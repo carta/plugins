@@ -1,0 +1,17 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "carta-plugins",
+  "description": "Official Carta plugins for Claude Code",
+  "owner": {
+    "name": "Carta Engineering",
+    "email": "engineering@carta.com"
+  },
+  "plugins": [
+    {
+      "name": "carta-cap-table",
+      "source": "./plugins/carta-cap-table",
+      "description": "Carta Cap Table plugin — skills and hooks for querying cap tables, grants, SAFEs, 409A valuations, waterfall scenarios, and more",
+      "category": "productivity"
+    }
+  ]
+}
