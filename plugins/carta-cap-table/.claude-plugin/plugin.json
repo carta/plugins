@@ -1,0 +1,25 @@
+{
+  "name": "carta-cap-table",
+  "displayName": "Carta Cap Table",
+  "version": "0.6.1",
+  "description": "Carta Cap Table plugin — skills and hooks for querying cap tables, grants, SAFEs, 409A valuations, waterfall scenarios, and more",
+  "author": {
+    "name": "Carta Engineering",
+    "email": "engineering@carta.com"
+  },
+  "homepage": "https://github.com/carta/plugins",
+  "repository": "https://github.com/carta/plugins",
+  "keywords": [
+    "cap_table",
+    "mcp",
+    "carta",
+    "equity",
+    "grants"
+  ],
+  "mcpServers": {
+    "carta": {
+      "type": "http",
+      "url": "https://mcp.app.carta.com/mcp"
+    }
+  }
+}
