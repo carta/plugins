@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Claude Code Plugin Manifest",
+  "description": "Schema for .claude-plugin/plugin.json files, based on https://code.claude.com/docs/en/plugins-reference",
+  "type": "object",
+  "required": ["name"],
+  "additionalProperties": false,
+  "$defs": {
+    "stringOrStringArray": {
+      "oneOf": [
+        { "type": "string" },
+        { "type": "array", "items": { "type": "string" } }
+      ]
+    },
+    "stringOrArrayOrObject": {
+      "oneOf": [
+        { "type": "string" },
+        { "type": "array", "items": { "type": "string" } },
+        { "type": "object" }
+      ]
+    }
+  },
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Unique plugin identifier (kebab-case, no spaces)"
+    },
+    "displayName": {
+      "type": "string",
+      "description": "Human-readable plugin name for marketplace display"
+    },
+    "version": {
+      "type": "string",
+      "description": "Semantic version (MAJOR.MINOR.PATCH)"
+    },
+    "description": {
+      "type": "string",
+      "description": "Brief explanation of plugin purpose"
+    },
+    "author": {
+      "type": "object",
+      "description": "Author information",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "url": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "homepage": {
+      "type": "string",
+      "description": "Documentation URL"
+    },
+    "repository": {
+      "type": "string",
+      "description": "Source code URL"
+    },
+    "license": {
+      "type": "string",
+      "description": "License identifier (e.g. MIT, Apache-2.0)"
+    },
+    "keywords": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Discovery tags"
+    },
+    "commands": {
+      "$ref": "#/$defs/stringOrStringArray",
+      "description": "Additional command files/directories (string or array of strings)"
+    },
+    "agents": {
+      "$ref": "#/$defs/stringOrStringArray",
+      "description": "Additional agent files/directories (string or array of strings)"
+    },
+    "skills": {
+      "$ref": "#/$defs/stringOrStringArray",
+      "description": "Additional skill directories (string or array of strings)"
+    },
+    "hooks": {
+      "$ref": "#/$defs/stringOrArrayOrObject",
+      "description": "Hook config paths or inline hook configuration (string, array, or object)"
+    },
+    "mcpServers": {
+      "$ref": "#/$defs/stringOrArrayOrObject",
+      "description": "MCP server config paths or inline configuration (string, array, or object)"
+    },
+    "outputStyles": {
+      "$ref": "#/$defs/stringOrStringArray",
+      "description": "Additional output style files/directories (string or array of strings)"
+    },
+    "lspServers": {
+      "$ref": "#/$defs/stringOrArrayOrObject",
+      "description": "LSP server config paths or inline configuration (string, array, or object)"
+    }
+  }
+}
