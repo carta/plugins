@@ -66,15 +66,9 @@ fetch("cap_table:get:pro_forma_models", {"corporation_id": corporation_id})
 
 This returns any saved pro-forma round models. If the company has modeled rounds in Carta, use these directly.
 
-## Option 2: Compute from Cap Table Data (BEST EFFORT)
+## Option 2: Compute from Cap Table Data
 
-When no saved models match the requested terms, **tell the user before computing**:
-- State what the saved models contain (if any) and why they don't match
-- Explicitly say: "I can compute a best-effort estimate from the cap table data. This is my math, not Carta's — it may not match actual round terms. Want me to proceed?"
-- Only compute after the user confirms (or if they explicitly asked for a custom scenario)
-
-When computing manually, **prefix the results with a prominent disclaimer**:
-> ⚠️ **Best-effort estimate** — computed from cap table data, not from a saved Carta model. Verify with counsel before relying on these numbers.
+When no saved models match the requested terms, compute from the cap table data.
 
 ### Step 1: Gather Current State
 
@@ -134,53 +128,11 @@ Note conversions (only if status = "Outstanding"):
 
 ### Step 3: Present Results
 
-Show a before/after ownership table:
+Show a before/after ownership table with: stakeholder group, pre-round shares, pre-round %, post-round shares, post-round %, dilution.
 
-| Stakeholder Group | Pre-Round Shares | Pre-Round % | Post-Round Shares | Post-Round % | Dilution |
-|-------------------|-----------------|-------------|-------------------|--------------|----------|
-| Founders | 5,000,000 | 50.0% | 5,000,000 | 35.7% | -14.3% |
-| Series A Investors | 2,000,000 | 20.0% | 2,000,000 | 14.3% | -5.7% |
-| SAFE Conversions | — | — | 800,000 | 5.7% | +5.7% |
-| Series B (new) | — | — | 1,875,000 | 13.4% | +13.4% |
-| Option Pool | 3,000,000 | 30.0% | 4,325,000 | 30.9% | +0.9% |
-| **Total** | **10,000,000** | **100%** | **14,000,000** | **100%** | |
-
-Also show:
-- Price per share
-- Pre-money and post-money valuation
-- Total SAFE/note conversion shares
-- New option pool shares added
-
-After the table, render an ASCII bar chart of post-round ownership by stakeholder group.
-Sort descending by post-round ownership. Scale bars to max width 40 chars.
-
-**Bar chart format rules:**
-- Left-align labels in a fixed-width column (pad with spaces to the longest label length + 2)
-- Immediately after the label column, fill blocks: `bar_width = round(pct / max_pct * 40)`
-- After the blocks, add a single space then the percentage
-- Never insert spaces between the label column and the blocks — the blocks must start right after label padding
-- Minimum 1 block for any non-zero value
-- Always pin "Others", "Other", or any catch-all group to the bottom of the chart, regardless of its ownership size
-
-```
-Post-Round Ownership
-
-Option Pool (total)  ████████████████████████████████████████  64.4%
-Series B (new)       ████████████                              14.2%
-Common Stock         ████                                       7.6%
-Series A Preferred   ███                                        4.5%
-Series B Preferred   ██                                         3.7%
-Series C Preferred   ██                                         2.7%
-Series Seed Pref.    █                                          1.7%
-Series D Preferred   █                                          1.2%
-```
-
-Also render this same chart for cap-table-by-stakeholder views when showing current ownership
-(pre-round). Use the same format rules.
+Also show: price per share, pre-money and post-money valuation, total SAFE/note conversion shares, new option pool shares added.
 
 ## Important Notes
 
-- Always state your assumptions clearly (e.g. "assuming all SAFEs convert at their caps")
 - If SAFE terms are ambiguous, show both cap and discount scenarios
 - Option pool shuffle: the pool increase typically comes from pre-money (dilutes existing holders, not new investors). Clarify this.
-- This is an estimate — actual round math depends on legal terms. Recommend verifying with counsel.
