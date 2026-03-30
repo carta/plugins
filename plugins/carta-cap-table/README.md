@@ -39,6 +39,7 @@ After installing, restart Claude Code and run `/mcp` to complete OAuth authentic
 | `client-triggers` | Surface time-based BD triggers across the portfolio. Use when asked about client outreach, which clients closed a round recently, stale cap tables, pending grants, tombstones, weekly deals, or BD triggers. |
 | `conversion-calculator` | Calculate SAFE and convertible note conversion into equity. Use when asked about SAFE conversion, note conversion, conversion shares, or how instruments convert in a round. |
 | `discover-commands` | Find the right carta-cap-table command when no other skill matches. Use when unsure which command to call, exploring available data, or when the user's request doesn't match a specific skill. |
+| `interaction-reference` | Carta's behavioral rules for presenting cap table data — voice, tone, financial precision, data provenance, and trust. Auto-loaded alongside domain skills. |
 | `grant-vesting` | Fetch vesting schedule for a specific option grant. Use when asked about vesting details, cliff dates, vesting progress, or unvested shares for a particular grant. |
 | `list-convertible-notes` | Fetch all convertible instruments (SAFEs and convertible debt) for a company. Use when asked about convertible notes, SAFEs, convertible debt, note terms, caps, discounts, or maturity dates. |
 | `list-safes` | Fetch all SAFEs for a company. Use when asked about SAFEs, simple agreements for future equity, SAFE terms, valuation caps, or discounts. |
