@@ -12,6 +12,12 @@
       "source": "./plugins/carta-cap-table",
       "description": "Carta Cap Table plugin — skills and hooks for querying cap tables, grants, SAFEs, 409A valuations, waterfall scenarios, and more",
       "category": "productivity"
+    },
+    {
+      "name": "carta-fund-admin",
+      "source": "./plugins/carta-fund-admin",
+      "description": "Carta Fund Admin plugin — skills for querying fund admin data, performance benchmarks, regulatory reporting, and more",
+      "category": "productivity"
     }
   ]
 }

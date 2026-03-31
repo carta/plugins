@@ -1,0 +1,27 @@
+{
+    "hooks": {
+        "SessionStart": [
+            {
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "node ${CLAUDE_PLUGIN_ROOT}/scripts/hooks/inject-skill-context.js",
+                        "timeout": 5
+                    }
+                ]
+            }
+        ],
+        "PostToolUse": [
+            {
+                "matcher": "mcp__Carta__execute_query",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "node ${CLAUDE_PLUGIN_ROOT}/scripts/hooks/warn-empty-query.js",
+                        "timeout": 5
+                    }
+                ]
+            }
+        ]
+    }
+}
