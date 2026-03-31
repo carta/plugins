@@ -1,0 +1,19 @@
+{
+  "name": "carta-fund-admin",
+  "displayName": "Carta Fund Admin",
+  "version": "0.1.0",
+  "description": "Carta Fund Admin plugin — skills for querying fund admin data, performance benchmarks, regulatory reporting, and more",
+  "author": {
+    "name": "Carta Engineering",
+    "email": "engineering@carta.com"
+  },
+  "homepage": "https://github.com/carta/plugins",
+  "repository": "https://github.com/carta/plugins",
+  "keywords": ["fund_admin", "mcp", "carta"],
+  "mcpServers": {
+    "carta": {
+      "type": "http",
+      "url": "https://mcp.app.carta.com/mcp"
+    }
+  }
+}
