@@ -35,14 +35,24 @@ After installing, restart Claude Code and run `/mcp` to complete OAuth authentic
 | `performance-benchmarks` | Compare fund performance against peer benchmark cohorts |
 | `download-tearsheet` | Generate tearsheet PDFs for one or more portfolio companies — single PDF preview or bulk ZIP download |
 
-## MCP Tools
+## MCP Commands
 
-The Carta MCP server exposes these data warehouse tools:
+All data access goes through the `fetch()` and `discover()` gateway tools. Available commands:
+
+| Command | Description |
+|---------|-------------|
+| `dwh:list:tables` | Browse available datasets with descriptions and record counts |
+| `dwh:get:table_schema` | Get column names, types, and descriptions for a specific table |
+| `dwh:execute:query` | Run a read-only SELECT query against the data warehouse |
+| `fund:list:tearsheet_templates` | List available tearsheet templates for your firm |
+| `fund:list:portfolio_companies` | List portfolio companies for tearsheet generation |
+| `fund:get:tearsheet_preview` | Generate a PDF tearsheet preview for one portfolio company |
+| `fund:mutate:start_tearsheet_download` | Start bulk tearsheet PDF generation |
+| `fund:get:tearsheet_download_status` | Check bulk tearsheet download status |
+
+Session management tools (called directly, not via `fetch()`):
 
 | Tool | Description |
 |------|-------------|
-| `list_tables` | Browse available datasets with descriptions and record counts |
-| `describe_table` | Get column names, types, and descriptions for a specific table |
-| `execute_query` | Run a read-only SELECT query against the data warehouse |
 | `list_contexts` | See which firms you have access to |
 | `set_context` | Switch to a different firm |

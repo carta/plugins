@@ -26,11 +26,11 @@ The user must have the Carta MCP server connected. If this is their first query 
 
 ## How to Query
 
-Use the three MCP tools in sequence:
+Use the three MCP commands in sequence:
 
-1. **Find the right table:** `list_tables(schema="FUND_ADMIN")` — browse available datasets
-2. **Understand the schema:** `describe_table(table_name="<TABLE>", schema="FUND_ADMIN")` — get column details
-3. **Run the query:** `execute_query(sql="SELECT ... FROM FUND_ADMIN.<TABLE> WHERE ... LIMIT 1000")` — fetch results
+1. **Find the right table:** `fetch("dwh:list:tables", {"schema": "FUND_ADMIN"})` — browse available datasets
+2. **Understand the schema:** `fetch("dwh:get:table_schema", {"table_name": "<TABLE>", "schema": "FUND_ADMIN"})` — get column details
+3. **Run the query:** `fetch("dwh:execute:query", {"sql": "SELECT ... FROM FUND_ADMIN.<TABLE> WHERE ... LIMIT 1000"})` — fetch results
 
 ## Common Datasets
 

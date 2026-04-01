@@ -38,7 +38,7 @@ Query the `FUND_ADMIN.TEMPORAL_FUND_COHORT_BENCHMARKS` table which contains fund
 
 ### SQL Query
 
-Execute this query with `execute_query`, substituting the user's fund name and optional filters:
+Execute this query with `fetch("dwh:execute:query", {"sql": "..."})`, substituting the user's fund name and optional filters:
 
 ```sql
 SELECT
@@ -55,7 +55,7 @@ SELECT
     dpi_10, dpi_25, dpi_50, dpi_75, dpi_90,
     moic_10, moic_25, moic_50, moic_75, moic_90
 FROM FUND_ADMIN.TEMPORAL_FUND_COHORT_BENCHMARKS
-WHERE fund_name ILIKE '%{fund_name}%'
+WHERE LOWER(fund_name) ILIKE '%{fund_name}%'
   AND performance_quarter_start_date >= '{start_date}'
   -- Add optional filters:
   -- AND vintage_year = {vintage_year}
