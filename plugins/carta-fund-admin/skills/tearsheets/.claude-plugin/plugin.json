@@ -1,0 +1,11 @@
+{
+  "name": "tearsheets",
+  "version": "1.0.0",
+  "description": "Fund Admin Tearsheet tools — generate PDF tearsheets for one or more portfolio companies via the Carta MCP server",
+  "author": {
+    "name": "Carta Engineering",
+    "email": "engineering@carta.com"
+  },
+  "repository": "https://github.com/carta/claude-marketplace",
+  "keywords": ["tearsheet", "fund-admin", "pdf", "portfolio", "portco", "bulk", "report"]
+}

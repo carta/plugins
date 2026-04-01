@@ -33,6 +33,7 @@ After installing, restart Claude Code and run `/mcp` to complete OAuth authentic
 | `explore-data` | Query and explore fund admin data — NAV, partners, investments, accounting |
 | `form-adv` | Form ADV Schedule D regulatory data and firm rollup |
 | `performance-benchmarks` | Compare fund performance against peer benchmark cohorts |
+| `download-tearsheet` | Generate tearsheet PDFs for one or more portfolio companies — single PDF preview or bulk ZIP download |
 
 ## MCP Tools
 
