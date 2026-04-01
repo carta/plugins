@@ -1,0 +1,54 @@
+name: Provenance Check
+on:
+  pull_request:
+    paths:
+      - 'plugins/**'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  provenance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Identify changed plugins
+        id: changes
+        run: |
+          PLUGINS=$(gh pr diff "$PR_NUMBER" --name-only \
+            | grep '^plugins/' \
+            | cut -d'/' -f2 \
+            | sort -u \
+            | tr '\n' ',')
+          echo "changed_plugins=${PLUGINS%,}" >> "$GITHUB_OUTPUT"
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}
+      - uses: actions/setup-python@v5
+        if: steps.changes.outputs.changed_plugins != ''
+        with:
+          python-version: '3.12'
+      - name: Verify provenance
+        if: steps.changes.outputs.changed_plugins != ''
+        run: python .github/scripts/verify-provenance.py "${{ steps.changes.outputs.changed_plugins }}"
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Post failure comment
+        if: failure()
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr comment "$PR_NUMBER" --body "## Provenance Check Failed
+
+          One or more plugins in this PR could not be verified against the internal marketplace.
+
+          **What this means:** Plugins must first be merged to the \`carta/claude-marketplace\` internal repo and pass security scanning before they can be published here.
+
+          **How to fix:**
+          1. Ensure your plugin is merged to \`main\` in carta/claude-marketplace
+          2. Wait for the security scan workflow to pass and generate the manifest
+          3. Ensure the plugin content here is an exact copy (no modifications)
+
+          See the workflow logs above for specific details on which checks failed."
