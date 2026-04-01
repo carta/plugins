@@ -23,7 +23,7 @@ Fetch Form ADV Schedule D §7.B.(1) regulatory data for each Fund and SPV, plus 
 
 ## Data Retrieval
 
-Run a single query using `execute_query` that joins across five datasets to produce the full Form ADV view. The query produces two sections: per-fund detail and a firm rollup.
+Run a single query using `fetch("dwh:execute:query", {"sql": "..."})` that joins across five datasets to produce the full Form ADV view. The query produces two sections: per-fund detail and a firm rollup.
 
 ### Source Tables
 
@@ -60,7 +60,7 @@ Use `effective_date` (accounting date) from journal entries. Do NOT filter on `p
 
 ### SQL Query
 
-Execute this query with `execute_query`, substituting the user's reporting date:
+Execute this query with `fetch("dwh:execute:query", ...)`, substituting the user's reporting date:
 
 ```sql
 WITH
