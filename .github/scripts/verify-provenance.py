@@ -92,14 +92,15 @@ def _github_get(path: str) -> dict | None:
 
 # Exclusions must stay in sync with generate-security-manifest.py so that
 # hashes computed here match hashes recorded in the security manifest.
-HASH_EXCLUDE_PATTERNS = {"__pycache__", ".pyc", ".DS_Store", "node_modules"}
+HASH_EXCLUDE_DIRS = {"__pycache__", "node_modules"}
 
 
 def _should_exclude(path: Path) -> bool:
-    """Return True if *path* should be skipped during hash computation."""
+    """Return True if *path* should be excluded from content hashing."""
     return (
-        any(part in HASH_EXCLUDE_PATTERNS for part in path.parts)
+        any(part in HASH_EXCLUDE_DIRS for part in path.parts)
         or path.suffix == ".pyc"
+        or path.name == ".DS_Store"
     )
 
 
