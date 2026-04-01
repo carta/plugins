@@ -1,26 +1,46 @@
 ---
 name: portfolio-query
-description: Query cap table data for one or more companies. Use when asked about cap tables, ownership breakdown, share classes, stakeholder holdings, portfolio-wide analysis, comparing companies, or finding patterns across multiple entities.
+description: Query cap table data across multiple companies, or fetch detailed per-company data (stakeholders, grants, SAFEs, 409A). Use for portfolio-wide analysis, comparing companies, finding patterns, or when detailed tabular data is needed beyond a visual summary.
 ---
 
 # Portfolio Query
 
 Fetch and present cap table data for a single company or across multiple companies.
 
+## Routing — Visual Summary vs. Detailed Data
+
+**For single-company cap table overview/summary/snapshot requests, use the `cap_table_chart` MCP tool directly.** It renders an interactive stacked bar chart in desktop clients (Cowork) or an ASCII chart in terminal clients (Claude Code).
+
+```
+cap_table_chart(corporation_id=<id>)
+```
+
+**Route to `cap_table_chart` when the user asks for:**
+- Cap table overview, summary, or snapshot
+- Ownership distribution or breakdown (visual)
+- Share class breakdown or equity structure
+- Fully diluted share counts or amount raised by share class
+- Board deck equity overview
+
+**After `cap_table_chart` renders, do NOT repeat its data.** The chart already shows share classes, FD shares, ownership %, amount raised, and the stacked bars. Instead, add only a brief commentary (2-3 sentences max) highlighting anything notable — e.g. unusually large option pool, concentrated ownership, or missing share classes. Do not restate numbers the chart already displays.
+
+**Stay in this skill (use `fetch` below) when:**
+- Multi-company queries or portfolio-wide comparisons
+- Detailed stakeholder listings or specific holder data
+- Specific data points (409A, SAFEs, grants, convertible notes)
+- The user explicitly asks for tables or raw numbers
+
 ## When to Use
 
-- "Show me the cap table for Acme Corp"
-- "What's the ownership breakdown?"
-- "Who are the shareholders?"
 - "Which companies have expiring 409As?"
 - "Show me cap tables for all my portfolio companies"
 - "Which companies have SAFEs outstanding?"
 - "Compare option pool sizes across my portfolio"
 - "Flag any red flags across my companies"
 
-## Single-Company Cap Table
+## Single-Company Detailed View
 
-For a single company, fetch both views and present with a bar chart:
+When the user needs detailed tabular data beyond the visual summary (e.g. stakeholder-level holdings, specific share counts), fetch both views:
 
 ```
 fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": corporation_id})

@@ -1,11 +1,13 @@
 ---
 name: ownership
-description: Ownership structure by share class, voting rights, and liquidation seniority. Use when asked about ownership breakdown, preferred vs common holders, voting power, protective provisions, or consent requirements.
+description: Voting rights, liquidation seniority, and preferred vs common holder analysis. Use when asked about voting power, protective provisions, consent requirements, preferred stockholders, or seniority. For general visual ownership summaries or cap table overviews, use the cap_table_chart tool instead.
 ---
 
 # Ownership Structure
 
 Surface which preferred stockholders hold voting power and would typically need to consent for major corporate actions (financing rounds, M&A, charter amendments).
+
+> **Routing note:** If the user asks for a general "ownership breakdown" or "cap table summary" without mentioning voting rights, seniority, or protective provisions, use the `cap_table_chart` MCP tool instead — it renders an interactive visual summary. This skill is for detailed voting/governance analysis.
 
 ## Prerequisites
 
