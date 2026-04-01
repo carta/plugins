@@ -22,7 +22,7 @@ cap_table_chart(corporation_id=<id>)
 - Fully diluted share counts or amount raised by share class
 - Board deck equity overview
 
-**After `cap_table_chart` renders, do NOT repeat its data.** The chart already shows share classes, FD shares, ownership %, amount raised, and the stacked bars. Instead, add only a brief commentary (2-3 sentences max) highlighting anything notable — e.g. unusually large option pool, concentrated ownership, or missing share classes. Do not restate numbers the chart already displays.
+**After `cap_table_chart` renders, do NOT repeat its data.** The chart already shows share classes, FD shares, ownership %, amount raised, and the stacked bars. Do not render the `text_summary` from the tool response — it is a terminal fallback and the visual chart already covers this. Instead, add only a brief commentary (2-3 sentences max) highlighting anything notable — e.g. unusually large option pool, concentrated ownership, or missing share classes. Do not restate numbers the chart already displays.
 
 **Stay in this skill (use `fetch` below) when:**
 - Multi-company queries or portfolio-wide comparisons
