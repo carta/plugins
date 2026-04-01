@@ -104,7 +104,3 @@ Metrics:
 
 If the user asks about a specific company ("how does Acme's option pool compare?"), show that company's value alongside the portfolio median.
 
-## Best Effort
-
-- **Computed:** median, min, max summary statistics and company-vs-portfolio comparisons are derived from the portfolio sample
-- **Authoritative:** per-company option pool sizes, SAFE terms, and round sizes come directly from Carta

@@ -50,7 +50,7 @@ For each company, fetch in sequence:
 - Key fields: `expiration_date`, `price` (FMV per share)
 - Find the most recent valuation (sort by `effective_date` desc)
 
-## Step 3 — Classify Triggers
+## Step 3 — Compute Trigger Classifications
 
 ### Recent Closes
 Companies whose last round closed within N days (default 90, or user-specified):
@@ -100,7 +100,3 @@ If no triggers found in a category, omit that section.
 
 If the user specifies a time window (e.g., "last 60 days", "last 6 months"), use that instead of the default 90 days.
 
-## Best Effort
-
-- **Computed:** trigger classification (recent close / stale 409A / pending grants) and time-window detection are heuristic
-- **Authoritative:** round close dates, 409A expiration dates, and grant issuance dates come directly from Carta

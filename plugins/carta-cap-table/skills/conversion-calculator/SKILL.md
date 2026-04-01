@@ -20,8 +20,8 @@ You need:
 1. `corporation_id` — get from `list_accounts`
 2. Round terms — user must provide at least a **pre-money valuation** or **price per share**
 
-If neither is provided, ask before proceeding:
-> "What pre-money valuation or price per share should I use for the conversion calculation?"
+If neither is provided, you MUST call AskUserQuestion BEFORE any computation:
+AskUserQuestion("What pre-money valuation or price per share should I use for the conversion calculation?")
 
 **Subagent prohibition:** Do NOT delegate this skill to a background agent if the round valuation or price per share is missing. A subagent cannot ask the user for input. If these are absent and you are considering dispatching an agent, stop — ask the user directly first, then proceed.
 
@@ -118,7 +118,3 @@ Post-conversion fully diluted: 11,986,747
 - State the assumed conversion date (today or the round close date)
 - This is an estimate — actual conversion depends on legal documents. Recommend review by counsel.
 
-## Best Effort
-
-- **Computed:** SAFE/note conversion share counts, cap-vs-discount method selection, effective price per share — these are estimates derived from instrument terms and user-supplied round price
-- **Authoritative:** instrument terms (cap, discount, principal, accrued interest) come directly from Carta

@@ -132,7 +132,3 @@ There is no single "portfolio query" endpoint. Instead:
 - Group results: "needs attention" vs "healthy"
 - Include a count summary: "3 of 12 companies need attention"
 
-## Best Effort
-
-- **Computed:** cross-company comparisons, pattern detection, and urgency/severity classifications are derived by Claude
-- **Authoritative:** per-company data (409A dates, cap tables, SAFEs, grants) comes directly from Carta

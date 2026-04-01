@@ -40,6 +40,7 @@ After installing, restart Claude Code and run `/mcp` to complete OAuth authentic
 | `conversion-calculator` | Calculate SAFE and convertible note conversion into equity. Use when asked about SAFE conversion, note conversion, conversion shares, or how instruments convert in a round. |
 | `discover-commands` | Find the right carta-cap-table command when no other skill matches. Use when unsure which command to call, exploring available data, or when the user's request doesn't match a specific skill. |
 | `grant-vesting` | Fetch vesting schedule for a specific option grant. Use when asked about vesting details, cliff dates, vesting progress, or unvested shares for a particular grant. |
+| `interaction-reference` | >- |
 | `list-convertible-notes` | Fetch all convertible instruments (SAFEs and convertible debt) for a company. Use when asked about convertible notes, SAFEs, convertible debt, note terms, caps, discounts, or maturity dates. |
 | `list-safes` | Fetch all SAFEs for a company. Use when asked about SAFEs, simple agreements for future equity, SAFE terms, valuation caps, or discounts. |
 | `market-benchmarks` | Analyze cap structure patterns across the portfolio as market benchmarks. Use when asked about market benchmarks, typical option pool sizes, average SAFE terms, what's normal for a Series A, cap structure patterns, or portfolio-wide statistics. |

@@ -10,18 +10,6 @@
                     }
                 ]
             }
-        ],
-        "PostToolUse": [
-            {
-                "matcher": "mcp__carta.*__fetch",
-                "hooks": [
-                    {
-                        "type": "command",
-                        "command": "node ${CLAUDE_PLUGIN_ROOT}/scripts/hooks/warn-empty-fetch.js",
-                        "timeout": 5
-                    }
-                ]
-            }
         ]
     }
 }

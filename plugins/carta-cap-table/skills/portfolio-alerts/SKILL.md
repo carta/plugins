@@ -5,7 +5,7 @@ description: Detect red flags and time-sensitive issues across portfolio compani
 
 # Portfolio Alerts
 
-Scan multiple companies for red flags and time-sensitive issues. Builds on the `portfolio-query` pattern.
+Scan multiple companies for red flags and compute severity classifications (critical / warning / info). Builds on the `portfolio-query` pattern.
 
 ## When to Use
 
@@ -38,7 +38,7 @@ From convertible notes: `maturity_date`, `status_explanation`, `is_debt`, `dolla
 
 1. Call `list_accounts` to get all `corporation_pk` accounts
 2. For each company, run the relevant checks
-3. Aggregate findings by severity: critical > warning > info
+3. Compute severity classifications (critical / warning / info) for each finding
 4. Present a summary dashboard
 
 ## Alert Checks
@@ -118,7 +118,3 @@ Healthy (7): Alpha, Zeta, Eta, Theta, Iota, Kappa, Lambda
 - Always show the scan date and count: "Scanned 12 companies on 2025-03-18"
 - Sort by severity (critical first), then by urgency (nearest deadline first)
 
-## Best Effort
-
-- **Computed:** severity classification (critical/warning/info thresholds) and aggregated health summary are heuristic, not Carta-defined
-- **Authoritative:** 409A expiration dates, option pool percentages, and note maturity dates come directly from Carta
