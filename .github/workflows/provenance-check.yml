@@ -34,6 +34,7 @@ jobs:
         run: python .github/scripts/verify-provenance.py "${{ steps.changes.outputs.changed_plugins }}"
         env:
           GH_TOKEN: ${{ github.token }}
+          PROVENANCE_REPO: ${{ vars.PROVENANCE_REPO }}
       - name: Post failure comment
         if: failure()
         env:
@@ -44,10 +45,10 @@ jobs:
 
           One or more plugins in this PR could not be verified against the internal marketplace.
 
-          **What this means:** Plugins must first be merged to the \`carta/claude-marketplace\` internal repo and pass security scanning before they can be published here.
+          **What this means:** Plugins must first be merged to the internal marketplace repo and pass security scanning before they can be published here.
 
           **How to fix:**
-          1. Ensure your plugin is merged to \`main\` in carta/claude-marketplace
+          1. Ensure your plugin is merged to \`main\` in the internal marketplace repo
           2. Wait for the security scan workflow to pass and generate the manifest
           3. Ensure the plugin content here is an exact copy (no modifications)
 

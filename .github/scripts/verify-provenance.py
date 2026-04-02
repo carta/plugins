@@ -29,7 +29,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 PLUGINS_DIR = REPO_ROOT / "plugins"
 
 GITHUB_API = "https://api.github.com"
-MARKETPLACE_REPO = "carta/claude-marketplace"
+MARKETPLACE_REPO = os.environ.get("PROVENANCE_REPO", "carta/claude-marketplace")
 MARKETPLACE_REF = "main"
 
 # Possible plugin directory prefixes in the marketplace repo.
