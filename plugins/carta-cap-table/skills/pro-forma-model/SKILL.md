@@ -14,9 +14,11 @@ Model the dilution impact of a new financing round using cap table data, SAFE/no
 - "How would a 10% option pool increase affect ownership?"
 - "Show me pro-forma ownership after converting SAFEs into a Series A"
 
-## Required Inputs — MUST BLOCK
+## Prerequisites
 
-**STOP. Do not compute ANY pro-forma values, scenarios, or estimates without ALL required inputs. Do not model multiple scenarios as a substitute for asking. Do not proceed "in the meantime". Ask first, compute after.**
+You need the `corporation_id`. Get it from `list_accounts` if you don't have it.
+
+Round parameters — the user must provide:
 
 | Input | Example | Required? |
 |---|---|---|
@@ -24,16 +26,9 @@ Model the dilution impact of a new financing round using cap table data, SAFE/no
 | New investment amount (raise size) | "raising $15M" | **Yes — ALWAYS ask if not given** |
 | Option pool target | "10% post-money pool" | No — skip pool math if omitted |
 
-If the raise size is missing, you MUST call AskUserQuestion BEFORE any computation:
-AskUserQuestion("How much are you raising in this round? I need the raise amount before I can compute any pro-forma numbers.")
+**STOP. Do not compute ANY pro-forma values, scenarios, or estimates without ALL required inputs. Do not model multiple scenarios as a substitute for asking. Do not proceed "in the meantime". Ask first, compute after.**
 
 **Even in multi-part requests** (e.g. "get me cap table AND pro-forma"), complete the other parts but BLOCK on the pro-forma until raise size is confirmed. Do not guess. Do not model scenarios at common amounts. Ask.
-
-**Subagent prohibition:** Do NOT delegate this skill to a background agent if the raise size is missing. A subagent cannot ask the user for input.
-
-## Prerequisites
-
-You need the `corporation_id`. Get it from `list_accounts` if you don't have it.
 
 ## Data Retrieval
 
@@ -43,7 +38,13 @@ Fetch saved pro-forma round models:
 fetch("cap_table:get:pro_forma_models", {"corporation_id": corporation_id})
 ```
 
-Returns saved pro-forma round models. If none exist, compute manually (see Option 2 below).
+Returns saved pro-forma round models. If none exist, compute manually (see Workflow Option 2 below).
+
+For manual computation, also fetch:
+
+1. `fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": corporation_id})` — get current authorized/outstanding/fully-diluted shares
+2. `fetch("cap_table:get:convertible_notes", {"corporation_id": corporation_id})` — get SAFEs and convertible notes (filter to `status_explanation: "Outstanding"`)
+3. `fetch("cap_table:get:409a_valuations", {"corporation_id": corporation_id})` — get current FMV
 
 ## Key Fields
 
@@ -58,7 +59,9 @@ From saved models:
 - `investments[]`: per-investor breakdown
 - `convertibles[]`: SAFEs/notes included in the model
 
-## Option 1: Use Saved Pro-Forma Models
+## Workflow
+
+### Option 1: Use Saved Pro-Forma Models
 
 ```
 fetch("cap_table:get:pro_forma_models", {"corporation_id": corporation_id})
@@ -66,23 +69,15 @@ fetch("cap_table:get:pro_forma_models", {"corporation_id": corporation_id})
 
 This returns any saved pro-forma round models. If the company has modeled rounds in Carta, use these directly.
 
-## Option 2: Compute from Cap Table Data (BEST EFFORT)
+### Option 2: Compute from Cap Table Data
 
-When no saved models match the requested terms, **tell the user before computing**:
-- State what the saved models contain (if any) and why they don't match
-- Explicitly say: "I can compute a best-effort estimate from the cap table data. This is my math, not Carta's — it may not match actual round terms. Want me to proceed?"
-- Only compute after the user confirms (or if they explicitly asked for a custom scenario)
-
-When computing manually, **prefix the results with a prominent disclaimer**:
-> ⚠️ **Best-effort estimate** — computed from cap table data, not from a saved Carta model. Verify with counsel before relying on these numbers.
-
-### Step 1: Gather Current State
+#### Step 1: Gather Current State
 
 1. `fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": corporation_id})` — get current authorized/outstanding/fully-diluted shares
 2. `fetch("cap_table:get:convertible_notes", {"corporation_id": corporation_id})` — get SAFEs and convertible notes (filter to `status_explanation: "Outstanding"`)
 3. `fetch("cap_table:get:409a_valuations", {"corporation_id": corporation_id})` — get current FMV
 
-### Step 2: Apply Round Math
+#### Step 2: Apply Round Math
 
 Given user inputs:
 - **Pre-money valuation** (e.g. $80M)
@@ -131,56 +126,43 @@ Note conversions (only if status = "Outstanding"):
   Same as SAFE but use total_with_interest instead of investment.
 ```
 
+#### Step 3: Present Results
 
-### Step 3: Present Results
+Show a before/after ownership table with: stakeholder group, pre-round shares, pre-round %, post-round shares, post-round %, dilution.
 
-Show a before/after ownership table:
+Also show: price per share, pre-money and post-money valuation, total SAFE/note conversion shares, new option pool shares added.
 
-| Stakeholder Group | Pre-Round Shares | Pre-Round % | Post-Round Shares | Post-Round % | Dilution |
-|-------------------|-----------------|-------------|-------------------|--------------|----------|
-| Founders | 5,000,000 | 50.0% | 5,000,000 | 35.7% | -14.3% |
-| Series A Investors | 2,000,000 | 20.0% | 2,000,000 | 14.3% | -5.7% |
-| SAFE Conversions | — | — | 800,000 | 5.7% | +5.7% |
-| Series B (new) | — | — | 1,875,000 | 13.4% | +13.4% |
-| Option Pool | 3,000,000 | 30.0% | 4,325,000 | 30.9% | +0.9% |
-| **Total** | **10,000,000** | **100%** | **14,000,000** | **100%** | |
+## Gates
 
-Also show:
-- Price per share
-- Pre-money and post-money valuation
-- Total SAFE/note conversion shares
-- New option pool shares added
+**Required inputs**: `corporation_id`, pre-money valuation, new investment amount (raise size).
+If missing, call `AskUserQuestion` before proceeding (see interaction-reference §4.1).
 
-After the table, render an ASCII bar chart of post-round ownership by stakeholder group.
-Sort descending by post-round ownership. Scale bars to max width 40 chars.
+AskUserQuestion("How much are you raising in this round? I need the raise amount before I can compute any pro-forma numbers.")
 
-**Bar chart format rules:**
-- Left-align labels in a fixed-width column (pad with spaces to the longest label length + 2)
-- Immediately after the label column, fill blocks: `bar_width = round(pct / max_pct * 40)`
-- After the blocks, add a single space then the percentage
-- Never insert spaces between the label column and the blocks — the blocks must start right after label padding
-- Minimum 1 block for any non-zero value
-- Always pin "Others", "Other", or any catch-all group to the bottom of the chart, regardless of its ownership size
+**AI computation**: Yes — models pro-forma ownership, dilution percentages, and share prices from round parameters and cap table data.
+Trigger the AI computation gate (see interaction-reference §6.2) before outputting any computed shares, prices, percentages, or ownership figures.
 
-```
-Post-Round Ownership
+**Subagent prohibition**: Do NOT delegate this skill to a background agent if required inputs are missing. A subagent cannot call `AskUserQuestion`. If inputs are absent, stop and ask the user directly first.
 
-Option Pool (total)  ████████████████████████████████████████  64.4%
-Series B (new)       ████████████                              14.2%
-Common Stock         ████                                       7.6%
-Series A Preferred   ███                                        4.5%
-Series B Preferred   ██                                         3.7%
-Series C Preferred   ██                                         2.7%
-Series Seed Pref.    █                                          1.7%
-Series D Preferred   █                                          1.2%
-```
+## Presentation
 
-Also render this same chart for cap-table-by-stakeholder views when showing current ownership
-(pre-round). Use the same format rules.
+**Format**: Before/after ownership table + summary block
 
-## Important Notes
+**BLUF lead**: Lead with the post-money valuation and price per share before showing the ownership table.
+
+**Sort order**: By post-round FD % descending (largest holder first).
+
+**Output label**: All AI-computed output must be prefixed with the disclaimer below.
+
+Show a before/after ownership table with: stakeholder group, pre-round shares, pre-round %, post-round shares, post-round %, dilution.
+
+Also show: price per share, pre-money and post-money valuation, total SAFE/note conversion shares, new option pool shares added.
+
+> ⚠️ **Claude's analysis** — computed from cap table data, not from a saved Carta model. Verify with counsel before relying on these numbers.
+
+## Caveats
 
 - Always state your assumptions clearly (e.g. "assuming all SAFEs convert at their caps")
 - If SAFE terms are ambiguous, show both cap and discount scenarios
 - Option pool shuffle: the pool increase typically comes from pre-money (dilutes existing holders, not new investors). Clarify this.
-- This is an estimate — actual round math depends on legal terms. Recommend verifying with counsel.
+- This is an estimate — actual results depend on legal documents. Recommend review by counsel.

@@ -7,11 +7,20 @@ description: Fetch 409A valuation history for a company. Use when asked about 40
 
 Fetch 409A fair market value (FMV) history for a company.
 
+## When to Use
+
+- "What's the current 409A valuation?"
+- "Show me the FMV history"
+- "When does the 409A expire?"
+- "What's the exercise price for common stock?"
+- "Has the FMV changed recently?"
+- "Is the 409A valuation still valid?"
+
 ## Prerequisites
 
 You need the `corporation_id`. Get it from `list_accounts` if you don't have it.
 
-## Data Fetching
+## Data Retrieval
 
 ```
 fetch("cap_table:get:409a_valuations", {"corporation_id": corporation_id})
@@ -21,18 +30,7 @@ Optional params:
 - `share_class_id`: filter to a specific share class
 - `report_id`: filter to a specific valuation report
 
-## Key Fields
-
-- `effective_date`: date the 409A valuation became effective
-- `expiration_date`: date the valuation expires (typically 1 year after effective)
-- `stale_date`: date after which the valuation is considered stale (if applicable)
-- `price`: FMV per share as a string (e.g. `"12.610000000000"`)
-- `name`: share class name (e.g. "Common")
-- `common`: true if this is the common stock FMV
-- `report_id`: ID of the 409A report
-- `share_class_id`: ID of the share class
-
-## Response Format
+### Response Format
 
 JSON array of FMV records:
 ```json
@@ -52,23 +50,72 @@ JSON array of FMV records:
 ]
 ```
 
-## How to Present
+## Key Fields
 
-1. Sort by `effective_date` descending (most recent first)
-2. The **most recent** entry is the current 409A — highlight it
-3. Format `price` as currency (e.g. "$12.61/share"), trimming trailing zeros
-4. Check if `expiration_date` is within 90 days of today — **flag as a time-sensitive action item**, not just a data point: bold it, call out the exact days remaining, and recommend initiating renewal immediately (especially if a financing round is in progress, as closing will likely push past the expiry date)
-5. Check if `expiration_date` is in the past — flag as "expired"
-6. For history, show a table:
+- `effective_date`: date the 409A valuation became effective
+- `expiration_date`: date the valuation expires (typically 1 year after effective)
+- `stale_date`: date after which the valuation is considered stale (if applicable)
+- `price`: FMV per share as a string (e.g. `"12.610000000000"`)
+- `name`: share class name (e.g. "Common")
+- `common`: true if this is the common stock FMV
+- `report_id`: ID of the 409A report
+- `share_class_id`: ID of the share class
+
+## Workflow
+
+### Step 1 — Fetch Valuations
+
+```
+fetch("cap_table:get:409a_valuations", {"corporation_id": corporation_id})
+```
+
+### Step 2 — Identify Current Valuation
+
+Sort by `effective_date` descending. The most recent entry is the current 409A — highlight it.
+
+### Step 3 — Check Expiration
+
+- If `expiration_date` is within 90 days of today — **flag as a time-sensitive action item**, not just a data point: bold it, call out the exact days remaining, and recommend initiating renewal immediately (especially if a financing round is in progress, as closing will likely push past the expiry date).
+- If `expiration_date` is in the past — flag as "expired".
+
+### Step 4 — Present Results
+
+Show the history table and trend summary (see Presentation section).
+
+## Gates
+
+**Required inputs**: `corporation_id`.
+If missing, call `AskUserQuestion` before proceeding (see interaction-reference §4.1).
+
+**AI computation**: No — this skill presents Carta data directly.
+
+## Presentation
+
+**Format**: Table + trend summary
+
+**BLUF lead**: Lead with the current FMV per share and its effective/expiration dates before showing the history table.
+
+**Sort order**: By `effective_date` descending (most recent first).
+
+**Date format**: MMM d, yyyy (e.g. "Jan 15, 2026").
+
+Format `price` as currency (e.g. "$12.61/share"), trimming trailing zeros.
 
 | Effective | Expires | FMV/Share | Share Class | Status |
 |-----------|---------|-----------|-------------|--------|
-| 04/25/2024 | 04/24/2025 | $12.61 | Common | Current |
-| 03/31/2023 | 04/24/2024 | $10.33 | Common | Expired |
+| Apr 25, 2024 | Apr 24, 2025 | $12.61 | Common | Current |
+| Mar 31, 2023 | Apr 24, 2024 | $10.33 | Common | Expired |
 
-7. Do not render a bar chart for FMV history — values in mature companies cluster near the
-   maximum, making bars uninformative (all bars look the same width). The table is sufficient.
-   Instead, after the table, add a one-line trend summary:
-   > FMV has grown **Nx since YYYY**, with [acceleration/steady growth] since [year].
+Do not render a bar chart for FMV history — values in mature companies cluster near the
+maximum, making bars uninformative (all bars look the same width). The table is sufficient.
+Instead, after the table, add a one-line trend summary:
+> FMV has grown **Nx since YYYY**, with [acceleration/steady growth] since [year].
 
-8. If multiple share classes exist, group by share class name in the table.
+If multiple share classes exist, group by share class name in the table.
+
+## Caveats
+
+- The `price` field is a string with many trailing zeros — always parse and format as currency before displaying.
+- A valuation with a past `expiration_date` should never be used for new grant pricing. Flag it prominently.
+- The `stale_date` field may be null; when present, it indicates the valuation is considered stale before its formal expiration.
+- 409A valuations are point-in-time snapshots — a material event (e.g., new financing round) can invalidate the current valuation even before its expiration date.

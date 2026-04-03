@@ -20,11 +20,6 @@ You need:
 1. `corporation_id` — get from `list_accounts`
 2. Round terms — user must provide at least a **pre-money valuation** or **price per share**
 
-If neither is provided, ask before proceeding:
-> "What pre-money valuation or price per share should I use for the conversion calculation?"
-
-**Subagent prohibition:** Do NOT delegate this skill to a background agent if the round valuation or price per share is missing. A subagent cannot ask the user for input. If these are absent and you are considering dispatching an agent, stop — ask the user directly first, then proceed.
-
 ## Data Retrieval
 
 - `fetch("cap_table:get:convertible_notes", {"corporation_id": corporation_id})` — SAFEs + convertible notes
@@ -43,15 +38,17 @@ From convertible instruments:
 - `has_most_favored_nation_clause`: MFN SAFE — converts at best subsequent terms
 - `status_explanation`: filter to "Outstanding" only
 
-## Step 1: Gather Instrument Data
+## Workflow
+
+### Step 1: Gather Instrument Data
 
 1. `fetch("cap_table:get:convertible_notes", {"corporation_id": corporation_id})` — SAFEs + notes (filter to `status_explanation: "Outstanding"`)
 2. `fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": corporation_id})` — get current fully diluted share count from `totals.total_fully_diluted`
 3. `fetch("cap_table:get:409a_valuations", {"corporation_id": corporation_id})` — current FMV for context
 
-## Step 2: Conversion Math
+### Step 2: Conversion Math
 
-### SAFE Conversion
+#### SAFE Conversion
 
 For each SAFE, compute shares under both methods, use the one giving MORE shares:
 
@@ -73,7 +70,7 @@ shares = investment_amount / discount_price
 shares = investment_amount / round_price_per_share
 ```
 
-### Convertible Note Conversion
+#### Convertible Note Conversion
 
 Same as SAFE but:
 - Use `total_with_interest` (principal + accrued interest) instead of investment amount
@@ -83,7 +80,27 @@ Same as SAFE but:
   total = principal * (1 + interest_rate * years)
   ```
 
-## Step 3: Present Results
+## Gates
+
+**Required inputs**: `corporation_id`, pre-money valuation or price per share.
+If missing, call `AskUserQuestion` before proceeding (see interaction-reference §4.1).
+
+AskUserQuestion("What pre-money valuation or price per share should I use for the conversion calculation?")
+
+**AI computation**: Yes — converts SAFE and note investment amounts into equity shares using cap/discount math.
+Trigger the AI computation gate (see interaction-reference §6.2) before outputting any computed shares, prices, percentages, or ownership figures.
+
+**Subagent prohibition**: Do NOT delegate this skill to a background agent if required inputs are missing. A subagent cannot call `AskUserQuestion`. If inputs are absent, stop and ask the user directly first.
+
+## Presentation
+
+**Format**: Per-instrument table + summary block
+
+**BLUF lead**: Lead with the round price per share and total conversion shares before showing the per-instrument breakdown.
+
+**Sort order**: By conversion shares descending (largest conversion first).
+
+**Output label**: All AI-computed output must be prefixed with the disclaimer below.
 
 ### Per-Instrument Table
 
@@ -109,16 +126,13 @@ Total conversion shares: 1,986,747
 Post-conversion fully diluted: 11,986,747
 ```
 
-## Important Notes
+> ⚠️ **Claude's analysis** — computed from cap table data, not from a saved Carta model. Verify with counsel before relying on these numbers.
+
+## Caveats
 
 - Always show which conversion method (cap vs discount) was more favorable and used
 - If a SAFE has both cap and discount, compute both and pick the one yielding more shares
 - For MFN SAFEs, note that they take the best terms of any subsequent SAFE
 - Accrued interest on notes can significantly increase the conversion amount — always account for it
 - State the assumed conversion date (today or the round close date)
-- This is an estimate — actual conversion depends on legal documents. Recommend review by counsel.
-
-## Best Effort
-
-- **Computed:** SAFE/note conversion share counts, cap-vs-discount method selection, effective price per share — these are estimates derived from instrument terms and user-supplied round price
-- **Authoritative:** instrument terms (cap, discount, principal, accrued interest) come directly from Carta
+- This is an estimate — actual results depend on legal documents. Recommend review by counsel.

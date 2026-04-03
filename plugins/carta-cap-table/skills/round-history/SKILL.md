@@ -7,17 +7,36 @@ description: Fetch financing round history for a company. Use when asked about f
 
 Fetch financing history and summarize by round, or use the cap table by share class for a quick overview.
 
+## When to Use
+
+- "Show me the funding history"
+- "What rounds has this company raised?"
+- "How much capital was raised in the Series A?"
+- "List all financing rounds"
+- "Who invested in each round?"
+- "What was the price per share for the seed?"
+
 ## Prerequisites
 
 You need the `corporation_id`. Get it from `list_accounts` if you don't have it.
 
-## Option 1: Detailed History (per-security)
+## Data Retrieval
+
+### Option 1: Detailed History (per-security)
 
 ```
 fetch("cap_table:get:financing_history", {"corporation_id": corporation_id})
 ```
 
 This is the same data that powers the in-app "Financing History" tab.
+
+### Option 2: Quick Summary (from cap table)
+
+```
+fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": corporation_id})
+```
+
+Each preferred share class represents a round. Faster but less detail: no individual investors, no issue dates, no price per share.
 
 ## Key Fields
 
@@ -57,21 +76,47 @@ This is the same data that powers the in-app "Financing History" tab.
 }
 ```
 
-### How to Present
+## Workflow
+
+### Step 1 — Fetch Financing History
+
+Call `fetch("cap_table:get:financing_history", {"corporation_id": corporation_id})` for detailed data, or `fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": corporation_id})` for a quick summary.
+
+### Step 2 — Aggregate by Round
 
 1. Group results by `round_name`
 2. For each round, aggregate: total `cash_paid`, total `quantity`, count of investors, earliest `issue_date`
 3. Use `issue_price` from any non-canceled entry as the price per share
 4. Filter out entries where `is_canceled` is true
-5. Present as:
+
+### Step 3 — Present Results
+
+Present the aggregated table and bar chart (see Presentation section).
+
+## Gates
+
+**Required inputs**: `corporation_id`.
+If missing, call `AskUserQuestion` before proceeding (see interaction-reference §4.1).
+
+**AI computation**: No — this skill presents Carta data directly (aggregation is mechanical grouping, not modeled output).
+
+## Presentation
+
+**Format**: Table + ASCII bar chart
+
+**BLUF lead**: Lead with the total number of rounds and total cash raised before showing the table.
+
+**Sort order**: By `issue_date` ascending (chronological order).
+
+**Date format**: MMM d, yyyy (e.g. "Jan 15, 2026").
 
 | Round | Close Date | Price/Share | Investors | Shares Issued | Cash Raised |
 |-------|-----------|-------------|-----------|---------------|-------------|
-| Series Seed Preferred | 2013-06-30 | $0.27 | 5 | 1,422,435 | $383,380 |
-| Series A Preferred | 2013-11-15 | $0.44 | 8 | 3,697,191 | $1,645,250 |
+| Series Seed Preferred | Jun 30, 2013 | $0.27 | 5 | 1,422,435 | $383,380 |
+| Series A Preferred | Nov 15, 2013 | $0.44 | 8 | 3,697,191 | $1,645,250 |
 
-6. After the table, render an ASCII bar chart of cash raised per round (chronological order).
-   Scale bars to max width 40 chars. Exclude rounds with zero cash raised (e.g. option grants).
+After the table, render an ASCII bar chart of cash raised per round (chronological order).
+Scale bars to max width 40 chars. Exclude rounds with zero cash raised (e.g. option grants).
 
 ```
 Cash Raised by Round
@@ -81,13 +126,12 @@ Series A Preferred     ████████████████         
 Series B Preferred     ████████████████████████████████████████ $3.7M
 ```
 
-   Each bar width = (cash_raised / max_cash_raised) * 40, rounded to nearest integer.
-   Format large numbers as $XM or $XK for readability.
+Each bar width = (cash_raised / max_cash_raised) * 40, rounded to nearest integer.
+Format large numbers as $XM or $XK for readability.
 
-## Option 2: Quick Summary (from cap table)
+## Caveats
 
-```
-fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": corporation_id})
-```
-
-Each preferred share class represents a round. Faster but less detail: no individual investors, no issue dates, no price per share.
+- Entries with `is_canceled: true` must be excluded from all aggregates.
+- Converted securities (`is_converted: true`) may appear alongside their post-conversion entries — avoid double-counting when summing shares or cash.
+- Option grants (`is_grant: true`) appear in financing history but are not priced rounds — exclude from the cash-raised bar chart.
+- The quick summary (Option 2) lacks per-investor detail, issue dates, and price per share.

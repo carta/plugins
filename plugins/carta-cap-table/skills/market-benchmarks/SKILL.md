@@ -9,13 +9,29 @@ Compute portfolio-wide benchmarks from your own Carta data: option pool sizes, S
 
 > **Note:** This reflects your firm's portfolio, not Carta-wide market data. Present results as "portfolio benchmarks" not "market data."
 
+## When to Use
+
+- "What's the typical option pool size in our portfolio?"
+- "What are average SAFE terms across our companies?"
+- "What's normal for a Series A?"
+- "Show me cap structure patterns across the portfolio"
+- "How does Acme's option pool compare to the rest?"
+- "Portfolio-wide statistics on round sizes"
+
 ## Prerequisites
 
-No inputs required — this skill loops the full portfolio automatically. Cap at 20 companies.
+No inputs required — this skill loops the full portfolio automatically.
 
-## Commands
+## Data Retrieval
 
-- `list_accounts` — get all portfolio companies
+### Portfolio Enumeration
+
+Call `list_accounts`. Filter to `corporation_pk:` accounts. Extract up to 20 numeric corporation IDs. If more than 20 companies exist, ask the user to narrow scope.
+
+### Per-Company Commands
+
+For each company, fetch in sequence:
+
 - `fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": corporation_id})` — option pool data
 - `fetch("cap_table:get:convertible_notes", {"corporation_id": corporation_id})` — SAFE/note terms
 - `fetch("cap_table:get:financing_history", {"corporation_id": corporation_id})` — round sizes
@@ -37,17 +53,13 @@ From financing history:
 - `cash_paid`: amount paid per security (sum by round_name for round total)
 - `issue_date`: close date
 
-## How to Present
+## Workflow
 
-See Step 4 below. Present as benchmark tables grouped by metric.
-
-## Step 1 — Get Portfolio
+### Step 1 — Get Portfolio
 
 Call `list_accounts`. Filter to `corporation_pk:` accounts. Extract up to 20 numeric corporation IDs.
 
-## Step 2 — Collect Data Per Company
-
-For each company, fetch in sequence:
+### Step 2 — Collect Data Per Company
 
 **Cap table by share class** (for option pool %):
 - `fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": corporation_id})`
@@ -64,7 +76,7 @@ For each company, fetch in sequence:
 - Key fields: `round_name`, `amount_raised`, `issue_date`
 - Identify the most recent priced round and its size
 
-## Step 3 — Compute Summary Statistics
+### Step 3 — Compute Summary Statistics
 
 For each metric, compute across companies that have data:
 - **Median**, **min**, **max**
@@ -75,7 +87,28 @@ Metrics:
 - SAFE valuation cap
 - Last priced round size
 
-## Step 4 — Present Results
+### Step 4 — Present Results
+
+See Presentation section.
+
+If the user asks about a specific company ("how does Acme's option pool compare?"), show that company's value alongside the portfolio median.
+
+## Gates
+
+**Required inputs**: None — portfolio enumeration is automatic.
+
+**AI computation**: Yes — portfolio benchmark statistics (median, min, max for option pool sizes, SAFE caps, round sizes) are AI-derived from aggregated cap table data.
+Trigger the AI computation gate (see interaction-reference §6.2) before outputting any benchmark statistics or portfolio comparisons.
+
+**Subagent prohibition**: Not applicable.
+
+## Presentation
+
+**Format**: Benchmark tables grouped by metric
+
+**BLUF lead**: Lead with the number of companies analyzed and the most notable finding (e.g., "median option pool is 12.5% across 14 companies").
+
+**Sort order**: By metric name (Option Pool, SAFE Caps, Round Sizes).
 
 **Portfolio Benchmarks (N companies)**
 
@@ -100,11 +133,9 @@ Metrics:
 | Range  | $500K – $30M |
 | Companies with priced rounds | 10 |
 
----
+## Caveats
 
-If the user asks about a specific company ("how does Acme's option pool compare?"), show that company's value alongside the portfolio median.
-
-## Best Effort
-
-- **Computed:** median, min, max summary statistics and company-vs-portfolio comparisons are derived from the portfolio sample
-- **Authoritative:** per-company option pool sizes, SAFE terms, and round sizes come directly from Carta
+- Portfolio data reflects point-in-time API calls, not a single atomic snapshot
+- Companies with restricted permissions may have incomplete data
+- Rate limit: maximum 20 companies per invocation
+- This reflects your firm's portfolio, not Carta-wide market data — present results as "portfolio benchmarks" not "market data"
