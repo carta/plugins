@@ -18,7 +18,33 @@ Fetch and present cap table data for a single company or across multiple compani
 - "Compare option pool sizes across my portfolio"
 - "Flag any red flags across my companies"
 
-## Single-Company Cap Table
+## Prerequisites
+
+- Single company: resolve `corporation_id` from `list_accounts`
+- Multi-company: loop all `corporation_pk` accounts from `list_accounts`
+
+## Data Retrieval
+
+### Portfolio Enumeration
+
+Call `list_accounts` to get all accessible entities. Filter to `corporation_pk:` accounts. Extract up to 20 numeric corporation IDs. If more than 20 companies, ask the user to narrow scope.
+
+### Per-Company Commands
+
+- `list_accounts` — get all accessible entities
+- Then per-company commands depending on the query (see reference below)
+
+#### Command Reference
+
+| Data | Command |
+|---|---|
+| 409A valuations | `fetch("cap_table:get:409a_valuations", {"corporation_id": corporation_id})` |
+| SAFEs & convertible notes | `fetch("cap_table:get:convertible_notes", {"corporation_id": corporation_id})` |
+| Pro-forma models | `fetch("cap_table:get:pro_forma_models", {"corporation_id": corporation_id})` |
+| Cap table by share class | `fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": corporation_id})` |
+| Option grants | `fetch("cap_table:list:grants", {"corporation_id": corporation_id})` |
+
+### Single-Company Cap Table
 
 For a single company, fetch both views and present with a bar chart:
 
@@ -26,6 +52,33 @@ For a single company, fetch both views and present with a bar chart:
 fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": corporation_id})
 fetch("cap_table:get:cap_table_by_stakeholder", {"corporation_id": corporation_id})
 ```
+
+## Key Fields
+
+From `list_accounts`:
+- `id`: format `corporation_pk:<id>` — extract the number for company-level commands
+- `accountType`: `"company"` accounts work with all commands; `"portfolio"` and `"investment firm"` are organizations, not companies
+- `name`: company display name
+
+## Workflow
+
+### Step 1 — Get Accounts
+
+Call `list_accounts` to get all accessible entities.
+
+### Step 2 — Filter Accounts
+
+Filter to the relevant account type (`company`, `fund`, `investment firm`, `law firm`, `portfolio`). Extract `corporation_id` from each account's `id` field (strip the `corporation_pk:` or `organization_pk:` prefix).
+
+### Step 3 — Fetch Data
+
+Loop through each corporation, calling the relevant command per company.
+
+### Step 4 — Aggregate and Present
+
+Aggregate and present the results.
+
+### Single-Company Presentation
 
 **Present in this exact order — do not skip any step:**
 
@@ -57,50 +110,7 @@ Other Investor       ███                                        2.6%
 Others               ████                                       9.9%
 ```
 
-## Prerequisites
-
-- Single company: resolve `corporation_id` from `list_accounts`
-- Multi-company: loop all `corporation_pk` accounts from `list_accounts`
-
-## Commands
-
-- `list_accounts` — get all accessible entities
-- Then per-company commands depending on the query (see reference below)
-
-### Command Reference
-
-| Data | Command |
-|---|---|
-| 409A valuations | `fetch("cap_table:get:409a_valuations", {"corporation_id": corporation_id})` |
-| SAFEs & convertible notes | `fetch("cap_table:get:convertible_notes", {"corporation_id": corporation_id})` |
-| Pro-forma models | `fetch("cap_table:get:pro_forma_models", {"corporation_id": corporation_id})` |
-| Cap table by share class | `fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": corporation_id})` |
-| Option grants | `fetch("cap_table:list:grants", {"corporation_id": corporation_id})` |
-
-## Key Fields
-
-From `list_accounts`:
-- `id`: format `corporation_pk:<id>` — extract the number for company-level commands
-- `accountType`: `"company"` accounts work with all commands; `"portfolio"` and `"investment firm"` are organizations, not companies
-- `name`: company display name
-
-## How It Works
-
-There is no single "portfolio query" endpoint. Instead:
-
-1. Call `list_accounts` to get all accessible entities
-2. Filter to the relevant account type (`company`, `fund`, `investment firm`, `law firm`, `portfolio`)
-3. Extract `corporation_id` from each account's `id` field (strip the `corporation_pk:` or `organization_pk:` prefix)
-4. Loop through each corporation, calling the relevant command per company
-5. Aggregate and present the results
-
-## Important
-
-- Only `corporation_pk` accounts work with company-level commands (cap table, grants, SAFEs, valuations). `organization_pk` accounts are portfolios/firms.
-- Be mindful of rate — don't call 50+ companies at once. Ask the user to narrow down if the list is large.
-- Some companies may return errors (permissions, setup state) — skip them gracefully and note which ones failed.
-
-## Example: Find Expiring 409As
+### Example: Find Expiring 409As
 
 ```
 1. list_accounts → get all corporation_pk accounts
@@ -112,10 +122,10 @@ There is no single "portfolio query" endpoint. Instead:
 
 | Company | Current FMV | Effective | Expires | Days Left |
 |---------|------------|-----------|---------|-----------|
-| Acme Corp | $12.61 | 04/25/2024 | 04/24/2025 | 37 |
-| Beta Inc | $5.00 | 01/15/2024 | 01/14/2025 | EXPIRED |
+| Acme Corp | $12.61 | Apr 25, 2024 | Apr 24, 2025 | 37 |
+| Beta Inc | $5.00 | Jan 15, 2024 | Jan 14, 2025 | EXPIRED |
 
-## Example: Portfolio Option Pool Health
+### Example: Portfolio Option Pool Health
 
 ```
 1. list_accounts → get all corporation_pk accounts
@@ -125,14 +135,33 @@ There is no single "portfolio query" endpoint. Instead:
 4. Flag companies with available pool < 5%
 ```
 
-## Presentation Tips
+## Gates
+
+**Required inputs**: None — portfolio enumeration is automatic.
+
+**AI computation**: Yes — cross-company comparisons, red flag detection, and health assessments are AI-derived when querying multiple companies.
+Trigger the AI computation gate (see interaction-reference §6.2) before outputting any cross-company analysis or health assessments.
+
+**Subagent prohibition**: Not applicable.
+
+## Presentation
+
+**Format**: Tables with company names; single-company queries include an ASCII bar chart (see Workflow).
+
+**BLUF lead**: For single-company: lead with total outstanding shares, fully diluted count, and total cash raised. For multi-company: lead with count summary ("3 of 12 companies need attention").
+
+**Sort order**: Multi-company results sorted by urgency/severity (most critical first). Single-company tables sorted by FD % descending.
+
+**Date format**: MMM d, yyyy (e.g. "Jan 15, 2026").
 
 - Always show company name alongside the data
-- Sort by urgency/severity (e.g. most expired first)
 - Group results: "needs attention" vs "healthy"
 - Include a count summary: "3 of 12 companies need attention"
 
-## Best Effort
+## Caveats
 
-- **Computed:** cross-company comparisons, pattern detection, and urgency/severity classifications are derived by Claude
-- **Authoritative:** per-company data (409A dates, cap tables, SAFEs, grants) comes directly from Carta
+- Portfolio data reflects point-in-time API calls, not a single atomic snapshot
+- Companies with restricted permissions may have incomplete data
+- Rate limit: maximum 20 companies per invocation — don't call 50+ companies at once; ask the user to narrow down if the list is large
+- Only `corporation_pk` accounts work with company-level commands (cap table, grants, SAFEs, valuations). `organization_pk` accounts are portfolios/firms.
+- Some companies may return errors (permissions, setup state) — skip them gracefully and note which ones failed
