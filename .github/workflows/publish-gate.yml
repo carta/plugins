@@ -1,0 +1,82 @@
+name: Publish Gate
+
+# Plugin content in this repo is auto-published from carta/claude-marketplace.
+# This gate blocks PRs that modify plugin directories unless they come from
+# the publish flow. PRs touching only non-plugin files (SECURITY.md, README,
+# .github/, CODEOWNERS, etc.) are allowed through.
+#
+# Allowed:
+#   - PRs that don't touch plugins/ directories
+#   - Branches matching publish/<plugin-name> (auto-publish workflow or /publish command)
+#   - Exempt actors (dependabot, terraform bots)
+#
+# Blocked:
+#   - Direct PRs that modify plugins/ (redirect to claude-marketplace)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  publish-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if plugins are modified
+        id: check-plugins
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          CHANGED_FILES=$(gh pr diff "$PR_NUMBER" --repo "${{ github.repository }}" --name-only 2>/dev/null || echo "")
+          PLUGIN_CHANGES=$(echo "$CHANGED_FILES" | grep -c '^plugins/' || true)
+
+          if [[ "$PLUGIN_CHANGES" -gt 0 ]]; then
+            echo "touches_plugins=true" >> "$GITHUB_OUTPUT"
+            echo "Plugin files modified ($PLUGIN_CHANGES files)"
+          else
+            echo "touches_plugins=false" >> "$GITHUB_OUTPUT"
+            echo "No plugin files modified — gate does not apply."
+          fi
+
+      - name: Verify publish provenance
+        if: steps.check-plugins.outputs.touches_plugins == 'true'
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          echo "=== Publish Gate ==="
+          echo "Author: $PR_AUTHOR"
+          echo "Branch: $HEAD_REF"
+          echo ""
+
+          # ── Exempt actors ───────────────────────────────────────────
+          EXEMPT_ACTORS=("dependabot[bot]" "carta-terraform" "terraform-github[bot]")
+          for actor in "${EXEMPT_ACTORS[@]}"; do
+            if [[ "$PR_AUTHOR" == "$actor" ]]; then
+              echo "✓ Exempt actor: $PR_AUTHOR"
+              exit 0
+            fi
+          done
+
+          # ── Check branch pattern ────────────────────────────────────
+          if [[ "$HEAD_REF" =~ ^publish/[a-z0-9-]+$ ]]; then
+            echo "✓ Branch matches publish pattern: $HEAD_REF"
+            exit 0
+          fi
+
+          # ── Blocked ─────────────────────────────────────────────────
+          echo ""
+          echo "✗ BLOCKED"
+          echo ""
+          echo "This PR modifies files under plugins/ but was not created"
+          echo "by the auto-publish workflow."
+          echo ""
+          echo "Plugin content is managed in carta/claude-marketplace."
+          echo "To make changes:"
+          echo "  1. Open a PR in carta/claude-marketplace"
+          echo "  2. Get it reviewed and merged"
+          echo "  3. Changes auto-publish here via the publish workflow"
+          echo ""
+          echo "For manual publish: run /publish <plugin-name> in claude-marketplace."
+          echo ""
+          exit 1
