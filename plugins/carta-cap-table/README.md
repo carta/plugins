@@ -51,3 +51,4 @@ After installing, restart Claude Code and run `/mcp` to complete OAuth authentic
 | `stakeholders` | List stakeholders for a company. Use when asked who the stakeholders are, stakeholder list, shareholders, investors, or holders. |
 | `valuation-history` | Fetch 409A valuation history for a company. Use when asked about 409A valuations, FMV, exercise prices, or valuation expiration dates. |
 | `waterfall-scenarios` | Fetch saved waterfall / exit scenario models for a company. Use when asked about liquidation preferences, exit payouts, return multiples, or waterfall analysis. |
+<!-- test -->
