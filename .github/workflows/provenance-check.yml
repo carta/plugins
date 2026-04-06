@@ -33,7 +33,7 @@ jobs:
         if: steps.changes.outputs.changed_plugins != ''
         run: python .github/scripts/verify-provenance.py "$CHANGED_PLUGINS"
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.PLUGIN_PUBLISH_TOKEN || github.token }}
           PROVENANCE_REPO: ${{ vars.PROVENANCE_REPO }}
           CHANGED_PLUGINS: ${{ steps.changes.outputs.changed_plugins }}
       - name: Post failure comment
