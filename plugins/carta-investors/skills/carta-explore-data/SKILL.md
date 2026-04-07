@@ -1,11 +1,13 @@
 ---
-name: explore-data
-description: Query and explore fund admin data in the Carta data warehouse. Use when asked about fund metrics, NAV, LP data, portfolio financials, journal entries, investments, or any general data warehouse query.
+name: carta-explore-data
+description: Query and explore investors data in the Carta data warehouse. Use when asked about fund metrics, NAV, LP data, portfolio financials, journal entries, investments, or any general data warehouse query.
 ---
+
+<!-- Part of the official Carta AI Agent Plugin -->
 
 # Explore Data
 
-Query the Carta data warehouse for fund admin data — NAV, partner data, portfolio financials, journal entries, investments, and more.
+Query the Carta data warehouse for investors data — NAV, partner data, portfolio financials, journal entries, investments, and more.
 
 ## When to Use
 

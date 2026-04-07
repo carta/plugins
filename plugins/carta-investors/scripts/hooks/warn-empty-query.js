@@ -4,6 +4,8 @@
  *
  * When execute_query returns no rows, outputs a reminder to stderr
  * (exit 2) which gets fed to Claude.
+ *
+ * Part of the official Carta AI Agent Plugin.
  */
 
 let inputData = '';

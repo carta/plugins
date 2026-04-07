@@ -1,0 +1,18 @@
+{
+  "name": "tearsheets",
+  "version": "1.0.1",
+  "description": "Investors Tearsheet tools — generate PDF tearsheets for one or more portfolio companies via the Carta MCP server",
+  "author": {
+    "name": "Carta Engineering",
+    "email": "engineering@carta.com"
+  },
+  "homepage": "https://github.com/carta/plugins",
+  "repository": "https://github.com/carta/plugins",
+  "keywords": ["tearsheet", "investors", "pdf", "portfolio", "portco", "bulk", "report"],
+  "mcpServers": {
+    "carta": {
+      "type": "http",
+      "url": "https://mcp.app.carta.com/mcp"
+    }
+  }
+}

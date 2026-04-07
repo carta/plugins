@@ -1,0 +1,133 @@
+# skill-triggers.test.yaml — verify each skill fires on its trigger phrases
+
+description: carta-investors — skill trigger detection via plugin mode
+
+defaultTest:
+  vars:
+    mode: plugin
+    env:
+      noMcp: true
+      pluginDir: ./plugins/carta-investors
+      tools: [Skill, AskUserQuestion]
+
+prompts:
+  - "{{prompt}}"
+
+tests:
+  # --- explore-data triggers ---
+  - description: "explore-data fires on NAV query"
+    vars:
+      prompt: "What's the current NAV for our funds?"
+    assert:
+      - type: skill-used
+        value: carta-investors:explore-data
+      - type: skill-avoided
+        value: carta-investors:performance-benchmarks
+
+  - description: "explore-data fires on LP contributions query"
+    vars:
+      prompt: "Show me total contributions and distributions for each LP"
+    assert:
+      - type: skill-used
+        value: carta-investors:explore-data
+
+  - description: "explore-data fires on TVPI query"
+    vars:
+      prompt: "Show me TVPI for all funds"
+    assert:
+      - type: skill-used
+        value: carta-investors:explore-data
+
+  # --- performance-benchmarks triggers ---
+  - description: "performance-benchmarks fires on benchmark comparison"
+    vars:
+      prompt: "How does our Fund I compare to its benchmark?"
+    assert:
+      - type: skill-used
+        value: carta-investors:performance-benchmarks
+      - type: skill-avoided
+        value: carta-investors:explore-data
+
+  - description: "performance-benchmarks fires on percentile ranking"
+    vars:
+      prompt: "What percentile is Fund I in for TVPI?"
+    assert:
+      - type: skill-used
+        value: carta-investors:performance-benchmarks
+
+  - description: "performance-benchmarks fires on peer comparison"
+    vars:
+      prompt: "Show me Net IRR benchmarks for Fund II against vintage 2021 peers"
+    assert:
+      - type: skill-used
+        value: carta-investors:performance-benchmarks
+
+  # --- form-adv triggers ---
+  - description: "form-adv fires on regulatory AUM request"
+    vars:
+      prompt: "What's our regulatory AUM as of December 2024?"
+    assert:
+      - type: skill-used
+        value: carta-investors:form-adv
+      - type: skill-avoided
+        value: carta-investors:explore-data
+
+  - description: "form-adv fires on Schedule D request"
+    vars:
+      prompt: "Pull our Form ADV Schedule D data for 2024"
+    assert:
+      - type: skill-used
+        value: carta-investors:form-adv
+
+  - description: "form-adv fires on Form PF request"
+    vars:
+      prompt: "What do I need for Form PF Section 1?"
+    assert:
+      - type: skill-used
+        value: carta-investors:form-adv
+
+  # --- fund-properties triggers ---
+  - description: "fund-properties fires on set fund properties"
+    vars:
+      prompt: "Set fund properties for our main fund"
+    assert:
+      - type: skill-used
+        value: carta-investors:fund-properties
+
+  - description: "fund-properties fires on edit fund terms"
+    vars:
+      prompt: "Update fund terms for Fund I — the domicile country is US"
+    assert:
+      - type: skill-used
+        value: carta-investors:fund-properties
+
+  # --- tearsheets triggers ---
+  - description: "download-tearsheet fires on generate tearsheet"
+    vars:
+      prompt: "Generate a tearsheet for Portco Alpha"
+      env:
+        pluginDir: ./plugins/carta-investors/skills/tearsheets
+        noMcp: true
+        tools: [Skill, AskUserQuestion]
+    assert:
+      - type: skill-used
+        value: tearsheets:download-tearsheet
+
+  - description: "download-tearsheet fires on bulk tearsheets request"
+    vars:
+      prompt: "Download tearsheets for all portfolio companies"
+      env:
+        pluginDir: ./plugins/carta-investors/skills/tearsheets
+        noMcp: true
+        tools: [Skill, AskUserQuestion]
+    assert:
+      - type: skill-used
+        value: tearsheets:download-tearsheet
+
+  # --- negative: unrelated prompt should not trigger carta-investors skills ---
+  - description: "no carta-investors skill fires on unrelated prompt"
+    vars:
+      prompt: "What is the weather today?"
+    assert:
+      - type: skill-avoided
+        value: carta-investors:*

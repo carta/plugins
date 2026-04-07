@@ -9,7 +9,7 @@ Claude Code skill for generating tearsheet PDFs via the Carta MCP server.
 
 ## Skills
 
-### `download-tearsheet`
+### `carta-download-tearsheet`
 
 Generate tearsheet PDFs for one or more portfolio companies.
 

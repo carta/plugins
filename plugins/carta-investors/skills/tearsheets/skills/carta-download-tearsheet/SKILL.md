@@ -1,29 +1,26 @@
 ---
-name: download-tearsheet
+name: carta-download-tearsheet
 description: >
   Generate tearsheet PDFs for one or more portfolio companies via the Carta MCP server.
   For a single portco, generates an immediate PDF preview returned as an embedded resource.
-  For multiple portcos, starts a bulk job, polls until complete, and presents a ZIP download link.
-  Trigger phrases: "generate tearsheet", "download tearsheet", "tearsheet for portco",
-  "bulk tearsheets", "tearsheets for all portcos", "preview tearsheet",
-  "generate tearsheet PDF", "create tearsheet", "download tearsheet package",
-  "tearsheet zip", "download all tearsheets",
-  "Investment Summary", "Fund Summary", "Tear Sheet",
-  "generate Investment Summary", "download Fund Summary", "create Tear Sheet",
-  "generate reports for portcos", "batch tearsheets", "tearsheets for all companies".
-  Also trigger when the user asks to generate or download a document whose name could
-  match a tearsheet template for one or more portfolio companies.
-version: 1.0.0
+  For all portcos across all funds, uses the fast path.
+  For a subset of portcos, starts a bulk job with fund breakdowns, polls until complete, and presents a ZIP download link.
+  Trigger phrases: "generate tearsheet", "download tearsheet", "tearsheet for portco", "bulk tearsheets", "tearsheets for all portcos", "preview tearsheet", "generate tearsheet PDF", "create tearsheet", "download tearsheet package", "tearsheet zip", "download all tearsheets".
+  Also trigger when the user asks to generate or download a document whose name could match a tearsheet template for one or more portfolio companies.
+version: 1.1.1
 ---
+
+<!-- Part of the official Carta AI Agent Plugin -->
 
 # Download Tearsheet
 
 Generate tearsheet PDFs for one or more portfolio companies using the Carta MCP server.
 The skill presents available templates and portfolio companies interactively, then routes
-to the appropriate workflow based on how many portcos are selected:
+to the appropriate workflow based on the selection:
 
 - **One portco** → Preview: immediate embedded PDF returned in the MCP response.
-- **Two or more portcos** → Bulk: async ZIP archive, polled until complete, download URL provided.
+- **All portcos across all funds** → Download All: fast path — no fund breakdown needed.
+- **Specific portcos (two or more)** → Bulk: builds fund breakdowns, async ZIP archive, polled until complete, download URL provided.
 
 ---
 
@@ -116,7 +113,8 @@ Ask the user to choose:
 After the user selects portcos:
 
 - **Exactly one portco selected** → proceed to [Preview Flow](#preview-flow-single-portco).
-- **Two or more portcos selected** → build `FUND_BREAKDOWNS` and proceed to [Bulk Flow](#bulk-flow-multiple-portcos).
+- **All portcos across all funds selected** → proceed to [Download All Flow](#download-all-flow-all-portcos).
+- **Two or more specific portcos selected** → build `FUND_BREAKDOWNS` and proceed to [Bulk Flow](#bulk-flow-multiple-portcos).
 
 ---
 
@@ -157,6 +155,52 @@ Company:  <PORTCO_NAME>
 - **Timeout:** Server may be busy. Try again.
 
 Never retry automatically.
+
+---
+
+## Download All Flow (all portcos)
+
+Present a confirmation summary before starting — **never proceed without explicit user approval**:
+
+```
+Ready to generate tearsheets for all portfolio companies:
+
+  Template:  <TEMPLATE_NAME> (<TEMPLATE_UUID>)
+  Scope:     All portcos across all funds
+
+Proceed? (yes/no)
+```
+
+Start the bulk job using the download-all command:
+
+```
+fetch("fund:mutate:download_all_tearsheets", {
+  "template_uuid": "<TEMPLATE_UUID>"
+})
+```
+
+Tell the user the job has started and polling will begin.
+
+**Poll for completion** — call `fetch("fund:get:tearsheet_download_status", {})` every 30 seconds, up to
+10 attempts (5 minutes total):
+
+- Response is `"pending"` → print progress ("Still processing... (attempt N/10)") and wait.
+- Response contains a URL → job complete. Capture as `DOWNLOAD_URL`.
+- Response is an error message → surface it and stop.
+
+**On timeout (10 attempts exhausted):** Tell the user the job may still be running and
+they can check manually by asking: "Check tearsheet download status".
+
+**On success:** Present the download link:
+- DO NOT try to download the artifact directly. ALWAYS present the download link.
+
+```
+Your tear sheets are ready!
+
+[Download Your Tear Sheets](<DOWNLOAD_URL>)
+
+> Note: this link is temporary and will expire — download it soon.
+```
 
 ---
 
@@ -210,6 +254,7 @@ Tell the user the job has started and polling will begin.
 they can check manually by asking: "Check tearsheet download status".
 
 **On success:** Present the download link:
+- DO NOT try to download the artifact directly. ALWAYS present the download link.
 
 ```
 Your tear sheets are ready!
