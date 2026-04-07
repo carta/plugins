@@ -5,7 +5,7 @@ description: >
   Use this skill when the user says things like "add a deal", "create a deal",
   "log a deal", "add deal to CRM", "add deal to Carta CRM", or "/add-deal".
   Collects deal information conversationally, then POSTs it to the Carta CRM API.
-tools:
+allowed-tools:
   - Bash
 ---
 
@@ -15,14 +15,22 @@ Help the user create one or more deal records in the Carta CRM by calling
 `POST /v1/deals`. First fetch available pipelines and custom fields, then collect
 deal details conversationally, and make the API call using curl.
 
-## Step 1 — Fetch available pipelines and stages
+## Step 1 — Check credentials
+
+```bash
+echo "API_KEY=${LISTALPHA_API_KEY:+set}"
+```
+
+If `LISTALPHA_API_KEY` is missing, tell the user:
+> "You need to set the `LISTALPHA_API_KEY` environment variable to your Carta CRM API key before using this skill. You can add it in Claude's environment settings."
+
+## Step 2 — Fetch available pipelines and stages
 
 Call the pipelines endpoint so the user can pick a pipeline and stage by name:
 
 ```bash
 curl -s -X GET "https://api.listalpha.com/v1/deals/pipelines" \
-  -H "Authorization: ${LISTALPHA_API_KEY}" \
-  -H "Content-Type: application/json"
+  -H "Authorization: ${LISTALPHA_API_KEY}"
 ```
 
 The response shape is:
@@ -36,17 +44,16 @@ The response shape is:
 
 Present the pipeline and stage names to the user. If the call fails, proceed without it.
 
-## Step 2 — Discover available custom fields (optional but recommended)
+## Step 3 — Discover available custom fields (optional but recommended)
 
 ```bash
 curl -s -X GET "https://api.listalpha.com/v1/deals/custom-fields" \
-  -H "Authorization: ${LISTALPHA_API_KEY}" \
-  -H "Content-Type: application/json"
+  -H "Authorization: ${LISTALPHA_API_KEY}"
 ```
 
 Use returned field names as hints when collecting deal data. If the call fails, proceed without it.
 
-## Step 3 — Collect deal information
+## Step 4 — Collect deal information
 
 Ask the user for:
 - **Pipeline** (optional) — which pipeline this deal belongs to (from Step 1)
@@ -62,7 +69,7 @@ Ask the user for:
 If the user has already provided details in their message, extract them directly
 without re-asking.
 
-## Step 4 — Create the deal via API
+## Step 5 — Create the deal via API
 
 Build the request body, omitting any fields the user did not provide:
 ```json
@@ -94,7 +101,7 @@ curl -s -X POST "https://api.listalpha.com/v1/deals" \
   -d '<json_body>'
 ```
 
-## Step 5 — Report result
+## Step 6 — Report result
 
 On success (HTTP 200), respond with:
 > "Deal created successfully (ID: `{id}`)."
@@ -109,7 +116,7 @@ On error, show the status code and error message from the response, and suggest 
 
 ## Adding multiple deals
 
-If the user wants to add multiple deals at once, repeat Steps 4–5 for each one.
+If the user wants to add multiple deals at once, repeat Steps 4–6 for each one.
 After all are done, summarize:
 > "Created N deals: [list of company names with IDs]"
 

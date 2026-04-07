@@ -1,6 +1,6 @@
 # Carta CRM Plugin
 
-Add investors, companies, and contacts to the Carta CRM via the public API — conversationally.
+Add investors, companies, contacts, deals, and notes to the Carta CRM via the public API — conversationally.
 
 ## Setup
 

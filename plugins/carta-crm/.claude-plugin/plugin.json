@@ -7,8 +7,5 @@
     "name": "Ihar Valodzin",
     "email": "ihar.valodzin@carta.com"
   },
-  "homepage": "https://github.com/carta/plugins",
-  "repository": "https://github.com/carta/plugins",
-  "keywords": ["carta", "crm", "investors", "companies", "contacts", "deals", "notes"],
-  "_note": "This plugin calls the Carta CRM API directly (no MCP server). Direct API chosen for speed of iteration; will evaluate MCP migration based on customer feedback."
+  "keywords": ["carta", "crm", "investors", "companies", "contacts", "deals", "notes"]
 }

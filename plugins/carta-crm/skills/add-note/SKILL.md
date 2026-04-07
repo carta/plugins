@@ -5,7 +5,7 @@ description: >
   Use this skill when the user says things like "add a note", "create a note",
   "log a note", "add note to CRM", "add note to Carta CRM", or "/add-note".
   Collects note information conversationally, then POSTs it to the Carta CRM API.
-tools:
+allowed-tools:
   - Bash
 ---
 
@@ -15,7 +15,16 @@ Help the user create one or more note records in the Carta CRM by calling
 `POST /v1/notes`. Collect the note details conversationally, validate the required
 fields, then make the API call using curl.
 
-## Step 1 — Collect note information
+## Step 1 — Check credentials
+
+```bash
+echo "API_KEY=${LISTALPHA_API_KEY:+set}"
+```
+
+If `LISTALPHA_API_KEY` is missing, tell the user:
+> "You need to set the `LISTALPHA_API_KEY` environment variable to your Carta CRM API key before using this skill. You can add it in Claude's environment settings."
+
+## Step 2 — Collect note information
 
 Ask the user for:
 - **Title** (required) — the display name shown in the UI (must be non-empty)
@@ -28,7 +37,7 @@ Ask the user for:
 If the user has already provided details in their message, extract them directly
 without re-asking.
 
-## Step 2 — Create the note via API
+## Step 3 — Create the note via API
 
 Build the request body, omitting any fields the user did not provide:
 ```json
@@ -50,7 +59,7 @@ curl -s -X POST "https://api.listalpha.com/v1/notes" \
   -d '<json_body>'
 ```
 
-## Step 3 — Report result
+## Step 4 — Report result
 
 On success (HTTP 200), respond with:
 > "Note **{title}** created successfully (ID: `{id}`)."
@@ -63,7 +72,7 @@ On error, show the status code and error message from the response, and suggest 
 
 ## Adding multiple notes
 
-If the user wants to add multiple notes at once, repeat Steps 2–3 for each one.
+If the user wants to add multiple notes at once, repeat Steps 2–4 for each one.
 After all are done, summarize:
 > "Created N notes: [list of titles with IDs]"
 

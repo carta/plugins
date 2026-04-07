@@ -7,7 +7,7 @@ description: >
   or "/add-contact". Collects contact information conversationally, then POSTs to the
   Carta CRM API. listId is optional — contacts are saved to the platform's all-contacts
   list if no list is specified.
-tools:
+allowed-tools:
   - Bash
 ---
 

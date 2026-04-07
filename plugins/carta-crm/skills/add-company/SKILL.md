@@ -5,7 +5,7 @@ description: >
   Use this skill when the user says things like "add a company", "create a company
   record", "add company to CRM", "upload company to Carta CRM", or "/add-company".
   Collects company information conversationally, then POSTs it to the Carta CRM API.
-tools:
+allowed-tools:
   - Bash
 ---
 
@@ -32,8 +32,7 @@ Call the custom fields endpoint to see what fields the tenant has configured for
 
 ```bash
 curl -s -X GET "https://api.listalpha.com/v1/companies/custom-fields" \
-  -H "Authorization: ${LISTALPHA_API_KEY}" \
-  -H "Content-Type: application/json"
+  -H "Authorization: ${LISTALPHA_API_KEY}"
 ```
 
 Use the returned field names as hints when collecting company data. If the call

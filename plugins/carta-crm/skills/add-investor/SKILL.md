@@ -6,7 +6,7 @@ description: >
   "add investor to Carta CRM", "create investor record", "add this VC fund to the CRM", or
   "save investor data". Collects investor information conversationally, then POSTs
   it to the Carta CRM API.
-tools:
+allowed-tools:
   - Bash
 ---
 
@@ -33,8 +33,7 @@ Call the custom fields endpoint to see what fields the tenant has configured:
 
 ```bash
 curl -s -X GET "https://api.listalpha.com/v1/investors/custom-fields" \
-  -H "Authorization: ${LISTALPHA_API_KEY}" \
-  -H "Content-Type: application/json"
+  -H "Authorization: ${LISTALPHA_API_KEY}"
 ```
 
 Use the returned field names as hints when collecting investor data. If the call
