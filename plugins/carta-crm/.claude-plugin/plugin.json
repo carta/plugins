@@ -1,0 +1,11 @@
+{
+  "name": "carta-crm",
+  "displayName": "Carta CRM",
+  "version": "0.5.1",
+  "description": "Add investors, companies, contacts, deals, and notes to the Carta CRM via the public API",
+  "author": {
+    "name": "Ihar Valodzin",
+    "email": "ihar.valodzin@carta.com"
+  },
+  "keywords": ["carta", "crm", "investors", "companies", "contacts", "deals", "notes"]
+}

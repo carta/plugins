@@ -18,6 +18,12 @@
       "source": "./plugins/carta-fund-admin",
       "description": "Carta Fund Admin plugin — skills for querying fund admin data, performance benchmarks, regulatory reporting, and more",
       "category": "productivity"
+    },
+    {
+      "name": "carta-crm",
+      "source": "./plugins/carta-crm",
+      "description": "Carta CRM plugin — skills for adding investors, companies, contacts, deals, and notes to the Carta CRM via the public API",
+      "category": "productivity"
     }
   ]
 }
