@@ -333,6 +333,11 @@ def main() -> int:
 
     results: dict[str, bool] = {}
     for name in plugin_names:
+        local_plugin_dir = PLUGINS_DIR / name
+        if not local_plugin_dir.is_dir():
+            print(f"\n  [SKIP] Plugin '{name}' is being removed — no provenance check needed.")
+            results[name] = True
+            continue
         results[name] = verify_plugin(name, manifest)
 
     # Summary
