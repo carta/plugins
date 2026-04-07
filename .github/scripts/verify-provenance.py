@@ -308,6 +308,26 @@ def verify_plugin(
     return all_passed
 
 
+def _load_marketplace_plugin_names() -> set[str]:
+    """Load the set of plugin names registered in marketplace.json."""
+    marketplace_path = REPO_ROOT / ".claude-plugin" / "marketplace.json"
+    if not marketplace_path.is_file():
+        print(f"Warning: marketplace.json not found at {marketplace_path.relative_to(REPO_ROOT)}")
+        return set()
+
+    try:
+        data = json.loads(marketplace_path.read_text())
+    except (json.JSONDecodeError, OSError) as exc:
+        print(f"Warning: Failed to parse marketplace.json: {exc}")
+        return set()
+
+    return {
+        p["name"]
+        for p in data.get("plugins", [])
+        if isinstance(p, dict) and "name" in p
+    }
+
+
 def main() -> int:
     if len(sys.argv) < 2 or not sys.argv[1].strip():
         print("No plugins to verify. Exiting.")
@@ -325,6 +345,9 @@ def main() -> int:
     print(f"Repo:    {MARKETPLACE_REPO} (ref: {MARKETPLACE_REF})")
     print(f"Plugins: {', '.join(plugin_names)}")
 
+    # Load registered plugin names from marketplace.json (used for deletion checks)
+    registered_plugins = _load_marketplace_plugin_names()
+
     # Fetch the security manifest once (used by checks 2 & 3)
     manifest = fetch_security_manifest()
     if manifest is None:
@@ -335,8 +358,19 @@ def main() -> int:
     for name in plugin_names:
         local_plugin_dir = PLUGINS_DIR / name
         if not local_plugin_dir.is_dir():
-            print(f"\n  [SKIP] Plugin '{name}' is being removed — no provenance check needed.")
-            results[name] = True
+            if name in registered_plugins:
+                # Directory is missing but plugin is still in marketplace.json
+                # — this is likely an accidental deletion.
+                print(f"\n  [FAIL] Plugin '{name}' directory is missing but still "
+                      f"listed in marketplace.json — either restore the plugin or "
+                      f"remove it from marketplace.json")
+                results[name] = False
+            else:
+                # Directory is missing AND plugin has been removed from
+                # marketplace.json — intentional deletion, safe to skip.
+                print(f"\n  [SKIP] Plugin '{name}' is being removed (directory deleted "
+                      f"and removed from marketplace.json) — no provenance check needed.")
+                results[name] = True
             continue
         results[name] = verify_plugin(name, manifest)
 
