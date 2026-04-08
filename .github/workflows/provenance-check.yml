@@ -13,6 +13,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/create-github-app-token@v1
+        id: app-token
+        with:
+          app-id: ${{ secrets.CARTA_CI_APP_ID }}
+          private-key: ${{ secrets.CARTA_CI_APP_PRIVATE_KEY }}
+          repositories: claude-marketplace
       - name: Identify changed plugins
         id: changes
         run: |
@@ -33,7 +39,7 @@ jobs:
         if: steps.changes.outputs.changed_plugins != ''
         run: python .github/scripts/verify-provenance.py "$CHANGED_PLUGINS"
         env:
-          GH_TOKEN: ${{ secrets.PLUGIN_PUBLISH_TOKEN || github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           PROVENANCE_REPO: ${{ vars.PROVENANCE_REPO }}
           CHANGED_PLUGINS: ${{ steps.changes.outputs.changed_plugins }}
       - name: Post failure comment

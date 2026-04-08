@@ -232,11 +232,15 @@ def check_content_integrity(
             f"missing from security manifest.",
         )
 
-    expected_hash = entry.get("content_hash", "")
+    # Prefer published_content_hash (accounts for publish transforms like
+    # URL rewrites and file exclusions). Fall back to content_hash for
+    # plugins that haven't been updated to include the published hash yet.
+    expected_hash = entry.get("published_content_hash") or entry.get("content_hash", "")
+    hash_field = "published_content_hash" if entry.get("published_content_hash") else "content_hash"
     if not expected_hash:
         return (
             False,
-            f"No content_hash recorded in manifest for '{plugin_name}'.",
+            f"No content hash recorded in manifest for '{plugin_name}'.",
         )
 
     # The local plugin directory is always at plugins/<name> in this repo,
@@ -256,7 +260,7 @@ def check_content_integrity(
             False,
             f"Content hash mismatch for '{plugin_name}'.\n"
             f"    Local:    {local_hash}\n"
-            f"    Expected: {expected_hash}\n"
+            f"    Expected: {expected_hash} ({hash_field})\n"
             f"    The local plugin content differs from what was scanned in "
             f"claude-marketplace. Ensure you are syncing the exact same files.",
         )
