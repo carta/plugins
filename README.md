@@ -13,4 +13,5 @@ Visit the [Carta Developer Platform website here](https://docs.carta.com/api-pla
 | Plugin | Description |
 |--------|-------------|
 | [carta-cap-table](plugins/carta-cap-table) | Skills and MCP server for querying Carta cap tables, grants, SAFEs, 409A valuations, waterfall scenarios, and more |
-| [carta-fund-admin](plugins/carta-fund-admin) | Skills and MCP server for querying Carta fund admin data, including NAV, performance, allocations, and regulatory reporting |
+| [carta-crm](plugins/carta-crm) | Manage the Carta CRM conversationally — search, add, update, and enrich investors, companies, contacts, deals, notes, and fundraisings via the public API |
+| [carta-investors](plugins/carta-investors) | Skills and MCP server for querying Carta fund admin data, including NAV, performance, allocations, and regulatory reporting |
