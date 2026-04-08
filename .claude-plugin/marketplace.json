@@ -24,6 +24,12 @@
       "source": "./plugins/carta-crm",
       "description": "Carta CRM plugin — skills for adding investors, companies, contacts, deals, and notes to the Carta CRM via the public API",
       "category": "productivity"
+    },
+    {
+      "name": "carta-cap-table-v2",
+      "source": "./plugins/carta-cap-table-v2",
+      "description": "Carta Cap Table plugin — skills and hooks for querying cap tables, grants, SAFEs, 409A valuations, waterfall scenarios, and more",
+      "category": "productivity"
     }
   ]
 }
