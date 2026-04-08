@@ -1,0 +1,12 @@
+{
+  "name": "tearsheets",
+  "version": "1.1.0",
+  "description": "Investors Tear sheet tools — generate PDF tear sheets for one or more portfolio companies via the Carta MCP server",
+  "author": {
+    "name": "Carta Engineering",
+    "email": "engineering@carta.com"
+  },
+  "homepage": "https://github.com/carta/plugins",
+  "repository": "https://github.com/carta/plugins",
+  "keywords": ["tear sheet", "tearsheet", "investors", "pdf", "portfolio", "portco", "bulk", "report"]
+}
