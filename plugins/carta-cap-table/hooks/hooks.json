@@ -10,6 +10,28 @@
                     }
                 ]
             }
+        ],
+        "PreToolUse": [
+            {
+                "matcher": "Skill",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "node ${CLAUDE_PLUGIN_ROOT}/scripts/hooks/track-active-skill.js",
+                        "timeout": 5
+                    }
+                ]
+            },
+            {
+                "matcher": "mcp__carta.*__.*",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "node ${CLAUDE_PLUGIN_ROOT}/scripts/hooks/inject-instrumentation.js",
+                        "timeout": 5
+                    }
+                ]
+            }
         ]
     }
 }
