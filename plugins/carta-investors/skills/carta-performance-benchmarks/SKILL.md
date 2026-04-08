@@ -1,7 +1,9 @@
 ---
-name: performance-benchmarks
+name: carta-performance-benchmarks
 description: Compare a fund's performance against peer benchmark cohorts. Use when asked about fund benchmarks, peer comparison, percentile ranking, Net IRR vs peers, TVPI benchmarks, or how a fund stacks up against its cohort.
 ---
+
+<!-- Part of the official Carta AI Agent Plugin -->
 
 # Performance Benchmarks
 
