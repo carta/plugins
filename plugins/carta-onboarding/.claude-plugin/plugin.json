@@ -1,6 +1,6 @@
 {
   "name": "carta-onboarding",
-  "version": "1.9.1",
+  "version": "1.9.2",
   "description": "Corporation onboarding tools — unified cap table onboarding orchestrator (entity setup, document extraction, OBS import, pro forma, reconciliation with global/regional rules, 33-point and 55-point validation), document upload and extraction via CLI, AI-assisted extraction review, and Shareworks migration for Implementation Managers",
   "author": {
     "name": "Carta Engineering",

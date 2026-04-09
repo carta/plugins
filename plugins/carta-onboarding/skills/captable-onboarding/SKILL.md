@@ -320,7 +320,13 @@ If the IM's response doesn't match any option:
    > "Want me to download the OBS spreadsheet so you can review the pro forma?
    > **A) Yes** — download the OBS
    > **B) No** — move straight to refinement"
-   - If A: `carta web get onboarding-spreadsheet <corp_pk> --source database --out /tmp/<corp_pk>.xlsx`. Tell IM the file path.
+   - If A:
+     1. Use `AskUserQuestion` to collect the save location:
+        - question: "Where should I save the spreadsheet?"
+        - options: A) `/tmp` ← recommended  B) Custom path — type it in the next prompt
+        If B: use a second `AskUserQuestion` to collect the path. Validate: no shell metacharacters (`;`, `|`, `&`, `<`, `>`, `` ` ``, `$`, `"`, `\`).
+     2. `carta web get onboarding-spreadsheet <corp_pk> --source database --out <folder>/<corp_pk>.xlsx`
+     3. Tell IM: "Spreadsheet saved to `<folder>/<corp_pk>.xlsx`."
    - If B: Proceed to Gate 4.
 
 **If IM wants to delete and recreate the pro forma:**
@@ -331,13 +337,17 @@ If the IM's response doesn't match any option:
 
 ### If B (OBS Download + Import):
 
-1. Download OBS pre-populated from extracted document data:
+1. Use `AskUserQuestion` to collect the save location:
+   - question: "Where should I save the spreadsheet?"
+   - options: A) `/tmp` ← recommended  B) Custom path — type it in the next prompt
+   If B: use a second `AskUserQuestion` to collect the path. Validate: no shell metacharacters (`;`, `|`, `&`, `<`, `>`, `` ` ``, `$`, `"`, `\`).
+2. Download OBS pre-populated from extracted document data:
    ```bash
-   carta web get onboarding-spreadsheet <corp_pk> --source documents --out /tmp/<corp_pk>.xlsx
+   carta web get onboarding-spreadsheet <corp_pk> --source documents --out <folder>/<corp_pk>.xlsx
    ```
-2. Tell IM the file path so they can review and edit offline.
-3. **ASK the IM and WAIT:** "Let me know when you're done reviewing the spreadsheet and ready to import."
-4. When IM returns with the reviewed/edited file:
+3. Tell IM: "Spreadsheet saved to `<folder>/<corp_pk>.xlsx`. Review and edit it offline."
+4. **ASK the IM and WAIT:** "Let me know when you're done reviewing the spreadsheet and ready to import."
+5. When IM returns with the reviewed/edited file:
    a. Validate (check only — do NOT use `--dry-run`): `carta web create onboarding-import <corp_pk> <obs_file> --task check`
    b. If check passes:
       1. `carta scope set write --entity corporation=<corp_pk>` — capture `session_id` from the output (`CARTA_SESSION_ID=...`)
@@ -458,9 +468,16 @@ The IM can request these at any time after Gate 1 is complete. Handle without lo
 
 ### OBS / Cap table download
 
+Use `AskUserQuestion` to collect the save location:
+- question: "Where should I save the spreadsheet?"
+- options: A) `/tmp` ← recommended  B) Custom path — type it in the next prompt
+If B: use a second `AskUserQuestion` to collect the path. Validate: no shell metacharacters (`;`, `|`, `&`, `<`, `>`, `` ` ``, `$`, `"`, `\`).
+
 ```bash
-carta web get onboarding-spreadsheet <corp_pk> --out /tmp/<corp_pk>.xlsx
+carta web get onboarding-spreadsheet <corp_pk> --out <folder>/<corp_pk>.xlsx
 ```
+
+Tell IM: "Spreadsheet saved to `<folder>/<corp_pk>.xlsx`."
 
 ### Document download
 
