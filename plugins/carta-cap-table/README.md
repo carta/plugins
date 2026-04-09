@@ -4,51 +4,62 @@ Claude Code plugin that gives Claude access to Carta cap table data.
 
 ## How it works
 
-This plugin provides **skills** that teach Claude how to use the Carta MCP server effectively — querying cap tables, modeling rounds, detecting portfolio alerts, and more.
+This plugin provides **skills** that teach Claude how to use the Carta MCP server effectively — querying cap tables, modeling rounds, detecting portfolio alerts, and more. The MCP server itself lives in the [carta-mcp](https://github.com/carta/carta-mcp) repo.
 
-The MCP server handles authentication via OAuth:
-1. On first use, Claude opens a browser to the Carta login page
-2. You log in with your Carta credentials
-3. Carta issues an access token that Claude uses for all subsequent requests
+OAuth uses a two-leg redirect flow:
+1. Claude opens a browser to the MCP server's `/authorize` endpoint
+2. User logs in via Carta's login page
+3. Carta redirects back with an auth code, which is exchanged for an access token
+4. Claude sends the token as a bearer token on every MCP tool call
 
 ## Installation
 
-Install from the `carta/plugins` marketplace:
-
-```
-/plugin install carta-cap-table@carta-plugins
-```
-
-This registers the Carta MCP server (`https://mcp.app.carta.com/mcp`) and loads all skills automatically.
+Install from the marketplace via `/plugin`, or use the install script in [`cap-table-scaffold`](../cap-table-scaffold/scripts/install/).
 
 After installing, restart Claude Code and run `/mcp` to complete OAuth authentication.
 
-## Try it out
+### Try it out
 
 - "What Carta cap table data do I have access to?"
 - "Show me the ownership breakdown for [company]"
 - "Who are the stakeholders in [company]?"
 - "What SAFEs are outstanding for [company]?"
 - "When does the 409A expire for [company]?"
-- "Model a Series B at $80M pre-money with a $20M raise"
 
 ## Skills
 
 | Skill | Description |
 |-------|-------------|
-| `client-triggers` | Surface time-based BD triggers across the portfolio. Use when asked about client outreach, which clients closed a round recently, stale cap tables, pending grants, tombstones, weekly deals, or BD triggers. |
-| `conversion-calculator` | Calculate SAFE and convertible note conversion into equity. Use when asked about SAFE conversion, note conversion, conversion shares, or how instruments convert in a round. |
-| `discover-commands` | Find the right carta-cap-table command when no other skill matches. Use when unsure which command to call, exploring available data, or when the user's request doesn't match a specific skill. |
-| `grant-vesting` | Fetch vesting schedule for a specific option grant. Use when asked about vesting details, cliff dates, vesting progress, or unvested shares for a particular grant. |
-| `interaction-reference` | >- |
-| `list-convertible-notes` | Fetch all convertible instruments (SAFEs and convertible debt) for a company. Use when asked about convertible notes, SAFEs, convertible debt, note terms, caps, discounts, or maturity dates. |
-| `list-safes` | Fetch all SAFEs for a company. Use when asked about SAFEs, simple agreements for future equity, SAFE terms, valuation caps, or discounts. |
-| `market-benchmarks` | Analyze cap structure patterns across the portfolio as market benchmarks. Use when asked about market benchmarks, typical option pool sizes, average SAFE terms, what's normal for a Series A, cap structure patterns, or portfolio-wide statistics. |
-| `ownership` | Ownership structure by share class, voting rights, and liquidation seniority. Use when asked about ownership breakdown, preferred vs common holders, voting power, protective provisions, or consent requirements. |
-| `portfolio-alerts` | Detect red flags and time-sensitive issues across portfolio companies. Use when asked to flag problems, find expiring items, or audit portfolio health. |
-| `portfolio-query` | Query cap table data for one or more companies. Use when asked about cap tables, ownership breakdown, share classes, stakeholder holdings, portfolio-wide analysis, comparing companies, or finding patterns across multiple entities. |
-| `pro-forma-model` | Model a pro-forma financing round to show dilution impact. Use when asked to model a Series A/B/C, new round, or show how a round would affect ownership. |
-| `round-history` | Fetch financing round history for a company. Use when asked about funding rounds, capital raised, or financing history. |
-| `stakeholders` | List stakeholders for a company. Use when asked who the stakeholders are, stakeholder list, shareholders, investors, or holders. |
-| `valuation-history` | Fetch 409A valuation history for a company. Use when asked about 409A valuations, FMV, exercise prices, or valuation expiration dates. |
-| `waterfall-scenarios` | Fetch saved waterfall / exit scenario models for a company. Use when asked about liquidation preferences, exit payouts, return multiples, or waterfall analysis. |
+| `carta-portfolio-query` | Query cap table data across multiple companies, or detailed per-company data. For visual summaries, routes to `cap_table_chart` MCP App |
+| `carta-pro-forma-model` | Model a financing round and show dilution impact |
+| `carta-portfolio-alerts` | Detect red flags and time-sensitive issues |
+| `carta-ownership` | Voting rights, liquidation seniority, preferred vs common analysis. For visual ownership summaries, use `cap_table_chart` |
+| `carta-stakeholders` | List stakeholders for a company |
+| `carta-list-safes` | Fetch all SAFEs for a company |
+| `carta-list-convertible-notes` | Fetch all convertible instruments |
+| `carta-valuation-history` | 409A valuation history |
+| `carta-waterfall-scenarios` | Saved exit scenario / waterfall models |
+| `carta-round-history` | Financing round history |
+| `carta-grant-vesting` | Vesting schedule for a specific option grant |
+| `carta-conversion-calculator` | Calculate SAFE/note conversion into equity |
+| `carta-client-triggers` | Surface time-based BD triggers across the portfolio |
+| `carta-market-benchmarks` | Cap structure patterns as market benchmarks |
+| `carta-interaction-reference` | Behavioral rules for presenting cap table data (voice, tone, precision, provenance) |
+| `carta-discover-commands` | Find the right MCP command when unsure |
+
+## MCP Server
+
+The Carta MCP server source code lives in [carta/carta-mcp](https://github.com/carta/carta-mcp). This plugin only contains the skills and hooks needed to use it from Claude.
+
+## Testing
+
+Run the verdict test suite with `/cap-table-scaffold:test`. Requires the `carta-local` MCP server running and authenticated — run `/mcp` first if needed.
+
+```
+/cap-table-scaffold:test                    # all suites in parallel
+/cap-table-scaffold:test ai-authorization   # single suite
+```
+
+## Contributing
+
+See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for the playbook on adding new skills, MCP commands, write actions, and when to move logic to Python.
