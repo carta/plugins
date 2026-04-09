@@ -22,7 +22,7 @@
     {
       "name": "carta-crm",
       "source": "./plugins/carta-crm",
-      "description": "Carta CRM plugin — skills for adding investors, companies, contacts, deals, and notes to the Carta CRM via the public API",
+      "description": "Add investors, companies, contacts, deals, and notes to the Carta CRM via the public API",
       "category": "productivity"
     }
   ]
