@@ -2,6 +2,8 @@
 
 # Carta Plugins
 
+> **Read-only mirror.** This repo is automatically published from an internal repository. Do not open pull requests here — all development and review happens internally.
+
 The official repository of Carta plugins for AI Agents, as a [Claude Plugin Marketplace](https://code.claude.com/docs/en/discover-plugins).
 
 ## Documentation
