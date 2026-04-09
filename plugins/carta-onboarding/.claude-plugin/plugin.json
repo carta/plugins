@@ -1,0 +1,39 @@
+{
+  "name": "carta-onboarding",
+  "version": "1.9.1",
+  "description": "Corporation onboarding tools — unified cap table onboarding orchestrator (entity setup, document extraction, OBS import, pro forma, reconciliation with global/regional rules, 33-point and 55-point validation), document upload and extraction via CLI, AI-assisted extraction review, and Shareworks migration for Implementation Managers",
+  "author": {
+    "name": "Carta Engineering",
+    "email": "engineering@carta.com"
+  },
+  "repository": "https://github.com/carta/plugins",
+  "keywords": [
+    "onboarding",
+    "obs",
+    "cap-table",
+    "extraction",
+    "corporation",
+    "im",
+    "implementation-manager",
+    "spreadsheet",
+    "carta-cli",
+    "validation",
+    "shareworks",
+    "pe",
+    "llc",
+    "document-classification",
+    "document-extraction",
+    "review-onboarding-documents",
+    "reconciliation",
+    "captable-reconciliation",
+    "orchestrator",
+    "captable-onboarding"
+  ],
+  "homepage": "https://github.com/carta/plugins",
+  "mcpServers": {
+    "carta": {
+      "type": "http",
+      "url": "https://mcp.app.carta.com/mcp"
+    }
+  }
+}
