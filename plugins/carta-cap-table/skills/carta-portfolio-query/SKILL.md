@@ -63,7 +63,10 @@ Call `list_accounts` to get all accessible entities. Filter to `corporation_pk:`
 | 409A valuations | `fetch("cap_table:get:409a_valuations", {"corporation_id": corporation_id})` |
 | SAFEs & convertible notes | `fetch("cap_table:get:convertible_notes", {"corporation_id": corporation_id})` |
 | Cap table by share class | `fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": corporation_id})` |
-| Option grants | `fetch("cap_table:list:grants", {"corporation_id": corporation_id})` |
+| Option grants (ISO/NSO) | `fetch("cap_table:list:grants", {"corporation_id": corporation_id})` |
+| RSU grants | `fetch("cap_table:list:rsus", {"corporation_id": corporation_id})` |
+| SAR grants | `fetch("cap_table:list:sars", {"corporation_id": corporation_id})` |
+| CBU grants | `fetch("cap_table:list:cbus", {"corporation_id": corporation_id})` |
 
 ### Single-Company Detailed View
 
