@@ -1,20 +1,18 @@
 ---
 name: carta-download-tearsheet
 description: >
-  Generate tearsheet PDFs for one or more portfolio companies via the Carta MCP server.
-  For a single portco, generates an immediate PDF preview returned as an embedded resource.
-  For all portcos across all funds, uses the fast path.
-  For a subset of portcos, starts a bulk job with fund breakdowns, polls until complete, and presents a ZIP download link.
-  Trigger phrases: "generate tearsheet", "download tearsheet", "tearsheet for portco", "bulk tearsheets", "tearsheets for all portcos", "preview tearsheet", "generate tearsheet PDF", "create tearsheet", "download tearsheet package", "tearsheet zip", "download all tearsheets".
-  Also trigger when the user asks to generate or download a document whose name could match a tearsheet template for one or more portfolio companies.
-version: 1.1.1
+  Download tear sheets for your portfolio companies and funds on Carta.
+version: 1.2.0
 ---
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
 # Download Tearsheet
 
-Generate tearsheet PDFs for one or more portfolio companies using the Carta MCP server.
+## Overview
+
+Download tear sheets for your portfolio companies and funds on Carta.
+
 The skill presents available templates and portfolio companies interactively, then routes
 to the appropriate workflow based on the selection:
 
@@ -23,6 +21,33 @@ to the appropriate workflow based on the selection:
 - **Specific portcos (two or more)** → Bulk: builds fund breakdowns, async ZIP archive, polled until complete, download URL provided.
 
 ---
+
+# When to Use
+
+- "Generate a tear sheet for [Portco]"
+- "Download tear sheet for all portfolio companies"
+- "Create a bulk tear sheet package"
+- "Preview the tear sheet for [Portco]"
+- "Generate tear sheets for all portcos in [Fund]"
+- "Download all tear sheets as a ZIP"
+- Other trigger phrases: "tear sheet for portco", "tear sheets for all portcos", "preview tear sheet", "generate tear sheet PDF", "create tear sheet", "download tear sheet package", "download all tear sheets".
+  
+## Prerequisites
+
+- The Carta MCP server must be connected.
+- A firm context must be active. If not set, call `list_contexts` then `set_context` with the target `firm_id` before any other call.
+- No fund UUID or portco UUID needs to be known in advance — both are resolved interactively via `fund:list:tearsheet_templates` and `fund:list:portfolio_companies`.
+
+## Data Retrieval
+
+| MCP Command | Purpose |
+|-------------|---------|
+| `fetch("fund:list:tearsheet_templates", {})` | List available PDF templates for the firm |
+| `fetch("fund:list:portfolio_companies", {})` | List all portfolio companies with their fund groupings |
+| `fetch("fund:get:tearsheet_preview", {...})` | Generate a single-portco PDF synchronously |
+| `fetch("fund:mutate:download_all_tearsheets", {...})` | Start an async job for all portcos (fast path) |
+| `fetch("fund:mutate:start_tearsheet_download", {...})` | Start an async bulk job for a specific portco subset |
+| `fetch("fund:get:tearsheet_download_status", {})` | Poll for async job completion; returns `"pending"` or a download URL |
 
 ## Gate 0: Firm Context
 
