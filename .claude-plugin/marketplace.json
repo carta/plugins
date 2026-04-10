@@ -24,12 +24,6 @@
       "source": "./plugins/carta-crm",
       "description": "Add investors, companies, contacts, deals, and notes to the Carta CRM via the public API",
       "category": "productivity"
-    },
-    {
-      "name": "carta-onboarding",
-      "source": "./plugins/carta-onboarding",
-      "description": "Corporation onboarding tools — unified cap table onboarding orchestrator (entity setup, document extraction, OBS import, pro forma, reconciliation with global/regional rules, 33-point and 55-point validation), document upload and extraction via CLI, AI-assisted extraction review, and Shareworks migration for Implementation Managers",
-      "category": "productivity"
     }
   ]
 }

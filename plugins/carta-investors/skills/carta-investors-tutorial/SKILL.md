@@ -1,5 +1,5 @@
 ---
-name: tutorial
+name: carta-investors-tutorial
 description: >
   Interactive 5-minute walkthrough of the carta-investors plugin. Covers plugin overview,
   setup verification, and demo of 3 real-world scenarios: fundraising benchmarks, LP reporting

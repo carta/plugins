@@ -1,7 +1,7 @@
 {
   "name": "carta-investors",
   "displayName": "Carta Investors",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Carta Investors plugin — skills for querying investors data, performance benchmarks, regulatory reporting, and more via the Carta MCP server",
   "author": {
     "name": "Carta Engineering",
@@ -9,7 +9,11 @@
   },
   "homepage": "https://github.com/carta/plugins",
   "repository": "https://github.com/carta/plugins",
-  "keywords": ["investors", "mcp", "carta"],
+  "keywords": [
+    "investors",
+    "mcp",
+    "carta"
+  ],
   "mcpServers": {
     "carta": {
       "type": "http",
