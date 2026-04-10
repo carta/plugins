@@ -11,7 +11,7 @@
  *
  * Schema:
  *   _instrumentation: {
- *     skills:         string[]  — skills loaded in the session (e.g. ["carta-pro-forma-model", "carta-interaction-reference"])
+ *     skills:         string[]  — skills loaded in the session (e.g. ["carta-portfolio-query", "carta-interaction-reference"])
  *     plugin:         string    — "carta-cap-table"
  *     plugin_version: string    — from plugin.json
  *     session_id:     string    — Claude Code session ID

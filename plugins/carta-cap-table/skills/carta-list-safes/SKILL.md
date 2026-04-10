@@ -17,7 +17,7 @@ Fetch all SAFEs for a company.
 - "List SAFE investors and terms"
 - "Do any SAFEs have MFN clauses?"
 
-Use this skill for SAFEs only. If you need both SAFEs and convertible notes together (e.g. for the carta-conversion-calculator or carta-pro-forma-model skills), use `fetch("cap_table:get:convertible_notes", {"corporation_id": corporation_id})` instead — that returns both types in one call and avoids a redundant API request. Do not call both `carta-list-safes` and `carta-list-convertible-notes` for the same query.
+Use this skill for SAFEs only. If you need both SAFEs and convertible notes together (e.g. for the carta-conversion-calculator skill), use `fetch("cap_table:get:convertible_notes", {"corporation_id": corporation_id})` instead — that returns both types in one call and avoids a redundant API request. Do not call both `carta-list-safes` and `carta-list-convertible-notes` for the same query.
 
 ## Prerequisites
 

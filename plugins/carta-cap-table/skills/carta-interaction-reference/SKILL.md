@@ -6,7 +6,7 @@ description: >-
   ALWAYS load this skill before responding to ANY Carta cap table query —
   ownership, grants, SAFEs, valuations, waterfall scenarios, financing history,
   stakeholders, convertible instruments, option pools, or any other topic.
-  Load alongside the domain skill (e.g. carta-portfolio-query, carta-pro-forma-model),
+  Load alongside the domain skill (e.g. carta-portfolio-query, carta-ownership),
   not instead of it. This is mandatory context for every Carta data response.
 ---
 

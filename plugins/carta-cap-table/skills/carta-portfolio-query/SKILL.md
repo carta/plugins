@@ -62,7 +62,6 @@ Call `list_accounts` to get all accessible entities. Filter to `corporation_pk:`
 |---|---|
 | 409A valuations | `fetch("cap_table:get:409a_valuations", {"corporation_id": corporation_id})` |
 | SAFEs & convertible notes | `fetch("cap_table:get:convertible_notes", {"corporation_id": corporation_id})` |
-| Pro-forma models | `fetch("cap_table:get:pro_forma_models", {"corporation_id": corporation_id})` |
 | Cap table by share class | `fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": corporation_id})` |
 | Option grants | `fetch("cap_table:list:grants", {"corporation_id": corporation_id})` |
 
