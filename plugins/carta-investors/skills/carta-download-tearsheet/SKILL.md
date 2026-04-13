@@ -36,18 +36,18 @@ to the appropriate workflow based on the selection:
 
 - The Carta MCP server must be connected.
 - A firm context must be active. If not set, call `list_contexts` then `set_context` with the target `firm_id` before any other call.
-- No fund UUID or portco UUID needs to be known in advance — both are resolved interactively via `fund:list:tearsheet_templates` and `fund:list:portfolio_companies`.
+- No fund UUID or portco UUID needs to be known in advance — both are resolved interactively via `fa:list:tearsheet_templates` and `fa:list:portfolio_companies`.
 
 ## Data Retrieval
 
 | MCP Command | Purpose |
 |-------------|---------|
-| `fetch("fund:list:tearsheet_templates", {})` | List available PDF templates for the firm |
-| `fetch("fund:list:portfolio_companies", {})` | List all portfolio companies with their fund groupings |
-| `fetch("fund:get:tearsheet_preview", {...})` | Generate a single-portco PDF synchronously |
-| `fetch("fund:mutate:download_all_tearsheets", {...})` | Start an async job for all portcos (fast path) |
-| `fetch("fund:mutate:start_tearsheet_download", {...})` | Start an async bulk job for a specific portco subset |
-| `fetch("fund:get:tearsheet_download_status", {})` | Poll for async job completion; returns `"pending"` or a download URL |
+| `fetch("fa:list:tearsheet_templates", {})` | List available PDF templates for the firm |
+| `fetch("fa:list:portfolio_companies", {})` | List all portfolio companies with their fund groupings |
+| `fetch("fa:get:tearsheet_preview", {...})` | Generate a single-portco PDF synchronously |
+| `fetch("fa:mutate:download_all_tearsheets", {...})` | Start an async job for all portcos (fast path) |
+| `fetch("fa:mutate:start_tearsheet_download", {...})` | Start an async bulk job for a specific portco subset |
+| `fetch("fa:get:tearsheet_download_status", {})` | Poll for async job completion; returns `"pending"` or a download URL |
 
 ## Gate 0: Firm Context
 
@@ -66,7 +66,7 @@ You do not need to ask the user for a firm UUID — the MCP session tracks the a
 Call:
 
 ```
-fetch("fund:list:tearsheet_templates", {})
+fetch("fa:list:tearsheet_templates", {})
 ```
 
 **If the user mentioned a document name** (e.g. "Investment Summary", "Fund Summary",
@@ -104,7 +104,7 @@ Store as `TEMPLATE_UUID` (the template `id`) and `TEMPLATE_NAME`.
 Call:
 
 ```
-fetch("fund:list:portfolio_companies", {})
+fetch("fa:list:portfolio_companies", {})
 ```
 
 The command returns an array of portfolio companies. Each item includes `name`,
@@ -152,7 +152,7 @@ Tell the user: "Generating tearsheet — this may take up to 2 minutes..."
 Call:
 
 ```
-fetch("fund:get:tearsheet_preview", {
+fetch("fa:get:tearsheet_preview", {
   "template_uuid": "<TEMPLATE_UUID>",
   "fund_uuid": "<FUND_UUID>",
   "entity_link_id": "<ENTITY_LINK_ID>"
@@ -199,14 +199,14 @@ Proceed? (yes/no)
 Start the bulk job using the download-all command:
 
 ```
-fetch("fund:mutate:download_all_tearsheets", {
+fetch("fa:mutate:download_all_tearsheets", {
   "template_uuid": "<TEMPLATE_UUID>"
 })
 ```
 
 Tell the user the job has started and polling will begin.
 
-**Poll for completion** — call `fetch("fund:get:tearsheet_download_status", {})` every 30 seconds, up to
+**Poll for completion** — call `fetch("fa:get:tearsheet_download_status", {})` every 30 seconds, up to
 10 attempts (5 minutes total):
 
 - Response is `"pending"` → print progress ("Still processing... (attempt N/10)") and wait.
@@ -260,7 +260,7 @@ Proceed? (yes/no)
 Start the bulk job:
 
 ```
-fetch("fund:mutate:start_tearsheet_download", {
+fetch("fa:mutate:start_tearsheet_download", {
   "template_uuid": "<TEMPLATE_UUID>",
   "fund_breakdowns": <FUND_BREAKDOWNS>
 })
@@ -268,7 +268,7 @@ fetch("fund:mutate:start_tearsheet_download", {
 
 Tell the user the job has started and polling will begin.
 
-**Poll for completion** — call `fetch("fund:get:tearsheet_download_status", {})` every 15 seconds, up to
+**Poll for completion** — call `fetch("fa:get:tearsheet_download_status", {})` every 15 seconds, up to
 20 attempts (5 minutes total):
 
 - Response is `"pending"` → print progress ("Still processing... (attempt N/20)") and wait.
