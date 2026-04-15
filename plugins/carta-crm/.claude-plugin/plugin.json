@@ -1,6 +1,5 @@
 {
   "name": "carta-crm",
-  "displayName": "Carta CRM",
   "version": "0.5.1",
   "description": "Add investors, companies, contacts, deals, and notes to the Carta CRM via the public API",
   "author": {
