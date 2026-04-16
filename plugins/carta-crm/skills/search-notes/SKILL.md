@@ -8,7 +8,8 @@ description: >
   Returns note details including ID, title, text, folder, and owner.
   The note ID returned can be used with the update-note skill.
 allowed-tools:
-  - Bash
+  - Bash(curl *)
+  - AskUserQuestion
 ---
 
 ## Overview

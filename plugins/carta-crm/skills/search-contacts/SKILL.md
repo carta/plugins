@@ -8,7 +8,8 @@ description: >
   Returns contact details including ID, name, email, title, company, and tags.
   The contact ID returned can be used with the update-contact skill.
 allowed-tools:
-  - Bash
+  - Bash(curl *)
+  - AskUserQuestion
 ---
 
 ## Overview

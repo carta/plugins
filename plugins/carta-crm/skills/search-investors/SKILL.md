@@ -8,7 +8,8 @@ description: >
   Returns investor details including ID, name, and custom fields.
   The investor ID returned can be used with the update-investor skill.
 allowed-tools:
-  - Bash
+  - Bash(curl *)
+  - AskUserQuestion
 ---
 
 ## Overview

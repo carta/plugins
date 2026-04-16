@@ -6,7 +6,8 @@ description: >
   "log a note", "add note to CRM", "add note to Carta CRM", or "/add-note".
   Collects note information conversationally, then POSTs it to the Carta CRM API.
 allowed-tools:
-  - Bash
+  - Bash(curl *)
+  - AskUserQuestion
 ---
 
 ## Overview

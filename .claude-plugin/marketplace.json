@@ -22,7 +22,7 @@
     {
       "name": "carta-crm",
       "source": "./plugins/carta-crm",
-      "description": "Add investors, companies, contacts, deals, and notes to the Carta CRM via the public API",
+      "description": "Manage the Carta CRM conversationally — search, add, update, and enrich investors, companies, contacts, deals, notes, and fundraisings via the public API",
       "category": "productivity"
     }
   ]

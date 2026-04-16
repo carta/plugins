@@ -12,7 +12,8 @@ user-invocable: false
 allowed-tools:
   - WebFetch
   - WebSearch
-  - Bash
+  - Bash(curl *)
+  - AskUserQuestion
 ---
 
 ## Overview

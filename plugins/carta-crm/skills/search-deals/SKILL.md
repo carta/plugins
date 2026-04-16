@@ -8,7 +8,8 @@ description: >
   Returns deal details including ID, company, stage, pipeline, tags, and custom fields.
   The deal ID returned can be used with the update-deal skill.
 allowed-tools:
-  - Bash
+  - Bash(curl *)
+  - AskUserQuestion
 ---
 
 ## Overview

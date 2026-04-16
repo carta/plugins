@@ -8,7 +8,8 @@ description: >
   Accepts a note ID or title keyword (will search if no ID provided).
   Only the fields explicitly provided are changed — all other fields are left untouched.
 allowed-tools:
-  - Bash
+  - Bash(curl *)
+  - AskUserQuestion
 ---
 
 ## Overview

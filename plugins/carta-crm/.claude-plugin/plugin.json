@@ -1,8 +1,7 @@
 {
   "name": "carta-crm",
-  "displayName": "Carta CRM",
-  "version": "0.5.1",
-  "description": "Add investors, companies, contacts, deals, and notes to the Carta CRM via the public API",
+  "version": "0.5.2",
+  "description": "Manage the Carta CRM conversationally — search, add, update, and enrich investors, companies, contacts, deals, notes, and fundraisings via the public API",
   "author": {
     "name": "Ihar Valodzin",
     "email": "ihar.valodzin@carta.com"
@@ -15,7 +14,10 @@
     "companies",
     "contacts",
     "deals",
-    "notes"
+    "notes",
+    "fundraisings",
+    "search",
+    "enrich"
   ],
   "homepage": "https://github.com/carta/plugins",
   "mcpServers": {

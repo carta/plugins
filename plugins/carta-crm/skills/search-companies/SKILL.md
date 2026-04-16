@@ -8,7 +8,8 @@ description: >
   Returns company details including ID, name, and custom fields.
   The company ID returned can be used with the update-company skill.
 allowed-tools:
-  - Bash
+  - Bash(curl *)
+  - AskUserQuestion
 ---
 
 ## Overview

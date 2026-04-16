@@ -7,7 +7,8 @@ description: >
   "save investor data". Collects investor information conversationally, then POSTs
   it to the Carta CRM API.
 allowed-tools:
-  - Bash
+  - Bash(curl *)
+  - AskUserQuestion
 ---
 
 ## Overview

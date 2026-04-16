@@ -7,7 +7,8 @@ description: >
   or "/add-fundraising". Collects fundraising information conversationally, then POSTs
   it to the Carta CRM API.
 allowed-tools:
-  - Bash
+  - Bash(curl *)
+  - AskUserQuestion
 ---
 
 ## Overview

@@ -8,7 +8,8 @@ description: >
   Returns fundraising details including ID, name, amount, stage, and associated company.
   The fundraising ID returned can be used with the update-fundraising skill.
 allowed-tools:
-  - Bash
+  - Bash(curl *)
+  - AskUserQuestion
 ---
 
 ## Overview

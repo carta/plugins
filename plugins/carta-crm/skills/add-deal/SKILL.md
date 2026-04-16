@@ -6,7 +6,8 @@ description: >
   "log a deal", "add deal to CRM", "add deal to Carta CRM", or "/add-deal".
   Collects deal information conversationally, then POSTs it to the Carta CRM API.
 allowed-tools:
-  - Bash
+  - Bash(curl *)
+  - AskUserQuestion
 ---
 
 ## Overview

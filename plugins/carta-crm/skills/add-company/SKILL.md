@@ -6,7 +6,8 @@ description: >
   record", "add company to CRM", "upload company to Carta CRM", or "/add-company".
   Collects company information conversationally, then POSTs it to the Carta CRM API.
 allowed-tools:
-  - Bash
+  - Bash(curl *)
+  - AskUserQuestion
 ---
 
 ## Overview
