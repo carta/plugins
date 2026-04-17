@@ -1,6 +1,12 @@
 ---
 name: carta-waterfall-scenarios
 description: Fetch saved waterfall / exit scenario models for a company. Use when asked about liquidation preferences, exit payouts, return multiples, or waterfall analysis.
+allowed-tools:
+  - mcp__carta__fetch
+  - mcp__carta__list_contexts
+  - mcp__carta__set_context
+  - mcp__carta__list_accounts
+  - AskUserQuestion
 ---
 
 <!-- Part of the official Carta AI Agent Plugin -->

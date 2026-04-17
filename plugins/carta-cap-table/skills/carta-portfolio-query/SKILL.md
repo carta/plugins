@@ -1,6 +1,13 @@
 ---
 name: carta-portfolio-query
 description: Query cap table data across multiple companies, or fetch detailed per-company data (stakeholders, grants, SAFEs, 409A). Use for portfolio-wide analysis, comparing companies, finding patterns, or when detailed tabular data is needed beyond a visual summary.
+allowed-tools:
+  - mcp__carta__fetch
+  - mcp__carta__list_contexts
+  - mcp__carta__set_context
+  - mcp__carta__list_accounts
+  - mcp__carta__cap_table_chart
+  - AskUserQuestion
 ---
 
 <!-- Part of the official Carta AI Agent Plugin -->
@@ -63,10 +70,13 @@ Call `list_accounts` to get all accessible entities. Filter to `corporation_pk:`
 | 409A valuations | `fetch("cap_table:get:409a_valuations", {"corporation_id": corporation_id})` |
 | SAFEs & convertible notes | `fetch("cap_table:get:convertible_notes", {"corporation_id": corporation_id})` |
 | Cap table by share class | `fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": corporation_id})` |
-| Option grants (ISO/NSO) | `fetch("cap_table:list:grants", {"corporation_id": corporation_id})` |
-| RSU grants | `fetch("cap_table:list:rsus", {"corporation_id": corporation_id})` |
-| SAR grants | `fetch("cap_table:list:sars", {"corporation_id": corporation_id})` |
-| CBU grants | `fetch("cap_table:list:cbus", {"corporation_id": corporation_id})` |
+| Option grants summary | `fetch("cap_table:list:grants", {"corporation_id": corporation_id, "summary": "true"})` |
+| RSU grants summary | `fetch("cap_table:list:rsus", {"corporation_id": corporation_id, "summary": "true"})` |
+| SAR grants summary | `fetch("cap_table:list:sars", {"corporation_id": corporation_id, "summary": "true"})` |
+| CBU grants summary | `fetch("cap_table:list:cbus", {"corporation_id": corporation_id, "summary": "true"})` |
+| Search grants by name | `fetch("cap_table:list:grants", {"corporation_id": corporation_id, "search": "Jane Doe"})` |
+
+> **Performance**: Always pass `"summary": "true"` for grant/RSU/SAR/CBU commands unless the user explicitly needs individual grant-level records. The summary mode returns the same aggregate data (count, totals, type/status breakdowns) but is orders of magnitude faster for companies with 1,000+ grants — it avoids serializing and paginating every record. Only omit `summary` when you need individual records (e.g. with `search` or `page`/`page_size` params). See the "Search grants by name" row above for the non-summary form.
 
 ### Single-Company Detailed View
 

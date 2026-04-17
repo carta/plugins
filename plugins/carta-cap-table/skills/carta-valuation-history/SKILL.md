@@ -1,6 +1,12 @@
 ---
 name: carta-valuation-history
 description: Fetch 409A valuation history for a company. Use when asked about 409A valuations, FMV, exercise prices, or valuation expiration dates.
+allowed-tools:
+  - mcp__carta__fetch
+  - mcp__carta__list_contexts
+  - mcp__carta__set_context
+  - mcp__carta__list_accounts
+  - AskUserQuestion
 ---
 
 <!-- Part of the official Carta AI Agent Plugin -->

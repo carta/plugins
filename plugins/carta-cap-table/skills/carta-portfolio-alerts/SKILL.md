@@ -1,6 +1,12 @@
 ---
 name: carta-portfolio-alerts
 description: Detect red flags and time-sensitive issues across portfolio companies. Use when asked to flag problems, find expiring items, or audit portfolio health.
+allowed-tools:
+  - mcp__carta__fetch
+  - mcp__carta__list_contexts
+  - mcp__carta__set_context
+  - mcp__carta__list_accounts
+  - AskUserQuestion
 ---
 
 <!-- Part of the official Carta AI Agent Plugin -->

@@ -1,6 +1,12 @@
 ---
 name: carta-conversion-calculator
 description: Calculate SAFE and convertible note conversion into equity. Use when asked about SAFE conversion, note conversion, conversion shares, or how instruments convert in a round.
+allowed-tools:
+  - mcp__carta__fetch
+  - mcp__carta__list_contexts
+  - mcp__carta__set_context
+  - mcp__carta__list_accounts
+  - AskUserQuestion
 ---
 
 <!-- Part of the official Carta AI Agent Plugin -->

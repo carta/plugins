@@ -8,6 +8,11 @@ description: >-
   stakeholders, convertible instruments, option pools, or any other topic.
   Load alongside the domain skill (e.g. carta-portfolio-query, carta-ownership),
   not instead of it. This is mandatory context for every Carta data response.
+allowed-tools:
+  - mcp__carta__fetch
+  - mcp__carta__list_contexts
+  - mcp__carta__set_context
+  - AskUserQuestion
 ---
 
 <!-- Part of the official Carta AI Agent Plugin -->

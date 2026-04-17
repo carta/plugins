@@ -1,6 +1,12 @@
 ---
 name: carta-stakeholders
 description: List stakeholders for a company. Use when asked who the stakeholders are, stakeholder list, shareholders, investors, or holders.
+allowed-tools:
+  - mcp__carta__fetch
+  - mcp__carta__list_contexts
+  - mcp__carta__set_context
+  - mcp__carta__list_accounts
+  - AskUserQuestion
 ---
 
 <!-- Part of the official Carta AI Agent Plugin -->

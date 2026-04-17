@@ -1,6 +1,12 @@
 ---
 name: carta-list-convertible-notes
 description: Fetch all convertible instruments (SAFEs and convertible debt) for a company. Use when asked about convertible notes, SAFEs, convertible debt, note terms, caps, discounts, or maturity dates.
+allowed-tools:
+  - mcp__carta__fetch
+  - mcp__carta__list_contexts
+  - mcp__carta__set_context
+  - mcp__carta__list_accounts
+  - AskUserQuestion
 ---
 
 <!-- Part of the official Carta AI Agent Plugin -->

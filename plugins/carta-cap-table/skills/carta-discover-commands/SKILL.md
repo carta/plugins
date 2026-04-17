@@ -1,6 +1,13 @@
 ---
 name: carta-discover-commands
 description: Find the right carta-cap-table command when no other skill matches. Use when unsure which command to call, exploring available data, or when the user's request doesn't match a specific skill.
+allowed-tools:
+  - mcp__carta__fetch
+  - mcp__carta__list_contexts
+  - mcp__carta__set_context
+  - mcp__carta__list_accounts
+  - mcp__carta__discover
+  - AskUserQuestion
 ---
 
 <!-- Part of the official Carta AI Agent Plugin -->

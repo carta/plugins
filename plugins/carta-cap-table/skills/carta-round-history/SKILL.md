@@ -1,6 +1,12 @@
 ---
 name: carta-round-history
 description: Fetch financing round history for a company. Use when asked about funding rounds, capital raised, or financing history.
+allowed-tools:
+  - mcp__carta__fetch
+  - mcp__carta__list_contexts
+  - mcp__carta__set_context
+  - mcp__carta__list_accounts
+  - AskUserQuestion
 ---
 
 <!-- Part of the official Carta AI Agent Plugin -->
