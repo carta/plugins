@@ -12,7 +12,6 @@ allowed-tools:
   - Bash(mkdir -p ~/.claude/plugins/cache/carta-development-tools/carta-crm)
   - Bash(touch ~/.claude/plugins/cache/carta-development-tools/carta-crm/.tutorial-seen)
 args: []
-model: haiku
 ---
 
 # Carta CRM Tutorial
