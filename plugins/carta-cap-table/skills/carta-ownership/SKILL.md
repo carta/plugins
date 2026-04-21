@@ -33,8 +33,10 @@ You need the `corporation_id`. Get it from `list_accounts` if you don't have it.
 
 ## Data Retrieval
 
+> The gateway defaults to `detail=summary` for list commands. This skill needs individual records, so `"detail": "full"` is passed explicitly.
+
 1. `fetch("cap_table:get:rights_and_preferences", { corporation_id })`
-2. `fetch("cap_table:get:cap_table_by_stakeholder", { corporation_id })`
+2. `fetch("cap_table:get:cap_table_by_stakeholder", { corporation_id, "detail": "full" })`
 
 ## Key Fields
 
@@ -58,7 +60,7 @@ fetch("cap_table:get:rights_and_preferences", { corporation_id })
 ### Step 2 — Fetch Cap Table by Stakeholder
 
 ```
-fetch("cap_table:get:cap_table_by_stakeholder", { corporation_id })
+fetch("cap_table:get:cap_table_by_stakeholder", { corporation_id, "detail": "full" })
 ```
 
 This returns per-stakeholder ownership broken down by share class.

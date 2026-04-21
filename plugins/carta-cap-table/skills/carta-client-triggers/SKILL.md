@@ -38,8 +38,9 @@ Call `list_accounts`. Filter to accounts where `id` starts with `corporation_pk:
 
 For each company, fetch in sequence:
 
-- `fetch("cap_table:get:financing_history", {"corporation_id": corporation_id})` — financing history per company
+- `fetch("cap_table:get:financing_history", {"corporation_id": corporation_id})` — financing history (summary includes per-round `latest_date` and `cash_raised`)
 - `fetch("cap_table:get:409a_valuations", {"corporation_id": corporation_id})` — 409A status (optional, only if checking valuation triggers)
+- `fetch("cap_table:list:grants", {"corporation_id": corporation_id})` — grants summary (includes `latest_issue_date` for "Pending Grants" trigger)
 
 ### Parameters
 
@@ -47,10 +48,13 @@ If the user specifies a time window (e.g., "last 60 days", "last 6 months"), use
 
 ## Key Fields
 
-From financing history:
-- `issue_date`: date of issuance
-- `round_name`: name of the round (e.g. "Series A")
-- `is_grant`: true if this is a grant issuance (not a priced round)
+From financing history (summary):
+- `by_round`: per-round `{count, cash_raised, latest_date}` — use `latest_date` to detect recent closes
+- `total_cash_raised`: aggregate cash raised
+
+From grants (summary):
+- `latest_issue_date`: most recent grant issue date — use for "Pending Grants" trigger
+- `count`: total grant count
 
 From 409A FMVs:
 - `expiration_date`: when the valuation expires
@@ -64,10 +68,13 @@ Call `list_accounts`. Filter to accounts where `id` starts with `corporation_pk:
 
 ### Step 2 — Collect Data Per Company
 
-**Financing history:**
+**Financing history** (summary):
 - `fetch("cap_table:get:financing_history", {"corporation_id": corporation_id})`
-- Key fields: `issue_date`, `round_name`, `is_grant`
-- Group by `round_name`, find max `issue_date` per round -> "last round date"
+- Use `by_round` to find the most recent `latest_date` across all rounds → "last round date"
+
+**Grants** (summary):
+- `fetch("cap_table:list:grants", {"corporation_id": corporation_id})`
+- Use `latest_issue_date` to detect recent grant activity
 
 **409A status** (optional, only if checking valuation triggers):
 - `fetch("cap_table:get:409a_valuations", {"corporation_id": corporation_id})`
@@ -94,7 +101,7 @@ Companies with an expired or near-expiry 409A (within 60 days):
 
 #### Pending Grants (no current 409A)
 Companies that issued grants recently (within 90 days) but have no valid 409A:
-- Trigger: recent `is_grant=true` entry + no active 409A
+- Trigger: `latest_issue_date` from grants summary is within 90 days + no active 409A
 - Action: Urgency outreach — grants issued without a current FMV create 409A exposure
 
 ### Step 4 — Present Results

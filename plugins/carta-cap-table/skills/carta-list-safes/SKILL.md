@@ -35,6 +35,8 @@ You need the `corporation_id`. Get it from `list_accounts` if you don't have it.
 fetch("cap_table:list:safes", {"corporation_id": corporation_id})
 ```
 
+> **Detail mode**: The gateway defaults to `detail=summary` for list commands. Summary mode returns counts, totals, and breakdowns (by status, valuation cap tiers) without serializing every individual SAFE record. If the user needs individual SAFE records (investor names, specific terms, per-instrument amounts), pass `"detail": "full"` in the fetch params. Omitting `detail` gives summary mode automatically.
+
 ## Key Fields
 
 - `investor_name` or `investor.name`: investor name
@@ -46,13 +48,25 @@ fetch("cap_table:list:safes", {"corporation_id": corporation_id})
 
 ## Workflow
 
-### Step 1 — Fetch SAFEs
+### Step 1 — Fetch Summary
 
-Call the data retrieval endpoint with the corporation ID.
+```
+fetch("cap_table:list:safes", {"corporation_id": corporation_id})
+```
 
-### Step 2 — Present Results
+Omitting `detail` returns the summary: count, total invested, and by-state breakdown. Present this data immediately (BLUF lead).
 
-Format the response as a table (see Presentation) with totals.
+### If the user needs individual SAFE records
+
+Call again with `"detail": "full"`:
+
+```
+fetch("cap_table:list:safes", {"corporation_id": corporation_id, "detail": "full"})
+```
+
+This returns individual SAFE records with investor names, specific terms, and per-instrument amounts. Format as a table (see Presentation) with totals.
+
+Do NOT call this automatically — only when the user asks for individual records, investor names, or specific SAFE terms.
 
 ## Gates
 
@@ -79,4 +93,4 @@ Show totals: total outstanding amount, count by status.
 
 - SAFE terms displayed reflect what is recorded in Carta; side letters or amendments outside Carta are not captured.
 - MFN clause presence is shown as a boolean flag — the specific MFN trigger conditions are governed by the SAFE agreement itself.
-- If you need both SAFEs and convertible notes, use the `carta-list-convertible-notes` skill instead to avoid redundant API calls.
+- If you need both SAFEs and convertible notes, use `fetch("cap_table:get:convertible_notes", {"corporation_id": corporation_id})` instead -- it returns both types in one call.

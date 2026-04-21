@@ -30,7 +30,7 @@ You need the `corporation_id`. Get it from `list_accounts` if you don't have it.
 
 ## Data Retrieval
 
-### Option 1: Detailed History (per-security)
+> **Detail mode**: The gateway defaults to `detail=summary` for list commands. Summary mode returns round count, total cash raised, and a by-round breakdown without serializing every individual security record. If the user needs per-investor detail, issue dates, or price per share, pass `"detail": "full"` in the fetch params. Omitting `detail` gives summary mode automatically.
 
 ```
 fetch("cap_table:get:financing_history", {"corporation_id": corporation_id})
@@ -38,7 +38,7 @@ fetch("cap_table:get:financing_history", {"corporation_id": corporation_id})
 
 This is the same data that powers the in-app "Financing History" tab.
 
-### Option 2: Quick Summary (from cap table)
+**Alternative**: For a quick overview without any financing history call, use the cap table by share class:
 
 ```
 fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": corporation_id})
@@ -86,20 +86,30 @@ Each preferred share class represents a round. Faster but less detail: no indivi
 
 ## Workflow
 
-### Step 1 — Fetch Financing History
+### Step 1 — Fetch Summary
 
-Call `fetch("cap_table:get:financing_history", {"corporation_id": corporation_id})` for detailed data, or `fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": corporation_id})` for a quick summary.
+```
+fetch("cap_table:get:financing_history", {"corporation_id": corporation_id})
+```
 
-### Step 2 — Aggregate by Round
+Omitting `detail` returns the summary: round count, total cash raised, and a by-round breakdown. Present this data immediately (BLUF lead) with the table and bar chart (see Presentation section).
+
+### If the user needs per-round details (dates, investors, amounts)
+
+Call again with `"detail": "full"`:
+
+```
+fetch("cap_table:get:financing_history", {"corporation_id": corporation_id, "detail": "full"})
+```
+
+This returns individual security records with per-investor data, issue dates, and price per share. Aggregate by round:
 
 1. Group results by `round_name`
 2. For each round, aggregate: total `cash_paid`, total `quantity`, count of investors, earliest `issue_date`
 3. Use `issue_price` from any non-canceled entry as the price per share
 4. Filter out entries where `is_canceled` is true
 
-### Step 3 — Present Results
-
-Present the aggregated table and bar chart (see Presentation section).
+Do NOT call this automatically — only when the user asks for individual records or investor-level detail.
 
 ## Gates
 

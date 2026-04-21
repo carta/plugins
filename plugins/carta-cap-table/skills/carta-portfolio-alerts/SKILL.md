@@ -35,73 +35,66 @@ Call `list_accounts` to get all portfolio companies. Filter to accounts where `i
 
 ### Per-Company Commands
 
-Depending on the check:
-- `fetch("cap_table:get:409a_valuations", {"corporation_id": corporation_id})` — 409A expiry check
-- `fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": corporation_id})` — option pool check
-- `fetch("cap_table:get:convertible_notes", {"corporation_id": corporation_id})` — note maturity check
-- `fetch("cap_table:list:safes", {"corporation_id": corporation_id})` — SAFE exposure check
+For each company, fetch the relevant checks:
+
+- `fetch("cap_table:get:409a_valuations", {"corporation_id": corporation_id})` -- 409A expiry check
+- `fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": corporation_id})` -- option pool check
+- `fetch("cap_table:get:convertible_notes", {"corporation_id": corporation_id})` -- note maturity check (summary includes `maturity.nearest_date`)
+- `fetch("cap_table:list:safes", {"corporation_id": corporation_id})` -- SAFE exposure check
+
+The gateway defaults to `detail=summary` for list commands. All four commands use summary mode — the convertible notes summary includes a `maturity` block with `nearest_date` and `total_outstanding_debt` for outstanding debt notes.
+
+If the user asks about a specific check only (e.g. "any expiring 409As?"), fetch only the relevant command per company.
 
 ## Key Fields
 
 From 409A: `expiration_date`, `price`, `effective_date`
 From cap table option plans: `available_ownership`, `name`
-From convertible notes: `maturity_date`, `status_explanation`, `is_debt`, `dollar_amount`, `total_with_interest`
+From convertible notes (summary): `maturity.nearest_date`, `maturity.total_outstanding_debt`, `by_status`, `by_type`
 
 ## Workflow
 
 ### Step 1 — Get Portfolio
 
-Call `list_accounts` to get all `corporation_pk` accounts.
+Call `list_accounts` to get all `corporation_pk` accounts. Extract up to 20 numeric corporation IDs.
 
-### Step 2 — Run Checks
+### Step 2 — Fetch Data Per Company
 
-For each company, run the relevant checks. Run whichever checks are relevant to the user's question. If they say "all red flags", run all of them.
+For each company, call the relevant `fetch()` commands from the Data Retrieval section. Include all four commands per company when the user asks for "all red flags." Include only the relevant subset when the user asks about a specific check.
+
+### Step 3 — Classify Findings
+
+Apply severity thresholds to the results for each company:
 
 #### 1. Expiring 409A Valuations
 
-```
-fetch("cap_table:get:409a_valuations", {"corporation_id": corporation_id})
-```
 | Check | Critical | Warning | Info | Rationale |
 |-------|----------|---------|------|-----------|
 | 409A expiry | No 409A on file, or expiration_date in the past | expiration_date within 90 days | expiration_date within 180 days | 90 days = standard board reporting cycle; 180 days = early warning for planning |
-| Option pool | available_ownership < 2% | available_ownership < 5% | available_ownership < 10% | 5% is industry floor for meaningful hiring capacity; <2% is effectively exhausted |
-| Note maturity | maturity_date in the past | maturity_date within 90 days | maturity_date within 180 days | 90 days = typical negotiation window for extension or conversion |
-| SAFE exposure | — | total outstanding SAFEs > 20% of last known valuation cap | — | 20% = significant dilution risk at conversion |
 
 Companies with no 409A data should never be silently skipped — always include them in the output as a distinct category.
 
 #### 2. Low Option Pool
 
-```
-fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": corporation_id})
-```
-- **Critical**: option plan available_ownership < 2%
-- **Warning**: option plan available_ownership < 5%
-- **Info**: option plan available_ownership < 10%
+| Check | Critical | Warning | Info | Rationale |
+|-------|----------|---------|------|-----------|
+| Option pool | available_ownership < 2% | available_ownership < 5% | available_ownership < 10% | 5% is industry floor for meaningful hiring capacity; <2% is effectively exhausted |
 
 #### 3. SAFEs/Notes Approaching Maturity
 
-```
-fetch("cap_table:get:convertible_notes", {"corporation_id": corporation_id})
-```
-- Filter to `status_explanation: "Outstanding"` and `is_debt: true` (notes have maturity dates)
-- **Critical**: maturity_date is in the past
-- **Warning**: maturity_date is within 90 days
-- **Info**: maturity_date is within 180 days
+| Check | Critical | Warning | Info | Rationale |
+|-------|----------|---------|------|-----------|
+| Note maturity | `maturity.nearest_date` in the past | `maturity.nearest_date` within 90 days | `maturity.nearest_date` within 180 days | 90 days = typical negotiation window for extension or conversion |
+
+Use `maturity.nearest_date` and `maturity.total_outstanding_debt` from the convertible notes summary. These fields are pre-filtered to outstanding debt notes by the backend.
 
 #### 4. Large Unconverted SAFE Exposure
 
-```
-fetch("cap_table:list:safes", {"corporation_id": corporation_id})
-```
-- Sum outstanding SAFE amounts
-- **Warning**: total outstanding SAFEs > 20% of last known valuation cap
-- Present total SAFE exposure per company
+| Check | Critical | Warning | Info | Rationale |
+|-------|----------|---------|------|-----------|
+| SAFE exposure | — | total outstanding SAFEs > 20% of last known valuation cap | — | 20% = significant dilution risk at conversion |
 
-### Step 3 — Classify Severity
-
-Compute severity classifications (critical / warning / info) for each finding.
+Sum outstanding SAFE amounts per company.
 
 ### Step 4 — Present Results
 
@@ -154,6 +147,6 @@ Healthy (7): Alpha, Zeta, Eta, Theta, Iota, Kappa, Lambda
 
 - Portfolio data reflects point-in-time API calls, not a single atomic snapshot
 - Companies with restricted permissions may have incomplete data
-- Rate limit: maximum 20 companies per invocation — if more than 20 companies, ask the user to narrow scope
+- Rate limit: maximum 20 companies per invocation — ask the user to narrow scope if more than 20
 - Some companies may error (permissions, incomplete setup) — skip gracefully and note which failed
 - Always show the scan date and count: "Scanned 12 companies on Mar 18, 2025"

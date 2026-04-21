@@ -38,11 +38,13 @@ Call `list_accounts`. Filter to `corporation_pk:` accounts. Extract up to 20 num
 
 ### Per-Company Commands
 
-For each company, fetch in sequence:
+For each company, fetch:
 
-- `fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": corporation_id})` — option pool data
-- `fetch("cap_table:get:convertible_notes", {"corporation_id": corporation_id})` — SAFE/note terms
-- `fetch("cap_table:get:financing_history", {"corporation_id": corporation_id})` — round sizes
+- `fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": corporation_id})` -- option pool data
+- `fetch("cap_table:get:convertible_notes", {"corporation_id": corporation_id})` -- SAFE/note terms (summary includes median/min/max price_cap, avg_discount, by_type)
+- `fetch("cap_table:get:financing_history", {"corporation_id": corporation_id})` -- round sizes (summary includes per-round cash_raised and latest_date)
+
+The gateway defaults to `detail=summary` for all three commands. The enriched summaries include all fields needed for portfolio benchmarks — no individual records required.
 
 ## Key Fields
 
@@ -50,16 +52,15 @@ From cap table (option pool):
 - `option_plans[].authorized_shares`: shares authorized per plan
 - `totals.total_fully_diluted`: total fully diluted share count
 
-From convertible notes:
-- `price_cap`: SAFE/note valuation cap
-- `discount_percent`: discount rate (e.g. `"20.00"` = 20%)
-- `interest_rate`: annual interest rate
-- `is_debt`: false = SAFE, true = convertible note
+From convertible notes (summary):
+- `median_price_cap`, `min_price_cap`, `max_price_cap`: valuation cap statistics
+- `avg_discount`: average discount rate
+- `by_type`: count of SAFEs vs Convertible Notes
+- `total_dollar_amount`: total invested across all instruments
 
-From financing history:
-- `round_name`: round name
-- `cash_paid`: amount paid per security (sum by round_name for round total)
-- `issue_date`: close date
+From financing history (summary):
+- `by_round`: per-round `{count, cash_raised, latest_date}`
+- `total_cash_raised`: aggregate across all rounds
 
 ## Workflow
 
@@ -69,20 +70,21 @@ Call `list_accounts`. Filter to `corporation_pk:` accounts. Extract up to 20 num
 
 ### Step 2 — Collect Data Per Company
 
+For each company, call the three `fetch()` commands from the Data Retrieval section.
+
 **Cap table by share class** (for option pool %):
-- `fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": corporation_id})`
 - From `option_plans[]`: sum `authorized_shares` across all plans
 - From `totals.total_fully_diluted`: compute option pool % = option_pool_authorized / total_fully_diluted
 
-**SAFE / convertible note terms:**
-- `fetch("cap_table:get:convertible_notes", {"corporation_id": corporation_id})`
-- Key fields per instrument: `price_cap`, `discount_percent`, `interest_rate`, `is_debt` (false=SAFE, true=note)
-- Collect all valuation caps for SAFEs
+**SAFE / convertible note terms** (summary):
+- Use `median_price_cap`, `min_price_cap`, `max_price_cap` directly for SAFE cap benchmarks
+- Use `avg_discount` for discount benchmarks
+- Use `by_type` to count SAFEs vs notes per company
 
-**Financing history** (for round sizes):
-- `fetch("cap_table:get:financing_history", {"corporation_id": corporation_id})`
-- Key fields: `round_name`, `amount_raised`, `issue_date`
-- Identify the most recent priced round and its size
+**Financing history** (summary):
+- Use `by_round` to identify rounds and their `cash_raised`
+- Use `total_cash_raised` for aggregate amounts
+- Most recent round = round with latest `latest_date`
 
 ### Step 3 — Compute Summary Statistics
 

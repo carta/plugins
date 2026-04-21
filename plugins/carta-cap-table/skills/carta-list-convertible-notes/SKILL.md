@@ -34,8 +34,10 @@ You need the `corporation_id`. Get it from `list_accounts` if you don't have it.
 fetch("cap_table:list:convertible_notes", {"corporation_id": corporation_id})
 ```
 
+> **Detail mode**: The gateway defaults to `detail=summary` for list commands. Summary mode returns counts, totals, and breakdowns (by status, type, tranche) without serializing every individual record — fast even for companies with many instruments. If the user needs individual instrument records (investor names, specific terms, per-instrument amounts), pass `"detail": "full"` in the fetch params. Omitting `detail` gives summary mode automatically.
+
 Optional params:
-- `page`, `pageSize`: pagination
+- `page`, `pageSize`: pagination (only relevant when `detail` is `full`)
 - `search`: text search
 - `statusExplanation`: filter by status (e.g. "Outstanding", "Converted", "Canceled")
 
@@ -55,21 +57,30 @@ Optional params:
 
 ## Workflow
 
-### Step 1 — Fetch Convertible Instruments
+### Step 1 — Fetch Summary
 
-Call the data retrieval endpoint with the corporation ID and any optional filters.
+```
+fetch("cap_table:list:convertible_notes", {"corporation_id": corporation_id})
+```
 
-### Step 2 — Classify Instruments
+Omitting `detail` returns the summary: count, total amount, and by-status breakdown. Present this data immediately (BLUF lead).
 
-Separate results into SAFEs (`is_debt: false`) and Convertible Notes (`is_debt: true`).
+### If the user needs individual instrument records
 
-### Step 3 — Filter and Flag
+Call again with `"detail": "full"`:
 
-Filter out canceled/converted unless specifically asked. For outstanding instruments, check if `maturity_date` is approaching (within 90 days) or past.
+```
+fetch("cap_table:list:convertible_notes", {"corporation_id": corporation_id, "detail": "full"})
+```
 
-### Step 4 — Present Results
+This returns individual instrument records. Classify and filter:
+
+1. Separate results into SAFEs (`is_debt: false`) and Convertible Notes (`is_debt: true`).
+2. Filter out canceled/converted unless specifically asked. For outstanding instruments, check if `maturity_date` is approaching (within 90 days) or past.
 
 Format as separate tables by type, grouped by `note_block` if there are multiple tranches (see Presentation).
+
+Do NOT call this automatically — only when the user asks for individual records, investor names, or specific instrument terms.
 
 ## Gates
 

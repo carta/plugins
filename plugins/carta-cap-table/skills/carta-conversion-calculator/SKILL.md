@@ -30,7 +30,9 @@ You need:
 
 ## Data Retrieval
 
-- `fetch("cap_table:get:convertible_notes", {"corporation_id": corporation_id})` — SAFEs + convertible notes
+> The gateway defaults to `detail=summary` for list commands. This skill needs individual records, so `"detail": "full"` is passed explicitly.
+
+- `fetch("cap_table:get:convertible_notes", {"corporation_id": corporation_id, "detail": "full"})` — SAFEs + convertible notes
 - `fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": corporation_id})` — current fully diluted count
 - `fetch("cap_table:get:409a_valuations", {"corporation_id": corporation_id})` — current FMV (for reference)
 
@@ -50,7 +52,7 @@ From convertible instruments:
 
 ### Step 1: Gather Instrument Data
 
-1. `fetch("cap_table:get:convertible_notes", {"corporation_id": corporation_id})` — SAFEs + notes (filter to `status_explanation: "Outstanding"`)
+1. `fetch("cap_table:get:convertible_notes", {"corporation_id": corporation_id, "detail": "full"})` — SAFEs + notes (filter to `status_explanation: "Outstanding"`)
 2. `fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": corporation_id})` — get current fully diluted share count from `totals.total_fully_diluted`
 3. `fetch("cap_table:get:409a_valuations", {"corporation_id": corporation_id})` — current FMV for context
 

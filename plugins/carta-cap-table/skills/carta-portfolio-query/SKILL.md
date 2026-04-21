@@ -41,11 +41,10 @@ cap_table_chart(corporation_id=<id>)
 
 ## When to Use
 
-- "Which companies have expiring 409As?"
 - "Show me cap tables for all my portfolio companies"
 - "Which companies have SAFEs outstanding?"
 - "Compare option pool sizes across my portfolio"
-- "Flag any red flags across my companies"
+- "Show me detailed grant data for Acme Corp"
 
 ## Prerequisites
 
@@ -60,8 +59,7 @@ Call `list_accounts` to get all accessible entities. Filter to `corporation_pk:`
 
 ### Per-Company Commands
 
-- `list_accounts` — get all accessible entities
-- Then per-company commands depending on the query (see reference below)
+Call the relevant command for each company depending on the query:
 
 #### Command Reference
 
@@ -70,13 +68,13 @@ Call `list_accounts` to get all accessible entities. Filter to `corporation_pk:`
 | 409A valuations | `fetch("cap_table:get:409a_valuations", {"corporation_id": corporation_id})` |
 | SAFEs & convertible notes | `fetch("cap_table:get:convertible_notes", {"corporation_id": corporation_id})` |
 | Cap table by share class | `fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": corporation_id})` |
-| Option grants summary | `fetch("cap_table:list:grants", {"corporation_id": corporation_id, "summary": "true"})` |
-| RSU grants summary | `fetch("cap_table:list:rsus", {"corporation_id": corporation_id, "summary": "true"})` |
-| SAR grants summary | `fetch("cap_table:list:sars", {"corporation_id": corporation_id, "summary": "true"})` |
-| CBU grants summary | `fetch("cap_table:list:cbus", {"corporation_id": corporation_id, "summary": "true"})` |
-| Search grants by name | `fetch("cap_table:list:grants", {"corporation_id": corporation_id, "search": "Jane Doe"})` |
+| Option grants | `fetch("cap_table:list:grants", {"corporation_id": corporation_id})` |
+| RSU grants | `fetch("cap_table:list:rsus", {"corporation_id": corporation_id})` |
+| SAR grants | `fetch("cap_table:list:sars", {"corporation_id": corporation_id})` |
+| CBU grants | `fetch("cap_table:list:cbus", {"corporation_id": corporation_id})` |
+| Search grants by name | `fetch("cap_table:list:grants", {"corporation_id": corporation_id, "detail": "full", "search": "Jane Doe"})` |
 
-> **Performance**: Always pass `"summary": "true"` for grant/RSU/SAR/CBU commands unless the user explicitly needs individual grant-level records. The summary mode returns the same aggregate data (count, totals, type/status breakdowns) but is orders of magnitude faster for companies with 1,000+ grants — it avoids serializing and paginating every record. Only omit `summary` when you need individual records (e.g. with `search` or `page`/`page_size` params). See the "Search grants by name" row above for the non-summary form.
+> **Detail mode**: The gateway now defaults all list commands to `detail=summary` automatically. You do not need to pass `"detail": "summary"` or `"summary": "true"` — summary mode is the default. Summary returns aggregate data (count, totals, type/status breakdowns) and is orders of magnitude faster for companies with 1,000+ grants. For individual grant-level records (e.g. searching by name, paginating through results), pass `"detail": "full"` with `"page_size": "25"`. See the "Search grants by name" row above for an example.
 
 ### Single-Company Detailed View
 
@@ -84,7 +82,7 @@ When the user needs detailed tabular data beyond the visual summary (e.g. stakeh
 
 ```
 fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": corporation_id})
-fetch("cap_table:get:cap_table_by_stakeholder", {"corporation_id": corporation_id})
+fetch("cap_table:get:cap_table_by_stakeholder", {"corporation_id": corporation_id, "detail": "full"})
 ```
 
 ## Key Fields

@@ -32,8 +32,10 @@ You need:
 
 ## Data Retrieval
 
+> The gateway defaults to `detail=summary` for list commands. This skill needs individual records, so `"detail": "full"` is passed explicitly.
+
 ```
-fetch("cap_table:list:grants", {"corporation_id": corporation_id, "search": "<holder name>"})
+fetch("cap_table:list:grants", {"corporation_id": corporation_id, "search": "<holder name>", "detail": "full"})
 ```
 
 Then:
@@ -56,7 +58,7 @@ Fields are returned in the formatted summary and vesting events table from the t
 
 ### Step 1 — Identify the Grant
 
-Call `fetch("cap_table:list:grants", {"corporation_id": corporation_id, "search": "<holder name>"})`. If multiple grants are returned, ask the user which one, or pick the most relevant based on context.
+Call `fetch("cap_table:list:grants", {"corporation_id": corporation_id, "search": "<holder name>", "detail": "full"})`. If multiple grants are returned, ask the user which one, or pick the most relevant based on context.
 
 ### Step 2 — Fetch Vesting Data
 
