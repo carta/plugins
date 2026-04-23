@@ -33,7 +33,17 @@ cap_table_chart(corporation_id=<id>)
 
 `cap_table_chart` also accepts `as_of_date` for point-in-time snapshots (see [Point-in-time snapshots](#point-in-time-snapshots) below).
 
-**After `cap_table_chart` renders, do NOT repeat its data.** The chart already shows share classes, FD shares, ownership %, amount raised, and the stacked bars. Do not render the `_terminal_fallback` from the tool response — it is a terminal fallback and the visual chart already covers this. Instead, add only a brief commentary (2-3 sentences max) highlighting anything notable — e.g. unusually large option pool, concentrated ownership, or missing share classes. Do not restate numbers the chart already displays.
+**After `cap_table_chart` renders, do NOT duplicate its content.** The tool returns two things: a `chart_data` object rendered as an interactive stacked bar chart in MCP App clients (Claude Desktop, Cowork), and a `_terminal_fallback` ASCII string for terminal clients (Claude Code) where the interactive view can't render.
+
+What you MUST NOT do in any client:
+
+- Emit a **markdown-style share class table** (pipe-delimited headers with alignment rows) on top of the chart. This is the core duplication regression — in MCP App clients, the user sees the chart AND a redundant table stacked underneath; in terminal, it competes with the ASCII fallback. Just don't.
+- Restate summary numbers the chart already shows (total outstanding, total FD, total raised) as bullet points or highlighted bold lines.
+- Render stakeholder or option-pool tables in text — those are for the fallback/detailed path below, not when you've routed to the chart.
+
+What terminal clients DO need: either the tool's `_terminal_fallback` surfaced verbatim, or a brief ASCII bar chart of equivalent shape. Pick one, once. Don't do both.
+
+Your text response alongside `cap_table_chart` should be **2–3 sentences of commentary** highlighting something notable — e.g. unusually large option pool, concentrated ownership, zero-outstanding classes — plus an optional single-sentence next-step offer. In MCP App clients that's the whole response. In terminal clients, prefix it with the one ASCII rendering.
 
 **Stay in this skill (use `fetch` below) when:**
 - Multi-company queries or portfolio-wide comparisons
@@ -127,17 +137,22 @@ Aggregate and present the results.
 
 ### Single-Company Presentation
 
-**Present in this exact order — do not skip any step:**
+**DO NOT use this section if you called `cap_table_chart`.** The MCP App tool renders its own visual (interactive in desktop clients, ASCII `_terminal_fallback` in terminal clients) — your job is then limited to 2–3 sentences of commentary, per the Routing section above. Re-rendering tables and bar charts on top of the chart tool's output produces duplicate, clashing content in the user's view.
+
+**Use this section only when:**
+- The user explicitly asked for detailed raw numbers / tables / specific share counts that the chart doesn't expose, OR
+- `cap_table_chart` is unavailable in the current client (rare — the tool provides its own terminal fallback), OR
+- The request is multi-company (per-company chart calls are too noisy; a cross-company table is clearer).
+
+In those cases only, present in this order:
 
 1. **Summary line**: total outstanding shares, total fully diluted shares, total cash raised
 2. **Share class table**: share class name, outstanding shares, outstanding %, FD shares, FD %, cash raised
 3. **Option pool**: authorized vs issued/outstanding, available shares and %
 4. **Top stakeholders table**: name, outstanding shares, outstanding %, FD %, cash raised
-5. **ASCII bar chart** — REQUIRED, always render this, no exceptions
+5. **ASCII bar chart** (fallback only — `cap_table_chart` already renders a better one when called)
 
-**Bar chart — MANDATORY. You MUST render this after the tables. Do not skip it.**
-
-Use the stakeholder data to render an ASCII ownership bar chart. Steps:
+ASCII bar chart recipe (fallback only):
 1. Collect each stakeholder's fully diluted % (or outstanding % if FD not available)
 2. Find the max value — that stakeholder gets 40 █ blocks
 3. All others: `bar_width = round(pct / max_pct * 40)`, minimum 1 block
@@ -145,7 +160,7 @@ Use the stakeholder data to render an ASCII ownership bar chart. Steps:
 5. Immediately after the label padding, place the █ blocks — no spaces between label and blocks
 6. After the blocks, one space then the percentage
 
-Example output (you MUST produce something like this):
+Example:
 ```
 Ownership (Fully Diluted)
 
