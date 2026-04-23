@@ -31,6 +31,8 @@ cap_table_chart(corporation_id=<id>)
 - Fully diluted share counts or amount raised by share class
 - Board deck equity overview
 
+`cap_table_chart` also accepts `as_of_date` for point-in-time snapshots (see [Point-in-time snapshots](#point-in-time-snapshots) below).
+
 **After `cap_table_chart` renders, do NOT repeat its data.** The chart already shows share classes, FD shares, ownership %, amount raised, and the stacked bars. Do not render the `_terminal_fallback` from the tool response — it is a terminal fallback and the visual chart already covers this. Instead, add only a brief commentary (2-3 sentences max) highlighting anything notable — e.g. unusually large option pool, concentrated ownership, or missing share classes. Do not restate numbers the chart already displays.
 
 **Stay in this skill (use `fetch` below) when:**
@@ -75,6 +77,19 @@ Call the relevant command for each company depending on the query:
 | Search grants by name | `fetch("cap_table:list:grants", {"corporation_id": corporation_id, "detail": "full", "search": "Jane Doe"})` |
 
 > **Detail mode**: The gateway now defaults all list commands to `detail=summary` automatically. You do not need to pass `"detail": "summary"` or `"summary": "true"` — summary mode is the default. Summary returns aggregate data (count, totals, type/status breakdowns) and is orders of magnitude faster for companies with 1,000+ grants. For individual grant-level records (e.g. searching by name, paginating through results), pass `"detail": "full"` with `"page_size": "25"`. See the "Search grants by name" row above for an example.
+
+### Point-in-time snapshots
+
+`cap_table:get:cap_table_by_share_class`, `cap_table:get:cap_table_by_stakeholder`, and the `cap_table_chart` tool accept an optional `as_of_date` param. When provided, they return the cap table as of that date instead of live data. Pass ISO (`YYYY-MM-DD`) or `MM/DD/YYYY`:
+
+```
+fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": corporation_id, "as_of_date": "2026-03-31"})
+cap_table_chart(corporation_id=<id>, as_of_date="2026-03-31")
+```
+
+Use `as_of_date` whenever the user's question is anchored to a specific date ("as of Q1 close", "on 3/31", "at fiscal year end"). If the user doesn't specify a date, omit the param — the API defaults to today.
+
+Limitations: future dates are accepted only for companies enrolled in future-dated cap tables; dates before incorporation are rejected. Other cap-table commands (grants, SAFEs, convertibles, 409A, rounds) do **not** yet support `as_of_date` — live data only for those.
 
 ### Single-Company Detailed View
 
@@ -192,7 +207,7 @@ Trigger the AI computation gate (see carta-interaction-reference §6.2) before o
 
 ## Caveats
 
-- Portfolio data reflects point-in-time API calls, not a single atomic snapshot
+- Portfolio data reflects separate API calls per company, not a single atomic snapshot. Even with `as_of_date`, each company's fetch is independent — state can diverge if data changes mid-loop.
 - Companies with restricted permissions may have incomplete data
 - Rate limit: maximum 20 companies per invocation — don't call 50+ companies at once; ask the user to narrow down if the list is large
 - Only `corporation_pk` accounts work with company-level commands (cap table, grants, SAFEs, valuations). `organization_pk` accounts are portfolios/firms.

@@ -78,6 +78,16 @@ If the user then asks about ownership, follow up with:
 fetch("cap_table:get:cap_table_by_stakeholder", { "corporation_id": corporation_id, "detail": "full" })
 ```
 
+### Point-in-time ownership
+
+`cap_table:get:cap_table_by_stakeholder` accepts an optional `as_of_date` (ISO `YYYY-MM-DD` or `MM/DD/YYYY`) to return holdings as of that date:
+
+```
+fetch("cap_table:get:cap_table_by_stakeholder", { "corporation_id": corporation_id, "detail": "full", "as_of_date": "2026-03-31" })
+```
+
+Use this whenever the user's question is anchored to a specific date ("ownership at Q1 close", "who held shares on 3/31"). `cap_table:get:stakeholders` (the contact-info command) does **not** support `as_of_date` — it only reflects current roster.
+
 ## Gates
 
 **Required inputs**: `corporation_id`.

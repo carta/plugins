@@ -65,6 +65,14 @@ fetch("cap_table:get:cap_table_by_stakeholder", { corporation_id, "detail": "ful
 
 This returns per-stakeholder ownership broken down by share class.
 
+If the user's question is anchored to a specific date (e.g. "who had voting control at Q1 close", "preferred holders on 3/31"), add `as_of_date` (ISO `YYYY-MM-DD` or `MM/DD/YYYY`):
+
+```
+fetch("cap_table:get:cap_table_by_stakeholder", { corporation_id, "detail": "full", "as_of_date": "2026-03-31" })
+```
+
+Note: `cap_table:get:rights_and_preferences` does not support `as_of_date` — it returns the current share class structure. Flag this to the user if the question hinges on historical share class terms.
+
 ### Step 3 — Identify Preferred Holders
 
 From the share class data, identify preferred classes (stock_type = "PREFERRED" or votes_per_share > 0).
