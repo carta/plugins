@@ -36,11 +36,13 @@ Call `list_accounts`. Filter to accounts where `id` starts with `corporation_pk:
 
 ### Per-Company Commands
 
-For each company, fetch in sequence:
+For each company, the relevant commands are:
 
 - `fetch("cap_table:get:financing_history", {"corporation_id": corporation_id})` — financing history (summary includes per-round `latest_date` and `cash_raised`)
 - `fetch("cap_table:get:409a_valuations", {"corporation_id": corporation_id})` — 409A status (optional, only if checking valuation triggers)
 - `fetch("cap_table:list:grants", {"corporation_id": corporation_id})` — grants summary (includes `latest_issue_date` for "Pending Grants" trigger)
+
+> **Parallel execution**: The `fetch` tool has `readOnlyHint=true`, so Claude Code executes parallel fetch calls concurrently. Issue ALL fetch calls for ALL companies in a single response — do NOT loop company-by-company. See Workflow Step 2.
 
 ### Parameters
 
@@ -66,20 +68,29 @@ From 409A FMVs:
 
 Call `list_accounts`. Filter to accounts where `id` starts with `corporation_pk:`. Extract the numeric corporation IDs (up to 20).
 
-### Step 2 — Collect Data Per Company
+### Step 2 — Collect Data for All Companies (parallel)
 
-**Financing history** (summary):
-- `fetch("cap_table:get:financing_history", {"corporation_id": corporation_id})`
-- Use `by_round` to find the most recent `latest_date` across all rounds → "last round date"
+Issue ALL fetch calls for ALL companies **in a single response** — do NOT loop company-by-company. Each fetch call is independent and will execute concurrently.
 
-**Grants** (summary):
-- `fetch("cap_table:list:grants", {"corporation_id": corporation_id})`
-- Use `latest_issue_date` to detect recent grant activity
+For example, with 5 companies and all 3 data types, issue all 15 fetch calls at once:
 
-**409A status** (optional, only if checking valuation triggers):
-- `fetch("cap_table:get:409a_valuations", {"corporation_id": corporation_id})`
-- Key fields: `expiration_date`, `price` (FMV per share)
-- Find the most recent valuation (sort by `effective_date` desc)
+```
+fetch("cap_table:get:financing_history", {"corporation_id": 1})
+fetch("cap_table:list:grants", {"corporation_id": 1})
+fetch("cap_table:get:409a_valuations", {"corporation_id": 1})
+fetch("cap_table:get:financing_history", {"corporation_id": 2})
+fetch("cap_table:list:grants", {"corporation_id": 2})
+fetch("cap_table:get:409a_valuations", {"corporation_id": 2})
+... (all companies)
+```
+
+Then from the results:
+
+**Financing history** (summary): Use `by_round` to find the most recent `latest_date` across all rounds → "last round date"
+
+**Grants** (summary): Use `latest_issue_date` to detect recent grant activity
+
+**409A status**: Key fields: `expiration_date`, `price` (FMV per share). Find the most recent valuation (sort by `effective_date` desc)
 
 ### Step 3 — Compute Trigger Classifications
 

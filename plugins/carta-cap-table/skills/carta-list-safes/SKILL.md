@@ -35,7 +35,7 @@ You need the `corporation_id`. Get it from `list_accounts` if you don't have it.
 fetch("cap_table:list:safes", {"corporation_id": corporation_id})
 ```
 
-> **Detail mode**: The gateway defaults to `detail=summary` for list commands. Summary mode returns counts, totals, and breakdowns (by status, valuation cap tiers) without serializing every individual SAFE record. If the user needs individual SAFE records (investor names, specific terms, per-instrument amounts), pass `"detail": "full"` in the fetch params. Omitting `detail` gives summary mode automatically.
+> **Detail mode**: This command supports `detail=summary` (counts, totals, breakdowns — fast) and `detail=full` (individual SAFE records with investor names and terms). Choose the right mode upfront based on user intent — see Workflow.
 
 ## Key Fields
 
@@ -48,25 +48,23 @@ fetch("cap_table:list:safes", {"corporation_id": corporation_id})
 
 ## Workflow
 
-### Step 1 — Fetch Summary
+### Step 1 — Fetch SAFEs
 
-```
-fetch("cap_table:list:safes", {"corporation_id": corporation_id})
-```
+Choose detail mode based on the user's intent — do NOT default to summary then re-fetch:
 
-Omitting `detail` returns the summary: count, total invested, and by-state breakdown. Present this data immediately (BLUF lead).
+- **Aggregate questions** ("how many SAFEs?", "total invested in SAFEs?"): omit `detail` — summary mode returns counts, totals, and breakdowns instantly.
 
-### If the user needs individual SAFE records
+  ```
+  fetch("cap_table:list:safes", {"corporation_id": corporation_id})
+  ```
 
-Call again with `"detail": "full"`:
+- **Individual records** ("show me the SAFEs", "list SAFE investors", "what are the valuation caps?", any request for investor names or terms): use `detail=full` directly.
 
-```
-fetch("cap_table:list:safes", {"corporation_id": corporation_id, "detail": "full"})
-```
+  ```
+  fetch("cap_table:list:safes", {"corporation_id": corporation_id, "detail": "full"})
+  ```
 
-This returns individual SAFE records with investor names, specific terms, and per-instrument amounts. Format as a table (see Presentation) with totals.
-
-Do NOT call this automatically — only when the user asks for individual records, investor names, or specific SAFE terms.
+When in doubt, prefer `detail=full` — most SAFE queries want to see investor names and terms.
 
 ## Gates
 

@@ -34,7 +34,7 @@ You need the `corporation_id`. Get it from `list_accounts` if you don't have it.
 fetch("cap_table:list:convertible_notes", {"corporation_id": corporation_id})
 ```
 
-> **Detail mode**: The gateway defaults to `detail=summary` for list commands. Summary mode returns counts, totals, and breakdowns (by status, type, tranche) without serializing every individual record — fast even for companies with many instruments. If the user needs individual instrument records (investor names, specific terms, per-instrument amounts), pass `"detail": "full"` in the fetch params. Omitting `detail` gives summary mode automatically.
+> **Detail mode**: This command supports `detail=summary` (counts, totals, breakdowns — fast) and `detail=full` (individual instrument records with investor names and terms). Choose the right mode upfront based on user intent — see Workflow.
 
 Optional params:
 - `page`, `pageSize`: pagination (only relevant when `detail` is `full`)
@@ -57,30 +57,30 @@ Optional params:
 
 ## Workflow
 
-### Step 1 — Fetch Summary
+### Step 1 — Fetch Convertible Notes
 
-```
-fetch("cap_table:list:convertible_notes", {"corporation_id": corporation_id})
-```
+Choose detail mode based on the user's intent — do NOT default to summary then re-fetch:
 
-Omitting `detail` returns the summary: count, total amount, and by-status breakdown. Present this data immediately (BLUF lead).
+- **Aggregate questions** ("how many convertible notes?", "total outstanding amount?"): omit `detail` — summary mode returns counts, totals, and breakdowns instantly.
 
-### If the user needs individual instrument records
+  ```
+  fetch("cap_table:list:convertible_notes", {"corporation_id": corporation_id})
+  ```
 
-Call again with `"detail": "full"`:
+- **Individual records** ("show me all convertible notes", "which notes are approaching maturity?", "what are the terms?", any request for investor names or specific terms): use `detail=full` directly.
 
-```
-fetch("cap_table:list:convertible_notes", {"corporation_id": corporation_id, "detail": "full"})
-```
+  ```
+  fetch("cap_table:list:convertible_notes", {"corporation_id": corporation_id, "detail": "full"})
+  ```
 
-This returns individual instrument records. Classify and filter:
+When in doubt, prefer `detail=full` — most convertible note queries want to see specific terms.
+
+After fetching with `detail=full`, classify and filter:
 
 1. Separate results into SAFEs (`is_debt: false`) and Convertible Notes (`is_debt: true`).
 2. Filter out canceled/converted unless specifically asked. For outstanding instruments, check if `maturity_date` is approaching (within 90 days) or past.
 
 Format as separate tables by type, grouped by `note_block` if there are multiple tranches (see Presentation).
-
-Do NOT call this automatically — only when the user asks for individual records, investor names, or specific instrument terms.
 
 ## Gates
 

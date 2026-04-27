@@ -30,7 +30,7 @@ You need the `corporation_id`. Get it from `list_accounts` if you don't have it.
 
 ## Data Retrieval
 
-> **Detail mode**: The gateway defaults to `detail=summary` for list commands. Summary mode returns round count, total cash raised, and a by-round breakdown without serializing every individual security record. If the user needs per-investor detail, issue dates, or price per share, pass `"detail": "full"` in the fetch params. Omitting `detail` gives summary mode automatically.
+> **Detail mode**: This command supports `detail=summary` (round count, total cash raised, by-round breakdown — fast) and `detail=full` (individual security records with per-investor data, issue dates, price per share). Choose the right mode upfront based on user intent — see Workflow.
 
 ```
 fetch("cap_table:get:financing_history", {"corporation_id": corporation_id})
@@ -86,30 +86,30 @@ Each preferred share class represents a round. Faster but less detail: no indivi
 
 ## Workflow
 
-### Step 1 — Fetch Summary
+### Step 1 — Fetch Financing History
 
-```
-fetch("cap_table:get:financing_history", {"corporation_id": corporation_id})
-```
+Choose detail mode based on the user's intent — do NOT default to summary then re-fetch:
 
-Omitting `detail` returns the summary: round count, total cash raised, and a by-round breakdown. Present this data immediately (BLUF lead) with the table and bar chart (see Presentation section).
+- **Overview questions** ("show me the funding history", "what rounds has this company raised?", "how much capital was raised?"): omit `detail` — summary mode returns round count, total cash raised, and a by-round breakdown instantly. Present with the table and bar chart (see Presentation section).
 
-### If the user needs per-round details (dates, investors, amounts)
+  ```
+  fetch("cap_table:get:financing_history", {"corporation_id": corporation_id})
+  ```
 
-Call again with `"detail": "full"`:
+- **Per-round details** ("who invested in each round?", "what was the price per share?", "list all investors by round", any request for investor names, issue dates, or price per share): use `detail=full` directly.
 
-```
-fetch("cap_table:get:financing_history", {"corporation_id": corporation_id, "detail": "full"})
-```
+  ```
+  fetch("cap_table:get:financing_history", {"corporation_id": corporation_id, "detail": "full"})
+  ```
 
-This returns individual security records with per-investor data, issue dates, and price per share. Aggregate by round:
+When in doubt, summary is usually sufficient for financing history — it already includes round names, dates, and totals.
+
+After fetching with `detail=full`, aggregate by round:
 
 1. Group results by `round_name`
 2. For each round, aggregate: total `cash_paid`, total `quantity`, count of investors, earliest `issue_date`
 3. Use `issue_price` from any non-canceled entry as the price per share
 4. Filter out entries where `is_canceled` is true
-
-Do NOT call this automatically — only when the user asks for individual records or investor-level detail.
 
 ## Gates
 

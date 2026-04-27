@@ -41,7 +41,7 @@ fetch("cap_table:get:stakeholders", { "corporation_id": corporation_id })
 
 Supports `search` param to filter by name or email.
 
-> **Detail mode**: The gateway defaults to `detail=summary` for this command, returning aggregate counts and totals instead of individual stakeholder records. This is fast even for companies with thousands of stakeholders. Always tell the user the total count (e.g. "150 stakeholders (summary)"). If the user needs individual stakeholder records (names, emails, roles), pass `"detail": "full"` with `"page_size": "25"` in the fetch params. For ownership data, `cap_table:get:cap_table_by_stakeholder` is still the right command.
+> **Detail mode**: This command supports `detail=summary` (aggregate counts and breakdowns, fast even for thousands of stakeholders) and `detail=full` (individual records with names, emails, roles). Choose the right mode upfront based on user intent — see Workflow. For ownership data, `cap_table:get:cap_table_by_stakeholder` is the right command.
 
 ## Key Fields
 
@@ -54,17 +54,21 @@ Supports `search` param to filter by name or email.
 
 ### Step 1 — Fetch Stakeholders
 
-```
-fetch("cap_table:get:stakeholders", { "corporation_id": corporation_id })
-```
+Choose detail mode based on the user's intent — do NOT default to summary then re-fetch:
 
-The gateway defaults to summary mode — this returns total count and breakdown by role type instantly. Present this: "Meetly has 162 stakeholders (129 employees, 25 investors, ...)."
+- **Aggregate questions** ("how many stakeholders?", "stakeholder breakdown by role"): omit `detail` — summary mode returns counts and breakdowns instantly, even for thousands of stakeholders.
 
-If the user asks for individual records (names, emails), call again with `"detail": "full"`:
+  ```
+  fetch("cap_table:get:stakeholders", { "corporation_id": corporation_id })
+  ```
 
-```
-fetch("cap_table:get:stakeholders", { "corporation_id": corporation_id, "detail": "full", "page_size": "25" })
-```
+- **Individual records** ("show me stakeholders", "list shareholders", "who holds equity?", any request for names/emails): use `detail=full` directly — skip summary, the user wants records.
+
+  ```
+  fetch("cap_table:get:stakeholders", { "corporation_id": corporation_id, "detail": "full", "page_size": "25" })
+  ```
+
+When in doubt, prefer `detail=full` — most stakeholder queries want to see names.
 
 ### Step 2 — Present Results
 

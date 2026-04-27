@@ -58,7 +58,15 @@ Fields are returned in the formatted summary and vesting events table from the t
 
 ### Step 1 — Identify the Grant
 
-Call `fetch("cap_table:list:grants", {"corporation_id": corporation_id, "search": "<holder name>", "detail": "full"})`. If multiple grants are returned, ask the user which one, or pick the most relevant based on context.
+**If `grant_id` is already known** from prior conversation context (e.g. the user just viewed a grants list), skip directly to Step 2.
+
+Otherwise, search for it:
+
+```
+fetch("cap_table:list:grants", {"corporation_id": corporation_id, "search": "<holder name>", "detail": "full"})
+```
+
+If multiple grants are returned, ask the user which one, or pick the most relevant based on context.
 
 ### Step 2 — Fetch Vesting Data
 

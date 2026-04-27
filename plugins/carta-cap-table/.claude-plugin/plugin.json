@@ -1,6 +1,6 @@
 {
   "name": "carta-cap-table",
-  "version": "0.13.1",
+  "version": "0.13.3",
   "description": "Carta Cap Table plugin — skills and hooks for querying cap tables, grants, SAFEs, 409A valuations, waterfall scenarios, and more",
   "author": {
     "name": "Carta Engineering",

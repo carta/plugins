@@ -38,13 +38,15 @@ Call `list_accounts`. Filter to `corporation_pk:` accounts. Extract up to 20 num
 
 ### Per-Company Commands
 
-For each company, fetch:
+For each company, the relevant commands are:
 
 - `fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": corporation_id})` -- option pool data
 - `fetch("cap_table:get:convertible_notes", {"corporation_id": corporation_id})` -- SAFE/note terms (summary includes median/min/max price_cap, avg_discount, by_type)
 - `fetch("cap_table:get:financing_history", {"corporation_id": corporation_id})` -- round sizes (summary includes per-round cash_raised and latest_date)
 
 The gateway defaults to `detail=summary` for all three commands. The enriched summaries include all fields needed for portfolio benchmarks — no individual records required.
+
+> **Parallel execution**: The `fetch` tool has `readOnlyHint=true`, so Claude Code executes parallel fetch calls concurrently. Issue ALL fetch calls for ALL companies in a single response — do NOT loop company-by-company. See Workflow Step 2.
 
 ## Key Fields
 
@@ -68,9 +70,23 @@ From financing history (summary):
 
 Call `list_accounts`. Filter to `corporation_pk:` accounts. Extract up to 20 numeric corporation IDs.
 
-### Step 2 — Collect Data Per Company
+### Step 2 — Collect Data for All Companies (parallel)
 
-For each company, call the three `fetch()` commands from the Data Retrieval section.
+Issue ALL fetch calls for ALL companies **in a single response** — do NOT loop company-by-company. Each fetch call is independent and will execute concurrently.
+
+For example, with 5 companies and all 3 data types, issue all 15 fetch calls at once:
+
+```
+fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": 1})
+fetch("cap_table:get:convertible_notes", {"corporation_id": 1})
+fetch("cap_table:get:financing_history", {"corporation_id": 1})
+fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": 2})
+fetch("cap_table:get:convertible_notes", {"corporation_id": 2})
+fetch("cap_table:get:financing_history", {"corporation_id": 2})
+... (all companies)
+```
+
+Then from the results:
 
 **Cap table by share class** (for option pool %):
 - From `option_plans[]`: sum `authorized_shares` across all plans

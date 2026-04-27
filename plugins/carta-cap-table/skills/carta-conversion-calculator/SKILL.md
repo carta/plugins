@@ -52,9 +52,17 @@ From convertible instruments:
 
 ### Step 1: Gather Instrument Data
 
-1. `fetch("cap_table:get:convertible_notes", {"corporation_id": corporation_id, "detail": "full"})` — SAFEs + notes (filter to `status_explanation: "Outstanding"`)
-2. `fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": corporation_id})` — get current fully diluted share count from `totals.total_fully_diluted`
-3. `fetch("cap_table:get:409a_valuations", {"corporation_id": corporation_id})` — current FMV for context
+Fetch all three data sources **in a single turn** (parallel tool calls) — do NOT fetch them sequentially:
+
+```
+fetch("cap_table:get:convertible_notes", {"corporation_id": corporation_id, "detail": "full"})
+fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": corporation_id})
+fetch("cap_table:get:409a_valuations", {"corporation_id": corporation_id})
+```
+
+- Convertible notes: SAFEs + notes (filter to `status_explanation: "Outstanding"`)
+- Cap table by share class: get current fully diluted share count from `totals.total_fully_diluted`
+- 409A valuations: current FMV for context
 
 ### Step 2: Conversion Math
 

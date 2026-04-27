@@ -35,7 +35,7 @@ Call `list_accounts` to get all portfolio companies. Filter to accounts where `i
 
 ### Per-Company Commands
 
-For each company, fetch the relevant checks:
+For each company, these are the relevant checks:
 
 - `fetch("cap_table:get:409a_valuations", {"corporation_id": corporation_id})` -- 409A expiry check
 - `fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": corporation_id})` -- option pool check
@@ -45,6 +45,8 @@ For each company, fetch the relevant checks:
 The gateway defaults to `detail=summary` for list commands. All four commands use summary mode — the convertible notes summary includes a `maturity` block with `nearest_date` and `total_outstanding_debt` for outstanding debt notes.
 
 If the user asks about a specific check only (e.g. "any expiring 409As?"), fetch only the relevant command per company.
+
+> **Parallel execution**: The `fetch` tool has `readOnlyHint=true`, so Claude Code executes parallel fetch calls concurrently. Issue ALL fetch calls for ALL companies in a single response — do NOT loop company-by-company. See Workflow Step 2.
 
 ## Key Fields
 
@@ -58,9 +60,23 @@ From convertible notes (summary): `maturity.nearest_date`, `maturity.total_outst
 
 Call `list_accounts` to get all `corporation_pk` accounts. Extract up to 20 numeric corporation IDs.
 
-### Step 2 — Fetch Data Per Company
+### Step 2 — Fetch Data for All Companies (parallel)
 
-For each company, call the relevant `fetch()` commands from the Data Retrieval section. Include all four commands per company when the user asks for "all red flags." Include only the relevant subset when the user asks about a specific check.
+Issue ALL fetch calls for ALL companies **in a single response** — do NOT loop company-by-company. Each fetch call is independent and will execute concurrently.
+
+For example, with 5 companies and all 4 checks, issue all 20 fetch calls at once:
+
+```
+fetch("cap_table:get:409a_valuations", {"corporation_id": 1})
+fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": 1})
+fetch("cap_table:get:convertible_notes", {"corporation_id": 1})
+fetch("cap_table:list:safes", {"corporation_id": 1})
+fetch("cap_table:get:409a_valuations", {"corporation_id": 2})
+fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": 2})
+... (all companies)
+```
+
+If the user asks about a specific check only (e.g. "any expiring 409As?"), issue only the relevant command per company — but still all companies in one response.
 
 ### Step 3 — Classify Findings
 

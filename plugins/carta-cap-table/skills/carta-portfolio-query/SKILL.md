@@ -85,8 +85,11 @@ Call the relevant command for each company depending on the query:
 | SAR grants | `fetch("cap_table:list:sars", {"corporation_id": corporation_id})` |
 | CBU grants | `fetch("cap_table:list:cbus", {"corporation_id": corporation_id})` |
 | Search grants by name | `fetch("cap_table:list:grants", {"corporation_id": corporation_id, "detail": "full", "search": "Jane Doe"})` |
+| Top N holders by shares | `fetch("cap_table:list:rsus", {"corporation_id": corporation_id, "ordering": "-quantity", "page_size": "20"})` |
 
 > **Detail mode**: The gateway now defaults all list commands to `detail=summary` automatically. You do not need to pass `"detail": "summary"` or `"summary": "true"` — summary mode is the default. Summary returns aggregate data (count, totals, type/status breakdowns) and is orders of magnitude faster for companies with 1,000+ grants. For individual grant-level records (e.g. searching by name, paginating through results), pass `"detail": "full"` with `"page_size": "25"`. See the "Search grants by name" row above for an example.
+
+> **Ordering & top-N queries**: Grant/RSU/SAR/CBU list commands support server-side `ordering`. Use `-quantity` for descending (top holders), `quantity` for ascending. Combine with `page_size` to get only the top N records without fetching everything. **Always use ordering+page_size for "top N" or "largest" queries** — never fetch all records and sort client-side, especially for companies with 1,000+ grants. Available ordering fields: `quantity`, `remaining_shares`, `exercised_shares`, `issue_date`, `stakeholder_name`, `grant_number`.
 
 ### Point-in-time snapshots
 
@@ -127,9 +130,18 @@ Call `list_accounts` to get all accessible entities.
 
 Filter to the relevant account type (`company`, `fund`, `investment firm`, `law firm`, `portfolio`). Extract `corporation_id` from each account's `id` field (strip the `corporation_pk:` or `organization_pk:` prefix).
 
-### Step 3 — Fetch Data
+### Step 3 — Fetch Data (parallel)
 
-Loop through each corporation, calling the relevant command per company.
+Issue ALL fetch calls for ALL companies **in a single response** — do NOT loop company-by-company. The `fetch` tool has `readOnlyHint=true`, so parallel calls execute concurrently.
+
+For example, to compare option pools across 5 companies, issue all 5 fetch calls at once:
+
+```
+fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": 1})
+fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": 2})
+fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": 3})
+... (all companies)
+```
 
 ### Step 4 — Aggregate and Present
 
@@ -176,8 +188,10 @@ Others               ████                                       9.9%
 
 ```
 1. list_accounts → get all corporation_pk accounts
-2. For each corporation_id:
-   fetch("cap_table:get:409a_valuations", {"corporation_id": corporation_id})
+2. Issue ALL fetch calls in a single response (parallel):
+   fetch("cap_table:get:409a_valuations", {"corporation_id": 1})
+   fetch("cap_table:get:409a_valuations", {"corporation_id": 2})
+   ... (all companies at once)
 3. For each result, check if the most recent expiration_date is within 90 days of today
 4. Present:
 ```
@@ -191,8 +205,10 @@ Others               ████                                       9.9%
 
 ```
 1. list_accounts → get all corporation_pk accounts
-2. For each corporation_id:
-   fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": corporation_id})
+2. Issue ALL fetch calls in a single response (parallel):
+   fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": 1})
+   fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": 2})
+   ... (all companies at once)
 3. Extract option plan available_ownership percentage
 4. Flag companies with available pool < 5%
 ```
