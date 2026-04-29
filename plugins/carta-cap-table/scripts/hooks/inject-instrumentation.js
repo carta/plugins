@@ -107,8 +107,10 @@ process.stdin.on('end', () => {
  */
 function readSkillState(sessionId) {
     if (!sessionId) return {};
+    const stateDir = process.env.CLAUDE_PLUGIN_DATA
+        ? path.join(process.env.CLAUDE_PLUGIN_DATA, 'sessions')
+        : '/tmp/claude-carta-cap-table';
     try {
-        const stateDir = '/tmp/claude-carta-cap-table';
         const statePath = path.join(stateDir, `${sessionId}.json`);
         return JSON.parse(fs.readFileSync(statePath, 'utf8'));
     } catch {

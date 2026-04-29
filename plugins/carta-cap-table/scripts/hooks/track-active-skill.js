@@ -14,7 +14,9 @@
 const fs = require('fs');
 const path = require('path');
 
-const STATE_DIR = '/tmp/claude-carta-cap-table';
+const STATE_DIR = process.env.CLAUDE_PLUGIN_DATA
+    ? path.join(process.env.CLAUDE_PLUGIN_DATA, 'sessions')
+    : '/tmp/claude-carta-cap-table';
 
 let inputData = '';
 process.stdin.on('data', chunk => (inputData += chunk));
