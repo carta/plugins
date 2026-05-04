@@ -1,6 +1,11 @@
 ---
 name: carta-form-adv
 description: Fetch Form ADV Schedule D regulatory data and firm rollup for fund-level reporting. Use when asked about Form ADV, regulatory AUM, Schedule D, Form PF Section 1, or annual filing data.
+allowed-tools:
+  - mcp__carta__fetch
+  - mcp__carta__list_contexts
+  - mcp__carta__set_context
+  - AskUserQuestion
 ---
 
 <!-- Part of the official Carta AI Agent Plugin -->

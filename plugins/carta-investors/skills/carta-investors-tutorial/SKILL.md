@@ -7,12 +7,11 @@ description: >
   "getting started with investors plugin", "how do I use the investors plugin", "demo",
   "walk me through the investors plugin", "what can I do with carta", "how does this work".
 allowed-tools:
-  - Bash(carta auth-status)
-  - Bash(carta plugins)
+  - mcp__carta__authenticate
+  - mcp__carta__complete_authentication
   - Bash(cp ~/.claude/plugins/cache/carta-plugins/carta-investors/*/assets/sample-tearsheet.pdf ~/Desktop/carta-sample-tearsheet.pdf)
   - Bash(touch ~/.claude/plugins/cache/carta-plugins/carta-investors/.tutorial-seen)
 args: []
-model: haiku
 ---
 
 # carta-investors Tutorial
@@ -59,15 +58,10 @@ Say **"next"** to verify your setup.
 
 Let me quickly check that everything is configured correctly.
 
-[Run `carta auth-status`]
+[Call `mcp__carta__authenticate`]
 
-[Run `carta plugins`]
-
-If you see `carta-investors` in the plugin list and your environment shows as authenticated,
-you're good to go.
-
-> If your connection authorization has expired, run `carta login` to re-authenticate and try again.
-> If something else looks off, visit #help-claude-code in Slack.
+- If the tool succeeds and Carta's real tools become available, you're authenticated — continue.
+- If the tool returns an authorization URL, share it with the user and ask them to open it in their browser. Once they've authorized, ask them to paste the full callback URL from their browser's address bar, then call `mcp__carta__complete_authentication` with that URL.
 
 Say **"next"** to start the demo.
 

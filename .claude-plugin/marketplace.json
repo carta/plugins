@@ -16,7 +16,7 @@
     {
       "name": "carta-investors",
       "source": "./plugins/carta-investors",
-      "description": "Carta Investors plugin — skills for querying investors data, performance benchmarks, regulatory reporting, and more via the Carta MCP server",
+      "description": "Carta Investors plugin — skills for querying investors data, performance benchmarks, regulatory reporting, AGM deck generation, brand extraction, and more via the Carta MCP server",
       "category": "productivity"
     },
     {

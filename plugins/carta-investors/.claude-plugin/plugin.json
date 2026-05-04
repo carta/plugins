@@ -1,8 +1,8 @@
 {
   "name": "carta-investors",
   "displayName": "Carta Investors",
-  "version": "0.7.3",
-  "description": "Carta Investors plugin — skills for querying investors data, performance benchmarks, regulatory reporting, and more via the Carta MCP server",
+  "version": "0.21.1",
+  "description": "Carta Investors plugin — skills for querying investors data, performance benchmarks, regulatory reporting, AGM deck generation, brand extraction, and more via the Carta MCP server",
   "author": {
     "name": "Carta Engineering",
     "email": "engineering@carta.com"
@@ -12,7 +12,15 @@
   "keywords": [
     "investors",
     "mcp",
-    "carta"
+    "carta",
+    "agm",
+    "annual-general-meeting",
+    "deck",
+    "presentation",
+    "brand",
+    "brand-board",
+    "pdf",
+    "pptx"
   ],
   "mcpServers": {
     "carta": {
