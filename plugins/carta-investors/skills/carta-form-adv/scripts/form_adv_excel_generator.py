@@ -400,9 +400,17 @@ def main():
 
     firm_name      = data.get("firm_name", "Firm")
     reporting_date = data.get("reporting_date", "")
-    fr             = data.get("firm_rollup", {})
     funds          = data.get("funds", [])
     demos          = data.get("investor_demographics", {})
+    fr = {
+        key: sum(f.get(key) or 0 for f in funds)
+        for key in [
+            "regulatory_aum", "total_active_fmv",
+            "fmv_exchange_traded_equity", "fmv_private_equity",
+            "fmv_pooled_investment_vehicles", "fmv_options_and_warrants",
+            "fmv_digital_assets", "fmv_other_alternatives",
+        ]
+    }
     fr["_fund_count"] = len(funds)
 
     wb = Workbook()
