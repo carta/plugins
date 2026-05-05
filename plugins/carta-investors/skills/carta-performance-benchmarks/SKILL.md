@@ -1,6 +1,6 @@
 ---
 name: carta-performance-benchmarks
-description: Compare a fund's performance against peer benchmark cohorts. Use when asked about fund benchmarks, peer comparison, percentile ranking, Net IRR vs peers, TVPI benchmarks, or how a fund stacks up against its cohort.
+description: Compare a fund's performance against peer benchmark cohorts. Use when asked about fund benchmarks, peer comparison, percentile ranking, Net IRR vs peers, TVPI benchmarks, or how a fund stacks up against its cohort. Do NOT use for cap table market benchmarks (option pool sizes, SAFE terms, cap structure patterns — use carta-market-benchmarks in carta-cap-table). Do NOT use for general fund financial data queries or NAV — use carta-explore-data.
 allowed-tools:
   - mcp__carta__fetch
   - mcp__carta__list_contexts
@@ -22,6 +22,18 @@ Compare a fund's historical Net IRR, TVPI, MOIC, or DPI against peer benchmark c
 - "Compare [Fund] against vintage 2020 peers"
 - "Show me benchmark data for our funds"
 - "How does our fund stack up against peers?"
+- "How does our fund's IRR compare to peers?"
+- "What percentile is our TVPI?"
+- "Is Fund II above or below median DPI?"
+- "Show me MOIC benchmarks for vintage 2021"
+
+## When NOT to Use
+
+- "What's the average option pool size for Series A?" → use `carta-market-benchmarks`
+- "What are typical SAFE terms across our portfolio?" → use `carta-market-benchmarks`
+- "Show me cap structure patterns for seed-stage companies" → use `carta-market-benchmarks`
+- "What's the current NAV for Fund I?" → use `carta-explore-data`
+- "Pull fund financial data for our quarterly report" → use `carta-explore-data`
 
 ## Prerequisites
 
