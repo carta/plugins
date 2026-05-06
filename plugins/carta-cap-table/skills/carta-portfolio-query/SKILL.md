@@ -1,6 +1,6 @@
 ---
 name: carta-portfolio-query
-description: Query cap table data across multiple companies, or fetch detailed per-company data (stakeholders, grants, SAFEs, 409A). Use for portfolio-wide analysis, comparing companies, finding patterns, or when detailed tabular data is needed beyond a visual summary.
+description: Query cap table data across multiple companies, or fetch detailed per-company data (stakeholders, grants, SAFEs, 409A). Use for portfolio-wide analysis, comparing companies, finding patterns, or when detailed tabular data is needed beyond a visual summary. Do NOT use for market benchmark statistics or cap structure patterns — use carta-market-benchmarks instead. Do NOT use for portfolio health alerts or red flags — use carta-portfolio-alerts instead.
 allowed-tools:
   - mcp__carta__fetch
   - mcp__carta__list_contexts

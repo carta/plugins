@@ -1,6 +1,6 @@
 ---
 name: carta-discover-commands
-description: Find the right carta-cap-table command when no other skill matches. Use when unsure which command to call, exploring available data, or when the user's request doesn't match a specific skill.
+description: Find the right carta-cap-table command when no other skill matches. Use when unsure which command to call, exploring available data, or when the user's request doesn't match a specific skill. Do NOT use when the user's intent clearly matches a specific skill — invoke that skill directly.
 allowed-tools:
   - mcp__carta__fetch
   - mcp__carta__list_contexts

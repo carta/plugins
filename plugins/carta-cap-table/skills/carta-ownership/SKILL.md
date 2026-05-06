@@ -1,6 +1,6 @@
 ---
 name: carta-ownership
-description: Voting rights, liquidation seniority, and preferred vs common holder analysis. Use when asked about voting power, protective provisions, consent requirements, preferred stockholders, or seniority. For general visual ownership summaries or cap table overviews, use the cap_table_chart tool instead.
+description: Analyzes voting rights, liquidation seniority, and preferred vs common holder breakdown for a company. Use when asked about voting power, protective provisions, consent requirements, preferred stockholders, or seniority. Do NOT use for a simple stakeholder or shareholder list — use carta-stakeholders instead. For general visual ownership summaries or cap table overviews, use the cap_table_chart tool instead.
 allowed-tools:
   - mcp__carta__fetch
   - mcp__carta__list_contexts

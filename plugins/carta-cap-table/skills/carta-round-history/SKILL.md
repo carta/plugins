@@ -1,6 +1,6 @@
 ---
 name: carta-round-history
-description: Fetch financing round history for a company. Use when asked about funding rounds, capital raised, or financing history.
+description: Fetch financing round history for a company. Use when asked about funding rounds, capital raised, or financing history. Do NOT use for portfolio-wide funding statistics or benchmarks — use carta-market-benchmarks instead.
 allowed-tools:
   - mcp__carta__fetch
   - mcp__carta__list_contexts
@@ -68,7 +68,7 @@ Each preferred share class represents a round. Faster but less detail: no indivi
     {
       "id": 666,
       "pk_key": "certificate_pk",
-      "stakeholder_name": "Janet Sugiyama",
+      "stakeholder_name": "Example Holder",
       "currency": "USD",
       "label": "PB-9",
       "round_name": "Series B Preferred",
