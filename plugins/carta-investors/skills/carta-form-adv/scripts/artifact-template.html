@@ -202,6 +202,26 @@ function initTabs() {
   });
 }
 
+// ── Firm rollup (computed from per-fund rows — firm_rollup key removed from schema) ───
+function computeFirmRollup() {
+  const funds = DATA.funds || [];
+  return funds.reduce((acc, f) => {
+    acc.regulatory_aum               += f.regulatory_aum               || 0;
+    acc.fair_market_value            += f.fair_market_value            || 0;
+    acc.cash                         += f.cash                         || 0;
+    acc.other_assets                 += f.other_assets                 || 0;
+    acc.total_gross_assets           += f.total_gross_assets           || 0;
+    acc.unfunded_commitments         += f.unfunded_commitments         || 0;
+    acc.total_borrowings_outstanding += f.total_borrowings_outstanding || 0;
+    acc.net_asset_value              += f.net_asset_value              || 0;
+    return acc;
+  }, {
+    regulatory_aum: 0, fair_market_value: 0, cash: 0, other_assets: 0,
+    total_gross_assets: 0, unfunded_commitments: 0, total_borrowings_outstanding: 0,
+    net_asset_value: 0,
+  });
+}
+
 // ── Header ────────────────────────────────────────────────────────────────
 function renderHeader() {
   document.getElementById('hdr-title').textContent = DATA.firm_name || 'Form ADV Preparation';
@@ -212,7 +232,7 @@ function renderHeader() {
 
 // ── Summary metrics ───────────────────────────────────────────────────────
 function renderMetrics() {
-  const fr = DATA.firm_rollup || {};
+  const fr = computeFirmRollup();
   const funds = DATA.funds || [];
   const totalLPs = funds.reduce((s, f) => s + (f.beneficial_owners_lp || 0), 0);
   const items = [
@@ -232,7 +252,7 @@ function renderMetrics() {
 
 // ── Tab 1: Firm Overview ──────────────────────────────────────────────────
 function renderFirmTab() {
-  const fr = DATA.firm_rollup || {};
+  const fr = computeFirmRollup();
   const funds = DATA.funds || [];
   const demos = DATA.investor_demographics || {};
 
@@ -472,7 +492,7 @@ function renderIARDTab() {
       <ol class="checklist">
         ${step(1,  'Log into IARD (iard.com) and open your Form ADV Part 1A amendment.')}
         ${step(2,  `Item 5.D — Client Type: select "Pooled Investment Vehicles" for 100% of clients. ${badge('carta','Carta fills')}`)}
-        ${step(3,  `Item 5.F — Regulatory AUM: enter <strong>${fmt$((DATA.firm_rollup || {}).regulatory_aum)}</strong> as discretionary AUM, 0 as non-discretionary, and <strong>${fmtNum((DATA.funds || []).length)} accounts</strong>. ${badge('carta','Carta fills')}`)}
+        ${step(3,  `Item 5.F — Regulatory AUM: enter <strong>${fmt$(computeFirmRollup().regulatory_aum)}</strong> as discretionary AUM, 0 as non-discretionary, and <strong>${fmtNum((DATA.funds || []).length)} accounts</strong>. ${badge('carta','Carta fills')}`)}
         ${step(4,  `Item 5.H — Non-US Clients: use the % of LP NAV from the Firm Overview tab to select the appropriate IARD range. ${badge('carta','Carta fills')} ${badge('manual','Verify')}`)}
         ${step(5,  `Schedule D §7.B.(1) — For each private fund, complete: fund identification (name, IARD fund ID, formation date, legal structure). ${badge('carta','Carta fills')} ${badge('flag','Verify legal names')}`)}
         ${step(6,  `Schedule D §7.B.(1) Q.13 — Enter beneficial owner counts (LP + GP) for each fund. ${badge('carta','Carta fills')}`)}

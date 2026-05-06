@@ -155,13 +155,16 @@ investor_counts_snapshot AS (
 ),
 
 investor_counts AS (
-    SELECT fund_uuid, count_lps, count_gps, is_point_in_time
-    FROM investor_counts_pit
-    UNION ALL
-    -- Only include snapshot row if no point-in-time row exists for that fund
-    SELECT s.fund_uuid, s.count_lps, s.count_gps, s.is_point_in_time
-    FROM investor_counts_snapshot s
-    WHERE NOT EXISTS (SELECT 1 FROM investor_counts_pit p WHERE p.fund_uuid = s.fund_uuid)
+    -- LEFT JOIN replaces UNION ALL (DWH endpoint rejects set operations in CTEs).
+    -- Priority: point-in-time over snapshot; is_point_in_time=TRUE when pit row exists.
+    SELECT
+        f.fund_uuid,
+        COALESCE(pit.count_lps,  snap.count_lps,  0) AS count_lps,
+        COALESCE(pit.count_gps,  snap.count_gps,  0) AS count_gps,
+        (pit.fund_uuid IS NOT NULL)                    AS is_point_in_time
+    FROM funds f
+    LEFT JOIN investor_counts_pit      pit  ON f.fund_uuid = pit.fund_uuid
+    LEFT JOIN investor_counts_snapshot snap ON f.fund_uuid = snap.fund_uuid
 ),
 
 portfolio_summary AS (
