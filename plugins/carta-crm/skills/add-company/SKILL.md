@@ -5,6 +5,9 @@ description: >
   Use this skill when the user says things like "add a company", "create a company
   record", "add company to CRM", "upload company to Carta CRM", or "/add-company".
   Collects company information conversationally, then POSTs it to the Carta CRM API.
+  NOT for cap table onboarding — if the user wants to onboard a company to Carta's
+  cap table system (entity setup, document extraction, OBS import), use the
+  captable-onboarding skill instead.
 allowed-tools:
   - Bash(curl *)
   - AskUserQuestion
