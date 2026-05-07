@@ -22,14 +22,14 @@ Download tear sheets for your portfolio companies and funds on Carta.
 The skill presents available templates and portfolio companies interactively, then routes
 to the appropriate workflow based on the selection:
 
-- **One portco** → Preview: immediate embedded PDF returned in the MCP response.
 - **All portcos across all funds** → Download All: fast path — no fund breakdown needed.
-- **Specific portcos (two or more)** → Bulk: builds fund breakdowns, async ZIP archive, polled until complete, download URL provided.
+- **Specific portcos (one or more)** → Bulk: builds fund breakdowns, async ZIP archive, polled until complete, download URL provided.
 
 ---
 
 # When to Use
 
+- "Create a [Portco] tear sheet"
 - "Generate a tear sheet for [Portco]"
 - "Download tear sheet for all portfolio companies"
 - "Create a bulk tear sheet package"
@@ -50,7 +50,6 @@ to the appropriate workflow based on the selection:
 |-------------|---------|
 | `fetch("fa:list:tearsheet_templates", {})` | List available PDF templates for the firm |
 | `fetch("fa:list:portfolio_companies", {})` | List all portfolio companies with their fund groupings |
-| `fetch("fa:get:tearsheet_preview", {...})` | Generate a single-portco PDF synchronously |
 | `fetch("fa:mutate:download_all_tearsheets", {...})` | Start an async job for all portcos (fast path) |
 | `fetch("fa:mutate:start_tearsheet_download", {...})` | Start an async bulk job for a specific portco subset |
 | `fetch("fa:get:tearsheet_download_status", {})` | Poll for async job completion; returns `"pending"` or a download URL |
@@ -143,49 +142,8 @@ Ask the user to choose:
 
 After the user selects portcos:
 
-- **Exactly one portco selected** → proceed to [Preview Flow](#preview-flow-single-portco).
 - **All portcos across all funds selected** → proceed to [Download All Flow](#download-all-flow-all-portcos).
-- **Two or more specific portcos selected** → build `FUND_BREAKDOWNS` and proceed to [Bulk Flow](#bulk-flow-multiple-portcos).
-
----
-
-## Preview Flow (single portco)
-
-Store the selected portco's `fund_uuid` and `entity_link_id`.
-
-Tell the user: "Generating tearsheet — this may take up to 2 minutes..."
-
-Call:
-
-```
-fetch("fa:get:tearsheet_preview", {
-  "template_uuid": "<TEMPLATE_UUID>",
-  "fund_uuid": "<FUND_UUID>",
-  "entity_link_id": "<ENTITY_LINK_ID>"
-})
-```
-
-The command returns the PDF as an embedded resource in the MCP response.
-
-Report to the user:
-
-```
-Your tear sheet is ready!
-
-The PDF has been returned as an embedded resource in this response.
-Save it from your interface or ask me to retry if nothing appeared.
-
-Template: <TEMPLATE_NAME>
-Company:  <PORTCO_NAME>
-```
-
-**On failure:** Surface the full error. Common causes:
-- **Firm context not set:** Call `list_contexts` and `set_context` first.
-- **422:** Template may not be compatible with this portco. Try a different template.
-- **401/403:** Session may have expired. Re-connect the Carta MCP server.
-- **Timeout:** Server may be busy. Try again.
-
-Never retry automatically.
+- **One or more specific portcos selected** → build `FUND_BREAKDOWNS` and proceed to [Bulk Flow](#bulk-flow-multiple-portcos).
 
 ---
 
