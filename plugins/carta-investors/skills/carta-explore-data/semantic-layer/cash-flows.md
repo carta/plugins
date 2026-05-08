@@ -7,6 +7,11 @@ Query period-specific cash flows using journal entries within a date range.
 
 A date range is required — ask the user if not provided.
 
+> **Date field note**: `effective_date` is the **accounting/posting date** — the date the entry was recorded
+> in the general ledger. For "cash-basis" or "funded in [year]" investment queries, this reflects when
+> cash moved. For "investments made in [year]", prefer `AGGREGATE_INVESTMENTS.investment_date` (see
+> `investments.md`) which is the deal date, not the GL posting date.
+
 ## Table: JOURNAL_ENTRIES
 
 The `event_type` column classifies what caused each entry and drives cash flow categorization.

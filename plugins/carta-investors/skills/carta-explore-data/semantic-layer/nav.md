@@ -4,6 +4,9 @@ Query current NAV, TVPI, DPI, MOIC, and cumulative LP contribution totals per fu
 
 > For *period* cash flows (e.g. "how much did LPs contribute this quarter?"), use `cash-flows.md` instead —
 > `MONTHLY_NAV_CALCULATIONS` stores **cumulative** totals, not period activity.
+>
+> For **IRR** (internal rate of return), use `AGGREGATE_FUND_METRICS` (see `fund-performance.md`) —
+> `MONTHLY_NAV_CALCULATIONS` does not contain IRR. Do not attempt to compute IRR from this table.
 
 ## Table: MONTHLY_NAV_CALCULATIONS
 

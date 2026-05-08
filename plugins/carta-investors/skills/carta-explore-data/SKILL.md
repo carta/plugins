@@ -2,17 +2,15 @@
 name: carta-explore-data
 description: >
   Query and explore investors data in the Carta data warehouse. Use when asked about
-  fund metrics, NAV, TVPI, DPI, LP data, portfolio financials, journal entries,
+  fund metrics, NAV, TVPI, DPI, IRR, LP data, portfolio financials, journal entries,
   cash flow statements, balance sheets, cap table data, share classes, ownership
-  percentages, or any financial reporting question.
+  percentages, 409a valuations, fair market value, portfolio company KPIs, revenue,
+  investments, cost basis, MOIC, or any financial reporting question.
 allowed-tools:
   - mcp__carta__fetch
   - mcp__carta__list_contexts
   - mcp__carta__set_context
-  - Read(${CLAUDE_PLUGIN_ROOT}/skills/carta-explore-data/semantic-layer/nav.md)
-  - Read(${CLAUDE_PLUGIN_ROOT}/skills/carta-explore-data/semantic-layer/cash-flows.md)
-  - Read(${CLAUDE_PLUGIN_ROOT}/skills/carta-explore-data/semantic-layer/balance-sheet.md)
-  - Read(${CLAUDE_PLUGIN_ROOT}/skills/carta-explore-data/semantic-layer/cap-table.md)
+  - Read(${CLAUDE_PLUGIN_ROOT}/skills/carta-explore-data/semantic-layer/*)
   - AskUserQuestion
 ---
 
@@ -24,24 +22,17 @@ Query the Carta data warehouse for investors data — NAV, performance metrics, 
 
 ## When to Use
 
-- "What companies do we have in our portfolio?"
-- "List our investments"
-- "Show me all our portfolio companies"
-- "What's the current NAV for [Fund]?"
-- "Show me TVPI and DPI for all funds"
-- "List all LP investors in [Fund] with their contributions"
-- "What journal entries were posted for [Fund] last quarter?"
-- "Which portfolio companies have the highest MOIC?"
-- "Show me total contributions and distributions for each LP"
-- "What are the fund metrics as of Q4 2024?"
-- "Show me all cash flows this quarter — LP contributions, distributions, management fees, and fund expenses"
-- "What were our LP contributions and distributions last year?"
-- "Build me a balance sheet for Fund III as of December 31"
-- "Show me assets, liabilities, and partners' capital for our funds"
-- "Show me the cap table for [Company]"
-- "What's our ownership in [Portfolio Company]?"
-- "What share classes does [Company] have?"
-- "What's our fully diluted stake in [Company]?"
+| Common Questions | Semantic File |
+|---|---|
+| "What companies do we have in our portfolio?"<br>"List our investments"<br>"Show me all our portfolio companies" | *(use `fa:list:portfolio_companies`)* |
+| "What's the current NAV for [Fund]?"<br>"Show me TVPI and DPI for all funds"<br>"Show me total contributions and distributions for each LP" | `nav.md` |
+| "What's the IRR for [Fund]?"<br>"Show me fund performance metrics"<br>"What are the fund metrics as of Q4 2024?" | `fund-performance.md` |
+| "What journal entries were posted for [Fund] last quarter?"<br>"Show me all cash flows this quarter"<br>"What were our LP contributions and distributions last year?"<br>"List all LP investors in [Fund] with their contributions" | `cash-flows.md` |
+| "Build me a balance sheet for Fund III as of December 31"<br>"Show me assets, liabilities, and partners' capital for our funds" | `balance-sheet.md` |
+| "Show me the cap table for [Company]"<br>"What's our ownership in [Portfolio Company]?"<br>"What share classes does [Company] have?"<br>"What's our fully diluted stake in [Company]?" | `cap-table.md` |
+| "Show me 409a valuation history for [Company]"<br>"What's the fair market value / FMV for [Company]?" | `valuations.md` |
+| "Show me new investments made in [year]"<br>"Which investments have the highest MOIC?"<br>"Which portfolio companies have the highest MOIC?" | `investments.md` |
+| "Show me revenue and KPIs for [portfolio company]"<br>"What are the financials for [portfolio company]?" | `company-financials.md` |
 
 ## Prerequisites
 
@@ -59,21 +50,19 @@ Use this table to pick the right context file before running any query:
 |---|---|---|
 | **Available investments or list of portfolio companies** | — | `fetch("fa:list:portfolio_companies", {})` — **always start here** |
 | Current NAV, TVPI, DPI, MOIC, cumulative LP contributions/distributions | `nav.md` | `MONTHLY_NAV_CALCULATIONS` |
+| Fund performance — IRR, DPI, TVPI, dry powder, expense breakdown | `fund-performance.md` | `AGGREGATE_FUND_METRICS` |
 | Cash flows in a period (contributions, distributions, fees, expenses) | `cash-flows.md` | `JOURNAL_ENTRIES` grouped by `event_type` |
 | Balance sheet (assets, liabilities, partners' capital) | `balance-sheet.md` | `JOURNAL_ENTRIES` summed by `account_type` |
 | Cap table — share classes, ownership %, firm stake for a portfolio company | `cap-table.md` | `SUMMARY_CAP_TABLE` (firm context required) |
-| Portfolio companies, FMV, MOIC per investment (metrics) | Query `AGGREGATE_INVESTMENTS` directly | `AGGREGATE_INVESTMENTS` |
+| 409a valuations, fair market value, FMV, common stock price | `valuations.md` | `IRC409A_VALUE` |
+| Investments — cost basis, FMV, MOIC, activity by year, unrealized gain/loss | `investments.md` | `AGGREGATE_INVESTMENTS` |
+| Portfolio company financials — revenue, ARR, headcount, KPIs | `company-financials.md` | `COMPANY_FINANCIALS` |
 | Benchmark percentile rankings vs peers | Use `carta-investors:carta-performance-benchmarks` | `TEMPORAL_FUND_COHORT_BENCHMARKS` |
 | Fund list, entity type (Fund vs SPV) | Query `ALLOCATIONS` directly | `ALLOCATIONS` |
 
 ## Step 2 — Load the Context File
 
-Read the matching file from the skill directory:
-
-- `${CLAUDE_PLUGIN_ROOT}/skills/carta-explore-data/semantic-layer/nav.md`
-- `${CLAUDE_PLUGIN_ROOT}/skills/carta-explore-data/semantic-layer/cash-flows.md`
-- `${CLAUDE_PLUGIN_ROOT}/skills/carta-explore-data/semantic-layer/balance-sheet.md`
-- `${CLAUDE_PLUGIN_ROOT}/skills/carta-explore-data/semantic-layer/cap-table.md`
+Read the matching file from `${CLAUDE_PLUGIN_ROOT}/skills/carta-explore-data/semantic-layer/<domain>.md`:
 
 The file contains the SQL query, column reference, and presentation rules for that domain. Follow them exactly.
 
@@ -101,7 +90,6 @@ Use the MCP commands in sequence:
 - **Portfolio company listing** — call `fetch("fa:list:portfolio_companies", {})` to list available investments; do NOT use `ALLOCATIONS` or `AGGREGATE_INVESTMENTS` for this purpose
 - **Always include LIMIT** — default `LIMIT 200`; use 50–500 for aggregations
 - **Only SELECT** — no INSERT, UPDATE, DELETE, or DDL
-- **Date fields** — `effective_date` for `JOURNAL_ENTRIES`; `month_end_date` for `MONTHLY_NAV_CALCULATIONS`
-- **Deduplication** — for `MONTHLY_NAV_CALCULATIONS`, use `QUALIFY ROW_NUMBER() OVER (PARTITION BY fund_uuid ORDER BY last_refreshed_at DESC) = 1`
+- **Date fields** — `effective_date` for `JOURNAL_ENTRIES`; `month_end_date` for `MONTHLY_NAV_CALCULATIONS`; `investment_date` for `AGGREGATE_INVESTMENTS`
+- **Deduplication** — for `MONTHLY_NAV_CALCULATIONS` and `AGGREGATE_FUND_METRICS`, use `QUALIFY ROW_NUMBER() OVER (PARTITION BY fund_uuid ORDER BY last_refreshed_at DESC) = 1`
 - **ALLOCATIONS has multiple rows per fund** — always `GROUP BY fund_uuid` with `MAX(fund_name)` when using it for fund metadata
-
