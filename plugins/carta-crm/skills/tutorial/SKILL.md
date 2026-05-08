@@ -8,10 +8,12 @@ description: >
   "how do I use carta crm", "walk me through carta crm",
   "getting started with crm", "demo carta crm", "crm tutorial"
 allowed-tools:
-  - Bash(curl -s -o /dev/null -w "%{http_code}" -H "X-API-Key: $LISTALPHA_API_KEY" "https://api.listalpha.com/v1/investors?limit=1")
+  - mcp__carta_crm__search_investors
   - Bash(mkdir -p ~/.claude/plugins/cache/carta-development-tools/carta-crm)
   - Bash(touch ~/.claude/plugins/cache/carta-development-tools/carta-crm/.tutorial-seen)
 args: []
+version: 1.0.0
+model: haiku
 ---
 
 # Carta CRM Tutorial
@@ -23,8 +25,8 @@ for the user to confirm before advancing**. A simple "ready", "next", or
 learning a new tool, not a certification exam.
 
 Do NOT run any real Carta CRM data commands. All entity data in the demo
-section is fictional and hardcoded. Only run the commands listed in
-`allowed-tools` (the API connectivity check and the completion marker touch).
+section is fictional and hardcoded. Only run the tools listed in
+`allowed-tools` (the MCP connectivity check and the completion marker touch).
 
 **UX rules:**
 - Gate-based: pause after every section, wait for confirmation
@@ -123,42 +125,50 @@ Wait for the user to confirm before continuing.
 
 ## Section 2 — Verify Setup
 
-Run the API connectivity check silently:
+Run the MCP connectivity check silently by calling:
 
-```bash
-curl -s -o /dev/null -w "%{http_code}" -H "X-API-Key: $LISTALPHA_API_KEY" "https://api.listalpha.com/v1/investors?limit=1"
+```
+mcp__carta_crm__search_investors({ limit: 1 })
 ```
 
-If the response is `200`, present this to the user:
+If the call succeeds (returns a result object without an auth error), present this to the user:
 
 ---
 
-Your API key is configured and working. You're ready to go.
+You're connected to the Carta CRM. You're ready to go.
 
 ---
 
-Then move on. If the response is anything other than `200`, present this to the user:
+Then move on. If the call fails with an authentication error, present this to the user:
 
 ---
 
-Your API key doesn't appear to be set up yet. To use this plugin, you'll
-need an API key from Carta and a one-time step to configure it.
+It looks like you haven't authenticated with the Carta CRM yet. This is a one-time
+browser login — no API key needed.
 
-**Step 1 — Get your API key**
+**Step 1 — Start the auth flow**
 
-- **Already a Carta CRM customer?** Contact [crm@carta.com](mailto:crm@carta.com) — they'll provide your key.
-- **Not yet a customer?**
-  - Deal CRM: https://carta.com/fund-management/deal-crm/
-  - LP CRM: https://carta.com/fund-management/fund-administration/lp-crm/
-  - Or chat with your Carta AE to get access.
+Say: "authenticate with Carta CRM" and Claude will give you a URL to open in your browser.
 
-**Step 2 — Configure it**
+**Step 2 — Log in**
 
-Once you have the key, just say:
+Open the URL, log in with your Carta CRM credentials, and authorize the connection.
 
-> "Set my LISTALPHA_API_KEY to [your-key-here]"
+**Step 3 — Complete the flow**
 
-Claude will add it to your Claude Code settings automatically. Then start a new conversation and come back to this tutorial.
+After logging in, your browser will redirect to a `localhost` URL (the page may not
+load — that's fine). Copy the full URL from the browser address bar and paste it back
+into Claude.
+
+Once that's done, come back and say **"carta crm tutorial"** to continue.
+
+---
+
+If you are not yet a Carta CRM customer:
+
+- **Deal CRM**: https://carta.com/fund-management/deal-crm/
+- **LP CRM**: https://carta.com/fund-management/fund-administration/lp-crm/
+- **Questions?** Chat with your Carta AE or reach out to [crm@carta.com](mailto:crm@carta.com)
 
 ---
 

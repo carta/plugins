@@ -1,60 +1,45 @@
 ---
 name: add-deal
 description: >
-  Creates one or more deal records in the Carta CRM via the public API.
+  Creates one or more deal records in the Carta CRM via the Carta CRM MCP Server.
   Use this skill when the user says things like "add a deal", "create a deal",
   "log a deal", "add deal to CRM", "add deal to Carta CRM", or "/add-deal".
-  Collects deal information conversationally, then POSTs it to the Carta CRM API.
+  Collects deal information conversationally, then creates it via the MCP server.
 allowed-tools:
-  - Bash(curl *)
-  - AskUserQuestion
+  - mcp__carta_crm__create_deal
+  - mcp__carta_crm__get_deal_pipelines_with_stages
+  - mcp__carta_crm__get_deal_custom_fields
+version: 1.0.0
+model: haiku
 ---
 
 ## Overview
 
-Help the user create one or more deal records in the Carta CRM by calling
-`POST /v1/deals`. First fetch available pipelines and custom fields, then collect
-deal details conversationally, and make the API call using curl.
+Help the user create one or more deal records in the Carta CRM. First fetch available
+pipelines and custom fields, then collect deal details conversationally, then call
+`create_deal`.
 
-## Step 1 — Check credentials
+## Step 1 — Fetch available pipelines and stages
 
-```bash
-echo "API_KEY=${LISTALPHA_API_KEY:+set}"
+Call the pipelines tool so the user can pick a pipeline and stage by name:
+
+```
+mcp__carta_crm__get_deal_pipelines_with_stages()
 ```
 
-If `LISTALPHA_API_KEY` is missing, tell the user:
-> "You need to set the `LISTALPHA_API_KEY` environment variable to your Carta CRM API key before using this skill. You can add it in Claude's environment settings."
+Present the pipeline and stage names to the user. If the call fails, proceed without
+it — pipeline and stage default to the organization's defaults if omitted.
 
-## Step 2 — Fetch available pipelines and stages
+## Step 2 — Discover available custom fields (optional)
 
-Call the pipelines endpoint so the user can pick a pipeline and stage by name:
-
-```bash
-curl -s -X GET "https://api.listalpha.com/v1/deals/pipelines" \
-  -H "Authorization: ${LISTALPHA_API_KEY}"
+```
+mcp__carta_crm__get_deal_custom_fields()
 ```
 
-The response shape is:
-```json
-{
-  "pipelines": [
-    { "id": "...", "name": "...", "stages": [{ "id": "...", "name": "..." }] }
-  ]
-}
-```
+Use returned field IDs and labels as hints when collecting deal data.
+If the call fails, proceed without it.
 
-Present the pipeline and stage names to the user. If the call fails, proceed without it.
-
-## Step 3 — Discover available custom fields (optional but recommended)
-
-```bash
-curl -s -X GET "https://api.listalpha.com/v1/deals/custom-fields" \
-  -H "Authorization: ${LISTALPHA_API_KEY}"
-```
-
-Use returned field names as hints when collecting deal data. If the call fails, proceed without it.
-
-## Step 4 — Collect deal information
+## Step 3 — Collect deal information
 
 Ask the user for:
 - **Pipeline** (optional) — which pipeline this deal belongs to (from Step 1)
@@ -64,63 +49,53 @@ Ask the user for:
 - **Comment** (optional) — notes or comments about the deal
 - **Tags** (optional) — array of tag strings
 - **Deal lead** (optional) — user ID to assign as deal lead
-- **Added at** (optional) — date the deal was added (ISO 8601)
+- **Added at** (optional) — ISO 8601 date the deal was added
+- **People** (optional) — contact IDs for advisers, introducers, management
 - **Custom fields** (optional) — any fields returned in Step 2
 
 If the user has already provided details in their message, extract them directly
 without re-asking.
 
-## Step 5 — Create the deal via API
+## Step 4 — Create the deal
 
-Build the request body, omitting any fields the user did not provide:
-```json
-{
-  "pipelineId": "<pipeline id>",
-  "stageId": "<stage id>",
-  "company": {
-    "name": "<company name>",
-    "url": "<company url>"
+Call:
+
+```
+mcp__carta_crm__create_deal({
+  pipelineId: "<pipeline id>",
+  stageId: "<stage id>",
+  company: {
+    name: "<company name>",
+    url: "<company url>"
   },
-  "comment": "<comment>",
-  "tags": ["<tag1>", "<tag2>"],
-  "dealLead": "<user id>",
-  "addedAt": "<ISO 8601 date>",
-  "fields": {
-    "<field_key>": "<value>"
+  comment: "<comment>",
+  tags: ["<tag1>", "<tag2>"],
+  dealLead: "<user id>",
+  addedAt: "<ISO 8601 date>",
+  people: {
+    advisers: ["<contact id>"],
+    introducer: ["<contact id>"],
+    management: ["<contact id>"]
+  },
+  fields: {
+    "<field_id>": "<value>"
   }
-}
+})
 ```
 
-Omit `company` if neither name nor URL was provided. Omit `fields` if no custom
-field data was provided.
+Omit any key the user did not provide. Omit `company` if neither name nor URL was given.
 
-Make the API call:
-```bash
-curl -s -X POST "https://api.listalpha.com/v1/deals" \
-  -H "Authorization: ${LISTALPHA_API_KEY}" \
-  -H "Content-Type: application/json" \
-  -d '<json_body>'
-```
+## Step 5 — Report result
 
-## Step 6 — Report result
-
-On success (HTTP 200), respond with:
-> "Deal created successfully (ID: `{id}`)."
-
-If a company name is available, include it:
+On success, respond with:
 > "Deal for **{company name}** created successfully (ID: `{id}`)."
 
-On error, show the status code and error message from the response, and suggest fixes:
-- **401** — API key is invalid or missing
-- **400** — Check that pipeline/stage IDs are valid and fields contain valid keys
-- **500** — Server error; try again or contact support
+On error, show the error message and suggest:
+- Verify pipeline and stage IDs — run `get_deal_pipelines_with_stages` to list valid options
+- Check that custom field IDs are valid
 
 ## Adding multiple deals
 
-If the user wants to add multiple deals at once, repeat Steps 4–6 for each one.
+If the user wants to add multiple deals at once, repeat Steps 3–5 for each one.
 After all are done, summarize:
 > "Created N deals: [list of company names with IDs]"
-
-## Reference
-
-See `references/api-reference.md` for endpoint details and field schema.

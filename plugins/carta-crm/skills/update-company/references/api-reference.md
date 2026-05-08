@@ -41,7 +41,7 @@ Partially updates an existing company. Only fields provided in the request body 
 
 **Example — update website:**
 ```bash
-curl -s -X PATCH "https://api.listalpha.com/v1/companies/64f1a2b3c4d5e6f7a8b9c0d1" \
+curl -s -X PATCH "https://crm-public-api.app.carta.com/v1/companies/64f1a2b3c4d5e6f7a8b9c0d1" \
   -H "Authorization: ${LISTALPHA_API_KEY}" \
   -H "Content-Type: application/json" \
   -d '{"fields": {"website": "https://stripe.com"}}'
@@ -49,7 +49,7 @@ curl -s -X PATCH "https://api.listalpha.com/v1/companies/64f1a2b3c4d5e6f7a8b9c0d
 
 **Example — update name and tags:**
 ```bash
-curl -s -X PATCH "https://api.listalpha.com/v1/companies/64f1a2b3c4d5e6f7a8b9c0d1" \
+curl -s -X PATCH "https://crm-public-api.app.carta.com/v1/companies/64f1a2b3c4d5e6f7a8b9c0d1" \
   -H "Authorization: ${LISTALPHA_API_KEY}" \
   -H "Content-Type: application/json" \
   -d '{"name": "Stripe Inc.", "fields": {"tags": ["fintech", "payments"]}}'
@@ -89,6 +89,6 @@ Use this to find a company ID before updating. See `search-companies` skill for 
 Use this to discover available custom field keys before updating `fields`.
 
 ```bash
-curl -s "https://api.listalpha.com/v1/companies/custom-fields" \
+curl -s "https://crm-public-api.app.carta.com/v1/companies/custom-fields" \
   -H "Authorization: ${LISTALPHA_API_KEY}"
 ```

@@ -40,7 +40,7 @@ Partially updates an existing deal. Only fields provided in the request body are
 
 **Example — move stage:**
 ```bash
-curl -s -X PATCH "https://api.listalpha.com/v1/deals/64f1a2b3c4d5e6f7a8b9c0d1" \
+curl -s -X PATCH "https://crm-public-api.app.carta.com/v1/deals/64f1a2b3c4d5e6f7a8b9c0d1" \
   -H "Authorization: ${LISTALPHA_API_KEY}" \
   -H "Content-Type: application/json" \
   -d '{"stageId": "64f1a2b3c4d5e6f7a8b9c0d3"}'
@@ -48,7 +48,7 @@ curl -s -X PATCH "https://api.listalpha.com/v1/deals/64f1a2b3c4d5e6f7a8b9c0d1" \
 
 **Example — update comment and tags:**
 ```bash
-curl -s -X PATCH "https://api.listalpha.com/v1/deals/64f1a2b3c4d5e6f7a8b9c0d1" \
+curl -s -X PATCH "https://crm-public-api.app.carta.com/v1/deals/64f1a2b3c4d5e6f7a8b9c0d1" \
   -H "Authorization: ${LISTALPHA_API_KEY}" \
   -H "Content-Type: application/json" \
   -d '{"comment": "Met founder at SaaStr", "tags": ["saas", "series-a"]}'

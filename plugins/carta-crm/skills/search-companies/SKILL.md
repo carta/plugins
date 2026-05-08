@@ -4,83 +4,51 @@ description: >
   Searches for and retrieves company records from the Carta CRM.
   Use this skill when the user says things like "find a company", "search companies",
   "look up a company", "show me company details for [name]", "get company by ID",
-  "list companies", "what companies do we have", or "/search-companies".
+  "get company by domain", "list companies", "what companies do we have", or "/search-companies".
   Returns company details including ID, name, and custom fields.
   The company ID returned can be used with the update-company skill.
 allowed-tools:
-  - Bash(curl *)
-  - AskUserQuestion
+  - mcp__carta_crm__search_companies
+  - mcp__carta_crm__fetch_company_by_domain
+version: 1.0.0
+model: haiku
 ---
 
 ## Overview
 
-Search for companies in the Carta CRM using `GET /v1/companies` (filtered list) or
-`GET /v1/companies/{id}` (single company by ID). Return results in a readable summary
-and always include the company ID so the user can reference it for updates.
+Search for companies in the Carta CRM. Choose the right tool based on what the user
+provided. Always surface the company ID so the user can reference it for updates.
 
 ## Step 1 — Determine search mode
 
-Based on the user's request, choose one of two modes:
+- **By domain** — user provided a website domain (e.g. "stripe.com") → use `fetch_company_by_domain`
+- **By name / keyword** — user provided a company name or keyword → use `search_companies`
 
-- **By ID** — user provided a company ID (a hex string like `64f1a2b3c4d5e6f7a8b9c0d1`) → use `GET /v1/companies/{id}`
-- **By search / filter** — user provided a name or keyword → use `GET /v1/companies` with query params
-
-If it's unclear, default to **By search / filter** and ask the user for a search term.
+If it's unclear, default to search by name and ask for a search term.
 
 ## Step 2 — Execute the search
 
-**By ID:**
-```bash
-curl -s "https://api.listalpha.com/v1/companies/<id>" \
-  -H "Authorization: ${LISTALPHA_API_KEY}"
+**By domain:**
+```
+mcp__carta_crm__fetch_company_by_domain({ domain: "<domain>" })
 ```
 
-**By search / filter:**
-
-```bash
-curl -s "https://api.listalpha.com/v1/companies?search=<term>&limit=20" \
-  -H "Authorization: ${LISTALPHA_API_KEY}"
+**By name / keyword:**
+```
+mcp__carta_crm__search_companies({
+  query: "<search term>",
+  limit: 20
+})
 ```
 
-Available query parameters:
-
-| Param | Type | Description |
-|-------|------|-------------|
-| `search` | string | Company name or keyword |
-| `limit` | integer | Max results (default to 20 unless user specifies) |
-| `offset` | integer | Skip N results for pagination |
-
-Omit any params the user did not specify.
+Increase `limit` if the user asks to see more results. Use `offset` to paginate.
 
 ## Step 3 — Present results
 
-For each company returned, display:
-
-```
-Company: <name> (ID: `<id>`)
-  Website: <website>
-  Location: <location>
-  Industry: <industry>
-  About: <about>
-  Tags: <tags>
-  Added: <createdAt>
-```
-
-Omit any fields that are blank or not present.
+For each company returned, display all non-empty fields in a readable summary.
+Always show the ID prominently — the user will need it to run `/update-company`.
 
 If no companies are found:
-> "No companies found matching your search. Try a different name or keyword."
+> "No companies found matching your search. Try a different name, keyword, or domain."
 
 If multiple results are returned, list them all and note the total count.
-
-Always surface the company ID prominently — the user will need it to run `/update-company`.
-
-## Error handling
-
-- **401** — API key is invalid or missing
-- **404** — No company found with that ID
-- **400 / 500** — Show the error message from the response
-
-## Reference
-
-See `references/api-reference.md` for full endpoint details.

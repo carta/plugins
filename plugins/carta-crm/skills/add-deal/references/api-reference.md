@@ -120,6 +120,6 @@ List or search existing deals.
 
 **Example:**
 ```bash
-curl -s "https://api.listalpha.com/v1/deals?search=stripe&limit=10" \
+curl -s "https://crm-public-api.app.carta.com/v1/deals?search=stripe&limit=10" \
   -H "Authorization: ${LISTALPHA_API_KEY}"
 ```

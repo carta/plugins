@@ -8,97 +8,88 @@ description: >
   Accepts a contact ID or name (will search if no ID provided).
   Only the fields explicitly provided are changed — all other fields are left untouched.
 allowed-tools:
-  - Bash(curl *)
-  - AskUserQuestion
+  - mcp__carta_crm__update_contact
+  - mcp__carta_crm__search_contacts
+  - mcp__carta_crm__fetch_contact_by_id
+  - mcp__carta_crm__get_contact_custom_fields
+version: 1.0.0
+model: haiku
 ---
 
 ## Overview
 
-Partially update an existing contact using `PATCH /v1/contacts/{id}`.
-Only fields provided in the request body are modified — this is a partial update,
-not a replacement. First resolve the contact ID, then collect what to change,
-then make the API call.
+Partially update an existing contact. Only fields provided are modified — this is
+a partial update, not a replacement. First resolve the contact ID, collect what to
+change, then call the update tool.
 
 ## Step 1 — Resolve the contact ID
 
 If the user provided a contact ID directly, use it and skip to Step 3.
 
-If only a name or description was given, search for the contact first:
+If only a name or description was given, search first:
 
-```bash
-curl -s "https://api.listalpha.com/v1/contacts?search=<name>&limit=10" \
-  -H "Authorization: ${LISTALPHA_API_KEY}"
+```
+mcp__carta_crm__search_contacts({ query: "<name>", limit: 10 })
 ```
 
-If multiple contacts match, present the list to the user and ask them to confirm which one to update (show name, title, company, and ID for each).
+If multiple contacts match, present the list and ask the user to confirm which one
+to update (show name, title, company, and ID for each).
 
 ## Step 2 — Collect what to update
 
-Ask the user what they want to change. Any combination of the following fields can be updated:
+Ask the user what they want to change. Updatable fields include:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `name` | string | Contact's full name |
-| `firstName` | string | First name |
-| `middleName` | string | Middle name |
-| `lastName` | string | Last name |
-| `emailDetail` | string | Primary email address |
-| `emailDetailSecond` | string | Second email address |
-| `emailDetailThird` | string | Third email address |
-| `emailDetailFourth` | string | Fourth email address |
-| `phone` | string | Primary phone number |
-| `businessPhone` | string | Business phone number |
-| `title` | string | Job title |
-| `company` | string | Employer/company name |
-| `linkedIn` | string | LinkedIn profile URL |
-| `tags` | array | Replace the full tags array |
-| `notes` | string | Free-text notes |
+| Field | Description |
+|-------|-------------|
+| `name` | Full name |
+| `firstName`, `lastName`, `middleName` | Name parts |
+| `emailDetail` | Primary email; Second/Third/Fourth for additional emails |
+| `phone` | Primary phone; `businessPhone` for business number |
+| `title` | Job title |
+| `headline` | Short bio or tagline |
+| `location` | Work location (city, state, country) |
+| `homeLocation` | Home location (city, state, country) |
+| `socialLinks` | linkedinUrl, twitterUrl, githubUrl, facebookUrl |
+| `jobs` | Work experience array — fully replaces existing jobs |
+| `tags` | Tags array — fully replaces existing tags |
+| `notes` | Free-text notes |
+| `fields` | Custom field values keyed by field ID |
 
-If the user has already specified what to change in their message, extract it directly without re-asking.
+If the user wants to update custom fields but isn't sure of field IDs, fetch the schema first:
+```
+mcp__carta_crm__get_contact_custom_fields()
+```
 
 **Important:** Only include fields that are explicitly being changed. Omit everything else.
 
-## Step 3 — Update the contact via API
+## Step 3 — Update the contact
 
-Build the request body with only the fields being changed:
+Call:
 
-```json
-{
-  "name": "<full name>",
-  "title": "<job title>",
-  "company": "<employer>",
-  "emailDetail": "<email>",
-  "phone": "<phone>",
-  "tags": ["<tag1>", "<tag2>"],
-  "notes": "<notes>"
-}
+```
+mcp__carta_crm__update_contact({
+  id: "<contact id>",
+  name: "<updated name>",
+  title: "<updated title>",
+  emailDetail: "<updated email>",
+  tags: ["<tag1>", "<tag2>"],
+  fields: { "<field_id>": "<value>" }
+})
 ```
 
-Make the API call:
-
-```bash
-curl -s -X PATCH "https://api.listalpha.com/v1/contacts/<id>" \
-  -H "Authorization: ${LISTALPHA_API_KEY}" \
-  -H "Content-Type: application/json" \
-  -d '<json_body>'
-```
+Omit any key that is not being updated.
 
 ## Step 4 — Report result
 
-On success (HTTP 200), respond with a summary of what changed:
-> "Contact **{name}** updated (ID: `{id}`). {Changed: title updated, email added, etc.}"
+On success, respond with a summary of what changed:
+> "Contact **{name}** updated (ID: `{id}`). Changed: [list of changed fields]"
 
-On error:
-- **401** — API key is invalid or missing
-- **400** — Check that field keys are valid
-- **404** — No contact found with that ID — suggest running `/search-contacts` first
-- **500** — Server error; try again or contact support
+On error, show the error message and suggest:
+- Verify the contact ID is correct — run `/search-contacts` to find it
+- Check that custom field IDs are valid
 
 ## Updating multiple contacts
 
-If the user wants to apply the same change to multiple contacts, repeat Steps 1 and 3–4 for each. Summarize at the end:
+If the user wants to apply the same change to multiple contacts, repeat Steps 1 and 3–4
+for each. Summarize at the end:
 > "Updated N contacts: [list of names]"
-
-## Reference
-
-See `references/api-reference.md` for full endpoint details.

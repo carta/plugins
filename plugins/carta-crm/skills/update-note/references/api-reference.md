@@ -33,7 +33,7 @@ Partially updates an existing note. Only fields provided in the request body are
 
 **Example — update note text:**
 ```bash
-curl -s -X PATCH "https://api.listalpha.com/v1/notes/64f1a2b3c4d5e6f7a8b9c0d2" \
+curl -s -X PATCH "https://crm-public-api.app.carta.com/v1/notes/64f1a2b3c4d5e6f7a8b9c0d2" \
   -H "Authorization: ${LISTALPHA_API_KEY}" \
   -H "Content-Type: application/json" \
   -d '{"text": "Updated: follow-up call scheduled for next week."}'
@@ -41,7 +41,7 @@ curl -s -X PATCH "https://api.listalpha.com/v1/notes/64f1a2b3c4d5e6f7a8b9c0d2" \
 
 **Example — rename and move to folder:**
 ```bash
-curl -s -X PATCH "https://api.listalpha.com/v1/notes/64f1a2b3c4d5e6f7a8b9c0d2" \
+curl -s -X PATCH "https://crm-public-api.app.carta.com/v1/notes/64f1a2b3c4d5e6f7a8b9c0d2" \
   -H "Authorization: ${LISTALPHA_API_KEY}" \
   -H "Content-Type: application/json" \
   -d '{"title": "Q2 Investor Call", "folderId": "64f1a2b3c4d5e6f7a8b9c0d9"}'

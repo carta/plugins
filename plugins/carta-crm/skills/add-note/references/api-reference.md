@@ -70,7 +70,7 @@ List or search existing notes.
 
 **Example:**
 ```bash
-curl -s "https://api.listalpha.com/v1/notes?search=investor&limit=10" \
+curl -s "https://crm-public-api.app.carta.com/v1/notes?search=investor&limit=10" \
   -H "Authorization: ${LISTALPHA_API_KEY}"
 ```
 
@@ -82,7 +82,7 @@ Retrieve a single note by ID.
 
 **Example:**
 ```bash
-curl -s "https://api.listalpha.com/v1/notes/64f1a2b3c4d5e6f7a8b9c0d2" \
+curl -s "https://crm-public-api.app.carta.com/v1/notes/64f1a2b3c4d5e6f7a8b9c0d2" \
   -H "Authorization: ${LISTALPHA_API_KEY}"
 ```
 
@@ -94,6 +94,6 @@ Link an existing note to a deal.
 
 **Example:**
 ```bash
-curl -s -X POST "https://api.listalpha.com/v1/deals/<dealId>/notes/<noteId>" \
+curl -s -X POST "https://crm-public-api.app.carta.com/v1/deals/<dealId>/notes/<noteId>" \
   -H "Authorization: ${LISTALPHA_API_KEY}"
 ```

@@ -30,7 +30,7 @@ If `pipelineId` is not specified, the default pipeline is used. To search across
 
 **Example:**
 ```bash
-curl -s "https://api.listalpha.com/v1/deals?search=stripe&limit=20" \
+curl -s "https://crm-public-api.app.carta.com/v1/deals?search=stripe&limit=20" \
   -H "Authorization: ${LISTALPHA_API_KEY}"
 ```
 
@@ -75,7 +75,7 @@ Returns a single deal by its unique identifier.
 
 **Example:**
 ```bash
-curl -s "https://api.listalpha.com/v1/deals/64f1a2b3c4d5e6f7a8b9c0d1" \
+curl -s "https://crm-public-api.app.carta.com/v1/deals/64f1a2b3c4d5e6f7a8b9c0d1" \
   -H "Authorization: ${LISTALPHA_API_KEY}"
 ```
 
@@ -96,6 +96,6 @@ curl -s "https://api.listalpha.com/v1/deals/64f1a2b3c4d5e6f7a8b9c0d1" \
 Returns all pipelines and their stages — use this to resolve stage/pipeline names to IDs.
 
 ```bash
-curl -s "https://api.listalpha.com/v1/deals/pipelines" \
+curl -s "https://crm-public-api.app.carta.com/v1/deals/pipelines" \
   -H "Authorization: ${LISTALPHA_API_KEY}"
 ```

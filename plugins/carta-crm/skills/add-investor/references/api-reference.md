@@ -87,6 +87,6 @@ List or search existing investors.
 
 **Example:**
 ```bash
-curl -s "https://api.listalpha.com/v1/investors?search=sequoia&limit=10" \
+curl -s "https://crm-public-api.app.carta.com/v1/investors?search=sequoia&limit=10" \
   -H "Authorization: ${LISTALPHA_API_KEY}"
 ```

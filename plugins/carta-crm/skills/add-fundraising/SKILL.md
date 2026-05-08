@@ -1,92 +1,82 @@
 ---
 name: add-fundraising
 description: >
-  Creates one or more fundraising records in the Carta CRM via the public API.
+  Adds one or more fundraising records to the Carta CRM via the Carta CRM MCP Server.
   Use this skill when the user says things like "add a fundraising", "create a fundraising",
   "log a fundraising round", "add fundraising to CRM", "create fundraising record",
-  or "/add-fundraising". Collects fundraising information conversationally, then POSTs
-  it to the Carta CRM API.
+  or "/add-fundraising". Collects fundraising information conversationally, then creates
+  it via the MCP server.
 allowed-tools:
-  - Bash(curl *)
-  - AskUserQuestion
+  - mcp__carta_crm__create_fundraising
+  - mcp__carta_crm__get_fundraising_custom_fields
+  - mcp__carta_crm__get_fundraising_stages
+version: 1.0.0
+model: haiku
 ---
 
 ## Overview
 
-Help the user create one or more fundraising records in the Carta CRM by calling
-`POST /v1/fundraisings`. Collect the fundraising details conversationally, validate the
-required fields, then make the API call using curl.
+Help the user create one or more fundraising records in the Carta CRM using the
+`create_fundraising` MCP tool. Collect details conversationally, then call the tool.
 
-## Step 1 — Check credentials
+## Step 1 — Fetch available stages (optional but recommended)
 
-Check that the required environment variables are set:
+Call the stages tool so the user can pick a stage by name:
 
-```bash
-echo "API_KEY=${LISTALPHA_API_KEY:+set}"
+```
+mcp__carta_crm__get_fundraising_stages()
 ```
 
-If `LISTALPHA_API_KEY` is missing, tell the user:
-> "You need to set the `LISTALPHA_API_KEY` environment variable to your Carta CRM API key before using this skill. You can add it in Claude's environment settings."
+Present the stage names to the user. If the call fails, proceed without it —
+stage defaults to the first stage if omitted.
 
-## Step 2 — Discover available custom fields (optional but recommended)
+## Step 2 — Discover available custom fields (optional)
 
-Call the custom fields endpoint to see what fields the tenant has configured for fundraisings:
-
-```bash
-curl -s -X GET "https://api.listalpha.com/v1/fundraisings/custom-fields" \
-  -H "Authorization: ${LISTALPHA_API_KEY}"
+```
+mcp__carta_crm__get_fundraising_custom_fields()
 ```
 
-Use the returned field names as hints when collecting fundraising data. If the call
-fails, proceed without it — custom fields are optional.
+Use returned field IDs and labels as hints when collecting fundraising data.
+If the call fails, proceed without it.
 
 ## Step 3 — Collect fundraising information
 
 Ask the user for:
-- **Name** (required) — the fundraising round name (e.g., "Acme Corp Series B", "Project Atlas Seed Round")
-- **Additional fields** (optional) — any custom fields returned in Step 2
+- **Name** (required) — the fundraising round name (e.g. "Acme Corp Series B", "Project Atlas Seed Round")
+- **Stage** (optional) — which stage this fundraising is in (from Step 1)
+- **Custom fields** (optional) — any fields returned in Step 2
 
 If the user has already provided details in their message, extract them directly
 without re-asking.
 
-## Step 4 — Create the fundraising via API
+## Step 4 — Create the fundraising
 
-Build the request body:
-```json
-{
-  "name": "<fundraising name>",
-  "fields": {
-    "<field_key>": "<value>"
+Call:
+
+```
+mcp__carta_crm__create_fundraising({
+  name: "<fundraising name>",
+  stageId: "<stage id>",
+  fields: {
+    "<field_id>": "<value>"
   }
-}
+})
 ```
 
-Omit `fields` entirely if no field data was provided.
-
-Make the API call:
-```bash
-curl -s -X POST "https://api.listalpha.com/v1/fundraisings" \
-  -H "Authorization: ${LISTALPHA_API_KEY}" \
-  -H "Content-Type: application/json" \
-  -d '<json_body>'
-```
+Omit `stageId` and `fields` if not provided.
 
 ## Step 5 — Report result
 
-On success (HTTP 200), respond with:
+On success, respond with:
 > "Fundraising **{name}** created successfully (ID: `{id}`)."
 
-On error, show the status code and error message from the response, and suggest fixes:
-- **401** — API key is invalid or missing
-- **400** — Check that `name` is provided and `fields` contains valid keys
-- **500** — Server error; try again or contact support
+On error, show the error message and suggest:
+- Check that `name` is provided and non-empty
+- Verify stage IDs are valid — run `get_fundraising_stages` to list options
+- Verify custom field IDs match the keys returned by `get_fundraising_custom_fields`
 
 ## Adding multiple fundraisings
 
-If the user wants to add multiple fundraisings at once, repeat Steps 3–5 for each
-one. After all are done, summarize:
+If the user wants to add multiple fundraisings at once, repeat Steps 3–5 for each one.
+After all are done, summarize:
 > "Created N fundraisings: [list of names with IDs]"
-
-## Reference
-
-See `references/api-reference.md` for endpoint details and field schema.

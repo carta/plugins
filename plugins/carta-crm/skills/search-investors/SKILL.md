@@ -8,81 +8,48 @@ description: >
   Returns investor details including ID, name, and custom fields.
   The investor ID returned can be used with the update-investor skill.
 allowed-tools:
-  - Bash(curl *)
-  - AskUserQuestion
+  - mcp__carta_crm__search_investors
+  - mcp__carta_crm__get_investor
+version: 1.0.0
+model: haiku
 ---
 
 ## Overview
 
-Search for investors in the Carta CRM using `GET /v1/investors` (filtered list) or
-`GET /v1/investors/{id}` (single investor by ID). Return results in a readable summary
-and always include the investor ID so the user can reference it for updates.
+Search for investors in the Carta CRM. If the user provided an ID, fetch the single
+record directly. Otherwise use the search tool and return results in a readable summary.
+Always surface the investor ID so the user can reference it for updates.
 
 ## Step 1 — Determine search mode
 
-Based on the user's request, choose one of two modes:
+- **By ID** — user provided an investor ID → call `get_investor`
+- **By name / keyword** — user provided a name or description → call `search_investors`
 
-- **By ID** — user provided an investor ID (a hex string like `64f1a2b3c4d5e6f7a8b9c0d1`) → use `GET /v1/investors/{id}`
-- **By search / filter** — user provided a name or keyword → use `GET /v1/investors` with query params
-
-If it's unclear, default to **By search / filter** and ask the user for a search term.
+If it's unclear, default to search and ask the user for a name or keyword.
 
 ## Step 2 — Execute the search
 
 **By ID:**
-```bash
-curl -s "https://api.listalpha.com/v1/investors/<id>" \
-  -H "Authorization: ${LISTALPHA_API_KEY}"
+```
+mcp__carta_crm__get_investor({ id: "<investor id>" })
 ```
 
-**By search / filter:**
-
-Build a query string from the available parameters and call:
-
-```bash
-curl -s "https://api.listalpha.com/v1/investors?search=<term>&limit=20" \
-  -H "Authorization: ${LISTALPHA_API_KEY}"
+**By name / keyword:**
+```
+mcp__carta_crm__search_investors({
+  query: "<search term>",
+  limit: 20
+})
 ```
 
-Available query parameters:
-
-| Param | Type | Description |
-|-------|------|-------------|
-| `search` | string | Investor name or keyword |
-| `limit` | integer | Max results (default to 20 unless user specifies) |
-| `offset` | integer | Skip N results for pagination |
-
-Omit any params the user did not specify.
+Increase `limit` if the user asks to see more results. Use `offset` to paginate.
 
 ## Step 3 — Present results
 
-For each investor returned, display:
-
-```
-Investor: <name> (ID: `<id>`)
-  Website: <website>
-  Location: <location>
-  Industry: <industry>
-  About: <about>
-  Tags: <tags>
-  Added: <createdAt>
-```
-
-Omit any fields that are blank or not present.
+For each investor returned, display all non-empty fields in a readable summary.
+Always show the ID prominently — the user will need it to run `/update-investor`.
 
 If no investors are found:
 > "No investors found matching your search. Try a different name or keyword."
 
 If multiple results are returned, list them all and note the total count.
-
-Always surface the investor ID prominently — the user will need it to run `/update-investor`.
-
-## Error handling
-
-- **401** — API key is invalid or missing
-- **404** — No investor found with that ID
-- **400 / 500** — Show the error message from the response
-
-## Reference
-
-See `references/api-reference.md` for full endpoint details.

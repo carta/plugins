@@ -84,6 +84,6 @@ List or search existing contacts.
 
 **Example:**
 ```bash
-curl -s "https://api.listalpha.com/v1/contacts?search=jane&limit=10" \
+curl -s "https://crm-public-api.app.carta.com/v1/contacts?search=jane&limit=10" \
   -H "Authorization: ${LISTALPHA_API_KEY}"
 ```

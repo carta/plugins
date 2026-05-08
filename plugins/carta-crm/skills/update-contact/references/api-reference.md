@@ -44,7 +44,7 @@ Partially updates an existing contact. Only fields provided in the request body 
 
 **Example — update title and company:**
 ```bash
-curl -s -X PATCH "https://api.listalpha.com/v1/contacts/64f1a2b3c4d5e6f7a8b9c0d2" \
+curl -s -X PATCH "https://crm-public-api.app.carta.com/v1/contacts/64f1a2b3c4d5e6f7a8b9c0d2" \
   -H "Authorization: ${LISTALPHA_API_KEY}" \
   -H "Content-Type: application/json" \
   -d '{"title": "Managing Partner", "company": "Acme Ventures"}'
@@ -52,7 +52,7 @@ curl -s -X PATCH "https://api.listalpha.com/v1/contacts/64f1a2b3c4d5e6f7a8b9c0d2
 
 **Example — update email and tags:**
 ```bash
-curl -s -X PATCH "https://api.listalpha.com/v1/contacts/64f1a2b3c4d5e6f7a8b9c0d2" \
+curl -s -X PATCH "https://crm-public-api.app.carta.com/v1/contacts/64f1a2b3c4d5e6f7a8b9c0d2" \
   -H "Authorization: ${LISTALPHA_API_KEY}" \
   -H "Content-Type: application/json" \
   -d '{"emailDetail": "jane.smith@acme.com", "tags": ["investor", "warm"]}'

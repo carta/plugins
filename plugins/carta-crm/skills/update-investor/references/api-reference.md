@@ -41,7 +41,7 @@ Partially updates an existing investor. Only fields provided in the request body
 
 **Example — update website:**
 ```bash
-curl -s -X PATCH "https://api.listalpha.com/v1/investors/64f1a2b3c4d5e6f7a8b9c0d1" \
+curl -s -X PATCH "https://crm-public-api.app.carta.com/v1/investors/64f1a2b3c4d5e6f7a8b9c0d1" \
   -H "Authorization: ${LISTALPHA_API_KEY}" \
   -H "Content-Type: application/json" \
   -d '{"fields": {"website": "https://sequoiacap.com"}}'
@@ -49,7 +49,7 @@ curl -s -X PATCH "https://api.listalpha.com/v1/investors/64f1a2b3c4d5e6f7a8b9c0d
 
 **Example — update name and tags:**
 ```bash
-curl -s -X PATCH "https://api.listalpha.com/v1/investors/64f1a2b3c4d5e6f7a8b9c0d1" \
+curl -s -X PATCH "https://crm-public-api.app.carta.com/v1/investors/64f1a2b3c4d5e6f7a8b9c0d1" \
   -H "Authorization: ${LISTALPHA_API_KEY}" \
   -H "Content-Type: application/json" \
   -d '{"name": "Sequoia Capital (US)", "fields": {"tags": ["tier-1", "series-a"]}}'
@@ -90,6 +90,6 @@ Use this to find an investor ID before updating. See `search-investors` skill fo
 Use this to discover available custom field keys before updating `fields`.
 
 ```bash
-curl -s "https://api.listalpha.com/v1/investors/custom-fields" \
+curl -s "https://crm-public-api.app.carta.com/v1/investors/custom-fields" \
   -H "Authorization: ${LISTALPHA_API_KEY}"
 ```

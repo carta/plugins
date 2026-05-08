@@ -25,7 +25,7 @@ Use this to discover which field keys are valid before creating fundraisings.
 
 **Example:**
 ```bash
-curl -s "https://api.listalpha.com/v1/fundraisings/custom-fields" \
+curl -s "https://crm-public-api.app.carta.com/v1/fundraisings/custom-fields" \
   -H "Authorization: ${LISTALPHA_API_KEY}"
 ```
 
@@ -98,6 +98,6 @@ List or search existing fundraisings.
 
 **Example:**
 ```bash
-curl -s "https://api.listalpha.com/v1/fundraisings?search=acme&limit=10" \
+curl -s "https://crm-public-api.app.carta.com/v1/fundraisings?search=acme&limit=10" \
   -H "Authorization: ${LISTALPHA_API_KEY}"
 ```

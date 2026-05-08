@@ -26,7 +26,7 @@ List or search fundraisings with pagination.
 
 **Example:**
 ```bash
-curl -s "https://api.listalpha.com/v1/fundraisings?search=acme&limit=20" \
+curl -s "https://crm-public-api.app.carta.com/v1/fundraisings?search=acme&limit=20" \
   -H "Authorization: ${LISTALPHA_API_KEY}"
 ```
 
@@ -61,7 +61,7 @@ Returns a single fundraising record by its unique identifier.
 
 **Example:**
 ```bash
-curl -s "https://api.listalpha.com/v1/fundraisings/64f1a2b3c4d5e6f7a8b9c0d1" \
+curl -s "https://crm-public-api.app.carta.com/v1/fundraisings/64f1a2b3c4d5e6f7a8b9c0d1" \
   -H "Authorization: ${LISTALPHA_API_KEY}"
 ```
 
@@ -82,6 +82,6 @@ curl -s "https://api.listalpha.com/v1/fundraisings/64f1a2b3c4d5e6f7a8b9c0d1" \
 Returns the custom field schema configured for your tenant's fundraising records.
 
 ```bash
-curl -s "https://api.listalpha.com/v1/fundraisings/custom-fields" \
+curl -s "https://crm-public-api.app.carta.com/v1/fundraisings/custom-fields" \
   -H "Authorization: ${LISTALPHA_API_KEY}"
 ```

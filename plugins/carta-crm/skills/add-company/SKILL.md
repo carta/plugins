@@ -1,96 +1,71 @@
 ---
 name: add-company
 description: >
-  Creates one or more company records in the Carta CRM via the public API.
-  Use this skill when the user says things like "add a company", "create a company
-  record", "add company to CRM", "upload company to Carta CRM", or "/add-company".
-  Collects company information conversationally, then POSTs it to the Carta CRM API.
-  NOT for cap table onboarding — if the user wants to onboard a company to Carta's
-  cap table system (entity setup, document extraction, OBS import), use the
-  captable-onboarding skill instead.
+  Adds one or more company records to the Carta CRM via the Carta CRM MCP Server.
+  Use this skill when the user says things like "add a company", "create company record",
+  "add company to CRM", "add company to Carta CRM", or "/add-company".
+  Collects company information conversationally, then creates it via the MCP server.
 allowed-tools:
-  - Bash(curl *)
-  - AskUserQuestion
+  - mcp__carta_crm__create_company
+  - mcp__carta_crm__get_company_custom_fields
+version: 1.0.0
+model: haiku
 ---
 
 ## Overview
 
-Help the user create one or more company records in the Carta CRM by calling
-`POST /v1/companies`. Collect the company details conversationally, validate the
-required fields, then make the API call using curl.
+Help the user create one or more company records in the Carta CRM using the
+`create_company` MCP tool. Collect company details conversationally, validate
+required fields, then call the tool.
 
-## Step 1 — Check credentials
+## Step 1 — Discover available custom fields (optional but recommended)
 
-Check that the required environment variables are set:
+Call the custom fields tool to see what fields the tenant has configured:
 
-```bash
-echo "API_KEY=${LISTALPHA_API_KEY:+set}"
+```
+mcp__carta_crm__get_company_custom_fields()
 ```
 
-If `LISTALPHA_API_KEY` is missing, tell the user:
-> "You need to set the `LISTALPHA_API_KEY` environment variable to your Carta CRM API key before using this skill. You can add it in Claude's environment settings."
+Use the returned field IDs and labels as hints when collecting company data.
+If the call fails, proceed without it — custom fields are optional.
 
-## Step 2 — Discover available custom fields (optional but recommended)
-
-Call the custom fields endpoint to see what fields the tenant has configured for companies:
-
-```bash
-curl -s -X GET "https://api.listalpha.com/v1/companies/custom-fields" \
-  -H "Authorization: ${LISTALPHA_API_KEY}"
-```
-
-Use the returned field names as hints when collecting company data. If the call
-fails, proceed without it — custom fields are optional.
-
-## Step 3 — Collect company information
+## Step 2 — Collect company information
 
 Ask the user for:
-- **Name** (required) — the company name (e.g., "Stripe", "Acme Corp")
-- **Additional fields** (optional) — any of: `website`, `location`, `industry`,
-  `about`, `tags`, or any custom fields returned in Step 2
+- **Name** (required) — the company name (e.g. "Stripe", "Acme Corp")
+- **Image URL** (optional) — company logo URL
+- **Custom fields** (optional) — any fields returned in Step 1 (e.g. website, industry, location, about, tags)
 
 If the user has already provided details in their message, extract them directly
 without re-asking.
 
-## Step 4 — Create the company via API
+## Step 3 — Create the company
 
-Build the request body:
-```json
-{
-  "name": "<company name>",
-  "fields": {
-    "<field_key>": "<value>"
+Call:
+
+```
+mcp__carta_crm__create_company({
+  name: "<company name>",
+  image: "<logo url>",
+  fields: {
+    "<field_id>": "<value>"
   }
-}
+})
 ```
 
-Omit `fields` entirely if no field data was provided.
+Omit `image` and `fields` if not provided.
 
-Make the API call:
-```bash
-curl -s -X POST "https://api.listalpha.com/v1/companies" \
-  -H "Authorization: ${LISTALPHA_API_KEY}" \
-  -H "Content-Type: application/json" \
-  -d '<json_body>'
-```
+## Step 4 — Report result
 
-## Step 5 — Report result
-
-On success (HTTP 200), respond with:
+On success, respond with:
 > "Company **{name}** created successfully (ID: `{id}`)."
 
-On error, show the status code and error message from the response, and suggest
-fixes:
-- **401** — API key is invalid or missing
-- **400** — Check that `name` is provided and `fields` contains valid keys
-- **500** — Server error; try again or contact support
+On error, show the error message and suggest:
+- Check that `name` is provided and non-empty
+- Verify custom field IDs match the keys returned by `get_company_custom_fields`
 
 ## Adding multiple companies
 
-If the user wants to add multiple companies at once, repeat Steps 3–5 for each
-one. After all are done, summarize:
+If the user wants to add multiple companies at once, repeat Steps 2–4 for each one.
+After all are done, summarize:
 > "Created N companies: [list of names with IDs]"
-
-## Reference
-
-See `references/api-reference.md` for endpoint details and field schema.

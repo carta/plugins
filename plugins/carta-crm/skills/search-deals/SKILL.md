@@ -3,96 +3,75 @@ name: search-deals
 description: >
   Searches for and retrieves deal records from the Carta CRM.
   Use this skill when the user says things like "find a deal", "search deals",
-  "look up a deal", "show me deals for [company]", "get deal by ID", "find deal in [pipeline/stage]",
+  "look up a deal", "show me deals for [company]", "get deal by ID", "find deal in [stage]",
   "list deals", "what deals do we have for [company]", or "/search-deals".
   Returns deal details including ID, company, stage, pipeline, tags, and custom fields.
   The deal ID returned can be used with the update-deal skill.
 allowed-tools:
-  - Bash(curl *)
-  - AskUserQuestion
+  - mcp__carta_crm__search_deals
+  - mcp__carta_crm__get_deal_fields
+  - mcp__carta_crm__fetch_deal_by_deal_id
+version: 1.0.0
+model: haiku
 ---
 
 ## Overview
 
-Search for deals in the Carta CRM using `GET /v1/deals` (filtered list) or
-`GET /v1/deals/{id}` (single deal by ID). Return results in a readable summary
-and always include the deal ID so the user can reference it for updates.
+Search for deals in the Carta CRM. If the user provided an ID, fetch that deal
+directly. Otherwise use `search_deals` with filters. Always surface the deal ID
+so the user can reference it for updates.
 
-## Step 1 — Determine search mode
+**Important:** Call `get_deal_fields` before every `search_deals` call to discover
+valid field IDs for filters. Do not skip this step.
 
-Based on the user's request, choose one of two modes:
+## Step 1 — Fetch deal fields
 
-- **By ID** — user provided a deal ID (a hex string like `64f1a2b3c4d5e6f7a8b9c0d1`) → use `GET /v1/deals/{id}`
-- **By search / filter** — user provided a company name, keyword, stage, or pipeline → use `GET /v1/deals` with query params
+Always call this before searching:
 
-If it's unclear, default to **By search / filter** and ask the user for a search term.
-
-## Step 2 — Fetch pipeline context (for filter mode)
-
-If the user mentioned a pipeline or stage by name, fetch pipelines first to resolve names to IDs:
-
-```bash
-curl -s "https://api.listalpha.com/v1/deals/pipelines" \
-  -H "Authorization: ${LISTALPHA_API_KEY}"
+```
+mcp__carta_crm__get_deal_fields()
 ```
 
-Match the user's pipeline/stage name to the corresponding `id`. Skip this step if the user didn't specify a pipeline or stage, or if they provided IDs directly.
+Read the field IDs, types, and descriptions carefully. Map the user's intent to the
+most specific matching field(s) and use those in the `filters` parameter.
+
+## Step 2 — Determine search mode
+
+- **By ID** — user provided a deal ID → call `fetch_deal_by_deal_id`
+- **By filters / keyword** — user provided a company name, stage, or criteria → call `search_deals`
 
 ## Step 3 — Execute the search
 
 **By ID:**
-```bash
-curl -s "https://api.listalpha.com/v1/deals/<id>" \
-  -H "Authorization: ${LISTALPHA_API_KEY}"
+```
+mcp__carta_crm__fetch_deal_by_deal_id({ id: "<deal id>" })
 ```
 
-**By search / filter:**
-
-Build a query string from the available parameters and call:
-
-```bash
-curl -s "https://api.listalpha.com/v1/deals?search=<term>&limit=20" \
-  -H "Authorization: ${LISTALPHA_API_KEY}"
+**By filters:**
+```
+mcp__carta_crm__search_deals({
+  query: "<free-text search — last resort only>",
+  stages: ["<stage id>"],
+  filters: [
+    { field_id: "<field id>", operator: "eq", value: "<value>" }
+  ],
+  limit: 50
+})
 ```
 
-Available query parameters:
+Prefer `filters` over `query` whenever a specific field matches the user's intent.
+Available operators: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `contains`, `in`, `between`.
+Use `stages` to filter by pipeline stage (funnel, tracking, due-diligence, execution, dead, completed).
 
-| Param | Type | Description |
-|-------|------|-------------|
-| `search` | string | Company name or keyword |
-| `pipelines` | array | Filter by pipeline ID(s) — repeat param for multiple: `?pipelines=id1&pipelines=id2` |
-| `stages` | array | Filter by stage ID(s) — repeat param for multiple |
-| `limit` | integer | Max results (default to 20 unless user specifies) |
-| `offset` | integer | Skip N results for pagination |
-
-Omit any params the user did not specify.
+Increase `limit` or use `offset` to paginate if `remainingCount > 0`.
 
 ## Step 4 — Present results
 
-For each deal returned, display:
-
-```
-Deal: <company name> (ID: `<id>`)
-  Pipeline: <pipelineId> | Stage: <stageId>
-  Tags: <tags>
-  Comment: <comment>
-  Added: <addedAt>
-  Custom fields: <fields>
-```
+For each deal returned, display all non-empty fields in a readable summary.
+`fetch_deal_by_deal_id` returns full detail including all notes and linked people — surface those if relevant.
+Always show the deal ID prominently — the user will need it to run `/update-deal`.
 
 If no deals are found:
-> "No deals found matching your search. Try a different company name or check the pipeline filter."
+> "No deals found matching your search. Try a different company name or adjust the filters."
 
-If multiple results are returned, list them all and note the total count.
-
-Always surface the deal ID prominently — the user will need it to run `/update-deal`.
-
-## Error handling
-
-- **401** — API key is invalid or missing
-- **404** — No deal found with that ID
-- **400 / 500** — Show the error message from the response
-
-## Reference
-
-See `references/api-reference.md` for full endpoint details.
+Note the total count and offer to paginate if there are more results.

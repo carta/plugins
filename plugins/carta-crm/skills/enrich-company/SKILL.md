@@ -14,6 +14,8 @@ allowed-tools:
   - WebSearch
   - Bash(curl *)
   - AskUserQuestion
+version: 1.0.0
+model: haiku
 ---
 
 ## Overview

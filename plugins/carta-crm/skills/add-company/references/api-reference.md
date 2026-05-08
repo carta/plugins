@@ -87,6 +87,6 @@ List or search existing companies.
 
 **Example:**
 ```bash
-curl -s "https://api.listalpha.com/v1/companies?search=stripe&limit=10" \
+curl -s "https://crm-public-api.app.carta.com/v1/companies?search=stripe&limit=10" \
   -H "Authorization: ${LISTALPHA_API_KEY}"
 ```

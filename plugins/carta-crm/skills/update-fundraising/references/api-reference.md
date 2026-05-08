@@ -33,7 +33,7 @@ Partially updates an existing fundraising record. Only fields provided in the re
 
 **Example — update name:**
 ```bash
-curl -s -X PATCH "https://api.listalpha.com/v1/fundraisings/64f1a2b3c4d5e6f7a8b9c0d1" \
+curl -s -X PATCH "https://crm-public-api.app.carta.com/v1/fundraisings/64f1a2b3c4d5e6f7a8b9c0d1" \
   -H "Authorization: ${LISTALPHA_API_KEY}" \
   -H "Content-Type: application/json" \
   -d '{"name": "Acme Corp Series B (Revised)"}'
@@ -41,7 +41,7 @@ curl -s -X PATCH "https://api.listalpha.com/v1/fundraisings/64f1a2b3c4d5e6f7a8b9
 
 **Example — update custom fields:**
 ```bash
-curl -s -X PATCH "https://api.listalpha.com/v1/fundraisings/64f1a2b3c4d5e6f7a8b9c0d1" \
+curl -s -X PATCH "https://crm-public-api.app.carta.com/v1/fundraisings/64f1a2b3c4d5e6f7a8b9c0d1" \
   -H "Authorization: ${LISTALPHA_API_KEY}" \
   -H "Content-Type: application/json" \
   -d '{"fields": {"status": "closed", "amount": "50000000"}}'
@@ -69,6 +69,6 @@ Use this to find a fundraising ID before updating. See `search-fundraisings` ski
 Use this to discover available custom field keys before updating `fields`.
 
 ```bash
-curl -s "https://api.listalpha.com/v1/fundraisings/custom-fields" \
+curl -s "https://crm-public-api.app.carta.com/v1/fundraisings/custom-fields" \
   -H "Authorization: ${LISTALPHA_API_KEY}"
 ```

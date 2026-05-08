@@ -1,90 +1,71 @@
 ---
 name: update-note
 description: >
-  Updates an existing note record in the Carta CRM.
+  Searches for notes in the Carta CRM and helps the user update deal comments.
   Use this skill when the user says things like "update a note", "edit note",
-  "update note content", "change note title", "update note text",
-  "move note to folder", or "/update-note".
-  Accepts a note ID or title keyword (will search if no ID provided).
-  Only the fields explicitly provided are changed — all other fields are left untouched.
+  "update note content", "change a note", or "/update-note".
+  Note: standalone note editing is not available via MCP — notes/comments are
+  attached to deals and updated via the update-deal skill.
 allowed-tools:
-  - Bash(curl *)
-  - AskUserQuestion
+  - mcp__carta_crm__search_notes
+  - mcp__carta_crm__search_deals
+  - mcp__carta_crm__get_deal_fields
+  - mcp__carta_crm__update_deal
+  - mcp__carta_crm__fetch_deal_by_deal_id
+version: 1.0.0
+model: haiku
 ---
 
 ## Overview
 
-Partially update an existing note using `PATCH /v1/notes/{id}`.
-Only fields provided in the request body are modified — this is a partial update,
-not a replacement. First resolve the note ID, then collect what to change,
-then make the API call.
+Notes in the Carta CRM MCP are accessible via `search_notes` but are edited as
+`comment` fields on deal records via `update_deal`. Help the user find the note
+they want to change, then update the associated deal's comment.
 
-## Step 1 — Resolve the note ID
+## Step 1 — Find the note
 
-If the user provided a note ID directly, use it and skip to Step 3.
+Search for the note by keyword:
 
-If only a title or keyword was given, search for the note first:
-
-```bash
-curl -s "https://api.listalpha.com/v1/notes?search=<title>&limit=10" \
-  -H "Authorization: ${LISTALPHA_API_KEY}"
+```
+mcp__carta_crm__search_notes({ query: "<keyword>", limit: 10 })
 ```
 
-If multiple notes match, present the list to the user and ask them to confirm which one to update (show title, owner, and ID for each).
+Show the results to the user and ask which note they want to update.
 
-## Step 2 — Collect what to update
+## Step 2 — Identify the associated deal
 
-Ask the user what they want to change. Any combination of the following fields can be updated:
+Once the user has selected a note, find the deal it belongs to. Ask the user for
+the deal name/company, or search:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `title` | string | Display name of the note |
-| `text` | string | Note body content |
-| `folderId` | string | ID of the parent folder |
-| `owner` | string | Email of the note owner |
-
-If the user has already specified what to change in their message, extract it directly without re-asking.
-
-**Important:** Only include fields that are explicitly being changed. Omit everything else.
-
-## Step 3 — Update the note via API
-
-Build the request body with only the fields being changed:
-
-```json
-{
-  "title": "<updated title>",
-  "text": "<updated body>",
-  "folderId": "<folder id>",
-  "owner": "<owner email>"
-}
+```
+mcp__carta_crm__get_deal_fields()
+mcp__carta_crm__search_deals({ query: "<company name>", limit: 10 })
 ```
 
-Make the API call:
-
-```bash
-curl -s -X PATCH "https://api.listalpha.com/v1/notes/<id>" \
-  -H "Authorization: ${LISTALPHA_API_KEY}" \
-  -H "Content-Type: application/json" \
-  -d '<json_body>'
+Fetch the deal to show the current comment:
+```
+mcp__carta_crm__fetch_deal_by_deal_id({ id: "<deal id>" })
 ```
 
-## Step 4 — Report result
+## Step 3 — Collect the updated content
 
-On success (HTTP 200), respond with a summary of what changed:
-> "Note **{title}** updated (ID: `{id}`). {Changed: text updated, moved to folder, etc.}"
+Show the user the existing comment and ask what they'd like to change.
 
-On error:
-- **401** — API key is invalid or missing
-- **400** — Check that `title` is non-empty if provided, and `folderId` is valid
-- **404** — No note found with that ID — suggest running `/search-notes` first
-- **500** — Server error; try again or contact support
+## Step 4 — Update the deal comment
 
-## Updating multiple notes
+Call:
 
-If the user wants to apply the same change to multiple notes, repeat Steps 1 and 3–4 for each. Summarize at the end:
-> "Updated N notes: [list of titles]"
+```
+mcp__carta_crm__update_deal({
+  id: "<deal id>",
+  comment: "<updated note content>"
+})
+```
 
-## Reference
+## Step 5 — Report result
 
-See `references/api-reference.md` for full endpoint details.
+On success, respond with:
+> "Note updated on deal **{company name}** (ID: `{id}`)."
+
+On error, show the error message and suggest verifying the deal ID by running
+`/search-deals`.

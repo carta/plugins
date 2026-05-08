@@ -3,72 +3,57 @@ name: search-fundraisings
 description: >
   Searches for and retrieves fundraising records from the Carta CRM.
   Use this skill when the user says things like "find a fundraising", "search fundraisings",
-  "look up a fundraising round", "show fundraising details for [company]", "get fundraising by ID",
+  "look up a fundraising round", "show fundraising details for [name]", "get fundraising by ID",
   "list fundraisings", "what fundraisings do we have", or "/search-fundraisings".
-  Returns fundraising details including ID, name, amount, stage, and associated company.
+  Returns fundraising details including ID, name, stage, and custom fields.
   The fundraising ID returned can be used with the update-fundraising skill.
 allowed-tools:
-  - Bash(curl *)
-  - AskUserQuestion
+  - mcp__carta_crm__search_fundraising
+  - mcp__carta_crm__get_fundraising
+  - mcp__carta_crm__get_fundraising_stages
+version: 1.0.0
+model: haiku
 ---
 
 ## Overview
 
-Search for fundraisings in the Carta CRM using `GET /v1/fundraisings` (filtered list) or
-`GET /v1/fundraisings/{id}` (single record by ID). Return results in a readable summary
-and always include the fundraising ID so the user can reference it for updates.
+Search for fundraisings in the Carta CRM. If the user provided an ID, fetch the single
+record directly. Otherwise use the search tool and return results in a readable summary.
+Always surface the fundraising ID so the user can reference it for updates.
 
 ## Step 1 — Determine search mode
 
-Based on the user's request, choose one of two modes:
+- **By ID** — user provided a fundraising ID → call `get_fundraising`
+- **By name / keyword / stage** — user provided a name or stage → call `search_fundraising`
 
-- **By ID** — user provided a fundraising ID (a hex string like `64f1a2b3c4d5e6f7a8b9c0d1`) → use `GET /v1/fundraisings/{id}`
-- **By search / filter** — user provided a company name, round type, or keyword → use `GET /v1/fundraisings` with query params
-
-If it's unclear, default to **By search / filter** and ask the user for a search term.
+If it's unclear, default to search and ask for a search term.
 
 ## Step 2 — Execute the search
 
 **By ID:**
-```bash
-curl -s "https://api.listalpha.com/v1/fundraisings/<id>" \
-  -H "Authorization: ${LISTALPHA_API_KEY}"
+```
+mcp__carta_crm__get_fundraising({ id: "<fundraising id>" })
 ```
 
-**By search / filter:**
-
-```bash
-curl -s "https://api.listalpha.com/v1/fundraisings?search=<term>&limit=20" \
-  -H "Authorization: ${LISTALPHA_API_KEY}"
+**By name / keyword:**
+```
+mcp__carta_crm__search_fundraising({
+  query: "<search term>",
+  limit: 20
+})
 ```
 
-Available query parameters:
+If the user filtered by stage name, call `get_fundraising_stages` first to resolve
+the name to a stage ID, then pass `stages: ["<stage id>"]`.
 
-| Param | Type | Description |
-|-------|------|-------------|
-| `search` | string | Company name or keyword |
-| `limit` | integer | Max results (default to 20 unless user specifies) |
-| `offset` | integer | Skip N results for pagination |
-
-Omit any params the user did not specify.
+Increase `limit` if the user asks to see more results. Use `offset` to paginate.
 
 ## Step 3 — Present results
 
-For each fundraising returned, display all non-empty fields in a readable summary, including the ID prominently. The exact field shape depends on the tenant's custom field configuration — display whatever the API returns.
+For each fundraising returned, display all non-empty fields in a readable summary.
+Always show the ID prominently — the user will need it to run `/update-fundraising`.
 
 If no fundraisings are found:
-> "No fundraisings found matching your search. Try a different company name or keyword."
+> "No fundraisings found matching your search. Try a different name or keyword."
 
-If multiple results are returned, list them all and note the total count.
-
-Always surface the fundraising ID prominently — the user will need it to run `/update-fundraising`.
-
-## Error handling
-
-- **401** — API key is invalid or missing
-- **404** — No fundraising found with that ID
-- **400 / 500** — Show the error message from the response
-
-## Reference
-
-See `references/api-reference.md` for full endpoint details.
+Note the total count and offer to paginate if there are more results.

@@ -1,7 +1,7 @@
 {
   "name": "carta-crm",
-  "version": "0.5.6",
-  "description": "Manage the Carta CRM conversationally — search, add, update, and enrich investors, companies, contacts, deals, notes, and fundraisings via the public API",
+  "version": "0.6.0",
+  "description": "Manage the Carta CRM conversationally — search, add, update, and enrich investors, companies, contacts, deals, notes, and fundraisings via the Carta CRM MCP Server",
   "author": {
     "name": "Ihar Valodzin",
     "email": "ihar.valodzin@carta.com"
