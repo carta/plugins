@@ -1,6 +1,5 @@
 {
   "name": "carta-investors",
-  "displayName": "Carta Investors",
   "version": "0.47.0",
   "description": "Carta Investors plugin — skills for querying investors data, performance benchmarks, regulatory reporting, AGM deck generation, brand extraction, and more via the Carta MCP server",
   "author": {
