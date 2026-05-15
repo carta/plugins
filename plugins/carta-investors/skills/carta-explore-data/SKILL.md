@@ -105,6 +105,7 @@ Use the MCP commands in sequence:
 
 - **Always include LIMIT** — default `LIMIT 200`; use 50–500 for aggregations
 - **Only SELECT** — no INSERT, UPDATE, DELETE, or DDL
+- **Do not query `INFORMATION_SCHEMA`** — it is not supported in this data warehouse; use the semantic layer files and `fetch("dwh:list:tables", ...)` / `fetch("dwh:get:table_schema", ...)` instead
 - **Date fields** — `effective_date` for `JOURNAL_ENTRIES`; `month_end_date` for `MONTHLY_NAV_CALCULATIONS`; `investment_date` for `AGGREGATE_INVESTMENTS`
 - **Deduplication** — for `MONTHLY_NAV_CALCULATIONS` and `AGGREGATE_FUND_METRICS`, use `QUALIFY ROW_NUMBER() OVER (PARTITION BY fund_uuid ORDER BY last_refreshed_at DESC) = 1`
 - **ALLOCATIONS has multiple rows per fund** — always `GROUP BY fund_uuid` with `MAX(fund_name)` when using it for fund metadata

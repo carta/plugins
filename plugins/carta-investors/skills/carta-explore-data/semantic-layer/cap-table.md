@@ -23,7 +23,7 @@ Each row is a share class snapshot per corporation at a given date. Always filte
 
 Supporting tables joined in the main query:
 - `STAKEHOLDER_CAP_TABLE` — share counts per stakeholder; used to compute firm stake (filter by `STAKEHOLDER_NAME` or `STAKEHOLDER_GROUP_NAME`)
-- `FINANCING_HISTORY` — round price and closing date per share class (`SHARECLASS_NAME`, `ORIGINAL_ISSUE_PRICE`, `CLOSING_DATE`); use `ISSUER_NAME` to filter by company name
+- `FINANCING_HISTORY` — round price and date info per share class (`SHARECLASS_NAME`, `ORIGINAL_ISSUE_PRICE`, `CLOSING_DATE`, `RAISED_DATE`); filter by `CORPORATION_ID` to scope to a company. Date columns: `CLOSING_DATE` (when the round closed), `RAISED_DATE` (when capital was raised)
 
 ## Common Aliases
 

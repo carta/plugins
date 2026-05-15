@@ -19,7 +19,7 @@ Each row is a single metric data point for a portfolio company at a given period
 | `firm_name` | Name of the management firm |
 | `as_of_date` | Date the data was collected |
 | `period_start` | Start date of the reporting period |
-| `period_end` | End date of the reporting period |
+| `period_end` | End date of the reporting period — **use `period_end`, not `period_end_date`** |
 | `frequency` | Period frequency: `ANN` (annual), `QTR` (quarterly), `MON` (monthly), `SA` (semi-annual) |
 | `name` | Human-readable metric name (e.g. "Revenue", "ARR", "Headcount") |
 | `mnemonic` | Short code for the metric — use for programmatic filtering |
