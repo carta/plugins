@@ -1,6 +1,17 @@
 ---
 name: carta-portfolio-alerts
-description: Detect red flags and time-sensitive issues across portfolio companies. Use when asked to flag problems, find expiring items, or audit portfolio health.
+description: Time-bounded and threshold-bounded risk detection across portfolio companies — finds items that are expiring soon, maturing soon, running low, or otherwise at risk. Surfaces what needs attention now, not what the data looks like in general.
+when_to_use: >-
+  Use when asked which companies have an expiring item (409As, agreements,
+  exercise windows), what is maturing in the next N months across the
+  portfolio (convertible notes, debt instruments), which companies are
+  running low on something (option pool below a threshold, runway), which
+  SAFEs are approaching their valuation-cap trigger or expiring before
+  conversion across the portfolio, or to run a portfolio health audit or
+  red-flag scan. For raw multi-company data without a risk or
+  time or threshold lens, prefer a portfolio data-query skill. For
+  statistical norms across the portfolio, prefer a portfolio-benchmarks
+  skill.
 allowed-tools:
   - mcp__carta__fetch
   - mcp__carta__list_contexts
@@ -14,14 +25,6 @@ allowed-tools:
 # Portfolio Alerts
 
 Scan multiple companies for red flags and compute severity classifications (critical / warning / info). Builds on the `carta-portfolio-query` pattern.
-
-## When to Use
-
-- "Flag any red flags across my portfolio"
-- "Which companies need attention?"
-- "Are any 409As expiring soon?"
-- "Which companies have low option pools?"
-- "Any SAFEs or notes approaching maturity?"
 
 ## Prerequisites
 

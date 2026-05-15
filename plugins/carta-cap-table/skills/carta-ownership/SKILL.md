@@ -1,6 +1,17 @@
 ---
 name: carta-ownership
-description: Analyzes voting rights, liquidation seniority, and preferred vs common holder breakdown for a company. Use when asked about voting power, protective provisions, consent requirements, preferred stockholders, or seniority. Do NOT use for a simple stakeholder or shareholder list — use carta-stakeholders instead. For general visual ownership summaries or cap table overviews, use the cap_table_chart tool instead.
+description: Voting, governance, and seniority analysis for a company — which corporate decisions require shareholder approval, which holders carry protective provisions or blocking rights, where preferred share classes sit in the liquidation stack, and who holds preferred stock (optionally as of a historical date).
+when_to_use: >-
+  Use when asked which corporate decisions or actions require shareholder
+  consent or approval or a vote, which actions investors must sign off on,
+  who has voting control, which holders carry protective provisions or
+  blocking rights, how preferred series stack up in liquidation seniority,
+  where preferred classes rank in the stack, who holds preferred stock as
+  of a date or quarter, or how rights compare across share classes. For
+  dollar-amount payouts at a specific exit valuation, prefer a payout or
+  waterfall scenario skill. For a flat list of stakeholders or shareholders
+  without a rights or governance angle, prefer a stakeholder list skill.
+  For a visual cap-table summary, use the cap_table_chart tool.
 allowed-tools:
   - mcp__carta__fetch
   - mcp__carta__list_contexts
@@ -15,17 +26,6 @@ allowed-tools:
 # Ownership Structure
 
 Surface which preferred stockholders hold voting power and would typically need to consent for major corporate actions (financing rounds, M&A, charter amendments).
-
-> **Routing note:** If the user asks for a general "ownership breakdown" or "cap table summary" without mentioning voting rights, seniority, or protective provisions, use the `cap_table_chart` MCP tool instead — it renders an interactive visual summary. This skill is for detailed voting/governance analysis.
-
-## When to Use
-
-- "Who are the preferred stockholders?"
-- "Show me the ownership breakdown by share class"
-- "Who has voting power?"
-- "What does the cap table look like by holder?"
-- "Which investors hold the most shares?"
-- "What's the seniority stack?"
 
 ## Prerequisites
 

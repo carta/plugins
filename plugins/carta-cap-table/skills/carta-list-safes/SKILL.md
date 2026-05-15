@@ -1,6 +1,16 @@
 ---
 name: carta-list-safes
-description: Fetch all SAFEs for a company. Use when asked about SAFEs, simple agreements for future equity, SAFE terms, valuation caps, or discounts.
+description: SAFEs for a single company — simple agreements for future equity, with SAFE investor names, SAFE investment amounts, SAFE valuation caps, SAFE discount rates, MFN flags on SAFEs, and SAFE totals. Lists SAFEs only; does not cover convertible notes or other debt.
+when_to_use: >-
+  Use when the user mentions SAFEs by name (or "simple agreements for
+  future equity" / "future-equity agreements"). Covers SAFE investors,
+  SAFE valuation caps, SAFE discount rates, MFN clauses on SAFEs, and
+  how much has been raised through SAFEs. Do not use for convertible
+  notes, convertible debt, interest-bearing instruments with maturity
+  dates, or generic "outstanding instruments" / "outstanding obligations"
+  framing without the word SAFE — those belong to a convertible-notes
+  skill. For modeling how SAFEs convert at a priced round, prefer a
+  conversion-calculator skill.
 allowed-tools:
   - mcp__carta__fetch
   - mcp__carta__list_contexts
@@ -15,15 +25,7 @@ allowed-tools:
 
 Fetch all SAFEs for a company.
 
-## When to Use
-
-- "Show me the SAFEs on this cap table"
-- "What SAFEs are outstanding?"
-- "What are the valuation caps on our SAFEs?"
-- "List SAFE investors and terms"
-- "Do any SAFEs have MFN clauses?"
-
-Use this skill for SAFEs only. If you need both SAFEs and convertible notes together (e.g. for the carta-conversion-calculator skill), use `fetch("cap_table:get:convertible_notes", {"corporation_id": corporation_id})` instead — that returns both types in one call and avoids a redundant API request. Do not call both `carta-list-safes` and `carta-list-convertible-notes` for the same query.
+If you need both SAFEs and convertible notes together (e.g. for the carta-conversion-calculator skill), use `fetch("cap_table:get:convertible_notes", {"corporation_id": corporation_id})` instead — that returns both types in one call and avoids a redundant API request. Do not call both `carta-list-safes` and `carta-list-convertible-notes` for the same query.
 
 ## Prerequisites
 

@@ -1,6 +1,16 @@
 ---
 name: carta-market-benchmarks
-description: Analyze cap structure patterns across the portfolio as market benchmarks. Use when asked about market benchmarks, typical option pool sizes, average SAFE terms, what's normal for a Series A, cap structure patterns, or portfolio-wide statistics.
+description: Computed statistics across portfolio companies — median, average, typical, range — used as market benchmarks. Returns aggregate numbers and percentiles, not raw per-company listings.
+when_to_use: >-
+  Use when asked what's typical for a metric, what's normal at a given
+  stage, what the median value is, what the average comes out to, how
+  something compares to the market, what range a metric falls in across
+  the portfolio, or how a specific deal's terms stack up against portfolio
+  norms. Covers option pool sizing, SAFE valuation caps, SAFE discount
+  rates, round sizes by stage, and similar structural metrics. For raw
+  cross-company data tables without computed statistics, prefer a
+  multi-company raw-data skill. For time-based risk detection across
+  companies, prefer a portfolio-alerts skill.
 allowed-tools:
   - mcp__carta__fetch
   - mcp__carta__list_contexts
@@ -16,15 +26,6 @@ allowed-tools:
 Compute portfolio-wide benchmarks from your own Carta data: option pool sizes, SAFE valuation caps, and round sizes. Useful for sanity-checking a new deal's terms against your existing portfolio.
 
 > **Note:** This reflects your firm's portfolio, not Carta-wide market data. Present results as "portfolio benchmarks" not "market data."
-
-## When to Use
-
-- "What's the typical option pool size in our portfolio?"
-- "What are average SAFE terms across our companies?"
-- "What's normal for a Series A?"
-- "Show me cap structure patterns across the portfolio"
-- "How does Acme's option pool compare to the rest?"
-- "Portfolio-wide statistics on round sizes"
 
 ## Prerequisites
 

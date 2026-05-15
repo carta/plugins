@@ -1,6 +1,19 @@
 ---
 name: carta-portfolio-query
-description: Query cap table data across multiple companies, or fetch detailed per-company data (stakeholders, grants, SAFEs, 409A). Use for portfolio-wide analysis, comparing companies, finding patterns, or when detailed tabular data is needed beyond a visual summary. Do NOT use for market benchmark statistics or cap structure patterns — use carta-market-benchmarks instead. Do NOT use for portfolio health alerts or red flags — use carta-portfolio-alerts instead.
+description: Raw cap-table data across multiple portfolio companies — stakeholders, grants, instruments, and valuations rendered as tables for comparison or audit. Returns the underlying records, not computed statistics or risk alerts.
+when_to_use: >-
+  Use when asked to pull cross-company cap-table data, compare cap tables
+  across companies, list stakeholders across the portfolio, break down
+  data across all companies, render side-by-side tabular cross-company
+  views, or audit any cap-table records spanning every portfolio company.
+  Covers raw stakeholder lists, raw grant data, raw SAFE listings, and
+  raw note listings spanning multiple companies. For statistical
+  benchmarks (median, average, typical, range), prefer a portfolio-
+  benchmarks skill. For time-based red flags (expiring valuations,
+  maturing notes, low option pools), prefer a portfolio-alerts skill. For
+  a single company's specialist data, prefer the matching single-purpose
+  skill. For Excel/spreadsheet exports of a single company's data,
+  prefer a reporting skill.
 allowed-tools:
   - mcp__carta__fetch
   - mcp__carta__list_contexts
@@ -16,20 +29,13 @@ allowed-tools:
 
 Fetch and present cap table data for a single company or across multiple companies.
 
-## Routing — Visual Summary vs. Detailed Data
+## Using `cap_table_chart` alongside this skill
 
-**For single-company cap table overview/summary/snapshot requests, use the `cap_table_chart` MCP tool directly.** It renders an interactive stacked bar chart in desktop clients (Cowork) or an ASCII chart in terminal clients (Claude Code).
+For single-company cap table overview/summary/snapshot requests, use the `cap_table_chart` MCP tool directly — it renders an interactive stacked bar chart in desktop clients (Cowork) or an ASCII chart in terminal clients (Claude Code):
 
 ```
 cap_table_chart(corporation_id=<id>)
 ```
-
-**Route to `cap_table_chart` when the user asks for:**
-- Cap table overview, summary, or snapshot
-- Ownership distribution or breakdown (visual)
-- Share class breakdown or equity structure
-- Fully diluted share counts or amount raised by share class
-- Board deck equity overview
 
 `cap_table_chart` also accepts `as_of_date` for point-in-time snapshots (see [Point-in-time snapshots](#point-in-time-snapshots) below).
 
@@ -44,19 +50,6 @@ What you MUST NOT do in any client:
 What terminal clients DO need: either the tool's `_terminal_fallback` surfaced verbatim, or a brief ASCII bar chart of equivalent shape. Pick one, once. Don't do both.
 
 Your text response alongside `cap_table_chart` should be **2–3 sentences of commentary** highlighting something notable — e.g. unusually large option pool, concentrated ownership, zero-outstanding classes — plus an optional single-sentence next-step offer. In MCP App clients that's the whole response. In terminal clients, prefix it with the one ASCII rendering.
-
-**Stay in this skill (use `fetch` below) when:**
-- Multi-company queries or portfolio-wide comparisons
-- Detailed stakeholder listings or specific holder data
-- Specific data points (409A, SAFEs, grants, convertible notes)
-- The user explicitly asks for tables or raw numbers
-
-## When to Use
-
-- "Show me cap tables for all my portfolio companies"
-- "Which companies have SAFEs outstanding?"
-- "Compare option pool sizes across my portfolio"
-- "Show me detailed grant data for Acme Corp"
 
 ## Prerequisites
 

@@ -1,6 +1,20 @@
 ---
 name: carta-list-convertible-notes
-description: Fetch all convertible instruments (SAFEs and convertible debt) for a company. Use when asked about convertible notes, SAFEs, convertible debt, note terms, caps, discounts, or maturity dates. Do NOT use when the user asks about SAFEs only — use carta-list-safes instead.
+description: Convertible debt instruments outstanding for a single company — interest-bearing convertible notes with note terms, conditions, principal amounts, accrued interest, valuation caps, discount rates, and maturity dates. Lists the notes themselves and what was agreed.
+when_to_use: >-
+  Use when asked about convertible notes, convertible debt, debt
+  instruments outstanding, note terms or conditions agreed on, note
+  principal or accrued interest, maturity dates on outstanding debt,
+  when notes come due, note discount rates, or note investors. Generic
+  "outstanding obligations" / "outstanding instruments" / "agreements
+  that will convert" framing also belongs here unless the user names
+  SAFEs explicitly. For SAFEs (no maturity, no interest, named as SAFEs
+  or "simple agreements for future equity"), prefer a SAFE list skill.
+  For modeling the conversion math at a priced round, prefer a
+  conversion-calculator skill. Do NOT route to a cross-company
+  portfolio-query skill for single-company note listings — even when the
+  user says "all our debt" or "list our notes" without naming a company,
+  default to this skill for the single-company case.
 allowed-tools:
   - mcp__carta__fetch
   - mcp__carta__list_contexts
@@ -14,15 +28,6 @@ allowed-tools:
 # List Convertible Notes
 
 Fetch all convertible instruments for a company.
-
-## When to Use
-
-- "Show me all convertible notes"
-- "What convertible instruments are outstanding?"
-- "Which notes are approaching maturity?"
-- "List all SAFEs and convertible debt"
-- "What are the terms on our convertible notes?"
-- "Show me notes grouped by tranche"
 
 ## Prerequisites
 

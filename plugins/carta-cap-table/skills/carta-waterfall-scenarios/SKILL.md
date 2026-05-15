@@ -1,6 +1,15 @@
 ---
 name: carta-waterfall-scenarios
-description: Fetch saved waterfall / exit scenario models for a company. Use when asked about liquidation preferences, exit payouts, return multiples, or waterfall analysis. Do NOT use for liquidation seniority stack or preferred stockholder voting analysis — use carta-ownership instead.
+description: Exit, sale, acquisition, and liquidation payouts for a company — answers how much money each holder walks away with at a given sale price, return multiples on holdings, and how proceeds distribute across share classes. Computes dollar amounts at modeled valuations, not abstract rights.
+when_to_use: >-
+  Use when asked how much a holder takes home, what each investor walks
+  away with, what the MOIC or return multiple is at a sale price, at what
+  sale price common starts seeing money, how distributions or payouts
+  change across exit scenarios, how proceeds split between share classes
+  at a valuation, who is underwater or gets zero in a low exit, or how
+  acquisition payouts break down. For voting power, protective provisions,
+  consent rights, or seniority rank in the abstract without computing
+  dollar payouts, prefer a rights/seniority skill.
 allowed-tools:
   - mcp__carta__fetch
   - mcp__carta__list_contexts
@@ -14,15 +23,6 @@ allowed-tools:
 # Waterfall Scenarios
 
 Fetch saved exit scenario models and present them with meaningful context, not just the per-holder table.
-
-## When to Use
-
-- "Show me the waterfall analysis"
-- "What do exit payouts look like at $50M?"
-- "Who gets paid first in a liquidation?"
-- "Compare exit scenarios"
-- "What return multiples do investors get?"
-- "Is anyone underwater in this exit model?"
 
 ## Prerequisites
 

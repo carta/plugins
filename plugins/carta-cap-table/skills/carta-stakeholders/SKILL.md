@@ -1,6 +1,15 @@
 ---
 name: carta-stakeholders
-description: List stakeholders for a company. Use when asked who the stakeholders are, stakeholder list, shareholders, investors, or holders.
+description: Roster of everyone with an equity stake in a company — names of stakeholders, shareholders, investors, holders, and employee equity holders along with what they own. Answers "who owns shares" and "who has put money in" with a flat list, not a rights or governance breakdown.
+when_to_use: >-
+  Use when asked who the stakeholders are, who owns shares, who holds
+  equity, who has invested in the company, who has put money in, which
+  employees currently hold stock options or option grants, who the option
+  holders are, for the stakeholder list, the shareholder roster, the
+  employee equity roster, or a flat list of holders with their stakes.
+  For voting power, protective provisions, consent rights, or seniority
+  rank, prefer a rights/governance skill. For payout amounts at a
+  specific exit valuation, prefer a payout or waterfall scenario skill.
 allowed-tools:
   - mcp__carta__fetch
   - mcp__carta__list_contexts

@@ -1,6 +1,13 @@
 ---
 name: carta-grant-vesting
 description: Fetch vesting schedule for a specific grant — options (ISO/NSO), RSUs, SARs, or CBUs. Use when asked about vesting details, cliff dates, vesting progress, settlement, or unvested shares for any grant type.
+when_to_use: >-
+  Use when asked about the vesting schedule for a specific grant, when the
+  cliff hits, how many shares have vested or remain unvested, vesting
+  progress for a named employee, RSU settlement eligibility, or when a
+  grant is fully vested. Requires identifying a specific grant — if the
+  user asks about aggregate vesting across all employees or the full option
+  pool, prefer a stakeholder list or ownership skill instead.
 allowed-tools:
   - mcp__carta__fetch
   - mcp__carta__list_contexts

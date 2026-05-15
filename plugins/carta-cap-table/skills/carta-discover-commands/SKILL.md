@@ -1,6 +1,21 @@
 ---
 name: carta-discover-commands
-description: Find the right carta-cap-table command when no other skill matches. Use when unsure which command to call, exploring available data, or when the user's request doesn't match a specific skill. Do NOT use when the user's intent clearly matches a specific skill — invoke that skill directly.
+description: META-DISCOVERY ONLY — answers the question "what cap-table tools or commands exist?" when the user is lost about what's available. NEVER use this skill for any request that names a cap-table topic (stakeholders, grants, vesting, SAFEs, notes, valuations, ownership, waterfall, financing, exposure, etc.) — those are always direct data requests, even if the user phrases them vaguely. The matching specialist skill wins every time over this one.
+when_to_use: >-
+  Use ONLY when the user explicitly admits they don't know what's
+  available and asks a meta question about the toolset itself —
+  literal phrasings like "I don't know where to begin", "what kinds
+  of cap-table data can I even access", "can you give me a tour of
+  the available commands", "which tools are even available for this
+  domain", or "point me in the right direction with no specific
+  topic in mind". Do NOT fire on any utterance that names a specific
+  cap-table noun (stakeholders, shareholders, holders, employees,
+  grants, options, vesting, SAFEs, notes, 409A, valuations, ownership,
+  waterfall, exit, financing, rounds, exposure, conversions, etc.) —
+  even if the verb sounds discovery-flavored ("show me X", "render X",
+  "find X", "compare X"), the named noun means it's a direct data
+  request and a specialist skill owns it. When in doubt between this
+  skill and a specialist, pick the specialist.
 allowed-tools:
   - mcp__carta__fetch
   - mcp__carta__list_contexts
@@ -15,12 +30,6 @@ allowed-tools:
 # Discover Commands
 
 Use the `discover()` tool to find available commands when no specific skill covers the user's request.
-
-## When to Use
-
-- No other carta-cap-table skill matches the user's request
-- User asks "what can you do?" or "what data is available?"
-- You're unsure which command to call
 
 ## Step 1 — Search for Relevant Commands
 

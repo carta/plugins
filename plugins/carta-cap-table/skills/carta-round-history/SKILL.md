@@ -1,6 +1,16 @@
 ---
 name: carta-round-history
-description: Fetch financing round history for a company. Use when asked about funding rounds, capital raised, or financing history. Do NOT use for portfolio-wide funding statistics or benchmarks — use carta-market-benchmarks instead.
+description: Financing round history for a company — each priced round with its date, share class issued, price per share, total cash raised, and the investors who participated. Covers what was raised and from whom across the company's funding history.
+when_to_use: >-
+  Use when asked about funding rounds, financing rounds, the company's
+  round history, capital raised totals, how much has been pulled in from
+  outside investors, how much money has been raised across all rounds,
+  cumulative cash raised, who invested in a specific round, price per
+  share at a financing, the equity activity timeline, or a round-by-
+  round breakdown. For securities outside priced rounds (SAFEs,
+  convertible notes), prefer the matching instrument-list skill. For
+  current stakeholder snapshots without round context, prefer a
+  stakeholder list skill.
 allowed-tools:
   - mcp__carta__fetch
   - mcp__carta__list_contexts
