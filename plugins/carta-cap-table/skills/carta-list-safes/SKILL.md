@@ -41,12 +41,13 @@ fetch("cap_table:list:safes", {"corporation_id": corporation_id})
 
 ## Key Fields
 
-- `investor_name` or `investor.name`: investor name
-- `investment_amount` or `amount`: dollar amount invested
-- `valuation_cap` or `cap`: valuation cap
-- `discount_rate` or `discount`: discount percentage
-- `mfn`: boolean, most favored nation clause
-- `status`: "Outstanding", "Converted", etc.
+- `investor_name`: investor name
+- `investor_amount`: dollar amount invested
+- `valuation_cap`: valuation cap (null on uncapped SAFEs)
+- `discount`: discount percentage
+- `state`: one of `PENDING_LEGAL_ADMIN_REVIEW`, `AWAITING_SIGNATURES`, `AWAITING_FUNDING`, `ISSUED`, `CANCELED`
+- `date_issued`, `company_signed_on`, `investor_signed_on`: signature/issuance dates
+- `instrument`: side-letter / template variant (e.g. YC, Carta-standard)
 
 ## Workflow
 
@@ -83,11 +84,11 @@ If missing, call `AskUserQuestion` before proceeding (see carta-interaction-refe
 
 **Sort order**: By investment amount descending.
 
-| Investor | Amount | Val. Cap | Discount | MFN | Status |
-|----------|--------|----------|----------|-----|--------|
-| Investor A | $500,000 | $6,000,000 | 20% | No | Outstanding |
+| Investor | Amount | Val. Cap | Discount | State |
+|----------|--------|----------|----------|-------|
+| Investor A | $500,000 | $6,000,000 | 20% | ISSUED |
 
-Show totals: total outstanding amount, count by status.
+Show totals: total outstanding amount, count by state.
 
 ## Caveats
 

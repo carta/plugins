@@ -42,9 +42,9 @@ fetch("cap_table:list:convertible_notes", {"corporation_id": corporation_id})
 > **Detail mode**: This command supports `detail=summary` (counts, totals, breakdowns — fast) and `detail=full` (individual instrument records with investor names and terms). Choose the right mode upfront based on user intent — see Workflow.
 
 Optional params:
-- `page`, `pageSize`: pagination (only relevant when `detail` is `full`)
+- `page`, `page_size`: pagination (only relevant when `detail` is `full`)
 - `search`: text search
-- `statusExplanation`: filter by status (e.g. "Outstanding", "Converted", "Canceled")
+- `status_explanation`: filter by status (e.g. "Outstanding", "Converted", "Canceled")
 
 ## Key Fields
 

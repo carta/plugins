@@ -42,6 +42,8 @@ You need the `corporation_id`. Get it from `list_accounts` if you don't have it.
 
 > **Detail mode**: This command supports `detail=summary` (round count, total cash raised, by-round breakdown — fast) and `detail=full` (individual security records with per-investor data, issue dates, price per share). Choose the right mode upfront based on user intent — see Workflow.
 
+> **Ordering**: Pass `ordering` to sort server-side — e.g. `-cash_paid` for largest investments first. Fields: `issue_date`, `quantity`, `stakeholder_name`, `cash_paid`, `prefix_number`. Combine with `detail=full` for "top N investors" queries; otherwise the default (chronological) order is fine.
+
 ```
 fetch("cap_table:get:financing_history", {"corporation_id": corporation_id})
 ```

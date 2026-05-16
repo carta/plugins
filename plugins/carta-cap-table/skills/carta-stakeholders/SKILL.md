@@ -101,6 +101,16 @@ fetch("cap_table:get:cap_table_by_stakeholder", { "corporation_id": corporation_
 
 Use this whenever the user's question is anchored to a specific date ("ownership at Q1 close", "who held shares on 3/31"). `cap_table:get:stakeholders` (the contact-info command) does **not** support `as_of_date` — it only reflects current roster.
 
+### Narrowing the per-stakeholder holdings
+
+`cap_table:get:cap_table_by_stakeholder` also accepts optional server-side filters that narrow the response before it crosses the wire — useful for large companies:
+
+- `security_type`: limit to one security type (e.g. `"CERTIFICATE"`, `"OPTION_GRANT"`, `"WARRANT"`, `"CONVERTIBLE"`)
+- `share_class_id`: limit to a single share class (pass the numeric ID from `cap_table:get:rights_and_preferences`)
+- `so_type`: limit option grants by sub-type (e.g. `"ISO"`, `"NSO"`, `"RSU"`)
+
+Prefer these over fetching everything and post-filtering whenever the user's question is scoped to one security or class.
+
 ## Gates
 
 **Required inputs**: `corporation_id`.

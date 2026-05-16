@@ -43,8 +43,8 @@ You need the `corporation_id`. Get it from `list_accounts` if you don't have it.
 From share classes:
 - `name`: class name (e.g. "Series A Preferred")
 - `stock_type`: "PREFERRED" or "COMMON"
-- `votes_per_share`: voting weight (0 = non-voting)
-- `seniority`: liquidation seniority rank (higher = senior)
+- `votes_per_share`: voting weight — `null` on non-voting classes, a positive integer otherwise (guard for `None`, not zero)
+- `seniority`: liquidation seniority rank — **lower = more senior**; rank 1 pays out first
 
 From cap table by stakeholder:
 - Per-stakeholder share counts and ownership % broken down by share class
@@ -71,14 +71,20 @@ If the user's question is anchored to a specific date (e.g. "who had voting cont
 fetch("cap_table:get:cap_table_by_stakeholder", { corporation_id, "detail": "full", "as_of_date": "2026-03-31" })
 ```
 
-Note: `cap_table:get:rights_and_preferences` does not support `as_of_date` — it returns the current share class structure. Flag this to the user if the question hinges on historical share class terms.
+For ownership questions that only care about preferred holders, narrow server-side with `security_type` or `share_class_id` instead of fetching all holdings and filtering in memory:
+
+```
+fetch("cap_table:get:cap_table_by_stakeholder", { corporation_id, "detail": "full", "security_type": "CERTIFICATE", "share_class_id": <preferred_class_id> })
+```
+
+`share_class_id` comes from `cap_table:get:rights_and_preferences` (Step 1).
 
 ### Step 3 — Identify Preferred Holders
 
-From the share class data, identify preferred classes (stock_type = "PREFERRED" or votes_per_share > 0).
+From the share class data, identify preferred classes (`stock_type == "PREFERRED"` or `votes_per_share` is a positive integer).
 
 From the cap table, identify stakeholders holding preferred shares. Sort by:
-1. Seniority (most senior first)
+1. `seniority` ascending (rank 1 = most senior, pays out first)
 2. Fully diluted ownership % (descending)
 
 ### Step 4 — Present Results

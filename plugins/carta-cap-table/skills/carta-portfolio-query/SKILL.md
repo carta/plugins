@@ -84,6 +84,16 @@ Call the relevant command for each company depending on the query:
 
 > **Ordering & top-N queries**: Grant/RSU/SAR/CBU list commands support server-side `ordering`. Use `-quantity` for descending (top holders), `quantity` for ascending. Combine with `page_size` to get only the top N records without fetching everything. **Always use ordering+page_size for "top N" or "largest" queries** — never fetch all records and sort client-side, especially for companies with 1,000+ grants. Available ordering fields: `quantity`, `remaining_shares`, `exercised_shares`, `issue_date`, `stakeholder_name`, `grant_number`.
 
+### Narrowing per-stakeholder holdings
+
+`cap_table:get:cap_table_by_stakeholder` accepts optional server-side filters that narrow the response — useful when querying a single security type across the portfolio:
+
+- `security_type`: e.g. `"CERTIFICATE"`, `"OPTION_GRANT"`, `"WARRANT"`, `"CONVERTIBLE"`
+- `share_class_id`: numeric ID from `cap_table:get:rights_and_preferences`
+- `so_type`: option sub-type, e.g. `"ISO"`, `"NSO"`, `"RSU"`
+
+Prefer these over fetching everything and post-filtering whenever the comparison is scoped to one security shape.
+
 ### Point-in-time snapshots
 
 `cap_table:get:cap_table_by_share_class`, `cap_table:get:cap_table_by_stakeholder`, and the `cap_table_chart` tool accept an optional `as_of_date` param. When provided, they return the cap table as of that date instead of live data. Pass ISO (`YYYY-MM-DD`) or `MM/DD/YYYY`:
