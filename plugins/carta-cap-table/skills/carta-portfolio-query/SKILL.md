@@ -78,7 +78,7 @@ Call the relevant command for each company depending on the query:
 | SAR grants | `fetch("cap_table:list:sars", {"corporation_id": corporation_id})` |
 | CBU grants | `fetch("cap_table:list:cbus", {"corporation_id": corporation_id})` |
 | Search grants by name | `fetch("cap_table:list:grants", {"corporation_id": corporation_id, "detail": "full", "search": "Jane Doe"})` |
-| Top N holders by shares | `fetch("cap_table:list:rsus", {"corporation_id": corporation_id, "ordering": "-quantity", "page_size": "20"})` |
+| Top N holders by shares | `fetch("cap_table:list:rsus", {"corporation_id": corporation_id, "ordering": "-quantity", "detail": "full", "page_size": "20"})` |
 
 > **Detail mode**: The gateway now defaults all list commands to `detail=summary` automatically. You do not need to pass `"detail": "summary"` or `"summary": "true"` — summary mode is the default. Summary returns aggregate data (count, totals, type/status breakdowns) and is orders of magnitude faster for companies with 1,000+ grants. For individual grant-level records (e.g. searching by name, paginating through results), pass `"detail": "full"` with `"page_size": "25"`. See the "Search grants by name" row above for an example.
 

@@ -104,7 +104,7 @@ If missing, call `AskUserQuestion` before proceeding (see carta-interaction-refe
 
 **BLUF lead**: Lead with the total number of preferred holders and the most senior share class before showing the tables.
 
-**Sort order**: By seniority (most senior first), then by fully diluted ownership % descending.
+**Sort order**: By `seniority` **ascending** (rank 1 = most senior, pays out first in liquidation), then by fully diluted ownership % descending.
 
 **Preferred Stockholders with Voting Rights**
 

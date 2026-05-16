@@ -1,10 +1,10 @@
 ---
 name: carta-list-safes
-description: SAFEs for a single company — simple agreements for future equity, with SAFE investor names, SAFE investment amounts, SAFE valuation caps, SAFE discount rates, MFN flags on SAFEs, and SAFE totals. Lists SAFEs only; does not cover convertible notes or other debt.
+description: SAFEs for a single company — simple agreements for future equity, with SAFE investor names, SAFE investment amounts, SAFE valuation caps, SAFE discount rates, and SAFE totals. Lists SAFEs only; does not cover convertible notes or other debt.
 when_to_use: >-
   Use when the user mentions SAFEs by name (or "simple agreements for
   future equity" / "future-equity agreements"). Covers SAFE investors,
-  SAFE valuation caps, SAFE discount rates, MFN clauses on SAFEs, and
+  SAFE valuation caps, SAFE discount rates, and
   how much has been raised through SAFEs. Do not use for convertible
   notes, convertible debt, interest-bearing instruments with maturity
   dates, or generic "outstanding instruments" / "outstanding obligations"
@@ -93,5 +93,5 @@ Show totals: total outstanding amount, count by state.
 ## Caveats
 
 - SAFE terms displayed reflect what is recorded in Carta; side letters or amendments outside Carta are not captured.
-- MFN clause presence is shown as a boolean flag — the specific MFN trigger conditions are governed by the SAFE agreement itself.
+- MFN clauses, pro-rata rights, and other side-letter terms are **not** exposed by this endpoint. If a user asks about MFN clauses, acknowledge the limitation — those live in the SAFE agreement itself, not in the Carta-surfaced fields. Use the `instrument` field to hint at template variant (e.g. YC, Carta-standard) when relevant.
 - If you need both SAFEs and convertible notes, use `fetch("cap_table:get:convertible_notes", {"corporation_id": corporation_id})` instead -- it returns both types in one call.
