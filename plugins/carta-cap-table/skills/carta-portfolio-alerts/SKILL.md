@@ -1,83 +1,29 @@
 ---
 name: carta-portfolio-alerts
-description: Time-bounded and threshold-bounded risk detection across portfolio companies — finds items that are expiring soon, maturing soon, running low, or otherwise at risk. Surfaces what needs attention now, not what the data looks like in general.
-when_to_use: >-
-  Use when asked which companies have an expiring item (409As, agreements,
-  exercise windows), what is maturing in the next N months across the
-  portfolio (convertible notes, debt instruments), which companies are
-  running low on something (option pool below a threshold, runway), which
-  SAFEs are approaching their valuation-cap trigger or expiring before
-  conversion across the portfolio, or to run a portfolio health audit or
-  red-flag scan. For raw multi-company data without a risk or
-  time or threshold lens, prefer a portfolio data-query skill. For
-  statistical norms across the portfolio, prefer a portfolio-benchmarks
-  skill.
-allowed-tools:
-  - mcp__carta__fetch
-  - mcp__carta__list_contexts
-  - mcp__carta__set_context
-  - mcp__carta__list_accounts
-  - AskUserQuestion
+description: "Scans portfolio companies for time-bounded and threshold-bounded risks — expiring 409A valuations, maturing convertible notes, low option pools, and large unconverted SAFE exposure. Classifies each finding as critical, warning, or info and presents a severity-sorted dashboard with days-remaining and threshold-gap metrics. Use when checking what's expiring across the portfolio, upcoming note maturities, low option pool alerts, SAFE exposure warnings, running a portfolio health audit, red-flag scan, or asking which companies have deadlines or renewals approaching. For raw multi-company data without a risk or threshold lens, prefer carta-portfolio-query. For statistical norms, prefer carta-market-benchmarks."
+allowed-tools: "mcp__carta__fetch, mcp__carta__list_contexts, mcp__carta__set_context, mcp__carta__list_accounts, AskUserQuestion"
 ---
-
-<!-- Part of the official Carta AI Agent Plugin -->
 
 # Portfolio Alerts
 
-Scan multiple companies for red flags and compute severity classifications (critical / warning / info). Builds on the `carta-portfolio-query` pattern.
-
-## Prerequisites
-
-No inputs required — this skill loops the full portfolio. Call `list_accounts` to get all `corporation_pk` accounts automatically.
-
-## Data Retrieval
-
-### Portfolio Enumeration
-
-Call `list_accounts` to get all portfolio companies. Filter to accounts where `id` starts with `corporation_pk:`. Extract up to 20 numeric corporation IDs. If more than 20 companies exist, ask the user to narrow scope.
-
-### Per-Company Commands
-
-For each company, these are the relevant checks:
-
-- `fetch("cap_table:get:409a_valuations", {"corporation_id": corporation_id})` -- 409A expiry check
-- `fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": corporation_id})` -- option pool check
-- `fetch("cap_table:get:convertible_notes", {"corporation_id": corporation_id})` -- note maturity check (summary includes `maturity.nearest_date`)
-- `fetch("cap_table:list:safes", {"corporation_id": corporation_id})` -- SAFE exposure check
-
-The gateway defaults to `detail=summary` for list commands. All four commands use summary mode — the convertible notes summary includes a `maturity` block with `nearest_date` and `total_outstanding_debt` for outstanding debt notes.
-
-If the user asks about a specific check only (e.g. "any expiring 409As?"), fetch only the relevant command per company.
-
-> **Parallel execution**: The `fetch` tool has `readOnlyHint=true`, so Claude Code executes parallel fetch calls concurrently. Issue ALL fetch calls for ALL companies in a single response — do NOT loop company-by-company. See Workflow Step 2.
-
-## Key Fields
-
-From 409A: `expiration_date`, `price`, `effective_date`
-From cap table option plans: `available_ownership`, `name`
-From convertible notes (summary): `maturity.nearest_date`, `maturity.total_outstanding_debt`, `by_status`, `by_type`
+Scan multiple companies for red flags and compute severity classifications (critical / warning / info).
 
 ## Workflow
 
 ### Step 1 — Get Portfolio
 
-Call `list_accounts` to get all `corporation_pk` accounts. Extract up to 20 numeric corporation IDs.
+Call `list_accounts` to get all `corporation_pk` accounts. Filter to accounts where `id` starts with `corporation_pk:`. Extract up to 20 numeric corporation IDs. If more than 20 companies exist, ask the user to narrow scope.
 
-### Step 2 — Fetch Data for All Companies (parallel)
+### Step 2 — Fetch Data for All Companies
 
-Issue ALL fetch calls for ALL companies **in a single response** — do NOT loop company-by-company. Each fetch call is independent and will execute concurrently.
+Issue ALL fetch calls for ALL companies **in a single response** — do NOT loop company-by-company. The `fetch` tool has `readOnlyHint=true`, so all calls execute concurrently.
 
-For example, with 5 companies and all 4 checks, issue all 20 fetch calls at once:
+Per-company commands (all use summary mode by default):
 
-```
-fetch("cap_table:get:409a_valuations", {"corporation_id": 1})
-fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": 1})
-fetch("cap_table:get:convertible_notes", {"corporation_id": 1})
-fetch("cap_table:list:safes", {"corporation_id": 1})
-fetch("cap_table:get:409a_valuations", {"corporation_id": 2})
-fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": 2})
-... (all companies)
-```
+- `fetch("cap_table:get:409a_valuations", {"corporation_id": ID})` — 409A expiry (`expiration_date`, `price`, `effective_date`)
+- `fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": ID})` — option pool (`available_ownership`, `name`)
+- `fetch("cap_table:get:convertible_notes", {"corporation_id": ID})` — note maturity (`maturity.nearest_date`, `maturity.total_outstanding_debt`)
+- `fetch("cap_table:list:safes", {"corporation_id": ID})` — SAFE exposure
 
 If the user asks about a specific check only (e.g. "any expiring 409As?"), issue only the relevant command per company — but still all companies in one response.
 
@@ -85,35 +31,16 @@ If the user asks about a specific check only (e.g. "any expiring 409As?"), issue
 
 Apply severity thresholds to the results for each company:
 
-#### 1. Expiring 409A Valuations
+| Check | Critical | Warning | Info |
+|-------|----------|---------|------|
+| 409A expiry | No 409A on file, or `expiration_date` in the past | `expiration_date` within 90 days | `expiration_date` within 180 days |
+| Option pool | `available_ownership` < 2% | `available_ownership` < 5% | `available_ownership` < 10% |
+| Note maturity | `maturity.nearest_date` in the past | `maturity.nearest_date` within 90 days | `maturity.nearest_date` within 180 days |
+| SAFE exposure | — | total outstanding SAFEs > 20% of last known valuation cap | — |
 
-| Check | Critical | Warning | Info | Rationale |
-|-------|----------|---------|------|-----------|
-| 409A expiry | No 409A on file, or expiration_date in the past | expiration_date within 90 days | expiration_date within 180 days | 90 days = standard board reporting cycle; 180 days = early warning for planning |
+Companies with no 409A data should never be silently skipped — always include them as a distinct category.
 
-Companies with no 409A data should never be silently skipped — always include them in the output as a distinct category.
-
-#### 2. Low Option Pool
-
-| Check | Critical | Warning | Info | Rationale |
-|-------|----------|---------|------|-----------|
-| Option pool | available_ownership < 2% | available_ownership < 5% | available_ownership < 10% | 5% is industry floor for meaningful hiring capacity; <2% is effectively exhausted |
-
-#### 3. SAFEs/Notes Approaching Maturity
-
-| Check | Critical | Warning | Info | Rationale |
-|-------|----------|---------|------|-----------|
-| Note maturity | `maturity.nearest_date` in the past | `maturity.nearest_date` within 90 days | `maturity.nearest_date` within 180 days | 90 days = typical negotiation window for extension or conversion |
-
-Use `maturity.nearest_date` and `maturity.total_outstanding_debt` from the convertible notes summary. These fields are pre-filtered to outstanding debt notes by the backend.
-
-#### 4. Large Unconverted SAFE Exposure
-
-| Check | Critical | Warning | Info | Rationale |
-|-------|----------|---------|------|-----------|
-| SAFE exposure | — | total outstanding SAFEs > 20% of last known valuation cap | — | 20% = significant dilution risk at conversion |
-
-Sum outstanding SAFE amounts per company.
+Use `maturity.nearest_date` and `maturity.total_outstanding_debt` from the convertible notes summary (pre-filtered to outstanding debt notes). Sum outstanding SAFE amounts per company for the exposure check.
 
 ### Step 4 — Present Results
 
@@ -123,10 +50,7 @@ Present a summary dashboard (see Presentation section).
 
 **Required inputs**: None — portfolio enumeration is automatic.
 
-**AI computation**: Yes — severity classifications (critical, warning, info) for 409A expiry, option pool health, note maturity, and SAFE exposure are AI-derived.
-Trigger the AI computation gate (see carta-interaction-reference §6.2) before outputting any severity classifications or health assessments.
-
-**Subagent prohibition**: Not applicable.
+**AI computation**: Severity classifications are AI-derived. Trigger the AI computation gate (see carta-interaction-reference §6.2) before outputting any severity classifications or health assessments.
 
 ## Presentation
 
