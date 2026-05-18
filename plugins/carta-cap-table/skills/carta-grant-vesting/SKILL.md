@@ -42,7 +42,7 @@ You need:
 
 ## Data Retrieval
 
-> The gateway defaults to `detail=summary` for list commands. This skill needs individual records, so `"detail": "full"` is passed explicitly.
+> The gateway defaults to `detail=summary` for list commands. This skill needs individual records, so `"detail": "minimal"` is passed explicitly.
 
 Two endpoints exist for vesting detail and they are **not interchangeable**:
 
@@ -56,7 +56,7 @@ Two endpoints exist for vesting detail and they are **not interchangeable**:
 **Important:** `cap_table:get:grant_vesting` is options-only and returns 500 for RSU/SAR/CBU ids. Use the table above; do not reuse a command across types.
 
 ```
-fetch("<list command>", {"corporation_id": corporation_id, "search": "<holder name>", "detail": "full"})
+fetch("<list command>", {"corporation_id": corporation_id, "search": "<holder name>", "detail": "minimal"})
 ```
 
 Then, for options or RSUs:
@@ -95,7 +95,7 @@ Otherwise, pick the list command based on grant type and search:
 - **Type unknown**: try `cap_table:list:grants` first (options are most common). If the holder is not found, try `list:rsus`, then `list:sars`, then `list:cbus`. Do not conclude vesting data is unavailable until all four have been checked.
 
 ```
-fetch("<list command>", {"corporation_id": corporation_id, "search": "<holder name>", "detail": "full"})
+fetch("<list command>", {"corporation_id": corporation_id, "search": "<holder name>", "detail": "minimal"})
 ```
 
 If multiple grants are returned, ask the user which one, or pick the most relevant based on context.

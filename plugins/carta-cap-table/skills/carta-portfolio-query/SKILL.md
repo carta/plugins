@@ -77,10 +77,10 @@ Call the relevant command for each company depending on the query:
 | RSU grants | `fetch("cap_table:list:rsus", {"corporation_id": corporation_id})` |
 | SAR grants | `fetch("cap_table:list:sars", {"corporation_id": corporation_id})` |
 | CBU grants | `fetch("cap_table:list:cbus", {"corporation_id": corporation_id})` |
-| Search grants by name | `fetch("cap_table:list:grants", {"corporation_id": corporation_id, "detail": "full", "search": "Jane Doe"})` |
-| Top N holders by shares | `fetch("cap_table:list:rsus", {"corporation_id": corporation_id, "ordering": "-quantity", "detail": "full", "page_size": "20"})` |
+| Search grants by name | `fetch("cap_table:list:grants", {"corporation_id": corporation_id, "detail": "minimal", "search": "Jane Doe"})` |
+| Top N holders by shares | `fetch("cap_table:list:rsus", {"corporation_id": corporation_id, "ordering": "-quantity", "detail": "minimal", "page_size": "20"})` |
 
-> **Detail mode**: The gateway now defaults all list commands to `detail=summary` automatically. You do not need to pass `"detail": "summary"` or `"summary": "true"` — summary mode is the default. Summary returns aggregate data (count, totals, type/status breakdowns) and is orders of magnitude faster for companies with 1,000+ grants. For individual grant-level records (e.g. searching by name, paginating through results), pass `"detail": "full"` with `"page_size": "25"`. See the "Search grants by name" row above for an example.
+> **Detail mode**: The gateway now defaults all list commands to `detail=summary` automatically. You do not need to pass `"detail": "summary"` or `"summary": "true"` — summary mode is the default. Summary returns aggregate data (count, totals, type/status breakdowns) and is orders of magnitude faster for companies with 1,000+ grants. For individual grant-level records (e.g. searching by name, paginating through results), pass `"detail": "minimal"` with `"page_size": "25"`. See the "Search grants by name" row above for an example.
 
 > **Ordering & top-N queries**: Grant/RSU/SAR/CBU list commands support server-side `ordering`. Use `-quantity` for descending (top holders), `quantity` for ascending. Combine with `page_size` to get only the top N records without fetching everything. **Always use ordering+page_size for "top N" or "largest" queries** — never fetch all records and sort client-side, especially for companies with 1,000+ grants. Available ordering fields: `quantity`, `remaining_shares`, `exercised_shares`, `issue_date`, `stakeholder_name`, `grant_number`.
 
