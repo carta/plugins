@@ -41,7 +41,9 @@ The user must have the Carta MCP server connected. If this is the first query in
 
 1. Call `list_contexts` to see which firms are accessible
 2. Call `set_context` with the target `firm_id` if needed
-3. For **cap table queries** — confirm the corporation ID before running. If the user names a portfolio company, resolve its `CORPORATION_ID` from `ALLOCATIONS` first (see Step 1 table below)
+3. For **cap table queries** — confirm the corporation ID before running. If the user names a portfolio company, resolve its `CORPORATION_ID` from `CORPORATION_BASIC_INFO_V2` first (see Step 1 table below)
+
+> **Firm context — tool priority rule:** When the active context is a **Firm**, prefer `fa:*` MCP commands over raw DWH queries. These commands are purpose-built for investor-facing data and return cleaner, pre-aggregated results. Fall back to `dwh:execute:query` only when no `fa:*` command covers the requested data. Only reach for `cap_table:*` or `cap_table_chart` as a last resort — if both `fa:*` commands and DWH queries failed to return a usable result.
 
 ## Step 0 — Fetch portfolio companies (MANDATORY GATE)
 
@@ -84,11 +86,13 @@ The file contains the SQL query, column reference, and presentation rules for th
 
 > **Cap table prerequisite check** — before loading `cap-table.md`, verify:
 > 1. The MCP context is set to a **firm** (not a fund or LP). Call `list_contexts` if unsure.
-> 2. A `CORPORATION_ID` is available. If the user named a company, resolve it:
+> 2. A `CORPORATION_ID` is available. If the user named a company, resolve it from `CORPORATION_BASIC_INFO_V2` — match by name, UUID, or integer ID depending on what the user supplied:
 >    ```sql
->    SELECT DISTINCT corporation_id, company_name
->    FROM FUND_ADMIN.ALLOCATIONS
+>    SELECT DISTINCT corporation_id, corporation_uuid, company_name
+>    FROM FUND_ADMIN.CORPORATION_BASIC_INFO_V2
 >    WHERE LOWER(company_name) LIKE '%<user-supplied name>%'
+>       OR corporation_uuid = '<user-supplied uuid>'
+>       OR corporation_id = <user-supplied integer id>
 >    LIMIT 10
 >    ```
 >    If multiple matches are found, use `AskUserQuestion` to confirm which one before continuing.
