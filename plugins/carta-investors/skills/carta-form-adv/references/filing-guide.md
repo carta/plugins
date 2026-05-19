@@ -19,7 +19,13 @@ Tell the user: *"Building your Form ADV interactive filing guide..."*
 
 ### Step 1 — Build the data file
 
-Extract values from Query 1 and Query 2. Use the `Write` tool to create `{TMPDIR}/form_adv_data.json` where `TMPDIR` is the system temp directory (`/tmp` on macOS/Linux, `%TEMP%` on Windows — resolve with `python3 -c "import tempfile; print(tempfile.gettempdir())"`):
+Extract values from Query 1 and Query 2. First resolve the system temp directory:
+
+```bash
+uv run python -c "import tempfile; print(tempfile.gettempdir())"
+```
+
+This returns `/tmp` on macOS/Linux or `C:\Users\…\AppData\Local\Temp` on Windows. Then use the `Write` tool to create `<resolved-tmpdir>/form_adv_data.json` — substitute the actual resolved path:
 
 ```json
 {
@@ -39,7 +45,7 @@ Use actual query result values — no placeholders.
 ### Step 2 — Generate the artifact
 
 ```bash
-TMPDIR=$(python3 -c "import tempfile; print(tempfile.gettempdir())")
+TMPDIR=$(uv run python -c "import tempfile; print(tempfile.gettempdir())")
 uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-form-adv/scripts/generate_form_adv_artifact.py \
   --data "${TMPDIR}/form_adv_data.json" \
   --title "<FirmName> — Form ADV <Year>" \
@@ -51,15 +57,15 @@ uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-form-adv/scripts/generate_form_adv_art
 Run immediately after Step 2 (reuses the same JSON data file):
 
 ```bash
-TMPDIR=$(python3 -c "import tempfile; print(tempfile.gettempdir())")
+TMPDIR=$(uv run python -c "import tempfile; print(tempfile.gettempdir())")
 uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-form-adv/scripts/form_adv_excel_generator.py \
   --data "${TMPDIR}/form_adv_data.json" \
   --title "<FirmName> — Form ADV <Year>" \
   --out "${TMPDIR}/FormADV_<FirmName>_<Year>.xlsx"
 ```
 
-Tell the user the file path:
-> *"Your Form ADV Excel filing reference has been saved to `{TMPDIR}/FormADV_<FirmName>_<Year>.xlsx`. Open it in Excel or Google Sheets. Blue cells are pre-filled from Carta — orange cells must be entered manually in IARD. The **Manual Fields** sheet lists every field requiring manual entry, organized by ADV item."*
+Tell the user the file path, substituting the resolved `$TMPDIR` value from the shell command above (e.g. `/tmp/FormADV_…` on macOS/Linux, `C:\Users\…\AppData\Local\Temp\FormADV_…` on Windows):
+> *"Your Form ADV Excel filing reference has been saved to `<resolved-tmpdir>/FormADV_<FirmName>_<Year>.xlsx`. Open it in Excel or Google Sheets. Blue cells are pre-filled from Carta — orange cells must be entered manually in IARD. The **Manual Fields** sheet lists every field requiring manual entry, organized by ADV item."*
 
 ### Step 4 — Open in preview panel (Claude Desktop)
 
@@ -94,5 +100,5 @@ Tell the user:
 
 > *"Your Form ADV interactive filing guide is open in the preview panel. It has three tabs: Firm Overview (Items 5.D, 5.F, 5.H), Per-Fund Detail (Schedule D §7.B.(1) for each fund, expandable), and an IARD Checklist. Blue badges are pre-filled from Carta — orange badges need to be entered manually in IARD. Use **Print / Save PDF** in the top right to export a PDF copy for your records."*
 
-**Fallback (non-Desktop):** If `preview_start` is unavailable, tell the user the file path to open in their browser:
-> *"Your filing guide has been saved to `{TMPDIR}/FormADV_<FirmName>_<Year>.html`. Open this file in your browser to view it. Use File → Print → Save as PDF to export."*
+**Fallback (non-Desktop):** If `preview_start` is unavailable, tell the user the file path to open in their browser, substituting the resolved `$TMPDIR` value:
+> *"Your filing guide has been saved to `<resolved-tmpdir>/FormADV_<FirmName>_<Year>.html`. Open this file in your browser to view it. Use File → Print → Save as PDF to export."*

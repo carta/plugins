@@ -43,6 +43,11 @@ def fmt_pct(v, decimals=1):
     try: return f"{float(v):.{decimals}f}%"
     except: return "—"
 
+def fmt_multiple(v):
+    if v is None: return "—"
+    try: return f"{float(v):.2f}x"
+    except: return "—"
+
 def fmt_val(v):
     return "—" if (v is None or v == "") else str(v)
 
@@ -258,6 +263,16 @@ def build_per_fund_detail(wb, funds):
             if lk: carta(ws, row, 3, fmt_currency(f.get(lk)))
             if gk: carta(ws, row, 4, fmt_currency(f.get(gk)))
             row += 1
+
+        # Performance multiples (Form PF reference)
+        sect(ws, row, "Performance Multiples (Form PF Reference)", 5); row += 1
+        for label, key in [
+            ("DPI",     "total_dpi"),
+            ("TVPI",    "total_tvpi"),
+            ("LP TVPI", "lp_tvpi"),
+        ]:
+            ws.cell(row=row, column=1, value=label).font = BOLD
+            carta(ws, row, 2, fmt_multiple(f.get(key))); row += 1
 
         # Per-fund manual fields
         sect(ws, row, "Manual Fields — Enter in IARD", 5); row += 1
