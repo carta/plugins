@@ -14,8 +14,9 @@
      the HTML artifact for users who prefer a spreadsheet they can annotate offline.
 -->
 
-After presenting the markdown output, automatically generate an interactive Form ADV filing guide as a self-contained HTML artifact.
-Tell the user: *"Building your Form ADV interactive filing guide..."*
+After running Query 1 and Query 2, generate both artifacts. This is mandatory — the artifacts are the skill's deliverable, not a supplementary export.
+
+Tell the user once at the start: *"Building your Form ADV interactive filing guide and Excel reference..."*
 
 ### Step 1 — Build the data file
 
@@ -98,7 +99,7 @@ window.location.href = 'http://localhost:<port>/FormADV_<FirmName>_<Year>.html';
 
 Tell the user:
 
-> *"Your Form ADV interactive filing guide is open in the preview panel. It has three tabs: Firm Overview (Items 5.D, 5.F, 5.H), Per-Fund Detail (Schedule D §7.B.(1) for each fund, expandable), and an IARD Checklist. Blue badges are pre-filled from Carta — orange badges need to be entered manually in IARD. Use **Print / Save PDF** in the top right to export a PDF copy for your records."*
+> *"Your Form ADV interactive filing guide is open in the preview panel. It has three tabs: Firm Overview (Items 5.D, 5.F, 5.H), Per-Fund Detail (Schedule D §7.B.(1) for each fund, expandable), and an IARD Checklist. Blue badges are pre-filled from Carta — orange badges need to be entered manually in IARD. Use your browser's Print → Save as PDF if you need a static copy for your records."*
 
 **Fallback (non-Desktop):** If `preview_start` is unavailable, tell the user the file path to open in their browser, substituting the resolved `$TMPDIR` value:
 > *"Your filing guide has been saved to `<resolved-tmpdir>/FormADV_<FirmName>_<Year>.html`. Open this file in your browser to view it. Use File → Print → Save as PDF to export."*
