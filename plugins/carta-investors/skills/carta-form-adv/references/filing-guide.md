@@ -14,13 +14,13 @@
      the HTML artifact for users who prefer a spreadsheet they can annotate offline.
 -->
 
-After running Query 1 and Query 2, generate both artifacts. This is mandatory — the artifacts are the skill's deliverable, not a supplementary export.
+After running Query 1, Query 2, **and Query 3**, generate both artifacts. This is mandatory — the artifacts are the skill's deliverable, not a supplementary export.
 
 Tell the user once at the start: *"Building your Form ADV interactive filing guide and Excel reference..."*
 
 ### Step 1 — Build the data file
 
-Extract values from Query 1 and Query 2. First resolve the system temp directory:
+Extract values from Query 1, Query 2, and Query 3. First resolve the system temp directory:
 
 ```bash
 uv run python -c "import tempfile; print(tempfile.gettempdir())"
@@ -37,11 +37,16 @@ This returns `/tmp` on macOS/Linux or `C:\Users\…\AppData\Local\Temp` on Windo
   ],
   "investor_demographics": {
     "<fund_uuid>": { "<all columns from Query 2 for that fund>" }
+  },
+  "firm_aggregates": {
+    "<the single row returned by Query 3 — all columns>"
   }
 }
 ```
 
 Use actual query result values — no placeholders.
+
+> **Why `firm_aggregates` is required:** The artifact generators read firm-level distinct-LP counts (Items 5.D, 5.H) directly from this block. Without it, both generators fall back to summing per-fund counts, which double-counts any LP committed to multiple funds. If `firm_aggregates` is missing, the artifacts will emit a visible "⚠ Counts may be inflated (LPs committed to multiple funds are double-counted)" banner.
 
 ### Step 2 — Generate the artifact
 

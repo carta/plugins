@@ -234,16 +234,64 @@ function renderHeader() {
   document.title = `${DATA.firm_name} — Form ADV ${(DATA.reporting_date || '').slice(0,4)}`;
 }
 
+// ── Firm-level LP aggregates ─────────────────────────────────────────────
+// Prefer the SQL-computed `firm_aggregates` block (distinct partner counts).
+// Falls back to summing per-fund counts if the block is absent, which
+// double-counts any LP committed to multiple funds — surface a warning then.
+function getFirmLpAggregates() {
+  const fa = DATA.firm_aggregates;
+  if (fa && (fa.total_lp_investors != null || fa.us_lp_investors != null)) {
+    return {
+      source: 'firm_aggregates',
+      total_lp:    fa.total_lp_investors ?? null,
+      us_lp:       fa.us_lp_investors ?? 0,
+      non_us_lp:   fa.non_us_lp_investors ?? 0,
+      no_country:  fa.lp_investors_no_country_on_file ?? 0,
+      total_nav:   fa.total_lp_nav ?? 0,
+      non_us_nav:  fa.non_us_lp_nav ?? 0,
+      pct_non_us_count: fa.pct_non_us_lp_investors ?? null,
+      pct_non_us_nav:   fa.pct_non_us_lp_nav ?? null,
+    };
+  }
+  // Legacy fallback — sum per-fund counts (double-counts multi-fund LPs).
+  const funds = DATA.funds || [];
+  const demos = DATA.investor_demographics || {};
+  let usLPs = 0, nonUsLPs = 0, noCtry = 0, totalLPNav = 0, nonUsNav = 0;
+  Object.values(demos).forEach(d => {
+    usLPs      += d.us_lp_investors || 0;
+    nonUsLPs   += d.non_us_lp_investors || 0;
+    noCtry     += d.lp_investors_no_country_on_file || 0;
+    totalLPNav += d.total_lp_nav || 0;
+    nonUsNav   += d.non_us_lp_nav || 0;
+  });
+  const totalLPs = funds.reduce((s, f) => s + (f.beneficial_owners_lp || 0), 0);
+  const known    = usLPs + nonUsLPs;
+  return {
+    source: 'per_fund_sum',
+    total_lp:    totalLPs,
+    us_lp:       usLPs,
+    non_us_lp:   nonUsLPs,
+    no_country:  noCtry,
+    total_nav:   totalLPNav,
+    non_us_nav:  nonUsNav,
+    pct_non_us_count: known > 0 ? nonUsLPs / known * 100 : null,
+    pct_non_us_nav:   totalLPNav > 0 ? nonUsNav / totalLPNav * 100 : null,
+  };
+}
+
 // ── Summary metrics ───────────────────────────────────────────────────────
 function renderMetrics() {
   const fr = computeFirmRollup();
   const funds = DATA.funds || [];
-  const totalLPs = funds.reduce((s, f) => s + (f.beneficial_owners_lp || 0), 0);
+  const lp = getFirmLpAggregates();
+  const lpNote = lp.source === 'firm_aggregates'
+    ? 'Distinct beneficial owners'
+    : '⚠ Sum across funds (may double-count multi-fund LPs)';
   const items = [
     { label: 'Regulatory AUM', value: fmt$(fr.regulatory_aum), note: 'Gross assets + unfunded' },
     { label: 'Total NAV', value: fmt$(fr.net_asset_value), note: 'LP + GP capital' },
     { label: 'Funds', value: fmtNum(funds.length), note: 'Active private funds' },
-    { label: 'LP Investors', value: fmtNum(totalLPs), note: 'Beneficial owners' },
+    { label: 'LP Investors', value: fmtNum(lp.total_lp), note: lpNote },
   ];
   const el = document.getElementById('metrics');
   el.innerHTML = items.map(m => `
@@ -258,26 +306,35 @@ function renderMetrics() {
 function renderFirmTab() {
   const fr = computeFirmRollup();
   const funds = DATA.funds || [];
-  const demos = DATA.investor_demographics || {};
 
-  // Aggregate US/Non-US across all funds
-  let usLPs = 0, nonUsLPs = 0, noCtry = 0, totalLPNav = 0, nonUsNav = 0;
-  Object.values(demos).forEach(d => {
-    usLPs      += d.us_lp_investors || 0;
-    nonUsLPs   += d.non_us_lp_investors || 0;
-    noCtry     += d.lp_investors_no_country_on_file || 0;
-    totalLPNav += d.total_lp_nav || 0;
-    nonUsNav   += d.non_us_lp_nav || 0;
-  });
+  // Use SQL-computed firm aggregates if present; otherwise legacy per-fund sum.
+  const lp = getFirmLpAggregates();
+  const usLPs      = lp.us_lp;
+  const nonUsLPs   = lp.non_us_lp;
+  const noCtry     = lp.no_country;
+  const totalLPNav = lp.total_nav;
+  const nonUsNav   = lp.non_us_nav;
   const totalKnown    = usLPs + nonUsLPs;
   const pctUsCount    = totalKnown > 0 ? usLPs / totalKnown * 100 : null;
-  const pctNonUsCount = totalKnown > 0 ? nonUsLPs / totalKnown * 100 : null;
+  const pctNonUsCount = lp.pct_non_us_count != null ? lp.pct_non_us_count
+                       : (totalKnown > 0 ? nonUsLPs / totalKnown * 100 : null);
   const pctUsNav      = totalLPNav > 0 ? (totalLPNav - nonUsNav) / totalLPNav * 100 : null;
-  const pctNonUsNav   = totalLPNav > 0 ? nonUsNav / totalLPNav * 100 : null;
+  const pctNonUsNav   = lp.pct_non_us_nav != null ? lp.pct_non_us_nav
+                       : (totalLPNav > 0 ? nonUsNav / totalLPNav * 100 : null);
 
   const totalFunds = funds.length;
 
+  const aggregateWarning = lp.source === 'per_fund_sum'
+    ? `<div style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:8px;padding:12px 14px;margin-bottom:18px;color:#78350F;font-size:13px;">
+         ⚠ <strong>Firm-level counts may be inflated.</strong> The data file is missing the
+         <code>firm_aggregates</code> block, so LP counts shown below are summed across funds —
+         partners committed to multiple funds will be counted multiple times. Re-run the skill
+         to populate <code>firm_aggregates</code> from Query 3 for accurate distinct counts.
+       </div>`
+    : '';
+
   document.getElementById('tab-firm').innerHTML = `
+    ${aggregateWarning}
     <div class="legend">
       <span class="legend-item">${badge('carta','Carta fills')} Carta can provide this value</span>
       <span class="legend-item">${badge('manual','Manual')} Must be entered directly in IARD</span>

@@ -1,7 +1,7 @@
 ---
 name: carta-form-adv
 description: Fetches Form ADV Part 1A filing data and generates an interactive HTML filing guide + Excel filing reference. Covers Items 5.D/F/H, Schedule D §7.B.(1) per-fund detail, beneficial owner breakdown, asset class composition, and capital activity. Use when asked about Form ADV, regulatory AUM, Schedule D, Form PF Section 1, SEC filing data, or private fund disclosures. Do NOT use for general fund metrics, NAV lookups, or LP contribution history — use carta-explore-data instead.
-version: 1.2.0
+version: 1.3.0
 model: sonnet
 allowed-tools:
   - Skill
@@ -70,7 +70,13 @@ You MUST complete every step on every invocation. Step 3 is not optional — the
 
 ### Step 2 — Run the queries (silently)
 
-Read `${CLAUDE_PLUGIN_ROOT}/skills/carta-form-adv/references/form-adv-queries.md` for the SQL. Execute Query 1 (AUM, fund detail, capital activity) then Query 2 (investor demographics) via `fetch("dwh:execute:query", {"sql": "..."})`. **Do not echo raw rows or render markdown tables** of the results.
+Read `${CLAUDE_PLUGIN_ROOT}/skills/carta-form-adv/references/form-adv-queries.md` for the SQL. Execute all three queries in order via `fetch("dwh:execute:query", {"sql": "..."})`:
+
+1. **Query 1** — per-fund AUM, fund detail, capital activity, point-in-time portfolio composition.
+2. **Query 2** — per-fund investor demographics (point-in-time membership and NAV from `PARTNER_MONTHLY_NAV_CALCULATIONS`, mutually-exclusive entity-type buckets).
+3. **Query 3** — firm-level **distinct** LP aggregates (Items 5.D, 5.H). This block is **required**: the artifact generators read distinct LP counts from `firm_aggregates` instead of summing per-fund counts (which double-counts any LP in multiple funds).
+
+**Do not echo raw rows or render markdown tables** of the results.
 
 ### Step 3 — Generate the artifacts (MANDATORY)
 
