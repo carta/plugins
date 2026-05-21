@@ -129,12 +129,49 @@ def build_legend(wb, firm_name, reporting_date):
         ws.cell(row=i, column=2, value=f"• {text}")
 
 
-def build_firm_overview(wb, fr, demos):
+def _firm_lp_aggregates(firm_aggregates, demos):
+    """Prefer SQL-computed firm_aggregates (distinct LPs). Fall back to summing per-fund
+    counts if absent, which double-counts any LP committed to multiple funds — flag the
+    fallback so the caller can surface a warning in the sheet.
+    """
+    fa = firm_aggregates or {}
+    if fa and (fa.get("total_lp_investors") is not None or fa.get("us_lp_investors") is not None):
+        return {
+            "source": "firm_aggregates",
+            "total_lp":   fa.get("total_lp_investors"),
+            "us_lp":      fa.get("us_lp_investors") or 0,
+            "non_us_lp":  fa.get("non_us_lp_investors") or 0,
+            "no_country": fa.get("lp_investors_no_country_on_file") or 0,
+            "total_nav":  fa.get("total_lp_nav") or 0,
+            "non_us_nav": fa.get("non_us_lp_nav") or 0,
+        }
+    return {
+        "source": "per_fund_sum",
+        "total_lp":   None,
+        "us_lp":      sum(d.get("us_lp_investors",              0) or 0 for d in demos.values()),
+        "non_us_lp":  sum(d.get("non_us_lp_investors",          0) or 0 for d in demos.values()),
+        "no_country": sum(d.get("lp_investors_no_country_on_file", 0) or 0 for d in demos.values()),
+        "non_us_nav": sum(d.get("non_us_lp_nav",                0) or 0 for d in demos.values()),
+        "total_nav":  sum(d.get("total_lp_nav",                 0) or 0 for d in demos.values()),
+    }
+
+
+def build_firm_overview(wb, fr, demos, firm_aggregates):
     ws = wb.create_sheet("Firm Overview")
     hdr(ws, 1, [""], col_widths=[42, 22, 18, 38])
 
     fund_count = fr.get("_fund_count", "—")
     row = 1
+
+    lp_agg = _firm_lp_aggregates(firm_aggregates, demos)
+    if lp_agg["source"] == "per_fund_sum":
+        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=4)
+        c = ws.cell(row=row, column=1,
+            value="⚠ Firm-level LP counts may be inflated — firm_aggregates block missing from data file. "
+                  "Counts are summed across funds, so LPs committed to multiple funds are double-counted.")
+        c.fill = PatternFill("solid", fgColor="FEF3C7")
+        c.font = Font(bold=True, color="78350F")
+        row += 2
 
     # Item 5.F
     sect(ws, row, "Item 5.F — Regulatory AUM", 4); row += 1
@@ -152,17 +189,19 @@ def build_firm_overview(wb, fr, demos):
     sect(ws, row, "Item 5.D — Client Types", 4); row += 1
     kv(ws, row, "Client type",         "Pooled Investment Vehicles");  row += 1
     kv(ws, row, "Number of clients",   f"{fund_count} private fund(s)"); row += 1
+    if lp_agg.get("total_lp") is not None:
+        kv(ws, row, "Total LP beneficial owners (distinct)", fmt_val(lp_agg["total_lp"])); row += 1
 
     row += 1
     # Item 5.H
     sect(ws, row, "Item 5.H — Non-US Client AUM", 4); row += 1
     hdr(ws, row, ["", "LP Count", "% of LP Investors", "Approx. % of LP NAV"]); row += 1
 
-    us_lp      = sum(d.get("us_lp_investors",              0) or 0 for d in demos.values())
-    non_us_lp  = sum(d.get("non_us_lp_investors",          0) or 0 for d in demos.values())
-    no_country = sum(d.get("lp_investors_no_country_on_file", 0) or 0 for d in demos.values())
-    non_us_nav = sum(d.get("non_us_lp_nav",                0) or 0 for d in demos.values())
-    total_nav  = sum(d.get("total_lp_nav",                 0) or 0 for d in demos.values())
+    us_lp      = lp_agg["us_lp"]
+    non_us_lp  = lp_agg["non_us_lp"]
+    no_country = lp_agg["no_country"]
+    non_us_nav = lp_agg["non_us_nav"]
+    total_nav  = lp_agg["total_nav"]
     known      = us_lp + non_us_lp
 
     for label, count, pct_c, pct_n in [
@@ -413,10 +452,11 @@ def main():
     with open(args.data) as fh:
         data = json.load(fh)
 
-    firm_name      = data.get("firm_name", "Firm")
-    reporting_date = data.get("reporting_date", "")
-    funds          = data.get("funds", [])
-    demos          = data.get("investor_demographics", {})
+    firm_name        = data.get("firm_name", "Firm")
+    reporting_date   = data.get("reporting_date", "")
+    funds            = data.get("funds", [])
+    demos            = data.get("investor_demographics", {})
+    firm_aggregates  = data.get("firm_aggregates", {})
     fr = {
         key: sum(f.get(key) or 0 for f in funds)
         for key in [
@@ -432,7 +472,7 @@ def main():
     wb.remove(wb.active)
 
     build_legend(wb, firm_name, reporting_date)
-    build_firm_overview(wb, fr, demos)
+    build_firm_overview(wb, fr, demos, firm_aggregates)
     build_per_fund_detail(wb, funds)
     build_investor_demographics(wb, funds, demos)
     build_asset_composition(wb, fr)
