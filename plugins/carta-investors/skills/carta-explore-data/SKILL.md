@@ -1,8 +1,8 @@
 ---
 name: carta-explore-data
 description: >
-  Query and explore investors data in the Carta data warehouse. Use when asked about
-  fund metrics, NAV, TVPI, DPI, IRR, LP data, portfolio financials, journal entries,
+  Query and explore investors data in the Carta data warehouse. Use when context is set to a Firm and the user asks a data or reporting question, 
+  or asked about fund metrics, NAV, TVPI, DPI, IRR, LP data, portfolio financials, journal entries,
   cash flow statements, balance sheets, cap table data, share classes, ownership
   percentages, shareholders, shareholder list, who owns a company, stakeholders,
   equity holders, 409a valuations, fair market value, portfolio company KPIs, revenue,
@@ -22,6 +22,8 @@ allowed-tools:
 Query the Carta data warehouse for investors data — NAV, performance metrics, cash flow statements, balance sheets, portfolio financials, and more.
 
 ## When to Use
+
+* Always use this skill if the user context is set to a `Firm` and the request involves a data query, financial metric, or reporting question
 
 | Common Questions | Semantic File |
 |---|---|
