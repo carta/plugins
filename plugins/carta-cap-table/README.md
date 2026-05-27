@@ -33,7 +33,6 @@ After installing, restart Claude Code and run `/mcp` to complete OAuth authentic
 | `carta-portfolio-query` | Query cap table data across multiple companies, or detailed per-company data. For visual summaries, routes to `cap_table_chart` MCP App |
 | `carta-portfolio-alerts` | Detect red flags and time-sensitive issues |
 | `carta-ownership` | Voting rights, liquidation seniority, preferred vs common analysis. For visual ownership summaries, use `cap_table_chart` |
-| `carta-stakeholders` | List stakeholders for a company |
 | `carta-valuation-history` | 409A valuation history |
 | `carta-waterfall-scenarios` | Saved exit scenario / waterfall models |
 | `carta-round-history` | Financing round history |
