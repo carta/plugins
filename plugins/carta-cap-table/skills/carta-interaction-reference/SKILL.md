@@ -9,7 +9,7 @@ description: >-
   convertible instruments, option pools, or any other topic). If already
   loaded earlier in this conversation, do NOT reload — the prior tool_result
   remains in your context. Load alongside the domain skill (e.g.
-  carta-portfolio-query, carta-ownership), not instead of it.
+  carta-ownership), not instead of it.
 allowed-tools:
   - mcp__carta__fetch
   - mcp__carta__list_contexts

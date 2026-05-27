@@ -24,7 +24,7 @@ allowed-tools:
 
 # Portfolio Alerts
 
-Scan multiple companies for red flags and compute severity classifications (critical / warning / info). Builds on the `carta-portfolio-query` pattern.
+Scan multiple companies for red flags and compute severity classifications (critical / warning / info).
 
 ## Prerequisites
 
