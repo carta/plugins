@@ -1,12 +1,19 @@
 ---
 name: carta-explore-data
 description: >
-  Query and explore investors data in the Carta data warehouse. Use when context is set to a Firm and the user asks a data or reporting question, 
-  or asked about fund metrics, NAV, TVPI, DPI, IRR, LP data, portfolio financials, journal entries,
+  Queries and explores investors data in the Carta data warehouse. The primary skill for
+  GP/firm users asking about their fund's investments, portfolio companies, or financial data.
+  Also the default for unscoped or ambiguous investment queries (e.g. "pull our carta
+  investments") where no LP context has been established.
+  Use when context is set to a Firm, or when no context is set and the user asks a data,
+  reporting, or investment question.
+  Covers: fund metrics, NAV, TVPI, DPI, IRR, LP data, portfolio financials, journal entries,
   cash flow statements, balance sheets, cap table data, share classes, ownership
   percentages, shareholders, shareholder list, who owns a company, stakeholders,
   equity holders, 409a valuations, fair market value, portfolio company KPIs, revenue,
   investments, cost basis, MOIC, or any financial reporting question.
+  Always prefer this skill over carta-lp-dashboard unless the user explicitly asks for the
+  LP dashboard by name.
 allowed-tools:
   - mcp__carta__fetch
   - mcp__carta__list_contexts
@@ -24,6 +31,7 @@ Query the Carta data warehouse for investors data — NAV, performance metrics, 
 ## When to Use
 
 * Always use this skill if the user context is set to a `Firm` and the request involves a data query, financial metric, or reporting question
+* Also use this skill when **no context is set** and the user asks an ambiguous investment or data question — this skill will guide them through context setup via `list_contexts` / `set_context`
 
 | Common Questions | Semantic File |
 |---|---|
@@ -107,6 +115,8 @@ Use the MCP commands in sequence:
 2. **Inspect schema:** `fetch("dwh:get:table_schema", {"table_name": "<TABLE>", "schema": "FUND_ADMIN"})`
 3. **Run the query:** `fetch("dwh:execute:query", {"sql": "..."})`
 
+**Output format:** Present results as a markdown table. Use fund or company names as row headers — never raw UUIDs. Currency values use `$X,XXX` format with commas; percentages use `X.XX%`. Bold totals and summary rows.
+
 ## General Query Rules
 
 - **Always include LIMIT** — default `LIMIT 200`; use 50–500 for aggregations
@@ -115,3 +125,14 @@ Use the MCP commands in sequence:
 - **Date fields** — `effective_date` for `JOURNAL_ENTRIES`; `month_end_date` for `MONTHLY_NAV_CALCULATIONS`; `investment_date` for `AGGREGATE_INVESTMENTS`
 - **Deduplication** — for `MONTHLY_NAV_CALCULATIONS` and `AGGREGATE_FUND_METRICS`, use `QUALIFY ROW_NUMBER() OVER (PARTITION BY fund_uuid ORDER BY last_refreshed_at DESC) = 1`
 - **ALLOCATIONS has multiple rows per fund** — always `GROUP BY fund_uuid` with `MAX(fund_name)` when using it for fund metadata
+
+## Terms
+
+| Acronym | Definition |
+|---------|------------|
+| NAV | Net Asset Value |
+| TVPI | Total Value to Paid-In |
+| DPI | Distributions to Paid-In |
+| IRR | Internal Rate of Return |
+| MOIC | Multiple on Invested Capital |
+| FMV | Fair Market Value |
