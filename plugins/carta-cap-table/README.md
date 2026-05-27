@@ -34,8 +34,6 @@ After installing, restart Claude Code and run `/mcp` to complete OAuth authentic
 | `carta-portfolio-alerts` | Detect red flags and time-sensitive issues |
 | `carta-ownership` | Voting rights, liquidation seniority, preferred vs common analysis. For visual ownership summaries, use `cap_table_chart` |
 | `carta-stakeholders` | List stakeholders for a company |
-| `carta-list-safes` | Fetch all SAFEs for a company |
-| `carta-list-convertible-notes` | Fetch all convertible instruments |
 | `carta-valuation-history` | 409A valuation history |
 | `carta-waterfall-scenarios` | Saved exit scenario / waterfall models |
 | `carta-round-history` | Financing round history |
