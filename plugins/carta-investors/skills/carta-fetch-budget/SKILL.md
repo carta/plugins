@@ -248,18 +248,59 @@ If a non-ManCo is picked, warn before fetching:
 
 ---
 
-## Gate 3 — Year + window
+## Gate 3 — Period picker
 
-In **one** `AskUserQuestion` call, ask for every parameter the prompt
-didn't already specify:
+In **one** `AskUserQuestion` call, ask for the period the prompt didn't
+already specify. Offer smart defaults based on **today's date** —
+compute year, half, and quarter labels dynamically, never copy the
+example values below.
 
-- **`budget_year`** — required, e.g. 2026.
-- **Window** — `start_month` / `end_month`, default 01 / 12.
+> What period should I pull the budget for?
 
-If the prompt already specified a year, skip the question.
+*Example shape — rendered with today's date = May 2026. Substitute `<CURRENT_YEAR>` and `<CURRENT_QUARTER>` at runtime.*
+
+| # | Label | Date range |
+|---|---|---|
+| 1 ← recommended | **Full year `<CURRENT_YEAR>`** | Jan 1 – Dec 31, `<CURRENT_YEAR>` |
+| 2 | **H1 `<CURRENT_YEAR>`** (Jan – Jun) | Jan 1 – Jun 30, `<CURRENT_YEAR>` |
+| 3 | **H2 `<CURRENT_YEAR>`** (Jul – Dec) | Jul 1 – Dec 31, `<CURRENT_YEAR>` |
+| 4 | **`<CURRENT_QUARTER>` `<CURRENT_YEAR>`** | (computed from today's date) |
+| 5 | **Custom range** — I'll specify start / end month | — |
+
+Always compute the current quarter label and year dynamically from
+today's date — never hardcode Q2 / 2026 / etc. Drop the H1 row once
+the current month is past June (H1 is fully in the past then — fold
+it into "Custom range"). Show the prior year as an option only if the
+user mentioned it in their prompt.
+
+If the prompt already specified a year or range (e.g. "2026 budget",
+"H1"), store it directly and skip the question.
 
 Store `<BUDGET_YEAR>`, `<START_DATE>` (`<YEAR>-<MM>-01`), `<END_DATE>`
 (last day of `<end_month>`).
+
+**No tag breakdown available.** The budget data from Carta (`fa:list:budgets`)
+contains no reporting dimension — it returns one amount per account per
+month. If the user asks for budget broken down by department, project
+code, or any other tag, tell them in one sentence — *"Carta's stored budget
+isn't broken down by tag, so I can only return flat monthly totals."* — and
+offer to route them to a different skill **via `AskUserQuestion`** (never a
+bare numbered list — see the UX Rules at the top of this skill).
+
+Call `AskUserQuestion` with these exact parameters:
+
+- `question`: `"Carta's stored budget has no tag dimension. How should I continue?"`
+- `header`: `"Tag breakdown"`
+- `multiSelect`: `false`
+- `options`:
+  - `label`: `"Continue with the flat budget pull"` — `description`: `"No tag dimension; returns one amount per account per month."`
+  - `label`: `"Build a new tag-sliced budget from journal actuals instead"` — `description`: `"← recommended for tag breakdowns. Hands off to carta-create-budget's slice-by-tag mode; uses last year's actuals as the seed."`
+
+If the user picks option 2, hand off via `Skill('carta-investors:carta-create-budget')`
+with the slice-by-tag routing — that skill's `slice-by-tag` mode is the
+canonical way to produce a budget broken down by reporting tag.
+
+The `← recommended` marker goes inside the `description` field of option 2, not as a suffix on the `label`. Bare-text numbered lists break the chooser UI in Claude for Excel and force the user to type the number — same rule as every other choice in this skill.
 
 ---
 
