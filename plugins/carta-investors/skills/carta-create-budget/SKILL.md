@@ -1,7 +1,8 @@
 ---
 name: carta-create-budget
 model: opus
-description: 'Build a new fund or ManCo budget workbook in Excel from Carta DWH data — pulls prior-year actuals via the Carta MCP, projects forward, and writes a budget sheet with section subtotals and Net Operating Income. Routes to from-prior-actuals (default), from-template, from-recommendation, or slice-by-tag. Runs in Claude for Excel and Claude Code / Cowork. TRIGGER on requests to build / create / generate / draft a budget for a future year ("build a 2026 budget", "draft a budget from last year''s actuals"). Shows a pre-build review before writing. DO NOT TRIGGER for P&L (carta-consolidating-pnl), balance sheet (carta-consolidating-balance-sheet), pulling Carta-stored budgets (carta-fetch-budget), refreshing actuals (carta-budget-actuals), pacing (carta-budget-vs-actuals), or scenarios (carta-budget-scenarios).'
+description: 'Build a new fund or ManCo budget workbook in Excel from Carta prior-year actuals. TRIGGER: build/create/draft a budget for a future year. NOT: P&L, balance sheet, fetch-budget, actuals refresh, pacing, scenarios.'
+version: 1.0.0
 allowed-tools:
   # MCP connector discovery (Claude for Excel runtime tool — used first in Gate 0)
   - refresh_mcp_connectors
@@ -168,15 +169,16 @@ append a suffix.
 
 ## Gate 3 — Route to the right reference
 
-Read the matching reference file **inline** and follow it. Do not ask
-the user which mode — infer from their original prompt:
+**Call `read_skill` with the matching `file_path` before doing anything else in this gate.** Do not reconstruct the layout or query logic from memory — the file must be in your context before you write any code.
 
-| Phrase in user's prompt | Reference |
+| Phrase in user's prompt | Call |
 |---|---|
-| "from last year's actuals", "based on 2025 actuals", "from prior actuals", no qualifier | [`references/from-prior-actuals.md`](references/from-prior-actuals.md) |
-| "use the template", "fill in this template", "Carta template" | [`references/from-template.md`](references/from-template.md) |
-| "add a line for <something not in CoA>", "I expect to spend $X on <new category>" | [`references/from-recommendation.md`](references/from-recommendation.md) |
-| "by department", "by reporting tag", "sliced by <dimension>", "by sub-account" | [`references/slice-by-tag.md`](references/slice-by-tag.md) |
+| "from last year's actuals", "based on 2025 actuals", "from prior actuals", no qualifier | `read_skill(file_path="references/from-prior-actuals.md")` |
+| "use the template", "fill in this template", "Carta template" | `read_skill(file_path="references/from-template.md")` |
+| "add a line for <something not in CoA>", "I expect to spend $X on <new category>" | `read_skill(file_path="references/from-recommendation.md")` |
+| "by department", "by reporting tag", "sliced by <dimension>", "by sub-account" | `read_skill(file_path="references/slice-by-tag.md")` |
+
+Do not ask the user which mode — infer from their original prompt. Follow the loaded file.
 
 ---
 
@@ -255,7 +257,14 @@ Before calling `execute_office_js` with state-mutating code, `setValues`, `write
 
 **Do not interpret upstream answers as approval.** A Gate 2 parameter response, a Gate 0.5 runtime answer, or any prior `AskUserQuestion` whose answer is not literally `"Approve and write"` does NOT clear this gate. Approval is the answer to the specific Gate 5 question — nothing else counts.
 
-Branches by `<RUNTIME>`. Writes **two tabs** — `Budget <budget_year>` (primary, hardcoded budget values) and `<prior_year> Actuals` (reference, hardcoded actuals). **No Provenance tab.** Layout, headers, number format, column widths defined in [`references/from-prior-actuals.md`](references/from-prior-actuals.md) sections 5–6 — apply verbatim. Branding spec (asset path, column anchor, sizing) in [`references/branding-and-header.md`](references/branding-and-header.md).
+Branches by `<RUNTIME>`. Writes **two tabs** — `Budget <budget_year>` (primary, hardcoded budget values) and `<prior_year> Actuals` (reference, hardcoded actuals). **No Provenance tab.**
+
+**Before writing a single cell, call both of these in the same message (parallel reads):**
+
+1. `read_skill(file_path="references/from-prior-actuals.md")` — layout, header band, column widths, section order, summary rows.
+2. `read_skill(file_path="references/branding-and-header.md")` — verbatim brand block JS and cell-comment API.
+
+Do not reconstruct either spec from memory. The files must be in your context before you generate any `execute_office_js` or `write_workbook.py` code.
 
 ### If `<RUNTIME>` is `excel-addin`
 
@@ -311,14 +320,14 @@ uv run "${CLAUDE_PLUGIN_ROOT}/scripts/write_workbook.py" --stdin <<'JSON'
       "op": "add_image",
       "sheet": "Budget <budget_year>",
       "path": "${CLAUDE_PLUGIN_ROOT}/skills/carta-create-budget/assets/powered_by_carta.png",
-      "anchor": "C1",
+      "anchor": "E1",
       "rows": 3
     },
     {
       "op": "add_image",
       "sheet": "<prior_year> Actuals",
       "path": "${CLAUDE_PLUGIN_ROOT}/skills/carta-create-budget/assets/powered_by_carta.png",
-      "anchor": "C1",
+      "anchor": "E1",
       "rows": 3
     }
   ]
@@ -354,7 +363,7 @@ to the result.
 > Wrote [Budget 2026](<citation:Budget 2026!A1:N80>) with 47 line items
 > across 4 sections, and the source actuals on the
 > [2025 Actuals](<citation:2025 Actuals!A1:N80>) tab. Carta logo placed
-> at the top of column C on both tabs. Two lines (Salaries, LOC
+> at the top of column E on both tabs. Two lines (Salaries, LOC
 > interest) flagged for review — see the Source column in the preview I
 > showed you above.
 
@@ -363,7 +372,7 @@ to the result.
 > Wrote `Budget 2026` (47 line items across 4 sections) plus a
 > `2025 Actuals` reference tab to
 > `file:///path/to/<budget-workbook>.xlsx`, both branded
-> with the Carta logo at the top of column C. Two lines (Salaries, LOC
+> with the Carta logo at the top of column E. Two lines (Salaries, LOC
 > interest) flagged for review — see the Source column in the preview I
 > showed you above.
 

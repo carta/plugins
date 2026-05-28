@@ -64,6 +64,26 @@ Bottom rows:
 
 Currency: `_([$$-en-US]* #,##0.00_);_([$$-en-US]* (#,##0.00);_([$$-en-US]* "-"??_);_(@_)`. Never a bare `$`. Percent (if used): `0.0%;(0.0%)`.
 
-Column widths: column A = 12 (spacer), B = 30 (account labels), C:O = autofit. **Anti-pattern:** `autofitColumns()` on a header-only range. Use `sh.getUsedRange().format.autofitColumns()` after data is written, or target `C7:N80`.
+**Column widths — autofit the label and amount columns after the data is written.** This is the single most important readability step: if the amount columns aren't autofit, 5+ digit currency renders as `####` and the user has to widen each column by hand.
 
-If using `set_column_width` in local-file mode, set monthly columns to min 14pt before autofit so sparse tabs don't render `####`.
+**Excel add-in (proven recipe):** the **last statements in the cell-write `execute_office_js` block** (Gate 6 Call 1), in this exact order — restore automatic calc, force a full recalc, *then* autofit, *then* the block's existing final `await context.sync()`. Keep them in the same block, not a separate call (a separate `execute_office_js` is a wasted round-trip):
+
+```javascript
+// LAST lines of the Gate 6 cell-write block — ORDER MATTERS
+context.application.calculationMode = Excel.CalculationMode.automatic;   // in case the bulk write suspended calc
+context.workbook.application.calculate(Excel.CalculationType.full);      // evaluate every =SUM(...) NOW
+sheet.getRange("B:O").format.autofitColumns();                           // size labels (B) + amounts (C:O) to the REAL values
+await context.sync();
+```
+
+**Recalc before autofit — both halves matter:**
+- **Force the recalc.** Without it, the `=SUM(...)` subtotals / Total Income / Total Expenses / Net Operating Income cells stay at 0 — which the accounting format renders as `-`, forcing the user to click each cell and press Enter to recompute. Setting `calculationMode = automatic` alone does **not** reliably recalc within the same batch; call `application.calculate(...)` explicitly.
+- **Autofit must run after the recalc.** If autofit runs while those cells still show `-`, the amount columns get sized to the width of a dash and the real figures overflow as `####` the moment they compute.
+
+Use a **full-column range** (`B:O`), not a header-only range like `B6:O6` — autofitting a header-only range sizes to the headers and leaves the amount columns too narrow. You already know the last amount column from the layout you just wrote — don't read the sheet back to find it.
+
+**Local-file mode (`write_workbook.py`):** add an `autofit_columns` op over the same span (`B:O`) after the write ops. Floor the monthly currency columns at 14pt first so sparse tabs (mostly-blank months) don't render `####`.
+
+Column A is an empty spacer — autofit can't size it against content, so set it explicitly (`sh.getRange("A:A").format.columnWidth = 90`, ≈ Excel-width 12).
+
+**Unit trap — only if you set a width by hand instead of autofitting:** Office.js `range.format.columnWidth` is in **points** (1/72"), NOT Excel's character-width unit. `columnWidth = 30` is 30 points ≈ 4 characters, not 30 characters — it truncates labels and amounts alike. Convert: Excel-width *N* characters ≈ `N × 7 + 5` points. Autofit avoids this entirely — prefer it.

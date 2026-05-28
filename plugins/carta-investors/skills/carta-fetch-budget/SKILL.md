@@ -1,7 +1,8 @@
 ---
 name: carta-fetch-budget
 model: opus
-description: 'Pull the budget for a management company from Carta (fa:list:budgets MCP command) and write it to an Excel workbook — entity picker lists ManCo first because only ManCo budgets exist in Carta. Produces a single Budget FY tab with monthly amounts + FY total, section subtotals, and Net Operating Income. Runs in Claude for Excel and Claude Code / Cowork. TRIGGER on requests to pull / fetch / import / sync Carta''s budget for a ManCo ("pull Example Capital''s 2026 budget from Carta", "fetch our ManCo budget"). Pre-build review before write. DO NOT TRIGGER for new budgets from journals (carta-create-budget), refreshing actuals (carta-budget-actuals), pacing (carta-budget-vs-actuals), what-if (carta-budget-scenarios), P&L (carta-consolidating-pnl), or balance sheet (carta-consolidating-balance-sheet).'
+description: 'Pull a ManCo budget from Carta and write it to an Excel workbook with monthly amounts and subtotals. TRIGGER: pull/fetch/import/sync Carta budget for a ManCo. NOT: new budgets, actuals refresh, pacing, scenarios, P&L, balance sheet.'
+version: 1.0.0
 allowed-tools:
   # MCP connector discovery (Claude for Excel runtime tool — used first in Gate 0)
   - refresh_mcp_connectors
@@ -222,9 +223,7 @@ Store `<DESTINATION>` for Gates 5–7.
 **Critical:** in Carta, only **management companies** carry budgets. Funds
 and SPVs return empty from `fa:list:budgets`.
 
-Load
-[`references/entity-picker.md`](references/entity-picker.md) inline and
-follow it. Summary of the rule:
+**Call `read_skill(file_path="references/entity-picker.md")` before proceeding.** Do not reconstruct the picker logic from memory. Summary of the rule:
 
 1. Call `fetch(command="fa:list:entities")` against the active firm.
 2. Identify the ManCo(s) by name suffix / type field — anything matching
@@ -306,9 +305,7 @@ The `← recommended` marker goes inside the `description` field of option 2, no
 
 ## Gate 4 — Fetch budget from Carta
 
-Load
-[`references/fetch-budget-data.md`](references/fetch-budget-data.md) inline
-and follow it. Summary of the contract:
+**Call `read_skill(file_path="references/fetch-budget-data.md")` before issuing any MCP calls.** Do not reconstruct the fetch contract from memory. Summary of the contract:
 
 - Issue **one `fetch(command="fa:list:budgets", ...)` call per month** for
   every month in the requested window. For a full-year pull this is
@@ -461,7 +458,7 @@ The most common failure mode is bundling cell writes + formatting + logo into on
 
 Returning from Call 1 does NOT finish Gate 6. The verification call must come last and must appear in your tool history.
 
-Branches by the Gate 1 write mode. **Before writing**, read [`references/branding-and-header.md`](references/branding-and-header.md). It defines the reserved 4-row metadata band (B1 entity / B2 descriptive title like `"2026 Budget (from Carta Fund Admin)"` / B3 source / B4 other context), Carta logo placement (column C, rows 1–3 height), the `blobs.getText("assets/...")` asset-loading pattern for Excel add-in (NOT `Read`), and the cell-comment pattern for any flagged rows. The tab is not "written" until it carries a `CartaLogo` shape.
+Branches by the Gate 1 write mode. **Before any write**, call `read_skill(file_path="references/branding-and-header.md")`. Do not reconstruct the brand block or header band from memory — the file must be in your context before you generate any `execute_office_js` or `write_workbook.py` code. It defines the reserved 4-row metadata band (B1 entity / B2 descriptive title like `"2026 Budget (from Carta Fund Admin)"` / B3 source / B4 other context), Carta logo placement (column E, rows 1–3 height), the `blobs.getText("assets/...")` asset-loading pattern for Excel add-in (NOT `Read`), and the cell-comment pattern for any flagged rows. The tab is not "written" until it carries a `CartaLogo` shape.
 
 ### Mode B — update existing tab in place
 
@@ -502,15 +499,17 @@ Layout (4-row metadata band per `branding-and-header.md`):
 | B3 | `Source: Carta Fund Admin · fa:list:budgets` — italic, size 10 |
 | B4 | `Amounts in USD` — italic, size 10 |
 | Row 5 | blank — breathing room between header band and column headers |
-| Row 6 | Column headers: `Account # \| Account \| Jan <year> \| Feb <year> \| … \| Dec <year> \| FY <year> Total` — bold, white-on-black, centered. |
+| Row 6 | Column headers (column A is a blank spacer; headers begin in column B): `Account \| Jan <year> \| Feb <year> \| … \| Dec <year> \| FY <year> Total` — bold, white-on-black, centered. No GL-code / "Account #" column. |
 
 Body — for each section (Income → Expenses → Other), in this order:
 
 1. Bold + underlined section header row in column B (e.g. `Income`,
    `Operating Expenses`, `Other`). No cell borders.
 2. One row per GL account in the section, sorted by `account_type`.
-   Column A = `account_type` (GL code), column B = `account_name`,
-   columns C..N = monthly amounts (hardcoded numbers).
+   Column A is left blank (spacer), column B = `account_name`,
+   columns C..N = monthly amounts (hardcoded numbers). The GL code
+   (`account_type`) is used only to sort and section the rows — it is
+   **not** written as a column.
 3. Subtotal row at end of section — bold, top thin border,
    `=SUM(<section_range>)` per monthly column and for column O.
 
@@ -532,10 +531,18 @@ Column O = `=SUM(C<row>:N<row>)` for every account, subtotal, and total row.
 A bare `$` or `"$"` is never allowed — it renders in system locale on
 non-US installs.
 
-**Column widths:** column A = 12, column B = 30, `autofit_columns` for
-C:O. Do **not** call `freeze_panes`.
+**Recalc + column widths (excel-addin):** the **last statements in the cell-write `execute_office_js` block**, in this order — never a separate call:
 
-**Column-width anti-pattern:** Do NOT call `autofitColumns()` on a header-only range like `C1:O1` — header rows are often empty at the moment of write, leaving the autofit width too narrow for 5+ digit currency (`####`). Use `sh.getUsedRange().format.autofitColumns()` after data is written, or target a data range like `C7:N80`. Full recipe: `carta-create-budget/references/from-prior-actuals.md` §6.
+```javascript
+context.application.calculationMode = Excel.CalculationMode.automatic;
+context.workbook.application.calculate(Excel.CalculationType.full);  // else =SUM cells stay 0 → render as "-" until edit+Enter
+sheet.getRange("B:O").format.autofitColumns();                       // size labels + amounts to REAL values (after recalc → no ####)
+await context.sync();
+```
+
+Force the recalc **before** the autofit: without it the `=SUM(...)` subtotals / Total / NOI cells sit at 0 and the accounting format shows `-` (the user then has to edit+Enter each one); and autofitting before the recalc sizes the amount columns to the dash, so the real figures overflow as `####`. In local-file mode, add an `autofit_columns` op over `B:O`. Column A is a fixed spacer (`sheet.getRange("A:A").format.columnWidth = 90`). Do **not** call `freeze_panes`.
+
+**Column-width anti-pattern:** Do NOT call `autofitColumns()` on a header-only range like `C1:O1` — header rows are often empty at write time, leaving the amount columns too narrow for 5+ digit currency (`####`). Always autofit the full label+amount span (`B:O`) after the data is written. Full recipe: `carta-create-budget/references/from-prior-actuals.md` §6.
 
 **If `<RUNTIME>` is `excel-addin`:** write via the Excel add-in's
 runtime cell-write tools, applying the same number format.
@@ -660,7 +667,7 @@ the Gate 1 write mode.
 - `range.merge(true)` discards trailing cells. Insert a new row first.
 - **Month-label date-serial trap:** prefix with `'` or use `numberFormat: "mmm yyyy"` on a real date.
 - **Border syntax (Office.js):** `style = "Continuous"` then `weight = "Thin"`. Never `style: "Thin"`.
-- **Branding standards — follow [`references/branding-and-header.md`](references/branding-and-header.md)** for every tab. Rows 1–4 reserved, logo at column C, `blobs.getText("assets/...")` for asset access.
+- **Branding standards — follow [`references/branding-and-header.md`](references/branding-and-header.md)** for every tab. Rows 1–4 reserved, logo at column E, `blobs.getText("assets/...")` for asset access.
 
 ---
 

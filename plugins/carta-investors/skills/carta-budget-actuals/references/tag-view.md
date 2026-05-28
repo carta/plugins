@@ -226,4 +226,4 @@ Multi-period runs (Quarter or Month aggregation) multiply the column count by th
 - Slice is **additive** to entity filter — `WHERE FUND_NAME = '<entity_name>'` always applies.
 - ManCo pre-flight runs at Gate 5 (same as other layouts) before any write.
 - `merge_cells` op in `write_workbook.py` must come **after** the `write_cell` for the same band-label ref — merged cells discard non-top-left values.
-- Branding (`branding-and-header.md`) applies to this tab exactly as for all other tabs — logo at column D (rows 1–3 height), metadata band in column A.
+- Branding (`branding-and-header.md`) applies to this tab exactly as for all other tabs — logo at column E (rows 1–3 height), metadata band in column A.

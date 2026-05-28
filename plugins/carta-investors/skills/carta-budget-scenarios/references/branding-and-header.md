@@ -17,7 +17,7 @@ Canonical spec for the 4-row header band + Carta logo placement. Read whenever a
 
 ## Logo placement
 
-- **Anchor:** column C, cell C1 (per-skill override: `carta-budget-actuals` and `carta-budget-vs-actuals` use column D — see their SKILL.md).
+- **Anchor:** column E, cell E1 (all Carta budget and consolidating skills anchor the logo at column E — it clears the column-B metadata band in every layout).
 - **Height:** combined height of rows 1–3.
 - **Width:** proportional to PNG aspect ratio.
 - **One logo per tab.** Bundled assets at `assets/powered_by_carta.png` (PNG) and `assets/powered_by_carta.b64.txt` (base64 sidecar for Excel runtime).
@@ -39,7 +39,7 @@ for (const s of shapes.items) {
 }
 await context.sync();
 
-const rows = sheet.getRange("C1:C3");  // D1:D3 for budget-actuals / budget-vs-actuals
+const rows = sheet.getRange("E1:E3");
 rows.load(["left", "top", "height"]);
 await context.sync();
 
@@ -70,7 +70,7 @@ Run this block in a **separate** `execute_office_js` call (not bundled with the 
   "op": "add_image",
   "sheet": "<TAB_NAME>",
   "path": "${CLAUDE_PLUGIN_ROOT}/skills/carta-budget-scenarios/assets/powered_by_carta.png",
-  "anchor": "C1",
+  "anchor": "E1",
   "rows": 3
 }
 ```

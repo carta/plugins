@@ -3,7 +3,7 @@
 Canonical spec for the 4-row header band + Carta logo placement.
 
 > **Per-skill overrides — carta-budget-actuals:**
-> 1. **Logo anchors at column D** (cell D1), not column C. Column C is the first month's Budget column in the Layout A interleaved grid.
+> 1. **Logo anchors at column E** (cell E1) — the standard anchor across all Carta budget/consolidating skills. Rows 1–3 are the reserved metadata band, so column E floats the logo clear of the Layout A interleaved data grid (where B–D hold the first month's Budget/Actual/Variance).
 > 2. **Metadata band lives in column A**, not column B. Column A holds account labels in Layout A. The cell-comment for sparse-history rows also moves from B to A.
 
 ## Row layout (column A — per override above)
@@ -21,7 +21,7 @@ Canonical spec for the 4-row header band + Carta logo placement.
 
 ## Logo placement
 
-- **Anchor:** column D, cell D1.
+- **Anchor:** column E, cell E1 (all Carta budget and consolidating skills anchor the logo at column E — it clears the column-B metadata band in every layout).
 - **Height:** combined height of rows 1–3.
 - **Width:** proportional to PNG aspect ratio.
 - Bundled assets at `assets/powered_by_carta.png` and `assets/powered_by_carta.b64.txt`.
@@ -41,7 +41,7 @@ for (const s of shapes.items) {
 }
 await context.sync();
 
-const rows = sheet.getRange("D1:D3");
+const rows = sheet.getRange("E1:E3");
 rows.load(["left", "top", "height"]);
 await context.sync();
 
@@ -70,7 +70,7 @@ Run in a **separate** `execute_office_js` call (not bundled with cell writes). A
   "op": "add_image",
   "sheet": "<TAB_NAME>",
   "path": "${CLAUDE_PLUGIN_ROOT}/skills/carta-budget-actuals/assets/powered_by_carta.png",
-  "anchor": "D1",
+  "anchor": "E1",
   "rows": 3
 }
 ```

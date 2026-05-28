@@ -1,7 +1,8 @@
 ---
 name: carta-budget-scenarios
 model: opus
-description: 'Model what-if scenarios on an existing budget workbook in Excel — trims (headcount reductions, revenue shocks, cost rebalances) and growth (new fund raises, expansion hires). Builds side-by-side scenario columns (or a Scenarios tab) with base + 1/2/3 and a cash-impact summary, one marked recommended. Five references — headcount-reduction, revenue-shock, cost-rebalance, new-fund-raise, expansion-hire. Runs in Claude for Excel and Claude Code / Cowork. TRIGGER on model / simulate / compare scenarios — trim ("cut headcount 10%", "model 15% revenue shortfall") and growth ("raise a new $500M fund", "hire 5 FTEs in 2027"). Pre-build review before write. DO NOT TRIGGER for new budgets (carta-create-budget), pulling Carta-stored budgets (carta-fetch-budget), refreshing actuals (carta-budget-actuals), pacing (carta-budget-vs-actuals), P&L (carta-consolidating-pnl), or balance sheet (carta-consolidating-balance-sheet).'
+description: 'Build what-if scenario columns on an existing Excel budget workbook (trim or growth). TRIGGER: model/simulate scenarios. NOT: new budgets, fetch-budget, actuals refresh, pacing, P&L, balance sheet.'
+version: 1.0.0
 allowed-tools:
   # MCP connector discovery (Claude for Excel runtime tool — used first in Step 0)
   - refresh_mcp_connectors
@@ -159,6 +160,16 @@ scenario column reflects the joint effect of all selected levers, and the
 cash-impact summary breaks out each leg (e.g. `New-Fund Fees`, `New Personnel`,
 `Net`). Do NOT run the references serially as separate outputs.
 
+**Immediately call `read_skill` for every matched reference — do not reconstruct scenario logic from memory:**
+
+| Reference matched | Call |
+|---|---|
+| headcount-reduction | `read_skill(file_path="references/headcount-reduction.md")` |
+| revenue-shock | `read_skill(file_path="references/revenue-shock.md")` |
+| cost-rebalance | `read_skill(file_path="references/cost-rebalance.md")` |
+| new-fund-raise | `read_skill(file_path="references/new-fund-raise.md")` |
+| expansion-hire | `read_skill(file_path="references/expansion-hire.md")` |
+
 ## Step 3 — Parameter gate (batched)
 
 Reference-specific. Generally include:
@@ -252,7 +263,12 @@ The most common failure mode is bundling cell writes + formatting + logo into on
 
 Returning from Call 1 does NOT finish Step 7. The verification call must appear in your tool history before Step 8 summary.
 
-**Before writing**, read [`references/branding-and-header.md`](references/branding-and-header.md). It defines the reserved 4-row metadata band (B1 firm / B2 descriptive title like `"2026 Budget · Senior-heavy trim scenario"` / B3 source / B4 other context), the Carta logo placement (column C, rows 1–3 height), the `blobs.getText("assets/...")` asset-loading pattern for Excel add-in (NOT `Read`), and the cell-comment pattern for any low-confidence flag. If the existing Budget tab does not already have the 4-row band, add it as part of this write (shift data via `sheet.getRange("1:5").insert(...)`).
+**Before any write**, call both of these in the same message (parallel reads):
+
+1. `read_skill(file_path="references/branding-and-header.md")` — 4-row metadata band, logo placement, `blobs.getText` asset pattern, cell-comment API.
+2. `read_skill(file_path="references/<scenario-reference-from-step-2>.md")` — the scenario file(s) matched in Step 2 (call one per reference for multi-lever prompts).
+
+Do not reconstruct either spec from memory. All files must be in your context before generating any `execute_office_js` or `write_workbook.py` code. The `branding-and-header.md` file defines the reserved 4-row metadata band (B1 firm / B2 descriptive title like `"2026 Budget · Senior-heavy trim scenario"` / B3 source / B4 other context), the Carta logo placement (column E, rows 1–3 height), the `blobs.getText("assets/...")` asset-loading pattern for Excel add-in (NOT `Read`), and the cell-comment pattern for any low-confidence flag. If the existing Budget tab does not already have the 4-row band, add it as part of this write (shift data via `sheet.getRange("1:5").insert(...)`).
 
 **If `<RUNTIME>` is `excel-addin`:** use the add-in's cell-write tools.
 Either side-by-side columns next to the existing budget, or a new
@@ -370,7 +386,8 @@ Queries > 50 rows: request `format: "ndjson"`, bucket into a blob. Don't paste l
 - `range.merge(true)` discards trailing cells. Insert a new row first.
 - **Month-label date-serial trap:** prefix with `'` or use `numberFormat: "mmm yyyy"` on a real date.
 - **Border syntax (Office.js):** `style = "Continuous"`, then `weight = "Thin"`. Never `style: "Thin"`.
-- **Branding standards — follow [`references/branding-and-header.md`](references/branding-and-header.md)** for every tab. Rows 1–4 reserved, logo at column C, `blobs.getText("assets/...")` for asset access.
+- **Recalc + column widths (excel-addin):** the last statements in the cell-write `execute_office_js` block (Call 1), in this order — never a separate call: restore automatic calc → `context.workbook.application.calculate(Excel.CalculationType.full)` → `sheet.getRange("A:<last>").format.autofitColumns()` over the full data span (widen to the last scenario column) → `context.sync()`. **Recalc before autofit:** scenario values are live formulas — without the forced recalc they stay at 0 and the accounting format shows `-` (forcing the user to edit+Enter each one); autofitting before the recalc sizes columns to the dash so real figures overflow as `####`. In local-file mode, add an `autofit_columns` op over the same span. Never autofit a header-only range.
+- **Branding standards — follow [`references/branding-and-header.md`](references/branding-and-header.md)** for every tab. Rows 1–4 reserved, logo at column E, `blobs.getText("assets/...")` for asset access.
 
 ---
 

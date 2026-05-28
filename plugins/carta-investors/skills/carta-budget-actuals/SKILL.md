@@ -1,7 +1,8 @@
 ---
 name: carta-budget-actuals
 model: opus
-description: 'Update actuals on an existing budget workbook in Excel. Layouts: interleave Budget/Actual/Variance per month, add a separate Actuals tab, refresh stale cells, extend by one period, or tag-view (actuals sliced by reporting dimension with a two-row period/tag header). Sources actuals from Carta MCP, strict FUND_NAME scoping. Runs in Claude for Excel and Claude Code / Cowork. TRIGGER on: refresh/update/sync actuals, add actuals by month/tab, interleave Budget-Actual-Variance, extend by one period, show actuals by department/tag/cost center/project code ("refresh the actuals", "add 2026 actuals by month", "show actuals by department", "split by project code", "actuals by cost center"). DO NOT TRIGGER for pacing/variance — use carta-budget-vs-actuals; new budgets — carta-create-budget; Carta-stored budgets — carta-fetch-budget; what-if — carta-budget-scenarios; P&L — carta-consolidating-pnl; balance sheet — carta-consolidating-balance-sheet.'
+description: 'Refresh actuals in an existing Excel budget workbook from Carta MCP. TRIGGER: refresh/sync/add actuals, interleave Budget/Actual/Variance, tag-view by department/cost center. NOT: pacing, new budgets, fetch-budget, scenarios, P&L, balance sheet.'
+version: 1.0.0
 allowed-tools:
   # MCP connector discovery (Claude for Excel runtime tool — used first in Gate 0)
   - refresh_mcp_connectors
@@ -178,7 +179,14 @@ and fall back to Layout A automatically. Do not pre-filter the chooser — the
 entity name needed for the probe is not available until Gate 3.
 
 The user's pick locks the reference to load for the rest of the
-workflow.
+workflow. **Immediately call `read_skill` for the chosen layout — do not reconstruct from memory:**
+
+| Layout chosen | Call |
+|---|---|
+| Option 1 — Interleave columns | `read_skill(file_path="references/add-actuals-columns.md")` |
+| Option 2 — Add actuals tab | `read_skill(file_path="references/add-actuals-tab.md")` |
+| Option 3 — Refresh existing | `read_skill(file_path="references/refresh-existing.md")` |
+| Option 4 — Add single period | `read_skill(file_path="references/add-period.md")` |
 
 > **Why we always ask:** the same prompt — "add 2026 actuals by month"
 > — can mean Option 1, 2, or 3 depending on the user's intent and the
@@ -423,13 +431,13 @@ The most common failure mode is bundling cell writes + formatting + logo + verif
 - **Call 1:** apply the cell updates from the approved payload. One `execute_office_js`. Return.
 - **Call 2:** currency-format readback (see below). Return.
 - **Call 3 (per tab touched):** logo via the verbatim brand block (paste from below — DO NOT paraphrase, DO NOT hardcode the height, DO NOT anchor to a single cell).
-- **Call N (verification, LAST):** load shape geometry + D1:D3 range geometry on every tab touched, confirm `CartaLogo` exists AND its height equals the row-band height.
+- **Call N (verification, LAST):** load shape geometry + E1:E3 range geometry on every tab touched, confirm `CartaLogo` exists AND its height equals the row-band height.
 
 Returning from Call 1 does NOT finish Gate 7. The verification call must appear in your tool history before Gate 8 summary.
 
 ### Verbatim brand block — paste this, do not improvise
 
-The single most common logo regression is hardcoding `shape.height = 48` (or any other pixel value) instead of using the actual D1:D3 row-band height. Excel's row heights depend on font sizes set during Call 1, so the band height can vary tab-to-tab. The model that hardcodes 48 produces a logo that either spills past row 3 or sits inside row 1 — the user then has to resize manually. **Paste this block verbatim per tab; substitute only `<TAB_NAME>`:**
+The single most common logo regression is hardcoding `shape.height = 48` (or any other pixel value) instead of using the actual E1:E3 row-band height. Excel's row heights depend on font sizes set during Call 1, so the band height can vary tab-to-tab. The model that hardcodes 48 produces a logo that either spills past row 3 or sits inside row 1 — the user then has to resize manually. **Paste this block verbatim per tab; substitute only `<TAB_NAME>`:**
 
 ```javascript
 const base64 = blobs.getText("assets/powered_by_carta.b64.txt").trim();
@@ -445,8 +453,8 @@ for (const s of shapes.items) {
 }
 await context.sync();
 
-// Anchor to the FULL row band D1:D3 — never a single cell.
-const rows = sheet.getRange("D1:D3");
+// Anchor to the FULL row band E1:E3 — never a single cell.
+const rows = sheet.getRange("E1:E3");
 rows.load(["left", "top", "height"]);
 await context.sync();
 
@@ -469,17 +477,22 @@ await context.sync();
 **Forbidden patterns (these reproduce the manual-resize bug):**
 
 - `image.height = 48` (or any number literal) — height MUST come from `rows.height`.
-- `sheet.getRange("D1")` instead of `sheet.getRange("D1:D3")` — single-cell anchor loses the band height.
+- `sheet.getRange("E1")` instead of `sheet.getRange("E1:E3")` — single-cell anchor loses the band height.
 - Skipping the de-dup loop — re-runs stack a second `CartaLogo` shape on top of the first.
 - Skipping `image.lockAspectRatio = false` before sizing — Excel resists width changes if locked.
 
 Only touch the cells the user approved. Do not edit formulas elsewhere
 in the sheet (subtotals are formula-driven and will auto-update).
 
-**Before writing**, read [`references/branding-and-header.md`](references/branding-and-header.md). It defines:
+**Before any write**, call both of these in the same message (parallel reads):
+
+1. `read_skill(file_path="references/branding-and-header.md")` — 4-row metadata band, logo placement, `blobs.getText` asset pattern, cell-comment API.
+2. `read_skill(file_path="references/<layout-from-gate-2>.md")` — the layout file chosen in Gate 2 (e.g. `add-actuals-columns.md` for Layout A).
+
+Do not reconstruct either spec from memory. Both files must be in your context before generating any `execute_office_js` or `write_workbook.py` code. The `branding-and-header.md` file defines:
 
 - The reserved 4-row metadata band (A1–A4 + blank A5) that every tab must carry — per-skill override (this skill uses column A so the band left-edges with the account-label column underneath). If the existing budget tab doesn't have it, add it as part of this write (shift the data down to row 6+ first via `sheet.getRange("1:5").insert(...)` in Excel add-in mode, or via prepended row writes in local-file mode).
-- The Carta logo placement (column D, rows 1–3 height — per-skill override, not column C) — apply to every tab this skill touches, including the actuals tab(s) it adds.
+- The Carta logo placement (column E, rows 1–3 height) — apply to every tab this skill touches, including the actuals tab(s) it adds.
 - The blobs.getText asset-loading pattern for Excel add-in mode (NOT `Read`).
 - The cell-comment pattern for any sparse-history / low-confidence flag.
 
@@ -535,7 +548,7 @@ Do not proceed to branding until every sampled cell returns a format string cont
 
 ### Branding verification (REQUIRED, observable, excel-addin only)
 
-After running the brand block for every tab this skill touched, run this verification as a **separate** `execute_office_js` call before proceeding to Gate 8. The check goes beyond confirming the shape exists — it also confirms the logo was **sized to the D1:D3 row band**, not a hardcoded pixel value:
+After running the brand block for every tab this skill touched, run this verification as a **separate** `execute_office_js` call before proceeding to Gate 8. The check goes beyond confirming the shape exists — it also confirms the logo was **sized to the E1:E3 row band**, not a hardcoded pixel value:
 
 ```javascript
 const tabs = [/* "Budget 2026", "2026 Actuals", ... — substitute the actual tab names touched this run */];
@@ -543,7 +556,7 @@ const result = {};
 for (const tabName of tabs) {
   const sheet = context.workbook.worksheets.getItem(tabName);
   sheet.shapes.load("items/name,items/height,items/left,items/top");
-  const rows = sheet.getRange("D1:D3");
+  const rows = sheet.getRange("E1:E3");
   rows.load(["height", "left"]);
   await context.sync();
 
@@ -564,10 +577,10 @@ return result;
 Per-tab pass criteria — ALL must be true:
 
 - `found === true` (`CartaLogo` exists on the tab)
-- `heightMatchesBand === true` (logo height equals `D1:D3` row-band height ±2pt — proves no pixel literal)
-- `leftMatchesBand === true` (logo anchors at column D's left edge ±2pt — proves correct `getRange("D1:D3")` anchor)
+- `heightMatchesBand === true` (logo height equals `E1:E3` row-band height ±2pt — proves no pixel literal)
+- `leftMatchesBand === true` (logo anchors at column E's left edge ±2pt — proves correct `getRange("E1:E3")` anchor)
 
-If any tab returns `found: false`, the brand block was skipped — re-run it. If `heightMatchesBand` is `false`, the brand block was paraphrased with a hardcoded height (e.g. `shape.height = 48`) — delete the existing `CartaLogo` shape and re-run the verbatim brand block above. If `leftMatchesBand` is `false`, the brand block anchored to a single cell like `D1` instead of `D1:D3` — same fix.
+If any tab returns `found: false`, the brand block was skipped — re-run it. If `heightMatchesBand` is `false`, the brand block was paraphrased with a hardcoded height (e.g. `shape.height = 48`) — delete the existing `CartaLogo` shape and re-run the verbatim brand block above. If `leftMatchesBand` is `false`, the brand block anchored to a single cell like `E1` instead of `E1:E3` — same fix.
 
 **Do not start Gate 8 summary text until every tab's verification result shows `found: true && heightMatchesBand: true && leftMatchesBand: true`.** The verification call is observable evidence; without it in your tool history with passing checks, Gate 7 is not complete.
 
@@ -601,7 +614,7 @@ If any anchor is missing, you have skipped a gate. **Do NOT write "Carta logo pl
 
 **Layout E — If `<RUNTIME>` is `excel-addin`:**
 
-> Created [2026 Actuals by Department](<citation:2026 Actuals by Department!A1>) (Example MgmtCo) — 23 accounts × 4 department values (Engineering, Marketing, G&A, Untagged), annual aggregation. 1 account flagged low-confidence (sparse history). Carta logo placed at D1.
+> Created [2026 Actuals by Department](<citation:2026 Actuals by Department!A1>) (Example MgmtCo) — 23 accounts × 4 department values (Engineering, Marketing, G&A, Untagged), annual aggregation. 1 account flagged low-confidence (sparse history). Carta logo placed at E1.
 >
 > Substitute the period block phrasing to match `<AGGREGATION>` from Gate 3a: "annual aggregation" for `YEAR`, "across 4 quarters" / "across Q1+Q2" for `QUARTER`, "across 12 months" / "across Jan–May" for `MONTH`.
 
@@ -651,8 +664,8 @@ Queries > 50 rows: request `format: "ndjson"`, bucket into a blob. Don't paste l
 - **Month-label date-serial trap:** prefix with `'` or use `numberFormat: "mmm yyyy"` on a real date.
 - **Currency format:** `_([$$-en-US]* #,##0.00_);_([$$-en-US]* (#,##0.00);_([$$-en-US]* "-"??_);_(@_)`. Apply to data range after the data write.
 - **Border syntax (Office.js):** `style = "Continuous"`, then `weight = "Thin"`. Never `style: "Thin"`.
-- **Column-width anti-pattern:** never `autofitColumns()` on a header-only range. Use `sh.getUsedRange().format.autofitColumns()` after data is written.
-- **Branding standards — follow [`references/branding-and-header.md`](references/branding-and-header.md)** for every tab. Per-skill overrides: metadata band in column A (not B), logo at column D (not C). Asset access via `blobs.getText("assets/...")`.
+- **Recalc + column widths:** the last statements in the cell-write `execute_office_js` block (Call 1), in this order — never a separate call: restore automatic calc → `context.workbook.application.calculate(Excel.CalculationType.full)` → `sheet.getRange("A:AO").format.autofitColumns()` (widen the range to the last amount column) → `context.sync()`. **Recalc before autofit:** without the forced recalc the `=SUM(...)` / variance / NOI cells stay at 0 and the accounting format shows `-` (forcing the user to edit+Enter each one); autofitting before the recalc sizes the amount columns to the dash so real figures overflow as `####`. Never autofit a header-only range.
+- **Branding standards — follow [`references/branding-and-header.md`](references/branding-and-header.md)** for every tab. Per-skill overrides: metadata band in column A (not B), logo at column E. Asset access via `blobs.getText("assets/...")`.
 
 ---
 

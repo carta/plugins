@@ -1,7 +1,8 @@
 ---
 name: carta-budget-vs-actuals
 model: opus
-description: 'Compare YTD actuals against an existing budget workbook in Excel and analyze pacing — % of annual budget consumed, % of year elapsed, projected run-rate, and flags lines pacing off plan. Pulls YTD actuals from the Carta MCP. Two references — pacing-overview (full sheet summary) and drill-down-line (month-by-month for one line). Runs in Claude for Excel and Claude Code / Cowork. TRIGGER on requests to compare actuals to budget, YTD pacing, variance, or "why is X line high/low" ("how are we pacing", "are we on track", "why are we over on Travel"). Supports chat-only output. DO NOT TRIGGER for new budgets (carta-create-budget), pulling Carta-stored budgets (carta-fetch-budget), refreshing actuals (carta-budget-actuals), what-if (carta-budget-scenarios), P&L (carta-consolidating-pnl), or balance sheet (carta-consolidating-balance-sheet).'
+description: 'Compare YTD actuals to a budget workbook and flag pacing variances. Pulls actuals from Carta MCP. TRIGGER: compare budget vs actuals, pacing or variance questions. NOT: new budgets, fetch-budget, actuals refresh, scenarios, P&L, balance sheet.'
+version: 1.0.0
 allowed-tools:
   # MCP connector discovery (Claude for Excel runtime tool — used first in Step 0)
   - refresh_mcp_connectors
@@ -122,10 +123,12 @@ in `local-file` mode if no file is open.
 
 ## Step 2 — Intent routing
 
-| Phrase | Reference |
+**Call `read_skill` for the matched reference immediately — do not reconstruct the analysis spec from memory:**
+
+| Phrase | Call |
 |---|---|
-| "compare", "pacing", "on track", "variance", "how are we doing" | [`pacing-overview.md`](references/pacing-overview.md) |
-| "why are we over on <X>", "drill into <X>", "what drove <X>", "largest entries", "which months", "what's behind" | [`drill-down-line.md`](references/drill-down-line.md) |
+| "compare", "pacing", "on track", "variance", "how are we doing" | `read_skill(file_path="references/pacing-overview.md")` |
+| "why are we over on <X>", "drill into <X>", "what drove <X>", "largest entries", "which months", "what's behind" | `read_skill(file_path="references/drill-down-line.md")` |
 
 ## Step 3 — Read the budget from the workbook
 
@@ -218,7 +221,12 @@ The most common failure mode is bundling cell writes + formatting + logo into on
 
 Returning from Call 1 does NOT finish Step 7. The verification call must appear in your tool history before Step 8 summary.
 
-**Before writing**, read [`references/branding-and-header.md`](references/branding-and-header.md). It defines the reserved 4-row metadata band (B1 firm / B2 descriptive title like `"Q1 2026 Budget vs Actuals (YTD through March)"` / B3 source / B4 other context), the Carta logo placement (column C, rows 1–3 height), the `blobs.getText("assets/...")` asset-loading pattern for Excel add-in (NOT `Read`), and the cell-comment pattern for any "pacing off plan" flag.
+**Before any write**, call both of these in the same message (parallel reads):
+
+1. `read_skill(file_path="references/branding-and-header.md")` — 4-row metadata band, logo placement, `blobs.getText` asset pattern, cell-comment API.
+2. `read_skill(file_path="references/<reference-from-step-2>.md")` — the analysis file matched in Step 2 (`pacing-overview.md` or `drill-down-line.md`).
+
+Do not reconstruct either spec from memory. Both files must be in your context before generating any `execute_office_js` or `write_workbook.py` code. The `branding-and-header.md` file defines the reserved 4-row metadata band (B1 firm / B2 descriptive title like `"Q1 2026 Budget vs Actuals (YTD through March)"` / B3 source / B4 other context), the Carta logo placement (column E, rows 1–3 height), the `blobs.getText("assets/...")` asset-loading pattern for Excel add-in (NOT `Read`), and the cell-comment pattern for any "pacing off plan" flag.
 
 **If `<RUNTIME>` is `excel-addin`:** use the add-in's cell-write tools, then brand the new `Budget vs Actuals` tab (and the underlying Budget tab if a header band was inserted into it).
 
@@ -325,9 +333,9 @@ Queries > 50 rows: request `format: "ndjson"` and bucket into a blob. Pasting la
 - **Two-row header for month-bucketed tables.** Row N = merged month label per Budget/Actual/Var triplet. Row N+1 = sub-headers. Never write both into the same row — subsequent merges destroy sub-headers.
 - `range.merge(true)` discards trailing cell values. Insert a new row first; don't merge over an existing sub-header row.
 - **Month-label date-serial trap.** `"Jan 2026"` auto-coerces to a date serial — prefix with `'` or write a real date with `numberFormat: "mmm yyyy"`.
-- **Column-width anti-pattern:** never `autofitColumns()` on a header-only range. Use `sh.getUsedRange().format.autofitColumns()` after data is written.
+- **Recalc + column widths:** the last statements in the cell-write `execute_office_js` block, in this order — never a separate call: restore automatic calc → `context.workbook.application.calculate(Excel.CalculationType.full)` → `sheet.getRange("A:<last>").format.autofitColumns()` (widen the range to the last amount column) → `context.sync()`. **Recalc before autofit:** without the forced recalc the `=SUM(...)` / variance cells stay at 0 and the accounting format shows `-` (forcing the user to edit+Enter each one); autofitting before the recalc sizes the amount columns to the dash so real figures overflow as `####`. Never autofit a header-only range.
 - **Border syntax (Office.js):** `style = "Continuous"` then `weight = "Thin"`. Never `style: "Thin"`.
-- **Branding & header standards — follow [`references/branding-and-header.md`](references/branding-and-header.md)** for every tab. Rows 1–4 reserved for metadata band, Carta logo at column C (logo + band col-overrides documented in the reference). Asset access via `blobs.getText("assets/...")` — NOT `Read`. Pacing-flagged rows use cell comments only.
+- **Branding & header standards — follow [`references/branding-and-header.md`](references/branding-and-header.md)** for every tab. Rows 1–4 reserved for metadata band, Carta logo at column E (logo + band col-overrides documented in the reference). Asset access via `blobs.getText("assets/...")` — NOT `Read`. Pacing-flagged rows use cell comments only.
 
 ---
 
