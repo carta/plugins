@@ -1,7 +1,7 @@
 ---
 name: carta-consolidating-pnl
 model: opus
-description: 'Generate a firm-wide consolidating P&L (Income Statement) for ALL entities under a firm for a given month — produces TWO Excel tabs: a detailed "P&L- with comments" tab (Month + YTD blocks of Actual/Budget/Variance/%) and a one-page executive "Summary P&L" tab formula-linked to the detail. Sourced from Carta MCP. TRIGGER on requests like "consolidating P&L for [firm] for [month]", "P&L for all entities of [firm]", "firm-wide income statement", or "P&L with executive summary". DO NOT TRIGGER for single-entity P&L, balance sheet (carta-consolidating-balance-sheet), new budgets (carta-create-budget), pulling Carta-stored budgets (carta-fetch-budget), refreshing actuals (carta-budget-actuals), pacing (carta-budget-vs-actuals), or what-if (carta-budget-scenarios).'
+description: 'Firm-wide consolidating P&L (Income Statement) across ALL entities of a firm for one month. Produces TWO Excel tabs: detailed P&L (Month + YTD Actual/Budget/Variance/%) and executive Summary P&L formula-linked to detail. Optional tag-view mode breaks Actuals down by ALL firm reporting-tag categories side by side with a three-row nested header (period > category > tag) and per-category subtotals; Budget/Variance omitted in tag-view (Carta budgets have no tag dimension). Sourced from Carta MCP. TRIGGER on "consolidating P&L for [firm] [month]", "P&L for all entities of [firm]", "firm-wide income statement", "P&L with executive summary", "P&L by department", "P&L by tag", "income statement by cost center", "P&L by project code". DO NOT TRIGGER for single-entity P&L, balance sheet (carta-consolidating-balance-sheet), new budgets (carta-create-budget), Carta budgets (carta-fetch-budget), actuals refresh (carta-budget-actuals), pacing (carta-budget-vs-actuals), or what-if (carta-budget-scenarios).'
 allowed-tools:
   # MCP connector discovery (Claude for Excel runtime tool — used first in Gate 0)
   - refresh_mcp_connectors
@@ -26,6 +26,7 @@ allowed-tools:
 [PATTERN text v0.0.8]
 [PATTERN tables v0.0.12]
 [PATTERN carta-watermark v0.0.10]
+[PATTERN menus-and-flows v0.0.7]
 [PATTERN base v0.1.0]
 
 # Consolidating P&L (detail + executive summary)
@@ -162,6 +163,74 @@ P&L account with non-zero YTD activity, aggregated firm-wide.
 
 ---
 
+## Gate 2.5: Tag-category discovery (silent probe)
+
+**Always run this gate** — even if the user hasn't asked for tag-view. The result determines whether the Gate 4 build chooser shows the "tag-view" option or hides it. **Silent — no user-facing output.**
+
+Tag-view layout (when chosen at Gate 4) shows **all firm tag categories side by side** under each period band — no "which dimension?" picker. This probe's job is to discover whether the firm has a tag taxonomy in `REPORTING_TAGS_JSON` (or falls back to the flat `REPORTING_TAGS` column).
+
+### Probe 1 — Detect the JSON-vs-flat path
+
+```sql
+SELECT
+  COUNT_IF(REPORTING_TAGS_JSON IS NOT NULL) AS json_rows,
+  COUNT_IF(REPORTING_TAGS IS NOT NULL)      AS flat_rows
+FROM <journal_entries_table>
+WHERE FIRM_ID = '<firm_uuid>'
+  AND EFFECTIVE_DATE BETWEEN '<ytd_start>' AND '<month_end>'
+```
+
+- `json_rows > 0` → **JSON path**. Continue to Probe 2.
+- `json_rows == 0 AND flat_rows > 0` → **flat path**. Skip Probe 2 — there is exactly one synthetic category labeled `Reporting Tag`. Set `<TAG_CATEGORIES> = ["Reporting Tag"]`, `<TAG_PATH> = "flat"`, and continue.
+- Both zero → set `<TAG_CATEGORIES> = []`, `<TAG_PATH> = "none"`. Gate 4 will omit the tag-view chooser option.
+
+### Probe 2 — Discover categories (JSON path only)
+
+```sql
+SELECT DISTINCT f.key::TEXT AS category
+FROM <journal_entries_table>,
+     LATERAL FLATTEN(input => REPORTING_TAGS_JSON) f
+WHERE FIRM_ID = '<firm_uuid>'
+  AND REPORTING_TAGS_JSON IS NOT NULL
+  AND EFFECTIVE_DATE BETWEEN '<ytd_start>' AND '<month_end>'
+ORDER BY 1
+```
+
+Store the returned keys as `<TAG_CATEGORIES>` (sorted list — e.g. `["Department", "Function", "Geography"]`). Set `<TAG_PATH> = "json"`.
+
+### Probe 3 — Cardinality per category (when tag-view is on the table)
+
+Only needed if `<TAG_CATEGORIES>` is non-empty. Returns the value count per category for the wide-vs-long decision in Gate 4's dimension picker.
+
+**JSON path:**
+```sql
+SELECT f.key::TEXT AS category, COUNT(DISTINCT f.value::TEXT) AS n_values
+FROM <journal_entries_table>,
+     LATERAL FLATTEN(input => REPORTING_TAGS_JSON) f
+WHERE FIRM_ID = '<firm_uuid>'
+  AND REPORTING_TAGS_JSON IS NOT NULL
+  AND EFFECTIVE_DATE BETWEEN '<ytd_start>' AND '<month_end>'
+GROUP BY 1
+ORDER BY 1
+```
+
+**Flat path:**
+```sql
+SELECT 'Reporting Tag' AS category, COUNT(DISTINCT REPORTING_TAGS) AS n_values
+FROM <journal_entries_table>
+WHERE FIRM_ID = '<firm_uuid>'
+  AND REPORTING_TAGS IS NOT NULL
+  AND EFFECTIVE_DATE BETWEEN '<ytd_start>' AND '<month_end>'
+```
+
+Store as `<TAG_CARDINALITY>` (map of `category → n_values`).
+
+**No `AskUserQuestion` here.** This gate only probes. The tag-view choice happens in Gate 4 if the user picks tag-view mode; the wide-vs-long choice (if needed) is asked there too.
+
+**Done when:** `<TAG_CATEGORIES>` and `<TAG_PATH>` are populated.
+
+---
+
 ## Gate 3: Classify and assign to sections
 
 Classify by leading digit of `ACCOUNT_TYPE`, per `references/schema.md`:
@@ -221,24 +290,44 @@ If any expense accounts landed in `Other`, surface them here:
 > "Foreign exchange", "Misc operating". Confirm or adjust the section
 > mapping before building.
 
-Then ask with `AskUserQuestion`:
+Then ask with `AskUserQuestion`. **The available options depend on whether Gate 2.5 found tag data** (i.e. whether `<TAG_CATEGORIES>` is non-empty):
 
 ```
-1 - Build both tabs  ← recommended
+1 - Build both tabs (detail + Summary)  ← recommended
 2 - Build the detail tab only (no Summary)
-3 - Change the firm or period
-4 - Cancel
+3 - Build a tag-view tab — Actuals broken down by all reporting tag categories   ← only if <TAG_CATEGORIES> is non-empty
+4 - Change the firm or period
+5 - Cancel
 ```
+
+If `<TAG_CATEGORIES>` is empty, omit option 3 from the chooser entirely.
+If the user's prompt explicitly asked for tag/department/cost-center breakdown,
+make option 3 the `← recommended` default (and demote option 1 to a plain option).
 
 Handle each branch:
 
 - **1 — Build both tabs** → proceed to the budget source question below.
-- **2 — Detail only** → drop the Summary build from the plan; proceed
-  to the budget source question below. Gates 5–6 run only, then Gate 8
-  verifies the detail alone and omits the Summary tie-out.
-- **3 — Change firm or period** → return to Inputs, re-run Gates 1–3,
-  then present this review again.
-- **4 — Cancel** → stop the skill cleanly.
+- **2 — Detail only** → drop the Summary build from the plan; proceed to the budget source question below. Gates 5–6 run only, then Gate 8 verifies the detail alone and omits the Summary tie-out.
+- **3 — Tag-view** → record `build_mode = "tag-view"`. **Skip the budget source question entirely** (no Budget/Variance columns in tag-view mode). All firm tag categories from `<TAG_CATEGORIES>` are shown side by side under each period band — no dimension picker. The only follow-up is the wide-vs-long question below, and only if cardinality exceeds the threshold.
+- **4 — Change firm or period** → return to Inputs, re-run Gates 1–3, then present this review again.
+- **5 — Cancel** → stop the skill cleanly.
+
+### Wide vs long (only when option 3 chosen AND cardinality is high)
+
+Compute the **total column count per period block** as: `sum(n_values for each category in <TAG_CATEGORIES>) + len(<TAG_CATEGORIES>)`. The `+ len(...)` term covers the per-category Total columns. Multiply by 2 for the Month + YTD blocks.
+
+If the combined total exceeds 24, ask via `AskUserQuestion`. The `← recommended` marker depends on which side of the 36-column threshold the run falls on (mirrors the Cardinality guard table in `references/tag-view.md`):
+
+> The tag-view tab would have `<N>` columns across `<C>` categories (`<cat1>`, `<cat2>`, …). With that many, should I build wide (one column per tag per category per period) or long (one row per tag per account)?
+
+| Total tag columns (Month + YTD combined) | Recommended option |
+|---|---|
+| 25–36 | **Wide — one column per tag** ← recommended |
+| > 36 | **Long — one row per tag per account** ← recommended |
+
+Always offer both options regardless of which is recommended — accountants sometimes want the wide layout even past 36 columns if they're going to filter it down in Excel.
+
+Store `<TAG_LAYOUT>` (`wide` | `long`). Default `wide` for ≤ 24 (no question asked).
 
 **Loop until the user picks a build option or cancels.** Never write to
 Excel based on inferred intent.
@@ -284,6 +373,12 @@ the budget source choice recorded.
 ---
 
 ## Gate 4b: Fetch budget data
+
+**Skip this gate entirely if `build_mode == "tag-view"`.** Tag-view mode
+writes Actuals only — there are no Budget/Variance/% columns to fill. The
+Carta `fa:list:budgets` API has no tag dimension, so a per-tag Budget
+column would be mathematically misleading (the same budget value
+duplicated across every tag column).
 
 Fetch the budget rows now — before any Excel writes — so Gate 6 can
 write Budget columns E + N in the same pass as the detail build.
@@ -389,6 +484,39 @@ workbook.
 
 ## Gate 6: Build and brand the detail P&L tab
 
+### Tag-view branch (if `build_mode == "tag-view"`)
+
+**Stop reading the rest of Gate 6 and switch references.** Load
+[`references/tag-view.md`](references/tag-view.md) now and follow it
+verbatim. That file documents:
+
+- Tab name (`P&L by Reporting Tag - <FIRM-SHORT> <MMM-YY>`).
+- Three-row nested header: row 4 = period band (merged `<MMM-YY>` / `YTD <MMM-YY>`); row 5 = category band (merged per category within each period block); row 6 = tag header (account + tag values + per-category Total per block).
+- Category-grouped SQL — JSON path uses `LATERAL FLATTEN` + `CROSS JOIN` to produce one row per (entry × category); flat path uses a synthetic `'Reporting Tag'` category.
+- All firm tag categories shown side by side (from `<TAG_CATEGORIES>`) — no dimension picker.
+- No Budget / Variance / % columns. No Summary tab. No Gate 7.
+- Same metadata band, branding, sign convention, classification, section order, and number formats as the standard build.
+
+**Currency-format verification (REQUIRED, observable, excel-addin only).** After the cell-write call (and before the brand block), run this readback as a **separate** `execute_office_js` call:
+
+```javascript
+const sheet = context.workbook.worksheets.getItem("<TAG_VIEW_TAB_NAME>");
+const cell = sheet.getRange("<sample_amount_cell>");  // e.g. first data cell, typically C7
+cell.load("numberFormat");
+await context.sync();
+return cell.numberFormat[0][0];
+```
+
+The returned string MUST contain the literal substring `[$$-en-US]`. If it returns `_($* #,##0...`, `$#,##0`, `"$"#,##0`, or anything else without `[$$-en-US]`, Excel will render currency in the user's local symbol (R$ on pt-BR, £ on en-GB). **Halt, re-apply `_-[$$-en-US]* #,##0.00_-;_-[$$-en-US]* (#,##0.00);_-[$$-en-US]* "-"??_-;_-@_-` to the full amount range, and re-verify.** Without this readback in your tool history, Gate 6 is not complete.
+
+After the tag-view tab is built and branded, **skip Gate 7 (no Summary
+tab in tag-view mode)** and jump straight to Gate 8 with the tag-view
+verification + report variant in `tag-view.md`.
+
+### Standard branch (Build mode = both tabs or detail-only)
+
+The rest of Gate 6 below applies.
+
 ### Approval-recorded check (run FIRST, before any write tool)
 
 Before calling `execute_office_js` with state-mutating code, `setValues`, `write_workbook.py`, or any other workbook-write tool, look back at your tool history. Find the most recent `AskUserQuestion` you sent. Does its answer literally include `"Approve and write"` (or the build-chooser option that maps to "Build it")? If NO, Gate 4 did not pass — send the Gate 4 approval menu now and wait for the explicit answer.
@@ -407,20 +535,63 @@ Returning from Call 1 does NOT finish Gate 6. The verification call must appear 
 
 Read `references/formatting.md` AND [`references/branding-and-header.md`](references/branding-and-header.md) now and apply both verbatim. `branding-and-header.md` reserves rows 1–4 for the firm/title/source/context band and places the Carta logo at **column D** (per-skill override for carta-consolidating-pnl), rows 1–3 height. `formatting.md` documents the +4 row shift this introduces — all data row numbers downstream are offset accordingly.
 
-### Brand block — run AFTER the cell writes (DO NOT SKIP)
+### Brand block — verbatim, paste don't paraphrase (DO NOT SKIP)
 
-The detail tab is not "built" until it carries a `CartaLogo` shape. Use the verbatim brand block from [`references/branding-and-header.md`](references/branding-and-header.md), substituting `<TAB_NAME>` = `<DETAIL_TAB_NAME>`. Per-skill override: logo anchors at **column D** (D1:D3). Asset access via `blobs.getText("assets/powered_by_carta.b64.txt")` — NOT `Read`.
+The detail tab is not "built" until it carries a `CartaLogo` shape sized to the D1:D3 row band. **Paste the block below verbatim** — never substitute a hardcoded pixel height (e.g. `image.height = 48`), never anchor to a single cell (`getRange("D1")`). Both shortcuts produce a logo the user has to resize and reposition by hand. Substitute only `<TAB_NAME>` = `<DETAIL_TAB_NAME>`:
 
-**Brand-verification call (REQUIRED, observable).** Run this as a **separate** `execute_office_js` call before proceeding to Gate 7:
+```javascript
+const base64 = blobs.getText("assets/powered_by_carta.b64.txt").trim();
+
+const sheet = context.workbook.worksheets.getItem("<TAB_NAME>");
+const shapes = sheet.shapes;
+shapes.load("items/name");
+await context.sync();
+
+for (const s of shapes.items) {
+  if (s.name === "CartaLogo") s.delete();
+}
+await context.sync();
+
+const rows = sheet.getRange("D1:D3");
+rows.load(["left", "top", "height"]);
+await context.sync();
+
+const image = sheet.shapes.addImage(base64);
+image.name = "CartaLogo";
+
+image.load(["width", "height"]);
+await context.sync();
+const ratio = image.width / image.height;
+
+image.lockAspectRatio = false;
+image.height = rows.height;
+image.width  = rows.height * ratio;
+image.left   = rows.left;
+image.top    = rows.top;
+image.lockAspectRatio = true;
+await context.sync();
+```
+
+**Brand-verification call (REQUIRED, observable).** Run this as a **separate** `execute_office_js` call before proceeding to Gate 7. The check confirms not just that the shape exists but that it was sized to the D1:D3 row band:
 
 ```javascript
 const sheet = context.workbook.worksheets.getItem("<DETAIL_TAB_NAME>");
-sheet.shapes.load("items/name");
+sheet.shapes.load("items/name,items/height,items/left");
+const rows = sheet.getRange("D1:D3");
+rows.load(["height", "left"]);
 await context.sync();
-return sheet.shapes.items.map(s => s.name);
+
+const logo = sheet.shapes.items.find(s => s.name === "CartaLogo");
+return {
+  found:             !!logo,
+  heightMatchesBand: logo ? Math.abs(logo.height - rows.height) < 2 : false,
+  leftMatchesBand:   logo ? Math.abs(logo.left - rows.left)   < 2 : false,
+  shapeHeight:       logo ? logo.height : null,
+  rowBandHeight:     rows.height,
+};
 ```
 
-The result must include `"CartaLogo"`. If it does not, re-run the brand block above for this tab and re-verify. **Do not proceed to Gate 7 until this verification returns `CartaLogo`.** The verification call is observable evidence; without it in your tool history, Gate 6 branding is not complete.
+Pass criteria — ALL three must be true: `found`, `heightMatchesBand`, `leftMatchesBand`. If `found` is false, re-run the brand block. If `heightMatchesBand` is false, the block was paraphrased with a pixel literal — delete the shape and re-run the verbatim block above. If `leftMatchesBand` is false, the anchor was a single cell instead of `D1:D3` — same fix. **Do not proceed to Gate 7 until every check passes.** Without this verification in your tool history with all-true checks, Gate 6 branding is not complete.
 
 ### Column map (use exactly — do NOT add columns the skill doesn't ask for)
 
@@ -569,22 +740,34 @@ After the detail tab is written and read-back has confirmed the row map, call `c
 
 ## Gate 7: Build and brand the Summary P&L tab
 
+**Skip this gate entirely if `build_mode == "tag-view"` or if Gate 4
+chose "Build the detail tab only".** Tag-view writes one tab; detail-only
+writes one tab. Both jump straight to Gate 8.
+
 Read `references/summary-tab.md` AND [`references/branding-and-header.md`](references/branding-and-header.md) now and apply both verbatim. The Summary tab follows the same 4-row metadata band as the detail tab — rows 1–4 reserved for firm/title/source/context, and the Carta logo at column D anchored to D1 with height = rows 1–3. If `summary-tab.md`'s legacy layout puts the Executive Summary title on B2 with a larger font, keep it on B2 but trim the font down so it still fits inside the 4-row band (or move auxiliary text to B3/B4).
 
-### Brand block — run AFTER the cell writes (DO NOT SKIP)
+### Brand block — verbatim, paste don't paraphrase (DO NOT SKIP)
 
-The Summary tab is not "built" until it carries a `CartaLogo` shape. Use the verbatim brand block from [`references/branding-and-header.md`](references/branding-and-header.md), substituting `<TAB_NAME>` = `<SUMMARY_TAB_NAME>`. Column D anchor (D1:D3) — same per-skill override as the detail tab.
+The Summary tab is not "built" until it carries a `CartaLogo` shape sized to the D1:D3 row band. **Paste the brand block from Gate 6** (the verbatim version inline there) — never hardcode `image.height = <number>`, never anchor to a single cell. Substitute `<TAB_NAME>` = `<SUMMARY_TAB_NAME>`.
 
-**Brand-verification call (REQUIRED, observable).** Run this as a **separate** `execute_office_js` call before moving to Gate 8:
+**Brand-verification call (REQUIRED, observable).** Run this as a **separate** `execute_office_js` call before moving to Gate 8. Same shape-geometry check as the detail tab:
 
 ```javascript
 const sheet = context.workbook.worksheets.getItem("<SUMMARY_TAB_NAME>");
-sheet.shapes.load("items/name");
+sheet.shapes.load("items/name,items/height,items/left");
+const rows = sheet.getRange("D1:D3");
+rows.load(["height", "left"]);
 await context.sync();
-return sheet.shapes.items.map(s => s.name);
+
+const logo = sheet.shapes.items.find(s => s.name === "CartaLogo");
+return {
+  found:             !!logo,
+  heightMatchesBand: logo ? Math.abs(logo.height - rows.height) < 2 : false,
+  leftMatchesBand:   logo ? Math.abs(logo.left - rows.left)   < 2 : false,
+};
 ```
 
-The result must include `"CartaLogo"`. If not, re-run the Summary brand block and re-verify.
+Pass criteria — `found`, `heightMatchesBand`, `leftMatchesBand` all true. Same fix paths as Gate 6: pixel-literal height → delete shape + re-run verbatim block; single-cell anchor → delete shape + re-run with `getRange("D1:D3")`. If any check fails, re-run before moving to Gate 8.
 
 `summary-tab.md` covers sheet name, position (index 0 — first tab), header rows, the
 Month and YTD blocks, the keyword buckets for revenue, the cross-sheet
@@ -618,11 +801,19 @@ reconciles to the detail for both Month and YTD.
 
 ## Gate 8: Verify and report
 
+**Tag-view branch (if `build_mode == "tag-view"`):** load
+[`references/tag-view.md`](references/tag-view.md) §"Gate 8 — verification
++ report (tag-view variant)" and follow that section verbatim. Skip the
+rest of this gate — the Summary tie-out, Budget tie-out, and standard
+report shape don't apply in tag-view mode.
+
+**Standard branch (both tabs or detail-only):** the rest of Gate 8 applies.
+
 **Gate 8 precondition (DO NOT SKIP).** Before sending the report text below, scan your tool history. Three anchors MUST be present in that order:
 
 1. An `AskUserQuestion` whose answer included `"Approve and write"` (or the Gate 4 "Build it" approval) — approval gate.
 2. A `sheet.shapes.addImage(base64)` call for the detail tab — and one for the Summary tab if Gate 4 included Summary — Gate 6/7 branding.
-3. The branding-verification `execute_office_js` whose result included `"CartaLogo"` for every tab — Gate 6/7 verification.
+3. The branding-verification `execute_office_js` whose result reported `{found: true, heightMatchesBand: true, leftMatchesBand: true}` for every tab — Gate 6/7 verification. (The verification call now returns a geometry object instead of a shape-name array; matching on `"CartaLogo"` alone is no longer sufficient.)
 
 If any anchor is missing, you have skipped a gate. **Do NOT report tie-out success in the build summary when no `shapes.addImage` call appears in your tool history.** STOP, go back, run the missing gate, then return here.
 
@@ -695,6 +886,10 @@ accounts and empty Summary buckets surfaced.
 ---
 
 ## Gate 9 — Budget tie-out and post-action menu
+
+**Skip the budget tie-out if `build_mode == "tag-view"`** — Gate 4b was
+skipped, no Budget data was fetched or written. In tag-view mode, jump
+directly to the post-action menu at the end of this gate.
 
 Budget data was fetched in Gate 4b and written during Gate 6. This gate
 finalises the budget merge (completing any steps Gate 6 couldn't do
