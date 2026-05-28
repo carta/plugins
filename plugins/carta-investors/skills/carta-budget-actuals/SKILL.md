@@ -1,7 +1,7 @@
 ---
 name: carta-budget-actuals
 model: opus
-description: 'Update actuals on an existing budget workbook in Excel. Four layouts — interleave Budget/Actual/Variance per month, add a separate Actuals tab, refresh stale cells in place, or extend by one period. Asks user which layout. Sources actuals from the Carta MCP, strict FUND_NAME scoping. Runs in Claude for Excel and Claude Code / Cowork. TRIGGER on requests to refresh / update / sync actuals, add a year''s actuals, interleave Budget/Actual/Variance columns (layout operation), add an actuals tab, or extend by one period ("refresh the actuals", "add 2026 actuals by month", "add an actuals tab"). Pre-build review before write. DO NOT TRIGGER for variance analysis or pacing questions ("how are we pacing", "variance by month") — use carta-budget-vs-actuals. Also DO NOT TRIGGER for new budgets (carta-create-budget), pulling Carta-stored budgets (carta-fetch-budget), what-if (carta-budget-scenarios), P&L (carta-consolidating-pnl), or balance sheet (carta-consolidating-balance-sheet).'
+description: 'Update actuals on an existing budget workbook in Excel. Layouts: interleave Budget/Actual/Variance per month, add a separate Actuals tab, refresh stale cells, extend by one period, or tag-view (actuals sliced by reporting dimension with a two-row period/tag header). Sources actuals from Carta MCP, strict FUND_NAME scoping. Runs in Claude for Excel and Claude Code / Cowork. TRIGGER on: refresh/update/sync actuals, add actuals by month/tab, interleave Budget-Actual-Variance, extend by one period, show actuals by department/tag/cost center/project code ("refresh the actuals", "add 2026 actuals by month", "show actuals by department", "split by project code", "actuals by cost center"). DO NOT TRIGGER for pacing/variance — use carta-budget-vs-actuals; new budgets — carta-create-budget; Carta-stored budgets — carta-fetch-budget; what-if — carta-budget-scenarios; P&L — carta-consolidating-pnl; balance sheet — carta-consolidating-balance-sheet.'
 allowed-tools:
   # MCP connector discovery (Claude for Excel runtime tool — used first in Gate 0)
   - refresh_mcp_connectors
@@ -29,16 +29,18 @@ allowed-tools:
 [PATTERN text v0.0.8]
 [PATTERN tables v0.0.12]
 [PATTERN carta-watermark v0.0.10]
+[PATTERN menus-and-flows v0.0.7]
 [PATTERN base v0.1.0]
 
 # Budget actuals
 
-Entry point for updating actuals in an existing budget. Five references:
+Entry point for updating actuals in an existing budget. Six references:
 
 - [`references/add-actuals-columns.md`](references/add-actuals-columns.md) — **Layout A**: interleave Budget / Actual / Variance per month on the Budget tab (recommended for active tracking).
 - [`references/add-actuals-tab.md`](references/add-actuals-tab.md) — **Layout B**: add a peer `<year> Actuals` tab alongside the Budget tab.
 - [`references/refresh-existing.md`](references/refresh-existing.md) — **Layout C**: overwrite stale actuals cells in columns that already exist.
 - [`references/add-period.md`](references/add-period.md) — **Layout D**: append the single next month/quarter column.
+- [`references/tag-view.md`](references/tag-view.md) — **Layout E**: new tab with actuals sliced by reporting dimension (department, project code, class, etc.) and a two-row period / tag header. Only offered when the entity has tagged journal data.
 - [`references/get-actuals.md`](references/get-actuals.md) — internal helper, the canonical actuals-query routine.
 
 ## UX Rules
@@ -157,6 +159,7 @@ Use `AskUserQuestion`:
 | 2 | **Add a separate `<year> Actuals` tab** alongside the Budget tab | [`add-actuals-tab.md`](references/add-actuals-tab.md) |
 | 3 | **Refresh existing Budget / Actual / Variance cells** (the cells are there, just stale) | [`refresh-existing.md`](references/refresh-existing.md) |
 | 4 | **Add only the next single period column** | [`add-period.md`](references/add-period.md) |
+| 5 | **Build a tag-view tab — actuals sliced by reporting dimension** (department, project code, class, etc.) | [`tag-view.md`](references/tag-view.md) — only offered when the entity has tagged data; see Gate 2.5 |
 
 Use the user's prompt only as a *hint* for which option to highlight —
 never as authority to skip the question:
@@ -167,6 +170,12 @@ never as authority to skip the question:
 | "add a tab", "track on its own tab", "separate actuals tab" | Option 2 |
 | "refresh", "the actuals are stale", "pull latest", "sync" | Option 3 |
 | "add next month", "extend through `<month>`", "next period" | Option 4 |
+| "by department", "by tag", "by cost center", "split by", "broken down by", "by reporting tag", "by project code" | Option 5 |
+
+**Option 5 availability**: always show Layout E in the chooser. If the user
+picks it and Gate 2.5 finds no tag data on the entity, tell them in one sentence
+and fall back to Layout A automatically. Do not pre-filter the chooser — the
+entity name needed for the probe is not available until Gate 3.
 
 The user's pick locks the reference to load for the rest of the
 workflow.
@@ -179,13 +188,150 @@ workflow.
 
 ---
 
+## Gate 2.5 — Tag-category discovery (Layout E path only)
+
+**Skip this gate entirely unless the user chose Layout E at Gate 2.**
+
+**Silent probe — no user-facing output.** Layout E shows **all firm tag categories side by side** under each period band — no "which dimension?" picker. The probe's job is to discover the firm's tag taxonomy from `REPORTING_TAGS_JSON` (or fall back to the flat `REPORTING_TAGS` column when only that's populated).
+
+### Probe 1 — Detect the JSON-vs-flat path
+
+```
+fetch(command="dwh:execute:query", params={
+  "sql": "SELECT
+            COUNT_IF(REPORTING_TAGS_JSON IS NOT NULL) AS json_rows,
+            COUNT_IF(REPORTING_TAGS IS NOT NULL)      AS flat_rows
+          FROM <journal_entries_table>
+          WHERE FUND_NAME = '<entity_name>'
+            AND EFFECTIVE_DATE >= DATEADD('year', -1, CURRENT_DATE)",
+  "format": "markdown"
+})
+```
+
+- `json_rows > 0` → **JSON path**. Continue to Probe 2.
+- `json_rows == 0 AND flat_rows > 0` → **flat path**. Skip Probe 2 — there is exactly one synthetic category labeled `Reporting Tag`. Set `<CATEGORIES> = ["Reporting Tag"]` and continue to Probe 3 (cardinality).
+- Both zero → no tag data on this entity. Tell the user in one plain-English sentence — *"Your journal data doesn't have any reporting tags, so I'll build a flat actuals view instead."* — and fall back to **Layout A**.
+
+### Probe 2 — Discover categories (JSON path only)
+
+```
+fetch(command="dwh:execute:query", params={
+  "sql": "SELECT DISTINCT f.key::TEXT AS category
+          FROM <journal_entries_table>,
+               LATERAL FLATTEN(input => REPORTING_TAGS_JSON) f
+          WHERE FUND_NAME = '<entity_name>'
+            AND REPORTING_TAGS_JSON IS NOT NULL
+            AND EFFECTIVE_DATE >= DATEADD('year', -1, CURRENT_DATE)
+          ORDER BY 1",
+  "format": "markdown"
+})
+```
+
+Store the returned keys as `<CATEGORIES>` (sorted list — e.g. `["Department", "Function", "Geography"]`).
+
+### Probe 3 — Cardinality per category
+
+Run **one** query that returns the value count per category (used to drive the wide vs long decision):
+
+**JSON path:**
+```
+fetch(command="dwh:execute:query", params={
+  "sql": "SELECT f.key::TEXT AS category, COUNT(DISTINCT f.value::TEXT) AS n_values
+          FROM <journal_entries_table>,
+               LATERAL FLATTEN(input => REPORTING_TAGS_JSON) f
+          WHERE FUND_NAME = '<entity_name>'
+            AND REPORTING_TAGS_JSON IS NOT NULL
+            AND EFFECTIVE_DATE >= DATEADD('year', -1, CURRENT_DATE)
+          GROUP BY 1
+          ORDER BY 1",
+  "format": "markdown"
+})
+```
+
+**Flat path:**
+```
+fetch(command="dwh:execute:query", params={
+  "sql": "SELECT 'Reporting Tag' AS category, COUNT(DISTINCT REPORTING_TAGS) AS n_values
+          FROM <journal_entries_table>
+          WHERE FUND_NAME = '<entity_name>'
+            AND REPORTING_TAGS IS NOT NULL
+            AND EFFECTIVE_DATE >= DATEADD('year', -1, CURRENT_DATE)",
+  "format": "markdown"
+})
+```
+
+Store as `<CARDINALITY>` (map of `category → n_values`). Compute the **total column count**:
+
+```
+total_columns = sum(n_values for each category) + len(<CATEGORIES>)
+```
+
+The `+ len(<CATEGORIES>)` term covers the per-category Total columns. If the run uses Quarter or Month aggregation across multiple period blocks, multiply by the number of period blocks for the layout decision.
+
+### Wide vs long decision
+
+The authoritative thresholds live in [`references/tag-view.md`](references/tag-view.md) §"Cardinality guard" — `≤ 24` wide / `25–36` ask / `> 36` long. Keep that file as the single source of truth; the inline cutoffs below mirror it for runtime convenience and must move together if the table changes.
+
+If `total_columns > 24` (single period) or `total_columns × n_period_blocks > 24` (multi-period), ask via `AskUserQuestion`:
+
+> The tag-view tab would have `<N>` columns across `<C>` categories. With that many, should I build a wide table (one column per tag per category per period) or a long table (one row per tag per account)?
+
+- **Wide — one column per tag** ← recommended for ≤ 36
+- **Long — one row per tag per account**
+
+Store `<TAG_LAYOUT>` (`wide` | `long`). Default `wide` for ≤ 24 (no question asked); default `long` for `> 36` (no question asked).
+
+---
+
 ## Gate 3 — Batched parameter gate
 
-In one `AskUserQuestion`:
+In one `AskUserQuestion`, confirm every parameter the prompt didn't already specify.
 
-- **Entity** — confirm `FUND_NAME` value before any query.
-- **Period range** — what months/quarters to refresh, or what new period to add.
-- **Match strategy** — `name first then GL code` (default) vs `GL code only`.
+**Entity:** confirm `<ENTITY_NAME>` — the exact `FUND_NAME` value used in DWH queries. If the user named one at Gate 0, pre-fill it and only ask if it's ambiguous.
+
+**Period:** offer smart defaults based on today's date (currently May 2026):
+
+> What period should I pull actuals for?
+
+| # | Label | Date range |
+|---|---|---|
+| 1 ← recommended | **Full year 2026** | Jan 1 – Dec 31, 2026 |
+| 2 | **YTD 2026** (Jan – May) | Jan 1 – May 31, 2026 |
+| 3 | **Q2 2026** (Apr – Jun, in progress) | Apr 1 – Jun 30, 2026 |
+| 4 | **Full year 2025** | Jan 1 – Dec 31, 2025 |
+| 5 | **Custom range** — I'll specify start / end month | — |
+
+Adapt `← recommended` and visible options to context: YTD if the user said
+"latest"; full year if they said "2026 actuals"; prior year if they said "2025".
+Always compute the current quarter's label dynamically from today's date — do
+not hardcode Q2.
+
+If the prompt already specified a period (e.g. "Q1 2026", "full year 2025"),
+store it directly and skip the period question.
+
+Store `<PERIOD_START>` (first day, `YYYY-MM-DD`) and `<PERIOD_END>` (last day).
+
+**Match strategy** (Layouts A–D only): `name first then GL code` (default) vs `GL code only`. Omit for Layout E (no existing-sheet matching needed — Layout E always writes a new tab).
+
+Store `<ENTITY_NAME>`, `<PERIOD_START>`, `<PERIOD_END>`, `<MATCH_STRATEGY>` (Layouts A–D).
+
+### Gate 3a — Aggregation level (Layout E only)
+
+**Skip this sub-gate for Layouts A–D** — aggregation is always monthly there. Set `<AGGREGATION> = MONTH` and continue.
+
+**For Layout E, this MUST be a separate `AskUserQuestion` call** — do not bundle with the period question above, and do not infer the answer from the period range. A YTD period (e.g. Jan–May) does not mean "Quarter"; a full-year period does not mean "Year". The user picks the period independently from the aggregation.
+
+> Aggregate tag columns by:
+
+| # | Label |
+|---|---|
+| 1 ← recommended | **Year** — one period block per year |
+| 2 | **Quarter** — one block per quarter |
+| 3 | **Month** — one block per month |
+
+Store `<AGGREGATION>` (`YEAR` | `QUARTER` | `MONTH`).
+
+**Hard rule:** if you find yourself building a tag-view with multiple period blocks (e.g. Q1+Q2) without an `AskUserQuestion` whose answer literally selected one of the three options above, you skipped this gate. Stop and ask before proceeding to Gate 4.
 
 ---
 
@@ -211,7 +357,16 @@ load-bearing — never overwrite it.
 
 ## Gate 5 — Load actuals + ManCo pre-flight
 
-Always call through [`references/get-actuals.md`](references/get-actuals.md).
+**Layout E:** use the category-grouped query from
+[`references/tag-view.md`](references/tag-view.md) §SQL. Pick the **JSON path**
+when Gate 2.5 detected `REPORTING_TAGS_JSON` rows; the **flat path** when only
+`REPORTING_TAGS` was populated. Substitute `<period_trunc>` from `<AGGREGATION>`,
+`<period_start>` from `<PERIOD_START>`, `<period_end>` from `<PERIOD_END>`, and
+`<entity_name>` from `<ENTITY_NAME>`. The JSON path discovers `<CATEGORIES>`
+inside the query via `LATERAL FLATTEN` — do not parameterize the category list
+into the SQL. All other rules below apply unchanged.
+
+**Layouts A–D:** always call through [`references/get-actuals.md`](references/get-actuals.md).
 Never write inline SQL outside that file.
 
 The helper runs the **ManCo pre-flight sanity check** as part of its
@@ -261,15 +416,62 @@ Before calling `execute_office_js` with state-mutating code, `setValues`, `write
 
 **Do not interpret upstream answers as approval.** A Gate 2 layout response, a Gate 3 period-range answer, or any prior `AskUserQuestion` whose answer is not literally `"Approve and apply the updates"` does NOT clear this gate.
 
-### Gate 7 requires AT LEAST three separate `execute_office_js` calls (excel-addin runtime)
+### Gate 7 requires AT LEAST four separate `execute_office_js` calls (excel-addin runtime)
 
-The most common failure mode is bundling cell writes + formatting + logo into one `writeSheet(...)` function — the model writes the cells, returns, and forgets the logo. **Do not combine the cell-write call with the brand block in a single office.js block.**
+The most common failure mode is bundling cell writes + formatting + logo + verification into one `writeSheet(...)` function — the model writes the cells, returns, hardcodes the logo height, and the user gets a misaligned logo they have to resize manually. **Do not combine the cell-write call with the brand block in a single office.js block.**
 
 - **Call 1:** apply the cell updates from the approved payload. One `execute_office_js`. Return.
-- **Call 2 (per tab touched):** logo via the verbatim brand block from `branding-and-header.md` (`sheet.shapes.addImage(...)`).
-- **Call N (verification, LAST):** load shape names on every tab touched, confirm `CartaLogo` exists.
+- **Call 2:** currency-format readback (see below). Return.
+- **Call 3 (per tab touched):** logo via the verbatim brand block (paste from below — DO NOT paraphrase, DO NOT hardcode the height, DO NOT anchor to a single cell).
+- **Call N (verification, LAST):** load shape geometry + D1:D3 range geometry on every tab touched, confirm `CartaLogo` exists AND its height equals the row-band height.
 
 Returning from Call 1 does NOT finish Gate 7. The verification call must appear in your tool history before Gate 8 summary.
+
+### Verbatim brand block — paste this, do not improvise
+
+The single most common logo regression is hardcoding `shape.height = 48` (or any other pixel value) instead of using the actual D1:D3 row-band height. Excel's row heights depend on font sizes set during Call 1, so the band height can vary tab-to-tab. The model that hardcodes 48 produces a logo that either spills past row 3 or sits inside row 1 — the user then has to resize manually. **Paste this block verbatim per tab; substitute only `<TAB_NAME>`:**
+
+```javascript
+const base64 = blobs.getText("assets/powered_by_carta.b64.txt").trim();
+
+const sheet = context.workbook.worksheets.getItem("<TAB_NAME>");
+const shapes = sheet.shapes;
+shapes.load("items/name");
+await context.sync();
+
+// De-dup: remove any prior CartaLogo so re-runs don't stack shapes.
+for (const s of shapes.items) {
+  if (s.name === "CartaLogo") s.delete();
+}
+await context.sync();
+
+// Anchor to the FULL row band D1:D3 — never a single cell.
+const rows = sheet.getRange("D1:D3");
+rows.load(["left", "top", "height"]);
+await context.sync();
+
+const image = sheet.shapes.addImage(base64);
+image.name = "CartaLogo";
+
+image.load(["width", "height"]);
+await context.sync();
+const ratio = image.width / image.height;
+
+image.lockAspectRatio = false;
+image.height = rows.height;        // ← match actual row-band height, never a pixel literal
+image.width  = rows.height * ratio;
+image.left   = rows.left;
+image.top    = rows.top;
+image.lockAspectRatio = true;
+await context.sync();
+```
+
+**Forbidden patterns (these reproduce the manual-resize bug):**
+
+- `image.height = 48` (or any number literal) — height MUST come from `rows.height`.
+- `sheet.getRange("D1")` instead of `sheet.getRange("D1:D3")` — single-cell anchor loses the band height.
+- Skipping the de-dup loop — re-runs stack a second `CartaLogo` shape on top of the first.
+- Skipping `image.lockAspectRatio = false` before sizing — Excel resists width changes if locked.
 
 Only touch the cells the user approved. Do not edit formulas elsewhere
 in the sheet (subtotals are formula-driven and will auto-update).
@@ -281,15 +483,12 @@ in the sheet (subtotals are formula-driven and will auto-update).
 - The blobs.getText asset-loading pattern for Excel add-in mode (NOT `Read`).
 - The cell-comment pattern for any sparse-history / low-confidence flag.
 
-**If `<RUNTIME>` is `excel-addin`:** before the first sheet write, load
-`references/add-actuals-columns.md` §5 ("Build the rebuild payload") and
-apply its header / column / format spec verbatim — especially the two-row
-header (row N = merged month labels, row N+1 = `Budget` / `Actual` /
-`Variance` sub-headers — spelled out in full, never abbreviated). Then
-use the add-in's cell-write tools to execute the payload.
+**If `<RUNTIME>` is `excel-addin`:**
 
-**If `<RUNTIME>` is `local-file`:** build an operations payload and
-apply it:
+- **Layouts A–D:** load `references/add-actuals-columns.md` §5 ("Build the rebuild payload") and apply its header / column / format spec verbatim — especially the two-row header (row N = merged month labels, row N+1 = `Budget` / `Actual` / `Variance` sub-headers — spelled out in full, never abbreviated). Then use the add-in's cell-write tools to execute the payload.
+- **Layout E:** load [`references/tag-view.md`](references/tag-view.md) §"Writing the workbook (excel-addin runtime)" and follow it verbatim — 3-row period/category/tag header, `range.merge(true)` for period and category bands. **Do NOT freeze panes** — same rule as Layouts A–D and the rest of the Carta budgeting skills.
+
+**If `<RUNTIME>` is `local-file`:** build an operations payload and apply it:
 
 ```bash
 uv run "${CLAUDE_PLUGIN_ROOT}/scripts/write_workbook.py" --stdin <<'JSON'
@@ -300,40 +499,92 @@ uv run "${CLAUDE_PLUGIN_ROOT}/scripts/write_workbook.py" --stdin <<'JSON'
 JSON
 ```
 
-Use only `write_cell` / `write_formula` / `set_format` operations.
-Avoid `create_sheet` and `write_range` here — those are for `carta-create-budget`.
+- **Layouts A–D:** use only `write_cell` / `write_formula` / `set_format` operations. Avoid `create_sheet` and `write_range` here — those are for `carta-create-budget`.
+- **Layout E:** use `create_sheet`, `write_cell`, `write_range`, `merge_cells`, `set_bold`, `set_format`, `set_column_width` (Account col), `autofit_columns` (data cols) per [`references/tag-view.md`](references/tag-view.md) §"Writing the workbook (local-file runtime)". Always issue `write_cell` for a period label **before** the `merge_cells` op for that same range. **Do NOT include `freeze_panes`** — same rule as Layouts A–D and the rest of the Carta budgeting skills.
+
+### Currency-format verification (REQUIRED, observable, excel-addin only)
+
+Excel renders bare `$` against the workbook's locale — `R$` on pt-BR, `£` on en-GB, `¥` on ja-JP. The `[$$-en-US]` locale token locks the display to USD regardless. Even though every reference mandates the locale-prefixed format, models routinely emit bare `$` when generating the office.js inline. This check is the only thing that catches the regression before the user sees R$.
+
+After the cell-write call (and before branding), run this readback as a **separate** `execute_office_js` call:
+
+```javascript
+const tabs = [/* tab names touched this run */];
+const samples = {};
+for (const tabName of tabs) {
+  const sheet = context.workbook.worksheets.getItem(tabName);
+  // Pick one amount cell — the first numeric data cell typically lives at C7 (Layout E) or B8 (Layouts A-D).
+  // Substitute the actual address from the payload you just wrote.
+  const cell = sheet.getRange("<sample_amount_cell>");
+  cell.load("numberFormat");
+  await context.sync();
+  samples[tabName] = cell.numberFormat[0][0];
+}
+return samples;
+```
+
+Each value MUST contain the literal substring `[$$-en-US]`. If any tab's sample format is `_($* #,##0...`, `$#,##0`, `"$"#,##0`, or anything else without `[$$-en-US]`, the format is wrong — Excel will render currency in the user's local symbol. **Halt, re-apply the format to the full amount range on that tab, and re-verify.**
+
+```javascript
+// Re-format if verification failed
+const fmt = "_([$$-en-US]* #,##0.00_);_([$$-en-US]* (#,##0.00);_([$$-en-US]* \"-\"??_);_(@_)";
+sheet.getRange("<full_amount_range>").numberFormat = [[fmt]];
+```
+
+Do not proceed to branding until every sampled cell returns a format string containing `[$$-en-US]`.
 
 ### Branding verification (REQUIRED, observable, excel-addin only)
 
-After running the brand block for every tab this skill touched, run this verification as a **separate** `execute_office_js` call before proceeding to Gate 8:
+After running the brand block for every tab this skill touched, run this verification as a **separate** `execute_office_js` call before proceeding to Gate 8. The check goes beyond confirming the shape exists — it also confirms the logo was **sized to the D1:D3 row band**, not a hardcoded pixel value:
 
 ```javascript
 const tabs = [/* "Budget 2026", "2026 Actuals", ... — substitute the actual tab names touched this run */];
 const result = {};
 for (const tabName of tabs) {
   const sheet = context.workbook.worksheets.getItem(tabName);
-  sheet.shapes.load("items/name");
+  sheet.shapes.load("items/name,items/height,items/left,items/top");
+  const rows = sheet.getRange("D1:D3");
+  rows.load(["height", "left"]);
   await context.sync();
-  result[tabName] = sheet.shapes.items.map(s => s.name);
+
+  const logo = sheet.shapes.items.find(s => s.name === "CartaLogo");
+  result[tabName] = {
+    found:           !!logo,
+    shapeHeight:     logo ? logo.height : null,
+    rowBandHeight:   rows.height,
+    heightMatchesBand: logo ? Math.abs(logo.height - rows.height) < 2 : false,
+    shapeLeft:       logo ? logo.left : null,
+    rowBandLeft:     rows.left,
+    leftMatchesBand: logo ? Math.abs(logo.left - rows.left) < 2 : false,
+  };
 }
 return result;
 ```
 
-The result must show `CartaLogo` in every tab's shape list. If any tab returns `[]` or its shape list lacks `CartaLogo`, you have skipped the brand block for that tab — re-run it and re-verify. **Do not start Gate 8 summary text until this verification returns `CartaLogo` on every tab.** The verification call is observable evidence; without it in your tool history, Gate 7 is not complete.
+Per-tab pass criteria — ALL must be true:
+
+- `found === true` (`CartaLogo` exists on the tab)
+- `heightMatchesBand === true` (logo height equals `D1:D3` row-band height ±2pt — proves no pixel literal)
+- `leftMatchesBand === true` (logo anchors at column D's left edge ±2pt — proves correct `getRange("D1:D3")` anchor)
+
+If any tab returns `found: false`, the brand block was skipped — re-run it. If `heightMatchesBand` is `false`, the brand block was paraphrased with a hardcoded height (e.g. `shape.height = 48`) — delete the existing `CartaLogo` shape and re-run the verbatim brand block above. If `leftMatchesBand` is `false`, the brand block anchored to a single cell like `D1` instead of `D1:D3` — same fix.
+
+**Do not start Gate 8 summary text until every tab's verification result shows `found: true && heightMatchesBand: true && leftMatchesBand: true`.** The verification call is observable evidence; without it in your tool history with passing checks, Gate 7 is not complete.
 
 ---
 
 ## Gate 8 — Summary + next steps
 
-**Gate 8 precondition (DO NOT SKIP).** Before sending the summary text below, scan your tool history. Three anchors MUST be present in that order:
+**Gate 8 precondition (DO NOT SKIP).** Before sending the summary text below, scan your tool history. Four anchors MUST be present in this order (excel-addin runtime):
 
 1. An `AskUserQuestion` whose answer included `"Approve and apply the updates"` — Gate 6 approval.
-2. A `sheet.shapes.addImage(base64)` call for **each** tab the skill touched (one per tab) — Gate 7 branding.
-3. The branding-verification `execute_office_js` whose result showed `CartaLogo` on every tab — Gate 7 verification.
+2. The currency-format-verification `execute_office_js` whose result returned a `numberFormat` string containing `[$$-en-US]` for every tab touched — Gate 7 currency check.
+3. A `sheet.shapes.addImage(base64)` call for **each** tab the skill touched (one per tab) — Gate 7 branding.
+4. The branding-verification `execute_office_js` whose result showed `CartaLogo` on every tab — Gate 7 branding verification.
 
 If any anchor is missing, you have skipped a gate. **Do NOT write "Carta logo placed at..." in the summary when no `shapes.addImage` call appears in your tool history — that's hallucinating completion.** STOP, go back, run the missing gate, then return here.
 
-**If `<RUNTIME>` is `excel-addin`:**
+**Layouts A–D — If `<RUNTIME>` is `excel-addin`:**
 
 > Refreshed 23 lines on [Budget 2026](<citation:Budget 2026!A1:Z80>)
 > (Example MgmtCo). 2 lines zeroed (Audit, Tax Prep — no Q1 activity).
@@ -341,12 +592,22 @@ If any anchor is missing, you have skipped a gate. **Do NOT write "Carta logo pl
 > 2 suspicious-zero flags — Salaries and Leased-employee payments
 > dropped to $0; could be posting lag.
 
-**If `<RUNTIME>` is `local-file`:**
+**Layouts A–D — If `<RUNTIME>` is `local-file`:**
 
 > Refreshed 23 lines on `Budget 2026` in
 > `file:///path/to/<budget-workbook>.xlsx` (Example MgmtCo). 2 lines zeroed (Audit, Tax Prep — no Q1 activity). 1 new
 > account inserted (AI Tooling, Operating Expenses). 2 suspicious-zero
 > flags — Salaries and Leased-employee payments.
+
+**Layout E — If `<RUNTIME>` is `excel-addin`:**
+
+> Created [2026 Actuals by Department](<citation:2026 Actuals by Department!A1>) (Example MgmtCo) — 23 accounts × 4 department values (Engineering, Marketing, G&A, Untagged), annual aggregation. 1 account flagged low-confidence (sparse history). Carta logo placed at D1.
+>
+> Substitute the period block phrasing to match `<AGGREGATION>` from Gate 3a: "annual aggregation" for `YEAR`, "across 4 quarters" / "across Q1+Q2" for `QUARTER`, "across 12 months" / "across Jan–May" for `MONTH`.
+
+**Layout E — If `<RUNTIME>` is `local-file`:**
+
+> Created `2026 Actuals by Department` tab in `file:///path/to/<budget-workbook>.xlsx` (Example MgmtCo) — 23 accounts × 4 department values, annual aggregation. 1 account flagged low-confidence (sparse history). Adjust the period phrasing to match `<AGGREGATION>` (see excel-addin example above).
 
 **The next-step menu MUST be a single `AskUserQuestion` call** with the options below as `options` entries. Never render them as a numbered markdown list, a bulleted list, or inline prose — bare-text menus break the chooser UI in Claude for Excel and force the user to type the number. The `← recommended` marker goes inside the `description` field of one option, not as a suffix on the `label`.
 

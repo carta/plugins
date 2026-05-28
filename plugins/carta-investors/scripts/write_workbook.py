@@ -26,6 +26,7 @@ Operations supported:
     autofit_columns             — compute width per column from cell content
     add_image                   — anchor a PNG at a cell, sized to N rows tall
     set_comment                 — attach a native cell comment (used for sparse-history flagging)
+    merge_cells                 — merge a cell range (used for period header rows in tag-view layout)
 
 Payload shape:
     {
@@ -81,6 +82,7 @@ from openpyxl.utils import (
     column_index_from_string,
     coordinate_to_tuple,
     get_column_letter,
+    range_boundaries,
 )
 from PIL import Image as PILImage
 
@@ -269,6 +271,34 @@ def apply_operations(payload: dict) -> dict:
             ws[op["ref"]].comment = Comment(op["text"], op.get("author", "Carta"))
             results.append({"op": kind, "sheet": op["sheet"], "ref": op["ref"],
                             "status": "ok"})
+        elif kind == "merge_cells":
+            ws = wb[op["sheet"]]
+            ref = op["ref"]
+            # Pre-check: openpyxl raises ValueError on overlapping ranges and
+            # halts the whole apply_operations loop — wb.save() never runs and
+            # the caller gets a terse stderr message with no `results` array to
+            # diagnose which op failed. Unmerge any overlapping ranges first
+            # (the new write will populate the merged region) and wrap the
+            # merge call so a still-failing case returns a structured error
+            # the model can see and retry against (e.g. by adding a
+            # delete_sheet preamble on re-runs).
+            try:
+                min_col, min_row, max_col, max_row = range_boundaries(ref)
+                for existing in list(ws.merged_cells.ranges):
+                    overlaps = not (
+                        max_col < existing.min_col
+                        or min_col > existing.max_col
+                        or max_row < existing.min_row
+                        or min_row > existing.max_row
+                    )
+                    if overlaps:
+                        ws.unmerge_cells(str(existing))
+                ws.merge_cells(ref)
+                results.append({"op": kind, "sheet": op["sheet"], "ref": ref,
+                                "status": "ok"})
+            except Exception as exc:
+                results.append({"op": kind, "sheet": op["sheet"], "ref": ref,
+                                "status": "error", "error": str(exc)})
         else:
             results.append({"op": kind, "status": "unknown_op"})
 
