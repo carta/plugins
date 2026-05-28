@@ -1,0 +1,439 @@
+---
+name: carta-create-budget
+model: opus
+description: 'Build a new fund or ManCo budget workbook in Excel from Carta DWH data — pulls prior-year actuals via the Carta MCP, projects forward, and writes a budget sheet with section subtotals and Net Operating Income. Routes to from-prior-actuals (default), from-template, from-recommendation, or slice-by-tag. Runs in Claude for Excel and Claude Code / Cowork. TRIGGER on requests to build / create / generate / draft a budget for a future year ("build a 2026 budget", "draft a budget from last year''s actuals"). Shows a pre-build review before writing. DO NOT TRIGGER for P&L (carta-consolidating-pnl), balance sheet (carta-consolidating-balance-sheet), pulling Carta-stored budgets (carta-fetch-budget), refreshing actuals (carta-budget-actuals), pacing (carta-budget-vs-actuals), or scenarios (carta-budget-scenarios).'
+allowed-tools:
+  # MCP connector discovery (Claude for Excel runtime tool — used first in Gate 0)
+  - refresh_mcp_connectors
+  # Production
+  - mcp__claude_ai_Carta__fetch
+  - mcp__claude_ai_Carta__welcome
+  - mcp__claude_ai_Carta__set_context
+  # Carta-installer naming (lowercase)
+  - mcp__carta_production__fetch
+  - mcp__carta_production__welcome
+  - mcp__carta_production__set_context
+  # Local / legacy fallback
+  - mcp__carta__fetch
+  - mcp__carta__welcome
+  - mcp__carta__set_context
+  - AskUserQuestion
+  - Read
+  - Write
+  - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/scripts/read_workbook.py *)
+  - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/scripts/write_workbook.py *)
+---
+
+[PATTERN carta-writing-style v0.0.2]
+[PATTERN etiquette v0.0.6]
+[PATTERN text v0.0.8]
+[PATTERN tables v0.0.12]
+[PATTERN carta-watermark v0.0.10]
+[PATTERN base v0.1.0]
+
+# Create budget
+
+Entry point for building a new budget. The skill routes to one of four
+references in `references/` based on user intent.
+
+## UX Rules
+
+Inlined here because the Carta CLI session-start hook does not run inside
+Claude for Excel. Audience is an accountant.
+
+- **Plain English only.** Never surface MCP server identifiers, DWH column
+  names (`ACCOUNT_TYPE`, `EFFECTIVE_DATE`), UUIDs, raw JSON, SQL, or gate labels.
+- **Currency formatting:** positive `$X,XXX`, negatives `($X,XXX)`, totals bolded `**$X,XXX**`.
+- **Difference values are absolute** — `$0` for match, `$2,000` for a gap.
+- **Status vocabulary:** ✅ Match | ⚠ Mismatch ($X diff) | ❌ Missing in Carta | ❌ Missing in Client Doc.
+- **No environment URLs.** Output goes into Excel cells, not Carta dashboard links.
+- **Closing summary link** is a workbook citation (`<citation:Sheet!Range>`) in
+  Claude for Excel mode, and a `file://` path in Claude Code / Cowork mode.
+  Never both.
+- **Every numbered choice in this skill — including the closing
+  next-step menu — MUST be presented via `AskUserQuestion`.** Never
+  render the options as a bare code-fenced markdown list. The
+  `AskUserQuestion` tool is in `allowed-tools`; use it. Bare-text
+  menus render inline in Claude for Excel, which breaks the chooser UI
+  and forces the user to type the number.
+
+## When to use
+
+Build / create / generate / draft a budget for a future year ("build a 2026 budget", "draft from last year's actuals", "make me a 2026 budget for `<entity>`").
+
+## DO NOT use this skill for
+
+- Refreshing actuals on existing budget → `carta-budget-actuals`
+- Pacing / variance / on-track → `carta-budget-vs-actuals`
+- What-if scenarios → `carta-budget-scenarios`
+- P&L / income statement → `carta-consolidating-pnl`
+- Balance sheet → `carta-consolidating-balance-sheet`
+
+---
+
+## Gate 0 — Carta MCP environment + resolve firm
+
+### Detect the Carta MCP server
+
+1. Call `refresh_mcp_connectors` (no params). It returns `servers[]` with `name` and `status`.
+2. Filter to entries whose `name` is `Carta`, starts with `Carta (`, or equals `carta`. Drop `failed` entries (need re-auth at claude.ai → Settings → Connectors).
+3. For each `connected` candidate, probe both prefix forms in parallel (one message, both calls): `mcp__claude_ai_Carta__welcome` and `mcp__carta__welcome`. Whichever returns first is `<SERVER>`.
+
+`<SERVER>` is resolved only after `welcome` returns successfully. **Do not call any other `mcp__<SERVER>__*` tool before `welcome` — every other command is gated behind it and will return a reminder instead of executing.**
+
+**If no Carta server is connected:** tell the user, list `failed` connectors, stop. **If multiple connected:** default to `Carta` (production). **Don't** probe every prefix in `allowed-tools` — only `connected` ones. **Don't** use `tool_search_tool_bm25` for primary detection.
+
+### Resolve the firm/entity
+
+The Carta MCP exposes three top-level tools: `welcome`, `fetch`, `set_context`. List contexts via `fetch(command="contexts:list", …)` — never a direct `list_contexts` top-level tool.
+
+If the user named a firm:
+1. `fetch(command="contexts:list", params={"firm_name": "<entity>"})`.
+2. Multiple matches → `AskUserQuestion` to disambiguate.
+3. `set_context(firm_id=<uuid>)`.
+
+Prefer granular tools when exposed: `mcp__<SERVER>__list_contexts(firm_name=...)` / `set_context(firm_id=...)`.
+
+**DWH param-name traps:**
+- `dwh:execute:query` takes `sql:`, NOT `query:`.
+- `dwh:get:table_schema` takes `table_name:`, NOT `table:`.
+- `format` accepts `"ndjson"` and `"markdown"`. Not `"csv"`.
+
+If no firm was named, defer to Gate 2.
+
+---
+
+## Gate 0.5 — Detect runtime
+
+Set `<RUNTIME>`:
+- **`excel-addin`** — references to "this workbook" / "the open spreadsheet" / open tab without a file path.
+- **`local-file`** — user supplied a file path (`~/Downloads/Budget.xlsx`) or asked to "create a new file" / "write to disk".
+- If unclear, ask via `AskUserQuestion`: *"Are you working in Excel via Claude for Excel, or with a local .xlsx (Claude Code / Cowork)?"*
+
+---
+
+## Gate 1 — Where to write
+
+Branches by `<RUNTIME>`.
+
+**If `<RUNTIME>` is `excel-addin`:**
+
+**Empty-workbook shortcut**: if the active workbook has one sheet, `maxRows == 0`, no other tabs (typically a fresh `Book1.xlsx`/`Sheet1`), skip the chooser. Announce the rename in one sentence — *"I'll use the empty workbook you have open and rename `Sheet1` to `Budget <year>`."* — then proceed. The chooser only exists to protect non-empty state.
+
+Otherwise, use `AskUserQuestion`:
+
+> Where should I put the new budget?
+
+- **"Update the open workbook — new tab (recommended)"** — Claude creates a tab named `Budget <year>`.
+- **"Update the open workbook — overwrite an existing tab"** — Claude asks which tab and confirms before overwriting.
+- **"Create a brand new workbook"** — Claude writes to a fresh file.
+
+If the user has no workbook open at all, default to "brand new workbook" without asking.
+
+**If `<RUNTIME>` is `local-file`:**
+
+Use `AskUserQuestion`:
+
+> Where should I write the budget file?
+
+- **"Create a new .xlsx (recommended)"** — ask for the destination path and folder.
+- **"Modify an existing .xlsx"** — ask for the file path; the skill will add a new sheet inside it (default name `Budget <year>`).
+
+If the user gave a path in the original prompt, skip the choice and use that path.
+
+**Done when:** the write destination is locked. Store `<DESTINATION>`
+(open workbook + tab in add-in mode, or `.xlsx` path + sheet name in
+local-file mode) for Gates 5–7.
+
+---
+
+## Gate 2 — Batched parameter gate
+
+In **one** `AskUserQuestion` call, ask for every parameter the prompt
+didn't already specify (do not drip-feed):
+
+- **Firm + entity** — if Gate 0's `contexts:list` was ambiguous or the user didn't name one.
+- **`budget_year`** — required, e.g. 2026.
+- **`prior_year`** — default `budget_year − 1`.
+- **Window** — `start_month` / `end_month`, default 01 / 12.
+- **Frequency** — `monthly` (default) | `quarterly` | `annually`.
+- **Accounts** — `all enabled` (default) or a list of GL codes.
+- **`account_lookback_years`** — default 3.
+- **Sheet name** — default `Budget <budget_year>`.
+
+If a sheet with that name already exists, ask whether to overwrite or
+append a suffix.
+
+---
+
+## Gate 3 — Route to the right reference
+
+Read the matching reference file **inline** and follow it. Do not ask
+the user which mode — infer from their original prompt:
+
+| Phrase in user's prompt | Reference |
+|---|---|
+| "from last year's actuals", "based on 2025 actuals", "from prior actuals", no qualifier | [`references/from-prior-actuals.md`](references/from-prior-actuals.md) |
+| "use the template", "fill in this template", "Carta template" | [`references/from-template.md`](references/from-template.md) |
+| "add a line for <something not in CoA>", "I expect to spend $X on <new category>" | [`references/from-recommendation.md`](references/from-recommendation.md) |
+| "by department", "by reporting tag", "sliced by <dimension>", "by sub-account" | [`references/slice-by-tag.md`](references/slice-by-tag.md) |
+
+---
+
+## Gate 4 — ManCo pre-flight sanity check
+
+This is the safety gate. **Run it before the approval gate, never
+after.** Halt here before any write is attempted.
+
+When the entity is a management company, scan the returned `account_name`
+values for fund-level leak indicators:
+
+- "Interest expense"
+- "Realized gain", "Unrealized gain", "Realized loss", "Unrealized loss"
+- "Audit fees"
+- "Dead deal"
+- "LOC fees", "LOC interest"
+- "Management fees" (expense side)
+
+If **any** appear, tell the user in plain English:
+
+> "I'm stopping before writing to your workbook because fund-level
+> accounts showed up in the management-company result. That usually
+> means the entity name in the query was too broad. Please confirm the
+> exact ManCo entity name and I'll retry."
+
+Offer the user a retry with a corrected entity name.
+
+**Always render the pre-flight outcome as user-visible prose, even when the dataset is clean.** The context engine may compress the underlying tool call into a snip summary, which means the user has no visibility into whether this safety gate ran. Surface one sentence:
+
+> "Checked N accounts for fund-level leak indicators (Interest expense, Audit fees, LOC fees, Realized/Unrealized gains, Management fees on expense side, Dead deal). None found — safe to proceed."
+
+If leaks ARE found, the existing halt-and-ask-user language already runs. Never silently pass this gate.
+
+**Done when:** no leak indicators in the dataset (or the user re-confirmed
+the entity name after a retry).
+
+---
+
+## Gate 5 — Pre-build review (approval gate)
+
+Present the proposed budget as a preview table:
+
+| Section | Line Item | GL Code | Prior-Year Total | Proposed Budget Total | Source |
+|---|---|---|---|---|---|
+
+Source values: `DWH actual` / `trailing-avg` / `fallback-zero` /
+`user-supplied` / `low-confidence — sparse history`.
+
+If any rows are flagged `low-confidence — sparse history`, call them
+out above the table:
+
+> ⚠ **N line items have less than 6 months of history in the lookback
+> window** — their proposed amounts are best-effort. Review these
+> before approving.
+
+Then offer the approval menu **via a single `AskUserQuestion` call** — never as a bare code-fenced markdown list (bare-text menus break the chooser UI in Claude for Excel and force the user to type the number). Render with these three options:
+
+1. **Approve and write the budget** ← recommended
+2. **Edit — change a parameter (year / window / accounts / sheet name)**
+3. **Cancel**
+
+The `← recommended` marker goes inside the `description` field of option 1, not as a suffix on the `label`.
+
+If the user picks Edit, return to Gate 2 with their feedback. Wait for
+explicit approval before writing.
+
+**Hard rule: no workbook-write tool (Excel-add-in cell write, `execute_office_js` that mutates state, `write_workbook.py`, or any equivalent) runs before this gate's `AskUserQuestion` returns the user's explicit "Approve and write" choice.** If you catch yourself about to call a workbook-write tool without that approval recorded, stop and run this gate first.
+
+---
+
+## Gate 6 — Write and brand the workbook (two tabs, no Provenance)
+
+### Approval-recorded check (run FIRST, before any write tool)
+
+Before calling `execute_office_js` with state-mutating code, `setValues`, `write_workbook.py`, or any other workbook-write tool, look back at your tool history. Find the most recent `AskUserQuestion` you sent. Does its answer literally include `"Approve and write"`? If NO, Gate 5 did not pass — send the Gate 5 approval menu now (preview table + 3-option `AskUserQuestion`) and wait for the explicit answer.
+
+**Do not interpret upstream answers as approval.** A Gate 2 parameter response, a Gate 0.5 runtime answer, or any prior `AskUserQuestion` whose answer is not literally `"Approve and write"` does NOT clear this gate. Approval is the answer to the specific Gate 5 question — nothing else counts.
+
+Branches by `<RUNTIME>`. Writes **two tabs** — `Budget <budget_year>` (primary, hardcoded budget values) and `<prior_year> Actuals` (reference, hardcoded actuals). **No Provenance tab.** Layout, headers, number format, column widths defined in [`references/from-prior-actuals.md`](references/from-prior-actuals.md) sections 5–6 — apply verbatim. Branding spec (asset path, column anchor, sizing) in [`references/branding-and-header.md`](references/branding-and-header.md).
+
+### If `<RUNTIME>` is `excel-addin`
+
+**Gate 6 requires AT LEAST four separate `execute_office_js` calls.** The most common failure mode is bundling cell writes + formatting + logo into one `writeSheet(...)` function — the model writes the cells, returns, and forgets the logo. **Do not combine Step 6a and Step 6b into a single office.js block.**
+
+- **Call 1 (Step 6a):** cell values, formulas, formatting, column widths, cell comments. One `execute_office_js`. Return.
+- **Call 2 (Step 6b, tab 1):** logo on `Budget <budget_year>`. One `execute_office_js` with the verbatim brand block below.
+- **Call 3 (Step 6b, tab 2):** logo on `<prior_year> Actuals`. Another `execute_office_js` with the same brand block, targeting the other tab.
+- **Call 4 (Step 6c):** verification — load shape names on both tabs, confirm `CartaLogo` exists.
+
+Returning from Call 1 does NOT finish Gate 6. Returning from Call 2 does NOT finish Gate 6 — every tab needs its own logo call, and the verification call must come last.
+
+**Step 6a — write the cells.** Use the Excel add-in's runtime cell-write tools with the accounting currency format (`_([$$-en-US]* #,##0.00_);…`). Do **not** call freeze_panes. For each `low-confidence — sparse history` account, attach a cell comment to the column-B label cell — see [`references/branding-and-header.md`](references/branding-and-header.md#cell-comment-pattern-for-sparse-history--projection-flags) for the verbatim `sheet.comments.add(...)` pattern. **Never** change row fill / font color / border.
+
+**Step 6b — brand both tabs (DO NOT SKIP).** Immediately after the
+cell writes — same Gate 6, before any summary text — embed the Carta
+lockup on every tab the skill just wrote.
+
+**For each tab the skill just wrote, run the verbatim brand block from [`references/branding-and-header.md`](references/branding-and-header.md) — one `execute_office_js` per tab.** Substitute `<TAB_NAME>`; do not paraphrase the JS. Asset access uses `blobs.getText("assets/powered_by_carta.b64.txt")` — NOT `Read`, NOT shell `find`. The unlock-set-relock dance preserves aspect ratio.
+
+**Step 6c — verify branding ran (REQUIRED, observable).** Before proceeding to Gate 7, run this verification block as a **separate** `execute_office_js` call:
+
+```javascript
+const tabs = ["Budget <budget_year>", "<prior_year> Actuals"];
+const result = {};
+for (const tabName of tabs) {
+  const sheet = context.workbook.worksheets.getItem(tabName);
+  sheet.shapes.load("items/name");
+  await context.sync();
+  result[tabName] = sheet.shapes.items.map(s => s.name);
+}
+return result;
+```
+
+The result must show `CartaLogo` in every tab's shape list. If any tab returns `[]` or its shape list lacks `CartaLogo`, you have skipped Step 6b for that tab — re-run the brand block for that tab and re-verify. **Do not start Gate 7 summary text until this verification returns `CartaLogo` on every tab.** The verification call itself is observable evidence; without it in your tool history, Gate 6 is not complete.
+
+### If `<RUNTIME>` is `local-file`
+
+Build a **single JSON operations payload** that writes the cells AND
+adds the logo on both tabs, then apply it in one shot. Branding is
+part of the same payload — do not split it across two `uv run` calls,
+do not leave it for "after the user reviews", do not defer it to a
+follow-up step.
+
+```bash
+uv run "${CLAUDE_PLUGIN_ROOT}/scripts/write_workbook.py" --stdin <<'JSON'
+{
+  "workbook_path": "<DESTINATION>",
+  "create_if_missing": true,
+  "operations": [
+    /* …all the cell-write ops for Budget <budget_year> and <prior_year> Actuals… */
+    {
+      "op": "add_image",
+      "sheet": "Budget <budget_year>",
+      "path": "${CLAUDE_PLUGIN_ROOT}/skills/carta-create-budget/assets/powered_by_carta.png",
+      "anchor": "C1",
+      "rows": 3
+    },
+    {
+      "op": "add_image",
+      "sheet": "<prior_year> Actuals",
+      "path": "${CLAUDE_PLUGIN_ROOT}/skills/carta-create-budget/assets/powered_by_carta.png",
+      "anchor": "C1",
+      "rows": 3
+    }
+  ]
+}
+JSON
+```
+
+No `freeze_panes` op. Every `set_format` op for currency uses the locale-token format from the Hard rules section. For each `low-confidence — sparse history` account, include a `set_comment` op (see `branding-and-header.md` for the JSON shape). Response includes one `add_image` entry per tab with `status: "ok"`; `status: "missing"` means the asset path didn't resolve — fix it before moving on.
+
+### Hardcoded vs formula cells (both runtimes)
+
+Budget values are hardcoded numbers. Subtotals, `Total Income`, `Total Expenses`, `Net Operating Income` use `=SUM(...)` formulas so totals recompute when the user edits a budget cell.
+
+**Done when:** both tabs are populated AND both carry a `CartaLogo` shape (Excel) or an `add_image` op with `status: "ok"` (local-file).
+
+---
+
+## Gate 7 — Summary + next steps
+
+**Gate 7 precondition (DO NOT SKIP).** Before sending the summary text below, scan your tool history. Three anchors MUST be present in that order:
+
+1. An `AskUserQuestion` whose answer included `"Approve and write"` — Gate 5 approval.
+2. A `sheet.shapes.addImage(base64)` call for **each** tab the skill wrote (one per tab) — Gate 6b branding.
+3. The Step 6c verification `execute_office_js` whose result showed `CartaLogo` on every tab — Gate 6c verification.
+
+If any anchor is missing, you have skipped a gate. **Do NOT write "Carta logo placed at..." in the summary when no `shapes.addImage` call appears in your tool history — that's hallucinating completion.** STOP, go back, run the missing gate, then return here.
+
+One or two sentences confirming what got written, with a clickable link
+to the result.
+
+**If `<RUNTIME>` is `excel-addin`:**
+
+> Wrote [Budget 2026](<citation:Budget 2026!A1:N80>) with 47 line items
+> across 4 sections, and the source actuals on the
+> [2025 Actuals](<citation:2025 Actuals!A1:N80>) tab. Carta logo placed
+> at the top of column C on both tabs. Two lines (Salaries, LOC
+> interest) flagged for review — see the Source column in the preview I
+> showed you above.
+
+**If `<RUNTIME>` is `local-file`:**
+
+> Wrote `Budget 2026` (47 line items across 4 sections) plus a
+> `2025 Actuals` reference tab to
+> `file:///path/to/<budget-workbook>.xlsx`, both branded
+> with the Carta logo at the top of column C. Two lines (Salaries, LOC
+> interest) flagged for review — see the Source column in the preview I
+> showed you above.
+
+**Flag negative-NOI months in the summary.** If any monthly Net Income figure in the written sheet is negative, surface the count:
+
+> "⚠ N of 12 months show negative NOI in this projection — review the lumpy revenue/expense lines before locking the budget."
+
+Don't bury this in a table. The user needs to see it in prose so they can decide whether to revise before sending the workbook downstream.
+
+**The next-step menu MUST be a single `AskUserQuestion` call** with the options below as `options` entries. Never render them as a numbered markdown list, a bulleted list, or inline prose — bare-text menus break the chooser UI in Claude for Excel and force the user to type the number. The `← recommended` marker goes inside the `description` field of one option, not as a suffix on the `label`.
+
+1. **Refresh actuals against this budget once new postings land** ← recommended
+2. **Run a pacing analysis (Budget vs Actuals)**
+3. **Model a what-if scenario on this budget (headcount cut / revenue shock / cash target)**
+4. **I'm done**
+
+**Call `AskUserQuestion` with these exact parameters:**
+
+- `question`: `"What would you like to do next?"`
+- `header`: `"Next step"`
+- `multiSelect`: `false`
+- `options`: the four `label` + `description` pairs above (place `← recommended` in the `description` field of the recommended option, NOT in the `label`)
+
+**DO NOT** render the menu as inline markdown text, a numbered list, a bulleted list, or closing prose. If your response is about to contain `1. ...`, `2. ...`, `3. ...`, `4. ...` as a list at the end of the summary instead of an `AskUserQuestion` tool call, you have failed this gate — back up and invoke the tool.
+
+Mark one option `← recommended` based on context — option 1 by default, option 2 if the budget year is already in progress, option 3 if the user mentioned cash pressure.
+
+**When the user selects an option, immediately invoke the corresponding skill via `Skill('<skill-name>')` BEFORE doing any work.** Do not freelance the output — load the downstream skill's SKILL.md so its gates, layout spec, branding rules, and approval flow apply. Routing:
+
+| Option | Skill to invoke |
+|---|---|
+| 1 — Refresh actuals against this budget | `Skill('carta-investors:carta-budget-actuals')` |
+| 2 — Run a pacing analysis | `Skill('carta-investors:carta-budget-vs-actuals')` |
+| 3 — Model a what-if scenario | `Skill('carta-investors:carta-budget-scenarios')` |
+| 4 — I'm done | No invocation; close cleanly |
+
+---
+
+### DWH result formatting
+
+For queries > 50 rows, request `format: "ndjson"` and bucket the result into a blob before working with it. Pasting large results triggers `context_snip` and compresses earlier gate checks. Use `"markdown"` only for ≤50-row previews.
+
+## Hard rules
+
+- **DWH queries:** call `fetch("dwh:execute:query", …)` directly — never a generic external-DWH connector. Filter by `FUND_NAME = '<entity>'` (never `FIRM_NAME ILIKE`). Use `AMOUNT` (never the base-currency variant — NULL in many datasets). Sign-flip revenue: `CASE WHEN LEFT(ACCOUNT_TYPE,1) = '4' THEN -AMOUNT ELSE AMOUNT END`. Preserve reversal entries as-is.
+- **Budget values are hardcoded numbers** (per-account, per-month). Subtotals, Total Income, Total Expenses, and Net Operating Income use `=SUM(...)` formulas so totals recompute when the user edits.
+- **Currency format:** `_([$$-en-US]* #,##0.00_);_([$$-en-US]* (#,##0.00);_([$$-en-US]* "-"??_);_(@_)`. A bare `$` renders in system locale (`R$` on pt-BR) — never use it.
+- **Do not freeze panes.** Do not write a Provenance tab — source data lives on the `<prior_year> Actuals` tab.
+- **Two-row header for month-bucketed tables.** Row N = one merged cell per month label. Row N+1 = sub-headers. `range.merge(true)` destroys trailing cell values — never merge over a row that already holds sub-headers; insert a new row first.
+- **Month-label date-serial trap.** `"Jan 2026"` auto-coerces to a date serial. Prefix with `'` to force text, or write a real date with `numberFormat: "mmm yyyy"`.
+- **Border syntax (Office.js):** `style = "Continuous"`, then `weight = "Thin"`. Never `style: "Thin"`.
+- **Low-confidence rows are flagged with cell comments only** — no fill, font color, border, or italic. Attach to the column-B account-name cell.
+- **Brand every generated tab in Gate 6.** Both tabs MUST carry a `CartaLogo` shape (Excel) or `add_image` op with `status: "ok"` (local-file) before Gate 7 summary runs. Use the bundled assets in this skill's `assets/` — never link to another plugin's assets.
+- In local-file mode, never silently overwrite an existing `.xlsx` — the helper returns a "sheet exists" status; surface it to the user.
+
+---
+
+## Schema discovery
+
+Source: the Carta DWH journal-entries table. If column names are needed, look up the table via the Carta MCP DWH schema command once at Gate 0.
+
+## Error handling
+
+Never auto-retry. Always surface the failure and let the user decide.
+
+- **No Carta MCP connected** → "Open Settings → Connectors in Claude, enable Carta, then retry."
+- **`contexts:list` returns no firm** → echo name, ask for spelling. Don't silently near-match.
+- **ManCo sanity check fires (Gate 4)** → halt and ask for the exact ManCo entity name.
+- **Sparse lookback (< 6 months for many accounts)** → flag rows `low-confidence`, surface count, let user decide.
+- **Tab name collision** → ask to overwrite, append suffix (`Budget 2026 (2)`), or cancel.
+- **Local-file: unreadable path / openpyxl error** → echo path, confirm it's a valid `.xlsx`.
+- **Auth error from MCP** → ask user to reconnect Carta. Do not auto-retry.
+- **Connector connected but tool calls fail (`McpAuthError`, "tool not available")** → prefix mismatch, NOT auth. Re-run `refresh_mcp_connectors`, probe the matching prefix's `welcome`. Never tell the user to re-auth without verifying first.
