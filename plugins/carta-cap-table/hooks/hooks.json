@@ -5,12 +5,12 @@
                 "hooks": [
                     {
                         "type": "command",
-                        "command": "node ${CLAUDE_PLUGIN_ROOT}/scripts/hooks/inject-skill-context.js",
+                        "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks/inject-skill-context.js\"",
                         "timeout": 5
                     },
                     {
                         "type": "command",
-                        "command": "node ${CLAUDE_PLUGIN_ROOT}/scripts/hooks/init-data-dir.js",
+                        "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks/init-data-dir.js\"",
                         "timeout": 5
                     }
                 ]
@@ -22,7 +22,7 @@
                 "hooks": [
                     {
                         "type": "command",
-                        "command": "node ${CLAUDE_PLUGIN_ROOT}/scripts/hooks/track-active-skill.js",
+                        "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks/track-active-skill.js\"",
                         "timeout": 5
                     }
                 ]
@@ -32,7 +32,7 @@
                 "hooks": [
                     {
                         "type": "command",
-                        "command": "node ${CLAUDE_PLUGIN_ROOT}/scripts/hooks/inject-instrumentation.js",
+                        "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks/inject-instrumentation.js\"",
                         "timeout": 5
                     }
                 ]
@@ -44,7 +44,7 @@
                 "hooks": [
                     {
                         "type": "command",
-                        "command": "node ${CLAUDE_PLUGIN_ROOT}/scripts/hooks/post-tool-tracker.js",
+                        "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks/post-tool-tracker.js\"",
                         "timeout": 5
                     }
                 ]
