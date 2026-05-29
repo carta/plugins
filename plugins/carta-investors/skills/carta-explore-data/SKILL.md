@@ -14,6 +14,8 @@ description: >
   investments, cost basis, MOIC, or any financial reporting question.
   Always prefer this skill over carta-lp-dashboard unless the user explicitly asks for the
   LP dashboard by name.
+  Shareholder/stakeholder prompts route to cap-table.md, which explains the firm-context
+  limitation and stops (no DW workaround attempted).
 allowed-tools:
   - mcp__carta__fetch
   - mcp__carta__list_contexts
@@ -53,7 +55,9 @@ The user must have the Carta MCP server connected. If this is the first query in
 2. Call `set_context` with the target `firm_id` if needed
 3. For **cap table queries** — confirm the corporation ID before running. If the user names a portfolio company, resolve its `CORPORATION_ID` from `CORPORATION_BASIC_INFO_V2` first (see Step 1 table below)
 
-> **Firm context — tool priority rule:** When the active context is a **Firm**, prefer `fa:*` MCP commands over raw DWH queries. These commands are purpose-built for investor-facing data and return cleaner, pre-aggregated results. Fall back to `dwh:execute:query` only when no `fa:*` command covers the requested data. Only reach for `cap_table:*` or `cap_table_chart` as a last resort — if both `fa:*` commands and DWH queries failed to return a usable result.
+> **Firm context — tool priority rule:** When the active context is a **Firm**, prefer `fa:*` MCP commands over raw DWH queries. These commands are purpose-built for investor-facing data and return cleaner, pre-aggregated results. Fall back to `dwh:execute:query` only when no `fa:*` command covers the requested data.
+>
+> **Never call `cap_table:*` or `cap_table_chart` in firm context.** Those MCP commands require a direct cap-table-tenant user role and reject UUID-only corporation IDs — most portcos surfaced by `fa:list:portfolio_companies` are exposed via the investor portal, not as direct tenant members, so these calls will fail. If a DWH query returns no useful result for a cap-table prompt, tell the user the data is not available rather than retrying with `cap_table:*`. See `semantic-layer/cap-table.md` for the full routing rationale and the DWH queries to use instead.
 
 ## Step 0 — Fetch portfolio companies (MANDATORY GATE)
 
@@ -81,7 +85,7 @@ Use this table to pick the right context file before running any query:
 | Fund performance — IRR, DPI, TVPI, dry powder, expense breakdown | `fund-performance.md` | `AGGREGATE_FUND_METRICS` |
 | Cash flows in a period (contributions, distributions, fees, expenses) | `cash-flows.md` | `JOURNAL_ENTRIES` grouped by `event_type` |
 | Balance sheet (assets, liabilities, partners' capital) | `balance-sheet.md` | `JOURNAL_ENTRIES` summed by `account_type` |
-| Cap table — share classes, ownership %, shareholders, stakeholders, equity holders, who owns a company | `cap-table.md` | `SUMMARY_CAP_TABLE` (firm context required) |
+| Cap table — share classes, ownership %, firm stake, fully-diluted ownership, shareholders / stakeholders / who-owns prompts (cap-table.md explains the firm-context limitation for shareholder-level data) | `cap-table.md` | `SUMMARY_CAP_TABLE`, `FUND_CORPORATION_OWNERSHIP` (firm context required) |
 | 409a valuations, fair market value, FMV, common stock price | `valuations.md` | `IRC409A_VALUE` |
 | Investments — cost basis, FMV, MOIC, activity by year, unrealized gain/loss | `investments.md` | `AGGREGATE_INVESTMENTS` |
 | Portfolio company financials — revenue, ARR, headcount, KPIs | `company-financials.md` | `COMPANY_FINANCIALS` |
@@ -96,13 +100,15 @@ The file contains the SQL query, column reference, and presentation rules for th
 
 > **Cap table prerequisite check** — before loading `cap-table.md`, verify:
 > 1. The MCP context is set to a **firm** (not a fund or LP). Call `list_contexts` if unsure.
-> 2. A `CORPORATION_ID` is available. If the user named a company, resolve it from `CORPORATION_BASIC_INFO_V2` — match by name, UUID, or integer ID depending on what the user supplied:
+> 2. A `CORPORATION_UUID` is available. If the user named a company, resolve it from `CORPORATION_BASIC_INFO_V2` — match by name, UUID, or integer ID depending on what the user supplied:
 >    ```sql
->    SELECT DISTINCT corporation_id, corporation_uuid, company_name
+>    -- CORPORATION_BASIC_INFO_V2.CORPORATION_ID is INTEGER. SUMMARY_CAP_TABLE / FUND_CORPORATION_OWNERSHIP
+>    -- match on UUID (TEXT). Pass CORPORATION_UUID — never CORPORATION_ID — to cap-table.md queries.
+>    SELECT DISTINCT CORPORATION_ID AS corporation_integer_id, CORPORATION_UUID, CORPORATION_NAME
 >    FROM FUND_ADMIN.CORPORATION_BASIC_INFO_V2
->    WHERE LOWER(company_name) LIKE '%<user-supplied name>%'
->       OR corporation_uuid = '<user-supplied uuid>'
->       OR corporation_id = <user-supplied integer id>
+>    WHERE LOWER(CORPORATION_NAME) LIKE '%<user-supplied name>%'
+>       OR CORPORATION_UUID = '<user-supplied uuid>'
+>       OR CORPORATION_ID = <user-supplied integer id>
 >    LIMIT 10
 >    ```
 >    If multiple matches are found, use `AskUserQuestion` to confirm which one before continuing.
@@ -125,6 +131,18 @@ Use the MCP commands in sequence:
 - **Date fields** — `effective_date` for `JOURNAL_ENTRIES`; `month_end_date` for `MONTHLY_NAV_CALCULATIONS`; `investment_date` for `AGGREGATE_INVESTMENTS`
 - **Deduplication** — for `MONTHLY_NAV_CALCULATIONS` and `AGGREGATE_FUND_METRICS`, use `QUALIFY ROW_NUMBER() OVER (PARTITION BY fund_uuid ORDER BY last_refreshed_at DESC) = 1`
 - **ALLOCATIONS has multiple rows per fund** — always `GROUP BY fund_uuid` with `MAX(fund_name)` when using it for fund metadata
+
+## General Presentation Rules
+
+Each semantic file's `## Presentation` section is the source of truth for its domain. When a semantic file does not specify, fall back to these defaults:
+
+- **Render results as a markdown table** with clear column headers
+- **Use names, never raw UUIDs** as row identifiers — fund name, company name, LP name
+- **Currency** — `$X,XXX` with commas; negatives/outflows in parentheses `($X,XXX)`; bold totals `**$X,XXX**`
+- **Percentages** — `X.XX%`
+- **Multiples** — `X.XXx` (e.g. MOIC, TVPI, DPI)
+- **Missing values** — show `—` rather than `0` or `null` to avoid implying a real zero
+- **Use Carta voice** — "your fund's NAV", "your portfolio", not "query results"
 
 ## Terms
 
