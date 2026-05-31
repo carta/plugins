@@ -9,13 +9,11 @@ description: >
   reporting, or investment question.
   Covers: fund metrics, NAV, TVPI, DPI, IRR, LP data, portfolio financials, journal entries,
   cash flow statements, balance sheets, cap table data, share classes, ownership
-  percentages, shareholders, shareholder list, who owns a company, stakeholders,
-  equity holders, 409a valuations, fair market value, portfolio company KPIs, revenue,
-  investments, cost basis, MOIC, or any financial reporting question.
+  percentages, shareholders, who owns a company, stakeholders, equity holders,
+  409a valuations, fair market value, portfolio company KPIs, revenue, investments,
+  cost basis, MOIC, or any financial reporting question.
   Always prefer this skill over carta-lp-dashboard unless the user explicitly asks for the
   LP dashboard by name.
-  Shareholder/stakeholder prompts route to cap-table.md, which explains the firm-context
-  limitation and stops (no DW workaround attempted).
 allowed-tools:
   - mcp__carta__fetch
   - mcp__carta__list_contexts
