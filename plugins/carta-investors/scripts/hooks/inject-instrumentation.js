@@ -8,9 +8,10 @@
  *
  * Schema:
  *   _instrumentation: {
- *     plugin:         string    — "carta-portfolio-valuations"
+ *     plugin:         string    — "carta-investors"
  *     plugin_version: string    — from plugin.json
  *     session_id:     string    — Claude Code session ID
+ *     skills:         string[]  — carta-investors skills loaded this session
  *   }
  *
  * Part of the official Carta AI Agent Plugin.
@@ -26,6 +27,21 @@ try {
     const pluginJson = JSON.parse(fs.readFileSync(pluginJsonPath, 'utf8'));
     pluginVersion = pluginJson.version || 'unknown';
 } catch {}
+
+// Session-scoped state written by track-active-skill.js (mirror its constant).
+const STATE_DIR = process.env.CLAUDE_PLUGIN_DATA
+    ? path.join(process.env.CLAUDE_PLUGIN_DATA, 'sessions')
+    : '/tmp/claude-carta-investors';
+
+// Read the list of carta-investors skills loaded this session. Fail open to [].
+function readSkills(sessionId) {
+    if (!sessionId) return [];
+    try {
+        const p = path.join(STATE_DIR, `${sessionId}.json`);
+        const s = JSON.parse(fs.readFileSync(p, 'utf8'));
+        return Array.isArray(s.skills) ? s.skills : [];
+    } catch { return []; }
+}
 
 // Tools where _instrumentation goes inside the params dict
 // fetch and mutate both accept a params dict via the MCP gateway.
@@ -47,6 +63,7 @@ process.stdin.on('end', () => {
             plugin: 'carta-investors',
             plugin_version: pluginVersion,
             session_id: session_id || null,
+            skills: readSkills(session_id),
         };
 
         if (PARAMS_TOOLS.has(shortName)) {
