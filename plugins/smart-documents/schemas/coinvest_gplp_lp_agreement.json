@@ -1,0 +1,565 @@
+{
+  "template_key": "coinvest_gplp_lp_agreement",
+  "display_name": "LP Agreement (UK Co-Invest GP/LP SPV)",
+  "category": "uk_co_investment_spv",
+  "description": "Limited Partnership Agreement for a UK co-investment SPV with GP/LP structure. Covers fund terms, fees, investment details, waterfall, stakeholders, and investor commitments.",
+  "sections": [
+    {
+      "key": "carta",
+      "display_name": "Fund Details",
+      "description": "Core fund and entity information.",
+      "fields": [
+        {
+          "key": "fund_name",
+          "type": "string",
+          "required": true,
+          "auto_populate_from": "fund.name",
+          "prompt": "Fund name"
+        },
+        {
+          "key": "lead_legal_name",
+          "type": "string",
+          "required": true,
+          "auto_populate_from": "deal.lead_legal_name",
+          "prompt": "Lead (sponsor) legal name"
+        },
+        {
+          "key": "fund_currency",
+          "type": "string",
+          "required": true,
+          "auto_populate_from": "fund.currency",
+          "prompt": "Fund currency (e.g. USD, GBP, EUR)"
+        },
+        {
+          "key": "currency_symbol",
+          "type": "string",
+          "required": true,
+          "auto_populate_from": "fund.currency_symbol",
+          "prompt": "Currency symbol (e.g. $, £, €)"
+        },
+        {
+          "key": "gp_entity_name",
+          "type": "string",
+          "required": true,
+          "auto_populate_from": "fund.gp_entity_name",
+          "prompt": "GP entity name"
+        },
+        {
+          "key": "management_company_name",
+          "type": "string",
+          "required": false,
+          "auto_populate_from": "fund.management_company_name",
+          "prompt": "Management company name (if different from GP)"
+        },
+        {
+          "key": "accounting_date",
+          "type": "string",
+          "required": false,
+          "default": "03/31",
+          "prompt": "Accounting date (MM/DD format, e.g. 03/31)"
+        }
+      ]
+    },
+    {
+      "key": "fees",
+      "display_name": "Fee Structure",
+      "description": "Setup costs, management fees, operating expenses, and transaction fees.",
+      "fields": [
+        {
+          "key": "charge_setup_costs_option",
+          "type": "enum",
+          "values": ["YES_PRECISE_FIGURE", "YES_PERCENT_COMMITTED_CAPITAL", "NONE"],
+          "labels": {
+            "YES_PRECISE_FIGURE": "A precise figure",
+            "YES_PERCENT_COMMITTED_CAPITAL": "A % of the total Commitment",
+            "NONE": "None"
+          },
+          "required": true,
+          "default": "NONE",
+          "prompt": "Are setup costs charged to the fund?"
+        },
+        {
+          "key": "management_fee_setup_costs_amount",
+          "type": "string",
+          "required": false,
+          "depends_on": {"field": "charge_setup_costs_option", "values": ["YES_PRECISE_FIGURE"]},
+          "prompt": "Setup costs amount (e.g. \"5000\")"
+        },
+        {
+          "key": "management_fee_setup_costs_percent",
+          "type": "string",
+          "required": false,
+          "depends_on": {"field": "charge_setup_costs_option", "values": ["YES_PERCENT_COMMITTED_CAPITAL"]},
+          "prompt": "Setup costs as percentage of committed capital"
+        },
+        {
+          "key": "cap_operating_expenses",
+          "type": "enum",
+          "values": ["YES_UNLIMITED", "YES_CAP", "NO"],
+          "labels": {
+            "YES_UNLIMITED": "Yes, unlimited",
+            "YES_CAP": "Yes with a maximum cap",
+            "NO": "No"
+          },
+          "required": true,
+          "default": "NO",
+          "prompt": "Are operating expenses charged to the fund?"
+        },
+        {
+          "key": "operating_expenses_cap_percent",
+          "type": "string",
+          "required": false,
+          "depends_on": {"field": "cap_operating_expenses", "values": ["YES_CAP"]},
+          "prompt": "Operating expenses cap as a percentage"
+        },
+        {
+          "key": "management_fee_option",
+          "type": "enum",
+          "values": ["ANNUAL_FEE_PERCENT", "UPFRONT", "NONE"],
+          "labels": {
+            "ANNUAL_FEE_PERCENT": "An annual percentage of the Commitment which will be paid to the GP when the Investment is realized",
+            "UPFRONT": "A percentage of the Commitment paid upfront to the GP",
+            "NONE": "No"
+          },
+          "required": true,
+          "default": "NONE",
+          "prompt": "How is the management fee structured?"
+        },
+        {
+          "key": "management_fee_percent",
+          "type": "string",
+          "required": false,
+          "depends_on": {"field": "management_fee_option", "values": ["ANNUAL_FEE_PERCENT"]},
+          "prompt": "Annual management fee percentage (e.g. \"2\" for 2%)"
+        },
+        {
+          "key": "management_fee_upfront_percent",
+          "type": "string",
+          "required": false,
+          "depends_on": {"field": "management_fee_option", "values": ["UPFRONT"]},
+          "prompt": "Upfront management fee percentage (e.g. \"15\" for 15%)"
+        },
+        {
+          "key": "management_fee_recipient",
+          "type": "enum",
+          "values": ["GP", "IM", "IA"],
+          "labels": {
+            "GP": "To the General Partner",
+            "IM": "To the Investment Manager",
+            "IA": "To the Investment Adviser"
+          },
+          "required": false,
+          "depends_on": {"field": "management_fee_option", "values": ["ANNUAL_FEE_PERCENT", "UPFRONT"]},
+          "prompt": "Who receives the management fee?"
+        },
+        {
+          "key": "transaction_fee_option",
+          "type": "enum",
+          "values": ["GP_RETAIN", "GP_REIMBURSE"],
+          "labels": {
+            "GP_RETAIN": "The GP shall retain these fees",
+            "GP_REIMBURSE": "The GP shall reimburse these fees to the SPV"
+          },
+          "required": true,
+          "prompt": "How are transaction fees handled?"
+        },
+        {
+          "key": "transaction_fee_reimburse_percent",
+          "type": "string",
+          "required": false,
+          "depends_on": {"field": "transaction_fee_option", "values": ["GP_REIMBURSE"]},
+          "prompt": "Percentage of transaction fees reimbursed"
+        }
+      ]
+    },
+    {
+      "key": "investment",
+      "display_name": "Investment Details",
+      "description": "Details of the target investment.",
+      "fields": [
+        {
+          "key": "name",
+          "type": "string",
+          "required": true,
+          "prompt": "Target company / investment name"
+        },
+        {
+          "key": "country",
+          "type": "string",
+          "required": false,
+          "prompt": "Country of the target investment"
+        },
+        {
+          "key": "investment_type",
+          "type": "enum",
+          "values": ["EQUITY", "SAFE", "CONVERTIBLE_DEBT"],
+          "labels": {
+            "EQUITY": "Equity round",
+            "SAFE": "SAFE (Simple Agreement for Future Equity)",
+            "CONVERTIBLE_DEBT": "Convertible note"
+          },
+          "required": false,
+          "prompt": "Type of investment"
+        },
+        {
+          "key": "share_class",
+          "type": "enum",
+          "values": ["PREFERRED", "COMMON"],
+          "labels": {
+            "PREFERRED": "Preferred shares",
+            "COMMON": "Common shares"
+          },
+          "required": false,
+          "depends_on": {"field": "investment_type", "values": ["EQUITY"]},
+          "prompt": "Share class"
+        },
+        {
+          "key": "investment_amount",
+          "type": "string",
+          "required": false,
+          "prompt": "Total investment amount"
+        },
+        {
+          "key": "investment_currency",
+          "type": "string",
+          "required": false,
+          "auto_populate_from": "fund.currency",
+          "prompt": "Investment currency (defaults to fund currency)"
+        },
+        {
+          "key": "round_size",
+          "type": "string",
+          "required": false,
+          "prompt": "Total round size"
+        },
+        {
+          "key": "pre_money_valuation",
+          "type": "string",
+          "required": false,
+          "depends_on": {"field": "investment_type", "values": ["EQUITY"]},
+          "prompt": "Pre-money valuation"
+        },
+        {
+          "key": "conversion_cap",
+          "type": "string",
+          "required": false,
+          "depends_on": {"field": "investment_type", "values": ["SAFE", "CONVERTIBLE_DEBT"]},
+          "prompt": "Conversion cap (Yes/No)"
+        },
+        {
+          "key": "conversion_cap_amount",
+          "type": "string",
+          "required": false,
+          "depends_on": {"field": "investment_type", "values": ["SAFE", "CONVERTIBLE_DEBT"]},
+          "prompt": "Conversion cap amount"
+        },
+        {
+          "key": "safe_discount",
+          "type": "string",
+          "required": false,
+          "depends_on": {"field": "investment_type", "values": ["SAFE", "CONVERTIBLE_DEBT"]},
+          "prompt": "Discount percentage"
+        }
+      ]
+    },
+    {
+      "key": "waterfall",
+      "display_name": "Waterfall / Carried Interest",
+      "description": "Distribution waterfall and carried interest configuration.",
+      "fields": [
+        {
+          "key": "carried_interest",
+          "type": "string",
+          "required": false,
+          "prompt": "Carried interest percentage (e.g. \"20\")"
+        },
+        {
+          "key": "payee_carried_interest_option",
+          "type": "enum",
+          "values": ["GP", "IM", "IA", "CIV", "NONE"],
+          "labels": {
+            "GP": "To the General Partner",
+            "IM": "To the Investment Manager",
+            "IA": "To the Investment Adviser",
+            "CIV": "To one or multiple Carried Interest Partners",
+            "NONE": "None"
+          },
+          "required": true,
+          "default": "NONE",
+          "prompt": "Who receives the carried interest?"
+        },
+        {
+          "key": "preferred_return_option",
+          "type": "enum",
+          "values": ["CLASSIC_CONTRIBUTED_CAPITAL", "MULTIPLE_CONTRIBUTED_CAPITAL", "MULTI_CLASSIC_CONTRIBUTED_CAPITAL", "MULTI_MULTIPLE_CONTRIBUTED_CAPITAL", "NONE"],
+          "labels": {
+            "CLASSIC_CONTRIBUTED_CAPITAL": "Preferred Return (Annualized percentage rate) of Commitment",
+            "MULTIPLE_CONTRIBUTED_CAPITAL": "Multiple of Commitment",
+            "MULTI_CLASSIC_CONTRIBUTED_CAPITAL": "Tiered Carry (Annualized percentage rate) of Commitment",
+            "MULTI_MULTIPLE_CONTRIBUTED_CAPITAL": "Tiered Carry Multiple of Commitment",
+            "NONE": "None"
+          },
+          "required": true,
+          "default": "NONE",
+          "prompt": "Preferred return structure"
+        },
+        {
+          "key": "preferred_return_annualized_percent",
+          "type": "string",
+          "required": false,
+          "depends_on": {"field": "preferred_return_option", "values": ["CLASSIC_CONTRIBUTED_CAPITAL", "MULTI_CLASSIC_CONTRIBUTED_CAPITAL"]},
+          "prompt": "Preferred return annualized percentage"
+        },
+        {
+          "key": "preferred_return_compounded",
+          "type": "enum",
+          "values": ["YES", "NO"],
+          "labels": {
+            "YES": "Yes, compounded",
+            "NO": "No, simple"
+          },
+          "required": false,
+          "default": "NO",
+          "depends_on": {"field": "preferred_return_option", "values": ["CLASSIC_CONTRIBUTED_CAPITAL", "MULTI_CLASSIC_CONTRIBUTED_CAPITAL"]},
+          "prompt": "Is the preferred return compounded?"
+        },
+        {
+          "key": "preferred_return_multiple_percent",
+          "type": "string",
+          "required": false,
+          "depends_on": {"field": "preferred_return_option", "values": ["MULTIPLE_CONTRIBUTED_CAPITAL", "MULTI_MULTIPLE_CONTRIBUTED_CAPITAL"]},
+          "prompt": "Preferred return multiple (e.g. \"1.5\" for 1.5x)"
+        },
+        {
+          "key": "multi_hurdle_classic_list",
+          "type": "string_list",
+          "required": false,
+          "depends_on": {"field": "preferred_return_option", "values": ["MULTI_CLASSIC_CONTRIBUTED_CAPITAL"]},
+          "prompt": "Tiered hurdle rates (annualized percentage) for each tier, one per line"
+        },
+        {
+          "key": "multi_hurdle_multiple_list",
+          "type": "string_list",
+          "required": false,
+          "depends_on": {"field": "preferred_return_option", "values": ["MULTI_MULTIPLE_CONTRIBUTED_CAPITAL"]},
+          "prompt": "Tiered multiple hurdles for each tier, one per line"
+        },
+        {
+          "key": "catch_up_option",
+          "type": "enum",
+          "values": ["PROPORTION_LP_PROFIT", "NONE"],
+          "labels": {
+            "PROPORTION_LP_PROFIT": "Catchup acceleration for the GP",
+            "NONE": "No catchup"
+          },
+          "required": true,
+          "default": "NONE",
+          "prompt": "Catch-up provision"
+        },
+        {
+          "key": "catch_up_percentage",
+          "type": "string",
+          "required": false,
+          "depends_on": {"field": "catch_up_option", "values": ["PROPORTION_LP_PROFIT"]},
+          "prompt": "Catch-up percentage"
+        }
+      ]
+    },
+    {
+      "key": "stakeholders",
+      "display_name": "Stakeholders",
+      "description": "Key parties involved in the fund.",
+      "signatory": true,
+      "fields": [
+        {
+          "key": "investment_manager_name",
+          "type": "string",
+          "required": false,
+          "prompt": "Investment manager name"
+        },
+        {
+          "key": "investment_manager_address",
+          "type": "string",
+          "required": false,
+          "prompt": "Investment manager address"
+        },
+        {
+          "key": "investment_manager_signatory",
+          "type": "string",
+          "required": false,
+          "prompt": "Investment manager signatory name"
+        },
+        {
+          "key": "investment_manager_email",
+          "type": "string",
+          "required": false,
+          "prompt": "Investment manager signatory email"
+        },
+        {
+          "key": "has_auditor",
+          "type": "enum",
+          "values": ["YES", "NO"],
+          "labels": {"YES": "Yes", "NO": "No"},
+          "required": true,
+          "default": "NO",
+          "prompt": "Does the fund have an auditor?"
+        },
+        {
+          "key": "has_adviser",
+          "type": "enum",
+          "values": ["YES", "NO"],
+          "labels": {"YES": "Yes", "NO": "No"},
+          "required": true,
+          "default": "NO",
+          "prompt": "Does the fund have an adviser?"
+        },
+        {
+          "key": "adviser_name",
+          "type": "string",
+          "required": false,
+          "depends_on": {"field": "has_adviser", "values": ["YES"]},
+          "prompt": "Adviser name"
+        },
+        {
+          "key": "adviser_address",
+          "type": "string",
+          "required": false,
+          "depends_on": {"field": "has_adviser", "values": ["YES"]},
+          "prompt": "Adviser address"
+        },
+        {
+          "key": "key_person_provision",
+          "type": "enum",
+          "values": ["NO", "YES_ONE", "YES_TWO", "YES_ALL"],
+          "labels": {
+            "NO": "No",
+            "YES_ONE": "One of them",
+            "YES_TWO": "Two of them",
+            "YES_ALL": "All of them"
+          },
+          "required": true,
+          "default": "NO",
+          "prompt": "Key person provision"
+        },
+        {
+          "key": "key_person_list",
+          "type": "string_list",
+          "required": false,
+          "depends_on": {"field": "key_person_provision", "values": ["YES_ONE", "YES_TWO", "YES_ALL"]},
+          "prompt": "Key person names (one per line)"
+        },
+        {
+          "key": "initial_lp_name",
+          "type": "string",
+          "required": false,
+          "prompt": "Initial LP contact name"
+        },
+        {
+          "key": "initial_lp_email",
+          "type": "string",
+          "required": false,
+          "prompt": "Initial LP contact email"
+        },
+        {
+          "key": "initial_lp_entity_name",
+          "type": "string",
+          "required": false,
+          "prompt": "Initial LP entity name"
+        },
+        {
+          "key": "signatures",
+          "type": "signature_list",
+          "required": false,
+          "prompt": "Initial LP signatories (name, email, entity)"
+        }
+      ]
+    },
+    {
+      "key": "constitution",
+      "display_name": "Constitution",
+      "description": "Fund governance and operational details.",
+      "fields": [
+        {
+          "key": "minimum_ticket_size",
+          "type": "string",
+          "required": false,
+          "prompt": "Minimum ticket size (e.g. \"25000\")"
+        },
+        {
+          "key": "operator_option",
+          "type": "enum",
+          "values": ["IM"],
+          "labels": {"IM": "Investment Manager"},
+          "required": false,
+          "default": "IM",
+          "prompt": "Fund operator (hardcoded to IM)"
+        },
+        {
+          "key": "office_address",
+          "type": "string",
+          "required": false,
+          "prompt": "Registered office address"
+        }
+      ]
+    },
+    {
+      "key": "lifecycle",
+      "display_name": "Fund Lifecycle",
+      "description": "Holding and exit period configuration.",
+      "fields": [
+        {
+          "key": "holding_period_years",
+          "type": "string",
+          "required": false,
+          "prompt": "Holding period in years"
+        },
+        {
+          "key": "exit_period_years",
+          "type": "string",
+          "required": false,
+          "prompt": "Exit period in years"
+        }
+      ]
+    },
+    {
+      "key": "partner",
+      "display_name": "General Partner",
+      "description": "The GP entity of the SPV.",
+      "signatory": true,
+      "fields": [
+        {
+          "key": "entity_name",
+          "type": "string",
+          "required": true,
+          "prompt": "GP entity name"
+        },
+        {
+          "key": "signatures",
+          "type": "signature_list",
+          "required": true,
+          "prompt": "GP signatories (name, email, entity)"
+        }
+      ]
+    },
+    {
+      "key": "investors",
+      "display_name": "Investors",
+      "description": "Carry limited partners and their commitments.",
+      "fields": [
+        {
+          "key": "investor_entries",
+          "type": "investor_list",
+          "required": false,
+          "prompt": "Add carry limited partners",
+          "payload_format": "array_at_section_root",
+          "investor_fields": {
+            "name": "Investor name",
+            "email": "Investor email",
+            "investment_amount": "Commitment amount",
+            "type": "CARRY_LIMITED_PARTNER"
+          }
+        }
+      ]
+    }
+  ]
+}
