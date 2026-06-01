@@ -111,6 +111,8 @@ The file contains the SQL query, column reference, and presentation rules for th
 >    ```
 >    If multiple matches are found, use `AskUserQuestion` to confirm which one before continuing.
 
+* IMPORTANT: if a specific semantic layer was not found, check for Saved Questions by running `fa:list:saved_queries` to get a list of existing questions and descriptions saved on the Data Warehouse. Use `fetch("fa:get:saved_query", {"name": "<query_name>"})` to retrieve the SQL of a matching saved query, where `<query_name>` is the `name` field returned by `fa:list:saved_queries`.
+
 ## Step 3 — Execute the Query
 
 Use the MCP commands in sequence:
