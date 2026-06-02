@@ -24,12 +24,6 @@
       "source": "./plugins/carta-crm",
       "description": "Manage the Carta CRM conversationally — search, add, update, and enrich investors, companies, contacts, deals, notes, and fundraisings via the Carta CRM MCP Server",
       "category": "productivity"
-    },
-    {
-      "name": "smart-documents",
-      "source": "./plugins/smart-documents",
-      "description": "Generate and manage smart documents (legal agreements, formation docs) via the Carta CLI. Supports interactive payload construction or raw JSON input.",
-      "category": "productivity"
     }
   ]
 }
