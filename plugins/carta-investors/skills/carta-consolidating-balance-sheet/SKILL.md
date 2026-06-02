@@ -105,6 +105,27 @@ Acme Ventures for March 2026"*), proceed without re-asking.
 
 ---
 
+## Execution discipline
+
+Execute all gates silently. Do not narrate tool calls, intermediate results, or status updates. Only speak at explicit decision points: Gate 2 (entity scope picker), Gate 5 (pre-build review and approval), Gate 6 (output destination), and Gate 8 (post-action menu).
+
+---
+
+## Entry mode — fresh session vs. chained skill
+
+Before Gate 0, check whether these context variables are already set from an earlier skill call in the same session (e.g. chained from `carta-consolidating-pnl`):
+
+- `<SERVER>` — connected Carta MCP server prefix
+- `<FIRM_NAME>` and `<FIRM_UUID>` — the resolved firm
+
+**If both are in context:** skip Gate 0 entirely. In Gate 1, skip the `contexts:list` lookup — but still call `set_context(firm_id=<FIRM_UUID>)` with the already-known UUID to re-anchor the MCP session scope (a prior skill's scope can be reset by a new turn or connector refresh between invocations), then proceed to `fa:list:entities` to enumerate entities for Gate 2.
+
+**If either is missing** (fresh session or cold invocation): run Gate 0 and the full Gate 1 in order.
+
+Do not ask "which firm?" when it is already established from the skill the user just ran.
+
+---
+
 ## Gate 0: Identify the Carta MCP environment
 
 1. Call `refresh_mcp_connectors`. Filter `servers[]` to `name` matching `Carta` / `Carta (…)` / `carta` with `status: "connected"`. Drop `failed`.
@@ -254,8 +275,27 @@ accruals booked during the month have offsetting P&L entries excluded by the
 If the result set is large, store it in a session blob (e.g.
 `blobs.setJSON("bs_data", ...)`) instead of carrying it in the prompt.
 
+### Resolve the presentation currency (`<fund_currency>`)
+
+The number format in `references/formatting.md` is built from `<fund_currency>` —
+resolve it here, do **not** assume USD:
+
+1. Probe the journal-entries table for a currency column:
+   `fetch(command="dwh:get:table_schema", params={"table_name": "<journal_entries_table>"})`.
+   If it exposes a currency column (e.g. `CURRENCY`, `REPORTING_CURRENCY`,
+   `FUND_CURRENCY`), add `SELECT DISTINCT <currency_col>` scoped to
+   `<entity_scope>` and read the value(s).
+2. If exactly one distinct currency comes back, set `<fund_currency>` to it.
+3. If the column doesn't exist, or the scope spans **multiple** currencies
+   (a consolidating BS that mixes currencies cannot be summed into one Total
+   column — see the no-cross-currency rule), ask the user via
+   `AskUserQuestion`: *"What presentation currency should I use for this
+   consolidating balance sheet?"* Store the answer as `<fund_currency>`.
+
+Never silently default to USD.
+
 **Done when:** the period dataset is loaded (covering only Asset / Liability /
-Equity accounts) — scoped to `<entity_scope>`.
+Equity accounts) — scoped to `<entity_scope>` — and `<fund_currency>` is resolved.
 
 ---
 
@@ -403,7 +443,7 @@ covers sheet name, header rows, section headers, subtotal/grand-total rows,
 the Total column, number formats, column widths, font, and the "do not
 include" list.
 
-**Also read [`references/branding-and-header.md`](references/branding-and-header.md)** for the standard 4-row metadata band (B1 firm / B2 descriptive title like `"Consolidating Balance Sheet · As of Mar-26"` / B3 source / B4 other context) and Carta logo placement (column C, rows 1–3 height). If `formatting.md` and `branding-and-header.md` disagree on where section headers start (e.g. `formatting.md` says `B5 = Assets`), the branding spec wins — shift sections to start at row 6 or below so rows 1–4 stay reserved for metadata.
+**Also read [`references/branding-and-header.md`](references/branding-and-header.md)** for the standard 4-row metadata band (B1 firm / B2 descriptive title like `"Consolidating Balance Sheet · As of Mar-26"` / B3 source / B4 other context) and Carta logo placement (column E, rows 1–3 height). If `formatting.md` and `branding-and-header.md` disagree on where section headers start (e.g. `formatting.md` says `B5 = Assets`), the branding spec wins — shift sections to start at row 6 or below so rows 1–4 stay reserved for metadata.
 
 ### Brand block — verbatim, run AFTER the cell writes (DO NOT SKIP)
 
@@ -553,5 +593,5 @@ user decide whether to retry.
 - **Don't rename accounts.** Use `ACCOUNT_NAME` from JE verbatim.
 - **Don't run period-only variant** without explicit opt-in and a "won't balance" warning.
 - **Don't claim success** without re-reading and verifying per-entity balance in Gate 8.
-- **Don't skip branding.** Gate 8 report must not run until the tab carries `CartaLogo` on column C — see [`references/branding-and-header.md`](references/branding-and-header.md).
+- **Don't skip branding.** Gate 8 report must not run until the tab carries `CartaLogo` on column E — see [`references/branding-and-header.md`](references/branding-and-header.md).
 - **Do NOT freeze panes** on this tab.

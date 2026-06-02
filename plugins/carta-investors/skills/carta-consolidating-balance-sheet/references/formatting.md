@@ -13,17 +13,16 @@ Truncate to Excel's 31-character sheet name limit if needed.
 
 This sheet uses the Carta budgeting 4-row metadata band (see
 [`branding-and-header.md`](branding-and-header.md)). The standard layout
-places labels in **column B**, not column A, so the Carta logo at column C
-anchors cleanly to the right of the metadata.
+places labels in **column B**, not column A. The Carta logo anchors at column E (rows 1–3 height), consistent with the budgeting plugin standard.
 
 | Cell | Content | Style |
 |---|---|---|
 | B1 | `<FIRM-FULL-NAME>` (e.g. `Acme Ventures`) | bold, size 10 |
 | B2 | `Consolidating Balance Sheet · As of <MMM-YY>` (e.g. `Consolidating Balance Sheet · As of Mar-26`) | bold, size 10 |
 | B3 | `Source: Carta MCP · DWH journal entries` | italic, size 10 |
-| B4 | `Amounts in USD` (or whatever the data currency is) | italic, size 10 |
+| B4 | `Amounts in <fund_currency>` (the currency resolved in Gate 3 — e.g. `Amounts in EUR`; never hardcode USD) | italic, size 10 |
 | Row 5 | blank — breathing room between header band and column headers |
-| Row 6 | entity-column headers — C6 → last-entity-col, one per entity, plus the Total column. Bold, centered, fill `#D6DCE4`, wrap text |
+| Row 6 | entity-column headers — C6 → last-entity-col, one per entity, plus the Total column. Bold, white text on black fill (`#000000` fill, `#FFFFFF` font), centered, wrap text |
 | Row 7 | blank |
 | B8 | `Assets` | underlined section header (first section starts at row 8) |
 
@@ -69,8 +68,7 @@ SUM-across-entities pattern. Same bold / border treatment.
 
 ## Number formats
 
-- Data cells: Accounting / money with two decimals, e.g. `$#,##0.00` or
-  Excel's built-in Accounting format.
+- Data cells: build the format string from `<fund_currency>` resolved in Gate 3's "Resolve the presentation currency" sub-step. For USD: `_([$$-en-US]* #,##0.00_);_([$$-en-US]* (#,##0.00);_([$$-en-US]* "-"??_);_(@_)`. For other currencies use the matching locale token (e.g. `[$€-407]` for EUR, `[$£-809]` for GBP) or the generic accounting pattern `_(* #,##0.00_);_(* (#,##0.00);_(* "-"??_);_(@_)` with the currency code prepended in the header. If `<fund_currency>` was not resolved for any reason, ask the user before writing — never fall back to USD. **Never hardcode `[$$-en-US]`** — that locks all amounts to USD regardless of fund currency. Never use bare `$` or Excel's built-in Accounting format; both resolve to system currency on non-US installs.
 - Subtotals / totals: same format, bolded.
 
 ## Column widths
