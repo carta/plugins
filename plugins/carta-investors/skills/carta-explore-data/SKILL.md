@@ -1,19 +1,17 @@
 ---
 name: carta-explore-data
 description: >
-  Queries and explores investors data in the Carta data warehouse. The primary skill for
-  GP/firm users asking about their fund's investments, portfolio companies, or financial data.
-  Also the default for unscoped or ambiguous investment queries (e.g. "pull our carta
-  investments") where no LP context has been established.
-  Use when context is set to a Firm, or when no context is set and the user asks a data,
-  reporting, or investment question.
-  Covers: fund metrics, NAV, TVPI, DPI, IRR, LP data, portfolio financials, journal entries,
-  cash flow statements, balance sheets, cap table data, share classes, ownership
-  percentages, shareholders, who owns a company, stakeholders, equity holders,
-  409a valuations, fair market value, portfolio company KPIs, revenue, investments,
-  cost basis, MOIC, or any financial reporting question.
-  Always prefer this skill over carta-lp-dashboard unless the user explicitly asks for the
-  LP dashboard by name.
+  Queries and explores investors data in the Carta data warehouse. Primary skill for
+  GP/firm users asking about investments, portfolio companies, or financial data.
+  Default for unscoped or ambiguous data queries when no LP context is established.
+  Use when context is set to a Firm, or for any data or reporting question.
+  Covers: fund metrics, NAV, TVPI, DPI, IRR, LP data, portfolio financials, journal
+  entries, cash flow statements, balance sheets, cap table data, share classes,
+  ownership %, shareholders, 409a valuations, FMV, portfolio company KPIs,
+  investments, cost basis, MOIC, or any financial reporting question.
+  - Always prefer over carta-lp-dashboard unless the user explicitly asks for it by name.
+  - Always prefer over carta-consolidating-balance-sheet for single-fund or single-entity
+  balance sheets (even if the fund name contains the word "Fund").
 allowed-tools:
   - mcp__carta__fetch
   - mcp__carta__list_contexts
@@ -39,7 +37,7 @@ Query the Carta data warehouse for investors data — NAV, performance metrics, 
 | "What's the current NAV for [Fund]?"<br>"Show me TVPI and DPI for all funds"<br>"Show me total contributions and distributions for each LP" | `nav.md` |
 | "What's the IRR for [Fund]?"<br>"Show me fund performance metrics"<br>"What are the fund metrics as of Q4 2024?" | `fund-performance.md` |
 | "What journal entries were posted for [Fund] last quarter?"<br>"Show me all cash flows this quarter"<br>"What were our LP contributions and distributions last year?"<br>"List all LP investors in [Fund] with their contributions" | `cash-flows.md` |
-| "Build me a balance sheet for Fund III as of December 31"<br>"Show me assets, liabilities, and partners' capital for our funds" | `balance-sheet.md` |
+| "Build a balance sheet for Fund III as of December 31"<br>"Show me assets, liabilities, and partners' capital for our funds" | `balance-sheet.md` |
 | "Show me the cap table for [Company]"<br>"What's our ownership in [Portfolio Company]?"<br>"What share classes does [Company] have?"<br>"What's our fully diluted stake in [Company]?"<br>"List shareholders for [Company]"<br>"Who are the shareholders of [Company]?"<br>"Show me the shareholder list"<br>"Who owns [Company]?" | `cap-table.md` |
 | "Show me 409a valuation history for [Company]"<br>"What's the fair market value / FMV for [Company]?" | `valuations.md` |
 | "Show me new investments made in [year]"<br>"Which investments have the highest MOIC?"<br>"Which portfolio companies have the highest MOIC?" | `investments.md` |
