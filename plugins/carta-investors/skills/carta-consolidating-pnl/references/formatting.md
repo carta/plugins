@@ -14,7 +14,7 @@ Excel's 31-character sheet name limit if needed.
 This sheet follows the Carta budgeting 4-row metadata standard (see
 [`branding-and-header.md`](branding-and-header.md)). Rows 1–4 are reserved
 for the firm/title/source/context band; the existing merged P&L header
-band and sub-headers shift down by 4 rows so the Carta logo at column C
+band and sub-headers shift down by 4 rows so the Carta logo at column E
 (rows 1–3 height) has clear space.
 
 | Cell | Content |

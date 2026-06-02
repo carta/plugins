@@ -89,6 +89,27 @@ If the user gave both in the request, proceed without re-asking.
 
 ---
 
+## Execution discipline
+
+Execute all gates silently. Do not narrate tool calls, intermediate results, or status updates. Only speak at explicit decision points: Gate 4 (pre-build review, build chooser, and budget source), Gate 4b (if budget source requires a file or tab), Gate 5 (output destination if workbook is non-empty), and Gate 9 (post-action menu).
+
+---
+
+## Entry mode — fresh session vs. chained skill
+
+Before Gate 0, check whether these context variables are already set from an earlier skill call in the same session (e.g. chained from `carta-consolidating-balance-sheet`):
+
+- `<SERVER>` — connected Carta MCP server prefix
+- `<FIRM_NAME>` and `<FIRM_UUID>` — the resolved firm
+
+**If both are in context:** skip Gates 0 and 1 entirely. Proceed from Gate 2 (pull period blocks) using the firm already in context and the month from the user's prompt.
+
+**If either is missing** (fresh session or cold invocation): run Gates 0 and 1 in order.
+
+Do not ask "which firm?" when it is already established from the skill the user just ran.
+
+---
+
 ## Gate 0: Identify the Carta MCP environment
 
 1. Call `refresh_mcp_connectors`. Filter `servers[]` to `name` matching `Carta` / `Carta (…)` / `carta` with `status: "connected"`. Drop `failed`.
@@ -180,23 +201,9 @@ WHERE FIRM_ID = '<firm_uuid>'
   AND EFFECTIVE_DATE BETWEEN '<ytd_start>' AND '<month_end>'
 ```
 
-- `json_rows > 0` → **JSON path**. Continue to Probe 2.
-- `json_rows == 0 AND flat_rows > 0` → **flat path**. Skip Probe 2 — there is exactly one synthetic category labeled `Reporting Tag`. Set `<TAG_CATEGORIES> = ["Reporting Tag"]`, `<TAG_PATH> = "flat"`, and continue.
+- `json_rows > 0` → **JSON path**. Skip Probe 2 — go directly to Probe 3 (JSON path). Probe 3 returns both category names and cardinality in one query, making a separate category-discovery query redundant.
+- `json_rows == 0 AND flat_rows > 0` → **flat path**. Set `<TAG_CATEGORIES> = ["Reporting Tag"]`, `<TAG_PATH> = "flat"`, and continue to Probe 3.
 - Both zero → set `<TAG_CATEGORIES> = []`, `<TAG_PATH> = "none"`. Gate 4 will omit the tag-view chooser option.
-
-### Probe 2 — Discover categories (JSON path only)
-
-```sql
-SELECT DISTINCT f.key::TEXT AS category
-FROM <journal_entries_table>,
-     LATERAL FLATTEN(input => REPORTING_TAGS_JSON) f
-WHERE FIRM_ID = '<firm_uuid>'
-  AND REPORTING_TAGS_JSON IS NOT NULL
-  AND EFFECTIVE_DATE BETWEEN '<ytd_start>' AND '<month_end>'
-ORDER BY 1
-```
-
-Store the returned keys as `<TAG_CATEGORIES>` (sorted list — e.g. `["Department", "Function", "Geography"]`). Set `<TAG_PATH> = "json"`.
 
 ### Probe 3 — Cardinality per category (when tag-view is on the table)
 
@@ -214,6 +221,8 @@ GROUP BY 1
 ORDER BY 1
 ```
 
+**JSON path — after query:** Store `<TAG_CATEGORIES>` as the sorted list of distinct `category` values returned, set `<TAG_PATH> = "json"`, and store `<TAG_CARDINALITY>` as the map of `category → n_values`.
+
 **Flat path:**
 ```sql
 SELECT 'Reporting Tag' AS category, COUNT(DISTINCT REPORTING_TAGS) AS n_values
@@ -223,7 +232,7 @@ WHERE FIRM_ID = '<firm_uuid>'
   AND EFFECTIVE_DATE BETWEEN '<ytd_start>' AND '<month_end>'
 ```
 
-Store as `<TAG_CARDINALITY>` (map of `category → n_values`).
+**Flat path — after query:** `<TAG_CATEGORIES>` is already set to `["Reporting Tag"]` (from Probe 1). Keep `<TAG_PATH> = "flat"`. Store `<TAG_CARDINALITY>` as `{"Reporting Tag": n_values}`.
 
 **No `AskUserQuestion` here.** This gate only probes. The tag-view choice happens in Gate 4 if the user picks tag-view mode; the wide-vs-long choice (if needed) is asked there too.
 
@@ -533,11 +542,11 @@ The most common failure mode is bundling cell writes + formatting + logo into on
 
 Returning from Call 1 does NOT finish Gate 6. The verification call must appear in your tool history before Gate 7.
 
-Read `references/formatting.md` AND [`references/branding-and-header.md`](references/branding-and-header.md) now and apply both verbatim. `branding-and-header.md` reserves rows 1–4 for the firm/title/source/context band and places the Carta logo at **column D** (per-skill override for carta-consolidating-pnl), rows 1–3 height. `formatting.md` documents the +4 row shift this introduces — all data row numbers downstream are offset accordingly.
+Read `references/formatting.md` AND [`references/branding-and-header.md`](references/branding-and-header.md) now and apply both verbatim. `branding-and-header.md` reserves rows 1–4 for the firm/title/source/context band and places the Carta logo at **column E**, rows 1–3 height. `formatting.md` documents the +4 row shift this introduces — all data row numbers downstream are offset accordingly.
 
 ### Brand block — verbatim, paste don't paraphrase (DO NOT SKIP)
 
-The detail tab is not "built" until it carries a `CartaLogo` shape sized to the D1:D3 row band. **Paste the block below verbatim** — never substitute a hardcoded pixel height (e.g. `image.height = 48`), never anchor to a single cell (`getRange("D1")`). Both shortcuts produce a logo the user has to resize and reposition by hand. Substitute only `<TAB_NAME>` = `<DETAIL_TAB_NAME>`:
+The detail tab is not "built" until it carries a `CartaLogo` shape sized to the E1:E3 row band. **Paste the block below verbatim** — never substitute a hardcoded pixel height (e.g. `image.height = 48`), never anchor to a single cell (`getRange("E1")`). Both shortcuts produce a logo the user has to resize and reposition by hand. Substitute only `<TAB_NAME>` = `<DETAIL_TAB_NAME>`:
 
 ```javascript
 const base64 = blobs.getText("assets/powered_by_carta.b64.txt").trim();
@@ -552,7 +561,7 @@ for (const s of shapes.items) {
 }
 await context.sync();
 
-const rows = sheet.getRange("D1:D3");
+const rows = sheet.getRange("E1:E3");
 rows.load(["left", "top", "height"]);
 await context.sync();
 
@@ -572,12 +581,12 @@ image.lockAspectRatio = true;
 await context.sync();
 ```
 
-**Brand-verification call (REQUIRED, observable).** Run this as a **separate** `execute_office_js` call before proceeding to Gate 7. The check confirms not just that the shape exists but that it was sized to the D1:D3 row band:
+**Brand-verification call (REQUIRED, observable).** Run this as a **separate** `execute_office_js` call before proceeding to Gate 7. The check confirms not just that the shape exists but that it was sized to the E1:E3 row band:
 
 ```javascript
 const sheet = context.workbook.worksheets.getItem("<DETAIL_TAB_NAME>");
 sheet.shapes.load("items/name,items/height,items/left");
-const rows = sheet.getRange("D1:D3");
+const rows = sheet.getRange("E1:E3");
 rows.load(["height", "left"]);
 await context.sync();
 
@@ -591,7 +600,7 @@ return {
 };
 ```
 
-Pass criteria — ALL three must be true: `found`, `heightMatchesBand`, `leftMatchesBand`. If `found` is false, re-run the brand block. If `heightMatchesBand` is false, the block was paraphrased with a pixel literal — delete the shape and re-run the verbatim block above. If `leftMatchesBand` is false, the anchor was a single cell instead of `D1:D3` — same fix. **Do not proceed to Gate 7 until every check passes.** Without this verification in your tool history with all-true checks, Gate 6 branding is not complete.
+Pass criteria — ALL three must be true: `found`, `heightMatchesBand`, `leftMatchesBand`. If `found` is false, re-run the brand block. If `heightMatchesBand` is false, the block was paraphrased with a pixel literal — delete the shape and re-run the verbatim block above. If `leftMatchesBand` is false, the anchor was a single cell instead of `E1:E3` — same fix. **Do not proceed to Gate 7 until every check passes.** Without this verification in your tool history with all-true checks, Gate 6 branding is not complete.
 
 ### Column map (use exactly — do NOT add columns the skill doesn't ask for)
 
@@ -744,18 +753,18 @@ After the detail tab is written and read-back has confirmed the row map, call `c
 chose "Build the detail tab only".** Tag-view writes one tab; detail-only
 writes one tab. Both jump straight to Gate 8.
 
-Read `references/summary-tab.md` AND [`references/branding-and-header.md`](references/branding-and-header.md) now and apply both verbatim. The Summary tab follows the same 4-row metadata band as the detail tab — rows 1–4 reserved for firm/title/source/context, and the Carta logo at column D anchored to D1 with height = rows 1–3. If `summary-tab.md`'s legacy layout puts the Executive Summary title on B2 with a larger font, keep it on B2 but trim the font down so it still fits inside the 4-row band (or move auxiliary text to B3/B4).
+Read `references/summary-tab.md` AND [`references/branding-and-header.md`](references/branding-and-header.md) now and apply both verbatim. The Summary tab follows the same 4-row metadata band as the detail tab — rows 1–4 reserved for firm/title/source/context, and the Carta logo at column E anchored to E1 with height = rows 1–3. If `summary-tab.md`'s legacy layout puts the Executive Summary title on B2 with a larger font, keep it on B2 but trim the font down so it still fits inside the 4-row band (or move auxiliary text to B3/B4).
 
 ### Brand block — verbatim, paste don't paraphrase (DO NOT SKIP)
 
-The Summary tab is not "built" until it carries a `CartaLogo` shape sized to the D1:D3 row band. **Paste the brand block from Gate 6** (the verbatim version inline there) — never hardcode `image.height = <number>`, never anchor to a single cell. Substitute `<TAB_NAME>` = `<SUMMARY_TAB_NAME>`.
+The Summary tab is not "built" until it carries a `CartaLogo` shape sized to the E1:E3 row band. **Paste the brand block from Gate 6** (the verbatim version inline there) — never hardcode `image.height = <number>`, never anchor to a single cell. Substitute `<TAB_NAME>` = `<SUMMARY_TAB_NAME>`.
 
 **Brand-verification call (REQUIRED, observable).** Run this as a **separate** `execute_office_js` call before moving to Gate 8. Same shape-geometry check as the detail tab:
 
 ```javascript
 const sheet = context.workbook.worksheets.getItem("<SUMMARY_TAB_NAME>");
 sheet.shapes.load("items/name,items/height,items/left");
-const rows = sheet.getRange("D1:D3");
+const rows = sheet.getRange("E1:E3");
 rows.load(["height", "left"]);
 await context.sync();
 
@@ -767,7 +776,7 @@ return {
 };
 ```
 
-Pass criteria — `found`, `heightMatchesBand`, `leftMatchesBand` all true. Same fix paths as Gate 6: pixel-literal height → delete shape + re-run verbatim block; single-cell anchor → delete shape + re-run with `getRange("D1:D3")`. If any check fails, re-run before moving to Gate 8.
+Pass criteria — `found`, `heightMatchesBand`, `leftMatchesBand` all true. Same fix paths as Gate 6: pixel-literal height → delete shape + re-run verbatim block; single-cell anchor → delete shape + re-run with `getRange("E1:E3")`. If any check fails, re-run before moving to Gate 8.
 
 `summary-tab.md` covers sheet name, position (index 0 — first tab), header rows, the
 Month and YTD blocks, the keyword buckets for revenue, the cross-sheet
@@ -976,4 +985,4 @@ Never auto-retry. Surface failures, let the user decide.
 - **Don't add columns the skill doesn't ask for** (no Acct # / GL Code column — column C is a 5pt spacer).
 - **Account label = `account_name` only.** Never `"4160 Management fee income"` or any variation. GL code is internal-only.
 - **Do NOT freeze panes** on either tab.
-- **Don't skip branding** — Gate 8 must not run until both tabs carry `CartaLogo` on column D. See [`references/branding-and-header.md`](references/branding-and-header.md).
+- **Don't skip branding** — Gate 8 must not run until both tabs carry `CartaLogo` on column E. See [`references/branding-and-header.md`](references/branding-and-header.md).
