@@ -8,7 +8,7 @@ description: >
   Covers: fund metrics, NAV, TVPI, DPI, IRR, LP data, portfolio financials, journal
   entries, cash flow statements, balance sheets, cap table data, share classes,
   ownership %, shareholders, 409a valuations, FMV, portfolio company KPIs,
-  investments, cost basis, MOIC, or any financial reporting question.
+  investments, cost basis, MOIC, or any financial reporting question, loans, loan ops
   - Always prefer over carta-lp-dashboard unless the user explicitly asks for it by name.
   - Always prefer over carta-consolidating-balance-sheet for single-fund or single-entity
   balance sheets (even if the fund name contains the word "Fund").
@@ -74,19 +74,20 @@ This call is required even if the user named a specific company — it establish
 
 Use this table to pick the right context file before running any query:
 
-| User is asking about | Context file to read | Primary table / tool |
-|---|---|---|
-| **Available investments or list of portfolio companies** | — | `fetch("fa:list:portfolio_companies", {})` (already run in Step 0) |
-| Current NAV, TVPI, DPI, MOIC, cumulative LP contributions/distributions | `nav.md` | `MONTHLY_NAV_CALCULATIONS` |
-| Fund performance — IRR, DPI, TVPI, dry powder, expense breakdown | `fund-performance.md` | `AGGREGATE_FUND_METRICS` |
-| Cash flows in a period (contributions, distributions, fees, expenses) | `cash-flows.md` | `JOURNAL_ENTRIES` grouped by `event_type` |
-| Balance sheet (assets, liabilities, partners' capital) | `balance-sheet.md` | `JOURNAL_ENTRIES` summed by `account_type` |
-| Cap table — share classes, ownership %, firm stake, fully-diluted ownership, shareholders / stakeholders / who-owns prompts (cap-table.md explains the firm-context limitation for shareholder-level data) | `cap-table.md` | `SUMMARY_CAP_TABLE`, `FUND_CORPORATION_OWNERSHIP` (firm context required) |
-| 409a valuations, fair market value, FMV, common stock price | `valuations.md` | `IRC409A_VALUE` |
-| Investments — cost basis, FMV, MOIC, activity by year, unrealized gain/loss | `investments.md` | `AGGREGATE_INVESTMENTS` |
-| Portfolio company financials — revenue, ARR, headcount, KPIs | `company-financials.md` | `COMPANY_FINANCIALS` |
-| Benchmark percentile rankings vs peers | Use `carta-investors:carta-performance-benchmarks` | `TEMPORAL_FUND_COHORT_BENCHMARKS` |
-| Fund list, entity type (Fund vs SPV) | Query `ALLOCATIONS` directly | `ALLOCATIONS` |
+| User is asking about                                                                                                                                                                                       | Context file to read                              | Primary table / tool                                                      |
+|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------|---------------------------------------------------------------------------|
+| **Available investments or list of portfolio companies**                                                                                                                                                   | —                                                 | `fetch("fa:list:portfolio_companies", {})` (already run in Step 0)        |
+| Current NAV, TVPI, DPI, MOIC, cumulative LP contributions/distributions                                                                                                                                    | `nav.md`                                          | `MONTHLY_NAV_CALCULATIONS`                                                |
+| Fund performance — IRR, DPI, TVPI, dry powder, expense breakdown                                                                                                                                           | `fund-performance.md`                             | `AGGREGATE_FUND_METRICS`                                                  |
+| Cash flows in a period (contributions, distributions, fees, expenses)                                                                                                                                      | `cash-flows.md`                                   | `JOURNAL_ENTRIES` grouped by `event_type`                                 |
+| Balance sheet (assets, liabilities, partners' capital)                                                                                                                                                     | `balance-sheet.md`                                | `JOURNAL_ENTRIES` summed by `account_type`                                |
+| Cap table — share classes, ownership %, firm stake, fully-diluted ownership, shareholders / stakeholders / who-owns prompts (cap-table.md explains the firm-context limitation for shareholder-level data) | `cap-table.md`                                    | `SUMMARY_CAP_TABLE`, `FUND_CORPORATION_OWNERSHIP` (firm context required) |
+| 409a valuations, fair market value, FMV, common stock price                                                                                                                                                | `valuations.md`                                   | `IRC409A_VALUE`                                                           |
+| Investments — cost basis, FMV, MOIC, activity by year, unrealized gain/loss                                                                                                                                | `investments.md`                                  | `AGGREGATE_INVESTMENTS`                                                   |
+| Portfolio company financials — revenue, ARR, headcount, KPIs                                                                                                                                               | `company-financials.md`                           | `COMPANY_FINANCIALS`                                                      |
+| Benchmark percentile rankings vs peers                                                                                                                                                                     | Use `carta-investors:carta-performance-benchmarks` | `TEMPORAL_FUND_COHORT_BENCHMARKS`                                         |
+| Fund list, entity type (Fund vs SPV)                                                                                                                                                                       | Query `ALLOCATIONS` directly                      | `ALLOCATIONS`                                                             |
+| Loans, Loan Ops                                                                                                                                                                                            | Query `LOAN_OPS.LOAN` directly                    | `LOAN_OPS.LOAN`                                                           |
 
 ## Step 2 — Load the Context File
 
@@ -119,6 +120,7 @@ Use the MCP commands in sequence:
 2. **Inspect schema:** `fetch("dwh:get:table_schema", {"table_name": "<TABLE>", "schema": "FUND_ADMIN"})`
 3. **Run the query:** `fetch("dwh:execute:query", {"sql": "..."})`
 
+** Schema: ** Use the schema matching the domain identified in Step 1. For most queries use `FUND_ADMIN`. For Loan Ops queries, use `LOAN_OPS` instead of `FUND_ADMIN` in every command above.
 **Output format:** Present results as a markdown table. Use fund or company names as row headers — never raw UUIDs. Currency values use `$X,XXX` format with commas; percentages use `X.XX%`. Bold totals and summary rows.
 
 ## General Query Rules
