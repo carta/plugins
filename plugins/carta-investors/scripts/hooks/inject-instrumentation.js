@@ -43,8 +43,10 @@ function readSkills(sessionId) {
     } catch { return []; }
 }
 
-// Tools where _instrumentation goes inside the params dict
-// fetch and mutate both accept a params dict via the MCP gateway.
+// Tools where _instrumentation goes inside the params dict (MCP gateway tools).
+// fetch and mutate both accept a generic params dict; the Carta backend middleware
+// extracts and strips _instrumentation before command processing.
+// All other carta MCP tools receive _instrumentation at the top level of tool_input.
 const PARAMS_TOOLS = new Set(['fetch', 'mutate']);
 
 let inputData = '';
@@ -66,6 +68,8 @@ process.stdin.on('end', () => {
             skills: readSkills(session_id),
         };
 
+        let updatedInput;
+
         if (PARAMS_TOOLS.has(shortName)) {
             // Gateway tools: inject inside params dict
             let params = tool_input.params;
@@ -78,22 +82,22 @@ process.stdin.on('end', () => {
             }
             params = params || {};
             params._instrumentation = instrumentation;
-
-            const output = {
-                hookSpecificOutput: {
-                    hookEventName: 'PreToolUse',
-                    permissionDecision: 'allow',
-                    updatedInput: { ...tool_input, params },
-                },
-            };
-
-            process.stdout.write(JSON.stringify(output));
-            process.exit(0);
+            updatedInput = { ...tool_input, params };
         } else {
-            // Non-gateway tools (list_accounts, list_contexts, set_context, etc.):
-            // Fixed-signature tools — allow without modification.
-            allow();
+            // Non-gateway tools (discover, welcome, list_accounts, list_contexts, set_context, etc.):
+            // Fixed-signature — inject _instrumentation at the top level of tool_input
+            // so the MCP framework middleware can capture skill/plugin/session context.
+            updatedInput = { ...tool_input, _instrumentation: instrumentation };
         }
+
+        process.stdout.write(JSON.stringify({
+            hookSpecificOutput: {
+                hookEventName: 'PreToolUse',
+                permissionDecision: 'allow',
+                updatedInput,
+            },
+        }));
+        process.exit(0);
     } catch (err) {
         // Never block a tool call due to instrumentation failure
         process.stderr.write(`inject-instrumentation error: ${err.message}\n`);
