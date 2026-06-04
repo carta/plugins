@@ -8,7 +8,7 @@ when_to_use: >-
   be for new option grants. For aggregate FMV or 409A comparisons across
   multiple portfolio companies, prefer a portfolio-benchmarks skill.
 allowed-tools:
-  - mcp__carta__fetch
+  - mcp__carta__call_tool
   - mcp__carta__list_contexts
   - mcp__carta__set_context
   - mcp__carta__list_accounts
@@ -37,7 +37,7 @@ You need the `corporation_id`. Get it from `list_accounts` if you don't have it.
 ## Data Retrieval
 
 ```
-fetch("cap_table:get:409a_valuations", {"corporation_id": corporation_id})
+call_tool({"name": "cap_table__get__409a_valuations", "arguments": {"corporation_id": corporation_id}})
 ```
 
 Optional params:
@@ -80,7 +80,7 @@ JSON array of FMV records:
 ### Step 1 — Fetch Valuations
 
 ```
-fetch("cap_table:get:409a_valuations", {"corporation_id": corporation_id})
+call_tool({"name": "cap_table__get__409a_valuations", "arguments": {"corporation_id": corporation_id}})
 ```
 
 ### Step 2 — Identify Current Valuation

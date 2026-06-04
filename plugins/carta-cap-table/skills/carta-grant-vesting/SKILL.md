@@ -13,7 +13,7 @@ when_to_use: >-
   all employees or the full option pool ("how much of my employees'
   equity has vested") — defer to a stakeholder/portfolio skill instead.
 allowed-tools:
-  - mcp__carta__fetch
+  - mcp__carta__call_tool
   - mcp__carta__list_contexts
   - mcp__carta__set_context
   - mcp__carta__list_accounts
@@ -73,13 +73,13 @@ Two endpoints exist for vesting detail and they are **not interchangeable**:
 **Important:** `cap_table:get:grant_vesting` is options-only and returns 500 for RSU/SAR/CBU ids. Use the table above; do not reuse a command across types.
 
 ```
-fetch("<list command>", {"corporation_id": corporation_id, "search": "<holder name>", "detail": "minimal"})
+call_tool({"name": "<list tool>", "arguments": {"corporation_id": corporation_id, "search": "<holder name>", "detail": "minimal"}})
 ```
 
 Then, for options or RSUs:
 
 ```
-fetch("<vesting detail command>", {"corporation_id": corporation_id, "grant_id": grant_id})
+call_tool({"name": "<vesting detail tool>", "arguments": {"corporation_id": corporation_id, "grant_id": grant_id}})
 ```
 
 For SARs and CBUs, the list-record `vested_shares_quantity` is the only available signal — there is no per-event detail endpoint yet.
@@ -106,18 +106,18 @@ The vesting detail commands return slightly different shapes:
 
 `cap_table:list:grants` (and the other list commands) require a real `corporation_id`. **Never pass a company name** (e.g. `"meetly"`) as `corporation_id` — it is not an ID and the call will fail.
 
-If you only have a company name, resolve it to a `corporation_id` before any list/fetch call:
+If you only have a company name, resolve it to a `corporation_id` before any list/data call:
 
 ```
-fetch("list_accounts", {"search": "<company name>"})   # narrow to the matching account(s)
+list_accounts({"search": "<company name>"})   # narrow to the matching account(s)
 # Each account's `id` is shaped `corporation_pk:<numeric id>`. Extract that numeric
-# id — it is the `corporation_id` every cap_table:* command needs.
+# id — it is the `corporation_id` every cap_table tool needs.
 # If several accounts share a similar name, call AskUserQuestion to disambiguate
 # before continuing — never guess which one the user meant.
-fetch("set_context", {...})     # set the active corporation context, if applicable
+set_context({...})     # set the active corporation context, if applicable
 ```
 
-Calling `list_accounts` with no `search` returns the full account list; on a multi-company instance that risks matching the wrong account, so always pass the name. Carry the resolved `corporation_id` into every subsequent `cap_table:*` call. Only once it is resolved do you proceed to Step 1.
+Calling `list_accounts` with no `search` returns the full account list; on a multi-company instance that risks matching the wrong account, so always pass the name. Carry the resolved `corporation_id` into every subsequent `cap_table__*` call. Only once it is resolved do you proceed to Step 1.
 
 ### Step 1 — Identify the Grant
 
@@ -129,7 +129,7 @@ Otherwise, pick the list command based on grant type and search:
 - **Type unknown**: try `cap_table:list:grants` first (options are most common). If the holder is not found, try `list:rsus`, then `list:sars`, then `list:cbus`. Do not conclude vesting data is unavailable until all four have been checked.
 
 ```
-fetch("<list command>", {"corporation_id": corporation_id, "search": "<holder name>", "detail": "minimal"})
+call_tool({"name": "<list tool>", "arguments": {"corporation_id": corporation_id, "search": "<holder name>", "detail": "minimal"}})
 ```
 
 If multiple grants are returned, ask the user which one, or pick the most relevant based on context.
@@ -147,8 +147,8 @@ Only fetch the per-grant vesting detail (Step 2) once the user has narrowed to a
 
 Pick the detail command based on grant type:
 
-- **Options (ISO/NSO)** → `fetch("cap_table:get:grant_vesting", {"corporation_id": ..., "grant_id": ...})`
-- **RSUs** → `fetch("cap_table:get:rsu_vesting", {"corporation_id": ..., "grant_id": ...})`
+- **Options (ISO/NSO)** → `call_tool({"name": "cap_table__get__grant_vesting", "arguments": {"corporation_id": ..., "grant_id": ...}})`
+- **RSUs** → `call_tool({"name": "cap_table__get__rsu_vesting", "arguments": {"corporation_id": ..., "grant_id": ...}})`
 - **SARs / CBUs** → no detail endpoint; use the list record's `vested_shares_quantity` and `quantity` fields and surface what's available.
 
 ### Step 3 — Present with Context

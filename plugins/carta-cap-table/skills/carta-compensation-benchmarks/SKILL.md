@@ -8,7 +8,7 @@ description: >
 version: 1.0.0
 model: sonnet
 allowed-tools:
-  - mcp__carta__fetch
+  - mcp__carta__call_tool
   - mcp__carta__discover
   - mcp__carta__list_accounts
   - AskUserQuestion
@@ -38,9 +38,9 @@ Look up Carta Total Compensation (CTC) market salary and equity benchmarks for a
 >
 > See `carta-compensation-rolematcher` → "Display → API enum tables" for the full mapping.
 
-> **Use MCP, not CLI.** Every API call in this skill goes through the carta MCP server's `mcp__carta__fetch` tool, with `compensation:*` commands. Do NOT shell out to the `carta` CLI (`carta compensation ...`, `carta web ...`, etc.) — that bypasses the formatters, the 403 handler, and the attribution requirement. The Bash tool is allowed only for writing CSV/JSON files locally, never for calling Carta APIs.
+> **Use MCP, not CLI.** Every API call in this skill goes through the carta MCP server's `mcp__carta__call_tool` tool, with `compensation:*` commands. Do NOT shell out to the `carta` CLI (`carta compensation ...`, `carta web ...`, etc.) — that bypasses the formatters, the 403 handler, and the attribution requirement. The Bash tool is allowed only for writing CSV/JSON files locally, never for calling Carta APIs.
 >
-> Examples below use shorthand `fetch("compensation:get:plan", {...})` — read this as `mcp__carta__fetch(command="compensation:get:plan", params={...})`.
+> Examples below use shorthand `call_tool({"name": "compensation__get__plan", "arguments": {...}})` — read this as `mcp__carta__call_tool({"name": "compensation__get__plan", "arguments": {...}})`.
 
 > **CRITICAL — Show only PERCENTILE columns (p25/p50/p75/p90) for all three rating types.**
 >
@@ -265,7 +265,7 @@ If the user provides only a job title, that is sufficient minimum input for the 
 ### Step 3a — Verify CTC subscription (REQUIRED)
 
 ```
-fetch("compensation:get:subscription_status", {"corporation_id": <corporation_pk>})
+call_tool({"name": "compensation__get__subscription_status", "arguments": {"corporation_id": <corporation_pk>}})
 ```
 
 If `is_subscribed` is False, stop here and send the subscription message (see **Subscription gating** section below). Do not call `plans/` or `benchmark/` — they will return empty data anyway and waste a round-trip.
@@ -273,7 +273,7 @@ If `is_subscribed` is False, stop here and send the subscription message (see **
 ### Step 3b — Fetch the corporation's active benchmark version + peer group
 
 ```
-fetch("compensation:get:plan", {"corporation_id": <corporation_pk>})
+call_tool({"name": "compensation__get__plan", "arguments": {"corporation_id": <corporation_pk>}})
 ```
 
 Capture two things from the response:
@@ -283,7 +283,7 @@ Capture two things from the response:
 ### Step 4 — Fetch the benchmark
 
 ```
-fetch("compensation:get:benchmark", {
+call_tool({"name": "compensation__get__benchmark", "arguments": {
   "corporation_id": <corporation_pk>,
   "job": <job_area>,                        # omit to get ALL job areas
   "level": <level>,                         # omit to get ALL levels for the job
@@ -291,14 +291,14 @@ fetch("compensation:get:benchmark", {
   "is_leader": <true if track == "manager" or track == "executive" else false>,
   "benchmark_version_id": <benchmark_version.id>,
   "location": <location string>             # optional, for geo adjustment
-})
+}})
 ```
 
 **No input pay required.** This command returns raw market bands (salary, equity, total cash) directly.
 
-**Single-job bulk:** omit `level` to get every level for one job in one call (~17 rows, fits well under the gateway response budget).
+**Single-job bulk:** omit `level` to get every level for one job in one call (~17 rows, fits well under the response budget).
 
-**Multi-job bulk (CSV across all functions):** issue **one fetch per job area** in parallel — do **not** omit both `job` and `level`. The unfiltered query returns ~22 jobs × ~17 levels in a single payload that exceeds the 40K-char gateway budget and will be rejected with `"response too large"`. Iterating per-job stays inside the budget and parallelizes cleanly.
+**Multi-job bulk (CSV across all functions):** issue **one call per job area** in parallel — do **not** omit both `job` and `level`. The unfiltered query returns ~22 jobs × ~17 levels in a single payload that exceeds the 40K-char response budget and will be rejected with `"response too large"`. Iterating per-job stays inside the budget and parallelizes cleanly.
 
 ### Step 5 — Present results
 
@@ -385,7 +385,7 @@ Compensation-service's `plans/` and `benchmark/` endpoints return 200 even for c
 Always call `compensation:get:subscription_status` FIRST for every corporation you intend to query. It returns `{corporation_id, is_subscribed}`.
 
 **Single-corp query:**
-1. `fetch("compensation:get:subscription_status", {"corporation_id": <id>})`
+1. `call_tool({"name": "compensation__get__subscription_status", "arguments": {"corporation_id": <id>}})`
 2. If `is_subscribed` is `false`:
    - Tell the user: *"Compensation benchmarks require a Carta Total Compensation subscription. Visit this page to request a demo: https://carta.com/demo/total-comp/?&utm_medium=product&utm_source=carta-web&utm_campaign=ctc-plugin-inq-amer-q2-26"*
    - **STOP.** Do not call `plans/`, `benchmark/`, `benchmark_versions`, or any other compensation endpoint for this corp.

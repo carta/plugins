@@ -12,7 +12,7 @@ when_to_use: >-
   multi-company raw-data skill. For time-based risk detection across
   companies, prefer a portfolio-alerts skill.
 allowed-tools:
-  - mcp__carta__fetch
+  - mcp__carta__call_tool
   - mcp__carta__list_contexts
   - mcp__carta__set_context
   - mcp__carta__list_accounts
@@ -41,9 +41,9 @@ Call `list_accounts`. Filter to `corporation_pk:` accounts. Extract up to 20 num
 
 For each company, the relevant commands are:
 
-- `fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": corporation_id})` -- option pool data
-- `fetch("cap_table:get:convertible_notes", {"corporation_id": corporation_id})` -- SAFE/note terms (summary includes median/min/max price_cap, avg_discount, by_type)
-- `fetch("cap_table:get:financing_history", {"corporation_id": corporation_id})` -- round sizes (summary includes per-round cash_raised and latest_date)
+- `call_tool({"name": "cap_table__get__cap_table_by_share_class", "arguments": {"corporation_id": corporation_id}})` -- option pool data
+- `call_tool({"name": "cap_table__get__convertible_notes", "arguments": {"corporation_id": corporation_id}})` -- SAFE/note terms (summary includes median/min/max price_cap, avg_discount, by_type)
+- `call_tool({"name": "cap_table__get__financing_history", "arguments": {"corporation_id": corporation_id}})` -- round sizes (summary includes per-round cash_raised and latest_date)
 
 The gateway defaults to `detail=summary` for all three commands. The enriched summaries include all fields needed for portfolio benchmarks — no individual records required.
 
@@ -78,12 +78,12 @@ Issue ALL fetch calls for ALL companies **in a single response** — do NOT loop
 For example, with 5 companies and all 3 data types, issue all 15 fetch calls at once:
 
 ```
-fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": 1})
-fetch("cap_table:get:convertible_notes", {"corporation_id": 1})
-fetch("cap_table:get:financing_history", {"corporation_id": 1})
-fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": 2})
-fetch("cap_table:get:convertible_notes", {"corporation_id": 2})
-fetch("cap_table:get:financing_history", {"corporation_id": 2})
+call_tool({"name": "cap_table__get__cap_table_by_share_class", "arguments": {"corporation_id": 1}})
+call_tool({"name": "cap_table__get__convertible_notes", "arguments": {"corporation_id": 1}})
+call_tool({"name": "cap_table__get__financing_history", "arguments": {"corporation_id": 1}})
+call_tool({"name": "cap_table__get__cap_table_by_share_class", "arguments": {"corporation_id": 2}})
+call_tool({"name": "cap_table__get__convertible_notes", "arguments": {"corporation_id": 2}})
+call_tool({"name": "cap_table__get__financing_history", "arguments": {"corporation_id": 2}})
 ... (all companies)
 ```
 

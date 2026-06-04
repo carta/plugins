@@ -11,7 +11,7 @@ when_to_use: >-
   consent rights, or seniority rank in the abstract without computing
   dollar payouts, prefer a rights/seniority skill.
 allowed-tools:
-  - mcp__carta__fetch
+  - mcp__carta__call_tool
   - mcp__carta__list_contexts
   - mcp__carta__set_context
   - mcp__carta__list_accounts
@@ -31,7 +31,7 @@ You need the `corporation_id`. Get it from `list_accounts` if you don't have it.
 ## Data Retrieval
 
 ```
-fetch("cap_table:get:waterfall_scenarios", {"corporation_id": corporation_id})
+call_tool({"name": "cap_table__get__waterfall_scenarios", "arguments": {"corporation_id": corporation_id}})
 ```
 
 The command returns each completed (status == "DONE", non-draft) scenario with a per-holder breakdown of cost basis, payout value, share count, and return multiple.

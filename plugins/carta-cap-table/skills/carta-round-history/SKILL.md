@@ -12,7 +12,7 @@ when_to_use: >-
   current stakeholder snapshots without round context, prefer a
   stakeholder list skill.
 allowed-tools:
-  - mcp__carta__fetch
+  - mcp__carta__call_tool
   - mcp__carta__list_contexts
   - mcp__carta__set_context
   - mcp__carta__list_accounts
@@ -45,7 +45,7 @@ You need the `corporation_id`. Get it from `list_accounts` if you don't have it.
 > **Ordering**: Pass `ordering` to sort server-side — e.g. `-cash_paid` for largest investments first. Fields: `issue_date`, `quantity`, `stakeholder_name`, `cash_paid`, `prefix_number`. Combine with `detail=full` for "top N investors" queries; otherwise the default (chronological) order is fine.
 
 ```
-fetch("cap_table:get:financing_history", {"corporation_id": corporation_id})
+call_tool({"name": "cap_table__get__financing_history", "arguments": {"corporation_id": corporation_id}})
 ```
 
 This is the same data that powers the in-app "Financing History" tab.
@@ -53,7 +53,7 @@ This is the same data that powers the in-app "Financing History" tab.
 **Alternative**: For a quick overview without any financing history call, use the cap table by share class:
 
 ```
-fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": corporation_id})
+call_tool({"name": "cap_table__get__cap_table_by_share_class", "arguments": {"corporation_id": corporation_id}})
 ```
 
 Each preferred share class represents a round. Faster but less detail: no individual investors, no issue dates, no price per share.
@@ -105,13 +105,13 @@ Choose detail mode based on the user's intent — do NOT default to summary then
 - **Overview questions** ("show me the funding history", "what rounds has this company raised?", "how much capital was raised?"): omit `detail` — summary mode returns round count, total cash raised, and a by-round breakdown instantly. Present with the table and bar chart (see Presentation section).
 
   ```
-  fetch("cap_table:get:financing_history", {"corporation_id": corporation_id})
+  call_tool({"name": "cap_table__get__financing_history", "arguments": {"corporation_id": corporation_id}})
   ```
 
 - **Per-round details** ("who invested in each round?", "what was the price per share?", "list all investors by round", any request for investor names, issue dates, or price per share): use `detail=full` directly.
 
   ```
-  fetch("cap_table:get:financing_history", {"corporation_id": corporation_id, "detail": "full"})
+  call_tool({"name": "cap_table__get__financing_history", "arguments": {"corporation_id": corporation_id, "detail": "full"}})
   ```
 
 When in doubt, summary is usually sufficient for financing history — it already includes round names, dates, and totals.

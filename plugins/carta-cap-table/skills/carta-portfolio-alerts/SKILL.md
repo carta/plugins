@@ -13,7 +13,7 @@ when_to_use: >-
   statistical norms across the portfolio, prefer a portfolio-benchmarks
   skill.
 allowed-tools:
-  - mcp__carta__fetch
+  - mcp__carta__call_tool
   - mcp__carta__list_contexts
   - mcp__carta__set_context
   - mcp__carta__list_accounts
@@ -40,10 +40,10 @@ Call `list_accounts` to get all portfolio companies. Filter to accounts where `i
 
 For each company, these are the relevant checks:
 
-- `fetch("cap_table:get:409a_valuations", {"corporation_id": corporation_id})` -- 409A expiry check
-- `fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": corporation_id})` -- option pool check
-- `fetch("cap_table:get:convertible_notes", {"corporation_id": corporation_id})` -- note maturity check (summary includes `maturity.nearest_date`)
-- `fetch("cap_table:list:safes", {"corporation_id": corporation_id})` -- SAFE exposure check
+- `call_tool({"name": "cap_table__get__409a_valuations", "arguments": {"corporation_id": corporation_id}})` -- 409A expiry check
+- `call_tool({"name": "cap_table__get__cap_table_by_share_class", "arguments": {"corporation_id": corporation_id}})` -- option pool check
+- `call_tool({"name": "cap_table__get__convertible_notes", "arguments": {"corporation_id": corporation_id}})` -- note maturity check (summary includes `maturity.nearest_date`)
+- `call_tool({"name": "cap_table__list__safes", "arguments": {"corporation_id": corporation_id}})` -- SAFE exposure check
 
 The gateway defaults to `detail=summary` for list commands. All four commands use summary mode — the convertible notes summary includes a `maturity` block with `nearest_date` and `total_outstanding_debt` for outstanding debt notes.
 
@@ -70,12 +70,12 @@ Issue ALL fetch calls for ALL companies **in a single response** — do NOT loop
 For example, with 5 companies and all 4 checks, issue all 20 fetch calls at once:
 
 ```
-fetch("cap_table:get:409a_valuations", {"corporation_id": 1})
-fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": 1})
-fetch("cap_table:get:convertible_notes", {"corporation_id": 1})
-fetch("cap_table:list:safes", {"corporation_id": 1})
-fetch("cap_table:get:409a_valuations", {"corporation_id": 2})
-fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": 2})
+call_tool({"name": "cap_table__get__409a_valuations", "arguments": {"corporation_id": 1}})
+call_tool({"name": "cap_table__get__cap_table_by_share_class", "arguments": {"corporation_id": 1}})
+call_tool({"name": "cap_table__get__convertible_notes", "arguments": {"corporation_id": 1}})
+call_tool({"name": "cap_table__list__safes", "arguments": {"corporation_id": 1}})
+call_tool({"name": "cap_table__get__409a_valuations", "arguments": {"corporation_id": 2}})
+call_tool({"name": "cap_table__get__cap_table_by_share_class", "arguments": {"corporation_id": 2}})
 ... (all companies)
 ```
 

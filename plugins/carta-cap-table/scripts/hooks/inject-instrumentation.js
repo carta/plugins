@@ -31,10 +31,11 @@ try {
     pluginVersion = pluginJson.version || 'unknown';
 } catch {}
 
-// Tools where _instrumentation goes inside the params dict
-// Only fetch has a params dict where we can inject _instrumentation.
-// discover has (domain, scope, search) — no params dict.
-const PARAMS_TOOLS = new Set(['fetch']);
+// Tools where _instrumentation goes inside the params dict (MCP gateway tools).
+// fetch and mutate both accept a generic params dict; the Carta backend middleware
+// extracts and strips _instrumentation before command processing.
+// All other carta MCP tools receive _instrumentation at the top level of tool_input.
+const PARAMS_TOOLS = new Set(['fetch', 'mutate']);
 
 let inputData = '';
 process.stdin.on('data', chunk => (inputData += chunk));
@@ -76,12 +77,10 @@ process.stdin.on('end', () => {
 
             updatedInput = { ...tool_input, params };
         } else {
-            // Non-gateway tools (list_accounts, get_current_user, etc.):
-            // Can't inject into fixed-signature tools. The middleware still
-            // captures tool_name + session context from the MCP framework.
-            // Allow without modification.
-            allow();
-            return;
+            // Non-gateway tools (discover, welcome, list_accounts, set_context, etc.):
+            // Fixed-signature — inject _instrumentation at the top level of tool_input
+            // so the MCP framework middleware can capture skill/plugin/session context.
+            updatedInput = { ...tool_input, _instrumentation: instrumentation };
         }
 
         const output = {

@@ -10,7 +10,7 @@ when_to_use: >-
   sale or acquisition — for dollar payouts at an exit valuation, prefer a
   waterfall or payout scenario skill.
 allowed-tools:
-  - mcp__carta__fetch
+  - mcp__carta__call_tool
   - mcp__carta__list_contexts
   - mcp__carta__set_context
   - mcp__carta__list_accounts
@@ -40,9 +40,9 @@ You need:
 
 > The gateway defaults to `detail=summary` for list commands. This skill needs individual records, so `"detail": "full"` is passed explicitly.
 
-- `fetch("cap_table:get:convertible_notes", {"corporation_id": corporation_id, "detail": "full"})` — SAFEs + convertible notes
-- `fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": corporation_id})` — current fully diluted count
-- `fetch("cap_table:get:409a_valuations", {"corporation_id": corporation_id})` — current FMV (for reference)
+- `call_tool({"name": "cap_table__get__convertible_notes", "arguments": {"corporation_id": corporation_id, "detail": "full"}})` — SAFEs + convertible notes
+- `call_tool({"name": "cap_table__get__cap_table_by_share_class", "arguments": {"corporation_id": corporation_id}})` — current fully diluted count
+- `call_tool({"name": "cap_table__get__409a_valuations", "arguments": {"corporation_id": corporation_id}})` — current FMV (for reference)
 
 ## Key Fields
 
@@ -63,9 +63,9 @@ From convertible instruments:
 Fetch all three data sources **in a single turn** (parallel tool calls) — do NOT fetch them sequentially:
 
 ```
-fetch("cap_table:get:convertible_notes", {"corporation_id": corporation_id, "detail": "full"})
-fetch("cap_table:get:cap_table_by_share_class", {"corporation_id": corporation_id})
-fetch("cap_table:get:409a_valuations", {"corporation_id": corporation_id})
+call_tool({"name": "cap_table__get__convertible_notes", "arguments": {"corporation_id": corporation_id, "detail": "full"}})
+call_tool({"name": "cap_table__get__cap_table_by_share_class", "arguments": {"corporation_id": corporation_id}})
+call_tool({"name": "cap_table__get__409a_valuations", "arguments": {"corporation_id": corporation_id}})
 ```
 
 - Convertible notes: SAFEs + notes (filter to `status_explanation: "Outstanding"`)
