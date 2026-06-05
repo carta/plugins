@@ -1,0 +1,1393 @@
+<!DOCTYPE html>
+<script type="application/json" id="cowork-artifact-meta">
+{
+  "name": "Schedule of Investments",
+  "schemaVersion": 1,
+  "description": "Interactive Schedule of Investments (SOI) with hierarchical company/asset view, sortable columns, and live filter. Fetches fund holdings data from Carta data warehouse via MCP."
+}
+</script>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Schedule of Investments</title>
+    <!-- SangBleu Versailles is Carta's brand serif but isn't licensed for distribution
+         outside Carta's environments, so it's referenced as the first font-family
+         option for staff-machine fidelity and falls back to EB Garamond / Georgia
+         everywhere else. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=EB+Garamond:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            color-scheme: light;
+            --surface-bg: #FFFFFF;
+            --surface-underlay: #F7F7F7;
+            --text-default: #1A1A1A;
+            --text-subtle: #656B6B;
+            --border-default: #A7AAAA;
+            --border-subtle: #DEDFDF;
+            --negative-strong: #E52431;
+            --positive-strong: #2D9E90;
+            --accent-primary: #FF7D55;
+            --surface-info-subtle: #EAF0F8;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--surface-bg);
+            color: var(--text-default);
+            padding: 48px;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        /* ── Header ── */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 24px;
+        }
+
+        .header-logo {
+            flex-shrink: 0;
+            margin-left: 24px;
+            padding-top: 4px;
+        }
+
+        .header-logo svg {
+            width: 80px;
+            height: auto;
+        }
+
+        .header-eyebrow {
+            font-size: 13px;
+            font-weight: 400;
+            color: var(--text-subtle);
+            letter-spacing: 0.02em;
+            margin-bottom: 2px;
+        }
+
+        .header h1 {
+            font-family: "SangBleu Versailles", 'EB Garamond', Georgia, "Times New Roman", serif;
+            font-size: 28px;
+            font-weight: 400;
+            line-height: 48px;
+            color: var(--text-default);
+        }
+
+        /* ── Shimmer loading state ── */
+        @keyframes shimmer {
+            0% { background-position: -400px 0; }
+            100% { background-position: 400px 0; }
+        }
+
+        .shimmer-bone {
+            background: linear-gradient(90deg, var(--surface-underlay) 25%, #EEEEEE 50%, var(--surface-underlay) 75%);
+            background-size: 800px 100%;
+            animation: shimmer 1.5s infinite ease-in-out;
+            border-radius: 4px;
+        }
+
+        .shimmer-metrics {
+            display: flex;
+            border-left: 4px solid var(--border-subtle);
+            background: var(--surface-underlay);
+            padding: 14px 16px;
+            margin-bottom: 24px;
+            gap: 16px;
+        }
+
+        .shimmer-metric-item { flex: 1; }
+        .shimmer-metric-label { height: 14px; width: 70px; margin-bottom: 8px; }
+        .shimmer-metric-value { height: 22px; width: 110px; }
+
+        .shimmer-toolbar { height: 32px; width: 220px; margin-bottom: 12px; }
+
+        .shimmer-table { width: 100%; }
+        .shimmer-table-header {
+            display: flex;
+            gap: 12px;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border-subtle);
+            margin-bottom: 4px;
+        }
+        .shimmer-th { height: 14px; flex: 1; }
+        .shimmer-th:first-child { flex: 2; }
+
+        .shimmer-row {
+            display: flex;
+            gap: 12px;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--surface-underlay);
+        }
+        .shimmer-td { height: 14px; flex: 1; }
+        .shimmer-td:first-child { flex: 2; }
+
+        .content-area { opacity: 0; transition: opacity 0.3s ease; }
+        .content-area.loaded { opacity: 1; }
+
+        /* ── Metrics strip ── */
+        .metrics-strip {
+            display: flex;
+            flex-wrap: wrap;
+            row-gap: 12px;
+            border-left: 4px solid var(--accent-primary);
+            background: var(--surface-underlay);
+            padding: 14px 16px;
+            margin-bottom: 24px;
+        }
+
+        .metric-item {
+            flex: 1 1 auto;
+            min-width: 0;
+            border-right: 1px solid var(--border-subtle);
+            padding-right: 16px;
+            margin-right: 16px;
+            white-space: nowrap;
+        }
+
+        .metric-item:last-child {
+            border-right: none;
+            padding-right: 0;
+            margin-right: 0;
+        }
+
+        @media (max-width: 640px) {
+            .metrics-strip { flex-direction: column; gap: 12px; }
+            .metric-item {
+                border-right: none;
+                border-bottom: 1px solid var(--border-subtle);
+                padding-right: 0;
+                padding-bottom: 12px;
+                margin-right: 0;
+            }
+            .metric-item:last-child {
+                border-bottom: none;
+                padding-bottom: 0;
+            }
+        }
+
+        .metric-label {
+            font-size: 13px;
+            color: var(--text-subtle);
+            margin-bottom: 4px;
+            font-weight: 500;
+            line-height: 20px;
+        }
+
+        .metric-value {
+            font-size: 20px;
+            font-weight: 500;
+            line-height: 28px;
+            color: var(--text-default);
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* ── Fund switcher ── */
+        .fund-switcher {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .fund-switcher-label {
+            font-size: 13px;
+            color: var(--text-subtle);
+            font-weight: 500;
+        }
+
+        .fund-select {
+            padding: 6px 28px 6px 10px;
+            border: 1px solid var(--border-subtle);
+            font-size: 13px;
+            font-family: inherit;
+            background: var(--surface-bg);
+            color: var(--text-default);
+            outline: none;
+            cursor: pointer;
+            min-width: 280px;
+            /* Native chevron via background-image so the select doesn't need extra DOM */
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512' fill='%23656B6B'%3E%3Cpath d='M446 363c-4 4-9 5-15 5l-351 0c-5 0-9-2-13-5-4-4-6-9-6-15 0-5 2-10 5-14l176-184c4-4 9-6 15-6 5 0 10 2 14 6l176 184c7 8 7 21-1 29z' transform='scale(0.024 -0.024) translate(0 -512)'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 8px center;
+            background-size: 10px;
+        }
+
+        .fund-select:focus { border-color: var(--border-default); }
+
+        /* Hidden until FUNDS has > 1 entry — keeps the single-fund case visually clean. */
+        .fund-switcher.hidden { display: none; }
+
+        /* ── Toolbar ── */
+        .toolbar {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .search-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 10px;
+            color: var(--text-subtle);
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+        }
+
+        .search-input {
+            padding: 6px 10px 6px 30px;
+            border: 1px solid var(--border-subtle);
+            font-size: 13px;
+            font-family: inherit;
+            outline: none;
+            width: 220px;
+            line-height: 20px;
+            color: var(--text-default);
+            transition: border-color 0.15s;
+        }
+
+        .search-input::placeholder { color: var(--text-subtle); }
+        .search-input:focus { border-color: var(--border-default); }
+
+        /* ── Table ── */
+        .table-scroll {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            background: var(--surface-bg);
+            padding: 8px 12px;
+            text-align: left;
+            font-size: 13px;
+            font-weight: 500;
+            font-family: inherit;
+            color: var(--text-default);
+            border-bottom: 1px solid var(--text-default);
+            height: 40px;
+            line-height: 20px;
+            white-space: nowrap;
+        }
+
+        th.number { text-align: right; }
+
+        th.sortable {
+            cursor: pointer;
+            user-select: none;
+            transition: color 0.12s;
+        }
+
+        th.sortable:hover { color: var(--text-subtle); }
+        th.sortable.dimmed { color: var(--text-subtle); }
+
+        th.sortable .th-inner {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        th.sortable.number .th-inner {
+            justify-content: flex-end;
+        }
+
+        .sort-indicator {
+            display: inline-flex;
+            color: var(--border-default);
+            transition: color 0.12s;
+        }
+
+        th.sortable.active .sort-indicator { color: var(--text-default); }
+
+        td {
+            padding: 8px 12px;
+            font-size: 13px;
+            color: var(--text-default);
+            line-height: 22px;
+            height: 40px;
+            vertical-align: middle;
+            white-space: nowrap;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        tbody tr:last-child:not(.totals-row) td { border-bottom: none; }
+
+        /* ── Sticky first column ── */
+        th:first-child,
+        td:first-child {
+            position: sticky;
+            left: 0;
+            z-index: 2;
+            background: var(--surface-bg);
+            padding-left: 8px;
+            min-width: 240px;
+            max-width: 400px;
+            white-space: normal;
+            word-wrap: break-word;
+        }
+
+        th:first-child { z-index: 3; }
+
+        th:first-child::after,
+        td:first-child::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: -6px;
+            bottom: 0;
+            width: 6px;
+            pointer-events: none;
+            box-shadow: inset 6px 0 6px -6px rgba(0,0,0,0.08);
+            opacity: 0;
+            transition: opacity 0.15s;
+        }
+
+        .table-scroll.scrolled th:first-child::after,
+        .table-scroll.scrolled td:first-child::after {
+            opacity: 1;
+        }
+
+        /* ── Company rows ── */
+        tr.company-row {
+            cursor: pointer;
+            user-select: none;
+        }
+
+        tr.company-row:hover td,
+        tr.company-row:hover td:first-child { background: var(--surface-underlay); }
+
+        /* ── Asset rows ── */
+        tr.asset-row { display: none; }
+        tr.asset-row.visible { display: table-row; }
+
+        tr.asset-row td,
+        tr.asset-row td:first-child { background: var(--surface-underlay); }
+
+        tr.asset-row td:first-child { padding-left: 48px; }
+
+        tr.asset-row:hover td,
+        tr.asset-row:hover td:first-child { background: var(--border-subtle); }
+
+        /* ── Ink icons ── */
+        .ink-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .ink-icon svg { display: block; }
+
+        /* ── Expand icon (row-level) ── */
+        .expand-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 16px;
+            color: var(--border-default);
+            transition: color 0.15s;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+
+        tr.company-row:hover .expand-icon { color: var(--text-subtle); }
+
+        .company-cell {
+            display: flex;
+            align-items: center;
+        }
+
+        .company-name {
+            font-weight: 500;
+            color: var(--text-default);
+        }
+
+        /* ── Expand-all toggle (header) ── */
+        .th-expand {
+            display: inline-flex;
+            align-items: center;
+            margin-right: 6px;
+        }
+
+        .expand-all-toggle {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--border-default);
+            cursor: pointer;
+            transition: color 0.12s;
+            flex-shrink: 0;
+        }
+
+        .expand-all-toggle:hover { color: var(--text-default); }
+
+        /* ── Asset name ── */
+        .asset-name {
+            color: var(--text-subtle);
+        }
+
+        /* ── Numeric cells ── */
+        .number {
+            font-variant-numeric: tabular-nums;
+            text-align: right;
+        }
+
+        /* ── Gain / Loss ── */
+        .gl-value {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .gl-value.gain { color: var(--positive-strong); }
+        .gl-value.loss { color: var(--negative-strong); }
+
+        .gl-arrow {
+            font-size: 12px;
+            line-height: 1;
+        }
+
+        /* ── Totals row ── */
+        .totals-row td {
+            border-top: none;
+            box-shadow: inset 0 1px 0 0 var(--text-default);
+            border-bottom: 1px solid var(--text-default);
+            font-weight: 500;
+            height: 40px;
+            background: var(--surface-info-subtle);
+            vertical-align: middle;
+        }
+
+        .totals-row td:first-child {
+            padding-left: 36px;
+            background: var(--surface-info-subtle);
+            color: var(--text-subtle);
+            font-weight: 500;
+        }
+
+        /* ── Tooltip ── */
+        .tooltip-trigger {
+            text-decoration: underline;
+            text-decoration-style: dotted;
+            text-decoration-color: var(--border-default);
+            text-underline-offset: 3px;
+            cursor: default;
+        }
+
+        .tooltip-popup {
+            position: fixed;
+            background: var(--text-default);
+            color: var(--surface-bg);
+            font-size: 12px;
+            font-weight: 400;
+            line-height: 18px;
+            padding: 6px 10px;
+            border-radius: 4px;
+            white-space: nowrap;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.15s;
+            z-index: 100;
+        }
+
+        .tooltip-popup.visible { opacity: 1; }
+
+        /* ── Empty / loading / error states ── */
+        .empty-state {
+            text-align: center;
+            padding: 48px 16px;
+            color: var(--text-subtle);
+        }
+
+        .empty-state.error {
+            color: var(--negative-strong);
+        }
+    </style>
+</head>
+<body>
+    <script type="application/json" id="soi-funds-state">{{FUNDS_JSON}}</script>
+    <div class="container">
+        <div class="header">
+            <div class="header-text">
+                <div class="header-eyebrow">{{FIRM_NAME}}</div>
+                <h1>Schedule of Investments</h1>
+            </div>
+            <div class="header-logo">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 528 264"><path fill="#1a1a1a" d="M0,0v264h528V0H0ZM517.44,253.44H10.56V10.56h506.88v242.88ZM69.26,137.15c0-26.47,22.34-42,42.39-42,14.35,0,27.74,5.38,34.9,17.78l-13.4,7.77c-2.31-3.49-5.47-6.35-9.17-8.3-3.71-1.96-7.85-2.98-12.05-2.95-11.79,0-25.81,9.2-25.81,27.42s13.41,27.58,26.93,27.58c9.4,0,17.21-5.24,21.84-13.33l13.7,6.33c-7.76,13.95-21.62,21.38-37.72,21.38-20.25-.02-41.6-15.58-41.6-41.69h0ZM197.5,178.83c11.14,0,21.66-4.91,27.09-12.05v9.81h16.55v-79.39h-16.55v9.83c-5.16-7.2-15.93-11.89-27.09-11.89-24.38,0-41.44,17.75-41.44,41.84s17.21,41.84,41.44,41.84ZM199.09,110.21c15.3,0,25.8,11.41,25.8,26.78s-10.51,26.78-25.8,26.78-26.14-11.57-26.14-27.1,10.84-26.47,26.14-26.47ZM330.1,112.96h-17.18v-15.85h17.34v-20.69h17.05v20.69h17.33v15.85h-17.33v63.61h-17.21v-63.61ZM412.2,178.83c11.16,0,21.68-4.91,27.11-12.05v9.81h16.58v-79.39h-16.58v9.83c-5.16-7.2-15.93-11.89-27.11-11.89-24.36,0-41.42,17.75-41.42,41.84s17.2,41.84,41.42,41.84ZM413.81,110.21c15.28,0,25.81,11.41,25.81,26.78s-10.53,26.78-25.81,26.78-26.14-11.57-26.14-27.1,10.84-26.47,26.14-26.47ZM278.62,176.49h-17.21v-79.39h15.77v14.78c3.9-8.78,9.77-14.5,19.3-14.98,1.97-.03,3.93,0,5.89.21l-.26,15.89c-13.69,0-23.47,7.34-23.47,27.79v35.72h-.01Z"/></svg>
+            </div>
+        </div>
+
+        <div id="loadingState">
+            <div id="loadingStatus" style="display: none; font-size: 13px; color: var(--text-subtle); margin-bottom: 12px;"></div>
+            <div class="shimmer-metrics">
+                <div class="shimmer-metric-item"><div class="shimmer-bone shimmer-metric-label"></div><div class="shimmer-bone shimmer-metric-value"></div></div>
+                <div class="shimmer-metric-item"><div class="shimmer-bone shimmer-metric-label"></div><div class="shimmer-bone shimmer-metric-value"></div></div>
+                <div class="shimmer-metric-item"><div class="shimmer-bone shimmer-metric-label"></div><div class="shimmer-bone shimmer-metric-value"></div></div>
+                <div class="shimmer-metric-item"><div class="shimmer-bone shimmer-metric-label"></div><div class="shimmer-bone shimmer-metric-value"></div></div>
+            </div>
+            <div class="shimmer-bone shimmer-toolbar"></div>
+            <div class="shimmer-table">
+                <div class="shimmer-table-header"><div class="shimmer-bone shimmer-th"></div><div class="shimmer-bone shimmer-th"></div><div class="shimmer-bone shimmer-th"></div><div class="shimmer-bone shimmer-th"></div><div class="shimmer-bone shimmer-th"></div></div>
+                <div class="shimmer-row"><div class="shimmer-bone shimmer-td"></div><div class="shimmer-bone shimmer-td"></div><div class="shimmer-bone shimmer-td"></div><div class="shimmer-bone shimmer-td"></div><div class="shimmer-bone shimmer-td"></div></div>
+                <div class="shimmer-row"><div class="shimmer-bone shimmer-td"></div><div class="shimmer-bone shimmer-td"></div><div class="shimmer-bone shimmer-td"></div><div class="shimmer-bone shimmer-td"></div><div class="shimmer-bone shimmer-td"></div></div>
+                <div class="shimmer-row"><div class="shimmer-bone shimmer-td"></div><div class="shimmer-bone shimmer-td"></div><div class="shimmer-bone shimmer-td"></div><div class="shimmer-bone shimmer-td"></div><div class="shimmer-bone shimmer-td"></div></div>
+                <div class="shimmer-row"><div class="shimmer-bone shimmer-td"></div><div class="shimmer-bone shimmer-td"></div><div class="shimmer-bone shimmer-td"></div><div class="shimmer-bone shimmer-td"></div><div class="shimmer-bone shimmer-td"></div></div>
+                <div class="shimmer-row"><div class="shimmer-bone shimmer-td"></div><div class="shimmer-bone shimmer-td"></div><div class="shimmer-bone shimmer-td"></div><div class="shimmer-bone shimmer-td"></div><div class="shimmer-bone shimmer-td"></div></div>
+                <div class="shimmer-row"><div class="shimmer-bone shimmer-td"></div><div class="shimmer-bone shimmer-td"></div><div class="shimmer-bone shimmer-td"></div><div class="shimmer-bone shimmer-td"></div><div class="shimmer-bone shimmer-td"></div></div>
+            </div>
+        </div>
+
+        <div class="content-area" id="contentArea">
+            <div class="fund-switcher" id="fundSwitcher">
+                <span class="fund-switcher-label">Fund:</span>
+                <select class="fund-select" id="fundSelect" onchange="switchFund(this.value)"></select>
+            </div>
+
+            <div id="metricsContainer"></div>
+
+            <div class="toolbar" id="toolbar">
+                <div class="search-wrapper">
+                    <span class="search-icon" id="searchIcon"></span>
+                    <input type="text" class="search-input" id="searchInput" placeholder="Search companies...">
+                </div>
+            </div>
+
+            <div class="table-scroll">
+                <table>
+                    <thead id="tableHead"></thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // === Skill-injected constants (string-replaced at artifact-create time) ===
+        // STATE: parsed once from the embedded <script id="soi-funds-state"> block
+        //   above. Holds {firm_uuid, firm_name, funds: [{uuid, name}, ...]}. The
+        //   funds list is the dropdown's data and also the persistence layer —
+        //   when the Python render script re-runs, it extracts this exact block
+        //   from the prior HTML to recover state.
+        // INITIAL_FUND_UUID: the fund whose SOI to show on first load (last-requested).
+        // FIRM_UUID: the firm that owns the funds. The artifact pins the user's MCP
+        //   firm context to this on load (via set_context), so the dwh query
+        //   succeeds even if the user has switched contexts elsewhere.
+        // MCP_TOOL_NAME: the Carta dwh fetch tool, UUID-form. The artifact runtime
+        //   does NOT resolve name-form prefixes (e.g. mcp__carta-test__fetch fails),
+        //   only UUID-form (e.g. mcp__33b9b857-...__fetch works). The UUID is per-user-
+        //   installation, so the skill must discover the active user's UUID at create-time
+        //   and inject it here.
+        const STATE = JSON.parse(document.getElementById('soi-funds-state').textContent);
+        const FUNDS = STATE.funds;
+        const INITIAL_FUND_UUID = '{{INITIAL_FUND_UUID}}';
+        const FIRM_UUID = '{{FIRM_UUID}}';
+        const MCP_TOOL_NAME = '{{MCP_TOOL_NAME}}';
+        // set_context and welcome both live on the same UUID-form connector — same
+        // prefix, different verb. welcome initializes the user's MCP session
+        // (identity, accounts, product access). The MCP server requires it to have
+        // been called once per session; when the session expires (typically after a
+        // few days of inactivity), subsequent tool calls return an "isError"
+        // envelope asking us to call welcome. We catch that below in
+        // callMcpWithWelcomeRetry and recover transparently.
+        const SET_CONTEXT_TOOL_NAME = MCP_TOOL_NAME.replace(/__fetch$/, '__set_context');
+        const WELCOME_TOOL_NAME = MCP_TOOL_NAME.replace(/__fetch$/, '__welcome');
+
+        // SOI query — actively held positions only, ordered for stable pagination.
+        // The dwh:execute:query response has a payload size limit (large funds were
+        // getting silently truncated mid-result), so we page through with OFFSET and
+        // accumulate.
+        //
+        // ORDER BY note: OFFSET pagination requires a deterministic sort. issuer_name +
+        // asset_name *should* be unique per row in AGGREGATE_INVESTMENTS, but if a fund
+        // holds multiple tranches in the same issuer + asset_class, ties could shuffle
+        // rows across page boundaries. If that bites, add a stable tiebreaker (e.g.
+        // an investment uuid) to the ORDER BY.
+        const PAGE_SIZE = 200;
+        const MAX_PAGES = 50;  // hard cap (10K rows) to prevent runaway loops
+
+        function buildSoiSql(fundUuid, offset, limit) {
+            return `SELECT
+                ISSUER_NAME                AS issuer_name,
+                ASSET_NAME                 AS asset_name,
+                INVESTMENT_DATE            AS acquisition_date,
+                COUNT_REMAINING_SHARES     AS count_remaining_shares,
+                TOTAL_COST_BASIS           AS cost_basis,
+                REMAINING_VALUE            AS fmv,
+                TOTAL_UNREALIZED_GAIN_LOSS AS unrealized_gain_loss,
+                REMAINING_VALUE_PER_SHARE  AS remaining_value_per_share,
+                LATEST_FMV_EFFECTIVE_DATE  AS latest_fmv_effective_date
+            FROM FUND_ADMIN.AGGREGATE_INVESTMENTS
+            WHERE FUND_UUID = '${fundUuid}'
+              AND IS_ACTIVE_INVESTMENT = TRUE
+            ORDER BY issuer_name, asset_name
+            LIMIT ${limit} OFFSET ${offset}`;
+        }
+
+        // === Markdown-table parser ===
+        // Carta dwh:execute:query returns the result as a markdown table string inside
+        // content[0].text. These four helpers unwrap, parse, and type-coerce per cell.
+        // Mirror of /sessions/.../carta-investors/soi-parser.js (40/40 tests passing).
+
+        function parseDwhQueryResult(result) {
+            const text = unwrapResponse(result);
+            return parseMarkdownTable(text);
+        }
+
+        function unwrapResponse(result) {
+            if (typeof result === 'string') return result;
+            if (!result || typeof result !== 'object') {
+                throw new Error('Unexpected response shape: ' + (typeof result));
+            }
+            if (result.isError) {
+                const msg = (result.content && result.content[0] && result.content[0].text) || '<no message>';
+                throw new Error('dwh query failed: ' + msg);
+            }
+            if (result.content && Array.isArray(result.content) && result.content[0] && typeof result.content[0].text === 'string') {
+                return result.content[0].text;
+            }
+            if (result.structuredContent && typeof result.structuredContent.result === 'string') {
+                return result.structuredContent.result;
+            }
+            throw new Error('Could not find text payload in response');
+        }
+
+        function parseMarkdownTable(text) {
+            if (!text || typeof text !== 'string') return [];
+            const lines = text.split(/\r?\n/).map(l => l.trimEnd()).filter(l => l.length > 0);
+            if (lines.length === 0) return [];
+
+            // The dwh response now prefixes the markdown table with a metadata line:
+            //   total_rows: 11 | offset: 0 | limit: 1000 | format: markdown
+            // Skip it so we don't mistake those four "columns" for headers and then
+            // silently drop every data row on column-count mismatch.
+            const headerIdx = lines[0].startsWith('total_rows:') ? 1 : 0;
+            if (headerIdx >= lines.length) return [];
+
+            const headers = lines[headerIdx].split(' | ').map(h => h.trim().toLowerCase());
+            let dataStart = headerIdx + 1;
+            if (lines.length > dataStart && /^[\s\-|]+$/.test(lines[dataStart])) dataStart++;
+
+            const rows = [];
+            for (let i = dataStart; i < lines.length; i++) {
+                const cells = lines[i].split(' | ').map(c => c.trim());
+                if (cells.length !== headers.length) {
+                    // Pipe-in-string is a known limitation; skip the bad row, log, continue.
+                    console.warn('parseMarkdownTable: row ' + i + ' has ' + cells.length + ' cells, expected ' + headers.length + '. Skipping.');
+                    continue;
+                }
+                const row = {};
+                for (let j = 0; j < headers.length; j++) row[headers[j]] = coerceCell(cells[j]);
+                rows.push(row);
+            }
+            return rows;
+        }
+
+        function coerceCell(raw) {
+            if (raw === 'NULL') return null;
+            if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+            if (/^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(raw)) {
+                const n = parseFloat(raw);
+                if (Number.isFinite(n)) return n;
+            }
+            return raw;
+        }
+
+        // === Data transform ===
+        // Map raw warehouse rows to the renderer's flat shape. Renderer/sort code
+        // references field names directly (e.g. c.cost, a.cps), so the schema bridge
+        // lives here in one place — when the visual prototype iterates, this transform
+        // can stay put.
+        //
+        // Schema mapping (warehouse → renderer):
+        //   issuer_name              → company.name
+        //   cost_basis               → company.cost / asset.cost (summed at company level)
+        //   fmv                      → company.value / asset.value (summed at company level)
+        //   unrealized_gain_loss     → company.gl / asset.gl (summed at company level)
+        //   latest_fmv_effective_date → company.lastDate / asset.lastDate (MM/DD/YYYY)
+        //   asset_name               → asset.name
+        //   acquisition_date         → asset.date (MM/DD/YYYY)
+        //   count_remaining_shares   → asset.shares
+        //   remaining_value_per_share → asset.vps
+        //   cost_basis / shares      → asset.cps (computed; null when shares == 0)
+        function transformData(investments) {
+            const byCompany = {};
+
+            investments.forEach(inv => {
+                // Coerce to string explicitly — coerceCell turns NULL into JS null,
+                // and any cell whose text matches the number regex into a JS number.
+                // If we kept those values as-is, downstream `.toLowerCase()` /
+                // `.localeCompare()` calls would throw and silently break filter /
+                // sort for the whole fund.
+                const companyName = inv.issuer_name == null ? 'Unknown' : String(inv.issuer_name);
+                if (!byCompany[companyName]) {
+                    byCompany[companyName] = {
+                        name: companyName,
+                        cost: 0,
+                        value: 0,
+                        gl: 0,
+                        date: '',
+                        lastDate: '',
+                        assets: []
+                    };
+                }
+                const company = byCompany[companyName];
+                company.cost  += inv.cost_basis || 0;
+                company.value += inv.fmv || 0;
+                company.gl    += inv.unrealized_gain_loss || 0;
+
+                const shares = inv.count_remaining_shares || 0;
+                const cost = inv.cost_basis || 0;
+                company.assets.push({
+                    name: inv.asset_name == null ? 'Unknown Asset' : String(inv.asset_name),
+                    date: formatDateShort(inv.acquisition_date),
+                    shares: shares,
+                    cost: cost,
+                    value: inv.fmv || 0,
+                    gl: inv.unrealized_gain_loss || 0,
+                    cps: shares > 0 ? cost / shares : null,
+                    vps: inv.remaining_value_per_share,
+                    lastDate: formatDateShort(inv.latest_fmv_effective_date)
+                });
+            });
+
+            // Roll asset-level dates up to the company. company.date is the earliest
+            // acquisition date across assets (semantic "when did we first invest?").
+            // company.lastDate is the most recent valuation date. Without these, the
+            // 'date'/'lastDate' sorts fall back to whichever asset hits assets[0] /
+            // gets processed last in iteration order — which is alphabetical by
+            // asset_name from the SQL, not chronological.
+            Object.values(byCompany).forEach(c => {
+                const dates = c.assets.map(a => a.date).filter(Boolean);
+                const lastDates = c.assets.map(a => a.lastDate).filter(Boolean);
+                if (dates.length) {
+                    c.date = dates.reduce((min, d) => parseDate(d) < parseDate(min) ? d : min);
+                }
+                if (lastDates.length) {
+                    c.lastDate = lastDates.reduce((max, d) => parseDate(d) > parseDate(max) ? d : max);
+                }
+            });
+
+            return Object.values(byCompany).sort((a, b) => a.name.localeCompare(b.name));
+        }
+
+        // Parse ISO YYYY-MM-DD as a local date string (no Date object → no timezone shift).
+        function formatDateShort(dateStr) {
+            if (!dateStr) return '';
+            const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
+            if (m) return m[2] + '/' + m[3] + '/' + m[1];
+            return dateStr;
+        }
+
+        // ── Ink icons (OshFont glyphs, Y-flipped for standalone SVG) ──
+
+        const INK_ICONS = {
+            'down': '<svg viewBox="61 206 386 387" fill="currentColor"><path transform="translate(0,512) scale(1,-1)" d="M446 219c-4 4-9 6-15 6-5 0-10-3-14-7l-160-168-161 168c-8 8-20 9-29 1-4-4-6-9-6-15 0-5 2-10 6-14l175-184c4-4 9-6 15-6 5 0 11 2 15 6l175 184c7 8 7 21-1 29z"/></svg>',
+            'forward': '<svg viewBox="63 129 384 384" fill="currentColor"><path transform="translate(0,512) scale(1,-1)" d="M164 0c-4 0-8 2-11 5-6 6-6 16 0 22l172 164-172 164c-6 6-6 16 0 22 5 6 15 6 22 0l184-175c3-3 4-7 4-11 0-4-1-8-4-11l-184-176c-3-3-7-4-11-4z"/></svg>',
+            'search': '<svg viewBox="0 0 512 512" fill="currentColor"><path transform="translate(0,512) scale(1,-1)" d="M290 173l15 15 4 4c24 29 38 65 38 103 0 87-72 159-160 159-88 0-159-72-159-159 0-88 71-160 159-160 37 0 72 13 100 36z m-103 0c-67 0-121 54-121 122 0 67 54 121 121 121 67 0 122-54 122-121 0-68-55-122-122-122z m121 17l39-37-20-21-40 39z m120-100l-1-2c-9-21-21-30-30-35l-2-1-75 73 34 35z m12-13l-2-3c-7-14-16-25-27-31l-4-2 35-34c5-5 11-7 18-7 6 0 12 2 17 7 9 10 9 25-1 35z m-12 13l-1-2c-9-21-21-30-30-35l-2-1 12-11 4 2c11 6 20 17 27 31l2 3z"/></svg>',
+            'up-carat': '<svg viewBox="0 0 512 512" fill="currentColor"><path transform="translate(0,512) scale(1,-1)" d="M67 149c4-4 9-5 14-5l351 0c5 0 10 2 14 5 4 4 6 9 6 15 0 5-2 10-6 14l-175 184c-4 4-9 6-15 6-5 0-11-2-15-6l-175-184c-7-8-7-21 1-29z"/></svg>',
+            'down-carat': '<svg viewBox="0 0 512 512" fill="currentColor"><path transform="translate(0,512) scale(1,-1)" d="M446 363c-4 4-9 5-15 5l-351 0c-5 0-9-2-13-5-4-4-6-9-6-15 0-5 2-10 5-14l176-184c4-4 9-6 15-6 5 0 10 2 14 6l176 184c7 8 7 21-1 29z"/></svg>',
+            'sort-carat': '<svg viewBox="0 0 512 512" fill="currentColor"><path transform="translate(0,512) scale(1,-1)" d="M111 268l289 0c5 0 9 2 12 5 7 7 7 18 0 25l-144 145c-3 3-7 5-12 5-5 0-9-2-12-5l-144-145c-7-7-7-18 0-25 3-3 7-4 11-5z m290-89l-289 0c-5 0-9-1-12-4-7-7-7-18 0-25l144-145c3-3 7-5 12-5 5 0 9 2 12 5l144 145c7 7 7 18 0 25-3 3-7 4-11 4z"/></svg>',
+            'expand-all': '<svg viewBox="0 0 512 512" fill="currentColor"><path transform="translate(0,512) scale(1,-1)" d="M185 362l49 0 0-66c0-4 1-8 4-11 4-4 7-5 11-5l7 0c4 0 8 1 11 5 3 3 4 7 4 11l0 66 49 0c3 0 6 2 8 5 1 1 3 5-1 10l-66 75c-1 2-4 4-8 4-4 0-6-2-7-4l-68-75-1-1c-1-4 0-7 0-9 2-3 5-5 8-5z m136-269l-49 0 0 67c0 4-2 8-5 11-3 3-7 5-11 5l-6 0c-4 0-8-2-11-5-3-3-5-7-5-11l1-67-49 0c-4 0-7-1-8-4-1-1-3-5 1-10l66-75c1-3 4-4 7-4 4 0 7 2 7 3l69 76 0 1c2 3 2 6 0 9-1 3-4 4-7 4z m98 155l-326 0c-11 0-20-9-20-20 0-11 9-20 20-20l326 0c11 0 20 9 20 20 0 11-9 20-20 20z"/></svg>',
+            'collapse-all': '<svg viewBox="0 0 512 512" fill="currentColor"><path transform="translate(0,512) scale(1,-1)" d="M245 283c1-1 3-3 7-3 5 0 7 2 7 3l69 75 0 1c2 4 1 7 0 9-1 3-4 5-7 5l-49 0 0 67c0 4-2 7-5 11-3 3-7 5-11 5l-6 0c-4 0-8-2-11-5-3-4-5-7-5-11l1-67-49 0c-4 0-7-1-8-4-2-2-3-6 1-11z m16-111c-2 3-4 4-8 4-4 0-6-2-7-3l-68-76-1-1c-1-3-1-6 0-9 2-3 5-4 8-4l49 0 0-67c0-4 1-8 4-11 4-3 7-5 11-5l7 0c4 0 8 2 11 5 3 3 4 7 4 11l0 67 49 0c4 0 6 1 8 4 1 2 3 6-1 10z m158 76l-326 0c-11 0-20-9-20-20 0-11 9-20 20-20l326 0c11 0 20 9 20 20 0 11-9 20-20 20z"/></svg>'
+        };
+
+        function inkIcon(name, size) {
+            size = size || 12;
+            return `<span class="ink-icon" style="width:${size}px;height:${size}px">${INK_ICONS[name].replace('<svg ', `<svg width="${size}" height="${size}" `)}</span>`;
+        }
+
+        // ── State ──
+
+        let companies = [];
+        let filterText = '';
+        let sortCol = null;
+        let sortDir = 'asc';
+        let allExpanded = false;
+
+        // Sticky flag: once we've called welcome to re-initialize the MCP session
+        // for this artifact load, don't call it again. If a subsequent MCP call
+        // still comes back demanding welcome, surface the error instead of looping.
+        let welcomeCalledThisSession = false;
+
+        // Active fund + per-fund cache. Cache survives fund switches but not page reloads —
+        // the SOI rarely changes within a single sidebar session, so persistent caching
+        // isn't worth the complexity yet.
+        let currentFundUuid = INITIAL_FUND_UUID;
+        const fundCache = new Map();  // fundUuid → companies[]
+
+        const COLUMNS = [
+            { key: 'name',     label: 'Investment',          num: false, expandToggle: true },
+            { key: 'date',     label: 'Investment date',     num: false },
+            { key: 'shares',   label: 'Shares / Principal',  num: true  },
+            { key: 'cost',     label: 'Cost',                num: true  },
+            { key: 'value',    label: 'Value',               num: true  },
+            { key: 'lastDate', label: 'Last updated',        num: false },
+            { key: 'gl',       label: 'Gain / Loss',         num: true  },
+            { key: 'cps',      label: 'Cost per share',      num: true  },
+            { key: 'vps',      label: 'Value per share',     num: true  },
+        ];
+
+        // ── Formatters ──
+
+        function fmt(val) {
+            return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(val);
+        }
+
+        function fmtDec(val) {
+            if (val == null) return '—';
+            return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
+        }
+
+        function fmtShares(val) {
+            if (!val) return '—';
+            return new Intl.NumberFormat('en-US').format(val);
+        }
+
+        function glCell(val) {
+            if (val === 0) return `<span class="gl-value" style="color:var(--text-subtle)">$0</span>`;
+            const cls = val >= 0 ? 'gain' : 'loss';
+            const arrow = val >= 0 ? '↑' : '↓';
+            return `<span class="gl-value ${cls}"><span class="gl-arrow">${arrow}</span>${fmt(Math.abs(val))}</span>`;
+        }
+
+        // DWH strings (company/asset names, dates) flow through innerHTML below;
+        // escape before interpolating so a malicious value can't inject markup.
+        function escHtml(str) {
+            if (str == null) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function parseDate(str) {
+            if (!str) return 0;
+            const [m, d, y] = str.split('/').map(Number);
+            return new Date(y, m - 1, d).getTime();
+        }
+
+        function computeTotals(rows) {
+            return rows.reduce((t, c) => ({
+                cost: t.cost + c.cost,
+                value: t.value + c.value,
+                gl: t.gl + c.gl,
+                assets: t.assets + c.assets.length,
+            }), { cost: 0, value: 0, gl: 0, assets: 0 });
+        }
+
+        // ── Sorting ──
+
+        function sorted(data) {
+            if (!sortCol) return data;
+            return [...data].sort((a, b) => {
+                let va, vb;
+                if (sortCol === 'name') {
+                    va = a.name.toLowerCase();
+                    vb = b.name.toLowerCase();
+                    return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+                } else if (sortCol === 'lastDate' || sortCol === 'date') {
+                    va = parseDate(a[sortCol]);
+                    vb = parseDate(b[sortCol]);
+                } else {
+                    va = a[sortCol] || 0;
+                    vb = b[sortCol] || 0;
+                }
+                return sortDir === 'asc' ? va - vb : vb - va;
+            });
+        }
+
+        function setSort(key) {
+            if (sortCol === key) {
+                sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                sortCol = key;
+                sortDir = 'asc';
+            }
+            render();
+        }
+
+        function filtered() {
+            if (!filterText) return companies;
+            const q = filterText.toLowerCase();
+            return companies.filter(c => c.name.toLowerCase().includes(q));
+        }
+
+        function sortIndicator(key) {
+            if (sortCol === key) {
+                return sortDir === 'asc' ? inkIcon('up-carat', 10) : inkIcon('down-carat', 10);
+            }
+            return inkIcon('sort-carat', 10);
+        }
+
+        // ── Render ──
+
+        function renderHead() {
+            const thead = document.getElementById('tableHead');
+            let html = '<tr>';
+
+            COLUMNS.forEach(col => {
+                const cls = ['sortable'];
+                if (col.num) cls.push('number');
+                if (sortCol === col.key) cls.push('active');
+                else if (sortCol) cls.push('dimmed');
+
+                if (col.expandToggle) {
+                    const expandIcon = allExpanded ? 'collapse-all' : 'expand-all';
+                    html += `<th class="${cls.join(' ')}" onclick="setSort('${col.key}')"><div class="th-inner"><span class="th-expand"><span class="expand-all-toggle" id="expandAllToggle" onclick="event.stopPropagation(); toggleAll()">${inkIcon(expandIcon, 16)}</span></span>${col.label}<span class="sort-indicator">${sortIndicator(col.key)}</span></div></th>`;
+                } else {
+                    html += `<th class="${cls.join(' ')}" onclick="setSort('${col.key}')"><div class="th-inner">${col.label}<span class="sort-indicator">${sortIndicator(col.key)}</span></div></th>`;
+                }
+            });
+
+            html += '</tr>';
+            thead.innerHTML = html;
+        }
+
+        function renderMetrics() {
+            const t = computeTotals(companies);
+            const moic = t.cost > 0 ? (t.value / t.cost).toFixed(2) : '—';
+            document.getElementById('metricsContainer').innerHTML = `
+                <div class="metrics-strip">
+                    <div class="metric-item">
+                        <div class="metric-label">Total cost</div>
+                        <div class="metric-value">${fmt(t.cost)}</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-label">Total value</div>
+                        <div class="metric-value">${fmt(t.value)}</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-label">Gain / Loss</div>
+                        <div class="metric-value">${glCell(t.gl)}</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-label"><span class="tooltip-trigger" data-tooltip="Multiple on Invested Capital">MOIC</span></div>
+                        <div class="metric-value">${moic === '—' ? moic : moic + 'x'}</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function render() {
+            const data = sorted(filtered());
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+
+            renderHead();
+
+            if (data.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="${COLUMNS.length}" class="empty-state">No companies match your filter.</td></tr>`;
+                return;
+            }
+
+            data.forEach((c, i) => {
+                const cr = document.createElement('tr');
+                cr.className = 'company-row';
+                cr.onclick = () => toggle(i);
+                cr.innerHTML = `
+                    <td><div class="company-cell"><span class="expand-icon" id="icon-${i}">${inkIcon(allExpanded ? 'down' : 'forward', 10)}</span><span class="company-name">${escHtml(c.name)}</span></div></td>
+                    <td></td>
+                    <td></td>
+                    <td class="number">${fmt(c.cost)}</td>
+                    <td class="number">${fmt(c.value)}</td>
+                    <td>${escHtml(c.lastDate)}</td>
+                    <td class="number">${glCell(c.gl)}</td>
+                    <td></td>
+                    <td></td>
+                `;
+                tbody.appendChild(cr);
+
+                c.assets.forEach(a => {
+                    const ar = document.createElement('tr');
+                    ar.className = `asset-row asset-group-${i}`;
+                    if (allExpanded) ar.classList.add('visible');
+                    ar.innerHTML = `
+                        <td><span class="asset-name">${escHtml(a.name)}</span></td>
+                        <td>${escHtml(a.date)}</td>
+                        <td class="number">${fmtShares(a.shares)}</td>
+                        <td class="number">${fmt(a.cost)}</td>
+                        <td class="number">${fmt(a.value)}</td>
+                        <td>${escHtml(a.lastDate)}</td>
+                        <td class="number">${glCell(a.gl)}</td>
+                        <td class="number">${fmtDec(a.cps)}</td>
+                        <td class="number">${fmtDec(a.vps)}</td>
+                    `;
+                    tbody.appendChild(ar);
+                });
+            });
+
+            if (!filterText) {
+                const t = computeTotals(data);
+                const tr = document.createElement('tr');
+                tr.className = 'totals-row';
+                tr.innerHTML = `
+                    <td>${data.length} companies, ${t.assets} positions</td>
+                    <td></td>
+                    <td></td>
+                    <td class="number">${fmt(t.cost)}</td>
+                    <td class="number">${fmt(t.value)}</td>
+                    <td></td>
+                    <td class="number">${glCell(t.gl)}</td>
+                    <td></td>
+                    <td></td>
+                `;
+                tbody.appendChild(tr);
+            }
+        }
+
+        function toggle(i) {
+            const rows = document.querySelectorAll(`.asset-group-${i}`);
+            const expanding = !rows[0]?.classList.contains('visible');
+            rows.forEach(r => r.classList.toggle('visible', expanding));
+            const icon = document.getElementById(`icon-${i}`);
+            if (icon) icon.innerHTML = inkIcon(expanding ? 'down' : 'forward', 10);
+
+            // Sync allExpanded to actual state so the header icon doesn't lie
+            // when the user expand-alls then collapses one (or vice-versa).
+            const allRows = document.querySelectorAll('.asset-row');
+            allExpanded = allRows.length > 0 && Array.from(allRows).every(r => r.classList.contains('visible'));
+            const t = document.getElementById('expandAllToggle');
+            if (t) t.innerHTML = inkIcon(allExpanded ? 'collapse-all' : 'expand-all', 16);
+        }
+
+        function toggleAll() {
+            allExpanded = !allExpanded;
+            document.querySelectorAll('.asset-row').forEach(r => r.classList.toggle('visible', allExpanded));
+            document.querySelectorAll('.expand-icon').forEach(ic => {
+                ic.innerHTML = inkIcon(allExpanded ? 'down' : 'forward', 10);
+            });
+            const t = document.getElementById('expandAllToggle');
+            if (t) t.innerHTML = inkIcon(allExpanded ? 'collapse-all' : 'expand-all', 16);
+        }
+
+        function filterCompanies(val) {
+            filterText = val;
+            render();
+        }
+
+        // ── Loading / error / empty-fund states ──
+
+        // Swap shimmer for the real content area. Used by every terminal state
+        // (success, error, empty fund) so the shimmer never gets stranded.
+        function showContent() {
+            document.getElementById('loadingState').style.display = 'none';
+            document.getElementById('contentArea').classList.add('loaded');
+            setLoadingStatus(null);
+        }
+
+        // Show or clear a status caption above the shimmer. Used to explain the
+        // brief extra delay when the artifact has to re-initialize the MCP session
+        // via the welcome tool before retrying a failed call.
+        function setLoadingStatus(msg) {
+            const el = document.getElementById('loadingStatus');
+            if (!el) return;
+            if (msg) {
+                el.textContent = msg;
+                el.style.display = 'block';
+            } else {
+                el.textContent = '';
+                el.style.display = 'none';
+            }
+        }
+
+        // The Carta MCP returns an isError envelope asking us to call `welcome`
+        // when the user's session state has expired (typically after a few days
+        // of inactivity). Match on the word "welcome" — narrow enough to avoid
+        // false positives on unrelated dwh errors, loose enough to survive minor
+        // wording tweaks from the MCP team.
+        function isWelcomeRequiredMessage(text) {
+            return typeof text === 'string' && /welcome/i.test(text);
+        }
+
+        // Wrapper around window.cowork.callMcpTool that transparently recovers
+        // from "please call welcome first" errors. On the first such failure
+        // per artifact load, we call welcome to re-initialize the session and
+        // retry the original call once. Any other error is passed through
+        // untouched, and `welcomeCalledThisSession` stops us from looping if
+        // welcome itself didn't fix the underlying issue.
+        async function callMcpWithWelcomeRetry(toolName, args) {
+            const result = await window.cowork.callMcpTool(toolName, args);
+            if (!result || !result.isError) return result;
+
+            const errorText = (result.content && result.content[0] && result.content[0].text) || '';
+            if (!isWelcomeRequiredMessage(errorText) || welcomeCalledThisSession) {
+                return result;
+            }
+
+            setLoadingStatus('Reconnecting to Carta…');
+            welcomeCalledThisSession = true;
+            const welcomeResult = await window.cowork.callMcpTool(WELCOME_TOOL_NAME, {});
+            if (welcomeResult && welcomeResult.isError) {
+                const msg = (welcomeResult.content && welcomeResult.content[0] && welcomeResult.content[0].text) || '<no message>';
+                throw new Error('Failed to initialize MCP session: ' + msg);
+            }
+
+            return await window.cowork.callMcpTool(toolName, args);
+        }
+
+        // Idempotent rebuild of contentArea's child structure. Called from every render
+        // path so that whatever the prior state was (shimmer, empty, error, populated
+        // table), the next render has a clean skeleton to write into. Doing it here
+        // rather than only in the cache-miss path means that an empty-fund or error
+        // state doesn't permanently destroy the fund switcher — the user can always
+        // switch to a different fund.
+        function ensureContentSkeleton() {
+            if (document.getElementById('tableBody')) return;
+            const area = document.getElementById('contentArea');
+            area.innerHTML = `
+                <div class="fund-switcher" id="fundSwitcher">
+                    <span class="fund-switcher-label">Fund:</span>
+                    <select class="fund-select" id="fundSelect" onchange="switchFund(this.value)"></select>
+                </div>
+                <div id="metricsContainer"></div>
+                <div class="toolbar" id="toolbar">
+                    <div class="search-wrapper">
+                        <span class="search-icon" id="searchIcon"></span>
+                        <input type="text" class="search-input" id="searchInput" placeholder="Search companies...">
+                    </div>
+                </div>
+                <div class="table-scroll">
+                    <table>
+                        <thead id="tableHead"></thead>
+                        <tbody id="tableBody"></tbody>
+                    </table>
+                </div>
+            `;
+            document.getElementById('searchIcon').innerHTML = inkIcon('search', 14);
+            populateFundSelect();
+        }
+
+        function showError(msg) {
+            // Don't wipe contentArea — the user needs the fund switcher above to escape
+            // from an error state. Write the error into the table area only.
+            ensureContentSkeleton();
+            document.getElementById('metricsContainer').innerHTML = '';
+            document.getElementById('tableHead').innerHTML = '';
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+            const tr = document.createElement('tr');
+            const td = document.createElement('td');
+            td.colSpan = COLUMNS.length;
+            td.className = 'empty-state error';
+            td.textContent = msg;
+            tr.appendChild(td);
+            tbody.appendChild(tr);
+            showContent();
+        }
+
+        function renderEmptyFund() {
+            ensureContentSkeleton();
+            document.getElementById('metricsContainer').innerHTML = '';
+            document.getElementById('tableHead').innerHTML = '';
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = `<tr><td colspan="${COLUMNS.length}" class="empty-state">This fund has no active investments.</td></tr>`;
+            showContent();
+        }
+
+        // ── Fetch and render ──
+
+        // Page through the warehouse query until we hit a short page (or the safety cap).
+        // Stops as soon as a page returns fewer rows than PAGE_SIZE, which signals we've
+        // read the last batch.
+        async function fetchAllPages(fundUuid) {
+            const allRows = [];
+            for (let page = 0; page < MAX_PAGES; page++) {
+                const result = await callMcpWithWelcomeRetry(MCP_TOOL_NAME, {
+                    command: 'dwh:execute:query',
+                    params: { sql: buildSoiSql(fundUuid, page * PAGE_SIZE, PAGE_SIZE) }
+                });
+                // Parser unwraps { content: [{ text: <markdown> }], isError? }
+                // and throws on error envelopes.
+                const pageRows = parseDwhQueryResult(result);
+                allRows.push(...pageRows);
+                if (pageRows.length < PAGE_SIZE) return allRows;
+            }
+            console.warn(`SOI fetch hit MAX_PAGES (${MAX_PAGES}); results may be truncated at ${MAX_PAGES * PAGE_SIZE} rows.`);
+            return allRows;
+        }
+
+        function populateFundSelect() {
+            const select = document.getElementById('fundSelect');
+            if (!select) return;
+            select.innerHTML = '';
+            FUNDS.forEach(f => {
+                const opt = document.createElement('option');
+                opt.value = f.uuid;
+                opt.textContent = f.name;
+                if (f.uuid === currentFundUuid) opt.selected = true;
+                select.appendChild(opt);
+            });
+            const switcher = document.getElementById('fundSwitcher');
+            if (switcher) {
+                switcher.classList.toggle('hidden', FUNDS.length <= 1);
+            }
+        }
+
+        // Show the shimmer skeleton again (used when switching to an uncached fund).
+        function showLoading() {
+            ensureContentSkeleton();
+            document.getElementById('loadingState').style.display = '';
+            document.getElementById('contentArea').classList.remove('loaded');
+        }
+
+        async function loadFund(fundUuid) {
+            currentFundUuid = fundUuid;
+            ensureContentSkeleton();  // Recovers DOM if prior render was empty/error.
+            // Keep the <select>'s selected attribute in sync with state. The live
+            // `.value` is already correct via the user's change event, but the
+            // attribute can lag — set it explicitly so programmatic reads and any
+            // future "reset" of the dropdown reflect the active fund.
+            const select = document.getElementById('fundSelect');
+            if (select) select.value = fundUuid;
+
+            // Cache hit → render immediately.
+            if (fundCache.has(fundUuid)) {
+                companies = fundCache.get(fundUuid);
+                if (companies.length === 0) { renderEmptyFund(); return; }
+                renderMetrics();
+                render();
+                showContent();
+                return;
+            }
+
+            // Cache miss → shimmer + fetch.
+            showLoading();
+            try {
+                const investments = await fetchAllPages(fundUuid);
+                const transformed = transformData(investments);
+                fundCache.set(fundUuid, transformed);
+                companies = transformed;
+                if (companies.length === 0) { renderEmptyFund(); return; }
+                renderMetrics();
+                render();
+                showContent();
+            } catch (error) {
+                showError('Error loading SOI: ' + error.message);
+            }
+        }
+
+        function switchFund(fundUuid) {
+            if (fundUuid === currentFundUuid) return;
+            // Reset transient view state when changing data sources; filter/sort/expand
+            // are properties of "this view of this fund", not global preferences.
+            filterText = '';
+            sortCol = null;
+            sortDir = 'asc';
+            allExpanded = false;
+            loadFund(fundUuid);
+        }
+
+        async function bootstrap() {
+            if (!INITIAL_FUND_UUID) {
+                showError('No initial fund UUID provided. The skill must inject an initial fund when creating the artifact.');
+                return;
+            }
+            if (!FIRM_UUID) {
+                showError('No firm UUID provided. The skill must inject a firm_uuid when creating the artifact.');
+                return;
+            }
+            if (!MCP_TOOL_NAME) {
+                showError("No MCP tool name provided. The skill must inject the user's UUID-form Carta fetch tool name when creating the artifact.");
+                return;
+            }
+            if (!Array.isArray(FUNDS) || FUNDS.length === 0) {
+                showError('No funds configured. The skill must inject at least one fund.');
+                return;
+            }
+
+            populateFundSelect();
+
+            // Pin firm context once for the artifact's lifetime — set_context is
+            // firm-scoped and the artifact is firm-scoped, so we don't re-fire on
+            // fund switches. If the MCP session has expired this is the first
+            // place we'd notice; the wrapper handles the welcome-then-retry.
+            try {
+                const contextResult = await callMcpWithWelcomeRetry(SET_CONTEXT_TOOL_NAME, { firm_id: FIRM_UUID });
+                if (contextResult && contextResult.isError) {
+                    const msg = (contextResult.content && contextResult.content[0] && contextResult.content[0].text) || '<no message>';
+                    throw new Error(msg);
+                }
+            } catch (error) {
+                showError('Error pinning firm context: ' + error.message);
+                return;
+            }
+
+            await loadFund(INITIAL_FUND_UUID);
+        }
+
+        // ── Init ──
+
+        document.getElementById('searchIcon').innerHTML = inkIcon('search', 14);
+
+        // Use capture-phase delegation on document — the .table-scroll element gets
+        // rebuilt when we show the shimmer between fund switches, so binding directly
+        // to it would leak listeners across switches and miss events on the new node.
+        // Scroll events don't bubble; capture phase reaches them.
+        document.addEventListener('scroll', e => {
+            const scroller = e.target.closest && e.target.closest('.table-scroll');
+            if (scroller) scroller.classList.toggle('scrolled', scroller.scrollLeft > 0);
+        }, true);
+
+        // Delegate the search-box 'input' listener too, for the same DOM-rebuild
+        // reason. Also more robust against any Cowork-side rewriting of inline
+        // event-handler attributes between artifact updates — we don't depend on
+        // `oninput=` surviving the round-trip.
+        document.addEventListener('input', e => {
+            if (e.target && e.target.id === 'searchInput') {
+                filterCompanies(e.target.value);
+            }
+        });
+
+        // Tooltip (body-appended popup, no layout impact)
+        const tip = document.createElement('div');
+        tip.className = 'tooltip-popup';
+        document.body.appendChild(tip);
+
+        document.addEventListener('mouseover', e => {
+            const trigger = e.target.closest('.tooltip-trigger');
+            if (!trigger) return;
+            tip.textContent = trigger.dataset.tooltip;
+            tip.classList.add('visible');
+            const rect = trigger.getBoundingClientRect();
+            const tipW = tip.offsetWidth;
+            const tipH = tip.offsetHeight;
+            // Position above the trigger; flip horizontally to stay in viewport.
+            let left = rect.left;
+            if (left + tipW > window.innerWidth - 8) left = rect.right - tipW;
+            if (left < 8) left = 8;
+            tip.style.left = left + 'px';
+            tip.style.top = rect.top - tipH - 6 + 'px';
+        });
+
+        document.addEventListener('mouseout', e => {
+            if (e.target.closest('.tooltip-trigger')) tip.classList.remove('visible');
+        });
+
+        // The shimmer in #loadingState covers the table during the fetch, so
+        // the table head doesn't need to render until data arrives. render()
+        // calls renderHead() itself once data is in.
+        bootstrap();
+    </script>
+</body>
+</html>
