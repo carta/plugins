@@ -72,13 +72,30 @@ LIMIT 1
 Parameters to substitute:
 - `<CORPORATION_UUIDS>` — one or more corporation IDs as a comma-separated list of quoted UUIDs (e.g. `'aaa-...', 'bbb-...'`).
 - `<AS_OF_DATE>` — the cap-table snapshot cutoff in `YYYY-MM-DD` format. **Default to `CURRENT_DATE`** for "latest snapshot" prompts. When the user specifies "as of [date]" (e.g. "as of Q1 2025", "as of 2024-12-31"), substitute that date here; the query will return the most recent snapshot on or before it. The same date is also applied to `FINANCING_HISTORY` so post-cutoff rounds are excluded.
+  - ⚠️ **`as_of_date` is a TIMESTAMP — select and join the snapshot at the DATE level.** The `latest_dates` CTE uses `MAX(DATE(as_of_date))` and the share CTEs join on `DATE(sct.as_of_date) = ld.max_as_of_date`. Keep both date-level. Do **not** revert to `MAX(as_of_date)` + an exact `sct.as_of_date = ld.max_as_of_date` equi-join: a single daily load can write rows with sub-second timestamp jitter (e.g. common classes at `...949`, the rest at `...950`), and an exact-timestamp join silently drops the jittered rows — which is what produced cap tables missing Class A/B Common and inflated every ownership %. Likewise keep `DATE(as_of_date) <= '<AS_OF_DATE>'` in the filter so a same-day snapshot isn't excluded by midnight coercion.
 
 ```sql
 WITH latest_dates AS (
-    SELECT CORPORATION_ID, MAX(as_of_date) AS max_as_of_date
+    -- Snapshot selection MUST be date-level, not timestamp-level. `as_of_date` is a TIMESTAMP,
+    -- and two failure modes follow from treating it as exact:
+    --   1. Boundary: comparing `as_of_date <= '<date>'` coerces the literal to midnight
+    --      (00:00:00), so a same-day snapshot timestamped later in the day is excluded and the
+    --      query falls back to a STALE prior snapshot. Fixed by `DATE(as_of_date) <= '<date>'`.
+    --   2. Intra-snapshot jitter: a single daily load can write rows with sub-second timestamp
+    --      jitter — e.g. Class A/B Common land at ...12.949 while every other class lands at
+    --      ...12.950. Picking MAX(as_of_date) (a single full timestamp) and equi-joining
+    --      `sct.as_of_date = ld.max_as_of_date` then SILENTLY DROPS the .949 rows (the common
+    --      classes), undercounting the fully-diluted denominator and inflating EVERY
+    --      ownership_pct. (This is the bug that produced cap tables missing common stock.)
+    -- Both are fixed by collapsing to the calendar date: take MAX(DATE(as_of_date)) here and
+    -- join on DATE(as_of_date) below, so all rows of one logical daily snapshot are included
+    -- regardless of jitter. Assumes one logical snapshot per corp per calendar day (true for
+    -- this daily-load table); if a corp ever has two genuine same-day loads, the date join would
+    -- union both — re-introduce a timestamp tiebreak then.
+    SELECT CORPORATION_ID, MAX(DATE(as_of_date)) AS max_as_of_date
     FROM FUND_ADMIN.SUMMARY_CAP_TABLE
     WHERE CORPORATION_ID IN (<CORPORATION_UUIDS>)
-      AND as_of_date <= '<AS_OF_DATE>'
+      AND DATE(as_of_date) <= '<AS_OF_DATE>'
     GROUP BY CORPORATION_ID
 ),
 shares_agg AS (
@@ -91,8 +108,8 @@ shares_agg AS (
         SUM(sct.OUTSTANDING_SHARES)                     AS outstanding_shares
     FROM FUND_ADMIN.SUMMARY_CAP_TABLE sct
     INNER JOIN latest_dates ld
-        ON sct.CORPORATION_ID = ld.CORPORATION_ID
-       AND sct.as_of_date     = ld.max_as_of_date
+        ON sct.CORPORATION_ID    = ld.CORPORATION_ID
+       AND DATE(sct.as_of_date)  = ld.max_as_of_date   -- date-level join: include all rows of the day's snapshot (see latest_dates)
     WHERE sct.security_class_type <> 'note_block'
     GROUP BY sct.CORPORATION_ID, sct.SECURITY_CLASS_NAME
 ),
@@ -102,8 +119,8 @@ total_shares_sum AS (
         SUM(sct.FULLY_DILUTED_QUANTITY) AS grand_total_shares
     FROM FUND_ADMIN.SUMMARY_CAP_TABLE sct
     INNER JOIN latest_dates ld
-        ON sct.CORPORATION_ID = ld.CORPORATION_ID
-       AND sct.as_of_date     = ld.max_as_of_date
+        ON sct.CORPORATION_ID    = ld.CORPORATION_ID
+       AND DATE(sct.as_of_date)  = ld.max_as_of_date   -- MUST match shares_agg's join exactly, or numerator/denominator diverge
     WHERE sct.security_class_type <> 'note_block'
     GROUP BY sct.CORPORATION_ID
 ),
@@ -190,7 +207,11 @@ WITH ranked AS (
     FROM FUND_ADMIN.FUND_CORPORATION_OWNERSHIP
     WHERE FIRM_ID = '<FIRM_UUID>'
       AND CORPORATION_ID IN (<CORPORATION_UUIDS>)
-      AND AS_OF_DATE <= '<AS_OF_DATE>'
+      -- DATE() cast for the same reason as Query A: guard against AS_OF_DATE carrying a time
+      -- component, which would make a bare `<= '<date>'` (coerced to midnight) skip the
+      -- same-day snapshot and fall back to a stale, lower ownership %. Harmless if the column
+      -- is already a pure DATE.
+      AND DATE(AS_OF_DATE) <= '<AS_OF_DATE>'
 )
 SELECT
     r.CORPORATION_ID,
@@ -226,12 +247,12 @@ Each row is a share class snapshot per corporation at a given date.
 | Column | Description |
 |--------|-------------|
 | `CORPORATION_ID` | Portfolio company identifier (UUID) |
-| `as_of_date` | Date of the cap table snapshot |
+| `as_of_date` | Cap table snapshot timestamp. **TIMESTAMP, not DATE** (carries a time component, e.g. `2026-06-03 16:13:19`). Rows of one daily snapshot can have sub-second jitter (e.g. common classes at `...949`, others at `...950`), so always select/join at the DATE level (`MAX(DATE(as_of_date))`, `DATE(as_of_date) = ...`) — an exact-timestamp equi-join drops the jittered rows. Also filter with `DATE(as_of_date) <= '<date>'`, never a bare `<= '<date>'`, or the same-day snapshot is excluded. |
 | `SECURITY_CLASS_NAME` | Share class label (e.g. "Series A Preferred") |
 | `security_class_type` | Broad type; filter out `note_block` rows |
 | `security_class_type_detailed` | Granular type: `Preferred`, `Option plan`, etc. |
 | `AUTHORIZED_SHARES` | Shares authorized in the class |
-| `FULLY_DILUTED_QUANTITY` | Fully diluted share count |
+| `FULLY_DILUTED_QUANTITY` | Fully diluted share count — the basis for `total_shares` and the `ownership_pct` denominator. Populated for real share classes (incl. common). If common shares or another class go **missing** from a result, the cause is almost always `as_of_date` snapshot selection (stale-fallback or timestamp-jitter drop — see the row above), **not** a null `FULLY_DILUTED_QUANTITY`. Do **not** "fix" it by `COALESCE`-ing in `OUTSTANDING_SHARES`; that masks the real bug and double-counts. |
 | `OUTSTANDING_SHARES` | Issued and outstanding shares |
 | `OUTSTANDING_WARRANTS` | Outstanding warrants |
 | `OUTSTANDING_EQUITY_AWARD_DERIVATIVES` | Outstanding options/RSUs |
