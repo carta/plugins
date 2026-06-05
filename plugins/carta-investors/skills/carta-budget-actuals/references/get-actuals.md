@@ -43,7 +43,7 @@ fetch(command="dwh:get:table_schema", params={"table_name": "<journal_entries_ta
 
 ## ManCo pre-flight sanity check
 
-The calling SKILL.md treats this as a named gate (Gate 4 in `carta-create-budget`, Gate 5 in `carta-budget-actuals`).
+The calling SKILL.md treats this as a named gate (Gate 5 in `carta-budget-actuals`).
 
 For management-company entities, scan returned `account_name` values for:
 - `Interest expense`

@@ -1,8 +1,8 @@
 ---
 name: carta-create-budget
 model: opus
-description: 'Build a new fund or ManCo budget workbook in Excel from Carta prior-year actuals. TRIGGER: build/create/draft a budget for a future year. NOT: P&L, balance sheet, fetch-budget, actuals refresh, pacing, scenarios.'
-version: 1.0.0
+description: 'Build or restructure a fund/ManCo budget workbook in Excel from Carta prior-year actuals. TRIGGER: build/create/draft a budget for a future year; group/categorize budget line items into sections with subtotals; apply an inflation/contingency buffer to budget expenses. NOT: consolidating P&L / balance sheet, fetch-budget, actuals refresh, pacing (carta-budget-vs-actuals), what-if scenarios (carta-budget-scenarios).'
+version: 1.0.1
 allowed-tools:
   # MCP connector discovery (Claude for Excel runtime tool — used first in Gate 0)
   - refresh_mcp_connectors
@@ -44,8 +44,8 @@ Claude for Excel. Audience is an accountant.
 
 - **Plain English only.** Never surface MCP server identifiers, DWH column
   names (`ACCOUNT_TYPE`, `EFFECTIVE_DATE`), UUIDs, raw JSON, SQL, or gate labels.
-- **Currency formatting:** positive `$X,XXX`, negatives `($X,XXX)`, totals bolded `**$X,XXX**`.
-- **Difference values are absolute** — `$0` for match, `$2,000` for a gap.
+- **Currency formatting:** positive `X,XXX`, negatives `(X,XXX)`, totals bolded — using the resolved currency's symbol, not always `$` (derive the currency from the data, never default to USD; see Hard rules).
+- **Difference values are absolute** — e.g. `0` for a match, `2,000` for a gap, in the resolved currency.
 - **Status vocabulary:** ✅ Match | ⚠ Mismatch ($X diff) | ❌ Missing in Carta | ❌ Missing in Client Doc.
 - **No environment URLs.** Output goes into Excel cells, not Carta dashboard links.
 - **Closing summary link** is a workbook citation (`<citation:Sheet!Range>`) in
@@ -62,6 +62,11 @@ Claude for Excel. Audience is an accountant.
 
 Build / create / generate / draft a budget for a future year ("build a 2026 budget", "draft from last year's actuals", "make me a 2026 budget for `<entity>`").
 
+Also covers **restructuring an existing budget** in the workbook:
+
+- "Group / organize / categorize the budget line items into a few top-level categories" → `references/reorganize-categories.md`
+- "Add a 5% inflation buffer to expenses" / "apply a contingency buffer" / "pad the budget by X%" → `references/inflation-buffer.md`
+
 ## DO NOT use this skill for
 
 - Refreshing actuals on existing budget → `carta-budget-actuals`
@@ -69,6 +74,35 @@ Build / create / generate / draft a budget for a future year ("build a 2026 budg
 - What-if scenarios → `carta-budget-scenarios`
 - P&L / income statement → `carta-consolidating-pnl`
 - Balance sheet → `carta-consolidating-balance-sheet`
+
+---
+
+## Execution discipline
+
+Execute all gates silently. Do not narrate tool calls, intermediate results, or status updates. Only speak at explicit decision points: Gate 0.5 (if runtime is ambiguous), Gate 1 (destination chooser), Gate 2 (parameter gate), Gate 5 (approval), and Gate 7 (next-step menu).
+
+Do NOT output any of the following between gates:
+- "Let me probe the server prefix…" / "Good — prefix is `carta_sandbox`."
+- "Now running the DWH queries." / "Queries complete."
+- "Approved. Writing now." / "Both tabs branded."
+- Any sentence that narrates a tool call you are about to make or just made.
+
+---
+
+## Entry mode — fresh session vs. chained skill
+
+Before Gate 0, check whether these context variables are already set from an earlier budgeting skill call in the same session:
+
+- `<SERVER>` — connected Carta MCP server prefix
+- `<ENTITY_NAME>` — the resolved entity name
+- `<ENTITY_UUID>` — the resolved entity UUID
+- `<RUNTIME>` — `excel-addin` or `local-file`
+
+**If all four are in context:** skip Gates 0 and 0.5 entirely. In Gate 2, pre-fill the entity and skip asking for it — ask only for `budget_year`, window, and other budget parameters. Proceed from Gate 1.
+
+**If any is missing** (fresh session or cold invocation): run Gates 0 and 0.5 in order, then continue from Gate 1.
+
+Do not ask "which firm?" or "which runtime?" when those are already established from the skill the user just ran.
 
 ---
 
@@ -80,9 +114,9 @@ Build / create / generate / draft a budget for a future year ("build a 2026 budg
 2. Filter to entries whose `name` is `Carta`, starts with `Carta (`, or equals `carta`. Drop `failed` entries (need re-auth at claude.ai → Settings → Connectors).
 3. For each `connected` candidate, probe both prefix forms in parallel (one message, both calls): `mcp__claude_ai_Carta__welcome` and `mcp__carta__welcome`. Whichever returns first is `<SERVER>`.
 
-`<SERVER>` is resolved only after `welcome` returns successfully. **Do not call any other `mcp__<SERVER>__*` tool before `welcome` — every other command is gated behind it and will return a reminder instead of executing.**
+`<SERVER>` is resolved only after `welcome` returns successfully. **Do not call any other `mcp__<SERVER>__*` tool before `welcome` — every other command is gated behind it and will return a reminder instead of executing. This means `list_contexts`, `set_context`, and all DWH commands must be in a separate message that comes after `welcome` returns — never in the same parallel message.**
 
-**If no Carta server is connected:** tell the user, list `failed` connectors, stop. **If multiple connected:** default to `Carta` (production). **Don't** probe every prefix in `allowed-tools` — only `connected` ones. **Don't** use `tool_search_tool_bm25` for primary detection.
+**If no Carta server is connected:** tell the user, list `failed` connectors, stop. **If multiple connected:** default to `Carta` (production). **Don't** probe every prefix in `allowed-tools` — only `connected` ones. **Never** use `tool_search_tool_bm25` to find the server prefix — it is not in `allowed-tools` and bypasses the `connected`-only filter. Determine the prefix solely from the `refresh_mcp_connectors` result.
 
 ### Resolve the firm/entity
 
@@ -91,7 +125,7 @@ The Carta MCP exposes three top-level tools: `welcome`, `fetch`, `set_context`. 
 If the user named a firm:
 1. `fetch(command="contexts:list", params={"firm_name": "<entity>"})`.
 2. Multiple matches → `AskUserQuestion` to disambiguate.
-3. `set_context(firm_id=<uuid>)`.
+3. `set_context(firm_id=<uuid>)`. **Do not skip this step — DWH queries scope to the active context. Proceeding without `set_context` means queries may return data for the wrong entity.**
 
 Prefer granular tools when exposed: `mcp__<SERVER>__list_contexts(firm_name=...)` / `set_context(firm_id=...)`.
 
@@ -177,49 +211,16 @@ append a suffix.
 | "use the template", "fill in this template", "Carta template" | `read_skill(file_path="references/from-template.md")` |
 | "add a line for <something not in CoA>", "I expect to spend $X on <new category>" | `read_skill(file_path="references/from-recommendation.md")` |
 | "by department", "by reporting tag", "sliced by <dimension>", "by sub-account" | `read_skill(file_path="references/slice-by-tag.md")` |
+| "group / categorize / organize line items into categories", "add category subtotals" | `read_skill(file_path="references/reorganize-categories.md")` |
+| "add a 5% inflation buffer", "apply a contingency buffer", "pad expenses by X%" | `read_skill(file_path="references/inflation-buffer.md")` |
 
-Do not ask the user which mode — infer from their original prompt. Follow the loaded file.
-
----
-
-## Gate 4 — ManCo pre-flight sanity check
-
-This is the safety gate. **Run it before the approval gate, never
-after.** Halt here before any write is attempted.
-
-When the entity is a management company, scan the returned `account_name`
-values for fund-level leak indicators:
-
-- "Interest expense"
-- "Realized gain", "Unrealized gain", "Realized loss", "Unrealized loss"
-- "Audit fees"
-- "Dead deal"
-- "LOC fees", "LOC interest"
-- "Management fees" (expense side)
-
-If **any** appear, tell the user in plain English:
-
-> "I'm stopping before writing to your workbook because fund-level
-> accounts showed up in the management-company result. That usually
-> means the entity name in the query was too broad. Please confirm the
-> exact ManCo entity name and I'll retry."
-
-Offer the user a retry with a corrected entity name.
-
-**Always render the pre-flight outcome as user-visible prose, even when the dataset is clean.** The context engine may compress the underlying tool call into a snip summary, which means the user has no visibility into whether this safety gate ran. Surface one sentence:
-
-> "Checked N accounts for fund-level leak indicators (Interest expense, Audit fees, LOC fees, Realized/Unrealized gains, Management fees on expense side, Dead deal). None found — safe to proceed."
-
-If leaks ARE found, the existing halt-and-ask-user language already runs. Never silently pass this gate.
-
-**Done when:** no leak indicators in the dataset (or the user re-confirmed
-the entity name after a retry).
+Do not ask the user which mode — infer from their original prompt. Follow the loaded file. The last two operate on an **existing** budget tab in the workbook rather than building from scratch — skip the prior-actuals fetch when the budget is already present.
 
 ---
 
 ## Gate 5 — Pre-build review (approval gate)
 
-Present the proposed budget as a preview table:
+Present the proposed budget as a preview table — **one row per account, no collapsing sections into a single summary row.** If there are 35 accounts, the table has 35 data rows plus section subtotal rows.
 
 | Section | Line Item | GL Code | Prior-Year Total | Proposed Budget Total | Source |
 |---|---|---|---|---|---|
@@ -234,13 +235,17 @@ out above the table:
 > window** — their proposed amounts are best-effort. Review these
 > before approving.
 
-Then offer the approval menu **via a single `AskUserQuestion` call** — never as a bare code-fenced markdown list (bare-text menus break the chooser UI in Claude for Excel and force the user to type the number). Render with these three options:
+Output the preview table above as a normal conversation message. Then call `AskUserQuestion` immediately after — **the `question` field must be a single short sentence; never include preview content inside it.**
 
-1. **Approve and write the budget** ← recommended
-2. **Edit — change a parameter (year / window / accounts / sheet name)**
-3. **Cancel**
+- `question`: `"Approve writing this budget?"`
+- `header`: `"Approval"`
+- `multiSelect`: `false`
+- `options`:
+  1. `label`: `"Approve and write the budget"` / `description`: `"Writes the budget to the destination chosen in Gate 1. ← recommended"`
+  2. `label`: `"Edit — change a parameter (year / window / accounts / sheet name)"`
+  3. `label`: `"Cancel"`
 
-The `← recommended` marker goes inside the `description` field of option 1, not as a suffix on the `label`.
+The `← recommended` marker goes inside the `description` field of option 1, not as a suffix on the `label`. Do not write `"Approve and write the budget ← recommended"` as the label.
 
 If the user picks Edit, return to Gate 2 with their feedback. Wait for
 explicit approval before writing.
@@ -256,6 +261,8 @@ explicit approval before writing.
 Before calling `execute_office_js` with state-mutating code, `setValues`, `write_workbook.py`, or any other workbook-write tool, look back at your tool history. Find the most recent `AskUserQuestion` you sent. Does its answer literally include `"Approve and write"`? If NO, Gate 5 did not pass — send the Gate 5 approval menu now (preview table + 3-option `AskUserQuestion`) and wait for the explicit answer.
 
 **Do not interpret upstream answers as approval.** A Gate 2 parameter response, a Gate 0.5 runtime answer, or any prior `AskUserQuestion` whose answer is not literally `"Approve and write"` does NOT clear this gate. Approval is the answer to the specific Gate 5 question — nothing else counts.
+
+**Restructure paths clear this gate the same way.** The categorize-line-items and inflation-buffer paths (`references/reorganize-categories.md`, `references/inflation-buffer.md`) collect their own input first (the category mapping, or the buffer %), then present the standard Gate 5 pre-build review — a preview of the restructured tab plus the 3-option `AskUserQuestion` whose answer is `"Approve and write"`. That `"Approve and write"` answer is what clears this check; the mapping/buffer confirmation alone does not.
 
 Branches by `<RUNTIME>`. Writes **two tabs** — `Budget <budget_year>` (primary, hardcoded budget values) and `<prior_year> Actuals` (reference, hardcoded actuals). **No Provenance tab.**
 
@@ -277,7 +284,7 @@ Do not reconstruct either spec from memory. The files must be in your context be
 
 Returning from Call 1 does NOT finish Gate 6. Returning from Call 2 does NOT finish Gate 6 — every tab needs its own logo call, and the verification call must come last.
 
-**Step 6a — write the cells.** Use the Excel add-in's runtime cell-write tools with the accounting currency format (`_([$$-en-US]* #,##0.00_);…`). Do **not** call freeze_panes. For each `low-confidence — sparse history` account, attach a cell comment to the column-B label cell — see [`references/branding-and-header.md`](references/branding-and-header.md#cell-comment-pattern-for-sparse-history--projection-flags) for the verbatim `sheet.comments.add(...)` pattern. **Never** change row fill / font color / border.
+**Step 6a — write the cells.** Use the Excel add-in's runtime cell-write tools with the accounting currency format for the resolved currency (`_(<CCY_TOKEN>* #,##0.00_);…` — see Hard rules). Do **not** call freeze_panes. For each `low-confidence — sparse history` account, attach a cell comment to the column-A label cell — see [`references/branding-and-header.md`](references/branding-and-header.md#cell-comment-pattern-for-sparse-history--projection-flags) for the verbatim `sheet.comments.add(...)` pattern. **Never** change row fill / font color / border.
 
 **Step 6b — brand both tabs (DO NOT SKIP).** Immediately after the
 cell writes — same Gate 6, before any summary text — embed the Carta
@@ -355,6 +362,8 @@ Budget values are hardcoded numbers. Subtotals, `Total Income`, `Total Expenses`
 
 If any anchor is missing, you have skipped a gate. **Do NOT write "Carta logo placed at..." in the summary when no `shapes.addImage` call appears in your tool history — that's hallucinating completion.** STOP, go back, run the missing gate, then return here.
 
+**Restructure-path carve-out.** The categorize-line-items and inflation-buffer paths (`references/reorganize-categories.md`, `references/inflation-buffer.md`) modify an existing, already-branded tab and do **not** run the brand block — they require only anchor 1 (the `"Approve and write"` response). Skip anchors 2 and 3 for these paths; do not add a second logo to a tab that already has one. (Only if the restructure rebuilt the tab from scratch and `CartaLogo` is gone do you re-run the brand block and re-verify.)
+
 One or two sentences confirming what got written, with a clickable link
 to the result.
 
@@ -419,12 +428,13 @@ For queries > 50 rows, request `format: "ndjson"` and bucket the result into a b
 
 - **DWH queries:** call `fetch("dwh:execute:query", …)` directly — never a generic external-DWH connector. Filter by `FUND_NAME = '<entity>'` (never `FIRM_NAME ILIKE`). Use `AMOUNT` (never the base-currency variant — NULL in many datasets). Sign-flip revenue: `CASE WHEN LEFT(ACCOUNT_TYPE,1) = '4' THEN -AMOUNT ELSE AMOUNT END`. Preserve reversal entries as-is.
 - **Budget values are hardcoded numbers** (per-account, per-month). Subtotals, Total Income, Total Expenses, and Net Operating Income use `=SUM(...)` formulas so totals recompute when the user edits.
-- **Currency format:** `_([$$-en-US]* #,##0.00_);_([$$-en-US]* (#,##0.00);_([$$-en-US]* "-"??_);_(@_)`. A bare `$` renders in system locale (`R$` on pt-BR) — never use it.
+- **Currency — derive from the data, never default to USD.** Resolve the workbook's presentation currency before writing (entity properties via `welcome`, or the currency on the actuals data); if it can't be resolved, ask the user. The format uses the locale token `<CCY_TOKEN>` for the resolved currency — `[$$-en-US]` USD, `[$€-x-euro2]` EUR, `[$£-en-GB]` GBP, `[$$-en-CA]` CAD, or the matching `[$<symbol>-<locale>]`. The `A4` band reads `Amounts in <resolved_currency>`.
+- **Currency format:** `_(<CCY_TOKEN>* #,##0.00_);_(<CCY_TOKEN>* (#,##0.00);_(<CCY_TOKEN>* "-"??_);_(@_)`. A bare `$` renders in system locale (`R$` on pt-BR) — never use it.
 - **Do not freeze panes.** Do not write a Provenance tab — source data lives on the `<prior_year> Actuals` tab.
 - **Two-row header for month-bucketed tables.** Row N = one merged cell per month label. Row N+1 = sub-headers. `range.merge(true)` destroys trailing cell values — never merge over a row that already holds sub-headers; insert a new row first.
 - **Month-label date-serial trap.** `"Jan 2026"` auto-coerces to a date serial. Prefix with `'` to force text, or write a real date with `numberFormat: "mmm yyyy"`.
 - **Border syntax (Office.js):** `style = "Continuous"`, then `weight = "Thin"`. Never `style: "Thin"`.
-- **Low-confidence rows are flagged with cell comments only** — no fill, font color, border, or italic. Attach to the column-B account-name cell.
+- **Low-confidence rows are flagged with cell comments only** — no fill, font color, border, or italic. Attach to the column-A account-name cell.
 - **Brand every generated tab in Gate 6.** Both tabs MUST carry a `CartaLogo` shape (Excel) or `add_image` op with `status: "ok"` (local-file) before Gate 7 summary runs. Use the bundled assets in this skill's `assets/` — never link to another plugin's assets.
 - In local-file mode, never silently overwrite an existing `.xlsx` — the helper returns a "sheet exists" status; surface it to the user.
 
@@ -440,7 +450,6 @@ Never auto-retry. Always surface the failure and let the user decide.
 
 - **No Carta MCP connected** → "Open Settings → Connectors in Claude, enable Carta, then retry."
 - **`contexts:list` returns no firm** → echo name, ask for spelling. Don't silently near-match.
-- **ManCo sanity check fires (Gate 4)** → halt and ask for the exact ManCo entity name.
 - **Sparse lookback (< 6 months for many accounts)** → flag rows `low-confidence`, surface count, let user decide.
 - **Tab name collision** → ask to overwrite, append suffix (`Budget 2026 (2)`), or cancel.
 - **Local-file: unreadable path / openpyxl error** → echo path, confirm it's a valid `.xlsx`.
