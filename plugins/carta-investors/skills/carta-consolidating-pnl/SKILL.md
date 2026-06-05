@@ -1,7 +1,8 @@
 ---
 name: carta-consolidating-pnl
-model: opus
+model: sonnet
 description: 'Firm-wide consolidating P&L (Income Statement) across ALL entities of a firm for one month. Produces TWO Excel tabs: detailed P&L (Month + YTD Actual/Budget/Variance/%) and executive Summary P&L formula-linked to detail. Optional tag-view mode breaks Actuals down by ALL firm reporting-tag categories side by side with a three-row nested header (period > category > tag) and per-category subtotals; Budget/Variance omitted in tag-view (Carta budgets have no tag dimension). Sourced from Carta MCP. TRIGGER on "consolidating P&L for [firm] [month]", "P&L for all entities of [firm]", "firm-wide income statement", "P&L with executive summary", "P&L by department", "P&L by tag", "income statement by cost center", "P&L by project code". DO NOT TRIGGER for single-entity P&L, balance sheet (carta-consolidating-balance-sheet), new budgets (carta-create-budget), Carta budgets (carta-fetch-budget), actuals refresh (carta-budget-actuals), pacing (carta-budget-vs-actuals), or what-if (carta-budget-scenarios).'
+version: 1.0.0
 allowed-tools:
   # MCP connector discovery (Claude for Excel runtime tool — used first in Gate 0)
   - refresh_mcp_connectors
