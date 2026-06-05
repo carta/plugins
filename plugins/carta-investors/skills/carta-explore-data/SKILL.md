@@ -114,6 +114,25 @@ The file contains the SQL query, column reference, and presentation rules for th
 
 ## Step 3 — Execute the Query
 
+> **Before executing — resolve uncertainty first**
+>
+> If the semantic domain or target table is not yet clear:
+>
+> 1. **Unclear intent — ask immediately.** If the user's request is simple, ambiguous,
+>    or contains a term that doesn't map to any known domain, table, or Carta concept
+>    in the Step 1 table, immediately call `AskUserQuestion` with focused options to
+>    resolve the ambiguity. Do **not** respond in prose first — go straight to
+>    `AskUserQuestion`.
+> 2. **Inspect the schema.** Use `fetch("dwh:get:table_schema", ...)` on any plausible
+>    table before referencing it in a query.
+> 3. **Ask up to 2 clarifying questions.** If, after checking saved queries (Step 2)
+>    and schema inspection, you still cannot identify the right table or domain, use
+>    `AskUserQuestion` to ask the user **at most 2 focused questions** that will resolve
+>    the ambiguity — e.g. fund-level vs company-level, metric type, entity name. After
+>    receiving answers, re-run Steps 1–2 before querying.
+>
+> **Never assume a table name or domain.** Guessing produces incorrect or empty results.
+
 Use the MCP commands in sequence:
 
 1. **Browse tables:** `fetch("dwh:list:tables", {"schema": "FUND_ADMIN"})`
