@@ -70,7 +70,7 @@ Every empty cell in E and N (P&L rows the budget didn't match) gets `0`. Without
 
 ### 7. Add the source note in B3
 
-`Budget source: <source_label>` (italic, size 10). Move `Amounts in $` to B4 if needed.
+`Budget source: <source_label>` (italic, size 10). Move `Amounts in <resolved_currency>` to B4 if needed.
 
 ### 8. Tie-out check (always run)
 
@@ -101,7 +101,7 @@ If single-entity-vs-firm-wide flag fired in step 1, repeat it in the closing rep
 - **Never overwrite columns D / G / H / M / P / Q** — those are Actual/Variance/% cells.
 - **Never invent rows** — new rows only from unmatched budget entries, classified into the correct section.
 - **Never smooth quarterly postings into monthly.** If Carta returns Management fee income only in months 1/4/7/10, leave the others blank.
-- **Currency format:** `[$$-en-US]` — never bare `$`.
+- **Currency format:** `<CCY_TOKEN>` (the resolved currency's locale token; derive from data, never default to USD) — never bare `$`.
 - **Match precedence:** GL code → exact name → prefix name. Never reverse (name collision across GL codes would silently merge wrong rows).
 - **Don't touch the Summary tab.**
 - **Do not auto-retry** failed fetches.

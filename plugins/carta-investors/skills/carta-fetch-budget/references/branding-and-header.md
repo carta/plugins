@@ -2,22 +2,30 @@
 
 Canonical spec for the 4-row header band + Carta logo placement. Read whenever a skill is about to write a tab.
 
-## Row layout (column B)
+## Row layout (column A)
+
+> **Known cross-skill divergence:** this skill places the metadata band in
+> **column A**. Some sibling skills (`carta-create-budget`,
+> `carta-consolidating-pnl`) still anchor their band in **column B**. This is
+> an accepted, intentional per-skill difference — the logo sits at column E in
+> every case, so it clears the band regardless. A user chaining between skills
+> may therefore see the metadata band in a different column depending on which
+> skill last wrote the tab. Tracked for eventual consolidation; not a blocker.
 
 | Cell | Content | Style |
 |---|---|---|
-| B1 | `<FIRM-FULL-NAME>` | bold, size 10 |
-| B2 | Title with descriptive subtitle (e.g. `2026 Budget (based on 2025 actuals)`) | bold, size 10 |
-| B3 | Source (e.g. `Source: Carta Fund Admin · DWH journal entries`) | italic, size 10 |
-| B4 | Other context (e.g. `Amounts in USD` / `As of YYYY-MM-DD`) | italic, size 10 |
-| B5 | blank | — |
+| A1 | `<FIRM-FULL-NAME>` | bold, size 10 |
+| A2 | Title with descriptive subtitle (e.g. `2026 Budget (based on 2025 actuals)`) | bold, size 10 |
+| A3 | Source (e.g. `Source: Carta Fund Admin · DWH journal entries`) | italic, size 10 |
+| A4 | Other context (e.g. `Amounts in <resolved_currency>` / `As of YYYY-MM-DD`) | italic, size 10 |
+| A5 | blank | — |
 | Row 6 | Column headers | bold, white on black, centered |
 
-**B2 must be descriptive, not bare** — append the provenance subtitle so the user can identify the tab from B2 alone.
+**A2 must be descriptive, not bare** — append the provenance subtitle so the user can identify the tab from A2 alone.
 
 ## Logo placement
 
-- **Anchor:** column E, cell E1 (all Carta budget and consolidating skills anchor the logo at column E — it clears the column-B metadata band in every layout).
+- **Anchor:** column E, cell E1 (all Carta budget and consolidating skills anchor the logo at column E — it clears the metadata band in every layout).
 - **Height:** combined height of rows 1–3.
 - **Width:** proportional to PNG aspect ratio.
 - **One logo per tab.** Bundled assets at `assets/powered_by_carta.png` (PNG) and `assets/powered_by_carta.b64.txt` (base64 sidecar for Excel runtime).
@@ -80,7 +88,7 @@ The script sizes height to `rows × 15pt × 4/3 px` and computes width from PNG 
 ## Cell-comment pattern (for sparse-history / projection flags)
 
 ```javascript
-sheet.comments.add("B<row>", "Less than 6 months of activity in <prior_year>. Best-effort projection — review before locking the budget.", "Plain");
+sheet.comments.add("A<row>", "Less than 6 months of activity in <prior_year>. Best-effort projection — review before locking the budget.", "Plain");
 await context.sync();
 ```
 
@@ -88,7 +96,7 @@ Comments only — no fill / font color / border / italic.
 
 ## Hard rules
 
-- **Rows 1–4 are reserved.** Never write data into B1–B4 (except the four metadata strings) and never shift the band down.
+- **Rows 1–4 are reserved.** Never write data into A1–A4 (except the four metadata strings) and never shift the band down.
 - **Asset access uses `blobs.getText("assets/...")`** in Excel add-in — NOT `Read`, NOT shell `find`.
 - **Border syntax (Office.js):** `style = "Continuous"`, then `weight = "Thin"`. The string `"Thin"` is not a valid `style` — setting `style: "Thin"` raises InvalidArgument.
 - **Never link to another plugin's branding assets.** Each skill bundles its own copy.

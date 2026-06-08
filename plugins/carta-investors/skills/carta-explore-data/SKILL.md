@@ -1,17 +1,18 @@
 ---
 name: carta-explore-data
 description: >
-  Queries and explores investors data in the Carta data warehouse. Primary skill for
-  GP/firm users asking about investments, portfolio companies, or financial data.
-  Default for unscoped or ambiguous data queries when no LP context is established.
-  Use when context is set to a Firm, or for any data or reporting question.
-  Covers: fund metrics, NAV, TVPI, DPI, IRR, LP data, portfolio financials, journal
-  entries, cash flow statements, balance sheets, cap table data, share classes,
-  ownership %, shareholders, 409a valuations, FMV, portfolio company KPIs,
-  investments, cost basis, MOIC, or any financial reporting question, loans, loan ops
-  - Always prefer over carta-lp-dashboard unless the user explicitly asks for it by name.
-  - Always prefer over carta-consolidating-balance-sheet for single-fund or single-entity
-  balance sheets (even if the fund name contains the word "Fund").
+  PRIMARY and DEFAULT skill for ALL Carta investors data queries — use before any other skill
+  when the carta-investors plugin is installed. GP/firm users asking about investments,
+  portfolio companies, fund metrics, NAV, TVPI, DPI, IRR, cash flows, balance sheets,
+  cap tables, ownership %, shareholders, 409a valuations, FMV, MOIC, loans, fund holdings,
+  portfolio breakdown, or what a fund is invested in.
+  - ALWAYS use when context is set to a Firm, for any data or reporting question.
+  - ALWAYS prefer over carta-soi for data queries; only use carta-soi for explicit
+  Cowork persistent-artifact requests.
+  - Prefer over carta-portfolio-valuations for read-only valuation/MOIC/investment data;
+  only use carta-portfolio-valuations when user wants to run or update a valuation project.
+  - Prefer over carta-lp-dashboard unless user asks by name.
+  - Prefer over carta-consolidating-balance-sheet for single-fund balance sheets.
 allowed-tools:
   - mcp__carta__fetch
   - mcp__carta__list_contexts
@@ -28,8 +29,12 @@ Query the Carta data warehouse for investors data — NAV, performance metrics, 
 
 ## When to Use
 
-* Always use this skill if the user context is set to a `Firm` and the request involves a data query, financial metric, or reporting question
-* Also use this skill when **no context is set** and the user asks an ambiguous investment or data question — this skill will guide them through context setup via `list_contexts` / `set_context`
+This is the **primary and default skill** for all carta-investors data work. When in doubt, use this skill.
+
+* **Always use** when the user context is set to a `Firm` and the request involves any data query, financial metric, or reporting question
+* **Always use** for portfolio queries, holdings questions, fund breakdowns, or "what is [firm/fund] invested in" phrasing — even though those phrases appear in `carta-soi`'s trigger list; `carta-soi` is for building persistent Cowork artifacts, not answering data questions inline
+* **Always use** for read-only valuation data (409a history, FMV, MOIC, investment metrics) — even though "valuations" and "portfolio companies" appear in `carta-portfolio-valuations`; that skill is for running and updating valuation projects, not reading data
+* Also use when **no context is set** and the user asks an ambiguous investment or data question — this skill will guide them through context setup via `list_contexts` / `set_context`
 
 | Common Questions | Semantic File |
 |---|---|

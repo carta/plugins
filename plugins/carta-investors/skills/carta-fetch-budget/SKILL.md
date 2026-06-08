@@ -2,7 +2,7 @@
 name: carta-fetch-budget
 model: opus
 description: 'Pull a ManCo budget from Carta and write it to an Excel workbook with monthly amounts and subtotals. TRIGGER: pull/fetch/import/sync Carta budget for a ManCo. NOT: new budgets, actuals refresh, pacing, scenarios, P&L, balance sheet.'
-version: 1.0.0
+version: 1.0.1
 allowed-tools:
   # MCP connector discovery (Claude for Excel runtime tool — used first in Gate 0)
   - refresh_mcp_connectors
@@ -46,9 +46,11 @@ Claude for Excel. Audience is an accountant.
 
 - **Plain English only.** Never surface MCP server identifiers, command
   names (`fa:list:budgets`), UUIDs, raw JSON, or gate labels.
-- **Currency formatting:** positive `$X,XXX`, negatives `($X,XXX)`, totals
-  bolded `**$X,XXX**`. Always `$`. The `[$$-en-US]` locale token in the workbook locks the display
-  to USD regardless of the user's Excel locale.
+- **Currency formatting:** positive `X,XXX`, negatives `(X,XXX)`, totals
+  bolded — using the resolved currency's symbol, not always `$`. The workbook uses the
+  locale token for the resolved presentation currency (`<CCY_TOKEN>`), which locks the
+  display to that currency regardless of the user's Excel locale. Derive the currency
+  from the data — never default to USD (see Hard rules).
 - **Closing summary link** is a workbook citation
   (`<citation:Sheet!Range>`) in Claude for Excel mode, and a `file://`
   path in Claude Code / Cowork mode. Never both.
@@ -78,6 +80,28 @@ Trigger this skill when the user asks for any of the following:
   building a P&L and wants the Budget columns filled with Carta data,
   `carta-consolidating-pnl` already integrates this skill's fetch logic in its
   Gate 9 — do not duplicate the workflow.)
+
+---
+
+## Execution discipline
+
+Execute all gates silently. Do not narrate tool calls, intermediate results, or status updates. Only speak at explicit decision points: Gate 0.5 (if runtime is ambiguous), Gate 1 (destination chooser), Gate 2 (entity picker — if entity not already in context), Gate 3 (period picker), Gate 5 (approval), and Gate 7 (next-step menu).
+
+---
+
+## Entry mode — fresh session vs. chained skill
+
+Before Gate 0, check whether these context variables are already set from an earlier budgeting skill call in the same session:
+
+- `<SERVER>` — connected Carta MCP server prefix
+- `<ENTITY_NAME>` and `<ENTITY_UUID>` — the resolved ManCo entity
+- `<RUNTIME>` — `excel-addin` or `local-file`
+
+**If all four are in context:** skip Gates 0 and 0.5 entirely, and skip Gate 2 (`<ENTITY_UUID>` is already locked). Then run the remaining gates in full — do **not** stop after the period picker: Gate 1 (destination) → Gate 3 (period picker) → Gate 4 (fetch budget from Carta) → Gate 5 (pre-build review) → Gate 6 (write and brand) → Gate 7 (summary). Skipping Gates 4–7 would write empty or stale data without re-fetching.
+
+**If any is missing** (fresh session or cold invocation): run Gates 0, 0.5, and 2 in order, then continue from Gate 1.
+
+Do not ask "which firm?" when the entity is already established from the skill the user just ran.
 
 ---
 
@@ -137,6 +161,10 @@ Stop at the first match — the user can always pick another tab via the
 1. Use the add-in's workbook-introspection tool to list sheet names + the
    first ~10 rows of each.
 2. Apply the heuristic. Store any matches as `<EXISTING_BUDGET_TABS>`.
+3. For each matched tab, **read its full content now** (all rows, not just
+   the first 10) and store it as `<EXISTING_TAB_DATA[tab_name]>`. Gate 5's
+   update-in-place matching uses this cached read — no second workbook
+   read is needed later.
 
 **If `<RUNTIME>` is `local-file`:**
 
@@ -149,7 +177,10 @@ uv run "${CLAUDE_PLUGIN_ROOT}/scripts/read_workbook.py" \
   "<PATH>"
 ```
 
-Apply the same heuristic to the JSON output.
+Apply the same heuristic to the JSON output. For each matched tab, store
+its full content (all rows) from the `read_workbook.py` output as
+`<EXISTING_TAB_DATA[tab_name]>` — Gate 5's update-in-place matching reuses
+this cached read exactly as in the add-in path; no second read is needed.
 
 ### Chooser
 
@@ -174,11 +205,12 @@ silently pick one.
 
 **Update-in-place semantics** (option 1):
 
-- Read the existing tab via the runtime's read tool. Identify the
-  label column (the column that holds account names) and the month
-  columns. Treat any cell where `is_formula: true` as **load-bearing**
-  — subtotal / Net Operating Income / FY-total rows stay formula-driven
-  and are **never overwritten**.
+- Use `<EXISTING_TAB_DATA[tab_name]>` already read at Gate 1 — **do not
+  re-read the workbook**. Identify the label column (the column that
+  holds account names) and the month columns from that cached data. Treat
+  any cell where `is_formula: true` as **load-bearing** — subtotal / Net
+  Operating Income / FY-total rows stay formula-driven and are **never
+  overwritten**.
 - For each matched (`gl_code` or `account_name`) row already in the
   sheet, write the new monthly budget values into the existing month
   cells. The tab's row positions, section headers, formulas, and
@@ -187,7 +219,7 @@ silently pick one.
   surface them in the pre-build review (Gate 5) — let the user decide
   whether to insert new rows or skip. **Never silently insert** into an
   existing budget tab without confirmation.
-- Refresh the source note in **B3** (italic) to
+- Refresh the source note in **A3** (italic) to
   `Source: Carta Fund Admin (refreshed <ISO date>)` so the user can see
   when the values were last pulled.
 
@@ -309,11 +341,12 @@ The `← recommended` marker goes inside the `description` field of option 2, no
 
 - Issue **one `fetch(command="fa:list:budgets", ...)` call per month** for
   every month in the requested window. For a full-year pull this is
-  exactly twelve calls (Jan 1–31, Feb 1–28/29, …, Dec 1–31). Run them in
-  parallel batches of 5–6 and merge the row lists. Do **not** try a
-  single annual or quarterly window first — the MCP response truncates
-  past ~40 KB and every wider window the user has been observed needing
-  has hit that cap.
+  exactly twelve calls (Jan 1–31, Feb 1–28/29, …, Dec 1–31). Issue all
+  twelve in one parallel batch and merge the row lists. If your runtime
+  limits concurrent tool calls, batch into two groups of six — but never
+  serialize further. Do **not** try a single annual or quarterly window
+  first — the MCP response truncates past ~40 KB and every wider window
+  the user has been observed needing has hit that cap.
 
 **Verbatim call template — do not omit `fund_uuid`.** The MCP rejects
 the call with `"missing required params: ['fund_uuid']"` if the param
@@ -376,8 +409,8 @@ Present a plain-English preview before any write:
 > - **Income accounts:** 1
 > - **Expense accounts:** 47
 > - **Sheet to write:** `Budget FY2026` in `<DESTINATION>`
-> - **Projected FY totals:** Income **$13,788,809** · Expenses
->   **$8,530,121** · Net Operating Income **$5,258,689**
+> - **Projected FY totals:** Income **<CCY>13,788,809** · Expenses
+>   **<CCY>8,530,121** · Net Operating Income **<CCY>5,258,689**
 
 ### Mode B — update existing tab in place (`update-in-place`)
 
@@ -427,12 +460,15 @@ subtotal, per the same logic as
 
 ### Approval menu (both modes)
 
-After showing the preview (and resolving any missing-row decisions),
-offer via `AskUserQuestion`:
+Output the preview above as a normal conversation message. Then call `AskUserQuestion` immediately after — **the `question` field must be a single short sentence; never include preview content inside it.**
 
-1. **Approve and write the budget** ← recommended (Mode A) / **Approve and refresh in place** ← recommended (Mode B)
-2. **Edit — change the entity, year, or destination**
-3. **Cancel**
+- `question`: `"Approve writing this budget?"` (Mode A) / `"Approve refreshing in place?"` (Mode B)
+- `header`: `"Approval"`
+- `multiSelect`: `false`
+- `options`:
+  1. **Approve and write the budget** ← recommended (Mode A) / **Approve and refresh in place** ← recommended (Mode B)
+  2. **Edit — change the entity, year, or destination**
+  3. **Cancel**
 
 If Edit, return to the right gate. Wait for explicit OK before writing.
 
@@ -458,7 +494,7 @@ The most common failure mode is bundling cell writes + formatting + logo into on
 
 Returning from Call 1 does NOT finish Gate 6. The verification call must come last and must appear in your tool history.
 
-Branches by the Gate 1 write mode. **Before any write**, call `read_skill(file_path="references/branding-and-header.md")`. Do not reconstruct the brand block or header band from memory — the file must be in your context before you generate any `execute_office_js` or `write_workbook.py` code. It defines the reserved 4-row metadata band (B1 entity / B2 descriptive title like `"2026 Budget (from Carta Fund Admin)"` / B3 source / B4 other context), Carta logo placement (column E, rows 1–3 height), the `blobs.getText("assets/...")` asset-loading pattern for Excel add-in (NOT `Read`), and the cell-comment pattern for any flagged rows. The tab is not "written" until it carries a `CartaLogo` shape.
+Branches by the Gate 1 write mode. **Before any write**, call `read_skill(file_path="references/branding-and-header.md")`. Do not reconstruct the brand block or header band from memory — the file must be in your context before you generate any `execute_office_js` or `write_workbook.py` code. It defines the reserved 4-row metadata band (A1 entity / A2 descriptive title like `"2026 Budget (from Carta Fund Admin)"` / A3 source / A4 other context), Carta logo placement (column E, rows 1–3 height), the `blobs.getText("assets/...")` asset-loading pattern for Excel add-in (NOT `Read`), and the cell-comment pattern for any flagged rows. The tab is not "written" until it carries a `CartaLogo` shape.
 
 ### Mode B — update existing tab in place
 
@@ -479,7 +515,7 @@ directly to the existing tab:
    After insertion, **rewrite** the affected section subtotal
    `=SUM(...)` formulas so the new rows are included. Match the
    formatting of neighboring rows (currency format, font, no fill).
-4. **Refresh the source note in B3** (italic, size 10):
+4. **Refresh the source note in A3** (italic, size 10):
    `Source: Carta Fund Admin (refreshed <ISO date>)`.
 5. **Never create a new tab.** If the chosen tab can't be updated for
    any reason (locked sheet, wrong layout, etc.), surface the error and
@@ -494,24 +530,23 @@ Layout (4-row metadata band per `branding-and-header.md`):
 
 | Row | Content |
 |---|---|
-| B1 | `<ENTITY_NAME>` — bold, size 10 |
-| B2 | `<BUDGET_YEAR> Budget (from Carta Fund Admin)` — bold, size 10 |
-| B3 | `Source: Carta Fund Admin · fa:list:budgets` — italic, size 10 |
-| B4 | `Amounts in USD` — italic, size 10 |
+| A1 | `<ENTITY_NAME>` — bold, size 10 |
+| A2 | `<BUDGET_YEAR> Budget (from Carta Fund Admin)` — bold, size 10 |
+| A3 | `Source: Carta Fund Admin · fa:list:budgets` — italic, size 10 |
+| A4 | `Amounts in <resolved_currency>` — italic, size 10 (derive the currency from the data, never default to USD) |
 | Row 5 | blank — breathing room between header band and column headers |
-| Row 6 | Column headers (column A is a blank spacer; headers begin in column B): `Account \| Jan <year> \| Feb <year> \| … \| Dec <year> \| FY <year> Total` — bold, white-on-black, centered. No GL-code / "Account #" column. |
+| Row 6 | Column headers starting in column A: `Account \| Jan <year> \| Feb <year> \| … \| Dec <year> \| FY <year> Total` — bold, white-on-black, centered. No GL-code / "Account #" column. |
 
 Body — for each section (Income → Expenses → Other), in this order:
 
-1. Bold + underlined section header row in column B (e.g. `Income`,
+1. Bold + underlined section header row in column A (e.g. `Income`,
    `Operating Expenses`, `Other`). No cell borders.
 2. One row per GL account in the section, sorted by `account_type`.
-   Column A is left blank (spacer), column B = `account_name`,
-   columns C..N = monthly amounts (hardcoded numbers). The GL code
-   (`account_type`) is used only to sort and section the rows — it is
-   **not** written as a column.
+   Column A = `account_name`, columns B..M = monthly amounts (hardcoded
+   numbers). The GL code (`account_type`) is used only to sort and
+   section the rows — it is **not** written as a column.
 3. Subtotal row at end of section — bold, top thin border,
-   `=SUM(<section_range>)` per monthly column and for column O.
+   `=SUM(<section_range>)` per monthly column and for column N.
 
 After the last section:
 
@@ -521,13 +556,13 @@ After the last section:
   Expense subtotals.
 - Blank row.
 - **`Net Operating Income`** — bold, top thin + bottom medium border,
-  `=<Total Income> - <Total Expenses>` per monthly column and for column O.
-  Set `numFmt="@"` on the column-B label if it contains a slash.
+  `=<Total Income> - <Total Expenses>` per monthly column and for column N.
+  Set `numFmt="@"` on the column-A label if it contains a slash.
 
-Column O = `=SUM(C<row>:N<row>)` for every account, subtotal, and total row.
+Column N = `=SUM(B<row>:M<row>)` for every account, subtotal, and total row.
 
-**Currency format** (every numeric cell):
-`_([$$-en-US]* #,##0.00_);_([$$-en-US]* (#,##0.00);_([$$-en-US]* "-"??_);_(@_)`.
+**Currency format** (every numeric cell), using the resolved currency's locale token `<CCY_TOKEN>`:
+`_(<CCY_TOKEN>* #,##0.00_);_(<CCY_TOKEN>* (#,##0.00);_(<CCY_TOKEN>* "-"??_);_(@_)`.
 A bare `$` or `"$"` is never allowed — it renders in system locale on
 non-US installs.
 
@@ -536,13 +571,14 @@ non-US installs.
 ```javascript
 context.application.calculationMode = Excel.CalculationMode.automatic;
 context.workbook.application.calculate(Excel.CalculationType.full);  // else =SUM cells stay 0 → render as "-" until edit+Enter
-sheet.getRange("B:O").format.autofitColumns();                       // size labels + amounts to REAL values (after recalc → no ####)
+sheet.getRange("A:A").format.columnWidth = 180;                      // account-name column — fixed; prevents long names driving it too wide
+sheet.getRange("B:N").format.autofitColumns();                       // size amounts (B:M) + FY total (N) to REAL values (after recalc → no ####)
 await context.sync();
 ```
 
-Force the recalc **before** the autofit: without it the `=SUM(...)` subtotals / Total / NOI cells sit at 0 and the accounting format shows `-` (the user then has to edit+Enter each one); and autofitting before the recalc sizes the amount columns to the dash, so the real figures overflow as `####`. In local-file mode, add an `autofit_columns` op over `B:O`. Column A is a fixed spacer (`sheet.getRange("A:A").format.columnWidth = 90`). Do **not** call `freeze_panes`.
+Force the recalc **before** the autofit: without it the `=SUM(...)` subtotals / Total / NOI cells sit at 0 and the accounting format shows `-` (the user then has to edit+Enter each one); and autofitting before the recalc sizes the amount columns to the dash, so the real figures overflow as `####`. In local-file mode, add a `set_column_width` op on column A (width 160), then an `autofit_columns` op over `B:N`. Do **not** call `freeze_panes`.
 
-**Column-width anti-pattern:** Do NOT call `autofitColumns()` on a header-only range like `C1:O1` — header rows are often empty at write time, leaving the amount columns too narrow for 5+ digit currency (`####`). Always autofit the full label+amount span (`B:O`) after the data is written. Full recipe: `carta-create-budget/references/from-prior-actuals.md` §6.
+**Column-width anti-pattern:** Do NOT call `autofitColumns()` on a header-only range like `B1:N1` — header rows are often empty at write time, leaving the amount columns too narrow for 5+ digit currency (`####`). Always autofit the full amount span (`B:N`) after the data is written. Full recipe: `carta-create-budget/references/from-prior-actuals.md` §6.
 
 **If `<RUNTIME>` is `excel-addin`:** write via the Excel add-in's
 runtime cell-write tools, applying the same number format.
@@ -597,36 +633,36 @@ the Gate 1 write mode.
 
 **If `<RUNTIME>` is `excel-addin`:**
 
-> Wrote [Budget FY2026](<citation:Budget FY2026!A1:O80>) for **Example
+> Wrote [Budget FY2026](<citation:Budget FY2026!A1:N80>) for **Example
 > Capital, LLC** — 1 income account, 47 expense accounts, source Carta
-> Fund Admin (live). FY total: Income **$13,788,809** · Expenses
-> **$8,530,121** · Net Operating Income **$5,258,689**.
+> Fund Admin (live). FY total: Income **<CCY>13,788,809** · Expenses
+> **<CCY>8,530,121** · Net Operating Income **<CCY>5,258,689**.
 
 **If `<RUNTIME>` is `local-file`:**
 
 > Wrote `Budget FY2026` for **Example Capital, LLC** to
 > `file:///path/to/budget.xlsx` — 1 income account, 47 expense accounts,
-> source Carta Fund Admin (live). FY total: Income **$13,788,809** ·
-> Expenses **$8,530,121** · Net Operating Income **$5,258,689**.
+> source Carta Fund Admin (live). FY total: Income **<CCY>13,788,809** ·
+> Expenses **<CCY>8,530,121** · Net Operating Income **<CCY>5,258,689**.
 
 ### Mode B — update existing tab in place
 
 **If `<RUNTIME>` is `excel-addin`:**
 
-> Refreshed [Budget FY2026](<citation:Budget FY2026!A1:O80>) in place
+> Refreshed [Budget FY2026](<citation:Budget FY2026!A1:N80>) in place
 > with Carta's 2026 budget for **Example Capital, LLC** — **492** cells
 > updated across **41** line items, **6** new rows inserted (Operating
 > Expenses), **2** sheet rows left untouched (no Carta budget for those
-> accounts). Refreshed FY total: Income **$13,788,809** · Expenses
-> **$8,530,121** · Net Operating Income **$5,258,689**.
+> accounts). Refreshed FY total: Income **<CCY>13,788,809** · Expenses
+> **<CCY>8,530,121** · Net Operating Income **<CCY>5,258,689**.
 
 **If `<RUNTIME>` is `local-file`:**
 
 > Refreshed `Budget FY2026` in
 > `file:///path/to/budget.xlsx` with Carta's 2026 budget for **Example
 > Capital, LLC** — **492** cells updated, **6** new rows inserted, **2**
-> sheet rows left untouched. Refreshed FY total: Income **$13,788,809**
-> · Expenses **$8,530,121** · Net Operating Income **$5,258,689**.
+> sheet rows left untouched. Refreshed FY total: Income **<CCY>13,788,809**
+> · Expenses **<CCY>8,530,121** · Net Operating Income **<CCY>5,258,689**.
 
 **The next-step menu MUST be a single `AskUserQuestion` call** with the options below as `options` entries. Never render them as a numbered markdown list, a bulleted list, or inline prose — bare-text menus break the chooser UI in Claude for Excel and force the user to type the number. The `← recommended` marker goes inside the `description` field of one option, not as a suffix on the `label`.
 
@@ -660,8 +696,9 @@ the Gate 1 write mode.
 - **Never call `fa:list:budgets` without `fund_uuid`** — MCP rejects with `"missing required params: ['fund_uuid']"`. Pass `<ENTITY_UUID>` (locked at end of Gate 2) as `params["fund_uuid"]`.
 - **Never invent budget rows** or extrapolate beyond what `fa:list:budgets` returned.
 - **Never apply a buffer percentage** — Carta budget is source of truth. (Buffered budgets are `carta-create-budget`.)
-- **Currency format:** `[$$-en-US]` locale token. Bare `$` renders in system locale — never use it.
-- **Do not freeze panes.** Do not write a Provenance tab — B3 source note is the audit trail.
+- **Currency — derive from the data, never default to USD.** Resolve the workbook's presentation currency before writing (entity properties via `welcome`, or the currency on the budget data); if it can't be resolved, ask the user. The format uses the locale token `<CCY_TOKEN>` for the resolved currency — `[$$-en-US]` USD, `[$€-x-euro2]` EUR, `[$£-en-GB]` GBP, `[$$-en-CA]` CAD, or the matching `[$<symbol>-<locale>]`. The `A4` band reads `Amounts in <resolved_currency>`. Bare `$` renders in system locale — never use it.
+- **Set `Worksheet.position` in a separate `context.sync()`, never in the same statement as `worksheets.add()`.** Create and activate first: `const sh = sheets.add(name); sh.activate(); await context.sync();`.
+- **Do not freeze panes.** Do not write a Provenance tab — A3 source note is the audit trail.
 - In local-file mode, never silently overwrite — helper returns "sheet exists" status; surface it.
 - **Two-row header for month-bucketed tables.** Row N = merged month label. Row N+1 = sub-headers. Never write both into same row — subsequent merges destroy sub-headers.
 - `range.merge(true)` discards trailing cells. Insert a new row first.

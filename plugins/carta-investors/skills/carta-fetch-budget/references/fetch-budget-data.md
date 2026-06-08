@@ -69,10 +69,11 @@ fit.
 | … | … | … |
 | Dec | `<year>-12-01` | `<year>-12-31` |
 
-Issue the twelve calls in parallel batches (5–6 per batch is the
-practical ceiling for the tool-use channel) and merge the row lists
-before pivoting. A single monthly response stays well under the 40 KB
-cap even for the widest ManCo CoAs observed.
+Issue all twelve calls in a **single parallel batch** and merge the row
+lists before pivoting. A single monthly response stays well under the
+40 KB cap even for the widest ManCo CoAs observed. If your runtime limits
+concurrent tool calls, batch into two groups of six — but never serialize
+further than that.
 
 Do **not** try a single annual call first as an "optimistic path" —
 discovering truncation costs at least one call, and then the quarterly
