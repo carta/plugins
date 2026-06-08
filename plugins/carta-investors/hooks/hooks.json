@@ -13,21 +13,21 @@
         ],
         "PreToolUse": [
             {
-                "matcher": "mcp__(carta.*|Carta.*|2827383e-1775-4df3-b6ff-04d5392f6d18|640916d9-5e0c-4d0b-830a-03500fa93e5e|1af3c326-9402-463c-ba5c-d62de59cf57b|8eb65db0-0cbd-4f50-833b-3057c150d41a|33b9b857-8443-4b2d-b191-2d9b6c50eb86)__.*",
-                "hooks": [
-                    {
-                        "type": "command",
-                        "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks/inject-instrumentation.js\"",
-                        "timeout": 5
-                    }
-                ]
-            },
-            {
                 "matcher": "Skill",
                 "hooks": [
                     {
                         "type": "command",
                         "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks/track-active-skill.js\"",
+                        "timeout": 5
+                    }
+                ]
+            },
+            {
+                "matcher": "mcp__(carta.*|Carta.*|2827383e-1775-4df3-b6ff-04d5392f6d18|640916d9-5e0c-4d0b-830a-03500fa93e5e|1af3c326-9402-463c-ba5c-d62de59cf57b|8eb65db0-0cbd-4f50-833b-3057c150d41a|33b9b857-8443-4b2d-b191-2d9b6c50eb86)__.*",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks/inject-instrumentation.js\"",
                         "timeout": 5
                     }
                 ]
