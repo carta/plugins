@@ -32,13 +32,20 @@ After installing, restart Claude Code and run `/mcp` to complete OAuth authentic
 |-------|-------------|
 | `carta-portfolio-alerts` | Detect red flags and time-sensitive issues |
 | `carta-reporting` | Display cap table data — grants, stakeholders, preferred holders, liquidation seniority, SAFEs, notes, round history, and more |
+| `carta-field-definitions` | Explain a column or field within a specific Carta report |
 | `carta-valuation-history` | 409A valuation history |
 | `carta-waterfall-scenarios` | Saved exit scenario / waterfall models |
+| `carta-voting-rights-optimizer` | Legal tool — minimum stockholder coalition to pass a charter amendment or vote |
 | `carta-round-history` | Financing round history |
 | `carta-grant-vesting` | Vesting schedule for a specific option grant |
+| `carta-witness-signatures` | Status of witness and spousal-consent signature requests on awards |
 | `carta-conversion-calculator` | Calculate SAFE/note conversion into equity |
 | `carta-client-triggers` | Surface time-based BD triggers across the portfolio |
 | `carta-market-benchmarks` | Cap structure patterns as market benchmarks |
+| `carta-compensation-benchmarks` | Carta Total Comp market benchmarks (salary, equity, total cash) for a role |
+| `carta-compensation-rolematcher` | Classify a job title into the CTC compensation taxonomy |
+| `carta-issuance` | Issue certificates and option grants; draft shares or resume from a draft set |
+| `carta-modify-issuables` | Amend issued certificates and option grants — dates, legend, notes, quantity, exercise price |
 | `carta-interaction-reference` | Behavioral rules for presenting cap table data (voice, tone, precision, provenance) |
 | `carta-discover-commands` | Find the right MCP command when unsure |
 
