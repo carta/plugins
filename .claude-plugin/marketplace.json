@@ -3,7 +3,7 @@
   "name": "carta-plugins",
   "description": "Official Carta plugins for Claude Code",
   "owner": {
-    "name": "Carta Engineering",
+    "name": "Carta",
     "email": "engineering@carta.com"
   },
   "plugins": [
