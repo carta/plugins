@@ -21,8 +21,6 @@ Open prompts like:
 `<period_start>` = first day of budget year, `<period_end>` = last
 completed month (ask if the year hasn't ended).
 
-ManCo sanity check. **Halt** on failure.
-
 ### 3. Match line items to GL accounts
 
 Name first, GL code as tiebreaker — same logic as `refresh-existing.md`.

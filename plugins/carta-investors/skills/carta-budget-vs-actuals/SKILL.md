@@ -1,8 +1,8 @@
 ---
 name: carta-budget-vs-actuals
 model: opus
-description: 'Compare YTD actuals to a budget workbook and flag pacing variances. Pulls actuals from Carta MCP. TRIGGER: compare budget vs actuals, pacing or variance questions. NOT: new budgets, fetch-budget, actuals refresh, scenarios, P&L, balance sheet.'
-version: 1.0.0
+description: 'Analyze pacing and variance: compare YTD actuals against a budget workbook (read-only analysis, pulls actuals from Carta MCP). TRIGGER: "how are we doing", pacing, on-track, variance analysis, compare budget vs actuals. NOT: writing/refreshing actuals columns into the workbook (carta-budget-actuals), new budgets (carta-create-budget), fetch-budget, scenarios, consolidating P&L / balance sheet.'
+version: 1.0.1
 allowed-tools:
   # MCP connector discovery (Claude for Excel runtime tool — used first in Step 0)
   - refresh_mcp_connectors
@@ -44,7 +44,7 @@ references:
 
 Audience is an accountant in Excel. Plain English only. Never surface MCP
 identifiers, DWH column names, UUIDs, raw JSON, SQL, or step labels.
-Currency: `$X,XXX` positive, `($X,XXX)` negative, totals bolded.
+Currency: `<CCY>X,XXX` positive, `(<CCY>X,XXX)` negative, totals bolded — use the resolved currency symbol, never a bare `$`.
 Differences are absolute. Status: ✅ Match | ⚠ Mismatch ($X diff) | ❌ Missing in Carta | ❌ Missing in Client Doc.
 
 **Closing summary link** is a workbook citation (`<citation:Sheet!Range>`) in
@@ -74,6 +74,28 @@ the number.
 - **Refreshing actuals on an existing budget** — use `carta-budget-actuals`.
 - **What-if scenarios** ("what if we cut headcount", "model a revenue shock", "preserve $X cash") — use `carta-budget-scenarios`.
 - **P&L / income statement requests** — use `carta-consolidating-pnl`.
+
+---
+
+## Execution discipline
+
+Execute all steps silently. Do not narrate tool calls, intermediate results, or status updates. Only speak at explicit decision points: Step 0.5 (if runtime is ambiguous), Step 1 (destination chooser), Step 2 (intent routing), Step 3 (period/parameter gate), Step 6 (approval), and Step 8 (next-step menu).
+
+---
+
+## Entry mode — fresh session vs. chained skill
+
+Before Step 0, check whether these context variables are already set from an earlier budgeting skill call in the same session:
+
+- `<SERVER>` — connected Carta MCP server prefix
+- `<ENTITY_NAME>` and `<ENTITY_UUID>` — the resolved entity
+- `<RUNTIME>` — `excel-addin` or `local-file`
+
+**If all four are in context:** skip Steps 0 and 0.5 entirely. Proceed from Step 1 (destination chooser).
+
+**If any is missing** (fresh session or cold invocation): run Steps 0 and 0.5 in order, then continue from Step 1.
+
+Do not ask "which firm?" or "which runtime?" when those are already established from the skill the user just ran.
 
 ---
 
@@ -153,14 +175,6 @@ Use [`references/get-actuals.md`](references/get-actuals.md)
 as the canonical source. `<period_start>` = first day of budget year,
 `<period_end>` = today (or last completed month — ask).
 
-The helper runs the **ManCo pre-flight sanity check**. **Halt** if it fails.
-
-**Always render the pre-flight outcome as user-visible prose, even when the dataset is clean.** The context engine may compress the underlying tool call into a snip summary, which means the user has no visibility into whether this safety gate ran. Surface one sentence:
-
-> "Checked N accounts for fund-level leak indicators (Interest expense, Audit fees, LOC fees, Realized/Unrealized gains, Management fees on expense side, Dead deal). None found — safe to proceed."
-
-If leaks ARE found, the existing halt-and-ask-user language already runs. Never silently pass this gate.
-
 ## Step 5 — Compute pacing metrics
 
 For each line:
@@ -191,11 +205,15 @@ Render two preview tables — overview (≤6 cols) and pacing detail. Splitting 
 | Line Item | YTD Budget | Variance | Run-Rate | Projected Year-End |
 |---|---|---|---|---|
 
-Then offer the approval menu **via a single `AskUserQuestion` call** — never as a bare code-fenced markdown list (bare-text menus break the chooser UI in Claude for Excel and force the user to type the number). Render with these three options:
+Output the preview tables above as a normal conversation message. Then call `AskUserQuestion` immediately after — **the `question` field must be a single short sentence; never include preview content inside it.**
 
-1. **Approve and write the analysis** ← recommended
-2. **Edit — change the period end, scope, or threshold**
-3. **Cancel**
+- `question`: `"Approve writing this analysis?"`
+- `header`: `"Approval"`
+- `multiSelect`: `false`
+- `options`:
+  1. **Approve and write the analysis** ← recommended (`description`: `"Writes the pacing analysis to a new tab."`)
+  2. **Edit — change the period end, scope, or threshold**
+  3. **Cancel**
 
 The `← recommended` marker goes inside the `description` field of option 1, not as a suffix on the `label`.
 
@@ -226,7 +244,7 @@ Returning from Call 1 does NOT finish Step 7. The verification call must appear 
 1. `read_skill(file_path="references/branding-and-header.md")` — 4-row metadata band, logo placement, `blobs.getText` asset pattern, cell-comment API.
 2. `read_skill(file_path="references/<reference-from-step-2>.md")` — the analysis file matched in Step 2 (`pacing-overview.md` or `drill-down-line.md`).
 
-Do not reconstruct either spec from memory. Both files must be in your context before generating any `execute_office_js` or `write_workbook.py` code. The `branding-and-header.md` file defines the reserved 4-row metadata band (B1 firm / B2 descriptive title like `"Q1 2026 Budget vs Actuals (YTD through March)"` / B3 source / B4 other context), the Carta logo placement (column E, rows 1–3 height), the `blobs.getText("assets/...")` asset-loading pattern for Excel add-in (NOT `Read`), and the cell-comment pattern for any "pacing off plan" flag.
+Do not reconstruct either spec from memory. Both files must be in your context before generating any `execute_office_js` or `write_workbook.py` code. The `branding-and-header.md` file defines the reserved 4-row metadata band (A1 firm / A2 descriptive title like `"Q1 2026 Budget vs Actuals (YTD through March)"` / A3 source / A4 other context), the Carta logo placement (column E, rows 1–3 height), the `blobs.getText("assets/...")` asset-loading pattern for Excel add-in (NOT `Read`), and the cell-comment pattern for any "pacing off plan" flag.
 
 **If `<RUNTIME>` is `excel-addin`:** use the add-in's cell-write tools, then brand the new `Budget vs Actuals` tab (and the underlying Budget tab if a header band was inserted into it).
 
@@ -278,13 +296,13 @@ If any anchor is missing in a write mode (not chat-only), you have skipped a gat
 
 > Pacing summary: 12 lines on plan, 3 over (Travel +28%, Legal +14%,
 > AI Tooling new activity not budgeted), 2 under (Audit −22% — Q4-loaded,
-> expected; Tax Prep −18%). Run-rate forecast lands **$42,000 over** annual
+> expected; Tax Prep −18%). Run-rate forecast lands **<CCY>42,000 over** annual
 > operating budget. Full table on [Budget vs Actuals](<citation:Budget vs Actuals!A1:M40>).
 
 **If `<RUNTIME>` is `local-file`:**
 
 > Pacing summary: 12 lines on plan, 3 over, 2 under. Run-rate forecast
-> lands **$42,000 over** annual operating budget. Full table written to
+> lands **<CCY>42,000 over** annual operating budget. Full table written to
 > `Budget vs Actuals` in
 > `file:///path/to/<budget-workbook>.xlsx`.
 
@@ -333,7 +351,18 @@ Queries > 50 rows: request `format: "ndjson"` and bucket into a blob. Pasting la
 - **Two-row header for month-bucketed tables.** Row N = merged month label per Budget/Actual/Var triplet. Row N+1 = sub-headers. Never write both into the same row — subsequent merges destroy sub-headers.
 - `range.merge(true)` discards trailing cell values. Insert a new row first; don't merge over an existing sub-header row.
 - **Month-label date-serial trap.** `"Jan 2026"` auto-coerces to a date serial — prefix with `'` or write a real date with `numberFormat: "mmm yyyy"`.
-- **Recalc + column widths:** the last statements in the cell-write `execute_office_js` block, in this order — never a separate call: restore automatic calc → `context.workbook.application.calculate(Excel.CalculationType.full)` → `sheet.getRange("A:<last>").format.autofitColumns()` (widen the range to the last amount column) → `context.sync()`. **Recalc before autofit:** without the forced recalc the `=SUM(...)` / variance cells stay at 0 and the accounting format shows `-` (forcing the user to edit+Enter each one); autofitting before the recalc sizes the amount columns to the dash so real figures overflow as `####`. Never autofit a header-only range.
+- **Currency — derive from the data, never default to USD.** Resolve the workbook's presentation currency before writing (entity properties via `welcome`, or the currency on the budget data); if it can't be resolved, ask the user. Format amounts with the locale token for the resolved currency — `[$$-en-US]` USD, `[$€-x-euro2]` EUR, `[$£-en-GB]` GBP, `[$$-en-CA]` CAD, or the matching `[$<symbol>-<locale>]`. A bare `$` renders as the user's local symbol. The `B4`/`A4` band reads `Amounts in <resolved_currency>`.
+- **Buffer-aware variance basis.** If the budget tab carries an inflation/contingency buffer (an input cell, or a header note like "Budget includes X% buffer"), pacing variances are measured against the buffered figure — state this in the output so favorable variances aren't misread, and offer to pace against the raw (pre-buffer) budget instead.
+- **Recalc + column widths:** the last statements in the cell-write `execute_office_js` block, in this order — never a separate call: restore automatic calc → `context.workbook.application.calculate(Excel.CalculationType.full)` → set fixed widths on the text label columns → autofit numeric columns only → `context.sync()`. **Pattern:**
+  ```javascript
+  context.application.calculationMode = Excel.CalculationMode.automatic;
+  context.workbook.application.calculate(Excel.CalculationType.full);
+  sheet.getRange("A:A").format.columnWidth = 160;  // Section — fixed, ~22 chars (points, not char-width); fits "Operating Expenses" without clipping
+  sheet.getRange("B:B").format.columnWidth = 220;  // Line Item — fixed, ~31 chars; fits long items like "Investment Management Fees"
+  sheet.getRange("C:<last_col>").format.autofitColumns();  // numeric columns only
+  await context.sync();
+  ```
+  **Why fixed widths for label columns:** calling `autofitColumns()` on the full range sizes column A to the widest section name (e.g. "Operating Expenses"), making it excessively wide and pushing numeric columns off screen. Always set A and B explicitly, autofit only C onwards. **Recalc before autofit:** without it variance / NOI cells stay at 0 and accounting format shows `-` (####  after autofit). Never autofit a header-only range.
 - **Border syntax (Office.js):** `style = "Continuous"` then `weight = "Thin"`. Never `style: "Thin"`.
 - **Branding & header standards — follow [`references/branding-and-header.md`](references/branding-and-header.md)** for every tab. Rows 1–4 reserved for metadata band, Carta logo at column E (logo + band col-overrides documented in the reference). Asset access via `blobs.getText("assets/...")` — NOT `Read`. Pacing-flagged rows use cell comments only.
 
@@ -350,7 +379,6 @@ Never auto-retry. Always surface the failure and let the user decide.
 - **No Carta MCP connected** → "Open Settings → Connectors, enable Carta, retry."
 - **Multiple budget tabs** → ask which to analyze. Don't silently pick.
 - **Annual budget column empty** → compute pacing on populated months, flag the gap, ask user to proceed.
-- **ManCo pre-flight fires (Step 4)** → halt, ask for exact ManCo entity name.
 - **Drill-down line doesn't match any account** → echo closest 3 matches, ask user to pick.
 | Local-file mode: file path is missing or unreadable | Wrong path supplied | Echo the path back and ask for the correct one. |
 | Query times out | DWH load | Tell the user it's slow and offer to retry — never auto-retry. |
