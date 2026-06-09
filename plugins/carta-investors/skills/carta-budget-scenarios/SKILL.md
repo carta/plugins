@@ -1,8 +1,8 @@
 ---
 name: carta-budget-scenarios
 model: opus
-description: 'Build what-if scenario columns on an existing Excel budget workbook (trim or growth). TRIGGER: model/simulate scenarios. NOT: new budgets, fetch-budget, actuals refresh, pacing, P&L, balance sheet.'
-version: 1.0.0
+description: 'Build what-if scenario columns on an existing Excel budget workbook — trim, growth, or additive layers (new fund raise, headcount/FTE hires, expansion). TRIGGER: what-if questions, "how would X affect next year''s budget/P&L", model/simulate a scenario, impact of raising a fund or hiring, forward projections with timing sensitivity. NOT: new budgets (carta-create-budget), fetch-budget, actuals refresh, pacing, historical/consolidating financial statements (carta-consolidating-pnl / carta-consolidating-balance-sheet).'
+version: 1.0.1
 allowed-tools:
   # MCP connector discovery (Claude for Excel runtime tool — used first in Step 0)
   - refresh_mcp_connectors
@@ -97,7 +97,29 @@ Growth:
 - **Building a new budget** — use `carta-create-budget`.
 - **Refreshing actuals on an existing budget** — use `carta-budget-actuals`.
 - **Pacing / variance / "how are we doing"** — use `carta-budget-vs-actuals`.
-- **P&L / income statement requests** — use `carta-consolidating-pnl`.
+- **Historical / consolidating P&L or income statements** (a P&L *statement* for a closed period, not a forward what-if) — use `carta-consolidating-pnl`. A forward "how would X affect our P&L" what-if belongs **here**.
+
+---
+
+## Execution discipline
+
+Execute all steps silently. Do not narrate tool calls, intermediate results, or status updates. Only speak at explicit decision points: Step 0.5 (if runtime is ambiguous), Step 1 (destination chooser), Step 2 (intent routing), Step 3 (parameter gate), Step 6 (approval), and Step 8 (next-step menu).
+
+---
+
+## Entry mode — fresh session vs. chained skill
+
+Before Step 0, check whether these context variables are already set from an earlier budgeting skill call in the same session:
+
+- `<SERVER>` — connected Carta MCP server prefix
+- `<ENTITY_NAME>` and `<ENTITY_UUID>` — the resolved entity
+- `<RUNTIME>` — `excel-addin` or `local-file`
+
+**If all four are in context:** skip Steps 0 and 0.5 entirely. Proceed from Step 1 (destination chooser).
+
+**If any is missing** (fresh session or cold invocation): run Steps 0 and 0.5 in order, then continue from Step 1.
+
+Do not ask "which firm?" or "which runtime?" when those are already established from the skill the user just ran.
 
 ---
 
@@ -195,14 +217,6 @@ Pull YTD actuals via
 so scenarios are grounded in real spend rather than just budget
 assumptions.
 
-The helper runs the **ManCo pre-flight sanity check**. **Halt** if it fails.
-
-**Always render the pre-flight outcome as user-visible prose, even when the dataset is clean.** The context engine may compress the underlying tool call into a snip summary, which means the user has no visibility into whether this safety gate ran. Surface one sentence:
-
-> "Checked N accounts for fund-level leak indicators (Interest expense, Audit fees, LOC fees, Realized/Unrealized gains, Management fees on expense side, Dead deal). None found — safe to proceed."
-
-If leaks ARE found, the existing halt-and-ask-user language already runs. Never silently pass this gate.
-
 ## Step 5 — Generate scenarios
 
 Each reference computes its own scenarios. Outputs are always
@@ -233,11 +247,15 @@ depend on the reference(s) that ran:
 - Growth references: see the cash-impact-summary table in each growth reference (the columns name the specific lever — `New-Fund Fees Y1`, `New Personnel Y1`, etc.).
 - Multi-lever (stacked) prompts: include one column per leg PLUS a `Net` column showing the combined effect.
 
-Then offer the approval menu **via a single `AskUserQuestion` call** — never as a bare code-fenced markdown list (bare-text menus break the chooser UI in Claude for Excel and force the user to type the number). Render with these three options:
+Output the preview table and cash-impact summary above as a normal conversation message. Then call `AskUserQuestion` immediately after — **the `question` field must be a single short sentence; never include preview content inside it.**
 
-1. **Approve and write the scenarios** ← recommended
-2. **Edit — change the target %, scenario count, or scope**
-3. **Cancel**
+- `question`: `"Approve writing these scenarios?"`
+- `header`: `"Approval"`
+- `multiSelect`: `false`
+- `options`:
+  1. **Approve and write the scenarios** ← recommended (`description`: `"Writes the scenario columns to the destination chosen in Step 1."`)
+  2. **Edit — change the target %, scenario count, or scope**
+  3. **Cancel**
 
 The `← recommended` marker goes inside the `description` field of option 1, not as a suffix on the `label`.
 
@@ -258,7 +276,15 @@ Before calling `execute_office_js` with state-mutating code, `setValues`, `write
 The most common failure mode is bundling cell writes + formatting + logo into one `writeSheet(...)` function — the model writes the cells, returns, and forgets the logo. **Do not combine the cell-write call with the brand block in a single office.js block.**
 
 - **Call 1:** cell values, formulas, formatting. One `execute_office_js`. Return.
-- **Call 2 (per tab touched):** logo via the verbatim brand block from `branding-and-header.md`.
+- **Call 1.5 (blob pre-flight, REQUIRED before logo):** verify the asset store is populated:
+  ```javascript
+  const keys = blobs.keys();
+  return { blobKeys: keys };
+  ```
+  If `blobKeys` is empty (`[]`), **stop immediately** — do NOT attempt the brand block and do NOT proceed to the summary. Surface this message to the user:
+  > "The Carta logo asset isn't loaded yet in this session. Please close the skill panel, wait a moment, then reopen it and try again. The scenario data has been written — only the branding step is pending."
+  Do not silently skip branding. Do not mark the branding step as complete. Do not write Step 8 summary text.
+- **Call 2 (per tab touched):** logo via the verbatim brand block from `branding-and-header.md`. Only run this after Call 1.5 confirms `blobKeys` is non-empty.
 - **Call N (verification, LAST):** load shape names on every tab touched, confirm `CartaLogo` exists.
 
 Returning from Call 1 does NOT finish Step 7. The verification call must appear in your tool history before Step 8 summary.
@@ -268,7 +294,7 @@ Returning from Call 1 does NOT finish Step 7. The verification call must appear 
 1. `read_skill(file_path="references/branding-and-header.md")` — 4-row metadata band, logo placement, `blobs.getText` asset pattern, cell-comment API.
 2. `read_skill(file_path="references/<scenario-reference-from-step-2>.md")` — the scenario file(s) matched in Step 2 (call one per reference for multi-lever prompts).
 
-Do not reconstruct either spec from memory. All files must be in your context before generating any `execute_office_js` or `write_workbook.py` code. The `branding-and-header.md` file defines the reserved 4-row metadata band (B1 firm / B2 descriptive title like `"2026 Budget · Senior-heavy trim scenario"` / B3 source / B4 other context), the Carta logo placement (column E, rows 1–3 height), the `blobs.getText("assets/...")` asset-loading pattern for Excel add-in (NOT `Read`), and the cell-comment pattern for any low-confidence flag. If the existing Budget tab does not already have the 4-row band, add it as part of this write (shift data via `sheet.getRange("1:5").insert(...)`).
+Do not reconstruct either spec from memory. All files must be in your context before generating any `execute_office_js` or `write_workbook.py` code. The `branding-and-header.md` file defines the reserved 4-row metadata band (A1 firm / A2 descriptive title like `"2026 Budget · Senior-heavy trim scenario"` / A3 source / A4 other context), the Carta logo placement (column E, rows 1–3 height), the `blobs.getText("assets/...")` asset-loading pattern for Excel add-in (NOT `Read`), and the cell-comment pattern for any low-confidence flag. If the existing Budget tab does not already have the 4-row band, add it as part of this write (shift data via `sheet.getRange("1:5").insert(...)`).
 
 **If `<RUNTIME>` is `excel-addin`:** use the add-in's cell-write tools.
 Either side-by-side columns next to the existing budget, or a new
@@ -310,6 +336,8 @@ return result;
 ```
 
 The result must show `CartaLogo` in every tab's shape list. If any tab lacks `CartaLogo`, re-run the brand block for that tab and re-verify. **Do not start Step 8 summary text until this verification returns `CartaLogo` on every tab.**
+
+**Never silently skip branding.** If the verification returns `[]` or an empty shape list, that means the brand block did not run successfully — do NOT proceed. If blobs were empty (Call 1.5 returned `[]`), surface the reload message above and stop. If blobs were available but `addImage` still failed, surface the error and let the user decide.
 
 ## Step 8 — Summary + next steps
 
@@ -385,8 +413,20 @@ Queries > 50 rows: request `format: "ndjson"`, bucket into a blob. Don't paste l
 - **Two-row header for month-bucketed tables.** Row N = merged month label. Row N+1 = sub-headers. Never write both into the same row — subsequent merges destroy sub-headers.
 - `range.merge(true)` discards trailing cells. Insert a new row first.
 - **Month-label date-serial trap:** prefix with `'` or use `numberFormat: "mmm yyyy"` on a real date.
+- **Label/header text beginning with `+`, `=`, `-`, or `@` parses as a formula.** Prefix such text with a leading `'` (or a space), or drop the leading symbol — including Δ-delta and `+ Δ` scenario column headers.
+- **Set `Worksheet.position` in a separate `context.sync()`, never in the same statement as `worksheets.add()`.** Create and activate first: `const sh = sheets.add(name); sh.activate(); await context.sync();`.
+- **Currency — derive from the data, never default to USD.** Resolve the workbook's presentation currency before writing (entity properties via `welcome`, or the currency on the base budget data); if it can't be resolved, ask the user. Apply the accounting format with the locale token for the resolved currency — `[$$-en-US]` USD, `[$€-x-euro2]` EUR, `[$£-en-GB]` GBP, `[$$-en-CA]` CAD, or the matching `[$<symbol>-<locale>]`. The token locks display to the fund's currency regardless of the user's Excel locale; a bare `$` renders as the local symbol. The `A4` band reads `Amounts in <resolved_currency>`.
 - **Border syntax (Office.js):** `style = "Continuous"`, then `weight = "Thin"`. Never `style: "Thin"`.
-- **Recalc + column widths (excel-addin):** the last statements in the cell-write `execute_office_js` block (Call 1), in this order — never a separate call: restore automatic calc → `context.workbook.application.calculate(Excel.CalculationType.full)` → `sheet.getRange("A:<last>").format.autofitColumns()` over the full data span (widen to the last scenario column) → `context.sync()`. **Recalc before autofit:** scenario values are live formulas — without the forced recalc they stay at 0 and the accounting format shows `-` (forcing the user to edit+Enter each one); autofitting before the recalc sizes columns to the dash so real figures overflow as `####`. In local-file mode, add an `autofit_columns` op over the same span. Never autofit a header-only range.
+- **Recalc + column widths (excel-addin):** the last statements in the cell-write `execute_office_js` block (Call 1), in this order — never a separate call: restore automatic calc → `context.workbook.application.calculate(Excel.CalculationType.full)` → set fixed widths on label columns → autofit numeric columns only → `context.sync()`. **Pattern:**
+  ```javascript
+  context.workbook.application.calculationMode = Excel.CalculationMode.automatic;
+  context.workbook.application.calculate(Excel.CalculationType.full);
+  sheet.getRange("A:A").format.columnWidth = 120;  // Section — fixed
+  sheet.getRange("B:B").format.columnWidth = 180;  // Line Item — fixed
+  sheet.getRange("C:<last_col>").format.autofitColumns();  // Base + scenario columns only
+  await context.sync();
+  ```
+  **Why fixed widths for label columns:** `autofitColumns()` on the full range sizes column A to the widest section name, making it excessively wide. Always set A and B explicitly, autofit only C onwards. **Recalc before autofit:** scenario values are live formulas — without the forced recalc they stay at 0 and accounting format shows `-` (then `####` after autofit). In local-file mode, add a `set_column_width` op for columns A and B, then `autofit_columns` over C onwards. Never autofit a header-only range.
 - **Branding standards — follow [`references/branding-and-header.md`](references/branding-and-header.md)** for every tab. Rows 1–4 reserved, logo at column E, `blobs.getText("assets/...")` for asset access.
 
 ---
@@ -404,7 +444,6 @@ Never auto-retry. Always surface the failure and let the user decide.
 - **Expansion-hire: no Personnel section** → fall back to `headcount-reduction.md` GL patterns, confirm placement.
 - **Expansion-hire: loadings unclear** → default payroll tax 8% / benefits 20% / bonus 15%, show defaults so user can override.
 - **User uses sentiment labels** (Bull/Base/Bear) → acknowledge, label scenarios mechanistically in output (`$300M close`, `$500M close`). Never carry sentiment into the workbook.
-- **ManCo pre-flight fires (Step 4)** → halt, ask for exact ManCo entity name.
 - **Recommended scenario doesn't hit target** → surface gap, ask whether to widen lever set.
 - **Auth error** → ask user to reconnect Carta. Do not auto-retry.
 - **Connector connected, tool calls fail (`McpAuthError`)** → prefix mismatch, NOT auth. Re-run `refresh_mcp_connectors`, probe matching prefix's `welcome`. Never tell user to re-auth without verifying.

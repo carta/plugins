@@ -16,8 +16,8 @@ Lookup priority:
 
 ### 2. Pull YTD personnel actuals — `get-actuals.md`
 
-So scenarios reflect real run-rate, not just budget. ManCo sanity
-check — halt on failure.
+So scenarios reflect real run-rate, not just budget. Apply the
+sparse-history check from `get-actuals.md`.
 
 ### 3. Generate three scenarios
 
