@@ -18,6 +18,7 @@ WHERE FUND_NAME = '<entity_name>'
   AND ACCOUNT_TYPE >= '4000'
   AND EFFECTIVE_DATE BETWEEN '<period_start>' AND '<period_end>'
 GROUP BY 1, 2, 3
+HAVING signed_amount <> 0
 ORDER BY 1, 3;
 ```
 
@@ -41,22 +42,8 @@ fetch(command="dwh:get:table_schema", params={"table_name": "<journal_entries_ta
 5. **Scope to P&L:** `ACCOUNT_TYPE >= '4000'` — excludes balance-sheet (1xxx/2xxx/3xxx).
 6. **Reversals:** preserve negative postings as-is.
 
-## ManCo pre-flight sanity check
-
-The calling SKILL.md treats this as a named gate (Gate 5 in `carta-budget-actuals`).
-
-For management-company entities, scan returned `account_name` values for:
-- `Interest expense`
-- `Realized gain` / `Unrealized gain` / `Realized loss` / `Unrealized loss`
-- `Audit fees`
-- `Dead deal`
-- `LOC fees` / `LOC interest`
-- `Management fees` (expense side)
-
-If **any** appear, the scope is wrong. **Halt before any write.** Tell the user: *"I'm stopping before writing to your workbook because fund-level accounts showed up in the management-company result. Please confirm the exact ManCo entity name and I'll retry."* Offer retry.
-
 ## Sparse-history check
 
-After grouping by `account_name`, count distinct months with non-zero `signed_amount`. If **< 6**, flag `low-confidence — sparse history`. Soft warning — not a halt.
+After grouping by `account_name`, count distinct periods returned (all rows are non-zero due to `HAVING signed_amount <> 0`). If **< 6** distinct months, flag `low-confidence — sparse history`. Soft warning — not a halt.
 
 Caller surfaces in the Gate 5 preview Source column and as cell comments on written rows.

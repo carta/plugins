@@ -21,7 +21,7 @@ Canonical spec for the 4-row header band + Carta logo placement.
 
 ## Logo placement
 
-- **Anchor:** column E, cell E1 (all Carta budget and consolidating skills anchor the logo at column E — it clears the column-B metadata band in every layout).
+- **Anchor:** column E, cell E1 (all Carta budget and consolidating skills anchor the logo at column E — it clears the column-A metadata band in every layout).
 - **Height:** combined height of rows 1–3.
 - **Width:** proportional to PNG aspect ratio.
 - Bundled assets at `assets/powered_by_carta.png` and `assets/powered_by_carta.b64.txt`.

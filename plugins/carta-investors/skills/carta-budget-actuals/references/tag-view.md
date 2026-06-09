@@ -60,7 +60,7 @@ Same 4-row band as all other budget skills (`branding-and-header.md`):
 | 1 | A1 | Entity name |
 | 2 | A2 | Tab title, e.g. `2026 Actuals by Reporting Tag` |
 | 3 | A3 | `Source: Carta DWH (actuals pulled <ISO date>)` (italic, size 10) |
-| 4 | A4 | `Amounts in $` (italic, size 10) |
+| 4 | A4 | `Amounts in <resolved_currency>` (italic, size 10) |
 | 5 | A5 | blank |
 
 Data headers start at row 6 (period band), row 7 (category band), row 8 (tag header); data at row 9+.
@@ -127,13 +127,13 @@ Build an operations payload for `write_workbook.py`:
 7. **Section subtotal rows** (after each section's last account): bold, currency format, `=SUM(...)` formula spanning the section's data rows per column.
 8. **Net Operating Income row** (after all sections): bold, formula `Income - Expenses` per column.
 9. `set_bold` on rows 6, 7, 8 and all subtotal + NOI rows.
-10. `set_format` on all amount columns, rows 9+. **Always use the `[$$-en-US]` locale token — never a bare `$`:**
+10. `set_format` on all amount columns, rows 9+. **Always use the `<CCY_TOKEN>` locale token — never a bare `$`:**
     ```json
     {
       "op": "set_format",
       "sheet": "<tab name>",
       "ref": "B9:<last col><last row>",
-      "number_format": "_([$$-en-US]* #,##0.00_);_([$$-en-US]* (#,##0.00);_([$$-en-US]* \"-\"??_);_(@_)"
+      "number_format": "_(<CCY_TOKEN>* #,##0.00_);_(<CCY_TOKEN>* (#,##0.00);_(<CCY_TOKEN>* \"-\"??_);_(@_)"
     }
     ```
 11. **Column widths** — apply two ops in this order:
@@ -176,9 +176,9 @@ sheet.getRange("A8:P8").values = [["Account",
   "US","EMEA","APAC","Untagged","Total"]];
 sheet.getRange("A8:P8").format.font.bold = true;
 
-// Currency format — ALWAYS use [$$-en-US] locale token, NEVER bare "$"
+// Currency format — ALWAYS use <CCY_TOKEN> locale token, NEVER bare "$"
 const dataRange = sheet.getRange("B9:<lastCol><lastRow>");
-dataRange.numberFormat = [["_([$$-en-US]* #,##0.00_);_([$$-en-US]* (#,##0.00);_([$$-en-US]* \"-\"??_);_(@_)"]];
+dataRange.numberFormat = [["_(<CCY_TOKEN>* #,##0.00_);_(<CCY_TOKEN>* (#,##0.00);_(<CCY_TOKEN>* \"-\"??_);_(@_)"]];
 
 // Column widths — autofit on used range first, then re-assert the
 // fixed Account column. `getColumnsAfter` does NOT exist on Excel.Range
@@ -193,7 +193,7 @@ sheet.getRange("A:A").format.columnWidth = 200;
 // no-freeze convention and Layout E aligns with that.
 ```
 
-Issue at least four separate `execute_office_js` calls per Gate 7 (cell writes, currency-format readback, brand block, branding-verification) — same requirement as Layouts A–D.
+Issue at least three separate `execute_office_js` calls per Gate 7 (cell writes, brand block, combined currency + branding verification) — same requirement as Layouts A–D.
 
 ---
 
@@ -220,10 +220,9 @@ Multi-period runs (Quarter or Month aggregation) multiply the column count by th
 
 ## Hard rules
 
-- **Currency format:** always `_([$$-en-US]* #,##0.00_);_([$$-en-US]* (#,##0.00);_([$$-en-US]* "-"??_);_(@_)`. The `[$$-en-US]` locale token locks the display to USD regardless of the user's Excel locale. **Never use a bare `$`.** Apply to every amount cell, subtotal row, and NOI row.
+- **Currency format:** always `_(<CCY_TOKEN>* #,##0.00_);_(<CCY_TOKEN>* (#,##0.00);_(<CCY_TOKEN>* "-"??_);_(@_)`. The `<CCY_TOKEN>` locale token locks the display to the resolved presentation currency regardless of the user's Excel locale (derive the currency from the data — never default to USD). **Never use a bare `$`.** Apply to every amount cell, subtotal row, and NOI row.
 - Never invent categories or tag values — only use what the JSON-keys probe and the cardinality probe returned at Gate 2.5.
 - Each category Total column on a given account row MUST equal every other category's Total on the same row. If they diverge, it's a data-quality signal worth flagging in Gate 8 (an entry is tagged in one category but not the other).
 - Slice is **additive** to entity filter — `WHERE FUND_NAME = '<entity_name>'` always applies.
-- ManCo pre-flight runs at Gate 5 (same as other layouts) before any write.
 - `merge_cells` op in `write_workbook.py` must come **after** the `write_cell` for the same band-label ref — merged cells discard non-top-left values.
 - Branding (`branding-and-header.md`) applies to this tab exactly as for all other tabs — logo at column E (rows 1–3 height), metadata band in column A.

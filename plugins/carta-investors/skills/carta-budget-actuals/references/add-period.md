@@ -32,8 +32,6 @@ the right to make room.
 `<period_start>` = first day of new period, `<period_end>` = last day
 of new period.
 
-Run the ManCo sanity check. **Halt** if it fails.
-
 ### 4. For each existing line item
 
 - **Actual cell.** Write the value from the DWH; 0 if no activity.

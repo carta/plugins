@@ -21,8 +21,6 @@ Read the active workbook:
 Call [`get-actuals.md`](get-actuals.md) with `<period_start>` =
 earliest actuals column in the sheet, `<period_end>` = latest.
 
-Run the ManCo sanity check. **Halt** if it fails.
-
 ### 3. Match each sheet line to a CoA account
 
 1. Exact name match on `account_name`.

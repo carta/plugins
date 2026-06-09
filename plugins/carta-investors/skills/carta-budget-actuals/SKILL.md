@@ -1,8 +1,8 @@
 ---
 name: carta-budget-actuals
 model: opus
-description: 'Refresh actuals in an existing Excel budget workbook from Carta MCP. TRIGGER: refresh/sync/add actuals, interleave Budget/Actual/Variance, tag-view by department/cost center. NOT: pacing, new budgets, fetch-budget, scenarios, P&L, balance sheet.'
-version: 1.0.0
+description: 'Write actuals into an existing Excel budget workbook from Carta MCP — add/interleave Budget/Actual/Variance columns or a tag-view tab. TRIGGER: refresh/sync/add actuals, interleave Budget/Actual/Variance, actuals by department/cost center/tag. NOT: pacing or "how are we doing"/variance-analysis questions (carta-budget-vs-actuals), new budgets (carta-create-budget), fetch-budget, scenarios, consolidating P&L / balance sheet.'
+version: 1.0.1
 allowed-tools:
   # MCP connector discovery (Claude for Excel runtime tool — used first in Gate 0)
   - refresh_mcp_connectors
@@ -78,6 +78,28 @@ the number.
 - **What-if scenarios** — use `carta-budget-scenarios`.
 - **P&L / income statement requests** — use `carta-consolidating-pnl`.
 - **Balance sheet requests** — use `carta-consolidating-balance-sheet`.
+
+---
+
+## Execution discipline
+
+Execute all gates silently. Do not narrate tool calls, intermediate results, or status updates. Only speak at explicit decision points: Gate 0.5 (if runtime is ambiguous), Gate 1 (destination chooser), Gate 2 (layout choice — always ask), Gate 3 (period/parameter gate), Gate 6 (approval), and Gate 8 (next-step menu).
+
+---
+
+## Entry mode — fresh session vs. chained skill
+
+Before Gate 0, check whether these context variables are already set from an earlier budgeting skill call in the same session:
+
+- `<SERVER>` — connected Carta MCP server prefix
+- `<ENTITY_NAME>` and `<ENTITY_UUID>` — the resolved entity
+- `<RUNTIME>` — `excel-addin` or `local-file`
+
+**If all four are in context:** skip Gates 0 and 0.5 entirely. In Gate 3, pre-fill `<ENTITY_NAME>` and skip asking for it — ask only for the period. Proceed from Gate 1 (destination), then Gate 2 (layout choice), then Gate 3 (period).
+
+**If any is missing** (fresh session or cold invocation): run Gates 0 and 0.5 in order, then continue from Gate 1.
+
+Do not ask "which firm?" or "which runtime?" when those are already established from the skill the user just ran.
 
 ---
 
@@ -216,26 +238,9 @@ fetch(command="dwh:execute:query", params={
 })
 ```
 
-- `json_rows > 0` → **JSON path**. Continue to Probe 2.
-- `json_rows == 0 AND flat_rows > 0` → **flat path**. Skip Probe 2 — there is exactly one synthetic category labeled `Reporting Tag`. Set `<CATEGORIES> = ["Reporting Tag"]` and continue to Probe 3 (cardinality).
+- `json_rows > 0` → **JSON path**. Skip Probe 2 — go directly to Probe 3 (JSON path). Probe 3 returns both category names and cardinality in one query, making a separate category-discovery query redundant.
+- `json_rows == 0 AND flat_rows > 0` → **flat path**. Set `<CATEGORIES> = ["Reporting Tag"]` and continue to Probe 3 (cardinality).
 - Both zero → no tag data on this entity. Tell the user in one plain-English sentence — *"Your journal data doesn't have any reporting tags, so I'll build a flat actuals view instead."* — and fall back to **Layout A**.
-
-### Probe 2 — Discover categories (JSON path only)
-
-```
-fetch(command="dwh:execute:query", params={
-  "sql": "SELECT DISTINCT f.key::TEXT AS category
-          FROM <journal_entries_table>,
-               LATERAL FLATTEN(input => REPORTING_TAGS_JSON) f
-          WHERE FUND_NAME = '<entity_name>'
-            AND REPORTING_TAGS_JSON IS NOT NULL
-            AND EFFECTIVE_DATE >= DATEADD('year', -1, CURRENT_DATE)
-          ORDER BY 1",
-  "format": "markdown"
-})
-```
-
-Store the returned keys as `<CATEGORIES>` (sorted list — e.g. `["Department", "Function", "Geography"]`).
 
 ### Probe 3 — Cardinality per category
 
@@ -268,7 +273,7 @@ fetch(command="dwh:execute:query", params={
 })
 ```
 
-Store as `<CARDINALITY>` (map of `category → n_values`). Compute the **total column count**:
+Store `<CATEGORIES>` as the sorted list of distinct `category` values returned, and store `<CARDINALITY>` as the map of `category → n_values`. (Probe 3 returns both in one pass — no separate Probe 2 needed.) Compute the **total column count**:
 
 ```
 total_columns = sum(n_values for each category) + len(<CATEGORIES>)
@@ -363,7 +368,7 @@ load-bearing — never overwrite it.
 
 ---
 
-## Gate 5 — Load actuals + ManCo pre-flight
+## Gate 5 — Load actuals
 
 **Layout E:** use the category-grouped query from
 [`references/tag-view.md`](references/tag-view.md) §SQL. Pick the **JSON path**
@@ -376,16 +381,6 @@ into the SQL. All other rules below apply unchanged.
 
 **Layouts A–D:** always call through [`references/get-actuals.md`](references/get-actuals.md).
 Never write inline SQL outside that file.
-
-The helper runs the **ManCo pre-flight sanity check** as part of its
-output. If it fires, halt and tell the user (plain English) — see
-`references/get-actuals.md` for the message wording.
-
-**Always render the pre-flight outcome as user-visible prose, even when the dataset is clean.** The context engine may compress the underlying tool call into a snip summary, which means the user has no visibility into whether this safety gate ran. Surface one sentence:
-
-> "Checked N accounts for fund-level leak indicators (Interest expense, Audit fees, LOC fees, Realized/Unrealized gains, Management fees on expense side, Dead deal). None found — safe to proceed."
-
-If leaks ARE found, the existing halt-and-ask-user language already runs. Never silently pass this gate.
 
 ---
 
@@ -402,11 +397,15 @@ If any rows carry the `low-confidence — sparse history` flag (account
 has < 6 months of activity in the lookback window), surface the count
 above the table.
 
-Then offer the approval menu **via a single `AskUserQuestion` call** — never as a bare code-fenced markdown list (bare-text menus break the chooser UI in Claude for Excel and force the user to type the number). Render with these three options:
+Output the preview tables above as a normal conversation message. Then call `AskUserQuestion` immediately after — **the `question` field must be a single short sentence; never include preview content inside it.**
 
-1. **Approve and apply the updates** ← recommended
-2. **Edit — change the period range, match strategy, or scope**
-3. **Cancel**
+- `question`: `"Approve applying these updates?"`
+- `header`: `"Approval"`
+- `multiSelect`: `false`
+- `options`:
+  1. **Approve and apply the updates** ← recommended (`description`: `"Writes the actuals to the destination chosen in Gate 1."`)
+  2. **Edit — change the period range, match strategy, or scope**
+  3. **Cancel**
 
 The `← recommended` marker goes inside the `description` field of option 1, not as a suffix on the `label`.
 
@@ -424,16 +423,15 @@ Before calling `execute_office_js` with state-mutating code, `setValues`, `write
 
 **Do not interpret upstream answers as approval.** A Gate 2 layout response, a Gate 3 period-range answer, or any prior `AskUserQuestion` whose answer is not literally `"Approve and apply the updates"` does NOT clear this gate.
 
-### Gate 7 requires AT LEAST four separate `execute_office_js` calls (excel-addin runtime)
+### Gate 7 requires AT LEAST three separate `execute_office_js` calls (excel-addin runtime)
 
 The most common failure mode is bundling cell writes + formatting + logo + verification into one `writeSheet(...)` function — the model writes the cells, returns, hardcodes the logo height, and the user gets a misaligned logo they have to resize manually. **Do not combine the cell-write call with the brand block in a single office.js block.**
 
 - **Call 1:** apply the cell updates from the approved payload. One `execute_office_js`. Return.
-- **Call 2:** currency-format readback (see below). Return.
-- **Call 3 (per tab touched):** logo via the verbatim brand block (paste from below — DO NOT paraphrase, DO NOT hardcode the height, DO NOT anchor to a single cell).
-- **Call N (verification, LAST):** load shape geometry + E1:E3 range geometry on every tab touched, confirm `CartaLogo` exists AND its height equals the row-band height.
+- **Call 2 (per tab touched):** logo via the verbatim brand block (paste from below — DO NOT paraphrase, DO NOT hardcode the height, DO NOT anchor to a single cell).
+- **Final call (combined verification):** currency format + shape geometry on every tab touched in one `execute_office_js`. See the combined verification block below.
 
-Returning from Call 1 does NOT finish Gate 7. The verification call must appear in your tool history before Gate 8 summary.
+Returning from Call 1 does NOT finish Gate 7. The final combined verification call must appear in your tool history before Gate 8 summary.
 
 ### Verbatim brand block — paste this, do not improvise
 
@@ -515,40 +513,15 @@ JSON
 - **Layouts A–D:** use only `write_cell` / `write_formula` / `set_format` operations. Avoid `create_sheet` and `write_range` here — those are for `carta-create-budget`.
 - **Layout E:** use `create_sheet`, `write_cell`, `write_range`, `merge_cells`, `set_bold`, `set_format`, `set_column_width` (Account col), `autofit_columns` (data cols) per [`references/tag-view.md`](references/tag-view.md) §"Writing the workbook (local-file runtime)". Always issue `write_cell` for a period label **before** the `merge_cells` op for that same range. **Do NOT include `freeze_panes`** — same rule as Layouts A–D and the rest of the Carta budgeting skills.
 
-### Currency-format verification (REQUIRED, observable, excel-addin only)
+### Combined currency + branding verification (REQUIRED, observable, excel-addin only)
 
-Excel renders bare `$` against the workbook's locale — `R$` on pt-BR, `£` on en-GB, `¥` on ja-JP. The `[$$-en-US]` locale token locks the display to USD regardless. Even though every reference mandates the locale-prefixed format, models routinely emit bare `$` when generating the office.js inline. This check is the only thing that catches the regression before the user sees R$.
+After the brand block runs for every tab, execute **one** `execute_office_js` that checks both currency format and logo geometry in a single `context.sync()`. This replaces the two separate passes (currency readback → branding check) previously required.
 
-After the cell-write call (and before branding), run this readback as a **separate** `execute_office_js` call:
+Two regressions this catches:
+- **Currency symbol** — a bare `$` renders as the user's Excel-locale symbol (`R$` on pt-BR, `£` on en-GB, `¥` on ja-JP). The locale token `<CCY_TOKEN>` for the resolved presentation currency locks display to that currency. `<CCY_TOKEN>` is `[$$-en-US]` (USD), `[$€-x-euro2]` (EUR), `[$£-en-GB]` (GBP), `[$$-en-CA]` (CAD), or the matching `[$<symbol>-<locale>]` — resolved from the data, never defaulted to USD.
+- **Logo sizing** — hardcoded `shape.height = 48` misaligns the logo when the E1:E3 row band is taller or shorter than 48pt. Height must come from `rows.height`.
 
-```javascript
-const tabs = [/* tab names touched this run */];
-const samples = {};
-for (const tabName of tabs) {
-  const sheet = context.workbook.worksheets.getItem(tabName);
-  // Pick one amount cell — the first numeric data cell typically lives at C7 (Layout E) or B8 (Layouts A-D).
-  // Substitute the actual address from the payload you just wrote.
-  const cell = sheet.getRange("<sample_amount_cell>");
-  cell.load("numberFormat");
-  await context.sync();
-  samples[tabName] = cell.numberFormat[0][0];
-}
-return samples;
-```
-
-Each value MUST contain the literal substring `[$$-en-US]`. If any tab's sample format is `_($* #,##0...`, `$#,##0`, `"$"#,##0`, or anything else without `[$$-en-US]`, the format is wrong — Excel will render currency in the user's local symbol. **Halt, re-apply the format to the full amount range on that tab, and re-verify.**
-
-```javascript
-// Re-format if verification failed
-const fmt = "_([$$-en-US]* #,##0.00_);_([$$-en-US]* (#,##0.00);_([$$-en-US]* \"-\"??_);_(@_)";
-sheet.getRange("<full_amount_range>").numberFormat = [[fmt]];
-```
-
-Do not proceed to branding until every sampled cell returns a format string containing `[$$-en-US]`.
-
-### Branding verification (REQUIRED, observable, excel-addin only)
-
-After running the brand block for every tab this skill touched, run this verification as a **separate** `execute_office_js` call before proceeding to Gate 8. The check goes beyond confirming the shape exists — it also confirms the logo was **sized to the E1:E3 row band**, not a hardcoded pixel value:
+**This block is NOT paste-verbatim — substitute its placeholders before running:** the `tabs` array (the tab names touched this run), `<sample_amount_cell>`, and **`<CCY_TOKEN>`** (replace with the resolved currency's locale token, e.g. `[$$-en-US]` / `[$€-x-euro2]`). If `<CCY_TOKEN>` is left literal, the `.includes(...)` check always returns `false` and Gate 7 loops forever.
 
 ```javascript
 const tabs = [/* "Budget 2026", "2026 Actuals", ... — substitute the actual tab names touched this run */];
@@ -558,17 +531,24 @@ for (const tabName of tabs) {
   sheet.shapes.load("items/name,items/height,items/left,items/top");
   const rows = sheet.getRange("E1:E3");
   rows.load(["height", "left"]);
+  // Pick one amount cell — typically C7 (Layout E) or B8 (Layouts A–D). Substitute from your payload.
+  const cell = sheet.getRange("<sample_amount_cell>");
+  cell.load("numberFormat");
   await context.sync();
 
   const logo = sheet.shapes.items.find(s => s.name === "CartaLogo");
   result[tabName] = {
-    found:           !!logo,
-    shapeHeight:     logo ? logo.height : null,
-    rowBandHeight:   rows.height,
+    // Currency check
+    numberFormat:      cell.numberFormat[0][0],
+    currencyOk:        cell.numberFormat[0][0].includes("<CCY_TOKEN>"),  // resolved-currency locale token, not always USD
+    // Branding checks
+    found:             !!logo,
+    shapeHeight:       logo ? logo.height : null,
+    rowBandHeight:     rows.height,
     heightMatchesBand: logo ? Math.abs(logo.height - rows.height) < 2 : false,
-    shapeLeft:       logo ? logo.left : null,
-    rowBandLeft:     rows.left,
-    leftMatchesBand: logo ? Math.abs(logo.left - rows.left) < 2 : false,
+    shapeLeft:         logo ? logo.left : null,
+    rowBandLeft:       rows.left,
+    leftMatchesBand:   logo ? Math.abs(logo.left - rows.left) < 2 : false,
   };
 }
 return result;
@@ -576,24 +556,28 @@ return result;
 
 Per-tab pass criteria — ALL must be true:
 
-- `found === true` (`CartaLogo` exists on the tab)
-- `heightMatchesBand === true` (logo height equals `E1:E3` row-band height ±2pt — proves no pixel literal)
-- `leftMatchesBand === true` (logo anchors at column E's left edge ±2pt — proves correct `getRange("E1:E3")` anchor)
+- `currencyOk === true` — sample cell format contains `<CCY_TOKEN>` (the resolved-currency locale token)
+- `found === true` — `CartaLogo` shape exists
+- `heightMatchesBand === true` — logo height equals E1:E3 row-band height ±2pt
+- `leftMatchesBand === true` — logo anchors at column E's left edge ±2pt
 
-If any tab returns `found: false`, the brand block was skipped — re-run it. If `heightMatchesBand` is `false`, the brand block was paraphrased with a hardcoded height (e.g. `shape.height = 48`) — delete the existing `CartaLogo` shape and re-run the verbatim brand block above. If `leftMatchesBand` is `false`, the brand block anchored to a single cell like `E1` instead of `E1:E3` — same fix.
+**Recovery actions:**
 
-**Do not start Gate 8 summary text until every tab's verification result shows `found: true && heightMatchesBand: true && leftMatchesBand: true`.** The verification call is observable evidence; without it in your tool history with passing checks, Gate 7 is not complete.
+- `currencyOk: false` → re-apply format with the resolved-currency token: `sheet.getRange("<full_amount_range>").numberFormat = [["_(<CCY_TOKEN>* #,##0.00_);_(<CCY_TOKEN>* (#,##0.00);_(<CCY_TOKEN>* \"-\"??_);_(@_)"]]`, then re-run this combined verification.
+- `found: false` → brand block was skipped — re-run the verbatim brand block, then re-verify.
+- `heightMatchesBand: false` or `leftMatchesBand: false` → brand block used a hardcoded pixel or wrong anchor — delete the `CartaLogo` shape and re-run the verbatim brand block, then re-verify.
+
+**Do not start Gate 8 summary text until every tab passes all four criteria.** The verification call is observable evidence; without it in your tool history with passing checks, Gate 7 is not complete.
 
 ---
 
 ## Gate 8 — Summary + next steps
 
-**Gate 8 precondition (DO NOT SKIP).** Before sending the summary text below, scan your tool history. Four anchors MUST be present in this order (excel-addin runtime):
+**Gate 8 precondition (DO NOT SKIP).** Before sending the summary text below, scan your tool history. Three anchors MUST be present in this order (excel-addin runtime):
 
 1. An `AskUserQuestion` whose answer included `"Approve and apply the updates"` — Gate 6 approval.
-2. The currency-format-verification `execute_office_js` whose result returned a `numberFormat` string containing `[$$-en-US]` for every tab touched — Gate 7 currency check.
-3. A `sheet.shapes.addImage(base64)` call for **each** tab the skill touched (one per tab) — Gate 7 branding.
-4. The branding-verification `execute_office_js` whose result showed `CartaLogo` on every tab — Gate 7 branding verification.
+2. A `sheet.shapes.addImage(base64)` call for **each** tab the skill touched (one per tab) — Gate 7 branding.
+3. The combined currency + branding verification `execute_office_js` whose result showed `currencyOk: true`, `found: true`, `heightMatchesBand: true`, and `leftMatchesBand: true` for every tab — Gate 7 combined verification.
 
 If any anchor is missing, you have skipped a gate. **Do NOT write "Carta logo placed at..." in the summary when no `shapes.addImage` call appears in your tool history — that's hallucinating completion.** STOP, go back, run the missing gate, then return here.
 
@@ -657,14 +641,17 @@ Queries > 50 rows: request `format: "ndjson"`, bucket into a blob. Don't paste l
 
 ## Hard rules
 
-- Same DWH primitives as `carta-create-budget` — Carta DWH journal-entries table only, no external-DWH fallback, `FUND_NAME` scoping, `AMOUNT` (not the base-currency variant), sign flip, preserve reversals. ManCo pre-flight mandatory before any write — see `references/get-actuals.md`.
+- Same DWH primitives as `carta-create-budget` — Carta DWH journal-entries table only, no external-DWH fallback, `FUND_NAME` scoping, `AMOUNT` (not the base-currency variant), sign flip, preserve reversals.
 - Local-file: never overwrite cells flagged as formulas in `read_workbook.py` output. Subtotals / NOI keep their `=SUM(...)` semantics.
 - **Two-row header is mandatory** for month-bucketed tables. Row N = merged month label per `Budget`/`Actual`/`Variance` triplet. Row N+1 = sub-headers spelled out in full (`Budget`, `Actual`, `Variance`). **Never abbreviate to `B`/`A`/`V`**. Never write both into the same row — subsequent merges destroy sub-headers.
 - `range.merge(true)` discards trailing cell values. Insert a new row first.
 - **Month-label date-serial trap:** prefix with `'` or use `numberFormat: "mmm yyyy"` on a real date.
-- **Currency format:** `_([$$-en-US]* #,##0.00_);_([$$-en-US]* (#,##0.00);_([$$-en-US]* "-"??_);_(@_)`. Apply to data range after the data write.
+- **Currency — derive from the data, never default to USD.** Resolve the workbook's presentation currency before writing (entity properties via `welcome`, or the currency on the budget data); if it can't be resolved, ask the user. The format uses the locale token `<CCY_TOKEN>` for the resolved currency — `[$$-en-US]` USD, `[$€-x-euro2]` EUR, `[$£-en-GB]` GBP, `[$$-en-CA]` CAD, or the matching `[$<symbol>-<locale>]`. The `B4`/`A4` band reads `Amounts in <resolved_currency>`.
+- **Currency format:** `_(<CCY_TOKEN>* #,##0.00_);_(<CCY_TOKEN>* (#,##0.00);_(<CCY_TOKEN>* "-"??_);_(@_)`. Apply to data range after the data write.
+- **Match the existing tab's period granularity.** If the budget tab is quarterly (not monthly), interleave Budget/Actual/Variance per quarter, not per month. For a partial period (e.g. YTD through a mid-quarter month against a quarterly tab), pull actuals at month grain and aggregate to the tab's buckets. Do not prorate a quarter's budget by month-fraction to approximate a partial period — derive the period's budget from the underlying monthly source.
+- **Buffer-aware variance basis.** If the on-tab budget carries an inflation/contingency buffer (an input cell, or a header note like "Budget includes X% buffer"), variances are computed against the buffered figure — state this in the preview so favorable variances aren't misread, and offer to compare against the raw (pre-buffer) budget instead.
 - **Border syntax (Office.js):** `style = "Continuous"`, then `weight = "Thin"`. Never `style: "Thin"`.
-- **Recalc + column widths:** the last statements in the cell-write `execute_office_js` block (Call 1), in this order — never a separate call: restore automatic calc → `context.workbook.application.calculate(Excel.CalculationType.full)` → `sheet.getRange("A:AO").format.autofitColumns()` (widen the range to the last amount column) → `context.sync()`. **Recalc before autofit:** without the forced recalc the `=SUM(...)` / variance / NOI cells stay at 0 and the accounting format shows `-` (forcing the user to edit+Enter each one); autofitting before the recalc sizes the amount columns to the dash so real figures overflow as `####`. Never autofit a header-only range.
+- **Recalc + column widths:** the last statements in the cell-write `execute_office_js` block (Call 1), in this order — never a separate call: restore automatic calc → `context.workbook.application.calculate(Excel.CalculationType.full)` → `sheet.getRange("A:AN").format.autofitColumns()` (widen the range to the last amount column) → `context.sync()`. **Recalc before autofit:** without the forced recalc the `=SUM(...)` / variance / NOI cells stay at 0 and the accounting format shows `-` (forcing the user to edit+Enter each one); autofitting before the recalc sizes the amount columns to the dash so real figures overflow as `####`. Never autofit a header-only range.
 - **Branding standards — follow [`references/branding-and-header.md`](references/branding-and-header.md)** for every tab. Per-skill overrides: metadata band in column A (not B), logo at column E. Asset access via `blobs.getText("assets/...")`.
 
 ---
@@ -683,7 +670,6 @@ column listings inline; the DWH contract can drift.
 | No Carta MCP server found | The Carta connector isn't enabled in this session | "I can't see your Carta connector. Open **Settings → Connectors** in Claude, enable Carta, then ask me again." |
 | Sheet has no recognisable header row | The budget layout uses non-date column headers | Surface what the headers look like and ask the user which row is the header and which columns are actuals. |
 | `low-confidence — sparse history` flagged on many rows | Entity is new or sparsely posted | Surface the count in the preview and let the user decide whether to proceed. Don't auto-suppress. |
-| ManCo pre-flight check fires (Gate 5) | Fund-level GL leaked into the ManCo query | "I'm stopping before writing because fund-level accounts showed up in the management-company result. Please confirm the exact entity name." |
 | Multiple budget tabs in the workbook | Ambiguous "the budget" | Ask the user which tab to update; do not silently pick one. |
 | Cell the skill wants to write is a formula | Subtotal / NOI row | Surface the row and confirm; never silently overwrite a formula. |
 | Local-file mode: file path is missing or unreadable | Wrong path supplied | Echo the path back and ask for the correct one. |

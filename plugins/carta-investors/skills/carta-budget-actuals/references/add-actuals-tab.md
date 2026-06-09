@@ -22,7 +22,7 @@ Capture row labels + section headers from `Budget FY<year>`. If a `<prior_year> 
 
 ### 2. Pull actuals
 
-Via [`get-actuals.md`](get-actuals.md). `<period_start>` = first day of year. `<period_end>` = today / last completed month (ask). Halt on ManCo pre-flight failure.
+Via [`get-actuals.md`](get-actuals.md). `<period_start>` = first day of year. `<period_end>` = today / last completed month (ask).
 
 ### 3. Match accounts
 
@@ -34,7 +34,7 @@ Name first, GL code tiebreaker.
 
 Tab name: `<year> Actuals`. Position: immediately after Budget tab.
 
-Header rows: A1 firm / A2 `<year> Actuals` / A4 `Amounts in $` (see [`branding-and-header.md`](branding-and-header.md) for full 4-row band, column-A override).
+Header rows: A1 firm / A2 `<year> Actuals` / A4 `Amounts in <resolved_currency>` (see [`branding-and-header.md`](branding-and-header.md) for full 4-row band, column-A override).
 
 Row 6 column headers: `Account | Jan <year> | … | Dec <year> | <year> Total`. Bold, white-on-black.
 

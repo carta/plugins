@@ -34,7 +34,7 @@ Capture every row label, monthly header, and Budget value per (account, month). 
 
 ### 3. Pull actuals
 
-Via [`get-actuals.md`](get-actuals.md). `<period_start>` = first day of year. `<period_end>` = today or last completed month (ask). Halt on ManCo pre-flight failure.
+Via [`get-actuals.md`](get-actuals.md). `<period_start>` = first day of year. `<period_end>` = today or last completed month (ask).
 
 ### 4. Match accounts
 
@@ -44,13 +44,13 @@ Name first, GL code as tiebreaker. Two outputs:
 
 ### 5. Build the rebuild payload
 
-Header rows: A1 firm, A2 `<year> Budget / Actual / Variance`, A4 `Amounts in $`. See [`branding-and-header.md`](branding-and-header.md) for full 4-row band spec (column-A override).
+Header rows: A1 firm, A2 `<year> Budget / Actual / Variance`, A4 `Amounts in <resolved_currency>`. See [`branding-and-header.md`](branding-and-header.md) for full 4-row band spec (column-A override).
 
 Column structure:
 - A: Account label
 - B–D: `Jan <year>` Budget/Actual/Variance
 - E–G: `Feb <year>` (same), through Dec
-- AM–AO: `<year> YTD` Budget/Actual/Variance
+- AL–AN: `<year> YTD` Budget/Actual/Variance
 
 Two-row header (rows 6+7):
 - Row 6: month labels merged across each triplet (e.g. `Jan <year>` across B–D), bold white-on-black.
@@ -74,7 +74,7 @@ Bottom rows: `Total Income` / blank / `Total Expenses` / blank / `Net Operating 
 
 **Use `fill_formula_horizontal` and `fill_formula_vertical`** for variance/YTD formulas — one seed, the script translates relative refs. Avoids the single-cell-overlay problem (thousands of individual writes).
 
-**Formatting:** accounting locale-token currency format. No freeze panes. `autofit_columns` on B:AO after data write (fixed widths < 16pt show `####` for 5+ digit currency). Column A fixed ~30 for labels.
+**Formatting:** accounting locale-token currency format. No freeze panes. Column A fixed ~180pt for labels; `autofit_columns` on B:AN after data write (fixed widths < 16pt show `####` for 5+ digit currency).
 
 #### Variance column color coding
 
@@ -83,7 +83,7 @@ Conditional formatting (never hard-code per cell):
 - Negative → red `#C0392B`
 - Zero / blank → default
 
-`excel-addin`: two `cellValue` rules per V-column range (`greaterThan 0` / `lessThan 0`), applied to D/G/J/M/P/S/V/Y/AB/AE/AH/AK + AO.
+`excel-addin`: two `cellValue` rules per V-column range (`greaterThan 0` / `lessThan 0`), applied to D/G/J/M/P/S/V/Y/AB/AE/AH/AK + AN.
 `local-file`: two openpyxl `CellIsRule` rules per range. Add `conditional_format` op to `write_workbook.py` if not yet supported.
 
 ### 6. Tie-out check (before preview)
