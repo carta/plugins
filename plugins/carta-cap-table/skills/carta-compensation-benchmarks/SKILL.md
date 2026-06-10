@@ -65,19 +65,23 @@ Look up Carta Total Compensation (CTC) market salary and equity benchmarks for a
 > |-----|-----|-----|-----|
 > | $164,000 | $185,000 | $210,000 | $237,000 |
 >
-> **Equity (Annual NTM Vesting)**
+> **Equity (4-Year Grant)**
 > | Metric | P25 | P50 | P75 | P90 |
 > |--------|-----|-----|-----|-----|
 > | FD % | 0.030% | 0.040% | 0.050% | 0.144% |
 > | Shares | 18,620 | 24,745 | 30,870 | 88,444 |
 > | Notional value | $100,000 | $133,000 | $165,000 | $474,000 |
 >
+> The 4-year grant view is the default — it matches the "Equity (4 year award)" columns in the CTC Total Compensation product UI (set by passing `equity_quantity=FOUR_YEAR_GRANT` to `compensation:get:benchmark`; see Step 4). If the user explicitly asks for "annual" / "NTM" / "next-twelve-months" equity, pass `equity_quantity=NTM_VESTING` instead and rename this header to **Equity (Annual NTM Vesting)**.
+>
 > (For peer groups ≥ $500M post money — `peer_group.notional_available: true` — put **Notional value** as the first row instead.)
 >
 > **Geo Adjustment:** [location] (X.XX× salary, X.XX× equity)
 >
 > ---
-> *Data source: Companies with post money valuations between [peer_group_label]. Benchmarks released [Month YYYY].*
+> *Data source: Companies with [peer_group_dimension_phrase] [peer_group_label]. Benchmarks released [Month YYYY].*
+>
+> The `[peer_group_dimension_phrase]` placeholder is required and varies by dimension — see the "Required attribution" block below for the three exact phrasings. Do NOT hardcode `post money valuations between` here regardless of what corp you're looking at; the phrase depends on `peer_group.dimension`.
 > ```
 >
 > ### CSV format (bulk)
@@ -124,23 +128,30 @@ Look up Carta Total Compensation (CTC) market salary and equity benchmarks for a
 > ### The exact string
 >
 > ```
-> Data source: Companies with post money valuations between <peer_group_label>. Benchmarks released <Month> <YYYY>.
+> Data source: Companies with <peer_group_dimension_phrase> <peer_group_label>. Benchmarks released <Month> <YYYY>.
 > ```
 >
-> Two placeholders, both required:
+> Three placeholders, all required:
 >
-> 1. **`<peer_group_label>`** — comes from `compensation:get:plan` → `peer_group.label` (e.g. `"$50M-$100M"`, `"$500M-$1B"`). This identifies the post-money valuation band the corp is benchmarked against. Always include it — the citation is incomplete without it.
-> 2. **`<Month> <YYYY>`** — a calendar date derived from the benchmark version's `created` ISO timestamp. **NOT a version number.**
+> 1. **`<peer_group_dimension_phrase>`** — depends on which peer-group dimension the corp's plan uses (`peer_group.dimension` from `compensation:get:plan`). The skill chooses one of three exact phrasings:
+>    - `post_money` → *"post money valuations between"*
+>    - `capital_raised` → *"capital raised between"*
+>    - `headcount` → *"headcount of"*
+> 2. **`<peer_group_label>`** — `peer_group.label` from the same response (e.g. `"$50M-$100M"`, `"$1M-$10M"`, `"100-500 employees"`).
+> 3. **`<Month> <YYYY>`** — a calendar date derived from `benchmark_version.created`. **NOT a version number.**
 >
 > Examples of correct values:
 >
-> | `peer_group.label` | `benchmark_version.created` | Correct attribution |
-> |---|---|---|
-> | `"$50M-$100M"` | `"2026-05-06T14:42:41.646134Z"` | `Data source: Companies with post money valuations between $50M-$100M. Benchmarks released May 2026.` |
-> | `"$500M-$1B"` | `"2026-02-15T08:00:00Z"` | `Data source: Companies with post money valuations between $500M-$1B. Benchmarks released February 2026.` |
-> | `"$100M-$250M"` | `"2025-11-30T23:59:59Z"` | `Data source: Companies with post money valuations between $100M-$250M. Benchmarks released November 2025.` |
+> | `peer_group.dimension` | `peer_group.label` | `benchmark_version.created` | Correct attribution |
+> |---|---|---|---|
+> | `post_money` | `"$50M-$100M"` | `"2026-05-06T14:42:41Z"` | `Data source: Companies with post money valuations between $50M-$100M. Benchmarks released May 2026.` |
+> | `post_money` | `"$500M-$1B"` | `"2026-02-15T08:00:00Z"` | `Data source: Companies with post money valuations between $500M-$1B. Benchmarks released February 2026.` |
+> | `capital_raised` | `"$1M-$10M"` | `"2025-06-26T21:19:22Z"` | `Data source: Companies with capital raised between $1M-$10M. Benchmarks released June 2025.` |
+> | `capital_raised` | `"$10M-$25M"` | `"2025-11-30T23:59:59Z"` | `Data source: Companies with capital raised between $10M-$25M. Benchmarks released November 2025.` |
+> | `headcount` | `"100-500 employees"` | `"2026-01-15T08:00:00Z"` | `Data source: Companies with headcount of 100-500 employees. Benchmarks released January 2026.` |
 >
 > **Anti-patterns — do NOT do these:**
+> - ❌ Hardcoding "post money valuations" when the corp's plan actually uses capital-raised or headcount — that misrepresents the comparison set
 > - ❌ Omitting the peer-group sentence — the citation must always name the comparison set
 > - ❌ `Data source: ... released v24.6` — that's the version number, not the date
 > - ❌ `Data source: ... released benchmark v24.6 (May 2026)` — drop the version, just use the month + year
@@ -155,17 +166,18 @@ Look up Carta Total Compensation (CTC) market salary and equity benchmarks for a
 > |---|---|
 > | Chat reply | Last line of the message, italicized, after a `---` horizontal rule |
 > | Markdown file | Last line of the file, italicized, after a `---` horizontal rule |
-> | CSV file | Final row, e.g. `Data source,Companies with post money valuations between $50M-$100M. Benchmarks released May 2026.` (use 1 cell or split across 2; both work) |
-> | JSON export | Top-level `"_source": "Companies with post money valuations between $50M-$100M. Benchmarks released May 2026."` field |
+> | CSV file | Final row, e.g. `Data source,Companies with capital raised between $1M-$10M. Benchmarks released June 2025.` (use 1 cell or split across 2; both work) |
+> | JSON export | Top-level `"_source": "Companies with capital raised between $1M-$10M. Benchmarks released June 2025."` field |
 >
 > ### Pre-send checklist (run before every response that touches benchmark data)
 >
-> 1. Did I read `peer_group.label` from the `compensation:get:plan` response and put it in the citation?
-> 2. Did I derive the date from the benchmark version's `created` ISO timestamp? (Not from `version`, `version_major`, `version_minor`.)
-> 3. Did I format it as `<Month name> <YYYY>` with no version number?
-> 4. Is the attribution in the chat reply?
-> 5. If I generated a file, is the attribution INSIDE the file too?
-> 6. If multiple versions were used, did I list each with its own date?
+> 1. Did I read `peer_group.dimension` from the `compensation:get:plan` response and pick the right phrase (`post money valuations between` / `capital raised between` / `headcount of`)?
+> 2. Did I read `peer_group.label` and put it in the citation?
+> 3. Did I derive the date from the benchmark version's `created` ISO timestamp? (Not from `version`, `version_major`, `version_minor`.)
+> 4. Did I format it as `<Month name> <YYYY>` with no version number?
+> 5. Is the attribution in the chat reply?
+> 6. If I generated a file, is the attribution INSIDE the file too?
+> 7. If multiple versions were used, did I list each with its own date?
 >
 > **If any answer is no, fix it before sending.** This is non-negotiable, even when the user asks for terse output.
 
@@ -276,9 +288,10 @@ If `is_subscribed` is False, stop here and send the subscription message (see **
 call_tool({"name": "compensation__get__plan", "arguments": {"corporation_id": <corporation_pk>}})
 ```
 
-Capture two things from the response:
+Capture three things from the response:
 - `benchmark_version.id` — use as `benchmark_version_id` in the next step.
-- `peer_group` — `{code, label, notional_available}`. The `label` (e.g. `"$50M-$100M"`) is required for the data-source footnote. The `notional_available` boolean tells you the equity column order (see Step 5).
+- `peer_group` — `{code, label, dimension, notional_available}`. The `label` (e.g. `"$50M-$100M"`, `"$1M-$10M"`, `"100-500 employees"`) is required for the data-source footnote. The `notional_available` boolean tells you the equity column order (see Step 5).
+- `peer_group.dimension` — one of `post_money` / `capital_raised` / `headcount`. This tells you **which bucket param to pass** in Step 4 (`post_money_bucket` / `capital_raised_bucket` / `headcount_bucket`) AND which phrasing to use in the data-source attribution. Many corps default to `capital_raised` — do not assume `post_money`.
 
 ### Step 4 — Fetch the benchmark
 
@@ -290,11 +303,100 @@ call_tool({"name": "compensation__get__benchmark", "arguments": {
   "focus": <focus>,                         # omit if null
   "is_leader": <true if track == "manager" or track == "executive" else false>,
   "benchmark_version_id": <benchmark_version.id>,
-  "location": <location string>             # optional, for geo adjustment
+  "location": <location string>,            # optional, for geo adjustment
+
+  # --- The corp's plan-default peer group. Include EXACTLY ONE bucket
+  #     param. Do NOT include two or three. Pick the key by string-mapping
+  #     `peer_group.dimension` from the plan response:
+  #
+  #         peer_group.dimension          key to use
+  #         ────────────────────────      ─────────────────────────
+  #         "post_money"               →  "post_money_bucket"
+  #         "capital_raised"           →  "capital_raised_bucket"
+  #         "headcount"                →  "headcount_bucket"
+  #         null / unknown             →  STOP — see Step 4a below
+  #
+  #     The value is always `peer_group.code` from the plan response.
+  "<peer_group_dimension>_bucket": <peer_group.code>,   # ONLY ONE — see mapping above
+
+  # ⚠ DO NOT include the other two bucket params in the same call. The enum
+  # values are dimension-specific (PostMoneyBuckets vs CapitalRaisedBuckets
+  # vs HeadcountBuckets are disjoint), so a code value valid for one bucket
+  # param is invalid for the other two — including more than one will either
+  # silently override (which one wins is undefined and may change) or return
+  # HTTP 400.
+  #
+  # Example: Meetly's plan returns peer_group = {dimension: "post_money",
+  # code: "ONE_HUNDRED_MILLION", label: "$100M-$250M"}. The right call passes:
+  #     "post_money_bucket": "ONE_HUNDRED_MILLION"
+  # Not:
+  #     "capital_raised_bucket": "ONE_HUNDRED_MILLION"   ← 400 Bad Request
+  #     (also wrong: passing both — only one bucket param per call)
+
+  # --- Match the CTC product UI's defaults so the skill's numbers tie out
+  #     against what HR users see at /benchmarks/employee?corporationId=N
+  "equity_quantity": "FOUR_YEAR_GRANT",          # The default in the CTC UI's "Equity (4 year award)"
+                                                  # columns. Pass "NTM_VESTING" only when the user
+                                                  # explicitly asks for "annual" / "NTM" equity.
+  "equity_competitiveness_percentile": 50,        # Market median. Overrides the plan's per-job-area
+  "salary_competitiveness_percentile": 50,        # competitiveness target. Pass a different integer
+                                                  # (e.g. 75) if the user asks for a different posture.
+  "industry": "all"                               # No industry filter; pass an industry enum if the
+                                                  # user explicitly scopes the query to one vertical.
 }})
 ```
 
 **No input pay required.** This command returns raw market bands (salary, equity, total cash) directly.
+
+**Why all those defaults?** The skill's output is most useful when its numbers tie out against the CTC product UI's "Employee Benchmarks" page. The frontend defaults to `equity_quantity=FOUR_YEAR_GRANT`, `equity_competitiveness_percentile=50`, `salary_competitiveness_percentile=50`, `industry=all`, plus the corp's plan-default peer group dimension. Sending the same params produces matching numbers; omitting them returns plan-derived bands instead of the percentile data HR users compare against.
+
+**Peer-group override (user-driven sensitivity analysis).** When the user explicitly asks to see a different peer group than the corp's plan default (*"show me $10M-$25M benchmarks instead"* or *"what would this look like for a 100-500 person company"*), **DROP the plan-default bucket param entirely and replace it with the override**. Do not include both — the API's behavior when more than one bucket is non-null is undefined and may change.
+
+So a Meetly-corp call that normally has `post_money_bucket: "ONE_HUNDRED_MILLION"` (plan default), when the user asks for "show me the $1M-$10M raised peer group instead", becomes:
+
+```
+call_tool({"name": "compensation__get__benchmark", "arguments": {
+  "corporation_id": 7, "job": "ENGINEER", "level": "ENTRY",
+  # post_money_bucket DROPPED — replaced by capital_raised_bucket below
+  "capital_raised_bucket": "ONE_TO_TEN_MILLION",
+  "equity_quantity": "FOUR_YEAR_GRANT",
+  ...
+}})
+```
+
+User-phrasing → override mapping:
+
+| User says | Bucket param key | Bucket value (note: each dimension's enum uses different naming) |
+|---|---|---|
+| *"$10M-$25M valuation"* | `post_money_bucket` | `TEN_MILLION` (post-money enum uses single-lower-bound names) |
+| *"$25M-$50M valuation"* | `post_money_bucket` | `TWENTY_FIVE_MILLION` |
+| *"$1M-$10M raised"* | `capital_raised_bucket` | `ONE_TO_TEN_MILLION` (capital-raised enum uses range names) |
+| *"$10M-$25M raised"* | `capital_raised_bucket` | `TEN_TO_TWENTY_FIVE_MILLION` |
+| *"100-500 employees"* | `headcount_bucket` | `HUNDRED_TO_FIVE_HUNDRED` |
+| *"25-100 employees"* | `headcount_bucket` | `TWENTY_FIVE_TO_HUNDRED` |
+
+**Important: the naming asymmetry between the three enums is intentional, not a typo.**
+
+- `PostMoneyBuckets` names a bucket by its **lower bound only**: `TEN_MILLION` IS the `$10M-$25M` band.
+- `CapitalRaisedBuckets` and `HeadcountBuckets` name a bucket by its **explicit range**: `TEN_TO_TWENTY_FIVE_MILLION` is the `$10M-$25M` band.
+
+Do NOT "fix" `post_money_bucket: "TEN_MILLION"` to `post_money_bucket: "TEN_TO_TWENTY_FIVE_MILLION"` thinking it's a typo. The post-money enum has no `_TO_` form — passing `TEN_TO_TWENTY_FIVE_MILLION` returns HTTP 400.
+
+Reference for the full enum sets is in `compensation:get:benchmark`'s `help` (run `discover` if you need to verify a specific value).
+
+### Step 4a — Unknown / missing `peer_group.dimension` (STOP)
+
+If `compensation:get:plan` returned a `peer_group.dimension` value that is **not** one of `post_money` / `capital_raised` / `headcount`, OR `peer_group.dimension` is null / absent entirely, **stop**. Do not attempt the benchmark fetch. Do not guess a bucket param.
+
+Tell the user:
+
+> *"I can't pull benchmarks for [Company Name] — the corporation's plan returned an unexpected peer-group dimension (`<dimension value>`), so I don't know which peer-group bucket to query. This usually means compensation-service shipped a new dimension type the skill hasn't been updated for. Please reach out to the CTC team to confirm the corp's plan configuration."*
+
+Why this is a stop-not-guess: each dimension's bucket param accepts values from a different enum. Picking a default would either send a code value that's invalid for the chosen param (HTTP 400) or — worse — accidentally return data from the wrong peer-group dimension, which would mislead the user with numbers that don't match what they see in the product UI.
+
+If the dimension is one of the three known values, continue to Step 4 above.
+
+### Step 4 — bulk-fetch nuances
 
 **Single-job bulk:** omit `level` to get every level for one job in one call (~17 rows, fits well under the response budget).
 
@@ -319,7 +421,7 @@ The response shape is:
         "as_shares": {"low": "...", "mid": "7717.00", "high": "..."},
         "as_notional_value": {"low": "...", "mid": "41000.00", "high": "..."},
         "percentiles": {...},
-        "quantity": "NTM_VESTING"
+        "quantity": "FOUR_YEAR_GRANT"
       },
       "tcc_benchmarks": {
         "yearly_tcc": {"low": "...", "mid": "210000.00", "high": "..."},
