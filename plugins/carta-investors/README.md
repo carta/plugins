@@ -39,7 +39,7 @@ After installing, restart Claude Code and run `/mcp` to complete OAuth authentic
 | `carta-form-adv` | Form ADV Schedule D regulatory data and firm rollup |
 | `carta-performance-benchmarks` | Compare fund performance against peer benchmark cohorts |
 | `carta-download-tearsheet` | Generate tearsheet PDFs for one or more portcos — single PDF preview or bulk ZIP download |
-| `fund-forecasting` | Read-only Carta Fund Forecasting (formerly Tactyc) — list funds, fund-wide KPIs (TVPI, DPI, IRR, MOIC, NAV, reserves), performance tables, and per-investment analytics. Internal-only. |
+| `carta-fund-forecasting` | Read-only Carta Fund Forecasting (formerly Tactyc) — list funds, fund-wide KPIs (TVPI, DPI, IRR, MOIC, NAV, reserves), performance tables, and per-investment analytics. Internal-only. |
 
 ### Budgeting (Excel)
 
