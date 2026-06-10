@@ -17,11 +17,11 @@ when_to_use: >-
   request and a specialist skill owns it. When in doubt between this
   skill and a specialist, pick the specialist.
 allowed-tools:
-  - mcp__carta__fetch
+  - mcp__carta__call_tool
   - mcp__carta__list_contexts
   - mcp__carta__set_context
   - mcp__carta__list_accounts
-  - mcp__carta__discover
+  - mcp__carta__search_tools
   - AskUserQuestion
 ---
 
@@ -29,28 +29,27 @@ allowed-tools:
 
 # Discover Commands
 
-Use the `discover()` tool to find available commands when no specific skill covers the user's request.
+Use `search_tools` to find available commands when no specific skill covers the user's request.
 
 ## Step 1 — Search for Relevant Commands
 
 ```
-discover(search="<keyword from user's request>")
+search_tools({"query": "<keyword from user's request>"})
 ```
 
 Use a keyword that captures the user's intent (e.g. "valuation", "grant", "safe", "stakeholder").
 
 ## Step 2 — Pick the Best Match
 
-Review the returned commands. Each has:
-- `command`: the name to pass to `fetch()`
+Review the returned tools. Each has:
+- `name`: the tool name to pass to `call_tool` (e.g. `cap_table__get__stakeholders`)
 - `description`: what it returns
-- `required_params`: what you need to provide
-- `help`: detailed field descriptions and caveats
+- `inputSchema`: the required and optional parameters
 
 ## Step 3 — Execute
 
 ```
-fetch("<command_name>", { ...params })
+call_tool({"name": "<tool_name>", "arguments": { ...params }})
 ```
 
 You still need `corporation_id` for most commands — get it from `list_accounts` if you don't have it.

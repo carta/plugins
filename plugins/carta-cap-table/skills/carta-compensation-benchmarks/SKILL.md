@@ -9,7 +9,7 @@ version: 1.0.0
 model: sonnet
 allowed-tools:
   - mcp__carta__call_tool
-  - mcp__carta__discover
+  - mcp__carta__search_tools
   - mcp__carta__list_accounts
   - AskUserQuestion
   - Skill
@@ -266,7 +266,7 @@ Capture the output:
 - `level` — must be one of (low to high seniority): `ENTRY`, `MID1`, `MID2`, `SENIOR1`, `SENIOR2`, `STAFF1`, `STAFF2`, `PRINCIPAL`, `VP1`, `VP2`, `C_LEVEL`, `CEO`
 - `track` — the value returned by the rolematcher (`ic`, `manager`, `executive`, or `UNKNOWN`). Map to `is_leader`: `manager` or `executive` → `true`, `ic` → `false`. If `UNKNOWN`, stop and ask the user before calling the API — see Error Handling.
 
-If the rolematcher returns a value not in these enums (e.g. `LEAD1`, `PRODUCT_MANAGER`), map it to the closest valid value before calling the API. If unsure, call `discover(domain="compensation:get:benchmark")` to re-read the valid enum list, or ask the user.
+If the rolematcher returns a value not in these enums (e.g. `LEAD1`, `PRODUCT_MANAGER`), map it to the closest valid value before calling the API. If unsure, call `search_tools({"query": "compensation get benchmark"})` to re-read the valid enum list, or ask the user.
 
 If the user provides only a job title, that is sufficient minimum input for the rolematcher.
 
@@ -382,7 +382,7 @@ User-phrasing → override mapping:
 
 Do NOT "fix" `post_money_bucket: "TEN_MILLION"` to `post_money_bucket: "TEN_TO_TWENTY_FIVE_MILLION"` thinking it's a typo. The post-money enum has no `_TO_` form — passing `TEN_TO_TWENTY_FIVE_MILLION` returns HTTP 400.
 
-Reference for the full enum sets is in `compensation:get:benchmark`'s `help` (run `discover` if you need to verify a specific value).
+Reference for the full enum sets is in `compensation:get:benchmark`'s description (run `search_tools({"query": "compensation get benchmark"})` if you need to verify a specific value).
 
 ### Step 4a — Unknown / missing `peer_group.dimension` (STOP)
 
