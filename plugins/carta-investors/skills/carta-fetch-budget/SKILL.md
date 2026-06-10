@@ -113,7 +113,7 @@ Do not ask "which firm?" when the entity is already established from the skill t
 
 If none connected, list `failed` connectors and stop. If multiple, default to `Carta` (production).
 
-**Resolve firm:** if user named one → `fetch(command="contexts:list", params={"firm_name": "<firm>"})` → disambiguate via `AskUserQuestion` if multiple → `set_context(firm_id=<uuid>)`. Prefer granular tools when exposed.
+**Resolve firm:** if user named one → `fetch(command="contexts:list", params={"firm_name": "<firm>"})` → disambiguate via `AskUserQuestion` if multiple → `set_context(firm_id=<uuid>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-fetch-budget"]})`. Prefer granular tools when exposed.
 
 **DWH param-name traps:** `dwh:execute:query` takes `sql:` not `query:`. `dwh:get:table_schema` takes `table_name:` not `table:`. `format` accepts `"ndjson"` / `"markdown"`, not `"csv"`.
 
@@ -257,7 +257,7 @@ and SPVs return empty from `fa:list:budgets`.
 
 **Call `read_skill(file_path="references/entity-picker.md")` before proceeding.** Do not reconstruct the picker logic from memory. Summary of the rule:
 
-1. Call `fetch(command="fa:list:entities", params={"_instrumentation": {"plugin": "carta-investors", "skills": ["carta-fetch-budget"]}})` against the active firm.
+1. Call `fetch(command="fa:list:entities")` against the active firm.
 2. Identify the ManCo(s) by name suffix / type field — anything matching
    `(LLC|Management|Mgmt|ManCo|Capital, LLC)` AND with no `Fund` /
    `Partners` / `SPV` qualifier.

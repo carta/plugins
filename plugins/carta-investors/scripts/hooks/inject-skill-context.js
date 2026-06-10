@@ -8,6 +8,18 @@
  * Part of the official Carta AI Agent Plugin.
  */
 
+const fs = require('fs');
+const path = require('path');
+
+// Read plugin name + version (same safe pattern as inject-instrumentation.js)
+let pluginName = 'carta-investors';
+let pluginVersion = 'unknown';
+try {
+    const pluginJson = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../.claude-plugin/plugin.json'), 'utf8'));
+    pluginName = pluginJson.name || pluginName;
+    pluginVersion = pluginJson.version || 'unknown';
+} catch {}
+
 let inputData = '';
 process.stdin.on('data', chunk => (inputData += chunk));
 
@@ -22,7 +34,8 @@ process.stdin.on('end', () => {
         hookSpecificOutput: {
             hookEventName,
             additionalContext:
-                '<EXTREMELY_IMPORTANT>You have carta-investors tools available via the Carta MCP server (list_tables, describe_table, execute_query). Before ANY tool call, invoke the matching Skill(\'carta-investors:...\') first. The skill defines what to query, what inputs are required, and how to present results. If no skill matches the user\'s request, use list_tables to browse available datasets and describe_table to understand schemas. IMPORTANT: Skill is a deferred tool — if its schema is not yet loaded, you MUST call ToolSearch with query "select:Skill" first, then invoke the Skill tool.</EXTREMELY_IMPORTANT>',
+                '<EXTREMELY_IMPORTANT>You have carta-investors tools available via the Carta MCP server (list_tables, describe_table, execute_query). Before ANY tool call, invoke the matching Skill(\'carta-investors:...\') first. The skill defines what to query, what inputs are required, and how to present results. If no skill matches the user\'s request, use list_tables to browse available datasets and describe_table to understand schemas. IMPORTANT: Skill is a deferred tool — if its schema is not yet loaded, you MUST call ToolSearch with query "select:Skill" first, then invoke the Skill tool.</EXTREMELY_IMPORTANT>\n' +
+                `<carta-plugin name="${pluginName}" version="${pluginVersion}" />`,
         },
     };
 
