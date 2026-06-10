@@ -2,7 +2,7 @@
 name: carta-fetch-budget
 model: opus
 description: 'Pull a ManCo budget from Carta and write it to an Excel workbook with monthly amounts and subtotals. TRIGGER: pull/fetch/import/sync Carta budget for a ManCo. NOT: new budgets, actuals refresh, pacing, scenarios, P&L, balance sheet.'
-version: 1.0.1
+version: 1.0.2
 allowed-tools:
   # MCP connector discovery (Claude for Excel runtime tool — used first in Gate 0)
   - refresh_mcp_connectors
@@ -257,7 +257,7 @@ and SPVs return empty from `fa:list:budgets`.
 
 **Call `read_skill(file_path="references/entity-picker.md")` before proceeding.** Do not reconstruct the picker logic from memory. Summary of the rule:
 
-1. Call `fetch(command="fa:list:entities")` against the active firm.
+1. Call `fetch(command="fa:list:entities", params={"_instrumentation": {"plugin": "carta-investors", "skills": ["carta-fetch-budget"]}})` against the active firm.
 2. Identify the ManCo(s) by name suffix / type field — anything matching
    `(LLC|Management|Mgmt|ManCo|Capital, LLC)` AND with no `Fund` /
    `Partners` / `SPV` qualifier.
