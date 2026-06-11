@@ -7,15 +7,15 @@ allowed-tools:
   # MCP connector discovery (Claude for Excel runtime tool — used first in Step 0)
   - refresh_mcp_connectors
   # Production
-  - mcp__claude_ai_Carta__fetch
+  - mcp__claude_ai_Carta__call_tool
   - mcp__claude_ai_Carta__welcome
   - mcp__claude_ai_Carta__set_context
   # Carta-installer naming (lowercase)
-  - mcp__carta_production__fetch
+  - mcp__carta_production__call_tool
   - mcp__carta_production__welcome
   - mcp__carta_production__set_context
   # Local / legacy fallback
-  - mcp__carta__fetch
+  - mcp__carta__call_tool
   - mcp__carta__welcome
   - mcp__carta__set_context
   - AskUserQuestion
@@ -107,7 +107,7 @@ Do not ask "which firm?" or "which runtime?" when those are already established 
 
 If no Carta connected, tell the user and stop. If multiple, default to `Carta` (production).
 
-**Resolve firm:** if user named one → `fetch(command="contexts:list", params={"firm_name": "<entity>"})` → disambiguate via `AskUserQuestion` if multiple → `set_context(firm_id=<uuid>)`. Granular tools preferred when exposed.
+**Resolve firm:** if user named one → `call_tool({"name": "contexts__list", "arguments": {"firm_name": "<entity>"}})` → disambiguate via `AskUserQuestion` if multiple → `set_context(firm_id=<uuid>)`. Granular tools preferred when exposed.
 
 **DWH param-name traps:** `dwh:execute:query` takes `sql:` not `query:`. `dwh:get:table_schema` takes `table_name:` not `table:`. `format` accepts `"ndjson"` / `"markdown"`, not `"csv"`.
 

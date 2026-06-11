@@ -14,7 +14,7 @@ description: >
   - Prefer over carta-lp-dashboard unless user asks by name.
   - Prefer over carta-consolidating-balance-sheet for single-fund balance sheets.
 allowed-tools:
-  - mcp__carta__fetch
+  - mcp__carta__call_tool
   - mcp__carta__list_contexts
   - mcp__carta__set_context
   - Read(${CLAUDE_PLUGIN_ROOT}/skills/carta-explore-data/semantic-layer/*)
@@ -67,7 +67,7 @@ The user must have the Carta MCP server connected. If this is the first query in
 **After setting context**, always fetch the list of portfolio companies the user has access to:
 
 ```
-fetch("fa:list:portfolio_companies", {})
+call_tool({"name": "fa__list__portfolio_companies", "arguments": {}})
 ```
 
 This call is required even if the user named a specific company — it establishes which companies are accessible in the current firm context and provides the `corporation_id` values needed for cap table queries. Do not skip this step.
@@ -81,7 +81,7 @@ Use this table to pick the right context file before running any query:
 
 | User is asking about                                                                                                                                                                                       | Context file to read                              | Primary table / tool                                                      |
 |------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------|---------------------------------------------------------------------------|
-| **Available investments or list of portfolio companies**                                                                                                                                                   | —                                                 | `fetch("fa:list:portfolio_companies", {})` (already run in Step 0)        |
+| **Available investments or list of portfolio companies**                                                                                                                                                   | —                                                 | `call_tool({"name": "fa__list__portfolio_companies", "arguments": {}})` (already run in Step 0)        |
 | Current NAV, TVPI, DPI, MOIC, cumulative LP contributions/distributions                                                                                                                                    | `nav.md`                                          | `MONTHLY_NAV_CALCULATIONS`                                                |
 | Fund performance — IRR, DPI, TVPI, dry powder, expense breakdown                                                                                                                                           | `fund-performance.md`                             | `AGGREGATE_FUND_METRICS`                                                  |
 | Cash flows in a period (contributions, distributions, fees, expenses)                                                                                                                                      | `cash-flows.md`                                   | `JOURNAL_ENTRIES` grouped by `event_type`                                 |
@@ -115,7 +115,7 @@ The file contains the SQL query, column reference, and presentation rules for th
 >    ```
 >    If multiple matches are found, use `AskUserQuestion` to confirm which one before continuing.
 
-* IMPORTANT: if a specific semantic layer was not found, check for Saved Questions by running `fa:list:saved_queries` to get a list of existing questions and descriptions saved on the Data Warehouse. Use `fetch("fa:get:saved_query", {"name": "<query_name>"})` to retrieve the SQL of a matching saved query, where `<query_name>` is the `name` field returned by `fa:list:saved_queries`.
+* IMPORTANT: if a specific semantic layer was not found, check for Saved Questions by running `call_tool({"name": "fa__list__saved_queries", "arguments": {}})` to get a list of existing questions and descriptions saved on the Data Warehouse. Use `call_tool({"name": "fa__get__saved_query", "arguments": {"name": "<query_name>"}})` to retrieve the SQL of a matching saved query, where `<query_name>` is the `name` field returned by `fa__list__saved_queries`.
 
 ## Step 3 — Execute the Query
 
@@ -140,9 +140,9 @@ The file contains the SQL query, column reference, and presentation rules for th
 
 Use the MCP commands in sequence:
 
-1. **Browse tables:** `fetch("dwh:list:tables", {"schema": "FUND_ADMIN"})`
-2. **Inspect schema:** `fetch("dwh:get:table_schema", {"table_name": "<TABLE>", "schema": "FUND_ADMIN"})`
-3. **Run the query:** `fetch("dwh:execute:query", {"sql": "..."})`
+1. **Browse tables:** `call_tool({"name": "dwh__list__tables", "arguments": {"schema": "FUND_ADMIN"}})`
+2. **Inspect schema:** `call_tool({"name": "dwh__get__table_schema", "arguments": {"table_name": "<TABLE>", "schema": "FUND_ADMIN"}})`
+3. **Run the query:** `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "..."}})`
 
 ** Schema: ** Use the schema matching the domain identified in Step 1. For most queries use `FUND_ADMIN`. For Loan Ops queries, use `LOAN_OPS` instead of `FUND_ADMIN` in every command above.
 **Output format:** Present results as a markdown table. Use fund or company names as row headers — never raw UUIDs. Currency values use `$X,XXX` format with commas; percentages use `X.XX%`. Bold totals and summary rows.

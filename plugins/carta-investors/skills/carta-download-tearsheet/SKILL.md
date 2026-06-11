@@ -7,7 +7,7 @@ description: >
 version: 1.2.1
 model: haiku
 allowed-tools:
-  - mcp__carta__fetch
+  - mcp__carta__call_tool
   - mcp__carta__list_contexts
   - mcp__carta__set_context
   - AskUserQuestion
@@ -50,11 +50,11 @@ to the appropriate workflow based on the selection:
 
 | MCP Command | Purpose |
 |-------------|---------|
-| `fetch("fa:list:tearsheet_templates", {})` | List available PDF templates for the firm |
-| `fetch("fa:list:portfolio_companies", {})` | List all portfolio companies with their fund groupings |
-| `fetch("fa:mutate:download_all_tearsheets", {...})` | Start an async job for all portcos (fast path) |
-| `fetch("fa:mutate:start_tearsheet_download", {...})` | Start an async bulk job for a specific portco subset |
-| `fetch("fa:get:tearsheet_download_status", {})` | Poll for async job completion; returns `"pending"` or a download URL |
+| `call_tool({"name": "fa__list__tearsheet_templates", "arguments": {}})` | List available PDF templates for the firm |
+| `call_tool({"name": "fa__list__portfolio_companies", "arguments": {}})` | List all portfolio companies with their fund groupings |
+| `call_tool({"name": "fa__mutate__download_all_tearsheets", "arguments": {...}})` | Start an async job for all portcos (fast path) |
+| `call_tool({"name": "fa__mutate__start_tearsheet_download", "arguments": {...}})` | Start an async bulk job for a specific portco subset |
+| `call_tool({"name": "fa__get__tearsheet_download_status", "arguments": {}})` | Poll for async job completion; returns `"pending"` or a download URL |
 
 ## Gate 0: Firm Context
 
@@ -73,7 +73,7 @@ You do not need to ask the user for a firm UUID — the MCP session tracks the a
 Call:
 
 ```
-fetch("fa:list:tearsheet_templates", {})
+call_tool({"name": "fa__list__tearsheet_templates", "arguments": {}})
 ```
 
 **If the user mentioned a document name** (e.g. "Investment Summary", "Fund Summary",
@@ -111,7 +111,7 @@ Store as `TEMPLATE_UUID` (the template `id`) and `TEMPLATE_NAME`.
 Call:
 
 ```
-fetch("fa:list:portfolio_companies", {})
+call_tool({"name": "fa__list__portfolio_companies", "arguments": {}})
 ```
 
 The command returns an array of portfolio companies. Each item includes `name`,
@@ -165,14 +165,14 @@ Proceed? (yes/no)
 Start the bulk job using the download-all command:
 
 ```
-fetch("fa:mutate:download_all_tearsheets", {
+call_tool({"name": "fa__mutate__download_all_tearsheets", "arguments": {
   "template_uuid": "<TEMPLATE_UUID>"
-})
+}})
 ```
 
 Tell the user the job has started and polling will begin.
 
-**Poll for completion** — call `fetch("fa:get:tearsheet_download_status", {})` every 30 seconds, up to
+**Poll for completion** — call `call_tool({"name": "fa__get__tearsheet_download_status", "arguments": {}})` every 30 seconds, up to
 10 attempts (5 minutes total):
 
 - Response is `"pending"` → print progress ("Still processing... (attempt N/10)") and wait.
@@ -226,15 +226,15 @@ Proceed? (yes/no)
 Start the bulk job:
 
 ```
-fetch("fa:mutate:start_tearsheet_download", {
+call_tool({"name": "fa__mutate__start_tearsheet_download", "arguments": {
   "template_uuid": "<TEMPLATE_UUID>",
   "fund_breakdowns": <FUND_BREAKDOWNS>
-})
+}})
 ```
 
 Tell the user the job has started and polling will begin.
 
-**Poll for completion** — call `fetch("fa:get:tearsheet_download_status", {})` every 15 seconds, up to
+**Poll for completion** — call `call_tool({"name": "fa__get__tearsheet_download_status", "arguments": {}})` every 15 seconds, up to
 20 attempts (5 minutes total):
 
 - Response is `"pending"` → print progress ("Still processing... (attempt N/20)") and wait.

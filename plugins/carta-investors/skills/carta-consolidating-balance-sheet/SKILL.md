@@ -7,15 +7,15 @@ allowed-tools:
   # MCP connector discovery (Claude for Excel runtime tool — used first in Gate 0)
   - refresh_mcp_connectors
   # Production
-  - mcp__claude_ai_Carta__fetch
+  - mcp__claude_ai_Carta__call_tool
   - mcp__claude_ai_Carta__welcome
   - mcp__claude_ai_Carta__set_context
   # Carta-installer naming (lowercase)
-  - mcp__carta_production__fetch
+  - mcp__carta_production__call_tool
   - mcp__carta_production__welcome
   - mcp__carta_production__set_context
   # Local / legacy fallback
-  - mcp__carta__fetch
+  - mcp__carta__call_tool
   - mcp__carta__welcome
   - mcp__carta__set_context
   - Read
@@ -139,21 +139,21 @@ If none connected, list `failed` connectors and stop. If multiple, default to `C
 
 ## Gate 1: Resolve the firm and its entities
 
-1. `fetch(command="contexts:list", params={"firm_name": "<FIRM>"})` to find
+1. `call_tool({"name": "contexts__list", "arguments": {"firm_name": "<FIRM>"}})` to find
    the firm. If multiple matches, present them via `AskUserQuestion` and
    confirm.
 2. `set_context(firm_id=<uuid>)` to scope the session.
-3. `fetch(command="fa:list:entities")` to enumerate **every** entity under
+3. `call_tool({"name": "fa__list__entities"})` to enumerate **every** entity under
    the firm.
 
 Prefer the granular tool when the server exposes it — one fewer hop, sidesteps `fetch`'s param-shape quirks:
 
 | Granular tool | Generic equivalent |
 |---|---|
-| `mcp__<SERVER>__list_contexts(firm_name="<entity>")` | `fetch(command="contexts:list", params={"firm_name": "<entity>"})` |
-| `mcp__<SERVER>__set_context(firm_id="<uuid>")` | `fetch(command="set_context", params={"firm_id": "<uuid>"})` |
+| `mcp__<SERVER>__list_contexts(firm_name="<entity>")` | `call_tool({"name": "contexts__list", "arguments": {"firm_name": "<entity>"}})` |
+| `mcp__<SERVER>__set_context(firm_id="<uuid>")` | `call_tool({"name": "set_context", "arguments": {"firm_id": "<uuid>"}})` |
 
-For DWH queries (`dwh:execute:query`, `dwh:list:tables`, `dwh:get:table_schema`) there is **no granular equivalent** — always go through `fetch(command="…", params={…})`.
+For DWH queries (`dwh:execute:query`, `dwh:list:tables`, `dwh:get:table_schema`) there is **no granular equivalent** — always go through `call_tool({"name": "…", "arguments": {…}})`.
 
 Each entity returned from step 3 (`fa:list:entities`) has the display name, `entity_id`, and a type field (e.g. `entity_type` — usually one of `FUND`, `GP`, `MANAGEMENT_COMPANY`, `SPV`, `HOLDING`, depending on the firm's structure). Cache the full list — Gate 2 reads from it.
 
@@ -264,7 +264,7 @@ Supported `format` values for `dwh:execute:query`:
 - `ndjson` — best for large results processed by code/agent.
 - `csv` is NOT supported. Do not try it.
 
-Run via `fetch(command="dwh:execute:query", params={"sql": "..."})`.
+Run via `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "..."}})`.
 SELECT-only.
 
 **Period-only variant** (`EFFECTIVE_DATE BETWEEN <month_start> AND
@@ -282,7 +282,7 @@ The number format in `references/formatting.md` is built from `<fund_currency>` 
 resolve it here, do **not** assume USD:
 
 1. Probe the journal-entries table for a currency column:
-   `fetch(command="dwh:get:table_schema", params={"table_name": "<journal_entries_table>"})`.
+   `call_tool({"name": "dwh__get__table_schema", "arguments": {"table_name": "<journal_entries_table>"}})`.
    If it exposes a currency column (e.g. `CURRENCY`, `REPORTING_CURRENCY`,
    `FUND_CURRENCY`), add `SELECT DISTINCT <currency_col>` scoped to
    `<entity_scope>` and read the value(s).

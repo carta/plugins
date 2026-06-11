@@ -7,15 +7,15 @@ allowed-tools:
   # MCP connector discovery (Claude for Excel runtime tool — used first in Gate 0)
   - refresh_mcp_connectors
   # Production
-  - mcp__claude_ai_Carta__fetch
+  - mcp__claude_ai_Carta__call_tool
   - mcp__claude_ai_Carta__welcome
   - mcp__claude_ai_Carta__set_context
   # Carta-installer naming (lowercase)
-  - mcp__carta_production__fetch
+  - mcp__carta_production__call_tool
   - mcp__carta_production__welcome
   - mcp__carta_production__set_context
   # Local / legacy fallback
-  - mcp__carta__fetch
+  - mcp__carta__call_tool
   - mcp__carta__welcome
   - mcp__carta__set_context
   - Read
@@ -123,7 +123,7 @@ If none connected, list `failed` connectors and stop. If multiple, default to `C
 
 ## Gate 1: Resolve firm
 
-1. `fetch(command="contexts:list", params={"firm_name": "<FIRM>"})`. Multiple matches → `AskUserQuestion`. Wait for confirmation.
+1. `call_tool({"name": "contexts__list", "arguments": {"firm_name": "<FIRM>"}})`. Multiple matches → `AskUserQuestion`. Wait for confirmation.
 2. `set_context(firm_id=<uuid>)`. Prefer granular tools when exposed.
 
 **DWH param-name traps:** `dwh:execute:query` takes `sql:` not `query:`. `dwh:get:table_schema` takes `table_name:` not `table:`. `format` accepts `"ndjson"` / `"markdown"`, not `"csv"`.
@@ -166,7 +166,7 @@ ORDER BY 1, 2
 
 Queries > 50 rows: request `format: "ndjson"`, bucket into a blob. Don't paste large results — triggers `context_snip`. Use `"markdown"` only for ≤50-row previews.
 
-Run via `fetch(command="dwh:execute:query", params={"sql": "..."})`.
+Run via `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "..."}})`.
 SELECT-only.
 
 **Critical**: no `FUND_NAME` filter. The GROUP BY on `ACCOUNT_TYPE,

@@ -7,15 +7,15 @@ allowed-tools:
   # MCP connector discovery (Claude for Excel runtime tool — used first in Gate 0)
   - refresh_mcp_connectors
   # Production
-  - mcp__claude_ai_Carta__fetch
+  - mcp__claude_ai_Carta__call_tool
   - mcp__claude_ai_Carta__welcome
   - mcp__claude_ai_Carta__set_context
   # Carta-installer naming (lowercase)
-  - mcp__carta_production__fetch
+  - mcp__carta_production__call_tool
   - mcp__carta_production__welcome
   - mcp__carta_production__set_context
   # Local / legacy fallback
-  - mcp__carta__fetch
+  - mcp__carta__call_tool
   - mcp__carta__welcome
   - mcp__carta__set_context
   - AskUserQuestion
@@ -111,7 +111,7 @@ Do not ask "which firm?" or "which runtime?" when those are already established 
 
 If none connected, list `failed` connectors and stop. If multiple, default to `Carta` (production).
 
-**Resolve firm:** if user named one → `fetch(command="contexts:list", params={"firm_name": "<entity>"})` → disambiguate via `AskUserQuestion` if multiple → `set_context(firm_id=<uuid>)`.
+**Resolve firm:** if user named one → `call_tool({"name": "contexts__list", "arguments": {"firm_name": "<entity>"}})` → disambiguate via `AskUserQuestion` if multiple → `set_context(firm_id=<uuid>)`.
 
 **DWH param-name traps:** `dwh:execute:query` takes `sql:` not `query:`. `dwh:get:table_schema` takes `table_name:` not `table:`. `format` accepts `"ndjson"` / `"markdown"`, not `"csv"`.
 
@@ -227,7 +227,7 @@ workflow. **Immediately call `read_skill` for the chosen layout — do not recon
 ### Probe 1 — Detect the JSON-vs-flat path
 
 ```
-fetch(command="dwh:execute:query", params={
+call_tool({"name": "dwh__execute__query", "arguments": {
   "sql": "SELECT
             COUNT_IF(REPORTING_TAGS_JSON IS NOT NULL) AS json_rows,
             COUNT_IF(REPORTING_TAGS IS NOT NULL)      AS flat_rows
@@ -235,7 +235,7 @@ fetch(command="dwh:execute:query", params={
           WHERE FUND_NAME = '<entity_name>'
             AND EFFECTIVE_DATE >= DATEADD('year', -1, CURRENT_DATE)",
   "format": "markdown"
-})
+}})
 ```
 
 - `json_rows > 0` → **JSON path**. Skip Probe 2 — go directly to Probe 3 (JSON path). Probe 3 returns both category names and cardinality in one query, making a separate category-discovery query redundant.
@@ -248,7 +248,7 @@ Run **one** query that returns the value count per category (used to drive the w
 
 **JSON path:**
 ```
-fetch(command="dwh:execute:query", params={
+call_tool({"name": "dwh__execute__query", "arguments": {
   "sql": "SELECT f.key::TEXT AS category, COUNT(DISTINCT f.value::TEXT) AS n_values
           FROM <journal_entries_table>,
                LATERAL FLATTEN(input => REPORTING_TAGS_JSON) f
@@ -258,19 +258,19 @@ fetch(command="dwh:execute:query", params={
           GROUP BY 1
           ORDER BY 1",
   "format": "markdown"
-})
+}})
 ```
 
 **Flat path:**
 ```
-fetch(command="dwh:execute:query", params={
+call_tool({"name": "dwh__execute__query", "arguments": {
   "sql": "SELECT 'Reporting Tag' AS category, COUNT(DISTINCT REPORTING_TAGS) AS n_values
           FROM <journal_entries_table>
           WHERE FUND_NAME = '<entity_name>'
             AND REPORTING_TAGS IS NOT NULL
             AND EFFECTIVE_DATE >= DATEADD('year', -1, CURRENT_DATE)",
   "format": "markdown"
-})
+}})
 ```
 
 Store `<CATEGORIES>` as the sorted list of distinct `category` values returned, and store `<CARDINALITY>` as the map of `category → n_values`. (Probe 3 returns both in one pass — no separate Probe 2 needed.) Compute the **total column count**:

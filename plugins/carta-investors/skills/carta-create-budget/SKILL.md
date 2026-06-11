@@ -7,15 +7,15 @@ allowed-tools:
   # MCP connector discovery (Claude for Excel runtime tool — used first in Gate 0)
   - refresh_mcp_connectors
   # Production
-  - mcp__claude_ai_Carta__fetch
+  - mcp__claude_ai_Carta__call_tool
   - mcp__claude_ai_Carta__welcome
   - mcp__claude_ai_Carta__set_context
   # Carta-installer naming (lowercase)
-  - mcp__carta_production__fetch
+  - mcp__carta_production__call_tool
   - mcp__carta_production__welcome
   - mcp__carta_production__set_context
   # Local / legacy fallback
-  - mcp__carta__fetch
+  - mcp__carta__call_tool
   - mcp__carta__welcome
   - mcp__carta__set_context
   - AskUserQuestion
@@ -123,7 +123,7 @@ Do not ask "which firm?" or "which runtime?" when those are already established 
 The Carta MCP exposes three top-level tools: `welcome`, `fetch`, `set_context`. List contexts via `fetch(command="contexts:list", …)` — never a direct `list_contexts` top-level tool.
 
 If the user named a firm:
-1. `fetch(command="contexts:list", params={"firm_name": "<entity>"})`.
+1. `call_tool({"name": "contexts__list", "arguments": {"firm_name": "<entity>"}})`.
 2. Multiple matches → `AskUserQuestion` to disambiguate.
 3. `set_context(firm_id=<uuid>)`. **Do not skip this step — DWH queries scope to the active context. Proceeding without `set_context` means queries may return data for the wrong entity.**
 

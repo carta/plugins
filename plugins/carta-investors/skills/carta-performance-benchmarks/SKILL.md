@@ -2,7 +2,7 @@
 name: carta-performance-benchmarks
 description: Compare a fund's performance against peer benchmark cohorts. Use when asked about fund benchmarks, peer comparison, percentile ranking, Net IRR vs peers, TVPI benchmarks, or how a fund stacks up against its cohort. Do NOT use for cap table market benchmarks (option pool sizes, SAFE terms, cap structure patterns — use carta-market-benchmarks in carta-cap-table). Do NOT use for general fund financial data queries or NAV — use carta-explore-data.
 allowed-tools:
-  - mcp__carta__fetch
+  - mcp__carta__call_tool
   - mcp__carta__list_contexts
   - mcp__carta__set_context
   - AskUserQuestion
@@ -57,7 +57,7 @@ Query the `FUND_ADMIN.TEMPORAL_FUND_COHORT_BENCHMARKS` table which contains fund
 
 ### SQL Query
 
-Execute this query with `fetch("dwh:execute:query", {"sql": "..."})`, substituting the user's fund name and optional filters:
+Execute this query with `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "..."}})`, substituting the user's fund name and optional filters:
 
 ```sql
 SELECT

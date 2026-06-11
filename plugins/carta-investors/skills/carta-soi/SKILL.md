@@ -5,12 +5,14 @@ version: 1.1.0
 model: haiku
 allowed-tools:
   # Carta MCP — registration prefix varies by host (Claude Code / Claude.ai / Cowork / public)
+  - mcp__carta__call_tool
   - mcp__carta__fetch
-  - mcp__carta__discover
+  - mcp__carta__discover  # UUID-form disambiguation only (Step 3) — not gateway discovery
   - mcp__carta__set_context
   - mcp__carta__list_contexts
+  - mcp__claude_ai_carta__call_tool
   - mcp__claude_ai_carta__fetch
-  - mcp__claude_ai_carta__discover
+  - mcp__claude_ai_carta__discover  # UUID-form disambiguation only (Step 3) — not gateway discovery
   - mcp__claude_ai_carta__set_context
   - mcp__claude_ai_carta__list_contexts
   # Cowork
@@ -79,7 +81,7 @@ With the firm list in hand:
 
 > **Run in parallel with Step 3.** Fund enumeration (this step) and MCP UUID discovery (Step 3) are fully independent — issue both tool batches concurrently in the same response, not sequentially. 
 
-Call `fetch("fa:list:entities", { entity_types: "fund,spv" })`. The filter excludes entity types that can't hold investments so it is critical. Capture the full `[{uuid, name}, ...]` list from the response.
+Call `call_tool({"name": "fa__list__entities", "arguments": { entity_types: "fund,spv" }})`. The filter excludes entity types that can't hold investments so it is critical. Capture the full `[{uuid, name}, ...]` list from the response.
 
 **Pick the initial fund** for the dropdown and capture two variables — `initial_fund_uuid` and `name_status` — that Step 6 will read by name.
 
@@ -102,7 +104,7 @@ Procedure:
 
 1. **Find the UUID-form Carta `fetch` tool.** Look for a tool matching `mcp__<UUID>__fetch` where `<UUID>` is the 8-4-4-4-12 hex format. `ToolSearch` with query `"fetch"` can help if the deferred-tools list is hard to scan. In most sessions there is exactly one such candidate — capture it.
 
-2. **If multiple UUID-form candidates exist** (e.g., both production and test Carta connectors are connected, or another MCP also uses a UUID prefix), disambiguate by calling `discover` on each candidate with `search: "dwh"` and picking the one that exposes `dwh:execute:query`. If two still pass (production + test Carta), ask the user via `AskUserQuestion`.
+2. **If multiple UUID-form candidates exist** (e.g., both production and test Carta connectors are connected, or another MCP also uses a UUID prefix), disambiguate by calling `mcp__<UUID>__discover({"search": "dwh"})` on each candidate and picking the one that exposes `dwh:execute:query`. If two still pass (production + test Carta), ask the user via `AskUserQuestion`.
 
 3. **Capture the chosen `mcp__<UUID>__fetch` string in a single local variable.** Reuse it as the fourth argument to the render script in Step 4 AND in `mcp_tools` at Step 5 (artifact allowlist). Step 5 also needs `mcp__<UUID>__set_context` — derive it from the fetch string by swapping the suffix, since both tools live on the same connector UUID. If any of these strings drift, the artifact loads but the corresponding MCP call fails with `"Tool ... is not in this artifact's mcp_tools allowlist."`.
 

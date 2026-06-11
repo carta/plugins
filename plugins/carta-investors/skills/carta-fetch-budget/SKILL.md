@@ -7,15 +7,15 @@ allowed-tools:
   # MCP connector discovery (Claude for Excel runtime tool — used first in Gate 0)
   - refresh_mcp_connectors
   # Production
-  - mcp__claude_ai_Carta__fetch
+  - mcp__claude_ai_Carta__call_tool
   - mcp__claude_ai_Carta__welcome
   - mcp__claude_ai_Carta__set_context
   # Carta-installer naming (lowercase)
-  - mcp__carta_production__fetch
+  - mcp__carta_production__call_tool
   - mcp__carta_production__welcome
   - mcp__carta_production__set_context
   # Local / legacy fallback
-  - mcp__carta__fetch
+  - mcp__carta__call_tool
   - mcp__carta__welcome
   - mcp__carta__set_context
   - AskUserQuestion
@@ -113,7 +113,7 @@ Do not ask "which firm?" when the entity is already established from the skill t
 
 If none connected, list `failed` connectors and stop. If multiple, default to `Carta` (production).
 
-**Resolve firm:** if user named one → `fetch(command="contexts:list", params={"firm_name": "<firm>"})` → disambiguate via `AskUserQuestion` if multiple → `set_context(firm_id=<uuid>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-fetch-budget"]})`. Prefer granular tools when exposed.
+**Resolve firm:** if user named one → `call_tool({"name": "contexts__list", "arguments": {"firm_name": "<firm>"}})` → disambiguate via `AskUserQuestion` if multiple → `set_context(firm_id=<uuid>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-fetch-budget"]})`. Prefer granular tools when exposed.
 
 **DWH param-name traps:** `dwh:execute:query` takes `sql:` not `query:`. `dwh:get:table_schema` takes `table_name:` not `table:`. `format` accepts `"ndjson"` / `"markdown"`, not `"csv"`.
 
@@ -257,7 +257,7 @@ and SPVs return empty from `fa:list:budgets`.
 
 **Call `read_skill(file_path="references/entity-picker.md")` before proceeding.** Do not reconstruct the picker logic from memory. Summary of the rule:
 
-1. Call `fetch(command="fa:list:entities")` against the active firm.
+1. Call `call_tool({"name": "fa__list__entities"})` against the active firm.
 2. Identify the ManCo(s) by name suffix / type field — anything matching
    `(LLC|Management|Mgmt|ManCo|Capital, LLC)` AND with no `Fund` /
    `Partners` / `SPV` qualifier.
@@ -353,11 +353,11 @@ the call with `"missing required params: ['fund_uuid']"` if the param
 isn't passed. `<ENTITY_UUID>` is the UUID locked at the end of Gate 2.
 
 ```
-fetch(command="fa:list:budgets", params={
+call_tool({"name": "fa__list__budgets", "arguments": {
   "fund_uuid":  "<ENTITY_UUID>",
   "start_date": "<YYYY-MM-01>",
   "end_date":   "<YYYY-MM-{28|29|30|31}>"
-})
+}})
 ```
 
 The param is named `fund_uuid` for historical reasons but it accepts any
