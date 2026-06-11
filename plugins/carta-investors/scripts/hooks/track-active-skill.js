@@ -6,9 +6,9 @@
  * The inject-instrumentation hook reads this list and includes it in
  * every MCP tool call for server-side telemetry.
  *
- * State file: /tmp/claude-carta-investors/<session_id>.json
- * Creates the session dir on write (mkdir -p) — investors has no
- * SessionStart bootstrap, so this hook owns directory creation.
+ * State file: ${CLAUDE_PLUGIN_DATA}/sessions/<session_id>.json
+ * init-data-dir.js (SessionStart) is the canonical owner of directory creation;
+ * this hook does mkdirSync only as a defensive fallback.
  *
  * Best effort — never blocks the Skill call.
  *

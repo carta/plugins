@@ -7,6 +7,11 @@
                         "type": "command",
                         "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks/inject-skill-context.js\"",
                         "timeout": 5
+                    },
+                    {
+                        "type": "command",
+                        "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks/init-data-dir.js\"",
+                        "timeout": 5
                     }
                 ]
             }
