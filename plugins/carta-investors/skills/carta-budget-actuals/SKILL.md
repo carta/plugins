@@ -95,7 +95,7 @@ Before Gate 0, check whether these context variables are already set from an ear
 - `<ENTITY_NAME>` and `<ENTITY_UUID>` — the resolved entity
 - `<RUNTIME>` — `excel-addin` or `local-file`
 
-**If all four are in context:** skip Gates 0 and 0.5 entirely. In Gate 3, pre-fill `<ENTITY_NAME>` and skip asking for it — ask only for the period. Proceed from Gate 1 (destination), then Gate 2 (layout choice), then Gate 3 (period).
+**If all four are in context:** skip Gates 0 and 0.5 entirely. Call `mcp__<SERVER>__set_context(firm_id=<ENTITY_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-budget-actuals"]})` to re-anchor the session scope and record this skill invocation. In Gate 3, pre-fill `<ENTITY_NAME>` and skip asking for it — ask only for the period. Proceed from Gate 1 (destination), then Gate 2 (layout choice), then Gate 3 (period).
 
 **If any is missing** (fresh session or cold invocation): run Gates 0 and 0.5 in order, then continue from Gate 1.
 
@@ -106,12 +106,13 @@ Do not ask "which firm?" or "which runtime?" when those are already established 
 ## Gate 0 — Carta MCP environment + resolve firm
 
 1. Call `refresh_mcp_connectors`. Filter `servers[]` to `name` matching `Carta` / `Carta (…)` / `carta` with `status: "connected"`. Drop `failed`.
-2. For each connected, probe both prefix forms in parallel: `mcp__claude_ai_Carta__welcome` and `mcp__carta__welcome`. First success = `<SERVER>`.
+2. For each connected, probe all three prefix forms in parallel: `mcp__claude_ai_Carta__welcome(_instrumentation={"plugin": "carta-investors", "skills": ["carta-budget-actuals"]})` , `mcp__carta_production__welcome(_instrumentation={"plugin": "carta-investors", "skills": ["carta-budget-actuals"]})`, and `mcp__carta__welcome(_instrumentation={"plugin": "carta-investors", "skills": ["carta-budget-actuals"]})`. First success = `<SERVER>`.
 3. **Don't call any other `mcp__<SERVER>__*` tool before `welcome`** — every command is gated.
 
 If none connected, list `failed` connectors and stop. If multiple, default to `Carta` (production).
 
-**Resolve firm:** if user named one → `call_tool({"name": "contexts__list", "arguments": {"firm_name": "<entity>"}})` → disambiguate via `AskUserQuestion` if multiple → `set_context(firm_id=<uuid>)`.
+**Resolve firm:** if user named one → `call_tool({"name": "contexts__list", "arguments": {"firm_name": "<entity>"}})` → disambiguate via `AskUserQuestion` if multiple → `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-budget-actuals"]})`. Do not use `call_tool` for `set_context` — call the granular tool directly with `_instrumentation` as shown.
+
 
 **DWH param-name traps:** `dwh:execute:query` takes `sql:` not `query:`. `dwh:get:table_schema` takes `table_name:` not `table:`. `format` accepts `"ndjson"` / `"markdown"`, not `"csv"`.
 
