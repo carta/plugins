@@ -103,7 +103,7 @@ Before Gate 0, check whether these context variables are already set from an ear
 - `<SERVER>` — connected Carta MCP server prefix
 - `<FIRM_NAME>` and `<FIRM_UUID>` — the resolved firm
 
-**If both are in context:** skip Gates 0 and 1 entirely. Proceed from Gate 2 (pull period blocks) using the firm already in context and the month from the user's prompt.
+**If both are in context:** skip Gate 0. Call `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-consolidating-pnl"]})` to re-anchor the session scope and record this skill invocation, then proceed from Gate 2 (pull period blocks) using the firm already in context and the month from the user's prompt.
 
 **If either is missing** (fresh session or cold invocation): run Gates 0 and 1 in order.
 
@@ -114,7 +114,7 @@ Do not ask "which firm?" when it is already established from the skill the user 
 ## Gate 0: Identify the Carta MCP environment
 
 1. Call `refresh_mcp_connectors`. Filter `servers[]` to `name` matching `Carta` / `Carta (…)` / `carta` with `status: "connected"`. Drop `failed`.
-2. For each connected, probe both prefix forms in parallel: `mcp__claude_ai_Carta__welcome` and `mcp__carta__welcome`. First success = `<SERVER>`.
+2. For each connected, probe all three prefix forms in parallel: `mcp__claude_ai_Carta__welcome(_instrumentation={"plugin": "carta-investors", "skills": ["carta-consolidating-pnl"]})` , `mcp__carta_production__welcome(_instrumentation={"plugin": "carta-investors", "skills": ["carta-consolidating-pnl"]})`, and `mcp__carta__welcome(_instrumentation={"plugin": "carta-investors", "skills": ["carta-consolidating-pnl"]})`. First success = `<SERVER>`.
 3. **Don't call any other `mcp__<SERVER>__*` tool before `welcome`** — every command is gated.
 
 If none connected, list `failed` connectors and stop. If multiple, default to `Carta` (production).
@@ -124,7 +124,7 @@ If none connected, list `failed` connectors and stop. If multiple, default to `C
 ## Gate 1: Resolve firm
 
 1. `call_tool({"name": "contexts__list", "arguments": {"firm_name": "<FIRM>"}})`. Multiple matches → `AskUserQuestion`. Wait for confirmation.
-2. `set_context(firm_id=<uuid>)`. Prefer granular tools when exposed.
+2. `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-consolidating-pnl"]})`. Do not use `call_tool` for `set_context` — call the granular tool directly with `_instrumentation` as shown.
 
 **DWH param-name traps:** `dwh:execute:query` takes `sql:` not `query:`. `dwh:get:table_schema` takes `table_name:` not `table:`. `format` accepts `"ndjson"` / `"markdown"`, not `"csv"`.
 
@@ -167,6 +167,7 @@ ORDER BY 1, 2
 Queries > 50 rows: request `format: "ndjson"`, bucket into a blob. Don't paste large results — triggers `context_snip`. Use `"markdown"` only for ≤50-row previews.
 
 Run via `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "..."}})`.
+
 SELECT-only.
 
 **Critical**: no `FUND_NAME` filter. The GROUP BY on `ACCOUNT_TYPE,
