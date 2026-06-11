@@ -119,7 +119,7 @@ Before Gate 0, check whether these context variables are already set from an ear
 - `<SERVER>` — connected Carta MCP server prefix
 - `<FIRM_NAME>` and `<FIRM_UUID>` — the resolved firm
 
-**If both are in context:** skip Gate 0 entirely. In Gate 1, skip the `contexts:list` lookup — but still call `set_context(firm_id=<FIRM_UUID>)` with the already-known UUID to re-anchor the MCP session scope (a prior skill's scope can be reset by a new turn or connector refresh between invocations), then proceed to `fa:list:entities` to enumerate entities for Gate 2.
+**If both are in context:** skip Gate 0 entirely. In Gate 1, skip the `contexts:list` lookup — but still call `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-consolidating-balance-sheet"]})` to re-anchor the MCP session scope and record this skill invocation, then proceed to `fa:list:entities` to enumerate entities for Gate 2.
 
 **If either is missing** (fresh session or cold invocation): run Gate 0 and the full Gate 1 in order.
 
@@ -130,7 +130,7 @@ Do not ask "which firm?" when it is already established from the skill the user 
 ## Gate 0: Identify the Carta MCP environment
 
 1. Call `refresh_mcp_connectors`. Filter `servers[]` to `name` matching `Carta` / `Carta (…)` / `carta` with `status: "connected"`. Drop `failed`.
-2. For each connected candidate, probe both prefix forms in parallel: `mcp__claude_ai_Carta__welcome` and `mcp__carta__welcome`. First success = `<SERVER>`.
+2. For each connected candidate, probe all three prefix forms in parallel: `mcp__claude_ai_Carta__welcome(_instrumentation={"plugin": "carta-investors", "skills": ["carta-consolidating-balance-sheet"]})` , `mcp__carta_production__welcome(_instrumentation={"plugin": "carta-investors", "skills": ["carta-consolidating-balance-sheet"]})`, and `mcp__carta__welcome(_instrumentation={"plugin": "carta-investors", "skills": ["carta-consolidating-balance-sheet"]})`. First success = `<SERVER>`.
 3. **Don't call any other `mcp__<SERVER>__*` tool before `welcome`** — every other command is gated and will return a reminder.
 
 If none connected, list `failed` connectors and stop. If multiple, default to `Carta` (production). Don't probe every prefix in `allowed-tools` — only `connected` ones.
@@ -142,7 +142,7 @@ If none connected, list `failed` connectors and stop. If multiple, default to `C
 1. `call_tool({"name": "contexts__list", "arguments": {"firm_name": "<FIRM>"}})` to find
    the firm. If multiple matches, present them via `AskUserQuestion` and
    confirm.
-2. `set_context(firm_id=<uuid>)` to scope the session.
+2. `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-consolidating-balance-sheet"]})` to scope the session. Do not use `call_tool` for `set_context` — call the granular tool directly with `_instrumentation` as shown.
 3. `call_tool({"name": "fa__list__entities"})` to enumerate **every** entity under
    the firm.
 
