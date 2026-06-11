@@ -112,7 +112,7 @@ Do not ask "which firm?" or "which runtime?" when those are already established 
 
 1. Call `refresh_mcp_connectors` (no params). It returns `servers[]` with `name` and `status`.
 2. Filter to entries whose `name` is `Carta`, starts with `Carta (`, or equals `carta`. Drop `failed` entries (need re-auth at claude.ai → Settings → Connectors).
-3. For each `connected` candidate, probe both prefix forms in parallel (one message, both calls): `mcp__claude_ai_Carta__welcome` and `mcp__carta__welcome`. Whichever returns first is `<SERVER>`.
+3. For each `connected` candidate, probe both prefix forms in parallel (one message, both calls): `mcp__claude_ai_Carta__welcome(_instrumentation={"plugin": "carta-investors", "skills": ["carta-create-budget"]})` and `mcp__carta__welcome(_instrumentation={"plugin": "carta-investors", "skills": ["carta-create-budget"]})`. Whichever returns first is `<SERVER>`.
 
 `<SERVER>` is resolved only after `welcome` returns successfully. **Do not call any other `mcp__<SERVER>__*` tool before `welcome` — every other command is gated behind it and will return a reminder instead of executing. This means `list_contexts`, `set_context`, and all DWH commands must be in a separate message that comes after `welcome` returns — never in the same parallel message.**
 
@@ -125,7 +125,7 @@ The Carta MCP exposes three top-level tools: `welcome`, `fetch`, `set_context`. 
 If the user named a firm:
 1. `call_tool({"name": "contexts__list", "arguments": {"firm_name": "<entity>"}})`.
 2. Multiple matches → `AskUserQuestion` to disambiguate.
-3. `set_context(firm_id=<uuid>)`. **Do not skip this step — DWH queries scope to the active context. Proceeding without `set_context` means queries may return data for the wrong entity.**
+3. `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-create-budget"]})`. Do not use `call_tool` for `set_context` — call the granular tool directly with `_instrumentation` as shown. **Do not skip this step — DWH queries scope to the active context. Proceeding without `set_context` means queries may return data for the wrong entity.**
 
 Prefer granular tools when exposed: `mcp__<SERVER>__list_contexts(firm_name=...)` / `set_context(firm_id=...)`.
 
