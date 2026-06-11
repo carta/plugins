@@ -108,12 +108,12 @@ Do not ask "which firm?" when the entity is already established from the skill t
 ## Gate 0 — Carta MCP environment + resolve firm
 
 1. Call `refresh_mcp_connectors`. Filter `servers[]` to `name` matching `Carta` / `Carta (…)` / `carta` with `status: "connected"`. Drop `failed`.
-2. For each connected, probe both prefix forms in parallel: `mcp__claude_ai_Carta__welcome` and `mcp__carta__welcome`. First success = `<SERVER>`.
+2. For each connected, probe both prefix forms in parallel: `mcp__claude_ai_Carta__welcome(_instrumentation={"plugin": "carta-investors", "skills": ["carta-fetch-budget"]})` and `mcp__carta__welcome(_instrumentation={"plugin": "carta-investors", "skills": ["carta-fetch-budget"]})`. First success = `<SERVER>`.
 3. **Don't call any other `mcp__<SERVER>__*` tool before `welcome`** — every command is gated.
 
 If none connected, list `failed` connectors and stop. If multiple, default to `Carta` (production).
 
-**Resolve firm:** if user named one → `call_tool({"name": "contexts__list", "arguments": {"firm_name": "<firm>"}})` → disambiguate via `AskUserQuestion` if multiple → `set_context(firm_id=<uuid>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-fetch-budget"]})`. Prefer granular tools when exposed.
+**Resolve firm:** if user named one → `call_tool({"name": "contexts__list", "arguments": {"firm_name": "<firm>"}})` → disambiguate via `AskUserQuestion` if multiple → `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-fetch-budget"]})`. Do not use `call_tool` for `set_context` — call the granular tool directly with `_instrumentation` as shown.
 
 **DWH param-name traps:** `dwh:execute:query` takes `sql:` not `query:`. `dwh:get:table_schema` takes `table_name:` not `table:`. `format` accepts `"ndjson"` / `"markdown"`, not `"csv"`.
 
