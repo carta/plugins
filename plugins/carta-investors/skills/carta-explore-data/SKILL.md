@@ -128,7 +128,7 @@ The file contains the SQL query, column reference, and presentation rules for th
 >    in the Step 1 table, immediately call `AskUserQuestion` with focused options to
 >    resolve the ambiguity. Do **not** respond in prose first — go straight to
 >    `AskUserQuestion`.
-> 2. **Inspect the schema.** Use `fetch("dwh:get:table_schema", ...)` on any plausible
+> 2. **Inspect the schema.** Use `call_tool({"name": "dwh__get__table_schema", ...})` on any plausible
 >    table before referencing it in a query.
 > 3. **Ask up to 2 clarifying questions.** If, after checking saved queries (Step 2)
 >    and schema inspection, you still cannot identify the right table or domain, use
@@ -151,7 +151,7 @@ Use the MCP commands in sequence:
 
 - **Always include LIMIT** — default `LIMIT 200`; use 50–500 for aggregations
 - **Only SELECT** — no INSERT, UPDATE, DELETE, or DDL
-- **Do not query `INFORMATION_SCHEMA`** — it is not supported in this data warehouse; use the semantic layer files and `fetch("dwh:list:tables", ...)` / `fetch("dwh:get:table_schema", ...)` instead
+- **Do not query `INFORMATION_SCHEMA`** — it is not supported in this data warehouse; use the semantic layer files and `call_tool({"name": "dwh__list__tables", ...})` / `call_tool({"name": "dwh__get__table_schema", ...})` instead
 - **Date fields** — `effective_date` for `JOURNAL_ENTRIES`; `month_end_date` for `MONTHLY_NAV_CALCULATIONS`; `investment_date` for `AGGREGATE_INVESTMENTS`
 - **Deduplication** — for `MONTHLY_NAV_CALCULATIONS` and `AGGREGATE_FUND_METRICS`, use `QUALIFY ROW_NUMBER() OVER (PARTITION BY fund_uuid ORDER BY last_refreshed_at DESC) = 1`
 - **ALLOCATIONS has multiple rows per fund** — always `GROUP BY fund_uuid` with `MAX(fund_name)` when using it for fund metadata
