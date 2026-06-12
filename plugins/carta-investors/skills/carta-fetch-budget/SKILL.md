@@ -1,7 +1,7 @@
 ---
 name: carta-fetch-budget
 model: opus
-description: 'Pull a ManCo budget from Carta and write it to an Excel workbook with monthly amounts and subtotals. TRIGGER: pull/fetch/import/sync Carta budget for a ManCo. NOT: new budgets, actuals refresh, pacing, scenarios, P&L, balance sheet.'
+description: 'Pull a ManCo budget from Carta and write it to an Excel workbook with monthly amounts and subtotals. TRIGGER: pull/fetch/import/sync Carta budget for a ManCo. NOT: pull/fetch/get actuals (carta-budget-actuals), new budgets (carta-create-budget), actuals refresh, pacing, scenarios, P&L, balance sheet.'
 version: 1.0.2
 allowed-tools:
   # MCP connector discovery (Claude for Excel runtime tool — used first in Gate 0)

@@ -1,7 +1,7 @@
 ---
 name: carta-budget-actuals
 model: opus
-description: 'Write actuals into an existing Excel budget workbook from Carta MCP — add/interleave Budget/Actual/Variance columns or a tag-view tab. TRIGGER: refresh/sync/add actuals, interleave Budget/Actual/Variance, actuals by department/cost center/tag, add next month/period column, extend budget through [month]. NOT: pacing or "how are we doing"/variance-analysis questions (carta-budget-vs-actuals), new budgets (carta-create-budget), fetch-budget, scenarios, consolidating P&L / balance sheet.'
+description: 'Write actuals into an existing Excel budget workbook from Carta MCP — add/interleave Budget/Actual/Variance columns or a tag-view tab. TRIGGER: pull/fetch/get/retrieve/refresh/sync/add actuals for [firm/ManCo], interleave Budget/Actual/Variance, actuals by department/cost center/tag, add next month/period column, extend budget through [month]. NOT: pacing or "how are we doing"/variance-analysis questions (carta-budget-vs-actuals), new budgets (carta-create-budget), fetch-budget, scenarios, consolidating P&L / balance sheet.'
 version: 1.0.1
 allowed-tools:
   # MCP connector discovery (Claude for Excel runtime tool — used first in Gate 0)
