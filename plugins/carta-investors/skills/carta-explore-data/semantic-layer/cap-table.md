@@ -273,6 +273,34 @@ One row per (corporation, firm, fund, as_of_date). Source for Query B.
 | `FULLY_DILUTED` | Corporation's total fully-diluted share count at the snapshot date (NUMBER, NOT a boolean — this is the denominator backing `PERCENTAGE`) |
 | `OWNERSHIP_QUANTITY` | Number of shares the fund holds |
 
+### FINANCING_HISTORY
+One row per financing round per company. Used by Query A (joined on `CORPORATION_ID`) for round price/date, **and** directly when the user asks about financing rounds ("show financing rounds for [Company]", "how much has [Company] raised", "latest post-money for [Company]").
+
+> **Filter by company name with `INVESTMENT_NAME`** — e.g. `WHERE LOWER(INVESTMENT_NAME) LIKE '%stripe%'`. There is **no** `COMPANY_NAME`, `ISSUER_NAME`, `CORPORATION_NAME`, or `FIRM_ID` column on this table. To filter by company UUID use `CORPORATION_ID`. To scope by fund, join to `FUNDS` — there is no `FUND_NAME` or fund column here.
+
+| Column | Description |
+|--------|-------------|
+| `INVESTMENT_NAME` | Company (investee) name — **the column to filter by company** |
+| `CORPORATION_ID` | Company identifier (UUID) — join key to `SUMMARY_CAP_TABLE` / `CORPORATION_BASIC_INFO.CORPORATION_UUID` |
+| `SHARECLASS_NAME` | Share class for the round (NB: `SUMMARY_CAP_TABLE` calls the same concept `SECURITY_CLASS_NAME`) |
+| `ROUND` | Round label (e.g. "Series A") |
+| `RAISED_DATE` / `CLOSING_DATE` | Round raised / closing dates |
+| `ESTIMATED_CASH_RAISED` / `CALCULATED_CASH_RAISED` | Cash raised in the round (no `AMOUNT_RAISED` column — use these) |
+| `ORIGINAL_ISSUE_PRICE` | Issue price per share for the round |
+| `SHARES_ISSUED` / `FULLY_DILUTED_SHARES` | Share counts |
+| `POST_MONEY_VALUATION` / `PRE_MONEY_VALUATION` | Round valuations |
+
+### CORPORATION_BASIC_INFO
+Canonical company-name/identifier lookup. Join target for `FUND_CORPORATION_OWNERSHIP` (`FCO.CORPORATION_ID = CBI.CORPORATION_UUID`).
+
+> **The company-name column is `CORPORATION_NAME`; the UUID column is `CORPORATION_UUID`.** There is **no** `COMPANY_NAME`, `COMPANY_UUID`, `LEGAL_NAME`, `NAME`, or `ISSUER_NAME` column — those are the most common wrong guesses. Both `CORPORATION_BASIC_INFO` and `CORPORATION_BASIC_INFO_V2` expose the same name/UUID columns.
+
+| Column | Description |
+|--------|-------------|
+| `CORPORATION_NAME` | Company name — **filter by this** (`LOWER(CORPORATION_NAME) LIKE '%...%'`) |
+| `CORPORATION_UUID` | Company UUID — join key from `FUND_CORPORATION_OWNERSHIP.CORPORATION_ID` |
+| `CORPORATION_ID` | Integer company id (do not pass to UUID-keyed tables) |
+
 ## Common Aliases
 
 `CORPORATION_NAME`, `LEGAL_NAME`, `company_name`

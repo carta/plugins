@@ -124,6 +124,59 @@ ORDER BY moic DESC NULLS LAST
 LIMIT 50
 ```
 
+## Table: AGGREGATE_INVESTMENTS_HISTORY
+
+Point-in-time history of investment holdings. Use this — **not** `AGGREGATE_INVESTMENTS` — for "as of [past date]" / "what did the portfolio look like at year-end" / historical valuation-and-cost questions. Each row is a holding state effective over a date range.
+
+> **This table is NOT a clone of `AGGREGATE_INVESTMENTS`.** It has **no `is_active_investment`, no `investment_date`, no `cost_basis`, and no `tags`** column — copying those filters over is the #1 source of errors. "Active as of date X" is expressed with the effective-date range below, not an `is_active_investment` flag.
+
+### Point-in-time filter (required pattern)
+
+To get the holding state as of a date `X`:
+
+```sql
+WHERE effective_date <= 'X'
+  AND (next_effective_date IS NULL OR next_effective_date > 'X')
+```
+
+`next_effective_date IS NULL` is the current/open state. Omit the date predicate entirely only when you want the full history.
+
+| Column | Description |
+|--------|-------------|
+| `fund_name` / `fund_uuid` | Investing fund |
+| `issuer_name` | Portfolio company (investee) — filter company by this |
+| `asset_name` | Specific asset (e.g. "Series A Preferred") |
+| `asset_class_type` | Asset classification |
+| `effective_date` | Date this holding state became effective |
+| `next_effective_date` | Date the next state begins; `NULL` = current/open state |
+| `event_types` | Transaction type(s) for the state change (e.g. proceeds, valuation) |
+| `total_cost` | Total capital invested |
+| `total_cost_basis` | Remaining cost basis (note: `total_cost_basis`, **not** `cost_basis`) |
+| `total_proceeds` | Cash from exits |
+| `remaining_value` | FMV of remaining holdings at this state |
+| `total_unrealized_gain_loss` | Unrealized gain/loss at this state |
+| `total_value` | Total value (realized + unrealized) |
+| `count_remaining_shares` | Shares/units held at this state |
+
+### Query 5 — Portfolio holdings as of a past date
+
+```sql
+SELECT
+    fund_name,
+    issuer_name,
+    asset_class_type,
+    total_cost,
+    total_cost_basis,
+    remaining_value,
+    total_unrealized_gain_loss,
+    ROUND(total_value / NULLIF(total_cost, 0), 2) AS gross_moic
+FROM FUND_ADMIN.AGGREGATE_INVESTMENTS_HISTORY
+WHERE effective_date <= '{as_of_date}'
+  AND (next_effective_date IS NULL OR next_effective_date > '{as_of_date}')
+ORDER BY remaining_value DESC NULLS LAST
+LIMIT 200
+```
+
 ## Presentation
 
 1. **Lead with a summary** — "Your firm has N active investments across M portfolio companies with a combined value of $X"
