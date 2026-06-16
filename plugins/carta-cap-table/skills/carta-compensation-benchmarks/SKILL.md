@@ -280,7 +280,10 @@ If the user provides only a job title, that is sufficient minimum input for the 
 call_tool({"name": "compensation__get__subscription_status", "arguments": {"corporation_id": <corporation_pk>}})
 ```
 
-If `is_subscribed` is False, stop here and send the subscription message (see **Subscription gating** section below). Do not call `plans/` or `benchmark/` — they will return empty data anyway and waste a round-trip.
+Three outcomes:
+- `is_subscribed: true` → proceed to Step 3b.
+- `is_subscribed: false` → stop and send the subscription message (see **Subscription gating**). Do not call `plans/` or `benchmark/` — they return empty data anyway and waste a round-trip.
+- **403** → the caller lacks a CTC role on this corp. Stop and send the no-access message (see **Access gating**). Do not retry or re-authenticate.
 
 ### Step 3b — Fetch the corporation's active benchmark version + peer group
 
@@ -507,6 +510,42 @@ Always call `compensation:get:subscription_status` FIRST for every corporation y
 - ❌ Generating a CSV with empty rows when the corp isn't subscribed — that's a wasted file with no data.
 - ❌ Saying "the local test environment doesn't have benchmark data seeded" when the actual cause is "this corp doesn't have CTC". The agent's diagnosis is wrong, and the user-facing message conflates two unrelated problems.
 
+## Access gating (no-CTC-access vs. no-subscription)
+
+A `compensation:*` read can fail for two unrelated reasons that must NOT be conflated, because they have different remediations:
+
+- **No subscription** — the corporation doesn't have Carta Total Compensation. Remediation: a sales/demo conversation.
+- **No access** — the corporation HAS CTC, but the **current user** doesn't hold a CTC role on it (Company Viewer, Compensation Manager, Company Editor, Company Admin). A user can be a stakeholder, board member, or cap-table admin without any CTC role. Remediation: an internal role grant — NOT a sales conversation.
+
+> **You distinguish these — the MCP layer does not.** The carta MCP gateway is a thin, domain-agnostic adapter: when a compensation command hits a 403 it surfaces the raw error, it does NOT probe subscription state or compose a friendly message. The authoritative signal for the distinction is `compensation:get:subscription_status`: when it succeeds it returns `{corporation_id, is_subscribed}` — `false` is no-subscription, `true` means a later `plan`/`benchmark` 403 is no-access. When it *itself* returns a 403, that 403 is the signal: the caller lacks a CTC role, so it's no-access. Step 3a already calls it up front — use its result (or its 403) to classify, per the table below.
+
+**How to classify a failure:**
+
+| What you observe | Meaning | What to do |
+|---|---|---|
+| `subscription_status` → `is_subscribed: false` | No subscription | Follow **Subscription gating** — send the demo-link message, STOP. Do not call `plans/` or `benchmark/`. |
+| `subscription_status` → `is_subscribed: true`, but a later `plan`/`benchmark` read returns **403** | No access (corp has CTC, you lack a role) | Send the no-access message below, STOP. Do NOT show a demo link — the corp already has CTC. |
+| `subscription_status` itself returns **403** | No access (the 403 means you lack a CTC role on this corp) | Send the no-access message below, STOP. Treat a 403 on the status probe as no-access, not as "couldn't determine subscription". |
+
+**The no-access message (surface this verbatim):**
+
+> *"Your account doesn't have a CTC role for this corporation, contact a company admin for access"*
+
+This wording is deliberately neutral on subscription state: it's correct for both no-access rows above, including the `subscription_status`-403 case where the corp's subscription status is unknown (a 403 only establishes the caller lacks a CTC role, not that the corp has CTC). Do not assert that the corporation has Carta Total Compensation.
+
+> **HARD STOP RULE:** Both outcomes are FINAL. Do NOT re-authenticate, retry, or "try a different command to see if it works" — re-authentication issues a fresh token for the **same user** and does not grant a role they don't have. Do NOT generate a CSV/JSON file for that corp. No partial output.
+
+**Multi-corp / bulk query:** call `subscription_status` for each corp up front; for corps that come back `is_subscribed: true`, a subsequent benchmark 403 means no-access. Partition and surface the two failure classes separately:
+- *"The following corporations don't have an active CTC subscription and were excluded: [Corp A]."*
+- *"Your account doesn't have a CTC role for the following corporations, contact a company admin for access: [Corp B]."*
+
+### Anti-patterns to avoid
+
+- ❌ Treating the failure as a transient auth issue and asking the user to re-login. Re-authentication issues a fresh token for the **same user** — it does not grant a role they don't have.
+- ❌ Expecting the gateway to hand you a finished, user-ready message. It returns a raw sanitized 403 — YOU classify it using the `subscription_status` result and compose the message.
+- ❌ Showing a CTC product demo link for the access-denied case. The user needs an internal role grant, not a sales conversation — and on a `subscription_status` 403 you don't even know the corp lacks CTC, so a demo link would be a guess.
+- ❌ Treating a 403 on `subscription_status` as "subscription unknown, try the benchmark anyway". A 403 there means no-access — stop and send the no-access message.
+
 ## Error Handling
 
 | Symptom | Cause | Tell user |
@@ -514,8 +553,8 @@ Always call `compensation:get:subscription_status` FIRST for every corporation y
 | Rolematcher returns `UNKNOWN` for `job_area` | Role description too vague or not in CTC taxonomy | "Could you clarify the role? For example: job area (Engineering, Sales), seniority level, and whether it's an IC or manager track." |
 | Rolematcher returns `UNKNOWN` for `track` | Level is also UNKNOWN — no seniority signals present | "Is this an individual contributor (IC), manager, or executive role? This determines which benchmark track to use." |
 | Benchmark response has no data for role/level (subscribed corp) | Data coverage gap — no snapshot for that exact slice | "No benchmark data is available for [role] at [level] in this benchmark version. Want to try a different level or focus?" |
-| `compensation:get:subscription_status` returns `is_subscribed: false` | Corp doesn't have an active CTC subscription | See Step 3a — stop and send the subscription message. |
-| `compensation:get:benchmark` returns 403 | Caller lacks permission for that corporation | Re-authenticate via the MCP welcome flow and retry. If it persists, the user may not have access to this corporation's data. |
+| `compensation:get:subscription_status` returns `is_subscribed: false` | Corp doesn't have an active CTC subscription | See **Subscription gating** — stop and send the subscription message. |
+| `compensation:get:subscription_status` returns **403**, OR `is_subscribed: true` but a `plan`/`benchmark` read returns **403** | The current user lacks a CTC role on this corp | See **Access gating** — send the no-access message, stop. No demo link; do NOT re-authenticate (won't grant a missing role). |
 
 ## What next?
 
