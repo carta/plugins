@@ -22,11 +22,11 @@ HAVING signed_amount <> 0
 ORDER BY 1, 3;
 ```
 
-## Fetch shape — exact parameter names
+## Tool call shape — exact parameter names
 
 ```
-fetch(command="dwh:execute:query", params={"sql": "<SQL>", "format": "ndjson"})
-fetch(command="dwh:get:table_schema", params={"table_name": "<journal_entries_table>"})
+call_tool({"name": "dwh__execute__query", "arguments": {"sql": "<SQL>", "format": "ndjson"}})
+call_tool({"name": "dwh__get__table_schema", "arguments": {"table_name": "<journal_entries_table>"}})
 ```
 
 - Query parameter is `sql`, NOT `query`.

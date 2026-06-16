@@ -6,11 +6,11 @@ Carta's Fund Admin via the MCP `fa:list:budgets` command.
 ## Command shape
 
 ```
-fetch(command="fa:list:budgets", params={
+call_tool({"name": "fa__list__budgets", "arguments": {
   "fund_uuid":  "<ENTITY_UUID>",
   "start_date": "<YYYY-MM-DD>",
   "end_date":   "<YYYY-MM-DD>"
-})
+}})
 ```
 
 The parameter is named `fund_uuid` for historical reasons but it accepts

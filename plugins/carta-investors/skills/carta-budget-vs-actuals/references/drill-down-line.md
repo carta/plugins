@@ -44,10 +44,10 @@ ORDER BY EFFECTIVE_DATE DESC, AMOUNT DESC;
 Send it through the MCP with the exact parameter shape:
 
 ```
-fetch(command="dwh:execute:query", params={
+call_tool({"name": "dwh__execute__query", "arguments": {
   "sql":    "<SQL above>",
-  "format": "ndjson"   # use "markdown" only when you expect ≤50 rows
-})
+  "format": "ndjson"
+}})
 ```
 
 The query parameter is `sql`, not `query`. The description column is

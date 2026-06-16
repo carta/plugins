@@ -10,7 +10,7 @@ Only **management companies** carry budgets in Carta. Funds/SPVs return empty.
 
 ### A1. List entities
 
-`fetch(command="fa:list:entities")` → list of `{id, name, type, ...}`. Entity-type labels vary; don't hard-code exact match.
+`call_tool({"name": "fa__list__entities"})` → list of `{id, name, type, ...}`. Entity-type labels vary; don't hard-code exact match.
 
 ### A2. Classify (first-match-wins)
 
@@ -48,11 +48,11 @@ Exact (case-insensitive substring) match in `fa:list:entities` → skip picker. 
 ### B1. Command shape
 
 ```
-fetch(command="fa:list:budgets", params={
+call_tool({"name": "fa__list__budgets", "arguments": {
   "fund_uuid":  "<ENTITY_UUID>",
   "start_date": "<YYYY-MM-DD>",
   "end_date":   "<YYYY-MM-DD>"
-})
+}})
 ```
 
 Param is named `fund_uuid` but accepts any entity UUID. Pass the ManCo UUID from Part A.

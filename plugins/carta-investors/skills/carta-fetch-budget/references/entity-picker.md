@@ -10,7 +10,7 @@ others probably won't have a budget.
 ### 1. List entities under the active firm
 
 ```
-fetch(command="fa:list:entities")
+call_tool({"name": "fa__list__entities"})
 ```
 
 The response is a list of `{id, name, type, ...}` records — entity-type

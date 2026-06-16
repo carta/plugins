@@ -339,7 +339,7 @@ The `← recommended` marker goes inside the `description` field of option 2, no
 
 **Call `read_skill(file_path="references/fetch-budget-data.md")` before issuing any MCP calls.** Do not reconstruct the fetch contract from memory. Summary of the contract:
 
-- Issue **one `fetch(command="fa:list:budgets", ...)` call per month** for
+- Issue **one `call_tool({"name": "fa__list__budgets", ...})` call per month** for
   every month in the requested window. For a full-year pull this is
   exactly twelve calls (Jan 1–31, Feb 1–28/29, …, Dec 1–31). Issue all
   twelve in one parallel batch and merge the row lists. If your runtime
