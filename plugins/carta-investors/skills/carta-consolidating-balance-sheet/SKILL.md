@@ -386,22 +386,45 @@ open workbook or to create a new one.
    exposes at runtime) to see if there is a workbook open in front of the
    user.
 2. **If a workbook is open**:
-   - Read the workbook name and the list of existing sheet/tab names.
-   - Ask the user, via `AskUserQuestion`, whether you may add a new tab to
-     it. Phrase the question concretely so they know exactly what's about
-     to happen. Example:
+   - Read the workbook name and the full list of existing sheet/tab names.
+   - **Scan for a matching existing tab (COA label detection).** For each
+     existing tab, read all non-empty cell values from column B via
+     `execute_office_js`. Compare them against the `ACCOUNT_NAME` values
+     in the Gate 4 dataset. A tab is a **COA-label match** if ≥ 5 account
+     labels from the current query appear in that tab's column B. An
+     **exact-name match** is a tab whose name equals the proposed sheet
+     name (`Balance Sheet - <FIRM-SHORT> <MMM-YY>`). Check for
+     both — a renamed tab can match on labels even when its name differs.
+   - **If a matching tab is found (exact-name or COA-label):** ask the
+     user via `AskUserQuestion`, naming the matched tab explicitly:
+     > **"I found an existing tab `<matched_tab_name>` that appears to
+     > contain balance sheet data for this firm. What would you like to
+     > do?"**
+     > Options:
+     > - **"Update the existing `<matched_tab_name>` tab"** — clear and
+     >   rebuild it in place. ← recommended
+     > - **"Create a new tab instead"** — adds a new tab named
+     >   `Balance Sheet - <FIRM-SHORT> <MMM-YY>` (with a numeric suffix
+     >   like `(2)` if that name also already exists; truncate to Excel's
+     >   31-character limit after suffixing).
+     > - **"Cancel"** — stop the skill.
+   - **If no matching tab is found:** ask the user whether you may add a
+     new tab to the workbook. Example:
      > **"You have `<workbook name>.xlsx` open. May I add a new tab called
      > `Balance Sheet - Acme Mar-26` to it?"**
      > Options:
-     > - **"Yes, add the tab here"** — proceed with the active workbook
-     >   as the destination.
-     > - **"No, create a new workbook instead"** — create a fresh
-     >   workbook.
+     > - **"Yes, add the tab here"** — proceed with the active workbook.
+     > - **"No, create a new workbook instead"** — create a fresh workbook.
      > - **"Cancel"** — stop the skill.
-   - If the new sheet name would collide with an existing tab, append a
-     numeric suffix (`… Mar-26 (2)`) and mention the rename to the user
-     in Gate 8's report. Truncate to Excel's 31-character limit
-     **after** suffixing.
+   - **If the user picks "Update existing tab":** clear the matched tab's
+     used data range before writing:
+     ```javascript
+     const sheet = context.workbook.worksheets.getItem("<matched_tab_name>");
+     sheet.getUsedRange().clear();
+     await context.sync();
+     ```
+     Then proceed to Gate 7 using `<matched_tab_name>` as the target
+     sheet (the sheet already exists — do not call `create_sheet`).
 3. **If no workbook is open**:
    - Create a new workbook silently. Name it `Balance Sheet -
      <FIRM-SHORT> <MMM-YY>.xlsx` (e.g. `Balance Sheet - Acme

@@ -460,12 +460,46 @@ open workbook or to create a new one.
    |---|---|---|
    | **A. No workbook open** | Add-in reports no active workbook | Create a new workbook silently. Tell the user in one sentence that you created `P&L - <FIRM-SHORT> <MMM-YY>.xlsx` because nothing was open. |
    | **B. Empty workbook open** | One sheet, `maxRows == 0`, no data, no other tabs (e.g. a fresh `Book1.xlsx` / `Sheet1`) | Use it without asking. **Announce the rename** in one sentence before writing: *"I'll use the empty workbook you have open and rename `Sheet1` to `P&L - <FIRM-SHORT> <MMM-YY>`."* No `AskUserQuestion` is required for the empty case — asking adds friction with no decision to make. |
-   | **C. Non-empty workbook open** | Any sheet has data, OR more than one sheet exists | **Must ask via `AskUserQuestion`** before any write. Phrase concretely: *"You have `<workbook>.xlsx` open with N tabs. May I add `P&L - <FIRM-SHORT> <MMM-YY>` and `Summary P&L` to it?"* Options: `Yes, add tabs here` / `No, create a new workbook` / `Cancel`. |
+   | **C. Non-empty workbook open** | Any sheet has data, OR more than one sheet exists | Run the COA label scan described below, then ask. |
 
-   If the new sheet name would collide with an existing tab (case C),
-   append a numeric suffix (`… Mar-26 (2)`) and mention the rename to the
-   user in Gate 8's report. Truncate to Excel's 31-character limit
-   **after** suffixing.
+   **COA label detection (Case C only).** Before asking the user anything,
+   scan every existing tab for matching P&L content. For each tab, read
+   non-empty values from column B via `execute_office_js` and compare them
+   against the `ACCOUNT_NAME` values in the Gate 3 dataset. A tab is a
+   **COA-label match** if ≥ 5 account labels from the current query appear
+   in that tab's column B. An **exact-name match** is a tab whose name
+   equals the proposed detail-tab name (`P&L - <FIRM-SHORT> <MMM-YY>`).
+
+   - **If a matching tab is found (exact-name or COA-label):** ask via
+     `AskUserQuestion`, naming the matched tab explicitly:
+     > *"I found an existing tab `<matched_tab_name>` that appears to
+     > contain P&L data for this firm. What would you like to do?"*
+     > Options:
+     > - **"Update the existing `<matched_tab_name>` tab"** — clear and
+     >   rebuild it in place (also rebuild `Summary P&L` if present). ← recommended
+     > - **"Create new tabs instead"** — adds `P&L - <FIRM-SHORT> <MMM-YY>`
+     >   (and `Summary P&L`) as new tabs (with a numeric suffix like `(2)`
+     >   if those names also already exist; truncate to 31 chars after suffixing).
+     > - **"Cancel"** — stop the skill.
+     If the user picks **"Update existing tab"**, clear the matched tab's
+     used data range before writing:
+     ```javascript
+     const sheet = context.workbook.worksheets.getItem("<matched_tab_name>");
+     sheet.getUsedRange().clear();
+     await context.sync();
+     ```
+     Proceed to Gate 6 using `<matched_tab_name>` as the detail-tab target
+     (the sheet already exists — do not call `create_sheet`). Also clear
+     and reuse the existing `Summary P&L` tab if it is present; otherwise
+     create it fresh.
+   - **If no matching tab is found:** ask concretely via `AskUserQuestion`:
+     *"You have `<workbook>.xlsx` open with N tabs. May I add
+     `P&L - <FIRM-SHORT> <MMM-YY>` and `Summary P&L` to it?"*
+     Options: `Add P&L tabs to this workbook` / `Create a new workbook instead` / `Cancel`.
+   - If the user picks "Create new tabs" and the proposed name collides
+     with an existing tab, append a numeric suffix (`… Mar-26 (2)`) and
+     mention the rename in Gate 8's report. Truncate to Excel's 31-character
+     limit after suffixing.
 
 3. **If the user cancels** or denies edit permission for the active
    workbook **and** picks "Cancel": stop the skill cleanly. Don't fall
@@ -530,9 +564,9 @@ The rest of Gate 6 below applies.
 
 ### Approval-recorded check (run FIRST, before any write tool)
 
-Before calling `execute_office_js` with state-mutating code, `setValues`, `write_workbook.py`, or any other workbook-write tool, look back at your tool history. Find the most recent `AskUserQuestion` you sent. Does its answer literally include `"Approve and write"` (or the build-chooser option that maps to "Build it")? If NO, Gate 4 did not pass — send the Gate 4 approval menu now and wait for the explicit answer.
+Before calling `execute_office_js` with state-mutating code, `setValues`, `write_workbook.py`, or any other workbook-write tool, look back at your tool history. Find the most recent `AskUserQuestion` you sent. Does its answer correspond to one of the Gate 4 build-approval choices — **"Build both tabs (detail + Summary)"**, **"Build the detail tab only"**, or **"Build a tag-view tab"**? If NO, Gate 4 did not pass — send the Gate 4 approval menu now and wait for the explicit answer.
 
-**Do not interpret upstream answers as approval.** A budget-source response from the batched chooser, a firm-pick answer, or any prior `AskUserQuestion` whose answer is not literally a build-approval choice does NOT clear this gate.
+**Do not interpret upstream answers as approval.** A budget-source response from the batched chooser, a firm-pick answer, a destination-picker answer from Gate 5, or any prior `AskUserQuestion` whose answer is not literally one of the three build-approval choices listed above does NOT clear this gate.
 
 ### Gate 6 requires AT LEAST three separate `execute_office_js` calls (excel-addin runtime)
 
@@ -967,14 +1001,16 @@ Source: the Carta DWH journal-entries table. If column names are needed, look up
 
 Never auto-retry. Surface failures, let the user decide.
 
-- **No Carta MCP connected** → "Open Settings → Connectors, enable Carta, retry." List any `failed` Carta entries.
-- **`contexts:list` returns no firm** → echo name, ask for spelling.
-- **`contexts:list` returns multiple** → `AskUserQuestion`.
-- **DWH query returns 0 rows** → "No P&L activity for this firm through `<MMM YYYY>`. Check period or posting status."
-- **DWH timeout** → tell user it's slow, offer retry.
-- **Summary Net Income ≠ Detail Net Income** → surface as `⚠ Mismatch ($X)`, offer to rebuild Summary.
-- **Revenue accounts in unmatched Summary buckets** → surface empty buckets, ask whether to extend keyword list or accept zeros.
-- **Auth error** → ask user to reconnect Carta.
+| Symptom | Likely cause | What to tell the user |
+|---|---|---|
+| No Carta MCP connected | Connector not enabled in Claude settings | "Open **Settings → Connectors** in Claude, enable Carta, then ask me again." List any `failed` Carta entries. |
+| `contexts:list` returns no firm | Firm name spelling mismatch or not in scope | Echo the name back and ask for the correct spelling. Never near-match silently. |
+| `contexts:list` returns multiple firms | Common short name matches several firms | Show the candidates via `AskUserQuestion` and let the user pick. |
+| DWH query returns 0 rows | No P&L activity for the period, or books not posted | "No P&L activity found for this firm through `<MMM YYYY>`. Confirm the period or check whether books are posted." |
+| DWH query times out | DWH load or unusually large date range | Tell the user the query is slow and offer to retry with the same parameters — never auto-retry. |
+| Summary Net Income ≠ Detail Net Income | Formula error or row-reference map stale | Surface as `⚠ Mismatch ($X diff)` in Gate 8's Key tie-outs; offer to rebuild the Summary tab. |
+| Revenue accounts in unmatched Summary buckets | Keyword list doesn't cover the account name | Surface empty buckets; ask whether to extend the keyword list or accept zeros. |
+| Auth / permission error from MCP | Carta session expired or lacks DWH access | "Reconnect Carta in **Settings → Connectors**." Do not retry automatically. |
 
 ---
 
