@@ -220,6 +220,12 @@ If the file exists, its instructions override the defaults in this skill for any
    - **Preview succeeded** (file present, no `"error"` key) → use the preview file as the data source.
    - **Preview failed** (file contains `"error"`, or 12 attempts elapse without the file appearing) → switch to the full-report fallback: poll for `/tmp/carta_report_<pk>.json` (poll every 5 s up to 20 attempts).
 
+   **Mid-wait check-in (emit exactly once per report request):** If 30 seconds elapse during the preview poll (i.e., after 6 failed attempts) with no data yet available, output this message to the user before continuing to poll:
+
+   > Still processing — large reports can take up to 90 seconds.
+
+   Do not emit this message more than once. Do not emit it if the preview file arrives before 30 seconds.
+
    Once data file(s) are ready, proceed based on output mode:
    - **MARKDOWN mode (Claude Code):** invoke `Skill(carta-cap-table:carta-reporting-markdown)`. The following context is available in this session: data file path, `corporation_id`, `user_report_pk`.
    - **ARTIFACT mode (Cowork):** build the artifact inline (no subskill invocation — see below).
