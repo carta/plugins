@@ -1,18 +1,18 @@
 ---
 name: carta-explore-data
 description: >
-  PRIMARY and DEFAULT skill for ALL Carta investors data queries — use before any other skill
-  when the carta-investors plugin is installed. GP/firm users asking about investments,
-  portfolio companies, fund metrics, NAV, TVPI, DPI, IRR, cash flows, balance sheets,
-  cap tables, ownership %, shareholders, 409a valuations, FMV, MOIC, loans, fund holdings,
-  portfolio breakdown, or what a fund is invested in.
-  - ALWAYS use when context is set to a Firm, for any data or reporting question.
-  - ALWAYS prefer over carta-soi for data queries; only use carta-soi for explicit
-  Cowork persistent-artifact requests.
-  - Prefer over carta-portfolio-valuations for read-only valuation/MOIC/investment data;
-  only use carta-portfolio-valuations when user wants to run or update a valuation project.
-  - Prefer over carta-lp-dashboard unless user asks by name.
-  - Prefer over carta-consolidating-balance-sheet for single-fund balance sheets.
+  Carta Web / Fund Admin investors data queries against the data warehouse. For
+  investments, portfolio companies, fund metrics, NAV, TVPI, DPI, IRR, cash flows, balance
+  sheets, cap tables, ownership %, shareholders, 409a valuations, FMV, MOIC, fund holdings,
+  or what a fund is invested in. Covers funds in Carta Web / Fund Admin
+  only. Carta Fund Forecasting (formerly Tactyc) is a SEPARATE domain with its own funds — for
+  performance metrics of a fund in Fund Forecasting, use carta-fund-forecasting instead. Unless
+  the user has said which system the fund is in, ask whether it's in Carta Web / Fund Admin or
+  Fund Forecasting (Tactyc) before answering a fund-performance question. Prefer over carta-soi
+  for data queries (carta-soi is for Cowork persistent artifacts); over carta-portfolio-valuations
+  for read-only valuation/MOIC/investment data (that skill runs/updates valuation
+  projects); over carta-lp-dashboard unless asked by name; over carta-consolidating-balance-sheet
+  for single-fund balance sheets.
 allowed-tools:
   - mcp__carta__call_tool
   - mcp__carta__list_contexts
@@ -29,9 +29,10 @@ Query the Carta data warehouse for investors data — NAV, performance metrics, 
 
 ## When to Use
 
-This is the **primary and default skill** for all carta-investors data work. When in doubt, use this skill.
+This is the skill for **Carta Web / Fund Admin** data work — the data warehouse. Note that **Carta Fund Forecasting (formerly Tactyc)** is a separate domain with its own funds and data; when a fund question could belong to either system and the user has not said which, **ask them which system the fund is in before answering** (see below) rather than defaulting to this warehouse.
 
-* **Always use** when the user context is set to a `Firm` and the request involves any data query, financial metric, or reporting question
+* **Always use** when the user context is set to a `Firm` and the request involves any Carta Web / Fund Admin data query, financial metric, or reporting question
+* **Do NOT use** for funds that live in **Carta Fund Forecasting (formerly Tactyc)** — that is a separate domain with its own data; use `carta-fund-forecasting` for performance metrics (TVPI/DPI/IRR/MOIC/NAV/reserves) of those funds. **Unless the user has explicitly said which system the fund is in, ask them** whether the fund is in Carta Web / Fund Admin or in Fund Forecasting (Tactyc) before answering — do not assume this skill's warehouse is the right source
 * **Always use** for portfolio queries, holdings questions, fund breakdowns, or "what is [firm/fund] invested in" phrasing — even though those phrases appear in `carta-soi`'s trigger list; `carta-soi` is for building persistent Cowork artifacts, not answering data questions inline
 * **Always use** for read-only valuation data (409a history, FMV, MOIC, investment metrics) — even though "valuations" and "portfolio companies" appear in `carta-portfolio-valuations`; that skill is for running and updating valuation projects, not reading data
 * Also use when **no context is set** and the user asks an ambiguous investment or data question — this skill will guide them through context setup via `list_contexts` / `set_context`
