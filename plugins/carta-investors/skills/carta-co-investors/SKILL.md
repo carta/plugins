@@ -4,7 +4,7 @@ description: >
   Interactive co-investor report from Carta SPA data with clickable portfolio
   drill-downs. Use for co-investor analysis or asking who invested in a
   specific portfolio company.
-version: 0.6.0
+version: 0.6.1
 model: sonnet
 allowed-tools:
   - mcp__carta__call_tool
@@ -377,7 +377,7 @@ not `Write` the body.
 call_tool({"name": "dwh__execute__query", "arguments": {
   "format": "ndjson",
   "limit": 50000,
-  "sql": "WITH doc_metadata AS (SELECT d.EXTRACTION_ID, i.ISSUER_NAME, s.CLOSING_DATE, MIN(p.SHARE_CLASS_NAME) AS SHARE_CLASS_NAME FROM FUND_ADMIN.DOCUMENT_AI_DOCUMENT d JOIN FUND_ADMIN.DOCUMENT_AI_SPA_ISSUER i ON d.EXTRACTION_ID = i.EXTRACTION_ID LEFT JOIN FUND_ADMIN.DOCUMENT_AI_SPA s ON d.EXTRACTION_ID = s.EXTRACTION_ID LEFT JOIN FUND_ADMIN.DOCUMENT_AI_SPA_PURCHASER p ON d.EXTRACTION_ID = p.EXTRACTION_ID WHERE d.FIRM_ID = '<firm_id>' AND i.ISSUER_NAME IS NOT NULL AND TRIM(i.ISSUER_NAME) <> '' GROUP BY d.EXTRACTION_ID, i.ISSUER_NAME, s.CLOSING_DATE), dedup_docs AS (SELECT MAX(EXTRACTION_ID) AS EXTRACTION_ID FROM doc_metadata GROUP BY ISSUER_NAME, COALESCE(CAST(CLOSING_DATE AS VARCHAR), SHARE_CLASS_NAME, 'undated')), coverage AS (SELECT (SELECT COUNT(DISTINCT i.ISSUER_NAME) FROM FUND_ADMIN.DOCUMENT_AI_SPA_ISSUER i JOIN FUND_ADMIN.DOCUMENT_AI_DOCUMENT d ON i.EXTRACTION_ID = d.EXTRACTION_ID WHERE d.FIRM_ID = '<firm_id>' AND i.ISSUER_NAME IS NOT NULL AND TRIM(i.ISSUER_NAME) <> '') AS SPA_COMPANIES, (SELECT COUNT(DISTINCT ISSUER_NAME) FROM FUND_ADMIN.AGGREGATE_INVESTMENTS WHERE FIRM_ID = '<firm_id>' AND (ASSET_NAME ILIKE '%Series %' OR ASSET_NAME ILIKE '%Preferred%' OR ASSET_NAME ILIKE '%Common%')) AS TOTAL_COMPANIES) SELECT p.PURCHASER_NAME, p.ENTITY_TYPE, ARRAY_AGG(DISTINCT i.ISSUER_NAME) WITHIN GROUP (ORDER BY i.ISSUER_NAME) AS COMPANIES, (SELECT SPA_COMPANIES FROM coverage) AS SPA_COMPANIES, (SELECT TOTAL_COMPANIES FROM coverage) AS TOTAL_COMPANIES FROM dedup_docs dd JOIN FUND_ADMIN.DOCUMENT_AI_SPA_ISSUER i ON dd.EXTRACTION_ID = i.EXTRACTION_ID JOIN FUND_ADMIN.DOCUMENT_AI_SPA_PURCHASER p ON dd.EXTRACTION_ID = p.EXTRACTION_ID WHERE p.ENTITY_TYPE NOT ILIKE '%notice%' AND p.ENTITY_TYPE NOT ILIKE '%law firm%' AND p.PURCHASER_NAME NOT ILIKE '%<firm_name_esc>%' [AND p.PURCHASER_NAME NOT ILIKE '%<firm_name_spaced>%'] [AND p.PURCHASER_NAME NOT ILIKE '%<vehicle_N_esc>%' ...] GROUP BY p.PURCHASER_NAME, p.ENTITY_TYPE ORDER BY COUNT(DISTINCT i.ISSUER_NAME) DESC, p.PURCHASER_NAME, p.ENTITY_TYPE"
+  "sql": "WITH doc_metadata AS (SELECT d.EXTRACTION_ID, i.ISSUER_NAME, s.CLOSING_DATE, MIN(p.SHARE_CLASS_NAME) AS SHARE_CLASS_NAME FROM FUND_ADMIN.DOCUMENT_AI_DOCUMENT d JOIN FUND_ADMIN.DOCUMENT_AI_SPA_ISSUER i ON d.EXTRACTION_ID = i.EXTRACTION_ID LEFT JOIN FUND_ADMIN.DOCUMENT_AI_SPA s ON d.EXTRACTION_ID = s.EXTRACTION_ID LEFT JOIN FUND_ADMIN.DOCUMENT_AI_SPA_PURCHASER p ON d.EXTRACTION_ID = p.EXTRACTION_ID WHERE d.FIRM_ID = '<firm_id>' AND i.ISSUER_NAME IS NOT NULL AND TRIM(i.ISSUER_NAME) <> '' GROUP BY d.EXTRACTION_ID, i.ISSUER_NAME, s.CLOSING_DATE), dedup_docs AS (SELECT MAX(EXTRACTION_ID) AS EXTRACTION_ID FROM doc_metadata GROUP BY ISSUER_NAME, COALESCE(CAST(CLOSING_DATE AS VARCHAR), SHARE_CLASS_NAME, 'undated')), coverage AS (SELECT (SELECT COUNT(DISTINCT ai.ISSUER_NAME) FROM FUND_ADMIN.AGGREGATE_INVESTMENTS ai WHERE ai.FIRM_ID = '<firm_id>' AND (ai.ASSET_NAME ILIKE '%Series %' OR ai.ASSET_NAME ILIKE '%Preferred%' OR ai.ASSET_NAME ILIKE '%Common%') AND EXISTS (SELECT 1 FROM FUND_ADMIN.DOCUMENT_AI_SPA_ISSUER spi JOIN FUND_ADMIN.DOCUMENT_AI_DOCUMENT spd ON spi.EXTRACTION_ID = spd.EXTRACTION_ID WHERE spd.FIRM_ID = '<firm_id>' AND LOWER(TRIM(spi.ISSUER_NAME)) = LOWER(TRIM(ai.ISSUER_NAME)))) AS SPA_COMPANIES, (SELECT COUNT(DISTINCT ISSUER_NAME) FROM FUND_ADMIN.AGGREGATE_INVESTMENTS WHERE FIRM_ID = '<firm_id>' AND (ASSET_NAME ILIKE '%Series %' OR ASSET_NAME ILIKE '%Preferred%' OR ASSET_NAME ILIKE '%Common%')) AS TOTAL_COMPANIES) SELECT p.PURCHASER_NAME, p.ENTITY_TYPE, ARRAY_AGG(DISTINCT i.ISSUER_NAME) WITHIN GROUP (ORDER BY i.ISSUER_NAME) AS COMPANIES, (SELECT SPA_COMPANIES FROM coverage) AS SPA_COMPANIES, (SELECT TOTAL_COMPANIES FROM coverage) AS TOTAL_COMPANIES FROM dedup_docs dd JOIN FUND_ADMIN.DOCUMENT_AI_SPA_ISSUER i ON dd.EXTRACTION_ID = i.EXTRACTION_ID JOIN FUND_ADMIN.DOCUMENT_AI_SPA_PURCHASER p ON dd.EXTRACTION_ID = p.EXTRACTION_ID WHERE p.ENTITY_TYPE NOT ILIKE '%notice%' AND p.ENTITY_TYPE NOT ILIKE '%law firm%' AND p.PURCHASER_NAME NOT ILIKE '%<firm_name_esc>%' [AND p.PURCHASER_NAME NOT ILIKE '%<firm_name_spaced>%'] [AND p.PURCHASER_NAME NOT ILIKE '%<vehicle_N_esc>%' ...] GROUP BY p.PURCHASER_NAME, p.ENTITY_TYPE ORDER BY COUNT(DISTINCT i.ISSUER_NAME) DESC, p.PURCHASER_NAME, p.ENTITY_TYPE"
 }})
 ```
 
@@ -692,12 +692,17 @@ Tell the user: `SPA data loaded. Preparing results…`
 ### Step B3: Present results
 
 **Coverage note — always include:**
-"Results are based on **N** SPAs covering **X** of your **Y** priced-equity portfolio companies."
+"Results cover **X** of your **Y** priced-equity portfolio companies that have at least one SPA on file."
+
+> **What X means:** the count of portfolio companies (from your SOI) with at
+> least one matching SPA in Carta. Companies with multiple SPAs (e.g. one per
+> round) count once. SPAs whose issuer name doesn't match any current portfolio
+> company are excluded.
 
 #### Q1 output
 
 > **<Firm name> — Most frequent co-investors**
-> (based on N SPAs covering X of your Y priced-equity portfolio companies)
+> (X of your Y priced-equity portfolio companies have at least one SPA on file)
 > *Co-investment counts are per company, not per round. Multi-vehicle investors
 > are aggregated to a single canonical entry per the groupings in
 > `canonical-investors.json`.*
@@ -777,6 +782,6 @@ Do not repeat the full menu after every result. If the user asks "what else can 
 | Query fails with table-not-found | Call `dwh:list:tables` to confirm available table names, then retry with correct names. |
 | 0 SPA rows returned | "No SPA documents were found for your account. Contact your Carta representative if you believe this is an error." |
 | Company name not found (Q4) | "No SPA found for '[name]'. Did you mean: [suggestions from available issuers]?" |
-| Partial SPA coverage | Note in results: "Based on N SPAs covering X of your Y portfolio companies." Offer to list missing companies. |
+| Partial SPA coverage | Note in results: "X of your Y portfolio companies have at least one SPA on file." Offer to list missing companies. |
 | `open` command fails | Tell the user the file path to open manually: `$WORKSPACE/carta-co-investors.html` (the resolved value, not the literal env var). |
 | MCP query error | "Could not reach Carta data. Try again in a moment." |

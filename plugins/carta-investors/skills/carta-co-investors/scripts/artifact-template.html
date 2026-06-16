@@ -344,7 +344,7 @@
       const spaPct = m.totalCompanies > 0 ? Math.round(m.spaCoverage / m.totalCompanies * 100) : 0;
       document.getElementById('page-header').innerHTML =
         '<h1>' + esc(m.firmName) + ' — Co-Investor Analysis</h1>' +
-        '<p>Based on ' + m.spaCoverage + ' SPAs covering ' + spaPct + '% of your ' + m.totalCompanies + ' portfolio companies</p>';
+        '<p>' + m.spaCoverage + ' of your ' + m.totalCompanies + ' portfolio companies have an SPA on file (' + spaPct + '%)</p>';
     }
 
     function renderMetrics() {
