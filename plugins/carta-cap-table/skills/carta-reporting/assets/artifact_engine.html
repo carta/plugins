@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<script type="application/json" id="cowork-artifact-meta">{"schemaVersion": 1}</script>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Carta Report</title>
+<style>
+@font-face {
+  font-family: "SangBleu Versailles";
+  font-style: normal;
+  font-weight: 100 900;
+  src: local("SangBleu Versailles"), local("SangBleuVersailles-Regular"),
+       url(/static/bundles/SangBleuVersailles-Regular-WebS.ff8ddd14.woff2) format("woff2"),
+       url(/static/bundles/SangBleuVersailles-Regular-WebS.e128d197.woff) format("woff"),
+       url(/static/bundles/SangBleuVersailles-Regular-WebS.8e685522.ttf) format("truetype");
+}
+/* ── Ink Semantic Tokens — ux-patterns/css/cap-table-artifact.css ── */
+:root{
+  color-scheme:light;
+  --surface-bg:#FFFFFF;
+  --surface-underlay:#F1F1F1;
+  --surface-darkgray-default:#1A1A1A;
+  --text-default:#1A1A1A;
+  --text-subtle:#656B6B;
+  --border-default:#A7AAAA;
+  --border-subtle:#DEDFDF;
+  --negative-subtle:#FFEEEF;
+  --negative-strong:#E52431;
+  --positive-subtle:#EBF7F6;
+  --positive-strong:#2D9E90;
+  --info-subtle:#EAF0F8;
+  --info-strong:#285DA3;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Inter",-apple-system,BlinkMacSystemFont,sans-serif;background:#F5F5F5;padding:16px}
+button{
+  -webkit-box-align:center;align-items:center;appearance:none;-webkit-appearance:none;
+  border-radius:6px;border-style:solid;border-width:1px;cursor:pointer;display:inline-flex;
+  font-family:inherit;font-size:13px;font-weight:500;-webkit-box-pack:center;justify-content:center;
+  margin:0;padding-top:0;padding-bottom:0;
+  transition-duration:120ms;transition-property:background-color,border-color,box-shadow,color,outline;
+  transition-timing-function:cubic-bezier(0.2,0,0,1);white-space:nowrap;min-height:32px;
+  padding-left:12px;padding-right:12px;gap:6px;line-height:1;
+  background-color:var(--surface-bg);border-color:#C8CACB;color:var(--text-default);
+}
+button:hover{background-color:#F7F8F8;border-color:#9C9F9F;color:var(--text-default)}
+button:active{background-color:#EDEEED;border-color:#9C9F9F}
+.rpt{background:var(--surface-bg);border-radius:8px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.08)}
+.hdr{background:var(--surface-bg)}
+.hdr-topbar{display:flex;justify-content:space-between;align-items:flex-start;padding:16px 24px}
+.hdr-confidential{font-size:11px;text-transform:uppercase;letter-spacing:0.12em;color:var(--border-default);font-weight:500}
+.hdr-topbar-right{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.hdr-generated-by{font-size:11px;color:#9C9F9F;text-align:right}
+.hdr-rule{height:1px;background:var(--border-subtle)}
+.hdr-body{padding:14px 24px 18px}
+.hdr-report-type{font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:#9C9F9F;margin-bottom:6px}
+.hdr-entity-name{font-family:"SangBleu Versailles",Georgia,"Times New Roman",serif;font-style:normal;font-weight:400;font-size:26px;color:var(--text-default);line-height:1.2;margin-bottom:14px}
+.hdr-meta-table{display:grid;grid-template-columns:120px 1fr;row-gap:6px;font-size:13px}
+.hdr-meta-label{color:var(--text-subtle)}
+.hdr-meta-value{color:var(--text-default)}
+.global-prompt-bar{background:var(--surface-bg);border-bottom:1px solid var(--border-subtle);padding:10px 24px 14px;display:none;flex-direction:column;gap:4px}
+button.prompt-toggle-active{background:var(--info-subtle);border-color:#B8CCE4;color:var(--info-strong)}
+.sheets-nav{background:var(--surface-bg);border-bottom:1px solid var(--border-subtle);padding:8px 24px;position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:8px}
+.sheet{display:block}.sheet+.sheet{border-top:2px solid var(--border-subtle)}
+.section-title-bar{padding:14px 24px 12px;display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;border-bottom:1px solid var(--border-subtle)}
+.section-title-bar:hover{background:#FAFAFA}
+.section-title{font-size:15px;font-weight:700;color:var(--text-default)}
+.section-row-count{font-size:12px;color:var(--text-subtle);font-weight:400;margin-left:6px}
+.section-chevron{margin-left:auto;flex-shrink:0;color:var(--text-subtle);display:inline-flex;transition:transform 0.15s ease}
+.sheet.collapsed .section-chevron{transform:rotate(-90deg)}
+.srch{font-family:inherit;font-size:12px;border:1px solid var(--border-subtle);border-radius:4px;padding:4px 8px 4px 26px;outline:none;background:var(--surface-bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23A7AAAA' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E") 7px center no-repeat;color:var(--text-default)}
+.srch:focus{border-color:var(--info-strong)}
+.srch::placeholder{color:#BEBFC0}
+.gcol-sheet-row{display:flex;align-items:center;gap:6px;padding:5px 2px;font-weight:600;font-size:13px;border-radius:4px;border-bottom:1px solid var(--border-subtle);margin-bottom:2px;margin-top:6px}
+.gcol-sheet-row:first-child{margin-top:0}
+.gcol-sheet-row:hover{background:#F7F8F8}
+.gcol-sheet-name{flex:1;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;font-size:13px}
+.gcol-sheet-name:hover{color:var(--info-strong)}
+.gcol-toggle{all:unset;cursor:pointer;font-size:10px;color:var(--text-subtle);padding:2px 5px;border-radius:3px;flex-shrink:0;line-height:1;user-select:none}
+.gcol-toggle:hover{background:var(--surface-underlay);color:var(--text-default)}
+.gcol-cols{padding-left:20px;margin-bottom:2px}
+.icon-btn{all:unset;cursor:pointer;padding:5px;border-radius:4px;display:inline-flex;align-items:center;justify-content:center;color:var(--text-subtle);line-height:0;flex-shrink:0}
+.icon-btn:hover{background:var(--surface-underlay);color:var(--text-default)}
+.sheet.collapsed .toolbar,.sheet.collapsed .tbl-wrap{display:none}
+.toolbar{padding:16px 24px;display:flex;justify-content:space-between;align-items:center;position:relative}
+.toolbar-left{font-size:13px;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;color:var(--text-default);display:flex;align-items:center;gap:12px}
+.row-count{font-size:13px;color:var(--text-subtle);font-weight:400;text-transform:none;letter-spacing:normal}
+.toolbar-right{display:flex;gap:8px}
+.col-panel{position:fixed;z-index:9999;background:var(--surface-bg);border:1px solid var(--border-subtle);border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.12);padding:12px 16px;min-width:220px;max-height:440px;overflow-y:auto;display:none}
+.col-panel label{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-default);padding:4px 0;cursor:pointer;white-space:nowrap}
+.col-panel-all{font-weight:600;border-bottom:1px solid var(--border-subtle);margin-bottom:4px;padding-bottom:8px !important}
+.col-row{display:flex;align-items:center;gap:6px;padding:3px 0;border-radius:4px}
+.col-name{flex:1;font-size:13px;color:var(--text-default);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.col-sort-btn{all:unset;padding:2px 5px;font-size:12px;color:#BEBFC0;cursor:pointer;border-radius:3px;line-height:1;flex-shrink:0}
+.col-sort-btn:hover{background:#F4F4F4;color:var(--text-subtle)}
+.col-sort-btn.active{color:var(--info-strong);font-weight:600}
+tfoot td{border-top:2px solid var(--border-subtle);background:#F7F8F8;font-size:12px;color:#9C9F9F;padding:7px 16px;white-space:nowrap;user-select:none}
+.tot-label{font-size:11px;text-transform:uppercase;letter-spacing:0.06em;font-weight:600}
+.tot-cell{cursor:pointer;text-align:right}
+.tot-cell:hover{background:var(--info-subtle);color:var(--info-strong)}
+.tot-cell.active{color:var(--text-default);font-weight:600}
+.tot-cell.active:hover{background:var(--info-subtle);color:var(--info-strong)}
+.tot-op{font-size:10px;text-transform:uppercase;letter-spacing:0.05em;font-weight:400;margin-right:4px;color:#9C9F9F}
+.prompt-bar{background:#F4F4F4;border-top:1px solid var(--border-subtle);padding:10px 24px;display:flex;align-items:center;gap:12px}
+.prompt-bar-label{font-size:13px;color:var(--text-default);font-weight:600;line-height:1.2}
+.prompt-bar-hint{display:block;font-size:11px;font-weight:400;color:#9C9F9F;margin-top:1px;letter-spacing:0}
+.prompt-bar-input{font-family:"Roboto Mono",ui-monospace,monospace;font-size:11px;color:var(--text-default);background:var(--surface-bg);border:1px solid var(--border-subtle);border-radius:4px;padding:5px 10px;min-height:80px;line-height:1.5;overflow-y:auto;white-space:normal;overflow-wrap:break-word;word-break:normal;cursor:text;resize:vertical;width:100%}
+.tbl-wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th{background:var(--surface-bg);font-size:13px;text-transform:none;color:var(--text-default);font-weight:600;letter-spacing:0;padding:10px 16px;border-bottom:2px solid var(--border-subtle);cursor:grab;white-space:nowrap;text-align:left}
+th:active{cursor:grabbing}
+th.th-drag-over{box-shadow:inset 3px 0 0 var(--info-strong);background:var(--info-subtle)}
+th.th-dragging{opacity:0.4;cursor:grabbing}
+th.num{text-align:right}
+td{padding:10px 16px;border-bottom:1px solid var(--border-subtle);color:var(--text-default);white-space:nowrap}
+td.num{text-align:right}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#F8F8F8}
+tr.section-hdr td{background:#F7F8F8;font-weight:600;color:var(--text-subtle);font-size:12px;text-transform:uppercase;letter-spacing:0.04em;border-bottom:1px solid var(--border-subtle)}
+tr.total-row td{font-weight:600;background:#F7F8F8;border-top:2px solid var(--border-subtle)}
+.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.05em}
+.b-iso{background:var(--positive-subtle);color:#237C70}.b-sar{background:#DFE8F4;color:#235291}
+.b-nso{background:var(--surface-underlay);color:var(--text-subtle)}.b-rsu{background:#F9F8FC;color:#563E93}
+.b-warrant{background:#FFE8F2;color:#E4106E}.b-cert{background:var(--info-subtle);color:#185FA5}
+.b-eq{background:var(--positive-subtle);color:#237C70}
+.b-yes{background:var(--positive-subtle);color:#1E6A60}.b-no{background:var(--surface-underlay);color:var(--text-subtle)}
+.status-dot{display:inline-flex;align-items:center;gap:6px}
+.status-dot::before{content:'';display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.status-outstanding::before{background:#32B0A0}.status-exercised::before{background:var(--info-strong)}
+.status-cancelled::before,.status-canceled::before{background:#E4106E}
+.status-expired::before{background:#E86C00}.status-terminated::before{background:#9C9F9F}
+.th-sort{color:#BEBFC0;font-size:11px;margin-left:4px}
+.footnote{padding:16px 24px;border-top:1px solid var(--border-subtle);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+.footnote-text{font-size:12px;color:#9C9F9F;font-style:italic;max-width:75%}
+.footnote-badge{background:var(--surface-darkgray-default);color:#fff;font-size:10px;text-transform:uppercase;border-radius:4px;padding:4px 8px;white-space:nowrap}
+</style>
+</head>
+<body>
+<div class="rpt">
+  <div class="hdr">
+    <div class="hdr-topbar">
+      <svg xmlns="http://www.w3.org/2000/svg" width="64" height="32" fill="none" viewBox="0 0 504 252" aria-label="Carta logo" role="img">
+        <path fill="#1a1a1a" d="M0 0v252h504V0zm493.92 241.92H10.08V10.08h483.84zM66.114 130.915c0-25.262 21.327-40.09 40.46-40.09 13.7 0 26.476 5.136 33.31 16.97l-12.796 7.419a23.9 23.9 0 0 0-8.754-7.927 24.3 24.3 0 0 0-11.506-2.811c-11.252 0-24.638 8.779-24.638 26.175s12.796 26.328 25.704 26.328c8.978 0 16.432-5.004 20.85-12.727l13.08 6.039c-7.403 13.316-20.636 20.41-36.002 20.41-19.326-.02-39.708-14.869-39.708-39.796zm122.405 39.786c10.633 0 20.677-4.689 25.857-11.499v9.368h15.802V92.784h-15.802v9.388c-4.926-6.871-15.203-11.347-25.857-11.347-23.276 0-39.556 16.939-39.556 39.938s16.432 39.938 39.556 39.938m1.524-65.504c14.603 0 24.627 10.89 24.627 25.566s-10.034 25.566-24.627 25.566c-14.594 0-24.953-11.042-24.953-25.87s10.349-25.262 24.953-25.262m125.056 2.628h-16.402V92.692h16.554v-19.75h16.279v19.75h16.544v15.133H331.53v60.714h-16.431zm78.36 62.876c10.653 0 20.697-4.689 25.877-11.499v9.368h15.822V92.784h-15.822v9.388c-4.926-6.871-15.203-11.347-25.877-11.347-23.256 0-39.536 16.939-39.536 39.938s16.422 39.938 39.536 39.938m1.544-65.504c14.583 0 24.637 10.89 24.637 25.566s-10.054 25.566-24.637 25.566-24.952-11.042-24.952-25.87 10.348-25.262 24.952-25.262m-129.047 63.271h-16.432V92.682h15.051v14.108c3.727-8.383 9.322-13.844 18.422-14.3 1.879-.03 3.747 0 5.626.203l-.252 15.163c-13.07 0-22.405 7.003-22.405 26.53v34.092z"/>
+      </svg>
+      <div class="hdr-topbar-right">
+        <span class="hdr-confidential">Confidential</span>
+        <span class="hdr-generated-by" id="generatedBy"></span>
+      </div>
+    </div>
+    <div class="hdr-rule"></div>
+    <div class="hdr-body">
+      <div class="hdr-report-type" id="reportType"></div>
+      <div class="hdr-entity-name" id="entityName"></div>
+      <div class="hdr-meta-table" id="metaTable"></div>
+    </div>
+  </div>
+  <div class="sheets-nav" id="sheetsNav"></div>
+  <div class="global-prompt-bar" id="globalPromptBar">
+    <div class="prompt-bar-label">Excel export<span class="prompt-bar-hint">To download an Excel file for your custom report, copy and paste this prompt into your active session</span></div>
+    <textarea class="prompt-bar-input" id="globalPbar"></textarea>
+  </div>
+  <div id="sheets"></div>
+  <div class="footnote">
+    <span class="footnote-text" id="footnoteText"></span>
+    <span class="footnote-badge" id="footnoteBadge"></span>
+  </div>
+</div>
+<script>
+const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+
+// ─── Module-level state (set by initReport) ───────────────────────────────────
+let data            = {};
+let sheetNames      = [];
+let sheetsNav;
+let sheetsDiv;
+let hiddenSheets           = new Set();
+let collapsedSheets        = new Set();
+let _panelSectionCollapsed = new Set();
+let _entityName     = '';
+let _corporationId  = '';
+let _asOfDate       = '';
+
+// initReport — called once data is available (fetch or inline)
+// payload shape: { config: {...}, data: { SheetName: { columns, rows } } }
+function initReport(payload) {
+  const C = payload.config || {};
+  data            = payload.data || {};
+  sheetNames      = Object.keys(data);
+  hiddenSheets           = new Set();
+  collapsedSheets        = new Set();
+  _panelSectionCollapsed = new Set();
+  _entityName    = C.entityName    || '';
+  _corporationId = C.corporationId || '';
+  _asOfDate      = C.asOfDate      || '';
+  sheetsNav       = document.getElementById('sheetsNav');
+  sheetsDiv       = document.getElementById('sheets');
+
+  document.title = C.title || 'Carta Report';
+  document.getElementById('reportType').textContent   = C.reportType  || '';
+  document.getElementById('entityName').textContent   = C.entityName  || '';
+  document.getElementById('generatedBy').textContent  = 'Generated by ' + (C.generatedBy || '') + ' via Claude AI';
+  document.getElementById('footnoteBadge').textContent = 'Carta Data · ' + (C.asOfDate || '');
+  document.getElementById('footnoteText').innerHTML =
+    'Data sourced from <strong>Carta</strong>. ' +
+    'Column selection, sorting, and display are Claude-computed best-effort analysis — ' +
+    'not official Carta output. Verify financial data independently before relying on this report for legal or tax purposes.';
+  const mt = document.getElementById('metaTable');
+  (C.metaRows || []).forEach(([label, value]) => {
+    const l = document.createElement('span'); l.className = 'hdr-meta-label'; l.textContent = label;
+    const v = document.createElement('span'); v.className = 'hdr-meta-value'; v.textContent = value;
+    mt.appendChild(l); mt.appendChild(v);
+  });
+
+  sheetNames.forEach((name, idx) => buildSheet(name, idx));
+  buildGlobalColumnsPanel();
+  updateGlobalPromptBar();
+}
+
+// ─── Column display name — stable even after drag-reorder ────────────────────
+// ci is the original index in sh.columns, fixed at data load time.
+const colDisplayName = (col, ci) => col.name || ('Column ' + (ci + 1));
+
+// ─── Formatters ───────────────────────────────────────────────────────────────
+const PCT = v => { if (v === null || v === undefined || v === '') return '—'; if (typeof v === 'string' && v.includes('%')) return v; const p = parseFloat(v) * 100; return isNaN(p) ? '—' : p.toFixed(4) + '%' };
+const INT = v => { if (v === null || v === undefined || v === '') return '—'; const n = parseInt(v); return isNaN(n) ? '—' : n.toLocaleString() };
+const MON = (v, sym) => { if (v === null || v === undefined || v === '') return '—'; const n = parseFloat(v); return isNaN(n) ? '—' : (sym || '$') + n.toFixed(2) };
+const FMT = (v, t, sym) => { if (v === null || v === undefined || v === '') return '—'; switch (t) { case 'percentage': return PCT(v); case 'integer': return INT(v); case 'money': return MON(v, sym); case 'date': return v || '—'; default: return String(v) } };
+const NUM_TYPES   = new Set(['integer', 'money', 'percentage', 'decimal']);
+const BADGE_COLS  = new Set(['Security Type', 'Award Type', 'Base Award Type']);
+const STATUS_COLS = new Set(['Status', 'Award Status', 'Grant Status', 'Certificate Status']);
+const BOOL_COLS   = new Set(['Early Exercisable', 'ISO/NSO Split?', 'Paper Status']);
+
+const BADGE = v => {
+  if (!v || v === '—') return null;
+  const u = v.toUpperCase();
+  if (u === 'ISO') return 'b-iso'; if (u === 'SAR') return 'b-sar';
+  if (u === 'NSO') return 'b-nso'; if (u === 'RSU' || u === 'RSA') return 'b-rsu';
+  if (u.includes('WARRANT')) return 'b-warrant'; if (u === 'CERTIFICATE') return 'b-cert';
+  if (u === 'EQUITY AWARD') return 'b-eq'; return null;
+};
+const BOOL_BADGE = v => {
+  if (!v || v === '—') return null;
+  const u = v.toUpperCase();
+  if (u === 'YES') return 'b-yes'; if (u === 'NO') return 'b-no'; return null;
+};
+const STATUS_KEY = v => {
+  if (!v || v === '—') return null;
+  const k = v.toLowerCase().replace(/\s+/g, '');
+  return { outstanding:'outstanding', exercised:'exercised', cancelled:'cancelled', canceled:'canceled', expired:'expired', terminated:'terminated' }[k] || null;
+};
+
+const CHEVRON = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 22 22" width="14" height="14" style="flex-shrink:0"><path fill="currentColor" fill-rule="evenodd" clip-rule="evenodd" d="m10 16.1-9-8L3 6l8 7 8-7L21 8l-9 8c-.6.5-1.4.5-2 0Z"></path></svg>`;
+const ICON_COLLAPSE_ALL = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 22 22" fill="currentColor"><path d="M10.25 1V6.18936L8.53036 4.46967L7.46969 5.53032L10.4696 8.53032C10.6103 8.67098 10.801 8.75 10.9999 8.75C11.1989 8.75 11.3896 8.67098 11.5303 8.53033L14.5303 5.53032L13.4696 4.46966L11.75 6.18928V1H10.25Z"/><path d="M11.5303 13.4697L14.5303 16.4697L13.4696 17.5303L11.7519 15.8127L11.75 21.0002L10.25 20.9997L10.252 15.8087L8.53027 17.5303L7.46961 16.4697L10.4696 13.4697C10.6103 13.329 10.801 13.25 10.9999 13.25C11.1989 13.25 11.3896 13.329 11.5303 13.4697Z"/><path d="M1 11.75H21V10.25H1V11.75Z"/></svg>`;
+const ICON_EXPAND_ALL   = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 22 22" fill="currentColor"><path d="M21 2.5H1V1h20v1.5ZM7.4 6.5l3-3c.4-.3.8-.3 1.1 0l3.1 3-1 1-1.9-1.7V10h-1.5V5.8L8.4 7.6l-1-1.1ZM11.7 16.3l1.9-1.7 1 1-3 3c-.4.3-.8.3-1.1 0l-3.1-3 1-1 1.8 1.7V12h1.6v4.3ZM1 21h20v-1.5H1V21Z"/></svg>`;
+
+// ─── Header drag state ─────────────────────────────────────────────────────────
+let _dragSrcSheetIdx = null;
+let _dragSrcCi       = null;
+
+// ─── Sheet builder ─────────────────────────────────────────────────────────────
+
+function initSheet(sName) {
+  const sh = data[sName];
+  if (!sh._colOrder) sh._colOrder = sh.columns.map((_, i) => i);
+  if (!sh._hidden)   sh._hidden   = new Set();
+  if (!sh._sort)     sh._sort     = [];   // [{ci, dir}]
+  if (!sh._totals)   sh._totals   = {};   // {ci: op}
+  // WeakMap keyed by the actual row array so currency survives sort reorders
+  if (!sh._rowCurrencyMap && sh.row_currencies) {
+    sh._rowCurrencyMap = new WeakMap();
+    sh.rows.forEach((row, i) => {
+      if (Array.isArray(row) && sh.row_currencies[i]) {
+        sh._rowCurrencyMap.set(row, sh.row_currencies[i]);
+      }
+    });
+  }
+}
+
+function isVis(sh, ci) { return !sh._hidden.has(ci); }
+
+// Row classification helpers
+// "Section" = {_s:"..."} object OR single-element string array ["label"]
+// "Total"   = {_t:[...]} object only — plain arrays that happen to say "Total" are data rows
+function rowIsSection(r) {
+  return r && (r._s || (Array.isArray(r) && r.length === 1 && typeof r[0] === 'string'));
+}
+function rowIsTotal(r)   { return r && (!!r._t || (Array.isArray(r) && r.length > 1 && typeof r[0] === 'string' && r[0].startsWith('Total'))); }
+function sectionText(r)  { return r._s || r[0]; }
+function totalArray(r)   { return r._t || r; }
+
+function buildSheet(sName, idx) {
+  const sh       = data[sName];
+  initSheet(sName);
+  const dataRows = sh.rows.filter(r => !rowIsSection(r));
+  const div      = document.createElement('div');
+  div.className  = 'sheet';
+  div.id         = 'sheet-' + idx;
+  div.innerHTML  = `
+    <div class="section-title-bar" id="anchor-${idx}" onclick="toggleSheetCollapse(${idx})">
+      <span class="section-title">${esc(sName)}</span>
+      <span class="section-row-count">${dataRows.length} row${dataRows.length !== 1 ? 's' : ''}</span>
+      <span class="section-chevron">${CHEVRON}</span>
+    </div>
+    <div class="toolbar">
+      <div class="toolbar-left"></div>
+      <div class="toolbar-right" id="tbr-${idx}"></div>
+    </div>
+    <div class="tbl-wrap">
+      <table id="tbl-${idx}">
+        <thead><tr id="hdr-${idx}"></tr></thead>
+        <tbody id="body-${idx}"></tbody>
+        <tfoot id="foot-${idx}"></tfoot>
+      </table>
+    </div>`;
+  sheetsDiv.appendChild(div);
+  rebuildHeaders(idx);
+  renderBody(idx);
+  updatePromptBar(idx);
+}
+
+// ─── Headers ──────────────────────────────────────────────────────────────────
+function rebuildHeaders(idx) {
+  const sh  = data[sheetNames[idx]];
+  const hdr = document.getElementById('hdr-' + idx);
+  hdr.innerHTML = '';
+  sh._colOrder.forEach(ci => {
+    if (!isVis(sh, ci)) return;
+    const col   = sh.columns[ci];
+    const th    = document.createElement('th');
+    th.dataset.col = ci;
+    th.className   = NUM_TYPES.has(col.type) ? 'num' : '';
+    const entry    = sh._sort.find(s => s.ci === ci);
+    const icon     = entry ? (entry.dir === 'asc' ? '↑' : '↓') : '↕';
+    const color    = entry ? '#285DA3' : '#BEBFC0';
+    const pri      = sh._sort.length > 1 && entry
+      ? `<sup style="color:#285DA3;font-size:9px">${sh._sort.indexOf(entry) + 1}</sup>` : '';
+    th.innerHTML   = esc(colDisplayName(col, ci)) + `<span class="th-sort si" style="color:${color};margin-left:4px">${icon}${pri}</span>`;
+    th.onclick     = () => clickHeaderSort(idx, ci);
+
+    // Drag-to-reorder
+    th.draggable   = true;
+    th.ondragstart = e => {
+      _dragSrcSheetIdx = idx; _dragSrcCi = ci;
+      th.classList.add('th-dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    };
+    th.ondragend = () => {
+      th.classList.remove('th-dragging');
+      document.querySelectorAll('#hdr-' + idx + ' th').forEach(t => t.classList.remove('th-drag-over'));
+    };
+    th.ondragover = e => {
+      e.preventDefault();
+      if (_dragSrcSheetIdx !== idx || _dragSrcCi === ci) return;
+      document.querySelectorAll('#hdr-' + idx + ' th').forEach(t => t.classList.remove('th-drag-over'));
+      th.classList.add('th-drag-over');
+    };
+    th.ondrop = e => {
+      e.preventDefault();
+      if (_dragSrcSheetIdx !== idx || _dragSrcCi === null || _dragSrcCi === ci) return;
+      const srcPos = sh._colOrder.indexOf(_dragSrcCi);
+      const tgtPos = sh._colOrder.indexOf(ci);
+      sh._colOrder.splice(srcPos, 1);
+      sh._colOrder.splice(tgtPos, 0, _dragSrcCi);
+      _dragSrcSheetIdx = _dragSrcCi = null;
+      rebuildHeaders(idx); renderBody(idx); updatePromptBar(idx);
+    };
+
+    hdr.appendChild(th);
+  });
+}
+
+// ─── Sort ─────────────────────────────────────────────────────────────────────
+function applySort(sh, rows) {
+  if (!sh._sort.length) return rows;
+  return [...rows].sort((a, b) => {
+    for (const {ci, dir} of sh._sort) {
+      const col = sh.columns[ci];
+      const va  = a[ci], vb = b[ci];
+      if (va === null && vb === null) continue;
+      if (va === null) return 1; if (vb === null) return -1;
+      const cmp = NUM_TYPES.has(col.type)
+        ? parseFloat(va) - parseFloat(vb)
+        : String(va).localeCompare(String(vb));
+      if (cmp !== 0) return dir === 'asc' ? cmp : -cmp;
+    }
+    return 0;
+  });
+}
+
+function clickHeaderSort(idx, ci) { _cycleSort(idx, ci); }
+function cycleSortCol(idx, ci)    { _cycleSort(idx, ci); }
+
+function _cycleSort(idx, ci) {
+  const sh      = data[sheetNames[idx]];
+  const existing = sh._sort.find(s => s.ci === ci);
+  if (!existing)               sh._sort.push({ci, dir: 'asc'});
+  else if (existing.dir === 'asc') existing.dir = 'desc';
+  else                         sh._sort = sh._sort.filter(s => s.ci !== ci);
+  rebuildHeaders(idx);
+  renderBody(idx);
+  const btn = document.querySelector(`#panel-${idx} [data-sort-col="${ci}"]`);
+  if (btn) _updateSortBtn(btn, sh._sort.find(s => s.ci === ci));
+  updatePromptBar(idx);
+}
+
+function _updateSortBtn(btn, entry) {
+  if (!entry)                  { btn.textContent = '↕'; btn.classList.remove('active'); }
+  else if (entry.dir === 'asc'){ btn.textContent = '↑'; btn.classList.add('active'); }
+  else                         { btn.textContent = '↓'; btn.classList.add('active'); }
+}
+
+// ─── Body ─────────────────────────────────────────────────────────────────────
+function renderBody(idx) {
+  const sh      = data[sheetNames[idx]];
+  const cols    = sh.columns;
+  const tbody   = document.getElementById('body-' + idx);
+  tbody.innerHTML = '';
+  const visCis  = sh._colOrder.filter(ci => isVis(sh, ci));
+  const nVis    = visCis.length;
+
+  const baseSym = (sh.currency && sh.currency.symbol) || '$';
+  const makeRow = (rd, cls) => {
+    const tr = document.createElement('tr');
+    if (cls) tr.className = cls;
+    // rowCurrInfo: undefined/null → base; {symbol} → row-level; Array → per-column cell-level
+    const rowCurrInfo = sh._rowCurrencyMap ? sh._rowCurrencyMap.get(rd) : null;
+    visCis.forEach(ci => {
+      const col = cols[ci];
+      const td  = document.createElement('td');
+      td.dataset.col = ci;
+      td.className   = NUM_TYPES.has(col.type) ? 'num' : '';
+      const v   = rd[ci] !== undefined ? rd[ci] : null;
+      // Resolve currency symbol: cell-level → row-level → base
+      let sym = baseSym;
+      if (Array.isArray(rowCurrInfo)) {
+        const cellCurr = rowCurrInfo[ci];
+        if (cellCurr) sym = cellCurr.symbol;
+      } else if (rowCurrInfo) {
+        sym = rowCurrInfo.symbol;
+      }
+      const fmt = FMT(v, col.type, sym);
+      const bc  = BADGE_COLS.has(col.name)  ? BADGE(fmt)      : null;
+      const sc  = STATUS_COLS.has(col.name) ? STATUS_KEY(fmt) : null;
+      const blc = BOOL_COLS.has(col.name)   ? BOOL_BADGE(fmt) : null;
+      if (bc)       td.innerHTML = `<span class="badge ${bc}">${esc(fmt)}</span>`;
+      else if (blc) td.innerHTML = `<span class="badge ${blc}">${esc(fmt)}</span>`;
+      else if (sc)  td.innerHTML = `<span class="status-dot status-${sc}">${esc(fmt)}</span>`;
+      else          td.textContent = fmt;
+      tr.appendChild(td);
+    });
+    return tr;
+  };
+
+  const dataRows = sh.rows.filter(r => !rowIsSection(r) && !rowIsTotal(r)); // exclude totals from sort pool
+  const sorted   = sh._sort.length ? applySort(sh, dataRows) : null;
+  let   di       = 0; // pointer into sorted array when sorting
+
+  sh.rows.forEach(row => {
+    if (rowIsSection(row)) {
+      const tr = document.createElement('tr'); tr.className = 'section-hdr';
+      const td = document.createElement('td'); td.colSpan = Math.max(1, nVis); td.textContent = sectionText(row);
+      tr.appendChild(td); tbody.appendChild(tr);
+    } else if (rowIsTotal(row)) {
+      tbody.appendChild(makeRow(totalArray(row), 'total-row'));
+    } else if (Array.isArray(row)) {
+      // If sorting is active, pull from the pre-sorted data array in order
+      const rd = sorted ? sorted[di++] : row;
+      if (rd) tbody.appendChild(makeRow(rd, ''));
+    }
+  });
+  // If sorted, append any remaining rows (can happen if section rows altered the count)
+  if (sorted) { while (di < sorted.length) tbody.appendChild(makeRow(sorted[di++], '')); }
+  renderTotalsBar(idx);
+}
+
+// ─── Totals bar (tfoot) ────────────────────────────────────────────────────────
+const TOT_CYCLE = ['sum', 'avg', 'min', 'max', 'count'];
+
+function renderTotalsBar(idx) {
+  const sh      = data[sheetNames[idx]];
+  const cols    = sh.columns;
+  const visCis  = sh._colOrder.filter(ci => isVis(sh, ci));
+  const foot    = document.getElementById('foot-' + idx);
+  if (!foot) return;
+  foot.innerHTML = '';
+  if (!visCis.length) return;
+
+  const dataRows = sh.rows.filter(r => !rowIsSection(r) && !rowIsTotal(r));
+  const hasAny   = visCis.some(ci => sh._totals[ci]);
+  const tr       = document.createElement('tr');
+
+  visCis.forEach((ci, pos) => {
+    const col   = cols[ci];
+    const isNum = NUM_TYPES.has(col.type);
+    const td    = document.createElement('td');
+
+    if (!isNum) {
+      if (pos === 0) {
+        td.className   = 'tot-label';
+        td.textContent = hasAny ? '∑ Totals' : '∑';
+      }
+    } else {
+      const op = sh._totals[ci];
+      td.className = 'tot-cell num' + (op ? ' active' : '');
+      td.title     = op ? 'Click to change aggregation' : 'Click to add totals';
+      if (op) {
+        const nums = dataRows.map(r => parseFloat(r[ci])).filter(n => !isNaN(n));
+        let result = null;
+        if (op === 'sum')   result = nums.reduce((a, b) => a + b, 0);
+        if (op === 'avg')   result = nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : null;
+        if (op === 'min')   result = nums.length ? Math.min(...nums) : null;
+        if (op === 'max')   result = nums.length ? Math.max(...nums) : null;
+        if (op === 'count') result = nums.length;
+        const totSym = (sh.currency && sh.currency.symbol) || '$';
+        td.innerHTML = `<span class="tot-op">${esc(op)}</span>${result !== null ? esc(FMT(result, op === 'count' ? 'integer' : col.type, totSym)) : '—'}`;
+      } else {
+        td.textContent = '—';
+      }
+      td.onclick = () => {
+        const cur  = sh._totals[ci];
+        const curI = cur ? TOT_CYCLE.indexOf(cur) : -1;
+        const next = curI + 1 < TOT_CYCLE.length ? TOT_CYCLE[curI + 1] : null;
+        if (next) sh._totals[ci] = next; else delete sh._totals[ci];
+        renderTotalsBar(idx);
+        updatePromptBar(idx);
+      };
+    }
+    tr.appendChild(td);
+  });
+  foot.appendChild(tr);
+}
+
+
+// ─── Prompt bars ──────────────────────────────────────────────────────────────
+function visibleCols(idx) {
+  const sh = data[sheetNames[idx]];
+  if (!sh._colOrder) return [];
+  return sh._colOrder.filter(ci => isVis(sh, ci)).map(ci => colDisplayName(sh.columns[ci], ci));
+}
+
+function sheetSegment(sName, idx) {
+  const sh   = data[sName];
+  const cols = visibleCols(idx);
+  if (!cols.length) return '';
+  let p = sName + ': columns: ' + cols.join(', ');
+  if (sh._sort.length) {
+    p += '; sorted by: ' + sh._sort.map(s => colDisplayName(sh.columns[s.ci], s.ci) + ' ' + s.dir).join(', ');
+  }
+  const totOps = Object.entries(sh._totals).filter(([ci]) => isVis(sh, parseInt(ci)));
+  if (totOps.length) {
+    p += '; totals: ' + totOps.map(([ci, op]) => { const c = parseInt(ci); return colDisplayName(sh.columns[c], c) + ' ' + op; }).join(', ');
+  }
+  return p;
+}
+
+function updatePromptBar(idx) {
+  const panel = document.getElementById('global-col-panel');
+  if (panel && panel._rebuildGlobalPanel) {
+    const srch = panel.querySelector('input[type="text"]');
+    panel._rebuildGlobalPanel(srch ? srch.value : '');
+  }
+  updateGlobalPromptBar();
+}
+
+function togglePromptBar() {
+  const bar = document.getElementById('globalPromptBar');
+  const btn = document.getElementById('prompt-toggle-btn');
+  if (!bar) return;
+  const show = bar.style.display !== 'flex';
+  bar.style.display = show ? 'flex' : 'none';
+  if (btn) btn.classList.toggle('prompt-toggle-active', show);
+  if (show) updateGlobalPromptBar();
+}
+
+const _PLACEHOLDER_NAMES = new Set(['sample data', 'sample schema', '']);
+
+function updateGlobalPromptBar() {
+  const ta = document.getElementById('globalPbar');
+  if (!ta) return;
+  const parts = sheetNames
+    .map((name, idx) => hiddenSheets.has(idx) ? null : sheetSegment(name, idx))
+    .filter(Boolean);
+  const lines = ['Generate Carta Excel —'];
+  const realName = !_PLACEHOLDER_NAMES.has((_entityName || '').toLowerCase());
+  if (realName || _corporationId) {
+    const corp = (realName ? _entityName : '') + (_corporationId ? ' (ID: ' + _corporationId + ')' : '');
+    lines.push('Corporation: ' + corp.trim());
+  }
+  if (parts.length) {
+    lines.push('Columns:');
+    parts.forEach(p => lines.push('  ' + p));
+  }
+  ta.value = lines.join('\n');
+}
+
+// ─── Export Excel (SpreadsheetML — no library needed) ─────────────────────────
+function exportExcel(idx) {
+  const sName  = sheetNames[idx]; const sh = data[sName]; const cols = sh.columns;
+  const visCis = sh._colOrder.filter(ci => isVis(sh, ci));
+
+  const headerCells = visCis.map(ci =>
+    `<Cell ss:StyleID="header"><Data ss:Type="String">${esc(cols[ci]._synthetic ? '' : cols[ci].name)}</Data></Cell>`
+  ).join('');
+
+  const dataRows = sh.rows.filter(r => !rowIsSection(r)).map(row => {
+    const isTotal = rowIsTotal(row);
+    const rd      = totalArray(row);
+    const cells   = visCis.map(ci => {
+      const col   = cols[ci];
+      const raw   = rd[ci];
+      const isNum = NUM_TYPES.has(col.type);
+      const val   = isNum
+        ? (String(raw ?? '').replace(/[$,%]/g, '').replace(/,/g, '') || '0')
+        : esc(FMT(raw, col.type));
+      const sid   = isNum ? col.type : (isTotal ? 'total' : '');
+      return `<Cell${sid ? ` ss:StyleID="${sid}"` : ''}><Data ss:Type="${isNum ? 'Number' : 'String'}">${val}</Data></Cell>`;
+    }).join('');
+    return `<Row>${cells}</Row>`;
+  }).join('');
+
+  const xml = `<?xml version="1.0"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+          xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+  <Styles>
+    <Style ss:ID="header"><Font ss:Bold="1"/><Interior ss:Color="#EAF0F8" ss:Pattern="Solid"/></Style>
+    <Style ss:ID="total"><Font ss:Bold="1"/><Interior ss:Color="#F4F4F4" ss:Pattern="Solid"/></Style>
+    <Style ss:ID="money"><NumberFormat ss:Format="$#,##0.00"/></Style>
+    <Style ss:ID="integer"><NumberFormat ss:Format="#,##0"/></Style>
+    <Style ss:ID="decimal"><NumberFormat ss:Format="#,##0.0000"/></Style>
+    <Style ss:ID="percentage"><NumberFormat ss:Format="0.00%"/></Style>
+  </Styles>
+  <Worksheet ss:Name="${esc(sName)}">
+    <Table>
+      <Row>${headerCells}</Row>
+      ${dataRows}
+    </Table>
+  </Worksheet>
+</Workbook>`;
+
+  const blob = new Blob([xml], { type: 'application/vnd.ms-excel' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = sName.toLowerCase().replace(/\s+/g, '-') + '_' + _asOfDate + '.xls';
+  a.click(); URL.revokeObjectURL(url);
+}
+
+// ─── Global Columns + Sheets panel ───────────────────────────────────────────
+function buildGlobalColumnsPanel() {
+  sheetsNav.innerHTML = '';
+
+  const collapseAllBtn = document.createElement('button');
+  collapseAllBtn.id = 'collapse-all-btn';
+  collapseAllBtn.className = 'icon-btn';
+  collapseAllBtn.title = 'Collapse all';
+  collapseAllBtn.innerHTML = ICON_COLLAPSE_ALL;
+  collapseAllBtn.onclick = () => toggleCollapseAll();
+  sheetsNav.appendChild(collapseAllBtn);
+
+  const btn = document.createElement('button');
+  btn.id = 'columns-btn';
+  btn.innerHTML = 'Columns ' + CHEVRON;
+  sheetsNav.appendChild(btn);
+
+  const promptToggleBtn = document.createElement('button');
+  promptToggleBtn.id = 'prompt-toggle-btn';
+  promptToggleBtn.textContent = 'Excel export';
+  promptToggleBtn.onclick = () => togglePromptBar();
+  sheetsNav.appendChild(promptToggleBtn);
+
+  const spacer = document.createElement('span');
+  spacer.style.flex = '1';
+  sheetsNav.appendChild(spacer);
+
+  const panel = document.createElement('div');
+  panel.className = 'col-panel';
+  panel.id = 'global-col-panel';
+  panel.style.minWidth = '300px';
+  panel.style.maxHeight = '520px';
+  sheetsNav.appendChild(panel);
+
+  // Search
+  const srchInput = document.createElement('input');
+  srchInput.type = 'text';
+  srchInput.placeholder = 'Search sheets and columns…';
+  srchInput.style.cssText = 'width:100%;font-size:12px;border:1px solid #DEDFDF;border-radius:4px;padding:5px 8px;margin-bottom:8px;outline:none;font-family:inherit;display:block';
+  srchInput.oninput = () => rebuildGlobalPanel(srchInput.value);
+  panel.appendChild(srchInput);
+
+  // "All" checkbox
+  const allLbl = document.createElement('label'); allLbl.className = 'col-panel-all';
+  const allChk = document.createElement('input'); allChk.type = 'checkbox'; allChk.checked = true; allChk.id = 'sel-all-global';
+  allChk.onchange = () => {
+    sheetNames.forEach((sName, i) => {
+      initSheet(sName);
+      const sh = data[sName];
+      const el = document.getElementById('sheet-' + i);
+      if (allChk.checked) {
+        hiddenSheets.delete(i); sh._hidden.clear();
+        if (el) el.style.display = '';
+      } else {
+        hiddenSheets.add(i); sh._colOrder.forEach(ci => sh._hidden.add(ci));
+        if (el) el.style.display = 'none';
+      }
+      rebuildHeaders(i); renderBody(i);
+    });
+    panel.querySelectorAll('input[data-sheet-chk]').forEach(c => c.checked = allChk.checked);
+    panel.querySelectorAll('input[data-col-chk]').forEach(c => c.checked = allChk.checked);
+    updateGlobalPromptBar();
+  };
+  allLbl.appendChild(allChk); allLbl.appendChild(document.createTextNode(' All'));
+  panel.appendChild(allLbl);
+
+  const listDiv = document.createElement('div');
+  panel.appendChild(listDiv);
+
+  function rebuildGlobalPanel(query) {
+    const q = (query || '').toLowerCase();
+    listDiv.innerHTML = '';
+
+    sheetNames.forEach((sName, i) => {
+      const sh = data[sName]; initSheet(sName);
+      const sheetMatches = !q || sName.toLowerCase().includes(q);
+      const matchingCols = sh._colOrder.filter(ci => sheetMatches || colDisplayName(sh.columns[ci], ci).toLowerCase().includes(q));
+      if (q && !sheetMatches && matchingCols.length === 0) return;
+
+      // Sheet row
+      const shRow = document.createElement('div'); shRow.className = 'gcol-sheet-row';
+
+      const shChk = document.createElement('input');
+      shChk.type = 'checkbox'; shChk.checked = !hiddenSheets.has(i); shChk.dataset.sheetChk = i;
+      shChk.onchange = e => {
+        e.stopPropagation();
+        const el = document.getElementById('sheet-' + i);
+        if (shChk.checked) {
+          hiddenSheets.delete(i); sh._hidden.clear();
+          if (el) el.style.display = '';
+          colsDiv.querySelectorAll('input[data-col-chk]').forEach(c => c.checked = true);
+        } else {
+          hiddenSheets.add(i); sh._colOrder.forEach(ci => sh._hidden.add(ci));
+          if (el) el.style.display = 'none';
+          colsDiv.querySelectorAll('input[data-col-chk]').forEach(c => c.checked = false);
+        }
+        syncGlobalAllChk(); rebuildHeaders(i); renderBody(i); updateGlobalPromptBar();
+      };
+
+      const shName = document.createElement('span'); shName.className = 'gcol-sheet-name'; shName.textContent = sName;
+      shName.onclick = e => {
+        e.stopPropagation();
+        if (hiddenSheets.has(i)) {
+          hiddenSheets.delete(i); shChk.checked = true;
+          const el = document.getElementById('sheet-' + i);
+          if (el) el.style.display = '';
+          syncGlobalAllChk(); updateGlobalPromptBar();
+        }
+        if (collapsedSheets.has(i)) toggleSheetCollapse(i);
+        document.getElementById('anchor-' + i)?.scrollIntoView({behavior: 'smooth', block: 'start'});
+        panel.style.display = 'none';
+      };
+
+      // Toggle columns section inside the panel
+      const colsDiv = document.createElement('div'); colsDiv.className = 'gcol-cols';
+      const isSectionCollapsed = _panelSectionCollapsed.has(i) && !q;
+      if (isSectionCollapsed) colsDiv.style.display = 'none';
+
+      const togBtn = document.createElement('button'); togBtn.className = 'gcol-toggle';
+      togBtn.textContent = isSectionCollapsed ? '▶' : '▼';
+      togBtn.onclick = e => {
+        e.stopPropagation();
+        if (_panelSectionCollapsed.has(i)) {
+          _panelSectionCollapsed.delete(i); colsDiv.style.display = ''; togBtn.textContent = '▼';
+        } else {
+          _panelSectionCollapsed.add(i); colsDiv.style.display = 'none'; togBtn.textContent = '▶';
+        }
+      };
+
+      shRow.appendChild(shChk); shRow.appendChild(shName); shRow.appendChild(togBtn);
+      listDiv.appendChild(shRow);
+
+      // Column rows
+      const colsToShow = q ? matchingCols : sh._colOrder;
+      colsToShow.forEach(ci => {
+        const col = sh.columns[ci];
+        const colRow = document.createElement('div'); colRow.className = 'col-row';
+
+        const colChk = document.createElement('input');
+        colChk.type = 'checkbox'; colChk.checked = isVis(sh, ci); colChk.dataset.colChk = ci;
+        colChk.onchange = () => {
+          if (colChk.checked) {
+            sh._hidden.delete(ci);
+            if (hiddenSheets.has(i)) {
+              hiddenSheets.delete(i);
+              const el = document.getElementById('sheet-' + i);
+              if (el) el.style.display = '';
+              shChk.checked = true;
+            }
+          } else {
+            sh._hidden.add(ci);
+          }
+          syncGlobalAllChk(); rebuildHeaders(i); renderBody(i); updateGlobalPromptBar();
+        };
+
+        const colName = document.createElement('span'); colName.className = 'col-name'; colName.textContent = colDisplayName(col, ci);
+
+        const sortBtn = document.createElement('button');
+        sortBtn.className = 'col-sort-btn'; sortBtn.dataset.sortCol = ci;
+        _updateSortBtn(sortBtn, sh._sort.find(s => s.ci === ci));
+        sortBtn.onclick = e => { e.stopPropagation(); cycleSortCol(i, ci); };
+
+        colRow.appendChild(colChk); colRow.appendChild(colName); colRow.appendChild(sortBtn);
+        colsDiv.appendChild(colRow);
+      });
+
+      listDiv.appendChild(colsDiv);
+    });
+  }
+
+  panel._rebuildGlobalPanel = rebuildGlobalPanel;
+  rebuildGlobalPanel('');
+
+  btn.onclick = () => {
+    const isOpen = panel.style.display === 'block';
+    if (!isOpen) {
+      const r = btn.getBoundingClientRect();
+      panel.style.top  = (r.bottom + 4) + 'px';
+      panel.style.left = r.left + 'px';
+      panel.style.right = 'auto';
+      panel.style.display = 'block';
+      srchInput.value = '';
+      rebuildGlobalPanel('');
+      srchInput.focus();
+      setTimeout(() => {
+        function outside(e) {
+          if (!panel.contains(e.target) && e.target !== btn) {
+            panel.style.display = 'none';
+            document.removeEventListener('click', outside);
+          }
+        }
+        document.addEventListener('click', outside);
+      }, 0);
+    } else {
+      panel.style.display = 'none';
+    }
+  };
+}
+
+function syncGlobalAllChk() {
+  const allChk = document.getElementById('sel-all-global');
+  if (!allChk) return;
+  let total = 0, hidden = 0;
+  sheetNames.forEach((sName, i) => {
+    total++; if (hiddenSheets.has(i)) { hidden++; return; }
+    const sh = data[sName];
+    if (sh._colOrder) { total += sh._colOrder.length; hidden += sh._colOrder.filter(ci => sh._hidden.has(ci)).length; }
+  });
+  allChk.checked       = hidden === 0;
+  allChk.indeterminate = hidden > 0 && hidden < total;
+}
+
+function toggleSheetCollapse(idx) {
+  const div = document.getElementById('sheet-' + idx);
+  if (!div) return;
+  if (collapsedSheets.has(idx)) {
+    collapsedSheets.delete(idx);
+    div.classList.remove('collapsed');
+  } else {
+    collapsedSheets.add(idx);
+    div.classList.add('collapsed');
+  }
+  updateCollapseAllBtn();
+}
+
+function updateCollapseAllBtn() {
+  const btn = document.getElementById('collapse-all-btn');
+  if (!btn) return;
+  const visibleIdxs  = sheetNames.map((_, i) => i).filter(i => !hiddenSheets.has(i));
+  const allCollapsed = visibleIdxs.length > 0 && visibleIdxs.every(i => collapsedSheets.has(i));
+  btn.innerHTML = allCollapsed ? ICON_EXPAND_ALL : ICON_COLLAPSE_ALL;
+  btn.title     = allCollapsed ? 'Expand all'   : 'Collapse all';
+}
+
+function toggleCollapseAll() {
+  const visibleIdxs  = sheetNames.map((_, i) => i).filter(i => !hiddenSheets.has(i));
+  const allCollapsed = visibleIdxs.length > 0 && visibleIdxs.every(i => collapsedSheets.has(i));
+  visibleIdxs.forEach(i => {
+    const div = document.getElementById('sheet-' + i);
+    if (allCollapsed) {
+      collapsedSheets.delete(i);
+      if (div) div.classList.remove('collapsed');
+    } else {
+      collapsedSheets.add(i);
+      if (div) div.classList.add('collapsed');
+    }
+  });
+  updateCollapseAllBtn();
+}
+// ─── Boot ─────────────────────────────────────────────────────────────────────
+(function () {
+  if (typeof _REPORT_PAYLOAD !== 'undefined') { // eslint-disable-line no-undef
+    var payload = _REPORT_PAYLOAD; // eslint-disable-line no-undef
+    if (typeof _REPORT_PARAMS !== 'undefined' && _REPORT_PARAMS.config) { // eslint-disable-line no-undef
+      payload = Object.assign({}, payload, { config: Object.assign({}, payload.config, _REPORT_PARAMS.config) }); // eslint-disable-line no-undef
+    }
+    initReport(payload);
+  } else {
+    var dataUrl = new URLSearchParams(location.search).get('data');
+    if (dataUrl) {
+      fetch(dataUrl)
+        .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(initReport)
+        .catch(function(e) { console.error('Could not load ' + dataUrl + ': ' + e.message); });
+    }
+  }
+}());
+</script>
+</body>
+</html>
