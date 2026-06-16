@@ -143,7 +143,7 @@ If the file exists, its instructions override the defaults in this skill for any
 
    **Filters** — for supported report types (`common_securities_report`, `equity_awards_outstanding`, `equity_plan_granted_report`, `options_outstanding_report`, `securities_ledger_report`, `share_registry_report`): if the user mentions specific stakeholders, share classes, equity plans, or securities by name, resolve their IDs using the filter lookup commands in [MCP Tool Reference](#mcp-tool-reference) and pass the matching filter params as comma-separated strings — the report runs faster. `security_ids` takes comma-separated `TYPE:ID` strings (e.g. `"OPTION:42,CERTIFICATE:7"`).
 
-4. **Emit a status message before dispatching subagents** — before triggering any report generation, output a plain-language message to the user.
+4. **Emit a status message before dispatching subagents** — before triggering any report generation, output a plain-language message to the user. Record the current time as `_report_start_time` (epoch seconds) on the **main thread**, immediately before dispatching the background `Agent` calls in steps 4b and 4c — this is the start of the generation clock. Do not record this inside the subagents. Capture it with: `UV_PYTHON_DOWNLOADS=never uv run python -c "import time; print(int(time.time()))"` (this form is already covered by the skill's `allowed-tools`).
 
    **Infer company size from the stakeholder count.** After resolving `corporation_id` in Step 1, call:
    ```
@@ -331,7 +331,10 @@ If the file exists, its instructions override the defaults in this skill for any
 
    **Always present a customization checkpoint after the artifact renders — every artifact, without exception:**
 
-   > Here's your **{Report Type}** for **{Company Name}** — {N} rows as of {date}.
+   Compute `{elapsed}` as `(current epoch seconds) − _report_start_time`, rounded to the nearest whole second.
+   Compute `{N}` as `filtered_row_count` (sum across all sheets) from `report_processor.py`'s `stats` output.
+
+   > Here's your **{Report Type}** for **{Company Name}** — {N} rows as of {date}, built in {elapsed}s.
    >
    > _(If the original prompt specified transforms, summarize them here.)_
    >
