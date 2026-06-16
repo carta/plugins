@@ -143,11 +143,18 @@ If the file exists, its instructions override the defaults in this skill for any
 
    **Filters** — for supported report types (`common_securities_report`, `equity_awards_outstanding`, `equity_plan_granted_report`, `options_outstanding_report`, `securities_ledger_report`, `share_registry_report`): if the user mentions specific stakeholders, share classes, equity plans, or securities by name, resolve their IDs using the filter lookup commands in [MCP Tool Reference](#mcp-tool-reference) and pass the matching filter params as comma-separated strings — the report runs faster. `security_ids` takes comma-separated `TYPE:ID` strings (e.g. `"OPTION:42,CERTIFICATE:7"`).
 
-4. **Emit a status message before dispatching subagents** — before triggering any report generation, output a plain-language message to the user. The message must:
-   - Name the report type being fetched (use the human-readable name, not the internal `report_type` slug)
-   - Give a rough time estimate: "This usually takes 30 to 90 seconds depending on company size."
+4. **Emit a status message before dispatching subagents** — before triggering any report generation, output a plain-language message to the user.
 
-   Example: "Fetching your **Securities Ledger** report for Meetly — this usually takes 30 to 90 seconds depending on company size."
+   **Infer company size from the stakeholder count.** After resolving `corporation_id` in Step 1, call:
+   ```
+   call_tool({"name": "cap_table__get__stakeholders", "arguments": { corporation_id }})
+   ```
+   The default (summary) response shape is `{ count: N, by_type: {...} }`. Use `count` as the size signal. If a stakeholder call without a `search` filter was already made this session, reuse the cached `count` rather than calling again.
+
+   Branch the message based on `count`:
+
+   - **Fast path (`count` < 50):** "Fetching your **{Report Type}** for {Company} — this usually takes under 30 seconds."
+   - **Slow path (`count` ≥ 50):** "Fetching your **{Report Type}** for {Company} — this may take a minute or more for larger cap tables."
 
    Do not skip this message. Emit it as your last output before any `Agent` tool call in step 4.
 
@@ -397,9 +404,14 @@ call_tool({"name": "reporting__create__report", "arguments": { corporation_id, r
   #     show_events_ledger_sheet     — true | false (REQUIRED)
 
 # Filter ID lookup commands:
+call_tool({"name": "cap_table__get__stakeholders", "arguments": { corporation_id }})
+  → { count: N, by_type: { employee: N, investor: N, ... } }
+  # Summary mode (no search param) — returns total stakeholder count and breakdown by type.
+  # Use count to infer company size for status message branching (Step 4).
+
 call_tool({"name": "cap_table__get__stakeholders", "arguments": { corporation_id, search: "<name>" }})
   → { results: [{ id, full_name, email, event_relationship }] }
-  # Resolves a stakeholder name to its numeric id for use in stakeholder_ids.
+  # Search mode — resolves a stakeholder name to its numeric id for use in stakeholder_ids.
   # search matches full_name and email. Available to all users.
 
 call_tool({"name": "cap_table__get__certificate_share_classes", "arguments": { corporation_id }})
