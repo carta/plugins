@@ -214,6 +214,14 @@ If the user mentioned a numeric corporation ID anywhere (e.g. *"corp 7"*, *"corp
 
 If the user named a company (e.g. *"benchmarks for Acme"*), call `list_accounts(search="Acme")`. Filter results to entries where `id` starts with `corporation_pk:`. If exactly one match, use it. If multiple, proceed to Path 4.
 
+> **HARD RULE — only ever use a name and `corporation_pk` that appear verbatim in the `list_accounts` response.** The corp you act on MUST be one returned by the API for this query, copied exactly. Never:
+> - invent, complete, or correct a company name the API didn't return,
+> - blend or merge two different returned names into one (e.g. seeing "Acme Labs" and "Acme Health" and proceeding with "Acme"),
+> - assume a corp exists because the user named it — if `list_accounts(search=...)` returns it, it exists; if it doesn't, it doesn't,
+> - reuse a name/ID remembered from earlier in the conversation instead of the current response.
+>
+> If the search returns **no** `corporation_pk:` matches, do NOT guess or substitute the closest-looking corp. Tell the user you couldn't find a company by that name and ask them to confirm the exact name or give the numeric corp ID — then re-run `list_accounts`. A benchmark for the wrong (or a non-existent) corp is worse than asking again.
+
 **Path 3 — Single account (auto-select, no question needed)**
 
 If the user gave no corp hint at all, call `list_accounts()` with no search. Filter to `corporation_pk:` entries. If exactly **one** corporation is returned, use it automatically — do **not** ask the user to confirm something they have no choice about.
@@ -222,7 +230,9 @@ If the user gave no corp hint at all, call `list_accounts()` with no search. Fil
 
 If multiple corporations are found, use `AskUserQuestion` immediately:
 - Question: *"Which company should I look up benchmarks for?"*
-- Options: corporation names from the list (cap at 10; offer "Other" if more)
+- Options: corporation names **copied verbatim from the `list_accounts` response** (cap at 10; offer "Other" if more). Do not paraphrase, shorten, or normalize the names — present them exactly as returned so the user picks a real corp.
+
+After the user picks, map their selection back to the **exact** `list_accounts` entry it came from and use that entry's `corporation_pk`. If the user typed a free-text answer via "Other" that doesn't match a returned name, treat it as a new name hint and re-run Path 2 — do not approximate it to one of the listed corps.
 
 Do **not** show the user a raw JSON dump of accounts. Do **not** attempt any compensation call before they answer.
 
@@ -238,7 +248,30 @@ Do **not** show the user a raw JSON dump of accounts. Do **not** attempt any com
 
 Extract the numeric `corporation_pk` (the integer after `corporation_pk:`) for all subsequent calls.
 
-### Step 2 — Map role to CTC taxonomy
+### Step 2 — Verify CTC subscription (REQUIRED — HARD GATE)
+
+> **STOP. The subscription check is a hard gate. Do not ask for — or even mention — the role until `is_subscribed: true` comes back.**
+>
+> Asking for the role is **Step 3a**, and Step 3a does not begin until this step returns `is_subscribed: true`. In the turn where you run the subscription check, your message to the user must contain **only** that you are verifying CTC access — nothing about a role, job title, level, or "in the meantime / simultaneously / while that runs." A corp with no CTC subscription (or no caller access) has no benchmark data, so any role the user gives would be wasted effort. Verify first; ask for the role only once you know there is data to return.
+>
+> **Anti-patterns — never do these (they defeat the gate):**
+> - ❌ "Let me check the subscription and get the role from you simultaneously…"
+> - ❌ "Verifying access — meanwhile, what role do you want benchmarks for?"
+> - ❌ "Meetly has a subscription. What role…" bundled into the *same* turn as outcomes you haven't branched on yet
+> - ❌ Calling the `carta-compensation-rolematcher` skill, or asking the user for a title/level, before `is_subscribed: true`
+>
+> The role question is a **separate turn** that happens *after* a confirmed `is_subscribed: true`.
+
+```
+call_tool({"name": "compensation__get__subscription_status", "arguments": {"corporation_id": <corporation_pk>}})
+```
+
+Three outcomes:
+- `is_subscribed: true` → **only now** proceed to Step 3a and ask for the role.
+- `is_subscribed: false` → stop and send the subscription message (see **Subscription gating**). Do not call `plans/` or `benchmark/` — they return empty data anyway and waste a round-trip. Do not invoke the rolematcher — don't make the user level a role we can't benchmark.
+- **403** → the caller lacks a CTC role on this corp. Stop and send the no-access message (see **Access gating**). Do not retry or re-authenticate.
+
+### Step 3a — Map role to CTC taxonomy
 
 **Invoke the `carta-compensation-rolematcher` skill** to classify free-text job titles, descriptions, or pasted job postings into the CTC taxonomy. Use the Skill tool, not Read:
 
@@ -273,17 +306,6 @@ If the user provides only a job title, that is sufficient minimum input for the 
 **Anti-patterns:**
 - ❌ Reading the rolematcher SKILL.md file directly instead of invoking the skill — the skill has tools and runtime context the inline read can't replicate
 - ❌ Freelancing the taxonomy mapping ("this looks like SENIOR2 to me") — always defer to `carta-compensation-rolematcher` for the classification
-
-### Step 3a — Verify CTC subscription (REQUIRED)
-
-```
-call_tool({"name": "compensation__get__subscription_status", "arguments": {"corporation_id": <corporation_pk>}})
-```
-
-Three outcomes:
-- `is_subscribed: true` → proceed to Step 3b.
-- `is_subscribed: false` → stop and send the subscription message (see **Subscription gating**). Do not call `plans/` or `benchmark/` — they return empty data anyway and waste a round-trip.
-- **403** → the caller lacks a CTC role on this corp. Stop and send the no-access message (see **Access gating**). Do not retry or re-authenticate.
 
 ### Step 3b — Fetch the corporation's active benchmark version + peer group
 
@@ -487,7 +509,7 @@ If the user asks about the current benchmark version or wants to query against a
 
 Compensation-service's `plans/` and `benchmark/` endpoints return 200 even for corporations that don't have an active CTC subscription — the response just has empty/null ratings. **You cannot infer subscription status from those calls.** That's why `subscription_status` exists.
 
-Always call `compensation:get:subscription_status` FIRST for every corporation you intend to query. It returns `{corporation_id, is_subscribed}`.
+Once you have resolved the corporation (Step 1), call `compensation:get:subscription_status` as **Step 2 — before any `plans/` or `benchmark/` call, and before asking the user for a role** (see Step 2 above). It returns `{corporation_id, is_subscribed}`. "First" here means first among the *compensation* calls, not before corp resolution — you still need a `corporation_pk` from Step 1 to make this call.
 
 **Single-corp query:**
 1. `call_tool({"name": "compensation__get__subscription_status", "arguments": {"corporation_id": <id>}})`
@@ -517,7 +539,7 @@ A `compensation:*` read can fail for two unrelated reasons that must NOT be conf
 - **No subscription** — the corporation doesn't have Carta Total Compensation. Remediation: a sales/demo conversation.
 - **No access** — the corporation HAS CTC, but the **current user** doesn't hold a CTC role on it (Company Viewer, Compensation Manager, Company Editor, Company Admin). A user can be a stakeholder, board member, or cap-table admin without any CTC role. Remediation: an internal role grant — NOT a sales conversation.
 
-> **You distinguish these — the MCP layer does not.** The carta MCP gateway is a thin, domain-agnostic adapter: when a compensation command hits a 403 it surfaces the raw error, it does NOT probe subscription state or compose a friendly message. The authoritative signal for the distinction is `compensation:get:subscription_status`: when it succeeds it returns `{corporation_id, is_subscribed}` — `false` is no-subscription, `true` means a later `plan`/`benchmark` 403 is no-access. When it *itself* returns a 403, that 403 is the signal: the caller lacks a CTC role, so it's no-access. Step 3a already calls it up front — use its result (or its 403) to classify, per the table below.
+> **You distinguish these — the MCP layer does not.** The carta MCP gateway is a thin, domain-agnostic adapter: when a compensation command hits a 403 it surfaces the raw error, it does NOT probe subscription state or compose a friendly message. The authoritative signal for the distinction is `compensation:get:subscription_status`: when it succeeds it returns `{corporation_id, is_subscribed}` — `false` is no-subscription, `true` means a later `plan`/`benchmark` 403 is no-access. When it *itself* returns a 403, that 403 is the signal: the caller lacks a CTC role, so it's no-access. Step 2 already calls it up front — use its result (or its 403) to classify, per the table below.
 
 **How to classify a failure:**
 

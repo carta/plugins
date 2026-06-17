@@ -89,3 +89,5 @@ def normalize_html(s: str) -> str:
     # Collapse remaining whitespace runs
     s = re.sub(r"\s+", " ", s)
     return s.strip()
+
+
