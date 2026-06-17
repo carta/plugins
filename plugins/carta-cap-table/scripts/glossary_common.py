@@ -6,7 +6,6 @@ update-stonly-glossary.py (per-section, source-ordered records for Stonly sync).
 from __future__ import annotations
 
 import json
-import os
 import re
 import subprocess
 import sys

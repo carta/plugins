@@ -1,0 +1,150 @@
+{
+  "guide_id": "n9AohqIopQ",
+  "team_id": "43540",
+  "nav_steps": [4815749, 4821381, 4821377, 4821421, 4821389, 4821419],
+  "sections": [
+    {
+      "report": "Cap Table Report",
+      "section": "Summary",
+      "steps": [
+        {"id": 4821382, "title": "Summary tab fields", "has_aside": true}
+      ]
+    },
+    {
+      "report": "Cap Table Report",
+      "section": "Intermediate and Detailed tabs",
+      "steps": [
+        {"id": 4821404, "title": "Intermediate and detailed tabs fields", "has_aside": false}
+      ]
+    },
+    {
+      "report": "Cap Table Report",
+      "section": "Securities ledgers by type and class — Share class tabs",
+      "steps": [
+        {"id": 4821387, "title": "Share class tabs", "has_aside": false},
+        {"id": 4821413, "title": "Share class tabs continued", "has_aside": false},
+        {"id": 4821385, "title": "Share class tabs continued", "has_aside": false},
+        {"id": 4821403, "title": "Share class tabs continued", "has_aside": false},
+        {"id": 4821399, "title": "Share class tabs continued", "has_aside": false}
+      ]
+    },
+    {
+      "report": "Cap Table Report",
+      "section": "Securities ledgers by type and class — Equity incentive plan tabs",
+      "steps": [
+        {"id": 4821420, "title": "Equity incentive plan tabs", "has_aside": false},
+        {"id": 4821418, "title": "Equity incentive plan tabs continued", "has_aside": false},
+        {"id": 4821406, "title": "Equity incentive plan tabs continued", "has_aside": false},
+        {"id": 4821378, "title": "Equity incentive plan tabs continued", "has_aside": false},
+        {"id": 4821412, "title": "Equity incentive plan tabs continued", "has_aside": false},
+        {"id": 4821379, "title": "Equity incentive plan tabs continued", "has_aside": false}
+      ]
+    },
+    {
+      "report": "Cap Table Report",
+      "section": "Securities ledgers by type and class — Warrant ledger tabs",
+      "steps": [
+        {"id": 4821388, "title": "Warrant ledger tabs", "has_aside": false},
+        {"id": 4821397, "title": "Warrant ledger tabs continued", "has_aside": false}
+      ]
+    },
+    {
+      "report": "Cap Table Report",
+      "section": "Securities ledgers by type and class — Convertible ledger tabs",
+      "steps": [
+        {"id": 4821376, "title": "Convertible ledger tabs", "has_aside": false},
+        {"id": 4821383, "title": "Convertible ledger tabs continued", "has_aside": false}
+      ]
+    },
+    {
+      "report": "Exercised and Settled Report",
+      "section": "Option exercised tab",
+      "steps": [
+        {"id": 4821414, "title": "Option exercised tab fields", "has_aside": false},
+        {"id": 4821395, "title": "Option exercised tab fields continued", "has_aside": false},
+        {"id": 4821386, "title": "Option exercised tab fields continued", "has_aside": false}
+      ]
+    },
+    {
+      "report": "Exercised and Settled Report",
+      "section": "RSUs settled tab",
+      "steps": [
+        {"id": 4821400, "title": "RSUs settled tab fields", "has_aside": false},
+        {"id": 4821409, "title": "RSU settled tab fields continued", "has_aside": false}
+      ]
+    },
+    {
+      "report": "Exercised and Settled Report",
+      "section": "Pending exercises tab",
+      "steps": [
+        {"id": 4821410, "title": "Pending exercises tab fields", "has_aside": false},
+        {"id": 4821390, "title": "Pending exercises tab fields continued", "has_aside": false},
+        {"id": 4821394, "title": "Pending exercises tab fields continued", "has_aside": false}
+      ]
+    },
+    {
+      "report": "Exercised and Settled Report",
+      "section": "Sales tab",
+      "steps": [
+        {"id": 4821402, "title": "Sales tab fields", "has_aside": false},
+        {"id": 4821417, "title": "Sales tab fields continued", "has_aside": false}
+      ]
+    },
+    {
+      "report": "Securities Ledger Report",
+      "section": "Securities ledger glossary",
+      "steps": [
+        {"id": 4821405, "title": "Securities ledger - glossary of fields", "has_aside": false},
+        {"id": 4821415, "title": "Securities ledger - glossary of fields continued", "has_aside": false},
+        {"id": 4821398, "title": "Securities ledger - glossary of fields continued", "has_aside": false},
+        {"id": 4821401, "title": "Securities ledger - glossary of fields continued", "has_aside": false}
+      ]
+    },
+    {
+      "report": "Stakeholder Ownership Details Report",
+      "section": "Stakeholder ownership details tab",
+      "steps": [
+        {"id": 4821411, "title": "Stakeholder ownership details tab fields", "has_aside": false}
+      ]
+    },
+    {
+      "report": "Stakeholder Ownership Details Report",
+      "section": "Certificates tab",
+      "steps": [
+        {"id": 4821416, "title": "Certificates tab fields", "has_aside": false},
+        {"id": 4821393, "title": "Certificates tab fields continued", "has_aside": false}
+      ]
+    },
+    {
+      "report": "Stakeholder Ownership Details Report",
+      "section": "Warrant tab",
+      "steps": [
+        {"id": 4821391, "title": "Warrant tab fields", "has_aside": false},
+        {"id": 4821384, "title": "Warrant tab fields continued", "has_aside": false}
+      ]
+    },
+    {
+      "report": "Stakeholder Ownership Details Report",
+      "section": "Convertibles tab",
+      "steps": [
+        {"id": 4821396, "title": "Convertibles tab fields", "has_aside": false}
+      ]
+    },
+    {
+      "report": "Stakeholder Ownership Details Report",
+      "section": "Vesting details tab",
+      "steps": [
+        {"id": 4821380, "title": "Vesting details tab fields", "has_aside": false}
+      ]
+    },
+    {
+      "report": "Stakeholder Ownership Details Report",
+      "section": "Equity incentive plan tab",
+      "steps": [
+        {"id": 4821408, "title": "Equity incentive plan tab fields", "has_aside": false},
+        {"id": 4821392, "title": "Equity incentive plan tab fields continued", "has_aside": false},
+        {"id": 4821407, "title": "Equity incentive plan tab fields continued", "has_aside": false}
+      ]
+    }
+  ]
+}
