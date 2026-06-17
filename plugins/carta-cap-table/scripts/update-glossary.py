@@ -41,94 +41,17 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
-import subprocess
 import sys
 import tempfile
-import urllib.error
-import urllib.parse
-import urllib.request
 
-SHEETS_BASE = "https://sheets.googleapis.com/v4/spreadsheets"
-COLUMN_HEADER_MARKER = "carta field"
-
-
-def gcloud_token() -> str:
-    try:
-        result = subprocess.run(
-            ["gcloud", "auth", "print-access-token"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        return result.stdout.strip()
-    except FileNotFoundError:
-        print(
-            "ERROR: gcloud is not installed or not on PATH.\n"
-            "Install it:\n"
-            "  macOS:   brew install --cask google-cloud-sdk\n"
-            "  Windows: winget install Google.CloudSDK\n"
-            "Then run: gcloud auth login --enable-gdrive-access",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-    except subprocess.CalledProcessError as exc:
-        print(
-            f"ERROR: gcloud auth failed — {exc}\n"
-            "Run: gcloud auth login --enable-gdrive-access",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-
-
-def http_get(url: str, token: str) -> dict:
-    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
-    try:
-        with urllib.request.urlopen(req) as resp:
-            return json.loads(resp.read())
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode(errors="replace")
-        print(f"ERROR: GET {url} → {exc.code}\n{detail}", file=sys.stderr)
-        sys.exit(2)
-    except urllib.error.URLError as exc:
-        print(f"ERROR: GET {url} → network error: {exc.reason}", file=sys.stderr)
-        sys.exit(2)
-
-
-def list_visible_tabs(token: str, sheet_id: str) -> list[str]:
-    url = f"{SHEETS_BASE}/{sheet_id}?fields=sheets.properties"
-    data = http_get(url, token)
-    return [
-        s["properties"]["title"]
-        for s in data.get("sheets", [])
-        if not s["properties"].get("hidden", False)
-    ]
-
-
-def read_tab(token: str, sheet_id: str, tab: str) -> list[list[str]]:
-    range_ = urllib.parse.quote(f"'{tab}'!A1:ZZ1000000")
-    url = f"{SHEETS_BASE}/{sheet_id}/values/{range_}"
-    return http_get(url, token).get("values", [])
-
-
-def normalize_tabs(header: str) -> str:
-    """Convert a section header into a short, clean Tabs string.
-
-    Examples:
-      "Summary tab"                                        → "Summary"
-      "Intermediate and Detailed tabs"                     → "Intermediate, Detailed"
-      "Securities ledgers by type and class - Share classes tabs" → "Share classes"
-      "Equity Plan - Available report"                     → "Available"
-    """
-    # Take the part after " - " when present (descriptive prefix before a dash)
-    if " - " in header:
-        header = header.split(" - ", 1)[1]
-    # Strip trailing "tab(s)" or "report" (case-insensitive)
-    header = re.sub(r"\s+tabs?\s*$", "", header, flags=re.IGNORECASE)
-    header = re.sub(r"\s+report\s*$", "", header, flags=re.IGNORECASE)
-    # Convert " and " separators to ", "
-    header = re.sub(r"\s+and\s+", ", ", header, flags=re.IGNORECASE)
-    return header.strip()
+from glossary_common import (
+    COLUMN_HEADER_MARKER,
+    gcloud_token,
+    http_get,
+    list_visible_tabs,
+    normalize_tabs,
+    read_tab,
+)
 
 
 def parse_tab_rows(values: list[list[str]]) -> list[dict]:
