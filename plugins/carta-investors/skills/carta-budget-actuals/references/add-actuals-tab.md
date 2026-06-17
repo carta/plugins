@@ -38,16 +38,18 @@ Header rows: A1 firm / A2 `<year> Actuals` / A4 `Amounts in <resolved_currency>`
 
 Row 6 column headers: `Account | Jan <year> | … | Dec <year> | <year> Total`. Bold, white-on-black.
 
+**Header text format trap:** before writing month labels ("Jan 2026", "Dec 2026") to row 6, apply `numberFormat = [["@"]]` (text format) to the range B6:M6 first, then write the values. Without this, Excel coerces "Jan 2026" → date serial 46023.
+
 Data rows:
 - Same section order as Budget tab.
 - One row per matched account, sorted by `gl_code`.
 - Actual = hardcoded from `get-actuals.md`. `0` for no activity; **blank** for future months.
 - Annual total: `=SUM(B<row>:M<row>)`.
-- Subtotal per section: bold, top thin border, `=SUM(<section>)` per column.
+- Subtotal per section: bold, top thin border. **Formula per column: `=SUM(<col><first_row>:<col><last_row>)` — same column only.** Never expand the range leftward from B: column C subtotal must be `=SUM(C<first>:C<last>)`, not `=SUM(B<first>:C<last>)`. The running-range trap produces cumulative totals instead of per-column sums.
 
-Bottom rows: `Total Income` / blank / `Total Expenses` / blank / `Net Operating Income` (= Income - Expenses), per column.
+Bottom rows: `Total Income` / blank / `Total Expenses` / blank / `Net Operating Income` (= Income - Expenses), per column. Use `=<col><income_subtotal_row>` and `=<col><expense_subtotal_row>` (not new SUM ranges) so the summary rows trace directly to their section subtotals.
 
-**Formatting:** accounting locale-token currency format. No freeze panes. `autofit_columns` on B:N (fixed widths < 16pt show `####`). Column A fixed ~30.
+**Formatting:** locale-specific currency token — `[$$-en-US]#,##0.00_);([$$-en-US]#,##0.00);"-"` for USD (use matching token for other currencies). Never use bare `$`, `_($*`, or quoted `"$"` — Excel strips quotes from stored format strings, leaving a bare `$` that renders as the system currency. State currency in cell A4: `Amounts in <resolved_currency>`. No freeze panes. `autofit_columns` on B:N (fixed widths < 16pt show `####`). Column A fixed ~30.
 
 ### 5. Approval gate
 

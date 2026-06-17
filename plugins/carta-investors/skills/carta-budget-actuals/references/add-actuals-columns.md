@@ -74,7 +74,7 @@ Bottom rows: `Total Income` / blank / `Total Expenses` / blank / `Net Operating 
 
 **Use `fill_formula_horizontal` and `fill_formula_vertical`** for variance/YTD formulas — one seed, the script translates relative refs. Avoids the single-cell-overlay problem (thousands of individual writes).
 
-**Formatting:** accounting locale-token currency format. No freeze panes. Column A fixed ~180pt for labels; `autofit_columns` on B:AN after data write (fixed widths < 16pt show `####` for 5+ digit currency).
+**Formatting:** locale-specific currency token — `[$$-en-US]#,##0.00_);([$$-en-US]#,##0.00);"-"` for USD (use matching token for other currencies). Never use bare `$`, `_($*`, or quoted `"$"` — Excel strips quotes, leaving a bare `$` that renders as the system currency. No freeze panes. Column A fixed ~180pt for labels; `autofit_columns` on B:AN after data write (fixed widths < 16pt show `####` for 5+ digit currency).
 
 #### Variance column color coding
 

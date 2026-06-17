@@ -171,9 +171,15 @@ In both modes:
 
 ## Step 4 — Pull YTD actuals
 
-Use [`references/get-actuals.md`](references/get-actuals.md)
-as the canonical source. `<period_start>` = first day of budget year,
-`<period_end>` = today (or last completed month — ask).
+Use [`references/get-actuals.md`](references/get-actuals.md) as the canonical
+source. `<period_start>` = first day of budget year, `<period_end>` = today
+(or last completed month — ask).
+
+In parallel, call `read_skill(file_path="references/vendor-actuals.md")` and
+run the vendor actuals query with the same period bounds — this loads
+`<VENDOR_ACTUALS>` into session context so vendor questions (e.g. "which vendor
+is driving the Travel overage?") are answerable for the rest of the session
+without a second round-trip.
 
 ## Step 5 — Compute pacing metrics
 
@@ -266,7 +272,7 @@ user can rerun by editing source data).
 
 ### Branding verification (REQUIRED, observable, excel-addin only)
 
-After running the brand block for every tab this skill touched, run this verification as a **separate** `execute_office_js` call before proceeding to Step 8:
+After running the brand block for every tab this skill touched, run this verification as a **separate** `execute_office_js` call before proceeding to Step 8. Substitute `<sample_amount_cell>` with one amount cell from the written range (e.g. `C7`):
 
 ```javascript
 const tabs = [/* "Budget vs Actuals", ... — substitute the actual tab names touched this run */];
@@ -274,13 +280,34 @@ const result = {};
 for (const tabName of tabs) {
   const sheet = context.workbook.worksheets.getItem(tabName);
   sheet.shapes.load("items/name");
+  const cell = sheet.getRange("<sample_amount_cell>");
+  cell.load("numberFormat");
   await context.sync();
-  result[tabName] = sheet.shapes.items.map(s => s.name);
+  result[tabName] = {
+    shapes:      sheet.shapes.items.map(s => s.name),
+    logoFound:   sheet.shapes.items.some(s => s.name === "CartaLogo"),
+    numberFormat: cell.numberFormat[0][0],
+    currencyOk:  cell.numberFormat[0][0].includes("[$"),  // locale-specific currency token, e.g. [$$-en-US]
+  };
 }
 return result;
 ```
 
-The result must show `CartaLogo` in every tab's shape list. If any tab returns `[]` or lacks `CartaLogo`, re-run the brand block for that tab and re-verify. **Do not start Step 8 summary text until this verification returns `CartaLogo` on every tab.**
+Per-tab pass criteria — ALL must be true:
+- `logoFound === true` — `CartaLogo` shape exists
+- `currencyOk === true` — amount cell format contains `[$` (locale-specific currency token)
+
+**Recovery actions:**
+- `logoFound: false` → re-run the verbatim brand block for that tab, then re-verify.
+- `currencyOk: false` → re-apply the locale-specific token for the resolved currency — pick the matching line, substitute `<full_amount_range>`, then re-verify:
+  - USD: `sheet.getRange("<full_amount_range>").numberFormat = [["[$$-en-US]#,##0.00_);([$$-en-US]#,##0.00);\"-\""]];`
+  - EUR: `sheet.getRange("<full_amount_range>").numberFormat = [["[$€-x-euro2]#,##0.00_);([$€-x-euro2]#,##0.00);\"-\""]];`
+  - GBP: `sheet.getRange("<full_amount_range>").numberFormat = [["[$£-en-GB]#,##0.00_);([$£-en-GB]#,##0.00);\"-\""]];`
+  - CAD: `sheet.getRange("<full_amount_range>").numberFormat = [["[$CA$-en-CA]#,##0.00_);([$CA$-en-CA]#,##0.00);\"-\""]];`
+
+**Do not start Step 8 summary text until every tab passes both criteria.**
+
+**`Range.getImage()` is forbidden here.** The shape name check is the complete, sufficient logo verification. Never output "I cannot visually verify the logo placement" — the shape check IS the verification. If you find yourself reaching for `Range.getImage()`, stop and use the shape check instead.
 
 ## Step 8 — Summary + next steps
 
@@ -288,7 +315,7 @@ The result must show `CartaLogo` in every tab's shape list. If any tab returns `
 
 1. An `AskUserQuestion` whose answer included `"Approve and write the analysis"` — Step 6 approval.
 2. A `sheet.shapes.addImage(base64)` call for **each** tab the skill touched — Step 7 branding.
-3. The branding-verification `execute_office_js` whose result showed `CartaLogo` on every tab — Step 7 verification.
+3. The branding-verification `execute_office_js` whose result showed `logoFound: true` and `currencyOk: true` on every tab — Step 7 verification.
 
 If any anchor is missing in a write mode (not chat-only), you have skipped a gate. **Do NOT write "Carta logo placed at..." in the summary when no `shapes.addImage` call appears in your tool history.** STOP, go back, run the missing gate, then return here. (Chat-only mode skips all three — the summary IS the deliverable.)
 
@@ -350,8 +377,9 @@ Queries > 50 rows: request `format: "ndjson"` and bucket into a blob. Pasting la
 - Local-file mode: prefer **adding a sheet** to the same file over a separate file.
 - **Two-row header for month-bucketed tables.** Row N = merged month label per Budget/Actual/Var triplet. Row N+1 = sub-headers. Never write both into the same row — subsequent merges destroy sub-headers.
 - `range.merge(true)` discards trailing cell values. Insert a new row first; don't merge over an existing sub-header row.
-- **Month-label date-serial trap.** `"Jan 2026"` auto-coerces to a date serial — prefix with `'` or write a real date with `numberFormat: "mmm yyyy"`.
-- **Currency — derive from the data, never default to USD.** Resolve the workbook's presentation currency before writing (entity properties via `welcome`, or the currency on the budget data); if it can't be resolved, ask the user. Format amounts with the locale token for the resolved currency — `[$$-en-US]` USD, `[$€-x-euro2]` EUR, `[$£-en-GB]` GBP, `[$$-en-CA]` CAD, or the matching `[$<symbol>-<locale>]`. A bare `$` renders as the user's local symbol. The `B4`/`A4` band reads `Amounts in <resolved_currency>`.
+- **Month-label date-serial trap (header rows):** before writing any month or period text label ("Jan 2026", "Q1 2026", etc.) to a header row, apply `numberFormat = [["@"]]` (text format) to the entire header range first, then write the values. Without this, Excel auto-coerces "Jan 2026" → date serial 46023.
+- **Currency — derive from the data, never default to USD.** Resolve the workbook's presentation currency before writing (entity properties via `welcome`, or the currency on the budget data); if it can't be resolved, ask the user. State the resolved currency in cell A4: `Amounts in <resolved_currency>`.
+- **Currency format:** use a locale-specific currency token — `[$$-en-US]#,##0.00_);([$$-en-US]#,##0.00);"-"` for USD, `[$€-x-euro2]#,##0.00_);([$€-x-euro2]#,##0.00);"-"` for EUR, `[$£-en-GB]#,##0.00_);([$£-en-GB]#,##0.00);"-"` for GBP. Resolve from the data — never default to USD. Do **not** use bare `$`, `_($*`, or quoted `"$"` — Excel strips quotes from stored format strings, leaving a bare `$` that renders as the system currency symbol.
 - **Buffer-aware variance basis.** If the budget tab carries an inflation/contingency buffer (an input cell, or a header note like "Budget includes X% buffer"), pacing variances are measured against the buffered figure — state this in the output so favorable variances aren't misread, and offer to pace against the raw (pre-buffer) budget instead.
 - **Recalc + column widths:** the last statements in the cell-write `execute_office_js` block, in this order — never a separate call: restore automatic calc → `context.workbook.application.calculate(Excel.CalculationType.full)` → set fixed widths on the text label columns → autofit numeric columns only → `context.sync()`. **Pattern:**
   ```javascript

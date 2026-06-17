@@ -127,13 +127,16 @@ Build an operations payload for `write_workbook.py`:
 7. **Section subtotal rows** (after each section's last account): bold, currency format, `=SUM(...)` formula spanning the section's data rows per column.
 8. **Net Operating Income row** (after all sections): bold, formula `Income - Expenses` per column.
 9. `set_bold` on rows 6, 7, 8 and all subtotal + NOI rows.
-10. `set_format` on all amount columns, rows 9+. **Always use the `<CCY_TOKEN>` locale token — never a bare `$`:**
+10. `set_format` on all amount columns, rows 9+. Use the locale-specific currency token — resolve `<CCY_TOKEN>` from the fund's currency before running:
+    - USD → `[$$-en-US]`  |  EUR → `[$€-x-euro2]`  |  GBP → `[$£-en-GB]`  |  CAD → `[$CA$-en-CA]`
+
+    Never use bare `$`, `_($*`, or `"$"` (quoted — Excel strips quotes):
     ```json
     {
       "op": "set_format",
       "sheet": "<tab name>",
       "ref": "B9:<last col><last row>",
-      "number_format": "_(<CCY_TOKEN>* #,##0.00_);_(<CCY_TOKEN>* (#,##0.00);_(<CCY_TOKEN>* \"-\"??_);_(@_)"
+      "number_format": "<CCY_TOKEN>#,##0.00_);(<CCY_TOKEN>#,##0.00);\"-\""
     }
     ```
 11. **Column widths** — apply two ops in this order:
@@ -176,9 +179,9 @@ sheet.getRange("A8:P8").values = [["Account",
   "US","EMEA","APAC","Untagged","Total"]];
 sheet.getRange("A8:P8").format.font.bold = true;
 
-// Currency format — ALWAYS use <CCY_TOKEN> locale token, NEVER bare "$"
+// Currency format — locale-specific token (e.g. [$$-en-US] for USD)
 const dataRange = sheet.getRange("B9:<lastCol><lastRow>");
-dataRange.numberFormat = [["_(<CCY_TOKEN>* #,##0.00_);_(<CCY_TOKEN>* (#,##0.00);_(<CCY_TOKEN>* \"-\"??_);_(@_)"]];
+dataRange.numberFormat = [["<CCY_TOKEN>#,##0.00_);(<CCY_TOKEN>#,##0.00);\"-\""]]; // e.g. [$$-en-US] USD | [$€-x-euro2] EUR | [$£-en-GB] GBP
 
 // Column widths — autofit on used range first, then re-assert the
 // fixed Account column. `getColumnsAfter` does NOT exist on Excel.Range
@@ -220,7 +223,7 @@ Multi-period runs (Quarter or Month aggregation) multiply the column count by th
 
 ## Hard rules
 
-- **Currency format:** always `_(<CCY_TOKEN>* #,##0.00_);_(<CCY_TOKEN>* (#,##0.00);_(<CCY_TOKEN>* "-"??_);_(@_)`. The `<CCY_TOKEN>` locale token locks the display to the resolved presentation currency regardless of the user's Excel locale (derive the currency from the data — never default to USD). **Never use a bare `$`.** Apply to every amount cell, subtotal row, and NOI row.
+- **Currency format:** locale-specific token — `[$$-en-US]#,##0.00_);([$$-en-US]#,##0.00);"-"` for USD (use matching token for other currencies). Never use bare `$`, `_($*`, or quoted `"$"` — Excel strips quotes from stored format strings, leaving a bare `$` that renders as the system currency. Apply to every amount cell, subtotal row, and NOI row.
 - Never invent categories or tag values — only use what the JSON-keys probe and the cardinality probe returned at Gate 2.5.
 - Each category Total column on a given account row MUST equal every other category's Total on the same row. If they diverge, it's a data-quality signal worth flagging in Gate 8 (an entry is tagged in one category but not the other).
 - Slice is **additive** to entity filter — `WHERE FUND_NAME = '<entity_name>'` always applies.

@@ -1,7 +1,7 @@
 ---
 name: carta-budget-actuals
 model: opus
-description: 'Write actuals into an existing Excel budget workbook from Carta MCP — add/interleave Budget/Actual/Variance columns or a tag-view tab. TRIGGER: pull/fetch/get/retrieve/refresh/sync/add actuals for [firm/ManCo], interleave Budget/Actual/Variance, actuals by department/cost center/tag, add next month/period column, extend budget through [month]. NOT: pacing or "how are we doing"/variance-analysis questions (carta-budget-vs-actuals), new budgets (carta-create-budget), fetch-budget, scenarios, consolidating P&L / balance sheet.'
+description: 'Write actuals into an existing Excel budget workbook from Carta MCP — add/interleave Budget/Actual/Variance columns, a tag-view tab, or a vendor-view tab. TRIGGER: pull/fetch/get/retrieve/refresh/sync/add actuals for [firm/ManCo], interleave Budget/Actual/Variance, actuals by department/cost center/tag/vendor, add next month/period column, extend budget through [month], broken down by vendor. NOT: pacing or "how are we doing"/variance-analysis questions (carta-budget-vs-actuals), new budgets (carta-create-budget), fetch-budget, scenarios, consolidating P&L / balance sheet.'
 version: 1.0.1
 allowed-tools:
   # MCP connector discovery (Claude for Excel runtime tool — used first in Gate 0)
@@ -35,13 +35,14 @@ allowed-tools:
 
 # Budget actuals
 
-Entry point for updating actuals in an existing budget. Six references:
+Entry point for updating actuals in an existing budget. Seven references:
 
 - [`references/add-actuals-columns.md`](references/add-actuals-columns.md) — **Layout A**: interleave Budget / Actual / Variance per month on the Budget tab (recommended for active tracking).
 - [`references/add-actuals-tab.md`](references/add-actuals-tab.md) — **Layout B**: add a peer `<year> Actuals` tab alongside the Budget tab.
 - [`references/refresh-existing.md`](references/refresh-existing.md) — **Layout C**: overwrite stale actuals cells in columns that already exist.
 - [`references/add-period.md`](references/add-period.md) — **Layout D**: append the single next month/quarter column.
-- [`references/tag-view.md`](references/tag-view.md) — **Layout E**: new tab with actuals sliced by reporting dimension (department, project code, class, etc.) and a two-row period / tag header. Only offered when the entity has tagged journal data.
+- [`references/tag-view.md`](references/tag-view.md) — **Layout E**: new tab with actuals sliced by reporting dimension (department, project code, class, etc.) and a three-row period / category / tag header. Only offered when the entity has tagged journal data.
+- [`references/vendor-view.md`](references/vendor-view.md) — **Layout F**: new tab with actuals sliced by vendor, with per-vendor subtotals and an Untagged section. Only offered when the entity has vendor-tagged journal data.
 - [`references/get-actuals.md`](references/get-actuals.md) — internal helper, the canonical actuals-query routine.
 
 ## UX Rules
@@ -184,6 +185,8 @@ Use `AskUserQuestion`:
 | 3 | **Refresh existing Budget / Actual / Variance cells** (the cells are there, just stale) | [`refresh-existing.md`](references/refresh-existing.md) |
 | 4 | **Add only the next single period column** | [`add-period.md`](references/add-period.md) |
 | 5 | **Build a tag-view tab — actuals sliced by reporting dimension** (department, project code, class, etc.) | [`tag-view.md`](references/tag-view.md) — only offered when the entity has tagged data; see Gate 2.5 |
+| 6 | **Build a vendor-view tab — actuals sliced by vendor** (with per-vendor subtotals and an Untagged section) | [`vendor-view.md`](references/vendor-view.md) — only offered when the entity has vendor-tagged data; see Gate 2.6 |
+| 7 | **Add vendor rows inline to the current actuals tab** — insert vendor sub-rows under each account; accounts become subtotals of their vendor children | [`inline-vendor.md`](references/inline-vendor.md) — only offered when the active tab is already an actuals tab; see Gate 2.7 |
 
 Use the user's prompt only as a *hint* for which option to highlight —
 never as authority to skip the question:
@@ -195,11 +198,23 @@ never as authority to skip the question:
 | "refresh", "the actuals are stale", "pull latest", "sync" | Option 3 |
 | "add next month", "extend through `<month>`", "next period" | Option 4 |
 | "by department", "by tag", "by cost center", "split by", "broken down by", "by reporting tag", "by project code" | Option 5 |
+| "by vendor", "broken down by vendor", "vendor view", "which vendors", "vendor breakdown" — **and the active tab is already an actuals tab** | Offer Options 6 and 7 together; 7 ← recommended |
+| "by vendor", "broken down by vendor", "vendor view", "which vendors", "vendor breakdown" — **no actuals tab open** | Option 6 |
+| "break by vendor on this tab", "add vendors here", "vendor breakdown on this tab", "enrich this tab with vendors" | Option 7 |
 
 **Option 5 availability**: always show Layout E in the chooser. If the user
 picks it and Gate 2.5 finds no tag data on the entity, tell them in one sentence
 and fall back to Layout A automatically. Do not pre-filter the chooser — the
 entity name needed for the probe is not available until Gate 3.
+
+**Option 6 availability**: always show Layout F in the chooser. If the user
+picks it and Gate 2.6 finds no vendor data on the entity, tell them in one sentence
+and fall back to Layout A automatically. Do not pre-filter the chooser.
+
+**Option 7 availability**: only show Layout G when the active sheet is already
+an actuals tab (its name contains "Actuals" or the user is explicitly on it).
+If the user picks it and Gate 2.7 finds no vendor data, tell them in one sentence
+and fall back to Option 6 (new vendor-view tab) instead.
 
 The user's pick locks the reference to load for the rest of the
 workflow. **Immediately call `read_skill` for the chosen layout — do not reconstruct from memory:**
@@ -210,6 +225,9 @@ workflow. **Immediately call `read_skill` for the chosen layout — do not recon
 | Option 2 — Add actuals tab | `read_skill(file_path="references/add-actuals-tab.md")` |
 | Option 3 — Refresh existing | `read_skill(file_path="references/refresh-existing.md")` |
 | Option 4 — Add single period | `read_skill(file_path="references/add-period.md")` |
+| Option 5 — Tag-view tab | `read_skill(file_path="references/tag-view.md")` |
+| Option 6 — Vendor view tab | `read_skill(file_path="references/vendor-view.md")` |
+| Option 7 — Vendor inline | `read_skill(file_path="references/inline-vendor.md")` |
 
 > **Why we always ask:** the same prompt — "add 2026 actuals by month"
 > — can mean Option 1, 2, or 3 depending on the user's intent and the
@@ -297,6 +315,56 @@ Store `<TAG_LAYOUT>` (`wide` | `long`). Default `wide` for ≤ 24 (no question a
 
 ---
 
+## Gate 2.6 — Vendor-data discovery (Layout F path only)
+
+**Skip this gate entirely unless the user chose Layout F at Gate 2.**
+
+**Silent probe — no user-facing output.** Checks whether `VENDOR_NAME` is populated and counts distinct vendors.
+
+```
+call_tool({"name": "dwh__execute__query", "arguments": {
+  "sql": "SELECT
+            COUNT_IF(VENDOR_NAME IS NOT NULL) AS tagged_rows,
+            COUNT_IF(VENDOR_NAME IS NULL)     AS untagged_rows,
+            COUNT(DISTINCT VENDOR_NAME)       AS distinct_vendors
+          FROM <journal_entries_table>
+          WHERE FUND_NAME = '<entity_name>'
+            AND ACCOUNT_TYPE >= '4000'
+            AND EFFECTIVE_DATE >= DATEADD('year', -1, CURRENT_DATE)",
+  "format": "markdown"
+}})
+```
+
+- `tagged_rows > 0` → vendor data exists. Store `<VENDOR_COUNT>` = `distinct_vendors` and `<HAS_UNTAGGED>` = (`untagged_rows > 0`). Continue to Gate 3.
+- `tagged_rows == 0` → no vendor data on this entity. Tell the user in one plain-English sentence — *"Your journal data doesn't have any vendor information, so I'll build a flat actuals view instead."* — and fall back to **Layout A**.
+
+---
+
+## Gate 2.7 — Vendor-data check (Layout G path only)
+
+**Skip this gate entirely unless the user chose Layout G at Gate 2.**
+
+**Silent probe — no user-facing output.** Same probe as Gate 2.6 — confirms vendor data exists before rebuilding the tab inline.
+
+```
+call_tool({"name": "dwh__execute__query", "arguments": {
+  "sql": "SELECT
+            COUNT_IF(VENDOR_NAME IS NOT NULL) AS tagged_rows,
+            COUNT_IF(VENDOR_NAME IS NULL)     AS untagged_rows,
+            COUNT(DISTINCT VENDOR_NAME)       AS distinct_vendors
+          FROM <journal_entries_table>
+          WHERE FUND_NAME = '<entity_name>'
+            AND ACCOUNT_TYPE >= '4000'
+            AND EFFECTIVE_DATE >= DATEADD('year', -1, CURRENT_DATE)",
+  "format": "markdown"
+}})
+```
+
+- `tagged_rows > 0` → vendor data exists. Store `<VENDOR_COUNT>` = `distinct_vendors` and `<HAS_UNTAGGED>` = (`untagged_rows > 0`). Continue to Gate 3.
+- `tagged_rows == 0` → no vendor data on this entity. Tell the user in one plain-English sentence and fall back to **Layout F** (new vendor-view tab) instead.
+
+---
+
 ## Gate 3 — Batched parameter gate
 
 In one `AskUserQuestion`, confirm every parameter the prompt didn't already specify.
@@ -325,17 +393,17 @@ store it directly and skip the period question.
 
 Store `<PERIOD_START>` (first day, `YYYY-MM-DD`) and `<PERIOD_END>` (last day).
 
-**Match strategy** (Layouts A–D only): `name first then GL code` (default) vs `GL code only`. Omit for Layout E (no existing-sheet matching needed — Layout E always writes a new tab).
+**Match strategy** (Layouts A–D only): `name first then GL code` (default) vs `GL code only`. Omit for Layouts E or F (no existing-sheet matching needed — Layouts E and F always write a new tab).
 
 Store `<ENTITY_NAME>`, `<PERIOD_START>`, `<PERIOD_END>`, `<MATCH_STRATEGY>` (Layouts A–D).
 
-### Gate 3a — Aggregation level (Layout E only)
+### Gate 3a — Aggregation level (Layouts E and F only)
 
 **Skip this sub-gate for Layouts A–D** — aggregation is always monthly there. Set `<AGGREGATION> = MONTH` and continue.
 
-**For Layout E, this MUST be a separate `AskUserQuestion` call** — do not bundle with the period question above, and do not infer the answer from the period range. A YTD period (e.g. Jan–May) does not mean "Quarter"; a full-year period does not mean "Year". The user picks the period independently from the aggregation.
+**For Layouts E and F, this MUST be a separate `AskUserQuestion` call** — do not bundle with the period question above, and do not infer the answer from the period range. A YTD period (e.g. Jan–May) does not mean "Quarter"; a full-year period does not mean "Year". The user picks the period independently from the aggregation.
 
-> Aggregate tag columns by:
+> Aggregate columns by:
 
 | # | Label |
 |---|---|
@@ -345,7 +413,23 @@ Store `<ENTITY_NAME>`, `<PERIOD_START>`, `<PERIOD_END>`, `<MATCH_STRATEGY>` (Lay
 
 Store `<AGGREGATION>` (`YEAR` | `QUARTER` | `MONTH`).
 
-**Hard rule:** if you find yourself building a tag-view with multiple period blocks (e.g. Q1+Q2) without an `AskUserQuestion` whose answer literally selected one of the three options above, you skipped this gate. Stop and ask before proceeding to Gate 4.
+**Hard rule:** if you find yourself building a tag-view or vendor-view with multiple period blocks (e.g. Q1+Q2) without an `AskUserQuestion` whose answer literally selected one of the three options above, you skipped this gate. Stop and ask before proceeding to Gate 4.
+
+### Gate 3b — Vendor row grouping preference (Layouts F and G + excel-addin only)
+
+**Skip this sub-gate for Layouts A–E**, or when `<RUNTIME>` is `local-file` (row outline grouping is not supported in the local-file path).
+
+Ask via `AskUserQuestion` — a separate call from Gate 3a above:
+
+> Should vendor detail rows be collapsible in Excel?
+
+| # | Label | Description |
+|---|---|---|
+| 1 ← recommended | **Yes — collapsed by default** | Rows hidden on open; click **+** to expand a vendor section |
+| 2 | **Yes — expanded by default** | Rows visible; click **−** to collapse a vendor section |
+| 3 | **No grouping** | Flat tab, no outline controls |
+
+Store `<VENDOR_GROUPING>` (`collapsed` | `expanded` | `none`).
 
 ---
 
@@ -380,8 +464,15 @@ when Gate 2.5 detected `REPORTING_TAGS_JSON` rows; the **flat path** when only
 inside the query via `LATERAL FLATTEN` — do not parameterize the category list
 into the SQL. All other rules below apply unchanged.
 
-**Layouts A–D:** always call through [`references/get-actuals.md`](references/get-actuals.md).
-Never write inline SQL outside that file.
+**Layout F:** use the vendor query from
+[`references/vendor-view.md`](references/vendor-view.md) §SQL. Substitute `<period_trunc>`
+from `<AGGREGATION>`, `<period_start>` from `<PERIOD_START>`, `<period_end>` from
+`<PERIOD_END>`, and `<entity_name>` from `<ENTITY_NAME>`. The query uses
+`COALESCE(VENDOR_NAME, 'Untagged')` so NULL-vendor entries roll into a single
+Untagged section — do not run a second query for untagged rows. All other hard
+rules (entity scoping, books date, sign convention, P&L scope) apply unchanged.
+
+**Layouts A–D:** call [`references/get-actuals.md`](references/get-actuals.md) for the main actuals query. In parallel, call `read_skill(file_path="references/vendor-actuals.md")` and run the vendor actuals query — this loads `<VENDOR_ACTUALS>` into session context so vendor questions (e.g. "which vendor is driving Legal Fees?") are answerable for the rest of the session without a second round-trip. Never write inline SQL outside those files.
 
 ---
 
@@ -499,6 +590,8 @@ Do not reconstruct either spec from memory. Both files must be in your context b
 
 - **Layouts A–D:** load `references/add-actuals-columns.md` §5 ("Build the rebuild payload") and apply its header / column / format spec verbatim — especially the two-row header (row N = merged month labels, row N+1 = `Budget` / `Actual` / `Variance` sub-headers — spelled out in full, never abbreviated). Then use the add-in's cell-write tools to execute the payload.
 - **Layout E:** load [`references/tag-view.md`](references/tag-view.md) §"Writing the workbook (excel-addin runtime)" and follow it verbatim — 3-row period/category/tag header, `range.merge(true)` for period and category bands. **Do NOT freeze panes** — same rule as Layouts A–D and the rest of the Carta budgeting skills.
+- **Layout F:** load [`references/vendor-view.md`](references/vendor-view.md) §"Writing the workbook (excel-addin runtime)" and follow it verbatim — 2-row period/vendor header, `range.merge(true)` for period bands, per-vendor subtotals, Untagged section at the bottom. **Do NOT freeze panes.**
+- **Layout G:** load [`references/inline-vendor.md`](references/inline-vendor.md) §"Write sequence (excel-addin runtime)" and follow it verbatim — clear rows 7+, rebuild account rows (bold, SUM formula) + vendor sub-rows (indented four spaces, hardcoded amounts, locale-specific currency token), then group and collapse. Gate 7's three-call sequence (cell write → brand block → combined verification) applies here too.
 
 **If `<RUNTIME>` is `local-file`:** build an operations payload and apply it:
 
@@ -513,16 +606,27 @@ JSON
 
 - **Layouts A–D:** use only `write_cell` / `write_formula` / `set_format` operations. Avoid `create_sheet` and `write_range` here — those are for `carta-create-budget`.
 - **Layout E:** use `create_sheet`, `write_cell`, `write_range`, `merge_cells`, `set_bold`, `set_format`, `set_column_width` (Account col), `autofit_columns` (data cols) per [`references/tag-view.md`](references/tag-view.md) §"Writing the workbook (local-file runtime)". Always issue `write_cell` for a period label **before** the `merge_cells` op for that same range. **Do NOT include `freeze_panes`** — same rule as Layouts A–D and the rest of the Carta budgeting skills.
+- **Layout F:** use `create_sheet`, `write_cell`, `write_range`, `merge_cells`, `set_bold`, `set_format`, `set_column_width` (Vendor/Account col), `autofit_columns` (data cols) per [`references/vendor-view.md`](references/vendor-view.md) §"Writing the workbook (local-file runtime)". Always issue `write_cell` for a period label **before** the `merge_cells` op for that same range. **Do NOT include `freeze_panes`**.
+
+### Row grouping — vendor GL rows (Layout F, excel-addin only, after verification)
+
+If `<VENDOR_GROUPING>` is `collapsed` or `expanded` (set at Gate 3b), run a **4th `execute_office_js` call** after all three required calls pass verification. This call is separate from the three required calls — do not bundle it with cell writes, branding, or verification.
+
+See [`references/vendor-view.md`](references/vendor-view.md) §"Collapse/expand grouping" for the exact code block. Substitute `<PERIOD_LABEL>` and `<VENDOR_GROUPING>` before running.
+
+**Local-file runtime:** skip this step. Row outline grouping is not supported via `write_workbook.py`.
 
 ### Combined currency + branding verification (REQUIRED, observable, excel-addin only)
 
 After the brand block runs for every tab, execute **one** `execute_office_js` that checks both currency format and logo geometry in a single `context.sync()`. This replaces the two separate passes (currency readback → branding check) previously required.
 
 Two regressions this catches:
-- **Currency symbol** — a bare `$` renders as the user's Excel-locale symbol (`R$` on pt-BR, `£` on en-GB, `¥` on ja-JP). The locale token `<CCY_TOKEN>` for the resolved presentation currency locks display to that currency. `<CCY_TOKEN>` is `[$$-en-US]` (USD), `[$€-x-euro2]` (EUR), `[$£-en-GB]` (GBP), `[$$-en-CA]` (CAD), or the matching `[$<symbol>-<locale>]` — resolved from the data, never defaulted to USD.
+- **Currency format** — amount cells must use a locale-specific token like `[$$-en-US]#,##0.00_);([$$-en-US]#,##0.00);"-"` (USD). Never use bare `$`, `_($*`, or a quoted literal `"$"` — Excel strips quotes from stored format strings, leaving a bare `$` that renders as the system currency symbol.
 - **Logo sizing** — hardcoded `shape.height = 48` misaligns the logo when the E1:E3 row band is taller or shorter than 48pt. Height must come from `rows.height`.
 
-**This block is NOT paste-verbatim — substitute its placeholders before running:** the `tabs` array (the tab names touched this run), `<sample_amount_cell>`, and **`<CCY_TOKEN>`** (replace with the resolved currency's locale token, e.g. `[$$-en-US]` / `[$€-x-euro2]`). If `<CCY_TOKEN>` is left literal, the `.includes(...)` check always returns `false` and Gate 7 loops forever.
+**`Range.getImage()` is forbidden here.** The shape geometry (`heightMatchesBand`, `leftMatchesBand`) is the complete, sufficient logo verification. Never output "I cannot visually verify the logo placement" — the geometry check IS the verification. If you find yourself reaching for `Range.getImage()`, stop and use the geometry check instead.
+
+**This block is NOT paste-verbatim — substitute its placeholders before running:** the `tabs` array (the tab names touched this run) and `<sample_amount_cell>`. The `currencyOk` check uses `"[$"` verbatim — no substitution needed.
 
 ```javascript
 const tabs = [/* "Budget 2026", "2026 Actuals", ... — substitute the actual tab names touched this run */];
@@ -541,7 +645,7 @@ for (const tabName of tabs) {
   result[tabName] = {
     // Currency check
     numberFormat:      cell.numberFormat[0][0],
-    currencyOk:        cell.numberFormat[0][0].includes("<CCY_TOKEN>"),  // resolved-currency locale token, not always USD
+    currencyOk:        cell.numberFormat[0][0].includes("[$"),  // locale-specific currency token, e.g. [$$-en-US]
     // Branding checks
     found:             !!logo,
     shapeHeight:       logo ? logo.height : null,
@@ -557,14 +661,18 @@ return result;
 
 Per-tab pass criteria — ALL must be true:
 
-- `currencyOk === true` — sample cell format contains `<CCY_TOKEN>` (the resolved-currency locale token)
+- `currencyOk === true` — sample cell format contains `[$` (locale-specific currency token)
 - `found === true` — `CartaLogo` shape exists
 - `heightMatchesBand === true` — logo height equals E1:E3 row-band height ±2pt
 - `leftMatchesBand === true` — logo anchors at column E's left edge ±2pt
 
 **Recovery actions:**
 
-- `currencyOk: false` → re-apply format with the resolved-currency token: `sheet.getRange("<full_amount_range>").numberFormat = [["_(<CCY_TOKEN>* #,##0.00_);_(<CCY_TOKEN>* (#,##0.00);_(<CCY_TOKEN>* \"-\"??_);_(@_)"]]`, then re-run this combined verification.
+- `currencyOk: false` → re-apply the locale-specific token for the resolved currency — pick the matching line, substitute `<full_amount_range>`, then re-run this combined verification:
+  - USD: `sheet.getRange("<full_amount_range>").numberFormat = [["[$$-en-US]#,##0.00_);([$$-en-US]#,##0.00);\"-\""]];`
+  - EUR: `sheet.getRange("<full_amount_range>").numberFormat = [["[$€-x-euro2]#,##0.00_);([$€-x-euro2]#,##0.00);\"-\""]];`
+  - GBP: `sheet.getRange("<full_amount_range>").numberFormat = [["[$£-en-GB]#,##0.00_);([$£-en-GB]#,##0.00);\"-\""]];`
+  - CAD: `sheet.getRange("<full_amount_range>").numberFormat = [["[$CA$-en-CA]#,##0.00_);([$CA$-en-CA]#,##0.00);\"-\""]];`
 - `found: false` → brand block was skipped — re-run the verbatim brand block, then re-verify.
 - `heightMatchesBand: false` or `leftMatchesBand: false` → brand block used a hardcoded pixel or wrong anchor — delete the `CartaLogo` shape and re-run the verbatim brand block, then re-verify.
 
@@ -607,6 +715,18 @@ If any anchor is missing, you have skipped a gate. **Do NOT write "Carta logo pl
 
 > Created `2026 Actuals by Department` tab in `file:///path/to/<budget-workbook>.xlsx` (Example MgmtCo) — 23 accounts × 4 department values, annual aggregation. 1 account flagged low-confidence (sparse history). Adjust the period phrasing to match `<AGGREGATION>` (see excel-addin example above).
 
+**Layout F — If `<RUNTIME>` is `excel-addin`:**
+
+> Created [2026 Actuals by Vendor](<citation:2026 Actuals by Vendor!A1>) (Example MgmtCo) — 23 accounts across 8 vendors (A2Z, Rippling, Alcatraz LLP, … Untagged), annual aggregation. 1 account flagged low-confidence (sparse history). Carta logo placed at E1.
+>
+> Substitute the period block phrasing to match `<AGGREGATION>` from Gate 3a: "annual aggregation" for `YEAR`, "across 4 quarters" / "across Q1+Q2" for `QUARTER`, "across 12 months" / "across Jan–May" for `MONTH`. List the top 3–5 vendor names; collapse the rest as "… Untagged".
+>
+> If `<VENDOR_GROUPING>` is `collapsed` or `expanded`, append: "Vendor detail rows are grouped — use the **+/−** toggles on the left margin or the **1/2** outline buttons in the top-left corner to expand or collapse all vendor sections at once."
+
+**Layout F — If `<RUNTIME>` is `local-file`:**
+
+> Created `2026 Actuals by Vendor` tab in `file:///path/to/<budget-workbook>.xlsx` (Example MgmtCo) — 23 accounts across 8 vendors, annual aggregation. 1 account flagged low-confidence (sparse history). Adjust the period phrasing to match `<AGGREGATION>` (see excel-addin example above).
+
 **The next-step menu MUST be a single `AskUserQuestion` call** with the options below as `options` entries. Never render them as a numbered markdown list, a bulleted list, or inline prose — bare-text menus break the chooser UI in Claude for Excel and force the user to type the number. The `← recommended` marker goes inside the `description` field of one option, not as a suffix on the `label`.
 
 1. **Run a pacing analysis (Budget vs Actuals)** ← recommended
@@ -646,9 +766,9 @@ Queries > 50 rows: request `format: "ndjson"`, bucket into a blob. Don't paste l
 - Local-file: never overwrite cells flagged as formulas in `read_workbook.py` output. Subtotals / NOI keep their `=SUM(...)` semantics.
 - **Two-row header is mandatory** for month-bucketed tables. Row N = merged month label per `Budget`/`Actual`/`Variance` triplet. Row N+1 = sub-headers spelled out in full (`Budget`, `Actual`, `Variance`). **Never abbreviate to `B`/`A`/`V`**. Never write both into the same row — subsequent merges destroy sub-headers.
 - `range.merge(true)` discards trailing cell values. Insert a new row first.
-- **Month-label date-serial trap:** prefix with `'` or use `numberFormat: "mmm yyyy"` on a real date.
-- **Currency — derive from the data, never default to USD.** Resolve the workbook's presentation currency before writing (entity properties via `welcome`, or the currency on the budget data); if it can't be resolved, ask the user. The format uses the locale token `<CCY_TOKEN>` for the resolved currency — `[$$-en-US]` USD, `[$€-x-euro2]` EUR, `[$£-en-GB]` GBP, `[$$-en-CA]` CAD, or the matching `[$<symbol>-<locale>]`. The `B4`/`A4` band reads `Amounts in <resolved_currency>`.
-- **Currency format:** `_(<CCY_TOKEN>* #,##0.00_);_(<CCY_TOKEN>* (#,##0.00);_(<CCY_TOKEN>* "-"??_);_(@_)`. Apply to data range after the data write.
+- **Month-label date-serial trap (header rows):** before writing any month or period text label ("Jan 2026", "Q1 2026", etc.) to a header row, apply `numberFormat = [["@"]]` (text format) to the entire header range first, then write the values. Without this, Excel auto-coerces "Jan 2026" → date serial 46023. This applies to row 6 column headers and any period-band rows (rows 6/7 in Layouts E and F). Applies to both `execute_office_js` (set `range.numberFormat` before `range.values`) and `write_workbook.py` (emit a `set_format` op with `"@"` before the `write_cell` ops for the header row).
+- **Currency — derive from the data, never default to USD.** Resolve the workbook's presentation currency before writing (entity properties via `welcome`, or the currency on the budget data); if it can't be resolved, ask the user. State the resolved currency in cell A4: `Amounts in <resolved_currency>`.
+- **Currency format:** use a locale-specific currency token — `[$$-en-US]#,##0.00_);([$$-en-US]#,##0.00);"-"` for USD, `[$€-x-euro2]#,##0.00_);([$€-x-euro2]#,##0.00);"-"` for EUR, `[$£-en-GB]#,##0.00_);([$£-en-GB]#,##0.00);"-"` for GBP. Resolve the currency from the data — never default to USD. Do **not** use a bare `$` or `_($*` format — Excel substitutes the system currency symbol for those. Do **not** use a quoted literal like `"$"` — Excel strips the quotes when storing the format, leaving a bare `$` that renders as the system currency. Apply to all data ranges after the data write.
 - **Match the existing tab's period granularity.** If the budget tab is quarterly (not monthly), interleave Budget/Actual/Variance per quarter, not per month. For a partial period (e.g. YTD through a mid-quarter month against a quarterly tab), pull actuals at month grain and aggregate to the tab's buckets. Do not prorate a quarter's budget by month-fraction to approximate a partial period — derive the period's budget from the underlying monthly source.
 - **Buffer-aware variance basis.** If the on-tab budget carries an inflation/contingency buffer (an input cell, or a header note like "Budget includes X% buffer"), variances are computed against the buffered figure — state this in the preview so favorable variances aren't misread, and offer to compare against the raw (pre-buffer) budget instead.
 - **Border syntax (Office.js):** `style = "Continuous"`, then `weight = "Thin"`. Never `style: "Thin"`.
