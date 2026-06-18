@@ -53,7 +53,7 @@ write"` answer.
 
 - Preserve every existing formula cell — subtotals / Total / NOI stay `=SUM(...)`.
 - Category subtotals and the grand total are formulas, never hardcoded duplicates.
-- Apply the resolved-currency format (`<CCY_TOKEN>`, see SKILL.md Hard rules) to new
+- Apply the resolved-currency format (see SKILL.md Hard rules) to new
   subtotal rows — match the existing tab's currency, never default to USD.
 - Label/header text beginning with `+`, `=`, `-`, or `@` parses as a formula — prefix such
   text with a leading `'` (or space), or drop the leading symbol.

@@ -56,5 +56,5 @@ cell to 0%). Either:
 - Subtotals / Total / NOI remain `=SUM(...)` — never overwrite a formula cell.
 - If a helper sheet is used, convert formulas to values (or re-point them) before deleting
   it — a deleted referenced sheet orphans dependents into `#REF!`.
-- Apply the resolved-currency format (`<CCY_TOKEN>`, see SKILL.md Hard rules) — match the
+- Apply the resolved-currency format (see SKILL.md Hard rules) — match the
   existing tab's currency, never default to USD.

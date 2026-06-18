@@ -101,7 +101,7 @@ If single-entity-vs-firm-wide flag fired in step 1, repeat it in the closing rep
 - **Never overwrite columns D / G / H / M / P / Q** — those are Actual/Variance/% cells.
 - **Never invent rows** — new rows only from unmatched budget entries, classified into the correct section.
 - **Never smooth quarterly postings into monthly.** If Carta returns Management fee income only in months 1/4/7/10, leave the others blank.
-- **Currency format:** `<CCY_TOKEN>` (the resolved currency's locale token; derive from data, never default to USD) — never bare `$`.
+- **Currency format:** use the locale-specific token for the resolved currency (derive from data, never default to USD) — never bare `$`: USD `[$$-en-US]`, EUR `[$€-x-euro2]`, GBP `[$£-en-GB]`, CAD `[$CA$-en-CA]`.
 - **Match precedence:** GL code → exact name → prefix name. Never reverse (name collision across GL codes would silently merge wrong rows).
 - **Don't touch the Summary tab.**
 - **Do not auto-retry** failed fetches.

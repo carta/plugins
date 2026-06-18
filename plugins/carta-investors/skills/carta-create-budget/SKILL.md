@@ -284,7 +284,7 @@ Do not reconstruct either spec from memory. The files must be in your context be
 
 Returning from Call 1 does NOT finish Gate 6. Returning from Call 2 does NOT finish Gate 6 — every tab needs its own logo call, and the verification call must come last.
 
-**Step 6a — write the cells.** Use the Excel add-in's runtime cell-write tools with the accounting currency format for the resolved currency (`_(<CCY_TOKEN>* #,##0.00_);…` — see Hard rules). Do **not** call freeze_panes. For each `low-confidence — sparse history` account, attach a cell comment to the column-A label cell — see [`references/branding-and-header.md`](references/branding-and-header.md#cell-comment-pattern-for-sparse-history--projection-flags) for the verbatim `sheet.comments.add(...)` pattern. **Never** change row fill / font color / border.
+**Step 6a — write the cells.** Use the Excel add-in's runtime cell-write tools with the accounting currency format for the resolved currency (see Hard rules). Do **not** call freeze_panes. For each `low-confidence — sparse history` account, attach a cell comment to the column-A label cell — see [`references/branding-and-header.md`](references/branding-and-header.md#cell-comment-pattern-for-sparse-history--projection-flags) for the verbatim `sheet.comments.add(...)` pattern. **Never** change row fill / font color / border.
 
 **Step 6b — brand both tabs (DO NOT SKIP).** Immediately after the
 cell writes — same Gate 6, before any summary text — embed the Carta
@@ -428,8 +428,12 @@ For queries > 50 rows, request `format: "ndjson"` and bucket the result into a b
 
 - **DWH queries:** call `fetch("dwh:execute:query", …)` directly — never a generic external-DWH connector. Filter by `FUND_NAME = '<entity>'` (never `FIRM_NAME ILIKE`). Use `AMOUNT` (never the base-currency variant — NULL in many datasets). Sign-flip revenue: `CASE WHEN LEFT(ACCOUNT_TYPE,1) = '4' THEN -AMOUNT ELSE AMOUNT END`. Preserve reversal entries as-is.
 - **Budget values are hardcoded numbers** (per-account, per-month). Subtotals, Total Income, Total Expenses, and Net Operating Income use `=SUM(...)` formulas so totals recompute when the user edits.
-- **Currency — derive from the data, never default to USD.** Resolve the workbook's presentation currency before writing (entity properties via `welcome`, or the currency on the actuals data); if it can't be resolved, ask the user. The format uses the locale token `<CCY_TOKEN>` for the resolved currency — `[$$-en-US]` USD, `[$€-x-euro2]` EUR, `[$£-en-GB]` GBP, `[$$-en-CA]` CAD, or the matching `[$<symbol>-<locale>]`. The `A4` band reads `Amounts in <resolved_currency>`.
-- **Currency format:** `_(<CCY_TOKEN>* #,##0.00_);_(<CCY_TOKEN>* (#,##0.00);_(<CCY_TOKEN>* "-"??_);_(@_)`. A bare `$` renders in system locale (`R$` on pt-BR) — never use it.
+- **Currency — derive from the data, never default to USD.** Resolve the workbook's presentation currency before writing (entity properties via `welcome`, or the currency on the actuals data); if it can't be resolved, ask the user. The `A4` band reads `Amounts in <resolved_currency>`.
+- **Currency format:** use the locale-specific accounting token for the resolved currency — never a bare `$` (renders as system symbol on non-US locales):
+  - USD: `[$$-en-US]#,##0.00_);([$$-en-US]#,##0.00);"-"`
+  - EUR: `[$€-x-euro2]#,##0.00_);([$€-x-euro2]#,##0.00);"-"`
+  - GBP: `[$£-en-GB]#,##0.00_);([$£-en-GB]#,##0.00);"-"`
+  - CAD: `[$CA$-en-CA]#,##0.00_);([$CA$-en-CA]#,##0.00);"-"`
 - **Do not freeze panes.** Do not write a Provenance tab — source data lives on the `<prior_year> Actuals` tab.
 - **Two-row header for month-bucketed tables.** Row N = one merged cell per month label. Row N+1 = sub-headers. `range.merge(true)` destroys trailing cell values — never merge over a row that already holds sub-headers; insert a new row first.
 - **Month-label date-serial trap.** `"Jan 2026"` auto-coerces to a date serial. Prefix with `'` to force text, or write a real date with `numberFormat: "mmm yyyy"`.

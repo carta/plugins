@@ -48,7 +48,7 @@ Claude for Excel. Audience is an accountant.
   names (`fa:list:budgets`), UUIDs, raw JSON, or gate labels.
 - **Currency formatting:** positive `X,XXX`, negatives `(X,XXX)`, totals
   bolded — using the resolved currency's symbol, not always `$`. The workbook uses the
-  locale token for the resolved presentation currency (`<CCY_TOKEN>`), which locks the
+  locale-specific token for the resolved presentation currency, which locks the
   display to that currency regardless of the user's Excel locale. Derive the currency
   from the data — never default to USD (see Hard rules).
 - **Closing summary link** is a workbook citation
@@ -561,10 +561,11 @@ After the last section:
 
 Column N = `=SUM(B<row>:M<row>)` for every account, subtotal, and total row.
 
-**Currency format** (every numeric cell), using the resolved currency's locale token `<CCY_TOKEN>`:
-`_(<CCY_TOKEN>* #,##0.00_);_(<CCY_TOKEN>* (#,##0.00);_(<CCY_TOKEN>* "-"??_);_(@_)`.
-A bare `$` or `"$"` is never allowed — it renders in system locale on
-non-US installs.
+**Currency format** (every numeric cell) — use the locale-specific token for the resolved currency, never a bare `$` or `"$"` (renders in system locale on non-US installs):
+- USD: `[$$-en-US]#,##0.00_);([$$-en-US]#,##0.00);"-"`
+- EUR: `[$€-x-euro2]#,##0.00_);([$€-x-euro2]#,##0.00);"-"`
+- GBP: `[$£-en-GB]#,##0.00_);([$£-en-GB]#,##0.00);"-"`
+- CAD: `[$CA$-en-CA]#,##0.00_);([$CA$-en-CA]#,##0.00);"-"`
 
 **Recalc + column widths (excel-addin):** the **last statements in the cell-write `execute_office_js` block**, in this order — never a separate call:
 
@@ -696,7 +697,7 @@ the Gate 1 write mode.
 - **Never call `fa:list:budgets` without `fund_uuid`** — MCP rejects with `"missing required params: ['fund_uuid']"`. Pass `<ENTITY_UUID>` (locked at end of Gate 2) as `params["fund_uuid"]`.
 - **Never invent budget rows** or extrapolate beyond what `fa:list:budgets` returned.
 - **Never apply a buffer percentage** — Carta budget is source of truth. (Buffered budgets are `carta-create-budget`.)
-- **Currency — derive from the data, never default to USD.** Resolve the workbook's presentation currency before writing (entity properties via `welcome`, or the currency on the budget data); if it can't be resolved, ask the user. The format uses the locale token `<CCY_TOKEN>` for the resolved currency — `[$$-en-US]` USD, `[$€-x-euro2]` EUR, `[$£-en-GB]` GBP, `[$$-en-CA]` CAD, or the matching `[$<symbol>-<locale>]`. The `A4` band reads `Amounts in <resolved_currency>`. Bare `$` renders in system locale — never use it.
+- **Currency — derive from the data, never default to USD.** Resolve the workbook's presentation currency before writing (entity properties via `welcome`, or the currency on the budget data); if it can't be resolved, ask the user. The `A4` band reads `Amounts in <resolved_currency>`. Use the locale-specific format token — never a bare `$` (renders as system symbol on non-US locales): USD `[$$-en-US]`, EUR `[$€-x-euro2]`, GBP `[$£-en-GB]`, CAD `[$CA$-en-CA]`.
 - **Set `Worksheet.position` in a separate `context.sync()`, never in the same statement as `worksheets.add()`.** Create and activate first: `const sh = sheets.add(name); sh.activate(); await context.sync();`.
 - **Do not freeze panes.** Do not write a Provenance tab — A3 source note is the audit trail.
 - In local-file mode, never silently overwrite — helper returns "sheet exists" status; surface it.

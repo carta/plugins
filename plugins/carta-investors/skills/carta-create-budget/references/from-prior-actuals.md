@@ -62,7 +62,13 @@ Bottom rows:
 
 ### 6. Number format & column widths
 
-Currency: `_(<CCY_TOKEN>* #,##0.00_);_(<CCY_TOKEN>* (#,##0.00);_(<CCY_TOKEN>* "-"??_);_(@_)` (the resolved currency's locale token — derive from data, never default USD). Never a bare `$`. Percent (if used): `0.0%;(0.0%)`.
+Currency: locale-specific token for the resolved currency — derive from data, never default to USD. Never a bare `$` (renders as system symbol on non-US locales):
+- USD: `[$$-en-US]#,##0.00_);([$$-en-US]#,##0.00);"-"`
+- EUR: `[$€-x-euro2]#,##0.00_);([$€-x-euro2]#,##0.00);"-"`
+- GBP: `[$£-en-GB]#,##0.00_);([$£-en-GB]#,##0.00);"-"`
+- CAD: `[$CA$-en-CA]#,##0.00_);([$CA$-en-CA]#,##0.00);"-"`
+
+Percent (if used): `0.0%;(0.0%)`.
 
 **Column widths — autofit the label and amount columns after the data is written.** This is the single most important readability step: if the amount columns aren't autofit, 5+ digit currency renders as `####` and the user has to widen each column by hand.
 
