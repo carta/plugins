@@ -8,6 +8,7 @@
 | SessionStart | — | init-data-dir.js | Create CLAUDE_PLUGIN_DATA directory structure |
 | PreToolUse | Skill | track-active-skill.js | Record which carta skills have been loaded this session |
 | PreToolUse | Carta MCP | inject-instrumentation.js | Inject `_instrumentation` into fetch/mutate params |
+| PreToolUse | Carta MCP `welcome` | inject-welcome-plugins.js | Upsert this plugin's `{name: version}` into `welcome`'s `claude_plugins` arg |
 | PostToolUse | Carta MCP | post-tool-tracker.js | Cache discover/welcome/list_accounts results; track corporation_id |
 
 ## Carta MCP matcher
