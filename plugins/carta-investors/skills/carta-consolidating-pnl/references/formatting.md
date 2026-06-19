@@ -92,16 +92,12 @@ if empty. One blank row between sections.
 
 | Cell content | Number format |
 |---|---|
-| Currency | `_([$$-en-US]* #,##0.00_);_([$$-en-US]* (#,##0.00);_([$$-en-US]* "-"??_);_(@_)` |
+| Currency | `_(<CCY_TOKEN>* #,##0.00_);_(<CCY_TOKEN>* (#,##0.00);_(<CCY_TOKEN>* "-"??_);_(@_)` where `<CCY_TOKEN>` = `[$$-en-US]` USD / `[$€-x-euro2]` EUR / `[$£-en-GB]` GBP / `[$CA$-en-CA]` CAD |
 | Variance / Difference (no $) | `_(* #,##0.00_);_(* (#,##0.00);_(* "-"??_);_(@_)` |
 | Percent | `0.0%;(0.0%)`, right-aligned |
 | Subtotals / totals | same formats, bold |
 
-**Currency-format locale gotcha**: use the `[$$-en-US]` locale token, NOT
-a bare `$` or `"$"`. Excel collapses `"$"` to `$`, which then resolves to
-**system currency** on non-US locales (`R$` on pt-BR, `£` on en-GB). The
-`[$$-en-US]` token locks the symbol to USD regardless of the workbook's
-locale.
+**Currency-format locale gotcha**: use the locale-specific currency token for the resolved fund currency — NOT a bare `$` or `"$"`. Excel collapses `"$"` to `$`, which then resolves to **system currency** on non-US locales (`R$` on pt-BR, `£` on en-GB). Resolve from fund data: `[$$-en-US]` USD, `[$€-x-euro2]` EUR, `[$£-en-GB]` GBP, `[$CA$-en-CA]` CAD.
 
 ## Borders
 

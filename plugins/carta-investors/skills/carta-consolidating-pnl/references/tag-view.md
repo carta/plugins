@@ -178,13 +178,13 @@ sheet.getRange("B6:<last_col>6").format.font.bold = true;
 sheet.getRange("B6:<last_col>6").format.horizontalAlignment = "Center";
 ```
 
-### Currency format — ALWAYS `[$$-en-US]`
+### Currency format — resolve from fund data, never hardcode USD
 
-**Never a bare `$`.** Bare `$` renders as `R$` on pt-BR, `£` on en-GB, etc.
+**Never a bare `$`.** Bare `$` renders as `R$` on pt-BR, `£` on en-GB, etc. Substitute `<CCY_TOKEN>` with the locale-specific token for the resolved currency before running — `[$$-en-US]` USD, `[$€-x-euro2]` EUR, `[$£-en-GB]` GBP, `[$CA$-en-CA]` CAD.
 
 ```javascript
 const dataRange = sheet.getRange("C7:<lastCol><lastRow>");
-dataRange.numberFormat = [["_-[$$-en-US]* #,##0.00_-;_-[$$-en-US]* (#,##0.00);_-[$$-en-US]* \"-\"??_-;_-@_-"]];
+dataRange.numberFormat = [["_-<CCY_TOKEN>* #,##0.00_-;_-<CCY_TOKEN>* (#,##0.00);_-<CCY_TOKEN>* \"-\"??_-;_-@_-"]];  // e.g. [$$-en-US] USD | [$€-x-euro2] EUR | [$£-en-GB] GBP | [$CA$-en-CA] CAD
 ```
 
 Apply the same format to subtotal rows and Net Income.
@@ -250,9 +250,9 @@ sheet.getRange("B4:F4").format.horizontalAlignment = "Center";
 //   (account_name, category, tag_value, month_amount, ytd_amount).
 // Sort: account → category → tag_value (alphabetical, Untagged last within category).
 
-// Currency on columns E and F only — same [$$-en-US] format as wide mode.
+// Currency on columns E and F only — same locale-token format as wide mode. Substitute <CCY_TOKEN> before running.
 const dataRange = sheet.getRange("E5:F<lastRow>");
-dataRange.numberFormat = [["_-[$$-en-US]* #,##0.00_-;_-[$$-en-US]* (#,##0.00);_-[$$-en-US]* \"-\"??_-;_-@_-"]];
+dataRange.numberFormat = [["_-<CCY_TOKEN>* #,##0.00_-;_-<CCY_TOKEN>* (#,##0.00);_-<CCY_TOKEN>* \"-\"??_-;_-@_-"]];  // e.g. [$$-en-US] USD | [$€-x-euro2] EUR | [$£-en-GB] GBP | [$CA$-en-CA] CAD
 
 // Net Income row at the bottom: bold, label in column B, formula
 // `=SUMIF(<gl_col>, ">=4000", <month_actual_col>) - …` (or pre-compute
@@ -368,7 +368,7 @@ Then offer the standard post-action menu via `AskUserQuestion` — the budget ti
 
 ## Hard rules
 
-- **Currency format always uses `[$$-en-US]`** — never bare `$`. Locale drift on non-US Excel locales (R$, £, etc.) is the single most common formatting bug.
+- **Currency format — resolve from fund data, never hardcode USD.** Use the locale-specific token: `[$$-en-US]` USD, `[$€-x-euro2]` EUR, `[$£-en-GB]` GBP, `[$CA$-en-CA]` CAD. Never bare `$` — locale drift on non-US Excel locales (R$, £, etc.) is the single most common formatting bug.
 - **No Budget / Variance / % columns in tag-view.** Carta budgets have no tag dimension — duplicating one budget value across every tag column is misleading.
 - **No Summary tab in tag-view.** Executive Summary rolls up across all expense categories — there's no meaningful way to roll up across tag values without losing the tag breakdown.
 - **All categories side by side, not one-per-run.** The categories are discovered from `REPORTING_TAGS_JSON` keys at query time and shown together so analysts can compare slicings of the same dollars.

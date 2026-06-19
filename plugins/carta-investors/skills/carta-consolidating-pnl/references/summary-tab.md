@@ -65,10 +65,10 @@ The detail-build gate captures the row map (HC subtotal, Total expenses, each re
 
 ## Number formats
 
-- Amounts (C/D/E): `[$$-en-US]#,##0;([$$-en-US]#,##0);-`
+- Amounts (C/D/E): `<CCY_TOKEN>#,##0;(<CCY_TOKEN>#,##0);-` where `<CCY_TOKEN>` is the locale token for the resolved fund currency: `[$$-en-US]` USD, `[$€-x-euro2]` EUR, `[$£-en-GB]` GBP, `[$CA$-en-CA]` CAD
 - Percent (F): `0.0%;(0.0%);-`
 
-`[$$-en-US]` locale token mandatory. Bare `$` resolves to system locale.
+Use the locale-specific currency token for the resolved fund currency — never a bare `$` or `"$"` (resolves to system locale).
 
 ## Borders + widths
 

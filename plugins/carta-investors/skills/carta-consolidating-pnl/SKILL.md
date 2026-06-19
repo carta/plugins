@@ -552,7 +552,7 @@ await context.sync();
 return cell.numberFormat[0][0];
 ```
 
-The returned string MUST contain the literal substring `[$$-en-US]`. If it returns `_($* #,##0...`, `$#,##0`, `"$"#,##0`, or anything else without `[$$-en-US]`, Excel will render currency in the user's local symbol (R$ on pt-BR, £ on en-GB). **Halt, re-apply `_-[$$-en-US]* #,##0.00_-;_-[$$-en-US]* (#,##0.00);_-[$$-en-US]* "-"??_-;_-@_-` to the full amount range, and re-verify.** Without this readback in your tool history, Gate 6 is not complete.
+The returned string MUST contain a locale-specific currency token matching the resolved fund currency (one of `[$$-en-US]` USD, `[$€-x-euro2]` EUR, `[$£-en-GB]` GBP, `[$CA$-en-CA]` CAD). If it returns `_($* #,##0...`, `$#,##0`, `"$"#,##0`, or anything without a `[$...-...]` locale token, Excel will render currency in the user's local symbol. **Halt, re-apply the format for the resolved currency (`_-<CCY_TOKEN>* #,##0.00_-;_-<CCY_TOKEN>* (#,##0.00);_-<CCY_TOKEN>* "-"??_-;_-@_-`) to the full amount range, and re-verify.** Without this readback in your tool history, Gate 6 is not complete.
 
 After the tag-view tab is built and branded, **skip Gate 7 (no Summary
 tab in tag-view mode)** and jump straight to Gate 8 with the tag-view
@@ -672,11 +672,11 @@ Paste these EXACT strings; never rewrite them from memory. Excel number-format s
 
 | Use for | Format string |
 |---|---|
-| Currency cells (D, E, G, M, N, P + subtotals + totals) | `_-[$$-en-US]* #,##0.00_-;_-[$$-en-US]* (#,##0.00);_-[$$-en-US]* "-"??_-;_-@_-` |
+| Currency cells (D, E, G, M, N, P + subtotals + totals) | locale token for resolved currency: `[$$-en-US]` USD, `[$€-x-euro2]` EUR, `[$£-en-GB]` GBP, `[$CA$-en-CA]` CAD — pattern: `_-<CCY_TOKEN>* #,##0.00_-;_-<CCY_TOKEN>* (#,##0.00);_-<CCY_TOKEN>* "-"??_-;_-@_-` |
 | Variance cells if you want no $ symbol (optional) | `_(* #,##0.00_);_(* (#,##0.00);_(* "-"??_);_(@_)` |
 | Percent cells (H, Q) | `0.0%;(0.0%)` (right-aligned) |
 
-**The `[$$-en-US]` locale token is mandatory** — a bare `$` or `"$"` resolves to system currency on non-US locales (renders as `R$` on pt-BR, `£` on en-GB). The negatives section (after the first `;`) MUST keep the parens form `(#,##0.00)` — leading-minus is wrong and will be flagged immediately.
+**Use the locale-specific token for the resolved currency — never a bare `$` or `"$"`** (resolves to system currency on non-US locales, renders as `R$` on pt-BR, `£` on en-GB). Resolve from fund data: `[$$-en-US]` USD, `[$€-x-euro2]` EUR, `[$£-en-GB]` GBP, `[$CA$-en-CA]` CAD. The negatives section (after the first `;`) MUST keep the parens form `(#,##0.00)` — leading-minus is wrong and will be flagged immediately.
 
 Section order is fixed (Revenue → Human Capital → Contractor → Occupancy →
 Professional Services → Travel & Marketing → Technology & Data → Other),
@@ -834,7 +834,7 @@ Reminders from `references/summary-tab.md`:
 - Empty buckets (Monitoring/Interest, Tax/Other, or Unrealized) get a
   literal `0` so `Investment Income`'s `SUM` still evaluates — and they
   must be surfaced in Gate 8's report.
-- Use the same `[$$-en-US]` locale token here as on the detail tab —
+- Use the same locale-specific currency token here as on the detail tab (`[$$-en-US]` USD, `[$€-x-euro2]` EUR, `[$£-en-GB]` GBP, `[$CA$-en-CA]` CAD) —
   arguably more important on the Summary, which is the tab most likely
   to be screenshotted.
 
