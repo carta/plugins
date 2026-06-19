@@ -1,8 +1,8 @@
 ---
 name: carta-budget-actuals
 model: opus
-description: 'Write actuals into an existing Excel budget workbook from Carta MCP — add/interleave Budget/Actual/Variance columns, a tag-view tab, or a vendor-view tab. TRIGGER: pull/fetch/get/retrieve/refresh/sync/add actuals for [firm/ManCo], interleave Budget/Actual/Variance, actuals by department/cost center/tag/vendor, add next month/period column, extend budget through [month], broken down by vendor. NOT: pacing or "how are we doing"/variance-analysis questions (carta-budget-vs-actuals), new budgets (carta-create-budget), fetch-budget, scenarios, consolidating P&L / balance sheet.'
-version: 1.0.1
+description: 'Write actuals into an existing Excel budget workbook from Carta MCP — add/interleave Budget/Actual/Variance columns, a tag-view tab, or a vendor-view tab. TRIGGER: pull/fetch/get/retrieve/refresh/sync/add actuals for [firm/ManCo], interleave Budget/Actual/Variance, actuals by department/cost center/tag/vendor, add next month/period column, extend budget through [month], broken down by vendor, vendor summary/spend over time/vendors across [period]. NOT: pacing, "how are we doing", "budget versus actual for [period]", or variance-analysis queries (carta-budget-vs-actuals); new budgets (carta-create-budget); scenarios; consolidating P&L / balance sheet. NOT: pulling a stored ManCo budget from Carta (carta-fetch-budget) — this skill writes actuals into an existing workbook, not the budget itself.'
+version: 1.1.0
 allowed-tools:
   # MCP connector discovery (Claude for Excel runtime tool — used first in Gate 0)
   - refresh_mcp_connectors
@@ -42,7 +42,9 @@ Entry point for updating actuals in an existing budget. Seven references:
 - [`references/refresh-existing.md`](references/refresh-existing.md) — **Layout C**: overwrite stale actuals cells in columns that already exist.
 - [`references/add-period.md`](references/add-period.md) — **Layout D**: append the single next month/quarter column.
 - [`references/tag-view.md`](references/tag-view.md) — **Layout E**: new tab with actuals sliced by reporting dimension (department, project code, class, etc.) and a three-row period / category / tag header. Only offered when the entity has tagged journal data.
-- [`references/vendor-view.md`](references/vendor-view.md) — **Layout F**: new tab with actuals sliced by vendor, with per-vendor subtotals and an Untagged section. Only offered when the entity has vendor-tagged journal data.
+- [`references/vendor-view.md`](references/vendor-view.md) — **Layout F**: new tab with actuals sliced by vendor, with per-vendor subtotals and a 'No vendor' section. Only offered when the entity has vendor-tagged journal data.
+- [`references/inline-vendor.md`](references/inline-vendor.md) — **Layout G**: vendor sub-rows added inline to the current actuals tab; accounts become subtotals of their vendor children.
+- [`references/vendor-only-view.md`](references/vendor-only-view.md) — **Layout H**: new tab with one row per vendor across a timeline — no GL account sub-rows. The lightweight vendor summary view.
 - [`references/get-actuals.md`](references/get-actuals.md) — internal helper, the canonical actuals-query routine.
 
 ## UX Rules
@@ -185,8 +187,9 @@ Use `AskUserQuestion`:
 | 3 | **Refresh existing Budget / Actual / Variance cells** (the cells are there, just stale) | [`refresh-existing.md`](references/refresh-existing.md) |
 | 4 | **Add only the next single period column** | [`add-period.md`](references/add-period.md) |
 | 5 | **Build a tag-view tab — actuals sliced by reporting dimension** (department, project code, class, etc.) | [`tag-view.md`](references/tag-view.md) — only offered when the entity has tagged data; see Gate 2.5 |
-| 6 | **Build a vendor-view tab — actuals sliced by vendor** (with per-vendor subtotals and an Untagged section) | [`vendor-view.md`](references/vendor-view.md) — only offered when the entity has vendor-tagged data; see Gate 2.6 |
+| 6 | **Build a vendor-view tab — actuals sliced by vendor, with GL account detail** (per-vendor subtotals and collapsible account rows) | [`vendor-view.md`](references/vendor-view.md) — only offered when the entity has vendor-tagged data; see Gate 2.6 |
 | 7 | **Add vendor rows inline to the current actuals tab** — insert vendor sub-rows under each account; accounts become subtotals of their vendor children | [`inline-vendor.md`](references/inline-vendor.md) — only offered when the active tab is already an actuals tab; see Gate 2.7 |
+| 8 | **Build a vendor summary tab — one row per vendor across a timeline, no GL detail** | [`vendor-only-view.md`](references/vendor-only-view.md) — only offered when the entity has vendor-tagged data; see Gate 2.8 |
 
 Use the user's prompt only as a *hint* for which option to highlight —
 never as authority to skip the question:
@@ -201,6 +204,7 @@ never as authority to skip the question:
 | "by vendor", "broken down by vendor", "vendor view", "which vendors", "vendor breakdown" — **and the active tab is already an actuals tab** | Offer Options 6 and 7 together; 7 ← recommended |
 | "by vendor", "broken down by vendor", "vendor view", "which vendors", "vendor breakdown" — **no actuals tab open** | Option 6 |
 | "break by vendor on this tab", "add vendors here", "vendor breakdown on this tab", "enrich this tab with vendors" | Option 7 |
+| "vendor summary", "vendor spend over time", "vendors across", "which vendors did we pay", "vendor totals", "vendor breakdown without accounts", "just vendors" | Option 8 |
 
 **Option 5 availability**: always show Layout E in the chooser. If the user
 picks it and Gate 2.5 finds no tag data on the entity, tell them in one sentence
@@ -216,6 +220,10 @@ an actuals tab (its name contains "Actuals" or the user is explicitly on it).
 If the user picks it and Gate 2.7 finds no vendor data, tell them in one sentence
 and fall back to Option 6 (new vendor-view tab) instead.
 
+**Option 8 availability**: always show Layout H in the chooser. If the user
+picks it and Gate 2.8 finds no vendor data on the entity, tell them in one sentence
+and fall back to Layout A automatically. Do not pre-filter the chooser.
+
 The user's pick locks the reference to load for the rest of the
 workflow. **Immediately call `read_skill` for the chosen layout — do not reconstruct from memory:**
 
@@ -228,6 +236,7 @@ workflow. **Immediately call `read_skill` for the chosen layout — do not recon
 | Option 5 — Tag-view tab | `read_skill(file_path="references/tag-view.md")` |
 | Option 6 — Vendor view tab | `read_skill(file_path="references/vendor-view.md")` |
 | Option 7 — Vendor inline | `read_skill(file_path="references/inline-vendor.md")` |
+| Option 8 — Vendor summary tab | `read_skill(file_path="references/vendor-only-view.md")` |
 
 > **Why we always ask:** the same prompt — "add 2026 actuals by month"
 > — can mean Option 1, 2, or 3 depending on the user's intent and the
@@ -346,6 +355,15 @@ call_tool({"name": "dwh__execute__query", "arguments": {
 
 **Silent probe — no user-facing output.** Same probe as Gate 2.6 — confirms vendor data exists before rebuilding the tab inline.
 
+---
+
+## Gate 2.8 — Vendor-data discovery (Layout H path only)
+
+**Skip this gate entirely unless the user chose Layout H at Gate 2.**
+
+**Silent probe — no user-facing output.** Same probe as Gate 2.6 — checks whether
+`VENDOR_NAME` is populated and counts distinct vendors.
+
 ```
 call_tool({"name": "dwh__execute__query", "arguments": {
   "sql": "SELECT
@@ -360,8 +378,11 @@ call_tool({"name": "dwh__execute__query", "arguments": {
 }})
 ```
 
-- `tagged_rows > 0` → vendor data exists. Store `<VENDOR_COUNT>` = `distinct_vendors` and `<HAS_UNTAGGED>` = (`untagged_rows > 0`). Continue to Gate 3.
-- `tagged_rows == 0` → no vendor data on this entity. Tell the user in one plain-English sentence and fall back to **Layout F** (new vendor-view tab) instead.
+- `tagged_rows > 0` → vendor data exists. Store `<VENDOR_COUNT>` = `distinct_vendors`
+  and `<HAS_UNTAGGED>` = (`untagged_rows > 0`). Continue to Gate 3.
+- `tagged_rows == 0` → no vendor data on this entity. Tell the user in one plain-English
+  sentence — *"Your journal data doesn't have any vendor information, so I'll build a
+  flat actuals view instead."* — and fall back to **Layout A**.
 
 ---
 
@@ -393,15 +414,15 @@ store it directly and skip the period question.
 
 Store `<PERIOD_START>` (first day, `YYYY-MM-DD`) and `<PERIOD_END>` (last day).
 
-**Match strategy** (Layouts A–D only): `name first then GL code` (default) vs `GL code only`. Omit for Layouts E or F (no existing-sheet matching needed — Layouts E and F always write a new tab).
+**Match strategy** (Layouts A–D only): `name first then GL code` (default) vs `GL code only`. Omit for Layouts E, F, G, or H (no existing-sheet matching needed — these layouts always write a new tab).
 
 Store `<ENTITY_NAME>`, `<PERIOD_START>`, `<PERIOD_END>`, `<MATCH_STRATEGY>` (Layouts A–D).
 
-### Gate 3a — Aggregation level (Layouts E and F only)
+### Gate 3a — Aggregation level (Layouts E, F, and H only)
 
-**Skip this sub-gate for Layouts A–D** — aggregation is always monthly there. Set `<AGGREGATION> = MONTH` and continue.
+**Skip this sub-gate for Layouts A–D and G** — aggregation is always monthly there. Set `<AGGREGATION> = MONTH` and continue.
 
-**For Layouts E and F, this MUST be a separate `AskUserQuestion` call** — do not bundle with the period question above, and do not infer the answer from the period range. A YTD period (e.g. Jan–May) does not mean "Quarter"; a full-year period does not mean "Year". The user picks the period independently from the aggregation.
+**For Layouts E, F, and H, this MUST be a separate `AskUserQuestion` call** — do not bundle with the period question above, and do not infer the answer from the period range. A YTD period (e.g. Jan–May) does not mean "Quarter"; a full-year period does not mean "Year". The user picks the period independently from the aggregation.
 
 > Aggregate columns by:
 
@@ -417,7 +438,7 @@ Store `<AGGREGATION>` (`YEAR` | `QUARTER` | `MONTH`).
 
 ### Gate 3b — Vendor row grouping preference (Layouts F and G + excel-addin only)
 
-**Skip this sub-gate for Layouts A–E**, or when `<RUNTIME>` is `local-file` (row outline grouping is not supported in the local-file path).
+**Skip this sub-gate for Layouts A–E and H**, or when `<RUNTIME>` is `local-file` (row outline grouping is not supported in the local-file path). Layout H has no GL sub-rows to collapse.
 
 Ask via `AskUserQuestion` — a separate call from Gate 3a above:
 
@@ -468,9 +489,11 @@ into the SQL. All other rules below apply unchanged.
 [`references/vendor-view.md`](references/vendor-view.md) §SQL. Substitute `<period_trunc>`
 from `<AGGREGATION>`, `<period_start>` from `<PERIOD_START>`, `<period_end>` from
 `<PERIOD_END>`, and `<entity_name>` from `<ENTITY_NAME>`. The query uses
-`COALESCE(VENDOR_NAME, 'Untagged')` so NULL-vendor entries roll into a single
-Untagged section — do not run a second query for untagged rows. All other hard
+`COALESCE(VENDOR_NAME, 'No vendor')` so NULL-vendor entries roll into a single
+'No vendor' section — do not run a second query for untagged rows. All other hard
 rules (entity scoping, books date, sign convention, P&L scope) apply unchanged.
+
+**Layout H:** use [`queries/actuals-by-vendor-period.sql`](queries/actuals-by-vendor-period.sql) directly. Substitute `<period_trunc>` from `<AGGREGATION>`, `<period_start>` from `<PERIOD_START>`, `<period_end>` from `<PERIOD_END>`, and `<entity_name>` from `<ENTITY_NAME>`. Same `COALESCE(VENDOR_NAME, 'No vendor')` convention; same hard rules as Layout F. The query returns `(vendor_name, period, signed_amount)` — no `gl_code` or `account_name` columns.
 
 **Layouts A–D:** call [`references/get-actuals.md`](references/get-actuals.md) for the main actuals query. In parallel, call `read_skill(file_path="references/vendor-actuals.md")` and run the vendor actuals query — this loads `<VENDOR_ACTUALS>` into session context so vendor questions (e.g. "which vendor is driving Legal Fees?") are answerable for the rest of the session without a second round-trip. Never write inline SQL outside those files.
 
@@ -590,7 +613,7 @@ Do not reconstruct either spec from memory. Both files must be in your context b
 
 - **Layouts A–D:** load `references/add-actuals-columns.md` §5 ("Build the rebuild payload") and apply its header / column / format spec verbatim — especially the two-row header (row N = merged month labels, row N+1 = `Budget` / `Actual` / `Variance` sub-headers — spelled out in full, never abbreviated). Then use the add-in's cell-write tools to execute the payload.
 - **Layout E:** load [`references/tag-view.md`](references/tag-view.md) §"Writing the workbook (excel-addin runtime)" and follow it verbatim — 3-row period/category/tag header, `range.merge(true)` for period and category bands. **Do NOT freeze panes** — same rule as Layouts A–D and the rest of the Carta budgeting skills.
-- **Layout F:** load [`references/vendor-view.md`](references/vendor-view.md) §"Writing the workbook (excel-addin runtime)" and follow it verbatim — 2-row period/vendor header, `range.merge(true)` for period bands, per-vendor subtotals, Untagged section at the bottom. **Do NOT freeze panes.**
+- **Layout F:** load [`references/vendor-view.md`](references/vendor-view.md) §"Writing the workbook (excel-addin runtime)" and follow it verbatim — 2-row period/vendor header, `range.merge(true)` for period bands, per-vendor subtotals, 'No vendor' section at the bottom. **Do NOT freeze panes.**
 - **Layout G:** load [`references/inline-vendor.md`](references/inline-vendor.md) §"Write sequence (excel-addin runtime)" and follow it verbatim — clear rows 7+, rebuild account rows (bold, SUM formula) + vendor sub-rows (indented four spaces, hardcoded amounts, locale-specific currency token), then group and collapse. Gate 7's three-call sequence (cell write → brand block → combined verification) applies here too.
 
 **If `<RUNTIME>` is `local-file`:** build an operations payload and apply it:
@@ -717,15 +740,25 @@ If any anchor is missing, you have skipped a gate. **Do NOT write "Carta logo pl
 
 **Layout F — If `<RUNTIME>` is `excel-addin`:**
 
-> Created [2026 Actuals by Vendor](<citation:2026 Actuals by Vendor!A1>) (Example MgmtCo) — 23 accounts across 8 vendors (A2Z, Rippling, Alcatraz LLP, … Untagged), annual aggregation. 1 account flagged low-confidence (sparse history). Carta logo placed at E1.
+> Created [2026 Actuals by Vendor](<citation:2026 Actuals by Vendor!A1>) (Example MgmtCo) — 23 accounts across 8 vendors (A2Z, Rippling, Alcatraz LLP, … No vendor), annual aggregation. 1 account flagged low-confidence (sparse history). Carta logo placed at E1.
 >
-> Substitute the period block phrasing to match `<AGGREGATION>` from Gate 3a: "annual aggregation" for `YEAR`, "across 4 quarters" / "across Q1+Q2" for `QUARTER`, "across 12 months" / "across Jan–May" for `MONTH`. List the top 3–5 vendor names; collapse the rest as "… Untagged".
+> Substitute the period block phrasing to match `<AGGREGATION>` from Gate 3a: "annual aggregation" for `YEAR`, "across 4 quarters" / "across Q1+Q2" for `QUARTER`, "across 12 months" / "across Jan–May" for `MONTH`. List the top 3–5 vendor names; collapse the rest as "… No vendor".
 >
 > If `<VENDOR_GROUPING>` is `collapsed` or `expanded`, append: "Vendor detail rows are grouped — use the **+/−** toggles on the left margin or the **1/2** outline buttons in the top-left corner to expand or collapse all vendor sections at once."
 
 **Layout F — If `<RUNTIME>` is `local-file`:**
 
 > Created `2026 Actuals by Vendor` tab in `file:///path/to/<budget-workbook>.xlsx` (Example MgmtCo) — 23 accounts across 8 vendors, annual aggregation. 1 account flagged low-confidence (sparse history). Adjust the period phrasing to match `<AGGREGATION>` (see excel-addin example above).
+
+**Layout H — If `<RUNTIME>` is `excel-addin`:**
+
+> Created [2026 Vendors](<citation:2026 Vendors!A1>) (Example MgmtCo) — 8 vendors (A2Z, Rippling, Alcatraz LLP, … No vendor), annual aggregation. 1 vendor flagged low-confidence (sparse history). Carta logo placed at E1.
+>
+> Substitute the period block phrasing to match `<AGGREGATION>` from Gate 3a: "annual aggregation" for `YEAR`, "across 4 quarters" / "across Q1+Q2" for `QUARTER`, "across 12 months" / "across Jan–May" for `MONTH`. List the top 3–5 vendor names; collapse the rest as "… No vendor".
+
+**Layout H — If `<RUNTIME>` is `local-file`:**
+
+> Created `2026 Vendors` tab in `file:///path/to/<budget-workbook>.xlsx` (Example MgmtCo) — 8 vendors, annual aggregation. 1 vendor flagged low-confidence (sparse history). Adjust the period phrasing to match `<AGGREGATION>` (see excel-addin example above).
 
 **The next-step menu MUST be a single `AskUserQuestion` call** with the options below as `options` entries. Never render them as a numbered markdown list, a bulleted list, or inline prose — bare-text menus break the chooser UI in Claude for Excel and force the user to type the number. The `← recommended` marker goes inside the `description` field of one option, not as a suffix on the `label`.
 

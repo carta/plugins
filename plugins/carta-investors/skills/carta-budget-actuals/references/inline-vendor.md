@@ -37,7 +37,7 @@ actuals query now using `<ENTITY_NAME>`, `<PERIOD_START>`, `<PERIOD_END>`.
   Account row (bold, subtotal formula)      ← was the data row; now a SUM of vendor children
     Vendor row 1 (indented, data)
     Vendor row 2 (indented, data)
-    Vendor row N — Untagged last (indented, data)
+    Vendor row N — No vendor last (indented, data)
 ```
 
 - **Account row** — label unchanged (e.g. `Taxes (7070)`). Values become
@@ -46,7 +46,7 @@ actuals query now using `<ENTITY_NAME>`, `<PERIOD_START>`, `<PERIOD_END>`.
 - **Vendor rows** — label indented four spaces: `    <vendor_name>`. Hardcoded
   monthly amounts from `<VENDOR_ACTUALS>`; blank for future months; `0` for past
   months with no activity. Annual total `=SUM(B<row>:M<row>)`. Plain format.
-- **Vendor order:** named vendors alphabetically, `Untagged` always last.
+- **Vendor order:** named vendors alphabetically, `No vendor` always last.
 - **Collapsible grouping:** apply `group(Excel.GroupOption.byRows)` to each
   vendor row (detected by the four-space indent in column A) unless `<VENDOR_GROUPING>` is `none`.
   After grouping, call `sheet.showOutlineLevels(1, undefined)` when `collapsed`,
@@ -159,7 +159,7 @@ Preview table before writing:
 
 | Account | Vendors found | Total |
 |---|---|---|
-| Taxes (7070) | KY Dept of Revenue, CA FTB, Untagged | $X,XXX |
+| Taxes (7070) | KY Dept of Revenue, CA FTB, No vendor | $X,XXX |
 | … | … | … |
 
 Summarise: "N accounts will have vendor rows inserted. Vendor detail rows will

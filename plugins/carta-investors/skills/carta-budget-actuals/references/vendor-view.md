@@ -34,7 +34,7 @@ Row 8+ data:          | Justworks        |      |      |   |      |       |  ←
 3. **Vendor subtotal row** — `<Vendor> Total`, bold, thin top border, `=SUM(...)` per column (same-column range from first to last GL row for that vendor).
 4. Blank row between vendor sections.
 
-Named vendors sorted alphabetically; `Untagged` always last. **Grand Total row** at the bottom: sums all vendor subtotal rows per column; double bottom border.
+Named vendors sorted alphabetically; `No vendor` always last. **Grand Total row** at the bottom: sums all vendor subtotal rows per column; double bottom border.
 
 ---
 
@@ -59,7 +59,7 @@ Data headers start at row 6 (period band), row 7 (vendor header); data at row 8+
 See [`../queries/actuals-by-account-vendor-period.sql`](../queries/actuals-by-account-vendor-period.sql).
 
 Substitute `<entity_name>`, `<period_trunc>` (`YEAR` / `QUARTER` / `MONTH`),
-`<period_start>`, `<period_end>`. `COALESCE(VENDOR_NAME, 'Untagged')` in the
+`<period_start>`, `<period_end>`. `COALESCE(VENDOR_NAME, 'No vendor')` in the
 SELECT means a single query returns both named-vendor and untagged rows — do
 NOT run a second query for `VENDOR_NAME IS NULL` entries.
 
@@ -80,7 +80,7 @@ After the query returns rows shaped `(vendor_name, gl_code, account_name, period
 data[vendor_name][gl_code] = { account_name, months: { "YYYY-MM": signed_amount } }
 ```
 
-- **Vendors**: named vendors sorted alphabetically, `Untagged` always last.
+- **Vendors**: named vendors sorted alphabetically, `No vendor` always last.
 - **GL accounts within a vendor**: sorted by `gl_code` ascending.
 - **Periods (columns)**: determined by `<AGGREGATION>` from Gate 3a — month labels for MONTH, quarter labels for QUARTER, year label for YEAR.
 

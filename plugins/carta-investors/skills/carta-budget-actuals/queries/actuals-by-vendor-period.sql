@@ -1,7 +1,6 @@
--- Actuals sliced by vendor, aggregated by period.
+-- Actuals aggregated by vendor and period only (no GL code breakdown).
 -- Used by:
---   • carta-budget-actuals Layout F (vendor-view tab) — <period_trunc> from Gate 3a
---   • vendor-actuals parallel fetch (Layouts A–D) — <period_trunc> = MONTH
+--   • carta-budget-actuals Layout H (vendor-only tab)
 --
 -- Substitutions (never hardcode):
 --   <journal_entries_table>  — resolved via dwh:list:tables at Gate 0
@@ -10,7 +9,7 @@
 --   <period_start>           — first day of the selected period (YYYY-MM-DD)
 --   <period_end>             — last day of the selected period (YYYY-MM-DD)
 --
--- Hard rules (same as actuals-by-account-month.sql):
+-- Hard rules (same as actuals-by-account-vendor-period.sql):
 --   - FUND_NAME = exact match, never FIRM_NAME ILIKE
 --   - EFFECTIVE_DATE (books date), not POSTED_DATE
 --   - Revenue (4xxx) sign-flipped via CASE; expenses kept as-is
@@ -21,8 +20,6 @@
 
 SELECT
     COALESCE(VENDOR_NAME, 'No vendor')                               AS vendor_name,
-    ACCOUNT_TYPE                                                    AS gl_code,
-    ACCOUNT_NAME                                                    AS account_name,
     DATE_TRUNC('<period_trunc>', EFFECTIVE_DATE)                    AS period,
     SUM(CASE WHEN LEFT(ACCOUNT_TYPE, 1) = '4' THEN -AMOUNT
              ELSE AMOUNT END)                                       AS signed_amount
@@ -30,10 +27,9 @@ FROM <journal_entries_table>
 WHERE FUND_NAME = '<entity_name>'
   AND ACCOUNT_TYPE >= '4000'
   AND EFFECTIVE_DATE BETWEEN '<period_start>' AND '<period_end>'
-GROUP BY 1, 2, 3, 4
+GROUP BY 1, 2
 ORDER BY
     -- Named vendors first (alphabetically), No vendor last
     CASE WHEN VENDOR_NAME IS NULL THEN 1 ELSE 0 END,
     vendor_name,
-    gl_code,
     period;
