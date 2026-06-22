@@ -2,7 +2,7 @@
 name: carta-consolidating-balance-sheet
 model: sonnet
 description: 'Generate a consolidating Balance Sheet for all entities under a firm for a given month and write it as a side-by-side Excel tab with Assets / Liabilities / Equity sections and a Total column. Sourced from Carta MCP (firm/entity resolution + DWH SQL). TRIGGER when the user asks for "balance sheet of all entities of [firm] for [month]", a consolidating BS by entity, or to replicate the "Balance Sheet - consolidating" tab format for a different firm/period. Trigger phrases include "consolidating balance sheet", "BS by entity", "balance sheet of all entities". DO NOT TRIGGER for single-entity BS, P&L / income statement (carta-consolidating-pnl), new budgets (carta-create-budget), pulling Carta-stored budgets (carta-fetch-budget), refreshing actuals (carta-budget-actuals), pacing (carta-budget-vs-actuals), or what-if (carta-budget-scenarios).'
-version: 1.0.0
+version: 1.0.1
 allowed-tools:
   # MCP connector discovery (Claude for Excel runtime tool — used first in Gate 0)
   - refresh_mcp_connectors
@@ -10,14 +10,17 @@ allowed-tools:
   - mcp__claude_ai_Carta__call_tool
   - mcp__claude_ai_Carta__welcome
   - mcp__claude_ai_Carta__set_context
+  - mcp__claude_ai_Carta__list_contexts
   # Carta-installer naming (lowercase)
   - mcp__carta_production__call_tool
   - mcp__carta_production__welcome
   - mcp__carta_production__set_context
+  - mcp__carta_production__list_contexts
   # Local / legacy fallback
   - mcp__carta__call_tool
   - mcp__carta__welcome
   - mcp__carta__set_context
+  - mcp__carta__list_contexts
   - Read
   - AskUserQuestion
 ---
@@ -114,6 +117,8 @@ Execute all gates silently. Do not narrate tool calls, intermediate results, or 
 
 ## Entry mode — fresh session vs. chained skill
 
+**Mandatory telemetry beacon — run this before any skip-gate check:** If `<SERVER>` and `<FIRM_UUID>` are already in context, call `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-consolidating-balance-sheet"]})` as your very first action. Do not skip this even when all data is already available — it records this skill invocation. If either is unknown, it fires in Gate 0 below.
+
 Before Gate 0, check whether these context variables are already set from an earlier skill call in the same session (e.g. chained from `carta-consolidating-pnl`):
 
 - `<SERVER>` — connected Carta MCP server prefix
@@ -139,11 +144,11 @@ If none connected, list `failed` connectors and stop. If multiple, default to `C
 
 ## Gate 1: Resolve the firm and its entities
 
-1. `call_tool({"name": "contexts__list", "arguments": {"firm_name": "<FIRM>"}})` to find
+1. `mcp__<SERVER>__list_contexts(firm_name="<FIRM>", _instrumentation={"plugin": "carta-investors", "skills": ["carta-consolidating-balance-sheet"]})` to find. Do not use `call_tool` for `list_contexts` — call the granular tool directly with `_instrumentation` as shown.
    the firm. If multiple matches, present them via `AskUserQuestion` and
    confirm.
 2. `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-consolidating-balance-sheet"]})` to scope the session. Do not use `call_tool` for `set_context` — call the granular tool directly with `_instrumentation` as shown.
-3. `call_tool({"name": "fa__list__entities"})` to enumerate **every** entity under
+3. `call_tool({"name": "fa__list__entities", "arguments": {"_instrumentation": {"plugin": "carta-investors", "skills": ["carta-consolidating-balance-sheet"]}}})` to enumerate **every** entity under
    the firm.
 
 Prefer the granular tool when the server exposes it — one fewer hop, sidesteps `fetch`'s param-shape quirks:
@@ -264,7 +269,7 @@ Supported `format` values for `dwh:execute:query`:
 - `ndjson` — best for large results processed by code/agent.
 - `csv` is NOT supported. Do not try it.
 
-Run via `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "..."}})`.
+Run via `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "...", "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-consolidating-balance-sheet"]}}})`.
 SELECT-only.
 
 **Period-only variant** (`EFFECTIVE_DATE BETWEEN <month_start> AND
@@ -282,7 +287,7 @@ The number format in `references/formatting.md` is built from `<fund_currency>` 
 resolve it here, do **not** assume USD:
 
 1. Probe the journal-entries table for a currency column:
-   `call_tool({"name": "dwh__get__table_schema", "arguments": {"table_name": "<journal_entries_table>"}})`.
+   `call_tool({"name": "dwh__get__table_schema", "arguments": {"table_name": "<journal_entries_table>", "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-consolidating-balance-sheet"]}}})`.
    If it exposes a currency column (e.g. `CURRENCY`, `REPORTING_CURRENCY`,
    `FUND_CURRENCY`), add `SELECT DISTINCT <currency_col>` scoped to
    `<entity_scope>` and read the value(s).

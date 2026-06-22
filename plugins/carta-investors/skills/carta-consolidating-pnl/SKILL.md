@@ -2,7 +2,7 @@
 name: carta-consolidating-pnl
 model: sonnet
 description: 'Firm-wide consolidating P&L (Income Statement) across ALL entities of a firm for one month. Produces TWO Excel tabs: detailed P&L (Month + YTD Actual/Budget/Variance/%) and executive Summary P&L formula-linked to detail. Optional tag-view mode breaks Actuals down by ALL firm reporting-tag categories side by side with a three-row nested header (period > category > tag) and per-category subtotals; Budget/Variance omitted in tag-view (Carta budgets have no tag dimension). Sourced from Carta MCP. TRIGGER on "consolidating P&L for [firm] [month]", "P&L for all entities of [firm]", "firm-wide income statement", "P&L with executive summary", "P&L by department", "P&L by tag", "income statement by cost center", "P&L by project code". DO NOT TRIGGER for single-entity P&L, balance sheet (carta-consolidating-balance-sheet), new budgets (carta-create-budget), Carta budgets (carta-fetch-budget), actuals refresh (carta-budget-actuals), pacing (carta-budget-vs-actuals), or what-if (carta-budget-scenarios).'
-version: 1.0.0
+version: 1.0.1
 allowed-tools:
   # MCP connector discovery (Claude for Excel runtime tool — used first in Gate 0)
   - refresh_mcp_connectors
@@ -10,14 +10,17 @@ allowed-tools:
   - mcp__claude_ai_Carta__call_tool
   - mcp__claude_ai_Carta__welcome
   - mcp__claude_ai_Carta__set_context
+  - mcp__claude_ai_Carta__list_contexts
   # Carta-installer naming (lowercase)
   - mcp__carta_production__call_tool
   - mcp__carta_production__welcome
   - mcp__carta_production__set_context
+  - mcp__carta_production__list_contexts
   # Local / legacy fallback
   - mcp__carta__call_tool
   - mcp__carta__welcome
   - mcp__carta__set_context
+  - mcp__carta__list_contexts
   - Read
   - AskUserQuestion
 ---
@@ -98,6 +101,8 @@ Execute all gates silently. Do not narrate tool calls, intermediate results, or 
 
 ## Entry mode — fresh session vs. chained skill
 
+**Mandatory telemetry beacon — run this before any skip-gate check:** If `<SERVER>` and `<FIRM_UUID>` are already in context, call `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-consolidating-pnl"]})` as your very first action. Do not skip this even when all data is already available — it records this skill invocation. If either is unknown, it fires in Gate 0 below.
+
 Before Gate 0, check whether these context variables are already set from an earlier skill call in the same session (e.g. chained from `carta-consolidating-balance-sheet`):
 
 - `<SERVER>` — connected Carta MCP server prefix
@@ -123,7 +128,7 @@ If none connected, list `failed` connectors and stop. If multiple, default to `C
 
 ## Gate 1: Resolve firm
 
-1. `call_tool({"name": "contexts__list", "arguments": {"firm_name": "<FIRM>"}})`. Multiple matches → `AskUserQuestion`. Wait for confirmation.
+1. `mcp__<SERVER>__list_contexts(firm_name="<FIRM>", _instrumentation={"plugin": "carta-investors", "skills": ["carta-consolidating-pnl"]})`. Do not use `call_tool` for `list_contexts` — call the granular tool directly with `_instrumentation` as shown. Multiple matches → `AskUserQuestion`. Wait for confirmation.
 2. `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-consolidating-pnl"]})`. Do not use `call_tool` for `set_context` — call the granular tool directly with `_instrumentation` as shown.
 
 **DWH param-name traps:** `dwh:execute:query` takes `sql:` not `query:`. `dwh:get:table_schema` takes `table_name:` not `table:`. `format` accepts `"ndjson"` / `"markdown"`, not `"csv"`.
@@ -166,7 +171,7 @@ ORDER BY 1, 2
 
 Queries > 50 rows: request `format: "ndjson"`, bucket into a blob. Don't paste large results — triggers `context_snip`. Use `"markdown"` only for ≤50-row previews.
 
-Run via `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "..."}})`.
+Run via `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "...", "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-consolidating-pnl"]}}})`.
 
 SELECT-only.
 
