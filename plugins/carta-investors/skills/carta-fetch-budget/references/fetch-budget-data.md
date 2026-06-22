@@ -9,7 +9,8 @@ Carta's Fund Admin via the MCP `fa:list:budgets` command.
 call_tool({"name": "fa__list__budgets", "arguments": {
   "fund_uuid":  "<ENTITY_UUID>",
   "start_date": "<YYYY-MM-DD>",
-  "end_date":   "<YYYY-MM-DD>"
+  "end_date":   "<YYYY-MM-DD>",
+  "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-fetch-budget"]}
 }})
 ```
 

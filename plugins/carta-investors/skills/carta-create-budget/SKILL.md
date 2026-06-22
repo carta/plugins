@@ -2,7 +2,7 @@
 name: carta-create-budget
 model: opus
 description: 'Build or restructure a fund/ManCo budget workbook in Excel from Carta prior-year actuals. TRIGGER: build/create/draft a budget for a future year; group/categorize budget line items into sections with subtotals; apply an inflation/contingency buffer to budget expenses. NOT: consolidating P&L / balance sheet, fetch-budget, actuals refresh, pacing (carta-budget-vs-actuals), what-if scenarios (carta-budget-scenarios).'
-version: 1.0.1
+version: 1.0.2
 allowed-tools:
   # MCP connector discovery (Claude for Excel runtime tool — used first in Gate 0)
   - refresh_mcp_connectors
@@ -10,14 +10,17 @@ allowed-tools:
   - mcp__claude_ai_Carta__call_tool
   - mcp__claude_ai_Carta__welcome
   - mcp__claude_ai_Carta__set_context
+  - mcp__claude_ai_Carta__list_contexts
   # Carta-installer naming (lowercase)
   - mcp__carta_production__call_tool
   - mcp__carta_production__welcome
   - mcp__carta_production__set_context
+  - mcp__carta_production__list_contexts
   # Local / legacy fallback
   - mcp__carta__call_tool
   - mcp__carta__welcome
   - mcp__carta__set_context
+  - mcp__carta__list_contexts
   - AskUserQuestion
   - Read
   - Write
@@ -91,6 +94,8 @@ Do NOT output any of the following between gates:
 
 ## Entry mode — fresh session vs. chained skill
 
+**Mandatory telemetry beacon — run this before any skip-gate check:** If `<SERVER>` and `<ENTITY_UUID>` are already in context, call `mcp__<SERVER>__set_context(firm_id=<ENTITY_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-create-budget"]})` as your very first action. Do not skip this even when all data is already available — it records this skill invocation. If either is unknown, it fires in Gate 0 below.
+
 Before Gate 0, check whether these context variables are already set from an earlier budgeting skill call in the same session:
 
 - `<SERVER>` — connected Carta MCP server prefix
@@ -123,11 +128,9 @@ Do not ask "which firm?" or "which runtime?" when those are already established 
 The Carta MCP exposes three top-level tools: `welcome`, `fetch`, `set_context`. List contexts via `fetch(command="contexts:list", …)` — never a direct `list_contexts` top-level tool.
 
 If the user named a firm:
-1. `call_tool({"name": "contexts__list", "arguments": {"firm_name": "<entity>"}})`.
+1. `mcp__<SERVER>__list_contexts(firm_name="<entity>", _instrumentation={"plugin": "carta-investors", "skills": ["carta-create-budget"]})`. Do not use `call_tool` for `list_contexts` — call the granular tool directly with `_instrumentation` as shown.
 2. Multiple matches → `AskUserQuestion` to disambiguate.
 3. `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-create-budget"]})`. Do not use `call_tool` for `set_context` — call the granular tool directly with `_instrumentation` as shown. **Do not skip this step — DWH queries scope to the active context. Proceeding without `set_context` means queries may return data for the wrong entity.**
-
-Prefer granular tools when exposed: `mcp__<SERVER>__list_contexts(firm_name=...)` / `set_context(firm_id=...)`.
 
 **DWH param-name traps:**
 - `dwh:execute:query` takes `sql:`, NOT `query:`.

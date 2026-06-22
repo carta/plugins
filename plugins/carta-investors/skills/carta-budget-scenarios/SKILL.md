@@ -2,7 +2,7 @@
 name: carta-budget-scenarios
 model: opus
 description: 'Build what-if scenario columns on an existing Excel budget workbook — trim, growth, or additive layers (new fund raise, headcount/FTE hires, expansion). TRIGGER: what-if questions, "how would X affect next year''s budget/P&L", model/simulate a scenario, impact of raising a fund or hiring, forward projections with timing sensitivity. NOT: new budgets (carta-create-budget), fetch-budget, actuals refresh, pacing, historical/consolidating financial statements (carta-consolidating-pnl / carta-consolidating-balance-sheet).'
-version: 1.0.1
+version: 1.0.2
 allowed-tools:
   # MCP connector discovery (Claude for Excel runtime tool — used first in Step 0)
   - refresh_mcp_connectors
@@ -10,14 +10,17 @@ allowed-tools:
   - mcp__claude_ai_Carta__call_tool
   - mcp__claude_ai_Carta__welcome
   - mcp__claude_ai_Carta__set_context
+  - mcp__claude_ai_Carta__list_contexts
   # Carta-installer naming (lowercase)
   - mcp__carta_production__call_tool
   - mcp__carta_production__welcome
   - mcp__carta_production__set_context
+  - mcp__carta_production__list_contexts
   # Local / legacy fallback
   - mcp__carta__call_tool
   - mcp__carta__welcome
   - mcp__carta__set_context
+  - mcp__carta__list_contexts
   - AskUserQuestion
   - Read
   - Write
@@ -109,6 +112,8 @@ Execute all steps silently. Do not narrate tool calls, intermediate results, or 
 
 ## Entry mode — fresh session vs. chained skill
 
+**Mandatory telemetry beacon — run this before any skip-gate check:** If `<SERVER>` and `<ENTITY_UUID>` are already in context, call `mcp__<SERVER>__set_context(firm_id=<ENTITY_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-budget-scenarios"]})` as your very first action. Do not skip this even when all data is already available — it records this skill invocation. If either is unknown, it fires in Step 0 below.
+
 Before Step 0, check whether these context variables are already set from an earlier budgeting skill call in the same session:
 
 - `<SERVER>` — connected Carta MCP server prefix
@@ -131,7 +136,7 @@ Do not ask "which firm?" or "which runtime?" when those are already established 
 
 If none connected, list `failed` connectors and stop. If multiple, default to `Carta` (production).
 
-**Resolve firm:** if user named one → `call_tool({"name": "contexts__list", "arguments": {"firm_name": "<entity>"}})` → disambiguate via `AskUserQuestion` if multiple → `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-budget-scenarios"]})`. Do not use `call_tool` for `set_context` — call the granular tool directly with `_instrumentation` as shown.
+**Resolve firm:** if user named one → `mcp__<SERVER>__list_contexts(firm_name="<entity>", _instrumentation={"plugin": "carta-investors", "skills": ["carta-budget-scenarios"]})` → disambiguate via `AskUserQuestion` if multiple → `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-budget-scenarios"]})`. Do not use `call_tool` for `list_contexts` or `set_context` — call the granular tools directly with `_instrumentation` as shown.
 
 
 **DWH param-name traps:** `dwh:execute:query` takes `sql:` not `query:`. `dwh:get:table_schema` takes `table_name:` not `table:`. `format` accepts `"ndjson"` / `"markdown"`, not `"csv"`.

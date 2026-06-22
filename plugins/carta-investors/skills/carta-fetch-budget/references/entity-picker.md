@@ -10,7 +10,7 @@ others probably won't have a budget.
 ### 1. List entities under the active firm
 
 ```
-call_tool({"name": "fa__list__entities"})
+call_tool({"name": "fa__list__entities", "arguments": {"_instrumentation": {"plugin": "carta-investors", "skills": ["carta-fetch-budget"]}}})
 ```
 
 The response is a list of `{id, name, type, ...}` records — entity-type

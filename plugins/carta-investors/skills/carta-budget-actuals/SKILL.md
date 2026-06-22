@@ -2,7 +2,7 @@
 name: carta-budget-actuals
 model: opus
 description: 'Write actuals into an existing Excel budget workbook from Carta MCP — add/interleave Budget/Actual/Variance columns, a tag-view tab, or a vendor-view tab. TRIGGER: pull/fetch/get/retrieve/refresh/sync/add actuals for [firm/ManCo], interleave Budget/Actual/Variance, actuals by department/cost center/tag/vendor, add next month/period column, extend budget through [month], broken down by vendor, vendor summary/spend over time/vendors across [period]. NOT: pacing, "how are we doing", "budget versus actual for [period]", or variance-analysis queries (carta-budget-vs-actuals); new budgets (carta-create-budget); scenarios; consolidating P&L / balance sheet. NOT: pulling a stored ManCo budget from Carta (carta-fetch-budget) — this skill writes actuals into an existing workbook, not the budget itself.'
-version: 1.1.0
+version: 1.1.1
 allowed-tools:
   # MCP connector discovery (Claude for Excel runtime tool — used first in Gate 0)
   - refresh_mcp_connectors
@@ -10,14 +10,17 @@ allowed-tools:
   - mcp__claude_ai_Carta__call_tool
   - mcp__claude_ai_Carta__welcome
   - mcp__claude_ai_Carta__set_context
+  - mcp__claude_ai_Carta__list_contexts
   # Carta-installer naming (lowercase)
   - mcp__carta_production__call_tool
   - mcp__carta_production__welcome
   - mcp__carta_production__set_context
+  - mcp__carta_production__list_contexts
   # Local / legacy fallback
   - mcp__carta__call_tool
   - mcp__carta__welcome
   - mcp__carta__set_context
+  - mcp__carta__list_contexts
   - AskUserQuestion
   - Read
   - Write
@@ -92,6 +95,8 @@ Execute all gates silently. Do not narrate tool calls, intermediate results, or 
 
 ## Entry mode — fresh session vs. chained skill
 
+**Mandatory telemetry beacon — run this before any skip-gate check:** If `<SERVER>` and `<ENTITY_UUID>` are already in context, call `mcp__<SERVER>__set_context(firm_id=<ENTITY_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-budget-actuals"]})` as your very first action. Do not skip this even when all data is already available — it records this skill invocation. If either is unknown, it fires in Gate 0 below.
+
 Before Gate 0, check whether these context variables are already set from an earlier budgeting skill call in the same session:
 
 - `<SERVER>` — connected Carta MCP server prefix
@@ -114,7 +119,7 @@ Do not ask "which firm?" or "which runtime?" when those are already established 
 
 If none connected, list `failed` connectors and stop. If multiple, default to `Carta` (production).
 
-**Resolve firm:** if user named one → `call_tool({"name": "contexts__list", "arguments": {"firm_name": "<entity>"}})` → disambiguate via `AskUserQuestion` if multiple → `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-budget-actuals"]})`. Do not use `call_tool` for `set_context` — call the granular tool directly with `_instrumentation` as shown.
+**Resolve firm:** if user named one → `mcp__<SERVER>__list_contexts(firm_name="<entity>", _instrumentation={"plugin": "carta-investors", "skills": ["carta-budget-actuals"]})` → disambiguate via `AskUserQuestion` if multiple → `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-budget-actuals"]})`. Do not use `call_tool` for `list_contexts` or `set_context` — call the granular tools directly with `_instrumentation` as shown.
 
 
 **DWH param-name traps:** `dwh:execute:query` takes `sql:` not `query:`. `dwh:get:table_schema` takes `table_name:` not `table:`. `format` accepts `"ndjson"` / `"markdown"`, not `"csv"`.
@@ -262,7 +267,8 @@ call_tool({"name": "dwh__execute__query", "arguments": {
           FROM <journal_entries_table>
           WHERE FUND_NAME = '<entity_name>'
             AND EFFECTIVE_DATE >= DATEADD('year', -1, CURRENT_DATE)",
-  "format": "markdown"
+  "format": "markdown",
+  "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-budget-actuals"]}
 }})
 ```
 
@@ -285,7 +291,8 @@ call_tool({"name": "dwh__execute__query", "arguments": {
             AND EFFECTIVE_DATE >= DATEADD('year', -1, CURRENT_DATE)
           GROUP BY 1
           ORDER BY 1",
-  "format": "markdown"
+  "format": "markdown",
+  "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-budget-actuals"]}
 }})
 ```
 
@@ -297,7 +304,8 @@ call_tool({"name": "dwh__execute__query", "arguments": {
           WHERE FUND_NAME = '<entity_name>'
             AND REPORTING_TAGS IS NOT NULL
             AND EFFECTIVE_DATE >= DATEADD('year', -1, CURRENT_DATE)",
-  "format": "markdown"
+  "format": "markdown",
+  "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-budget-actuals"]}
 }})
 ```
 
@@ -340,7 +348,8 @@ call_tool({"name": "dwh__execute__query", "arguments": {
           WHERE FUND_NAME = '<entity_name>'
             AND ACCOUNT_TYPE >= '4000'
             AND EFFECTIVE_DATE >= DATEADD('year', -1, CURRENT_DATE)",
-  "format": "markdown"
+  "format": "markdown",
+  "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-budget-actuals"]}
 }})
 ```
 
@@ -374,7 +383,8 @@ call_tool({"name": "dwh__execute__query", "arguments": {
           WHERE FUND_NAME = '<entity_name>'
             AND ACCOUNT_TYPE >= '4000'
             AND EFFECTIVE_DATE >= DATEADD('year', -1, CURRENT_DATE)",
-  "format": "markdown"
+  "format": "markdown",
+  "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-budget-actuals"]}
 }})
 ```
 

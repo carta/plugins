@@ -2,7 +2,7 @@
 name: carta-fetch-budget
 model: opus
 description: 'Pull a ManCo budget from Carta and write it to an Excel workbook with monthly amounts and subtotals. TRIGGER: pull/fetch/import/sync Carta budget for a ManCo. NOT: pull/fetch/get actuals (carta-budget-actuals), new budgets (carta-create-budget), actuals refresh, pacing, scenarios, P&L, balance sheet.'
-version: 1.0.2
+version: 1.0.3
 allowed-tools:
   # MCP connector discovery (Claude for Excel runtime tool — used first in Gate 0)
   - refresh_mcp_connectors
@@ -10,14 +10,17 @@ allowed-tools:
   - mcp__claude_ai_Carta__call_tool
   - mcp__claude_ai_Carta__welcome
   - mcp__claude_ai_Carta__set_context
+  - mcp__claude_ai_Carta__list_contexts
   # Carta-installer naming (lowercase)
   - mcp__carta_production__call_tool
   - mcp__carta_production__welcome
   - mcp__carta_production__set_context
+  - mcp__carta_production__list_contexts
   # Local / legacy fallback
   - mcp__carta__call_tool
   - mcp__carta__welcome
   - mcp__carta__set_context
+  - mcp__carta__list_contexts
   - AskUserQuestion
   - Read
   - Write
@@ -91,6 +94,8 @@ Execute all gates silently. Do not narrate tool calls, intermediate results, or 
 
 ## Entry mode — fresh session vs. chained skill
 
+**Mandatory telemetry beacon — run this before any skip-gate check:** If `<SERVER>` and `<ENTITY_UUID>` are already in context, call `mcp__<SERVER>__set_context(firm_id=<ENTITY_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-fetch-budget"]})` as your very first action. Do not skip this even when all data is already available — it records this skill invocation. If either is unknown, it fires in Gate 0 below.
+
 Before Gate 0, check whether these context variables are already set from an earlier budgeting skill call in the same session:
 
 - `<SERVER>` — connected Carta MCP server prefix
@@ -113,7 +118,7 @@ Do not ask "which firm?" when the entity is already established from the skill t
 
 If none connected, list `failed` connectors and stop. If multiple, default to `Carta` (production).
 
-**Resolve firm:** if user named one → `call_tool({"name": "contexts__list", "arguments": {"firm_name": "<firm>"}})` → disambiguate via `AskUserQuestion` if multiple → `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-fetch-budget"]})`. Do not use `call_tool` for `set_context` — call the granular tool directly with `_instrumentation` as shown.
+**Resolve firm:** if user named one → `mcp__<SERVER>__list_contexts(firm_name="<firm>", _instrumentation={"plugin": "carta-investors", "skills": ["carta-fetch-budget"]})` → disambiguate via `AskUserQuestion` if multiple → `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-fetch-budget"]})`. Do not use `call_tool` for `list_contexts` or `set_context` — call the granular tools directly with `_instrumentation` as shown.
 
 **DWH param-name traps:** `dwh:execute:query` takes `sql:` not `query:`. `dwh:get:table_schema` takes `table_name:` not `table:`. `format` accepts `"ndjson"` / `"markdown"`, not `"csv"`.
 
@@ -257,7 +262,7 @@ and SPVs return empty from `fa:list:budgets`.
 
 **Call `read_skill(file_path="references/entity-picker.md")` before proceeding.** Do not reconstruct the picker logic from memory. Summary of the rule:
 
-1. Call `call_tool({"name": "fa__list__entities"})` against the active firm.
+1. Call `call_tool({"name": "fa__list__entities", "arguments": {"_instrumentation": {"plugin": "carta-investors", "skills": ["carta-fetch-budget"]}}})` against the active firm.
 2. Identify the ManCo(s) by name suffix / type field — anything matching
    `(LLC|Management|Mgmt|ManCo|Capital, LLC)` AND with no `Fund` /
    `Partners` / `SPV` qualifier.
@@ -356,7 +361,8 @@ isn't passed. `<ENTITY_UUID>` is the UUID locked at the end of Gate 2.
 call_tool({"name": "fa__list__budgets", "arguments": {
   "fund_uuid":  "<ENTITY_UUID>",
   "start_date": "<YYYY-MM-01>",
-  "end_date":   "<YYYY-MM-{28|29|30|31}>"
+  "end_date":   "<YYYY-MM-{28|29|30|31}>",
+  "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-fetch-budget"]}
 }})
 ```
 

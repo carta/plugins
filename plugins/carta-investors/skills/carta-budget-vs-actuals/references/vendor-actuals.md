@@ -13,7 +13,7 @@ parameters confirmed at Step 4. Set `<period_trunc>` = `MONTH`.
 ## Fetch shape
 
 ```
-call_tool({"name": "dwh__execute__query", "arguments": {"sql": "<SQL>", "format": "ndjson"}})
+call_tool({"name": "dwh__execute__query", "arguments": {"sql": "<SQL>", "format": "ndjson", "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-budget-vs-actuals"]}}})
 ```
 
 Use `"ndjson"` — results can be large (many vendors × accounts × months).

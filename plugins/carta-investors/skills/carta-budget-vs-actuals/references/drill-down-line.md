@@ -46,7 +46,8 @@ Send it through the MCP with the exact parameter shape:
 ```
 call_tool({"name": "dwh__execute__query", "arguments": {
   "sql":    "<SQL above>",
-  "format": "ndjson"
+  "format": "ndjson",
+  "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-budget-vs-actuals"]}
 }})
 ```
 
