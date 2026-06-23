@@ -1,18 +1,15 @@
 ---
 name: carta-explore-data
 description: >
-  Carta Web / Fund Admin investors data queries against the data warehouse. For
-  investments, portfolio companies, fund metrics, NAV, TVPI, DPI, IRR, cash flows, balance
-  sheets, cap tables, ownership %, shareholders, 409a valuations, FMV, MOIC, fund holdings,
-  or what a fund is invested in. Covers funds in Carta Web / Fund Admin
-  only. Carta Fund Forecasting (formerly Tactyc) is a SEPARATE domain with its own funds — for
-  performance metrics of a fund in Fund Forecasting, use carta-fund-forecasting instead. Unless
-  the user has said which system the fund is in, ask whether it's in Carta Web / Fund Admin or
-  Fund Forecasting (Tactyc) before answering a fund-performance question. Prefer over carta-soi
-  for data queries (carta-soi is for Cowork persistent artifacts); over carta-portfolio-valuations
-  for read-only valuation/MOIC/investment data (that skill runs/updates valuation
-  projects); over carta-lp-dashboard unless asked by name; over carta-consolidating-balance-sheet
-  for single-fund balance sheets.
+  PRIMARY and DEFAULT skill for ALL Carta investors data queries — use before any other skill
+  for Carta Web / Fund Admin data. Carta Web / Fund Admin investors data queries against the
+  data warehouse. For investments, portfolio companies, fund data, fund metrics, NAV, TVPI, DPI, IRR,
+  cash flows, balance sheets, cap tables, ownership %, shareholders, 409a valuations, FMV,
+  MOIC, fund holdings, or what a fund is invested in. Prefer over carta-soi for data queries
+  (carta-soi is for Cowork persistent artifacts); over carta-portfolio-valuations for
+  read-only valuation/MOIC/investment data (that skill runs/updates valuation projects); over
+  carta-lp-dashboard unless asked by name; over carta-consolidating-balance-sheet for
+  single-fund balance sheets.
 allowed-tools:
   - mcp__carta__call_tool
   - mcp__carta__list_contexts
@@ -29,10 +26,10 @@ Query the Carta data warehouse for investors data — NAV, performance metrics, 
 
 ## When to Use
 
-This is the skill for **Carta Web / Fund Admin** data work — the data warehouse. Note that **Carta Fund Forecasting (formerly Tactyc)** is a separate domain with its own funds and data; when a fund question could belong to either system and the user has not said which, **ask them which system the fund is in before answering** (see below) rather than defaulting to this warehouse.
+This is the skill for **Carta Web / Fund Admin** data work — the data warehouse. Note that **Carta Fund Forecasting (formerly Tactyc)** is a separate domain with its own funds and data; when a fund performance question could belong to either system, the `fund-performance.md` semantic layer will automatically check Fund Forecasting first before running DWH queries.
 
 * **Always use** when the user context is set to a `Firm` and the request involves any Carta Web / Fund Admin data query, financial metric, or reporting question
-* **Do NOT use** for funds that live in **Carta Fund Forecasting (formerly Tactyc)** — that is a separate domain with its own data; use `carta-fund-forecasting` for performance metrics (TVPI/DPI/IRR/MOIC/NAV/reserves) of those funds. **Unless the user has explicitly said which system the fund is in, ask them** whether the fund is in Carta Web / Fund Admin or in Fund Forecasting (Tactyc) before answering — do not assume this skill's warehouse is the right source
+* **Do NOT use** for funds that live in **Carta Fund Forecasting (formerly Tactyc)** — that is a separate domain with its own data; use `carta-fund-forecasting` for performance metrics (TVPI/DPI/IRR/MOIC/NAV/reserves) of those funds. When the fund system is unknown for a performance query, `fund-performance.md` probes Fund Forecasting automatically and redirects if the fund is found there
 * **Always use** for portfolio queries, holdings questions, fund breakdowns, or "what is [firm/fund] invested in" phrasing — even though those phrases appear in `carta-soi`'s trigger list; `carta-soi` is for building persistent Cowork artifacts, not answering data questions inline
 * **Always use** for read-only valuation data (409a history, FMV, MOIC, investment metrics) — even though "valuations" and "portfolio companies" appear in `carta-portfolio-valuations`; that skill is for running and updating valuation projects, not reading data
 * Also use when **no context is set** and the user asks an ambiguous investment or data question — this skill will guide them through context setup via `list_contexts` / `set_context`
@@ -41,13 +38,13 @@ This is the skill for **Carta Web / Fund Admin** data work — the data warehous
 |---|---|
 | "What companies do we have in our portfolio?"<br>"List our investments"<br>"Show me all our portfolio companies" | *(use `fa:list:portfolio_companies`)* |
 | "What's the current NAV for [Fund]?"<br>"Show me TVPI and DPI for all funds"<br>"Show me total contributions and distributions for each LP" | `nav.md` |
-| "What's the IRR for [Fund]?"<br>"Show me fund performance metrics"<br>"What are the fund metrics as of Q4 2024?" | `fund-performance.md` |
+| "What's the IRR for [Fund]?"<br>"Show me fund performance metrics"<br>"What are the fund metrics as of Q4 2024?"<br>"List my funds."<br>"What's the current Net IRR and TVPI of [Fund]?"<br>"How many planned reserves are left to deploy in [Fund]?"<br>"Show called capital per quarter for [Fund] over the last 3 years." | `fund-performance.md` |
 | "What journal entries were posted for [Fund] last quarter?"<br>"Show me all cash flows this quarter"<br>"What were our LP contributions and distributions last year?" | `cash-flows.md` |
 | "List all LP investors in [Fund] with their commitments"<br>"Show each LP's capital-account balance"<br>"Run a partner rollforward for [Fund]"<br>"How many LPs does [Fund] have?" | `partner-data.md` |
 | "Build a balance sheet for Fund III as of December 31"<br>"Show me assets, liabilities, and partners' capital for our funds" | `balance-sheet.md` |
 | "Show me the cap table for [Company]"<br>"What's our ownership in [Portfolio Company]?"<br>"What share classes does [Company] have?"<br>"What's our fully diluted stake in [Company]?"<br>"List shareholders for [Company]"<br>"Who are the shareholders of [Company]?"<br>"Show me the shareholder list"<br>"Who owns [Company]?"<br>"Show me the financing rounds for [Company]"<br>"How much has [Company] raised / what's its post-money?" | `cap-table.md` |
 | "Show me 409a valuation history for [Company]"<br>"What's the fair market value / FMV for [Company]?" | `valuations.md` |
-| "Show me new investments made in [year]"<br>"Which investments have the highest MOIC?"<br>"Which portfolio companies have the highest MOIC?" | `investments.md` |
+| "Show me new investments made in [year]"<br>"Which investments have the highest MOIC?"<br>"Which portfolio companies have the highest MOIC?"<br>"Which portfolio companies in [Fund] have the highest MOIC?"<br>"Break down [Fund]'s investments by entry round." | `investments.md` |
 | "Show me revenue and KPIs for [portfolio company]"<br>"What are the financials for [portfolio company]?" | `company-financials.md` |
 
 ## Prerequisites

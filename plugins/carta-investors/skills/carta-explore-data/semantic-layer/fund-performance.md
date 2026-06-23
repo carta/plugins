@@ -2,6 +2,102 @@
 
 Query fund-level performance metrics: IRR, DPI, TVPI, RVPI, MOIC, NAV, cost basis, and expense breakdowns.
 
+## Fund System Check (run first when fund system is unknown)
+
+Before running any DWH query, check whether the named fund belongs to Fund Forecasting (Tactyc)
+rather than the Carta Web / Fund Admin data warehouse.
+
+## Gate 0 — Unnamed Fund Queries ("List my funds", "What funds do I manage?")
+
+When the user has **not named a specific fund**, skip Gate 1 (which requires a fund name for `search=`)
+and use the DWH directly to determine whether this firm has funds in Carta Web / Fund Admin:
+
+```sql
+SELECT
+    fund_name,
+    entity_type_name,
+    vintage_year,
+    fund_size,
+    ending_total_nav
+FROM FUND_ADMIN.AGGREGATE_FUND_METRICS
+QUALIFY ROW_NUMBER() OVER (
+    PARTITION BY fund_uuid
+    ORDER BY month_end_date DESC, last_refreshed_at DESC
+) = 1
+ORDER BY ending_total_nav DESC NULLS LAST
+LIMIT 50
+```
+
+**If the query returns funds → show them** using the Presentation rules at the bottom of this file.
+The firm's funds are in Carta Web / Fund Admin — skip Gates 1 and 2 entirely.
+
+**If the query returns empty results** → the firm may have funds registered but no month-end
+close yet (newly onboarded). Before redirecting, run a secondary existence check against
+`ALLOCATIONS`, which is populated at fund creation and does not require a close:
+
+```sql
+SELECT DISTINCT fund_name, fund_uuid
+FROM FUND_ADMIN.ALLOCATIONS
+WHERE fund_uuid IS NOT NULL
+GROUP BY fund_uuid, fund_name
+LIMIT 10
+```
+
+- **`ALLOCATIONS` returns funds** → the firm has DWH funds but no performance data yet. Show
+  the fund list from `ALLOCATIONS` and note that performance metrics will appear after the
+  first month-end close.
+- **`ALLOCATIONS` also returns empty** → this firm has no funds in Carta Web / Fund Admin at
+  all. Redirect the user:
+  > No funds found in the Carta Web / Fund Admin data warehouse for your firm context.
+  > Your funds may live in Fund Forecasting (Tactyc) — type `/carta-fund-forecasting` to list your Fund Forecasting funds.
+
+Do not run any further DWH queries. The explore-data skill's work is done.
+
+**Skip Gate 0 when:** a specific fund name is mentioned → proceed to Gate 1 below.
+
+**Skip Gate 1 when:** the user has already confirmed the fund is in Carta Web / Fund Admin
+in this session, or when the query does not name a specific fund (handled by Gate 0 above).
+
+**Gate 1 — Look up the fund in Fund Forecasting**
+
+```
+call_tool({"name": "fund_forecasting__list__funds", "arguments": {"search": "<distinctive word(s) from fund name>"}})
+```
+
+Tips: use only distinctive words — omit "Fund", "Capital", fund numbers. For "La Garita Fund II",
+use `search=la garita`. If the call returns an error (access denied, feature not enabled, not
+found) → the fund is not in Fund Forecasting. Proceed to the DWH queries below. Do not inform
+the user of the error.
+
+**Gate 2 — Route based on result**
+
+**No match** (`total = 0` or empty results array)
+→ Fund is in Carta Web / Fund Admin. Continue with the DWH queries below.
+
+**Clear match** (one obvious result matching the named fund)
+→ Stop. Redirect the user:
+> Found **[fund name]** in Fund Forecasting (Tactyc). This fund's data lives in the Fund
+> Forecasting domain, not in the Carta Web / Fund Admin data warehouse. To get [the requested
+> metric], use the Fund Forecasting skill — type `/carta-fund-forecasting` to continue with
+> the same question.
+
+Do not run any DWH query. The explore-data skill's work is done.
+
+**Ambiguous** (multiple candidates, or `cartaId` field links the match to a Carta Web fund)
+→ Use `AskUserQuestion`:
+> I found a fund named **[fund name]** in Fund Forecasting (Tactyc). Is this the fund you mean,
+> or are you asking about a fund in Carta Web / Fund Admin?
+> - **Fund Forecasting (Tactyc)** — performance metrics from the forecasting model
+> - **Carta Web / Fund Admin** — accounting data from the data warehouse
+
+Based on the user's answer: redirect to `carta-fund-forecasting` OR continue with DWH queries.
+
+**Limit:** one `call_tool` call maximum — do not call `list:funds` without `search=`, and do
+not pre-fetch fund details. Once routed in a session, do not re-run this check for follow-up
+questions about the same fund.
+
+## Gate 3 — DWH Querying Instructions (only when fund is NOT in Fund Forecasting)
+
 > For *current NAV and cumulative LP contributions*, `MONTHLY_NAV_CALCULATIONS` (see `nav.md`) is also valid.
 > `AGGREGATE_FUND_METRICS` is preferred when you need IRR, DPI, TVPI, expense detail, or dry powder.
 
