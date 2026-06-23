@@ -1,0 +1,11 @@
+# Runtime artifacts written by serve.py / the skill (sensitive — never commit)
+.port
+.token
+**/scenarios/
+**/tearsheets/
+**/tearsheet-queue/
+
+# OS / editor
+.DS_Store
+*.swp
+__pycache__/

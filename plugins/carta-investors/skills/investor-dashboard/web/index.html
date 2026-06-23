@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Investor Dashboard</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <div id="app">
+    <aside id="sidebar">
+      <div class="brand">
+        <div class="brand-mark">◆</div>
+        <div class="brand-text">
+          <div class="brand-title">Investor Dashboard</div>
+          <div id="fund-name" class="brand-sub">Loading…</div>
+        </div>
+      </div>
+      <nav id="nav"></nav>
+      <div class="sidebar-foot">
+        <div id="scenario-pill" class="pill pill-muted">Budget (Carta baseline)</div>
+        <div id="as-of" class="as-of"></div>
+      </div>
+    </aside>
+
+    <main id="main">
+      <header id="topbar">
+        <div id="view-title" class="view-title">Overview</div>
+        <div class="topbar-right">
+          <span id="mode-badge" class="badge badge-budget">Budget</span>
+        </div>
+      </header>
+      <section id="content"><div class="loading">Loading dashboard…</div></section>
+    </main>
+  </div>
+
+  <script src="vendor/chart.umd.js"></script>
+  <script src="js/calc.js"></script>
+  <script src="js/scenario.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

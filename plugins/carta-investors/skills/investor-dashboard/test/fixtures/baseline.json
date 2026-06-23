@@ -1,0 +1,29 @@
+{
+  "fund": { "name": "Moxxie Ventures Fund II", "currency": "USD" },
+  "terms": { "carryPct": 0.20, "hurdlePct": 0.08, "gpCommitPct": 0.02, "catchUp": true, "distributionType": "european" },
+  "capital": {
+    "committedCapital": 100000000,
+    "contributedCapital": 60000000,
+    "cumulativeDistributions": 12000000,
+    "totalMgmtFees": 8000000,
+    "dryPowder": 25000000,
+    "fundSize": 100000000,
+    "fundStartDate": "2021-03-01",
+    "avgCheckSize": 2500000
+  },
+  "deals": [
+    { "id": "d1", "name": "Northwind Robotics", "invested": 4000000, "fmv": 12000000, "realized": 0, "ownershipPct": 0.08, "investmentDate": "2021-06-15", "status": "Active", "moic": 3.0 },
+    { "id": "d2", "name": "Helios Bio", "invested": 3000000, "fmv": 3000000, "realized": 0, "ownershipPct": 0.05, "investmentDate": "2021-09-01", "status": "Active", "moic": 1.0 },
+    { "id": "d3", "name": "Cobalt Data", "invested": 5000000, "fmv": 9000000, "realized": 2000000, "ownershipPct": 0.10, "investmentDate": "2022-01-20", "status": "Active", "moic": 2.2 },
+    { "id": "d4", "name": "Vega Mobility", "invested": 2500000, "fmv": 0, "realized": 6000000, "ownershipPct": 0.0, "investmentDate": "2020-11-05", "status": "Realized", "moic": 2.4 },
+    { "id": "d5", "name": "Quill Software", "invested": 3500000, "fmv": 4500000, "realized": 0, "ownershipPct": 0.07, "investmentDate": "2022-05-10", "status": "Active", "moic": 1.29 }
+  ],
+  "cashflows": [
+    { "date": "2021-03-01", "amount": -15000000 },
+    { "date": "2021-09-01", "amount": -15000000 },
+    { "date": "2022-03-01", "amount": -15000000 },
+    { "date": "2022-12-01", "amount": -15000000 },
+    { "date": "2023-06-01", "amount": 5000000 },
+    { "date": "2024-06-01", "amount": 7000000 }
+  ]
+}
