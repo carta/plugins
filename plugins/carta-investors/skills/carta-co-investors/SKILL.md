@@ -4,6 +4,11 @@ description: >
   Interactive co-investor report from Carta SPA data with clickable portfolio
   drill-downs. Use for co-investor analysis or asking who invested in a
   specific portfolio company.
+  Trigger phrases: "co-investors", "coinvestors", "who are my co-investors",
+  "who else invested", "co-investors by stage/round", "co-investors on Aumni".
+  Use instead: carta-explore-data for general fund/investment/portfolio data —
+  this skill is specifically for co-investor ("who else invested alongside us")
+  analysis.
 version: 0.6.2
 model: sonnet
 allowed-tools:

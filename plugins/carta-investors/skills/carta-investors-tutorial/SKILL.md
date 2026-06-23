@@ -6,6 +6,12 @@ description: >
   tear sheets, and LP meeting prep. Trigger with: "investors tutorial", "show me the tutorial",
   "getting started with investors plugin", "how do I use the investors plugin", "demo",
   "walk me through the investors plugin", "what can I do with carta", "how does this work".
+  Also the default for capability/meta and out-of-scope questions ("what can you do",
+  "how does the plugin work", weather / general knowledge), plugin how-to ("how do I find
+  my DPI"), and glossary/conceptual terms the warehouse cannot compute ("what is a
+  migration event"). Use instead: carta-explore-data for any actual data pull — a bare
+  metric term ("DPI", "TVPI", "NAV", "fair market value") or a data-locator ("where can I
+  find ...", "show me ...") is data, not tutorial.
 allowed-tools:
   - mcp__carta__authenticate
   - mcp__carta__complete_authentication

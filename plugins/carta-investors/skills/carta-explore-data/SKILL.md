@@ -10,6 +10,8 @@ description: >
   read-only valuation/MOIC/investment data (that skill runs/updates valuation projects); over
   carta-lp-dashboard unless asked by name; over carta-consolidating-balance-sheet for
   single-fund balance sheets.
+  Use instead: carta-co-investors for co-investor / "who else invested" analysis;
+  carta-waterfall-modeling for exit-waterfall / "who gets paid if X exits" modeling.
 allowed-tools:
   - mcp__carta__call_tool
   - mcp__carta__list_contexts
