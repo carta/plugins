@@ -21,6 +21,7 @@
  */
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 
 // Read plugin.json for version
@@ -83,6 +84,31 @@ process.stdin.on('end', () => {
             updatedInput = { ...tool_input, _instrumentation: instrumentation };
         }
 
+        // welcome ONLY (KAF-2841): also inject claude_plugins. welcome is the one tool
+        // matched by both this hook and the (now-removed) inject-welcome-plugins hook;
+        // since multiple hooks' updatedInput don't merge (last-writer-wins), we emit both
+        // keys from this single surviving hook so _instrumentation isn't clobbered. The
+        // claude_plugins registry logic below is copied verbatim from inject-welcome-plugins.js.
+        // Wrapped so a registry I/O failure never drops _instrumentation.
+        if (shortName === 'welcome') {
+            try {
+                const base = process.env.CARTA_WELCOME_REGISTRY_DIR
+                    || path.join(os.tmpdir(), 'carta-welcome-plugins');
+                const dir = path.join(base, String(session_id || 'no-session').replace(/[^A-Za-z0-9._-]/g, '_'));
+                fs.mkdirSync(dir, { recursive: true });
+                fs.writeFileSync(path.join(dir, `carta-cap-table.json`), JSON.stringify(pluginVersion));
+
+                const claude_plugins = asObject(tool_input && tool_input.claude_plugins);
+                for (const f of fs.readdirSync(dir)) {
+                    if (!f.endsWith('.json')) continue;
+                    try {
+                        claude_plugins[f.slice(0, -5)] = String(JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')));
+                    } catch {}
+                }
+                updatedInput.claude_plugins = claude_plugins;
+            } catch {}
+        }
+
         const output = {
             hookSpecificOutput: {
                 hookEventName: 'PreToolUse',
@@ -115,6 +141,18 @@ function readSkillState(sessionId) {
     } catch {
         return {};
     }
+}
+
+// Normalize a model-supplied claude_plugins value (object | JSON string | null | junk)
+// to {string: string}. Copied verbatim from inject-welcome-plugins.js.
+function asObject(v) {
+    if (typeof v === 'string') {
+        try { v = JSON.parse(v); } catch { return {}; }
+    }
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
+    const out = {};
+    for (const [k, val] of Object.entries(v)) out[k] = String(val);
+    return out;
 }
 
 function allow() {
