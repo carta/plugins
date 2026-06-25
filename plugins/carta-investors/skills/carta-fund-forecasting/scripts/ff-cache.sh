@@ -72,15 +72,20 @@ cmd_store_staged() {  # args: env command fund_id params_json [now_epoch]; reads
   return "$rc"
 }
 
-cmd_lookup() {  # args: env command fund_id params_json [now_epoch] -> prints .data (rc 0) or rc 3
+cmd_lookup() {  # args: env command fund_id params_json [now_epoch]
+  # Prints the cached .data on a fresh hit, or the literal "CACHE_MISS" on a
+  # miss/stale entry. ALWAYS exits 0 — a cache miss is the normal first-call
+  # path, not a failure, so it must not surface as a non-zero "error" exit.
   local env="$1" command="$2" fund_id="$3" params="${4:-"{}"}" now="${5:-$(date +%s)}"
   local file fetched ttl
   file="$(path_for "$env" "$command" "$fund_id" "$params")"
-  [ -f "$file" ] || return 3
-  fetched="$(jq -r '._meta.fetched_at_epoch // 0' "$file" 2>/dev/null || echo 0)"
-  ttl="$(jq -r '._meta.ttl_seconds // 0' "$file" 2>/dev/null || echo 0)"
-  if [ $(( now - fetched )) -lt "$ttl" ]; then jq -c '.data' "$file"; return 0; fi
-  return 3
+  if [ -f "$file" ]; then
+    fetched="$(jq -r '._meta.fetched_at_epoch // 0' "$file" 2>/dev/null || echo 0)"
+    ttl="$(jq -r '._meta.ttl_seconds // 0' "$file" 2>/dev/null || echo 0)"
+    if [ $(( now - fetched )) -lt "$ttl" ]; then jq -c '.data' "$file"; return 0; fi
+  fi
+  echo "CACHE_MISS"
+  return 0
 }
 
 cmd_meta() {  # args: env command fund_id params_json -> prints ._meta

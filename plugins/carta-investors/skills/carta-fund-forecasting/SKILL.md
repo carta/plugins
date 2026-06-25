@@ -267,12 +267,13 @@ Responses can be large. Cache every read to disk and reuse it within its freshne
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-forecasting/scripts/ff-cache.sh lookup <env> <command> <fund_id> '<params-json>'
 ```
-- **Exit 0:** a fresh cached response is printed to stdout — use it. Read only the slice you need from large payloads with `jq`. State the as-of time from `meta`:
+`lookup` **always exits 0** (a cache miss is the normal first-call path, not an error) and signals hit vs. miss on **stdout**:
+- **Fresh hit:** stdout is the cached response JSON — use it. Read only the slice you need from large payloads with `jq`. State the as-of time from `meta`:
   ```bash
   ${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-forecasting/scripts/ff-cache.sh meta <env> <command> <fund_id> '<params-json>' | jq -r '.fetched_at'
   ```
   e.g. *"as of 2026-06-02 14:03 UTC (cached)"*.
-- **Exit 3:** miss or stale — go to step 2.
+- **Miss or stale:** stdout is the literal `CACHE_MISS` (it can't collide with cached data, which is always a JSON object/array) — go to step 2. This is expected; it does not mean anything went wrong.
 
 **2. On a miss, call the command (call_tool) then stage-and-store.** Call `call_tool`, then persist via the staging path. Never inline the response into a shell command (fund/investment names may contain quotes or shell metacharacters), and never reuse one temp file across fetches — overwriting a file you haven't re-read trips Claude Code's *"file has not been read yet"* guard. The `stage-path` → `Write` → `store-staged` flow sidesteps both:
 
