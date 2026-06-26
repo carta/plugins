@@ -7,8 +7,10 @@ description: >-
   holders, liquidation seniority, and rights & preferences. Also handles any request
   starting with "Generate Carta Excel —" (the artifact prompt bar payload).
   Defers to specialized skills for: waterfall exits, SAFE/note conversion math,
-  voting rights, issuance, modifying issuables, per-grant vesting, and round history.
-  Not for cross-portfolio data.
+  voting rights, issuance, modifying issuables, per-stakeholder vesting detail
+  (use carta-grant-vesting for "How much has [name] vested?"), round history lookup
+  (use carta-round-history for "What was our Series B round?"), and SAFE/convertible
+  conversion math. Not for cross-portfolio data.
 model: sonnet
 allowed-tools:
   - ToolSearch
@@ -61,6 +63,8 @@ Pull data directly from Carta and turn it into a customized report — filtered,
 - "Generate a report of employees with unvested RSUs with a final vesting date past 2027, and include their current fully diluted ownership"
 - "Help me build a cap table report — I'm not sure what's available"
 - "What can I export from the cap table?"
+- NOT: "What's [Alice]'s vesting schedule?" (use carta-grant-vesting instead)
+- NOT: "What was our Series B round?" (use carta-round-history instead)
 
 ## Workflow
 

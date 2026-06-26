@@ -198,6 +198,44 @@ def apply_filters(columns, rows, filters):
 
 
 # ---------------------------------------------------------------------------
+# Empty-row elimination
+# ---------------------------------------------------------------------------
+
+def drop_empty_rows(columns, rows):
+    """Drop rows where every numeric/money/percentage/integer column is null or zero.
+
+    Identity-type columns (text, string, etc.) are excluded from the check —
+    a row is "empty" only when it carries no quantitative data. This removes
+    placeholder security-type rows (e.g. Options, RSAs) that Carta emits even
+    when the company has never issued that type.
+
+    A row is kept if at least one value column is non-null and non-zero.
+    Rows where ALL value columns are None, 0, "0", or "" are dropped.
+    If the report has no value columns at all, no rows are dropped.
+    """
+    value_types = {"money", "decimal", "percentage", "integer"}
+    value_indices = [i for i, col in enumerate(columns) if col.get("type") in value_types]
+    if not value_indices:
+        return rows
+
+    def _is_empty_value(v):
+        if v is None or v == "" or v == "0":
+            return True
+        n = _parse_numeric(v)
+        return n is not None and n == 0.0
+
+    kept = []
+    for row in rows:
+        has_value = any(
+            not _is_empty_value(row[i] if i < len(row) else None)
+            for i in value_indices
+        )
+        if has_value:
+            kept.append(row)
+    return kept
+
+
+# ---------------------------------------------------------------------------
 # Column selection
 # ---------------------------------------------------------------------------
 
@@ -530,6 +568,17 @@ def main():
             pairs = [(oi, r) for oi, r in zip(orig_indices, rows) if pred(r)]
             orig_indices = [p[0] for p in pairs]
             rows         = [p[1] for p in pairs]
+
+        # Automatically drop rows where all numeric/value columns are null or zero.
+        # This removes placeholder security-type rows (e.g. Options, RSAs) that
+        # Carta emits even when the company has never issued that security type.
+        nonempty = drop_empty_rows(cols, rows)
+        if len(nonempty) < len(rows):
+            kept_set     = {id(r) for r in nonempty}
+            pairs        = [(oi, r) for oi, r in zip(orig_indices, rows) if id(r) in kept_set]
+            orig_indices = [p[0] for p in pairs]
+            rows         = [p[1] for p in pairs]
+
         filtered_count = len(rows)
 
         cols, rows, missing_cols = select_columns(cols, rows, columns)
