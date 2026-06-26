@@ -47,6 +47,7 @@ This skill **reads and reports existing Fund Forecasting data** — it answers q
 - Per-investment analytics — MOIC, IRR, FMV, ownership, status, reserves (`list:investments`).
 - **Reading** an existing **construction (planned-at-close) forecast** — the numbers the GP already entered — via the `.construction` slot / `mode=construction`.
 - **Reading** the existing **scenario breakdown** on multi-scenario investments — `type: grouped` rows and their `children[]` scenario tree with probabilities.
+- **Reading** the fund's **Sector Profiles** (named round/stage ladders) and **follow-on configuration** — via `fund_summary` with `includeConstruction=true`. See Construction: Sector Profiles & follow-on.
 
 **Not supported (yet) — decline rather than improvise:**
 - **Running scenarios / what-ifs.** The skill cannot run, create, re-run, or re-weight a scenario, or model a new what-if (e.g. "what's TVPI if this round 3x's?", "add a bull case"). It can only report scenario rows that **already exist** in the fund.
@@ -85,7 +86,7 @@ Commands are gated behind a Fund Forecasting feature flag; if the `call_tool` ca
 | Command | Required | Optional | Returns |
 |---|---|---|---|
 | `fund_forecasting:list:funds` | — | `page`, `page_size`, `search` | accessible funds (`id`, `name`, `committedCapital`, `currency`, `cartaId`, `status`), paginated — response includes `total`, `page`, `page_size`, `has_more` |
-| `fund_forecasting:get:fund_summary` | `fund_id` | `startPeriod`, `endPeriod` | fund-wide scalar KPIs |
+| `fund_forecasting:get:fund_summary` | `fund_id` | `startPeriod`, `endPeriod`, `includeConstruction` | fund-wide scalar KPIs; add `includeConstruction=true` for Sector Profile + follow-on construction config |
 | `fund_forecasting:get:fund_details` | `fund_id`, `view` | `mode`, `accum`, `startPeriod`, `endPeriod`, `fiscalEndMonth`, `lpBreakdown` | metrics over time |
 | `fund_forecasting:list:investments` | `fund_id` | `period`, `includeIntegrationStatus`, `detail`, `rounds`, `qualitative` | per-investment KPIs (compact projection by default, incl. round-derived scalars; `detail=full` for all ~90 raw fields; `rounds=true` adds an opt-in per-investment `rounds[]` ladder; `qualitative=true` adds opt-in qualitative fields — CEO, notes, commentary, board/co-investors, URL, customFields) |
 
@@ -98,6 +99,79 @@ Enums: `view` ∈ {`period`, `cumulative`, `investment-level`}; `mode` ∈ {`cur
 - `list:investments` `rounds`: opt-in (`false` by default). `rounds=true` **adds** a compact per-investment `rounds[]` ladder (`{name, roundSize, valuation}` per modeled round) to each row. Unlike `lpBreakdown` this is **additive, not a toggle** — every other field stays. It's cheap: the round ladder is read from the `stages` tree already in the payload (no extra fetch), and the projection is small, so it rarely pushes a `detail=summary` response over the limit. Pass it only when the user wants the round-by-round ladder; the five round-derived scalars (`lastRoundDate`, `nextRoundDate`, `entryPreMoneyValuation`, `currentPostMoneyValuation`, `currentSharePrice`) are already present by default without it.
 - `list:investments` `qualitative`: opt-in (`false` by default). `qualitative=true` **adds** the per-investment qualitative fields to each row — `ceo`, `url`, `notes`, `commentary`, `scenarioNotes`, `exitNotes`, `partners`, `boardMembers`, `coInvestors`, and the user-defined `customFields` object (the Affinity-style custom attributes a firm tracks per company). Like `rounds` it is **additive, not a toggle** — every other field stays. The fields are already in the payload (no extra fetch); most are short free text, but `customFields` and `commentary`/`notes` can be sizable on funds that use them heavily, so pass it only when the user asks about qualitative info. `sector`, `country`, and `tags` come back by default without it.
 - `fund_details` `lpBreakdown`: a **toggle** between two views. `false` (default) returns the full tables with the per-LP `calledCapital.<lpId>` rows collapsed to LP / GP / Total aggregates (`calledCapitalLp` / `calledCapitalGp` / `calledCapital`). `true` returns **only** the per-LP called-capital breakdown — just the per-LP rows, with every other section dropped — so a many-LP fund stays under the size limit. Use `true` when the user explicitly wants the per-LP breakdown; it is not additive (it does not return the full tables *plus* the per-LP rows).
+
+## Construction: Sector Profiles & follow-on
+
+Pass `includeConstruction=true` to `fund_forecasting:get:fund_summary` to append two extra blocks to the response. This flag is **off by default** (safe to pass to any fund; adds no extra DB queries).
+
+### `stageProfiles` — Sector Profiles
+
+The fund's round/stage ladders (called **Sector Profiles** in the UI). Each entry has an `id`, `name`, `description`, and a `stages[]` array.
+
+```jsonc
+"stageProfiles": [
+  {
+    "id": "…",
+    "name": "Default",
+    "description": null,
+    "stages": [
+      {
+        "name": "Pre-Seed",
+        "roundSize": 1000000,    // fund currency
+        "valuationType": "pre",  // "pre" | "post"
+        "valuation": 8000000,    // fund currency
+        "esop": 0.10,            // 0-1 fraction → display as 10.00%
+        "graduation": 0.70,      // 0-1 fraction → display as 70.00%
+        "exit": 0.00,            // 0-1 fraction → display as 0.00%
+        "writeOff": 0.30,        // 1 - graduation - exit → display as 30.00%
+        "exitValue": 15000000,   // fund currency
+        "monthsToGraduate": 20,
+        "monthsToExit": 20
+      }
+      // … one entry per stage in the ladder
+    ]
+  }
+  // … additional profiles with the same shape
+]
+```
+
+**Units:** all rate fields (`esop`, `graduation`, `exit`, `writeOff`) are **0-1 fractions** — format as `X.XX%` (multiply by 100, round to 2 dp) for display. `roundSize`, `valuation`, and `exitValue` are in the fund currency (read from `list:funds`; see Presentation).
+
+### `followOnConfig` — follow-on configuration
+
+One entry per fund allocation, describing how the fund plans follow-on capital for each bucket.
+
+```jsonc
+"followOnConfig": [
+  {
+    "allocationId": "…",
+    "name": "Series A Bucket",
+    "entryRound": 0,             // 0-based index into the resolved ladder
+    "allocType": "percent",      // "percent" | "amount"
+    "allocValue": 0.30,          // percent → 0-1 fraction; amount → fund currency
+    "stageProfile": null,        // id ref into stageProfiles[], or null if not linked
+    "initialCheckSize": {
+      "type": "amount",          // "amount" (fund currency) | "ownership" (0-1 fraction)
+      "value": 500000
+    },
+    "followOnPerc": 1.0,         // 0-1 reserve ratio; defaults to 1 when not set
+    "followOnType": "amount",    // "amount" | "ownership"
+    "followOn": [                // one entry per stage in the resolved ladder
+      { "round": "Pre-Seed", "value": 0,      "participation": 0 },
+      { "round": "Seed",     "value": 250000, "participation": 0.5 }
+      // value: fund currency when followOnType="amount"; 0-1 fraction when "ownership"
+    ]
+  }
+]
+```
+
+**Key semantics:**
+- `stageProfile` is an `id` reference into `stageProfiles[]`, or `null` when the allocation is not linked to a named profile.
+- `allocValue`: when `allocType = "percent"`, a 0-1 fraction (display as `X.XX%`); when `"amount"`, a monetary value in the fund currency.
+- `initialCheckSize.value` and `followOn[i].value`: interpret based on the respective `type` / `followOnType` — `"amount"` means fund currency; `"ownership"` means a 0-1 ownership fraction (display as `X.XX%`).
+- `followOn[i].value` entries at or below `entryRound` are `0`.
+- `participation` (0-1) defaults to `1` where the source array is shorter than the resolved ladder — display as `X.XX%`.
+- `followOnPerc` and `participation` are **0-1 fractions** — format as `X.XX%` for display.
 
 ## Fund ID namespace warning
 
@@ -112,6 +186,7 @@ The `fund_id` used by Fund Forecasting is **unique to this service** (a short ba
 - "**Per portfolio company**?" → `list:investments`.
 - "**Round events / entry & current valuations / share price** per company?" → `list:investments` — the round-derived scalars (`lastRoundDate`, `nextRoundDate`, `entryPreMoneyValuation`, `currentPostMoneyValuation`, `currentSharePrice`) come back by default. Add `rounds=true` only when the user wants the full round-by-round ladder (`rounds[]`).
 - "**Qualitative info per company** — CEO, thesis/notes, commentary, board members, co-investors, custom fields?" → `list:investments` with `qualitative=true` (additive; the qualitative fields are off by default).
+- "**Sector Profiles** (named round ladders), **follow-on config** / reserve ratios, allocation buckets, round-by-round follow-on plan?" → `fund_summary` with `includeConstruction=true`. See Construction: Sector Profiles & follow-on for the full field reference.
 - "**Planned vs. actual**?" → compare `fund_summary`'s `.construction` (planned-at-close) vs `.current` (forecast-at-close) slots — one cheap round-trip. `fund_details mode=both` also carries both, but it **doubles the payload and usually overflows**; use it only on a tightly-windowed `fund_details` query when you need the planned-vs-actual split *per period*.
 - "How much was **deployed to each company over time**?" → `fund_details view=investment-level`.
 
@@ -293,10 +368,21 @@ If the user says **"refresh" / "latest" / "live"**, skip step 1 and go straight 
 
 - **Resolve the fund currency, don't assume `$`/USD.** Each `list:funds` entry carries a per-fund `currency` (ISO code, e.g. `USD`, `EUR`, `GBP`) — read it for the fund in context and denominate every money value in that currency. Fund Forecasting converts per-round currencies to the fund currency before reporting, so this single per-fund code correctly denominates all metric/money values across `fund_summary`, `fund_details`, and `list:investments`. Format money as `1,234,567 EUR` (or the matching symbol where unambiguous, e.g. `$1,234,567` for `USD`, `€1,234,567` for `EUR`); state the currency explicitly so a non-USD fund is never silently shown as dollars. Multiples `2.35x`; percentages `15.2%`.
 - Summarize time-series as tables/bullets — never dump raw arrays.
+- **Null / missing values:** render as — (em dash). Never use `N/A`, `null`, or leave the cell blank.
 - `fund_summary` slots: label them **As-of** (`.period`), **Planned-at-close** (`.construction`), **Current-at-close** (`.current`).
 - Multi-scenario investments (`type: grouped`) → show the rolled-up row; expand `children[]` only on request.
 - **Validation issues (`errors[]` / `warnings[]`).** When an investment has `errors[]` or `warnings[]`, never dump the raw flag or JSON. State it plainly: *"N investment(s) have data-validation issues in their forecast-model inputs."* Distinguish blocking **errors** from non-blocking **warnings**. For each affected company, give the company name and the message(s) in plain English (a trailing "+N more…" string means the list was capped — say "and others"). Make clear these are **data issues in the fund model**, that this tool is **read-only**, and that they're fixed in Fund Forecasting. Then provide a copyable link (next bullet). Do not invent a cause beyond what the message says.
 - **Deep link to fix an investment.** Build the link from the env (resolved in Step 0) and the row's `investmentId`: `https://<base>/fund/<fund_id>/investments/<investmentId>` — it opens that investment's editor. `<base>` is `fund-forecasting.app.carta.com`. If you can't construct the link, link the fund's Investments page (`https://<base>/fund/<fund_id>/investments`) and name the affected investments rather than guessing a host. Present it as a plain-text, copyable URL in an "Investigate further" block **after** the data — never as the only thing you say about the error.
+
+## Error handling
+
+| Symptom | Cause | Tell the user |
+|---|---|---|
+| `call_tool` returns not-found or forbidden | Fund Forecasting feature flag not enabled for this account | "Your account doesn't appear to have Fund Forecasting access. Contact your Carta account team to enable it." |
+| Response too large / size-limit overflow | Payload exceeds the MCP size cap | Narrow the request (see Limits & honest failure) and retry. If it still won't fit: "This data slice is too large to retrieve here — open it directly in [Fund Forecasting](https://fund-forecasting.app.carta.com)." |
+| `CACHE_MISS` on `ff-cache.sh lookup` | Normal first-call path — not an error | Proceed to fetch and store; say nothing to the user. |
+| Investment has `errors[]` | Blocking data problem in the fund model inputs | Name the company and the plain-English message(s). Clarify these are model-input issues, not MCP errors, and that they're corrected in Fund Forecasting (provide the deep link). |
+| Investment has `warnings[]` | Non-blocking data concern in the fund model | Same as errors but label them warnings and note they don't block the model. |
 
 ## Safety
 
