@@ -1,7 +1,7 @@
 ---
 name: carta-create-budget
 model: opus
-description: 'Build or restructure a fund/ManCo budget workbook in Excel from Carta prior-year actuals. TRIGGER: build/create/draft a budget for a future year; group/categorize budget line items into sections with subtotals; apply an inflation/contingency buffer to budget expenses. NOT: consolidating P&L / balance sheet, fetch-budget, actuals refresh, pacing (carta-budget-vs-actuals), what-if scenarios (carta-budget-scenarios).'
+description: 'Build or restructure a fund/ManCo budget workbook in Excel from Carta prior-year actuals. TRIGGER: build/create/draft a budget for a future year; group/categorize budget line items into sections with subtotals; apply an inflation/contingency buffer to budget expenses. NOT: consolidating P&L / balance sheet, fetch-budget, actuals refresh, pacing (carta-budget-analysis), what-if scenarios (carta-budget-scenarios).'
 version: 1.0.2
 allowed-tools:
   # MCP connector discovery (Claude for Excel runtime tool — used first in Gate 0)
@@ -72,8 +72,8 @@ Also covers **restructuring an existing budget** in the workbook:
 
 ## DO NOT use this skill for
 
-- Refreshing actuals on existing budget → `carta-budget-actuals`
-- Pacing / variance / on-track → `carta-budget-vs-actuals`
+- Refreshing actuals on existing budget → `carta-fetch-actuals`
+- Pacing / variance / on-track → `carta-budget-analysis`
 - What-if scenarios → `carta-budget-scenarios`
 - P&L / income statement → `carta-consolidating-pnl`
 - Balance sheet → `carta-consolidating-balance-sheet`
@@ -416,8 +416,8 @@ Mark one option `← recommended` based on context — option 1 by default, opti
 
 | Option | Skill to invoke |
 |---|---|
-| 1 — Refresh actuals against this budget | `Skill('carta-investors:carta-budget-actuals')` |
-| 2 — Run a pacing analysis | `Skill('carta-investors:carta-budget-vs-actuals')` |
+| 1 — Refresh actuals against this budget | `Skill('carta-investors:carta-fetch-actuals')` |
+| 2 — Run a pacing analysis | `Skill('carta-investors:carta-budget-analysis')` |
 | 3 — Model a what-if scenario | `Skill('carta-investors:carta-budget-scenarios')` |
 | 4 — I'm done | No invocation; close cleanly |
 

@@ -1,7 +1,7 @@
 ---
-name: carta-budget-actuals
+name: carta-fetch-actuals
 model: opus
-description: 'Write actuals into an existing Excel budget workbook from Carta MCP — add/interleave Budget/Actual/Variance columns, a tag-view tab, or a vendor-view tab. TRIGGER: pull/fetch/get/retrieve/refresh/sync/add actuals for [firm/ManCo], interleave Budget/Actual/Variance, actuals by department/cost center/tag/vendor, add next month/period column, extend budget through [month], broken down by vendor, vendor summary/spend over time/vendors across [period]. NOT: pacing, "how are we doing", "budget versus actual for [period]", or variance-analysis queries (carta-budget-vs-actuals); new budgets (carta-create-budget); scenarios; consolidating P&L / balance sheet. NOT: pulling a stored ManCo budget from Carta (carta-fetch-budget) — this skill writes actuals into an existing workbook, not the budget itself.'
+description: 'Write actuals into an existing Excel budget workbook from Carta MCP — add/interleave Budget/Actual/Variance columns, a tag-view tab, or a vendor-view tab. TRIGGER: pull/fetch/get/retrieve/refresh/sync/add actuals for [firm/ManCo], interleave Budget/Actual/Variance, actuals by department/cost center/tag/vendor, add next month/period column, extend budget through [month], broken down by vendor, vendor summary/spend over time/vendors across [period]. NOT: pacing, "how are we doing", "budget versus actual for [period]", or variance-analysis queries (carta-budget-analysis); new budgets (carta-create-budget); scenarios; consolidating P&L / balance sheet. NOT: pulling a stored ManCo budget from Carta (carta-fetch-budget) — this skill writes actuals into an existing workbook, not the budget itself.'
 version: 1.1.1
 allowed-tools:
   # MCP connector discovery (Claude for Excel runtime tool — used first in Gate 0)
@@ -80,7 +80,7 @@ the number.
 
 - **Building a new budget from scratch** — use `carta-create-budget`.
 - **Pulling the Carta-stored ManCo budget** — use `carta-fetch-budget`.
-- **Pacing / YTD vs budget / variance / "are we on track"** — use `carta-budget-vs-actuals`.
+- **Pacing / YTD vs budget / variance / "are we on track"** — use `carta-budget-analysis`.
 - **What-if scenarios** — use `carta-budget-scenarios`.
 - **P&L / income statement requests** — use `carta-consolidating-pnl`.
 - **Balance sheet requests** — use `carta-consolidating-balance-sheet`.
@@ -95,7 +95,7 @@ Execute all gates silently. Do not narrate tool calls, intermediate results, or 
 
 ## Entry mode — fresh session vs. chained skill
 
-**Mandatory telemetry beacon — run this before any skip-gate check:** If `<SERVER>` and `<ENTITY_UUID>` are already in context, call `mcp__<SERVER>__set_context(firm_id=<ENTITY_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-budget-actuals"]})` as your very first action. Do not skip this even when all data is already available — it records this skill invocation. If either is unknown, it fires in Gate 0 below.
+**Mandatory telemetry beacon — run this before any skip-gate check:** If `<SERVER>` and `<ENTITY_UUID>` are already in context, call `mcp__<SERVER>__set_context(firm_id=<ENTITY_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-fetch-actuals"]})` as your very first action. Do not skip this even when all data is already available — it records this skill invocation. If either is unknown, it fires in Gate 0 below.
 
 Before Gate 0, check whether these context variables are already set from an earlier budgeting skill call in the same session:
 
@@ -103,7 +103,7 @@ Before Gate 0, check whether these context variables are already set from an ear
 - `<ENTITY_NAME>` and `<ENTITY_UUID>` — the resolved entity
 - `<RUNTIME>` — `excel-addin` or `local-file`
 
-**If all four are in context:** skip Gates 0 and 0.5 entirely. Call `mcp__<SERVER>__set_context(firm_id=<ENTITY_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-budget-actuals"]})` to re-anchor the session scope and record this skill invocation. In Gate 3, pre-fill `<ENTITY_NAME>` and skip asking for it — ask only for the period. Proceed from Gate 1 (destination), then Gate 2 (layout choice), then Gate 3 (period).
+**If all four are in context:** skip Gates 0 and 0.5 entirely. Call `mcp__<SERVER>__set_context(firm_id=<ENTITY_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-fetch-actuals"]})` to re-anchor the session scope and record this skill invocation. In Gate 3, pre-fill `<ENTITY_NAME>` and skip asking for it — ask only for the period. Proceed from Gate 1 (destination), then Gate 2 (layout choice), then Gate 3 (period).
 
 **If any is missing** (fresh session or cold invocation): run Gates 0 and 0.5 in order, then continue from Gate 1.
 
@@ -114,12 +114,12 @@ Do not ask "which firm?" or "which runtime?" when those are already established 
 ## Gate 0 — Carta MCP environment + resolve firm
 
 1. Call `refresh_mcp_connectors`. Filter `servers[]` to `name` matching `Carta` / `Carta (…)` / `carta` with `status: "connected"`. Drop `failed`.
-2. For each connected, probe all three prefix forms in parallel: `mcp__claude_ai_Carta__welcome(_instrumentation={"plugin": "carta-investors", "skills": ["carta-budget-actuals"]})` , `mcp__carta_production__welcome(_instrumentation={"plugin": "carta-investors", "skills": ["carta-budget-actuals"]})`, and `mcp__carta__welcome(_instrumentation={"plugin": "carta-investors", "skills": ["carta-budget-actuals"]})`. First success = `<SERVER>`.
+2. For each connected, probe all three prefix forms in parallel: `mcp__claude_ai_Carta__welcome(_instrumentation={"plugin": "carta-investors", "skills": ["carta-fetch-actuals"]})` , `mcp__carta_production__welcome(_instrumentation={"plugin": "carta-investors", "skills": ["carta-fetch-actuals"]})`, and `mcp__carta__welcome(_instrumentation={"plugin": "carta-investors", "skills": ["carta-fetch-actuals"]})`. First success = `<SERVER>`.
 3. **Don't call any other `mcp__<SERVER>__*` tool before `welcome`** — every command is gated.
 
 If none connected, list `failed` connectors and stop. If multiple, default to `Carta` (production).
 
-**Resolve firm:** if user named one → `mcp__<SERVER>__list_contexts(firm_name="<entity>", _instrumentation={"plugin": "carta-investors", "skills": ["carta-budget-actuals"]})` → disambiguate via `AskUserQuestion` if multiple → `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-budget-actuals"]})`. Do not use `call_tool` for `list_contexts` or `set_context` — call the granular tools directly with `_instrumentation` as shown.
+**Resolve firm:** if user named one → `mcp__<SERVER>__list_contexts(firm_name="<entity>", _instrumentation={"plugin": "carta-investors", "skills": ["carta-fetch-actuals"]})` → disambiguate via `AskUserQuestion` if multiple → `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-fetch-actuals"]})`. Do not use `call_tool` for `list_contexts` or `set_context` — call the granular tools directly with `_instrumentation` as shown.
 
 
 **DWH param-name traps:** `dwh:execute:query` takes `sql:` not `query:`. `dwh:get:table_schema` takes `table_name:` not `table:`. `format` accepts `"ndjson"` / `"markdown"`, not `"csv"`.
@@ -268,7 +268,7 @@ call_tool({"name": "dwh__execute__query", "arguments": {
           WHERE FUND_NAME = '<entity_name>'
             AND EFFECTIVE_DATE >= DATEADD('year', -1, CURRENT_DATE)",
   "format": "markdown",
-  "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-budget-actuals"]}
+  "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-fetch-actuals"]}
 }})
 ```
 
@@ -292,7 +292,7 @@ call_tool({"name": "dwh__execute__query", "arguments": {
           GROUP BY 1
           ORDER BY 1",
   "format": "markdown",
-  "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-budget-actuals"]}
+  "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-fetch-actuals"]}
 }})
 ```
 
@@ -305,7 +305,7 @@ call_tool({"name": "dwh__execute__query", "arguments": {
             AND REPORTING_TAGS IS NOT NULL
             AND EFFECTIVE_DATE >= DATEADD('year', -1, CURRENT_DATE)",
   "format": "markdown",
-  "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-budget-actuals"]}
+  "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-fetch-actuals"]}
 }})
 ```
 
@@ -349,7 +349,7 @@ call_tool({"name": "dwh__execute__query", "arguments": {
             AND ACCOUNT_TYPE >= '4000'
             AND EFFECTIVE_DATE >= DATEADD('year', -1, CURRENT_DATE)",
   "format": "markdown",
-  "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-budget-actuals"]}
+  "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-fetch-actuals"]}
 }})
 ```
 
@@ -384,7 +384,7 @@ call_tool({"name": "dwh__execute__query", "arguments": {
             AND ACCOUNT_TYPE >= '4000'
             AND EFFECTIVE_DATE >= DATEADD('year', -1, CURRENT_DATE)",
   "format": "markdown",
-  "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-budget-actuals"]}
+  "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-fetch-actuals"]}
 }})
 ```
 
@@ -792,8 +792,8 @@ Mark `← recommended` based on context — option 1 by default after a refresh;
 
 | Option | Skill to invoke |
 |---|---|
-| 1 — Run a pacing analysis | `Skill('carta-investors:carta-budget-vs-actuals')` |
-| 2 — Drill into a specific line item | `Skill('carta-investors:carta-budget-vs-actuals')` with the `drill-down-line` reference |
+| 1 — Run a pacing analysis | `Skill('carta-investors:carta-budget-analysis')` |
+| 2 — Drill into a specific line item | `Skill('carta-investors:carta-budget-analysis')` with the `drill-down-line` reference |
 | 3 — Model a what-if scenario | `Skill('carta-investors:carta-budget-scenarios')` |
 | 4 — I'm done | No invocation; close cleanly |
 

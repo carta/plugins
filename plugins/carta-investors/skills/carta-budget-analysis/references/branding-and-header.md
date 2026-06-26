@@ -69,7 +69,7 @@ Run this block in a **separate** `execute_office_js` call (not bundled with the 
 {
   "op": "add_image",
   "sheet": "<TAB_NAME>",
-  "path": "${CLAUDE_PLUGIN_ROOT}/skills/carta-budget-vs-actuals/assets/powered_by_carta.png",
+  "path": "${CLAUDE_PLUGIN_ROOT}/skills/carta-budget-analysis/assets/powered_by_carta.png",
   "anchor": "E1",
   "rows": 3
 }

@@ -1,6 +1,6 @@
 # Reference: Layout E — tag-view actuals tab (category-grouped)
 
-Loaded by `carta-budget-actuals/SKILL.md` Gate 2.5 and Gate 7 when the user chose
+Loaded by `carta-fetch-actuals/SKILL.md` Gate 2.5 and Gate 7 when the user chose
 **Layout E** and the entity has tagged journal data.
 
 ---

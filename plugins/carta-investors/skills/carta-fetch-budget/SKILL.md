@@ -1,7 +1,7 @@
 ---
 name: carta-fetch-budget
 model: opus
-description: 'Pull a ManCo budget from Carta and write it to an Excel workbook with monthly amounts and subtotals. TRIGGER: pull/fetch/import/sync Carta budget for a ManCo. NOT: pull/fetch/get actuals (carta-budget-actuals), new budgets (carta-create-budget), actuals refresh, pacing, scenarios, P&L, balance sheet.'
+description: 'Pull a ManCo budget from Carta and write it to an Excel workbook with monthly amounts and subtotals. TRIGGER: pull/fetch/import/sync Carta budget for a ManCo. NOT: pull/fetch/get actuals (carta-fetch-actuals), new budgets (carta-create-budget), actuals refresh, pacing, scenarios, P&L, balance sheet.'
 version: 1.0.3
 allowed-tools:
   # MCP connector discovery (Claude for Excel runtime tool — used first in Gate 0)
@@ -76,8 +76,8 @@ Trigger this skill when the user asks for any of the following:
 ## DO NOT use this skill for
 
 - **Building a new budget from prior-year actuals** — use `carta-create-budget`.
-- **Refreshing actuals against an existing budget** — use `carta-budget-actuals`.
-- **Pacing / variance / "are we on track"** — use `carta-budget-vs-actuals`.
+- **Refreshing actuals against an existing budget** — use `carta-fetch-actuals`.
+- **Pacing / variance / "are we on track"** — use `carta-budget-analysis`.
 - **What-if scenarios** — use `carta-budget-scenarios`.
 - **P&L / income statement** — use `carta-consolidating-pnl`. (If the user is
   building a P&L and wants the Budget columns filled with Carta data,
@@ -674,8 +674,8 @@ the Gate 1 write mode.
 **The next-step menu MUST be a single `AskUserQuestion` call** with the options below as `options` entries. Never render them as a numbered markdown list, a bulleted list, or inline prose — bare-text menus break the chooser UI in Claude for Excel and force the user to type the number. The `← recommended` marker goes inside the `description` field of one option, not as a suffix on the `label`.
 
 1. **Build the P&L with this budget pre-filled (carta-consolidating-pnl)** ← recommended
-2. **Refresh actuals against this budget (carta-budget-actuals)**
-3. **Run a pacing analysis (carta-budget-vs-actuals)**
+2. **Refresh actuals against this budget (carta-fetch-actuals)**
+3. **Run a pacing analysis (carta-budget-analysis)**
 4. **I'm done**
 
 **Call `AskUserQuestion` with these exact parameters:**
@@ -692,8 +692,8 @@ the Gate 1 write mode.
 | Option | Skill to invoke |
 |---|---|
 | 1 — Build the P&L with this budget pre-filled | `Skill('carta-investors:carta-consolidating-pnl')` |
-| 2 — Refresh actuals against this budget | `Skill('carta-investors:carta-budget-actuals')` |
-| 3 — Run a pacing analysis | `Skill('carta-investors:carta-budget-vs-actuals')` |
+| 2 — Refresh actuals against this budget | `Skill('carta-investors:carta-fetch-actuals')` |
+| 3 — Run a pacing analysis | `Skill('carta-investors:carta-budget-analysis')` |
 | 4 — I'm done | No invocation; close cleanly |
 
 ---

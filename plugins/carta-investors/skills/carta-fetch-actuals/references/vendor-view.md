@@ -1,6 +1,6 @@
 # Reference: Layout F — vendor-view actuals tab
 
-Loaded by `carta-budget-actuals/SKILL.md` Gate 2.6 and Gate 7 when the user chose
+Loaded by `carta-fetch-actuals/SKILL.md` Gate 2.6 and Gate 7 when the user chose
 **Layout F** and the entity has vendor-tagged journal data.
 
 ---

@@ -4,7 +4,7 @@ Adds `<year> Actuals` alongside the existing `Budget FY<year>` — mirrors the `
 
 ## When to use
 
-User picked Layout B in `add-actuals` Gate 2. Triggers: "add separate `<year> Actuals` tab", "track this year's actuals on its own tab", or keeping Budget clean for pacing via `carta-budget-vs-actuals`.
+User picked Layout B in `add-actuals` Gate 2. Triggers: "add separate `<year> Actuals` tab", "track this year's actuals on its own tab", or keeping Budget clean for pacing via `carta-budget-analysis`.
 
 ## When NOT to use
 
@@ -63,4 +63,4 @@ Don't touch the Budget tab. Only `create_sheet` + `write_*` on the new `<year> A
 
 > "Added `<year> Actuals` alongside `Budget FY<year>` and `<prior_year> Actuals`. Jan through `<last month>` populated; future months left blank. N DWH-only accounts included (or held back)."
 
-Parent SKILL.md handles post-action menu — `carta-budget-vs-actuals` will now compare Budget vs `<year> Actuals` directly.
+Parent SKILL.md handles post-action menu — `carta-budget-analysis` will now compare Budget vs `<year> Actuals` directly.

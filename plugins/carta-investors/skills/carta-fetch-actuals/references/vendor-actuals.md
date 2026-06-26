@@ -8,12 +8,12 @@ for any mid-session questions without a second round-trip.
 
 See [`../queries/actuals-by-account-vendor-period.sql`](../queries/actuals-by-account-vendor-period.sql).
 Substitute `<entity_name>`, `<period_start>`, `<period_end>` from the session
-parameters confirmed at Step 4. Set `<period_trunc>` = `MONTH`.
+parameters confirmed at Gate 3. Set `<period_trunc>` = `MONTH`.
 
 ## Fetch shape
 
 ```
-call_tool({"name": "dwh__execute__query", "arguments": {"sql": "<SQL>", "format": "ndjson", "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-budget-vs-actuals"]}}})
+call_tool({"name": "dwh__execute__query", "arguments": {"sql": "<SQL>", "format": "ndjson", "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-fetch-actuals"]}}})
 ```
 
 Use `"ndjson"` — results can be large (many vendors × accounts × months).
@@ -25,6 +25,7 @@ output at fetch time.
 
 ## When to skip
 
-This reference is used exclusively by `carta-budget-vs-actuals`. Always run
-at Step 4 in parallel with the main actuals query — there are no layout-based
-skip conditions in this skill.
+- **Layout F** — the vendor-view query in `vendor-view.md` already covers
+  vendor breakdown for the chosen period; do not run a duplicate query.
+- **Layout E** — tag-view sessions; run only if the user asks a vendor
+  question, not proactively.

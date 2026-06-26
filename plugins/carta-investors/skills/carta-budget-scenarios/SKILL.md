@@ -98,8 +98,8 @@ Growth:
 ## DO NOT use this skill for
 
 - **Building a new budget** — use `carta-create-budget`.
-- **Refreshing actuals on an existing budget** — use `carta-budget-actuals`.
-- **Pacing / variance / "how are we doing"** — use `carta-budget-vs-actuals`.
+- **Refreshing actuals on an existing budget** — use `carta-fetch-actuals`.
+- **Pacing / variance / "how are we doing"** — use `carta-budget-analysis`.
 - **Historical / consolidating P&L or income statements** (a P&L *statement* for a closed period, not a forward what-if) — use `carta-consolidating-pnl`. A forward "how would X affect our P&L" what-if belongs **here**.
 
 ---
@@ -401,7 +401,7 @@ if the user is exploring "what would the new pacing look like".
 |---|---|
 | 1 — Model a different scenario type | `Skill('carta-investors:carta-budget-scenarios')` re-entry with the new scenario type |
 | 2 — Drill into one of the scenarios | Stay in this skill — render the impacted-lines breakdown inline |
-| 3 — Run a fresh pacing analysis using the scenario as baseline | `Skill('carta-investors:carta-budget-vs-actuals')` |
+| 3 — Run a fresh pacing analysis using the scenario as baseline | `Skill('carta-investors:carta-budget-analysis')` |
 | 4 — I'm done | No invocation; close cleanly |
 
 ---

@@ -1,6 +1,6 @@
 # Reference: Layout H — vendor-only tab (no GL breakdown)
 
-Loaded by `carta-budget-actuals/SKILL.md` Gate 2.8 and Gate 7 when the user
+Loaded by `carta-fetch-actuals/SKILL.md` Gate 2.8 and Gate 7 when the user
 chose **Layout H** and the entity has vendor-tagged journal data.
 
 Layout H is the lightweight vendor view: **one row per vendor, no GL account

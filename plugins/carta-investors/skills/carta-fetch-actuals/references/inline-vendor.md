@@ -1,6 +1,6 @@
 # Reference: Layout G — vendor rows inline on existing actuals tab
 
-Loaded by `carta-budget-actuals/SKILL.md` Gate 2.7 when the user asked to add
+Loaded by `carta-fetch-actuals/SKILL.md` Gate 2.7 when the user asked to add
 vendor breakdown directly to an existing actuals tab (not a new tab).
 
 The existing tab is rebuilt in place: vendor sub-rows are inserted under each

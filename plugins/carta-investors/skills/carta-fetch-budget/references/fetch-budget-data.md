@@ -48,7 +48,7 @@ Notes from the source data:
   `ACCOUNT_TYPE` in the Carta DWH journal-entries table.
 - `amount` is signed, already in the natural display sign — income
   positive, expenses positive. **No leading-digit sign flip needed**
-  (this differs from the actuals query in `carta-budget-actuals/get-actuals.md`).
+  (this differs from the actuals query in `carta-fetch-actuals/get-actuals.md`).
 - Some accounts post **quarterly** (e.g. Management fee income — only the
   first month of each quarter has a value, the others are absent or $0).
   Do not synthesize zeros for missing months; leave the cell empty
