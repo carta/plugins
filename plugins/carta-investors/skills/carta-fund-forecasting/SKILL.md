@@ -79,6 +79,8 @@ All data comes from the Carta MCP server's gateway tools:
 - `<CALL_TOOL>({"name": "d__v__n", "arguments": {...}})` — run a command.
 - `<DISCOVER_TOOL>()` — list commands with live parameter help.
 
+Command names in the table below use `:` as a separator (e.g. `fund_forecasting:list:funds`). When calling `<CALL_TOOL>`, convert `:` to `__` and pass the result as the `name` field (e.g. `fund_forecasting__list__funds`). Do not rewrite or shorten the name.
+
 Commands are gated behind a Fund Forecasting feature flag; if the `call_tool` call returns not-found/forbidden, the user is likely not enabled — explain it as an access/enablement gap and do not retry blindly.
 
 ## Commands
