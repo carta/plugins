@@ -204,6 +204,8 @@ Supported ops: `sum` `avg` `min` `max` `count`
 
 See **Script Reference** in `carta-reporting` for the full API (all fields, multi-sheet, merge, output format).
 
+**Phantom equity label:** If `_phantom_label_<corporation_id>` was resolved in this session (Step 1a of `carta-reporting`), include `"label_overrides": {"CBU": "<label>"}` in every `report_processor.py` invocation for this corporation — both the schema preview call and the output preview/full-report call. Use the corporation-keyed variable (e.g. `_phantom_label_12345`) to correctly handle multi-corporation flows.
+
 Always check `stats` after running:
 - `missing_columns` non-empty → list available column names from `data[sheet].columns` and ask the user which they meant, then re-run with the corrected name
 - `skipped_formulas` non-empty → tell the user which formulas couldn't run (usually the source column wasn't included in the selection)

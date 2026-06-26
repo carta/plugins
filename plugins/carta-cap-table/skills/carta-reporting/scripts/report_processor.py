@@ -11,18 +11,21 @@ Usage:
     EOF
 
 Config JSON fields:
-  download_url   str              S3 presigned URL
-  sheets         list[str]|dict   Sheets to include (null = all).
-                                  List form: filter to named sheets, apply global transforms.
-                                  Dict form: per-sheet config — each key is a sheet name,
-                                  value is an object with any of: columns, filters, sort,
-                                  formulas, aggregations. Per-sheet values override globals.
-  columns        list[str]        Global columns to include, in order (null = all)
-  filters        list             Global filter predicates (see below)
-  sort           list             Global sort spec (see below)
-  formulas       list             Global formula column definitions (see below)
-  aggregations   object           Global summary or group-by aggregation (see below)
-  preview        int              Return first N rows only per sheet (null = all rows)
+  download_url    str              S3 presigned URL
+  sheets          list[str]|dict   Sheets to include (null = all).
+                                   List form: filter to named sheets, apply global transforms.
+                                   Dict form: per-sheet config — each key is a sheet name,
+                                   value is an object with any of: columns, filters, sort,
+                                   formulas, aggregations. Per-sheet values override globals.
+  columns         list[str]        Global columns to include, in order (null = all)
+  filters         list             Global filter predicates (see below)
+  sort            list             Global sort spec (see below)
+  formulas        list             Global formula column definitions (see below)
+  aggregations    object           Global summary or group-by aggregation (see below)
+  label_overrides dict             Map raw string cell values → display names, applied to all
+                                   string-typed columns across every sheet (e.g. {"CBU": "Phantom Units"}).
+                                   Matching is exact and case-sensitive. Applied before filtering and column selection.
+  preview         int              Return first N rows only per sheet (null = all rows)
 
 Per-sheet dict example:
   {
@@ -486,13 +489,37 @@ def sort_rows_with_indices(columns, rows, orig_indices, sort_spec):
 # Main
 # ---------------------------------------------------------------------------
 
+def apply_label_overrides(columns, rows, label_overrides):
+    """Replace exact string cell values in string/text columns using the override map.
+
+    label_overrides: dict mapping old value → new value, e.g. {"CBU": "Phantom Units"}.
+    Only applied to columns whose type is string/text (not numeric or date).
+    Matching is case-sensitive and exact (whole-cell only).
+    """
+    if not label_overrides:
+        return rows
+    string_types = {"string", "text", None}
+    col_indices = [i for i, col in enumerate(columns) if col.get("type") in string_types]
+    if not col_indices:
+        return rows
+    result = []
+    for row in rows:
+        new_row = list(row)
+        for i in col_indices:
+            if i < len(new_row) and new_row[i] in label_overrides:
+                new_row[i] = label_overrides[new_row[i]]
+        result.append(new_row)
+    return result
+
+
 def main():
     config = json.load(sys.stdin)
 
-    download_url  = config.get("download_url")
-    local_file    = config.get("local_file")
-    sheets_config = config.get("sheets")
-    preview_n     = config.get("preview")
+    download_url    = config.get("download_url")
+    local_file      = config.get("local_file")
+    sheets_config   = config.get("sheets")
+    preview_n       = config.get("preview")
+    label_overrides = config.get("label_overrides") or {}
 
     # Global transforms — used when sheets is a list or None
     g_columns     = config.get("columns")
@@ -561,6 +588,10 @@ def main():
 
         # Record original column name→index before any selection/reorder
         orig_col_name_to_idx = {col["name"]: i for i, col in enumerate(cols)}
+
+        # Replace raw security type labels (e.g. "CBU") with configured display names
+        # before filtering so filters against display names (e.g. "Phantom Units") work.
+        rows = apply_label_overrides(cols, rows, label_overrides)
 
         # Filter with index tracking
         if filters:

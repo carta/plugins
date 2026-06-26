@@ -129,6 +129,20 @@ If the file exists, its instructions override the defaults in this skill for any
 
 1. **Find the company** — if the company name appears to be a nickname, abbreviation, or informal reference (e.g. "golden master", "the fund", "our main entity"), note this and use it as a fuzzy search term in `list_accounts` rather than a literal match. After `list_accounts` returns, do a case-insensitive substring match across all account names before assuming no match. Then extract the numeric ID from the `corporation_pk:<id>` field. Only `corporation_pk` accounts support reports. If the user names multiple companies, dispatch one subagent per company in parallel (send all `Agent` tool calls in a single message) to resolve each corporation_id simultaneously. If multiple accounts share the same name, **you MUST call the `AskUserQuestion` tool** — do not ask in plain text, the user cannot respond to plain text questions. List every match explicitly in the question, e.g. "I found 3 accounts named Meetly — which one did you mean? (Account 2451, Account 2452, or Account 7)" — the question must enumerate the options so the user can pick one. If a company cannot be found, say "I couldn't find [CompanyName] — it won't be included in the report" — never fabricate or estimate data for it.
 
+1a. **Resolve phantom equity display label (silent)** — run this step on the **main thread** for each resolved `corporation_id`. Do NOT delegate to a subagent — the resolved label must be available in the parent context before report processing begins.
+
+   Call with `detail: "minimal"` and `page_size: 1` to check for CBU existence without fetching all records:
+   ```
+   call_tool({"name": "cap_table__list__cbus", "arguments": { corporation_id, detail: "minimal", page_size: 1 }})
+   ```
+   The `detail: "minimal"` response shape is `{ results: [...] }`. If `results` is empty or the call fails (403/404), set `_phantom_label_<corporation_id>` to `null` — the corporation has no CBUs.
+
+   If `results` is non-empty, call `call_tool({"name": "cap_table__get__option_plans", "arguments": { corporation_id }})`. If this call fails for any reason (403, 404, network error, or unexpected response shape), set `_phantom_label_<corporation_id>` to `"Phantom Equity"` and continue — do not surface the error to the user. On success, look for any plan whose name suggests a phantom equity instrument (e.g. contains "Phantom", "PIU", "CBU", or similar). Use that plan's `name` field as `_phantom_label_<corporation_id>` if it differs from generic values like "Cash Bonus Units Plan". If no distinctive name is found, set `_phantom_label_<corporation_id>` to `"Phantom Equity"` as the fallback.
+
+   Key per-corporation using `_phantom_label_<corporation_id>` (e.g. `_phantom_label_12345`) so multi-corporation flows each have their own label without collision.
+
+   When `_phantom_label_<corporation_id>` is non-null, pass `"label_overrides": {"CBU": "<label>"}` to every `report_processor.py` invocation for that corporation. This applies to schema preview, preview report, and full report processing (step 4d, the markdown skill, and the Excel skill). **Exception:** the `Generate Carta Excel —` prompt-bar path enters `carta-reporting-excel` fresh without session context and cannot apply label overrides — this is a known limitation and out of scope for this fix.
+
 2. **Find the right report type** — call `call_tool({"name": "reporting__search__report_types", "arguments": { corporation_id, query, json_export_supported: true }})` with a natural-language description of the data the user needs (e.g. `"option grants > 50% vested with exercise prices"`). Use `reports` from the response, ranked by `similarity`. If results are empty, rephrase the query with broader terms and try again.
 
    **Supported report types** (support `export_format: "json"`):
@@ -504,17 +518,20 @@ Single sheet (global transforms):
 ```bash
 UV_PYTHON_DOWNLOADS=never uv run "$(find ~ -name "report_processor.py" -path "*/carta-reporting/scripts/*" 2>/dev/null | head -1)" <<'EOF'
 {
-  "local_file":    "<path to downloaded report JSON>",
-  "sheets":        ["Securities Ledger"],
-  "columns":       ["Stakeholder Name", "Grant Date", "Shares Issued", "Vested %"],
-  "filters":       [{"column": "Vested %", "op": ">", "value": 0.5}],
-  "sort":          [{"column": "Shares Issued", "direction": "desc"}],
-  "formulas":      [{"name": "% of Total", "op": "pct_of_total", "column": "Shares Issued"}],
-  "aggregations":  {"type": "summary", "columns": {"Shares Issued": "sum"}},
-  "preview":       5
+  "local_file":      "<path to downloaded report JSON>",
+  "sheets":          ["Securities Ledger"],
+  "columns":         ["Stakeholder Name", "Grant Date", "Shares Issued", "Vested %"],
+  "filters":         [{"column": "Vested %", "op": ">", "value": 0.5}],
+  "sort":            [{"column": "Shares Issued", "direction": "desc"}],
+  "formulas":        [{"name": "% of Total", "op": "pct_of_total", "column": "Shares Issued"}],
+  "aggregations":    {"type": "summary", "columns": {"Shares Issued": "sum"}},
+  "label_overrides": {"CBU": "Phantom Units"},
+  "preview":         5
 }
 EOF
 ```
+
+`label_overrides` — optional dict mapping raw string cell values to display names. Applied to all string-typed columns across every sheet. Use to replace Carta's internal security type codes with the corporation's configured equity language names (e.g. `{"CBU": "Phantom Units"}`). Matching is exact and case-sensitive.
 
 Multi-sheet with per-sheet config:
 ```bash
