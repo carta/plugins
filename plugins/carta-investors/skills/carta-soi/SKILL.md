@@ -81,7 +81,7 @@ With the firm list in hand:
 
 > **Run in parallel with Step 3.** Fund enumeration (this step) and MCP UUID discovery (Step 3) are fully independent — issue both tool batches concurrently in the same response, not sequentially. 
 
-Call `call_tool({"name": "fa__list__entities", "arguments": { entity_types: "fund,spv" }})`. The filter excludes entity types that can't hold investments so it is critical. Capture the full `[{uuid, name}, ...]` list from the response.
+Call `call_tool({"name": "fa__list__entities", "arguments": { entity_types: "fund,spv" }})`. The filter excludes entity types that can't hold investments so it is critical. Capture the full `[{uuid, name, currency}, ...]` list from the response — the `currency` field is the fund's reporting currency (e.g. `"USD"`, `"EUR"`) and is needed for correct amount formatting in the artifact.
 
 **Pick the initial fund** for the dropdown and capture two variables — `initial_fund_uuid` and `name_status` — that Step 6 will read by name.
 
@@ -118,8 +118,8 @@ Two sub-steps:
 
 ```json
 [
-  {"uuid": "<fund_uuid_1>", "name": "<fund_name_1>"},
-  {"uuid": "<fund_uuid_2>", "name": "<fund_name_2>"}
+  {"uuid": "<fund_uuid_1>", "name": "<fund_name_1>", "currency": "<currency_code_1>"},
+  {"uuid": "<fund_uuid_2>", "name": "<fund_name_2>", "currency": "<currency_code_2>"}
 ]
 ```
 

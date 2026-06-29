@@ -20,7 +20,7 @@ Usage:
         <mcp_tool> <firm_uuid> <firm_name> <funds_file> <initial_fund_uuid>
 
 <funds_file> is a path to a JSON file whose contents are a non-empty list of
-{"uuid": "...", "name": "..."} dicts. It is a path (not a positional JSON
+{"uuid": "...", "name": "...", "currency": "..."} dicts (currency is optional). It is a path (not a positional JSON
 string) because legitimate fund names contain apostrophes ("O'Reilly Capital",
 "St. James's Place Holdings"), JSON does not escape ', and shell single-quoting
 needed to preserve JSON's embedded double quotes terminates on the first '.
@@ -28,7 +28,7 @@ The tempfile bridge eliminates that hazard.
 
 Embedded state block (in the rendered HTML, consumed at runtime by artifact.html):
     <script type="application/json" id="soi-funds-state">
-    {"firm_uuid": "...", "firm_name": "...", "funds": [{"uuid": "...", "name": "..."}]}
+    {"firm_uuid": "...", "firm_name": "...", "funds": [{"uuid": "...", "name": "...", "currency": "..."}]}
     </script>
 
 On success, one line is printed to stdout: the absolute output path. The
@@ -104,7 +104,7 @@ def check_path_under_cwd(p: Path, label: str) -> "Path | None":
 def load_funds(funds_file: Path) -> "list | None":
     """Read and validate the funds list. Return the list, or None on error
     (after printing a message to stderr). On success the returned list contains
-    {uuid, name} dicts only — extra keys are rejected.
+    {uuid, name} dicts with an optional currency field.
     """
     if not funds_file.is_file():
         print(f"error: funds_file not found or not a regular file: {funds_file}", file=sys.stderr)
@@ -124,9 +124,13 @@ def load_funds(funds_file: Path) -> "list | None":
         if not isinstance(entry, dict):
             print(f"error: fund entry #{i} is not an object: {entry!r}", file=sys.stderr)
             return None
-        if set(entry.keys()) != {"uuid", "name"}:
+        allowed_keys = {"uuid", "name", "currency"}
+        required_keys = {"uuid", "name"}
+        extra = entry.keys() - allowed_keys
+        missing = required_keys - entry.keys()
+        if extra or missing:
             print(
-                f"error: fund entry #{i} must have exactly 'uuid' and 'name' keys, got {sorted(entry.keys())}",
+                f"error: fund entry #{i} must have 'uuid' and 'name' (and optionally 'currency'), got {sorted(entry.keys())}",
                 file=sys.stderr,
             )
             return None

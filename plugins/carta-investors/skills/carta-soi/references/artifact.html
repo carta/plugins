@@ -817,7 +817,9 @@
 
         // ── State ──
 
+        const DEFAULT_CURRENCY = 'USD';
         let companies = [];
+        let currentCurrency = DEFAULT_CURRENCY;
         let filterText = '';
         let sortCol = null;
         let sortDir = 'asc';
@@ -849,12 +851,12 @@
         // ── Formatters ──
 
         function fmt(val) {
-            return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(val);
+            return new Intl.NumberFormat('en-US', { style: 'currency', currency: currentCurrency, minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(val);
         }
 
         function fmtDec(val) {
             if (val == null) return '—';
-            return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
+            return new Intl.NumberFormat('en-US', { style: 'currency', currency: currentCurrency, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
         }
 
         function fmtShares(val) {
@@ -863,7 +865,7 @@
         }
 
         function glCell(val) {
-            if (val === 0) return `<span class="gl-value" style="color:var(--text-subtle)">$0</span>`;
+            if (val === 0) return `<span class="gl-value" style="color:var(--text-subtle)">${fmt(0)}</span>`;
             const cls = val >= 0 ? 'gain' : 'loss';
             const arrow = val >= 0 ? '↑' : '↓';
             return `<span class="gl-value ${cls}"><span class="gl-arrow">${arrow}</span>${fmt(Math.abs(val))}</span>`;
@@ -1260,6 +1262,10 @@
             // future "reset" of the dropdown reflect the active fund.
             const select = document.getElementById('fundSelect');
             if (select) select.value = fundUuid;
+
+            // Resolve fund currency from the injected FUNDS list (authoritative reporting currency).
+            const fundMeta = FUNDS.find(f => f.uuid === fundUuid);
+            currentCurrency = (fundMeta && fundMeta.currency) || DEFAULT_CURRENCY;
 
             // Cache hit → render immediately.
             if (fundCache.has(fundUuid)) {
