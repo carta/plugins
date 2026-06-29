@@ -55,9 +55,9 @@ The user must have the Carta MCP server connected. If this is the first query in
 
 1. Call `list_contexts` to see which firms are accessible
 2. Call `set_context` with the target `firm_id` if needed
-3. For **cap table queries** — confirm the corporation ID before running. If the user names a portfolio company, resolve its `CORPORATION_ID` from `CORPORATION_BASIC_INFO_V2` first (see Step 1 table below)
+3. For **cap table queries** — confirm the corporation ID before running. If the user names a portfolio company, resolve its `CORPORATION_ID` from `CORPORATION_BASIC_INFO_V2` first (see Step 2 table below)
 
-> **Firm context — tool priority rule:** When the active context is a **Firm**, prefer `fa:*` MCP commands over raw DWH queries. These commands are purpose-built for investor-facing data and return cleaner, pre-aggregated results. Fall back to `dwh:execute:query` only when no `fa:*` command covers the requested data.
+> **Firm context — tool priority rule:** When the active context is a **Firm**, prefer `fa:*` MCP commands for portfolio/entity listing (Step 0), then `dwh:execute:question` for customer questions (Step 1). Fall back to the semantic-layer SQL path (Steps 2–4) only when `execute:question` returns an error, empty result, or data that doesn't address the question. Fall back to raw `dwh:execute:query` only when no semantic layer covers the requested data.
 >
 > **Never call `cap_table:*` or `cap_table_chart` in firm context.** Those MCP commands require a direct cap-table-tenant user role and reject UUID-only corporation IDs — most portcos surfaced by `fa:list:portfolio_companies` are exposed via the investor portal, not as direct tenant members, so these calls will fail. If a DWH query returns no useful result for a cap-table prompt, tell the user the data is not available rather than retrying with `cap_table:*`. See `semantic-layer/cap-table.md` for the full routing rationale and the DWH queries to use instead.
 
@@ -74,9 +74,27 @@ call_tool({"name": "fa__list__portfolio_companies", "arguments": {}})
 This call is required even if the user named a specific company — it establishes which companies are accessible in the current firm context and provides the `corporation_id` values needed for cap table queries. Do not skip this step.
 
 - If the result is empty, tell the user their firm context may not be set correctly and call `list_contexts` to diagnose.
-- If the user asked about a specific company, use the result to resolve the exact `corporation_id` for that company before continuing to Step 2.
+- If the user asked about a specific company, use the result to resolve the exact `corporation_id` for that company before continuing to Step 1.
 
-## Step 1 — Identify the Query Domain
+## Step 1 — Try execute:question (PRIMARY query path)
+
+Before loading any semantic layer, call the plain-English query interface with the user's question verbatim (or lightly rephrased for clarity):
+
+```
+call_tool({"name": "dwh__execute__question", "arguments": {"question": "<user's question>"}})
+```
+
+**If the call succeeds and returns meaningful rows** → format and present the results using the General Presentation Rules below. Stop here — do not continue to Steps 2–4.
+
+**Fall through to Step 2 when any of the following occur:**
+- The tool returns an error or exception
+- The result set is empty and the user's question implies data should exist
+- The returned columns don't match what the user asked for (e.g. wrong metric, wrong granularity)
+- The tool indicates it cannot interpret the question or lacks the required data
+
+Do NOT retry `execute:question` with a rephrased question — fall through immediately.
+
+## Step 2 — Identify the Query Domain
 
 Use this table to pick the right context file before running any query:
 
@@ -96,7 +114,7 @@ Use this table to pick the right context file before running any query:
 | Fund list, entity type (Fund vs SPV)                                                                                                                                                                       | Query `ALLOCATIONS` directly                      | `ALLOCATIONS`                                                             |
 | Loans, Loan Ops                                                                                                                                                                                            | Query `LOAN_OPS.LOAN` directly                    | `LOAN_OPS.LOAN`                                                           |
 
-## Step 2 — Load the Context File
+## Step 3 — Load the Context File
 
 Read the matching file from `${CLAUDE_PLUGIN_ROOT}/skills/carta-explore-data/semantic-layer/<domain>.md`:
 
@@ -119,18 +137,18 @@ The file contains the SQL query, column reference, and presentation rules for th
 
 * IMPORTANT: if a specific semantic layer was not found, check for Saved Questions by running `call_tool({"name": "fa__list__saved_queries", "arguments": {}})` to get a list of existing questions and descriptions saved on the Data Warehouse. Use `call_tool({"name": "fa__get__saved_query", "arguments": {"name": "<query_name>"}})` to retrieve the SQL of a matching saved query, where `<query_name>` is the `name` field returned by `fa__list__saved_queries`.
 
-## Step 3 — Execute the Query
+## Step 4 — Execute the Query
 
 > **MANDATORY pre-query checklist — run for every query, no exceptions:**
 >
-> 1. **Determine the schema** from the domain routing table in Step 1: if the table is listed with an explicit schema prefix (e.g. `LOAN_OPS.LOAN`), use that schema. Otherwise `FUND_ADMIN` is the default and most common schema.
-> 2. **Verify the table exists**: `call_tool({"name": "dwh__list__tables", "arguments": {"schema": "<SCHEMA>"}})` — use the schema from step 1. If the target table does not appear in the result, it does not exist — check the wrong→right table name reference in `## SQL Compilation Safety Rules` before continuing. Do **not** query a table that is not listed.
-> 3. **Verify column names**: `call_tool({"name": "dwh__get__table_schema", "arguments": {"table_name": "<TABLE>", "schema": "<SCHEMA>"}})` — use the schema from step 1. Confirm every column you plan to SELECT or filter on appears in the schema with its **exact** name. Check the wrong→right column name reference in `## SQL Compilation Safety Rules` if a column is missing.
+> 1. **Determine the schema** from the domain routing table in Step 2: if the table is listed with an explicit schema prefix (e.g. `LOAN_OPS.LOAN`), use that schema. Otherwise `FUND_ADMIN` is the default and most common schema.
+> 2. **Verify the table exists**: `call_tool({"name": "dwh__list__tables", "arguments": {"schema": "<SCHEMA>"}})` — use the schema from step 2. If the target table does not appear in the result, it does not exist — check the wrong→right table name reference in `## SQL Compilation Safety Rules` before continuing. Do **not** query a table that is not listed.
+> 3. **Verify column names**: `call_tool({"name": "dwh__get__table_schema", "arguments": {"table_name": "<TABLE>", "schema": "<SCHEMA>"}})` — use the schema from step 2. Confirm every column you plan to SELECT or filter on appears in the schema with its **exact** name. Check the wrong→right column name reference in `## SQL Compilation Safety Rules` if a column is missing.
 >
 > **Then resolve any remaining uncertainty:**
 >
-> 1. **Unclear intent — ask immediately.** If the user's request contains a term that doesn't map to any known domain, table, or Carta concept in the Step 1 table, immediately call `AskUserQuestion` with focused options. Do **not** respond in prose first — go straight to `AskUserQuestion`.
-> 2. **Ask up to 2 clarifying questions.** If, after checking saved queries (Step 2) and schema inspection, you still cannot identify the right table or domain, use `AskUserQuestion` to ask the user **at most 2 focused questions** — e.g. fund-level vs company-level, metric type, entity name. After receiving answers, re-run Steps 1–2 before querying.
+> 1. **Unclear intent — ask immediately.** If the user's request contains a term that doesn't map to any known domain, table, or Carta concept in the Step 2 table, immediately call `AskUserQuestion` with focused options. Do **not** respond in prose first — go straight to `AskUserQuestion`.
+> 2. **Ask up to 2 clarifying questions.** If, after checking saved queries (Step 3) and schema inspection, you still cannot identify the right table or domain, use `AskUserQuestion` to ask the user **at most 2 focused questions** — e.g. fund-level vs company-level, metric type, entity name. After receiving answers, re-run Steps 2–3 before querying.
 >
 > **Never assume a table or column name.** Every wrong guess produces a Snowflake compilation error visible in production logs.
 
