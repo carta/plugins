@@ -5,7 +5,22 @@ Query investment-level data: cost basis, fair market value, unrealized gain/loss
 > For *fund-level* performance (IRR, DPI, TVPI), use `AGGREGATE_FUND_METRICS` (see `fund-performance.md`).
 > For *cap table* data (share classes, ownership %), use `SUMMARY_CAP_TABLE` (see `cap-table.md`).
 
-## Common Aliases
+## ⚠️ Common Mistakes in This Domain
+
+| ❌ Wrong | ✅ Correct | Note |
+|---|---|---|
+| `INVESTMENTS` / `PORTFOLIO_COMPANIES` / `FUND_INVESTMENTS` | `AGGREGATE_INVESTMENTS` | wrong table names |
+| `COST_BASIS` | `total_cost_basis` | (`AGGREGATE_INVESTMENTS` and `AGGREGATE_INVESTMENTS_HISTORY`) |
+| `QUANTITY` / `SHARES` | `count_remaining_shares` | |
+| `COMPANY_NAME` / `LEGAL_NAME` | `issuer_name` | company name in this table |
+| `SECURITY_NAME` | `asset_name` (instrument) or `issuer_name` (company) | |
+| `SECURITY_TYPE` | `asset_class_type` | |
+| `CURRENT_VALUE` / `FAIR_VALUE` | `remaining_value` | total FMV of remaining holdings |
+| `INVESTMENT_DATE` on history table | not a column — use `effective_date` range filter | `AGGREGATE_INVESTMENTS_HISTORY` only |
+| `IS_ACTIVE` on history table | not a column — use `next_effective_date IS NULL` | `AGGREGATE_INVESTMENTS_HISTORY` only |
+| `FUND_ID` | `fund_uuid` (VARCHAR) | |
+
+## Common Aliases (table name aliases — use `AGGREGATE_INVESTMENTS` instead)
 
 `PORTFOLIO_COMPANIES`, `INVESTMENTS`, `FUND_INVESTMENTS`, `PORTFOLIO`
 

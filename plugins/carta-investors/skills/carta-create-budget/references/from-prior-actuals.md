@@ -4,11 +4,11 @@
 
 ### 1. Discovery — one call
 
-`call_tool({"name": "dwh__list__tables", "arguments": {"_instrumentation": {"plugin": "carta-investors", "skills": ["carta-create-budget"]}}})`. Identify the Carta DWH journal-entries table. Optionally `call_tool({"name": "dwh__get__table_schema", ...})` once. **Don't probe other tables.**
+`call_tool({"name": "dwh__list__tables", "arguments": {}, "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-create-budget"]}})`. Identify the Carta DWH journal-entries table. Optionally `call_tool({"name": "dwh__get__table_schema", ...})` once. **Don't probe other tables.**
 
 ### 2. Queries
 
-Use the canonical SQL in [`../queries/chart-of-accounts.sql`](../queries/chart-of-accounts.sql) and [`../queries/prior-year-monthly-activity.sql`](../queries/prior-year-monthly-activity.sql). Substitute `<entity_name>`, `<prior_year>`, `<lookback_start_year>` before calling `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "…", "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-create-budget"]}}})`.
+Use the canonical SQL in [`../queries/chart-of-accounts.sql`](../queries/chart-of-accounts.sql) and [`../queries/prior-year-monthly-activity.sql`](../queries/prior-year-monthly-activity.sql). Substitute `<entity_name>`, `<prior_year>`, `<lookback_start_year>` before calling `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "…"}, "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-create-budget"]}})`.
 
 - **q1 chart of accounts** (wide window) — distinct GL codes (`ACCOUNT_TYPE`) + names (`ACCOUNT_NAME`) that posted activity in lookback.
 - **q2 monthly activity** (narrow window) — sum of signed amounts grouped by `(ACCOUNT_TYPE, MONTH)` for the prior year.

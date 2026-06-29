@@ -148,7 +148,7 @@ If none connected, list `failed` connectors and stop. If multiple, default to `C
    the firm. If multiple matches, present them via `AskUserQuestion` and
    confirm.
 2. `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-consolidating-balance-sheet"]})` to scope the session. Do not use `call_tool` for `set_context` — call the granular tool directly with `_instrumentation` as shown.
-3. `call_tool({"name": "fa__list__entities", "arguments": {"_instrumentation": {"plugin": "carta-investors", "skills": ["carta-consolidating-balance-sheet"]}}})` to enumerate **every** entity under
+3. `call_tool({"name": "fa__list__entities", "arguments": {}, "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-consolidating-balance-sheet"]}})` to enumerate **every** entity under
    the firm.
 
 Prefer the granular tool when the server exposes it — one fewer hop, sidesteps `fetch`'s param-shape quirks:
@@ -269,7 +269,7 @@ Supported `format` values for `dwh:execute:query`:
 - `ndjson` — best for large results processed by code/agent.
 - `csv` is NOT supported. Do not try it.
 
-Run via `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "...", "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-consolidating-balance-sheet"]}}})`.
+Run via `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "..."}, "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-consolidating-balance-sheet"]}})`.
 SELECT-only.
 
 **Period-only variant** (`EFFECTIVE_DATE BETWEEN <month_start> AND
@@ -287,7 +287,7 @@ The number format in `references/formatting.md` is built from `<fund_currency>` 
 resolve it here, do **not** assume USD:
 
 1. Probe the journal-entries table for a currency column:
-   `call_tool({"name": "dwh__get__table_schema", "arguments": {"table_name": "<journal_entries_table>", "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-consolidating-balance-sheet"]}}})`.
+   `call_tool({"name": "dwh__get__table_schema", "arguments": {"table_name": "<journal_entries_table>"}, "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-consolidating-balance-sheet"]}})`.
    If it exposes a currency column (e.g. `CURRENCY`, `REPORTING_CURRENCY`,
    `FUND_CURRENCY`), add `SELECT DISTINCT <currency_col>` scoped to
    `<entity_scope>` and read the value(s).

@@ -171,7 +171,7 @@ ORDER BY 1, 2
 
 Queries > 50 rows: request `format: "ndjson"`, bucket into a blob. Don't paste large results — triggers `context_snip`. Use `"markdown"` only for ≤50-row previews.
 
-Run via `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "...", "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-consolidating-pnl"]}}})`.
+Run via `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "..."}, "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-consolidating-pnl"]}})`.
 
 SELECT-only.
 

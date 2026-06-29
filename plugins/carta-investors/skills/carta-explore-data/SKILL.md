@@ -121,32 +121,25 @@ The file contains the SQL query, column reference, and presentation rules for th
 
 ## Step 3 — Execute the Query
 
-> **Before executing — resolve uncertainty first**
+> **MANDATORY pre-query checklist — run for every query, no exceptions:**
 >
-> If the semantic domain or target table is not yet clear:
+> 1. **Determine the schema** from the domain routing table in Step 1: if the table is listed with an explicit schema prefix (e.g. `LOAN_OPS.LOAN`), use that schema. Otherwise `FUND_ADMIN` is the default and most common schema.
+> 2. **Verify the table exists**: `call_tool({"name": "dwh__list__tables", "arguments": {"schema": "<SCHEMA>"}})` — use the schema from step 1. If the target table does not appear in the result, it does not exist — check the wrong→right table name reference in `## SQL Compilation Safety Rules` before continuing. Do **not** query a table that is not listed.
+> 3. **Verify column names**: `call_tool({"name": "dwh__get__table_schema", "arguments": {"table_name": "<TABLE>", "schema": "<SCHEMA>"}})` — use the schema from step 1. Confirm every column you plan to SELECT or filter on appears in the schema with its **exact** name. Check the wrong→right column name reference in `## SQL Compilation Safety Rules` if a column is missing.
 >
-> 1. **Unclear intent — ask immediately.** If the user's request is simple, ambiguous,
->    or contains a term that doesn't map to any known domain, table, or Carta concept
->    in the Step 1 table, immediately call `AskUserQuestion` with focused options to
->    resolve the ambiguity. Do **not** respond in prose first — go straight to
->    `AskUserQuestion`.
-> 2. **Inspect the schema.** Use `call_tool({"name": "dwh__get__table_schema", ...})` on any plausible
->    table before referencing it in a query.
-> 3. **Ask up to 2 clarifying questions.** If, after checking saved queries (Step 2)
->    and schema inspection, you still cannot identify the right table or domain, use
->    `AskUserQuestion` to ask the user **at most 2 focused questions** that will resolve
->    the ambiguity — e.g. fund-level vs company-level, metric type, entity name. After
->    receiving answers, re-run Steps 1–2 before querying.
+> **Then resolve any remaining uncertainty:**
 >
-> **Never assume a table name or domain.** Guessing produces incorrect or empty results.
+> 1. **Unclear intent — ask immediately.** If the user's request contains a term that doesn't map to any known domain, table, or Carta concept in the Step 1 table, immediately call `AskUserQuestion` with focused options. Do **not** respond in prose first — go straight to `AskUserQuestion`.
+> 2. **Ask up to 2 clarifying questions.** If, after checking saved queries (Step 2) and schema inspection, you still cannot identify the right table or domain, use `AskUserQuestion` to ask the user **at most 2 focused questions** — e.g. fund-level vs company-level, metric type, entity name. After receiving answers, re-run Steps 1–2 before querying.
+>
+> **Never assume a table or column name.** Every wrong guess produces a Snowflake compilation error visible in production logs.
 
-Use the MCP commands in sequence:
+Use the MCP commands in sequence, substituting `<SCHEMA>` with the schema determined in the checklist above:
 
-1. **Browse tables:** `call_tool({"name": "dwh__list__tables", "arguments": {"schema": "FUND_ADMIN"}})`
-2. **Inspect schema:** `call_tool({"name": "dwh__get__table_schema", "arguments": {"table_name": "<TABLE>", "schema": "FUND_ADMIN"}})`
+1. **Browse tables:** `call_tool({"name": "dwh__list__tables", "arguments": {"schema": "<SCHEMA>"}})`
+2. **Inspect schema:** `call_tool({"name": "dwh__get__table_schema", "arguments": {"table_name": "<TABLE>", "schema": "<SCHEMA>"}})`
 3. **Run the query:** `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "..."}})`
 
-** Schema: ** Use the schema matching the domain identified in Step 1. For most queries use `FUND_ADMIN`. For Loan Ops queries, use `LOAN_OPS` instead of `FUND_ADMIN` in every command above.
 **Output format:** Present results as a markdown table. Use fund or company names as row headers — never raw UUIDs. Currency values use `$X,XXX` format with commas; percentages use `X.XX%`. Bold totals and summary rows.
 
 ## General Query Rules
@@ -157,6 +150,27 @@ Use the MCP commands in sequence:
 - **Date fields** — `effective_date` for `JOURNAL_ENTRIES`; `month_end_date` for `MONTHLY_NAV_CALCULATIONS`; `investment_date` for `AGGREGATE_INVESTMENTS`
 - **Deduplication** — for `MONTHLY_NAV_CALCULATIONS` and `AGGREGATE_FUND_METRICS`, use `QUALIFY ROW_NUMBER() OVER (PARTITION BY fund_uuid ORDER BY last_refreshed_at DESC) = 1`
 - **ALLOCATIONS has multiple rows per fund** — always `GROUP BY fund_uuid` with `MAX(fund_name)` when using it for fund metadata
+
+## SQL Compilation Safety Rules
+
+- **Always schema-qualify tables**: `FUND_ADMIN.TABLE_NAME` (or `LOAN_OPS.TABLE_NAME` for loans). A bare name defaults to `PUBLIC` where no customer tables exist.
+- **Only query schemas visible in `dwh__list__tables`**: never query a schema that does not appear in that tool's output — unrecognized schemas are either internal-only or non-existent and will always fail.
+- **Use `fund_uuid` (VARCHAR), not `fund_id`** — the integer `fund_id` is internal-only and not available in customer-facing views.
+- **Snowflake syntax only**: `LIMIT N` not `FETCH FIRST N ROWS ONLY`; `LIKE`/`RLIKE` not `SIMILAR TO`; `ROW_NUMBER() OVER (...)` not bare `ROW()`; `DATE_TRUNC` not `ROUND` on dates; UUID values are strings (`fund_uuid = '<uuid>'`).
+- **Wrong → right table names** — if the user or context uses any name on the left, use the right instead:
+
+| ❌ Do NOT query | ✅ Use instead |
+|---|---|
+| `FUND_NAV` / `NAV_HISTORY` | `MONTHLY_NAV_CALCULATIONS` |
+| `FUND_METRICS` / `FUND_PERFORMANCE_SUMMARY` / `FUND_PERFORMANCE_METRICS` / `FUND_PERFORMANCE` | `AGGREGATE_FUND_METRICS` |
+| `CAPITAL_CALLS` / `FUND_CAPITAL_CALLS` | `CAPITAL_ACTIVITIES` |
+| `INVESTMENTS` (bare) | `AGGREGATE_INVESTMENTS` |
+| `PORTFOLIO_COMPANIES` | `call_tool({"name": "fa__list__portfolio_companies"})` — not a queryable table |
+| `FINANCIAL_STATEMENTS` / `FINANCIALS` / `PROFIT_AND_LOSS` / `KPIS` / `PORTFOLIO_KPIS` | `COMPANY_FINANCIALS` (KPIs) or `JOURNAL_ENTRIES` (P&L) |
+| `INVESTORS_PARTNER` | `PARTNER_DATA` |
+| `FUNDADMIN_DATASHARE_*` (with full dbt prefix) | Use short name: e.g. `MONTHLY_NAV_CALCULATIONS` |
+
+- **Wrong column names**: Domain-specific corrections are in each semantic layer file's `⚠️ Common Mistakes` section. Always run `dwh__get__table_schema` to verify column names before querying — the schema response flags common aliases in the column descriptions.
 
 ## General Presentation Rules
 

@@ -8,6 +8,18 @@ Query current NAV, TVPI, DPI, MOIC, and cumulative LP contribution totals per fu
 > For **IRR** (internal rate of return), use `AGGREGATE_FUND_METRICS` (see `fund-performance.md`) —
 > `MONTHLY_NAV_CALCULATIONS` does not contain IRR. Do not attempt to compute IRR from this table.
 
+## ⚠️ Common Mistakes in This Domain
+
+| ❌ Wrong column | ✅ Correct column | Note |
+|---|---|---|
+| `LP_NAV` | `ending_lp_nav` | |
+| `TOTAL_NAV` | `ending_total_nav` | |
+| `TVPI` / `NET_TVPI` | `total_tvpi` | |
+| `DPI` | `total_dpi` | |
+| `COMMITTED_CAPITAL` / `TOTAL_COMMITMENTS` | `cumulative_commitment_amount` | |
+| `NET_IRR` / `IRR` | **not in this table** — use `AGGREGATE_FUND_METRICS.net_lp_irr` | `MONTHLY_NAV_CALCULATIONS` has no IRR column |
+| `NAV_HISTORY` / `FUND_NAV` | `MONTHLY_NAV_CALCULATIONS` (schema-qualified) | wrong table name |
+
 ## Table: MONTHLY_NAV_CALCULATIONS
 
 Each row is a month-end snapshot per fund. Use `QUALIFY ROW_NUMBER()` to get the latest row per fund.

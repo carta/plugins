@@ -101,7 +101,19 @@ questions about the same fund.
 > For *current NAV and cumulative LP contributions*, `MONTHLY_NAV_CALCULATIONS` (see `nav.md`) is also valid.
 > `AGGREGATE_FUND_METRICS` is preferred when you need IRR, DPI, TVPI, expense detail, or dry powder.
 
-## Common Aliases
+## ⚠️ Common Mistakes in This Domain
+
+| ❌ Wrong | ✅ Correct | Note |
+|---|---|---|
+| `FUND_METRICS` / `FUND_PERFORMANCE` / `FUND_PERFORMANCE_SUMMARY` | `FUND_ADMIN.AGGREGATE_FUND_METRICS` | wrong table names |
+| `NET_IRR` | `net_lp_irr` (LP net IRR) or `deal_irr` (gross) | use `net_lp_irr` for LP-level IRR |
+| `TVPI` / `NET_TVPI` | `total_tvpi` | |
+| `DPI` | `lp_dpi` | use `total_dpi` for `MONTHLY_NAV_CALCULATIONS` (see `nav.md`) |
+| `VINTAGE` | `vintage_year` | |
+| `FUND_SIZE` | `fund_size` | verify with `dwh__get__table_schema` |
+| `FUND_ID` | `fund_uuid` (VARCHAR) | integer fund_id is internal only |
+
+## Common Aliases (table name aliases — use `AGGREGATE_FUND_METRICS` instead)
 
 `FUND_PERFORMANCE`, `FUND_METRICS`, `FUND_SUMMARY`, `FUND_QUARTERLY_PERFORMANCE`, `FUND_INVESTMENTS`, `FUND_PERFORMANCE_METRICS`, `FUND_PERFORMANCE_METRICS_HISTORY`, `PERFORMANCE`
 

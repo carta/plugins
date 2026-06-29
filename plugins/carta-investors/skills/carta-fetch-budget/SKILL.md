@@ -262,7 +262,7 @@ and SPVs return empty from `fa:list:budgets`.
 
 **Call `read_skill(file_path="references/entity-picker.md")` before proceeding.** Do not reconstruct the picker logic from memory. Summary of the rule:
 
-1. Call `call_tool({"name": "fa__list__entities", "arguments": {"_instrumentation": {"plugin": "carta-investors", "skills": ["carta-fetch-budget"]}}})` against the active firm.
+1. Call `call_tool({"name": "fa__list__entities", "arguments": {}, "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-fetch-budget"]}})` against the active firm.
 2. Identify the ManCo(s) by name suffix / type field — anything matching
    `(LLC|Management|Mgmt|ManCo|Capital, LLC)` AND with no `Fund` /
    `Partners` / `SPV` qualifier.
@@ -361,9 +361,8 @@ isn't passed. `<ENTITY_UUID>` is the UUID locked at the end of Gate 2.
 call_tool({"name": "fa__list__budgets", "arguments": {
   "fund_uuid":  "<ENTITY_UUID>",
   "start_date": "<YYYY-MM-01>",
-  "end_date":   "<YYYY-MM-{28|29|30|31}>",
-  "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-fetch-budget"]}
-}})
+  "end_date":   "<YYYY-MM-{28|29|30|31}>"
+}, "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-fetch-budget"]}})
 ```
 
 The param is named `fund_uuid` for historical reasons but it accepts any

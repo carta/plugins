@@ -12,6 +12,13 @@ A date range is required — ask the user if not provided.
 > cash moved. For "investments made in [year]", prefer `AGGREGATE_INVESTMENTS.investment_date` (see
 > `investments.md`) which is the deal date, not the GL posting date.
 
+## ⚠️ Common Mistakes in This Domain
+
+- **Snowflake syntax**: Use `LIMIT N`, not `FETCH FIRST N ROWS ONLY`. Use `LIKE`/`RLIKE`, not `SIMILAR TO`.
+- **`effective_date`** is the accounting/GL date — it is **not** the deal/investment date. For "invested in [year]", use `AGGREGATE_INVESTMENTS.investment_date`.
+- **No pre-defined cash flow table** — there is no `CASH_FLOWS`, `FINANCIALS`, `PROFIT_AND_LOSS`, or `FINANCIAL_STATEMENTS` table. Always build cash flow views from `JOURNAL_ENTRIES` using `event_type` grouping.
+- **Always use schema prefix**: `FUND_ADMIN.JOURNAL_ENTRIES`, `FUND_ADMIN.ALLOCATIONS`.
+
 ## Table: JOURNAL_ENTRIES
 
 The `event_type` column classifies what caused each entry and drives cash flow categorization.
