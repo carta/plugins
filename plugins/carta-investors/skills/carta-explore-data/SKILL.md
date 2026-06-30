@@ -78,6 +78,17 @@ This call is required even if the user named a specific company — it establish
 
 ## Step 1 — Try execute:question (PRIMARY query path)
 
+> **Structural questions skip straight to the catalog tools — never call `execute:question` for these.** `execute:question` runs against the Semantic Views layer, which models business concepts (NAV, cap tables, cash flows, etc.) and has **no visibility into raw schema/table structure**. It will always error, return nothing useful, or hallucinate when the question is about what exists in the warehouse rather than what the business numbers are. Recognize a structural question by its shape — "what exists" / "where does X live", not "what is the value of X":
+> - "What tables are available?" / "Show me tables with account or opportunity data"
+> - "What tables contain [X] data?" (e.g. "...LLC interest holder or cap table data")
+> - "What schemas exist?" / "What columns does [table] have?"
+>
+> For these, skip Steps 1–3 entirely and go directly to:
+> 1. `call_tool({"name": "dwh__list__tables", "arguments": {}})` — omit `schema` to list tables across **all** schemas, then filter the result client-side by keyword (e.g. `salesforce`, `account`, `opportunity`, `llc`, `interest_holder`) to answer "what tables are available / contain X" questions.
+> 2. `call_tool({"name": "dwh__get__table_schema", "arguments": {"table_name": "<TABLE>", "schema": "<SCHEMA>"}})` for any specific table whose columns the user asked about.
+>
+> Present the raw table/column names and descriptions returned. Do not map them onto a semantic-layer domain or run a data query unless the user follows up with an actual business question — that's a separate turn, back at Step 1.
+
 Before loading any semantic layer, call the plain-English query interface with the user's question verbatim (or lightly rephrased for clarity):
 
 ```
