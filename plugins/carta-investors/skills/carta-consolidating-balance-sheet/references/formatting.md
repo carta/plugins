@@ -88,12 +88,12 @@ Calibri 10 across the whole sheet.
 
 ## Do NOT include
 
-- Eliminations column
 - Topside Adjustments column
 - Prior-period comparison columns
 
-The only non-entity column in the output is the **Total** column on the
-right.
+The only non-entity columns in the output are one per entity in
+`<entity_scope>` plus the **Total** column on the right. No entity type is
+excluded by default — see SKILL.md Gate 2.
 
 ## Formulas, not hardcoded values
 

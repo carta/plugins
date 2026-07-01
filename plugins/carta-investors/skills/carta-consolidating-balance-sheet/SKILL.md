@@ -160,7 +160,7 @@ Prefer the granular tool when the server exposes it — one fewer hop, sidesteps
 
 For DWH queries (`dwh:execute:query`, `dwh:list:tables`, `dwh:get:table_schema`) there is **no granular equivalent** — always go through `call_tool({"name": "…", "arguments": {…}})`.
 
-Each entity returned from step 3 (`fa:list:entities`) has the display name, `entity_id`, and a type field (e.g. `entity_type` — usually one of `FUND`, `GP`, `MANAGEMENT_COMPANY`, `SPV`, `HOLDING`, depending on the firm's structure). Cache the full list — Gate 2 reads from it.
+Each entity returned from step 3 (`fa:list:entities`) has the display name, `entity_id`, and a type field (`entity_type_string` — e.g. `Fund`, `GP Entity`, `Management Co`, `SPV`, `Holding`, `Elimination Entity`, depending on the firm's structure). Cache the full list — Gate 2 reads from it.
 
 **DWH param-name traps** — these cost a retry every time:
 - `dwh:execute:query` takes `sql:`, **not** `query:` (the trailing `:query` in the command name is not the param key).
@@ -189,10 +189,10 @@ Show a short summary first so the user knows what they're choosing from:
 > - **Other (3):** Acme Co-Invest (SPV), Acme GP LP (GP),
 >   Acme SPV-1 (SPV)
 
-(Group entities by `entity_type` if the field is available; otherwise
-group by name pattern — common fund-name tokens are `Fund`, `LP`, `LLC`
-with `Fund` in the name. Be conservative — when in doubt, surface the
-entity in "Other".)
+(Group entities by `entity_type_string` if the field is available;
+otherwise group by name pattern — common fund-name tokens are `Fund`,
+`LP`, `LLC` with `Fund` in the name. Be conservative — when in doubt,
+surface the entity in "Other".)
 
 Then ask via `AskUserQuestion`:
 
@@ -206,11 +206,12 @@ Which entities should the Balance Sheet include?
 
 Handle each branch:
 
-- **1 — All entities** → keep every entity from Gate 1.
-- **2 — Funds only** → filter to entities whose `entity_type == "FUND"`.
-  If `entity_type` is not present in the API response, fall back to a
-  conservative name pattern (case-insensitive `Fund` token in the
-  display name). Show the resulting filtered list and confirm with
+- **1 — All entities** → keep every entity from Gate 1, with no type
+  excluded by default.
+- **2 — Funds only** → filter to entities whose `entity_type_string ==
+  "Fund"`. If `entity_type_string` is not present in the API response,
+  fall back to a conservative name pattern (case-insensitive `Fund` token
+  in the display name). Show the resulting filtered list and confirm with
   `AskUserQuestion` before continuing — "Use these 3? Or pick
   individually?"
 - **3 — Pick from a list** → present a multi-select `AskUserQuestion`
@@ -618,7 +619,8 @@ user decide whether to retry.
 
 - **Don't skip Gate 2** by inferring entity scope from chat. User must explicitly pick — even if the prompt says "all entities", echo the resolved list and confirm.
 - **Don't run BS query with empty entity scope.** Zero entities → stop, ask user to re-pick.
-- **Don't include Eliminations, Topside Adjustments, or prior-period columns.** Only non-entity column is Total.
+- **Don't exclude any entity type by default.** "All entities" in Gate 2 means every entity Gate 1 returned, full stop.
+- **Don't include Topside Adjustments or prior-period columns.** The only non-entity columns are per-entity columns plus Total.
 - **Don't rename accounts.** Use `ACCOUNT_NAME` from JE verbatim.
 - **Don't run period-only variant** without explicit opt-in and a "won't balance" warning.
 - **Don't claim success** without re-reading and verifying per-entity balance in Gate 8.
