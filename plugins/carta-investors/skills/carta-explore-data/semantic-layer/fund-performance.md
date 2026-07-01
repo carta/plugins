@@ -112,6 +112,7 @@ questions about the same fund.
 | `VINTAGE` | `vintage_year` | |
 | `FUND_SIZE` | `fund_size` | verify with `dwh__get__table_schema` |
 | `FUND_ID` | `fund_uuid` (VARCHAR) | integer fund_id is internal only |
+| Querying `AGGREGATE_FUND_METRICS` for a specific past date/quarter-end | Query `TEMPORAL_FUND_COHORT_BENCHMARKS` instead | `AGGREGATE_FUND_METRICS` only retains the latest monthly refresh — zero rows for a past date does not mean the data doesn't exist |
 
 ## Common Aliases (table name aliases — use `AGGREGATE_FUND_METRICS` instead)
 
@@ -122,6 +123,12 @@ questions about the same fund.
 ## Table: AGGREGATE_FUND_METRICS
 
 Each row is a month-end snapshot per fund. Use `QUALIFY ROW_NUMBER()` to get the latest row per fund.
+
+**This table only ever holds the latest monthly refresh — it is NOT a historical archive.** A
+query for a specific past `month_end_date` (e.g. last quarter-end) returning zero rows does
+**not** mean the historical data doesn't exist — it means the wrong table was queried. For any
+"as of [past date]" or "as of last quarter-end" IRR/TVPI/DPI/MOIC request, use
+`TEMPORAL_FUND_COHORT_BENCHMARKS` instead — see Query 2 below.
 
 | Column | Description |
 |--------|-------------|
@@ -159,8 +166,9 @@ Each row is a month-end snapshot per fund. Use `QUALIFY ROW_NUMBER()` to get the
 
 | Use case | Column | Notes |
 |----------|--------|-------|
-| Fund-level gross IRR | `deal_irr` | On `AGGREGATE_FUND_METRICS` |
-| Fund-level net LP IRR | `net_lp_irr` | On `AGGREGATE_FUND_METRICS` |
+| Fund-level gross IRR (current/latest) | `deal_irr` | On `AGGREGATE_FUND_METRICS` |
+| Fund-level net LP IRR (current/latest) | `net_lp_irr` | On `AGGREGATE_FUND_METRICS` |
+| Fund-level gross or net LP IRR as of a past date/quarter-end | `deal_irr`, `net_lp_irr` | On `TEMPORAL_FUND_COHORT_BENCHMARKS` — see Query 2 |
 | Deal-level IRR (per investment) | — | Use `TEMPORAL_DEAL_IRR` table instead |
 
 ## Query 1 — Fund Performance Summary (latest snapshot)
@@ -192,7 +200,53 @@ ORDER BY ending_total_nav DESC NULLS LAST
 LIMIT 50
 ```
 
-## Query 2 — Fund Performance Trend Over Time
+## Query 2 — Fund Performance As Of a Historical Date
+
+Use this query whenever the user asks for IRR, TVPI, DPI, or MOIC **as of a specific past date**
+(e.g. "as of 6/30/2026", "as of last quarter-end", "at the end of Q2"). Do **not** query
+`AGGREGATE_FUND_METRICS` with a past `month_end_date` filter — it only has the latest refresh.
+
+**`performance_quarter_start_date` despite its name holds the LAST day of the quarter (quarter-end
+— e.g. `2026-06-30` for Q2 2026), not the first day.** It is a direct alias of the underlying
+`month_end_date` column, filtered to quarter-end rows only. When a user says "as of 6/30/2026",
+pass `2026-06-30` literally — do NOT convert it to the quarter's opening date (`2026-04-01`); doing
+so will silently return zero rows, the exact failure this query exists to fix.
+
+```sql
+SELECT
+    fund_name,
+    performance_quarter_start_date AS as_of,
+    net_lp_irr,
+    deal_irr,
+    net_irr,
+    tvpi,
+    dpi,
+    lp_dpi,
+    lp_tvpi,
+    moic
+FROM FUND_ADMIN.TEMPORAL_FUND_COHORT_BENCHMARKS
+WHERE fund_name ILIKE '%{fund_name}%'
+  AND performance_quarter_start_date = '{as_of_quarter_end_date}'
+ORDER BY fund_name
+LIMIT 50
+```
+
+Caveats:
+- **Quarter-end grain only** — one row per fund per quarter-end (last day of Mar/Jun/Sep/Dec), not
+  every month-end, and the stored date value IS that quarter-end day despite the column's
+  `_start_date` suffix (see above). If the user asks for a non-quarter-end date, use the nearest
+  prior quarter-end and say so.
+- **Only benchmark-eligible funds appear here** — funds need a resolved `vintage_year`,
+  `fund_aum_bucket`, and `entity_type_name`. If a fund is missing, say so explicitly rather than
+  concluding no historical data exists at all.
+- **Column names differ slightly from `AGGREGATE_FUND_METRICS`**: this table also has `net_irr`
+  (fund-level net IRR combining LPs and GPs — distinct from both `deal_irr` and `net_lp_irr`).
+  `deal_irr` and `net_lp_irr` mean the same thing as on `AGGREGATE_FUND_METRICS`.
+- For peer/percentile benchmark comparisons (not just the fund's own historical values), this
+  table also has percentile columns (`dpi_5`...`dpi_95`, `net_lp_irr_5th`...`net_lp_irr_95th`,
+  etc.) — for that use case prefer `carta-investors:carta-performance-benchmarks`.
+
+## Query 3 — Fund Performance Trend Over Time
 
 ```sql
 SELECT
@@ -210,7 +264,7 @@ ORDER BY fund_name, month_end_date
 LIMIT 200
 ```
 
-## Query 3 — Expense Breakdown by Fund
+## Query 4 — Expense Breakdown by Fund
 
 ```sql
 SELECT
