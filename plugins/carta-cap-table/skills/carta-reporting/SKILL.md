@@ -147,9 +147,10 @@ If the file exists, its instructions override the defaults in this skill for any
 
    **Supported report types** (support `export_format: "json"`):
    `canceled_and_returned_report`, `cap_table_summary_report`, `common_securities_report`,
-   `equity_awards_outstanding`, `equity_plan_granted_report`, `equity_plan_report`,
-   `exercised_and_settled_report`, `historical_terminations_report`, `ocx_report`,
-   `options_outstanding_report`, `secondary_transaction_seller_model`, `securities_ledger_report`,
+   `eightythreeb_elections_report`, `equity_awards_outstanding`, `equity_plan_granted_report`,
+   `equity_plan_report`, `exercised_and_settled_report`, `historical_terminations_report`,
+   `ocx_report`, `options_outstanding_report`, `rule_701_report`,
+   `secondary_transaction_seller_model`, `securities_ledger_report`,
    `share_registry_report`, `stakeholder_details_report`, `stakeholder_ledger_report`,
    `stakeholder_ownership_details_report`, `termination_modeling_report`, `vesting_details_report`
 
@@ -159,7 +160,7 @@ If the file exists, its instructions override the defaults in this skill for any
 
 3. **Collect report details** — look up the matched report type in the **Required params** table in [MCP Tool Reference](#mcp-tool-reference). **Every param listed for that report type is required.** If missing, call `AskUserQuestion`. Default `as_of_date` to today (YYYY-MM-DD). Always use `export_format: "json"`.
 
-   **Filters** — for supported report types (`common_securities_report`, `equity_awards_outstanding`, `equity_plan_granted_report`, `options_outstanding_report`, `securities_ledger_report`, `share_registry_report`): if the user mentions specific stakeholders, share classes, equity plans, or securities by name, resolve their IDs using the filter lookup commands in [MCP Tool Reference](#mcp-tool-reference) and pass the matching filter params as comma-separated strings — the report runs faster. `security_ids` takes comma-separated `TYPE:ID` strings (e.g. `"OPTION:42,CERTIFICATE:7"`).
+   **Filters** — many report types accept filter params; see [MCP Tool Reference](#mcp-tool-reference) for which filters each report type supports. If the user mentions specific stakeholders, share classes, equity plans, securities, or a date range, resolve their IDs/values and pass the matching filter params as comma-separated strings — the report runs faster. `security_ids` takes comma-separated `TYPE:ID` strings (e.g. `"CERTIFICATE:42,OPTION:7"`); valid types: `CERTIFICATE`, `RSA`, `RSU`, `OPTION`, `SAR`, `CBU`, `PIU`, `WARRANT`, `CONVERTIBLE_NOTE`. Passing unsupported filters for a report type has no effect.
 
 4. **Emit a status message before dispatching subagents** — before triggering any report generation, output a plain-language message to the user. Record the current time as `_report_start_time` (epoch seconds) on the **main thread**, immediately before dispatching the background `Agent` calls in steps 4b and 4c — this is the start of the generation clock. Do not record this inside the subagents. Capture it with: `UV_PYTHON_DOWNLOADS=never uv run python -c "import time; print(int(time.time()))"` (this form is already covered by the skill's `allowed-tools`).
 
@@ -390,13 +391,22 @@ call_tool({"name": "reporting__create__report", "arguments": { corporation_id, r
   # OPTIONAL params (any report type):
   #   preview          — pass true for a faster partial report
   #
-  #   Filter params — only effective on: common_securities_report, equity_awards_outstanding,
-  #     equity_plan_granted_report, options_outstanding_report,
-  #     securities_ledger_report, share_registry_report
+  #   Filter params — supported per report type:
+  #   Full support (stakeholder_ids, equity_plan_ids, security_ids, share_class_ids, issued_from, issued_to):
+  #     exercised_and_settled_report, equity_plan_report, vesting_details_report,
+  #     historical_terminations_report, common_securities_report, equity_awards_outstanding,
+  #     equity_plan_granted_report, options_outstanding_report, securities_ledger_report,
+  #     share_registry_report, rule_701_report, canceled_and_returned_report, eightythreeb_elections_report
+  #   termination_modeling_report: equity_plan_ids, security_ids, share_class_ids, issued_from, issued_to (stakeholder_ids not supported)
+  #   stakeholder_ledger_report, stakeholder_details_report: stakeholder_ids only
+  #   Passing unsupported filters for a report type has no effect.
   #   stakeholder_ids  — comma-separated integer IDs, e.g. "42,7,99"
   #   equity_plan_ids  — comma-separated integer IDs
+  #   security_ids     — comma-separated TYPE:ID strings, e.g. "CERTIFICATE:42,OPTION:7"
+  #     valid types: CERTIFICATE, RSA, RSU, OPTION, SAR, CBU, PIU, WARRANT, CONVERTIBLE_NOTE
   #   share_class_ids  — comma-separated integer IDs
-  #   security_ids     — comma-separated TYPE:ID strings, e.g. "OPTION:42,CERTIFICATE:7"
+  #   issued_from      — grant issuance start date, MM/DD/YYYY
+  #   issued_to        — grant issuance end date, MM/DD/YYYY
   #
   # REQUIRED params by report_type — the API fails silently or errors if these are omitted.
   # Collect any that the user has not already provided via AskUserQuestion BEFORE calling this command.
