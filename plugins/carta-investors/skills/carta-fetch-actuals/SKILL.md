@@ -2,7 +2,7 @@
 name: carta-fetch-actuals
 model: opus
 description: 'Write actuals into an existing Excel budget workbook from Carta MCP — add/interleave Budget/Actual/Variance columns, a tag-view tab, or a vendor-view tab. TRIGGER: pull/fetch/get/retrieve/refresh/sync/add actuals for [firm/ManCo], interleave Budget/Actual/Variance, actuals by department/cost center/tag/vendor, add next month/period column, extend budget through [month], broken down by vendor, vendor summary/spend over time/vendors across [period]. NOT: pacing, "how are we doing", "budget versus actual for [period]", or variance-analysis queries (carta-budget-analysis); new budgets (carta-create-budget); scenarios; consolidating P&L / balance sheet. NOT: pulling a stored ManCo budget from Carta (carta-fetch-budget) — this skill writes actuals into an existing workbook, not the budget itself.'
-version: 1.1.1
+version: 1.2.0
 allowed-tools:
   # MCP connector discovery (Claude for Excel runtime tool — used first in Gate 0)
   - refresh_mcp_connectors
@@ -89,7 +89,7 @@ the number.
 
 ## Execution discipline
 
-Execute all gates silently. Do not narrate tool calls, intermediate results, or status updates. Only speak at explicit decision points: Gate 0.5 (if runtime is ambiguous), Gate 1 (destination chooser), Gate 2 (layout choice — always ask), Gate 3 (period/parameter gate), Gate 6 (approval), and Gate 8 (next-step menu).
+Execute all gates silently. Do not narrate tool calls, intermediate results, or status updates. Only speak at explicit decision points: Gate 0.5 (if runtime is ambiguous), Gate 1 (destination chooser), Gate 2 (layout choice — always ask), Gate 3 (period/parameter gate), Gate 5.5 (memo-based vendor inference — offer only, Layouts F/G/H with a non-empty 'No vendor' bucket), Gate 6 (approval), and Gate 8 (next-step menu).
 
 ---
 
@@ -507,6 +507,84 @@ rules (entity scoping, books date, sign convention, P&L scope) apply unchanged.
 
 **Layouts A–D:** call [`references/get-actuals.md`](references/get-actuals.md) for the main actuals query. In parallel, call `read_skill(file_path="references/vendor-actuals.md")` and run the vendor actuals query — this loads `<VENDOR_ACTUALS>` into session context so vendor questions (e.g. "which vendor is driving Legal Fees?") are answerable for the rest of the session without a second round-trip. Never write inline SQL outside those files.
 
+**After the actuals are loaded (Layouts F, G, H only):** if the built data structure has a non-empty `No vendor` bucket, go to **Gate 5.5** before the pre-build review. For every other layout, and whenever the `No vendor` bucket is empty, skip Gate 5.5 entirely and proceed to Gate 6.
+
+---
+
+## Gate 5.5 — Infer vendors for 'No vendor' entries (opt-in; Layouts F, G, H only)
+
+**This gate is strictly opt-in and changes nothing by default.** The `No vendor` section renders exactly as before unless the user explicitly asks for inference. Run this gate ONLY when **all** of these hold:
+
+- `<LAYOUT>` is F, G, or H (the layouts with a `No vendor` section), **and**
+- the loaded actuals contain at least one `No vendor` entry, **and**
+- the user opts in at Step 1 below (or already asked for memo-based inference in their original prompt — in that case skip the Step 1 question and go straight to Step 2).
+
+If any condition is false, **do nothing** — skip to Gate 6.
+
+### Step 1 — Offer inference (`AskUserQuestion`)
+
+Compute the `No vendor` bucket's entry count and total from the already-loaded data. Then ask via `AskUserQuestion` — never a bare-text menu:
+
+- `question`: `"<N> entries totalling <total> have no vendor. Want me to infer vendors from their memos?"` (format `<total>` per the resolved currency)
+- `header`: `"No vendor"`
+- `multiSelect`: `false`
+- `options`:
+  1. **Leave them as 'No vendor'** ← recommended (`description`: `"No inference. The 'No vendor' section stays exactly as pulled from the ledger."`)
+  2. **Infer vendors from the entry memos** (`description`: `"Read each memo and propose a likely vendor. You approve the list before anything is written."`)
+
+If the user picks option 1 (or the default when they dismiss), **do nothing** — proceed to Gate 6 with the `No vendor` bucket unchanged. Only continue to Step 2 when the user picks option 2 (or asked for inference up front).
+
+### Step 2 — Pull the memos (drill query)
+
+Run [`queries/no-vendor-memo-lines.sql`](queries/no-vendor-memo-lines.sql). Resolve `<memo_column>` from the Gate 0 DWH schema lookup (candidates: `MEMO`, `DESCRIPTION`, `LINE_MEMO`, `NARRATIVE`). Substitute `<entity_name>`, `<period_trunc>` (from `<AGGREGATION>`), `<period_start>`, `<period_end>`.
+
+**If the table has no memo-like column**, tell the user in one plain-English sentence — *"These entries don't carry a memo I can read, so I'll leave them as 'No vendor'."* — and proceed to Gate 6 unchanged. Do not retry with a different column guess more than once.
+
+### Step 3 — Infer a vendor per memo (existing vendors first)
+
+Build the candidate list of **existing vendor names on this entity** — the distinct named vendors already in the loaded data (`<VENDOR_ACTUALS>` for Layout G, or the named-vendor keys of the built pivot for F/H). For each memo:
+
+- **Match to an existing vendor when the memo clearly refers to one** (e.g. memo `"AMZN Mktp US*2Z4"` → existing vendor `Amazon`). Prefer existing vendors so amounts reconcile to the vendor rows already on the sheet instead of spawning near-duplicate spellings.
+- **Propose a brand-new vendor name ONLY when the memo unambiguously names a vendor that isn't already present** (e.g. memo `"Stripe invoice #4471"` with no existing `Stripe` row → new vendor `Stripe`).
+- **Leave the entry in `No vendor` when you are not confident** — do not force a match. A memo that is a bare reference number, an internal transfer note, or otherwise ambiguous stays untagged.
+
+Never write inferred vendor tags back to Carta — this is a **report-only** enrichment of the workbook. The underlying journal entries are not modified.
+
+### Step 4 — Confirm before applying (`AskUserQuestion`)
+
+Output a preview table as a normal message (not inside the `AskUserQuestion`), grouped so existing-vendor matches and new-vendor proposals are visually distinct:
+
+| Memo | Inferred vendor | New or existing? | Amount |
+|---|---|---|---|
+| AMZN Mktp US*2Z4 | Amazon | Existing | 1,240 |
+| Stripe invoice #4471 | Stripe | New | 600 |
+
+Format every amount in this table per the fund's resolved currency (e.g. `1,240 EUR` / `1,240 USD`) — never hardcode a `$` prefix.
+
+Follow the table with one line: `"<K> of <N> 'No vendor' entries matched (<total matched>). <N−K> stay as 'No vendor'."` Then call `AskUserQuestion`:
+
+- `question`: `"Apply these inferred vendors to the report?"`
+- `header`: `"Confirm"`
+- `multiSelect`: `false`
+- `options`:
+  1. **Apply all inferred vendors** ← recommended (`description`: `"Fold every matched amount into the vendor rows, flagged 'inferred from memo'."`)
+  2. **Apply only matches to existing vendors** (`description`: `"Skip the new-vendor proposals; only reassign amounts that matched a vendor already on the sheet."`)
+  3. **Cancel — keep everything as 'No vendor'** (`description`: `"Discard the inferences and render the section as originally pulled."`)
+
+Wait for an explicit choice. On option 3, proceed to Gate 6 with the `No vendor` bucket unchanged.
+
+### Step 5 — Fold the approved inferences into the data structure
+
+For each approved memo→vendor mapping, move its `signed_amount` (per period, and per GL account for Layouts F/G) **out of** the `No vendor` bucket and **into** the target vendor:
+
+- **Existing vendor:** add the amount to that vendor's matching period/account cell.
+- **New vendor:** create a new vendor entry (sorted alphabetically among named vendors) with the amount.
+- **Residual:** amounts from unmatched or skipped entries **remain** in `No vendor`. If the bucket becomes empty after reassignment, drop the `No vendor` section.
+
+Mark every vendor row that received an inferred amount so Gate 7 can attach a cell comment (see each layout reference's "Inferred vendors" section) — the flag text is **"inferred from memo"**. Store `<INFERRED_VENDORS>` = the list of `(vendor, amount, sample_memo, is_new)` mappings applied, for the Gate 6 preview and the Gate 8 summary.
+
+The reassigned structure then flows into Gate 6 and Gate 7 exactly like any other vendor data — no separate write path.
+
 ---
 
 ## Gate 6 — Pre-build review (approval gate)
@@ -521,6 +599,12 @@ Preview table grouped by:
 If any rows carry the `low-confidence — sparse history` flag (account
 has < 6 months of activity in the lookback window), surface the count
 above the table.
+
+If Gate 5.5 ran and `<INFERRED_VENDORS>` is non-empty, add an **Inferred
+vendors** group — Vendor | Amount | New or existing | Sample memo — so the
+reassignments are visible one last time before the write. Format every amount
+per the fund's resolved currency (e.g. `1,240 EUR` / `1,240 USD`) — never
+hardcode a `$` prefix. State the residual that stayed in `No vendor`.
 
 Output the preview tables above as a normal conversation message. Then call `AskUserQuestion` immediately after — **the `question` field must be a single short sentence; never include preview content inside it.**
 
@@ -769,6 +853,8 @@ If any anchor is missing, you have skipped a gate. **Do NOT write "Carta logo pl
 **Layout H — If `<RUNTIME>` is `local-file`:**
 
 > Created `2026 Vendors` tab in `file:///path/to/<budget-workbook>.xlsx` (Example MgmtCo) — 8 vendors, annual aggregation. 1 vendor flagged low-confidence (sparse history). Adjust the period phrasing to match `<AGGREGATION>` (see excel-addin example above).
+
+**If Gate 5.5 ran and inferences were applied**, append one sentence to the summary (Layout F/G/H): *"`<M>` entries were inferred from memos and folded into their vendors (flagged with a cell comment); `<residual>` stayed as 'No vendor'."* Do not claim any inference when `<INFERRED_VENDORS>` is empty.
 
 **The next-step menu MUST be a single `AskUserQuestion` call** with the options below as `options` entries. Never render them as a numbered markdown list, a bulleted list, or inline prose — bare-text menus break the chooser UI in Claude for Excel and force the user to type the number. The `← recommended` marker goes inside the `description` field of one option, not as a suffix on the `label`.
 

@@ -153,6 +153,30 @@ needed here), `set_column_width` ops via `write_workbook.py`. No `freeze_panes`.
 
 ---
 
+## Inferred vendors (only when Gate 5.5 ran and was approved)
+
+When `<INFERRED_VENDORS>` carries approved memo→vendor mappings, the amounts are
+already folded into `<VENDOR_ACTUALS>` at Gate 5.5 Step 5 — an inferred amount
+lands on the existing vendor sub-row under its account, or creates a new vendor
+sub-row (four-space indent, alphabetical among named vendors). The only Layout G
+addition is a **cell comment** on column A of each vendor sub-row that received
+an inferred amount:
+
+```javascript
+sheet.comments.add("A<vendor_row>", "Includes <amount_with_currency> inferred from memo(s) — e.g. \"<sample_memo>\". Not vendor-tagged in the ledger.", "Plain");
+await context.sync();
+```
+
+`<amount_with_currency>` MUST be formatted per the fund's resolved currency
+(e.g. `1,240 EUR` / `1,240 USD`) — never a bare number and never a hardcoded `$`.
+
+Comment only — no fill / font color / border. The residual `No vendor` sub-row
+under any account (if entries stayed untagged) renders normally; if it emptied
+out for an account, omit it there. Grouping (Step 4) still detects vendor rows by
+the four-space indent, so inferred rows collapse/expand like any other.
+
+---
+
 ## Approval gate (Gate 6)
 
 Preview table before writing:
@@ -163,7 +187,8 @@ Preview table before writing:
 | … | … | … |
 
 Summarise: "N accounts will have vendor rows inserted. Vendor detail rows will
-be collapsed by default."
+be collapsed by default." If Gate 5.5 ran, add the inferred-vendor group
+described in SKILL.md Gate 6.
 
 ---
 

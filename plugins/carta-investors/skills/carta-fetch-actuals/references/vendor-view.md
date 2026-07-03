@@ -189,6 +189,33 @@ After building the pivot, count distinct periods per `(vendor_name, account_name
 
 ---
 
+## Inferred vendors (only when Gate 5.5 ran and was approved)
+
+When `<INFERRED_VENDORS>` carries approved memo→vendor mappings, the amounts are
+already folded into the pivot at Gate 5.5 Step 5 — no extra query or write path.
+The only Layout F addition is a **cell comment** on each vendor whose total
+includes an inferred amount:
+
+- **Existing vendor that received an inferred amount:** comment on the vendor
+  header row's column-A cell.
+- **New vendor created purely from memos:** comment on that vendor's header-row
+  column-A cell.
+
+```javascript
+sheet.comments.add("A<vendor_header_row>", "Includes <amount_with_currency> inferred from memo(s) — e.g. \"<sample_memo>\". Not vendor-tagged in the ledger.", "Plain");
+await context.sync();
+```
+
+`<amount_with_currency>` MUST be formatted per the fund's resolved currency
+(e.g. `1,240 EUR` / `1,240 USD`) — never a bare number and never a hardcoded `$`.
+
+Comment only — no fill / font color / border (same rule as the sparse-history
+flag). Add these comments in the same `execute_office_js` call as the
+sparse-history comments. The residual `No vendor` section (if any entries stayed
+untagged) renders normally; if it emptied out, omit it.
+
+---
+
 ## Collapse/expand grouping (optional, excel-addin runtime only)
 
 Run this as a **4th `execute_office_js` call** — after the three required calls (cell write → logo brand → combined verification) all pass. Only run when `<VENDOR_GROUPING>` is `collapsed` or `expanded` (set at Gate 3b). Skip entirely for local-file runtime.
