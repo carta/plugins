@@ -224,8 +224,12 @@ const colDisplayName = (col, ci) => col.name || ('Column ' + (ci + 1));
 // ─── Formatters ───────────────────────────────────────────────────────────────
 const PCT = v => { if (v === null || v === undefined || v === '') return '—'; if (typeof v === 'string' && v.includes('%')) return v; const p = parseFloat(v) * 100; return isNaN(p) ? '—' : p.toFixed(4) + '%' };
 const INT = v => { if (v === null || v === undefined || v === '') return '—'; const n = parseInt(v); return isNaN(n) ? '—' : n.toLocaleString() };
-const MON = (v, sym) => { if (v === null || v === undefined || v === '') return '—'; const n = parseFloat(v); return isNaN(n) ? '—' : (sym || '$') + n.toFixed(2) };
-const FMT = (v, t, sym) => { if (v === null || v === undefined || v === '') return '—'; switch (t) { case 'percentage': return PCT(v); case 'integer': return INT(v); case 'money': return MON(v, sym); case 'date': return v || '—'; default: return String(v) } };
+// cur is a currency object {code, symbol}. Prefer ISO-code-driven Intl currency
+// formatting (correct symbol + grouping per the viewer's locale, like INT); fall
+// back to a symbol prefix + grouped decimal when the code is missing/invalid
+// (never assert USD). Negatives render in parentheses per Carta number rules.
+const MON = (v, cur) => { if (v === null || v === undefined || v === '') return '—'; const n = parseFloat(v); if (isNaN(n)) return '—'; const code = cur && cur.code; const sym = (cur && cur.symbol) || '$'; let a; try { a = code ? new Intl.NumberFormat(undefined, { style: 'currency', currency: code }).format(Math.abs(n)) : sym + Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } catch (e) { a = sym + Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } return n < 0 ? '(' + a + ')' : a };
+const FMT = (v, t, cur) => { if (v === null || v === undefined || v === '') return '—'; switch (t) { case 'percentage': return PCT(v); case 'integer': return INT(v); case 'money': return MON(v, cur); case 'date': return v || '—'; default: return String(v) } };
 const NUM_TYPES   = new Set(['integer', 'money', 'percentage', 'decimal']);
 const BADGE_COLS  = new Set(['Security Type', 'Award Type', 'Base Award Type']);
 const STATUS_COLS = new Set(['Status', 'Award Status', 'Grant Status', 'Certificate Status']);
@@ -419,11 +423,11 @@ function renderBody(idx) {
   const visCis  = sh._colOrder.filter(ci => isVis(sh, ci));
   const nVis    = visCis.length;
 
-  const baseSym = (sh.currency && sh.currency.symbol) || '$';
+  const baseCur = sh.currency || { symbol: '$' };
   const makeRow = (rd, cls) => {
     const tr = document.createElement('tr');
     if (cls) tr.className = cls;
-    // rowCurrInfo: undefined/null → base; {symbol} → row-level; Array → per-column cell-level
+    // rowCurrInfo: undefined/null → base; {code,symbol} → row-level; Array → per-column cell-level
     const rowCurrInfo = sh._rowCurrencyMap ? sh._rowCurrencyMap.get(rd) : null;
     visCis.forEach(ci => {
       const col = cols[ci];
@@ -431,15 +435,15 @@ function renderBody(idx) {
       td.dataset.col = ci;
       td.className   = NUM_TYPES.has(col.type) ? 'num' : '';
       const v   = rd[ci] !== undefined ? rd[ci] : null;
-      // Resolve currency symbol: cell-level → row-level → base
-      let sym = baseSym;
+      // Resolve currency: cell-level → row-level → base (each a {code, symbol})
+      let cur = baseCur;
       if (Array.isArray(rowCurrInfo)) {
         const cellCurr = rowCurrInfo[ci];
-        if (cellCurr) sym = cellCurr.symbol;
+        if (cellCurr) cur = cellCurr;
       } else if (rowCurrInfo) {
-        sym = rowCurrInfo.symbol;
+        cur = rowCurrInfo;
       }
-      const fmt = FMT(v, col.type, sym);
+      const fmt = FMT(v, col.type, cur);
       const bc  = BADGE_COLS.has(col.name)  ? BADGE(fmt)      : null;
       const sc  = STATUS_COLS.has(col.name) ? STATUS_KEY(fmt) : null;
       const blc = BOOL_COLS.has(col.name)   ? BOOL_BADGE(fmt) : null;
@@ -512,8 +516,8 @@ function renderTotalsBar(idx) {
         if (op === 'min')   result = nums.length ? Math.min(...nums) : null;
         if (op === 'max')   result = nums.length ? Math.max(...nums) : null;
         if (op === 'count') result = nums.length;
-        const totSym = (sh.currency && sh.currency.symbol) || '$';
-        td.innerHTML = `<span class="tot-op">${esc(op)}</span>${result !== null ? esc(FMT(result, op === 'count' ? 'integer' : col.type, totSym)) : '—'}`;
+        const totCur = sh.currency || { symbol: '$' };
+        td.innerHTML = `<span class="tot-op">${esc(op)}</span>${result !== null ? esc(FMT(result, op === 'count' ? 'integer' : col.type, totCur)) : '—'}`;
       } else {
         td.textContent = '—';
       }
