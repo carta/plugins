@@ -12,6 +12,7 @@ description: >
   single-fund balance sheets.
   Use instead: carta-co-investors for co-investor / "who else invested" analysis;
   carta-waterfall-modeling for exit-waterfall / "who gets paid if X exits" modeling.
+model: inherit
 allowed-tools:
   - mcp__carta__call_tool
   - mcp__carta__list_contexts
@@ -57,13 +58,9 @@ The user must have the Carta MCP server connected. If this is the first query in
 2. Call `set_context` with the target `firm_id` if needed
 3. For **cap table queries** — confirm the corporation ID before running. If the user names a portfolio company, resolve its `CORPORATION_ID` from `CORPORATION_BASIC_INFO_V2` first (see Step 2 table below)
 
-> **Firm context — tool priority rule:** When the active context is a **Firm**, prefer `fa:*` MCP commands for portfolio/entity listing (Step 0), then `dwh:execute:question` for customer questions (Step 1). Fall back to the semantic-layer SQL path (Steps 2–4) only when `execute:question` returns an error, empty result, or data that doesn't address the question. Fall back to raw `dwh:execute:query` only when no semantic layer covers the requested data.
->
-> **Never call `cap_table:*` or `cap_table_chart` in firm context.** Those MCP commands require a direct cap-table-tenant user role and reject UUID-only corporation IDs — most portcos surfaced by `fa:list:portfolio_companies` are exposed via the investor portal, not as direct tenant members, so these calls will fail. If a DWH query returns no useful result for a cap-table prompt, tell the user the data is not available rather than retrying with `cap_table:*`. See `semantic-layer/cap-table.md` for the full routing rationale and the DWH queries to use instead.
+> **Tool priority (firm context):** `fa:*` MCP commands → `dwh:execute:question` → semantic-layer SQL (Steps 2–4) → raw `dwh:execute:query`. Never call `cap_table:*` or `cap_table_chart` in firm context — those require a direct tenant role unavailable to investor-portal portcos; use the DWH queries in `cap-table.md` instead.
 
 ## Step 0 — Fetch portfolio companies (MANDATORY GATE)
-
-> **Prerequisite:** Complete the session setup above (`list_contexts` / `set_context`) before this step. `fa:list:portfolio_companies` requires an active firm context and will return an empty list if none is set.
 
 **After setting context**, always fetch the list of portfolio companies the user has access to:
 
@@ -71,23 +68,14 @@ The user must have the Carta MCP server connected. If this is the first query in
 call_tool({"name": "fa__list__portfolio_companies", "arguments": {}})
 ```
 
-This call is required even if the user named a specific company — it establishes which companies are accessible in the current firm context and provides the `corporation_id` values needed for cap table queries. Do not skip this step.
+Required even for specific-company queries — establishes accessible companies and resolves `corporation_id` values needed for cap table queries.
 
 - If the result is empty, tell the user their firm context may not be set correctly and call `list_contexts` to diagnose.
 - If the user asked about a specific company, use the result to resolve the exact `corporation_id` for that company before continuing to Step 1.
 
 ## Step 1 — Try execute:question (PRIMARY query path)
 
-> **Structural questions skip straight to the catalog tools — never call `execute:question` for these.** `execute:question` runs against the Semantic Views layer, which models business concepts (NAV, cap tables, cash flows, etc.) and has **no visibility into raw schema/table structure**. It will always error, return nothing useful, or hallucinate when the question is about what exists in the warehouse rather than what the business numbers are. Recognize a structural question by its shape — "what exists" / "where does X live", not "what is the value of X":
-> - "What tables are available?" / "Show me tables with account or opportunity data"
-> - "What tables contain [X] data?" (e.g. "...LLC interest holder or cap table data")
-> - "What schemas exist?" / "What columns does [table] have?"
->
-> For these, skip Steps 1–3 entirely and go directly to:
-> 1. `call_tool({"name": "dwh__list__tables", "arguments": {}})` — omit `schema` to list tables across **all** schemas, then filter the result client-side by keyword (e.g. `salesforce`, `account`, `opportunity`, `llc`, `interest_holder`) to answer "what tables are available / contain X" questions.
-> 2. `call_tool({"name": "dwh__get__table_schema", "arguments": {"table_name": "<TABLE>", "schema": "<SCHEMA>"}})` for any specific table whose columns the user asked about.
->
-> Present the raw table/column names and descriptions returned. Do not map them onto a semantic-layer domain or run a data query unless the user follows up with an actual business question — that's a separate turn, back at Step 1.
+> **Structural questions ("what tables exist?", "what columns does X have?") skip Steps 1–3 entirely.** Go directly to `dwh__list__tables` (omit `schema` to list all) or `dwh__get__table_schema`. Do not run `execute:question` for schema discovery — it has no visibility into raw table structure and will hallucinate.
 
 Before loading any semantic layer, call the plain-English query interface with the user's question verbatim (or lightly rephrased for clarity):
 
