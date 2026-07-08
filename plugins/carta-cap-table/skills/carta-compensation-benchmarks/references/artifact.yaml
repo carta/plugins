@@ -1,4 +1,5 @@
 template: artifact_engine.html
+styles: styles.css
 
 substitutions:
   required: [TITLE, BENCHMARK_PAYLOAD]
