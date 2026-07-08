@@ -1,0 +1,8 @@
+template: artifact_engine.html
+
+substitutions:
+  required: [TITLE, BENCHMARK_PAYLOAD]
+  # TITLE        — e.g. "Compensation Benchmarks — Acme Corp"
+  # BENCHMARK_PAYLOAD — JSON string injected as window._BENCHMARK_PAYLOAD
+  #                     Shape: { company: {id, name}, results: [...], version: "v3.1", fetchedAt: "ISO" }
+  #                     Pass null / "{}" when rendering in interactive-only mode (no pre-seed)

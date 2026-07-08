@@ -1,0 +1,1191 @@
+<!DOCTYPE html>
+<script type="application/json" id="cowork-artifact-meta">{"schemaVersion": 1, "mcp_tools": ["mcp__carta__fetch", "mcp__carta__list_accounts"]}</script>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{TITLE}}</title>
+<link rel="preconnect" href="https://rsms.me/">
+<link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+<style>
+@font-face {
+  font-family: "SangBleu Versailles";
+  src: url("assets/SangBleuVersailles-Regular-WebS.woff2") format("woff2");
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+
+/* ── Ink tokens ──────────────────────────────────────────────────────────── */
+:root {
+  color-scheme: light dark;
+
+  /* Surfaces */
+  --ink-color-global-surface-background-default:  light-dark(#FFFFFF, #1A1A1A);
+  --ink-color-global-surface-background-underlay: light-dark(#F1F1F1, #2C3030);
+  --ink-color-global-surface-background-paper:    light-dark(#FBFAF9, #1A1A1A);
+  --ink-color-global-surface-disabled:            light-dark(#EDEDED, #394040);
+  --ink-color-global-surface-darkgray-default:    light-dark(#1A1A1A, #FFFFFF);
+  --ink-color-global-surface-darkgray-hover:      light-dark(#2C3030, #E9EAEA);
+  --ink-color-global-surface-lightgray-hover:     light-dark(#E9EAEA, #394040);
+
+  /* Text */
+  --ink-color-global-text-default:                light-dark(#1A1A1A, #FFFFFF);
+  --ink-color-global-text-subtle:                 light-dark(#656B6B, #DEDFDF);
+  --ink-color-global-text-very-subtle:            light-dark(#9C9F9F, #A7AAAA);
+  --ink-color-global-text-disabled:               light-dark(#A7AAAA, #656B6B);
+  --ink-color-global-text-inverse:                light-dark(#FFFFFF, #1A1A1A);
+
+  /* Borders */
+  --ink-color-global-border-default:              light-dark(#A7AAAA, #656B6B);
+  --ink-color-global-border-subtle:               light-dark(#DEDFDF, #394040);
+  --ink-color-global-border-hover:                light-dark(#656B6B, #DEDFDF);
+  --ink-color-global-border-active:               light-dark(#1A1A1A, #FFFFFF);
+  --ink-color-global-border-focus-default:        light-dark(#285DA3, #8BABD6);
+  --ink-color-global-border-focus-light:          light-dark(#C0D1E9, rgba(139,171,214,.35));
+  --ink-color-global-border-disabled:             light-dark(#DEDFDF, #394040);
+
+  /* Feedback */
+  --ink-color-global-feedback-positive-subtle:    light-dark(#EBF7F6, #144640);
+  --ink-color-global-feedback-positive-strong:    light-dark(#2D9E90, #5BC0B3);
+  --ink-color-global-feedback-negative-subtle:    light-dark(#FFEEEF, #831124);
+  --ink-color-global-feedback-negative-strong:    light-dark(#E52431, #EF7171);
+  --ink-color-global-feedback-warning-subtle:     light-dark(#FFFCED, #5A1F00);
+  --ink-color-global-brand-yellow-80:             light-dark(#C88600, #FBE284);
+  --ink-color-global-feedback-info-subtle:        light-dark(#EAF0F8, #122948);
+  --ink-color-global-feedback-info-strong:        light-dark(#285DA3, #8BABD6);
+
+  /* Brand */
+  --ink-color-global-brand-gray-30:              light-dark(#E9EAEA, #394040);
+
+  /* Elevation */
+  --ink-elevation-global-shadow-small:  0 4px 12px 0 rgba(0,0,0,.08);
+  --ink-elevation-global-shadow-large:  0 4px 20px 0 rgba(0,0,0,.20);
+
+  /* Typography */
+  --ink-font-global-family-prominent: "SangBleu Versailles", Georgia, serif;
+
+  /* Radius */
+  --ink-size-global-radius-subtle: 4px;
+}
+*,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: "Inter var", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 14px; line-height: 24px;
+  background: var(--ink-color-global-surface-background-paper);
+  color: var(--ink-color-global-text-default);
+}
+.page { max-width: 1280px; margin: 0 auto; padding: 32px 24px; }
+
+/* ── Header ──────────────────────────────────────────────────────────────── */
+.header { margin-bottom: 28px; }
+.brand { margin-bottom: 20px; }
+.brand svg { height: 32px; width: 64px; display: block; }
+.header h1 {
+  font-family: var(--ink-font-global-family-prominent);
+  font-size: 28px; font-weight: 400; line-height: 48px;
+  color: var(--ink-color-global-text-default); margin-bottom: 4px;
+}
+@media(max-width:768px){.header h1{font-size:24px;line-height:40px;}}
+.header p { font-size: 14px; color: var(--ink-color-global-text-subtle); }
+
+/* ── Card ────────────────────────────────────────────────────────────────── */
+.card {
+  background: var(--ink-color-global-surface-background-default);
+  border: 1px solid var(--ink-color-global-brand-gray-30);
+  border-radius: 0;
+  padding: 24px 24px 0;
+  margin-bottom: 16px;
+}
+.card-section { padding-bottom: 24px; }
+.card-section + .card-section {
+  border-top: 1px solid var(--ink-color-global-border-subtle);
+  padding-top: 20px;
+}
+
+/* ── Field + NewSelect ───────────────────────────────────────────────────── */
+.field-label {
+  display: block; font: 500 14px/20px inherit;
+  color: var(--ink-color-global-text-default); margin-bottom: 6px;
+}
+.field-required { color: #FF7D55; margin-left: 2px; }
+.new-select {
+  position: relative; display: flex; align-items: center;
+  height: 40px; padding: 0 12px; max-width: 400px;
+  border: 1px solid var(--ink-color-global-border-default);
+  border-radius: var(--ink-size-global-radius-subtle);
+  background: var(--ink-color-global-surface-background-default);
+  cursor: pointer; user-select: none; transition: border-color 0.15s;
+}
+.new-select:hover:not(.new-select--disabled) { border-color: var(--ink-color-global-border-hover); }
+.new-select.is-open { border-color: var(--ink-color-global-border-focus-default); box-shadow: 0 0 0 4px var(--ink-color-global-border-focus-light); }
+.new-select--disabled { cursor: default; }
+.new-select__value {
+  flex: 1; font: 400 14px/1 inherit;
+  color: var(--ink-color-global-text-default);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.new-select__value.is-placeholder { color: var(--ink-color-global-text-very-subtle); }
+.new-select__chevron {
+  width: 14px; height: 14px; flex-shrink: 0; margin-left: 8px;
+  color: var(--ink-color-global-text-subtle); transition: transform 0.15s;
+}
+.new-select.is-open .new-select__chevron { transform: rotate(180deg); }
+.new-select .search-dropdown {
+  display: none; position: absolute; top: calc(100% + 4px); left: 0; width: 100%;
+  background: var(--ink-color-global-surface-background-default);
+  border: 1px solid var(--ink-color-global-border-subtle);
+  border-radius: var(--ink-size-global-radius-subtle);
+  z-index: 400; max-height: 280px; overflow-y: auto;
+  box-shadow: var(--ink-elevation-global-shadow-small);
+}
+.new-select .search-dropdown.open { display: block; }
+.dropdown-search {
+  display: block; width: 100%; padding: 8px 12px;
+  border: none; border-bottom: 1px solid var(--ink-color-global-border-subtle);
+  font: 400 14px/1 inherit; color: var(--ink-color-global-text-default);
+  background: var(--ink-color-global-surface-background-default);
+  outline: none; box-sizing: border-box;
+  position: sticky; top: 0; z-index: 1;
+}
+.dd-item { padding: 10px 12px; cursor: pointer; border-bottom: 1px solid var(--ink-color-global-border-subtle); }
+.dd-item:last-child { border-bottom: none; }
+.dd-item:hover { background: var(--ink-color-global-surface-lightgray-hover); }
+.dd-item-name { font-weight: 500; font-size: 14px; }
+.dd-item-meta { font-size: 12px; color: var(--ink-color-global-text-subtle); margin-top: 1px; }
+.dd-msg { padding: 10px 12px; font-size: 13px; color: var(--ink-color-global-text-subtle); }
+
+/* ── Toolbar ─────────────────────────────────────────────────────────────── */
+.toolbar {
+  display: flex; align-items: center; justify-content: flex-end;
+  gap: 8px; padding: 4px 0; margin-bottom: 12px;
+}
+.btn-export {
+  height: 34px; padding: 0 14px; border-radius: var(--ink-size-global-radius-subtle);
+  font: 500 13px/1 inherit; cursor: pointer; white-space: nowrap;
+  background: var(--ink-color-global-surface-background-default);
+  color: var(--ink-color-global-text-default);
+  border: 1px solid var(--ink-color-global-border-default);
+  transition: border-color 0.12s;
+}
+.btn-export:hover:not(:disabled) { border-color: var(--ink-color-global-border-hover); }
+.btn-export:disabled { color: var(--ink-color-global-text-disabled); border-color: var(--ink-color-global-border-subtle); cursor: not-allowed; }
+
+/* ── Equity toggle ───────────────────────────────────────────────────────── */
+.results-header {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 12px; margin-bottom: 12px;
+}
+.results-title { font-size: 16px; font-weight: 500; line-height: 28px; }
+.results-meta  { font-size: 12px; color: var(--ink-color-global-text-subtle); line-height: 20px; }
+.eq-toggle {
+  display: inline-flex; border: 1px solid var(--ink-color-global-border-default);
+  border-radius: var(--ink-size-global-radius-subtle); overflow: hidden;
+}
+.eq-toggle button {
+  height: 32px; padding: 0 12px; background: var(--ink-color-global-surface-background-default);
+  border: none; border-right: 1px solid var(--ink-color-global-border-default);
+  font: inherit; font-size: 12px; font-weight: 500; color: var(--ink-color-global-text-default); cursor: pointer;
+}
+.eq-toggle button:last-child { border-right: none; }
+.eq-toggle button:hover { background: var(--ink-color-global-surface-background-underlay); }
+.eq-toggle button.active { background: var(--ink-color-global-surface-darkgray-default); color: var(--ink-color-global-text-inverse); }
+.eq-toggle button.active:hover { background: var(--ink-color-global-surface-darkgray-hover); }
+
+/* ── Alerts / loading / empty ────────────────────────────────────────────── */
+.alert { padding: 14px 16px; font-size: 14px; border-radius: 0; margin-bottom: 12px; }
+.alert-error { background: var(--ink-color-global-feedback-negative-subtle); color: var(--ink-color-global-feedback-negative-strong); }
+.alert-warn  { background: var(--ink-color-global-feedback-warning-subtle); color: var(--ink-color-global-brand-yellow-80); }
+.loading-state {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  padding: 40px; color: var(--ink-color-global-text-subtle); font-size: 14px;
+}
+.spinner {
+  width: 18px; height: 18px;
+  border: 2px solid var(--ink-color-global-border-subtle);
+  border-top-color: var(--ink-color-global-surface-darkgray-default);
+  border-radius: 50%; animation: spin 0.7s linear infinite;
+}
+.spinner-sm {
+  display: inline-block; width: 12px; height: 12px;
+  border: 1.5px solid var(--ink-color-global-border-subtle);
+  border-top-color: var(--ink-color-global-surface-darkgray-default);
+  border-radius: 50%; animation: spin 0.7s linear infinite;
+  vertical-align: middle;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.empty-state {
+  text-align: center; padding: 48px 20px;
+  color: var(--ink-color-global-text-subtle); font-size: 14px;
+  border: 1px dashed var(--ink-color-global-border-subtle); border-radius: 0;
+}
+
+/* ── Table ───────────────────────────────────────────────────────────────── */
+.table-wrap { overflow-x: auto; border-radius: 0; }
+table { width: 100%; min-width: 900px; border-collapse: collapse; }
+
+/* Group label row */
+thead tr.group-row th {
+  background: transparent;
+  font-size: 12px; font-weight: 600; color: var(--ink-color-global-text-default);
+  font-family: "Inter var", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  padding: 10px 16px 4px; text-align: center;
+  border-bottom: 1px solid var(--ink-color-global-border-default);
+  letter-spacing: .02em;
+}
+/* Descriptor label cells in group-row (Job Area, Level, Location, Track) */
+thead tr.group-row th.desc-col {
+  text-align: left; vertical-align: bottom; padding-bottom: 4px;
+}
+
+/* Sub-header row */
+thead tr.sub-row th {
+  background: transparent;
+  font-size: 12px; font-weight: 600; color: var(--ink-color-global-text-default);
+  font-family: "Inter var", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  padding: 4px 16px 10px; text-align: left;
+  border-bottom: 1px solid var(--ink-color-global-border-default);
+}
+thead tr.sub-row th.right { text-align: right; }
+thead tr.sub-row th.desc-sub { padding: 0; border-bottom: 1px solid var(--ink-color-global-border-default); }
+
+tbody tr td { background: var(--ink-color-global-surface-background-default); }
+tbody tr:hover td { background: var(--ink-color-global-surface-lightgray-hover) !important; }
+tbody td {
+  padding: 10px 16px; border-bottom: 1px solid var(--ink-color-global-border-subtle);
+  font-size: 14px; color: var(--ink-color-global-text-default);
+  white-space: nowrap;
+}
+tbody tr:last-child td { border-bottom: none; }
+.td-right { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Row loading state */
+tr.row-loading td { opacity: 0.45; pointer-events: none; }
+tr.row-loading td:first-child::after {
+  content: ''; display: inline-block;
+  width: 12px; height: 12px; margin-left: 8px;
+  border: 1.5px solid var(--ink-color-global-border-subtle);
+  border-top-color: var(--ink-color-global-surface-darkgray-default);
+  border-radius: 50%; animation: spin 0.7s linear infinite;
+  vertical-align: middle;
+}
+
+/* ── Inline cell select ──────────────────────────────────────────────────── */
+.cell-select {
+  appearance: none; -webkit-appearance: none; -moz-appearance: none;
+  background: transparent;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath d='M2 3.5L5 6.5L8 3.5' stroke='%23A7AAAA' stroke-width='1.3' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 2px center;
+  border: 1px solid transparent;
+  border-radius: var(--ink-size-global-radius-subtle);
+  padding: 3px 18px 3px 4px;
+  font: 14px/1.4 "Inter var", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--ink-color-global-text-default);
+  cursor: pointer;
+  width: auto;
+  white-space: nowrap;
+}
+.cell-select:hover {
+  border-color: var(--ink-color-global-border-default);
+  background-color: var(--ink-color-global-surface-background-underlay);
+}
+.cell-select:focus {
+  outline: none;
+  border-color: var(--ink-color-global-border-focus-default);
+  box-shadow: 0 0 0 2px var(--ink-color-global-border-focus-light);
+}
+
+/* ── Add row button ──────────────────────────────────────────────────────── */
+.add-row-wrap { padding: 12px 0 4px; }
+.btn-add-row {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 32px; padding: 0 12px;
+  border: 1px dashed var(--ink-color-global-border-default);
+  border-radius: var(--ink-size-global-radius-subtle);
+  background: transparent;
+  color: var(--ink-color-global-text-subtle);
+  font: 500 13px/1 inherit; cursor: pointer;
+  transition: border-color 0.12s, color 0.12s;
+}
+.btn-add-row:hover {
+  border-color: var(--ink-color-global-border-hover);
+  color: var(--ink-color-global-text-default);
+}
+
+/* ── Remove row button ───────────────────────────────────────────────────── */
+.btn-remove-row {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 3px;
+  border: none; background: transparent;
+  color: var(--ink-color-global-text-very-subtle);
+  cursor: pointer; font-size: 16px; line-height: 1; padding: 0;
+  transition: color 0.1s, background 0.1s;
+}
+.btn-remove-row:hover { color: var(--ink-color-global-feedback-negative-strong); background: var(--ink-color-global-feedback-negative-subtle); }
+td.remove-col { padding: 10px 8px 10px 4px; width: 30px; }
+
+/* ── Job area tooltip (fixed-position, escapes overflow containers) ──────── */
+.job-cell { cursor: default; }
+#jobTooltipGlobal {
+  display: none;
+  position: fixed;
+  z-index: 9000;
+  min-width: 440px; max-width: 560px;
+  background: var(--ink-color-global-surface-background-default);
+  border: 1px solid var(--ink-color-global-border-subtle);
+  border-radius: var(--ink-size-global-radius-subtle);
+  box-shadow: var(--ink-elevation-global-shadow-small);
+  padding: 12px 16px;
+  pointer-events: none;
+  white-space: normal;
+}
+.job-tooltip-name  { font-size: 13px; font-weight: 600; margin-bottom: 4px; color: var(--ink-color-global-text-default); }
+.job-tooltip-desc  { font-size: 12px; color: var(--ink-color-global-text-subtle); margin-bottom: 8px; line-height: 18px; }
+.job-tooltip-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-color-global-text-very-subtle); margin-bottom: 4px; }
+.job-tooltip-titles{ font-size: 12px; color: var(--ink-color-global-text-default); line-height: 20px; }
+
+/* ── Footer ──────────────────────────────────────────────────────────────── */
+.results-footer {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 8px; margin-top: 10px;
+}
+.timestamp { font-size: 12px; color: var(--ink-color-global-text-subtle); line-height: 20px; }
+
+/* ── Toast ───────────────────────────────────────────────────────────────── */
+.export-toast {
+  position: fixed; bottom: 24px; right: 24px;
+  background: var(--ink-color-global-surface-darkgray-default);
+  color: var(--ink-color-global-text-inverse);
+  padding: 12px 16px; border-radius: var(--ink-size-global-radius-subtle);
+  font-size: 13px; display: flex; flex-direction: column; gap: 2px;
+  max-width: 360px; box-shadow: var(--ink-elevation-global-shadow-small);
+  z-index: 9999; opacity: 0; transform: translateY(8px);
+  transition: opacity 0.18s ease, transform 0.18s ease; pointer-events: none;
+}
+.export-toast[hidden] { display: none; }
+.export-toast.is-visible { opacity: 1; transform: translateY(0); }
+.export-toast strong { font-weight: 600; }
+.export-toast span   { font-weight: 400; opacity: 0.85; }
+
+/* ── Export overlay ──────────────────────────────────────────────────────── */
+.export-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.4);
+  display: flex; align-items: center; justify-content: center; z-index: 10000;
+}
+.export-overlay-card {
+  background: var(--ink-color-global-surface-background-default);
+  color: var(--ink-color-global-text-default); padding: 24px;
+  border-radius: var(--ink-size-global-radius-subtle); max-width: 560px;
+  width: calc(100% - 64px); box-shadow: var(--ink-elevation-global-shadow-large);
+  display: flex; flex-direction: column; gap: 12px;
+}
+.export-overlay-title { font-size: 14px; font-weight: 600; }
+.export-overlay-text {
+  width: 100%; min-height: 140px; font-family: inherit; font-size: 13px;
+  padding: 12px; border: 1px solid var(--ink-color-global-border-subtle);
+  border-radius: var(--ink-size-global-radius-subtle); resize: vertical;
+}
+.export-overlay-actions { display: flex; justify-content: flex-end; }
+.gf-btn {
+  height: 32px; padding: 0 14px; border-radius: var(--ink-size-global-radius-subtle);
+  font: 500 13px/1 inherit; border: 1px solid transparent; cursor: pointer;
+}
+.gf-btn--ghost { background: transparent; color: var(--ink-color-global-text-default); border-color: var(--ink-color-global-border-default); }
+.gf-btn--ghost:hover { background: var(--ink-color-global-surface-background-underlay); }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="header">
+    <div class="brand" aria-label="Carta">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 528 264" role="img" aria-hidden="true">
+        <path fill="currentColor" d="M0,0v264h528V0H0ZM517.44,253.44H10.56V10.56h506.88v242.88ZM69.26,137.15c0-26.47,22.34-42,42.39-42,14.35,0,27.74,5.38,34.9,17.78l-13.4,7.77c-2.31-3.49-5.47-6.35-9.17-8.3-3.71-1.96-7.85-2.98-12.05-2.95-11.79,0-25.81,9.2-25.81,27.42s13.41,27.58,26.93,27.58c9.4,0,17.21-5.24,21.84-13.33l13.7,6.33c-7.76,13.95-21.62,21.38-37.72,21.38-20.25-.02-41.6-15.58-41.6-41.69h0ZM197.5,178.83c11.14,0,21.66-4.91,27.09-12.05v9.81h16.55v-79.39h-16.55v9.83c-5.16-7.2-15.93-11.89-27.09-11.89-24.38,0-41.44,17.75-41.44,41.84s17.21,41.84,41.44,41.84ZM199.09,110.21c15.3,0,25.8,11.41,25.8,26.78s-10.51,26.78-25.8,26.78-26.14-11.57-26.14-27.1,10.84-26.47,26.14-26.47ZM330.1,112.96h-17.18v-15.85h17.34v-20.69h17.05v20.69h17.33v15.85h-17.33v63.61h-17.21v-63.61ZM412.2,178.83c11.16,0,21.68-4.91,27.11-12.05v9.81h16.58v-79.39h-16.58v9.83c-5.16-7.2-15.93-11.89-27.11-11.89-24.36,0-41.42,17.75-41.42,41.84s17.2,41.84,41.42,41.84ZM413.81,110.21c15.28,0,25.81,11.41,25.81,26.78s-10.53,26.78-25.81,26.78-26.14-11.57-26.14-27.1,10.84-26.47,26.14-26.47ZM278.62,176.49h-17.21v-79.39h15.77v14.78c3.9-8.78,9.77-14.5,19.3-14.98,1.97-.03,3.93,0,5.89.21l-.26,15.89c-13.69,0-23.47,7.34-23.47,27.79v35.72h-.01Z"/>
+      </svg>
+    </div>
+    <h1>Compensation Benchmark Explorer</h1>
+    <p>Market salary, equity, and total cash benchmarks by role and level — from Carta Total Compensation.</p>
+  </div>
+
+  <div class="card">
+    <!-- Company field -->
+    <div class="card-section">
+      <label class="field-label">Company <span class="field-required" aria-label="required">*</span></label>
+      <div id="companyStatic" style="display:none">
+        <div class="new-select new-select--disabled" tabindex="-1">
+          <span class="new-select__value" id="companyStaticName"></span>
+          <svg class="new-select__chevron" viewBox="0 0 14 14" fill="none">
+            <path d="M2 5L7 10L12 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+      </div>
+      <div id="companyDynamic">
+        <div class="new-select" id="companySelectTrigger" role="combobox" aria-expanded="false" aria-haspopup="listbox" tabindex="0">
+          <span class="new-select__value is-placeholder" id="companySelectDisplay">Select a company…</span>
+          <svg class="new-select__chevron" viewBox="0 0 14 14" fill="none">
+            <path d="M2 5L7 10L12 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <div class="search-dropdown" id="searchDropdown"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Results area — shown after company is selected -->
+    <div id="gfArea" class="card-section" style="display:none">
+      <div class="toolbar">
+        <button class="btn-export" id="exportExcelBtn" disabled>Download Excel</button>
+      </div>
+      <div id="resultsArea"></div>
+    </div>
+  </div>
+
+</div><!-- /.page -->
+
+<div id="jobTooltipGlobal" aria-hidden="true"></div>
+
+<div id="exportToast" class="export-toast" role="status" aria-live="polite" hidden>
+  <strong>Copied to clipboard</strong>
+  <span>Paste into the Claude Chat to download an Excel file.</span>
+</div>
+
+<script>
+/* ── Pre-seeded payload ──────────────────────────────────────────────────── */
+/* window._BENCHMARK_PAYLOAD is injected by the SKILL.md prepend step
+   (a <script> tag that runs before this block). Do NOT reassign it here —
+   doing so would clobber the LLM's real data with an empty value. */
+
+/* ── Constants ───────────────────────────────────────────────────────────── */
+const JOBS = ['ACCOUNTING','ADMIN','CEO','CORPORATE_AFFAIRS','CUSTOMER_SUCCESS',
+              'DATA','DESIGN','ENGINEER','FINANCE','HR','IT','LEGAL','MANUFACTURING',
+              'MARKETING','OPERATIONS','PRODUCT','PROJECT_MANAGEMENT','RESEARCH',
+              'SALES','STRATEGY','SUPPORT','OTHER'];
+// Tracks and per-track level options — mirrors the CTC product UI
+// (compensation-frontend/src/constants: IC/MANAGER/EXECUTIVE level role maps).
+// The SAME API level enum renders a DIFFERENT display name per track, and each
+// track exposes a DIFFERENT subset of levels:
+//   IC:        ENTRY..VP1   (VP1 shown as "Distinguished")
+//   MANAGER:   SENIOR1..PRINCIPAL
+//   EXECUTIVE: VP1..CEO     (VP1 shown as "Vice President")
+// The benchmark API only distinguishes IC (is_leader:false) from LEADER
+// (is_leader:true); MANAGER and EXECUTIVE are both LEADER and are told apart by
+// level (rank ≤8 → Manager, ≥9 → Executive). See reconcileTrack().
+const TRACKS = ['IC','MANAGER','EXECUTIVE'];
+const TRACK_LABELS = { IC:'IC', MANAGER:'Manager', EXECUTIVE:'Executive' };
+
+// Per-track: ordered level enums + display label. Labels are verbatim from the
+// FE constants (label + parenthetical description where the FE shows one).
+const LEVELS_BY_TRACK = {
+  IC: [
+    ['ENTRY','Entry'], ['MID1','Mid 1 (Developing)'], ['MID2','Mid 2 (Proficient)'],
+    ['SENIOR1','Senior 1 (Skilled)'], ['SENIOR2','Senior 2 (Advanced)'],
+    ['STAFF1','Staff (Expert)'], ['STAFF2','Senior Staff (Advisor)'],
+    ['PRINCIPAL','Principal (Strategist)'], ['VP1','Distinguished (Thought Leader)'],
+  ],
+  MANAGER: [
+    ['SENIOR1','Team Lead'], ['SENIOR2','Manager'], ['STAFF1','Senior Manager'],
+    ['STAFF2','Director'], ['PRINCIPAL','Senior Director'],
+  ],
+  EXECUTIVE: [
+    ['VP1','Vice President'], ['VP2','Senior Vice President'],
+    ['C_LEVEL','C-Level'], ['CEO','CEO'],
+  ],
+};
+// Numeric rank per level enum (FE levelNumberMap) — used to split LEADER into
+// Manager vs Executive when reconciling the track from an API response.
+const LEVEL_RANK = { ENTRY:1, MID1:2, MID2:3, SENIOR1:4, SENIOR2:5, STAFF1:6,
+                     STAFF2:7, PRINCIPAL:8, VP1:9, VP2:10, C_LEVEL:11, CEO:12 };
+
+// Display label for a (level, track) pair — falls back across tracks then to
+// the raw enum so a stale level never renders blank.
+function lvlFmt(level, track) {
+  const inTrack = (LEVELS_BY_TRACK[track] || []).find(([v]) => v === level);
+  if (inTrack) return inTrack[1];
+  for (const t of TRACKS) {
+    const hit = LEVELS_BY_TRACK[t].find(([v]) => v === level);
+    if (hit) return hit[1];
+  }
+  return level;
+}
+// Levels valid for a track (enum list).
+const levelsForTrack = track => (LEVELS_BY_TRACK[track] || []).map(([v]) => v);
+// track → is_leader for the benchmark API.
+const trackIsLeader = track => track === 'MANAGER' || track === 'EXECUTIVE';
+// Reconcile the displayed track from the API's ladder + the level's rank.
+function reconcileTrack(ladder, level, fallback) {
+  if (ladder === 'IC') return 'IC';
+  if (ladder === 'LEADER' || ladder === 'MGR') {
+    return (LEVEL_RANK[level] || 0) >= 9 ? 'EXECUTIVE' : 'MANAGER';
+  }
+  return fallback;
+}
+// value = the city,state,country string the benchmark API expects
+// (matches the CTC frontend's locationToAPIString: "City,ST,USA").
+// "Any" omits the param; "National" / "Remote - USA" use the US national
+// average (",,US"). Labels are unchanged — only the underlying values map
+// to the API's accepted format.
+const GEO_OPTIONS = [
+  {value:'',                     label:'Any'},
+  {value:',,US',                 label:'National'},
+  {value:'San Francisco,CA,USA', label:'San Francisco Bay Area'},
+  {value:'New York,NY,USA',      label:'New York City'},
+  {value:'Boston,MA,USA',        label:'Boston'},
+  {value:'Seattle,WA,USA',       label:'Seattle'},
+  {value:'Los Angeles,CA,USA',   label:'Los Angeles'},
+  {value:'Chicago,IL,USA',       label:'Chicago'},
+  {value:'Austin,TX,USA',        label:'Austin'},
+  {value:'Denver,CO,USA',        label:'Denver'},
+  {value:',,US',                 label:'Remote - USA'},
+];
+
+const jobFmt = j => j.replace(/_/g,' ').split(' ').map(w => w.charAt(0).toUpperCase()+w.slice(1).toLowerCase()).join(' ');
+
+const JOB_META = {
+  ACCOUNTING:          { desc: 'Financial reporting, bookkeeping, tax, and audit', titles: ['Accountant', 'Senior Accountant', 'Controller', 'CFO'] },
+  ADMIN:               { desc: 'Executive support and office operations', titles: ['Executive Assistant', 'Office Manager', 'Admin Coordinator'] },
+  CEO:                 { desc: 'Top executive leadership of the organization', titles: ['Chief Executive Officer', 'Co-founder & CEO'] },
+  CORPORATE_AFFAIRS:   { desc: 'Policy, communications, and government relations', titles: ['Policy Manager', 'Comms Director', 'Corp Affairs Lead'] },
+  CUSTOMER_SUCCESS:    { desc: 'Customer retention, onboarding, and growth', titles: ['Customer Success Manager', 'Account Manager', 'CSM Director'] },
+  DATA:                { desc: 'Data science, analytics engineering, and ML', titles: ['Data Scientist', 'Analytics Engineer', 'ML Engineer', 'Data Analyst'] },
+  DESIGN:              { desc: 'Product design, UX research, and visual design', titles: ['Product Designer', 'UX Designer', 'Design Director', 'Brand Designer'] },
+  ENGINEER:            { desc: 'Software engineering across backend, frontend, and infra', titles: ['Software Engineer', 'Backend Engineer', 'Staff Engineer', 'Engineering Manager'] },
+  FINANCE:             { desc: "Financial planning, analysis, and the company's financial operations", titles: ['FP&A Analyst', 'Finance Manager', 'VP Finance', 'Treasury Manager'] },
+  HR:                  { desc: 'People operations, recruiting, and HR business partnering', titles: ['HR Manager', 'Recruiter', 'People Ops', 'HRBP', 'VP People'] },
+  IT:                  { desc: 'Internal IT infrastructure, security, and systems', titles: ['IT Manager', 'Systems Administrator', 'Security Engineer', 'IT Director'] },
+  LEGAL:               { desc: 'In-house legal, compliance, and legal operations', titles: ['Counsel', 'Senior Counsel', 'Legal Ops Manager', 'General Counsel'] },
+  MANUFACTURING:       { desc: 'Production, supply chain, and manufacturing engineering', titles: ['Manufacturing Engineer', 'Operations Manager', 'Plant Manager'] },
+  MARKETING:           { desc: 'Demand generation, brand, and product marketing', titles: ['Marketing Manager', 'Growth Manager', 'Product Marketing Manager', 'CMO'] },
+  OPERATIONS:          { desc: 'Business operations, process, and cross-functional programs', titles: ['Operations Manager', 'BizOps', 'Chief of Staff', 'COO'] },
+  PRODUCT:             { desc: 'Product strategy, roadmap, and delivery', titles: ['Product Manager', 'Senior PM', 'Group PM', 'VP Product', 'CPO'] },
+  PROJECT_MANAGEMENT:  { desc: 'Project and program delivery across functions', titles: ['Project Manager', 'Program Manager', 'PMO Lead', 'Technical PM'] },
+  RESEARCH:            { desc: 'Applied and fundamental research across disciplines', titles: ['Research Scientist', 'Research Engineer', 'Lab Director', 'Principal Researcher'] },
+  SALES:               { desc: 'Pipeline, revenue, and customer acquisition', titles: ['Account Executive', 'Sales Manager', 'SDR', 'VP Sales', 'CRO'] },
+  STRATEGY:            { desc: 'Corporate strategy, business development, and corp dev', titles: ['Strategy Manager', 'Corp Dev Associate', 'Business Development Lead'] },
+  SUPPORT:             { desc: 'Technical and customer support operations', titles: ['Support Engineer', 'Technical Support', 'Support Manager', 'Help Desk'] },
+  OTHER:               { desc: 'Roles that do not fit a standard job area', titles: [] },
+};
+
+/* ── DOM refs ────────────────────────────────────────────────────────────── */
+const companyTrigger = document.getElementById('companySelectTrigger');
+const dropdown       = document.getElementById('searchDropdown');
+let   dropSearchTmr  = null;
+
+/* ── State ───────────────────────────────────────────────────────────────── */
+let selectedCompany = null, equityRep = 'notional';
+let _allCompanies = null;
+let rows = [];          // {id, job, level, location, track, salary, tcc, equity, currency, geo, error, loading}
+let rowIdCounter = 0;
+// Pinned benchmark version from the pre-seed payload. Interactive re-fetches
+// must send this so they query the same version the pre-seed used.
+let _benchmarkVersionId = null;
+// Pinned peer group from the pre-seed payload (the corp's plan-configured
+// comparable set). Interactive re-fetches MUST send the same bucket so the
+// artifact's numbers match the CTC product UI; omitting it makes the API fall
+// back to a default comparable set whose values diverge from the FE.
+// _peerGroupDimension is one of 'post_money' | 'capital_raised' | 'headcount';
+// _peerGroupCode is the matching bucket enum (e.g. 'ONE_HUNDRED_MILLION').
+let _peerGroupDimension = null;
+let _peerGroupCode = null;
+
+/* ── Geo options (merged with any geo from loaded data) ──────────────────── */
+function buildGeoOptions(extraGeos) {
+  const known = new Set(GEO_OPTIONS.map(o => o.value));
+  const extras = (extraGeos || []).filter(g => g && !known.has(g));
+  return [...GEO_OPTIONS, ...extras.map(g => ({value: g, label: g}))];
+}
+
+// Resolve a pre-seed row to a valid GEO_OPTIONS *value* ("City,ST,USA" or '').
+// The dropdown <select> matches r.location === o.value, so location MUST be a
+// known value (never the MSA display label — that fails to match AND 400s on
+// the next row edit). Priority:
+//   1. r.location, when present and already a known GEO_OPTIONS value.
+//   2. r.geo (the geo_adjustment.label display string, e.g.
+//      "San Francisco-Oakland-Fremont, CA") reverse-mapped to a value by
+//      matching the city prefix of the option's label.
+//   3. '' (Any) — safe fallback for anything we can't resolve.
+function resolveSeedLocation(r) {
+  const known = new Set(GEO_OPTIONS.map(o => o.value));
+  if (r.location && known.has(r.location)) return r.location;
+  // Reverse-map the MSA display label (e.g. "New York-Newark-Jersey City, NY-NJ-PA",
+  // "San Francisco-Oakland-Fremont, CA") to an option value by comparing the
+  // primary city token. The label's leading city is everything before the first
+  // '-' or ','; match it against the option value's own city (the part before
+  // the first comma in "City,ST,USA").
+  const label = (r.geo || '').trim().toLowerCase();
+  if (label) {
+    const labelCity = label.split(/[-,]/)[0].trim();   // "new york", "san francisco"
+    for (const o of GEO_OPTIONS) {
+      if (!o.value) continue;                           // skip "Any" / "National"
+      const optCity = o.value.split(',')[0].trim().toLowerCase();  // "new york", "san francisco"
+      if (labelCity === optCity) return o.value;
+    }
+  }
+  return '';
+}
+
+/* ── Boot: pre-seeded payload ────────────────────────────────────────────── */
+(function applyPreload() {
+  const p = window._BENCHMARK_PAYLOAD;
+  if (!p || !p.company) return;
+  if (p.benchmark_version_id != null) _benchmarkVersionId = p.benchmark_version_id;
+  // Pin the corp's plan-configured peer group so interactive re-fetches query
+  // the same comparable set as the pre-seed (and the CTC product UI).
+  if (p.peer_group && p.peer_group.dimension && p.peer_group.code) {
+    _peerGroupDimension = p.peer_group.dimension;
+    _peerGroupCode = p.peer_group.code;
+  }
+  selectCompany(p.company, true);
+  if (p.results && p.results.length) {
+    rows = p.results.map(r => ({
+      id: rowIdCounter++,
+      job:      r.job      || 'ENGINEER',
+      level:    r.level    || 'SENIOR1',
+      // location must be a GEO_OPTIONS value ("City,ST,USA") or '' (Any).
+      // resolveSeedLocation prefers an explicit r.location API value, else
+      // reverse-maps the r.geo MSA display label to a known value, else ''.
+      // This keeps location a valid value (never the raw display label, which
+      // would 400 on the next row edit) while still pre-seeding the dropdown.
+      // r.geo is retained separately below for the display-only geo line.
+      location: resolveSeedLocation(r),
+      // Map the API ladder ('IC' | 'LEADER') + level to the 3-track UI model
+      // (IC / Manager / Executive). Default to IC when the seed lacks a ladder.
+      track:    reconcileTrack(r.ladder, r.level || 'SENIOR1', 'IC'),
+      salary:   r.salary   || {p25:null,p50:null,p75:null,p90:null},
+      tcc:      r.tcc      || {p25:null,p50:null,p75:null,p90:null},
+      equity:   r.equity   || {p25:{},p50:{},p75:{},p90:{}},
+      currency: r.currency || null,   // never default to USD — fmtCurrency renders null without a symbol
+      geo:      r.geo      || null,
+      version:  r.version  || null,
+      error:    r.error    || null,
+      loading:  false,
+    }));
+    renderTable();
+    document.getElementById('exportExcelBtn').disabled = false;
+  }
+})();
+
+/* ── Boot: load accessible companies ─────────────────────────────────────── */
+if (window.cowork?.callMcpTool) loadAllCompanies();
+
+/* ── Company loading ─────────────────────────────────────────────────────── */
+async function loadAllCompanies() {
+  try {
+    const res  = await window.cowork.callMcpTool('mcp__carta__list_accounts', {});
+    const data = unwrap(res);
+    _allCompanies = (data.accounts || [])
+      .filter(a => (a.type === 'company' || a.type === 'fund') && a.name?.trim());
+    if (_allCompanies.length === 1) {
+      const a     = _allCompanies[0];
+      const numId = String(a.id || '').replace('corporation_pk:', '');
+      const corp  = { id: parseInt(numId) || a.id, name: a.name };
+      if (!selectedCompany) selectCompany(corp);
+      switchToStaticMode(corp.name);
+    } else {
+      document.getElementById('companyDynamic').style.display = '';
+      document.getElementById('companyStatic').style.display = 'none';
+      renderDropdownItems(_allCompanies);
+    }
+  } catch (_) { _allCompanies = []; }
+}
+
+function switchToStaticMode(name) {
+  document.getElementById('companyDynamic').style.display = 'none';
+  document.getElementById('companyStatic').style.display  = '';
+  document.getElementById('companyStaticName').textContent = name;
+}
+
+/* ── Company NewSelect ───────────────────────────────────────────────────── */
+companyTrigger?.addEventListener('click', e => {
+  if (e.target.closest('.dd-item,.dropdown-search,.dd-msg')) return;
+  dropdown.classList.contains('open') ? closeSelectDropdown() : openSelectDropdown();
+});
+companyTrigger?.addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openSelectDropdown(); }
+  if (e.key === 'Escape') closeSelectDropdown();
+});
+
+function openSelectDropdown() {
+  dropdown.innerHTML = '';
+  const si = document.createElement('input');
+  si.className = 'dropdown-search'; si.placeholder = 'Search companies…'; si.autocomplete = 'off';
+  si.addEventListener('input', () => {
+    clearTimeout(dropSearchTmr);
+    const q = si.value.trim().toLowerCase();
+    if (_allCompanies?.length) {
+      renderDropdownItems(_allCompanies.filter(a => !q || (a.name||'').toLowerCase().includes(q)));
+    } else {
+      dropSearchTmr = setTimeout(() => doSearch(si.value.trim()), 300);
+    }
+  });
+  si.addEventListener('click', e => e.stopPropagation());
+  dropdown.appendChild(si);
+  if (_allCompanies?.length) renderDropdownItems(_allCompanies);
+  else {
+    const msg = document.createElement('div'); msg.className = 'dd-msg';
+    msg.textContent = _allCompanies === null ? 'Loading your companies…' : 'No companies found.';
+    dropdown.appendChild(msg);
+  }
+  dropdown.classList.add('open');
+  companyTrigger.classList.add('is-open');
+  companyTrigger.setAttribute('aria-expanded', 'true');
+  setTimeout(() => si.focus(), 20);
+}
+
+function closeSelectDropdown() {
+  dropdown.classList.remove('open');
+  companyTrigger?.classList.remove('is-open');
+  companyTrigger?.setAttribute('aria-expanded', 'false');
+}
+
+function renderDropdownItems(accounts) {
+  const si = dropdown.querySelector('.dropdown-search');
+  while (dropdown.lastChild && dropdown.lastChild !== si) dropdown.removeChild(dropdown.lastChild);
+  if (!accounts.length) {
+    const msg = document.createElement('div'); msg.className = 'dd-msg'; msg.textContent = 'No companies found.';
+    dropdown.appendChild(msg); return;
+  }
+  accounts.slice(0, 50).forEach(a => {
+    const numId = String(a.id||'').replace('corporation_pk:','');
+    const item  = document.createElement('div'); item.className = 'dd-item';
+    item.innerHTML = `<div class="dd-item-name">${esc(a.name)}</div>
+                      <div class="dd-item-meta">ID ${numId}${a.status?' · '+esc(a.status):''}</div>`;
+    item.addEventListener('click', () => selectCompany({id:parseInt(numId)||a.id, name:a.name}));
+    dropdown.appendChild(item);
+  });
+  if (accounts.length > 50) {
+    const more = document.createElement('div'); more.className = 'dd-msg';
+    more.textContent = `+ ${accounts.length-50} more — keep typing…`;
+    dropdown.appendChild(more);
+  }
+}
+
+async function doSearch(query) {
+  if (!query) return;
+  try {
+    const res  = await window.cowork.callMcpTool('mcp__carta__list_accounts', {search:query});
+    const data = unwrap(res);
+    renderDropdownItems((data.accounts||[]).filter(a=>a.type==='company'||a.type==='fund'));
+  } catch {
+    const si = dropdown.querySelector('.dropdown-search');
+    while (dropdown.lastChild && dropdown.lastChild !== si) dropdown.removeChild(dropdown.lastChild);
+    const msg = document.createElement('div'); msg.className = 'dd-msg';
+    msg.style.color = 'var(--ink-color-global-feedback-negative-strong)'; msg.textContent = 'Search failed.';
+    dropdown.appendChild(msg);
+  }
+}
+
+document.addEventListener('click', e => {
+  if (companyTrigger && !companyTrigger.contains(e.target)) closeSelectDropdown();
+});
+
+function selectCompany(company, skipReset) {
+  selectedCompany = company;
+  closeSelectDropdown();
+  const disp = document.getElementById('companySelectDisplay');
+  if (disp) { disp.textContent = company.name; disp.classList.remove('is-placeholder'); }
+  document.getElementById('gfArea').style.display = '';
+  if (!skipReset) {
+    // Interactive company switch: drop the pre-seed company's pinned peer group
+    // and benchmark version. They belong to the previous company's plan; reusing
+    // them for a different company would query the wrong peer group / version
+    // (400 Bad Request, or silently wrong data). They are only valid for the
+    // company they were pre-seeded with (skipReset=true path).
+    _peerGroupDimension = null;
+    _peerGroupCode = null;
+    _benchmarkVersionId = null;
+    rows = [];
+    renderTable();
+    document.getElementById('exportExcelBtn').disabled = true;
+  }
+}
+
+/* ── Per-row fetch ───────────────────────────────────────────────────────── */
+async function fetchRowData(row) {
+  if (!selectedCompany || !window.cowork?.callMcpTool) return row;
+  const isLeader = trackIsLeader(row.track);
+  const params = { corporation_id: selectedCompany.id, job: row.job, level: row.level, equity_quantity: 'FOUR_YEAR_GRANT' };
+  if (_benchmarkVersionId != null) params.benchmark_version_id = _benchmarkVersionId;
+  // Pin the corp's plan peer group so values tie out with the CTC product UI.
+  // Without it the API falls back to a default comparable set and the numbers
+  // diverge from the FE. One bucket param only, keyed by the plan's dimension.
+  if (_peerGroupDimension && _peerGroupCode) {
+    params[`${_peerGroupDimension}_bucket`] = _peerGroupCode;
+  }
+  if (row.location) params.location = row.location;
+  if (isLeader) params.is_leader = true;
+  try {
+    const res     = await window.cowork.callMcpTool('mcp__carta__fetch', {command:'compensation:get:benchmark', params});
+    const parsed  = parseResults([{job: row.job, level: row.level, data: res, error: null}]);
+    const r       = parsed[0];
+    if (!r) {
+      // The API returns no rows for a (level, track) combination that doesn't
+      // exist for this job/peer group — e.g. VP2 on the IC track, or ENTRY on
+      // the Manager track. This is NOT an error: surface it as an explicit
+      // "not available for this track" state so the user knows to switch track
+      // or level, rather than a generic failure.
+      return {...row, salary:null, tcc:null, equity:null,
+              error: `No benchmark for ${lvlFmt(row.level, row.track)} on the ${TRACK_LABELS[row.track]} track.`, loading: false};
+    }
+    // Reconcile the row's displayed track to the ladder the API actually
+    // returned (split LEADER into Manager vs Executive by level rank), so
+    // Manager/Executive data can never be shown under an IC label or vice versa.
+    const returnedTrack = reconcileTrack(r.ladder, r.level || row.level, row.track);
+    return {...row, ...r, track: returnedTrack, loading: false, error: null};
+  } catch(e) {
+    return {...row, error: e.message || 'Fetch failed', loading: false};
+  }
+}
+
+async function onRowChange(rowId, field, value) {
+  const idx = rows.findIndex(r => r.id === rowId);
+  if (idx < 0) return;
+  const patch = { [field]: value, loading: true, error: null };
+  // Changing track may invalidate the current level (each track exposes a
+  // different level set). If so, snap to the closest valid level by rank so we
+  // never fetch an impossible (level, track) combo. e.g. IC "Distinguished"
+  // (VP1) → switch to Manager → snap to "Senior Director" (PRINCIPAL, the
+  // highest Manager level).
+  if (field === 'track') {
+    const valid = levelsForTrack(value);
+    const curLevel = rows[idx].level;
+    if (!valid.includes(curLevel)) {
+      const curRank = LEVEL_RANK[curLevel] || 0;
+      patch.level = valid.reduce((best, lv) =>
+        Math.abs((LEVEL_RANK[lv]||0) - curRank) < Math.abs((LEVEL_RANK[best]||0) - curRank) ? lv : best,
+        valid[0]);
+    }
+  }
+  rows[idx] = {...rows[idx], ...patch};
+  renderTable();
+  const updated = await fetchRowData(rows[idx]);
+  // Re-find by id after the await — removeRow/addRow may have rebuilt `rows`
+  // and shifted indices while the fetch was in flight, so the captured `idx`
+  // can now point at a different row (or past the end). Bail if the row is gone.
+  const i = rows.findIndex(r => r.id === rowId);
+  if (i < 0) return;
+  rows[i] = {...rows[i], ...updated, loading: false};
+  renderTable();
+  document.getElementById('exportExcelBtn').disabled = !rows.some(r => !r.error && !r.loading);
+}
+
+function removeRow(rowId) {
+  rows = rows.filter(r => r.id !== rowId);
+  renderTable();
+  document.getElementById('exportExcelBtn').disabled = !rows.some(r => !r.error && !r.loading);
+}
+
+async function addRow() {
+  const newRow = {
+    id: rowIdCounter++,
+    job: 'ENGINEER', level: 'SENIOR1', location: '', track: 'IC',
+    salary: {p25:null,p50:null,p75:null,p90:null},
+    tcc:    {p25:null,p50:null,p75:null,p90:null},
+    equity: {p25:{},p50:{},p75:{},p90:{}},
+    currency: null, geo: null, version: null,   // never default to USD — fmtCurrency renders null without a symbol
+    error: null, loading: true,
+  };
+  rows.push(newRow);
+  renderTable();
+  const updated = await fetchRowData(newRow);
+  const idx = rows.findIndex(r => r.id === newRow.id);
+  if (idx >= 0) { rows[idx] = {...rows[idx], ...updated, loading: false}; renderTable(); }
+  document.getElementById('exportExcelBtn').disabled = !rows.some(r => !r.error && !r.loading);
+}
+
+/* ── Render table ────────────────────────────────────────────────────────── */
+function renderTable() {
+  const eqLabels = {notional:'Equity (4 yr award)', shares:'Equity — Shares', fdpct:'Equity — FD %'};
+
+  if (!rows.length) {
+    setResults(`<div class="empty-state">No benchmarks yet. Use "+ Add benchmark" to get started.</div>
+      <div class="add-row-wrap">
+        <button class="btn-add-row" onclick="addRow()">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 2v8M2 6h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          Add benchmark
+        </button>
+      </div>`);
+    return;
+  }
+
+  // Use only the fixed GEO_OPTIONS (whose values are valid "City,ST,USA"
+  // API strings). Do NOT merge in row geos — those are MSA *display* labels
+  // (e.g. "San Francisco-Oakland-Fremont, CA") which the benchmark API
+  // rejects with a 400 if sent as a location param.
+  const geoOpts   = GEO_OPTIONS;
+
+  const ok      = rows.filter(r => !r.error);
+  const version = ok[0]?.version;
+
+  let html = `
+    <div class="results-header">
+      <div>
+        <div class="results-title">Benchmark Results</div>
+        <div class="results-meta">${ok.length} result${ok.length!==1?'s':''}${version?' · Benchmark '+esc(version):''}</div>
+      </div>
+      <div>
+        <div class="eq-toggle">
+          <button onclick="setEquityRep('notional')" id="eq-notional" ${equityRep==='notional'?'class="active"':''}>Notional $</button>
+          <button onclick="setEquityRep('shares')"   id="eq-shares"   ${equityRep==='shares'?'class="active"':''}>Shares</button>
+          <button onclick="setEquityRep('fdpct')"    id="eq-fdpct"    ${equityRep==='fdpct'?'class="active"':''}>FD %</button>
+        </div>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table id="resultsTable">
+        <thead>
+          <tr class="group-row">
+            <th class="desc-col">Job Area</th>
+            <th class="desc-col">Level</th>
+            <th class="desc-col">Location</th>
+            <th class="desc-col">Track</th>
+            <th colspan="4">Salary</th>
+            <th colspan="4">Total Cash</th>
+            <th colspan="4" id="equityGroupHeader">${esc(eqLabels[equityRep])}</th>
+            <th class="desc-col" style="border-bottom:1px solid var(--ink-color-global-border-default)"></th>
+          </tr>
+          <tr class="sub-row">
+            <th class="desc-sub"></th><th class="desc-sub"></th><th class="desc-sub"></th><th class="desc-sub"></th>
+            <th class="right">25th</th><th class="right">50th</th><th class="right">75th</th><th class="right">90th</th>
+            <th class="right">25th</th><th class="right">50th</th><th class="right">75th</th><th class="right">90th</th>
+            <th class="right">25th</th><th class="right">50th</th><th class="right">75th</th><th class="right">90th</th>
+            <th class="desc-sub"></th>
+          </tr>
+        </thead>
+        <tbody>`;
+
+  for (const r of rows) {
+    const fmtS = v => v!=null ? fmtCurrency(v, r.currency) : '—';
+    const fmtE = v => {
+      if (!v) return '—';
+      if (equityRep==='notional') return v.notional!=null ? fmtCurrency(v.notional,r.currency) : '—';
+      if (equityRep==='shares')   return v.shares!=null   ? Math.round(v.shares).toLocaleString() : '—';
+      if (equityRep==='fdpct')    return v.fdpct!=null    ? (v.fdpct*100).toFixed(3)+'%' : '—';
+    };
+
+    // Job Area select — tooltip driven by global fixed div via JS delegation
+
+    const jobOptions   = JOBS.map(j   => `<option value="${j}"   ${r.job===j  ?'selected':''}>${esc(jobFmt(j))}</option>`).join('');
+    // Level options are scoped to the row's track (IC / Manager / Executive),
+    // each with its own level set and display labels.
+    const lvlOptions   = (LEVELS_BY_TRACK[r.track] || []).map(([v,lbl]) => `<option value="${v}" ${r.level===v?'selected':''}>${esc(lbl)}</option>`).join('');
+    const trackOptions = TRACKS.map(t => `<option value="${t}" ${r.track===t?'selected':''}>${esc(TRACK_LABELS[t])}</option>`).join('');
+    const geoOptions   = geoOpts.map(o => `<option value="${esc(o.value)}" ${r.location===o.value?'selected':''}>${esc(o.label)}</option>`).join('');
+
+    if (r.error) {
+      html += `
+        <tr${r.loading?' class="row-loading"':''}>
+          <td class="job-cell" data-job="${esc(r.job)}">
+            <select class="cell-select" onchange="onRowChange(${r.id},'job',this.value)">${jobOptions}</select>
+          </td>
+          <td><select class="cell-select" onchange="onRowChange(${r.id},'level',this.value)">${lvlOptions}</select></td>
+          <td><select class="cell-select" onchange="onRowChange(${r.id},'location',this.value)">${geoOptions}</select></td>
+          <td><select class="cell-select" onchange="onRowChange(${r.id},'track',this.value)">${trackOptions}</select></td>
+          <td colspan="12" style="color:var(--ink-color-global-feedback-negative-strong);font-size:13px">${esc(r.error)}</td>
+          <td class="remove-col"><button class="btn-remove-row" onclick="removeRow(${r.id})" title="Remove row">×</button></td>
+        </tr>`;
+      continue;
+    }
+
+    html += `
+        <tr${r.loading?' class="row-loading"':''}>
+          <td class="job-cell" data-job="${esc(r.job)}">
+            <select class="cell-select" onchange="onRowChange(${r.id},'job',this.value)">${jobOptions}</select>
+          </td>
+          <td><select class="cell-select" onchange="onRowChange(${r.id},'level',this.value)">${lvlOptions}</select></td>
+          <td><select class="cell-select" onchange="onRowChange(${r.id},'location',this.value)">${geoOptions}</select></td>
+          <td><select class="cell-select" onchange="onRowChange(${r.id},'track',this.value)">${trackOptions}</select></td>
+          <td class="td-right">${fmtS(r.salary?.p25)}</td><td class="td-right">${fmtS(r.salary?.p50)}</td>
+          <td class="td-right">${fmtS(r.salary?.p75)}</td><td class="td-right">${fmtS(r.salary?.p90)}</td>
+          <td class="td-right">${fmtS(r.tcc?.p25)}</td><td class="td-right">${fmtS(r.tcc?.p50)}</td>
+          <td class="td-right">${fmtS(r.tcc?.p75)}</td><td class="td-right">${fmtS(r.tcc?.p90)}</td>
+          <td class="td-right">${fmtE(r.equity?.p25)}</td><td class="td-right">${fmtE(r.equity?.p50)}</td>
+          <td class="td-right">${fmtE(r.equity?.p75)}</td><td class="td-right">${fmtE(r.equity?.p90)}</td>
+          <td class="remove-col"><button class="btn-remove-row" onclick="removeRow(${r.id})" title="Remove row">×</button></td>
+        </tr>`;
+  }
+
+  html += `</tbody></table></div>
+    <div class="add-row-wrap">
+      <button class="btn-add-row" onclick="addRow()">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 2v8M2 6h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        Add benchmark
+      </button>
+    </div>
+    <div class="results-footer"><span class="timestamp">Last refreshed ${new Date().toLocaleString()}</span></div>`;
+
+  setResults(html);
+}
+
+function setEquityRep(rep) {
+  equityRep = rep;
+  renderTable();
+}
+
+/* ── Export ──────────────────────────────────────────────────────────────── */
+document.getElementById('exportExcelBtn').addEventListener('click', exportExcel);
+
+function buildExportPrompt() {
+  const company = selectedCompany?.name || 'this company';
+  const ok = rows.filter(r => !r.error && !r.loading);
+  const jobs   = [...new Set(ok.map(r=>jobFmt(r.job)))].filter(Boolean);
+  const levels = [...new Set(ok.map(r=>`${lvlFmt(r.level, r.track)} (${TRACK_LABELS[r.track]})`))].filter(Boolean);
+  const geo    = ok[0]?.geo || null;
+  const lines  = ['Export the compensation benchmarks shown in the live artifact to an Excel file.','',`Company: ${company}`];
+  if (jobs.length)   lines.push(`Job area(s): ${jobs.join(', ')}`);
+  if (levels.length) lines.push(`Level(s): ${levels.join(', ')}`);
+  if (geo)           lines.push(`Location: ${geo}`);
+  lines.push('','Use the export_benchmarks.py script (Excel — exact steps in SKILL.md) so the file includes the Carta title block, attribution row, and full template styling.');
+  return lines.join('\n');
+}
+
+async function exportExcel() {
+  const prompt = buildExportPrompt();
+  let copied = false;
+  try {
+    if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(prompt); copied = true; }
+  } catch(_) {}
+  if (!copied) {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = prompt; ta.style.cssText='position:fixed;top:0;left:0;opacity:0';
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      copied = document.execCommand?.('copy'); ta.remove();
+    } catch(_) {}
+  }
+  if (copied) showToast();
+  else showExportOverlay(prompt);
+}
+
+function showExportOverlay(prompt) {
+  let overlay = document.getElementById('exportOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div'); overlay.id='exportOverlay';
+    overlay.className='export-overlay';
+    overlay.innerHTML=`<div class="export-overlay-card">
+      <div class="export-overlay-title">Copy this prompt and paste into the chat to download Excel:</div>
+      <textarea readonly class="export-overlay-text"></textarea>
+      <div class="export-overlay-actions"><button class="gf-btn gf-btn--ghost" id="exportOverlayClose">Close</button></div>
+    </div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', e => { if(e.target===overlay||e.target.id==='exportOverlayClose') overlay.remove(); });
+  }
+  overlay.querySelector('.export-overlay-text').value = prompt;
+  overlay.querySelector('.export-overlay-text').focus();
+  overlay.querySelector('.export-overlay-text').select();
+}
+
+function showToast() {
+  const t = document.getElementById('exportToast');
+  if (!t) return;
+  t.hidden = false; void t.offsetWidth; t.classList.add('is-visible');
+  clearTimeout(showToast._timer);
+  showToast._timer = setTimeout(() => {
+    t.classList.remove('is-visible');
+    setTimeout(() => { t.hidden=true; }, 220);
+  }, 6000);
+}
+
+/* ── Parse results ───────────────────────────────────────────────────────── */
+function parseResults(responses) {
+  const result = [];
+  const flt = v => { const n=parseFloat(v); return isNaN(n)?null:n; };
+  for (const resp of responses) {
+    if (resp.error) { result.push({job:resp.job,level:resp.level,error:resp.error}); continue; }
+    try {
+      let payload = unwrap(resp.data);
+      // Some response shapes nest the benchmark body under `data`
+      // (e.g. the raw/empty-warning envelope `{_warning, data:{benchmarks}}`).
+      // Descend into it so `benchmarks` is always found at the top level.
+      if (payload && !payload.benchmarks && payload.data && payload.data.benchmarks) {
+        payload = payload.data;
+      }
+      const vObj    = payload.benchmark_version;
+      const version = vObj ? `v${vObj.version_major}.${vObj.version_minor}` : null;
+      for (const b of (payload.benchmarks||[])) {
+        const sp = b.salary_benchmarks?.percentiles||{};
+        const tp = b.tcc_benchmarks?.percentiles||{};
+        const ep = b.equity_benchmarks?.percentiles||{};
+        const currency = b.salary_benchmarks?.currency_code ?? b.tcc_benchmarks?.currency_code ?? null;
+        result.push({
+          job: b.job||resp.job, level: b.level||resp.level, ladder: b.ladder||null, error: null,
+          currency, geo: b.geo_adjustment?.label||null, version,
+          salary:{p25:flt(sp.p25),p50:flt(sp.p50),p75:flt(sp.p75),p90:flt(sp.p90)},
+          tcc:   {p25:flt(tp.p25),p50:flt(tp.p50),p75:flt(tp.p75),p90:flt(tp.p90)},
+          equity:{
+            p25:{notional:flt(ep.p25?.as_notional_value),shares:flt(ep.p25?.as_shares),fdpct:flt(ep.p25?.as_fd_percentage)},
+            p50:{notional:flt(ep.p50?.as_notional_value),shares:flt(ep.p50?.as_shares),fdpct:flt(ep.p50?.as_fd_percentage)},
+            p75:{notional:flt(ep.p75?.as_notional_value),shares:flt(ep.p75?.as_shares),fdpct:flt(ep.p75?.as_fd_percentage)},
+            p90:{notional:flt(ep.p90?.as_notional_value),shares:flt(ep.p90?.as_shares),fdpct:flt(ep.p90?.as_fd_percentage)},
+          }
+        });
+      }
+    } catch(e) { result.push({job:resp.job,level:resp.level,error:'Parse error: '+e.message}); }
+  }
+  return result;
+}
+
+/* ── Utilities ───────────────────────────────────────────────────────────── */
+function setResults(html) { document.getElementById('resultsArea').innerHTML = html; }
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function unwrap(res) {
+  if (!res) return {};
+  if (typeof res==='string') { try{return JSON.parse(res);}catch{return{};} }
+  const sc = res.structuredContent;
+  if (sc) {
+    if (typeof sc.result==='string') { try{return JSON.parse(sc.result);}catch{} }
+    if (sc.result && typeof sc.result==='object') return sc.result;
+  }
+  if (Array.isArray(res.content)&&res.content[0]?.text) { try{return JSON.parse(res.content[0].text);}catch{} }
+  if (typeof res.result==='string') { try{return JSON.parse(res.result);}catch{} }
+  if (res.result && typeof res.result==='object') return res.result;
+  return res;
+}
+/* ── Job area tooltip (fixed-position delegation) ────────────────────────── */
+(function() {
+  const tt = document.getElementById('jobTooltipGlobal');
+  document.addEventListener('mouseover', e => {
+    const cell = e.target.closest('.job-cell');
+    if (!cell) { tt.style.display = 'none'; return; }
+    const job = cell.dataset.job;
+    const m = JOB_META[job];
+    if (!m) { tt.style.display = 'none'; return; }
+    tt.innerHTML = `<div class="job-tooltip-name">${esc(jobFmt(job))}</div>
+      <div class="job-tooltip-desc">${esc(m.desc)}</div>
+      ${m.titles.length ? `<div class="job-tooltip-label">Common titles</div>
+      <div class="job-tooltip-titles">${m.titles.map(t => esc(t)).join(' · ')}</div>` : ''}`;
+    tt.style.display = 'block';
+    const rect = cell.getBoundingClientRect();
+    const ttW = 440;
+    let left = rect.left;
+    if (left + ttW > window.innerWidth - 12) left = window.innerWidth - ttW - 12;
+    if (left < 8) left = 8;
+    const ttH = tt.offsetHeight;
+    let top = rect.bottom + 6;
+    if (top + ttH > window.innerHeight - 12) top = rect.top - ttH - 6;
+    tt.style.left = left + 'px';
+    tt.style.top  = top  + 'px';
+  });
+})();
+
+function fmtCurrency(val, currency) {
+  if (val==null) return '—';
+  const k = Math.round(Number(val) / 1000);
+  // Never default to USD. When the API didn't return a currency code, render
+  // the magnitude without a currency symbol rather than silently mislabeling
+  // a non-USD (or unknown-currency) amount as dollars. See SKILL.md: "surface
+  // null if neither is present — do NOT default to 'USD'".
+  if (!currency) return k.toLocaleString() + 'K';
+  try {
+    const parts = new Intl.NumberFormat('en-US',{style:'currency',currency,minimumFractionDigits:0,maximumFractionDigits:0})
+      .formatToParts(0);
+    const sym = parts.find(p=>p.type==='currency')?.value ?? currency;
+    return sym + ' ' + k.toLocaleString() + 'K';
+  } catch {
+    // currency code present but not recognized by Intl — show the code itself,
+    // never a fabricated '$'.
+    return currency + ' ' + k.toLocaleString() + 'K';
+  }
+}
+</script>
+</body>
+</html>
