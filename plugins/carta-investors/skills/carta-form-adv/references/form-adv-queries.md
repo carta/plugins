@@ -44,7 +44,7 @@ Use `effective_date` (accounting date) from `JOURNAL_ENTRIES`. The datashare tab
 For any filing-date Form ADV value (investor counts, US/non-US %, asset composition, NAV by partner), use a **point-in-time** source filtered to `reporting_date`:
 
 - Partner membership / counts → `PARTNER_MONTHLY_NAV_CALCULATIONS` at `month_end_date = reporting_date`.
-- Per-partner NAV at reporting date → `PARTNER_MONTHLY_NAV_CALCULATIONS.ending_total_nav` (column name may vary — verify against schema before merging changes).
+- Per-partner NAV at reporting date → `PARTNER_MONTHLY_NAV_CALCULATIONS.ending_total_nav`.
 - Portfolio holdings at reporting date → `AGGREGATE_INVESTMENTS_HISTORY` with `EFFECTIVE_DATE <= reporting_date` + QUALIFY most-recent-per-position.
 
 `AGGREGATE_INVESTMENTS`, `AGGREGATE_FUND_METRICS`, and `PARTNER_DATA` are **current snapshots** and are only used as fallbacks (e.g. classification fields where point-in-time isn't required) or when a fund has no NAV calc for the reporting month.
@@ -194,7 +194,12 @@ portfolio_pit AS (
     SELECT
         aih.fund_uuid,
         aih.general_ledger_issuer_id,
-        aih.is_active_investment,
+        -- AGGREGATE_INVESTMENTS_HISTORY has NO is_active_investment column (that flag
+        -- exists only on the current-snapshot AGGREGATE_INVESTMENTS). On the history
+        -- table "still held as of reporting_date" is derived: the point-in-time state
+        -- picked by the QUALIFY below has a non-zero remaining value. Referencing the
+        -- non-existent column threw a DataWarehouseError (invalid identifier).
+        (aih.remaining_value <> 0)  AS is_active_investment,
         aih.remaining_value,
         aih.is_public_asset,
         aih.is_ownership_interest_asset,
@@ -354,7 +359,7 @@ partner_pit AS (
     SELECT
         pmn.fund_id    AS fund_uuid,
         pmn.partner_id,
-        pmn.ending_total_nav  -- TODO(schema-verify): confirm column name in PARTNER_MONTHLY_NAV_CALCULATIONS
+        pmn.ending_total_nav
     FROM FUND_ADMIN.PARTNER_MONTHLY_NAV_CALCULATIONS pmn
     INNER JOIN funds f ON pmn.fund_id = f.fund_uuid
     CROSS JOIN constants c
@@ -526,7 +531,7 @@ firm_lp_universe AS (
     SELECT
         pmn.partner_id,
         MAX(pd.partner_country)                              AS partner_country,
-        SUM(pmn.ending_total_nav)                            AS partner_total_nav,  -- TODO(schema-verify): confirm column
+        SUM(pmn.ending_total_nav)                            AS partner_total_nav,
         BOOLOR_AGG(COALESCE(pd.is_limited_partner, FALSE))   AS is_limited_partner
     FROM FUND_ADMIN.PARTNER_MONTHLY_NAV_CALCULATIONS pmn
     INNER JOIN funds f
