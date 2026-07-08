@@ -1,6 +1,6 @@
 ---
 name: carta-form-adv
-description: Fetches Form ADV Part 1A filing data and generates an interactive HTML filing guide + Excel filing reference. Covers Items 5.D/F/H, Schedule D §7.B.(1) per-fund detail, beneficial owner breakdown, asset class composition, and capital activity. Use when asked about Form ADV, regulatory AUM, Schedule D, Form PF Section 1, SEC filing data, or private fund disclosures. Do NOT use for general fund metrics, NAV lookups, or LP contribution history — use carta-explore-data instead.
+description: Fetches Form ADV Part 1A filing data and generates an interactive HTML filing guide + Excel filing reference. Covers Items 5.D/F/H, Schedule D §7.B.(1) per-fund detail, beneficial owner breakdown, asset class composition, and capital activity. For regulatory filing workflows, use carta-compliance-routing instead. Do NOT use for general fund metrics, NAV lookups, or LP contribution history — use carta-explore-data instead.
 version: 1.3.0
 model: sonnet
 allowed-tools:
