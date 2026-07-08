@@ -172,6 +172,8 @@ Use the MCP commands in sequence, substituting `<SCHEMA>` with the schema determ
 
 - **Always schema-qualify tables**: `FUND_ADMIN.TABLE_NAME` (or `LOAN_OPS.TABLE_NAME` for loans). A bare name defaults to `PUBLIC` where no customer tables exist.
 - **Only query schemas visible in `dwh__list__tables`**: never query a schema that does not appear in that tool's output — unrecognized schemas are either internal-only or non-existent and will always fail.
+- **`dwh__execute__query` does NOT accept a `schema` argument** — the schema is encoded directly in the SQL as `SCHEMA.TABLE_NAME`. Never pass `"schema"` inside the `arguments` dict.
+- **`set_context` takes `firm_id` as a UUID string** — pass the UUID value returned by `list_contexts`, not a bare integer.
 - **Use `fund_uuid` (VARCHAR), not `fund_id`** — the integer `fund_id` is internal-only and not available in customer-facing views.
 - **Snowflake syntax only**: `LIMIT N` not `FETCH FIRST N ROWS ONLY`; `LIKE`/`RLIKE` not `SIMILAR TO`; `ROW_NUMBER() OVER (...)` not bare `ROW()`; `DATE_TRUNC` not `ROUND` on dates; UUID values are strings (`fund_uuid = '<uuid>'`).
 - **Wrong → right table names** — if the user or context uses any name on the left, use the right instead:
