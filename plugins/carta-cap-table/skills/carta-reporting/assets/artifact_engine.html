@@ -267,7 +267,7 @@ let _dragSrcCi       = null;
 function initSheet(sName) {
   const sh = data[sName];
   if (!sh._colOrder) sh._colOrder = sh.columns.map((_, i) => i);
-  if (!sh._hidden)   sh._hidden   = new Set();
+  if (!sh._hidden)   sh._hidden   = new Set(sh.columns.flatMap((c, i) => c.hidden ? [i] : []));
   if (!sh._sort)     sh._sort     = [];   // [{ci, dir}]
   if (!sh._totals)   sh._totals   = {};   // {ci: op}
   // WeakMap keyed by the actual row array so currency survives sort reorders
