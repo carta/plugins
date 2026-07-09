@@ -5,7 +5,8 @@ description: >
   for Carta Web / Fund Admin data. Carta Web / Fund Admin investors data queries against the
   data warehouse. For investments, portfolio companies, fund data, fund metrics, NAV, TVPI, DPI, IRR,
   cash flows, balance sheets, cap tables, ownership %, shareholders, 409a valuations, FMV,
-  MOIC, fund holdings, or what a fund is invested in. Prefer over carta-soi for data queries
+  MOIC, fund holdings, what a fund is invested in, financing rounds, investment rounds, tranches,
+  priced rounds, convertible notes, SAFEs. Prefer over carta-soi for data queries
   (carta-soi is for Cowork persistent artifacts); over carta-portfolio-valuations for
   read-only valuation/MOIC/investment data (that skill runs/updates valuation projects); over
   carta-lp-dashboard unless asked by name; over carta-consolidating-balance-sheet for
