@@ -23,15 +23,32 @@ allowed-tools:
   - mcp__carta__list_accounts
   - mcp__carta__search_tools
   - AskUserQuestion
+  - Bash(cat "${CLAUDE_PLUGIN_DATA}/cache/commands.json"*)
 ---
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
 # Discover Commands
 
-Use `search_tools` to find available commands when no specific skill covers the user's request.
+Use the command registry to find available commands when no specific skill covers the user's request. A prior `discover` call in this environment caches the full registry to disk — read that cache first and only hit the network on a miss.
 
-## Step 1 — Search for Relevant Commands
+## Step 0 — Read the cached command registry (do this first)
+
+The plugin's PostToolUse hook writes the full command registry to `${CLAUDE_PLUGIN_DATA}/cache/commands.json` after any `discover` call. Read it before making any MCP call:
+
+```bash
+cat "${CLAUDE_PLUGIN_DATA}/cache/commands.json" 2>/dev/null || true
+```
+
+If the file exists and is valid, treat it as the command list and validate it before use:
+
+- **Freshness** — the JSON has a `cached_at` ISO timestamp. If `cached_at` is more than **24 hours** old, treat the cache as stale and fall through to Step 1 (this matches the 24h TTL the welcome/accounts caches use).
+- **Version** — the JSON has a `plugin_version`. If it does not match the running plugin version (see the `<carta-plugin version=… />` tag injected at session start), treat the cache as stale and fall through to Step 1.
+- **Shape** — the command list lives under the `commands` key (an array). If the file is empty, unparseable, or `commands` is missing/empty, fall through to Step 1.
+
+When the cache is valid and fresh, **skip Steps 1–2's network call** — pick the best-matching command directly from the cached `commands` array (same `name` / `description` / `inputSchema` fields as the live `search_tools` result) and go straight to Step 3. This removes a network round-trip on warm sessions.
+
+## Step 1 — Search for Relevant Commands (cache miss / stale only)
 
 ```
 search_tools({"query": "<keyword from user's request>"})

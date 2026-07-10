@@ -22,7 +22,11 @@ allowed-tools:
   - Agent
   - AskUserQuestion
   - Bash(cat ${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/staff/*)
+  - Bash(cat ${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/references/*)
   - Bash(find * -name "artifact_engine.html"*)
+  - Bash(find ~ -name "report_processor.py"*)
+  - Bash(find ~ -name "artifact_engine.html"*)
+  - Bash(cat "$_engine_html_path"*)
   - Skill(carta-cli:btg)
   - Skill(carta-cap-table:carta-reporting-markdown)
   - Bash(UV_PYTHON_DOWNLOADS=never uv run*)
@@ -89,6 +93,15 @@ If the file exists, its instructions override the defaults in this skill for any
 
 **Tool discovery (ALL environments — run before any other step):** Call `ToolSearch` with query `"list_accounts create_artifact"` and `max_results: 10`. Cache the full result set in memory as `_tool_results`. Do not call `ToolSearch` again anywhere in this workflow — all subsequent gates read from this cached result.
 
+**Resolve script/asset paths ONCE (run before any other step, in the same turn as tool discovery):** the `report_processor.py` script and `artifact_engine.html` engine can live in varying install locations, but their paths do not change within a session. Resolve both a single time and cache them in memory — do NOT re-run `find` at each later use:
+
+```bash
+find ~ -name "report_processor.py" -path "*/carta-reporting/scripts/*" 2>/dev/null | head -1
+find ~ -name "artifact_engine.html" -path "*/carta-reporting/assets/*" 2>/dev/null | head -1
+```
+
+Store the results as `_report_processor_path` and `_engine_html_path`. Every later step that needs these (schema preview, engine read, `report_processor.py` runs, and the markdown/Excel sub-skills) MUST reuse the cached value instead of re-running `find`. If a cached path is empty, re-run that single `find` once at the point of use as a fallback. This removes 2–4 home-directory `find` scans per report request.
+
 0. **Connect Carta (Claude Desktop only — skip entirely in Claude Code)**
 
    **0a. Environment UUID map**
@@ -114,7 +127,9 @@ If the file exists, its instructions override the defaults in this skill for any
 
    **Confirm reporting access**
 
-   Once the account is connected, call `mcp__carta__search_tools({"query": "reporting"})` to query Carta's BM25 catalog (reporting tools are indexed, not pinned, so `ToolSearch` won't find them). If no `reporting__*` tools appear in the results, tell the user: "Looks like reporting isn't enabled for this account yet. You can try a different Carta account, or reach out to your Carta contact to get it set up." Then stop — do not proceed to Step 1.
+   Reporting access is a property of the connected Carta account (the confirmed MCP connector prefix from Gate 0b), not of an individual company, and it does not change within a conversation — so confirm it **once per connected account**. If `_reporting_access_confirmed` is already set to `true` in this session for the current connector prefix, skip this check entirely and proceed to Step 1 — do not re-call `search_tools`. (If the user switches to a different Carta connector mid-conversation, treat that as a new account and re-confirm.)
+
+   Otherwise, call `mcp__carta__search_tools({"query": "reporting"})` to query Carta's BM25 catalog (reporting tools are indexed, not pinned, so `ToolSearch` won't find them). If no `reporting__*` tools appear in the results, tell the user: "Looks like reporting isn't enabled for this account yet. You can try a different Carta account, or reach out to your Carta contact to get it set up." Then stop — do not proceed to Step 1. On success, set `_reporting_access_confirmed` to `true` in session memory so subsequent report requests on the same connected account skip this round-trip.
 
 0c. **Set output mode — runs in ALL environments (Claude Desktop and Claude Code)**
 
@@ -158,9 +173,9 @@ If the file exists, its instructions override the defaults in this skill for any
 
    **2a. In MARKDOWN mode, skip this entire step and go straight to "Collect report details".**
 
-3. **Collect report details** — look up the matched report type in the **Required params** table in [MCP Tool Reference](#mcp-tool-reference). **Every param listed for that report type is required.** If missing, call `AskUserQuestion`. Default `as_of_date` to today (YYYY-MM-DD). Always use `export_format: "json"`.
+3. **Collect report details** — read `references/mcp-tool-reference.md` now (see the [MCP Tool Reference](#mcp-tool-reference) section for the `cat` command) and look up the matched report type in its **REQUIRED params by report_type** table. **Every param listed for that report type is required.** If missing, call `AskUserQuestion`. Default `as_of_date` to today (YYYY-MM-DD). Always use `export_format: "json"`.
 
-   **Filters** — many report types accept filter params; see [MCP Tool Reference](#mcp-tool-reference) for which filters each report type supports. If the user mentions specific stakeholders, share classes, equity plans, securities, or a date range, resolve their IDs/values and pass the matching filter params as comma-separated strings — the report runs faster. `security_ids` takes comma-separated `TYPE:ID` strings (e.g. `"CERTIFICATE:42,OPTION:7"`); valid types: `CERTIFICATE`, `RSA`, `RSU`, `OPTION`, `SAR`, `CBU`, `PIU`, `WARRANT`, `CONVERTIBLE_NOTE`. Passing unsupported filters for a report type has no effect.
+   **Filters** — many report types accept filter params; the same reference file lists which filters each report type supports and the ID-lookup commands to resolve them. If the user mentions specific stakeholders, share classes, equity plans, securities, or a date range, resolve their IDs/values and pass the matching filter params as comma-separated strings — the report runs faster. `security_ids` takes comma-separated `TYPE:ID` strings (e.g. `"CERTIFICATE:42,OPTION:7"`); valid types: `CERTIFICATE`, `RSA`, `RSU`, `OPTION`, `SAR`, `CBU`, `PIU`, `WARRANT`, `CONVERTIBLE_NOTE`. Passing unsupported filters for a report type has no effect.
 
 4. **Emit a status message before dispatching subagents** — before triggering any report generation, output a plain-language message to the user. Record the current time as `_report_start_time` (epoch seconds) on the **main thread**, immediately before dispatching the background `Agent` calls in steps 4b and 4c — this is the start of the generation clock. Do not record this inside the subagents. Capture it with: `UV_PYTHON_DOWNLOADS=never uv run python -c "import time; print(int(time.time()))"` (this form is already covered by the skill's `allowed-tools`).
 
@@ -227,10 +242,10 @@ If the file exists, its instructions override the defaults in this skill for any
    3. Run: curl -fsSL "<presigned_url>" -o <output_path>
    ```
 
-   **4d. Main thread — wait for data, then build the artifact** — runs immediately after dispatching 4b and 4c. Read the engine HTML using `find` (plugin install locations vary; static paths are unreliable):
+   **4d. Main thread — wait for data, then build the artifact** — runs immediately after dispatching 4b and 4c. Read the engine HTML from the cached `_engine_html_path` (resolved once in the tool-discovery step). Use `cat "$_engine_html_path"`; only if that path is empty, resolve it once with `find`:
 
    ```bash
-   find ~ -name "artifact_engine.html" -path "*/carta-reporting/assets/*" 2>/dev/null | head -1 | xargs -I{} cat {}
+   cat "$_engine_html_path" 2>/dev/null || find ~ -name "artifact_engine.html" -path "*/carta-reporting/assets/*" 2>/dev/null | head -1 | xargs -I{} cat {}
    ```
 
    If this returns empty, continue — do **not** fall back to the xlsx skill or generate Excel directly.
@@ -263,10 +278,10 @@ If the file exists, its instructions override the defaults in this skill for any
 
    **Building the artifact (ARTIFACT mode only)**
 
-   Run `report_processor.py` on each data file with no transforms to get schema data:
+   Run `report_processor.py` on each data file with no transforms to get schema data. Use the cached `_report_processor_path` (resolved once in the tool-discovery step); only fall back to `find` if it is empty:
 
    ```bash
-   UV_PYTHON_DOWNLOADS=never uv run "$(find ~ -name "report_processor.py" -path "*/carta-reporting/scripts/*" 2>/dev/null | head -1)" <<'EOF'
+   UV_PYTHON_DOWNLOADS=never uv run "${_report_processor_path:-$(find ~ -name "report_processor.py" -path "*/carta-reporting/scripts/*" 2>/dev/null | head -1)}" <<'EOF'
    {
      "local_file": "<data file path>"
    }
@@ -381,126 +396,17 @@ If the file exists, its instructions override the defaults in this skill for any
 
 ## MCP Tool Reference
 
+The full call signatures, filter-param support matrix, and **required-params-by-report-type**
+table live in `references/mcp-tool-reference.md` (kept out of the always-loaded skill to
+reduce context). Read it on demand — only when you need to look up a required param, a filter
+param, or an ID-lookup command — using this skill's declared base directory (do not use
+`${CLAUDE_PLUGIN_ROOT}` in bash):
+
+```bash
+cat <skill_base_dir>/references/mcp-tool-reference.md
 ```
-# All commands invoked via call_tool
 
-call_tool({"name": "reporting__create__report", "arguments": { corporation_id, report_type, as_of_date, report_name, export_format: "json" }})
-  → { user_report_pk }
-  # Always pass export_format: "json". Never pass "xlsx".
-  #
-  # OPTIONAL params (any report type):
-  #   preview          — pass true for a faster partial report
-  #
-  #   Filter params — supported per report type:
-  #   Full support (stakeholder_ids, equity_plan_ids, security_ids, share_class_ids, issued_from, issued_to):
-  #     exercised_and_settled_report, equity_plan_report, vesting_details_report,
-  #     historical_terminations_report, common_securities_report, equity_awards_outstanding,
-  #     equity_plan_granted_report, options_outstanding_report, securities_ledger_report,
-  #     share_registry_report, rule_701_report, canceled_and_returned_report, eightythreeb_elections_report
-  #   termination_modeling_report: equity_plan_ids, security_ids, share_class_ids, issued_from, issued_to (stakeholder_ids not supported)
-  #   stakeholder_ledger_report, stakeholder_details_report: stakeholder_ids only
-  #   Passing unsupported filters for a report type has no effect.
-  #   stakeholder_ids  — comma-separated integer IDs, e.g. "42,7,99"
-  #   equity_plan_ids  — comma-separated integer IDs
-  #   security_ids     — comma-separated TYPE:ID strings, e.g. "CERTIFICATE:42,OPTION:7"
-  #     valid types: CERTIFICATE, RSA, RSU, OPTION, SAR, CBU, PIU, WARRANT, CONVERTIBLE_NOTE
-  #   share_class_ids  — comma-separated integer IDs
-  #   issued_from      — grant issuance start date, MM/DD/YYYY
-  #   issued_to        — grant issuance end date, MM/DD/YYYY
-  #
-  # REQUIRED params by report_type — the API fails silently or errors if these are omitted.
-  # Collect any that the user has not already provided via AskUserQuestion BEFORE calling this command.
-  #
-  #   stakeholder_ownership_details_report
-  #     stakeholder_pk       — the stakeholder to report on (REQUIRED)
-  #
-  #   termination_modeling_report
-  #     stakeholder_pk       — the stakeholder to model (REQUIRED)
-  #     termination_reason   — one of: voluntary | involuntary | with_cause |
-  #                            retirement | disability | death (REQUIRED)
-  #
-  #   historical_terminations_report
-  #     stakeholder_pk       — the stakeholder whose history to pull (REQUIRED)
-  #
-  #   vesting_details_report
-  #     stakeholder_pk       — filter to a specific stakeholder (REQUIRED)
-  #     issued_from          — grant issuance start date, MM/DD/YYYY (REQUIRED)
-  #     issued_to            — grant issuance end date, MM/DD/YYYY (REQUIRED)
-  #
-  #   cap_table_summary_report
-  #     reports              — comma-separated sub-reports to include (REQUIRED):
-  #                            summary_cap | intermediate_cap | detailed_cap |
-  #                            ledgers | summary_grouped_cap
-  #     group_selected       — grouping dimension, e.g. 'Relationship', 'Cost Center',
-  #                            'Job Title' (REQUIRED when reports includes summary_grouped_cap)
-  #
-  #   equity_plan_report
-  #     starting_date        — report period start, MM/DD/YYYY (REQUIRED)
-  #     ending_date          — report period end, MM/DD/YYYY (REQUIRED)
-  #     show_stakeholder_sums_sheet  — true | false (REQUIRED)
-  #     show_events_ledger_sheet     — true | false (REQUIRED)
-
-# Filter ID lookup commands:
-call_tool({"name": "cap_table__get__stakeholders", "arguments": { corporation_id }})
-  → { count: N, by_type: { employee: N, investor: N, ... } }
-  # Summary mode (no search param) — returns total stakeholder count and breakdown by type.
-  # Use count to infer company size for status message branching (Step 4).
-
-call_tool({"name": "cap_table__get__stakeholders", "arguments": { corporation_id, search: "<name>" }})
-  → { results: [{ id, full_name, email, event_relationship }] }
-  # Search mode — resolves a stakeholder name to its numeric id for use in stakeholder_ids.
-  # search matches full_name and email. Available to all users.
-
-call_tool({"name": "cap_table__get__certificate_share_classes", "arguments": { corporation_id }})
-  → { results: [{ id, name, prefix }] }
-  # Returns available share classes (Common, Series A, etc.) with their numeric id.
-  # Staff-only — call may fail with 403 for non-staff users; fall back to AskUserQuestion.
-
-call_tool({"name": "cap_table__get__option_plans", "arguments": { corporation_id }})
-  → { results: [{ id, name, common_share_class_id, size, available_quantity, is_expired }] }
-  # Returns equity plans with their numeric id and linked share class id.
-  # Staff-only — call may fail with 403 for non-staff users; fall back to AskUserQuestion.
-  # common_share_class_id links a plan to its share class — use to resolve equity_plan_ids
-  # when the user filters by share class.
-
-# security_ids — resolve label to TYPE:ID (all available to non-staff users):
-call_tool({"name": "cap_table__get__certificate", "arguments": { corporation_id, label: "<label>" }})
-  → { id, label, ... }   # CERTIFICATE:<id>
-
-call_tool({"name": "cap_table__get__option_grant", "arguments": { corporation_id, label: "<label>" }})
-  → { id, label, ... }   # OPTION:<id>
-
-call_tool({"name": "cap_table__get__rsu", "arguments": { corporation_id, label: "<label>" }})
-  → { id, label, ... }   # RSU:<id>
-
-call_tool({"name": "cap_table__get__rsa", "arguments": { corporation_id, label: "<label>" }})
-  → { id, label, ... }   # RSA:<id>
-
-call_tool({"name": "cap_table__get__piu", "arguments": { corporation_id, label: "<label>" }})
-  → { id, label, ... }   # PIU:<id>
-
-call_tool({"name": "cap_table__get__warrant", "arguments": { corporation_id, label: "<label>" }})
-  → { id, label, ... }   # WARRANT:<id>
-
-call_tool({"name": "cap_table__list__sars", "arguments": { corporation_id, search: "<label>", detail: "minimal" }})
-  → { results: [{ id, label, ... }] }   # SAR:<id>
-
-call_tool({"name": "cap_table__list__cbus", "arguments": { corporation_id, search: "<label>", detail: "minimal" }})
-  → { results: [{ id, label, ... }] }   # CBU:<id>
-
-call_tool({"name": "reporting__search__report_types", "arguments": { corporation_id, query, json_export_supported: true }})
-  → {
-      reports: [{report_type, name, similarity, answers_question}],
-      questions: [{question, similarity, answers, hide_from_ui}]
-    }
-
-call_tool({"name": "reporting__get__report_status", "arguments": { user_report_pk }})
-  → { status }   # status: "pending" | "complete" | "error" | "not_found"
-                 # corporation_id not required — endpoint is user-scoped
-
-call_tool({"name": "reporting__get__download_url", "arguments": { user_report_pk, corporation_id }})
-  → { download_url }   # S3 presigned URL — pass to report_processor.py, not WebFetch
-```
+Cache the contents in memory the first time you read it; do not re-`cat` it within a session.
 
 ---
 
@@ -524,9 +430,11 @@ call_tool({"name": "reporting__get__download_url", "arguments": { user_report_pk
 
 All post-processing (filter, column selection, sort, formulas, aggregations, preview) runs through this script. Called by `carta-reporting`, `carta-reporting-markdown`, and `carta-reporting-excel`. Never apply these transforms in Claude's memory.
 
+> **Path resolution:** the examples below show `$(find ~ -name "report_processor.py" …)` for self-containment, but in the live workflow use the cached `_report_processor_path` resolved once in the tool-discovery step — `UV_PYTHON_DOWNLOADS=never uv run "${_report_processor_path:-$(find ~ -name "report_processor.py" -path "*/carta-reporting/scripts/*" 2>/dev/null | head -1)}"`. Only re-run `find` when the cached path is empty.
+
 Single sheet (global transforms):
 ```bash
-UV_PYTHON_DOWNLOADS=never uv run "$(find ~ -name "report_processor.py" -path "*/carta-reporting/scripts/*" 2>/dev/null | head -1)" <<'EOF'
+UV_PYTHON_DOWNLOADS=never uv run "${_report_processor_path:-$(find ~ -name "report_processor.py" -path "*/carta-reporting/scripts/*" 2>/dev/null | head -1)}" <<'EOF'
 {
   "local_file":      "<path to downloaded report JSON>",
   "sheets":          ["Securities Ledger"],
@@ -545,7 +453,7 @@ EOF
 
 Multi-sheet with per-sheet config:
 ```bash
-UV_PYTHON_DOWNLOADS=never uv run "$(find ~ -name "report_processor.py" -path "*/carta-reporting/scripts/*" 2>/dev/null | head -1)" <<'EOF'
+UV_PYTHON_DOWNLOADS=never uv run "${_report_processor_path:-$(find ~ -name "report_processor.py" -path "*/carta-reporting/scripts/*" 2>/dev/null | head -1)}" <<'EOF'
 {
   "local_file": "<path>",
   "sheets": {
@@ -560,7 +468,7 @@ EOF
 
 Sheet merge — sources must share the same column schema; merged tab replaces source tabs:
 ```bash
-UV_PYTHON_DOWNLOADS=never uv run "$(find ~ -name "report_processor.py" -path "*/carta-reporting/scripts/*" 2>/dev/null | head -1)" <<'EOF'
+UV_PYTHON_DOWNLOADS=never uv run "${_report_processor_path:-$(find ~ -name "report_processor.py" -path "*/carta-reporting/scripts/*" 2>/dev/null | head -1)}" <<'EOF'
 {
   "local_file": "<path>",
   "sheets": {

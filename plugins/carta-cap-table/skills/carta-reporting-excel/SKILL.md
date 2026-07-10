@@ -9,7 +9,9 @@ model: sonnet
 allowed-tools:
   - mcp__carta__call_tool
   - Bash(find * -name "report_processor.py"*)
+  - Bash(find ~ -name "report_processor.py"*)
   - Bash(find * -name "excel_exporter.py"*)
+  - Bash(find ~ -name "excel_exporter.py"*)
   - Bash(UV_PYTHON_DOWNLOADS=never uv run*)
 ---
 
@@ -63,10 +65,10 @@ Check if `/tmp/carta_report_<user_report_pk>.json` is available (use `user_repor
 
 For combining sheets into one tab, use `merge_sheets` in the `report_processor.py` call.
 
-Pass all sheets in one run using the `sheets` dict. Pipe into `excel_exporter.py`:
+Pass all sheets in one run using the `sheets` dict. Pipe into `excel_exporter.py`. Reuse the cached `_report_processor_path` if the parent session resolved it (it may be unset on the fresh `Generate Carta Excel —` prompt-bar path — the `find` fallback handles that):
 
 ```bash
-UV_PYTHON_DOWNLOADS=never uv run "$(find ~ -name "report_processor.py" -path "*/carta-reporting/scripts/*" 2>/dev/null | head -1)" <<'EOF' | \
+UV_PYTHON_DOWNLOADS=never uv run "${_report_processor_path:-$(find ~ -name "report_processor.py" -path "*/carta-reporting/scripts/*" 2>/dev/null | head -1)}" <<'EOF' | \
     UV_PYTHON_DOWNLOADS=never uv run "$(find ~ -name "excel_exporter.py" -path "*/carta-reporting-excel/scripts/*" 2>/dev/null | head -1)" \
         --title "Securities Ledger Report" \
         --as-of-date 2024-01-15 \
