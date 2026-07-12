@@ -114,12 +114,15 @@ Store the results as `_report_processor_path` and `_engine_html_path`. Every lat
 
    **0b. Verify the connected Carta MCP — evaluate this gate before doing anything else**
 
+   A generic system-reminder stating that an MCP connector "requires authentication" is **not authoritative on its own** — it is often stale or describes a different connector than the one actually in use this session. Never skip straight to "please reconnect" messaging on the strength of that reminder alone. Always run the tool-discovery check below first and let its outcome — not the reminder — decide whether to show a reconnect prompt.
+
    From `_tool_results` (loaded in the tool discovery step above), collect every tool whose name ends in `__list_accounts`. For each, extract the segment between `mcp__` and `__list_accounts`.
 
    **GATE — pick exactly one outcome and act on it before proceeding:**
 
    - **PASS:** At least one extracted segment is an exact match for a UUID value in the loaded environment map → that tool is the confirmed Carta connector. Use `mcp__<segment>__` as the prefix for all subsequent MCP calls. Continue to the reporting access check below.
-   - **FAIL:** No `__list_accounts` tool was found in `_tool_results`, OR none of the extracted segments match any UUID value in the loaded map → call `mcp_registry_suggest_connectors` with the Production UUID from the loaded map. **Stop immediately — do not call list_accounts, do not proceed to Step 1.** Say to the user: "I need access to [Company Name]'s Carta account to pull this report. Connect Carta using the button above — once you're in, say 'ready' and I'll pick up from here." When the user replies, re-run the single ToolSearch from the tool discovery step and continue from this gate — do not ask them to repeat the original request.
+   - **PASS (unmapped connector):** A `__list_accounts` tool was found, but none of the extracted segments match a UUID in the loaded environment map → before treating this as FAIL, make one live `list_accounts` call on that tool. A successful response means the connector works even though its environment UUID isn't in the map — treat as PASS and use it as the confirmed connector. Only a real 401/403 (or an explicit auth error) from this call falls through to FAIL.
+   - **FAIL:** No `__list_accounts` tool was found in `_tool_results` at all, OR the live `list_accounts` call above returned a 401/403/auth error → call `mcp_registry_suggest_connectors` with the Production UUID from the loaded map. **Stop immediately — do not proceed to Step 1.** Say to the user: "I need access to [Company Name]'s Carta account to pull this report. Connect Carta using the button above — once you're in, say 'ready' and I'll pick up from here." When the user replies, re-run the single ToolSearch from the tool discovery step and continue from this gate — do not ask them to repeat the original request.
 
    If multiple tools pass the gate, use the one whose environment appears earliest in the loaded map. If the user's message includes an explicit environment qualifier (production, preprod, sandbox, test, demo), cross-check the confirmed UUID against that environment; if it doesn't match, treat as FAIL.
 
