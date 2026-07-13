@@ -277,6 +277,11 @@ One row per (corporation, firm, fund, as_of_date). Source for Query B.
 One row per financing round per company. Used by Query A (joined on `CORPORATION_ID`) for round price/date, **and** directly when the user asks about financing rounds ("show financing rounds for [Company]", "how much has [Company] raised", "latest post-money for [Company]").
 
 > **Filter by company name with `INVESTMENT_NAME`** — e.g. `WHERE LOWER(INVESTMENT_NAME) LIKE '%stripe%'`. There is **no** `COMPANY_NAME`, `ISSUER_NAME`, `CORPORATION_NAME`, or `FIRM_ID` column on this table. To filter by company UUID use `CORPORATION_ID`. To scope by fund, join to `FUNDS` — there is no `FUND_NAME` or fund column here.
+>
+> ⚠️ **Wrong column names (common errors):**
+> - `PRICE_PER_SHARE` does not exist → use `ORIGINAL_ISSUE_PRICE`
+> - `AMOUNT_RAISED` does not exist → use `ESTIMATED_CASH_RAISED` or `CALCULATED_CASH_RAISED`
+> - `SHARACLASS_NAME` (typo) / `SHARE_CLASS_NAME` → use `SHARECLASS_NAME` (one word, no underscore between SHARE and CLASS)
 
 | Column | Description |
 |--------|-------------|
@@ -286,7 +291,7 @@ One row per financing round per company. Used by Query A (joined on `CORPORATION
 | `ROUND` | Round label (e.g. "Series A") |
 | `RAISED_DATE` / `CLOSING_DATE` | Round raised / closing dates |
 | `ESTIMATED_CASH_RAISED` / `CALCULATED_CASH_RAISED` | Cash raised in the round (no `AMOUNT_RAISED` column — use these) |
-| `ORIGINAL_ISSUE_PRICE` | Issue price per share for the round |
+| `ORIGINAL_ISSUE_PRICE` | Issue price per share for the round (no `PRICE_PER_SHARE` column) |
 | `SHARES_ISSUED` / `FULLY_DILUTED_SHARES` | Share counts |
 | `POST_MONEY_VALUATION` / `PRE_MONEY_VALUATION` | Round valuations |
 
@@ -294,12 +299,22 @@ One row per financing round per company. Used by Query A (joined on `CORPORATION
 Canonical company-name/identifier lookup. Join target for `FUND_CORPORATION_OWNERSHIP` (`FCO.CORPORATION_ID = CBI.CORPORATION_UUID`).
 
 > **The company-name column is `CORPORATION_NAME`; the UUID column is `CORPORATION_UUID`.** There is **no** `COMPANY_NAME`, `COMPANY_UUID`, `LEGAL_NAME`, `NAME`, or `ISSUER_NAME` column — those are the most common wrong guesses. Both `CORPORATION_BASIC_INFO` and `CORPORATION_BASIC_INFO_V2` expose the same name/UUID columns.
+>
+> **Location columns are `CITY`, `STATE`, `COUNTRY` — not `HEADQUARTERS_CITY` / `HEADQUARTERS_STATE` / `HEADQUARTERS_COUNTRY`.** Those compound forms do not exist and will throw `SQL compilation error: invalid identifier`.
 
 | Column | Description |
 |--------|-------------|
 | `CORPORATION_NAME` | Company name — **filter by this** (`LOWER(CORPORATION_NAME) LIKE '%...%'`) |
 | `CORPORATION_UUID` | Company UUID — join key from `FUND_CORPORATION_OWNERSHIP.CORPORATION_ID` |
 | `CORPORATION_ID` | Integer company id (do not pass to UUID-keyed tables) |
+| `CITY` / `STATE` / `COUNTRY` | Location fields (ISO-3 country code) — `HEADQUARTERS_*` variants do not exist |
+
+> ⚠️ **FUND_CORPORATION_OWNERSHIP JOIN pattern** — `FCO.CORPORATION_ID` is **TEXT (UUID)**, while `CORPORATION_BASIC_INFO_V2.CORPORATION_ID` is **INTEGER**. Joining on `c.corporation_id = o.corporation_id` causes a Snowflake type-cast error (`Numeric value 'uuid-string' is not recognized`). Always join on the UUID column:
+> ```sql
+> JOIN FUND_ADMIN.CORPORATION_BASIC_INFO_V2 c
+>   ON c.CORPORATION_UUID = o.CORPORATION_ID   -- both TEXT/UUID
+> ```
+> Never use `c.CORPORATION_ID` (INTEGER) as the join key when joining from `FUND_CORPORATION_OWNERSHIP`.
 
 ## Common Aliases
 

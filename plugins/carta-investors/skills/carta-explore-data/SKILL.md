@@ -164,7 +164,8 @@ Use the MCP commands in sequence, substituting `<SCHEMA>` with the schema determ
 
 - **Always include LIMIT** — default `LIMIT 200`; use 50–500 for aggregations
 - **Only SELECT** — no INSERT, UPDATE, DELETE, or DDL
-- **Do not query `INFORMATION_SCHEMA`** — it is not supported in this data warehouse; use the semantic layer files and `call_tool({"name": "dwh__list__tables", ...})` / `call_tool({"name": "dwh__get__table_schema", ...})` instead
+- **Single SELECT only — no UNION / UNION ALL** — the tool enforces one statement at a time and returns `Only a single SELECT statement is allowed`. If you need to count rows across multiple tables, run separate `call_tool` calls.
+- **Do not query `INFORMATION_SCHEMA`** — it is not supported in this data warehouse and returns a hard `ValueError: Querying INFORMATION_SCHEMA is not allowed`. Use `call_tool({"name": "dwh__list__tables", ...})` to list tables and `call_tool({"name": "dwh__get__table_schema", ...})` to inspect columns. These MCP tools are the only valid schema-discovery path.
 - **Date fields** — `effective_date` for `JOURNAL_ENTRIES`; `month_end_date` for `MONTHLY_NAV_CALCULATIONS`; `investment_date` for `AGGREGATE_INVESTMENTS`
 - **Deduplication** — for `MONTHLY_NAV_CALCULATIONS` and `AGGREGATE_FUND_METRICS`, use `QUALIFY ROW_NUMBER() OVER (PARTITION BY fund_uuid ORDER BY last_refreshed_at DESC) = 1`
 - **ALLOCATIONS has multiple rows per fund** — always `GROUP BY fund_uuid` with `MAX(fund_name)` when using it for fund metadata
@@ -190,7 +191,19 @@ Use the MCP commands in sequence, substituting `<SCHEMA>` with the schema determ
 | `INVESTORS_PARTNER` | `PARTNER_DATA` |
 | `FUNDADMIN_DATASHARE_*` (with full dbt prefix) | Use short name: e.g. `MONTHLY_NAV_CALCULATIONS` |
 
-- **Wrong column names**: Domain-specific corrections are in each semantic layer file's `⚠️ Common Mistakes` section. Always run `dwh__get__table_schema` to verify column names before querying — the schema response flags common aliases in the column descriptions.
+- **Wrong column names**: Domain-specific corrections are in each semantic layer file's `⚠️ Common Mistakes` section. Always run `dwh__get__table_schema` to verify column names before querying. Cross-domain shortcuts that frequently produce `invalid identifier` errors:
+
+| ❌ Do NOT use | ✅ Use instead | Table |
+|---|---|---|
+| `NET_IRR` / `IRR` | `net_lp_irr` (LP net) or `deal_irr` (gross) | `AGGREGATE_FUND_METRICS` |
+| `PRICE_PER_SHARE` | `ORIGINAL_ISSUE_PRICE` | `FINANCING_HISTORY` |
+| `AMOUNT_RAISED` | `ESTIMATED_CASH_RAISED` or `CALCULATED_CASH_RAISED` | `FINANCING_HISTORY` |
+| `HEADQUARTERS_CITY` / `HEADQUARTERS_STATE` / `HEADQUARTERS_COUNTRY` | `CITY` / `STATE` / `COUNTRY` | `CORPORATION_BASIC_INFO_V2` |
+| `LEGAL_NAME` / `NAME` / `COMPANY_NAME` | `CORPORATION_NAME` | `CORPORATION_BASIC_INFO_V2` |
+| `BOOL_OR(col)` | `BOOLOR_AGG(col)` | *(any table)* — Snowflake has no `BOOL_OR` |
+
+- **`dwh__execute__query` takes `sql` as its argument key, not `query`** — using the wrong key returns a pydantic `ValidationError: Missing required argument: sql`. The correct invocation is `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "SELECT ..."}})`.
+- **`ORDER BY` with `SELECT DISTINCT`** — columns used in `ORDER BY` must also appear in the `SELECT` list when using `DISTINCT`; otherwise Snowflake raises `is not a valid order by expression`.
 
 ## General Presentation Rules
 
