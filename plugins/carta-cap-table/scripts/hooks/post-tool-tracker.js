@@ -46,14 +46,6 @@ process.stdin.on('end', () => {
             cacheDiscoverResult(dataDir, resultText);
         }
 
-        if (shortName === 'welcome' && resultText) {
-            cacheToolResult(dataDir, 'welcome.json', resultText);
-        }
-
-        if (shortName === 'list_accounts' && resultText) {
-            cacheToolResult(dataDir, 'accounts.json', resultText);
-        }
-
         if (shortName === 'fetch' && tool_input) {
             trackCorporation(dataDir, tool_input);
         }
@@ -88,21 +80,6 @@ function cacheDiscoverResult(dataDir, resultText) {
             commands,
         };
         fs.writeFileSync(path.join(cacheDir, 'commands.json'), JSON.stringify(cacheData));
-    } catch {}
-}
-
-const MAX_CACHE_SIZE = 500000;
-
-function cacheToolResult(dataDir, filename, resultText) {
-    try {
-        if (resultText.length > MAX_CACHE_SIZE) return;
-        const cacheDir = path.join(dataDir, 'cache');
-        fs.mkdirSync(cacheDir, { recursive: true });
-        const cacheData = {
-            cached_at: new Date().toISOString(),
-            text: resultText,
-        };
-        fs.writeFileSync(path.join(cacheDir, filename), JSON.stringify(cacheData));
     } catch {}
 }
 
