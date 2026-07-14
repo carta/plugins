@@ -6,7 +6,7 @@
 |-------|---------|--------|---------|
 | SessionStart | — | inject-skill-context.js | Inject skill-loading instruction |
 | PreToolUse | Skill | track-active-skill.js | Record which carta skills have been loaded this session |
-| PreToolUse | Carta MCP | inject-instrumentation.js | Inject `_instrumentation` into fetch/mutate params |
+| PreToolUse | Carta MCP | inject-instrumentation.js | Inject merged `_instrumentation_v2` (all active plugins + namespaced skills) into fetch/mutate params (top-level otherwise) |
 | PostToolUse | Carta MCP `execute_query` | warn-empty-query.js | Warn Claude when a query returns no results |
 
 ## Carta MCP matcher
