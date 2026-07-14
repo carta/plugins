@@ -2,9 +2,8 @@
 name: carta-download-tearsheet
 description: >
   Download tear sheets for your portfolio companies and funds on Carta.
-  Use when asked to "create a [portco] tear sheet", "download tear sheet for all portfolio companies",
-  or "preview the tear sheet for [portco]".
-version: 1.2.1
+  For tear sheet requests, use carta-lp-reporting-routing instead.
+version: 1.2.2
 model: haiku
 allowed-tools:
   - mcp__carta__call_tool
