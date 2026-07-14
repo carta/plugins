@@ -94,6 +94,13 @@ function buildInstrumentationV2(sessionId, skills) {
             } catch {}
         }
         if (!plugins.length) return selfOnly;
+        // Move the most-recently-invoked skill (the shared '.last-skill' marker written
+        // cross-plugin by track-active-skill.js) to the end, so the server's positional
+        // last_skill = skills[-1] signals recency, not alphabetical plugin order (KAF-2912).
+        let last = '';
+        try { last = fs.readFileSync(path.join(dir, '.last-skill'), 'utf8').trim(); } catch {}
+        const i = last ? mergedSkills.indexOf(last) : -1;
+        if (i > -1) mergedSkills.push(mergedSkills.splice(i, 1)[0]);
         return { plugins, skills: mergedSkills, session_id: sessionId || null };
     } catch {
         return selfOnly;

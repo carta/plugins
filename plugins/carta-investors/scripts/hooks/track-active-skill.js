@@ -16,6 +16,7 @@
  */
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 
 const PREFIX = 'carta-investors:';
@@ -57,6 +58,17 @@ process.stdin.on('end', () => {
             existing.skills = skills;
 
             fs.writeFileSync(statePath, JSON.stringify(existing));
+
+            // Record the most-recently-invoked skill (namespaced) into the shared
+            // instrumentation registry so inject-instrumentation orders the emitted
+            // skills union with the genuine latest last (KAF-2912). Best effort.
+            try {
+                const base = process.env.CARTA_INSTRUMENTATION_REGISTRY_DIR
+                    || path.join(os.tmpdir(), 'carta-instrumentation');
+                const regDir = path.join(base, String(session_id).replace(/[^A-Za-z0-9._-]/g, '_'));
+                fs.mkdirSync(regDir, { recursive: true });
+                fs.writeFileSync(path.join(regDir, '.last-skill'), skillFull);
+            } catch {}
         }
 
         allow();
