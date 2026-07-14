@@ -502,11 +502,24 @@
             line-height: 18px;
             padding: 6px 10px;
             border-radius: 4px;
-            white-space: nowrap;
+            white-space: pre;
             pointer-events: none;
             opacity: 0;
             transition: opacity 0.15s;
             z-index: 100;
+        }
+
+        /* ── FX icon (foreign currency investment indicator) ── */
+        .fx-icon {
+            display: inline-flex;
+            align-items: center;
+            font-size: 14px;
+            color: var(--text-default);
+            cursor: default;
+            margin-right: 5px;
+            text-decoration: none !important;
+            vertical-align: middle;
+            line-height: 1;
         }
 
         .tooltip-popup.visible { opacity: 1; }
@@ -626,15 +639,19 @@
 
         function buildSoiSql(fundUuid, offset, limit) {
             return `SELECT
-                ISSUER_NAME                AS issuer_name,
-                ASSET_NAME                 AS asset_name,
-                INVESTMENT_DATE            AS acquisition_date,
-                COUNT_REMAINING_SHARES     AS count_remaining_shares,
-                TOTAL_COST_BASIS           AS cost_basis,
-                REMAINING_VALUE            AS fmv,
-                TOTAL_UNREALIZED_GAIN_LOSS AS unrealized_gain_loss,
-                REMAINING_VALUE_PER_SHARE  AS remaining_value_per_share,
-                LATEST_FMV_EFFECTIVE_DATE  AS latest_fmv_effective_date
+                ISSUER_NAME                        AS issuer_name,
+                ASSET_NAME                         AS asset_name,
+                INVESTMENT_DATE                    AS acquisition_date,
+                COUNT_REMAINING_SHARES             AS count_remaining_shares,
+                TOTAL_COST_BASIS                   AS cost_basis,
+                REMAINING_VALUE                    AS fmv,
+                TOTAL_UNREALIZED_GAIN_LOSS         AS unrealized_gain_loss,
+                REMAINING_VALUE_PER_SHARE          AS remaining_value_per_share,
+                LATEST_FMV_EFFECTIVE_DATE          AS latest_fmv_effective_date,
+                BASE_CURRENCY_CODE                 AS base_currency_code,
+                BASE_CURRENCY_COST                 AS base_currency_cost,
+                BASE_CURRENCY_REMAINING_VALUE      AS base_currency_remaining_value,
+                BASE_CURRENCY_UNREALIZED_GAIN_LOSS AS base_currency_unrealized_gain_loss
             FROM FUND_ADMIN.AGGREGATE_INVESTMENTS
             WHERE FUND_UUID = '${fundUuid}'
               AND IS_ACTIVE_INVESTMENT = TRUE
@@ -703,6 +720,8 @@
 
         function coerceCell(raw) {
             if (raw === 'NULL') return null;
+            if (raw === 'TRUE') return true;
+            if (raw === 'FALSE') return false;
             if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
             if (/^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(raw)) {
                 const n = parseFloat(raw);
@@ -765,7 +784,13 @@
                     gl: inv.unrealized_gain_loss || 0,
                     cps: shares > 0 ? cost / shares : null,
                     vps: inv.remaining_value_per_share,
-                    lastDate: formatDateShort(inv.latest_fmv_effective_date)
+                    lastDate: formatDateShort(inv.latest_fmv_effective_date),
+                    // Base currency fields — present when the asset was purchased in a different
+                    // currency than the fund. Company summary rows intentionally omit these.
+                    fxCode: inv.base_currency_code || null,
+                    fxCost: inv.base_currency_cost,
+                    fxValue: inv.base_currency_remaining_value,
+                    fxGl: inv.base_currency_unrealized_gain_loss,
                 });
             });
 
@@ -862,6 +887,14 @@
         function fmtShares(val) {
             if (!val) return '—';
             return new Intl.NumberFormat('en-US').format(val);
+        }
+
+        // Format an amount in the asset's base currency for the fx tooltip.
+        // Shows the raw number with 2 decimal places; the currency code is shown
+        // separately in the tooltip so we don't need a currency symbol here.
+        function fmtBaseAmount(val) {
+            if (val == null) return '—';
+            return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
         }
 
         function glCell(val) {
@@ -1024,14 +1057,24 @@
                     const ar = document.createElement('tr');
                     ar.className = `asset-row asset-group-${i}`;
                     if (allExpanded) ar.classList.add('visible');
+
+                    // Build fx icon markup for a given base-currency amount and column label.
+                    // The tooltip uses &#10; (newline entity) so the browser parses it as \n,
+                    // which white-space:pre on .tooltip-popup renders as a line break.
+                    const fxIcon = (baseVal, header) => {
+                        if (!a.fxCode || a.fxCode === currentCurrency) return '';
+                        const tip = `${header}&#10;Amount ${fmtBaseAmount(baseVal)}&#10;Currency ${escHtml(a.fxCode)}`;
+                        return `<span class="fx-icon tooltip-trigger" data-tooltip="${tip}">⇄</span>`;
+                    };
+
                     ar.innerHTML = `
                         <td><span class="asset-name">${escHtml(a.name)}</span></td>
                         <td>${escHtml(a.date)}</td>
                         <td class="number">${fmtShares(a.shares)}</td>
-                        <td class="number">${fmt(a.cost)}</td>
-                        <td class="number">${fmt(a.value)}</td>
+                        <td class="number">${fxIcon(a.fxCost, 'Original purchase')}${fmt(a.cost)}</td>
+                        <td class="number">${fxIcon(a.fxValue, 'Base currency value')}${fmt(a.value)}</td>
                         <td>${escHtml(a.lastDate)}</td>
-                        <td class="number">${glCell(a.gl)}</td>
+                        <td class="number">${fxIcon(a.fxGl, 'Base currency unrealized G/L')}${glCell(a.gl)}</td>
                         <td class="number">${fmtDec(a.cps)}</td>
                         <td class="number">${fmtDec(a.vps)}</td>
                     `;
