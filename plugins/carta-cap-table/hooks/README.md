@@ -7,7 +7,7 @@
 | SessionStart | — | inject-skill-context.js | Inject skill-loading instruction and cached account data |
 | SessionStart | — | init-data-dir.js | Create CLAUDE_PLUGIN_DATA directory structure |
 | PreToolUse | Skill | track-active-skill.js | Record which carta skills have been loaded this session |
-| PreToolUse | Carta MCP | inject-instrumentation.js | Inject `_instrumentation` into fetch/mutate params (top-level otherwise); on `welcome` also inject `claude_plugins` |
+| PreToolUse | Carta MCP | inject-instrumentation.js | Inject merged `_instrumentation_v2` (all active plugins + namespaced skills) into fetch/mutate params (top-level otherwise); on `welcome` also inject `claude_plugins` |
 | PostToolUse | Carta MCP | post-tool-tracker.js | Cache discover/welcome/list_accounts results; track corporation_id |
 
 ## Carta MCP matcher
