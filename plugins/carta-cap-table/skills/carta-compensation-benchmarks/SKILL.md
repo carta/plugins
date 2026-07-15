@@ -450,7 +450,7 @@ Capture the output:
 - `level` — must be one of (low to high seniority): `ENTRY`, `MID1`, `MID2`, `SENIOR1`, `SENIOR2`, `STAFF1`, `STAFF2`, `PRINCIPAL`, `VP1`, `VP2`, `C_LEVEL`, `CEO`
 - `track` — the value returned by the rolematcher (`ic`, `manager`, `executive`, or `UNKNOWN`). Map to `is_leader`: `manager` or `executive` → `true`, `ic` → `false`. If `UNKNOWN`, stop and ask the user before calling the API — see Error Handling.
 
-If the rolematcher returns a value not in these enums (e.g. `LEAD1`, `PRODUCT_MANAGER`), map it to the closest valid value before calling the API. If unsure, call `search_tools({"query": "compensation get benchmark"})` to re-read the valid enum list, or ask the user.
+If the rolematcher returns a value not in these enums (e.g. `LEAD1`, `PRODUCT_MANAGER`), map it to the closest valid value before calling the API. If unsure, read the valid enum list from `discover("compensation:get:benchmark")` (or `search_tools({"query": "compensation get benchmark"})`) — do NOT guess a plausible-looking name or invent a `compensation:list:*` command to look it up. Ask the user if still ambiguous.
 
 If the user provides only a job title, that is sufficient minimum input for the rolematcher.
 
@@ -470,6 +470,28 @@ Capture three things from the response:
 - If `peer_group.dimension` is missing or not one of those three values, follow Step 4a (STOP).
 
 ### Step 4 — Fetch the benchmark
+
+> **CRITICAL — Valid enum values: read them, don't guess them. Two failure modes to avoid.**
+>
+> Every filter param on `compensation:get:benchmark` (`job`, `level`, `focus`, the three `*_bucket` params, `equity_quantity`) takes a fixed **UPPER_SNAKE_CASE enum value**. The API validates by exact enum name and returns **HTTP 400** for anything else. Two things burn retries:
+>
+> **1. There is NO `compensation:list:*` command for these enums. Do not invent one.**
+> `compensation:list:job_types`, `list:jobs`, `list:peer_groups`, `list:post_money_buckets`, `list:capital_raised_buckets`, `list:headcount_buckets` — **none of these exist.** Calling them returns `Unknown command` and wastes a turn. The only `compensation:list:*` command is `compensation:list:benchmark_versions`. To see the valid filter values, **read the `compensation:get:benchmark` command help** — it enumerates every `job`, `level`, and bucket value:
+> ```
+> discover("compensation:get:benchmark")
+> ```
+> (`search_tools({"query": "compensation get benchmark"})` also returns it.) Read the enum lists from that help; never self-discover via a guessed `list:` command.
+>
+> **2. Pass the enum NAME, not the human display label.**
+> The API wants `MARKETING`, not `"Marketing"`; `CUSTOMER_SUCCESS`, not `"Customer Success"` or `"Customer Support"`; `SENIOR1`, not `"Senior 1"`. For buckets, pass the enum name (`TWENTY_FIVE_MILLION`), not the dollar label (`"$25M-$50M"`). The Title-Case forms are for **user-facing text only** (see the casing rule at the top of this file) — they are never valid API values. If you only have a free-text role, that's what the `carta-compensation-rolematcher` in Step 3a is for; it returns canonical enum names. Do not hand-translate a display label into a guessed enum.
+>
+> **Anti-patterns (all observed in real failures):**
+> - ❌ `fetch("compensation:list:job_types")` → `Unknown command`. Read `discover("compensation:get:benchmark")` instead.
+> - ❌ `job: "Marketing"` / `job: "Engineering"` / `job: "Customer Support"` → HTTP 400. Use `MARKETING` / `ENGINEER` / `CUSTOMER_SUCCESS`.
+> - ❌ `job: "PRODUCT_MANAGER"` → HTTP 400 (invented). The value is `PRODUCT`. When unsure, read the help — don't guess a plausible-looking name.
+> - ❌ `capital_raised_bucket: "$250M-$500M"` (a label) or a fabricated name → HTTP 400. Pass a real `CapitalRaisedBuckets` name from the help.
+>
+> Bucketing across many job functions? Iterate over the valid `job` enum names from the help — do **not** loop over display labels.
 
 ```
 fetch("compensation:get:benchmark", {
@@ -547,7 +569,7 @@ User-phrasing → override mapping:
 
 Do NOT "fix" `post_money_bucket: "TEN_MILLION"` to `post_money_bucket: "TEN_TO_TWENTY_FIVE_MILLION"` thinking it's a typo. The post-money enum has no `_TO_` form — passing `TEN_TO_TWENTY_FIVE_MILLION` returns HTTP 400.
 
-Reference for the full enum sets is in `compensation:get:benchmark`'s description (run `search_tools({"query": "compensation get benchmark"})` if you need to verify a specific value).
+Reference for the full enum sets is in `compensation:get:benchmark`'s help (run `discover("compensation:get:benchmark")`, or `search_tools({"query": "compensation get benchmark"})`, to verify a specific value). There is no `compensation:list:*` command for bucket enums — read them from the command help.
 
 ### Step 4a — Unknown / missing `peer_group.dimension` (STOP)
 
