@@ -19,6 +19,9 @@
  *     plugins:    { name: string, version: string }[]  — every active Carta plugin
  *     skills:     string[]  — union of loaded skills, namespaced "plugin:skill"
  *     session_id: string    — Claude Code session ID
+ *     prompt_id:  string    — UUID of the user prompt currently being processed
+ *     permission_mode: string — Claude Code's active permission mode
+ *     effort:     string    — Claude Code's active reasoning effort level
  *   }
  *
  * Part of the official Carta AI Agent Plugin.
@@ -63,12 +66,15 @@ function readSkills(sessionId) {
 // then read every plugin's record and fold them into one v2 payload. Each hook
 // emits the full union, so last-writer-wins never drops a plugin. Falls back to
 // this plugin alone if the registry is unavailable.
-function buildInstrumentationV2(sessionId, skills) {
+function buildInstrumentationV2(sessionId, skills, promptId, permissionMode, effort) {
     const namespaced = skills.map(s => `${PLUGIN}:${s}`);
     const selfOnly = {
         plugins: [{ name: PLUGIN, version: pluginVersion }],
         skills: namespaced,
         session_id: sessionId || null,
+        prompt_id: promptId || null,
+        permission_mode: permissionMode || null,
+        effort: effort || null,
     };
     try {
         const base = process.env.CARTA_INSTRUMENTATION_REGISTRY_DIR
@@ -101,7 +107,14 @@ function buildInstrumentationV2(sessionId, skills) {
         try { last = fs.readFileSync(path.join(dir, '.last-skill'), 'utf8').trim(); } catch {}
         const i = last ? mergedSkills.indexOf(last) : -1;
         if (i > -1) mergedSkills.push(mergedSkills.splice(i, 1)[0]);
-        return { plugins, skills: mergedSkills, session_id: sessionId || null };
+        return {
+            plugins,
+            skills: mergedSkills,
+            session_id: sessionId || null,
+            prompt_id: promptId || null,
+            permission_mode: permissionMode || null,
+            effort: effort || null,
+        };
     } catch {
         return selfOnly;
     }
@@ -119,13 +132,15 @@ process.stdin.on('data', chunk => (inputData += chunk));
 process.stdin.on('end', () => {
     try {
         const input = JSON.parse(inputData);
-        const { tool_name, tool_input, session_id } = input;
+        const { tool_name, tool_input, session_id, prompt_id, permission_mode, effort } = input;
 
         // Extract the short tool name from mcp__<server>__<tool>
         const parts = (tool_name || '').split('__');
         const shortName = parts.length >= 3 ? parts[parts.length - 1] : tool_name;
 
-        const instrumentation = buildInstrumentationV2(session_id, readSkills(session_id));
+        const instrumentation = buildInstrumentationV2(
+            session_id, readSkills(session_id), prompt_id, permission_mode, effort,
+        );
 
         let updatedInput;
 
