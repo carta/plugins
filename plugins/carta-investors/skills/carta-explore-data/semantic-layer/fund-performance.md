@@ -113,6 +113,7 @@ questions about the same fund.
 | `FUND_SIZE` | `fund_size` | verify with `dwh__get__table_schema` |
 | `FUND_ID` | `fund_uuid` (VARCHAR) | integer fund_id is internal only |
 | Querying `AGGREGATE_FUND_METRICS` for a specific past date/quarter-end | Query `TEMPORAL_FUND_COHORT_BENCHMARKS` instead | `AGGREGATE_FUND_METRICS` only retains the latest monthly refresh — zero rows for a past date does not mean the data doesn't exist |
+| `ALLOCATION_AMOUNT` / `ALLOCATION_VALUE` (in `FUND_ADMIN.ALLOCATIONS`) | `ACTUAL_AMOUNT` | the numeric amount column in `ALLOCATIONS` is `ACTUAL_AMOUNT`, not `ALLOCATION_AMOUNT` or `ALLOCATION_VALUE` |
 
 ## Common Aliases (table name aliases — use `AGGREGATE_FUND_METRICS` instead)
 
