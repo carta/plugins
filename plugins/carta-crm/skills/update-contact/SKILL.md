@@ -8,10 +8,7 @@ description: >
   Accepts a contact ID or name (will search if no ID provided).
   Only the fields explicitly provided are changed — all other fields are left untouched.
 allowed-tools:
-  - mcp__carta_crm__update_contact
-  - mcp__carta_crm__search_contacts
-  - mcp__carta_crm__fetch_contact_by_id
-  - mcp__carta_crm__get_contact_custom_fields
+  - mcp__carta__crm_call_tool
 version: 1.0.0
 model: haiku
 ---
@@ -29,7 +26,7 @@ If the user provided a contact ID directly, use it and skip to Step 3.
 If only a name or description was given, search first:
 
 ```
-mcp__carta_crm__search_contacts({ query: "<name>", limit: 10 })
+crm_call_tool({ "name": "crm:search_contacts", "arguments": { query: "<name>", limit: 10 } })
 ```
 
 If multiple contacts match, present the list and ask the user to confirm which one
@@ -57,7 +54,7 @@ Ask the user what they want to change. Updatable fields include:
 
 If the user wants to update custom fields but isn't sure of field IDs, fetch the schema first:
 ```
-mcp__carta_crm__get_contact_custom_fields()
+crm_call_tool({ "name": "crm:get_contact_custom_fields", "arguments": {} })
 ```
 
 **Important:** Only include fields that are explicitly being changed. Omit everything else.
@@ -67,13 +64,16 @@ mcp__carta_crm__get_contact_custom_fields()
 Call:
 
 ```
-mcp__carta_crm__update_contact({
-  id: "<contact id>",
-  name: "<updated name>",
-  title: "<updated title>",
-  emailDetail: "<updated email>",
-  tags: ["<tag1>", "<tag2>"],
-  fields: { "<field_id>": "<value>" }
+crm_call_tool({
+  "name": "crm:update_contact",
+  "arguments": {
+    id: "<contact id>",
+    name: "<updated name>",
+    title: "<updated title>",
+    emailDetail: "<updated email>",
+    tags: ["<tag1>", "<tag2>"],
+    fields: { "<field_id>": "<value>" }
+  }
 })
 ```
 

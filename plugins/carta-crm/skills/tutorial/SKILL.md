@@ -8,7 +8,7 @@ description: >
   "how do I use carta crm", "walk me through carta crm",
   "getting started with crm", "demo carta crm", "crm tutorial"
 allowed-tools:
-  - mcp__carta_crm__search_investors
+  - mcp__carta__crm_call_tool
   - Bash(mkdir -p ~/.claude/plugins/cache/carta-development-tools/carta-crm)
   - Bash(touch ~/.claude/plugins/cache/carta-development-tools/carta-crm/.tutorial-seen)
 args: []
@@ -128,7 +128,7 @@ Wait for the user to confirm before continuing.
 Run the MCP connectivity check silently by calling:
 
 ```
-mcp__carta_crm__search_investors({ limit: 1 })
+crm_call_tool({ "name": "crm:search_investors", "arguments": { limit: 1 } })
 ```
 
 If the call succeeds (returns a result object without an auth error), present this to the user:

@@ -8,11 +8,7 @@ description: >
   Accepts a fundraising ID or name (will search if no ID provided).
   Only the fields explicitly provided are changed — all other fields are left untouched.
 allowed-tools:
-  - mcp__carta_crm__update_fundraising
-  - mcp__carta_crm__search_fundraising
-  - mcp__carta_crm__get_fundraising
-  - mcp__carta_crm__get_fundraising_custom_fields
-  - mcp__carta_crm__get_fundraising_stages
+  - mcp__carta__crm_call_tool
 version: 1.0.0
 model: haiku
 ---
@@ -30,7 +26,7 @@ If the user provided a fundraising ID directly, use it and skip to Step 3.
 If only a name or keyword was given, search first:
 
 ```
-mcp__carta_crm__search_fundraising({ query: "<name>", limit: 10 })
+crm_call_tool({ "name": "crm:search_fundraising", "arguments": { query: "<name>", limit: 10 } })
 ```
 
 If multiple fundraisings match, present the list and ask the user to confirm which one
@@ -43,10 +39,16 @@ Ask the user what they want to change:
 - **stageId** — move to a different stage (call `get_fundraising_stages` to resolve name → ID)
 - **fields** — custom field values keyed by field ID
 
+If the user wants to move to a stage by name, fetch the stages to resolve name → ID:
+
+```
+crm_call_tool({ "name": "crm:get_fundraising_stages", "arguments": {} })
+```
+
 If the user wants to update custom fields but isn't sure of field IDs, fetch the schema first:
 
 ```
-mcp__carta_crm__get_fundraising_custom_fields()
+crm_call_tool({ "name": "crm:get_fundraising_custom_fields", "arguments": {} })
 ```
 
 **Important:** Only include fields that are explicitly being changed. Omit everything else.
@@ -56,12 +58,15 @@ mcp__carta_crm__get_fundraising_custom_fields()
 Call:
 
 ```
-mcp__carta_crm__update_fundraising({
-  id: "<fundraising id>",
-  name: "<updated name>",
-  stageId: "<stage id>",
-  fields: {
-    "<field_id>": "<value>"
+crm_call_tool({
+  "name": "crm:update_fundraising",
+  "arguments": {
+    id: "<fundraising id>",
+    name: "<updated name>",
+    stageId: "<stage id>",
+    fields: {
+      "<field_id>": "<value>"
+    }
   }
 })
 ```

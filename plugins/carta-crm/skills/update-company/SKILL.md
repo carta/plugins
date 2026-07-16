@@ -8,10 +8,7 @@ description: >
   Accepts a company ID or name (will search if no ID provided).
   Only the fields explicitly provided are changed — all other fields are left untouched.
 allowed-tools:
-  - mcp__carta_crm__update_company
-  - mcp__carta_crm__search_companies
-  - mcp__carta_crm__fetch_company_by_domain
-  - mcp__carta_crm__get_company_custom_fields
+  - mcp__carta__crm_call_tool
 version: 1.0.0
 model: haiku
 ---
@@ -28,12 +25,12 @@ If the user provided a company ID directly, use it and skip to Step 3.
 
 If a domain was given, look it up first:
 ```
-mcp__carta_crm__fetch_company_by_domain({ domain: "<domain>" })
+crm_call_tool({ "name": "crm:fetch_company_by_domain", "arguments": { domain: "<domain>" } })
 ```
 
 If a name or keyword was given, search first:
 ```
-mcp__carta_crm__search_companies({ query: "<name>", limit: 10 })
+crm_call_tool({ "name": "crm:search_companies", "arguments": { query: "<name>", limit: 10 } })
 ```
 
 If multiple companies match, present the list and ask the user to confirm which one
@@ -49,7 +46,7 @@ Ask the user what they want to change:
 If the user wants to update custom fields but isn't sure of field IDs, fetch the schema first:
 
 ```
-mcp__carta_crm__get_company_custom_fields()
+crm_call_tool({ "name": "crm:get_company_custom_fields", "arguments": {} })
 ```
 
 If the user has already specified what to change in their message, extract it directly
@@ -62,12 +59,15 @@ without re-asking.
 Call:
 
 ```
-mcp__carta_crm__update_company({
-  id: "<company id>",
-  name: "<updated name>",
-  image: "<logo url>",
-  fields: {
-    "<field_id>": "<value>"
+crm_call_tool({
+  "name": "crm:update_company",
+  "arguments": {
+    id: "<company id>",
+    name: "<updated name>",
+    image: "<logo url>",
+    fields: {
+      "<field_id>": "<value>"
+    }
   }
 })
 ```

@@ -9,12 +9,7 @@ description: >
   Accepts a deal ID or company name (will search if no ID provided).
   Only the fields explicitly provided are changed — all other fields are left untouched.
 allowed-tools:
-  - mcp__carta_crm__update_deal
-  - mcp__carta_crm__search_deals
-  - mcp__carta_crm__get_deal_fields
-  - mcp__carta_crm__fetch_deal_by_deal_id
-  - mcp__carta_crm__get_deal_pipelines_with_stages
-  - mcp__carta_crm__get_deal_custom_fields
+  - mcp__carta__crm_call_tool
 version: 1.0.0
 model: haiku
 ---
@@ -32,8 +27,8 @@ If the user provided a deal ID directly, use it and skip to Step 3.
 If only a company name was given, call `get_deal_fields` first, then search:
 
 ```
-mcp__carta_crm__get_deal_fields()
-mcp__carta_crm__search_deals({ query: "<company name>", limit: 10 })
+crm_call_tool({ "name": "crm:get_deal_fields", "arguments": {} })
+crm_call_tool({ "name": "crm:search_deals", "arguments": { query: "<company name>", limit: 10 } })
 ```
 
 If multiple deals match, present the list and ask the user to confirm which one
@@ -59,12 +54,12 @@ Ask the user what they want to change:
 
 If the user wants to move to a stage by name, fetch pipelines first:
 ```
-mcp__carta_crm__get_deal_pipelines_with_stages()
+crm_call_tool({ "name": "crm:get_deal_pipelines_with_stages", "arguments": {} })
 ```
 
 If updating custom fields by label rather than ID:
 ```
-mcp__carta_crm__get_deal_custom_fields()
+crm_call_tool({ "name": "crm:get_deal_custom_fields", "arguments": {} })
 ```
 
 **Important:** Only include fields that are explicitly being changed. Omit everything else.
@@ -74,19 +69,22 @@ mcp__carta_crm__get_deal_custom_fields()
 Call:
 
 ```
-mcp__carta_crm__update_deal({
-  id: "<deal id>",
-  stageId: "<stage id>",
-  company: { name: "<name>", url: "<url>" },
-  comment: "<updated comment>",
-  tags: ["<tag1>", "<tag2>"],
-  dealLead: "<user id>",
-  addedAt: "<ISO 8601 date>",
-  fields: { "<field_id>": "<value>" },
-  people: {
-    advisers: ["<contact id>"],
-    introducer: ["<contact id>"],
-    management: ["<contact id>"]
+crm_call_tool({
+  "name": "crm:update_deal",
+  "arguments": {
+    id: "<deal id>",
+    stageId: "<stage id>",
+    company: { name: "<name>", url: "<url>" },
+    comment: "<updated comment>",
+    tags: ["<tag1>", "<tag2>"],
+    dealLead: "<user id>",
+    addedAt: "<ISO 8601 date>",
+    fields: { "<field_id>": "<value>" },
+    people: {
+      advisers: ["<contact id>"],
+      introducer: ["<contact id>"],
+      management: ["<contact id>"]
+    }
   }
 })
 ```

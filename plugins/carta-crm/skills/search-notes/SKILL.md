@@ -7,7 +7,7 @@ description: >
   "find notes mentioning [keyword]", or "/search-notes".
   Returns note details including ID, title, and text content.
 allowed-tools:
-  - mcp__carta_crm__search_notes
+  - mcp__carta__crm_call_tool
 version: 1.0.0
 model: haiku
 ---
@@ -25,9 +25,12 @@ If no search term was given, ask for one.
 ## Step 2 — Execute the search
 
 ```
-mcp__carta_crm__search_notes({
-  query: "<search term>",
-  limit: 20
+crm_call_tool({
+  "name": "crm:search_notes",
+  "arguments": {
+    query: "<search term>",
+    limit: 20
+  }
 })
 ```
 

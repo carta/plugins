@@ -7,8 +7,7 @@ description: >
   "save investor data". Collects investor information conversationally, then creates
   it via the MCP server.
 allowed-tools:
-  - mcp__carta_crm__create_investor
-  - mcp__carta_crm__get_investor_custom_fields
+  - mcp__carta__crm_call_tool
 version: 1.0.0
 model: haiku
 ---
@@ -24,7 +23,7 @@ required fields, then call the tool.
 Call the custom fields tool to see what fields the tenant has configured:
 
 ```
-mcp__carta_crm__get_investor_custom_fields()
+crm_call_tool({ "name": "crm:get_investor_custom_fields", "arguments": {} })
 ```
 
 Use the returned field IDs and labels as hints when collecting investor data.
@@ -44,10 +43,13 @@ without re-asking.
 Call:
 
 ```
-mcp__carta_crm__create_investor({
-  name: "<investor name>",
-  fields: {
-    "<field_id>": "<value>"
+crm_call_tool({
+  "name": "crm:create_investor",
+  "arguments": {
+    name: "<investor name>",
+    fields: {
+      "<field_id>": "<value>"
+    }
   }
 })
 ```

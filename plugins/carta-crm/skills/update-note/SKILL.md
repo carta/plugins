@@ -7,11 +7,7 @@ description: >
   Note: standalone note editing is not available via MCP — notes/comments are
   attached to deals and updated via the update-deal skill.
 allowed-tools:
-  - mcp__carta_crm__search_notes
-  - mcp__carta_crm__search_deals
-  - mcp__carta_crm__get_deal_fields
-  - mcp__carta_crm__update_deal
-  - mcp__carta_crm__fetch_deal_by_deal_id
+  - mcp__carta__crm_call_tool
 version: 1.0.0
 model: haiku
 ---
@@ -27,7 +23,7 @@ they want to change, then update the associated deal's comment.
 Search for the note by keyword:
 
 ```
-mcp__carta_crm__search_notes({ query: "<keyword>", limit: 10 })
+crm_call_tool({ "name": "crm:search_notes", "arguments": { query: "<keyword>", limit: 10 } })
 ```
 
 Show the results to the user and ask which note they want to update.
@@ -38,13 +34,13 @@ Once the user has selected a note, find the deal it belongs to. Ask the user for
 the deal name/company, or search:
 
 ```
-mcp__carta_crm__get_deal_fields()
-mcp__carta_crm__search_deals({ query: "<company name>", limit: 10 })
+crm_call_tool({ "name": "crm:get_deal_fields", "arguments": {} })
+crm_call_tool({ "name": "crm:search_deals", "arguments": { query: "<company name>", limit: 10 } })
 ```
 
 Fetch the deal to show the current comment:
 ```
-mcp__carta_crm__fetch_deal_by_deal_id({ id: "<deal id>" })
+crm_call_tool({ "name": "crm:fetch_deal_by_deal_id", "arguments": { id: "<deal id>" } })
 ```
 
 ## Step 3 — Collect the updated content
@@ -56,9 +52,12 @@ Show the user the existing comment and ask what they'd like to change.
 Call:
 
 ```
-mcp__carta_crm__update_deal({
-  id: "<deal id>",
-  comment: "<updated note content>"
+crm_call_tool({
+  "name": "crm:update_deal",
+  "arguments": {
+    id: "<deal id>",
+    comment: "<updated note content>"
+  }
 })
 ```
 

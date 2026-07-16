@@ -8,9 +8,7 @@ description: >
   Returns deal details including ID, company, stage, pipeline, tags, and custom fields.
   The deal ID returned can be used with the update-deal skill.
 allowed-tools:
-  - mcp__carta_crm__search_deals
-  - mcp__carta_crm__get_deal_fields
-  - mcp__carta_crm__fetch_deal_by_deal_id
+  - mcp__carta__crm_call_tool
 version: 1.0.0
 model: haiku
 ---
@@ -29,7 +27,7 @@ valid field IDs for filters. Do not skip this step.
 Always call this before searching:
 
 ```
-mcp__carta_crm__get_deal_fields()
+crm_call_tool({ "name": "crm:get_deal_fields", "arguments": {} })
 ```
 
 Read the field IDs, types, and descriptions carefully. Map the user's intent to the
@@ -44,18 +42,21 @@ most specific matching field(s) and use those in the `filters` parameter.
 
 **By ID:**
 ```
-mcp__carta_crm__fetch_deal_by_deal_id({ id: "<deal id>" })
+crm_call_tool({ "name": "crm:fetch_deal_by_deal_id", "arguments": { id: "<deal id>" } })
 ```
 
 **By filters:**
 ```
-mcp__carta_crm__search_deals({
-  query: "<free-text search — last resort only>",
-  stages: ["<stage id>"],
-  filters: [
-    { field_id: "<field id>", operator: "eq", value: "<value>" }
-  ],
-  limit: 50
+crm_call_tool({
+  "name": "crm:search_deals",
+  "arguments": {
+    query: "<free-text search — last resort only>",
+    stages: ["<stage id>"],
+    filters: [
+      { field_id: "<field id>", operator: "eq", value: "<value>" }
+    ],
+    limit: 50
+  }
 })
 ```
 

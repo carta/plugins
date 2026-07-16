@@ -6,8 +6,7 @@ description: >
   "add company to CRM", "add company to Carta CRM", or "/add-company".
   Collects company information conversationally, then creates it via the MCP server.
 allowed-tools:
-  - mcp__carta_crm__create_company
-  - mcp__carta_crm__get_company_custom_fields
+  - mcp__carta__crm_call_tool
 version: 1.0.0
 model: haiku
 ---
@@ -23,7 +22,7 @@ required fields, then call the tool.
 Call the custom fields tool to see what fields the tenant has configured:
 
 ```
-mcp__carta_crm__get_company_custom_fields()
+crm_call_tool({ "name": "crm:get_company_custom_fields", "arguments": {} })
 ```
 
 Use the returned field IDs and labels as hints when collecting company data.
@@ -44,11 +43,14 @@ without re-asking.
 Call:
 
 ```
-mcp__carta_crm__create_company({
-  name: "<company name>",
-  image: "<logo url>",
-  fields: {
-    "<field_id>": "<value>"
+crm_call_tool({
+  "name": "crm:create_company",
+  "arguments": {
+    name: "<company name>",
+    image: "<logo url>",
+    fields: {
+      "<field_id>": "<value>"
+    }
   }
 })
 ```

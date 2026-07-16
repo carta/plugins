@@ -7,8 +7,7 @@ description: >
   or "/add-contact". Collects contact information conversationally, then creates it
   via the MCP server. Only name is required — all other fields are optional.
 allowed-tools:
-  - mcp__carta_crm__create_contact
-  - mcp__carta_crm__get_contact_custom_fields
+  - mcp__carta__crm_call_tool
 version: 1.0.0
 model: haiku
 ---
@@ -40,7 +39,7 @@ Fields you can collect:
 
 If the user wants to populate custom fields, fetch the schema first:
 ```
-mcp__carta_crm__get_contact_custom_fields()
+crm_call_tool({ "name": "crm:get_contact_custom_fields", "arguments": {} })
 ```
 
 Never ask for `listId` unless the user brings it up.
@@ -50,15 +49,18 @@ Never ask for `listId` unless the user brings it up.
 Call:
 
 ```
-mcp__carta_crm__create_contact({
-  name: "<contact name>",
-  firstName: "<first>",
-  lastName: "<last>",
-  emailDetail: "<email>",
-  phone: "<phone>",
-  title: "<title>",
-  tags: ["<tag1>"],
-  fields: { "<field_id>": "<value>" }
+crm_call_tool({
+  "name": "crm:create_contact",
+  "arguments": {
+    name: "<contact name>",
+    firstName: "<first>",
+    lastName: "<last>",
+    emailDetail: "<email>",
+    phone: "<phone>",
+    title: "<title>",
+    tags: ["<tag1>"],
+    fields: { "<field_id>": "<value>" }
+  }
 })
 ```
 

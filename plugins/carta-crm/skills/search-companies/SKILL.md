@@ -8,8 +8,7 @@ description: >
   Returns company details including ID, name, and custom fields.
   The company ID returned can be used with the update-company skill.
 allowed-tools:
-  - mcp__carta_crm__search_companies
-  - mcp__carta_crm__fetch_company_by_domain
+  - mcp__carta__crm_call_tool
 version: 1.0.0
 model: haiku
 ---
@@ -30,14 +29,17 @@ If it's unclear, default to search by name and ask for a search term.
 
 **By domain:**
 ```
-mcp__carta_crm__fetch_company_by_domain({ domain: "<domain>" })
+crm_call_tool({ "name": "crm:fetch_company_by_domain", "arguments": { domain: "<domain>" } })
 ```
 
 **By name / keyword:**
 ```
-mcp__carta_crm__search_companies({
-  query: "<search term>",
-  limit: 20
+crm_call_tool({
+  "name": "crm:search_companies",
+  "arguments": {
+    query: "<search term>",
+    limit: 20
+  }
 })
 ```
 

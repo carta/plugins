@@ -6,9 +6,7 @@ description: >
   "log a deal", "add deal to CRM", "add deal to Carta CRM", or "/add-deal".
   Collects deal information conversationally, then creates it via the MCP server.
 allowed-tools:
-  - mcp__carta_crm__create_deal
-  - mcp__carta_crm__get_deal_pipelines_with_stages
-  - mcp__carta_crm__get_deal_custom_fields
+  - mcp__carta__crm_call_tool
 version: 1.0.0
 model: haiku
 ---
@@ -24,7 +22,7 @@ pipelines and custom fields, then collect deal details conversationally, then ca
 Call the pipelines tool so the user can pick a pipeline and stage by name:
 
 ```
-mcp__carta_crm__get_deal_pipelines_with_stages()
+crm_call_tool({ "name": "crm:get_deal_pipelines_with_stages", "arguments": {} })
 ```
 
 Present the pipeline and stage names to the user. If the call fails, proceed without
@@ -33,7 +31,7 @@ it — pipeline and stage default to the organization's defaults if omitted.
 ## Step 2 — Discover available custom fields (optional)
 
 ```
-mcp__carta_crm__get_deal_custom_fields()
+crm_call_tool({ "name": "crm:get_deal_custom_fields", "arguments": {} })
 ```
 
 Use returned field IDs and labels as hints when collecting deal data.
@@ -61,24 +59,27 @@ without re-asking.
 Call:
 
 ```
-mcp__carta_crm__create_deal({
-  pipelineId: "<pipeline id>",
-  stageId: "<stage id>",
-  company: {
-    name: "<company name>",
-    url: "<company url>"
-  },
-  comment: "<comment>",
-  tags: ["<tag1>", "<tag2>"],
-  dealLead: "<user id>",
-  addedAt: "<ISO 8601 date>",
-  people: {
-    advisers: ["<contact id>"],
-    introducer: ["<contact id>"],
-    management: ["<contact id>"]
-  },
-  fields: {
-    "<field_id>": "<value>"
+crm_call_tool({
+  "name": "crm:create_deal",
+  "arguments": {
+    pipelineId: "<pipeline id>",
+    stageId: "<stage id>",
+    company: {
+      name: "<company name>",
+      url: "<company url>"
+    },
+    comment: "<comment>",
+    tags: ["<tag1>", "<tag2>"],
+    dealLead: "<user id>",
+    addedAt: "<ISO 8601 date>",
+    people: {
+      advisers: ["<contact id>"],
+      introducer: ["<contact id>"],
+      management: ["<contact id>"]
+    },
+    fields: {
+      "<field_id>": "<value>"
+    }
   }
 })
 ```

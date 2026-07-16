@@ -7,9 +7,7 @@ description: >
   or "/add-fundraising". Collects fundraising information conversationally, then creates
   it via the MCP server.
 allowed-tools:
-  - mcp__carta_crm__create_fundraising
-  - mcp__carta_crm__get_fundraising_custom_fields
-  - mcp__carta_crm__get_fundraising_stages
+  - mcp__carta__crm_call_tool
 version: 1.0.0
 model: haiku
 ---
@@ -24,7 +22,7 @@ Help the user create one or more fundraising records in the Carta CRM using the
 Call the stages tool so the user can pick a stage by name:
 
 ```
-mcp__carta_crm__get_fundraising_stages()
+crm_call_tool({ "name": "crm:get_fundraising_stages", "arguments": {} })
 ```
 
 Present the stage names to the user. If the call fails, proceed without it —
@@ -33,7 +31,7 @@ stage defaults to the first stage if omitted.
 ## Step 2 — Discover available custom fields (optional)
 
 ```
-mcp__carta_crm__get_fundraising_custom_fields()
+crm_call_tool({ "name": "crm:get_fundraising_custom_fields", "arguments": {} })
 ```
 
 Use returned field IDs and labels as hints when collecting fundraising data.
@@ -54,11 +52,14 @@ without re-asking.
 Call:
 
 ```
-mcp__carta_crm__create_fundraising({
-  name: "<fundraising name>",
-  stageId: "<stage id>",
-  fields: {
-    "<field_id>": "<value>"
+crm_call_tool({
+  "name": "crm:create_fundraising",
+  "arguments": {
+    name: "<fundraising name>",
+    stageId: "<stage id>",
+    fields: {
+      "<field_id>": "<value>"
+    }
   }
 })
 ```

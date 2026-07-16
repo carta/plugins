@@ -8,9 +8,7 @@ description: >
   Returns fundraising details including ID, name, stage, and custom fields.
   The fundraising ID returned can be used with the update-fundraising skill.
 allowed-tools:
-  - mcp__carta_crm__search_fundraising
-  - mcp__carta_crm__get_fundraising
-  - mcp__carta_crm__get_fundraising_stages
+  - mcp__carta__crm_call_tool
 version: 1.0.0
 model: haiku
 ---
@@ -32,19 +30,26 @@ If it's unclear, default to search and ask for a search term.
 
 **By ID:**
 ```
-mcp__carta_crm__get_fundraising({ id: "<fundraising id>" })
+crm_call_tool({ "name": "crm:get_fundraising", "arguments": { id: "<fundraising id>" } })
 ```
 
 **By name / keyword:**
 ```
-mcp__carta_crm__search_fundraising({
-  query: "<search term>",
-  limit: 20
+crm_call_tool({
+  "name": "crm:search_fundraising",
+  "arguments": {
+    query: "<search term>",
+    limit: 20
+  }
 })
 ```
 
 If the user filtered by stage name, call `get_fundraising_stages` first to resolve
-the name to a stage ID, then pass `stages: ["<stage id>"]`.
+the name to a stage ID, then pass `stages: ["<stage id>"]`:
+
+```
+crm_call_tool({ "name": "crm:get_fundraising_stages", "arguments": {} })
+```
 
 Increase `limit` if the user asks to see more results. Use `offset` to paginate.
 

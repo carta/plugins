@@ -8,8 +8,7 @@ description: >
   Returns investor details including ID, name, and custom fields.
   The investor ID returned can be used with the update-investor skill.
 allowed-tools:
-  - mcp__carta_crm__search_investors
-  - mcp__carta_crm__get_investor
+  - mcp__carta__crm_call_tool
 version: 1.0.0
 model: haiku
 ---
@@ -31,14 +30,17 @@ If it's unclear, default to search and ask the user for a name or keyword.
 
 **By ID:**
 ```
-mcp__carta_crm__get_investor({ id: "<investor id>" })
+crm_call_tool({ "name": "crm:get_investor", "arguments": { id: "<investor id>" } })
 ```
 
 **By name / keyword:**
 ```
-mcp__carta_crm__search_investors({
-  query: "<search term>",
-  limit: 20
+crm_call_tool({
+  "name": "crm:search_investors",
+  "arguments": {
+    query: "<search term>",
+    limit: 20
+  }
 })
 ```
 
