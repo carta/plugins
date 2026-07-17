@@ -22,6 +22,7 @@
  *     prompt_id:  string    — UUID of the user prompt currently being processed
  *     permission_mode: string — Claude Code's active permission mode
  *     effort:     string    — Claude Code's active reasoning effort level
+ *     model:      string    — Claude model id, captured at SessionStart (see capture-model.js)
  *   }
  *
  * Part of the official Carta AI Agent Plugin.
@@ -74,6 +75,7 @@ function buildInstrumentationV2(sessionId, skills, promptId, permissionMode, eff
         prompt_id: promptId || null,
         permission_mode: permissionMode || null,
         effort: effort || null,
+        model: null,
     };
     try {
         const base = process.env.CARTA_INSTRUMENTATION_REGISTRY_DIR
@@ -106,6 +108,9 @@ function buildInstrumentationV2(sessionId, skills, promptId, permissionMode, eff
         try { last = fs.readFileSync(path.join(dir, '.last-skill'), 'utf8').trim(); } catch {}
         const i = last ? mergedSkills.indexOf(last) : -1;
         if (i > -1) mergedSkills.push(mergedSkills.splice(i, 1)[0]);
+        // model is captured at SessionStart by capture-model.js (not on PreToolUse stdin).
+        let model = null;
+        try { model = fs.readFileSync(path.join(dir, '.model'), 'utf8').trim() || null; } catch {}
         return {
             plugins,
             skills: mergedSkills,
@@ -113,6 +118,7 @@ function buildInstrumentationV2(sessionId, skills, promptId, permissionMode, eff
             prompt_id: promptId || null,
             permission_mode: permissionMode || null,
             effort: effort || null,
+            model,
         };
     } catch {
         return selfOnly;
