@@ -1,6 +1,7 @@
 ---
 name: carta-performance-benchmarks
-description: Compare a fund's performance against peer benchmark cohorts. Use when asked about fund benchmarks, peer comparison, percentile ranking, Net IRR vs peers, TVPI benchmarks, or how a fund stacks up against its cohort. Do NOT use for cap table market benchmarks (option pool sizes, SAFE terms, cap structure patterns — use carta-market-benchmarks in carta-cap-table). Do NOT use for general fund financial data queries or NAV — use carta-explore-data.
+description: Compare a fund's performance against peer benchmark cohorts. For performance benchmark requests, use carta-portfolio-analytics-routing instead. Do NOT use for cap table market benchmarks (option pool sizes, SAFE terms, cap structure patterns — use carta-market-benchmarks in carta-cap-table). Do NOT use for general fund financial data queries or NAV — use carta-explore-data.
+version: 1.0.0
 allowed-tools:
   - mcp__carta__call_tool
   - mcp__carta__list_contexts
