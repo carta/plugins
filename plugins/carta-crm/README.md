@@ -67,3 +67,8 @@ Claude will collect any missing required information, call the right MCP tools, 
 |-------|----------------|
 | `enrich-company` | "enrich this company", "look up company info", "research this company" |
 | `lookup-fund-portfolio` | "look up portfolio of [fund]", "get portfolio companies for [fund website]" |
+
+### Analytics & reporting
+| Skill | Trigger phrases |
+|-------|----------------|
+| `deal-flow-analytics` | "deal flow analytics", "analyze our deal flow", "who introduced most of our deals", "breakdown of deals by sector", "deal flow by geography" |

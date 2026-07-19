@@ -1,6 +1,6 @@
 {
   "name": "carta-crm",
-  "version": "0.11.1",
+  "version": "0.12.0",
   "description": "Manage the Carta CRM conversationally — search, add, update, and enrich investors, companies, contacts, deals, notes, and fundraisings via the Carta CRM MCP Server",
   "author": {
     "name": "Carta",
@@ -17,7 +17,8 @@
     "notes",
     "fundraisings",
     "search",
-    "enrich"
+    "enrich",
+    "analytics"
   ],
   "homepage": "https://github.com/carta/plugins",
   "mcpServers": {

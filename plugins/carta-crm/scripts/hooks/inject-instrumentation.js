@@ -23,6 +23,7 @@
  *     permission_mode: string — Claude Code's active permission mode
  *     effort:     string    — Claude Code's active reasoning effort level
  *     model:      string    — Claude model id, captured at SessionStart (see capture-model.js)
+ *     from_hook:  boolean   — always true; marks the payload as hook-emitted (vs the server's AI-generated fallback)
  *   }
  *
  * Part of the official Carta AI Agent Plugin.
@@ -76,6 +77,7 @@ function buildInstrumentationV2(sessionId, skills, promptId, permissionMode, eff
         permission_mode: permissionMode || null,
         effort: effort || null,
         model: null,
+        from_hook: true,
     };
     try {
         const base = process.env.CARTA_INSTRUMENTATION_REGISTRY_DIR
@@ -119,6 +121,7 @@ function buildInstrumentationV2(sessionId, skills, promptId, permissionMode, eff
             permission_mode: permissionMode || null,
             effort: effort || null,
             model,
+            from_hook: true,
         };
     } catch {
         return selfOnly;

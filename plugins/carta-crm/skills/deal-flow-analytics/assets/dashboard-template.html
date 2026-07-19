@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Carta CRM — Deal Flow Analytics</title>
+<style>
+  :root {
+    color-scheme: light;
+    --surface-1:      #fcfcfb;
+    --page:           #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --gridline:       #e1e0d9;
+    --baseline:       #c3c2b7;
+    --border:         rgba(11,11,11,0.10);
+    --series-1:       #2a78d6; /* categorical slot 1 — the one series each bar chart uses */
+    --other:          #c3c2b7; /* de-emphasis fill for the "Other" bucket */
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: var(--text-primary);
+  }
+  header {
+    padding: 24px 32px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  header h1 { margin: 0; font-size: 20px; font-weight: 600; }
+  header .meta { color: var(--text-secondary); font-size: 13px; }
+  header .title-group { display: flex; align-items: center; gap: 12px; }
+  .carta-logo {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    padding: 5px 12px;
+    border: 1.5px solid var(--text-primary);
+    color: var(--text-primary);
+    display: inline-block;
+    border-radius: 2px;
+  }
+  #fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+    gap: 16px;
+    padding: 0 32px 24px;
+  }
+  footer {
+    margin: 0 32px 32px;
+    padding-top: 20px;
+    border-top: 1px solid var(--gridline);
+  }
+  #headline {
+    padding: 16px 20px;
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+    color: var(--text-secondary);
+  }
+  #excluded {
+    margin-top: 16px;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .field-card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px 20px;
+  }
+  .field-card-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+  .field-title { font-size: 14px; font-weight: 600; margin: 0; }
+  .field-toggle {
+    font-size: 11px;
+    color: var(--text-secondary);
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 3px 8px;
+    cursor: pointer;
+  }
+  .field-toggle:hover { color: var(--text-primary); }
+  .field-meta {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin: 0 0 14px;
+  }
+  .bar-row {
+    display: grid;
+    grid-template-columns: minmax(90px, 30%) 1fr auto;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .bar-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    text-align: right;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .bar-track {
+    position: relative;
+    height: 18px;
+    background: transparent;
+    border-bottom: 1px solid var(--gridline);
+  }
+  .bar-fill {
+    height: 18px;
+    background: var(--series-1);
+    border-radius: 0 4px 4px 0;
+    min-width: 2px;
+  }
+  .bar-fill.is-other { background: var(--other); }
+  .bar-value {
+    font-size: 12px;
+    color: var(--text-primary);
+    white-space: nowrap;
+    min-width: 64px;
+  }
+  table.field-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  table.field-table th, table.field-table td {
+    text-align: left;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--gridline);
+  }
+  table.field-table th {
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+  table.field-table td:last-child, table.field-table th:last-child {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="title-group">
+    <span class="carta-logo">carta</span>
+    <h1>Carta CRM — Deal Flow Analytics</h1>
+  </div>
+  <div class="meta" id="header-meta"></div>
+</header>
+<div id="fields"></div>
+<footer>
+  <div id="headline"></div>
+  <div id="excluded"></div>
+</footer>
+
+<script>
+  // ---- Fill this in per report run: one entry per dimension ----------------
+  // {
+  //   label: "Sector",                 // card title
+  //   total: 167,                      // deals in the analyzed window
+  //   filled: 166,                     // deals where this field had a value
+  //   values: [{ name: "Software", count: 43 }, ...],  // ranked, "Other" last if present
+  // }
+  const DATA = {
+    dateRange: "",       // e.g. "Jul 2025 – Jul 2026"
+    headline: "",         // the single most notable finding, one sentence
+    excluded: [],         // field labels dropped for low coverage, e.g. ["ltmRevenue (13%)", ...]
+    fields: [],
+  };
+  // ---------------------------------------------------------------------------
+
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function renderBars(container, values) {
+    const max = Math.max(...values.map(v => v.count), 1);
+    const total = values.reduce((s, v) => s + v.count, 0);
+    container.innerHTML = values.map(v => {
+      const pct = total ? Math.round((v.count / total) * 100) : 0;
+      const widthPct = Math.round((v.count / max) * 100);
+      const isOther = /^other$/i.test(v.name);
+      const safeName = escapeHtml(v.name);
+      return `
+        <div class="bar-row">
+          <div class="bar-label" title="${safeName}">${safeName}</div>
+          <div class="bar-track"><div class="bar-fill${isOther ? ' is-other' : ''}" style="width:${widthPct}%"></div></div>
+          <div class="bar-value">${v.count} (${pct}%)</div>
+        </div>`;
+    }).join('');
+  }
+
+  function renderTable(container, values) {
+    const total = values.reduce((s, v) => s + v.count, 0);
+    const rows = values.map(v => {
+      const pct = total ? Math.round((v.count / total) * 100) : 0;
+      return `<tr><td>${escapeHtml(v.name)}</td><td>${v.count}</td><td>${pct}%</td></tr>`;
+    }).join('');
+    container.innerHTML = `
+      <table class="field-table">
+        <thead><tr><th>Value</th><th>Count</th><th>Share</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  }
+
+  function buildCard(field) {
+    const card = document.createElement('div');
+    card.className = 'field-card';
+
+    const fillRate = field.total ? Math.round((field.filled / field.total) * 100) : 0;
+
+    card.innerHTML = `
+      <div class="field-card-head">
+        <h2 class="field-title">${escapeHtml(field.label)}</h2>
+        <button class="field-toggle" type="button">Table view</button>
+      </div>
+      <p class="field-meta">${field.filled}/${field.total} deals (${fillRate}% filled)</p>
+      <div class="field-body"></div>`;
+
+    const body = card.querySelector('.field-body');
+    const toggle = card.querySelector('.field-toggle');
+    let showingTable = false;
+    renderBars(body, field.values);
+    toggle.addEventListener('click', () => {
+      showingTable = !showingTable;
+      toggle.textContent = showingTable ? 'Chart view' : 'Table view';
+      (showingTable ? renderTable : renderBars)(body, field.values);
+    });
+
+    return card;
+  }
+
+  document.getElementById('header-meta').textContent = DATA.dateRange;
+  document.getElementById('headline').textContent = DATA.headline;
+  const excludedEl = document.getElementById('excluded');
+  excludedEl.textContent = DATA.excluded.length
+    ? `Excluded — low coverage: ${DATA.excluded.join(', ')}`
+    : '';
+
+  const fieldsEl = document.getElementById('fields');
+  DATA.fields.forEach(field => fieldsEl.appendChild(buildCard(field)));
+</script>
+</body>
+</html>
