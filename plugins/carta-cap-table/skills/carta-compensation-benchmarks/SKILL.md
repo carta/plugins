@@ -8,8 +8,6 @@ description: >
 version: 1.0.0
 model: sonnet
 allowed-tools:
-  - mcp__carta__fetch
-  - mcp__carta__discover
   - mcp__carta__call_tool
   - mcp__carta__search_tools
   - mcp__carta__list_accounts
@@ -51,9 +49,9 @@ Look up Carta Total Compensation (CTC) market salary and equity benchmarks for a
 >
 > See `carta-compensation-rolematcher` → "Display → API enum tables" for the full mapping.
 
-> **Use MCP, not CLI.** Every API call in this skill goes through the carta MCP server's `mcp__carta__fetch` tool, with `compensation:*` commands. Do NOT shell out to the `carta` CLI (`carta compensation ...`, `carta web ...`, etc.) — that bypasses the formatters, the 403 handler, and the attribution requirement. The Bash tool is allowed only for writing CSV/JSON files locally, never for calling Carta APIs.
+> **Use MCP, not CLI.** Every API call in this skill goes through the carta MCP server's `mcp__carta__call_tool` tool, with `compensation:*` commands. Do NOT shell out to the `carta` CLI (`carta compensation ...`, `carta web ...`, etc.) — that bypasses the formatters, the 403 handler, and the attribution requirement. The Bash tool is allowed only for writing CSV/JSON files locally, never for calling Carta APIs.
 >
-> Examples below use shorthand `fetch("compensation:get:plan", {...})` — read this as `mcp__carta__fetch(command="compensation:get:plan", params={...})`.
+> Examples below use shorthand `call_tool({"name": "compensation__get__plan", "arguments": {...}})` — read this as `mcp__carta__call_tool({"name": "compensation__get__plan", "arguments": {...}})`.
 
 > **CRITICAL — Show only PERCENTILE columns (p25/p50/p75/p90) for all three rating types.**
 >
@@ -458,7 +456,7 @@ Capture the output:
 - `level` — must be one of (low to high seniority): `ENTRY`, `MID1`, `MID2`, `SENIOR1`, `SENIOR2`, `STAFF1`, `STAFF2`, `PRINCIPAL`, `VP1`, `VP2`, `C_LEVEL`, `CEO`
 - `track` — the value returned by the rolematcher (`ic`, `manager`, `executive`, or `UNKNOWN`). Map to `is_leader`: `manager` or `executive` → `true`, `ic` → `false`. If `UNKNOWN`, stop and ask the user before calling the API — see Error Handling.
 
-If the rolematcher returns a value not in these enums (e.g. `LEAD1`, `PRODUCT_MANAGER`), map it to the closest valid value before calling the API. If unsure, read the valid enum list from `discover("compensation:get:benchmark")` (or `search_tools({"query": "compensation get benchmark"})`) — do NOT guess a plausible-looking name or invent a `compensation:list:*` command to look it up. Ask the user if still ambiguous.
+If the rolematcher returns a value not in these enums (e.g. `LEAD1`, `PRODUCT_MANAGER`), map it to the closest valid value before calling the API. If unsure, read the valid enum list from `search_tools({"query": "compensation get benchmark"})` — do NOT guess a plausible-looking name or invent a `compensation:list:*` command to look it up. Ask the user if still ambiguous.
 
 If the user provides only a job title, that is sufficient minimum input for the rolematcher.
 
@@ -469,7 +467,7 @@ If the user provides only a job title, that is sufficient minimum input for the 
 ### Step 3b — Fetch the corporation's active benchmark version + peer group
 
 ```
-fetch("compensation:get:plan", {"corporation_id": <corporation_pk>})
+call_tool({"name": "compensation__get__plan", "arguments": {"corporation_id": <corporation_pk>}})
 ```
 
 Capture three things from the response:
@@ -486,15 +484,15 @@ Capture three things from the response:
 > **1. There is NO `compensation:list:*` command for these enums. Do not invent one.**
 > `compensation:list:job_types`, `list:jobs`, `list:peer_groups`, `list:post_money_buckets`, `list:capital_raised_buckets`, `list:headcount_buckets` — **none of these exist.** Calling them returns `Unknown command` and wastes a turn. The only `compensation:list:*` command is `compensation:list:benchmark_versions`. To see the valid filter values, **read the `compensation:get:benchmark` command help** — it enumerates every `job`, `level`, and bucket value:
 > ```
-> discover("compensation:get:benchmark")
+> search_tools({"query": "compensation get benchmark"})
 > ```
-> (`search_tools({"query": "compensation get benchmark"})` also returns it.) Read the enum lists from that help; never self-discover via a guessed `list:` command.
+> Read the enum lists from that help; never self-discover via a guessed `list:` command.
 >
 > **2. Pass the enum NAME, not the human display label.**
 > The API wants `MARKETING`, not `"Marketing"`; `CUSTOMER_SUCCESS`, not `"Customer Success"` or `"Customer Support"`; `SENIOR1`, not `"Senior 1"`. For buckets, pass the enum name (`TWENTY_FIVE_MILLION`), not the dollar label (`"$25M-$50M"`). The Title-Case forms are for **user-facing text only** (see the casing rule at the top of this file) — they are never valid API values. If you only have a free-text role, that's what the `carta-compensation-rolematcher` in Step 3a is for; it returns canonical enum names. Do not hand-translate a display label into a guessed enum.
 >
 > **Anti-patterns (all observed in real failures):**
-> - ❌ `fetch("compensation:list:job_types")` → `Unknown command`. Read `discover("compensation:get:benchmark")` instead.
+> - ❌ `call_tool({"name": "compensation__list__job_types"})` → `Unknown tool`. Read `search_tools({"query": "compensation get benchmark"})` instead.
 > - ❌ `job: "Marketing"` / `job: "Engineering"` / `job: "Customer Support"` → HTTP 400. Use `MARKETING` / `ENGINEER` / `CUSTOMER_SUCCESS`.
 > - ❌ `job: "PRODUCT_MANAGER"` → HTTP 400 (invented). The value is `PRODUCT`. When unsure, read the help — don't guess a plausible-looking name.
 > - ❌ `capital_raised_bucket: "$250M-$500M"` (a label) or a fabricated name → HTTP 400. Pass a real `CapitalRaisedBuckets` name from the help.
@@ -502,7 +500,7 @@ Capture three things from the response:
 > Bucketing across many job functions? Iterate over the valid `job` enum names from the help — do **not** loop over display labels.
 
 ```
-fetch("compensation:get:benchmark", {
+call_tool({"name": "compensation__get__benchmark", "arguments": {
   "corporation_id": <corporation_pk>,
   "job": <job_area>,                        # omit to get ALL job areas
   "level": <level>,                         # omit to get ALL levels for the job
@@ -540,7 +538,7 @@ fetch("compensation:get:benchmark", {
   #     (also wrong: passing both — only one bucket param per call)
 
   "equity_quantity": "FOUR_YEAR_GRANT"      # REQUIRED — match the CTC product UI default
-})
+}})
 ```
 
 > **`equity_quantity` defaults to `NTM_VESTING` on the MCP side, but the CTC product UI defaults to `FOUR_YEAR_GRANT`.** Always pass `FOUR_YEAR_GRANT` explicitly so the skill's numbers tie out against the in-product UI. If you omit it, you'll return ~25% of the value HR users expect — that's a hard tie-out failure, not a stylistic preference. Applies to every benchmark call: single role, bulk CSV, live artifact panel, Excel export.
@@ -550,13 +548,13 @@ fetch("compensation:get:benchmark", {
 So a Meetly-corp call that normally has `post_money_bucket: "ONE_HUNDRED_MILLION"` (plan default), when the user asks for "show me the $1M-$10M raised peer group instead", becomes:
 
 ```
-fetch("compensation:get:benchmark", {
+call_tool({"name": "compensation__get__benchmark", "arguments": {
   "corporation_id": 7, "job": "ENGINEER", "level": "ENTRY",
   # post_money_bucket DROPPED — replaced by capital_raised_bucket below
   "capital_raised_bucket": "ONE_TO_TEN_MILLION",
   "equity_quantity": "FOUR_YEAR_GRANT",
   ...
-})
+}})
 ```
 
 User-phrasing → override mapping:
@@ -577,7 +575,7 @@ User-phrasing → override mapping:
 
 Do NOT "fix" `post_money_bucket: "TEN_MILLION"` to `post_money_bucket: "TEN_TO_TWENTY_FIVE_MILLION"` thinking it's a typo. The post-money enum has no `_TO_` form — passing `TEN_TO_TWENTY_FIVE_MILLION` returns HTTP 400.
 
-Reference for the full enum sets is in `compensation:get:benchmark`'s help (run `discover("compensation:get:benchmark")`, or `search_tools({"query": "compensation get benchmark"})`, to verify a specific value). There is no `compensation:list:*` command for bucket enums — read them from the command help.
+Reference for the full enum sets is in `compensation:get:benchmark`'s help (run `search_tools({"query": "compensation get benchmark"})` to verify a specific value). There is no `compensation:list:*` command for bucket enums — read them from the command help.
 
 ### Step 4a — Unknown / missing `peer_group.dimension` (STOP)
 
@@ -682,7 +680,7 @@ Compensation-service's `plans/` and `benchmark/` endpoints return 200 even for c
 Once you have resolved the corporation (Step 1), call `compensation:get:subscription_status` as **Step 2 — before any `plans/` or `benchmark/` call, and before asking the user for a role** (see Step 2 above). It returns `{corporation_id, is_subscribed}`. "First" here means first among the *compensation* calls, not before corp resolution — you still need a `corporation_pk` from Step 1 to make this call.
 
 **Single-corp query:**
-1. `fetch("compensation:get:subscription_status", {"corporation_id": <id>})`
+1. `call_tool({"name": "compensation__get__subscription_status", "arguments": {"corporation_id": <id>}})`
 2. If `is_subscribed` is `false`:
    - Tell the user: *"Compensation benchmarks require a Carta Total Compensation subscription. Visit this page to request a demo: https://carta.com/demo/total-comp/?&utm_medium=product&utm_source=carta-web&utm_campaign=ctc-plugin-inq-amer-q2-26"*
    - **STOP.** Do not call `plans/`, `benchmark/`, `benchmark_versions`, or any other compensation endpoint for this corp.

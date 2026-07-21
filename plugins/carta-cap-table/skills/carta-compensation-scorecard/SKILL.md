@@ -11,9 +11,8 @@ description: >
 version: 0.1.0
 model: sonnet
 allowed-tools:
-  - mcp__carta__fetch
   - mcp__carta__call_tool
-  - mcp__carta__discover
+  - mcp__carta__search_tools
   - mcp__carta__list_accounts
   - AskUserQuestion
   - Skill
@@ -288,7 +287,7 @@ Use Title Case in narration even when passing the raw enum to the API. Example: 
 >
 > The 2nd CSV slot is exact level; the 3rd is a "≤ this level" cap. `JobArea` is a `JobType` enum (`ENGINEER`, `SALES`, …); `Level`/`LimitingLevel` are `LevelCode` enums (`ENTRY`, `MID1`, `SENIOR1`, … `C_LEVEL`, `CEO`). Passing an object or `job:level` with a colon returns HTTP 400 *"… is not a valid selection for type JobType"*.
 >
-> **Use the enum NAME, and don't guess it.** Pass `ENGINEER`, not `"Engineering"`; `CUSTOMER_SUCCESS`, not `"Customer Success"`/`"Customer Support"`; `SENIOR1`, not `"Senior 1"` — the Title-Case forms are user-facing only and 400 as API values. If you're unsure of a valid `JobType`/`LevelCode` name, read the full list from `discover("compensation:get:benchmark")` (its help enumerates every job area and level). **There is no `compensation:list:job_types` / `list:jobs` / `list:levels` command — do not invent one; it returns `Unknown command`.**
+> **Use the enum NAME, and don't guess it.** Pass `ENGINEER`, not `"Engineering"`; `CUSTOMER_SUCCESS`, not `"Customer Success"`/`"Customer Support"`; `SENIOR1`, not `"Senior 1"` — the Title-Case forms are user-facing only and 400 as API values. If you're unsure of a valid `JobType`/`LevelCode` name, read the full list from `search_tools({"query": "compensation get benchmark"})` (its help enumerates every job area and level). **There is no `compensation:list:job_types` / `list:jobs` / `list:levels` command — do not invent one; it returns `Unknown tool`.**
 >
 > **There is NO top-level `level` filter and NO `location` filter on this endpoint** — `level` is only reachable through the `job_filters` CSV (above), and a top-level `level` param is silently ignored. Location cannot be filtered server-side at all. If the user asks to filter by location (e.g. "show me below-market employees in Austin"), fetch the roster and filter client-side on `location.home_location` / `location.work_location`, and tell the user you filtered locally.
 
