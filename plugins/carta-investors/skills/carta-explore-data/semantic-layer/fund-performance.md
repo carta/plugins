@@ -114,6 +114,8 @@ questions about the same fund.
 | `FUND_ID` | `fund_uuid` (VARCHAR) | integer fund_id is internal only |
 | Querying `AGGREGATE_FUND_METRICS` for a specific past date/quarter-end | Query `TEMPORAL_FUND_COHORT_BENCHMARKS` instead | `AGGREGATE_FUND_METRICS` only retains the latest monthly refresh — zero rows for a past date does not mean the data doesn't exist |
 | `ALLOCATION_AMOUNT` / `ALLOCATION_VALUE` (in `FUND_ADMIN.ALLOCATIONS`) | `ACTUAL_AMOUNT` | the numeric amount column in `ALLOCATIONS` is `ACTUAL_AMOUNT`, not `ALLOCATION_AMOUNT` or `ALLOCATION_VALUE` |
+| `PERFORMANCE_QUARTER_END_DATE` (in `TEMPORAL_FUND_COHORT_BENCHMARKS`) | `performance_quarter_start_date` | despite the `_start_date` suffix, this column holds the quarter-END date (e.g. `2026-06-30` for Q2); do NOT convert to the quarter's first day |
+| `PORTFOLIO_VALUATIONS` for fund performance | `AGGREGATE_FUND_METRICS` (latest) or `TEMPORAL_FUND_COHORT_BENCHMARKS` (historical) | `PORTFOLIO_VALUATIONS` is the GP-side portfolio valuation tool table, not a fund performance source; it has no `FIRM_NAME` column (filter by `FIRM_ID`) and no `STATUS` column (use `FINALIZED_AT IS NOT NULL` for finalized marks) |
 
 ## Common Aliases (table name aliases — use `AGGREGATE_FUND_METRICS` instead)
 

@@ -12,7 +12,7 @@ Query investment-level data: cost basis, fair market value, unrealized gain/loss
 | `INVESTMENTS` / `PORTFOLIO_COMPANIES` / `FUND_INVESTMENTS` | `AGGREGATE_INVESTMENTS` | wrong table names |
 | `COST_BASIS` | `total_cost_basis` | (`AGGREGATE_INVESTMENTS` and `AGGREGATE_INVESTMENTS_HISTORY`) |
 | `QUANTITY` / `SHARES` | `count_remaining_shares` | |
-| `COMPANY_NAME` / `LEGAL_NAME` | `issuer_name` | company name in this table |
+| `COMPANY_NAME` / `LEGAL_NAME` / `CORPORATION_NAME` / `PORTFOLIO_COMPANY_NAME` | `issuer_name` | company name in this table |
 | `SECURITY_NAME` | `asset_name` (instrument) or `issuer_name` (company) | |
 | `SECURITY_TYPE` | `asset_class_type` | |
 | `CURRENT_VALUE` / `FAIR_VALUE` | `remaining_value` | total FMV of remaining holdings |

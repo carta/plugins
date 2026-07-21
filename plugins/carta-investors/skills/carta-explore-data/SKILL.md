@@ -67,7 +67,7 @@ The user must have the Carta MCP server connected. If this is the first query in
 2. Call `set_context` with the target `firm_id` if needed
 3. For **cap table queries** — confirm the corporation ID before running. If the user names a portfolio company, resolve its `CORPORATION_ID` from `CORPORATION_BASIC_INFO_V2` first (see Step 2 table below)
 
-> **Tool priority (firm context):** `fa:*` MCP commands → `dwh:execute:question` → semantic-layer SQL (Steps 2–4) → raw `dwh:execute:query`. Never call `cap_table:*` or `cap_table_chart` in firm context — those require a direct tenant role unavailable to investor-portal portcos; use the DWH queries in `cap-table.md` instead.
+> **Tool priority (firm context):** `fa:*` MCP commands → `dwh__execute__question` → semantic-layer SQL (Steps 2–4) → raw `dwh__execute__query`. Never call `cap_table:*` or `cap_table_chart` in firm context — those require a direct tenant role unavailable to investor-portal portcos; use the DWH queries in `cap-table.md` instead.
 
 ## Step 0 — Fetch portfolio companies (MANDATORY GATE)
 
