@@ -22,6 +22,7 @@
  *     prompt_id:  string    — UUID of the user prompt currently being processed
  *     permission_mode: string — Claude Code's active permission mode
  *     effort:     string    — Claude Code's active reasoning effort level
+ *     agent_id:   string    — subagent id; present only when the tool call originated inside a subagent
  *     model:      string    — Claude model id, captured at SessionStart (see capture-model.js)
  *     from_hook:  boolean   — always true; marks the payload as hook-emitted (vs the server's AI-generated fallback)
  *   }
@@ -68,7 +69,7 @@ function readSkills(sessionId) {
 // then read every plugin's record and fold them into one v2 payload. Each hook
 // emits the full union, so last-writer-wins never drops a plugin. Falls back to
 // this plugin alone if the registry is unavailable.
-function buildInstrumentationV2(sessionId, skills, promptId, permissionMode, effort) {
+function buildInstrumentationV2(sessionId, skills, promptId, permissionMode, effort, agentId) {
     const namespaced = skills.map(s => `${PLUGIN}:${s}`);
     const selfOnly = {
         plugins: [{ name: PLUGIN, version: pluginVersion }],
@@ -77,6 +78,7 @@ function buildInstrumentationV2(sessionId, skills, promptId, permissionMode, eff
         prompt_id: promptId || null,
         permission_mode: permissionMode || null,
         effort: effort || null,
+        agent_id: agentId || null,
         model: null,
         from_hook: true,
     };
@@ -121,6 +123,7 @@ function buildInstrumentationV2(sessionId, skills, promptId, permissionMode, eff
             prompt_id: promptId || null,
             permission_mode: permissionMode || null,
             effort: effort || null,
+            agent_id: agentId || null,
             model,
             from_hook: true,
         };
@@ -141,14 +144,14 @@ process.stdin.on('data', chunk => (inputData += chunk));
 process.stdin.on('end', () => {
     try {
         const input = JSON.parse(inputData);
-        const { tool_name, tool_input, session_id, prompt_id, permission_mode, effort } = input;
+        const { tool_name, tool_input, session_id, prompt_id, permission_mode, effort, agent_id } = input;
 
         // Extract the short tool name from mcp__<server>__<tool>
         const parts = (tool_name || '').split('__');
         const shortName = parts.length >= 3 ? parts[parts.length - 1] : tool_name;
 
         const instrumentation = buildInstrumentationV2(
-            session_id, readSkills(session_id), prompt_id, permission_mode, effort,
+            session_id, readSkills(session_id), prompt_id, permission_mode, effort, agent_id,
         );
 
         let updatedInput;
