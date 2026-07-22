@@ -174,6 +174,7 @@ Use the MCP commands in sequence, substituting `<SCHEMA>` with the schema determ
 - **Only SELECT** — no INSERT, UPDATE, DELETE, or DDL
 - **Single SELECT only — no UNION / UNION ALL** — the tool enforces one statement at a time and returns `Only a single SELECT statement is allowed`. If you need to count rows across multiple tables, run separate `call_tool` calls.
 - **Do not query `INFORMATION_SCHEMA`** — it is not supported in this data warehouse and returns a hard `ValueError: Querying INFORMATION_SCHEMA is not allowed`. Use `call_tool({"name": "dwh__list__tables", ...})` to list tables and `call_tool({"name": "dwh__get__table_schema", ...})` to inspect columns. These MCP tools are the only valid schema-discovery path.
+- **`LATERAL` (including `LATERAL FLATTEN`) is not permitted** — returns `ValueError: Lateral is not permitted in query execution`. To access keys in a VARIANT/ARRAY column, use explicit JSON path notation (e.g. `col:key::STRING`) rather than `LATERAL FLATTEN`.
 - **Date fields** — `effective_date` for `JOURNAL_ENTRIES`; `month_end_date` for `MONTHLY_NAV_CALCULATIONS`; `investment_date` for `AGGREGATE_INVESTMENTS`
 - **Deduplication** — for `MONTHLY_NAV_CALCULATIONS` and `AGGREGATE_FUND_METRICS`, use `QUALIFY ROW_NUMBER() OVER (PARTITION BY fund_uuid ORDER BY last_refreshed_at DESC) = 1`
 - **ALLOCATIONS has multiple rows per fund** — always `GROUP BY fund_uuid` with `MAX(fund_name)` when using it for fund metadata
@@ -211,6 +212,9 @@ Use the MCP commands in sequence, substituting `<SCHEMA>` with the schema determ
 | `BOOL_OR(col)` | `BOOLOR_AGG(col)` | *(any table)* — Snowflake has no `BOOL_OR` |
 
 - **`dwh__execute__query` takes `sql` as its argument key, not `query`** — using the wrong key returns a pydantic `ValidationError: Missing required argument: sql`. The correct invocation is `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "SELECT ..."}})`.
+- **`dwh:execute:question` (colon form) does not exist** — the Cortex Analyst interface is only registered under the double-underscore name `dwh__execute__question`. The colon form (`dwh:execute:question`) and the single-underscore form (`dwh_execute_question`) both return `NotFoundError: Unknown tool`. Always call it via `call_tool({"name": "dwh__execute__question", "arguments": {"question": "..."}})`.
+- **`dwh__execute__question` takes only a `question` argument** — do not pass `fund_uuid`, `firm_uuid`, `sql`, or any other key. The only valid invocation is `call_tool({"name": "dwh__execute__question", "arguments": {"question": "<plain-English question>"}})`.
+- **JSON keys with spaces in VARIANT columns** — `col:'Key With Spaces'` and `col["Key With Spaces"]` both fail with `SQL compilation error`. For keys containing spaces, use escaped inner quotes: `col:'"Key With Spaces"'::STRING`. This applies to `AGGREGATE_INVESTMENTS.TAGS_JSON` and any other VARIANT column with spaced key names.
 - **`ORDER BY` with `SELECT DISTINCT`** — columns used in `ORDER BY` must also appear in the `SELECT` list when using `DISTINCT`; otherwise Snowflake raises `is not a valid order by expression`.
 
 ## General Presentation Rules
