@@ -625,7 +625,7 @@
         const WELCOME_TOOL_NAME = MCP_TOOL_NAME.replace(/__call_tool$/, '__welcome');
 
         // SOI query — actively held positions only, ordered for stable pagination.
-        // The dwh:execute:query response has a payload size limit (large funds were
+        // The dwh__execute__query response has a payload size limit (large funds were
         // getting silently truncated mid-result), so we page through with OFFSET and
         // accumulate.
         //
@@ -660,7 +660,7 @@
         }
 
         // === Markdown-table parser ===
-        // Carta dwh:execute:query returns the result as a markdown table string inside
+        // Carta dwh__execute__query returns the result as a markdown table string inside
         // content[0].text. These four helpers unwrap, parse, and type-coerce per cell.
         // Mirror of /sessions/.../carta-investors/soi-parser.js (40/40 tests passing).
 
@@ -1259,8 +1259,8 @@
             const allRows = [];
             for (let page = 0; page < MAX_PAGES; page++) {
                 const result = await callMcpWithWelcomeRetry(MCP_TOOL_NAME, {
-                    command: 'dwh:execute:query',
-                    params: { sql: buildSoiSql(fundUuid, page * PAGE_SIZE, PAGE_SIZE) }
+                    name: 'dwh__execute__query',
+                    arguments: { sql: buildSoiSql(fundUuid, page * PAGE_SIZE, PAGE_SIZE) }
                 });
                 // Parser unwraps { content: [{ text: <markdown> }], isError? }
                 // and throws on error envelopes.

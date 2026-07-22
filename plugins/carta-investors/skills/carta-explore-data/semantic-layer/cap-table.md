@@ -18,6 +18,12 @@ Ownership questions:
 - "What's our ownership in **[Company]**?"
 - "What's our fully-diluted stake in **[Company]**?"
 
+Portfolio event questions:
+- "Show me the portfolio event history for **[Company]**"
+- "What certificate activity has **[Company]** had?"
+- "Has **[Company]** had any warrant exercises or share class conversions?"
+- "When was the last certificate issuance/transfer for **[Company]**?"
+
 ## Tool routing (CRITICAL — investor/firm context)
 
 When the active MCP context is a **Firm**, the agent has investor-side access only. Most portfolio companies returned by `fa:list:portfolio_companies` are exposed through the investor portal, **not** as direct cap-table-tenant members.
@@ -33,7 +39,8 @@ When the active MCP context is a **Firm**, the agent has investor-side access on
 |--------------------------------------------------------|------------------|--------------------------------------------|
 | Share-class breakdown, outstanding/authorized shares   | **Query A**      | `FUND_ADMIN.SUMMARY_CAP_TABLE`             |
 | Firm ownership % / fully-diluted stake                 | **Query B**      | `FUND_ADMIN.FUND_CORPORATION_OWNERSHIP`    |
-| Batch — same intent across multiple companies          | A or B with `IN` | (same as above)                            |
+| Portfolio event history (certificate issuance/transfer, conversions, warrant exercises) | **Query C** | `FUND_ADMIN.NEWSFEED` |
+| Batch — same intent across multiple companies          | A, B, or C with `IN` | (same as above)                        |
 | Both — "give me the full picture for [Company]"        | A then B         | Both                                       |
 
 ## Input resolution (run before either query)
@@ -239,6 +246,48 @@ Notes:
 - **Single-company queries** — do not trigger a split. A 500-row result for one corporation means the firm holds that company through 500 funds (extremely unlikely) and is genuine, not truncation.
 - **Verification rule** — if the sum of the two halves' row counts equals the original 500, the original result was already complete; discard the split.
 
+## Query C — Portfolio Event History (NEWSFEED)
+
+For "portfolio event history" / "certificate activity" / "warrant exercises" / "share class conversions" questions. `NEWSFEED` covers Carta-administered companies across every firm on the platform (~850K rows total) — it is only small and cheap to query at the per-company scope (a handful to a few dozen events each). **Always filter by `CORPORATION_ID` — never query this table unscoped.**
+
+Parameters to substitute:
+- `<CORPORATION_UUIDS>` — one or more corporation IDs as a comma-separated list of quoted UUIDs (same resolution as Query A/B).
+
+```sql
+SELECT
+    CORPORATION_ID,
+    CORPORATION_NAME,
+    EVENT_TYPE,
+    EVENT_DATE,
+    SECURITY_LABEL,
+    SECURITY_KIND,
+    FUND_NAME,
+    FIRM_NAME,
+    DESCRIPTION
+FROM FUND_ADMIN.NEWSFEED
+WHERE CORPORATION_ID IN (<CORPORATION_UUIDS>)
+ORDER BY EVENT_DATE DESC
+LIMIT 500
+```
+
+**Event type breakdown variant** — when the user asks "what kinds of events" or "how many of each" rather than a row-by-row history:
+
+```sql
+SELECT
+    CORPORATION_ID,
+    EVENT_TYPE,
+    COUNT(DISTINCT EVENT_UUID) AS event_count,
+    MIN(EVENT_DATE) AS earliest_event_date,
+    MAX(EVENT_DATE) AS latest_event_date
+FROM FUND_ADMIN.NEWSFEED
+WHERE CORPORATION_ID IN (<CORPORATION_UUIDS>)
+GROUP BY CORPORATION_ID, EVENT_TYPE
+ORDER BY event_count DESC
+LIMIT 50
+```
+
+**Batch truncation** — same rule as Query A/B: if the row-by-row query returns exactly 500 rows, treat it as potentially truncated and split `<CORPORATION_UUIDS>` in half, capping recursion at 2 levels. The event-type breakdown variant is aggregated and rarely hits the 50-row limit; if it does, the company has an unusually diverse event history — split the batch the same way.
+
 ## Table reference
 
 ### SUMMARY_CAP_TABLE
@@ -295,6 +344,25 @@ One row per financing round per company. Used by Query A (joined on `CORPORATION
 | `SHARES_ISSUED` / `FULLY_DILUTED_SHARES` | Share counts |
 | `POST_MONEY_VALUATION` / `PRE_MONEY_VALUATION` | Round valuations |
 
+### NEWSFEED
+One row per portfolio event per corporation. Source for Query C.
+
+> **`EVENT_TYPE` has a narrower live taxonomy than you might expect.** Only 5 values actually occur in the data: `Certificate issuance`, `Certificate transfer`, `Convertible conversion`, `Share class conversion`, `Warrant exercise`. Don't filter/group on other values (e.g. "new priced round", "valuation finalized") — they don't appear in this table.
+>
+> **`DESCRIPTION` is frequently empty.** Don't rely on it being populated — use `EVENT_TYPE`, `SECURITY_LABEL`, and `SECURITY_KIND` for the structured facts of the event instead.
+
+| Column | Description |
+|--------|-------------|
+| `CORPORATION_ID` | Portfolio company identifier (UUID) — always filter by this; the table is ~850K rows unscoped |
+| `CORPORATION_NAME` | Company legal name as recorded on the event |
+| `EVENT_TYPE` | Event category — see the narrower live taxonomy above |
+| `EVENT_DATE` | Date/time the event occurred — use to order event history chronologically |
+| `SECURITY_LABEL` | Label of the security involved (e.g. `PS-03`, `CS-380`) |
+| `SECURITY_KIND` | Kind of security involved (e.g. `CERTIFICATE`) |
+| `FUND_NAME` / `FIRM_NAME` | Fund and firm associated with the event |
+| `DESCRIPTION` | Free-text notes — frequently empty, do not rely on it |
+| `EVENT_UUID` | Unique event identifier — use for `COUNT(DISTINCT ...)` in the event-type breakdown query |
+
 ### CORPORATION_BASIC_INFO
 Canonical company-name/identifier lookup. Join target for `FUND_CORPORATION_OWNERSHIP` (`FCO.CORPORATION_ID = CBI.CORPORATION_UUID`).
 
@@ -335,6 +403,14 @@ Canonical company-name/identifier lookup. Join target for `FUND_CORPORATION_OWNE
 ### Batch (multiple companies in one prompt)
 - Render one section per company with a `### [Company Name]` header followed by its table. Do not interleave rows from different companies.
 - For companies that returned zero rows from Query A, show a single line under the header: "_No cap table data in Carta for this company._" Continue to the next company; do not abort the entire response.
+
+### Portfolio events (Query C)
+1. **Header line** — "Portfolio events for **[Company Name]**"
+2. **Table columns** (max 5): Event Date | Event Type | Security | Fund | Firm. Omit `DESCRIPTION` from the table (it's usually empty) — if present for a row, mention it in a footnote rather than a column.
+3. **Row order** — most recent event first (`EVENT_DATE DESC`), matching the query's default order.
+4. **Event-type breakdown variant** — when the user asks "what kinds" or "how many", render a simple summary table instead: Event Type | Count | Earliest | Latest.
+5. **Empty results** — if 0 rows return for a company, show "_No portfolio events recorded for this company._" rather than failing silently.
+6. **Batch** — same per-company section pattern as cap table batch responses: one `### [Company Name]` header per company, no interleaving.
 
 ### Ownership-only response (Query B without Query A)
 - Render one table per company, with columns: Fund Name | As Of | Ownership % | Shares Held.
