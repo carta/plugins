@@ -72,7 +72,7 @@ This skill ships as a standalone Claude for Excel skill — the global `carta-sk
 This skill does **not** call `carta auth-status` — that command isn't
 available inside the Excel add-in. Instead, the active Carta environment
 is detected at Gate 0 from the connected MCP server's prefix
-(`mcp__claude_ai_Carta_<Env>__fetch`).
+(`mcp__claude_ai_Carta_<Env>__call_tool`).
 
 ## When to use
 

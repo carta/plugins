@@ -604,9 +604,9 @@
         // FIRM_UUID: the firm that owns the funds. The artifact pins the user's MCP
         //   firm context to this on load (via set_context), so the dwh query
         //   succeeds even if the user has switched contexts elsewhere.
-        // MCP_TOOL_NAME: the Carta dwh fetch tool, UUID-form. The artifact runtime
-        //   does NOT resolve name-form prefixes (e.g. mcp__carta-test__fetch fails),
-        //   only UUID-form (e.g. mcp__33b9b857-...__fetch works). The UUID is per-user-
+        // MCP_TOOL_NAME: the Carta call_tool, UUID-form. The artifact runtime
+        //   does NOT resolve name-form prefixes (e.g. mcp__carta-test__call_tool fails),
+        //   only UUID-form (e.g. mcp__33b9b857-...__call_tool works). The UUID is per-user-
         //   installation, so the skill must discover the active user's UUID at create-time
         //   and inject it here.
         const STATE = JSON.parse(document.getElementById('soi-funds-state').textContent);
@@ -621,8 +621,8 @@
         // few days of inactivity), subsequent tool calls return an "isError"
         // envelope asking us to call welcome. We catch that below in
         // callMcpWithWelcomeRetry and recover transparently.
-        const SET_CONTEXT_TOOL_NAME = MCP_TOOL_NAME.replace(/__fetch$/, '__set_context');
-        const WELCOME_TOOL_NAME = MCP_TOOL_NAME.replace(/__fetch$/, '__welcome');
+        const SET_CONTEXT_TOOL_NAME = MCP_TOOL_NAME.replace(/__call_tool$/, '__set_context');
+        const WELCOME_TOOL_NAME = MCP_TOOL_NAME.replace(/__call_tool$/, '__welcome');
 
         // SOI query — actively held positions only, ordered for stable pagination.
         // The dwh:execute:query response has a payload size limit (large funds were
@@ -1357,7 +1357,7 @@
                 return;
             }
             if (!MCP_TOOL_NAME) {
-                showError("No MCP tool name provided. The skill must inject the user's UUID-form Carta fetch tool name when creating the artifact.");
+                showError("No MCP tool name provided. The skill must inject the user's UUID-form Carta call_tool name when creating the artifact.");
                 return;
             }
             if (!Array.isArray(FUNDS) || FUNDS.length === 0) {

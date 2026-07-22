@@ -99,7 +99,7 @@ globally by the hook — are the skill's own responsibility here:
 This skill does **not** call `carta auth-status` — that command isn't
 available inside the Excel add-in. Instead, the active Carta environment is
 detected at Gate 0 from the connected MCP server's prefix
-(`mcp__claude_ai_Carta_<Env>__fetch`). Treat the prefix discovery in Gate 0
+(`mcp__claude_ai_Carta_<Env>__call_tool`). Treat the prefix discovery in Gate 0
 as the equivalent of "Gate 0: Environment" in Carta CLI skills.
 
 ## Inputs to collect

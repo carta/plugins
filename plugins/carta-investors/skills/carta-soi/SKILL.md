@@ -6,13 +6,11 @@ model: haiku
 allowed-tools:
   # Carta MCP — registration prefix varies by host (Claude Code / Claude.ai / Cowork / public)
   - mcp__carta__call_tool
-  - mcp__carta__fetch
-  - mcp__carta__discover  # UUID-form disambiguation only (Step 3) — not gateway discovery
+  - mcp__carta__search_tools  # UUID-form disambiguation only (Step 3) — not gateway discovery
   - mcp__carta__set_context
   - mcp__carta__list_contexts
   - mcp__claude_ai_carta__call_tool
-  - mcp__claude_ai_carta__fetch
-  - mcp__claude_ai_carta__discover  # UUID-form disambiguation only (Step 3) — not gateway discovery
+  - mcp__claude_ai_carta__search_tools  # UUID-form disambiguation only (Step 3) — not gateway discovery
   - mcp__claude_ai_carta__set_context
   - mcp__claude_ai_carta__list_contexts
   # Cowork
@@ -106,15 +104,15 @@ Call `call_tool({"name": "fa__list__entities", "arguments": { entity_types: "fun
 
 > **Run in parallel with Step 2** — see note in Step 2.
 
-The artifact must call the Carta `fetch` tool by its **UUID-form prefix** (e.g., `mcp__33b9b857-8443-4b2d-b191-2d9b6c50eb86__fetch`) — name-form prefixes like `mcp__carta-test__fetch` fail with a 400 at runtime. The UUID is assigned per-installation by Cowork, so it must be discovered, not hardcoded.
+The artifact must call the Carta `call_tool` tool by its **UUID-form prefix** (e.g., `mcp__33b9b857-8443-4b2d-b191-2d9b6c50eb86__call_tool`) — name-form prefixes like `mcp__carta-test__call_tool` fail with a 400 at runtime. The UUID is assigned per-installation by Cowork, so it must be discovered, not hardcoded.
 
 Procedure:
 
-1. **Find the UUID-form Carta `fetch` tool.** Look for a tool matching `mcp__<UUID>__fetch` where `<UUID>` is the 8-4-4-4-12 hex format. `ToolSearch` with query `"fetch"` can help if the deferred-tools list is hard to scan. In most sessions there is exactly one such candidate — capture it.
+1. **Find the UUID-form Carta `call_tool` tool.** Look for a tool matching `mcp__<UUID>__call_tool` where `<UUID>` is the 8-4-4-4-12 hex format. `ToolSearch` with query `"call_tool"` can help if the deferred-tools list is hard to scan. In most sessions there is exactly one such candidate — capture it.
 
-2. **If multiple UUID-form candidates exist** (e.g., both production and test Carta connectors are connected, or another MCP also uses a UUID prefix), disambiguate by calling `mcp__<UUID>__discover({"search": "dwh"})` on each candidate and picking the one that exposes `dwh:execute:query`. If two still pass (production + test Carta), ask the user via `AskUserQuestion`.
+2. **If multiple UUID-form candidates exist** (e.g., both production and test Carta connectors are connected, or another MCP also uses a UUID prefix), disambiguate by calling `mcp__<UUID>__search_tools({"query": "dwh execute query"})` on each candidate and picking the one that exposes `dwh__execute__query`. If two still pass (production + test Carta), ask the user via `AskUserQuestion`.
 
-3. **Capture the chosen `mcp__<UUID>__fetch` string in a single local variable.** Reuse it as the fourth argument to the render script in Step 4 AND in `mcp_tools` at Step 5 (artifact allowlist). Step 5 also needs `mcp__<UUID>__set_context` — derive it from the fetch string by swapping the suffix, since both tools live on the same connector UUID. If any of these strings drift, the artifact loads but the corresponding MCP call fails with `"Tool ... is not in this artifact's mcp_tools allowlist."`.
+3. **Capture the chosen `mcp__<UUID>__call_tool` string in a single local variable.** Reuse it as the fourth argument to the render script in Step 4 AND in `mcp_tools` at Step 5 (artifact allowlist). Step 5 also needs `mcp__<UUID>__set_context` — derive it from the call_tool string by swapping the suffix, since both tools live on the same connector UUID. If any of these strings drift, the artifact loads but the corresponding MCP call fails with `"Tool ... is not in this artifact's mcp_tools allowlist."`.
 
 ### Step 4 — Write the funds file, then render the template
 
@@ -152,7 +150,7 @@ Positional arguments:
 1. **Template path** — `${CLAUDE_PLUGIN_ROOT}/skills/carta-soi/references/artifact.html` (verbatim).
 2. **Output path** — must be **absolute**, under the session's current working directory (`<CWD>`), and **not under `/tmp`** (`mcp__cowork__create_artifact` rejects `/tmp` paths). Use `pwd` to resolve `<CWD>` if needed. Filename is `<firm-slug>-fund-soi-collection.html`.
 3. **Artifact ID** — the kebab-case Cowork artifact id, same string you'll pass as `id` to `create_artifact` / `update_artifact` in Step 5. Must equal `<firm-slug>-fund-soi-collection`.
-4. **MCP tool name** — the full `mcp__<UUID>__fetch` string from Step 3.
+4. **MCP tool name** — the full `mcp__<UUID>__call_tool` string from Step 3.
 5. **Firm UUID** — the firm's UUID from Step 1. The artifact calls `set_context` with this on every load to pin the user's MCP firm context, so the dwh query succeeds even if the user switched contexts elsewhere.
 6. **Firm name** — the human-readable firm name from Step 1.
 7. **Funds file path** — the absolute path to the JSON file you wrote in 4a. Must also be under CWD and not under `/tmp`.
@@ -183,7 +181,7 @@ Same arguments either way:
 - `id`: `"<firm-slug>-fund-soi-collection"` (kebab-case slug of the firm name from Step 1, with the `-fund-soi-collection` suffix). Cowork title-cases the id for the sidebar label, so this renders as e.g. "Krakatoa Ventures Fund Soi Collection" — identifies the firm and conveys that the artifact is a collection of per-fund SOIs.
 - `html_path`: the absolute path printed on stdout by the render script.
 - `description`: `"<Firm Name> — fund Schedule of Investments"`.
-- `mcp_tools`: `[<MCP_TOOL_NAME>, <SET_CONTEXT_TOOL_NAME>, <WELCOME_TOOL_NAME>]` — all three must be allowlisted. `<MCP_TOOL_NAME>` is the `mcp__<UUID>__fetch` string from Step 3 (same string passed as the fourth argument to the render script). `<SET_CONTEXT_TOOL_NAME>` and `<WELCOME_TOOL_NAME>` live on the same connector — derive them by replacing the `__fetch` suffix on `<MCP_TOOL_NAME>` with `__set_context` and `__welcome` respectively (i.e. `mcp__<UUID>__set_context`, `mcp__<UUID>__welcome`). All three must be present or the artifact will load but fail at runtime with `"Tool ... is not in this artifact's mcp_tools allowlist."`. The artifact only calls `welcome` itself when the MCP returns a "session not initialized" error on the first dwh query or set_context call — see **Session re-initialization** under Caveats.
+- `mcp_tools`: `[<MCP_TOOL_NAME>, <SET_CONTEXT_TOOL_NAME>, <WELCOME_TOOL_NAME>]` — all three must be allowlisted. `<MCP_TOOL_NAME>` is the `mcp__<UUID>__call_tool` string from Step 3 (same string passed as the fourth argument to the render script). `<SET_CONTEXT_TOOL_NAME>` and `<WELCOME_TOOL_NAME>` live on the same connector — derive them by replacing the `__call_tool` suffix on `<MCP_TOOL_NAME>` with `__set_context` and `__welcome` respectively (i.e. `mcp__<UUID>__set_context`, `mcp__<UUID>__welcome`). All three must be present or the artifact will load but fail at runtime with `"Tool ... is not in this artifact's mcp_tools allowlist."`. The artifact only calls `welcome` itself when the MCP returns a "session not initialized" error on the first dwh query or set_context call — see **Session re-initialization** under Caveats.
 
 ### Step 6 — Confirm to the user
 
@@ -209,6 +207,6 @@ See **User-facing output** at the top of this skill for the broader narration ru
 
 ## Caveats
 
-- **MCP tool UUID is per-user-installation.** The `mcp__<UUID>__fetch` prefix injected as `MCP_TOOL_NAME` is assigned by Cowork to the user's specific Carta MCP connector. If the user disconnects and reconnects their Carta MCP, the UUID changes and existing artifacts stop working with a permission-denied error from the allowlist check. Re-invoke this skill to recreate the artifact with the new UUID.
+- **MCP tool UUID is per-user-installation.** The `mcp__<UUID>__call_tool` prefix injected as `MCP_TOOL_NAME` is assigned by Cowork to the user's specific Carta MCP connector. If the user disconnects and reconnects their Carta MCP, the UUID changes and existing artifacts stop working with a permission-denied error from the allowlist check. Re-invoke this skill to recreate the artifact with the new UUID.
 - **Session re-initialization.** The Carta MCP requires `welcome` to have been called once per session to populate identity/account state. When the user's session expires (typically after a few days of inactivity), the first `set_context` or dwh query returns an error string asking us to call `welcome` first. The artifact handles this transparently: it catches the error, briefly shows "Reconnecting to Carta…" above the shimmer, calls `welcome` itself, and retries the original call once.
 - **Cowork-only.** Live Artifacts only render in Cowork. If the user is in Claude Code or Claude Desktop, explain that the artifact view requires Cowork. For inline data answers, point them at the `carta-explore-data` skill.
