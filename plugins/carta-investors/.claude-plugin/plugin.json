@@ -1,7 +1,7 @@
 {
   "name": "carta-investors",
-  "version": "2.0.0",
-  "description": "Carta Investors plugin — skills for querying investors data, performance benchmarks, regulatory reporting, AGM deck generation, brand extraction, and more via the Carta MCP server",
+  "version": "2.0.1",
+  "description": "Carta Investors plugin — write-capable skills for querying and updating investors data, performance benchmarks, regulatory reporting, AGM deck generation, brand extraction, and more via the Carta MCP server",
   "author": {
     "name": "Carta",
     "email": "engineering@carta.com"
@@ -12,6 +12,8 @@
     "investors",
     "mcp",
     "carta",
+    "write",
+    "write-capable",
     "agm",
     "annual-general-meeting",
     "deck",
