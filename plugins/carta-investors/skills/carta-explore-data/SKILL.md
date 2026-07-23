@@ -211,6 +211,7 @@ Use the MCP commands in sequence, substituting `<SCHEMA>` with the schema determ
 | `HEADQUARTERS_CITY` / `HEADQUARTERS_STATE` / `HEADQUARTERS_COUNTRY` | `CITY` / `STATE` / `COUNTRY` | `CORPORATION_BASIC_INFO_V2` |
 | `LEGAL_NAME` / `NAME` / `COMPANY_NAME` | `CORPORATION_NAME` | `CORPORATION_BASIC_INFO_V2` |
 | `BOOL_OR(col)` | `BOOLOR_AGG(col)` | *(any table)* — Snowflake has no `BOOL_OR` |
+| `SHARE_CLASS_NAME` | `SHARECLASS_NAME` | `FINANCING_HISTORY` — one word, no underscore between SHARE and CLASS |
 
 - **`dwh__execute__query` takes `sql` as its argument key, not `query`** — using the wrong key returns a pydantic `ValidationError: Missing required argument: sql`. The correct invocation is `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "SELECT ..."}})`.
 - **`dwh:execute:question` (colon form) does not exist** — the Cortex Analyst interface is only registered under the double-underscore name `dwh__execute__question`. The colon form (`dwh:execute:question`) and the single-underscore form (`dwh_execute_question`) both return `NotFoundError: Unknown tool`. Always call it via `call_tool({"name": "dwh__execute__question", "arguments": {"question": "..."}})`.

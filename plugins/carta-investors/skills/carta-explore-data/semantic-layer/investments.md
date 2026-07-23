@@ -12,10 +12,11 @@ Query investment-level data: cost basis, fair market value, unrealized gain/loss
 | `INVESTMENTS` / `PORTFOLIO_COMPANIES` / `FUND_INVESTMENTS` | `AGGREGATE_INVESTMENTS` | wrong table names |
 | `COST_BASIS` | `total_cost_basis` | (`AGGREGATE_INVESTMENTS` and `AGGREGATE_INVESTMENTS_HISTORY`) |
 | `QUANTITY` / `SHARES` | `count_remaining_shares` | |
-| `COMPANY_NAME` / `LEGAL_NAME` / `CORPORATION_NAME` / `PORTFOLIO_COMPANY_NAME` | `issuer_name` | company name in this table |
+| `COMPANY_NAME` / `LEGAL_NAME` / `CORPORATION_NAME` / `PORTFOLIO_COMPANY_NAME` / `INVESTMENT_NAME` | `issuer_name` | company name in this table; `INVESTMENT_NAME` is a valid column in the cap-table domain (`FUND_CORPORATION_OWNERSHIP`) but **does not exist** on `AGGREGATE_INVESTMENTS` |
 | `SECURITY_NAME` | `asset_name` (instrument) or `issuer_name` (company) | |
 | `SECURITY_TYPE` | `asset_class_type` | |
 | `CURRENT_VALUE` / `FAIR_VALUE` | `remaining_value` | total FMV of remaining holdings |
+| `TOTAL_NET_REALIZED` | `residual_gain_loss` (realized+unrealized combined) or `total_proceeds` (exit cash only) | `total_net_realized` does **not** exist on `AGGREGATE_INVESTMENTS` — it is a column on `AGGREGATE_FUND_METRICS` |
 | `INVESTMENT_DATE` on history table | not a column — use `effective_date` range filter | `AGGREGATE_INVESTMENTS_HISTORY` only |
 | `IS_ACTIVE` on history table | not a column — use `next_effective_date IS NULL` | `AGGREGATE_INVESTMENTS_HISTORY` only |
 | `FUND_ID` | `fund_uuid` (VARCHAR) | |
@@ -46,7 +47,7 @@ Each row represents one investment (fund × issuer × asset class combination). 
 | `total_value` | Total value (realized + unrealized) |
 | `total_unrealized_gain_loss` | Current unrealized gain/loss (`remaining_value − total_cost_basis`) |
 | `total_proceeds` | Cash received from partial or full exits |
-| `total_net_realized` | Net realized gains/losses from exited positions |
+| `residual_gain_loss` | Total return: `total_value − total_cost` (realized + unrealized combined). **Note:** `total_net_realized` does **not** exist on this table — that column is on `AGGREGATE_FUND_METRICS`. |
 | `count_remaining_shares` | Current shares/units held |
 | `tags` | Comma-delimited tags assigned by the firm (e.g. "AI, SaaS") |
 | `tags_json` | JSON key-value pairs of tags |

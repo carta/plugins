@@ -112,6 +112,7 @@ questions about the same fund.
 | `VINTAGE` | `vintage_year` | |
 | `FUND_SIZE` | `fund_size` | verify with `dwh__get__table_schema` |
 | `FUND_ID` | `fund_uuid` (VARCHAR) | integer fund_id is internal only |
+| `COMMITTED_CAPITAL` / `TOTAL_COMMITTED` | `fund_size` | `fund_size` is the total committed capital across all LPs and GPs on `AGGREGATE_FUND_METRICS` |
 | Querying `AGGREGATE_FUND_METRICS` for a specific past date/quarter-end | Query `TEMPORAL_FUND_COHORT_BENCHMARKS` instead | `AGGREGATE_FUND_METRICS` only retains the latest monthly refresh — zero rows for a past date does not mean the data doesn't exist |
 | `ALLOCATION_AMOUNT` / `ALLOCATION_VALUE` (in `FUND_ADMIN.ALLOCATIONS`) | `ACTUAL_AMOUNT` | the numeric amount column in `ALLOCATIONS` is `ACTUAL_AMOUNT`, not `ALLOCATION_AMOUNT` or `ALLOCATION_VALUE` |
 | `PERFORMANCE_QUARTER_END_DATE` (in `TEMPORAL_FUND_COHORT_BENCHMARKS`) | `performance_quarter_start_date` | despite the `_start_date` suffix, this column holds the quarter-END date (e.g. `2026-06-30` for Q2); do NOT convert to the quarter's first day |
