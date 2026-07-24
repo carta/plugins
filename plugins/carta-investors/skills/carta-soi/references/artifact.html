@@ -1282,7 +1282,8 @@
             for (let page = 0; page < MAX_PAGES; page++) {
                 const result = await callMcpWithWelcomeRetry(MCP_TOOL_NAME, {
                     name: 'dwh__execute__query',
-                    arguments: { sql: buildSoiSql(fundUuid, page * PAGE_SIZE, PAGE_SIZE) }
+                    arguments: { sql: buildSoiSql(fundUuid, page * PAGE_SIZE, PAGE_SIZE) },
+                    _instrumentation_v2: { skills: ['carta-investors:carta-soi'] }
                 });
                 // Parser unwraps { content: [{ text: <markdown> }], isError? }
                 // and throws on error envelopes.
