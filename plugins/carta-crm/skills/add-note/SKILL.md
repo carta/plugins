@@ -1,11 +1,10 @@
 ---
 name: add-note
 description: >
-  Adds a comment/note to a deal record in the Carta CRM via the Carta CRM MCP Server.
-  Use this skill when the user says things like "add a note", "create a note",
-  "log a note", "add note to a deal", "add note to CRM", "add note to Carta CRM",
-  "log a comment on a deal", or "/add-note".
-  Notes are stored as comments on deal records.
+  Adds a note to a deal in the Carta CRM via the Carta CRM MCP Server; notes are
+  stored as comments on the deal record. Use this skill when the user says things
+  like "add a note", "log a note", "add note to a deal", "add note to Carta CRM",
+  "add a comment", "comment on a deal", or "/add-note".
 allowed-tools:
   - mcp__carta__crm_call_tool
 version: 1.0.0
@@ -22,7 +21,7 @@ List only Carta skills in use, each namespaced `"plugin:skill"` (`carta-cap-tabl
 
 ## Overview
 
-In the Carta CRM MCP, notes are added as comments on deal records using the
+In the Carta CRM MCP Server, notes are added as comments on deal records using the
 `comment` field via `update_deal`. Help the user identify which deal to attach
 the note to, collect the note content, then update the deal.
 
