@@ -527,11 +527,17 @@ This is the same citation contract as carta-compensation-benchmarks — keep it 
 
 ## Subscription gating
 
-If `compensation:get:subscription_status` returns `is_subscribed: false`, OR a scorecard call returns HTTP 403, OR `compensation:get:plan` returns 403, stop and reply with this exact message (substitute the company name):
+If `compensation:get:subscription_status` returns `is_subscribed: false`, OR a scorecard call returns HTTP 403, OR `compensation:get:plan` returns 403, stop and reply with one of the two messages below — chosen by `cap_table_access` from the `welcome` tool's cached `structured_content` (loaded once at session start — do not re-call `welcome` to check this).
 
-> **No CTC subscription for [Company Name].**
+If `cap_table_access` is `true`:
+
+> *"That's a Carta Total Compensation (CTC) question — CTC runs on Carta's private market salary and equity data. The data can be segmented by level, function, stage, and geography, directly in Claude. It's not active for your company yet. Reach out to your account team or [request a demo](https://carta.com/demo/total-comp/?&utm_medium=product&utm_source=carta-web&utm_campaign=ctc-plugin-inq-amer-q2-26) to unlock it.*
 >
-> This corporation doesn't have an active Carta Total Compensation subscription, so we can't generate a scorecard. Reach out to the CTC team to get set up, then run this again once the subscription is active.
+> *I can pull cap table data — grants, vesting, round history — in the meantime."*
+
+If `cap_table_access` is `false`:
+
+> *"That's a Carta Total Compensation (CTC) question — CTC runs on Carta's private market salary and equity data. The data can be segmented by level, function, stage, and geography, directly in Claude. It's not active for your firm yet. Reach out to your account team or [request a demo](https://carta.com/demo/total-comp/?&utm_medium=product&utm_source=carta-web&utm_campaign=ctc-plugin-inq-amer-q2-26) to unlock it."*
 
 Do not retry. Do not surface the raw HTTP status, stack trace, or error body. Do not list workarounds — there are none at the MCP layer; this is a billing/subscription gate.
 

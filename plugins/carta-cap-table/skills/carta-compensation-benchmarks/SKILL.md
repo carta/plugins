@@ -682,7 +682,13 @@ Once you have resolved the corporation (Step 1), call `compensation:get:subscrip
 **Single-corp query:**
 1. `call_tool({"name": "compensation__get__subscription_status", "arguments": {"corporation_id": <id>}})`
 2. If `is_subscribed` is `false`:
-   - Tell the user: *"Compensation benchmarks require a Carta Total Compensation subscription. Visit this page to request a demo: https://carta.com/demo/total-comp/?&utm_medium=product&utm_source=carta-web&utm_campaign=ctc-plugin-inq-amer-q2-26"*
+   - Read `cap_table_access` from the `welcome` tool's cached `structured_content` (loaded once at session start — do not re-call `welcome` to check this).
+   - If `cap_table_access` is `true`, tell the user:
+     > *"That's a Carta Total Compensation (CTC) question — CTC runs on Carta's private market salary and equity data. The data can be segmented by level, function, stage, and geography, directly in Claude. It's not active for your company yet. Reach out to your account team or [request a demo](https://carta.com/demo/total-comp/?&utm_medium=product&utm_source=carta-web&utm_campaign=ctc-plugin-inq-amer-q2-26) to unlock it.*
+     >
+     > *I can pull cap table data — grants, vesting, round history — in the meantime."*
+   - If `cap_table_access` is `false`, tell the user:
+     > *"That's a Carta Total Compensation (CTC) question — CTC runs on Carta's private market salary and equity data. The data can be segmented by level, function, stage, and geography, directly in Claude. It's not active for your firm yet. Reach out to your account team or [request a demo](https://carta.com/demo/total-comp/?&utm_medium=product&utm_source=carta-web&utm_campaign=ctc-plugin-inq-amer-q2-26) to unlock it."*
    - **STOP.** Do not call `plans/`, `benchmark/`, `benchmark_versions`, or any other compensation endpoint for this corp.
    - Do not generate a CSV/JSON file for this corp. No "framework" file. No "structure-only" file. Nothing.
    - Do not "try the benchmark to see if it works anyway". The answer is no.
