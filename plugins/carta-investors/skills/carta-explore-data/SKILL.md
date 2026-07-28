@@ -89,8 +89,10 @@ Required even for specific-company queries — establishes accessible companies 
 Before loading any semantic layer, call the plain-English query interface with the user's question verbatim (or lightly rephrased for clarity):
 
 ```
-call_tool({"name": "dwh__execute__question", "arguments": {"question": "<user's question>"}})
+call_tool({"name": "dwh__execute__question", "arguments": {"question": "<user's question>", "include_links": true}})
 ```
+
+> **Always pass `include_links: true`** — it enriches result rows with `_links` entries pointing to the corresponding Carta product pages for supported entity UUID fields (see [Deep Links](#deep-links) below).
 
 **If the call succeeds and returns meaningful rows** → format and present the results using the General Presentation Rules below. Stop here — do not continue to Steps 2–4.
 
@@ -165,7 +167,9 @@ Use the MCP commands in sequence, substituting `<SCHEMA>` with the schema determ
 
 1. **Browse tables:** `call_tool({"name": "dwh__list__tables", "arguments": {"schema": "<SCHEMA>"}})`
 2. **Inspect schema:** `call_tool({"name": "dwh__get__table_schema", "arguments": {"table_name": "<TABLE>", "schema": "<SCHEMA>"}})`
-3. **Run the query:** `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "..."}})`
+3. **Run the query:** `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "...", "format": "ndjson", "include_links": true}})`
+
+> **Always pass `format: "ndjson"` and `include_links: true`** on every `dwh__execute__query` call — `ndjson` is required for `include_links` to embed `_links` objects in each result row. See [Deep Links](#deep-links) for how to parse the response and use the links.
 
 **Output format:** Present results as a markdown table. Use fund or company names as row headers — never raw UUIDs. Currency values use `$X,XXX` format with commas; percentages use `X.XX%`. Bold totals and summary rows.
 
@@ -216,9 +220,31 @@ Use the MCP commands in sequence, substituting `<SCHEMA>` with the schema determ
 - **`dwh__execute__query` takes `sql` as its argument key, not `query`** — using the wrong key returns a pydantic `ValidationError: Missing required argument: sql`. The correct invocation is `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "SELECT ..."}})`.
 - **`dwh:execute:question` (colon form) does not exist** — the Cortex Analyst interface is only registered under the double-underscore name `dwh__execute__question`. The colon form (`dwh:execute:question`) and the single-underscore form (`dwh_execute_question`) both return `NotFoundError: Unknown tool`. Always call it via `call_tool({"name": "dwh__execute__question", "arguments": {"question": "..."}})`.
 - **`dwh:execute:query` (colon form) does not exist** — the SQL execution tool is registered as `dwh__execute__query` (double-underscore). The colon form (`dwh:execute:query`) and the plural form (`dwh:execute:queries`) both return `NotFoundError: Unknown tool`. Always call it via `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "SELECT ..."}})`.
-- **`dwh__execute__question` takes only a `question` argument** — do not pass `fund_uuid`, `firm_uuid`, `sql`, or any other key. The only valid invocation is `call_tool({"name": "dwh__execute__question", "arguments": {"question": "<plain-English question>"}})`.
+- **`dwh__execute__question` takes `question` and (optionally) `include_links`** — do not pass `fund_uuid`, `firm_uuid`, `sql`, `format`, or any other key. Valid invocation: `call_tool({"name": "dwh__execute__question", "arguments": {"question": "<plain-English question>", "include_links": true}})`.
 - **JSON keys with spaces in VARIANT columns** — `col:'Key With Spaces'` and `col["Key With Spaces"]` both fail with `SQL compilation error`. For keys containing spaces, use escaped inner quotes: `col:'"Key With Spaces"'::STRING`. This applies to `AGGREGATE_INVESTMENTS.TAGS_JSON` and any other VARIANT column with spaced key names.
 - **`ORDER BY` with `SELECT DISTINCT`** — columns used in `ORDER BY` must also appear in the `SELECT` list when using `DISTINCT`; otherwise Snowflake raises `is not a valid order by expression`.
+
+## Deep Links
+
+**Mandatory:** always pass `include_links: true` on every `dwh__execute__question` and `dwh__execute__query` call. Always pass `format: "ndjson"` on every `dwh__execute__query` call. `ndjson` is required for `_links` to be embedded in the result rows; without it, link data is lost.
+
+`include_links` adds a `_links` entry to each row for supported entity UUID columns. Supported fields and their requirements:
+
+| Column | Links to | Requires |
+|---|---|---|
+| `journal_entry_gluuid` | Journal entry page | `fund_uuid` column in result |
+| `journal_entry_line_id` | Journal tab | `fund_uuid` column in result |
+| `asset_id` | Investments tab | `fund_uuid` column in result |
+| `partner_interest_group_id` | Partners tab | `fund_uuid` column in result |
+| `entity_link_id` | Portfolio company page | `fund_uuid` or `firm_carta_id` column in result |
+| `issuer_entity_link_id` | Portfolio company page | `fund_uuid` or `firm_carta_id` column in result |
+
+**Always include the resolver column(s) in every SELECT** — `_links` is silently empty without them:
+- Include `fund_uuid` whenever the result contains `journal_entry_gluuid`, `journal_entry_line_id`, `asset_id`, or `partner_interest_group_id`
+- Include `fund_uuid` or `firm_carta_id` whenever the result contains `entity_link_id` or `issuer_entity_link_id`
+- Include these columns even when you don't display them to the user
+
+**Using `_links`:** when a row has a `_links` entry, hyperlink the entity's display name (fund name, company name, LP name) to `row["_links"][field]["web_url"]`. Use the value verbatim — never reconstruct or guess URLs.
 
 ## General Presentation Rules
 
