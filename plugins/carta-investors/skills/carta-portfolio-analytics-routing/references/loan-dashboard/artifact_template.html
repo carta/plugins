@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<script type="application/json" id="cowork-artifact-meta">
+{ "name": "Loan Dashboard", "schemaVersion": 1,
+  "description": "Loan portfolio dashboard — KPI tiles + top-10 loans, data embedded at create time.",
+  "mcpTools": [] }
+</script>
+<!-- IMPORTANT: before substituting the data placeholder below, escape the JSON with JSON unicode escapes:
+     < -> \u003c   > -> \u003e   & -> \u0026   ' -> \u0027
+     Use \uXXXX (NOT HTML entities like &lt; — a <script> block is raw text, so entities are
+     not decoded and would corrupt the value). A raw </script> in any string value
+     (loan/borrower/lender name) would close this block early and inject HTML (stored XSS).
+     JSON.parse decodes \uXXXX back, so the rendered data is unchanged. -->
+
+<script type="application/json" id="loan-data">__LOAN_DATA__</script>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Loan Portfolio Dashboard</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --text-default:  light-dark(#1A1A1A, #FFFFFF);
+      --text-subtle:   light-dark(#656B6B, #9C9F9F);
+      --surface:       light-dark(#FFFFFF, #1A1A1A);
+      --border-subtle: light-dark(#DEDFDF, #394040);
+      --brand-black:   light-dark(#1A1A1A, #FFFFFF);
+      --positive:      light-dark(#2D9E90, #5BC0B3);
+
+      --font-heading: Georgia, 'Times New Roman', serif;
+      --font-body: system-ui, -apple-system, sans-serif;
+      --space-s: 8px;
+      --space-m: 16px;
+      --space-l: 24px;
+      --space-xl: 32px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--surface);
+      color: var(--text-default);
+      font-family: var(--font-body);
+      font-size: 14px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    .page {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: var(--space-xl) var(--space-l);
+    }
+
+    /* === Header === */
+    .logo {
+      display: block;
+      color: var(--brand-black);
+      margin-bottom: var(--space-l);
+    }
+    h1 {
+      font-family: var(--font-heading);
+      font-size: 28px;
+      line-height: 1.2;
+      font-weight: 400;
+      margin: 0 0 var(--space-s);
+      color: var(--text-default);
+    }
+    .scope {
+      color: var(--text-subtle);
+      font-size: 14px;
+      margin: 0 0 var(--space-xl);
+    }
+
+    /* === KPI tiles === */
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: var(--space-m);
+      margin-bottom: var(--space-xl);
+    }
+    @media (max-width: 900px) {
+      .kpis { grid-template-columns: repeat(2, 1fr); }
+    }
+    .tile {
+      border: 1px solid var(--border-subtle);
+      border-radius: 0;
+      padding: var(--space-m);
+      background: var(--surface);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .tile-label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-subtle);
+    }
+    .tile-value {
+      font-family: var(--font-heading);
+      font-size: 24px;
+      line-height: 1.2;
+      color: var(--text-default);
+      font-variant-numeric: tabular-nums;
+    }
+    .tile-sub {
+      font-size: 12px;
+      color: var(--text-subtle);
+      font-variant-numeric: tabular-nums;
+    }
+    .tile-note {
+      font-size: 11px;
+      color: var(--text-subtle);
+    }
+
+    /* === Table === */
+    h2 {
+      font-family: var(--font-heading);
+      font-size: 18px;
+      font-weight: 400;
+      margin: 0 0 var(--space-m);
+      color: var(--text-default);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1px solid var(--border-subtle);
+    }
+    thead th {
+      text-align: left;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-subtle);
+      font-weight: 600;
+      padding: var(--space-s) var(--space-m);
+      border-bottom: 1px solid var(--border-subtle);
+      white-space: nowrap;
+    }
+    tbody td {
+      padding: var(--space-s) var(--space-m);
+      border-bottom: 1px solid var(--border-subtle);
+      color: var(--text-default);
+      vertical-align: middle;
+    }
+    tbody tr:last-child td { border-bottom: none; }
+    .num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    th.num { text-align: right; }
+    .rank { color: var(--text-subtle); font-variant-numeric: tabular-nums; }
+    .empty-row td {
+      text-align: center;
+      color: var(--text-subtle);
+      padding: var(--space-l);
+    }
+
+    /* === Utilization bar === */
+    .util {
+      display: flex;
+      align-items: center;
+      gap: var(--space-s);
+      min-width: 140px;
+    }
+    .util-track {
+      flex: 1;
+      height: 8px;
+      background: var(--border-subtle);
+      border-radius: 0;
+      overflow: hidden;
+    }
+    .util-fill {
+      height: 100%;
+      background: var(--brand-black);
+    }
+    .util-pct {
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+      color: var(--text-subtle);
+      min-width: 38px;
+      text-align: right;
+    }
+
+    /* === Status pill === */
+    .pill {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .pill-active {
+      color: var(--positive);
+      border: 1px solid var(--positive);
+    }
+    .pill-inactive {
+      color: var(--text-subtle);
+      border: 1px solid var(--border-subtle);
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <svg class="logo" width="64" height="32" viewBox="0 0 64 32" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Carta">
+      <path d="M0 0V32H64V0H0ZM62.72 30.72H1.28V1.28H62.72V30.72ZM8.39515 16.6242C8.39515 13.4158 11.103 11.5333 13.5333 11.5333C15.2727 11.5333 16.8958 12.1855 17.7636 13.6885L16.1394 14.6303C15.8594 14.2073 15.4764 13.8606 15.0279 13.6242C14.5782 13.3867 14.0764 13.263 13.5673 13.2667C12.1382 13.2667 10.4388 14.3818 10.4388 16.5903C10.4388 18.7988 12.0642 19.9333 13.703 19.9333C14.8424 19.9333 15.7891 19.2982 16.3503 18.3176L18.0109 19.0848C17.0703 20.7758 15.3903 21.6764 13.4388 21.6764C10.9842 21.6739 8.39636 19.7879 8.39636 16.623L8.39515 16.6242ZM23.9394 21.6764C25.2897 21.6764 26.5648 21.0812 27.223 20.2158V21.4048H29.2291V11.7818H27.223V12.9733C26.5976 12.1006 25.2921 11.5321 23.9394 11.5321C20.9842 11.5321 18.9164 13.6836 18.9164 16.6036C18.9164 19.5236 21.0024 21.6752 23.9394 21.6752V21.6764ZM24.1321 13.3588C25.9867 13.3588 27.2594 14.7418 27.2594 16.6048C27.2594 18.4679 25.9855 19.8509 24.1321 19.8509C22.2788 19.8509 20.9636 18.4485 20.9636 16.5661C20.9636 14.6836 22.2776 13.3576 24.1321 13.3576V13.3588ZM40.0121 13.6921H37.9297V11.7709H40.0315V9.26303H42.0982V11.7709H44.1988V13.6921H42.0982V21.4024H40.0121V13.6921ZM49.9636 21.6764C51.3164 21.6764 52.5915 21.0812 53.2497 20.2158V21.4048H55.2594V11.7818H53.2497V12.9733C52.6242 12.1006 51.3188 11.5321 49.9636 11.5321C47.0109 11.5321 44.943 13.6836 44.943 16.6036C44.943 19.5236 47.0279 21.6752 49.9636 21.6752V21.6764ZM50.1588 13.3588C52.0109 13.3588 53.2873 14.7418 53.2873 16.6048C53.2873 18.4679 52.0109 19.8509 50.1588 19.8509C48.3067 19.8509 46.9903 18.4485 46.9903 16.5661C46.9903 14.6836 48.3042 13.3576 50.1588 13.3576V13.3588ZM33.7721 21.3927H31.6861V11.7697H33.5976V13.5612C34.0703 12.497 34.7818 11.8036 35.937 11.7455C36.1758 11.7418 36.4133 11.7455 36.6509 11.7709L36.6194 13.697C34.96 13.697 33.7745 14.5867 33.7745 17.0655V21.3952H33.7733L33.7721 21.3927Z" fill="currentColor"></path>
+    </svg>
+    <h1>Loan Portfolio Dashboard</h1>
+    <p class="scope" id="scope"></p>
+
+    <section class="kpis" id="kpis"></section>
+
+    <h2>Top 10 loans</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Loan</th>
+          <th>Borrower</th>
+          <th>Lead Lender</th>
+          <th class="num">Committed</th>
+          <th class="num">Outstanding</th>
+          <th>Utilization</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="loan-rows"></tbody>
+    </table>
+  </main>
+
+  <script>
+    const DATA = JSON.parse(document.getElementById('loan-data').textContent);
+
+    // Format money using DATA.currency_code. Compact notation for large values.
+    // No hardcoded "$" — falsy currency_code => plain number, no symbol.
+    function money(n, currencyCode) {
+      if (n === null || n === undefined || isNaN(n)) return '—';
+      const abs = Math.abs(n);
+      const compact = abs >= 1_000_000;
+      if (!currencyCode) {
+        return new Intl.NumberFormat(undefined, {
+          notation: compact ? 'compact' : 'standard',
+          maximumFractionDigits: compact ? 2 : 0,
+        }).format(n);
+      }
+      return new Intl.NumberFormat(undefined, {
+        style: 'currency',
+        currency: currencyCode,
+        notation: compact ? 'compact' : 'standard',
+        maximumFractionDigits: compact ? 2 : 0,
+      }).format(n);
+    }
+
+    function num(n) {
+      if (n === null || n === undefined || isNaN(n)) return '—';
+      return new Intl.NumberFormat(undefined).format(n);
+    }
+
+    function pct(n) {
+      if (n === null || n === undefined || isNaN(n)) return 0;
+      return Math.max(0, Math.min(100, Number(n)));
+    }
+
+    function esc(s) {
+      const d = document.createElement('div');
+      d.textContent = s == null ? '' : String(s);
+      return d.innerHTML;
+    }
+
+    const cc = DATA.currency_code;
+    const k = DATA.kpis || {};
+
+    // Scope line
+    document.getElementById('scope').textContent = DATA.firm_name || '';
+
+    // KPI tiles
+    const tiles = [
+      {
+        label: 'Total Loans',
+        value: num(k.total_loans),
+        sub: `${num(k.active_loans)} active · ${num(k.inactive_loans)} inactive`,
+      },
+      {
+        label: 'Committed',
+        value: money(k.total_committed, cc),
+      },
+      {
+        label: 'Drawn',
+        value: money(k.total_drawn, cc),
+        sub: `${num(k.drawn_utilization_pct)}% utilized`,
+      },
+      {
+        label: 'Outstanding',
+        value: money(k.total_outstanding, cc),
+        note: 'incl. PIK',
+      },
+      {
+        label: 'Undrawn Capacity',
+        value: money(k.undrawn_capacity, cc),
+      },
+    ];
+
+    document.getElementById('kpis').innerHTML = tiles.map(t => `
+      <div class="tile">
+        <span class="tile-label">${esc(t.label)}</span>
+        <span class="tile-value">${t.value}</span>
+        ${t.sub ? `<span class="tile-sub">${esc(t.sub)}</span>` : ''}
+        ${t.note ? `<span class="tile-note">${esc(t.note)}</span>` : ''}
+      </div>
+    `).join('');
+
+    // Top-10 table
+    const loans = Array.isArray(DATA.top_loans) ? DATA.top_loans : [];
+    const tbody = document.getElementById('loan-rows');
+
+    if (loans.length === 0) {
+      tbody.innerHTML = `<tr class="empty-row"><td colspan="8">No loans in scope</td></tr>`;
+    } else {
+      tbody.innerHTML = loans.map((l, i) => {
+        const p = pct(l.draw_utilization_pct);
+        const active = !!l.is_active;
+        return `
+          <tr>
+            <td class="rank">${i + 1}</td>
+            <td>${esc(l.loan_name)}</td>
+            <td>${esc(l.borrower_name)}</td>
+            <td>${esc(l.lead_lender_name)}</td>
+            <td class="num">${money(l.committed, cc)}</td>
+            <td class="num">${money(l.outstanding, cc)}</td>
+            <td>
+              <div class="util">
+                <div class="util-track"><div class="util-fill" style="width:${p}%"></div></div>
+                <span class="util-pct">${num(Math.round(p))}%</span>
+              </div>
+            </td>
+            <td>
+              <span class="pill ${active ? 'pill-active' : 'pill-inactive'}">${active ? 'Active' : 'Inactive'}</span>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+  </script>
+</body>
+</html>

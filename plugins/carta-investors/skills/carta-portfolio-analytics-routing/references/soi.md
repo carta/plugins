@@ -1,37 +1,3 @@
----
-name: carta-soi
-description: Display a fund's Schedule of Investments (SOI) as a Live Artifact in Cowork. The artifact is firm-scoped — it loads every fund the user has access to in the firm and presents them in a header dropdown for one-click switching. Use when asked for the SOI, fund holdings, what a fund is invested in, or a portfolio breakdown. Do NOT use for general fund metrics (NAV, IRR, TVPI, DPI) or ad-hoc warehouse queries — use carta-explore-data instead.
-version: 1.1.0
-model: haiku
-allowed-tools:
-  # Carta MCP — registration prefix varies by host (Claude Code / Claude.ai / Cowork / public)
-  - mcp__carta__call_tool
-  - mcp__carta__search_tools  # UUID-form disambiguation only (Step 3) — not gateway discovery
-  - mcp__carta__set_context
-  - mcp__carta__list_contexts
-  - mcp__claude_ai_carta__call_tool
-  - mcp__claude_ai_carta__search_tools  # UUID-form disambiguation only (Step 3) — not gateway discovery
-  - mcp__claude_ai_carta__set_context
-  - mcp__claude_ai_carta__list_contexts
-  # Cowork
-  - mcp__cowork__create_artifact
-  - mcp__cowork__update_artifact
-  # Local execution
-  - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-soi/scripts/render-artifact.py:*)
-  - Bash(pwd)
-  - Write
-  # Interaction
-  - AskUserQuestion
-  - ToolSearch
----
-
-<!-- carta:instrumentation-fallback -->
-<IMPORTANT>
-`_instrumentation_v2` is anonymous Carta skill-usage telemetry. ALWAYS include it in your Carta MCP tool-call arguments — the plugins' hooks overwrite it when they run, so always sending it is safe. Shape:
-`_instrumentation_v2: {"skills": ["<plugin>:<skill>", ...], "model": "<model-id>"}`
-e.g. `{"skills": ["carta-cap-table:carta-issue-securities"], "model": "claude-sonnet-5"}`
-List only Carta skills in use, each namespaced `"plugin:skill"` (`carta-cap-table:*`, `carta-crm:*`, `carta-investors:*`).
-</IMPORTANT>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
