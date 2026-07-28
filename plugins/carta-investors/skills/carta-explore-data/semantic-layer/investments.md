@@ -14,7 +14,7 @@ Query investment-level data: cost basis, fair market value, unrealized gain/loss
 | `QUANTITY` / `SHARES` | `count_remaining_shares` | |
 | `COMPANY_NAME` / `LEGAL_NAME` / `CORPORATION_NAME` / `PORTFOLIO_COMPANY_NAME` / `INVESTMENT_NAME` | `issuer_name` | company name in this table; `INVESTMENT_NAME` is a valid column in the cap-table domain (`FUND_CORPORATION_OWNERSHIP`) but **does not exist** on `AGGREGATE_INVESTMENTS` |
 | `SECURITY_NAME` | `asset_name` (instrument) or `issuer_name` (company) | |
-| `SECURITY_TYPE` | `asset_class_type` | |
+| `SECURITY_TYPE` / `ASSET_CLASS` | `asset_class_type` | |
 | `CURRENT_VALUE` / `FAIR_VALUE` | `remaining_value` | total FMV of remaining holdings |
 | `TOTAL_NET_REALIZED` | `residual_gain_loss` (realized+unrealized combined) or `total_proceeds` (exit cash only) | `total_net_realized` does **not** exist on `AGGREGATE_INVESTMENTS` — it is a column on `AGGREGATE_FUND_METRICS` |
 | `INVESTMENT_DATE` on history table | not a column — use `effective_date` range filter | `AGGREGATE_INVESTMENTS_HISTORY` only |
