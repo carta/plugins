@@ -4,8 +4,6 @@ model: opus
 description: 'Pull a ManCo budget from Carta and write it to an Excel workbook with monthly amounts and subtotals. TRIGGER: pull/fetch/import/sync Carta budget for a ManCo. NOT: pull/fetch/get actuals (carta-fetch-actuals), new budgets (carta-create-budget), actuals refresh, pacing, scenarios, P&L, balance sheet.'
 version: 1.0.3
 allowed-tools:
-  # MCP connector discovery (Claude for Excel runtime tool — used first in Gate 0)
-  - refresh_mcp_connectors
   # Production
   - mcp__claude_ai_Carta__call_tool
   - mcp__claude_ai_Carta__welcome
@@ -120,11 +118,12 @@ Do not ask "which firm?" when the entity is already established from the skill t
 
 ## Gate 0 — Carta MCP environment + resolve firm
 
-1. Call `refresh_mcp_connectors`. Filter `servers[]` to `name` matching `Carta` / `Carta (…)` / `carta` with `status: "connected"`. Drop `failed`.
-2. For each connected, probe both prefix forms in parallel: `mcp__claude_ai_Carta__welcome(_instrumentation={"plugin": "carta-investors", "skills": ["carta-fetch-budget"]})` and `mcp__carta__welcome(_instrumentation={"plugin": "carta-investors", "skills": ["carta-fetch-budget"]})`. First success = `<SERVER>`.
-3. **Don't call any other `mcp__<SERVER>__*` tool before `welcome`** — every command is gated.
+Scan the tools available in the conversation for any matching `mcp__*__welcome`. Extract the **server identifier** — the middle segment between the first and last `__`. Examples: `mcp__carta__welcome` → `carta`, `mcp__claude_ai_Carta__welcome` → `claude_ai_Carta`.
 
-If none connected, list `failed` connectors and stop. If multiple, default to `Carta` (production).
+**If none found:** tell the user no Carta MCP is connected and stop.
+**If exactly one found:** call `mcp__<SERVER>__welcome(_instrumentation={"plugin": "carta-investors", "skills": ["carta-fetch-budget"]})` to verify. This is `<SERVER>`.
+**If multiple found:** ask the user which to use via `AskUserQuestion`. Default to `carta` (production) if present.
+**Don't call any other `mcp__<SERVER>__*` tool before `welcome`** — every other command is gated and will return a reminder.
 
 **Resolve firm:** if user named one → `mcp__<SERVER>__list_contexts(firm_name="<firm>", _instrumentation={"plugin": "carta-investors", "skills": ["carta-fetch-budget"]})` → disambiguate via `AskUserQuestion` if multiple → `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-fetch-budget"]})`. Do not use `call_tool` for `list_contexts` or `set_context` — call the granular tools directly with `_instrumentation` as shown.
 

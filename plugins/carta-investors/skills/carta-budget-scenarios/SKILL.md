@@ -4,8 +4,6 @@ model: opus
 description: 'Build what-if scenario columns on an existing Excel budget workbook — trim, growth, or additive layers (new fund raise, headcount/FTE hires, expansion). TRIGGER: what-if questions, "how would X affect next year''s budget/P&L", model/simulate a scenario, impact of raising a fund or hiring, forward projections with timing sensitivity. NOT: new budgets (carta-create-budget), fetch-budget, actuals refresh, pacing, historical/consolidating financial statements (carta-consolidating-pnl / carta-consolidating-balance-sheet).'
 version: 1.0.2
 allowed-tools:
-  # MCP connector discovery (Claude for Excel runtime tool — used first in Step 0)
-  - refresh_mcp_connectors
   # Production
   - mcp__claude_ai_Carta__call_tool
   - mcp__claude_ai_Carta__welcome
@@ -138,11 +136,12 @@ Do not ask "which firm?" or "which runtime?" when those are already established 
 
 ## Step 0 — Carta MCP environment + resolve firm
 
-1. Call `refresh_mcp_connectors`. Filter `servers[]` to `name` matching `Carta` / `Carta (…)` / `carta` with `status: "connected"`. Drop `failed`.
-2. Probe all three prefix forms in parallel: `mcp__claude_ai_Carta__welcome(_instrumentation={"plugin": "carta-investors", "skills": ["carta-budget-scenarios"]})`, `mcp__carta_production__welcome(_instrumentation={"plugin": "carta-investors", "skills": ["carta-budget-scenarios"]})`, and `mcp__carta__welcome(_instrumentation={"plugin": "carta-investors", "skills": ["carta-budget-scenarios"]})`. First success = `<SERVER>`.
-3. **Don't call any other `mcp__<SERVER>__*` tool before `welcome`** — every command is gated.
+Scan the tools available in the conversation for any matching `mcp__*__welcome`. Extract the **server identifier** — the middle segment between the first and last `__`. Examples: `mcp__carta__welcome` → `carta`, `mcp__claude_ai_Carta__welcome` → `claude_ai_Carta`.
 
-If none connected, list `failed` connectors and stop. If multiple, default to `Carta` (production).
+**If none found:** tell the user no Carta MCP is connected and stop.
+**If exactly one found:** call `mcp__<SERVER>__welcome(_instrumentation={"plugin": "carta-investors", "skills": ["carta-budget-scenarios"]})` to verify. This is `<SERVER>`.
+**If multiple found:** ask the user which to use via `AskUserQuestion`. Default to `carta` (production) if present.
+**Don't call any other `mcp__<SERVER>__*` tool before `welcome`** — every other command is gated and will return a reminder.
 
 **Resolve firm:** if user named one → `mcp__<SERVER>__list_contexts(firm_name="<entity>", _instrumentation={"plugin": "carta-investors", "skills": ["carta-budget-scenarios"]})` → disambiguate via `AskUserQuestion` if multiple → `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-budget-scenarios"]})`. Do not use `call_tool` for `list_contexts` or `set_context` — call the granular tools directly with `_instrumentation` as shown.
 

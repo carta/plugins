@@ -4,8 +4,6 @@ model: opus
 description: 'Build or restructure a fund/ManCo budget workbook in Excel from Carta prior-year actuals. TRIGGER: build/create/draft a budget for a future year; group/categorize budget line items into sections with subtotals; apply an inflation/contingency buffer to budget expenses. NOT: consolidating P&L / balance sheet, fetch-budget, actuals refresh, pacing (carta-budget-analysis), what-if scenarios (carta-budget-scenarios).'
 version: 1.0.2
 allowed-tools:
-  # MCP connector discovery (Claude for Excel runtime tool — used first in Gate 0)
-  - refresh_mcp_connectors
   # Production
   - mcp__claude_ai_Carta__call_tool
   - mcp__claude_ai_Carta__welcome
@@ -123,13 +121,14 @@ Do not ask "which firm?" or "which runtime?" when those are already established 
 
 ### Detect the Carta MCP server
 
-1. Call `refresh_mcp_connectors` (no params). It returns `servers[]` with `name` and `status`.
-2. Filter to entries whose `name` is `Carta`, starts with `Carta (`, or equals `carta`. Drop `failed` entries (need re-auth at claude.ai → Settings → Connectors).
-3. For each `connected` candidate, probe both prefix forms in parallel (one message, both calls): `mcp__claude_ai_Carta__welcome(_instrumentation={"plugin": "carta-investors", "skills": ["carta-create-budget"]})` and `mcp__carta__welcome(_instrumentation={"plugin": "carta-investors", "skills": ["carta-create-budget"]})`. Whichever returns first is `<SERVER>`.
+Scan the tools available in the conversation for any matching `mcp__*__welcome`. Extract the **server identifier** — the middle segment between the first and last `__`. Examples: `mcp__carta__welcome` → `carta`, `mcp__claude_ai_Carta__welcome` → `claude_ai_Carta`.
+
+**If none found:** tell the user no Carta MCP is connected and stop.
+**If exactly one found:** call `mcp__<SERVER>__welcome(_instrumentation={"plugin": "carta-investors", "skills": ["carta-create-budget"]})` to verify. This is `<SERVER>`.
+**If multiple found:** ask the user which to use via `AskUserQuestion`. Default to `carta` (production) if present.
+**Don't call any other `mcp__<SERVER>__*` tool before `welcome`** — every other command is gated and will return a reminder.
 
 `<SERVER>` is resolved only after `welcome` returns successfully. **Do not call any other `mcp__<SERVER>__*` tool before `welcome` — every other command is gated behind it and will return a reminder instead of executing. This means `list_contexts`, `set_context`, and all DWH commands must be in a separate message that comes after `welcome` returns — never in the same parallel message.**
-
-**If no Carta server is connected:** tell the user, list `failed` connectors, stop. **If multiple connected:** default to `Carta` (production). **Don't** probe every prefix in `allowed-tools` — only `connected` ones. **Never** use `tool_search_tool_bm25` to find the server prefix — it is not in `allowed-tools` and bypasses the `connected`-only filter. Determine the prefix solely from the `refresh_mcp_connectors` result.
 
 ### Resolve the firm/entity
 
