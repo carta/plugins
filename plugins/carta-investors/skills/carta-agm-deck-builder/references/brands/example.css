@@ -1,0 +1,59 @@
+/* =========================================================================
+   BRAND — EXAMPLE FIRM
+   -------------------------------------------------------------------------
+   Per-deck brand layer. The ONLY file you edit when reskinning a deck.
+
+   Drop a sibling file in this folder for each new brand and link it from
+   the deck's HTML BEFORE tokens.css:
+
+     <link rel="stylesheet" href="brands/yourbrand.css">
+     <link rel="stylesheet" href="design-system/tokens.css">
+     <link rel="stylesheet" href="design-system/system.css">
+
+   System rules:
+     - Set ONLY --brand-* values here. Do not touch --ds-* (intent layer).
+     - Pair with logo assets in /assets and a Google Fonts <link> in <head>.
+     - Aim for: 1 paper, 1 alt paper, 1 ink, 1 ink-mute, 1 rule,
+                3 accents, 1 on-accent, 1 on-accent-em, 2 fonts.
+     - Spacing, sizing, weights are owned by the system and stay constant
+       across brands. Only colors + font families are interchangeable.
+   ========================================================================= */
+
+:root {
+  /* Surfaces & ink */
+  --brand-paper:        #F2EEE6;   /* primary surface (light) */
+  --brand-paper-alt:    #FFFFFF;   /* alternate surface */
+  --brand-ink:          #1A1A1A;
+  --brand-ink-2:        #2C2A26;
+  --brand-ink-mute:     #6B655B;
+  --brand-rule:         #C9C2B3;
+
+  /* Accents */
+  --brand-accent-1:     #2D4A33;   /* deep forest green */
+  --brand-accent-2:     #B8693D;   /* terracotta */
+  --brand-accent-3:     #C99A56;   /* gold */
+
+  /* Text on accent-1 backgrounds (.ds-dark) */
+  --brand-on-accent:    #F2EEE6;
+  --brand-on-accent-em: #E0B987;   /* gold em on green */
+
+  /* Fonts — interchangeable. Sizes/weights are system-owned. */
+  --brand-font-display: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --brand-font-body:    "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+  --brand-weight-display: 300;   /* hero/h1/h2/lede */
+  --brand-weight-body:    400;   /* body, labels */
+  --brand-weight-num:     200;   /* big numbers */
+  --brand-weight-em:      400;   /* italicised emphasis */
+
+  /* Logo assets — REQUIRED to ship two variants per brand.
+     ----------------------------------------------------------------------
+     Rule: every logo on a slide must adapt to the surface it sits on, in
+     BOTH the live render and the PPTX export. Never ship one variant.
+     light: dark mark, used on light surfaces (paper / alt).
+     dark:  light/cream mark, used on .ds-dark surfaces.
+     The build script picks the right file per slide based on variant —
+     do not bypass this by hardcoding <img src=…> on a single variant. */
+  --brand-logo-light:   url("../assets/logo-dark.svg");   /* dark Carta mark → shown on light slides */
+  --brand-logo-dark:    url("../assets/logo-light.svg");  /* light Carta mark → shown on dark slides */
+}

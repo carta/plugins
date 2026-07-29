@@ -1,0 +1,342 @@
+/* =========================================================================
+   DESIGN SYSTEM — STYLES
+   -------------------------------------------------------------------------
+   Reads only from intent tokens (--ds-*). To restyle, edit tokens.css.
+
+   Class prefix: `.ds-` for system primitives.
+   Apply `.ds-dark` or `.ds-alt` to a <section> for slide variants.
+   ========================================================================= */
+
+/* ---------- slide canvas ---------- */
+deck-stage section,
+.ds-slide {
+  width: 1920px;
+  height: 1080px;
+  box-sizing: border-box;
+  background: var(--ds-bg);
+  color: var(--ds-ink);
+  font-family: var(--ds-font-body);
+  font-feature-settings: "ss01", "cv11";
+  overflow: hidden;
+  position: relative;
+}
+
+/* page padding container */
+.ds-pad {
+  padding: 140px 112px;
+  box-sizing: border-box;
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.ds-pad--header { padding-top: 180px; }
+
+/* ---------- type system ---------- */
+.ds-eyebrow {
+  font-family: var(--ds-font-body);
+  font-size: 14px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ds-ink-mute);
+  font-weight: 500;
+}
+
+.ds-display {
+  font-family: var(--ds-font-display);
+  font-weight: var(--ds-weight-display);
+  font-size: 88px;
+  line-height: 1.04;
+  letter-spacing: -0.028em;
+  color: var(--ds-ink);
+  text-wrap: pretty;
+}
+.ds-display em {
+  font-style: normal;
+  font-weight: var(--ds-weight-em);
+  color: var(--ds-em);
+}
+
+.ds-h1 {
+  font-family: var(--ds-font-display);
+  font-weight: var(--ds-weight-display);
+  font-size: 64px;
+  line-height: 1.08;
+  letter-spacing: -0.022em;
+  color: var(--ds-ink);
+  text-wrap: pretty;
+}
+.ds-h1 em {
+  font-style: normal;
+  font-weight: var(--ds-weight-em);
+  color: var(--ds-em);
+}
+
+.ds-h2 {
+  font-family: var(--ds-font-display);
+  font-weight: var(--ds-weight-body);
+  font-size: 40px;
+  line-height: 1.15;
+  letter-spacing: -0.018em;
+  color: var(--ds-ink);
+}
+.ds-h2 em {
+  font-style: normal;
+  font-weight: 500;
+  color: var(--ds-em);
+}
+
+.ds-lede {
+  font-family: var(--ds-font-body);
+  font-weight: 300;
+  font-size: 26px;
+  line-height: 1.4;
+  letter-spacing: -0.011em;
+  color: var(--ds-ink-2);
+  text-wrap: pretty;
+}
+
+.ds-body {
+  font-family: var(--ds-font-body);
+  font-weight: var(--ds-weight-body);
+  font-size: 19px;
+  line-height: 1.55;
+  color: var(--ds-ink-2);
+  text-wrap: pretty;
+}
+.ds-body--sm { font-size: 16px; }
+
+.ds-label {
+  font-family: var(--ds-font-body);
+  font-size: 14px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ds-ink-mute);
+  font-weight: 500;
+}
+.ds-label--sm { font-size: 12px; letter-spacing: 0.14em; }
+
+.ds-num {
+  font-family: var(--ds-font-display);
+  font-weight: var(--ds-weight-num);
+  font-size: 96px;
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+  color: var(--ds-ink);
+  font-feature-settings: "lnum", "tnum";
+}
+.ds-num--sm {
+  font-family: var(--ds-font-display);
+  font-weight: var(--ds-weight-num);
+  font-size: 56px;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--ds-ink);
+  font-feature-settings: "lnum", "tnum";
+}
+.ds-num__unit {
+  font-size: 0.45em;
+  color: var(--ds-accent);
+  font-feature-settings: "lnum", "tnum";
+}
+
+/* color modifiers (semantic, not hue-named) */
+.ds-on-accent     { color: var(--ds-accent); }
+.ds-on-accent-2   { color: var(--ds-accent-2); }
+.ds-on-mute       { color: var(--ds-ink-mute); }
+
+/* ---------- hairline ---------- */
+.ds-rule {
+  height: 1px;
+  background: var(--ds-rule);
+  width: 100%;
+  border: 0;
+}
+
+/* ---------- chrome / page furniture ---------- */
+.ds-chrome-logo {
+  position: absolute;
+  top: 36px;
+  left: 56px;
+  height: 80px;
+  width: auto;
+  z-index: 5;
+}
+
+/* Optional: brand-driven logo via CSS var. Use on a <div class="ds-chrome-logo"
+   data-variant="light|dark"></div> if you don't want to hardcode <img src=>.  */
+div.ds-chrome-logo {
+  background-position: left center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  background-image: var(--brand-logo-light);
+  width: 220px;
+}
+.ds-dark div.ds-chrome-logo,
+div.ds-chrome-logo[data-variant="dark"] {
+  background-image: var(--brand-logo-dark);
+}
+
+.ds-chrome-page {
+  position: absolute;
+  bottom: 36px;
+  left: 56px;
+  font-family: var(--ds-font-body);
+  font-size: 14px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ds-ink-mute);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.ds-chrome-page__dot {
+  width: 4px; height: 4px; border-radius: 50%;
+  background: var(--ds-ink-mute);
+  opacity: 0.6;
+}
+
+.ds-chrome-foot {
+  position: absolute;
+  bottom: 36px;
+  right: 56px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--ds-font-body);
+  font-size: 14px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ds-ink-mute);
+  z-index: 5;
+}
+.ds-chrome-foot .carta-mark { display: inline-flex; align-items: center; }
+.ds-chrome-foot .carta-mark svg { height: 20px; width: auto; display: block; fill: currentColor; }
+
+/* ---------- horizontal-bar primitive ---------- */
+.ds-hbar-row {
+  display: grid;
+  grid-template-columns: 200px 1fr 100px;
+  gap: 24px;
+  align-items: center;
+  padding: 14px 0;
+}
+.ds-hbar-row__label {
+  font-family: var(--ds-font-body);
+  font-size: 16px;
+  color: var(--ds-ink);
+  font-weight: 500;
+}
+.ds-hbar-row__value {
+  font-family: var(--ds-font-body);
+  font-size: 16px;
+  color: var(--ds-ink-2);
+  font-weight: 500;
+  text-align: right;
+  font-feature-settings: "tnum";
+}
+.ds-hbar-track {
+  height: 14px;
+  background: transparent;
+  position: relative;
+}
+.ds-hbar-track__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--ds-cat-1);
+}
+.ds-hbar-track[data-series="1"] .ds-hbar-track__fill { background: var(--ds-cat-1); }
+.ds-hbar-track[data-series="2"] .ds-hbar-track__fill { background: var(--ds-cat-2); }
+.ds-hbar-track[data-series="3"] .ds-hbar-track__fill { background: var(--ds-cat-3); }
+.ds-hbar-track[data-series="4"] .ds-hbar-track__fill { background: var(--ds-cat-4); }
+.ds-hbar-track[data-series="5"] .ds-hbar-track__fill { background: var(--ds-cat-5); }
+
+/* ---------- swatch dot (for legends) ---------- */
+.ds-swatch {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  background: var(--ds-cat-1);
+}
+.ds-swatch[data-series="1"] { background: var(--ds-cat-1); }
+.ds-swatch[data-series="2"] { background: var(--ds-cat-2); }
+.ds-swatch[data-series="3"] { background: var(--ds-cat-3); }
+.ds-swatch[data-series="4"] { background: var(--ds-cat-4); }
+.ds-swatch[data-series="5"] { background: var(--ds-cat-5); }
+
+/* ---------- accent utilities ---------- */
+.ds-accent-bar {
+  width: 56px;
+  height: 4px;
+  background: var(--ds-accent);
+  border-radius: 2px;
+}
+.ds-accent-bar--wide { width: 100%; }
+.ds-accent-bar--2 { background: var(--ds-accent-2); }
+.ds-accent-bar--3 { background: var(--ds-accent-3); }
+
+.ds-accent-border {
+  border-left: 4px solid var(--ds-accent);
+  padding-left: 24px;
+}
+.ds-accent-border--2 { border-left-color: var(--ds-accent-2); }
+.ds-accent-border--3 { border-left-color: var(--ds-accent-3); }
+
+.ds-accent-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ds-accent);
+  flex-shrink: 0;
+}
+.ds-accent-dot--2 { background: var(--ds-accent-2); }
+.ds-accent-dot--3 { background: var(--ds-accent-3); }
+
+.ds-kpi-highlight {
+  color: var(--ds-accent);
+}
+.ds-kpi-highlight--2 { color: var(--ds-accent-2); }
+.ds-kpi-highlight--3 { color: var(--ds-accent-3); }
+
+.ds-card {
+  background: var(--ds-bg-alt);
+  border-radius: 16px;
+  padding: 40px;
+  border-top: 4px solid var(--ds-accent);
+}
+.ds-card--2 { border-top-color: var(--ds-accent-2); }
+.ds-card--3 { border-top-color: var(--ds-accent-3); }
+.ds-card--flat { border-top: none; }
+
+.ds-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  border-radius: 100px;
+  font-family: var(--ds-font-body);
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 500;
+  background: color-mix(in oklab, var(--ds-accent) 12%, transparent);
+  color: var(--ds-accent);
+}
+.ds-pill--2 {
+  background: color-mix(in oklab, var(--ds-accent-2) 12%, transparent);
+  color: var(--ds-accent-2);
+}
+.ds-pill--3 {
+  background: color-mix(in oklab, var(--ds-accent-3) 12%, transparent);
+  color: var(--ds-accent-3);
+}
+
+/* ---------- chart container ---------- */
+.ds-chart {
+  display: block;
+  overflow: visible;
+}

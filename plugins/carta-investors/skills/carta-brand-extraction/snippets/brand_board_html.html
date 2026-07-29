@@ -1,0 +1,375 @@
+<!--
+  Brand Board HTML Template
+
+  This is a self-contained HTML artifact that renders a brand board.
+  Claude fills in the template variables marked with {{PLACEHOLDER}} based on
+  the analysis output from analyze_website.py and any user-provided assets.
+
+  Layout sections:
+    1. Header — firm name + website URL
+    2. Color Palette — primary, secondary, accent, and neutral swatches with hex codes
+    3. Typography — font families with samples at heading/body/small sizes
+    4. Logo — extracted logo(s) displayed at original aspect ratio
+    5. Imagery & Mood — hero images / style references in a grid
+    6. Design Tokens — border radius, shadows, spacing patterns observed
+
+  For dark brand identities, set the <body> class to "dark-mode" to invert
+  the board background.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{FIRM_NAME}} — Brand Board</title>
+  <style>
+    /* ── Reset & base ─────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Inter", system-ui, -apple-system, sans-serif;
+      background: #f8f8f8;
+      color: #1a1a1a;
+      padding: 40px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    body.dark-mode {
+      background: #1a1a1a;
+      color: #f0f0f0;
+    }
+
+    /* ── Header ───────────────────────────────────────────────────── */
+    .bb-header {
+      text-align: center;
+      margin-bottom: 48px;
+      padding-bottom: 32px;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    .dark-mode .bb-header { border-bottom-color: #333; }
+
+    .bb-header h1 {
+      font-size: 36px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      margin-bottom: 8px;
+    }
+    .bb-header .bb-subtitle {
+      font-size: 14px;
+      color: #888;
+      font-weight: 400;
+    }
+    .bb-header .bb-url {
+      font-size: 13px;
+      color: #aaa;
+      margin-top: 4px;
+    }
+
+    /* ── Section titles ───────────────────────────────────────────── */
+    .bb-section {
+      margin-bottom: 48px;
+    }
+    .bb-section-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: #999;
+      margin-bottom: 20px;
+    }
+    .dark-mode .bb-section-title { color: #777; }
+
+    /* ── Color Palette ────────────────────────────────────────────── */
+    .bb-colors {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .bb-color-group {
+      flex: 1;
+      min-width: 180px;
+    }
+    .bb-color-group-label {
+      font-size: 12px;
+      font-weight: 500;
+      color: #666;
+      margin-bottom: 8px;
+    }
+    .bb-swatch-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .bb-swatch {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+    .bb-swatch-box {
+      width: 72px;
+      height: 72px;
+      border-radius: 8px;
+      border: 1px solid rgba(0,0,0,0.08);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    .dark-mode .bb-swatch-box {
+      border-color: rgba(255,255,255,0.1);
+    }
+    .bb-swatch-label {
+      font-size: 11px;
+      font-family: "Roboto Mono", monospace;
+      color: #777;
+    }
+
+    /* ── Typography ───────────────────────────────────────────────── */
+    .bb-type-specimens {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    .bb-type-specimen {
+      padding: 24px;
+      background: #fff;
+      border: 1px solid #e8e8e8;
+      border-radius: 8px;
+    }
+    .dark-mode .bb-type-specimen {
+      background: #222;
+      border-color: #333;
+    }
+    .bb-type-family {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #999;
+      margin-bottom: 12px;
+    }
+    .bb-type-sample-heading {
+      font-size: 32px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .bb-type-sample-body {
+      font-size: 16px;
+      font-weight: 400;
+      line-height: 1.6;
+      color: #555;
+      margin-bottom: 6px;
+    }
+    .dark-mode .bb-type-sample-body { color: #aaa; }
+    .bb-type-sample-small {
+      font-size: 12px;
+      color: #999;
+    }
+    .bb-type-meta {
+      margin-top: 12px;
+      font-size: 11px;
+      color: #aaa;
+      font-family: "Roboto Mono", monospace;
+    }
+
+    /* ── Logo ─────────────────────────────────────────────────────── */
+    .bb-logos {
+      display: flex;
+      gap: 32px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .bb-logo-card {
+      padding: 24px;
+      background: #fff;
+      border: 1px solid #e8e8e8;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 200px;
+      min-height: 120px;
+    }
+    .bb-logo-card.dark-bg {
+      background: #1a1a1a;
+      border-color: #333;
+    }
+    .dark-mode .bb-logo-card {
+      background: #222;
+      border-color: #333;
+    }
+    .bb-logo-card img {
+      max-width: 240px;
+      max-height: 100px;
+      object-fit: contain;
+    }
+
+    /* ── Imagery grid ─────────────────────────────────────────────── */
+    .bb-imagery-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 16px;
+    }
+    .bb-imagery-card {
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid #e8e8e8;
+      aspect-ratio: 16 / 10;
+    }
+    .dark-mode .bb-imagery-card { border-color: #333; }
+    .bb-imagery-card img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    /* ── Design Tokens ────────────────────────────────────────────── */
+    .bb-tokens {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 16px;
+    }
+    .bb-token-card {
+      padding: 16px;
+      background: #fff;
+      border: 1px solid #e8e8e8;
+      border-radius: 8px;
+    }
+    .dark-mode .bb-token-card {
+      background: #222;
+      border-color: #333;
+    }
+    .bb-token-name {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #999;
+      margin-bottom: 8px;
+    }
+    .bb-token-value {
+      font-size: 14px;
+      font-family: "Roboto Mono", monospace;
+      color: #555;
+    }
+    .dark-mode .bb-token-value { color: #bbb; }
+
+    /* ── Footer ───────────────────────────────────────────────────── */
+    .bb-footer {
+      margin-top: 48px;
+      padding-top: 24px;
+      border-top: 1px solid #e0e0e0;
+      text-align: center;
+      font-size: 11px;
+      color: #bbb;
+    }
+    .dark-mode .bb-footer { border-top-color: #333; }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="bb-header">
+    <h1>{{FIRM_NAME}}</h1>
+    <div class="bb-subtitle">Brand Board</div>
+    <div class="bb-url">{{WEBSITE_URL}}</div>
+  </div>
+
+  <!-- Color Palette -->
+  <div class="bb-section">
+    <div class="bb-section-title">Color Palette</div>
+    <div class="bb-colors">
+      <div class="bb-color-group">
+        <div class="bb-color-group-label">Primary</div>
+        <div class="bb-swatch-row">
+          <!-- {{PRIMARY_COLORS}} — Repeat .bb-swatch for each primary color -->
+          <div class="bb-swatch">
+            <div class="bb-swatch-box" style="background: {{HEX}};"></div>
+            <span class="bb-swatch-label">{{HEX}}</span>
+          </div>
+        </div>
+      </div>
+      <div class="bb-color-group">
+        <div class="bb-color-group-label">Secondary</div>
+        <div class="bb-swatch-row">
+          <!-- {{SECONDARY_COLORS}} -->
+        </div>
+      </div>
+      <div class="bb-color-group">
+        <div class="bb-color-group-label">Accent</div>
+        <div class="bb-swatch-row">
+          <!-- {{ACCENT_COLORS}} -->
+        </div>
+      </div>
+      <div class="bb-color-group">
+        <div class="bb-color-group-label">Neutral</div>
+        <div class="bb-swatch-row">
+          <!-- {{NEUTRAL_COLORS}} -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Typography -->
+  <div class="bb-section">
+    <div class="bb-section-title">Typography</div>
+    <div class="bb-type-specimens">
+      <!-- {{FONT_SPECIMENS}} — Repeat .bb-type-specimen for each font family -->
+      <div class="bb-type-specimen">
+        <div class="bb-type-family">{{FONT_FAMILY_NAME}}</div>
+        <div class="bb-type-sample-heading" style="font-family: '{{FONT_FAMILY}}', sans-serif;">
+          The quick brown fox jumps over the lazy dog
+        </div>
+        <div class="bb-type-sample-body" style="font-family: '{{FONT_FAMILY}}', sans-serif;">
+          ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz 0123456789
+        </div>
+        <div class="bb-type-sample-small" style="font-family: '{{FONT_FAMILY}}', sans-serif;">
+          !@#$%^&*()_+-=[]{}|;:'",.<>?/
+        </div>
+        <div class="bb-type-meta">Weights: {{WEIGHTS}} &middot; Sizes: {{SIZES}}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Logo -->
+  <div class="bb-section">
+    <div class="bb-section-title">Logo</div>
+    <div class="bb-logos">
+      <!-- Light background -->
+      <div class="bb-logo-card">
+        <img src="{{LOGO_URL}}" alt="{{FIRM_NAME}} logo" />
+      </div>
+      <!-- Dark background -->
+      <div class="bb-logo-card dark-bg">
+        <img src="{{LOGO_URL}}" alt="{{FIRM_NAME}} logo on dark background" />
+      </div>
+    </div>
+  </div>
+
+  <!-- Imagery & Mood -->
+  <div class="bb-section">
+    <div class="bb-section-title">Imagery &amp; Mood</div>
+    <div class="bb-imagery-grid">
+      <!-- {{IMAGERY}} — Repeat .bb-imagery-card for each image -->
+      <div class="bb-imagery-card">
+        <img src="{{IMAGE_URL}}" alt="{{IMAGE_ALT}}" />
+      </div>
+    </div>
+  </div>
+
+  <!-- Design Tokens -->
+  <div class="bb-section">
+    <div class="bb-section-title">Design Tokens</div>
+    <div class="bb-tokens">
+      <!-- {{TOKENS}} — Repeat .bb-token-card for each token -->
+      <div class="bb-token-card">
+        <div class="bb-token-name">{{TOKEN_NAME}}</div>
+        <div class="bb-token-value">{{TOKEN_VALUE}}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bb-footer">
+    Generated from {{WEBSITE_URL}} &middot; Brand Board
+  </div>
+
+</body>
+</html>

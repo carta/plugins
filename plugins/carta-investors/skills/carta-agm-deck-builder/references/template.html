@@ -1,0 +1,1437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>{{FIRM_NAME}} AGM {{AS_OF_YEAR}}</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?{{GOOGLE_FONTS_QUERY}}&display=swap" rel="stylesheet">
+
+<script src="deck-stage.js"></script>
+<link rel="stylesheet" href="brands/{{BRAND_SLUG}}.css">
+<link rel="stylesheet" href="design-system/tokens.css">
+<link rel="stylesheet" href="design-system/system.css">
+<script defer src="design-system/charts.js"></script>
+<script defer src="design-system/carta-mark.js"></script>
+<script src="deck-nav.js" defer></script>
+
+<style>
+  html, body { margin: 0; padding: 0; background: #000; }
+
+  /* Agenda slide rows */
+  .agenda-row {
+    font-family: var(--ds-font-display);
+    font-weight: 300;
+    font-size: 26px;
+    line-height: 1.2;
+    letter-spacing: -0.012em;
+    padding: 13px 0;
+    color: var(--ds-ink);
+  }
+
+  /* Fund performance table — used on slides 06 and 25b */
+  .fund-table { width: 100%; border-collapse: collapse; }
+  .fund-table th {
+    font-family: var(--ds-font-body);
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ds-on-accent);
+    opacity: 0.6;
+    text-align: right;
+    padding: 0 0 18px 24px;
+    border-bottom: 1px solid rgba(255,255,255,0.15);
+    font-weight: 500;
+  }
+  .fund-table th:first-child { text-align: left; padding-left: 0; }
+  .fund-table td {
+    font-family: var(--ds-font-body);
+    font-size: 26px;
+    color: var(--ds-on-accent);
+    text-align: right;
+    padding: 14px 0 14px 24px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    font-weight: 300;
+  }
+  .fund-table td:first-child { text-align: left; padding-left: 0; font-weight: 400; }
+  .fund-table td.hi { color: #05CE61; font-weight: 400; }
+  .fund-table td.mute { color: rgba(255,255,255,0.4); font-size: 15px; }
+</style>
+</head>
+<body>
+<deck-stage>
+
+<!-- ================================================================
+HOW TO USE THIS TEMPLATE
+================================================================
+This template defines the EXACT structure for every AGM slide.
+For each active slide:
+  1. Copy the <section> block verbatim
+  2. Replace every [TOKEN] with real data from the MCP queries
+  3. Do NOT alter grid layouts, class names, element order, or nesting
+  4. Only skip a slide if its designated query returned zero rows
+
+Token naming: [SCREAMING_SNAKE_CASE] = replace with a value
+              [JSON_ARRAY_TOKEN]     = replace with a JSON array literal
+              [HTML_BLOCK_TOKEN]     = replace with rendered HTML rows
+
+Logo handling:
+  - Light slides  → <div class="ds-chrome-logo"></div>
+  - Dark slides   → <div class="ds-chrome-logo" data-variant="dark"></div>
+  - If brand CSS uses <img> logos instead of CSS variables, keep the
+    <img> tag consistent across all light/dark slides respectively.
+
+Global tokens used on every slide:
+  {{FIRM_NAME}}      e.g. "Acme Capital"
+  {{AS_OF_DATE}}     e.g. "December 31, 2025"
+  {{AS_OF_YEAR}}     e.g. "2025"
+  {{PERIOD_LABEL}}   e.g. "Full Year 2025" or "Q2 2025"
+  {{BRAND_SLUG}}     e.g. "acme-capital"
+  {{GOOGLE_FONTS_QUERY}} e.g. "family=Inter:wght@200;300;400;500;600;700"
+================================================================ -->
+
+
+<!-- ============================================================
+     SLIDE 01 — COVER
+     Surface: ds-dark (always)
+     Tokens:
+       {{PERIOD_LABEL}}       "Full Year 2025"
+       {{FIRM_NAME}}          "Acme Capital"
+       {{COVER_HERO_LINE1}}   first line of hero (no emphasis)
+       {{COVER_HERO_EMPHASIS}} emphasized phrase (wrapped in <em>)
+       {{COVER_STANDFIRST}}   1-2 sentences framing the deck
+       {{AS_OF_DATE}}         "December 31, 2025"
+     ============================================================ -->
+<section data-screen-label="01 Cover" class="ds-dark">
+  <div class="ds-chrome-logo" data-variant="dark"></div>
+  <div class="ds-chrome-page"><span>Annual General Meeting</span><span class="ds-chrome-page__dot"></span><span>{{PERIOD_LABEL}}</span></div>
+
+  <div style="position:absolute; left:140px; right:140px; top:50%; transform:translateY(-50%);">
+    <div class="ds-eyebrow" style="margin-bottom:36px; opacity:0.7;">{{FIRM_NAME}} · {{PERIOD_LABEL}} Review</div>
+    <div class="ds-display">
+      {{COVER_HERO_LINE1}}<br/><em>{{COVER_HERO_EMPHASIS}}</em>
+    </div>
+    <div style="display:flex; align-items:flex-end; justify-content:space-between; margin-top:80px;">
+      <div class="ds-body" style="font-size:20px; max-width:620px; opacity:0.85;">{{COVER_STANDFIRST}}</div>
+      <div class="ds-label" style="opacity:0.6;">Confidential · {{AS_OF_DATE}}</div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     SLIDE 02 — AGENDA
+     Surface: paper (default)
+     Tokens:
+       {{AGENDA_HEADLINE_PLAIN}}  e.g. "Performance, portfolio, and the"
+       {{AGENDA_HEADLINE_EM}}     e.g. "path ahead."
+       {{AGENDA_ITEMS_LEFT}}      HTML: alternating .ds-rule + .agenda-row pairs
+       {{AGENDA_ITEMS_RIGHT}}     HTML: same pattern for second column
+     Agenda row pattern (repeat for each item):
+       <div class="ds-rule"></div>
+       <div class="agenda-row">01 &nbsp;&nbsp; Slide Title</div>
+     Split items evenly (50/50) across left and right columns.
+     Always end each column with a final <div class="ds-rule"></div>.
+     ============================================================ -->
+<section data-screen-label="02 Agenda">
+  <div class="ds-chrome-logo"></div>
+  <div class="ds-chrome-page"><span>02</span><span class="ds-chrome-page__dot"></span><span>Agenda</span></div>
+
+  <div class="ds-pad ds-pad--header">
+    <div class="ds-eyebrow" style="margin-bottom:16px;">Today's agenda</div>
+    <div class="ds-h1" style="margin-bottom:36px; font-size:52px;">
+      {{AGENDA_HEADLINE_PLAIN}} <em>{{AGENDA_HEADLINE_EM}}</em>
+    </div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; column-gap:120px;">
+      <div>
+        {{AGENDA_ITEMS_LEFT}}
+        <div class="ds-rule"></div>
+      </div>
+      <div>
+        {{AGENDA_ITEMS_RIGHT}}
+        <div class="ds-rule"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     SLIDE 03 — FUND PERFORMANCE SUMMARY
+     Surface: ds-alt
+     Tokens:
+       {{PERF_PERIOD_EYEBROW}}  "Fund performance · Full year 2025"
+       {{PERF_HEADLINE_PLAIN}}  "Five funds."
+       {{PERF_HEADLINE_EM}}     "$X.XXB" — value ONLY; "in total value created." is hardcoded plain text after the tag
+       {{TOTAL_NAV}}            "$X.XXB" (ds-kpi-highlight)
+       {{TOTAL_VALUE}}          "$X.XXB" (ds-kpi-highlight--2)
+       {{DISTRIBUTIONS}}        "$X.XXB"
+       {{ACTIVE_FUND_COUNT}}    "N"
+       {{AS_OF_DATE}}           "December 31, 2025"
+       {{TVPI_CHART_MAX}}       number — max TVPI value across all funds
+       {{TVPI_CHART_ROWS}}      JSON array — 🚨 MAX 5 ROWS HARD LIMIT:
+         [{"label":"Fund Name (Vintage)","value":X.XX,"valueLabel":"X.XX×","series":1}, ...]
+         sorted descending by value
+         series: 1=TVPI≥5×, 2=TVPI 2-5×, 3=TVPI 1-2×, 4=TVPI<1×
+         HARD CAP: 5 rows max. Each hbar row is ~52-58px (14px vertical padding × 2 +
+         content), and the chart's container is max-height:300px — 6+ rows overflow
+         and get silently clipped by `overflow: hidden`. Do not raise this cap without
+         also re-measuring the rendered slide; there is little spare vertical room
+         above the chart on this slide (eyebrow + 1-line headline + 4-up KPI row + rule).
+         Pick top 5 by TVPI — remaining funds are excluded to prevent overflow.
+     ============================================================ -->
+<section data-screen-label="03 Fund Performance" class="ds-alt">
+  <div class="ds-chrome-logo"></div>
+  <div class="ds-chrome-page"><span>03</span><span class="ds-chrome-page__dot"></span><span>Fund Performance</span></div>
+
+  <div class="ds-pad ds-pad--header">
+    <div class="ds-eyebrow" style="margin-bottom:20px;">{{PERF_PERIOD_EYEBROW}}</div>
+    <div class="ds-h1" style="margin-bottom:48px;">
+      {{PERF_HEADLINE_PLAIN}} <em>{{PERF_HEADLINE_EM}}</em> in total value created.
+    </div>
+
+    <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:40px; margin-bottom:48px;">
+      <div>
+        <div class="ds-label" style="margin-bottom:12px;">Total NAV</div>
+        <div class="ds-num ds-kpi-highlight" style="font-size:72px;">{{TOTAL_NAV}}</div>
+      </div>
+      <div>
+        <div class="ds-label" style="margin-bottom:12px;">Total Value</div>
+        <div class="ds-num ds-kpi-highlight--2" style="font-size:72px;">{{TOTAL_VALUE}}</div>
+      </div>
+      <div>
+        <div class="ds-label" style="margin-bottom:12px;">Distributions</div>
+        <div class="ds-num" style="font-size:72px;">{{DISTRIBUTIONS}}</div>
+      </div>
+      <div>
+        <div class="ds-label" style="margin-bottom:12px;">Active Funds</div>
+        <div class="ds-num" style="font-size:72px;">{{ACTIVE_FUND_COUNT}}</div>
+      </div>
+    </div>
+
+    <div class="ds-rule" style="margin-bottom:28px;"></div>
+
+    <div style="display:grid; grid-template-columns:220px 1fr; gap:48px; align-items:start;">
+      <div>
+        <div class="ds-body ds-body--sm ds-on-mute">Total value to paid-in as of {{AS_OF_DATE}}. Older vintage funds reflect mature, realized returns.</div>
+      </div>
+      <div style="max-height:300px; overflow:hidden;">
+        <div data-ds-chart="hbar" data-config='{"max":{{TVPI_CHART_MAX}},"rows":{{TVPI_CHART_ROWS}}}'></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     SLIDE 04 — FUND NET IRR
+     Surface: paper (default)
+     Tokens:
+       {{IRR_HEADLINE_PLAIN}}   "Early vintages delivering"
+       {{IRR_HEADLINE_EM}}      "exceptional" — emphasized word(s) only; plain suffix follows in {{IRR_HEADLINE_SUFFIX}}
+       {{IRR_HEADLINE_SUFFIX}}  "net returns." — plain text after the em tag (NOT in accent color)
+       {{IRR_STANDFIRST}}       2-3 sentences about lifecycle context
+       {{HIGHEST_IRR_VALUE}}    "XX.X%" (ds-kpi-highlight)
+       {{HIGHEST_IRR_FUND}}     "Fund Name (Vintage)"
+       {{LOWEST_IRR_VALUE}}     "X.X%"
+       {{LOWEST_IRR_FUND}}      "Fund Name (Vintage)"
+       {{IRR_BENCHMARK_NOTE}}   "Peer benchmark data not available for this period."
+       {{AS_OF_DATE}}
+       {{IRR_CHART_MAX}}        number — max IRR value
+       {{IRR_CHART_ROWS}}       JSON array:
+         [{"label":"Fund Name (Vintage)","value":XX.X,"valueLabel":"XX.X%","series":1}, ...]
+         sorted descending by value
+         series: 1=IRR≥30%, 2=IRR 20-30%, 3=IRR 5-20%, 4=IRR<5%
+     ============================================================ -->
+<section data-screen-label="04 Fund Net IRR">
+  <div class="ds-chrome-logo"></div>
+  <div class="ds-chrome-page"><span>04</span><span class="ds-chrome-page__dot"></span><span>Net IRR</span></div>
+
+  <div class="ds-pad ds-pad--header">
+    <div class="ds-eyebrow" style="margin-bottom:20px;">Performance · Net IRR by fund</div>
+    <div class="ds-h1" style="margin-bottom:32px;">
+      {{IRR_HEADLINE_PLAIN}} <em>{{IRR_HEADLINE_EM}}</em> {{IRR_HEADLINE_SUFFIX}}
+    </div>
+    <div style="display:grid; grid-template-columns:1.1fr 1fr; gap:100px; align-items:start;">
+      <div>
+        <div class="ds-lede" style="max-width:540px; margin-bottom:32px;">{{IRR_STANDFIRST}}</div>
+        <div style="display:flex; gap:48px;">
+          <div>
+            <div class="ds-label" style="margin-bottom:8px;">Highest IRR</div>
+            <div class="ds-num--sm ds-kpi-highlight" style="font-size:52px;">{{HIGHEST_IRR_VALUE}}</div>
+            <div class="ds-body ds-body--sm ds-on-mute" style="margin-top:8px;">{{HIGHEST_IRR_FUND}}</div>
+          </div>
+          <div>
+            <div class="ds-label" style="margin-bottom:8px;">Lowest IRR</div>
+            <div class="ds-num--sm" style="font-size:52px;">{{LOWEST_IRR_VALUE}}</div>
+            <div class="ds-body ds-body--sm ds-on-mute" style="margin-top:8px;">{{LOWEST_IRR_FUND}}</div>
+          </div>
+        </div>
+        <div class="ds-accent-bar ds-accent-bar--2" style="margin-top:40px;"></div>
+        <div class="ds-body ds-body--sm ds-on-mute" style="margin-top:14px;">{{IRR_BENCHMARK_NOTE}}</div>
+      </div>
+      <div>
+        <div class="ds-label" style="margin-bottom:20px;">Net IRR · As of {{AS_OF_DATE}}</div>
+        <div data-ds-chart="hbar" data-config='{"max":{{IRR_CHART_MAX}},"rows":{{IRR_CHART_ROWS}}}'></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     SLIDE 04b — NET IRR · FULL PORTFOLIO (all funds, 2-panel hbar)
+     Rendered whenever Slide 04 is rendered (same data, broader view).
+     Surface: ds-alt
+     Tokens:
+       {{IRR4B_EYEBROW}}           "Net IRR · All funds · As of {{AS_OF_DATE}}"
+       {{IRR4B_HEADLINE_PLAIN}}    "N funds in the full portfolio —"
+       {{IRR4B_HEADLINE_EM}}       "leading fund at XX.XX% net IRR"
+       {{IRR4B_GLOBAL_MAX}}        number — shared max across both panels for consistent scale
+       {{IRR4B_LEFT_LABEL}}        "Flagship funds · Sorted by Net IRR"
+       {{IRR4B_LEFT_ROWS}}         JSON array (sorted desc, max 9 funds — older/higher-IRR funds):
+         [{"label":"Fund Name (Vintage)","value":XX.XX,"valueLabel":"XX.XX%","series":1}, ...]
+       {{IRR4B_RIGHT_LABEL}}       "Newer vintages · Sorted by Net IRR"
+       {{IRR4B_RIGHT_ROWS}}        JSON array (sorted desc, max 9 funds — newer vintages):
+         [{"label":"Fund Name (Vintage)","value":XX.XX,"valueLabel":"XX.XX%","series":2}, ...]
+       {{IRR4B_FOOTNOTE}}          "IRR as of {{AS_OF_DATE}}. Peer benchmark percentiles not available."
+     Split: ~50/50 fund count. Older/higher-performing funds on left, newer vintages on right.
+     Both charts share {{IRR4B_GLOBAL_MAX}} so bar lengths are directly comparable.
+     ============================================================ -->
+<section data-screen-label="04b Net IRR All Funds" class="ds-alt">
+  <div class="ds-chrome-logo"></div>
+  <div class="ds-chrome-page"><span>04b</span><span class="ds-chrome-page__dot"></span><span>Net IRR · Full Portfolio</span></div>
+
+  <div class="ds-pad ds-pad--header">
+    <div class="ds-eyebrow" style="margin-bottom:20px;">{{IRR4B_EYEBROW}}</div>
+    <div class="ds-h1" style="margin-bottom:40px;">
+      {{IRR4B_HEADLINE_PLAIN}} <em>{{IRR4B_HEADLINE_EM}}</em>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:64px; align-items:start;">
+      <div>
+        <div class="ds-label" style="margin-bottom:18px;">{{IRR4B_LEFT_LABEL}}</div>
+        <div data-ds-chart="hbar" data-config='{"max":{{IRR4B_GLOBAL_MAX}},"rows":{{IRR4B_LEFT_ROWS}}}'></div>
+      </div>
+
+      <div>
+        <div class="ds-label" style="margin-bottom:18px;">{{IRR4B_RIGHT_LABEL}}</div>
+        <div data-ds-chart="hbar" data-config='{"max":{{IRR4B_GLOBAL_MAX}},"rows":{{IRR4B_RIGHT_ROWS}}}'></div>
+        <div class="ds-accent-bar ds-accent-bar--2" style="margin-top:24px;"></div>
+        <div class="ds-body ds-body--sm ds-on-mute" style="margin-top:12px;">{{IRR4B_FOOTNOTE}}</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     SLIDE 05 — NAV BY FUND (donut + legend)
+     Surface: ds-alt
+     Tokens:
+       {{NAV_HEADLINE_EM}}          "$X.XXB"
+       {{FUND_COUNT_LABEL}}         "five funds"
+       {{AS_OF_DATE}}
+       {{NAV_DONUT_CENTER_NUMBER}}  "$X.XXB"
+       {{NAV_DONUT_SEGMENTS}}       JSON array (value = NAV in M, sorted desc, max 9).
+         🚨 Always include "color" on every segment — colorOverride is ignored by charts.js.
+         [
+           {"label":"Fund Name","value":XXX.X,"color":"var(--ds-cat-1)"},
+           {"label":"Fund Name","value":XXX.X,"color":"var(--ds-cat-2)"},
+           {"label":"Fund Name","value":XXX.X,"color":"var(--ds-cat-3)"},
+           {"label":"Fund Name","value":XXX.X,"color":"var(--ds-cat-4)"},
+           {"label":"Fund Name","value":XXX.X,"color":"var(--ds-cat-5)"},
+           {"label":"Other funds","value":NNN,"color":"rgba(128,128,128,0.35)"}
+         ]
+         Rotate cat-1 through cat-5 in order. Grouped remainder always uses the rgba gray.
+       {{NAV_LEGEND_ROWS}}          HTML: see pattern below, top 5 individually + grouped remainder
+     NAV_LEGEND_ROWS row pattern (repeat, omit border-bottom on last row):
+       <div style="display:flex; align-items:baseline; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--ds-rule);">
+         <div style="display:flex; align-items:center; gap:12px;"><span class="ds-swatch" data-series="N"></span><div class="ds-label">Fund Name (Vintage)</div></div>
+         <div style="display:flex; gap:24px; align-items:baseline;"><div class="ds-num--sm" style="font-size:28px;">$XXX<span class="ds-num__unit" style="font-size:16px;">M</span></div><div class="ds-label ds-label--sm ds-on-mute">XX.X%</div></div>
+       </div>
+     ============================================================ -->
+<section data-screen-label="05 NAV by Fund" class="ds-alt">
+  <div class="ds-chrome-logo"></div>
+  <div class="ds-chrome-page"><span>05</span><span class="ds-chrome-page__dot"></span><span>NAV</span></div>
+
+  <div class="ds-pad ds-pad--header">
+    <div class="ds-eyebrow" style="margin-bottom:20px;">Net asset value · {{AS_OF_DATE}}</div>
+    <div class="ds-h1" style="margin-bottom:60px;">
+      <em>{{NAV_HEADLINE_EM}}</em> in net asset value across {{FUND_COUNT_LABEL}}.
+    </div>
+
+    <div style="display:grid; grid-template-columns:480px 1fr; gap:80px; align-items:center;">
+      <!-- WHEN GENERATING: replace centerNumber and segments array with real query data.
+           Segment format: {"label":"Fund Name","value":NAV_IN_M,"color":"var(--ds-cat-N)"}
+           Rotate cat-1 through cat-5, gray rgba for grouped remainder. -->
+      <div data-ds-chart="donut" data-config='{"size":440,"radius":165,"thickness":62,"gap":0.5,"centerLabel":"Total NAV","centerNumber":"{{NAV_DONUT_CENTER_NUMBER}}","segments":{{NAV_DONUT_SEGMENTS}}}'></div>
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        {{NAV_LEGEND_ROWS}}
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     SLIDE 05b — NAV TREND (line chart)
+     Surface: paper (default)
+     Tokens:
+       {{NAV_TREND_PEAK_EM}}        "$X.XXB" — peak value ONLY (in em/accent color)
+       {{NAV_TREND_PEAK_YEAR}}      "2021" — year of peak (plain text after em tag)
+       {{NAV_TREND_FOOTNOTE}}       "normalizing as distributions flow to LPs." — plain text suffix
+       {{NAV_M1_LABEL}}  {{NAV_M1_VALUE}}  {{NAV_M1_NOTE}}   milestone 1 (plain)
+       {{NAV_M2_LABEL}}  {{NAV_M2_VALUE}}  {{NAV_M2_NOTE}}   milestone 2 = PEAK (ds-kpi-highlight)
+       {{NAV_M3_LABEL}}  {{NAV_M3_VALUE}}  {{NAV_M3_NOTE}}   milestone 3 (ds-kpi-highlight--2)
+       {{NAV_M4_LABEL}}  {{NAV_M4_VALUE}}  {{NAV_M4_NOTE}}   milestone 4 = current (plain)
+       {{NAV_TREND_XLABELS}}  JSON string array: ["Dec YYYY","Dec YYYY","Dec YYYY","Dec YYYY"]
+       {{NAV_TREND_YLABELS}}  JSON string array: ["$X.XB","$X.XB","$X.XB","$X.XB"]
+       {{NAV_TREND_YDOMAIN}}  JSON array: [0, PEAK_VALUE_IN_M * 1.1]
+       {{NAV_TREND_VALUES}}   JSON number array matching xLabels (values in M)
+       {{NAV_TREND_END_LABEL}} "$X.XXB"
+       {{NAV_TREND_NOTE_TEXT}} footnote about accounting nuances
+     ============================================================ -->
+<section data-screen-label="05b NAV Trend">
+  <div class="ds-chrome-logo"></div>
+  <div class="ds-chrome-page"><span>05b</span><span class="ds-chrome-page__dot"></span><span>NAV Trend</span></div>
+
+  <div class="ds-pad ds-pad--header">
+    <div class="ds-eyebrow" style="margin-bottom:20px;">Net asset value · Year-end snapshots</div>
+    <div class="ds-h1" style="margin-bottom:40px;">
+      NAV surged to <em>{{NAV_TREND_PEAK_EM}}</em> in {{NAV_TREND_PEAK_YEAR}} — {{NAV_TREND_FOOTNOTE}}
+    </div>
+
+    <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:36px; margin-bottom:44px;">
+      <div>
+        <div class="ds-label" style="margin-bottom:10px;">{{NAV_M1_LABEL}}</div>
+        <div class="ds-num--sm" style="font-size:48px;">{{NAV_M1_VALUE}}</div>
+        <div class="ds-body ds-body--sm ds-on-mute" style="margin-top:8px;">{{NAV_M1_NOTE}}</div>
+      </div>
+      <div>
+        <div class="ds-label" style="margin-bottom:10px;">{{NAV_M2_LABEL}}</div>
+        <div class="ds-num--sm ds-kpi-highlight" style="font-size:48px;">{{NAV_M2_VALUE}}</div>
+        <div class="ds-body ds-body--sm ds-on-mute" style="margin-top:8px;">{{NAV_M2_NOTE}}</div>
+      </div>
+      <div>
+        <div class="ds-label" style="margin-bottom:10px;">{{NAV_M3_LABEL}}</div>
+        <div class="ds-num--sm ds-kpi-highlight--2" style="font-size:48px;">{{NAV_M3_VALUE}}</div>
+        <div class="ds-body ds-body--sm ds-on-mute" style="margin-top:8px;">{{NAV_M3_NOTE}}</div>
+      </div>
+      <div>
+        <div class="ds-label" style="margin-bottom:10px;">{{NAV_M4_LABEL}}</div>
+        <div class="ds-num--sm" style="font-size:48px;">{{NAV_M4_VALUE}}</div>
+        <div class="ds-body ds-body--sm ds-on-mute" style="margin-top:8px;">{{NAV_M4_NOTE}}</div>
+      </div>
+    </div>
+
+    <div class="ds-rule" style="margin-bottom:32px;"></div>
+
+    <div style="display:grid; grid-template-columns:200px 1fr; gap:48px; align-items:start;">
+      <div>
+        <div class="ds-body ds-body--sm ds-on-mute" style="margin-bottom:24px;">Year-end snapshots. The peak reflects mark-up of the portfolio at peak valuations.</div>
+        <div class="ds-accent-bar"></div>
+      </div>
+      <div data-ds-chart="line" data-config='{"width":960,"height":300,"padding":{"top":20,"right":60,"bottom":44,"left":72},"gridLines":4,"xLabels":{{NAV_TREND_XLABELS}},"yLabels":{{NAV_TREND_YLABELS}},"yDomain":{{NAV_TREND_YDOMAIN}},"series":[{"values":{{NAV_TREND_VALUES}},"area":true,"dots":true,"highlightLast":true,"endLabel":"{{NAV_TREND_END_LABEL}}"}]}'></div>
+    </div>
+
+    <div style="margin-top:28px; padding:16px 20px; background:var(--ds-paper-alt); border-radius:6px; border-left:3px solid var(--ds-accent-2);">
+      <div class="ds-body ds-body--sm ds-on-mute">{{NAV_TREND_NOTE_TEXT}}</div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     SLIDE 06 — MULTI-FUND PERFORMANCE TABLE
+     Surface: ds-dark
+     Tokens:
+       {{MULTI_FUND_HEADLINE_PLAIN}}  "N flagship funds."
+       {{MULTI_FUND_HEADLINE_EM}}     "N years of investing."
+       {{CURRENCY}}                   "USD" or "EUR" etc.
+       {{MULTI_FUND_TABLE_ROWS}}      HTML <tr> blocks — see pattern below
+     Table columns: Fund | Vintage | Committed | Called | NAV | Distributions | TVPI | DPI | Net IRR
+     🚨 MAX 5 ROWS — cap at 5 funds to prevent overflow on the 1920×1080 slide.
+       If more than 5 funds exist, show the top 5 by TVPI (highest to lowest).
+       Sorted by TVPI descending.
+     Row pattern:
+       <tr>
+         <td>Full Fund Name, LP</td>
+         <td class="mute">YYYY</td>
+         <td class="mute">$XXX.XM</td>
+         <td class="mute">$XXX.XM</td>
+         <td>$XXX.XM</td>
+         <td>$XXX.XM (or <td class="mute">—</td> if none)</td>
+         <td class="hi">XX.XX×</td>  (hi if TVPI≥2×, plain otherwise)
+         <td class="hi">XX.XX×</td>  (hi if DPI≥1×, mute if 0.00×)
+         <td class="hi">XX.X%</td>   (hi if IRR≥20%, plain otherwise)
+       </tr>
+     ============================================================ -->
+<section data-screen-label="06 Multi-Fund Performance" class="ds-dark">
+  <div class="ds-chrome-logo" data-variant="dark"></div>
+  <div class="ds-chrome-page"><span>06</span><span class="ds-chrome-page__dot"></span><span>All Funds</span></div>
+
+  <div class="ds-pad ds-pad--header">
+    <div class="ds-eyebrow" style="margin-bottom:20px; opacity:0.6;">Multi-fund performance · Top 5 funds by TVPI · Latest snapshot</div>
+    <div class="ds-h1" style="margin-bottom:36px;">
+      {{MULTI_FUND_HEADLINE_PLAIN}} <em>{{MULTI_FUND_HEADLINE_EM}}</em>
+    </div>
+
+    <div style="max-height:420px; overflow:hidden;">
+      <table class="fund-table" style="font-size:22px;">
+        <thead>
+          <tr>
+            <th>Fund</th><th>Vintage</th><th>Committed</th><th>Called</th>
+            <th>NAV</th><th>Distributions</th><th>TVPI</th><th>DPI</th><th>Net IRR</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{MULTI_FUND_TABLE_ROWS}}
+        </tbody>
+      </table>
+    </div>
+    <div class="ds-body ds-body--sm" style="margin-top:16px; opacity:0.4;">All values {{CURRENCY}} · DPI = 0.00× means no capital returned to LPs yet (normal for recent vintage funds)</div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     SLIDE 07 — CAPITAL DEPLOYMENT
+     Surface: paper (default)
+     Tokens:
+       {{DEPLOY_HEADLINE_PLAIN}}   "Funds I–N fully deployed."
+       {{DEPLOY_HEADLINE_EM}}      "Fund [Name]" — the newest fund NAME only (in accent color)
+       {{DEPLOY_HEADLINE_SUFFIX}}  "early-stage with $XXXM dry powder." — plain text after the em tag
+       {{AS_OF_DATE}}
+       {{DEPLOY_KPI1_LABEL}}  {{DEPLOY_KPI1_VALUE}}  {{DEPLOY_KPI1_NOTE}}
+         — newest fund dry powder (ds-kpi-highlight--2)
+       {{DEPLOY_KPI2_LABEL}}  {{DEPLOY_KPI2_VALUE}}  {{DEPLOY_KPI2_NOTE}}
+         — second-newest fund (plain)
+       {{DEPLOY_KPI3_LABEL}}  {{DEPLOY_KPI3_VALUE}}  {{DEPLOY_KPI3_NOTE}}
+         — older funds status (ds-kpi-highlight)
+       {{DEPLOY_CHART_ROWS}}   JSON array — 🚨 MAX 6 ROWS HARD LIMIT:
+         [{"label":"Fund Name (Vintage)","value":99.0,"valueLabel":"99.0%","series":1}, ...]
+         sorted descending by deployment %
+         series: 1=95%+, 2=75-95%, 3=50-75%, 4=<50%
+         HARD CAP: 6 rows max. Each hbar row is ~52-58px (14px vertical padding × 2 +
+         content), and the chart's container is max-height:360px — 7+ rows overflow
+         and get silently clipped by `overflow: hidden`. This slide's headline
+         commonly wraps to 2 lines and the KPI row includes a note line under each
+         number, so there is less spare vertical room here than on slide 03.
+         More than 6 rows will be clipped and invisible. Pick top 6 by deployment %.
+     ============================================================ -->
+<section data-screen-label="07 Capital Deployment">
+  <div class="ds-chrome-logo"></div>
+  <div class="ds-chrome-page"><span>07</span><span class="ds-chrome-page__dot"></span><span>Deployment</span></div>
+
+  <div class="ds-pad ds-pad--header">
+    <div class="ds-eyebrow" style="margin-bottom:20px;">Capital deployment · As of {{AS_OF_DATE}}</div>
+    <div class="ds-h1" style="margin-bottom:44px;">
+      {{DEPLOY_HEADLINE_PLAIN}} <em>{{DEPLOY_HEADLINE_EM}}</em> {{DEPLOY_HEADLINE_SUFFIX}}
+    </div>
+
+    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:40px; margin-bottom:44px;">
+      <div>
+        <div class="ds-label" style="margin-bottom:10px;">{{DEPLOY_KPI1_LABEL}}</div>
+        <div class="ds-num ds-kpi-highlight--2" style="font-size:64px;">{{DEPLOY_KPI1_VALUE}}</div>
+        <div class="ds-body ds-body--sm ds-on-mute" style="margin-top:8px;">{{DEPLOY_KPI1_NOTE}}</div>
+      </div>
+      <div>
+        <div class="ds-label" style="margin-bottom:10px;">{{DEPLOY_KPI2_LABEL}}</div>
+        <div class="ds-num" style="font-size:64px;">{{DEPLOY_KPI2_VALUE}}</div>
+        <div class="ds-body ds-body--sm ds-on-mute" style="margin-top:8px;">{{DEPLOY_KPI2_NOTE}}</div>
+      </div>
+      <div>
+        <div class="ds-label" style="margin-bottom:10px;">{{DEPLOY_KPI3_LABEL}}</div>
+        <div class="ds-num ds-kpi-highlight" style="font-size:64px;">{{DEPLOY_KPI3_VALUE}}</div>
+        <div class="ds-body ds-body--sm ds-on-mute" style="margin-top:8px;">{{DEPLOY_KPI3_NOTE}}</div>
+      </div>
+    </div>
+
+    <div class="ds-rule" style="margin-bottom:28px;"></div>
+
+    <div style="display:grid; grid-template-columns:200px 1fr; gap:40px; align-items:start;">
+      <div>
+        <div class="ds-body ds-body--sm ds-on-mute">Deployment rate for each fund at its current age since inception.</div>
+        <div class="ds-accent-bar ds-accent-bar--3" style="margin-top:24px;"></div>
+      </div>
+      <div style="max-height:360px; overflow:hidden;">
+        <div data-ds-chart="hbar" data-config='{"max":100,"rows":{{DEPLOY_CHART_ROWS}}}'></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     SLIDE 10 — LP GEOGRAPHY (limited partners by commitment location)
+     Surface: paper (default)
+     Layout: eyebrow full-width, then 2-column grid (narrow left / wide right).
+             The h1 headline lives INSIDE the left column (not full-width above grid).
+     NO section label/title above the narrative text — only the KPI metric label is allowed.
+     Tokens:
+       {{LP_GEO_EYEBROW}}       "Limited Partners · Commitment by Location"
+       {{LP_GEO_HEADLINE_PLAIN}} "Strong US base with" — plain text
+       {{LP_GEO_HEADLINE_EM}}   "global reach." — emphasized phrase (whole phrase in em)
+       {{LP_GEO_TOTAL}}         "$X.XXB" — total LP commitments (ds-num--sm ~52px)
+       {{LP_GEO_NARRATIVE}}     2-3 sentences: top region leads with $XXM, international notes
+       {{LP_GEO_CHART_LABEL}}   "Commitment by State / Country · Top 10"
+       {{LP_GEO_CHART_MAX}}     number — max commitment value in the set
+       {{LP_GEO_CHART_ROWS}}    JSON array (sorted desc by value, max 10):
+         [{"label":"Virginia, US","value":757,"valueLabel":"$757M","series":1}, ...]
+         series: 1=largest (dark/series-1), 2=mid, 3=international, 4=smaller
+     ============================================================ -->
+<section data-screen-label="10 LP Geography">
+  <div class="ds-chrome-logo"></div>
+  <div class="ds-chrome-page"><span>10</span><span class="ds-chrome-page__dot"></span><span>LP Geography</span></div>
+
+  <div class="ds-pad ds-pad--header">
+    <div class="ds-eyebrow" style="margin-bottom:20px;">{{LP_GEO_EYEBROW}}</div>
+    <div class="ds-h1" style="margin-bottom:44px;">
+      {{LP_GEO_HEADLINE_PLAIN}} <em>{{LP_GEO_HEADLINE_EM}}</em>
+    </div>
+    <div style="display:grid; grid-template-columns:260px 1fr; gap:80px; align-items:start;">
+      <div>
+        <div class="ds-label" style="margin-bottom:8px;">Total LP Commitments</div>
+        <div class="ds-num--sm" style="font-size:52px;">{{LP_GEO_TOTAL}}</div>
+        <div class="ds-body ds-body--sm ds-on-mute" style="margin-top:16px;">{{LP_GEO_NARRATIVE}}</div>
+        <div class="ds-accent-bar ds-accent-bar--2" style="margin-top:24px;"></div>
+      </div>
+      <div>
+        <div class="ds-label" style="margin-bottom:20px;">{{LP_GEO_CHART_LABEL}}</div>
+        <div data-ds-chart="hbar" data-config='{"max":{{LP_GEO_CHART_MAX}},"rows":{{LP_GEO_CHART_ROWS}}}'></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     SLIDE 11 — PORTFOLIO OVERVIEW (top holdings by FMV)
+     Surface: paper (default)
+     Tokens:
+       {{PORTFOLIO_EYEBROW}}          "Portfolio · Top 8 holdings by current FMV"
+       {{PORTFOLIO_HEADLINE_PLAIN}}   "Company A leads at"
+       {{PORTFOLIO_HEADLINE_EM}}      "£XXX.XM FMV" — FMV VALUE ONLY in accent color
+       {{PORTFOLIO_HEADLINE_SUFFIX}}  "— Company B largest USD position at $XXX.XM." — plain text after em
+       {{PORTFOLIO_CURRENCY_NOTE}}    "Unrealized FMV per position. Values in each position's reporting currency..."
+       {{PORTFOLIO_CHART_MAX}}        number — max FMV value across all rows
+       {{PORTFOLIO_CHART_ROWS}}       JSON array:
+         [{"label":"Company · Fund (currency)","value":XXX.X,"valueLabel":"$XXX.XM","series":1}, ...]
+         sorted descending by FMV value; max 10 rows; series rotates 1-4 for color variety
+     ============================================================ -->
+<section data-screen-label="11 Portfolio Overview">
+  <div class="ds-chrome-logo"></div>
+  <div class="ds-chrome-page"><span>11</span><span class="ds-chrome-page__dot"></span><span>Portfolio</span></div>
+
+  <div class="ds-pad ds-pad--header">
+    <div class="ds-eyebrow" style="margin-bottom:20px;">{{PORTFOLIO_EYEBROW}}</div>
+    <div class="ds-h1" style="margin-bottom:40px;">
+      {{PORTFOLIO_HEADLINE_PLAIN}} <em>{{PORTFOLIO_HEADLINE_EM}}</em> {{PORTFOLIO_HEADLINE_SUFFIX}}
+    </div>
+
+    <div style="display:grid; grid-template-columns:220px 1fr; gap:48px; align-items:start;">
+      <div>
+        <div class="ds-body ds-body--sm ds-on-mute" style="margin-bottom:20px;">{{PORTFOLIO_CURRENCY_NOTE}}</div>
+        <div class="ds-accent-bar"></div>
+      </div>
+      <div data-ds-chart="hbar" data-config='{"max":{{PORTFOLIO_CHART_MAX}},"rows":{{PORTFOLIO_CHART_ROWS}}}'></div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     SLIDE 11b — INVESTMENT DETAIL & PERFORMANCE (realized + unrealized MOIC)
+     Surface: ds-alt
+     Tokens:
+       {{INVEST_COMPANY1}}           "Company A" — first realized company name (plain)
+       {{INVEST_MOIC1}}             "XXX×" — first MOIC value (in em/accent color)
+       {{INVEST_COMPANY2}}          "Company B" — second realized company name (plain)
+       {{INVEST_MOIC2}}             "YYY×" — second MOIC value (in em/accent color)
+       {{REALIZED_CHART_MAX}}       number — max MOIC across all realized positions
+       {{REALIZED_CHART_ROWS}}      JSON array (sorted desc by MOIC, max 8):
+         [{"label":"Company · Fund","value":XXX,"valueLabel":"XXX×","series":1}, ...]
+         series: 1=100×+, 2=50-100×, 3=10-50×, 4=<10×
+       {{REALIZED_KPI1_LABEL}}  {{REALIZED_KPI1_VALUE}}  {{REALIZED_KPI1_NOTE}}  (ds-kpi-highlight)
+       {{REALIZED_KPI2_LABEL}}  {{REALIZED_KPI2_VALUE}}  {{REALIZED_KPI2_NOTE}}  (ds-kpi-highlight--2)
+       {{UNREALIZED_CHART_MAX}} same value as REALIZED_CHART_MAX (consistent scale)
+       {{UNREALIZED_CHART_ROWS}} JSON array (sorted desc by MOIC, max 8):
+         [{"label":"Company · Fund (currency)","value":XX.XX,"valueLabel":"XX.XX×","series":2}, ...]
+       {{UNREALIZED_NOTE}}      "Unrealized MOIC = remaining FMV ÷ cost basis." — no source attribution
+     ============================================================ -->
+<section data-screen-label="11b Investment Performance" class="ds-alt">
+  <div class="ds-chrome-logo"></div>
+  <div class="ds-chrome-page"><span>11b</span><span class="ds-chrome-page__dot"></span><span>Investment Performance</span></div>
+
+  <div class="ds-pad ds-pad--header">
+    <div class="ds-eyebrow" style="margin-bottom:20px;">Investment performance · Realized &amp; unrealized MOIC</div>
+    <div class="ds-h1" style="margin-bottom:36px;">
+      {{INVEST_COMPANY1}} returned <em>{{INVEST_MOIC1}}</em>. {{INVEST_COMPANY2}} <em>{{INVEST_MOIC2}}</em>. Both fully realized.
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:64px; align-items:start;">
+      <div>
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:16px;">
+          <span class="ds-pill ds-pill--3">Realized · Cash returned to LPs</span>
+        </div>
+        <div data-ds-chart="hbar" data-config='{"max":{{REALIZED_CHART_MAX}},"rows":{{REALIZED_CHART_ROWS}}}'></div>
+        <div style="margin-top:16px; display:flex; gap:32px;">
+          <div>
+            <div class="ds-label" style="margin-bottom:6px;">{{REALIZED_KPI1_LABEL}}</div>
+            <div class="ds-num--sm ds-kpi-highlight" style="font-size:40px;">{{REALIZED_KPI1_VALUE}}</div>
+            <div class="ds-body ds-body--sm ds-on-mute" style="margin-top:4px;">{{REALIZED_KPI1_NOTE}}</div>
+          </div>
+          <div>
+            <div class="ds-label" style="margin-bottom:6px;">{{REALIZED_KPI2_LABEL}}</div>
+            <div class="ds-num--sm ds-kpi-highlight--2" style="font-size:40px;">{{REALIZED_KPI2_VALUE}}</div>
+            <div class="ds-body ds-body--sm ds-on-mute" style="margin-top:4px;">{{REALIZED_KPI2_NOTE}}</div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:16px;">
+          <span class="ds-pill ds-pill--2">MOIC on current FMV</span>
+        </div>
+        <div data-ds-chart="hbar" data-config='{"max":{{UNREALIZED_CHART_MAX}},"rows":{{UNREALIZED_CHART_ROWS}}}'></div>
+        <div class="ds-accent-bar ds-accent-bar--2" style="margin-top:20px;"></div>
+        <div class="ds-body ds-body--sm ds-on-mute" style="margin-top:12px;">{{UNREALIZED_NOTE}}</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     SLIDE 12 — PORTFOLIO COMPANY LOGO GRID
+     Surface: ds-alt
+     Tokens:
+       {{LOGO_GRID_EYEBROW}}    "Top Companies by Value · YYYY"
+       {{LOGO_GRID_HEADLINE}}   "Portfolio at a Glance"
+       {{LOGO_CARDS}}           HTML: repeated card blocks, max 25 companies
+                                sorted by total value desc; use logo_url from query
+     Card pattern (repeat for each company — rotate fallback bg accent 1/2/3):
+       <div style="background:#fff;border-radius:12px;border:1px solid var(--ds-rule);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px 12px;gap:8px;box-shadow:0 1px 4px rgba(0,0,0,.06);">
+         <img src="[LOGO_URL]" alt="[COMPANY_NAME]" style="max-width:80px;max-height:36px;object-fit:contain;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+         <div style="display:none;width:44px;height:44px;border-radius:50%;background:var(--ds-accent-1);color:#fff;font-weight:700;font-size:14px;align-items:center;justify-content:center;">[INITIALS]</div>
+         <div style="font-size:11px;font-weight:600;color:var(--ds-ink);text-align:center;line-height:1.2;">[COMPANY_NAME]</div>
+         <div style="font-size:10px;color:var(--ds-accent-2);font-weight:500;">[TOTAL_VALUE] · [MOIC]</div>
+       </div>
+     INITIALS: first letter of each word, max 2 (e.g. "Acme Capital" → "AC")
+     TOTAL_VALUE: total value in $XXM or $X.XB format
+     MOIC: unrealized MOIC formatted as "X.Xx"
+     If no logo_url: omit <img> tag entirely and show fallback div (remove display:none)
+     ============================================================ -->
+<section data-screen-label="12 Portfolio Logos" class="ds-alt">
+  <div class="ds-chrome-logo"></div>
+  <div class="ds-chrome-page"><span>12</span><span class="ds-chrome-page__dot"></span><span>Portfolio</span></div>
+
+  <div class="ds-pad ds-pad--header" style="display:flex;flex-direction:column;height:100%;box-sizing:border-box;">
+    <div style="margin-bottom:4px;">
+      <div class="ds-eyebrow" style="color:var(--ds-accent-2);">{{LOGO_GRID_EYEBROW}}</div>
+      <h1 class="ds-h1">{{LOGO_GRID_HEADLINE}}</h1>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);grid-template-rows:repeat(5,1fr);gap:16px;flex:1;min-height:0;">
+      {{LOGO_CARDS}}
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     SLIDE 13 — ASSET TYPE BREAKDOWN
+     Surface: paper (default)
+     Tokens:
+       {{ASSET_HEADLINE_PERCENT}}      "XX.X%" — percentage value ONLY (in em/accent color)
+       {{ASSET_HEADLINE_SUFFIX}}       "of portfolio FMV in preferred equity." — plain text after em
+       {{ASSET_DONUT_CENTER_NUMBER}}   "$X.XXB"
+       {{ASSET_DONUT_SEGMENTS}}        JSON array — always this category order, omit if 0.
+         🚨 Include "color" on every segment (colorOverride is ignored by charts.js):
+         [
+           {"label":"Preferred Equity","value":XX.X,"color":"var(--ds-cat-1)"},
+           {"label":"Common Equity","value":XX.X,"color":"var(--ds-cat-2)"},
+           {"label":"Fund Investment","value":X.X,"color":"var(--ds-cat-3)"},
+           {"label":"Warrants","value":X.X,"color":"var(--ds-cat-4)"},
+           {"label":"SAFE","value":X.X,"color":"var(--ds-cat-5)"},
+           {"label":"Convertible Debt","value":X.X,"color":"rgba(128,128,128,0.4)"}
+         ]
+         (values = % of FMV — the chart auto-normalises)
+       {{ASSET_LEGEND_ROWS}}           HTML — see pattern below
+     ASSET_LEGEND_ROWS row pattern (repeat for each category, omit border-bottom on last):
+       <div style="display:flex; align-items:baseline; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--ds-rule);">
+         <div style="display:flex; align-items:center; gap:10px;">
+           <span class="ds-swatch" data-series="N"></span>
+           <div class="ds-label">Asset Type</div>
+           <span class="ds-pill [ds-pill--2|ds-pill--3]">NNN cos</span>
+         </div>
+         <div style="display:flex; gap:20px; align-items:baseline;">
+           <div class="ds-num--sm" style="font-size:26px;">$XXXM</div>
+           <div class="ds-label ds-label--sm ds-on-mute">XX.X%</div>
+         </div>
+       </div>
+     ============================================================ -->
+<section data-screen-label="13 Asset Type Breakdown">
+  <div class="ds-chrome-logo"></div>
+  <div class="ds-chrome-page"><span>13</span><span class="ds-chrome-page__dot"></span><span>Asset Types</span></div>
+
+  <div class="ds-pad ds-pad--header">
+    <div class="ds-eyebrow" style="margin-bottom:20px;">Portfolio composition · By asset class</div>
+    <div class="ds-h1" style="margin-bottom:60px;">
+      <em>{{ASSET_HEADLINE_PERCENT}}</em> {{ASSET_HEADLINE_SUFFIX}}
+    </div>
+
+    <div style="display:grid; grid-template-columns:460px 1fr; gap:80px; align-items:center;">
+      <!-- WHEN GENERATING: replace centerNumber and segments array with real query data.
+           Always this category order with explicit colors. Values = % of FMV. -->
+      <div data-ds-chart="donut" data-config='{"size":420,"radius":158,"thickness":60,"gap":0.5,"centerLabel":"Total FMV","centerNumber":"{{ASSET_DONUT_CENTER_NUMBER}}","segments":{{ASSET_DONUT_SEGMENTS}}}'></div>
+      <div style="display:flex; flex-direction:column; gap:14px;">
+        {{ASSET_LEGEND_ROWS}}
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     SLIDE 14 — INVESTMENT PERFORMANCE BUCKETS
+     Surface: ds-alt
+     Tokens:
+       {{BUCKETS_HEADLINE_COUNT}}  "N companies" — count + "companies" in em/accent color
+       {{BUCKETS_HEADLINE_SUFFIX}} "returning 10× or more — from just $XXM invested." — plain text after em
+       {{BUCKET_10X_COUNT}}        "N"   (ds-kpi-highlight in ds-card--flat)
+       {{BUCKET_10X_DETAIL}}       "$XXM cost → $X.XXB value"
+       {{BUCKET_3_10X_COUNT}}      "N"   (ds-kpi-highlight--2 in ds-card--2)
+       {{BUCKET_3_10X_DETAIL}}     "$XXM cost → $XXXM value"
+       {{BUCKET_1_3X_COUNT}}       "N"   (plain in ds-card--3)
+       {{BUCKET_1_3X_DETAIL}}      "$X.XXB cost → $X.XXB value"
+       {{BUCKET_LT1X_COUNT}}       "N"   (plain in ds-card--flat)
+       {{BUCKET_LT1X_DETAIL}}      "$XXXM cost → $XXXM value"
+       {{BUCKET_0X_COUNT}}         "N"   (plain in ds-card--flat)
+       {{BUCKET_0X_DETAIL}}        "$XXXM cost → $0 value"
+       {{BUCKETS_TOTAL_COUNT}}     "NNN"
+       {{BUCKETS_OUTPERFORM_COUNT}} "NNN"
+       {{BUCKETS_CHART_MAX}}       max count across all buckets
+       {{BUCKETS_CHART_ROWS}}      JSON array — always 5 rows, this exact order:
+         [{"label":"1–3×","value":N,"valueLabel":"N companies","series":3},
+          {"label":"10×+","value":N,"valueLabel":"N companies","series":1},
+          {"label":"<1×","value":N,"valueLabel":"N companies","series":4},
+          {"label":"0× (written off)","value":N,"valueLabel":"N companies","series":5},
+          {"label":"3–10×","value":N,"valueLabel":"N companies","series":2}]
+     ============================================================ -->
+<section data-screen-label="14 Performance Buckets" class="ds-alt">
+  <div class="ds-chrome-logo"></div>
+  <div class="ds-chrome-page"><span>14</span><span class="ds-chrome-page__dot"></span><span>Performance Buckets</span></div>
+
+  <div class="ds-pad ds-pad--header">
+    <div class="ds-eyebrow" style="margin-bottom:20px;">Portfolio · Returns by multiple bucket</div>
+    <div class="ds-h1" style="margin-bottom:40px;">
+      <em>{{BUCKETS_HEADLINE_COUNT}}</em> {{BUCKETS_HEADLINE_SUFFIX}}
+    </div>
+
+    <div style="display:grid; grid-template-columns:repeat(5,1fr); gap:40px; margin-bottom:44px;">
+      <div>
+        <div class="ds-label" style="margin-bottom:8px;">10×+</div>
+        <div class="ds-num ds-kpi-highlight" style="font-size:72px;">{{BUCKET_10X_COUNT}}</div>
+        <div class="ds-body ds-body--sm ds-on-mute" style="margin-top:8px;">{{BUCKET_10X_DETAIL}}</div>
+      </div>
+      <div>
+        <div class="ds-label" style="margin-bottom:8px;">3–10×</div>
+        <div class="ds-num ds-kpi-highlight--2" style="font-size:72px;">{{BUCKET_3_10X_COUNT}}</div>
+        <div class="ds-body ds-body--sm ds-on-mute" style="margin-top:8px;">{{BUCKET_3_10X_DETAIL}}</div>
+      </div>
+      <div>
+        <div class="ds-label" style="margin-bottom:8px;">1–3×</div>
+        <div class="ds-num" style="font-size:72px;">{{BUCKET_1_3X_COUNT}}</div>
+        <div class="ds-body ds-body--sm ds-on-mute" style="margin-top:8px;">{{BUCKET_1_3X_DETAIL}}</div>
+      </div>
+      <div>
+        <div class="ds-label" style="margin-bottom:8px;">&lt;1×</div>
+        <div class="ds-num" style="font-size:72px;">{{BUCKET_LT1X_COUNT}}</div>
+        <div class="ds-body ds-body--sm ds-on-mute" style="margin-top:8px;">{{BUCKET_LT1X_DETAIL}}</div>
+      </div>
+      <div>
+        <div class="ds-label" style="margin-bottom:8px;">0× (written off)</div>
+        <div class="ds-num" style="font-size:72px;">{{BUCKET_0X_COUNT}}</div>
+        <div class="ds-body ds-body--sm ds-on-mute" style="margin-top:8px;">{{BUCKET_0X_DETAIL}}</div>
+      </div>
+    </div>
+
+    <div class="ds-rule" style="margin-bottom:28px;"></div>
+
+    <div style="display:grid; grid-template-columns:200px 1fr; gap:40px; align-items:start;">
+      <div>
+        <div class="ds-body ds-body--sm ds-on-mute">{{BUCKETS_TOTAL_COUNT}} total investments. {{BUCKETS_OUTPERFORM_COUNT}} companies delivering 3× or better.</div>
+      </div>
+      <div data-ds-chart="hbar" data-config='{"max":{{BUCKETS_CHART_MAX}},"rows":{{BUCKETS_CHART_ROWS}}}'></div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     SLIDE 15 — TOP PERFORMING INVESTMENTS
+     Surface: ds-dark
+     Tokens:
+       {{TOP_PERF_HEADLINE_PLAIN}}    "N investments"
+       {{TOP_PERF_HEADLINE_EM}}       "returning XX× or better."
+       {{TOP_PERF_CHART_MAX}}         number — highest MOIC in the set
+       {{TOP_PERF_CHART_ROWS}}        JSON array (sorted desc by MOIC, max 8):
+         [{"label":"Company Name (Fund, Vintage)","value":XX.XX,"valueLabel":"XX.XX×","series":1}, ...]
+         series: 1=top tier, 2=second tier, 3=third tier, 4=fourth
+       {{TOP_PERF_CALLOUT1_LABEL}}    "Fund N standout"
+       {{TOP_PERF_CALLOUT1_TITLE}}    "Company Name" (ds-h2)
+       {{TOP_PERF_CALLOUT1_BODY}}     "$XXXM remaining value · XX.XX× MOIC on $X.XM invested"
+       {{TOP_PERF_CALLOUT2_LABEL}}    "Fund N+1 standout"
+       {{TOP_PERF_CALLOUT2_TITLE}}    "Company Name"
+       {{TOP_PERF_CALLOUT2_BODY}}     "$XXXM remaining · XX.XX× MOIC on $X.XM invested"
+       {{TOP_PERF_CALLOUT3_BODY}}     disclosure about undisclosed companies (if any)
+     ============================================================ -->
+<section data-screen-label="15 Top Performers" class="ds-dark">
+  <div class="ds-chrome-logo" data-variant="dark"></div>
+  <div class="ds-chrome-page"><span>15</span><span class="ds-chrome-page__dot"></span><span>Top Performers</span></div>
+
+  <div class="ds-pad ds-pad--header">
+    <div class="ds-eyebrow" style="margin-bottom:20px; opacity:0.65;">Top performing investments · by MOIC</div>
+    <div class="ds-h1" style="margin-bottom:44px;">
+      <em>{{TOP_PERF_HEADLINE_PLAIN}}</em> {{TOP_PERF_HEADLINE_EM}}
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 360px; gap:80px; align-items:start;">
+      <div data-ds-chart="hbar" data-config='{"max":{{TOP_PERF_CHART_MAX}},"rows":{{TOP_PERF_CHART_ROWS}}}'></div>
+
+      <div>
+        <div style="border-left:3px solid var(--ds-accent-1); padding-left:20px; margin-bottom:32px;">
+          <div class="ds-label" style="margin-bottom:8px; opacity:0.65;">{{TOP_PERF_CALLOUT1_LABEL}}</div>
+          <div class="ds-h2">{{TOP_PERF_CALLOUT1_TITLE}}</div>
+          <div class="ds-body ds-body--sm" style="margin-top:8px; opacity:0.8;">{{TOP_PERF_CALLOUT1_BODY}}</div>
+        </div>
+        <div style="border-left:3px solid var(--ds-accent-2); padding-left:20px; margin-bottom:32px;">
+          <div class="ds-label" style="margin-bottom:8px; opacity:0.65;">{{TOP_PERF_CALLOUT2_LABEL}}</div>
+          <div class="ds-h2">{{TOP_PERF_CALLOUT2_TITLE}}</div>
+          <div class="ds-body ds-body--sm" style="margin-top:8px; opacity:0.8;">{{TOP_PERF_CALLOUT2_BODY}}</div>
+        </div>
+        <div style="border-left:3px solid rgba(255,255,255,0.3); padding-left:20px;">
+          <div class="ds-label" style="margin-bottom:8px; opacity:0.65;">Note</div>
+          <div class="ds-body ds-body--sm" style="opacity:0.6;">{{TOP_PERF_CALLOUT3_BODY}}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     SLIDE 18 — GEOGRAPHIC PORTFOLIO MIX
+     🚨 Surface: paper (default) — NOT ds-dark. Never use a dark background here.
+     🚨 Donut size is FIXED: size=380, radius=140, thickness=58. Do NOT increase these.
+        The left column is constrained to 420px — the donut must fit inside it.
+        A larger donut overflows the slide and pushes content off-screen.
+     Tokens:
+       {{GEO_HEADLINE_PLAIN}}        "Predominantly US-focused with"
+       {{GEO_HEADLINE_EM}}           "selective international exposure."
+       {{GEO_DONUT_CENTER_LABEL}}    "US by FMV"  (or dominant region)
+       {{GEO_DONUT_CENTER_NUMBER}}   "96%"
+       {{GEO_DONUT_SEGMENTS}}        JSON array (sorted desc, max 5) — include "color" on EVERY segment:
+         🚨 The donut renderer uses seg.color if present — "colorOverride" is NOT supported and is ignored.
+         Always assign explicit colors so the dominant segment is visible on dark/light backgrounds:
+         [
+           {"label":"United States","value":96.0,"color":"var(--ds-cat-2)"},
+           {"label":"Brazil","value":4.0,"color":"var(--ds-cat-3)"},
+           {"label":"Other","value":0.03,"color":"rgba(255,255,255,0.3)"}
+         ]
+         On ds-dark slides: use var(--ds-cat-2) for largest, var(--ds-cat-3) for second.
+         On paper/ds-alt slides: use var(--ds-cat-1) for largest, var(--ds-cat-2) for second.
+       {{GEO_TABLE_ROWS}}            HTML — see pattern below
+     GEO_TABLE_ROWS row pattern (repeat, omit border-bottom on last):
+       <div style="display:grid; grid-template-columns:1fr auto auto; gap:20px; align-items:baseline; padding:28px 0; border-bottom:1px solid var(--ds-rule);">
+         <div style="display:flex; align-items:center; gap:10px;">
+           <span class="ds-swatch" data-series="N"></span>
+           <div class="ds-label">Country/Region</div>
+         </div>
+         <div class="ds-num--sm [ds-kpi-highlight]" style="font-size:40px;">NNN<span class="ds-num__unit" style="font-size:18px;">cos</span></div>
+         <div style="text-align:right;">
+           <div class="ds-num--sm" style="font-size:32px;">$X.XX<span class="ds-num__unit" style="font-size:16px;">B</span></div>
+           <div class="ds-label ds-label--sm ds-on-mute">XX.X% of FMV</div>
+         </div>
+       </div>
+     Apply ds-kpi-highlight to largest region count, ds-kpi-highlight--2 to second.
+     ============================================================ -->
+<section data-screen-label="18 Geographic Mix">
+  <div class="ds-chrome-logo"></div>
+  <div class="ds-chrome-page"><span>18</span><span class="ds-chrome-page__dot"></span><span>Geography</span></div>
+
+  <div class="ds-pad ds-pad--header">
+    <div class="ds-eyebrow" style="margin-bottom:20px;">Portfolio · Geographic distribution by FMV</div>
+    <div class="ds-h1" style="margin-bottom:56px;">
+      {{GEO_HEADLINE_PLAIN}} <em>{{GEO_HEADLINE_EM}}</em>
+    </div>
+
+    <div style="display:grid; grid-template-columns:420px 1fr; gap:80px; align-items:center;">
+      <!-- WHEN GENERATING: replace centerLabel, centerNumber, and segments with real query data.
+           On ds-dark slides use cat-2/cat-3. On paper/alt slides use cat-1/cat-2.
+           Always include "color" per segment — colorOverride is NOT supported. -->
+      <div data-ds-chart="donut" data-config='{"size":380,"radius":140,"thickness":58,"gap":0.5,"centerLabel":"{{GEO_DONUT_CENTER_LABEL}}","centerNumber":"{{GEO_DONUT_CENTER_NUMBER}}","segments":{{GEO_DONUT_SEGMENTS}}}'></div>
+      <div>
+        <div class="ds-rule"></div>
+        {{GEO_TABLE_ROWS}}
+        <div class="ds-rule"></div>
+        <div class="ds-accent-bar ds-accent-bar--3" style="margin-top:24px;"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     SLIDE 19 — SPV PERFORMANCE
+     Surface: ds-alt
+     Tokens:
+       {{SPV_HEADLINE_PLAIN}}    "SPV Name (Company SPV) at"
+       {{SPV_HEADLINE_EM}}       "X.XX× TVPI leads SPV returns."
+       {{SPV_TOP_TVPI}}          "X.XX"
+       {{SPV_TOP_NAME_NAV}}      "SPV Name (Company) · NAV $XX.XM"
+       {{SPV_TOTAL_COUNT}}       "N"
+       {{SPV_CHART_MAX}}         number — max TVPI
+       {{SPV_CHART_ROWS}}        JSON array (sorted desc by TVPI, max 12):
+         [{"label":"SPV Name","value":7.88,"valueLabel":"7.88×","series":1}, ...]
+         series: 1=TVPI≥2×, 2=TVPI 1-2×, 3=TVPI 0.5-1×, 4=<0.5×, 5=0×
+     ============================================================ -->
+<section data-screen-label="19 SPV Performance" class="ds-alt">
+  <div class="ds-chrome-logo"></div>
+  <div class="ds-chrome-page"><span>19</span><span class="ds-chrome-page__dot"></span><span>SPV Performance</span></div>
+
+  <div class="ds-pad ds-pad--header">
+    <div class="ds-eyebrow" style="margin-bottom:20px;">SPV performance · TVPI by vehicle</div>
+    <div class="ds-h1" style="margin-bottom:40px;">
+      {{SPV_HEADLINE_PLAIN}} <em>{{SPV_HEADLINE_EM}}</em>
+    </div>
+
+    <div style="display:grid; grid-template-columns:200px 1fr; gap:48px; align-items:start;">
+      <div>
+        <div>
+          <div class="ds-label" style="margin-bottom:8px;">Top SPV</div>
+          <div class="ds-num--sm ds-kpi-highlight" style="font-size:52px;">{{SPV_TOP_TVPI}}<span class="ds-num__unit">×</span></div>
+          <div class="ds-body ds-body--sm ds-on-mute" style="margin-top:8px;">{{SPV_TOP_NAME_NAV}}</div>
+        </div>
+        <div style="margin-top:32px;">
+          <div class="ds-label" style="margin-bottom:8px;">Total SPVs</div>
+          <div class="ds-num--sm" style="font-size:52px;">{{SPV_TOTAL_COUNT}}</div>
+        </div>
+        <div class="ds-accent-bar ds-accent-bar--2" style="margin-top:28px;"></div>
+      </div>
+      <div data-ds-chart="hbar" data-config='{"max":{{SPV_CHART_MAX}},"rows":{{SPV_CHART_ROWS}}}'></div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     SLIDE 21 — PROFITABILITY MILESTONE TRACKER
+     Surface: paper (default)
+     Tokens:
+       {{PROFIT_HEADLINE_EM}}      "N portfolio companies"
+       {{PROFIT_HEADLINE_SUFFIX}}  "reporting positive net income — led by Company A, Company B, and Company C."
+       {{AS_OF_YEAR}}
+       {{PROFIT_COMPANY_GRID}}     HTML — see cell pattern below; 3-column grid
+       {{PROFIT_PROFITABLE_COUNT}} "N"
+       {{PROFIT_REPORTING_COUNT}}  "~NNN"
+     Company grid cell pattern (border-bottom on all except last cell):
+       <div style="padding:5px 0; border-bottom:1px solid var(--ds-rule);">
+         <div class="ds-body" style="font-size:14px;">Company Name</div>
+         <div class="ds-label ds-on-mute" style="margin-top:1px;">Fund · Sector</div>
+       </div>
+     Metrics pills: always include Net Income (ds-pill--3), Gross Profit (ds-pill--2),
+       EBITDA (ds-pill), then any others available (ds-pill--2).
+     ============================================================ -->
+<section data-screen-label="21 Profitability Tracker">
+  <div class="ds-chrome-logo"></div>
+  <div class="ds-chrome-page"><span>21</span><span class="ds-chrome-page__dot"></span><span>Profitability Tracker</span></div>
+
+  <div class="ds-pad ds-pad--header">
+    <div class="ds-eyebrow" style="margin-bottom:20px;">Portfolio company profitability · Latest reported net income · {{AS_OF_YEAR}}</div>
+    <div class="ds-h1" style="margin-bottom:20px;">
+      <em>{{PROFIT_HEADLINE_EM}}</em> {{PROFIT_HEADLINE_SUFFIX}}
+    </div>
+
+    <div style="display:grid; grid-template-columns:1.4fr 1fr; gap:48px; align-items:start;">
+      <div>
+        <div style="display:flex; align-items:center; gap:16px; margin-bottom:12px;">
+          <div style="width:12px; height:12px; border-radius:50%; background:var(--ds-accent-1); flex-shrink:0;"></div>
+          <div class="ds-label">Net-profitable · Latest reported period</div>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:5px 14px;">
+          {{PROFIT_COMPANY_GRID}}
+        </div>
+      </div>
+
+      <div>
+        <div class="ds-rule" style="margin-bottom:32px;"></div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:32px; margin-bottom:40px;">
+          <div>
+            <div class="ds-label" style="margin-bottom:10px;">Net profitable</div>
+            <div class="ds-num--sm ds-kpi-highlight" style="font-size:64px;">{{PROFIT_PROFITABLE_COUNT}}</div>
+            <div class="ds-body ds-body--sm ds-on-mute" style="margin-top:8px;">Companies with positive net income in latest reported period</div>
+          </div>
+          <div>
+            <div class="ds-label" style="margin-bottom:10px;">Reporting financials</div>
+            <div class="ds-num--sm" style="font-size:64px;">{{PROFIT_REPORTING_COUNT}}</div>
+            <div class="ds-body ds-body--sm ds-on-mute" style="margin-top:8px;">Companies submitting P&amp;L data to Carta</div>
+          </div>
+        </div>
+        <div class="ds-rule" style="margin-bottom:28px;"></div>
+        <div class="ds-label" style="margin-bottom:12px;">Metrics available in Carta</div>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          <div style="display:flex; align-items:center; gap:12px;"><span class="ds-pill ds-pill--3">Net Income</span><div class="ds-body ds-on-mute" style="font-size:16px;">Primary profitability signal</div></div>
+          <div style="display:flex; align-items:center; gap:12px;"><span class="ds-pill ds-pill--2">Gross Profit</span><div class="ds-body ds-on-mute" style="font-size:16px;">Unit economics baseline</div></div>
+          <div style="display:flex; align-items:center; gap:12px;"><span class="ds-pill">EBITDA</span><div class="ds-body ds-on-mute" style="font-size:16px;">Cash operating profitability</div></div>
+        </div>
+        <div class="ds-accent-bar ds-accent-bar--3" style="margin-top:32px;"></div>
+        <div class="ds-body ds-body--sm ds-on-mute" style="margin-top:14px;">Profitability derived from sign of Net Income in latest reported period.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     SLIDE 22 — FINANCING ROUND HISTORY (recent investments, 2-column table)
+     Surface: ds-alt
+     Tokens:
+       {{FINANCING_PERIOD_EYEBROW}}    "February – July 2026"
+       {{FINANCING_HEADLINE_PLAIN}}    "N new investments"  (wrapped in <em>)
+       {{FINANCING_HEADLINE_EM}}       "across Fund A, Fund B, and Fund C."
+       {{FINANCING_LEFT_ROWS}}         HTML: header + top 5 investment rows (sorted by amount desc)
+       {{FINANCING_RIGHT_ROWS}}        HTML: header + next 5 investment rows
+       {{FINANCING_AS_OF_NOTE}}        "Amounts in [currency]. Data as of {{AS_OF_DATE}}." — no source attribution
+     Header row pattern (first in each column):
+       <div style="display:grid; grid-template-columns:1fr auto auto; gap:0; align-items:baseline; border-bottom:1px solid var(--ds-rule); padding-bottom:10px; margin-bottom:4px;">
+         <div class="ds-label">Company</div>
+         <div class="ds-label" style="text-align:right; padding-left:20px;">Fund</div>
+         <div class="ds-label" style="text-align:right; padding-left:24px;">Amount</div>
+       </div>
+     Data row pattern (border-bottom on all except last in each column):
+       <div style="display:grid; grid-template-columns:1fr auto auto; gap:0; align-items:baseline; padding:14px 0; border-bottom:1px solid var(--ds-rule);">
+         <div><div class="ds-body" style="font-size:17px; font-weight:500;">Company Name</div><div class="ds-label ds-on-mute" style="margin-top:2px;">Security Type · Mon YYYY</div></div>
+         <div class="ds-label ds-on-mute" style="padding-left:20px; white-space:nowrap;">Fund Name</div>
+         <div class="ds-num--sm [ds-kpi-highlight|ds-kpi-highlight--2]" style="font-size:26px; padding-left:24px;">$XX.XM</div>
+       </div>
+     Apply ds-kpi-highlight to #1 amount, ds-kpi-highlight--2 to #2.
+     ============================================================ -->
+<section data-screen-label="22 Financing Round History" class="ds-alt">
+  <div class="ds-chrome-logo"></div>
+  <div class="ds-chrome-page"><span>22</span><span class="ds-chrome-page__dot"></span><span>Financing Round History</span></div>
+
+  <div class="ds-pad ds-pad--header">
+    <div class="ds-eyebrow" style="margin-bottom:20px;">Recent investments · {{FINANCING_PERIOD_EYEBROW}}</div>
+    <div class="ds-h1" style="margin-bottom:40px;">
+      <em>{{FINANCING_HEADLINE_PLAIN}}</em> {{FINANCING_HEADLINE_EM}}
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:60px; align-items:start;">
+      <div>{{FINANCING_LEFT_ROWS}}</div>
+      <div>{{FINANCING_RIGHT_ROWS}}</div>
+    </div>
+    <div class="ds-body ds-body--sm ds-on-mute" style="margin-top:20px;">{{FINANCING_AS_OF_NOTE}}</div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     SLIDE 22b — EARLY & MID VINTAGE IRR COMPARISON
+     Surface: ds-dark
+     Tokens:
+       {{VINTAGE_EARLY_LABEL}}      "YYYY–YYYY vintage"
+       {{VINTAGE_MID_LABEL}}        "YYYY–YYYY vintage"
+       {{VINTAGE_EARLY_TOP_N}}      "N"
+       {{VINTAGE_EARLY_THRESHOLD}}  "XX"
+       {{VINTAGE_GLOBAL_MAX}}       number — shared max across both charts for consistent scale
+       {{VINTAGE_EARLY_ROWS}}       JSON array (sorted desc by IRR, max 6):
+         [{"label":"Fund Name, LP · YYYY","value":XX.XX,"valueLabel":"XX.XX%","series":1}, ...]
+       {{VINTAGE_EARLY_AVG_IRR}}    "XX.X"  (ds-kpi-highlight)
+       {{VINTAGE_EARLY_DEPLOYED}}   "N / N"
+       {{VINTAGE_MID_ROWS}}         JSON array (sorted desc by IRR, max 6)
+       {{VINTAGE_MID_AVG_IRR}}      "XX.X"  (ds-kpi-highlight--2)
+       {{VINTAGE_MID_DEPLOYED}}     "N / N"
+       {{VINTAGE_AS_OF_NOTE}}       "Net IRR as of {{AS_OF_DATE}}. Peer benchmark percentiles not available." — no source attribution
+     ============================================================ -->
+<section data-screen-label="22b Early Vintage IRR" class="ds-dark">
+  <div class="ds-chrome-logo" data-variant="dark"></div>
+  <div class="ds-chrome-page"><span>22b</span><span class="ds-chrome-page__dot"></span><span>Benchmark · Early &amp; Mid Vintage</span></div>
+
+  <div class="ds-pad ds-pad--header">
+    <div class="ds-eyebrow" style="margin-bottom:20px; opacity:0.65;">IRR comparison · {{VINTAGE_EARLY_LABEL}} funds</div>
+    <div class="ds-h1" style="margin-bottom:44px;">
+      Early vintages dominate — <em>{{VINTAGE_EARLY_TOP_N}} funds above {{VINTAGE_EARLY_THRESHOLD}}% net IRR.</em>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:80px; align-items:start;">
+      <div>
+        <div class="ds-label" style="margin-bottom:8px; opacity:0.65;">{{VINTAGE_EARLY_LABEL}}</div>
+        <div class="ds-rule" style="opacity:0.2; margin-bottom:20px;"></div>
+        <div data-ds-chart="hbar" data-config='{"max":{{VINTAGE_GLOBAL_MAX}},"rows":{{VINTAGE_EARLY_ROWS}}}'></div>
+        <div style="margin-top:32px; display:flex; gap:32px;">
+          <div>
+            <div class="ds-label" style="margin-bottom:8px; opacity:0.65;">Avg IRR · this cohort</div>
+            <div class="ds-num--sm ds-kpi-highlight" style="font-size:52px;">{{VINTAGE_EARLY_AVG_IRR}}<span class="ds-num__unit">%</span></div>
+          </div>
+          <div>
+            <div class="ds-label" style="margin-bottom:8px; opacity:0.65;">Funds fully deployed</div>
+            <div class="ds-num--sm" style="font-size:52px;">{{VINTAGE_EARLY_DEPLOYED}}</div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="ds-label" style="margin-bottom:8px; opacity:0.65;">{{VINTAGE_MID_LABEL}}</div>
+        <div class="ds-rule" style="opacity:0.2; margin-bottom:20px;"></div>
+        <div data-ds-chart="hbar" data-config='{"max":{{VINTAGE_GLOBAL_MAX}},"rows":{{VINTAGE_MID_ROWS}}}'></div>
+        <div style="margin-top:32px; display:flex; gap:32px;">
+          <div>
+            <div class="ds-label" style="margin-bottom:8px; opacity:0.65;">Avg IRR · this cohort</div>
+            <div class="ds-num--sm ds-kpi-highlight--2" style="font-size:52px;">{{VINTAGE_MID_AVG_IRR}}<span class="ds-num__unit">%</span></div>
+          </div>
+          <div>
+            <div class="ds-label" style="margin-bottom:8px; opacity:0.65;">Funds fully deployed</div>
+            <div class="ds-num--sm" style="font-size:52px;">{{VINTAGE_MID_DEPLOYED}}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:40px; padding:14px 20px; border:1px solid rgba(255,255,255,0.15); border-radius:6px;">
+      <div class="ds-body ds-body--sm" style="opacity:0.55;">{{VINTAGE_AS_OF_NOTE}}</div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     SLIDE 22c — RECENT VINTAGE IRR COMPARISON
+     Surface: paper (default)
+     Tokens:
+       {{RECENT_A_LABEL}}       "YYYY–YYYY vintage"
+       {{RECENT_B_LABEL}}       "YYYY–YYYY vintage"
+       {{RECENT_LEADER_1}}      top fund in recent B group: "Fund Name"
+       {{RECENT_LEADER_2}}      second fund: "Fund Name"
+       {{RECENT_GLOBAL_MAX}}    shared max across both charts
+       {{RECENT_A_ROWS}}        JSON array (sorted desc, max 8)
+       {{RECENT_B_ROWS}}        JSON array (sorted desc, max 4)
+       {{RECENT_CONTEXT_BODY}}  2-3 sentences about J-curve and maturation
+       {{RECENT_AS_OF_NOTE}}    "Net IRR as of {{AS_OF_DATE}}. Recent vintage funds are J-curve stage." — no source attribution
+     ============================================================ -->
+<section data-screen-label="22c Recent Vintage IRR">
+  <div class="ds-chrome-logo"></div>
+  <div class="ds-chrome-page"><span>22c</span><span class="ds-chrome-page__dot"></span><span>Benchmark · Recent Vintage</span></div>
+
+  <div class="ds-pad ds-pad--header">
+    <div class="ds-eyebrow" style="margin-bottom:20px;">IRR comparison · {{RECENT_A_LABEL}} &amp; {{RECENT_B_LABEL}} funds</div>
+    <div class="ds-h1" style="margin-bottom:40px;">
+      Newer funds in early stages — <em>{{RECENT_LEADER_1}}</em> and <em>{{RECENT_LEADER_2}}</em> already showing strong IRR.
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:80px; align-items:start;">
+      <div>
+        <div class="ds-label" style="margin-bottom:8px;">{{RECENT_A_LABEL}}</div>
+        <div class="ds-rule" style="margin-bottom:20px;"></div>
+        <div data-ds-chart="hbar" data-config='{"max":{{RECENT_GLOBAL_MAX}},"rows":{{RECENT_A_ROWS}}}'></div>
+      </div>
+      <div>
+        <div class="ds-label" style="margin-bottom:8px;">{{RECENT_B_LABEL}}</div>
+        <div class="ds-rule" style="margin-bottom:20px;"></div>
+        <div data-ds-chart="hbar" data-config='{"max":{{RECENT_GLOBAL_MAX}},"rows":{{RECENT_B_ROWS}}}'></div>
+        <div style="margin-top:32px;">
+          <div class="ds-label" style="margin-bottom:12px;">Context</div>
+          <div class="ds-body ds-on-mute" style="font-size:18px;">{{RECENT_CONTEXT_BODY}}</div>
+          <div class="ds-accent-bar ds-accent-bar--3" style="margin-top:20px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:32px; padding:14px 20px; background:var(--ds-paper-alt); border-radius:6px; border-left:3px solid var(--ds-accent-2);">
+      <div class="ds-body ds-body--sm ds-on-mute">{{RECENT_AS_OF_NOTE}}</div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     SLIDE 25 — IRR vs TVPI CROSS-REFERENCE
+     Surface: ds-alt
+     Tokens:
+       {{CROSS_HEADLINE_EM}}    "early vintages win on both metrics."
+       {{CROSS_IRR_MAX}}        number — max IRR across all funds
+       {{CROSS_IRR_ROWS}}       JSON array (sorted by vintage asc, grouped by perf tier):
+         [{"label":"Fund III · YYYY","value":41.79,"valueLabel":"41.79%","series":1}, ...]
+       {{CROSS_TVPI_MAX}}       number — max TVPI across all funds
+       {{CROSS_TVPI_ROWS}}      JSON array — SAME FUND ORDER as IRR rows
+       {{CROSS_INSIGHT_BODY}}   2-3 sentences interpreting the correlation
+     ============================================================ -->
+<section data-screen-label="25 IRR vs TVPI" class="ds-alt">
+  <div class="ds-chrome-logo"></div>
+  <div class="ds-chrome-page"><span>25</span><span class="ds-chrome-page__dot"></span><span>IRR vs TVPI</span></div>
+
+  <div class="ds-pad ds-pad--header">
+    <div class="ds-eyebrow" style="margin-bottom:20px;">Performance cross-reference · Net IRR vs TVPI · All main funds</div>
+    <div class="ds-h1" style="margin-bottom:44px;">
+      IRR and TVPI tell the same story — <em>{{CROSS_HEADLINE_EM}}</em>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:72px; align-items:start;">
+      <div style="max-height:620px; overflow:hidden;">
+        <div class="ds-label" style="margin-bottom:18px;">Net IRR · Sorted by vintage</div>
+        <div data-ds-chart="hbar" data-config='{"max":{{CROSS_IRR_MAX}},"rows":{{CROSS_IRR_ROWS}}}'></div>
+      </div>
+      <div>
+        <div style="max-height:500px; overflow:hidden;">
+          <div class="ds-label" style="margin-bottom:18px;">TVPI · Same fund order</div>
+          <div data-ds-chart="hbar" data-config='{"max":{{CROSS_TVPI_MAX}},"rows":{{CROSS_TVPI_ROWS}}}'></div>
+        </div>
+        <div style="margin-top:20px; padding:14px 16px; border:1px solid var(--ds-rule); border-radius:6px; max-height:110px; overflow:hidden;">
+          <div class="ds-label" style="margin-bottom:6px;">Key insight</div>
+          <div class="ds-body ds-body--sm ds-on-mute" style="line-clamp:3; -webkit-line-clamp:3; display:-webkit-box; -webkit-box-orient:vertical; overflow:hidden;">{{CROSS_INSIGHT_BODY}}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     SLIDE 25b — PORTFOLIO COMPANY DEEP DIVES (performance table)
+     Surface: ds-dark
+     Tokens:
+       {{DEEPDIVE_HEADLINE_PLAIN}}   "Company A leads on MOIC at"
+       {{DEEPDIVE_HEADLINE_EM}}      "XX× — Company B at $XXXM FMV."
+       {{DEEPDIVE_TABLE_ROWS}}       HTML <tr> blocks — 🚨 MAX 8 ROWS HARD LIMIT (sorted by current FMV desc):
+         The table container has max-height:560px + overflow:hidden.
+         Each row is ~52px at font-size:20px. 8 rows = 416px + header 50px = 466px → safe.
+         DO NOT exceed 8 rows — content will be clipped and invisible.
+         <tr>
+           <td>Company Name</td>
+           <td class="mute">Fund Name</td>
+           <td class="mute">$XX.XM (or £XX.XM)</td>
+           <td>$XX.XM (or £XX.XM)</td>
+           <td class="mute">$XX.XM (or <td class="mute">—</td>)</td>
+           <td [class="hi" if MOIC≥5×]>XX.XX×</td>
+           <td class="mute">Mon YYYY</td>
+         </tr>
+       {{DEEPDIVE_CURRENCY_NOTE}}    "FMV in each position's reporting currency (GBP for X & Y, USD for others)."
+     ============================================================ -->
+<section data-screen-label="25b Portfolio Deep Dives" class="ds-dark">
+  <div class="ds-chrome-logo" data-variant="dark"></div>
+  <div class="ds-chrome-page"><span>25b</span><span class="ds-chrome-page__dot"></span><span>Portfolio Deep Dives</span></div>
+
+  <div class="ds-pad ds-pad--header">
+    <div class="ds-eyebrow" style="margin-bottom:20px; opacity:0.65;">Top 8 holdings by current FMV · Company-level detail</div>
+    <div class="ds-h1" style="margin-bottom:36px;">
+      {{DEEPDIVE_HEADLINE_PLAIN}} <em>{{DEEPDIVE_HEADLINE_EM}}</em>
+    </div>
+
+    <div style="max-height:560px; overflow:hidden;">
+      <table class="fund-table" style="font-size:20px;">
+        <thead>
+          <tr>
+            <th>Company</th><th>Fund</th><th>Invested</th>
+            <th>Current FMV</th><th>Proceeds</th><th>MOIC</th>
+          </tr>
+        </thead>
+        <tbody>{{DEEPDIVE_TABLE_ROWS}}</tbody>
+      </table>
+    </div>
+    <div class="ds-body ds-body--sm" style="margin-top:16px; opacity:0.4;">{{DEEPDIVE_CURRENCY_NOTE}}</div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     SLIDE 27 — FUND EXPENSES BREAKDOWN
+     Surface: paper (default)
+     Tokens:
+       {{EXPENSES_HEADLINE_EM}}          "$X.XM in total operating expenses"
+       {{EXPENSES_HEADLINE_SUFFIX}}      "across N funds."
+       {{FUND_COUNT_LABEL}}              "N funds"
+       {{EXPENSES_DONUT_CENTER_NUMBER}}  "$X.XM"
+       {{EXPENSES_DONUT_SEGMENTS}}       JSON array — always this exact category order (omit if 0).
+         🚨 Include "color" on every segment (colorOverride is ignored by charts.js):
+         [
+           {"label":"Other Operating","value":X.XX,"color":"var(--ds-cat-1)"},
+           {"label":"Fund Admin","value":X.XX,"color":"var(--ds-cat-2)"},
+           {"label":"Legal Fees","value":X.XX,"color":"var(--ds-cat-3)"},
+           {"label":"Tax Preparation","value":X.XX,"color":"var(--ds-cat-4)"}
+         ]
+         (value = $ amount in M)
+       {{EXPENSES_LEGEND_ITEMS}}         HTML — see pattern below
+       {{EXPENSES_CHART_MAX}}            number — highest single-fund expense
+       {{EXPENSES_CHART_ROWS}}           JSON array (sorted desc by total expense):
+         [{"label":"Fund Name","value":2.08,"valueLabel":"$2.08M","series":1}, ...]
+         series: 1=top 2, 2=mid 2, 3=rest
+       {{EXPENSES_MGMT_FEES_NOTE}}       "Excludes management fees. Total mgmt fees: $XXM cumulative."
+     EXPENSES_LEGEND_ITEMS pattern:
+       <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+         <span class="ds-swatch" data-series="N"></span>
+         <div class="ds-body ds-body--sm">Category: $X.XXM (XX.X%)</div>
+       </div>
+     ============================================================ -->
+<section data-screen-label="27 Fund Expenses">
+  <div class="ds-chrome-logo"></div>
+  <div class="ds-chrome-page"><span>27</span><span class="ds-chrome-page__dot"></span><span>Expenses</span></div>
+
+  <div class="ds-pad ds-pad--header">
+    <div class="ds-eyebrow" style="margin-bottom:20px;">Fund expenses · {{FUND_COUNT_LABEL}}</div>
+    <div class="ds-h1" style="margin-bottom:44px;">
+      <em>{{EXPENSES_HEADLINE_EM}}</em> {{EXPENSES_HEADLINE_SUFFIX}}
+    </div>
+
+    <div style="display:grid; grid-template-columns:400px 1fr; gap:80px; align-items:center;">
+      <div>
+        <!-- WHEN GENERATING: replace centerNumber and segments with real query data.
+             Always this category order with explicit colors. Values = $ amount in M. -->
+        <div data-ds-chart="donut" data-config='{"size":360,"radius":132,"thickness":52,"gap":0.5,"centerLabel":"Total OpEx","centerNumber":"{{EXPENSES_DONUT_CENTER_NUMBER}}","segments":{{EXPENSES_DONUT_SEGMENTS}}}'></div>
+        <div style="margin-top:16px;">
+          {{EXPENSES_LEGEND_ITEMS}}
+        </div>
+      </div>
+
+      <div>
+        <div class="ds-label" style="margin-bottom:20px;">Total operating expenses by fund</div>
+        <div data-ds-chart="hbar" data-config='{"max":{{EXPENSES_CHART_MAX}},"rows":{{EXPENSES_CHART_ROWS}}}'></div>
+        <div class="ds-accent-bar ds-accent-bar--3" style="margin-top:28px;"></div>
+        <div class="ds-body ds-body--sm ds-on-mute" style="margin-top:14px;">{{EXPENSES_MGMT_FEES_NOTE}}</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     SLIDE 29 — CLOSING
+     Surface: ds-dark (always)
+     Tokens:
+       {{CLOSING_EYEBROW}}        "Looking ahead · 2026"
+       {{CLOSING_HERO_LINE1}}     "Fintech is still in its"
+       {{CLOSING_HERO_EMPHASIS}}  "earliest innings."
+       {{CLOSING_THANK_YOU}}      1-2 sentence thank-you + commitment statement
+       {{CLOSING_FOOTER_LABEL}}   "Questions &amp; discussion"
+     ============================================================ -->
+<section data-screen-label="29 Closing" class="ds-dark">
+  <div class="ds-chrome-logo" data-variant="dark"></div>
+  <div class="ds-chrome-page"><span>29</span><span class="ds-chrome-page__dot"></span><span>Closing</span></div>
+
+  <div style="position:absolute; left:140px; right:140px; top:50%; transform:translateY(-50%);">
+    <div class="ds-eyebrow" style="margin-bottom:36px; opacity:0.65;">{{CLOSING_EYEBROW}}</div>
+    <div class="ds-display" style="font-size:82px; line-height:1.1;">
+      {{CLOSING_HERO_LINE1}}<br/><em>{{CLOSING_HERO_EMPHASIS}}</em>
+    </div>
+    <div style="display:flex; align-items:flex-end; justify-content:space-between; margin-top:80px;">
+      <div class="ds-body" style="font-size:20px; max-width:640px; opacity:0.8;">{{CLOSING_THANK_YOU}}</div>
+      <div class="ds-label" style="opacity:0.55;">{{CLOSING_FOOTER_LABEL}}</div>
+    </div>
+  </div>
+</section>
+
+</deck-stage>
+</body>
+</html>

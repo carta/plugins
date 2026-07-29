@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>{{FIRM_NAME}} — Annual General Meeting {{YEAR}}</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family={{GOOGLE_FONTS_QUERY}}&display=swap" rel="stylesheet">
+
+<script src="deck-stage.js"></script>
+
+<!-- Brand → tokens → system -->
+<link rel="stylesheet" href="brands/{{BRAND_SLUG}}.css">
+<link rel="stylesheet" href="design-system/tokens.css">
+<link rel="stylesheet" href="design-system/system.css">
+<script defer src="design-system/charts.js"></script>
+<script defer src="design-system/carta-mark.js"></script>
+<script defer src="deck-nav.js"></script>
+
+<style>
+  html, body { margin: 0; padding: 0; background: #000; }
+
+  .agenda-row {
+    font-family: var(--ds-font-display);
+    font-weight: 300;
+    font-size: 28px;
+    line-height: 1.2;
+    letter-spacing: -0.012em;
+    padding: 26px 0;
+    color: var(--ds-ink);
+  }
+  .invest-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 22px 0;
+    font-family: var(--ds-font-body);
+    font-weight: 400;
+    font-size: 22px;
+    letter-spacing: -0.012em;
+    color: var(--ds-ink);
+  }
+  .invest-row .meta {
+    font-family: var(--ds-font-body);
+    font-size: 14px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ds-ink-mute);
+    font-weight: 500;
+  }
+  .carta-mark { display: inline-block; }
+  .carta-mark svg { height: 26px; width: auto; display: block; color: var(--ds-ink); opacity: 0.9; }
+</style>
+</head>
+<body>
+
+<deck-stage>
+
+{{SLIDES}}
+
+</deck-stage>
+
+</body>
+</html>

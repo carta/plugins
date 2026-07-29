@@ -1,0 +1,93 @@
+/* =========================================================================
+   DESIGN SYSTEM — TOKENS (INTENT LAYER)
+   -------------------------------------------------------------------------
+   This file is the SYSTEM CONTRACT. Do not edit per deck.
+
+   Brand values live in /brands/<name>.css and define --brand-* properties.
+   This file consumes those --brand-* values and exposes them as semantic
+   --ds-* intents that every other stylesheet, slide and chart reads from.
+
+   Load order in HTML:
+     <link rel="stylesheet" href="brands/<name>.css">    ← brand values
+     <link rel="stylesheet" href="design-system/tokens.css">  ← this file
+     <link rel="stylesheet" href="design-system/system.css">  ← typography + chrome
+   ========================================================================= */
+
+:root {
+  /* Surfaces & ink */
+  --ds-bg:           var(--brand-paper);
+  --ds-bg-alt:       var(--brand-paper-alt);
+  --ds-ink:          var(--brand-ink);
+  --ds-ink-2:        var(--brand-ink-2);
+  --ds-ink-mute:     var(--brand-ink-mute);
+  --ds-rule:         var(--brand-rule);
+
+  /* Accents — semantic, not numbered by hue */
+  --ds-accent:       var(--brand-accent-1);
+  --ds-accent-2:     var(--brand-accent-2);
+  --ds-accent-3:     var(--brand-accent-3);
+  --ds-em:           var(--brand-accent-2);
+
+  /* Text on accent backgrounds */
+  --ds-on-accent:        var(--brand-on-accent);
+  --ds-on-accent-mute:   color-mix(in oklab, var(--brand-on-accent) 70%, transparent);
+  --ds-on-accent-soft:   color-mix(in oklab, var(--brand-on-accent) 78%, transparent);
+  --ds-on-accent-rule:   color-mix(in oklab, var(--brand-on-accent) 22%, transparent);
+  --ds-on-accent-em:     var(--brand-on-accent-em);
+
+  /* Fonts (intent) */
+  --ds-font-display: var(--brand-font-display);
+  --ds-font-body:    var(--brand-font-body);
+  --ds-weight-display: var(--brand-weight-display);
+  --ds-weight-body:    var(--brand-weight-body);
+  --ds-weight-num:     var(--brand-weight-num);
+  --ds-weight-em:      var(--brand-weight-em);
+
+  /* Chart tokens — read at render time */
+  --ds-chart-axis:        var(--ds-rule);
+  --ds-chart-grid:        var(--ds-rule);
+  --ds-chart-text:        var(--ds-ink-mute);
+  --ds-chart-text-strong: var(--ds-ink);
+  --ds-chart-bg:          var(--ds-bg);
+
+  --ds-chart-series-1:    var(--ds-accent);
+  --ds-chart-series-2:    var(--ds-accent-2);
+  --ds-chart-series-3:    var(--ds-ink);
+  --ds-chart-series-4:    var(--ds-accent-3);
+  --ds-chart-series-5:    var(--ds-ink-mute);
+
+  /* Lead with the three declared brand accents (guaranteed visually distinct —
+     see "Use all three brand colors" in SKILL.md) before falling back to ink
+     tones. Do NOT lead with --ds-ink: for brands whose accent-1 IS a dark/navy
+     tone (common for finance firms), ink and accent-1 render nearly identical,
+     making cat-1/cat-2 indistinguishable in 2-segment donuts (LO — Clearview
+     donut color bug). */
+  --ds-cat-1: var(--ds-accent);
+  --ds-cat-2: var(--ds-accent-2);
+  --ds-cat-3: var(--ds-accent-3);
+  --ds-cat-4: var(--ds-ink);
+  --ds-cat-5: var(--ds-ink-mute);
+  --ds-cat-6: color-mix(in oklab, var(--ds-accent) 45%, var(--ds-ink-mute));
+}
+
+/* Slide variants — re-point intent tokens for dark / alt sections. */
+
+.ds-dark {
+  --ds-bg:        var(--brand-accent-1);
+  --ds-bg-alt:    var(--brand-accent-1);
+  --ds-ink:       var(--brand-on-accent);
+  --ds-ink-2:     var(--ds-on-accent-soft);
+  --ds-ink-mute:  var(--ds-on-accent-mute);
+  --ds-rule:      var(--ds-on-accent-rule);
+  --ds-em:        var(--brand-on-accent-em);
+
+  --ds-chart-series-1:    var(--brand-on-accent-em);  /* sky blue — navy invisible on dark bg */
+  --ds-chart-series-3:    var(--brand-on-accent);
+  --ds-cat-1:             var(--brand-on-accent);
+  --ds-cat-2:             var(--brand-accent-2);      /* sky blue — navy invisible on dark bg */
+  --ds-chart-text-strong: var(--brand-on-accent);
+}
+
+.ds-alt {
+  --ds-bg: var(--brand-paper-alt);
+}

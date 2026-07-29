@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Example Firm — Annual General Meeting 2026 (Themed)</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700&display=swap" rel="stylesheet">
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="deck-stage.js"></script>
+
+<!-- ===== Brand → tokens → system ===== -->
+<link rel="stylesheet" href="brands/example.css">
+<link rel="stylesheet" href="design-system/tokens.css">
+<link rel="stylesheet" href="design-system/system.css">
+<script defer src="design-system/charts.js"></script>
+<script defer src="design-system/carta-mark.js"></script>
+
+<!-- ===== Slide-only styles (no colors here) ===== -->
+<style>
+  html, body { margin: 0; padding: 0; background: #000; }
+
+  /* agenda row pattern, used on slide 02 */
+  .agenda-row {
+    font-family: var(--ds-font-display);
+    font-weight: 300;
+    font-size: 28px;
+    line-height: 1.2;
+    letter-spacing: -0.012em;
+    padding: 26px 0;
+    color: var(--ds-ink);
+  }
+
+  /* invest list rows on slide 08 */
+  .invest-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 22px 0;
+    font-family: var(--ds-font-body);
+    font-weight: 400;
+    font-size: 22px;
+    letter-spacing: -0.012em;
+    color: var(--ds-ink);
+  }
+  .invest-row .meta {
+    font-family: var(--ds-font-body);
+    font-size: 14px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ds-ink-mute);
+    font-weight: 500;
+  }
+
+  /* carta mark — drawn live in JS so it inherits ds-ink */
+  .carta-mark { display: inline-block; }
+  .carta-mark svg { height: 26px; width: auto; display: block; color: var(--ds-ink); opacity: 0.9; }
+</style>
+</head>
+<body>
+
+<deck-stage>
+
+  <!-- ============ SLIDE 01 — COVER ============ -->
+  <section data-screen-label="01 Cover" class="ds-dark">
+    <img class="ds-chrome-logo" src="assets/logo-light.png" alt="Example Firm" />
+    <div class="ds-chrome-page"><span>Annual General Meeting</span><span class="ds-chrome-page__dot"></span><span>2026</span></div>
+    <div class="ds-chrome-foot">
+      <span>Powered by</span>
+      <span class="carta-mark"></span>
+    </div>
+
+    <div style="position:absolute; left:112px; right:112px; top:50%; transform:translateY(-50%);">
+      <div class="ds-eyebrow" style="margin-bottom: 36px;">Annual General Meeting · Vintage-to-date Review</div>
+      <div class="ds-display">
+        We bring things<br/>of <em>real wonder</em><br/>into the world.
+      </div>
+      <div style="display:flex; align-items:flex-end; justify-content:space-between; margin-top: 80px;">
+        <div class="ds-body" style="font-size:20px; max-width:560px;">
+          A review of fund performance, portfolio progress, and the road ahead — for our limited partners, advisors, and founders.
+        </div>
+        <div class="ds-label">May 2026</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SLIDE 02 — AGENDA ============ -->
+  <section data-screen-label="02 Agenda">
+    <img class="ds-chrome-logo" src="assets/logo-dark.png" alt="Example Firm" />
+    <div class="ds-chrome-page"><span>02</span><span class="ds-chrome-page__dot"></span><span>Agenda</span></div>
+    <div class="ds-chrome-foot"><span>Powered by</span><span class="carta-mark"></span></div>
+
+    <div class="ds-pad ds-pad--header">
+      <div class="ds-eyebrow" style="margin-bottom: 28px;">The conversation today</div>
+      <div class="ds-h1" style="margin-bottom: 80px; max-width: 1100px;">
+        A candid look at the year — what we built, what we learned, and where we're headed.
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr; column-gap: 120px;">
+        <div>
+          <div class="ds-rule"></div>
+          <div class="agenda-row">01 &nbsp;&nbsp; Firm update</div>
+          <div class="ds-rule"></div>
+          <div class="agenda-row">02 &nbsp;&nbsp; Market environment</div>
+          <div class="ds-rule"></div>
+          <div class="agenda-row">03 &nbsp;&nbsp; Fund performance</div>
+          <div class="ds-rule"></div>
+          <div class="agenda-row">04 &nbsp;&nbsp; Portfolio overview</div>
+          <div class="ds-rule"></div>
+        </div>
+        <div>
+          <div class="ds-rule"></div>
+          <div class="agenda-row">05 &nbsp;&nbsp; Company highlights</div>
+          <div class="ds-rule"></div>
+          <div class="agenda-row">06 &nbsp;&nbsp; New investments &amp; exits</div>
+          <div class="ds-rule"></div>
+          <div class="agenda-row">07 &nbsp;&nbsp; Looking ahead</div>
+          <div class="ds-rule"></div>
+          <div class="agenda-row">08 &nbsp;&nbsp; Questions &amp; discussion</div>
+          <div class="ds-rule"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SLIDE 03 — FIRM UPDATE ============ -->
+  <section data-screen-label="03 Firm update" class="ds-alt">
+    <img class="ds-chrome-logo" src="assets/logo-dark.png" alt="Example Firm" />
+    <div class="ds-chrome-page"><span>03</span><span class="ds-chrome-page__dot"></span><span>Firm update</span></div>
+    <div class="ds-chrome-foot"><span>Powered by</span><span class="carta-mark"></span></div>
+
+    <div class="ds-pad ds-pad--header">
+      <div class="ds-eyebrow" style="margin-bottom: 28px;">The firm</div>
+      <div class="ds-h1" style="max-width: 1200px; margin-bottom: 90px;">
+        Deeper bench. Sharper focus. <em>Same conviction.</em>
+      </div>
+
+      <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap: 56px;">
+        <div>
+          <div class="ds-num">19</div>
+          <div class="ds-rule" style="margin: 18px 0;"></div>
+          <div class="ds-label" style="margin-bottom: 10px;">Years investing</div>
+          <div class="ds-body ds-body--sm">Founded 2006. Same thesis: courageous founders, category-defining companies.</div>
+        </div>
+        <div>
+          <div class="ds-num">$3.1<span class="ds-num__unit" style="color:var(--ds-ink); font-size:48px;">B</span></div>
+          <div class="ds-rule" style="margin: 18px 0;"></div>
+          <div class="ds-label" style="margin-bottom: 10px;">Assets under management</div>
+          <div class="ds-body ds-body--sm">Across early, growth, and sustainability strategies.</div>
+        </div>
+        <div>
+          <div class="ds-num">42</div>
+          <div class="ds-rule" style="margin: 18px 0;"></div>
+          <div class="ds-label" style="margin-bottom: 10px;">Investment professionals</div>
+          <div class="ds-body ds-body--sm">Three offices: New York, Los Angeles, San Francisco.</div>
+        </div>
+        <div>
+          <div class="ds-num">5</div>
+          <div class="ds-rule" style="margin: 18px 0;"></div>
+          <div class="ds-label" style="margin-bottom: 10px;">Senior hires this year</div>
+          <div class="ds-body ds-body--sm">Including a new CMO, CPO, and Partner of Global Strategic Relationships.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SLIDE 04 — MARKET ENVIRONMENT ============ -->
+  <section data-screen-label="04 Market environment">
+    <img class="ds-chrome-logo" src="assets/logo-dark.png" alt="Example Firm" />
+    <div class="ds-chrome-page"><span>04</span><span class="ds-chrome-page__dot"></span><span>Market</span></div>
+    <div class="ds-chrome-foot"><span>Powered by</span><span class="carta-mark"></span></div>
+
+    <div class="ds-pad ds-pad--header">
+      <div class="ds-eyebrow" style="margin-bottom: 28px;">Market environment</div>
+      <div style="display:grid; grid-template-columns: 1.1fr 1fr; gap: 120px; align-items: start;">
+        <div>
+          <div class="ds-h1" style="margin-bottom: 36px;">
+            A market that <em>rewards</em><br/>discipline.
+          </div>
+          <div class="ds-lede" style="max-width:560px;">
+            Capital is no longer the moat. Conviction is. We deployed less, paid more attention, and held our reserves for the companies that proved out the thesis.
+          </div>
+        </div>
+
+        <div>
+          <div class="ds-rule"></div>
+          <div style="display:flex; justify-content:space-between; align-items:baseline; padding: 28px 0;">
+            <div>
+              <div class="ds-label" style="margin-bottom: 8px;">US VC deployment</div>
+              <div class="ds-body ds-body--sm ds-on-mute">2025 vs. peak 2021</div>
+            </div>
+            <div class="ds-num--sm ds-on-accent-2">−58%</div>
+          </div>
+          <div class="ds-rule"></div>
+          <div style="display:flex; justify-content:space-between; align-items:baseline; padding: 28px 0;">
+            <div>
+              <div class="ds-label" style="margin-bottom: 8px;">Median seed valuation</div>
+              <div class="ds-body ds-body--sm ds-on-mute">YoY change</div>
+            </div>
+            <div class="ds-num--sm">−12%</div>
+          </div>
+          <div class="ds-rule"></div>
+          <div style="display:flex; justify-content:space-between; align-items:baseline; padding: 28px 0;">
+            <div>
+              <div class="ds-label" style="margin-bottom: 8px;">AI as % of new deals</div>
+              <div class="ds-body ds-body--sm ds-on-mute">Example Fund 2025 vintage</div>
+            </div>
+            <div class="ds-num--sm ds-on-accent">64%</div>
+          </div>
+          <div class="ds-rule"></div>
+          <div style="display:flex; justify-content:space-between; align-items:baseline; padding: 28px 0;">
+            <div>
+              <div class="ds-label" style="margin-bottom: 8px;">IPO window</div>
+              <div class="ds-body ds-body--sm ds-on-mute">Selectively reopening</div>
+            </div>
+            <div class="ds-num--sm">2026</div>
+          </div>
+          <div class="ds-rule"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SLIDE 05 — FUND PERFORMANCE ============ -->
+  <section data-screen-label="05 Fund performance">
+    <img class="ds-chrome-logo" src="assets/logo-dark.png" alt="Example Firm" />
+    <div class="ds-chrome-page"><span>05</span><span class="ds-chrome-page__dot"></span><span>Performance</span></div>
+    <div class="ds-chrome-foot"><span>Powered by</span><span class="carta-mark"></span></div>
+
+    <div class="ds-pad ds-pad--header">
+      <div class="ds-eyebrow" style="margin-bottom: 28px;">Fund performance · Vintage-to-date</div>
+      <div class="ds-h1" style="margin-bottom: 60px; max-width: 1100px;">
+        Returns built <em>company by company</em>, not market by market.
+      </div>
+
+      <!-- top KPI strip -->
+      <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap: 56px; margin-bottom: 64px;">
+        <div>
+          <div class="ds-label" style="margin-bottom: 14px;">TVPI</div>
+          <div class="ds-num" style="font-size: 84px;">2.4<span class="ds-num__unit">×</span></div>
+        </div>
+        <div>
+          <div class="ds-label" style="margin-bottom: 14px;">DPI</div>
+          <div class="ds-num" style="font-size: 84px;">0.8<span class="ds-num__unit">×</span></div>
+        </div>
+        <div>
+          <div class="ds-label" style="margin-bottom: 14px;">Net IRR</div>
+          <div class="ds-num" style="font-size: 84px;">21<span class="ds-num__unit">%</span></div>
+        </div>
+        <div>
+          <div class="ds-label" style="margin-bottom: 14px;">Reserves</div>
+          <div class="ds-num" style="font-size: 84px;">38<span class="ds-num__unit">%</span></div>
+        </div>
+      </div>
+
+      <div class="ds-rule" style="margin-bottom: 32px;"></div>
+
+      <!-- TVPI trajectory line chart, declarative -->
+      <div style="display:grid; grid-template-columns: 280px 1fr; gap: 64px; align-items: start;">
+        <div>
+          <div class="ds-label" style="margin-bottom: 14px;">TVPI trajectory</div>
+          <div class="ds-body ds-body--sm ds-on-mute" style="max-width: 260px;">
+            Vintage 2019 fund value to paid-in, marked quarterly. Steady markup despite a flat market.
+          </div>
+          <div style="display:flex; gap: 18px; margin-top: 22px; align-items: center;">
+            <div style="display:flex; align-items:center; gap:8px;"><span style="display:inline-block; width:18px; height:2px; background:var(--ds-chart-series-1);"></span><span class="ds-label ds-label--sm">Example Firm</span></div>
+            <div style="display:flex; align-items:center; gap:8px;"><span style="display:inline-block; width:18px; height:0; border-top:2px dashed var(--ds-chart-series-2);"></span><span class="ds-label ds-label--sm">Cambridge median</span></div>
+          </div>
+        </div>
+
+        <div data-ds-chart="line" data-config='{
+          "width": 920, "height": 300,
+          "padding": {"top": 20, "right": 30, "bottom": 40, "left": 60},
+          "gridLines": 4,
+          "xLabels": ["2020","2021","2022","2023","2024","2025","Q1&#39;26"],
+          "yLabels": ["2.5×","2.0×","1.5×","1.0×"],
+          "yDomain": [1.0, 2.5],
+          "series": [
+            { "values": [1.06, 1.18, 1.5, 1.7, 1.9, 2.15, 2.4], "area": true, "dots": true, "highlightLast": true, "endLabel": "2.4×" },
+            { "values": [1.04, 1.1, 1.32, 1.4, 1.5, 1.55, 1.6], "dashed": true }
+          ]
+        }'></div>
+      </div>
+
+      <div style="margin-top: 32px; font-family: var(--ds-font-body); font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ds-ink-mute); opacity:0.7;">
+        Figures preliminary · Vintage-to-date as of Q1 2026 · Aggregated across active funds
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SLIDE 06 — PORTFOLIO OVERVIEW ============ -->
+  <section data-screen-label="06 Portfolio overview">
+    <img class="ds-chrome-logo" src="assets/logo-dark.png" alt="Example Firm" />
+    <div class="ds-chrome-page"><span>06</span><span class="ds-chrome-page__dot"></span><span>Portfolio</span></div>
+    <div class="ds-chrome-foot"><span>Powered by</span><span class="carta-mark"></span></div>
+
+    <div class="ds-pad ds-pad--header">
+      <div class="ds-eyebrow" style="margin-bottom: 28px;">Portfolio overview</div>
+      <div class="ds-h1" style="max-width: 1200px; margin-bottom: 70px;">
+        140+ active companies across <em>three</em> theses.
+      </div>
+
+      <div style="display:grid; grid-template-columns: 520px 1fr; gap: 96px; align-items: center;">
+        <!-- Donut chart, declarative -->
+        <div data-ds-chart="donut" data-config='{
+          "size": 480, "radius": 180, "thickness": 68, "gap": 0.5,
+          "centerLabel": "Active companies",
+          "centerNumber": "142",
+          "segments": [
+            { "label": "Software",       "value": 62 },
+            { "label": "Sustainability", "value": 28 },
+            { "label": "Consumer Brands","value": 52 }
+          ]
+        }'></div>
+
+        <!-- Legend / category breakdown -->
+        <div style="display:flex; flex-direction:column; gap: 28px;">
+          <div>
+            <div style="display:flex; align-items:baseline; gap: 14px; margin-bottom: 10px;">
+              <span class="ds-swatch" data-series="1" style="transform: translateY(2px);"></span>
+              <div class="ds-label" style="flex:1;">Software</div>
+              <div class="ds-num--sm" style="font-size:36px;">62</div>
+              <div class="ds-label ds-label--sm" style="color:var(--ds-ink-mute);">44%</div>
+            </div>
+            <div class="ds-rule" style="margin-bottom: 10px;"></div>
+            <div class="ds-body ds-body--sm" style="max-width: 540px;">
+              Foundational models, AI infrastructure, and intelligent enterprise applications. <span class="ds-on-mute">Contextual AI · Together AI · Icertis · Pika · Coactive AI · Sybill · OpenEvidence</span>
+            </div>
+          </div>
+
+          <div>
+            <div style="display:flex; align-items:baseline; gap: 14px; margin-bottom: 10px;">
+              <span class="ds-swatch" data-series="2" style="transform: translateY(2px);"></span>
+              <div class="ds-label" style="flex:1;">Sustainability</div>
+              <div class="ds-num--sm ds-on-accent" style="font-size:36px;">28</div>
+              <div class="ds-label ds-label--sm" style="color:var(--ds-ink-mute);">20%</div>
+            </div>
+            <div class="ds-rule" style="margin-bottom: 10px;"></div>
+            <div class="ds-body ds-body--sm" style="max-width: 540px;">
+              Next-generation solutions reducing long-term environmental impact at scale. <span class="ds-on-mute">Harbinger · OpenPath · H2Ok Innovations · Rembrand</span>
+            </div>
+          </div>
+
+          <div>
+            <div style="display:flex; align-items:baseline; gap: 14px; margin-bottom: 10px;">
+              <span class="ds-swatch" data-series="3" style="transform: translateY(2px);"></span>
+              <div class="ds-label" style="flex:1;">Consumer Brands</div>
+              <div class="ds-num--sm ds-on-accent-2" style="font-size:36px;">52</div>
+              <div class="ds-label ds-label--sm" style="color:var(--ds-ink-mute);">37%</div>
+            </div>
+            <div class="ds-rule" style="margin-bottom: 10px;"></div>
+            <div class="ds-body ds-body--sm" style="max-width: 540px;">
+              Reimagining everyday life — beauty, food, beverage, personal care, pet. <span class="ds-on-mute">Anine Bing · Merit Beauty · Seed Health · Goop · Acorns · Bumble</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SLIDE 07 — COMPANY HIGHLIGHTS ============ -->
+  <section data-screen-label="07 Company highlights" class="ds-alt">
+    <img class="ds-chrome-logo" src="assets/logo-dark.png" alt="Example Firm" />
+    <div class="ds-chrome-page"><span>07</span><span class="ds-chrome-page__dot"></span><span>Highlights</span></div>
+    <div class="ds-chrome-foot"><span>Powered by</span><span class="carta-mark"></span></div>
+
+    <div class="ds-pad ds-pad--header">
+      <div class="ds-eyebrow" style="margin-bottom: 28px;">Company highlights</div>
+      <div class="ds-h1" style="margin-bottom: 80px; max-width: 1100px;">
+        A handful of <em>moments</em> from the year.
+      </div>
+
+      <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap: 64px 96px;">
+        <div>
+          <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom: 14px;">
+            <div class="ds-h2">Contextual AI</div>
+            <div class="ds-label">Series B · led</div>
+          </div>
+          <div class="ds-rule" style="margin-bottom: 18px;"></div>
+          <div class="ds-body">Deepened our position as RAG 2.0 became the enterprise-AI standard. ARR up 4× year over year. Marquee deployments across financial services and life sciences.</div>
+        </div>
+
+        <div>
+          <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom: 14px;">
+            <div class="ds-h2">MNTN</div>
+            <div class="ds-label">IPO · NYSE</div>
+          </div>
+          <div class="ds-rule" style="margin-bottom: 18px;"></div>
+          <div class="ds-body">Listed on NYSE in May 2025. Brought connected-TV advertising to the public markets and delivered our largest realized return of the vintage.</div>
+        </div>
+
+        <div>
+          <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom: 14px;">
+            <div class="ds-h2">Whatnot</div>
+            <div class="ds-label">Series E · participated</div>
+          </div>
+          <div class="ds-rule" style="margin-bottom: 18px;"></div>
+          <div class="ds-body">Livestream commerce crossed $3B GMV. Expansion into Europe ahead of plan. Mark-up reflects continued category dominance.</div>
+        </div>
+
+        <div>
+          <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom: 14px;">
+            <div class="ds-h2">Hidden Road</div>
+            <div class="ds-label">Acquired by Ripple</div>
+          </div>
+          <div class="ds-rule" style="margin-bottom: 18px;"></div>
+          <div class="ds-body">A quiet path to a billion-dollar exit. Acquired in April 2025; demonstrated our thesis on prime brokerage for digital assets.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SLIDE 08 — NEW INVESTMENTS & EXITS ============ -->
+  <section data-screen-label="08 New investments &amp; exits">
+    <img class="ds-chrome-logo" src="assets/logo-dark.png" alt="Example Firm" />
+    <div class="ds-chrome-page"><span>08</span><span class="ds-chrome-page__dot"></span><span>Activity</span></div>
+    <div class="ds-chrome-foot"><span>Powered by</span><span class="carta-mark"></span></div>
+
+    <div class="ds-pad ds-pad--header">
+      <div class="ds-eyebrow" style="margin-bottom: 28px;">Activity this year</div>
+      <div class="ds-h1" style="margin-bottom: 64px; max-width: 1100px;">
+        Fewer checks. <em>Higher conviction.</em>
+      </div>
+
+      <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap: 56px; margin-bottom: 56px;">
+        <div>
+          <div class="ds-label" style="margin-bottom: 12px;">New investments</div>
+          <div class="ds-num" style="font-size: 72px;">14</div>
+        </div>
+        <div>
+          <div class="ds-label" style="margin-bottom: 12px;">Capital deployed</div>
+          <div class="ds-num" style="font-size: 72px;">$284<span class="ds-num__unit" style="color:var(--ds-ink-mute); font-size:36px;">M</span></div>
+        </div>
+        <div>
+          <div class="ds-label" style="margin-bottom: 12px;">Realizations</div>
+          <div class="ds-num ds-on-accent-2" style="font-size: 72px;">$612<span style="font-size:36px;">M</span></div>
+        </div>
+      </div>
+
+      <div class="ds-rule" style="margin-bottom: 32px;"></div>
+
+      <div style="display:grid; grid-template-columns: 1.2fr 1fr; gap: 80px;">
+        <!-- horizontal bar chart, declarative -->
+        <div>
+          <div class="ds-label" style="margin-bottom: 24px;">Capital deployed by thesis · 2025</div>
+
+          <div data-ds-chart="hbar" data-config='{
+            "max": 118,
+            "rows": [
+              { "label": "AI &amp; infrastructure", "value": 118, "valueLabel": "$118M", "series": 1 },
+              { "label": "Enterprise SaaS",         "value": 66,  "valueLabel": "$66M",  "series": 1 },
+              { "label": "Sustainability",          "value": 48,  "valueLabel": "$48M",  "series": 2 },
+              { "label": "Consumer brands",         "value": 30,  "valueLabel": "$30M",  "series": 3 },
+              { "label": "Healthcare &amp; bio",    "value": 22,  "valueLabel": "$22M",  "series": 4 }
+            ]
+          }'></div>
+
+          <div style="margin-top: 24px;">
+            <div class="ds-label ds-label--sm">Selected new investments</div>
+            <div class="ds-body ds-body--sm" style="margin-top: 8px;">
+              Sequen · Thread AI · Bee AI · Coactive AI · OpenEvidence · ConductorOne <span class="ds-on-mute">+ 8 more</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- realizations list -->
+        <div>
+          <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom: 24px;">
+            <div class="ds-label">Realizations</div>
+            <div class="ds-label ds-label--sm">5 events</div>
+          </div>
+          <div class="ds-rule"></div>
+          <div class="invest-row"><span>MNTN</span><span class="meta">IPO · May 2025</span></div>
+          <div class="ds-rule"></div>
+          <div class="invest-row"><span>Hidden Road</span><span class="meta">Acquired · Ripple</span></div>
+          <div class="ds-rule"></div>
+          <div class="invest-row"><span>Frame AI</span><span class="meta">Acquired · HubSpot</span></div>
+          <div class="ds-rule"></div>
+          <div class="invest-row"><span>Scopely</span><span class="meta">Secondary</span></div>
+          <div class="ds-rule"></div>
+          <div class="invest-row"><span>Applied Intuition</span><span class="meta">Secondary</span></div>
+          <div class="ds-rule"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SLIDE 09 — ESG / SUSTAINABILITY ============ -->
+  <section data-screen-label="09 ESG &amp; Sustainability" class="ds-alt">
+    <img class="ds-chrome-logo" src="assets/logo-dark.png" alt="Example Firm" />
+    <div class="ds-chrome-page"><span>09</span><span class="ds-chrome-page__dot"></span><span>Sustainability</span></div>
+    <div class="ds-chrome-foot"><span>Powered by</span><span class="carta-mark"></span></div>
+
+    <div class="ds-pad ds-pad--header">
+      <div class="ds-eyebrow" style="margin-bottom: 28px;">ESG &amp; sustainability</div>
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 120px; align-items: start;">
+        <div>
+          <div class="ds-h1" style="margin-bottom: 36px;">
+            Sustainability as a <em>strategy</em>, not a side note.
+          </div>
+          <div class="ds-lede" style="max-width:560px; margin-bottom: 40px;">
+            Our dedicated sustainability fund — anchored by The Coca-Cola Company and eight bottling partners — invests in the commercialization of breakthrough environmental innovations.
+          </div>
+          <div class="ds-body">
+            We measure outcomes the way we measure returns: with discipline. Carbon avoided, water saved, and waste diverted reported quarterly across the fund.
+          </div>
+        </div>
+
+        <div>
+          <div class="ds-rule"></div>
+          <div style="display:flex; justify-content:space-between; align-items:baseline; padding: 32px 0;">
+            <div class="ds-label">CO₂e avoided</div>
+            <div class="ds-num--sm ds-on-accent">2.4M<span style="font-size:24px;">t</span></div>
+          </div>
+          <div class="ds-rule"></div>
+          <div style="display:flex; justify-content:space-between; align-items:baseline; padding: 32px 0;">
+            <div class="ds-label">Water saved</div>
+            <div class="ds-num--sm ds-on-accent">880M<span style="font-size:24px;">gal</span></div>
+          </div>
+          <div class="ds-rule"></div>
+          <div style="display:flex; justify-content:space-between; align-items:baseline; padding: 32px 0;">
+            <div class="ds-label">Diverse-led companies</div>
+            <div class="ds-num--sm">41%</div>
+          </div>
+          <div class="ds-rule"></div>
+          <div style="display:flex; justify-content:space-between; align-items:baseline; padding: 32px 0;">
+            <div class="ds-label">LP reporting cadence</div>
+            <div class="ds-num--sm" style="font-size:32px;">Quarterly</div>
+          </div>
+          <div class="ds-rule"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SLIDE 10 — LOOKING AHEAD / Q&A ============ -->
+  <section data-screen-label="10 Looking ahead" class="ds-dark">
+    <img class="ds-chrome-logo" src="assets/logo-light.png" alt="Example Firm" />
+    <div class="ds-chrome-page"><span>10</span><span class="ds-chrome-page__dot"></span><span>Looking ahead</span></div>
+    <div class="ds-chrome-foot"><span>Powered by</span><span class="carta-mark"></span></div>
+
+    <div style="position:absolute; left:112px; right:112px; top:50%; transform:translateY(-50%);">
+      <div class="ds-eyebrow" style="margin-bottom: 36px;">Looking ahead · 2026</div>
+      <div class="ds-display" style="font-size: 84px; line-height: 1.1;">
+        The work is to keep<br/>finding the <em>brilliant ones</em>,<br/>and to stay near them.
+      </div>
+      <div style="display:flex; align-items:flex-end; justify-content:space-between; margin-top: 90px;">
+        <div class="ds-body" style="max-width:600px;">
+          Thank you for your continued partnership. We'll open the floor for questions and discussion.
+        </div>
+        <div class="ds-label">Questions &amp; discussion</div>
+      </div>
+    </div>
+  </section>
+
+</deck-stage>
+
+
+</body>
+</html>
