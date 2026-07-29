@@ -60,7 +60,7 @@
      see "Use all three brand colors" in SKILL.md) before falling back to ink
      tones. Do NOT lead with --ds-ink: for brands whose accent-1 IS a dark/navy
      tone (common for finance firms), ink and accent-1 render nearly identical,
-     making cat-1/cat-2 indistinguishable in 2-segment donuts (LO — Clearview
+     making cat-1/cat-2 indistinguishable in 2-segment donuts (LO — client-A
      donut color bug). */
   --ds-cat-1: var(--ds-accent);
   --ds-cat-2: var(--ds-accent-2);

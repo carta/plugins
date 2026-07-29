@@ -248,7 +248,7 @@ Skip a slide only when its **Required content** is completely absent from the qu
 
 **`logo_url` validation — always check before using:**
 A logo URL is usable only when it starts with `https://`. Treat all other values as missing and show the initials fallback:
-- Valid: `"https://investor-service-prod.s3.amazonaws.com/..."`
+- Valid: `"https://storage.example.com/..."`
 - Missing (use initials): `""` (empty string), `"None"` (Python None serialised), `"static_files/..."` (internal server path)
 
 **🚨 Copy the ENTIRE logo URL verbatim — including all query string parameters.**

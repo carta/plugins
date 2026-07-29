@@ -216,7 +216,7 @@ def cap_narrative(text: str, max_chars: int = 120) -> str:
 
 def short_company_name(name: str, max_len: int = 22) -> str:
     """Shorten a company name for use in headlines.
-    Prefers the parenthetical alias (e.g. 'Credit Laser Holdings Limited (ClearScore)' → 'ClearScore').
+    Prefers the parenthetical alias (e.g. 'Example Holdings Limited (ExampleCo)' → 'ExampleCo').
     Falls back to first two words, then hard truncation."""
     # Extract parenthetical alias if it's shorter than max_len
     m = re.search(r'\(([^)]{2,})\)', name)
@@ -1086,7 +1086,7 @@ def build_slide18(geo_rows: list[dict]) -> dict:
 
     # Only claim "selective international exposure" if a second geography is
     # actually present — otherwise the headline asserts diversification that
-    # doesn't exist in the data (LO — Clearview 100%-US portfolio bug).
+    # doesn't exist in the data (LO — client-A 100%-US portfolio bug).
     if len(sorted_geo) > 1 and top_pct < 99.95:
         headline_plain = f"Predominantly {top_geo}-focused with"
         headline_em = "selective international exposure."
@@ -1244,7 +1244,7 @@ def build_slides22bc(irr_rows: list[dict], as_of_date: date) -> dict:
     # Keep rows with a present net_irr, including negative/zero values — a fresh
     # fund early in the J-curve legitimately has a negative net IRR, and dropping
     # those rows here silently emptied the "recent vintage" bucket further down,
-    # producing a slide with headline/labels but no chart (LO — Clearview bug).
+    # producing a slide with headline/labels but no chart (LO — client-A bug).
     # Only rows genuinely missing net_irr are excluded.
     valid = sorted(
         [r for r in irr_rows if r.get("net_irr") is not None],
@@ -1659,7 +1659,7 @@ def strip_inactive_sections(template: str, active_slides: list[str]) -> str:
     <section> regardless, so a zero-data slide (e.g. no financing rounds)
     still rendered as an empty shell with an unfillable headline instead of
     being omitted per SKILL.md's "only valid skip reason is zero usable data"
-    rule (LO — Clearview financing-round-history bug).
+    rule (LO — client-A financing-round-history bug).
     """
     active = set(active_slides)
     return _SECTION_RE.sub(lambda m: m.group(0) if m.group(1) in active else "", template)
