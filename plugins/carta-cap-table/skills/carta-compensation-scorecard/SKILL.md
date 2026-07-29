@@ -146,6 +146,16 @@ Do **not** show the user a raw JSON dump of accounts. Do **not** attempt any com
 >
 > > *"No problem — let me know which corporation's scorecard to look up (name or numeric ID) when you're ready. If there's something else I can help with in the meantime, just ask."*
 
+**Path 5 — No corporations at all (Fund-Admin-only user — STOP, do not ask)**
+
+If Paths 2/3/4 returned **zero** `corporation_pk:` entries, the user may have no cap table access at all — a Fund Admin user whose access is fund accounting only. Confirm before doing anything else:
+
+1. `call_tool({"name": "context_tools__get__profile", "arguments": {}})` — returns `corporations[]`, the corporations the user holds a cap-table role on (it excludes `NO_ACCESS` roles, and returns `[]` for a user with no corporation roles).
+2. If `corporations[]` is **empty** → the user has no cap table. Send the **no-cap-table CTC message** from *Subscription gating* below (the "your firm" variant) and **STOP**. Do **not** ask them to name a corporation — they don't have one. Do **not** call any compensation endpoint.
+3. If `corporations[]` is **non-empty** → the user does have cap tables; the name search just missed. Do **not** send an upsell. Ask them to confirm the exact company name or numeric corp ID and re-resolve.
+
+> Why `profile` and not `list_accounts` for this check: `list_accounts` groups corporations *and funds* under the same `corporation_pk:` prefix, so a Fund Admin user's funds can read as cap table access. `context_tools:get:profile` returns corporations only.
+
 Extract the numeric `corporation_pk` (the integer after `corporation_pk:`) for all subsequent calls.
 
 ### Step 2 — Verify CTC subscription (REQUIRED)
@@ -527,15 +537,19 @@ This is the same citation contract as carta-compensation-benchmarks — keep it 
 
 ## Subscription gating
 
-If `compensation:get:subscription_status` returns `is_subscribed: false`, OR a scorecard call returns HTTP 403, OR `compensation:get:plan` returns 403, stop and reply with one of the two messages below — chosen by `cap_table_access` from the `welcome` tool's cached `structured_content` (loaded once at session start — do not re-call `welcome` to check this).
+If `compensation:get:subscription_status` returns `is_subscribed: false`, OR a scorecard call returns HTTP 403, OR `compensation:get:plan` returns 403, stop and reply with one of the two messages below.
 
-If `cap_table_access` is `true`:
+Choose between them by whether the user has cap table access: `call_tool({"name": "context_tools__get__profile", "arguments": {}})` and check whether `corporations[]` is non-empty. Treat a **non-empty** list as "has cap table access" — the endpoint already excludes `NO_ACCESS` roles, so presence is the signal. Do **not** match on the `role` label: those strings are raw and unnormalized (`'Admin'` and `'Administrator'` both occur), so an allowlist would misclassify real admins. Do **not** test whether *this specific corp* is in the list — the list is capped server-side, so a large-portfolio admin can be a false negative.
+
+This call runs only on this failure path, after the gate has already decided to stop — it costs nothing on the happy path. If it errors or returns an unreadable response, use the **"your firm"** variant (it promises nothing you can't deliver) and do not retry.
+
+If `corporations[]` is **non-empty**:
 
 > *"That's a Carta Total Compensation (CTC) question — CTC runs on Carta's private market salary and equity data. The data can be segmented by level, function, stage, and geography, directly in Claude. It's not active for your company yet. Reach out to your account team or [request a demo](https://carta.com/demo/total-comp/?&utm_medium=product&utm_source=carta-web&utm_campaign=ctc-plugin-inq-amer-q2-26) to unlock it.*
 >
 > *I can pull cap table data — grants, vesting, round history — in the meantime."*
 
-If `cap_table_access` is `false`:
+If `corporations[]` is **empty** — a Fund-Admin-only user, or the corp came from a hand-typed numeric ID (Path 1) that they hold no cap-table role on:
 
 > *"That's a Carta Total Compensation (CTC) question — CTC runs on Carta's private market salary and equity data. The data can be segmented by level, function, stage, and geography, directly in Claude. It's not active for your firm yet. Reach out to your account team or [request a demo](https://carta.com/demo/total-comp/?&utm_medium=product&utm_source=carta-web&utm_campaign=ctc-plugin-inq-amer-q2-26) to unlock it."*
 

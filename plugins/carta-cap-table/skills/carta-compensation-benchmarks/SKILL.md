@@ -401,6 +401,16 @@ Do **not** show the user a raw JSON dump of accounts. Do **not** attempt any com
 >
 > Picking a corp the user didn't authorize would return data for the wrong company. There is no recovery from that mistake.
 
+**Path 5 — No corporations at all (Fund-Admin-only user — STOP, do not ask)**
+
+If Paths 2/3/4 returned **zero** `corporation_pk:` entries, the user may have no cap table access at all — a Fund Admin user whose access is fund accounting only. Confirm before doing anything else:
+
+1. `call_tool({"name": "context_tools__get__profile", "arguments": {}})` — returns `corporations[]`, the corporations the user holds a cap-table role on (it excludes `NO_ACCESS` roles, and returns `[]` for a user with no corporation roles).
+2. If `corporations[]` is **empty** → the user has no cap table. Send the **no-cap-table CTC message** from *Subscription gating* below (the "your firm" variant) and **STOP**. Do **not** ask them to name a corporation — they don't have one. Do **not** call any compensation endpoint.
+3. If `corporations[]` is **non-empty** → the user does have cap tables; the name search just missed. Do **not** send an upsell. Ask them to confirm the exact company name or numeric corp ID (same handling as a Path 2 miss) and re-resolve.
+
+> Why `profile` and not `list_accounts` for this check: `list_accounts` groups corporations *and funds* under the same `corporation_pk:` prefix, so a Fund Admin user's funds can read as cap table access. `context_tools:get:profile` returns corporations only.
+
 **Note:** `list_contexts` / `set_context` are for Fund Admin firms — they do not return corporations. Always use `list_accounts` for corporation lookup.
 
 Extract the numeric `corporation_pk` (the integer after `corporation_pk:`) for all subsequent calls.
@@ -682,19 +692,21 @@ Once you have resolved the corporation (Step 1), call `compensation:get:subscrip
 **Single-corp query:**
 1. `call_tool({"name": "compensation__get__subscription_status", "arguments": {"corporation_id": <id>}})`
 2. If `is_subscribed` is `false`:
-   - Read `cap_table_access` from the `welcome` tool's cached `structured_content` (loaded once at session start — do not re-call `welcome` to check this).
-   - If `cap_table_access` is `true`, tell the user:
+   - Determine whether the user has cap table access: `call_tool({"name": "context_tools__get__profile", "arguments": {}})` and check whether `corporations[]` is non-empty. Treat a **non-empty** list as "has cap table access" — the endpoint already excludes `NO_ACCESS` roles, so presence is the signal. Do **not** match on the `role` label: those strings are raw and unnormalized (`'Admin'` and `'Administrator'` both occur), so an allowlist would misclassify real admins. Do **not** test whether *this specific corp* is in the list — the list is capped server-side, so a large-portfolio admin can be a false negative.
+   - If `corporations[]` is **non-empty**, tell the user:
      > *"That's a Carta Total Compensation (CTC) question — CTC runs on Carta's private market salary and equity data. The data can be segmented by level, function, stage, and geography, directly in Claude. It's not active for your company yet. Reach out to your account team or [request a demo](https://carta.com/demo/total-comp/?&utm_medium=product&utm_source=carta-web&utm_campaign=ctc-plugin-inq-amer-q2-26) to unlock it.*
      >
      > *I can pull cap table data — grants, vesting, round history — in the meantime."*
-   - If `cap_table_access` is `false`, tell the user:
+   - If `corporations[]` is **empty** — a Fund-Admin-only user, or the corp came from a hand-typed numeric ID (Path 1) that they hold no cap-table role on — tell the user:
      > *"That's a Carta Total Compensation (CTC) question — CTC runs on Carta's private market salary and equity data. The data can be segmented by level, function, stage, and geography, directly in Claude. It's not active for your firm yet. Reach out to your account team or [request a demo](https://carta.com/demo/total-comp/?&utm_medium=product&utm_source=carta-web&utm_campaign=ctc-plugin-inq-amer-q2-26) to unlock it."*
+   - If the profile call errors or returns an unreadable response, use the **"your firm"** variant — it promises nothing you can't deliver. Do not retry it.
    - **STOP.** Do not call `plans/`, `benchmark/`, `benchmark_versions`, or any other compensation endpoint for this corp.
    - Do not generate a CSV/JSON file for this corp. No "framework" file. No "structure-only" file. Nothing.
    - Do not "try the benchmark to see if it works anyway". The answer is no.
 3. If `is_subscribed` is `true` → proceed with the benchmark workflow.
 
 **Multi-corp / bulk query:**
+0. If any corp turns out to be unsubscribed, call `context_tools__get__profile` **once** for the whole batch and reuse the result. The cap-table-access branch is per-**user**, not per-corp — never re-fetch it inside the loop.
 1. Call `compensation:get:subscription_status` for each corp up front. Partition them into `subscribed` and `unsubscribed` lists.
 2. Run benchmark queries (`plans/`, `benchmark/`) **only** for corps in the `subscribed` list. Never query the API for corps in `unsubscribed`.
 3. In the chat reply, list unsubscribed corps separately: *"The following corporations don't have an active CTC subscription and were excluded: [Corp A], [Corp B]."*
