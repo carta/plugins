@@ -236,6 +236,9 @@ div.ds-chrome-logo[data-variant="dark"] {
   text-align: right;
   font-feature-settings: "tnum";
 }
+.ds-hbar--wide-label .ds-hbar-row {
+  grid-template-columns: 3fr 2fr 100px;
+}
 .ds-hbar-track {
   height: 14px;
   background: transparent;

@@ -380,15 +380,27 @@
 
     const max = cfg.max != null ? cfg.max : cfg.rows.reduce((m, r) => Math.max(m, r.value), 0) || 1;
 
+    if (cfg.wideLabel) host.classList.add('ds-hbar--wide-label');
     clear(host);
     const frag = document.createDocumentFragment();
     cfg.rows.forEach((row, i) => {
       const pct = (row.value / max) * 100;
       const r = document.createElement('div');
       r.className = 'ds-hbar-row';
+      let trackHtml;
+      if (row.segments && row.segments.length > 0) {
+        const segTotal = row.segments.reduce((s, seg) => s + (seg.value || 0), 0) || row.value || 1;
+        const segs = row.segments.map(seg => {
+          const w = (seg.value / segTotal) * pct;
+          return `<div style="width:${w}%;height:100%;background:${seg.color};flex-shrink:0;"></div>`;
+        }).join('');
+        trackHtml = `<div class="ds-hbar-track"><div style="position:absolute;inset:0;display:flex;">${segs}</div></div>`;
+      } else {
+        trackHtml = `<div class="ds-hbar-track" data-series="${row.series || 1}"><div class="ds-hbar-track__fill" style="width:${pct}%"></div></div>`;
+      }
       r.innerHTML =
         `<div class="ds-hbar-row__label">${row.label}</div>` +
-        `<div class="ds-hbar-track" data-series="${row.series || 1}"><div class="ds-hbar-track__fill" style="width:${pct}%"></div></div>` +
+        trackHtml +
         `<div class="ds-hbar-row__value">${row.valueLabel != null ? row.valueLabel : row.value}</div>`;
       frag.appendChild(r);
       if (cfg.showRules && i < cfg.rows.length - 1) {
