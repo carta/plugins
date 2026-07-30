@@ -176,7 +176,7 @@ Use the MCP commands in sequence, substituting `<SCHEMA>` with the schema determ
 
 - **Always include LIMIT** — default `LIMIT 200`; use 50–500 for aggregations
 - **Only SELECT** — no INSERT, UPDATE, DELETE, or DDL
-- **Single SELECT only — no UNION / UNION ALL** — the tool enforces one statement at a time and returns `Only a single SELECT statement is allowed`. If you need to count rows across multiple tables, run separate `call_tool` calls.
+- **Single SELECT only — no UNION / UNION ALL, no SHOW commands** — the tool enforces one SELECT at a time; `SHOW TABLES LIKE '%...'` and other `SHOW *` commands also return `Only a single SELECT statement is allowed`. Use `call_tool({"name": "dwh__list__tables", ...})` for table discovery and run separate `call_tool` calls when you need counts from multiple tables.
 - **Do not query `INFORMATION_SCHEMA`** — it is not supported in this data warehouse and returns a hard `ValueError: Querying INFORMATION_SCHEMA is not allowed`. Use `call_tool({"name": "dwh__list__tables", ...})` to list tables and `call_tool({"name": "dwh__get__table_schema", ...})` to inspect columns. These MCP tools are the only valid schema-discovery path.
 - **`LATERAL` (including `LATERAL FLATTEN`) is not permitted** — returns `ValueError: Lateral is not permitted in query execution`. To access keys in a VARIANT/ARRAY column, use explicit JSON path notation (e.g. `col:key::STRING`) rather than `LATERAL FLATTEN`.
 - **Date fields** — `effective_date` for `JOURNAL_ENTRIES`; `month_end_date` for `MONTHLY_NAV_CALCULATIONS`; `investment_date` for `AGGREGATE_INVESTMENTS`
@@ -216,16 +216,25 @@ Use the MCP commands in sequence, substituting `<SCHEMA>` with the schema determ
 | `BOOL_OR(col)` | `BOOLOR_AGG(col)` | *(any table)* — Snowflake has no `BOOL_OR` |
 | `SHARE_CLASS_NAME` | `SHARECLASS_NAME` | `FINANCING_HISTORY` — one word, no underscore between SHARE and CLASS |
 
-- **`dwh__execute__query` takes `sql` as its argument key, not `query`** — using the wrong key returns a pydantic `ValidationError: Missing required argument: sql`. The correct invocation is `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "SELECT ..."}})`.
-- **`dwh:execute:question` (colon form) does not exist** — the Cortex Analyst interface is only registered under the double-underscore name `dwh__execute__question`. The colon form (`dwh:execute:question`) and the single-underscore form (`dwh_execute_question`) both return `NotFoundError: Unknown tool`. Always call it via `call_tool({"name": "dwh__execute__question", "arguments": {"question": "..."}})`.
-- **`dwh:execute:query` (colon form) does not exist** — the SQL execution tool is registered as `dwh__execute__query` (double-underscore). The colon form (`dwh:execute:query`) and the plural form (`dwh:execute:queries`) both return `NotFoundError: Unknown tool`. Always call it via `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "SELECT ..."}})`.
-- **`dwh__execute__question` takes `question` and (optionally) `include_links`** — do not pass `fund_uuid`, `firm_uuid`, `sql`, `format`, or any other key. Valid invocation: `call_tool({"name": "dwh__execute__question", "arguments": {"question": "<plain-English question>", "include_links": true}})`.
+## DWH Tool Invocations — Exact Forms Required
+
+Use `call_tool` with these exact double-underscore names. Any other form (colon syntax, single underscores, direct tool invocations) returns `NotFoundError: Unknown tool`.
+
+| Task | Exact invocation |
+|---|---|
+| Run SQL | `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "SELECT ...", "format": "ndjson", "include_links": true}})` |
+| Natural-language question | `call_tool({"name": "dwh__execute__question", "arguments": {"question": "...", "include_links": true}})` |
+| List tables in a schema | `call_tool({"name": "dwh__list__tables", "arguments": {"schema": "FUND_ADMIN"}})` |
+| Get a table's columns | `call_tool({"name": "dwh__get__table_schema", "arguments": {"table_name": "TABLE_NAME", "schema": "FUND_ADMIN"}})` |
+
+- `dwh__execute__query` key is `sql` (not `query`). `format: "ndjson"` and `include_links: true` are mandatory on every call — `ndjson` is required for `_links` to be embedded in rows; without it, link data is lost.
+- `dwh__execute__question` keys: `question` (required) and `include_links` (optional). Do not pass `sql`, `fund_uuid`, `firm_uuid`, `format`, or any other key.
 - **JSON keys with spaces in VARIANT columns** — `col:'Key With Spaces'` and `col["Key With Spaces"]` both fail with `SQL compilation error`. For keys containing spaces, use escaped inner quotes: `col:'"Key With Spaces"'::STRING`. This applies to `AGGREGATE_INVESTMENTS.TAGS_JSON` and any other VARIANT column with spaced key names.
 - **`ORDER BY` with `SELECT DISTINCT`** — columns used in `ORDER BY` must also appear in the `SELECT` list when using `DISTINCT`; otherwise Snowflake raises `is not a valid order by expression`.
 
 ## Deep Links
 
-**Mandatory:** always pass `include_links: true` on every `dwh__execute__question` and `dwh__execute__query` call. Always pass `format: "ndjson"` on every `dwh__execute__query` call. `ndjson` is required for `_links` to be embedded in the result rows; without it, link data is lost.
+`include_links: true` is always required (see table above). It adds a `_links` entry to each row for supported entity UUID columns:
 
 `include_links` adds a `_links` entry to each row for supported entity UUID columns. Supported fields and their requirements:
 
