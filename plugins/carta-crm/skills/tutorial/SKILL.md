@@ -6,7 +6,10 @@ description: >
   a demo walkthrough of 4 realistic CRM scenarios.
   Trigger phrases: "carta crm tutorial", "show me the crm tutorial",
   "how do I use carta crm", "walk me through carta crm",
-  "getting started with crm", "demo carta crm", "crm tutorial"
+  "getting started with crm", "demo carta crm", "crm tutorial".
+  Do NOT use for real data lookups (searching, adding, or updating CRM
+  records) — just describe what you need in plain language and Claude
+  picks the right action.
 allowed-tools:
   - mcp__carta__crm_call_tool
   - Bash(mkdir -p ~/.claude/plugins/cache/carta-development-tools/carta-crm)
@@ -20,11 +23,12 @@ model: haiku
 <IMPORTANT>
 `_instrumentation_v2` is anonymous Carta skill-usage telemetry. ALWAYS include it in your Carta MCP tool-call arguments — the plugins' hooks overwrite it when they run, so always sending it is safe. Shape:
 `_instrumentation_v2: {"skills": ["<plugin>:<skill>", ...], "model": "<model-id>"}`
-e.g. `{"skills": ["carta-cap-table:carta-issue-securities"], "model": "claude-sonnet-5"}`
-List only Carta skills in use, each namespaced `"plugin:skill"` (`carta-cap-table:*`, `carta-crm:*`, `carta-investors:*`).
+`skills` is cumulative for the session: list every Carta skill loaded so far, not only the one driving this call. Namespace each entry `"plugin:skill"` and keep them oldest-first, with the most recently used skill last. List only Carta skills (`carta-cap-table:*`, `carta-crm:*`, `carta-investors:*`) — never skills from non-Carta plugins.
 </IMPORTANT>
 
 # Carta CRM Tutorial
+
+**Prerequisites:** Active Carta CRM subscription. Skill runs interactively — pause after each section for user input. All demo data is fictional.
 
 You are leading an interactive ~5-minute tutorial for a user of the
 Carta CRM plugin. Present each section clearly, then **pause and wait
@@ -58,6 +62,8 @@ This takes about 5 minutes. Here's what we'll cover:
 2. Verifying your setup
 3. How to kick off each skill — what to say
 4. A demo walkthrough — 4 scenarios, 4 different CRM workflows
+
+This walkthrough takes about 5 minutes and gives you a hands-on tour of the Carta CRM plugin.
 
 **First — are you a Carta CRM customer?**
 
@@ -151,18 +157,18 @@ Then move on. If the call fails with an authentication error, present this to th
 
 ---
 
-It looks like you haven't authenticated with the Carta CRM yet. This is a one-time
-browser login — no API key needed.
+It looks like you haven't signed in to the Carta CRM yet. This is a one-time browser
+login with your normal Carta CRM account.
 
-**Step 1 — Start the auth flow**
+**Step 1 — Start signing in**
 
-Say: "authenticate with Carta CRM" and Claude will give you a URL to open in your browser.
+Say: "sign in to Carta CRM" and Claude will give you a URL to open in your browser.
 
 **Step 2 — Log in**
 
 Open the URL, log in with your Carta CRM credentials, and authorize the connection.
 
-**Step 3 — Complete the flow**
+**Step 3 — Finish signing in**
 
 After logging in, your browser will redirect to a `localhost` URL (the page may not
 load — that's fine). Copy the full URL from the browser address bar and paste it back
@@ -226,10 +232,9 @@ Tell the user:
 
 ---
 
-Now we'll work through **4 scenarios** for a fictional fund:
-**Meridian Capital Partners**
+We'll use a fictional fund called **Meridian Capital Partners** for these examples — nothing here is real, so you can follow along risk-free.
 
-This is demo data — nothing here is real. For each scenario I'll show what
+Now we'll work through **4 scenarios**. For each scenario I'll show what
 the interaction looks like, then ask what you'd like to do — just like the
 real plugin. Here's what's in the queue:
 

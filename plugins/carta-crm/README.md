@@ -4,7 +4,8 @@ Manage the Carta CRM conversationally — search, add, update, and enrich invest
 
 ## Setup
 
-This plugin connects to the Carta CRM via the **Carta CRM MCP Server** — no API key required.
+This plugin talks to the Carta CRM through the **Carta CRM MCP Server**. You sign in with your
+normal Carta CRM account.
 
 On first use, Claude will prompt you to authenticate:
 
