@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<!--
+  Carta CRM — Meeting Brief
+  Skill: carta-crm:prepare-for-meeting
+
+  HOW TO USE
+  (Comment delimiters are written as [[ ]] below, because a literal closing delimiter
+  nested in this comment would end it early and leak the rest onto the page.)
+  - Replace every [[ FILL: ... ]] placeholder with escaped CRM data.
+  - Delete any whole [[ SECTION: x ]] ... [[ /SECTION: x ]] block you have no data for,
+    markers included. Do not leave empty shells.
+  - Escape interpolated values: & to &amp;, < to &lt;, > to &gt;, " to &quot;
+  - Do NOT add script tags. The PDF renderer does not execute JavaScript, so any
+    script-driven content renders blank. Keep this document static. (This file is
+    deliberately free of the literal string, so a generated brief containing it is a bug.)
+
+  HEADER
+  Fill masthead-title with "[EXTERNAL FIRM] &lt;&gt; [USER ORG] &middot; Day DD Mon &middot; HH:MM":
+  - External firm: the CRM entity name (company or investor). Escape & as &amp;.
+  - User org: crm:get_current_user() → organization field. Do NOT hardcode a firm name.
+  - Meeting time: futureInteractions[0].startDate — format as "Thu 11 Jun · 14:30"
+    (abbreviated weekday, no year, 24-hour clock, no seconds).
+
+  BRIEFING FLAGS (SECTION: briefing)
+  Each flag-item is one line, ~90 chars max. Choose severity class:
+  - flag-high:     risk or blocker — changes how the meeting opens
+  - flag-watch:    something to monitor or follow up on
+  - flag-note:     neutral context, background, or FYI
+  - flag-strength: positive signal or relationship strength to lean on
+  Order: flag-high first, then flag-watch, then flag-note, then flag-strength.
+  Max 5 items. Delete the whole [[ SECTION: briefing ]] block only if there are no flags.
+
+  PEOPLE (SECTION: people)
+  Avatars: 2-char initials — first initial + last initial only (e.g. "JD" not "JDR").
+  External attendee background colors (assign round-robin by position):
+  ["#285DA3", "#2D9E90", "#8B5CF6", "#D48A00", "#E52431"]
+  Internal attendees: always use background #A7AAAA.
+  - badge-you: marks the acting user (identified via crm:get_current_user()).
+  Someone on the invite with no CRM record still gets a row — they are attending. Show
+  their email on the role line and "No history" for stats; that says it without a badge.
+  The person-role line is a JOB TITLE: "Title, employer" for an external attendee, the
+  email for someone with no CRM record, and the title alone for an internal attendee.
+  Never the firm name (the group label right above already says it) and never a bare
+  domain — "mmlcapital.com" is not a role. With no title for an internal attendee, delete
+  the person-role div rather than filling it.
+  Person stats carry ONLY fields the tool actually returned. lastInteractedAt and
+  nextInteractionAt are frequently null — when they are, print the interaction count alone
+  ("6 interactions") and no date. Never estimate a date from the interaction list or from a
+  neighbouring contact. Dates must be short: "14 Jul", never "14 Jul 2026" — the stats line
+  is narrow and a year overflows it.
+  If the invite has more people than a group shows, close that group with
+  <p class="people-more">+N more on the invite</p>. A meeting brief must never leave an
+  attendee out silently.
+  Group label order: external firm first (from CRM entity), then user's firm
+  (from get_current_user().organization). No separator bar between groups — the
+  group-label element already provides enough visual separation.
+
+  DEALS (SECTION: deals)
+  Stage badge class by where the stage sits in the pipeline. Stage names are configured
+  per tenant, so map by meaning and not by exact string — take the label from
+  search_deals `stageName`, then classify:
+  - stage-early: earliest stages — top of the funnel, tracking, screening, intro, prospect
+  - stage-mid:   diligence stages — due diligence, IC review
+  - stage-late:  closing stages — execution, term sheet, LOI, closing, completed
+  - stage-hold:  stopped — on hold, pass, dead, closed lost
+  deal-name is the PROJECT name (search_deals fields.projectName), never the company name.
+  deal-meta carries the numbers, most useful first, separated by " · ", omitting any that
+  are missing: "EV £185m · EBITDA £22m · Added 18 Jun". Do not print the pipeline id.
+  Max 3 deal cards. Delete the whole [[ SECTION: deals ]] block if no active deals.
+
+  SangBleu Versailles is the primary Carta display face but is licensed to the design team,
+  so brand guidance is explicit that Claude output uses Libre Caslon Text instead. All three
+  Carta typefaces are on Google Fonts, so none silently falls back to a system face.
+  IBM Plex Mono is ALWAYS uppercase, so it is used only on already-uppercase labels.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meeting Brief</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Libre+Caslon+Text:wght@400&family=Plus+Jakarta+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root {
+    color-scheme: light;
+    /* Ink Semantic Tokens */
+    --surface-bg: #FFFFFF;
+    --surface-underlay: #F1F1F1;
+    --surface-darkgray-default: #1A1A1A;
+    --text-default: #1A1A1A;
+    --text-subtle: #656B6B;
+    --border-default: #A7AAAA;
+    --border-subtle: #DEDFDF;
+    --negative-subtle: #FFEEEF;
+    --negative-strong: #E52431;
+    --positive-subtle: #EBF7F6;
+    --positive-strong: #2D9E90;
+    --info-subtle: #EAF0F8;
+    --info-strong: #285DA3;
+    --warning-subtle: #FFF8EC;
+    --warning-strong: #D48A00;
+
+    --display: 'Libre Caslon Text', Georgia, serif;
+    --body: 'Plus Jakarta Sans', 'Helvetica Neue', -apple-system, sans-serif;
+    --mono: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+/* Brand rule: emphasis never bolds. Weight is carried by the type scale. */
+strong, b { font-weight: 400; }
+
+body {
+    font: 12px/18px var(--body);
+    color: var(--text-default);
+    background: var(--surface-underlay);
+    padding: 24px;
+    -webkit-font-smoothing: antialiased;
+}
+
+.sheet {
+    max-width: 940px;
+    margin: 0 auto;
+    background: var(--surface-bg);
+    border: 1px solid var(--border-subtle);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .08);
+    overflow: hidden;
+}
+
+/* ---------- Masthead: dark full-width header ---------- */
+.masthead {
+    background: var(--surface-darkgray-default);
+    padding: 20px 28px 18px;
+}
+
+.masthead-context {
+    font-family: var(--mono);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 1.4px;
+    color: rgba(255, 255, 255, .5);
+    margin-bottom: 6px;
+}
+
+.masthead-title {
+    font: 400 22px/28px var(--display);
+    letter-spacing: -.2px;
+    color: #FFFFFF;
+}
+
+/* ---------- Body ---------- */
+.body {
+    padding: 0 28px 20px;
+}
+
+/* ---------- Briefing block ---------- */
+.briefing {
+    margin: 18px 0 16px;
+}
+
+.flag-item {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--border-subtle);
+    line-height: 18px;
+}
+
+.flag-item:last-child { border-bottom: none; }
+
+.flag-badge {
+    display: inline-block;
+    /* Fixed width so every flag's text starts at the same x. Left to hug their labels the
+       badges range from 34px (NOTE) to 57px (STRENGTH), and that 23px spread reads as a
+       ragged left edge down the most-read block on the page. 58px clears the widest label. */
+    min-width: 58px;
+    text-align: center;
+    padding: 2px 6px;
+    border-radius: 2px;
+    font-family: var(--mono);
+    font-size: 8px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: .8px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.flag-high     { background: var(--negative-subtle); color: var(--negative-strong); }
+.flag-watch    { background: var(--warning-subtle);  color: var(--warning-strong); }
+.flag-note     { background: var(--info-subtle);     color: var(--info-strong); }
+.flag-strength { background: var(--positive-subtle); color: var(--positive-strong); }
+
+.flag-text { font-size: 12px; color: var(--text-default); }
+
+/* ---------- Two-column bottom: people | deals ---------- */
+.bottom-grid {
+    display: grid;
+    grid-template-columns: 1fr 240px;
+    gap: 0 28px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border-subtle);
+}
+
+/* When the deals section is absent, let people span full width */
+.bottom-grid > :only-child { grid-column: 1 / -1; }
+
+/* ---------- People ---------- */
+.group-label {
+    display: block;
+    font-family: var(--mono);
+    font-size: 9px;
+    text-transform: uppercase;
+    font-weight: 500;
+    letter-spacing: 1.2px;
+    color: var(--text-subtle);
+    padding: 8px 0 4px;
+}
+
+.group-label:first-child { padding-top: 0; }
+
+.person {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.person:last-of-type { border-bottom: none; }
+
+.avatar {
+    width: 30px;
+    height: 30px;
+    min-width: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--body);
+    font-size: 10px;
+    font-weight: 600;
+    color: #FFFFFF;
+}
+
+.person-info { flex: 1; min-width: 0; }
+
+/* Flex, not inline flow: as an inline-block the You badge's padding and border made its
+   box 20px against the name's 16px line, which inflated the line box and pushed the role
+   line 4px lower on badged rows only. As a flex row the badge can no longer drive the
+   row height, so a badged person lines up with an unbadged one. */
+.person-name {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 16px;
+}
+
+.person-role {
+    font-size: 11px;
+    color: var(--text-subtle);
+    line-height: 15px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.person-stats {
+    font-size: 10px;
+    color: var(--text-subtle);
+    line-height: 14px;
+    margin-top: 1px;
+}
+
+/* Shown when the invite has more people than the group displays, so a real attendee is
+   never silently missing from a brief whose whole job is telling you who is in the room. */
+.people-more {
+    font-size: 10px;
+    color: var(--text-subtle);
+    padding: 6px 0 0 42px;
+}
+
+.badge-you {
+    /* line-height 1 keeps the badge 12px tall, under the 16px name line. Spacing comes
+       from the parent's gap, so there is no margin to knock the flex row out of true. */
+    line-height: 1;
+    padding: 2px 5px;
+    background: var(--info-subtle);
+    border: 1px solid var(--info-strong);
+    color: var(--info-strong);
+    border-radius: 2px;
+    font-family: var(--mono);
+    font-size: 8px;
+    font-weight: 500;
+    letter-spacing: .4px;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+
+/* ---------- Deals ---------- */
+.deals {
+    border-left: 1px solid var(--border-subtle);
+    padding-left: 24px;
+}
+
+.deals-label {
+    display: block;
+    font-family: var(--mono);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    font-weight: 500;
+    color: var(--text-subtle);
+    padding-bottom: 6px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.deal-card {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.deal-card:last-child { border-bottom: none; }
+
+.stage-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 2px;
+    font-family: var(--mono);
+    font-size: 8px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+    margin-bottom: 3px;
+}
+
+.stage-early { background: var(--info-subtle);     color: var(--info-strong); }
+.stage-mid   { background: var(--warning-subtle);  color: var(--warning-strong); }
+.stage-late  { background: var(--positive-subtle); color: var(--positive-strong); }
+.stage-hold  { background: var(--negative-subtle); color: var(--negative-strong); }
+
+.deal-name { font-size: 12px; font-weight: 600; line-height: 16px; }
+.deal-meta { font-size: 10px; color: var(--text-subtle); margin-top: 2px; }
+
+/* ---------- Colophon ---------- */
+.colophon {
+    font-family: var(--mono);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: .3px;
+    color: var(--text-subtle);
+    text-align: center;
+    padding: 10px 28px;
+    border-top: 1px solid var(--border-subtle);
+    margin-top: 16px;
+}
+
+/* ---------- Print / PDF ---------- */
+@page { size: A4; margin: 10mm; }
+
+@media print {
+    body { background: #FFFFFF; padding: 0; font-size: 9pt; line-height: 1.4; }
+    .sheet { max-width: none; border: none; box-shadow: none; }
+    .masthead { padding: 14px 20px 12px; }
+    .masthead-title { font-size: 17pt; line-height: 1.2; }
+    .body { padding: 0 20px 14px; }
+    .bottom-grid { grid-template-columns: 1fr 200px; gap: 0 20px; }
+    .deals { padding-left: 16px; }
+    a { color: var(--text-default); text-decoration: none; }
+    .flag-item, .person, .deal-card { break-inside: avoid; }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+
+/* Stack below 700px. The two-column row needs ~547px of content width (people
+   min-content + gap + the fixed 240px deals track) plus 104px of body and sheet
+   padding, so it starts clipping at about 650px. .sheet is overflow:hidden, so
+   that clipping is silent — no scrollbar, no ellipsis, the deals column just
+   disappears. Scoped to `screen`: the A4 print box is 718px, only 18px clear of
+   this breakpoint, and the PDF must never fall back to the stacked layout. */
+@media screen and (max-width: 700px) {
+    .bottom-grid { grid-template-columns: 1fr; }
+    .deals { border-left: none; padding-left: 0; border-top: 1px solid var(--border-subtle); padding-top: 14px; margin-top: 14px; }
+}
+</style>
+</head>
+<body>
+<div class="sheet">
+
+    <header class="masthead">
+        <!-- FILL: context tag — "DEAL · DILIGENCE", "LP MEETING", "FIRST CONTACT", etc. -->
+        <div class="masthead-context">Context type</div>
+        <!-- FILL: "[EXTERNAL FIRM] &lt;&gt; [USER ORG] &middot; Day DD Mon &middot; HH:MM"
+             External firm comes from the CRM entity name.
+             User org comes from crm:get_current_user() → organization field.
+             Meeting time from futureInteractions[0].startDate — "Thu 11 Jun · 14:30". -->
+        <div class="masthead-title">Counterparty firm &lt;&gt; Your firm &middot; Day DD Mon &middot; HH:MM</div>
+    </header>
+
+    <div class="body">
+
+        <!-- SECTION: briefing -->
+        <div class="briefing">
+            <!-- FILL: 1–5 flag-items. Each is one line, ~90 chars max.
+                 Order: flag-high first, then flag-watch, then flag-note, then flag-strength.
+                 Delete the whole section only if there are no flags at all. -->
+            <div class="flag-item">
+                <span class="flag-badge flag-high">High</span>
+                <span class="flag-text">The most important thing that changes how this meeting opens.</span>
+            </div>
+            <div class="flag-item">
+                <span class="flag-badge flag-watch">Watch</span>
+                <span class="flag-text">Something to monitor or follow up on during the conversation.</span>
+            </div>
+            <div class="flag-item">
+                <span class="flag-badge flag-note">Note</span>
+                <span class="flag-text">Neutral context or background the reader should carry in.</span>
+            </div>
+            <div class="flag-item">
+                <span class="flag-badge flag-strength">Strength</span>
+                <span class="flag-text">A positive signal or relationship strength to lean on.</span>
+            </div>
+        </div>
+        <!-- /SECTION: briefing -->
+
+        <div class="bottom-grid">
+
+            <!-- SECTION: people -->
+            <div class="people">
+                <!-- FILL: external group label = the counterparty firm name (UPPERCASE via CSS). -->
+                <span class="group-label">Counterparty firm</span>
+                <!-- FILL: one .person per external attendee, most relevant first, max 4.
+                     Avatar: 2-char initials (e.g. "AB"), background from palette round-robin:
+                     ["#285DA3","#2D9E90","#8B5CF6","#D48A00","#E52431"]
+                     Stats: the interaction count, plus a date ONLY if the tool returned one.
+                     Drop the whole stats line for someone with no history worth stating.
+                     If the invite has more than 4, keep the .people-more line below. -->
+                <div class="person">
+                    <div class="avatar" style="background: #285DA3;">AB</div>
+                    <div class="person-info">
+                        <div class="person-name">Attendee name</div>
+                        <div class="person-role">Title, employer</div>
+                        <div class="person-stats">N interactions · Next DD Mon</div>
+                    </div>
+                </div>
+                <div class="person">
+                    <div class="avatar" style="background: #2D9E90;">CD</div>
+                    <div class="person-info">
+                        <div class="person-name">Second attendee</div>
+                        <div class="person-role">name@domain.com</div>
+                        <div class="person-stats">No history</div>
+                    </div>
+                </div>
+                <!-- FILL: keep ONLY when the invite has more externals than are listed.
+                     Delete this line otherwise. -->
+                <p class="people-more">+N more on the invite</p>
+                <!-- FILL: internal group label = user's firm from crm:get_current_user() → organization.
+                     Internal avatar background: always #A7AAAA.
+                     Mark the acting user with badge-you.
+                     person-role is the JOB TITLE only. The group label above already names
+                     the firm, so never repeat it here and never use a domain. No title?
+                     Delete the whole person-role div. -->
+                <span class="group-label">Your firm</span>
+                <div class="person">
+                    <div class="avatar" style="background: #A7AAAA;">YN</div>
+                    <div class="person-info">
+                        <div class="person-name">Your name <span class="badge-you">You</span></div>
+                        <div class="person-role">Job title</div>
+                    </div>
+                </div>
+            </div>
+            <!-- /SECTION: people -->
+
+            <!-- SECTION: deals -->
+            <div class="deals">
+                <span class="deals-label">Deals</span>
+                <!-- FILL: one .deal-card per active deal, max 3, from search_deals.
+                     Stage badge: stage-early · stage-mid · stage-late · stage-hold
+                     deal-name: fields.projectName — the PROJECT, never the company name
+                     deal-meta: numbers first, omit what is missing, never the pipeline id -->
+                <div class="deal-card">
+                    <span class="stage-badge stage-mid">Stage name</span>
+                    <div class="deal-name">Project name</div>
+                    <div class="deal-meta">EV · EBITDA · Added DD Mon</div>
+                </div>
+                <div class="deal-card">
+                    <span class="stage-badge stage-early">Stage name</span>
+                    <div class="deal-name">Second project</div>
+                    <div class="deal-meta">EV · EBITDA · Added DD Mon</div>
+                </div>
+            </div>
+            <!-- /SECTION: deals -->
+
+        </div>
+    </div>
+
+    <!-- FILL: generation date, "DD Mon YYYY" -->
+    <p class="colophon">Carta CRM &middot; Generated DD Mon YYYY</p>
+
+</div>
+</body>
+</html>

@@ -72,3 +72,27 @@ Claude will collect any missing required information, call the right MCP tools, 
 | Skill | Trigger phrases |
 |-------|----------------|
 | `deal-flow-analytics` | "deal flow analytics", "analyze our deal flow", "who introduced most of our deals", "breakdown of deals by sector", "deal flow by geography" |
+
+### Meeting prep
+| Skill | Trigger phrases |
+|-------|----------------|
+| `prepare-for-meeting` | "prepare me for my meeting", "meeting brief", "brief me for this meeting", "prep for upcoming meeting", "what do I need to know before my call with [company]" |
+
+Builds a one-page tear sheet for **the next upcoming meeting** with a counterparty, from CRM
+data only:
+
+> "Prepare me for my meeting with Meridian Growth Partners."
+
+It resolves the meeting from whichever handle you give it — a deal, investor, fundraising,
+company, person, or just an email domain — reading that entity's `futureInteractions` for the
+next event. It then compiles the invitees and their history, the organization's notes and
+relationship status, related CRM objects, warm paths, and suggested questions into a rendered
+brief.
+
+**Where the brief appears.** In Cowork it renders inline as an artifact. Everywhere else you
+get a PDF link, and in Claude Code an HTML file on disk. Re-running it for the same meeting
+updates the existing artifact rather than creating a second one.
+
+**Scope.** One meeting — the next one. This is not an agenda view and there is no date-range
+mode. Fields the CRM does not hold (RSVP status, meeting duration) are omitted rather than
+guessed at.
