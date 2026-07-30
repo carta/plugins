@@ -5,6 +5,15 @@ Build a fund balance sheet as of a specific date by summing journal entries cumu
 An as-of date is required — ask the user if not provided.
 A fund name filter is optional — omit the `HAVING` clause to query all funds.
 
+## ⚠️ Common Mistakes for JOURNAL_ENTRIES
+
+| ❌ Wrong | ✅ Correct | Note |
+|---|---|---|
+| `ACCOUNT_NUMBER` / `account_name` | `account_type` | numeric range column (1000–3999), not a string label |
+| `debit_amount` / `credit_amount` | `amount` (signed) | single `amount` column; negative = outflow |
+| `journal_entry_id` / `journal_entry_line_id` | `journal_entry_gluuid` / `journal_entry_line_id` | use `_links` deep-link columns; raw integer IDs are not exposed |
+| `description` / `memo` | `event_type` | use `event_type` for entry classification |
+
 ## Table: JOURNAL_ENTRIES
 
 Balance sheet = `SUM(amount)` for all entries where `effective_date <= as_of_date`.

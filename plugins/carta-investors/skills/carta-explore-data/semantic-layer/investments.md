@@ -144,7 +144,7 @@ LIMIT 50
 
 Point-in-time history of investment holdings. Use this — **not** `AGGREGATE_INVESTMENTS` — for "as of [past date]" / "what did the portfolio look like at year-end" / historical valuation-and-cost questions. Each row is a holding state effective over a date range.
 
-> **This table is NOT a clone of `AGGREGATE_INVESTMENTS`.** It has **no `is_active_investment`, no `investment_date`, no `cost_basis`, and no `tags`** column — copying those filters over is the #1 source of errors. "Active as of date X" is expressed with the effective-date range below, not an `is_active_investment` flag.
+> **This table is NOT a clone of `AGGREGATE_INVESTMENTS`.** It has **no `is_active_investment`, no `investment_date`, no `cost_basis`, no `tags`, and no `most_recent_journal_entry_type`** column — copying those filters over is the #1 source of errors. "Active as of date X" is expressed with the effective-date range below, not an `is_active_investment` flag. Use `IS_ACTIVE_INVESTMENT` → `next_effective_date IS NULL` as the equivalent active-holding filter on this table.
 
 ### Point-in-time filter (required pattern)
 
