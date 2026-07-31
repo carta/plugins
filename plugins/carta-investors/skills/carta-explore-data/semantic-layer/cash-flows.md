@@ -15,6 +15,7 @@ A date range is required — ask the user if not provided.
 ## ⚠️ Common Mistakes in This Domain
 
 - **Snowflake syntax**: Use `LIMIT N`, not `FETCH FIRST N ROWS ONLY`. Use `LIKE`/`RLIKE`, not `SIMILAR TO`.
+- **`TRANSACTION_DATE` / `POSTING_DATE` / `ENTRY_DATE` do not exist** — the date column on `JOURNAL_ENTRIES` is `effective_date`.
 - **`effective_date`** is the accounting/GL date — it is **not** the deal/investment date. For "invested in [year]", use `AGGREGATE_INVESTMENTS.investment_date`.
 - **No pre-defined cash flow table** — there is no `CASH_FLOWS`, `FINANCIALS`, `PROFIT_AND_LOSS`, or `FINANCIAL_STATEMENTS` table. Always build cash flow views from `JOURNAL_ENTRIES` using `event_type` grouping.
 - **Always use schema prefix**: `FUND_ADMIN.JOURNAL_ENTRIES`, `FUND_ADMIN.ALLOCATIONS`.

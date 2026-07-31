@@ -213,8 +213,12 @@ Use the MCP commands in sequence, substituting `<SCHEMA>` with the schema determ
 | `AMOUNT_RAISED` | `ESTIMATED_CASH_RAISED` or `CALCULATED_CASH_RAISED` | `FINANCING_HISTORY` |
 | `HEADQUARTERS_CITY` / `HEADQUARTERS_STATE` / `HEADQUARTERS_COUNTRY` | `CITY` / `STATE` / `COUNTRY` | `CORPORATION_BASIC_INFO_V2` |
 | `LEGAL_NAME` / `NAME` / `COMPANY_NAME` | `CORPORATION_NAME` | `CORPORATION_BASIC_INFO_V2` |
+| `TRANSACTION_DATE` / `POSTING_DATE` / `ENTRY_DATE` | `effective_date` | `JOURNAL_ENTRIES` |
+| `OWNERSHIP_PERCENTAGE` / `OWNERSHIP_PCT` | `PERCENTAGE` (TEXT — cast with `TRY_TO_DECIMAL`) | `FUND_CORPORATION_OWNERSHIP` |
+| `OUTSTANDING_QUANTITY` | `OUTSTANDING_SHARES` | `SUMMARY_CAP_TABLE` |
 | `BOOL_OR(col)` | `BOOLOR_AGG(col)` | *(any table)* — Snowflake has no `BOOL_OR` |
 | `SHARE_CLASS_NAME` | `SHARECLASS_NAME` | `FINANCING_HISTORY` — one word, no underscore between SHARE and CLASS |
+| `rows` / `ROWS` (as a column alias) | any other alias (e.g. `row_count`, `cnt`) | *(any table)* — `ROWS` is a Snowflake reserved word; using it as a column alias causes `syntax error unexpected 'ROWS'` |
 
 ## DWH Tool Invocations — Exact Forms Required
 
