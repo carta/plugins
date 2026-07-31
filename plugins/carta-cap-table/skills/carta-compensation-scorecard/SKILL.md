@@ -3,7 +3,7 @@ name: carta-compensation-scorecard
 description: >
   Carta Total Compensation scorecard — shows how a corporation's employees compare to market.
   Two lenses: corporation-level rollup (band distribution — what % of employees are below / at / above market) and per-employee scorecard (each employee's compa-ratio + percentile + market band).
-  Triggered by queries like: "scorecard", "how is our comp positioned", "who's below market", "which employees are below P50", "show me the roster", "are we paying market", "comp posture", "employee compa-ratios".
+  Triggered by queries like: "scorecard", "how is our comp positioned", "who's below market", "which employees are below P50", "show me the roster", "are we paying market", "comp posture", "employee compa-ratios", "is [employee] underpaid", "pay adjustment analysis", "our internal pay bands vs benchmarks", "score these employees".
   Operates on the corporation's already-ingested CTC roster (HRIS-synced employees).
   Do NOT use for market-rate lookups for a role (use carta-compensation-benchmarks).
   Do NOT use for job classification (use carta-compensation-rolematcher).
@@ -583,9 +583,16 @@ Do not retry. Do not surface the raw HTTP status, stack trace, or error body. Do
 
 ## What this skill does NOT cover
 
+Two categories here — read carefully, they behave differently at the routing layer:
+
+**Route to a different skill** (the router should pick these up, not this one):
 - **Market-rate lookups for a hypothetical role** (e.g. "what's the market rate for a Senior 1 engineer?") — that's `carta-compensation-benchmarks`.
-- **Fresh-CSV roster scoring** (e.g. "score these 200 employees from this spreadsheet") — not supported in Phase 0. Coming in a later phase.
-- **Adjustment-range suggestions** ("to reach P50, increase by $X") — not in Phase 0.
 - **Job classification** for a free-text title — use `carta-compensation-rolematcher`.
 
-If the user asks for any of those, route them to the right skill in one sentence and stop — don't try to approximate it here.
+If the user asks for either of those, route them to the right skill in one sentence and stop.
+
+**In-scope by routing intent, but not yet implemented** (this skill IS the right skill; it just tells the user the feature isn't ready):
+- **Fresh-CSV roster scoring** (e.g. "score these 200 employees from this spreadsheet") — not supported in Phase 0. Coming in a later phase.
+- **Adjustment-range suggestions** ("to reach P50, increase by $X") — not in Phase 0.
+
+For these, load the skill, acknowledge the ask, explain the Phase 0 limit, and offer the closest supported alternative (e.g. per-employee scorecard for an existing HRIS-synced roster). Do NOT bounce them to a different skill — nothing else covers roster-level pay positioning.
