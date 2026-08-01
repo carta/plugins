@@ -39,7 +39,7 @@ After installing, restart Claude Code and run `/mcp` to complete OAuth authentic
 | `carta-form-adv` | Form ADV Schedule D regulatory data and firm rollup |
 | `carta-performance-benchmarks` | Compare fund performance against peer benchmark cohorts |
 | `carta-download-tearsheet` | Generate tearsheet PDFs for one or more portcos — single PDF preview or bulk ZIP download |
-| `carta-fund-forecasting` | Read-only Carta Fund Forecasting (formerly Tactyc) — list funds, fund-wide KPIs (TVPI, DPI, IRR, MOIC, NAV, reserves), performance tables, and per-investment analytics. Internal-only. |
+| `carta-fund-forecasting` | Read-only Carta Fund Forecasting (formerly Tactyc) — list funds, fund-wide KPIs (TVPI, DPI, IRR, MOIC, NAV, reserves), performance tables, and per-investment analytics. |
 
 ### Budgeting (Excel)
 
@@ -56,6 +56,12 @@ Skills that produce accountant-ready Excel workbooks. They run inside **Claude f
 | `carta-consolidating-balance-sheet` | Generate a consolidating Balance Sheet across all entities for a given month — side-by-side layout with Assets / Liabilities / Equity. |
 
 For Claude for Excel, enable the Carta connector in **Settings → Connectors** in your claude.ai workspace.
+
+### Fund modeling
+
+| Skill | Description |
+|-------|-------------|
+| `carta-fund-modeling` | Launch an interactive local console to reprice portfolio companies, model exits, and plan reserves for an entire firm — fund modeling React app with Overview, Companies, Exit & IRR, Reserves, and Cohort Standing tabs. Invoke with a firm name, e.g. "fund modeling for Demo Capital". |
 
 ## MCP Tools
 

@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="/favicon.ico" />
+    <title>Carta Fund Modeling</title>
+    <!-- System-font stack per the micro-app theme contract — never CDN a webfont. -->
+    <link rel="stylesheet" href="/src/ui/tokens.css">
+    <style>
+      html, body { margin: 0; padding: 0; background: var(--ink-color-global-surface-background-default); }
+
+      #fm-error {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 99999;
+        background: rgba(0,0,0,0.85);
+        color: #fff;
+        font-family: ui-monospace, "SF Mono", Consolas, monospace;
+        font-size: 13px;
+        line-height: 1.5;
+        padding: 32px;
+        overflow: auto;
+        box-sizing: border-box;
+      }
+      #fm-error.visible { display: block; }
+      #fm-error pre {
+        white-space: pre-wrap;
+        word-break: break-word;
+        background: rgba(255,255,255,0.08);
+        border-radius: 6px;
+        padding: 16px;
+        margin: 12px 0;
+      }
+      #fm-error .fm-cta {
+        margin-top: 20px;
+        padding: 12px 16px;
+        background: #2563eb;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 14px;
+      }
+    </style>
+
+    <!-- All four React specifiers resolve to one monobundle (see build.mjs for why).
+         Absolute paths so they resolve at any client-route depth (serve.py mounts at /). -->
+    <script type="importmap">
+    {
+      "imports": {
+        "react":            "/vendor/react.esm.js",
+        "react-dom":        "/vendor/react.esm.js",
+        "react-dom/client": "/vendor/react.esm.js",
+        "react/jsx-runtime":"/vendor/react.esm.js"
+      }
+    }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <div id="fm-error"></div>
+
+    <script type="module">
+      // Overlay for all three failure timings: transpile (SW error module),
+      // module-eval, and post-mount React errors.
+      function showError(message) {
+        const el = document.getElementById("fm-error");
+        el.innerHTML =
+          "<h2 style='margin:0 0 8px'>Error</h2>" +
+          "<pre>" + escapeHtml(message) + "</pre>" +
+          "<div class='fm-cta'>Copy this message and paste it back to Claude to fix it.</div>";
+        el.classList.add("visible");
+      }
+      function escapeHtml(s) {
+        return String(s)
+          .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+      }
+      window.addEventListener("error", (e) => showError(e.message || String(e)));
+      window.addEventListener("unhandledrejection", (e) =>
+        showError((e.reason && e.reason.message) || String(e.reason)));
+
+      // Gate the app-module import behind SW control so the module graph is never
+      // fetched before the SW is active (cold-start race fix).
+      if (!("serviceWorker" in navigator)) {
+        showError("Service workers are not supported in this browser. Please use Chrome or Safari (16.4+).");
+      } else {
+        function sleep(ms) {
+          return new Promise((res) => setTimeout(res, ms));
+        }
+
+        try {
+          // Absolute /sw.js + root scope: a hard refresh on a nested client route
+          // (e.g. /firm/<slug>/) must still fetch the SW from / and control the page.
+          await navigator.serviceWorker.register("/sw.js", {
+            type: "module",
+            scope: "/",
+          });
+          await navigator.serviceWorker.ready;
+
+          if (!navigator.serviceWorker.controller) {
+            // First visit: registered but not yet controlling. Wait for
+            // controllerchange (fires after clients.claim()); reload after 3s as a
+            // backstop for browsers that mishandle the event.
+            const claimed = new Promise((res) =>
+              navigator.serviceWorker.addEventListener("controllerchange", res, {
+                once: true,
+              })
+            );
+            await Promise.race([claimed, sleep(3000).then(() => location.reload())]);
+          }
+
+          await import("/src/outer/main-outer.jsx");
+        } catch (err) {
+          showError((err && err.message) || String(err));
+        }
+      }
+    </script>
+  </body>
+</html>

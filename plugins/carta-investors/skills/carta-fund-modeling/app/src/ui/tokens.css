@@ -1,0 +1,187 @@
+/* Ink token snapshot — canonical CSS custom properties (pinned).
+   Only the :root block is included here. Base element resets (body, h1–h6, etc.)
+   are intentionally omitted so the app controls its own base styles.
+   Update by re-syncing the :root block from the current Ink token export. */
+
+:root {
+  color-scheme: light dark;
+
+  /* === Brand colors === */
+  --ink-color-global-brand-white: #FFFFFF;
+  --ink-color-global-brand-black: #1A1A1A;
+
+  --ink-color-global-brand-gray-10:  #F1F1F1;
+  --ink-color-global-brand-gray-20:  #EDEDED;
+  --ink-color-global-brand-gray-30:  #E9EAEA;
+  --ink-color-global-brand-gray-40:  #DEDFDF;
+  --ink-color-global-brand-gray-50:  #CECFCF;
+  --ink-color-global-brand-gray-60:  #A7AAAA;
+  --ink-color-global-brand-gray-70:  #9C9F9F;
+  --ink-color-global-brand-gray-80:  #656B6B;
+  --ink-color-global-brand-gray-90:  #394040;
+  --ink-color-global-brand-gray-100: #202020;
+
+  --ink-color-global-brand-blue-10:  #EAF0F8;
+  --ink-color-global-brand-blue-20:  #DFE8F4;
+  --ink-color-global-brand-blue-30:  #C0D1E9;
+  --ink-color-global-brand-blue-40:  #8BABD6;
+  --ink-color-global-brand-blue-50:  #4176BC;
+  --ink-color-global-brand-blue-60:  #2C67B5;
+  --ink-color-global-brand-blue-70:  #285DA3;
+  --ink-color-global-brand-blue-80:  #235291;
+  --ink-color-global-brand-blue-90:  #1A3E6D;
+  --ink-color-global-brand-blue-100: #122948;
+
+  --ink-color-global-brand-red-10:  #FFEEEF;
+  --ink-color-global-brand-red-20:  #FFE9EA;
+  --ink-color-global-brand-red-30:  #FFE4E5;
+  --ink-color-global-brand-red-40:  #FAD9D7;
+  --ink-color-global-brand-red-50:  #FBB5B5;
+  --ink-color-global-brand-red-60:  #EF7171;
+  --ink-color-global-brand-red-70:  #E52431;
+  --ink-color-global-brand-red-80:  #A82020;
+  --ink-color-global-brand-red-90:  #701818;
+  --ink-color-global-brand-red-100: #401018;
+
+  --ink-color-global-brand-yellow-10:  #FFFEF7;
+  --ink-color-global-brand-yellow-20:  #FFFCED;
+  --ink-color-global-brand-yellow-30:  #FEF8DA;
+  --ink-color-global-brand-yellow-40:  #FCEFB6;
+  --ink-color-global-brand-yellow-50:  #FBE284;
+  --ink-color-global-brand-yellow-60:  #F8D648;
+  --ink-color-global-brand-yellow-70:  #DDB31F;
+  --ink-color-global-brand-yellow-80:  #B58A00;
+  --ink-color-global-brand-yellow-90:  #705010;
+  --ink-color-global-brand-yellow-100: #341C00;
+
+  --ink-color-global-brand-green-10:  #EBF7F6;
+  --ink-color-global-brand-green-20:  #D6EFEC;
+  --ink-color-global-brand-green-30:  #ADDFD9;
+  --ink-color-global-brand-green-40:  #84D0C6;
+  --ink-color-global-brand-green-50:  #5BC0B3;
+  --ink-color-global-brand-green-60:  #32B0A0;
+  --ink-color-global-brand-green-70:  #2D9E90;
+  --ink-color-global-brand-green-80:  #1F8575;
+  --ink-color-global-brand-green-90:  #105242;
+  --ink-color-global-brand-green-100: #063A32;
+
+  /* === Data-viz palette === */
+  --ink-color-global-data-viz-positive-3:  #2D9E90;
+  --ink-color-global-data-viz-negative-3:  #E52431;
+  --ink-color-global-data-viz-neutral-3:   #656B6B;
+  --ink-color-global-data-viz-blue-3:      #285DA3;
+  --ink-color-global-data-viz-turquoise-3: #58B8BC;
+  --ink-color-global-data-viz-brown-3:     #B29990;
+  --ink-color-global-data-viz-yellow-3:    #DDB31F;
+  --ink-color-global-data-viz-lime-3:      #94B524;
+
+  /* === Semantic feedback === */
+  --ink-color-global-feedback-positive-subtle: light-dark(#EBF7F6, #063A32);
+  --ink-color-global-feedback-positive-strong: light-dark(#2D9E90, #2D9E90);
+  --ink-color-global-feedback-negative-subtle: light-dark(#FFEEEF, #401018);
+  --ink-color-global-feedback-negative-strong: light-dark(#E52431, #FAD9D7);
+  --ink-color-global-feedback-warning-subtle:  light-dark(#FFFCED, #341C00);
+  --ink-color-global-feedback-warning-strong:  light-dark(#F8D648, #B58A00);
+  --ink-color-global-feedback-info-subtle:     light-dark(#EAF0F8, #122948);
+  --ink-color-global-feedback-info-strong:     light-dark(#285DA3, #2C67B5);
+  --ink-color-global-feedback-neutral-subtle:  light-dark(#F1F1F1, #202020);
+  --ink-color-global-feedback-neutral-strong:  light-dark(#1A1A1A, #9C9F9F);
+
+  /* === Surfaces === */
+  --ink-color-global-surface-background-default:  light-dark(#FFFFFF, rgb(18 18 18));
+  --ink-color-global-surface-background-underlay: light-dark(#F1F1F1, #2D2D2D);
+  --ink-color-global-surface-darkgray-default:    light-dark(#1A1A1A, #394040);
+  --ink-color-global-surface-darkgray-hover:      light-dark(#202020, #656B6B);
+  --ink-color-global-surface-lightgray-default:   light-dark(#F1F1F1, #202020);
+  --ink-color-global-surface-lightgray-hover:     light-dark(#DEDFDF, #2D2D2D);
+  --ink-color-global-surface-lightgray-active:    light-dark(#CECFCF, #656B6B);
+  --ink-color-global-surface-disabled:            light-dark(#EDEDED, #394040);
+
+  /* === Text === */
+  --ink-color-global-text-default:     light-dark(#1A1A1A, #EDEDED);
+  --ink-color-global-text-subtle:      light-dark(#656B6B, #A7AAAA);
+  --ink-color-global-text-very-subtle: light-dark(#9C9F9F, #394040);
+  --ink-color-global-text-disabled:    light-dark(#CECFCF, #656B6B);
+  --ink-color-global-text-inverse:     light-dark(#FFFFFF, #1A1A1A);
+
+  /* === Links === */
+  --ink-color-global-link-default: light-dark(#285DA3, #8BABD6);
+  --ink-color-global-link-hover:   light-dark(#1A3E6D, #4176BC);
+  --ink-color-global-link-active:  light-dark(#122948, #2C67B5);
+
+  /* === Borders === */
+  --ink-color-global-border-subtle:        light-dark(#DEDFDF, #2D2D2D);
+  --ink-color-global-border-default:       light-dark(#A7AAAA, #656B6B);
+  --ink-color-global-border-hover:         light-dark(#656B6B, #9C9F9F);
+  --ink-color-global-border-active:        light-dark(#1A1A1A, #CECFCF);
+  --ink-color-global-border-focus-default: light-dark(#285DA3, #8BABD6);
+  --ink-color-global-border-focus-light:   light-dark(#C0D1E9, #1A3E6D);
+  --ink-color-global-border-disabled:      light-dark(#DEDFDF, #2D2D2D);
+
+  /* === Elevation (shadows) === */
+  --ink-elevation-global-shadow-flat:   0 0 0 0;
+  --ink-elevation-global-shadow-small:  0 4px 12px 0 rgb(0 0 0 / 0.08);
+  --ink-elevation-global-shadow-medium: 0 4px 20px 0 rgb(0 0 0 / 0.1);
+  --ink-elevation-global-shadow-large:  0 4px 20px 0 rgb(0 0 0 / 0.2);
+
+  /* === Radius === */
+  --ink-size-global-radius-flat:    0;
+  --ink-size-global-radius-subtle:  4px;
+  --ink-size-global-radius-default: 8px;
+  --ink-size-global-radius-max:     24px;
+  --ink-size-global-radius-round:   50%;
+  --ink-radius-pill: 9999px;
+
+  /* === Spacing === */
+  --ink-spacing-global-vertical-xxsmall: 4px;
+  --ink-spacing-global-vertical-xsmall:  8px;
+  --ink-spacing-global-vertical-small:   12px;
+  --ink-spacing-global-vertical-normal:  16px;
+  --ink-spacing-global-vertical-large:   24px;
+  --ink-spacing-global-vertical-xlarge:  32px;
+  --ink-spacing-global-horizontal-xxsmall: 4px;
+  --ink-spacing-global-horizontal-xsmall:  8px;
+  --ink-spacing-global-horizontal-small:   12px;
+  --ink-spacing-global-horizontal-normal:  16px;
+  --ink-spacing-global-horizontal-large:   24px;
+  --ink-spacing-global-horizontal-xlarge:  32px;
+
+  /* === Typography (re-synced from theme-with-ink/tokens.css — the pinned Ink
+     snapshot theme.js's FS scale is documented as aligning to; this block had
+     been dropped from this app's local snapshot at some point) === */
+  --ink-font-global-size-small-1:            12px;
+  --ink-font-global-size-small-2:            12px;
+  --ink-font-global-size-heading-3:         16px;
+  --ink-font-global-size-heading-4:         16px;
+  --ink-font-global-size-heading-2-desktop: 20px;
+
+  --ink-font-global-leading-small-1:           20px;
+  --ink-font-global-leading-small-2:           20px;
+  --ink-font-global-leading-heading-3:         28px;
+  --ink-font-global-leading-heading-4:         28px;
+  --ink-font-global-leading-heading-2-desktop: 36px;
+
+  --ink-font-global-weight-small-2:   400;
+  --ink-font-global-weight-heading-4: 400;
+  --ink-font-global-weight-small-1:   500;
+  --ink-font-global-weight-heading-2: 500;
+  --ink-font-global-weight-heading-3: 500;
+
+  /* === Buttons (component tokens — primary/secondary/danger must invert for dark) === */
+  --ink-button-background-color-primary-base-default:   light-dark(#1A1A1A, #FFFFFF);
+  --ink-button-background-color-primary-base-hover:     light-dark(#202020, #CECFCF);
+  --ink-button-background-color-primary-base-down:      light-dark(#394040, #A7AAAA);
+  --ink-button-background-color-primary-disabled:       light-dark(#EDEDED, #394040);
+  --ink-button-font-color-primary-base:                 light-dark(#FFFFFF, #1A1A1A);
+  --ink-button-font-color-primary-disabled:             light-dark(#CECFCF, #656B6B);
+
+  --ink-button-background-color-secondary-base-default: light-dark(#FFFFFF, rgb(18 18 18));
+  --ink-button-border-color-secondary-base-default:     light-dark(#A7AAAA, #656B6B);
+  --ink-button-border-color-secondary-base-hover:       light-dark(#656B6B, #9C9F9F);
+  --ink-button-font-color-secondary-base-default:       light-dark(#1A1A1A, #EDEDED);
+  --ink-button-font-color-secondary-disabled:           light-dark(#CECFCF, #656B6B);
+
+  --ink-button-background-color-danger-base-default:    #E52431;
+  --ink-button-background-color-danger-base-hover:      #A82020;
+  --ink-button-font-color-danger-base:                  #FFFFFF;
+}
