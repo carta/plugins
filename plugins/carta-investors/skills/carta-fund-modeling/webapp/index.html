@@ -5,7 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" href="/favicon.ico" />
     <title>Carta Fund Modeling</title>
-    <!-- System-font stack per the micro-app theme contract — never CDN a webfont. -->
+    <!-- Inter loader — the rsms.me canonical distribution, per this app's typography
+         contract for micro-app dashboards. ui/theme.js's SANS stack does NOT
+         @font-face Inter itself, so without this <link> body text silently falls back to
+         "Open Sans"/"Helvetica Neue". SangBleu Versailles (H1's display font) is
+         self-hosted from /fonts/ instead — see theme.js's GLOBAL_CSS @font-face. -->
+    <link rel="preconnect" href="https://rsms.me/" />
+    <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
     <link rel="stylesheet" href="/src/ui/tokens.css">
     <style>
       html, body { margin: 0; padding: 0; background: var(--ink-color-global-surface-background-default); }

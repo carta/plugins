@@ -5,8 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" href="/favicon.ico" />
     <title>Carta Fund Modeling</title>
-    <!-- No web font: micro-apps use a system-font stack (Inter as fallback only) per
-         the canonical micro-app theme contract — never @font-face/CDN a webfont. -->
+    <!-- Inter loader — the rsms.me canonical distribution, per this app's typography
+         contract for micro-app dashboards. theme.js's SANS stack does NOT
+         @font-face Inter itself, so without this <link> body text silently falls back to
+         "Open Sans"/"Helvetica Neue". If this line is ever removed, also drop "Inter" from
+         theme.js's font-family — never name a face you don't load. Offline-safe: if this
+         CDN request fails (no network), the browser just falls through to the next name in
+         the stack — no error, no broken page, just a visually different fallback font. -->
+    <link rel="preconnect" href="https://rsms.me/" />
+    <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
     <link rel="stylesheet" href="/src/ui/tokens.css">
     <style>
       html, body { margin: 0; padding: 0; background: #FFFFFF; }

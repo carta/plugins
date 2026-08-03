@@ -13,9 +13,15 @@
 //     rows/slices, checked toggles, primary buttons are BLACK in light, WHITE in dark.
 //   - BLUE ("links / focus / info accents") -> Ink link/focus blue (#285DA3), never
 //     used for "active" state.
-// Fonts: SYSTEM-FONT STACK ONLY (Inter as fallback) — never @font-face/CDN a webfont.
-// Micro-apps are opened repeatedly as a dev tool; a webfont's cost compounds. This is a
-// deliberate divergence from the base theme contract (which loads Inter for one-shot artifacts).
+// Fonts: now aligned with this app's updated micro-app typography contract (a prior
+// version of this file deliberately avoided ever loading a webfont here — see git history
+// if you need the old rationale). Inter is loaded from the rsms.me CDN via index.html's
+// <link> — never name a face in the font stack without a matching loader (if that <link>
+// is ever removed, drop Inter from SANS too). SangBleu Versailles is self-hosted: the
+// woff2 ships at public/fonts/ and is @font-face'd below, so it loads from a local file
+// with zero network dependency. Offline-safe for Inter specifically: if the CDN request
+// fails (no network), the browser just falls through to the next name in the stack — no
+// error, no broken page, just a different-looking fallback font until connectivity returns.
 //
 // INK, PAPER, LINE, BORDER_DEFAULT, GREEN, RED, BLUE, FAINT, SHADE, ACCENT — internal only.
 // Components inline these as var(--ink-...) strings directly; these consts exist only for
@@ -51,25 +57,22 @@ export const GRAD_DARK = "var(--ink-button-background-color-primary-base-default
 // any consumer computing a track-relative position accounting for thumb width.
 export const TAPE_THUMB = 14;
 
-// System-font stack ONLY — never @font-face'd or CDN-loaded (see header). Mirrors
-// Ink's REAL, actually-shipped stack — not a generic "system font stack" pattern
-// (confirmed in real fund-admin: `@carta/ink/dist/ink.css`'s `body` rule is
-// literally `font-family: "Inter var", "Open Sans", "Helvetica Neue", helvetica,
-// arial, sans-serif`, and Ink self-hosts Inter as a local variable-font woff2 —
-// no CDN). This app has neither that font file nor Ink's synthetic
-// `"Inter Fallback"` face, so those two names are dropped; `Inter` stays first
-// (opportunistic — resolves if the user happens to have it installed, same as
-// Ink's own `local("Inter")` @font-face src), then Ink's own real fallback chain
-// verbatim.
+// Inter is now loaded as a real webfont from the rsms.me CDN (see the <link> in
+// index.html) — this mirrors Ink's REAL, actually-shipped stack, not a generic "system
+// font stack" pattern (confirmed in real fund-admin: `@carta/ink/dist/ink.css`'s `body`
+// rule is literally `font-family: "Inter var", "Open Sans", "Helvetica Neue", helvetica,
+// arial, sans-serif`). This app doesn't load Ink's synthetic `"Inter Fallback"` face, so
+// that name is dropped; `Inter` stays first (now backed by the CDN link, not just an
+// opportunistic locally-installed match), then Ink's own real fallback chain verbatim.
 export const SANS = "Inter, \"Open Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif";
 export const sans = { fontFamily: SANS };
 // Real serif — Ink's real `--ink-font-global-family-prominent` chain verbatim:
-// `SangBleu Versailles` first (opportunistic — same pattern as `Inter` in SANS
-// above, resolves only if a user happens to have Carta's brand font installed
-// locally; this app never @font-face's or CDN-loads it), then `Georgia` (Ink's
-// own designated fallback, a real system-installed serif), then the generic
-// `serif` catch-all. Used by `H1` ONLY (components.jsx) — Ink reserves the real
-// serif for the page title; `H2`/`H3` are sans (see `HEADING2_STYLE`/`H3` there).
+// `SangBleu Versailles` first, now self-hosted (the woff2 ships at public/fonts/ and is
+// @font-face'd in GLOBAL_CSS below, so it loads from a local file with zero network
+// dependency), then `Georgia` (Ink's own designated fallback, a real system-installed
+// serif), then the generic `serif` catch-all. Used by `H1` ONLY (components.jsx) — Ink
+// reserves the real serif for the page title; `H2`/`H3` are sans (see
+// `HEADING2_STYLE`/`H3` there).
 export const serif = { fontFamily: "\"SangBleu Versailles\", Georgia, serif" };
 // SANS with tight tracking — this app's own bolder display treatment for brand
 // wordmarks and hero numbers (StatTile's `serif` prop, the top-bar/landing-page
@@ -129,6 +132,15 @@ export const SMALL_1 = { ...sans, fontSize: FS.body, lineHeight: "20px", fontWei
 export const SMALL_2 = { ...sans, fontSize: FS.body, lineHeight: "20px", fontWeight: 400 };
 
 export const GLOBAL_CSS = `
+  /* Self-hosted — the woff2 lives at public/fonts/ (copied verbatim into dist/fonts/ by
+     Vite's public-dir passthrough, unhashed), so this loads from a local file with no
+     network dependency, unlike Inter above. Georgia (serif's second link) covers the
+     rare case this fails to load. */
+  @font-face {
+    font-family: "SangBleu Versailles";
+    src: url("/fonts/SangBleuVersailles-Regular-WebS.woff2") format("woff2");
+    font-weight: 400; font-style: normal; font-display: swap;
+  }
   :root {
     color-scheme: light;
 
