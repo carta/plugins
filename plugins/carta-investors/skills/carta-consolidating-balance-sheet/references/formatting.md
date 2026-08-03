@@ -80,7 +80,7 @@ SUM-across-entities pattern. Same bold / border treatment.
 | Entity columns (C → last) | 130 |
 | Total column | 130 |
 
-**Column-width anti-pattern:** Do NOT call `autofitColumns()` on a header-only range like `C1:O1` — header rows are often empty at the moment of write, leaving the autofit width too narrow for 5+ digit currency (`####`). Use `sh.getUsedRange().format.autofitColumns()` after data is written, or target a data range like `C7:N80`. Full recipe: `carta-create-budget/references/from-prior-actuals.md` §6.
+**Column-width anti-pattern:** Do NOT call `autofitColumns()` on a header-only range like `C1:O1` — header rows are often empty at the moment of write, leaving the autofit width too narrow for 5+ digit currency (`####`). Use `sh.getUsedRange().format.autofitColumns()` after data is written, or target a data range like `C7:N80`. Full recipe: `carta-manco/references/from-prior-actuals.md` §6.
 
 ## Font
 
