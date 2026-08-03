@@ -418,36 +418,84 @@ function HoverPopover({ label, maxWidth, panelPadding, children }) {
   );
 }
 
-// A blue help-circle icon that reveals Ink's dark hover tooltip above it — the
-// on-demand explainer for a toolbar control whose selected value (e.g. "Partial")
-// isn't self-explanatory. Lives in-flow (not portaled) since the filter ribbon
-// itself has no overflow clip, unlike HoverPopover's table-row triggers above.
-function InfoTip({ label, children, width = 300 }) {
+// Ink dark hover tooltip — reusable for any trigger element. Defaults match the
+// Reserves toolbar's "Partial" usage (own HelpCircleIcon button, in-flow, opens
+// downward); pass `trigger` + `portal` for triggers that live inside an
+// overflow-clipped ancestor, e.g. a table row (see HoverPopover above for why
+// table-row popovers need portaling to escape the Companies table's overflow clip).
+function InfoTip({ label, children, width = 300, trigger, portal = false, placement = "bottom" }) {
   const [open, setOpen] = useState(false);
-  const show = () => setOpen(true);
+  const [mounted, setMounted] = useState(false); // stays true after first show so opacity can transition back to 0 on hide
+  const [pos, setPos] = useState(null);
+  const triggerRef = useRef(null);
+  const show = () => {
+    setMounted(true);
+    setOpen(true);
+    if (portal) {
+      const r = triggerRef.current?.getBoundingClientRect();
+      if (r) {
+        const w = Math.min(width, window.innerWidth - 24);
+        const top = placement === "top" ? r.top - 8 : r.bottom + 8;
+        setPos({ left: Math.max(w / 2 + 12, Math.min(r.left + r.width / 2, window.innerWidth - w / 2 - 12)), top, width: w });
+      }
+    }
+  };
   const hide = () => setOpen(false);
+
+  const triggerEl = trigger ?? (
+    <button type="button" aria-label={label} style={{ display: "flex", background: "none", border: "none", padding: 0, cursor: "default", color: "var(--ink-color-global-feedback-info-strong)" }}>
+      <HelpCircleIcon size={16} strokeWidth={1.6} />
+    </button>
+  );
+
+  const caret = (
+    <span style={{ position: "absolute", left: "50%", transform: "translateX(-50%)",
+      ...(placement === "top"
+        ? { top: "100%", borderLeft: "6px solid transparent", borderRight: "6px solid transparent", borderTop: "6px solid var(--ink-color-global-brand-black)" }
+        : { bottom: "100%", borderLeft: "6px solid transparent", borderRight: "6px solid transparent", borderBottom: "6px solid var(--ink-color-global-brand-black)" }) }} />
+  );
+
+  // Ink's canonical recipe fades the tooltip in/out (transition: opacity 0.1s) rather than
+  // mount/unmount — stay mounted once shown (see `mounted`) so hide() can animate to opacity 0
+  // instead of disappearing instantly. The global prefers-reduced-motion reset (see EASE usage
+  // elsewhere in this file) neutralizes this transition automatically for users who need it.
+  // Font size/leading and radius match theme-with-ink's canonical Tooltip recipe
+  // (components.md: 12px/16px, radius-subtle) — that skill is the styling target for this
+  // app, not the live @carta/ink package's own token values.
+  const tooltipBody = (
+    <div role="tooltip"
+      style={{ ...sans, background: "var(--ink-color-global-brand-black)", color: "var(--ink-color-global-brand-white)",
+        fontSize: FS.body, lineHeight: "16px", padding: "10px 14px", borderRadius: "var(--ink-size-global-radius-subtle)",
+        boxShadow: "var(--shadow-hover)", zIndex: 60, textAlign: "left",
+        opacity: open ? 1 : 0, transition: "opacity 0.1s", pointerEvents: "none",
+        ...(portal
+          ? { position: "fixed", left: pos?.left, top: pos?.top, width: pos?.width, transform: `translate(-50%, ${placement === "top" ? "-100%" : "0"})` }
+          : { position: "absolute", [placement === "top" ? "bottom" : "top"]: "calc(100% + 8px)", left: "50%", transform: "translateX(-50%)", width }) }}>
+      {children}
+      {caret}
+    </div>
+  );
+
   return (
-    <span style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
-      <button type="button" aria-label={label} onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide}
-        style={{ display: "flex", background: "none", border: "none", padding: 0, cursor: "default", color: "var(--ink-color-global-feedback-info-strong)" }}>
-        <HelpCircleIcon size={16} strokeWidth={1.6} />
-      </button>
-      {open && (
-        // Opens downward (toward the table), not upward — this trigger sits right
-        // under the page header, where an upward tooltip has nowhere to grow and
-        // clips against the viewport top. Every other popover in this toolbar
-        // (Dropdown, GlobalFilter) already opens downward for the same reason.
-        <div role="tooltip"
-          style={{ ...sans, position: "absolute", top: "calc(100% + 8px)", left: "50%", transform: "translateX(-50%)",
-            width, background: "var(--ink-color-global-brand-black)", color: "var(--ink-color-global-brand-white)",
-            fontSize: FS.body, lineHeight: 1.5, padding: "10px 12px", borderRadius: "var(--ink-size-global-radius-subtle)",
-            boxShadow: "var(--shadow-hover)", zIndex: 60, textAlign: "left" }}>
-          {children}
-          <span style={{ position: "absolute", bottom: "100%", left: "50%", transform: "translateX(-50%)",
-            width: 0, height: 0, borderLeft: "6px solid transparent", borderRight: "6px solid transparent",
-            borderBottom: "6px solid var(--ink-color-global-brand-black)" }} />
-        </div>
-      )}
+    <span ref={triggerRef} style={{ position: portal ? undefined : "relative", display: "inline-flex", alignItems: "center" }}
+      onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide}>
+      {triggerEl}
+      {mounted && (portal ? (pos && createPortal(tooltipBody, document.body)) : tooltipBody)}
+    </span>
+  );
+}
+
+// Circular badge shell for a small Ink icon glyph — shared by the row-level InfoTip
+// triggers below (financials/cap-table). Circle fill + icon color follow Bubble's
+// info tone; `path`/`fillRule`/`clipRule` are the one thing each glyph varies.
+function IconBadge({ label, path, fillRule, clipRule }) {
+  return (
+    <span aria-label={label} tabIndex={0} style={{ flex: "none", display: "inline-flex", alignItems: "center",
+      justifyContent: "center", width: 20, height: 20, borderRadius: "50%", background: "var(--ink-color-global-feedback-info-subtle)",
+      color: "var(--ink-color-global-feedback-info-strong)" }}>
+      <svg width="12" height="12" viewBox="0 0 22 22" aria-hidden="true">
+        <path fill="currentColor" fillRule={fillRule} clipRule={clipRule} d={path} />
+      </svg>
     </span>
   );
 }
@@ -749,28 +797,23 @@ function CompanyRow({ company, updateCompany, refDate, staleDays, assumptions, s
               {company.name}
             </span>
             {company.financials?.series?.length > 0 && (
-              <span title="Reported financials collected (Carta Data Collection) — expand to see the trend"
-                aria-label="Has reported financials" style={{ flex: "none", display: "inline-flex", alignItems: "center",
-                  justifyContent: "center", width: 15, height: 15, borderRadius: "50%", background: "var(--accent-soft)", color: "var(--ink-color-global-link-default)" }}>
-                <svg width="9" height="9" viewBox="0 0 12 12" aria-hidden="true">
-                  <path d="M2.5 6.3 L5 8.7 L9.5 3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </span>
+              <InfoTip portal placement="top" trigger={
+                <IconBadge label="Has reported financials" fillRule="evenodd" clipRule="evenodd"
+                  path="M11.8 2.65q1.13.1 2.07.52 1.26.59 2.03 1.62t.88 2.4v.42h-1.66l-.03-.21-.02-.15a3 3 0 0 0-.62-1.62 3.4 3.4 0 0 0-1.4-1.06 5 5 0 0 0-1.25-.3v5.9l.47.1q2.5.55 3.65 1.6l.27.25-.04.02q.9 1.02.9 2.63 0 1.38-.75 2.44-.75 1.04-2.09 1.6-1.08.46-2.42.53v1.68h-1.55v-1.7a8 8 0 0 1-2.18-.5 5 5 0 0 1-1.94-1.35l-.2-.26A4.6 4.6 0 0 1 5 14.78v-.41h1.65l.03.2.02.15v.01q.11.93.67 1.6.57.69 1.54 1.08l.18.06q.54.18 1.16.24v-6.2l-.18-.04a7.5 7.5 0 0 1-3.5-1.58 3.7 3.7 0 0 1-1.15-2.83v-.02q0-1.3.74-2.31a5 5 0 0 1 2-1.57 7 7 0 0 1 2.1-.51V.97h1.54zm.01 15.1q.91-.06 1.61-.33l.23-.1a3 3 0 0 0 1.2-.95q.51-.67.51-1.56v-.01q0-1.15-.77-1.8a6.5 6.5 0 0 0-2.75-1.15h-.03zM10.27 4.26q-.75.08-1.33.3-.86.38-1.34 1v.01q-.47.6-.47 1.46 0 1.09.77 1.75.74.64 2.37 1.05z" />
+              }>
+                Financials available through Carta Data Collection
+              </InfoTip>
             )}
             {company.capTable?.available && (
-              <span title={company.capTable.hasPrefTerms
-                ? "Detailed cap table available — liquidation preferences modeled (expand the row, then hover “Cap table & preferences”; incorporate the liquidation waterfall in Scenario controls)"
-                : "Detailed cap table available (expand the row, then hover “Cap table & preferences”)"}
-                aria-label={company.capTable.hasPrefTerms ? "Detailed cap table with liquidation preferences" : "Detailed cap table available"}
-                style={{ flex: "none", display: "inline-flex", alignItems: "center", justifyContent: "center",
-                  width: 15, height: 15, borderRadius: 3, border: `1px solid var(--ink-color-global-link-default)`, color: "var(--ink-color-global-link-default)",
-                  background: company.capTable.hasPrefTerms ? "var(--blue-soft, transparent)" : "transparent" }}>
-                {/* stacked-layers glyph = the preference stack */}
-                <svg width="9" height="9" viewBox="0 0 12 12" aria-hidden="true">
-                  <path d="M6 1 L11 3.5 L6 6 L1 3.5 Z M1 6 L6 8.5 L11 6 M1 8.5 L6 11 L11 8.5"
-                    fill="none" stroke="currentColor" strokeWidth="1.1" strokeLinejoin="round" strokeLinecap="round" />
-                </svg>
-              </span>
+              <InfoTip portal placement="top" trigger={
+                <IconBadge label={company.capTable.hasPrefTerms ? "Detailed cap table with liquidation preferences" : "Detailed cap table available"}
+                  fillRule="evenodd" clipRule="evenodd"
+                  path="M13.8 2a.7.7 0 0 0-1-.7l-10.4 2c-.4 0-.6.3-.6.7v16c0 .4.3.8.7.8H20c.4 0 .8-.4.8-.8v-9.7c0-.4-.3-.7-.7-.8l-6.4-.8V2Zm0 8.2v9h5.4V11l-5.4-.7Zm-1.6-7.3-9 1.7v14.7h2V12h1.5v7.3h2V7h1.6v12.3h2V2.9Z" />
+              }>
+                {company.capTable.hasPrefTerms
+                  ? "Cap table and liquidation preferences available"
+                  : "Cap table available"}
+              </InfoTip>
             )}
           </div>
         </td>
