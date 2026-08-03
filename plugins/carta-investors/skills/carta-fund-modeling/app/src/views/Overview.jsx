@@ -419,7 +419,7 @@ function TrendCard({ snapshot, fundStates, firmNow }) {
         <MultiFundPicker funds={fundList} selected={shownIds} onChange={setShownIds} colorOf={colorOf} />
       </div>
       <div style={{ position: "relative" }}>
-        <svg viewBox={`0 0 ${TW} ${TH}`} style={{ width: "100%", display: "block" }} role="img" aria-label="LP NAV by fund and TVPI over time">
+        <svg viewBox={`0 0 ${TW} ${TH}`} style={{ width: "100%", display: "block", overflow: "visible" }} role="img" aria-label="LP NAV by fund and TVPI over time">
           <line x1={TPL} x2={TW - TPR} y1={y0} y2={y0} style={{ stroke: "var(--ink-color-global-border-subtle)" }} strokeWidth="1" />
           {yearTicks.map((t) => (
             <text key={t.yr + t.i} x={cx(t.i)} y={TH - TPB + 22} textAnchor="middle" style={lab}>{t.yr}</text>
