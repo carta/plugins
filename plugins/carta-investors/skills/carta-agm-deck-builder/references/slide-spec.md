@@ -215,15 +215,14 @@ Skip a slide only when its **Required content** is completely absent from the qu
 **Right panel (Unrealized):** investments with current FMV > 0 and not fully exited
 
 **Headline guidance:**
-- `{{INVEST_HEADLINE_PLAIN}}` — "[Top realized company] returned"
-- `{{INVEST_HEADLINE_EM}}` — "[MOIC]×. [Second company] [MOIC]×. Both fully realized." (only if both realized; adapt if one)
+- `{{INVEST_HEADLINE}}` — pre-rendered HTML sentence. 1 realized exit: `"[Company] returned <em>[MOIC]</em>."` · 2+ realized exits: `"[Company A] returned <em>[MOIC]</em> &amp; [Company B] returned <em>[MOIC]</em>. Both fully realized."`
 
 **KPIs below realized chart:**
 - KPI 1 (`ds-kpi-highlight`): top realized investment — label = company name, value = total proceeds, note = "on $X.XM invested"
 - KPI 2 (`ds-kpi-highlight--2`): second realized investment — same pattern
 
 **Checksums:**
-- `{{REALIZED_CHART_MAX}}` = `{{UNREALIZED_CHART_MAX}}` (both panels share the same scale)
+- `{{REALIZED_CHART_MAX}}` is derived from realized positions only; `{{UNREALIZED_CHART_MAX}}` is derived from unrealized positions only — the two panels use independent scales
 - All "realized" companies must have proceeds > 0 in the query data
 
 ---

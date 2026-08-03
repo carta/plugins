@@ -1483,6 +1483,18 @@ def build_slide27(expense_rows: list[dict]) -> dict:
     }
 
 
+def _invest_headline(realized: list[dict]) -> str:
+    if not realized:
+        return "No realized exits in this portfolio."
+    c1 = realized[0].get("issuer_name", "Company A")
+    m1 = fmt_moic(to_f(realized[0].get("moic", 0)))
+    if len(realized) < 2:
+        return f"{c1} returned <em>{m1}</em>."
+    c2 = realized[1].get("issuer_name", "Company B")
+    m2 = fmt_moic(to_f(realized[1].get("moic", 0)))
+    return f"{c1} returned <em>{m1}</em> &amp; {c2} returned <em>{m2}</em>. Both fully realized."
+
+
 def build_slide11b(inv_rows: list[dict]) -> dict:
     """11b Investment Performance · Table of realized exits + top unrealized by MOIC."""
     if not inv_rows:
@@ -1511,10 +1523,8 @@ def build_slide11b(inv_rows: list[dict]) -> dict:
     if not realized and not unrealized:
         return {}
 
-    global_max = max(
-        (to_f(r.get("moic", 0)) for r in (realized + unrealized)[:20]),
-        default=100.0,
-    )
+    realized_max   = max((to_f(r.get("moic", 0)) for r in realized[:20]),   default=100.0)
+    unrealized_max = max((to_f(r.get("moic", 0)) for r in unrealized[:20]), default=100.0)
 
     def make_rows(items, max_n=8):
         return json.dumps([{
@@ -1525,7 +1535,7 @@ def build_slide11b(inv_rows: list[dict]) -> dict:
         } for i, r in enumerate(items[:max_n])])
 
     top1 = realized[0] if realized else unrealized[0] if unrealized else {}
-    top2 = realized[1] if len(realized) > 1 else (unrealized[0] if unrealized else {})
+    top2 = realized[1] if len(realized) > 1 else {}
 
     def kpi_parts(r, prefix):
         name = r.get("issuer_name", "Company")
@@ -1538,18 +1548,22 @@ def build_slide11b(inv_rows: list[dict]) -> dict:
         }
 
     result = {
-        "INVEST_COMPANY1":      realized[0].get("issuer_name", "Company A") if realized else "Company A",
-        "INVEST_MOIC1":         fmt_moic(to_f(realized[0].get("moic", 0))) if realized else "—",
-        "INVEST_COMPANY2":      realized[1].get("issuer_name", "Company B") if len(realized) > 1 else "Company B",
-        "INVEST_MOIC2":         fmt_moic(to_f(realized[1].get("moic", 0))) if len(realized) > 1 else "—",
-        "REALIZED_CHART_MAX":   str(round(global_max, 2)),
+        "INVEST_HEADLINE":      _invest_headline(realized),
+        "REALIZED_CHART_MAX":   str(round(realized_max, 2)),
         "REALIZED_CHART_ROWS":  make_rows(realized),
-        "UNREALIZED_CHART_MAX": str(round(global_max, 2)),
+        "UNREALIZED_CHART_MAX": str(round(unrealized_max, 2)),
         "UNREALIZED_CHART_ROWS": make_rows(unrealized),
         "UNREALIZED_NOTE":      "Unrealized MOIC = remaining FMV ÷ cost basis.",
     }
     result.update(kpi_parts(top1, "REALIZED_KPI1"))
-    result.update(kpi_parts(top2, "REALIZED_KPI2"))
+    if len(realized) >= 2:
+        result.update(kpi_parts(top2, "REALIZED_KPI2"))
+    else:
+        result.update({
+            "REALIZED_KPI2_LABEL": "",
+            "REALIZED_KPI2_VALUE": "",
+            "REALIZED_KPI2_NOTE":  "",
+        })
     return result
 
 
