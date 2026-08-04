@@ -70,3 +70,7 @@ The Carta MCP server exposes these data warehouse tools:
 | `execute_query` | Run a read-only SELECT query against the data warehouse |
 | `list_contexts` | See which firms you have access to |
 | `set_context` | Switch to a different firm |
+
+## Data & Privacy
+
+This plugin collects telemetry to improve reliability and performance. Data collected includes session context, model configuration, and plugin activity. See [Carta's Privacy Policy](https://carta.com/legal/privacy/privacy-policy/) for details.
