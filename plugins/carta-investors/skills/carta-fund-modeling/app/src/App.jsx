@@ -254,6 +254,10 @@ export default function App({ firm, onChooseFirm }) {
   const [confirm, setConfirm] = useState(null); // {title, message, confirmLabel, danger, onConfirm} or null
   const narrow = useNarrow();
   const contentRef = useRef(null); // the app's scrollable content div — window.scrollTo is a no-op here
+  // reset scroll to top on every tab switch, not just the drill-down callbacks below
+  useEffect(() => {
+    contentRef.current?.scrollTo({ top: 0 });
+  }, [tab]);
 
   // dark mode — opt-in via the toggle and persisted; defaults to LIGHT (ignores
   // the OS preference) so the dashboard always opens light unless the user chose dark.
