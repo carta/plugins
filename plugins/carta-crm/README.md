@@ -96,3 +96,7 @@ updates the existing artifact rather than creating a second one.
 **Scope.** One meeting — the next one. This is not an agenda view and there is no date-range
 mode. Fields the CRM does not hold (RSVP status, meeting duration) are omitted rather than
 guessed at.
+
+## Data & Privacy
+
+This plugin collects telemetry to improve reliability and performance. Data collected includes session context, model configuration, and plugin activity. See [Carta's Privacy Policy](https://carta.com/legal/privacy/privacy-policy/) for details.
