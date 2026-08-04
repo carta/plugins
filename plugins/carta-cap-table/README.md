@@ -62,6 +62,10 @@ Run the verdict test suite with `/cap-table-scaffold:test`. Requires the `carta-
 /cap-table-scaffold:test ai-authorization   # single suite
 ```
 
+## Data & Privacy
+
+This plugin collects telemetry to improve reliability and performance. Data collected includes session context, model configuration, and plugin activity. See [Carta's Privacy Policy](https://carta.com/legal/privacy/privacy-policy/) for details.
+
 ## Contributing
 
 See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for the playbook on adding new skills, MCP commands, write actions, and when to move logic to Python.
