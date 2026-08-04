@@ -221,11 +221,14 @@ mkdir -p "$WORKSPACE"
 # would resolve to an empty string or a host-side macOS path the
 # sandbox can't read. This probe resolves the install path in both
 # environments without depending on harness substitution.
-if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -d "$CLAUDE_PLUGIN_ROOT/skills/carta-co-investors" ]; then
+if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -d "$CLAUDE_PLUGIN_ROOT/skills/carta-portfolio-analytics-routing/references/co-investors" ]; then
+  SKILL_DIR="$CLAUDE_PLUGIN_ROOT/skills/carta-portfolio-analytics-routing/references/co-investors"
+elif [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -d "$CLAUDE_PLUGIN_ROOT/skills/carta-co-investors" ]; then
   SKILL_DIR="$CLAUDE_PLUGIN_ROOT/skills/carta-co-investors"
 else
-  # Cowork: the plugin is bind-mounted at $HOME/mnt/.remote-plugins/plugin_*/skills/carta-co-investors
-  SKILL_DIR=$(find "${HOME}/mnt/.remote-plugins" -maxdepth 3 -type d -name "carta-co-investors" 2>/dev/null | head -1)
+  # Cowork: the plugin is bind-mounted at $HOME/mnt/.remote-plugins/plugin_*/skills/carta-portfolio-analytics-routing
+  SKILL_DIR=$(find "${HOME}/mnt/.remote-plugins" -maxdepth 3 -type d -name "carta-portfolio-analytics-routing" 2>/dev/null | head -1)
+  SKILL_DIR="${SKILL_DIR:+$SKILL_DIR/references/co-investors}"
 fi
 if [ -z "${SKILL_DIR:-}" ] || [ ! -d "$SKILL_DIR/scripts" ]; then
   echo "ERROR: could not locate carta-co-investors skill install dir" >&2
@@ -468,7 +471,7 @@ Tell the user: `Artifact generated. Opening preview panel…`
   "runtimeExecutable": "uv",
   "runtimeArgs": [
     "run", "python",
-    "${CLAUDE_PLUGIN_ROOT}/skills/carta-co-investors/scripts/preview_server.py",
+    "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-analytics-routing/references/co-investors/scripts/preview_server.py",
     "--serve-dir", "<workspace_path>"
   ],
   "autoPort": true

@@ -100,8 +100,8 @@ The fund list comes straight from Step 2's `fa:list:entities` response. Preserve
 **4b.** Run the bundled Python script:
 
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-soi/scripts/render-artifact.py" \
-    "${CLAUDE_PLUGIN_ROOT}/skills/carta-soi/references/artifact.html" \
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-analytics-routing/references/soi/scripts/render-artifact.py" \
+    "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-analytics-routing/references/soi/artifact.html" \
     "<CWD>/<firm-slug>-fund-soi-collection.html" \
     "<firm-slug>-fund-soi-collection" \
     "<MCP_TOOL_NAME>" \
@@ -113,7 +113,7 @@ uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-soi/scripts/render-artifact.py" \
 
 Positional arguments:
 
-1. **Template path** — `${CLAUDE_PLUGIN_ROOT}/skills/carta-soi/references/artifact.html` (verbatim).
+1. **Template path** — `${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-analytics-routing/references/soi/artifact.html` (verbatim).
 2. **Output path** — must be **absolute**, under the session's current working directory (`<CWD>`), and **not under `/tmp`** (`mcp__cowork__create_artifact` rejects `/tmp` paths). Use `pwd` to resolve `<CWD>` if needed. Filename is `<firm-slug>-fund-soi-collection.html`.
 3. **Artifact ID** — the kebab-case Cowork artifact id, same string you'll pass as `id` to `create_artifact` / `update_artifact` in Step 5. Must equal `<firm-slug>-fund-soi-collection`.
 4. **MCP tool name** — the full `mcp__<UUID>__call_tool` string from Step 3.
