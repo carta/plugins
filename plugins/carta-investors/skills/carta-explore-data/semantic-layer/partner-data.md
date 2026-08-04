@@ -21,7 +21,7 @@ Query limited-partner and general-partner data: commitments, contributions, mana
 
 One row per partner per fund — current/snapshot totals.
 
-> **Column names that trip up the agent (do not use these):** there is no `PARTNER_TYPE` (use `PARTNER_ENTITY_TYPE` or `PARTNER_CLASS_NAME`), no bare `COMMITMENT` or `COMMITMENT_AMOUNT` (use `TOTAL_CAPITAL_COMMITMENT_AMOUNT_CURRENT`), and no `FUND_ID` (the fund column here is `FUND_UUID`).
+> **Column names that trip up the agent (do not use these):** there is no `PARTNER_TYPE` (use `PARTNER_ENTITY_TYPE` or `PARTNER_CLASS_NAME`), no bare `COMMITMENT`, `COMMITMENT_AMOUNT`, `TOTAL_COMMITMENT`, or `COMMITTED_CAPITAL` (use `TOTAL_CAPITAL_COMMITMENT_AMOUNT_CURRENT`), no `SENT_DATE` or `PRIMARY_CONTACT_EMAIL` (those don't exist on this table), and no `FUND_ID` (the fund column here is `FUND_UUID`).
 
 | Column | Description |
 |--------|-------------|
