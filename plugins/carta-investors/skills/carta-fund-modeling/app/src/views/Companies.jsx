@@ -17,7 +17,7 @@ import { useTableSort, SortIcon, useStickyHeader, TableScroll } from "../ui/tabl
 import RepriceControl from "../ui/RepriceControl.jsx";
 import ConfirmDialog from "../ui/ConfirmDialog.jsx";
 import { repricePosition, positionReprice, carryRateFor, companyRepriceState, exitHorizonFor,
-  companyIsWaterfall, companyHasCapTable, companyReferenceExit, companyExitValueAbs, quarterOffsetDate } from "../model/reprice.js";
+  companyIsWaterfall, companyHasCapTable, companyReferenceExit, companyExitValueAbs, quarterOffsetDate, quartersBetween } from "../model/reprice.js";
 import { fundExitProceeds, fundProceedsCurve, preferenceSummary, normClass } from "../model/liqpref.js";
 import { scenarioDealIrr, entryLegsFor, anchorIrrByRatio } from "../model/dealIrr.js";
 import { xirr } from "../model/xirr.js";
@@ -231,7 +231,9 @@ function ExitIrrCurve({ company, totalFv, curFv, proceeds, navAsOf, selectedQ })
 }
 
 // Slider + IRR-over-time line for a realized company; persists the offset as `company.exitTimingQ`.
-function ExitTimingSection({ company, totalFv, curFv, proceeds, navAsOf, locked, updateCompany, onDragStart, onDragEnd }) {
+// Until the user drags it, the slider defaults to the fund-wide exit horizon (the
+// "Exit: +N years" master strategy above), not today — `defaultExitQ` carries that.
+function ExitTimingSection({ company, totalFv, curFv, proceeds, navAsOf, locked, updateCompany, defaultExitQ = 0, onDragStart, onDragEnd }) {
   if (!navAsOf) {
     return (
       <div style={{ marginBottom: 14 }}>
@@ -242,7 +244,7 @@ function ExitTimingSection({ company, totalFv, curFv, proceeds, navAsOf, locked,
       </div>
     );
   }
-  const selectedQ = Math.round(company.exitTimingQ ?? 0);
+  const selectedQ = Math.round(company.exitTimingQ ?? defaultExitQ);
   const cfg = {
     value: selectedQ, min: 0, max: EXIT_Q_MAX, step: 1,
     fmtVal: (q) => exitQLabel(navAsOf, Math.round(q)),
@@ -934,6 +936,8 @@ function CompanyRow({ company, updateCompany, refDate, staleDays, assumptions, s
                   {company.exited && !company.realized && (
                     <ExitTimingSection company={company} totalFv={totalFv} curFv={curFv} proceeds={totalProceeds}
                       navAsOf={snapshot?.source?.navAsOf} locked={readOnly} updateCompany={updateCompany}
+                      defaultExitQ={Math.max(0, Math.min(EXIT_Q_MAX,
+                        quartersBetween(snapshot?.source?.navAsOf, exitHorizonFor(assumptions, snapshot, company.fundId))))}
                       onDragStart={onDragStart} onDragEnd={onDragEnd} />
                   )}
                   <div style={{ marginBottom: 14 }}>

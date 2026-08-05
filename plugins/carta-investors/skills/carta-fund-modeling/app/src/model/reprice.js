@@ -208,6 +208,14 @@ export function quarterOffsetDate(anchorISO, q) {
   return dt.toISOString().slice(0, 10);
 }
 
+/** Inverse of quarterOffsetDate: whole quarters between an ISO anchor and an ISO target date (month-based, day-agnostic, matching quarterOffsetDate's own arithmetic). */
+export function quartersBetween(anchorISO, targetISO) {
+  const [ay, am] = String(anchorISO || "").split("-").map(Number);
+  const [ty, tm] = String(targetISO || "").split("-").map(Number);
+  if (!ay || !ty) return 0;
+  return Math.round(((ty - ay) * 12 + (tm - am)) / 3);
+}
+
 /**
  * Per-fund exit horizon derived from realized companies' exit-timing sliders: the
  * proceeds-weighted average exit quarter, offset from navAsOf. Funds with no
