@@ -20,7 +20,7 @@ import { warn, WarnToast, BASELINE_LOCKED_MSG } from "./ui/warn.jsx";
 import { parseRoute, navigate, subscribeNav } from "./route.js";
 import { fmContext } from "./pinpoint/fmContext.js";
 import { postToOuter, onFromOuter } from "./bridge-client.js";
-import { trackFundModeling } from "./analytics.js";
+import { trackClick, trackRender } from "./analytics.js";
 
 const I = ({ d, extra }) => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flex: "none" }}>
@@ -224,13 +224,13 @@ export default function App({ firm, onChooseFirm }) {
   // from drill-downs (openFund/openFundSection) and the per-fund-tab auto-select,
   // which aren't user nav clicks.
   const selectTab = (id) => {
-    trackFundModeling("click", `FundModeling.Nav.${TAB_VIEW_NAMES[id]}`);
+    trackClick(`FundModeling.Nav.${TAB_VIEW_NAMES[id]}`);
     setTab(id);
   };
   // Fires once per view becoming active, however it got there (nav click,
   // drill-down, back/forward, or a direct link).
   useEffect(() => {
-    trackFundModeling("render", `FundModeling.${TAB_VIEW_NAMES[tab]}.View`);
+    trackRender(`FundModeling.${TAB_VIEW_NAMES[tab]}.View`);
   }, [tab]);
   // Normalize a bare /firm/<slug> to /firm/<slug>/overview so the URL always names
   // the page shown (a reload of the bare firm path lands here first).

@@ -1,17 +1,12 @@
-// Snowplow UI-event tracking for the fund-modeling console via
-// @carta/mcp-ui-tracker (vendored at webapp/vendor/mcp-ui-tracker.global.js).
-// This is a full running React micro-app (routing, own server, outer-shell
-// iframe) rather than a single skill-produced artifact — interfaceType is
-// "micro_app". No MCP-host app.connect() handshake here, so init fires as
-// early as possible.
+// Snowplow UI-event tracking for the fund-modeling console via @carta/mcp-ui-tracker
+// (vendored at webapp/vendor/mcp-ui-tracker.global.js). A full React micro-app, not a
+// skill-produced artifact — hence interfaceType "micro_app" with no app.connect()
+// handshake to await, so init fires as early as possible.
 //
-// `env` is the Carta environment the skill's build resolved the data from
-// (threaded via the launch URL's ?env= param, set by serve.py from
-// snapshot.source.cartaEnvironment, which itself defaults to "production" —
-// see serve.py/build_datadir.py). "nonprod" must be explicit; anything else
-// (including a missing/garbled param, e.g. a stale bookmarked URL) resolves
-// to "production" — this is a customer-facing plugin, so an unclassified
-// launch is far more likely real production usage than a staff test session.
+// env comes from the launch URL's ?env= param (serve.py/build_datadir.py set it from the
+// cached snapshot's cartaEnvironment). Only an explicit "nonprod" counts; anything else —
+// missing, garbled, or a stale bookmark — defaults to "production", since an unclassified
+// launch of a customer-facing plugin is far more likely real prod use than a test session.
 export function initFundModelingTracker(env) {
   if (typeof window === "undefined" || !window.mcpUiTracker) return;
   window.mcpUiTracker.initTracker({
@@ -20,7 +15,10 @@ export function initFundModelingTracker(env) {
   });
 }
 
-export function trackFundModeling(action, elementId, options) {
+function track(action, elementId) {
   if (typeof window === "undefined" || !window.mcpUiTracker || !window.mcpUiTracker.getTransport()) return;
-  window.mcpUiTracker.trackUiEvent(action, elementId, options);
+  window.mcpUiTracker.trackUiEvent(action, elementId);
 }
+
+export const trackClick = (elementId) => track("click", elementId);
+export const trackRender = (elementId) => track("render", elementId);

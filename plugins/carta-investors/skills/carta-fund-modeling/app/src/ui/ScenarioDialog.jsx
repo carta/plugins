@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef } from "react";
 import { FS, sans, MICRO } from "./theme.js";
 import { Btn } from "./components.jsx";
-import { trackFundModeling } from "../analytics.js";
+import { trackClick, trackRender } from "../analytics.js";
 
 // A small, distinct palette for tagging scenarios. Literal hex — these are
 // user-chosen semantic labels, stable across light/dark. `null` = no color.
@@ -26,7 +26,7 @@ export default function ScenarioDialog({ mode, initialName = "", initialColor = 
 
   useEffect(() => { inputRef.current?.focus(); inputRef.current?.select(); }, []);
   useEffect(() => {
-    trackFundModeling("render", "FundModeling.ScenarioDialog.View");
+    trackRender("FundModeling.ScenarioDialog.View");
   }, []);
   useEffect(() => {
     const onKey = (e) => { if (e.key === "Escape") onCancel(); };
@@ -35,7 +35,7 @@ export default function ScenarioDialog({ mode, initialName = "", initialColor = 
   }, [onCancel]);
 
   const trimmed = name.trim();
-  const submit = () => { if (trimmed) { trackFundModeling("click", "FundModeling.ScenarioDialog.Submit"); onSubmit(trimmed, color); } };
+  const submit = () => { if (trimmed) { trackClick("FundModeling.ScenarioDialog.Submit"); onSubmit(trimmed, color); } };
   const title = mode === "rename" ? "Rename scenario" : "New scenario";
   const label = { ...sans, fontSize: FS.micro, fontWeight: 600, letterSpacing: "0.09em",
     textTransform: "uppercase", color: MICRO, display: "block" };
@@ -79,7 +79,7 @@ export default function ScenarioDialog({ mode, initialName = "", initialColor = 
         </div>
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 24 }}>
-          <Btn size="comfortable" onClick={() => { trackFundModeling("click", "FundModeling.ScenarioDialog.Cancel"); onCancel(); }}>Cancel</Btn>
+          <Btn size="comfortable" onClick={() => { trackClick("FundModeling.ScenarioDialog.Cancel"); onCancel(); }}>Cancel</Btn>
           <Btn size="comfortable" kind="primary" onClick={submit} disabled={!trimmed}>{mode === "rename" ? "Save" : "Create scenario"}</Btn>
         </div>
       </div>

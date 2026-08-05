@@ -515,8 +515,9 @@ run `npm run build` after editing source** — there is no build step for source
 React/Sucrase version bump.
 
 ## Analytics
-New interactive elements: call `trackFundModeling(action, elementId)` (import from `../analytics.js` or the
-correct relative path) at the top of the handler, IDs as `FundModeling.<Area>.<Specific>` (e.g.
+New interactive elements: call `trackClick(elementId)` (or `trackRender(elementId)` for view/dialog mounts)
+(import from `../analytics.js` or the correct relative path) at the top of the handler, IDs as
+`FundModeling.<Area>.<Specific>` (e.g.
 `FundModeling.Overview.ExportClick`) — skip sort clicks, keystrokes, dropdown changes. The tracker bundle at
 `webapp/vendor/mcp-ui-tracker.global.js` is vendored from `@carta/mcp-ui-tracker`'s `build:browser` output — if
 the upstream library changes, rebuild and overwrite that file.

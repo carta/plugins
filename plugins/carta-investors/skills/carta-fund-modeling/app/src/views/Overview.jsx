@@ -9,7 +9,7 @@ import { quarterlySeries, trailingAvg } from "../model/pacing.js";
 import { concentrationAcrossAll } from "../model/concentration.js";
 import { recentActivity } from "../model/activity.js";
 import { useFirmData } from "../state/FirmData.jsx";
-import { trackFundModeling } from "../analytics.js";
+import { trackClick } from "../analytics.js";
 
 // ── pacing chart (lifted from the former Pacing view) ──
 // Categorical fund palette using Ink data-viz token hex values. SVG fill attributes
@@ -618,7 +618,7 @@ export default function Overview({ fundStates, snapshot, portfolio, onOpenFund }
                 const fundName = fundNameOnly(f.name);
                 return (
                 <tr key={f.id} data-datum-id={f.id} data-datum-type="fund" data-datum-label={fundName}
-                  onClick={() => { trackFundModeling("click", "FundModeling.Overview.OpenFund"); onOpenFund(f.id); }}
+                  onClick={() => { trackClick("FundModeling.Overview.OpenFund"); onOpenFund(f.id); }}
                   style={{ cursor: "pointer" }} title="Open scenarios">
                   <td style={{ minWidth: 220, maxWidth: 320 }}
                     title={fundName}>

@@ -12,7 +12,7 @@ import { TableHead, useTableSort, TableScroll } from "../ui/table.jsx";
 import { computeReserves, nearlyDeployed, optimalReserveAllocation, newDealCount } from "../model/reserves.js";
 import { deploymentRunway } from "../model/runway.js";
 import { useFirmData } from "../state/FirmData.jsx";
-import { trackFundModeling } from "../analytics.js";
+import { trackClick } from "../analytics.js";
 
 /** A quarter count rendered as "3.0 qtrs · ~9 mo" for quick reading. */
 const fmtRunway = (q) => `${q.toFixed(1)} qtrs · ~${Math.round(q * 3)} mo`;
@@ -283,11 +283,11 @@ export default function Reserves({ snapshot, portfolio, setAssumption, readOnly 
           <span style={{ ...sans, fontSize: FS.bodyLg, fontWeight: 650, color: "var(--ink-color-global-text-default)" }}>Committed capital, allocated</span>
           <span style={{ ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)" }}>fee, follow-on &amp; recycling set per fund{readOnly ? " · locked" : ""}</span>
           {spvCount > 0 && (
-            <Toggle checked={showSpv} onChange={(v) => { trackFundModeling("click", "FundModeling.Reserves.ToggleShowSpvs"); setShowSpv(v); }}
+            <Toggle checked={showSpv} onChange={(v) => { trackClick("FundModeling.Reserves.ToggleShowSpvs"); setShowSpv(v); }}
               labels={[`Show SPVs (${spvCount})`, `Show SPVs (${spvCount})`]} />
           )}
           {hiddenCount > 0 && (
-            <Toggle checked={showCalled} onChange={(v) => { trackFundModeling("click", "FundModeling.Reserves.ToggleShowCalledFunds"); setShowCalled(v); }}
+            <Toggle checked={showCalled} onChange={(v) => { trackClick("FundModeling.Reserves.ToggleShowCalledFunds"); setShowCalled(v); }}
               labels={[`Show fully called funds (${hiddenCount})`, `Show fully called funds (${hiddenCount})`]} />
           )}
           <span style={{ flex: 1 }} />
@@ -384,7 +384,7 @@ export default function Reserves({ snapshot, portfolio, setAssumption, readOnly 
             <span style={{ ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)" }}>where the next dollar works hardest</span>
             <span style={{ flex: 1 }} />
             {noPoolCount > 0 && (
-              <Toggle checked={hideNoPool} onChange={(v) => { trackFundModeling("click", "FundModeling.Reserves.ToggleHideNoPool"); setHideNoPool(v); }}
+              <Toggle checked={hideNoPool} onChange={(v) => { trackClick("FundModeling.Reserves.ToggleHideNoPool"); setHideNoPool(v); }}
                 labels={[`Hide funds with no reserve pool (${noPoolCount})`, `Hide funds with no reserve pool (${noPoolCount})`]} />
             )}
           </div>
