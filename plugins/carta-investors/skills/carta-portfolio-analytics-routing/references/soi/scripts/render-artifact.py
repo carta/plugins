@@ -16,12 +16,15 @@ Doing the substitution in a script (rather than asking the LLM to Read → modif
 cutting tokens and latency.
 
 Usage:
-    uv run render-artifact.py <template> <output> <artifact_id> \\
+    uv run render-artifact.py <output> <artifact_id> \\
         <mcp_tool> <firm_uuid> <firm_name> <funds_file> <initial_fund_uuid>
 
+The template is resolved relative to this file, so callers only locate the script.
+
 <funds_file> is a path to a JSON file whose contents are a non-empty list of
-{"uuid": "...", "name": "...", "currency": "..."} dicts (currency is optional). It is a path (not a positional JSON
-string) because legitimate fund names contain apostrophes ("O'Reilly Capital",
+{"uuid": "...", "name": "...", "currency": "..."} dicts; all three keys are
+required on every entry. It is a path (not a positional JSON string) because
+legitimate fund names contain apostrophes ("O'Reilly Capital",
 "St. James's Place Holdings"), JSON does not escape ', and shell single-quoting
 needed to preserve JSON's embedded double quotes terminates on the first '.
 The tempfile bridge eliminates that hazard.
@@ -46,6 +49,13 @@ import json
 import re
 import sys
 from pathlib import Path
+
+# Two ship locations with different template offsets; probing both keeps the
+# carta-soi and carta-portfolio-analytics-routing copies byte-identical.
+TEMPLATE_CANDIDATES = (
+    Path(__file__).resolve().parent.parent / "references" / "artifact.html",
+    Path(__file__).resolve().parent.parent / "artifact.html",
+)
 
 PLACEHOLDERS = (
     "{{FUNDS_JSON}}",
@@ -140,19 +150,24 @@ def load_funds(funds_file: Path) -> "list | None":
         if not isinstance(entry["name"], str) or entry["name"] == "":
             print(f"error: fund entry #{i} has invalid name: {entry['name']!r}", file=sys.stderr)
             return None
+        # An amount rendered without its currency is misleading, so a blank or
+        # non-string code is rejected rather than displayed empty.
+        if not isinstance(entry["currency"], str) or entry["currency"] == "":
+            print(f"error: fund entry #{i} has invalid currency: {entry['currency']!r}", file=sys.stderr)
+            return None
     return data
 
 
 def main() -> int:
-    if len(sys.argv) != 9:
+    if len(sys.argv) != 8:
         print(
-            "usage: render-artifact.py <template> <output> <artifact_id> "
+            "usage: render-artifact.py <output> <artifact_id> "
             "<mcp_tool> <firm_uuid> <firm_name> <funds_file> <initial_fund_uuid>",
             file=sys.stderr,
         )
         return 2
 
-    (template, output, artifact_id, mcp_tool,
+    (output, artifact_id, mcp_tool,
      firm_uuid, firm_name, funds_file, initial_fund_uuid) = sys.argv[1:]
 
     if not UUID_RE.match(firm_uuid):
@@ -187,9 +202,13 @@ def main() -> int:
         )
         return 1
 
-    src = Path(template)
-    if not src.is_file():
-        print(f"error: template not found: {template}", file=sys.stderr)
+    src = next((c for c in TEMPLATE_CANDIDATES if c.is_file()), None)
+    if src is None:
+        print(
+            "error: template artifact.html not found at any of: "
+            + ", ".join(str(c) for c in TEMPLATE_CANDIDATES),
+            file=sys.stderr,
+        )
         return 1
 
     content = src.read_text(encoding="utf-8")

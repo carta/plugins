@@ -84,9 +84,9 @@ Procedure:
 
 > **You must NEVER write the artifact HTML manually.** Every render goes through `render-artifact.py`. Manual edits — `Read` + `Edit` / `Write` against the rendered HTML or the template — bypass the placeholder substitution and validation logic. If the script fails, surface the error and stop. Do not fall back to manual edits.
 
-Two sub-steps:
+Three sub-steps:
 
-**4a.** Use the `Write` tool to drop the firm's fund list to a JSON file inside the session's current working directory. Filename should be `<firm-slug>-funds.json`. Contents must be a JSON array of `{"uuid", "name"}` objects:
+**4a.** Use the `Write` tool to drop the firm's fund list to a JSON file inside the session's current working directory. Filename should be `<firm-slug>-funds.json`. Contents must be a JSON array of `{"uuid", "name", "currency"}` objects — all three keys required; `currency` is the fund's own code from Step 2, not a default:
 
 ```json
 [
@@ -97,11 +97,20 @@ Two sub-steps:
 
 The fund list comes straight from Step 2's `fa:list:entities` response. Preserve the entity name verbatim — including apostrophes, ampersands, commas, and any punctuation. The script JSON-escapes hostile characters at substitution time.
 
-**4b.** Run the bundled Python script:
+**4b.** Locate the script:
 
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-analytics-routing/references/soi/scripts/render-artifact.py" \
-    "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-analytics-routing/references/soi/artifact.html" \
+find /sessions "$HOME/mnt" -type f -path '*/carta-portfolio-analytics-routing/references/soi/scripts/render-artifact.py' 2>/dev/null | head -1
+```
+
+If it prints nothing, use `${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-analytics-routing/references/soi/scripts/render-artifact.py`.
+
+**4c.** Render, substituting the path from 4b **literally**. `allowed-tools`
+matches the command text, so a shell variable in place of the path fails the
+allowlist and the call has to be approved by hand each time:
+
+```bash
+uv run "<SCRIPT_PATH>" \
     "<CWD>/<firm-slug>-fund-soi-collection.html" \
     "<firm-slug>-fund-soi-collection" \
     "<MCP_TOOL_NAME>" \
@@ -111,16 +120,28 @@ uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-analytics-routing/reference
     "<INITIAL_FUND_UUID>"
 ```
 
+Keep the `find` scoped to those two roots — the remote plugin mounts, the only
+place bash can reach this script, since it cannot reach the path
+`${CLAUDE_PLUGIN_ROOT}` expands to there. Locally neither exists, the `find` is
+empty, and the plugin-root path is the correct one. Do not broaden to `$HOME` or
+`/`: it takes tens of seconds and can resolve a stale cached copy.
+
+If `uv run` fails because the script file does not exist (not on a validation
+error), bash cannot reach the plugin mount but `Read` can. Copy both files into
+`<CWD>/soi-render/` as `scripts/render-artifact.py` and
+`references/artifact.html`, run that copy, and report that the fallback fired so
+the mount path gets fixed. One attempt — if it fails too, stop rather than
+hand-writing the HTML.
+
 Positional arguments:
 
-1. **Template path** — `${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-analytics-routing/references/soi/artifact.html` (verbatim).
-2. **Output path** — must be **absolute**, under the session's current working directory (`<CWD>`), and **not under `/tmp`** (`mcp__cowork__create_artifact` rejects `/tmp` paths). Use `pwd` to resolve `<CWD>` if needed. Filename is `<firm-slug>-fund-soi-collection.html`.
-3. **Artifact ID** — the kebab-case Cowork artifact id, same string you'll pass as `id` to `create_artifact` / `update_artifact` in Step 5. Must equal `<firm-slug>-fund-soi-collection`.
-4. **MCP tool name** — the full `mcp__<UUID>__call_tool` string from Step 3.
-5. **Firm UUID** — the firm's UUID from Step 1. The artifact calls `set_context` with this on every load to pin the user's MCP firm context, so the dwh query succeeds even if the user switched contexts elsewhere.
-6. **Firm name** — the human-readable firm name from Step 1.
-7. **Funds file path** — the absolute path to the JSON file you wrote in 4a. Must also be under CWD and not under `/tmp`.
-8. **Initial fund UUID** — the `initial_fund_uuid` chosen in Step 2. Must be one of the uuids in the funds file; the script refuses if it isn't.
+1. **Output path** — must be **absolute**, under the session's current working directory (`<CWD>`), and **not under `/tmp`** (`mcp__cowork__create_artifact` rejects `/tmp` paths). Use `pwd` to resolve `<CWD>` if needed. Filename is `<firm-slug>-fund-soi-collection.html`.
+2. **Artifact ID** — the kebab-case Cowork artifact id, same string you'll pass as `id` to `create_artifact` / `update_artifact` in Step 5. Must equal `<firm-slug>-fund-soi-collection`.
+3. **MCP tool name** — the full `mcp__<UUID>__call_tool` string from Step 3.
+4. **Firm UUID** — the firm's UUID from Step 1. The artifact calls `set_context` with this on every load to pin the user's MCP firm context, so the dwh query succeeds even if the user switched contexts elsewhere.
+5. **Firm name** — the human-readable firm name from Step 1.
+6. **Funds file path** — the absolute path to the JSON file you wrote in 4a. Must also be under CWD and not under `/tmp`.
+7. **Initial fund UUID** — the `initial_fund_uuid` chosen in Step 2. Must be one of the uuids in the funds file; the script refuses if it isn't.
 
 On success, the script prints one stdout line: the absolute output path. The script exits non-zero on any validation failure (bad UUID, bad MCP tool slug, output or funds file outside CWD, empty funds list, malformed fund entries, initial_fund_uuid not present in the list, template missing, missing placeholders). If it fails, surface the error and abort.
 
