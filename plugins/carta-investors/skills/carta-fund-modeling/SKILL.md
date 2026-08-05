@@ -198,6 +198,14 @@ warm-cache launch skips this step entirely — no MCP.
 **Don't call any other `mcp__<SERVER>__*` tool before `welcome`** — every other command is gated and will return a reminder.
 **Fund Admin only — never `fund_forecasting:*`.**
 
+**Classify the environment from `<SERVER>`'s name.** A name containing `test`/`sandbox`/`demo`/`preprod`/
+`preproduction` (case-insensitive) → `cartaEnvironment = "nonprod"`. Everything else — `carta`,
+`carta_production`, any other name, or an opaque UUID (some connectors expose one instead of a name, per
+`carta-home-build/SKILL.md`'s Step 0) — → `"production"`. This is a customer-facing plugin, so the common
+case by volume is real production usage; an unrecognized identifier is far more likely to be a production
+connector we haven't named yet than a staff test session, and staff noise is filterable downstream (the
+server already knows `is_staff` per request). Carry `cartaEnvironment` to Step 3's `meta.json`.
+
 **Resolve the firm via `list_contexts`.** Call `list_contexts {firm_name: "<typed firm name>"}` — **always pass
 the typed name; never call it bare** (bare can return an already-active firm instead of the one asked for).
 
@@ -445,11 +453,12 @@ console: do **not** fetch tearsheets, schedule of investments, or cash-flow stat
 > **What's happening:** Transforming the raw query files into the structured JSON the React app consumes — portfolio companies, fund metrics, LP data, and benchmarks. A script handles this deterministically; no manual JSON writing.
 
 Write `<raw_dir>/meta.json` = `{"name":"<canonical name>","slug":"<slug printed by Step-1 resolve>","navAsOf":"<latest month_end_date, ISO>",
-"mark":{"text":"<≤3-char initials>","bg":"<hex>","fg":"<hex>"},"firmId":<carta_id from Step 1, or null if absent>,"firmUuid":"<firm_uuid from Step 1>"}`
+"mark":{"text":"<≤3-char initials>","bg":"<hex>","fg":"<hex>"},"firmId":<carta_id from Step 1, or null if absent>,"firmUuid":"<firm_uuid from Step 1>","cartaEnvironment":"<production|nonprod from Step 1>"}`
 (optional `"carryRate"`, default 0.20). **`name` and `slug` are both the canonical firm identity from Step 1
 (`slug` = the canonical-name slug, the cache key; `name` = the canonical `name`), and `firmId`/`firmUuid` are
-the canonical ids** — the builder writes them to `snapshot.source` so a later URL/UUID invocation finds this
-cache via `find-by-id` without a fetch (Step 0). Then
+the canonical ids** — the builder writes them (and `cartaEnvironment`) to `snapshot.source` so a later
+URL/UUID invocation finds this cache via `find-by-id` without a fetch (Step 0), and `serve.py` can tell the
+browser's Snowplow tracker which collector to use. Then
 run the firm-agnostic generator — it transforms the `<raw_dir>` files into every console-schema file the app needs:
 ```bash
 uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-modeling/scripts/build_datadir.py" \
@@ -457,7 +466,7 @@ uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-modeling/scripts/build_datadir.p
 ```
 It writes `firms.json`, `snapshot.json`, `portfolio.json`, `pacing.json`, and — when the inputs exist —
 `company-ownership.json` + `lp-base.json`, in the exact shapes `src/model/*` consume. In particular it emits
-**`snapshot.source` as an object** (`{firm,firmId,firmUuid,navAsOf,marksAsOf,marksPulledAt,currency,mixedCurrency}`); the app
+**`snapshot.source` as an object** (`{firm,firmId,firmUuid,navAsOf,marksAsOf,marksPulledAt,currency,mixedCurrency,cartaEnvironment}`); the app
 runs `source.navAsOf.slice(0,4)`, so a `source` written as a bare string blanks the **Companies** and
 **Exit & IRR** tabs. The generator resolves the firm's real reporting currency (never hardcoded USD), keeps
 realized companies inert (`realized:true, includeInNav:false, cartaFv:0`), reads ownership from the
@@ -504,6 +513,13 @@ Source under `app/src/` is served directly; the service worker transpiles `.jsx`
 run `npm run build` after editing source** — there is no build step for source edits: edit a file in
 `app/src/`, refresh, done. `npm run build` only rebuilds `webapp/vendor/*` and is needed **only** on a
 React/Sucrase version bump.
+
+## Analytics
+New interactive elements: call `trackFundModeling(action, elementId)` (import from `../analytics.js` or the
+correct relative path) at the top of the handler, IDs as `FundModeling.<Area>.<Specific>` (e.g.
+`FundModeling.Overview.ExportClick`) — skip sort clicks, keystrokes, dropdown changes. The tracker bundle at
+`webapp/vendor/mcp-ui-tracker.global.js` is vendored from `@carta/mcp-ui-tracker`'s `build:browser` output — if
+the upstream library changes, rebuild and overwrite that file.
 
 ## Common failure modes
 

@@ -5,6 +5,7 @@ import { H1, H2, Btn, Eyebrow, MethodNote, SourceNote, FundPicker, Slider, StatT
 import { TableHead, useTableSort, TableScroll } from "../../ui/table.jsx";
 import { useFirmData } from "../../state/FirmData.jsx";
 import { useScenarioModel } from "./useScenarioModel.js";
+import { trackFundModeling } from "../../analytics.js";
 
 // GP returns per exit multiple. Net TVPI sorts on the exit multiple (the row key).
 const GP_RET_COLS = [
@@ -141,7 +142,7 @@ export default function GpEconomics(props) {
             Pre-set based on Carta configuration.
             {!readOnly && !editWaterfall && (
               <>{" "}
-                <Btn kind="link" onClick={() => setEditWaterfall(true)} style={{ fontSize: FS.small }}>
+                <Btn kind="link" onClick={() => { trackFundModeling("click", "FundModeling.GpEconomics.EditWaterfall"); setEditWaterfall(true); }} style={{ fontSize: FS.small }}>
                   Edit Waterfall
                 </Btn>
               </>
@@ -162,10 +163,10 @@ export default function GpEconomics(props) {
                 Overrides this fund's terms for the active scenario. Preferred return is a hurdle on paid-in (LPs recover capital + this return before catch-up/carry); set catch-up to 0 to disable.
               </p>
               <div style={{ display: "flex", gap: 16, alignItems: "center", marginTop: 2 }}>
-                <Btn kind="link" onClick={() => setEditWaterfall(false)} style={{ fontSize: FS.small }}>
+                <Btn kind="link" onClick={() => { trackFundModeling("click", "FundModeling.GpEconomics.CloseWaterfallEdit"); setEditWaterfall(false); }} style={{ fontSize: FS.small }}>
                   Close
                 </Btn>
-                <Btn kind="link" onClick={m.revertWaterfall} style={{ fontSize: FS.small, color: "var(--ink-color-global-text-subtle)" }}>
+                <Btn kind="link" onClick={() => { trackFundModeling("click", "FundModeling.GpEconomics.RevertWaterfall"); m.revertWaterfall(); }} style={{ fontSize: FS.small, color: "var(--ink-color-global-text-subtle)" }}>
                   Revert to Carta configuration
                 </Btn>
               </div>

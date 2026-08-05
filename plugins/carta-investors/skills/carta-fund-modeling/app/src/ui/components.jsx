@@ -256,7 +256,7 @@ export function Toggle({ checked, onChange, labels = ["On", "Off"], disabled, lo
       role="switch"
       aria-checked={checked}
       disabled={disabled}
-      title={muted ? "Locked — duplicate into a scenario to edit" : title}
+      title={locked ? "Locked — duplicate into a scenario to edit" : title}
       style={{ ...sans, display: "inline-flex", alignItems: "center", gap: small ? 6 : 8, fontSize: small ? FS.small : FS.body, fontWeight: 500,
         border: "none", background: "transparent", color: checked ? "var(--ink-color-global-text-default)" : "var(--ink-color-global-text-subtle)",
         cursor: locked ? "not-allowed" : disabled ? "default" : "pointer", opacity: muted ? 0.45 : 1, padding: 0, whiteSpace: "nowrap" }}

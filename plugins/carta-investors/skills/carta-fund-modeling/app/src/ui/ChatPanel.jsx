@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { renderMarkdown } from "./markdown.jsx";
 import { CloseIcon } from "./components.jsx";
 import { FS, SANS } from "./theme.js";
+import { trackFundModeling } from "../analytics.js";
 
 // Built-in fallback catalog, used when the outer shell's /api/models fetch
 // hasn't resolved (or failed) — keeps the model picker usable offline. This
@@ -140,6 +141,7 @@ export default function ChatPanel({ sessionId, onTurnStart, onTurnEnd, anchor, o
   async function send() {
     const prompt = input.trim();
     if (!prompt || busy) return;
+    trackFundModeling("click", "FundModeling.Chat.SendMessage");
     const pin = anchor ? pinLabel(anchor) : null;
     setMessages((m) => [...m, { role: "user", text: prompt, pin }, { role: "assistant", text: "" }]);
     setInput(""); setBusy(true);

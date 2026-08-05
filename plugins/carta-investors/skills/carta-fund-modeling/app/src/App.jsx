@@ -20,6 +20,7 @@ import { warn, WarnToast, BASELINE_LOCKED_MSG } from "./ui/warn.jsx";
 import { parseRoute, navigate, subscribeNav } from "./route.js";
 import { fmContext } from "./pinpoint/fmContext.js";
 import { postToOuter, onFromOuter } from "./bridge-client.js";
+import { trackFundModeling } from "./analytics.js";
 
 const I = ({ d, extra }) => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flex: "none" }}>
@@ -39,6 +40,19 @@ const TABS = [
 ];
 const TAB_IDS = TABS.map(([id]) => id);
 const DEFAULT_TAB = "overview";
+
+// PascalCase view names for analytics IDs (FundModeling.<ViewName>.*) — keyed
+// by the same tab id used in routing/TABS above.
+const TAB_VIEW_NAMES = {
+  overview: "Overview",
+  companies: "Companies",
+  "power-law": "PowerLaw",
+  "lp-returns": "LpReturns",
+  "gp-economics": "GpEconomics",
+  reserves: "Reserves",
+  cohort: "CohortStanding",
+  report: "Report",
+};
 
 // The active page is the third path segment (/firm/<slug>/<page>) — see route.js.
 // The URL is the source of truth: useSyncExternalStore re-reads it on any nav
@@ -206,6 +220,18 @@ export default function App({ firm, onChooseFirm }) {
   // (never hardcoded USD); drives fmt$/fmtM/fmtB across the app.
   setDisplayCurrency(snapshot?.source?.currency);
   const [tab, setTab] = useTabRoute(firm);
+  // Nav-click tracking is separate from setTab itself — setTab is also called
+  // from drill-downs (openFund/openFundSection) and the per-fund-tab auto-select,
+  // which aren't user nav clicks.
+  const selectTab = (id) => {
+    trackFundModeling("click", `FundModeling.Nav.${TAB_VIEW_NAMES[id]}`);
+    setTab(id);
+  };
+  // Fires once per view becoming active, however it got there (nav click,
+  // drill-down, back/forward, or a direct link).
+  useEffect(() => {
+    trackFundModeling("render", `FundModeling.${TAB_VIEW_NAMES[tab]}.View`);
+  }, [tab]);
   // Normalize a bare /firm/<slug> to /firm/<slug>/overview so the URL always names
   // the page shown (a reload of the bare firm path lands here first).
   useEffect(() => {
@@ -401,7 +427,7 @@ export default function App({ firm, onChooseFirm }) {
         </div>
       </div>
       {TABS.map(([id, label, icon, extra]) => (
-        <NavItem key={id} id={id} label={label} icon={icon} extra={extra} active={tab === id} onClick={() => setTab(id)} />
+        <NavItem key={id} id={id} label={label} icon={icon} extra={extra} active={tab === id} onClick={() => selectTab(id)} />
       ))}
       <div style={{ height: 1, background: "var(--ink-color-global-border-subtle)", margin: "9px 8px" }} />
       <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "0 8px 4px" }}>
@@ -450,8 +476,8 @@ export default function App({ firm, onChooseFirm }) {
       </div>
       <div style={{ display: "flex", gap: 4, overflowX: "auto" }}>
         {TABS.map(([id, label]) => (
-          <button key={id} onClick={() => setTab(id)} data-testid={`tab-${id}`}
-            style={{ ...sans, fontSize: FS.bodyLg, fontWeight: tab === id ? 600 : 500, padding: "7px 13px", border: "none",
+          <button key={id} onClick={() => selectTab(id)} data-testid={`tab-${id}`}
+            style={{ ...sans, fontSize: FS.body, fontWeight: tab === id ? 600 : 500, padding: "7px 13px", border: "none",
               borderRadius: 4, cursor: "pointer", whiteSpace: "nowrap",
               background: tab === id ? "var(--ink-color-global-surface-lightgray-default)" : "transparent", color: tab === id ? "var(--ink-button-background-color-primary-base-default)" : "var(--ink-color-global-text-subtle)" }}>
             {label}

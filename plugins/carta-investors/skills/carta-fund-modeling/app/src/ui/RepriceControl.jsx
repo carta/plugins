@@ -8,6 +8,7 @@ import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { FS, sans, mono, MICRO, TAPE_THUMB } from "./theme.js";
 import { fmtM } from "./format.js";
 import { useAnimated } from "./components.jsx";
+import { trackFundModeling } from "../analytics.js";
 
 const clampTo = (v, min, max) => Math.min(max, Math.max(min, v));
 const near = (a, b, eps) => Math.abs(a - b) < eps;
@@ -115,7 +116,7 @@ export default function RepriceControl({ value, onChange, onReset, fmtVal, min =
   const startEdit = () => { if (disabled) return; setText(String(+displayed.toFixed(2))); setEditing(true); };
   const commit = () => {
     const n = parseFloat(text);
-    if (!isNaN(n)) onChange(clampTo(n, min, max));
+    if (!isNaN(n)) { trackFundModeling("click", "FundModeling.Reprice.SetValue"); onChange(clampTo(n, min, max)); }
     setEditing(false);
   };
 
@@ -187,7 +188,7 @@ export default function RepriceControl({ value, onChange, onReset, fmtVal, min =
             const bg = p.tone ? (on ? p.tone : "transparent") : (on ? "var(--accent-soft)" : "transparent");
             const color = p.tone ? (on ? "#fff" : p.tone) : (on ? "var(--ink-button-background-color-primary-base-default)" : "var(--ink-color-global-text-subtle)");
             return (
-              <button key={p.label} onClick={() => !disabled && onChange(p.v)} disabled={disabled}
+              <button key={p.label} onClick={() => { if (!disabled) { trackFundModeling("click", "FundModeling.Reprice.Preset"); onChange(p.v); } }} disabled={disabled}
                 title={p.tone ? "Set this company's mark as a multiple of the Carta mark" : undefined}
                 style={{ ...sans, fontSize: FS.small, fontWeight: on ? 700 : 500, padding: "5px 11px", borderRadius: 4, whiteSpace: "nowrap",
                   border: `1px solid ${border}`, cursor: disabled ? "default" : "pointer",
@@ -197,7 +198,7 @@ export default function RepriceControl({ value, onChange, onReset, fmtVal, min =
             );
           })}
           {onReset && (
-            <button onClick={() => !disabled && onReset()} disabled={disabled} title="Reset this company to its Carta mark"
+            <button onClick={() => { if (!disabled) { trackFundModeling("click", "FundModeling.Reprice.Reset"); onReset(); } }} disabled={disabled} title="Reset this company to its Carta mark"
               style={{ ...sans, fontSize: FS.small, fontWeight: 500, padding: "5px 11px", borderRadius: 4, whiteSpace: "nowrap",
                 border: `1px solid var(--ink-color-global-border-subtle)`, cursor: disabled ? "default" : "pointer",
                 background: "transparent", color: "var(--ink-color-global-text-subtle)" }}>

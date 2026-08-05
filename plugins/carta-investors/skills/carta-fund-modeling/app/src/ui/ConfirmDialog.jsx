@@ -7,8 +7,12 @@
 import { useEffect } from "react";
 import { FS, sans } from "./theme.js";
 import { Btn } from "./components.jsx";
+import { trackFundModeling } from "../analytics.js";
 
 export default function ConfirmDialog({ title, message, confirmLabel = "Confirm", cancelLabel = "Cancel", danger = false, onConfirm, onCancel }) {
+  useEffect(() => {
+    trackFundModeling("render", "FundModeling.ConfirmDialog.View");
+  }, []);
   useEffect(() => {
     const onKey = (e) => { if (e.key === "Escape") onCancel(); };
     document.addEventListener("keydown", onKey);
@@ -29,8 +33,8 @@ export default function ConfirmDialog({ title, message, confirmLabel = "Confirm"
           </div>
         )}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 24 }}>
-          <Btn size="comfortable" onClick={onCancel}>{cancelLabel}</Btn>
-          <Btn size="comfortable" kind={danger ? "danger" : "primary"} onClick={onConfirm}>{confirmLabel}</Btn>
+          <Btn size="comfortable" onClick={() => { trackFundModeling("click", "FundModeling.ConfirmDialog.Cancel"); onCancel(); }}>{cancelLabel}</Btn>
+          <Btn size="comfortable" kind={danger ? "danger" : "primary"} onClick={() => { trackFundModeling("click", "FundModeling.ConfirmDialog.Confirm"); onConfirm(); }}>{confirmLabel}</Btn>
         </div>
       </div>
     </div>

@@ -347,6 +347,13 @@ def build(rawdir, out, meta):
     firm_id = meta.get("firmId")      # optional integer Carta ID (may be null), for cache lookup
     firm_uuid = meta.get("firmUuid")
     carry_default = meta.get("carryRate", 0.20)
+    # "production" or "nonprod" — which Carta MCP server this build's data came
+    # from (Step 1). Threaded into snapshot.source so serve.py can tell the
+    # browser's Snowplow tracker which collector to use. A pre-fix cache with
+    # no cartaEnvironment defaults to "production": this is a customer-facing
+    # plugin, so an unclassified build is far more likely real production
+    # usage than a staff test session — staff noise is filterable downstream.
+    carta_env = meta.get("cartaEnvironment") or "production"
     mark = meta.get("mark") or {"text": (firm_name[:3] or "FND").upper(), "bg": "#4F46E5", "fg": "#FFFFFF"}
 
     # ---- GP commitment (REAL) — GP partners' committed capital, else GP paid-in. ----
@@ -931,7 +938,8 @@ def build(rawdir, out, meta):
         "source": {"firm": firm_name, "firmId": firm_id, "firmUuid": firm_uuid,
                    "preparedAt": nav, "navAsOf": nav, "marksAsOf": nav,
                    "marksPulledAt": nav, "provider": "carta-fund-admin",
-                   "currency": firm_currency, "mixedCurrency": mixed_currency},
+                   "currency": firm_currency, "mixedCurrency": mixed_currency,
+                   "cartaEnvironment": carta_env},
         "branding": {"firmName": firm_name, "mark": mark},
         "funds": snap_funds, "baseLpNav": baseLpNav, "baseAccruedCarry": baseAccruedCarry,
         "accruedCarryAsOf": accrued_asof, "carryDistributedAsOf": dist_carry_asof, "gpEconomics": gpEconomics,

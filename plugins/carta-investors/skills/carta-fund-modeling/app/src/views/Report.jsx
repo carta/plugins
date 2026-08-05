@@ -11,6 +11,7 @@ import { fmtM, fmtX, fmtPct, fmtAsOf, displayCurrency } from "../ui/format.js";
 import { H1, H3, Btn, Eyebrow, MethodNote, SourceNote, LockIcon, fundLabel, MultiFundPicker } from "../ui/components.jsx";
 import { buildReport } from "../model/report.js";
 import { BASELINE_ID } from "../model/slices.js";
+import { trackFundModeling } from "../analytics.js";
 
 // Comparison metric rows. `delta:true` → show the vs-Baseline change beneath the
 // value (skipped for the Baseline column). `money` rows blank to "—" for a
@@ -206,7 +207,10 @@ export default function Report({ doc, snapshot, baseSlice }) {
 
   const [selected, setSelected] = useState(() => new Set(slices.map((s) => s.id))); // default: all
   const chosen = slices.filter((s) => selected.has(s.id));
-  const toggle = (id) => setSelected((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const toggle = (id) => {
+    trackFundModeling("click", "FundModeling.Report.ToggleScenario");
+    setSelected((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  };
   const allOn = chosen.length === slices.length;
 
   const report = useMemo(
@@ -240,13 +244,13 @@ export default function Report({ doc, snapshot, baseSlice }) {
         <Eyebrow color={MICRO} style={{ marginRight: 2 }}>Scenarios</Eyebrow>
         {slices.map((s) => <ScenarioChip key={s.id} s={s} on={selected.has(s.id)} onClick={() => toggle(s.id)} />)}
         {!allOn && (
-          <Btn kind="link" onClick={() => setSelected(new Set(slices.map((s) => s.id)))}
+          <Btn kind="link" onClick={() => { trackFundModeling("click", "FundModeling.Report.SelectAllScenarios"); setSelected(new Set(slices.map((s) => s.id))); }}
             style={{ fontSize: FS.small, color: "var(--ink-button-background-color-primary-base-default)" }}>
             Select all
           </Btn>
         )}
         <span style={{ flex: 1 }} />
-        <Btn kind="primary" onClick={() => window.print()} data-testid="download-pdf"
+        <Btn kind="primary" onClick={() => { trackFundModeling("click", "FundModeling.Report.DownloadPdfClick"); window.print(); }} data-testid="download-pdf"
           disabled={!report}>Download PDF</Btn>
       </div>
 

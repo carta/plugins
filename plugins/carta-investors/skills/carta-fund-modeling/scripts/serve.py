@@ -49,6 +49,7 @@ DATA_DIR = None
 WEB_DIR = None
 SRC_DIR = None
 TOKEN = None
+CARTA_ENV = "production"  # from this firm's cached snapshot.source.cartaEnvironment
 _CHAT_SESSIONS = {}   # sessionId -> {"session": chat_session.ChatSession, "lock": threading.Lock()}
 _SESSIONS_LOCK = threading.Lock()  # guards get-or-create / eviction of _CHAT_SESSIONS entries
 IDLE_TIMEOUT_DEFAULT = 28800  # 8h backstop; should never fire during active use
@@ -400,6 +401,21 @@ def _load_or_make_token(token_file):
     return secrets.token_urlsafe(18)
 
 
+def _read_carta_environment(data_dir):
+    """This firm's cached snapshot.source.cartaEnvironment ("production" or
+    "nonprod"), threaded into the launch URL so the browser can tell the
+    tracker which Snowplow collector to use. Defaults to "production" on any
+    read/parse failure or on an older cache built before this field existed —
+    this is a customer-facing plugin, so an unclassified build is far more
+    likely real production usage than a staff test session; staff noise is
+    filterable downstream."""
+    try:
+        data = json.loads((data_dir / "snapshot.json").read_text())
+        return data.get("source", {}).get("cartaEnvironment") or "production"
+    except (OSError, ValueError):
+        return "production"
+
+
 def _get_previously_used_port(port_file):
     """The port this firm last bound (persisted in its data dir), or 0 if none/unreadable/out of range."""
     try:
@@ -412,8 +428,8 @@ def _get_previously_used_port(port_file):
     return port
 
 
-def _build_dashboard_url(port, token):
-    return "http://127.0.0.1:%d/?t=%s" % (port, token)
+def _build_dashboard_url(port, token, env):
+    return "http://127.0.0.1:%d/?t=%s&env=%s" % (port, token, env)
 
 
 def _probe_instance(port, token):
@@ -451,7 +467,7 @@ def _bind(preferred_port):
 
 
 def main():
-    global DATA_DIR, WEB_DIR, SRC_DIR, TOKEN
+    global DATA_DIR, WEB_DIR, SRC_DIR, TOKEN, CARTA_ENV
     ap = argparse.ArgumentParser()
     ap.add_argument("--data-dir", required=True)
     ap.add_argument("--web-dir", default=str(Path(__file__).resolve().parent.parent / "webapp"))
@@ -474,6 +490,7 @@ def main():
     WEB_DIR = Path(args.web_dir).resolve()
     SRC_DIR = Path(args.src_dir).resolve() if args.src_dir else (WEB_DIR.parent / "app" / "src")
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+    CARTA_ENV = _read_carta_environment(DATA_DIR)
 
     port_file = DATA_DIR / ".port"
     token_file = DATA_DIR / ".token"
@@ -486,7 +503,7 @@ def main():
 
     # Reuse a firm's live daemon rather than start a duplicate sharing its portfolio.json.
     if not args.port and _probe_instance(preferred_port, TOKEN):
-        url = _build_dashboard_url(preferred_port, TOKEN)
+        url = _build_dashboard_url(preferred_port, TOKEN, CARTA_ENV)
         print("[serve] fund-modeling already running at %s" % url, flush=True)
         if not args.no_open:
             _open_link_in_browser(url)
@@ -505,7 +522,7 @@ def main():
         pass
 
     idle_timeout = max(0, args.idle_timeout)
-    url = _build_dashboard_url(port, TOKEN)
+    url = _build_dashboard_url(port, TOKEN, CARTA_ENV)
     print("[serve] fund-modeling at %s" % url, flush=True)
     print("[serve] data-dir: %s" % DATA_DIR, flush=True)
     print("[serve] web-dir:  %s%s" % (WEB_DIR, "" if (WEB_DIR / "vendor").exists() else "  (vendor missing — run `npm run build`)"), flush=True)

@@ -26,6 +26,7 @@ import { zeroOutFund, resetFundToCarta, zeroOutAll, resetAllToCarta, companiesIn
 import { FULL_RESERVE_DILUTION } from "../model/reserves.js";
 import { useFirmData } from "../state/FirmData.jsx";
 import { companyOwnership } from "../model/ownership.js";
+import { trackFundModeling } from "../analytics.js";
 
 // Derive a company's display status as a filterable key. Approximates the
 // StatusChip logic in CompanyRow without the full per-position reprice model.
@@ -875,7 +876,7 @@ function CompanyRow({ company, updateCompany, refDate, staleDays, assumptions, s
                   {ownInfo.pct != null && <span style={{ marginLeft: repriced ? 10 : 0 }}>{fmtOwn(ownInfo.pct)} fully-diluted ownership</span>}
                 </div>
                 {onOpenCompany && company.corpUuid && (
-                  <Btn kind="link" onClick={(e) => { e.stopPropagation(); onOpenCompany(company.corpUuid); }} title="Open company page">
+                  <Btn kind="link" onClick={(e) => { e.stopPropagation(); trackFundModeling("click", "FundModeling.Companies.OpenDetailsClick"); onOpenCompany(company.corpUuid); }} title="Open company page">
                     Details ↗
                   </Btn>
                 )}
@@ -914,16 +915,27 @@ function CompanyRow({ company, updateCompany, refDate, staleDays, assumptions, s
                   {/* compact toggle cluster — liquidation waterfall + realize, side by side */}
                   <div style={{ marginBottom: 14 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap", rowGap: 6 }}>
-                      {companyHasCapTable(company) && !company.realized && !company.defunct && (
-                        <Toggle small checked={!!company.waterfallMode}
-                          onChange={(val) => updateCompany(company.id, val
-                            ? { waterfallMode: true, includeInNav: true, valuationB: company.valuationB ?? companyReferenceExit(company) / 1e9 }
-                            : { waterfallMode: false })}
-                          labels={["Liquidation waterfall applied", "Incorporate liquidation waterfall"]} locked={readOnly}
-                          title="Values the fund's stake through the preference stack at the slider valuation — floors the downside, converges to ownership × value. Independent of Realize." />
-                      )}
+                      {companyHasCapTable(company) && !company.realized && !company.defunct && (() => {
+                        const hasReferenceExit = companyReferenceExit(company) > 0;
+                        return (
+                          <Toggle small checked={!!company.waterfallMode} disabled={!hasReferenceExit}
+                            onChange={(val) => {
+                              trackFundModeling("click", "FundModeling.Companies.ToggleWaterfall");
+                              updateCompany(company.id, val
+                                ? { waterfallMode: true, includeInNav: true, valuationB: company.valuationB ?? companyReferenceExit(company) / 1e9 }
+                                : { waterfallMode: false });
+                            }}
+                            labels={["Liquidation waterfall applied", "Incorporate liquidation waterfall"]} locked={readOnly}
+                            title={hasReferenceExit
+                              ? "Values the fund's stake through the preference stack at the slider valuation — floors the downside, converges to ownership × value. Independent of Realize."
+                              : "No priced round or OIP data available for Company valuation mode"} />
+                        );
+                      })()}
                       <Toggle small checked={!!company.exited}
-                        onChange={(val) => updateCompany(company.id, { exited: val, includeInNav: true })}
+                        onChange={(val) => {
+                          trackFundModeling("click", "FundModeling.Companies.ToggleRealize");
+                          updateCompany(company.id, { exited: val, includeInNav: true });
+                        }}
                         labels={["Realized at this mark", "Realize at this mark"]} locked={readOnly}
                         title="Crystallize this holding's marked value into LP distributions (DPI) — runs the make-whole waterfall; LP NAV drops by the realized amount." />
                     </div>
@@ -943,10 +955,13 @@ function CompanyRow({ company, updateCompany, refDate, staleDays, assumptions, s
                   <div style={{ marginBottom: 14 }}>
                     <SubLabel>{companyIsWaterfall(company) ? "Company valuation (liquidation waterfall)" : hasBasis ? "Company valuation" : "Mark · multiple of invested cost (MOIC)"}</SubLabel>
                     <RepriceControl {...cfg} uplift={uplift} locked={readOnly} showTick
-                      onReset={() => updateCompany(company.id, (c) => ({
-                        valuationB: c.defaultValuationB ?? null, markMultiple: 1,
-                        includeInNav: false, exited: false, exitTimingQ: 0, futureDilution: 0, waterfallMode: false,
-                      }))}
+                      onReset={() => {
+                        trackFundModeling("click", "FundModeling.Companies.ResetRepriceClick");
+                        updateCompany(company.id, (c) => ({
+                          valuationB: c.defaultValuationB ?? null, markMultiple: 1,
+                          includeInNav: false, exited: false, exitTimingQ: 0, futureDilution: 0, waterfallMode: false,
+                        }));
+                      }}
                       onDragStart={onDragStart} onDragEnd={onDragEnd} />
                     {companyIsWaterfall(company) && (
                       <div style={{ marginTop: 10 }}>
@@ -1009,8 +1024,8 @@ function ResetMenu({ onZeroOut, onReset }) {
         <div role="menu" className="popin" style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, background: "var(--ink-color-global-surface-background-default)",
           border: `1px solid var(--ink-color-global-border-subtle)`, borderRadius: 6, minWidth: 190, zIndex: 50,
           boxShadow: POPOVER_SHADOW }}>
-          <MenuItem role="menuitem" tint={false} onClick={() => { setOpen(false); onZeroOut(); }}>Zero out companies</MenuItem>
-          <MenuItem role="menuitem" tint={false} onClick={() => { setOpen(false); onReset(); }}>Reset to Carta marks</MenuItem>
+          <MenuItem role="menuitem" tint={false} onClick={() => { setOpen(false); trackFundModeling("click", "FundModeling.Companies.ZeroOutClick"); onZeroOut(); }}>Zero out companies</MenuItem>
+          <MenuItem role="menuitem" tint={false} onClick={() => { setOpen(false); trackFundModeling("click", "FundModeling.Companies.ResetToCartaClick"); onReset(); }}>Reset to Carta marks</MenuItem>
         </div>
       )}
     </span>
@@ -1236,14 +1251,27 @@ export default function Companies({ portfolio, snapshot, exitHorizonOverrides, u
     .filter((c) => globalFilters.statuses.length === 0 || globalFilters.statuses.includes(companyStatus(c)))
     .filter((c) => !query || c.name.toLowerCase().includes(query.toLowerCase()));
 
-  const companies = frozenOrder
-    ? frozenOrder.map((id) => filtered.find((c) => c.id === id)).filter(Boolean)
-    : [...filtered].sort((a, b) => SORTS[sortBy](a, b) * (sortDir === "asc" ? 1 : -1));
+  const bySort = (a, b) => SORTS[sortBy](a, b) * (sortDir === "asc" ? 1 : -1);
+  // A freeze pins the order of the rows it captured and nothing more: a company
+  // it never saw (a different fund scope, a search since cleared) still sorts in
+  // normally. Letting the freeze pick the rows instead would blank the table
+  // whenever the scope moved to a fund sharing none of the frozen companies.
+  const companies = (() => {
+    if (!frozenOrder) return [...filtered].sort(bySort);
+    const rank = new Map(frozenOrder.map((id, i) => [id, i]));
+    return [...filtered].sort((a, b) => {
+      const ra = rank.get(a.id);
+      const rb = rank.get(b.id);
+      if (ra != null && rb != null) return ra - rb;
+      if (ra != null) return -1;
+      if (rb != null) return 1;
+      return bySort(a, b);
+    });
+  })();
 
   const onSliderDragStart = () => {
     if (frozenOrder) return; // already frozen
-    const sorted = [...filtered].sort((a, b) => SORTS[sortBy](a, b) * (sortDir === "asc" ? 1 : -1));
-    setFrozenOrder(sorted.map((c) => c.id));
+    setFrozenOrder([...filtered].sort(bySort).map((c) => c.id));
   };
   const onSliderDragEnd = () => {}; // order stays frozen until the user clicks a column header
 
@@ -1284,6 +1312,7 @@ export default function Companies({ portfolio, snapshot, exitHorizonOverrides, u
       <H1 actions={
         <FundPicker funds={snapshot.funds} value={fundScope} onChange={(v) => {
           setFundScope(v);
+          setFrozenOrder(null); // a new scope is a new set of rows — sort them fresh
           setGlobalFilters((f) => f.statuses.length ? { ...f, statuses: [] } : f);
         }} />
       }>Companies</H1>
@@ -1351,7 +1380,11 @@ export default function Companies({ portfolio, snapshot, exitHorizonOverrides, u
               <CompanyRow key={c.id} company={c} ownership={ownership}
                 updateCompany={updateCompany} refDate={refDate} staleDays={staleDays}
                 assumptions={portfolio.assumptions} snapshot={snapshot} readOnly={readOnly} onOpenCompany={onOpenCompany} reload={reload} flush={flush}
-                expanded={expandedId === c.id} onToggle={() => setExpandedId(expandedId === c.id ? null : c.id)}
+                expanded={expandedId === c.id} onToggle={() => {
+                  const next = expandedId === c.id ? null : c.id;
+                  if (next) trackFundModeling("click", "FundModeling.Companies.ExpandCompany");
+                  setExpandedId(next);
+                }}
                 onHoverChange={setHoverId} onDragStart={onSliderDragStart} onDragEnd={onSliderDragEnd} />
             ))}
             {companies.length === 0 && (
