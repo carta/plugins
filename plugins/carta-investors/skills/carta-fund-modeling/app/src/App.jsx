@@ -30,10 +30,10 @@ const I = ({ d, extra }) => (
 const TABS = [
   ["overview", "Firm Overview", "M4 18a8 8 0 0116 0", "M12 18l5-5"],
   ["companies", "Companies", "M12 3l9 5-9 5-9-5z", "M3 13l9 5 9-5"],
-  ["power-law", "Power Law", "M4 20h16", "M4 20C10 20 13 5 20 4"],
   ["lp-returns", "LP Returns", "M3 16l5-5 4 4 8-8", "M16 7h4v4"],
   ["gp-economics", "GP Economics", "M4 7h16", "M9 7v13M15 7v13"],
   ["reserves", "Reserves", "M4 7h13v10H4z", "M17 10h3v4h-3"],
+  ["power-law", "Power Law", "M4 20h16", "M4 20C10 20 13 5 20 4"],
   ["cohort", "Benchmarks", "M5 19a9 9 0 1114 0", "M12 19l5-6"],
   ["report", "Report", "M7 3h7l4 4v13a1 1 0 01-1 1H7a1 1 0 01-1-1V4a1 1 0 011-1z", "M14 3v4h4"],
 ];
