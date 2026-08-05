@@ -1,10 +1,9 @@
 // URL routing for the fund-modeling app.
 //
-// Shape: /firm/<slug>/<page>?t=<token>
-//   - The firm slug AND the page both live in the PATH, so a reload reopens the
-//     exact firm + page you were on. The ?t= auth token (and any other query) is
-//     always preserved across navigation — main.jsx captured it once at load, but
-//     keeping it in the URL means a hard reload re-authenticates too.
+// Shape: /firm/<slug>/<page>
+//   - The firm slug and the page both live in the PATH. A reload therefore
+//     reopens the exact firm and page you were on.
+//   - The /api auth token is not in the URL — it lives in localStorage (see dash-token.js).
 //   - Path-based (History API), not a hash: serve.py and Vite dev both serve
 //     index.html for unknown paths (SPA fallback), and vite `base: "/"` makes
 //     assets resolve from root at this nested depth.
@@ -26,7 +25,7 @@ export function parseRoute() {
 }
 
 function urlFor({ firm, tab }) {
-  const url = new URL(window.location.href); // preserves ?t= and any other query
+  const url = new URL(window.location.href);
   url.pathname = firm ? `/firm/${encodeURIComponent(firm)}${tab ? `/${tab}` : ""}` : "/";
   return url;
 }
