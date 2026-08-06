@@ -208,7 +208,7 @@ export default function Report({ doc, snapshot, baseSlice }) {
   const [selected, setSelected] = useState(() => new Set(slices.map((s) => s.id))); // default: all
   const chosen = slices.filter((s) => selected.has(s.id));
   const toggle = (id) => {
-    trackClick("FundModeling.Report.ToggleScenario");
+    trackClick("FundModeling.Export.ToggleScenario");
     setSelected((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   };
   const allOn = chosen.length === slices.length;
@@ -234,7 +234,7 @@ export default function Report({ doc, snapshot, baseSlice }) {
 
   return (
     <div>
-      <H1>Scenario report</H1>
+      <H1>Export scenarios</H1>
       <MethodNote>
         Compare scenarios side by side and export a PDF. Pick the scenarios to include, then <strong>Download PDF</strong> (choose “Save as PDF” in the print dialog). Metrics are computed per scenario from Carta Fund Admin data; deltas are vs the Baseline.
       </MethodNote>
@@ -244,13 +244,13 @@ export default function Report({ doc, snapshot, baseSlice }) {
         <Eyebrow color={MICRO} style={{ marginRight: 2 }}>Scenarios</Eyebrow>
         {slices.map((s) => <ScenarioChip key={s.id} s={s} on={selected.has(s.id)} onClick={() => toggle(s.id)} />)}
         {!allOn && (
-          <Btn kind="link" onClick={() => { trackClick("FundModeling.Report.SelectAllScenarios"); setSelected(new Set(slices.map((s) => s.id))); }}
+          <Btn kind="link" onClick={() => { trackClick("FundModeling.Export.SelectAllScenarios"); setSelected(new Set(slices.map((s) => s.id))); }}
             style={{ fontSize: FS.small, color: "var(--ink-button-background-color-primary-base-default)" }}>
             Select all
           </Btn>
         )}
         <span style={{ flex: 1 }} />
-        <Btn kind="primary" onClick={() => { trackClick("FundModeling.Report.DownloadPdfClick"); window.print(); }} data-testid="download-pdf"
+        <Btn kind="primary" onClick={() => { trackClick("FundModeling.Export.DownloadPdfClick"); window.print(); }} data-testid="download-pdf"
           disabled={!report}>Download PDF</Btn>
       </div>
 
@@ -275,7 +275,7 @@ export default function Report({ doc, snapshot, baseSlice }) {
       {report && createPortal(
         <div id="print-report">
           <div style={{ marginBottom: 14, borderBottom: `2px solid var(--ink-color-global-text-default)`, paddingBottom: 10 }}>
-            <div style={{ ...tightSans, fontSize: FS.h2, fontWeight: 700, color: "var(--ink-color-global-text-default)" }}>{firmName} — Scenario Report</div>
+            <div style={{ ...tightSans, fontSize: FS.h2, fontWeight: 700, color: "var(--ink-color-global-text-default)" }}>{firmName} — Fund modeling</div>
             <div style={{ ...sans, fontSize: FS.body, color: "var(--ink-color-global-text-subtle)", marginTop: 3 }}>
               Data as of {asOf} · {chosen.length} scenario{chosen.length === 1 ? "" : "s"}: {chosen.map((s) => s.name).join(", ")}
             </div>

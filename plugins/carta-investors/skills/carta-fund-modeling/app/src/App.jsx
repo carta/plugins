@@ -36,7 +36,7 @@ const TABS = [
   ["reserves", "Reserves", "M4 7h13v10H4z", "M17 10h3v4h-3"],
   ["power-law", "Power Law", "M4 20h16", "M4 20C10 20 13 5 20 4"],
   ["cohort", "Benchmarks", "M5 19a9 9 0 1114 0", "M12 19l5-6"],
-  ["report", "Report", "M7 3h7l4 4v13a1 1 0 01-1 1H7a1 1 0 01-1-1V4a1 1 0 011-1z", "M14 3v4h4"],
+  ["export", "Export", "M7 3h7l4 4v13a1 1 0 01-1 1H7a1 1 0 01-1-1V4a1 1 0 011-1z", "M14 3v4h4"],
 ];
 const TAB_IDS = TABS.map(([id]) => id);
 const DEFAULT_TAB = "overview";
@@ -51,7 +51,7 @@ const TAB_VIEW_NAMES = {
   "gp-economics": "GpEconomics",
   reserves: "Reserves",
   cohort: "CohortStanding",
-  report: "Report",
+  export: "Export",
 };
 
 // The active page is the third path segment (/firm/<slug>/<page>) — see route.js.
@@ -548,7 +548,7 @@ export default function App({ firm, onChooseFirm }) {
                 return <GpEconomics {...returnsProps} />;
               })()}
               {tab === "cohort" && <CohortStanding snapshot={snapshot} fundStates={fundStates} portfolio={slice} />}
-              {tab === "report" && <Report doc={doc} snapshot={snapshot} baseSlice={baseSlice} />}
+              {tab === "export" && <Report doc={doc} snapshot={snapshot} baseSlice={baseSlice} />}
             </div>
           </main>
         </div>
