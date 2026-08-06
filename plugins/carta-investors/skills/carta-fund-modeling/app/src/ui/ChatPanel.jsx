@@ -161,31 +161,45 @@ export default function ChatPanel({ sessionId, onTurnStart, onTurnEnd, anchor, o
       }
       const reader = res.body.getReader();
       let buf = "";
+      // Once we've seen a partial text_delta, the CLI's terminal full-message
+      // `assistant` frame merely restates what we already streamed — ignore it.
+      // If no delta ever arrives (older CLI / unexpected shape), sawDelta stays
+      // false and we append whole `assistant` blocks as before.
+      let sawDelta = false;
       for (;;) {
         const { value, done } = await reader.read();
         if (done) break;
         buf += decoder.decode(value, { stream: true });
         let events;
         [events, buf] = parseSSE(buf);
+        // Coalesce every appended token from this network chunk into one render.
+        let chunkText = "";
+        let errorText = null;
         for (const ev of events) {
-          if (ev.type === "assistant") {
-            const text = (ev.message?.content || [])
+          if (ev.type === "stream_event"
+              && ev.event?.type === "content_block_delta"
+              && ev.event.delta?.type === "text_delta") {
+            sawDelta = true;
+            chunkText += ev.event.delta.text || "";
+          } else if (ev.type === "assistant" && !sawDelta) {
+            chunkText += (ev.message?.content || [])
               .filter((b) => b.type === "text").map((b) => b.text).join("");
-            if (text) setMessages((m) => {
-              const copy = m.slice();
-              copy[copy.length - 1] = { role: "assistant", text: copy[copy.length - 1].text + text };
-              return copy;
-            });
           } else if (ev.type === "result" && (ev.is_error || ev.subtype === "error")) {
-            // Claude-side failure (not a transport error): the turn ended, but the
-            // pending assistant bubble is empty/partial — surface it instead of a
-            // silent blank line.
-            setMessages((m) => {
-              const copy = m.slice();
-              copy[copy.length - 1] = { role: "assistant", text: "⚠️ " + (ev.error || "claude reported an error") };
-              return copy;
-            });
+            errorText = "⚠️ " + (ev.error || "claude reported an error");
           }
+        }
+        if (errorText !== null) {
+          setMessages((m) => {
+            const copy = m.slice();
+            copy[copy.length - 1] = { role: "assistant", text: errorText };
+            return copy;
+          });
+        } else if (chunkText) {
+          setMessages((m) => {
+            const copy = m.slice();
+            copy[copy.length - 1] = { role: "assistant", text: copy[copy.length - 1].text + chunkText };
+            return copy;
+          });
         }
       }
     } catch (err) {
@@ -214,7 +228,7 @@ export default function ChatPanel({ sessionId, onTurnStart, onTurnEnd, anchor, o
           </button>
         </div>
       )}
-      <div className="fm-chat-log" style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8, padding: "4px 0" }}>
+      <div className="fm-chat-log" style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8, padding: "4px 10px 4px 0" }}>
         {messages.length === 0 && <EmptyState />}
         {messages.map((m, i) => (
           <div key={i} className={"fm-msg fm-" + m.role}
@@ -251,11 +265,11 @@ export default function ChatPanel({ sessionId, onTurnStart, onTurnEnd, anchor, o
         </select>
         {onTogglePinMode && (
           <button data-testid="pinpoint-toggle" onClick={onTogglePinMode} aria-pressed={!!pinMode}
-            style={{ fontSize: FS.body, padding: "4px 8px", borderRadius: 6,
+            style={{ fontSize: FS.body, padding: "4px 8px", borderRadius: 6, whiteSpace: "nowrap",
                      border: "1px solid var(--ink-color-global-border-subtle)",
                      background: pinMode ? "var(--ink-color-global-surface-lightgray-default)" : "transparent",
                      color: "var(--ink-color-global-text-default)", cursor: "pointer" }}>
-            📍 {pinMode ? "Pinpointing… (Esc to cancel)" : "Pinpoint"}
+            📍 {pinMode ? "Esc to cancel" : "Pinpoint"}
           </button>
         )}
       </div>

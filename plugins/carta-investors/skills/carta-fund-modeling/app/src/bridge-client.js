@@ -40,6 +40,7 @@ export function installPinpoint() {
   onFromOuter("pinpoint-mode", (payload) => {
     setInspectMode(!!(payload && payload.on), {
       onPin: (el) => postToOuter("pinpoint", buildAnchor(el)),
+      onCancel: () => postToOuter("pinpoint-cancel"),   // Esc inside the iframe
     });
   });
   // Chat-turn soft lock: the outer shell pauses autosave for the duration of a

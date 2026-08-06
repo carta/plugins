@@ -31,6 +31,7 @@ def build_argv(claude_bin, add_dirs, model=None):
         "--input-format", "stream-json",
         "--output-format", "stream-json",
         "--verbose",
+        "--include-partial-messages",
         "--permission-mode", "acceptEdits",
         "--allowedTools", ALLOWED_TOOLS,
     ]

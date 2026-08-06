@@ -97,6 +97,28 @@ export default function OuterShell() {
     });
   }
 
+  function cancelPinMode() {
+    setPinMode(false);
+    postToApp(document.getElementById("fm-app"), "pinpoint-mode", { on: false });
+  }
+
+  // Esc cancels Pinpoint. The iframe's inspect controller only sees Esc when
+  // focus is inside the app; after the user clicks the outer toggle, focus is
+  // in this outer frame, so we need our own listener here. (Esc pressed with
+  // focus inside the iframe is handled there and synced back via
+  // "pinpoint-cancel" below.) Only bound while active, so it never competes
+  // with other Esc handlers otherwise.
+  useEffect(() => {
+    if (!pinMode) return undefined;
+    function onKey(e) { if (e.key === "Escape") cancelPinMode(); }
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [pinMode]);
+
+  // The iframe exited inspect mode on its own (Esc with focus inside it) — keep
+  // the toggle in sync without echoing a redundant mode message back to it.
+  useEffect(() => onFromApp("pinpoint-cancel", () => setPinMode(false)), []);
+
   // Keep the ref in sync and re-send the active anchor as a "highlight" any
   // time it changes, so the app draws (or clears) the mark immediately.
   useEffect(() => {

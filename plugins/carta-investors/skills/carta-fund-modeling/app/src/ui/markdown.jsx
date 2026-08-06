@@ -97,17 +97,22 @@ export function renderMarkdown(src) {
         bodyRows.push(cells);
         i++;
       }
+      // Scroll wide tables horizontally instead of letting the panel squish
+      // columns: cells never wrap, so a table wider than the panel overflows the
+      // scroll wrapper; a narrow one still fills the width via the table's 100%.
       out.push(
-        <table key={k()} style={{ borderCollapse: "collapse", margin: "6px 0", fontSize: FS.body, width: "100%" }}>
-          <thead><tr>{headerCells.map((c, ci) => (
-            <th key={k()} style={{ textAlign: align[ci] || "left", borderBottom: "1px solid var(--ink-color-global-border-default)", padding: "4px 8px", fontWeight: 600 }}>{inline(c)}</th>
-          ))}</tr></thead>
-          <tbody>{bodyRows.map((row) => (
-            <tr key={k()}>{row.map((c, ci) => (
-              <td key={k()} style={{ textAlign: align[ci] || "left", borderBottom: "1px solid var(--ink-color-global-border-subtle)", padding: "4px 8px" }}>{inline(c)}</td>
-            ))}</tr>
-          ))}</tbody>
-        </table>
+        <div key={k()} style={{ overflowX: "auto", margin: "6px 0" }}>
+          <table style={{ borderCollapse: "collapse", fontSize: FS.body, width: "100%" }}>
+            <thead><tr>{headerCells.map((c, ci) => (
+              <th key={k()} style={{ textAlign: align[ci] || "left", borderBottom: "1px solid var(--ink-color-global-border-default)", padding: "4px 8px", fontWeight: 600, whiteSpace: "nowrap" }}>{inline(c)}</th>
+            ))}</tr></thead>
+            <tbody>{bodyRows.map((row) => (
+              <tr key={k()}>{row.map((c, ci) => (
+                <td key={k()} style={{ textAlign: align[ci] || "left", borderBottom: "1px solid var(--ink-color-global-border-subtle)", padding: "4px 8px", whiteSpace: "nowrap" }}>{inline(c)}</td>
+              ))}</tr>
+            ))}</tbody>
+          </table>
+        </div>
       );
       continue;
     }

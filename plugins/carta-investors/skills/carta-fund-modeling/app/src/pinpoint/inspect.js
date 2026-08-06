@@ -54,7 +54,11 @@ function onClick(e) {
 }
 
 function onKey(e) {
-  if (e.key === "Escape") setInspectMode(false, {});
+  if (e.key === "Escape") {
+    const onCancel = cfg.onCancel;
+    setInspectMode(false, {});
+    if (onCancel) onCancel();   // let the outer shell sync its toggle off
+  }
 }
 
 export function setInspectMode(on, config) {
