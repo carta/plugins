@@ -61,6 +61,11 @@ Builds a firm's baseline from Carta Fund Admin data, writes it to a local data d
 never calls the Carta MCP** — this skill fetches the data; the server only serves JSON + the built app. The
 repricing/waterfall/IRR is a **transparent estimate** (the ported `model/`), not Carta's official engine.
 
+> **Runs locally only.** Because it starts a localhost web server and opens your browser, this skill works only
+> in a Claude Code session running on your machine (a local terminal, or Claude Desktop set to run locally). It
+> can't run in a **sandboxed** session — **Cowork**, or a Claude Code **cloud** session — where that server is
+> unreachable and no local browser exists. Gate 0 stops early and tells the user to switch.
+
 ## No demo data — real firm required
 **Never** fabricate, synthesize, sample, or fall back to demo/placeholder data, and never launch against an
 empty or partial data dir. Every dashboard runs against **one real Carta firm's** Fund Admin data — either
@@ -72,6 +77,30 @@ answer. A missing or unresolved firm is a graceful exit, not a reason to invent 
 Building a dashboard needs the Carta MCP; **launching a warm cache does not.** Resolve the firm **name** and
 check the local cache *before* touching any MCP — a fresh cache launches with **no MCP call**. Only a
 build/refresh (Step 1 onward) identifies the MCP and resolves the firm over it.
+
+## Gate 0 — Surface check (run first, before anything else)
+
+Step 4 launches `serve.py`, which binds `127.0.0.1` and opens the user's default browser. That only works when
+Claude Code runs on the user's own machine (a local terminal, or Claude Desktop set to run locally). In a
+**sandboxed** session — **Cowork**, or a Claude Code **cloud** session (Claude Desktop can run sessions in the
+cloud, which is the default) — the server runs in a remote container the user can't reach and there is no local
+browser to open, so the dashboard URL goes nowhere. The skill must not run there.
+
+**Before Step 0 — before any cache scan, MCP call, or greeting — run this once and route on it:**
+```bash
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-modeling/scripts/fm_paths.py" detect-surface
+```
+- Output contains **`surface=sandboxed`** → **stop immediately.** Do **not** scan caches, resolve a firm, touch
+  the MCP, or launch `serve.py`. Reply with this message (substance verbatim), then end the turn:
+  > Fund Modeling launches an interactive web app on your own machine — a local server plus your browser — so it
+  > only works in a Claude Code session running locally. It can't run in a sandboxed session: Cowork, or a Claude
+  > Code cloud session (in Claude Desktop, running in the cloud is the default — switch it to run locally).
+  > Please re-run from a local session, e.g. "fund modeling for \<firm\>".
+
+  This is a graceful exit. Do **not** retry `detect-surface`, do **not** try to launch anyway, and do **not**
+  fall back to another surface or tool — a sandboxed verdict will not change on retry.
+- Otherwise (**`surface=local`**, the normal case) → continue to **Step 0** silently. Say nothing about this
+  check — it stays quiet, like the rest of Step 0.
 
 ## Step 0 — Resolve identity + check the local cache
 
@@ -579,6 +608,7 @@ the upstream library changes, rebuild and overwrite that file.
 
 | Situation | What to do |
 |---|---|
+| Running in a sandboxed session (`detect-surface` → `surface=sandboxed`) | Gate 0 stops before any work: tell the user to re-run in a **local** Claude Code session (a terminal, or Claude Desktop set to run locally — not Cowork or a cloud session). Do not retry or launch. |
 | No Carta MCP connected | Exit: "No Carta MCP is connected — please connect one and try again." Do not proceed. |
 | Firm name given but unresolvable | Prompt with `AskUserQuestion`: show any cache suggestions or "Build fresh from Carta" option. |
 | No firm given and no local cache | Exit: ask the user to name a firm before doing anything else. |

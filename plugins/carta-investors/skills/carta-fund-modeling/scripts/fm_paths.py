@@ -9,6 +9,9 @@ Subcommands:
   touch-empty <path>        create an empty file (records a "fetched, none published" stem).
   list-dashboards           scan cached dashboards; print each one's firm name, slug, age, dashboard_dir + identity.
   find-by-id <id>           scan cached dashboards for a matching firmId/firmUuid; print the hit.
+  detect-surface            classify the runtime surface as local vs sandboxed (the skill launches a localhost
+                            server + browser, which only works in a local Claude Code session — not Cowork or a
+                            Claude Code cloud session).
 
 The slug is derived from the firm name here (not by the caller) so every session
 resolves the same directory for a firm. slugify is idempotent, so passing an
@@ -163,6 +166,59 @@ def cmd_find_by_id(fid):
     print("match=none")
 
 
+def detect_surface():
+    """Classify the runtime surface as "local" or "sandboxed".
+
+    Step 4 launches serve.py, which binds 127.0.0.1 and auto-opens the user's
+    default browser. That only works when Claude Code runs on the user's own
+    machine (a local terminal, or Claude Desktop set to run locally). In a
+    sandboxed session — Cowork, or a Claude Code *cloud* session — the server
+    binds inside a remote container the user can't reach and there is no local
+    browser to open, so the dashboard URL goes nowhere. Detecting that lets the
+    skill exit gracefully instead of handing back a dead URL.
+
+    Sandboxed if ANY signal fires — no single one covers every surface, verified
+    in real sessions:
+      - CLAUDE_CODE_REMOTE is truthy — a Claude Code cloud session ($HOME there
+        is a container path like /root, not /sessions, and there is no mount).
+      - $HOME is the Cowork session root (/sessions/<name>) — Cowork local-agent
+        mode has this but no mount and no CLAUDE_CODE_REMOTE.
+      - the /mnt/outputs sandbox mount exists — some remote-container surfaces.
+    They are OR'd because each catches a surface the others miss.
+
+    An explicit FUND_MODELING_SURFACE=local|sandboxed override wins (tests /
+    unusual installs), mirroring fm_paths' existing FUND_MODELING_DATA override.
+
+    Returns (surface, signals): surface is "local"/"sandboxed"; signals is a dict
+    of the raw probe values for diagnostics.
+    """
+    home = os.environ.get("HOME") or str(pathlib.Path.home())
+    remote = (os.environ.get("CLAUDE_CODE_REMOTE") or "").strip().lower()
+    signals = {
+        "claude_code_remote": os.environ.get("CLAUDE_CODE_REMOTE") or "unset",
+        "home_sessions": "yes" if home.startswith("/sessions/") else "no",
+        "mnt_outputs": "yes" if pathlib.Path("/mnt/outputs").is_dir() else "no",
+        "override": (os.environ.get("FUND_MODELING_SURFACE") or "").strip().lower() or "unset",
+    }
+
+    if signals["override"] in ("local", "sandboxed"):
+        return signals["override"], signals
+
+    is_sandboxed = (
+        remote in ("1", "true", "yes", "on")
+        or signals["home_sessions"] == "yes"
+        or signals["mnt_outputs"] == "yes"
+    )
+    return ("sandboxed" if is_sandboxed else "local"), signals
+
+
+def cmd_detect_surface():
+    surface, signals = detect_surface()
+    print("surface=%s" % surface)
+    for key in ("claude_code_remote", "home_sessions", "mnt_outputs", "override"):
+        print("%s=%s" % (key, signals[key]))
+
+
 def main():
     ap = argparse.ArgumentParser(description="fund-modeling path resolver")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -173,6 +229,7 @@ def main():
     sub.add_parser("list-dashboards")
     p_find = sub.add_parser("find-by-id")
     p_find.add_argument("id")
+    sub.add_parser("detect-surface")
     a = ap.parse_args()
     if a.cmd == "resolve":
         cmd_resolve(a.name)
@@ -182,6 +239,8 @@ def main():
         cmd_list_dashboards()
     elif a.cmd == "find-by-id":
         cmd_find_by_id(a.id)
+    elif a.cmd == "detect-surface":
+        cmd_detect_surface()
 
 
 if __name__ == "__main__":

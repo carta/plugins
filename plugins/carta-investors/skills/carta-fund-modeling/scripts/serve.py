@@ -37,6 +37,7 @@ import os
 import re
 import secrets
 import socketserver
+import sys
 import threading
 import time
 import webbrowser
@@ -44,6 +45,7 @@ from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
 import chat_session
+import fm_paths
 
 DATA_DIR = None
 WEB_DIR = None
@@ -485,6 +487,19 @@ def main():
         help="seconds of API inactivity before the server self-terminates (0 = never)",
     )
     args = ap.parse_args()
+
+    # Defense-in-depth backstop for the SKILL.md Gate 0 surface check. serve.py
+    # binds 127.0.0.1 and opens a local browser — neither reaches the user from a
+    # sandboxed session (Cowork, or a Claude Code cloud session) — so refuse to
+    # start rather than hand back a dead URL.
+    surface, _signals = fm_paths.detect_surface()
+    if surface == "sandboxed":
+        print(
+            "[serve] Fund Modeling runs a local web app (localhost server + browser) and only "
+            "works in a Claude Code session running on your machine. It can't run in a sandboxed "
+            "session (Cowork, or a Claude Code cloud session) — switch to a local session and re-run.",
+            file=sys.stderr, flush=True)
+        raise SystemExit(2)
 
     DATA_DIR = Path(args.data_dir).resolve()
     WEB_DIR = Path(args.web_dir).resolve()
