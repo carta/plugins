@@ -54,6 +54,10 @@
   --ink-color-global-brand-yellow-90:  #705010;
   --ink-color-global-brand-yellow-100: #341C00;
 
+  /* Only the one shade this app needs (EmptyState/Vignette's accent color) —
+     not the full orange scale, since nothing else here reaches for orange. */
+  --ink-color-global-brand-orange-60: #FF7D55;
+
   --ink-color-global-brand-green-10:  #EBF7F6;
   --ink-color-global-brand-green-20:  #D6EFEC;
   --ink-color-global-brand-green-30:  #ADDFD9;
@@ -90,6 +94,7 @@
   /* === Surfaces === */
   --ink-color-global-surface-background-default:  light-dark(#FFFFFF, rgb(18 18 18));
   --ink-color-global-surface-background-underlay: light-dark(#F1F1F1, #2D2D2D);
+  --ink-color-global-surface-background-overlay:  light-dark(rgb(0 0 0 / 0.8), rgb(80 80 80 / 0.8));
   --ink-color-global-surface-darkgray-default:    light-dark(#1A1A1A, #394040);
   --ink-color-global-surface-darkgray-hover:      light-dark(#202020, #656B6B);
   --ink-color-global-surface-lightgray-default:   light-dark(#F1F1F1, #202020);
@@ -179,6 +184,8 @@
   --ink-button-border-color-secondary-base-default:     light-dark(#A7AAAA, #656B6B);
   --ink-button-border-color-secondary-base-hover:       light-dark(#656B6B, #9C9F9F);
   --ink-button-font-color-secondary-base-default:       light-dark(#1A1A1A, #EDEDED);
+  --ink-button-background-color-secondary-disabled:     light-dark(#FFFFFF, rgb(18 18 18));
+  --ink-button-border-color-secondary-disabled:         light-dark(#DEDFDF, #2D2D2D);
   --ink-button-font-color-secondary-disabled:           light-dark(#CECFCF, #656B6B);
 
   --ink-button-background-color-danger-base-default:    #E52431;

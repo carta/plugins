@@ -10,7 +10,6 @@ import Companies from "./views/Companies.jsx";
 import PowerLaw from "./views/returns/PowerLaw.jsx";
 import LpReturns from "./views/returns/LpReturns.jsx";
 import GpEconomics from "./views/returns/GpEconomics.jsx";
-import PerformanceSidebarV2 from "./ui/PerformanceSidebarV2.jsx";
 import Reserves from "./views/Reserves.jsx";
 import CohortStanding from "./views/CohortStanding.jsx";
 import Report from "./views/Report.jsx";
@@ -328,10 +327,6 @@ export default function App({ firm, onChooseFirm }) {
     }
   }, [tab, fundScope, snapshot]);
 
-  // which fund(s) the hovered/expanded Companies row touches — lets the
-  // Performance sidebar v2 grey out the funds a reprice can't possibly affect
-  const [activeFundIds, setActiveFundIds] = useState(null);
-
   if (!fundStates) {
     return (
       <div style={{ ...sans, minHeight: "100vh", background: "var(--ink-color-global-surface-background-default)", color: "var(--ink-color-global-text-subtle)", display: "grid", placeItems: "center" }}>
@@ -354,9 +349,6 @@ export default function App({ firm, onChooseFirm }) {
     setTab(sectionId === "gp-returns" ? "gp-economics" : "lp-returns");
     contentRef.current?.scrollTo({ top: 0 });
   };
-  // Performance sidebar v2 — consolidates the top metric strip, the per-company
-  // fund-impact grey box, and the slider presets into one right panel on Companies
-  const showPerformanceV2Sidebar = tab === "companies" && !narrow;
 
   // live firm rollup for the persistent metric bar — reflects this slice's marks
   const firmAgg = firmRollup(fundStates);
@@ -534,7 +526,8 @@ export default function App({ firm, onChooseFirm }) {
                   updateCompany={updateCompany} updateSlice={update} setAssumption={setAssumption}
                   readOnly={locked} reload={reload} flush={flush}
                   holdingsPulled={holdingsPulled} fundScope={fundScope} setFundScope={setFundScope}
-                  onActiveFundsChange={setActiveFundIds} />
+                  fundStates={fundStates} firmAgg={firmAgg} firmLpDelta={firmLpDelta} firmGpCarry={firmGpCarry}
+                  sliceName={slice.name} onOpenFundSection={openFundSection} />
               )}
               {(tab === "power-law" || tab === "lp-returns" || tab === "gp-economics") && (() => {
                 const returnsProps = {
@@ -552,13 +545,6 @@ export default function App({ firm, onChooseFirm }) {
             </div>
           </main>
         </div>
-
-        {showPerformanceV2Sidebar && (
-          <PerformanceSidebarV2 fundStates={fundStates} firmAgg={firmAgg} firmLpDelta={firmLpDelta}
-            firmGpCarry={firmGpCarry} sliceName={slice.name} fundScope={fundScope}
-            snapshot={snapshot} portfolio={effSlice}
-            onOpenFundSection={openFundSection} activeFundIds={activeFundIds} />
-        )}
       </div>
 
       {scenarioDialog && (

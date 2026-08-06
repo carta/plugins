@@ -3,6 +3,7 @@
 // debounce. All edits land in the ACTIVE slice; the baseline slice is locked.
 import { useState, useEffect, useRef, useCallback } from "react";
 import { activeSlice, getSlice, makeSlice, sliceId, BASELINE_ID } from "../model/slices.js";
+import { setTrackingFirm } from "../analytics.js";
 
 export default function usePortfolio(firm, { onLockedEdit } = {}) {
   const q = firm ? `?firm=${encodeURIComponent(firm)}` : "";
@@ -30,6 +31,8 @@ export default function usePortfolio(firm, { onLockedEdit } = {}) {
       fetch(`/api/portfolio${q}`).then(async (r) => { etag.current = r.headers.get("etag"); return r.json(); }),
     ]);
     setSnapshot(s);
+    // Runs on post-refresh reloads too, so a late-resolved id lands without a relaunch.
+    setTrackingFirm(s?.source?.firmId);
     setDoc(pr);
   }, [q]);
   useEffect(() => { load(); }, [load]);

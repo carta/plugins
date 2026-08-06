@@ -287,6 +287,9 @@ export const GLOBAL_CSS = `
      border on hover per the real recipe. */
   .btn-ghost { border: 1px solid var(--ink-button-border-color-secondary-base-default) !important; border-radius: 4px; }
   .btn-ghost:hover:not(:disabled) { background: ${SHADE} !important; border-color: var(--ink-button-border-color-secondary-base-hover) !important; }
+  /* Ink's real secondary-disabled recipe — a muted border/text on the same
+     background, not the crude opacity-dim Btn falls back to for "locked". */
+  .btn-ghost:disabled { border-color: var(--ink-button-border-color-secondary-disabled) !important; background: var(--ink-button-background-color-secondary-disabled) !important; color: var(--ink-button-font-color-secondary-disabled) !important; }
   .btn-primary { border-radius: 4px; box-shadow: none; }
   .btn-primary:hover:not(:disabled) { background: var(--grad-dark-hover) !important; }
 
@@ -395,6 +398,40 @@ export const GLOBAL_CSS = `
   .ink-sort-icon__asc, .ink-sort-icon__desc { fill: #CECFCF; }
   th[aria-sort="ascending"] .ink-sort-icon__asc { fill: ${INK}; }
   th[aria-sort="descending"] .ink-sort-icon__desc { fill: ${INK}; }
+
+  /* Ink's standard underline Tab recipe (theme-with-ink components.md "## Tab") —
+     the active indicator is a 3px bottom border on the item itself, never a
+     separate pill/element. disabled tabs get the muted-text/no-hover treatment
+     inline styles apply on top of these rules (see Companies.jsx usage). */
+  /* Matches theme-with-ink's HorizontalNav resource (components-horizontalnav.html)
+     exactly — the "## Tab" recipe in components.md is a looser generic approximation
+     (8px-padded 3px border-bottom, 24px leading) that reads with a visibly bigger
+     gap between the label and its underline than the real product. HorizontalNav's
+     own measured spec: 44px-tall items with the label vertically centered, a 2px
+     underline pinned to the bottom edge via ::after (not part of the box's own
+     padding/border), 14px/20px type, weight 400 → 500 on the active item. */
+  .ink-tabs { display: flex; align-items: center; gap: 24px; height: 44px; border-bottom: 1px solid var(--ink-color-global-border-subtle); }
+  .ink-tab { position: relative; display: inline-flex; align-items: center; height: 44px; padding: 0; margin: 0; background: transparent; border: 0; font: 400 ${FS.value}px/20px ${SANS}; color: var(--ink-color-global-text-subtle); cursor: pointer; border-radius: 0; box-shadow: none; white-space: nowrap; }
+  .ink-tab:hover, .ink-tab:focus { color: ${INK}; }
+  .ink-tab.is-active { color: ${INK}; font-weight: 500; }
+  .ink-tab.is-active::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--ink-color-global-border-active); }
+
+  /* Ink's real NewCheckbox recipe (theme-with-ink resources/components-checkbox.html) —
+     20px square, 4px radius, box stays WHITE in both themes (only the border/glyph
+     recolor), Gray-90 check glyph, 8px gap to the label, 14px/20px type. Focus and
+     hover key off the real (visually-hidden) <input>'s own pseudo-classes via the
+     sibling ".box" span, rather than a manually-toggled "is-*" class — no JS
+     needed to keep the states in sync. */
+  .ink-chk { display: inline-flex; align-items: center; gap: 8px; font: 400 ${FS.value}px/20px ${SANS}; color: ${INK}; cursor: pointer; user-select: none; position: relative; }
+  .ink-chk input { position: absolute; opacity: 0; pointer-events: none; width: 20px; height: 20px; }
+  .ink-chk .box { flex: 0 0 auto; width: 20px; height: 20px; border: 1px solid var(--ink-color-global-border-default); border-radius: 4px; background: var(--ink-color-global-brand-white); display: inline-flex; align-items: center; justify-content: center; transition: border-color .12s ease, box-shadow .12s ease; }
+  .ink-chk .box svg { display: block; width: 14px; height: 14px; opacity: 0; color: #394040; }
+  .ink-chk:hover .box { border-color: var(--ink-color-global-border-hover); }
+  .ink-chk input:checked ~ .box svg { opacity: 1; }
+  .ink-chk input:focus-visible ~ .box { border-color: var(--ink-color-global-border-focus-default); box-shadow: 0 0 0 4px var(--ink-color-global-border-focus-light); }
+  .ink-chk input:disabled ~ .box { background: var(--ink-color-global-surface-disabled); border-color: var(--ink-color-global-border-disabled); }
+  .ink-chk input:disabled ~ .box svg { color: var(--ink-color-global-text-disabled); }
+  .ink-chk:has(input:disabled) { cursor: not-allowed; color: var(--ink-color-global-text-disabled); }
 
   /* Ink Tag variants — "mini" size for dense tables: 20px height, 11px text, 4px radius.
      feedback-informational ("default") is a bordered semantic tag (reuses this app's own

@@ -24,20 +24,55 @@ export const FULL_RESERVE_DILUTION = 0.3;
  * Pro-rata defense costs ≈ (dilution defended) × (current stake value): to hold
  * your slice as the company raises, you re-invest that share of your marked
  * position. So per live company, earmark = (FULL_RESERVE_DILUTION − futureDilution)
- * × its current marked FV (pre-dilution). Realized/defunct/archived and not-in-NAV
- * companies contribute nothing. Returns { total, byFund }. An estimate, not a call.
+ * × its current marked FV (pre-dilution). Realized/defunct/archived companies
+ * contribute nothing; every other company counts even if nobody has touched
+ * its scenario controls yet — `includeInNav` tracks "has this company been
+ * scenario-edited," not "should this count," so it isn't part of eligibility
+ * here (matches the per-company reserve readout in Companies.jsx, which uses
+ * the same eligibility filter). Returns { total, byFund }. An estimate, not a
+ * call.
  */
 export function reservesEarmarked(portfolio) {
   let total = 0;
   const byFund = {};
   for (const c of (portfolio.companies || [])) {
-    if (c.archived || c.realized || c.defunct || !c.includeInNav) continue;
+    if (c.archived || c.realized || c.defunct) continue;
     const defended = clamp0(FULL_RESERVE_DILUTION - (c.futureDilution ?? 0));
     if (defended <= 0) continue;
     for (const p of c.positions) {
       // stake value being defended = marked FV BEFORE the dilution haircut
       const markFv = positionReprice(c, p, { live: true, dilution: 0 }).repricedFv;
       const amt = defended * markFv;
+      total += amt;
+      byFund[p.fundId] = (byFund[p.fundId] || 0) + amt;
+    }
+  }
+  return { total, byFund };
+}
+
+/** One company's baseline reserve — the FULL_RESERVE_DILUTION × its Carta-mark
+ *  FV (pre-dilution), with no scenario reprice applied. Shared by
+ *  `baseReservesEarmarked` (below) and the per-company reserve readout in
+ *  Companies.jsx, so the two stay in lockstep by construction. */
+export function companyBaseReserve(company) {
+  const markFvGross = company.positions.reduce((s, p) => s + positionReprice(company, p, { live: false, dilution: 0 }).repricedFv, 0);
+  return FULL_RESERVE_DILUTION * markFvGross;
+}
+
+/** Baseline counterpart to `reservesEarmarked`, for a vs-baseline delta — the
+ *  baseline scenario never sets a `futureDilution` lever, so every live company
+ *  defends the FULL baseline dilution (no scenario edit has reduced it yet), and
+ *  the stake being defended is priced at the Carta mark (`live: false`), not the
+ *  scenario's reprice. Same eligibility filter as `reservesEarmarked` so the two
+ *  are comparing the same set of companies. */
+export function baseReservesEarmarked(portfolio) {
+  let total = 0;
+  const byFund = {};
+  for (const c of (portfolio.companies || [])) {
+    if (c.archived || c.realized || c.defunct) continue;
+    for (const p of c.positions) {
+      const markFv = positionReprice(c, p, { live: false, dilution: 0 }).repricedFv;
+      const amt = FULL_RESERVE_DILUTION * markFv;
       total += amt;
       byFund[p.fundId] = (byFund[p.fundId] || 0) + amt;
     }

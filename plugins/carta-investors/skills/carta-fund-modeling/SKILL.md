@@ -537,8 +537,8 @@ Write `<raw_dir>/meta.json` = `{"name":"<canonical name>","slug":"<slug printed 
 (optional `"carryRate"`, default 0.20). **`name` and `slug` are both the canonical firm identity from Step 1
 (`slug` = the canonical-name slug, the cache key; `name` = the canonical `name`), and `firmId`/`firmUuid` are
 the canonical ids** — the builder writes them (and `cartaEnvironment`) to `snapshot.source` so a later
-URL/UUID invocation finds this cache via `find-by-id` without a fetch (Step 0), and `serve.py` can tell the
-browser's Snowplow tracker which collector to use. Then
+URL/UUID invocation finds this cache via `find-by-id` without a fetch (Step 0), and `serve.py` can serve
+them to the browser's Snowplow tracker (`/api/telemetry-context`). Then
 run the firm-agnostic generator — it transforms the `<raw_dir>` files into every console-schema file the app needs:
 ```bash
 uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-modeling/scripts/build_datadir.py" \
@@ -603,6 +603,14 @@ New interactive elements: call `trackClick(elementId)` (or `trackRender(elementI
 `FundModeling.Overview.ExportClick`) — skip sort clicks, keystrokes, dropdown changes. The tracker bundle at
 `webapp/vendor/mcp-ui-tracker.global.js` is vendored from `@carta/mcp-ui-tracker`'s `build:browser` output — if
 the upstream library changes, rebuild and overwrite that file.
+
+Every event carries a firm context (`{firmId}`) so telemetry joins on the real Carta id instead of a
+slugified firm name. The envelope (firm + environment) comes from `GET /api/telemetry-context`, which
+reads `snapshot.source` per request; `mountWithAuth` awaits it before rendering, so both documents
+have it before any event fires. So **capture `firmId` in Step 1 whenever the `#<digits>` token is
+there** — when it is absent the context is dropped (that firm's events land with no firm attribution),
+and a placeholder id is never substituted. A refresh that resolves a previously missing `firmId` is
+picked up without a relaunch.
 
 ## Common failure modes
 

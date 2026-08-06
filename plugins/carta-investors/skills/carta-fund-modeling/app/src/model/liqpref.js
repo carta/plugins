@@ -18,12 +18,14 @@
 // label it an estimate wherever it surfaces.
 
 /** Normalize a share-class / holding name so "Series B Preferred Stock" (holdings)
- *  matches "Series B Preferred" (cap table): lowercase, drop punctuation and the
- *  trailing "stock"/"shares" noise words. */
+ *  matches "Series B Preferred" (cap table), and so a holding recorded as just
+ *  "Series D" (security-type suffix omitted) still matches the cap table's
+ *  "Series D Preferred" — lowercase, drop punctuation and the trailing
+ *  "stock"/"shares"/"preferred" noise words. */
 export function normClass(name) {
   return String(name || "")
     .toLowerCase()
-    .replace(/\bstock\b|\bshares?\b/g, " ")
+    .replace(/\bstock\b|\bshares?\b|\bpreferred\b/g, " ")
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
 }
