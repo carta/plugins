@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { FS, mono, sans, MICRO } from "../ui/theme.js";
 import { fmt$, fmtM, fmtX, fmtPct, fmtAsOf, fmtOwn } from "../ui/format.js";
-import { Num, SourceNote, H1, H3, SectionChips, Segmented, Badge, Bubble, fundNameOnly, MultiFundPicker } from "../ui/components.jsx";
+import { Num, SourceNote, H1, H3, SectionChips, Segmented, Badge, Bubble, Avatar, fundNameOnly, MultiFundPicker } from "../ui/components.jsx";
 import { TableHead, useTableSort, TableScroll } from "../ui/table.jsx";
 import { firmRollup } from "../model/funds.js";
 import { fundAvgOwnership } from "../model/ownership.js";
@@ -247,6 +247,36 @@ const initialsOf = (name) => {
   return words.slice(0, 2).map((w) => w[0]).join("").toUpperCase();
 };
 
+// Deterministic pick of an initials-avatar color per company, so a feed of many
+// different companies doesn't render as a wall of identical gray circles — the
+// same company always lands on the same color. Drawn from PALETTE (above) —
+// the same categorical data-viz hues the fund charts use — skipping index 0
+// (brand-black, the charts' "lead fund" special case) and the trailing
+// brand-gray-30 fallback slot, neither of which is a real data-viz color.
+const INITIALS_COLORS = PALETTE.slice(1, 9);
+const colorFor = (name) => {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0;
+  return INITIALS_COLORS[Math.abs(h) % INITIALS_COLORS.length];
+};
+
+// Feed-row avatar: Ink's real Avatar (see ui/components.jsx) at its standard
+// 38px size, always the round circle — a real logo renders via `imageUrl`,
+// never Ink's separate non-circular `variant="company"` box. Avatar itself
+// degrades to `initials` if the logo is missing or fails to load (a corrupt/
+// truncated file fetch_logos.py's own validation makes rare, not impossible),
+// so a non-empty `initials` is always passed here even when a logo is present.
+function FeedAvatar({ logo, name }) {
+  return (
+    <Avatar imageUrl={logo || undefined}
+      initials={initialsOf(name) || name.slice(0, 2).toUpperCase() || "?"} initialsColor={colorFor(name)}
+      // nudge down to the company-name text's visual top (its 28px line-height
+      // has ~6px of leading above the actual glyph-cap top) rather than the
+      // row's box top, which sits a few px above where the name text starts
+      style={{ marginTop: 6 }} />
+  );
+}
+
 // The per-lane context line under the fund/security chips. Valuation rows
 // match the design spec's "Multiplier" row exactly: "{moic}× MOIC" in the inherited
 // subtle/regular tone, gap-12, then an arrow + colored medium-weight delta
@@ -300,11 +330,7 @@ function RecentActivityCard({ rows, mixed }) {
           return (
           <div key={r.key} style={{ display: "flex", gap: 12, alignItems: "flex-start",
             padding: "16px 0", borderBottom: last ? "none" : "1px solid var(--ink-color-global-border-subtle)" }}>
-            <div style={{ width: 32, height: 32, flex: "none", borderRadius: "50%", overflow: "hidden",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              background: "var(--ink-color-global-surface-lightgray-default)" }}>
-              <span style={{ ...sans, fontSize: FS.micro, fontWeight: 700, color: "var(--ink-color-global-text-subtle)" }}>{initialsOf(r.name)}</span>
-            </div>
+            <FeedAvatar logo={r.logo} name={r.name} />
             <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
               <div style={{ display: "flex", flexDirection: "column" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>

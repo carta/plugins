@@ -77,10 +77,17 @@ lowercased name, so extra columns are harmless. Logical files (stem.md|psv|tsv|t
                              corporation_uuid — the entity_link -> corpUuid bridge
                              that drives the corp-scoped joins above
 
+Not an ndjson stem — a directory, read by load_logos() (see there): <rawdir>/logos/,
+optional, one image file per company named <corporation_uuid>.<ext> (fetched via the
+Carta MCP portco-logo tools, SKILL.md Step 2b). Embedded into each matching company as
+comp["logoDataUri"] (a data: URI); a company with no corpUuid or no matching file gets
+no logoDataUri and the app falls back to its initials avatar.
+
 meta.json: {"name","slug","navAsOf","mark":{"text","bg","fg"},"carryRate"?,"firmId"?,"firmUuid"?}
 """
 import argparse
 import ast
+import base64
 import collections
 import copy
 import datetime
@@ -165,7 +172,15 @@ def truncated_stems(rawdir):
 def col(row, *names):
     for n in names:
         if n in row:
-            v = (row[n] or "").strip()
+            v = row[n]
+            # Falsy-skip first, matching every existing caller's original
+            # contract (None/""/0/False all mean "try the next name") -- only
+            # THEN coerce to str for .strip(), since fetch_logos.py reuses this
+            # on JSON rows where an id column (corporation_id) can be a real,
+            # truthy int that plain (row[n] or "").strip() would crash on.
+            if not v:
+                continue
+            v = v.strip() if isinstance(v, str) else str(v).strip()
             if v != "":
                 return v
     return ""
@@ -338,6 +353,53 @@ def reconcile_slice(old_slice, companies, live_fund_ids):
     reconciled["assumptions"] = assumptions
     reconciled["companies"] = companies_out
     return reconciled, dropped
+
+
+# Company logos are optional and out-of-band from the DWH ndjson stems: the skill
+# fetches them via the Carta MCP portco-logo tools (fa__list__portco_logos /
+# fa__get__portco_logo_zip — see SKILL.md Step 2b) and drops the image bytes at
+# <rawdir>/logos/<corporation_uuid>.<ext>, one file per company that has a logo.
+# Embedding as a data: URI (rather than a logoUrl the browser fetches later) keeps
+# the "browser only reads JSON the skill wrote" invariant serve.py documents, and
+# avoids depending on a presigned S3 URL still being valid on a later relaunch.
+
+# The only extensions fetch_logos.py's magic-byte sniff can ever write -- an
+# explicit map rather than mimetypes.guess_type() (whose registered types can vary
+# by OS/Python build) so both files agree on "is this a real image". fetch_logos.py
+# imports this dict directly and validates every sniffed extension against it, so a
+# format added to one file without the other fails at fetch time (loud, logged,
+# skipped) instead of build_datadir.py silently dropping the file later.
+EXT_MIME = {
+    ".png": "image/png", ".jpg": "image/jpeg", ".gif": "image/gif",
+    ".bmp": "image/bmp", ".webp": "image/webp", ".svg": "image/svg+xml",
+}
+
+
+def load_logos(rawdir):
+    """corporation_uuid -> data: URI, for every file under <rawdir>/logos/.
+
+    fetch_logos.py clears this directory before every fetch, so there should
+    never be two files for the same corp_uuid -- but os.listdir()'s order is
+    filesystem-dependent, so sort it anyway: if a caller ever writes here
+    without going through that cleanup, a leftover duplicate stays a
+    deterministic "last write wins" instead of a random one across builds."""
+    logos_dir = os.path.join(rawdir, "logos")
+    out = {}
+    if not os.path.isdir(logos_dir):
+        return out
+    for fname in sorted(os.listdir(logos_dir)):
+        corp_uuid, ext = os.path.splitext(fname)
+        if not corp_uuid:
+            continue
+        mime = EXT_MIME.get(ext.lower())
+        if mime is None:
+            continue
+        with open(os.path.join(logos_dir, fname), "rb") as fh:
+            data = fh.read()
+        if not data:
+            continue
+        out[corp_uuid] = "data:%s;base64,%s" % (mime, base64.b64encode(data).decode("ascii"))
+    return out
 
 
 def build(rawdir, out, meta):
@@ -609,6 +671,9 @@ def build(rawdir, out, meta):
         if el and cu:
             corp_by_el[el] = cu
 
+    # ---- company logos (optional; see load_logos above) ----
+    logos_by_corp = load_logos(rawdir)
+
     # ---- cap table + liquidation preferences (optional; §15 SUMMARY_CAP_TABLE) ----
     # Per share class: seniority, preference multiple, participation (+ cap),
     # original issue price, conversion ratio, share count, cash raised. Keyed by
@@ -828,6 +893,9 @@ def build(rawdir, out, meta):
         lr = fin_by_corp.get(corp_uuid) if corp_uuid else None
         if lr:
             comp["lastRound"] = lr
+        logo = logos_by_corp.get(corp_uuid) if corp_uuid else None
+        if logo:
+            comp["logoDataUri"] = logo
         # financials (§14 COMPANY_FINANCIALS/Data Collection) has no corporation_id —
         # it is matched by normalized legal name only, independent of the corpUuid bridge.
         fnc = financials.get(norm_co(name))

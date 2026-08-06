@@ -71,7 +71,7 @@ export function recentActivity(companies, funds, navAsOf) {
         const { ids, names } = collectFunds(row.pos, fundName);
         events.push({
           key: `${c.id}@inv@${row.date}`, type: i === 0 ? "investment" : "followOn",
-          companyId: c.id, name: c.name, date: row.date, cost: row.cost,
+          companyId: c.id, name: c.name, logo: c.logoDataUri ?? null, date: row.date, cost: row.cost,
           fundIds: ids, fundNames: names, securities: securitiesOf(row.pos),
           round: c.lastRound?.round ?? null, postMoney: c.lastRound?.postMoney ?? null,
         });
@@ -84,7 +84,7 @@ export function recentActivity(companies, funds, navAsOf) {
       let d = null;
       for (const p of positions) d = LATER(d, p.updateDate || p.fmvDate);
       events.push({
-        key: `${c.id}@exit`, type: "exit", companyId: c.id, name: c.name,
+        key: `${c.id}@exit`, type: "exit", companyId: c.id, name: c.name, logo: c.logoDataUri ?? null,
         date: d && d !== navAsOf ? d : null,
         proceeds: c.proceeds, cost, moic: cost > 0 ? c.proceeds / cost : null,
         fundIds: ids, fundNames: names, securities: allSecs,
@@ -105,7 +105,7 @@ export function recentActivity(companies, funds, navAsOf) {
         positions.every((p) => p.fmvDate !== d || (p.cartaFv || 0) === (p.cost || 0));
       if (mark > 0 && d && d !== navAsOf && !isNoOpOnCheckDate) {
         events.push({
-          key: `${c.id}@val`, type: "valuation", companyId: c.id, name: c.name, date: d,
+          key: `${c.id}@val`, type: "valuation", companyId: c.id, name: c.name, logo: c.logoDataUri ?? null, date: d,
           mark, cost, gain: mark - cost, moic: cost > 0 ? mark / cost : null,
           fundIds: ids, fundNames: names, securities: allSecs,
         });

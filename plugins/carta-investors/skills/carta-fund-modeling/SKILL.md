@@ -231,9 +231,18 @@ duplicate. (When the typed name already equals the canonical name, this slug mat
 refresh.) Persist `carta_id`/`firm_uuid` as `firmId`/`firmUuid` in the snapshot (Step 3) so a later URL/UUID
 invocation finds this cache via `find-by-id` (Step 0) without a fetch.
 
+Tell the user: "✅ Resolved <canonical name>. Starting data fetch..." — this is the only checkpoint between
+Step 1 and Step 2 the user sees before the (potentially multi-wave, multi-minute) fetch below begins.
+
 ## Step 2 — Fetch the baseline (Fund Admin) → raw query files
 
 > **What's happening:** Fetching the firm's fund holdings, partner data, valuations, and financials from Carta's data warehouse in parallel waves. Results land as raw JSON files in the local cache — nothing is sent back to Carta.
+
+**Preflight, before issuing any query:** confirm the Carta MCP connection is live (Step 1's `welcome` call
+already did this), the cache dir is writable (`fm_paths.py resolve` from Step 0/1 already created it), and the
+firm UUID is resolved (Step 1's `set_context`). All three are already true by the time this step starts — no
+extra call needed — but if the firm resolution above ended in a `zero firms matched`/ambiguous state, do not
+proceed into the fetch; surface that to the user first.
 
 Read `${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-modeling/references/queries.md`. Substitute the **Step-1 canonical
 `raw_dir`** for `<raw_dir>` in every command below. The dir is created on demand by the first writer that
@@ -448,6 +457,48 @@ Cohort may also fail with `Error in secure object` for some firm roles — if so
 missing cohort file is a hard build failure (the fetch gate treats it as "never run"). Scenario-focused
 console: do **not** fetch tearsheets, schedule of investments, or cash-flow statements.
 
+### Step 2b — Company logos (optional — best-effort, never blocks the build)
+
+> **What's happening:** Fetching each portfolio company's real logo (if Carta has one on file) to replace the initials placeholder on the Overview activity feed.
+
+This is **not** a DWH stem and has no fetch gate — a firm with no logos, or a portco-logo call that errors,
+degrades silently to the initials avatar every company already falls back to. It needs no `fund_uuid`/
+`corporation_id` IN-list (the tool is firm-scoped) and no DWH output, so issue its `call_tool` in the **same
+message** as Wave 1's `dwh__execute__queries` batches rather than waiting for Wave 1 to finish first — the two
+have no ordering dependency, and serializing them only adds wall-clock time to every build:
+
+1. Call the bulk list tool for the firm:
+   ```
+   call_tool({"name": "fa__list__portco_logos", "arguments": {"firm_uuid": "<firm_uuid from Step 1>"}})
+   ```
+   Each row carries **both** `corporation_id` (integer) and `corporation_uuid` — `fetch_logos.py` keys its
+   output filenames on `corporation_uuid`, since that's what `build_datadir.py`'s `load_logos()` matches
+   against (every company object carries a `corpUuid`, never the integer id). The row also carries a
+   **presigned** image URL; presigned URLs expire, so this result is only ever used once, immediately, to
+   download the bytes — never store the URL itself in the app's JSON (see step 3 below for why).
+2. Capture the result to `<raw_dir>/portco_logos.json`: a small firm's list returns inline — **Write** it
+   verbatim (same "capture immediately, don't defer" rule as the DWH stems in Step 2: a compaction between the
+   call and the write loses it). A large firm's list may instead come back as a persisted-result envelope (the
+   "Output has been saved to …" message, same shape as an oversized DWH stem) — in that case pass the printed
+   path straight to `fetch_logos.py` in step 3 instead of hand-copying/re-Writing it.
+3. Download every image into `<raw_dir>/logos/` (clearing it first, so a stale file from a prior run never
+   lingers alongside a fresh one for the same company):
+   ```bash
+   uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-modeling/scripts/fetch_logos.py" \
+     "<raw_dir>/portco_logos.json" "<raw_dir>"
+   ```
+   Fetches run concurrently (a small thread pool, not one round-trip at a time). Intentionally best-effort per
+   row: a broken/expired URL, a network error, a row whose id isn't UUID-shaped (only `corporation_uuid` can
+   ever match a company — see step 1), an oversized download (>500KB — this is a 32px avatar, never a
+   multi-MB asset), or a download that doesn't sniff as a real image all just skip that one company (logged to
+   stderr) rather than failing the run. `build_datadir.py`'s `load_logos()` reads `<raw_dir>/logos/` and embeds
+   each image as a `data:` URI on its matching company by corporation UUID — the browser never re-fetches from
+   Carta, so an expired presigned URL after this point doesn't matter.
+
+If `fa__list__portco_logos` isn't available on the connected MCP (older environments), skip this step entirely
+— do not substitute `fa__get__portco_logo` in a per-company loop as a fallback; that's one round-trip per
+company on a firm that may hold hundreds, for a cosmetic enhancement.
+
 ## Step 3 — Build the data dir (deterministic — do NOT hand-write the JSON)
 
 > **What's happening:** Transforming the raw query files into the structured JSON the React app consumes — portfolio companies, fund metrics, LP data, and benchmarks. A script handles this deterministically; no manual JSON writing.
@@ -465,7 +516,9 @@ uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-modeling/scripts/build_datadir.p
   --raw "<raw_dir>" --out "<dashboard_dir>" --meta "<raw_dir>/meta.json"
 ```
 It writes `firms.json`, `snapshot.json`, `portfolio.json`, `pacing.json`, and — when the inputs exist —
-`company-ownership.json` + `lp-base.json`, in the exact shapes `src/model/*` consume. In particular it emits
+`company-ownership.json` + `lp-base.json`, in the exact shapes `src/model/*` consume. It also embeds a
+`logoDataUri` on any company matched against `<raw_dir>/logos/` (Step 2b) — omitted entirely when that
+company has no logo, in which case the app falls back to its initials avatar. In particular it emits
 **`snapshot.source` as an object** (`{firm,firmId,firmUuid,navAsOf,marksAsOf,marksPulledAt,currency,mixedCurrency,cartaEnvironment}`); the app
 runs `source.navAsOf.slice(0,4)`, so a `source` written as a bare string blanks the **Companies** and
 **Exit & IRR** tabs. The generator resolves the firm's real reporting currency (never hardcoded USD), keeps

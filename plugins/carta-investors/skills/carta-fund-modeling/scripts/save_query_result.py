@@ -210,22 +210,35 @@ def _walk_for_rows(node):
     """Recursively pull rows out of an MCP content-block structure: decode any
     ``resource.blob`` (base64 ndjson), read inline ``text`` blocks, and — crucially —
     treat a *string* value (e.g. a string-valued ``result``/``content``, the
-    harness-persisted large-result wrapper) as embedded ndjson/JSON text."""
+    harness-persisted large-result wrapper) as embedded ndjson/JSON text.
+
+    A dict that matches none of those shapes (no resource/blob/text, no nested
+    content/result/results/rows/data key) only got here because
+    ``_looks_like_content_blocks`` saw a container-valued reserved key *elsewhere*
+    in the same payload — it's a genuine data row, not a wrapper, so treat it as
+    one rather than silently dropping it."""
     rows = []
     if isinstance(node, str):
         return _rows_from_text(node)
     if isinstance(node, dict):
+        recognized = False
         res = node.get("resource")
         if isinstance(res, dict) and res.get("blob"):
             rows += _decode_blob(res.get("blob"))
+            recognized = True
         if node.get("blob") and "resource" not in node:
             rows += _decode_blob(node.get("blob"))
+            recognized = True
         txt = node.get("text")
         if isinstance(txt, str) and txt.strip():
             rows += _rows_from_text(txt)
+            recognized = True
         for k in ("content", "result", "results", "rows", "data"):
             if k in node:
                 rows += _walk_for_rows(node.get(k))
+                recognized = True
+        if not recognized and node:
+            rows.append(node)
     elif isinstance(node, list):
         for x in node:
             rows += _walk_for_rows(x)

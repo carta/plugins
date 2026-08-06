@@ -846,6 +846,69 @@ export function Bubble({ children, variant = "positive", style }) {
   );
 }
 
+/** Ink's real Avatar — "Shows thumbnails for people and company logos."
+ *  Mirrors carta-frontend-platform's libs/ink/ink-foundations/library/Avatar
+ *  (Avatar.tsx + styles.ts) exactly, not just visually: the load-bearing detail
+ *  is that `variant="company"` is NOT a circular crop — it's a fixed
+ *  80px-wide, border-radius:0 rectangle sized to the real company-logo artwork's
+ *  native aspect ratio (Ink's own default company glyph is an 80x38 viewBox).
+ *  Cropping a company logo into a circle (this app's first attempt) looks wrong
+ *  for exactly that reason; the person/initials circle is a separate, deliberately
+ *  different shape (`size`, round). `imageUrl` renders as a real `<img>` (not a
+ *  CSS background-image, so a broken/corrupt logo can be caught with a plain
+ *  `onError` and degrade to `initials` right here, instead of every caller
+ *  re-implementing its own preload-and-check) with `object-fit: contain` — a
+ *  departure from Ink's own `cover` — because portfolio-company logos are often
+ *  wide wordmarks (5:1+ aspect ratios); `cover` zooms in to fill the circle and
+ *  crops most of the mark off, leaving only an unrecognizable sliver. `contain`
+ *  letterboxes the whole logo inside the circle instead.
+ *  Docs: https://ink.carta.com/components/Avatar/usage
+ *
+ *  `initialsColor` is a deliberate departure from Ink's own `initialsVariant`
+ *  (primary|secondary|tertiary, a fixed 3-color enum baked into the component):
+ *  Ink's own docs don't prescribe an algorithm for picking one of the three, and
+ *  "primary" is a brand purple that doesn't appear anywhere in this app's own
+ *  categorical data-viz palette (the same hues the fund charts use) — so callers
+ *  here pass a raw color already drawn from that palette instead of reaching for
+ *  a fixed enum that doesn't line up with the rest of the dashboard.
+ *
+ *  Props: imageUrl, initials, initialsColor (CSS color for the initials
+ *  background — any hex/var, not Ink's 3-value enum), variant ("company" for the
+ *  wide logo box; omit for the round person/initials circle), size (px, default
+ *  38 — Ink's --ink-avatar-size-base), style. */
+export function Avatar({ imageUrl, initials, initialsColor, variant, size = 38, style }) {
+  const company = variant === "company";
+  const [broken, setBroken] = useState(false);
+  useEffect(() => { setBroken(false); }, [imageUrl]);
+  const showImage = imageUrl && !broken;
+  const hasInitials = !showImage && !!initials;
+  return (
+    <div
+      style={{
+        display: "flex", alignItems: "center", justifyContent: "center", position: "relative", overflow: "hidden",
+        flex: "none", boxSizing: "content-box",
+        height: size, width: company ? 80 : size, minWidth: company ? 80 : size,
+        borderRadius: company ? 0 : "var(--ink-avatar-border-radius)",
+        border: company ? "var(--ink-avatar-border-width) solid transparent" : "none",
+        background: hasInitials
+          ? (initialsColor || "var(--ink-avatar-background-color-initials-default)")
+          : "var(--ink-avatar-background-color-base)",
+        color: hasInitials
+          ? (initialsColor ? "var(--ink-avatar-font-color-white)" : "var(--ink-avatar-font-color-initials-default)")
+          : "var(--ink-avatar-font-color-default)",
+        fontWeight: "var(--ink-avatar-font-weight)", fontSize: 14, lineHeight: 1,
+        ...style,
+      }}
+    >
+      {showImage && (
+        <img src={imageUrl} alt="" onError={() => setBroken(true)}
+          style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+      )}
+      {hasInitials && initials}
+    </div>
+  );
+}
+
 const GLOBAL_FILTER_PANEL_WIDTH = 500;
 
 /** Global filter — trigger button + removable tags inline; the panel (left

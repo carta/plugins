@@ -184,4 +184,23 @@
   --ink-button-background-color-danger-base-default:    #E52431;
   --ink-button-background-color-danger-base-hover:      #A82020;
   --ink-button-font-color-danger-base:                  #FFFFFF;
+
+  /* === Avatar (component tokens — synced from ink-tokens/library/tokens/components/Avatar).
+     Ink's own initials-primary/secondary/tertiary enum is intentionally not included here —
+     this app colors initials avatars from its own categorical data-viz palette instead
+     (see PALETTE in Overview.jsx), passed directly as Avatar's `initialsColor` prop. === */
+  --ink-avatar-background-color-base:               light-dark(#FFFFFF, #5A473F);
+  --ink-avatar-background-color-initials-default:   light-dark(#EFEAE8, #7B6056);
+  --ink-avatar-icon-background-color-base:          light-dark(#EFEAE8, #332824);
+  --ink-avatar-icon-background-color-accent:        light-dark(#E0D6D2, #1A1A1A);
+  --ink-avatar-icon-background-color-highlight:     light-dark(#FBFAF9, #1A1A1A);
+  --ink-avatar-icon-foreground-color:               var(--ink-color-global-text-inverse);
+  --ink-avatar-icon-outline-color:                  light-dark(#1A1A1A, #656B6B);
+  --ink-avatar-font-weight:                         600;
+  --ink-avatar-font-color-default:                  var(--ink-color-global-text-default);
+  --ink-avatar-font-color-initials-default:         light-dark(#656B6B, #1A1A1A);
+  --ink-avatar-font-color-white:                    var(--ink-color-global-text-inverse);
+  --ink-avatar-border-width:                        1px;
+  --ink-avatar-border-radius:                       var(--ink-size-global-radius-round);
+  --ink-avatar-size-base:                           38px;
 }
