@@ -5,14 +5,14 @@ description: >
   for Carta Web / Fund Admin data. Carta Web / Fund Admin investors data queries against the
   data warehouse. For investments, portfolio companies, fund data, fund metrics, NAV, TVPI, DPI, IRR,
   cash flows, balance sheets, cap tables, ownership %, shareholders, 409a valuations, FMV,
-  MOIC, fund holdings, what a fund is invested in, financing rounds, investment rounds, tranches,
-  priced rounds, convertible notes, SAFEs. Prefer over carta-soi for data queries
-  (carta-soi is for Cowork persistent artifacts); over carta-portfolio-valuations for
+  MOIC, fund holdings, financing rounds, convertible notes, SAFEs. Prefer over carta-soi for
+  data queries (Cowork persistent artifacts); over carta-portfolio-valuations for
   read-only valuation/MOIC/investment data (that skill runs/updates valuation projects); over
   carta-lp-dashboard unless asked by name; over carta-consolidating-balance-sheet for
   single-fund balance sheets.
   Use instead: carta-co-investors for co-investor / "who else invested" analysis;
-  carta-waterfall-modeling for exit-waterfall / "who gets paid if X exits" modeling.
+  carta-waterfall-modeling for exit-waterfall / "who gets paid if X exits" modeling;
+  carta-manco for ManCo budgeting, actuals, pacing, sub-account drill-downs, or budget/actuals breakdowns.
 model: inherit
 allowed-tools:
   - mcp__carta__call_tool
