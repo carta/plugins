@@ -257,7 +257,8 @@ function ExitTimingSection({ company, totalFv, curFv, proceeds, navAsOf, locked,
   return (
     <div style={{ marginBottom: 14 }}>
       <SubLabel>Exit timing · deal IRR over time</SubLabel>
-      <RepriceControl {...cfg} locked={locked} hidePresets onDragStart={onDragStart} onDragEnd={onDragEnd} />
+      <RepriceControl {...cfg} locked={locked} hidePresets trackId="FundModeling.Companies.SetExitQuarter"
+        onDragStart={onDragStart} onDragEnd={onDragEnd} />
       <div style={{ ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", margin: "6px 0 8px" }}>
         Exit at <strong style={{ ...mono, color: "var(--ink-color-global-text-default)" }}>{exitQLabel(navAsOf, selectedQ)}</strong>
         {" · deal IRR "}
@@ -853,7 +854,8 @@ function CompanyRow({ company, updateCompany, refDate, staleDays, assumptions, s
           </StackedValue>
         </td>
         <td style={{ padding: "6px 12px", minWidth: 112 }} onClick={(e) => e.stopPropagation()}>
-          {cfg && <RepriceControl {...cfg} uplift={uplift} locked={readOnly} compact hideReadout onDragStart={onDragStart} onDragEnd={onDragEnd} />}
+          {cfg && <RepriceControl {...cfg} uplift={uplift} locked={readOnly} compact hideReadout
+            trackId="FundModeling.Reprice.SetValueCompact" onDragStart={onDragStart} onDragEnd={onDragEnd} />}
         </td>
         <td style={{ textAlign: "left", width: STATUS_COL_W }}>{status}</td>
       </tr>
@@ -955,6 +957,7 @@ function CompanyRow({ company, updateCompany, refDate, staleDays, assumptions, s
                   <div style={{ marginBottom: 14 }}>
                     <SubLabel>{companyIsWaterfall(company) ? "Company valuation (liquidation waterfall)" : hasBasis ? "Company valuation" : "Mark · multiple of invested cost (MOIC)"}</SubLabel>
                     <RepriceControl {...cfg} uplift={uplift} locked={readOnly} showTick
+                      trackId="FundModeling.Reprice.SetValue"
                       onReset={() => {
                         trackClick("FundModeling.Companies.ResetRepriceClick");
                         updateCompany(company.id, (c) => ({
@@ -975,7 +978,8 @@ function CompanyRow({ company, updateCompany, refDate, staleDays, assumptions, s
                   {dilutionCfg && (
                     <div style={{ marginBottom: 14 }}>
                       <SubLabel>Expected future dilution</SubLabel>
-                      <RepriceControl {...dilutionCfg} locked={readOnly} hidePresets onDragStart={onDragStart} onDragEnd={onDragEnd} />
+                      <RepriceControl {...dilutionCfg} locked={readOnly} hidePresets trackId="FundModeling.Companies.SetFutureDilution"
+                        onDragStart={onDragStart} onDragEnd={onDragEnd} />
                       <span style={{ ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", display: "block", marginTop: 6 }}>
                         Haircuts this company's value to the fund by the % you expect future rounds to dilute the stake — lowers TVPI and DPI.
                       </span>

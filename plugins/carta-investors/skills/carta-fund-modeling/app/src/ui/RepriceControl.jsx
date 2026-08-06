@@ -15,13 +15,16 @@ const near = (a, b, eps) => Math.abs(a - b) < eps;
 
 /** @param presets [{v, label}]  @param fmtVal (v)=>string  @param compact bool
  *  @param hidePresets bool — skip the preset chips and draw a Carta-mark tick on the track instead
- *  @param showTick bool — force the Carta-mark tick even when preset chips are shown (expanded view) */
+ *  @param showTick bool — force the Carta-mark tick even when preset chips are shown (expanded view)
+ *  @param trackId elementId for a committed value change — the caller names it (one component, four
+ *    sliders); omit it to track nothing */
 // `disabled` is truly inert. `locked` keeps the control interactive-but-muted:
 // the slider/presets/value-input still fire onChange so the parent setter can
 // no-op and surface a "Baseline is read-only" warning — and because the parent
 // never updates `value`, the control stays put / snaps back on its own.
-export default function RepriceControl({ value, onChange, onReset, fmtVal, min = 0, max, step = 0.05, presets = [], resetValue, uplift = 0, disabled, locked, compact, hidePresets, hideReadout, showTick, onDragStart, onDragEnd }) {
+export default function RepriceControl({ value, onChange, onReset, fmtVal, min = 0, max, step = 0.05, presets = [], resetValue, uplift = 0, disabled, locked, compact, hidePresets, hideReadout, showTick, trackId, onDragStart, onDragEnd }) {
   const v = value ?? 0;
+  const trackCommit = () => { if (trackId) trackClick(trackId); };
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState("");
   const inputRef = useRef(null);
@@ -35,6 +38,7 @@ export default function RepriceControl({ value, onChange, onReset, fmtVal, min =
   // table updates; this just keeps the slider's own position stable during drag.
   const [dragVal, setDragVal] = useState(null);
   const draggingRef = useRef(false);
+  const dragStartRef = useRef(null);
 
   // When v changes from outside (parent state sync after release, external reset),
   // clear the local override — but only when not actively dragging.
@@ -87,28 +91,36 @@ export default function RepriceControl({ value, onChange, onReset, fmtVal, min =
     onChange(clamped);
   };
 
+  // The window shrinks near an endpoint so the zone can't extend past min/max — otherwise
+  // a drag all the way to 0 snaps back.
+  const snapToCartaMark = (val) => {
+    if (resetValue == null || tickPct == null) return val;
+    const distToNearestEnd = Math.min(resetValue - min, max - resetValue);
+    const effectiveWindow = Math.min(cartaSnapWindow, Math.max(0, distToNearestEnd - step));
+    return effectiveWindow > 0 && near(val, resetValue, effectiveWindow) ? resetValue : val;
+  };
+
   const handlePointerDown = () => {
     if (locked) return; // no drag override on a read-only slider
     draggingRef.current = true;
-    setDragVal(clampTo(v, min, max));
+    dragStartRef.current = clampTo(v, min, max);
+    setDragVal(dragStartRef.current);
     onDragStart?.();
   };
 
   const handlePointerUp = () => {
     if (locked) return;
     draggingRef.current = false;
-    // Snap to Carta mark on release if the thumb lands close. Shrink the snap
-    // window when the mark is near an endpoint so the zone never extends past
-    // min or max — prevents snapping when the user dragged all the way to 0.
-    if (resetValue != null && tickPct != null) {
-      const cur = dragVal ?? clampTo(v, min, max);
-      const distToNearestEnd = Math.min(resetValue - min, max - resetValue);
-      const effectiveWindow = Math.min(cartaSnapWindow, Math.max(0, distToNearestEnd - step));
-      if (effectiveWindow > 0 && near(cur, resetValue, effectiveWindow)) {
-        setDragVal(resetValue);
-        onChange(resetValue);
-      }
+    const start = dragStartRef.current;
+    dragStartRef.current = null;
+    const held = dragVal ?? clampTo(v, min, max);
+    const committed = snapToCartaMark(held);
+    if (committed !== held) {
+      setDragVal(committed);
+      onChange(committed);
     }
+    // Commit-only: tracking onSlide would emit one event per pointer-move.
+    if (start != null && committed !== start) trackCommit();
     onDragEnd?.();
   };
 
@@ -116,7 +128,7 @@ export default function RepriceControl({ value, onChange, onReset, fmtVal, min =
   const startEdit = () => { if (disabled) return; setText(String(+displayed.toFixed(2))); setEditing(true); };
   const commit = () => {
     const n = parseFloat(text);
-    if (!isNaN(n)) { trackClick("FundModeling.Reprice.SetValue"); onChange(clampTo(n, min, max)); }
+    if (!isNaN(n)) { trackCommit(); onChange(clampTo(n, min, max)); }
     setEditing(false);
   };
 
