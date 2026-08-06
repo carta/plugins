@@ -299,7 +299,7 @@ function ActivityContext({ r }) {
   } else if (r.type === "exit") {
     content = <>Realized <strong style={{ color: "var(--ink-color-global-text-default)", fontWeight: 600 }}>{fmtX(r.moic)}</strong> on {fmtM(r.cost)} cost</>;
   } else if (r.round) {
-    content = <>Latest round: <strong style={{ color: "var(--ink-color-global-text-default)", fontWeight: 600 }}>{roundLabel(r.round)}</strong>{r.postMoney ? ` · ${fmtM(r.postMoney)} post` : ""}</>;
+    content = <>Latest round: <strong style={{ color: "var(--ink-color-global-text-default)", fontWeight: 600 }}>{roundLabel(r.round)}</strong>{r.postMoney ? ` · ${fmtM(r.postMoney)} post-money valuation` : ""}</>;
   }
   if (!content) return null;
   return <div style={{ ...sans, fontSize: FS.body, lineHeight: "20px", color: "var(--ink-color-global-text-subtle)" }}>{content}</div>;
@@ -346,7 +346,6 @@ function RecentActivityCard({ rows, mixed }) {
               <div style={{ display: "flex", flexDirection: "column" }}>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
                   <span style={{ ...sans, fontSize: FS.value, lineHeight: "24px", fontWeight: 500, color: "var(--ink-color-global-text-default)" }}>{fmtM(activityAmount(r))}</span>
-                  {r.round && <span style={{ ...sans, fontSize: FS.value, lineHeight: "24px", color: "var(--ink-color-global-text-subtle)" }}>{roundLabel(r.round)}</span>}
                   {r.securities && r.securities.length > 0 && (
                     <span style={{ ...sans, fontSize: FS.value, lineHeight: "24px", color: "var(--ink-color-global-text-subtle)" }}>{r.securities.join(", ")}</span>
                   )}
