@@ -1,8 +1,8 @@
 {
   "name": "carta-crm",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "description": "Manage the Carta CRM conversationally — search, add, update, and enrich investors, companies, contacts, deals, notes, and fundraisings via the Carta CRM MCP Server",
-  "problem": "Keeping the Carta CRM current means clicking through the app form by form to add or update investors, companies, contacts, deals, and notes — tedious for more than a single record and easy to let go stale.",
+  "problem": "Keeping the CRM current means clicking through forms one record at a time, and the relationship intelligence already in it — who we know at a target, what was said last, who can open a door — stays buried when a dealmaker has two minutes before a call.",
   "author": {
     "name": "Carta",
     "email": "crm@carta.com"
@@ -19,7 +19,10 @@
     "fundraisings",
     "search",
     "enrich",
-    "analytics"
+    "analytics",
+    "angles",
+    "introductions",
+    "network"
   ],
   "homepage": "https://github.com/carta/plugins",
   "mcpServers": {

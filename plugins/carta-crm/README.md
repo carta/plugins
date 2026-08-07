@@ -97,6 +97,30 @@ updates the existing artifact rather than creating a second one.
 mode. Fields the CRM does not hold (RSVP status, meeting duration) are omitted rather than
 guessed at.
 
+### Warm introductions
+| Skill | Trigger phrases |
+|-------|----------------|
+| `get-angles` | "how can I get introduced to [company]", "who do I know at [company]", "find intro angles into [company]", "warm intro to [company]", "any connections at [domain]" |
+
+Finds your best way into a company you have no relationship with, and then sets it up:
+
+> "How can I get introduced to Tunic Pay?"
+
+It resolves the company's domain, reads your network overlap alongside your own firm's history
+with that domain, and ranks the routes by whether they can actually be walked — a contact you
+know who overlapped in tenure with a Director beats a stranger who shared an employer with the
+CEO but never at the same time. You get an interactive route map, a drafted introduction
+request to the connector, and the option to have Claude create the email draft, log the request
+on the deal, and add the target to the CRM.
+
+**Two things it deliberately does.** It tells you when a colleague is already in conversation
+with the company, so you don't ask a near-stranger for an intro into an account your own firm
+is working. And it stops rather than padding the list when no genuinely warm route exists.
+
+**Where the map appears.** As an interactive artifact wherever your host renders one; in Claude
+Code, as an HTML file you can open in a browser. The follow-through actions run as buttons in
+the panel where the host supports it, and in the conversation everywhere else.
+
 ## Data & Privacy
 
 This plugin collects telemetry to improve reliability and performance. Data collected includes session context, model configuration, and plugin activity. See [Carta's Privacy Policy](https://carta.com/legal/privacy/privacy-policy/) for details.

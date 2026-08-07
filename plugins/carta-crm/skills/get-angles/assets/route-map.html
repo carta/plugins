@@ -1,0 +1,1087 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Warm introductions</title>
+    <style>
+      /* Only the Ink tokens this view references, each carrying its light + dark pair.
+         No Inter link and no SangBleu woff2: the live-artifact sandbox blocks external
+         fetches, so the h1 resolves to Georgia and body copy to the system stack. */
+      :root {
+        color-scheme: light dark;
+        --ink-color-global-text-default: light-dark(#1A1A1A, #EDEDED);
+        --ink-color-global-text-subtle: light-dark(#656B6B, #A7AAAA);
+        --ink-color-global-surface-background-default: light-dark(#FFFFFF, rgb(18 18 18));
+        --ink-color-global-surface-lightgray-default: light-dark(#F1F1F1, #202020);
+        --ink-color-global-surface-lightgray-hover: light-dark(#DEDFDF, #2D2D2D);
+        --ink-color-global-border-subtle: light-dark(#DEDFDF, #2D2D2D);
+        --ink-color-global-border-default: light-dark(#A7AAAA, #656B6B);
+        --ink-color-global-border-focus-light: light-dark(#C0D1E9, #1A3E6D);
+        /* Positive TEXT. The Ink feedback-strong tokens are fill colours:
+           green-70 is 3.28:1 on white and 2.99:1 on the green-10 fill of the
+           path pill, so it cannot carry text. Green-90 / green-40 are the
+           nearest steps on the same Ink scale that clear AA on every surface
+           here, in both schemes. colors.md already prescribes this stepping for
+           yellow; green fails the same way. */
+        --positive-text: light-dark(#105242, #84D0C6);
+        /* Same reason: red-70 is 4.13:1 on the dark page. */
+        --negative-text: light-dark(#A82020, #FBB5B5);
+        --ink-color-global-feedback-positive-subtle: light-dark(#EBF7F6, #063A32);
+        --ink-color-global-feedback-positive-strong: light-dark(#2D9E90, #2D9E90);
+        /* Info TEXT, for the same reason. colors.md prescribes blue-100 for
+           banner text and blue-70 for the banner icon, so info-strong on the
+           info fill is only 5.75:1 light and 2.59:1 dark -- in dark mode the
+           fill IS blue-100. Blue-100 / blue-40 clear AA on the banner in both
+           schemes (13.2:1, 6.2:1). */
+        --info-text: light-dark(#122948, #8BABD6);
+        --ink-color-global-feedback-info-subtle: light-dark(#EAF0F8, #122948);
+        --ink-color-global-feedback-info-strong: light-dark(#285DA3, #2C67B5);
+        --ink-button-background-color-primary-base-default: light-dark(#1A1A1A, #FFFFFF);
+        --ink-button-background-color-primary-base-hover: light-dark(#202020, #CECFCF);
+        --ink-button-background-color-primary-disabled: light-dark(#EDEDED, #394040);
+        --ink-button-font-color-primary-base: light-dark(#FFFFFF, #1A1A1A);
+        --ink-button-font-color-primary-disabled: light-dark(#CECFCF, #656B6B);
+        --ink-button-background-color-secondary-base-default: light-dark(#FFFFFF, rgb(18 18 18));
+        --ink-button-border-color-secondary-base-default: light-dark(#A7AAAA, #656B6B);
+        --ink-button-border-color-secondary-base-hover: light-dark(#656B6B, #9C9F9F);
+        --ink-button-font-color-secondary-base-default: light-dark(#1A1A1A, #EDEDED);
+        --ink-font-global-family-prominent: "SangBleu Versailles", Georgia, serif;
+        --ink-font-global-size-display-1: 28px;
+        --ink-font-global-leading-display-1: 48px;
+        --ink-font-global-weight-heading-1: 400;
+        --ink-size-global-radius-flat: 0;
+        --ink-size-global-radius-subtle: 4px;
+        /* One inset for every side of every tile on the board, so the head, the
+           body and the avatar-to-text gap cannot drift apart. */
+        --card-pad: 12px;
+        --ink-focus-ring: 0 0 0 4px var(--ink-color-global-border-focus-light);
+      }
+
+      body {
+        margin: 0;
+        background: var(--ink-color-global-surface-background-default);
+        color: var(--ink-color-global-text-default);
+        font-family: system-ui, -apple-system, sans-serif;
+        font-size: 14px;
+        line-height: 20px;
+      }
+      /* One measure for every block on the page. The board is the widest thing
+         here and it sets this number: five cells that each hold a name on one
+         line. Capping the prose blocks narrower instead left the page with two
+         right edges and a ragged void beside the draft. */
+      .container { max-width: 1080px; margin: 0 auto; padding: 24px 32px 32px; }
+      .carta-logo {
+        display: block; width: 64px; height: 32px;
+        margin-bottom: 32px; color: var(--ink-color-global-text-default);
+      }
+      h1 {
+        font-family: var(--ink-font-global-family-prominent);
+        font-size: var(--ink-font-global-size-display-1);
+        line-height: var(--ink-font-global-leading-display-1);
+        font-weight: var(--ink-font-global-weight-heading-1);
+        margin: 0 0 4px;
+      }
+      h2 {
+        font-size: 14px; font-weight: 600; line-height: 20px;
+        margin: 28px 0 10px; color: var(--ink-color-global-text-default);
+      }
+      .subtitle { color: var(--ink-color-global-text-subtle); margin: 0; }
+      .empty { color: var(--ink-color-global-text-subtle); }
+
+      :focus-visible {
+        outline: 2px solid var(--ink-color-global-feedback-info-strong);
+        outline-offset: 0;
+        box-shadow: var(--ink-focus-ring);
+      }
+
+      /* Coverage banner - our own firm's existing contact with the target. */
+      .coverage {
+        margin: 20px 0 0;
+        padding: 10px 12px;
+        background: var(--ink-color-global-feedback-info-subtle);
+        border-left: 2px solid var(--ink-color-global-feedback-info-strong);
+        border-radius: var(--ink-size-global-radius-flat);
+      }
+      .coverage-label {
+        font-size: 12px; font-weight: 600; letter-spacing: 0.04em;
+        text-transform: uppercase; color: var(--info-text);
+        display: block; margin-bottom: 2px;
+      }
+
+      /* The route board: one grid row of five cells -- three lane cards and the
+         two gutters between them. Every child declares its own column and row;
+         letting auto-placement decide is what packs the cards into columns 1-2-3
+         and puts the hop labels under the wrong lanes. */
+      .board {
+        margin-top: 12px;
+        padding: 20px;
+        background: var(--ink-color-global-surface-lightgray-default);
+        border-radius: var(--ink-size-global-radius-flat);
+      }
+      .board-pill { display: block; margin-bottom: 22px; }
+      /* Pills are inline by nature, so the wrapper carries the block spacing and
+         the pill keeps its own stadium radius. Fill and border are Ink's
+         green-10 / green-70; the label steps to green-90 because green-70 on
+         green-10 is 2.99:1, under the AA floor for 14px text. */
+      .path-pill {
+        display: inline-block;
+        font-size: 14px; line-height: 20px; font-weight: 500;
+        padding: 5px 16px;
+        border: 1px solid var(--ink-color-global-feedback-positive-strong);
+        border-radius: 999px;
+        background: var(--ink-color-global-feedback-positive-subtle);
+        color: var(--positive-text);
+        white-space: nowrap;
+      }
+      /* Gutters run slightly wider than the cards: the right-hand hop carries two
+         lines of evidence plus a logo, and the arrow still has to show either
+         side of them. */
+      .lanes {
+        display: grid;
+        grid-template-columns: 1fr 1.15fr 1fr 1.15fr 1fr;
+        align-items: stretch;
+      }
+
+      .card {
+        min-width: 0;
+        display: flex; flex-direction: column;
+        background: var(--ink-color-global-surface-background-default);
+        border: 1px solid var(--ink-color-global-border-subtle);
+        border-radius: var(--ink-size-global-radius-flat);
+        overflow: hidden;
+      }
+      /* The head is a component part, so its own fill carries the boundary -- no
+         border-bottom, which Ink rule 7 would read as a decorative rule. */
+      .card-head {
+        display: flex; align-items: center; gap: var(--card-pad);
+        padding: var(--card-pad);
+        background: var(--ink-color-global-surface-lightgray-default);
+      }
+      .card-company {
+        min-width: 0;
+        font-size: 13px; font-weight: 600;
+        overflow-wrap: anywhere;
+      }
+      .card-company.is-unknown {
+        font-weight: 400;
+        color: var(--ink-color-global-text-subtle);
+      }
+      /* One padding value on every side of every tile. No min-height on the card:
+         height beyond the avatar plus two insets shows up as extra space above
+         and below it, which reads as irregular spacing. */
+      .card-body {
+        flex: 1 1 auto;
+        display: flex; align-items: center; gap: var(--card-pad);
+        padding: var(--card-pad);
+      }
+      .card-id { min-width: 0; }
+      /* Which of our people actually holds the relationship -- the point of the
+         whole left-hand column, and the only place that signal appears. */
+      .card-flag {
+        display: block;
+        font-size: 11px; line-height: 16px; font-weight: 600;
+        letter-spacing: 0.06em; text-transform: uppercase;
+        color: var(--positive-text);
+      }
+      .person-name { font-weight: 600; overflow-wrap: anywhere; }
+      .person-role {
+        color: var(--ink-color-global-text-subtle);
+        font-size: 13px; overflow-wrap: anywhere;
+      }
+
+      .avatar {
+        flex: 0 0 auto;
+        width: 44px; height: 44px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 999px;
+        background: var(--ink-color-global-surface-lightgray-hover);
+        font-size: 14px; font-weight: 600; letter-spacing: 0.04em;
+      }
+      .avatar-img {
+        flex: 0 0 auto;
+        width: 44px; height: 44px;
+        border-radius: 999px; object-fit: cover;
+      }
+      /* Company lettermark. Square-ish, so it never reads as a person. */
+      .lettermark {
+        flex: 0 0 auto;
+        width: 22px; height: 22px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: var(--ink-size-global-radius-subtle);
+        background: var(--ink-color-global-surface-lightgray-hover);
+        font-size: 10px; font-weight: 600; letter-spacing: 0.04em;
+      }
+      /* Same box as the lettermark it replaces, so a logo that loads and one that
+         does not occupy identical space and nothing reflows. */
+      .logo-img {
+        flex: 0 0 auto;
+        width: 22px; height: 22px;
+        object-fit: contain;
+        border-radius: var(--ink-size-global-radius-subtle);
+      }
+
+      /* A thin arrow: a flexing 1px shaft plus a fixed-size chevron. Drawing the
+         whole thing as one stretched SVG distorts the head. */
+      .arrow {
+        display: flex; align-items: center;
+        color: var(--ink-color-global-text-subtle);
+      }
+      .arrow-shaft { flex: 1 1 auto; height: 0; border-top: 1px solid currentColor; }
+      .arrow-head { flex: 0 0 auto; display: block; width: 7px; height: 8px; }
+      /* column-reverse puts the head at the top, so the arrow points up. */
+      .arrow-v { flex-direction: column-reverse; }
+      .arrow-v .arrow-shaft {
+        width: 0; height: auto;
+        border-top: 0; border-left: 1px solid currentColor;
+      }
+      .arrow-v .arrow-head { width: 8px; height: 7px; }
+
+      /* Gutters. The arrow spans the cell at the vertical midpoint and the label
+         block sits over it carrying the board's own fill, so the line breaks
+         around the text however many lines it runs to. Centring the block on the
+         same 50% keeps both hops level with each other. */
+      .link { position: relative; min-width: 0; }
+      .link-line {
+        position: absolute; top: 50%; left: 0; right: 0;
+        margin-top: -4px;
+      }
+      /* A fixed share of the gutter, NOT shrink-to-fit: sized to its text, each
+         label leaves a different amount of arrow either side of it, and the two
+         hops came out with visibly unequal arms. A share keeps them identical and
+         still scales with the column. Not left:0/right:0 either -- stretched edge
+         to edge this paints over the whole arrow instead of breaking it. */
+      .link-stack {
+        position: absolute; top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        /* border-box so the share below includes the side padding -- on
+           content-box the padding is added outside it and the arms shrink by
+           36px without anything in the value saying so. */
+        box-sizing: border-box;
+        width: 73%;
+        display: flex; flex-direction: column; align-items: center; gap: 3px;
+        /* Side padding is the gap between the words and the arrow tips. Held at
+           12px rather than 18: every pixel here is taken off both arms, and at
+           18px the arrows read as dashes rather than as a route. */
+        padding: 4px 12px;
+        background: var(--ink-color-global-surface-lightgray-default);
+      }
+      .link-title {
+        font-size: 12px; line-height: 17px; font-weight: 600;
+        text-align: center; overflow-wrap: anywhere;
+      }
+      /* One treatment for every line below the title. The employer and the years
+         are two halves of one fact; giving the years their own size and weight
+         made the hop read as three competing labels. */
+      .link-detail {
+        font-size: 11px; line-height: 16px; text-align: center;
+        color: var(--ink-color-global-text-subtle); overflow-wrap: anywhere;
+      }
+      /* Separates the title from the evidence under it, so a hop with no evidence
+         gets none. Ink rule 7 would normally forbid a decorative separator;
+         keeping it here is a deliberate exception, at the reviewer's request. */
+      .link-dots {
+        display: flex; gap: 4px; justify-content: center;
+        padding: 2px 0 3px;
+      }
+      .link-dots span {
+        width: 3px; height: 3px; border-radius: 999px;
+        background: var(--ink-color-global-text-subtle);
+      }
+      /* An employer name stays whole. As an inline-block it moves to the next
+         line as a unit when the line is tight -- so the hop wraps as
+         "Overlap at / Goldman Sachs" rather than splitting the company name --
+         and only breaks internally when the name alone cannot fit. */
+      .keep-whole { display: inline-block; overflow-wrap: anywhere; }
+      .link-mark { margin-top: 3px; }
+
+      /* The vertical hop from the person running the query up to the colleague who
+         actually holds the relationship. */
+      .you-wrap { display: flex; flex-direction: column; align-items: center; }
+      .you-arrow { height: 26px; }
+      .you-card { width: 100%; }
+
+      .sr-only {
+        position: absolute; width: 1px; height: 1px;
+        margin: -1px; padding: 0; overflow: hidden;
+        clip-path: inset(50%); white-space: nowrap;
+      }
+
+      /* One column on a narrow panel: the horizontal arrows become vertical ones
+         above each label, and the label stops masking a line that no longer runs
+         behind it. */
+      /* Compact five-column. The delivery surface is an artifact panel around
+         800px wide -- not a browser window -- so without this tier the designed
+         board is never actually seen: it would stack on every real render. The
+         card body turns vertical here because a 34px avatar beside the text
+         leaves ~80px for a name, and "Chloe Chilton" needs 95px. Stacked, the
+         text gets the card's full width. */
+      @media (max-width: 1140px) {
+        .container { padding-left: 16px; padding-right: 16px; }
+        .board { padding: 12px; }
+        /* Two lines' worth, always. A company name that wraps makes its head
+           taller than its neighbours', which pushes that card's avatar down and
+           the row stops reading as one band. Reserving the space costs a little
+           air when every name is short and keeps the avatars level when one is
+           not. */
+        .card-head {
+          padding: 10px; gap: 8px;
+          min-height: calc(2 * 18px + 20px);
+        }
+        .card-company { line-height: 18px; }
+        .card-body {
+          flex-direction: column; align-items: flex-start;
+          gap: 8px; padding: 10px;
+        }
+        .avatar, .avatar-img { width: 34px; height: 34px; }
+        .avatar { font-size: 12px; }
+        .link-stack { padding: 4px 8px; }
+        .link-title { font-size: 11px; line-height: 15px; }
+        .link-detail { font-size: 10px; line-height: 14px; }
+        .card-flag { font-size: 10px; }
+      }
+
+      /* One column. Only once five cells genuinely cannot hold a name -- below
+         this the cards are narrower than the words in them. */
+      @media (max-width: 640px) {
+        /* Back to a row: a full-width card has room for the avatar beside the
+           text, and capped width keeps the chain aligned with its arrows instead
+           of stranding a 44px avatar in 700px of empty card. */
+        .card-body {
+          flex-direction: row; align-items: center;
+          gap: var(--card-pad); padding: var(--card-pad);
+        }
+        /* Release the two-line reservation from the compact tier: a full-width
+           card fits any company name on one line, so holding the space just
+           lifts the name off its own mark. */
+        .card-head {
+          padding: var(--card-pad); gap: var(--card-pad);
+          min-height: 0;
+        }
+        .card-company { line-height: 20px; }
+        .avatar, .avatar-img { width: 44px; height: 44px; }
+        .avatar { font-size: 14px; }
+        .link-title { font-size: 12px; line-height: 17px; }
+        .link-detail { font-size: 11px; line-height: 16px; }
+        .card-flag { font-size: 11px; }
+        .lanes { grid-template-columns: 1fr; }
+        .lanes > * { grid-column: 1 !important; grid-row: auto !important; }
+        .card, .you-wrap { width: 100%; max-width: 360px; margin: 0 auto; }
+        .link { padding: 16px 0; }
+        .link-line {
+          position: static; margin: 0 auto 8px;
+          flex-direction: column; width: auto; height: 26px;
+        }
+        .link-line .arrow-shaft {
+          width: 0; height: auto; border-top: 0;
+          border-left: 1px solid currentColor;
+        }
+        /* Rotated rather than resized: the chevron's viewBox is 7x8, so swapping
+           width and height squashes the glyph instead of turning it. */
+        .link-line .arrow-head { transform: rotate(90deg); }
+        /* In one column the route is read top to bottom, so the person running the
+           query has to come first -- left in DOM order it lands after the target
+           and the chain reads as target -> you. Card first, then the arrow flipped
+           to point down at the colleague who follows it. */
+        .you-wrap { order: -1; flex-direction: column-reverse; }
+        .you-arrow { transform: rotate(180deg); }
+        /* Static, so it no longer masks a line that does not run behind it -- and
+           centred by margin, since dropping the transform also drops the centring
+           the absolute position was doing. Without this the label sits hard left
+           of an arrow that is still centred. */
+        .link-stack {
+          position: static; transform: none;
+          width: max-content; margin: 0 auto;
+          background: transparent; max-width: 100%;
+        }
+      }
+
+      /* Alternates. Native details/summary so expand is keyboard-accessible
+         and works with no JS at all. */
+      .alt {
+        border: 1px solid var(--ink-color-global-border-subtle);
+        border-top: none;
+      }
+      .alt:first-of-type { border-top: 1px solid var(--ink-color-global-border-subtle); }
+      .alt > summary {
+        list-style: none; cursor: pointer;
+        padding: var(--card-pad);
+        display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap;
+      }
+      .alt > summary::-webkit-details-marker { display: none; }
+      .alt > summary:hover { background: var(--ink-color-global-surface-lightgray-hover); }
+      /* Disclosure caret drawn in CSS: the default marker is hidden, and without an
+         affordance nothing signals that a row opens. */
+      .alt > summary::before {
+        content: "";
+        flex: 0 0 auto;
+        align-self: center;
+        width: 0; height: 0;
+        border-left: 5px solid var(--ink-color-global-text-subtle);
+        border-top: 4px solid transparent;
+        border-bottom: 4px solid transparent;
+        transform-origin: 2px 50%;
+      }
+      .alt[open] > summary::before { transform: rotate(90deg); }
+      .alt-target { font-weight: 600; }
+      .alt-meta { color: var(--ink-color-global-text-subtle); font-size: 13px; }
+      /* Pushed to the trailing edge, so the row reads as "who" on the left and
+         "how you would get there" on the right rather than one run-on line. */
+      .alt-route { margin-left: auto; }
+      .alt-body {
+        padding: 0 var(--card-pad) var(--card-pad);
+        color: var(--ink-color-global-text-subtle);
+      }
+
+      /* The drafted ask. */
+      .draft {
+        border: 1px solid var(--ink-color-global-border-subtle);
+        padding: 16px;
+      }
+      .draft-subject { font-weight: 600; margin-bottom: 8px; overflow-wrap: anywhere; }
+      .draft-body {
+        margin: 0; white-space: pre-wrap; overflow-wrap: anywhere;
+        font-family: inherit; font-size: 14px; line-height: 20px;
+        /* Readable measure on the text itself. The panel stays the page width. */
+        max-width: 68ch;
+      }
+
+      .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+      .copy-status { align-self: center; }
+      /* Shown after asking Claude to send the message. `sendPrompt` can exist as
+         a function and still no-op, so the prompt is always offered for manual
+         paste rather than reported as sent. */
+      .handoff { margin-top: 12px; }
+      .handoff-hint { margin: 0 0 6px; color: var(--ink-color-global-text-subtle); }
+      .handoff-text {
+        display: block; width: 100%; box-sizing: border-box;
+        min-height: 76px; resize: vertical;
+        font: inherit; font-size: 13px; line-height: 19px;
+        padding: 8px;
+        color: var(--ink-color-global-text-default);
+        background: var(--ink-color-global-surface-background-default);
+        border: 1px solid var(--ink-color-global-border-default);
+        border-radius: var(--ink-size-global-radius-subtle);
+      }
+      button {
+        font: inherit; cursor: pointer;
+        padding: 7px 14px;
+        border-radius: var(--ink-size-global-radius-subtle);
+        border: 1px solid transparent;
+      }
+      .btn-primary {
+        background: var(--ink-button-background-color-primary-base-default);
+        color: var(--ink-button-font-color-primary-base);
+      }
+      .btn-primary:hover { background: var(--ink-button-background-color-primary-base-hover); }
+      .btn-secondary {
+        background: var(--ink-button-background-color-secondary-base-default);
+        color: var(--ink-button-font-color-secondary-base-default);
+        border-color: var(--ink-button-border-color-secondary-base-default);
+      }
+      .btn-secondary:hover { border-color: var(--ink-button-border-color-secondary-base-hover); }
+      button[disabled] {
+        cursor: default;
+        background: var(--ink-button-background-color-primary-disabled);
+        color: var(--ink-button-font-color-primary-disabled);
+        border-color: transparent;
+      }
+
+      /* Two-step confirm. Nothing is written until the second click, and the
+         panel states exactly what the write will do. */
+      .confirm {
+        margin-top: 12px; padding: 12px;
+        border: 1px solid var(--ink-color-global-border-default);
+        border-radius: var(--ink-size-global-radius-subtle);
+      }
+      .confirm-what { margin: 0 0 10px; }
+      .action-status { margin-top: 10px; }
+      .status-ok { color: var(--positive-text); }
+      .status-fail { color: var(--negative-text); }
+
+      @media (prefers-reduced-motion: reduce) {
+        * { transition: none !important; animation: none !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <svg class="carta-logo" role="img" aria-label="Carta" fill="none" viewBox="0 0 64 32" xmlns="http://www.w3.org/2000/svg">
+        <rect x="0.64" y="0.64" width="62.72" height="30.72" stroke="currentColor" stroke-width="1.28"/>
+        <path d="M8.4 16.62C8.4 13.42 11.1 11.53 13.53 11.53C15.27 11.53 16.9 12.19 17.76 13.69L16.14 14.63C15.86 14.21 15.48 13.86 15.03 13.62C14.58 13.39 14.08 13.26 13.57 13.27C12.14 13.27 10.44 14.38 10.44 16.59C10.44 18.8 12.06 19.93 13.7 19.93C14.84 19.93 15.79 19.3 16.35 18.32L18.01 19.08C17.07 20.78 15.39 21.68 13.44 21.68C10.98 21.67 8.4 19.79 8.4 16.62L8.4 16.62ZM23.94 21.68C25.29 21.68 26.56 21.08 27.22 20.22V21.4H29.23V11.78H27.22V12.97C26.6 12.1 25.29 11.53 23.94 11.53C20.98 11.53 18.92 13.68 18.92 16.6C18.92 19.52 21 21.68 23.94 21.68V21.68ZM24.13 13.36C25.99 13.36 27.26 14.74 27.26 16.6C27.26 18.47 25.99 19.85 24.13 19.85C22.28 19.85 20.96 18.45 20.96 16.57C20.96 14.68 22.28 13.36 24.13 13.36V13.36ZM40.01 13.69H37.93V11.77H40.03V9.26H42.1V11.77H44.2V13.69H42.1V21.4H40.01V13.69ZM49.96 21.68C51.32 21.68 52.59 21.08 53.25 20.22V21.4H55.26V11.78H53.25V12.97C52.62 12.1 51.32 11.53 49.96 11.53C47.01 11.53 44.94 13.68 44.94 16.6C44.94 19.52 47.03 21.68 49.96 21.68V21.68ZM50.16 13.36C52.01 13.36 53.29 14.74 53.29 16.6C53.29 18.47 52.01 19.85 50.16 19.85C48.31 19.85 46.99 18.45 46.99 16.57C46.99 14.68 48.3 13.36 50.16 13.36V13.36ZM33.77 21.39H31.69V11.77H33.6V13.56C34.07 12.5 34.78 11.8 35.94 11.75C36.18 11.74 36.41 11.75 36.65 11.77L36.62 13.7C34.96 13.7 33.77 14.59 33.77 17.07V21.4H33.77L33.77 21.39Z" fill="currentColor"/>
+      </svg>
+      <h1 id="title">Warm introductions</h1>
+      <p class="subtitle" id="subtitle"></p>
+      <div id="root">
+        <p class="empty">No route data.</p>
+      </div>
+    </div>
+    <script>
+      // Replaced wholesale by the skill with the ranked routes from the CRM. Shipped
+      // with a worked example so the file renders standalone during development.
+      const DATA = {
+        company: "Tunic Pay",
+        domain: "tunicpay.com",
+        // get_current_user.organization. Our firm is the tenant, not a CRM company
+        // record, so it has no logo -- its card head takes the lettermark.
+        ourFirm: "Carta",
+        // Omit or null when our firm has no history with the domain.
+        coverage: {
+          text: "Jaya Okafor emailed Tom Reid 12 days ago. Check with her before asking for an intro."
+        },
+        recommended: {
+          // The one label on the board. Every field below comes from a tool
+          // response; anything the CRM does not carry is left out, not guessed.
+          pathLabel: "Strongest Connection Path",
+          // Our side. `name` is get_company_relations[].userName -- the colleague
+          // who holds the relationship. `flag` only when that is not the acting
+          // user, and `role` only ever the literal "You": the CRM carries no job
+          // title for our own people.
+          sender: { name: "Jamie Chen", flag: "Strongest link" },
+          // The acting user, when they are not the sender. Omit when they are.
+          you: { name: "Alex Rivera" },
+          // The connector. title/photoUrl from the angles payload; companyName
+          // from the contact record's activeCompany; companyLogoUrl from that
+          // company's `image` when the employer resolves to a CRM company.
+          connector: {
+            name: "Sara Ali",
+            title: "Partner",
+            // Needed by the Gmail action below: the tool takes bare addresses, and
+            // draft.to is a display name.
+            email: "sara.ali@northwindventures.com",
+            photoUrl: null,
+            companyName: "Northwind Ventures",
+            companyLogoUrl: null
+          },
+          target: { name: "Tom Reid", title: "CTO", photoUrl: null },
+          targetLogoUrl: null,
+          // paths[].sharedEmployer, and the calendar years the two tenures
+          // overlap. Omit overlapYears when either tenure has no dates.
+          employer: "Monzo",
+          employerLogoUrl: null,
+          overlapYears: "2017 - 2019"
+        },
+        alternates: [
+          {
+            target: "Priya Nandi",
+            targetRole: "CEO, Tunic Pay",
+            via: "Revolut",
+            connectorCount: 3,
+            overlap: false,
+            connectors: "Dev Rao, Anna Bell, and one more"
+          },
+          {
+            target: "Dan Webb",
+            targetRole: "VP Engineering, Tunic Pay",
+            via: "Stripe",
+            connectorCount: 1,
+            overlap: true,
+            connectors: "Marta Lis"
+          }
+        ],
+        draft: {
+          to: "Sara Ali",
+          subject: "Quick intro to Tom Reid at Tunic Pay?",
+          body: "Hi Sara,\n\nI saw you overlapped with Tom Reid at Monzo. We are looking at Tunic Pay and I would value a short conversation with him.\n\nHappy to send something forwardable if that is easier.\n\nThanks,\nAlex"
+        },
+        // The skill omits any action it does not want offered. Rendered only where
+        // window.cowork.callMcpTool exists; elsewhere the chat handles them.
+        actions: [
+          {
+            id: "draft-email",
+            label: "Create the email draft",
+            primary: true,
+            confirm: "Creates an unsent Gmail draft to Sara Ali. Nothing is sent.",
+            tool: "mcp__claude_ai_Gmail__create_draft",
+            // The bridge passes args and nothing else, so the message has to be here
+            // too -- an empty one drafts a blank email. `to` is an array of bare
+            // addresses; the tool rejects "Name <addr>".
+            args: {
+              to: [ "sara.ali@northwindventures.com" ],
+              subject: "Quick intro to Tom Reid at Tunic Pay?",
+              body: "Hi Sara,\n\nI saw you overlapped with Tom Reid at Monzo. We are looking at Tunic Pay and I would value a short conversation with him.\n\nHappy to send something forwardable if that is easier.\n\nThanks,\nAlex"
+            },
+            done: "Draft created. It is waiting in your Gmail drafts."
+          }
+        ]
+      };
+
+      // The sandbox throws on web storage, so all state lives here in memory.
+      const LIVE = typeof window !== "undefined" && !!window.cowork && typeof window.cowork.callMcpTool === "function";
+      const fired = new Set();
+
+      function el(tag, cls, text) {
+        const n = document.createElement(tag);
+        if (cls) n.className = cls;
+        // textContent only. Every string below is untrusted tenant data, and this
+        // document executes JavaScript, so assigning markup here would be an XSS sink.
+        if (text != null) n.textContent = text;
+        return n;
+      }
+
+      function chevron(vertical) {
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute("class", "arrow-head");
+        svg.setAttribute("viewBox", vertical ? "0 0 8 7" : "0 0 7 8");
+        svg.setAttribute("fill", "none");
+        svg.setAttribute("aria-hidden", "true");
+        const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        p.setAttribute("d", vertical ? "M1 6l3-4.5L7 6" : "M1 1l4.5 3L1 7");
+        p.setAttribute("stroke", "currentColor");
+        p.setAttribute("stroke-width", "1");
+        p.setAttribute("stroke-linecap", "round");
+        p.setAttribute("stroke-linejoin", "round");
+        svg.appendChild(p);
+        return svg;
+      }
+
+      function arrow(cls, vertical) {
+        const box = el("div", "arrow" + (vertical ? " arrow-v" : "") + (cls ? " " + cls : ""));
+        box.appendChild(el("span", "arrow-shaft"));
+        box.appendChild(chevron(vertical));
+        return box;
+      }
+
+      function initials(name) {
+        const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+        if (!parts.length) return "?";
+        const first = parts[0].charAt(0);
+        return (parts.length > 1 ? first + parts[parts.length - 1].charAt(0) : first).toUpperCase();
+      }
+
+      // Some stored logo URLs are an ImageKit media-library path that wraps an
+      // encoded remote URL. ImageKit finds no such stored file and answers with a
+      // generic placeholder at HTTP 200 -- so the <img> succeeds, the error
+      // handler never runs, and the card shows a stranger's grey building instead
+      // of the lettermark. Recovering the inner URL both points at the real logo
+      // and puts a genuine failure back on the error path. Mirrors the CRM's own
+      // renderer; no provider token is added, because that would put a third
+      // party's key in this file.
+      function unwrapImageUrl(url) {
+        if (!url || url.indexOf("ik.imagekit.io") === -1) return url;
+        const segments = String(url).split("/");
+        for (let i = 0; i < segments.length; i++) {
+          let decoded;
+          try { decoded = decodeURIComponent(segments[i]); } catch (e) { continue; }
+          if (/^https?:\/\//i.test(decoded)) return decoded;
+        }
+        return url;
+      }
+
+      // Says out loud why a picture did not appear. Without this, "no photo in the
+      // record", "the skill did not pass the URL" and "the host refused the fetch"
+      // all look identical -- a grey circle -- and none of them can be told apart
+      // from outside. The panel stays quiet; the console does the explaining.
+      function reportImage(kind, url, reason) {
+        if (typeof console === "undefined" || !console.warn) return;
+        console.warn("[route-map] " + kind + " image " + reason + ": " + url);
+      }
+
+      // A board of initials looks the same whether the CRM held no pictures, the
+      // skill dropped the URLs on the way in, or the host refused to fetch them.
+      // This names the fields that arrived empty, so the first case can be ruled
+      // out without guessing. Our own people are excluded -- the CRM carries no
+      // photo for them, so an empty field there is correct, not a symptom.
+      function reportImageCoverage(route) {
+        if (typeof console === "undefined" || !console.warn) return;
+        const absent = [
+          [ "connector.photoUrl", route.connector && route.connector.photoUrl ],
+          [ "connector.companyLogoUrl", route.connector && route.connector.companyLogoUrl ],
+          [ "target.photoUrl", route.target && route.target.photoUrl ],
+          [ "targetLogoUrl", route.targetLogoUrl ],
+          [ "employerLogoUrl", route.employerLogoUrl ]
+        ].filter(function (f) { return !f[1]; }).map(function (f) { return f[0]; });
+        if (absent.length) {
+          console.warn("[route-map] no URL supplied for: " + absent.join(", ")
+            + " -- initials and lettermarks are standing in for them");
+        }
+      }
+
+      // The person's own photo where the contact record carries one, falling back
+      // to initials if it fails to load. Our own people have no photo in the CRM,
+      // so their cards always take the initials path.
+      function avatar(name, photoUrl) {
+        const src = unwrapImageUrl(photoUrl);
+        if (!src) return el("div", "avatar", initials(name));
+        const img = el("img", "avatar-img");
+        img.setAttribute("src", src);
+        img.setAttribute("alt", "");
+        img.setAttribute("aria-hidden", "true");
+        img.addEventListener("error", function () {
+          reportImage("avatar", src, "failed to load");
+          if (img.parentNode) img.parentNode.replaceChild(el("div", "avatar", initials(name)), img);
+        });
+        return img;
+      }
+
+      // The company's own logo where the CRM company record carries one. The URL
+      // always comes from that record -- never built here.
+      function companyMark(name, logoUrl) {
+        const src = unwrapImageUrl(logoUrl);
+        if (!src) return el("div", "lettermark", initials(name));
+        const img = el("img", "logo-img");
+        img.setAttribute("src", src);
+        img.setAttribute("alt", "");
+        img.setAttribute("aria-hidden", "true");
+        img.addEventListener("error", function () {
+          reportImage("logo", src, "failed to load");
+          const fallback = el("div", "lettermark", initials(name));
+          if (img.parentNode) img.parentNode.replaceChild(fallback, img);
+        });
+        return img;
+      }
+
+      // A headed card: the company across the top, one person underneath, so the
+      // route reads our firm -> the connector's firm -> the target's firm.
+      function card(companyName, fallback, person, opts) {
+        const o = opts || {};
+        const box = el("div", "card");
+
+        const head = el("div", "card-head");
+        head.appendChild(companyMark(companyName || fallback, o.companyLogoUrl));
+        head.appendChild(el("div", "card-company" + (companyName ? "" : " is-unknown"),
+          companyName || fallback));
+        box.appendChild(head);
+
+        const body = el("div", "card-body");
+        body.appendChild(avatar(person.name, person.photoUrl));
+        const id = el("div", "card-id");
+        if (o.flag) id.appendChild(el("span", "card-flag", o.flag));
+        id.appendChild(el("div", "person-name", person.name));
+        if (o.role) id.appendChild(el("div", "person-role", o.role));
+        body.appendChild(id);
+        box.appendChild(body);
+        return box;
+      }
+
+      // One gutter: the arrow, and the label block that breaks it.
+      function link(title, details, mark) {
+        const box = el("div", "link");
+        box.appendChild(arrow("link-line"));
+        const stack = el("div", "link-stack");
+        stack.appendChild(el("div", "link-title", title));
+
+        if (details.length || (mark && mark.name)) {
+          const dots = el("div", "link-dots");
+          dots.setAttribute("aria-hidden", "true");
+          [ 0, 1, 2 ].forEach(function () { dots.appendChild(el("span")); });
+          stack.appendChild(dots);
+        }
+
+        details.forEach(function (d) {
+          const row = el("div", "link-detail");
+          if (typeof d === "string") {
+            row.textContent = d;
+          } else {
+            // Still textContent only: a text node plus a span, never markup.
+            row.appendChild(document.createTextNode(d.lead + " "));
+            row.appendChild(el("span", "keep-whole", d.name));
+          }
+          stack.appendChild(row);
+        });
+        if (mark && mark.name) {
+          const wrap = el("div", "link-mark");
+          wrap.appendChild(companyMark(mark.name, mark.logoUrl));
+          stack.appendChild(wrap);
+        }
+        box.appendChild(stack);
+        return box;
+      }
+
+      function place(node, column, row) {
+        node.style.gridColumn = String(column);
+        node.style.gridRow = String(row);
+        return node;
+      }
+
+      function renderRoute(route, data) {
+        const board = el("div", "board");
+
+        const pillWrap = el("div", "board-pill");
+        pillWrap.appendChild(el("span", "path-pill",
+          route.pathLabel || "Strongest Connection Path"));
+        board.appendChild(pillWrap);
+
+        const lanes = el("div", "lanes");
+        const sender = route.sender || { name: "You", you: true };
+
+        // Column 1 - the colleague who should send the ask.
+        lanes.appendChild(place(
+          card(data.ourFirm, "Your firm", sender, {
+            flag: sender.flag,
+            role: sender.role
+          }), 1, 1));
+
+        // Column 2 - our person to the connector. Deliberately unlabelled beyond
+        // the instruction: a relationship length here cannot say whether it means
+        // regular contact across those years or one touchpoint at the start of
+        // them, and those imply very different things about the ask.
+        lanes.appendChild(place(link("Ask for intro", []), 2, 1));
+
+        // Column 3 - the connector, at their own current employer.
+        lanes.appendChild(place(
+          card(route.connector.companyName, "Employer not on record", route.connector, {
+            role: route.connector.title,
+            companyLogoUrl: route.connector.companyLogoUrl
+          }), 3, 1));
+
+        // Column 4 - the shared employer that makes this hop real, and when.
+        lanes.appendChild(place(link("Introduces to", [
+          route.employer
+            ? { lead: "Overlap at", name: route.employer }
+            : "Shared employer not on record",
+          route.overlapYears || "Dates not on record"
+        ], { name: route.employer, logoUrl: route.employerLogoUrl }), 4, 1));
+
+        // Column 5 - the target.
+        lanes.appendChild(place(
+          card(data.company, data.company, route.target, {
+            role: route.target.title,
+            companyLogoUrl: route.targetLogoUrl
+          }), 5, 1));
+
+        // Column 1, row 2 - the person running the query, below the colleague they
+        // route through. Only when those are two different people.
+        if (route.you) {
+          const wrap = el("div", "you-wrap");
+          wrap.appendChild(arrow("you-arrow", true));
+          // The arrow is the only thing carrying this relationship visually, so it
+          // needs a spoken equivalent.
+          wrap.appendChild(el("span", "sr-only", route.you.name + " routes through "
+            + sender.name + " to reach " + route.connector.name));
+          const own = card(data.ourFirm, "Your firm", route.you, { role: "You" });
+          own.className = "card you-card";
+          wrap.appendChild(own);
+          lanes.appendChild(place(wrap, 1, 2));
+        }
+
+        board.appendChild(lanes);
+        return board;
+      }
+
+      function renderAlternate(alt) {
+        const d = el("details", "alt");
+        const s = el("summary");
+        s.appendChild(el("span", "alt-target", alt.target));
+        if (alt.targetRole) s.appendChild(el("span", "alt-meta", alt.targetRole));
+        const count = alt.connectorCount === 1 ? "1 contact" : alt.connectorCount + " contacts";
+        s.appendChild(el("span", "alt-meta alt-route",
+          "via " + alt.via + ", " + count + ", " + (alt.overlap ? "worked together" : "no overlap")));
+        d.appendChild(s);
+        d.appendChild(el("div", "alt-body", alt.connectors || "No named connectors."));
+        return d;
+      }
+
+      // Three paths, tried in order. The async Clipboard API is gated by the
+      // clipboard-write permission policy, which the artifact iframe is not
+      // granted, so it rejects in the panel even though it works when this file
+      // is opened directly in a browser. execCommand is not gated that way and
+      // is the fallback every other Carta artifact uses. If both are blocked,
+      // select the message so the user's own copy shortcut can take it -- never
+      // leave them with a button that reports nothing useful.
+      async function copyText(text, selectable) {
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(text);
+            return "copied";
+          }
+        } catch (e) { /* blocked; try execCommand */ }
+
+        try {
+          const ta = document.createElement("textarea");
+          ta.value = text;
+          ta.setAttribute("readonly", "");
+          ta.style.cssText = "position:fixed;top:0;left:0;width:1px;height:1px;opacity:0";
+          document.body.appendChild(ta);
+          ta.select();
+          ta.setSelectionRange(0, text.length);
+          const ok = document.execCommand && document.execCommand("copy");
+          ta.remove();
+          if (ok) return "copied";
+        } catch (e) { /* blocked; fall back to manual selection */ }
+
+        if (selectable) {
+          try {
+            const range = document.createRange();
+            range.selectNodeContents(selectable);
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+            return "selected";
+          } catch (e) { /* nothing left to try */ }
+        }
+        return "blocked";
+      }
+
+      function unwrap(res) {
+        if (!res) return {};
+        if (typeof res === "string") { try { return JSON.parse(res); } catch (e) { return {}; } }
+        const sc = res.structuredContent;
+        if (sc) {
+          if (typeof sc.result === "string") { try { return JSON.parse(sc.result); } catch (e) { /* fall through */ } }
+          if (sc.result && typeof sc.result === "object") return sc.result;
+        }
+        if (Array.isArray(res.content) && res.content[0] && res.content[0].text) {
+          try { return JSON.parse(res.content[0].text); } catch (e) { /* fall through */ }
+        }
+        if (res.result && typeof res.result === "object") return res.result;
+        return res;
+      }
+
+      // Two-step: the first click only reveals what the write will do. One call on
+      // confirm, then the button is spent - no retry loop against a live write.
+      function renderAction(action) {
+        const holder = el("div");
+        const btn = el("button", action.primary ? "btn-primary" : "btn-secondary", action.label);
+        holder.appendChild(btn);
+
+        btn.addEventListener("click", function () {
+          if (fired.has(action.id) || holder.querySelector(".confirm")) return;
+          const box = el("div", "confirm");
+          box.appendChild(el("p", "confirm-what", action.confirm));
+          const row = el("div", "btn-row");
+          const go = el("button", "btn-primary", "Confirm");
+          const no = el("button", "btn-secondary", "Cancel");
+          row.appendChild(go);
+          row.appendChild(no);
+          box.appendChild(row);
+          holder.appendChild(box);
+
+          no.addEventListener("click", function () { holder.removeChild(box); });
+
+          go.addEventListener("click", async function () {
+            go.disabled = true;
+            no.disabled = true;
+            fired.add(action.id);
+            btn.disabled = true;
+            const status = el("p", "action-status", "Working...");
+            box.appendChild(status);
+            try {
+              const res = unwrap(await window.cowork.callMcpTool(action.tool, action.args || {}));
+              const failed = res && (res.error || res.isError);
+              status.className = "action-status " + (failed ? "status-fail" : "status-ok");
+              status.textContent = failed
+                ? "That did not go through. Ask in the chat and it will be retried there."
+                : (action.done || "Done.");
+            } catch (e) {
+              status.className = "action-status status-fail";
+              status.textContent = "That did not go through. Ask in the chat and it will be retried there.";
+            }
+          });
+        });
+
+        return holder;
+      }
+
+      function render(data) {
+        const root = document.getElementById("root");
+        while (root.firstChild) root.removeChild(root.firstChild);
+
+        document.getElementById("title").textContent =
+          "Warm introductions into " + (data.company || "this company");
+        document.getElementById("subtitle").textContent = data.domain || "";
+
+        if (!data.recommended) {
+          root.appendChild(el("p", "empty",
+            "No warm route into " + (data.company || "this company") + " in your network."));
+          return;
+        }
+
+        if (data.coverage && data.coverage.text) {
+          const c = el("div", "coverage");
+          c.appendChild(el("span", "coverage-label", "Already in contact"));
+          c.appendChild(el("div", null, data.coverage.text));
+          root.appendChild(c);
+        }
+
+        // No "Best route" heading: the pill on the board is that heading.
+        root.appendChild(renderRoute(data.recommended, data));
+        reportImageCoverage(data.recommended);
+
+        const alts = data.alternates || [];
+        if (alts.length) {
+          root.appendChild(el("h2", null, alts.length === 1 ? "One other route" : "Other routes"));
+          const box = el("div");
+          alts.forEach(function (a) { box.appendChild(renderAlternate(a)); });
+          root.appendChild(box);
+        }
+
+        if (data.draft) {
+          root.appendChild(el("h2", null, "The ask, ready to send to " + data.draft.to));
+          const d = el("div", "draft");
+          if (data.draft.subject) d.appendChild(el("div", "draft-subject", data.draft.subject));
+          const bodyNode = el("p", "draft-body", data.draft.body);
+          d.appendChild(bodyNode);
+          const row = el("div", "btn-row");
+          const copy = el("button", "btn-secondary", "Copy the message");
+          // The outcome goes in its own live region. Overwriting the label would
+          // spend the button's only name on a status message and leave no way to
+          // try again.
+          const status = el("span", "copy-status");
+          status.setAttribute("role", "status");
+          copy.addEventListener("click", async function () {
+            const text = data.draft.body;
+            const result = await copyText(text, bodyNode);
+            status.className = "copy-status " + (result === "blocked" ? "status-fail" : "status-ok");
+            status.textContent =
+              result === "copied" ? "Copied to your clipboard."
+              : result === "selected" ? "The message is selected. Copy it with your keyboard shortcut."
+              : "Copying is blocked here. Select the message above and copy it.";
+          });
+          row.appendChild(copy);
+
+          // Hands the message back to the chat so Claude sends it, rather than
+          // the user re-typing the request. Offered on every host: where
+          // `sendPrompt` is missing or no-ops, the same text is there to paste.
+          if (data.draft.to) {
+            const ask = el("button", "btn-primary", "Ask Claude to send this");
+            const handoff = el("div", "handoff");
+            handoff.style.display = "none";
+            const hint = el("p", "handoff-hint");
+            const text = el("textarea", "handoff-text");
+            text.setAttribute("readonly", "");
+            text.setAttribute("aria-label", "Message to send to the chat");
+            handoff.appendChild(hint);
+            handoff.appendChild(text);
+
+            ask.addEventListener("click", function () {
+              const prompt = "Send the drafted introduction request to "
+                + data.draft.to + ". Use the message exactly as it is in the route map.";
+              let sent = false;
+              if (typeof sendPrompt === "function") {
+                try { sendPrompt(prompt); sent = true; } catch (e) { sent = false; }
+              }
+              text.value = prompt;
+              hint.textContent = sent
+                ? "Sent to the chat. If you do not see it there, copy this and paste it in."
+                : "Copy this into the chat and press enter.";
+              handoff.style.display = "block";
+              text.focus();
+              text.select();
+            });
+            row.appendChild(ask);
+            row.appendChild(status);
+            d.appendChild(row);
+            d.appendChild(handoff);
+          } else {
+            row.appendChild(status);
+            d.appendChild(row);
+          }
+          root.appendChild(d);
+        }
+
+        // Actions are live tool calls, so they render only where the bridge exists.
+        // Everywhere else the chat offers the same list - never a dead button here.
+        const actions = data.actions || [];
+        if (LIVE && actions.length) {
+          root.appendChild(el("h2", null, "Next"));
+          const row = el("div", "btn-row");
+          actions.forEach(function (a) { row.appendChild(renderAction(a)); });
+          root.appendChild(row);
+        }
+      }
+
+      render(DATA);
+    </script>
+  </body>
+</html>
