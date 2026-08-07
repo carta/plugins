@@ -67,6 +67,14 @@ export const SwitchIcon = icon(["M16 3l4 4-4 4", "M20 7H8a4 4 0 00-4 4v1", "M8 2
 // stroked-outline weight of the other topbar glyphs (no fill, no emoji).
 export const ChatIcon = icon(["M21 11.5a8.5 8.5 0 01-8.5 8.5H8l-4 3v-4.6A8.5 8.5 0 1121 11.5z"]);
 export const CloseIcon = icon(["M18 6L6 18", "M6 6l12 12"]);
+// Stop affordance in the chat composer. Filled rather than stroked like the
+// icons above — at 11px an outlined square reads as an empty checkbox.
+export const StopIcon = ({ size = 11, style }) => (
+  <svg width={size} height={size} viewBox="0 0 12 12" aria-hidden
+    style={{ flex: "none", display: "block", ...style }}>
+    <rect x="1.5" y="1.5" width="9" height="9" rx="1.5" fill="currentColor" />
+  </svg>
+);
 
 // Ink's real Modal width tiers (carta-frontend-platform: libs/ink/ink-containers/
 // library/Modal/Modal.tsx MODAL_MAX_WIDTH) — a 1280px/11-gutter grid, 68px per

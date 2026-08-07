@@ -5,6 +5,7 @@ import os
 import queue
 import subprocess
 import threading
+import uuid
 from typing import List, Optional
 
 ALLOWED_TOOLS = "Read,Edit,Write,Grep,Glob"  # NO Bash — ADR Branch 4b
@@ -139,6 +140,10 @@ class ChatSession(object):
         self._q = queue.Queue()
         self._reader = None
         self._closed = False
+        # send() runs on the thread streaming a turn; interrupt() runs on another
+        # request thread while that turn is still in flight. Both write a whole
+        # frame + newline to the same pipe, so they serialize on this.
+        self._stdin_lock = threading.Lock()
 
     def start(self):
         argv = build_argv(self.claude_bin, self.add_dirs, self.model)
@@ -161,11 +166,45 @@ class ChatSession(object):
         if self._closed:
             raise RuntimeError("chat session is closed")
         try:
-            self.proc.stdin.write(user_message_json(text) + "\n")
-            self.proc.stdin.flush()
+            with self._stdin_lock:
+                self.proc.stdin.write(user_message_json(text) + "\n")
+                self.proc.stdin.flush()
         except (BrokenPipeError, OSError, ValueError):
             self._closed = True
             raise RuntimeError("chat session is closed")
+
+    def interrupt(self):
+        # type: () -> bool
+        """Abort the turn in flight, keeping the session and its context alive.
+
+        The CLI accepts a `control_request` on stdin in stream-json input mode
+        (which build_argv always uses) and answers with a `control_response`. It
+        then ends the aborted turn with an ordinary `result` frame carrying
+        terminal_reason `aborted_streaming` / `aborted_tools` — so the turn's SSE
+        reader still latches turn-end via is_turn_end() and the subprocess is
+        deliberately NOT reaped. `cancel_queued` sweeps any user message accepted
+        but not yet dispatched, so Stop means stop rather than "stop, then run the
+        next one".
+
+        Returns False when there is no live subprocess left to signal; callers
+        treat that as "already finished", not as an error. Deliberately does not
+        flip _closed: the thread streaming the turn owns that transition, and
+        racing it here would evict a session that is still perfectly usable.
+        """
+        if self._closed or self.proc is None or self.proc.poll() is not None:
+            return False
+        frame = json.dumps({
+            "type": "control_request",
+            "request_id": "interrupt-" + uuid.uuid4().hex[:12],
+            "request": {"subtype": "interrupt", "cancel_queued": True},
+        })
+        try:
+            with self._stdin_lock:
+                self.proc.stdin.write(frame + "\n")
+                self.proc.stdin.flush()
+        except (BrokenPipeError, OSError, ValueError):
+            return False
+        return True
 
     def events(self, timeout=120):
         if self._closed:

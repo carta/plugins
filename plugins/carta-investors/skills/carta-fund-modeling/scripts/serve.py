@@ -312,17 +312,50 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.close_connection = True   # ensure the client's read() terminates at stream end
 
+    def _read_json_body(self):
+        """Parsed request body, or None when it isn't JSON (caller sends the 400)."""
+        length = int(self.headers.get("Content-Length", 0) or 0)
+        try:
+            return json.loads(self.rfile.read(length) or b"{}")
+        except ValueError:
+            return None
+
+    def _chat_interrupt(self, u):
+        """Stop the turn in flight without tearing the session down.
+
+        Deliberately does NOT take the session's turn lock: that lock is held for
+        the entire in-flight turn, so waiting on it would block in exactly the
+        case this endpoint exists to serve. It only needs the registry, which is
+        guarded briefly.
+        """
+        if not self._token_ok(parse_qs(u.query)):
+            return self._send(401, {"error": "unauthorized"})
+        _touch_heartbeat()
+        body = self._read_json_body()
+        if body is None:
+            return self._send(400, {"error": "bad_json"})
+        sid = body.get("sessionId") or "default"
+        with _SESSIONS_LOCK:
+            entry = _CHAT_SESSIONS.get(sid)
+        # A turn that ended between the click and this request has already been
+        # evicted, so there is nothing to stop and nothing went wrong.
+        if entry is None:
+            return self._send(404, {"error": "no_session"})
+        if not entry["session"].interrupt():
+            return self._send(409, {"error": "not_interruptible"})
+        return self._send(200, {"ok": True})
+
     def do_POST(self):
         u = urlparse(self.path)
+        if u.path == "/api/chat/interrupt":
+            return self._chat_interrupt(u)
         if u.path != "/api/chat":
             return self._send(404, {"error": "not_found"})
         if not self._token_ok(parse_qs(u.query)):
             return self._send(401, {"error": "unauthorized"})
         _touch_heartbeat()
-        length = int(self.headers.get("Content-Length", 0) or 0)
-        try:
-            body = json.loads(self.rfile.read(length) or b"{}")
-        except ValueError:
+        body = self._read_json_body()
+        if body is None:
             return self._send(400, {"error": "bad_json"})
         prompt = body.get("prompt")
         prompt = str(prompt).strip() if prompt is not None else ""
