@@ -25,6 +25,7 @@ The browser NEVER calls the Carta MCP — it only reads JSON the skill produced.
 
 Usage:
   uv run serve.py --data-dir <dir> [--web-dir <webapp>] [--port N] [--no-open]
+                  [--user-id <carta_user_id>]
 """
 
 import argparse
@@ -245,8 +246,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/api/telemetry-context":
             # Read per request, not at startup: a refresh rewrites snapshot.json, and a
             # firmId it resolves late should reach the tracker without a relaunch.
-            return self._send(200, {"environment": _read_carta_environment(DATA_DIR),
-                                    "firmId": _read_firm_id(DATA_DIR)})
+            return self._send(
+                200,
+                {
+                    "environment": _read_carta_environment(DATA_DIR),
+                    "firmId": _read_firm_id(DATA_DIR),
+                    "userId": _read_user_id(DATA_DIR),
+                },
+            )
         if path == "/api/models":
             return self._send(200, {"models": chat_session.CLAUDE_MODELS,
                                     "default": chat_session.DEFAULT_MODEL})
@@ -466,6 +473,33 @@ def _read_firm_id(data_dir):
     return firm_id if firm_id > 0 else None
 
 
+def _user_id_file(data_dir):
+    return data_dir / ".user-id"
+
+
+def _read_user_id(data_dir):
+    """The launching user's integer Carta id, so events name a person rather than a device."""
+    try:
+        user_id = int(_user_id_file(data_dir).read_text().strip())
+    except (OSError, ValueError):
+        return None
+    return user_id if user_id > 0 else None
+
+
+def _write_user_id(data_dir, raw):
+    """Record the launching user. No id means no MCP, not a new person — so keep the last one."""
+    try:
+        user_id = int(str(raw).strip())
+    except (TypeError, ValueError):
+        return
+    if user_id <= 0:
+        return
+    try:
+        _user_id_file(data_dir).write_text(str(user_id))
+    except OSError:
+        pass
+
+
 def _get_previously_used_port(port_file):
     """The port this firm last bound (persisted in its data dir), or 0 if none/unreadable/out of range."""
     try:
@@ -524,6 +558,13 @@ def main():
     ap.add_argument("--src-dir", default=None, help="canonical source tree served at /src/* (default: <web-dir>/../app/src)")
     ap.add_argument("--port", type=int, default=int(os.environ.get("PORT", "0")))
     ap.add_argument("--no-open", action="store_true")
+    # Not type=int: a malformed id must degrade to "no user", not fail the launch.
+    ap.add_argument(
+        "--user-id",
+        default=None,
+        help="integer Carta id of the launching user, for the browser's Snowplow tracker; "
+        "omit when unknown",
+    )
     ap.add_argument(
         "--detach", action="store_true",
         help="Run as a background daemon that outlives the launching process and returns "
@@ -553,6 +594,8 @@ def main():
     WEB_DIR = Path(args.web_dir).resolve()
     SRC_DIR = Path(args.src_dir).resolve() if args.src_dir else (WEB_DIR.parent / "app" / "src")
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+    # Before the reuse probe: a relaunch onto a live daemon must still refresh the id it serves.
+    _write_user_id(DATA_DIR, args.user_id)
 
     port_file = DATA_DIR / ".port"
     token_file = DATA_DIR / ".token"

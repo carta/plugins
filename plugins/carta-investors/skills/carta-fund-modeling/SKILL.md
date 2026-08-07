@@ -574,6 +574,9 @@ user-facing dashboard.)
 uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-modeling/scripts/serve.py" --data-dir "<dashboard_dir>" \
   --web-dir "${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-modeling/webapp" --detach
 ```
+**Only when the session already carries `pk`** from `get_current_user` (a connected Carta MCP has it from
+bootstrap), append `--user-id <pk>` so telemetry names a real user. Never call the MCP to get it — that
+needs `welcome` first, and this path stays MCP-free. Never substitute the email or a placeholder.
 Run with **Bash run_in_background**; read `<dashboard_dir>/.port` + the printed `http://127.0.0.1:<port>/?t=<token>`
 and give the user that URL. Tell them it **opens in their default browser automatically** — if it doesn't,
 they can paste the URL into the address bar. `webapp/` is the committed prebuilt React app, served

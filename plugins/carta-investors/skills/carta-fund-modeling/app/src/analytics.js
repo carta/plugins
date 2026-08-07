@@ -3,8 +3,8 @@
 // skill-produced artifact — hence interfaceType "micro_app" with no app.connect()
 // handshake to await.
 //
-// The envelope (environment + firm) comes from GET /api/telemetry-context: server-sourced, so
-// no one can retarget the firm by editing a URL and no bookmark can drop it. mountWithAuth awaits
+// The envelope (environment + firm + user) comes from GET /api/telemetry-context: server-sourced,
+// so no one can retarget the firm by editing a URL and no bookmark can drop it. mountWithAuth awaits
 // it before rendering, so no event fires ahead of it — in either document.
 //
 // Only an explicit "nonprod" environment counts; anything else — missing, garbled, or an
@@ -37,13 +37,20 @@ async function telemetryContext() {
   }
 }
 
+// Snowplow's user_id is a string column; the server sends the integer.
+function toTrackerUserId(userId) {
+  return Number.isInteger(userId) && userId > 0 ? String(userId) : undefined;
+}
+
 export async function initFundModelingTracker() {
   if (typeof window === "undefined" || !window.mcpUiTracker) return;
-  const { environment, firmId } = await telemetryContext();
+  const { environment, firmId, userId } = await telemetryContext();
   firmContexts = toFirmContexts(firmId);
+  // The vendored tracker exposes no post-init setUserId — the id has to be known here.
   window.mcpUiTracker.initTracker({
     interface: { interfaceType: "micro_app", interfaceId: "carta-fund-modeling" },
     environment: environment === "nonprod" ? "nonprod" : "production",
+    userId: toTrackerUserId(userId),
   });
 }
 
