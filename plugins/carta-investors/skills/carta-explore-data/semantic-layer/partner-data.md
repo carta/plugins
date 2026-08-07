@@ -60,6 +60,8 @@ LIMIT 200
 
 The per-partner companion to `MONTHLY_NAV_CALCULATIONS`: one row per partner per fund per month-end. Source for capital-account statements and rollforwards.
 
+> **Cross-table column trap:** `CUMULATIVE_COMMITMENT_AMOUNT` is the correct commitment column in `MONTHLY_NAV_CALCULATIONS` but **does not exist** in `PARTNER_MONTHLY_NAV_CALCULATIONS`. Use `TOTAL_COMMITMENT` here instead.
+
 | Column | Description |
 |--------|-------------|
 | `FUND_NAME` / `FUND_ID` | Fund (here the fund column is `FUND_ID`, UUID-format) |
@@ -68,6 +70,7 @@ The per-partner companion to `MONTHLY_NAV_CALCULATIONS`: one row per partner per
 | `BEGINNING_TOTAL_NAV` / `ENDING_TOTAL_NAV` | Capital-account NAV at start/end of month (`ENDING_TOTAL_NAV` = the capital-account balance) |
 | `TOTAL_CONTRIBUTIONS` / `TOTAL_DISTRIBUTIONS` | Period activity that month |
 | `CUMULATIVE_TOTAL_CONTRIBUTIONS` | Contributions to date |
+| `TOTAL_COMMITMENT` | Partner's committed capital (use this — **not** `CUMULATIVE_COMMITMENT_AMOUNT`, which is the fund-level equivalent in `MONTHLY_NAV_CALCULATIONS`) |
 | `TOTAL_VALUE` | Total value |
 | `TOTAL_TVPI` / `TOTAL_DPI` / `TOTAL_RVPI` | Partner-level multiples |
 | `IS_LIMITED_PARTNER` / `IS_GENERAL_PARTNER` / `IS_ACTIVE` | Role / status flags |
