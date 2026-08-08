@@ -1,6 +1,6 @@
 import { useState, useRef, Fragment } from "react";
 import { createPortal } from "react-dom";
-import { tightSans, sans, mono, FS, MICRO, NOTICE, SMALL_1, SMALL_2 } from "../ui/theme.js";
+import { tightSans, sans, inkNum, FS, MICRO, NOTICE, SMALL_1, SMALL_2 } from "../ui/theme.js";
 import { fmt$, fmtM, fmtB, fmtX, fmtPct, fmtAsOf, fmtOwn } from "../ui/format.js";
 
 // pretty round name: "seed" → "Seed", "a" → "Series A", "pre-seed" → "Pre-seed"
@@ -116,10 +116,10 @@ function PrefStackTable({ company }) {
                 {cl.name}
                 {cl.kind && <span style={{ ...sans, fontSize: FS.micro, color: MICRO, marginLeft: 6 }}>{cl.kind}</span>}
               </td>
-              <td style={{ ...mono, textAlign: "right" }}>{cl.seniority != null ? cl.seniority : "—"}</td>
+              <td style={{ ...inkNum, textAlign: "right" }}>{cl.seniority != null ? cl.seniority : "—"}</td>
               <td style={{ color: isPref ? "var(--ink-color-global-text-default)" : "var(--ink-color-global-text-subtle)" }}>{prefDescriptor(cl)}</td>
-              <td style={{ ...mono, textAlign: "right" }}>{fmtMoney(cl.cashRaised, ccy)}</td>
-              <td style={{ ...mono, textAlign: "right", color: h ? "var(--ink-color-global-text-default)" : "var(--ink-color-global-text-subtle)" }}>{h && h.shares > 0 ? fmtShares(h.shares) : "—"}</td>
+              <td style={{ ...inkNum, textAlign: "right" }}>{fmtMoney(cl.cashRaised, ccy)}</td>
+              <td style={{ ...inkNum, textAlign: "right", color: h ? "var(--ink-color-global-text-default)" : "var(--ink-color-global-text-subtle)" }}>{h && h.shares > 0 ? fmtShares(h.shares) : "—"}</td>
             </tr>
           );
         })}
@@ -333,7 +333,7 @@ function PositionsTable({ company, refDate, staleDays }) {
   const rows = company.positions.map((p) => ({ ...p, ...positionReprice(company, p, { live }) }));
   const { sorted: posRows, sort: posSort, onSort: onPosSort } = useTableSort(rows, POS_COLS);
   const tot = (k) => rows.reduce((s, r) => s + (r[k] || 0), 0);
-  const numCell = { ...mono, textAlign: "right" };
+  const numCell = { ...inkNum, textAlign: "right" };
   return (
     <table className="ledger">
       <TableHead cols={POS_COLS} sort={posSort} onSort={onPosSort} />
@@ -502,7 +502,7 @@ const StatusChip = ({ variant, children }) => (
 // compresses on resize instead of collapsing; no-op for Invested/MOIC/Deal IRR.
 const NUM_COL_MIN_W = 88;
 // nowrap: a wrapped value would break the fixed two-line cellStack height.
-const numTd = { ...mono, textAlign: "right", fontSize: FS.value, whiteSpace: "nowrap", minWidth: NUM_COL_MIN_W };
+const numTd = { ...inkNum, textAlign: "right", fontSize: FS.value, whiteSpace: "nowrap", minWidth: NUM_COL_MIN_W };
 // FV/MOIC/Deal IRR cells can show a second (change) line when repriced — see
 // StackedValue below for how the value stays centred and the row height stays
 // fixed (no mid-drag jitter).
@@ -618,7 +618,7 @@ function MetricTrend({ financials }) {
           {hv != null && (() => {
             const pv = pts[hv].v, col = pv < 0 ? "var(--ink-color-global-feedback-negative-strong)" : "var(--ink-button-background-color-primary-base-default)";
             const ly = Math.max(MT_PT - 4, Math.min(MT_H - 4, pv < 0 ? y(pv) + 15 : y(pv) - 7));
-            return <text x={bx(hv)} y={ly} textAnchor="middle" style={{ ...mono, fontSize: FS.body, fontWeight: 700, fill: col }}>{fmtV(pv)}</text>;
+            return <text x={bx(hv)} y={ly} textAnchor="middle" style={{ ...inkNum, fontSize: FS.body, fontWeight: 700, fill: col }}>{fmtV(pv)}</text>;
           })()}
         </svg>
       )}
@@ -765,7 +765,7 @@ function CompanyRow({ company, updateCompany, refDate, staleDays, assumptions, p
     ? <StatusChip variant="flex-yellow-light">Repriced</StatusChip>
     : company.exited && live
     ? <StatusChip variant="fb-info">Exited · in DPI</StatusChip>
-    : <span style={{ ...mono, color: "var(--ink-color-global-text-subtle)" }}>—</span>;
+    : <span style={{ ...inkNum, color: "var(--ink-color-global-text-subtle)" }}>—</span>;
 
   // ── unified FV / MOIC: the CURRENT (slider-driven) values, with the change
   //    vs the Carta mark shown as a green/red increment when the slider's moved.
@@ -1060,7 +1060,7 @@ function CompanyRow({ company, updateCompany, refDate, staleDays, assumptions, p
                       <div style={{ marginTop: 8 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                           <div style={{ ...sans, fontSize: FS.value, color: "var(--ink-color-global-text-subtle)" }}>
-                            <strong style={{ ...mono, fontSize: FS.value, color: "var(--ink-color-global-text-default)" }}>{fmtM(companyReserve)}</strong> reserve earmarked
+                            <strong style={{ ...inkNum, fontSize: FS.value, color: "var(--ink-color-global-text-default)" }}>{fmtM(companyReserve)}</strong> reserve earmarked
                           </div>
                           <InfoTip label="What does reserve earmarked mean?" width={320}>
                             {fmtPct(dilutionDefended)} of dilution defended × {fmtM(markFvGross)} marked FV
@@ -1068,9 +1068,9 @@ function CompanyRow({ company, updateCompany, refDate, staleDays, assumptions, p
                         </div>
                         {ownInfo.pct != null && (
                           <div style={{ ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", marginTop: 4 }}>
-                            Ownership <strong style={{ ...mono, color: "var(--ink-color-global-text-default)" }}>{fmtOwn(ownInfo.pct)}</strong>
+                            Ownership <strong style={{ ...inkNum, color: "var(--ink-color-global-text-default)" }}>{fmtOwn(ownInfo.pct)}</strong>
                             {" → "}
-                            <strong style={{ ...mono, color: ownDiluted ? "var(--ink-color-global-feedback-negative-strong)" : "var(--ink-color-global-text-default)" }}>{fmtOwn(ownInfo.postDilution)}</strong>
+                            <strong style={{ ...inkNum, color: ownDiluted ? "var(--ink-color-global-feedback-negative-strong)" : "var(--ink-color-global-text-default)" }}>{fmtOwn(ownInfo.postDilution)}</strong>
                             {ownDiluted ? ` after ${fmtPct(company.futureDilution)} expected dilution` : " — no dilution modeled"}
                           </div>
                         )}

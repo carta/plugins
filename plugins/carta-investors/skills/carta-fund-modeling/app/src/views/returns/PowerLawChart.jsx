@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { FS, sans, mono, MICRO } from "../../ui/theme.js";
+import { FS, sans, inkNum, MICRO } from "../../ui/theme.js";
 import { fmtM, fmtX } from "../../ui/format.js";
 import { H3, MethodNote, SourceNote } from "../../ui/components.jsx";
 
@@ -118,7 +118,7 @@ export default function PowerLawChart({ companies, fundName }) {
         {yTicks.map((t) => (
           <g key={`y${t}`}>
             <line x1={PL} x2={W - PR} y1={y(t)} y2={y(t)} style={{ stroke: "var(--ink-color-global-border-subtle)" }} strokeWidth="1" />
-            <text x={PL - 8} y={y(t) + 3} textAnchor="end" style={{ ...mono, fontSize: FS.micro, fill: MICRO }}>{fmtX(t)}</text>
+            <text x={PL - 8} y={y(t) + 3} textAnchor="end" style={{ ...inkNum, fontSize: FS.micro, fill: MICRO }}>{fmtX(t)}</text>
           </g>
         ))}
         {/* x ticks + labels (rank) */}
@@ -177,7 +177,7 @@ export default function PowerLawChart({ companies, fundName }) {
                 }}
                 strokeWidth="1" />
               <text x={tx + 11} y={ty + 18} style={{ ...sans, fontSize: FS.small, fontWeight: 700, fill: "var(--ink-color-global-text-default)" }}>{shortCo(hovered.name)}</text>
-              <text x={tx + 11} y={ty + 34} style={{ ...mono, fontSize: FS.small, fill: "var(--ink-color-global-text-subtle)" }}>
+              <text x={tx + 11} y={ty + 34} style={{ ...inkNum, fontSize: FS.small, fill: "var(--ink-color-global-text-subtle)" }}>
                 #{hovered.rank} · {fmtX(hovered.moic)} · {fmtM(hovered.value)}{hovered.realized ? " · exited" : ""}
               </text>
             </g>

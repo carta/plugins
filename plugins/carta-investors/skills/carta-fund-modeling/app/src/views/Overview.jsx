@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { FS, mono, sans, MICRO } from "../ui/theme.js";
+import { FS, inkNum, sans, MICRO } from "../ui/theme.js";
 import { fmt$, fmtM, fmtX, fmtPct, fmtAsOf, fmtOwn } from "../ui/format.js";
 import { Num, SourceNote, H1, H3, SectionChips, Segmented, Badge, Bubble, Avatar, fundNameOnly, MultiFundPicker } from "../ui/components.jsx";
 import { TableHead, useTableSort, TableScroll } from "../ui/table.jsx";
@@ -43,7 +43,7 @@ function CadenceChart({ quarters, trail, FUNDS, FUND_TINT }) {
       {[3, 6, 9].filter((n) => n < yMax).map((n) => (
         <g key={n}>
           <line x1={PL} x2={W - PR} y1={y(n)} y2={y(n)} style={{ stroke: "var(--ink-color-global-border-subtle)" }} strokeWidth="1" />
-          <text x={PL - 7} y={y(n) + 3} textAnchor="end" style={{ ...mono, fontSize: FS.micro, fill: MICRO }}>{n}</text>
+          <text x={PL - 7} y={y(n) + 3} textAnchor="end" style={{ ...inkNum, fontSize: FS.micro, fill: MICRO }}>{n}</text>
         </g>
       ))}
       <line x1={PL} x2={W - PR} y1={y(0)} y2={y(0)} style={{ stroke: "var(--ink-color-global-border-subtle)" }} strokeWidth="1" />
@@ -77,7 +77,7 @@ function CadenceChart({ quarters, trail, FUNDS, FUND_TINT }) {
             <circle cx={cx} cy={cy} r="5" style={{ fill: "var(--ink-color-global-surface-background-default)", stroke: "var(--ink-color-global-text-default)" }} strokeWidth="2" />
             <rect x={Math.min(cx + 9, W - PR - lw)} y={Math.max(cy - 25, PT)} width={lw} height="19" rx="9.5" style={{ fill: "var(--ink-color-global-text-default)" }} />
             <text x={Math.min(cx + 9, W - PR - lw) + lw / 2} y={Math.max(cy - 25, PT) + 13} textAnchor="middle"
-              style={{ ...mono, fontSize: FS.micro, fontWeight: 600, fill: "var(--ink-color-global-surface-background-default)" }}>{label}</text>
+              style={{ ...inkNum, fontSize: FS.micro, fontWeight: 600, fill: "var(--ink-color-global-surface-background-default)" }}>{label}</text>
           </g>
         );
       })()}
@@ -171,7 +171,7 @@ function ConcentrationCard({ snapshot, portfolio, mixed }) {
             <div key={h.id} data-datum-id={h.id} data-datum-type="company" data-datum-label={h.name}
               style={{ display: "flex", alignItems: "center", gap: 14, padding: "11px 0",
               borderBottom: last ? "none" : `1px solid var(--ink-color-global-border-subtle)` }}>
-              <span style={{ ...mono, fontSize: FS.small, fontWeight: 600, color: "var(--ink-color-global-text-subtle)", flex: "none",
+              <span style={{ ...inkNum, fontSize: FS.small, fontWeight: 600, color: "var(--ink-color-global-text-subtle)", flex: "none",
                 width: 26, height: 26, borderRadius: "50%", border: `1px solid var(--ink-color-global-border-subtle)`, background: "var(--ink-color-global-surface-background-default)",
                 display: "flex", alignItems: "center", justifyContent: "center" }}>{i + 1}</span>
               <span style={{ ...sans, fontSize: FS.bodyLg, fontWeight: i < 5 ? 600 : 500, color: h.defunct ? "var(--ink-color-global-text-subtle)" : "var(--ink-color-global-text-default)",
@@ -183,14 +183,14 @@ function ConcentrationCard({ snapshot, portfolio, mixed }) {
                 <div style={{ width: `${Math.max(2, (h.fv / maxFv) * 100)}%`, height: "100%", borderRadius: 2,
                   background: i < 5 ? "var(--ink-button-background-color-primary-base-default)" : "var(--ink-color-global-surface-lightgray-active)" }} />
               </div>
-              <span style={{ ...mono, fontSize: FS.small, color: irrById[h.id] == null ? "var(--ink-color-global-text-subtle)" : irrById[h.id] >= 0 ? "var(--ink-color-global-feedback-positive-strong)" : "var(--ink-color-global-feedback-negative-strong)", width: 52, textAlign: "right", flex: "none" }}
+              <span style={{ ...inkNum, fontSize: FS.small, color: irrById[h.id] == null ? "var(--ink-color-global-text-subtle)" : irrById[h.id] >= 0 ? "var(--ink-color-global-feedback-positive-strong)" : "var(--ink-color-global-feedback-negative-strong)", width: 52, textAlign: "right", flex: "none" }}
                 title="Deal IRR">
                 {irrById[h.id] == null ? "—" : fmtPct(irrById[h.id])}
               </span>
-              <span style={{ ...mono, fontSize: FS.body, fontWeight: 700, color: "var(--ink-color-global-text-default)", width: 54, textAlign: "right", flex: "none" }}>
+              <span style={{ ...inkNum, fontSize: FS.body, fontWeight: 700, color: "var(--ink-color-global-text-default)", width: 54, textAlign: "right", flex: "none" }}>
                 {((h.fv / c.total) * 100).toFixed(1)}%
               </span>
-              <span style={{ ...mono, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", width: 58, textAlign: "right", flex: "none" }}>{fmtM(h.fv)}</span>
+              <span style={{ ...inkNum, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", width: 58, textAlign: "right", flex: "none" }}>{fmtM(h.fv)}</span>
             </div>
           );
         })}
@@ -474,10 +474,10 @@ function TrendCard({ snapshot, fundStates, firmNow }) {
           <path d={tvpiLine} fill="none" style={{ stroke: "var(--ink-color-global-text-default)" }} strokeWidth="2" strokeDasharray="5 3" strokeLinejoin="round" opacity="0.9" />
           {lastC.tvpi != null && <circle cx={cx(n - 1)} cy={yTvpi(lastC.tvpi)} r="3.5" style={{ fill: "var(--ink-color-global-text-default)" }} />}
           {/* endpoint labels */}
-          <text x={TW - TPR + 8} y={navLblY + 4} style={{ ...mono, fontSize: LBL_FS, fontWeight: 700, fill: "var(--ink-color-global-text-default)" }}>
+          <text x={TW - TPR + 8} y={navLblY + 4} style={{ ...inkNum, fontSize: LBL_FS, fontWeight: 700, fill: "var(--ink-color-global-text-default)" }}>
             {fmtM(lastC.firmNav)}{allShown && repriced && Math.abs(navDelta) > 0.5 && <tspan style={{ fill: navDelta >= 0 ? "var(--ink-color-global-feedback-positive-strong)" : "var(--ink-color-global-feedback-negative-strong)" }}> {navDelta >= 0 ? "▲" : "▼"}</tspan>}
           </text>
-          {lastC.tvpi != null && <text x={TW - TPR + 8} y={tvpiLblY + 4} style={{ ...mono, fontSize: LBL_FS, fontWeight: 700, fill: "var(--ink-color-global-text-default)" }}>
+          {lastC.tvpi != null && <text x={TW - TPR + 8} y={tvpiLblY + 4} style={{ ...inkNum, fontSize: LBL_FS, fontWeight: 700, fill: "var(--ink-color-global-text-default)" }}>
             {fmtX(lastC.tvpi)}{repriced && Math.abs(tvpiDelta) > 0.005 && <tspan style={{ fill: tvpiDelta >= 0 ? "var(--ink-color-global-feedback-positive-strong)" : "var(--ink-color-global-feedback-negative-strong)" }}> {tvpiDelta >= 0 ? "▲" : "▼"}</tspan>}
           </text>}
         </svg>
@@ -485,8 +485,8 @@ function TrendCard({ snapshot, fundStates, firmNow }) {
           <div style={{ position: "absolute", top: 0, left: `${tipLeft}%`, transform: "translateX(-50%)", pointerEvents: "none",
             background: "var(--ink-color-global-surface-background-default)", border: `1px solid var(--ink-color-global-border-subtle)`, borderRadius: 8, padding: "8px 12px", boxShadow: "0 6px 18px rgba(16,24,40,.14)", whiteSpace: "nowrap" }}>
             <div style={{ ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", marginBottom: 3 }}>{hc.date}</div>
-            <div style={{ ...mono, fontSize: FS.bodyLg, fontWeight: 700, color: "var(--ink-color-global-text-default)" }}>{fmtM(hc.firmNav)} <span style={{ ...sans, fontSize: FS.micro, color: "var(--ink-color-global-text-subtle)", fontWeight: 500 }}>LP NAV</span></div>
-            <div style={{ ...mono, fontSize: FS.bodyLg, fontWeight: 700, color: "var(--ink-color-global-text-default)" }}>{hc.tvpi == null ? "—" : fmtX(hc.tvpi)} <span style={{ ...sans, fontSize: FS.micro, color: "var(--ink-color-global-text-subtle)", fontWeight: 500 }}>TVPI</span></div>
+            <div style={{ ...inkNum, fontSize: FS.bodyLg, fontWeight: 700, color: "var(--ink-color-global-text-default)" }}>{fmtM(hc.firmNav)} <span style={{ ...sans, fontSize: FS.micro, color: "var(--ink-color-global-text-subtle)", fontWeight: 500 }}>LP NAV</span></div>
+            <div style={{ ...inkNum, fontSize: FS.bodyLg, fontWeight: 700, color: "var(--ink-color-global-text-default)" }}>{hc.tvpi == null ? "—" : fmtX(hc.tvpi)} <span style={{ ...sans, fontSize: FS.micro, color: "var(--ink-color-global-text-subtle)", fontWeight: 500 }}>TVPI</span></div>
             {hc.segs.length > 0 && (
               <div style={{ marginTop: 6, paddingTop: 6, borderTop: `1px solid var(--ink-color-global-border-subtle)`, display: "flex", flexDirection: "column", gap: 3 }}>
                 {[...hc.segs].sort((a, b) => b.v - a.v).map((s) => (
@@ -495,7 +495,7 @@ function TrendCard({ snapshot, fundStates, firmNow }) {
                       <span style={{ width: 8, height: 8, borderRadius: 2, background: colorOf[s.id], display: "inline-block", flex: "none" }} />
                       {shortFund(nameOf[s.id])}
                     </span>
-                    <span style={{ ...mono, fontSize: FS.micro, fontWeight: 600, color: "var(--ink-color-global-text-default)" }}>{fmtM(s.v)}</span>
+                    <span style={{ ...inkNum, fontSize: FS.micro, fontWeight: 600, color: "var(--ink-color-global-text-default)" }}>{fmtM(s.v)}</span>
                   </div>
                 ))}
               </div>
@@ -522,7 +522,7 @@ function TrendCard({ snapshot, fundStates, firmNow }) {
   );
 }
 
-const RT = { ...mono, textAlign: "right", fontSize: FS.value };
+const RT = { ...inkNum, textAlign: "right", fontSize: FS.value };
 
 // Fund-table columns — label + a value accessor for sorting. Text columns sort
 // ascending-first, numeric columns descending-first (useTableSort's naturalDir);

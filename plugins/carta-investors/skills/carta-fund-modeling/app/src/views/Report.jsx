@@ -6,7 +6,7 @@
 // while hiding the app chrome.
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { tightSans, sans, mono, FS, MICRO } from "../ui/theme.js";
+import { tightSans, sans, inkNum, FS, MICRO } from "../ui/theme.js";
 import { fmtM, fmtX, fmtPct, fmtAsOf, displayCurrency } from "../ui/format.js";
 import { H1, H3, Btn, Eyebrow, MethodNote, SourceNote, LockIcon, fundLabel, MultiFundPicker } from "../ui/components.jsx";
 import { buildReport } from "../model/report.js";
@@ -72,7 +72,7 @@ function ScenarioHead({ s }) {
 function ReportBody({ report, funds, metrics }) {
   const { summaries, diffs, fundOrder } = report;
   const mixed = summaries.some((s) => s.mixedCurrency);
-  const numTd = { ...mono, textAlign: "right", fontSize: FS.value, whiteSpace: "nowrap" };
+  const numTd = { ...inkNum, textAlign: "right", fontSize: FS.value, whiteSpace: "nowrap" };
   // fall back to the full set when the caller doesn't drive the selectors (e.g. tests)
   const showFunds = funds ?? fundOrder;
   const showMetrics = metrics ?? FUND_METRICS.filter((m) => DEFAULT_FUND_METRICS.includes(m.key));
@@ -102,7 +102,7 @@ function ReportBody({ report, funds, metrics }) {
                   <td key={s.id} style={numTd}>
                     <div style={{ fontWeight: 600 }}>{fmtVal(s[m.key], m.kind, mixed)}</div>
                     {showD && (
-                      <div style={{ ...mono, fontSize: FS.micro, fontWeight: 600, color: d >= 0 ? "var(--ink-color-global-feedback-positive-strong)" : "var(--ink-color-global-feedback-negative-strong)" }}>{fmtDelta(d, m.kind)}</div>
+                      <div style={{ ...inkNum, fontSize: FS.micro, fontWeight: 600, color: d >= 0 ? "var(--ink-color-global-feedback-positive-strong)" : "var(--ink-color-global-feedback-negative-strong)" }}>{fmtDelta(d, m.kind)}</div>
                     )}
                   </td>
                 );

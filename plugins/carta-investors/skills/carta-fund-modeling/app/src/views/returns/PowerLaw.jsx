@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { FS, sans, mono, MICRO } from "../../ui/theme.js";
+import { FS, sans, inkNum, MICRO } from "../../ui/theme.js";
 import { fmtM, fmtX } from "../../ui/format.js";
 import { H1, H3, MethodNote, SourceNote, FundPicker, Slider, Segmented, MultiFundPicker, fundLabel, SectionChips } from "../../ui/components.jsx";
 import { TableHead, useTableSort, TableScroll } from "../../ui/table.jsx";
@@ -70,12 +70,12 @@ function ExitImpactCard({ snapshot, portfolio, fs }) {
           borderTop: `1px solid var(--ink-color-global-border-subtle)` }}>
           <span style={{ ...sans, fontSize: FS.body, fontWeight: 500, color: "var(--ink-color-global-text-default)", width: 150, flex: "none",
             whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={`${c.name} · ${fmtM(c.fv)}`}>
-            <span style={{ ...mono, color: MICRO, marginRight: 7 }}>{i + 1}</span>{shortCo(c.name)}
+            <span style={{ ...inkNum, color: MICRO, marginRight: 7 }}>{i + 1}</span>{shortCo(c.name)}
           </span>
-          <span style={{ ...mono, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", width: 54, textAlign: "right", flex: "none" }}>{fmtX(Math.min(c.lowMultiple, c.highMultiple))}</span>
+          <span style={{ ...inkNum, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", width: 54, textAlign: "right", flex: "none" }}>{fmtX(Math.min(c.lowMultiple, c.highMultiple))}</span>
           <SwingBar lowVal={c.lowMultiple} highVal={c.highMultiple} baseVal={t.baseMultiple} pct={pct} />
-          <span style={{ ...mono, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", width: 54, textAlign: "left", flex: "none" }}>{fmtX(Math.max(c.lowMultiple, c.highMultiple))}</span>
-          <span style={{ ...mono, fontSize: FS.body, fontWeight: 700, color: "var(--ink-color-global-text-default)", width: 64, textAlign: "right", flex: "none" }}
+          <span style={{ ...inkNum, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", width: 54, textAlign: "left", flex: "none" }}>{fmtX(Math.max(c.lowMultiple, c.highMultiple))}</span>
+          <span style={{ ...inkNum, fontSize: FS.body, fontWeight: 700, color: "var(--ink-color-global-text-default)", width: 64, textAlign: "right", flex: "none" }}
             title="Net TVPI swing across this holding's ± range">±{fmtX(c.swing / 2)}</span>
         </div>
       ))}
@@ -193,14 +193,14 @@ function ReturnTheFund({ portfolio, fundId, readOnly, target, setTarget, config,
           <tbody>
             {rtfRows.map((s, i) => (
               <tr key={i}>
-                <td style={{ ...mono, color: MICRO }}>{i + 1}</td>
+                <td style={{ ...inkNum, color: MICRO }}>{i + 1}</td>
                 {/* width:100% makes this the greedy column that soaks up the table's
                     slack, so the #/multiple/value columns size to their (constant)
                     content instead of a shifting slack share — otherwise every
                     column reflowed as the target slider changed the values. */}
                 <td style={{ ...sans, fontSize: FS.value, color: "var(--ink-color-global-text-default)", width: "100%" }}>{s.companies.map((c) => shortCo(c.name)).join(" + ")}</td>
-                <td style={{ ...mono, textAlign: "right", fontSize: FS.value, fontWeight: 700 }}>{fmtX(s.m)}</td>
-                <td style={{ ...mono, textAlign: "right", fontSize: FS.value }}
+                <td style={{ ...inkNum, textAlign: "right", fontSize: FS.value, fontWeight: 700 }}>{fmtX(s.m)}</td>
+                <td style={{ ...inkNum, textAlign: "right", fontSize: FS.value }}
                   title={s.companies.map((c) => `${shortCo(c.name)} → ${fmtM(c.neededValue)}`).join(" · ")}>
                   {fmtM(s.companies.reduce((t, c) => t + c.neededValue, 0))}
                 </td>

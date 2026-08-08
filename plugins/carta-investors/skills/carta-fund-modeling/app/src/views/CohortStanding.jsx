@@ -6,7 +6,7 @@
 // side-by-side scanning — no click-to-expand, no metric toggle. LV predates
 // Carta's cohorts (dashed estimate); a pre-deployment fund shows a quiet
 // empty row.
-import { FS, sans, mono, MICRO } from "../ui/theme.js";
+import { FS, sans, inkNum, MICRO } from "../ui/theme.js";
 import { fmtM, fmtX, fmtPct } from "../ui/format.js";
 import { H1, H3, MethodNote, SourceNote, fundNameOnly, Eyebrow, StatTile } from "../ui/components.jsx";
 import { cohortPercentile } from "../model/benchmarks.js";
@@ -100,7 +100,7 @@ function Rail({ pctl, val, cohortMarks, estimated, below, belowP, noValueLabel }
         return (
           <div key={t} style={{ position: "absolute", top: 28, left: `${t}%`, transform: "translateX(-50%)", textAlign: "center" }}>
             <div style={{ ...sans, fontSize: FS.micro, fontWeight: 700, color: "var(--ink-color-global-text-default)", whiteSpace: "nowrap" }}>p{t}</div>
-            <div style={{ ...mono, fontSize: FS.micro, color: MICRO, whiteSpace: "nowrap" }}>{v.toFixed(2)}×</div>
+            <div style={{ ...inkNum, fontSize: FS.micro, color: MICRO, whiteSpace: "nowrap" }}>{v.toFixed(2)}×</div>
           </div>
         );
       })}

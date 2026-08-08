@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { FS, sans, mono, SIDEBAR_PANEL_BG } from "./theme.js";
+import { FS, sans, inkNum, SIDEBAR_PANEL_BG } from "./theme.js";
 import { fmtM, fmtX, fmtPct } from "./format.js";
 import { Num, Btn, ALL_FUNDS, fundLabel, DeltaCaret } from "./components.jsx";
 import { scenarioFund, firmBaseRollup } from "../model/funds.js";
@@ -48,7 +48,7 @@ function Row({ label, value, fmt, delta, eps = 0.5, forceDelta = false, alignCol
       opacity: dim ? 0.35 : 1, transition: "opacity 120ms ease" }}>
       {labelEl}
       <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        <span style={{ ...mono, fontSize: 12, fontWeight: 500, lineHeight: "24px", color: "var(--ink-color-global-text-default)",
+        <span style={{ ...inkNum, fontSize: 12, fontWeight: 500, lineHeight: "24px", color: "var(--ink-color-global-text-default)",
           ...(alignCols ? { minWidth: 64, textAlign: "right" } : {}) }}>
           <Num value={value} fmt={fmt} />
         </span>
@@ -63,7 +63,7 @@ function Row({ label, value, fmt, delta, eps = 0.5, forceDelta = false, alignCol
           // still sits left-aligned directly after its caret, per the design spec.
           <span style={{ display: "flex", alignItems: "center", gap: 6, color: deltaColor }}>
             <DeltaCaret up={delta >= 0} />
-            <span style={{ ...mono, fontSize: 12, fontWeight: 500, lineHeight: "24px",
+            <span style={{ ...inkNum, fontSize: 12, fontWeight: 500, lineHeight: "24px",
               ...(alignCols ? { minWidth: 52 } : {}) }}>{fmt(Math.abs(delta))}</span>
           </span>
         )}

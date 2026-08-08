@@ -80,7 +80,11 @@ export const serif = { fontFamily: "\"SangBleu Versailles\", Georgia, serif" };
 // despite some call sites' historical `serif`-named prop — kept as a distinct,
 // honestly-named export so it's never confused with the real `serif` above.
 export const tightSans = { fontFamily: SANS, letterSpacing: "-0.02em" };
-export const mono = { fontFamily: SANS, fontVariantNumeric: "tabular-nums", letterSpacing: "0" }; // figures (grotesk, tabular)
+// NOT a monospace typeface — same SANS/Inter family as `sans`, just with
+// tabular-nums figures for column/value alignment. Named after Ink's real
+// `.ink-num` recipe (theme-with-ink/tokens.css), which this mirrors — never
+// switch to an actual monospace font for numeric alignment.
+export const inkNum = { fontFamily: SANS, fontVariantNumeric: "tabular-nums", letterSpacing: "0" };
 
 // ── Type scale — the single source of truth for font sizes across the app.
 // Replaces the ~24 ad-hoc fontSize literals (many half-pixel: 9/9.5/10.5/11.5…)

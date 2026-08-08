@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { FS, sans, mono, MICRO } from "../../ui/theme.js";
+import { FS, sans, inkNum, MICRO } from "../../ui/theme.js";
 import { fmtM, fmtX, fmtPct, fmtAsOf, fmt$ } from "../../ui/format.js";
 import { H1, H2, H3, Eyebrow, Segmented, MethodNote, SourceNote, FundPicker, StatBar, Badge, fundLabel, SectionChips } from "../../ui/components.jsx";
 import { TableHead, useTableSort, TableScroll } from "../../ui/table.jsx";
@@ -7,7 +7,7 @@ import { useFirmData } from "../../state/FirmData.jsx";
 import { useScenarioModel } from "./useScenarioModel.js";
 import Glidepath from "./Glidepath.jsx";
 
-const RT = { ...mono, textAlign: "right", fontSize: FS.value };
+const RT = { ...inkNum, textAlign: "right", fontSize: FS.value };
 
 // Expected profit at today's marks: residual value (NAV) + realized distributions,
 // net of paid-in capital. Positive = the LP is above water on paid-in.
@@ -81,7 +81,7 @@ function LpPartnersTable({ funds }) {
               <div style={{ width: `${Math.max(2, r.pct * 100)}%`, height: "100%", background: "var(--ink-color-global-text-default)", borderRadius: 2 }} />
             </div>
             <span style={{ ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", width: 44, textAlign: "right", flex: "none" }}>{fmtPct(r.pct, 0)}</span>
-            <span style={{ ...mono, fontSize: FS.small, color: "var(--ink-color-global-text-default)", width: 76, textAlign: "right", flex: "none" }}>{fmtM(r.commitment)}</span>
+            <span style={{ ...inkNum, fontSize: FS.small, color: "var(--ink-color-global-text-default)", width: 76, textAlign: "right", flex: "none" }}>{fmtM(r.commitment)}</span>
             <span style={{ ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", width: 60, textAlign: "right", flex: "none" }}>{r.count} LPs</span>
           </div>
         ))}
@@ -271,11 +271,11 @@ export default function LpReturns(props) {
                     `${r.multiple}×`
                   )}
                 </td>
-                <td style={{ ...mono, textAlign: "right", fontSize: FS.value }}>{c$(r.lpDistributions)}</td>
-                <td style={{ ...mono, textAlign: "right", fontSize: FS.value }}>{c$(r.lpNetProfit)}</td>
-                <td style={{ ...mono, textAlign: "right", fontSize: FS.value }}>{fmtPct(r.netLpIrr)}</td>
-                <td style={{ ...mono, textAlign: "right", fontSize: FS.value, color: "var(--ink-color-global-text-subtle)" }}>{fmtPct(r.spIrr)}</td>
-                <td style={{ ...mono, textAlign: "right", fontSize: FS.value, color: r.edge == null ? "var(--ink-color-global-text-subtle)" : r.edge >= 0 ? "var(--ink-color-global-feedback-positive-strong)" : "var(--ink-color-global-feedback-negative-strong)" }}>
+                <td style={{ ...inkNum, textAlign: "right", fontSize: FS.value }}>{c$(r.lpDistributions)}</td>
+                <td style={{ ...inkNum, textAlign: "right", fontSize: FS.value }}>{c$(r.lpNetProfit)}</td>
+                <td style={{ ...inkNum, textAlign: "right", fontSize: FS.value }}>{fmtPct(r.netLpIrr)}</td>
+                <td style={{ ...inkNum, textAlign: "right", fontSize: FS.value, color: "var(--ink-color-global-text-subtle)" }}>{fmtPct(r.spIrr)}</td>
+                <td style={{ ...inkNum, textAlign: "right", fontSize: FS.value, color: r.edge == null ? "var(--ink-color-global-text-subtle)" : r.edge >= 0 ? "var(--ink-color-global-feedback-positive-strong)" : "var(--ink-color-global-feedback-negative-strong)" }}>
                   {r.edge == null ? "n/m" : (r.edge >= 0 ? "+" : "−") + fmtPct(Math.abs(r.edge))}
                 </td>
               </tr>

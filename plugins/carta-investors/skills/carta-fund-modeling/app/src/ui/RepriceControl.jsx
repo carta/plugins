@@ -5,7 +5,7 @@
 // component, two sizes: `compact` (inline table cell) and full (expanded, with
 // preset chips). Mode-agnostic — the caller passes a resolved config.
 import { useState, useRef, useEffect, useLayoutEffect } from "react";
-import { FS, sans, mono, MICRO, TAPE_THUMB } from "./theme.js";
+import { FS, sans, inkNum, MICRO, TAPE_THUMB } from "./theme.js";
 import { fmtM } from "./format.js";
 import { useAnimated } from "./components.jsx";
 import { trackClick } from "../analytics.js";
@@ -176,7 +176,7 @@ export default function RepriceControl({ value, onChange, onReset, fmtVal, min =
     // quarter offset), not the readable label shown — much harder for users
     // to get right than dragging or typing a percentage/dollar value, so this
     // readout skips the click-to-type affordance entirely.
-    <span style={{ ...mono, fontSize: numSize, fontWeight: 700, color: "var(--ink-color-global-text-default)", letterSpacing: "-0.02em", lineHeight: 1,
+    <span style={{ ...inkNum, fontSize: numSize, fontWeight: 700, color: "var(--ink-color-global-text-default)", letterSpacing: "-0.02em", lineHeight: 1,
       minWidth: compact ? 52 : 96, display: "inline-block", textAlign: compact ? "right" : "left" }}>
       {fmtVal(displayed)}
     </span>
@@ -184,11 +184,11 @@ export default function RepriceControl({ value, onChange, onReset, fmtVal, min =
     <input ref={inputRef} className="numin" type="text" inputMode="decimal" value={text} disabled={disabled}
       onChange={(e) => { setText(e.target.value); const n = parseFloat(e.target.value); if (!isNaN(n)) onChange(clampTo(n, min, max)); }}
       onBlur={commit} onKeyDown={(e) => { if (e.key === "Enter") commit(); if (e.key === "Escape") setEditing(false); }}
-      style={{ ...mono, width: compact ? 60 : 110, fontSize: numSize, fontWeight: 700, padding: "1px 6px", background: "transparent", color: "var(--ink-color-global-text-default)", textAlign: compact ? "right" : "left", letterSpacing: "-0.02em" }} />
+      style={{ ...inkNum, width: compact ? 60 : 110, fontSize: numSize, fontWeight: 700, padding: "1px 6px", background: "transparent", color: "var(--ink-color-global-text-default)", textAlign: compact ? "right" : "left", letterSpacing: "-0.02em" }} />
   ) : (
     <button onClick={locked ? () => onChange(displayed) : startEdit}
       title={locked ? "Locked — duplicate into a scenario to edit" : "Click to type an exact value"} disabled={disabled}
-      style={{ ...mono, fontSize: numSize, fontWeight: 700, color: "var(--ink-color-global-text-default)", letterSpacing: "-0.02em", lineHeight: 1,
+      style={{ ...inkNum, fontSize: numSize, fontWeight: 700, color: "var(--ink-color-global-text-default)", letterSpacing: "-0.02em", lineHeight: 1,
         background: "transparent", border: "none", padding: 0, cursor: locked ? "not-allowed" : disabled ? "default" : "text",
         minWidth: compact ? 52 : 96, textAlign: compact ? "right" : "left" }}>
       {fmtVal(displayed)}
@@ -199,7 +199,7 @@ export default function RepriceControl({ value, onChange, onReset, fmtVal, min =
   // expanded view the split line below the control carries this instead.
   const upliftEl = (
     <span title="Change in this company's fair value vs its Carta mark"
-      style={{ ...mono, fontSize: FS.micro, fontWeight: 600, width: 82, textAlign: "right", whiteSpace: "nowrap",
+      style={{ ...inkNum, fontSize: FS.micro, fontWeight: 600, width: 82, textAlign: "right", whiteSpace: "nowrap",
         color: !moved ? "var(--ink-color-global-text-subtle)" : uplift >= 0 ? "var(--ink-color-global-feedback-positive-strong)" : "var(--ink-color-global-feedback-negative-strong)" }}>
       {!moved ? "FV —" : `FV ${uplift >= 0 ? "▲" : "▼"} ${fmtM(Math.abs(aUplift))}`}
     </span>

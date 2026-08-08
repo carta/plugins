@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, forwardRef } from "react";
 import { createPortal } from "react-dom";
-import { FS, SANS, serif, tightSans, sans, mono, MICRO, NOTICE, NOTICE_TINT, EASE, GRAD_DARK, EYEBROW_TRACKING } from "./theme.js";
+import { FS, SANS, serif, tightSans, sans, inkNum, MICRO, NOTICE, NOTICE_TINT, EASE, GRAD_DARK, EYEBROW_TRACKING } from "./theme.js";
 
 // SVG/text fontFamily attributes need a plain string (not a style object) —
 // reuse theme.js's own SANS constant rather than hand-duplicating it.
@@ -753,7 +753,7 @@ export function Slider({ label, value, min, max, step, onChange, fmt, accent, va
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 4 }}>
         <span style={{ ...sans, fontSize: FS.small, fontWeight: labelKind === "strong" ? 600 : 400,
           color: labelKind === "strong" ? "var(--ink-color-global-text-default)" : "var(--ink-color-global-text-subtle)" }}>{label}</span>
-        <span style={{ ...mono, fontSize: valueSize, fontWeight: 700, color: valueColor ?? accent ?? "var(--ink-color-global-text-default)" }}>{fmt(value)}</span>
+        <span style={{ ...inkNum, fontSize: valueSize, fontWeight: 700, color: valueColor ?? accent ?? "var(--ink-color-global-text-default)" }}>{fmt(value)}</span>
       </div>
       <input className="tape" type="range" min={min} max={max} step={step} value={value} disabled={disabled}
         aria-label={label} title={locked ? lockedTitle : title}
@@ -775,7 +775,7 @@ export function Slider({ label, value, min, max, step, onChange, fmt, accent, va
  *  (node rendered below, e.g. a vs-baseline delta). Optional — color (value color),
  *  labelPos "top" (label above value — the eyebrow scorecard look) | "bottom"
  *  (value above label — the display-figure look), size "display" (default) | "h3"
- *  (compact), serif (tight-tracked sans display look instead of tabular mono —
+ *  (compact), serif (tight-tracked sans display look instead of tabular-nums —
  *  see `tightSans` in theme.js; NOT the real serif, which is `H1`-only), labelTone
  *  "eyebrow" (uppercase micro, default for top) | "strong" (600-weight default-text)
  *  | "muted" (micro subtle) | "plain" (12px/400 sentence-case, Ink's real Tile
@@ -786,7 +786,7 @@ export function StatTile({ label, value, sub, color = "var(--ink-color-global-te
   const tone = labelTone ?? (labelPos === "top" ? "eyebrow" : "strong");
   const valStyle = useSerif
     ? { ...tightSans, fontSize: size === "h3" ? FS.h3 : FS.display, fontWeight: 700, color, letterSpacing: "0", lineHeight: 1.1, fontVariantNumeric: "tabular-nums" }
-    : { ...mono, fontSize: size === "h3" ? FS.h3 : FS.display, fontWeight: 700, color, letterSpacing: "0", lineHeight: 1.05 };
+    : { ...inkNum, fontSize: size === "h3" ? FS.h3 : FS.display, fontWeight: 700, color, letterSpacing: "0", lineHeight: 1.05 };
   const labelEl = tone === "eyebrow"
     ? <Eyebrow color={MICRO} style={{ whiteSpace: "nowrap" }}>{label}</Eyebrow>
     : <div style={tone === "muted"

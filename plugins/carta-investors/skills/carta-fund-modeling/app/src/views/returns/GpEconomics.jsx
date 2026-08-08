@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { FS, sans, mono, MICRO } from "../../ui/theme.js";
+import { FS, sans, inkNum, MICRO } from "../../ui/theme.js";
 import { fmtM, fmtX, fmtPct, fmt$ } from "../../ui/format.js";
 import { H1, H2, Btn, Eyebrow, MethodNote, SourceNote, FundPicker, Slider, StatTile, StatBar, Badge, fundLabel, SectionChips } from "../../ui/components.jsx";
 import { TableHead, useTableSort, TableScroll } from "../../ui/table.jsx";
@@ -49,7 +49,7 @@ function GpPartnerCarry({ gpEntry, todayGpCarry, fsName }) {
   if (!gpEntry || !partners.length) return null;
   const shareBasis = partners.some((p) => p.carryShare != null) || totalCommit > 0;
   const c$ = (n) => (n == null ? "—" : n === 0 ? "$0" : fmtM(n));
-  const money = (n) => ({ ...mono, textAlign: "right", fontSize: FS.value, color: n != null && n < 0 ? "var(--ink-color-global-feedback-negative-strong)" : "var(--ink-color-global-text-default)" });
+  const money = (n) => ({ ...inkNum, textAlign: "right", fontSize: FS.value, color: n != null && n < 0 ? "var(--ink-color-global-feedback-negative-strong)" : "var(--ink-color-global-text-default)" });
   return (
     <>
       <H2>GP partner carry</H2>
@@ -73,16 +73,16 @@ function GpPartnerCarry({ gpEntry, todayGpCarry, fsName }) {
                     )}
                   </td>
                   <td style={money(p.accruedCarry)}>{c$(p.accruedCarry)}</td>
-                  <td style={{ ...mono, textAlign: "right", fontSize: FS.value, color: "var(--ink-color-global-text-subtle)" }}>{share != null ? fmtPct(share, 1) : "—"}</td>
+                  <td style={{ ...inkNum, textAlign: "right", fontSize: FS.value, color: "var(--ink-color-global-text-subtle)" }}>{share != null ? fmtPct(share, 1) : "—"}</td>
                   <td style={{ ...money(scenarioOf(p)), fontWeight: 700 }}>{c$(scenarioOf(p))}</td>
                 </tr>
               );
             })}
             <tr className="totrow">
               <td style={{ ...sans, color: "var(--ink-color-global-text-default)" }}>Count: {sortedPartners.length}</td>
-              <td style={{ ...mono, textAlign: "right" }}>{c$(gpEntry.totalAccruedCarry)}</td>
-              <td style={{ ...mono, textAlign: "right", color: "var(--ink-color-global-text-subtle)" }}>{shareBasis ? "100.0%" : "—"}</td>
-              <td style={{ ...mono, textAlign: "right" }}>{c$(todayGpCarry)}</td>
+              <td style={{ ...inkNum, textAlign: "right" }}>{c$(gpEntry.totalAccruedCarry)}</td>
+              <td style={{ ...inkNum, textAlign: "right", color: "var(--ink-color-global-text-subtle)" }}>{shareBasis ? "100.0%" : "—"}</td>
+              <td style={{ ...inkNum, textAlign: "right" }}>{c$(todayGpCarry)}</td>
             </tr>
           </tbody>
         </table>
@@ -203,10 +203,10 @@ export default function GpEconomics(props) {
                     `${r.multiple}×`
                   )}
                 </td>
-                <td style={{ ...mono, textAlign: "right", fontSize: FS.value, color: "var(--ink-color-global-text-subtle)" }}>{r.gpCommit == null ? "—" : c$(r.gpCommit)}</td>
-                <td style={{ ...mono, textAlign: "right", fontSize: FS.value }}>{r.gpCapital == null ? "—" : c$(r.gpCapital)}</td>
-                <td style={{ ...mono, textAlign: "right", fontSize: FS.value, fontWeight: 700 }}>{c$(r.gpCarry)}</td>
-                <td style={{ ...mono, textAlign: "right", fontSize: FS.value, fontWeight: 700 }}>{c$(r.gpTotal)}</td>
+                <td style={{ ...inkNum, textAlign: "right", fontSize: FS.value, color: "var(--ink-color-global-text-subtle)" }}>{r.gpCommit == null ? "—" : c$(r.gpCommit)}</td>
+                <td style={{ ...inkNum, textAlign: "right", fontSize: FS.value }}>{r.gpCapital == null ? "—" : c$(r.gpCapital)}</td>
+                <td style={{ ...inkNum, textAlign: "right", fontSize: FS.value, fontWeight: 700 }}>{c$(r.gpCarry)}</td>
+                <td style={{ ...inkNum, textAlign: "right", fontSize: FS.value, fontWeight: 700 }}>{c$(r.gpTotal)}</td>
               </tr>
             ))}
           </tbody>

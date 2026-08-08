@@ -2,7 +2,7 @@
 // (/api/firms) written by scripts/ingest-firm.mjs. Firm-agnostic — every card
 // is data-driven from the registry, so adding a firm needs no code change.
 import { useEffect, useState } from "react";
-import { FS, tightSans, sans, mono, GLOBAL_CSS } from "./ui/theme.js";
+import { FS, tightSans, sans, inkNum, GLOBAL_CSS } from "./ui/theme.js";
 import { Mark, H3 } from "./ui/components.jsx";
 
 export default function FundChooser({ onPick }) {
@@ -40,7 +40,7 @@ export default function FundChooser({ onPick }) {
               <Mark branding={{ mark: f.mark }} size={42} />
               <div>
                 <H3 as="div" style={{ lineHeight: 1.2 }}>{f.name}</H3>
-                <div style={{ ...mono, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", marginTop: 6 }}>
+                <div style={{ ...inkNum, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", marginTop: 6 }}>
                   {f.funds} fund{f.funds === 1 ? "" : "s"} · NAV {f.navAsOf}
                 </div>
               </div>

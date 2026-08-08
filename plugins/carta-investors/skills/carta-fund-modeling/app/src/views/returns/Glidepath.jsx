@@ -7,7 +7,7 @@
 // computeFundStates), so repricing a company or toggling an exit moves the whole
 // path. Model: src/model/glidepath.js. Knobs persist per fund into the active scenario.
 import { useMemo, useState } from "react";
-import { FS, sans, mono, MICRO } from "../../ui/theme.js";
+import { FS, sans, inkNum, MICRO } from "../../ui/theme.js";
 import { fmtM, fmtX, fmtPct } from "../../ui/format.js";
 import { H2, H3, Eyebrow, MethodNote, SourceNote, Segmented, Slider, StatBar, Badge, fundLabel } from "../../ui/components.jsx";
 import { fundGlidepath } from "../../model/glidepath.js";
@@ -115,7 +115,7 @@ function GlidepathChart({ g }) {
           ))}
           {/* TVPI endpoint dot + label */}
           <circle cx={x(n - 1)} cy={y(rows[n - 1].tvpi)} r="3.5" style={{ fill: C_TVPI }} />
-          <text x={W - PR + 6} y={y(rows[n - 1].tvpi) + 4} style={{ ...mono, fontSize: 12, fontWeight: 700, fill: C_TVPI }}>{fmtX(rows[n - 1].tvpi)}</text>
+          <text x={W - PR + 6} y={y(rows[n - 1].tvpi) + 4} style={{ ...inkNum, fontSize: 12, fontWeight: 700, fill: C_TVPI }}>{fmtX(rows[n - 1].tvpi)}</text>
           {/* hover hit-columns */}
           {rows.map((r, i) => (
             <rect key={r.year} x={x(i) - (plotW / (n - 1)) / 2} y={PT} width={plotW / (n - 1)} height={plotH} fill="transparent"
@@ -132,7 +132,7 @@ function GlidepathChart({ g }) {
                 <span style={{ ...sans, fontSize: FS.micro, color: "var(--ink-color-global-text-subtle)", display: "inline-flex", alignItems: "center", gap: 5 }}>
                   <span style={{ width: 8, height: 8, borderRadius: 2, background: c }} />{t}
                 </span>
-                <span style={{ ...mono, fontSize: FS.micro, fontWeight: 700, color: "var(--ink-color-global-text-default)" }}>{fmtX(v)}</span>
+                <span style={{ ...inkNum, fontSize: FS.micro, fontWeight: 700, color: "var(--ink-color-global-text-default)" }}>{fmtX(v)}</span>
               </div>
             ))}
           </div>
@@ -221,7 +221,7 @@ export default function Glidepath({ snapshot, fundState, portfolio, setAssumptio
             </thead>
             <tbody>
               {g.years.map((r) => {
-                const cell = { ...mono, textAlign: "right", fontSize: FS.value, whiteSpace: "nowrap" };
+                const cell = { ...inkNum, textAlign: "right", fontSize: FS.value, whiteSpace: "nowrap" };
                 return (
                   <tr key={r.year}>
                     <td style={{ whiteSpace: "nowrap" }}>
