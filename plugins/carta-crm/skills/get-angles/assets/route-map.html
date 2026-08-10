@@ -142,6 +142,14 @@
         grid-template-columns: 1fr 1.15fr 1fr 1.15fr 1fr;
         align-items: stretch;
       }
+      /* The direct route: the user, the shared employer, the target. Cards stay
+         the width they are on the five-column board rather than stretching to a
+         third of the row each, so the two boards read as the same object. */
+      .lanes-direct {
+        grid-template-columns: 1fr 1.15fr 1fr;
+        max-width: 660px;
+        margin: 0 auto;
+      }
 
       .card {
         min-width: 0;
@@ -153,7 +161,11 @@
       }
       /* The head is a component part, so its own fill carries the boundary -- no
          border-bottom, which Ink rule 7 would read as a decorative rule. */
+      /* border-box because equaliseHeads() assigns a measured border-box height
+         to min-height; on a content box that reserves the padding a second time
+         and every head grows by one inset. */
       .card-head {
+        box-sizing: border-box;
         display: flex; align-items: center; gap: var(--card-pad);
         padding: var(--card-pad);
         background: var(--ink-color-global-surface-lightgray-default);
@@ -316,24 +328,28 @@
          card body turns vertical here because a 34px avatar beside the text
          leaves ~80px for a name, and "Chloe Chilton" needs 95px. Stacked, the
          text gets the card's full width. */
-      @media (max-width: 1140px) {
+      @media (max-width: 1140px) and (min-width: 831px) {
         .container { padding-left: 16px; padding-right: 16px; }
         .board { padding: 12px; }
-        /* Two lines' worth, always. A company name that wraps makes its head
-           taller than its neighbours', which pushes that card's avatar down and
-           the row stops reading as one band. Reserving the space costs a little
-           air when every name is short and keeps the avatars level when one is
-           not. */
-        .card-head {
-          padding: 10px; gap: 8px;
-          min-height: calc(2 * 18px + 20px);
-        }
+        /* Heads are levelled by equaliseHeads() to whatever the tallest one needs,
+           so nothing is reserved here. A fixed two-line reservation spends 34px on
+           every card whether or not any company name wraps. */
+        .card-head { padding: 10px; gap: 8px; }
         .card-company { line-height: 18px; }
+        /* The avatar stays beside the name. Stacking it turns a 116px card into a
+           180px one, and the width it needs is available -- see the gutters. */
         .card-body {
-          flex-direction: column; align-items: flex-start;
-          gap: 8px; padding: 10px;
+          flex-direction: row; align-items: center;
+          gap: 10px; padding: 10px;
         }
-        .avatar, .avatar-img { width: 34px; height: 34px; }
+        /* The gutters were taking 1.15fr to print "Ask for intro" in 177px. Handing
+           that back to the cards is what pays for the row layout above; the floor
+           keeps the hop labels off two lines. */
+        .lanes {
+          grid-template-columns: 1fr minmax(88px, .7fr) 1fr minmax(88px, .7fr) 1fr;
+        }
+        .lanes-direct { grid-template-columns: 1fr minmax(88px, .7fr) 1fr; }
+        .avatar, .avatar-img { width: 32px; height: 32px; }
         .avatar { font-size: 12px; }
         .link-stack { padding: 4px 8px; }
         .link-title { font-size: 11px; line-height: 15px; }
@@ -341,36 +357,36 @@
         .card-flag { font-size: 10px; }
       }
 
-      /* One column. Only once five cells genuinely cannot hold a name -- below
-         this the cards are narrower than the words in them. */
-      @media (max-width: 640px) {
-        /* Back to a row: a full-width card has room for the avatar beside the
-           text, and capped width keeps the chain aligned with its arrows instead
-           of stranding a 44px avatar in 700px of empty card. */
+      /* One column. Measured: at 830px "Nabil Ouajdouni" still sits beside its
+         avatar and the hop labels hold one line; below it the name breaks, so the
+         chain reads better stacked than squeezed. */
+      @media (max-width: 830px) {
+        /* A tighter inset for the whole board. One token, so the tiles keep equal
+           padding on every side at this width the same as at any other. */
+        .board { --card-pad: 10px; }
         .card-body {
           flex-direction: row; align-items: center;
           gap: var(--card-pad); padding: var(--card-pad);
         }
-        /* Release the two-line reservation from the compact tier: a full-width
-           card fits any company name on one line, so holding the space just
-           lifts the name off its own mark. */
         .card-head {
           padding: var(--card-pad); gap: var(--card-pad);
           min-height: 0;
         }
         .card-company { line-height: 20px; }
-        .avatar, .avatar-img { width: 44px; height: 44px; }
-        .avatar { font-size: 14px; }
+        /* A stacked card is one line of name over one of role, so a 44px avatar
+           sets the card's height on its own. 36 matches the text block. */
+        .avatar, .avatar-img { width: 36px; height: 36px; }
+        .avatar { font-size: 13px; }
         .link-title { font-size: 12px; line-height: 17px; }
         .link-detail { font-size: 11px; line-height: 16px; }
         .card-flag { font-size: 11px; }
         .lanes { grid-template-columns: 1fr; }
         .lanes > * { grid-column: 1 !important; grid-row: auto !important; }
-        .card, .you-wrap { width: 100%; max-width: 360px; margin: 0 auto; }
-        .link { padding: 16px 0; }
+        .card, .you-wrap { width: 100%; max-width: 320px; margin: 0 auto; }
+        .link { padding: 10px 0; }
         .link-line {
           position: static; margin: 0 auto 8px;
-          flex-direction: column; width: auto; height: 26px;
+          flex-direction: column; width: auto; height: 20px;
         }
         .link-line .arrow-shaft {
           width: 0; height: auto; border-top: 0;
@@ -384,7 +400,7 @@
            and the chain reads as target -> you. Card first, then the arrow flipped
            to point down at the colleague who follows it. */
         .you-wrap { order: -1; flex-direction: column-reverse; }
-        .you-arrow { transform: rotate(180deg); }
+        .you-arrow { transform: rotate(180deg); height: 20px; }
         /* Static, so it no longer masks a line that does not run behind it -- and
            centred by margin, since dropping the transform also drops the centring
            the absolute position was doing. Without this the label sits hard left
@@ -794,6 +810,37 @@
         return node;
       }
 
+      // The shared employer and the years, as the middle gutter reads them. Both
+      // hops show the same evidence, so both take it from here.
+      function employerHop(route, title) {
+        return link(title, [
+          route.employer
+            ? { lead: "Overlap at", name: route.employer }
+            : "Shared employer not on record",
+          route.overlapYears || "Dates not on record"
+        ], { name: route.employer, logoUrl: route.employerLogoUrl });
+      }
+
+      // The acting user worked at the shared employer themselves, so there is no
+      // one to ask: the route is the user straight to the target, and the board
+      // drops to three columns. Anything that reads a connector has to stay on the
+      // other side of this branch -- there is no connector to read.
+      function renderDirect(route, data) {
+        const lanes = el("div", "lanes lanes-direct");
+        const you = route.sender || { name: "You", role: "You" };
+
+        lanes.appendChild(place(
+          card(data.ourFirm, "Your firm", you, { role: you.role || "You" }), 1, 1));
+        lanes.appendChild(place(employerHop(route, "Reach out directly"), 2, 1));
+        lanes.appendChild(place(
+          card(data.company, data.company, route.target, {
+            role: route.target.title,
+            companyLogoUrl: route.targetLogoUrl
+          }), 3, 1));
+
+        return lanes;
+      }
+
       function renderRoute(route, data) {
         const board = el("div", "board");
 
@@ -801,6 +848,14 @@
         pillWrap.appendChild(el("span", "path-pill",
           route.pathLabel || "Strongest Connection Path"));
         board.appendChild(pillWrap);
+
+        // No connector means a direct route whether or not the skill said so --
+        // the five-column board cannot be drawn without one, and a thrown render
+        // leaves an empty panel with no way to tell what went wrong.
+        if (route.pathKind === "direct" || !route.connector) {
+          board.appendChild(renderDirect(route, data));
+          return board;
+        }
 
         const lanes = el("div", "lanes");
         const sender = route.sender || { name: "You", you: true };
@@ -826,12 +881,7 @@
           }), 3, 1));
 
         // Column 4 - the shared employer that makes this hop real, and when.
-        lanes.appendChild(place(link("Introduces to", [
-          route.employer
-            ? { lead: "Overlap at", name: route.employer }
-            : "Shared employer not on record",
-          route.overlapYears || "Dates not on record"
-        ], { name: route.employer, logoUrl: route.employerLogoUrl }), 4, 1));
+        lanes.appendChild(place(employerHop(route, "Introduces to"), 4, 1));
 
         // Column 5 - the target.
         lanes.appendChild(place(
@@ -1081,7 +1131,28 @@
         }
       }
 
+      // A company name that wraps makes its head taller than its neighbours',
+      // which pushes that card's avatar down and the row stops reading as one
+      // band. Levelling the heads to the tallest one keeps the avatars in line
+      // and costs nothing when every name is short -- a fixed reservation cannot
+      // do both, since it has to guess the number of lines up front.
+      function equaliseHeads() {
+        document.querySelectorAll(".lanes").forEach(function (lane) {
+          var heads = [].slice.call(lane.querySelectorAll(".card-head"));
+          if (!heads.length) return;
+          heads.forEach(function (h) { h.style.minHeight = "0px"; });
+          var tallest = Math.max.apply(null, heads.map(function (h) {
+            return h.getBoundingClientRect().height;
+          }));
+          heads.forEach(function (h) { h.style.minHeight = tallest + "px"; });
+        });
+      }
+
       render(DATA);
+      equaliseHeads();
+      // The panel is resizable and the board changes tier at 830 and 1140, so the
+      // levelling has to be redone rather than measured once at load.
+      addEventListener("resize", equaliseHeads);
     </script>
   </body>
 </html>

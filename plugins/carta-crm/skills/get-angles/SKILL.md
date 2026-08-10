@@ -178,7 +178,8 @@ Order the headline answer this way:
 
 0. **The user is already a connector.** A path with `pathType: "direct"` means the acting user
    personally worked at the shared employer. The route is `You -> Target` with that employer as
-   the hop, and the ask is a direct reach-out, not an intro request.
+   the hop, and the ask is a direct reach-out, not an intro request. It fills `recommended`
+   differently — see **A direct route** under Step 5.
 1. A colleague of ours with live, target-matched history (Step 2).
 2. Warm routes, tiered below.
 
@@ -255,6 +256,23 @@ The `DATA` shape is documented by the example in the file. Rules for filling it:
   `companyLogoUrl` from that company's `image` only if it resolved, `email` from
   `email_detail.email` on the contact record. Any of them may be null — but without `email`
   there is no Gmail action (Step 6).
+
+### A direct route
+
+When the recommended path is `pathType: "direct"` (Step 3, case 0), set
+`recommended.pathKind: "direct"` and leave `connector` out. The board drops to three columns —
+you, the shared employer, the target — and the middle hop reads `Reach out directly` instead of
+`Ask for intro`.
+
+- `sender` is the acting user: `{ name, role: "You" }`. There is no colleague to route through,
+  so no `flag`, and **omit `you`** — it would repeat the card beside it.
+- `employer` / `overlapYears` / `employerLogoUrl` / `target` / `targetLogoUrl` are filled exactly
+  as below.
+- The second wave's `fetch_contact_by_id` has nothing to fetch and the third wave does not run:
+  both exist to resolve a connector.
+
+**Never invent a connector to fill the five-column shape.** A direct route has none, and the
+board draws without one.
 
 **Pictures: pass every URL through verbatim.** `contacts[].photoUrl`,
 `targetEmployees[].photoUrl` and a company's `image` are usually populated; the example DATA
@@ -383,7 +401,13 @@ numbered list with one marked `<- recommended`, via `AskUserQuestion`. Never fir
    `to` is an **array of bare addresses**. The tool rejects `"Name <addr>"`, and
    `DATA.draft.to` is a display name rather than an address — take the address from the
    connector's `email_detail.email` on their `fetch_contact_by_id` record, or `contact.email`
-   on the relation row. **No address, no action:** drop this option rather than offering a
+   on the relation row.
+
+   **On a direct route the recipient is the target, not the connector** (Step 4). Their address
+   is `targetEmployees[].email` where the CRM holds one, and often it holds none — that is the
+   usual outcome, not a fault. Do not substitute the connector's address to have somewhere to
+   send it, and do not go looking for the target's address with `search_people` or
+   `enrich_person`. **No address, no action:** drop this option rather than offering a
    button that drafts to nobody. Keep `subject` and `body` byte-identical to `DATA.draft` —
    they are the same message, and a reader comparing the panel to their drafts folder should
    find no difference.
