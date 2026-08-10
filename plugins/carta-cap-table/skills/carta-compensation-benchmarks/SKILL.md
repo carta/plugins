@@ -461,10 +461,17 @@ Pass the user's role description as input. Do not freelance the mapping — the 
 **If the user's question is ambiguous** between "classify this for benchmark" vs "help me write the JD copy" vs "give me career advice", invoke the rolematcher first to get the classification, then use the result to answer their actual question. Do not skip the rolematcher and freelance — the user is in a comp/benchmark conversation.
 
 Capture the output:
-- `job_area` — must be one of: `ACCOUNTING`, `ADMIN`, `CEO`, `CORPORATE_AFFAIRS`, `CUSTOMER_SUCCESS`, `DATA`, `DESIGN`, `ENGINEER`, `FINANCE`, `HR`, `IT`, `LEGAL`, `MANUFACTURING`, `MARKETING`, `OPERATIONS`, `PRODUCT`, `PROJECT_MANAGEMENT`, `RESEARCH`, `SALES`, `STRATEGY`, `SUPPORT`, `OTHER`
+- `job_area` — **passed to the API as `job`, NOT as `job_area`** (see the rename note below). Must be one of: `ACCOUNTING`, `ADMIN`, `CEO`, `CORPORATE_AFFAIRS`, `CUSTOMER_SUCCESS`, `DATA`, `DESIGN`, `ENGINEER`, `FINANCE`, `HR`, `IT`, `LEGAL`, `MANUFACTURING`, `MARKETING`, `OPERATIONS`, `PRODUCT`, `PROJECT_MANAGEMENT`, `RESEARCH`, `SALES`, `STRATEGY`, `SUPPORT`, `OTHER`
 - `focus` (e.g. `"backend"`, `"devops and site reliability"`, `null`) — job-area-dependent; the rolematcher returns lowercase multi-word strings matching the taxonomy verbatim — pass them through as-is to the API
 - `level` — must be one of (low to high seniority): `ENTRY`, `MID1`, `MID2`, `SENIOR1`, `SENIOR2`, `STAFF1`, `STAFF2`, `PRINCIPAL`, `VP1`, `VP2`, `C_LEVEL`, `CEO`
 - `track` — the value returned by the rolematcher (`ic`, `manager`, `executive`, or `UNKNOWN`). Map to `is_leader`: `manager` or `executive` → `true`, `ic` → `false`. If `UNKNOWN`, stop and ask the user before calling the API — see Error Handling.
+
+> **Rename the field on handoff: `job_area` → `job`.** The rolematcher's output label and the CTC product both say *"job area"*, but the parameter on `compensation:get:benchmark` is `job`. Passing `job_area` returns HTTP 400 — there is no `job_area` parameter on any compensation endpoint.
+>
+> ❌ `{"job_area": "ENGINEER", "level": "SENIOR1"}`
+> ✅ `{"job": "ENGINEER", "level": "SENIOR1"}`
+>
+> `focus` and `level` keep their names; only `job_area` is renamed.
 
 If the rolematcher returns a value not in these enums (e.g. `LEAD1`, `PRODUCT_MANAGER`), map it to the closest valid value before calling the API. If unsure, read the valid enum list from `search_tools({"query": "compensation get benchmark"})` — do NOT guess a plausible-looking name or invent a `compensation:list:*` command to look it up. Ask the user if still ambiguous.
 
@@ -552,6 +559,18 @@ call_tool({"name": "compensation__get__benchmark", "arguments": {
 ```
 
 > **`equity_quantity` defaults to `NTM_VESTING` on the MCP side, but the CTC product UI defaults to `FOUR_YEAR_GRANT`.** Always pass `FOUR_YEAR_GRANT` explicitly so the skill's numbers tie out against the in-product UI. If you omit it, you'll return ~25% of the value HR users expect — that's a hard tie-out failure, not a stylistic preference. Applies to every benchmark call: single role, bulk CSV, live artifact panel, Excel export.
+
+> **`equity_quantity` (`EquityQuantity`) has exactly TWO valid values. There are no others.**
+>
+> | Value | Meaning |
+> |---|---|
+> | `FOUR_YEAR_GRANT` | Total value of the full four-year grant. **Use this** — matches the CTC product UI. |
+> | `NTM_VESTING` | Value vesting over the next twelve months (≈25% of the four-year grant). |
+>
+> ❌ `ONE_YEAR_GRANT` → HTTP 400. **This is the most common invented value** — do not use it, not even to express "one year of vesting". The concept you want is `NTM_VESTING`.
+> ❌ `ANNUAL`, `ONE_YEAR`, `TWO_YEAR_GRANT`, `THREE_YEAR_GRANT`, `NTM`, `NEXT_TWELVE_MONTHS`, `REFRESH_GRANT` → all HTTP 400. None exist.
+>
+> Why `ONE_YEAR_GRANT` looks plausible but is wrong: compensation-service's *internal* field for this concept is named `one_year_grant_benchmark` (its source comment notes it "used to be known as `ntm_vesting_benchmark`"). That internal name is **not** the API enum and never reaches the wire. If the user asks for "one year of equity" or "annual equity value", map it to `NTM_VESTING`.
 
 **Peer-group override (user-driven sensitivity analysis).** When the user explicitly asks to see a different peer group than the corp's plan default (*"show me $10M-$25M benchmarks instead"* or *"what would this look like for a 100-500 person company"*), **DROP the plan-default bucket param entirely and replace it with the override**. Do not include both — the API's behavior when more than one bucket is non-null is undefined and may change.
 

@@ -494,7 +494,21 @@ Flagged for review:
 
 When a downstream skill (e.g. `carta-compensation-benchmarks`) needs to call the compensation API with this classification, convert each display value to the API enum using the tables below. Do NOT surface the API enum form to the user — it is for machine handoff only.
 
-**Job Area:**
+> **First, rename the fields. This skill's output labels are NOT the API parameter names.**
+>
+> | This skill outputs | API parameter name |
+> |---|---|
+> | Job Area / `job_area` | `job` |
+> | Focus | `focus` |
+> | Level | `level` |
+> | Track | *not passed directly* — convert to `is_leader` (`manager`/`executive` → `true`, `ic` → `false`) |
+>
+> ❌ `{"job_area": "ENGINEER"}` → HTTP 400. The parameter is `job`, not `job_area`.
+> ✅ `{"job": "ENGINEER"}`
+>
+> "Job area" is the taxonomy/display term used throughout this skill and the CTC product; `job` is the wire name on `compensation:get:benchmark`. Convert the **name** as well as the value. There is no `job_area` parameter on any compensation endpoint.
+
+**Job Area:** (values for the `job` parameter)
 
 | Display value | API enum |
 |---|---|
