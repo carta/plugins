@@ -2,25 +2,34 @@
 name: carta-consolidating-balance-sheet
 model: sonnet
 description: 'Generate a consolidating Balance Sheet for all entities under a firm for a given month and write it as a side-by-side Excel tab with Assets / Liabilities / Equity sections and a Total column. Sourced from Carta MCP (firm/entity resolution + DWH SQL). TRIGGER when the user asks for "balance sheet of all entities of [firm] for [month]", a consolidating BS by entity, or to replicate the "Balance Sheet - consolidating" tab format for a different firm/period. Trigger phrases include "consolidating balance sheet", "BS by entity", "balance sheet of all entities". DO NOT TRIGGER for single-entity BS, P&L / income statement (carta-consolidating-pnl), or ManCo budgeting (carta-manco: budgets, actuals, pacing, what-if). Also DO NOT TRIGGER for a single-fund / fund-level balance sheet or fund account balances as-of a date — use carta-explore-data for those.'
-version: 1.0.1
+version: 1.1.0
 allowed-tools:
   # Production
   - mcp__claude_ai_Carta__call_tool
+  - mcp__claude_ai_Carta__fetch
   - mcp__claude_ai_Carta__welcome
   - mcp__claude_ai_Carta__set_context
   - mcp__claude_ai_Carta__list_contexts
   # Carta-installer naming (lowercase)
   - mcp__carta_production__call_tool
+  - mcp__carta_production__fetch
   - mcp__carta_production__welcome
   - mcp__carta_production__set_context
   - mcp__carta_production__list_contexts
   # Local / legacy fallback
   - mcp__carta__call_tool
+  - mcp__carta__fetch
   - mcp__carta__welcome
   - mcp__carta__set_context
   - mcp__carta__list_contexts
   - Read
   - AskUserQuestion
+  # local-file runtime (Cowork / desktop app / Claude Code) — without these the
+  # skill has no way to produce a workbook outside the Excel add-in
+  - Write
+  - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/scripts/read_workbook.py *)
+  - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/scripts/write_workbook.py *)
+  - Bash(test *)
 ---
 
 <!-- carta:instrumentation-fallback -->
@@ -240,6 +249,27 @@ entity display names from the Gate 1 cache.
 
 ---
 
+## Gate 2.5: Runtime and target workbook
+
+Load [`references/local-file-output.md`](references/local-file-output.md)
+and follow its **Runtime gate** section to set `<RUNTIME>` and `<TARGET_FILE>`.
+
+Run it **here, before Gate 3 pulls any data.** This skill was written for the
+Claude for Excel add-in, but it also runs in Cowork, the Claude desktop app, and
+Claude Code. On those surfaces there is no add-in and no "active workbook" tool,
+so an add-in-only output path reaches Gate 6 with nothing it can call and stops —
+which the user experiences as the skill running and producing nothing at all.
+
+Do not guess `excel-addin`. If no Excel add-in tools are present in the
+conversation, the runtime is `local-file`.
+
+Skip this gate only if `<RUNTIME>` and `<TARGET_FILE>` are already in context
+(e.g. handed down by a calling skill that resolved them up front).
+
+**Done when:** `<RUNTIME>` is set, and `<TARGET_FILE>` is set or explicitly null.
+
+---
+
 ## Gate 3: Pull journal entries
 
 The schema and sign conventions for the Carta DWH journal-entries
@@ -389,7 +419,25 @@ period, and entity scope locked in.
 
 ## Gate 6: Decide the output destination
 
-This skill is designed to run inside the **Claude for Excel** add-in.
+Branch on `<RUNTIME>` from Gate 2.5.
+
+**If `<RUNTIME>` is `local-file`:** follow the **Destination**, **Writing**,
+**Verification**, and **Closing summary** sections of
+[`references/local-file-output.md`](references/local-file-output.md)
+instead of the add-in steps below, then continue to Gate 7. The report-specific
+inputs it needs:
+
+- **Proposed sheet names:** `Balance Sheet - <FIRM-SHORT> <MMM-YY>` (consolidated)
+  and the by-entity tab this skill builds.
+- **New-file name when `<TARGET_FILE>` is null:**
+  `Balance Sheet - <FIRM-SHORT> <MMM-YY>.xlsx`.
+- **COA label detection** compares against the `ACCOUNT_NAME` values in the
+  Gate 4 dataset — same ≥ 5-label threshold as the add-in path.
+- **Content and layout** come from Gate 7 unchanged. The shared reference changes
+  *how* each write is issued, never *what* is written.
+
+**If `<RUNTIME>` is `excel-addin`:** continue below.
+
 Before writing anything, decide whether to write into the user's currently
 open workbook or to create a new one.
 
