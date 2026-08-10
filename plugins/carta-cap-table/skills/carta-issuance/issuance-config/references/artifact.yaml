@@ -1,0 +1,27 @@
+template: template.html
+styles: styles.css
+
+# The config panel is parameterized by SECURITY_TYPE. The template carries BOTH
+# field sets; the script hides the rows whose data-sectype doesn't match. Every
+# per-type dynamic field (option type, vesting, documents, share class, legend,
+# Rule 144, exercise price / price-per-share defaults, today's date, currency)
+# now lives INSIDE each stakeholder's block within STAKEHOLDER_ROWS — there is
+# no separate top-level substitution per field anymore, since each block is
+# independently configured.
+substitutions:
+  required:
+    - CORP_NAME       # e.g. "Acme Corp"
+    - CORP_ID         # e.g. "2776"
+    - FLOW_TITLE      # "Issue Option Grants" | "Issue Certificates" (verb-first — write operation)
+    - HEADER_SUB      # "7 grantees" | "2 holders"
+    - SECURITY_TYPE   # "option_grant" | "certificate" — drives field-row show/hide + submit payload
+  optional:
+    STAKEHOLDER_ROWS: ""             # one full .stake-block per person, built by build_config.py; one blank block when the prompt named no one
+    STAKEHOLDER_LIST_JSON: "[]"      # JSON array of the corp roster ([{name,email,id,kind,event_relationship},…]) for name autocomplete + email/stakeholder-type/relationship auto-fill; built by build_config.py from _data.json's `stakeholders`. Default "[]" (valid JS) when no roster was fetched
+    BATCH_ERRORS_HTML: ""            # panel-level red banner for corp-/batch-level server errors (Phase 1.5's validate_drafts errors.corporation / errors.issuance), built by build_config.py from knowns.batch_errors; "" when clean
+
+capabilities: [save, submit-watcher]
+
+sidecars:
+  - filename: .artifact_corp_pk   # holds the corporation pk ({{CORP_ID}}); watcher reads it to build the signal filename
+    content: "{{CORP_ID}}"

@@ -1,0 +1,280 @@
+@font-face {
+  font-family: 'Inter var';
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  src: url('Inter-roman.var.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'SangBleu Versailles';
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url('SangBleuVersailles-Regular-WebS.ttf') format('truetype');
+}
+
+/* ── Ink design tokens ── */
+:root {
+  --color-cream:   #FBFAF9;
+  --color-white:   #ffffff;
+  --color-black:   #1A1A1A;
+  --color-gray-80: #2C3030;
+  --color-gray-60: #656B6B;
+  --color-gray-50: #9C9F9F;
+  --color-gray-40: #A7AAAA;
+  --color-gray-30: #DEDFDF;
+  --color-gray-20: #EDEDED;
+  --color-gray-10: #F1F1F1;
+  --color-blue-70: #285DA3;
+  --color-blue-20: #C0D1E9;
+  --color-blue-10: #F7FAFE;
+  --color-red-60:  #C0392B;
+  --color-red-10:  #FBEEEC;
+
+  --radius-small: 4px;
+
+  --font-sans:  'Inter var', 'Inter', system-ui, sans-serif;
+  --font-serif: 'SangBleu Versailles', Georgia, serif;
+  --font-mono:  ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; font-family: var(--font-sans); background: var(--color-cream); color: var(--color-black); }
+
+/* ── Shell ── */
+#shell { display: flex; flex-direction: column; min-height: 100vh; }
+
+/* ── Logo row ── */
+#logo-row {
+  background: var(--color-white); border-bottom: 1px solid var(--color-gray-30);
+  padding: 14px 24px;
+  display: flex; align-items: center; gap: 14px;
+}
+#header-meta { display: flex; flex-direction: column; gap: 2px; }
+.corp-name { font-family: var(--font-serif); font-size: 20px; font-weight: 400; color: var(--color-black); line-height: 1.2; }
+.sub { font-size: 12px; color: var(--color-gray-60); }
+
+/* ── Form ── */
+#form { flex: 1; padding: 20px 24px; display: flex; flex-direction: column; gap: 0; }
+
+.field-group { padding: 20px 0; }
+.field-label { font-size: 12px; font-weight: 500; color: var(--color-gray-60); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 10px; }
+.field-hint  { font-size: 12px; color: var(--color-gray-50); margin-bottom: 10px; line-height: 1.5; }
+
+/* ── Toggle buttons ── */
+.toggle-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.toggle-row.wrap { flex-wrap: wrap; }
+
+.toggle {
+  height: 36px; padding: 0 14px;
+  background: var(--color-white); color: var(--color-black);
+  border: 1px solid var(--color-gray-40); border-radius: var(--radius-small);
+  font-size: 14px; font-family: var(--font-sans);
+  cursor: pointer; transition: border-color .12s, background .12s, color .12s;
+  display: inline-flex; align-items: center; gap: 6px;
+  white-space: nowrap;
+}
+.toggle:hover { border-color: var(--color-gray-60); }
+.toggle.selected {
+  background: var(--color-black); color: var(--color-white);
+  border-color: var(--color-black);
+}
+
+.date-input {
+  margin-top: 10px;
+  border: 1px solid var(--color-gray-40); border-radius: var(--radius-small);
+  padding: 6px 10px; font-size: 13px; font-family: var(--font-sans);
+  background: var(--color-white); color: var(--color-black); outline: none;
+  display: block;
+}
+.date-input:focus { border-color: var(--color-blue-70); box-shadow: 0 0 0 4px var(--color-blue-20); }
+.date-input:disabled { background: var(--color-gray-20); color: var(--color-gray-50); cursor: not-allowed; }
+
+.block-vesting-start-wrap { margin-top: 12px; }
+.block-vesting-start-wrap .date-input { margin-top: 0; }
+.block-rule144-reason-wrap { margin-top: 12px; }
+
+.pending-label {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 10px; font-size: 13px; color: var(--color-gray-60); cursor: pointer;
+  user-select: none;
+}
+.field-sublabel { font-size: 12px; font-weight: 500; color: var(--color-gray-60); margin-bottom: 6px; }
+
+/* ── Select (vesting schedule, relationship) ── */
+.select-input, .stake-relationship {
+  border: 1px solid var(--color-gray-40); border-radius: var(--radius-small);
+  padding: 0 10px; font-size: 13px; font-family: var(--font-sans);
+  background: var(--color-white); color: var(--color-black); outline: none;
+  height: 36px; cursor: pointer; display: block; width: 100%;
+}
+.select-input:focus, .stake-relationship:focus { border-color: var(--color-blue-70); box-shadow: 0 0 0 4px var(--color-blue-20); }
+.stake-relationship:disabled { background: var(--color-gray-10); color: var(--color-gray-60); cursor: not-allowed; }
+
+/* ── Text input (exercise price, name/email/quantity, …) ── */
+.text-input {
+  border: 1px solid var(--color-gray-40); border-radius: var(--radius-small);
+  padding: 6px 10px; font-size: 13px; font-family: var(--font-sans);
+  background: var(--color-white); color: var(--color-black); outline: none;
+  width: 100%;
+}
+.text-input:focus { border-color: var(--color-blue-70); box-shadow: 0 0 0 4px var(--color-blue-20); }
+
+.price-row { display: flex; align-items: center; gap: 8px; }
+.price-row .text-input { width: auto; }
+.currency-suffix { font-size: 13px; color: var(--color-gray-60); font-family: var(--font-mono); }
+
+/* ── Stakeholder name typeahead — custom dropdown (native <datalist> doesn't
+   render reliably in Claude Desktop's embedded webview). ── */
+.stake-name-wrap { position: relative; }
+.stake-suggestions {
+  position: absolute; top: 100%; left: 0; right: 0; margin-top: 4px; z-index: 20;
+  background: var(--color-white); border: 1px solid var(--color-gray-30); border-radius: var(--radius-small);
+  box-shadow: 0 4px 14px rgba(0,0,0,.10); max-height: 220px; overflow-y: auto;
+}
+.stake-suggestion-item { padding: 8px 12px; font-size: 13px; cursor: pointer; }
+.stake-suggestion-item:hover { background: var(--color-blue-10); }
+
+/* ── Toggle buttons, disabled (stakeholder type auto-locked to a roster match) ── */
+.toggle:disabled { opacity: .55; cursor: not-allowed; }
+.toggle:disabled:hover { border-color: var(--color-gray-40); }
+
+/* ── Stakeholder blocks — one full key-value table per person ──
+   Each block is a self-contained card: every field the batch used to share (name,
+   email, stakeholder type, relationship, quantity, and the whole type-specific
+   field set) lives here, so different people in the same batch can carry
+   different terms. "+ Add stakeholder" appends another block below the last. */
+#stake-blocks { display: flex; flex-direction: column; gap: 16px; margin-bottom: 12px; }
+.stake-block {
+  border: 1px solid var(--color-gray-30); border-radius: var(--radius-small);
+  background: var(--color-white); padding: 16px;
+}
+.stake-block-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.stake-block-title { font-size: 12px; font-weight: 500; color: var(--color-gray-60); text-transform: uppercase; letter-spacing: .06em; }
+
+.kv-table { display: flex; flex-direction: column; }
+.kv-row { display: flex; align-items: flex-start; gap: 16px; padding: 10px 0; border-top: 1px solid var(--color-gray-20); }
+.kv-row:first-child { border-top: none; padding-top: 0; }
+.kv-label {
+  flex: 0 0 150px; font-size: 12px; font-weight: 500; color: var(--color-gray-60);
+  padding-top: 8px;
+}
+.kv-input { flex: 1; min-width: 0; }
+.kv-input .field-hint { margin-bottom: 8px; }
+.kv-input .field-hint:only-child { margin-bottom: 0; }
+.req-mark { color: var(--color-red-60); font-weight: 500; }
+
+.btn-add {
+  background: var(--color-white); color: var(--color-blue-70);
+  border: 1px dashed var(--color-gray-40); border-radius: var(--radius-small);
+  padding: 7px 12px; font-size: 13px; cursor: pointer;
+  font-family: var(--font-sans);
+}
+.btn-add:hover { border-color: var(--color-blue-70); background: var(--color-blue-10); }
+.btn-add:disabled { opacity: .5; cursor: not-allowed; color: var(--color-gray-50); border-color: var(--color-gray-30); }
+.btn-add:disabled:hover { background: var(--color-white); border-color: var(--color-gray-30); }
+.btn-trash {
+  background: none; border: none; color: var(--color-gray-50); cursor: pointer;
+  padding: 4px; border-radius: var(--radius-small); display: inline-flex; align-items: center; flex-shrink: 0;
+}
+.btn-trash:hover { color: var(--color-red-60); background: var(--color-red-10); }
+
+/* People-section header (just the "Grantees"/"Holders" label now — the
+   summary/Edit toggle this used to pair with was dropped: it doesn't generalize
+   once a block carries a full configuration, not just name+quantity). */
+.people-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+
+/* ── Legend attestation box (certificates) ──
+   Reveals the full legal legend body under the legend toggles so the issuer
+   reads what they are attesting to before clicking Start. ── */
+.legend-attest {
+  margin-top: 12px;
+  border: 1px solid var(--color-gray-30); border-radius: var(--radius-small); background: var(--color-white);
+  padding: 12px 14px; font-size: 12px; line-height: 1.6; color: var(--color-black);
+  white-space: pre-wrap; max-height: 200px; overflow-y: auto;
+}
+
+/* ── Advanced fields accordion — low-priority optional fields (payload-reference.md)
+   collapsed by default so they don't compete for attention with the fields every
+   row actually needs. Native <details>/<summary> — no JS needed for open/close,
+   and content stays in the DOM (readable by collectBlocks()) either way. ── */
+.advanced-fields { margin-top: 4px; }
+.advanced-fields summary {
+  cursor: pointer; font-size: 12px; font-weight: 500; color: var(--color-blue-70);
+  padding: 8px 0; list-style: none;
+}
+.advanced-fields summary::-webkit-details-marker { display: none; }
+.advanced-fields summary::before { content: '▸ '; }
+.advanced-fields[open] summary::before { content: '▾ '; }
+.advanced-fields .kv-table { margin-top: 4px; }
+.advanced-fields .kv-row:first-child { border-top: 1px solid var(--color-gray-20); padding-top: 10px; }
+
+/* ── Footer ── */
+#footer {
+  background: var(--color-white); border-top: 1px solid var(--color-gray-30);
+  padding: 14px 24px;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  position: sticky; bottom: 0;
+}
+.summary { font-size: 12px; color: var(--color-gray-50); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.btn-primary {
+  height: 40px; padding: 0 20px;
+  background: var(--color-black); color: var(--color-white);
+  border: none; border-radius: var(--radius-small); font-size: 14px; font-weight: 500;
+  cursor: pointer; font-family: var(--font-sans);
+  white-space: nowrap; flex-shrink: 0;
+  transition: background .12s;
+}
+.btn-primary:hover:not(:disabled) { background: var(--color-gray-80); }
+.btn-primary:disabled { background: var(--color-gray-20); color: var(--color-gray-40); cursor: not-allowed; }
+
+/* Secondary footer button ("Save" — save_drafts only, no validation). Matches
+   issuance-review's .btn-default naming/look (that panel's Back to edit) for a
+   consistent secondary-button language across both surfaces. */
+.btn-default {
+  height: 40px; padding: 0 20px;
+  background: var(--color-white); color: var(--color-black);
+  border: 1px solid var(--color-gray-40); border-radius: var(--radius-small);
+  font-size: 14px; font-weight: 500; cursor: pointer; font-family: var(--font-sans);
+  white-space: nowrap; flex-shrink: 0; transition: background .12s, border-color .12s;
+}
+.btn-default:hover:not(:disabled) { border-color: var(--color-gray-60); background: var(--color-gray-10); }
+.btn-default:disabled { background: var(--color-gray-10); color: var(--color-gray-40); cursor: not-allowed; border-color: var(--color-gray-30); }
+
+/* ── Server-side error banners (Phase 1.5's save+validate step). Block-level:
+   top of the erroring stakeholder's own block. Panel-level: above the
+   Grantees/Holders list, for corp-/batch-level errors not tied to one row.
+   Both are absent entirely (not just empty) when there's nothing to report —
+   build_config.py never renders an empty box. ── */
+.block-error-banner, .panel-error-banner {
+  background: var(--color-red-10); border: 1px solid var(--color-red-60);
+  border-radius: var(--radius-small); padding: 10px 14px; margin-bottom: 12px;
+  font-size: 13px; color: var(--color-black);
+}
+.block-error-banner-title, .panel-error-banner-title { font-weight: 500; color: var(--color-red-60); margin-bottom: 4px; }
+.block-error-banner ul, .panel-error-banner ul { margin: 0; padding-left: 18px; }
+.block-error-banner li, .panel-error-banner li { line-height: 1.5; }
+#batch-error-banner:empty { display: none; margin: 0; }
+
+/* ── Submit overlay — a real solid-white modal card on a dimmed backdrop
+   (matching the review panel's .modal-box, not a translucent full-page wash),
+   while config_submit is in flight, then (no dismiss control — same
+   informational-only strategy as the review panel's hand-off) shows the "sent"
+   message until the review panel replaces this one or the grace-period timeout
+   re-opens the form for a retry. ── */
+#submit-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.55);
+  display: none; align-items: center; justify-content: center; z-index: 200;
+}
+#submit-overlay .overlay-box {
+  display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center;
+  background: var(--color-white); border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,.2);
+  padding: 32px 40px; max-width: 360px;
+}
+#submit-overlay .spinner {
+  width: 28px; height: 28px; border: 3px solid var(--color-blue-20); border-top-color: var(--color-blue-70);
+  border-radius: 50%; animation: spin .7s linear infinite;
+}
+#submit-overlay .overlay-msg { font-size: 14px; color: var(--color-gray-60); }
+@keyframes spin { to { transform: rotate(360deg); } }

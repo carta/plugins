@@ -1,0 +1,34 @@
+template: template.html
+styles: styles.css
+
+# The review panel is parameterized by security_type. carta-issuance builds the
+# per-type regions (KPI cells, detail table) as HTML
+# blocks and passes them as substitutions, so this required list is only the
+# shared frame keys — every type-specific scalar lives inside a block value.
+substitutions:
+  required:
+    - CORP_NAME              # company name, e.g. "Acme Corp"
+    - CORP_ID                # corporation pk, e.g. "2776"
+    - ENV_HOST               # e.g. "app.test.carta.rocks"
+    - ISSUE_DATE             # display date, e.g. "June 11, 2026"
+    - DRAFT_SET_ID           # "new" before save, numeric id after Phase 3
+    - FLOW_TITLE             # "Issue Option Grants" | "Issue Certificates" (verb-first — write operation)
+    - SUBHEADING             # sub-line under the company name (plan / share classes · date · draft set)
+    - KPI_STRIP              # <div class="kpi-grid">…</div> — Recipients / Total quantity (+ ISO-NSO or per-class breakdown) / Pending board approval / Currency(ies), computed once by build_review.py
+    - DETAIL_TITLE           # "Grant Detail" | "Certificate Detail"
+    - DETAIL_INTRO           # one-line helper under the detail title
+    - DETAIL_TABLE           # <div class="grantee-table-wrap">…</div> — one READ-ONLY row per stakeholder (corrections happen via "Back to edit", not inline here)
+    - VIEW_URL_PATH          # path after host for "View on Carta" (grant: options/list/<id>/; cert: certificates/list/<id>/)
+    - SECURITY_NOUN_PLURAL   # "option grants" | "certificates" — modal/toast wording
+    - ISSUE_MODAL_DISCLAIMER # the differing confirm-issue legal sentence
+  optional:
+    PLAN_CARD: ""            # <div class="card section plan-card">…</div> — option-grant only: plan name + exercise periods, built by build_review.py. Empty string for certificates (no equity plan concept there).
+
+# {{SAVE_PORT}} is intentionally NOT listed — render-panel substitutes it after
+# the save server binds its port, the same as the preview port.
+
+capabilities: [save, submit-watcher]
+
+sidecars:
+  - filename: .artifact_corp_pk   # holds the corporation pk ({{CORP_ID}}); watcher reads it to build the signal filename
+    content: "{{CORP_ID}}"

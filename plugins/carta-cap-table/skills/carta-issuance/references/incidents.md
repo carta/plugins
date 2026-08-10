@@ -1,0 +1,64 @@
+# Recorded incidents
+
+Why the hard rules say what they say. Each entry is a real run that went wrong; the rule it
+produced is stated in [SKILL.md](../SKILL.md) with a one-clause reason, and the full story
+lives here.
+
+**Read this file only when you need to justify, change, or argue with a rule** — never on the
+happy path. If you are about to weaken a guardrail because it looks redundant, find it here
+first: most of them look redundant precisely because the failure they prevent is invisible
+when they work.
+
+---
+
+## Round-trips that bought nothing
+
+| Incident | Rule it produced |
+|---|---|
+| The skill shelled out to `find … generate.py` to detect the side-panel renderer. In Cowork that command **always** returns `RENDERER_MISSING` — the sandbox has no such path — so it burned a round trip to learn what the tool list already said. Worse, the old wording ("never assume the panel is unavailable — run the probe") trained the model to distrust its own tool list, so it ran the dead probe *and then* fell back to chat anyway. | Detect the adapter from the tool surface. `Bash(find *)` was removed from `allowed-tools` so the capability is gone, not merely discouraged. |
+| `set_context` was called on a corporation and **failed**, costing a round trip and changing nothing — the subsequent commands worked purely off their own `corporation_id`. | Never `set_context` for a corporation-scoped command. |
+| `discover` / `search_tools` were called to look up command names the skill already hardcodes. A name-lookup tool is a pure round trip when you know the name. | Command names are hardcoded; `discover` is a debugging aid only. |
+| The old `call_tool` + `cap_table__mutate__issue_securities` form returned *"Unknown tool"* and silently wasted the call. **The original write-up mis-stated the cause** as "these are commands, not tools". carta-mcp does generate one tool per command by swapping `:` for `__` (`src/tool_search.py`, `_tool_name_from_command`), registered unconditionally — so the dunder name is real. What it is *not* is visible: those tools are excluded from `tools/list` and reachable only via a `search_tools` → `call_tool` round trip, and they disappear entirely when hidden from the session (e.g. a `staff_only` command outside a staff request). | Use the **pinned gateway**: `fetch`/`mutate` with colon-separated names and a `params` key. One hop, always in `tools/list`, scope and staff checks enforced in the executor. |
+| An unfiltered `list_accounts()` for a prompt naming an account returned a large alphabetically-ordered page that ended before reaching that name. The model gave up and asked the user for the ID — never trying the tool's own `search` parameter, which resolves it in one call. | `list_accounts(search="<name>")`, never an unfiltered listing. |
+
+Together these were ~7 avoidable backend round-trips in a single live Cowork run (a batch of
+option grants on one company), plus one extra interactive prompt.
+
+---
+
+## Asking for what the surface already collects
+
+| Incident | Rule it produced |
+|---|---|
+| A prompt for "100 option grants" (no names given) produced *"Before I open the batch config panel, I need to know who these 100 grants go to — the request didn't name anyone"* via `AskUserQuestion`, instead of opening the panel. | Never ask who the grantees are before opening the collection surface. A missing recipient is a blank field, never a chat question. |
+| A prompt for "100 certificates" (no names, no person-language) opened the panel with **100 blank stakeholder blocks** instead of one block with `quantity: 100` — the exact opposite of what was asked. | A bare "N \<securities\>" is a **quantity** for one recipient. Only people-language ("100 employees", "100 new hires") makes N a row count. |
+| Values the skill can compute (issue date, expiration, FMV-derived exercise price, the only active plan) were pre-asked in chat, turning a 2-wait flow into a 3+-wait one. | Stamp computable defaults and surface them tagged and overridable in the review. The review *is* the override point. |
+
+---
+
+## Reading server data wrong
+
+| Incident | Rule it produced |
+|---|---|
+| A model conflated `acceleration_templates`' genuine `count: 0` with `document_sets`, told the user *"…doesn't have any option-grant document templates set up yet"* and **aborted the whole issuance** — when `document_sets` had actually returned `count: 1`. | Read each `issuance_init` section under its own name. Never stop the flow over a section's count. |
+| The unfiltered `detail=full` roster **truncated at 150 of 167** stakeholders — it paid full latency *and* still missed people. | Cowork resolves named recipients with a targeted `search=`. The Code adapter keeps the full roster only because its autocomplete genuinely needs every row. |
+| Each grantee was resolved with its own `search` call — one serial round-trip per person. For a 10-person batch this was the dominant contributor to a ~7-minute runtime. | Stakeholder calls are bounded by roster **misses**, never by row count. Concatenating every name into one `OR`-ed `search` to disguise a per-row loop is the same bug. |
+| A leftover `_vesting_templates_arr.json` from an earlier, unrelated run was reused instead of regenerated, because it "looked right". `OUT_DIR` is keyed only by `corporation_id` and persists across sessions. | Always rewrite the raw fetched envelopes fresh from this turn's fetch. |
+
+---
+
+## Silent data loss
+
+| Incident | Rule it produced |
+|---|---|
+| A row reached `issue_securities` with `stakeholder_id=null`. Because name and email were also null it slipped duplicate detection, created **zero securities, and returned success** — so the user was told the batch was "in draft" when it could never issue. | The pre-save assertion: every `always` field holds a non-null value before any `save_drafts` or `issue_securities`. `save_drafts` accepts incomplete rows silently. |
+| A user set an absurd quantity, clicked Review, reviewed an **unvalidated** summary, and only found out at the final **Confirm & Issue** that the server rejected it ("Not enough shares in the option plan") — after a draft row had already been silently created. | Save + validate *before* the review surface renders (Phase 1.5), not after it is confirmed. |
+
+---
+
+## Confirmation gates
+
+| Incident | Rule it produced |
+|---|---|
+| An `AskUserQuestion` was stacked on an open side panel. The open question suspends the panel's submit watcher, so the user's click never landed. | Code adapter only: while a panel is open, emit no `AskUserQuestion`. The button is the gate. Cowork has no watcher, so its recovery questions are unrestricted. |
+| A fresh submit signal was second-guessed as a stale replay — the model asked *"did you mean to submit again?"* — which both stacked a question on what should have been a direct branch and made the click look like it "did nothing" until the user typed "continue" by hand. Every click POSTs and overwrites the action-request file, so a signal you have not branched on yet is real. | Branch directly on the action. Never re-ask after a confirmation. |

@@ -1,0 +1,192 @@
+/* Fonts loaded from carta-web static assets */
+@font-face {
+  font-family: 'Inter var';
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  src: url('Inter-roman.var.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'SangBleu Versailles';
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url('SangBleuVersailles-Regular-WebS.ttf') format('truetype');
+}
+
+/* ── Ink design tokens ── */
+:root {
+  --color-cream:    #FBFAF9;
+  --color-white:    #ffffff;
+  --color-black:    #1A1A1A;
+  --color-gray-80:  #2C3030;
+  --color-gray-70:  #394040;
+  --color-gray-60:  #656B6B;
+  --color-gray-50:  #9C9F9F;
+  --color-gray-40:  #A7AAAA;
+  --color-gray-30:  #DEDFDF;
+  --color-gray-20:  #EDEDED;
+  --color-blue-70:  #285DA3;
+  --color-blue-20:  #C0D1E9;
+  --color-blue-15:  #EAF0F8;
+  --color-blue-10:  #F7FAFE;
+  --color-red-70:   #C62128;
+  --color-red-60:   #E52431;
+  --color-red-10:   #FFEEEF;
+  --color-amber-60: #C88600;
+  --color-amber-50: #9A5700;
+  --color-amber-30: #DDB31F;
+  --color-amber-10: #FFFCED;
+
+  --radius-small: 4px;
+
+  --font-sans:  'Inter var', 'Inter', system-ui, sans-serif;
+  --font-serif: 'SangBleu Versailles', Georgia, serif;
+  --font-mono:  ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
+}
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { font-family: var(--font-sans); background: var(--color-cream); color: var(--color-black); }
+    .mono { font-family: var(--font-mono); font-size: 13px; }
+    .serif { font-family: var(--font-serif); }
+
+    /* ── Logo row ── */
+    #logo-row { background: var(--color-white); border-bottom: 1px solid var(--color-gray-30); padding: 14px 24px; display: flex; align-items: center; gap: 14px; }
+    #header-meta { display: flex; flex-direction: column; gap: 2px; }
+    .corp-name { font-family: var(--font-serif); font-size: 20px; font-weight: 400; color: var(--color-black); line-height: 1.2; }
+    .sub { font-size: 12px; color: var(--color-gray-60); }
+
+    /* ── Page content ── */
+    #page { padding: 24px 80px 48px; }
+
+    /* ── Sticky action bar — primary CTAs pinned bottom-right (design feedback:
+       confirm after reviewing without scrolling back up) ── */
+    #action-bar {
+      position: sticky; bottom: 0; z-index: 50;
+      display: flex; justify-content: flex-end; align-items: center; gap: 8px;
+      padding: 12px 80px; background: var(--color-white); border-top: 1px solid var(--color-gray-30);
+    }
+
+    /* ── Buttons ── */
+    .btn-primary {
+      height: 40px; padding: 0 15px; background: var(--color-black); color: var(--color-white);
+      border: none; border-radius: var(--radius-small); font-size: 14px; font-weight: 500;
+      cursor: pointer; font-family: var(--font-sans); box-shadow: none; white-space: nowrap;
+    }
+    .btn-primary:hover  { background: var(--color-gray-80); }
+    .btn-primary:active { background: var(--color-gray-70); }
+    .btn-default {
+      height: 40px; padding: 0 15px; background: var(--color-white); color: var(--color-black);
+      border: 1px solid var(--color-gray-40); border-radius: var(--radius-small); font-size: 14px;
+      cursor: pointer; font-family: var(--font-sans); box-shadow: none; white-space: nowrap;
+    }
+    .btn-default:hover { border-color: var(--color-gray-60); }
+    .btn-danger {
+      height: 40px; padding: 0 15px; background: var(--color-red-60); color: var(--color-white);
+      border: none; border-radius: var(--radius-small); font-size: 14px; font-weight: 500;
+      cursor: pointer; font-family: var(--font-sans); box-shadow: none; white-space: nowrap;
+    }
+    .btn-danger:hover { background: var(--color-red-70); }
+
+    /* ── Cards ── */
+    .card { background: var(--color-white); border: 1px solid var(--color-gray-30); }
+    /* auto-fit (not a fixed repeat(4,1fr)) — certificates render 3 tiles (no
+       "Pending board approval", which can never be anything but 0 for a
+       security type with no pending state), grants render 4; this adapts to
+       whichever count is actually emitted instead of leaving an empty 4th slot. */
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1px; background: var(--color-gray-30); border: 1px solid var(--color-gray-30); margin-bottom: 16px; }
+    /* Stack the label / value / sub spans vertically — without this they render
+       inline and mash together (e.g. "Holders2", "Total Shares20Common: 20"). */
+    .kpi-cell  { background: var(--color-white); padding: 16px 18px; display: flex; flex-direction: column; gap: 4px; }
+    .kpi-cell .kpi-label { font-size: 12px; font-weight: 500; color: var(--color-gray-60); text-transform: uppercase; letter-spacing: .06em; }
+    .kpi-cell .kpi-val   { font-size: 22px; font-weight: 400; color: var(--color-black); line-height: 1.15; }
+    .kpi-cell .kpi-sub   { font-size: 12px; color: var(--color-gray-60); line-height: 1.4; }
+
+    /* ── Section label — small-1: 12px/500 uppercase ── */
+    .section-lbl { font-size: 12px; font-weight: 500; color: var(--color-gray-60); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 12px; }
+    /* ── Card title — 14px/700, normal case ── */
+    .card-title { font-size: 14px; font-weight: 700; color: var(--color-black); margin-bottom: 4px; }
+
+    /* ── Section divider ── */
+    .section { margin-bottom: 20px; }
+
+    /* ── Equity Plan card — option-grant only. A left accent bar + tinted
+       background gives it a distinct, "highlighted" weight against the plain
+       white detail card, since it's the one fact (which plan) every row shares. ── */
+    .plan-card {
+      display: flex; flex-direction: column; gap: 6px;
+      padding: 14px 16px; border-left: 3px solid var(--color-blue-70);
+      background: var(--color-blue-15);
+    }
+    .plan-card-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+    .plan-card-label { font-size: 12px; font-weight: 500; color: var(--color-blue-70); text-transform: uppercase; letter-spacing: .06em; }
+    .plan-card-name { font-size: 16px; font-weight: 600; color: var(--color-black); }
+    .plan-card-periods { font-size: 13px; color: var(--color-gray-60); line-height: 1.5; }
+
+    /* ── Grantee / holder responsive table ── */
+    .stake-name  { font-size: 14px; font-weight: 600; color: var(--color-black); white-space: nowrap; }
+    .stake-email { font-size: 12px; color: var(--color-gray-50); margin-top: 2px; white-space: nowrap; }
+    .grantee-table td:first-child { width: 140px; max-width: 140px; }
+    .grantee-table .stake-email { display: none; }
+
+    .grantee-table-wrap { overflow-x: auto; }
+    .grantee-table { width: 100%; border-collapse: collapse; min-width: 600px; }
+    .grantee-table th {
+      font-size: 12px; font-weight: 500; color: var(--color-gray-60);
+      padding: 10px 14px; text-align: left;
+      background: var(--color-white);
+      border-bottom: 1px solid var(--color-gray-30); white-space: nowrap;
+    }
+    .grantee-table td {
+      font-size: 13px; color: var(--color-black);
+      padding: 10px 14px; vertical-align: middle;
+      border-bottom: 1px solid var(--color-gray-20);
+    }
+    .grantee-table tbody tr:last-child td { border-bottom: none; }
+    .grantee-table tbody tr:hover td { background: var(--color-cream); }
+
+    /* kv-grid retained for Summary card and flags rows */
+    .kv-grid { display: grid; grid-template-columns: 1fr; }
+    .kv-row {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 8px 14px; border-bottom: 1px solid var(--color-gray-20); min-height: 44px;
+    }
+    .kv-key { font-size: 12px; color: var(--color-gray-60); white-space: nowrap; }
+    .kv-val { font-size: 13px; color: var(--color-black); text-align: right; }
+    .kv-val.mono { font-family: var(--font-mono); }
+
+    /* ── Legend attestation (certificates) ── shows the full legend body the
+       issuer is attesting to, in the #modal-legend modal (below) — not inline
+       in the table, which the horizontally-scrolling .grantee-table-wrap
+       clipped/hid in practice. ── */
+    .legend-body {
+      white-space: pre-wrap; max-height: 50vh; overflow-y: auto;
+      font-size: 13px; line-height: 1.6; color: var(--color-black);
+    }
+    .legend-view-btn { background: none; border: none; cursor: pointer; color: var(--color-blue-70); font-size: 13px; font-family: var(--font-sans); padding: 0; }
+    .legend-view-btn:hover { text-decoration: underline; }
+
+    /* ── Rule 144 difference-reason annotation ── */
+    .rule144-reason { font-size: 12px; color: var(--color-gray-60); white-space: nowrap; }
+
+    /* ── Tags — h-[28px] px-2 text-xs rounded ── */
+    .tag { display: inline-flex; align-items: center; height: 28px; padding: 0 8px; font-size: 12px; font-weight: 400; border-radius: var(--radius-small); white-space: nowrap; line-height: 1; }
+    .tag-warn   { background: var(--color-amber-10); color: var(--color-amber-60); border: 1px solid var(--color-amber-60); }
+    .tag-intl   { background: var(--color-amber-10); color: var(--color-amber-50); border: 1px solid var(--color-amber-30); }
+    .tag-first  { background: var(--color-blue-15);  color: var(--color-blue-70);  border: 1px solid var(--color-blue-20); }
+
+    /* ── Toast ── */
+    #toast { position: fixed; bottom: 20px; right: 20px; background: var(--color-black); color: var(--color-white); padding: 12px 18px; border-radius: var(--radius-small); font-size: 14px; z-index: 999; display: none; align-items: center; gap: 8px; box-shadow: 0 4px 20px rgba(0,0,0,.2); }
+
+    /* ── Modals ── */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 1000; display: flex; align-items: center; justify-content: center; }
+    .modal-box { background: var(--color-white); border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,.2); width: 480px; max-width: 90vw; overflow: hidden; }
+    .modal-header { padding: 20px 24px 0; }
+    .modal-title { font-size: 18px; font-weight: 600; color: var(--color-black); margin-bottom: 10px; }
+    .modal-disclaimer { font-size: 14px; color: var(--color-gray-60); line-height: 1.6; margin-bottom: 0; }
+    .modal-body { padding: 20px 24px; }
+    .modal-footer { padding: 16px 24px; border-top: 1px solid var(--color-gray-30); display: flex; justify-content: flex-end; gap: 8px; }
+
+    /* Spinner — submit hand-off indicator */
+    .spinner { width: 14px; height: 14px; border: 2px solid var(--color-blue-20); border-top-color: var(--color-blue-70); border-radius: 50%; animation: spin .7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }

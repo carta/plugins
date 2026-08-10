@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>{{FLOW_TITLE}} — {{CORP_NAME}}</title>
+<style>{{STYLES}}</style>
+</head>
+<body>
+<div id="shell">
+
+  <!-- Logo row -->
+  <div id="logo-row">
+    <svg width="56" height="24" viewBox="0 0 86 38" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M0 0V37.4974H86V0H0ZM83.715 35.2123H2.28503V2.28503H83.715V35.2123ZM12.4391 19.6855C12.4391 15.444 16.0009 12.9533 19.1971 12.9533C21.485 12.9533 23.6187 13.8159 24.7612 15.8038L22.6247 17.0492C22.2562 16.4894 21.7535 16.0323 21.1622 15.7182C20.571 15.404 19.9112 15.2412 19.24 15.2469C17.3605 15.2469 15.124 16.7207 15.124 19.6427C15.124 22.4933 17.2606 24.0642 19.4171 24.0642C20.9166 24.0642 22.1619 23.2245 22.8989 21.9277L25.0839 22.9417C23.8472 25.1782 21.6364 26.3693 19.0714 26.3693C15.8438 26.3664 12.4391 23.8729 12.4391 19.6855ZM32.7159 26.3664C34.4925 26.3664 36.1692 25.5781 37.0346 24.4355V26.0094H39.6738V13.2817H37.0346V14.8584C36.212 13.7045 34.4954 12.9533 32.7159 12.9533C28.8285 12.9533 26.1093 15.7981 26.1093 19.6598C26.1093 23.4444 28.8542 26.3664 32.7159 26.3664ZM32.9701 15.3668C35.4094 15.3668 37.0832 17.1949 37.0832 19.6598C37.0832 22.1248 35.4066 23.9528 32.9701 23.9528C30.4795 23.9528 28.8028 22.0991 28.8028 19.6084C28.8028 17.172 30.5309 15.3668 32.9701 15.3668ZM53.0099 15.741H50.979V13.1989H53.0356V9.44003H55.7548V13.1989H58.5739V15.741H55.7548V26.0037H53.0099V15.741ZM66.0974 26.3664C67.8768 26.3664 69.5535 25.5781 70.4189 24.4355V26.0094H73.061V13.2817H70.4189V14.8584C69.5963 13.7045 67.8797 12.9533 66.0974 12.9533C62.2128 12.9533 59.4936 15.7981 59.4936 19.6598C59.4936 23.4444 62.2357 26.3664 66.0974 26.3664ZM66.3544 15.3668C68.7909 15.3668 70.4704 17.1949 70.4704 19.6598C70.4704 22.1248 68.7909 23.9528 66.3544 23.9528C63.8638 23.9528 62.1871 22.0991 62.1871 19.6084C62.1871 17.172 63.9152 15.3668 66.3544 15.3668ZM45.1408 25.9922H42.3959V13.2646H44.9094V15.4754C45.4293 14.0387 46.5289 13.0618 47.9857 13.0618C48.2998 13.0561 48.6169 13.0904 48.9254 13.1618V15.6239C46.8746 15.384 45.1408 16.8178 45.1408 20.0968V25.9922Z" fill="#1A1A1A"/>
+    </svg>
+    <div id="header-meta">
+      <p class="corp-name">{{CORP_NAME}}</p>
+      <p class="sub">{{FLOW_TITLE}} &nbsp;·&nbsp; {{HEADER_SUB}}</p>
+    </div>
+  </div>
+
+  <!-- Config form. One full key-value block per stakeholder — every field (name,
+       email, stakeholder type, relationship, quantity, and the whole type-specific
+       field set) lives inside that person's own block, so a batch can issue
+       genuinely different terms to different people. Field-groups tagged
+       data-sectype="option_grant" or data-sectype="certificate" inside a block are
+       shown/hidden by SEC_TYPE; Issue date and Board approval are shared by both. -->
+  <div id="form">
+
+    <!-- Panel-level banner for corp-/batch-level server errors (not tied to any
+         one stakeholder). Built by build_config.py from knowns.batch_errors;
+         "" (collapsed via :empty) when there's nothing to show. -->
+    <div id="batch-error-banner">{{BATCH_ERRORS_HTML}}</div>
+
+    <!-- ════ Grantees / Holders — one key-value block per person ════
+         The STAKEHOLDER_ROWS slot below holds one full .stake-block per person,
+         pre-filled from the prompt by build_config.py (or a single blank block when
+         the prompt named no one). This is where every field is collected — never in
+         chat. (Keep substitution-token names out of this comment: generate.py
+         replaces every such placeholder it finds, comments included, which would
+         duplicate the block here.) -->
+    <div class="field-group" id="people-group">
+      <div class="people-head">
+        <p class="field-label" id="people-label">Grantees</p>
+      </div>
+      <div id="stake-blocks">
+        {{STAKEHOLDER_ROWS}}
+      </div>
+      <button class="btn-add" type="button" onclick="addStakeBlock()">+ Add stakeholder</button>
+    </div>
+
+  </div><!-- /form -->
+
+  <!-- Footer -->
+  <div id="footer">
+    <p id="summary-line" class="summary"></p>
+    <button id="btn-save-only" class="btn-default" type="button" onclick="saveOnly()" disabled>Save</button>
+    <button id="btn-start" class="btn-primary" type="button" onclick="submit()" disabled>Review</button>
+  </div>
+
+</div><!-- /shell -->
+
+<!-- Submit overlay — full-panel dim + spinner while the config_submit POST is in
+     flight, and again (with no dismiss control) once it lands, since the panel
+     can't reliably close itself (artifact-flow §5): the user reads "you can
+     close this" instead of being handed a button that implies more work to do. -->
+<div id="submit-overlay">
+  <div class="overlay-box">
+    <div class="spinner"></div>
+    <p class="overlay-msg" id="overlay-msg">Sending to Claude…</p>
+  </div>
+</div>
+
+<script>
+  const SEC_TYPE = '{{SECURITY_TYPE}}';   // 'option_grant' | 'certificate'
+  const STAKEHOLDERS = {{STAKEHOLDER_LIST_JSON}};  // [{name, email, kind, event_relationship}, …]
+
+  // Name (lowercased) → {email, kind, relationship} — powers the auto-populate on
+  // an exact match in onStakeNameInput().
+  const _stakeMap = {};
+  STAKEHOLDERS.forEach(s => {
+    if (!s.name) return;
+    _stakeMap[s.name.trim().toLowerCase()] = {
+      email: s.email || '',
+      kind: s.kind || 'INDIVIDUAL',
+      relationship: s.event_relationship || '',
+    };
+  });
+
+  // ── Custom typeahead dropdown ────────────────────────────────────────────────
+  // A native <datalist> doesn't render its suggestion popover reliably inside
+  // Claude Desktop's embedded webview, which made the "Search…" placeholder a
+  // lie — nothing ever appeared. This renders the matching subset of the roster
+  // as a real, always-visible dropdown under the input instead.
+  const MAX_SUGGESTIONS = 8;
+
+  function renderSuggestions(input) {
+    const wrap = input.closest('.stake-name-wrap');
+    const box = wrap && wrap.querySelector('.stake-suggestions');
+    if (!box) return;
+    const q = input.value.trim().toLowerCase();
+    // Empty query shows the first MAX_SUGGESTIONS roster entries instead of
+    // nothing, so focusing a blank field reveals the roster exists.
+    const matches = q
+      ? STAKEHOLDERS.filter(s => s.name && s.name.toLowerCase().includes(q)).slice(0, MAX_SUGGESTIONS)
+      : STAKEHOLDERS.slice(0, MAX_SUGGESTIONS);
+    if (!matches.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+    box.innerHTML = matches.map(s =>
+      `<div class="stake-suggestion-item" data-name="${_escAttr(s.name)}">${_escText(s.name)}</div>`
+    ).join('');
+    box.style.display = 'block';
+  }
+
+  function _escAttr(s) { return String(s).replace(/"/g, '&quot;'); }
+  function _escText(s) {
+    const d = document.createElement('div');
+    d.textContent = String(s);
+    return d.innerHTML;
+  }
+
+  function selectSuggestion(item) {
+    const box = item.closest('.stake-suggestions');
+    const wrap = box && box.closest('.stake-name-wrap');
+    const input = wrap && wrap.querySelector('.stake-name-in');
+    if (!input) return;
+    input.value = item.dataset.name;
+    box.style.display = 'none';
+    onStakeNameInput(input);
+  }
+
+  function onStakeNameFocus(input) { renderSuggestions(input); }
+
+  // mousedown (not click) fires before the input's blur, so a suggestion click
+  // lands before anything closes the dropdown out from under it.
+  document.addEventListener('mousedown', (e) => {
+    const item = e.target.closest('.stake-suggestion-item');
+    if (item) selectSuggestion(item);
+  });
+  document.addEventListener('click', (e) => {
+    document.querySelectorAll('.stake-suggestions').forEach(box => {
+      const wrap = box.closest('.stake-name-wrap');
+      if (wrap && !wrap.contains(e.target)) box.style.display = 'none';
+    });
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') document.querySelectorAll('.stake-suggestions').forEach(b => b.style.display = 'none');
+  });
+
+  function allBlocks() { return Array.from(document.querySelectorAll('[data-stake-block]')); }
+
+  // ── Generic single-select within a toggle group, scoped to the enclosing block
+  // (data-group values repeat across blocks, so every lookup/clear must stay
+  // inside btn.closest('[data-stake-block]') — a page-wide querySelectorAll would
+  // cross-contaminate every other stakeholder's selection). ──
+  function pick(btn) {
+    const block = btn.closest('[data-stake-block]');
+    if (!block) return;
+    const group = btn.dataset.group;
+    block.querySelectorAll(`[data-group="${group}"]`).forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    onStakeInput();
+  }
+
+  // Toggles every row sharing a data-conditional value together (vesting-,
+  // so_type-gated rows) — see build_config.py _kv_row()'s conditional_on.
+  function toggleConditional(block, key, show) {
+    block.querySelectorAll(`[data-conditional="${key}"]`).forEach(el => {
+      el.style.display = show ? '' : 'none';
+    });
+  }
+
+  const HMRC_SO_TYPES = ['EMI'];
+  const ATO_SO_TYPES = ['Startup Concessions', 'Non-Concessional', 'ZEPO'];
+
+  // Mirrors build_config.py's HMRC_SO_TYPES / ATO_SO_TYPES — must stay in sync.
+  function syncSoTypeConditionals(block) {
+    const typeBtn = block.querySelector('[data-group="type"].selected');
+    const soType = typeBtn ? typeBtn.dataset.value : null;
+    toggleConditional(block, 'so_type_emi', HMRC_SO_TYPES.includes(soType));
+    toggleConditional(block, 'so_type_au', ATO_SO_TYPES.includes(soType));
+  }
+
+  // Option-type buttons additionally re-sync the HMRC/ATO conditional rows —
+  // switching so_type can change which of those apply.
+  function pickType(btn) {
+    pick(btn);
+    const block = btn.closest('[data-stake-block]');
+    if (block) syncSoTypeConditionals(block);
+  }
+
+  // Legend buttons additionally reveal their data-body in this block's attest box.
+  function pickLegend(btn) {
+    pick(btn);
+    const block = btn.closest('[data-stake-block]');
+    const box = block && block.querySelector('.block-legend-attest');
+    if (box) {
+      box.textContent = btn.dataset.body || '';
+      box.style.display = btn.dataset.body ? 'block' : 'none';
+    }
+  }
+
+  // Rule 144 buttons additionally show/hide this block's custom date input.
+  function pickRule144(btn) {
+    pick(btn);
+    const block = btn.closest('[data-stake-block]');
+    const isOther = btn.dataset.value === 'other';
+    const custom = block && block.querySelector('.block-rule144-date');
+    if (custom) custom.style.display = isOther ? 'block' : 'none';
+    const reasonWrap = block && block.querySelector('.block-rule144-reason-wrap');
+    if (reasonWrap) reasonWrap.style.display = isOther ? 'block' : 'none';
+  }
+
+  // Vesting is a <select> — show/hide start-date + the Acceleration row
+  // based on whether a real template is selected.
+  function toggleVestingStartFor(block) {
+    const sel = block.querySelector('.block-vesting-select');
+    if (!sel) return;
+    const hasVesting = !!(sel.value && sel.value !== '__none__');
+    const wrap = block.querySelector('.block-vesting-start-wrap');
+    if (wrap) wrap.style.display = hasVesting ? 'block' : 'none';
+    toggleConditional(block, 'vesting', hasVesting);
+    // Reset it too, or a stale acceleration_template submits alongside
+    // vesting_template_id: null.
+    if (!hasVesting) {
+      const accelSel = block.querySelector('.block-acceleration-select');
+      if (accelSel) accelSel.value = '__none__';
+    }
+  }
+  function pickVesting(select) {
+    toggleVestingStartFor(select.closest('[data-stake-block]'));
+    onStakeInput();
+  }
+
+  // Keep a block's vesting start aligned with its own issue date until the user
+  // edits that block's start date directly (tracked via a per-input data-touched
+  // flag — a single global flag would freeze/unfreeze every block together).
+  function syncVestingStartFor(block) {
+    const vestStart = block.querySelector('.block-vesting-start-date');
+    if (!vestStart || vestStart.dataset.touched === '1') return;
+    const issue = block.querySelector('.block-issue-date');
+    if (issue) vestStart.value = issue.value;
+  }
+  function updateIssueDate(input) {
+    syncVestingStartFor(input.closest('[data-stake-block]'));
+    onStakeInput();
+  }
+  function updateVestingStart(input) {
+    input.dataset.touched = '1';
+    onStakeInput();
+  }
+
+  function toggleBoardPending(checkbox) {
+    const block = checkbox.closest('[data-stake-block]');
+    const dateInput = block && block.querySelector('.block-board-date');
+    if (dateInput) dateInput.disabled = checkbox.checked;
+    onStakeInput();
+  }
+
+  // ── Stakeholder name → auto-populate email + relationship + stakeholder type on
+  // an exact (case-insensitive) roster match. Fields stay editable either way —
+  // they used to lock on a match, but an edit to an existing stakeholder's
+  // email/relationship/type here is cosmetic only (Phase 1 always uses the real
+  // cap-table record for an existing stakeholder regardless of what this panel
+  // shows), so locking them just looked broken with no corresponding data-safety
+  // reason to justify it. ──
+  // Split from onStakeNameInput() so a pre-filled name (resolved server-side
+  // before the panel opened) can auto-populate on page load too, without
+  // opening the suggestions dropdown.
+  function applyRosterAutofill(input) {
+    const block = input.closest('[data-stake-block]');
+    if (!block) return;
+    const emailInput = block.querySelector('.stake-email-in');
+    const relSelect  = block.querySelector('.stake-relationship');
+    const kindBtns   = block.querySelectorAll('[data-group="kind"]');
+    const rec = _stakeMap[input.value.trim().toLowerCase()];
+    if (rec) {
+      emailInput.value = rec.email;
+      if (rec.relationship && Array.from(relSelect.options).some(o => o.value === rec.relationship)) {
+        relSelect.value = rec.relationship;
+      }
+      kindBtns.forEach(b => b.classList.toggle('selected', b.dataset.value === rec.kind));
+    }
+  }
+
+  function onStakeNameInput(input) {
+    applyRosterAutofill(input);
+    renderSuggestions(input);
+    onStakeInput();
+  }
+
+  // ── Add / remove stakeholder blocks ──────────────────────────────────────────
+  // A new block copies forward the most-recently-added block's non-personal
+  // fields (option type / price / vesting / dates / documents, or share class /
+  // price / legend / Rule 144) — issuing the same terms to many people only
+  // requires editing name/email/quantity per row. Name, email, stakeholder type,
+  // relationship, and quantity always start blank on a new block: quantity in
+  // particular is the field most likely to differ per person, so it is never
+  // copied forward.
+  //
+  // cloneNode(true) copies DOM *attributes*, not live JS properties — a value the
+  // user typed (or a <select> option they picked) never updated the underlying
+  // HTML attribute, so a naive clone would silently revert every edited field back
+  // to its original server-rendered default. copyForwardValues() below explicitly
+  // reads/writes the live .value/.checked/classList of every stateful control
+  // instead of relying on clone semantics.
+  function copyForwardValues(source, clone) {
+    ['type', 'docset', 'shareclass', 'legend', 'rule144'].forEach(group => {
+      const sBtns = source.querySelectorAll(`[data-group="${group}"]`);
+      const cBtns = clone.querySelectorAll(`[data-group="${group}"]`);
+      sBtns.forEach((sb, i) => { if (cBtns[i]) cBtns[i].classList.toggle('selected', sb.classList.contains('selected')); });
+    });
+    const copyVal = (sel) => {
+      const s = source.querySelector(sel), c = clone.querySelector(sel);
+      if (s && c) c.value = s.value;
+    };
+    copyVal('.block-exercise-price');
+    copyVal('.block-price-per-share');
+    copyVal('.block-issue-date');
+    copyVal('.block-board-date');
+    copyVal('.block-vesting-select');
+    copyVal('.block-vesting-start-date');
+    copyVal('.block-rule144-date');
+    copyVal('.block-rule144-reason');
+    copyVal('.block-acceleration-select');
+    copyVal('.block-grant-reason');
+    // Batch-level policy/terms fields — same for everyone, unlike identity/
+    // amount fields which stay blank on a new block.
+    copyVal('.block-hmrc-notified-date');
+
+    const copyChecked = (sel) => {
+      const s = source.querySelector(sel), c = clone.querySelector(sel);
+      if (s && c) c.checked = s.checked;
+    };
+    copyChecked('.block-early-exercise');
+    copyChecked('.block-auto-exercise-at-vest');
+    copyChecked('.block-flexible-issue-date');
+    copyChecked('.block-hmrc-notified');
+    copyChecked('.block-ato-notified');
+
+    const sPending = source.querySelector('.block-board-pending');
+    const cPending = clone.querySelector('.block-board-pending');
+    if (sPending && cPending) { cPending.checked = sPending.checked; }
+    const cBoardDate = clone.querySelector('.block-board-date');
+    if (cBoardDate) cBoardDate.disabled = !!(sPending && sPending.checked);
+
+    const sVestStart = source.querySelector('.block-vesting-start-date');
+    const cVestStart = clone.querySelector('.block-vesting-start-date');
+    if (sVestStart && cVestStart) cVestStart.dataset.touched = sVestStart.dataset.touched || '';
+
+    const sAttest = source.querySelector('.block-legend-attest');
+    const cAttest = clone.querySelector('.block-legend-attest');
+    if (sAttest && cAttest) { cAttest.textContent = sAttest.textContent; cAttest.style.display = sAttest.style.display; }
+
+    const cloneBlock = clone;
+    toggleVestingStartFor(cloneBlock);
+    syncSoTypeConditionals(cloneBlock);
+    const cR144 = clone.querySelector('.block-rule144-date');
+    const r144Selected = clone.querySelector('[data-group="rule144"].selected');
+    if (cR144) cR144.style.display = (r144Selected && r144Selected.dataset.value === 'other') ? 'block' : 'none';
+  }
+
+  function clearIdentity(block) {
+    const name = block.querySelector('.stake-name-in');
+    if (name) name.value = '';
+    const email = block.querySelector('.stake-email-in');
+    if (email) email.value = '';
+    const qty = block.querySelector('.stake-qty-in');
+    if (qty) qty.value = '';
+    const rel = block.querySelector('.stake-relationship');
+    if (rel) rel.value = '';
+    block.querySelectorAll('[data-group="kind"]').forEach(b => {
+      b.classList.toggle('selected', b.dataset.value === 'INDIVIDUAL');
+    });
+    // Per-person fields in the "More fields" accordion must start blank on a
+    // new block, or cloneNode(true) leaks the source person's values forward.
+    ['.block-custom-label', '.block-notes', '.block-prefix-number',
+     '.block-cash-paid', '.block-debt-canceled']
+      .forEach(sel => {
+        const el = block.querySelector(sel);
+        if (el) el.value = '';
+      });
+    // The error banner belongs to the source block's prior server response —
+    // cloneNode(true) copies it too; strip it since the new block is unvalidated.
+    const banner = block.querySelector('.block-error-banner');
+    if (banner) banner.remove();
+  }
+
+  function renumberBlocks() {
+    const blocks = allBlocks();
+    blocks.forEach((b, i) => {
+      const t = b.querySelector('.stake-block-title');
+      if (t) t.textContent = 'Stakeholder ' + (i + 1);
+      const trash = b.querySelector('.btn-trash');
+      if (trash) trash.style.visibility = blocks.length > 1 ? 'visible' : 'hidden';
+    });
+  }
+
+  function addStakeBlock() {
+    const container = document.getElementById('stake-blocks');
+    const blocks = allBlocks();
+    const last = blocks[blocks.length - 1];
+    if (!last) return;
+    const clone = last.cloneNode(true);
+    copyForwardValues(last, clone);
+    clearIdentity(clone);
+    // Fresh identity, not the source's row_key — this is a new person. A
+    // 'new-' prefix can't collide with a server-stamped 'r<N>' key.
+    clone.dataset.rowKey = 'new-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
+    container.appendChild(clone);
+    renumberBlocks();
+    const nameInput = clone.querySelector('.stake-name-in');
+    if (nameInput) nameInput.focus();
+    onStakeInput();
+  }
+
+  function removeStakeBlock(btn) {
+    if (allBlocks().length <= 1) return;
+    const block = btn.closest('[data-stake-block]');
+    if (block) block.remove();
+    renumberBlocks();
+    onStakeInput();
+  }
+
+  // ── Readiness + summary ──────────────────────────────────────────────────────
+  // Mirrors the "*" required markers build_config.py renders on labels — an
+  // exact roster match (email, relationship) is not re-validated here, since
+  // Phase 1 always trusts the existing record over whatever this panel shows,
+  // even if that record's own relationship is blank. Fields are always editable
+  // (never disabled), so this checks the roster directly — the same lookup
+  // onStakeNameInput() uses — rather than a field's disabled state.
+  function missingFields(block) {
+    const missing = [];
+    const name = (block.querySelector('.stake-name-in')?.value || '').trim();
+    if (!name) missing.push('a name');
+    const isRosterMatch = !!_stakeMap[name.toLowerCase()];
+    const email = block.querySelector('.stake-email-in');
+    if (email && !isRosterMatch && !email.value.trim()) missing.push('an email');
+    const rel = block.querySelector('.stake-relationship');
+    if (rel && !isRosterMatch && !rel.value) missing.push('a relationship');
+    const qty = (block.querySelector('.stake-qty-in')?.value || '').trim();
+    if (!qty || Number(qty) <= 0) missing.push('a quantity');
+    if (SEC_TYPE === 'certificate') {
+      if (!block.querySelector('[data-group="shareclass"].selected')) missing.push('a share class');
+      if (!block.querySelector('[data-group="legend"].selected')) missing.push('a legend');
+      const r144Other = block.querySelector('[data-group="rule144"].selected')?.dataset.value === 'other';
+      if (r144Other && !block.querySelector('.block-rule144-reason')?.value) missing.push('a Rule 144 difference reason');
+    } else {
+      if (!block.querySelector('.block-vesting-select')?.value) missing.push('a vesting schedule');
+      if (!block.querySelector('[data-group="docset"].selected')) missing.push('documents');
+    }
+    return missing;
+  }
+  function blockReady(block) { return missingFields(block).length === 0; }
+
+  function updateSummary() {
+    const line = document.getElementById('summary-line');
+    const noun = SEC_TYPE === 'certificate' ? 'holder' : 'grantee';
+    const blocks = allBlocks();
+    const startBtn = document.getElementById('btn-start');
+    const saveBtn = document.getElementById('btn-save-only');
+    if (blocks.length === 0) {
+      line.textContent = `Add at least one ${noun}.`;
+      startBtn.disabled = true; saveBtn.disabled = true;
+      return;
+    }
+    const notReadyIdx = blocks.findIndex(b => !blockReady(b));
+    const ready = notReadyIdx === -1;
+    // Save gates on the same readiness as Review — Hard rule 9's pre-save
+    // assertion applies to the lighter Save button too, not a weaker bar.
+    startBtn.disabled = !ready; saveBtn.disabled = !ready;
+    if (!ready) {
+      const missing = missingFields(blocks[notReadyIdx]);
+      line.textContent = `Stakeholder ${notReadyIdx + 1} needs ${missing.join(', ')}.`;
+      return;
+    }
+    line.textContent = `${blocks.length} ${noun}${blocks.length === 1 ? '' : 's'} ready.`;
+  }
+  function onStakeInput() { updateSummary(); }
+
+  // ── Submit ────────────────────────────────────────────────────────────────────
+  function collectBlocks() {
+    return allBlocks().map(block => {
+      const name = (block.querySelector('.stake-name-in')?.value || '').trim();
+      const email = (block.querySelector('.stake-email-in')?.value || '').trim();
+      const quantity = (block.querySelector('.stake-qty-in')?.value || '').trim();
+      const relationship = (block.querySelector('.stake-relationship')?.value || '').trim();
+      const kindBtn = block.querySelector('[data-group="kind"].selected');
+      const boardPending = !!block.querySelector('.block-board-pending')?.checked;
+      const boardDateInput = block.querySelector('.block-board-date');
+      const accelSel = block.querySelector('.block-acceleration-select');
+      const noAccel = !accelSel || accelSel.value === '__none__';
+      const row = {
+        row_key: block.dataset.rowKey || '',
+        name, email, quantity, relationship,
+        stakeholder_kind: kindBtn ? kindBtn.dataset.value : 'INDIVIDUAL',
+        issue_date: block.querySelector('.block-issue-date')?.value || '',
+        board_approval: boardPending ? 'pending' : 'approved_other',
+        board_approval_date: boardPending ? null : (boardDateInput?.value || null),
+        notes: block.querySelector('.block-notes')?.value || '',
+        acceleration_template: noAccel ? null : accelSel.value,
+      };
+      if (SEC_TYPE === 'certificate') {
+        const shareBtn = block.querySelector('[data-group="shareclass"].selected');
+        const legendBtn = block.querySelector('[data-group="legend"].selected');
+        const r144Btn = block.querySelector('[data-group="rule144"].selected');
+        const r144Mode = r144Btn ? r144Btn.dataset.value : 'issue_date';
+        const vestSel = block.querySelector('.block-vesting-select');
+        const noVesting = !vestSel || vestSel.value === '__none__';
+        row.share_class_prefix = shareBtn ? shareBtn.dataset.value : null;
+        row.share_class_label  = shareBtn ? shareBtn.dataset.label : null;
+        row.price_per_share = block.querySelector('.block-price-per-share')?.value || '';
+        row.legend_id = legendBtn ? legendBtn.dataset.value : null;
+        row.legend_label = legendBtn ? legendBtn.dataset.label : null;
+        row.rule_144_mode = r144Mode;
+        row.rule_144_date = r144Mode === 'other' ? (block.querySelector('.block-rule144-date')?.value || null) : null;
+        row.rule_144_reason = r144Mode === 'other' ? (block.querySelector('.block-rule144-reason')?.value || null) : null;
+        row.vesting_template_id = noVesting ? null : vestSel.value;
+        row.vesting_start_date = noVesting ? null : (block.querySelector('.block-vesting-start-date')?.value || null);
+        row.prefix_number = block.querySelector('.block-prefix-number')?.value || '';
+        row.cash_paid = block.querySelector('.block-cash-paid')?.value || '';
+        row.debt_canceled = block.querySelector('.block-debt-canceled')?.value || '';
+      } else {
+        const typeBtn = block.querySelector('[data-group="type"].selected');
+        const docsetBtn = block.querySelector('[data-group="docset"].selected');
+        const vestSel = block.querySelector('.block-vesting-select');
+        const noVesting = !!vestSel && vestSel.value === '__none__';
+        const vestOpt = vestSel ? vestSel.options[vestSel.selectedIndex] : null;
+        row.option_type = typeBtn ? typeBtn.dataset.value : null;
+        row.exercise_price = block.querySelector('.block-exercise-price')?.value || '';
+        row.vesting_template_id = noVesting ? null : (vestSel ? vestSel.value : null);
+        row.vesting_label = vestOpt ? (vestOpt.dataset.label || vestOpt.text) : null;
+        row.vesting_start_date = noVesting ? null : (block.querySelector('.block-vesting-start-date')?.value || null);
+        row.document_set_id = docsetBtn ? docsetBtn.dataset.value : null;
+        row.document_set_label = docsetBtn ? docsetBtn.dataset.label : null;
+        row.custom_label = block.querySelector('.block-custom-label')?.value || '';
+        row.early_exercise = !!block.querySelector('.block-early-exercise')?.checked;
+        row.auto_exercise_at_vest = !!block.querySelector('.block-auto-exercise-at-vest')?.checked;
+        row.is_flexible_issue_date = !!block.querySelector('.block-flexible-issue-date')?.checked;
+        // `.block-grant-reason` is a <select> now (picklist, matching carta-web) —
+        // reading `.value` works identically to the free-text <input> it replaced.
+        row.grant_reason = block.querySelector('.block-grant-reason')?.value || '';
+        const soType = typeBtn ? typeBtn.dataset.value : null;
+        if (HMRC_SO_TYPES.includes(soType)) {
+          row.is_hmrc_notified = !!block.querySelector('.block-hmrc-notified')?.checked;
+          row.hmrc_notified = block.querySelector('.block-hmrc-notified-date')?.value || null;
+        }
+        if (ATO_SO_TYPES.includes(soType)) {
+          row.is_ato_notified = !!block.querySelector('.block-ato-notified')?.checked;
+        }
+      }
+      return row;
+    });
+  }
+
+  let _startTimer = null;
+  const START_GRACE_MS = 30000;   // how long to wait for Claude to pick up the click
+
+  // Locks every field/button in the form while a submit is in flight, so a
+  // second click (or an edit) can't race the in-flight one. btn-start and
+  // btn-save-only are excluded — submitAction() drives them itself. Only locks/
+  // unlocks elements it itself locked (data-form-locked) — a roster-matched
+  // block's Email/Relationship/Stakeholder-type are already `disabled` for a
+  // different reason (auto-populate lock, onStakeNameInput) and must stay
+  // locked after a failed/timed-out submit re-enables the rest of the form.
+  function setFormDisabled(disabled) {
+    if (disabled) {
+      document.querySelectorAll('#form input, #form select, #form button').forEach(el => {
+        if (el.disabled) return;   // already disabled (e.g. roster-locked) — leave it alone
+        el.disabled = true;
+        el.dataset.formLocked = '1';
+      });
+    } else {
+      document.querySelectorAll('[data-form-locked="1"]').forEach(el => {
+        el.disabled = false;
+        delete el.dataset.formLocked;
+      });
+    }
+  }
+
+  // Overlay: full-panel dim + spinner while the POST is in flight, then (on
+  // success) a no-button "sent" message — same informational-only strategy as
+  // the review panel's post-submit hand-off (no "Done" to click, nothing left
+  // to do here). Only hidden again on error/timeout, when the form re-opens for
+  // a retry.
+  function showOverlay(msg) {
+    const o = document.getElementById('submit-overlay');
+    if (!o) return;
+    const m = document.getElementById('overlay-msg');
+    if (m) m.textContent = msg;
+    o.style.display = 'flex';
+  }
+  function setOverlayMessage(msg) {
+    const m = document.getElementById('overlay-msg');
+    if (m) m.textContent = msg;
+  }
+  function hideOverlay() {
+    const o = document.getElementById('submit-overlay');
+    if (o) o.style.display = 'none';
+  }
+
+  // Both footer buttons share this: same POST shape (only `action` differs),
+  // same overlay/grace-timer/form-lock behavior; both stay disabled either way.
+  function setFooterButtonsDisabled(disabled) {
+    document.getElementById('btn-start').disabled = disabled;
+    document.getElementById('btn-save-only').disabled = disabled;
+  }
+
+  function submitAction(action, clickedBtn, busyLabel, idleLabel) {
+    const data = {
+      action,
+      security_type: SEC_TYPE,
+      corp_id: '{{CORP_ID}}',
+      rows: collectBlocks(),
+    };
+    const payload = { filename: '{{CORP_ID}}_action_request.json', data };
+    const line = document.getElementById('summary-line');
+    setFooterButtonsDisabled(true);
+    clickedBtn.textContent = busyLabel;
+    setFormDisabled(true);
+    document.querySelectorAll('.stake-suggestions').forEach(b => b.style.display = 'none');
+    showOverlay('Sending to Claude…');
+    fetch('http://localhost:{{SAVE_PORT}}/save-json', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    })
+    .then(() => {
+      // The click was saved. Claude should wake from the background watcher and
+      // advance to the next step. If that wake never fires, this panel just sits
+      // here forever — so after a grace period, re-enable the form and tell the
+      // user how to continue by hand.
+      setOverlayMessage('Sent to Claude — follow the rest in the chat. You can close this panel.');
+      if (_startTimer) clearTimeout(_startTimer);
+      _startTimer = setTimeout(() => {
+        hideOverlay();
+        clickedBtn.textContent = idleLabel;
+        setFooterButtonsDisabled(false);
+        setFormDisabled(false);
+        if (line) line.textContent = 'Claude hasn’t picked this up yet — type "continue" in chat, or click again.';
+      }, START_GRACE_MS);
+    })
+    .catch(() => {
+      hideOverlay();
+      clickedBtn.textContent = idleLabel;
+      setFooterButtonsDisabled(false);
+      setFormDisabled(false);
+      alert('Save server not reachable.');
+    });
+  }
+
+  // "Review" — save + validate (Phase 1.5), then the review panel if clean.
+  function submit() {
+    submitAction('config_submit', document.getElementById('btn-start'), 'Reviewing…', 'Review');
+  }
+
+  // "Save" — save_drafts only, no validation (Phase 1.5's lighter escape hatch).
+  function saveOnly() {
+    submitAction('save_only', document.getElementById('btn-save-only'), 'Saving…', 'Save');
+  }
+
+  // Hide the field groups that don't belong to this security type. Works for any
+  // element (div or otherwise) since resetting to '' falls back to that tag's
+  // normal display, not necessarily 'block'.
+  function applySecType() {
+    document.querySelectorAll('[data-sectype]').forEach(el => {
+      el.style.display = (el.dataset.sectype !== SEC_TYPE) ? 'none' : '';
+    });
+  }
+
+  // Per-block initial derived visual state, plus roster auto-fill for a name
+  // the parent skill already pre-filled server-side — without this it sat
+  // unmatched until the user clicked into the field themselves.
+  function initBlockDisplay(block) {
+    toggleVestingStartFor(block);
+    if (SEC_TYPE === 'option_grant') syncSoTypeConditionals(block);
+    const nameInput = block.querySelector('.stake-name-in');
+    if (nameInput && nameInput.value.trim()) applyRosterAutofill(nameInput);
+  }
+
+  (function () {
+    const lbl = document.getElementById('people-label');
+    if (lbl) lbl.textContent = SEC_TYPE === 'certificate' ? 'Holders' : 'Grantees';
+  })();
+  applySecType();
+  allBlocks().forEach(initBlockDisplay);
+  renumberBlocks();
+  updateSummary();
+</script>
+</body>
+</html>
