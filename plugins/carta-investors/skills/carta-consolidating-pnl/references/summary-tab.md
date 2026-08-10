@@ -12,10 +12,10 @@ Name `Summary P&L`. If taken, append numeric suffix (`Summary P&L (2)`), truncat
 |---|---|---|
 | B2 | `<FIRM-SHORT> Executive Summary` | bold, size 24, `#1F4E79` |
 | B4:F4 (merged) | `<MMM YYYY> Income Statement` | bold, white on `#1F4E79`, centered |
-| B5 | `Amounts in $` | italic, size 10 |
+| B5 | `Amounts in <resolved_currency>` | italic, size 10 |
 | C5–F5 | `Actual` / `Budget` / `Variance` / `%` | bold, right-aligned, bottom border |
 | B17:F17 | `YTD <MMM YYYY> Income Statement` | same styling as B4 |
-| B18 | `Amounts in $` | italic |
+| B18 | `Amounts in <resolved_currency>` | italic |
 | C18–F18 | Same headers as C5–F5 |
 
 ## Month block (rows 6–15)

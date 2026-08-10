@@ -9,7 +9,7 @@ Canonical spec for the 4-row header band + Carta logo placement. Read whenever a
 | B1 | `<FIRM-FULL-NAME>` | bold, size 10 |
 | B2 | Title with descriptive subtitle (e.g. `2026 Budget (based on 2025 actuals)`) | bold, size 10 |
 | B3 | Source (e.g. `Source: Carta Fund Admin · DWH journal entries`) | italic, size 10 |
-| B4 | Other context (e.g. `Amounts in USD` / `As of YYYY-MM-DD`) | italic, size 10 |
+| B4 | Other context (e.g. `Amounts in <resolved_currency>` / `As of YYYY-MM-DD`) | italic, size 10 |
 | B5 | blank | — |
 | Row 6 | Column headers | bold, white on black, centered |
 

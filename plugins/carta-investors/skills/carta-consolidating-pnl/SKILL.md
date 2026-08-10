@@ -2,7 +2,7 @@
 name: carta-consolidating-pnl
 model: sonnet
 description: 'Consolidating P&L (Income Statement) across the entities of a firm, for any period the user picks — a month, quarter, year, or start-to-end date range. Produces TWO Excel tabs: detail P&L (Period + YTD Actual/Budget/Variance/%) and executive Summary P&L formula-linked to detail. Optional tag-view breaks Actuals down by all firm reporting-tag categories with per-category subtotals. Runs in Claude for Excel (writes into the open workbook), and in Cowork, the desktop app, and Claude Code (adds tabs to an attached .xlsx, or creates one). Sourced from Carta MCP. TRIGGER on "consolidating P&L for [firm] [period]", "P&L for all entities of [firm]", "P&L for our funds", "firm-wide income statement", "P&L with executive summary", "P&L by department", "P&L by tag", "income statement by cost center". DO NOT TRIGGER for single-entity P&L, balance sheet (carta-consolidating-balance-sheet), or ManCo budgeting (carta-manco: budgets, actuals, pacing, what-if).'
-version: 1.1.0
+version: 1.1.1
 allowed-tools:
   # Production
   - mcp__claude_ai_Carta__call_tool
@@ -225,7 +225,7 @@ these name heuristics **in order, first match wins**:
 
 | Label | Heuristic |
 |---|---|
-| `ManCo` | name contains `Management`, `Mgmt`, or `ManCo`, AND does not contain `Fund`, `SPV`, `LP`, `Co-Invest`, `Bridge` |
+| `ManCo` | name contains any of `Management`, `Mgmt`, `ManCo`, OR ends in `Capital, LLC` / `Partners Management`, AND does **not** contain `Fund`, `SPV`, `LP`, `Co-Invest`, `Bridge` |
 | `Fund` | name contains `Fund` |
 | `SPV` | name contains `SPV`, `Co-Invest`, `Bridge` |
 | `Other` | anything else — don't guess |

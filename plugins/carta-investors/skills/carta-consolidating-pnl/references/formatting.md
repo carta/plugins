@@ -22,7 +22,7 @@ band and sub-headers shift down by 4 rows so the Carta logo at column E
 | B1 | `<FIRM-FULL-NAME>` — bold, size 10 (e.g. `Acme Ventures`) |
 | B2 | `<YYYY> P&L · <MMM-YY> Consolidating` — bold, size 10 |
 | B3 | `Source: Carta MCP · DWH journal entries` — italic, size 10 |
-| B4 | `Amounts in USD` — italic, size 10 |
+| B4 | `Amounts in <resolved_currency>` — italic, size 10. Resolve from fund data; never hardcode USD |
 | Row 5 | blank — breathing room |
 | D8:H8 | Month header `<MMM-YY>` — bold, white text on black fill, centered, merged D:H |
 | M8:Q8 | YTD header `YTD <MMM-YY>` — same styling |
