@@ -193,8 +193,10 @@ Order the headline answer this way:
 Tier C means they may never have met. Say so rather than dressing it up.
 
 **Within a tier**, sort by target seniority: CEO / Founder / President / MD, then C-suite, then
-Chief of Staff, then VP / Partner / Director, then Head of, then everyone else. Use `score`
-only as a tiebreaker inside one seniority band. Seniority never promotes a route across tiers.
+Chief of Staff, then VP / Partner / Director, then Head of, then everyone else. Use `bestPathScore`
+only as a tiebreaker inside one seniority band — the server returns `targetEmployees[]` pre-sorted
+by `bestPathScore` desc, which is the per-person score; `score` is the per-path field on `paths[]`
+and is already sorted by the server. Seniority never promotes a route across tiers.
 
 **Group and dedupe.** One entry per `(target person, shared employer)` — count the connectors
 and name the top 1–2 rather than listing pairs. Then dedupe across routes: if the same person
