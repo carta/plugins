@@ -72,6 +72,13 @@ Speed here is round trips, not the CRM: every tool call returns in roughly a qua
 second, so what costs time is doing them one at a time. The dependency graph is only two
 waves deep, so **issue each wave as parallel calls in a single turn.**
 
+Every `crm:*` name in this skill is dispatched through `crm_call_tool`. The generic
+`call_tool` cannot reach CRM tools at all — it resolves Carta commands only:
+
+```
+crm_call_tool({ "name": "crm:<tool>", "arguments": { ... } })
+```
+
 **Wave 1** — once you have a domain or an entity id, these are independent of each other:
 
 - the entity-appropriate interactions call (below) — the meeting, plus the history timeline
@@ -100,6 +107,13 @@ exactly the scope here. Take whichever handle the user gave you:
 | A company | `crm:get_company_interactions` |
 | A person | `crm:get_contact_interactions` |
 | An email address, domain, or a vague company name | `crm:list_interactions_by_domain` with `type: "EVENT"` |
+
+```
+crm_call_tool({
+  "name": "crm:list_interactions_by_domain",
+  "arguments": { "domain": "<domain>", "type": "EVENT" }
+})
+```
 
 Resolve a name to an ID first when the tool needs one — `crm:search_deals`,
 `crm:search_investors`, `crm:search_fundraising`, `crm:search_companies`,
