@@ -33,6 +33,13 @@ When the active MCP context is a **Firm**, the agent has investor-side access on
 - **Waterfall scenarios** (`/waterfall-scenarios`) are NOT supported here — they depend on cap-table-tenant access. If asked, explain the limitation and stop; do not attempt a DW workaround.
 - **Per-stakeholder / shareholder lists** are NOT available — there is no shareholder-detail table accessible in firm context. If the user asks "who are the shareholders of [Company]?" or "list shareholders", tell them individual shareholder data isn't accessible in investor context and stop. Do not attempt a DW workaround.
 
+## ⚠️ Common Mistakes in This Domain
+
+| ❌ Wrong | ✅ Correct | Note |
+|---|---|---|
+| `OUTSTANDING_QUANTITY` | `OUTSTANDING_SHARES` | correct column in `SUMMARY_CAP_TABLE` and `STAKEHOLDER_CAP_TABLE` |
+| `OWNERSHIP_PERCENTAGE` | `PERCENTAGE` | column in `FUND_CORPORATION_OWNERSHIP` is `PERCENTAGE`, not `OWNERSHIP_PERCENTAGE` |
+
 ## Picking the right query
 
 | User intent                                            | Use this query   | Primary table                              |

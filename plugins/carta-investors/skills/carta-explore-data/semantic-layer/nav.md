@@ -16,6 +16,7 @@ Query current NAV, TVPI, DPI, MOIC, and cumulative LP contribution totals per fu
 | `TOTAL_NAV` | `ending_total_nav` | |
 | `TVPI` / `NET_TVPI` | `total_tvpi` | |
 | `DPI` | `total_dpi` | |
+| `CUMULATIVE_CONTRIBUTIONS` / `LP_CONTRIBUTIONS` | `cumulative_lp_contributions` | tracks total LP capital called to date |
 | `COMMITTED_CAPITAL` / `TOTAL_COMMITMENTS` / `COMMITMENT` / `CUMULATIVE_TOTAL_COMMITMENT` | `cumulative_commitment_amount` | |
 | `NET_IRR` / `IRR` | **not in this table** — use `AGGREGATE_FUND_METRICS.net_lp_irr` | `MONTHLY_NAV_CALCULATIONS` has no IRR column |
 | `NAV_HISTORY` / `FUND_NAV` | `MONTHLY_NAV_CALCULATIONS` (schema-qualified) | wrong table name |

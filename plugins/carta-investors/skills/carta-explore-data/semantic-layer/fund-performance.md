@@ -245,6 +245,7 @@ Caveats:
 - **Only benchmark-eligible funds appear here** — funds need a resolved `vintage_year`,
   `fund_aum_bucket`, and `entity_type_name`. If a fund is missing, say so explicitly rather than
   concluding no historical data exists at all.
+- **`RVPI` / `total_rvpi` is not in this table** — `TEMPORAL_FUND_COHORT_BENCHMARKS` has no RVPI column. To approximate residual-value-to-paid-in, calculate `tvpi - dpi` using this table's own columns (`total_tvpi` is `tvpi`; `total_dpi` does not exist here — use `dpi`).
 - **Column names differ slightly from `AGGREGATE_FUND_METRICS`**: this table also has `net_irr`
   (fund-level net IRR combining LPs and GPs — distinct from both `deal_irr` and `net_lp_irr`).
   `deal_irr` and `net_lp_irr` mean the same thing as on `AGGREGATE_FUND_METRICS`.
