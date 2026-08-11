@@ -1,6 +1,6 @@
 {
   "name": "carta-investors",
-  "version": "3.19.3",
+  "version": "3.19.4",
   "description": "Carta Investors plugin — write-capable skills for querying and updating investors data, performance benchmarks, regulatory reporting, AGM deck generation, brand extraction, and more via the Carta MCP server",
   "problem": "Fund CFOs and investor teams answering questions about NAV, benchmarks, budgets, Form ADV, or AGM decks pull data screen-by-screen from the Carta app and rebuild reports, models, and decks by hand every cycle.",
   "author": {
