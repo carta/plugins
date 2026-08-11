@@ -10,6 +10,21 @@ from typing import List, Optional
 
 ALLOWED_TOOLS = "Read,Edit,Write,Grep,Glob"  # NO Bash — ADR Branch 4b
 
+# Appended to the chat agent's system prompt so it edits a scenario's `edits`
+# delta rather than writing a full companies clone onto a non-baseline slice.
+# The editable-field list below MUST match EDIT_FIELDS in app/src/model/slices.js
+# and SCENARIO_EDIT_FIELDS in build_datadir.py — update all three together.
+PORTFOLIO_FORMAT_NOTE = (
+    "portfolio.json (version 3) stores scenarios as deltas. The 'baseline' slice "
+    "holds full `companies`; every other slice has an `edits` map keyed by company "
+    "id, resolved against the baseline. To change a company in a scenario, set "
+    "slices[].edits[<companyId>][<field>] — only these fields are editable: "
+    "valuationB, markMultiple, futureDilution, includeInNav, exited, exitTimingQ, "
+    "waterfallMode, archived, notes. Do NOT write a full `companies` array onto a non-baseline "
+    "slice, and never touch the immutable Carta layer (positions, costBasis, "
+    "defaultValuationB, dealIrr, anchors, sliderRange)."
+)
+
 # Curated model catalog for the in-app chat dropdown. The `claude` CLI has no
 # model-discovery command, so this is hand-maintained. Values are the CLI's
 # latest-resolving aliases (see `claude --help`: "Provide an alias for the
@@ -35,6 +50,7 @@ def build_argv(claude_bin, add_dirs, model=None):
         "--include-partial-messages",
         "--permission-mode", "acceptEdits",
         "--allowedTools", ALLOWED_TOOLS,
+        "--append-system-prompt", PORTFOLIO_FORMAT_NOTE,
     ]
     if model:
         argv += ["--model", model]

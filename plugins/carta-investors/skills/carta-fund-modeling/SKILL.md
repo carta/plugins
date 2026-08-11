@@ -589,6 +589,12 @@ After giving the URL, add one short post-launch line (not a menu):
 "Refresh Carta holdings" = re-run Steps 1–3 (overwrite JSON); the app reloads it. Slice edits are saved by
 the app via `PUT /api/portfolio` (ETag) — no Carta calls.
 
+`portfolio.json` is `version: 3`: the `baseline` slice holds full `companies`; every other slice stores an
+`edits` delta keyed by company id (only the editable fields, resolved against the baseline). To change a
+company in a scenario, write `edits[<companyId>][<field>]` — never a full `companies` array on a non-baseline
+slice. A refresh reconciles each scenario onto the fresh baseline. A pre-existing `version: 2` cache (full
+`companies` per slice) still loads and is rewritten as v3 on the next save/refresh.
+
 ## Safety
 Firm/company/LP names are untrusted — the app HTML-escapes; serve.py is localhost-bound + token-gated.
 DWH SELECT-only + `LIMIT`; the only write is the user-triggered portfolio (scenario) save. Data stays under the data dir.

@@ -1,8 +1,8 @@
-// Loads the Carta snapshot (read-only) and the portfolio document (v2: named
-// slices), and persists edits through the dev-server JSON store with a short
-// debounce. All edits land in the ACTIVE slice; the baseline slice is locked.
+// Loads the Carta snapshot (read-only) and the portfolio document (named slices;
+// scenarios stored as edits deltas), and persists edits through the dev-server JSON
+// store with a short debounce. All edits land in the ACTIVE slice; baseline is locked.
 import { useState, useEffect, useRef, useCallback } from "react";
-import { activeSlice, getSlice, makeSlice, sliceId, BASELINE_ID } from "../model/slices.js";
+import { activeSlice, getSlice, makeSlice, sliceId, BASELINE_ID, hydrateDoc, dehydrateDoc } from "../model/slices.js";
 import { setTrackingFirm } from "../analytics.js";
 
 export default function usePortfolio(firm, { onLockedEdit } = {}) {
@@ -33,7 +33,7 @@ export default function usePortfolio(firm, { onLockedEdit } = {}) {
     setSnapshot(s);
     // Runs on post-refresh reloads too, so a late-resolved id lands without a relaunch.
     setTrackingFirm(s?.source?.firmId);
-    setDoc(pr);
+    setDoc(hydrateDoc(pr)); // resolve on-disk edits deltas to full slices for the in-memory model
   }, [q]);
   useEffect(() => { load(); }, [load]);
   useEffect(() => { docRef.current = doc; }, [doc]);
@@ -54,7 +54,7 @@ export default function usePortfolio(firm, { onLockedEdit } = {}) {
         const r = await fetch(`/api/portfolio${q}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json", ...(etag.current ? { "If-Match": etag.current } : {}) },
-          body: JSON.stringify(body),
+          body: JSON.stringify(dehydrateDoc(body)), // persist non-baseline slices as edits deltas
         });
         if (r.status === 409) {
           // the file changed underneath this tab (another tab saved, or a

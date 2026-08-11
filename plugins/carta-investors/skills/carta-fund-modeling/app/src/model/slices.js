@@ -4,6 +4,13 @@
 
 export const BASELINE_ID = "baseline";
 
+// The company-level fields a user can edit in a scenario. MUST match
+// SCENARIO_EDIT_FIELDS in scripts/build_datadir.py — a field missing here is
+// silently dropped from a saved delta. Everything else on a company is the
+// immutable Carta layer.
+export const EDIT_FIELDS = ["valuationB", "markMultiple", "futureDilution",
+  "includeInNav", "exited", "exitTimingQ", "waterfallMode", "archived", "notes"];
+
 /** Reset every editable input in a slice body to its default. */
 export function normalizeToDefaults(body) {
   const doc = structuredClone(body);
@@ -37,6 +44,56 @@ export function getSlice(doc, id) {
 
 export function activeSlice(doc) {
   return getSlice(doc, doc.activeSliceId);
+}
+
+// On disk a non-baseline slice is an `edits` delta keyed by company id, resolved
+// against the baseline. In memory every slice carries a full `companies` array,
+// so views/models never see the delta: hydrate on load, dehydrate on save. Both
+// tolerate a version-2 slice (full `companies`, no `edits`) as already in its
+// target shape — that is what lets an existing v2 cache load and re-save as v3.
+
+export function hydrateSlice(slice, baselineCompanies) {
+  if (!slice.edits) return slice; // baseline, v2, or already hydrated
+  const companies = baselineCompanies.map((base) => {
+    const c = structuredClone(base);
+    const e = slice.edits[c.id];
+    if (e) for (const f of EDIT_FIELDS) if (f in e) c[f] = e[f];
+    return c;
+  });
+  const { edits, ...rest } = slice;
+  return { ...rest, companies };
+}
+
+export function dehydrateSlice(slice, baselineCompanies) {
+  if (!slice.companies) return slice; // already dehydrated
+  if (slice.id === BASELINE_ID) return slice; // baseline stays a full copy
+  const baseById = new Map(baselineCompanies.map((c) => [c.id, c]));
+  const edits = {};
+  for (const c of slice.companies) {
+    const base = baseById.get(c.id);
+    if (!base) continue; // drop companies absent from baseline (same rule as reconcile)
+    const delta = {};
+    for (const f of EDIT_FIELDS) if (c[f] !== base[f]) delta[f] = c[f];
+    if (Object.keys(delta).length) edits[c.id] = delta;
+  }
+  const { companies, ...rest } = slice;
+  return { ...rest, edits };
+}
+
+export function hydrateDoc(doc) {
+  if (!doc || !Array.isArray(doc.slices)) return doc;
+  const base = getSlice(doc, BASELINE_ID)?.companies;
+  if (!Array.isArray(base)) return doc; // no baseline to resolve against
+  return { ...doc, slices: doc.slices.map((s) => hydrateSlice(s, base)) };
+}
+
+export function dehydrateDoc(doc) {
+  if (!doc || !Array.isArray(doc.slices)) return doc;
+  const base = getSlice(doc, BASELINE_ID)?.companies;
+  if (!Array.isArray(base)) return doc;
+  // Stamp v3 so a persisted file's `version` matches its edits shape — a v2 cache
+  // edited in-app saves as v3 here, mirroring build_datadir.py's refresh path.
+  return { ...doc, version: 3, slices: doc.slices.map((s) => dehydrateSlice(s, base)) };
 }
 
 /** Companies holding positions in a fund (live ones only). Defunct companies
@@ -146,7 +203,7 @@ export function sliceDiffers(a, b) {
       s.assumptions.feeLoads ?? {},
       s.assumptions.followOnRatios ?? {},
       s.assumptions.recyclingRatios ?? {},
-      s.companies.map((c) => [c.id, c.valuationB, c.markMultiple ?? 1, c.futureDilution ?? 0, c.includeInNav, !!c.exited, !!c.waterfallMode, c.archived, c.positions.length]),
+      s.companies.map((c) => [c.id, ...EDIT_FIELDS.map((f) => c[f]), c.positions.length]),
     ]);
   return sig(a) !== sig(b);
 }

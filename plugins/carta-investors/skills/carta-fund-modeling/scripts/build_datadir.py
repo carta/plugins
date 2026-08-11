@@ -312,36 +312,62 @@ def _cohort_covered(r):
     return False
 
 
-# The company-level fields the app lets a user edit (per
-# app/src/model/slices.js:sliceDiffers); everything else on a
-# company is the immutable Carta layer.
+# The company-level fields the app lets a user edit; everything else on a company
+# is the immutable Carta layer. MUST match EDIT_FIELDS in app/src/model/slices.js —
+# the JS delta serializer and this reconcile share the list, so a field in one but
+# not the other is silently dropped on the side that lacks it.
 SCENARIO_EDIT_FIELDS = ("valuationB", "markMultiple", "futureDilution",
-                        "includeInNav", "exited", "waterfallMode", "archived", "notes")
+                        "includeInNav", "exited", "exitTimingQ", "waterfallMode",
+                        "archived", "notes")
 # Assumption maps keyed by fund id — pruned to the surviving funds on refresh.
 FUND_KEYED_ASSUMPTIONS = ("carryRates", "preferredReturns", "catchupRates",
                           "catchupLimits", "feeLoads", "followOnRatios",
                           "recyclingRatios", "avgChecks", "exitHorizon",
-                          "rtfTarget", "rtfConfig")
+                          "rtfTarget", "rtfConfig", "glidepath")
+
+
+def _slice_overlay(old_slice):
+    """The user's scenario knobs keyed by company id. Reads a version-3 `edits`
+    map directly, or derives one from a version-2 slice's full `companies` array.
+    Reading `edits` unconditionally would silently wipe every edit on a v2 file."""
+    edits = old_slice.get("edits")
+    if isinstance(edits, dict):
+        return {cid: e for cid, e in edits.items() if isinstance(e, dict) and cid}
+    # `or` (not a .get default) also coalesces an explicit JSON null.
+    overlay = {}
+    for c in (old_slice.get("companies") or []):
+        if isinstance(c, dict) and c.get("id"):
+            overlay[c["id"]] = {f: c[f] for f in SCENARIO_EDIT_FIELDS if f in c}
+    return overlay
+
+
+def _overlay_company_name(old_slice, cid):
+    """A dropped company's name, available only from a v2 slice's `companies`
+    array; a v3 `edits` map stores no name, so the caller falls back to the id."""
+    for c in (old_slice.get("companies") or []):
+        if isinstance(c, dict) and c.get("id") == cid:
+            return c.get("name")
+    return None
 
 
 def reconcile_slice(old_slice, companies, live_fund_ids):
-    """Rebuild one preserved scenario on the fresh baseline `companies`, overlaying
-    only the user's scenario knobs. Returns (reconciled_slice, dropped_names)."""
-    # `or` (not a .get default) also coalesces an explicit JSON null.
-    old_by_id = {c["id"]: c for c in (old_slice.get("companies") or [])
-                 if isinstance(c, dict) and c.get("id")}
-    companies_out = []
-    for fresh in companies:
-        merged = copy.deepcopy(fresh)
-        oc = old_by_id.get(fresh["id"])
-        if oc:
-            for f in SCENARIO_EDIT_FIELDS:
-                if f in oc:
-                    merged[f] = oc[f]
-        companies_out.append(merged)
-    fresh_ids = {c["id"] for c in companies}
-    dropped = [old_by_id[cid].get("name") or cid
-               for cid in old_by_id if cid not in fresh_ids]
+    """Rebuild one preserved scenario against the fresh baseline `companies` as a
+    version-3 `edits` delta: keep only the edit fields that differ from the fresh
+    baseline company. Accepts a v2 (`companies`) or v3 (`edits`) input.
+    Returns (reconciled_slice, dropped_names)."""
+    fresh_by_id = {c["id"]: c for c in companies}
+    overlay = _slice_overlay(old_slice)
+    edits_out = {}
+    for cid, fields in overlay.items():
+        fresh = fresh_by_id.get(cid)
+        if fresh is None:
+            continue  # company no longer in Carta — logged as dropped below
+        delta = {f: fields[f] for f in SCENARIO_EDIT_FIELDS
+                 if f in fields and fields[f] != fresh.get(f)}
+        if delta:
+            edits_out[cid] = delta
+    dropped = [_overlay_company_name(old_slice, cid) or cid
+               for cid in overlay if cid not in fresh_by_id]
     assumptions = copy.deepcopy(old_slice.get("assumptions") or {})
     for key in FUND_KEYED_ASSUMPTIONS:
         m = assumptions.get(key)
@@ -351,7 +377,7 @@ def reconcile_slice(old_slice, companies, live_fund_ids):
                   if k in old_slice}
     reconciled["locked"] = False
     reconciled["assumptions"] = assumptions
-    reconciled["companies"] = companies_out
+    reconciled["edits"] = edits_out
     return reconciled, dropped
 
 
@@ -1039,7 +1065,7 @@ def build(rawdir, out, meta):
                 cu_limit_seed[i] = wf["catchupLimit"]
 
     portfolio = {
-        "version": 2,
+        "version": 3,
         "seededFrom": {"firm": firm_name, "navAsOf": nav, "provider": "carta-fund-admin"},
         "activeSliceId": "baseline",
         "slices": [{
