@@ -58,7 +58,7 @@ Bottom rows:
 
 **Do not** freeze panes. **Do not** hide a GL-code column. **Do not** add a buffer-% cell.
 
-**Tab 2: `<prior_year> Actuals` (reference, same shape).** Same 4-row header band (A2 = `<prior_year> Actuals (source data)`). Same section blocks, same accounts. Values = hardcoded prior-year actuals from the DWH.
+**Tab 2: `<prior_year> Actuals` (reference, same shape).** Same 4-row header band (A2 = `<prior_year> Actuals (source data)`). Same section blocks, same accounts. Values = hardcoded prior-year actuals from the DWH. **Same §4a sparse-history comments too** — the flag is a property of the account's history, not of which tab you're viewing it through, so Tab 2 gets a comment on exactly the same rows Tab 1 does. Build both tabs from one shared per-row sparse/not-sparse determination rather than two independent passes — a second pass that happens to skip the comment step is how a tab silently ends up missing them.
 
 ### 6. Number format & column widths
 

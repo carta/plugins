@@ -1,6 +1,6 @@
 # Fetch actuals capability
 
-Entry point for updating actuals in an existing budget. Eight layout sub-references:
+Entry point for updating actuals in an existing budget. Nine layout sub-references:
 
 - [`add-actuals-columns.md`](add-actuals-columns.md) — **Layout A**: interleave Budget / Actual / Variance per month on the Budget tab (recommended for active tracking).
 - [`add-actuals-tab.md`](add-actuals-tab.md) — **Layout B**: add a peer `<year> Actuals` tab alongside the Budget tab.
@@ -10,6 +10,7 @@ Entry point for updating actuals in an existing budget. Eight layout sub-referen
 - [`vendor-view.md`](vendor-view.md) — **Layout F**: new tab with actuals sliced by vendor, with per-vendor subtotals.
 - [`inline-vendor.md`](inline-vendor.md) — **Layout G**: vendor sub-rows added inline to the current actuals tab.
 - [`vendor-only-view.md`](vendor-only-view.md) — **Layout H**: new tab with one row per vendor across a timeline — no GL account sub-rows.
+- [`sub-account-view.md`](sub-account-view.md) — **Layout I**: new tab with a sub-account drill-down across the full chart of accounts (not just P&L), GL account as the outer grouping with its sub-accounts nested beneath.
 
 Shared helper: [`get-actuals.md`](get-actuals.md) — canonical actuals-query routine.
 
@@ -64,6 +65,7 @@ Use `AskUserQuestion`:
 | 6 | **Build a vendor-view tab — actuals sliced by vendor, with GL account detail** | `read_skill(file_path="references/vendor-view.md")` |
 | 7 | **Add vendor rows inline to the current actuals tab** | `read_skill(file_path="references/inline-vendor.md")` — only offered when the active sheet is already an actuals tab |
 | 8 | **Build a vendor summary tab — one row per vendor across a timeline, no GL detail** | `read_skill(file_path="references/vendor-only-view.md")` |
+| 9 | **Build a sub-account drill-down tab — every GL account (full chart, not just P&L) broken into its sub-accounts** | `read_skill(file_path="references/sub-account-view.md")` |
 
 Use the user's prompt as a *hint* for which option to highlight — never as authority to skip the question:
 
@@ -77,10 +79,12 @@ Use the user's prompt as a *hint* for which option to highlight — never as aut
 | "by vendor", "vendor view", "vendor breakdown" — **and the active tab is already an actuals tab** | Offer Options 6 and 7 together; 7 ← recommended |
 | "by vendor", "vendor view" — **no actuals tab open** | Option 6 |
 | "vendor summary", "vendor spend over time", "just vendors" | Option 8 |
+| "by sub-account", "sub-account view", "sub-account breakdown", "GL sub-account" | Option 9 |
 
 **Option 5 availability:** always show in chooser; if Gate 2.5 finds no tag data, fall back to Layout A.
 **Option 6/8 availability:** always show in chooser; if Gate 2.6/2.8 finds no vendor data, fall back to Layout A.
 **Option 7 availability:** only show when the active sheet is already an actuals tab.
+**Option 9 availability:** always show in chooser; if Gate 2.9 finds no sub-account data, fall back to Layout A. Expect this fallback to trigger often — sub-account is a sparse, opt-in GL feature.
 
 **Immediately call `read_skill` for the chosen layout** — do not reconstruct from memory.
 
@@ -149,6 +153,35 @@ call_tool({"name": "dwh__execute__query", "arguments": {
 
 ---
 
+## Gate 2.9 — Sub-account-data discovery (Layout I path only)
+
+**Skip unless the user chose Layout I at Gate 2.**
+
+```
+call_tool({"name": "dwh__execute__query", "arguments": {
+  "sql": "SELECT
+            COUNT_IF(SUB_ACCOUNT_NAME IS NOT NULL) AS tagged_rows,
+            COUNT_IF(SUB_ACCOUNT_NAME IS NULL)     AS untagged_rows,
+            COUNT(DISTINCT SUB_ACCOUNT_NAME)       AS distinct_sub_accounts
+          FROM <journal_entries_table>
+          WHERE FUND_NAME = '<entity_name>'
+            AND EFFECTIVE_DATE >= DATEADD('year', -1, CURRENT_DATE)",
+  "format": "markdown",
+  "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-manco", "<CAPABILITY>"]}
+}})
+```
+
+**Deliberately no `ACCOUNT_TYPE >= '4000'` filter here** — unlike Gate 2.5/2.6's probes, this one must match Layout I's full-COA scope (see `sub-account-view.md`). Live testing showed most sub-account tagging sits on capital accounts below the P&L cutoff; restricting this probe to P&L would under-detect real coverage.
+
+- `tagged_rows > 0` → sub-account data exists. Store `<SUBACCOUNT_COUNT>` and `<HAS_UNTAGGED>`. Continue to Gate 3.
+- `tagged_rows == 0` → no sub-account data anywhere in the chart of accounts. Tell the user in one sentence and fall back to **Layout A**.
+
+Sub-accounts are a sparse, opt-in GL feature. A `tagged_rows == 0` result here is common even
+at firms that have sub-accounts configured — treat it as the expected fallback path, not an
+error to investigate.
+
+---
+
 ## Gate 3 — Batched parameter gate
 
 In one `AskUserQuestion`, confirm every parameter the prompt didn't already specify.
@@ -169,13 +202,13 @@ In one `AskUserQuestion`, confirm every parameter the prompt didn't already spec
 
 Adapt `← recommended` and options to context. Always compute labels dynamically from today's date.
 
-Store `<PERIOD_START>`, `<PERIOD_END>`, `<MATCH_STRATEGY>` (Layouts A–D: `name first then GL code` or `GL code only`).
+Store `<PERIOD_START>`, `<PERIOD_END>`, `<MATCH_STRATEGY>` (Layouts A–D: `name first then GL code` or `GL code only`). A third matching dimension — sub-account — is never asked here; Gate 4 auto-detects it from the existing sheet's row structure (see Gate 4).
 
-### Gate 3a — Aggregation level (Layouts E, F, and H only)
+### Gate 3a — Aggregation level (Layouts E, F, H, and I only)
 
 **Skip for Layouts A–D and G.** Set `<AGGREGATION> = MONTH` and continue.
 
-**For Layouts E, F, H, this MUST be a separate `AskUserQuestion` call** — do not bundle with the period question above.
+**For Layouts E, F, H, I, this MUST be a separate `AskUserQuestion` call** — do not bundle with the period question above.
 
 > Aggregate columns by:
 
@@ -187,11 +220,11 @@ Store `<PERIOD_START>`, `<PERIOD_END>`, `<MATCH_STRATEGY>` (Layouts A–D: `name
 
 Store `<AGGREGATION>` (`YEAR` | `QUARTER` | `MONTH`).
 
-### Gate 3b — Vendor row grouping preference (Layouts F and G + excel-addin only)
+### Gate 3b — Detail-row grouping preference (Layouts F, G, and I + excel-addin only)
 
 **Skip for Layouts A–E and H**, or when `<RUNTIME>` is `local-file`.
 
-> Should vendor detail rows be collapsible in Excel?
+> Should detail rows be collapsible in Excel?
 
 | # | Label | Description |
 |---|---|---|
@@ -199,7 +232,7 @@ Store `<AGGREGATION>` (`YEAR` | `QUARTER` | `MONTH`).
 | 2 | **Yes — expanded by default** | Rows visible; click **−** to collapse |
 | 3 | **No grouping** | Flat tab, no outline controls |
 
-Store `<VENDOR_GROUPING>`.
+Store `<VENDOR_GROUPING>` (Layouts F/G) or `<SUBACCOUNT_GROUPING>` (Layout I).
 
 ---
 
@@ -214,6 +247,15 @@ uv run "${CLAUDE_PLUGIN_ROOT}/scripts/read_workbook.py" "<DESTINATION_PATH>" --s
 
 In both modes: identify header row, line-item rows, actuals/budget columns, formula rows. Treat any cell where `is_formula: true` as load-bearing — never overwrite it.
 
+**Sub-account detection (Layouts A–D only, always run — cheap, no extra tool call):** while
+scanning line-item rows, also check for the two-space-indent convention `sub-account-view.md`
+and `budget-by-subaccount.md` both use — an unindented account-header row (bold, no amounts)
+immediately followed by one or more indented `  No Sub-Account` / `  <sub-account name>` rows.
+This is the shape `budget-by-subaccount.md` writes for accounts with sub-account activity. If
+found anywhere on the sheet, set `<HAS_SUBACCOUNT_BUDGET_ROWS> = true` and record the flagged
+GL codes as `<SUBACCOUNT_BUDGET_ACCOUNTS>`. Most budgets won't have this pattern — a plain
+`false` / empty list is the common case, not a failure.
+
 ---
 
 ## Gate 5 — Load actuals
@@ -224,7 +266,20 @@ In both modes: identify header row, line-item rows, actuals/budget columns, form
 
 **Layout H:** use [`queries/actuals-by-vendor-period.sql`](../queries/actuals-by-vendor-period.sql). Returns `(vendor_name, period, signed_amount)` — no `gl_code` or `account_name` columns. Same `COALESCE(VENDOR_NAME, 'No vendor')` convention as Layout F.
 
+**Layout I:** use the query from `sub-account-view.md` §SQL. Full chart of accounts (no `ACCOUNT_TYPE` filter), grouped by section → GL account → sub-account. `COALESCE(SUB_ACCOUNT_NAME, 'No Sub-Account')` means every account gets at least one row whether or not it has sub-account tagging — do not run a second query and do not drop accounts that only produce a 'No Sub-Account' row.
+
 **Layouts A–D:** call `read_skill(file_path="references/get-actuals.md")` for the main actuals query. In parallel, call `read_skill(file_path="references/vendor-actuals.md")` and run the vendor actuals query — loads `<VENDOR_ACTUALS>` into session context. Never write inline SQL outside those files.
+
+**Layouts A–D, sub-account-aware match (only when Gate 4 set `<HAS_SUBACCOUNT_BUDGET_ROWS>`):**
+for the accounts in `<SUBACCOUNT_BUDGET_ACCOUNTS>` only, additionally run the query from
+`sub-account-view.md` §SQL (`actuals-by-account-subaccount-period.sql`, period-scoped to
+`<PERIOD_START>`/`<PERIOD_END>`) and keep just the rows whose `gl_code` is in that list. Match
+each sheet row to its actual by `(gl_code, sub_account_name)` — the sheet's `  No Sub-Account`
+row matches the query's `No Sub-Account` row exactly like a named sub-account row would.
+Every account NOT in `<SUBACCOUNT_BUDGET_ACCOUNTS>` still matches by `<MATCH_STRATEGY>` alone
+against the normal flat `get-actuals.md` result — don't run the sub-account query for accounts
+that don't need it, and don't apply sub-account matching when `<HAS_SUBACCOUNT_BUDGET_ROWS>`
+is false (the overwhelming majority of runs).
 
 **After the actuals are loaded (Layouts F, G, H only):** if the built data structure has a non-empty `No vendor` bucket, go to **Gate 5.5** before the pre-build review. For every other layout, and whenever the `No vendor` bucket is empty, skip Gate 5.5 entirely and proceed to Gate 6.
 

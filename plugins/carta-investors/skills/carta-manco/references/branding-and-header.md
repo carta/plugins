@@ -84,6 +84,40 @@ await context.sync();
 
 Comments only — no fill / font color / border / italic.
 
+**Comment-collision trap.** `comments.add()` throws `InvalidOperation` if a comment already
+exists at that address — a real risk here, since a single row can independently earn a
+sparse-history comment (this pattern) and a different flag (e.g. the reclassification note in
+`sub-account-view.md`) from separate passes over the same sheet. Check for an existing comment
+and merge into it rather than calling `add()` blindly and handling the throw:
+
+```javascript
+const comments = sheet.comments;
+comments.load("items/id,items/content");
+await context.sync();
+const locs = comments.items.map(c => { const l = c.getLocation(); l.load("address"); return { c, l }; });
+await context.sync();
+const existing = {};
+for (const x of locs) existing[x.l.address.split("!")[1]] = x.c;
+
+const addr = "A<row>";
+const note = "<the note text>";
+if (existing[addr]) {
+  existing[addr].load("content");
+  await context.sync();
+  // Guard against re-running this pass and appending the same note twice.
+  if (!existing[addr].content.includes(note)) {
+    existing[addr].content = existing[addr].content + "  |  " + note;
+  }
+} else {
+  sheet.comments.add(addr, note, "Plain");
+}
+await context.sync();
+```
+
+The `includes(note)` guard matters as much as the merge itself — appending unconditionally on
+every re-run (e.g. a Gate 6 retry, or two separate flagging passes over the same row) produces
+a comment with the same sentence repeated. Check before you append, not just before you add.
+
 ## Hard rules
 
 - **Rows 1–4 are reserved.** Never write data into A1–A4 (except the four metadata strings).

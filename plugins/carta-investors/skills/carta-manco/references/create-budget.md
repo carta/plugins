@@ -6,6 +6,7 @@ Entry point for building a new budget. Routes to one of several sub-references b
 - [`from-template.md`](from-template.md) — fill in a Carta template.
 - [`from-recommendation.md`](from-recommendation.md) — add a line not in the Chart of Accounts.
 - [`slice-by-tag.md`](slice-by-tag.md) — build a budget broken down by reporting tag / department.
+- [`budget-by-subaccount.md`](budget-by-subaccount.md) — build a budget with sub-account rows nested under their parent account, for accounts that have sub-account activity.
 - [`reorganize-categories.md`](reorganize-categories.md) — group / categorize existing budget line items into sections with subtotals.
 - [`inflation-buffer.md`](inflation-buffer.md) — apply an inflation / contingency buffer to budget expenses.
 
@@ -72,7 +73,8 @@ If a sheet with that name already exists, ask whether to overwrite or append a s
 | "from last year's actuals", "based on prior actuals", "from prior actuals", no qualifier | `read_skill(file_path="references/from-prior-actuals.md")` |
 | "use the template", "fill in this template", "Carta template" | `read_skill(file_path="references/from-template.md")` |
 | "add a line for <something not in CoA>", "I expect to spend $X on <new category>" | `read_skill(file_path="references/from-recommendation.md")` |
-| "by department", "by reporting tag", "sliced by <dimension>", "by sub-account" | `read_skill(file_path="references/slice-by-tag.md")` |
+| "by department", "by reporting tag", "sliced by <dimension>" | `read_skill(file_path="references/slice-by-tag.md")` |
+| "by sub-account", "sub-account budget", "GL sub-account" | `read_skill(file_path="references/budget-by-subaccount.md")` |
 | "group / categorize / organize line items into categories", "add category subtotals" | `read_skill(file_path="references/reorganize-categories.md")` |
 | "add a 5% inflation buffer", "apply a contingency buffer", "pad expenses by X%" | `read_skill(file_path="references/inflation-buffer.md")` |
 

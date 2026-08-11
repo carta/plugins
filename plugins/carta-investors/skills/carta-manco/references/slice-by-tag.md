@@ -2,13 +2,17 @@
 
 ## When to use
 
-User said "by department", "by reporting tag", "split by `<tag>`", "by sub-account", etc.
+User said "by department", "by reporting tag", "split by `<tag>`", etc. — a dimension that
+can vary independently across many accounts. **Not** for "by sub-account" — that's routed to
+[`budget-by-subaccount.md`](budget-by-subaccount.md) instead, since a sub-account belongs to
+exactly one parent account and needs an account-outer/sub-account-row shape, not this file's
+per-dimension column-block pivot.
 
 ## Workflow
 
 ### 1. Discover the slicing dimension
 
-Common dimension columns on the journal-entries table (typical names: reporting-tag, department, sub-account-name, project-code, class). **Discover the exact column names** at runtime via `dwh:get:table_schema` — don't hardcode.
+Common dimension columns on the journal-entries table (typical names: reporting-tag, department, project-code, class). **Discover the exact column names** at runtime via `dwh:get:table_schema` — don't hardcode.
 
 Discovery query:
 

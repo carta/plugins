@@ -1,7 +1,7 @@
 ---
 name: carta-manco
 model: opus
-description: 'ManCo (management company) budgeting & consolidating-financials skill for Carta Fund Admin firms; hard-gates on Carta Fund Admin + active ManCo eligibility. TRIGGER (specific tasks): build/create/draft a budget, pull/fetch/import the Carta budget, add/refresh actuals, interleave Budget/Actual/Variance, pacing/on-track/variance/budget-analysis, "what did we spend on [X] YTD", "where did we overspend", what-if/scenario modeling (headcount cuts, revenue shocks, new fund raise, expansion hires), consolidating P&L / balance sheet / trial balance / cash flow for the ManCo. ALSO fires on a generic/ambiguous ManCo request with no specific action named — "help with our ManCo", "work on the management company", "ManCo financials", "management company numbers", "not sure what I need" — and presents the capability menu. NOT FOR: single-fund financials, portfolio valuations, LP reporting, cap tables, loans (carta-investors:carta-loan-dashboard).'
+description: 'ManCo (management company) budgeting skill for Carta Fund Admin firms; hard-gates on Carta Fund Admin + active ManCo eligibility. TRIGGER (specific tasks): build/create/draft a budget, pull/fetch/import the Carta budget, add/refresh actuals, interleave Budget/Actual/Variance, sub-account drill-down/breakdown, budget by sub-account, pacing/on-track/variance/budget-analysis, "what did we spend on [X] YTD", "where did we overspend", what-if/scenario modeling (headcount cuts, revenue shocks, new fund raise, expansion hires). ALSO fires on a generic/ambiguous ManCo request with no specific action named — "help with our ManCo", "not sure what I need" — and presents the capability menu (including consolidating financials). NOT FOR: single-fund financials, portfolio valuations, LP reporting, cap tables, loans (carta-investors:carta-loan-dashboard); named consolidating P&L/BS/TB/cash-flow asks — use carta-consolidating-pnl/-balance-sheet/-trial-balance or fa-manco:carta-consolidating-cash-flow directly.'
 version: 1.0.0
 allowed-tools:
   # Production
@@ -209,7 +209,7 @@ capability by its technical name.** Two paths only:
 |---|---|---|
 | "pull / fetch / import / sync Carta budget", "bring Carta's budget into this sheet", "pull the Carta budget for [ManCo]" | fetch-budget | `read_skill(file_path="references/fetch-budget.md")` |
 | "build / create / draft / generate a budget for [year]", "build a budget for next year", "from last year's actuals", "from prior actuals", "add a 5% inflation buffer", "group / categorize budget line items" | create-budget | `read_skill(file_path="references/create-budget.md")` |
-| "pull / fetch / get / refresh / sync actuals for [firm/ManCo]", "what did we spend on [category] YTD", "interleave Budget/Actual/Variance", "actuals by department/tag/vendor", "add next month column", "extend budget through [month]" | fetch-actuals | `read_skill(file_path="references/fetch-actuals.md")` |
+| "pull / fetch / get / refresh / sync actuals for [firm/ManCo]", "what did we spend on [category] YTD", "interleave Budget/Actual/Variance", "actuals by department/tag/vendor/sub-account", "add next month column", "extend budget through [month]" | fetch-actuals | `read_skill(file_path="references/fetch-actuals.md")` |
 | "how are we doing", "pacing", "on track", "how are we pacing against budget", "variance analysis", "compare budget vs actuals", "budget vs actuals for [firm]", "are we over on [X]", "where did we overspend or underspend", "drill into [X]" | budget-analysis | `read_skill(file_path="references/budget-analysis.md")` |
 | "what if we cut headcount", "model a revenue shortfall", "preserve $X cash", "raise a new fund", "model hiring N FTEs", "what-if", "scenario", "build me a scenario model" | budget-scenarios | `read_skill(file_path="references/budget-scenarios.md")` |
 | "consolidating P&L", "consolidated income statement", "ManCo P&L", "pull our ManCo P&L", "consolidating P&L across all entities" | consolidating-pnl (external) | `Skill("carta-investors:carta-consolidating-pnl")` |
@@ -447,6 +447,7 @@ The skill queries the Carta DWH journal-entries table. Look up column names via 
 - `references/from-template.md` — build from a user-supplied Excel template
 - `references/from-recommendation.md` — build from a Carta-generated recommendation
 - `references/slice-by-tag.md` — scope budget to a specific department/tag
+- `references/budget-by-subaccount.md` — build a budget with sub-account rows nested under their parent account, for accounts that have sub-account activity
 - `references/reorganize-categories.md` — restructure COA groupings before budgeting
 - `references/inflation-buffer.md` — apply a percentage uplift across line items
 - `references/fill-budget-columns.md` — write budget figures into month columns
@@ -460,6 +461,7 @@ The skill queries the Carta DWH journal-entries table. Look up column names via 
 - `references/vendor-only-view.md` — vendor view without budget columns
 - `references/inline-vendor.md` — inline vendor detail beneath line items
 - `references/tag-view.md` — actuals bucketed by department/tag
+- `references/sub-account-view.md` — full chart-of-accounts drill-down, sub-accounts nested under their one parent GL account (not just P&L)
 - `references/refresh-existing.md` — refresh already-written actuals figures
 
 ### Budget-analysis sub-references
@@ -491,27 +493,31 @@ The 4 consolidating-financials capabilities are **external dispatches** via the
 `Skill()` tool to standalone `carta-investors`/`fa-manco` skills that own their
 own gates end to end.
 
-**History:** this skill was previously a thin `carta-investors:carta-manco`
-router that dispatched to 5 separate published budgeting skills
-(`carta-fetch-budget`, `carta-create-budget`, `carta-fetch-actuals`,
-`carta-budget-analysis`, `carta-budget-scenarios`), and was briefly mirrored
-into `fa-manco:carta-budgeting`. That content was consolidated here, the 5
-leaf skills were deleted, and this skill is now the sole, published
-implementation of all 5 budgeting capabilities — there is no more
-coexistence or mirroring to maintain. One drift incident occurred during the
-transition: `carta-fetch-actuals` shipped an opt-in memo-based
-vendor-inference flow (Gate 5.5) that sat un-mirrored here for two weeks
-before being manually ported (MANCO-924) — a reminder of why the references
-are now self-contained rather than split across sibling skills.
+This skill is the sole, published implementation of all 5 budgeting
+capabilities — no separate leaf skill exists for any of them, and no sibling
+skill to keep in sync. References stay self-contained for this reason: each
+capability's full logic lives in its own reference file here rather than
+split across skills that could drift apart from each other.
 
-### Known limitation — picker overlap with consolidating skills
+### Consolidating-financials routing (menu-only, not a top-level trigger)
 
-`carta-consolidating-pnl` and `carta-consolidating-balance-sheet` are not
-de-tuned and their own trigger phrases ("consolidating P&L for [firm]",
-"consolidating balance sheet") overlap this skill's consolidating-financials
-triggers directly. `carta-consolidating-trial-balance` and
-`fa-manco:carta-consolidating-cash-flow` have narrower descriptions with less
-overlap risk.
+This skill's own description does not claim "consolidating P&L / balance
+sheet / trial balance / cash flow" as trigger phrases, even though the
+Router Gate below still dispatches to those 4 capabilities. `carta-
+consolidating-pnl` and `carta-consolidating-balance-sheet` independently
+claim those same phrases in their own descriptions — if this skill's
+description claimed them too, the top-level picker would face a genuine
+ambiguity between two skills for the same utterance. A named consolidating
+ask (e.g. "show consolidating P&L for our firm") therefore reaches the
+standalone skill directly, without this skill ever being selected.
+
+The Router Gate's Route rows and the welcome-screen menu (category 4,
+drill-down C) still dispatch to the 4 consolidating skills — those only run
+**after** carta-manco is already selected (explicit invocation by name, or a
+genuinely ambiguous "help with our ManCo" request that falls through to the
+menu), so they carry no picker-level collision risk. A user who names the
+consolidating ask directly reaches the standalone skill without ever loading
+carta-manco; a user who asks broadly still finds it as a menu option.
 
 ### Firm-context handoff to consolidating skills (known, accepted inefficiency)
 
@@ -524,13 +530,11 @@ re-resolve the firm it was just handed. This is a minor extra round-trip, not a
 correctness bug, and fixing it means changing the variable-naming contract of 4
 other skills — out of scope here.
 
-### Per-capability telemetry now uses the capability name directly
+### Telemetry naming feeds an external Metabase dashboard
 
 Gate 0.75's Dispatch step tags `_instrumentation.skills` with `<CAPABILITY>`
 itself (`fetch-budget`, `create-budget`, `fetch-actuals`, `budget-analysis`,
-`budget-scenarios`) — there is no longer a separate old-skill-name mapping.
-Previously this tagged the now-deleted leaf skill names (`carta-fetch-budget`,
-etc.) for continuity with a Metabase dashboard ("Budget Skills Usage") that
-filtered on those literal strings. That dashboard's SQL must be updated to
-filter on the new capability-name strings instead — it is an external
-dependency this repo cannot verify or fix directly.
+`budget-scenarios`). A Metabase dashboard ("Budget Skills Usage") filters on
+these exact strings — renaming a capability here requires updating that
+dashboard's SQL too, an external dependency this repo cannot verify or fix
+directly.
