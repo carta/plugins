@@ -7,7 +7,7 @@ description: >
   make-whole waterfall + carry banking), Exit & IRR (exit scenarios, XIRR, GP & LP returns, plus a per-fund
   DPI/RVPI/TVPI glidepath in the LP Returns view), Reserves (per-fund dry-powder planning), and Cohort
   Standing (peer-cohort + S&P-equivalent benchmarking). Scenarios persist locally. Invoke with a firm name,
-  e.g. "fund modeling for Demo Capital" or "model portfolio scenarios for <firm>". Fund Admin only. NOT
+  e.g. "fund modeling for Demo Capital" or "model portfolio scenarios for a firm". Fund Admin only. NOT
   Tactyc/Fund Forecasting — use carta-fund-forecasting for Tactyc funds. NOT for single-exit waterfalls on
   one company. NOT read-only fund data queries — use carta-explore-data.
 argument-hint: "<firm name or Carta firm URL — required>"

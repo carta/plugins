@@ -911,6 +911,13 @@ def _fetch_stylesheets(soup: BeautifulSoup, base_url: str) -> list[str]:
         if len(hrefs) >= _MAX_CSS_FILES:
             break
 
+    # No linked stylesheets (e.g. a site whose CSS is entirely inline <style>):
+    # skip the pool entirely. ThreadPoolExecutor(max_workers=0) raises
+    # ValueError("max_workers must be greater than 0"), so guarding here also
+    # returns the inline <style> blocks already collected above.
+    if not hrefs:
+        return sheets
+
     def _fetch_one(url: str) -> str | None:
         try:
             resp = requests.get(url, headers=_HEADERS, timeout=8)

@@ -292,13 +292,13 @@ Run this bash block exactly as written:
 
 ```bash
 OUTPUT_DIR="/tmp/agm-deck"
-PLUGIN_DIR="${CLAUDE_PLUGIN_ROOT}"
+REFERENCES_DIR="${CLAUDE_PLUGIN_ROOT}/skills/carta-agm-deck-builder/references"
 
 mkdir -p "$OUTPUT_DIR/design-system" "$OUTPUT_DIR/brands" "$OUTPUT_DIR/assets"
-cp -r "$PLUGIN_DIR/references/design-system/." "$OUTPUT_DIR/design-system/"
-cp "$PLUGIN_DIR/references/deck-stage.js" "$OUTPUT_DIR/"
-cp "$PLUGIN_DIR/references/deck-nav.js" "$OUTPUT_DIR/"
-cp "$PLUGIN_DIR/references/deck-shell.html" "$OUTPUT_DIR/"
+cp -r "$REFERENCES_DIR/design-system/." "$OUTPUT_DIR/design-system/"
+cp "$REFERENCES_DIR/slide-templates/deck-stage.js" "$OUTPUT_DIR/"
+cp "$REFERENCES_DIR/slide-templates/deck-nav.js" "$OUTPUT_DIR/"
+cp "$REFERENCES_DIR/slide-templates/deck-shell.html" "$OUTPUT_DIR/"
 ```
 
 **Logo — priority chain (resolve before writing brand CSS):**
