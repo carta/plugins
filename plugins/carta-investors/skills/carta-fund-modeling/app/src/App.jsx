@@ -3,8 +3,9 @@ import usePortfolio from "./state/usePortfolio.js";
 import { computeFundStates, firmRollup, firmBaseRollup } from "./model/funds.js";
 import { effectiveExitHorizons } from "./model/reprice.js";
 import { FS, tightSans, sans, GLOBAL_CSS, GRAD_DARK, MICRO, SMALL_1 } from "./ui/theme.js";
-import { Btn, LockIcon, RefreshIcon, Mark, SunIcon, MoonIcon, ChatIcon, ALL_FUNDS, Num, StatBar, Eyebrow, Heading2, H3, DeltaCaret, useDismissable } from "./ui/components.jsx";
+import { Btn, LockIcon, Mark, SunIcon, MoonIcon, ChatIcon, ALL_FUNDS, Num, StatBar, Eyebrow, Heading2, H3, DeltaCaret } from "./ui/components.jsx";
 import { fmtAsOf, fmtM, fmtX, setDisplayCurrency } from "./ui/format.js";
+import UpdateDataButton from "./ui/UpdateDataButton.jsx";
 import Overview from "./views/Overview.jsx";
 import Companies from "./views/Companies.jsx";
 import PowerLaw from "./views/returns/PowerLaw.jsx";
@@ -183,35 +184,6 @@ function DataStatus({ asOf }) {
   );
 }
 
-/** Update-data affordance as a compact icon (sits next to the theme toggle). The
- *  refresh runs through Claude, so the popover just surfaces the phrase to say. */
-function UpdateDataButton() {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-  useDismissable(open, setOpen, ref);
-  return (
-    <span ref={ref} style={{ position: "relative", lineHeight: 0 }}>
-      <button onClick={() => setOpen((o) => !o)} data-testid="update-data" aria-expanded={open}
-        title="Update data" aria-label="Update data"
-        style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 40, height: 40,
-          border: `1px solid var(--ink-color-global-border-subtle)`, borderRadius: 4, background: "var(--ink-color-global-surface-background-default)", color: "var(--ink-color-global-text-subtle)", cursor: "pointer", lineHeight: 0 }}>
-        <RefreshIcon size={16} strokeWidth={2} />
-      </button>
-      {open && (
-        <div className="popin" style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", width: 240,
-          background: "var(--ink-color-global-surface-background-default)", border: `1px solid var(--ink-color-global-border-subtle)`, borderRadius: 8, padding: "13px 14px",
-          boxShadow: "var(--shadow-hover)", zIndex: 40 }}>
-          <div style={{ ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", lineHeight: 1.5 }}>To update to current Carta data, ask Claude:</div>
-          <div style={{ fontVariantNumeric: "tabular-nums", display: "inline-block", marginTop: 9,
-            background: "var(--accent-soft)", color: "var(--ink-color-global-text-default)", padding: "7px 11px", borderRadius: 4, fontSize: FS.body, fontWeight: 650 }}>
-            “Refresh Carta holdings”
-          </div>
-        </div>
-      )}
-    </span>
-  );
-}
-
 export default function App({ firm, onChooseFirm }) {
   const { snapshot, doc, slice, selectSlice, createSlice, renameSlice, deleteSlice, update, updateCompany, setAssumption, reload, flush, pauseAutosave, resumeAutosave } =
     usePortfolio(firm, { onLockedEdit: () => warn(BASELINE_LOCKED_MSG) });
@@ -265,9 +237,9 @@ export default function App({ firm, onChooseFirm }) {
   // so an in-flight Claude edit and the user's own scenario edits can't race.
   useEffect(() => {
     if (typeof window !== "undefined") {
-      window.__fmPortfolioCtl = { pauseAutosave, resumeAutosave, reload };
+      window.__fmPortfolioCtl = { pauseAutosave, resumeAutosave, reload, flush };
     }
-  }, [pauseAutosave, resumeAutosave, reload]);
+  }, [pauseAutosave, resumeAutosave, reload, flush]);
   // Mirrors the outer shell's chat rail state so the topbar toggle can label
   // itself "Ask Claude" vs "Close chat panel". The rail starts closed (the shell
   // persists the user's choice), and re-posts on every iframe load, so this

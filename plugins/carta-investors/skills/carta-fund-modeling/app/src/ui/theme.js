@@ -193,6 +193,8 @@ export const GLOBAL_CSS = `
   .pagein { animation: pagein .12s ${EASE_OUT} backwards; }
   @keyframes popin { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
   .popin { animation: popin .1s ${EASE_OUT}; transform-origin: top left; }
+  /* Redefined here: keyframes don't cross into the App iframe (ChatPanel's copy is outer-frame). */
+  @keyframes fm-spin { to { transform: rotate(360deg); } }
 
   .actrow { transition: background .1s ${EASE}; }
   .actrow:hover { background: ${SHADE}; }

@@ -40,8 +40,8 @@ DEFAULT_MODEL = "sonnet"
 ALLOWED_MODEL_VALUES = frozenset(m["value"] for m in CLAUDE_MODELS)
 
 
-def build_argv(claude_bin, add_dirs, model=None):
-    # type: (str, List[str], Optional[str]) -> List[str]
+def build_argv(claude_bin, add_dirs, model=None, allowed_tools=None, system_prompt=None):
+    # type: (str, List[str], Optional[str], Optional[str], Optional[str]) -> List[str]
     argv = [
         claude_bin, "-p",
         "--input-format", "stream-json",
@@ -49,9 +49,11 @@ def build_argv(claude_bin, add_dirs, model=None):
         "--verbose",
         "--include-partial-messages",
         "--permission-mode", "acceptEdits",
-        "--allowedTools", ALLOWED_TOOLS,
-        "--append-system-prompt", PORTFOLIO_FORMAT_NOTE,
+        "--allowedTools", allowed_tools or ALLOWED_TOOLS,
     ]
+    prompt = PORTFOLIO_FORMAT_NOTE if system_prompt is None else system_prompt
+    if prompt:
+        argv += ["--append-system-prompt", prompt]
     if model:
         argv += ["--model", model]
     for d in add_dirs:
@@ -146,12 +148,15 @@ def anchor_preamble(anchor):
 
 
 class ChatSession(object):
-    def __init__(self, cwd, add_dirs, claude_bin=None, model=None):
-        # type: (str, List[str], Optional[str], Optional[str]) -> None
+    def __init__(self, cwd, add_dirs, claude_bin=None, model=None,
+                 allowed_tools=None, system_prompt=None):
+        # type: (str, List[str], Optional[str], Optional[str], Optional[str], Optional[str]) -> None
         self.cwd = cwd
         self.add_dirs = add_dirs
         self.claude_bin = claude_bin or os.environ.get("FM_CLAUDE_BIN", "claude")
         self.model = model
+        self.allowed_tools = allowed_tools
+        self.system_prompt = system_prompt
         self.proc = None
         self._q = queue.Queue()
         self._reader = None
@@ -162,7 +167,10 @@ class ChatSession(object):
         self._stdin_lock = threading.Lock()
 
     def start(self):
-        argv = build_argv(self.claude_bin, self.add_dirs, self.model)
+        # build_argv falls back to the chat posture when allowed_tools/system_prompt are
+        # None; a refresh session passes an MCP tool set + its own system prompt.
+        argv = build_argv(self.claude_bin, self.add_dirs, self.model,
+                          allowed_tools=self.allowed_tools, system_prompt=self.system_prompt)
         self.proc = subprocess.Popen(
             argv, cwd=self.cwd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL, text=True, bufsize=1)

@@ -47,13 +47,17 @@ from urllib.parse import urlparse, parse_qs
 
 import chat_session
 import fm_paths
+import refresh
 
 DATA_DIR = None
 WEB_DIR = None
 SRC_DIR = None
 TOKEN = None
 _CHAT_SESSIONS = {}   # sessionId -> {"session": chat_session.ChatSession, "lock": threading.Lock()}
-_SESSIONS_LOCK = threading.Lock()  # guards get-or-create / eviction of _CHAT_SESSIONS entries
+# The in-flight refresh's ChatSession, tracked so _close_all_sessions reaps it on shutdown —
+# it lives in a daemon thread whose own finally may not run when the process exits mid-fetch.
+_refresh_session = None
+_SESSIONS_LOCK = threading.Lock()  # guards _CHAT_SESSIONS get-or-create / eviction and _refresh_session
 IDLE_TIMEOUT_DEFAULT = 28800  # 8h backstop; should never fire during active use
 # Watchdog cadence, and the slack above it that distinguishes a real suspend
 # (laptop sleep) from ordinary scheduling jitter — a gap beyond the sum is sleep.
@@ -62,6 +66,17 @@ SUSPEND_GAP_SLACK = 55
 _last_heartbeat = time.time()
 _hb_lock = threading.Lock()
 _portfolio_lock = threading.Lock()
+# Single-flight guard for a background refresh (409 if one is already running). Held for
+# the whole run but does NOT gate edits — the fetch writes only raw files, so the app
+# stays usable throughout.
+_refresh_lock = threading.Lock()
+# Held only for the few seconds build_datadir rewrites the served dir; a portfolio PUT in
+# that window 409s (the client reloads truth). The minutes-long fetch stays ungated.
+_build_lock = threading.Lock()
+# Snapshot of the in-flight (or last-finished) background refresh, polled by the browser
+# via GET /api/refresh/status. Guarded by _refresh_state_lock.
+_refresh_state = {"status": "idle"}
+_refresh_state_lock = threading.Lock()
 
 _CONTENT_TYPES = {
     ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
@@ -86,16 +101,78 @@ def _touch_heartbeat():
         _last_heartbeat = time.time()
 
 
-def _close_all_sessions():
-    """Reap every registered chat session. Called on both shutdown paths (normal
-    atexit and the watchdog's os._exit) so subprocesses are never orphaned."""
+def _set_refresh_state(**fields):
+    with _refresh_state_lock:
+        _refresh_state.update(fields)
+
+
+def _refresh_progress(phase, message, **extra):
+    """emit() for a background refresh: fold progress into _refresh_state (polled by the
+    browser) and touch the heartbeat so the watchdog can't reap a long fetch."""
+    _touch_heartbeat()
+    with _refresh_state_lock:
+        _refresh_state["phase"] = phase
+        _refresh_state["progress"] = message
+        if phase == "issue":
+            _refresh_state.setdefault("warnings", []).append(message)
+            return
+        if "step" in extra:
+            _refresh_state["step"] = extra["step"]
+        if "total" in extra:
+            _refresh_state["total"] = extra["total"]
+
+
+def _track_refresh_session(session):
+    """run_fetch's on_session hook: publish the live session (or None) for _close_all_sessions."""
+    global _refresh_session
     with _SESSIONS_LOCK:
-        for entry in _CHAT_SESSIONS.values():
-            try:
-                entry["session"].close()
-            except Exception:
-                pass
+        _refresh_session = session
+
+
+def _run_refresh_bg():
+    """Daemon-thread body: run the fetch decoupled from the POST, record the outcome, release
+    the single-flight lock. The build+swap is deferred to POST /api/refresh/apply."""
+    try:
+        result = refresh.run_fetch(str(DATA_DIR), _refresh_progress,
+                                   on_session=_track_refresh_session)
+        _set_refresh_state(status="fetched", progress=None,
+                           warnings=result.get("warnings") or [])
+    except refresh.RefreshError as e:
+        _set_refresh_state(status="error", progress=None, message=str(e),
+                           needs_human=e.needs_human)
+    except Exception as e:  # never leave the button spinning on an unexpected fault
+        _set_refresh_state(status="error", progress=None,
+                           message="Refresh failed: %s" % e, needs_human=True)
+    finally:
+        _refresh_lock.release()
+
+
+def _start_refresh_bg():
+    with _refresh_state_lock:
+        _refresh_state.clear()
+        _refresh_state.update({"status": "running", "phase": "preflight",
+                               "progress": "Checking your Carta connection…", "warnings": [],
+                               # server-anchored so the browser timer survives a reload
+                               "started_at": time.time()})
+    threading.Thread(target=_run_refresh_bg, daemon=True).start()
+
+
+def _close_all_sessions():
+    """Reap every registered chat session AND the in-flight refresh session. Called on both
+    shutdown paths (normal atexit and the watchdog's os._exit) so subprocesses are never
+    orphaned."""
+    global _refresh_session
+    with _SESSIONS_LOCK:
+        sessions = [e["session"] for e in _CHAT_SESSIONS.values()]
         _CHAT_SESSIONS.clear()
+        if _refresh_session is not None:
+            sessions.append(_refresh_session)
+            _refresh_session = None
+    for s in sessions:
+        try:
+            s.close()
+        except Exception:
+            pass
 
 
 def _watchdog(httpd, timeout):
@@ -113,6 +190,8 @@ def _watchdog(httpd, timeout):
         last_tick = now
         if timeout <= 0:
             continue
+        if _refresh_lock.locked() or _build_lock.locked():
+            continue  # never reap mid-fetch or mid-build (both go quiet between events)
         with _hb_lock:
             idle = now - _last_heartbeat
         if idle > timeout:
@@ -257,6 +336,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/api/models":
             return self._send(200, {"models": chat_session.CLAUDE_MODELS,
                                     "default": chat_session.DEFAULT_MODEL})
+        if path == "/api/refresh/status":
+            with _refresh_state_lock:
+                return self._send(200, dict(_refresh_state))
         if path == "/api/portfolio":
             return self._get_portfolio()
         if path in _FILE_ROUTES:
@@ -282,6 +364,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
         _touch_heartbeat()
         if u.path != "/api/portfolio":
             return self._send(404, {"error": "not_found"})
+        # Only blocked for the build+swap seconds, not the whole fetch. A save that lands
+        # in that window 409s and the client reloads the reconciled truth.
+        if _build_lock.locked():
+            return self._send(409, {"error": "refresh_in_progress"})
         length = int(self.headers.get("Content-Length", 0) or 0)
         if length > 8 * 1024 * 1024:
             return self._send(413, {"error": "payload_too_large"})
@@ -352,15 +438,82 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._send(409, {"error": "not_interruptible"})
         return self._send(200, {"ok": True})
 
+    def _refresh(self, u):
+        """Start a background fetch (single-flight via _refresh_lock) and return 202; the
+        browser polls GET /api/refresh/status. Background, not SSE, so the app stays usable
+        and a dropped client can't abort it. The build+swap waits for /api/refresh/apply."""
+        if not self._token_ok(parse_qs(u.query)):
+            return self._send(401, {"error": "unauthorized"})
+        _touch_heartbeat()
+        if _build_lock.locked():  # a build is swapping raw→served; don't rewrite raw under it
+            return self._send(409, {"error": "apply_in_progress"})
+        if not _refresh_lock.acquire(blocking=False):
+            return self._send(409, {"error": "refresh_in_progress"})
+        # A staged-but-unloaded fetch ("fetched") must not be clobbered by a new one, which
+        # could also tear a concurrent apply's raw read. Check the state (not a lock peek) so
+        # it can't race _refresh_apply's status→build_lock transition.
+        with _refresh_state_lock:
+            staged = _refresh_state.get("status") == "fetched"
+        if staged:
+            _refresh_lock.release()
+            return self._send(409, {"error": "refresh_in_progress"})
+        # The thread's finally is the lock's only other release — if it can't start, release
+        # here or every later refresh 409s until restart.
+        try:
+            _start_refresh_bg()
+        except Exception as e:
+            _refresh_lock.release()
+            _set_refresh_state(status="error", progress=None,
+                               message="Couldn't start the refresh: %s" % e, needs_human=True)
+            return self._send(500, {"error": "refresh_start_failed"})
+        return self._send(202, {"ok": True})
+
+    def _refresh_apply(self, u):
+        """Build + swap the fetched raw into the served dir (the user's "Load new data").
+        Reads the CURRENT portfolio.json — the client flushes edits first, so the reconcile
+        picks up the latest scenarios. _build_lock blocks portfolio PUT for the build."""
+        if not self._token_ok(parse_qs(u.query)):
+            return self._send(401, {"error": "unauthorized"})
+        _touch_heartbeat()
+        with _refresh_state_lock:
+            ready = _refresh_state.get("status") == "fetched"
+        if not ready:
+            return self._send(409, {"error": "nothing_to_apply"})
+        if _refresh_lock.locked():  # a fetch is rewriting raw — building it would tear
+            return self._send(409, {"error": "refresh_in_progress"})
+        if not _build_lock.acquire(blocking=False):
+            return self._send(409, {"error": "apply_in_progress"})
+        try:
+            # build_lock already held here, so pass None (threading.Lock isn't reentrant).
+            result = refresh.run_build(str(DATA_DIR), lambda *a, **k: _touch_heartbeat(),
+                                       build_lock=None)
+            _set_refresh_state(status="idle")
+            return self._send(200, {"ok": True, "asOf": result.get("asOf"),
+                                    "funds": result.get("funds"), "companies": result.get("companies")})
+        except refresh.RefreshError as e:
+            return self._send(500, {"error": "build_failed", "message": str(e),
+                                    "needs_human": e.needs_human})
+        except Exception as e:
+            return self._send(500, {"error": "build_failed",
+                                    "message": "Rebuild failed: %s" % e, "needs_human": True})
+        finally:
+            _build_lock.release()
+
     def do_POST(self):
         u = urlparse(self.path)
         if u.path == "/api/chat/interrupt":
             return self._chat_interrupt(u)
+        if u.path == "/api/refresh":
+            return self._refresh(u)
+        if u.path == "/api/refresh/apply":
+            return self._refresh_apply(u)
         if u.path != "/api/chat":
             return self._send(404, {"error": "not_found"})
         if not self._token_ok(parse_qs(u.query)):
             return self._send(401, {"error": "unauthorized"})
         _touch_heartbeat()
+        # Chat is NOT gated on a running refresh: the refresh and chat sessions are
+        # separate claude subprocesses with no shared state.
         body = self._read_json_body()
         if body is None:
             return self._send(400, {"error": "bad_json"})

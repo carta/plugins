@@ -312,7 +312,9 @@ def main(argv):
         if err:
             _write_rows([], dest, None)  # failed query: empty file, still exists per contract
             errored.append((stem, err))
-            sys.stdout.write("ERROR stem=%s: %s\n" % (stem, str(err)[:200]))
+            # Flatten to one line — the DWH puts the real cause after a newline (e.g. below
+            # "SQL compilation error:"), which the single-line downstream parser would drop.
+            sys.stdout.write("ERROR stem=%s: %s\n" % (stem, " ".join(str(err).split())[:300]))
             continue
         rows, next_offset = extract(chunk)
         # Truncation is signalled by the element's own total_rows exceeding what came back,
