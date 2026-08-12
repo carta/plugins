@@ -1372,7 +1372,8 @@ def build(rawdir, out, meta):
 STEM_CONTRACT = [
     ("nav_latest",    True,   ["fund_uuid", "fund_name", "ending_lp_nav",
                                "cumulative_lp_distributions", "lp_tvpi"]),
-    ("investments",   True,   ["fund_uuid", "issuer_name", "entity_link_id"]),
+    ("investments",   True,   ["fund_uuid", "issuer_name", "entity_link_id",
+                               "latest_fmv_effective_date", "latest_update_effective_date"]),
     ("cashflows",     "file", ["fund_uuid", "month_end_date", "lp_contributions",
                                "lp_distributions", "ending_lp_nav",
                                "cumulative_lp_contributions", "cumulative_lp_distributions"]),

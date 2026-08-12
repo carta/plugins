@@ -147,7 +147,9 @@ SELECT fund_uuid, issuer_name, entity_link_id, general_ledger_issuer_id,
        SUM(total_proceeds) AS total_proceeds,
        SUM(count_remaining_shares) AS count_remaining_shares,
        MAX(is_active_investment) AS is_active_investment,
-       MAX(is_public_asset) AS is_public_asset
+       MAX(is_public_asset) AS is_public_asset,
+       MAX(latest_fmv_effective_date) AS latest_fmv_effective_date,
+       MAX(latest_update_effective_date) AS latest_update_effective_date
 FROM FUND_ADMIN.AGGREGATE_INVESTMENTS
 WHERE fund_uuid IN ('<uuid1>','<uuid2>', …)
 GROUP BY fund_uuid, issuer_name, entity_link_id, general_ledger_issuer_id,
@@ -158,6 +160,9 @@ LIMIT 5000
 `asset_name` (the specific security, e.g. "Series E-2 Preferred") and `count_remaining_shares` (the fund's
 share holding in that security) are the join keys the §15 cap-table stem uses to make the liquidation-preference
 waterfall **fund-specific** (which classes the fund holds, and how many shares).
+
+`latest_fmv_effective_date` (last revaluation) and `latest_update_effective_date` (last touched) are the real
+"Mark date" / stale source — `MAX()` across a company's lots; the builder falls back to `investment_date` when null.
 → one `deals[]` row per company: `id` (slug of issuer_name), `name`, `invested`=total_cost,
 `fmv`=remaining_value, `realized`=total_proceeds, `status` (Active/Realized from is_active),
 `moic`=(remaining_value+total_proceeds)/total_cost. Aggregate multiple asset rows per issuer.

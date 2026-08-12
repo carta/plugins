@@ -28,6 +28,10 @@ import { companyOwnership } from "../model/ownership.js";
 import { trackClick } from "../analytics.js";
 import { ReturnsPreviewContent } from "../ui/PerformanceSidebarV2.jsx";
 
+// A position's "Mark date": prefer the last revaluation (fmvDate), fall back to
+// the investment date (markDate) when it was never remarked.
+const positionMarkDate = (p) => p.fmvDate || p.markDate || "";
+
 // Rounds a fraction to the SAME decimal precision fmtOwn will display it at
 // (1 decimal place as a percent when ≥1%, else 2) — so subtracting two
 // ownership fractions AFTER rounding gives a delta that matches what the two
@@ -322,7 +326,7 @@ const POS_COLS = [
   { label: "Position", align: "left", get: (r) => r.security || "Equity" },
   { label: "Cost", get: (r) => r.cost },
   { label: "Carta FV", get: (r) => r.cartaFv },
-  { label: "Mark date", get: (r) => r.markDate || "" },
+  { label: "Mark date", get: (r) => positionMarkDate(r) },
   { label: "Basis" },
   { label: "Repriced FV", get: (r) => r.repricedFv },
   { label: "Uplift", get: (r) => r.uplift },
@@ -338,20 +342,23 @@ function PositionsTable({ company, refDate, staleDays }) {
     <table className="ledger">
       <TableHead cols={POS_COLS} sort={posSort} onSort={onPosSort} />
       <tbody>
-        {posRows.map((r) => (
+        {posRows.map((r) => {
+          const md = positionMarkDate(r);
+          return (
           <tr key={r.id}>
             <td style={{ whiteSpace: "nowrap" }}>{r.security || "Equity"}</td>
             <td style={numCell}>{fmt$(r.cost)}</td>
             <td style={numCell}>{fmt$(r.cartaFv)}</td>
             <td style={{ ...numCell, color: "var(--ink-color-global-text-subtle)", whiteSpace: "nowrap" }}>
-              {r.markDate || "—"}
-              {isStaleMark(r.markDate, refDate, staleDays) && <StalePill markDate={r.markDate} days={daysBetween(r.markDate, refDate)} />}
+              {md || "—"}
+              {isStaleMark(md, refDate, staleDays) && <StalePill markDate={md} days={daysBetween(md, refDate)} />}
             </td>
             <td style={{ ...numCell, color: NOTICE }}>{r.markBasisB ? fmtB(r.markBasisB) : "—"}</td>
             <td style={{ ...numCell, fontWeight: 600 }}>{fmt$(r.repricedFv)}</td>
             <td style={{ ...numCell, color: r.uplift >= 0 ? "var(--ink-color-global-feedback-positive-strong)" : "var(--ink-color-global-feedback-negative-strong)" }}>{fmt$(r.uplift)}</td>
           </tr>
-        ))}
+          );
+        })}
         {rows.length > 1 && (
           <tr className="totrow">
             <td>Total</td>
@@ -755,7 +762,7 @@ function CompanyRow({ company, updateCompany, refDate, staleDays, assumptions, p
   // gates the Financials button — same "usable reported-metric series" check the
   // trend chart itself applies inside the modal
   const hasFinancials = (company.financials?.series || []).some((sr) => sr.points && sr.points.length);
-  const markDate = company.positions.reduce((m, p) => ((p.markDate || "") > m ? p.markDate : m), "");
+  const markDate = company.positions.reduce((m, p) => { const d = positionMarkDate(p); return d > m ? d : m; }, "");
 
   const status = company.realized
     ? <StatusChip variant="fb-info">Exited · realized</StatusChip>
@@ -1317,7 +1324,7 @@ export default function Companies({ portfolio, snapshot, exitHorizonOverrides, u
     const liveC = c.includeInNav && !c.archived;
     return c.positions.reduce((s, p) => s + positionReprice(c, p, { live: liveC }).uplift, 0);
   };
-  const markDateOf = (c) => c.positions.reduce((m, p) => ((p.markDate || "") > m ? p.markDate : m), "");
+  const markDateOf = (c) => c.positions.reduce((m, p) => { const d = positionMarkDate(p); return d > m ? d : m; }, "");
   // current (scenario) FV = Carta FV + the active reprice uplift, so FV / MOIC
   // sorts reflect the slider-driven values now shown in those columns
   const curFvOf = (c) => (c.realized ? 0 : fvOf(c) + upliftOf(c));
