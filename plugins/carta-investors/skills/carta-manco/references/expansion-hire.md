@@ -53,6 +53,8 @@ Never hardcode the numbers — inputs must be editable so the user can flex them
 
 ### 4. Cash-impact summary
 
+**Starting cash balance.** Call `read_skill(file_path="references/cash-balance.md")` and fetch `fa:get:cash-balance` with `as_of_date` = today. If available: `<CASH_BALANCE>.totals_by_currency` is an array — if it has one entry, use that entry's `total_balance` as the starting point for `Projected Cash at Year-End`; if it has more than one entry, show one `Projected Cash at Year-End (<CCY>)` column per currency instead of a single column — never blend across currencies. If unavailable, pull current cash from the workbook if present, else flag as user-supplied in the preview.
+
 | Scenario | New Personnel Y1 | NOI Δ | Projected Cash at Year-End |
 |---|---|---|---|
 

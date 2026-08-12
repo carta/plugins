@@ -5,9 +5,9 @@ Pacing and variance analysis on top of an existing budget. Two sub-references:
 - [`pacing-overview.md`](pacing-overview.md) — sheet-wide pacing & variance.
 - [`drill-down-line.md`](drill-down-line.md) — month-by-month + top journal entries for one line.
 
-Gates 0, 0.5, and the Router Gate ran in SKILL.md. This file picks up at Step 1.
+Gates 0, 0.5, 0.75, and the Router Gate ran in SKILL.md — per its Forbidden narration rule, none of them produced any text output on success. This file picks up at Step 1.
 
-**Telemetry:** on entry, set `<CAPABILITY> = budget-analysis`. Every MCP call in this flow tags `_instrumentation.skills = ["carta-manco", "<CAPABILITY>"]`. Re-fire the beacon (`set_context(firm_id=<ENTITY_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-manco", "budget-analysis"]})`) if you arrived here via a next-step menu rather than the Router Gate.
+**Telemetry:** on entry, set `<CAPABILITY> = budget-analysis`. Every MCP call in this flow tags `_instrumentation.skills = ["carta-manco", "<CAPABILITY>"]`. Re-fire the beacon (`set_context(firm_id=<FIRM_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-manco", "budget-analysis"]})`) if you arrived here via a next-step menu rather than the Router Gate.
 
 ---
 

@@ -13,9 +13,11 @@ others probably won't have a budget.
 call_tool({"name": "fa__list__entities", "arguments": {}, "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-manco", "<CAPABILITY>"]}})
 ```
 
-The response is a list of `{id, name, type, ...}` records — entity-type
-labels vary by firm and over time, so do **not** hard-code an exact
-match. Treat the data defensively.
+The response is a list of `{id, uuid, name, type, ...}` records — `id`
+is the entity's **integer** Fund PK, `uuid` is its **UUID**. These are
+two distinct fields, both present on every record — do not treat one as
+a stand-in for the other. Entity-type labels vary by firm and over time,
+so do **not** hard-code an exact match. Treat the data defensively.
 
 ### 2. Classify each entity
 
@@ -58,7 +60,7 @@ option, not in the label.
 
 | User picks | What to do |
 |---|---|
-| The (or a) ManCo | Lock `<ENTITY_NAME>` and `<ENTITY_UUID>` and proceed. |
+| The (or a) ManCo | Lock `<ENTITY_NAME>`, `<ENTITY_UUID>`, and `<ENTITY_ID>` and proceed. |
 | A non-ManCo (Fund / SPV / Other) | Warn first: *"Heads up — only management companies carry a budget in Carta. If I pull `<entity>`, the result will likely be empty. Want me to pick the ManCo instead?"* Wait for confirmation. |
 | "None of these — let me type the name" | Ask for the entity name via free-text, re-query `fa:list:entities` if needed, and re-run the classification. Do not free-type a UUID. |
 
@@ -76,10 +78,17 @@ ManCo instead.
 {
   entity_name: "Example Capital, LLC",
   entity_uuid: "<uuid>",
+  entity_id: <int>,
   entity_label: "ManCo" | "Fund" | "SPV" | "Other",
   user_warned_non_manco: true | false
 }
 ```
+
+`entity_uuid` maps from the record's `uuid` field — pass it to
+`fa:list:budgets` (`fund_uuid`) and anywhere else a fund UUID is
+expected. `entity_id` maps from the record's `id` field — it's the
+integer Fund PK `fa:get:cash-balance` requires for `entity_ids`
+(see `cash-balance.md`). Do not derive one from the other.
 
 The calling SKILL.md uses `entity_label` to decide whether to proceed
 straight to fetching the budget (ManCo) or to confirm one more time

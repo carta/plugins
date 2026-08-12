@@ -12,8 +12,7 @@ The user states a goal rather than a specific lever:
 
 ### 1. Compute the gap
 
-- Read current cash from the workbook if there's a cash-balance
-  cell or a Cash tab; otherwise ask the user.
+- **Starting cash balance.** Call `read_skill(file_path="references/cash-balance.md")` and fetch `fa:get:cash-balance` with `as_of_date` = today. If available: `<CASH_BALANCE>.totals_by_currency` is an array — if it has one entry, use that entry's `total_balance` as starting cash; if it has more than one entry, compute the gap and every scenario per currency separately — never blend balances across currencies. If unavailable (per `cash-balance.md`'s empty-result handling), fall back to reading a cash-balance cell or Cash tab from the workbook; if neither exists, ask the user, and note in the preview that the figure is user-supplied, not Carta-sourced.
 - Project full-year NOI using YTD actuals + remaining-period budget.
 - Gap = user's goal − projected outcome.
 

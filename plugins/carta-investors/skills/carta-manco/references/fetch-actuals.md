@@ -14,9 +14,9 @@ Entry point for updating actuals in an existing budget. Nine layout sub-referenc
 
 Shared helper: [`get-actuals.md`](get-actuals.md) — canonical actuals-query routine.
 
-Gates 0, 0.5, and the Router Gate ran in SKILL.md. This file picks up at Gate 1.
+Gates 0, 0.5, 0.75, and the Router Gate ran in SKILL.md — per its Forbidden narration rule, none of them produced any text output on success. This file picks up at Gate 1.
 
-**Telemetry:** on entry, set `<CAPABILITY> = fetch-actuals`. Every MCP call in this flow tags `_instrumentation.skills = ["carta-manco", "<CAPABILITY>"]`. Re-fire the beacon (`set_context(firm_id=<ENTITY_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-manco", "fetch-actuals"]})`) if you arrived here via a next-step menu rather than the Router Gate.
+**Telemetry:** on entry, set `<CAPABILITY> = fetch-actuals`. Every MCP call in this flow tags `_instrumentation.skills = ["carta-manco", "<CAPABILITY>"]`. Re-fire the beacon (`set_context(firm_id=<FIRM_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-manco", "fetch-actuals"]})`) if you arrived here via a next-step menu rather than the Router Gate.
 
 ---
 

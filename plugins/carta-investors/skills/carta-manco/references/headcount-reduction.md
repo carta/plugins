@@ -44,7 +44,8 @@ solver inputs in the preview so the user can sanity-check.
 For each scenario:
 
 - `Annual personnel spend Δ` = scenario total − base total.
-- `Projected cash at year-end` = current cash + projected NOI under scenario (pull current cash from the workbook if present, else flag as user-supplied).
+- **Starting cash balance.** Call `read_skill(file_path="references/cash-balance.md")` and fetch `fa:get:cash-balance` with `as_of_date` = today. If available: `<CASH_BALANCE>.totals_by_currency` is an array — if it has one entry, use that entry's `total_balance`; if it has more than one entry, show `Projected cash at year-end` per currency instead of one figure — never blend across currencies. If unavailable, pull current cash from the workbook if present, else flag as user-supplied in the preview.
+- `Projected cash at year-end` = starting cash balance + projected NOI under scenario.
 - `NOI Δ` = base projected NOI − scenario projected NOI.
 
 ### 5. Pick the recommended scenario

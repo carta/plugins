@@ -47,7 +47,9 @@ allowed-tools:
 
 # Carta Budgeting
 
-Unified ManCo budgeting skill. Routes to one of five capabilities:
+Unified ManCo budgeting skill. Routes to one of five capabilities.
+
+**Prerequisites:** a Carta Fund Admin connection + an active management company. Gate 0.75 (below) confirms both before dispatching to any capability.
 
 - [`references/fetch-budget.md`](references/fetch-budget.md) — pull a stored ManCo budget from Carta Fund Admin into Excel.
 - [`references/create-budget.md`](references/create-budget.md) — build a new budget workbook from prior-year actuals (or a template, recommendation, tag slice, restructure, or inflation buffer).
@@ -70,7 +72,7 @@ upfront.
 
 | If the user needs… | Capability | Load first | Pair with (load only when capability delegates) | Minimal first check |
 |---|---|---|---|---|
-| Pull/fetch/import/sync a stored ManCo budget from Carta | fetch-budget | `references/fetch-budget.md` | `references/fetch-budget-data.md` | Carta MCP connected + firm resolved |
+| Pull/fetch/import/sync a stored ManCo budget from Carta | fetch-budget | `references/fetch-budget.md` | `references/fetch-budget-data.md`, `references/cash-balance.md` | Carta MCP connected + firm resolved |
 | Build/create/draft a new budget for a future year | create-budget | `references/create-budget.md` | `references/from-prior-actuals.md` (default) or `references/from-template.md` | Prior-year actuals accessible in Carta, or template file path provided |
 | Add/refresh actuals into an existing budget workbook | fetch-actuals | `references/fetch-actuals.md` | `references/get-actuals.md` | Existing budget workbook open or path supplied |
 | Pacing, variance, "how are we doing", "on track", compare budget vs actuals | budget-analysis | `references/budget-analysis.md` | `references/pacing-overview.md` | Both budget columns and actuals columns present in the workbook |
@@ -150,7 +152,8 @@ Check whether these context variables are already set from an earlier
 budgeting skill call in the same session:
 
 - `<SERVER>` — connected Carta MCP server prefix
-- `<ENTITY_NAME>` and `<ENTITY_UUID>` — the resolved entity
+- `<FIRM_UUID>` — the resolved firm (set in Gate 0, distinct from the ManCo entity below — some commands, e.g. `fa:get:cash-balance`, need both at once)
+- `<ENTITY_NAME>`, `<ENTITY_UUID>`, and `<ENTITY_ID>` — the resolved ManCo entity (`<ENTITY_ID>` is its integer Fund PK, distinct from `<ENTITY_UUID>` — see `entity-picker.md`)
 - `<RUNTIME>` — `excel-addin` or `local-file`
 - `<HAS_MANCO>` — whether `fa:get:manco_eligibility` confirmed active Fund Admin + an active ManCo this session
 - `<CAPABILITY>` — previously routed capability (if re-entering from a next-step menu)
@@ -176,6 +179,8 @@ and proceed directly to Gate 0.75. Otherwise run Gate 0 and Gate 0.5 first.
 ---
 
 ## Router Gate — Determine the right capability
+
+Ambiguous requests use a two-step menu (category, then drill-down) instead of one flat list — `AskUserQuestion` caps at 4 options in Claude for Excel, and the 9 capabilities/dispatches don't fit in one question.
 
 **STOP rows — handle before routing:** check these first, before attempting
 any capability match below. A match here means the request is out of scope
@@ -207,7 +212,7 @@ capability by its technical name.** Two paths only:
 
 | Phrase in the prompt | Capability | Reference to load |
 |---|---|---|
-| "pull / fetch / import / sync Carta budget", "bring Carta's budget into this sheet", "pull the Carta budget for [ManCo]" | fetch-budget | `read_skill(file_path="references/fetch-budget.md")` |
+| "pull / fetch / import / sync Carta budget", "bring Carta's budget into this sheet", "pull the Carta budget for [ManCo]", "add / update / refresh cash balance", "add / update the beginning cash balance" | fetch-budget | `read_skill(file_path="references/fetch-budget.md")` |
 | "build / create / draft / generate a budget for [year]", "build a budget for next year", "from last year's actuals", "from prior actuals", "add a 5% inflation buffer", "group / categorize budget line items" | create-budget | `read_skill(file_path="references/create-budget.md")` |
 | "pull / fetch / get / refresh / sync actuals for [firm/ManCo]", "what did we spend on [category] YTD", "interleave Budget/Actual/Variance", "actuals by department/tag/vendor/sub-account", "add next month column", "extend budget through [month]" | fetch-actuals | `read_skill(file_path="references/fetch-actuals.md")` |
 | "how are we doing", "pacing", "on track", "how are we pacing against budget", "variance analysis", "compare budget vs actuals", "budget vs actuals for [firm]", "are we over on [X]", "where did we overspend or underspend", "drill into [X]" | budget-analysis | `read_skill(file_path="references/budget-analysis.md")` |
@@ -293,7 +298,7 @@ Scan the tools available in the conversation for any matching `mcp__*__welcome`.
 **If multiple found:** ask the user which to use via `AskUserQuestion`. Default to `carta` (production) if present.
 **Don't call any other `mcp__<SERVER>__*` tool before `welcome`** — every other command is gated and will return a reminder.
 
-**Resolve firm:** if user named one → `mcp__<SERVER>__list_contexts(firm_name="<entity>", _instrumentation={"plugin": "carta-investors", "skills": ["carta-manco"]})` → disambiguate via `AskUserQuestion` if multiple → `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-manco"]})`. Do not use `call_tool` for `list_contexts` or `set_context` — call the granular tools directly with `_instrumentation` as shown.
+**Resolve firm:** if user named one → `mcp__<SERVER>__list_contexts(firm_name="<entity>", _instrumentation={"plugin": "carta-investors", "skills": ["carta-manco"]})` → disambiguate via `AskUserQuestion` if multiple → `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-manco"]})`. Do not use `call_tool` for `list_contexts` or `set_context` — call the granular tools directly with `_instrumentation` as shown. **Store the resolved value as `<FIRM_UUID>` for the rest of the session** — it's the firm, not the ManCo entity `entity-picker.md` resolves later; downstream commands that need both (e.g. `fa:get:cash-balance`) require them kept distinct.
 
 **DWH param-name traps:** `dwh:execute:query` takes `sql:` not `query:`. `dwh:get:table_schema` takes `table_name:` not `table:`. `format` accepts `"ndjson"` / `"markdown"`, not `"csv"`.
 
@@ -373,7 +378,7 @@ Once `<HAS_MANCO>` is `true`, dispatch to `<CAPABILITY>`:
 For **budgeting capabilities**, **re-fire the telemetry beacon** so this capability's MCP calls attribute correctly. Every budgeting reference's `_instrumentation` uses `skills: ["carta-manco", "<CAPABILITY>"]` — the capability name itself (`fetch-budget`, `create-budget`, `fetch-actuals`, `budget-analysis`, or `budget-scenarios`), not a separate skill identifier.
 
 ```
-mcp__<SERVER>__set_context(firm_id=<ENTITY_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-manco", "<CAPABILITY>"]})
+mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-manco", "<CAPABILITY>"]})
 ```
 
 (Consolidating capabilities skip this — the external skill they dispatch to fires its own per-skill instrumentation.)
@@ -439,6 +444,7 @@ The skill queries the Carta DWH journal-entries table. Look up column names via 
 
 ### Data fetching
 - `references/fetch-budget-data.md` — DWH query patterns for pulling stored budget figures
+- `references/cash-balance.md` — GL-based bank/cash balance fetch (`fa:get:cash-balance`), used by `fetch-budget`'s Beginning cash balance row and every budget-scenario reference's cash-impact summary
 - `references/get-actuals.md` — DWH query patterns for pulling journal-entry actuals
 - `references/entity-picker.md` — firm/entity resolution and picker UX
 
