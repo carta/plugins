@@ -5,17 +5,17 @@
                 "hooks": [
                     {
                         "type": "command",
-                        "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks/inject-skill-context.js\"",
+                        "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/dispatch.sh\" inject-context",
                         "timeout": 5
                     },
                     {
                         "type": "command",
-                        "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks/init-data-dir.js\"",
+                        "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/dispatch.sh\" prune-session-data",
                         "timeout": 5
                     },
                     {
                         "type": "command",
-                        "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks/capture-model.js\"",
+                        "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/dispatch.sh\" capture-model",
                         "timeout": 5
                     }
                 ]
@@ -26,7 +26,7 @@
                 "hooks": [
                     {
                         "type": "command",
-                        "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks/track-slash-skill.js\"",
+                        "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/dispatch.sh\" capture-slash-skill",
                         "timeout": 5
                     }
                 ]
@@ -38,7 +38,7 @@
                 "hooks": [
                     {
                         "type": "command",
-                        "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks/track-active-skill.js\"",
+                        "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/dispatch.sh\" capture-active-skill",
                         "timeout": 5
                     }
                 ]
@@ -48,7 +48,7 @@
                 "hooks": [
                     {
                         "type": "command",
-                        "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks/inject-instrumentation.js\"",
+                        "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/dispatch.sh\" inject-instrumentation",
                         "timeout": 5
                     }
                 ]
