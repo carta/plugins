@@ -2,11 +2,19 @@
 
 ## Hook entries
 
-| Event | Matcher | Script | Purpose |
-|-------|---------|--------|---------|
-| SessionStart | — | inject-skill-context.js | Inject skill-loading instruction |
-| PreToolUse | Skill | track-active-skill.js | Record which carta skills have been loaded this session |
-| PreToolUse | Carta MCP | inject-instrumentation.js | Inject merged `_instrumentation_v2` (all active plugins + namespaced skills) into fetch/mutate params (top-level otherwise) |
+Every hook except `warn-empty-query.js` dispatches to the shared Go hooks
+binary in `tools/hooks/` via `dispatch.sh`.
+
+ **Windows:** `dispatch.sh` is a POSIX shell script, so hooks won't fire unless Bash or Git Bash is installed.
+
+| Event | Matcher | Command | Purpose |
+|-------|---------|---------|---------|
+| SessionStart | — | `dispatch.sh inject-context` | Inject skill-loading instruction |
+| SessionStart | — | `dispatch.sh prune-session-data` | Prune stale session files from CLAUDE_PLUGIN_DATA/sessions |
+| SessionStart | — | `dispatch.sh capture-model` | Capture the active Claude model for later PreToolUse instrumentation |
+| PreToolUse | Skill | `dispatch.sh capture-active-skill` | Record which carta skills have been loaded this session |
+| PreToolUse | Carta MCP | `dispatch.sh inject-instrumentation` | Inject merged `_instrumentation_v2` (all active plugins + namespaced skills) into fetch/mutate params (top-level otherwise) |
+| UserPromptSubmit | — | `dispatch.sh capture-slash-skill` | Record explicitly-invoked skills (bare `/skill` slash commands) |
 | PostToolUse | Carta MCP `execute_query` | warn-empty-query.js | Warn Claude when a query returns no results |
 
 ## Carta MCP matcher
