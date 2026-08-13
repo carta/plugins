@@ -89,10 +89,8 @@ Required even for specific-company queries — establishes accessible companies 
 Before loading any semantic layer, call the plain-English query interface with the user's question verbatim (or lightly rephrased for clarity):
 
 ```
-call_tool({"name": "dwh__execute__question", "arguments": {"question": "<user's question>", "include_links": true}})
+call_tool({"name": "dwh__execute__question", "arguments": {"question": "<user's question>"}})
 ```
-
-> **Always pass `include_links: true`** — it enriches result rows with `_links` entries pointing to the corresponding Carta product pages for supported entity UUID fields (see [Deep Links](#deep-links) below).
 
 **If the call succeeds and returns meaningful rows** → format and present the results using the General Presentation Rules below. Stop here — do not continue to Steps 2–4.
 
@@ -168,9 +166,7 @@ Use the MCP commands in sequence, substituting `<SCHEMA>` with the schema determ
 
 1. **Browse tables:** `call_tool({"name": "dwh__list__tables", "arguments": {"schema": "<SCHEMA>"}})`
 2. **Inspect schema:** `call_tool({"name": "dwh__get__table_schema", "arguments": {"table_name": "<TABLE>", "schema": "<SCHEMA>"}})`
-3. **Run the query:** `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "...", "format": "ndjson", "include_links": true}})`
-
-> **Always pass `format: "ndjson"` and `include_links: true`** on every `dwh__execute__query` call — `ndjson` is required for `include_links` to embed `_links` objects in each result row. See [Deep Links](#deep-links) for how to parse the response and use the links.
+3. **Run the query:** `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "..."}})`
 
 **Output format:** Present results as a markdown table. Use fund or company names as row headers — never raw UUIDs. Currency values use `$X,XXX` format with commas; percentages use `X.XX%`. Bold totals and summary rows.
 
@@ -228,19 +224,19 @@ Use `call_tool` with these exact double-underscore names. Any other form (colon 
 
 | Task | Exact invocation |
 |---|---|
-| Run SQL | `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "SELECT ...", "format": "ndjson", "include_links": true}})` |
-| Natural-language question | `call_tool({"name": "dwh__execute__question", "arguments": {"question": "...", "include_links": true}})` |
+| Run SQL | `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "SELECT ..."}})` |
+| Natural-language question | `call_tool({"name": "dwh__execute__question", "arguments": {"question": "..."}})` |
 | List tables in a schema | `call_tool({"name": "dwh__list__tables", "arguments": {"schema": "FUND_ADMIN"}})` |
 | Get a table's columns | `call_tool({"name": "dwh__get__table_schema", "arguments": {"table_name": "TABLE_NAME", "schema": "FUND_ADMIN"}})` |
 
-- `dwh__execute__query` key is `sql` (not `query`). `format: "ndjson"` and `include_links: true` are mandatory on every call — `ndjson` is required for `_links` to be embedded in rows; without it, link data is lost.
-- `dwh__execute__question` keys: `question` (required) and `include_links` (optional). Do not pass `sql`, `fund_uuid`, `firm_uuid`, `format`, or any other key.
+- `dwh__execute__query` key is `sql` (not `query`).
+- `dwh__execute__question` keys: `question` (required). Do not pass `sql`, `fund_uuid`, `firm_uuid`, `format`, or any other key.
 - **JSON keys with spaces in VARIANT columns** — `col:'Key With Spaces'` and `col["Key With Spaces"]` both fail with `SQL compilation error`. For keys containing spaces, use escaped inner quotes: `col:'"Key With Spaces"'::STRING`. This applies to `AGGREGATE_INVESTMENTS.TAGS_JSON` and any other VARIANT column with spaced key names.
 - **`ORDER BY` with `SELECT DISTINCT`** — columns used in `ORDER BY` must also appear in the `SELECT` list when using `DISTINCT`; otherwise Snowflake raises `is not a valid order by expression`.
 
 ## Deep Links
 
-`include_links: true` is always required (see table above). It adds a `_links` entry to each row for supported entity UUID columns:
+`include_links: true` required when users wants a direct link to the app. It adds a `_links` entry to each row for supported entity UUID columns:
 
 `include_links` adds a `_links` entry to each row for supported entity UUID columns. Supported fields and their requirements:
 
