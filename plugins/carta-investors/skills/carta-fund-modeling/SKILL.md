@@ -583,7 +583,13 @@ they can paste the URL into the address bar. `webapp/` is the committed prebuilt
 verbatim — no Node or build needed at runtime.
 
 After giving the URL, add one short post-launch line (not a menu):
-"A few things to try: check the Baseline scenario on the Overview tab · click Edit on any company to reprice it · run a scenario to see LP/GP returns · export a scenario as a PDF for LP review · say 'refresh' to pull fresh Carta data."
+"A few things to try: check the Baseline scenario on the Overview tab · click Edit on any company to reprice it · run a scenario to see LP/GP returns · export a scenario as a PDF for LP review · publish a scenario to share it with your firm · say 'refresh' to pull fresh Carta data."
+
+## Scenario sharing
+Firm admins can publish/pull scenarios across the firm — **built into the app** (a SHARED sidebar section plus
+per-scenario Publish / Update / Duplicate / Hide / Delete). It is button-driven with no prompt flow; if a
+user asks to share, point them at those controls. See
+`${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-modeling/references/scenario-sharing.md`.
 
 ## Refresh / edits
 "Refresh Carta holdings" = re-run Steps 1–3 (overwrite JSON); the app reloads it. Slice edits are saved by

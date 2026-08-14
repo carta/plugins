@@ -6,6 +6,9 @@ import { FS, tightSans, sans, GLOBAL_CSS, GRAD_DARK, MICRO, SMALL_1 } from "./ui
 import { Btn, LockIcon, Mark, SunIcon, MoonIcon, ChatIcon, ALL_FUNDS, Num, StatBar, Eyebrow, Heading2, H3, DeltaCaret } from "./ui/components.jsx";
 import { fmtAsOf, fmtM, fmtX, setDisplayCurrency } from "./ui/format.js";
 import UpdateDataButton from "./ui/UpdateDataButton.jsx";
+import useShare from "./state/useShare.js";
+import { ShareControls, PullButton, SharePopover } from "./ui/ScenarioSharing.jsx";
+import { isShared, isHidden } from "./model/slices.js";
 import Overview from "./views/Overview.jsx";
 import Companies from "./views/Companies.jsx";
 import PowerLaw from "./views/returns/PowerLaw.jsx";
@@ -185,8 +188,14 @@ function DataStatus({ asOf }) {
 }
 
 export default function App({ firm, onChooseFirm }) {
-  const { snapshot, doc, slice, selectSlice, createSlice, renameSlice, deleteSlice, update, updateCompany, setAssumption, reload, flush, pauseAutosave, resumeAutosave } =
+  const { snapshot, doc, slice, selectSlice, createSlice, renameSlice, forkSlice, deleteSlice, hideShared, showHidden, unshareSlice, update, updateCompany, setAssumption, reload, flush, pauseAutosave, resumeAutosave } =
     usePortfolio(firm, { onLockedEdit: () => warn(BASELINE_LOCKED_MSG) });
+  const share = useShare();
+  // Current user's Carta id, for the owner-only Delete on a shared scenario (self-vs-other).
+  const [userId, setUserId] = useState(null);
+  useEffect(() => {
+    fetch("/api/telemetry-context").then((r) => r.json()).then((c) => setUserId(c?.userId ?? null)).catch(() => {});
+  }, []);
   // firm display currency — data-driven from the firm's reporting currency
   // (never hardcoded USD); drives fmt$/fmtM/fmtB across the app.
   setDisplayCurrency(snapshot?.source?.currency);
@@ -343,6 +352,18 @@ export default function App({ firm, onChooseFirm }) {
       danger: true,
       onConfirm: () => { deleteSlice(slice.id); setConfirm(null); },
     });
+  // Scenario sharing (publish/pull/delete via useShare; fork/remove are local doc ops).
+  const onPublish = () => share.publish(slice.id);
+  const onFork = () => forkSlice(slice.id);
+  const onRemove = () => hideShared(slice.id); // hide from my list; firm row + local copy stay
+  const onDeleteShared = () =>
+    setConfirm({
+      title: "Delete shared scenario",
+      message: `Delete “${slice.name}” for everyone in the firm? This can't be undone.`,
+      confirmLabel: "Delete for everyone",
+      danger: true,
+      onConfirm: () => { share.deleteShared(slice.id); setConfirm(null); },
+    });
   const holdingsPulled = doc.seededFrom?.holdings?.pulledAt;
   const statusLine = `Data as of ${fmtAsOf(snapshot.source.navAsOf)}`;
 
@@ -373,9 +394,11 @@ export default function App({ firm, onChooseFirm }) {
   );
 
   const sliceTools = !locked && (
-    <span style={{ display: "flex", gap: 6 }}>
+    <span style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
       <Btn onClick={onRename} style={{ height: "auto", padding: "6px 13px", fontSize: FS.small }}>Rename</Btn>
-      <Btn kind="danger" onClick={onDelete} style={{ height: "auto", padding: "6px 13px", fontSize: FS.small }}>Delete scenario</Btn>
+      {!isShared(slice) && <Btn kind="danger" onClick={onDelete} style={{ height: "auto", padding: "6px 13px", fontSize: FS.small }}>Delete scenario</Btn>}
+      <ShareControls slice={slice} snapshot={snapshot} userId={userId} busy={share.running}
+        onPublish={onPublish} onFork={onFork} onRemove={onRemove} onDelete={onDeleteShared} />
     </span>
   );
 
@@ -400,9 +423,25 @@ export default function App({ firm, onChooseFirm }) {
           className="addslice" style={{ width: 18, height: 18, borderRadius: 4, border: "none", background: "var(--accent-soft)",
             color: "var(--ink-button-background-color-primary-base-default)", cursor: "pointer", display: "grid", placeItems: "center", fontSize: FS.bodyLg, fontWeight: 600, lineHeight: 1, padding: 0 }}>+</button>
       </div>
-      {doc.slices.map((s) => (
+      {doc.slices.filter((s) => !isShared(s)).map((s) => (
         <ScenarioItem key={s.id} slice={s} active={s.id === slice.id} onClick={() => selectSlice(s.id)} />
       ))}
+      <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "12px 8px 4px" }}>
+        <Eyebrow color={MICRO}>Shared</Eyebrow>
+        <PullButton onPull={share.pull} busy={share.running} />
+        {doc.slices.filter(isHidden).length > 0 && (
+          <button onClick={showHidden} title="Show hidden shared scenarios"
+            style={{ ...sans, fontSize: FS.micro, color: "var(--ink-button-background-color-primary-base-default)",
+              background: "none", border: "none", cursor: "pointer", padding: 0, marginLeft: "auto" }}>
+            {doc.slices.filter(isHidden).length} hidden · Show
+          </button>
+        )}
+      </div>
+      {doc.slices.some((s) => isShared(s) && !isHidden(s))
+        ? doc.slices.filter((s) => isShared(s) && !isHidden(s)).map((s) => (
+            <ScenarioItem key={s.id} slice={s} active={s.id === slice.id} onClick={() => selectSlice(s.id)} />
+          ))
+        : <div style={{ ...sans, fontSize: FS.micro, color: "var(--ink-color-global-text-subtle)", padding: "2px 12px 4px" }}>None yet — load to check.</div>}
       <span style={{ flex: 1, minHeight: 10 }} />
       <div style={{ height: 1, background: "var(--ink-color-global-border-subtle)", margin: "6px 8px 0" }} />
       <div style={{ padding: "9px 9px 0" }}>
@@ -449,7 +488,7 @@ export default function App({ firm, onChooseFirm }) {
         ))}
       </div>
       <div style={{ display: "flex", gap: 6, overflowX: "auto", alignItems: "center" }}>
-        {doc.slices.map((s) => (
+        {doc.slices.filter((s) => !isHidden(s)).map((s) => (
           <button key={s.id} onClick={() => selectSlice(s.id)}
             style={{ ...sans, fontSize: FS.bodyLg, fontWeight: s.id === slice.id ? 600 : 500, padding: "6px 13px", borderRadius: 4,
               border: `1px solid ${s.id === slice.id ? "var(--ink-color-global-text-default)" : "var(--ink-color-global-border-subtle)"}`, cursor: "pointer", whiteSpace: "nowrap",
@@ -466,7 +505,18 @@ export default function App({ firm, onChooseFirm }) {
             background: "transparent", color: "var(--ink-button-background-color-primary-base-default)", cursor: "pointer", whiteSpace: "nowrap" }}>
           + New scenario
         </button>
+        <button onClick={share.pull} disabled={share.running} data-testid="pull-shared-narrow"
+          style={{ ...sans, fontSize: FS.bodyLg, fontWeight: 600, padding: "6px 13px", borderRadius: 4, border: `1px dashed var(--ink-color-global-border-subtle)`,
+            background: "transparent", color: "var(--ink-button-background-color-primary-base-default)", cursor: share.running ? "default" : "pointer", whiteSpace: "nowrap" }}>
+          ⤓ Load shared
+        </button>
       </div>
+      {!locked && (
+        <div style={{ display: "flex", gap: 6, overflowX: "auto", alignItems: "center" }}>
+          <ShareControls slice={slice} snapshot={snapshot} userId={userId} busy={share.running}
+            onPublish={onPublish} onFork={onFork} onRemove={onRemove} onDelete={onDeleteShared} />
+        </div>
+      )}
     </div>
   );
 
@@ -474,6 +524,9 @@ export default function App({ firm, onChooseFirm }) {
     <div style={{ ...sans, minHeight: "100vh", background: "var(--ink-color-global-surface-background-default)", color: "var(--ink-color-global-text-default)" }}>
       <style>{GLOBAL_CSS}</style>
       <WarnToast />
+      <SharePopover share={share} onUpdateAnyway={share.updateAnyway} onPullFirst={share.loadTheirs}
+        onPublishAsNew={share.publishAsNew}
+        onKeepPrivate={() => { if (share.sliceId) unshareSlice(share.sliceId); share.dismiss(); }} />
 
       <div id="app-screen" style={{ display: "flex", alignItems: "flex-start", gap: 0, padding: 0, height: "100vh", overflow: "clip" }}>
         {!narrow && sidebar}

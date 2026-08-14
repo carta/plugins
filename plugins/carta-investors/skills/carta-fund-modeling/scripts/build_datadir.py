@@ -373,7 +373,9 @@ def reconcile_slice(old_slice, companies, live_fund_ids):
         m = assumptions.get(key)
         if isinstance(m, dict):
             assumptions[key] = {k: v for k, v in m.items() if k in live_fund_ids}
-    reconciled = {k: old_slice[k] for k in ("id", "name", "createdAt", "color")
+    # "shared" carries the shared-scenario link (uuid, author, snapshot basis, dirty flag);
+    # dropping it here would unlink every shared scenario on each data refresh.
+    reconciled = {k: old_slice[k] for k in ("id", "name", "createdAt", "color", "shared")
                   if k in old_slice}
     reconciled["locked"] = False
     reconciled["assumptions"] = assumptions

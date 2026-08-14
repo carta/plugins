@@ -131,7 +131,11 @@ export default function usePortfolio(firm, { onLockedEdit } = {}) {
       setDoc((prev) => {
         if (activeSlice(prev).locked) return prev; // defensive backstop: no clone, no persist
         const next = structuredClone(prev);
-        fn(activeSlice(next));
+        const s = activeSlice(next);
+        fn(s);
+        // A local edit to a shared scenario is unpublished until "Update" — mark it
+        // so a teammate's pull-in skips it and the UI can offer to push it.
+        if (s.shared?.uuid) s.shared = { ...s.shared, dirty: true };
         persist(next);
         return next;
       });
@@ -175,6 +179,22 @@ export default function usePortfolio(firm, { onLockedEdit } = {}) {
         if (!s || s.locked) return null;
         s.name = name;
         if (color !== undefined) s.color = color; // undefined = leave unchanged; null = clear
+        if (s.shared?.uuid) s.shared = { ...s.shared, dirty: true };
+        return d;
+      }),
+    [mutateDoc]
+  );
+
+  // Fork a scenario into an independent LOCAL copy. makeSlice copies only
+  // assumptions+companies (never `shared`), so the fork drops the firm link.
+  const forkSlice = useCallback(
+    (id) =>
+      mutateDoc((d) => {
+        const src = getSlice(d, id);
+        if (!src) return null;
+        const s = makeSlice({ id: sliceId(src.name), name: `${src.name} (copy)`, from: src, color: src.color });
+        d.slices.push(s);
+        d.activeSliceId = s.id;
         return d;
       }),
     [mutateDoc]
@@ -192,6 +212,45 @@ export default function usePortfolio(firm, { onLockedEdit } = {}) {
     [mutateDoc]
   );
 
+  // Hide a shared scenario from your list without deleting it — the firm's copy stays and a
+  // pull keeps it hidden (share.py carries the flag). Not a content edit, so it never dirties.
+  const hideShared = useCallback(
+    (id) =>
+      mutateDoc((d) => {
+        const s = d.slices.find((x) => x.id === id);
+        if (!s || !s.shared?.uuid) return null;
+        s.shared = { ...s.shared, hidden: true };
+        if (d.activeSliceId === id) d.activeSliceId = BASELINE_ID;
+        return d;
+      }),
+    [mutateDoc]
+  );
+
+  const showHidden = useCallback(
+    () =>
+      mutateDoc((d) => {
+        let changed = false;
+        for (const s of d.slices) {
+          if (s.shared?.hidden) { s.shared = { ...s.shared, hidden: false }; changed = true; }
+        }
+        return changed ? d : null;
+      }),
+    [mutateDoc]
+  );
+
+  // Drop the firm link, keeping the scenario as a private local copy (edits intact) — the
+  // "Keep private" recovery when the shared row was deleted upstream.
+  const unshareSlice = useCallback(
+    (id) =>
+      mutateDoc((d) => {
+        const s = d.slices.find((x) => x.id === id);
+        if (!s || !s.shared) return null;
+        delete s.shared;
+        return d;
+      }),
+    [mutateDoc]
+  );
+
   const slice = doc ? activeSlice(doc) : null;
 
   return {
@@ -201,7 +260,11 @@ export default function usePortfolio(firm, { onLockedEdit } = {}) {
     selectSlice,
     createSlice,
     renameSlice,
+    forkSlice,
     deleteSlice,
+    hideShared,
+    showHidden,
+    unshareSlice,
     update,
     updateCompany,
     setAssumption,

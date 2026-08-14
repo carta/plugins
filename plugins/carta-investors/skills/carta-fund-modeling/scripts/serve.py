@@ -48,6 +48,7 @@ from urllib.parse import urlparse, parse_qs
 import chat_session
 import fm_paths
 import refresh
+import share
 
 DATA_DIR = None
 WEB_DIR = None
@@ -77,6 +78,16 @@ _build_lock = threading.Lock()
 # via GET /api/refresh/status. Guarded by _refresh_state_lock.
 _refresh_state = {"status": "idle"}
 _refresh_state_lock = threading.Lock()
+# Single-flight guard for a background publish/pull. Its MCP calls don't touch firm context
+# (fa commands are firm_uuid-param-scoped), so it may run alongside a refresh fetch; the two
+# serialize only at the portfolio.json write, which share takes _portfolio_lock for.
+_share_lock = threading.Lock()
+_share_state = {"status": "idle"}
+_share_state_lock = threading.Lock()
+_share_session = None  # live warm-share ChatSession, reported by the pool, reaped by _close_all_sessions
+_warm_share = None     # reusable share session (pool of one); its subprocess is _share_session
+_share_prewarm_disabled = False  # set once a load-time warm sees not_enabled — don't respawn-and-fail each load
+_share_prewarm_inflight = False  # a load-time warm is spawning; dedupe concurrent prewarm pings
 
 _CONTENT_TYPES = {
     ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
@@ -157,17 +168,133 @@ def _start_refresh_bg():
     threading.Thread(target=_run_refresh_bg, daemon=True).start()
 
 
+def _set_share_state(**fields):
+    with _share_state_lock:
+        _share_state.update(fields)
+
+
+def _share_progress(phase, message, **extra):
+    """emit() for a background publish/pull: fold progress into _share_state (polled by the
+    browser) and touch the heartbeat so the watchdog can't reap a long pull."""
+    _touch_heartbeat()
+    with _share_state_lock:
+        _share_state["phase"] = phase
+        _share_state["progress"] = message
+        for k in ("step", "total"):
+            if k in extra:
+                _share_state[k] = extra[k]
+
+
+def _track_share_session(session):
+    """The warm pool's on_session hook: publish the live subprocess (or None) so
+    _close_all_sessions reaps it on shutdown, exactly as the per-op session was tracked."""
+    global _share_session
+    with _SESSIONS_LOCK:
+        _share_session = session
+
+
+def _get_warm_share():
+    """Lazily create the pooled warm session (object only — no spawn; warm() spawns on first use)."""
+    global _warm_share
+    with _SESSIONS_LOCK:
+        if _warm_share is None:
+            _warm_share = share.WarmShareSession(str(DATA_DIR), on_session=_track_share_session)
+        return _warm_share
+
+
+def _run_share_bg(kind, params):
+    """Daemon-thread body: run publish/pull decoupled from the POST, record the outcome, release
+    the single-flight lock. Reuses the pooled warm session so only the first op pays spawn+welcome."""
+    warm = _get_warm_share()
+    try:
+        if kind == "publish":
+            result = share.run_publish(str(DATA_DIR), params["sliceId"], _share_progress,
+                                       _portfolio_lock, warm, force=params.get("force", False),
+                                       as_new=params.get("as_new", False))
+        elif kind == "delete":
+            result = share.run_delete(str(DATA_DIR), params["sliceId"], _share_progress,
+                                      _portfolio_lock, warm)
+        else:
+            result = share.run_pull(str(DATA_DIR), _share_progress, _portfolio_lock, warm,
+                                    override_uuids=set(params.get("overrideUuids") or []))
+        _set_share_state(status="done", progress=None, result=result)
+    except share.ShareError as e:
+        raw = getattr(e, "raw", None)
+        if raw:  # keep the classified message user-facing; log the raw tool error for diagnosis
+            print("[share] %s error (raw: %s)" % (e.code, str(raw)[:300]), flush=True)
+        _set_share_state(status="error", progress=None, code=e.code,
+                         message=str(e), needs_human=e.needs_human)
+    except Exception as e:  # never leave the button spinning on an unexpected fault
+        _set_share_state(status="error", progress=None, code="failed",
+                         message="Sharing failed: %s" % e, needs_human=True)
+    finally:
+        _share_lock.release()
+
+
+def _start_share_bg(kind, params):
+    with _share_state_lock:
+        _share_state.clear()
+        _share_state.update({"status": "running", "phase": "preflight",
+                             "progress": "Checking your Carta connection…",
+                             "started_at": time.time()})
+    threading.Thread(target=_run_share_bg, args=(kind, params), daemon=True).start()
+
+
+def _prewarm_share_bg():
+    """Silently bootstrap the pooled share session so the first user op is fast. Takes no
+    _share_lock and does no pull/write; a firm without sharing is remembered to avoid re-spawning."""
+    global _share_prewarm_disabled, _share_prewarm_inflight
+    try:
+        if _share_lock.locked():
+            return  # an op is already warming the pool
+        warm = _get_warm_share()
+        try:
+            firm_uuid, prefer_nonprod, _, _ = share._load_context(str(DATA_DIR))
+            warm.warm(firm_uuid, prefer_nonprod, lambda *a, **k: None)
+        except share.ShareError as e:
+            if e.code == "not_enabled":
+                with _SESSIONS_LOCK:
+                    _share_prewarm_disabled = True
+        except Exception:
+            pass
+    finally:
+        with _SESSIONS_LOCK:
+            _share_prewarm_inflight = False
+
+
+def _maybe_prewarm_share():
+    """Fire-and-forget the load-time warm, deduped: skip if sharing is known-off, a warm is
+    already spawning, or the pool is already warm."""
+    global _share_prewarm_inflight
+    with _SESSIONS_LOCK:
+        if _share_prewarm_disabled or _share_prewarm_inflight:
+            return
+        if _warm_share is not None and _warm_share.is_warm():
+            return
+        _share_prewarm_inflight = True
+    try:
+        threading.Thread(target=_prewarm_share_bg, daemon=True).start()
+    except Exception:
+        # A failed spawn would otherwise leave the flag stuck and disable prewarm for good.
+        with _SESSIONS_LOCK:
+            _share_prewarm_inflight = False
+
+
 def _close_all_sessions():
-    """Reap every registered chat session AND the in-flight refresh session. Called on both
-    shutdown paths (normal atexit and the watchdog's os._exit) so subprocesses are never
+    """Reap every registered chat session AND the in-flight refresh/share sessions. Called on
+    both shutdown paths (normal atexit and the watchdog's os._exit) so subprocesses are never
     orphaned."""
-    global _refresh_session
+    global _refresh_session, _share_session, _warm_share
     with _SESSIONS_LOCK:
         sessions = [e["session"] for e in _CHAT_SESSIONS.values()]
         _CHAT_SESSIONS.clear()
         if _refresh_session is not None:
             sessions.append(_refresh_session)
             _refresh_session = None
+        if _share_session is not None:
+            sessions.append(_share_session)  # the warm pool's live subprocess
+            _share_session = None
+        _warm_share = None  # drop the wrapper; its subprocess is reaped via _share_session above
     for s in sessions:
         try:
             s.close()
@@ -190,8 +317,8 @@ def _watchdog(httpd, timeout):
         last_tick = now
         if timeout <= 0:
             continue
-        if _refresh_lock.locked() or _build_lock.locked():
-            continue  # never reap mid-fetch or mid-build (both go quiet between events)
+        if _refresh_lock.locked() or _build_lock.locked() or _share_lock.locked():
+            continue  # never reap mid-fetch/build/share (all go quiet between events)
         with _hb_lock:
             idle = now - _last_heartbeat
         if idle > timeout:
@@ -339,6 +466,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/api/refresh/status":
             with _refresh_state_lock:
                 return self._send(200, dict(_refresh_state))
+        if path == "/api/scenarios/share-status":
+            if qs.get("warm"):  # load-time ping: warm the share pool in the background (idempotent)
+                _maybe_prewarm_share()
+            with _share_state_lock:
+                return self._send(200, dict(_share_state))
         if path == "/api/portfolio":
             return self._get_portfolio()
         if path in _FILE_ROUTES:
@@ -499,6 +631,39 @@ class Handler(http.server.BaseHTTPRequestHandler):
         finally:
             _build_lock.release()
 
+    def _share_start(self, u, kind):
+        """Start a background publish/pull (single-flight via _share_lock) and return 202; the
+        browser polls GET /api/scenarios/share-status. Publish needs a sliceId (+ optional force
+        to override the staleness guard); pull takes no body."""
+        if not self._token_ok(parse_qs(u.query)):
+            return self._send(401, {"error": "unauthorized"})
+        _touch_heartbeat()
+        params = {}
+        if kind in ("publish", "delete"):
+            body = self._read_json_body()
+            if body is None:
+                return self._send(400, {"error": "bad_json"})
+            slice_id = body.get("sliceId")
+            if not slice_id:
+                return self._send(400, {"error": "missing_slice"})
+            params = {"sliceId": slice_id, "force": bool(body.get("force")),
+                      "as_new": bool(body.get("asNew"))}
+        elif kind == "pull":
+            # Optional: overwrite one locally-dirty scenario ("load theirs" on a conflict).
+            ov = (self._read_json_body() or {}).get("overrideUuid")
+            params = {"overrideUuids": [ov]} if ov else {}
+        if not _share_lock.acquire(blocking=False):
+            return self._send(409, {"error": "share_in_progress"})
+        # The thread's finally is the lock's only other release — release here if it can't start.
+        try:
+            _start_share_bg(kind, params)
+        except Exception as e:
+            _share_lock.release()
+            _set_share_state(status="error", progress=None, code="failed",
+                             message="Couldn't start sharing: %s" % e, needs_human=True)
+            return self._send(500, {"error": "share_start_failed"})
+        return self._send(202, {"ok": True})
+
     def do_POST(self):
         u = urlparse(self.path)
         if u.path == "/api/chat/interrupt":
@@ -507,6 +672,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._refresh(u)
         if u.path == "/api/refresh/apply":
             return self._refresh_apply(u)
+        if u.path == "/api/scenarios/publish":
+            return self._share_start(u, "publish")
+        if u.path == "/api/scenarios/pull":
+            return self._share_start(u, "pull")
+        if u.path == "/api/scenarios/delete":
+            return self._share_start(u, "delete")
         if u.path != "/api/chat":
             return self._send(404, {"error": "not_found"})
         if not self._token_ok(parse_qs(u.query)):

@@ -38,6 +38,32 @@ export function makeSlice({ id, name, from, locked = false, createdAt, color = n
   };
 }
 
+// A slice is "shared" once it carries a firm-scenario link (uuid). The sidebar groups
+// on this; a published local scenario gains `shared`, a fork drops it.
+export function isShared(s) {
+  return !!(s && s.shared && s.shared.uuid);
+}
+
+// A shared scenario the user hid from their list — stays on disk so a pull keeps it hidden
+// instead of resurfacing it; "Show hidden" clears the flag. Filtered out of every list.
+export function isHidden(s) {
+  return !!(s && s.shared && s.shared.hidden);
+}
+
+// The envelope carries only integer user ids, so v1 shows self-vs-other, not a real name.
+export function sharedByLabel(slice, currentUserId) {
+  const who = slice?.shared?.updatedBy;
+  return who != null && currentUserId != null && who === currentUserId ? "you" : "another admin";
+}
+
+// A shared scenario built against a different NAV vintage than the viewer's current
+// snapshot. Informational only — re-hydration already applies its knobs to live data.
+export function sharedDrift(slice, snapshot) {
+  const basis = slice?.shared?.snapshotBasis?.navAsOf;
+  const current = snapshot?.source?.navAsOf;
+  return basis && current && basis !== current ? { basis, current } : null;
+}
+
 export function getSlice(doc, id) {
   return doc.slices.find((s) => s.id === id) ?? doc.slices.find((s) => s.id === BASELINE_ID) ?? doc.slices[0];
 }

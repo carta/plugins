@@ -7,6 +7,12 @@ import { FS } from "./theme.js";
 let _k = 0;
 const k = () => "md" + (_k++);
 
+// React escapes text but not a `javascript:`/`data:` URL in an href; allow-list schemes so an
+// untrusted shared-scenario link can't smuggle a script URL. Anything else renders as text.
+export function safeUrl(u) {
+  return /^(https?:|mailto:)/i.test(String(u || "").trim()) ? String(u).trim() : null;
+}
+
 function inline(text) {
   const nodes = [];
   let rest = String(text);
@@ -21,7 +27,7 @@ function inline(text) {
     const t = m[0];
     if (t[0] === "`") nodes.push(<code key={k()} style={{ fontFamily: "ui-monospace,SFMono-Regular,Menlo,monospace", background: "var(--ink-color-global-surface-lightgray-default)", padding: "1px 4px", borderRadius: 3 }}>{t.slice(1, -1)}</code>);
     else if (t.slice(0, 2) === "**") nodes.push(<strong key={k()}>{t.slice(2, -2)}</strong>);
-    else if (t[0] === "[") { const mm = /\[([^\]]+)\]\(([^)]+)\)/.exec(t); nodes.push(<a key={k()} href={mm[2]} target="_blank" rel="noreferrer">{mm[1]}</a>); }
+    else if (t[0] === "[") { const mm = /\[([^\]]+)\]\(([^)]+)\)/.exec(t); const href = safeUrl(mm[2]); nodes.push(href ? <a key={k()} href={href} target="_blank" rel="noreferrer">{mm[1]}</a> : mm[1]); }
     else nodes.push(<em key={k()}>{t.slice(1, -1)}</em>);
     rest = rest.slice(m.index + t.length);
   }
