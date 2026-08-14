@@ -33,6 +33,11 @@ one-confirmation rule, panel lifecycle gotchas) are a separate concern — see
 **Recovery `AskUserQuestion`s after a server short-circuit are fine** — no watcher is running
 at that point. The restriction applies only while a panel is open and awaiting a click.
 
+**The [account-setup gate](../SKILL.md#account-setup-gate-option-grant-only) is not a
+divergence** — worth stating because it is the one stop that precedes panel work. It runs on
+this path exactly as the core describes, so an option-grant corporation with zero document sets
+stops in Phase 0.5 and the config panel never renders.
+
 **The config panel stays open** after submit — it can't reliably close itself
 ([artifact-flow §5](artifact-flow.md#5-panel-lifecycle-gotchas)). Proceed to Phase 1 anyway.
 

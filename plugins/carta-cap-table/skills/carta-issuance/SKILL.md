@@ -298,8 +298,45 @@ no dependencies on each other; serial fetches here are pure latency.
   `issuance_init` payload".
 
   **Read each section under its own name.** Never let one section's `count: 0` stand in for
-  another's, and **never stop the flow over a count** — the surface is built and opened
-  regardless (Hard rule 10).
+  another's. Exactly one count may stop the flow — the [Account-setup
+  gate](#account-setup-gate-option-grant-only) below, on `document_sets.count` read under that
+  name and no other. Every other count, zero included, never gates: the surface is built and
+  opened regardless (Hard rule 10).
+
+### Account-setup gate (option grant only)
+
+Runs once, immediately after the `issuance_init` payload is read — before FMV, jurisdiction,
+plan, or any surface work — and is skipped entirely when `security_type` is `certificate`. Both
+adapters run it: a zero-template corporation cannot issue from either surface.
+
+Read `document_sets.count` from the `document_sets` section, under that exact name. Confirm the
+section name before acting on the number: a real run aborted a valid issuance by reading
+`acceleration_templates`' zero as this section's ([incidents.md § Reading server data
+wrong](references/incidents.md#reading-server-data-wrong)). Then branch:
+
+- **`count >= 1`** → pass; continue the phase. No other section's count matters here —
+  `acceleration_templates.count: 0`, or any other empty list, is a normal state and never gates.
+- **`count == 0`** → stop before building any surface:
+
+  > *"Your corporation doesn't have any option-grant document templates set up yet. Create one in the Carta app, then come back."*
+
+- **`document_sets` failed to fetch** — `null` (named in the top-level `errors` or not), absent
+  outright, or present but not the documented `{count, results}` shape (missing or non-numeric
+  `count`) → a failed fetch, **not** `count: 0`. Run the section's fallback,
+  `cap_table:get:document_sets` with `security_type: "option_grant"`, and gate on that count
+  instead. If the fallback errors too, surface its message verbatim and stop as a fetch failure
+  — never with the no-templates message above.
+
+**Why stopping here doesn't break Hard rule 10.** Rule 10 forbids asking for *collectible
+fields* — anything the surface has a field for, like who the grantees are — before the surface
+opens. The surface's document-set field picks **among existing templates**; it cannot create
+one. Every grant row requires one (`document_set_id` is an `always` field), so with zero
+templates the field is unfillable from any surface and the batch it collects can never issue. A
+missing template is an **account-setup blocker** — the same category as an unreachable Carta MCP
+(Phase 0 Step 3) — and account setup happens in the Carta app, not on this surface.
+
+**The gate has exactly one member: `document_sets`, on option grants.** It is not a "stop on any
+empty section" rule and must not be read as one.
 
 ### Option grant: resolve the FMV and the jurisdiction (before building the surface)
 

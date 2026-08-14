@@ -88,22 +88,21 @@ render it without recomputing it.
 
 ### Document-set resolution
 
-**Cowork path only, like every section in [SKILL.md § Shared resolution
-helpers](../SKILL.md#shared-resolution-helpers) — never run this "Zero → stop" check on the
-side-panel path.** On the side panel, `document_sets` is just one of Phase 0.5's parallel
-reference-data fetches ([Fetch the active type's reference
-data](../SKILL.md#phase-05--configure-the-issuance)); the panel is built and opened from
-whatever it returns, same as any other reference-data list, never gated on its count
-beforehand. Confusing this path with the one below is exactly what caused a real incident:
-the side-panel flow stopped before ever opening the panel, telling the user a corporation
-with a real, fetched `document_sets` result (`count: 1`) had zero — don't repeat that
-regardless of which section you're reading.
+The zero-templates stop lives in [SKILL.md § Account-setup gate (option grant
+only)](../SKILL.md#account-setup-gate-option-grant-only), which runs on **both** adapters in
+Phase 0.5 immediately after `issuance_init` returns, before any surface is built, reading
+`document_sets.count` under its own section name. This helper, like every section in [SKILL.md §
+Shared resolution helpers](../SKILL.md#shared-resolution-helpers), is a fallback that runs only
+when the collection surface didn't already resolve the field — never pre-emptively, on either
+path. By the time it runs the gate has passed, so the list holds at least one entry: **don't
+re-check the count here, and don't re-issue `cap_table:get:document_sets` for data the gate
+already holds.** Stopping over any *other* section's count is the real incident this file used
+to warn about — a run read `acceleration_templates`' `count: 0` as this section's and aborted a
+valid issuance when `document_sets` had returned `count: 1`
+([incidents.md § Reading server data wrong](incidents.md#reading-server-data-wrong)).
 
-Use the `document_sets` section from the Phase 0.5 `issuance_init` payload (fall back to
-`cap_table:get:document_sets` with `security_type: "option_grant"` only if init named it in
-`errors`). Zero → *"Your corporation
-doesn't have any option-grant document templates set up yet. Create one in the Carta app,
-then come back."* (stop). One → default silently, stamp `document_set_id`, tag
+Use the `document_sets` list the gate validated — init's section, or the gate's fallback fetch
+when init named the section in `errors`. One → default silently, stamp `document_set_id`, tag
 `(default — only template)`. Multiple → `AskUserQuestion` (one per set, last `"Cancel"`).
 **Never emit** `form_of_option_doc` / `form_of_exercise_doc` / `equity_incentive_plan_doc` /
 `attachments_uuid` — the server populates them from `document_set_id`. Also stamp the chosen
