@@ -39,7 +39,8 @@ export function scenarioFund(snapshot, fundId) {
  * Live state for every fund given the registry and assumptions.
  * Returns [{id, name, vintage, committed, lpPaidIn, lpDistributed, lpNav,
  *           dpi, rvpi, tvpi, netLpIrr, accruedCarry, gpCapitalNav, uplift,
- *           percentile, cohort, baseLpNav, baseTvpi, baseAccruedCarry}]
+ *           invested, fv, baseFv, percentile, cohort, baseLpNav, baseTvpi,
+ *           baseAccruedCarry}]
  */
 export function computeFundStates(snapshot, portfolio) {
   const uplifts = upliftByFund(portfolio.companies);
@@ -52,12 +53,16 @@ export function computeFundStates(snapshot, portfolio) {
       exits[p.fundId] = (exits[p.fundId] || 0) + repricedFv;
     }
   }
-  // fund asset base at Carta marks — denominator for the GP-capital reprice
-  // ratio (held-at-Carta companies count at FV with zero uplift)
+  // Per fund: FV at Carta marks (also the GP-capital reprice denominator) and
+  // cost basis. Split by position fundId, so cross-fund companies sum to firm total.
   const fvByFund = {};
+  const costByFund = {};
   for (const c of portfolio.companies) {
     if (c.archived) continue;
-    for (const p of c.positions) fvByFund[p.fundId] = (fvByFund[p.fundId] || 0) + (p.cartaFv || 0);
+    for (const p of c.positions) {
+      fvByFund[p.fundId] = (fvByFund[p.fundId] || 0) + (p.cartaFv || 0);
+      costByFund[p.fundId] = (costByFund[p.fundId] || 0) + (p.cost || 0);
+    }
   }
   return snapshot.funds.map((f) => {
     const cfg = waterfallCfgFor(portfolio.assumptions, snapshot, f.id);
@@ -123,6 +128,9 @@ export function computeFundStates(snapshot, portfolio) {
       accruedCarry,
       carryBanked, // GP cash from exit toggles — paid through the real waterfall
       exitedFv: exitFv,
+      invested: costByFund[f.id] || 0, // cost basis — fixed, doesn't reprice
+      fv: fvBase + uplift,
+      baseFv: fvBase, // FV at Carta marks — for the vs-baseline delta
       gpCapitalNav: f.gpCapitalNav, // booked (Carta) — the workbook reconciliation anchor
       gpCapitalNavLive,
       uplift,
@@ -159,6 +167,8 @@ export function firmRollup(fundStates) {
   const gpCapitalNav = sum("gpCapitalNav");
   const gpCapitalNavLive = sum("gpCapitalNavLive");
   const uplift = sum("uplift");
+  const invested = sum("invested");
+  const fv = sum("fv");
   // currencies among funds that actually carry capital (ignore empty/GP shells)
   const currencies = [...new Set(
     fundStates.filter((f) => (f.committed || f.lpPaidIn || f.lpNav) && f.currency).map((f) => f.currency)
@@ -174,6 +184,8 @@ export function firmRollup(fundStates) {
     gpCapitalNav,
     gpCapitalNavLive,
     uplift,
+    invested,
+    fv,
     currency: mixedCurrency ? null : (currencies[0] ?? null),
     mixedCurrency,
     dpi: lpPaidIn > 0 ? lpDistributed / lpPaidIn : 0,
@@ -204,6 +216,7 @@ export function firmBaseRollup(fundStates) {
     lpDistributed,
     lpNav,
     gpCarry,
+    fv: sum("baseFv"), // firm-wide FV at Carta marks — baseline for the FV delta
     dpi: lpPaidIn > 0 ? lpDistributed / lpPaidIn : 0,
     tvpi: lpPaidIn > 0 ? (lpNav + lpDistributed) / lpPaidIn : 0,
   };

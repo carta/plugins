@@ -52,21 +52,22 @@ function Row({ label, value, fmt, delta, eps = 0.5, forceDelta = false, alignCol
           ...(alignCols ? { minWidth: 64, textAlign: "right" } : {}) }}>
           <Num value={value} fmt={fmt} />
         </span>
-        {showDelta && (
-          // The row itself is `justify-content: space-between`, so the whole
-          // value+delta group is anchored to the row's RIGHT edge — meaning if the
-          // delta text's own width varies row to row, the group's total width varies
-          // too, which shifts the caret (its left edge) left/right despite the fixed
-          // value column before it. Reserving a fixed `minWidth` on the delta text
-          // (without right-aligning it) keeps the group's total width constant, so
-          // the caret lands at the same x on every row — while the number itself
-          // still sits left-aligned directly after its caret, per the design spec.
+        {showDelta ? (
+          // Row is right-anchored (space-between), so a fixed `minWidth` on the delta
+          // text keeps every caret at the same x instead of drifting with figure width.
           <span style={{ display: "flex", alignItems: "center", gap: 6, color: deltaColor }}>
             <DeltaCaret up={delta >= 0} />
             <span style={{ ...inkNum, fontSize: 12, fontWeight: 500, lineHeight: "24px",
               ...(alignCols ? { minWidth: 52 } : {}) }}>{fmt(Math.abs(delta))}</span>
           </span>
-        )}
+        ) : alignCols ? (
+          // A deltaless aligned row (Invested) still reserves the caret+figure slot,
+          // so its value's right edge lines up with the delta rows above and below.
+          <span aria-hidden style={{ display: "flex", alignItems: "center", gap: 6, visibility: "hidden" }}>
+            <DeltaCaret up />
+            <span style={{ ...inkNum, fontSize: 12, fontWeight: 500, lineHeight: "24px", minWidth: 52 }} />
+          </span>
+        ) : null}
       </span>
     </div>
   );
@@ -123,6 +124,9 @@ function FundCard({ f, snapshot, portfolio, onOpenFundSection, isLast, reserves,
         whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
         {name}
       </div>
+      {/* Invested/FV are holdings figures with no dedicated Returns view — plain, not links (like Reserves earmarked below). */}
+      <Row label="Invested" value={f.invested} fmt={fmtM} alignCols />
+      <Row label="FV" value={f.fv} fmt={fmtM} delta={f.fv - f.baseFv} forceDelta alignCols />
       <Row label="NAV" value={f.lpNav} fmt={fmtM} delta={f.lpNav - f.baseLpNav} forceDelta alignCols onClick={openExit} title={exitTitle} />
       <Row label="TVPI" value={f.tvpi} fmt={(n) => fmtX(n)} delta={f.tvpi - f.baseTvpi} eps={0.005} forceDelta alignCols onClick={openExit} title={exitTitle} />
       <Row label={`Net LP IRR · exit ${m?.thisYear ?? "—"}`} value={m?.netLpIrr} fmt={(n) => fmtPct(n)}
@@ -237,6 +241,8 @@ export function ReturnsPreviewContent({ fundStates, firmAgg, firmLpDelta, firmGp
           </div>
         ) : (
           <>
+            <Row label="Invested" value={firmAgg.invested} fmt={fmtM} alignCols />
+            <Row label="FV" value={firmAgg.fv} fmt={fmtM} delta={firmAgg.fv - firmBase.fv} forceDelta alignCols />
             <Row label="LP NAV" value={firmAgg.lpNav} fmt={fmtM} delta={firmLpDelta} forceDelta alignCols />
             <Row label="TVPI" value={firmAgg.tvpi} fmt={(n) => fmtX(n)} delta={firmAgg.tvpi - firmBase.tvpi} eps={0.005} forceDelta alignCols />
             <Row label="DPI" value={firmAgg.dpi} fmt={(n) => fmtX(n)} delta={firmAgg.dpi - firmBase.dpi} eps={0.005} forceDelta alignCols
