@@ -221,6 +221,141 @@ func TestInjectInstrumentation_UnionAcrossPlugins(t *testing.T) {
 	}
 }
 
+// injectWithAISupplied runs InjectInstrumentation with the given AI-supplied
+// _instrumentation_v2 already present and returns the resulting fields.
+func injectWithAISupplied(t *testing.T, aiSuppliedInstrJSON string) map[string]json.RawMessage {
+	t.Helper()
+	isolateEnv(t)
+	setupPluginRoot(t, "carta-crm", "1.0.0")
+	stdin := `{"tool_name":"some_tool","tool_input":{"_instrumentation_v2":` + aiSuppliedInstrJSON + `},"session_id":"s1"}`
+	out, err := InjectInstrumentation([]byte(stdin))
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated := parsePreToolUseUpdatedInput(t, out)
+	var instr map[string]json.RawMessage
+	if err := json.Unmarshal(updated["_instrumentation_v2"], &instr); err != nil {
+		t.Fatal(err)
+	}
+	return instr
+}
+
+func fieldAsString(t *testing.T, fields map[string]json.RawMessage, key string) *string {
+	t.Helper()
+	raw, ok := fields[key]
+	if !ok || isMissingJSON(raw) {
+		return nil
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err != nil {
+		t.Fatal(err)
+	}
+	return &s
+}
+
+// TestInjectInstrumentation_FallbackModelBackfilledWhenHookHasNone covers a
+// missing .model marker: the AI-supplied model must survive.
+func TestInjectInstrumentation_FallbackModelBackfilledWhenHookHasNone(t *testing.T) {
+	instr := injectWithAISupplied(t, `{"model":"claude-sonnet-5"}`)
+	if model := fieldAsString(t, instr, "model"); model == nil || *model != "claude-sonnet-5" {
+		t.Errorf("model = %v, want backfilled \"claude-sonnet-5\"", model)
+	}
+	var fromHook bool
+	if err := json.Unmarshal(instr["from_hook"], &fromHook); err != nil || !fromHook {
+		t.Error("expected from_hook to remain true even when model is backfilled")
+	}
+}
+
+// TestInjectInstrumentation_HookModelWinsOverFallback covers the hook having
+// its own .model value: the AI-supplied fallback must not override it.
+func TestInjectInstrumentation_HookModelWinsOverFallback(t *testing.T) {
+	isolateEnv(t)
+	setupPluginRoot(t, "carta-crm", "1.0.0")
+	if err := session.WriteModel("s1", "claude-opus-5"); err != nil {
+		t.Fatal(err)
+	}
+
+	stdin := `{"tool_name":"some_tool","tool_input":{"_instrumentation_v2":{"model":"claude-sonnet-5"}},"session_id":"s1"}`
+	out, err := InjectInstrumentation([]byte(stdin))
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated := parsePreToolUseUpdatedInput(t, out)
+	var instr map[string]json.RawMessage
+	if err := json.Unmarshal(updated["_instrumentation_v2"], &instr); err != nil {
+		t.Fatal(err)
+	}
+	if model := fieldAsString(t, instr, "model"); model == nil || *model != "claude-opus-5" {
+		t.Errorf("model = %v, want hook's own \"claude-opus-5\" to win", model)
+	}
+}
+
+// TestInjectInstrumentation_NonAllowlistedFallbackFieldIgnored guards against
+// scope creep: skills is deliberately excluded from fallbackPreserveFields.
+func TestInjectInstrumentation_NonAllowlistedFallbackFieldIgnored(t *testing.T) {
+	instr := injectWithAISupplied(t, `{"skills":["fake:skill"]}`)
+	var skills []string
+	if err := json.Unmarshal(instr["skills"], &skills); err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range skills {
+		if s == "fake:skill" {
+			t.Errorf("skills = %v, fake:skill must not be adopted from AI fallback", skills)
+		}
+	}
+}
+
+// TestInjectInstrumentation_MalformedFallbackPayloadIgnored covers an
+// AI-supplied _instrumentation_v2 that isn't a JSON object: the hook payload
+// must still inject cleanly with no error.
+func TestInjectInstrumentation_MalformedFallbackPayloadIgnored(t *testing.T) {
+	isolateEnv(t)
+	setupPluginRoot(t, "carta-crm", "1.0.0")
+
+	stdin := `{"tool_name":"some_tool","tool_input":{"_instrumentation_v2":"not-an-object"},"session_id":"s1"}`
+	out, err := InjectInstrumentation([]byte(stdin))
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated := parsePreToolUseUpdatedInput(t, out)
+	var instr struct {
+		FromHook bool `json:"from_hook"`
+	}
+	if err := json.Unmarshal(updated["_instrumentation_v2"], &instr); err != nil {
+		t.Fatal(err)
+	}
+	if !instr.FromHook {
+		t.Error("expected hook payload injected normally despite malformed prior")
+	}
+}
+
+// TestInjectInstrumentation_ParamsToolsFallbackBackfilled exercises the same
+// merge for the params-nested injection site used by fetch/mutate.
+func TestInjectInstrumentation_ParamsToolsFallbackBackfilled(t *testing.T) {
+	isolateEnv(t)
+	setupPluginRoot(t, "carta-crm", "1.0.0")
+
+	stdin := `{"tool_name":"mcp__carta__fetch","tool_input":{"params":{"a":1,"_instrumentation_v2":{"model":"claude-sonnet-5"}}},"session_id":"s1"}`
+	out, err := InjectInstrumentation([]byte(stdin))
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated := parsePreToolUseUpdatedInput(t, out)
+	var params map[string]json.RawMessage
+	if err := json.Unmarshal(updated["params"], &params); err != nil {
+		t.Fatal(err)
+	}
+	var instr struct {
+		Model *string `json:"model"`
+	}
+	if err := json.Unmarshal(params["_instrumentation_v2"], &instr); err != nil {
+		t.Fatal(err)
+	}
+	if instr.Model == nil || *instr.Model != "claude-sonnet-5" {
+		t.Errorf("model = %v, want backfilled \"claude-sonnet-5\" under params", instr.Model)
+	}
+}
+
 func TestInjectInstrumentation_PluginRootUnsetFailsOpenNoWrites(t *testing.T) {
 	isolateEnv(t)
 	t.Setenv("CLAUDE_PLUGIN_ROOT", "")
