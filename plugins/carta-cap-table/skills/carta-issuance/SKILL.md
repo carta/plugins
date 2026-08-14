@@ -23,6 +23,8 @@ allowed-tools:
   - Bash(cat *)
   - Bash(test *)
   - Bash(ls *)
+  # In prose and examples, `mcp__carta__*` is a placeholder for the session's actual
+  # Carta server prefix (Step 2a). These permission entries are literal — leave them.
   - mcp__carta__fetch
   - mcp__carta__mutate
   - mcp__carta__list_accounts
@@ -208,6 +210,13 @@ and never attempt `render-panel` when `preview_start` is absent.
 ToolSearch: "select:mcp__carta__fetch,mcp__carta__mutate,mcp__carta__welcome,mcp__carta__list_accounts"
 ```
 
+`mcp__carta__` is the placeholder prefix
+([Step 2a](#step-2a--carta-command-names-hardcoded-never-discovered)) — when the session's
+Carta tools carry a different prefix, substitute it into the `select:` string; the names after
+the prefix never change. Zero matches on the literal `mcp__carta__` names means the wrong
+prefix, not a disconnected server — re-check the session's tool list before treating it as the
+Step 3 stop.
+
 One call, four tools, the complete set for the run. **`mutate` is loaded here, up front**, so
 Phase 2 never has to load it after the user confirms — that would be serial latency at the
 worst possible moment. On the Cowork path, add `mcp__visualize__show_widget` to the same
@@ -226,18 +235,40 @@ mcp__carta__fetch({"command": "cap_table:get:<noun>",     "params": {…}})
 mcp__carta__mutate({"command": "cap_table:mutate:<noun>", "params": {…}})
 ```
 
+**`mcp__carta__` is a placeholder** — here, in every code block below, and in every reference
+file. The real prefix is environment-dependent (`mcp__carta-test__fetch`, plugin-scoped and
+UUID-suffixed connector forms all occur). Resolve it from the session's tool list and
+substitute it everywhere; only the prefix varies — tool and command names never do. The one
+exception: the frontmatter `allowed-tools` entries are literal grant patterns — never
+substitute there.
+
 | Purpose | Command | Tool |
 |---|---|---|
 | Reference data for the collection surface | `cap_table:get:issuance_init` | `fetch` |
 | Stakeholder lookup | `cap_table:get:stakeholders` | `fetch` |
 | Load an existing set's rows | `cap_table:get:load_drafts` | `fetch` |
 | List draft sets (resume by name) | `cap_table:list:draft_sets` | `fetch` |
+| Cap-table totals for context math — authorized, outstanding, fully diluted, ownership % | `cap_table:get:cap_table_by_share_class` | `fetch` |
 | Save rows, no validation | `cap_table:mutate:save_drafts` | `mutate` |
 | Validate a saved set | `cap_table:mutate:validate_drafts` | `mutate` |
 | Save + validate + dedupe + issue | `cap_table:mutate:issue_securities` | `mutate` |
 | Resolve flagged duplicates | `cap_table:mutate:resolve_duplicate_stakeholder` | `mutate` |
 
-**Go through `fetch`/`mutate`, not `call_tool`.** Both are *pinned gateway* tools: always
+> **The totals source has a breakdown-sounding name.** `cap_table:get:cap_table_by_share_class`
+> — `corporation_id` alone — returns authorized, outstanding, fully diluted, and ownership %.
+> Context math only (e.g. percent-of-fully-diluted for a grant), never a payload source. There
+> is no `cap_table:get:cap_table_summary` — guessing it returns *"Unknown command"* — and the
+> similar-sounding `cap_table_summary_report` is a different plugin's report command, not a
+> name here; the row above is this skill's totals source.
+
+**Go through `fetch`/`mutate`, not `call_tool`.** The runtime's tool descriptions deprecate
+`fetch` in favour of `call_tool` and `discover` in favour of `search_tools`. That notice is
+known and deliberately not followed — do not "fix" the contradiction. `fetch` stays because
+the per-command tools `call_tool` would target are excluded from `tools/list` (the mechanics
+below); the `discover` half is moot here because every command name is hardcoded in the table
+above, so discovery never runs (full story:
+[incidents.md § Round-trips](references/incidents.md#round-trips-that-bought-nothing)).
+Both `fetch` and `mutate` are *pinned gateway* tools: always
 present in `tools/list`, reachable in one hop, with scope and staff checks enforced inside the
 command executor. The double-underscore form (`cap_table__mutate__issue_securities`) is not a
 typo for a command name — carta-mcp also generates one hidden tool per command by swapping `:`
