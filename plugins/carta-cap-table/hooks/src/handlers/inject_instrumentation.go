@@ -18,6 +18,10 @@ func init() {
 // the top level of tool_input.
 var paramsTools = map[string]bool{"fetch": true, "mutate": true}
 
+// fallbackPreserveFields lists keys whose AI-supplied value survives when
+// the hook has none. The hook stays authoritative for every other key.
+var fallbackPreserveFields = map[string]bool{"model": true}
+
 type instrumentationV2 struct {
 	Plugins        []session.PluginRef `json:"plugins"`
 	Skills         []string            `json:"skills"`
@@ -108,11 +112,6 @@ func buildUpdatedInput(toolInputRaw json.RawMessage, shortName string, instr ins
 		_ = json.Unmarshal(toolInputRaw, &toolInput)
 	}
 
-	instrBytes, err := json.Marshal(instr)
-	if err != nil {
-		return nil, err
-	}
-
 	if paramsTools[shortName] {
 		params := map[string]json.RawMessage{}
 		canInject := true
@@ -134,6 +133,10 @@ func buildUpdatedInput(toolInputRaw json.RawMessage, shortName string, instr ins
 			}
 		}
 		if canInject {
+			instrBytes, err := mergeFallback(instr, params["_instrumentation_v2"])
+			if err != nil {
+				return nil, err
+			}
 			params["_instrumentation_v2"] = instrBytes
 			paramsBytes, err := json.Marshal(params)
 			if err != nil {
@@ -142,8 +145,56 @@ func buildUpdatedInput(toolInputRaw json.RawMessage, shortName string, instr ins
 			toolInput["params"] = paramsBytes
 		}
 	} else {
+		instrBytes, err := mergeFallback(instr, toolInput["_instrumentation_v2"])
+		if err != nil {
+			return nil, err
+		}
 		toolInput["_instrumentation_v2"] = instrBytes
 	}
 
 	return json.Marshal(toolInput)
+}
+
+// mergeFallback backfills fallbackPreserveFields onto instr from the
+// AI-supplied payload wherever the hook's own value is missing.
+func mergeFallback(instr instrumentationV2, aiSupplied json.RawMessage) (json.RawMessage, error) {
+	hook := map[string]json.RawMessage{}
+	hookBytes, err := json.Marshal(instr)
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(hookBytes, &hook); err != nil {
+		return nil, err
+	}
+
+	var aiFields map[string]json.RawMessage
+	if len(aiSupplied) == 0 || json.Unmarshal(aiSupplied, &aiFields) != nil {
+		return hookBytes, nil
+	}
+
+	for field := range fallbackPreserveFields {
+		if !isMissingJSON(hook[field]) {
+			continue
+		}
+		fallback, ok := aiFields[field]
+		if !ok || isMissingJSON(fallback) {
+			continue
+		}
+		var s string
+		if err := json.Unmarshal(fallback, &s); err != nil {
+			continue
+		}
+		hook[field] = fallback
+	}
+	return json.Marshal(hook)
+}
+
+// isMissingJSON reports whether raw is JSON's absence, null, "", [], or {}.
+func isMissingJSON(raw json.RawMessage) bool {
+	switch string(raw) {
+	case "", "null", `""`, "[]", "{}":
+		return true
+	default:
+		return false
+	}
 }
