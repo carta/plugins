@@ -1190,11 +1190,11 @@ const SORT_DEFAULT_DIR = { value: "desc", invested: "desc", az: "asc", mark: "de
 // frozenOrder freeze-during-slider-drag), which the generic useTableSort does
 // not model — so it stays bespoke, but shares the canonical <SortIcon> and the
 // `.ink-sort-btn` styling so the header reads identically to every other table.
-function SortableTh({ id, label, align = "right", sortBy, sortDir, onSort, style, hidden }) {
+function SortableTh({ id, label, align = "right", sortBy, sortDir, onSort, style, hidden, help }) {
   const active = sortBy === id;
   const ariaSort = active ? (sortDir === "asc" ? "ascending" : "descending") : "none";
   return (
-    <th style={{ textAlign: align, ...style }} aria-sort={ariaSort}>
+    <th style={{ textAlign: align, ...style }} aria-sort={ariaSort} title={help}>
       {/* tabIndex/aria-hidden when `hidden`: the real (non-clone) header stays scrolled
           off-screen but in the DOM while its floating clone is showing — without this,
           the off-screen buttons would still be reachable by Tab and announced by
@@ -1224,7 +1224,7 @@ function CompaniesHeaderRow({ sortBy, sortDir, onSort, colWidths, hidden }) {
       <SortableTh id="az" label="Company" align="left" sortBy={sortBy} sortDir={sortDir} onSort={onSort} style={{ paddingLeft: 10, ...w(0) }} hidden={hidden} />
       <SortableTh id="invested" label="Invested" sortBy={sortBy} sortDir={sortDir} onSort={onSort} style={w(1)} hidden={hidden} />
       <SortableTh id="value" label="FV" sortBy={sortBy} sortDir={sortDir} onSort={onSort} style={w(2)} hidden={hidden} />
-      <SortableTh id="stale" label="Mark" sortBy={sortBy} sortDir={sortDir} onSort={onSort} style={w(3)} hidden={hidden} />
+      <SortableTh id="stale" label="Latest Mark" help="Latest valuation mark held in Carta" sortBy={sortBy} sortDir={sortDir} onSort={onSort} style={w(3)} hidden={hidden} />
       <SortableTh id="mark" label="MOIC" sortBy={sortBy} sortDir={sortDir} onSort={onSort} style={w(4)} hidden={hidden} />
       <SortableTh id="irr" label="Deal IRR" sortBy={sortBy} sortDir={sortDir} onSort={onSort} style={w(5)} hidden={hidden} />
       <SortableTh id="own" label="Own %" sortBy={sortBy} sortDir={sortDir} onSort={onSort} style={w(6)} hidden={hidden} />
