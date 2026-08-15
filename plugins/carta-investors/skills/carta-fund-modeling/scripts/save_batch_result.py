@@ -222,7 +222,12 @@ def split_aggregate(text, n):
             if isinstance(doc, dict):
                 for k in _LIST_KEYS:
                     v = doc.get(k)
-                    if isinstance(v, list) and len(v) == n:
+                    # Same _is_result_elem guard as the top-level branch: a content-block
+                    # wrapper under a `result`/`content` key is a 2-element list that would
+                    # otherwise false-match n==2 and return the raw blocks as results.
+                    if isinstance(v, list) and len(v) == n and all(_is_result_elem(x) for x in v):
+                        if all(isinstance(x.get("index"), int) for x in v):
+                            return sorted(v, key=lambda x: x["index"])
                         return list(v)
                 # harness-persisted string wrapper: recurse into the embedded text
                 for k in ("result", "content", "text"):
