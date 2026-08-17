@@ -1,6 +1,6 @@
 {
   "carta-home-build": {
-    "version": "1.0.0",
-    "headline": "Carta Home now tells you when a newer version is available."
+    "version": "1.1.0",
+    "headline": "Preview an investor's reminder email before you send it."
   }
 }
