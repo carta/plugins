@@ -1224,7 +1224,7 @@ function CompaniesHeaderRow({ sortBy, sortDir, onSort, colWidths, hidden }) {
       <SortableTh id="az" label="Company" align="left" sortBy={sortBy} sortDir={sortDir} onSort={onSort} style={{ paddingLeft: 10, ...w(0) }} hidden={hidden} />
       <SortableTh id="invested" label="Invested" sortBy={sortBy} sortDir={sortDir} onSort={onSort} style={w(1)} hidden={hidden} />
       <SortableTh id="value" label="FV" sortBy={sortBy} sortDir={sortDir} onSort={onSort} style={w(2)} hidden={hidden} />
-      <SortableTh id="stale" label="Latest Mark" help="Latest valuation mark held in Carta" sortBy={sortBy} sortDir={sortDir} onSort={onSort} style={w(3)} hidden={hidden} />
+      <SortableTh id="stale" label="Valuation date" help="Date of the latest valuation mark held in Carta" sortBy={sortBy} sortDir={sortDir} onSort={onSort} style={w(3)} hidden={hidden} />
       <SortableTh id="mark" label="MOIC" sortBy={sortBy} sortDir={sortDir} onSort={onSort} style={w(4)} hidden={hidden} />
       <SortableTh id="irr" label="Deal IRR" sortBy={sortBy} sortDir={sortDir} onSort={onSort} style={w(5)} hidden={hidden} />
       <SortableTh id="own" label="Own %" sortBy={sortBy} sortDir={sortDir} onSort={onSort} style={w(6)} hidden={hidden} />
