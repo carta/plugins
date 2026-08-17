@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"com.carta.claude_plugins.hooks/internal/hookio"
+	"com.carta.claude_plugins.hooks/internal/session"
 	"com.carta.claude_plugins.hooks/registry"
 )
 
@@ -17,11 +18,12 @@ func init() {
 // dir before PruneSessionData prunes it on the next SessionStart.
 const maxSessionAge = 24 * time.Hour
 
-// PruneSessionData prunes session files older than maxSessionAge from
-// CLAUDE_PLUGIN_DATA/sessions. It is a no-op when CLAUDE_PLUGIN_DATA is
-// unset or the sessions dir doesn't exist yet, and is fully best-effort: any
-// filesystem error is swallowed so a broken data dir never blocks the
-// session.
+// PruneSessionData prunes entries older than maxSessionAge from
+// CLAUDE_PLUGIN_DATA/sessions (per-plugin skill state) and from
+// session.SessionStateBaseDir() (cross-plugin shared session state). Both
+// dirs otherwise grow unbounded: nothing else ever deletes a per-session
+// directory once its session ends. It is fully best-effort: any filesystem
+// error is swallowed so a broken data dir never blocks the session.
 //
 // It does not create CLAUDE_PLUGIN_DATA/{sessions,cache} itself — each
 // writer (session.AppendSkill, session.WriteModel, cache-commands' cache
@@ -29,11 +31,11 @@ const maxSessionAge = 24 * time.Hour
 // central mkdir here would be redundant.
 func PruneSessionData(stdin []byte) ([]byte, error) {
 	dataDir := os.Getenv("CLAUDE_PLUGIN_DATA")
-	if dataDir == "" {
-		return hookio.SessionStartOK(), nil
+	if dataDir != "" {
+		pruneStaleSessions(filepath.Join(dataDir, "sessions"))
 	}
 
-	pruneStaleSessions(filepath.Join(dataDir, "sessions"))
+	pruneStaleSessions(session.SessionStateBaseDir())
 
 	return hookio.SessionStartOK(), nil
 }
@@ -50,7 +52,12 @@ func pruneStaleSessions(sessionsDir string) {
 		if err != nil {
 			continue
 		}
-		if now.Sub(info.ModTime()) > maxSessionAge {
+		if now.Sub(info.ModTime()) <= maxSessionAge {
+			continue
+		}
+		if entry.IsDir() {
+			_ = os.RemoveAll(path)
+		} else {
 			_ = os.Remove(path)
 		}
 	}

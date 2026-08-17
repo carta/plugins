@@ -119,11 +119,11 @@ func buildUpdatedInput(toolInputRaw json.RawMessage, shortName string, instr ins
 			var asString string
 			if err := json.Unmarshal(raw, &asString); err == nil {
 				var parsed map[string]json.RawMessage
-				if err := json.Unmarshal([]byte(asString), &parsed); err == nil {
+				if err := json.Unmarshal([]byte(asString), &parsed); err == nil && parsed != nil {
 					params = parsed
 				}
-				// A JSON-encoded string that fails to parse as an object falls
-				// back to an empty params object.
+				// A JSON-encoded string that fails to parse as an object, or that
+				// decodes to JSON null, falls back to an empty params object.
 			} else if err := json.Unmarshal(raw, &params); err != nil {
 				// params is neither an object nor a JSON-encoded object string
 				// (e.g. an array or a number) — leave it untouched rather than

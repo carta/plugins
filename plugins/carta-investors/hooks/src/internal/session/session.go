@@ -129,8 +129,8 @@ type Record struct {
 	Skills  []string `json:"skills"`
 }
 
-// WriteRecord writes this plugin's contribution to the session's shared
-// state directory, creating it as needed.
+// WriteRecord writes this plugin's contribution to the shared session
+// state dir. Writes are atomic, so readers never see a torn record.
 func WriteRecord(sessionID, pluginName, version string, skills []string) error {
 	dir := SessionStateDir(sessionID)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -141,7 +141,29 @@ func WriteRecord(sessionID, pluginName, version string, skills []string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(dir, pluginName+".json"), data, 0o644)
+	return writeFileAtomic(filepath.Join(dir, pluginName+".json"), data, 0o644)
+}
+
+// writeFileAtomic writes via temp file + rename so readers never see a torn write.
+func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmpPath, perm); err != nil {
+		return err
+	}
+	return os.Rename(tmpPath, path)
 }
 
 // PluginRef identifies a plugin contributing to the merged instrumentation.
