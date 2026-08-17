@@ -187,9 +187,15 @@ Order the headline answer this way:
 
 | Tier | Condition | Label in the artifact |
 |---|---|---|
-| A | Tenure overlap **and** the connector is a CRM contact with interaction history | `Strong route` |
-| B | Tenure overlap, connector thin or absent in the CRM | `Likely route` |
-| C | Shared employer, no tenure overlap | `Weak route` |
+| A | `pathType: "contact"`, tenure overlap, **and** interaction history in the CRM | `Strong route` |
+| B | `pathType: "contact"`, tenure overlap, connector thin or absent in the CRM | `Likely route` |
+| C | No tenure overlap; or `pathType: "colleague"` (enrichment-sourced — no direct CRM relationship) | `Weak route` |
+
+`pathType: "colleague"` means the connector was surfaced from Carta's enrichment data and has no
+direct CRM relationship with the acting user. They have no email in the CRM, so **no Gmail draft
+action is available** (Step 6). The route is still worth showing — it widens the search — but cap
+it at Tier C regardless of tenure overlap, and make clear in Step 7 that this is a weaker path
+requiring the user to track down their own contact details outside the CRM.
 
 Tier C means they may never have met. Say so rather than dressing it up.
 
@@ -251,11 +257,28 @@ The `DATA` shape is documented by the example in the file. Rules for filling it:
   flag. **`role` is only ever the literal `"You"`.** See the omissions list below.
 - `recommended.you` — the acting user, and only when they are *not* the sender. Omit otherwise;
   a card that repeats the person above it reads as a bug.
-- `recommended.connector` — `{ name, title, email, photoUrl, companyName, companyLogoUrl }`.
+- `recommended.connector` — `{ name, title, email, photoUrl, companyName, companyLogoUrl, location, lists, relationStrength, addedBy }`.
   `title` and `photoUrl` from the angles payload, `companyName` from `activeCompany`,
   `companyLogoUrl` from that company's `image` only if it resolved, `email` from
   `email_detail.email` on the contact record. Any of them may be null — but without `email`
   there is no Gmail action (Step 6).
+
+  Four context fields answer the natural question "who is this person and do I trust this
+  route?" — populate them from the same calls already in flight, without any extra round trips:
+
+  - `location` — `city`, `location`, or `country` from the `fetch_contact_by_id` record.
+    Null if the CRM holds none. Answers "Australia or London?".
+  - `lists` — array of CRM list names from `lists` or `tags` on the contact record. Null or
+    `[]` if absent. Answers "is this person a portfolio CEO or an HR recruiter?".
+  - `relationStrength` — `"HIGH"` / `"MEDIUM"` / `"LOW"` from the matching row in the
+    `get_company_relations` response (the row whose `contact.email` matches the connector).
+    This is already fetched in wave 3; copy the `strength` field from that row. Null if wave
+    3 did not run. Shown in the "Ask for intro" gutter as "Strong link" / "Medium link" /
+    "Light link" so the user can judge the quality of the route at a glance.
+  - `addedBy` — the `createdBy` or `addedBy` display name from the `fetch_contact_by_id`
+    record, if the CRM exposes it. Null otherwise. Answers "who saved this contact?" —
+    critical when the person who added them has since left the firm. **Do not guess, do not
+    look it up with a separate call; null is the correct value when the field is absent.**
 
 ### A direct route
 
@@ -385,6 +408,8 @@ numbered list with one marked `<- recommended`, via `AskUserQuestion`. Never fir
    **Draft only, never send.** This is an email to a real colleague and the user has not read
    it yet. If no mail connector is available in this session, skip this option without
    announcing its absence; the message is already in the artifact with a copy button.
+   **Skip this option entirely for `colleague`-typed routes** — enrichment contacts have no CRM
+   email address, so there is nothing to send to.
 
    **Fill `args` — an empty one drafts a blank email.** The in-panel button calls
    `callMcpTool(action.tool, action.args || {})` and passes nothing else, so the message in

@@ -449,6 +449,32 @@
         color: var(--ink-color-global-text-subtle);
       }
 
+      /* Connector context: location and CRM list membership */
+      .person-location {
+        font-size: 12px; line-height: 17px;
+        color: var(--ink-color-global-text-subtle);
+        margin-top: 2px; overflow-wrap: anywhere;
+      }
+      .person-lists {
+        display: flex; flex-wrap: wrap; gap: 4px;
+        margin-top: 4px;
+      }
+      .list-tag {
+        display: inline-block;
+        font-size: 11px; line-height: 15px; font-weight: 500;
+        padding: 1px 7px;
+        border: 1px solid var(--ink-color-global-border-subtle);
+        border-radius: 999px;
+        color: var(--ink-color-global-text-default);
+        white-space: nowrap;
+      }
+      /* Who added this contact — answers "who saved their profile" */
+      .person-added-by {
+        font-size: 11px; line-height: 16px;
+        color: var(--ink-color-global-text-subtle);
+        margin-top: 3px;
+      }
+
       /* The drafted ask. */
       .draft {
         border: 1px solid var(--ink-color-global-border-subtle);
@@ -567,7 +593,19 @@
             email: "sara.ali@northwindventures.com",
             photoUrl: null,
             companyName: "Northwind Ventures",
-            companyLogoUrl: null
+            companyLogoUrl: null,
+            // Context fields — null-safe, omit any the CRM does not carry.
+            // location: fetch_contact_by_id location/city/country
+            location: "London, UK",
+            // lists: CRM list memberships from fetch_contact_by_id
+            lists: ["VC Investor"],
+            // relationStrength: the matching row from get_company_relations
+            // (HIGH / MEDIUM / LOW). Shown in the "Ask for intro" gutter.
+            relationStrength: "HIGH",
+            // addedBy: createdBy / addedBy from fetch_contact_by_id, if present.
+            // Answers "who saved this contact" — useful when the contact was added
+            // by a colleague who has since left the firm.
+            addedBy: null
           },
           target: { name: "Tom Reid", title: "CTO", photoUrl: null },
           targetLogoUrl: null,
@@ -765,6 +803,13 @@
         if (o.flag) id.appendChild(el("span", "card-flag", o.flag));
         id.appendChild(el("div", "person-name", person.name));
         if (o.role) id.appendChild(el("div", "person-role", o.role));
+        if (o.location) id.appendChild(el("div", "person-location", o.location));
+        if (o.lists && o.lists.length) {
+          const listRow = el("div", "person-lists");
+          o.lists.forEach(function (l) { listRow.appendChild(el("span", "list-tag", l)); });
+          id.appendChild(listRow);
+        }
+        if (o.addedBy) id.appendChild(el("div", "person-added-by", "Added by " + o.addedBy));
         body.appendChild(id);
         box.appendChild(body);
         return box;
@@ -867,17 +912,24 @@
             role: sender.role
           }), 1, 1));
 
-        // Column 2 - our person to the connector. Deliberately unlabelled beyond
-        // the instruction: a relationship length here cannot say whether it means
-        // regular contact across those years or one touchpoint at the start of
-        // them, and those imply very different things about the ask.
-        lanes.appendChild(place(link("Ask for intro", []), 2, 1));
+        // Column 2 - our person to the connector. Strength from get_company_relations
+        // tells the user whether this is a genuine working relationship or a
+        // one-off coffee three years ago, without requiring a second CRM call.
+        const leftDetails = [];
+        if (route.connector.relationStrength) {
+          const s = route.connector.relationStrength;
+          leftDetails.push(s === "HIGH" ? "Strong link" : s === "MEDIUM" ? "Medium link" : "Light link");
+        }
+        lanes.appendChild(place(link("Ask for intro", leftDetails), 2, 1));
 
         // Column 3 - the connector, at their own current employer.
         lanes.appendChild(place(
           card(route.connector.companyName, "Employer not on record", route.connector, {
             role: route.connector.title,
-            companyLogoUrl: route.connector.companyLogoUrl
+            companyLogoUrl: route.connector.companyLogoUrl,
+            location: route.connector.location,
+            lists: route.connector.lists,
+            addedBy: route.connector.addedBy
           }), 3, 1));
 
         // Column 4 - the shared employer that makes this hop real, and when.
