@@ -384,6 +384,11 @@
     // cloneNode(true) copies it too; strip it since the new block is unvalidated.
     const banner = block.querySelector('.block-error-banner');
     if (banner) banner.remove();
+    // Import markers describe a row that came out of the uploaded file. This new
+    // block came from the user clicking "+ Add stakeholder", so keeping them
+    // would attribute someone else's spreadsheet cell to a person who isn't in
+    // the file at all.
+    block.querySelectorAll('.import-note, .import-banner').forEach(el => el.remove());
   }
 
   function renumberBlocks() {
@@ -446,9 +451,15 @@
       const r144Other = block.querySelector('[data-group="rule144"].selected')?.dataset.value === 'other';
       if (r144Other && !block.querySelector('.block-rule144-reason')?.value) missing.push('a Rule 144 difference reason');
     } else {
+      // Normally a jurisdiction default is always selected, so this only bites
+      // when an import couldn't match the file's option type and deliberately
+      // left it blank — the tax treatment differs per type, so it can't default.
+      if (!block.querySelector('[data-group="type"].selected')) missing.push('an option type');
       if (!block.querySelector('.block-vesting-select')?.value) missing.push('a vesting schedule');
       if (!block.querySelector('[data-group="docset"].selected')) missing.push('documents');
     }
+    // Same story: only unselected when an import couldn't read Holder Type.
+    if (!block.querySelector('[data-group="kind"].selected')) missing.push('a stakeholder type');
     return missing;
   }
   function blockReady(block) { return missingFields(block).length === 0; }

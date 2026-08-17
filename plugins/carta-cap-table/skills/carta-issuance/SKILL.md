@@ -8,7 +8,9 @@ description: >-
   user says "issue", "grant", "draft", "award", "give equity", "give
   shares", "give stock", "create a certificate", "create a grant", "set
   up an option grant", "issue equity to a named person", or names any specific
-  security type above.
+  security type above. Also USE WHEN the user points at a spreadsheet, CSV,
+  Carta import template, or a grant/award document as the source of the
+  issuance ("issue the grants in this file", "here's our import template").
 model: inherit
 allowed-tools:
   - AskUserQuestion
@@ -52,6 +54,7 @@ Those two are the **only** security types this skill issues.
 |---|---|
 | Certificates | "Issue 1 cert for Jane Doe, 1000 Series A at $1.50." · "Draft 5 founder certs on Acme." |
 | Option grants | "Issue 1000 ISOs to Jane at $1.50 on the 2024 Plan." · "Draft 10 ISOs for new hires." · "Issue an EMI grant — 2000 options at £0.50." |
+| Spreadsheet / file | "Issue the grants in ~/Downloads/Q3-hires.xlsx." · "Here's our import template — issue these certs." · "Draft the grant in this signed award agreement." |
 | Resume | "Resume draft set 472." · "Continue the 'Q2 hires' draft set." |
 
 To **fix** an already-issued certificate or grant, that's `carta-modify-issuables`, not this
@@ -62,6 +65,10 @@ warrants, convertibles, SAFEs, convertible debt, and for custom legends, vesting
 acceleration, or exercise periods:
 
 > *"This skill issues certificates and option grants today. For \<thing\>, use the Drafts UI in the Carta app."*
+
+Carta's own import template has sheets for several of those, so an uploaded workbook routinely
+contains rows this skill can't issue. [Phase 0.25](#phase-025--ingest-an-uploaded-file) skips
+them and reports the count — never reshape an RSU row into an option grant to make it fit.
 
 ## Architecture — one engine, two surfaces
 
@@ -145,6 +152,11 @@ The SDK's HITL prompt on that mutate is the final, irreversible gate — never t
       `knowns.rows` as that many empty dicts so the surface opens pre-sized.
     - Genuinely ambiguous (rare) → `AskUserQuestion` which one. That is a real fork, not the
       forbidden "who are the grantees" question.
+    - **"Which file did you mean?" is also a real fork**, not this forbidden question — but only
+      when the prompt referenced a file and [Phase 0.25](#phase-025--ingest-an-uploaded-file)'s
+      search found zero or several candidates, or the workbook has more than one importable
+      sheet. Never use it to ask *who* is in the file, and never in place of parsing a path the
+      prompt already gave.
 
 The incidents behind these rules — including the ones that look redundant — are in
 [references/incidents.md](references/incidents.md). Read it before weakening any of them.
@@ -294,6 +306,148 @@ If the prompt named a company and you don't already have its `corporation_id`, c
 truncated alphabetical page that may never reach the name you want. `search` is the tool's own
 name lookup; don't substitute a `discover` guess for it. Only ask the user via
 `AskUserQuestion` if `search` returns zero or several ambiguous matches.
+
+---
+
+## Phase 0.25 — Ingest an uploaded file
+
+**Skip this phase entirely unless the prompt references a file.** When it does, the file
+replaces the prompt as the source of the rows — everything downstream is unchanged. It does not
+add a path around any gate: Phase 1 still resolves, Phase 1.5 still saves and validates, Phase 2
+still reviews, Phase 3 is still the only mutate.
+
+Supported: `.xlsx` `.xlsm` `.csv` `.tsv` (deterministic) and `.pdf` `.docx` (text extraction —
+see [Documents](#documents-pdf--docx)). The sub-skill
+[issuance-import/SKILL.md](issuance-import/SKILL.md) owns the mechanics;
+[issuance-import/references/column-map.md](issuance-import/references/column-map.md) is the
+header vocabulary. **Never hand-read a workbook** — a column read by eye is how a quantity lands
+in an exercise-price field.
+
+### Step 0 — Confirm you can actually run the parser
+
+The parser is a local script, so this phase needs `Bash(uv run *)`. **Check your own tool
+surface for Bash before promising an import** — it is present on the Code adapter and is not
+guaranteed on Cowork.
+
+No Bash → **do not hand-read the file.** Reading a workbook by eye is the failure this whole
+phase exists to prevent, and offering it as a fallback would make the parser's guarantees
+optional. Say so and route to the feature built for this:
+
+> *"I can't read spreadsheets in this session. Two options: import it directly in Carta's Drafts
+> UI, which takes this same template — or paste the rows here as text and I'll set them up."*
+
+Pasted-as-text rows are fine: they arrive in the prompt, so the ordinary prompt-driven flow
+handles them with the user's own values in plain sight. That is different in kind from silently
+parsing a binary nobody can see.
+
+### Step 1 — Locate the file
+
+Take the path straight from the prompt; a pasted `~/Downloads/…` path is the norm. Only if the
+user said "the attached file" with no path, list the likely directories (`ls -t ~/Downloads`,
+`~/Desktop`, the cwd) and look for a supported extension recently modified. Zero or several
+plausible matches → `AskUserQuestion` which one (allowed by Hard rule 10's file carve-out).
+`Bash(find *)` is deliberately not granted to this skill — use `ls`.
+
+### Step 2 — Parse, before spending any round trip
+
+```bash
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-issuance/issuance-import/scripts/parse_upload.py" \
+  --file "<path>" --out-dir "$OUT_DIR"
+```
+
+This first run is deliberately **without** `--reference`: it costs nothing, and its output tells
+you the two things Phase 0.5's fetches need — the `security_type` and the names in the file. It
+prints `SECURITY_TYPE=`, `ROW_COUNT=`, and the paths it wrote.
+
+- **Exit 2 with `AMBIGUOUS:` + `CANDIDATES=[…]`** — the workbook has more than one importable
+  sheet. `AskUserQuestion` which, then re-run with `--sheet "<name>"`. **Never merge two
+  sheets into one batch** (Hard rule 2) and never pick for the user.
+- **Exit 2 with `ERROR:`** — nothing usable. Surface the message verbatim and fall back to the
+  ordinary prompt-driven flow; do not guess at rows.
+
+**Reconcile `security_type` with the prompt.** File and prompt disagreeing is a real fork →
+`AskUserQuestion`. The file wins only when the prompt never said.
+
+### Step 3 — Fetch reference data (Phase 0.5's fetches, informed by the file)
+
+Run [Phase 0.5](#phase-05--configure-the-issuance)'s fetches exactly as documented, with two
+inputs now supplied by the file: `issuance_init`'s `security_type`, and the stakeholder
+lookup's `search=` covering **the names the file contains** rather than the names the prompt
+named. That keeps the lookup bounded by the file's row count, never by roster size.
+
+**The [account-setup gate](#account-setup-gate-option-grant-only) still applies.** Having a
+parsed file in hand is not a reason to push past it: a corp with no option-grant document set
+cannot issue one, whether the rows came from a spreadsheet or from the prompt. Stop where the
+gate says to stop — the parsed rows cost nothing and the file is still there afterwards.
+
+### Step 4 — Re-run the parser to resolve names to ids
+
+```bash
+uv run "…/parse_upload.py" --file "<path>" [--sheet "<name>"] \
+  --reference "$OUT_DIR/_data.json" --out-dir "$OUT_DIR"
+```
+
+`--reference` is the same `_data.json` you just built for `build_config.py`. The parser matches
+the file's free text against it — vesting schedule, acceleration terms, share class (by name
+**or** prefix), legend (by code or name), document set, equity plan, and the roster — and
+writes `_import_knowns.json`.
+
+**Unresolved is blank, never guessed.** A cell matching nothing leaves its field **unset** with
+an `import_notes` entry. There is no fuzzy matching, and do not add any: an almost-match on a
+vesting schedule or share class issues genuinely wrong terms, and unlike a bad quantity the
+server cannot catch it.
+
+### Step 5 — Merge into `knowns` and open the surface
+
+`_import_knowns.json` holds `{security_type, rows, equity_plan_id?, batch_errors?}`. Its `rows`
+**are** your `knowns.rows` — merge them in and continue into Phase 0.5 unchanged. The row count
+comes from the file, so Hard rule 10's quantity-vs-headcount heuristic doesn't apply here (a
+40-row sheet is unambiguously 40 blocks). Carry `batch_errors` through to the surface's
+panel-level banner, and hold `equity_plan_id` for the first mutate only.
+
+Each row may carry `import_notes` — `[{field, raw_value, reason}]`, **display-only**. Two
+obligations, both load-bearing:
+
+1. **Show every note on the surface**, against the field it's about. On Code, `build_config.py`
+   renders them as amber markers automatically. On Cowork, render them the same way in the
+   `show_widget` form — see
+   [cowork-adapter.md §1](references/cowork-adapter.md#import-markers-uploaded-file-rows).
+2. **Render a noted field with nothing selected**, so the surface's own readiness check blocks
+   submission until the admin picks. `build_config.py` does this for you. A marker alone is
+   ignorable; the blocked button is what actually prevents a silent wrong issuance.
+
+**Strip `import_notes` before any mutate** — same discipline as the review-only fields
+([Build the mutate payload](#build-the-mutate-payload-from-your-phase-1-resolved-rows)).
+The server rejects unknown keys.
+
+### Step 6 — Say what happened, in one line, before the surface opens
+
+Read `_import_report.json` and report totals — never silently drop a column or a row. A dropped
+`Exercise Price` column is a wrong-priced grant the user has no way to notice.
+
+> *"Read 38 rows from Q3-grants.xlsx. 2 columns I couldn't map and 3 values I couldn't match
+> are flagged in the form — everything else is filled in. Review and submit when ready."*
+
+Rows the file carried but this skill can't issue (RSUs, SARs, CBUs, warrants, RSAs,
+convertibles) are skipped by the parser with a reason. **Name them and their count** — they need
+the Drafts UI, and an admin who thinks a 40-row sheet issued 40 securities when it issued 37 has
+been misled.
+
+### Documents (`.pdf` / `.docx`)
+
+The parser extracts text to `_import_text.txt` and stops — it writes no rows, because prose has
+no fixed layout and a script guessing at it would guess silently.
+
+Read the text, build the rows yourself in the parser's own row schema
+([issuance-import/SKILL.md § Row schema](issuance-import/SKILL.md#row-schema)), and give every
+field you filled this way an `import_notes` entry with `"confidence": "low"` so it renders as
+needs-confirmation. Then continue from Step 3.
+
+Take only what the document states. A grant agreement rarely names a vesting template by the
+company's own template name, so leave `vesting_template_id` unset rather than inferring it from
+prose like "vests monthly over four years" — that is the fuzzy match this phase forbids, done by
+hand. Empty text means a scanned image: the parser exits 2 saying so; route the admin to OCR it
+or type the values in, and never infer values from a filename.
 
 ---
 
@@ -614,14 +768,36 @@ not re-ask**, and don't second-guess a fresh signal as a stale replay. Branch di
 
 ### Build the mutate payload from your Phase-1-resolved rows
 
-The review is read-only and has nothing to merge back. Build the `drafts` array directly from
-your Phase-1-resolved rows, using the [Row templates](#row-templates) key list **only**.
+The review is read-only and has nothing to merge back. **Run the serializer** on your
+Phase-1-resolved rows and pass what it returns as `drafts` verbatim:
 
-- **Strip every review-only field first.** `plan_name`, `document_set_label`,
-  `exercise_periods_text`, and `legend_body` live on the same resolved-row dict as the payload
-  fields; sending one makes the server reject the mutate with an unknown-field error.
-- **CharField dates** (`grant_expiration_date`, `vesting_start_date`, `rule_144_date`) should
-  already be `MM/DD/YYYY` from Phases 0.5/1 — confirm before the mutate.
+```bash
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-issuance/scripts/serialize_drafts.py" \
+  --security-type <option_grant|certificate> \
+  --rows "$OUT_DIR/_review_rows.json" --out "$OUT_DIR/_drafts.json"
+```
+
+It enforces the three things that used to be prose here, each of which fails the whole mutate
+when got wrong:
+
+- **Per-field date formats.** `grant_expiration_date`, `vesting_start_date` and `rule_144_date`
+  are `CharField(10)` and take **`MM/DD/YYYY` only** — an ISO string comes back
+  `Date is invalid`, with no server-side coercion. Every other date goes out ISO. Rows carry ISO
+  everywhere upstream of this call, so **do not hand-format dates.** Conversion is idempotent,
+  so a row already in `MM/DD/YYYY` is fine.
+- **Non-payload keys stripped**: `import_notes`, `row_key`, and the review-only
+  `plan_name` / `document_set_label` / `exercise_periods_text` / `legend_body`. Any of them
+  present is an unknown-field rejection.
+- **Empty means omit**, while a real `0` price, `needs_board_approval: false`, and an explicit
+  `vesting_template: null` all survive.
+
+Exit 2 with the row and field named means a date couldn't be read — fix it and re-run rather
+than sending it.
+
+> **No Bash in this session?** Then do all three by hand, and note that the format rule bites
+> hardest on an [imported](#phase-025--ingest-an-uploaded-file) batch: those rows arrive
+> prefilled in ISO (the panel's date inputs accept nothing else), so all three CharFields need
+> converting — Phases 0.5/1 did not touch them.
 
 Re-run the pre-save assertion (Hard rule 9) on the resolved rows, then mutate.
 

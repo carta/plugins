@@ -20,6 +20,7 @@ one-confirmation rule, panel lifecycle gotchas) are a separate concern — see
 
 | Core step | Cowork does | You do instead |
 |---|---|---|
+| **Phase 0.25** — import markers | render `import_notes` in the form yourself, and blank any noted field | **nothing extra** — `build_config.py` renders the amber markers and blanks noted fields (so `missingFields()` blocks **Review**) straight from `row.import_notes` |
 | **Phase 0.5** — reference data | one targeted `search=` for the named people | **fetch the unfiltered full roster** (`detail=full`, no `search`). The panel's name autocomplete and email auto-fill genuinely need every row — it becomes `STAKEHOLDER_LIST_JSON`. Oversized rosters: [§1 Roster fetch](#roster-fetch-for-large-corporations) |
 | **Phase 0.5** — `collectConfig` | one `show_widget` form | the config panel — [§1](#1-config-panel-build_configpy-builds-every-block) |
 | **Phase 0.5** — on submit | read the form's `sendPrompt()` JSON | `cat "$OUT_DIR/<CORP_ID>_action_request.json"` — same shape, same [row mapping](row-mapping.md) |

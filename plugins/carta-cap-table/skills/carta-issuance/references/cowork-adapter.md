@@ -88,6 +88,36 @@ invent a name or quantity, and never ask who the grantees are before rendering t
 quantity for **one** recipient, not a headcount; only people-language ("100 employees") makes
 N a row count. See [Hard rule 10](../SKILL.md#hard-rules).
 
+### Import markers (uploaded-file rows)
+
+Only when [Phase 0.25](../SKILL.md#phase-025--ingest-an-uploaded-file) built the rows from a
+spreadsheet or document. Each row may carry `import_notes` —
+`[{field, raw_value, reason, confidence?}]`, display-only, and **never** part of any mutate
+payload.
+
+Two obligations, and the second is the one that actually protects the cap table:
+
+1. **Render every note next to the field it names**, as a short marker under that input:
+   *"Your file said "1/48 monthly 1yr cliff" — no vesting schedule on this company matches it,
+   pick one."* A note whose field has no input in this form (`state_of_residency`, say) goes in
+   a **From your file** block at the top of that person's block — dropping it is the silent loss
+   the import contract forbids. Humanize the field name; never show the raw key
+   ([labels.md](labels.md)).
+2. **Render a noted field with nothing pre-selected, and refuse to submit until it's set.** A
+   marker alone is ignorable. This matters most for the fields with an appealing-looking
+   default: vesting schedule (don't fall back to 4yr/1yr cliff), share class (don't fall back to
+   the most recent), option type (don't fall back to the jurisdiction's primary — the tax
+   treatment differs), stakeholder type (don't default an entity to Individual), document set
+   (don't auto-pick the only one). Each of those defaults is right for a prompt that said
+   nothing and wrong for a file that said something we couldn't match, because the file's intent
+   was specific and we failed to honour it.
+
+`confidence: "low"` means the value was read out of a document's prose rather than a cell. Say
+so — *"read from the document, confirm it"* — and treat it as needs-confirmation the same way.
+
+The Code adapter gets both behaviours from `build_config.py` automatically; on this path they
+are yours to render.
+
 ### Batch mode — identical-term bulk grants
 
 The per-stakeholder repeater above renders one full block per person — for a genuinely mixed

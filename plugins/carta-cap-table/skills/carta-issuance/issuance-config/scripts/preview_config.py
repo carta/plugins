@@ -88,7 +88,10 @@ SAMPLE_DATA = {
 SAMPLE_KNOWNS = {
     # Two rows demonstrate divergent per-row terms: Jane keeps the batch
     # default; John carries his own NSO/no-vesting/price/reason. Both stay
-    # within the one resolved jurisdiction (US).
+    # within the one resolved jurisdiction (US). John also carries
+    # `import_notes` so the amber import markers (issuance-import) are visible
+    # in the preview — both the inline per-field kind and the block-level
+    # fallback for a field this panel has no row for.
     "option_grant": {
         "jurisdiction": "US", "today_iso": "2026-06-11", "currency": "USD",
         "exercise_price_default": "1.45",
@@ -96,14 +99,24 @@ SAMPLE_KNOWNS = {
             {"name": "Jane Doe", "quantity": "1000", "acceleration_template": "3"},
             {"name": "John Smith", "quantity": "250", "option_type": "NSO",
              "exercise_price": "2.00", "vesting_template_id": "__none__",
-             "grant_reason": "Promotion"},
+             "grant_reason": "Promotion",
+             "import_notes": [
+                 {"field": "vesting_template_id", "raw_value": "1/48 monthly 1yr cliff",
+                  "reason": "no vesting schedule on this company matches it — pick one"},
+                 {"field": "state_of_residency", "raw_value": "CA",
+                  "reason": "not a field on this panel"},
+             ]},
         ],
     },
     "certificate": {
         "today_iso": "2026-06-11", "currency": "USD", "price_per_share_default": "",
         "share_class_prefix": "PA",
         "rows": [
-            {"name": "Jane Doe", "quantity": "500"},
+            {"name": "Jane Doe", "quantity": "500",
+             "import_notes": [
+                 {"field": "quantity", "raw_value": "five hundred",
+                  "reason": "couldn't read this quantity"},
+             ]},
             # Demonstrates the inline Rule 144 reason and opt-in vesting/acceleration.
             {"name": "John Smith", "quantity": "200", "rule_144_mode": "other",
              "rule_144_date": "2026-07-01", "rule_144_reason": "affiliates",

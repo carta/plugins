@@ -30,6 +30,8 @@
   --color-blue-10: #F7FAFE;
   --color-red-60:  #C0392B;
   --color-red-10:  #FBEEEC;
+  --color-amber-60: #8A5A00;
+  --color-amber-10: #FDF6EA;
 
   --radius-small: 4px;
 
@@ -256,6 +258,25 @@ html, body { height: 100%; font-family: var(--font-sans); background: var(--colo
 .block-error-banner ul, .panel-error-banner ul { margin: 0; padding-left: 18px; }
 .block-error-banner li, .panel-error-banner li { line-height: 1.5; }
 #batch-error-banner:empty { display: none; margin: 0; }
+
+/* ── Import markers (issuance-import) — amber, deliberately NOT red: a value
+   carried in from a spreadsheet or document is a breadcrumb to confirm, not a
+   server rejection. Red is reserved for the validation errors that actually
+   block a save, so the two must stay visually distinct. ── */
+.import-note {
+  margin-top: 6px; font-size: 12px; line-height: 1.5;
+  color: var(--color-amber-60);
+  border-left: 2px solid var(--color-amber-60); padding-left: 8px;
+}
+.import-note span { display: block; }
+.import-banner {
+  background: var(--color-amber-10); border: 1px solid var(--color-amber-60);
+  border-radius: var(--radius-small); padding: 10px 14px; margin-bottom: 12px;
+  font-size: 13px; color: var(--color-black);
+}
+.import-banner-title { font-weight: 500; color: var(--color-amber-60); margin-bottom: 4px; }
+.import-banner ul { margin: 0; padding-left: 18px; }
+.import-banner li { line-height: 1.5; }
 
 /* ── Submit overlay — a real solid-white modal card on a dimmed backdrop
    (matching the review panel's .modal-box, not a translucent full-page wash),

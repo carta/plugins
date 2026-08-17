@@ -362,15 +362,20 @@ def _default_so_type(jurisdiction: str, rows: Optional[List[Dict[str, Any]]] = N
 
 
 def build_option_type(
-    jurisdiction: str, rows: Optional[List[Dict[str, Any]]] = None, preferred: Optional[str] = None
+    jurisdiction: str, rows: Optional[List[Dict[str, Any]]] = None, preferred: Optional[str] = None,
+    force_blank: bool = False,
 ) -> str:
     """Renders only the corp's own resolved jurisdiction's 3 so_types (not all 9
     grouped by jurisdiction) — a corp only ever issues one jurisdiction's types,
     so the rest is clutter. `jurisdiction` (`knowns.jurisdiction`, SKILL.md
-    Phase 0.5) now gates which buttons render, not just which is pre-selected."""
+    Phase 0.5) now gates which buttons render, not just which is pre-selected.
+
+    ``force_blank`` selects nothing (see build_vesting) — when a file named an
+    option type we couldn't match, falling back to the jurisdiction's primary
+    would change the grant's tax treatment without saying so."""
     juris = (jurisdiction or "US").upper()
     types = JURISDICTION_SO_TYPES.get(juris, JURISDICTION_SO_TYPES["US"])
-    primary = _default_so_type(jurisdiction, rows, preferred)
+    primary = None if force_blank else _default_so_type(jurisdiction, rows, preferred)
     btns = "".join(
         '<button type="button" class="toggle{s}" data-group="type" data-value="{v}" onclick="pickType(this)">{v}</button>'.format(
             s=_sel(t == primary), v=_esc(t)
@@ -381,8 +386,25 @@ def build_option_type(
 
 
 def build_vesting(
-    templates: List[Dict[str, Any]], no_vesting: bool, preferred_id: Optional[str] = None
+    templates: List[Dict[str, Any]], no_vesting: bool, preferred_id: Optional[str] = None,
+    force_blank: bool = False,
 ) -> str:
+    """``force_blank`` renders an empty placeholder as the selection instead of
+    the 4yr/1yr-cliff heuristic. Used when an import couldn't resolve the file's
+    vesting schedule: the heuristic default would otherwise silently issue terms
+    the file never asked for, and unlike a bad quantity the server can't catch
+    it. The empty value also makes ``missingFields()`` block **Review** until the
+    admin picks one, which is the actual gate — an amber marker alone is
+    ignorable."""
+    if force_blank:
+        opts = ['<option value="" selected>Select a vesting schedule…</option>']
+        for t in templates:
+            tid = str(t.get("id"))
+            name = str(t.get("name", tid))
+            opts.append('<option value="{v}" data-label="{l}">{l}</option>'.format(
+                v=_esc(tid), l=_esc(name)))
+        opts.append('<option value="__none__" data-label="No vesting">No vesting</option>')
+        return "".join(opts)
     default_id = None if no_vesting else _pick_default_vesting(templates, preferred_id)
     opts = []
     for t in templates:
@@ -423,12 +445,16 @@ def build_acceleration(templates: List[Dict[str, Any]], preferred_id: Optional[s
     return "".join(opts)
 
 
-def build_docsets(sets: List[Dict[str, Any]], preferred_id: Optional[str] = None) -> str:
+def build_docsets(sets: List[Dict[str, Any]], preferred_id: Optional[str] = None,
+                  force_blank: bool = False) -> str:
     # Pre-select the caller's preferred id when it names a real set; else the only
-    # set when there's exactly one (the common case).
+    # set when there's exactly one (the common case). force_blank selects nothing
+    # (see build_vesting) so missingFields() blocks Review.
     ids = [str(d.get("id")) for d in sets]
-    if preferred_id is not None and str(preferred_id) in ids:
-        default_id: Optional[str] = str(preferred_id)
+    if force_blank:
+        default_id: Optional[str] = None
+    elif preferred_id is not None and str(preferred_id) in ids:
+        default_id = str(preferred_id)
     else:
         default_id = ids[0] if len(sets) == 1 else None
     btns = [
@@ -441,16 +467,24 @@ def build_docsets(sets: List[Dict[str, Any]], preferred_id: Optional[str] = None
     return "".join(btns)
 
 
-def build_share_classes(classes: List[Dict[str, Any]], prefill_prefix: Optional[str]) -> str:
+def build_share_classes(classes: List[Dict[str, Any]], prefill_prefix: Optional[str],
+                        force_blank: bool = False) -> str:
     """Button text is `(<prefix>) <name>` (e.g. `(CS) Common`) — the bare name
     alone left the user guessing which prefix a class maps to when several
     classes share a name. Pre-selects the prompt-named class; else the most
     recently created one (no creation timestamp in the fetched list, so last
     entry by ascending `id` is the best available proxy); falls back to the
-    only class when there's just one."""
+    only class when there's just one.
+
+    ``force_blank`` selects nothing (see build_vesting) — "most recently
+    created" is a reasonable guess for a prompt that named no class, and a
+    dangerous one for a file that named a class we couldn't match."""
     only_prefix = str(classes[0].get("prefix", "")) if len(classes) == 1 else None
     latest_prefix = str(classes[-1].get("prefix", "")) if classes else None
-    default_prefix = prefill_prefix if prefill_prefix is not None else (only_prefix or latest_prefix)
+    default_prefix = (
+        None if force_blank
+        else (prefill_prefix if prefill_prefix is not None else (only_prefix or latest_prefix))
+    )
     btns = []
     for c in classes:
         prefix = str(c.get("prefix", ""))
@@ -465,8 +499,9 @@ def build_share_classes(classes: List[Dict[str, Any]], prefill_prefix: Optional[
     return "".join(btns)
 
 
-def build_legends(legends: List[Dict[str, Any]], preferred_id: Optional[str] = None) -> str:
-    default_id = _default_legend_id(legends, preferred_id)
+def build_legends(legends: List[Dict[str, Any]], preferred_id: Optional[str] = None,
+                  force_blank: bool = False) -> str:
+    default_id = None if force_blank else _default_legend_id(legends, preferred_id)
     btns = []
     for lg in legends:
         lid = str(lg.get("id"))
@@ -491,8 +526,10 @@ def build_rule144_reason_select(reason: Optional[str]) -> str:
     )
 
 
-def build_stakeholder_kind(kind: str) -> str:
-    kind = kind or "INDIVIDUAL"
+def build_stakeholder_kind(kind: str, force_blank: bool = False) -> str:
+    """``force_blank`` selects neither button (see build_vesting) — a file whose
+    Holder Type we couldn't read must not default an entity to Individual."""
+    kind = "" if force_blank else (kind or "INDIVIDUAL")
     return "".join(
         '<button type="button" class="toggle{s}" data-group="kind" data-value="{v}" onclick="pick(this)">{l}</button>'.format(
             s=_sel(kind == v), v=v, l=l
@@ -552,6 +589,7 @@ def _cert_no_vesting(row: Dict[str, Any], knowns: Dict[str, Any]) -> bool:
 def _kv_row(
     label: str, input_html: str, sectype: Optional[str] = None, required: bool = False,
     conditional_on: Optional[str] = None, hidden: bool = False,
+    notes: Optional[List[Dict[str, Any]]] = None,
 ) -> str:
     """One "label | input" row in a stakeholder's key-value block (a flex pair,
     not a literal HTML <table>).
@@ -561,7 +599,10 @@ def _kv_row(
 
     ``conditional_on`` tags the row ``data-conditional="<value>"``; with
     ``hidden=True`` it starts ``display:none``. The template's JS toggles every
-    row sharing a `data-conditional` value together."""
+    row sharing a `data-conditional` value together.
+
+    ``notes`` are this field's ``import_notes`` (issuance-import), rendered as an
+    inline marker under the input. Display-only — never collected on submit."""
     attr = f' data-sectype="{sectype}"' if sectype else ""
     if conditional_on:
         attr += f' data-conditional="{_esc(conditional_on)}"'
@@ -570,7 +611,7 @@ def _kv_row(
     return (
         f'<div class="kv-row"{attr}{style}>'
         f'<div class="kv-label">{_esc(label)}{mark}</div>'
-        f'<div class="kv-input">{input_html}</div>'
+        f'<div class="kv-input">{input_html}{build_import_note(notes)}</div>'
         f'</div>'
     )
 
@@ -599,79 +640,97 @@ def build_grant_reason_select(reason: Optional[str]) -> str:
 
 
 def _advanced_accordion_grant(
-    row: Dict[str, Any], accel_templates: List[Dict[str, Any]], no_vesting: bool
+    row: Dict[str, Any], accel_templates: List[Dict[str, Any]], no_vesting: bool,
+    notes: Optional[Dict[str, List[Dict[str, Any]]]] = None,
 ) -> str:
+    notes = notes if notes is not None else {}
     return _advanced_accordion([
         _kv_row(
             "Custom label",
             f'<input class="text-input block-custom-label" type="text" '
             f'placeholder="Server auto-generates (e.g. ES-1) if left blank" '
             f'value="{_esc(row.get("custom_label", ""))}" oninput="onStakeInput()"/>',
+            notes=notes.pop("custom_label", None),
         ),
-        _kv_row("Grant reason", build_grant_reason_select(row.get("grant_reason"))),
+        _kv_row(
+            "Grant reason", build_grant_reason_select(row.get("grant_reason")),
+            notes=notes.pop("grant_reason", None),
+        ),
         _kv_row(
             "Acceleration",
             f'<select class="select-input block-acceleration-select" onchange="onStakeInput()">'
             f'{build_acceleration(accel_templates, None if no_vesting else row.get("acceleration_template"))}</select>',
             conditional_on="vesting", hidden=no_vesting,
+            notes=notes.pop("acceleration_template", None),
         ),
         _kv_row(
             "Early exercise",
             f'<label class="pending-label"><input type="checkbox" class="block-early-exercise"'
             f'{" checked" if row.get("early_exercise") else ""} onchange="onStakeInput()"/> '
             f'Allow early exercise</label>',
+            notes=notes.pop("early_exercise", None),
         ),
         _kv_row(
             "Auto-exercise at vest",
             f'<label class="pending-label"><input type="checkbox" class="block-auto-exercise-at-vest"'
             f'{" checked" if row.get("auto_exercise_at_vest") else ""} onchange="onStakeInput()"/> '
             f'Auto-exercise at vest</label>',
+            notes=notes.pop("auto_exercise_at_vest", None),
         ),
         _kv_row(
             "Flexible issue date",
             f'<label class="pending-label"><input type="checkbox" class="block-flexible-issue-date"'
             f'{" checked" if row.get("is_flexible_issue_date") else ""} onchange="onStakeInput()"/> '
             f'Issue date is flexible</label>',
+            notes=notes.pop("is_flexible_issue_date", None),
         ),
         _kv_row(
             "Notes",
             f'<input class="text-input block-notes" type="text" placeholder="Optional" '
             f'value="{_esc(row.get("notes", ""))}" oninput="onStakeInput()"/>',
+            notes=notes.pop("notes", None),
         ),
     ])
 
 
 def _advanced_accordion_cert(
     row: Dict[str, Any], accel_templates: List[Dict[str, Any]], no_vesting: bool,
+    notes: Optional[Dict[str, List[Dict[str, Any]]]] = None,
 ) -> str:
+    notes = notes if notes is not None else {}
     field_rows = [
         _kv_row(
             "Acceleration",
             f'<select class="select-input block-acceleration-select" onchange="onStakeInput()">'
             f'{build_acceleration(accel_templates, None if no_vesting else row.get("acceleration_template"))}</select>',
             conditional_on="vesting", hidden=no_vesting,
+            notes=notes.pop("acceleration_template", None),
         ),
         _kv_row(
             "Certificate number",
             f'<input class="text-input block-prefix-number" type="text" '
             f'placeholder="Server auto-numbers if left blank" '
             f'value="{_esc(row.get("prefix_number", ""))}" oninput="onStakeInput()"/>',
+            notes=notes.pop("prefix_number", None),
         ),
         _kv_row(
             "Cash paid",
             f'<input class="text-input block-cash-paid" type="text" inputmode="decimal" placeholder="Optional" '
             f'value="{_esc(row.get("cash_paid", ""))}" oninput="onStakeInput()"/>',
+            notes=notes.pop("cash_paid", None),
         ),
         _kv_row(
             "Debt canceled",
             f'<input class="text-input block-debt-canceled" type="text" inputmode="decimal" placeholder="Optional" '
             f'value="{_esc(row.get("debt_canceled", ""))}" oninput="onStakeInput()"/>',
+            notes=notes.pop("debt_canceled", None),
         ),
     ]
     field_rows.append(_kv_row(
         "Notes",
         f'<input class="text-input block-notes" type="text" placeholder="Optional" '
         f'value="{_esc(row.get("notes", ""))}" oninput="onStakeInput()"/>',
+        notes=notes.pop("notes", None),
     ))
     return _advanced_accordion(field_rows)
 
@@ -699,6 +758,74 @@ def build_block_error_banner(errors: Optional[List[Any]]) -> str:
     return build_error_banner(errors, css_class="block-error-banner", title="This stakeholder needs attention")
 
 
+# ── Import markers (issuance-import's `import_notes`) ──
+
+def notes_by_field(row: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
+    """Group a row's ``import_notes`` by the field each one is about.
+
+    Notes are display-only breadcrumbs from a spreadsheet/document import: what
+    the file said, and why it couldn't be applied. Malformed entries are dropped
+    here rather than crashing the panel — a bad note must never cost the admin
+    the whole form."""
+    grouped: Dict[str, List[Dict[str, Any]]] = {}
+    for note in row.get("import_notes") or []:
+        if not isinstance(note, dict):
+            continue
+        field = str(note.get("field") or "").strip()
+        if field:
+            grouped.setdefault(field, []).append(note)
+    return grouped
+
+
+def _note_text(note: Dict[str, Any]) -> str:
+    raw = str(note.get("raw_value") or "").strip()
+    reason = str(note.get("reason") or "").strip()
+    confidence = str(note.get("confidence") or "").strip().lower()
+    parts = []
+    if raw:
+        parts.append(f'Your file said "{raw}"')
+    if reason:
+        parts.append(reason)
+    if confidence == "low":
+        # Document mode fills fields by reading prose, so every one of them is a
+        # guess the admin has to confirm — say so rather than implying the file
+        # stated it outright.
+        parts.append("read from the document — confirm it")
+    return " — ".join(parts) if parts else "Check this value."
+
+
+def build_import_note(notes: Optional[List[Dict[str, Any]]]) -> str:
+    """Inline amber marker under one field's input. ``""`` when there's nothing."""
+    items = [_note_text(n) for n in (notes or []) if isinstance(n, dict)]
+    if not items:
+        return ""
+    body = "".join(f"<span>{_esc(t)}</span>" for t in items)
+    return f'<div class="import-note" role="note">{body}</div>'
+
+
+def build_import_leftover_banner(grouped: Dict[str, List[Dict[str, Any]]]) -> str:
+    """Block-level marker for notes whose field has no visible row in this block.
+
+    Without this, a note on a field the panel doesn't render (a conditional row,
+    or a field this security type doesn't have) would be silently dropped — the
+    exact silent-loss the import contract forbids. Field names are humanized
+    mechanically (SKILL.md Voice & defaults) so no raw snake_case reaches the
+    admin."""
+    items = []
+    for field, notes in grouped.items():
+        label = field.replace("_", " ").strip().capitalize()
+        for note in notes:
+            items.append(f"{label}: {_note_text(note)}")
+    if not items:
+        return ""
+    body = "".join(f"<li>{_esc(t)}</li>" for t in items)
+    return (
+        '<div class="import-banner" role="note">'
+        '<p class="import-banner-title">From your file</p>'
+        f'<ul>{body}</ul></div>'
+    )
+
+
 def build_batch_error_banner(errors: Optional[List[Any]]) -> str:
     return build_error_banner(errors, css_class="panel-error-banner", title="Some issues need attention before this can be saved")
 
@@ -713,6 +840,14 @@ def build_stakeholder_block(row: Dict[str, Any], security_type: str, data: Dict[
     currency = _esc(knowns.get("currency", ""))
     today = knowns.get("today_iso", "")
 
+    # Consumed per field as the block is built; whatever is left over had no
+    # visible row and goes to the block-level banner instead of being dropped.
+    notes = notes_by_field(row)
+    # Fields the file spoke to but we couldn't resolve. These render with NOTHING
+    # selected, so the panel's own missingFields() gate blocks Review until the
+    # admin chooses — the amber marker explains, this is what enforces.
+    unresolved = set(notes)
+
     rows_html: List[str] = [
         _kv_row(
             "Name",
@@ -722,25 +857,28 @@ def build_stakeholder_block(row: Dict[str, Any], security_type: str, data: Dict[
             f'oninput="onStakeNameInput(this)" onfocus="onStakeNameFocus(this)"/>'
             f'<div class="stake-suggestions" style="display:none;"></div>'
             f'</div>',
-            required=True,
+            required=True, notes=notes.pop("name", None),
         ),
         _kv_row(
             "Email",
             f'<input class="text-input stake-email-in" type="email" placeholder="Email" '
             f'value="{email}" oninput="onStakeInput()"/>',
-            required=True,
+            required=True, notes=notes.pop("email", None),
         ),
         _kv_row(
             "Stakeholder type",
-            f'<div class="toggle-row">{build_stakeholder_kind(row.get("stakeholder_kind", ""))}</div>',
-            required=True,
+            f'<div class="toggle-row">{build_stakeholder_kind(row.get("stakeholder_kind", ""), "stakeholder_kind" in unresolved)}</div>',
+            required=True, notes=notes.pop("stakeholder_kind", None),
         ),
-        _kv_row("Relationship", build_relationship_select(row.get("relationship", "")), required=True),
+        _kv_row(
+            "Relationship", build_relationship_select(row.get("relationship", "")),
+            required=True, notes=notes.pop("relationship", None),
+        ),
         _kv_row(
             "Quantity",
             f'<input class="text-input stake-qty-in" type="number" inputmode="numeric" '
             f'placeholder="Quantity" value="{qty}" oninput="onStakeInput()"/>',
-            required=True,
+            required=True, notes=notes.pop("quantity", None),
         ),
     ]
 
@@ -768,9 +906,10 @@ def build_stakeholder_block(row: Dict[str, Any], security_type: str, data: Dict[
 
         rows_html.append(_kv_row(
             "Type",
-            build_option_type(str(knowns.get("jurisdiction", "US")), [row], row.get("option_type")),
+            build_option_type(str(knowns.get("jurisdiction", "US")), [row], row.get("option_type"),
+                              "option_type" in unresolved),
             sectype="option_grant",
-            required=True,
+            required=True, notes=notes.pop("option_type", None),
         ))
         price_hint = _esc(build_exercise_price_hint(knowns, currency))
         rows_html.append(_kv_row(
@@ -781,36 +920,42 @@ def build_stakeholder_block(row: Dict[str, Any], security_type: str, data: Dict[
             f'value="{_esc(exercise_price_default)}" oninput="onStakeInput()" style="width:140px;"/>'
             f'<span class="currency-suffix">{currency}</span></div>',
             sectype="option_grant",
-            required=True,
+            required=True, notes=notes.pop("exercise_price", None),
         ))
         rows_html.append(_kv_row(
             "Issue date",
             f'<input class="date-input block-issue-date" type="date" value="{_esc(row.get("issue_date") or today)}" '
             f'oninput="updateIssueDate(this)"/>',
-            required=True,
+            required=True, notes=notes.pop("issue_date", None),
         ))
         rows_html.append(_kv_row(
             "Board approval",
             _board_approval_html(row, today, security_type),
-            required=True,
+            required=True, notes=notes.pop("board_approval_date", None),
         ))
+        vesting_options = build_vesting(
+            templates, no_vesting, _row_preferred_vesting(row, knowns),
+            "vesting_template_id" in unresolved,
+        )
         rows_html.append(_kv_row(
             "Vesting schedule",
             f'<select class="select-input block-vesting-select" onchange="pickVesting(this)">'
-            f'{build_vesting(templates, no_vesting, _row_preferred_vesting(row, knowns))}</select>'
+            f'{vesting_options}</select>'
             f'<div class="block-vesting-start-wrap"{vest_wrap_style}>'
             f'<p class="field-sublabel">Vesting start date</p>'
             f'<input class="date-input block-vesting-start-date" type="date" value="{_esc(vesting_start)}" '
             f'oninput="updateVestingStart(this)"/></div>',
             sectype="option_grant",
             required=True,
+            notes=(notes.pop("vesting_template_id", None) or [])
+                  + (notes.pop("vesting_start_date", None) or []) or None,
         ))
         rows_html.append(_kv_row(
             "Documents",
             f'<p class="field-hint">Document templates attached to every grant.</p>'
-            f'<div class="toggle-row wrap">{build_docsets(docsets, row.get("document_set_id"))}</div>',
+            f'<div class="toggle-row wrap">{build_docsets(docsets, row.get("document_set_id"), "document_set_id" in unresolved)}</div>',
             sectype="option_grant",
-            required=True,
+            required=True, notes=notes.pop("document_set_id", None),
         ))
         rows_html.append(_kv_row(
             "HMRC notified",
@@ -819,14 +964,17 @@ def build_stakeholder_block(row: Dict[str, Any], security_type: str, data: Dict[
             f'<input class="date-input block-hmrc-notified-date" type="date" value="{_esc(hmrc_notified)}" '
             f'oninput="onStakeInput()"/>',
             sectype="option_grant", conditional_on="so_type_emi", hidden=(so_type not in HMRC_SO_TYPES),
+            notes=(notes.pop("is_hmrc_notified", None) or [])
+                  + (notes.pop("hmrc_notified", None) or []) or None,
         ))
         rows_html.append(_kv_row(
             "ATO notified",
             f'<label class="pending-label"><input type="checkbox" class="block-ato-notified"'
             f'{" checked" if row.get("is_ato_notified") else ""} onchange="onStakeInput()"/> ATO has been notified</label>',
             sectype="option_grant", conditional_on="so_type_au", hidden=(so_type not in ATO_SO_TYPES),
+            notes=notes.pop("is_ato_notified", None),
         ))
-        rows_html.append(_advanced_accordion_grant(row, accel_templates, no_vesting))
+        rows_html.append(_advanced_accordion_grant(row, accel_templates, no_vesting, notes))
     else:
         price_default = row.get("price_per_share")
         if price_default is None:
@@ -848,9 +996,9 @@ def build_stakeholder_block(row: Dict[str, Any], security_type: str, data: Dict[
 
         rows_html.append(_kv_row(
             "Share class",
-            f'<div class="toggle-row wrap">{build_share_classes(classes, preferred_prefix)}</div>',
+            f'<div class="toggle-row wrap">{build_share_classes(classes, preferred_prefix, "share_class_prefix" in unresolved)}</div>',
             sectype="certificate",
-            required=True,
+            required=True, notes=notes.pop("share_class_prefix", None),
         ))
         # LLC status can't be resolved (no MCP command returns it), so the hint
         # stays generic rather than confirming either way.
@@ -862,28 +1010,28 @@ def build_stakeholder_block(row: Dict[str, Any], security_type: str, data: Dict[
             f'<input class="text-input block-price-per-share" type="text" inputmode="decimal" '
             f'value="{_esc(price_default)}" oninput="onStakeInput()" style="width:140px;"/></div>',
             sectype="certificate",
-            required=True,
+            required=True, notes=notes.pop("price_per_share", None),
         ))
         rows_html.append(_kv_row(
             "Issue date",
             f'<input class="date-input block-issue-date" type="date" value="{_esc(row.get("issue_date") or today)}" '
             f'oninput="updateIssueDate(this)"/>',
-            required=True,
+            required=True, notes=notes.pop("issue_date", None),
         ))
         rows_html.append(_kv_row(
             "Board approval",
             _board_approval_html(row, today, security_type),
-            required=True,
+            required=True, notes=notes.pop("board_approval_date", None),
         ))
         attest_style = "" if body else ' style="display:none;"'
         rows_html.append(_kv_row(
             "Build legend",
             f'<p class="field-hint">Legal text printed on every certificate to restrict transfer. Read the full '
             f'body before continuing — you are attesting to it.</p>'
-            f'<div class="toggle-row wrap">{build_legends(legends, preferred_legend)}</div>'
+            f'<div class="toggle-row wrap">{build_legends(legends, preferred_legend, "legend_id" in unresolved)}</div>'
             f'<div class="block-legend-attest legend-attest"{attest_style}>{_esc(body)}</div>',
             sectype="certificate",
-            required=True,
+            required=True, notes=notes.pop("legend_id", None),
         ))
         r144_date_style = "" if r144_mode == "other" else ' style="display:none;"'
         r144_reason = row.get("rule_144_reason")
@@ -902,21 +1050,31 @@ def build_stakeholder_block(row: Dict[str, Any], security_type: str, data: Dict[
             f'{build_rule144_reason_select(r144_reason)}</div>',
             sectype="certificate",
             required=True,
+            notes=(notes.pop("rule_144_date", None) or [])
+                  + (notes.pop("rule_144_reason", None) or []) or None,
         ))
+        cert_vesting_options = build_vesting(
+            templates, cert_no_vesting, _row_preferred_vesting(row, knowns),
+            "vesting_template_id" in unresolved,
+        )
         rows_html.append(_kv_row(
             "Vesting schedule",
             f'<select class="select-input block-vesting-select" onchange="pickVesting(this)">'
-            f'{build_vesting(templates, cert_no_vesting, _row_preferred_vesting(row, knowns))}</select>'
+            f'{cert_vesting_options}</select>'
             f'<div class="block-vesting-start-wrap"{cert_vest_wrap_style}>'
             f'<p class="field-sublabel">Vesting start date</p>'
             f'<input class="date-input block-vesting-start-date" type="date" value="{_esc(cert_vesting_start)}" '
             f'oninput="updateVestingStart(this)"/></div>',
             sectype="certificate",
+            notes=(notes.pop("vesting_template_id", None) or [])
+                  + (notes.pop("vesting_start_date", None) or []) or None,
         ))
-        rows_html.append(_advanced_accordion_cert(row, accel_templates, cert_no_vesting))
+        rows_html.append(_advanced_accordion_cert(row, accel_templates, cert_no_vesting, notes))
 
     row_key = _esc(row.get("row_key", ""))
     error_banner = build_block_error_banner(row.get("server_errors"))
+    # Anything still in `notes` had no visible row — surfaced, never dropped.
+    import_banner = build_import_leftover_banner(notes)
     return (
         f'<div class="stake-block" data-stake-block data-row-key="{row_key}">'
         '<div class="stake-block-head">'
@@ -925,7 +1083,7 @@ def build_stakeholder_block(row: Dict[str, Any], security_type: str, data: Dict[
         '<svg width="13" height="13" fill="none" viewBox="0 0 20 20"><path d="M8 2h4M3 5h14M6 5l1 12h6l1-12" '
         'stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>'
         '</button></div>'
-        f'{error_banner}'
+        f'{error_banner}{import_banner}'
         f'<div class="kv-table">{"".join(rows_html)}</div>'
         '</div>'
     )
