@@ -44,7 +44,7 @@ This returns `/tmp` on macOS/Linux or `C:\Users\…\AppData\Local\Temp` on Windo
 }
 ```
 
-Use actual query result values — no placeholders.
+Use actual query result values — no placeholders. *Lowercase all JSON keys* — the data warehouse returns column names in UPPERCASE (`FUND_NAME`, `FAIR_MARKET_VALUE`, etc.) but the artifact generators read lowercase snake_case (`fund_name`, `fair_market_value`). If you copy the column names as-is, every field renders as `undefined`.
 
 > **Currency — include `reporting_currency` per fund.** Query 1 returns a
 > `reporting_currency` column on every fund row; keep it in the `funds` array (it comes
