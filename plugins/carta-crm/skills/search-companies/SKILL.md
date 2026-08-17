@@ -8,6 +8,7 @@ description: >
   Returns company details including ID, name, and custom fields.
   The company ID returned can be used with the update-company skill.
 allowed-tools:
+  - mcp__carta__crm_view_tool
   - mcp__carta__crm_call_tool
 version: 1.0.0
 model: haiku
@@ -34,14 +35,12 @@ If it's unclear, default to search by name and ask for a search term.
 
 ## Step 2 — Execute the search
 
-**By domain:**
-```
-crm_call_tool({ "name": "crm:fetch_company_by_domain", "arguments": { domain: "<domain>" } })
-```
+Use `crm_view_tool` so the result renders as an interactive table the user can sort and
+click through. It takes exactly the same `name` and `arguments` as `crm_call_tool`.
 
 **By name / keyword:**
 ```
-crm_call_tool({
+crm_view_tool({
   "name": "crm:search_companies",
   "arguments": {
     query: "<search term>",
@@ -50,14 +49,34 @@ crm_call_tool({
 })
 ```
 
+**By domain:**
+```
+crm_view_tool({ "name": "crm:fetch_company_by_domain", "arguments": { domain: "<domain>" } })
+```
+
 Increase `limit` if the user asks to see more results. Use `offset` to paginate.
+
+### If the view is unavailable
+
+CRM views are enabled per organisation, and single-record views behind a second flag on
+top of that. So **either** call above may answer with:
+
+> CRM tool 'search_companies' has no view — call it with crm_call_tool instead.
+
+That is a normal response, not a failure — this organisation does not have that view
+enabled. Retry that one call verbatim through `crm_call_tool` and present the result as
+text per Step 3. Do **not** retry `crm_view_tool`, and do not report the message to the
+user.
 
 ## Step 3 — Present results
 
-For each company returned, display all non-empty fields in a readable summary.
-Always show the ID prominently — the user will need it to run `/update-company`.
+**When the view rendered**, the user already sees every record on screen. Do NOT
+re-list, re-format, or summarise the rows as text — that duplicates the table.
+Answer the question they actually asked, or acknowledge in one line
+(e.g. "Found 14 companies — the ID is in the first column, for `/update-company`.").
+
+**When you fell back to `crm_call_tool`**, display all non-empty fields in a readable
+summary and show the ID prominently — the user will need it to run `/update-company`.
 
 If no companies are found:
 > "No companies found matching your search. Try a different name, keyword, or domain."
-
-If multiple results are returned, list them all and note the total count.
