@@ -1,6 +1,6 @@
 {
   "carta-home-build": {
-    "version": "1.1.1",
-    "headline": "Preview an investor's reminder email before you send it."
+    "version": "1.2.0",
+    "headline": "Investment totals now flag mixed currencies instead of adding them up."
   }
 }
