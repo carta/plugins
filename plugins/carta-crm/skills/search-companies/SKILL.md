@@ -3,7 +3,7 @@ name: search-companies
 description: >
   Searches for and retrieves company records from the Carta CRM.
   Use this skill when the user says things like "find a company", "search companies",
-  "look up a company", "show me company details for [name]", "get company by ID",
+  "look up a company", "show me company details for [name]", "full details on [name]", "tell me about [name]", "get company by ID",
   "get company by domain", "list companies", "what companies do we have", or "/search-companies".
   Returns company details including ID, name, and custom fields.
   The company ID returned can be used with the update-company skill.
@@ -23,22 +23,74 @@ model: haiku
 
 ## Overview
 
-Search for companies in the Carta CRM. Choose the right tool based on what the user
-provided. Always surface the company ID so the user can reference it for updates.
+Look up companies in the Carta CRM. A request about **one named company** renders that
+company's card; a request for a **set** renders a table. Route on that distinction first —
+it decides every call below.
 
-## Step 1 — Determine search mode
+## Step 1 — Determine intent: one company, or a set?
 
-- **By domain** — user provided a website domain (e.g. "stripe.com") → use `fetch_company_by_domain`
-- **By name / keyword** — user provided a company name or keyword → use `search_companies`
+- **Detail** — the user named one company and wants the record: "full details on Preqin",
+  "tell me about Acme", "more on Stripe", "who is Preqin". → Step 2.
+- **List** — the user wants a set, or filtered or plural results: "companies I'm tracking",
+  "companies in fintech", "what companies do we have". → Step 3.
+- **By domain** — the user gave a website domain (e.g. "stripe.com") → Step 2, skipping the
+  resolve; `fetch_company_by_domain` already identifies one record.
 
-If it's unclear, default to search by name and ask for a search term.
+A named single company is a **detail** request even when the user says "search" or "find".
+If it's genuinely unclear, treat it as a list and ask what they want to narrow to.
 
-## Step 2 — Execute the search
+## Step 2 — Detail: resolve the name, then render the card
 
-Use `crm_view_tool` so the result renders as an interactive table the user can sort and
-click through. It takes exactly the same `name` and `arguments` as `crm_call_tool`.
+**Resolve through `crm_call_tool`, never `crm_view_tool`.** This step is for you, not the
+user: a view call collapses every array in the response to a count, so the rows — and the
+`id` you need — never reach you, and the user gets a list they did not ask for.
 
-**By name / keyword:**
+```
+crm_call_tool({
+  "name": "crm:search_companies",
+  "arguments": { query: "<company name>", limit: 10 }
+})
+```
+
+Then branch on how many candidates came back:
+
+- **Exactly one match** → render its card and stop:
+  ```
+  crm_view_tool({ "name": "crm:fetch_company_by_id", "arguments": { id: "<id>" } })
+  ```
+- **Several matches** → do NOT guess. Render the candidates as a view and ask which one:
+  ```
+  crm_view_tool({
+    "name": "crm:search_companies",
+    "arguments": { query: "<company name>", limit: 10 }
+  })
+  ```
+  Then ask: "Several companies match — which one did you mean?" When they pick, call
+  `fetch_company_by_id` for it. Opening the top hit unasked shows the wrong record with
+  full confidence.
+- **No match** → say so; do not render an empty view.
+
+**By domain**, there is nothing to resolve — one call, one card:
+```
+crm_view_tool({ "name": "crm:fetch_company_by_domain", "arguments": { domain: "<domain>" } })
+```
+
+Render at most one card per request. If the user named several companies, ask which to open
+rather than stacking views.
+
+## Step 3 — List: search and render the table
+
+When the user's filters map to specific fields, discover the valid `field_id`s first. This
+is a schema lookup, so it goes through `crm_call_tool`:
+
+```
+crm_call_tool({ "name": "crm:get_company_fields", "arguments": {} })
+```
+
+Map the user's intent to the most specific matching fields and pass them as `filters`
+(`{ field_id, operator, value }`). Fall back to the free-text `query` only when no field
+matches. Never guess a `field_id` — they vary per organisation.
+
 ```
 crm_view_tool({
   "name": "crm:search_companies",
@@ -49,31 +101,32 @@ crm_view_tool({
 })
 ```
 
-**By domain:**
-```
-crm_view_tool({ "name": "crm:fetch_company_by_domain", "arguments": { domain: "<domain>" } })
-```
-
 Increase `limit` if the user asks to see more results. Use `offset` to paginate.
 
 ### If the view is unavailable
 
 CRM views are enabled per organisation, and single-record views behind a second flag on
-top of that. So **either** call above may answer with:
+top of that. So any `crm_view_tool` call above may answer with:
 
 > CRM tool 'search_companies' has no view — call it with crm_call_tool instead.
 
 That is a normal response, not a failure — this organisation does not have that view
 enabled. Retry that one call verbatim through `crm_call_tool` and present the result as
-text per Step 3. Do **not** retry `crm_view_tool`, and do not report the message to the
+text per Step 4. Do **not** retry `crm_view_tool`, and do not report the message to the
 user.
 
-## Step 3 — Present results
+A detail request whose card has no view still resolves the same way: keep the
+`crm_call_tool` resolve from Step 2 and present the chosen record as text.
 
-**When the view rendered**, the user already sees every record on screen. Do NOT
-re-list, re-format, or summarise the rows as text — that duplicates the table.
-Answer the question they actually asked, or acknowledge in one line
-(e.g. "Found 14 companies — the ID is in the first column, for `/update-company`.").
+## Step 4 — Present results
+
+**When a card rendered**, the user sees the whole record. Do not restate its fields.
+Answer what they asked, or acknowledge in one line.
+
+**When a table rendered**, the user already sees every row. Do NOT re-list, re-format, or
+summarise them as text — that duplicates the table. Answer the question they actually
+asked, or acknowledge in one line (e.g. "Found 14 companies — the ID is in the first
+column, for `/update-company`.").
 
 **When you fell back to `crm_call_tool`**, display all non-empty fields in a readable
 summary and show the ID prominently — the user will need it to run `/update-company`.

@@ -3,7 +3,7 @@ name: search-fundraisings
 description: >
   Searches for and retrieves fundraising records from the Carta CRM.
   Use this skill when the user says things like "find a fundraising", "search fundraisings",
-  "look up a fundraising round", "show fundraising details for [name]", "get fundraising by ID",
+  "look up a fundraising round", "show fundraising details for [name]", "full details on [name]", "get fundraising by ID",
   "list fundraisings", "what fundraisings do we have", or "/search-fundraisings".
   Returns fundraising details including ID, name, stage, and custom fields.
   The fundraising ID returned can be used with the update-fundraising skill.
@@ -23,23 +23,59 @@ model: haiku
 
 ## Overview
 
-Search for fundraisings in the Carta CRM. If the user provided an ID, fetch the single
-record directly. Otherwise use the search tool and return results in a readable summary.
-Always surface the fundraising ID so the user can reference it for updates.
+Look up fundraisings in the Carta CRM. A request about **one named round** renders that
+round's card; a request for a **set** renders a table. Route on that distinction first —
+it decides every call below.
 
-## Step 1 — Determine search mode
+## Step 1 — Determine intent: one round, or a set?
 
-- **By ID** — user provided a fundraising ID → call `get_fundraising`
-- **By name / keyword / stage** — user provided a name or stage → call `search_fundraising`
+- **Detail** — the user named one round and wants the record: "full details on the Acme
+  Series B", "tell me about that round", "more on this fundraising". → Step 2.
+- **List** — the user wants a set, or filtered or plural results: "rounds in diligence",
+  "list fundraisings", "what fundraisings do we have". → Step 3.
+- **By ID** — the user gave a fundraising ID → Step 2, skipping the resolve.
 
-If it's unclear, default to search and ask for a search term.
+A named single round is a **detail** request even when the user says "search" or "find".
+If it's genuinely unclear, treat it as a list and ask what they want to narrow to.
 
-## Step 2 — Execute the search
+## Step 2 — Detail: resolve the name, then render the card
 
-Use `crm_view_tool` so the result renders as an interactive table the user can sort and
-click through. It takes exactly the same `name` and `arguments` as `crm_call_tool`.
+**Resolve through `crm_call_tool`, never `crm_view_tool`.** This step is for you, not the
+user: a view call collapses every array in the response to a count, so the rows — and the
+`id` you need — never reach you, and the user gets a list they did not ask for.
 
-**By name / keyword:**
+```
+crm_call_tool({
+  "name": "crm:search_fundraising",
+  "arguments": { query: "<round name>", limit: 10 }
+})
+```
+
+Then branch on how many candidates came back:
+
+- **Exactly one match** → render its card and stop:
+  ```
+  crm_view_tool({ "name": "crm:get_fundraising", "arguments": { id: "<id>" } })
+  ```
+- **Several matches** → do NOT guess. Render the candidates as a view and ask which one:
+  ```
+  crm_view_tool({
+    "name": "crm:search_fundraising",
+    "arguments": { query: "<round name>", limit: 10 }
+  })
+  ```
+  Then ask: "Several fundraisings match — which one did you mean?" When they pick, call
+  `get_fundraising` for it. One company often has several rounds, so opening the top hit
+  unasked shows the wrong round with full confidence.
+- **No match** → say so; do not render an empty view.
+
+When the user gives an ID outright, there is nothing to resolve — one call, one card.
+
+Render at most one card per request. If the user named several rounds, ask which to open
+rather than stacking views.
+
+## Step 3 — List: search and render the table
+
 ```
 crm_view_tool({
   "name": "crm:search_fundraising",
@@ -48,11 +84,6 @@ crm_view_tool({
     limit: 20
   }
 })
-```
-
-**By ID:**
-```
-crm_view_tool({ "name": "crm:get_fundraising", "arguments": { id: "<fundraising id>" } })
 ```
 
 If the user filtered by stage name, resolve the name to a stage ID first, then pass
@@ -68,21 +99,27 @@ Increase `limit` if the user asks to see more results. Use `offset` to paginate.
 ### If the view is unavailable
 
 CRM views are enabled per organisation, and single-record views behind a second flag on
-top of that. So **either** call above may answer with:
+top of that. So any `crm_view_tool` call above may answer with:
 
 > CRM tool 'search_fundraising' has no view — call it with crm_call_tool instead.
 
 That is a normal response, not a failure — this organisation does not have that view
 enabled. Retry that one call verbatim through `crm_call_tool` and present the result as
-text per Step 3. Do **not** retry `crm_view_tool`, and do not report the message to the
+text per Step 4. Do **not** retry `crm_view_tool`, and do not report the message to the
 user.
 
-## Step 3 — Present results
+A detail request whose card has no view still resolves the same way: keep the
+`crm_call_tool` resolve from Step 2 and present the chosen record as text.
 
-**When the view rendered**, the user already sees every record on screen. Do NOT
-re-list, re-format, or summarise the rows as text — that duplicates the table.
-Answer the question they actually asked, or acknowledge in one line
-(e.g. "6 fundraisings match — the ID is in the first column, for `/update-fundraising`.").
+## Step 4 — Present results
+
+**When a card rendered**, the user sees the whole record. Do not restate its fields.
+Answer what they asked, or acknowledge in one line.
+
+**When a table rendered**, the user already sees every row. Do NOT re-list, re-format, or
+summarise them as text — that duplicates the table. Answer the question they actually
+asked, or acknowledge in one line (e.g. "6 fundraisings match — the ID is in the first
+column, for `/update-fundraising`.").
 
 **When you fell back to `crm_call_tool`**, display all non-empty fields in a readable
 summary and show the ID prominently — the user needs it to run `/update-fundraising`.
