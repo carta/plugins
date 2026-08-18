@@ -119,6 +119,23 @@ func TestMergeSessionStateUnion(t *testing.T) {
 	}
 }
 
+func TestWriteRecordLeavesNoTempFile(t *testing.T) {
+	t.Setenv("CARTA_SESSION_STATE_DIR", t.TempDir())
+	sessionID := "sess-atomic"
+
+	if err := WriteRecord(sessionID, "carta-crm", "1.0.0", []string{"carta-crm:list-deals"}); err != nil {
+		t.Fatal(err)
+	}
+
+	entries, err := os.ReadDir(SessionStateDir(sessionID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != "carta-crm.json" {
+		t.Errorf("dir entries = %v, want exactly [carta-crm.json]", entries)
+	}
+}
+
 func TestMergeSessionStateEmpty(t *testing.T) {
 	t.Setenv("CARTA_SESSION_STATE_DIR", t.TempDir())
 	_, _, _, ok := MergeSessionState("no-such-session")

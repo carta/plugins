@@ -134,6 +134,28 @@ func TestInjectInstrumentation_ParamsToolsNonObjectParamsPreserved(t *testing.T)
 	}
 }
 
+// TestInjectInstrumentation_ParamsToolsStringNullParamsNoPanic guards against
+// a nil map assignment panic: params encoded as the JSON string "null"
+// decodes to a nil map, which must fall back to an empty params object.
+func TestInjectInstrumentation_ParamsToolsStringNullParamsNoPanic(t *testing.T) {
+	isolateEnv(t)
+	setupPluginRoot(t, "carta-crm", "1.0.0")
+
+	stdin := `{"tool_name":"mcp__carta__fetch","tool_input":{"params":"null"},"session_id":"s1"}`
+	out, err := InjectInstrumentation([]byte(stdin))
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated := parsePreToolUseUpdatedInput(t, out)
+	var params map[string]json.RawMessage
+	if err := json.Unmarshal(updated["params"], &params); err != nil {
+		t.Fatalf("expected params object, got unparseable %s: %v", updated["params"], err)
+	}
+	if _, ok := params["_instrumentation_v2"]; !ok {
+		t.Error("expected _instrumentation_v2 injected despite string-encoded null params")
+	}
+}
+
 func TestInjectInstrumentation_EffortObjectRoundtrips(t *testing.T) {
 	isolateEnv(t)
 	setupPluginRoot(t, "carta-crm", "1.0.0")
@@ -375,5 +397,142 @@ func TestInjectInstrumentation_PluginRootUnsetFailsOpenNoWrites(t *testing.T) {
 	entries, _ := os.ReadDir(registryDir)
 	if len(entries) != 0 {
 		t.Errorf("expected zero writes to the registry dir, found %v", entries)
+	}
+}
+
+func injectAndGetInstr(t *testing.T, stdin string) map[string]json.RawMessage {
+	t.Helper()
+	out, err := InjectInstrumentation([]byte(stdin))
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated := parsePreToolUseUpdatedInput(t, out)
+	var instr map[string]json.RawMessage
+	if err := json.Unmarshal(updated["_instrumentation_v2"], &instr); err != nil {
+		t.Fatal(err)
+	}
+	return instr
+}
+
+// TestInjectInstrumentation_EntrypointResolvesToSurface covers every mapped
+// entrypoint. Unmapped-but-present entrypoints pass through raw (see
+// TestInjectInstrumentation_UnmappedEntrypointPassesThroughRaw).
+func TestInjectInstrumentation_EntrypointResolvesToSurface(t *testing.T) {
+	cases := []struct {
+		entrypoint string
+		want       string
+	}{
+		{"cli", "code-terminal"},
+		{"claude-desktop", "code-desktop"},
+		{"local-agent", "cowork"},
+		{"sdk-cli", "sdk-cli"},
+		{"sdk-ts", "sdk-typescript"},
+		{"sdk-py", "sdk-python"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.entrypoint, func(t *testing.T) {
+			isolateEnv(t)
+			setupPluginRoot(t, "carta-crm", "1.0.0")
+			t.Setenv("CLAUDE_CODE_ENTRYPOINT", tc.entrypoint)
+
+			stdin := `{"tool_name":"some_tool","tool_input":{"foo":"bar"},"session_id":"s1"}`
+			instr := injectAndGetInstr(t, stdin)
+			if typ := fieldAsString(t, instr, "surface"); typ == nil || *typ != tc.want {
+				t.Errorf("surface = %v, want %q", typ, tc.want)
+			}
+		})
+	}
+}
+
+// TestInjectInstrumentation_UnmappedEntrypointPassesThroughRaw: the hook can't
+// emit metrics, so an unrecognized entrypoint is passed through, not coerced
+// to "other" — carta-mcp does that coercion where it can also log the raw value.
+func TestInjectInstrumentation_UnmappedEntrypointPassesThroughRaw(t *testing.T) {
+	for _, entrypoint := range []string{"claude-vscode", "claude-desktop-3p", "some-future-token-we-have-never-seen"} {
+		t.Run(entrypoint, func(t *testing.T) {
+			isolateEnv(t)
+			setupPluginRoot(t, "carta-crm", "1.0.0")
+			t.Setenv("CLAUDE_CODE_ENTRYPOINT", entrypoint)
+
+			stdin := `{"tool_name":"some_tool","tool_input":{"foo":"bar"},"session_id":"s1"}`
+			instr := injectAndGetInstr(t, stdin)
+			if typ := fieldAsString(t, instr, "surface"); typ == nil || *typ != entrypoint {
+				t.Errorf("surface = %v, want raw entrypoint %q passed through", typ, entrypoint)
+			}
+		})
+	}
+}
+
+// TestInjectInstrumentation_RemoteResolvesToCodeRemote covers CLAUDE_CODE_REMOTE
+// alone, with no entrypoint set.
+func TestInjectInstrumentation_RemoteResolvesToCodeRemote(t *testing.T) {
+	for _, val := range []string{"1", "true", "yes", "on", "TRUE"} {
+		t.Run(val, func(t *testing.T) {
+			isolateEnv(t)
+			setupPluginRoot(t, "carta-crm", "1.0.0")
+			t.Setenv("CLAUDE_CODE_ENTRYPOINT", "")
+			t.Setenv("CLAUDE_CODE_REMOTE", val)
+
+			stdin := `{"tool_name":"some_tool","tool_input":{"foo":"bar"},"session_id":"s1"}`
+			instr := injectAndGetInstr(t, stdin)
+			if typ := fieldAsString(t, instr, "surface"); typ == nil || *typ != "code-remote" {
+				t.Errorf("surface = %v, want \"code-remote\"", typ)
+			}
+		})
+	}
+}
+
+// TestInjectInstrumentation_RemoteWinsOverEntrypoint: a remote cli session is
+// "code-remote", not "code-terminal" — CLAUDE_CODE_REMOTE takes precedence.
+func TestInjectInstrumentation_RemoteWinsOverEntrypoint(t *testing.T) {
+	isolateEnv(t)
+	setupPluginRoot(t, "carta-crm", "1.0.0")
+	t.Setenv("CLAUDE_CODE_ENTRYPOINT", "cli")
+	t.Setenv("CLAUDE_CODE_REMOTE", "true")
+
+	stdin := `{"tool_name":"some_tool","tool_input":{"foo":"bar"},"session_id":"s1"}`
+	instr := injectAndGetInstr(t, stdin)
+	if typ := fieldAsString(t, instr, "surface"); typ == nil || *typ != "code-remote" {
+		t.Errorf("surface = %v, want \"code-remote\" to win over entrypoint \"cli\"", typ)
+	}
+}
+
+// TestInjectInstrumentation_NoSignalOmitsSurface covers a client with no
+// entrypoint and no remote signal: surface must be absent, not an empty
+// string, so mergeFallback treats it as missing and lets the AI fallback fill
+// it in — isMissingJSON does not treat "" as present.
+func TestInjectInstrumentation_NoSignalOmitsSurface(t *testing.T) {
+	isolateEnv(t)
+	setupPluginRoot(t, "carta-crm", "1.0.0")
+	t.Setenv("CLAUDE_CODE_ENTRYPOINT", "")
+	t.Setenv("CLAUDE_CODE_REMOTE", "")
+
+	stdin := `{"tool_name":"some_tool","tool_input":{"foo":"bar"},"session_id":"s1"}`
+	instr := injectAndGetInstr(t, stdin)
+	if typ := fieldAsString(t, instr, "surface"); typ != nil {
+		t.Errorf("surface = %v, want absent with no entrypoint and no remote signal", *typ)
+	}
+}
+
+// TestInjectInstrumentation_FallbackTypeBackfilledWhenHookHasNone mirrors the model test.
+func TestInjectInstrumentation_FallbackTypeBackfilledWhenHookHasNone(t *testing.T) {
+	t.Setenv("CLAUDE_CODE_ENTRYPOINT", "")
+	t.Setenv("CLAUDE_CODE_REMOTE", "")
+	instr := injectWithAISupplied(t, `{"surface":"chat"}`)
+	if typ := fieldAsString(t, instr, "surface"); typ == nil || *typ != "chat" {
+		t.Errorf("surface = %v, want backfilled \"chat\"", typ)
+	}
+}
+
+// TestInjectInstrumentation_HookTypeWinsOverFallback mirrors the model precedence test.
+func TestInjectInstrumentation_HookTypeWinsOverFallback(t *testing.T) {
+	isolateEnv(t)
+	setupPluginRoot(t, "carta-crm", "1.0.0")
+	t.Setenv("CLAUDE_CODE_ENTRYPOINT", "cli")
+
+	stdin := `{"tool_name":"some_tool","tool_input":{"_instrumentation_v2":{"surface":"chat"}},"session_id":"s1"}`
+	instr := injectAndGetInstr(t, stdin)
+	if typ := fieldAsString(t, instr, "surface"); typ == nil || *typ != "code-terminal" {
+		t.Errorf("surface = %v, want hook's own resolved \"code-terminal\" to win", typ)
 	}
 }
