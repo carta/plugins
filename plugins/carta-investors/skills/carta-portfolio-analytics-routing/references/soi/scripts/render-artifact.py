@@ -22,8 +22,12 @@ Usage:
 The template is resolved relative to this file, so callers only locate the script.
 
 <funds_file> is a path to a JSON file whose contents are a non-empty list of
-{"uuid": "...", "name": "...", "currency": "..."} dicts; all three keys are
-required on every entry. It is a path (not a positional JSON string) because
+{"uuid": "...", "name": "...", "currency": "...", "fund_family_name": "..."} dicts.
+uuid, name, and currency are required on every entry; fund_family_name is optional
+(omit it, or set it to null, for a standalone fund with no family) — the artifact
+groups the fund dropdown by fund_family_name when any entry has one, and adds an
+"All of <family>" rollup option per family with more than one fund. It is a path
+(not a positional JSON string) because
 legitimate fund names contain apostrophes ("O'Reilly Capital",
 "St. James's Place Holdings"), JSON does not escape ', and shell single-quoting
 needed to preserve JSON's embedded double quotes terminates on the first '.
@@ -134,16 +138,26 @@ def load_funds(funds_file: Path) -> "list | None":
         if not isinstance(entry, dict):
             print(f"error: fund entry #{i} is not an object: {entry!r}", file=sys.stderr)
             return None
-        allowed_keys = {"uuid", "name", "currency"}
+        allowed_keys = {"uuid", "name", "currency", "fund_family_name"}
         required_keys = {"uuid", "name", "currency"}
         extra = entry.keys() - allowed_keys
         missing = required_keys - entry.keys()
         if extra or missing:
             print(
-                f"error: fund entry #{i} must have 'uuid', 'name', and 'currency', got {sorted(entry.keys())}",
+                f"error: fund entry #{i} must have 'uuid', 'name', 'currency', and optionally "
+                f"'fund_family_name', got {sorted(entry.keys())}",
                 file=sys.stderr,
             )
             return None
+        # fund_family_name is optional (funds outside any family omit it or set it to
+        # null); when present it must be a non-empty string used for dropdown grouping.
+        if "fund_family_name" in entry and entry["fund_family_name"] is not None:
+            if not isinstance(entry["fund_family_name"], str) or entry["fund_family_name"] == "":
+                print(
+                    f"error: fund entry #{i} has invalid fund_family_name: {entry['fund_family_name']!r}",
+                    file=sys.stderr,
+                )
+                return None
         if not isinstance(entry["uuid"], str) or not UUID_RE.match(entry["uuid"]):
             print(f"error: fund entry #{i} has invalid uuid: {entry['uuid']!r}", file=sys.stderr)
             return None

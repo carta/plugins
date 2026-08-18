@@ -53,7 +53,7 @@ With the firm list in hand:
 
 > **Run in parallel with Step 3.** Fund enumeration (this step) and MCP UUID discovery (Step 3) are fully independent — issue both tool batches concurrently in the same response, not sequentially. 
 
-Call `call_tool({"name": "fa__list__entities", "arguments": { entity_types: "fund,spv" }})`. The filter excludes entity types that can't hold investments so it is critical. Capture the full `[{uuid, name, currency}, ...]` list from the response — the `currency` field is the fund's reporting currency (e.g. `"USD"`, `"EUR"`) and is needed for correct amount formatting in the artifact.
+Call `call_tool({"name": "fa__list__entities", "arguments": { entity_types: "fund,spv" }})`. The filter excludes entity types that can't hold investments so it is critical. Capture the full `[{uuid, name, currency, fund_family_id, fund_family_name}, ...]` list from the response — the `currency` field is the fund's reporting currency (e.g. `"USD"`, `"EUR"`) and is needed for correct amount formatting in the artifact. `fund_family_name` is non-null for funds that belong to a fund family (e.g. side-by-side vehicles of the same strategy) and null/absent for standalone funds — carry it through verbatim to Step 4a so the artifact can group the fund dropdown by family.
 
 **Pick the initial fund** for the dropdown and capture two variables — `initial_fund_uuid` and `name_status` — that Step 6 will read by name.
 
@@ -86,16 +86,19 @@ Procedure:
 
 Three sub-steps:
 
-**4a.** Use the `Write` tool to drop the firm's fund list to a JSON file inside the session's current working directory. Filename should be `<firm-slug>-funds.json`. Contents must be a JSON array of `{"uuid", "name", "currency"}` objects — all three keys required; `currency` is the fund's own code from Step 2, not a default:
+**4a.** Use the `Write` tool to drop the firm's fund list to a JSON file inside the session's current working directory. Filename should be `<firm-slug>-funds.json`. Contents must be a JSON array of `{"uuid", "name", "currency"}` objects — all three keys required; `currency` is the fund's own code from Step 2, not a default. Add `"fund_family_name"` on any entry whose Step 2 `fund_family_name` was non-null — omit the key entirely (don't set it to `null`) for standalone funds:
 
 ```json
 [
-  {"uuid": "<fund_uuid_1>", "name": "<fund_name_1>", "currency": "<currency_code_1>"},
-  {"uuid": "<fund_uuid_2>", "name": "<fund_name_2>", "currency": "<currency_code_2>"}
+  {"uuid": "<fund_uuid_1>", "name": "<fund_name_1>", "currency": "<currency_code_1>", "fund_family_name": "<family_name>"},
+  {"uuid": "<fund_uuid_2>", "name": "<fund_name_2>", "currency": "<currency_code_2>", "fund_family_name": "<family_name>"},
+  {"uuid": "<fund_uuid_3>", "name": "<fund_name_3>", "currency": "<currency_code_3>"}
 ]
 ```
 
 The fund list comes straight from Step 2's `fa:list:entities` response. Preserve the entity name verbatim — including apostrophes, ampersands, commas, and any punctuation. The script JSON-escapes hostile characters at substitution time.
+
+If any fund in the firm has a `fund_family_name`, the artifact automatically groups the fund dropdown by family: the family name is a bold, selectable row that pools every fund beneath it — same pooling behavior as "All Entities", including the "Held By" column — with its member funds indented under it. Families of one fund and standalone funds render as plain rows. No extra step or render argument is needed; this is driven entirely by whether `fund_family_name` is present in the funds file.
 
 **4b.** Locate the script:
 

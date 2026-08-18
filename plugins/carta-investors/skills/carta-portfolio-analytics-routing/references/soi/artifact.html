@@ -946,6 +946,26 @@
         // it into an IN-list of every real fund UUID instead.
         const ALL_ENTITIES_VALUE = '__all_entities__';
 
+        // Sentinel prefix for a fund-family rollup (e.g. 'family::Healthcare Partners
+        // Fund V'). Same pooling mechanism as ALL_ENTITIES_VALUE, scoped to the funds
+        // sharing one fund_family_name instead of every fund in the firm.
+        const FAMILY_PREFIX = 'family::';
+
+        function isPooledUuid(uuid) {
+            return uuid === ALL_ENTITIES_VALUE || (typeof uuid === 'string' && uuid.startsWith(FAMILY_PREFIX));
+        }
+
+        // Funds backing a pooled selection: every fund for All Entities, or just the
+        // funds sharing a family name for a family selection.
+        function pooledFunds(fundUuid) {
+            if (fundUuid === ALL_ENTITIES_VALUE) return FUNDS;
+            if (fundUuid.startsWith(FAMILY_PREFIX)) {
+                const familyName = fundUuid.slice(FAMILY_PREFIX.length);
+                return FUNDS.filter(f => f.fund_family_name === familyName);
+            }
+            return [];
+        }
+
         // True only while viewing All Entities AND the firm's funds don't share one
         // reporting currency. Drives renderMetrics/render() to show per-row/per-currency
         // breakdowns instead of a single summed total that would silently add
@@ -970,7 +990,7 @@
         // fund — insert it right after Investment (matching the cap-table Investments
         // table pattern) only while viewing All Entities.
         function getColumns() {
-            if (currentFundUuid !== ALL_ENTITIES_VALUE) return BASE_COLUMNS;
+            if (!isPooledUuid(currentFundUuid)) return BASE_COLUMNS;
             return [BASE_COLUMNS[0], HELD_BY_COLUMN, ...BASE_COLUMNS.slice(1)];
         }
 
@@ -1180,7 +1200,7 @@
                 // "Held By" mirrors the cap-table Investments table: a collapsed
                 // multi-fund company shows "N funds" (with the names on hover);
                 // a company held by a single fund just names it.
-                const heldByCell = currentFundUuid === ALL_ENTITIES_VALUE
+                const heldByCell = isPooledUuid(currentFundUuid)
                     ? (() => {
                         const names = c.fundNames ? [...c.fundNames] : [];
                         if (names.length > 1) {
@@ -1221,13 +1241,13 @@
                         return `<span class="fx-icon tooltip-trigger" data-tooltip="${tip}">⇄</span>`;
                     };
 
-                    // In All Entities mode each asset carries its own fund's currency
-                    // (a.currency), which may differ from another row's — pass it
-                    // explicitly rather than relying on the single currentCurrency.
-                    const currencyTag = currentFundUuid === ALL_ENTITIES_VALUE && a.currency
+                    // In a pooled view (All Entities or a fund family) each asset carries
+                    // its own fund's currency (a.currency), which may differ from another
+                    // row's — pass it explicitly rather than relying on currentCurrency.
+                    const currencyTag = isPooledUuid(currentFundUuid) && a.currency
                         ? `<span class="currency-tag">${escHtml(a.currency)}</span>`
                         : '';
-                    const assetHeldByCell = currentFundUuid === ALL_ENTITIES_VALUE
+                    const assetHeldByCell = isPooledUuid(currentFundUuid)
                         ? `<td>${escHtml(a.fundName || '—')}</td>`
                         : '';
                     ar.innerHTML = `
@@ -1251,7 +1271,7 @@
                 const totalCost  = viewMixedCurrency ? '<span class="mixed-badge">Mixed</span>' : fmt(t.cost);
                 const totalValue = viewMixedCurrency ? '<span class="mixed-badge">Mixed</span>' : fmt(t.value);
                 const totalGl    = viewMixedCurrency ? '<span class="mixed-badge">Mixed</span>' : glCell(t.gl);
-                const heldByTotalsCell = currentFundUuid === ALL_ENTITIES_VALUE ? '<td></td>' : '';
+                const heldByTotalsCell = isPooledUuid(currentFundUuid) ? '<td></td>' : '';
                 const tr = document.createElement('tr');
                 tr.className = 'totals-row';
                 tr.innerHTML = `
@@ -1442,6 +1462,34 @@
             return allRows;
         }
 
+        // Group funds by fund_family_name (present) vs standalone (absent/null).
+        // Families are sorted alphabetically by name; funds within a family and the
+        // standalone funds are each sorted alphabetically by fund name.
+        function groupFundsByFamily() {
+            const families = new Map();
+            const standalone = [];
+            FUNDS.forEach(f => {
+                if (f.fund_family_name) {
+                    if (!families.has(f.fund_family_name)) families.set(f.fund_family_name, []);
+                    families.get(f.fund_family_name).push(f);
+                } else {
+                    standalone.push(f);
+                }
+            });
+            const familyNames = [...families.keys()].sort((a, b) => a.localeCompare(b));
+            familyNames.forEach(name => families.get(name).sort((a, b) => a.name.localeCompare(b.name)));
+            standalone.sort((a, b) => a.name.localeCompare(b.name));
+            return { familyNames, families, standalone };
+        }
+
+        function makeOption(value, label, selectedUuid) {
+            const opt = document.createElement('option');
+            opt.value = value;
+            opt.textContent = label;
+            if (value === selectedUuid) opt.selected = true;
+            return opt;
+        }
+
         function populateFundSelect() {
             const select = document.getElementById('fundSelect');
             if (!select) return;
@@ -1449,20 +1497,33 @@
 
             // "All Entities" only makes sense with more than one fund to combine.
             if (FUNDS.length > 1) {
-                const allOpt = document.createElement('option');
-                allOpt.value = ALL_ENTITIES_VALUE;
-                allOpt.textContent = 'All Entities';
-                if (currentFundUuid === ALL_ENTITIES_VALUE) allOpt.selected = true;
-                select.appendChild(allOpt);
+                select.appendChild(makeOption(ALL_ENTITIES_VALUE, 'All Entities', currentFundUuid));
             }
 
-            FUNDS.forEach(f => {
-                const opt = document.createElement('option');
-                opt.value = f.uuid;
-                opt.textContent = f.name;
-                if (f.uuid === currentFundUuid) opt.selected = true;
-                select.appendChild(opt);
-            });
+            const { familyNames, families, standalone } = groupFundsByFamily();
+
+            if (familyNames.length === 0) {
+                // No fund families in this firm — flat list, unchanged from before.
+                FUNDS.forEach(f => select.appendChild(makeOption(f.uuid, f.name, currentFundUuid)));
+            } else {
+                familyNames.forEach(name => {
+                    const funds = families.get(name);
+                    if (funds.length > 1) {
+                        // The family name itself is the rollup option: an <optgroup> label renders
+                        // the family but cannot be selected, so pooling would need a second row.
+                        const header = makeOption(FAMILY_PREFIX + name, name, currentFundUuid);
+                        header.style.fontWeight = 'bold';
+                        select.appendChild(header);
+                        // Non-breaking spaces — leading plain whitespace collapses in some browsers.
+                        funds.forEach(f => select.appendChild(makeOption(f.uuid, '\u00a0\u00a0\u00a0\u00a0' + f.name, currentFundUuid)));
+                    } else {
+                        // A family of one fund has nothing to pool, so it reads as a plain fund.
+                        funds.forEach(f => select.appendChild(makeOption(f.uuid, f.name, currentFundUuid)));
+                    }
+                });
+                standalone.forEach(f => select.appendChild(makeOption(f.uuid, f.name, currentFundUuid)));
+            }
+
             const switcher = document.getElementById('fundSwitcher');
             if (switcher) {
                 switcher.classList.toggle('hidden', FUNDS.length <= 1);
@@ -1486,14 +1547,15 @@
             const select = document.getElementById('fundSelect');
             if (select) select.value = fundUuid;
 
-            const isAllEntities = fundUuid === ALL_ENTITIES_VALUE;
+            const isPooled = isPooledUuid(fundUuid);
+            const pooled = isPooled ? pooledFunds(fundUuid) : [];
 
-            if (isAllEntities) {
-                // A firm's funds aren't guaranteed to share one reporting currency.
-                // currentCurrency stays meaningful (for fmt() call sites that don't
-                // have a specific row's currency handy) only when every fund agrees;
-                // otherwise per-row/per-company currency drives display instead.
-                const uniqueCurrencies = new Set(FUNDS.map(f => f.currency).filter(Boolean));
+            if (isPooled) {
+                // A pooled selection's funds aren't guaranteed to share one reporting
+                // currency. currentCurrency stays meaningful (for fmt() call sites that
+                // don't have a specific row's currency handy) only when every fund
+                // agrees; otherwise per-row/per-company currency drives display instead.
+                const uniqueCurrencies = new Set(pooled.map(f => f.currency).filter(Boolean));
                 viewMixedCurrency = uniqueCurrencies.size > 1;
                 currentCurrency = uniqueCurrencies.size === 1 ? [...uniqueCurrencies][0] : null;
             } else {
@@ -1517,11 +1579,11 @@
             showLoading();
             try {
                 let transformed;
-                if (isAllEntities) {
+                if (isPooled) {
                     const fundMetaByUuid = {};
-                    FUNDS.forEach(f => { fundMetaByUuid[f.uuid] = { name: f.name, currency: f.currency }; });
+                    pooled.forEach(f => { fundMetaByUuid[f.uuid] = { name: f.name, currency: f.currency }; });
                     const investments = await fetchAllPages((offset, limit) =>
-                        buildSoiSqlAllFunds(FUNDS.map(f => f.uuid), offset, limit));
+                        buildSoiSqlAllFunds(pooled.map(f => f.uuid), offset, limit));
                     transformed = transformData(investments, fundMetaByUuid);
                 } else {
                     const investments = await fetchAllPages((offset, limit) => buildSoiSql(fundUuid, offset, limit));
