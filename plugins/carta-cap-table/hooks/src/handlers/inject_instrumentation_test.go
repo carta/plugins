@@ -134,6 +134,28 @@ func TestInjectInstrumentation_ParamsToolsNonObjectParamsPreserved(t *testing.T)
 	}
 }
 
+// TestInjectInstrumentation_ParamsToolsStringNullParamsNoPanic guards against
+// a nil map assignment panic: params encoded as the JSON string "null"
+// decodes to a nil map, which must fall back to an empty params object.
+func TestInjectInstrumentation_ParamsToolsStringNullParamsNoPanic(t *testing.T) {
+	isolateEnv(t)
+	setupPluginRoot(t, "carta-crm", "1.0.0")
+
+	stdin := `{"tool_name":"mcp__carta__fetch","tool_input":{"params":"null"},"session_id":"s1"}`
+	out, err := InjectInstrumentation([]byte(stdin))
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated := parsePreToolUseUpdatedInput(t, out)
+	var params map[string]json.RawMessage
+	if err := json.Unmarshal(updated["params"], &params); err != nil {
+		t.Fatalf("expected params object, got unparseable %s: %v", updated["params"], err)
+	}
+	if _, ok := params["_instrumentation_v2"]; !ok {
+		t.Error("expected _instrumentation_v2 injected despite string-encoded null params")
+	}
+}
+
 func TestInjectInstrumentation_EffortObjectRoundtrips(t *testing.T) {
 	isolateEnv(t)
 	setupPluginRoot(t, "carta-crm", "1.0.0")

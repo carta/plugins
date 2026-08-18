@@ -203,7 +203,8 @@ Resolve once, at the top. Pass on every draft-set tool call.
 
 Four steps, in order, **all before any user interaction and before gathering any input.** Step
 1 is free. Steps 2–4 are the only round trips this preflight may spend: one `ToolSearch`, one
-connectivity check, one `list_accounts`.
+connectivity check, one `list_accounts`. Phase 0.5 then spends exactly **one** more —
+`issuance_init`, which carries the stakeholder lookup with it.
 
 ### Step 1 — Detect the environment from the tool surface
 
@@ -256,8 +257,8 @@ substitute there.
 
 | Purpose | Command | Tool |
 |---|---|---|
-| Reference data for the collection surface | `cap_table:get:issuance_init` | `fetch` |
-| Stakeholder lookup | `cap_table:get:stakeholders` | `fetch` |
+| Reference data for the collection surface, **plus named stakeholders** via `stakeholder_names` | `cap_table:get:issuance_init` | `fetch` |
+| Stakeholder lookup for a roster **miss** — pass `names=` for several, `search=` for exactly one | `cap_table:get:stakeholders` | `fetch` |
 | Load an existing set's rows | `cap_table:get:load_drafts` | `fetch` |
 | List draft sets (resume by name) | `cap_table:list:draft_sets` | `fetch` |
 | Cap-table totals for context math — authorized, outstanding, fully diluted, ownership % | `cap_table:get:cap_table_by_share_class` | `fetch` |
@@ -294,10 +295,30 @@ instead.
 
 ### Step 3 — Confirm Carta MCP connectivity
 
-The whole flow depends on the Carta MCP server. If no Carta MCP tool is available (none in the
-tool list, or `welcome` errors), **stop before gathering any input**:
+The whole flow depends on the Carta MCP server. When it doesn't answer, **classify the failure
+before reporting it** — "not connected" and "Carta is briefly down" need opposite responses from
+the user, and telling someone to reconnect a connection that was fine is its own failure.
+
+| Signal | Meaning | Do |
+|---|---|---|
+| No Carta MCP tool in the tool list at all | Genuinely not connected | Stop with the message below |
+| A call fails with HTTP 5xx / 502 / 503 / a gateway or HTML error body / a timeout | Transient upstream — the server is connected and briefly unhealthy | **Retry once**, then stop with the *temporary problem* message |
+
+**Genuinely not connected** — stop before gathering any input:
 
 > *"I can't reach Carta — the Carta MCP server isn't connected. Connect the Carta MCP server and try again."*
+
+**Transient upstream** — retry the failed call exactly **once**. If the retry succeeds, continue
+the run normally and say nothing about it. If it fails again, stop:
+
+> *"Carta is having a temporary problem on its end — the connection is fine. Give it a minute and try again."*
+
+**The retry cap is one, and it is a hard cap.** A second failure means waiting, not another
+attempt: re-running the same call against a 502 cannot succeed, and repeated attempts are the
+inner-loop thrash this skill's budgets exist to prevent. Do not vary the call to make a retry
+look novel, do not fall back to a different tool or a `discover`/`search_tools` probe, and do not
+treat an HTML error body as a data payload to parse — an HTML response to a JSON call is an
+outage signal, never content.
 
 ### Step 4 — Resolve the corporation by name
 
@@ -371,9 +392,14 @@ prints `SECURITY_TYPE=`, `ROW_COUNT=`, and the paths it wrote.
 ### Step 3 — Fetch reference data (Phase 0.5's fetches, informed by the file)
 
 Run [Phase 0.5](#phase-05--configure-the-issuance)'s fetches exactly as documented, with two
-inputs now supplied by the file: `issuance_init`'s `security_type`, and the stakeholder
-lookup's `search=` covering **the names the file contains** rather than the names the prompt
-named. That keeps the lookup bounded by the file's row count, never by roster size.
+inputs now supplied by the file: `issuance_init`'s `security_type`, and its `stakeholder_names`
+covering **the names the file contains** rather than the names the prompt named. That keeps the
+lookup bounded by the file's row count, never by roster size.
+
+`stakeholder_names` takes the whole list at once, which is the only correct shape here — a
+40-row sheet resolved through a concatenated `search=` matches **nobody** and would create 40
+duplicate stakeholders on a real cap table. Pass the names as a list; never join them into a
+`search` string.
 
 **The [account-setup gate](#account-setup-gate-option-grant-only) still applies.** Having a
 parsed file in hand is not a reason to push past it: a corp with no option-grant document set
@@ -461,20 +487,34 @@ decides what the surface is.
 **Fetch the reference data first, and issue every call below in ONE assistant turn.** They have
 no dependencies on each other; serial fetches here are pure latency.
 
-- **Stakeholder lookup** — `cap_table:get:stakeholders` with `detail=full`, scoped with a
-  `search=` covering the people the prompt named. `search` matches `full_name` **and** `email`.
-  For several named people, issue **one** call covering them all if the gateway accepts it,
-  else one per person — bounded by the number of people named, never by roster size.
-  **If the prompt named nobody, make no call at all**: there is nobody to resolve yet, and
+- **Stakeholder lookup** — pass the people the prompt named as `stakeholder_names` on the
+  **same** `issuance_init` call below. The server resolves them alongside the reference data in
+  one round trip, and the result comes back as that payload's `stakeholders` section with the
+  same shape as the standalone `cap_table:get:stakeholders` command. There is no separate
+  stakeholder fetch here.
+  **If the prompt named nobody, pass no names at all**: there is nobody to resolve yet, and
   [Phase 1](#phase-1--resolve-each-row--reconcile-share-classes) resolves whatever names the
   user types into the form.
-- **Reference data** — `cap_table:get:issuance_init` with the active `security_type`. **One
-  call** returns every section the surface and Phase 1 need, each with the same
-  `{count, results}` shape as its standalone command:
+
+  > **Never put two people in one `search=`.** `search` AND-s its whitespace-separated terms, so
+  > it matches **one person only** — `search="Jane Doe"` works, `search="Jane Doe Bob Smith"`
+  > asks for a single human matching all four terms and returns an empty list with a perfectly
+  > healthy `200`. Commas don't help; they're stripped before the terms are AND-ed. Use
+  > `stakeholder_names` (here) or `names=` (Phase 1) for several people — never a concatenated
+  > `search`.
+- **Reference data** — `cap_table:get:issuance_init` with the active `security_type`, plus
+  `stakeholder_names` when the prompt named people. **One call** returns every section the
+  surface and Phase 1 need, each with the same `{count, results}` shape as its standalone
+  command:
   - *Option grant* — `vesting_templates`, `acceleration_templates`, `document_sets`,
     `valuations_409a`, `international_valuations`, `option_plans`.
   - *Certificate* — `certificate_share_classes`, `legends`, `vesting_templates`,
     `acceleration_templates` (cert vesting is opt-in but needs the same two lists once opted in).
+  - *Both, only when `stakeholder_names` was passed* — `stakeholders`, already at `detail=full`,
+    carrying `id`, `full_name`, `email`, `event_relationship`, and `kind` per person.
+
+  Every section is fetched server-side in parallel, so adding `stakeholder_names` costs no extra
+  wall-clock — it removes a round trip rather than adding one.
 
   **Partial failure is non-fatal.** A section that failed comes back `null` and is named in the
   top-level `errors` array (`[{section, message}]`); fall back to that section's individual
@@ -590,21 +630,29 @@ carrying its own quantity and full field set. Phase 1 *resolves* each row; it do
 re-collect the person, the quantity, or any field the surface already carries.
 
 **Resolve from what Phase 0.5 already fetched.** Match each `rows[].name` case-insensitively
-against the targeted `search` results, which carry `name`/`full_name`, `email`, `id`, `kind`,
-and `event_relationship` per person:
+against the `issuance_init` payload's `stakeholders` section, which carries `full_name`, `email`,
+`id`, `kind`, and `event_relationship` per person:
 
 - **Exactly one match** → reuse `email`, `event_relationship`, `kind`, `id`. Stamp
   `stakeholder_id` to bypass duplicate detection. Tag `(from existing record)`. **No MCP call.**
 - **No match** → the person is new, or was typed into the form after Phase 0.5 fetched (routine
-  on Cowork). Batch *only these misses* into **one** `cap_table:get:stakeholders` call whose
-  `search` covers them all, else one per miss. A genuine no-match is a new stakeholder — never
-  ask for an email that is already on the cap table.
+  on Cowork). Batch *only these misses* into **one** `cap_table:get:stakeholders` call passing
+  `names=` (a list of the missed names), not `search=`. A genuine no-match is a new stakeholder —
+  never ask for an email that is already on the cap table.
 - **Multiple matches on one name** → disambiguate with `AskUserQuestion`.
+
+> **`search` matches one person; `names` matches many.** `search` AND-s its whitespace-separated
+> terms across `full_name`/`email`, so two people in one `search` string can never match anything
+> — it returns an empty list with a `200`, which looks exactly like "nobody here". **A
+> zero-result `search` that contained more than one name is a malformed query, not an absent
+> person.** Never conclude "these are all new stakeholders" from one; re-issue it as `names=`.
+> Creating a duplicate stakeholder for someone already on the cap table is silent, wrong, and
+> lands on a real cap table.
 
 > **The number of stakeholder calls is bounded by roster misses, never by row count.** A
 > per-name `search` loop is the serial round-trip pattern this skill was slow for — and
-> concatenating every row's name into one `OR`-ed `search` to make that loop look batched is the
-> same bug wearing a disguise.
+> concatenating every row's name into one `search` to make that loop look batched is the same bug
+> wearing a disguise, with the added defect that it silently matches nobody.
 
 **Precedence for the two fields the surface can also supply:** a non-empty `relationship`
 stamps `issue_date_relationship`, and `stakeholder_kind` (defaulting to `INDIVIDUAL`) stamps
