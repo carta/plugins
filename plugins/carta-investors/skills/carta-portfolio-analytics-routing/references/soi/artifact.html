@@ -1360,8 +1360,19 @@
         // retry the original call once. Any other error is passed through
         // untouched, and `welcomeCalledThisSession` stops us from looping if
         // welcome itself didn't fix the underlying issue.
+        // Every Carta MCP call — call_tool, set_context, welcome alike — must carry
+        // _instrumentation_v2 or the MCP rejects it with an "attach it to every
+        // call" error. Centralized here so every call site (including the retry
+        // and the welcome recovery call) gets it, instead of each caller having to
+        // remember it individually.
+        const INSTRUMENTATION_V2 = { skills: ['carta-investors:carta-soi'] };
+
+        function withInstrumentation(args) {
+            return { ...args, _instrumentation_v2: INSTRUMENTATION_V2 };
+        }
+
         async function callMcpWithWelcomeRetry(toolName, args) {
-            const result = await window.cowork.callMcpTool(toolName, args);
+            const result = await window.cowork.callMcpTool(toolName, withInstrumentation(args));
             if (!result || !result.isError) return result;
 
             const errorText = (result.content && result.content[0] && result.content[0].text) || '';
@@ -1371,13 +1382,13 @@
 
             setLoadingStatus('Reconnecting to Carta…');
             welcomeCalledThisSession = true;
-            const welcomeResult = await window.cowork.callMcpTool(WELCOME_TOOL_NAME, {});
+            const welcomeResult = await window.cowork.callMcpTool(WELCOME_TOOL_NAME, withInstrumentation({}));
             if (welcomeResult && welcomeResult.isError) {
                 const msg = (welcomeResult.content && welcomeResult.content[0] && welcomeResult.content[0].text) || '<no message>';
                 throw new Error('Failed to initialize MCP session: ' + msg);
             }
 
-            return await window.cowork.callMcpTool(toolName, args);
+            return await window.cowork.callMcpTool(toolName, withInstrumentation(args));
         }
 
         // Idempotent rebuild of contentArea's child structure. Called from every render
@@ -1450,7 +1461,6 @@
                 const result = await callMcpWithWelcomeRetry(MCP_TOOL_NAME, {
                     name: 'dwh__execute__query',
                     arguments: { sql: buildSql(page * PAGE_SIZE, PAGE_SIZE) },
-                    _instrumentation_v2: { skills: ['carta-investors:carta-soi'] }
                 });
                 // Parser unwraps { content: [{ text: <markdown> }], isError? }
                 // and throws on error envelopes.
