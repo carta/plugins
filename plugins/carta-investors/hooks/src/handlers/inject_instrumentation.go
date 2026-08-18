@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"encoding/json"
+	"os"
+	"strings"
 
 	"com.carta.claude_plugins.hooks/internal/hookio"
 	"com.carta.claude_plugins.hooks/internal/plugin"
@@ -20,7 +22,7 @@ var paramsTools = map[string]bool{"fetch": true, "mutate": true}
 
 // fallbackPreserveFields lists keys whose AI-supplied value survives when
 // the hook has none. The hook stays authoritative for every other key.
-var fallbackPreserveFields = map[string]bool{"model": true}
+var fallbackPreserveFields = map[string]bool{"model": true, "surface": true}
 
 type instrumentationV2 struct {
 	Plugins        []session.PluginRef `json:"plugins"`
@@ -32,6 +34,9 @@ type instrumentationV2 struct {
 	AgentID        *string             `json:"agent_id"`
 	Model          *string             `json:"model"`
 	FromHook       bool                `json:"from_hook"`
+	// Surface is the resolved Claude surface (e.g. "chat", "code-terminal"), or
+	// nil when the hook has no signal — the AI fallback fills it in then.
+	Surface *string `json:"surface"`
 }
 
 // InjectInstrumentation injects an _instrumentation_v2 payload into the tool
@@ -69,6 +74,7 @@ func buildInstrumentationV2(ident plugin.Identity, evt hookio.InjectEvent, skill
 	for i, s := range skills {
 		namespaced[i] = ident.Name + ":" + s
 	}
+	surface := resolveSurface()
 	selfOnly := instrumentationV2{
 		Plugins:        []session.PluginRef{{Name: ident.Name, Version: ident.Version}},
 		Skills:         namespaced,
@@ -79,6 +85,7 @@ func buildInstrumentationV2(ident plugin.Identity, evt hookio.InjectEvent, skill
 		AgentID:        hookio.StrPtr(evt.AgentID),
 		Model:          nil,
 		FromHook:       true,
+		Surface:        surface,
 	}
 
 	if err := session.WriteRecord(evt.SessionID, ident.Name, ident.Version, namespaced); err != nil {
@@ -100,7 +107,41 @@ func buildInstrumentationV2(ident plugin.Identity, evt hookio.InjectEvent, skill
 		AgentID:        hookio.StrPtr(evt.AgentID),
 		Model:          hookio.StrPtr(model),
 		FromHook:       true,
+		Surface:        surface,
 	}
+}
+
+// entrypointToSurface maps a raw CLAUDE_CODE_ENTRYPOINT value to the reported
+// surface. "sdk-typescript"/"sdk-python" never appear as raw entrypoint values
+// (verified against the claude binary — those are its own pretty-printed names
+// for "sdk-ts"/"sdk-py"), so they're not mapped here.
+var entrypointToSurface = map[string]string{
+	"cli":            "code-terminal",
+	"claude-desktop": "code-desktop",
+	"local-agent":    "cowork",
+	"sdk-cli":        "sdk-cli",
+	"sdk-ts":         "sdk-typescript",
+	"sdk-py":         "sdk-python",
+}
+
+// resolveSurface returns nil only when there is no signal at all. An
+// unmapped-but-present entrypoint passes through raw — carta-mcp coerces and
+// logs it, since this hook can't emit metrics. CLAUDE_CODE_REMOTE wins over
+// entrypoint: verified live that CLAUDE_CODE_ENTRYPOINT is reliable on its own.
+func resolveSurface() *string {
+	remote := strings.ToLower(strings.TrimSpace(os.Getenv("CLAUDE_CODE_REMOTE")))
+	if remote == "1" || remote == "true" || remote == "yes" || remote == "on" {
+		codeRemote := "code-remote"
+		return &codeRemote
+	}
+	entrypoint := strings.ToLower(strings.TrimSpace(os.Getenv("CLAUDE_CODE_ENTRYPOINT")))
+	if surface, ok := entrypointToSurface[entrypoint]; ok {
+		return &surface
+	}
+	if entrypoint != "" {
+		return &entrypoint
+	}
+	return nil
 }
 
 // buildUpdatedInput injects instr into tool_input, nesting it under

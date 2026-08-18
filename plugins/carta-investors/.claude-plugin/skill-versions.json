@@ -1,6 +1,6 @@
 {
   "carta-home-build": {
-    "version": "1.5.1",
-    "headline": "Capital activity cards are now live, and progress counts investors paid."
+    "version": "1.6.0",
+    "headline": "Carta Home now flags when a newer version is ready, so you know when to rebuild."
   }
 }
