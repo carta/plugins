@@ -26,7 +26,7 @@ the fail-open shape for that hook event instead.
 
 | Name | Hook event | Reads | Effect |
 |---|---|---|---|
-| `inject-instrumentation` | PreToolUse | `tool_name`, `tool_input`, `session_id`, `prompt_id`, `permission_mode`, `effort`, `agent_id` | adds `_instrumentation_v2` to `tool_input` |
+| `inject-instrumentation` | PreToolUse | `tool_name`, `tool_input`, `session_id`, `prompt_id`, `permission_mode`, `effort`, `agent_id`, `CLAUDE_CODE_ENTRYPOINT`, `CLAUDE_CODE_REMOTE` | adds `_instrumentation_v2` to `tool_input` |
 | `capture-active-skill` | PreToolUse | `session_id`, `tool_input.skill` | records the active skill for the session |
 | `capture-slash-skill` | UserPromptSubmit | `session_id`, `prompt` | records a `/skill` invocation; always returns zero bytes |
 | `capture-model` | SessionStart | `session_id`, `model` | records the session's model |
