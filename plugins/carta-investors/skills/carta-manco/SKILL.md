@@ -1,7 +1,7 @@
 ---
 name: carta-manco
 model: opus
-description: 'ManCo (management company) budgeting skill for Carta Fund Admin firms; hard-gates on Carta Fund Admin + active ManCo eligibility. TRIGGER (specific tasks): build/create/draft a budget, pull/fetch/import the Carta budget, add/refresh actuals, interleave Budget/Actual/Variance, sub-account drill-down/breakdown, budget by sub-account, pacing/on-track/variance/budget-analysis, "what did we spend on [X] YTD", "where did we overspend", what-if/scenario modeling (headcount cuts, revenue shocks, new fund raise, expansion hires). ALSO fires on a generic/ambiguous ManCo request with no specific action named — "help with our ManCo", "not sure what I need" — and presents the capability menu (including consolidating financials). NOT FOR: single-fund financials, portfolio valuations, LP reporting, cap tables, loans (carta-investors:carta-loan-dashboard); named consolidating P&L/BS/TB/cash-flow asks — use carta-consolidating-pnl/-balance-sheet/-trial-balance or fa-manco:carta-consolidating-cash-flow directly.'
+description: 'ManCo (management company) budgeting and reporting for Carta Fund Admin firms; hard-gates on Fund Admin + active ManCo. TRIGGER: build/create/draft a budget, pull/import the Carta budget, add/refresh actuals, interleave Budget/Actual/Variance, sub-account drill-down, pacing/variance analysis, "what did we spend on [X] YTD", "where did we overspend", what-if/scenario modeling (headcount cuts, revenue shocks, new fund raise, expansion hires). ALSO fires on ANY generic management-company ask naming no specific report, and shows the capability menu: "help with our ManCo", "help me with our ManCo financials", "ManCo financials", "management company financials", "ManCo reporting", "not sure what I need". NOT FOR: single-FUND (not ManCo) financials, portfolio valuations, LP reporting, cap tables, loans (carta-investors:carta-loan-dashboard); a NAMED consolidating statement (P&L, BS, TB, cash flow) — use carta-consolidating-pnl/-balance-sheet/-trial-balance or fa-manco:carta-consolidating-cash-flow.'
 version: 1.0.0
 allowed-tools:
   # Production
@@ -104,45 +104,53 @@ produce an exact match — before falling back to the welcome screen +
 
 ## UX Rules
 
-Audience is an accountant in Excel. Plain English only. Never surface MCP
-identifiers, DWH column names (`ACCOUNT_TYPE`, `EFFECTIVE_DATE`), UUIDs,
-raw JSON, SQL, or gate labels.
+Audience is an accountant in Excel, so write in plain English and in their
+vocabulary. Internal identifiers mean nothing to this reader and read as noise:
+MCP tool names, DWH column names (`ACCOUNT_TYPE`, `EFFECTIVE_DATE`), UUIDs, raw
+JSON, SQL, and the gate labels used in these instructions all stay out of the
+reply. Say "your firm's Carta connection", not the connector's tool name.
 
 - **Currency formatting:** positive `$X,XXX`, negatives `($X,XXX)`, totals bolded — use the resolved currency symbol, never a bare `$`. Derive from the data, never default to USD.
 - **Difference values are absolute** — e.g. `$0` for a match, `$2,000` for a gap.
 - **Status vocabulary:** ✅ Match | ⚠ Mismatch ($X diff) | ❌ Missing in Carta | ❌ Missing in Client Doc.
 - **Closing summary link** is a workbook citation (`<citation:Sheet!Range>`) in Claude for Excel mode, and a `file://` path in Claude Code / Cowork mode. Never both.
 - **Every numbered choice in this skill — including all next-step menus — MUST be presented via `AskUserQuestion`.** Never render options as a bare code-fenced markdown list. Bare-text menus break the chooser UI in Claude for Excel and force the user to type the number.
+- **The Router Gate welcome screen is not a menu, and the rule above does not reach it.** Its bullets are read-only context introducing what this skill can do — they carry no numbers and selecting one is impossible. They precede the `AskUserQuestion` menu and never replace it; both must appear. Emit them as markdown bullets exactly as written. The rule above governs the *choice*, not the introduction to it.
 
-## Execution discipline
+## Response style
+
+The reader is an accountant working in a spreadsheet, and the deliverable is the
+workbook. What helps them is the content this skill defines — the capability
+menu, the questions, the finished tabs. Running commentary on gate progress and
+tool plumbing doesn't help that reader, and it pushes the content they came for
+further down the screen. So this skill's replies are the content itself.
 
 **The Router Gate runs first, before any MCP tool call.** If the prompt is
 generic/ambiguous, the welcome screen + `AskUserQuestion` menu is the very
 first thing you emit — the user sees what this skill can do while Gate 0,
 Gate 0.5, and Gate 0.75 haven't even started. If the prompt names a specific
-capability, determine `<CAPABILITY>` silently from the routing table (no
-welcome screen, no question) and move straight to Gate 0.
+capability, determine `<CAPABILITY>` from the routing table and move straight to
+Gate 0.
 
-**Once `<CAPABILITY>` is set, Gate 0, Gate 0.5, and Gate 0.75 execute
-silently.** Do not narrate tool calls, intermediate results, or status
-updates. Once eligibility is confirmed, dispatch and let the capability's own
-gates (from its reference file, or the external skill it hands off to) drive
+**Once `<CAPABILITY>` is set, Gate 0, Gate 0.5, and Gate 0.75 run without
+commentary.** Once eligibility is confirmed, dispatch and let the capability's
+own gates (from its reference file, or the external skill it hands off to) drive
 the rest — do not re-implement or pre-run its logic here.
 
-**Forbidden narration — output nothing between tool calls.** The only permitted text outputs in this skill are:
-1. The Router Gate welcome screen + `AskUserQuestion` menu — only when the prompt is generic/ambiguous, and only before Gate 0 begins.
-2. Firm disambiguation via `AskUserQuestion` — only when multiple firms match (during Gate 0).
-3. Gate 0.5 runtime question via `AskUserQuestion` — only when runtime is genuinely ambiguous.
-4. The verbatim eligibility messages (No ManCo, No Fund Admin, Try again) — exactly as written, no additions (during Gate 0.75).
+**The user-facing text this skill produces is:**
+1. The Router Gate welcome screen + `AskUserQuestion` menu — when the prompt is generic/ambiguous, before Gate 0 begins.
+2. Firm disambiguation via `AskUserQuestion` — when multiple firms match (during Gate 0).
+3. The Gate 0.5 runtime question via `AskUserQuestion` — when the runtime is genuinely ambiguous.
+4. The eligibility messages (No ManCo, No Fund Admin, Try again) — word for word as written, with nothing added around them (during Gate 0.75).
 
-Everything else is forbidden between the moment `<CAPABILITY>` is determined and the moment eligibility is confirmed. During Gate 0, Gate 0.5, and Gate 0.75, produce **zero text output** beyond the exceptions above — make tool calls only, with no text before, between, or after them. Specific examples of forbidden output:
-- "Now I have the Carta MCP tools. Proceeding with Gate 0/0.75." or any similar progress announcement.
-- "Server prefix is `<X>`", "Found server `<X>`", or any statement about the resolved prefix.
-- "Now checking…", "Now running…", "Now calling…", or any sentence describing an imminent tool call.
-- "Context set to…", "Eligibility check complete…", or any summary of a tool result.
-- "No skipping the gate result…", "I have it and must respond now.", or any internal reasoning surfaced to the user.
-- Any explanation of internal tool failures — never surface `context_snip` errors, compression notes, or other internal mechanics.
-- Any preamble or postamble added to the verbatim eligibility messages.
+Everywhere else in the routing and gate sequence, the reply is the tool call. Commentary that adds nothing for this reader:
+
+- Progress announcements — "Now I have the Carta MCP tools", "Proceeding with Gate 0", "Now checking…", "Now calling…".
+- Server or prefix details — "Server prefix is `<X>`", "Found server `<X>`".
+- Summaries of a tool result — "Context set to…", "Eligibility check complete…".
+- Tool inventories — "Only `<X>` surfaced", "this server lacks `list_contexts`". `list_contexts` and `call_tool` load lazily and are often absent from the visible tool list; that is expected and they still work, so there is nothing here worth reporting.
+- A description of a step in place of the step. When a step calls for text, that text *is* the reply: a sentence about the welcome screen leaves the reader without the screen.
+- Internal tool errors — `context_snip` failures, compression notes, and similar plumbing.
 
 ---
 
@@ -225,12 +233,15 @@ capability by its technical name.** Two paths only:
 **If ambiguous** (prompt matches no row, or skill was invoked with no specific task), emit a welcome screen first, then ask via `AskUserQuestion`.
 
 **Welcome screen** — output before calling `AskUserQuestion`, and before any
-Gate 0 tool call. **Format rule:** put each capability on its OWN line as a
-markdown bullet (`- `). Do NOT merge them into one paragraph — a blockquote
-with the items run together renders as an unreadable wall of text in Claude
-for Excel.
+Gate 0 tool call. It opens the reply; nothing precedes it. Emit the block below
+exactly as written. It is already complete as it stands: only the headline
+varies, and it carries its default inline, so emitting it verbatim is always
+correct. **Format rule:** put each
+capability on its OWN line as a markdown bullet (`- `). Do NOT merge them into
+one paragraph — a blockquote with the items run together renders as an
+unreadable wall of text in Claude for Excel.
 
-> **Connected to [ENTITY_NAME] via Carta Fund Admin.** *(Only use this line if `<ENTITY_NAME>` is already known from a prior chained call this session — e.g. a downstream skill's "back to budgeting menu" option. On a fresh invocation the firm hasn't been resolved yet, so use "Ready to help with your ManCo budget." instead.)*
+> **Ready to help with your ManCo budget.**
 
 Here's what I can help you with:
 
@@ -240,6 +251,10 @@ Here's what I can help you with:
 - **Analyze pacing & variance** — Compare actuals to budget, assess on-track status, drill into over/under lines.
 - **Model a what-if scenario** — Simulate headcount cuts, revenue shocks, new fund raises, or expansion hires.
 - **Consolidating financials** — Firm-wide P&L, balance sheet, trial balance, or cash flow.
+
+**Headline variant:** swap the first line for *"**Connected to [FIRM] via Carta
+Fund Admin.**"* only when a real firm name is already known from a chained call
+this session. Never emit a bracketed placeholder.
 
 **Format rule for `AskUserQuestion`:** pass each `question`, `label`, and `description` as **plain text** — no markdown (`**bold**`, backticks), no emoji, no line breaks. The chooser renders the string verbatim, so any markup shows as literal characters. The `**…**` in the tables below is doc formatting only; strip it when you pass the value.
 
