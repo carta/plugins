@@ -7,6 +7,7 @@ description: >
   Operates on the corporation's already-ingested CTC roster (HRIS-synced employees).
   Do NOT use for market-rate lookups for a role (use carta-compensation-benchmarks).
   Do NOT use for job classification (use carta-compensation-rolematcher).
+  In Claude Code, "comp dashboard" / "open the console" → carta-compensation-app instead.
   Do NOT use for fund performance scorecards or portfolio-level metrics.
 version: 0.1.0
 model: sonnet
