@@ -73,7 +73,10 @@ UUID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
     re.IGNORECASE,
 )
-MCP_TOOL_RE = re.compile(r"^mcp__[a-z0-9_-]+__[a-z_]+$", re.IGNORECASE)
+MCP_TOOL_RE = re.compile(
+    r"^mcp__[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}__[a-z_]+$",
+    re.IGNORECASE,
+)
 ARTIFACT_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]*[a-z0-9]$")
 
 
@@ -191,7 +194,11 @@ def main() -> int:
         print(f"error: initial_fund_uuid is not a valid UUID: {initial_fund_uuid!r}", file=sys.stderr)
         return 1
     if not MCP_TOOL_RE.match(mcp_tool):
-        print(f"error: mcp_tool_name is not a valid MCP tool slug: {mcp_tool!r}", file=sys.stderr)
+        print(
+            f"error: mcp_tool must use a UUID-form prefix "
+            f"(e.g. mcp__33b9b857-...__call_tool), not name-form; got: {mcp_tool!r}",
+            file=sys.stderr,
+        )
         return 1
     if not ARTIFACT_ID_RE.match(artifact_id):
         print(f"error: artifact_id is not a valid kebab-case slug: {artifact_id!r}", file=sys.stderr)

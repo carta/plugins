@@ -70,15 +70,23 @@ Call `call_tool({"name": "fa__list__entities", "arguments": { entity_types: "fun
 
 > **Run in parallel with Step 2** — see note in Step 2.
 
-The artifact must call the Carta `call_tool` tool by its **UUID-form prefix** (e.g., `mcp__33b9b857-8443-4b2d-b191-2d9b6c50eb86__call_tool`) — name-form prefixes like `mcp__carta-test__call_tool` fail with a 400 at runtime. The UUID is assigned per-installation by Cowork, so it must be discovered, not hardcoded.
+**3-A. Cowork preflight.** Use `ToolSearch` to confirm `mcp__cowork__create_artifact` exists in this session. If it does not, tell the user:
+
+> Live Artifacts require Cowork's native artifact hosting, which isn't available in this session. I can still pull the SOI data — would you like a text summary instead?
+
+Stop the workflow if the user declines.
+
+**3-B. Find the UUID-form Carta tool.** The artifact calls Carta at runtime via `window.cowork.callMcpTool`, which only resolves **UUID-form** prefixes (e.g. `mcp__33b9b857-8443-4b2d-b191-2d9b6c50eb86__call_tool`). Name-form prefixes (`mcp__carta-test__call_tool`, `mcp__Carta__call_tool`) fail with a 400 at runtime. The UUID is assigned per-installation by Cowork, so it must be discovered, not hardcoded.
 
 Procedure:
 
 1. **Find the UUID-form Carta `call_tool` tool.** Look for a tool matching `mcp__<UUID>__call_tool` where `<UUID>` is the 8-4-4-4-12 hex format. `ToolSearch` with query `"call_tool"` can help if the deferred-tools list is hard to scan. In most sessions there is exactly one such candidate — capture it.
 
-2. **If multiple UUID-form candidates exist** (e.g., both production and test Carta connectors are connected, or another MCP also uses a UUID prefix), disambiguate by calling `mcp__<UUID>__search_tools({"query": "dwh execute query"})` on each candidate and picking the one that exposes `dwh__execute__query`. If two still pass (production + test Carta), ask the user via `AskUserQuestion`.
+2. **If no UUID-form candidate exists:** Tell the user that a UUID-form Carta connector is required for the Live Artifact to work. The skill's own MCP calls work with name-form, but the artifact won't. Stop.
 
-3. **Capture the chosen `mcp__<UUID>__call_tool` string in a single local variable.** Reuse it as the fourth argument to the render script in Step 4 AND in `mcp_tools` at Step 5 (artifact allowlist). Step 5 also needs `mcp__<UUID>__set_context` — derive it from the call_tool string by swapping the suffix, since both tools live on the same connector UUID. If any of these strings drift, the artifact loads but the corresponding MCP call fails with `"Tool ... is not in this artifact's mcp_tools allowlist."`.
+3. **If multiple UUID-form candidates exist** (e.g., both production and test Carta connectors are connected, or another MCP also uses a UUID prefix), disambiguate by calling `mcp__<UUID>__search_tools({"query": "dwh execute query"})` on each candidate and picking the one that exposes `dwh__execute__query`. If two still pass (production + test Carta), ask the user via `AskUserQuestion`.
+
+4. **Capture the chosen `mcp__<UUID>__call_tool` string in a single local variable.** Reuse it as the fourth argument to the render script in Step 4 AND in `mcp_tools` at Step 5 (artifact allowlist). Step 5 also needs `mcp__<UUID>__set_context` and `mcp__<UUID>__welcome` — derive them from the call_tool string by swapping the suffix, since all three tools live on the same connector UUID. If any of these strings drift, the artifact loads but the corresponding MCP call fails with `"Tool ... is not in this artifact's mcp_tools allowlist."`.
 
 ### Step 4 — Write the funds file, then render the template
 
