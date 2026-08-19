@@ -1,0 +1,6 @@
+{
+  "carta-captable-home-build": {
+    "version": "0.5.0",
+    "headline": "The company selector now has a search box, so you can reach any company you have access to instead of only the first page of the list. Every example prompt names the company you picked, and each skill in the directory shows two or three prompts instead of one."
+  }
+}

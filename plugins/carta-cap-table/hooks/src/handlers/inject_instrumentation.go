@@ -8,6 +8,7 @@ import (
 	"com.carta.claude_plugins.hooks/internal/hookio"
 	"com.carta.claude_plugins.hooks/internal/plugin"
 	"com.carta.claude_plugins.hooks/internal/session"
+	"com.carta.claude_plugins.hooks/internal/tokenusage"
 	"com.carta.claude_plugins.hooks/registry"
 )
 
@@ -36,7 +37,8 @@ type instrumentationV2 struct {
 	FromHook       bool                `json:"from_hook"`
 	// Surface is the resolved Claude surface (e.g. "chat", "code-terminal"), or
 	// nil when the hook has no signal — the AI fallback fills it in then.
-	Surface *string `json:"surface"`
+	Surface          *string `json:"surface"`
+	CumulativeTokens *int64  `json:"cumulative_tokens,omitempty"`
 }
 
 // InjectInstrumentation injects an _instrumentation_v2 payload into the tool
@@ -75,17 +77,24 @@ func buildInstrumentationV2(ident plugin.Identity, evt hookio.InjectEvent, skill
 		namespaced[i] = ident.Name + ":" + s
 	}
 	surface := resolveSurface()
+
+	var tokens *int64
+	if total, ok := tokenusage.CumulativeSessionTokens(evt.TranscriptPath); ok {
+		tokens = &total
+	}
+
 	selfOnly := instrumentationV2{
-		Plugins:        []session.PluginRef{{Name: ident.Name, Version: ident.Version}},
-		Skills:         namespaced,
-		SessionID:      hookio.StrPtr(evt.SessionID),
-		PromptID:       hookio.StrPtr(evt.PromptID),
-		PermissionMode: hookio.StrPtr(evt.PermissionMode),
-		Effort:         evt.Effort,
-		AgentID:        hookio.StrPtr(evt.AgentID),
-		Model:          nil,
-		FromHook:       true,
-		Surface:        surface,
+		Plugins:          []session.PluginRef{{Name: ident.Name, Version: ident.Version}},
+		Skills:           namespaced,
+		SessionID:        hookio.StrPtr(evt.SessionID),
+		PromptID:         hookio.StrPtr(evt.PromptID),
+		PermissionMode:   hookio.StrPtr(evt.PermissionMode),
+		Effort:           evt.Effort,
+		AgentID:          hookio.StrPtr(evt.AgentID),
+		Model:            nil,
+		FromHook:         true,
+		Surface:          surface,
+		CumulativeTokens: tokens,
 	}
 
 	if err := session.WriteRecord(evt.SessionID, ident.Name, ident.Version, namespaced); err != nil {
@@ -98,16 +107,17 @@ func buildInstrumentationV2(ident plugin.Identity, evt hookio.InjectEvent, skill
 	}
 
 	return instrumentationV2{
-		Plugins:        plugins,
-		Skills:         mergedSkills,
-		SessionID:      hookio.StrPtr(evt.SessionID),
-		PromptID:       hookio.StrPtr(evt.PromptID),
-		PermissionMode: hookio.StrPtr(evt.PermissionMode),
-		Effort:         evt.Effort,
-		AgentID:        hookio.StrPtr(evt.AgentID),
-		Model:          hookio.StrPtr(model),
-		FromHook:       true,
-		Surface:        surface,
+		Plugins:          plugins,
+		Skills:           mergedSkills,
+		SessionID:        hookio.StrPtr(evt.SessionID),
+		PromptID:         hookio.StrPtr(evt.PromptID),
+		PermissionMode:   hookio.StrPtr(evt.PermissionMode),
+		Effort:           evt.Effort,
+		AgentID:          hookio.StrPtr(evt.AgentID),
+		Model:            hookio.StrPtr(model),
+		FromHook:         true,
+		Surface:          surface,
+		CumulativeTokens: tokens,
 	}
 }
 
