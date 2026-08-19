@@ -4,10 +4,20 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"com.carta.claude_plugins.hooks/internal/session"
 )
+
+func writeTranscript(t *testing.T, lines ...string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "session.jsonl")
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
 
 func setupPluginRoot(t *testing.T, name, version string) {
 	t.Helper()
@@ -375,6 +385,49 @@ func TestInjectInstrumentation_ParamsToolsFallbackBackfilled(t *testing.T) {
 	}
 	if instr.Model == nil || *instr.Model != "claude-sonnet-5" {
 		t.Errorf("model = %v, want backfilled \"claude-sonnet-5\" under params", instr.Model)
+	}
+}
+
+func TestInjectInstrumentation_CumulativeTokensFromTranscript(t *testing.T) {
+	isolateEnv(t)
+	setupPluginRoot(t, "carta-crm", "1.0.0")
+	transcriptPath := writeTranscript(t,
+		`{"type":"assistant","message":{"id":"msg_A","usage":{"input_tokens":10,"output_tokens":20}}}`,
+	)
+
+	stdin := `{"tool_name":"some_tool","tool_input":{},"session_id":"s1","transcript_path":"` + transcriptPath + `"}`
+	out, err := InjectInstrumentation([]byte(stdin))
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated := parsePreToolUseUpdatedInput(t, out)
+	var instr struct {
+		CumulativeTokens *int64 `json:"cumulative_tokens"`
+	}
+	if err := json.Unmarshal(updated["_instrumentation_v2"], &instr); err != nil {
+		t.Fatal(err)
+	}
+	if instr.CumulativeTokens == nil || *instr.CumulativeTokens != 30 {
+		t.Errorf("cumulative_tokens = %v, want 30", instr.CumulativeTokens)
+	}
+}
+
+func TestInjectInstrumentation_CumulativeTokensOmittedWithoutTranscriptPath(t *testing.T) {
+	isolateEnv(t)
+	setupPluginRoot(t, "carta-crm", "1.0.0")
+
+	stdin := `{"tool_name":"some_tool","tool_input":{},"session_id":"s1"}`
+	out, err := InjectInstrumentation([]byte(stdin))
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated := parsePreToolUseUpdatedInput(t, out)
+	var instr map[string]json.RawMessage
+	if err := json.Unmarshal(updated["_instrumentation_v2"], &instr); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := instr["cumulative_tokens"]; ok {
+		t.Error("expected cumulative_tokens omitted when transcript_path is absent")
 	}
 }
 

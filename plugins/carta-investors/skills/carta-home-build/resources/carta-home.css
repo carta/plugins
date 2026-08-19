@@ -1,0 +1,1437 @@
+@font-face {
+      font-family: "SangBleu Versailles";
+      src: url("data:font/woff2;base64,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") format("woff2");
+      font-weight: 400;
+      font-style: normal;
+    }
+
+    :root {
+      color-scheme: light dark;
+      --ink-color-global-text-default:               light-dark(#1A1A1A, #EDEDED);
+      --ink-color-global-text-subtle:                light-dark(#656B6B, #A7AAAA);
+      --ink-color-global-surface-background-default: light-dark(#FFFFFF, rgb(18 18 18));
+      /* Local, intentionally non-Ink: the elevated card surface used in dark mode.
+         #2C3030 is not the value of any Ink surface token, so it carries a --carta-*
+         name rather than shadowing an Ink token name with an invented value.
+         Rendered pixels are unchanged. */
+      --carta-surface-card-elevated:                 #2C3030;
+      /* One step further up the elevation stack: a card nested INSIDE a card
+         (e.g. .tearsheet-preview). Light arg is Ink's light surface-background-
+         underlay, so light mode is unchanged; dark arg is Ink's dark
+         surface-darkgray-default, the nearest Ink step to #444 — the next one
+         up, surface-lightgray-active (#656B6B), overshoots badly. Keeps the
+         nested card readable as elevated against the #2C3030 card. */
+      --carta-surface-card-nested:                   light-dark(#F1F1F1, #394040);
+      --ink-color-global-border-subtle:              light-dark(#DEDFDF, #2D2D2D);
+      --ink-color-global-border-default:             light-dark(#A7AAAA, #656B6B);
+      --ink-elevation-global-shadow-small:           0 4px 12px 0 rgb(0 0 0 / 0.08);
+      --ink-elevation-global-shadow-medium:          0 4px 20px 0 rgb(0 0 0 / 0.1);
+      --ink-elevation-global-shadow-large:           0 4px 20px 0 rgb(0 0 0 / 0.2);
+      --ink-font-global-family-prominent:            "SangBleu Versailles", Georgia, serif;
+      --ink-font-global-size-display-1:              28px;
+      --ink-font-global-leading-display-1:           48px;
+      --ink-size-global-radius-flat:                 0;
+      --ink-size-global-radius-subtle:               4px;
+      --ink-size-global-radius-default:              8px;
+      --ink-radius-pill:                             9999px;
+      /* Single-valued on purpose: the toast and the perf tooltip are
+         permanently-dark surfaces, so they must NOT flip with the theme —
+         light-dark() pairs there put dark text on a dark surface. */
+      --ink-color-global-brand-black:                #1A1A1A;
+      --ink-color-global-brand-white:                #FFFFFF;
+      /* Button tokens (Ink primary) */
+      --ink-button-background-color-primary-base-default: light-dark(#1A1A1A, #FFFFFF);
+      --ink-button-background-color-primary-base-hover:   light-dark(#202020, #CECFCF);
+      --ink-button-font-color-primary-base:               light-dark(#FFFFFF, #1A1A1A);
+      /* Info feedback (for What's New banner) */
+      --ink-color-global-feedback-info-subtle:       light-dark(#EAF0F8, #122948);
+      /* Feedback semantics — both deliberately depart from Ink's own values.
+         Ink ships feedback-positive-strong single-valued at green-70 (#2D9E90)
+         and negative-strong at red-70/red-40. As SMALL TEXT those miss WCAG AA
+         on the surfaces this artifact actually puts them on, so each arg is
+         moved along the same Ink brand ramp until it clears 4.5:1 on every one.
+         Signed values render on: light #FFFFFF (card), #F1F1F1 (SOI asset rows,
+         nested card) and #DEDFDF (row hover); dark #121212 (page, .ts-kpi),
+         #2C3030 (card) and #2D2D2D (SOI rows, row hover).
+           positive light green-90 #105242 -> 9.10 / 8.06 / 6.82
+                    dark  green-50 #5BC0B3 -> 8.60 / 6.13 / 6.32
+           negative light red-80   #A82020 -> 7.26 / 6.43 / 5.44
+                    dark  red-60   #EF7171 -> 6.49 / 4.62 / 4.77
+         Ink's own steps scored 3.28 / 2.90 / 2.46 and 4.54 / 4.02 / 3.40.
+         Nothing signed renders on --carta-surface-card-nested (#394040), where
+         red-60 would be 3.67:1 — keep it that way. */
+      --ink-color-global-feedback-positive-strong:   light-dark(#105242, #5BC0B3);
+      --ink-color-global-feedback-positive-subtle:   light-dark(#EBF7F6, #063A32);
+      --ink-color-global-feedback-negative-strong:   light-dark(#A82020, #EF7171);
+      --ink-color-global-feedback-negative-subtle:   light-dark(#FFEEEF, #401018);
+      --ink-color-global-feedback-warning-subtle:    light-dark(#FFFCED, #341C00);
+      /* Surfaces */
+      --ink-color-global-surface-background-underlay: light-dark(#F1F1F1, #2D2D2D);
+      --ink-color-global-surface-lightgray-default:  light-dark(#F1F1F1, #202020);
+      --ink-color-global-surface-lightgray-hover:    light-dark(#DEDFDF, #2D2D2D);
+      --ink-color-global-surface-background-overlay:  light-dark(rgb(0 0 0 / 0.8), rgb(80 80 80 / 0.8));
+      /* Text / links / borders */
+      --ink-color-global-link-default:               light-dark(#285DA3, #8BABD6);
+      --ink-color-global-border-active:              light-dark(#1A1A1A, #CECFCF);
+      /* Focus. This artifact never links tokens.css, so Ink's focus pair has to
+         be declared locally for the :focus-visible model below. */
+      --ink-color-global-border-focus-default:       light-dark(#285DA3, #8BABD6);
+      --ink-color-global-border-focus-light:         light-dark(#C0D1E9, #1A3E6D);
+      /* Warning text, always paired with feedback-warning-subtle behind it.
+         accessibility.md mandates yellow-80 (#B58A00) as the warning-text step
+         and forbids yellow-60/70 — but on its own light warning-subtle
+         (#FFFCED) yellow-80 is only 3.09:1. Dark keeps the mandated yellow-80
+         (5.03:1 on #341C00); light steps one darker to yellow-90 (7.17:1),
+         which is the direction the rule intends rather than the yellow-60/70 it
+         forbids. Carries a --carta-* name because the value is no longer a
+         single Ink palette step. */
+      --carta-warning-text:                          light-dark(#705010, #B58A00);
+      /* Chart chrome (axis ticks + legend labels). Canvas text is painted by
+         Chart.js, which cannot read light-dark() out of a custom property —
+         carta-home.html resolves this token through inkColor(). */
+      --carta-chart-label-color:                     light-dark(#656B6B, #FFFFFF);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: Inter, system-ui, -apple-system, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      background: var(--ink-color-global-surface-background-default);
+      color: var(--ink-color-global-text-default);
+      min-height: 100vh;
+    }
+
+    /* Ink focus model: recolor the border and add a 4px halo. The artifact
+       doesn't link tokens.css, so this reset has to be inlined. */
+    :focus-visible {
+      outline: 2px solid var(--ink-color-global-border-focus-default);
+      outline-offset: 1px;
+    }
+
+    /* Bordered controls take Ink's real treatment instead: recolor the 1px
+       border, add the 4px ring outside it, drop the outline. */
+    .perf-th-info:focus-visible,
+    select:focus-visible,
+    #soi-page-search:focus-visible,
+    #soi-page-fund-select:focus-visible,
+    #perf-page-fund-select:focus-visible {
+      border-color: var(--ink-color-global-border-focus-default);
+      box-shadow: 0 0 0 4px var(--ink-color-global-border-focus-light);
+      outline: none;
+    }
+
+    /* Rest borders for these three form controls live here rather than in the
+       template's inline style attributes: an inline `border` shorthand outranks
+       every stylesheet rule, so the focus recolor above could never win.
+       Values are exactly what the inline styles declared — no pixel change. */
+    #soi-page-search { border: 1px solid var(--ink-color-global-border-default); }
+    #soi-page-fund-select,
+    #perf-page-fund-select { border: 1px solid var(--ink-color-global-border-subtle); }
+
+    .soi-mixed-badge {
+      color: var(--ink-color-global-text-subtle);
+      font-style: italic;
+      font-weight: 400;
+    }
+
+    .container {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 28px 32px 64px;
+    }
+
+    /* ── Logo bar ── */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    .logo-wrap { display: flex; align-items: center; gap: 12px; }
+
+    /* ── Toggle ── */
+    /* ── Starred add card ── */
+
+    /* ── Dashboard popover — drops below the Dashboards title row ── */
+    .section-label-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: relative;
+      margin-bottom: 12px;
+    }
+
+    /* ── Page header ── */
+    .page-title {
+      font-family: var(--ink-font-global-family-prominent);
+      font-size: var(--ink-font-global-size-display-1);
+      font-weight: 400;
+      line-height: var(--ink-font-global-leading-display-1);
+      color: var(--ink-color-global-text-default);
+      margin-bottom: 8px;
+    }
+    .page-subtitle {
+      font-size: 15px;
+      color: var(--ink-color-global-text-subtle);
+      margin-bottom: 36px;
+      max-width: none;
+    }
+    /* ── Section headers ── */
+    .section-label {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--ink-color-global-text-default);
+      margin-bottom: 16px;
+    }
+
+    /* ── Card grid ── */
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+      margin-bottom: 40px;
+    }
+
+    /* Company logo on a light chip, overlaid bottom-left of a Plugin news thumb
+       when the card is a live content item (live-content.js). */
+    .cs-logo-chip {
+      position: absolute;
+      left: 12px;
+      bottom: 12px;
+      background: #FFFFFF;
+      border-radius: var(--ink-size-global-radius-subtle);
+      padding: 5px 8px;
+      box-shadow: var(--ink-elevation-global-shadow-small);
+      max-width: 60%;
+    }
+    .cs-logo-chip img {
+      display: block;
+      height: 20px;
+      width: auto;
+      max-width: 100%;
+      object-fit: contain;
+    }
+
+    /* ── Skill card ── */
+    .skill-card {
+      background: light-dark(var(--ink-color-global-surface-background-default), var(--carta-surface-card-elevated));
+      border: 1px solid var(--ink-color-global-border-subtle);
+      border-radius: 0;
+      box-shadow: var(--ink-elevation-global-shadow-small);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .card-header {
+      padding: 16px 20px 12px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .card-header-text { flex: 1; min-width: 0; }
+    .card-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--ink-color-global-text-default);
+      margin-bottom: 4px;
+    }
+    .card-desc {
+      font-size: 12px;
+      color: var(--ink-color-global-text-subtle);
+    }
+    .card-preview {
+      padding: 0 20px 8px;
+      flex: 1;
+    }
+    .card-footer {
+      padding: 12px 20px 16px;
+      border-top: 1px solid var(--ink-color-global-border-subtle);
+    }
+    .run-btn {
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--ink-color-global-link-default);
+      background: transparent;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .run-btn:hover { text-decoration: underline; }
+    .run-btn svg { width: 14px; height: 14px; }
+
+    /* ── Capabilities to try ── */
+    .cap-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 40px;
+    }
+    .cap-card {
+      border: 1px solid var(--ink-color-global-border-subtle);
+      box-shadow: var(--ink-elevation-global-shadow-small);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-height: 120px;
+      cursor: pointer;
+      transition: filter 0.12s;
+      position: relative;
+      overflow: hidden;
+    }
+    .cap-card:hover { filter: brightness(0.96); }
+    /* Dot pattern overlay: two radial-gradient tiers — coarser bright dots + finer dim dots —
+       at non-overlapping offsets so every 4th dot in the grid appears as an "accent" dot.
+       mask-image fades dots from invisible on the left to full opacity on the right. */
+    .cap-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image:
+        radial-gradient(circle, light-dark(rgba(110,60,220,0.30), rgba(180,130,255,0.30)) 1.5px, transparent 1.5px),
+        radial-gradient(circle, light-dark(rgba(110,60,220,0.12), rgba(180,130,255,0.12)) 1.5px, transparent 1.5px);
+      background-size: 20px 20px, 10px 10px;
+      background-position: 3px 3px, 8px 8px;
+      -webkit-mask-image: linear-gradient(to right, transparent 0%, transparent 50%, black 100%);
+      mask-image: linear-gradient(to right, transparent 0%, transparent 50%, black 100%);
+      pointer-events: none;
+      z-index: 0;
+    }
+    .cap-card-text, .cap-card-icon { position: relative; z-index: 1; }
+    /* Gradient fills — hex values pulled from Ink token definitions above */
+    /* light-dark() accepts <color> only — use it on each stop, not the whole gradient.
+       Light stops: near-white tint → feedback-subtle base (lightest Ink semantics).
+       Dark stops: pulled from the same Ink palette family, kept subtle. */
+    .cap-card-blue {
+      background: linear-gradient(145deg,
+        light-dark(#FFFFFF, #1E1438) 0%,
+        light-dark(#FFFFFF, #1E1438) 30%,
+        light-dark(#EDE8FF, #2A1C50) 100%
+      );
+    }
+    .cap-card-teal {
+      background: linear-gradient(145deg,
+        light-dark(#FFFFFF, #1A1035) 0%,
+        light-dark(#FFFFFF, #1A1035) 30%,
+        light-dark(#EAE4FF, #261848) 100%
+      );
+    }
+    .cap-card-amber {
+      background: linear-gradient(145deg,
+        light-dark(#FFFFFF, #201542) 0%,
+        light-dark(#FFFFFF, #201542) 30%,
+        light-dark(#EEE8FF, #2E2058) 100%
+      );
+    }
+    .cap-card-violet {
+      background: linear-gradient(145deg,
+        light-dark(#FFFFFF, #1C1240) 0%,
+        light-dark(#FFFFFF, #1C1240) 30%,
+        light-dark(#E8E0FF, #281A52) 100%
+      );
+    }
+    .cap-card-text {
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--ink-color-global-text-default);
+      flex: 1;
+    }
+    .cap-card-text::before { content: '\201C'; }
+    .cap-card-text::after  { content: '\201D'; }
+    .cap-card-icon {
+      align-self: flex-start;
+      margin-top: 10px;
+      background: none;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      color: var(--ink-color-global-text-default);
+      font-size: 11px;
+      font-style: normal;
+      font-family: inherit;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+    }
+
+    /* ── Preview table ── */
+    .tbl-label { font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-color-global-text-subtle); margin-bottom: 8px; display: none; }
+    .tbl-row.tbl-header .tbl-col-name,
+    .tbl-row.tbl-header .tbl-col-val,
+    .tbl-row.tbl-header .tbl-col-gl {
+      font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--ink-color-global-text-subtle);
+    }
+    .tbl-row {
+      display: flex;
+      align-items: center;
+      padding: 7px 0;
+      border-bottom: 1px solid var(--ink-color-global-border-subtle);
+    }
+    .tbl-row:last-child { border-bottom: none; }
+    .tbl-col-name { flex: 1; color: var(--ink-color-global-text-default); font-weight: 500; }
+    .tbl-col-val    { width: 64px; text-align: right; color: var(--ink-color-global-text-default); font-variant-numeric: tabular-nums; font-size: 12px; }
+    .tbl-col-gl     { width: 72px; text-align: right; font-variant-numeric: tabular-nums; font-size: 12px; }
+    .gl-pos { color: var(--ink-color-global-feedback-positive-strong); }
+    .gl-neg { color: var(--ink-color-global-feedback-negative-strong); }
+    .loading-row { color: var(--ink-color-global-text-subtle); font-style: italic; font-size: 12px; padding: 12px 0; }
+
+    /* ── Chart wrapper ── */
+    .chart-wrap { position: relative; height: 130px; }
+
+    /* ── Tear sheet preview ── */
+    .tearsheet-preview {
+      background: var(--carta-surface-card-nested);
+      border: 1px solid var(--ink-color-global-border-subtle);
+      border-radius: var(--ink-size-global-radius-subtle);
+      padding: 12px 16px;
+      font-size: 12px;
+    }
+    .ts-company-label {
+      font-size: 13px; font-weight: 600; color: var(--ink-color-global-text-default);
+      margin-bottom: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .ts-kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 8px; }
+    .ts-kpi { background: var(--ink-color-global-surface-background-default); border: 1px solid var(--ink-color-global-border-subtle); border-radius: var(--ink-size-global-radius-subtle); padding: 7px 9px; }
+    .ts-kpi-label { font-size: 9px; color: var(--ink-color-global-text-subtle); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px; }
+    .ts-kpi-val { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ts-kpi-val.pos { color: var(--ink-color-global-feedback-positive-strong); }
+    .ts-kpi-val.neg { color: var(--ink-color-global-feedback-negative-strong); }
+    .ts-409a { background: var(--ink-color-global-surface-background-default); border: 1px solid var(--ink-color-global-border-subtle); border-radius: var(--ink-size-global-radius-subtle); padding: 7px 9px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+    .ts-409a-label { font-size: 9px; color: var(--ink-color-global-text-subtle); text-transform: uppercase; letter-spacing: 0.06em; }
+    .ts-409a-date { font-size: 9px; color: var(--ink-color-global-text-subtle); margin-top: 1px; }
+    .ts-409a-val { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+
+    /* ── P&L / BS preview ── */
+    .fin-tbl { width: 100%; font-size: 11px; border-collapse: collapse; }
+    .fin-tbl thead th { 
+      text-align: right; 
+      font-size: 10px; 
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      color: var(--ink-color-global-text-subtle); 
+      padding: 0 0 6px;
+      border-bottom: 1px solid var(--ink-color-global-border-subtle);
+    }
+    .fin-tbl thead th:first-child { text-align: left; }
+    .fin-tbl tbody td { 
+      padding: 5px 0; 
+      text-align: right; 
+      font-variant-numeric: tabular-nums;
+      border-bottom: 1px solid var(--ink-color-global-border-subtle);
+    }
+    .fin-tbl tbody td:first-child { text-align: left; color: var(--ink-color-global-text-subtle); }
+    .fin-tbl tfoot td {
+      padding: 6px 0 0;
+      text-align: right;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+    .fin-tbl tfoot td:first-child { text-align: left; }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(60px);
+      background: var(--ink-color-global-brand-black);
+      color: var(--ink-color-global-brand-white);
+      font-size: 13px;
+      padding: 10px 20px;
+      border-radius: var(--ink-size-global-radius-subtle);
+      opacity: 0;
+      transition: transform 0.25s ease, opacity 0.25s ease;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    #toast.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+
+    /* ── Prompt popover ── */
+    .prompt-popover {
+      background: var(--ink-color-global-surface-background-default);
+      border: 1px solid var(--ink-color-global-border-subtle);
+      box-shadow: var(--ink-elevation-global-shadow-medium);
+      padding: 18px 20px;
+      z-index: 9999;
+      min-width: 300px;
+    }
+    .pop-subtitle {
+      font-size: 12px;
+      color: var(--ink-color-global-text-subtle);
+      margin-bottom: 12px;
+    }
+
+    /* ── Customize popover (floating, no backdrop) ── */
+    #customize-popover {
+      display: none;
+      position: fixed;
+      top: 64px; /* just below the sticky page header */
+      right: 16px;
+      width: 360px;
+      max-height: 480px;
+      overflow-y: auto;
+      z-index: 400;
+      background: var(--ink-color-global-surface-background-default);
+      border: 1px solid var(--ink-color-global-border-subtle);
+      box-shadow: var(--ink-elevation-global-shadow-medium);
+      padding: 18px 20px;
+    }
+    #customize-popover.open { display: block; }
+    .customize-popover-header {
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;
+      margin-bottom: 2px;
+    }
+    .customize-title { font-size: 13px; font-weight: 600; }
+    .customize-subtitle { font-size: 12px; color: var(--ink-color-global-text-subtle); line-height: 1.5; margin-bottom: 14px; }
+    .customize-close {
+      background: none; border: none; cursor: pointer; padding: 2px; flex-shrink: 0;
+      color: var(--ink-color-global-text-subtle);
+    }
+    /* No underline: the uppercase, letter-spaced type carries the hierarchy on
+       its own, and the rule separated nothing structural (Ink rule 7). */
+    .cust-section-label {
+      font-size: 10px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase;
+      color: var(--ink-color-global-text-subtle); margin: 16px 0 8px;
+    }
+    .cust-section-label:first-child { margin-top: 0; }
+    .cust-prompt-card {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 10px;
+      border: 1px solid var(--ink-color-global-border-subtle);
+      margin-bottom: 5px;
+      background: var(--ink-color-global-surface-background-default);
+      transition: background 0.12s;
+    }
+    .cust-prompt-card:hover { background: var(--ink-color-global-surface-lightgray-hover); }
+    .cust-prompt-text {
+      flex: 1; font-size: 13px; color: var(--ink-color-global-text-default); line-height: 1.35;
+    }
+    .cust-copy-btn {
+      flex-shrink: 0; background: none; border: 1px solid var(--ink-color-global-border-subtle);
+      border-radius: var(--ink-size-global-radius-subtle); padding: 4px 9px; cursor: pointer;
+      color: var(--ink-color-global-text-subtle); font-size: 11px; font-family: inherit;
+      display: flex; align-items: center; gap: 4px;
+      transition: border-color 0.12s, color 0.12s; white-space: nowrap;
+    }
+    .cust-copy-btn:hover { border-color: var(--ink-color-global-border-default); color: var(--ink-color-global-text-default); }
+    .cust-copy-btn.copied { border-color: var(--ink-color-global-feedback-positive-strong); color: var(--ink-color-global-feedback-positive-strong); }
+
+    /* ── Perf page chart grid ── */
+    /* Always 2 columns; drops to 1 below 600px via media query */
+    .perf-chart-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-top: 20px; }
+    .perf-chart-grid .chart-full { grid-column: 1 / -1; }
+    .perf-chart-card {
+      border: 1px solid var(--ink-color-global-border-subtle);
+      border-radius: 0; padding: 16px 20px;
+      background: light-dark(var(--ink-color-global-surface-background-default), var(--carta-surface-card-elevated));
+    }
+    .perf-chart-header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px; gap: 8px; }
+    .perf-chart-title { font-size: 12px; font-weight: 600; letter-spacing: .04em; color: var(--ink-color-global-text-default); }
+    .perf-chart-asof { font-size: 10px; color: var(--ink-color-global-text-subtle); text-align: right; white-space: nowrap; }
+    .perf-chart-wrap { position: relative; height: 180px; }
+    .perf-chart-wrap.tall { height: 240px; }
+    /* Metrics strip: flex row matching SOI style.
+       Single row on wide screens; wraps to 2-column grid on narrow screens. */
+    .perf-metrics-strip {
+      display: flex;
+      flex-wrap: nowrap;
+      gap: 0;
+      margin-bottom: 20px;
+      border: 1px solid var(--ink-color-global-border-subtle);
+    }
+    .perf-metric {
+      flex: 1 1 0;
+      min-width: 0;
+      padding: 12px 16px;
+      border-right: 1px solid var(--ink-color-global-border-subtle);
+    }
+    .perf-metric:last-child { border-right: none; }
+    .perf-metric-label { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-color-global-text-subtle); margin-bottom: 4px; }
+    .perf-metric-val { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink-color-global-text-default); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* ── Fund detail metrics table ── */
+    .perf-detail-table { border-collapse: collapse; width: 100%; font-size: 13px; margin-bottom: 24px; table-layout: auto; }
+    .perf-detail-table thead th { font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-color-global-text-subtle); padding: 8px 14px; text-align: right; border-bottom: 1px solid var(--ink-color-global-border-subtle); white-space: nowrap; }
+    .perf-detail-table thead th:first-child { text-align: left; }
+    .perf-detail-table thead th:not(:first-child) { width: 140px; }
+    .perf-detail-table tbody td { padding: 9px 14px; text-align: right; border-bottom: 1px solid var(--ink-color-global-border-subtle); font-variant-numeric: tabular-nums; color: var(--ink-color-global-text-default); white-space: nowrap; }
+    .perf-detail-table tbody td:first-child { text-align: left; color: var(--ink-color-global-text-default); font-weight: 500; white-space: nowrap; }
+    .perf-detail-table tbody tr:last-child td { border-bottom: none; }
+    .perf-legend { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 8px; }
+    .perf-legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--ink-color-global-text-subtle); }
+    .perf-legend-dot { width: 10px; height: 3px; border-radius: 1px; flex-shrink: 0; }
+    /* Narrow-screen overrides */
+    @media (max-width: 600px) {
+      #perf-detail-view { padding: 16px 14px !important; }
+      .perf-chart-grid { grid-template-columns: 1fr; }
+      .perf-chart-wrap { height: 160px; }
+      .perf-chart-wrap.tall { height: 200px; }
+      .perf-detail-table { font-size: 12px; }
+      .perf-detail-table tbody td, .perf-detail-table thead th { padding: 7px 10px; }
+      /* Both strips: 2×2 grid */
+      #soi-page-metrics { flex-wrap: wrap !important; }
+      #soi-page-metrics > * { flex: 0 0 50% !important; border-bottom: 1px solid var(--ink-color-global-border-subtle) !important; }
+      #soi-page-metrics > *:nth-child(even) { border-right: none !important; }
+      #soi-page-metrics > *:nth-last-child(-n+2) { border-bottom: none !important; }
+      .perf-metrics-strip { flex-wrap: wrap; }
+      .perf-metric { flex: 0 0 50%; border-bottom: 1px solid var(--ink-color-global-border-subtle); }
+      .perf-metric:nth-child(even) { border-right: none; }
+      .perf-metric:nth-last-child(-n+2) { border-bottom: none; }
+    }
+    /* Very narrow: both strips stack to 1 tile per row */
+    @media (max-width: 480px) {
+      #soi-page-metrics > * { flex: 0 0 100% !important; border-right: none !important; border-bottom: 1px solid var(--ink-color-global-border-subtle) !important; }
+      #soi-page-metrics > *:nth-last-child(-n+2) { border-bottom: 1px solid var(--ink-color-global-border-subtle) !important; }
+      #soi-page-metrics > *:last-child { border-bottom: none !important; }
+      .perf-metric { flex: 0 0 100%; border-right: none; border-bottom: 1px solid var(--ink-color-global-border-subtle); }
+      .perf-metric:nth-child(even) { border-right: none; }
+      .perf-metric:last-child { border-bottom: none; }
+    }
+
+    /* ── Perf page all-funds table ── */
+    .perf-table-scroll { overflow-x: auto; }
+    .perf-funds-table { min-width: 100%; border-collapse: collapse; font-size: 13px; table-layout: auto; }
+    .perf-funds-table thead th {
+      font-size: 10px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase;
+      color: var(--ink-color-global-text-subtle); padding: 10px 12px; text-align: right;
+      border-bottom: 2px solid var(--ink-color-global-border-subtle); white-space: nowrap;
+      position: sticky; top: 0; background: var(--ink-color-global-surface-background-default);
+    }
+    .perf-funds-table thead th:first-child { text-align: left; width: 220px; min-width: 220px; }
+    .perf-funds-table tbody td {
+      padding: 11px 12px; text-align: right;
+      border-bottom: 1px solid var(--ink-color-global-border-subtle);
+      font-variant-numeric: tabular-nums; color: var(--ink-color-global-text-default);
+      white-space: nowrap;
+    }
+    .perf-funds-table tbody td:first-child { text-align: left; white-space: normal; word-break: break-word; }
+    /* No row-level `cursor: pointer` — the <tr> no longer carries a click
+       handler; the fund name is a real <button>, so the cursor must not
+       promise a row action that doesn't exist. The hover tint stays as a
+       row-scanning aid. */
+    .perf-funds-table tbody tr:hover { background: var(--ink-color-global-surface-lightgray-hover); }
+    /* Text button styled as a link (borderless → Ink's outline + ring focus). */
+    .perf-fund-name-link {
+      background: none;
+      border: none;
+      padding: 0;
+      font: inherit;
+      font-weight: 500;
+      cursor: pointer;
+      color: var(--ink-color-global-link-default);
+      text-align: left;
+      text-decoration: none;
+    }
+    .perf-fund-name-link:hover { text-decoration: underline; }
+    .perf-fund-name-link:focus-visible {
+      outline: 2px solid var(--ink-color-global-border-focus-default);
+      outline-offset: 0;
+      box-shadow: 0 0 0 4px var(--ink-color-global-border-focus-light);
+      text-decoration: underline;
+    }
+    .perf-th-wrap { display: inline-flex; align-items: center; gap: 5px; }
+    /* A real <button> (keyboard-reachable tooltip trigger) painted to look
+       exactly like the <i> it replaced — hence the appearance/background/padding
+       resets on top of the original glyph rules. */
+    .perf-th-info {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 13px; height: 13px; border-radius: 50%;
+      border: 1px solid var(--ink-color-global-text-subtle);
+      color: var(--ink-color-global-text-subtle);
+      font-size: 8px; font-weight: 700; font-style: normal; font-family: inherit;
+      cursor: default; position: relative; flex-shrink: 0; line-height: 1;
+      -webkit-appearance: none; appearance: none;
+      background: none; padding: 0; margin: 0;
+      /* The <i> inherited the th's uppercase + tracking (so the glyph painted
+         as "I"); the UA button style would reset both, so re-inherit them. */
+      text-transform: inherit; letter-spacing: inherit;
+    }
+    /* tooltip rendered via JS into #perf-tip (position:fixed, escapes overflow:hidden) */
+    #perf-tip {
+      position: fixed; z-index: 9999; pointer-events: none;
+      background: var(--ink-color-global-brand-black);
+      color: var(--ink-color-global-brand-white); font-size: 11px; font-weight: 400;
+      letter-spacing: 0; text-transform: none; white-space: normal; width: 220px;
+      padding: 8px 10px; border-radius: var(--ink-size-global-radius-flat); line-height: 1.45;
+      opacity: 0; transition: opacity .15s;
+    }
+    #perf-tip.visible { opacity: 1; }
+    .perf-list-status { color: var(--ink-color-global-text-subtle); font-size: 13px; font-style: italic; padding: 60px 0; text-align: center; }
+
+    /* ── Fund dropdown (detail page) ── */
+    #perf-fund-title-btn {
+      display: flex; align-items: center; gap: 5px;
+      background: none; border: none; padding: 0;
+      cursor: default; font-family: inherit;
+    }
+    #perf-fund-dropdown {
+      display: none; position: absolute; z-index: 200;
+      top: calc(100% + 8px); left: 0;
+      background: var(--ink-color-global-surface-background-default);
+      border: 1px solid var(--ink-color-global-border-subtle);
+      border-radius: var(--ink-size-global-radius-subtle);
+      box-shadow: var(--ink-elevation-global-shadow-medium);
+      min-width: 220px; max-height: 260px; overflow-y: auto;
+    }
+    .perf-fund-dropdown-item {
+      display: block; width: 100%; text-align: left;
+      padding: 9px 14px; font-size: 13px; font-family: inherit;
+      background: transparent; border: none; cursor: pointer;
+      color: var(--ink-color-global-text-default); white-space: nowrap;
+    }
+    .perf-fund-dropdown-item:hover,
+    .perf-fund-dropdown-item.active {
+      background: var(--ink-color-global-surface-background-underlay);
+    }
+
+    /* ── Tab switcher ── */
+    .tab-bar {
+      display: flex;
+      justify-content: flex-start;
+      gap: 0;
+      border-bottom: 1px solid var(--ink-color-global-border-subtle);
+      margin-bottom: 28px;
+    }
+    .tab-btn {
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--ink-color-global-text-subtle);
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      padding: 10px 24px;
+      margin-right: 0;
+      cursor: pointer;
+      transition: color .15s, border-color .15s;
+    }
+    .tab-btn:hover { color: var(--ink-color-global-text-default); }
+    /* .tab-btn has no rest border to recolor (`border: none` plus a 2px
+       transparent bottom border that doubles as the active indicator), so it
+       takes Ink's borderless fallback — 2px outline + the same 4px ring.
+       Giving it a 1px transparent rest border to unlock the bordered treatment
+       would widen every tab by 2px and shift the whole tab bar. */
+    .tab-btn:focus-visible {
+      outline: 2px solid var(--ink-color-global-border-focus-default);
+      outline-offset: 0;
+      box-shadow: 0 0 0 4px var(--ink-color-global-border-focus-light);
+    }
+    .tab-btn.active {
+      color: var(--ink-color-global-text-default);
+      font-weight: 600;
+      border-bottom-color: var(--ink-color-global-border-active);
+    }
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+
+    /* ── What's New banner — Ink Banner recipe (from ink-banner.html reference) ── */
+    .ink-banner {
+      width: 100%;
+      margin: 0 0 28px;
+      padding: 12px 20px;
+      border: 0;
+      border-radius: 0;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+    .ink-banner--info { background: var(--ink-color-global-feedback-info-subtle); }
+    .ink-banner__body { flex: 1 1 auto; font-size: 14px; line-height: 24px; }
+    .ink-banner__title { font-weight: 600; color: var(--ink-color-global-text-default); margin: 0 0 2px; font-size: 14px; }
+    .ink-banner__message { color: var(--ink-color-global-text-subtle); margin: 0; font-size: 14px; line-height: 24px; }
+    .ink-banner__cta {
+      all: unset;
+      color: var(--ink-color-global-link-default);
+      font-weight: 500; cursor: pointer;
+      text-decoration: none;
+    }
+    .ink-banner__cta:hover { text-decoration: underline; }
+    /* Icon + label variant, matching the capabilities cards' copy affordance. Sits on
+       its own line under the message rather than inline, so the icon doesn't interrupt
+       a sentence. `all: unset` on the base class makes this inline, hence inline-flex. */
+    .ink-banner__cta--icon {
+      display: inline-flex;
+      align-items: center;
+      margin-top: 6px;
+      font-size: 11px;
+    }
+    /* `all: unset` above resets outline-style to none at author origin, which
+       beats the UA ring — without this rule the CTA has no focus indicator at
+       all. Same for .ink-banner__dismiss below. */
+    .ink-banner__cta:focus-visible {
+      outline: 2px solid var(--ink-color-global-border-focus-default);
+      outline-offset: 0;
+      box-shadow: 0 0 0 4px var(--ink-color-global-border-focus-light);
+    }
+    .ink-banner__dismiss {
+      all: unset;
+      flex: 0 0 auto;
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 24px; height: 24px;
+      cursor: pointer;
+      color: var(--ink-color-global-text-subtle);
+      border-radius: var(--ink-size-global-radius-subtle);
+      margin-top: 2px;
+    }
+    .ink-banner__dismiss:hover { color: var(--ink-color-global-text-default); background: light-dark(rgba(0,0,0,0.06), rgba(255,255,255,0.08)); }
+    .ink-banner__dismiss:focus-visible {
+      outline: 2px solid var(--ink-color-global-border-focus-default);
+      outline-offset: 0;
+      box-shadow: 0 0 0 4px var(--ink-color-global-border-focus-light);
+    }
+    .ink-banner__dismiss svg { width: 14px; height: 14px; }
+
+    /* The Directory heading uses .section-label directly (see template) — no
+       .dir-header / .dir-title / .dir-count rules needed. */
+
+    .dir-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 40px;
+    }
+    .dir-cat-card {
+      background: light-dark(var(--ink-color-global-surface-background-default), var(--carta-surface-card-elevated));
+      border: 1px solid var(--ink-color-global-border-subtle);
+      box-shadow: var(--ink-elevation-global-shadow-small);
+      padding: 20px 24px;
+    }
+    .dir-cat-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .dir-cat-name { font-size: 16px; font-weight: 600; color: var(--ink-color-global-text-default); }
+    .dir-cat-tagline {
+      font-size: 12px; color: var(--ink-color-global-text-subtle);
+      padding-bottom: 12px;
+      /* Ink's divider pair is base -> border-subtle, strong -> border-default.
+         base is tuned for the default dark surface (#121212); this card sits on
+         the elevated --carta-surface-card-elevated surface (#2C3030), against which subtle
+         (#2D2D2D) is invisible. Take the strong step in dark only, so light mode
+         keeps the same faint #DEDFDF hairline. */
+      border-bottom: 1px solid light-dark(var(--ink-color-global-border-subtle), var(--ink-color-global-border-default));
+      margin-bottom: 14px;
+    }
+    .dir-skill-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+    .dir-skill-name { font-size: 13px; font-weight: 500; color: var(--ink-color-global-text-default); margin-bottom: 3px; }
+    .dir-skill-prompt { display: flex; align-items: flex-start; gap: 5px; }
+    .dir-skill-prompt-text { flex: 1; font-size: 12px; color: var(--ink-color-global-text-subtle); line-height: 1.45; }
+    .dir-skill-note { font-size: 12px; color: var(--ink-color-global-text-subtle); line-height: 1.45; }
+    .dir-copy-btn {
+      flex-shrink: 0; background: none; border: none; padding: 1px 2px; cursor: pointer;
+      color: var(--ink-color-global-text-subtle); display: flex; align-items: center;
+      transition: color 0.12s;
+    }
+    .dir-copy-btn:hover { color: var(--ink-color-global-text-default); }
+    .dir-copy-btn.copied { color: var(--ink-color-global-text-subtle); }
+
+    /* ── Capital activity pinned card ── */
+    :root {
+      --ca-unpaid: var(--ink-color-global-feedback-negative-strong);
+      --ca-partial: var(--carta-warning-text);
+      --ca-paid: var(--ink-color-global-feedback-positive-strong);
+      --ca-warn: var(--carta-warning-text);
+    }
+    /* ── Capital activity detail overlay ── */
+    .ca-detail-overlay {
+      display: none; position: fixed; inset: 0; z-index: 1000;
+      background: rgba(0,0,0,.45); align-items: center; justify-content: center;
+    }
+    .ca-detail-overlay.ca-detail-visible { display: flex; }
+    .ca-detail-panel {
+      background: var(--ink-color-global-surface-background-default);
+      border: 1px solid var(--ink-color-global-border-subtle);
+      border-radius: var(--ink-size-global-radius-default);
+      box-shadow: var(--ink-elevation-global-shadow-large);
+      width: min(560px, 92vw); max-height: 80vh;
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .ca-detail-header {
+      padding: 16px 20px 12px; border-bottom: 1px solid var(--ink-color-global-border-subtle);
+      position: relative; flex-shrink: 0;
+    }
+    .ca-detail-title-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .ca-detail-fund { font-size: 15px; font-weight: 600; color: var(--ink-color-global-text-default); }
+    .ca-detail-meta { font-size: 12px; color: var(--ink-color-global-text-subtle); }
+    .ca-detail-close {
+      position: absolute; top: 14px; right: 16px;
+      background: none; border: none; cursor: pointer; font-size: 16px; line-height: 1;
+      color: var(--ink-color-global-text-subtle); padding: 4px;
+      border-radius: var(--ink-size-global-radius-subtle); transition: color .1s;
+    }
+    .ca-detail-close:hover { color: var(--ink-color-global-text-default); }
+    .ca-detail-body { flex: 1; overflow-y: auto; padding: 0 20px 20px; }
+    .ca-detail-summary {
+      display: flex; gap: 24px; padding: 14px 0 10px;
+      border-bottom: 1px solid var(--ink-color-global-border-subtle); margin-bottom: 12px;
+    }
+    .ca-detail-stat { display: flex; flex-direction: column; gap: 2px; }
+    .ca-detail-stat-val { font-size: 14px; font-weight: 600; color: var(--ink-color-global-text-default); font-variant-numeric: tabular-nums; }
+    .ca-detail-stat-lbl { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-color-global-text-subtle); }
+    .ca-unpaid-val { color: var(--ca-unpaid); }
+    .ca-paid-val   { color: var(--ca-paid); }
+    .ca-detail-table-wrap { overflow-x: auto; }
+    /* Fixed layout keeps the call and distribution modals on one column rhythm
+       and gives Partner a definite width to ellipsize against. Below min-width
+       the wrap scrolls rather than crushing the columns. */
+    .ca-detail-table { width: 100%; min-width: 500px; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
+    .ca-detail-table th {
+      text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .05em;
+      color: var(--ink-color-global-text-subtle); padding: 6px 8px 6px 0;
+      border-bottom: 1px solid var(--ink-color-global-border-subtle);
+      white-space: nowrap;
+    }
+    /* Partner claims whatever these leave. Percentages, not px: the widths sit on
+       the 10px `th` but must clear 12px `td` content, so em/ch would size off the
+       wrong font — and a proportion keeps Partner from absorbing every pixel lost
+       on a narrow panel. */
+    .ca-th-amount  { width: 22%; }
+    .ca-th-status  { width: 14%; }
+    .ca-th-date    { width: 15%; }
+    .ca-th-remind  { width: 18%; }
+    .ca-th-actions { width: 7%; }
+    /* Outranks `.ca-detail-table th`, which would otherwise left-align the header
+       away from the values under it. */
+    .ca-detail-table .ca-th-amount, .ca-detail-table .ca-td-amount { text-align: right; padding-right: 16px; }
+    .ca-detail-table .ca-th-remind, .ca-detail-table .ca-td-remind { text-align: right; }
+    .ca-detail-table .ca-th-actions, .ca-detail-table .ca-td-actions { text-align: right; padding-right: 0; }
+    .ca-detail-row td { padding: 7px 8px 7px 0; border-bottom: 1px solid var(--ink-color-global-border-subtle); vertical-align: middle; }
+    .ca-detail-row:last-child td { border-bottom: none; }
+    .ca-td-name { color: var(--ink-color-global-text-default); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ca-td-amount { color: var(--ink-color-global-text-default); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .ca-td-status { white-space: nowrap; }
+    .ca-td-date { color: var(--ink-color-global-text-subtle); white-space: nowrap; }
+    .ca-status {
+      font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
+      padding: 2px 6px; border-radius: var(--ink-size-global-radius-subtle); line-height: 1.4; display: inline-block;
+    }
+    .ca-status-unpaid  { background: var(--ink-color-global-feedback-negative-subtle); color: var(--ca-unpaid); }
+    .ca-status-partial { background: var(--ink-color-global-feedback-warning-subtle); color: var(--ca-partial); }
+    .ca-status-paid    { background: var(--ink-color-global-feedback-positive-subtle); color: var(--ca-paid); }
+    .ca-late { color: var(--ca-unpaid); font-weight: 500; }
+    .ca-td-remind { white-space: nowrap; }
+    .ca-remind-btn {
+      background: none; border: none;
+      cursor: pointer;
+      padding: 0;
+      font-size: 11px;
+      font-weight: 500;
+      font-family: inherit;
+      color: var(--ink-color-global-link-default);
+      text-decoration: none;
+      transition: text-decoration .1s;
+    }
+    .ca-remind-btn:hover { text-decoration: underline; }
+    .ca-remind-sub {
+      font-size: 9px;
+      margin-top: 1px;
+      color: var(--ink-color-global-text-subtle);
+    }
+
+    /* ── Remind confirmation dialog ── */
+    .ca-confirm-overlay {
+      display: none; position: fixed; inset: 0; z-index: 1100;
+      background: rgba(0,0,0,.45); align-items: center; justify-content: center;
+    }
+    .ca-confirm-overlay.ca-confirm-visible { display: flex; }
+    .ca-confirm-panel {
+      background: var(--ink-color-global-surface-background-default);
+      border: 1px solid var(--ink-color-global-border-subtle);
+      border-radius: var(--ink-size-global-radius-default);
+      box-shadow: var(--ink-elevation-global-shadow-large);
+      width: min(360px, 90vw);
+      padding: 20px;
+    }
+    .ca-confirm-title { font-size: 14px; font-weight: 600; color: var(--ink-color-global-text-default); margin-bottom: 8px; }
+    .ca-confirm-text { font-size: 13px; color: var(--ink-color-global-text-subtle); line-height: 1.5; margin-bottom: 20px; }
+    .ca-confirm-actions { display: flex; justify-content: space-between; align-items: center; }
+    .ca-confirm-cancel-btn {
+      background: none; border: none; cursor: pointer;
+      font-size: 13px; font-weight: 500; font-family: inherit;
+      color: var(--ink-color-global-text-subtle); padding: 8px 4px;
+    }
+    .ca-confirm-cancel-btn:hover { color: var(--ink-color-global-text-default); }
+    .ca-confirm-primary-btn {
+      background: var(--ink-button-background-color-primary-base-default);
+      border: none; cursor: pointer;
+      font-size: 13px; font-weight: 500; font-family: inherit;
+      color: var(--ink-button-font-color-primary-base);
+      padding: 8px 18px;
+      border-radius: var(--ink-size-global-radius-subtle);
+      white-space: nowrap;
+      transition: background .13s;
+    }
+    .ca-confirm-primary-btn:hover { background: var(--ink-button-background-color-primary-base-hover); }
+    .ca-confirm-primary-btn:disabled { opacity: .6; cursor: default; }
+
+    /* ── Row overflow menu ── */
+    .ca-td-actions { white-space: nowrap; }
+    .ca-row-menu-btn {
+      background: none; border: none; cursor: pointer;
+      padding: 0 2px; font-size: 15px; line-height: 1; font-family: inherit;
+      color: var(--ink-color-global-text-subtle);
+      border-radius: var(--ink-size-global-radius-subtle);
+      transition: color .1s;
+    }
+    .ca-row-menu-btn:hover { color: var(--ink-color-global-text-default); }
+    /* Fixed, and positioned from the button's rect in JS — see toggleCaRowMenu. */
+    .ca-row-menu {
+      display: none; position: fixed; z-index: 1150;
+      background: var(--ink-color-global-surface-background-default);
+      border: 1px solid var(--ink-color-global-border-subtle);
+      border-radius: var(--ink-size-global-radius-default);
+      box-shadow: var(--ink-elevation-global-shadow-large);
+      padding: 4px; min-width: 148px;
+    }
+    .ca-row-menu.ca-row-menu-open { display: block; }
+    .ca-row-menu-item {
+      display: block; width: 100%; text-align: left;
+      background: none; border: none; cursor: pointer;
+      font-size: 13px; font-family: inherit;
+      color: var(--ink-color-global-text-default);
+      padding: 8px 10px;
+      border-radius: var(--ink-size-global-radius-subtle);
+    }
+    .ca-row-menu-item:hover { background: var(--ink-color-global-surface-lightgray-hover); }
+
+    /* ── Email preview modal ── */
+    .ca-preview-overlay {
+      display: none; position: fixed; inset: 0; z-index: 1200;
+      background: rgba(0,0,0,.45); align-items: center; justify-content: center;
+    }
+    .ca-preview-overlay.ca-preview-visible { display: flex; }
+    .ca-preview-panel {
+      background: var(--ink-color-global-surface-background-default);
+      border: 1px solid var(--ink-color-global-border-subtle);
+      border-radius: var(--ink-size-global-radius-default);
+      box-shadow: var(--ink-elevation-global-shadow-large);
+      width: min(680px, 94vw); height: min(760px, 88vh);
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .ca-preview-header {
+      padding: 16px 20px; border-bottom: 1px solid var(--ink-color-global-border-subtle);
+      position: relative; flex-shrink: 0;
+    }
+    .ca-preview-title { font-size: 15px; font-weight: 600; color: var(--ink-color-global-text-default); }
+    .ca-preview-close {
+      position: absolute; top: 14px; right: 16px;
+      background: none; border: none; cursor: pointer; font-size: 16px; line-height: 1;
+      color: var(--ink-color-global-text-subtle); padding: 4px;
+      border-radius: var(--ink-size-global-radius-subtle); transition: color .1s;
+    }
+    .ca-preview-close:hover { color: var(--ink-color-global-text-default); }
+    .ca-preview-body {
+      flex: 1; overflow-y: auto; padding: 16px 20px;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .ca-preview-envelope {
+      border: 1px solid var(--ink-color-global-border-subtle);
+      border-radius: var(--ink-size-global-radius-subtle);
+      padding: 12px 14px; flex-shrink: 0;
+    }
+    .ca-preview-field { font-size: 13px; color: var(--ink-color-global-text-default); line-height: 1.6; }
+    .ca-preview-field-lbl { color: var(--ink-color-global-text-subtle); margin-right: 6px; }
+    /* The email is authored for a white client background, so the frame keeps
+       one regardless of the artifact's theme. */
+    .ca-preview-frame {
+      flex: 1; min-height: 360px; width: 100%;
+      border: 1px solid var(--ink-color-global-border-subtle);
+      border-radius: var(--ink-size-global-radius-subtle);
+      background: #fff;
+    }
+    .ca-preview-note { font-size: 11px; color: var(--ink-color-global-text-subtle); flex-shrink: 0; }
+    .ca-preview-footer {
+      padding: 12px 20px; border-top: 1px solid var(--ink-color-global-border-subtle);
+      display: flex; justify-content: flex-end; flex-shrink: 0;
+    }
+    .ca-preview-close-btn {
+      background: none; cursor: pointer;
+      border: 1px solid var(--ink-color-global-border-default);
+      font-size: 13px; font-weight: 500; font-family: inherit;
+      color: var(--ink-color-global-text-default);
+      padding: 8px 18px;
+      border-radius: var(--ink-size-global-radius-subtle);
+      transition: background .13s;
+    }
+    .ca-preview-close-btn:hover { background: var(--ink-color-global-surface-lightgray-hover); }
+    /* The confirm variant puts the snooze checkbox opposite the buttons. */
+    .ca-preview-footer-confirm { justify-content: space-between; align-items: center; gap: 16px; }
+    .ca-preview-footer-actions { display: flex; gap: 8px; align-items: center; }
+    .ca-snooze-label {
+      display: flex; align-items: center; gap: 8px; cursor: pointer;
+      font-size: 12px; color: var(--ink-color-global-text-subtle);
+    }
+    .ca-snooze-label input { cursor: pointer; margin: 0; }
+
+    /* ── Capital activity v2 cards (section row + card grid) ── */
+    #ca-section-v2 { /* container hook — no extra styles needed, inherits section layout */ }
+    .ca-section-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 16px;
+      margin-bottom: 40px;
+    }
+    .ca-card-v2 {
+      position: relative;
+      background: light-dark(var(--ink-color-global-surface-background-default), var(--carta-surface-card-elevated));
+      border: 1px solid var(--ink-color-global-border-subtle);
+      border-radius: 0;
+      padding: 16px 16px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      box-shadow: var(--ink-elevation-global-shadow-small);
+      transition: box-shadow .15s;
+    }
+    .ca-card-v2:hover { box-shadow: var(--ink-elevation-global-shadow-medium); }
+
+    /* dismiss × button */
+    .ca-v2-dismiss {
+      position: absolute;
+      top: 10px; right: 10px;
+      background: none; border: none;
+      cursor: pointer;
+      font-size: 12px;
+      color: var(--ink-color-global-text-subtle);
+      padding: 2px 4px;
+      border-radius: var(--ink-size-global-radius-subtle);
+      line-height: 1;
+      transition: color .1s, background .1s;
+    }
+    .ca-v2-dismiss:hover {
+      color: var(--ink-color-global-text-default);
+      background: light-dark(rgba(0,0,0,0.06), rgba(255,255,255,0.08));
+    }
+
+    /* title / fund labels */
+    .ca-v2-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ink-color-global-text-default);
+      padding-right: 20px;        /* clear the dismiss btn */
+      line-height: 1.3;
+    }
+    .ca-v2-fund {
+      font-size: 11px;
+      color: var(--ink-color-global-text-subtle);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* progress bar */
+    .ca-v2-progress-track {
+      height: 5px;
+      border-radius: var(--ink-radius-pill);
+      margin: 4px 0 2px;
+      background: var(--ink-color-global-surface-lightgray-default);
+      overflow: hidden;
+    }
+    .ca-v2-progress-fill {
+      height: 100%;
+      border-radius: var(--ink-radius-pill);
+      background: var(--ink-color-global-feedback-positive-strong);   /* --ca-paid inline */
+      transition: width .4s ease;
+    }
+
+    /* status row */
+    .ca-v2-status-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .ca-v2-pct {
+      font-size: 12px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      color: var(--ink-color-global-text-default);
+    }
+    .ca-v2-warn-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--ca-warn);
+      flex-shrink: 0;
+    }
+    .ca-v2-status-text {
+      font-size: 11px;
+      color: var(--ink-color-global-text-subtle);
+      margin-left: auto;
+      text-align: right;
+    }
+
+    /* footer: view button + due badge */
+    .ca-v2-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 4px;
+    }
+    .ca-v2-view-btn {
+      background: none; border: none;
+      cursor: pointer;
+      padding: 0;
+      font-size: 11px;
+      font-weight: 500;
+      font-family: inherit;
+      color: var(--ink-color-global-link-default);
+      text-decoration: none;
+      transition: text-decoration .1s;
+    }
+    .ca-v2-view-btn:hover { text-decoration: underline; }
+
+    .ca-v2-due-badge {
+      font-size: 10px;
+      font-weight: 500;
+      padding: 2px 7px;
+      border-radius: var(--ink-radius-pill);
+      /* default (no date) */
+      background: var(--ink-color-global-surface-lightgray-default);
+      color: var(--ink-color-global-text-subtle);
+    }
+
+    /* >14 days: gray */
+    .ca-v2-due-badge.ca-v2-due-far {
+      background: var(--ink-color-global-surface-lightgray-default);
+      color: var(--ink-color-global-text-subtle);
+    }
+
+    /* ≤14 days: amber */
+    .ca-v2-due-badge.ca-v2-due-soon {
+      background: var(--ink-color-global-feedback-warning-subtle);
+      color: var(--ca-warn);
+    }
+
+    /* overdue: red */
+    .ca-v2-due-badge.ca-v2-due-overdue {
+      background: var(--ink-color-global-feedback-negative-subtle);
+      color: var(--ca-unpaid);
+    }
+
+    /* "View all capital activity" footer link */
+    .ca-view-all-wrap {
+      padding: 4px 0 2px;
+      width: 100%;
+    }
+    .ca-view-all-link {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--ink-color-global-link-default);
+      text-decoration: none;
+    }
+    .ca-view-all-link:hover { text-decoration: underline; }
+
+/* ── Guided Tour ── */
+#tour-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 998;
+  background: transparent;
+  cursor: pointer;
+}
+#tour-spotlight {
+  display: none;
+  position: fixed;
+  z-index: 999;
+  border-radius: var(--ink-size-global-radius-flat);
+  pointer-events: none;
+  transition: top 0.2s ease, left 0.2s ease, width 0.2s ease, height 0.2s ease;
+}
+#tour-tooltip {
+  display: none;
+  position: fixed;
+  z-index: 1000;
+  width: 308px;
+  background: var(--ink-color-global-surface-background-default);
+  border: 1px solid var(--ink-color-global-border-subtle);
+  border-radius: var(--ink-size-global-radius-flat);
+  box-shadow: var(--ink-elevation-global-shadow-large);
+  padding: 20px 22px;
+  font-family: inherit;
+  transition: top 0.2s ease, left 0.2s ease;
+}
+.tour-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ink-color-global-border-default);
+  flex-shrink: 0;
+}
+.tour-dot.active { background: var(--ink-color-global-border-active); }
+/* Ink primary-button hover for the inline-styled #tour-next-btn in the template. */
+#tour-next-btn { transition: background 0.13s; }
+#tour-next-btn:hover { background: var(--ink-button-background-color-primary-base-hover); }
+
+    /* Honor the OS "reduce motion" setting (Ink a11y floor). Covers every
+       transition in this file, including the tour spotlight/tooltip moves. */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
+
+/* ── What's new ── */
+.whats-new-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+.wn-card {
+  background: light-dark(var(--ink-color-global-surface-background-default), var(--carta-surface-card-elevated));
+  border: 1px solid var(--ink-color-global-border-subtle);
+  box-shadow: var(--ink-elevation-global-shadow-small);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: box-shadow .15s;
+}
+.wn-card:hover { box-shadow: var(--ink-elevation-global-shadow-medium); }
+.wn-card-header { display: flex; align-items: center; gap: 8px; }
+.wn-tag {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 20px;
+  background: light-dark(#ede8fb, #2a1f4a);
+  color: light-dark(#6e3cdc, #c4a0ff);
+}
+.wn-card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-color-global-text-default);
+  line-height: 1.3;
+}
+.wn-card-body {
+  font-size: 12px;
+  color: var(--ink-color-global-text-subtle);
+  line-height: 1.5;
+  flex: 1;
+}
+.wn-copy-btn {
+  margin-top: 8px;
+  align-self: flex-start;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-color-global-link-default);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.wn-copy-btn:hover { opacity: 0.75; }
+
+/* ── Plugin news ── */
+.plugin-news-grid {
+  display: grid;
+  /* auto-fit instead of a fixed 3-up: Carta Home renders in a side panel that can
+     get narrow, and a 16:9 thumbnail stops reading below roughly 220px. */
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-bottom: 32px;
+}
+.plugin-news-card {
+  display: flex;
+  flex-direction: column;
+  background: light-dark(var(--ink-color-global-surface-background-default), var(--carta-surface-card-elevated));
+  border: 1px solid var(--ink-color-global-border-subtle);
+  border-radius: var(--ink-size-global-radius-flat);
+  box-shadow: var(--ink-elevation-global-shadow-small);
+  overflow: hidden;
+  /* each card is an <a>, so the UA underline and link color have to be cleared */
+  text-decoration: none;
+  color: var(--ink-color-global-text-default);
+  transition: box-shadow .15s;
+}
+.plugin-news-card:hover { box-shadow: var(--ink-elevation-global-shadow-medium); }
+/* Bordered component, so it takes Ink's border-recolor + ring rather than the bare outline. */
+.plugin-news-card:focus-visible {
+  border-color: var(--ink-color-global-border-focus-default);
+  box-shadow: 0 0 0 4px var(--ink-color-global-border-focus-light);
+  outline: none;
+}
+.plugin-news-thumb {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  background: var(--ink-color-global-surface-lightgray-default);
+}
+/* The --fake and --overlay thumbs are <div>s that center a play glyph; --overlay
+   also holds a full-bleed <img> that the glyph sits on top of. */
+.plugin-news-thumb--fake,
+.plugin-news-thumb--overlay {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.plugin-news-fake-play,
+.plugin-news-play-overlay {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--ink-radius-pill);
+  background: var(--ink-color-global-surface-background-default);
+  color: var(--ink-color-global-text-default);
+  box-shadow: var(--ink-elevation-global-shadow-small);
+  font-size: 14px;
+  line-height: 1;
+  padding-left: 2px;  /* ▶ carries left side bearing, so nudge it back to optical center */
+  opacity: .92;
+}
+.plugin-news-play-overlay { position: absolute; }
+.plugin-news-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px 16px;
+}
+.plugin-news-tag {
+  align-self: flex-start;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: var(--ink-size-global-radius-subtle);
+  background: var(--ink-color-global-surface-lightgray-default);
+  color: var(--ink-color-global-text-subtle);
+}
+.plugin-news-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--ink-color-global-text-default);
+}
+.plugin-news-desc {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-color-global-text-subtle);
+}
+/* The card itself is the <a>; this is a visual link cue only (see renderLiveContent). */
+.plugin-news-cta {
+  margin-top: 2px;
+  align-self: flex-start;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-color-global-link-default);
+}
