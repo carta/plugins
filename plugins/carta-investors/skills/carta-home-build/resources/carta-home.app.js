@@ -1519,19 +1519,44 @@ function renderCapabilities(recs) {
   const colors = ["cap-card-blue", "cap-card-teal", "cap-card-amber", "cap-card-violet"];
   const copySvg = '<svg width="11" height="11" viewBox="0 0 16 16" fill="none" style="margin-right:5px;vertical-align:middle;"><rect x="5" y="5" width="9" height="9" rx="1" stroke="currentColor" stroke-width="1.4"/><path d="M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>Copy this prompt';
 
-  // Static prompts used to pad when user has fewer than 4 personalized recs
+  // Static prompts used to pad when user has fewer than 4 personalized recs.
+  // `topics` drive de-duplication: a pad is skipped when a personalized prompt
+  // already covers the same subject, so we never show two cards about one thing.
   const staticPad = [
-    "Use my firm's tear sheet template and generate tear sheets for this quarter",
-    "Show me my firm's balance sheet as of this month",
-    "What is our regulatory AUM",
-    "Compare YTD actuals against the budget",
+    {
+      text: "Use my firm's tear sheet template and generate tear sheets for this quarter",
+      topics: ["tear sheet", "tearsheet"],
+    },
+    {
+      text: "Show me my firm's balance sheet as of this month",
+      topics: ["balance sheet"],
+    },
+    {
+      text: "What is our regulatory AUM",
+      topics: ["regulatory aum", "aum", "assets under management"],
+    },
+    {
+      text: "Compare YTD actuals against the budget",
+      topics: ["budget", "actuals"],
+    },
   ];
 
   const prompts = live.slice(0, 4).map(r => r.recommended_prompt);
-  // Pad to 4 with static prompts not already shown
-  for (const s of staticPad) {
+  const haystack = prompts.join(" ").toLowerCase();
+  const covered = pad => pad.topics.some(t => haystack.includes(t));
+
+  // Pad to 4, preferring prompts on subjects the personalized set doesn't cover.
+  // Each duplicate filtered here is a rec already occupying a card, so the
+  // preferred pass alone fills the grid in every case except one prompt matching
+  // two pads. The second pass backfills from what was skipped so the grid is
+  // always 4 cards.
+  for (const pad of staticPad) {
     if (prompts.length >= 4) break;
-    if (!prompts.includes(s)) prompts.push(s);
+    if (!covered(pad) && !prompts.includes(pad.text)) prompts.push(pad.text);
+  }
+  for (const pad of staticPad) {
+    if (prompts.length >= 4) break;
+    if (!prompts.includes(pad.text)) prompts.push(pad.text);
   }
 
   dynamic.innerHTML = prompts.map((prompt, i) => {
