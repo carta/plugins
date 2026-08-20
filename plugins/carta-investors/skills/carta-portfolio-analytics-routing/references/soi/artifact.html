@@ -1365,7 +1365,7 @@
         // call" error. Centralized here so every call site (including the retry
         // and the welcome recovery call) gets it, instead of each caller having to
         // remember it individually.
-        const INSTRUMENTATION_V2 = { skills: ['carta-investors:carta-soi'] };
+        const INSTRUMENTATION_V2 = { skills: ['carta-investors:carta-soi'], from_ui: true };
 
         function withInstrumentation(args) {
             return { ...args, _instrumentation_v2: INSTRUMENTATION_V2 };
