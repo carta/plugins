@@ -179,6 +179,8 @@ async function fetchPartnerRows(fundUuid, activityId, dueDate) {
         amountReceived: parseFloat(r.amount_received ?? 0),
         paymentStatus: r.payment_status ?? 'unpaid',
         paidDate: r.paid_date,
+        // No `?? false`: canRemind needs unset kept distinct from false.
+        emailNoticeEnabled: r.email_notice_enabled,
         lastReminded: r.last_reminded_date ?? null,
         daysLate: daysPastDue(dueDate),
         fundUuid,
@@ -211,9 +213,20 @@ function fmtRemindedOn(ts) {
   return `${p(dt.getMonth() + 1)}/${p(dt.getDate())}/${String(dt.getFullYear()).slice(-2)}`;
 }
 
+// The send silently drops email-disabled rows, so a button there would lie. Only
+// an explicit false disqualifies — the backend reads unset as enabled.
+function canRemind(r) {
+  return r.emailNoticeEnabled !== false;
+}
+
 // An already-reminded row offers "Resend" over its last-reminded date, so the
 // GP can see which LPs have been chased.
 function remindCellInner(r, activityId) {
+  if (!canRemind(r)) {
+    return `<span class="ca-remind-off"
+      title="Email notices are disabled for this investor, so a reminder would not reach them."
+      >Email disabled</span>`;
+  }
   const remindedOn = r.lastReminded ? fmtRemindedOn(r.lastReminded) : null;
   return `<button class="ca-remind-btn"
       data-row-id="${escHtml(r.rowId)}"
@@ -226,9 +239,10 @@ function remindCellInner(r, activityId) {
     remindedOn ? `<div class="ca-remind-sub">Reminded ${remindedOn}</div>` : ''}`;
 }
 
-// The preview needs the interest id, so a row without one gets no menu.
+// The preview needs the interest id, and previews an email a disabled row will
+// never get, so both cases lose the menu.
 function rowMenuCellInner(r, activityId) {
-  if (r.partnerId == null) return '';
+  if (r.partnerId == null || !canRemind(r)) return '';
   return `<button class="ca-row-menu-btn"
       aria-label="More actions"
       aria-haspopup="true"

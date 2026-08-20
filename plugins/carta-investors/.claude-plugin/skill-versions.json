@@ -1,6 +1,6 @@
 {
   "carta-home-build": {
-    "version": "1.6.0",
-    "headline": "Carta Home now flags when a newer version is ready, so you know when to rebuild."
+    "version": "1.7.0",
+    "headline": "Capital call rows now show \"Email disabled\" instead of a Send Reminder button when an investor's email notices are turned off."
   }
 }

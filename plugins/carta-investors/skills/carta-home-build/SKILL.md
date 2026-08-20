@@ -75,7 +75,8 @@ You never need to read the assembled HTML — see "Source layout" below.
   listing each LP partner's amount, status, and date — paid date once paid, days late while
   outstanding. On a capital call, unpaid partners get **Send Reminder** (**Resend**, over the
   last-reminded date, once one has gone out), which confirms and then sends the email via
-  `fa:send:capital-call-reminder`.
+  `fa:send:capital-call-reminder`. Rows with `email_notice_enabled: false` show a muted
+  **Email disabled** and no menu — the backend drops those sends silently.
 
 ## MCP tools required inside the artifact
 

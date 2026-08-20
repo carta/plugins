@@ -938,6 +938,11 @@
       margin-top: 1px;
       color: var(--ink-color-global-text-subtle);
     }
+    /* The button's slot without its affordance — not fixable from this panel. */
+    .ca-remind-off {
+      font-size: 11px;
+      color: var(--ink-color-global-text-subtle);
+    }
 
     /* ── Remind confirmation dialog ── */
     .ca-confirm-overlay {
