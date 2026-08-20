@@ -52,6 +52,7 @@ Claude will collect any missing required information, call the right MCP tools, 
 | `search-deals` | "find a deal", "search deals", "show me deals for [company]" |
 | `search-notes` | "find a note", "search notes", "look up a note" |
 | `search-fundraisings` | "find a fundraising", "search fundraisings", "show fundraising pipeline" |
+| `search-reports` | "run my report", "run the [name] report", "what reports do we have" |
 
 ### Update records
 | Skill | Trigger phrases |

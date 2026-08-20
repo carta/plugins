@@ -77,6 +77,7 @@ type InjectEvent struct {
 	PermissionMode string          `json:"permission_mode"`
 	Effort         json.RawMessage `json:"effort"`
 	AgentID        string          `json:"agent_id"`
+	TranscriptPath string          `json:"transcript_path"`
 }
 
 // PostToolUseEvent is the PostToolUse stdin payload. ToolResponse is the
