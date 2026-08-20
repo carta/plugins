@@ -2,7 +2,7 @@
 async function _mcp(tool, args) {
   return window.cowork.callMcpTool(
     "mcp__{{CARTA_MCP_ID}}__" + tool,
-    Object.assign({}, args, { _instrumentation_v2: { skills: [], from_ui: true } })
+    Object.assign({}, args, { _instrumentation_v2: { skills: ['carta-investors:carta-home-build'], from_ui: true } })
   );
 }
 
