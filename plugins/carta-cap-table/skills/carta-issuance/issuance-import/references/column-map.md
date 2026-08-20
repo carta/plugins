@@ -53,6 +53,7 @@ Synonyms beyond those two are the obvious hand-rolled variants (`Grantee`,
 | HMRC Notified · HMRC Notification | `is_hmrc_notified` |
 | HMRC Notified Date · HMRC Notification Date | `hmrc_notified` (also sets `is_hmrc_notified`) |
 | ATO Notified · ATO Notification | `is_ato_notified` |
+| Employment Related · Employment Related Securities · Employment-Related · ERS | `employment_related` — an explicit "No" carries through, unlike the yes/no flags above (a blank is what `validate_drafts` rejects on Unapproved grants) |
 | Expiration Date · Grant Expiration Date · Expiry Date · Expiration · Grant Expiry | `grant_expiration_date` |
 | Equity Plan Name · Equity Plan · Plan · Plan Name · Option Plan · Equity Plan For RSAs | *set-level* → `equity_plan_id` |
 

@@ -70,6 +70,9 @@ RELATIONSHIP_CHOICES = [
 # shows neither — these fields don't exist server-side for them.
 HMRC_SO_TYPES = {"EMI"}
 ATO_SO_TYPES = {"Startup Concessions", "Non-Concessional", "ZEPO"}
+# Tri-state, not a flag: validate_drafts rejects an unanswered designation,
+# but "No" is a valid answer.
+EMPLOYMENT_RELATED_SO_TYPES = {"Unapproved"}
 
 # data-value matches the MCP `stakeholder_kind` contract (payload-reference.md)
 # — INDIVIDUAL/NON-INDIVIDUAL, not the raw Django enum's ORGANIZATION.
@@ -973,6 +976,22 @@ def build_stakeholder_block(row: Dict[str, Any], security_type: str, data: Dict[
             f'{" checked" if row.get("is_ato_notified") else ""} onchange="onStakeInput()"/> ATO has been notified</label>',
             sectype="option_grant", conditional_on="so_type_au", hidden=(so_type not in ATO_SO_TYPES),
             notes=notes.pop("is_ato_notified", None),
+        ))
+        emp_related = row.get("employment_related")
+        rows_html.append(_kv_row(
+            "Employment related",
+            f'<p class="field-hint">Was this grant acquired by reason of employment? Required for '
+            f'Unapproved grants so they are reported correctly in the HMRC Other ERS annual return.</p>'
+            f'<div class="toggle-row">'
+            f'<button type="button" class="toggle{_sel(emp_related is True)}" data-group="employment-related" '
+            f'data-value="yes" onclick="pick(this)">Yes</button>'
+            f'<button type="button" class="toggle{_sel(emp_related is False)}" data-group="employment-related" '
+            f'data-value="no" onclick="pick(this)">No</button></div>',
+            sectype="option_grant",
+            conditional_on="so_type_employment_related",
+            hidden=(so_type not in EMPLOYMENT_RELATED_SO_TYPES),
+            required=True,
+            notes=notes.pop("employment_related", None),
         ))
         rows_html.append(_advanced_accordion_grant(row, accel_templates, no_vesting, notes))
     else:

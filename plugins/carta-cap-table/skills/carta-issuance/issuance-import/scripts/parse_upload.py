@@ -104,7 +104,7 @@ ROW_KEYS = {
     "option_type", "exercise_price", "document_set_id", "custom_label",
     "grant_reason", "early_exercise", "auto_exercise_at_vest",
     "is_flexible_issue_date", "is_hmrc_notified", "hmrc_notified",
-    "is_ato_notified", "grant_expiration_date",
+    "is_ato_notified", "grant_expiration_date", "employment_related",
     # certificate
     "share_class_prefix", "price_per_share", "legend_id", "prefix_number",
     "rule_144_mode", "rule_144_date", "rule_144_reason", "cash_paid",
@@ -168,6 +168,8 @@ _syn("auto_exercise_at_vest", "Auto Exercise At Vest", "Auto Exercise")
 _syn("is_hmrc_notified", "HMRC Notified", "HMRC Notification")
 _syn("hmrc_notified", "HMRC Notified Date", "HMRC Notification Date")
 _syn("is_ato_notified", "ATO Notified", "ATO Notification")
+_syn("employment_related", "Employment Related", "Employment Related Securities",
+     "Employment-Related", "ERS")
 # NB: the importer template also has an "Exercise Expiration Date" column — the
 # post-termination exercise window, a different concept. It stays unmapped (and
 # so gets reported), and _norm keeps the two header keys distinct.
@@ -582,6 +584,16 @@ def _build_grant_fields(record: Dict[str, Any], row: Dict[str, Any]) -> None:
             _note(row, field, raw, "couldn't read this as yes/no")
         elif flag:
             row[field] = True
+
+    # Kept out of the loop above, which drops a falsey answer: "No" is the
+    # answer that satisfies the Unapproved validation, so carry it through.
+    emp_raw = _cell(record, "employment_related")
+    if _text(emp_raw):
+        emp_flag = coerce_bool(emp_raw)
+        if emp_flag is None:
+            _note(row, "employment_related", emp_raw, "couldn't read this as yes/no")
+        else:
+            row["employment_related"] = emp_flag
 
     hmrc = coerce_date(_cell(record, "hmrc_notified"))
     if hmrc:

@@ -37,9 +37,13 @@ means **omit the key entirely** from the payload — see [Row templates](../SKIL
 acceleration**), `notes`, `custom_label`, `early_exercise`, `auto_exercise_at_vest`,
 `is_flexible_issue_date`, `grant_reason`.
 
-`is_hmrc_notified` / `hmrc_notified` and `is_ato_notified` are already conditionally absent
-from the row unless the surface's `so_type` matched (EMI, and the three AU types,
-respectively), so no additional gating is needed here.
+`is_hmrc_notified` / `hmrc_notified`, `is_ato_notified`, and `employment_related` are already
+conditionally absent from the row unless the surface's `so_type` matched (EMI, the three AU
+types, and `Unapproved`, respectively), so no additional gating is needed here.
+
+Pass `employment_related` through as the boolean it is — **do not coerce a `false` to omitted**.
+`false` ("No") is the answer that satisfies the Unapproved validation; only a missing value
+fails it.
 
 ---
 

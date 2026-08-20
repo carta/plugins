@@ -74,7 +74,9 @@ schedule silently reverts to none), `early_exercise`, `auto_exercise_at_vest`,
 when the reconstructed row's `option_type` is `"EMI"`; a row that's since moved to a
 different so_type via reconstruction should not carry a stale HMRC value across (mirrors
 `build_config.py`'s own so_type-scoped clearing). **AU-types-only** (`Startup Concessions`/
-`Non-Concessional`/`ZEPO`): `is_ato_notified`, same rule.
+`Non-Concessional`/`ZEPO`): `is_ato_notified`, same rule. **`Unapproved`-only:**
+`employment_related`, same rule — and carry `false` across as faithfully as `true`, since
+dropping an explicit "No" back to unanswered re-breaks the validation the answer cleared.
 
 **Certificate:** `prefix`→`share_class_prefix`; `law_firm_price`→`price_per_share`;
 `legend_id`→same; `board_approval_date`. **Compare `rule_144_date` to `issue_date`

@@ -53,6 +53,7 @@ Contents: [Common fields](#common-fields-both-flows) ·
 | `vesting_start_date` | if `vesting_template` set | `MM/DD/YYYY` only (CharField) | |
 | `acceleration_template` | optional | int | |
 | `dividend_accrual_start_date` | when share class has non-cash dividends | `YYYY-MM-DD` or `MM/DD/YYYY` | Required for non-cash dividend share classes; server rejects when set on cash / no-dividend share classes. Omit entirely outside that case |
+| `employment_related` | optional — UK issuers | bool (Yes/No) | UK HMRC "Other ERS" designation. Accepted, but **not collected by carta-issuance** — unlike Unapproved option grants, no certificate validation rule requires it, so the panel doesn't ask. Remains valid server-side for other callers |
 
 ## Option-grant-only fields
 
@@ -76,6 +77,7 @@ Contents: [Common fields](#common-fields-both-flows) ·
 | `is_hmrc_notified` | EMI only, optional | bool | Cleared for other `so_type` |
 | `hmrc_notified` | EMI only, optional | `YYYY-MM-DD` or `MM/DD/YYYY` | Stored as `DateTimeField` on the draft model — server normalises both inputs |
 | `is_ato_notified` | ESS/Non-Concessional/ZEPO only, optional | bool | |
+| `employment_related` | **`Unapproved` — required** | bool (Yes/No) | UK HMRC "Other ERS" designation. `validate_drafts` rejects a blank one, so **collect it up front**. `No` is a valid answer; only unanswered fails. Not required for `EMI` / `CSOP` (own returns) — omit for every other `so_type`. See [so_type auto-fill rules](#so_type-auto-fill-rules) |
 | `grant_reason` | optional | enum | See [Picklists](#picklists) — schema-enforced, not free text |
 | `employee_id`, `cost_center`, `job_title`, `salary` | optional | string / decimal | Pass-through — **not collected by carta-issuance** (design feedback dropped these from the panel entirely; they remain valid server-side for other callers) |
 
@@ -147,6 +149,14 @@ Apply before review. Tag each as `(autofill — <so_type> rule)`. Override only 
 
 **ATO field** — show `is_ato_notified` only when `so_type ∈ {Startup Concessions, Non-Concessional, ZEPO}`.
 
+**`employment_related`** — **collect up front when `so_type = Unapproved`**, never leave it to validation. `validate_drafts` hard-fails a blank one: *"Unapproved grants must be designated as employment related so they can be reported correctly in the HMRC Other ERS annual return. Select Yes or No."* Because the draft set already exists by then, the admin is stranded mid-flow — ask at collection instead.
+
+Yes/No, and **`No` is a real answer** — only "unanswered" fails. Ask plainly: *was this grant acquired by reason of employment?* (HMRC's ITEPA 2003 Part 7 concept; the Other ERS annual return only covers grants flagged as employment related, so a blank silently drops the grant out of the return).
+
+`EMI` and `CSOP` are **not** affected — they are reported on their own HMRC returns and the field stays optional there. Omit it entirely for every `so_type` other than `Unapproved`.
+
+Server-side the field is gated per-issuer (UK incorporation + the `SIB_1160_EMPLOYMENT_RELATED_SECURITIES` flag), so a non-UK issuer never sees the rule. Sending it is harmless when the gate is off, so key the question off `so_type = Unapproved` rather than trying to detect the flag.
+
 ## Date format quirks
 
 Most date fields are `DateField`s and accept both `YYYY-MM-DD` and `MM/DD/YYYY`. Three fields are stored as `CharField(max_length=10)` on the draft model and accept **`MM/DD/YYYY` only** — an ISO `YYYY-MM-DD` string is rejected with `Date is invalid`:
@@ -161,7 +171,7 @@ Mixing formats across a payload is fine — each field is parsed independently. 
 
 ## camelCase and snake_case
 
-The MCP gateway auto-converts a known allow-list (`lawFirmPrice` → `law_firm_price`, `legendId` → `legend_id`, `soType` → `so_type`, `exercisePrice` → `exercise_price`, `vestingTemplate` → `vesting_template`, `vestingStartDate` → `vesting_start_date`, `accelerationTemplate` → `acceleration_template`, `grantExpirationDate` → `grant_expiration_date`, `customLabel` → `custom_label`, `earlyExercise` → `early_exercise`, `autoExerciseAtVest` → `auto_exercise_at_vest`, `isFlexibleIssueDate` → `is_flexible_issue_date`, `isHmrcNotified` → `is_hmrc_notified`, `hmrcNotified` → `hmrc_notified`, `isAtoNotified` → `is_ato_notified`, `needsBoardApproval` → `needs_board_approval`, `documentSetId` → `document_set_id`, `employeeId` → `employee_id`, `costCenter` → `cost_center`, `jobTitle` → `job_title`, `grantReason` → `grant_reason`, `issueDateRelationship` → `issue_date_relationship`, `stakeholderKind` → `stakeholder_kind`, `stakeholderId` → `stakeholder_id`, `boardApprovalDate` → `board_approval_date`, `issueDate` → `issue_date`, `prefixNumber` → `prefix_number`, `ruleOf144Date` → `rule_144_date`, `rule144Date` → `rule_144_date`, `rule144DifferenceReason` → `rule_144_difference_reason`, `stateOfResidency` → `state_of_residency`, `stateExemption` → `state_exemption`, `cashPaid` → `cash_paid`, `debtCanceled` → `debt_canceled`, `convertibleNote` → `convertible_note`, `dividendAccrualStartDate` → `dividend_accrual_start_date`, `returnedInvestedCapital` → `returned_invested_capital`).
+The MCP gateway auto-converts a known allow-list (`lawFirmPrice` → `law_firm_price`, `legendId` → `legend_id`, `soType` → `so_type`, `exercisePrice` → `exercise_price`, `vestingTemplate` → `vesting_template`, `vestingStartDate` → `vesting_start_date`, `accelerationTemplate` → `acceleration_template`, `grantExpirationDate` → `grant_expiration_date`, `customLabel` → `custom_label`, `earlyExercise` → `early_exercise`, `autoExerciseAtVest` → `auto_exercise_at_vest`, `isFlexibleIssueDate` → `is_flexible_issue_date`, `isHmrcNotified` → `is_hmrc_notified`, `hmrcNotified` → `hmrc_notified`, `isAtoNotified` → `is_ato_notified`, `needsBoardApproval` → `needs_board_approval`, `documentSetId` → `document_set_id`, `employeeId` → `employee_id`, `costCenter` → `cost_center`, `jobTitle` → `job_title`, `grantReason` → `grant_reason`, `issueDateRelationship` → `issue_date_relationship`, `stakeholderKind` → `stakeholder_kind`, `stakeholderId` → `stakeholder_id`, `boardApprovalDate` → `board_approval_date`, `issueDate` → `issue_date`, `prefixNumber` → `prefix_number`, `ruleOf144Date` → `rule_144_date`, `rule144Date` → `rule_144_date`, `rule144DifferenceReason` → `rule_144_difference_reason`, `stateOfResidency` → `state_of_residency`, `stateExemption` → `state_exemption`, `cashPaid` → `cash_paid`, `debtCanceled` → `debt_canceled`, `convertibleNote` → `convertible_note`, `dividendAccrualStartDate` → `dividend_accrual_start_date`, `returnedInvestedCapital` → `returned_invested_capital`, `employmentRelated` → `employment_related`).
 
 Unknown camelCase or snake_case typos fail with `UsageError: Unknown draft field <key>`. **Always emit snake_case.**
 

@@ -172,13 +172,16 @@
 
   const HMRC_SO_TYPES = ['EMI'];
   const ATO_SO_TYPES = ['Startup Concessions', 'Non-Concessional', 'ZEPO'];
+  const EMPLOYMENT_RELATED_SO_TYPES = ['Unapproved'];
 
-  // Mirrors build_config.py's HMRC_SO_TYPES / ATO_SO_TYPES — must stay in sync.
+  // Mirrors build_config.py's HMRC_SO_TYPES / ATO_SO_TYPES /
+  // EMPLOYMENT_RELATED_SO_TYPES — must stay in sync.
   function syncSoTypeConditionals(block) {
     const typeBtn = block.querySelector('[data-group="type"].selected');
     const soType = typeBtn ? typeBtn.dataset.value : null;
     toggleConditional(block, 'so_type_emi', HMRC_SO_TYPES.includes(soType));
     toggleConditional(block, 'so_type_au', ATO_SO_TYPES.includes(soType));
+    toggleConditional(block, 'so_type_employment_related', EMPLOYMENT_RELATED_SO_TYPES.includes(soType));
   }
 
   // Option-type buttons additionally re-sync the HMRC/ATO conditional rows —
@@ -558,6 +561,12 @@
         }
         if (ATO_SO_TYPES.includes(soType)) {
           row.is_ato_notified = !!block.querySelector('.block-ato-notified')?.checked;
+        }
+        if (EMPLOYMENT_RELATED_SO_TYPES.includes(soType)) {
+          // Left null when neither button is picked, so an unanswered
+          // designation reads as missing instead of as "No".
+          const empBtn = block.querySelector('[data-group="employment-related"].selected');
+          row.employment_related = empBtn ? empBtn.dataset.value === 'yes' : null;
         }
       }
       return row;

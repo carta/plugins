@@ -49,6 +49,8 @@ reapply the default, re-call the stakeholder lookup, or ask ([Hard rule
     "is_flexible_issue_date":  <bool or omit>,                     # optional
     "is_hmrc_notified":        <bool or omit>,                     # EMI only — cleared for other so_type
     "hmrc_notified":           <user, YYYY-MM-DD or MM/DD/YYYY, or omit>,  # EMI only
+    "employment_related":      <bool>,                             # REQUIRED for Unapproved on UK issuers — ask up
+                                                                   # front, never leave to validation; omit otherwise
     "is_ato_notified":         <bool or omit>,                     # AU types only (Startup Concessions/Non-Concessional/ZEPO)
     "grant_reason":            <user or omit>,                    # optional — picklist (carta-web's own field-contract.md), not free-form
     "draft_pk":                <previous_save.draft_pk or omit>,  # retry only
