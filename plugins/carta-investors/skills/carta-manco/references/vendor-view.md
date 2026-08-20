@@ -191,10 +191,10 @@ After building the pivot, count distinct periods per `(vendor_name, account_name
 
 ## Inferred vendors (only when Gate 5.5 ran and was approved)
 
-When `<INFERRED_VENDORS>` carries approved memo→vendor mappings, the amounts are already folded into the pivot at Gate 5.5 Step 5 — no extra query or write path. The only Layout F addition is a **cell comment** on each vendor whose total includes an inferred amount: on the vendor header row's column-A cell for an existing vendor that received an inferred amount, or on a new vendor's header-row column-A cell.
+When `<INFERRED_VENDORS>` carries approved description→vendor mappings, the amounts are already folded into the pivot at Gate 5.5 Step 5 — no extra query or write path. The only Layout F addition is a **cell comment** on each vendor whose total includes an inferred amount: on the vendor header row's column-A cell for an existing vendor that received an inferred amount, or on a new vendor's header-row column-A cell.
 
 ```javascript
-sheet.comments.add("A<vendor_header_row>", "Includes <amount_with_currency> inferred from memo(s) — e.g. \"<sample_memo>\". Not vendor-tagged in the ledger.", "Plain");
+sheet.comments.add("A<vendor_header_row>", "Includes <amount_with_currency> inferred from description(s) — e.g. \"<sample_description>\". Not vendor-tagged in the ledger.", "Plain");
 await context.sync();
 ```
 

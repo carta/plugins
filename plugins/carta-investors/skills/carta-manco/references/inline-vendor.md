@@ -155,7 +155,7 @@ needed here), `set_column_width` ops via `write_workbook.py`. No `freeze_panes`.
 
 ## Inferred vendors (only when Gate 5.5 ran and was approved)
 
-When `<INFERRED_VENDORS>` carries approved memo→vendor mappings, the amounts are
+When `<INFERRED_VENDORS>` carries approved description→vendor mappings, the amounts are
 already folded into `<VENDOR_ACTUALS>` at Gate 5.5 Step 5 — an inferred amount
 lands on the existing vendor sub-row under its account, or creates a new vendor
 sub-row (four-space indent, alphabetical among named vendors). The only Layout G
@@ -163,7 +163,7 @@ addition is a **cell comment** on column A of each vendor sub-row that received
 an inferred amount:
 
 ```javascript
-sheet.comments.add("A<vendor_row>", "Includes <amount_with_currency> inferred from memo(s) — e.g. \"<sample_memo>\". Not vendor-tagged in the ledger.", "Plain");
+sheet.comments.add("A<vendor_row>", "Includes <amount_with_currency> inferred from description(s) — e.g. \"<sample_description>\". Not vendor-tagged in the ledger.", "Plain");
 await context.sync();
 ```
 

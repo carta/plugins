@@ -208,13 +208,13 @@ the Gate 6 preview and add a cell comment on the written row.
 
 ## Inferred vendors (only when Gate 5.5 ran and was approved)
 
-When `<INFERRED_VENDORS>` carries approved memo→vendor mappings, the amounts are
+When `<INFERRED_VENDORS>` carries approved description→vendor mappings, the amounts are
 already folded into the pivot at Gate 5.5 Step 5. The only Layout H addition is a
 **cell comment** on each vendor row whose total includes an inferred amount
 (column A of that vendor's data row):
 
 ```javascript
-sheet.comments.add("A<vendor_row>", "Includes <amount_with_currency> inferred from memo(s) — e.g. \"<sample_memo>\". Not vendor-tagged in the ledger.", "Plain");
+sheet.comments.add("A<vendor_row>", "Includes <amount_with_currency> inferred from description(s) — e.g. \"<sample_description>\". Not vendor-tagged in the ledger.", "Plain");
 await context.sync();
 ```
 

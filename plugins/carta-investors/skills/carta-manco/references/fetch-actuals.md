@@ -287,25 +287,27 @@ is false (the overwhelming majority of runs).
 
 ## Gate 5.5 — Infer vendors for 'No vendor' entries (opt-in; Layouts F, G, H only)
 
-**Strictly opt-in — changes nothing by default.** The `No vendor` section renders exactly as before unless the user explicitly asks for inference. Run this gate ONLY when **all** hold: `<LAYOUT>` is F, G, or H; the loaded actuals contain at least one `No vendor` entry; and the user opts in below (or already asked for memo-based inference in their original prompt — then skip Step 1 and go straight to Step 2). Otherwise **do nothing** — skip to Gate 6.
+**Strictly opt-in — changes nothing by default.** The `No vendor` section renders exactly as before unless the user explicitly asks for inference. Run this gate ONLY when **all** hold: `<LAYOUT>` is F, G, or H; the loaded actuals contain at least one `No vendor` entry; and the user opts in below (or already asked for this in their original prompt — then skip Step 1 and go straight to Step 2). Otherwise **do nothing** — skip to Gate 6.
+
+**Say "description", not "memo".** Carta labels this field Description everywhere a journal entry appears, and reserves Memo for other records — a bank transaction's memo, a payment obligation's memo. A user may still ask about "the memos"; understand them and answer in the product's word, so the one they read back matches the column they can see in the ledger.
 
 **Step 1 — Offer inference (`AskUserQuestion`):** compute the `No vendor` bucket's entry count and total. Ask:
-- `question`: `"<N> entries totalling <total> have no vendor. Want me to infer vendors from their memos?"` (format `<total>` per the resolved currency)
-- `options`: 1. **Leave them as 'No vendor'** ← recommended — *"No inference. The 'No vendor' section stays exactly as pulled from the ledger."* 2. **Infer vendors from the entry memos** — *"Read each memo and propose a likely vendor. You approve the list before anything is written."*
+- `question`: `"<N> entries totalling <total> have no vendor. Want me to infer vendors from their descriptions?"` (format `<total>` per the resolved currency)
+- `options`: 1. **Leave them as 'No vendor'** ← recommended — *"No inference. The 'No vendor' section stays exactly as pulled from the ledger."* 2. **Infer vendors from the entry descriptions** — *"Read each description and propose a likely vendor. You approve the list before anything is written."*
 
 If the user picks option 1 (or dismisses), proceed to Gate 6 unchanged. Only continue on option 2 or an up-front request.
 
-**Step 2 — Pull the memos:** run [`queries/no-vendor-memo-lines.sql`](../queries/no-vendor-memo-lines.sql). Resolve `<memo_column>` from the Gate 0 DWH schema lookup (candidates: `MEMO`, `DESCRIPTION`, `LINE_MEMO`, `NARRATIVE`). Substitute `<entity_name>`, `<period_trunc>`, `<period_start>`, `<period_end>`. **If no memo-like column exists**, tell the user in one sentence — *"These entries don't carry a memo I can read, so I'll leave them as 'No vendor'."* — and proceed to Gate 6 unchanged. Do not retry with a different column guess more than once.
+**Step 2 — Pull the descriptions:** run [`queries/no-vendor-descriptions.sql`](../queries/no-vendor-descriptions.sql). Substitute `<entity_name>`, `<period_trunc>`, `<period_start>`, `<period_end>`. The column is `JOURNAL_ENTRY_DESCRIPTION` and the query names it directly — don't go looking for a memo-named column, and don't reach for `ACCOUNT_DESCRIPTION`, which describes the GL account rather than the entry. If the query errors, say so in one sentence — *"I couldn't read the descriptions on these entries, so I'll leave them as 'No vendor'."* — and proceed to Gate 6 unchanged, rather than retrying against a different column.
 
-**Step 3 — Infer a vendor per memo (existing vendors first):** build the candidate list from existing named vendors already in the loaded data. For each memo: match to an existing vendor when it clearly refers to one (prefer this so amounts reconcile to rows already on the sheet); propose a brand-new vendor name only when the memo unambiguously names one that isn't already present; leave the entry in `No vendor` when not confident — never force a match. Never write inferred vendor tags back to Carta — this is report-only.
+**Step 3 — Infer a vendor per description (existing vendors first):** build the candidate list from existing named vendors already in the loaded data. For each description: match to an existing vendor when it clearly refers to one (prefer this so amounts reconcile to rows already on the sheet); propose a brand-new vendor name only when the description unambiguously names one that isn't already present; leave the entry in `No vendor` when not confident — never force a match. Never write inferred vendor tags back to Carta — this is report-only.
 
-**Step 4 — Confirm before applying:** output a preview table (Memo | Inferred vendor | New or existing? | Amount, currency-formatted, never a bare `$`) grouped so existing-vendor matches and new-vendor proposals are visually distinct. Follow with `"<K> of <N> 'No vendor' entries matched (<total matched>). <N−K> stay as 'No vendor'."` Then `AskUserQuestion`:
+**Step 4 — Confirm before applying:** output a preview table (Description | Inferred vendor | New or existing? | Amount, currency-formatted, never a bare `$`) grouped so existing-vendor matches and new-vendor proposals are visually distinct. Follow with `"<K> of <N> 'No vendor' entries matched (<total matched>). <N−K> stay as 'No vendor'."` Then `AskUserQuestion`:
 - `question`: `"Apply these inferred vendors to the report?"`
 - `options`: 1. **Apply all inferred vendors** ← recommended 2. **Apply only matches to existing vendors** 3. **Cancel — keep everything as 'No vendor'**
 
 On option 3, proceed to Gate 6 with the bucket unchanged.
 
-**Step 5 — Fold approved inferences into the data structure:** for each approved memo→vendor mapping, move its `signed_amount` (per period, and per GL account for Layouts F/G) out of `No vendor` and into the target vendor — existing vendor: add to its matching cell; new vendor: create a new entry sorted alphabetically among named vendors; residual unmatched/skipped amounts stay in `No vendor` (drop the section if it empties out). Mark every vendor row that received an inferred amount so Gate 7 attaches a cell comment (see each layout reference's "Inferred vendors" section) — flag text **"inferred from memo"**. Store `<INFERRED_VENDORS>` = the list of `(vendor, amount, sample_memo, is_new)` mappings applied, for the Gate 6 preview and Gate 8 summary. The reassigned structure then flows into Gate 6 and Gate 7 like any other vendor data — no separate write path.
+**Step 5 — Fold approved inferences into the data structure:** for each approved description→vendor mapping, move its `signed_amount` (per period, and per GL account for Layouts F/G) out of `No vendor` and into the target vendor — existing vendor: add to its matching cell; new vendor: create a new entry sorted alphabetically among named vendors; residual unmatched/skipped amounts stay in `No vendor` (drop the section if it empties out). Mark every vendor row that received an inferred amount so Gate 7 attaches a cell comment (see each layout reference's "Inferred vendors" section) — flag text **"inferred from description"**. Store `<INFERRED_VENDORS>` = the list of `(vendor, amount, sample_description, is_new)` mappings applied, for the Gate 6 preview and Gate 8 summary. The reassigned structure then flows into Gate 6 and Gate 7 like any other vendor data — no separate write path.
 
 ---
 
@@ -319,7 +321,7 @@ Preview table grouped by:
 
 If any rows carry the `low-confidence — sparse history` flag, surface the count above the table.
 
-If Gate 5.5 ran and `<INFERRED_VENDORS>` is non-empty, add an **Inferred vendors** group — Vendor | Amount | New or existing | Sample memo — so the reassignments are visible one last time before the write. Format every amount per the fund's resolved currency, never a bare `$`. State the residual that stayed in `No vendor`.
+If Gate 5.5 ran and `<INFERRED_VENDORS>` is non-empty, add an **Inferred vendors** group — Vendor | Amount | New or existing | Sample description — so the reassignments are visible one last time before the write. Format every amount per the fund's resolved currency, never a bare `$`. State the residual that stayed in `No vendor`.
 
 Output the preview table above as a normal conversation message. Then call `AskUserQuestion` immediately after:
 
