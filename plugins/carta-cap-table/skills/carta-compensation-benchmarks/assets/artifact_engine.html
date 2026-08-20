@@ -665,10 +665,17 @@ function resolveSeedLocation(r) {
 /* ── Boot: load accessible companies ─────────────────────────────────────── */
 if (window.cowork?.callMcpTool) loadAllCompanies();
 
+/* ── MCP call helper ──────────────────────────────────────────────────────── */
+function callMcp(tool, args) {
+  return window.cowork.callMcpTool(tool, Object.assign({}, args, {
+    _instrumentation_v2: { skills: ['carta-cap-table:carta-compensation-benchmarks'], from_ui: true },
+  }));
+}
+
 /* ── Company loading ─────────────────────────────────────────────────────── */
 async function loadAllCompanies() {
   try {
-    const res  = await window.cowork.callMcpTool('mcp__carta__list_accounts', {});
+    const res  = await callMcp('mcp__carta__list_accounts', {});
     const data = unwrap(res);
     _allCompanies = (data.accounts || [])
       .filter(a => (a.type === 'company' || a.type === 'fund') && a.name?.trim());
@@ -760,7 +767,7 @@ function renderDropdownItems(accounts) {
 async function doSearch(query) {
   if (!query) return;
   try {
-    const res  = await window.cowork.callMcpTool('mcp__carta__list_accounts', {search:query});
+    const res  = await callMcp('mcp__carta__list_accounts', {search:query});
     const data = unwrap(res);
     renderDropdownItems((data.accounts||[]).filter(a=>a.type==='company'||a.type==='fund'));
   } catch {
@@ -812,7 +819,7 @@ async function fetchRowData(row) {
   if (row.location) params.location = row.location;
   if (isLeader) params.is_leader = true;
   try {
-    const res     = await window.cowork.callMcpTool('mcp__carta__fetch', {command:'compensation:get:benchmark', params});
+    const res     = await callMcp('mcp__carta__fetch', {command:'compensation:get:benchmark', params});
     const parsed  = parseResults([{job: row.job, level: row.level, data: res, error: null}]);
     const r       = parsed[0];
     if (!r) {
