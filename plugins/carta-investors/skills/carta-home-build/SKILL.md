@@ -192,16 +192,11 @@ upstream, rebuild it (`build:browser`) and overwrite `resources/carta-home.track
 
 ## Deploy steps
 
-### Step 0: Detect the Carta MCP server ID
+### Step 0: Cowork preflight + Carta MCP server ID
 
-**How to find it:** Look at the tools available in this session. Scan for any tool matching `mcp__*__list_contexts` and extract the server identifier — the middle segment between the first and last `__`. The identifier can be a name (e.g. `carta`) or a UUID (e.g. `33b9b857-8443-4b2d-b191-2d9b6c50eb86`):
+Read `${CLAUDE_PLUGIN_ROOT}/references/gate-0-cowork.md` and run **Gate A + Gate B**. This is a live artifact — the rendered HTML calls Carta at runtime via `window.cowork.callMcpTool`, which requires both Cowork and a UUID-form Carta tool prefix.
 
-```
-# Name-form:  mcp__carta__list_contexts          → CARTA_MCP_ID = carta
-# UUID-form:  mcp__33b9b857-8443-4b2d-b191-2d9b6c50eb86__list_contexts  → CARTA_MCP_ID = 33b9b857-8443-4b2d-b191-2d9b6c50eb86
-```
-
-Store it as `CARTA_MCP_ID`.
+**Gate B discovery:** Scan for any tool matching `mcp__<UUID>__list_contexts` where `<UUID>` is the 8-4-4-4-12 hex format. Store the UUID as `CARTA_MCP_ID`.
 
 ### Step 1: Build the self-contained artifact (no need to read any HTML)
 
