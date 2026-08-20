@@ -664,6 +664,16 @@
       const LIVE = typeof window !== "undefined" && !!window.cowork && typeof window.cowork.callMcpTool === "function";
       const fired = new Set();
 
+      // Every programmatic (UI-issued) tool call goes through this - never call
+      // window.cowork.callMcpTool directly. Stamps _instrumentation_v2.from_ui
+      // so the instrumentation nudge middleware can tell this apart from a
+      // model-issued call (KAF-3090).
+      function callMcp(tool, args) {
+        return window.cowork.callMcpTool(tool, Object.assign({}, args, {
+          _instrumentation_v2: { skills: ['carta-crm:get-angles'], from_ui: true },
+        }));
+      }
+
       function el(tag, cls, text) {
         const n = document.createElement(tag);
         if (cls) n.className = cls;
@@ -1059,7 +1069,7 @@
             const status = el("p", "action-status", "Working...");
             box.appendChild(status);
             try {
-              const res = unwrap(await window.cowork.callMcpTool(action.tool, action.args || {}));
+              const res = unwrap(await callMcp(action.tool, action.args || {}));
               const failed = res && (res.error || res.isError);
               status.className = "action-status " + (failed ? "status-fail" : "status-ok");
               status.textContent = failed
