@@ -1,6 +1,6 @@
 {
   "carta-captable-home-build": {
-    "version": "0.5.0",
-    "headline": "The company selector now has a search box, so you can reach any company you have access to instead of only the first page of the list. Every example prompt names the company you picked, and each skill in the directory shows two or three prompts instead of one."
+    "version": "0.6.0",
+    "headline": "Cap Table Home now has a full cap table and round history dashboard you can open in place, four suggested prompts tailored to you, a What's new row, and the latest Carta events and guides. It also tells you when a newer version is ready."
   }
 }
