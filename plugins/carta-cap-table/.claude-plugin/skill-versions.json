@@ -1,6 +1,6 @@
 {
   "carta-captable-home-build": {
-    "version": "0.6.1",
-    "headline": "Cap Table Home now has a full cap table and round history dashboard you can open in place, four suggested prompts tailored to you, a What's new row, and the latest Carta events and guides. It also tells you when a newer version is ready."
+    "version": "0.7.0",
+    "headline": "Round history loads again, and the Fully diluted summary, Option pool and Stakeholders cards are now charts. Picking a company is one search box that filters as you type."
   }
 }
