@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -33,24 +34,20 @@ func (u usageSnapshot) total() int64 {
 type assistantLine struct {
 	Type    string `json:"type"`
 	Message struct {
-		ID    string        `json:"id"`
-		Usage usageSnapshot `json:"usage"`
+		ID    string         `json:"id"`
+		Usage *usageSnapshot `json:"usage"`
 	} `json:"message"`
 }
 
-// CumulativeSessionTokens sums token usage across every assistant turn.
-// Streamed lines share one message id; keep only the last (final) usage per id.
-func CumulativeSessionTokens(transcriptPath string) (int64, bool) {
-	if transcriptPath == "" {
-		return 0, false
-	}
-	f, err := os.Open(transcriptPath)
+// accumulateFile folds one transcript's assistant-turn usage into seen, keyed
+// by message id so streamed chunks collapse to their final snapshot.
+func accumulateFile(path string, seen map[string]usageSnapshot) error {
+	f, err := os.Open(path)
 	if err != nil {
-		return 0, false
+		return err
 	}
 	defer f.Close()
 
-	seen := map[string]usageSnapshot{}
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
 	for scanner.Scan() {
@@ -62,15 +59,75 @@ func CumulativeSessionTokens(transcriptPath string) (int64, bool) {
 		if err := json.Unmarshal([]byte(line), &a); err != nil || a.Type != "assistant" {
 			continue
 		}
-		if a.Message.ID == "" {
+		if a.Message.ID == "" || a.Message.Usage == nil {
 			continue
 		}
-		seen[a.Message.ID] = a.Message.Usage
+		seen[a.Message.ID] = *a.Message.Usage
+	}
+	return scanner.Err()
+}
+
+// CumulativeSessionTokens sums usage across every assistant turn in a single
+// transcript. ok is false when no usage-bearing turn was found — not just 0.
+func CumulativeSessionTokens(transcriptPath string) (int64, bool) {
+	if transcriptPath == "" {
+		return 0, false
+	}
+	seen := map[string]usageSnapshot{}
+	if err := accumulateFile(transcriptPath, seen); err != nil {
+		return 0, false
+	}
+	return sumSeen(seen), len(seen) > 0
+}
+
+// CumulativeSessionTokensForSession sums usage across a whole conversation:
+// the main transcript plus every subagent sidechain. transcriptPath may point
+// at either — a subagent's own turns still count toward the session total.
+func CumulativeSessionTokensForSession(transcriptPath string) (int64, bool) {
+	mainPath := mainTranscriptPath(transcriptPath)
+	if mainPath == "" {
+		return 0, false
 	}
 
+	// A read failure on one file shouldn't drop usage already folded from the rest.
+	seen := map[string]usageSnapshot{}
+	_ = accumulateFile(mainPath, seen)
+	for _, sidechain := range sidechainFiles(mainPath) {
+		_ = accumulateFile(sidechain, seen)
+	}
+
+	return sumSeen(seen), len(seen) > 0
+}
+
+func sumSeen(seen map[string]usageSnapshot) int64 {
 	var total int64
 	for _, usage := range seen {
 		total += usage.total()
 	}
-	return total, true
+	return total
+}
+
+// mainTranscriptPath maps a sidechain path (<session>/subagents/agent-X.jsonl)
+// to its main transcript (<session>.jsonl); any other path is already main.
+func mainTranscriptPath(transcriptPath string) string {
+	if transcriptPath == "" {
+		return ""
+	}
+	dir := filepath.Dir(transcriptPath)
+	if filepath.Base(dir) != "subagents" {
+		return transcriptPath
+	}
+	sessionDir := filepath.Dir(dir)
+	return sessionDir + ".jsonl"
+}
+
+// sidechainFiles lists a session's subagent transcripts. A missing or empty
+// subagents/ directory is not an error — it just means no sidechains exist.
+func sidechainFiles(mainPath string) []string {
+	sessionDir := strings.TrimSuffix(mainPath, filepath.Ext(mainPath))
+	matches, err := filepath.Glob(filepath.Join(sessionDir, "subagents", "agent-*.jsonl"))
+	if err != nil {
+		return nil
+	}
+	return matches
 }
