@@ -412,6 +412,65 @@ func TestInjectInstrumentation_CumulativeTokensFromTranscript(t *testing.T) {
 	}
 }
 
+func TestInjectInstrumentation_CumulativeTokensRollUpFromSubagentTranscript(t *testing.T) {
+	isolateEnv(t)
+	setupPluginRoot(t, "carta-crm", "1.0.0")
+	dir := t.TempDir()
+	mainPath := filepath.Join(dir, "session.jsonl")
+	if err := os.WriteFile(mainPath, []byte(
+		`{"type":"assistant","message":{"id":"msg_main","usage":{"input_tokens":10,"output_tokens":20}}}`+"\n",
+	), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sidechainDir := filepath.Join(dir, "session", "subagents")
+	if err := os.MkdirAll(sidechainDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sidechainPath := filepath.Join(sidechainDir, "agent-a1.jsonl")
+	if err := os.WriteFile(sidechainPath, []byte(
+		`{"type":"assistant","message":{"id":"msg_sub","usage":{"input_tokens":5,"output_tokens":5}}}`+"\n",
+	), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	stdin := `{"tool_name":"some_tool","tool_input":{},"session_id":"s1","agent_id":"a1","transcript_path":"` + sidechainPath + `"}`
+	out, err := InjectInstrumentation([]byte(stdin))
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated := parsePreToolUseUpdatedInput(t, out)
+	var instr struct {
+		CumulativeTokens *int64 `json:"cumulative_tokens"`
+	}
+	if err := json.Unmarshal(updated["_instrumentation_v2"], &instr); err != nil {
+		t.Fatal(err)
+	}
+	// A subagent tool call reports the whole-session total (main + sidechain), not just its own turns.
+	if instr.CumulativeTokens == nil || *instr.CumulativeTokens != 40 {
+		t.Errorf("cumulative_tokens = %v, want 40 (30 main + 10 sidechain)", instr.CumulativeTokens)
+	}
+}
+
+func TestInjectInstrumentation_CumulativeTokensOmittedWhenTranscriptHasNoUsage(t *testing.T) {
+	isolateEnv(t)
+	setupPluginRoot(t, "carta-crm", "1.0.0")
+	transcriptPath := writeTranscript(t, `{"type":"user","message":{"content":"hi"}}`)
+
+	stdin := `{"tool_name":"some_tool","tool_input":{},"session_id":"s1","transcript_path":"` + transcriptPath + `"}`
+	out, err := InjectInstrumentation([]byte(stdin))
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated := parsePreToolUseUpdatedInput(t, out)
+	var instr map[string]json.RawMessage
+	if err := json.Unmarshal(updated["_instrumentation_v2"], &instr); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := instr["cumulative_tokens"]; ok {
+		t.Error("expected cumulative_tokens omitted: transcript has no usage-bearing assistant line, so it's unknown, not 0")
+	}
+}
+
 func TestInjectInstrumentation_CumulativeTokensOmittedWithoutTranscriptPath(t *testing.T) {
 	isolateEnv(t)
 	setupPluginRoot(t, "carta-crm", "1.0.0")
