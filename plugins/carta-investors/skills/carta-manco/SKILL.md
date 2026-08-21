@@ -318,7 +318,7 @@ Scan the tools available in the conversation for any matching `mcp__*__welcome`.
 
 **DWH param-name traps:** `dwh:execute:query` takes `sql:` not `query:`. `dwh:get:table_schema` takes `table_name:` not `table:`. `format` accepts `"ndjson"` / `"markdown"`, not `"csv"`.
 
-**DWH result formatting:** queries > 50 rows: request `format: "ndjson"`, bucket into a blob. Don't paste large results — triggers `context_snip`. Use `"markdown"` only for ≤50-row previews.
+**DWH result formatting:** queries > 50 rows: request `format: "ndjson"`, bucket into a blob. Don't paste large results — triggers `context_snip`. Use `"markdown"` only for ≤50-row previews. **DWH limit ceiling is 10000** — the server clamps any higher value silently; pass `limit: 10000` and paginate via `next_offset` if the response includes one.
 
 If no firm was named, defer to the capability's own parameter gate.
 

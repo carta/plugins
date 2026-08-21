@@ -318,28 +318,22 @@ value is non-empty and differs from the `<firm_name_esc>` clause.
 coverage and total-company counts embedded in every row. Returns one row per
 purchaser; large firms can have thousands of rows.
 
-**Fetch it in ONE call — do NOT paginate.** Pass `"format": "ndjson"` **and a
-high `"limit"` (use `50000`)** so the entire result set comes back in a single
-fetch. `limit: 50000` comfortably covers even the largest firms in a single
-call (no `next_offset`), and the ndjson body lands on disk regardless of size,
-so there is no payload-cap reason to split it. Capture the `saved to …` path
-from the result and resolve it to `$QUERY_S_BLOB` via the helper (above). Do
-not `Write` the body.
+**Fetch with `"format": "ndjson"` and `"limit": 10000`** (the server-side
+maximum — the DWH clamps any higher value to 10000). The ndjson body lands on
+disk regardless of size. Capture the `saved to …` path from the result and
+resolve it to `$QUERY_S_BLOB` via the helper (above). Do not `Write` the body.
 
-> **CRITICAL — fetch ONCE; never re-issue this query with a different
-> `offset`.** A single high-`limit` fetch returns everything, so there is no
-> page 2. Do **not** re-run the query for "later pages." The reason this rule
-> exists: when the model re-types this ~1,200-char SQL for a second call it
-> reliably corrupts a token — the embedded firm UUID (`…8af6…` → `…8ad6…`) or
-> even a JOIN key (`s.EXTRACTION_ID` → `s.CLOSING_DATE`, which errors with
-> *"Date '<uuid>' is not recognized"*) — silently dropping rows or failing the
-> call. One fetch means the SQL is authored exactly once and this whole class
-> of error cannot happen.
+> **CRITICAL — do NOT retype the SQL for a second call.** This ~1,200-char SQL
+> contains embedded UUIDs and JOIN keys that corrupt on re-type (e.g. `8af6` →
+> `8ad6`, or `s.EXTRACTION_ID` → `s.CLOSING_DATE`, which errors with *"Date
+> '<uuid>' is not recognized"*). If pagination is needed, re-issue by copying
+> the *exact same* tool call with only `"offset": <next_offset>` added — never
+> type the SQL again from scratch.
 
-> **If the row count ever exceeds the limit** (it won't at `50000` for any real
-> firm — flag it as a data anomaly rather than paginating): the safe response
-> is to raise the `limit` further in the same single call, never to add
-> `offset` pages.
+> **If the response carries `next_offset`**, issue another call with the same
+> SQL and `"offset": <next_offset>`, capture that blob path, and repeat until
+> no `next_offset` is returned. Pass all blob paths to `process.py` via
+> `--summary`.
 
 > **Why the ORDER BY has a tiebreaker:** Query S ends with
 > `ORDER BY COUNT(DISTINCT cc.CANONICAL_NAME) DESC, p.PURCHASER_NAME, p.ENTITY_TYPE`.
@@ -368,7 +362,7 @@ not `Write` the body.
 ```
 call_tool({"name": "dwh__execute__query", "arguments": {
   "format": "ndjson",
-  "limit": 50000,
+  "limit": 10000,
   "sql": "WITH norm_investments AS (SELECT ISSUER_NAME AS INV_NAME, TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(ISSUER_NAME), ' *[(][^)]*[)].*$', '')), ' +(D/?B/?A|F/?K/?A|AKA) +.*$', '')), ',? *(INC|LLC|LTD|LIMITED|CORP|CORPORATION|L[.]P[.]|LP|PBC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]? *$', '')), '[,.]', '')) AS NAME_NORM FROM FUND_ADMIN.AGGREGATE_INVESTMENTS WHERE FIRM_ID = '<firm_id>' GROUP BY ISSUER_NAME HAVING MAX(CASE WHEN ASSET_CLASS_TYPE IN ('PREFERRED_EQUITY', 'COMMON_EQUITY') THEN 1 ELSE 0 END) = 1), norm_spa AS (SELECT DISTINCT i.ISSUER_NAME AS SPA_NAME, LOWER(TRIM(i.ISSUER_NAME)) AS NORM_KEY, TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(i.ISSUER_NAME), ' *[(][^)]*[)].*$', '')), ' +(D/?B/?A|F/?K/?A|AKA) +.*$', '')), ',? *(INC|LLC|LTD|LIMITED|CORP|CORPORATION|L[.]P[.]|LP|PBC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]? *$', '')), '[,.]', '')) AS NAME_NORM FROM FUND_ADMIN.DOCUMENT_AI_SPA_ISSUER i JOIN FUND_ADMIN.DOCUMENT_AI_DOCUMENT d ON i.EXTRACTION_ID = d.EXTRACTION_ID WHERE d.FIRM_ID = '<firm_id>' AND i.ISSUER_NAME IS NOT NULL AND TRIM(i.ISSUER_NAME) <> ''), spa_fuzzy AS (SELECT s.SPA_NAME, s.NORM_KEY, i.INV_NAME AS MATCHED_INV_NAME, ROW_NUMBER() OVER (PARTITION BY s.SPA_NAME ORDER BY JAROWINKLER_SIMILARITY(s.NAME_NORM, i.NAME_NORM) DESC NULLS LAST) AS RN FROM norm_spa s LEFT JOIN norm_investments i ON JAROWINKLER_SIMILARITY(s.NAME_NORM, i.NAME_NORM) >= 90), canonical_company AS (SELECT NORM_KEY, COALESCE(MIN(MATCHED_INV_NAME), MAX(SPA_NAME)) AS CANONICAL_NAME FROM spa_fuzzy WHERE RN = 1 GROUP BY NORM_KEY), doc_metadata AS (SELECT d.EXTRACTION_ID, cc.CANONICAL_NAME AS ISSUER_NAME, s.CLOSING_DATE, MIN(p.SHARE_CLASS_NAME) AS SHARE_CLASS_NAME FROM FUND_ADMIN.DOCUMENT_AI_DOCUMENT d JOIN FUND_ADMIN.DOCUMENT_AI_SPA_ISSUER i ON d.EXTRACTION_ID = i.EXTRACTION_ID JOIN canonical_company cc ON LOWER(TRIM(i.ISSUER_NAME)) = cc.NORM_KEY LEFT JOIN FUND_ADMIN.DOCUMENT_AI_SPA s ON d.EXTRACTION_ID = s.EXTRACTION_ID LEFT JOIN FUND_ADMIN.DOCUMENT_AI_SPA_PURCHASER p ON d.EXTRACTION_ID = p.EXTRACTION_ID WHERE d.FIRM_ID = '<firm_id>' AND i.ISSUER_NAME IS NOT NULL AND TRIM(i.ISSUER_NAME) <> '' GROUP BY d.EXTRACTION_ID, cc.CANONICAL_NAME, s.CLOSING_DATE), dedup_docs AS (SELECT MAX(EXTRACTION_ID) AS EXTRACTION_ID FROM doc_metadata GROUP BY ISSUER_NAME, COALESCE(CAST(CLOSING_DATE AS VARCHAR), SHARE_CLASS_NAME, 'undated')), coverage AS (SELECT (SELECT COUNT(*) FROM norm_investments ni WHERE EXISTS (SELECT 1 FROM spa_fuzzy sf WHERE sf.RN = 1 AND sf.MATCHED_INV_NAME = ni.INV_NAME)) AS SPA_COMPANIES, (SELECT COUNT(*) FROM norm_investments) AS TOTAL_COMPANIES) SELECT p.PURCHASER_NAME, p.ENTITY_TYPE, ARRAY_AGG(DISTINCT cc.CANONICAL_NAME) WITHIN GROUP (ORDER BY cc.CANONICAL_NAME) AS COMPANIES, (SELECT SPA_COMPANIES FROM coverage) AS SPA_COMPANIES, (SELECT TOTAL_COMPANIES FROM coverage) AS TOTAL_COMPANIES FROM dedup_docs dd JOIN FUND_ADMIN.DOCUMENT_AI_SPA_ISSUER i ON dd.EXTRACTION_ID = i.EXTRACTION_ID JOIN canonical_company cc ON LOWER(TRIM(i.ISSUER_NAME)) = cc.NORM_KEY JOIN FUND_ADMIN.DOCUMENT_AI_SPA_PURCHASER p ON dd.EXTRACTION_ID = p.EXTRACTION_ID WHERE p.ENTITY_TYPE NOT ILIKE '%notice%' AND p.ENTITY_TYPE NOT ILIKE '%law firm%' AND p.PURCHASER_NAME NOT ILIKE '%<firm_name_esc>%' [AND p.PURCHASER_NAME NOT ILIKE '%<firm_name_spaced>%'] [AND p.PURCHASER_NAME NOT ILIKE '%<vehicle_N_esc>%' ...] GROUP BY p.PURCHASER_NAME, p.ENTITY_TYPE ORDER BY COUNT(DISTINCT cc.CANONICAL_NAME) DESC, p.PURCHASER_NAME, p.ENTITY_TYPE"
 }})
 ```
@@ -380,14 +374,14 @@ compact JSON string produced by `TO_JSON(ARRAY_AGG(OBJECT_CONSTRUCT(...)))`,
 nesting up to 15 investors per round, ordered by % of round descending. Short
 keys (`n`, `t`, `p`, `a`, `f`, `sc`, `cd`, `inv`) keep the payload small.
 
-Same as Query S — **one fetch** with `"format": "ndjson"` and `"limit": 50000`
-(never paginate; the fetch-once rule above applies here too). Capture the
-`saved to …` path, resolve it to `$QUERY_R_BLOB`. Do not `Write` the body.
+Same as Query S — `"format": "ndjson"`, `"limit": 10000`, paginate via
+`next_offset` if present. Capture the `saved to …` path, resolve it to
+`$QUERY_R_BLOB`. Do not `Write` the body.
 
 ```
 call_tool({"name": "dwh__execute__query", "arguments": {
   "format": "ndjson",
-  "limit": 50000,
+  "limit": 10000,
   "sql": "WITH norm_investments AS (SELECT ISSUER_NAME AS INV_NAME, TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(ISSUER_NAME), ' *[(][^)]*[)].*$', '')), ' +(D/?B/?A|F/?K/?A|AKA) +.*$', '')), ',? *(INC|LLC|LTD|LIMITED|CORP|CORPORATION|L[.]P[.]|LP|PBC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]? *$', '')), '[,.]', '')) AS NAME_NORM FROM FUND_ADMIN.AGGREGATE_INVESTMENTS WHERE FIRM_ID = '<firm_id>' GROUP BY ISSUER_NAME HAVING MAX(CASE WHEN ASSET_CLASS_TYPE IN ('PREFERRED_EQUITY', 'COMMON_EQUITY') THEN 1 ELSE 0 END) = 1), norm_spa AS (SELECT DISTINCT i.ISSUER_NAME AS SPA_NAME, LOWER(TRIM(i.ISSUER_NAME)) AS NORM_KEY, TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(i.ISSUER_NAME), ' *[(][^)]*[)].*$', '')), ' +(D/?B/?A|F/?K/?A|AKA) +.*$', '')), ',? *(INC|LLC|LTD|LIMITED|CORP|CORPORATION|L[.]P[.]|LP|PBC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]? *$', '')), '[,.]', '')) AS NAME_NORM FROM FUND_ADMIN.DOCUMENT_AI_SPA_ISSUER i JOIN FUND_ADMIN.DOCUMENT_AI_DOCUMENT d ON i.EXTRACTION_ID = d.EXTRACTION_ID WHERE d.FIRM_ID = '<firm_id>' AND i.ISSUER_NAME IS NOT NULL AND TRIM(i.ISSUER_NAME) <> ''), spa_fuzzy AS (SELECT s.SPA_NAME, s.NORM_KEY, i.INV_NAME AS MATCHED_INV_NAME, ROW_NUMBER() OVER (PARTITION BY s.SPA_NAME ORDER BY JAROWINKLER_SIMILARITY(s.NAME_NORM, i.NAME_NORM) DESC NULLS LAST) AS RN FROM norm_spa s LEFT JOIN norm_investments i ON JAROWINKLER_SIMILARITY(s.NAME_NORM, i.NAME_NORM) >= 90), canonical_company AS (SELECT NORM_KEY, COALESCE(MIN(MATCHED_INV_NAME), MAX(SPA_NAME)) AS CANONICAL_NAME FROM spa_fuzzy WHERE RN = 1 GROUP BY NORM_KEY), doc_metadata AS (SELECT d.EXTRACTION_ID, cc.CANONICAL_NAME AS ISSUER_NAME, s.CLOSING_DATE, MIN(p.SHARE_CLASS_NAME) AS SHARE_CLASS_NAME FROM FUND_ADMIN.DOCUMENT_AI_DOCUMENT d JOIN FUND_ADMIN.DOCUMENT_AI_SPA_ISSUER i ON d.EXTRACTION_ID = i.EXTRACTION_ID JOIN canonical_company cc ON LOWER(TRIM(i.ISSUER_NAME)) = cc.NORM_KEY LEFT JOIN FUND_ADMIN.DOCUMENT_AI_SPA s ON d.EXTRACTION_ID = s.EXTRACTION_ID LEFT JOIN FUND_ADMIN.DOCUMENT_AI_SPA_PURCHASER p ON d.EXTRACTION_ID = p.EXTRACTION_ID WHERE d.FIRM_ID = '<firm_id>' GROUP BY d.EXTRACTION_ID, cc.CANONICAL_NAME, s.CLOSING_DATE), dedup_docs AS (SELECT MAX(EXTRACTION_ID) AS EXTRACTION_ID FROM doc_metadata GROUP BY ISSUER_NAME, COALESCE(CAST(CLOSING_DATE AS VARCHAR), SHARE_CLASS_NAME, 'undated')), investor_rows AS (SELECT cc.CANONICAL_NAME AS ISSUER_NAME, p.SHARE_CLASS_NAME, s.CLOSING_DATE, dd.EXTRACTION_ID, p.PURCHASER_NAME, p.ENTITY_TYPE, p.SHARES_PURCHASED, p.TOTAL_AMOUNT_PAID, p.SHARES_PURCHASED / NULLIF(SUM(p.SHARES_PURCHASED) OVER (PARTITION BY dd.EXTRACTION_ID), 0) AS PCT_OF_ROUND, CASE WHEN p.PURCHASER_NAME ILIKE '%<firm_name_esc>%' [OR p.PURCHASER_NAME ILIKE '%<firm_name_spaced>%'] [OR p.PURCHASER_NAME ILIKE '%<vehicle_N_esc>%' ...] THEN TRUE ELSE FALSE END AS IS_FIRM, ROW_NUMBER() OVER (PARTITION BY dd.EXTRACTION_ID ORDER BY p.SHARES_PURCHASED DESC NULLS LAST) AS RN FROM dedup_docs dd JOIN FUND_ADMIN.DOCUMENT_AI_SPA_ISSUER i ON dd.EXTRACTION_ID = i.EXTRACTION_ID JOIN canonical_company cc ON LOWER(TRIM(i.ISSUER_NAME)) = cc.NORM_KEY JOIN FUND_ADMIN.DOCUMENT_AI_SPA_PURCHASER p ON dd.EXTRACTION_ID = p.EXTRACTION_ID LEFT JOIN FUND_ADMIN.DOCUMENT_AI_SPA s ON dd.EXTRACTION_ID = s.EXTRACTION_ID WHERE p.ENTITY_TYPE NOT ILIKE '%notice%' AND p.ENTITY_TYPE NOT ILIKE '%law firm%'), per_round AS (SELECT ISSUER_NAME, SHARE_CLASS_NAME, CLOSING_DATE, EXTRACTION_ID, ARRAY_AGG(OBJECT_CONSTRUCT('n', PURCHASER_NAME, 't', ENTITY_TYPE, 'p', ROUND(PCT_OF_ROUND, 4), 'a', TOTAL_AMOUNT_PAID, 'f', IS_FIRM)) WITHIN GROUP (ORDER BY PCT_OF_ROUND DESC NULLS LAST) AS INVESTORS FROM investor_rows WHERE RN <= 15 GROUP BY ISSUER_NAME, SHARE_CLASS_NAME, CLOSING_DATE, EXTRACTION_ID) SELECT ISSUER_NAME, TO_JSON(ARRAY_AGG(OBJECT_CONSTRUCT('sc', SHARE_CLASS_NAME, 'cd', CLOSING_DATE, 'inv', INVESTORS)) WITHIN GROUP (ORDER BY CLOSING_DATE DESC NULLS LAST)) AS ROUNDS_JSON FROM per_round GROUP BY ISSUER_NAME ORDER BY ISSUER_NAME"
 }})
 ```
@@ -397,8 +391,8 @@ call_tool({"name": "dwh__execute__query", "arguments": {
 > not rendered prominently in the drill-down view.
 
 Query R is one row per portfolio company (10s–100s of rows even for large
-firms), so the single `"limit": 50000` fetch always covers it in one call —
-the same fetch-once rule as Query S. Never re-issue it with an `offset`.
+firms), so a single `"limit": 10000` fetch almost always covers it — but
+check for `next_offset` and paginate if present, same as Query S.
 
 If Query S returns 0 rows: stop with "No SPA documents were found for your account.
 Contact your Carta representative if you believe this is an error."
