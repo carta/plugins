@@ -39,6 +39,7 @@ from pathlib import Path
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
 RES = SKILL_DIR / "resources"
+VENDOR_DIR = SKILL_DIR.parent.parent / "vendor"  # plugin root / vendor/
 
 SKILL_NAME = SKILL_DIR.name
 VERSIONS_FILE = SKILL_DIR.parent.parent / ".claude-plugin" / "skill-versions.json"
@@ -61,9 +62,12 @@ APP_JS_PARTS = [
 
 MARKERS = {
     "carta-home.css": r"/\*\s*__CARTA_HOME_CSS__\s*\*/",
-    "carta-home.chart.js": r"/\*\s*__CARTA_HOME_CHART_JS__\s*\*/",
     "carta-home.tracker.js": r"/\*\s*__CARTA_HOME_TRACKER_JS__\s*\*/",
     "carta-home.config.js": r"/\*\s*__CARTA_HOME_CONFIG_JS__\s*\*/",
+}
+VENDOR_MARKERS = {
+    # chart.js v4.5.1 — replace vendor/chart.umd.min.js and bump this comment to upgrade
+    "chart.umd.min.js": r"/\*\s*__CARTA_HOME_CHART_JS__\s*\*/",
 }
 APP_JS_MARKER = r"/\*\s*__CARTA_HOME_APP_JS__\s*\*/"
 
@@ -105,11 +109,12 @@ def read_version():
 def build(mcp_server):
     template = (RES / "carta-home.template.html").read_text()
     parts = {name: (RES / name).read_text() for name in MARKERS}
+    parts.update({name: (VENDOR_DIR / name).read_text() for name in VENDOR_MARKERS})
     parts.update({name: (RES / name).read_text() for name in APP_JS_PARTS})
     build_id = compute_build_id(template, parts)
 
     out = template
-    for filename, marker in MARKERS.items():
+    for filename, marker in {**MARKERS, **VENDOR_MARKERS}.items():
         content = parts[filename]
         if not re.search(marker, out):
             sys.exit("ERROR: marker for {} missing from template".format(filename))
@@ -122,7 +127,7 @@ def build(mcp_server):
     out = re.sub(APP_JS_MARKER, lambda _m, c=app_js: c, out, count=1)
 
     # Leftover build-time markers would mean an incomplete assembly — fail loudly.
-    for token in ("__CARTA_HOME_CSS__", "__CARTA_HOME_TRACKER_JS__", "__CARTA_HOME_CONFIG_JS__", "__CARTA_HOME_APP_JS__"):
+    for token in ("__CARTA_HOME_CSS__", "__CARTA_HOME_TRACKER_JS__", "__CARTA_HOME_CHART_JS__", "__CARTA_HOME_CONFIG_JS__", "__CARTA_HOME_APP_JS__"):
         if token in out:
             sys.exit("ERROR: unresolved marker {} after assembly".format(token))
 
