@@ -19,8 +19,7 @@ allowed-tools:
   - Bash(mkdir *)
   - Bash(ls *)
   - Bash(uv run *)
-  - mcp__cowork__create_artifact
-  - mcp__cowork__update_artifact
+  - Artifact
 ---
 
 <!-- carta:instrumentation-fallback -->
@@ -66,7 +65,7 @@ Look up Carta Total Compensation (CTC) market salary and equity benchmarks for a
 >
 > | Client | Chat reply | Live artifact panel |
 > |---|---|---|
-> | **Cowork** (`mcp__cowork__create_artifact` callable) | One-line acknowledgement + the data-source attribution line. NO markdown percentile tables. | ✅ Renders the percentile tables |
+> | **`Artifact` callable** | One-line acknowledgement + the data-source attribution line. NO markdown percentile tables. | ✅ Renders the percentile tables |
 > | **Claude Code, Claude Desktop, claude.ai** | ✅ Renders the markdown tables (the "Chat reply format" below) + the attribution line | Not available — skip the artifact path |
 >
 > **Anti-patterns:**
@@ -191,16 +190,16 @@ The script handles all branding automatically — do not modify its output styli
 
 ### Live artifact — exact steps
 
-> **The live artifact panel is an enhancement, not a replacement for the chat experience.** Every surface (Cowork, Claude Code, Claude Desktop, claude.ai) gets the same data and the same Excel export path. The artifact only changes HOW that data is presented:
+> **The live artifact panel is an enhancement, not a replacement for the chat experience.** Every surface gets the same data and the same Excel export path. The artifact only changes HOW that data is presented:
 >
-> - **In Cowork** — render the artifact panel for every benchmark query, no opt-in trigger required. Words like "interactive", "visualize", "explore" are no longer needed. The chat reply that accompanies the panel MUST be a one-line acknowledgement (e.g. *"Opened the benchmark panel for <Role> at <Company> — see the side panel."*) **plus the standard data-source attribution line** (see "Required attribution" below) — and **NOTHING ELSE**. No markdown percentile tables, no per-rating-type sub-tables, no salary/TCC/equity numbers in chat. The artifact panel owns those numbers; duplicating them in chat is noise. The attribution stays in chat because the panel doesn't render it.
-> - **In Claude Code, Claude Desktop, claude.ai** — the artifact tools (`mcp__cowork__create_artifact`) are not available. Present the same data inline using the "Chat reply format (single role)" or CSV/Excel export paths. Skip the artifact steps below.
+> - **Where `Artifact` is callable** — publish the panel for every benchmark query, no opt-in trigger required. Words like "interactive", "visualize", "explore" are no longer needed. The chat reply that accompanies the panel MUST be a one-line acknowledgement (e.g. *"Published the benchmark panel for <Role> at <Company> — <URL>."*) **plus the standard data-source attribution line** (see "Required attribution" below) — and **NOTHING ELSE**. No markdown percentile tables, no per-rating-type sub-tables, no salary/TCC/equity numbers in chat. The artifact panel owns those numbers; duplicating them in chat is noise. The attribution stays in chat because the panel doesn't render it.
+> - **Where it is not** — present the same data inline using the "Chat reply format (single role)" or CSV/Excel export paths. Skip the artifact steps below.
 >
-> Why no Claude Desktop / `preview_start` path? The artifact's interactive controls (corp search, refetch, Download Excel) call `window.cowork.callMcpTool` — a bridge that only exists inside Cowork's iframe. In `preview_start`, the panel would render but the buttons would silently fail to make MCP calls. Cowork is the only surface where the artifact functions correctly today; the chat-only path covers everywhere else equivalently.
+> Why no `preview_start` path? The panel's interactive controls (corp search, refetch, Download Excel) call Carta through the published artifact's `mcp` capability, which only a published artifact has. In `preview_start`, the panel would render but the buttons would silently fail. Publishing is the only surface where the panel functions fully; the chat-only path covers everywhere else equivalently.
 
 **Step 0 — Pick the rendering path**
 
-- **Cowork** (`mcp__cowork__create_artifact` is callable) → use the artifact panel path below (Steps 1, 2, 4). Default for every benchmark query — no trigger phrase needed.
+- **`Artifact` is callable** → use the artifact panel path below (Steps 1, 2, 4). Default for every benchmark query — no trigger phrase needed.
 - **Anywhere else** → skip the artifact steps; present the data inline per "Chat reply format (single role)" + offer the Excel export when appropriate.
 
 **Step 1 — Build the benchmark payload JSON**
@@ -262,20 +261,39 @@ Use `null` for any percentile value the API didn't return — never `0` or `""`.
 
 Write the payload to `/tmp/benchmark_payload_<corp_id>.json`.
 
-**Step 2 — Render the artifact panel (Cowork)**
+**Step 2 — Publish the artifact panel**
 
-Read the engine HTML and inject the payload as a `<script>` block before the engine's own JavaScript runs, then create the artifact via Cowork:
+Read the engine HTML, replace `{{CARTA_MCP_SERVER}}` with the Carta connector's display
+name, and inject the payload as a `<script>` block before the engine's own JavaScript runs:
 
 ```
 Read ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-benchmarks/assets/artifact_engine.html
 ```
 
-Then call `mcp__cowork__create_artifact` with:
-- `html` = `<script>window._BENCHMARK_PAYLOAD = <payload JSON>;</script>` + engine HTML  *(the script tag MUST appear in the document before the engine's main `<script>` block; injecting after the engine's own boot IIFE runs is too late — the engine will treat the panel as interactive-only and skip the pre-seed)*
-- `id` = `comp-benchmarks-<company-slug>`  *(stable per company so re-renders update the existing artifact in place via the auto-retry to `mcp__cowork__update_artifact`)*
-- `description` = `Compensation benchmarks for <Company Name>`
+`Write` `<script>window._BENCHMARK_PAYLOAD = <payload JSON>;</script>` + engine HTML to
+`comp-benchmarks-<company-slug>.html`. The script tag MUST appear in the document before
+the engine's main `<script>` block; injecting after the engine's own boot IIFE runs is too
+late — the engine will treat the panel as interactive-only and skip the pre-seed.
 
-If `mcp__cowork__create_artifact` returns "already exists" (or equivalent), immediately retry with `mcp__cowork__update_artifact` using the same arguments. Re-invocations for the same company produce the same artifact id, so the update branch is the common case after the first render.
+Then check for an existing one with `Artifact({action: "list", scope: "mine"})` and publish:
+
+```
+Artifact({
+  file_path: "comp-benchmarks-<company-slug>.html",
+  url: "<url of the existing panel for this company — omit on a first publish>",
+  title: "Compensation Benchmarks — <Company Name>",
+  description: "Compensation benchmarks for <Company Name>",
+  favicon: "💰",
+  capabilities: {
+    mcp: { servers: [{ server: "<CARTA_MCP_SERVER>", tools: ["list_accounts", "fetch"] }] }
+  }
+})
+```
+
+The panel's own controls (corp search, refetch, Download Excel) call Carta at runtime, so
+both tools must be in the grant or those controls fail with `not_in_manifest`. Re-renders
+for the same company reuse the same `url`, so redeploying in place is the common case
+after the first publish.
 
 > **CRITICAL — Required attribution on every benchmark response**
 >

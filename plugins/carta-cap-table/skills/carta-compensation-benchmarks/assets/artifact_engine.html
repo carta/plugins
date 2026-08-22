@@ -1,13 +1,9 @@
 <!DOCTYPE html>
-<script type="application/json" id="cowork-artifact-meta">{"schemaVersion": 1, "mcp_tools": ["mcp__carta__fetch", "mcp__carta__list_accounts"]}</script>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>{{TITLE}}</title>
-<link rel="preconnect" href="https://rsms.me/">
-<link rel="stylesheet" href="https://rsms.me/inter/inter.css">
-<style>
+<title>{{TITLE}}</title><style>
 @font-face {
   font-family: "SangBleu Versailles";
   src: url("assets/SangBleuVersailles-Regular-WebS.woff2") format("woff2");
@@ -662,20 +658,37 @@ function resolveSeedLocation(r) {
   }
 })();
 
-/* ── Boot: load accessible companies ─────────────────────────────────────── */
-if (window.cowork?.callMcpTool) loadAllCompanies();
-
 /* ── MCP call helper ──────────────────────────────────────────────────────── */
-function callMcp(tool, args) {
-  return window.cowork.callMcpTool(tool, Object.assign({}, args, {
+// The artifact runtime addresses a connector by display name, never a UUID or an
+// mcp__…__ tool name, so tool names below are bare verbs.
+const CARTA_MCP_SERVER = '{{CARTA_MCP_SERVER}}';
+
+let _mcpNsPromise = null;
+// null means this view cannot run mcp — not granted, not served, or failed to load.
+function mcpNamespace() {
+  if (!_mcpNsPromise) {
+    _mcpNsPromise = Promise.resolve(window.claude?.use?.('mcp') ?? null).catch(() => null);
+  }
+  return _mcpNsPromise;
+}
+
+async function mcpAvailable() { return !!(await mcpNamespace()); }
+
+async function callMcp(tool, args) {
+  const mcp = await mcpNamespace();
+  if (!mcp) throw new Error('No live Carta connector in this view');
+  return mcp.callTool(CARTA_MCP_SERVER, tool, Object.assign({}, args, {
     _instrumentation_v2: { skills: ['carta-cap-table:carta-compensation-benchmarks'], from_ui: true },
   }));
 }
 
+/* ── Boot: load accessible companies ─────────────────────────────────────── */
+mcpAvailable().then(live => { if (live) loadAllCompanies(); });
+
 /* ── Company loading ─────────────────────────────────────────────────────── */
 async function loadAllCompanies() {
   try {
-    const res  = await callMcp('mcp__carta__list_accounts', {});
+    const res  = await callMcp('list_accounts', {});
     const data = unwrap(res);
     _allCompanies = (data.accounts || [])
       .filter(a => (a.type === 'company' || a.type === 'fund') && a.name?.trim());
@@ -767,7 +780,7 @@ function renderDropdownItems(accounts) {
 async function doSearch(query) {
   if (!query) return;
   try {
-    const res  = await callMcp('mcp__carta__list_accounts', {search:query});
+    const res  = await callMcp('list_accounts', {search:query});
     const data = unwrap(res);
     renderDropdownItems((data.accounts||[]).filter(a=>a.type==='company'||a.type==='fund'));
   } catch {
@@ -806,7 +819,7 @@ function selectCompany(company, skipReset) {
 
 /* ── Per-row fetch ───────────────────────────────────────────────────────── */
 async function fetchRowData(row) {
-  if (!selectedCompany || !window.cowork?.callMcpTool) return row;
+  if (!selectedCompany || !(await mcpAvailable())) return row;
   const isLeader = trackIsLeader(row.track);
   const params = { corporation_id: selectedCompany.id, job: row.job, level: row.level, equity_quantity: 'FOUR_YEAR_GRANT' };
   if (_benchmarkVersionId != null) params.benchmark_version_id = _benchmarkVersionId;
@@ -819,7 +832,7 @@ async function fetchRowData(row) {
   if (row.location) params.location = row.location;
   if (isLeader) params.is_leader = true;
   try {
-    const res     = await callMcp('mcp__carta__fetch', {command:'compensation:get:benchmark', params});
+    const res     = await callMcp('fetch', {command:'compensation:get:benchmark', params});
     const parsed  = parseResults([{job: row.job, level: row.level, data: res, error: null}]);
     const r       = parsed[0];
     if (!r) {
@@ -1137,6 +1150,8 @@ function esc(s) {
 function unwrap(res) {
   if (!res) return {};
   if (typeof res==='string') { try{return JSON.parse(res);}catch{return{};} }
+  if (res.payload && typeof res.payload==='object') return res.payload;
+  if (typeof res.payload==='string') { try{return JSON.parse(res.payload);}catch{} }
   const sc = res.structuredContent;
   if (sc) {
     if (typeof sc.result==='string') { try{return JSON.parse(sc.result);}catch{} }

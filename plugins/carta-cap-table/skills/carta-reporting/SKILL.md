@@ -18,7 +18,7 @@ allowed-tools:
   - mcp__carta__call_tool
   - mcp__carta__search_tools
   - mcp__carta__list_accounts
-  - mcp__cowork__create_artifact
+  - Artifact
   - Agent
   - AskUserQuestion
   - Bash(cat ${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/staff/*)
@@ -99,7 +99,7 @@ cat <skill_base_dir>/staff/overrides.md 2>/dev/null || true
 ```
 If the file exists, its instructions override the defaults in this skill for any section it covers. If absent, proceed with the defaults below.
 
-**Tool discovery (ALL environments — run before any other step):** Call `ToolSearch` with query `"list_accounts create_artifact"` and `max_results: 10`. Cache the full result set in memory as `_tool_results`. Do not call `ToolSearch` again anywhere in this workflow — all subsequent gates read from this cached result.
+**Tool discovery (ALL environments — run before any other step):** Call `ToolSearch` with query `"list_accounts"` and `max_results: 10`. Cache the full result set in memory as `_tool_results`. Do not call `ToolSearch` again anywhere in this workflow — all subsequent gates read from this cached result.
 
 **Resolve script/asset paths ONCE (run before any other step, in the same turn as tool discovery):** the `report_processor.py` script and `artifact_engine.html` engine can live in varying install locations, but their paths do not change within a session. Resolve both a single time and cache them in memory — do NOT re-run `find` at each later use:
 
@@ -144,11 +144,11 @@ Store the results as `_report_processor_path` and `_engine_html_path`. Every lat
 
 0c. **Set output mode — runs in ALL environments (Claude Desktop and Claude Code)**
 
-   From `_tool_results` (loaded in the tool discovery step above), check whether `mcp__cowork__create_artifact` is present.
+   Check whether the `Artifact` tool is available in this session.
 
    **GATE — pick exactly one outcome and hold it for the rest of this session:**
 
-   - **Cowork available** (`mcp__cowork__create_artifact` found) → output mode is **ARTIFACT**. All non-trivial report data **must** be rendered as a live artifact. Do not render report data as a markdown table in chat. Skip this check for all subsequent steps — output mode is already set.
+   - **`Artifact` available** → output mode is **ARTIFACT**. All non-trivial report data **must** be rendered as a published artifact. Do not render report data as a markdown table in chat. Skip this check for all subsequent steps — output mode is already set.
    - **Cowork unavailable** (tool not found) → output mode is **MARKDOWN**. Use markdown tables and Excel export for all results.
 
    Do not re-run this check later in the workflow. Do not rely on environment heuristics — a user may be on Claude Desktop without Cowork installed.
@@ -372,7 +372,20 @@ Store the results as `_report_processor_path` and `_engine_html_path`. Every lat
 
    **Naming** — use a short slug: `{stakeholder-or-entity}-{report-type}`, e.g. `meetly-securities-ledger`.
 
-   One short sentence before creating ("Building your report…"), then call `mcp__cowork__create_artifact` with `html` as the full combined HTML string — not a file path.
+   One short sentence before publishing ("Building your report…"), then `Write` the full
+   combined HTML to `{slug}.html` and publish it:
+
+   ```
+   Artifact({
+     file_path: "{slug}.html",
+     title: "{Company Name} — {Report Type}",
+     description: "{Report Type} for {Company Name} — {N} rows as of {date}.",
+     favicon: "📋"
+   })
+   ```
+
+   The payload is baked into the page, so it needs no `capabilities`. To refresh a report
+   already published this session, pass that artifact's `url` so it redeploys in place.
 
    **Always present a customization checkpoint after the artifact renders — every artifact, without exception:**
 
