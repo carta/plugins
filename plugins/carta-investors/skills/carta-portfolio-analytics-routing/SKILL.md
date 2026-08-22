@@ -20,8 +20,7 @@ allowed-tools:
   - mcp__Claude_Preview__preview_start
   - mcp__Claude_Preview__preview_list
   - mcp__Claude_Preview__preview_eval
-  - mcp__cowork__create_artifact
-  - mcp__cowork__update_artifact
+  - Artifact
   - Bash(uv run /sessions/*)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/*)
   - Bash(pwd)
@@ -419,7 +418,7 @@ to active" below, not a re-mirroring job.
 ### Loan Dashboard
 
 - **Status:** Internal stage — has a `version` field (`1.0.0`) but no `publish` field. Not GA for external users.
-- **Mirror status:** Already built at `references/loan-dashboard.md` — one call rewritten (the Step 7e `read_skill` fallback, see References layout above) plus a real copy of `artifact_template.html` into `references/loan-dashboard/`. Every Bash pattern it needs (`carta workspace cache`, `uv run`, `test -d`/`-f`, `find`, `mkdir -p`) and `mcp__cowork__create_artifact`/`update_artifact` are already in this router's `allowed-tools` (added for `carta-soi`'s own Cowork artifact calls). Only `mcp__cowork__list_artifacts` and `read_skill` are missing — add those two at promotion time.
+- **Mirror status:** Already built at `references/loan-dashboard.md` — one call rewritten (the Step 7e `read_skill` fallback, see References layout above) plus a real copy of `artifact_template.html` into `references/loan-dashboard/`. Every Bash pattern it needs (`carta workspace cache`, `uv run`, `test -d`/`-f`, `find`, `mkdir -p`) and `Artifact` are already in this router's `allowed-tools` (added for `carta-soi`'s own artifact calls). Only `read_skill` is missing — add it at promotion time.
 - **Signals:** "loan dashboard", "loan portfolio", "show my loans", "loan overview", "draw balance", "drawn balance", "undrawn", "credit facility", "outstanding loans", "loan commitments", "borrower portfolio", "loan KPIs", "loan exposure"
 - **CTA until GA:** "The loan portfolio dashboard is coming to external users soon. Reach out to your Carta account manager or contact Carta Support to request early access."
 - **Skill when live:** `carta-investors:carta-loan-dashboard`

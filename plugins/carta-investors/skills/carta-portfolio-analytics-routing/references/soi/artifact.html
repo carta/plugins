@@ -1,11 +1,4 @@
 <!DOCTYPE html>
-<script type="application/json" id="cowork-artifact-meta">
-{
-  "name": "Schedule of Investments",
-  "schemaVersion": 1,
-  "description": "Interactive Schedule of Investments (SOI) with hierarchical company/asset view, sortable columns, and live filter. Fetches fund holdings data from Carta data warehouse via MCP."
-}
-</script>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -638,25 +631,22 @@
         // FIRM_UUID: the firm that owns the funds. The artifact pins the user's MCP
         //   firm context to this on load (via set_context), so the dwh query
         //   succeeds even if the user has switched contexts elsewhere.
-        // MCP_TOOL_NAME: the Carta call_tool, UUID-form. The artifact runtime
-        //   does NOT resolve name-form prefixes (e.g. mcp__carta-test__call_tool fails),
-        //   only UUID-form (e.g. mcp__33b9b857-...__call_tool works). The UUID is per-user-
-        //   installation, so the skill must discover the active user's UUID at create-time
-        //   and inject it here.
+        // CARTA_MCP_SERVER: the Carta connector's DISPLAY NAME. The artifact runtime's
+        //   mcp capability addresses a connector by display name only — never a UUID and
+        //   never an mcp__…__ tool name — because a published page runs for many viewers
+        //   and connector ids are per-viewer facts. The skill resolves it at publish time.
         const STATE = JSON.parse(document.getElementById('soi-funds-state').textContent);
         const FUNDS = STATE.funds;
         const INITIAL_FUND_UUID = '{{INITIAL_FUND_UUID}}';
         const FIRM_UUID = '{{FIRM_UUID}}';
-        const MCP_TOOL_NAME = '{{MCP_TOOL_NAME}}';
-        // set_context and welcome both live on the same UUID-form connector — same
-        // prefix, different verb. welcome initializes the user's MCP session
-        // (identity, accounts, product access). The MCP server requires it to have
-        // been called once per session; when the session expires (typically after a
-        // few days of inactivity), subsequent tool calls return an "isError"
-        // envelope asking us to call welcome. We catch that below in
-        // callMcpWithWelcomeRetry and recover transparently.
-        const SET_CONTEXT_TOOL_NAME = MCP_TOOL_NAME.replace(/__call_tool$/, '__set_context');
-        const WELCOME_TOOL_NAME = MCP_TOOL_NAME.replace(/__call_tool$/, '__welcome');
+        const CARTA_MCP_SERVER = '{{CARTA_MCP_SERVER}}';
+        // welcome initializes the user's MCP session (identity, accounts, product
+        // access). The server requires it once per session; when the session expires
+        // (typically after a few days of inactivity), later calls fail asking us to
+        // call welcome. callMcpWithWelcomeRetry below catches that and recovers.
+        const CALL_TOOL = 'call_tool';
+        const SET_CONTEXT_TOOL = 'set_context';
+        const WELCOME_TOOL = 'welcome';
 
         // SOI query — actively held positions only, ordered for stable pagination.
         // The dwh__execute__query response has a payload size limit (large funds were
@@ -1345,21 +1335,14 @@
             }
         }
 
-        // The Carta MCP returns an isError envelope asking us to call `welcome`
-        // when the user's session state has expired (typically after a few days
-        // of inactivity). Match on the word "welcome" — narrow enough to avoid
-        // false positives on unrelated dwh errors, loose enough to survive minor
-        // wording tweaks from the MCP team.
+        // The Carta MCP asks us to call `welcome` when the user's session state has
+        // expired (typically after a few days of inactivity). Match on the word
+        // "welcome" — narrow enough to avoid false positives on unrelated dwh errors,
+        // loose enough to survive minor wording tweaks from the MCP team.
         function isWelcomeRequiredMessage(text) {
             return typeof text === 'string' && /welcome/i.test(text);
         }
 
-        // Wrapper around window.cowork.callMcpTool that transparently recovers
-        // from "please call welcome first" errors. On the first such failure
-        // per artifact load, we call welcome to re-initialize the session and
-        // retry the original call once. Any other error is passed through
-        // untouched, and `welcomeCalledThisSession` stops us from looping if
-        // welcome itself didn't fix the underlying issue.
         // Every Carta MCP call — call_tool, set_context, welcome alike — must carry
         // _instrumentation_v2 or the MCP rejects it with an "attach it to every
         // call" error. Centralized here so every call site (including the retry
@@ -1371,8 +1354,39 @@
             return { ...args, _instrumentation_v2: INSTRUMENTATION_V2 };
         }
 
+        let _mcpNsPromise = null;
+        // null means this view cannot run mcp — not granted, not served, or failed to load.
+        function mcpNamespace() {
+            if (!_mcpNsPromise) {
+                _mcpNsPromise = Promise.resolve(window.claude?.use?.('mcp') ?? null).catch(() => null);
+            }
+            return _mcpNsPromise;
+        }
+
+        // A tool that ran and reported failure comes back as an isError envelope so the
+        // welcome recovery below can read its message. Connector-level codes
+        // (needs_reauth, server_not_connected) rethrow — those are page-level.
+        async function callCartaTool(toolName, args) {
+            const mcp = await mcpNamespace();
+            if (!mcp) {
+                throw new Error('No live Carta connector in this view — the page cannot load data');
+            }
+            try {
+                return await mcp.callTool(CARTA_MCP_SERVER, toolName, withInstrumentation(args || {}));
+            } catch (err) {
+                if (err && err.code === 'tool_error') {
+                    return { isError: true, code: err.code, result: err.result, content: [{ type: 'text', text: err.message || 'tool error' }] };
+                }
+                throw err;
+            }
+        }
+
+        // Transparently recovers from "please call welcome first" errors. On the first
+        // such failure per artifact load, call welcome to re-initialize the session and
+        // retry the original call once. Any other error passes through untouched, and
+        // `welcomeCalledThisSession` stops a loop if welcome didn't fix the cause.
         async function callMcpWithWelcomeRetry(toolName, args) {
-            const result = await window.cowork.callMcpTool(toolName, withInstrumentation(args));
+            const result = await callCartaTool(toolName, args);
             if (!result || !result.isError) return result;
 
             const errorText = (result.content && result.content[0] && result.content[0].text) || '';
@@ -1382,13 +1396,13 @@
 
             setLoadingStatus('Reconnecting to Carta…');
             welcomeCalledThisSession = true;
-            const welcomeResult = await window.cowork.callMcpTool(WELCOME_TOOL_NAME, withInstrumentation({}));
+            const welcomeResult = await callCartaTool(WELCOME_TOOL, {});
             if (welcomeResult && welcomeResult.isError) {
                 const msg = (welcomeResult.content && welcomeResult.content[0] && welcomeResult.content[0].text) || '<no message>';
                 throw new Error('Failed to initialize MCP session: ' + msg);
             }
 
-            return await window.cowork.callMcpTool(toolName, withInstrumentation(args));
+            return await callCartaTool(toolName, args);
         }
 
         // Idempotent rebuild of contentArea's child structure. Called from every render
@@ -1458,7 +1472,7 @@
         async function fetchAllPages(buildSql) {
             const allRows = [];
             for (let page = 0; page < MAX_PAGES; page++) {
-                const result = await callMcpWithWelcomeRetry(MCP_TOOL_NAME, {
+                const result = await callMcpWithWelcomeRetry(CALL_TOOL, {
                     name: 'dwh__execute__query',
                     arguments: { sql: buildSql(page * PAGE_SIZE, PAGE_SIZE) },
                 });
@@ -1630,8 +1644,8 @@
                 showError('No firm UUID provided. The skill must inject a firm_uuid when creating the artifact.');
                 return;
             }
-            if (!MCP_TOOL_NAME) {
-                showError("No MCP tool name provided. The skill must inject the user's UUID-form Carta call_tool name when creating the artifact.");
+            if (!CARTA_MCP_SERVER) {
+                showError('No Carta connector name provided. The skill must inject the connector display name when publishing the artifact.');
                 return;
             }
             if (!Array.isArray(FUNDS) || FUNDS.length === 0) {
@@ -1646,7 +1660,7 @@
             // fund switches. If the MCP session has expired this is the first
             // place we'd notice; the wrapper handles the welcome-then-retry.
             try {
-                const contextResult = await callMcpWithWelcomeRetry(SET_CONTEXT_TOOL_NAME, { firm_id: FIRM_UUID });
+                const contextResult = await callMcpWithWelcomeRetry(SET_CONTEXT_TOOL, { firm_id: FIRM_UUID });
                 if (contextResult && contextResult.isError) {
                     const msg = (contextResult.content && contextResult.content[0] && contextResult.content[0].text) || '<no message>';
                     throw new Error(msg);

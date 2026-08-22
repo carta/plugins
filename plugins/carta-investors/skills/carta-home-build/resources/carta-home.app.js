@@ -1,16 +1,53 @@
-// ── Carta MCP wrapper: injects _instrumentation_v2 required since 2026-07-27 ──
+// ── Carta MCP bridge ──
+// The artifact runtime addresses a connector by display name, so {{CARTA_MCP_SERVER}} is
+// the name the build script stamps in — not a UUID and not a prefixed tool name.
+const CARTA_MCP_SERVER = "{{CARTA_MCP_SERVER}}";
+
+let _mcpNsPromise = null;
+// For sync render paths: null while resolving, then true/false. Unknown behaves like
+// live, since each such path re-renders once enrichment settles.
+let _mcpLive = null;
+
+// null means this view cannot run mcp — not granted, not served, or failed to load.
+function _mcpNamespace() {
+  if (!_mcpNsPromise) {
+    _mcpNsPromise = Promise.resolve(window.claude?.use?.("mcp") ?? null)
+      .catch(() => null)
+      .then(ns => { _mcpLive = !!ns; return ns; });
+  }
+  return _mcpNsPromise;
+}
+
+// Gate every data path on this instead of probing window.claude members.
+async function mcpAvailable() {
+  return !!(await _mcpNamespace());
+}
+
+_mcpNamespace();  // start resolving at load so the sync render paths see a settled answer
+
+// Carta MCP wrapper: injects _instrumentation_v2 required since 2026-07-27
 async function _mcp(tool, args) {
-  return window.cowork.callMcpTool(
-    "mcp__{{CARTA_MCP_ID}}__" + tool,
-    Object.assign({}, args, { _instrumentation_v2: { skills: ['carta-investors:carta-home-build'], from_ui: true } })
-  );
+  const mcp = await _mcpNamespace();
+  if (!mcp) throw new Error("Carta connector unavailable in this view");
+  try {
+    return await mcp.callTool(
+      CARTA_MCP_SERVER,
+      tool,
+      Object.assign({}, args, { _instrumentation_v2: { skills: ['carta-investors:carta-home-build'], from_ui: true } })
+    );
+  } catch (err) {
+    // A failed tool belongs to the card that asked, so return an envelope. Connector
+    // codes (needs_reauth, server_not_connected) rethrow — those are page-level.
+    if (err?.code === "tool_error") return { isError: true, code: err.code, result: err.result, content: [{ type: "text", text: err.message ?? "tool error" }] };
+    throw err;
+  }
 }
 
 // ── Snowplow UI-event tracking via @carta/mcp-ui-tracker (window.mcpUiTracker) ──
 if (window.mcpUiTracker) {
   window.mcpUiTracker.initTracker({
     interface: { interfaceType: "artifact", interfaceId: "carta-home" },
-    mcpServerId: "{{CARTA_MCP_ID}}",
+    mcpServerId: CARTA_MCP_SERVER,
   });
 }
 function trackHome(action, elementId, options) {
@@ -191,7 +228,7 @@ function _fmtQtr(dateStr) {
 }
 
 async function fetchBenchmarkData() {
-  if (!window.cowork?.callMcpTool || !_benchmarkFirmId) return;
+  if (!(await mcpAvailable()) || !_benchmarkFirmId) return;
 
   try {
     const res = await _mcp("fetch", {
@@ -302,9 +339,10 @@ async function fetchBenchmarkData() {
 }
 
 // ── Static fallback data ──
-function populateFallback() {
-  // SOI card: no fallback — show error state so broken loading is visible
-  renderSOIError("Not loading");
+function populateFallback(reason) {
+  // Name the cause: viewers reach here without a connector on first open, and only
+  // one of the two causes is something they can act on.
+  renderSOIError(reason || "Can't load your portfolio — this page isn't connected to Carta.");
 
   // Tear sheet: show fallback state
   const tsLbl = document.getElementById("ts-company-label");
@@ -486,8 +524,8 @@ function selectTSCompany(name) {
 
 // ── Live data fetch from Carta MCP ──
 async function fetchLiveData() {
-  if (!window.cowork?.callMcpTool) {
-    // No cowork context — use fallback
+  if (!(await mcpAvailable())) {
+    // No live connector in this view — use fallback
     populateFallback();
     return;
   }
@@ -545,7 +583,7 @@ async function fetchLiveData() {
       });
     }
 
-    if (!firmId) { populateFallback(); return; }
+    if (!firmId) { populateFallback("Can't load your portfolio — no active firm in your Carta context."); return; }
 
     // Await set_context before firing DWH queries — the MCP server requires an active
     // firm context even when FIRM_ID is embedded directly in the SQL.
@@ -871,11 +909,21 @@ ORDER BY MONTH_END_DATE DESC LIMIT 1`
 
   } catch (err) {
     console.error("Carta MCP fetch error:", err);
-    // SOI card: no fallback — show explicit error so broken loading is visible
-    renderSOIError("Not loading");
-    // P&L / BS tiles: leave as — (data unavailable)
+    // Connector-level codes rethrow from _mcp and land here. Each has a different fix,
+    // so name it — one generic banner hides the action that would repair the page.
+    renderSOIError(SOI_ERROR_BY_CODE[err?.code]
+      || "Can't load your portfolio — something went wrong reaching Carta.");
   }
 }
+
+const SOI_ERROR_BY_CODE = {
+  needs_reauth:         "Can't load your portfolio — reconnect Carta in Settings → Connectors.",
+  server_not_connected: "Can't load your portfolio — add the Carta connector in Settings → Connectors.",
+  selection_required:   "Can't load your portfolio — choose which Carta connector to use.",
+  server_unavailable:   "Can't load your portfolio — Carta didn't respond. Reload to retry.",
+  blocked_by_policy:    "Can't load your portfolio — your organization's policy blocks this.",
+  approval_required:    "Can't load your portfolio — this needs approval from your organization.",
+};
 
 // ── Helpers ──
 function tryParse(str) { try { return JSON.parse(str); } catch { return null; } }
@@ -1143,7 +1191,7 @@ async function soiLoadAllFunds() {
   soiSetStatus('Loading…');
   document.getElementById('soi-page-table').style.display = 'none';
 
-  if (!window.cowork?.callMcpTool) { soiLoadFallback(); return; }
+  if (!(await mcpAvailable())) { soiLoadFallback(); return; }
 
   const token = ++soiLoadToken;
   try {
@@ -1671,7 +1719,7 @@ async function perfLoadAllFunds() {
   if (!listEl) return;
   if (_perfAllFundsLoaded && listEl.querySelector('table.perf-funds-table')) return;
   listEl.innerHTML = '<div class="perf-list-status">Loading fund performance…</div>';
-  if (!window.cowork?.callMcpTool) {
+  if (!(await mcpAvailable())) {
     listEl.innerHTML = '<div class="perf-list-status">Live data not available in preview mode.</div>';
     return;
   }
@@ -1940,7 +1988,7 @@ async function perfLoadFund(uuid) {
   let seriesData = null;
   let snapshotRow = null;
 
-  if (uuid && window.cowork?.callMcpTool) {
+  if (uuid && await mcpAvailable()) {
     // ── Helper: parse series rows ──
     const _parseSeriesRows = (rows) => rows.map(row => ({
       QUARTER_END_DATE: _fmtQtr(row.PERFORMANCE_QUARTER_START_DATE),
@@ -2315,11 +2363,9 @@ function perfDrawCharts(data) {
 let _userEntitlements = {};  // product flags (manco, tactyc); true/false/null-unknown
 let _enrichmentDone = false; // flips true once get_current_user resolves/fails/times out
 let _dirTabOpened = false;   // has the user opened the Skill directory tab this session
-// Collect every plausible "actual payload" object out of an MCP tool result,
-// however callMcpTool happened to wrap it this time: the raw object, MCP
-// content[].text (JSON string), or a {result:"<json>"} wrapper under
-// structuredContent. Order is candidate-priority, not confidence — callers
-// apply their own predicate to pick the real one.
+// Collect every plausible "actual payload" object out of a callTool result: `payload`,
+// `structuredContent`, content[].text as a JSON string, or a {result:"<json>"} wrapper.
+// Order is candidate-priority, not confidence — callers apply their own predicate.
 function _mcpResultCandidates(res) {
   const cands = [];
   const add = v => {
@@ -2327,6 +2373,7 @@ function _mcpResultCandidates(res) {
     else if (v && typeof v === "object") { cands.push(v); if (typeof v.result === "string") { const p = tryParse(v.result); if (p) cands.push(p); } }
   };
   if (res && typeof res === "object") {
+    add(res.payload);
     add(res);
     add(res.structuredContent);
     add(res.result);
@@ -2335,9 +2382,8 @@ function _mcpResultCandidates(res) {
   return cands;
 }
 
-// Dig the user-profile object out of whatever shape callMcpTool returns.
-// Returns the first candidate that has firm_ui_categories, else the first
-// object-shaped candidate, else {}.
+// Dig the user-profile object out of the result. Returns the first candidate that has
+// firm_ui_categories, else the first object-shaped candidate, else {}.
 function extractUserProfile(res) {
   const cands = _mcpResultCandidates(res);
   const norm = c => (c && (c.user || c.profile)) || c;
@@ -2369,17 +2415,8 @@ function readProductFlag(profile, key) {
 }
 
 async function fetchUserEnrichment() {
-  // Wait up to 3s for cowork to be injected before giving up
-  if (!window.cowork?.callMcpTool) {
-    await new Promise(resolve => {
-      let waited = 0;
-      const poll = setInterval(() => {
-        waited += 100;
-        if (window.cowork?.callMcpTool || waited >= 3000) { clearInterval(poll); resolve(); }
-      }, 100);
-    });
-  }
-  if (!window.cowork?.callMcpTool) { markEnrichmentDone(); return; }
+  // No poll needed: claude.use("mcp") settles on its own once the view knows.
+  if (!(await mcpAvailable())) { markEnrichmentDone(); return; }
   try {
     const res = await _mcp("get_current_user", {});
     console.log("[carta-home][debug] get_current_user full payload:\n" + JSON.stringify(res, null, 2));
@@ -2494,7 +2531,7 @@ function renderDirectory() {
   // personalizing state instead of the unfiltered full list — markEnrichmentDone()
   // re-renders this with the role filter applied. (Skipped with no MCP, e.g. local
   // preview, where enrichment can't run and we just show everything.)
-  if (!_enrichmentDone && window.cowork?.callMcpTool) {
+  if (!_enrichmentDone && _mcpLive !== false) {
     grid.innerHTML = '<div style="grid-column:1/-1;padding:24px 0;color:var(--ink-color-global-text-subtle);font-size:13px;">Personalizing your directory…</div>';
     return;
   }

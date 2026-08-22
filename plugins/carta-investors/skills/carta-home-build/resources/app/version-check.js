@@ -111,10 +111,10 @@ function renderUpdateBanner(latest, headline) {
   trackHome("render", "CartaHome.UpdateBanner.Shown");
 }
 
-// Dig the version payload out of whatever shape callMcpTool returns, the same way
-// extractUserProfile/extractContextsPayload do — the wrapper varies between a raw
-// object, `content[].text`, and `{result:"<json>"}`, so matching on a fixed shape
-// silently reads `undefined` and the banner never appears.
+// Dig the version payload out of the result, the same way extractUserProfile and
+// extractContextsPayload do — the wrapper varies between `payload`, a raw object,
+// `content[].text`, and `{result:"<json>"}`, so matching on a fixed shape silently
+// reads `undefined` and the banner never appears. long-comment-ok: shape enumeration
 function extractVersionPayload(res) {
   // _mcpResultCandidates only walks objects; a transport that hands back the bare JSON
   // string still has to resolve, so parse that case before delegating.

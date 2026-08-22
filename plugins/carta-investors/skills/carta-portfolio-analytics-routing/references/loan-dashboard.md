@@ -8,13 +8,13 @@ sync; see carta-portfolio-analytics-routing/SKILL.md Architecture Notes
 NOT YET WIRED — this route is not dispatched from Step 3. Step 7e below
 calls `read_skill`, which is NOT in the router's `allowed-tools`; testing
 this fallback path today will fail silently at the tool-call stage. Add
-`mcp__cowork__list_artifacts` and `read_skill` to `allowed-tools` at
-promotion time (see "Future routes" in SKILL.md).
+`read_skill` to `allowed-tools` at promotion time (see "Future routes" in
+SKILL.md).
 -->
 
 # Loan Dashboard Skill
 
-Creates (or updates) a persistent Cowork artifact showing the user's loan portfolio: KPI tiles + a top-10 loans table. Data is pulled from Carta via the MCP and **baked into the artifact at create time** (the artifact does not fetch live). The skill is identity-agnostic — RAP scopes which loans are visible via the firm context; the skill adds no firm filter.
+Publishes (or redeploys) a persistent artifact showing the user's loan portfolio: KPI tiles + a top-10 loans table. Data is pulled from Carta via the MCP and **baked into the artifact at create time** (the artifact does not fetch live). The skill is identity-agnostic — RAP scopes which loans are visible via the firm context; the skill adds no firm filter.
 
 ## Steps
 
@@ -108,6 +108,19 @@ The shared renderer reads the template you point it at, applies the XSS-safe `\u
 | 4 | bundled template not found | use the inline fallback (7e) |
 | 14 | template token count is not exactly 1 (drift) | stop; the template needs fixing, report it |
 
-**7d. Create / update the artifact.** `Read` the rendered HTML from the path the script printed. Then `mcp__cowork__list_artifacts`; if id `loan-dashboard` exists → `mcp__cowork__update_artifact` (id `loan-dashboard`, that html, `update_summary: "Refreshed for <firm_name>"`); else → `mcp__cowork__create_artifact` (id `loan-dashboard`, name "Loan Dashboard", that html, description "Loan portfolio dashboard — KPIs + top-10 loans from Carta."). Tell the user the dashboard is ready, briefly. Do nothing else after.
+**7d. Publish the artifact.** `Artifact({action: "list", scope: "mine"})`; if a **Loan Dashboard** artifact is already published, keep its `url`. Then publish the path the script printed — `url` is the only difference between a first publish and a redeploy:
 
-**7e. Inline fallback** (only when 7a's probe finds no script or the runtime blocks subprocess): load the template with `read_skill(file_path="references/loan-dashboard/artifact_template.html")` (this router's own mirrored copy — `read_skill` resolves relative to the currently-executing skill, which is this router, not `carta-loan-dashboard`), escape the compact data JSON exactly as the template's header comment documents (the `\uXXXX` form for `&` `<` `>` `'` — **not** HTML entities; a raw `</script>` in a warehouse string would otherwise inject HTML = stored XSS), replace the single `__LOAN_DATA__` placeholder, then create/update as in 7d.
+```
+Artifact({
+  file_path: "<path printed by the script>",
+  url: "<url from the list — omit entirely on a first publish>",
+  title: "Loan Dashboard",
+  description: "Loan portfolio dashboard — KPIs + top-10 loans from Carta.",
+  favicon: "🏦",
+  label: "Refreshed for <firm_name>"
+})
+```
+
+No `capabilities` — this variant bakes the data in at publish time and makes no runtime MCP calls. Give the user the URL, briefly. Do nothing else after.
+
+**7e. Inline fallback** (only when 7a's probe finds no script or the runtime blocks subprocess): load the template with `read_skill(file_path="references/loan-dashboard/artifact_template.html")` (this router's own mirrored copy — `read_skill` resolves relative to the currently-executing skill, which is this router, not `carta-loan-dashboard`), escape the compact data JSON exactly as the template's header comment documents (the `\uXXXX` form for `&` `<` `>` `'` — **not** HTML entities; a raw `</script>` in a warehouse string would otherwise inject HTML = stored XSS), replace the single `__LOAN_DATA__` placeholder, then publish as in 7d.

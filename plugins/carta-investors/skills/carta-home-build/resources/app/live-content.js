@@ -11,11 +11,11 @@ const NEWS_TAG_SOURCE = "metadata";
 // content_type intentionally UNSET so the query spans event/webPage/caseStudy/blogPost.
 
 // Unwrap an MCP call_tool result into the plain object the command returned.
-// The command's output is {result: <entry|asset>}; prefer structured_content,
+// The command's output is {result: <entry|asset>}; prefer the structured payload,
 // fall back to JSON in the text content block.
 function _unwrap(res) {
   if (!res || res.isError) return null;
-  let obj = res.structured_content ?? res.structuredContent ?? null;
+  let obj = res.payload ?? res.structured_content ?? res.structuredContent ?? null;
   if (obj && obj.result !== undefined) obj = obj.result;
   if (obj) return obj;
   const txt = res.content?.[0]?.text;
@@ -204,10 +204,10 @@ function _buildCards(items, entries) {
 
 async function fetchLiveContent() {
   // The template ships static Plugin news cards. Replace them only once live cards
-  // exist; on any failure / no bridge / empty result, keep the static cards.
+  // exist; on any failure / no connector / empty result, keep the static cards.
   const grid = document.getElementById("plugin-news-grid");
   if (!grid) return;
-  if (!window.cowork?.callMcpTool) return;
+  if (!(await mcpAvailable())) return;
 
   try {
     const { items, entries } = await _listContent();

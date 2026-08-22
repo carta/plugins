@@ -17,7 +17,7 @@ cutting tokens and latency.
 
 Usage:
     uv run render-artifact.py <output> <artifact_id> \\
-        <mcp_tool> <firm_uuid> <firm_name> <funds_file> <initial_fund_uuid>
+        <mcp_server> <firm_uuid> <firm_name> <funds_file> <initial_fund_uuid>
 
 The template is resolved relative to this file, so callers only locate the script.
 
@@ -38,10 +38,9 @@ Embedded state block (in the rendered HTML, consumed at runtime by artifact.html
     {"firm_uuid": "...", "firm_name": "...", "funds": [{"uuid": "...", "name": "...", "currency": "..."}]}
     </script>
 
-On success, one line is printed to stdout: the absolute output path. The
-calling skill no longer needs a verb signal — it attempts
-mcp__cowork__create_artifact, falling back to mcp__cowork__update_artifact on
-"already exists".
+On success, one line is printed to stdout: the absolute output path. The calling
+skill publishes it with the Artifact tool, passing the existing artifact's `url`
+when one is already published so the page redeploys in place.
 
 Output path and funds-file path are constrained to live under CWD and not under
 /tmp. SKILL.md says the same thing in prose, but a prompt-injected LLM could
@@ -64,7 +63,7 @@ TEMPLATE_CANDIDATES = (
 PLACEHOLDERS = (
     "{{FUNDS_JSON}}",
     "{{INITIAL_FUND_UUID}}",
-    "{{MCP_TOOL_NAME}}",
+    "{{CARTA_MCP_SERVER}}",
     "{{FIRM_NAME}}",
     "{{FIRM_UUID}}",
 )
@@ -73,10 +72,10 @@ UUID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
     re.IGNORECASE,
 )
-MCP_TOOL_RE = re.compile(
-    r"^mcp__[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}__[a-z_]+$",
-    re.IGNORECASE,
-)
+# The artifact runtime addresses a connector by display name. Names are viewer-facing
+# text, so only reject what would break the page: empty, or a stray quote/angle bracket
+# that could escape the JS string literal it lands in.
+MCP_SERVER_RE = re.compile(r"^[^\r\n\'\"<>\\]{1,120}$")
 ARTIFACT_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]*[a-z0-9]$")
 
 
@@ -179,12 +178,12 @@ def main() -> int:
     if len(sys.argv) != 8:
         print(
             "usage: render-artifact.py <output> <artifact_id> "
-            "<mcp_tool> <firm_uuid> <firm_name> <funds_file> <initial_fund_uuid>",
+            "<mcp_server> <firm_uuid> <firm_name> <funds_file> <initial_fund_uuid>",
             file=sys.stderr,
         )
         return 2
 
-    (output, artifact_id, mcp_tool,
+    (output, artifact_id, mcp_server,
      firm_uuid, firm_name, funds_file, initial_fund_uuid) = sys.argv[1:]
 
     if not UUID_RE.match(firm_uuid):
@@ -193,10 +192,10 @@ def main() -> int:
     if not UUID_RE.match(initial_fund_uuid):
         print(f"error: initial_fund_uuid is not a valid UUID: {initial_fund_uuid!r}", file=sys.stderr)
         return 1
-    if not MCP_TOOL_RE.match(mcp_tool):
+    if not MCP_SERVER_RE.match(mcp_server):
         print(
-            f"error: mcp_tool must use a UUID-form prefix "
-            f"(e.g. mcp__33b9b857-...__call_tool), not name-form; got: {mcp_tool!r}",
+            f"error: mcp_server must be the Carta connector's display name — non-empty "
+            f"and free of quotes, angle brackets and newlines; got: {mcp_server!r}",
             file=sys.stderr,
         )
         return 1
@@ -249,7 +248,7 @@ def main() -> int:
 
     content = content.replace("{{FUNDS_JSON}}", js_safe_json(state_obj))
     content = content.replace("{{INITIAL_FUND_UUID}}", initial_fund_uuid)
-    content = content.replace("{{MCP_TOOL_NAME}}", mcp_tool)
+    content = content.replace("{{CARTA_MCP_SERVER}}", mcp_server)
     content = content.replace("{{FIRM_NAME}}", html.escape(firm_name))
     content = content.replace("{{FIRM_UUID}}", firm_uuid)
 

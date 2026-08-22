@@ -12,13 +12,16 @@ description: >
   carta home dashboard".
 model: sonnet
 allowed-tools:
+  # Carta MCP — Gate B probe only; registration prefix varies by host
+  - mcp__carta__welcome
+  - mcp__carta__get_current_user
+  - mcp__claude_ai_carta__welcome
+  - mcp__claude_ai_carta__get_current_user
   - Bash(uv run *build_artifact.py *)
   - Bash(find ~ -name "build_artifact.py"*)
   - Bash(find /sessions -name "build_artifact.py"*)
   - Bash(dirname *)
-  - mcp__cowork__list_artifacts
-  - mcp__cowork__create_artifact
-  - mcp__cowork__update_artifact
+  - Artifact
 ---
 
 <!-- carta:instrumentation-fallback -->
@@ -31,9 +34,9 @@ allowed-tools:
 
 # Carta Home — Build / Redeploy
 
-Deploys the `carta-home` Cowork live artifact. It is **assembled** from source parts in
+Deploys the `carta-home` live artifact. It is **assembled** from source parts in
 this skill's `resources/` directory (template + CSS + config + app JS) by
-`scripts/build_artifact.py`, which also substitutes this session's Carta MCP server ID.
+`scripts/build_artifact.py`, which also substitutes this session's Carta connector name.
 You never need to read the assembled HTML — see "Source layout" below.
 
 ## What the artifact does
@@ -80,17 +83,23 @@ You never need to read the assembled HTML — see "Source layout" below.
 
 ## MCP tools required inside the artifact
 
-The artifact calls these tools at runtime via `window.cowork.callMcpTool()`. The tool names
-use the format `mcp__<SERVER_ID>__<tool>` where `<SERVER_ID>` is the UUID of the user's
-Carta MCP connector — this is the `{{CARTA_MCP_ID}}` placeholder that the build script fills in.
+The artifact resolves the runtime bridge once with `await claude.use("mcp")`, then calls
+`mcp.callTool(CARTA_MCP_SERVER, "<tool>", args)`. `CARTA_MCP_SERVER` is the Carta
+connector's **display name** — the `{{CARTA_MCP_SERVER}}` placeholder the build script
+fills in. The runtime addresses connectors by display name only, never by a UUID.
 
-- `mcp__{{CARTA_MCP_ID}}__list_contexts` — auto-detects the active firm
-- `mcp__{{CARTA_MCP_ID}}__set_context` — activates the firm's DWH session
-- `mcp__{{CARTA_MCP_ID}}__fetch` — all DWH queries (SOI, P&L, BS, benchmarks, tear sheets)
-- `mcp__{{CARTA_MCP_ID}}__get_current_user` — signed-in user's profile; `has_tactyc` and
-  `has_active_manco` gate their Skill Directory categories (see `fetchUserEnrichment`)
-- `mcp__{{CARTA_MCP_ID}}__mutate` — write operations; used by the Capital Activity detail
-  overlay's reminder actions (`fa:send:capital-call-reminder`)
+Every tool below must appear in the publish call's `capabilities.mcp` grant, or the call
+rejects with `not_in_manifest`:
+
+- `welcome` — re-initializes an expired MCP session
+- `list_contexts` — auto-detects the active firm
+- `set_context` — activates the firm's DWH session
+- `fetch` — all DWH queries (SOI, P&L, BS, benchmarks, tear sheets)
+- `get_current_user` — signed-in user's profile; `has_tactyc` and `has_active_manco` gate
+  their Skill Directory categories (see `fetchUserEnrichment`)
+- `mutate` — write operations; used by the Capital Activity detail overlay's reminder
+  actions (`fa:send:capital-call-reminder`)
+- `call_tool` — the gateway dispatcher the Plugin news live-content cards use
 
 ## Source layout — the artifact is BUILT, not hand-edited
 
@@ -106,8 +115,9 @@ need the full file in context. Edit the small source file for what you're changi
 | `resources/app/version-check.js` | update banner: reads the published version, compares, renders/dismisses | change the banner copy or when it appears |
 | `../../.claude-plugin/skill-versions.json` | this skill's `version` + release `headline` | **bump on every user-visible change** — see Versioning |
 | `resources/carta-home.css` | styles (Ink tokens) | change appearance |
-| `resources/carta-home.template.html` | HTML skeleton + `{{CARTA_MCP_ID}}` + injection markers | change page structure |
+| `resources/carta-home.template.html` | HTML skeleton + injection markers | change page structure |
 | `resources/carta-home.tracker.js` | inlined `@carta/mcp-ui-tracker` browser bundle (`window.mcpUiTracker`) | re-run the library's `build:browser` and re-copy the output if the tracker source ever changes |
+| `resources/carta-home.chart.js` | inlined Chart.js v4.5.1 UMD | bump only to change Chart.js versions — never link it from a CDN, the CSP blocks that |
 
 App-layer JS is split across multiple files (see `APP_JS_PARTS` in
 `build_artifact.py`) but still assembles into a single classic (non-module)
@@ -119,7 +129,7 @@ bundle.
 The build inlines `carta-home.css` → `/* __CARTA_HOME_CSS__ */`, `carta-home.tracker.js`
 → `/* __CARTA_HOME_TRACKER_JS__ */`, `carta-home.config.js` → `/* __CARTA_HOME_CONFIG_JS__ */`,
 and the concatenated `APP_JS_PARTS` → `/* __CARTA_HOME_APP_JS__ */`, then substitutes
-`{{CARTA_MCP_ID}}`, producing one self-contained HTML. `{{FIRM}}` is a **runtime**
+`{{CARTA_MCP_SERVER}}`, producing one self-contained HTML. `{{FIRM}}` is a **runtime**
 placeholder the artifact fills from `list_contexts` — leave it alone.
 
 ## Versioning — bump this skill's entry when you change the artifact
@@ -129,7 +139,7 @@ sets `connect-src 'none'` so it cannot fetch its own release metadata. The only 
 existing user learns a newer build exists is the update banner, which compares the
 version baked in at build time against the one carta-mcp reads from the published
 `carta/plugins` tree (`plugin:get:version`, called through the `fetch` tool the artifact
-already has — no `mcp_tools` change needed).
+already has — no `capabilities.mcp` change needed).
 
 The version lives in the **plugin's** registry, keyed by this skill:
 
@@ -184,20 +194,30 @@ Two things that follow from the published tree being the source of truth:
   local build — it correctly stays silent when your version is newer. To see it, stub
   the command's response or temporarily lower your local entry.
 
-## Analytics
+## Analytics — currently inert, by platform constraint
 
-New interactive elements: call `trackHome(action, elementId)` (top of the handler),
-IDs as `CartaHome.<Area>.<Specific>` (e.g. `CartaHome.Tour.Start`) — skip sort clicks,
-keystrokes, dropdown changes. If `@carta/mcp-ui-tracker`'s bundle output changes
-upstream, rebuild it (`build:browser`) and overwrite `resources/carta-home.tracker.js`.
+Keep calling `trackHome(action, elementId)` on new interactive elements (top of the
+handler), IDs as `CartaHome.<Area>.<Specific>` (e.g. `CartaHome.Tour.Start`) — skip sort
+clicks, keystrokes, dropdown changes. The calls are harmless and cost nothing.
+
+**No event currently reaches Snowplow, and rebuilding the tracker will not change that.**
+The runtime CSP is `connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com`,
+so the collector host is unreachable from the artifact — the browser blocks the request
+before the tracker's transport matters. Restoring analytics means routing events through an
+MCP tool call (which goes over the runtime bridge, not the network, and so is not
+CSP-limited), not fixing the bundle.
 
 ## Deploy steps
 
-### Step 0: Cowork preflight + Carta MCP server ID
+### Step 0: Artifact preflight + Carta connector name
 
-Read `${CLAUDE_PLUGIN_ROOT}/references/gate-0-cowork.md` and run **Gate A + Gate B**. This is a live artifact — the rendered HTML calls Carta at runtime via `window.cowork.callMcpTool`, which requires both Cowork and a UUID-form Carta tool prefix.
+Read `${CLAUDE_PLUGIN_ROOT}/references/gate-0-artifact.md` and run **Gate A + Gate B**. This is a live artifact — the rendered HTML calls Carta at runtime via `claude.use("mcp")`, which needs both the `Artifact` tool and a Carta connector in the session.
 
-**Gate B discovery:** Scan for any tool matching `mcp__<UUID>__list_contexts` where `<UUID>` is the 8-4-4-4-12 hex format. Store the UUID as `CARTA_MCP_ID`.
+**Gate B discovery:** claude.ai connectors appear as `mcp__claude_ai_<connector>__<tool>`. Find the one exposing `list_contexts` / `fetch` / `call_tool` and store its display name as `CARTA_MCP_SERVER`. Do not substitute a UUID — the runtime rejects it.
+
+**Gate B probe — required before Step 3.** Call `welcome`, then `get_current_user`, using *your own* prefixed tool names (`mcp__<prefix>__welcome`). This is the connector's mandated bootstrap and it is what makes the grant honest: publish without one observed call and the platform warns that the page is "published against an unobserved interface". It also catches a wrong display name here rather than on the first viewer's blank dashboard. If either call errors, report what it returned and stop — do not publish.
+
+Keep `get_current_user`'s response: Step 3 grants that tool, and the Skill Directory's entitlement gate reads `has_tactyc` / `has_active_manco` from the same payload at runtime.
 
 ### Step 1: Build the self-contained artifact (no need to read any HTML)
 
@@ -215,7 +235,7 @@ server id. The script lives in **this skill's own `scripts/` directory**.
 
 ```
 uv run "<SKILL_DIR>/scripts/build_artifact.py" \
-  --mcp-id <CARTA_MCP_ID> \
+  --mcp-server "<CARTA_MCP_SERVER>" \
   --out <outputs-directory>/carta-home-updated.html
 ```
 
@@ -223,79 +243,67 @@ uv run "<SKILL_DIR>/scripts/build_artifact.py" \
 `/sessions/<name>/mnt/.remote-plugins/plugin_<id>/skills/carta-home-build`, in Claude Code
 `${CLAUDE_PLUGIN_ROOT}/skills/carta-home-build`.
 
-### Step 2: Check whether the artifact already exists
-
-Call `list_artifacts`. If an artifact with id `carta-home` is present, use
-`update_artifact`. Otherwise use `create_artifact`.
-
-### Step 3: Create or update the artifact
-
-**mcp_tools list** — use the actual resolved tool names (with real UUID):
+### Step 2: Find an already-published Carta Home
 
 ```
-mcp__<CARTA_MCP_ID>__list_contexts
-mcp__<CARTA_MCP_ID>__set_context
-mcp__<CARTA_MCP_ID>__fetch
-mcp__<CARTA_MCP_ID>__get_current_user
-mcp__<CARTA_MCP_ID>__mutate
-mcp__<CARTA_MCP_ID>__call_tool
+Artifact({action: "list", scope: "mine"})
 ```
 
-> The artifact sandbox only permits tools listed in `mcp_tools`. `get_current_user`
-> **must** be included or `fetchUserEnrichment()` fails silently — the debug log never
-> prints and the Skill Directory falls back to showing all categories. `mutate` enables
-> write operations, needed for the Capital Activity reminder actions. `call_tool` is the
-> gateway dispatcher the Plugin news live content cards use to reach
+Look for an artifact titled **Carta Home**. If one is there, keep its `url` — Step 3
+passes it so the page redeploys in place instead of claiming a second URL. If there is
+none, omit `url`.
+
+### Step 3: Publish the artifact
+
+One call either way. `action` defaults to `"publish"`, so it is omitted below; `url` is
+the only difference between a first publish and a redeploy.
+
+```
+Artifact({
+  file_path: "<outputs-directory>/carta-home-updated.html",
+  url: "<url from Step 2 — omit entirely on a first publish>",
+  title: "Carta Home",
+  description: "Dashboard home — SOI, Fund Performance, P&L, Balance Sheet, LP Reporting, Valuations, ManCo Actuals, Form ADV, and Skill Directory. Works for any Carta firm.",
+  favicon: "🏠",
+  label: "Redeployed from skill bundle",
+  capabilities: {
+    mcp: {
+      servers: [
+        {
+          server: "<CARTA_MCP_SERVER>",
+          tools: ["welcome", "list_contexts", "set_context", "fetch", "get_current_user", "mutate", "call_tool"]
+        }
+      ]
+    }
+  }
+})
+```
+
+> Anything the page calls that is missing from `tools` rejects with `not_in_manifest`.
+> `get_current_user` **must** be there or `fetchUserEnrichment()` fails silently — the
+> debug log never prints and the Skill Directory falls back to showing all categories.
+> `mutate` enables write operations, needed for the Capital Activity reminder actions.
+> `call_tool` is the gateway dispatcher the Plugin news live content cards use to reach
 > `marketing__list__content` / `marketing__get__asset_data`
 > (`resources/app/live-content.js`); without it those cards fall back to the static
 > defaults. The marketing commands only exist on some environments, so a missing command
 > degrades gracefully to the static cards.
-
-**Create (first time):**
-```
-create_artifact({
-  id: "carta-home",
-  title: "Carta Home",
-  description: "Dashboard home — SOI, Fund Performance, P&L, Balance Sheet, LP Reporting, Valuations, ManCo Actuals, Form ADV, and Skill Directory. Works for any Carta firm.",
-  html_path: "<outputs-directory>/carta-home-updated.html",
-  mcp_tools: [
-    "mcp__<CARTA_MCP_ID>__list_contexts",
-    "mcp__<CARTA_MCP_ID>__set_context",
-    "mcp__<CARTA_MCP_ID>__fetch",
-    "mcp__<CARTA_MCP_ID>__get_current_user",
-    "mcp__<CARTA_MCP_ID>__mutate",
-    "mcp__<CARTA_MCP_ID>__call_tool"
-  ]
-})
-```
-
-**Update (already exists):**
-```
-update_artifact({
-  id: "carta-home",
-  html_path: "<outputs-directory>/carta-home-updated.html",
-  update_summary: "Redeployed from skill bundle; entitlement-gated Skill Directory from get_current_user",
-  mcp_tools: [
-    "mcp__<CARTA_MCP_ID>__list_contexts",
-    "mcp__<CARTA_MCP_ID>__set_context",
-    "mcp__<CARTA_MCP_ID>__fetch",
-    "mcp__<CARTA_MCP_ID>__get_current_user",
-    "mcp__<CARTA_MCP_ID>__mutate",
-    "mcp__<CARTA_MCP_ID>__call_tool"
-  ]
-})
-```
+>
+> Keep `favicon` and `title` stable across redeploys — users find the tab by its icon.
+> Restate the whole `capabilities` object every time: a non-empty object replaces the
+> stored grant, so a tool you leave out is revoked.
 
 ### Step 4: Validate
 
-Open the artifact from Cowork's artifacts panel and check that it displays fund data for
-the active firm without errors — SOI rows, Fund Performance charts, and the P&L/Balance
-Sheet cards should all populate.
+Open the published URL and check that it displays fund data for the active firm without
+errors — SOI rows, Fund Performance charts, and the P&L/Balance Sheet cards should all
+populate. The first open asks the viewer to consent to the Carta connector; until they
+accept, every card shows its no-connector state.
 
 ### Step 5: Confirm
 
-Tell the user the artifact is live and they can open it from the artifacts panel.
-The artifact will auto-detect whichever firm they have active in their Carta MCP context.
+Give the user the artifact's URL and tell them it is live. The artifact auto-detects
+whichever firm they have active in their Carta MCP context.
 
 ## If something fails
 
@@ -303,13 +311,16 @@ The artifact will auto-detect whichever firm they have active in their Carta MCP
   session. Ask the user to reopen the artifact and retry; if it still times out, the firm
   may have an unusually large portfolio or there's an underlying DWH issue, so ask the user
   to confirm in their Carta MCP session that the firm resolves correctly before retrying.
-- **Cowork sandbox reports a permission error calling an MCP tool** — the artifact was
-  created or updated with an incomplete `mcp_tools` list. Compare it against the complete
-  list in Step 3 and re-issue `create_artifact`/`update_artifact` with every entry.
-- **Firm context unavailable inside the artifact** — also a runtime issue, not something
-  this build session can query directly. Go back to Step 0 to reconfirm the Carta MCP
-  server ID used at build time, and ask the user to confirm their Carta MCP connector has
-  an active firm in context before redeploying.
+- **A card reports `not_in_manifest`** — the publish call carried an incomplete
+  `capabilities.mcp` grant. Compare it against the full `tools` list in Step 3 and
+  republish with every entry, passing the same `url`.
+- **Every card reports `server_not_connected` or `needs_reauth`** — the viewer has no
+  callable Carta connector under the name baked in at publish time, or their credentials
+  lapsed. Ask them to add or reconnect Carta in Settings → Connectors. If their connector's
+  display name differs from the one Step 0 resolved, republish with the right name.
+- **Firm context unavailable inside the artifact** — a runtime issue this build session
+  cannot query directly. Ask the user to confirm their Carta MCP connector has an active
+  firm in context before redeploying.
 
 ## Related skills
 
@@ -336,16 +347,18 @@ the Carta Home dashboard as a whole, not on requests for one of those cards in i
 
 ## Notes
 
-- `build_artifact.py` produces a complete, self-contained Cowork live artifact — CSS + config
-  + app inlined, base64-encoded fonts and logo, no external CDNs except Chart.js from
-  cdn.jsdelivr.net. (Assemble via the build script; the source `carta-home.css` /
-  `carta-home.app.js` are injected — the template on its own is intentionally unstyled.)
+- `build_artifact.py` produces a complete, self-contained live artifact — CSS + config +
+  app + Chart.js inlined, base64-encoded fonts and logo, **no external hosts at all**. The
+  runtime CSP allows no external script, style or connect host, so a CDN reference blocks
+  silently and whatever needed it never renders. (Assemble via the build script; the source
+  `carta-home.css` / `carta-home.app.js` are injected — the template on its own is
+  intentionally unstyled.)
 - The artifact supports **any Carta firm** — it calls `list_contexts` without a firm_name
   filter and extracts the active firm automatically.
 - Skill directory prompts use `{{FIRM}}` internally and are replaced at runtime with the
   detected firm name.
-- If `update_artifact` returns a read-only error (artifact was shared from another session),
-  fall back to `create_artifact` with id `carta-home-v2`.
+- Publishing with a `url` only works on an artifact the user owns. If the `url` from
+  Step 2 was shared with them rather than theirs, drop `url` and publish fresh.
 - To change the artifact, edit the relevant source file under `resources/` (see the
   source-layout table above — includes `resources/app/*.js` for features already split out),
   then re-run `build_artifact.py`. Never hand-edit the assembled `carta-home-updated.html`.

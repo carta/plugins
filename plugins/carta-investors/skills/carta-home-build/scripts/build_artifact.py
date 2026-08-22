@@ -4,8 +4,8 @@
 """Assemble the self-contained carta-home Cowork artifact from its source parts.
 
 Inlines the CSS + config + app JS into the template and substitutes the Carta MCP
-server id, producing ONE self-contained HTML file ready for create_artifact /
-update_artifact. The model never has to read the large HTML: to change what the
+connector name, producing ONE self-contained HTML file the Artifact tool publishes
+by path. The model never has to read the large HTML: to change what the
 directory shows, edit resources/carta-home.config.js; to change logic, edit
 resources/carta-home.app.js; then re-run this.
 
@@ -22,12 +22,13 @@ because carta-mcp serves it to the running artifact from the published carta/plu
 mirror, and a skill that has not opted into publishing never reaches that mirror —
 whereas .claude-plugin/ is plugin-level metadata and is always published.
 
-The `{{CARTA_MCP_ID}}` placeholder (throughout the template + app) is replaced with
-the real Carta MCP server UUID. `{{FIRM}}` is left intact — it is a RUNTIME
+The `{{CARTA_MCP_SERVER}}` placeholder (throughout the template + app) is replaced with
+the Carta connector's display name — what the artifact runtime's mcp capability
+addresses a connector by. `{{FIRM}}` is left intact — it is a RUNTIME
 placeholder the artifact fills in from list_contexts.
 
 Usage:
-  uv run scripts/build_artifact.py --mcp-id <uuid> --out <path>/carta-home-updated.html
+  uv run scripts/build_artifact.py --mcp-server <connector-display-name> --out <path>/carta-home-updated.html
 """
 import argparse
 import hashlib
@@ -60,6 +61,7 @@ APP_JS_PARTS = [
 
 MARKERS = {
     "carta-home.css": r"/\*\s*__CARTA_HOME_CSS__\s*\*/",
+    "carta-home.chart.js": r"/\*\s*__CARTA_HOME_CHART_JS__\s*\*/",
     "carta-home.tracker.js": r"/\*\s*__CARTA_HOME_TRACKER_JS__\s*\*/",
     "carta-home.config.js": r"/\*\s*__CARTA_HOME_CONFIG_JS__\s*\*/",
 }
@@ -100,7 +102,7 @@ def read_version():
     return version
 
 
-def build(mcp_id):
+def build(mcp_server):
     template = (RES / "carta-home.template.html").read_text()
     parts = {name: (RES / name).read_text() for name in MARKERS}
     parts.update({name: (RES / name).read_text() for name in APP_JS_PARTS})
@@ -124,9 +126,9 @@ def build(mcp_id):
         if token in out:
             sys.exit("ERROR: unresolved marker {} after assembly".format(token))
 
-    out = out.replace("{{CARTA_MCP_ID}}", mcp_id)
-    if "{{CARTA_MCP_ID}}" in out:
-        sys.exit("ERROR: {{CARTA_MCP_ID}} still present after substitution")
+    out = out.replace("{{CARTA_MCP_SERVER}}", mcp_server)
+    if "{{CARTA_MCP_SERVER}}" in out:
+        sys.exit("ERROR: {{CARTA_MCP_SERVER}} still present after substitution")
 
     out = out.replace("{{BUILD_ID}}", build_id)
 
@@ -140,12 +142,12 @@ def build(mcp_id):
 
 def main():
     ap = argparse.ArgumentParser(description="Assemble the carta-home artifact.")
-    ap.add_argument("--mcp-id", required=True,
-                    help="Carta MCP server UUID (the {{CARTA_MCP_ID}} value)")
+    ap.add_argument("--mcp-server", required=True,
+                    help="Carta connector display name (the {{CARTA_MCP_SERVER}} value)")
     ap.add_argument("--out", required=True, help="output HTML path")
     args = ap.parse_args()
 
-    html, build_id, version = build(args.mcp_id)
+    html, build_id, version = build(args.mcp_server)
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(html)
