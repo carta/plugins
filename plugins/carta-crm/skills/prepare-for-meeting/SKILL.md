@@ -92,6 +92,19 @@ crm_call_tool({ "name": "crm:<tool>", "arguments": { ... } })
 Never serialise these. Two waves is the target; more than three means something is being
 fetched that the brief cannot show.
 
+## Step 0 — Artifact preflight + Carta connector name
+
+Read `${CLAUDE_PLUGIN_ROOT}/references/gate-0-artifact.md` and run **Gate A + Gate B**.
+This is a live artifact — the brief calls Carta at runtime via `claude.use("mcp")`, which
+needs both the `Artifact` tool and a Carta connector.
+
+**Gate B discovery:** connectors appear as `mcp__claude_ai_<connector>__<tool>`. Find
+the one exposing `crm:get_contact_profile` / `crm:list_interactions_by_domain` and store
+its display name as `CARTA_MCP_SERVER`. Do not substitute a UUID.
+
+**Gate B probe:** call `welcome` then `get_current_user` via your prefixed tool names
+(`mcp__<prefix>__welcome`). If either errors, report what it returned and stop.
+
 ## Step 1 — Resolve the meeting
 
 Every entity's interactions tool returns `futureInteractions` alongside past history.
