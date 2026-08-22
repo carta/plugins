@@ -66,21 +66,25 @@ Call `call_tool({"name": "fa__list__entities", "arguments": { entity_types: "fun
 
 `named_but_missing` is **not** a blocker — render the artifact with the full firm fund list anyway. The user can pick their intended fund from the dropdown; Step 6 surfaces the miss in the confirmation message.
 
-### Step 3 — Discover the Carta connector's display name
+### Step 3 — Checks before building
 
 > **Run in parallel with Step 2** — see note in Step 2.
 
-Read `${CLAUDE_PLUGIN_ROOT}/references/gate-0-artifact.md` and run **Gate A + Gate B**. This is a live artifact — the rendered HTML calls Carta at runtime via `claude.use("mcp")`, which needs both the `Artifact` tool and a Carta connector in the session. On Gate A failure, offer to pull the SOI data as a text summary instead.
+Run both checks before building, and stay quiet about them when they pass:
 
-**Gate B discovery:** claude.ai connectors appear as `mcp__claude_ai_<connector>__<tool>`. Scan for one exposing both `call_tool` and `set_context` — that is a connected Carta MCP server. `ToolSearch` with query `"call_tool"` can help if the deferred-tools list is hard to scan.
+1. `${CLAUDE_PLUGIN_ROOT}/references/gate-has-artifact-tool.md` — can this session publish at all?
+2. `${CLAUDE_PLUGIN_ROOT}/references/gate-carta-connector-name.md` — the connector name the page will call.
 
-**If exactly one is found:** Use it.
+Both sit in the **plugin's** `references/` directory — `${CLAUDE_PLUGIN_ROOT}/references/`,
+alongside the other plugin-wide references. They are *not* under this skill's own
+`references/`. Read them by that exact path; don't search for them.
 
-**If multiple are found:** Disambiguate by calling `search_tools({"query": "dwh execute query"})` on each candidate and picking the one that exposes `dwh__execute__query`. If two still pass (e.g. production + test Carta), ask the user via `AskUserQuestion`.
+This is a live artifact: the rendered HTML calls Carta at runtime through `claude.use("mcp")`, so it needs both.
+If the `Artifact` tool is missing, offer to pull the SOI data as a text summary instead.
 
-**Capture** the chosen connector's **display name** as `CARTA_MCP_SERVER`. That one string is what Steps 4 and 5 need — the runtime addresses a connector by display name and the tool names are bare verbs (`call_tool`, `set_context`, `welcome`), so there is nothing to derive and nothing to keep in sync.
-
-Never substitute a UUID or an `mcp__…__` tool name: the runtime rejects both.
+Store the `name` the connector gate resolves as `CARTA_MCP_SERVER` — Step 4 passes it to
+the render script as positional argument 3, and Step 5 puts it in the `capabilities.mcp`
+grant. It is one string; there is nothing to derive and nothing to keep in sync.
 
 ### Step 4 — Write the funds file, then render the template
 
@@ -108,7 +112,13 @@ If any fund in the firm has a `fund_family_name`, the artifact automatically gro
 find /sessions "$HOME/mnt" -type f -path '*/carta-portfolio-analytics-routing/references/soi/scripts/render-artifact.py' 2>/dev/null | head -1
 ```
 
-If it prints nothing, use `${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-analytics-routing/references/soi/scripts/render-artifact.py`.
+**An empty result is the expected case in Cowork, not an error** — bash cannot reach the
+plugin mount there. When it prints nothing, go straight to the copy fallback at the end of
+this step; do not spend a `uv run` on
+`${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-analytics-routing/references/soi/scripts/render-artifact.py`
+first, because that path is exactly what bash can't see. Use that path directly only where
+the plugin lives on the local filesystem (a repo checkout), where the `find` roots don't
+exist and the plugin root does.
 
 **4c.** Render, substituting the path from 4b **literally**. `allowed-tools`
 matches the command text, so a shell variable in place of the path fails the
@@ -131,12 +141,12 @@ place bash can reach this script, since it cannot reach the path
 empty, and the plugin-root path is the correct one. Do not broaden to `$HOME` or
 `/`: it takes tens of seconds and can resolve a stale cached copy.
 
-If `uv run` fails because the script file does not exist (not on a validation
-error), bash cannot reach the plugin mount but `Read` can. Copy both files into
-`<CWD>/soi-render/` as `scripts/render-artifact.py` and
-`references/artifact.html`, run that copy, and report that the fallback fired so
-the mount path gets fixed. One attempt — if it fails too, stop rather than
-hand-writing the HTML.
+**The copy fallback.** Use it when the `find` came back empty on a host where the plugin
+root isn't a local path, or when `uv run` fails because the script file does not exist (not
+on a validation error). Bash cannot reach the plugin mount, but `Read` can: copy both files
+into `<CWD>/soi-render/` as `scripts/render-artifact.py` and `references/artifact.html`, run
+that copy, and report that the fallback fired so the mount path gets fixed. One attempt — if
+it fails too, stop rather than hand-writing the HTML.
 
 Positional arguments:
 

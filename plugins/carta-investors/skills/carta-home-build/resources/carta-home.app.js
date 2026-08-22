@@ -12,11 +12,14 @@ let _mcpLive = null;
 // the script runs before the artifact runtime installs window.claude).
 function _waitForClaude(timeoutMs) {
   if (window.claude?.use) return Promise.resolve(window.claude);
+  // `claude` without `.use` is a surface that never serves MCP, so don't spend the full
+  // budget there — a chat viewer would sit on loading state before the degraded view.
+  const budget = window.claude ? Math.min(timeoutMs, 300) : timeoutMs;
   return new Promise(resolve => {
     const id = setInterval(() => {
       if (window.claude?.use) { clearInterval(id); clearTimeout(tid); resolve(window.claude); }
     }, 20);
-    const tid = setTimeout(() => { clearInterval(id); resolve(null); }, timeoutMs);
+    const tid = setTimeout(() => { clearInterval(id); resolve(null); }, budget);
   });
 }
 

@@ -12,7 +12,10 @@ description: >
   comparable company selection, loan dashboard.
 model: sonnet
 allowed-tools:
-  - mcp__carta__welcome
+  # The only source for a connector's name
+  - list_connectors
+  - mcp__*carta*__welcome
+  - mcp__*Carta*__welcome
   - mcp__carta__call_tool
   - mcp__carta__search_tools
   - mcp__carta__set_context

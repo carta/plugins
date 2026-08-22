@@ -12,11 +12,14 @@ description: >
   carta home dashboard".
 model: sonnet
 allowed-tools:
-  # Carta MCP — Gate B probe only; registration prefix varies by host
-  - mcp__carta__welcome
-  - mcp__carta__get_current_user
-  - mcp__claude_ai_carta__welcome
-  - mcp__claude_ai_carta__get_current_user
+  # The only source for a connector's name
+  - list_connectors
+  # Carta MCP — the connector check's observed call, plus the entitlement read.
+  # Prefix-agnostic so the grant holds whichever form the host registers.
+  - mcp__*carta*__welcome
+  - mcp__*Carta*__welcome
+  - mcp__*carta*__get_current_user
+  - mcp__*Carta*__get_current_user
   - Bash(uv run *build_artifact.py *)
   - Bash(find ~ -name "build_artifact.py"*)
   - Bash(find /sessions -name "build_artifact.py"*)
@@ -209,13 +212,20 @@ CSP-limited), not fixing the bundle.
 
 ## Deploy steps
 
-### Step 0: Artifact preflight + Carta connector name
+### Step 0: Checks before building
 
-Read `${CLAUDE_PLUGIN_ROOT}/references/gate-0-artifact.md` and run **Gate A + Gate B**. This is a live artifact — the rendered HTML calls Carta at runtime via `claude.use("mcp")`, which needs both the `Artifact` tool and a Carta connector in the session.
+Run both checks before building, and stay quiet about them when they pass:
 
-**Gate B discovery:** claude.ai connectors appear as `mcp__claude_ai_<connector>__<tool>`. Find the one exposing `list_contexts` / `fetch` / `call_tool` and store its display name as `CARTA_MCP_SERVER`. Do not substitute a UUID — the runtime rejects it.
+1. `${CLAUDE_PLUGIN_ROOT}/references/gate-has-artifact-tool.md` — can this session publish at all?
+2. `${CLAUDE_PLUGIN_ROOT}/references/gate-carta-connector-name.md` — the connector name the page will call.
 
-**Gate B probe — required before Step 3.** Call `welcome`, then `get_current_user`, using *your own* prefixed tool names (`mcp__<prefix>__welcome`). This is the connector's mandated bootstrap and it is what makes the grant honest: publish without one observed call and the platform warns that the page is "published against an unobserved interface". It also catches a wrong display name here rather than on the first viewer's blank dashboard. If either call errors, report what it returned and stop — do not publish.
+Both sit in the **plugin's** `references/` directory — `${CLAUDE_PLUGIN_ROOT}/references/`,
+alongside the other plugin-wide references. They are *not* under this skill's own
+`references/`. Read them by that exact path; don't search for them.
+
+This is a live artifact: the rendered HTML calls Carta at runtime through `claude.use("mcp")`, so it needs both.
+
+**Connector check — run it before publishing, and stay quiet when it passes.** Call `welcome`, then `get_current_user`, using *your own* prefixed tool names (`mcp__<prefix>__welcome`). `welcome` confirms the connector actually answers — being listed is registry state, not proof — and publishing without one observed call earns the platform's "published against an unobserved interface" warning. `get_current_user` is not a second check; this skill needs its payload (see below). If either call errors, tell the user Carta isn't responding and stop — do not publish. If both succeed, say nothing about them and get on with the build.
 
 Keep `get_current_user`'s response: Step 3 grants that tool, and the Skill Directory's entitlement gate reads `has_tactyc` / `has_active_manco` from the same payload at runtime.
 
