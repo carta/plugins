@@ -8,13 +8,29 @@ let _mcpNsPromise = null;
 // live, since each such path re-renders once enrichment settles.
 let _mcpLive = null;
 
-// null means this view cannot run mcp — not granted, not served, or failed to load.
+// Wait up to timeoutMs for window.claude to appear (guards against the race where
+// the script runs before the artifact runtime installs window.claude).
+function _waitForClaude(timeoutMs) {
+  if (window.claude?.use) return Promise.resolve(window.claude);
+  return new Promise(resolve => {
+    const id = setInterval(() => {
+      if (window.claude?.use) { clearInterval(id); clearTimeout(tid); resolve(window.claude); }
+    }, 20);
+    const tid = setTimeout(() => { clearInterval(id); resolve(null); }, timeoutMs);
+  });
+}
+
+// null = mcp not granted, not served, or failed. Null is not cached — callers may retry.
 function _mcpNamespace() {
-  if (!_mcpNsPromise) {
-    _mcpNsPromise = Promise.resolve(window.claude?.use?.("mcp") ?? null)
-      .catch(() => null)
-      .then(ns => { _mcpLive = !!ns; return ns; });
-  }
+  if (_mcpNsPromise) return _mcpNsPromise;
+  _mcpNsPromise = _waitForClaude(5000)
+    .then(claude => claude ? claude.use("mcp") : null)
+    .catch(() => null)
+    .then(ns => {
+      _mcpLive = !!ns;
+      if (!ns) _mcpNsPromise = null; // don't cache failure — allow retry
+      return ns;
+    });
   return _mcpNsPromise;
 }
 
@@ -340,15 +356,17 @@ async function fetchBenchmarkData() {
 
 // ── Static fallback data ──
 function populateFallback(reason) {
-  // Name the cause: viewers reach here without a connector on first open, and only
-  // one of the two causes is something they can act on.
-  renderSOIError(reason || "Can't load your portfolio — this page isn't connected to Carta.");
+  const noConnectorMsg = "Can't load your portfolio — add or allow Carta in Settings → Connectors, then reload.";
+  renderSOIError(reason || noConnectorMsg);
 
-  // Tear sheet: show fallback state
+  const benchMsg = reason || "Can't load fund performance — add or allow Carta in Settings → Connectors, then reload.";
+  const benchMetrics = document.getElementById("benchmark-metrics");
+  if (benchMetrics && !benchMetrics.textContent.trim()) {
+    benchMetrics.innerHTML = `<div style="font-size:11px;color:var(--ink-color-global-feedback-negative-strong);padding-top:8px;">${benchMsg}</div>`;
+  }
+
   const tsLbl = document.getElementById("ts-company-label");
   if (tsLbl) { tsLbl.textContent = "— no data —"; }
-
-  // P&L / BS tiles: leave as — (no live data in fallback mode)
 }
 
 // Render fund-level summary rows in the home card (value + gain/loss only, no shares)
