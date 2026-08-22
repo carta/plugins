@@ -9,9 +9,7 @@ description: >
   a drafted intro request, and the follow-through actions.
 allowed-tools:
   - mcp__carta__crm_call_tool
-  - mcp__cowork__list_artifacts
-  - mcp__cowork__create_artifact
-  - mcp__cowork__update_artifact
+  - Artifact
   - mcp__claude_ai_Gmail__create_draft
   - AskUserQuestion
   - Bash(cp *)
@@ -372,14 +370,22 @@ is an XSS sink, not a styling shortcut.
 
 Deliver it with whichever sink the host offers, in this order, and **try each once**:
 
-1. **A native artifact capability** — Claude chat and Desktop. The common case; needs no MCP
-   tools.
-2. **`mcp__cowork__*`** — preferred when present, because it supports update-in-place and it
-   is the only sink where the action buttons can run. Build a stable id
-   `intro-routes-<company-slug>`, check `mcp__cowork__list_artifacts`, then
-   `create_artifact` or `update_artifact` with `name` set to
-   `Warm introductions - <Company>`.
-3. **`Write`** the file and name the path. It stays fully interactive in a browser.
+1. **`Artifact`** — the primary sink. Write the populated file to the scratchpad, then publish:
+   ```
+   Artifact({
+     file_path: "<scratchpad-path>",
+     title: "Warm introductions — <Company>",
+     favicon: "🗺️",
+     capabilities: {
+       mcp: { servers: [{ server: "claude_ai_Gmail", tools: ["create_draft"] }] }
+     }
+   })
+   ```
+   The `capabilities.mcp` grant is what lets the in-panel action buttons call Gmail; omit it
+   and the buttons will not fire. For update-in-place, call `Artifact({ action: "list" })`
+   first, find the entry whose title matches, and pass its `url` to the call.
+2. **`Write`** the file and name the path. It stays fully interactive in a browser.
+   Omit `DATA.actions` — in-panel buttons cannot run outside an artifact.
 
 A failed render counts as no render: move to the next sink rather than re-rendering the same
 one.
@@ -391,14 +397,13 @@ is not a degraded version of a diagram; it is a different and much worse thing, 
 the point of the skill. There is no chat-text fallback for the map.
 
 This should be rare — almost every host renders an HTML artifact, and where none does, `Write`
-succeeds. Before concluding you have no sink, confirm you checked for a **native** artifact
-capability and not only `mcp__cowork__*`; that mistake is what produces a text dump on a host
-that would have rendered the map perfectly well.
+succeeds. Before concluding you have no sink, confirm you tried the `Artifact` tool and not
+only `Write`; that mistake is what produces a text dump on a host that would have rendered the
+map perfectly well.
 
-If a native artifact, the Cowork tools and `Write` are all genuinely unavailable, stop and say
-so in two lines: name the single best route in one sentence, give the drafted message, and
-offer to answer questions about the alternates conversationally. Do not substitute a
-hand-drawn diagram.
+If `Artifact` and `Write` are both genuinely unavailable, stop and say so in two lines: name
+the single best route in one sentence, give the drafted message, and offer to answer questions
+about the alternates conversationally. Do not substitute a hand-drawn diagram.
 
 ## Step 6 — Take care of it
 
@@ -413,7 +418,7 @@ numbered list with one marked `<- recommended`, via `AskUserQuestion`. Never fir
    email address, so there is nothing to send to.
 
    **Fill `args` — an empty one drafts a blank email.** The in-panel button calls
-   `callMcpTool(action.tool, action.args || {})` and passes nothing else, so the message in
+   `callMcp(action.tool, action.args || {})` and passes nothing else, so the message in
    `DATA.draft` reaches Gmail only if it is also in `args`:
 
    ```
@@ -452,11 +457,11 @@ numbered list with one marked `<- recommended`, via `AskUserQuestion`. Never fir
    already there and only for the recommended route's target.
 4. **Hand off** — offer `/prepare-for-meeting` for once the intro lands.
 
-**When the Cowork sink was used**, pass the tools these actions need in `mcp_tools` on
-`create_artifact` so the in-panel buttons work, and put the same actions in `DATA.actions`.
-The artifact renders them only where the bridge exists and confirms in-panel before writing.
-On any other sink, omit `DATA.actions` — a button that cannot fire is worse than no button —
-and run the list above in the chat instead.
+**When `Artifact` was used**, put actions in `DATA.actions`; the `capabilities.mcp` grant from
+the publish call is what lets the in-panel buttons fire. The artifact renders them only where
+the bridge exists and confirms in-panel before writing.
+On `Write` or any other sink, omit `DATA.actions` — a button that cannot fire is worse than no
+button — and run the list above in the chat instead.
 
 ## Step 7 — Close
 

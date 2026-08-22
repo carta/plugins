@@ -639,7 +639,7 @@
           body: "Hi Sara,\n\nI saw you overlapped with Tom Reid at Monzo. We are looking at Tunic Pay and I would value a short conversation with him.\n\nHappy to send something forwardable if that is easier.\n\nThanks,\nAlex"
         },
         // The skill omits any action it does not want offered. Rendered only where
-        // window.cowork.callMcpTool exists; elsewhere the chat handles them.
+        // the MCP bridge (claude.use("mcp")) resolves; elsewhere the chat handles them.
         actions: [
           {
             id: "draft-email",
@@ -661,15 +661,28 @@
       };
 
       // The sandbox throws on web storage, so all state lives here in memory.
-      const LIVE = typeof window !== "undefined" && !!window.cowork && typeof window.cowork.callMcpTool === "function";
       const fired = new Set();
 
-      // Every programmatic (UI-issued) tool call goes through this - never call
-      // window.cowork.callMcpTool directly. Stamps _instrumentation_v2.from_ui
-      // so the instrumentation nudge middleware can tell this apart from a
-      // model-issued call (KAF-3090).
-      function callMcp(tool, args) {
-        return window.cowork.callMcpTool(tool, Object.assign({}, args, {
+      // MCP bridge via claude.use("mcp"). Resolves asynchronously at load; action buttons
+      // are appended once it settles (see render() below).
+      let _mcpNsPromise = null;
+
+      function _mcpNamespace() {
+        if (!_mcpNsPromise) {
+          _mcpNsPromise = Promise.resolve(window.claude && window.claude.use ? window.claude.use("mcp") : null)
+            .catch(function () { return null; });
+        }
+        return _mcpNsPromise;
+      }
+      _mcpNamespace();  // start resolving at load
+
+      // Every UI-issued tool call goes through this - one shared source per file.
+      // Splits mcp__SERVER__toolName, injects _instrumentation_v2 (KAF-3090).
+      async function callMcp(tool, args) {
+        var ns = await _mcpNamespace();
+        if (!ns) throw new Error("MCP bridge unavailable");
+        var parts = tool.split("__");  // ["mcp", "SERVER", "toolName"]
+        return ns.callTool(parts[1], parts[2], Object.assign({}, args, {
           _instrumentation_v2: { skills: ['carta-crm:get-angles'], from_ui: true },
         }));
       }
@@ -1182,14 +1195,18 @@
           root.appendChild(d);
         }
 
-        // Actions are live tool calls, so they render only where the bridge exists.
+        // Actions are live tool calls, so they render only where the MCP bridge exists.
         // Everywhere else the chat offers the same list - never a dead button here.
+        // _mcpNamespace() starts resolving at load; append the section once it settles.
         const actions = data.actions || [];
-        if (LIVE && actions.length) {
-          root.appendChild(el("h2", null, "Next"));
-          const row = el("div", "btn-row");
-          actions.forEach(function (a) { row.appendChild(renderAction(a)); });
-          root.appendChild(row);
+        if (actions.length) {
+          _mcpNamespace().then(function (ns) {
+            if (!ns || root.querySelector(".actions-row")) return;
+            root.appendChild(el("h2", null, "Next"));
+            var row = el("div", "btn-row actions-row");
+            actions.forEach(function (a) { row.appendChild(renderAction(a)); });
+            root.appendChild(row);
+          });
         }
       }
 

@@ -10,9 +10,7 @@ description: >
   meeting — the next one; not an agenda view.
 allowed-tools:
   - mcp__carta__crm_call_tool
-  - mcp__cowork__list_artifacts
-  - mcp__cowork__create_artifact
-  - mcp__cowork__update_artifact
+  - Artifact
   - AskUserQuestion
   - Bash(cp *)
   - Read
@@ -357,19 +355,25 @@ Two things not to "fix":
 ### 1. An artifact — the primary render
 
 The brief is a self-contained static HTML document, so **any** artifact capability renders it.
-Use whichever this host offers:
+Use the `Artifact` tool — it works in every host and supports update-in-place:
 
-**a. The host's native artifact capability.** If you can create an HTML artifact directly —
-as in Claude chat and Claude Desktop — do that. This is the common case and needs no MCP tools
-at all. Title it `Meeting Brief — <Company> — <date>`.
+```
+Artifact({
+  file_path: "<scratchpad-path>",
+  title: "Meeting Brief — <Company> — <date>",
+  favicon: "📋"
+})
+```
 
-**b. The Cowork artifact MCP tools**, when `mcp__cowork__*` are available. Prefer these when
-present, because they support update-in-place.
+**Do not pass `capabilities`** — this brief makes no MCP calls at runtime.
 
-**Never skip to PDF just because `mcp__cowork__*` is missing** — check for a native artifact
-capability first. (`carta-lp-dashboard` *requires* the Cowork tools because it builds a live
-artifact calling `window.cowork.callMcpTool` at runtime. This brief is a static snapshot and
-has no such dependency, so it is far less picky about the host.)
+For update-in-place, call `Artifact({ action: "list" })` first, find the entry whose title
+matches, and pass its `url` to the call. Build the title as `Meeting Brief — <Company> — <yyyy-mm-dd>`
+from the meeting date — per-meeting titles mean successive briefs don't overwrite each other,
+while re-briefing the same meeting updates in place.
+
+**Never skip to PDF** — the `Artifact` tool covers every host; PDF is for when `Artifact`
+genuinely fails or the user wants a portable copy.
 
 **A failed render counts as no render.** If the artifact renderer errors rather than being
 absent — "unable to reach", "problem displaying content", a timeout, or an empty panel — treat
@@ -382,23 +386,6 @@ user who is two minutes from a call.
 an inline preview of a file you create, with an open/download control. When that happens the
 user is looking at the brief, so don't apologise or describe it as a fallback — just point at
 it. Only mention a failed renderer once, in a single clause, and never twice.
-
-Using route (b): build a stable id `meeting-brief-<company-slug>-<yyyy-mm-dd>` from the meeting
-date. Per-meeting ids mean successive briefs don't overwrite each other, while re-briefing the
-same meeting updates in place.
-
-Call `mcp__cowork__list_artifacts` and check whether that id already exists.
-
-- **New** — `mcp__cowork__create_artifact` with `id`, `name`
-  (`Meeting Brief — <Company> — <date>`), `html` (the full document), and a one-line
-  `description` naming the company and date.
-- **Exists** — `mcp__cowork__update_artifact` with the same `id`, the full `html`, and an
-  `update_summary` such as `Refreshed <date>`.
-
-**Do not pass `mcp_tools`** — this artifact makes no calls at runtime.
-
-If the `mcp__cowork__*` tools aren't available in this session, skip this sink silently
-and move on. Don't announce the absence.
 
 ### 2. PDF — portable fallback and shareable takeaway
 
@@ -433,11 +420,11 @@ one-page document; retyping it as a wall of text is not a degraded version of it
 different and much worse thing, and it defeats the point of the skill.
 
 This should be rare: almost every host can render an HTML artifact, and where one can't, PDF
-export usually works. Before concluding you have no sink, confirm you actually checked for a
-**native** artifact capability and not only `mcp__cowork__*` — that mistake is what produces a
-prose dump on a host that could have rendered the brief perfectly well.
+export usually works. Before concluding you have no sink, confirm you tried the `Artifact` tool
+and not only `Write` — that mistake is what produces a prose dump on a host that could have
+rendered the brief perfectly well.
 
-If a native artifact, the Cowork tools, PDF export and `Write` are all genuinely unavailable,
+If the `Artifact` tool, PDF export and `Write` are all genuinely unavailable,
 stop and say so in two lines: name what you tried, and offer to answer specific questions
 about the meeting conversationally instead. Do not silently substitute a text dump.
 
