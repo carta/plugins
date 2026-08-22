@@ -18,13 +18,14 @@ every artifact operation; the mode is picked with `action`:
 
 **PASS:** `Artifact` is present. Continue.
 
-**FAIL:** Not present — this session cannot publish artifacts. Tell the user:
+**FAIL:** `Artifact` is not available in this session. Stop immediately and tell the user:
 
-> This feature publishes a Live Artifact, and this session has no artifact tool. I can
-> still pull the data — would you like a text summary instead?
+> The `Artifact` tool isn't in this session, which means your version of Claude is out of
+> date. Update Claude — **Help → Check for Updates** in the desktop app, or `claude update`
+> in the CLI — then start a fresh session and try again.
 
-If the user declines, stop. If they accept, switch to a markdown/text output path
-(skill-specific).
+Do not offer a text or markdown fallback — the old `create_artifact` API is retired and
+there is no alternative publish path.
 
 ## Gate B — Carta connector display name
 
@@ -58,8 +59,9 @@ mcp__<the connector's tool prefix>__get_current_user
 
 **FAIL — no Carta connector in the session:**
 
-> I can't find a Carta connector in this session, so a published page would have nothing
-> to call. Add the Carta connector in Settings → Connectors, then ask me again.
+> I can't find a Carta connector in this session. Add it in Settings → Connectors, then
+> ask me again. Without it the published page will have nothing to call at runtime —
+> every data card will render empty for every viewer.
 
 **FAIL — the connector is there but the bootstrap errors:** say what the call returned and
 stop. Do not publish. Whatever broke here breaks identically for every viewer, except they
@@ -78,12 +80,27 @@ Stop in both cases. Never publish with a guessed name — `callTool` rejects
    and every card fails `server_not_connected`. The probe moves that failure from their
    screen to your terminal.
 
+### Note: which contexts support live data
+
+`claude.use("mcp")` is available in **Claude Code contexts only** (CLI, Desktop, Cowork).
+In chat artifacts (claude.ai web chat, Desktop chat), `claude` exists but has no `.use`
+method — the published page will hit the `!mcp` branch and render its static/degraded
+state. Gate B passing confirms the connector works from *your* session; it does not prevent
+a chat viewer from seeing the degraded experience. That is expected and handled in-page.
+
+Summary:
+
+| Context the viewer opens in | `claude.use("mcp")` in the page | Live Carta data |
+|---|---|---|
+| Claude Code (CLI / Desktop / Cowork) | ✓ (resolves to MCP namespace) | ✓ |
+| Chat (web or Desktop chat) | ✗ (`undefined`) | ✗ — degrades gracefully |
+
 ## Gate combinations
 
 | Skill type | Gates needed | On Gate A fail | On Gate B fail |
 |---|---|---|---|
-| **Live artifact** (runtime MCP calls via `claude.use("mcp")`) | A + B | Offer text fallback | Stop; ask the user to add the connector |
-| **Static artifact** (data baked in at publish time, no runtime MCP) | A only | Offer text fallback | n/a |
+| **Live artifact** (runtime MCP calls via `claude.use("mcp")`) | A + B | Stop; tell user to upgrade | Stop; ask the user to add the connector |
+| **Static artifact** (data baked in at publish time, no runtime MCP) | A only | Stop; tell user to upgrade | n/a |
 
 ## Granting the page its tools
 
