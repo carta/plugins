@@ -8,11 +8,13 @@ description: >
   [company]", or "/get-angles". Input: a company name or domain. Output: a ranked route map,
   a drafted intro request, and the follow-through actions.
 allowed-tools:
+  # The only source for a connector's name
+  - list_connectors
   - mcp__carta__crm_call_tool
   - Artifact
   - mcp__claude_ai_Gmail__create_draft
   - AskUserQuestion
-  - Bash(cp *)
+  - Bash(cp "${CLAUDE_PLUGIN_ROOT}/skills/get-angles/assets/route-map.html" *)
   - Read
   - Edit
   - Write
@@ -119,18 +121,22 @@ the user to the wrong person.
 Never call `crm:search_people` or `crm:enrich_person` in this skill. Both are open-world
 enrichment calls that cost money per lookup, and neither adds anything the map shows.
 
-## Step 0 — Artifact preflight + Carta connector name
+## Step 0 — Checks before building
 
-Read `${CLAUDE_PLUGIN_ROOT}/references/gate-0-artifact.md` and run **Gate A + Gate B**.
-This is a live artifact — the rendered route map calls Carta at runtime via
-`claude.use("mcp")`, which needs both the `Artifact` tool and a Carta connector.
+Run both checks before building, and stay quiet about them when they pass:
 
-**Gate B discovery:** connectors appear as `mcp__claude_ai_<connector>__<tool>`. Find
-the one exposing `crm:get_company_angles` / `crm:list_interactions_by_domain` and store
-its display name as `CARTA_MCP_SERVER`. Do not substitute a UUID.
+1. `${CLAUDE_PLUGIN_ROOT}/references/gate-has-artifact-tool.md` — can this session publish at all?
+2. `${CLAUDE_PLUGIN_ROOT}/references/gate-carta-connector-name.md` — the connector name the page will call.
 
-**Gate B probe:** call `welcome` then `get_current_user` via your prefixed tool names
-(`mcp__<prefix>__welcome`). If either errors, report what it returned and stop.
+Both sit in the **plugin's** `references/` directory — `${CLAUDE_PLUGIN_ROOT}/references/`,
+alongside the other plugin-wide references. They are *not* under this skill's own
+`references/`. Read them by that exact path; don't search for them.
+
+This is a live artifact, but **the connector its page calls is Gmail, not Carta** — the route
+map's action buttons draft an email, and Step 5 grants only `create_draft`. So apply the
+connector gate to **Gmail**: resolve that connector's name from `list_connectors` the same
+way, and don't publish a name you guessed. The CRM data in the map is gathered here and baked
+in, so the page never calls Carta at runtime.
 
 ## Step 1 — Resolve the domain
 

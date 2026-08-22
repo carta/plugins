@@ -9,10 +9,12 @@ description: >
   status, and related deal, investor, fundraising or company context. Briefs exactly one
   meeting — the next one; not an agenda view.
 allowed-tools:
+  # The only source for a connector's name
+  - list_connectors
   - mcp__carta__crm_call_tool
   - Artifact
   - AskUserQuestion
-  - Bash(cp *)
+  - Bash(cp "${CLAUDE_PLUGIN_ROOT}/skills/prepare-for-meeting/assets/brief-template.html" *)
   - Read
   - Edit
   - Write
@@ -92,18 +94,16 @@ crm_call_tool({ "name": "crm:<tool>", "arguments": { ... } })
 Never serialise these. Two waves is the target; more than three means something is being
 fetched that the brief cannot show.
 
-## Step 0 — Artifact preflight + Carta connector name
+## Step 0 — Checks before building
 
-Read `${CLAUDE_PLUGIN_ROOT}/references/gate-0-artifact.md` and run **Gate A + Gate B**.
-This is a live artifact — the brief calls Carta at runtime via `claude.use("mcp")`, which
-needs both the `Artifact` tool and a Carta connector.
+Read `${CLAUDE_PLUGIN_ROOT}/references/gate-has-artifact-tool.md` — the plugin's own
+`references/` directory, not this skill's. Read it by that exact path; don't search for it.
+Stay quiet about the check when it passes.
 
-**Gate B discovery:** connectors appear as `mcp__claude_ai_<connector>__<tool>`. Find
-the one exposing `crm:get_contact_profile` / `crm:list_interactions_by_domain` and store
-its display name as `CARTA_MCP_SERVER`. Do not substitute a UUID.
-
-**Gate B probe:** call `welcome` then `get_current_user` via your prefixed tool names
-(`mcp__<prefix>__welcome`). If either errors, report what it returned and stop.
+That is the only check this skill needs. **The brief is a static page** — it is rendered from
+data gathered here and makes no MCP calls once published (Step 6 passes no `capabilities`),
+so there is no connector for the page to address and
+`gate-carta-connector-name.md` does not apply.
 
 ## Step 1 — Resolve the meeting
 
