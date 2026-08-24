@@ -181,6 +181,8 @@ async function fetchPartnerRows(fundUuid, activityId, dueDate) {
         paidDate: r.paid_date,
         // No `?? false`: canRemind needs unset kept distinct from false.
         emailNoticeEnabled: r.email_notice_enabled,
+        partnerInterestGroupUuid: r.partner_interest_group_uuid ?? null,
+        partnerInterestGroupName: r.partner_interest_group_name ?? null,
         lastReminded: r.last_reminded_date ?? null,
         daysLate: daysPastDue(dueDate),
         fundUuid,
@@ -217,6 +219,48 @@ function fmtRemindedOn(ts) {
 // an explicit false disqualifies — the backend reads unset as enabled.
 function canRemind(r) {
   return r.emailNoticeEnabled !== false;
+}
+
+// One entry per interest group, because the send collapses a group's rows into a
+// single email — listing rows would double-count a two-interest investor.
+function groupUnpaidRows(rows, include) {
+  const byKey = new Map();
+  (rows ?? []).forEach(r => {
+    if (r.paymentStatus !== 'unpaid' || !include(r)) return;
+    // Mirrors the backend's own fallback key for a row with no group.
+    const key = r.partnerInterestGroupUuid ?? `row_${r.rowId}`;
+    const seen = byKey.get(key);
+    if (seen) {
+      seen.rowIds.push(r.rowId);
+      seen.amount += r.amount;
+      // The group's chase date is its latest row's.
+      if (r.lastReminded && (!seen.lastReminded || r.lastReminded > seen.lastReminded)) {
+        seen.lastReminded = r.lastReminded;
+      }
+      return;
+    }
+    byKey.set(key, {
+      key,
+      name: r.partnerInterestGroupName || r.partnerName,
+      partnerId: r.partnerId,
+      fundUuid: r.fundUuid,
+      rowIds: [r.rowId],
+      amount: r.amount,
+      lastReminded: r.lastReminded,
+      daysLate: r.daysLate,
+    });
+  });
+  return Array.from(byKey.values());
+}
+
+function remindableGroups(rows) {
+  return groupUnpaidRows(rows, canRemind);
+}
+
+// Listed but unselectable: an email-disabled investor reads as remindable from the
+// detail table, so dropping them from the selection silently confuses.
+function blockedRemindGroups(rows) {
+  return groupUnpaidRows(rows, r => !canRemind(r));
 }
 
 // An already-reminded row offers "Resend" over its last-reminded date, so the
@@ -317,6 +361,7 @@ async function openCapActivityDetail(activityId, fundName, typeLabel, dueDate, t
       <div class="ca-detail-stat"><span class="ca-detail-stat-val">${fmtFull(totalOwed)}</span><span class="ca-detail-stat-lbl">Net Amount</span></div>
       <div class="ca-detail-stat"><span class="ca-detail-stat-val ca-unpaid-val">${fmtFull(totalPending)}</span><span class="ca-detail-stat-lbl">Amount Pending</span></div>
       <div class="ca-detail-stat"><span class="ca-detail-stat-val ca-paid-val">${fmtFull(totalReceived)}</span><span class="ca-detail-stat-lbl">Amount Received</span></div>
+      ${isCall ? `<span class="ca-notify-slot" id="ca-notify-slot">${bulkRemindCta(activityId, rows)}</span>` : ''}
     </div>
     <div class="ca-detail-table-wrap">
       <table class="ca-detail-table">
@@ -409,38 +454,38 @@ function openRemindConfirm(btn) {
     partnerId: btn.dataset.partnerId,
     partnerName: btn.dataset.partnerName,
     isResend,
-    label: isResend ? 'Resend' : 'Send',
+    label: isResend ? 'Resend reminder' : 'Send reminder',
     sourceBtn: btn,
   };
+  // The preview is the confirmation, so opting out of it sends on this click.
+  if (isPreviewSnoozed()) { submitRemindConfirm(); return; }
   // No interest id means no preview to confirm against, so it takes the short path.
-  if (isPreviewSnoozed() || !_pendingRemind.partnerId) {
-    renderShortRemindConfirm();
-  } else {
-    renderPreviewRemindConfirm();
-  }
+  if (!_pendingRemind.partnerId) renderShortRemindConfirm();
+  else renderPreviewRemindConfirm();
 }
 
 function renderShortRemindConfirm() {
+  const { partnerName, isResend } = _pendingRemind;
   const overlay = ensureRemindOverlay();
   overlay.innerHTML = `
     <div class="ca-confirm-panel">
-      <div class="ca-confirm-title">${escHtml(_pendingRemind.partnerName)}</div>
-      <div class="ca-confirm-text">Are you sure you want to send an email to this partner reminding them of their contribution?</div>
+      <div class="ca-confirm-title">${isResend ? 'Resend reminder' : 'Send reminder'}</div>
+      <div class="ca-confirm-text">Send a reminder email to ${escHtml(partnerName)} reminding them of their contribution.</div>
       <div class="ca-confirm-actions">
         <button class="ca-confirm-cancel-btn" onclick="closeRemindConfirm()">Cancel</button>
-        <button class="ca-confirm-primary-btn" id="ca-confirm-submit-btn" onclick="submitRemindConfirm()">${_pendingRemind.isResend ? 'Resend' : 'Send Reminder'}</button>
+        <button class="ca-confirm-primary-btn" id="ca-confirm-submit-btn" onclick="submitRemindConfirm()">${isResend ? 'Resend reminder' : 'Send reminder'}</button>
       </div>
     </div>`;
   overlay.classList.add('ca-confirm-visible');
 }
 
 async function renderPreviewRemindConfirm() {
-  const { activityId, fundUuid, partnerId, partnerName, isResend, label } = _pendingRemind;
+  const { activityId, fundUuid, partnerId, partnerName, label } = _pendingRemind;
   const overlay = ensureRemindOverlay();
   overlay.innerHTML = `
     <div class="ca-preview-panel">
       <div class="ca-preview-header">
-        <span class="ca-preview-title">${isResend ? 'Resend reminder' : 'Send Reminder'}</span>
+        <span class="ca-preview-title">Investor reminder email</span>
         <button class="ca-preview-close" onclick="closeRemindConfirm()" aria-label="Close">✕</button>
       </div>
       <div class="ca-preview-body" id="ca-remind-preview-body">
@@ -483,16 +528,19 @@ async function renderPreviewRemindConfirm() {
   renderEmailPreview(body, view);
 }
 
+// Both flows share the overlay, so a backdrop click has to clear either one.
 function closeRemindConfirm() {
   const overlay = document.getElementById('ca-confirm-overlay');
   if (overlay) overlay.classList.remove('ca-confirm-visible');
   _pendingRemind = null;
+  _pendingBulk = null;
 }
 
 async function submitRemindConfirm() {
   if (!_pendingRemind) return;
   const { rowId, activityId, fundUuid, partnerName, sourceBtn } = _pendingRemind;
-  const btn = document.getElementById('ca-confirm-submit-btn');
+  // A snoozed send skips the confirm step, so the row's own button looks busy.
+  const btn = document.getElementById('ca-confirm-submit-btn') ?? sourceBtn;
   const label = btn ? btn.textContent : '';
   // Applied on send, not on cancel: cancelling means "never mind", and silently
   // changing a preference from it would surprise.
@@ -500,9 +548,10 @@ async function submitRemindConfirm() {
   if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
 
   try {
-    const res = await _mcp("mutate", {
-      command: "fa:send:capital-call-reminder",
-      params: {
+    // Colons become `__` in the generated tool name; the hyphens stay.
+    const res = await _mcp("call_tool", {
+      name: "fa__send__capital-call-reminder",
+      arguments: {
         fund_uuid: fundUuid,
         capital_activity_id: activityId,
         row_ids: [rowId]
@@ -520,6 +569,326 @@ async function submitRemindConfirm() {
     showToast('Failed to send reminder — please try again.');
     if (btn) { btn.disabled = false; btn.textContent = label; }
   }
+}
+
+// ── Bulk remind ──
+let _pendingBulk = null;
+
+// A day, matching the preview snooze; row-level Resend covers anyone missed.
+const CA_BULK_SENT_KEY = 'caBulkRemindedAt';
+const CA_BULK_SENT_MS = 86400000;
+
+function readBulkSent() {
+  try {
+    return JSON.parse(localStorage.getItem(CA_BULK_SENT_KEY) ?? '{}');
+  } catch (e) {
+    return {};
+  }
+}
+
+function bulkRemindedRecently(activityId) {
+  return Date.now() - (readBulkSent()[activityId] ?? 0) < CA_BULK_SENT_MS;
+}
+
+function stampBulkSent(activityId) {
+  const now = Date.now();
+  // Pruned on write, or the map keeps every activity the firm ever chased.
+  const kept = Object.fromEntries(
+    Object.entries(readBulkSent()).filter(([, ts]) => now - ts < CA_BULK_SENT_MS));
+  kept[activityId] = now;
+  try {
+    localStorage.setItem(CA_BULK_SENT_KEY, JSON.stringify(kept));
+  } catch (e) {
+    /* best-effort */
+  }
+}
+
+function bulkRemindCta(activityId, rows) {
+  if (!remindableGroups(rows).length) return '';
+  if (bulkRemindedRecently(activityId)) {
+    return '<span class="ca-notify-sent">Sent just now</span>';
+  }
+  return `<button class="ca-notify-btn" data-activity-id="${escHtml(activityId)}"
+      onclick="openBulkNotify(this)">Remind investors</button>`;
+}
+
+function openBulkNotify(btn) {
+  trackHome("click", "CartaHome.CapActivity.BulkNotify");
+  const activityId = btn.dataset.activityId;
+  const rows = _capDetailCache[activityId];
+  const groups = remindableGroups(rows);
+  if (!groups.length) return;
+  _pendingBulk = {
+    activityId,
+    groups,
+    blocked: blockedRemindGroups(rows),
+    selected: new Set(groups.map(g => g.key)),
+    previewKey: null,
+  };
+  renderBulkSelect();
+}
+
+function selectedBulkGroups() {
+  return _pendingBulk.groups.filter(g => _pendingBulk.selected.has(g.key));
+}
+
+// The detail table's columns, so names line up with what the GP just read.
+function bulkSelectRow(g, cells) {
+  return `
+    <tr class="ca-detail-row ca-row-unpaid">
+      <td class="ca-td-check">${cells}</td>
+      <td class="ca-td-name" title="${escHtml(g.name)}">${escHtml(g.name)}${
+        g.blocked ? '<div class="ca-remind-sub">Email disabled</div>' : ''}</td>
+      <td class="ca-td-amount">${fmtFull(g.amount)}</td>
+      <td class="ca-td-status"><span class="ca-status ca-status-unpaid">Unpaid</span></td>
+      <td class="ca-td-date">${g.daysLate > 0 ? `<span class="ca-late">${g.daysLate}d late</span>` : '—'}</td>
+      <td class="ca-td-reminded">${g.lastReminded ? (fmtRemindedOn(g.lastReminded) ?? '—') : '—'}</td>
+    </tr>`;
+}
+
+function renderBulkSelect() {
+  const { groups, blocked, selected } = _pendingBulk;
+  const overlay = ensureRemindOverlay();
+  overlay.innerHTML = `
+    <div class="ca-preview-panel">
+      <div class="ca-preview-header">
+        <span class="ca-preview-title">Remind investors</span>
+        <button class="ca-preview-close" onclick="closeRemindConfirm()" aria-label="Close">✕</button>
+      </div>
+      <div class="ca-preview-body">
+        <div class="ca-preview-note">Select the partners you want to send a reminder email to.</div>
+        <div class="ca-detail-table-wrap">
+          <table class="ca-detail-table">
+            <thead>
+              <tr>
+                <th class="ca-th-check">
+                  <input type="checkbox" id="ca-bulk-all"
+                    onchange="toggleBulkSelectAll(this)" aria-label="Select all partners">
+                </th>
+                <th class="ca-th-name">Partner</th>
+                <th class="ca-th-amount">Amount</th>
+                <th class="ca-th-status">Status</th>
+                <th class="ca-th-date">Date</th>
+                <th class="ca-th-reminded">Last reminded</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${groups.map(g => bulkSelectRow(g,
+                `<input type="checkbox" class="ca-bulk-check" ${selected.has(g.key) ? 'checked' : ''}
+                   data-key="${escHtml(g.key)}" onchange="toggleBulkSelect(this)"
+                   aria-label="Remind ${escHtml(g.name)}">`)).join('')}
+              ${blocked.map(g => bulkSelectRow({ ...g, blocked: true }, '')).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="ca-preview-footer ca-preview-footer-confirm">
+        <span class="ca-bulk-count" id="ca-bulk-count"></span>
+        <div class="ca-preview-footer-actions">
+          <button class="ca-preview-close-btn" onclick="closeRemindConfirm()">Cancel</button>
+          <button class="ca-confirm-primary-btn" id="ca-bulk-continue" onclick="bulkNotifyContinue()">Continue</button>
+        </div>
+      </div>
+    </div>`;
+  overlay.classList.add('ca-confirm-visible');
+  syncBulkFooter();
+}
+
+function toggleBulkSelect(input) {
+  if (input.checked) _pendingBulk.selected.add(input.dataset.key);
+  else _pendingBulk.selected.delete(input.dataset.key);
+  syncBulkFooter();
+}
+
+function toggleBulkSelectAll(input) {
+  const { groups, selected } = _pendingBulk;
+  selected.clear();
+  if (input.checked) groups.forEach(g => selected.add(g.key));
+  document.querySelectorAll('.ca-bulk-check').forEach(cb => { cb.checked = input.checked; });
+  syncBulkFooter();
+}
+
+function syncBulkFooter() {
+  const n = _pendingBulk.selected.size;
+  const total = _pendingBulk.groups.length;
+  const count = document.getElementById('ca-bulk-count');
+  if (count) count.textContent = `${n} of ${total} selected`;
+  const all = document.getElementById('ca-bulk-all');
+  if (all) {
+    all.checked = n === total;
+    all.indeterminate = n > 0 && n < total;
+  }
+  const cont = document.getElementById('ca-bulk-continue');
+  if (cont) {
+    // Snoozing removes the step this button leads to, so it stops promising one.
+    cont.textContent = isPreviewSnoozed() ? bulkSendLabel(n) : 'Continue';
+    cont.disabled = n === 0;
+  }
+}
+
+function bulkNotifyContinue() {
+  if (!_pendingBulk?.selected.size) return;
+  // The preview is the confirmation, so opting out of it sends on this click.
+  if (isPreviewSnoozed()) { submitBulkRemind(); return; }
+  // No interest id means no preview to confirm against, so it takes the short path.
+  if (!selectedBulkGroups().some(g => g.partnerId != null)) renderBulkShortConfirm();
+  else renderBulkPreviewConfirm();
+}
+
+function renderBulkShortConfirm() {
+  const n = selectedBulkGroups().length;
+  const overlay = ensureRemindOverlay();
+  overlay.innerHTML = `
+    <div class="ca-confirm-panel">
+      <div class="ca-confirm-title">Send reminder${n === 1 ? '' : 's'}</div>
+      <div class="ca-confirm-text">Send a reminder email to ${n === 1 ? 'this partner' : `these ${n} partners`} reminding them of their contribution.</div>
+      <div class="ca-confirm-actions">
+        <button class="ca-confirm-cancel-btn" onclick="renderBulkSelect()">Back</button>
+        <button class="ca-confirm-primary-btn" id="ca-bulk-submit-btn" onclick="submitBulkRemind()">${bulkSendLabel(n)}</button>
+      </div>
+    </div>`;
+  overlay.classList.add('ca-confirm-visible');
+}
+
+function bulkSendLabel(n) {
+  return n === 1 ? 'Send reminder' : `Send ${n} reminders`;
+}
+
+// Every selected investor's own email is reachable from the picker: a batch the GP
+// cannot read is a batch they cannot check.
+function renderBulkPreviewConfirm() {
+  const sel = selectedBulkGroups();
+  const previewable = sel.filter(g => g.partnerId != null);
+  _pendingBulk.previewKey = previewable.some(g => g.key === _pendingBulk.previewKey)
+    ? _pendingBulk.previewKey
+    : previewable[0].key;
+  const overlay = ensureRemindOverlay();
+  overlay.innerHTML = `
+    <div class="ca-preview-panel">
+      <div class="ca-preview-header">
+        <span class="ca-preview-title">Investor reminder email</span>
+        <button class="ca-preview-close" onclick="closeRemindConfirm()" aria-label="Close">✕</button>
+      </div>
+      <div class="ca-preview-body">
+        ${previewable.length > 1 ? `
+          <div class="ca-preview-picker-row">
+            <label for="ca-bulk-preview-pick">Previewing</label>
+            <select class="ca-preview-picker" id="ca-bulk-preview-pick"
+              onchange="switchBulkPreview(this.value)">
+              ${previewable.map(g => `
+                <option value="${escHtml(g.key)}" ${g.key === _pendingBulk.previewKey ? 'selected' : ''}
+                  >${escHtml(g.name)}</option>`).join('')}
+            </select>
+            <span class="ca-preview-note" id="ca-bulk-preview-pos"></span>
+          </div>` : ''}
+        <div class="ca-preview-slot" id="ca-bulk-preview-body"></div>
+      </div>
+      <div class="ca-preview-footer ca-preview-footer-confirm">
+        <label class="ca-snooze-label">
+          <input type="checkbox" id="ca-snooze-preview"> Do not show preview for one day
+        </label>
+        <div class="ca-preview-footer-actions">
+          <button class="ca-preview-close-btn" onclick="renderBulkSelect()">Back</button>
+          <button class="ca-confirm-primary-btn" id="ca-bulk-submit-btn" onclick="submitBulkRemind()">${bulkSendLabel(sel.length)}</button>
+        </div>
+      </div>
+    </div>`;
+  overlay.classList.add('ca-confirm-visible');
+  renderBulkPreviewFor(_pendingBulk.previewKey);
+}
+
+function switchBulkPreview(key) {
+  if (!_pendingBulk) return;
+  _pendingBulk.previewKey = key;
+  renderBulkPreviewFor(key);
+}
+
+async function renderBulkPreviewFor(key) {
+  const { activityId } = _pendingBulk;
+  const g = _pendingBulk.groups.find(x => x.key === key);
+  const slot = document.getElementById('ca-bulk-preview-body');
+  if (!g || !slot) return;
+  const pos = document.getElementById('ca-bulk-preview-pos');
+  if (pos) {
+    const previewable = selectedBulkGroups().filter(x => x.partnerId != null);
+    pos.textContent = `${previewable.findIndex(x => x.key === key) + 1} of ${previewable.length}`;
+  }
+  slot.innerHTML = `<div class="loading-row" style="padding:20px 0;">Loading preview for ${escHtml(g.name)}…</div>`;
+
+  const cacheKey = `${activityId}:${g.partnerId}`;
+  let view = _emailPreviewCache[cacheKey];
+  let error = null;
+  if (!view) {
+    try {
+      view = await fetchEmailPreview(g.fundUuid, activityId, g.partnerId);
+      _emailPreviewCache[cacheKey] = view;
+    } catch (e) {
+      console.error('[bulk remind preview error]', e);
+      error = e;
+    }
+  }
+  // Dismissed, or another investor was picked, while the preview was in flight.
+  if (_pendingBulk?.previewKey !== key) return;
+  const body = document.getElementById('ca-bulk-preview-body');
+  if (!body) return;
+
+  // A preview that failed to load still leaves a working send.
+  if (error) {
+    body.innerHTML = '<div class="loading-row" style="padding:16px 0;">Preview failed to load. You can still send the reminders.</div>';
+    return;
+  }
+  renderEmailPreview(body, view);
+}
+
+async function submitBulkRemind() {
+  if (!_pendingBulk?.selected.size) return;
+  const { activityId } = _pendingBulk;
+  const sel = selectedBulkGroups();
+  const rowIds = sel.flatMap(g => g.rowIds);
+  // A snoozed send skips the confirm step, so the selection footer looks busy.
+  const btn = document.getElementById('ca-bulk-submit-btn')
+    ?? document.getElementById('ca-bulk-continue');
+  const label = btn ? btn.textContent : '';
+  if (document.getElementById('ca-snooze-preview')?.checked) snoozePreviewForOneDay();
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+
+  try {
+    // force_send is not on this tool, so a non-staff caller's batch becomes a
+    // staff review request rather than an immediate send.
+    const res = await _mcp("call_tool", {
+      name: "fa__send__capital-call-reminder",
+      arguments: {
+        fund_uuid: sel[0].fundUuid,
+        capital_activity_id: activityId,
+        row_ids: rowIds
+      }
+    });
+    if (res.isError) throw new Error(res.content?.[0]?.text ?? 'Unknown error');
+    closeRemindConfirm();
+    showToast(`Reminders sent to ${sel.length} investor${sel.length === 1 ? '' : 's'}.`);
+    stampRemindedRows(activityId, rowIds);
+    stampBulkSent(activityId);
+    const slot = document.getElementById('ca-notify-slot');
+    if (slot) slot.innerHTML = bulkRemindCta(activityId, _capDetailCache[activityId] ?? []);
+  } catch (e) {
+    console.error('[bulk remind error]', e);
+    showToast('Failed to send reminders — please try again.');
+    if (btn) { btn.disabled = false; btn.textContent = label; }
+  }
+}
+
+// Stamps the cache, not just the DOM: the overlay reopens off the cache.
+function stampRemindedRows(activityId, rowIds) {
+  const now = new Date().toISOString();
+  const ids = new Set(rowIds);
+  (_capDetailCache[activityId] ?? []).forEach(r => {
+    if (!ids.has(r.rowId)) return;
+    r.lastReminded = now;
+    const cell = document
+      .querySelector(`.ca-remind-btn[data-row-id="${CSS.escape(r.rowId)}"]`)
+      ?.closest('.ca-td-remind');
+    if (cell) cell.innerHTML = remindCellInner(r, activityId);
+  });
 }
 
 // ── Row overflow menu ──

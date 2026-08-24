@@ -881,6 +881,22 @@
     .ca-detail-stat-lbl { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-color-global-text-subtle); }
     .ca-unpaid-val { color: var(--ca-unpaid); }
     .ca-paid-val   { color: var(--ca-paid); }
+    /* Trails the stats rather than joining their rhythm — it is an action, not a figure. */
+    .ca-notify-slot { margin-left: auto; align-self: center; }
+    .ca-notify-sent {
+      font-size: 12px; white-space: nowrap;
+      color: var(--ink-color-global-text-subtle);
+    }
+    .ca-notify-btn {
+      background: none; cursor: pointer;
+      border: 1px solid var(--ink-color-global-border-default);
+      font-size: 12px; font-weight: 500; font-family: inherit;
+      color: var(--ink-color-global-text-default);
+      padding: 6px 12px; white-space: nowrap;
+      border-radius: var(--ink-size-global-radius-subtle);
+      transition: background .13s;
+    }
+    .ca-notify-btn:hover { background: var(--ink-color-global-surface-lightgray-hover); }
     .ca-detail-table-wrap { overflow-x: auto; }
     /* Fixed layout keeps the call and distribution modals on one column rhythm
        and gives Partner a definite width to ellipsize against. Below min-width
@@ -901,6 +917,9 @@
     .ca-th-date    { width: 15%; }
     .ca-th-remind  { width: 18%; }
     .ca-th-actions { width: 7%; }
+    /* The selection table's two extra columns. */
+    .ca-th-check    { width: 6%; }
+    .ca-th-reminded { width: 18%; }
     /* Outranks `.ca-detail-table th`, which would otherwise left-align the header
        away from the values under it. */
     .ca-detail-table .ca-th-amount, .ca-detail-table .ca-td-amount { text-align: right; padding-right: 16px; }
@@ -912,6 +931,8 @@
     .ca-td-amount { color: var(--ink-color-global-text-default); font-variant-numeric: tabular-nums; white-space: nowrap; }
     .ca-td-status { white-space: nowrap; }
     .ca-td-date { color: var(--ink-color-global-text-subtle); white-space: nowrap; }
+    .ca-td-reminded { color: var(--ink-color-global-text-subtle); white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .ca-th-check input, .ca-td-check input { cursor: pointer; margin: 0; vertical-align: middle; }
     .ca-status {
       font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
       padding: 2px 6px; border-radius: var(--ink-size-global-radius-subtle); line-height: 1.4; display: inline-block;
@@ -1078,6 +1099,25 @@
       font-size: 12px; color: var(--ink-color-global-text-subtle);
     }
     .ca-snooze-label input { cursor: pointer; margin: 0; }
+
+    /* ── Bulk remind selection ── */
+    .ca-bulk-count { font-size: 12px; color: var(--ink-color-global-text-subtle); }
+    .ca-preview-picker-row {
+      display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+      font-size: 12px; color: var(--ink-color-global-text-subtle);
+    }
+    .ca-preview-picker {
+      font-family: inherit; font-size: 12px; padding: 4px 6px; max-width: 320px;
+      color: var(--ink-color-global-text-default);
+      background: var(--ink-color-global-surface-background-default);
+      border: 1px solid var(--ink-color-global-border-default);
+      border-radius: var(--ink-size-global-radius-subtle);
+    }
+    /* The body's column layout one level down, so a swapped-in frame still grows. */
+    .ca-preview-slot {
+      flex: 1; min-height: 0;
+      display: flex; flex-direction: column; gap: 12px;
+    }
 
     /* ── Capital activity v2 cards (section row + card grid) ── */
     #ca-section-v2 { /* container hook — no extra styles needed, inherits section layout */ }

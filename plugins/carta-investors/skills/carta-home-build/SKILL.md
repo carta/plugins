@@ -80,9 +80,14 @@ You never need to read the assembled HTML — see "Source layout" below.
   calls and distributions from `fa:list:active-capital-activity`, with a detail overlay
   listing each LP partner's amount, status, and date — paid date once paid, days late while
   outstanding. On a capital call, unpaid partners get **Send Reminder** (**Resend**, over the
-  last-reminded date, once one has gone out), which confirms and then sends the email via
+  last-reminded date, once one has gone out), which previews and then sends the email via
   `fa:send:capital-call-reminder`. Rows with `email_notice_enabled: false` show a muted
-  **Email disabled** and no menu — the backend drops those sends silently.
+  **Email disabled** and no menu — the backend drops those sends silently. **Remind investors**
+  in the summary row batches the same send: a selection table of the remindable investors (all
+  checked to start), then a preview with a picker over each one's own email. One entry per
+  interest group, since the backend collapses a group's rows into a single email. The preview
+  is the confirmation: snoozing it means the next click sends, and a sent batch reads
+  **Sent just now** for 24h (`caBulkRemindedAt`).
 
 ## MCP tools required inside the artifact
 
@@ -100,9 +105,10 @@ rejects with `not_in_manifest`:
 - `fetch` — all DWH queries (SOI, P&L, BS, benchmarks, tear sheets)
 - `get_current_user` — signed-in user's profile; `has_tactyc` and `has_active_manco` gate
   their Skill Directory categories (see `fetchUserEnrichment`)
-- `mutate` — write operations; used by the Capital Activity detail overlay's reminder
-  actions (`fa:send:capital-call-reminder`)
-- `call_tool` — the gateway dispatcher the Plugin news live-content cards use
+- `mutate` — the legacy write dispatcher, granted as a fallback; nothing in `resources/`
+  calls it
+- `call_tool` — the gateway dispatcher, carrying both the Capital Activity reminder sends
+  (`fa__send__capital-call-reminder`) and the Plugin news live-content cards
 
 ## Source layout — the artifact is BUILT, not hand-edited
 
@@ -292,8 +298,8 @@ Artifact({
 > Anything the page calls that is missing from `tools` rejects with `not_in_manifest`.
 > `get_current_user` **must** be there or `fetchUserEnrichment()` fails silently — the
 > debug log never prints and the Skill Directory falls back to showing all categories.
-> `mutate` enables write operations, needed for the Capital Activity reminder actions.
-> `call_tool` is the gateway dispatcher the Plugin news live content cards use to reach
+> `call_tool` carries the Capital Activity reminder sends, and is the gateway dispatcher
+> the Plugin news live content cards use to reach
 > `marketing__list__content` / `marketing__get__asset_data`
 > (`resources/app/live-content.js`); without it those cards fall back to the static
 > defaults. The marketing commands only exist on some environments, so a missing command

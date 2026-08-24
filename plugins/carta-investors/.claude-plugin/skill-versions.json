@@ -1,6 +1,6 @@
 {
   "carta-home-build": {
-    "version": "1.7.5",
-    "headline": "Connector fallback messages now name the fix (Settings → Connectors); benchmark card no longer goes blank when no connector is attached."
+    "version": "1.8.0",
+    "headline": "Remind investors sends capital call reminders to a batch of LPs at once."
   }
 }
