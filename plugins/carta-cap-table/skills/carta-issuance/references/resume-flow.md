@@ -21,6 +21,10 @@ review](../SKILL.md#phase-2--render-the-review-surface-mandatory-pre-save-gate).
 `security_type` is locked once created — never ask to change it on resume. If `load_drafts`
 returns more rows than you're tracking, see [Cleanup unexpected draft rows](#cleanup-unexpected-draft-rows).
 
+**Keep the `draft_set_id` you resumed from.** The rows are already on the server, so unless the
+user edits them, Phase 3 issues with that id and no `drafts` payload
+([Hard rule 11](../SKILL.md#hard-rules)).
+
 **Option grant — re-derive the review-only display fields.** `load_drafts` returns
 `equity_plan_id` (set-level) and `document_set_id` (per row) but never `plan_name` /
 `document_set_label` / `exercise_periods_text` — those were never persisted server-side

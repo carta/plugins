@@ -11,6 +11,11 @@ Two rules govern every branch below:
 - **Every re-call carries `draft_set_id` and each row's `draft_pk`** ([Hard rule
   4](../SKILL.md#hard-rules)). Omitting `draft_set_id` mints a second draft set; omitting
   `draft_pk` inserts a new row instead of updating.
+- **Send only the rows you actually changed.** Recovery is the case where a `drafts` payload is
+  right — you are editing values, so they must go back. Rows you did not touch are already
+  correct on the server; resending them re-opens the divergence [Hard rule
+  11](../SKILL.md#hard-rules) exists to close. Once the set is clean, the issue re-call needs no
+  rows at all.
 
 ---
 

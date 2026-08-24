@@ -158,6 +158,12 @@ The SDK's HITL prompt on that mutate is the final, irreversible gate — never t
       search found zero or several candidates, or the workbook has more than one importable
       sheet. Never use it to ask *who* is in the file, and never in place of parsing a path the
       prompt already gave.
+11. **Issue what was validated, not a copy of it.** When a draft set already holds the rows the
+    user approved, [Phase 3](#first-do-you-need-a-payload-at-all) issues with `draft_set_id` and
+    **no `drafts` key**. Re-sending rows makes the issued payload merely *probably* identical to
+    the reviewed one — a transposed digit anywhere in it issues terms nobody approved, and no
+    later gate compares the two. Send rows again only to change them, and then with each
+    `draft_pk` attached.
 
 The incidents behind these rules — including the ones that look redundant — are in
 [references/incidents.md](references/incidents.md). Read it before weakening any of them.
@@ -815,10 +821,45 @@ not re-ask**, and don't second-guess a fresh signal as a stale replay. Branch di
 | `"Edit a row"` | re-render the Phase 0.5 form, pre-filled with the resolved rows |
 | `"Cancel"` | stop — *Canceled* closing |
 
+### First: do you need a payload at all?
+
+**Usually not.** [Phase 1.5](#phase-15--save--validate-before-review-or-save-only) already saved
+and validated these rows, and the review is read-only with nothing to merge back — so the server
+is already holding exactly what the user just approved. Issue *those* rows:
+
+```
+mcp__carta__mutate({"command": "cap_table:mutate:issue_securities", "params": {
+  "corporation_id": <corporation_id>, "security_type": "<certificate|option_grant>",
+  "draft_set_id": <draft_set_id>}})     # no `drafts` key at all
+```
+
+`drafts` is optional. Given `draft_set_id` and no rows, the server skips the save entirely and
+validates and issues what is already persisted on that set. Everything else is unchanged — the
+same blocking validation, the same duplicate detection, the same corporation-signatory check, the
+same atomic issue, the same response shape.
+
+This is the **correctness** path, not just the cheap one. Re-serializing rows between validation
+and issue means the payload that commits is not provably the payload that was validated and
+shown to the user: validation passes on payload A, the user reviews payload A, and payload B is
+what issues. Nothing downstream catches that divergence. Sending no rows makes it impossible
+([Hard rule 11](#hard-rules)).
+
+**Build a `drafts` payload only when the rows aren't already on the server:**
+
+- **Rows changed after Phase 1.5 saved them** — an error-retry that edited a value, or a
+  [back-to-edit](references/back-to-edit.md) round trip. Send the changed rows **with their
+  `draft_pk`s** so they update rather than insert (Hard rule 4), then the set is current again.
+- **No `draft_set_id`** — nothing was ever saved, so there is no set to issue from. Rare on this
+  path: Phase 1.5 runs before the review by design, so reaching Phase 3 without one means an
+  earlier step was skipped.
+
+If either applies, build the payload per the rules below. Otherwise skip to
+[Run the issue securities mutate](#run-the-issue-securities-mutate).
+
 ### Build the mutate payload from your Phase-1-resolved rows
 
-The review is read-only and has nothing to merge back. Three rules govern the `drafts` payload
-on **both** paths, and each one fails the whole mutate when got wrong:
+Three rules govern the `drafts` payload on **both** paths, and each one fails the whole mutate
+when got wrong:
 
 - **Per-field date formats.** `grant_expiration_date`, `vesting_start_date` and `rule_144_date`
   are `CharField(10)` and take **`MM/DD/YYYY` only** — an ISO string comes back
@@ -857,28 +898,42 @@ Re-run the pre-save assertion (Hard rule 9) on the resolved rows, then mutate.
 
 ## Run the issue securities mutate
 
-One mutate runs save → validate → check duplicates → issue, atomically.
+One mutate runs save → validate → check duplicates → issue, atomically. The save step is skipped
+when you send no rows.
+
+```
+# The normal case, both security types — the set already holds the reviewed rows
+mcp__carta__mutate({"command": "cap_table:mutate:issue_securities", "params": {
+  "corporation_id": <corporation_id>, "security_type": "<certificate|option_grant>",
+  "draft_set_id": <draft_set_id>}})
+```
+
+Only when the rows must change, or no set exists yet ([above](#first-do-you-need-a-payload-at-all)):
 
 ```
 # Certificate
 mcp__carta__mutate({"command": "cap_table:mutate:issue_securities", "params": {
   "corporation_id": <corporation_id>, "security_type": "certificate",
-  "drafts": [ ...cert rows... ],
-  "draft_set_id": <draft_set_id on retry/resume>,   # omit on first call
+  "drafts": [ ...cert rows, each with its draft_pk when the set exists... ],
+  "draft_set_id": <draft_set_id when one exists>,
   "draft_set_name": <optional label, ≤30 chars>}})
 
-# Option grant — additionally pass equity_plan_id on the FIRST call only
+# Option grant — additionally pass equity_plan_id on the FIRST save of a new set
 mcp__carta__mutate({"command": "cap_table:mutate:issue_securities", "params": {
   "corporation_id": <corporation_id>, "security_type": "option_grant",
-  "drafts": [ ...grant rows... ],
-  "equity_plan_id": <equity_plan_id>,               # first call only
-  "draft_set_id": <draft_set_id on retry/resume>}})
+  "drafts": [ ...grant rows, each with its draft_pk when the set exists... ],
+  "equity_plan_id": <equity_plan_id>,               # first save of a new set only
+  "draft_set_id": <draft_set_id when one exists>}})
 ```
+
+An unknown `draft_set_id` sent with no `drafts` returns a descriptive error rather than quietly
+creating a new set — so a stale id fails loudly instead of issuing into the wrong place.
 
 **Response:** `{draft_set_id, drafts:[{temp_id, draft_pk, status}], validation:{status, success,
 errors, warnings}, duplicates:{has_duplicates, count, results}, issued:[{id}]|null}`. **Always
 capture `draft_set_id` and each `draft_pk`**, even on success — a follow-up may retry this
-conversation.
+conversation. On the no-rows path `drafts` comes back `[]` (nothing was saved); the `draft_pk`s
+you already hold from Phase 1.5 stay valid.
 
 | Response state | Action |
 |---|---|
