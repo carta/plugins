@@ -117,6 +117,7 @@ If you genuinely cannot determine the intent, call `AskUserQuestion`:
 | Fund financials, NAV, trial balance | Consolidating financials skills |
 | Performance benchmarks, IRR, TVPI, peer percentile | `/carta-performance-benchmarks` |
 | Co-investor analysis | `carta-co-investors` |
+| Wants Carta's Fund Admin team to *do* something | `carta-fund-admin-requests` |
 
 ---
 

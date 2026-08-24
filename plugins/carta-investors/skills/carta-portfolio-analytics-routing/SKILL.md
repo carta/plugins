@@ -152,6 +152,7 @@ Fire only if Step 1 returned no clear match.
 | LP documents, K-1, LP reporting, AGM decks, tear sheets | `/carta-lp-reporting-routing` |
 | Cap table ownership, equity management, 409A | Carta cap table tools |
 | Fund of Funds | Not yet available — see STOP rows |
+| Wants Carta's Fund Admin team to *do* something | `carta-fund-admin-requests` |
 
 ---
 
