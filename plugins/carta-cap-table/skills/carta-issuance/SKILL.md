@@ -817,8 +817,30 @@ not re-ask**, and don't second-guess a fresh signal as a stale replay. Branch di
 
 ### Build the mutate payload from your Phase-1-resolved rows
 
-The review is read-only and has nothing to merge back. **Run the serializer** on your
-Phase-1-resolved rows and pass what it returns as `drafts` verbatim:
+The review is read-only and has nothing to merge back. Three rules govern the `drafts` payload
+on **both** paths, and each one fails the whole mutate when got wrong:
+
+- **Per-field date formats.** `grant_expiration_date`, `vesting_start_date` and `rule_144_date`
+  are `CharField(10)` and take **`MM/DD/YYYY` only** — an ISO string comes back
+  `Date is invalid`, with no server-side coercion. Every other date goes out ISO. Rows carry ISO
+  everywhere upstream of this call. Conversion is idempotent, so a row already in `MM/DD/YYYY`
+  is fine.
+- **Non-payload keys stripped**: `import_notes`, `row_key`, and the review-only
+  `plan_name` / `document_set_label` / `exercise_periods_text` / `legend_body`. Any of them
+  present is an unknown-field rejection.
+- **Empty means omit**, while a real `0` price, `needs_board_approval: false`, and an explicit
+  `vesting_template: null` all survive.
+
+**On Cowork — apply all three by hand.** There is no serializer on this path: the script below
+reads and writes `$OUT_DIR` files that only the Code adapter has. The date rule bites hardest on
+an [imported](#phase-025--ingest-an-uploaded-file) batch, where rows arrive prefilled in ISO (the
+form's date inputs accept nothing else), so all three CharFields need converting — Phases 0.5/1
+did not touch them. Strip `row_key` here too: you needed it to thread `draft_pk`
+([cowork-adapter.md § Draft state](references/cowork-adapter.md#draft-state-on-this-path)), and
+it is an unknown field to the server.
+
+**On Code — run the serializer**, which enforces all three, and pass what it returns as `drafts`
+verbatim:
 
 ```bash
 uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-issuance/scripts/serialize_drafts.py" \
@@ -826,27 +848,8 @@ uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-issuance/scripts/serialize_drafts.py"
   --rows "$OUT_DIR/_review_rows.json" --out "$OUT_DIR/_drafts.json"
 ```
 
-It enforces the three things that used to be prose here, each of which fails the whole mutate
-when got wrong:
-
-- **Per-field date formats.** `grant_expiration_date`, `vesting_start_date` and `rule_144_date`
-  are `CharField(10)` and take **`MM/DD/YYYY` only** — an ISO string comes back
-  `Date is invalid`, with no server-side coercion. Every other date goes out ISO. Rows carry ISO
-  everywhere upstream of this call, so **do not hand-format dates.** Conversion is idempotent,
-  so a row already in `MM/DD/YYYY` is fine.
-- **Non-payload keys stripped**: `import_notes`, `row_key`, and the review-only
-  `plan_name` / `document_set_label` / `exercise_periods_text` / `legend_body`. Any of them
-  present is an unknown-field rejection.
-- **Empty means omit**, while a real `0` price, `needs_board_approval: false`, and an explicit
-  `vesting_template: null` all survive.
-
 Exit 2 with the row and field named means a date couldn't be read — fix it and re-run rather
 than sending it.
-
-> **No Bash in this session?** Then do all three by hand, and note that the format rule bites
-> hardest on an [imported](#phase-025--ingest-an-uploaded-file) batch: those rows arrive
-> prefilled in ISO (the panel's date inputs accept nothing else), so all three CharFields need
-> converting — Phases 0.5/1 did not touch them.
 
 Re-run the pre-save assertion (Hard rule 9) on the resolved rows, then mutate.
 

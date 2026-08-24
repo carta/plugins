@@ -21,6 +21,21 @@ form already collects, or a pre-ask for a value that is computable (§4).
 One form. Every field, per stakeholder, every computable default pre-filled. The user edits
 what they want and submits once.
 
+**Before you build it, two prerequisites — in this order:**
+
+1. **Call `read_me` once, with `modules: ["interactive"]`.** `show_widget` refuses to render
+   until `read_me` has run, and this form is an interactive one — that module is the one that
+   carries the form and input guidance. Ask for it by name in a single call: `read_me` re-emits
+   the shared core design system on *every* call, so probing module-by-module to find the right
+   one costs ~6k tokens per probe and returns mostly what you already have.
+2. **Read [payload-reference.md](payload-reference.md).** It is the authoritative field contract
+   ([Hard rule 1](../SKILL.md#hard-rules)) and it governs the fields you are about to build —
+   most sharply the per-field date formats, where `grant_expiration_date`, `vesting_start_date`
+   and `rule_144_date` take `MM/DD/YYYY` while every other date goes out ISO. SKILL.md names it
+   as required-reading-up-front, but on this path SKILL.md's preamble is behind you by the time
+   you reach the form, so read it **here** — before constructing the first row, not after the
+   server rejects one with `Date is invalid`.
+
 **Use `show_widget`, not `AskUserQuestion`.** `AskUserQuestion` renders option cards — it
 cannot take a free-text quantity, price, date, or name. Expressing this form as
 `AskUserQuestion`s costs one interactive wait *per field*, which is the serial interrogation
@@ -180,13 +195,58 @@ shape the panel's action-request file does, so the engine's "On submit" step is 
 
 `action` is `config_submit` (save + validate, then review) or `save_only` (save, no
 validation, no review) — same two actions, same meanings, as the panel's two footer buttons.
-Keep `row_key` stable per block: [draft-state
-bookkeeping](save-validate-flow.md#draft-state-bookkeeping) threads `draft_pk` by `row_key`,
-not by array position, so a user adding or removing a block between retries doesn't corrupt
-the mapping.
+Keep `row_key` stable per block — see [Draft state on this path](#draft-state-on-this-path)
+below for what threads through it and why position won't do.
 
 After rendering the form, say one line and **wait**. Do not stack an `AskUserQuestion` on top
 of it — that spends the second interactive wait before the review even exists.
+
+### Draft state on this path
+
+**Cowork has no persistence layer. Your context is the state.**
+[save-validate-flow.md § Draft-state bookkeeping](save-validate-flow.md#draft-state-bookkeeping)
+describes this in Code-adapter terms — `$OUT_DIR/_draft_state.json`, written alongside
+`_data.json`/`_knowns.json`, with `row_key`s stamped by `build_config.py`. **None of that
+exists here.** Read that section for the *reasoning*; the mechanism below is what you actually
+run.
+
+[Hard rule 4](../SKILL.md#hard-rules) still binds in full, so track the same three things in
+context, from the first mutate response onward:
+
+| Track | From | Goes on |
+|---|---|---|
+| `draft_set_id` | the first mutate response | every subsequent `issue_securities`, `save_drafts`, `load_drafts`, `validate_drafts`, `resolve_duplicate_stakeholder` |
+| each row's `draft_pk` | that row's first save | that row on every retry, alongside *every* required field |
+| each row's `row_key` | the `row_key` you assigned in the form | the key you match `draft_pk` back by — **never** array position |
+
+Omitting `draft_set_id` makes the server auto-create a *second* draft set holding the same
+incomplete rows. Omitting a row's `draft_pk` inserts a new row instead of updating the
+existing one. Both fail silently — you get a success response either way.
+
+**The error-retry is where position-matching breaks.** Re-rendering the form after a
+validation error is an ordinary editable-form action, and the user may add or remove a
+stakeholder block before re-submitting. When they do:
+
+- **A block the user removed** — drop its `row_key` from your tracking. Do not shift the
+  remaining `draft_pk`s up to fill the gap; that is precisely the corruption `row_key`
+  matching prevents.
+- **A block the user added** — it has a new `row_key` and **no** `draft_pk`. Send it without
+  one; the server inserts it and returns its `draft_pk` in the response. Never hand it a
+  `draft_pk` borrowed from another row.
+- **Every surviving block** — keeps the `row_key` it already had, and therefore the
+  `draft_pk` already threaded to it, regardless of where it now sits in the array.
+
+**The stale-state rule has no teeth here, and that is the one way Cowork is simpler.** The
+Code path must actively discard a leftover `_draft_state.json`, because `OUT_DIR` is keyed
+only by `corporation_id` and persists across unrelated sessions — so a stranger's `draft_pk`
+can be sitting there under an identical `r0`/`r1` key. On this path a fresh request starts
+with empty context and there is nothing on disk to inherit, so a genuinely fresh batch is
+fresh by construction. What still applies: **within** one conversation, if the user pivots to
+a genuinely new batch (a different corporation, a different `security_type`, or plainly a new
+request rather than a retry of the one in flight), drop the tracked `draft_set_id` and every
+`draft_pk` and start clean. Carrying them forward re-saves the new batch into the old set, and
+for a first-ever grant save it also wrongly skips `equity_plan_id` because the run looks like
+a retry.
 
 ---
 

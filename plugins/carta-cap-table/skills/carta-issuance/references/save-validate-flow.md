@@ -23,11 +23,13 @@ Branch on the action from Phase 0.5:
    templates](../SKILL.md#row-templates) keys only — same construction as [Build the mutate
    payload](../SKILL.md#build-the-mutate-payload-from-your-phase-1-resolved-rows), used again
    one phase later for Confirm & Issue).
-2. Thread `draft_set_id` + each row's `draft_pk` from [`_draft_state.json`](#draft-state-bookkeeping)
-   if present ([Hard rule 4](../SKILL.md#hard-rules)).
+2. Thread `draft_set_id` + each row's `draft_pk` from your [draft
+   state](#draft-state-bookkeeping) if present — the file on Code, tracked context on Cowork
+   ([Hard rule 4](../SKILL.md#hard-rules)).
 3. Call `cap_table:mutate:save_drafts` exactly as in [Save as draft
    (escape hatch)](../SKILL.md#save-as-draft-escape-hatch) — **no `validate_drafts`**, by design.
-4. Update `_draft_state.json` with the returned `draft_set_id` + each row's `draft_pk`.
+4. Record the returned `draft_set_id` + each row's `draft_pk` — into `_draft_state.json` on
+   Code, into tracked context on Cowork.
 5. Report in **chat only** — no panel re-render. All rows saved → the existing success
    message; any row errored → [Error recovery](mutate-recovery.md#error-recovery)'s chat flow. The
    config panel stays open and untouched; the user can click **Save** or **Review** again at
@@ -107,6 +109,11 @@ This is a plain re-open of the **same** artifact, not a cross-tab navigation:
    > http://localhost:\<port\>/\<file\>.html directly."*
 
 ## Draft-state bookkeeping
+
+> **The file mechanics below are Code-only** — `$OUT_DIR`, `_draft_state.json` and
+> `build_config.py` do not exist on the Cowork path. What the state *is* and why `row_key`
+> beats array position applies to both; how you hold it does not. Cowork's equivalent is
+> [cowork-adapter.md § Draft state on this path](cowork-adapter.md#draft-state-on-this-path).
 
 `$OUT_DIR/_draft_state.json` (new, alongside `_data.json`/`_knowns.json`) persists
 `draft_set_id` + each row's `draft_pk`, keyed by `row_key` (stamped by `build_config.py`
