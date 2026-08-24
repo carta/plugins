@@ -9,8 +9,9 @@ description: >
   status, and related deal, investor, fundraising or company context. Briefs exactly one
   meeting — the next one; not an agenda view.
 allowed-tools:
-  # The only source for a connector's name
-  - list_connectors
+  # No list_connectors: the brief is a static page, so it addresses no connector at
+  # runtime and has no name to resolve. The call renders a connector card with a
+  # Reconnect button per connector, which is a visible cost for nothing.
   - mcp__carta__crm_call_tool
   - Artifact
   - AskUserQuestion
@@ -380,8 +381,10 @@ Artifact({
 
 **Do not pass `capabilities`** — this brief makes no MCP calls at runtime.
 
-For update-in-place, call `Artifact({ action: "list" })` first, find the entry whose title
-matches, and pass its `url` to the call. Build the title as `Meeting Brief — <Company> — <yyyy-mm-dd>`
+For update-in-place, call `Artifact({ action: "list", scope: "mine" })` first, find the entry
+whose title matches, and pass its `url` to the call. `scope: "mine"` matters: a title match
+against an artifact someone shared with you cannot be updated, and publishing without a `url`
+silently creates a second brief instead. Build the title as `Meeting Brief — <Company> — <yyyy-mm-dd>`
 from the meeting date — per-meeting titles mean successive briefs don't overwrite each other,
 while re-briefing the same meeting updates in place.
 

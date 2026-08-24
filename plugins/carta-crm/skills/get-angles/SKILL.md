@@ -12,7 +12,10 @@ allowed-tools:
   - list_connectors
   - mcp__carta__crm_call_tool
   - Artifact
-  - mcp__claude_ai_Gmail__create_draft
+  # Prefix-agnostic: outside claude.ai web chat the mail connector's prefix is a session
+  # UUID. Both cases, because glob matching is case-sensitive.
+  - mcp__*Gmail*__create_draft
+  - mcp__*gmail*__create_draft
   - AskUserQuestion
   - Bash(cp "${CLAUDE_PLUGIN_ROOT}/skills/get-angles/assets/route-map.html" *)
   - Read
@@ -256,7 +259,15 @@ breaking the diagram, and the `textContent`-only rule below.
 cp "${CLAUDE_PLUGIN_ROOT}/skills/get-angles/assets/route-map.html" <working-path>
 ```
 
-Then make **one** `Edit`: replace the example `const DATA = {...}` object with the real one.
+Then make **two** `Edit`s and no more:
+
+1. Replace the example `const DATA = {...}` object with the real one.
+2. Replace the `__MCP_SERVER__` placeholder in `const MCP_SERVER` with the mail connector's
+   name from Step 0. The page addresses the connector by that name at runtime, so a
+   surviving placeholder fails every action button with `server_not_connected`, for every
+   viewer, with nothing in your session to warn you. Where Step 0 resolved no mail
+   connector, omit `DATA.actions` instead and leave the placeholder alone.
+
 Everything else in the file stays byte-identical. Where there is no filesystem, `Read` the
 asset and reproduce it verbatim from `<!doctype html>` onward, including the whole `<style>`
 block — if you find yourself composing CSS, you have already gone wrong.
@@ -396,13 +407,22 @@ Deliver it with whichever sink the host offers, in this order, and **try each on
      title: "Warm introductions — <Company>",
      favicon: "🗺️",
      capabilities: {
-       mcp: { servers: [{ server: "claude_ai_Gmail", tools: ["create_draft"] }] }
+       mcp: { servers: [{ server: "<the mail connector's name from Step 0>",
+                          tools: ["create_draft"] }] }
      }
    })
    ```
-   The `capabilities.mcp` grant is what lets the in-panel action buttons call Gmail; omit it
-   and the buttons will not fire. For update-in-place, call `Artifact({ action: "list" })`
-   first, find the entry whose title matches, and pass its `url` to the call.
+   `server` is the same string you substituted into `MCP_SERVER`, and it comes from
+   `list_connectors` — not from your own tool prefixes, which are opaque session UUIDs
+   outside claude.ai web chat. The `capabilities.mcp` grant is what lets the in-panel action
+   buttons call the mail connector; omit it and the buttons will not fire. Keep `tools` to
+   `create_draft` — it is a viewer-consented grant, and a redeploy carrying a non-empty
+   `capabilities` replaces the stored one, so anything left out is revoked.
+
+   For update-in-place, call `Artifact({ action: "list", scope: "mine" })` first, find the
+   entry whose title matches, and pass its `url` to the call. `scope: "mine"` matters here:
+   a title match against an artifact someone shared with you cannot be updated, and
+   publishing without a `url` silently creates a second map instead.
 2. **`Write`** the file and name the path. It stays fully interactive in a browser.
    Omit `DATA.actions` — in-panel buttons cannot run outside an artifact.
 
@@ -429,16 +449,21 @@ about the alternates conversationally. Do not substitute a hand-drawn diagram.
 The map shows the route; this is where the introduction actually happens. Offer these as a
 numbered list with one marked `<- recommended`, via `AskUserQuestion`. Never fire one silently.
 
-1. **Create the email draft** — `mcp__claude_ai_Gmail__create_draft` to the connector.
-   **Draft only, never send.** This is an email to a real colleague and the user has not read
+1. **Create the email draft** — the mail connector's `create_draft`, to the connector person.
+   Call it by whatever prefix your own tool list shows; that prefix is yours, and the page
+   uses the connector's name instead. **Draft only, never send.** This is an email to a real colleague and the user has not read
    it yet. If no mail connector is available in this session, skip this option without
    announcing its absence; the message is already in the artifact with a copy button.
    **Skip this option entirely for `colleague`-typed routes** — enrichment contacts have no CRM
    email address, so there is nothing to send to.
 
+   **`action.tool` is the bare verb — `"create_draft"`, no `mcp__…__` prefix.** The page
+   addresses the connector through `MCP_SERVER`, so a prefixed name here reaches the
+   connector as a tool it does not expose.
+
    **Fill `args` — an empty one drafts a blank email.** The in-panel button calls
    `callMcp(action.tool, action.args || {})` and passes nothing else, so the message in
-   `DATA.draft` reaches Gmail only if it is also in `args`:
+   `DATA.draft` reaches the mail connector only if it is also in `args`:
 
    ```
    args: {

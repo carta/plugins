@@ -646,7 +646,9 @@
             label: "Create the email draft",
             primary: true,
             confirm: "Creates an unsent Gmail draft to Sara Ali. Nothing is sent.",
-            tool: "mcp__claude_ai_Gmail__create_draft",
+            // The bare verb the connector exposes. The connector it runs against is
+            // MCP_SERVER above, so this carries no prefix.
+            tool: "create_draft",
             // The bridge passes args and nothing else, so the message has to be here
             // too -- an empty one drafts a blank email. `to` is an array of bare
             // addresses; the tool rejects "Name <addr>".
@@ -663,28 +665,64 @@
       // The sandbox throws on web storage, so all state lives here in memory.
       const fired = new Set();
 
+      // The connector the action buttons call, by the name list_connectors reports for it.
+      // The skill substitutes this before publishing; a prefixed tool name is not a source
+      // for it, because outside claude.ai web chat those prefixes are opaque session UUIDs.
+      const MCP_SERVER = "__MCP_SERVER__";
+
       // MCP bridge via claude.use("mcp"). Resolves asynchronously at load; action buttons
       // are appended once it settles (see render() below).
       let _mcpNsPromise = null;
 
+      // The runtime installs window.claude after this script parses on some hosts, so
+      // reading it synchronously here reports "no bridge" on an unlucky load. Poll for it
+      // instead, and give a surface that has `claude` without `.use` -- one that never
+      // serves MCP -- a short budget rather than the full wait.
+      function _waitForClaude(timeoutMs) {
+        if (window.claude && window.claude.use) return Promise.resolve(window.claude);
+        var budget = window.claude ? Math.min(timeoutMs, 300) : timeoutMs;
+        return new Promise(function (resolve) {
+          var id = setInterval(function () {
+            if (window.claude && window.claude.use) {
+              clearInterval(id); clearTimeout(tid); resolve(window.claude);
+            }
+          }, 20);
+          var tid = setTimeout(function () { clearInterval(id); resolve(null); }, budget);
+        });
+      }
+
       function _mcpNamespace() {
-        if (!_mcpNsPromise) {
-          _mcpNsPromise = Promise.resolve(window.claude && window.claude.use ? window.claude.use("mcp") : null)
-            .catch(function () { return null; });
-        }
+        if (_mcpNsPromise) return _mcpNsPromise;
+        _mcpNsPromise = _waitForClaude(5000)
+          .then(function (claude) { return claude ? claude.use("mcp") : null; })
+          .catch(function () { return null; })
+          .then(function (ns) {
+            // Memoise success only. Caching a null would leave every button dead for the
+            // life of the page, with nothing short of a reload to recover it.
+            if (!ns) _mcpNsPromise = null;
+            return ns;
+          });
         return _mcpNsPromise;
       }
       _mcpNamespace();  // start resolving at load
 
       // Every UI-issued tool call goes through this - one shared source per file.
-      // Splits mcp__SERVER__toolName, injects _instrumentation_v2 (KAF-3090).
+      // Injects _instrumentation_v2 (KAF-3090).
       async function callMcp(tool, args) {
         var ns = await _mcpNamespace();
         if (!ns) throw new Error("MCP bridge unavailable");
-        var parts = tool.split("__");  // ["mcp", "SERVER", "toolName"]
-        return ns.callTool(parts[1], parts[2], Object.assign({}, args, {
-          _instrumentation_v2: { skills: ['carta-crm:get-angles'], from_ui: true },
-        }));
+        try {
+          return await ns.callTool(MCP_SERVER, tool, Object.assign({}, args, {
+            _instrumentation_v2: { skills: ['carta-crm:get-angles'], from_ui: true },
+          }));
+        } catch (err) {
+          // callTool rejects on a tool-level failure. Hand the caller the envelope shape
+          // it already reads, so a tool error stays a card error rather than a crash.
+          if (err && err.code === "tool_error") {
+            return { isError: true, code: err.code, result: err.result };
+          }
+          throw err;
+        }
       }
 
       function el(tag, cls, text) {
@@ -1082,15 +1120,22 @@
             const status = el("p", "action-status", "Working...");
             box.appendChild(status);
             try {
-              const res = unwrap(await callMcp(action.tool, action.args || {}));
-              const failed = res && (res.error || res.isError);
+              // Read the envelope before unwrapping: unwrap() digs out the payload and
+              // an error envelope carries no payload to dig for.
+              const raw = await callMcp(action.tool, action.args || {});
+              const res = unwrap(raw);
+              const failed = (raw && raw.isError) || (res && (res.error || res.isError));
               status.className = "action-status " + (failed ? "status-fail" : "status-ok");
               status.textContent = failed
                 ? "That did not go through. Ask in the chat and it will be retried there."
                 : (action.done || "Done.");
             } catch (e) {
               status.className = "action-status status-fail";
-              status.textContent = "That did not go through. Ask in the chat and it will be retried there.";
+              // Branch on the code: a missing connector is the one failure the reader can
+              // repair themselves, and telling them to ask in the chat instead wastes it.
+              status.textContent = (e && e.code === "server_not_connected")
+                ? "That connection is not available here. Add it in Settings > Connectors, then reload this page."
+                : "That did not go through. Ask in the chat and it will be retried there.";
             }
           });
         });
