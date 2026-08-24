@@ -1,0 +1,449 @@
+/* Carta Ink (latest tokens) — canonical CSS custom properties.
+
+   Token names mirror Ink's generated token export at:
+     https://github.com/carta/ink/blob/e9c0c304b95c598aa2f211a710dde2feaf3ebd18/src/tokens/exports/ink-magna.css
+   (the latest Ink tokens export commit) so values stay in sync with
+   upstream Ink releases via a mechanical re-extraction (no rename pass required).
+
+   Curated subset: this file exposes the Global tokens artifact authors
+   actually reach for (brand colors, feedback semantics, surfaces, text,
+   borders, elevation, radius, spacing, typography, data-viz). Ink's
+   ~1500 Component-level tokens (accordion, modal, …) are not re-exported
+   here — use the corresponding Global tokens in their place. The one
+   exception is the action Button (primary/secondary/danger), whose surfaces
+   must invert for dark mode in a way no Global token expresses; those
+   --ink-button-* tokens are re-exported in the Buttons section of :root.
+
+   Extension tokens (no canonical Ink equivalent) are marked at the
+   bottom of :root. */
+
+@font-face {
+  font-family: "SangBleu Versailles";
+  /* Path adapted for this app: the canonical snapshot points at a sibling assets/
+     dir, but serve.py serves fonts from /fonts/ (alongside the self-hosted Inter
+     faces). Left as the upstream relative path this 404'd on every page load and the
+     H1 silently fell back to Georgia. Self-hosted, not a CDN — sw.js passes
+     cross-origin requests straight through, so a CDN font is never cached. */
+  src: url("/fonts/SangBleuVersailles-Regular-WebS.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  color-scheme: light dark;
+
+  /* === Brand colors === */
+  --ink-color-global-brand-white: #FFFFFF;
+  --ink-color-global-brand-black: #1A1A1A;
+
+  --ink-color-global-brand-gray-10:  #F1F1F1;
+  --ink-color-global-brand-gray-20:  #EDEDED;
+  --ink-color-global-brand-gray-30:  #E9EAEA;
+  --ink-color-global-brand-gray-40:  #DEDFDF;
+  --ink-color-global-brand-gray-50:  #CECFCF;
+  --ink-color-global-brand-gray-60:  #A7AAAA;
+  --ink-color-global-brand-gray-70:  #9C9F9F;
+  --ink-color-global-brand-gray-80:  #656B6B;
+  --ink-color-global-brand-gray-90:  #394040;
+  --ink-color-global-brand-gray-100: #202020;
+
+  --ink-color-global-brand-blue-10:  #EAF0F8;
+  --ink-color-global-brand-blue-20:  #DFE8F4;
+  --ink-color-global-brand-blue-30:  #C0D1E9;
+  --ink-color-global-brand-blue-40:  #8BABD6;
+  --ink-color-global-brand-blue-50:  #4176BC;
+  --ink-color-global-brand-blue-60:  #2C67B5;
+  --ink-color-global-brand-blue-70:  #285DA3;
+  --ink-color-global-brand-blue-80:  #235291;
+  --ink-color-global-brand-blue-90:  #1A3E6D;
+  --ink-color-global-brand-blue-100: #122948;
+
+  --ink-color-global-brand-orange-10:  #FFF7F5;
+  --ink-color-global-brand-orange-20:  #FAE5DE;
+  --ink-color-global-brand-orange-30:  #FCD4C8;
+  --ink-color-global-brand-orange-40:  #FFC4B2;
+  --ink-color-global-brand-orange-50:  #FF997A;
+  --ink-color-global-brand-orange-60:  #FF7D55;
+  --ink-color-global-brand-orange-70:  #E8704C;
+  --ink-color-global-brand-orange-80:  #D26442;
+  --ink-color-global-brand-orange-90:  #A54A2F;
+  --ink-color-global-brand-orange-100: #6B2F1D;
+
+  --ink-color-global-brand-brown-10:  #FBFAF9;
+  --ink-color-global-brand-brown-20:  #F8F8F7;
+  --ink-color-global-brand-brown-30:  #EFEAE8;
+  --ink-color-global-brand-brown-40:  #E0D6D2;
+  --ink-color-global-brand-brown-50:  #C9B8B1;
+  --ink-color-global-brand-brown-60:  #B29990;
+  --ink-color-global-brand-brown-70:  #9B7B6F;
+  --ink-color-global-brand-brown-80:  #7B6056;
+  --ink-color-global-brand-brown-90:  #5A473F;
+  --ink-color-global-brand-brown-100: #332824;
+
+  --ink-color-global-brand-red-10:  #FFEEEF;
+  --ink-color-global-brand-red-20:  #FFE9EA;
+  --ink-color-global-brand-red-30:  #FFE4E5;
+  --ink-color-global-brand-red-40:  #FAD9D7;
+  --ink-color-global-brand-red-50:  #FBB5B5;
+  --ink-color-global-brand-red-60:  #EF7171;
+  --ink-color-global-brand-red-70:  #E52431;
+  --ink-color-global-brand-red-80:  #A82020;
+  --ink-color-global-brand-red-90:  #701818;
+  --ink-color-global-brand-red-100: #401018;
+
+  --ink-color-global-brand-yellow-10:  #FFFEF7;
+  --ink-color-global-brand-yellow-20:  #FFFCED;
+  --ink-color-global-brand-yellow-30:  #FEF8DA;
+  --ink-color-global-brand-yellow-40:  #FCEFB6;
+  --ink-color-global-brand-yellow-50:  #FBE284;
+  --ink-color-global-brand-yellow-60:  #F8D648;
+  --ink-color-global-brand-yellow-70:  #DDB31F;
+  --ink-color-global-brand-yellow-80:  #B58A00;
+  --ink-color-global-brand-yellow-90:  #705010;
+  --ink-color-global-brand-yellow-100: #341C00;
+
+  --ink-color-global-brand-green-10:  #EBF7F6;
+  --ink-color-global-brand-green-20:  #D6EFEC;
+  --ink-color-global-brand-green-30:  #ADDFD9;
+  --ink-color-global-brand-green-40:  #84D0C6;
+  --ink-color-global-brand-green-50:  #5BC0B3;
+  --ink-color-global-brand-green-60:  #32B0A0;
+  --ink-color-global-brand-green-70:  #2D9E90;
+  --ink-color-global-brand-green-80:  #1F8575;
+  --ink-color-global-brand-green-90:  #105242;
+  --ink-color-global-brand-green-100: #063A32;
+
+  --ink-color-global-brand-turquoise-10:  #F2FBFB;
+  --ink-color-global-brand-turquoise-20:  #E4F7F7;
+  --ink-color-global-brand-turquoise-30:  #C8F0F0;
+  --ink-color-global-brand-turquoise-40:  #ABE8E8;
+  --ink-color-global-brand-turquoise-50:  #8CDFE1;
+  --ink-color-global-brand-turquoise-60:  #68D7D9;
+  --ink-color-global-brand-turquoise-70:  #58B8BC;
+  --ink-color-global-brand-turquoise-80:  #479CA0;
+  --ink-color-global-brand-turquoise-90:  #1A6B6E;
+  --ink-color-global-brand-turquoise-100: #08453B;
+
+  --ink-color-global-brand-lime-10:  #FAFDEE;
+  --ink-color-global-brand-lime-20:  #F5FCD5;
+  --ink-color-global-brand-lime-30:  #EBFCAC;
+  --ink-color-global-brand-lime-40:  #DDFB74;
+  --ink-color-global-brand-lime-50:  #C9EC56;
+  --ink-color-global-brand-lime-60:  #B1D636;
+  --ink-color-global-brand-lime-70:  #94B524;
+  --ink-color-global-brand-lime-80:  #738C12;
+  --ink-color-global-brand-lime-90:  #536507;
+  --ink-color-global-brand-lime-100: #384202;
+
+  --ink-color-global-brand-pink-10:  #FFE8F7;
+  --ink-color-global-brand-pink-20:  #FFE8F2;
+  --ink-color-global-brand-pink-30:  #FFDFEB;
+  --ink-color-global-brand-pink-40:  #FFD2E0;
+  --ink-color-global-brand-pink-50:  #FDB3CC;
+  --ink-color-global-brand-pink-60:  #F97EA8;
+  --ink-color-global-brand-pink-70:  #F32882;
+  --ink-color-global-brand-pink-80:  #E4106E;
+  --ink-color-global-brand-pink-90:  #C31562;
+  --ink-color-global-brand-pink-100: #450522;
+
+  --ink-color-global-brand-purple-10:  #F9F8FC;
+  --ink-color-global-brand-purple-20:  #F3F1F9;
+  --ink-color-global-brand-purple-30:  #E7E2F3;
+  --ink-color-global-brand-purple-40:  #D2C9E8;
+  --ink-color-global-brand-purple-50:  #B1A2D7;
+  --ink-color-global-brand-purple-60:  #907BC7;
+  --ink-color-global-brand-purple-70:  #6F53B6;
+  --ink-color-global-brand-purple-80:  #563E93;
+  --ink-color-global-brand-purple-90:  #3A2860;
+  --ink-color-global-brand-purple-100: #2A1F45;
+
+  /* === Semantic feedback === */
+  --ink-color-global-feedback-positive-subtle: light-dark(#EBF7F6, #063A32);
+  --ink-color-global-feedback-positive-strong: light-dark(#2D9E90, #2D9E90);
+  --ink-color-global-feedback-negative-subtle: light-dark(#FFEEEF, #401018);
+  --ink-color-global-feedback-negative-strong: light-dark(#E52431, #FAD9D7);
+  --ink-color-global-feedback-warning-subtle:  light-dark(#FFFCED, #341C00);
+  --ink-color-global-feedback-warning-strong:  light-dark(#F8D648, #B58A00);
+  --ink-color-global-feedback-info-subtle:     light-dark(#EAF0F8, #122948);
+  --ink-color-global-feedback-info-strong:     light-dark(#285DA3, #2C67B5);
+  --ink-color-global-feedback-neutral-subtle:  light-dark(#F1F1F1, #202020);
+  --ink-color-global-feedback-neutral-strong:  light-dark(#1A1A1A, #9C9F9F);
+  --ink-color-global-feedback-pending-subtle:  light-dark(#F9F8FC, #2A1F45);
+  --ink-color-global-feedback-pending-strong:  light-dark(#563E93, #E7E2F3);
+
+  /* === Highlight + staff === */
+  --ink-color-global-highlight-subtle: light-dark(#FFF7F5, #1A1A1A);
+  --ink-color-global-highlight-strong: light-dark(#FF7D55, #FFC4B2);
+  --ink-color-global-staff-subtle:     light-dark(#F9F8FC, #2A1F45);
+  --ink-color-global-staff-strong:     light-dark(#6F53B6, #D2C9E8);
+
+  /* === Surfaces === */
+  --ink-color-global-surface-background-default:  light-dark(#FFFFFF, rgb(18 18 18));
+  --ink-color-global-surface-background-underlay: light-dark(#F1F1F1, #2D2D2D);
+  --ink-color-global-surface-background-overlay:  light-dark(rgb(0 0 0 / 0.8), rgb(80 80 80 / 0.8));
+  --ink-color-global-surface-darkgray-default:    light-dark(#1A1A1A, #394040);
+  --ink-color-global-surface-darkgray-hover:      light-dark(#202020, #656B6B);
+  --ink-color-global-surface-darkgray-active:     light-dark(#394040, #9C9F9F);
+  --ink-color-global-surface-lightgray-default:   light-dark(#F1F1F1, #202020);
+  --ink-color-global-surface-lightgray-hover:     light-dark(#DEDFDF, #2D2D2D);
+  --ink-color-global-surface-lightgray-active:    light-dark(#CECFCF, #656B6B);
+  --ink-color-global-surface-brown-default:       light-dark(#FBFAF9, #5A473F);
+  --ink-color-global-surface-disabled:            light-dark(#EDEDED, #394040);
+
+  /* === Text === */
+  --ink-color-global-text-default:     light-dark(#1A1A1A, #EDEDED);
+  --ink-color-global-text-subtle:      light-dark(#656B6B, #A7AAAA);
+  --ink-color-global-text-very-subtle: light-dark(#9C9F9F, #394040);
+  --ink-color-global-text-disabled:    light-dark(#CECFCF, #656B6B);
+  --ink-color-global-text-inverse:     light-dark(#FFFFFF, #1A1A1A);
+
+  /* === Links === */
+  --ink-color-global-link-default: light-dark(#285DA3, #8BABD6);
+  --ink-color-global-link-hover:   light-dark(#1A3E6D, #4176BC);
+  --ink-color-global-link-active:  light-dark(#122948, #2C67B5);
+  --ink-color-global-link-inverse: light-dark(#8BABD6, #2C67B5);
+
+  /* === Borders === */
+  --ink-color-global-border-subtle:        light-dark(#DEDFDF, #2D2D2D);
+  --ink-color-global-border-default:       light-dark(#A7AAAA, #656B6B);
+  --ink-color-global-border-hover:         light-dark(#656B6B, #9C9F9F);
+  --ink-color-global-border-active:        light-dark(#1A1A1A, #CECFCF);
+  --ink-color-global-border-focus-default: light-dark(#285DA3, #8BABD6);
+  --ink-color-global-border-focus-light:   light-dark(#C0D1E9, #1A3E6D);
+  --ink-color-global-border-disabled:      light-dark(#DEDFDF, #2D2D2D);
+
+  /* === Elevation (shadows) === */
+  --ink-elevation-global-shadow-flat:   0 0 0 0;
+  --ink-elevation-global-shadow-small:  0 4px 12px 0 rgb(0 0 0 / 0.08);
+  --ink-elevation-global-shadow-medium: 0 4px 20px 0 rgb(0 0 0 / 0.1);
+  --ink-elevation-global-shadow-large:  0 4px 20px 0 rgb(0 0 0 / 0.2);
+
+  /* === Radius === */
+  --ink-size-global-radius-flat:    0;
+  --ink-size-global-radius-subtle:  4px;
+  --ink-size-global-radius-default: 8px;
+  --ink-size-global-radius-max:     24px;
+  --ink-size-global-radius-round:   50%;
+
+  /* === Border widths === */
+  --ink-size-global-border-container-small:  1px;
+  --ink-size-global-border-container-medium: 2px;
+  --ink-size-global-border-container-large:  4px;
+  --ink-size-global-border-focus-width:      2px;
+
+  /* === Spacing — vertical === */
+  --ink-spacing-global-vertical-xxsmall: 4px;
+  --ink-spacing-global-vertical-xsmall:  8px;
+  --ink-spacing-global-vertical-small:   12px;
+  --ink-spacing-global-vertical-normal:  16px;
+  --ink-spacing-global-vertical-gutter:  20px;
+  --ink-spacing-global-vertical-large:   24px;
+  --ink-spacing-global-vertical-xlarge:  32px;
+
+  /* === Spacing — horizontal === */
+  --ink-spacing-global-horizontal-xxsmall: 4px;
+  --ink-spacing-global-horizontal-xsmall:  8px;
+  --ink-spacing-global-horizontal-small:   12px;
+  --ink-spacing-global-horizontal-normal:  16px;
+  --ink-spacing-global-horizontal-gutter:  20px;
+  --ink-spacing-global-horizontal-large:   24px;
+  --ink-spacing-global-horizontal-xlarge:  32px;
+  --ink-spacing-global-horizontal-xxlarge: 40px;
+
+  /* === Typography — families === */
+  --ink-font-global-family-base:      "Inter var", "Inter Fallback", sans-serif;
+  --ink-font-global-family-prominent: "SangBleu Versailles", Georgia, serif;
+  --ink-font-global-family-monospace: "Roboto Mono", ui-monospace, Menlo, Monaco, monospace;
+
+  /* === Typography — sizes === */
+  --ink-font-global-size-small-1:           12px;
+  --ink-font-global-size-small-2:           12px;
+  --ink-font-global-size-monospace:         13px;
+  --ink-font-global-size-body-1:            14px;
+  --ink-font-global-size-body-2:            14px;
+  --ink-font-global-size-body-3:            14px;
+  --ink-font-global-size-heading-3:         16px;
+  --ink-font-global-size-heading-4:         16px;
+  --ink-font-global-size-heading-2-mobile:  18px;
+  --ink-font-global-size-heading-2-desktop: 20px;
+  --ink-font-global-size-display-2:         24px;
+  --ink-font-global-size-heading-1-mobile:  24px;
+  --ink-font-global-size-display-1:         28px;
+  --ink-font-global-size-heading-1-desktop: 28px;
+
+  /* === Typography — line heights (leading) === */
+  --ink-font-global-leading-small-1:           20px;
+  --ink-font-global-leading-small-2:           20px;
+  --ink-font-global-leading-body-1:            24px;
+  --ink-font-global-leading-body-2:            24px;
+  --ink-font-global-leading-body-3:            24px;
+  --ink-font-global-leading-heading-2-mobile:  28px;
+  --ink-font-global-leading-heading-3:         28px;
+  --ink-font-global-leading-heading-4:         28px;
+  --ink-font-global-leading-heading-2-desktop: 36px;
+  --ink-font-global-leading-heading-1-mobile:  40px;
+  --ink-font-global-leading-display-2:         44px;
+  --ink-font-global-leading-display-1:         48px;
+  --ink-font-global-leading-heading-1-desktop: 48px;
+
+  /* === Typography — weights === */
+  --ink-font-global-weight-body-3:    400;
+  --ink-font-global-weight-small-2:   400;
+  --ink-font-global-weight-heading-1: 400;
+  --ink-font-global-weight-heading-4: 400;
+  --ink-font-global-weight-monospace: 400;
+  --ink-font-global-weight-body-2:    500;
+  --ink-font-global-weight-heading-2: 500;
+  --ink-font-global-weight-heading-3: 500;
+  --ink-font-global-weight-small-1:   500;
+  --ink-font-global-weight-body-1:    600;
+  --ink-font-global-weight-display-1: 600;
+  --ink-font-global-weight-display-2: 600;
+
+  /* === Data-viz (chart palette) === */
+  --ink-color-global-data-viz-positive-3:  #2D9E90;
+  --ink-color-global-data-viz-negative-3:  #E52431;
+  --ink-color-global-data-viz-neutral-3:   #656B6B;
+  --ink-color-global-data-viz-blue-3:      #285DA3;
+  --ink-color-global-data-viz-turquoise-3: #58B8BC;
+  --ink-color-global-data-viz-brown-3:     #B29990;
+  --ink-color-global-data-viz-yellow-3:    #DDB31F;
+  --ink-color-global-data-viz-lime-3:      #94B524;
+
+  /* === Buttons (Ink component tokens) ===
+     The one component group re-exported here: the primary/secondary/danger
+     action buttons. Their surfaces must INVERT for dark mode (a primary button
+     is black in light, white in dark) — behavior no single Global token can
+     express — so authors need the real --ink-button-* tokens rather than a
+     hand-rolled --local-* pair or fixed --ink-color-global-brand-black. Values
+     are flattened light-dark() pairs straight from Ink's button component
+     tokens (background/font/border, per state). */
+  --ink-button-background-color-primary-base-default:   light-dark(#1A1A1A, #FFFFFF);
+  --ink-button-background-color-primary-base-hover:     light-dark(#202020, #CECFCF);
+  --ink-button-background-color-primary-base-down:      light-dark(#394040, #A7AAAA);
+  --ink-button-background-color-primary-disabled:       light-dark(#EDEDED, #394040);
+  --ink-button-font-color-primary-base:                 light-dark(#FFFFFF, #1A1A1A);
+  --ink-button-font-color-primary-disabled:             light-dark(#CECFCF, #656B6B);
+
+  --ink-button-background-color-secondary-base-default: light-dark(#FFFFFF, rgb(18 18 18));
+  --ink-button-background-color-secondary-base-hover:   light-dark(#FFFFFF, rgb(18 18 18));
+  --ink-button-background-color-secondary-base-down:    light-dark(#FFFFFF, rgb(18 18 18));
+  --ink-button-background-color-secondary-disabled:     light-dark(#FFFFFF, rgb(18 18 18));
+  --ink-button-border-color-secondary-base-default:     light-dark(#A7AAAA, #656B6B);
+  --ink-button-border-color-secondary-base-hover:       light-dark(#656B6B, #9C9F9F);
+  --ink-button-border-color-secondary-base-down:        light-dark(#1A1A1A, #CECFCF);
+  --ink-button-border-color-secondary-disabled:         light-dark(#DEDFDF, #2D2D2D);
+  --ink-button-font-color-secondary-base-default:       light-dark(#1A1A1A, #EDEDED);
+  --ink-button-font-color-secondary-base-hover:         light-dark(#1A1A1A, #EDEDED);
+  --ink-button-font-color-secondary-base-down:          light-dark(#1A1A1A, #EDEDED);
+  --ink-button-font-color-secondary-disabled:           light-dark(#CECFCF, #656B6B);
+
+  --ink-button-background-color-danger-base-default:    #E52431;
+  --ink-button-background-color-danger-base-hover:      #A82020;
+  --ink-button-background-color-danger-base-down:       #A82020;
+  --ink-button-background-color-danger-disabled:        light-dark(#FFEEEF, #401018);
+  --ink-button-border-color-danger-base-default:        #E52431;
+  --ink-button-border-color-danger-base-hover:          #A82020;
+  --ink-button-border-color-danger-base-focus:          #A82020;
+  --ink-button-border-color-danger-disabled:            light-dark(#FFEEEF, #401018);
+  --ink-button-font-color-danger-base:                  #FFFFFF;
+  --ink-button-font-color-danger-disabled:              light-dark(#CECFCF, #656B6B);
+
+  /* === Extensions (no canonical Ink equivalent; maintained locally) === */
+  /* Capsule/pill radius — Ink's --ink-size-global-radius-round is 50% (circle), not a pill. */
+  --ink-radius-pill: 9999px;
+  /* Composite focus ring used by :focus-visible. Width matches --ink-size-global-border-container-large.
+     Ink's bordered components (Button, Input, Checkbox, Radio, Select, etc.) recolor their 1px border to
+     Blue-70 (--ink-color-global-border-focus-default) and add THIS 4px Blue-30 ring with `outline: none`
+     — ≈5px total (1px border + 4px ring). The generic :focus-visible reset below (2px outline + this ring)
+     is only the fallback for borderless elements (link buttons, nav, tooltip triggers) with no border to recolor. */
+  --ink-focus-ring:  0 0 0 4px var(--ink-color-global-border-focus-light);
+}
+
+/* === Base element styles === */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--ink-color-global-surface-background-default);
+  color: var(--ink-color-global-text-default);
+  font-family: var(--ink-font-global-family-base);
+  font-size: var(--ink-font-global-size-body-1);
+  line-height: var(--ink-font-global-leading-body-1);
+  font-weight: var(--ink-font-global-weight-body-3);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  margin: 0 0 var(--ink-spacing-global-vertical-normal);
+  font-family: var(--ink-font-global-family-base);
+  color: var(--ink-color-global-text-default);
+}
+
+h1 {
+  font-family: var(--ink-font-global-family-prominent);
+  font-size: var(--ink-font-global-size-display-1);
+  line-height: var(--ink-font-global-leading-display-1);
+  font-weight: var(--ink-font-global-weight-heading-1);
+}
+
+h2 {
+  font-size: var(--ink-font-global-size-heading-2-desktop);
+  line-height: var(--ink-font-global-leading-heading-2-desktop);
+  font-weight: var(--ink-font-global-weight-heading-2);
+}
+
+h3 {
+  font-size: var(--ink-font-global-size-heading-3);
+  line-height: var(--ink-font-global-leading-heading-3);
+  font-weight: var(--ink-font-global-weight-heading-3);
+}
+
+h4 {
+  font-size: var(--ink-font-global-size-heading-4);
+  line-height: var(--ink-font-global-leading-heading-4);
+  font-weight: var(--ink-font-global-weight-heading-4);
+}
+
+p {
+  margin: 0 0 var(--ink-spacing-global-vertical-xsmall);
+}
+
+a {
+  color: var(--ink-color-global-link-default);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+a:hover { color: var(--ink-color-global-link-hover); }
+
+code, pre {
+  font-family: var(--ink-font-global-family-monospace);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--ink-font-global-size-monospace);
+}
+
+/* Generic focus fallback for BORDERLESS elements (link buttons, nav links, tooltip triggers).
+   Ink's bordered components instead recolor their 1px border to Blue-70 and add the 4px Blue-30
+   --ink-focus-ring with `outline: none` (≈5px total) — see --ink-focus-ring above and the
+   bordered recipes in components.md. This 2px outline + ring is only the no-border-to-recolor path. */
+:focus-visible {
+  outline: 2px solid var(--ink-color-global-border-focus-default);
+  box-shadow: var(--ink-focus-ring);
+  outline-offset: 0;
+}
+
+/* === Drop-in utility classes === */
+
+.ink-num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.ink-num--positive { color: var(--ink-color-global-feedback-positive-strong); }
+.ink-num--negative { color: var(--ink-color-global-feedback-negative-strong); }

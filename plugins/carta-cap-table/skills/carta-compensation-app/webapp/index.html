@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="/favicon.ico" />
+    <title>Carta Compensation Dashboard</title>
+    <!-- Carta Ink design tokens — a pinned, traceable snapshot of Ink's real :root
+         custom properties (see the header comment in that file for the upstream
+         version). theme.js reads these via var(--ink-*) rather than restating hex
+         values, so a token change upstream lands here by replacing one file.
+         Served from /src/ by serve.py, same as the app source. -->
+    <link rel="stylesheet" href="/src/ui/tokens.css" />
+    <style>
+      /* Inter is SELF-HOSTED from /fonts/, not fetched from a CDN. sw.js passes
+         cross-origin requests straight through, so a CDN font is never cached —
+         on an airgapped machine or behind a strict proxy the page would stall
+         waiting on it before falling back to system sans. Vendored by
+         app/build.mjs alongside React and Sucrase. */
+      @font-face {
+        font-family: "Inter";
+        font-style: normal;
+        font-weight: 400;
+        font-display: swap;  /* render immediately in system sans, swap when ready */
+        src: url("/fonts/inter-latin-400-normal.woff2") format("woff2");
+      }
+      @font-face {
+        font-family: "Inter";
+        font-style: normal;
+        font-weight: 600;
+        font-display: swap;
+        src: url("/fonts/inter-latin-600-normal.woff2") format("woff2");
+      }
+
+      html, body { margin: 0; padding: 0; background: #FFFFFF; }
+
+      #ctc-error {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 99999;
+        background: rgba(0,0,0,0.85);
+        color: #fff;
+        font-family: ui-monospace, "SF Mono", Consolas, monospace;
+        font-size: 13px;
+        line-height: 1.5;
+        padding: 32px;
+        overflow: auto;
+        box-sizing: border-box;
+      }
+      #ctc-error.visible { display: block; }
+      #ctc-error pre {
+        white-space: pre-wrap;
+        word-break: break-word;
+        background: rgba(255,255,255,0.08);
+        border-radius: 6px;
+        padding: 16px;
+        margin: 12px 0;
+      }
+      #ctc-error .ctc-cta {
+        margin-top: 20px;
+        padding: 12px 16px;
+        background: #2563eb;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 14px;
+      }
+    </style>
+
+    <!-- All four React specifiers resolve to one monobundle (see app/build.mjs).
+         Absolute paths so they resolve at any client-route depth. -->
+    <script type="importmap">
+    {
+      "imports": {
+        "react":            "/vendor/react.esm.js",
+        "react-dom":        "/vendor/react.esm.js",
+        "react-dom/client": "/vendor/react.esm.js",
+        "react/jsx-runtime":"/vendor/react.esm.js"
+      }
+    }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <div id="ctc-error"></div>
+
+    <script type="module">
+      // Overlay for all three failure timings: transpile (SW error module),
+      // module-eval, and post-mount React errors.
+      function showError(message) {
+        const el = document.getElementById("ctc-error");
+        el.innerHTML =
+          "<h2 style='margin:0 0 8px'>Error</h2>" +
+          "<pre>" + escapeHtml(message) + "</pre>" +
+          "<div class='ctc-cta'>Copy this message and paste it back to Claude to fix it.</div>";
+        el.classList.add("visible");
+      }
+      function escapeHtml(s) {
+        return String(s)
+          .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+      }
+      window.addEventListener("error", (e) => showError(e.message || String(e)));
+      window.addEventListener("unhandledrejection", (e) =>
+        showError((e.reason && e.reason.message) || String(e.reason)));
+
+      // Gate the app-module import behind SW control so the module graph is never
+      // fetched before the SW is active (cold-start race fix).
+      if (!("serviceWorker" in navigator)) {
+        showError("Service workers are not supported in this browser. Please use Chrome or Safari (16.4+).");
+      } else {
+        function sleep(ms) {
+          return new Promise((res) => setTimeout(res, ms));
+        }
+
+        try {
+          await navigator.serviceWorker.register("/sw.js", { type: "module", scope: "/" });
+          await navigator.serviceWorker.ready;
+
+          if (!navigator.serviceWorker.controller) {
+            // First visit: registered but not yet controlling. Wait for
+            // controllerchange (fires after clients.claim()); reload after 3s as a
+            // backstop for browsers that mishandle the event.
+            const claimed = new Promise((res) =>
+              navigator.serviceWorker.addEventListener("controllerchange", res, { once: true })
+            );
+            await Promise.race([claimed, sleep(3000).then(() => location.reload())]);
+          }
+
+          await import("/src/main.jsx");
+        } catch (err) {
+          showError((err && err.message) || String(err));
+        }
+      }
+    </script>
+  </body>
+</html>
