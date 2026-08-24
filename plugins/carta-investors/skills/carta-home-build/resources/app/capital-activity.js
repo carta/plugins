@@ -546,6 +546,7 @@ async function submitRemindConfirm() {
   // changing a preference from it would surprise.
   if (document.getElementById('ca-snooze-preview')?.checked) snoozePreviewForOneDay();
   if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+  clearSendError();
 
   try {
     // Colons become `__` in the generated tool name; the hyphens stay.
@@ -558,15 +559,15 @@ async function submitRemindConfirm() {
       }
     });
     if (res.isError) throw new Error(res.content?.[0]?.text ?? 'Unknown error');
-    closeRemindConfirm();
-    showToast(`Reminder sent to ${partnerName}.`);
     // Stamp the cache, not just the DOM: the overlay reopens off the cache.
     const row = _capDetailCache[activityId].find(r => r.rowId === rowId);
     row.lastReminded = new Date().toISOString();
     sourceBtn.closest('.ca-td-remind').innerHTML = remindCellInner(row, activityId);
+    renderSentConfirm([partnerName]);
+    _pendingRemind = null;
   } catch (e) {
     console.error('[remind error]', e);
-    showToast('Failed to send reminder — please try again.');
+    showSendError('Failed to send reminder — please try again.');
     if (btn) { btn.disabled = false; btn.textContent = label; }
   }
 }
@@ -851,6 +852,7 @@ async function submitBulkRemind() {
   const label = btn ? btn.textContent : '';
   if (document.getElementById('ca-snooze-preview')?.checked) snoozePreviewForOneDay();
   if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+  clearSendError();
 
   try {
     // force_send is not on this tool, so a non-staff caller's batch becomes a
@@ -864,17 +866,64 @@ async function submitBulkRemind() {
       }
     });
     if (res.isError) throw new Error(res.content?.[0]?.text ?? 'Unknown error');
-    closeRemindConfirm();
-    showToast(`Reminders sent to ${sel.length} investor${sel.length === 1 ? '' : 's'}.`);
+    // Runs behind the sent pane, so Close lands on a summary already reading
+    // "Sent just now".
     stampRemindedRows(activityId, rowIds);
     stampBulkSent(activityId);
     const slot = document.getElementById('ca-notify-slot');
     if (slot) slot.innerHTML = bulkRemindCta(activityId, _capDetailCache[activityId] ?? []);
+    renderSentConfirm(sel.map(g => g.name));
+    _pendingBulk = null;
   } catch (e) {
     console.error('[bulk remind error]', e);
-    showToast('Failed to send reminders — please try again.');
+    showSendError('Failed to send reminders — please try again.');
     if (btn) { btn.disabled = false; btn.textContent = label; }
   }
+}
+
+// A send closes its modal over the table, so the only proof it fired was a toast
+// that fades. This waits to be dismissed instead.
+function renderSentConfirm(names) {
+  const n = names.length;
+  const overlay = ensureRemindOverlay();
+  overlay.innerHTML = `
+    <div class="ca-confirm-panel ca-confirm-panel-sent">
+      <div class="ca-confirm-mark" aria-hidden="true">✓</div>
+      <div class="ca-confirm-title">Reminder${n === 1 ? '' : 's'} sent</div>
+      <div class="ca-confirm-text">${n === 1
+        ? `${escHtml(names[0])} has been sent a reminder email.`
+        : `${n} investors have been sent a reminder email.`}</div>
+      <div class="ca-confirm-actions ca-confirm-actions-center">
+        <button class="ca-confirm-primary-btn" id="ca-sent-close"
+          onclick="closeRemindConfirm()">Close</button>
+      </div>
+    </div>`;
+  overlay.classList.add('ca-confirm-visible');
+  document.getElementById('ca-sent-close').focus();
+}
+
+// A failed send keeps the panel and its retry button, so the reason belongs there.
+// Falls back to the toast on the snoozed path, which opens no panel.
+function showSendError(msg) {
+  // Closing leaves the last panel in the DOM, so a hidden overlay still matches —
+  // an error written into it would be invisible.
+  const overlay = document.getElementById('ca-confirm-overlay');
+  const panel = overlay?.classList.contains('ca-confirm-visible')
+    ? overlay.querySelector('.ca-preview-panel, .ca-confirm-panel')
+    : null;
+  if (!panel) { showToast(msg); return; }
+  let el = panel.querySelector('.ca-send-error');
+  if (!el) {
+    el = document.createElement('div');
+    el.className = 'ca-send-error';
+    el.setAttribute('role', 'alert');
+    panel.insertBefore(el, panel.querySelector('.ca-preview-footer, .ca-confirm-actions'));
+  }
+  el.textContent = msg;
+}
+
+function clearSendError() {
+  document.querySelector('#ca-confirm-overlay .ca-send-error')?.remove();
 }
 
 // Stamps the cache, not just the DOM: the overlay reopens off the cache.

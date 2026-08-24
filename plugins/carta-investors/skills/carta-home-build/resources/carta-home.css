@@ -1000,6 +1000,25 @@
     }
     .ca-confirm-primary-btn:hover { background: var(--ink-button-background-color-primary-base-hover); }
     .ca-confirm-primary-btn:disabled { opacity: .6; cursor: default; }
+    .ca-confirm-panel-sent { text-align: center; }
+    .ca-confirm-mark {
+      width: 40px; height: 40px; margin: 4px auto 12px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 50%; font-size: 20px; line-height: 1;
+      background: var(--ink-color-global-feedback-positive-subtle);
+      color: var(--ca-paid);
+    }
+    /* One CTA, so it centres under the mark instead of hugging an absent sibling. */
+    .ca-confirm-actions-center { justify-content: center; }
+    .ca-send-error {
+      flex-shrink: 0; margin: 0 0 12px; padding: 8px 10px;
+      font-size: 12px; line-height: 1.4; text-align: left;
+      border-radius: var(--ink-size-global-radius-subtle);
+      background: var(--ink-color-global-feedback-negative-subtle);
+      color: var(--ca-unpaid);
+    }
+    /* The preview panel has no padding of its own — its children carry it. */
+    .ca-preview-panel .ca-send-error { margin: 0 20px 12px; }
 
     /* ── Row overflow menu ── */
     .ca-td-actions { white-space: nowrap; }
