@@ -78,6 +78,12 @@ different so_type via reconstruction should not carry a stale HMRC value across 
 `employment_related`, same rule — and carry `false` across as faithfully as `true`, since
 dropping an explicit "No" back to unanswered re-breaks the validation the answer cleared.
 
+**Both flows:** `fund_structure` — carry it across whenever the resolved row has it, on
+certificates as well as grants, and with the same `false`-is-real rule. It is not so_type-
+scoped, so never clear it on reconstruction; the panel has no field for it, so the value
+survives Back to edit only by being carried here. Losing a `true` re-arms the
+fund-structure block the admin already cleared.
+
 **Certificate:** `prefix`→`share_class_prefix`; `law_firm_price`→`price_per_share`;
 `legend_id`→same; `board_approval_date`. **Compare `rule_144_date` to `issue_date`
 (normalize formats first — `rule_144_date` is `MM/DD/YYYY`, `issue_date` is often

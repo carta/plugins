@@ -100,6 +100,7 @@ ROW_KEYS = {
     "name", "email", "relationship", "stakeholder_kind", "quantity", "notes",
     "issue_date", "board_approval", "board_approval_date",
     "vesting_template_id", "vesting_start_date", "acceleration_template",
+    "fund_structure",
     # option grant
     "option_type", "exercise_price", "document_set_id", "custom_label",
     "grant_reason", "early_exercise", "auto_exercise_at_vest",
@@ -170,6 +171,7 @@ _syn("hmrc_notified", "HMRC Notified Date", "HMRC Notification Date")
 _syn("is_ato_notified", "ATO Notified", "ATO Notification")
 _syn("employment_related", "Employment Related", "Employment Related Securities",
      "Employment-Related", "ERS")
+_syn("fund_structure", "Part of fund structure", "Fund Structure")
 # NB: the importer template also has an "Exercise Expiration Date" column — the
 # post-termination exercise window, a different concept. It stays unmapped (and
 # so gets reported), and _norm keeps the two header keys distinct.
@@ -537,6 +539,16 @@ def build_row(record: Dict[str, Any], security_type: str) -> Dict[str, Any]:
         text = _text(_cell(record, field))
         if text:
             row["_" + field] = text
+
+    # Both security types carry this. Keep an explicit "No": the designation is
+    # tri-state, so a false must not read back as unanswered.
+    fund_raw = _cell(record, "fund_structure")
+    if _text(fund_raw):
+        fund_flag = coerce_bool(fund_raw)
+        if fund_flag is None:
+            _note(row, "fund_structure", fund_raw, "couldn't read this as yes/no")
+        else:
+            row["fund_structure"] = fund_flag
 
     if security_type == "option_grant":
         _build_grant_fields(record, row)

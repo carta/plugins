@@ -45,6 +45,11 @@ Pass `employment_related` through as the boolean it is — **do not coerce a `fa
 `false` ("No") is the answer that satisfies the Unapproved validation; only a missing value
 fails it.
 
+`fund_structure` follows the same tri-state rule on **both** security types, but the surface
+never collects it: it is present only when an import sheet supplied it or a prior
+`validate_drafts` block was recovered. Carry whatever the row holds — `true`, `false`, or
+absent — and never synthesize a value the admin didn't give.
+
 ---
 
 ## Certificate, per row

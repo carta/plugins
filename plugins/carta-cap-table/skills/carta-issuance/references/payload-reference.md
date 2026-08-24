@@ -32,6 +32,7 @@ Contents: [Common fields](#common-fields-both-flows) ·
 | `draft_pk` | retry | int | Pk of existing draft row — updates in place |
 | `stakeholder_id` | optional | int | Bypasses duplicate detection |
 | `delete` | optional | bool | With `draft_pk`, removes row on next save |
+| `fund_structure` | optional — paper corps only | bool (Yes/No), tri-state | "Part of fund structure" designation. **Never prompt for it** — accepted when the caller supplies it (parameter or sheet column), and otherwise only surfaced when `validate_drafts` demands it. `null` / `false` / `true` are distinct; send `false` as `false`, never omit it. See [fund-structure recovery](#recovering-a-fund-structure-block) |
 
 ## Certificate-only fields
 
@@ -157,6 +158,38 @@ Yes/No, and **`No` is a real answer** — only "unanswered" fails. Ask plainly: 
 
 Server-side the field is gated per-issuer (UK incorporation + the `SIB_1160_EMPLOYMENT_RELATED_SECURITIES` flag), so a non-UK issuer never sees the rule. Sending it is harmless when the gate is off, so key the question off `so_type = Unapproved` rather than trying to detect the flag.
 
+## Recovering a fund-structure block
+
+`fund_structure` is the one conditionally-required field the skill **must not ask about
+up front**. It applies to a single customer, the gate is server-owned (paper corp + the
+`BBO_DRAFT_ISSUANCE_HOLDING_ENTITY` flag), and a run that never touches it must behave
+exactly as before. So: no panel field, no chat question, no prompt. Accept it when the
+caller supplies it — as a `save_drafts` parameter or the sheet's "Part of fund structure"
+column — and otherwise wait for the server to ask.
+
+`validate_drafts` asks by failing. When a holder resolves to the firm's fund structure and
+the designation is not `true`, it returns a critical error keyed `fundStructure`:
+
+> `"<name>" matches an entity in <firm>'s fund structure. Enable Fund Structure for this security to continue.`
+
+or, when the stakeholder is already linked:
+
+> `"<name>" is already linked to <firm>'s fund structure. Enable Fund Structure for this security to continue.`
+
+Recover in place — the draft set already exists, so never restart the flow:
+
+1. Surface the server's message **verbatim**, naming the row it came from. Do not
+   paraphrase it or infer the designation on the admin's behalf; the message names a real
+   entity match and the answer is theirs to confirm.
+2. Ask only now, and only for the blocked rows, via `AskUserQuestion`.
+3. Re-save just those rows with `save_drafts`, carrying `draft_set_id` **and** each row's
+   `draft_pk` so they update in place instead of duplicating.
+4. Re-run `validate_drafts` and confirm it comes back clean before issuing.
+
+A `false` answer does not clear this error — only `true` does. If the admin says the holder
+is genuinely unrelated to the fund structure, the match itself is wrong: persist the
+`false`, stop, and route them to Carta support rather than looping on validation.
+
 ## Date format quirks
 
 Most date fields are `DateField`s and accept both `YYYY-MM-DD` and `MM/DD/YYYY`. Three fields are stored as `CharField(max_length=10)` on the draft model and accept **`MM/DD/YYYY` only** — an ISO `YYYY-MM-DD` string is rejected with `Date is invalid`:
@@ -171,7 +204,7 @@ Mixing formats across a payload is fine — each field is parsed independently. 
 
 ## camelCase and snake_case
 
-The MCP gateway auto-converts a known allow-list (`lawFirmPrice` → `law_firm_price`, `legendId` → `legend_id`, `soType` → `so_type`, `exercisePrice` → `exercise_price`, `vestingTemplate` → `vesting_template`, `vestingStartDate` → `vesting_start_date`, `accelerationTemplate` → `acceleration_template`, `grantExpirationDate` → `grant_expiration_date`, `customLabel` → `custom_label`, `earlyExercise` → `early_exercise`, `autoExerciseAtVest` → `auto_exercise_at_vest`, `isFlexibleIssueDate` → `is_flexible_issue_date`, `isHmrcNotified` → `is_hmrc_notified`, `hmrcNotified` → `hmrc_notified`, `isAtoNotified` → `is_ato_notified`, `needsBoardApproval` → `needs_board_approval`, `documentSetId` → `document_set_id`, `employeeId` → `employee_id`, `costCenter` → `cost_center`, `jobTitle` → `job_title`, `grantReason` → `grant_reason`, `issueDateRelationship` → `issue_date_relationship`, `stakeholderKind` → `stakeholder_kind`, `stakeholderId` → `stakeholder_id`, `boardApprovalDate` → `board_approval_date`, `issueDate` → `issue_date`, `prefixNumber` → `prefix_number`, `ruleOf144Date` → `rule_144_date`, `rule144Date` → `rule_144_date`, `rule144DifferenceReason` → `rule_144_difference_reason`, `stateOfResidency` → `state_of_residency`, `stateExemption` → `state_exemption`, `cashPaid` → `cash_paid`, `debtCanceled` → `debt_canceled`, `convertibleNote` → `convertible_note`, `dividendAccrualStartDate` → `dividend_accrual_start_date`, `returnedInvestedCapital` → `returned_invested_capital`, `employmentRelated` → `employment_related`).
+The MCP gateway auto-converts a known allow-list (`lawFirmPrice` → `law_firm_price`, `legendId` → `legend_id`, `soType` → `so_type`, `exercisePrice` → `exercise_price`, `vestingTemplate` → `vesting_template`, `vestingStartDate` → `vesting_start_date`, `accelerationTemplate` → `acceleration_template`, `grantExpirationDate` → `grant_expiration_date`, `customLabel` → `custom_label`, `earlyExercise` → `early_exercise`, `autoExerciseAtVest` → `auto_exercise_at_vest`, `isFlexibleIssueDate` → `is_flexible_issue_date`, `isHmrcNotified` → `is_hmrc_notified`, `hmrcNotified` → `hmrc_notified`, `isAtoNotified` → `is_ato_notified`, `needsBoardApproval` → `needs_board_approval`, `documentSetId` → `document_set_id`, `employeeId` → `employee_id`, `costCenter` → `cost_center`, `jobTitle` → `job_title`, `grantReason` → `grant_reason`, `issueDateRelationship` → `issue_date_relationship`, `stakeholderKind` → `stakeholder_kind`, `stakeholderId` → `stakeholder_id`, `boardApprovalDate` → `board_approval_date`, `issueDate` → `issue_date`, `prefixNumber` → `prefix_number`, `ruleOf144Date` → `rule_144_date`, `rule144Date` → `rule_144_date`, `rule144DifferenceReason` → `rule_144_difference_reason`, `stateOfResidency` → `state_of_residency`, `stateExemption` → `state_exemption`, `cashPaid` → `cash_paid`, `debtCanceled` → `debt_canceled`, `convertibleNote` → `convertible_note`, `dividendAccrualStartDate` → `dividend_accrual_start_date`, `returnedInvestedCapital` → `returned_invested_capital`, `employmentRelated` → `employment_related`, `fundStructure` → `fund_structure`).
 
 Unknown camelCase or snake_case typos fail with `UsageError: Unknown draft field <key>`. **Always emit snake_case.**
 
@@ -225,4 +258,5 @@ never came back.
 | Custom-label clash | User-supplied `custom_label` colliding with `ES-{n}` or another grant's label is rejected. Ask for new label or clear, re-save with `draft_pk`. |
 | Set name length | carta-web rejects `draft_set_name` > 30 chars with a 400. Trim if user volunteers a long label. |
 | Dividend accrual start date is share-class-gated | The resolved share class's `dividend` field (`"Non-cash"` / `"Cash"` / `null`, returned by `cap_table:get:certificate_share_classes`) controls whether to prompt — required for `"Non-cash"`, forbidden otherwise. Sending the wrong shape raises a server validation error; surface verbatim and recover via `AskUserQuestion`. `save_drafts` skips this check (the validator honors `ignore_empty`), so a row missing the field saves cleanly but will fail at issue. |
+| Fund-structure block is server-detected, never predicted | Only carta-web knows whether a holder matches the firm's fund structure, so don't guess and don't pre-prompt. Let `validate_drafts` raise the critical `fundStructure` error, then recover in place — see [fund-structure recovery](#recovering-a-fund-structure-block). Only `true` clears it; a `false` persists but stays blocked. |
 | `law_firm_price = 0` is LLC-only | A `0` price per share validates only for LLC corporations; non-LLC corps are rejected at the validate/issue step with *"Value must be greater than 0"*. Don't pre-block `0` for LLC issuers (alongside ZEPO option grants). Server-gated by the `LLCCW_SUPPORT_ZERO_LAW_FIRM_PRICE_LLC` flag, so treat the server as the source of truth — surface its message verbatim if a non-LLC `0` is rejected. |

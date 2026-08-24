@@ -37,6 +37,7 @@ Synonyms beyond those two are the obvious hand-rolled variants (`Grantee`,
 | Vesting Schedule · Vesting · Vesting Template | `vesting_template_id` *(resolved)* |
 | Vesting Commencement Date · Vesting Start Date · Vesting Start · Vesting Commencement | `vesting_start_date` |
 | Acceleration · Acceleration Terms · Acceleration Template | `acceleration_template` *(resolved)* |
+| Part of fund structure · Fund Structure | `fund_structure` — only on a paper corp's sheet. An explicit "No" carries through, like `employment_related`; `validate_drafts` blocks a row whose holder resolves to the firm's fund structure until this is Yes |
 
 ## Option grant
 
