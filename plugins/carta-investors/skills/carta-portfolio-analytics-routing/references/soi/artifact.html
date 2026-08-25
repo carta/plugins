@@ -1356,9 +1356,19 @@
 
         let _mcpNsPromise = null;
         // null means this view cannot run mcp — not granted, not served, or failed to load.
+        // Polls up to 5 attempts, 4 × 500 ms gaps (2 s max) to handle window.claude not yet ready on first render.
         function mcpNamespace() {
             if (!_mcpNsPromise) {
-                _mcpNsPromise = Promise.resolve(window.claude?.use?.('mcp') ?? null).catch(() => null);
+                _mcpNsPromise = (async () => {
+                    for (let i = 0; i < 5; i++) {
+                        try {
+                            const mcp = await Promise.resolve(window.claude?.use?.('mcp') ?? null);
+                            if (mcp) return mcp;
+                        } catch (_) {}
+                        if (i < 4 && typeof setTimeout === 'function') await new Promise(r => setTimeout(r, 500));
+                    }
+                    return null;
+                })();
             }
             return _mcpNsPromise;
         }
