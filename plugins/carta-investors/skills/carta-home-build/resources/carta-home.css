@@ -266,7 +266,7 @@
     .run-btn:hover { text-decoration: underline; }
     .run-btn svg { width: 14px; height: 14px; }
 
-    /* ── Capabilities to try ── */
+    /* ── What to try next ── */
     .cap-grid {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
