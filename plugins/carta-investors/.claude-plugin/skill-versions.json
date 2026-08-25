@@ -2,5 +2,9 @@
   "carta-home-build": {
     "version": "1.8.1",
     "headline": "Remind investors sends capital call reminders to a batch of LPs at once."
+  },
+  "carta-tasks-build": {
+    "version": "1.0.7",
+    "headline": "Carta Tasks (Beta): plan requests, confirm before sending, and track them to done."
   }
 }
