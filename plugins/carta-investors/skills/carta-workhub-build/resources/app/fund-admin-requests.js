@@ -1,5 +1,5 @@
 // ── Fund Admin requests: composer bar + grouped queue + thread overlay ──
-// Depends on carta-tasks.app.js: _mcp, escHtml, showToast, trackTasks,
+// Depends on carta-workhub.app.js: _mcp, escHtml, showToast, trackWorkhub,
 // _mcpResultCandidates, _benchmarkFirmId.
 
 // Who the case waits on, from last_task.template. An unrecognised value shows
@@ -30,16 +30,16 @@ function farStatusLabel(row) {
 
 // Ids of requests this artifact created. Only read when no list command is
 // reachable — see farFetchRequests() for why that path is partial.
-const FAR_IDS_KEY = 'cartaTasks.fundAdminRequestIds';
+const FAR_IDS_KEY = 'cartaWorkhub.fundAdminRequestIds';
 
 // Plans are held here and nowhere else — Carta has no unsent-draft state, so a
 // plan exists only in this artifact until it is sent.
-const FAR_PLANS_KEY = 'cartaTasks.plannedRequests';
+const FAR_PLANS_KEY = 'cartaWorkhub.plannedRequests';
 
 // fa:create:fund-admin-message takes only `message`, and the backend stamps
 // request_type 'other'. So the type is carried two ways: as the message's first
 // line (durable, and the team reads it) and cached here to avoid refetching.
-const FAR_TYPES_KEY = 'cartaTasks.requestTypes';
+const FAR_TYPES_KEY = 'cartaWorkhub.requestTypes';
 const FAR_GENERIC_TYPES = new Set(['', 'other', 'general', 'request-generic', 'request generic']);
 const FAR_HYDRATE_MAX = 8;   // bounded: a title is not worth a fetch storm
 
@@ -51,8 +51,8 @@ let _farStorageOk = null;
 function farStorageOk() {
   if (_farStorageOk !== null) return _farStorageOk;
   try {
-    localStorage.setItem('cartaTasks.probe', '1');
-    localStorage.removeItem('cartaTasks.probe');
+    localStorage.setItem('cartaWorkhub.probe', '1');
+    localStorage.removeItem('cartaWorkhub.probe');
     _farStorageOk = true;
   } catch (e) {
     _farStorageOk = false;
@@ -475,7 +475,7 @@ function farSavePlan() {
   const box = document.getElementById('far-compose-text');
   const message = (box?.value ?? '').trim();
   if (!message) { showToast('Add a description before saving.'); return; }
-  trackTasks('click', 'CartaTasks.FundAdminRequests.SavePlan');
+  trackWorkhub('click', 'CartaWorkhub.FundAdminRequests.SavePlan');
   farWritePlans(farReadPlans().concat({
     planId: 'plan-' + Date.now(),
     message,
@@ -496,7 +496,7 @@ function farDropPlan(planId) {
 }
 
 function farDiscardPlan(planId) {
-  trackTasks('click', 'CartaTasks.FundAdminRequests.DiscardPlan');
+  trackWorkhub('click', 'CartaWorkhub.FundAdminRequests.DiscardPlan');
   farDropPlan(planId);
 }
 
@@ -635,7 +635,7 @@ async function farFetchThread(workflowId) {
 // No case number here on purpose: quoting Carta's internal handle at the sender
 // implies it is how they follow up, when the thread is.
 function farRenderSent() {
-  trackTasks('render', 'CartaTasks.FundAdminRequests.Sent');
+  trackWorkhub('render', 'CartaWorkhub.FundAdminRequests.Sent');
   const overlay = farEnsureOverlay('far-compose-overlay', 'far-overlay');
   overlay.innerHTML = `
     <div class="far-panel far-panel-sent">
@@ -665,7 +665,7 @@ let _farSort = 'newest';
 
 function farSetSort(value) {
   _farSort = value;
-  trackTasks('click', 'CartaTasks.FundAdminRequests.Sort');
+  trackWorkhub('click', 'CartaWorkhub.FundAdminRequests.Sort');
   renderFarSection();
 }
 
@@ -816,7 +816,7 @@ function farRenderDone(rows) {
 }
 
 function toggleFarDone() {
-  trackTasks('click', 'CartaTasks.FundAdminRequests.ExpandCompleted');
+  trackWorkhub('click', 'CartaWorkhub.FundAdminRequests.ExpandCompleted');
   _farDoneOpen = !_farDoneOpen;
   renderFarSection();
 }
@@ -864,7 +864,7 @@ function farEnsureOverlay(id, className) {
   return overlay;
 }
 
-// Tiles come from TASK_PRESETS in carta-tasks.config.js. Index, not the prompt
+// Tiles come from TASK_PRESETS in carta-workhub.config.js. Index, not the prompt
 // text, rides the DOM so quotes and newlines cannot break out of the attribute.
 function farPresetTiles() {
   const presets = typeof TASK_PRESETS === 'undefined' ? [] : TASK_PRESETS;
@@ -877,7 +877,7 @@ function applyFarPreset(i) {
   const preset = (typeof TASK_PRESETS === 'undefined' ? [] : TASK_PRESETS)[i];
   const box = document.getElementById('far-compose-text');
   if (!preset || !box) return;
-  trackTasks('click', 'CartaTasks.FundAdminRequests.Preset');
+  trackWorkhub('click', 'CartaWorkhub.FundAdminRequests.Preset');
   _farPresetName = preset.name;
   box.value = preset.template.join('\n');
   box.focus();
@@ -888,7 +888,7 @@ function applyFarPreset(i) {
 }
 
 function openFarCompose() {
-  trackTasks('click', 'CartaTasks.FundAdminRequests.Compose');
+  trackWorkhub('click', 'CartaWorkhub.FundAdminRequests.Compose');
   _farPlanId = null;
   _farPresetName = null;
   const overlay = farEnsureOverlay('far-compose-overlay', 'far-overlay');
@@ -979,7 +979,7 @@ function reviewFarCompose() {
   const message = (document.getElementById('far-compose-text')?.value ?? '').trim();
   if (!message) { showToast('Add a description before sending.'); return; }
   _farDraft = message;
-  trackTasks('click', 'CartaTasks.FundAdminRequests.Review');
+  trackWorkhub('click', 'CartaWorkhub.FundAdminRequests.Review');
   farRenderReview();
 }
 
@@ -1026,7 +1026,7 @@ async function submitFarCompose() {
   const message = farWithTypeLine(_farDraft.trim(), label);
   if (!message) { showToast('Add a description before sending.'); return; }
 
-  trackTasks('click', 'CartaTasks.FundAdminRequests.Send');
+  trackWorkhub('click', 'CartaWorkhub.FundAdminRequests.Send');
   const btn = document.getElementById('far-compose-send');
   if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
 
@@ -1070,7 +1070,7 @@ async function submitFarCompose() {
 let _farOpenThreadId = null;
 
 async function openFarThread(workflowId) {
-  trackTasks('click', 'CartaTasks.FundAdminRequests.OpenThread');
+  trackWorkhub('click', 'CartaWorkhub.FundAdminRequests.OpenThread');
   _farOpenThreadId = workflowId;
   const row = (_farRows ?? []).find(r => String(r.id) === String(workflowId));
   const overlay = farEnsureOverlay('far-thread-overlay', 'far-overlay');
@@ -1167,7 +1167,7 @@ async function submitFarReply() {
   const message = (box?.value ?? '').trim();
   if (!workflowId || !message) { showToast('Write a reply before sending.'); return; }
 
-  trackTasks('click', 'CartaTasks.FundAdminRequests.Reply');
+  trackWorkhub('click', 'CartaWorkhub.FundAdminRequests.Reply');
   const btn = document.getElementById('far-reply-send');
   if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
 

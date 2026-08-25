@@ -1,4 +1,4 @@
-// Core runtime for Carta Tasks. Mirrors the same helpers in carta-home.app.js —
+// Core runtime for Carta Workhub. Mirrors the same helpers in carta-home.app.js —
 // keep the two behaviourally identical.
 
 // ── Carta MCP bridge ──
@@ -38,7 +38,7 @@ async function _mcp(tool, args) {
     return await mcp.callTool(
       CARTA_MCP_SERVER,
       tool,
-      Object.assign({}, args, { _instrumentation_v2: { skills: ['carta-investors:carta-tasks-build'], from_ui: true } })
+      Object.assign({}, args, { _instrumentation_v2: { skills: ['carta-investors:carta-workhub-build'], from_ui: true } })
     );
   } catch (err) {
     // A failed tool belongs to the caller that asked, so return an envelope. Connector
@@ -51,11 +51,11 @@ async function _mcp(tool, args) {
 // ── Snowplow UI-event tracking via @carta/mcp-ui-tracker (window.mcpUiTracker) ──
 if (window.mcpUiTracker) {
   window.mcpUiTracker.initTracker({
-    interface: { interfaceType: "artifact", interfaceId: "carta-tasks" },
+    interface: { interfaceType: "artifact", interfaceId: "carta-workhub" },
     mcpServerId: CARTA_MCP_SERVER,
   });
 }
-function trackTasks(action, elementId, options) {
+function trackWorkhub(action, elementId, options) {
   if (window.mcpUiTracker && window.mcpUiTracker.getTransport()) {
     window.mcpUiTracker.trackUiEvent(action, elementId, options);
   }
@@ -112,7 +112,7 @@ function farShowSection(msg) {
   if (msg) showToast(msg);
 }
 
-async function bootCartaTasks() {
+async function bootCartaWorkhub() {
   if (!(await mcpAvailable())) {
     farShowSection('Carta is not connected in this view.');
     return;
@@ -141,9 +141,9 @@ async function bootCartaTasks() {
 
     await farFetchRequests();
   } catch (e) {
-    console.error('[carta-tasks boot]', e);
+    console.error('[carta-workhub boot]', e);
     farShowSection('Could not load your requests. Reopen the artifact to retry.');
   }
 }
 
-bootCartaTasks();
+bootCartaWorkhub();

@@ -155,7 +155,7 @@ than hide it. Age comes from `last_activity_at`, falling back to `created_at`.
 
 Status reads **Sent** (`new`) / **Working** (`pending-carta`) / **Ready for you**
 (`pending-customer`) / **Done** (`status` 2) / **Canceled** (`status` 3) — the same
-words the Carta Tasks artifact uses. Each is an event the payload can prove; there
+words the Carta Workhub artifact uses. Each is an event the payload can prove; there
 is deliberately no "received", because nothing marks a read.
 
 There is **no `state` field and no `_links` block** on this payload. Do not read

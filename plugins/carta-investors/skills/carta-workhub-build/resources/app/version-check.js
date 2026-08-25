@@ -1,5 +1,5 @@
 // ── Update banner: is this artifact behind the published build? ──
-// Depends on carta-tasks.app.js: _mcp(), escHtml(), showToast(), trackTasks().
+// Depends on carta-workhub.app.js: _mcp(), escHtml(), showToast(), trackWorkhub().
 //
 // A live artifact is a frozen copy of its source — once built into a user's workspace
 // nothing can update it in place, and the sandbox sets connect-src 'none' so it cannot
@@ -9,16 +9,16 @@
 
 const PLUGIN = "carta-investors";
 // The skill that builds this artifact — carta-mcp keys published versions by skill, not
-// by plugin. The plugin's own version moves several times a day for reasons a Carta Tasks
+// by plugin. The plugin's own version moves several times a day for reasons a Carta Workhub
 // user never sees, so keying the banner to it would raise one almost daily, forever.
-const SKILL = "carta-tasks-build";
+const SKILL = "carta-workhub-build";
 const ARTIFACT_VERSION = "{{ARTIFACT_VERSION}}";
-const UPDATE_PROMPT = "Rebuild my Carta Tasks artifact";
+const UPDATE_PROMPT = "Rebuild my Carta Workhub artifact";
 const UPDATE_INSTRUCTION =
-  "To get the latest version, tell Claude to update the Carta Tasks artifact.";
+  "To get the latest version, tell Claude to update the Carta Workhub artifact.";
 // Keyed per artifact: a shared key would let dismissing one banner silence the other
 // as soon as the two artifacts reach the same version number.
-const DISMISS_KEY = "cartaTasks.dismissedUpdateVersion";
+const DISMISS_KEY = "cartaWorkhub.dismissedUpdateVersion";
 
 // Parse "1.2.3" into [major, minor]. Patch is deliberately dropped: a patch ships a
 // copy tweak or a style nudge, and interrupting every user for that trains them to
@@ -56,7 +56,7 @@ function writeDismissed(version) {
 }
 
 function dismissUpdateBanner(version) {
-  trackTasks("click", "CartaTasks.UpdateBanner.Dismiss");
+  trackWorkhub("click", "CartaWorkhub.UpdateBanner.Dismiss");
   writeDismissed(version);
   const slot = document.getElementById("update-banner-slot");
   if (slot) slot.innerHTML = "";
@@ -69,7 +69,7 @@ const COPY_ICON =
 const COPY_LABEL = COPY_ICON + "Copy this prompt";
 
 function copyUpdatePrompt(btn) {
-  trackTasks("click", "CartaTasks.UpdateBanner.Copy");
+  trackWorkhub("click", "CartaWorkhub.UpdateBanner.Copy");
   const done = () => {
     btn.textContent = "✓ Copied";
     setTimeout(() => { btn.innerHTML = COPY_LABEL; }, 2000);
@@ -95,7 +95,7 @@ function renderUpdateBanner(latest, headline) {
   slot.innerHTML = `
     <div class="ink-banner ink-banner--info" role="status" id="update-banner">
       <div class="ink-banner__body">
-        <p class="ink-banner__title">New version of Carta Tasks available!</p>
+        <p class="ink-banner__title">New version of Carta Workhub available!</p>
         <p class="ink-banner__message">${message}</p>
         <button class="ink-banner__cta ink-banner__cta--icon" id="update-banner-copy">${COPY_LABEL}</button>
       </div>
@@ -110,7 +110,7 @@ function renderUpdateBanner(latest, headline) {
   document
     .getElementById("update-banner-dismiss")
     .addEventListener("click", () => dismissUpdateBanner(latest));
-  trackTasks("render", "CartaTasks.UpdateBanner.Shown");
+  trackWorkhub("render", "CartaWorkhub.UpdateBanner.Shown");
 }
 
 // Dig the version payload out of whatever shape callMcpTool returns, the same way
@@ -144,7 +144,7 @@ async function checkForUpdate() {
     if (readDismissed() === latest) return;
     renderUpdateBanner(latest, payload.headline);
   } catch (e) {
-    console.log("[carta-tasks] update check unavailable:", e && e.message);
+    console.log("[carta-workhub] update check unavailable:", e && e.message);
   }
 }
 

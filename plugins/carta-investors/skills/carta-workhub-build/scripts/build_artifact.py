@@ -1,20 +1,20 @@
 # /// script
 # requires-python = ">=3.9"
 # ///
-"""Assemble the self-contained carta-tasks Cowork artifact from its source parts.
+"""Assemble the self-contained carta-workhub Cowork artifact from its source parts.
 
 Inlines the CSS + config + app JS into the template and substitutes the Carta MCP
 server id, producing ONE self-contained HTML file ready for create_artifact /
 update_artifact. The model never has to read the large HTML: to change the composer
-tiles, edit resources/carta-tasks.config.js; to change logic, edit the app JS under
+tiles, edit resources/carta-workhub.config.js; to change logic, edit the app JS under
 resources/; then re-run this.
 
 Source parts (all in the skill's resources/ dir):
-  carta-tasks.template.html  — HTML skeleton + <style>/<script> injection markers
-  carta-tasks.css            — styles          (marker: /* __CARTA_TASKS_CSS__ */)
-  carta-tasks.tracker.js     — Snowplow UI tracker bundle (marker: /* __CARTA_TASKS_TRACKER_JS__ */)
-  carta-tasks.config.js      — TASK_PRESETS    (marker: /* __CARTA_TASKS_CONFIG_JS__ */)
-  carta-tasks.app.js         — app logic       (marker: /* __CARTA_TASKS_APP_JS__ */)
+  carta-workhub.template.html  — HTML skeleton + <style>/<script> injection markers
+  carta-workhub.css            — styles          (marker: /* __CARTA_WORKHUB_CSS__ */)
+  carta-workhub.tracker.js     — Snowplow UI tracker bundle (marker: /* __CARTA_WORKHUB_TRACKER_JS__ */)
+  carta-workhub.config.js      — TASK_PRESETS    (marker: /* __CARTA_WORKHUB_CONFIG_JS__ */)
+  carta-workhub.app.js         — app logic       (marker: /* __CARTA_WORKHUB_APP_JS__ */)
 
 The artifact's version comes from the plugin's skill-versions registry, keyed by this
 skill (placeholder: {{ARTIFACT_VERSION}}). It lives there rather than beside the skill
@@ -28,7 +28,7 @@ addresses a connector by. `{{FIRM}}` is left intact — it is a RUNTIME placehol
 artifact fills in from list_contexts.
 
 Usage:
-  uv run scripts/build_artifact.py --mcp-server <connector-display-name> --out <path>/carta-tasks.html
+  uv run scripts/build_artifact.py --mcp-server <connector-display-name> --out <path>/carta-workhub.html
 """
 import argparse
 import hashlib
@@ -48,22 +48,22 @@ VERSIONS_FILE = SKILL_DIR.parent.parent / ".claude-plugin" / "skill-versions.jso
 SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+$")
 
 # App-layer JS is assembled from multiple source files, concatenated in this
-# order into the single __CARTA_TASKS_APP_JS__ slot below. Concatenation order
+# order into the single __CARTA_WORKHUB_APP_JS__ slot below. Concatenation order
 # doesn't matter functionally today (function/let declarations, no cross-file
 # execution-order dependencies) — list shared/core logic first by convention.
-# Add new feature files here as carta-tasks.app.js gets split further.
+# Add new feature files here as carta-workhub.app.js gets split further.
 APP_JS_PARTS = [
-    "carta-tasks.app.js",
+    "carta-workhub.app.js",
     "app/fund-admin-requests.js",
     "app/version-check.js",
 ]
 
 MARKERS = {
-    "carta-tasks.css": r"/\*\s*__CARTA_TASKS_CSS__\s*\*/",
-    "carta-tasks.tracker.js": r"/\*\s*__CARTA_TASKS_TRACKER_JS__\s*\*/",
-    "carta-tasks.config.js": r"/\*\s*__CARTA_TASKS_CONFIG_JS__\s*\*/",
+    "carta-workhub.css": r"/\*\s*__CARTA_WORKHUB_CSS__\s*\*/",
+    "carta-workhub.tracker.js": r"/\*\s*__CARTA_WORKHUB_TRACKER_JS__\s*\*/",
+    "carta-workhub.config.js": r"/\*\s*__CARTA_WORKHUB_CONFIG_JS__\s*\*/",
 }
-APP_JS_MARKER = r"/\*\s*__CARTA_TASKS_APP_JS__\s*\*/"
+APP_JS_MARKER = r"/\*\s*__CARTA_WORKHUB_APP_JS__\s*\*/"
 
 
 def compute_build_id(template, parts):
@@ -101,7 +101,7 @@ def read_version():
 
 
 def build(mcp_server):
-    template = (RES / "carta-tasks.template.html").read_text()
+    template = (RES / "carta-workhub.template.html").read_text()
     parts = {name: (RES / name).read_text() for name in MARKERS}
     parts.update({name: (RES / name).read_text() for name in APP_JS_PARTS})
     build_id = compute_build_id(template, parts)
@@ -120,7 +120,7 @@ def build(mcp_server):
     out = re.sub(APP_JS_MARKER, lambda _m, c=app_js: c, out, count=1)
 
     # Leftover build-time markers would mean an incomplete assembly — fail loudly.
-    for token in ("__CARTA_TASKS_CSS__", "__CARTA_TASKS_TRACKER_JS__", "__CARTA_TASKS_CONFIG_JS__", "__CARTA_TASKS_APP_JS__"):
+    for token in ("__CARTA_WORKHUB_CSS__", "__CARTA_WORKHUB_TRACKER_JS__", "__CARTA_WORKHUB_CONFIG_JS__", "__CARTA_WORKHUB_APP_JS__"):
         if token in out:
             sys.exit("ERROR: unresolved marker {} after assembly".format(token))
 
@@ -139,7 +139,7 @@ def build(mcp_server):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Assemble the carta-tasks artifact.")
+    ap = argparse.ArgumentParser(description="Assemble the carta-workhub artifact.")
     ap.add_argument("--mcp-server", required=True,
                     help="Carta connector display name (the {{CARTA_MCP_SERVER}} value)")
     ap.add_argument("--out", required=True, help="output HTML path")

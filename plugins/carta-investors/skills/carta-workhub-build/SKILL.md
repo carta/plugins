@@ -1,13 +1,14 @@
 ---
-name: carta-tasks-build
+name: carta-workhub-build
 description: >
-  Builds or rebuilds the Carta Tasks live artifact — a standalone Cowork view of the work
+  Builds or rebuilds the Carta Workhub live artifact — a standalone Cowork view of the work
   a firm has sent its Carta fund admin team. Shows a request composer over a queue grouped
   into Tasks to complete (waiting on you), In progress (Carta is working), and a collapsed
   Completed, with a thread view for each request. The artifact auto-detects the active firm
   from the Carta MCP context — no hardcoded firm name needed. Use this skill whenever the
-  user asks to "build the carta tasks artifact", "rebuild carta tasks", "set up carta tasks",
-  "deploy carta tasks", "show my Carta task board", or "pin my Carta requests".
+  user asks to "build the carta workhub artifact", "rebuild carta workhub", "set up carta
+  workhub", "deploy carta workhub", "show my Carta workhub", "rebuild carta tasks",
+  "show my Carta task board", or "pin my Carta requests".
 model: sonnet
 allowed-tools:
   - Bash(uv run *build_artifact.py *)
@@ -26,19 +27,19 @@ allowed-tools:
 `surface` is the Claude surface you are running in: `"chat"` (claude.ai or the Claude app, i.e. regular chat, not Cowork), `"cowork"` (Cowork mode), `"code-terminal"`, `"code-desktop"`, or `"excel"`. Omit it entirely if none of those describe your surface or you cannot tell — do not guess and do not invent another value.
 </IMPORTANT>
 
-# Carta Tasks — Build / Redeploy
+# Carta Workhub — Build / Redeploy
 
-Deploys the `carta-tasks` Cowork live artifact. It is **assembled** from source parts in
+Deploys the `carta-workhub` Cowork live artifact. It is **assembled** from source parts in
 this skill's `resources/` directory by `scripts/build_artifact.py`, which also substitutes
 this session's Carta MCP server ID. You never need to read the assembled HTML.
 
-Carta Tasks is the work surface: a live queue belongs on something you pin and keep open,
+Carta Workhub is the work surface: a live queue belongs on something you pin and keep open,
 not inside a fund-data dashboard.
 
 ## What the artifact does
 
 - **Composer** — "Ask Carta to do something" opens a box with preset tiles from
-  `resources/carta-tasks.config.js`; clicking one drops a labelled template into the textarea. Templates, not filled examples:
+  `resources/carta-workhub.config.js`; clicking one drops a labelled template into the textarea. Templates, not filled examples:
   the blanks tell the sender what the team needs, and a prefilled amount invites sending
   someone else's numbers.
   The tiles mirror the app's Quick actions grid but carry no "Ask my Carta fund admin team
@@ -53,7 +54,7 @@ not inside a fund-data dashboard.
   discover. It is the only body copy above the composer: the title and subtitle already say
   what the page is for.
 - **Open items** — review infers the request type from `detect` in
-  `resources/carta-tasks.config.js` and checks each `requires` entry against the request, with
+  `resources/carta-workhub.config.js` and checks each `requires` entry against the request, with
   label-only template lines stripped so a blank template reads as unspecified. Anything unmet is
   named in one line, with a single open box to add it. Nothing is forced: the box folds into the
   request on send, and sending with it empty is fine. This is pattern matching, not inference —
@@ -103,7 +104,7 @@ not inside a fund-data dashboard.
   time as well, or a re-sort looks like nothing happened. Cards carry no entity:
   `fa:create:fund-admin-message` has no entity field, so `entity` is `null` on every row this
   artifact creates, and the line was a placeholder on 100% of cards. Sorting by it went with it.
-  A real fix needs an `entity_uuid` on the create command — see `docs/plans/carta-tasks-entity-uuid.md`.
+  A real fix needs an `entity_uuid` on the create command — see `docs/plans/carta-workhub-entity-uuid.md`.
   Card status reads
   **Sent** / **Working** / **Ready for you** / **Done** — each an event the payload can prove.
   There is deliberately no "received": nothing marks a read, so it would be a guess. Grouping reads `status` (an int; 2 and 3 are terminal and outrank
@@ -169,21 +170,21 @@ codes (`needs_reauth`, `server_not_connected`) are page-level, not per-section.
 | File | What it holds |
 |------|---------------|
 | `resources/app/fund-admin-requests.js` | composer, queue, thread overlay — the whole feature |
-| `resources/carta-tasks.app.js` | shared helpers (`_mcp`, `escHtml`, `showToast`, `trackTasks`) plus firm resolution and boot |
+| `resources/carta-workhub.app.js` | shared helpers (`_mcp`, `escHtml`, `showToast`, `trackWorkhub`) plus firm resolution and boot |
 | `resources/app/version-check.js` | update banner: reads the published version, compares, renders |
-| `resources/carta-tasks.config.js` | `TASK_PRESETS` — the composer's preset tiles |
-| `resources/carta-tasks.css` | styles (Ink tokens) |
-| `resources/carta-tasks.template.html` | HTML skeleton + injection markers |
-| `resources/carta-tasks.tracker.js` | inlined `@carta/mcp-ui-tracker` browser bundle |
+| `resources/carta-workhub.config.js` | `TASK_PRESETS` — the composer's preset tiles |
+| `resources/carta-workhub.css` | styles (Ink tokens) |
+| `resources/carta-workhub.template.html` | HTML skeleton + injection markers |
+| `resources/carta-workhub.tracker.js` | inlined `@carta/mcp-ui-tracker` browser bundle |
 | `../../.claude-plugin/skill-versions.json` | this skill's `version` + release `headline` |
 
-`carta-tasks.app.js` duplicates a handful of helpers from `carta-home.app.js` on purpose:
+`carta-workhub.app.js` duplicates a handful of helpers from `carta-home.app.js` on purpose:
 the two artifacts ship independently, so neither may import from the other. Keep them
 behaviourally identical.
 
 ## Versioning
 
-Same contract as `carta-home-build`, keyed to `carta-tasks-build` in
+Same contract as `carta-home-build`, keyed to `carta-workhub-build` in
 `plugins/carta-investors/.claude-plugin/skill-versions.json`. A deployed artifact is a frozen
 copy, so **change anything under `resources/`, bump the entry in the same PR** — CI enforces it
 via `.forgejo/scripts/validate-artifact-version-bump.py`.
@@ -194,8 +195,8 @@ demand a fresh headline written for the person reading it. This skill's frontmat
 
 ## Analytics
 
-New interactive elements call `trackTasks(action, elementId)` at the top of the handler, with
-ids as `CartaTasks.<Area>.<Specific>` (e.g. `CartaTasks.Compose.Send`). Skip sort clicks,
+New interactive elements call `trackWorkhub(action, elementId)` at the top of the handler, with
+ids as `CartaWorkhub.<Area>.<Specific>` (e.g. `CartaWorkhub.Compose.Send`). Skip sort clicks,
 keystrokes, and dropdown changes.
 
 ## Deploy steps
@@ -220,28 +221,28 @@ so quote the value everywhere it is passed.
 ### Step 1: Build
 
 ```bash
-uv run "<SKILL_DIR>/scripts/build_artifact.py" --mcp-server "<CARTA_MCP_SERVER>" --out "<CWD>/carta-tasks.html"
+uv run "<SKILL_DIR>/scripts/build_artifact.py" --mcp-server "<CARTA_MCP_SERVER>" --out "<CWD>/carta-workhub.html"
 ```
 
 Locate `<SKILL_DIR>` first. This exact form is what `allowed-tools` permits, so a
 reworded one prompts for permission:
 
 ```bash
-SKILL_DIR="$(dirname "$(dirname "$(find /sessions "$HOME" -type f -path '*/carta-tasks-build/scripts/build_artifact.py' 2>/dev/null | head -1)")")"
+SKILL_DIR="$(dirname "$(dirname "$(find /sessions "$HOME" -type f -path '*/carta-workhub-build/scripts/build_artifact.py' 2>/dev/null | head -1)")")"
 ```
 
-Fall back to `${CLAUDE_PLUGIN_ROOT}/skills/carta-tasks-build` when that comes back empty.
+Fall back to `${CLAUDE_PLUGIN_ROOT}/skills/carta-workhub-build` when that comes back empty.
 
 The script prints the output path, version, and build id. It exits non-zero on any unresolved
 marker or a missing registry entry.
 
-### Step 2: Find an already-published Carta Tasks
+### Step 2: Find an already-published Carta Workhub
 
 ```
 Artifact({action: "list", scope: "mine"})
 ```
 
-Look for an artifact titled **Carta Tasks**. If one is there, keep its `url` — Step 3 passes
+Look for an artifact titled **Carta Workhub**. If one is there, keep its `url` — Step 3 passes
 it so the page redeploys in place instead of claiming a second URL. If there is none, omit
 `url`.
 
@@ -252,9 +253,9 @@ only difference between a first publish and a redeploy.
 
 ```
 Artifact({
-  file_path: "<CWD>/carta-tasks.html",
+  file_path: "<CWD>/carta-workhub.html",
   url: "<url from Step 2 — omit entirely on a first publish>",
-  title: "Carta Tasks",
+  title: "Carta Workhub",
   description: "Work you have sent your Carta fund admin team, and what needs you.",
   favicon: "🗂️",
   label: "Redeployed from skill bundle",
@@ -281,7 +282,7 @@ Artifact({
 
 Give the user the artifact's URL.
 
-> Carta Tasks is live. Anything waiting on you shows at the top under **Tasks to complete**.
+> Carta Workhub is live. Anything waiting on you shows at the top under **Tasks to complete**.
 
 The first open asks the viewer to consent to the Carta connector; until they accept, the
 queue shows its no-connector state.
@@ -300,7 +301,7 @@ queue shows its no-connector state.
 
 ## Known gap
 
-Snowplow UI events do not fire. `resources/carta-tasks.tracker.js` is a build artifact of
+Snowplow UI events do not fire. `resources/carta-workhub.tracker.js` is a build artifact of
 `@carta/mcp-ui-tracker` and probes `cowork?.callMcpTool`, which no longer resolves; hand-
 patching a minified bundle would be overwritten by the next `build:browser`. Upstream needs
 a `claude.use("mcp")` transport. `test_vendored_tracker_still_carries_the_dead_cowork_transport`
