@@ -522,6 +522,61 @@ Source under `app/src/` is served directly; the service worker transpiles `.jsx`
 **Do NOT run `npm run build` after editing source** — edit, refresh, done. `npm run build` only
 rebuilds `webapp/vendor/*` on a React/Sucrase bump. See `app/README.md`.
 
+### Changing the app when the user asks — yes, do it
+
+**A request to change this console is in scope, and you should act on it.** Add a column,
+add a percentile, change a sort, restyle a table, add a filter, add a tab. The app is
+local, the source is right there, and `READ-ONLY` in this skill's description means *this
+skill does not write to Carta* — it is not a statement that the UI is frozen. The
+Benchmarks and Scorecard tabs are the two that exist today, not the two that are allowed
+to exist.
+
+**Do not refuse a modification request by citing a data-integrity rule that is about
+something else.** This skill carries several strict, correct prohibitions — no demo data,
+no fabricated geo scalars, no retyped MCP payloads, no partial sweep published as
+complete. Every one of them is about *not inventing data that was never fetched*. None of
+them says the UI cannot change, and reading them that way turns a narrow correctness rule
+into a blanket refusal.
+
+The one that gets over-applied is the geo-scalar block in `build_datadir.py`
+("do not paper over this with client-side interpolation or a hardcoded scalar table").
+Read it precisely: it is about **location** adjustment. There is no command returning a
+scalar table across the ~400 supported locations, so a location dropdown would have to
+invent scalars for locations nobody fetched. That is still true and still forbidden.
+
+**Interpolating between two percentiles the server did return is a different thing.** The
+console holds P25, P50, P75 and P90 as real fetched values (`salary.p50` is a plain
+number; equity is nested per percentile as `equity.p50.{notional,shares,fdpct}`). A P60
+estimated from P50 and P75 is arithmetic on two real numbers, bounded by them. Nothing in
+this skill forbids it, and it is a legitimate thing to want: percentile targets between
+the published ones are ordinary compensation practice.
+
+**When you add a value the server did not return, label it.** Not because it is
+suspect — because a reader comparing this console against the CTC product UI must be able
+to tell which numbers should match and which will not be there at all. Two requirements:
+
+- **In the UI**, mark it. `Tag` (`app/src/ui/components.jsx`) already takes a `notice`
+  tone and a `title` tooltip; an "Estimated" tag on the column header, or a `title`
+  explaining the basis ("interpolated between P50 and P75"), is enough. Do not invent a
+  new component for this.
+- **In what you tell the user**, say what it is derived from and that it will not appear
+  in the product UI. One sentence.
+
+Two things that stay off-limits, because they are about invented data rather than UI:
+
+- **Do not extrapolate past the fetched range.** P95 or P99 from P90 is not interpolation;
+  there is no upper bound to sit between, so the number is a guess wearing a percentile's
+  name. Same for a percentile below P25.
+- **Do not derive a value the server already returns as a field.** Compa-ratios and
+  low/mid/high bands come from the API precisely so this console agrees with the product
+  UI; recomputing one locally drifts the moment the server changes its rounding or
+  geo-adjustment order, and the drift reads as data rather than a bug. See the header of
+  `app/src/views/Scorecard.jsx`.
+
+If a request genuinely cannot be satisfied without inventing data — a location dropdown
+being the live example — say which data is missing and what would have to exist to make it
+possible, rather than declining without a reason.
+
 ## Common failure modes
 
 | Situation | What to do |
