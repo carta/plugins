@@ -8,7 +8,7 @@ The official repository of Carta plugins for AI Agents, as a [Claude Plugin Mark
 
 ## Documentation
 
-Visit the [Carta Developer Platform website here](https://docs.carta.com/api-platform/docs/claude-plugins-setup) for installation and support documentation.
+Visit the [Carta Developer Platform website here](https://docs.carta.com/api-platform/guides/guides/claude-mcp-setup/) for installation and support documentation.
 
 ## Plugins
 
