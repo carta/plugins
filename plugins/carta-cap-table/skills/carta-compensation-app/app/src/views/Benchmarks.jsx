@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { C, FS, RADIUS, SANS } from "../ui/theme.js";
 import ExportButton from "../ui/ExportButton.jsx";
-import { Select, Th, Td } from "../ui/components.jsx";
+import { MultiSelect, Select, Th, Td } from "../ui/components.jsx";
 import { compareRows, jobLabel, levelLabel, trackOf, TRACK_LABELS } from "../model/taxonomy.js";
 import { money, equityValue, EQUITY_REPS } from "../model/format.js";
 import { csvFilename, downloadCsv, toCsv } from "../model/csv.js";
@@ -74,7 +74,13 @@ function MetricTable({ rows, currency, equityRep }) {
 }
 
 export default function Benchmarks({ data, onPeerGroupChange }) {
-  const [job, setJob] = useState("ALL");
+  // A SET of job codes, empty meaning "all". Empty-as-all rather than seeding the set
+  // with every code: the two states look identical on screen but behave differently the
+  // moment the peer group switches, because a different bucket can cover a different set
+  // of job areas. A pre-filled set would silently become a stale explicit filter —
+  // pinning the view to areas the new group may not have — while empty keeps meaning
+  // "whatever this group covers".
+  const [jobSel, setJobSel] = useState(() => new Set());
 
   // Peer-group switching. The build may cache alternate buckets from the SAME dimension
   // (peer_<CODE>/ dirs -> data.alternatePeerGroups); when it hasn't, there is nothing to
@@ -160,7 +166,32 @@ export default function Benchmarks({ data, onPeerGroupChange }) {
     return seen.sort((a, b) => jobLabel(a).localeCompare(jobLabel(b)));
   }, [rows]);
 
-  const visible = job === "ALL" ? rows : rows.filter((r) => r.job === job);
+  // Selection is intersected with what this peer group actually covers, rather than
+  // trusted as-is. Switching bucket can change the job-area set, and a code selected
+  // under the old group would otherwise filter every row out and render an empty grid
+  // that looks like missing data. Derived, not stored: the selection itself is left
+  // alone, so switching back restores it.
+  const activeSel = useMemo(() => {
+    const present = new Set(jobs);
+    const kept = new Set();
+    for (const code of jobSel) if (present.has(code)) kept.add(code);
+    return kept;
+  }, [jobSel, jobs]);
+
+  const visible = activeSel.size === 0 ? rows : rows.filter((r) => activeSel.has(r.job));
+
+  const toggleJob = (code) => {
+    setJobSel((prev) => {
+      const next = new Set(prev);
+      // Deselecting the last one returns to "all" rather than to an empty grid: an
+      // empty selection and "show everything" are the same intent here, and a blank
+      // screen would read as broken.
+      if (next.has(code)) next.delete(code);
+      else next.add(code);
+      return next;
+    });
+  };
+  const clearJobs = () => setJobSel(new Set());
 
   /** The visible matrix -> CSV. Respects the job filter, so "Export" means what is on
    *  screen; a button that quietly returns all 22 areas while the view shows one would
@@ -281,15 +312,14 @@ export default function Benchmarks({ data, onPeerGroupChange }) {
           />
         )}
 
-        <Select
-          label="Job area"
-          value={job}
-          onChange={setJob}
+        <MultiSelect
+          label="Job areas"
+          allLabel={`All (${jobs.length})`}
+          options={jobs.map((j) => ({ value: j, label: jobLabel(j) }))}
+          selected={activeSel}
+          onToggle={toggleJob}
+          onAll={clearJobs}
           minWidth={170}
-          options={[
-            { value: "ALL", label: `All (${jobs.length})` },
-            ...jobs.map((j) => ({ value: j, label: jobLabel(j) })),
-          ]}
         />
 
         <Select
@@ -308,9 +338,11 @@ export default function Benchmarks({ data, onPeerGroupChange }) {
         <ExportButton
           onExport={exportMatrix}
           title={
-            job === "ALL"
+            activeSel.size === 0
               ? "Download all job areas as CSV — raw percentile values"
-              : `Download ${jobLabel(job)} as CSV — raw percentile values`
+              : activeSel.size === 1
+                ? `Download ${jobLabel([...activeSel][0])} as CSV — raw percentile values`
+                : `Download ${activeSel.size} of ${jobs.length} job areas as CSV — raw percentile values`
           }
           disabled={!visible.length}
         />

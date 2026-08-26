@@ -14,7 +14,7 @@
 // copy-pasted `padding: "5px 8px"` and no appearance reset, so they rendered ~30px tall
 // with OS chrome and did not match Ink's 40px fields sitting next to them.
 
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { C, FS, RADIUS, SANS } from "./theme.js";
 
 /** Ink's chevron-down. Static: this app's menus only ever open downward.
@@ -181,5 +181,155 @@ export function Td({ children, align, subtle, mono, ellipsis, title }) {
       borderBottom: `1px solid ${C.borderSubtle}`, whiteSpace: "nowrap",
       ...(ellipsis ? { overflow: "hidden", textOverflow: "ellipsis" } : null),
     }}>{children}</td>
+  );
+}
+
+/** Multi-select in a dropdown: the same 40px field as `Select`, opening a checkbox list.
+ *
+ *  NOT a native <select multiple>. Native wins everywhere else in this kit — it brings
+ *  keyboard, screen-reader and scroll behaviour for free — but that trade stops paying for
+ *  multi-select: it needs ctrl/cmd-click to add a second item, drops the whole selection on
+ *  a plain click, and shows about four of 22 rows at a time. Losing a selection you spent
+ *  six clicks building is worse than any styling detail.
+ *
+ *  So the FIELD borrows Select's recipe exactly (40px, 0 12px padding, overlaid chevron,
+ *  two-part focus) and the menu is a real checkbox list. Options are <label><input
+ *  type=checkbox> — the platform gives each row a hit target, a tab stop and the
+ *  checked-state announcement, none of which a div-and-aria reimplementation gets right
+ *  for free.
+ *
+ *  `selected` is a Set of codes. Empty means "all" to the CALLER; this component only
+ *  reports what was clicked, which keeps "no filter" and "everything ticked" from needing
+ *  to be told apart here.
+ */
+export function MultiSelect({ label, options, selected, onToggle, onAll, allLabel, minWidth = 0 }) {
+  const [open, setOpen] = useState(false);
+  const [hover, setHover] = useState(false);
+  const [focus, setFocus] = useState(false);
+  const wrapRef = useRef(null);
+
+  // Close on outside click and on Escape. Without the outside-click half, the menu stays
+  // open behind whatever the user clicks next and covers the grid it is filtering.
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDown = (e) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+    };
+    const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const n = selected.size;
+  const noun = label ? label.toLowerCase() : "options";
+  // The field reads as a summary, not a list: 22 comma-joined labels would overflow any
+  // sane width, and truncating them mid-name reads as data loss.
+  const summary = n === 0
+    ? allLabel
+    : n === 1
+      ? (options.find((o) => o.value === [...selected][0]) || {}).label || `${n} selected`
+      : `${n} of ${options.length} selected`;
+
+  return (
+    <span
+      ref={wrapRef}
+      style={{ display: "inline-flex", flexDirection: "column", gap: 4, position: "relative" }}
+    >
+      {label && <span style={{ fontSize: FS.sm, color: C.textSubtle }}>{label}</span>}
+      <span
+        style={{ position: "relative", display: "inline-flex", alignItems: "center" }}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+      >
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          onFocus={() => setFocus(true)}
+          onBlur={() => setFocus(false)}
+          aria-expanded={open}
+          aria-haspopup="true"
+          title={n ? `${n} of ${options.length} ${noun} shown` : `All ${noun} shown`}
+          style={{
+            height: 40,
+            padding: "0 34px 0 12px",
+            minWidth,
+            font: `400 ${FS.md}px/1 ${SANS}`,
+            color: C.textDefault,
+            background: C.surfaceDefault,
+            border: `1px solid ${focus || open ? C.linkDefault : hover ? C.borderHover : C.borderDefault}`,
+            borderRadius: RADIUS,
+            boxShadow: focus ? `0 0 0 4px ${C.focusRing}` : "none",
+            outline: "none",
+            cursor: "pointer",
+            textAlign: "left",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {summary}
+        </button>
+        <span style={{
+          position: "absolute", right: 11, display: "inline-flex",
+          pointerEvents: "none", color: C.textSubtle,
+        }}>
+          <ChevronDown />
+        </span>
+      </span>
+
+      {open && (
+        <div
+          role="group"
+          aria-label={label}
+          style={{
+            position: "absolute", top: "100%", left: 0, marginTop: 4, zIndex: 20,
+            minWidth: 220, maxHeight: 320, overflowY: "auto",
+            background: C.surfaceDefault,
+            border: `1px solid ${C.borderDefault}`,
+            borderRadius: RADIUS,
+            boxShadow: "0 4px 12px rgba(0,0,0,0.12)",
+            padding: 4,
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => { onAll(); }}
+            style={{
+              display: "block", width: "100%", textAlign: "left",
+              font: `400 ${FS.sm}px/1.4 ${SANS}`,
+              color: n === 0 ? C.linkDefault : C.textSubtle,
+              background: "transparent", border: "none", borderRadius: RADIUS,
+              padding: "6px 8px", cursor: "pointer",
+            }}
+          >
+            {allLabel}
+          </button>
+          <span style={{
+            display: "block", height: 1, background: C.borderSubtle, margin: "4px 0",
+          }} />
+          {options.map((o) => (
+            <label
+              key={o.value}
+              style={{
+                display: "flex", alignItems: "center", gap: 8,
+                padding: "6px 8px", borderRadius: RADIUS, cursor: "pointer",
+                font: `400 ${FS.sm}px/1.4 ${SANS}`, color: C.textDefault,
+                whiteSpace: "nowrap",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={selected.has(o.value)}
+                onChange={() => onToggle(o.value)}
+                style={{ margin: 0, cursor: "pointer" }}
+              />
+              {o.label}
+            </label>
+          ))}
+        </div>
+      )}
+    </span>
   );
 }
