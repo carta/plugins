@@ -447,28 +447,41 @@ the directory name to look up that group's label and dimension, so `peer_one_mil
 **Skip the corp's own bucket** — it is already the flat `benchmark_*.json` set at the top of the
 raw dir, and fetching it twice would put the same group in the dropdown twice.
 
-**Cost — this is the expensive part of a build, so agree it before spending it.** There are 18
-buckets across the three dimensions (8 post-money, 4 headcount, 6 capital raised) and each is a
-full 4-page sweep. The complete set is **17 alternates × 4 = 68 extra calls**, against the ~9 a
-build spends on the corp's own group — an 8x build, and minutes of wall clock rather than
-seconds.
+> ### Sweep ALL dimensions and ALL buckets by default
+>
+> **Unless the user has asked for something narrower, fetch every bucket in all three
+> dimensions.** Do not ask first, and do not quietly pick a cheaper scope on their behalf — a
+> partial sweep is the one outcome that looks like a broken app rather than a saved call. With
+> one dimension the dimension picker renders a single option and hides; with one bucket both
+> pickers hide, and the user sees a dashboard with no peer-group controls at all and no
+> indication that anything was skipped.
+>
+> Narrow **only** on an explicit instruction ("just post-money", "skip the alternates", "keep it
+> quick"). Then say which scope you used and which pickers it leaves empty, so the absence is a
+> stated choice rather than a silent gap.
 
-So **ask before sweeping everything**, in one line naming the number, and offer the cheaper
-shapes:
+**Cost, and why it is no longer a reason to ask.** There are 18 buckets across the three
+dimensions (8 post-money, 4 headcount, 6 capital raised), each a full 4-page sweep: **17
+alternates × 4 = 68 extra calls**, against the ~9 for the corp's own group.
+
+Sequentially that is minutes of wall clock, which is what the old "ask first" default was
+protecting against. **Fan the sweep out across subagents instead** (see below) and those 68
+calls cost roughly one bucket's wall clock, because buckets are independent. Parallelism, not a
+smaller scope, is the answer to the cost.
 
 | Scope | Calls | What the pickers show |
 |---|---|---|
-| Own bucket only | 0 extra | Neither picker appears |
-| Own dimension, all buckets | ~28 | Bucket picker works; one dimension |
-| All three dimensions | ~68 | Both pickers fully populated |
+| **All three dimensions (DEFAULT)** | ~68 | Both pickers fully populated |
+| Own dimension, all buckets | ~12–28 | Bucket picker works; dimension picker hides |
 | Adjacent buckets only | ~8 | Three buckets in one dimension |
+| Own bucket only | 0 extra | Neither picker appears |
 
-Default to the **plan's own dimension** when the user has not said which they want — it is the
-peer set their plan chose, and it turns on the bucket picker for a third of the cost. Sweep all
-three when they ask for the dimension picker, or say yes to the full number.
+The per-dimension figures differ — post-money has 7 alternates (~28 calls), capital raised 5
+(~20), headcount 3 (~12) — so quote the number for the dimension actually in play rather than
+28 for all three.
 
-A verified reference point for the estimate: on corp 7 the full 18-bucket sweep completed with
-every page returning 200, so the 68 is a real figure rather than a guess.
+A verified reference point: on corp 7 the full 18-bucket sweep completed with every page
+returning 200, so 68 is a measured figure rather than a guess.
 
 Ceiling for this step: **at most 6 export calls per bucket** (4 pages plus two retries), and
 **stop the whole step after 3 consecutive buckets fail**. A systemic failure — wrong
@@ -481,6 +494,53 @@ delete its partial `peer_<CODE>/` directory and move on — `build_datadir.py` a
 alternate with no rows and warns rather than publishing a group that renders as a blank grid,
 but removing the directory keeps the warning list honest about what you actually attempted.
 Report which buckets are in the switcher and which you dropped.
+
+**2c-ter. Fan the alternates out across subagents.**
+
+**Do the alternates in parallel, one subagent per bucket.** Buckets are independent — each is a
+self-contained 4-page sweep writing to its own `peer_<CODE>/` directory, with no shared state
+and no ordering between them. Sweeping them in one context is the slowest possible arrangement
+and, on a client where MCP results arrive inline rather than as a file path, also the most
+fragile: every page's payload has to pass through the orchestrator twice (once arriving, once
+being written), and each of those hand-reproduced pages is an opportunity to corrupt a salary
+figure. Delegating puts the payloads in the subagent's context instead, so the orchestrator
+never handles them.
+
+**Split one bucket per agent, 17 agents.** The harness caps concurrency (~10 at once) and
+queues the rest, so this lands in about two waves and the wall clock is a couple of buckets
+deep rather than 17. If the MCP starts rate-limiting, fall back to ~6 agents of ~3 buckets
+each — do NOT respond to rate limiting by narrowing the scope.
+
+**Do the version gate ONCE, in the orchestrator, before spawning anything.** Resolve the
+corporation, run Step 2a/2b, and hand every agent the already-pinned `benchmark_version_id`.
+Seventeen agents each calling `get:plan` is 17 wasted calls, and worse, a release published
+mid-sweep could leave different buckets pinned to different versions — figures that silently
+disagree across the picker.
+
+Each agent's brief needs, at minimum:
+
+- Its bucket code(s), and **the matching bucket param for that dimension** — `post_money_bucket`
+  / `headcount_bucket` / `capital_raised_bucket`, exactly one per call.
+- The pinned `benchmark_version_id`, `corporation_id`, and `equity_quantity: "FOUR_YEAR_GRANT"`.
+- The absolute raw-dir path, and the destination `<raw_dir>/peer_<CODE>` — the code spelled
+  **exactly** as in the table above, since the builder reads the dimension and label back out of
+  the directory name.
+- The paging discipline: `job_limit: 6`, page until `next_job_offset` is null.
+- **The capture contract, in full.** The agent must write the tool result verbatim and pass it
+  to `save_benchmark_result.py --export-page`; it must never retype or summarise a payload.
+- **A verification step**: the script prints the job areas and row count it captured; the agent
+  confirms those match the response's own `jobs_covered` and `row_count`, and re-captures on a
+  mismatch rather than proceeding.
+- The per-bucket ceiling (6 calls) and the instruction to delete a partial `peer_<CODE>/` and
+  report it rather than leaving it half-swept.
+- **Never echo benchmark figures in its report** — the same rule that applies here. Agents
+  report bucket codes, page counts and row counts only.
+
+**Verify the fan-out centrally when the agents return.** Do not trust the reports alone — read
+each bucket's `peer_<CODE>/export_pages.json` and confirm `sweep_complete: true`. A retried page
+can appear twice in a manifest's `pages` list; that is harmless, because a re-capture overwrites
+the same per-job-area files rather than appending, but a manifest whose `sweep_complete` is
+false means that bucket really is short and must be re-run or dropped.
 
 **2d. Employee list — one bulk export (feeds the Scorecard tab).**
 
