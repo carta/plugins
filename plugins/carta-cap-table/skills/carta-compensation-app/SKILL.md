@@ -1,17 +1,18 @@
 ---
 name: carta-compensation-app
 description: >
-  Launch an interactive local web console for Carta Total Compensation (CTC) data — a React app
-  served from localhost, fed by CTC benchmark data fetched once at build time. Today it ships the
-  Benchmarks tab: the full salary / total-cash / equity percentile matrix (P25/P50/P75/P90) for a
-  corporation, grouped by job area and IC/Manager/Executive track, with an equity representation
-  toggle (notional / FD % / shares), and the Scorecard tab: per-metric market positioning
-  (salary / total cash / equity) plus the per-employee roster with compa-ratios. Plan Modeling
-  and Reports tabs are planned.
-  Invoke with a corporation name or numeric id, e.g. "comp dashboard for Acme" or "open the CTC
-  console for corp 7". READ-ONLY. CLAUDE CODE ONLY — it serves a local web app; outside Claude Code
-  use carta-compensation-benchmarks (market rate for a role) or carta-compensation-scorecard
-  (roster, compa-ratios). NOT for a single role lookup.
+  Builds and serves an interactive local web app for exploring one corporation's Carta Total
+  Compensation (CTC) data — a React console on localhost. Use it when the ask is to open, launch
+  or build a comp dashboard, console or app, or to browse CTC figures interactively rather than
+  be told a number. Invoke with a corporation name or numeric id, e.g. "comp dashboard for Acme".
+  Its tabs are where data appears and are not separately routable: Benchmarks (salary,
+  total-cash and equity percentiles by job area and track) and Scorecard (that corporation's
+  roster).
+  Route by deliverable, not subject — an answer, CSV or figure to quote belongs to a sibling
+  even when the wording overlaps: use carta-compensation-benchmarks for a role's market rate,
+  and carta-compensation-scorecard for roster positioning, compa-ratios or who is below market.
+  Choose this skill only when a running, browsable app is wanted. NOT for a single role lookup.
+  READ-ONLY. CLAUDE CODE ONLY — outside Claude Code use those siblings instead.
 argument-hint: "<corporation name or numeric corporation id — required>"
 version: 0.1.0
 model: inherit
@@ -51,6 +52,8 @@ allowed-tools:
 `skills` is cumulative for the session: list every Carta skill loaded so far, not only the one driving this call. Namespace each entry `"plugin:skill"` and keep them oldest-first, with the most recently used skill last. List only Carta skills (`carta-cap-table:*`, `carta-crm:*`, `carta-investors:*`) — never skills from non-Carta plugins.
 `surface` is the Claude surface you are running in: `"chat"` (claude.ai or the Claude app, i.e. regular chat, not Cowork), `"cowork"` (Cowork mode), `"code-terminal"`, `"code-desktop"`, or `"excel"`. Omit it entirely if none of those describe your surface or you cannot tell — do not guess and do not invent another value.
 </IMPORTANT>
+
+<!-- [PATTERN carta-writing-style v0.0.2] [PATTERN etiquette v0.0.6] [PATTERN text v0.0.8] [PATTERN tables v0.0.12] [PATTERN carta-watermark v0.0.10] [PATTERN base v0.1.0] -->
 
 # CTC Dashboard (local React console)
 
@@ -551,14 +554,18 @@ estimated from P50 and P75 is arithmetic on two real numbers, bounded by them. N
 this skill forbids it, and it is a legitimate thing to want: percentile targets between
 the published ones are ordinary compensation practice.
 
-**When you add a value the server did not return, label it.** Not because it is
+**When you add a value the server did not return, you MUST label it.** Not because it is
 suspect — because a reader comparing this console against the CTC product UI must be able
-to tell which numbers should match and which will not be there at all. Two requirements:
+to tell which numbers should match and which will not be there at all. Two requirements,
+both mandatory:
 
-- **In the UI**, mark it. `Tag` (`app/src/ui/components.jsx`) already takes a `notice`
-  tone and a `title` tooltip; an "Estimated" tag on the column header, or a `title`
-  explaining the basis ("interpolated between P50 and P75"), is enough. Do not invent a
-  new component for this.
+- **In the UI**, mark it with BOTH a `Tag` AND a `title` tooltip naming the calculation —
+  e.g. a `notice`-tone "Estimated" tag on the column header, with
+  `title="Interpolated between P50 and P75"`. `Tag` (`app/src/ui/components.jsx`) already
+  takes both; do not invent a new component. **The tag must be visible on first render** —
+  not behind a help menu, a disclosure toggle, or a legend the reader has to go find; the
+  tooltip then explains the arithmetic on hover. An interpolated number that looks identical
+  to a fetched one is the failure this prevents.
 - **In what you tell the user**, say what it is derived from and that it will not appear
   in the product UI. One sentence.
 
@@ -579,20 +586,24 @@ possible, rather than declining without a reason.
 
 ## Common failure modes
 
-| Situation | What to do |
-|---|---|
-| `exceeded 10000ms time limit` or `"Too many job areas"` on `compensation:export:benchmarks` | You asked for too many areas in one call — usually by omitting `job_limit`. The limit that bites first is a **10s server timeout**, not the ~300-row cap. Use `job_limit: 6` and page with `job_offset`; an explicit `job_limit` above 12 is a 400, not clamped. |
-| An export page 403s / 5xxs | Retry that page once, same `job_offset`. **Never** fall back to per-job-area `compensation:get:benchmark` calls to route around it — fix the export call's arguments instead. |
-| An export page fails twice | Stop before building and surface the error. One call now covers up to 12 of 22 job areas, so a page that won't succeed after a retry is a systemic problem (wrong `benchmark_version_id`, bad bucket param, auth), not bad luck on one job area. |
-| `build_datadir.py` reports `EXPORT SWEEP: ... stopped early` or refuses to build | Paging didn't reach `next_job_offset: null`. Fetch the remaining page(s) — check `<raw_dir>/export_pages.json` for `last_next_job_offset`. |
-| `"Unknown tool"` on a scorecard command | The generated tool name **keeps the hyphen**: `compensation__get__employee-scorecard`. Only colons become `__`, so `..._scorecard` (underscore) is not a real tool. `call_tool` works fine with the correct name — verified against a live MCP. (`fetch` is not registered in current builds, so it is not the fallback either.) |
-| Roster looks short / Scorecard counts too low | On the paged fallback: `pageSize` camelCase is silently ignored and the default page size applies — use `page_size`. Also check you did not pass `score=`, which filters on the nullable overall band and drops unscored employees. |
-| `compensation:export:scorecard` returns 400 "at most 200 fit" | The corporation is larger than one export response. Use the paged fallback in Step 2d — do NOT narrow with `job_filters`, which silently under-reports who is below market. |
-| `save_roster_page: N row(s) do not match the ... header` | The export's columns and rows disagree, so the payload is not what the decoder expects. Do not work around it — a partially-decoded employee list would be published flagged COMPLETE. Re-fetch; if it repeats, the export's column set changed and the script needs updating. |
-| `build_datadir.py` refuses: "the roster sweep is INCOMPLETE" | Paging stopped before `total_results` was reached. Check `<raw_dir>/roster_pages.json` for `distinct_employees` vs `total_results` and fetch the remaining pages. Never work around this — a partial roster under-reports how many employees are below market. |
-| Scorecard tab absent on a fresh build | `snapshot.json` will say `hasRoster: false`. The roster sweep failed or was skipped; re-run with "refresh". A warm cache re-fetches nothing (Step 0's one call is the version gate), so the tab cannot appear until the next build. |
-| Numbers don't match the CTC product UI | Almost always `equity_quantity` (must be `FOUR_YEAR_GRANT`) or a missing/incorrect `*_bucket` param. |
-| `HTTP 400` on `job`/`focus` | Passing a display label (`"Engineering"`) or a combined value (`ENGINEER/BACKEND`). Two separate params; `job` UPPER_SNAKE, `focus` lowercase. |
-| Builder exits "peer_group.dimension is …" | `plan.json` is missing or from a different corp. Re-fetch Step 2. |
-| Browser shows the dark error overlay | Copy the message back into the session — it carries the file and line. |
-| Blank page, no overlay | Service worker didn't claim. Hard-refresh once; the shell reloads itself after 3s as a backstop. |
+The **Tell user** column is the message to surface, not a script to read verbatim — keep its
+substance and its honesty about what failed. Where it is "—", the fix is silent and the user
+does not need to hear about it.
+
+| Symptom | Cause | Tell user |
+|---|---|---|
+| `exceeded 10000ms time limit` or `"Too many job areas"` on `compensation:export:benchmarks` | Too many areas in one call — usually `job_limit` omitted. The limit that bites first is a **10s server timeout**, not the ~300-row cap. Use `job_limit: 6` and page with `job_offset`; an explicit `job_limit` above 12 is a 400, not clamped. | "The request was too large. Retrying in smaller batches…" |
+| An export page 403s / 5xxs | Transient. Retry that page once, same `job_offset`. **Never** fall back to per-job-area `compensation:get:benchmark` calls to route around it — fix the export call's arguments instead. | — (retry silently; only speak up if the retry also fails) |
+| An export page fails twice | Systemic, not bad luck: one call covers up to 12 of 22 job areas, so a page that won't succeed after a retry means a wrong `benchmark_version_id`, bad bucket param, or auth. Stop before building. | "The benchmark fetch failed twice on the same page, so I stopped rather than build a partial dashboard. [the error]" |
+| `build_datadir.py` reports `EXPORT SWEEP: ... stopped early` or refuses to build | Paging didn't reach `next_job_offset: null`. Fetch the remaining page(s) — check `<raw_dir>/export_pages.json` for `last_next_job_offset`. | — (fetch the rest, then build; mention only if pages cannot be completed) |
+| `"Unknown tool"` on a scorecard command | The generated tool name **keeps the hyphen**: `compensation__get__employee-scorecard`. Only colons become `__`, so `..._scorecard` (underscore) is not a real tool. `call_tool` works with the correct name — verified against a live MCP. (`fetch` is not registered in current builds, so it is not the fallback either.) | — (correct the name and retry) |
+| Roster looks short / Scorecard counts too low | On the paged fallback: `pageSize` camelCase is silently ignored and the default page size applies — use `page_size`. Also check you did not pass `score=`, which filters on the nullable overall band and drops unscored employees. | "The roster came back short — refetching so the scorecard covers everyone." |
+| `compensation:export:scorecard` returns 400 "at most 200 fit" | The corporation is larger than one export response. Use the paged fallback in Step 2d — do NOT narrow with `job_filters`, which silently under-reports who is below market. | — (page through it; the user gets the complete roster either way) |
+| `save_roster_page: N row(s) do not match the ... header` | The export's columns and rows disagree, so the payload is not what the decoder expects. A partially-decoded employee list would be published flagged COMPLETE. Re-fetch; if it repeats, the export's column set changed and the script needs updating. | "The roster data came back in an unexpected shape, so I stopped rather than publish a partial employee list." |
+| `build_datadir.py` refuses: "the roster sweep is INCOMPLETE" | Paging stopped before `total_results` was reached. Check `<raw_dir>/roster_pages.json` for `distinct_employees` vs `total_results` and fetch the remaining pages. Never work around this — a partial roster under-reports how many employees are below market. | "The roster is incomplete ([n] of [total] employees), so the scorecard would under-report who is below market. Fetching the rest." |
+| Scorecard tab absent on a fresh build | `snapshot.json` says `hasRoster: false`. The roster sweep failed or was skipped; re-run with "refresh". A warm cache re-fetches nothing (Step 0's one call is the version gate), so the tab cannot appear until the next build. | "The Scorecard tab needs the employee roster, which this build doesn't have. Want me to rebuild with a refresh?" |
+| Numbers don't match the CTC product UI | Almost always `equity_quantity` (must be `FOUR_YEAR_GRANT`) or a missing/incorrect `*_bucket` param. | "Those figures were fetched with the wrong equity basis or peer group. Rebuilding so they match the product UI." |
+| `HTTP 400` on `job`/`focus` | Passing a display label (`"Engineering"`) or a combined value (`ENGINEER/BACKEND`). Two separate params; `job` UPPER_SNAKE, `focus` lowercase. | — (fix the params and retry) |
+| Builder exits "peer_group.dimension is …" | `plan.json` is missing or from a different corp. Re-fetch Step 2. | — (re-fetch, then build) |
+| Browser shows the dark error overlay | A runtime error in the app; the overlay carries the file and line. | "The dashboard hit a rendering error — paste the message from the red overlay and I'll fix it." |
+| Blank page, no overlay | Service worker didn't claim. The shell reloads itself after 3s as a backstop. | "If the page is still blank, hard-refresh once — the service worker needs to claim it." |

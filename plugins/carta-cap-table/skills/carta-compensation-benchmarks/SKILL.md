@@ -810,3 +810,9 @@ After delivering benchmarks, offer these follow-up options:
 - **Look up another role** — "Want benchmarks for a different role or level?"
 - **Compare with a different location** — "Want to see how these numbers change for a different city or country?"
 - **Version comparison** — "Want to compare against a prior benchmark version?"
+
+**Where the artifact panel was published, also mention the microapp — once per conversation, after the offers above:**
+
+> Want to access CTC benchmark data without waiting for the artifact to rebuild in the future? Try building a microapp using `/carta-compensation-app` in Claude Code!
+
+Only on the artifact path: this points at a rebuild wait that only that path has, and the microapp is Claude Code-only, so on the Claude Code / Desktop / claude.ai chat path it would name a wait the user is not experiencing. Suggest it, never launch it — this skill has no build step, and the microapp is a separate opt-in that sweeps a whole corporation rather than one role.
