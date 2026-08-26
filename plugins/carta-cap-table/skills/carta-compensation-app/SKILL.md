@@ -384,8 +384,103 @@ between pages as a failure and re-fetch what you already have.
    one of 22 job areas. A timeout on a `job_limit: 6` page is NOT a reason to retry with a bigger
    limit; if 6 areas time out, a larger page certainly will.
 
-A hard ceiling regardless of outcome: **at most 8 export calls per build** (4 pages plus
-retries). If you're about to exceed that, stop and report — you're in a retry loop.
+A hard ceiling regardless of outcome: **at most 8 export calls per build** for the corp's OWN
+group (4 pages plus retries). Alternates in 2c-bis carry their own ceiling. If you're about to
+exceed either, stop and report — you're in a retry loop.
+
+**2c-bis. The other buckets in the corp's dimension — this is what turns on the peer-group
+dropdowns.**
+
+The Benchmarks tab has a dimension picker and a bucket picker, and **it hides both unless the
+data dir contains more than one peer group.** They read `alternatePeerGroups`, which
+`build_datadir.py` assembles from `peer_<CODE>/` subdirectories of the raw dir. Fetch nothing
+here and the controls never appear — not broken, just nothing to switch between.
+
+So: after the corp's own sweep is COMPLETE, **sweep every other bucket in the same dimension.**
+Same `benchmark_version_id`, same `equity_quantity: "FOUR_YEAR_GRANT"`, same `job_limit: 6` and
+the same page-until-`next_job_offset`-is-null discipline — the only thing that changes is the
+`<dimension>_bucket` value. The codes, in order, per dimension:
+
+| Dimension | Bucket codes (low → high) |
+|---|---|
+| `post_money` | `ONE_MILLION`, `TEN_MILLION`, `TWENTY_FIVE_MILLION`, `FIFTY_MILLION`, `ONE_HUNDRED_MILLION`, `TWO_HUNDRED_FIFTY_MILLION`, `FIVE_HUNDRED_MILLION`, `ONE_BILLION` |
+| `headcount` | `ONE_TO_TWENTY_FIVE`, `TWENTY_FIVE_TO_HUNDRED`, `HUNDRED_TO_FIVE_HUNDRED`, `GREATER_THAN_FIVE_HUNDRED` |
+| `capital_raised` | `ONE_TO_TEN_MILLION`, `TEN_TO_TWENTY_FIVE_MILLION`, `TWENTY_FIVE_TO_FIFTY_MILLION`, `FIFTY_TO_ONE_HUNDRED_MILLION`, `ONE_HUNDRED_TO_TWO_HUNDRED_MILLION`, `GREATER_THAN_TWO_HUNDRED_MILLION` |
+
+**Sweep all three dimensions, not just the plan's.** The app has a dimension picker as well as
+a bucket picker, and it offers whatever dimensions the data dir contains — so fetching only the
+plan's dimension leaves that control with one option, which is the same dead-end the bucket
+picker had. Post-money valuation, headcount and capital raised are all real ways a customer
+asks "who are we being compared against", and the builder already labels each group with its
+own dimension and citation phrase.
+
+The bucket param name changes with the dimension — **exactly one** per call:
+
+| Dimension | Param |
+|---|---|
+| `post_money` | `post_money_bucket` |
+| `headcount` | `headcount_bucket` |
+| `capital_raised` | `capital_raised_bucket` |
+
+**The plan's own dimension still leads.** The builder puts it first in the picker and the corp's
+own bucket stays the default, because that is the peer set the plan actually chose — switching
+bucket asks "what if we were valued higher?", while switching dimension changes what a peer *is*.
+Both are legitimate; only one is the default.
+
+> **A bucket label alone is ambiguous across dimensions.** `$1M-$10M` exists in both post-money
+> and capital raised, and on a real corp they return different figures (167,000 vs 144,000 for the
+> same role). That is why each group carries its own dimension and citation, and why the CSV
+> filename includes the dimension. Never describe a group by its bucket label alone.
+
+Capture each bucket into its OWN subdirectory — `--export-page` takes the destination, so point
+it at `peer_<CODE>/` instead of the raw dir:
+
+```bash
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_benchmark_result.py" \
+  --export-page <printed_result_path_or_.raw_file> "<raw_dir>/peer_<CODE>"
+```
+
+Use the bucket code **exactly** as spelled above: `build_datadir.py` reads the code back out of
+the directory name to look up that group's label and dimension, so `peer_one_million` or
+`peer_ONE-MILLION` lands as an unlabelled group in the switcher.
+
+**Skip the corp's own bucket** — it is already the flat `benchmark_*.json` set at the top of the
+raw dir, and fetching it twice would put the same group in the dropdown twice.
+
+**Cost — this is the expensive part of a build, so agree it before spending it.** There are 18
+buckets across the three dimensions (8 post-money, 4 headcount, 6 capital raised) and each is a
+full 4-page sweep. The complete set is **17 alternates × 4 = 68 extra calls**, against the ~9 a
+build spends on the corp's own group — an 8x build, and minutes of wall clock rather than
+seconds.
+
+So **ask before sweeping everything**, in one line naming the number, and offer the cheaper
+shapes:
+
+| Scope | Calls | What the pickers show |
+|---|---|---|
+| Own bucket only | 0 extra | Neither picker appears |
+| Own dimension, all buckets | ~28 | Bucket picker works; one dimension |
+| All three dimensions | ~68 | Both pickers fully populated |
+| Adjacent buckets only | ~8 | Three buckets in one dimension |
+
+Default to the **plan's own dimension** when the user has not said which they want — it is the
+peer set their plan chose, and it turns on the bucket picker for a third of the cost. Sweep all
+three when they ask for the dimension picker, or say yes to the full number.
+
+A verified reference point for the estimate: on corp 7 the full 18-bucket sweep completed with
+every page returning 200, so the 68 is a real figure rather than a guess.
+
+Ceiling for this step: **at most 6 export calls per bucket** (4 pages plus two retries), and
+**stop the whole step after 3 consecutive buckets fail**. A systemic failure — wrong
+`benchmark_version_id`, auth, a bad bucket param — will fail on every bucket, and grinding
+through 17 of them wastes ~100 calls to learn what the second one already told you.
+
+**A failed alternate is not a failed build.** Alternates are additive: the corp's own group is
+already captured and the dashboard is complete without them. If a bucket's sweep won't finish,
+delete its partial `peer_<CODE>/` directory and move on — `build_datadir.py` already drops an
+alternate with no rows and warns rather than publishing a group that renders as a blank grid,
+but removing the directory keeps the warning list honest about what you actually attempted.
+Report which buckets are in the switcher and which you dropped.
 
 **2d. Employee list — one bulk export (feeds the Scorecard tab).**
 
