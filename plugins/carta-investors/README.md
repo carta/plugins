@@ -40,6 +40,7 @@ After installing, restart Claude Code and run `/mcp` to complete OAuth authentic
 | `carta-performance-benchmarks` | Compare fund performance against peer benchmark cohorts |
 | `carta-download-tearsheet` | Generate tearsheet PDFs for one or more portcos — single PDF preview or bulk ZIP download |
 | `carta-fund-forecasting` | Read-only Carta Fund Forecasting (formerly Tactyc) — list funds, fund-wide KPIs (TVPI, DPI, IRR, MOIC, NAV, reserves), performance tables, and per-investment analytics. |
+| `deal-group-wf-health` | Read-only dashboard of waterfall health across a firm's deal groups (pass any firm/org id) — model assignment (stranded/none), ownership-link defects, orphaned models, and whether recent runs reached every entity. Internal-only. |
 
 ### Budgeting (Excel)
 
