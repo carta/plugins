@@ -4,7 +4,7 @@
     "headline": "Remind investors sends capital call reminders to a batch of LPs at once."
   },
   "carta-workhub-build": {
-    "version": "1.1.1",
-    "headline": "Carta Workhub (Beta): plan requests, confirm before sending, and track them to done."
+    "version": "1.2.0",
+    "headline": "Files attached to a request now show in its thread."
   }
 }

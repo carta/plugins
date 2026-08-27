@@ -294,6 +294,16 @@ function farTitleFrom(text) {
   return clean.length > FAR_TITLE_MAX ? clean.slice(0, FAR_TITLE_MAX - 1) + '…' : clean;
 }
 
+// Files come back beside the body, never inside it, so a message that carried a
+// PDF reads as prose with no sign a file was attached unless they are kept here.
+// The name arrives under two spellings: the endpoint serializes `title`, and the
+// model it passes through on the way out renames that field to `filename`.
+function farNormalizeAttachments(rows) {
+  return (rows ?? [])
+    .map(a => ({ name: String(a?.filename ?? a?.title ?? '').trim(), href: farSafeHref(a?.url) }))
+    .filter(a => a.name);
+}
+
 function farNormalizeMessages(rows) {
   return (rows ?? [])
     .map(m => ({
@@ -303,6 +313,7 @@ function farNormalizeMessages(rows) {
       isStaff: m.author?.is_staff === true,
       author: m.author?.name ?? null,
       at: m.message_timestamp ?? null,
+      attachments: farNormalizeAttachments(m.attachments),
     }))
     .sort((a, b) => farMs(a.at) - farMs(b.at));
 }
@@ -1127,6 +1138,7 @@ function farBubble(m, webUrl, i, title) {
         <span class="far-bubble-at">${escHtml(farStamp(m.at))}</span>
       </div>
       ${farBodyHtml(m, mine, title)}
+      ${farAttachmentsHtml(m.attachments)}
       ${cta}
     </div>`;
 }
@@ -1154,6 +1166,25 @@ function farBodyHtml(m, mine, title) {
 function farSameHeading(a, b) {
   const norm = v => String(v ?? '').trim().replace(/[.:]+$/, '').toLowerCase();
   return !!norm(a) && norm(a) === norm(b);
+}
+
+const FAR_CLIP_ICON =
+  '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" aria-hidden="true">'
+  + '<path d="M10.5 5.5L6 10a1.75 1.75 0 0 0 2.5 2.5l4.5-4.5a3.25 3.25 0 0 0-4.6-4.6L3.9 7.9a4.75 4.75 0 0 0 6.7 6.7"'
+  + ' stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>';
+
+// The URL is presigned and expires, so a name we cannot link is still worth
+// showing — the file is named either way, and silence reads as "it never sent".
+function farAttachmentsHtml(attachments) {
+  if (!attachments?.length) return '';
+  const chips = attachments.map(a => {
+    const label = `${FAR_CLIP_ICON}<span class="far-attachment-name">${escHtml(a.name)}</span>`;
+    return a.href
+      ? `<a class="far-attachment" href="${escHtml(a.href)}" target="_blank"`
+        + ` rel="noopener noreferrer">${label}</a>`
+      : `<span class="far-attachment far-attachment-plain">${label}</span>`;
+  }).join('');
+  return `<div class="far-attachments">${chips}</div>`;
 }
 
 function closeFarThread() {

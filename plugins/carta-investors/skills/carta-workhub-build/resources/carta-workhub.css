@@ -506,6 +506,29 @@
   font-variant-numeric: tabular-nums;
 }
 
+.far-attachments {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  margin-top: 2px;
+}
+
+.far-attachment {
+  display: inline-flex; align-items: center; gap: 5px;
+  max-width: 100%;
+  padding: 3px 8px;
+  border: 1px solid var(--ink-color-global-border-subtle);
+  border-radius: var(--ink-size-global-radius-subtle);
+  font-size: 12px;
+  color: var(--ink-color-global-link-default);
+  text-decoration: none;
+}
+
+.far-attachment svg { flex: none; }
+
+/* A long filename shortens rather than widening the bubble past its neighbours. */
+.far-attachment-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.far-attachment-plain { color: var(--ink-color-global-text-subtle); }
+
 .far-bubble-cta {
   align-self: flex-start;
   font-size: 12px; font-weight: 600;
