@@ -78,6 +78,8 @@ SELECT
     asset_name,
     asset_class_type,
     investment_date,
+    total_cost,
+    total_proceeds,
     total_cost_basis,
     remaining_value,
     total_unrealized_gain_loss,
@@ -87,6 +89,14 @@ WHERE is_active_investment = TRUE
 ORDER BY remaining_value DESC NULLS LAST
 LIMIT 200
 ```
+
+> **`is_active_investment = TRUE` scopes this to currently-held positions only.** A fund
+> relationship that's been fully exited (no remaining stake) won't appear here at all, even though
+> it may still have a real `total_proceeds` / realized value worth showing. If the question is
+> about the complete history — "everything ever invested," "realized and unrealized," "all
+> positions past and present" — drop this filter rather than reusing Query 1 as-is; every column
+> needed for a full accounting (`total_cost`, `total_proceeds`, `remaining_value`,
+> `total_unrealized_gain_loss`) is already in the SELECT above.
 
 ## Query 2 — New Investments by Year
 
