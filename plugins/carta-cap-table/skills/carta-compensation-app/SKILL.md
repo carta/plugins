@@ -101,8 +101,9 @@ uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/ctc_paths.py
 ```
 
 Read-only; prints `slug`, `cache_root`, `raw_dir`, `dashboard_dir`, `snapshot_age_days`,
-`snapshot_benchmark_version_id` and `snapshot_benchmark_version` without creating anything. Use
-the printed `dashboard_dir` **verbatim** — never recompute a cache path.
+`snapshot_benchmark_version_id`, `snapshot_benchmark_version`, `snapshot_skill_version` and
+`current_skill_version` without creating anything. Use the printed `dashboard_dir` **verbatim**
+— never recompute a cache path.
 
 - `snapshot_age_days=none` with `suggested_match=` lines → did-you-mean picker via
   `AskUserQuestion`.
@@ -111,6 +112,11 @@ the printed `dashboard_dir` **verbatim** — never recompute a cache path.
   alone.
 
 ### The version gate (REQUIRED on every cache hit)
+
+**Age is not freshness**, and there are two independent ways a fresh-looking cache can be stale:
+the **benchmark release** it holds, and the **skill version** that built it. Check both before
+launching. Neither is visible on screen — a stale dashboard renders perfectly, which is exactly
+what makes it worth a gate.
 
 **Age is not freshness.** Carta publishes benchmark releases on its own cadence, and a
 corporation's plan can be re-pinned to a newer release at any time — so a cache written
@@ -135,6 +141,42 @@ Compare its `benchmark_version.id` against the printed `snapshot_benchmark_versi
 | ids **differ** | **Re-fetch (Step 2), regardless of age.** Say why in one line: "Carta published a newer benchmark release (v21.0 → v25.5) — refetching." Do not offer "use cached" as the default here; the cached figures are superseded. |
 | `snapshot_benchmark_version_id=none` | Treat as a mismatch and re-fetch. A cache whose version cannot be read must not be trusted. |
 | The plan call fails (403/5xx) | Fall back to the age rule and **say so**: "Couldn't confirm the benchmark release is current, so this may be up to N days behind." Never silently pretend the check passed. |
+
+#### Skill version — the second staleness axis (no MCP call)
+
+`resolve` prints `snapshot_skill_version` (what built the cache) and `current_skill_version`
+(what a rebuild would produce). Compare them:
+
+| Condition | Action |
+|---|---|
+| **equal** | Nothing to say. The cache was built by this skill; launch. |
+| **differ** | **Tell the user and offer a rebuild** — do not rebuild unprompted, and do not launch silently. One line naming both versions and what it means, then `AskUserQuestion`: rebuild (recommended) vs open the cached build. |
+| `snapshot_skill_version=none` | A cache built before the field existed. Same as "differ": say the cache predates version tracking and offer the rebuild. |
+| `current_skill_version=none` | The running skill's version could not be read. Say so, skip this check, and fall through to the benchmark gate — never treat unknown as a match. |
+
+**Why offer rather than force**, when a benchmark mismatch re-fetches outright: superseded
+percentiles are *wrong*, while a cache from an older skill is *correct but possibly incomplete*.
+The figures still tie out; what may be missing is a capability — a tab, a peer-group dimension —
+that this version could add. Wrong data justifies spending the user's calls without asking;
+missing features do not, especially now that a default rebuild is a ~77-call sweep.
+
+**Say what changed in terms of the dashboard, not the version string.** "Built with skill 0.1.0,
+now on 0.2.0" tells the user nothing they can act on. Name the consequence: *"This dashboard was
+built before peer-group switching existed, so it has no dimension or bucket pickers. Rebuilding
+adds them — about 77 calls, a few minutes."* If you cannot say what a rebuild would add, say that
+plainly rather than inventing a benefit.
+
+**Version equality is the signal — do not second-guess it.** This skill's `version:` is bumped
+deliberately when a change warrants rebuilding a cache; an unchanged version means the maintainers
+judged the change cache-compatible. Never compare timestamps, file contents, or the plugin version
+as a substitute — `plugin.json` moves whenever any sibling skill in the plugin changes, which has
+nothing to do with this dashboard's data.
+
+> **Bump `version:` in this skill's frontmatter when a change alters what a build produces** — a
+> new tab, another data dimension, a different data-dir shape. That bump is the whole mechanism by
+> which existing users are told their dashboard can be improved; skip it and they keep opening a
+> cache that silently lacks the new capability. Leave it alone for wording, docs and fixes that
+> produce a byte-identical build.
 
 **This intentionally costs one MCP call on a warm launch.** The previous zero-call path was
 faster but could not distinguish "4 days old and current" from "4 days old and 12 releases

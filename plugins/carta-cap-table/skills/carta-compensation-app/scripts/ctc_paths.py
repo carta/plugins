@@ -101,6 +101,43 @@ def snapshot_benchmark_version(slug):
     return (vid if isinstance(vid, int) else None, bv.get("version"))
 
 
+def snapshot_skill_version(slug):
+    """The skill version that built this cache, or None if absent/unreadable.
+
+    A cache is only as good as the code that wrote it. When the skill gains a
+    capability -- an extra tab, another peer-group dimension -- an older cache
+    still loads and still looks complete, because the missing part renders as a
+    control that simply is not there. Callers compare this against the running
+    skill's own version and offer a rebuild on a mismatch.
+
+    None covers both a cache built before this field existed and a snapshot that
+    will not parse; callers treat it as "unknown" and offer the rebuild rather
+    than assuming the cache is current.
+    """
+    snap = dashboard_dir(slug) / "snapshot.json"
+    if not snap.exists():
+        return None
+    try:
+        data = json.loads(snap.read_text(encoding="utf-8"))
+    except (ValueError, OSError):
+        return None
+    sv = data.get("skillVersion")
+    return sv if isinstance(sv, str) else None
+
+
+def current_skill_version():
+    """The `version:` in this skill's SKILL.md -- what a rebuild would stamp."""
+    path = pathlib.Path(__file__).resolve().parent.parent / "SKILL.md"
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    end = text.find("\n---", 3)
+    head = text[:end] if end != -1 else text
+    m = re.search(r"^version:\s*(\S+)\s*$", head, re.MULTILINE)
+    return m.group(1) if m else None
+
+
 def _fuzzy_candidates(typed_slug, limit=3):
     if len(typed_slug) < 3:  # a shorter slug fuzzy-matches nearly every cache
         return []
@@ -138,6 +175,11 @@ def cmd_resolve(name):
     bv_id, bv_label = snapshot_benchmark_version(slug)
     print("snapshot_benchmark_version_id=%s" % ("none" if bv_id is None else bv_id))
     print("snapshot_benchmark_version=%s" % (bv_label or "none"))
+    # The skill version that built the cache vs the one running now. A cache
+    # predating a capability still loads and still looks whole, so this is the
+    # only signal that the dashboard is missing something it could now have.
+    print("snapshot_skill_version=%s" % (snapshot_skill_version(slug) or "none"))
+    print("current_skill_version=%s" % (current_skill_version() or "none"))
     if age is None:
         for c_slug, source, c_age in _fuzzy_candidates(slug):
             c_name = _format_name(source.get("corporation"))

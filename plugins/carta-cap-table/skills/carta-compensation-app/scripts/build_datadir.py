@@ -89,6 +89,29 @@ import time
 
 SCHEMA_VERSION = 1
 
+
+def skill_version():
+    """The `version:` from this skill's SKILL.md, or None if it cannot be read.
+
+    Stamped into the snapshot so a warm launch can tell that the skill has moved
+    on since the cache was built — a cache is only as good as the code that wrote
+    it, and a build predating a capability produces a dashboard missing it with
+    nothing on screen to say why.
+
+    Resolved from this file's own location rather than ${CLAUDE_PLUGIN_ROOT},
+    which is not guaranteed to be set in the script's environment.
+    """
+    path = pathlib.Path(__file__).resolve().parent.parent / "SKILL.md"
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    # Frontmatter only: a `version:` further down the body is prose, not the field.
+    end = text.find("\n---", 3)
+    head = text[:end] if end != -1 else text
+    m = re.search(r"^version:\s*(\S+)\s*$", head, re.MULTILINE)
+    return m.group(1) if m else None
+
 # Percentiles surfaced by the console. p90 is included: it is real market data the
 # API returns, and HR users reference it for top-of-market offers.
 PCTS = ("p25", "p50", "p75", "p90")
@@ -438,6 +461,7 @@ def build(rawdir, out, meta):
 
     snapshot = {
         "schemaVersion": SCHEMA_VERSION,
+        "skillVersion": skill_version(),
         "builtAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "source": {
             "corporation": meta.get("corporation"),
