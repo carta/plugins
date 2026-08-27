@@ -1,18 +1,17 @@
 ---
 name: carta-compensation-app
 description: >
-  Builds and serves an interactive local web app for exploring one corporation's Carta Total
-  Compensation (CTC) data — a React console on localhost. Use it when the ask is to open, launch
-  or build a comp dashboard, console or app, or to browse CTC figures interactively rather than
-  be told a number. Invoke with a corporation name or numeric id, e.g. "comp dashboard for Acme".
-  Its tabs are where data appears and are not separately routable: Benchmarks (salary,
-  total-cash and equity percentiles by job area and track) and Scorecard (that corporation's
-  roster).
+  Serves a live, clickable CTC console — builds one corporation's Carta Total Compensation
+  data into a React app on localhost, where you filter by job area, compare peer groups and
+  explore the scorecard yourself. CLAUDE CODE ONLY; it serves a local web app. Use it when
+  the ask is to run an app, launch a console, or explore the data live, rather than to be
+  told a figure. Invoke with a corporation name or id, e.g. "launch a comp dashboard for Acme".
+  Its Benchmarks and Scorecard tabs are surfaces inside the app, not separately routable.
   Route by deliverable, not subject — an answer, CSV or figure to quote belongs to a sibling
   even when the wording overlaps: use carta-compensation-benchmarks for a role's market rate,
   and carta-compensation-scorecard for roster positioning, compa-ratios or who is below market.
-  Choose this skill only when a running, browsable app is wanted. NOT for a single role lookup.
-  READ-ONLY. CLAUDE CODE ONLY — outside Claude Code use those siblings instead.
+  So "what are our comp benchmarks" is a sibling even though it names them, while "open our
+  comp benchmarks so I can filter them" is this skill. NOT for a single role lookup. READ-ONLY.
 argument-hint: "<corporation name or numeric corporation id — required>"
 version: 0.1.0
 model: inherit
@@ -570,13 +569,44 @@ Each agent's brief needs, at minimum:
 - The paging discipline: `job_limit: 6`, page until `next_job_offset` is null.
 - **The capture contract, in full.** The agent must write the tool result verbatim and pass it
   to `save_benchmark_result.py --export-page`; it must never retype or summarise a payload.
-- **A verification step**: the script prints the job areas and row count it captured; the agent
-  confirms those match the response's own `jobs_covered` and `row_count`, and re-captures on a
-  mismatch rather than proceeding.
+- **A verification step, done by PARSING — not by eye.** The script prints the job areas and row
+  count it captured; the agent parses the response's own `jobs_covered` and `row_count` and
+  compares them programmatically, then re-captures on any mismatch rather than proceeding. Say
+  this explicitly in the brief: an agent told only to "confirm the counts match" will skim two
+  numbers that look alike, and a single transposed digit inside a 100-row page changes neither
+  the row count nor the job list. Structural comparison is what catches a payload that arrived
+  intact but was written back wrong — the one failure the capture contract exists to prevent, and
+  one that a real sweep has already produced and caught this way.
 - The per-bucket ceiling (6 calls) and the instruction to delete a partial `peer_<CODE>/` and
   report it rather than leaving it half-swept.
 - **Never echo benchmark figures in its report** — the same rule that applies here. Agents
   report bucket codes, page counts and row counts only.
+
+**Sanity-check the figures themselves once the sweep lands.** Counts and job lists prove a page
+arrived; they say nothing about whether its numbers survived being written back out. One cheap
+pass over the captured rows catches what counting cannot:
+
+```bash
+uv run - <<'PY'
+import json, glob, os
+bad = 0; rows = 0
+for f in glob.glob(os.path.expanduser("<raw_dir>/peer_*/benchmark_*.json")):
+    for r in json.load(open(f)).get("benchmarks") or []:
+        rows += 1
+        p = (r.get("salary_benchmarks") or {}).get("percentiles") or {}
+        v = [float(p[k]) for k in ("p25", "p50", "p75", "p90") if p.get(k) is not None]
+        # Percentiles are ordered by construction, and a salary outside this range
+        # is not a number the API returns -- either signals a mangled write.
+        if v != sorted(v) or any(x < 1000 or x > 50_000_000 for x in v):
+            bad += 1
+print("rows", rows, "anomalies", bad)
+PY
+```
+
+A transposed digit usually breaks the ordering or leaves the plausible range, so this turns a
+silent corruption into a visible one for the cost of a second. It is a smoke test, not a proof —
+a wrong digit that happens to preserve both properties still slips through, which is why the
+per-page parsed comparison above remains the primary defence.
 
 **Verify the fan-out centrally when the agents return.** Do not trust the reports alone — read
 each bucket's `peer_<CODE>/export_pages.json` and confirm `sweep_complete: true`. A retried page
