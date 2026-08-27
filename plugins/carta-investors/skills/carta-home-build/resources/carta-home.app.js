@@ -871,23 +871,25 @@ FROM FUND_ADMIN.STATEMENT_OF_OPS WHERE FIRM_ID = '${firmId}'`
     try {
       let disc = 0, nonDisc = 0, total = 0, source = 'nav';
 
-      // Attempt 1: dedicated Form ADV table
-      try {
-        const advRes = await _mcp("fetch", {
-          command: "dwh:execute:query",
-          params: {
-            sql: `SELECT
-  SUM(DISCRETIONARY_AUM)     AS disc,
-  SUM(NON_DISCRETIONARY_AUM) AS non_disc
-FROM FUND_ADMIN.FORM_ADV_FUND_DETAIL WHERE FIRM_ID = '${firmId}'`
-          }
-        });
-        if (!advRes.isError) {
-          const ar = parseDWH(advRes)[0] ?? {};
-          const d = parseFloat(ar.DISC ?? 0), nd = parseFloat(ar.NON_DISC ?? 0);
-          if (d > 0 || nd > 0) { disc = d; nonDisc = nd; total = d + nd; source = 'formadv'; }
-        }
-      } catch (_) { /* table may not exist — fall through */ }
+      // NOTE (2026-08-27): FUND_ADMIN.FORM_ADV_FUND_DETAIL does not exist in the warehouse.
+      // Disabled, not removed — this always falls through to the NAV fallback below.
+      // // Attempt 1: dedicated Form ADV table
+      // try {
+      //   const advRes = await _mcp("fetch", {
+      //     command: "dwh:execute:query",
+      //     params: {
+      //       sql: `SELECT
+      //   SUM(DISCRETIONARY_AUM)     AS disc,
+      //   SUM(NON_DISCRETIONARY_AUM) AS non_disc
+      // FROM FUND_ADMIN.FORM_ADV_FUND_DETAIL WHERE FIRM_ID = '${firmId}'`
+      //     }
+      //   });
+      //   if (!advRes.isError) {
+      //     const ar = parseDWH(advRes)[0] ?? {};
+      //     const d = parseFloat(ar.DISC ?? 0), nd = parseFloat(ar.NON_DISC ?? 0);
+      //     if (d > 0 || nd > 0) { disc = d; nonDisc = nd; total = d + nd; source = 'formadv'; }
+      //   }
+      // } catch (_) { /* table may not exist — fall through */ }
 
       // Fallback: total NAV from MONTHLY_NAV_CALCULATIONS (VC funds = effectively all discretionary)
       if (source === 'nav') {
