@@ -1,6 +1,6 @@
 ---
 name: carta-portfolio-analytics-routing
-version: 2.0.0
+version: 2.1.0
 description: >
   Routes to Schedule of Investments, Co-Investor Lookup, or Performance
   Benchmarks. Trigger on any of:
@@ -24,6 +24,9 @@ allowed-tools:
   - mcp__Claude_Preview__preview_list
   - mcp__Claude_Preview__preview_eval
   - Artifact
+  # Dispatches the co-investors route. A dispatched skill runs under its own
+  # frontmatter, so carta-co-investors' tools are deliberately NOT repeated here.
+  - Skill
   - Bash(uv run /sessions/*)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/*)
   - Bash(pwd)
@@ -53,8 +56,9 @@ allowed-tools:
 # carta-portfolio-analytics-routing — Portfolio Analytics Router (mirror)
 
 Routes to Schedule of Investments, Co-Investor Lookup, or Performance
-Benchmarks — each executed inline from a content mirror of its own specialist
-skill. See **specialists are unchanged** in Architecture Notes below. The
+Benchmarks. SOI and Benchmarks execute inline from a content mirror of their
+specialist skill; Co-Investor Lookup dispatches the specialist directly via the
+`Skill` tool. See **execution modes** in Architecture Notes below. The
 fourth Portfolio Analytics capability (Loan Dashboard) is internal-stage today
 and will be wired into this router as it reaches general availability for
 external users.
@@ -70,7 +74,7 @@ external users.
 | Intent | Skill |
 |---|---|
 | View fund holdings — Schedule of Investments (SOI) | `references/soi.md` |
-| Who co-invested alongside us in portfolio companies | `references/co-investors.md` |
+| Who co-invested alongside us in portfolio companies | `carta-investors:carta-co-investors` (dispatched) |
 | Benchmark a fund's performance against peer cohorts | `references/benchmarks.md` |
 
 ---
@@ -198,15 +202,18 @@ other step of the matched route's own workflow, including its own "Announce"
 step if it has one — happens in the **next** turn, after this one, never
 instead of it or merged into the same turn as a tool call.
 
-Then read and execute the matched route's instructions inline:
+Then hand the run off. Two routes read a reference file; one dispatches a skill.
+Use the exact action for the matched route:
 
-| Route | Display Name | Read |
+| Route | Display Name | Action |
 |---|---|---|
-| `soi` | Schedule of Investments | `${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-analytics-routing/references/soi.md` |
-| `co-investors` | Co-Investor Lookup | `${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-analytics-routing/references/co-investors.md` |
-| `benchmarks` | Performance Benchmarks | `${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-analytics-routing/references/benchmarks.md` |
+| `soi` | Schedule of Investments | `Read ${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-analytics-routing/references/soi.md` |
+| `co-investors` | Co-Investor Lookup | `Skill('carta-investors:carta-co-investors')` |
+| `benchmarks` | Performance Benchmarks | `Read ${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-analytics-routing/references/benchmarks.md` |
 
-Follow the matched file's instructions exactly, starting from its own Step 1/Workflow entry point with the user's original message as context. Every reference file resolves its own internal script and data paths independently (see Architecture Notes) — do not rewrite them.
+For the two `Read` routes: follow the matched file's instructions exactly, starting from its own Step 1/Workflow entry point with the user's original message as context. Each reference file resolves its own internal script and data paths independently (see Architecture Notes) — do not rewrite them.
+
+For `co-investors`: dispatch the skill and let it run its own workflow from its own entry point. Do not read a reference file for this route — there isn't one, and `references/` holds no copy of the co-investor workflow. Do not re-implement any part of it here, and do not pre-collect its inputs (firm, fund, date range) on its behalf; it asks for what it needs. If the dispatch fails because the skill is unavailable, say so plainly and stop — do not fall back to writing the analysis yourself.
 
 Do not summarize what the target skill will do beyond the announcement itself. Do not add any other output before the routing announcement.
 
@@ -232,18 +239,41 @@ Do not summarize what the target skill will do beyond the announcement itself. D
 
 This skill is the sole external-facing entry point for the Portfolio Analytics
 theme. It classifies intent, resolves ambiguity via `AskUserQuestion`, and
-executes each matched route's logic inline via `Read references/<route>.md`.
-No separate registered skill is dispatched — the routing skill owns the entire
-user-facing surface for its three active routes. Loan Dashboard will be wired
-in as it reaches GA for external users.
+then either executes a route inline from `references/<route>.md` or dispatches
+the specialist skill. Loan Dashboard will be wired in as it reaches GA for
+external users.
 
-### Scope decision (as of v2.0.0)
+### Execution modes — mirror vs dispatch
 
-SOI, Co-Investor Lookup, and Performance Benchmarks are confirmed GA for
-external users — all three carry `publish: true` on their backing skills. Loan
-Dashboard (`carta-investors:carta-loan-dashboard`) has a `version` field but no
-`publish` field — internal-stage today — and is documented below as a
-**future route**, not an active one.
+| Mode | Routes | How the route runs |
+|---|---|---|
+| **Mirror** | `soi`, `benchmarks` | `references/<route>.md` holds a copy of the specialist's `SKILL.md` body, plus real copies of any scripts it runs under `references/<route>/`. Runs inside this skill's turn, under **this** skill's `allowed-tools`. |
+| **Dispatch** | `co-investors` | `Skill('carta-investors:carta-co-investors')`. The specialist runs under **its own** frontmatter and owns its whole workflow. No reference file exists for this route. |
+
+**Dispatch is the preferred mode.** A mirror is a copy, so it can drift from its
+specialist, and keeping it honest costs either a declarable codemod
+(`tests/carta-investors/mirror_sync.py`) or a human merge. Dispatch has nothing
+to drift and nothing to re-mirror. It also keeps this router's `allowed-tools`
+minimal: a dispatched skill brings its own tools, so `carta-co-investors`'
+`Bash(uv run *)`, `Bash(tee *)`, and `skill_checkpoint` are deliberately **not**
+duplicated here.
+
+The remaining two routes are mirrors only because their specialists are
+`publish: false`, so the publish pipeline strips them and there would be nothing
+for a dispatch to reach. Convert either one to dispatch by publishing it.
+
+### Scope decision (as of v2.1.0)
+
+SOI, Co-Investor Lookup, and Performance Benchmarks are GA for external users.
+`carta-co-investors` carries `publish: true` — **the dispatch route depends on
+it.** Strip that skill from the published plugin and the route dead-ends for
+external users, since the dispatch has no skill to reach.
+`tests/carta-investors/test_router_mirror_parity.py` guards this. `carta-soi` and
+`carta-performance-benchmarks` stay `publish: false`; their mirrors are what
+reach external users. Loan Dashboard
+(`carta-investors:carta-loan-dashboard`) has a `version` field but no `publish`
+field — internal-stage today — and is documented below as a **future route**,
+not an active one.
 
 ### Structural patterns
 
@@ -258,7 +288,7 @@ and carta-compliance-routing (the reference routing skills), extended to
 | Customer Intent Framework | All three active routes; loans documented separately below |
 | Explicit skip logic | Match → Step 2.5; no match → Step 2 |
 | Step 2.5 (active proxy gate) | `welcome` + one `fa__list__entities` probe — not a real entitlement check (see below), but no longer purely passive |
-| Step 3 `[Deterministic]` + `Read references/<route>.md` | Inline execution per matched route, no Skill() dispatch |
+| Step 3 `[Deterministic]` | Mirror read for `soi`/`benchmarks`, `Skill()` dispatch for `co-investors` |
 
 ### Fund Admin access preflight — proxy, not a real SKU check
 
@@ -287,12 +317,13 @@ one-attempt cap follows the sub-agent safety pattern in the marketplace root
 for an MCP command surfacing `EntityProductAccess` for the current firm
 context; that's Carta MCP team work, not something fixable from the skill side.
 
-### Specialists are unchanged — these are mirrors, not migrations
+### Specialists are unchanged
 
-`references/soi.md`, `references/co-investors.md`, and `references/benchmarks.md`
-are **content mirrors** of `carta-investors:carta-soi`,
-`carta-investors:carta-co-investors`, and `carta-investors:carta-performance-benchmarks`'s
-own `SKILL.md` bodies. Two of the three are verbatim copies; `soi.md` is not:
+`references/soi.md` and `references/benchmarks.md` are **content mirrors** of
+`carta-investors:carta-soi` and
+`carta-investors:carta-performance-benchmarks`'s own `SKILL.md` bodies.
+`carta-investors:carta-co-investors` has no reference file at all — it is
+dispatched.
 
 - **`soi.md` is not re-mirrorable by copy-paste.** When re-mirroring, rewrite
   both of its Step 4b paths — the `find` pattern and the `${CLAUDE_PLUGIN_ROOT}`
@@ -301,35 +332,30 @@ own `SKILL.md` bodies. Two of the three are verbatim copies; `soi.md` is not:
   `render-artifact.py` and `artifact.html` need no rewrite — the script probes
   both template offsets — so those two files stay byte-identical across both
   locations and re-mirror with `cp`. Keep them that way.
-- `carta-co-investors` resolves its scripts and canonical-investors data via a
-  `$SKILL_DIR` shell probe that searches for a directory literally named
-  `carta-co-investors` (via `$CLAUDE_PLUGIN_ROOT/skills/carta-co-investors` or
-  the Cowork bind-mount equivalent) — this resolves correctly regardless of
-  which file the mirrored text lives in.
 - `carta-performance-benchmarks` is entirely self-contained SQL/logic with no
   sub-references or scripts at all.
+- `carta-co-investors` needs no re-mirroring at all — dispatch reaches the
+  specialist itself, and it resolves its own scripts and
+  `canonical-investors.json` exactly as it does when the picker invokes it
+  directly.
 
-`carta-investors:carta-soi` and `carta-investors:carta-co-investors` were not
-modified: both are still `publish: true`, still have their original
-trigger-phrase-rich descriptions, and are still directly invocable by the
-skill picker exactly as before. `carta-investors:carta-performance-benchmarks`
-had only its `description` softened (see "Picker de-tune" below) — same
-precedent `carta-compliance-routing` used for `carta-form-adv` (PR #11162) and
-`carta-lp-reporting-routing` used for `carta-download-tearsheet` (PR #11953).
-These mirrors exist purely as additional, router-owned execution paths so the
-router can run each workflow inline without touching any standalone skill's
-tools or its existing test coverage in
-`tests/carta-investors/skill-triggers.test.yaml`.
+None of the three specialists had its workflow modified.
+`carta-investors:carta-performance-benchmarks` had only its `description`
+softened (see "Picker de-tune" below) — same precedent `carta-compliance-routing`
+used for `carta-form-adv` (PR #11162) and `carta-lp-reporting-routing` used for
+`carta-download-tearsheet` (PR #11953). All three remain directly invocable by
+name, with their existing test coverage in
+`tests/carta-investors/skill-triggers.test.yaml` untouched.
 
-**Maintenance cost — read before editing any of the three specialists:**
-because these are mirrors, not a shared source, any change to
-`carta-soi/SKILL.md`, `carta-co-investors/SKILL.md`, or
-`carta-performance-benchmarks/SKILL.md` must be manually re-applied to the
-matching `carta-portfolio-analytics-routing/references/<route>.md` or the two
-will drift. There is no tooling that keeps them in sync. `carta-co-investors`
-in particular is an 800-line skill — re-mirroring it by hand on every change is
-real, ongoing cost; this was an explicit tradeoff (mirror-for-consistency over
-direct-dispatch-to-avoid-drift) made when this router was built.
+**Maintenance cost — read before editing `carta-soi` or
+`carta-performance-benchmarks`:** a mirror is a copy, not a shared source, so any
+change to those two bodies must be re-applied to the matching
+`references/<route>.md`. `tests/carta-investors/test_router_mirror_parity.py`
+enforces this where the transform is declarable and otherwise requires the
+divergence be declared with a reason. **`carta-co-investors` is exempt** —
+dispatch has nothing to keep in sync, which is the reason to prefer it. When
+promoting a future route, reach for dispatch first and fall back to a mirror only
+if the specialist must stay `publish: false`.
 
 **Picker de-tune — `carta-performance-benchmarks`:** its trigger-phrase-rich
 description was stripped down to a one-line redirect ("For performance
@@ -343,9 +369,10 @@ recommends rather than fabricating a bump from a nonexistent prior release.
 
 **Known limitation — `carta-soi` and `carta-co-investors` only:** because
 these two specialists still have trigger-phrase-rich descriptions and remain
-standalone public skills, specific prompts ("show me the SOI") can still win
-the skill picker directly and bypass this router — the mirror does not fix
-that. This is a known, accepted limitation. See the `failing: true` trigger
+standalone invocable skills, specific prompts ("show me the SOI") can still win
+the skill picker directly and bypass this router. This is a known, accepted
+limitation — and for `co-investors` it is now harmless, since the picker and the
+router both end up running the same skill. See the `failing: true` trigger
 tests in `carta-portfolio-analytics-routing.test.yaml` and
 `carta-portfolio-analytics-routing-triggers.test.yaml` for the two remaining
 un-de-tuned routes; the former benchmarks picker test is now a hard assertion,
@@ -364,19 +391,22 @@ carta-portfolio-analytics-routing/
     ├── soi/                  ← copies of carta-soi's script + template (see below)
     │   ├── artifact.html
     │   └── scripts/render-artifact.py
-    ├── co-investors.md       ← mirror of carta-co-investors/SKILL.md — ACTIVE
-    ├── co-investors/         ← copies of carta-co-investors' scripts + data files
+    │                         (no co-investors file — that route is dispatched, see Step 3)
     ├── benchmarks.md         ← mirror of carta-performance-benchmarks/SKILL.md — ACTIVE
     ├── loan-dashboard.md     ← mirror of carta-loan-dashboard/SKILL.md — NOT YET WIRED (future route)
     └── loan-dashboard/
         └── artifact_template.html   ← copy of carta-loan-dashboard/references/artifact_template.html, used only by the Step 7e fallback path (see below)
 ```
 
-`soi/` and `co-investors/` hold real copies of their source skills' scripts and
-assets: the publish pipeline strips the whole directory of any `publish: false`
-skill, so a published route must not reference `skills/carta-soi/` or
-`skills/carta-co-investors/`. Both mirrored bodies point at these copies;
-`benchmarks.md` needs none (self-contained SQL). `loan-dashboard.md` is different
+`soi/` holds real copies of `carta-soi`'s script and template: the publish
+pipeline strips the whole directory of any `publish: false` skill, so a published
+route must not reference `skills/carta-soi/`. `soi.md` points at those copies;
+`benchmarks.md` needs none (self-contained SQL). The co-investors route needs no
+copies for the opposite reason — `carta-co-investors` is `publish: true`, so
+`skills/carta-co-investors/` and its `scripts/` survive publish and the
+dispatched skill runs them in place. **That publish flag is load-bearing:
+flipping it back to `false` silently breaks this route in the published plugin**,
+since the dispatch would have no skill to reach. `loan-dashboard.md` is different
 again: its primary render path
 (`$SKILL_DIR/references/artifact_template.html`, Step 7c) also resolves
 correctly with no rewrite, since `$SKILL_DIR` is probed by literal name
@@ -399,16 +429,17 @@ to active" below, not a re-mirroring job.
 | Route | Reference file | Status |
 |---|---|---|
 | `soi` | `references/soi.md` | GA — external users, executed inline (mirror of `carta-investors:carta-soi`) |
-| `co-investors` | `references/co-investors.md` | GA — external users, executed inline (mirror of `carta-investors:carta-co-investors`) |
+| `co-investors` | — (dispatched) | GA — external users, `Skill('carta-investors:carta-co-investors')` |
 | `benchmarks` | `references/benchmarks.md` | GA — external users, executed inline (mirror of `carta-investors:carta-performance-benchmarks`) |
 | `loan-dashboard` | `references/loan-dashboard.md` | Mirror built, **not wired** — internal-stage, awaiting GA |
 
 ### How to promote a future route to active
 
 1. Confirm the underlying skill is GA for external users.
-2. Decide dispatch mechanism:
-   - **Mirror** (this router's pattern for all three active routes) — copy the backing skill's `SKILL.md` body verbatim into `references/<route>.md`. Check first whether the source skill has any `Read ${CLAUDE_PLUGIN_ROOT}/skills/<source>/...` calls or relative `references/` links that assume they're being read from the *source* skill's own directory — if so, rewrite those paths into a `references/<route>/` sub-directory (as `carta-compliance-routing` did for `form-adv`); if the source skill resolves its own paths dynamically or via literal skill-anchored strings (as all three routes here do), no rewrite is needed. Does **not** require touching the backing skill's frontmatter or `publish` flag, so its existing test coverage stays intact. Cost: the mirror can drift from the source if the backing skill changes later — there's no auto-sync, re-mirror by hand on every meaningful change.
-   - **Direct dispatch** (simplest) — Step 3 just names the skill (`carta-investors:carta-<skill>`) with no `references/` copy at all. No duplication, no drift risk, but still inherits picker-competition risk if the skill's own description is trigger-phrase-rich.
+2. Decide dispatch mechanism. **Try direct dispatch first** — it is the only mode
+   with no drift surface:
+   - **Direct dispatch** (this router's pattern for `co-investors`) — Step 3 calls `Skill('carta-investors:carta-<skill>')` with no `references/` copy at all. The specialist runs under its own frontmatter, so do **not** copy its tools into this router's `allowed-tools`; `Skill` alone is enough. Requires the backing skill be `publish: true`, or the publish pipeline strips it and the dispatch dead-ends for external users — add the route to `DISPATCHED` in `tests/carta-investors/mirror_sync.py` so a later `publish: false` fails CI instead of shipping. Still inherits picker-competition risk if the skill's own description is trigger-phrase-rich.
+   - **Mirror** (this router's pattern for `soi` and `benchmarks`) — copy the backing skill's `SKILL.md` body verbatim into `references/<route>.md`. Check first whether the source skill has any `Read ${CLAUDE_PLUGIN_ROOT}/skills/<source>/...` calls or relative `references/` links that assume they're being read from the *source* skill's own directory — if so, rewrite those paths into a `references/<route>/` sub-directory (as `carta-compliance-routing` did for `form-adv`); if the source skill resolves its own paths dynamically or via literal skill-anchored strings (as all three routes here do), no rewrite is needed. Does **not** require touching the backing skill's frontmatter or `publish` flag, so its existing test coverage stays intact. Cost: the mirror can drift from the source if the backing skill changes later — there's no auto-sync, re-mirror by hand on every meaningful change.
    - **Mirror + de-tune** (carta-valuations-routing's pattern for `waterfall`) — mirror as above, *and* set the backing skill to `publish: false` plus soften its description. Eliminates picker competition, but changes the skill's public availability and can break existing tests that assert direct-picker behavior. Get explicit sign-off before doing this to any currently-public skill.
 3. Add its signal phrases to the Step 1 Route rows table and the Customer Intent Framework.
 4. Add it as an option in Step 2's `AskUserQuestion` (existing active routes keep their numbers; new route gets the next number; "Something else" moves to last).
