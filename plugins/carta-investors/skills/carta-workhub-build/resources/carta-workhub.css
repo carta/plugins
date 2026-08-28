@@ -762,3 +762,203 @@
   visibility: visible;
   opacity: 1;
 }
+
+/* ── Capital call review panel ─────────────────────────────────────────── */
+/* Sits on the thread panel's chrome; only what the review adds lives here. */
+.ccr-overlay-top { z-index: 1001; }
+/* Height is fixed, not max-height: the body's content changes size as it loads,
+   as accordions open and as the phase advances, and a modal that resizes under
+   the reader is harder to work in than one with a little slack. */
+/* One box for both panels: the notice opens on top of the review, so a
+   different width or height would read as the modal resizing under the reader. */
+.ccr-panel, .ccr-notice-panel { width: min(720px, 94vw); height: min(660px, 88vh); }
+.ccr-notice-panel { display: flex; flex-direction: column; overflow: hidden; }
+.ccr-body, .ccr-notice-body { flex: 1; min-height: 0; overflow-y: auto; }
+.ccr-notice-body { display: flex; flex-direction: column; }
+
+/* The end states are short, so they sit centred in the fixed frame rather than
+   stranded at the top of it. */
+.ccr-done { display: flex; flex-direction: column; justify-content: center; min-height: 100%; }
+.ccr-panel-sub { display: block; font-size: 12px; color: var(--ink-color-global-text-subtle); padding-right: 28px; }
+
+.ccr-body { padding: 16px 20px; }
+.ccr-note { font-size: 11px; line-height: 17px; color: var(--ink-color-global-text-subtle); }
+.ccr-muted { color: var(--ink-color-global-text-subtle); }
+.ccr-faint { color: var(--ink-color-global-text-subtle); }
+.ccr-strong { font-weight: 600; }
+
+.ccr-note-box { display: flex; gap: 10px; padding: 10px 12px; background: light-dark(#EAF0F8, #122948); border-radius: 4px; }
+.ccr-note-icon {
+  flex: none; width: 20px; height: 20px; border-radius: 50%;
+  background: light-dark(#285DA3, #8BABD6); color: light-dark(#FFFFFF, #122948);
+  display: inline-flex; align-items: center; justify-content: center; font-size: 12px;
+}
+.ccr-note-main { flex: 1; min-width: 0; }
+.ccr-note-head { display: flex; align-items: baseline; gap: 8px; font-size: 11px; font-weight: 600; }
+.ccr-note-toggle { background: none; border: 0; padding: 0; font-family: inherit; font-size: 11px; font-weight: 600; color: var(--ink-color-global-link-default); cursor: pointer; }
+.ccr-note-clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 12px; line-height: 18px; }
+.ccr-note-full { display: block; font-size: 12px; line-height: 18px; }
+
+.ccr-card { margin-top: 12px; border: 1px solid var(--ink-color-global-border-subtle); padding: 14px; }
+.ccr-card-label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-color-global-text-subtle); }
+.ccr-card-figure { font-family: var(--ink-font-global-family-prominent); font-size: 28px; line-height: 1.15; font-variant-numeric: tabular-nums; margin-top: 2px; }
+.ccr-card-list { margin-top: 12px; border-top: 1px solid var(--ink-color-global-border-subtle); }
+
+.ccr-kv { display: flex; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--ink-color-global-border-subtle); }
+.ccr-kv:last-child { border-bottom: 0; }
+.ccr-k { flex: none; width: 132px; font-size: 12px; line-height: 20px; color: var(--ink-color-global-text-subtle); }
+.ccr-v { flex: 1; min-width: 0; font-size: 13px; line-height: 20px; font-variant-numeric: tabular-nums; }
+.ccr-aside { flex: none; font-size: 12px; line-height: 20px; color: var(--ink-color-global-text-subtle); }
+.ccr-split { display: flex; justify-content: space-between; gap: 10px; }
+.ccr-meter { display: block; height: 5px; background: var(--ink-color-global-border-subtle); margin-top: 4px; }
+.ccr-meter > span { display: block; height: 5px; background: var(--ink-color-global-text-default); }
+
+.ccr-group { margin-top: 12px; border: 1px solid var(--ink-color-global-border-subtle); }
+.ccr-row-btn {
+  width: 100%; display: flex; align-items: center; gap: 10px; padding: 11px 14px;
+  background: none; border: 0; border-bottom: 1px solid var(--ink-color-global-border-subtle);
+  text-align: left; cursor: pointer; font-family: inherit; color: var(--ink-color-global-text-default);
+}
+.ccr-row-btn:last-child { border-bottom: 0; }
+.ccr-row-btn:hover { background: var(--ink-color-global-surface-lightgray-default); }
+.ccr-row-title { flex: 1; font-size: 13px; font-weight: 600; }
+.ccr-row-sum { font-size: 11px; color: var(--ink-color-global-text-subtle); text-align: right; }
+.ccr-chev { flex: none; display: inline-flex; color: var(--ink-color-global-text-subtle); }
+.ccr-chev svg { width: 15px; height: 15px; }
+.ccr-chev-open { transform: rotate(180deg); }
+.ccr-row-body { padding: 0 0 12px; border-bottom: 1px solid var(--ink-color-global-border-subtle); }
+/* Key/value rows sit inset from the group's edge; the allocations table does
+   not, because its cells carry the inset themselves. */
+.ccr-pad { padding: 0 14px; }
+.ccr-more-loading {
+  padding: 7px 14px; font-size: 11px; color: var(--ink-color-global-text-subtle);
+  border-bottom: 1px solid var(--ink-color-global-border-subtle);
+}
+.ccr-row-note {
+  margin-top: 8px; padding-top: 10px;
+  border-top: 1px solid var(--ink-color-global-border-subtle);
+  font-size: 11px; line-height: 17px; color: var(--ink-color-global-text-subtle);
+}
+
+.ccr-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.ccr-table th {
+  text-align: right; font-size: 10px; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--ink-color-global-text-subtle); font-weight: 600; padding: 6px; border-bottom: 1px solid var(--ink-color-global-border-subtle);
+}
+.ccr-table th:first-child, .ccr-table td:first-child { text-align: left; padding-left: 14px; }
+.ccr-table th:last-child, .ccr-table td:last-child { padding-right: 14px; }
+.ccr-table td { padding: 6px; font-size: 12px; text-align: right; border-bottom: 1px solid var(--ink-color-global-border-subtle); }
+.ccr-table tr.ccr-total td { font-weight: 600; background: light-dark(#EAF0F8, #122948); }
+.ccr-more {
+  width: 100%; padding: 7px 14px; text-align: left; background: none; border: 0;
+  border-bottom: 1px solid var(--ink-color-global-border-subtle); font-family: inherit;
+  font-size: 11px; font-weight: 600; color: var(--ink-color-global-link-default); cursor: pointer;
+}
+.ccr-np-block { padding: 12px 14px 0; }
+.ccr-np-label { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-color-global-text-subtle); }
+.ccr-np { display: flex; gap: 10px; margin-top: 4px; font-size: 12px; line-height: 18px; }
+.ccr-np > span:first-child { flex: none; width: 140px; font-weight: 600; }
+.ccr-np > span:last-child { flex: 1; color: var(--ink-color-global-text-subtle); }
+
+.ccr-steps { border-top: 1px solid var(--ink-color-global-border-subtle); }
+.ccr-step { display: flex; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--ink-color-global-border-subtle); font-size: 13px; line-height: 20px; }
+.ccr-step-n { flex: none; width: 14px; color: var(--ink-color-global-text-subtle); font-variant-numeric: tabular-nums; }
+
+.ccr-footer { flex-direction: column; gap: 8px; align-items: stretch; }
+.ccr-footer-actions { display: flex; gap: 12px; }
+/* Equal halves of the footer, both outlined — the decision is the point of the
+   panel, so neither reads as a link. */
+.ccr-footer-actions button {
+  flex: 1; height: 44px; font-family: inherit; font-size: 14px; font-weight: 600;
+  border-radius: var(--ink-size-global-radius-default); cursor: pointer;
+}
+.ccr-footer-actions .far-btn-primary {
+  border: 1px solid var(--ink-color-global-brand-black);
+}
+.ccr-footer-end { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
+
+.ccr-done { text-align: center; padding: 12px 8px; }
+.ccr-done-tick {
+  width: 52px; height: 52px; margin: 0 auto 16px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: #FFFFFF; background: light-dark(#105242, #5BC0B3);
+}
+.ccr-done-tick svg { width: 24px; height: 24px; }
+.ccr-done-title { font-family: var(--ink-font-global-family-prominent); font-size: 22px; margin-bottom: 8px; }
+.ccr-done-body { font-size: 14px; line-height: 22px; margin-bottom: 14px; }
+.ccr-sent-msg {
+  text-align: left; font-size: 13px; line-height: 20px; white-space: pre-wrap;
+  background: var(--ink-color-global-surface-lightgray-default); border: 1px solid var(--ink-color-global-border-subtle);
+  border-radius: 4px; padding: 12px 14px; margin-bottom: 14px;
+}
+.ccr-empty { padding: 16px 0; font-size: 13px; line-height: 20px; }
+
+.ccr-notice-bar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 12px 20px; border-bottom: 1px solid var(--ink-color-global-border-subtle); flex-shrink: 0;
+}
+.ccr-notice-bar select {
+  flex: 1; min-width: 200px; height: 32px; padding: 0 8px; font-family: inherit; font-size: 12px;
+  color: var(--ink-color-global-text-default); background: var(--ink-color-global-surface-background-default);
+  border: 1px solid var(--ink-color-global-border-default); border-radius: 4px;
+}
+.ccr-tabs { display: flex; border: 1px solid var(--ink-color-global-border-default); border-radius: 4px; overflow: hidden; }
+.ccr-tab { height: 30px; padding: 0 12px; font-family: inherit; font-size: 12px; font-weight: 500; border: 0; cursor: pointer; background: transparent; color: var(--ink-color-global-text-subtle); }
+.ccr-tab-on { background: light-dark(#1A1A1A, #FFFFFF); color: light-dark(#FFFFFF, #1A1A1A); }
+.ccr-notice-body { background: var(--ink-color-global-surface-lightgray-default); padding: 16px 20px 24px; }
+.ccr-mail-head { background: var(--ink-color-global-surface-background-default); border: 1px solid var(--ink-color-global-border-subtle); padding: 12px 14px; }
+.ccr-mail-subject { font-size: 12px; line-height: 18px; font-weight: 600; }
+.ccr-mail-body {
+  margin-top: 10px; background: var(--ink-color-global-surface-background-default); border: 1px solid var(--ink-color-global-border-subtle);
+  padding: 16px; font-size: 13px; line-height: 20px; white-space: normal;
+}
+
+/* The notice is a printed document: white paper in either theme. */
+.ccr-doc { background: #FFFFFF; border: 1px solid #DEDFDF; color: #1A1A1A; padding: 24px 22px 28px; font-variant-numeric: tabular-nums; }
+.ccr-doc-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.ccr-doc-fund { display: block; font-size: 14px; line-height: 20px; font-weight: 700; }
+.ccr-doc-kind { display: block; font-size: 12px; line-height: 18px; color: #656B6B; }
+.ccr-doc-h { font-size: 12px; line-height: 18px; font-weight: 700; margin-top: 18px; padding-bottom: 4px; border-bottom: 1px solid #1A1A1A; }
+.ccr-doc-h:first-of-type { margin-top: 20px; }
+.ccr-doc-row { display: flex; justify-content: space-between; gap: 14px; padding: 6px 0; border-bottom: 1px solid #EDEDED; font-size: 12px; line-height: 18px; }
+.ccr-doc-k { color: #656B6B; }
+.ccr-doc-total { padding: 7px 0; border-bottom: 1px solid #1A1A1A; font-weight: 700; }
+.ccr-doc-total .ccr-doc-k { color: #1A1A1A; }
+.ccr-doc-sub { font-size: 12px; line-height: 18px; font-weight: 700; margin-top: 18px; }
+.ccr-doc-b { font-size: 12px; line-height: 18px; margin-top: 2px; }
+.ccr-doc-bullet { padding-left: 14px; }
+.ccr-doc-foot { margin-top: 18px; font-size: 11px; line-height: 17px; color: #656B6B; }
+
+/* The email is a document Carta composes; it renders in its own frame so its
+   markup cannot reach the page's styles or scripts. */
+/* Tall enough that the panel scrolls once, as the mock's inline email does,
+   rather than trapping a second scrollbar inside the frame. */
+.ccr-mail-frame {
+  width: 100%; margin-top: 10px; display: block; border: 0;
+  background: #FFFFFF; overflow: hidden;
+  /* Fills the frame when the height cannot be measured, rather than collapsing
+     the email into a sliver. JS replaces this once it can measure. */
+  flex: 1 1 auto; min-height: 520px;
+}
+.ccr-mail-subject { font-size: 12px; line-height: 18px; font-weight: 600; }
+.ccr-mail-addr { font-size: 11px; line-height: 18px; color: var(--ink-color-global-text-subtle); }
+.ccr-mail-addr:first-of-type { margin-top: 4px; }
+.ccr-caveat {
+  display: flex; gap: 8px; margin-top: 10px; padding: 9px 11px;
+  border: 1px dashed light-dark(#285DA3, #8BABD6);
+  background: light-dark(#EAF0F8, #122948);
+  color: light-dark(#285DA3, #8BABD6);
+  font-size: 11px; line-height: 18px;
+}
+.ccr-caveat-arrow { flex: none; font-size: 12px; line-height: 18px; }
+/* The mock's Back to review is a bordered control, not bare text. */
+.ccr-footer .far-btn-secondary,
+.ccr-footer-end .far-btn-secondary,
+.ccr-notice-footer .far-btn-secondary {
+  border: 1px solid var(--ink-color-global-border-active);
+  border-radius: var(--ink-size-global-radius-default);
+  padding: 8px 16px; background: transparent;
+  color: var(--ink-color-global-text-default);
+  font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer;
+}
+.ccr-notice-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }

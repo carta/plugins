@@ -55,6 +55,7 @@ SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+$")
 APP_JS_PARTS = [
     "carta-workhub.app.js",
     "app/fund-admin-requests.js",
+    "app/capital-call-review.js",
     "app/version-check.js",
 ]
 
@@ -100,7 +101,7 @@ def read_version():
     return version
 
 
-def build(mcp_server):
+def build(mcp_server, ccr_fund_uuid="", ccr_activity_id=""):
     template = (RES / "carta-workhub.template.html").read_text()
     parts = {name: (RES / name).read_text() for name in MARKERS}
     parts.update({name: (RES / name).read_text() for name in APP_JS_PARTS})
@@ -128,6 +129,10 @@ def build(mcp_server):
     if "{{CARTA_MCP_SERVER}}" in out:
         sys.exit("ERROR: {{CARTA_MCP_SERVER}} still present after substitution")
 
+    # Empty is the normal case: the panel then opens only from a task card.
+    out = out.replace("{{CCR_FUND_UUID}}", ccr_fund_uuid or "")
+    out = out.replace("{{CCR_ACTIVITY_ID}}", ccr_activity_id or "")
+
     out = out.replace("{{BUILD_ID}}", build_id)
 
     version = read_version()
@@ -142,10 +147,16 @@ def main():
     ap = argparse.ArgumentParser(description="Assemble the carta-workhub artifact.")
     ap.add_argument("--mcp-server", required=True,
                     help="Carta connector display name (the {{CARTA_MCP_SERVER}} value)")
+    ap.add_argument("--ccr-fund-uuid", default="",
+                    help="seed the capital call review panel with this fund UUID")
+    ap.add_argument("--ccr-activity-id", default="",
+                    help="seed the capital call review panel with this activity ShortUUID")
     ap.add_argument("--out", required=True, help="output HTML path")
     args = ap.parse_args()
 
-    html, build_id, version = build(args.mcp_server)
+    html, build_id, version = build(
+        args.mcp_server, args.ccr_fund_uuid, args.ccr_activity_id
+    )
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(html)

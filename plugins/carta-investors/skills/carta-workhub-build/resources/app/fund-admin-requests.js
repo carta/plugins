@@ -14,6 +14,9 @@ const FAR_GROUP_BY_PENDING = {
 const FAR_STATUS_COMPLETE = 2;
 const FAR_STATUS_CANCELED = 3;
 
+// TaskStatus PENDING and ACTIVE — the task statuses that still await someone.
+const FAR_OPEN_TASK_STATUSES = [0, 1];
+
 // Each label is an event the payload can prove. There is no "received" here:
 // nothing marks a read, so it would be a guess presented as a fact.
 const FAR_STATUS_LABEL = {
@@ -323,7 +326,19 @@ function farNormalizeMessages(rows) {
 function farPendingState(w) {
   const fromTask = String(w.last_task?.template ?? '').toLowerCase();
   if (fromTask) return fromTask;
-  return String(w.status_presentation?.status ?? '').toLowerCase().replace(/\s+/g, '-');
+  const shown = String(w.status_presentation?.status ?? '').toLowerCase().replace(/\s+/g, '-');
+  if (shown) return shown;
+  return farPendingFromTasks(w);
+}
+
+// fa:list:workflow names no pending actor of its own — it carries the tasks and
+// each one says whose turn it is. The open task is the one that answers.
+function farPendingFromTasks(w) {
+  const open = (w.tasks || []).find(t => t && FAR_OPEN_TASK_STATUSES.includes(t.status));
+  if (!open) return '';
+  if (open.is_pending_customer) return 'pending-customer';
+  if (open.is_pending_carta) return 'pending-carta';
+  return '';
 }
 
 // "investment wire" → "Investment wire". request_type names the job, so it beats
@@ -360,23 +375,30 @@ function farNeedsTitle(w) {
 
 function farNormalizeWorkflow(w) {
   const status = Number(w.status);
-  const pending = farPendingState(w);
+  // Set only when the pending task is the GP's review, so a card knows to open
+  // the capital call panel rather than the thread.
+  const ccr = ccrIsReviewTask(w) ? ccrTargetFor(w) : null;
+  const pending = ccr ? 'pending-customer' : farPendingState(w);
   const group = (status === FAR_STATUS_COMPLETE || status === FAR_STATUS_CANCELED)
     ? 'done'
     : (FAR_GROUP_BY_PENDING[pending] ?? 'progress');
   return {
     id: w.id ?? w.workflow_id,
-    title: farRequestTitle(w),
+    title: ccr ? CCR_CARD_TITLE : farRequestTitle(w),
+    subtitle: ccr ? ccrFundLabel(w) : null,
     firm: w.firm?.name?.trim() || null,
     group,
     state: pending,
     canceled: status === FAR_STATUS_CANCELED,
-    needsTitle: farNeedsTitle(w),
+    // A review card is already named, and its thread is the workflow's own
+    // history rather than a request someone typed.
+    needsTitle: ccr ? false : farNeedsTitle(w),
     requested: w.created_at ?? null,
     lastActivity: w.last_activity_at ?? w.last_communication_at ?? w.created_at ?? null,
     // Deliberately NOT workflow_detail_url — that is a /staff/ route, so linking
     // a customer to it sends them somewhere they cannot open.
     webUrl: w.workflow_cta_url ?? null,
+    ccr,
   };
 }
 
@@ -570,14 +592,9 @@ async function farFetchRequests() {
     let rows = farResults(scoped);
 
     if (!rows && _benchmarkFirmId) {
-      const listed = await _mcp('fetch', {
-        command: 'fa:list:workflow',
-        params: {
-          firm_uuid: _benchmarkFirmId,
-          template_type: 'request-generic',
-          page_size: FAR_PAGE_SIZE,
-        },
-      });
+      // Takes only `statuses` and rejects every other param; the firm comes from
+      // the session context set at boot. Capital calls under review ride along.
+      const listed = await _mcp('fetch', { command: 'fa:list:workflow', params: {} });
       rows = farResults(listed);
     }
 
@@ -589,11 +606,12 @@ async function farFetchRequests() {
       _farPartial = true;
       _farRows = await farFetchFromIds();
     }
+    _farRows = ccrWithSeedRow(_farRows);
     loaded = true;
   } catch (e) {
     console.error('[far] request list unavailable —', e);
     _farPartial = true;
-    _farRows = [];
+    _farRows = ccrWithSeedRow([]);
   }
   renderFarSection();
   // Hydration only improves titles, so it stays outside the try above — sharing
@@ -764,15 +782,17 @@ function farCard(r, withTime) {
   card.className = 'far-card' + (isTodo ? ' far-card-todo' : '');
   card.innerHTML = `
     <div class="far-card-title">${escHtml(r.title ?? 'Request to Carta')}</div>
+    ${r.subtitle ? `<div class="far-card-sub">${escHtml(r.subtitle)}</div>` : ''}
     <div class="far-card-status">
       <span class="far-dot${isTodo ? ' far-dot-todo' : ''}"></span>
       <span class="far-card-status-text">${escHtml(farStatusLabel(r))}</span>
     </div>
     <div class="far-card-footer">
       <button class="far-card-view">${isTodo ? 'Review' : 'View'} &rarr;</button>
-      <span class="far-card-age">Requested ${escHtml(withTime ? farStamp(r.requested) : farDate(r.requested))}</span>
+      ${r.requested ? `<span class="far-card-age">Requested ${escHtml(withTime ? farStamp(r.requested) : farDate(r.requested))}</span>` : ''}
     </div>`;
-  card.querySelector('.far-card-view').addEventListener('click', () => openFarThread(r.id));
+  card.querySelector('.far-card-view').addEventListener('click', () =>
+    r.ccr ? openCapitalCallReview(r.ccr, r.title) : openFarThread(r.id));
   return card;
 }
 
