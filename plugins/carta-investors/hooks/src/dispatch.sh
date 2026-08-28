@@ -1,4 +1,5 @@
 #!/bin/sh
+# long-comment-ok: documents three runtime layouts this shim must resolve across.
 # Dispatch shim for the Carta hooks Go binary. Invoked by a plugin's
 # hooks.json as `dispatch.sh <subcommand>`; forwards "$@" (subcommand +
 # whatever else Claude Code appends) to the resolved native binary and
@@ -13,11 +14,9 @@
 #      staff exercising hooks without a publish, where bin/ is checked in
 #      alongside this script
 #
-# A third layout carries no bin/ at all: each instrumented plugin commits this
-# script at plugins/<name>/hooks/dispatch.sh, and a marketplace install copies
-# that plugin directory verbatim without running the publish pipeline. There the
-# lookup finds nothing and every subcommand fails open below — hooks go quiet
-# instead of erroring on a missing file, and PreToolUse still allows the call.
+# A third layout carries no bin/ sibling: a clone-based install copies the
+# plugin dir verbatim, with no publish step. The second lookup below walks up
+# to a sibling "marketplaces/" clone and tries its tools/hooks/bin/ instead.
 #
 # Fail-open is PER SUBCOMMAND, not a blanket PreToolUse allow: an event with
 # no allow/deny concept (SessionStart, UserPromptSubmit) must not emit a
@@ -52,12 +51,36 @@ if [ -n "$os" ]; then
     fi
 fi
 
+# Case 3: walk up looking for a "marketplaces" dir next to an ancestor (a
+# sibling of the cache dir a plugin install copies from). Bounded to 8 levels.
+if [ -z "$bin" ] && [ -n "$os" ]; then
+    walk="$here"
+    depth=0
+    while [ "$depth" -lt 8 ] && [ "$walk" != "/" ]; do
+        parent=$(dirname -- "$walk")
+        sibling="$parent/marketplaces"
+        if [ -d "$sibling" ]; then
+            for mkt in "$sibling"/*/tools/hooks/bin; do
+                [ -d "$mkt" ] || continue
+                candidate="$mkt/hooks-${os}-${arch}"
+                [ "$os" = windows ] && candidate="${candidate}.exe"
+                if [ -x "$candidate" ]; then
+                    bin="$candidate"
+                    break
+                fi
+            done
+            break
+        fi
+        walk="$parent"
+        depth=$((depth + 1))
+    done
+fi
+
 if [ -n "$bin" ]; then
     exec "$bin" "$@"
 fi
 
-# No binary resolved (unbuilt checkout, unsupported host, or a publish that
-# dropped bin/) — fail open with the shape the invoking event requires.
+# No binary resolved — fail open with the shape the invoking event requires.
 case "$subcommand" in
     capture-model | inject-context | prune-session-data)
         # SessionStart: no allow/deny concept, but Claude Code expects the
