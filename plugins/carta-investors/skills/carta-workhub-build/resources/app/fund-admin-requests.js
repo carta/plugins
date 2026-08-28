@@ -519,13 +519,19 @@ async function farSavePlan() {
   const message = (box?.value ?? '').trim();
   if (!message) { showToast('Add a description before saving.'); return; }
   trackWorkhub('click', 'CartaWorkhub.FundAdminRequests.SavePlan');
+  // Editing a plan and saving it again is the same plan. Its drafted date rides
+  // along so an edit does not read as a new one.
   const plans = farReadPlans();
-  const build = files => plans.concat({
-    planId: 'plan-' + Date.now(),
-    message,
-    requested: new Date().toISOString(),
-    attachments: files ?? [],
-  });
+  const at = _farPlanId ? plans.findIndex(p => p.planId === _farPlanId) : -1;
+  const build = files => {
+    const entry = {
+      planId: at === -1 ? 'plan-' + Date.now() : _farPlanId,
+      message,
+      requested: at === -1 ? new Date().toISOString() : plans[at].requested,
+      attachments: files ?? [],
+    };
+    return at === -1 ? plans.concat(entry) : plans.map((p, i) => (i === at ? entry : p));
+  };
 
   let files = await farPlanAttachments('compose');
   let reason = files === null ? 'big' : '';
@@ -537,11 +543,12 @@ async function farSavePlan() {
   }
   const dropped = files === null ? (_farPicked.compose ?? []).length : 0;
   farWritePlans(next);
+  _farPlanId = (at === -1 ? next[next.length - 1] : next[at]).planId;
   _farPicked.compose = [];
   closeFarCompose();
-  showToast((farStorageOk()
-    ? 'Saved as a plan on this computer. Nothing has gone to Carta yet.'
-    : 'Saved as a plan for this session. Nothing has gone to Carta yet.')
+  showToast(((at === -1 ? 'Saved as a plan' : 'Plan updated')
+    + (farStorageOk() ? ' on this computer.' : ' for this session.')
+    + ' Nothing has gone to Carta yet.')
     + (dropped === 0 ? '' : reason === 'big'
       ? ` ${dropped === 1 ? 'Your file was' : 'Your files were'} too large to keep with a plan —`
         + ' attach again when you send.'
@@ -951,12 +958,14 @@ function applyFarPreset(i) {
   box.selectionStart = box.selectionEnd = at;
 }
 
-// keepFiles carries the picks back from review, where they are still what the
-// sender chose.
-function openFarCompose(keepFiles) {
+// resume means the same draft coming back — from review, or reopened from a plan.
+// Its files, its preset and the plan it belongs to are all still the sender's.
+function openFarCompose(resume) {
   trackWorkhub('click', 'CartaWorkhub.FundAdminRequests.Compose');
-  _farPlanId = null;
-  _farPresetName = null;
+  if (!resume) {
+    _farPlanId = null;
+    _farPresetName = null;
+  }
   const overlay = farEnsureOverlay('far-compose-overlay', 'far-overlay');
   overlay.innerHTML = `
     <div class="far-panel">
@@ -980,7 +989,7 @@ function openFarCompose(keepFiles) {
     </div>`;
   overlay.classList.add('far-overlay-visible');
   document.getElementById('far-compose-text')?.focus();
-  farMountPicker('compose', { reset: !keepFiles });
+  farMountPicker('compose', { reset: !resume });
 }
 
 // ── Request analysis ──
