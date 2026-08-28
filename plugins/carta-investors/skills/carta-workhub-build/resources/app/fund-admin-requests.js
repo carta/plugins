@@ -94,6 +94,16 @@ function farWorkflowId(res) {
   return null;
 }
 
+// The JWT a message carries as an attachment. Without it the file is in Carta but
+// attached to nothing, so a missing token counts as a failed upload.
+function farDocToken(res) {
+  if (!res || res.isError) return null;
+  for (const c of _mcpResultCandidates(res)) {
+    if (c && typeof c.token === 'string' && c.token) return c.token;
+  }
+  return null;
+}
+
 // ── Normalizing ──
 
 // content_text is null on HTML-only messages, so fall back to content_html with
@@ -504,20 +514,39 @@ function farPlanScopeNote() {
     : 'Save as plan keeps it for this session only — this artifact cannot save it.';
 }
 
-function farSavePlan() {
+async function farSavePlan() {
   const box = document.getElementById('far-compose-text');
   const message = (box?.value ?? '').trim();
   if (!message) { showToast('Add a description before saving.'); return; }
   trackWorkhub('click', 'CartaWorkhub.FundAdminRequests.SavePlan');
-  farWritePlans(farReadPlans().concat({
+  const plans = farReadPlans();
+  const build = files => plans.concat({
     planId: 'plan-' + Date.now(),
     message,
     requested: new Date().toISOString(),
-  }));
+    attachments: files ?? [],
+  });
+
+  let files = await farPlanAttachments('compose');
+  let reason = files === null ? 'big' : '';
+  let next = build(files);
+  if (files && files.length && JSON.stringify(next).length > FAR_PLAN_STORE_BUDGET) {
+    files = null;
+    reason = 'full';
+    next = build(null);
+  }
+  const dropped = files === null ? (_farPicked.compose ?? []).length : 0;
+  farWritePlans(next);
+  _farPicked.compose = [];
   closeFarCompose();
-  showToast(farStorageOk()
+  showToast((farStorageOk()
     ? 'Saved as a plan on this computer. Nothing has gone to Carta yet.'
-    : 'Saved as a plan for this session. Nothing has gone to Carta yet.');
+    : 'Saved as a plan for this session. Nothing has gone to Carta yet.')
+    + (dropped === 0 ? '' : reason === 'big'
+      ? ` ${dropped === 1 ? 'Your file was' : 'Your files were'} too large to keep with a plan —`
+        + ' attach again when you send.'
+      : ` There was no room to keep ${dropped === 1 ? 'your file' : 'your files'} —`
+        + ' discard an old plan, or attach again when you send.'));
   renderFarSection();
 }
 
@@ -538,7 +567,11 @@ function farDiscardPlan(planId) {
 function farReviewPlan(planId) {
   const plan = farReadPlans().find(p => p.planId === planId);
   if (!plan) return;
-  openFarCompose();
+  // Set before opening, so the picker mounts with the plan's files already in it.
+  _farPicked.compose = (plan.attachments ?? []).map(a => ({
+    id: ++_farPickSeq, name: a.name, size: a.size, b64: a.b64,
+  }));
+  openFarCompose(true);
   _farPlanId = planId;
   const box = document.getElementById('far-compose-text');
   if (box) box.value = plan.message;
@@ -918,7 +951,9 @@ function applyFarPreset(i) {
   box.selectionStart = box.selectionEnd = at;
 }
 
-function openFarCompose() {
+// keepFiles carries the picks back from review, where they are still what the
+// sender chose.
+function openFarCompose(keepFiles) {
   trackWorkhub('click', 'CartaWorkhub.FundAdminRequests.Compose');
   _farPlanId = null;
   _farPresetName = null;
@@ -934,6 +969,7 @@ function openFarCompose() {
         <div class="far-presets">${farPresetTiles()}</div>
         <textarea id="far-compose-text" class="far-textarea" rows="6"
           placeholder="Anything your fund admin team can do — capital calls, investments, valuations, payments, transfers, or closes."></textarea>
+        ${farPickerHtml('compose')}
       </div>
       <div class="far-panel-footer">
         <button class="far-btn-secondary" onclick="closeFarCompose()">Cancel</button>
@@ -944,6 +980,7 @@ function openFarCompose() {
     </div>`;
   overlay.classList.add('far-overlay-visible');
   document.getElementById('far-compose-text')?.focus();
+  farMountPicker('compose', { reset: !keepFiles });
 }
 
 // ── Request analysis ──
@@ -1026,6 +1063,7 @@ function farRenderReview() {
       <div class="far-panel-body">
         <p class="far-compose-hint">Summary of what goes to your Carta fund admin team. They pick it up, start the work, and reply here.</p>
         <div class="far-review" id="far-review-text">${escHtml(message)}</div>
+        ${farPickedSummaryHtml('compose')}
         ${farOpenItemsHtml(farOpenItems(message))}
       </div>
       <div class="far-panel-footer">
@@ -1040,7 +1078,7 @@ function farRenderReview() {
 // Back from review keeps what they wrote — retyping it would be its own bug.
 function openFarComposeWithDraft() {
   const draft = _farDraft;
-  openFarCompose();
+  openFarCompose(true);
   const box = document.getElementById('far-compose-text');
   if (box) { box.value = draft; box.focus(); }
 }
@@ -1062,9 +1100,21 @@ async function submitFarCompose() {
   if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
 
   try {
+    const { tokens, failed } = await farUploadPicked('compose', (n, total) => {
+      if (btn) btn.textContent = `Attaching ${n} of ${total}…`;
+    });
+    if (btn) btn.textContent = 'Sending…';
+    // Filing the request anyway would open a case whose evidence is missing, and
+    // the thread would show no sign of it. Stop so the file can be retried.
+    if (failed.length) {
+      showToast(`Could not upload ${failed.join(', ')} — remove or retry before sending.`);
+      if (btn) { btn.disabled = false; btn.textContent = 'Send to Carta'; }
+      return;
+    }
+
     const res = await _mcp('mutate', {
       command: 'fa:create:fund-admin-message',
-      params: { message },
+      params: tokens.length ? { message, attachment_tokens: tokens } : { message },
     });
     if (res.isError) throw new Error(res.content?.[0]?.text ?? 'Unknown error');
     const id = farWorkflowId(res);
@@ -1087,6 +1137,7 @@ async function submitFarCompose() {
       lastActivity: now,
       webUrl: null,
     });
+    _farPicked.compose = [];
     renderFarSection();
     farRenderSent();
   } catch (e) {
@@ -1117,6 +1168,7 @@ async function openFarThread(workflowId) {
       <div class="far-panel-footer far-thread-footer">
         <textarea id="far-reply-text" class="far-textarea far-textarea-reply" rows="3"
           placeholder="Reply to your Carta team…"></textarea>
+        ${farPickerHtml('reply')}
         <div class="far-thread-actions">
           <button class="far-btn-secondary" onclick="closeFarThread()">Close</button>
           <button class="far-btn-primary" id="far-reply-send" onclick="submitFarReply()">Send</button>
@@ -1124,6 +1176,7 @@ async function openFarThread(workflowId) {
       </div>
     </div>`;
   overlay.classList.add('far-overlay-visible');
+  farMountPicker('reply');
 
   const msgs = await farFetchThread(workflowId);
   const body = document.getElementById('far-thread-body');
@@ -1207,6 +1260,200 @@ function farAttachmentsHtml(attachments) {
   return `<div class="far-attachments">${chips}</div>`;
 }
 
+// ── Attaching files to a message ──
+// Carta drops files past 15 and tokens past 30 minutes without reporting either,
+// so the count is enforced before picking and the clock by uploading at send.
+
+const FAR_MAX_FILES = 15;
+
+// Measured: a request body over 1 MiB never reaches Carta. One file per call, and
+// base64 costs a third, so 750 KB fits. Fifteen stay under the composer's 25 MB.
+const FAR_MAX_FILE_BYTES = 750 * 1024;
+
+const FAR_UPLOAD_COMMAND = 'fa:create:document-content';
+
+// A plan is JSON, so a file rides along as the base64 the upload needs anyway.
+// One plan's share, then the ceiling for all of them: localStorage is a few MB
+// for the whole origin, so one big plan must not cost the rest their durability.
+const FAR_PLAN_FILE_BUDGET = 2 * 1024 * 1024;
+const FAR_PLAN_STORE_BUDGET = 3 * 1024 * 1024;
+
+// Picked files per surface, held only until send. A new request and a reply are
+// separate messages, so each gets its own allowance.
+const _farPicked = { compose: [], reply: [] };
+let _farPickSeq = 0;
+let _farUploadProbe = null;
+
+// Staff-gated, so most viewers cannot attach. discover() runs the same access
+// check; fetch() rejects writes on method first, so it would answer yes for all.
+function farUploadAvailable() {
+  if (!_farUploadProbe) {
+    _farUploadProbe = (async () => {
+      try {
+        const res = await _mcp('discover', { domain: FAR_UPLOAD_COMMAND });
+        if (res && !res.isError) return true;
+        console.info('[far attach] attaching is not available to this viewer');
+        return false;
+      } catch (e) {
+        console.info('[far attach] availability probe failed', e);
+        return false;
+      }
+    })();
+  }
+  return _farUploadProbe;
+}
+
+function farFmtBytes(n) {
+  if (n < 1024) return n + ' B';
+  if (n < 1024 * 1024) return Math.round(n / 1024) + ' KB';
+  return (n / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function farPickedBytes(key) {
+  return (_farPicked[key] ?? []).reduce((sum, f) => sum + f.size, 0);
+}
+
+// readAsDataURL, not btoa: btoa needs a binary string, and building one for a
+// multi-megabyte file overruns String.fromCharCode's argument limit.
+function farFileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('could not read ' + file.name));
+    reader.onload = () => {
+      const out = String(reader.result ?? '');
+      const comma = out.indexOf(',');
+      if (comma === -1) { reject(new Error('unreadable encoding')); return; }
+      resolve(out.slice(comma + 1));
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function farPickerHtml(key) {
+  return `<div class="far-attach" id="far-attach-${key}" hidden>
+      <input type="file" multiple class="far-file-input" id="far-file-${key}"
+        onchange="farAddFiles('${key}', this)">
+      <div class="far-attach-row">
+        <button type="button" class="far-attach-btn"
+          onclick="document.getElementById('far-file-${key}').click()">${FAR_CLIP_ICON}Attach files</button>
+        <span class="far-attach-hint" id="far-attach-hint-${key}"></span>
+      </div>
+      <div class="far-attach-list" id="far-attach-list-${key}"></div>
+    </div>`;
+}
+
+// The panel can be closed and reopened while the probe is in flight, so the
+// element is looked up again rather than captured before the await.
+async function farMountPicker(key, { reset = true } = {}) {
+  if (reset) _farPicked[key] = [];
+  if (!(await farUploadAvailable())) return;
+  const wrap = document.getElementById('far-attach-' + key);
+  if (!wrap) return;
+  wrap.hidden = false;
+  farRenderPicked(key);
+}
+
+function farRenderPicked(key) {
+  const picked = _farPicked[key] ?? [];
+  const hint = document.getElementById('far-attach-hint-' + key);
+  if (hint) {
+    hint.textContent = picked.length
+      ? `${picked.length} of ${FAR_MAX_FILES} files · ${farFmtBytes(farPickedBytes(key))}`
+      : `Up to ${FAR_MAX_FILES} files, ${farFmtBytes(FAR_MAX_FILE_BYTES)} each.`;
+  }
+  const list = document.getElementById('far-attach-list-' + key);
+  if (!list) return;
+  list.innerHTML = picked.map(f =>
+    `<span class="far-attachment far-attachment-picked">${FAR_CLIP_ICON}` +
+    `<span class="far-attachment-name">${escHtml(f.name)}</span>` +
+    `<span class="far-attach-size">${escHtml(farFmtBytes(f.size))}</span>` +
+    `<button type="button" class="far-attach-remove" onclick="farRemoveFile('${key}', ${f.id})"` +
+    ` aria-label="Remove ${escHtml(f.name)}">✕</button></span>`).join('');
+}
+
+// Names what it would not take and why. Keeping only what fits, silently, is the
+// server behaviour this exists to prevent.
+function farAddFiles(key, input) {
+  const incoming = Array.from(input.files ?? []);
+  input.value = '';
+  if (incoming.length === 0) return;
+
+  const picked = _farPicked[key];
+  const refused = [];
+  for (const file of incoming) {
+    if (picked.length >= FAR_MAX_FILES) {
+      refused.push(`${file.name} (over ${FAR_MAX_FILES} files)`);
+    } else if (file.size > FAR_MAX_FILE_BYTES) {
+      refused.push(`${file.name} is ${farFmtBytes(file.size)}, over the ${farFmtBytes(FAR_MAX_FILE_BYTES)} limit`);
+    } else {
+      picked.push({ id: ++_farPickSeq, name: file.name, size: file.size, file });
+    }
+  }
+  farRenderPicked(key);
+  if (refused.length) showToast('Not attached: ' + refused.join(', '));
+}
+
+function farRemoveFile(key, id) {
+  _farPicked[key] = (_farPicked[key] ?? []).filter(f => f.id !== id);
+  farRenderPicked(key);
+}
+
+// The review step exists so nothing reaches Carta unseen. That includes files.
+function farPickedSummaryHtml(key) {
+  const picked = _farPicked[key] ?? [];
+  if (picked.length === 0) return '';
+  const chips = picked.map(f =>
+    `<span class="far-attachment far-attachment-picked">${FAR_CLIP_ICON}` +
+    `<span class="far-attachment-name">${escHtml(f.name)}</span>` +
+    `<span class="far-attach-size">${escHtml(farFmtBytes(f.size))}</span></span>`).join('');
+  return `<div class="far-attach-review">
+      <p class="far-attach-review-title">Sending ${picked.length}
+        ${picked.length === 1 ? 'file' : 'files'} with this request</p>
+      <div class="far-attach-list">${chips}</div>
+    </div>`;
+}
+
+// All or nothing: half a plan's evidence is harder to notice than none of it.
+async function farPlanAttachments(key) {
+  const out = [];
+  let total = 0;
+  for (const item of _farPicked[key] ?? []) {
+    const b64 = item.b64 ?? await farFileToBase64(item.file);
+    total += b64.length;
+    if (total > FAR_PLAN_FILE_BUDGET) return null;
+    out.push({ name: item.name, size: item.size, b64 });
+  }
+  return out;
+}
+
+// Serial, so the progress count is exact and tokens keep the sender's order.
+async function farUploadPicked(key, onProgress) {
+  const picked = _farPicked[key] ?? [];
+  const tokens = [];
+  const failed = [];
+  for (let i = 0; i < picked.length; i++) {
+    const item = picked[i];
+    // Fifteen round trips is long enough that an unchanging button reads as hung.
+    if (onProgress) onProgress(i + 1, picked.length);
+    try {
+      // Restored from a plan the bytes are already encoded; a fresh pick is not.
+      const content_base64 = item.b64 ?? await farFileToBase64(item.file);
+      const res = await _mcp('mutate', {
+        command: FAR_UPLOAD_COMMAND,
+        params: { filename: item.name, content_base64 },
+      });
+      if (res.isError) throw new Error(res.content?.[0]?.text ?? 'upload rejected');
+      const token = farDocToken(res);
+      if (!token) throw new Error('upload returned no token');
+      tokens.push(token);
+    } catch (e) {
+      console.error('[far upload error]', item.name, e);
+      failed.push(item.name);
+    }
+  }
+  return { tokens, failed };
+}
+
 function closeFarThread() {
   _farOpenThreadId = null;
   document.getElementById('far-thread-overlay')?.classList.remove('far-overlay-visible');
@@ -1223,21 +1470,38 @@ async function submitFarReply() {
   if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
 
   try {
+    const { tokens, failed } = await farUploadPicked('reply', (n, total) => {
+      if (btn) btn.textContent = `Attaching ${n} of ${total}…`;
+    });
+    if (btn) btn.textContent = 'Sending…';
+    if (failed.length) {
+      showToast(`Could not upload ${failed.join(', ')} — remove or retry before sending.`);
+      return;
+    }
+    const sentFiles = (_farPicked.reply ?? []).map(f => ({ name: f.name, href: null }));
+
     const res = await _mcp('mutate', {
       command: 'fa:create:workflow-message',
-      params: { workflow_id: Number(workflowId), message },
+      params: tokens.length
+        ? { workflow_id: Number(workflowId), message, attachment_tokens: tokens }
+        : { workflow_id: Number(workflowId), message },
     });
     if (res.isError) throw new Error(res.content?.[0]?.text ?? 'Unknown error');
 
     // The thread is cached, so append rather than refetch — and the ball is back
     // with Carta, so the card leaves "Tasks to complete".
     const msgs = _farThreadCache[workflowId] ?? [];
-    msgs.push({ id: null, text: message, html: '', isStaff: false, author: null, at: new Date().toISOString() });
+    msgs.push({
+      id: null, text: message, html: '', isStaff: false, author: null,
+      at: new Date().toISOString(), attachments: sentFiles,
+    });
     _farThreadCache[workflowId] = msgs;
     const row = (_farRows ?? []).find(r => String(r.id) === String(workflowId));
     if (row) { row.group = 'progress'; row.state = 'pending-carta'; row.lastActivity = new Date().toISOString(); }
 
     if (box) box.value = '';
+    _farPicked.reply = [];
+    farRenderPicked('reply');
     const body = document.getElementById('far-thread-body');
     if (body) body.innerHTML = msgs.map((m, i) => farBubble(m, row?.webUrl, i, row?.title)).join('');
     showToast('Reply sent to your Carta team.');

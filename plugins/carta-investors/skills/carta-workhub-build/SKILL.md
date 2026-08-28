@@ -217,8 +217,13 @@ rejects with `not_in_manifest`:
 
 - `list_contexts` / `set_context` — resolve and pin the firm
 - `fetch` — the list and thread reads
-- `mutate` — sending a request, replying, and the review decision
+- `mutate` — sending a request, replying, uploading an attachment, and the review decision
 - `welcome` — re-initializes an expired MCP session
+- `discover` — asks whether this viewer may attach files at all
+
+`fa:create:document-content` is staff-gated, so the composer probes `discover` and
+stays text-only when the viewer may not attach. Publish without `discover` and every
+viewer looks un-entitled, staff included.
 
 `callTool` **rejects** on tool failure rather than resolving with `isError`. The queue and
 thread readers degrade one section while the rest of the page renders, so `_mcp` maps the
@@ -332,7 +337,7 @@ Artifact({
       servers: [
         {
           server: "<CARTA_MCP_SERVER>",
-          tools: ["list_contexts", "set_context", "fetch", "mutate", "welcome"]
+          tools: ["list_contexts", "set_context", "fetch", "mutate", "welcome", "discover"]
         }
       ]
     }
@@ -360,6 +365,10 @@ queue shows its no-connector state.
 - **The queue reports `not_in_manifest`** — the publish call carried an incomplete
   `capabilities.mcp` grant. Compare it against the `tools` list in Step 3 and republish with
   every entry, passing the same `url`.
+- **No Attach files control, even for staff** — most often `discover` missing from the
+  grant, which reads exactly like being un-entitled. The console says which:
+  `[far attach] availability probe failed` is the manifest, `not available to this viewer`
+  is the staff gate on `fa:create:document-content`.
 - **Everything reports `server_not_connected` or `needs_reauth`** — the viewer has no
   callable Carta connector under the name baked in at publish time, or their credentials
   lapsed. Ask them to add or reconnect Carta in Settings → Connectors. If their connector's
