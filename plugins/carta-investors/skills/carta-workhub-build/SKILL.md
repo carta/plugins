@@ -220,10 +220,16 @@ rejects with `not_in_manifest`:
 - `mutate` — sending a request, replying, uploading an attachment, and the review decision
 - `welcome` — re-initializes an expired MCP session
 - `discover` — asks whether this viewer may attach files at all
+- `get_current_user` — whose messages are whose in a thread
 
 `fa:create:document-content` is staff-gated, so the composer probes `discover` and
 stays text-only when the viewer may not attach. Publish without `discover` and every
 viewer looks un-entitled, staff included.
+
+Thread attribution compares each message's author against the viewer's own id, since
+a staff sender's messages carry `is_staff` true exactly as Carta's do. Without
+`get_current_user` it falls back to position, which labels a staff viewer's own
+replies "Carta".
 
 `callTool` **rejects** on tool failure rather than resolving with `isError`. The queue and
 thread readers degrade one section while the rest of the page renders, so `_mcp` maps the
@@ -337,7 +343,8 @@ Artifact({
       servers: [
         {
           server: "<CARTA_MCP_SERVER>",
-          tools: ["list_contexts", "set_context", "fetch", "mutate", "welcome", "discover"]
+          tools: ["list_contexts", "set_context", "fetch", "mutate", "welcome", "discover",
+                  "get_current_user"]
         }
       ]
     }

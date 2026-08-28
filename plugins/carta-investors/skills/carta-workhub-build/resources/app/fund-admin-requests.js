@@ -325,6 +325,8 @@ function farNormalizeMessages(rows) {
       html: m.content_html ?? '',
       isStaff: m.author?.is_staff === true,
       author: m.author?.name ?? null,
+      // Two spellings again: the endpoint sends user_id, the model renames it id.
+      authorId: m.author?.id ?? m.author?.user_id ?? null,
       at: m.message_timestamp ?? null,
       attachments: farNormalizeAttachments(m.attachments),
     }))
@@ -1187,7 +1189,7 @@ async function openFarThread(workflowId) {
   overlay.classList.add('far-overlay-visible');
   farMountPicker('reply');
 
-  const msgs = await farFetchThread(workflowId);
+  const [msgs] = await Promise.all([farFetchThread(workflowId), farResolveViewer()]);
   const body = document.getElementById('far-thread-body');
   // A second card was opened while this thread was in flight.
   if (!body || String(_farOpenThreadId) !== String(workflowId)) return;
@@ -1199,36 +1201,36 @@ async function openFarThread(workflowId) {
   body.innerHTML = msgs.map((m, i) => farBubble(m, row?.webUrl, i, row?.title)).join('');
 }
 
-// Staff messages render as their client-facing text plus a link into Carta —
-// never Carta's internal agent output, run logs, or system metadata.
-//
-// Attribution is positional because it cannot be read from the payload: every
-// message comes back with the same author and is_staff true, Carta's replies
-// included. Index 0 is always the request that opened the thread, and a reply
-// sent in this session is appended with isStaff false.
+// The thread has three parties, not two: the viewer, a colleague at their firm,
+// and Carta. Identity settles the first, is_staff the last, and a colleague sits
+// on the firm's side under their own name.
 function farBubble(m, webUrl, i, title) {
-  const mine = i === 0 || m.isStaff === false;
-  const side = mine ? 'far-bubble-you' : 'far-bubble-carta';
-  const who = mine ? 'You' : 'Carta';
-  const cta = !mine && webUrl
+  const mine = _farViewerId != null && m.authorId != null
+    ? String(m.authorId) === _farViewerId
+    : i === 0 || m.isStaff === false;
+  // Ordered after `mine`, or a staff viewer's own messages read as Carta's.
+  const carta = !mine && m.isStaff === true;
+  const side = carta ? 'far-bubble-carta' : 'far-bubble-you';
+  const who = mine ? 'You' : carta ? 'Carta' : (m.author || 'Someone at your firm');
+  const cta = carta && webUrl
     ? `<a class="far-bubble-cta" href="${escHtml(webUrl)}" target="_blank" rel="noopener">Review in Carta &rarr;</a>`
     : '';
   return `
     <div class="far-bubble ${side}">
       <div class="far-bubble-head">
-        <span class="far-bubble-who">${who}</span>
+        <span class="far-bubble-who">${escHtml(who)}</span>
         <span class="far-bubble-at">${escHtml(farStamp(m.at))}</span>
       </div>
-      ${farBodyHtml(m, mine, title)}
+      ${farBodyHtml(m, i === 0, title)}
       ${farAttachmentsHtml(m.attachments)}
       ${cta}
     </div>`;
 }
 
-// The sender's own opening message is a filled template; a reply is prose.
-function farBodyHtml(m, mine, title) {
+// The message that opened the request is a filled template; a reply is prose.
+function farBodyHtml(m, opening, title) {
   const source = { content_html: m.html, content_text: m.text };
-  if (mine) {
+  if (opening) {
     // Field parsing stays on the flat text — its label regex is line-oriented.
     const { fields, lead, rest } = farParseFields(farMessageBlocks(source).join('\n\n'));
     if (fields.length > 0) {
@@ -1292,6 +1294,30 @@ const FAR_PLAN_STORE_BUDGET = 3 * 1024 * 1024;
 const _farPicked = { compose: [], reply: [] };
 let _farPickSeq = 0;
 let _farUploadProbe = null;
+
+// A staff sender's own messages come back is_staff true, exactly like Carta's, so
+// only their id tells the two apart. Resolved once, and null when it cannot be.
+let _farViewerId = null;
+let _farViewerProbe = null;
+function farResolveViewer() {
+  if (!_farViewerProbe) {
+    _farViewerProbe = (async () => {
+      try {
+        const res = await _mcp('get_current_user', {});
+        if (res && !res.isError) {
+          for (const c of _mcpResultCandidates(res)) {
+            const id = c && (c.pk ?? c.id);
+            if (id != null) { _farViewerId = String(id); break; }
+          }
+        }
+      } catch (e) {
+        console.info('[far identity] viewer lookup failed', e);
+      }
+      return _farViewerId;
+    })();
+  }
+  return _farViewerProbe;
+}
 
 // Staff-gated, so most viewers cannot attach. discover() runs the same access
 // check; fetch() rejects writes on method first, so it would answer yes for all.
@@ -1502,7 +1528,7 @@ async function submitFarReply() {
     const msgs = _farThreadCache[workflowId] ?? [];
     msgs.push({
       id: null, text: message, html: '', isStaff: false, author: null,
-      at: new Date().toISOString(), attachments: sentFiles,
+      authorId: _farViewerId, at: new Date().toISOString(), attachments: sentFiles,
     });
     _farThreadCache[workflowId] = msgs;
     const row = (_farRows ?? []).find(r => String(r.id) === String(workflowId));
