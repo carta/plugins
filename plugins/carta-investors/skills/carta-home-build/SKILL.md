@@ -20,6 +20,9 @@ allowed-tools:
   - mcp__*Carta*__welcome
   - mcp__*carta*__get_current_user
   - mcp__*Carta*__get_current_user
+  # Resolves the firm the published title names.
+  - mcp__*carta*__list_contexts
+  - mcp__*Carta*__list_contexts
   - Bash(uv run *build_artifact.py *)
   - Bash(find ~ -name "build_artifact.py"*)
   - Bash(find /sessions -name "build_artifact.py"*)
@@ -37,10 +40,14 @@ allowed-tools:
 
 # Carta Home — Build / Redeploy
 
-Deploys the `carta-home` live artifact. It is **assembled** from source parts in
-this skill's `resources/` directory (template + CSS + config + app JS) by
-`scripts/build_artifact.py`, which also substitutes this session's Carta connector name.
-You never need to read the assembled HTML — see "Source layout" below.
+Deploys the `carta-home` live artifact, published as **`Carta Home - <firm>`**. It is
+**assembled** from source parts in this skill's `resources/` directory (template + CSS +
+config + app JS) by `scripts/build_artifact.py`, which also substitutes this session's
+Carta connector name. You never need to read the assembled HTML — see "Source layout" below.
+
+The firm is named in the title but **not** baked into the bundle: the page still detects
+whichever firm is active at open time. One artifact per firm, so each has its own sidebar
+tile.
 
 ## What the artifact does
 
@@ -235,6 +242,11 @@ This is a live artifact: the rendered HTML calls Carta at runtime through `claud
 
 Keep `get_current_user`'s response: Step 3 grants that tool, and the Skill Directory's entitlement gate reads `has_tactyc` / `has_active_manco` from the same payload at runtime.
 
+**Then resolve the firm the title will name.** Call `list_contexts` with no firm filter and
+take the firm whose `is_active` is true, falling back to the first one listed — the same
+resolution `fetchLiveData()` does at runtime in `carta-home.app.js`. If it returns no firm,
+tell the user their connector has no firm in context and stop; a title cannot be guessed.
+
 ### Step 1: Build the self-contained artifact (no need to read any HTML)
 
 Run the build script — it assembles CSS + config + app into one file and substitutes the
@@ -249,25 +261,31 @@ server id. The script lives in **this skill's own `scripts/` directory**.
 > SKILL_DIR="$(dirname "$(dirname "$(find /sessions "$HOME" -type f -path '*/carta-home-build/scripts/build_artifact.py' 2>/dev/null | head -1)")")"
 > ```
 
+`<slug>` is the firm name lowercased with non-alphanumerics collapsed to `-`, so two firms
+never write over each other's file. The bundle itself is firm-agnostic — the slug only
+keeps the paths apart.
+
 ```
 uv run "<SKILL_DIR>/scripts/build_artifact.py" \
   --mcp-server "<CARTA_MCP_SERVER>" \
-  --out <outputs-directory>/carta-home-updated.html
+  --out <outputs-directory>/carta-home-<slug>.html
 ```
 
 `<SKILL_DIR>` is this skill's base directory — e.g. in Cowork
 `/sessions/<name>/mnt/.remote-plugins/plugin_<id>/skills/carta-home-build`, in Claude Code
 `${CLAUDE_PLUGIN_ROOT}/skills/carta-home-build`.
 
-### Step 2: Find an already-published Carta Home
+### Step 2: Find an already-published Carta Home for this firm
 
 ```
 Artifact({action: "list", scope: "mine"})
 ```
 
-Look for an artifact titled **Carta Home**. If one is there, keep its `url` — Step 3
-passes it so the page redeploys in place instead of claiming a second URL. If there is
-none, omit `url`.
+Look for an artifact titled exactly **`Carta Home - <Firm>`**. If one is there, keep its
+`url` — Step 3 passes it so the page redeploys in place. If there is none, omit `url`: this
+firm gets its own artifact. An artifact for a *different* firm is not a match — reusing its
+`url` would overwrite that firm's page. A bare **Carta Home** with no suffix is a page from
+before this skill titled them per firm; treat it as this firm's and redeploy over it.
 
 ### Step 3: Publish the artifact
 
@@ -276,10 +294,10 @@ the only difference between a first publish and a redeploy.
 
 ```
 Artifact({
-  file_path: "<outputs-directory>/carta-home-updated.html",
+  file_path: "<outputs-directory>/carta-home-<slug>.html",
   url: "<url from Step 2 — omit entirely on a first publish>",
-  title: "Carta Home",
-  description: "Dashboard home — SOI, Fund Performance, P&L, Balance Sheet, LP Reporting, Valuations, ManCo Actuals, Form ADV, and Skill Directory. Works for any Carta firm.",
+  title: "Carta Home - <Firm>",
+  description: "Dashboard home for <Firm> — SOI, Fund Performance, P&L, Balance Sheet, LP Reporting, Valuations, ManCo Actuals, Form ADV, and Skill Directory.",
   favicon: "🏠",
   label: "Redeployed from skill bundle",
   capabilities: {
@@ -305,9 +323,14 @@ Artifact({
 > defaults. The marketing commands only exist on some environments, so a missing command
 > degrades gracefully to the static cards.
 >
-> Keep `favicon` and `title` stable across redeploys — users find the tab by its icon.
+> Keep `favicon` stable across redeploys — users find the tab by its icon — and keep the
+> title stable **for a given firm**: it is the per-firm lookup key Step 2 matches on.
 > Restate the whole `capabilities` object every time: a non-empty object replaces the
 > stored grant, so a tool you leave out is revoked.
+>
+> The title is stamped once, at publish; the **page** still follows whatever firm is active
+> in the viewer's Carta context when they open it. A viewer who switches firm sees a title
+> that no longer matches the body. Rebuild for that firm to fix it.
 
 ### Step 4: Validate
 
@@ -318,8 +341,7 @@ accept, every card shows its no-connector state.
 
 ### Step 5: Confirm
 
-Give the user the artifact's URL and tell them it is live. The artifact auto-detects
-whichever firm they have active in their Carta MCP context.
+Give the user the artifact's URL, name the firm in its title, and tell them it is live.
 
 ## If something fails
 
@@ -377,4 +399,4 @@ the Carta Home dashboard as a whole, not on requests for one of those cards in i
   Step 2 was shared with them rather than theirs, drop `url` and publish fresh.
 - To change the artifact, edit the relevant source file under `resources/` (see the
   source-layout table above — includes `resources/app/*.js` for features already split out),
-  then re-run `build_artifact.py`. Never hand-edit the assembled `carta-home-updated.html`.
+  then re-run `build_artifact.py`. Never hand-edit the assembled HTML.

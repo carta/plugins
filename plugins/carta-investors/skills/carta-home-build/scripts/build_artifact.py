@@ -28,7 +28,7 @@ addresses a connector by. `{{FIRM}}` is left intact — it is a RUNTIME
 placeholder the artifact fills in from list_contexts.
 
 Usage:
-  uv run scripts/build_artifact.py --mcp-server <connector-display-name> --out <path>/carta-home-updated.html
+  uv run scripts/build_artifact.py --mcp-server <connector-display-name> --out <path>/carta-home-<slug>.html
 """
 import argparse
 import hashlib
