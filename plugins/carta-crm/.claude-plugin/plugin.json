@@ -1,6 +1,6 @@
 {
   "name": "carta-crm",
-  "version": "1.8.8",
+  "version": "1.9.0",
   "description": "Manage the Carta CRM conversationally — search, add, update, and enrich investors, companies, contacts, deals, notes, and fundraisings via the Carta CRM MCP Server",
   "problem": "Keeping the CRM current means clicking through forms one record at a time, and the relationship intelligence already in it — who we know at a target, what was said last, who can open a door — stays buried when a dealmaker has two minutes before a call.",
   "author": {
