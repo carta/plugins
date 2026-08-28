@@ -913,21 +913,14 @@
   padding: 16px; font-size: 13px; line-height: 20px; white-space: normal;
 }
 
-/* The notice is a printed document: white paper in either theme. */
-.ccr-doc { background: #FFFFFF; border: 1px solid #DEDFDF; color: #1A1A1A; padding: 24px 22px 28px; font-variant-numeric: tabular-nums; }
-.ccr-doc-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
-.ccr-doc-fund { display: block; font-size: 14px; line-height: 20px; font-weight: 700; }
-.ccr-doc-kind { display: block; font-size: 12px; line-height: 18px; color: #656B6B; }
-.ccr-doc-h { font-size: 12px; line-height: 18px; font-weight: 700; margin-top: 18px; padding-bottom: 4px; border-bottom: 1px solid #1A1A1A; }
-.ccr-doc-h:first-of-type { margin-top: 20px; }
-.ccr-doc-row { display: flex; justify-content: space-between; gap: 14px; padding: 6px 0; border-bottom: 1px solid #EDEDED; font-size: 12px; line-height: 18px; }
-.ccr-doc-k { color: #656B6B; }
-.ccr-doc-total { padding: 7px 0; border-bottom: 1px solid #1A1A1A; font-weight: 700; }
-.ccr-doc-total .ccr-doc-k { color: #1A1A1A; }
-.ccr-doc-sub { font-size: 12px; line-height: 18px; font-weight: 700; margin-top: 18px; }
-.ccr-doc-b { font-size: 12px; line-height: 18px; margin-top: 2px; }
-.ccr-doc-bullet { padding-left: 14px; }
-.ccr-doc-foot { margin-top: 18px; font-size: 11px; line-height: 17px; color: #656B6B; }
+/* The notice PDF, painted to canvas by pdf.js. The page is a printed document:
+   white paper in either theme. Width drives the size so a portrait page can
+   never push the panel sideways. */
+.ccr-pdf { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.ccr-pdf-page {
+  display: block; width: 100%; height: auto; max-width: 620px; min-width: 0;
+  background: #FFFFFF; border: 1px solid #DEDFDF;
+}
 
 /* The email is a document Carta composes; it renders in its own frame so its
    markup cannot reach the page's styles or scripts. */

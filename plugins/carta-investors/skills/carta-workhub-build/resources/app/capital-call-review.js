@@ -49,6 +49,9 @@ function ccrReset(target, title) {
     docTab: "email",
     email: null,
     emailError: null,
+    pdf: null,
+    pdfError: null,
+    pdfLoading: false,
     changeText: "",
     sentMessage: "",
     error: null,
@@ -673,7 +676,30 @@ function ccrOpenNotice() {
   trackWorkhub("click", "CartaWorkhub.CapitalCallReview.OpenNotice");
   _ccr.noticeOpen = true;
   ccrRenderNotice();
-  ccrLoadEmail();
+  ccrLoadActiveDoc();
+}
+
+// Both documents belong to the investor on screen, so switching drops them —
+// pdfLoading included, or the guard below refuses to start the new render while
+// the answer in flight, which ccrLoadPdf discards, never clears the flag.
+function ccrSelectLp(index) {
+  _ccr.lpIndex = index;
+  _ccr.email = null;
+  _ccr.emailError = null;
+  _ccr.pdf = null;
+  _ccr.pdfError = null;
+  _ccr.pdfLoading = false;
+  ccrRenderNotice();
+  ccrLoadActiveDoc();
+}
+
+// Each tab costs a render on Carta's side, so only the visible one is fetched.
+function ccrLoadActiveDoc() {
+  if (_ccr.docTab === "pdf") {
+    if (!_ccr.pdf && !_ccr.pdfLoading) ccrLoadPdf();
+  } else if (!_ccr.email) {
+    ccrLoadEmail();
+  }
 }
 
 function ccrCloseNotice() {
@@ -779,30 +805,127 @@ function ccrRenderNotice() {
   overlay.querySelectorAll("[data-ccr-tab]").forEach((el) =>
     el.addEventListener("click", () => {
       _ccr.docTab = el.getAttribute("data-ccr-tab");
+      if (_ccr.docTab === "pdf") trackWorkhub("click", "CartaWorkhub.CapitalCallReview.NoticePdf");
       ccrRenderNotice();
-      if (_ccr.docTab === "email" && !_ccr.email) ccrLoadEmail();
+      ccrLoadActiveDoc();
     }));
   const sel = document.getElementById("ccr-lp");
-  if (sel) sel.addEventListener("change", (ev) => {
-    _ccr.lpIndex = Number(ev.target.value);
-    _ccr.email = null;
-    ccrRenderNotice();
-    ccrLoadEmail();
-  });
+  if (sel) sel.addEventListener("change", (ev) => ccrSelectLp(Number(ev.target.value)));
+
+  if (_ccr.docTab === "pdf") ccrPaintPdf();
 }
 
 
-// The sent notice is a document Carta serves, and the artifact sandbox renders
-// no PDF inline — data: and blob: both fail. So this tab links out, never
-// redraws the notice from figures.
+// ── Notice PDF ────────────────────────────────────────────────────────────
+//
+// The bytes ride inline in the response because nothing else reaches this page:
+// the CSP blocks every external host, so neither the authenticated Carta link
+// nor a presigned S3 URL loads, and the sandbox renders no PDF natively —
+// <object>, <iframe src="data:"> and <embed src="blob:"> all show nothing. So
+// pdf.js, vendored into this artifact, paints the real document to canvas. What
+// the reader sees is the file itself, never a redrawing of it from figures.
+
+async function ccrLoadPdf() {
+  const row = _ccr.rows[_ccr.lpIndex];
+  if (!row || !row.interest || row.interest.id == null) {
+    _ccr.pdfError = "This row carries no interest id, so its notice cannot be rendered.";
+    ccrRenderNotice();
+    return;
+  }
+
+  _ccr.pdf = null;
+  _ccr.pdfError = null;
+  _ccr.pdfLoading = true;
+  ccrRenderNotice();
+
+  // Carta renders the document on every call, which is slow enough that the
+  // reader can pick another investor first; that answer is no longer wanted.
+  const want = _ccr.lpIndex;
+  try {
+    const res = await _mcp("fetch", {
+      command: "fa:get:capital-activity-notice-pdf-preview",
+      params: {
+        fund_uuid: _ccr.target.fundUuid,
+        capital_activity_id: _ccr.target.activityId,
+        interest_id: row.interest.id,
+      },
+    });
+    if (want !== _ccr.lpIndex) return;
+    if (res.isError) throw new Error(res.content?.[0]?.text ?? "the notice could not be rendered");
+    const p = ccrPayload(res, (c) => "data_uri" in c);
+    if (!p) throw new Error("no document in the response");
+    _ccr.pdf = p;
+  } catch (err) {
+    if (want !== _ccr.lpIndex) return;
+    _ccr.pdfError = err && err.message ? err.message : "the notice could not be rendered";
+  }
+  _ccr.pdfLoading = false;
+  ccrRenderNotice();
+}
+
+function ccrB64Bytes(b64) {
+  const raw = atob(b64);
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
+}
+
+// Every render rewrites the panel's innerHTML, so canvases are painted after it
+// rather than in it. The token drops a paint whose panel has already moved on.
+let _ccrPaintToken = 0;
+
+async function ccrPaintPdf() {
+  const host = document.getElementById("ccr-pdf-pages");
+  if (!host || !_ccr.pdf || !window.pdfjsLib) return;
+  const token = ++_ccrPaintToken;
+  const uri = _ccr.pdf.data_uri || "";
+  const width = Math.max(240, host.clientWidth || 560);
+
+  try {
+    const doc = await pdfjsLib.getDocument({ data: ccrB64Bytes(uri.slice(uri.indexOf(",") + 1)) }).promise;
+    for (let n = 1; n <= doc.numPages; n++) {
+      if (token !== _ccrPaintToken) return;
+      const page = await doc.getPage(n);
+      const base = page.getViewport({ scale: 1 });
+      // Width drives the scale, so height follows the page's own ratio and a
+      // portrait page can never widen the panel.
+      const vp = page.getViewport({ scale: (width / base.width) * (window.devicePixelRatio || 1) });
+      const canvas = document.createElement("canvas");
+      canvas.className = "ccr-pdf-page";
+      canvas.width = Math.round(vp.width);
+      canvas.height = Math.round(vp.height);
+      canvas.setAttribute("role", "img");
+      canvas.setAttribute("aria-label", "Notice page " + n + " of " + doc.numPages);
+      host.appendChild(canvas);
+      await page.render({ canvasContext: canvas.getContext("2d"), viewport: vp }).promise;
+    }
+  } catch (err) {
+    if (token !== _ccrPaintToken) return;
+    _ccr.pdfError = "The document arrived but could not be rendered: " +
+      ((err && err.message) || "unknown error");
+    ccrRenderNotice();
+  }
+}
+
 function ccrNoticeDoc() {
-  return '<div class="ccr-empty">' +
-    "<p>The notice each investor receives is a PDF Carta generates. " +
-    "This page cannot display it inline.</p>" +
-    '<p class="ccr-note">Opening it here needs an MCP command for ' +
-    "<code>preview_capital_activity_notice</code>, which returns the document URL. " +
-    "Until that ships, open the capital call in Carta and use Preview notice. " +
-    "The Email tab is the real rendered email.</p></div>";
+  if (!window.pdfjsLib) {
+    return '<div class="ccr-empty"><p>This build carries no PDF renderer, so the notice cannot be shown here.</p>' +
+      '<p class="ccr-note">Open the capital call in Carta and use Preview notice. The Email tab is unaffected.</p></div>';
+  }
+  if (_ccr.pdfError) {
+    return '<div class="ccr-empty"><p>This notice could not be rendered.</p>' +
+      '<p class="ccr-note">' + escHtml(_ccr.pdfError) + "</p>" +
+      '<p class="ccr-note">Carta renders the document fresh on each request, so trying again is worth a shot. ' +
+      "Otherwise open the capital call in Carta and use Preview notice.</p></div>";
+  }
+  if (_ccr.pdfLoading || !_ccr.pdf) {
+    return '<div class="loading-row" style="padding:20px 0;">Carta is rendering this investor\'s notice…</div>';
+  }
+  return '<div class="ccr-pdf" id="ccr-pdf-pages"></div>' +
+    '<div class="ccr-caveat"><span class="ccr-caveat-arrow">&#8593;</span><span>' +
+    "This is the document itself, not a redrawing of it — the same PDF this investor " +
+    "receives on release." +
+    "</span></div>";
 }
 
 // ── Open / close ──────────────────────────────────────────────────────────

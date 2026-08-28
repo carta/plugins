@@ -117,10 +117,13 @@ not inside a fund-data dashboard.
   `review-capital-activity` (or `review-capital-activity-changes`) task opens the review panel
   instead of the thread: the preparer's note, what is being called, when it is due,
   how much of each commitment it consumes, and collapsible Investor allocations / Payment and
-  delivery. A second panel shows the notice each investor receives. The footer carries **Request
-  changes** and **Approve and release**, each behind its own confirm step. Read from
-  `fa:get:capital-activity-review-summary` and `fa:list:capital-activity-review-row`; written with
-  `fa:request-changes:capital-activity` and `fa:approve-and-release:capital-activity`.
+  delivery. A second panel shows the notice each investor receives, as the rendered email and as
+  the real PDF. The footer carries **Request changes** and **Approve and release**, each behind
+  its own confirm step. Read from `fa:get:capital-activity-review-summary`,
+  `fa:list:capital-activity-review-row`, `fa:get:capital-activity-partner-email-preview` and
+  `fa:get:capital-activity-notice-pdf-preview`; written with `fa:request-changes:capital-activity`
+  and `fa:approve-and-release:capital-activity`. All of them ride the `fetch` and `mutate` tools
+  already in the grant, so adding a command never changes the publish call.
 
   There is no build flag for this: the server decides which rows exist, so no review card
   means the environment does not serve them. `--ccr-fund-uuid` / `--ccr-activity-id` seed one
@@ -141,12 +144,26 @@ not inside a fund-data dashboard.
   envelope-plus-scriptless-iframe shape, the same `[/LINK_CARTA]` caveat. Recipients key on
   `addr_type` (`TO` / `CC` / `BCC`), not `type`. Keep the two behaviourally identical.
 
-  **The Notice tab cannot show the PDF, and this was measured.** A published artifact renders no
-  PDF inline — `<embed>`, `<iframe>` and `blob:` were all tried against real PDF bytes and none
-  render; only navigating to a URL works. So the tab explains itself and points at Carta. Showing
-  the real notice needs an MCP command for `preview_capital_activity_notice` (the resource is on
-  master, with `interest_id`) returning the document `url` for the panel to link out to. The
-  notice is never redrawn from figures — a replica of a document drifts from the document.
+  **The Notice tab shows the real PDF, painted by a renderer the artifact carries.** Read with
+  `fa:get:capital-activity-notice-pdf-preview`, which returns the document as a base64 `data:`
+  URI; pdf.js, vendored under `resources/vendor/`, paints it to canvas. The notice is never
+  redrawn from figures — a replica of a document drifts from the document.
+
+  Three measured facts hold that shape in place, and none of them is obvious:
+
+  - **The browser's own viewer is blocked here.** `<object>`, `<iframe src="data:">` and
+    `<embed src="blob:">` were each tried against real PDF bytes inside a published artifact and
+    all three render nothing. A renderer in the page is the only way, so the vendored bundle is
+    load-bearing rather than a convenience.
+  - **The bytes have to be in the response.** The CSP blocks every external host, so neither the
+    authenticated Carta link nor a presigned S3 URL loads, and the page cannot redeem a document
+    token either.
+  - **A binary blob would not survive the trip.** Every Anthropic-managed surface rejects a blob
+    content block, so the command returns a `data:` URI instead.
+
+  **Each render costs.** Carta renders the document through Prince or Carbone on every call and
+  stores it, so the panel fetches only the visible tab and only for the investor on screen —
+  never a walk down the picker. A measured notice is 2 pages and ~45 KB.
 
   **The activity link is read off the workflow row**, not guessed: `fund.uuid` plus whichever of
   `capital_activity_id` / `object_id` the row carries. A row with neither opens the panel to a
@@ -222,6 +239,7 @@ codes (`needs_reauth`, `server_not_connected`) are page-level, not per-section.
 | `resources/carta-workhub.css` | styles (Ink tokens) |
 | `resources/carta-workhub.template.html` | HTML skeleton + injection markers |
 | `resources/carta-workhub.tracker.js` | inlined `@carta/mcp-ui-tracker` browser bundle |
+| `resources/vendor/` | pdf.js, vendored — pinned to the last UMD release for a reason its README gives |
 | `../../.claude-plugin/skill-versions.json` | this skill's `version` + release `headline` |
 
 `carta-workhub.app.js` duplicates a handful of helpers from `carta-home.app.js` on purpose:

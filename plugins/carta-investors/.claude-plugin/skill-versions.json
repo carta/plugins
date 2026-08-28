@@ -4,7 +4,7 @@
     "headline": "Remind investors sends capital call reminders to a batch of LPs at once."
   },
   "carta-workhub-build": {
-    "version": "1.3.0",
-    "headline": "Review and release a capital call without leaving Carta Workhub."
+    "version": "1.4.0",
+    "headline": "See the real notice PDF each investor receives, inside the review panel."
   }
 }
