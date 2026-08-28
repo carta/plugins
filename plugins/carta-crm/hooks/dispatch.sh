@@ -4,20 +4,20 @@
 # whatever else Claude Code appends) to the resolved native binary and
 # passes stdin/stdout through untouched.
 #
-# Resolves the binary from two candidate locations, relative to THIS
-# script's own path (not $PWD, which Claude Code does not guarantee):
-#   1. Published:  <this-dir>/bin/hooks-<os>-<arch>[.exe]
-#      (after the publish pipeline injects dispatch.sh + bin/ side by side
-#      into <plugin>/hooks/ — see scripts/pipeline/pipeline.py inject_hook_binaries)
-#   2. Monorepo:   <this-dir>/bin/hooks-<os>-<arch>[.exe]
-#      (tools/hooks/dispatch.sh run straight from a checkout, for staff
-#      exercising hooks without a publish — bin/ is a checked-in sibling
-#      of this script there too, same relative layout as case 1)
+# Resolves the binary from "$here/bin/hooks-<os>-<arch>[.exe]", relative to
+# THIS script's own path (not $PWD, which Claude Code does not guarantee).
+# That single relative lookup covers both layouts that carry a bin/ sibling:
+#   1. Published:  the publish pipeline injects dispatch.sh + bin/ side by side
+#      into <plugin>/hooks/ — see scripts/pipeline/pipeline.py inject_hook_binaries
+#   2. Monorepo:   tools/hooks/dispatch.sh run straight from a checkout, for
+#      staff exercising hooks without a publish, where bin/ is checked in
+#      alongside this script
 #
-# Both cases resolve to the same relative path ("$here/bin/hooks-...") since
-# the publish step preserves tools/hooks/'s own dispatch.sh-next-to-bin/
-# layout when injecting into <plugin>/hooks/ — so there is really only one
-# lookup, done once, from wherever this script physically lives.
+# A third layout carries no bin/ at all: each instrumented plugin commits this
+# script at plugins/<name>/hooks/dispatch.sh, and a marketplace install copies
+# that plugin directory verbatim without running the publish pipeline. There the
+# lookup finds nothing and every subcommand fails open below — hooks go quiet
+# instead of erroring on a missing file, and PreToolUse still allows the call.
 #
 # Fail-open is PER SUBCOMMAND, not a blanket PreToolUse allow: an event with
 # no allow/deny concept (SessionStart, UserPromptSubmit) must not emit a
