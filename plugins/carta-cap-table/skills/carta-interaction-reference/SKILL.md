@@ -277,7 +277,9 @@ Agents in extended conversations must manage context across turns without burden
 
 When fetching cap table data, prefer efficient retrieval patterns:
 
-- **Top-N / "largest" / "biggest" queries**: Use `ordering` with `page_size` and `detail=minimal` instead of fetching all records and sorting client-side. Example: `call_tool({"name": "cap_table__list__rsus", "arguments": {"corporation_id": id, "ordering": "-quantity", "detail": "minimal", "page_size": "20"}})` returns the top 20 RSU holders in one call. Available on grants, RSUs, SARs, CBUs, stakeholders, convertible notes, and financing history.
+- **Top-N / "largest" / "biggest" queries**: Use `ordering` with `page_size` and `detail=minimal` instead of fetching all records and sorting client-side. Example: `call_tool({"name": "cap_table__list__rsus", "arguments": {"corporation_id": id, "ordering": "-quantity", "detail": "minimal", "page_size": "20"}})` returns the top 20 RSU holders in one call. Available on:
+  - `cap_table__list__grants`, `cap_table__list__rsus`, `cap_table__list__sars`, `cap_table__list__cbus`, `cap_table__list__convertible_notes`, `cap_table__list__financing_history` — use the `list__` verb
+  - `cap_table__get__stakeholders` — use `get__`, not `list__`;
 - **Ordering fields vary by command** — use `search_tools({"query": "<command name>"})` to inspect its `inputSchema` for available fields. Common fields: `quantity`, `remaining_shares`, `issue_date`, `stakeholder_name`.
 - **Never paginate through all records to sort client-side** — this times out on large companies (1,000+ grants/stakeholders).
 
