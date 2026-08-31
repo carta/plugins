@@ -36,6 +36,8 @@ allowed-tools:
 
 Query the Carta data warehouse for investors data — NAV, performance metrics, cash flow statements, balance sheets, portfolio financials, and more.
 
+> **Schema-first rule for raw SQL:** Whenever you fall through to `dwh__execute__query` directly — bypassing `execute:question` and the semantic-layer steps — you MUST call `dwh__list__tables` (omit `schema` to enumerate all schemas) and then `dwh__get__table_schema` to confirm the exact table path and every column name before composing the query. Never infer or guess column names from context or semantics; the live schema is the only source of truth. One preflight eliminates the two leading error classes: `invalid identifier` (wrong column name) and `Object does not exist` (wrong table name) on the first attempt.
+
 ## When to Use
 
 This is the skill for **Carta Web / Fund Admin** data work — the data warehouse. Note that **Carta Fund Forecasting (formerly Tactyc)** is a separate domain with its own funds and data; when a fund performance question could belong to either system, the `fund-performance.md` semantic layer will automatically check Fund Forecasting first before running DWH queries.
