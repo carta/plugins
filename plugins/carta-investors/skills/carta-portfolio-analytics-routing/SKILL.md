@@ -1,6 +1,6 @@
 ---
 name: carta-portfolio-analytics-routing
-version: 2.1.0
+version: 2.1.1
 description: >
   Routes to Schedule of Investments, Co-Investor Lookup, or Performance
   Benchmarks. Trigger on any of:
@@ -20,6 +20,10 @@ allowed-tools:
   - mcp__carta__search_tools
   - mcp__carta__set_context
   - mcp__carta__list_contexts
+  # The soi mirror picks its server at runtime and can land on either prefix.
+  - mcp__claude_ai_carta__call_tool
+  - mcp__claude_ai_carta__set_context
+  - mcp__claude_ai_carta__list_contexts
   - mcp__Claude_Preview__preview_start
   - mcp__Claude_Preview__preview_list
   - mcp__Claude_Preview__preview_eval
