@@ -4,7 +4,7 @@
     "headline": "Remind investors sends capital call reminders to a batch of LPs at once."
   },
   "carta-workhub-build": {
-    "version": "1.5.2",
+    "version": "1.5.3",
     "headline": "You can attach files to a request or a reply."
   }
 }

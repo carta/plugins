@@ -121,8 +121,8 @@ not inside a fund-data dashboard.
   the real PDF. The footer carries **Request changes** and **Approve and release**, each behind
   its own confirm step. Read from `fa:get:capital-activity-review-summary`,
   `fa:list:capital-activity-review-row`, `fa:get:capital-activity-partner-email-preview` and
-  `fa:get:capital-activity-notice-pdf-preview`; written with `fa:request-changes:capital-activity`
-  and `fa:approve-and-release:capital-activity`. All of them ride the `fetch` and `mutate` tools
+  `fa:get:capital-activity-notice-pdf-preview`; written with `fa:mutate:request-capital-activity-changes`
+  and `fa:mutate:approve-capital-activity`. All of them ride the `fetch` and `mutate` tools
   already in the grant, so adding a command never changes the publish call.
 
   There is no build flag for this: the server decides which rows exist, so no review card

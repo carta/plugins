@@ -282,7 +282,7 @@ async function ccrSubmitChanges() {
 
   try {
     const res = await _mcp("mutate", {
-      command: "fa:request-changes:capital-activity",
+      command: "fa:mutate:request-capital-activity-changes",
       params: {
         fund_uuid: _ccr.target.fundUuid,
         capital_activity_id: _ccr.target.activityId,
@@ -308,7 +308,7 @@ async function ccrApprove() {
 
   try {
     const res = await _mcp("mutate", {
-      command: "fa:approve-and-release:capital-activity",
+      command: "fa:mutate:approve-capital-activity",
       params: {
         fund_uuid: _ccr.target.fundUuid,
         capital_activity_id: _ccr.target.activityId,
