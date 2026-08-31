@@ -131,6 +131,13 @@ func PostToolUseOK() []byte {
 	return []byte(`{"hookSpecificOutput":{"hookEventName":"PostToolUse"}}`)
 }
 
+// PostModelSwitchOK is the fixed PostModelSwitch output shape.
+// PostModelSwitch fires async and cannot block, same as PostToolUse, but
+// still emits the hookSpecificOutput envelope Claude Code expects.
+func PostModelSwitchOK() []byte {
+	return []byte(`{"hookSpecificOutput":{"hookEventName":"PostModelSwitch"}}`)
+}
+
 // FailOpen returns the generic fail-open payload for a given hook event,
 // used by main.go when a handler returns an error or panics.
 func FailOpen(event registry.Event) []byte {
@@ -143,6 +150,8 @@ func FailOpen(event registry.Event) []byte {
 		return UserPromptSubmitOK()
 	case registry.PostToolUse:
 		return PostToolUseOK()
+	case registry.PostModelSwitch:
+		return PostModelSwitchOK()
 	default:
 		return []byte{}
 	}

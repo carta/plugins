@@ -98,6 +98,12 @@ case "$subcommand" in
         printf '%s' '{"hookSpecificOutput":{"hookEventName":"PostToolUse"}}'
         exit 0
         ;;
+    capture-model-switch)
+        # PostModelSwitch: fires async, cannot block, but still expects the
+        # hookSpecificOutput envelope back (hookio.PostModelSwitchOK).
+        printf '%s' '{"hookSpecificOutput":{"hookEventName":"PostModelSwitch"}}'
+        exit 0
+        ;;
     capture-slash-skill)
         # UserPromptSubmit: silently best-effort, no stdout contract.
         exit 0
