@@ -14,6 +14,7 @@ const (
 	PostToolUse      Event = "PostToolUse"
 	SessionStart     Event = "SessionStart"
 	UserPromptSubmit Event = "UserPromptSubmit"
+	PostModelSwitch  Event = "PostModelSwitch"
 )
 
 // Handler processes raw stdin bytes for a hook invocation and returns the
