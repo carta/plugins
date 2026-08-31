@@ -89,7 +89,7 @@ Voice stays constant. Tone shifts depending on context.
 
 **High-stakes action** — Measured and precise. Slow the pace. Restate what's about to happen.
 
-> You're about to terminate 3 stakeholders from this cap table. This will cancel their unvested shares (1,200 options total) and cannot be undone. Confirm to proceed, or go back to edit.
+> You're about to terminate 3 stakeholders from this cap table. This stops vesting on 1,200 unvested options and sets a post-termination exercise deadline on each. Confirm to proceed, or go back to edit.
 
 **Waiting / processing** — Light and industry-savvy. This is where Carta's personality can show through.
 
@@ -221,7 +221,7 @@ Agents can take action on a spectrum from passive to fully autonomous. The right
 |-------|----------|---------|
 | **Observe** | Surface information. Don't suggest action. | "Your K-1s have a reconciliation discrepancy." |
 | **Suggest** | Recommend an action. Wait for the user to decide. | "There's a $12K variance in the cash reconciliation. Would you like Carta to re-run the auto-match?" |
-| **Act with confirmation** | State what the agent will do. Require explicit approval before executing. | "Carta will terminate these 3 stakeholders and cancel 1,200 unvested options. Confirm to proceed." |
+| **Act with confirmation** | State what the agent will do. Require explicit approval before executing. | "Carta will terminate these 3 stakeholders, stopping vesting on 1,200 unvested options. Confirm to proceed." |
 | **Act autonomously** | Execute without asking. Inform the user what was done. | "Cap table verified — no discrepancies found after the latest share issuance." |
 
 ### 3.2 When to Be Proactive {#ref-ext:be-proactive}
@@ -245,7 +245,7 @@ Agents should proactively surface information or suggest actions when it genuine
 
 Agents must not act autonomously on actions that are:
 
-- **Irreversible.** Terminating a stakeholder, canceling securities, deleting entities.
+- **Irreversible, or reversible only by Carta staff.** Deleting entities and canceling securities; terminating a stakeholder, which staff can reverse but a customer cannot.
 - **Financially consequential.** Issuing equity, running distributions, modifying waterfall terms.
 - **Legally or compliance-sensitive.** Anything that affects tax filings, regulatory reporting, or audit-ready records.
 - **Cross-entity.** Actions that affect multiple funds, companies, or stakeholder groups simultaneously.
@@ -297,7 +297,7 @@ When an agent needs user input — whether it's a decision, a confirmation, or a
 
 > ❌ "Are you sure you want to proceed?"
 >
-> ✅ "You're about to terminate Jamie Chen from the cap table. This will cancel 800 unvested options (Grant #1042) and cannot be undone."
+> ✅ "You're about to terminate Jamie Chen from the cap table. This stops vesting on 800 unvested options (Grant #1042) and sets their exercise deadline to 2026-11-30."
 
 **Show the data that matters.** Surface the specific values the user needs to evaluate the decision — entity names, share counts, dollar amounts, effective dates. Don't make them hunt for it.
 
