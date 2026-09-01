@@ -29,6 +29,13 @@ allowed-tools:
 
 # Carta AI Agent Interaction Reference
 
+A write flow that only needs the non-negotiable rules — financial precision
+(§2.3), how to ask for confirmation (§4.1), and trust & safety (§6) — can load
+[carta-interaction-reference-core](../carta-interaction-reference-core/SKILL.md)
+instead. It carries those sections verbatim under the same numbers and anchors,
+at about a quarter the size. This file is the superset; load it when voice,
+tone, audience calibration, proactiveness or error-handling style also matter.
+
 ---
 
 ## 1. Voice & Tone {#ref-ext:voice-and-tone}
