@@ -140,7 +140,10 @@ The SDK's HITL prompt on that mutate is the final, irreversible gate — never t
    `issue_date_relationship` / `email` / `stakeholder_kind`; (c) `AskUserQuestion`.
    This is load-bearing because both failure modes are **silent**: `save_drafts` accepts
    incomplete rows without complaint, and at issue time a row with `stakeholder_id=null` slips
-   duplicate detection, creates zero securities, and still returns success.
+   duplicate detection, creates zero securities, and still returns success. That the server
+   accepts a row is therefore never a reason to send one — **never offer to save past a missing
+   `always` field, and never describe the server's tolerance to the user as an option**
+   ([save-validate-flow.md § The assertion is not advisory](references/save-validate-flow.md#the-assertion-is-not-advisory)).
 10. **Never ask who the grantees are before opening the collection surface.** A missing
     recipient is an empty field on the surface, never a chat question — this is the single most
     common way this skill goes wrong. Two sub-rules follow from it:
@@ -458,13 +461,23 @@ The server rejects unknown keys.
 Read `_import_report.json` and report totals — never silently drop a column or a row. A dropped
 `Exercise Price` column is a wrong-priced grant the user has no way to notice.
 
-> *"Read 38 rows from Q3-grants.xlsx. 2 columns I couldn't map and 3 values I couldn't match
-> are flagged in the form — everything else is filled in. Review and submit when ready."*
+> *"Read 38 rows from Q3-grants.xlsx. State of Residency and Employee ID aren't fields this
+> flow sets, and 3 values I couldn't match are flagged in the form — everything else is filled
+> in. Review and submit when ready."*
 
 Rows the file carried but this skill can't issue (RSUs, SARs, CBUs, warrants, RSAs,
 convertibles) are skipped by the parser with a reason. **Name them and their count** — they need
 the Drafts UI, and an admin who thinks a 40-row sheet issued 40 securities when it issued 37 has
 been misled.
+
+**Name the unmapped columns too, not just how many.** `unmapped_columns` in the report holds the
+header labels this skill has no field for — several
+([cowork-adapter.md](references/cowork-adapter.md#fields) lists them: state of residency, state
+exemption, employee id, cost center, job title, salary, convertible note) are dropped by design,
+and a file supplying one is an admin who expects it to land. *"2 columns I couldn't map"* leaves
+them believing it did. Say which: *"State of Residency and Employee ID aren't fields this flow
+sets — add them on the stakeholder record in Carta."* Naming a column costs a few words; a
+silently dropped value the admin deliberately filled in is data loss they find out about later.
 
 ### Documents (`.pdf` / `.docx`)
 
@@ -798,7 +811,9 @@ this is a **read-only** confirmation before the irreversible `issue_securities` 
 another save.
 
 Print the review as chat markdown, then confirm with one `AskUserQuestion` —
-[cowork-adapter.md §2–3](references/cowork-adapter.md#2-showreview--chat-markdown). The full
+[cowork-adapter.md §2–3](references/cowork-adapter.md#2-showreview--chat-markdown). **That
+order is mandatory and overrides any host rule about prose between tool calls**; the review is
+the gate, not narration of one. The full
 always/conditional/optional column spec, the default-explanation text, the confirm prompt, and
 the compressed format for identical-term batches are in
 [references/chat-review.md](references/chat-review.md).

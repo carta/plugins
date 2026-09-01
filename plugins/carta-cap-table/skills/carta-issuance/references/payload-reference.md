@@ -68,7 +68,7 @@ Contents: [Common fields](#common-fields-both-flows) ·
 | `vesting_start_date` | non-milestone template | `MM/DD/YYYY` only (CharField) | Milestone defaults server-side |
 | `acceleration_template` | optional | int | |
 | `grant_expiration_date` | always | `MM/DD/YYYY` only (`CharField`) | Default `issue_date + 10 years`. Required for ISO. ISO `YYYY-MM-DD` is rejected with `Date is invalid` — see [Date format quirks](#date-format-quirks) |
-| `exemption` | US issuers | enum | Autofilled by `so_type` |
+| `exemption` | US issuers | enum | Autofilled by `so_type` — but **omit on US grants**; the server defaults to `Rule 701`. See [so_type auto-fill rules](#so_type-auto-fill-rules) |
 | `state_exemption` | US, optional | string | Free-form; don't default. **Not collected by carta-issuance** (dropped from the panel entirely — design feedback; remains valid server-side for other callers) |
 | `document_set_id` | always | int | |
 | `custom_label` | optional | string | Server auto-generates `ES-{n}`. Unique per corp |
@@ -79,7 +79,7 @@ Contents: [Common fields](#common-fields-both-flows) ·
 | `hmrc_notified` | EMI only, optional | `YYYY-MM-DD` or `MM/DD/YYYY` | Stored as `DateTimeField` on the draft model — server normalises both inputs |
 | `is_ato_notified` | ESS/Non-Concessional/ZEPO only, optional | bool | |
 | `employment_related` | **`Unapproved` — required** | bool (Yes/No) | UK HMRC "Other ERS" designation. `validate_drafts` rejects a blank one, so **collect it up front**. `No` is a valid answer; only unanswered fails. Not required for `EMI` / `CSOP` (own returns) — omit for every other `so_type`. See [so_type auto-fill rules](#so_type-auto-fill-rules) |
-| `grant_reason` | optional | enum | See [Picklists](#picklists) — schema-enforced, not free text |
+| `grant_reason` | optional | enum | See [Picklists](#picklists) — schema-enforced, not free text. **Never infer it**; leave unset unless the user or file named one |
 | `employee_id`, `cost_center`, `job_title`, `salary` | optional | string / decimal | Pass-through — **not collected by carta-issuance** (design feedback dropped these from the panel entirely; they remain valid server-side for other callers) |
 
 `equity_plan_id` lives on the draft **set**, not the row — pass on the first mutate only.
@@ -107,9 +107,10 @@ Server-resolved, UI-only, or vestigial. Sending these raises `Unknown draft fiel
 
 If user gives an unfamiliar value, ask them to pick from this list — never guess.
 
-**`exemption`** (federal, US issuers):
+**`exemption`** (federal, US issuers). The blank default differs by security type: a certificate
+falls back to `Section 4(a)(2)`, an option grant to `Rule 701`.
 
-- `Section 4(a)(2)` (default if blank), `Section 4(a)(1-1/2)`, `Section 4(a)(7)`
+- `Section 4(a)(2)`, `Section 4(a)(1-1/2)`, `Section 4(a)(7)`
 - `Rule 144`, `Rule 701`
 - `Reg D - 506(b)`, `Reg D - 506(c)`, `Reg D - 506`, `Reg D - 505`, `Reg D - 504`
 - `Reg S`, `Reg A (Tier 1)`, `Reg A (Tier 2)`, `Reg CF`
@@ -133,16 +134,32 @@ Frontend enum key for *Startup Concessions* is `ESS`; canonical persisted string
 
 New Hire · Merit · Promotion · Refresh · Corporate transaction · Relationship change · Retention · Advisor · Consultant · Board · Performance bonus · Boxcar grant
 
+**Leave it unset unless the user or the file named a reason.** It is optional, so an unset
+value costs nothing and is trivially editable later; a wrong one is a plausible-looking record
+nobody re-reads. Do **not** infer it from surrounding language — a prompt that says *"grants for
+our new hires"* is describing the batch, not asserting `New Hire` for each person in it, and a
+run that read it that way stamped `New Hire` on employees who had been at the company for
+years. The same applies to `Promotion` from a raise mentioned in passing, or `Retention` from
+context about attrition.
+
 ## so_type auto-fill rules
 
 Apply before review. Tag each as `(autofill — <so_type> rule)`. Override only on explicit user input.
 
 | `so_type` | `currency` | `exemption` |
 |---|---|---|
-| `ISO`, `NSO`, `INTL` | `USD` | `Section 4(a)(2)` |
+| `ISO`, `NSO`, `INTL` | `USD` | (omit — server defaults to `Rule 701`) |
 | `EMI`, `CSOP` | `GBP` | `Non-U.S.` |
 | `Unapproved` | `GBP` | (pass through corp default) |
 | `Startup Concessions`, `Non-Concessional`, `ZEPO` | `AUD` | `Small Scale` |
+
+**Omit `exemption` on US grants — don't stamp `Section 4(a)(2)`.** Options granted under a
+written compensatory plan are exempt under **Rule 701**, and the server already defaults to it:
+carta-web's option-grant draft model sets `exemption`'s default to `Rule 701`, and the Drafts
+UI's own picker lists it first for US issuers. Sending `Section 4(a)(2)` — the private-placement
+exemption, correct for **certificates** — overrides that correct default with a wrong one on a
+securities-law field. Omitting the key lets the server decide. A user who names an exemption
+explicitly still wins; this rule is only about what the skill stamps unasked.
 
 **ZEPO** — `exercise_price = "0"` (hard-set); `early_exercise = false` (server rejects ZEPO + early exercise).
 

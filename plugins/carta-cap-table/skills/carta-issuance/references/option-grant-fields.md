@@ -39,7 +39,7 @@ reapply the default, re-call the stakeholder lookup, or ask ([Hard rule
     "vesting_template":        <template.id | null>,              # always — null only after explicit "No vesting"
     "vesting_start_date":      <issue_date as MM/DD/YYYY>,        # non-milestone template (CharField)
     "grant_expiration_date":   <issue_date + 10 years as MM/DD/YYYY>,  # always — silent default; CharField (MM/DD/YYYY only)
-    "exemption":               <autofill per so_type>,            # US — default Section 4(a)(2)
+    "exemption":               <autofill per so_type, or omit>, # US — omit; server defaults to Rule 701
     "document_set_id":         <doc_set.id>,                      # always
     "acceleration_template":   <template.id or omit>,             # optional — only meaningful once vesting is set
     "notes":                   <user or omit>,                    # optional

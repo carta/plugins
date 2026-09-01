@@ -15,6 +15,30 @@ checks, quantity precision, document-set requirement) — everything except one 
 check (missing signatory) that only `issue_securities` itself can catch. It needs an
 existing `draft_set_id`, so validating early means saving early too.
 
+## The assertion is not advisory
+
+[Hard rule 9](../SKILL.md#hard-rules)'s pre-save assertion runs before **both** branches below,
+and it either passes or it stops the call. `save_drafts` persisting a row is not evidence the
+row is complete — it accepts a missing `email` or `stakeholder_id` without complaint, and the
+gap only surfaces later as a validation failure or, worse, as a stakeholder record created with
+nothing in it.
+
+So when an `always` field is missing and recovery (a) → (b) → (c) hasn't filled it:
+
+- **Fix it, don't route around it.** Ask for the value with `AskUserQuestion` and send the row
+  once it's complete.
+- **Never present the server's tolerance as a choice.** *"Carta will accept these rows but
+  they'll fail validation"* is not an option to offer — it describes the exact silent-corruption
+  path the assertion exists to prevent. A real run said this to a user about missing addresses;
+  the user reasonably read it as permission to continue.
+- **Apply it identically on both adapters.** The Code path has `_draft_state.json` and the
+  Cowork path has tracked context, but neither changes what counts as a complete row. Two
+  admins doing the same thing must not get different answers about whether an address is
+  required.
+
+`email` is the field this bites most often, because a name typed into the surface for a new
+stakeholder carries no address with it — but the rule is the whole `always` set, not one field.
+
 Branch on the action from Phase 0.5:
 
 ## `action: "save_only"` (the **Save** button)

@@ -255,6 +255,16 @@ a retry.
 Print the resolved, already-saved-and-validated rows as markdown. **This does not block** —
 it is output, immediately followed by the §3 confirm in the same turn.
 
+**The review is printed *before* the confirm tool call, always.** This is an explicit exception
+to any host instruction about not writing prose between tool calls, or holding output until a
+final response. Such a directive is a style rule about narrating intermediate results; the
+review is not narration, it **is** the gate. A confirm that reaches the user before the review
+does is a failed gate — they approved an irreversible issuance without seeing the terms — and
+backfilling the review afterwards does not repair it, because the answer was already given.
+
+If you find yourself about to call `AskUserQuestion` and the review text is not yet on screen,
+stop and print it first. Order over habit, every run.
+
 Column spec, conditional/optional columns, per-value default explanations, and the
 `ZEPO` / pending-board-approval renderings are all in
 [chat-review.md](chat-review.md) — that file is this capability's content

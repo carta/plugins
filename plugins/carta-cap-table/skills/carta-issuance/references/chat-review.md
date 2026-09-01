@@ -41,8 +41,9 @@ Render `ZEPO` exercise price as
 
 **Default explanations** (attach a one-liner below the table for each value the skill chose):
 Rule 144 date (holding-period start for restricted securities); Board approval pending
-(grant issues pending; record the date later in Carta); Federal exemption (defaulting to
-Section 4(a)(2) private placement); Stakeholder type (INDIVIDUAL = person; NON-INDIVIDUAL =
+(grant issues pending; record the date later in Carta); Federal exemption (certificates default
+to Section 4(a)(2) private placement; US grants are left to the server, which applies Rule 701
+for options under a written compensatory plan); Stakeholder type (INDIVIDUAL = person; NON-INDIVIDUAL =
 trust/LLC/fund/corp); Build/Exercise legend (legal transfer-restriction text — full body
 shown to read before confirming); Option type (ISO/NSO/INTL/EMI/CSOP/Unapproved/AU types,
 ZEPO = zero-exercise-price); Currency/Exemption autofill (set by the option type's
