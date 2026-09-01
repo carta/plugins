@@ -91,12 +91,19 @@ The transaction is identical everywhere; only the surface that collects and revi
 [code-adapter.md](references/code-adapter.md) — its **§0** lists every point where that adapter
 diverges, and anything §0 does not mention behaves exactly as described here.
 
-Read up front on every run:
+Read these two **in parallel with the first Carta fetch**, not before it —
+[Phase 0.5](#phase-05--configure-the-issuance)'s `issuance_init` has no dependency on them, so
+reading first only delays it:
 
 - **[references/cowork-adapter.md](references/cowork-adapter.md)** — the form, the chat review,
   the confirm, and the authoritative per-block field list. Skip only if Step 1 selected Code.
 - **[references/payload-reference.md](references/payload-reference.md)** — the authoritative
   field contract: types, formats, picklists, autofills, date quirks.
+
+**The type-specific row file waits for `security_type`.** Read
+[option-grant-fields.md](references/option-grant-fields.md) *or*
+[certificate-fields.md](references/certificate-fields.md) once that resolves — never both, and
+never before. Loading the wrong one is pure cost, and a grant run has no use for Rule 144.
 
 Both paths end the same way: the `issue_securities` mutate ([Phase 3](#phase-3--on-confirmation-run-the-mutate)).
 The SDK's HITL prompt on that mutate is the final, irreversible gate — never the review gate.
