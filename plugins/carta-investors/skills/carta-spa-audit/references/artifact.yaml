@@ -1,0 +1,10 @@
+template: template.html
+styles: styles.css
+
+# The save server (spawned because of this capability) exposes POST /open-url,
+# which the artifact uses to open Carta links in the system browser — the
+# Claude Desktop preview pane blocks <a target="_blank"> to non-localhost URLs.
+capabilities: [save]
+
+substitutions:
+  required: [TITLE, DATA]

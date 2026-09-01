@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{TITLE}}</title>
+  <style>{{STYLES}}</style>
+</head>
+<body>
+  <div class="container">
+    <div class="header" id="page-header"></div>
+
+    <div class="coverage-bar-section" id="coverage-bar"></div>
+
+    <div class="metrics-grid" id="metrics-grid"></div>
+
+    <div id="upload-cta"></div>
+
+    <div class="status-bar" id="status-bar"></div>
+
+    <div class="table-title">Portfolio companies — SPA coverage</div>
+    <div class="table-toolbar">
+      <div class="filter-group">
+        <div class="filter-bar" id="filter-bar"></div>
+        <div class="fund-filter-wrap" id="fund-filter-wrap"></div>
+        <div class="fund-filter-wrap" id="geo-filter-wrap"></div>
+      </div>
+      <div class="table-search">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <circle cx="6" cy="6" r="4.5"/>
+          <path d="M9.5 9.5 L12.5 12.5" stroke-linecap="round"/>
+        </svg>
+        <input type="text" id="search-input" placeholder="Search companies…" aria-label="Search companies" oninput="setSearch(this.value)">
+      </div>
+    </div>
+    <div class="table-container" id="main-table"></div>
+    <div class="footer-note" id="footer-note"></div>
+
+    <div class="page-footer" id="page-footer"></div>
+  </div>
+
+  <div class="drawer-backdrop" id="backdrop" onclick="closeDrawer()"></div>
+  <div class="drawer" id="drawer">
+    <button class="drawer-close" onclick="closeDrawer()" aria-label="Close drawer">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
+        <path d="M2 2 L10 10 M10 2 L2 10"/>
+      </svg>
+    </button>
+    <h2 id="drawer-title"></h2>
+    <div class="drawer-subtitle" id="drawer-subtitle"></div>
+    <div id="drawer-content"></div>
+  </div>
+
+  <script>
+    const DATA = {{DATA}};
+
+    // ---------- Formatters ----------
+    function fmtMoney(n) {
+        if (n === null || n === undefined) return '—';
+        if (n === 0) return '$0';
+        return '$' + Math.round(n).toLocaleString('en-US');
+    }
+    function fmtPrice(n) {
+        if (n === null || n === undefined) return '—';
+        return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    function fmtNum(n) {
+        if (n === null || n === undefined) return '—';
+        return n.toLocaleString('en-US');
+    }
+    // Compact variants — used in the drawer to keep the Shares / Amount paid
+    // columns narrow. Full-precision value is surfaced via a `title` tooltip.
+    function compactSuffix(n) {
+        const abs = Math.abs(n);
+        if (abs >= 1e9) return [n / 1e9, 'B'];
+        if (abs >= 1e6) return [n / 1e6, 'M'];
+        if (abs >= 1e3) return [n / 1e3, 'K'];
+        return [n, ''];
+    }
+    function trim1(x) { return x.toFixed(1).replace(/\.0$/, ''); }
+    function fmtMoneyCompact(n) {
+        if (n === null || n === undefined) return '—';
+        if (n === 0) return '$0';
+        const [v, suf] = compactSuffix(n);
+        return suf ? '$' + trim1(v) + suf : '$' + Math.round(v).toLocaleString('en-US');
+    }
+    function fmtNumCompact(n) {
+        if (n === null || n === undefined) return '—';
+        const [v, suf] = compactSuffix(n);
+        return suf ? trim1(v) + suf : Math.round(v).toLocaleString('en-US');
+    }
+    // SPA amounts are denominated in whatever currency the document stated, so
+    // they render with an explicit code rather than a hardcoded '$'. A null
+    // code means the document named no currency: show the bare number and let
+    // the caller footnote it, rather than implying one.
+    function ccyTag(ccy) { return ccy ? ' ' + ccy : '*'; }
+    function fmtAmountCcy(n, ccy) {
+        if (n === null || n === undefined) return '—';
+        return Math.round(n).toLocaleString('en-US') + ccyTag(ccy);
+    }
+    function fmtPriceCcy(n, ccy) {
+        if (n === null || n === undefined) return '—';
+        return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ccyTag(ccy);
+    }
+    function fmtAmountCcyCompact(n, ccy) {
+        if (n === null || n === undefined) return '—';
+        if (n === 0) return '0' + ccyTag(ccy);
+        const [v, suf] = compactSuffix(n);
+        return (suf ? trim1(v) + suf : Math.round(v).toLocaleString('en-US')) + ccyTag(ccy);
+    }
+    function esc(s) {
+        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+    function escAttr(s) {
+        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+    }
+
+    // ---------- External links ----------
+    // The Claude Desktop preview pane sandboxes the artifact and blocks
+    // <a target="_blank"> navigation to non-localhost URLs. The save server
+    // runs as a local process OUTSIDE the sandbox and exposes POST /open-url,
+    // which opens the URL in the system default browser. We POST as text/plain
+    // to avoid a CORS preflight; if the save server is unreachable (e.g. Cowork,
+    // or SAVE_PORT not substituted) we fall back to window.open().
+    const SAVE_PORT = '{{SAVE_PORT}}';
+    // Base Carta web URL for the environment this audit was built from
+    // (resolved at generation time). Falls back to production if unsubstituted.
+    const RAW_BASE_URL = '{{BASE_URL}}';
+    const CARTA_BASE_URL = /^https:\/\//.test(RAW_BASE_URL) ? RAW_BASE_URL.replace(/\/$/, '') : 'https://app.carta.com';
+    function openExternal(url) {
+        const fallback = () => window.open(url, '_blank', 'noopener');
+        if (!/^\d+$/.test(SAVE_PORT)) { fallback(); return; }
+        fetch('http://127.0.0.1:' + SAVE_PORT + '/open-url', {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({ url: url })
+        }).then(r => { if (!r.ok) fallback(); }).catch(fallback);
+    }
+
+    // ---------- Bucket metadata ----------
+    // Four bucket tiles. Pending-extraction is NOT a bucket — pending docs
+    // can't be attributed to specific portfolio companies until extraction
+    // completes (the issuer_name comes from extraction), so promoting them
+    // to a bucket tile would imply a precision we don't have. The pending
+    // count is surfaced as an FYI pill in the page-header instead (see
+    // renderHeader below).
+    const BUCKETS = [
+        { key: 'executed',   label: 'Executed',   filterLabel: 'Executed SPA',     icon: '✓', cardClass: 'bucket-executed',   muted: true  },
+        { key: 'unexecuted', label: 'Unexecuted', filterLabel: 'SPA not executed', icon: '○', cardClass: 'bucket-unexecuted', muted: false },
+        { key: 'missing',    label: 'Missing',    filterLabel: 'Missing SPA',      icon: '✕', cardClass: 'bucket-missing',    muted: false },
+        { key: 'notNeeded',  label: 'No SPA Needed', filterLabel: 'No SPA needed', icon: '—', cardClass: 'bucket-not-needed', muted: true,
+          helpText: 'Covers investments that don\'t use Stock Purchase Agreements: SAFEs, convertible notes, fund / LP positions, tokens, and warrants. These have their own document types and don\'t need an SPA on file. SAFEs and convertible notes will move into a different bucket if and when they convert into preferred or common equity.' },
+    ];
+
+    // ---------- Status filter (All / Live / Exited) ----------
+    let STATUS_FILTER = 'all';
+
+    function passesStatusFilter(companyName) {
+        if (STATUS_FILTER === 'all') return true;
+        const s = DATA.companyStatus;
+        if (!s || !(companyName in s)) return false;
+        return STATUS_FILTER === 'live' ? s[companyName] === true : s[companyName] === false;
+    }
+
+    function filteredBucketRows(b) {
+        const rows = DATA.buckets[b.key] || [];
+        if (STATUS_FILTER === 'all' || !DATA.companyStatus) return rows;
+        return rows.filter(r => passesStatusFilter(r.company));
+    }
+
+    function filteredBucketRowsByKey(key) {
+        const b = BUCKETS.find(bkt => bkt.key === key);
+        return b ? filteredBucketRows(b) : [];
+    }
+
+    function bucketCount(b) {
+        return filteredBucketRows(b).length;
+    }
+
+    // ---------- Header (firm name + coverage line + pending pill) ----------
+    // Coverage % rides in the page header as a small contextual line. When
+    // there are pending-extraction docs, a hover-tooltipped pill chip sits
+    // inline in the subtitle to surface the count without claiming any
+    // company-level attribution.
+    function renderHeader() {
+        const m = DATA.meta;
+        const c = DATA.coverage;
+        const pending = c.pendingExtractionDocs || 0;
+        const pendingPill = pending > 0
+            ? ' · <span class="pending-pill has-tooltip" tabindex="0" aria-describedby="pending-tooltip">' +
+                '<span class="pending-pill-icon" aria-hidden="true">ⓘ</span>' +
+                '<span class="pending-pill-text">' + pending + ' pending extraction</span>' +
+                '<span class="tooltip" id="pending-tooltip" role="tooltip">' +
+                    'Heads up: ' + pending + ' SPA documents are still being processed by Carta\'s Document Intelligence. ' +
+                    'Once extraction completes, they\'ll appear in this audit and may move companies out of "Missing SPA."' +
+                '</span>' +
+              '</span>'
+            : '';
+        const orphaned = c.orphanedSpas || 0;
+        const orphanedNames = c.orphanedSpaNames || [];
+        const orphanWord = orphaned === 1 ? 'SPA' : 'SPAs';
+        const orphanedPill = orphaned > 0
+            ? ' · <span class="orphaned-pill has-tooltip" tabindex="0" aria-describedby="orphaned-tooltip">' +
+                '<span class="orphaned-pill-icon" aria-hidden="true">ⓘ</span>' +
+                '<span class="orphaned-pill-text">' + orphaned + ' unmatched ' + orphanWord + '</span>' +
+                '<span class="tooltip" id="orphaned-tooltip" role="tooltip">' +
+                    orphaned + ' ' + orphanWord + ' on file couldn\'t be linked to a portfolio company. ' +
+                    'Typically name mismatches (e.g. SPA filed under "Acme Holdings Inc." vs. investment recorded as "Acme"), ' +
+                    'parent vs. subsidiary entities, or SPAs uploaded for investments not yet booked. ' +
+                    'Compare names in your portfolio against the source SPA documents to reconcile.' +
+                    (orphanedNames.length > 0
+                        ? '<ul style="margin:6px 0 0;padding-left:14px;list-style:disc;">' +
+                            orphanedNames.map(n => '<li>' + esc(n) + '</li>').join('') +
+                          '</ul>'
+                        : '') +
+                '</span>' +
+              '</span>'
+            : '';
+        // Coverage subtitle removed per design — coverage now lives in the
+        // "Coverage by cost basis" section directly below the title. The
+        // pending-extraction and unmatched-SPA FYI pills (when present) still
+        // surface as their own line beneath the title.
+        const fyiPills = (pendingPill + orphanedPill).replace(/^ · /, '');
+        const fyiLine = fyiPills ? '<p>' + fyiPills + '</p>' : '';
+        document.getElementById('page-header').innerHTML =
+            '<h1>' + esc(m.firmName) + ' — SPA coverage audit</h1>' + fyiLine;
+    }
+
+    // ---------- Stat tiles — one per bucket ----------
+    // Four tiles in a single auto-fit row. Gap buckets (Missing / Unexecuted)
+    // read at full visual weight; the trailing two (Executed / No SPA needed)
+    // use muted styling so the user's eye lands on the gaps first.
+    function bucketTotal(key) {
+        return filteredBucketRowsByKey(key).reduce((s, r) => s + (r.costBasis || 0), 0);
+    }
+    function renderMetricsGrid() {
+        // Grand total across all buckets — each tile's cost basis is shown as
+        // a share of this, rather than an absolute dollar figure.
+        const grandTotal = BUCKETS.reduce((s, b) => s + bucketTotal(b.key), 0);
+        const html = BUCKETS.map((b, i) => {
+            const count = bucketCount(b);
+            const total = bucketTotal(b.key);
+            let sub = '';
+            if (filteredBucketRows(b).length > 0) {
+                const pct = grandTotal > 0 ? (total / grandTotal * 100) : 0;
+                sub = pct.toFixed(1) + '% of total cost basis';
+            }
+            // Optional info icon + hover tooltip — used by tiles whose label
+            // doesn't fully convey what's in the bucket (notably "No SPA
+            // Needed" which covers SAFEs / convertibles / fund LPs / tokens).
+            const helpIcon = b.helpText
+                ? ' <span class="help-icon has-tooltip" tabindex="0" aria-describedby="tile-help-' + b.key + '">' +
+                    'ⓘ' +
+                    '<span class="tooltip tooltip--tile" id="tile-help-' + b.key + '" role="tooltip">' + esc(b.helpText) + '</span>' +
+                  '</span>'
+                : '';
+            return '<div class="metric-card ' + b.cardClass + (b.muted ? ' metric-card--muted' : '') + '">' +
+                '<div class="metric-label">' + b.icon + ' ' + esc(b.label) + helpIcon + '</div>' +
+                '<div class="metric-value">' + count + '</div>' +
+                (sub ? '<div class="metric-sub">' + sub + '</div>' : '') +
+            '</div>';
+        }).join('');
+        document.getElementById('metrics-grid').innerHTML = html;
+    }
+
+    // ---------- Coverage bar — stacked bar with by-value / by-count toggle ----------
+    let BAR_MODE = 'weight'; // 'weight' | 'count'
+    function setBarMode(mode) { BAR_MODE = mode; renderCoverageBar(); }
+
+    function renderCoverageBar() {
+        const grand = BUCKETS.reduce((s, b) => s + bucketTotal(b.key), 0);
+        if (grand <= 0) { document.getElementById('coverage-bar').innerHTML = ''; return; }
+
+        const coveredVal = bucketTotal('executed') + bucketTotal('unexecuted');
+        const valuePct = coveredVal / grand * 100;
+
+        const covered = filteredBucketRowsByKey('executed').length + filteredBucketRowsByKey('unexecuted').length;
+        const notNeededCount = filteredBucketRowsByKey('notNeeded').length;
+        const totalCos = BUCKETS.reduce((s, b) => s + filteredBucketRows(b).length, 0);
+        const equityCos = totalCos - notNeededCount;
+        const countPct = equityCos > 0 ? Math.round(covered / equityCos * 100) : 0;
+
+        const ORDER = [
+            { key: 'executed',   label: 'Executed' },
+            { key: 'unexecuted', label: 'Unexecuted' },
+            { key: 'missing',    label: 'Missing' },
+            { key: 'notNeeded',  label: 'No SPA needed' },
+        ];
+
+        const useCount = BAR_MODE === 'count';
+        const totalForBar = useCount ? totalCos : grand;
+
+        let segs = '', legend = '';
+        ORDER.forEach(o => {
+            const v = useCount ? filteredBucketRowsByKey(o.key).length : bucketTotal(o.key);
+            if (v <= 0) return;
+            const p = v / totalForBar * 100;
+            const titleAttr = useCount
+                ? escAttr(o.label + ': ' + v + ' companies (' + p.toFixed(1) + '%)')
+                : escAttr(o.label + ': ' + fmtMoney(v) + ' (' + p.toFixed(1) + '%)');
+            segs += '<div class="coverage-bar-seg ' + o.key + '" style="width:' + p + '%" title="' + titleAttr + '"></div>';
+            legend += '<span class="item"><span class="swatch ' + o.key + '"></span>' +
+                esc(o.label) + ' ' + p.toFixed(1) + '%</span>';
+        });
+
+        const headerValue = useCount
+            ? countPct + '% of companies covered'
+            : valuePct.toFixed(1) + '% of total cost basis covered';
+
+        const toggleHtml =
+            '<div class="bar-mode-toggle">' +
+                '<button class="bar-mode-btn' + (!useCount ? ' active' : '') + '" onclick="setBarMode(\'weight\')" type="button">By value</button>' +
+                '<button class="bar-mode-btn' + (useCount ? ' active' : '') + '" onclick="setBarMode(\'count\')" type="button">By count</button>' +
+            '</div>';
+
+        document.getElementById('coverage-bar').innerHTML =
+            '<div class="coverage-bar-head">' +
+                '<span class="label">Coverage</span>' +
+                toggleHtml +
+                '<span class="value">' + headerValue + '</span>' +
+            '</div>' +
+            '<div class="coverage-bar-track">' + segs + '</div>' +
+            '<div class="coverage-legend">' + legend + '</div>';
+    }
+
+    // ---------- Upload CTAs — softer, action-oriented, split by gap type ----------
+    function renderUploadCta() {
+        const missing = filteredBucketRowsByKey('missing').length;
+        const unexecuted = filteredBucketRowsByKey('unexecuted').length;
+        const el = document.getElementById('upload-cta');
+        if (missing === 0 && unexecuted === 0) {
+            el.innerHTML = '';
+            return;
+        }
+        const m = DATA.meta;
+        const docsUrl = CARTA_BASE_URL + '/investors/firm/' + esc(m.firmCartaId) + '/portfolio/documents/';
+        let html = '<div class="cta-row">';
+
+        if (missing > 0) {
+            const companyWord = missing === 1 ? 'company' : 'companies';
+            html +=
+                '<div class="cta-card cta-card--missing">' +
+                    '<div class="cta-card-body">' +
+                        '<div class="cta-card-title">Close the coverage gap</div>' +
+                        '<div class="cta-card-text">Upload Stock Purchase Agreements for ' +
+                            '<strong>' + missing + ' ' + companyWord + '</strong> ' +
+                            'missing an SPA — unlocks co-investor analysis and more downstream skills.</div>' +
+                    '</div>' +
+                    '<button type="button" class="cta-card-action" onclick="openExternal(\'' + escAttr(docsUrl) + '\')">' +
+                        'Upload missing SPAs <span aria-hidden="true">↗</span>' +
+                    '</button>' +
+                '</div>';
+        }
+
+        if (unexecuted > 0) {
+            const spaWord = unexecuted === 1 ? 'SPA is' : 'SPAs are';
+            const btnLabel = missing > 0 ? 'Upload SPAs' : 'Upload signed copy';
+            html +=
+                '<div class="cta-card cta-card--unexecuted">' +
+                    '<div class="cta-card-body">' +
+                        '<div class="cta-card-title">Get executed copies on file</div>' +
+                        '<div class="cta-card-text"><strong>' + unexecuted + ' ' + spaWord + '</strong> ' +
+                            'marked unexecuted — if you already have a signed copy, upload it now. If not, follow up with the issuer to get it signed.</div>' +
+                    '</div>' +
+                    '<button type="button" class="cta-card-action cta-card-action--secondary" onclick="openExternal(\'' + escAttr(docsUrl) + '\')">' +
+                        btnLabel + ' <span aria-hidden="true">↗</span>' +
+                    '</button>' +
+                '</div>';
+        }
+
+        html += '</div>';
+        el.innerHTML = html;
+    }
+
+    // ---------- Filter pills + search + sort state ----------
+    let ACTIVE_FILTER = 'all';
+    let SEARCH_QUERY = '';
+    // Default sort: cost basis descending (matches what most users want first)
+    let SORT_KEY = 'costBasis';
+    let SORT_DIR = 'desc';
+
+    // Enrichment-backed filters and columns only render when they have something
+    // to show. A dropdown with one option can't narrow anything and a column
+    // that's empty for every company is noise, so both stay hidden — which also
+    // covers Query E being skipped entirely (no funds, no regions, no SOI values).
+    function eachRow(fn) {
+        Object.values(DATA.buckets).forEach(arr => arr.forEach(fn));
+    }
+
+    // Fund multi-select filter (needs 2+ funds to be able to narrow anything)
+    let FUND_FILTER = [];  // empty = all funds shown
+    const ALL_FUNDS = (() => {
+        const s = new Set();
+        eachRow(r => (r.funds || []).forEach(f => s.add(f)));
+        return Array.from(s).sort();
+    })();
+
+    // Geography multi-select filter (needs 2+ populated region tags)
+    let GEOGRAPHY_FILTER = [];  // empty = all regions shown
+    const ALL_REGIONS = (() => {
+        const s = new Set();
+        eachRow(r => { if (r.regionTag && r.regionTag !== '—') s.add(r.regionTag.trim()); });
+        return Array.from(s).sort();
+    })();
+
+    // SOI valuation column — hidden when no company has a value (every position
+    // fully exited, or Query E skipped).
+    const HAS_SOI_VALUATION = (() => {
+        let found = false;
+        eachRow(r => { if (r.soiValuation !== null && r.soiValuation !== undefined) found = true; });
+        return found;
+    })();
+
+    // Sortable column definitions — keys must match row field names from process.py
+    const COLUMNS = [
+        { key: 'rowNum',        label: '#',              align: 'left',  sortable: false },
+        { key: 'company',       label: 'Company',        align: 'left',  sortable: true,  type: 'string' },
+        { key: 'bucketKey',     label: 'Status',         align: 'left',  sortable: true,  type: 'bucket' },
+        { key: 'firstInvested', label: 'First invested', align: 'left',  sortable: true,  type: 'date' },
+        { key: 'costBasis',     label: 'Cost basis',     align: 'right', sortable: true,  type: 'number' },
+        { key: 'soiValuation',  label: 'SOI valuation',  align: 'right', sortable: true,  type: 'number' },
+    ].filter(c => c.key !== 'soiValuation' || HAS_SOI_VALUATION);
+
+    // Used for bucket-status sort ordering (lower = listed higher when ASC)
+    const BUCKET_ORDER = { missing: 0, unexecuted: 1, executed: 2, notNeeded: 3 };
+
+    function renderStatusFilterBar() {
+        const s = DATA.companyStatus;
+        // Query T is optional. Without it the Live/Exited tabs would show 0 and
+        // filter the table to nothing, so render no bar when status is absent.
+        if (!s || Object.keys(s).length === 0) {
+            document.getElementById('status-bar').innerHTML = '';
+            return;
+        }
+        const allCount = Object.keys(s).length;
+        const liveCount = Object.values(s).filter(v => v === true).length;
+        const exitedCount = Object.values(s).filter(v => v === false).length;
+
+        function tab(id, label, count) {
+            const active = STATUS_FILTER === id ? ' active' : '';
+            return '<button class="status-tab' + active + '" onclick="setStatusFilter(\'' + id + '\')">' +
+                label + '<span class="status-tab-count">' + count + '</span></button>';
+        }
+
+        document.getElementById('status-bar').innerHTML =
+            tab('all', 'All', allCount) +
+            tab('live', 'Live', liveCount) +
+            tab('exited', 'Exited', exitedCount);
+    }
+
+    function setStatusFilter(filter) {
+        STATUS_FILTER = filter;
+        renderStatusFilterBar();
+        renderMetricsGrid();
+        renderCoverageBar();
+        renderUploadCta();
+        renderFilterBar();
+        renderMainTable();
+    }
+
+    function renderFilterBar() {
+        const total = BUCKETS.reduce((s, b) => s + filteredBucketRows(b).length, 0);
+        let opts = '<option value="all"' + (ACTIVE_FILTER === 'all' ? ' selected' : '') + '>All companies (' + total + ')</option>';
+        BUCKETS.forEach(b => {
+            const count = filteredBucketRows(b).length;
+            const sel = ACTIVE_FILTER === b.key ? ' selected' : '';
+            opts += '<option value="' + b.key + '"' + sel + '>' + esc(b.filterLabel) + ' (' + count + ')</option>';
+        });
+        document.getElementById('filter-bar').innerHTML =
+            '<label class="filter-select-label" for="filter-select">Show</label>' +
+            '<select id="filter-select" class="filter-select" aria-label="Filter by SPA status" onchange="setFilter(this.value)">' + opts + '</select>';
+    }
+    function setFilter(key) {
+        ACTIVE_FILTER = key;
+        renderFilterBar();
+        renderMainTable();
+    }
+    function setSearch(q) {
+        SEARCH_QUERY = (q || '').toLowerCase().trim();
+        renderMainTable();
+    }
+    // ── Fund filter ──────────────────────────────────────────────────────────
+    // Panel markup is built once. Selection changes go through syncFundFilter()
+    // instead of a rebuild: regenerating the panel drops its `open` class, which
+    // would close the dropdown after every checkbox click.
+    function renderFundFilter() {
+        const wrap = document.getElementById('fund-filter-wrap');
+        if (!wrap || ALL_FUNDS.length < 2) return;
+        let items = '<label class="fund-option">'
+            + '<input type="checkbox" data-fund-all onchange="clearFundFilter()">'
+            + 'All funds</label><hr class="fund-sep">';
+        ALL_FUNDS.forEach(f => {
+            items += '<label class="fund-option">'
+                + '<input type="checkbox" data-fund="' + escAttr(f) + '" onchange="toggleFundInput(this)">'
+                + esc(f) + '</label>';
+        });
+        wrap.innerHTML =
+            '<button class="fund-filter-btn" onclick="toggleFundDropdown()" aria-haspopup="listbox"></button>'
+            + '<div class="fund-dropdown-panel" id="fund-dropdown-panel">' + items + '</div>';
+        syncFundFilter();
+    }
+    function syncFundFilter() {
+        const wrap = document.getElementById('fund-filter-wrap');
+        if (!wrap) return;
+        const none = FUND_FILTER.length === 0;
+        const label = none ? 'Fund'
+            : FUND_FILTER.length === 1 ? FUND_FILTER[0]
+            : FUND_FILTER.length + ' funds';
+        const btn = wrap.querySelector('.fund-filter-btn');
+        if (btn) {
+            btn.classList.toggle('active', !none);
+            btn.innerHTML = esc(label) + ' <span class="fund-caret">▾</span>';
+        }
+        const all = wrap.querySelector('input[data-fund-all]');
+        if (all) all.checked = none;
+        wrap.querySelectorAll('input[data-fund]').forEach(cb => {
+            cb.checked = FUND_FILTER.includes(cb.dataset.fund);
+        });
+    }
+    function toggleFundDropdown() {
+        const p = document.getElementById('fund-dropdown-panel');
+        if (p) p.classList.toggle('open');
+    }
+    function toggleFundInput(el) { toggleFund(el.dataset.fund, el.checked); }
+    function toggleFund(fund, checked) {
+        if (checked) { if (!FUND_FILTER.includes(fund)) FUND_FILTER.push(fund); }
+        else { FUND_FILTER = FUND_FILTER.filter(f => f !== fund); }
+        syncFundFilter();
+        renderMainTable();
+    }
+    function clearFundFilter() {
+        FUND_FILTER = [];
+        syncFundFilter();
+        renderMainTable();
+    }
+
+    // ── Geography filter ──────────────────────────────────────────────────────
+    function renderGeographyFilter() {
+        const wrap = document.getElementById('geo-filter-wrap');
+        if (!wrap || ALL_REGIONS.length < 2) return;
+        let items = '<label class="fund-option">'
+            + '<input type="checkbox" data-region-all onchange="clearGeographyFilter()">'
+            + 'All regions</label><hr class="fund-sep">';
+        ALL_REGIONS.forEach(r => {
+            items += '<label class="fund-option">'
+                + '<input type="checkbox" data-region="' + escAttr(r) + '" onchange="toggleRegionInput(this)">'
+                + esc(r) + '</label>';
+        });
+        wrap.innerHTML =
+            '<button class="fund-filter-btn" onclick="toggleGeoDropdown()" aria-haspopup="listbox"></button>'
+            + '<div class="fund-dropdown-panel" id="geo-dropdown-panel">' + items + '</div>';
+        syncGeographyFilter();
+    }
+    function syncGeographyFilter() {
+        const wrap = document.getElementById('geo-filter-wrap');
+        if (!wrap) return;
+        const none = GEOGRAPHY_FILTER.length === 0;
+        const label = none ? 'Geography'
+            : GEOGRAPHY_FILTER.length === 1 ? GEOGRAPHY_FILTER[0]
+            : GEOGRAPHY_FILTER.length + ' regions';
+        const btn = wrap.querySelector('.fund-filter-btn');
+        if (btn) {
+            btn.classList.toggle('active', !none);
+            btn.innerHTML = esc(label) + ' <span class="fund-caret">▾</span>';
+        }
+        const all = wrap.querySelector('input[data-region-all]');
+        if (all) all.checked = none;
+        wrap.querySelectorAll('input[data-region]').forEach(cb => {
+            cb.checked = GEOGRAPHY_FILTER.includes(cb.dataset.region);
+        });
+    }
+    function toggleGeoDropdown() {
+        const p = document.getElementById('geo-dropdown-panel');
+        if (p) p.classList.toggle('open');
+    }
+    function toggleRegionInput(el) { toggleGeography(el.dataset.region, el.checked); }
+    function toggleGeography(region, checked) {
+        if (checked) { if (!GEOGRAPHY_FILTER.includes(region)) GEOGRAPHY_FILTER.push(region); }
+        else { GEOGRAPHY_FILTER = GEOGRAPHY_FILTER.filter(r => r !== region); }
+        syncGeographyFilter();
+        renderMainTable();
+    }
+    function clearGeographyFilter() {
+        GEOGRAPHY_FILTER = [];
+        syncGeographyFilter();
+        renderMainTable();
+    }
+
+    function setSort(key) {
+        if (SORT_KEY === key) {
+            // Toggle direction on repeat click
+            SORT_DIR = SORT_DIR === 'asc' ? 'desc' : 'asc';
+        } else {
+            SORT_KEY = key;
+            // Numeric columns default to descending; string/date default ascending
+            const col = COLUMNS.find(c => c.key === key);
+            SORT_DIR = (col && col.type === 'number') ? 'desc' : 'asc';
+        }
+        renderMainTable();
+    }
+
+    // ---------- Main table ----------
+    function renderMainTable() {
+        // Flatten visible buckets into one sortable list, respecting both the
+        // bucket filter (ACTIVE_FILTER) and the status filter (STATUS_FILTER).
+        let rows = [];
+        BUCKETS.forEach(b => {
+            if (ACTIVE_FILTER === 'all' || ACTIVE_FILTER === b.key) {
+                filteredBucketRows(b).forEach(r => {
+                    rows.push({ ...r, bucketKey: b.key, bucketLabel: b.filterLabel });
+                });
+            }
+        });
+
+        // Apply search filter (substring match on company name, case-insensitive)
+        if (SEARCH_QUERY) {
+            rows = rows.filter(r => r.company.toLowerCase().includes(SEARCH_QUERY));
+        }
+
+        // Apply fund filter (multi-select; empty = all funds shown)
+        if (FUND_FILTER.length > 0) {
+            rows = rows.filter(r => {
+                const rowFunds = r.funds || [];
+                return FUND_FILTER.some(f => rowFunds.includes(f));
+            });
+        }
+
+        // Apply geography filter (multi-select; empty = all regions shown)
+        if (GEOGRAPHY_FILTER.length > 0) {
+            rows = rows.filter(r => GEOGRAPHY_FILTER.includes((r.regionTag || '').trim()));
+        }
+
+        // Apply active sort
+        const col = COLUMNS.find(c => c.key === SORT_KEY) || COLUMNS[4];
+        const dir = SORT_DIR === 'asc' ? 1 : -1;
+        rows.sort((a, b) => {
+            let av, bv;
+            if (col.type === 'number') {
+                av = a[col.key] || 0;
+                bv = b[col.key] || 0;
+                if (av !== bv) return (av - bv) * dir;
+            } else if (col.type === 'bucket') {
+                av = BUCKET_ORDER[a.bucketKey] ?? 99;
+                bv = BUCKET_ORDER[b.bucketKey] ?? 99;
+                if (av !== bv) return (av - bv) * dir;
+            } else if (col.type === 'date') {
+                // firstInvested is "Mmm yyyy" — parse to a comparable yyyy-mm string
+                av = parseMonthYear(a.firstInvested);
+                bv = parseMonthYear(b.firstInvested);
+                if (av !== bv) return av < bv ? -1 * dir : 1 * dir;
+            } else {
+                av = (a[col.key] || '').toString();
+                bv = (b[col.key] || '').toString();
+                if (av !== bv) return av.localeCompare(bv) * dir;
+            }
+            // Stable tiebreaker: cost basis DESC, then company ASC
+            const cbDiff = (b.costBasis || 0) - (a.costBasis || 0);
+            if (cbDiff !== 0) return cbDiff;
+            return a.company.localeCompare(b.company);
+        });
+
+        if (rows.length === 0) {
+            const empty = SEARCH_QUERY
+                ? 'No companies match "' + esc(SEARCH_QUERY) + '".'
+                : 'No companies in this view.';
+            document.getElementById('main-table').innerHTML =
+                '<div class="empty-bucket">' + empty + '</div>';
+            return;
+        }
+
+        // Header row with sort indicators
+        let html = '<table><thead><tr>';
+        COLUMNS.forEach(c => {
+            const alignStyle = c.align === 'right' ? ' style="text-align:right"' : '';
+            if (!c.sortable) {
+                html += '<th' + alignStyle + '>' + esc(c.label) + '</th>';
+            } else {
+                const active = SORT_KEY === c.key;
+                const caret = active ? (SORT_DIR === 'asc' ? '▲' : '▼') : '↕';
+                const cls = 'sortable' + (active ? ' sort-active' : '');
+                html += '<th class="' + cls + '"' + alignStyle + ' onclick="setSort(\'' + c.key + '\')" aria-sort="' + (active ? SORT_DIR + 'ending' : 'none') + '">' + esc(c.label) + '<span class="sort-caret">' + caret + '</span></th>';
+            }
+        });
+        html += '</tr></thead><tbody>';
+
+        rows.forEach((r, i) => {
+            // Drill-down dict is keyed by the SPA-side ISSUER_NAME, which often
+            // differs from the audit-side company name (e.g. "Polaris Robotics"
+            // vs "Polaris Robotics, Inc."). process.py stamps drillDownKey onto
+            // bucket entries from Query A's SPA_NAME column; fall back to the
+            // company name for exact-match cases and pre-drillDownKey caches.
+            const dKey = r.drillDownKey || r.company;
+            const hasDrillDown = !!DATA.companies[dKey];
+            const clickAttr = hasDrillDown
+                ? ' class="clickable" onclick="openDrawer(\'' + escAttr(dKey) + '\')"'
+                : '';
+            const badgeClass = r.bucketKey === 'notNeeded' ? 'notNeeded' : r.bucketKey;
+            html += '<tr' + clickAttr + '>' +
+                '<td>' + (i + 1) + '</td>' +
+                '<td class="company-name">' + esc(r.company) + (hasDrillDown ? '<span class="row-caret" aria-hidden="true">›</span>' : '') + '</td>' +
+                '<td><span class="bucket-badge ' + badgeClass + '">' + esc(r.bucketLabel) + '</span></td>' +
+                '<td>' + esc(r.firstInvested) + '</td>' +
+                '<td class="number">' + fmtMoney(r.costBasis) + '</td>' +
+                (HAS_SOI_VALUATION ? '<td class="number">' + fmtMoney(r.soiValuation) + '</td>' : '') +
+                '</tr>';
+        });
+        html += '</tbody></table>';
+        document.getElementById('main-table').innerHTML = html;
+    }
+
+    // Parse "Mmm yyyy" → "yyyy-mm" for date sorting. Unparseable values sort first when ASC.
+    function parseMonthYear(s) {
+        if (!s || s === '—') return '0000-00';
+        const m = s.match(/^([A-Za-z]{3})\s+(\d{4})$/);
+        if (!m) return s;
+        const months = { Jan:'01', Feb:'02', Mar:'03', Apr:'04', May:'05', Jun:'06',
+                         Jul:'07', Aug:'08', Sep:'09', Oct:'10', Nov:'11', Dec:'12' };
+        return m[2] + '-' + (months[m[1]] || '00');
+    }
+
+    // ---------- Footer note + page footer ----------
+    function renderFooterNote() {
+        document.getElementById('footer-note').innerHTML =
+            'Click any company with a Status of "Executed SPA" or "SPA not executed" to view the underlying SPA documents and purchaser breakdown.';
+    }
+    function renderPageFooter() {
+        const m = DATA.meta;
+        const docsUrl = CARTA_BASE_URL + '/investors/firm/' + esc(m.firmCartaId) + '/portfolio/documents/';
+        const html = '<a class="carta-link" href="#" onclick="openExternal(\'' + escAttr(docsUrl) + '\'); return false;">View SPA source documents in Carta ↗</a>';
+        document.getElementById('page-footer').innerHTML = html;
+    }
+
+    // ---------- Drawer ----------
+    function openDrawer(company) {
+        const data = DATA.companies[company];
+        if (!data || !data.spas || data.spas.length === 0) return;
+        document.getElementById('drawer-title').textContent = company;
+        const spaWord = data.spas.length === 1 ? 'SPA' : 'SPAs';
+        document.getElementById('drawer-subtitle').textContent =
+            data.spas.length + ' ' + spaWord + ' on file · First invested ' + data.firstInvested + ' · ' + fmtMoney(data.costBasis) + ' cost basis';
+
+        let html = '';
+        data.spas.forEach(spa => {
+            const execChip = spa.executed
+                ? '<span class="bucket-badge executed">Executed</span>'
+                : '<span class="bucket-badge unexecuted">Not executed</span>';
+            const meta = [
+                spa.shareClass !== '—' ? spa.shareClass : null,
+                spa.transactionDate !== '—' ? 'Closed ' + spa.transactionDate : null,
+                spa.uploadDate !== '—' ? 'Uploaded ' + spa.uploadDate : null,
+            ].filter(Boolean).join(' · ');
+            html +=
+                '<div class="drawer-spa-label">' +
+                    '<span>SPA #' + spa.num + '</span>' +
+                    execChip +
+                    (meta ? '<span class="drawer-spa-meta">' + esc(meta) + '</span>' : '') +
+                '</div>';
+
+            if (spa.purchasers.length === 0) {
+                html += '<div class="empty-bucket" style="margin: 0 0 12px;">No purchaser rows extracted from this SPA.</div>';
+                return;
+            }
+
+            // Compute totalAmount before the row loop so we can show % of round per purchaser
+            const totalAmount = spa.purchasers.reduce((s, p) => s + (p.amountPaid || 0), 0);
+            html += '<div class="table-container"><table><thead><tr>' +
+                '<th>Purchaser</th>' +
+                '<th>Type</th>' +
+                '<th style="text-align:right">Shares</th>' +
+                '<th style="text-align:right">Price/share</th>' +
+                '<th style="text-align:right">Amount paid</th>' +
+                '<th style="text-align:right">% of round</th>' +
+                '</tr></thead><tbody>';
+            const sorted = [...spa.purchasers].sort((a, b) => (b.shares || 0) - (a.shares || 0));
+            sorted.forEach(p => {
+                const pct = totalAmount > 0 && p.amountPaid != null
+                    ? (p.amountPaid / totalAmount * 100).toFixed(1) + '%'
+                    : '—';
+                html += '<tr>' +
+                    '<td class="purchaser-name">' + esc(p.name) + '</td>' +
+                    '<td class="entity-type"><span class="tag tag-neutral">' + esc(p.entityType || '—') + '</span></td>' +
+                    '<td class="number" title="' + escAttr(fmtNum(p.shares)) + '">' + fmtNumCompact(p.shares) + '</td>' +
+                    '<td class="number">' + fmtPriceCcy(p.pricePerShare, spa.currency) + '</td>' +
+                    '<td class="number" title="' + escAttr(fmtAmountCcy(p.amountPaid, spa.currency)) + '">' + fmtAmountCcyCompact(p.amountPaid, spa.currency) + '</td>' +
+                    '<td class="number">' + pct + '</td>' +
+                    '</tr>';
+            });
+            // Safe to total: every purchaser row within one SPA shares that
+            // SPA's currency. Never total across SPAs.
+            const totalShares = spa.purchasers.reduce((s, p) => s + (p.shares || 0), 0);
+            html += '</tbody><tfoot><tr><td colspan="2">Total raised</td><td class="number" title="' + escAttr(fmtNum(totalShares)) + '">' + fmtNumCompact(totalShares) + '</td><td></td><td class="number" title="' + escAttr(fmtAmountCcy(totalAmount, spa.currency)) + '">' + fmtAmountCcyCompact(totalAmount, spa.currency) + '</td><td class="number">100%</td></tr></tfoot></table></div>';
+            if (!spa.currency) {
+                html += '<div class="drawer-spa-footnote">* currency not stated in the source document</div>';
+            }
+        });
+
+        document.getElementById('drawer-content').innerHTML = html;
+        document.getElementById('drawer').classList.add('open');
+        document.getElementById('backdrop').classList.add('open');
+    }
+    function closeDrawer() {
+        document.getElementById('drawer').classList.remove('open');
+        document.getElementById('backdrop').classList.remove('open');
+    }
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') closeDrawer();
+    });
+
+    // ---------- Powered-by watermark — only visible at page bottom ----------
+    function setupPoweredBy() {
+        const el = document.querySelector('.powered-by-carta');
+        if (!el) return;
+        const update = () => {
+            const atBottom = (window.innerHeight + window.scrollY) >= (document.documentElement.scrollHeight - 4);
+            el.classList.toggle('visible', atBottom);
+        };
+        window.addEventListener('scroll', update, { passive: true });
+        window.addEventListener('resize', update);
+        update();
+    }
+    window.addEventListener('load', setupPoweredBy);
+
+    // ---------- Init ----------
+    renderHeader();
+    renderStatusFilterBar();
+    renderMetricsGrid();
+    renderCoverageBar();
+    renderUploadCta();
+    renderFilterBar();
+    renderFundFilter();
+    renderGeographyFilter();
+    renderMainTable();
+    renderFooterNote();
+    renderPageFooter();
+    // Close every dropdown the click landed outside of. A click inside a filter
+    // wrap — including on its checkboxes — leaves that wrap's own panel open.
+    document.addEventListener('click', e => {
+        const wrap = e.target.closest('.fund-filter-wrap');
+        document.querySelectorAll('.fund-dropdown-panel').forEach(p => {
+            if (!wrap || !wrap.contains(p)) p.classList.remove('open');
+        });
+    });
+  </script>
+
+  <div class="powered-by-carta" aria-label="Powered by Carta">
+    <svg width="572" height="101" viewBox="0 0 572 101" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M370.228 0V100.61H571.448V0H370.228ZM567.423 96.5856H374.252V4.0244H567.423V96.5856ZM396.623 52.2674C396.623 42.1817 405.138 36.2615 412.777 36.2615C418.246 36.2615 423.347 38.3119 426.076 43.0367L420.967 45.9988C420.087 44.6697 418.883 43.5796 417.472 42.8341C416.057 42.0885 414.48 41.6995 412.878 41.7116C408.386 41.7116 403.042 45.2167 403.042 52.162C403.042 59.1074 408.151 62.6732 413.304 62.6732C416.888 62.6732 419.864 60.6756 421.628 57.5919L426.85 60.0029C423.894 65.3193 418.611 68.1517 412.477 68.1517C404.761 68.1436 396.623 62.2154 396.623 52.2633V52.2674ZM445.493 68.1517C449.738 68.1517 453.748 66.2796 455.816 63.5607V67.3008H462.125V37.0436H455.816V40.7918C453.85 38.0485 449.746 36.2615 445.493 36.2615C436.2 36.2615 429.701 43.0245 429.701 52.2066C429.701 61.3887 436.261 68.1517 445.493 68.1517ZM446.101 41.9993C451.932 41.9993 455.934 46.3472 455.934 52.2066C455.934 58.066 451.928 62.4139 446.101 62.4139C440.275 62.4139 436.139 58.0052 436.139 52.0851C436.139 46.1649 440.271 41.9993 446.101 41.9993ZM496.029 43.0488H489.481V37.0071H496.09V29.1217H502.59V37.0071H509.195V43.0488H502.59V67.2886H496.029V43.0488ZM527.315 68.1517C531.568 68.1517 535.578 66.2796 537.646 63.5607V67.3008H543.963V37.0436H537.646V40.7918C535.679 38.0485 531.576 36.2615 527.315 36.2615C518.03 36.2615 511.53 43.0245 511.53 52.2066C511.53 61.3887 518.086 68.1517 527.315 68.1517ZM527.931 41.9993C533.753 41.9993 537.767 46.3472 537.767 52.2066C537.767 58.066 533.753 62.4139 527.931 62.4139C522.108 62.4139 517.969 58.0052 517.969 52.0851C517.969 46.1649 522.1 41.9993 527.931 41.9993ZM476.409 67.2602H469.849V37.0031H475.858V42.6355C477.346 39.2885 479.58 37.1084 483.213 36.9261C483.963 36.9139 484.709 36.9261 485.459 37.0071L485.359 43.061C480.14 43.061 476.413 45.8569 476.413 53.6532V67.2643L476.409 67.2602Z" fill="#1A1A1A"/><path d="M0 67.2018V65.4679L2.60086 65.0633C4.62375 64.7743 4.97053 64.3119 4.97053 61.9422V28.6512C4.97053 26.2816 4.62375 25.8192 2.60086 25.5302L0 25.1256V23.3917H19.8243C28.3205 23.3917 37.4524 25.4146 37.4524 35.1245C37.4524 42.9849 30.0544 47.3774 19.8821 47.3774H10.9814V62C10.9814 64.3119 11.3282 64.7743 13.3511 64.9477L17.6858 65.3523V67.2018H0ZM10.9814 27.0907V44.8922H20.5179C26.76 44.8922 30.6323 42.0601 30.6323 35.2979C30.6323 28.5356 26.76 25.7036 20.5179 25.7036H13.8713C11.4438 25.7036 10.9814 25.877 10.9814 27.0907Z" fill="#1A1A1A"/><path d="M54.8109 67.8953C46.3725 67.8953 39.6681 61.8844 39.6681 52.5791C39.6681 43.2738 46.3725 37.263 54.8109 37.263C63.2492 37.263 69.9536 43.2738 69.9536 52.5791C69.9536 61.8844 63.2492 67.8953 54.8109 67.8953ZM54.8109 65.6412C59.6658 65.6412 64.0006 61.7111 64.0006 52.5791C64.0006 43.4472 59.6658 39.5171 54.8109 39.5171C49.9559 39.5171 45.6212 43.4472 45.6212 52.5791C45.6212 61.7111 49.9559 65.6412 54.8109 65.6412Z" fill="#1A1A1A"/><path d="M87.6815 67.8375L76.6423 42.2335C76.1221 41.0776 75.8331 40.6152 73.8102 40.1528L72.0763 39.7482V38.1877H86.41V39.7482L84.5604 40.1528C82.5376 40.6152 81.9596 41.0776 82.4798 42.2335L90.2823 60.6129L96.4088 46.6261L92.8832 38.1877H104.385V39.7482L102.535 40.1528C100.512 40.6152 99.9922 41.0776 100.455 42.2335L107.853 60.6129L115.655 42.2335C116.175 41.0776 115.771 40.6152 113.748 40.1528L111.898 39.7482V38.1877H122.995V39.7482L121.261 40.1528C119.239 40.6152 118.95 41.0776 118.429 42.2335L107.332 67.8375H105.252L97.7381 49.8627L89.7622 67.8375H87.6815Z" fill="#1A1A1A"/><path d="M139.946 67.8953C130.988 67.8953 125.15 61.4221 125.15 52.7525C125.15 43.0427 132.433 37.263 139.599 37.263C146.824 37.263 152.43 41.7711 153.644 49.9205H130.641C130.641 50.0939 130.641 50.2673 130.641 50.4407C130.641 59.0524 135.091 64.2541 141.911 64.2541C146.073 64.2541 150.465 62.6936 152.257 56.4515H154.106C152.488 64.0229 147.518 67.8953 139.946 67.8953ZM139.484 39.4015C135.265 39.4015 131.739 42.2335 130.872 47.6086H147.575C147.113 41.7133 143.818 39.4015 139.484 39.4015Z" fill="#1A1A1A"/><path d="M159.249 67.2018V65.6412L161.099 65.2367C163.122 64.7743 163.469 64.4275 163.469 63.156V42.8693C163.469 41.5977 163.122 41.251 161.099 40.7886L159.249 40.384V38.8235L168.67 37.4942V44.7188C170 39.806 174.045 37.4364 177.282 37.4364C179.594 37.4364 181.443 38.5345 181.443 40.9042C181.443 42.8115 179.998 44.083 178.265 44.083C175.837 44.083 175.201 41.7133 172.889 41.7133C170.924 41.7133 168.67 44.5454 168.67 48.2444V63.156C168.67 64.4275 169.017 64.8321 171.04 65.1211L174.045 65.5257V67.2018H159.249Z" fill="#1A1A1A"/><path d="M199.407 67.8953C190.448 67.8953 184.611 61.4221 184.611 52.7525C184.611 43.0427 191.893 37.263 199.06 37.263C206.285 37.263 211.891 41.7711 213.105 49.9205H190.102C190.102 50.0939 190.102 50.2673 190.102 50.4407C190.102 59.0524 194.552 64.2541 201.372 64.2541C205.533 64.2541 209.926 62.6936 211.718 56.4515H213.567C211.949 64.0229 206.978 67.8953 199.407 67.8953ZM198.945 39.4015C194.725 39.4015 191.2 42.2335 190.333 47.6086H207.036C206.574 41.7133 203.279 39.4015 198.945 39.4015Z" fill="#1A1A1A"/><path d="M232.581 67.8953C225.241 67.8953 218.884 62.1156 218.884 52.9837C218.884 43.794 225.415 37.263 233.911 37.263C237.494 37.263 239.806 38.7657 241.193 40.095V26.6861C241.193 25.4146 240.846 24.8944 238.823 24.6055L235.818 24.2009V22.6404L246.395 21.311V62.2312C246.395 63.5028 246.742 63.8495 248.765 64.3119L250.614 64.7165V66.277L241.193 67.4329V63.7339C240.153 64.8899 237.205 67.8953 232.581 67.8953ZM235.298 64.6587C238.246 64.6587 240.095 63.6184 241.193 62.6936V41.3666C239.517 40.3262 237.841 39.7482 235.356 39.7482C229.229 39.7482 224.663 44.372 224.663 51.9434C224.663 59.8038 229.171 64.6587 235.298 64.6587Z" fill="#1A1A1A"/><path d="M286.714 67.8953C283.131 67.8953 280.53 66.3926 279.143 65.0633L274.635 67.8375H274.23V26.6861C274.23 25.4146 273.883 25.0678 271.86 24.6055L270.011 24.2009V22.6404L279.432 21.311V41.4244C280.472 40.2684 283.42 37.263 288.043 37.263C295.384 37.263 301.741 43.0427 301.741 52.1746C301.741 61.3643 295.21 67.8953 286.714 67.8953ZM285.327 40.4996C282.379 40.4996 280.53 41.5399 279.432 42.4647V63.7917C281.108 64.8321 282.784 65.4101 285.269 65.4101C291.396 65.4101 295.962 60.7863 295.962 53.2149C295.962 45.3545 291.453 40.4996 285.327 40.4996Z" fill="#1A1A1A"/><path d="M311.899 81.8244C310.107 81.8244 309.067 80.495 309.067 79.1657C309.067 77.6052 310.223 76.2759 312.65 75.2933C314.789 74.4264 315.771 74.0218 316.812 71.6521L319.124 66.5082L308.662 42.2335C308.142 41.0776 307.853 40.6152 305.83 40.1528L304.096 39.7482V38.1877H318.43V39.7482L316.581 40.1528C314.558 40.6152 313.98 41.0776 314.5 42.2335L322.071 60.0927L330.105 42.2335C330.625 41.0776 330.221 40.6152 328.198 40.1528L326.348 39.7482V38.1877H337.445V39.7482L335.711 40.1528C333.688 40.6152 333.4 41.0776 332.879 42.2335L317.39 76.3915C315.482 80.6106 313.575 81.8244 311.899 81.8244Z" fill="#1A1A1A"/></svg>
+  </div>
+</body>
+</html>

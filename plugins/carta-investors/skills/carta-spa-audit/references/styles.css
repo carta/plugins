@@ -1,0 +1,728 @@
+/* Inter font — Carta's primary typeface. Loaded explicitly so the artifact
+       renders consistently on systems without "Inter var" installed locally. */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+    /* === SHARED CARTA STYLESHEET === */
+    :root {
+        color-scheme: light;
+        --surface-bg: #FFFFFF;
+        --surface-underlay: #F1F1F1;
+        --surface-darkgray-default: #1A1A1A;
+        --text-default: #1A1A1A;
+        --text-subtle: #656B6B;
+        --border-default: #A7AAAA;
+        --border-subtle: #DEDFDF;
+        --negative-subtle: #FFEEEF;
+        --negative-strong: #E52431;
+        --positive-subtle: #EBF7F6;
+        --positive-strong: #2D9E90;
+        --info-subtle: #EAF0F8;
+        --info-strong: #285DA3;
+        --warning-subtle: #FFFCED;
+        --warning-strong: #C88600;
+        --border-focus-light: #C0D1E9;
+        --surface-lightgray-hover: #E9EAEA;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+        font-family: "Inter var", "Inter", -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        background: var(--surface-bg);
+        color: var(--text-default);
+        padding: 24px;
+        /* Bottom padding clears the fixed-positioned "Powered by Carta"
+           watermark — without this, long tables scroll under the badge
+           and the last few rows render with the wordmark on top. */
+        padding-bottom: 80px;
+    }
+
+    .container { max-width: 1100px; margin: 0 auto; }
+
+    .header { margin-bottom: 32px; }
+    .header h1 { font-size: 28px; font-weight: 500; line-height: 40px; color: var(--text-default); margin-bottom: 8px; letter-spacing: -0.01em; }
+    .header p { color: var(--text-subtle); font-size: 14px; font-weight: 400; line-height: 24px; }
+
+    /* Five-tile stat grid — one tile per bucket. Auto-fits to viewport
+       width; gap buckets carry their full color accent, the trailing two
+       (Executed / No-SPA-needed) get .metric-card--muted to read as
+       secondary so the user's eye lands on the gaps first. */
+    .metrics-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 12px;
+        margin-bottom: 20px;
+    }
+    .metric-card {
+        background: var(--surface-bg);
+        border: 1px solid #E9EAEA;
+        padding: 14px 16px;
+    }
+    .metric-label {
+        font-size: 11px;
+        color: var(--text-subtle);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 6px;
+        font-weight: 500;
+        line-height: 16px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        white-space: nowrap;
+    }
+    .metric-value {
+        font-size: 28px;
+        font-weight: 600;
+        line-height: 36px;
+        color: var(--surface-darkgray-default);
+        font-variant-numeric: tabular-nums;
+    }
+    .metric-sub {
+        font-size: 12px;
+        color: var(--text-subtle);
+        margin-top: 2px;
+        font-weight: 400;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+
+    /* Coverage-by-cost-basis bar — value-weighted companion to the count
+       tiles. A 100%-width stacked bar segmented by bucket, plus a legend and
+       an interpretive callout contrasting count coverage vs value coverage. */
+    .coverage-bar-section { margin-bottom: 20px; }
+    .coverage-bar-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+    .coverage-bar-head .label { font-size: 13px; font-weight: 500; color: var(--text-default); }
+    .coverage-bar-head .value { font-size: 13px; font-weight: 600; color: var(--text-default); font-variant-numeric: tabular-nums; margin-left: auto; }
+    .bar-mode-toggle { display: flex; gap: 2px; }
+    .bar-mode-btn { font-size: 11px; font-family: inherit; padding: 2px 8px; border: 1px solid var(--border-default); border-radius: 4px; background: transparent; color: var(--text-subtle); cursor: pointer; }
+    .bar-mode-btn.active { background: var(--surface-darkgray-default); color: #fff; border-color: var(--surface-darkgray-default); }
+    .coverage-bar-track { display: flex; height: 18px; border-radius: 4px; overflow: hidden; background: var(--surface-underlay); }
+    .coverage-bar-seg { height: 100%; }
+    .coverage-bar-seg.missing    { background: var(--negative-strong); }
+    .coverage-bar-seg.unexecuted { background: var(--warning-strong); }
+    .coverage-bar-seg.executed   { background: var(--positive-strong); }
+    .coverage-bar-seg.notNeeded  { background: var(--text-subtle); }
+    .coverage-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; font-size: 12px; color: var(--text-subtle); }
+    .coverage-legend .item { display: inline-flex; align-items: center; gap: 6px; }
+    .coverage-legend .swatch { width: 10px; height: 10px; border-radius: 2px; }
+    .coverage-legend .swatch.missing    { background: var(--negative-strong); }
+    .coverage-legend .swatch.unexecuted { background: var(--warning-strong); }
+    .coverage-legend .swatch.executed   { background: var(--positive-strong); }
+    .coverage-legend .swatch.notNeeded  { background: var(--text-subtle); }
+    .coverage-callout { font-size: 13px; color: var(--text-default); line-height: 18px; margin-top: 10px; }
+
+    /* Left-edge bucket accent — color encodes the bucket, paired with text label */
+    .metric-card.bucket-missing    { border-left: 3px solid var(--negative-strong); }
+    .metric-card.bucket-unexecuted { border-left: 3px solid var(--warning-strong); }
+    .metric-card.bucket-executed   { border-left: 3px solid var(--positive-strong); }
+    .metric-card.bucket-not-needed { border-left: 3px solid var(--text-subtle); }
+
+    /* Pending-extraction FYI pill — sits inline in the page-header subtitle
+       when pendingExtractionDocs > 0. Hover reveals a tooltip with the full
+       explanation. Pending docs can't be linked to specific portfolio
+       companies pre-extraction, so we keep this as an FYI surface (not a
+       tile / bucket). */
+    .pending-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 1px 8px;
+        background: var(--info-subtle);
+        color: var(--info-strong);
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 18px;
+        position: relative;
+        cursor: help;
+    }
+    .pending-pill-icon { font-size: 13px; line-height: 1; }
+    .pending-pill-text { font-variant-numeric: tabular-nums; }
+
+    /* Unmatched-SPA FYI pill — same Ink chip pattern as the pending pill, but
+       warning-amber instead of info-blue. These are SPAs that have nowhere to
+       land in the four-bucket audit because their issuer name didn't fuzzy-
+       match any portfolio investment. Action-oriented (reconcile names), not
+       just "wait." */
+    .orphaned-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 1px 8px;
+        background: var(--warning-subtle);
+        color: var(--warning-strong);
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 18px;
+        position: relative;
+        cursor: help;
+    }
+    .orphaned-pill-icon { font-size: 13px; line-height: 1; }
+    .orphaned-pill-text { font-variant-numeric: tabular-nums; }
+
+    /* Ink-style tooltip — black bg, white text, caret pointing up into the
+       trigger. Matches the pattern shipped in plugins/skill-dev/skills/
+       theme-with-ink/SKILL.md. */
+    .has-tooltip:focus-visible {
+        outline: 2px solid var(--info-strong);
+        outline-offset: 2px;
+        border-radius: 4px;
+    }
+    .tooltip {
+        position: absolute;
+        top: calc(100% + 10px);
+        left: 0;
+        background: #1A1A1A;
+        color: #FFFFFF;
+        padding: 10px 12px;
+        border-radius: 4px;
+        font-size: 12px;
+        line-height: 18px;
+        font-weight: 400;
+        width: max-content;
+        max-width: 320px;
+        text-align: left;
+        text-transform: none;
+        letter-spacing: normal;
+        white-space: normal;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.15s ease, visibility 0.15s ease;
+        pointer-events: none;
+        z-index: 100;
+    }
+    .tooltip::after {
+        content: '';
+        position: absolute;
+        bottom: 100%;
+        left: 16px;
+        width: 0;
+        height: 0;
+        border-left: 6px solid transparent;
+        border-right: 6px solid transparent;
+        border-bottom: 6px solid #1A1A1A;
+    }
+    .has-tooltip:hover .tooltip,
+    .has-tooltip:focus-visible .tooltip {
+        opacity: 1;
+        visibility: visible;
+    }
+
+    /* Inline help icon for tile labels — small ⓘ that opens a hover tooltip.
+       Used on the "No SPA Needed" tile to explain which asset types land
+       there (SAFEs, convertibles, fund LPs, tokens, warrants). */
+    .help-icon {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-left: 4px;
+        font-size: 11px;
+        color: var(--text-subtle);
+        cursor: help;
+        line-height: 1;
+    }
+    .help-icon:hover { color: var(--text-default); }
+
+    /* Tile-anchored tooltip — same Ink-style as the pending-pill tooltip
+       but right-aligned so the popup doesn't overflow the viewport when
+       triggered on the rightmost tile in the row. */
+    .tooltip--tile {
+        left: auto;
+        right: 0;
+        width: 260px;
+        max-width: 260px;
+    }
+    .tooltip--tile::after {
+        left: auto;
+        right: 8px;
+    }
+
+    /* Muted tile treatment — Executed + No-SPA-needed get visually
+       de-emphasized per Vispan's "surface the gaps" feedback. Same border
+       color (semantics preserved) but lighter background, smaller value. */
+    .metric-card--muted { background: var(--surface-bg); }
+    .metric-card--muted .metric-value { color: var(--text-default); }
+    .metric-card--muted .metric-label { color: var(--text-subtle); }
+    .metric-card--muted .metric-sub { color: var(--text-subtle); }
+
+    /* Bucket badge in the table — color + text label (a11y: never color-only) */
+    .bucket-badge {
+        display: inline-flex;
+        align-items: center;
+        height: 22px;
+        padding: 0 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 1;
+        white-space: nowrap;
+    }
+    .bucket-badge.missing    { background: var(--negative-subtle); color: var(--negative-strong); }
+    .bucket-badge.unexecuted { background: var(--warning-subtle); color: var(--warning-strong); }
+    .bucket-badge.executed   { background: var(--positive-subtle); color: var(--positive-strong); }
+    .bucket-badge.notNeeded  { background: var(--surface-underlay); color: var(--text-subtle); }
+
+    .table-title { font-size: 16px; font-weight: 500; line-height: 28px; color: var(--text-default); margin-bottom: 12px; }
+    .table-container { background: var(--surface-bg); overflow-x: auto; }
+    table { width: 100%; min-width: 480px; border-collapse: collapse; }
+    th { background: var(--surface-bg); padding: 10px 16px; text-align: left; font-size: 14px; font-weight: 500; color: var(--text-default); border-bottom: 1px solid var(--border-default); line-height: 20px; }
+    td { padding: 10px 16px; border-bottom: 1px solid var(--border-subtle); font-size: 14px; color: var(--text-default); line-height: 24px; }
+    tbody tr.clickable { cursor: pointer; }
+    tbody tr.clickable:hover { background: var(--surface-lightgray-hover); }
+    tbody tr:last-child td { border-bottom: none; }
+
+    .number { font-variant-numeric: tabular-nums; font-size: 14px; text-align: right; }
+    .company-name { font-weight: 500; }
+    .row-caret { margin-left: 4px; color: var(--text-subtle); font-size: 12px; }
+    .similarity-asterisk { color: var(--warning-strong); font-weight: 600; cursor: help; margin-left: 4px; }
+
+    /* Toolbar above the table — filter pills on the left, search on the right */
+    .table-toolbar {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 12px;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .filter-bar {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+    .filter-select-label {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-subtle);
+    }
+    .filter-select {
+        height: 28px;
+        padding: 0 30px 0 10px;
+        border: 1px solid var(--border-default);
+        border-radius: 4px;
+        font-size: 13px;
+        font-weight: 500;
+        font-family: inherit;
+        color: var(--text-default);
+        background-color: var(--surface-bg);
+        background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none' stroke='%23656B6B' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><path d='M1 1l4 4 4-4'/></svg>");
+        background-repeat: no-repeat;
+        background-position: right 10px center;
+        cursor: pointer;
+        outline: none;
+        appearance: none;
+        -webkit-appearance: none;
+        transition: border-color 0.12s ease, box-shadow 0.12s ease;
+    }
+    .filter-select:hover { background-color: var(--surface-lightgray-hover); }
+    .filter-select:focus {
+        border-color: var(--info-strong);
+        box-shadow: 0 0 0 3px var(--border-focus-light);
+    }
+    .filter-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 28px;
+        padding: 0 12px;
+        border-radius: 4px;
+        font-size: 13px;
+        font-weight: 500;
+        background: var(--surface-bg);
+        color: var(--text-default);
+        border: 1px solid var(--border-default);
+        cursor: pointer;
+        font-family: inherit;
+    }
+    .filter-pill:hover { background: var(--surface-lightgray-hover); }
+    .filter-pill.active {
+        background: var(--surface-darkgray-default);
+        color: var(--surface-bg);
+        border-color: var(--surface-darkgray-default);
+    }
+    .filter-pill .count { font-variant-numeric: tabular-nums; opacity: 0.8; }
+
+    /* Search input — Ink input pattern: 1px border, 4px radius, 28px height, focus ring */
+    .table-search {
+        position: relative;
+    }
+    .table-search input {
+        width: 240px;
+        height: 28px;
+        padding: 0 8px 0 30px;
+        border: 1px solid var(--border-default);
+        border-radius: 4px;
+        font-size: 13px;
+        font-family: inherit;
+        color: var(--text-default);
+        background: var(--surface-bg);
+        outline: none;
+        transition: border-color 0.12s ease, box-shadow 0.12s ease;
+    }
+    .table-search input::placeholder { color: var(--text-subtle); }
+    .table-search input:focus {
+        border-color: var(--info-strong);
+        box-shadow: 0 0 0 3px var(--border-focus-light);
+    }
+    .table-search svg {
+        position: absolute;
+        left: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--text-subtle);
+        pointer-events: none;
+    }
+
+    /* Sortable column headers — caret indicator on active sort column */
+    th.sortable {
+        cursor: pointer;
+        user-select: none;
+        position: relative;
+    }
+    th.sortable:hover { background: var(--surface-lightgray-hover); }
+    th.sortable .sort-caret {
+        display: inline-block;
+        margin-left: 4px;
+        color: var(--text-subtle);
+        font-size: 10px;
+        line-height: 1;
+        opacity: 0.4;
+    }
+    th.sortable.sort-active .sort-caret { opacity: 1; color: var(--text-default); }
+
+    /* Drawer — lifted verbatim from co-investors */
+    .drawer-backdrop {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.2);
+        z-index: 999;
+    }
+    .drawer-backdrop.open { display: block; }
+    .drawer {
+        position: fixed;
+        right: 0;
+        top: 0;
+        width: 92vw;
+        max-width: 92vw;
+        height: 100vh;
+        background: var(--surface-bg);
+        box-shadow: -4px 0 24px rgba(0,0,0,0.12);
+        transform: translateX(100%);
+        transition: transform 0.25s ease;
+        z-index: 1000;
+        overflow-y: auto;
+        padding: 24px;
+    }
+    .drawer.open { transform: translateX(0); }
+    .drawer table { min-width: max-content; }
+    .drawer-close {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        width: 32px;
+        height: 32px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: transparent;
+        border: none;
+        border-radius: 4px;
+        color: var(--text-default);
+        cursor: pointer;
+        padding: 0;
+        transition: background-color 0.12s ease;
+    }
+    .drawer-close:hover { background: var(--surface-lightgray-hover); }
+    .drawer-close:focus-visible { outline: 2px solid var(--info-strong); outline-offset: 2px; box-shadow: 0 0 0 4px var(--border-focus-light); }
+    .drawer h2 { font-size: 18px; font-weight: 600; color: var(--text-default); margin-bottom: 4px; padding-right: 32px; }
+    .drawer-subtitle { font-size: 13px; color: var(--text-subtle); margin-bottom: 20px; }
+    .drawer-spa-label {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-default);
+        margin: 20px 0 8px;
+        padding-bottom: 6px;
+        border-bottom: 1px solid var(--border-subtle);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .drawer-spa-meta { font-size: 12px; color: var(--text-subtle); font-weight: 400; }
+    .drawer-spa-footnote { font-size: 11px; color: var(--text-subtle); margin: -24px 0 32px; }
+    /* Bounded scroller: each SPA's table-container scrolls internally so a
+       sticky header pins while a long purchaser list scrolls, with horizontal
+       scroll as the fallback. Short tables don't reach max-height. */
+    .drawer .table-container { box-shadow: none; overflow: auto; max-height: 60vh; margin-bottom: 32px; }
+    .drawer thead th {
+        position: sticky;
+        top: 0;
+        background: var(--surface-bg);
+        z-index: 2;
+    }
+    /* Cap the purchaser-name column so long fund names wrap instead of
+       forcing the table wide. */
+    .drawer td.purchaser-name {
+        max-width: 220px;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+    /* Cap the Type column and let its tag wrap instead of forcing width. */
+    .drawer td.entity-type { max-width: 84px; }
+    .drawer td.entity-type .tag {
+        white-space: normal;
+        height: auto;
+        min-height: 22px;
+        padding-top: 3px;
+        padding-bottom: 3px;
+        line-height: 1.3;
+    }
+    .drawer td, .drawer th { padding: 8px 12px; }
+    .drawer tfoot td {
+        font-weight: 600;
+        font-size: 13px;
+        background: var(--info-subtle);
+        border-top: 1px solid var(--border-default);
+    }
+
+    /* Action-CTA cards — sit between the Gaps grid and the Covered grid.
+       Sized in a row so up to two cards can sit side-by-side on wide
+       viewports and stack on narrow ones. Softer treatment than the
+       previous red-banner warning — these are action-oriented prompts,
+       not error states. */
+    .cta-row {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 12px;
+        margin: 0 0 24px;
+    }
+    .cta-card {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 14px 18px;
+        border: 1px solid var(--border-subtle);
+        border-radius: 0;
+    }
+    .cta-card--missing    { background: #FFF7F2; border-left: 3px solid #C77B3F; }
+    .cta-card--unexecuted { background: var(--info-subtle); border-left: 3px solid var(--info-strong); }
+    .cta-card-body { flex: 1; min-width: 0; }
+    .cta-card-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-default);
+        margin-bottom: 2px;
+        line-height: 20px;
+    }
+    .cta-card-text {
+        font-size: 13px;
+        color: var(--text-default);
+        line-height: 18px;
+    }
+    .cta-card-action {
+        flex-shrink: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 32px;
+        padding: 0 14px;
+        border-radius: 4px;
+        font-size: 13px;
+        font-weight: 600;
+        font-family: inherit;
+        color: #FFFFFF;
+        background: var(--surface-darkgray-default);
+        border: none;
+        text-decoration: none;
+        white-space: nowrap;
+        cursor: pointer;
+        transition: background-color 0.12s ease;
+    }
+    .cta-card-action:hover { background: #000000; }
+    .cta-card-action--secondary {
+        background: var(--surface-bg);
+        color: var(--text-default);
+        border: 1px solid var(--border-default);
+    }
+    .cta-card-action--secondary:hover {
+        background: var(--surface-lightgray-hover);
+    }
+    .cta-card-action:focus-visible {
+        outline: 2px solid var(--info-strong);
+        outline-offset: 2px;
+    }
+
+    /* Empty state for buckets with zero companies */
+    .empty-bucket {
+        padding: 24px;
+        text-align: center;
+        color: var(--text-subtle);
+        font-size: 14px;
+        border: 1px dashed var(--border-subtle);
+        border-radius: 0;
+    }
+
+    .footer-note {
+        font-size: 12px;
+        color: var(--text-subtle);
+        margin-top: 16px;
+        line-height: 18px;
+    }
+
+    .page-footer {
+        margin-top: 32px;
+        padding-top: 16px;
+        border-top: 1px solid var(--border-subtle);
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+    .carta-link { font-size: 13px; color: var(--info-strong); text-decoration: none; }
+    .carta-link:hover { text-decoration: underline; }
+    .powered-by-carta {
+        position: fixed;
+        bottom: 20px; right: 20px;
+        width: min(13.5vw, calc(13.5vh * 5.66));
+        height: auto; line-height: 0;
+        pointer-events: none; z-index: 10;
+        /* Hidden until scrolled to the bottom (toggled by setupPoweredBy). */
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.2s ease, visibility 0.2s ease;
+    }
+    .powered-by-carta.visible {
+        opacity: 1;
+        visibility: visible;
+    }
+    .powered-by-carta svg { display: block; width: 100%; height: auto; }
+
+    .tag {
+        display: inline-flex;
+        align-items: center;
+        height: 24px;
+        padding: 0 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 1;
+        white-space: nowrap;
+    }
+    .tag-neutral { background: var(--surface-underlay); color: var(--text-default); }
+
+    /* ── Fund / Geography multi-select filter ─────────────────────────────── */
+    .filter-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .fund-filter-wrap {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+    }
+    .fund-filter-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 5px 10px;
+        font-size: 13px;
+        font-family: inherit;
+        font-weight: 500;
+        color: var(--text-default);
+        background: var(--surface-bg);
+        border: 1px solid var(--border-default);
+        border-radius: 4px;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background 0.12s, border-color 0.12s;
+    }
+    .fund-filter-btn:hover { background: var(--surface-lightgray-hover); }
+    .fund-filter-btn.active {
+        background: var(--info-subtle);
+        border-color: var(--info-strong);
+        color: var(--info-strong);
+    }
+    .fund-caret { font-size: 10px; opacity: 0.7; }
+    .fund-dropdown-panel {
+        display: none;
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        z-index: 200;
+        min-width: 200px;
+        max-height: 280px;
+        overflow-y: auto;
+        background: var(--surface-bg);
+        border: 1px solid var(--border-default);
+        border-radius: 4px;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.10);
+        padding: 6px 0;
+    }
+    .fund-dropdown-panel.open { display: block; }
+    .fund-option {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 14px;
+        font-size: 13px;
+        cursor: pointer;
+        user-select: none;
+        transition: background 0.1s;
+    }
+    .fund-option:hover { background: var(--surface-lightgray-hover); }
+    .fund-option input[type="checkbox"] { accent-color: var(--info-strong); flex-shrink: 0; }
+    .fund-sep { border: none; border-top: 1px solid var(--border-subtle); margin: 4px 0; }
+
+    /* Status filter tab bar (All / Live / Exited) */
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-bottom: 16px;
+    }
+    .status-tab {
+      display: inline-flex;
+      align-items: center;
+      height: 32px;
+      padding: 0 14px;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid var(--border-default);
+      background: var(--surface-bg);
+      color: var(--text-subtle);
+      transition: background-color 0.1s ease, color 0.1s ease, border-color 0.1s ease;
+      font-family: inherit;
+    }
+    .status-tab:hover { background: var(--surface-underlay); color: var(--text-default); }
+    .status-tab.active {
+      background: var(--text-default);
+      color: var(--surface-bg);
+      border-color: var(--text-default);
+    }
+    .status-tab-count {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      border-radius: 9px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-left: 6px;
+      background: rgba(255,255,255,0.2);
+      color: inherit;
+    }
+    .status-tab:not(.active) .status-tab-count {
+      background: var(--surface-underlay);
+      color: var(--text-subtle);
+    }
+
