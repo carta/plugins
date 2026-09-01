@@ -2,7 +2,8 @@
 // with the editable portfolio document (companies, toggles, assumptions) into
 // live fund states. All pure — UI and persistence live elsewhere.
 
-import { upliftByFund, fundReprice, waterfallCfgFor, positionReprice, BOOKED_CARRY_RATE } from "./reprice.js";
+import { upliftByFund, fundReprice, waterfallCfgFor, positionReprice, BOOKED_CARRY_RATE,
+         secondaryEvents, hasSecondaryPlan, retainedFraction } from "./reprice.js";
 import { splitProfit } from "./waterfall.js";
 import { cohortPercentile } from "./benchmarks.js";
 
@@ -36,6 +37,55 @@ export function scenarioFund(snapshot, fundId) {
 }
 
 /**
+ * Run a fund's liquidity events in order, converting paper value into cash.
+ * Cash below the paper given up is a realized loss (a secondary priced under the mark).
+ * Recycled cash is reinvested and never reaches the waterfall.
+ *
+ * @param events [{date, paper, cash, recyclePct, terminal}] — terminal runs last
+ * @returns {lpDistributed, carryBanked, paperOut, cashIn, realizedLoss, recycled,
+ *           secondaryCash, legs}
+ */
+export function applyLiquidityEvents(events, opts) {
+  const { lpPaidIn = 0, lpDistributed0 = 0, availablePaper = 0, cfg, recycleCap = Infinity } = opts;
+  let paper = Math.max(0, availablePaper);
+  let lpDistributed = lpDistributed0;
+  let carryBanked = 0, paperOut = 0, cashIn = 0, realizedLoss = 0, recycled = 0, secondaryCash = 0;
+  const legs = [];
+  const ordered = [...events].sort((a, b) => {
+    if (!!a.terminal !== !!b.terminal) return a.terminal ? 1 : -1;
+    const [x, y] = [String(a.date || ""), String(b.date || "")];
+    return x < y ? -1 : x > y ? 1 : 0;
+  });
+  for (const e of ordered) {
+    const wantPaper = Math.max(0, e.paper || 0);
+    if (wantPaper <= 0 || paper <= 0) continue;
+    const takePaper = Math.min(wantPaper, paper);
+    // Clamping paper has to clamp the cash with it, or a partly-honoured event
+    // would pay out at full size against a shrunken position.
+    const cash = Math.max(0, (e.cash || 0) * (takePaper / wantPaper));
+    paper -= takePaper;
+    paperOut += takePaper;
+    cashIn += cash;
+    realizedLoss += takePaper - cash;
+    let payable = cash;
+    if (!e.terminal) {
+      secondaryCash += cash;
+      const share = Math.max(0, Math.min(1, e.recyclePct || 0));
+      const take = Math.min(cash * share, Math.max(0, recycleCap - recycled));
+      recycled += take;
+      payable -= take;
+    }
+    if (payable <= 0) continue;
+    const lpFirst = Math.min(payable, Math.max(0, lpPaidIn - lpDistributed));
+    const { gpCarry, lpProfit } = splitProfit(payable - lpFirst, lpPaidIn, cfg);
+    lpDistributed += lpFirst + lpProfit;
+    carryBanked += gpCarry;
+    if (!e.terminal && e.date) legs.push({ date: e.date, amount: lpFirst + lpProfit });
+  }
+  return { lpDistributed, carryBanked, paperOut, cashIn, realizedLoss, recycled, secondaryCash, legs };
+}
+
+/**
  * Live state for every fund given the registry and assumptions.
  * Returns [{id, name, vintage, committed, lpPaidIn, lpDistributed, lpNav,
  *           dpi, rvpi, tvpi, netLpIrr, accruedCarry, gpCapitalNav, uplift,
@@ -44,13 +94,23 @@ export function scenarioFund(snapshot, fundId) {
  */
 export function computeFundStates(snapshot, portfolio) {
   const uplifts = upliftByFund(portfolio.companies);
-  // exit toggles: proceeds at the slice's marks, per fund (defunct can't exit)
+  const navAsOf = snapshot?.source?.navAsOf || null;
+  // The terminal exit sells only the RETAINED stake (defunct can't exit) —
+  // secondaries already sold the rest, each on its own date and at its own price.
   const exits = {};
+  const secondaries = {};
   for (const c of portfolio.companies) {
-    if (!c.exited || c.archived || c.defunct || !c.includeInNav) continue;
+    if (c.archived || c.defunct || !c.includeInNav) continue;
+    const retained = retainedFraction(c);
     for (const p of c.positions) {
+      if (hasSecondaryPlan(c)) {
+        for (const e of secondaryEvents(c, p, { navAsOf })) {
+          (secondaries[p.fundId] = secondaries[p.fundId] || []).push(e);
+        }
+      }
+      if (!c.exited) continue;
       const { repricedFv } = positionReprice(c, p, { live: true });
-      exits[p.fundId] = (exits[p.fundId] || 0) + repricedFv;
+      exits[p.fundId] = (exits[p.fundId] || 0) + repricedFv * retained;
     }
   }
   // Per fund: FV at Carta marks (also the GP-capital reprice denominator) and
@@ -87,20 +147,23 @@ export function computeFundStates(snapshot, portfolio) {
     const repriceRatio = fvBase > 0 ? Math.max(0, (fvBase + uplift) / fvBase) : 1;
     const gpCapitalNavLive = f.gpCapitalNav * repriceRatio;
 
-    // ---- exit waterfall: sold-at-mark value converts from paper to cash ----
-    // LPs take 100% of proceeds until cumulative distributions reach paid-in;
-    // above the make-whole line cash splits (1−c)/c, so carry banks for real.
-    // The remaining paper keeps the anchored split (banked carry comes out of
-    // accrued first, floored at zero). Total value at the slice's marks is
-    // conserved — exits move it between columns, never create or destroy it.
-    const exitFv = Math.min(exits[f.id] || 0, Math.max(0, r.lpNav + r.accruedCarry));
-    const lpFirst = Math.min(exitFv, Math.max(0, f.lpPaidIn - base.lpDistributed));
-    const restAboveWhole = exitFv - lpFirst;
-    // Above the make-whole line, proceeds split through the full waterfall
-    // (pref + catch-up). Flat case: gpCarry = carryRate·rest, lpProfit = (1−c)·rest.
-    const { gpCarry: carryBanked, lpProfit: lpFromRest } = splitProfit(restAboveWhole, f.lpPaidIn, cfg);
-    const lpDistributed = base.lpDistributed + lpFirst + lpFromRest;
-    const paper = r.lpNav + r.accruedCarry - exitFv;
+    // Value at the slice's marks is conserved EXCEPT for `realizedLoss`: a
+    // secondary sold below the mark destroys the difference.
+    const recycling = (portfolio.assumptions?.recyclingRatios || {})[f.id] ?? 0;
+    const ev = applyLiquidityEvents(
+      [...(secondaries[f.id] || []).map((e) => ({
+         ...e, recyclePct: e.recyclePct != null ? e.recyclePct : recycling })),
+       { terminal: true, paper: exits[f.id] || 0, cash: exits[f.id] || 0 }],
+      { lpPaidIn: f.lpPaidIn,
+        lpDistributed0: base.lpDistributed,
+        availablePaper: r.lpNav + r.accruedCarry,
+        cfg,
+        // An LPA caps recycling at a share of committed, not per sale. No
+        // provision configured → honour the per-sale share the user set.
+        recycleCap: recycling > 0 ? Math.max(0, f.committed * recycling) : Infinity },
+    );
+    const { lpDistributed, carryBanked } = ev;
+    const paper = r.lpNav + r.accruedCarry - ev.paperOut;
     const accruedCarry = Math.max(0, Math.min(r.accruedCarry - carryBanked, paper));
     const lpNav = paper - accruedCarry;
     const dpi = f.lpPaidIn > 0 ? lpDistributed / f.lpPaidIn : 0;
@@ -126,8 +189,12 @@ export function computeFundStates(snapshot, portfolio) {
       grossMoic: f.grossMoic != null ? f.grossMoic * repriceRatio : null,
       baseGrossMoic: f.grossMoic ?? null, // Carta booked (unrepriced) — for the vs-baseline delta
       accruedCarry,
-      carryBanked, // GP cash from exit toggles — paid through the real waterfall
-      exitedFv: exitFv,
+      carryBanked, // GP cash from every liquidity event — through the real waterfall
+      exitedFv: ev.paperOut, // paper value converted to cash across every event
+      secondaryProceeds: ev.secondaryCash, // cash from partial sales before the exit
+      secondaryLegs: ev.legs, // dated LP distributions, for the scenario IRRs
+      realizedLoss: ev.realizedLoss, // mark value lost selling below the mark
+      recycled: ev.recycled, // secondary cash reinvested instead of distributed
       invested: costByFund[f.id] || 0, // cost basis — fixed, doesn't reprice
       fv: fvBase + uplift,
       baseFv: fvBase, // FV at Carta marks — for the vs-baseline delta
@@ -169,6 +236,9 @@ export function firmRollup(fundStates) {
   const uplift = sum("uplift");
   const invested = sum("invested");
   const fv = sum("fv");
+  const secondaryProceeds = sum("secondaryProceeds");
+  const realizedLoss = sum("realizedLoss");
+  const recycled = sum("recycled");
   // currencies among funds that actually carry capital (ignore empty/GP shells)
   const currencies = [...new Set(
     fundStates.filter((f) => (f.committed || f.lpPaidIn || f.lpNav) && f.currency).map((f) => f.currency)
@@ -186,6 +256,9 @@ export function firmRollup(fundStates) {
     uplift,
     invested,
     fv,
+    secondaryProceeds,
+    realizedLoss,
+    recycled,
     currency: mixedCurrency ? null : (currencies[0] ?? null),
     mixedCurrency,
     dpi: lpPaidIn > 0 ? lpDistributed / lpPaidIn : 0,

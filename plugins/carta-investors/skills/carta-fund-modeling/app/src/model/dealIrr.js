@@ -59,6 +59,8 @@ export function anchorIrrByRatio(cartaIrr, base, now) {
  * @param {number}   a.baseValue       - residual FV at Carta marks (pre-reprice)
  * @param {number}   a.repricedValue   - residual FV at the current slider marks
  * @param {number}   [a.proceeds=0]    - realized proceeds already received
+ * @param {Array}    [a.interim=[]]    - modeled dated cash [{date, amount}] from
+ *   secondary sales; scenario-only, so it shifts `now` and never `base`
  * @param {boolean}  [a.realized=false]- fully exited → locked to Carta's IRR
  * @returns {?number} annualized IRR (decimal), or null when it can't be formed
  *
@@ -69,7 +71,8 @@ export function anchorIrrByRatio(cartaIrr, base, now) {
  * so the cell still tracks MOIC (caller labels it as an estimate).
  */
 export function scenarioDealIrr({
-  positions, exitDate, cartaIrr, baseValue, repricedValue, proceeds = 0, realized = false,
+  positions, exitDate, cartaIrr, baseValue, repricedValue, proceeds = 0, interim = [],
+  realized = false,
 }) {
   // Realized deals have already exited — the slider can't restate history.
   if (realized) return cartaIrr ?? null;
@@ -77,15 +80,19 @@ export function scenarioDealIrr({
   const entryLegs = entryLegsFor(positions);
   if (!entryLegs.length) return cartaIrr ?? null;
 
+  const legs = (interim || []).filter((l) => l && l.date && l.date <= exitDate && l.amount > 0);
+  const early = legs.reduce((s, l) => s + l.amount, 0);
+
   // A modeled total loss (FV → 0, no proceeds) is a -100% deal IRR, not an
   // unformable stream. Return it explicitly; otherwise xirr sees no positive
   // flow, returns null, and we'd wrongly snap back to Carta's reported IRR.
-  const terminal = (repricedValue || 0) + (proceeds || 0);
+  const terminal = (repricedValue || 0) + (proceeds || 0) + early;
   if (terminal <= 0) return -1;
 
-  const irrAt = (v) => xirr([...entryLegs, { date: exitDate, amount: (v || 0) + (proceeds || 0) }]);
+  const irrAt = (v, mid = []) =>
+    xirr([...entryLegs, ...mid, { date: exitDate, amount: (v || 0) + (proceeds || 0) }]);
   const base = irrAt(baseValue);
-  const now = irrAt(repricedValue);
+  const now = irrAt(repricedValue, legs);
 
   // Degenerate stream (e.g. entry == exitDate, or no positive terminal) → xirr
   // returns null; fall back to Carta's number rather than showing a broken delta.

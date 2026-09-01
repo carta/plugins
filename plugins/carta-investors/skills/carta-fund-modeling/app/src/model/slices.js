@@ -9,7 +9,8 @@ export const BASELINE_ID = "baseline";
 // silently dropped from a saved delta. Everything else on a company is the
 // immutable Carta layer.
 export const EDIT_FIELDS = ["valuationB", "markMultiple", "futureDilution",
-  "includeInNav", "exited", "exitTimingQ", "waterfallMode", "archived", "notes"];
+  "includeInNav", "exited", "exitTimingQ", "waterfallMode", "archived", "notes",
+  "secondaries"];
 
 /** Reset every editable input in a slice body to its default. */
 export function normalizeToDefaults(body) {
@@ -22,6 +23,7 @@ export function normalizeToDefaults(body) {
     c.exited = false;
     c.futureDilution = 0;
     c.waterfallMode = false; // baseline uses the flat reprice, not the preference waterfall
+    c.secondaries = []; // baseline holds the whole stake — no modeled partial sales
   }
   return doc;
 }
@@ -90,6 +92,21 @@ export function hydrateSlice(slice, baselineCompanies) {
   return { ...rest, companies };
 }
 
+/** Field-level equality for the delta. `secondaries` is an array, and `!==` on
+ *  two arrays is always true — that would write an edit for every company on
+ *  every save. Scalars keep the cheap identity compare. */
+function sameFieldValue(a, b) {
+  if (a === b) return true;
+  // "no secondaries" is spelled both ways — absent on a fresh baseline company,
+  // [] once the editor has touched it. Neither is an edit worth persisting.
+  const empty = (v) => v == null || (Array.isArray(v) && v.length === 0);
+  if (empty(a) && empty(b)) return true;
+  if (a && b && typeof a === "object" && typeof b === "object") {
+    return JSON.stringify(a) === JSON.stringify(b);
+  }
+  return false;
+}
+
 export function dehydrateSlice(slice, baselineCompanies) {
   if (!slice.companies) return slice; // already dehydrated
   if (slice.id === BASELINE_ID) return slice; // baseline stays a full copy
@@ -99,7 +116,7 @@ export function dehydrateSlice(slice, baselineCompanies) {
     const base = baseById.get(c.id);
     if (!base) continue; // drop companies absent from baseline (same rule as reconcile)
     const delta = {};
-    for (const f of EDIT_FIELDS) if (c[f] !== base[f]) delta[f] = c[f];
+    for (const f of EDIT_FIELDS) if (!sameFieldValue(c[f], base[f])) delta[f] = c[f];
     if (Object.keys(delta).length) edits[c.id] = delta;
   }
   const { companies, ...rest } = slice;
@@ -157,6 +174,7 @@ export function resetFundToCarta(body, fundId) {
     c.exited = false;
     c.futureDilution = 0;
     c.waterfallMode = false;
+    c.secondaries = [];
   }
   return body;
 }
@@ -186,6 +204,7 @@ export function resetAllToCarta(body) {
     c.exited = false;
     c.futureDilution = 0;
     c.waterfallMode = false;
+    c.secondaries = [];
   }
   return body;
 }

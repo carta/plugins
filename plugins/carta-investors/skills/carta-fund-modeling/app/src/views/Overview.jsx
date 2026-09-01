@@ -694,6 +694,11 @@ export default function Overview({ fundStates, snapshot, portfolio, onOpenFund }
 
       <SourceNote>
         Source: Carta Fund Admin. Reprices flow to LP NAV / DPI / RVPI / TVPI but don't restate Carta's Net LP IRR.
+        {!firm.mixedCurrency && firm.secondaryProceeds > 0.5 && (
+          <> Distributions include <strong>{fmt$(firm.secondaryProceeds)}</strong> from modeled partial sales
+          {firm.recycled > 0.5 && <> ({fmt$(firm.recycled)} recycled, not distributed)</>}
+          {firm.realizedLoss > 0.5 && <>, realizing {fmt$(firm.realizedLoss)} below the marks</>}.</>
+        )}
       </SourceNote>
       </section>
 

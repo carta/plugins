@@ -6,7 +6,7 @@
 // each "solution" fixes one degree of freedom: a subset of live holdings that each
 // exit at the SAME multiple `m` on invested cost. Per subset that pins a unique
 // required `m`, and we rank all subsets by it (lowest = most achievable).
-import { positionReprice } from "./reprice.js";
+import { positionTotalValue } from "./reprice.js";
 
 /** All combinations of `arr` of sizes 1..maxSize (order-independent). */
 function combinations(arr, maxSize) {
@@ -54,7 +54,7 @@ export function returnTheFundSolutions(slice, fundId, targetMoic, opts = {}) {
     for (const p of c.positions || []) {
       if (p.fundId !== fundId) continue;
       cost += p.cost || 0;
-      value += positionReprice(c, p, { live: true }).repricedFv + (p.proceeds || 0);
+      value += positionTotalValue(c, p);
     }
     if (cost <= 0) continue;
     investedCost += cost;

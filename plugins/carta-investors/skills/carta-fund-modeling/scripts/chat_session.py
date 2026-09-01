@@ -20,7 +20,11 @@ PORTFOLIO_FORMAT_NOTE = (
     "id, resolved against the baseline. To change a company in a scenario, set "
     "slices[].edits[<companyId>][<field>] — only these fields are editable: "
     "valuationB, markMultiple, futureDilution, includeInNav, exited, exitTimingQ, "
-    "waterfallMode, archived, notes. Do NOT write a full `companies` array onto a non-baseline "
+    "waterfallMode, archived, notes, secondaries. `secondaries` is a list of partial "
+    "sales before the terminal exit: [{id, q (quarter offset from navAsOf), pct (share "
+    "of the ORIGINAL stake, list sums to <= 1), valuationB / markMultiple (the sale's own "
+    "price, in whichever of the two the company's mark uses; omit both to sell at the "
+    "mark), recyclePct}]. Do NOT write a full `companies` array onto a non-baseline "
     "slice, and never touch the immutable Carta layer (positions, costBasis, "
     "defaultValuationB, dealIrr, anchors, sliderRange)."
 )

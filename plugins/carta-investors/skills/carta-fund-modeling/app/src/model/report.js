@@ -8,6 +8,7 @@
 
 import { computeFundStates, firmRollup, firmBaseRollup } from "./funds.js";
 import { computeReserves, newDealCount } from "./reserves.js";
+import { secondarySales } from "./reprice.js";
 
 /**
  * Top-line output metrics for one scenario, each with its vs-Baseline delta. The
@@ -86,6 +87,8 @@ export function scenarioDiff(baseSlice, slice) {
   if (wf) out.push(`${wf} via liquidation waterfall`);
   const exited = comps.filter((c) => c.exited).length;
   if (exited) out.push(`${exited} realized at mark`);
+  const sales = comps.reduce((n, c) => n + secondarySales(c).length, 0);
+  if (sales) out.push(`${sales} partial ${sales === 1 ? "sale" : "sales"} before exit`);
   const diluted = comps.filter((c) => (c.futureDilution ?? 0) > 0).length;
   if (diluted) out.push(`${diluted} with future dilution`);
   if (hasEntries(a.feeLoads) || hasEntries(a.followOnRatios) || hasEntries(a.recyclingRatios) || hasEntries(a.avgChecks) || hasEntries(a.carryRates))

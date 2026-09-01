@@ -59,11 +59,11 @@ export function scenarioIrr(fund, m) {
 // The app passes the fund's assumed exit horizon (default = navAsOf year-end) to
 // keep the whole table on the same "exit on horizon" basis as the sidebar /
 // scorecard and the per-company Deal IRR.
-export function scenarioTable(fund, cfg = 0.2, spRate = 0.102, exitDate = null) {
+export function scenarioTable(fund, cfg = 0.2, spRate = 0.102, exitDate = null, interim = []) {
   return SCENARIO_MULTIPLES.map((m) => {
     const row = scenarioRow(fund, m, cfg);
     // exitDate null → wind-down basis (back-compat); an ISO date → exit on it.
-    const irr = exitDate == null ? scenarioIrr(fund, m) : exitDateIrr(fund, exitDate, m);
+    const irr = exitDate == null ? scenarioIrr(fund, m) : exitDateIrr(fund, exitDate, m, interim);
     return { ...row, netLpIrr: irr, spIrr: spRate, edge: irr == null ? null : irr - spRate };
   });
 }
@@ -75,13 +75,17 @@ export function scenarioTable(fund, cfg = 0.2, spRate = 0.102, exitDate = null) 
  * `exitDate` includes any scheduled calls in the window and lengthens the
  * horizon (same multiple, later date → lower IRR).
  */
-export function exitDateIrr(fund, exitDate, m) {
+export function exitDateIrr(fund, exitDate, m, interim = []) {
   const flows = fund.flows.filter((f) => f.date <= exitDate);
   if (!flows.some((f) => f.amount < 0)) return null; // nothing called yet — n/m
   const grossPaidIn = flows.reduce((s, f) => s + (f.amount < 0 ? -f.amount : 0), 0);
   const distributed = flows.reduce((s, f) => s + (f.amount > 0 ? f.amount : 0), 0);
-  const terminal = Math.max(0, m * grossPaidIn - distributed);
-  return xirr([...flows, { date: exitDate, amount: terminal }]);
+  // Modeled distributions dated before the exit come out of the terminal, so the
+  // multiple is unchanged and only the TIMING moves: cash sooner → higher IRR.
+  const legs = interim.filter((l) => l && l.date && l.date <= exitDate && l.amount > 0);
+  const early = legs.reduce((s, l) => s + l.amount, 0);
+  const terminal = Math.max(0, m * grossPaidIn - distributed - early);
+  return xirr([...flows, ...legs, { date: exitDate, amount: terminal }]);
 }
 
 /**

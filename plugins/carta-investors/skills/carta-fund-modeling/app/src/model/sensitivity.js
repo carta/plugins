@@ -11,18 +11,20 @@
 // It is horizon-independent, so exit timing does not enter; carry rate is a
 // fixed fund term, held at the scenario's rate. All pure — no UI, no persistence.
 
-import { fundReprice, positionReprice } from "./reprice.js";
+import { fundReprice, positionReprice, positionTotalValue, retainedFraction } from "./reprice.js";
 
 /** Realizable value of each company in a fund at the scenario's marks, ranked
- *  by value. Archived and fully-realized (zero-FV) positions drop out. */
+ *  by value. Archived and fully-realized (zero-FV) positions drop out. Only the
+ *  stake still held is realizable — a secondary already turned the rest to cash. */
 export function fundCompanies(slice, fundId) {
   const out = [];
   for (const c of slice.companies || []) {
     if (c.archived) continue;
     let fv = 0;
+    const retained = retainedFraction(c);
     for (const p of c.positions || []) {
       if (p.fundId !== fundId) continue;
-      fv += positionReprice(c, p, { live: true }).repricedFv;
+      fv += positionReprice(c, p, { live: true }).repricedFv * retained;
     }
     if (fv > 0) out.push({ id: c.id, name: c.name, fv });
   }
@@ -44,7 +46,7 @@ export function fundCompanyReturns(slice, fundId) {
     let value = 0, cost = 0;
     for (const p of c.positions || []) {
       if (p.fundId !== fundId) continue;
-      value += positionReprice(c, p, { live: true }).repricedFv + (p.proceeds || 0);
+      value += positionTotalValue(c, p);
       cost += p.cost || 0;
     }
     if (cost > 0) out.push({ id: c.id, name: c.name, value, cost, moic: value / cost, realized: !!c.realized });

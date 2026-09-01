@@ -12,12 +12,13 @@ const roundLabel = (r) => {
   if (/^[a-z]\d?$/i.test(s)) return "Series " + s.toUpperCase();
   return s.charAt(0).toUpperCase() + s.slice(1);
 };
-import { H1, Btn, Toggle, Num, ChevronDownIcon, HelpCircleIcon, FundPicker, Dropdown, Badge, Eyebrow, MenuItem, useDismissable, ALL_FUNDS, MethodNote, SourceNote, fundLabel, POPOVER_SHADOW, GlobalFilter, SearchInput, DeltaCaret, Modal, EmptyState } from "../ui/components.jsx";
+import { H1, Btn, Toggle, Num, ChevronDownIcon, HelpCircleIcon, FundPicker, Dropdown, Badge, Eyebrow, MenuItem, useDismissable, ALL_FUNDS, MethodNote, SourceNote, fundLabel, POPOVER_SHADOW, GlobalFilter, SearchInput, DeltaCaret, Modal, EmptyState, Slider } from "../ui/components.jsx";
 import { useTableSort, SortIcon, useStickyHeader, TableScroll, TableHead } from "../ui/table.jsx";
 import RepriceControl from "../ui/RepriceControl.jsx";
 import ConfirmDialog from "../ui/ConfirmDialog.jsx";
 import { repricePosition, positionReprice, carryRateFor, companyRepriceState, exitHorizonFor,
-  companyIsWaterfall, companyHasCapTable, companyReferenceExit, companyExitValueAbs, quarterOffsetDate, quartersBetween } from "../model/reprice.js";
+  companyIsWaterfall, companyHasCapTable, companyReferenceExit, companyExitValueAbs, quarterOffsetDate, quartersBetween,
+  secondarySales, secondaryEvents, retainedFraction, saleRepriceConfig, repricesByValuation } from "../model/reprice.js";
 import { fundExitProceeds, fundProceedsCurve, normClass } from "../model/liqpref.js";
 import { scenarioDealIrr } from "../model/dealIrr.js";
 import { isStaleMark, daysBetween, fundIdsOf } from "../model/funds.js";
@@ -49,7 +50,9 @@ function roundToOwnDisplay(p) {
 function companyStatus(c) {
   if (c.realized) return "realized";
   if (c.defunct) return "defunct";
-  if (c.exited && c.includeInNav && !c.archived) return "exited-dpi";
+  const live = c.includeInNav && !c.archived;
+  if (live && (c.secondaries || []).some((s) => s && s.pct > 0)) return "partly-sold";
+  if (c.exited && live) return "exited-dpi";
   const cartaFv = c.positions.reduce((s, p) => s + (p.cartaFv || 0), 0);
   if (cartaFv > 0 && (
     (c.markMultiple != null && Math.abs(c.markMultiple - 1) > 1e-6) ||
@@ -60,6 +63,7 @@ function companyStatus(c) {
 const STATUS_META = {
   active:       { label: "Held at Carta" },
   repriced:     { label: "Repriced" },
+  "partly-sold": { label: "Partly sold" },
   "exited-dpi": { label: "Exited · in DPI" },
   defunct:      { label: "Out of business" },
   realized:     { label: "Exited · realized" },
@@ -304,6 +308,160 @@ function ExitTimingSection({ company, navAsOf, locked, updateCompany, defaultExi
         updateCompany(company.id, { exitTimingQ: q });
         onDragEnd?.();
       }} />
+  );
+}
+
+// ── Exit plan — the company's liquidity timeline: dated partial sales, each at
+// its own price, then the terminal exit selling whatever is left. One list, so
+// "take money off the table" and "multiple exits" stay one concept.
+const SALE_PCT_MAX = 95; // a single sale never claims the last of the stake by drag
+
+const newSaleId = () => "s" + Math.random().toString(36).slice(2, 8);
+
+/** Chips summarizing a plan, for the Scenario-inputs tab. */
+function planChips(company, navAsOf, onRemove, locked) {
+  return secondarySales(company).map((s) => {
+    // Show the price only when the user moved it off the mark, in the company's
+    // own units — same formatter as the slider that set it.
+    const priced = s.valuationB != null || s.markMultiple != null;
+    const cfg = priced ? saleRepriceConfig(company, s, () => {}) : null;
+    return (
+    <Badge key={s.id} tone="info" style={{ gap: 4, paddingRight: locked ? 8 : 4, cursor: "default" }}>
+      {`${fmtPct(s.pct, 0)} @ ${navAsOf ? exitQLabel(navAsOf, s.q) : `Q+${s.q}`}`}
+      {cfg ? ` · at ${cfg.fmtVal(cfg.value)}` : ""}
+      {!locked && (
+        <button onClick={(e) => { e.stopPropagation(); onRemove(s.id); }}
+          style={{ display: "inline-flex", alignItems: "center", justifyContent: "center",
+            background: "transparent", border: "none", cursor: "pointer", padding: 0,
+            width: 14, height: 14, color: "inherit", borderRadius: 2, fontSize: 13, lineHeight: 1 }}
+          aria-label={`Remove the sale at ${navAsOf ? exitQLabel(navAsOf, s.q) : `quarter ${s.q}`}`}>×</button>
+      )}
+    </Badge>
+    );
+  });
+}
+
+function ExitPlanTab({ company, navAsOf, locked, updateCompany, defaultExitQ = 0, onDragStart, onDragEnd }) {
+  const sales = secondarySales(company);
+  const retained = retainedFraction(company);
+  const exitQ = Math.round(company.exitTimingQ ?? defaultExitQ);
+
+  if (company.realized || company.defunct) {
+    return <EmptyState type="page" icon="setup"
+      text={company.realized
+        ? "This holding has already exited on Carta's books — its proceeds are history, not a scenario."
+        : "This company is out of business, so there is nothing left to sell."} />;
+  }
+  if (!navAsOf) {
+    return <EmptyState type="page" icon="pending"
+      text="Unavailable — this fund has no NAV-as-of date in the data pull, so sale dates can't be placed." />;
+  }
+
+  // Dollar figures come from the model, never re-derived here, so the plan and
+  // the fund numbers can never disagree.
+  const cashById = {}, paperById = {};
+  for (const p of company.positions) {
+    for (const e of secondaryEvents(company, p, { navAsOf })) {
+      cashById[e.id] = (cashById[e.id] || 0) + e.cash;
+      paperById[e.id] = (paperById[e.id] || 0) + e.paper;
+    }
+  }
+  const totalCash = Object.values(cashById).reduce((a, v) => a + v, 0);
+  const lossOf = (id) => (paperById[id] || 0) - (cashById[id] || 0);
+  const totalLoss = Object.keys(paperById).reduce((a, k) => a + lossOf(k), 0);
+  const priceLabel = repricesByValuation(company) ? "Sale price · company valuation" : "Sale price · MOIC";
+
+  const write = (next) => updateCompany(company.id, { secondaries: next, includeInNav: true });
+  const patch = (id, p) => write(sales.map((s) => (s.id === id ? { ...s, ...p } : s)));
+  const remove = (id) => {
+    trackClick("FundModeling.Companies.ExitPlanRemoveSale");
+    write(sales.filter((s) => s.id !== id));
+  };
+  const add = () => {
+    trackClick("FundModeling.Companies.ExitPlanAddSale");
+    const last = sales.length ? sales[sales.length - 1].q : null;
+    const q = Math.max(0, Math.min(EXIT_Q_MAX, last != null ? last + 2 : Math.floor(exitQ / 2) || 4));
+    write([...sales, { id: newSaleId(), q, pct: Math.min(0.25, retained) }]);
+  };
+
+  const quarterOpts = Array.from({ length: EXIT_Q_MAX + 1 }, (_, q) => ({ id: q, label: exitQLabel(navAsOf, q) }));
+
+  return (
+    <div>
+      <div style={{ ...sans, fontSize: FS.body, color: "var(--ink-color-global-text-subtle)", lineHeight: 1.6, marginBottom: 14 }}>
+        Sell part of this stake before the exit — a secondary into a later round. Each sale banks
+        cash on its own date, so the same total return arrives earlier and lifts IRR. The exit
+        itself sells whatever is left.
+      </div>
+
+      {sales.length === 0 && (
+        <div style={{ ...sans, fontSize: FS.body, color: "var(--ink-color-global-text-subtle)", marginBottom: 14 }}>
+          No partial sales modeled — the whole stake rides to the exit.
+        </div>
+      )}
+
+      {sales.map((s, i) => (
+        <div key={s.id} style={{ border: "1px solid var(--ink-color-global-border-subtle)", borderRadius: 6,
+          padding: "12px 14px", marginBottom: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <Eyebrow style={{ marginBottom: 0 }}>{`Sale ${i + 1}`}</Eyebrow>
+              <Dropdown options={quarterOpts} value={s.q} triggerLabel="Date" locked={locked}
+                minWidth={0} maxWidth={200}
+                onChange={(q) => { onDragStart?.(); patch(s.id, { q }); onDragEnd?.(); }} />
+            </div>
+            {!locked && (
+              <Btn kind="link" onClick={() => remove(s.id)} title="Remove this sale">Remove</Btn>
+            )}
+          </div>
+          <Slider label="Share of the position sold" style={{ marginBottom: 14 }}
+            value={Math.round(s.pct * 100)} min={1} max={SALE_PCT_MAX} step={1}
+            fmt={(v) => `${v}%`} locked={locked}
+            onChange={(v) => patch(s.id, { pct: v / 100 })} />
+          {/* Priced in the company's OWN reprice mode and units — the same
+              control, presets and Carta-mark reset as the mark slider. */}
+          <PlainLabel>{priceLabel}</PlainLabel>
+          <RepriceControl {...saleRepriceConfig(company, s, (p) => patch(s.id, p))}
+            locked={locked} showTick resetLabel="At the mark"
+            trackId="FundModeling.Companies.ExitPlanSetPrice"
+            onReset={() => patch(s.id, { valuationB: null, markMultiple: null })}
+            onDragStart={onDragStart} onDragEnd={onDragEnd} />
+          <div style={{ ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", marginTop: 8 }}>
+            <strong style={{ ...inkNum, color: "var(--ink-color-global-text-default)" }}>{fmtM(cashById[s.id] || 0)}</strong>
+            {" to the fund"}
+            {lossOf(s.id) > 0.5 && ` · ${fmtM(lossOf(s.id))} below the mark`}
+            {lossOf(s.id) < -0.5 && ` · ${fmtM(-lossOf(s.id))} above the mark`}
+          </div>
+        </div>
+      ))}
+
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 4, marginBottom: 16 }}>
+        <Btn kind="ghost" size="small" onClick={add} disabled={locked || retained <= 0.01}
+          title={retained <= 0.01 ? "The whole stake is already sold" : undefined}>
+          Add a sale
+        </Btn>
+        {sales.length > 0 && (
+          <div style={{ ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)" }}>
+            <strong style={{ ...inkNum, color: "var(--ink-color-global-text-default)" }}>{fmtM(totalCash)}</strong>
+            {" banked early"}
+            {totalLoss > 0.5 && ` · ${fmtM(totalLoss)} realized loss`}
+          </div>
+        )}
+      </div>
+
+      <div style={{ borderTop: "1px solid var(--ink-color-global-border-subtle)", paddingTop: 12 }}>
+        <div style={{ ...sans, fontSize: FS.body, color: "var(--ink-color-global-text-default)" }}>
+          <strong style={{ ...inkNum }}>{fmtPct(retained, 0)}</strong>
+          {" of the position retained · "}
+          {company.exited
+            ? `exits ${exitQLabel(navAsOf, exitQ)}`
+            : "no exit modeled — held at the mark"}
+        </div>
+        <div style={{ ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", marginTop: 4 }}>
+          Set the exit itself with Realize on the Scenario inputs tab.
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -655,9 +813,23 @@ function dealIrrOf(company, assumptions, snapshot, updateCompany) {
   const { totalFv, totalProceeds, curFv } = companyFvState(company, companyRepriceState(company, updateCompany));
   return scenarioDealIrr({
     positions: company.positions, exitDate: exitHorizonFor(assumptions, snapshot, company.fundId),
-    cartaIrr: company.dealIrr ?? null, baseValue: totalFv, repricedValue: curFv,
+    cartaIrr: company.dealIrr ?? null, baseValue: totalFv,
+    repricedValue: curFv * retainedFraction(company),
+    interim: companySecondaryLegs(company, snapshot?.source?.navAsOf),
     proceeds: totalProceeds, realized: company.realized,
   });
+}
+
+// Company-level secondary cash, grouped by date — the Deal IRR's interim legs.
+function companySecondaryLegs(company, navAsOf) {
+  const byDate = {};
+  for (const p of company.positions) {
+    for (const e of secondaryEvents(company, p, { navAsOf })) {
+      if (!e.date) continue;
+      byDate[e.date] = (byDate[e.date] || 0) + e.cash;
+    }
+  }
+  return Object.entries(byDate).map(([date, amount]) => ({ date, amount }));
 }
 
 function CompanyRow({ company, updateCompany, refDate, staleDays, assumptions, portfolio, snapshot, readOnly, onOpenCompany, reload, flush, expanded, onToggle, ownership, onHoverChange, onDragStart, onDragEnd, fundStates, firmAgg, firmLpDelta, firmGpCarry, sliceName, fundScope, onOpenFundSection }) {
@@ -732,7 +904,9 @@ function CompanyRow({ company, updateCompany, refDate, staleDays, assumptions, p
     : exitHorizonFor(assumptions, snapshot, company.fundId);
   const companyDealIrr = scenarioDealIrr({
     positions: company.positions, exitDate: companyExitDate,
-    cartaIrr: company.dealIrr ?? null, baseValue: totalFv, repricedValue: curFv,
+    cartaIrr: company.dealIrr ?? null, baseValue: totalFv,
+    repricedValue: curFv * retainedFraction(company),
+    interim: companySecondaryLegs(company, snapshot?.source?.navAsOf),
     proceeds: totalProceeds, realized: company.realized,
   });
   const companyDealIrrDelta = company.dealIrr != null && companyDealIrr != null
@@ -764,10 +938,13 @@ function CompanyRow({ company, updateCompany, refDate, staleDays, assumptions, p
   const hasFinancials = (company.financials?.series || []).some((sr) => sr.points && sr.points.length);
   const markDate = company.positions.reduce((m, p) => { const d = positionMarkDate(p); return d > m ? d : m; }, "");
 
+  const soldPct = 1 - retainedFraction(company);
   const status = company.realized
     ? <StatusChip variant="fb-info">Exited · realized</StatusChip>
     : company.defunct
     ? <StatusChip variant="flex-gray-light">Out of business</StatusChip>
+    : soldPct > 0 && live
+    ? <StatusChip variant="fb-info">{`Partly sold · ${fmtPct(soldPct, 0)}`}</StatusChip>
     : repriced
     ? <StatusChip variant="flex-yellow-light">Repriced</StatusChip>
     : company.exited && live
@@ -898,6 +1075,7 @@ function CompanyRow({ company, updateCompany, refDate, staleDays, assumptions, p
               <nav className="ink-tabs" role="tablist" style={{ marginBottom: 16 }}>
                 {[
                   { id: null, label: "Scenario inputs" },
+                  { id: "exitplan", label: "Exit plan" },
                   { id: "positions", label: "Positions" },
                   { id: "captable", label: "Cap table" },
                   { id: "financials", label: "Financials" },
@@ -925,6 +1103,13 @@ function CompanyRow({ company, updateCompany, refDate, staleDays, assumptions, p
               )}
               {openModal === "positions" && (
                 <TableScroll><PositionsTable company={company} refDate={refDate} staleDays={staleDays} /></TableScroll>
+              )}
+              {openModal === "exitplan" && (
+                <ExitPlanTab company={company} navAsOf={snapshot?.source?.navAsOf} locked={readOnly}
+                  updateCompany={updateCompany}
+                  defaultExitQ={Math.max(0, Math.min(EXIT_Q_MAX,
+                    quartersBetween(snapshot?.source?.navAsOf, exitHorizonFor(assumptions, snapshot, company.fundId))))}
+                  onDragStart={onDragStart} onDragEnd={onDragEnd} />
               )}
 
               {/* ── Scenario controls: valuation, dilution, realize ── */}
@@ -1084,6 +1269,39 @@ function CompanyRow({ company, updateCompany, refDate, staleDays, assumptions, p
                       </div>
                     </div>
                   )}
+                  {/* Partial sales live on their own tab: the cluster above is
+                      already full, and a plan is a list, not one more knob. The
+                      chips keep the plan visible without it. */}
+                  {!company.realized && !company.defunct && (() => {
+                    const sales = secondarySales(company);
+                    const open = () => {
+                      trackClick("FundModeling.Companies.ExitPlanOpen");
+                      setOpenModal("exitplan");
+                    };
+                    if (!sales.length) {
+                      return (
+                        <div style={{ marginTop: 4 }}>
+                          <Btn kind="link" onClick={open}
+                            title="Model selling part of this stake before the exit">
+                            Plan partial sales
+                          </Btn>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
+                        <span style={{ ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)" }}>
+                          Partial sales
+                        </span>
+                        {planChips(company, snapshot?.source?.navAsOf,
+                          (id) => {
+                            trackClick("FundModeling.Companies.ExitPlanRemoveSale");
+                            updateCompany(company.id, { secondaries: sales.filter((s) => s.id !== id) });
+                          }, readOnly)}
+                        <Btn kind="link" onClick={open}>Edit plan</Btn>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
 

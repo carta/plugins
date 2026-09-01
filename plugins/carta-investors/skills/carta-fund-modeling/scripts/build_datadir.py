@@ -318,7 +318,7 @@ def _cohort_covered(r):
 # not the other is silently dropped on the side that lacks it.
 SCENARIO_EDIT_FIELDS = ("valuationB", "markMultiple", "futureDilution",
                         "includeInNav", "exited", "exitTimingQ", "waterfallMode",
-                        "archived", "notes")
+                        "archived", "notes", "secondaries")
 # Assumption maps keyed by fund id — pruned to the surviving funds on refresh.
 FUND_KEYED_ASSUMPTIONS = ("carryRates", "preferredReturns", "catchupRates",
                           "catchupLimits", "feeLoads", "followOnRatios",

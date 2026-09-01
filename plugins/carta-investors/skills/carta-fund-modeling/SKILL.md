@@ -4,7 +4,8 @@ description: >
   Spin up an interactive local web console for FIRM-LEVEL scenario modeling over Carta Fund Admin data — a
   React app to reprice portfolio companies and model exits ACROSS MULTIPLE COMPANIES, with five tabs:
   Overview (fund-family rollup, investment pacing, concentration), Companies (per-company repricing + LP
-  make-whole waterfall + carry banking), Exit & IRR (exit scenarios, XIRR, GP & LP returns, plus a per-fund
+  make-whole waterfall + carry banking, plus an exit plan of dated partial sales, each at its own price —
+  secondary proceeds off the table before the exit), Exit & IRR (exit scenarios, XIRR, GP & LP returns, plus a per-fund
   DPI/RVPI/TVPI glidepath in the LP Returns view), Reserves (per-fund dry-powder planning), and Cohort
   Standing (peer-cohort + S&P-equivalent benchmarking). Scenarios persist locally. Invoke with a firm name,
   e.g. "fund modeling for Demo Capital" or "model portfolio scenarios for a firm". Fund Admin only. NOT
@@ -599,7 +600,13 @@ the app via `PUT /api/portfolio` (ETag) — no Carta calls.
 `portfolio.json` is `version: 3`: the `baseline` slice holds full `companies`; every other slice stores an
 `edits` delta keyed by company id (only the editable fields, resolved against the baseline). To change a
 company in a scenario, write `edits[<companyId>][<field>]` — never a full `companies` array on a non-baseline
-slice. A refresh reconciles each scenario onto the fresh baseline. A pre-existing `version: 2` cache (full
+slice. One editable field is a list: `secondaries` = `[{id, q, pct, valuationB|markMultiple, recyclePct}]`,
+the partial sales modeled before the terminal exit (`q` = quarter offset from `navAsOf`; `pct` = share of the
+ORIGINAL stake, summing to ≤ 1). A sale is priced in the company's **own** reprice mode — `valuationB` in
+waterfall/mark-basis mode, `markMultiple` otherwise — and omitting both sells at the mark. The exit
+(`exited` + `exitTimingQ`) then sells only what those left. The editable-field list lives in three files and
+must match, or a field is silently dropped on save or on refresh: `app/src/model/slices.js`,
+`scripts/build_datadir.py`, `scripts/chat_session.py`. A refresh reconciles each scenario onto the fresh baseline. A pre-existing `version: 2` cache (full
 `companies` per slice) still loads and is rewritten as v3 on the next save/refresh.
 
 ## Safety

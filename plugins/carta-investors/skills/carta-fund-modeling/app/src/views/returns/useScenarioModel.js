@@ -61,8 +61,12 @@ export function useScenarioModel({
   // assumed exit horizon (default = navAsOf year-end, i.e. "exit now"), matching
   // the sidebar, the scorecard below, and the per-company Deal IRR — not wind-down.
   const exitDate = exitHorizonFor(portfolio.assumptions, snapshot, fundId);
-  const table = useMemo(() => scenarioTable(fund, wf, spRate, exitDate), [fund, wf, spRate, exitDate]);
   const fs = fundStates.find((f) => f.id === fundId);
+  // Modeled secondary distributions, dated. They come out of the terminal rather
+  // than adding to it, so a row's multiple is unchanged and only the timing moves.
+  const interim = fs.secondaryLegs || [];
+  const table = useMemo(() => scenarioTable(fund, wf, spRate, exitDate, interim),
+    [fund, wf, spRate, exitDate, interim]);
 
   // Where THIS SLICE's marks land: the implied Net TVPI if today's
   // repriced LP NAV (plus anything already distributed) were ultimately
@@ -71,15 +75,15 @@ export function useScenarioModel({
   const sliceRows = useMemo(() => {
     if (!(implied > 0)) return [...table];
     const row = scenarioRow(fund, implied, wf);
-    const irr = exitDateIrr(fund, exitDate, implied);
+    const irr = exitDateIrr(fund, exitDate, implied, interim);
     const slice = { ...row, netLpIrr: irr, spIrr: spRate, edge: irr == null ? null : irr - spRate, isSlice: true };
     return [...table, slice].sort((a, b) => a.multiple - b.multiple);
-  }, [table, fund, implied, wf, spRate, exitDate]);
+  }, [table, fund, implied, wf, spRate, exitDate, interim]);
 
   // headline snapshot: where we'd stand if everything realized at today's
   // marks NOW — i.e. one terminal distribution at this year's exit, not the
   // far-out wind-down. The grid below is on this same "exit now" basis.
-  const todayIrr = implied > 0 ? exitDateIrr(fund, exitDate, implied) : null;
+  const todayIrr = implied > 0 ? exitDateIrr(fund, exitDate, implied, interim) : null;
   const todayEdge = todayIrr == null ? null : todayIrr - spRate;
   // GP carry at today's net position — dollars depend on the multiple, not the
   // exit year; matches the highlighted grid row's GP CARRY.

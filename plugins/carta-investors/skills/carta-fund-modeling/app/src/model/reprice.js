@@ -65,11 +65,10 @@ export function positionReprice(company, position, opts = {}) {
   const live = opts.live !== false;
   const dil = opts.dilution != null ? opts.dilution : company.futureDilution ?? 0;
   if (live && companyIsWaterfall(company)) {
-    const totalFv = company.positions.reduce((s, p) => s + (p.cartaFv || 0), 0);
-    const wfFv = fundExitProceeds(company.capTable, companyExitValueAbs(company)).proceeds;
-    const keep = 1 - Math.max(0, Math.min(1, dil || 0));
-    const share = totalFv > 0 ? (position.cartaFv || 0) / totalFv : 0;
-    const repricedFv = wfFv * share * keep;
+    const repricedFv = positionValueAt(company, position, {
+      valuationB: company.valuationB,
+      dilution: dil,
+    });
     return { repricedFv, uplift: repricedFv - (position.cartaFv || 0) };
   }
   const val = live ? company.valuationB : null;
@@ -98,6 +97,129 @@ export function repricePosition(position, valuationB, markMultiple = 1, dilution
   const m = markMultiple == null || !isFinite(markMultiple) ? 1 : Math.max(0, markMultiple);
   const repricedFv = cartaFv * m * keep;
   return { repricedFv, uplift: repricedFv - cartaFv };
+}
+
+// ── Secondary sales (partial realizations before the terminal exit) ────────────
+// `secondaries` = cash sales of part of the stake before the terminal exit
+// (`exited` + `exitTimingQ` sells whatever remains). Entry:
+// {id, q (quarter offset from navAsOf), pct (of the ORIGINAL stake, list sums ≤ 1),
+//  valuationB / markMultiple (the sale's price, in the company's own reprice mode;
+//  null on both = sell at the mark), recyclePct}.
+//
+// A sale is priced in the SAME units as the company's mark — $ valuation in
+// waterfall/basis mode, MOIC otherwise — through `saleRepriceConfig` below, which
+// is `repriceConfig` pointed at the sale's fields. So one mode, one set of units,
+// one set of presets, wherever the price is entered.
+//
+// `positionReprice` still returns the FULL stake's value, so paper NAV and the
+// carry anchor keep their current meaning; model/funds.js moves value from paper
+// into cash per event. A sale below the mark then lands where it belongs — cash
+// in, below the paper given up.
+
+/** Normalized, chronologically sorted secondary sales. Clamps the cumulative
+ *  total to the whole stake, so the list can never over-sell. */
+export function secondarySales(company) {
+  const raw = Array.isArray(company?.secondaries) ? company.secondaries : [];
+  const out = [];
+  let cum = 0;
+  const sorted = raw
+    .filter((s) => s && isFinite(s.pct) && s.pct > 0 && isFinite(s.q))
+    .map((s) => ({ ...s, q: Math.max(0, Math.round(s.q)) }))
+    .sort((a, b) => a.q - b.q);
+  for (const s of sorted) {
+    // Later sales are truncated rather than dropped, so the stake can never
+    // over-sell however the list was authored (hand-edited JSON, a stale share).
+    const pct = Math.min(Math.max(0, s.pct), Math.max(0, 1 - cum));
+    if (pct <= 0) continue;
+    cum += pct;
+    out.push({ ...s, pct });
+  }
+  return out;
+}
+
+/** Fraction of the original stake sold across every secondary (0..1). */
+export function soldFraction(company) {
+  return secondarySales(company).reduce((a, s) => a + s.pct, 0);
+}
+
+/** Fraction of the stake still held — what the terminal exit sells. */
+export function retainedFraction(company) {
+  return Math.max(0, 1 - soldFraction(company));
+}
+
+/** True when this company has a usable secondary plan. A `realized` company is
+ *  frozen at Carta's books (see canReprice) and can never carry one. */
+export function hasSecondaryPlan(company) {
+  if (!company || company.realized) return false;
+  return secondarySales(company).length > 0;
+}
+
+/** A sale's own price, falling back to the company's mark on either field, so an
+ *  untouched sale sells at the mark in whichever mode the company is in. */
+export function salePrice(company, sale) {
+  return {
+    valuationB: sale?.valuationB != null ? sale.valuationB : company.valuationB,
+    markMultiple: sale?.markMultiple != null ? sale.markMultiple : company.markMultiple ?? 1,
+  };
+}
+
+/**
+ * Per-position effect of each secondary sale, dated:
+ * [{id, q, date, pct, paper, cash, recyclePct}]. `paper` leaves NAV at the
+ * scenario mark, `cash` comes in at the sale's own price; paper − cash is
+ * realized loss against the mark.
+ */
+export function secondaryEvents(company, position, opts = {}) {
+  const sales = secondarySales(company);
+  if (!sales.length || company.realized) return [];
+  const navAsOf = opts.navAsOf || null;
+  const dilution = opts.dilution != null ? opts.dilution : company.futureDilution ?? 0;
+  const atMark = positionValueAt(company, position, { valuationB: company.valuationB, dilution });
+  return sales.map((s) => {
+    const at = positionValueAt(company, position, { ...salePrice(company, s), dilution });
+    return {
+      id: s.id,
+      q: s.q,
+      date: navAsOf ? quarterOffsetDate(navAsOf, s.q) : null,
+      pct: s.pct,
+      paper: atMark * s.pct,
+      cash: Math.max(0, at * s.pct),
+      recyclePct: s.recyclePct != null ? s.recyclePct : null, // null → the fund's ratio
+    };
+  });
+}
+
+/** Total secondary cash for one position, ignoring dates — for company-level
+ *  total-return sums (sensitivity, return-the-fund, Deal IRR terminal). */
+export function secondaryCash(company, position, opts = {}) {
+  return secondaryEvents(company, position, opts).reduce((a, e) => a + e.cash, 0);
+}
+
+/** A position's TOTAL value to the fund: the stake still held, plus cash from
+ *  modeled secondary sales, plus proceeds Carta already booked. WHEN a sale
+ *  happens never moves this total — only the price does. */
+export function positionTotalValue(company, position, opts = {}) {
+  const { repricedFv } = positionReprice(company, position, { live: opts.live !== false });
+  return repricedFv * retainedFraction(company)
+    + secondaryCash(company, position)
+    + (position.proceeds || 0);
+}
+
+/** The FULL stake's value for one position at an arbitrary company valuation.
+ *  Shared by `positionReprice` and the secondary pricing above, so a sale runs
+ *  through the same engine — liquidation waterfall included — as the mark it is
+ *  compared against. */
+export function positionValueAt(company, position, { valuationB, markMultiple, dilution = 0 } = {}) {
+  if (companyIsWaterfall(company)) {
+    const totalFv = company.positions.reduce((s, p) => s + (p.cartaFv || 0), 0);
+    const exitAbs = valuationB != null ? valuationB * 1e9 : companyReferenceExit(company);
+    const wfFv = fundExitProceeds(company.capTable, exitAbs).proceeds;
+    const keep = 1 - Math.max(0, Math.min(1, dilution || 0));
+    const share = totalFv > 0 ? (position.cartaFv || 0) / totalFv : 0;
+    return wfFv * share * keep;
+  }
+  const mult = markMultiple != null ? markMultiple : company.markMultiple ?? 1;
+  return repricePosition(position, valuationB, mult, dilution).repricedFv;
 }
 
 /**
@@ -221,6 +343,10 @@ export function quartersBetween(anchorISO, targetISO) {
  * proceeds-weighted average exit quarter, offset from navAsOf. Funds with no
  * realized company are omitted. An explicit user horizon wins downstream (see
  * effectiveExitHorizons).
+ *
+ * The weight is the RETAINED stake — the terminal exit only sells what the
+ * secondaries left behind, so a mostly-sold company must not drag the fund's
+ * horizon toward its own quarter. Secondary cash is dated by its own event.
  */
 export function deriveRealizedExitHorizons(snapshot, portfolio) {
   const navAsOf = snapshot?.source?.navAsOf;
@@ -229,9 +355,10 @@ export function deriveRealizedExitHorizons(snapshot, portfolio) {
   for (const c of portfolio?.companies || []) {
     if (!c.exited || c.realized || c.archived || c.defunct || !c.includeInNav) continue;
     const q = Math.max(0, Math.round(c.exitTimingQ ?? 0));
+    const retained = retainedFraction(c);
     for (const p of c.positions) {
       const { repricedFv } = positionReprice(c, p, { live: true });
-      const w = Math.max(0, repricedFv || 0);
+      const w = Math.max(0, (repricedFv || 0) * retained);
       if (w <= 0) continue;
       wSum[p.fundId] = (wSum[p.fundId] || 0) + w;
       wq[p.fundId] = (wq[p.fundId] || 0) + w * q;
@@ -322,13 +449,20 @@ function sentimentPresets(anchor) {
 
 /** Resolve the mode-dependent reprice config for a company — one config drives
  *  both the inline (compact) and expanded RepriceControl. The number is the
- *  knob; the quick-pick presets are multiples of the Carta mark (the resetValue). */
-function repriceConfig(company, { totalFv, hasBasis, cartaMoic, cartaRef, updateCompany }) {
+ *  knob; the quick-pick presets are multiples of the Carta mark (the resetValue).
+ *
+ *  `target` is what the knob reads from (defaults to the company itself) and
+ *  `write` is how it persists, so a secondary sale can price itself through this
+ *  same function — same modes, same units, same presets — against its own fields.
+ */
+function repriceConfig(company, { totalFv, hasBasis, cartaMoic, cartaRef, updateCompany,
+                                  target = company, write }) {
+  const set = write || ((patch) => updateCompany(company.id, { ...patch, includeInNav: true }));
   // Waterfall mode: the slider is an EXIT company valuation ($B). 1× snaps to the
   // company's reference (current) value; proceeds flow through the preference stack.
   if (companyIsWaterfall(company)) {
     const refB = companyReferenceExit(company) / 1e9; // billions
-    const cur = company.valuationB ?? refB ?? 0;
+    const cur = target.valuationB ?? refB ?? 0;
     // `ref` (→ max, → presets) must NEVER fall back to `cur` — cur is the value
     // being dragged/set, so anchoring the range to it bakes each render's dragged
     // value into the NEXT render's max/presets, compounding on every mousemove
@@ -339,35 +473,35 @@ function repriceConfig(company, { totalFv, hasBasis, cartaMoic, cartaRef, update
     return {
       value: cur, min: 0, max: Math.max(1, ref * 8), step: 0.01,
       fmtVal: (x) => fmtB(x), resetValue: refB,
-      onChange: (x) => updateCompany(company.id, { valuationB: x, includeInNav: true }),
+      onChange: (x) => set({ valuationB: x }),
       presets: sentimentPresets(ref),
     };
   }
   if (hasBasis) {
-    const cur = company.valuationB ?? cartaRef ?? 0;
+    const cur = target.valuationB ?? cartaRef ?? 0;
     // Same fix as the waterfall branch above — never anchor `ref` to `cur`.
     const ref = cartaRef || 1;
     return {
       value: cur, min: 0, max: Math.max(2, ref * 22), step: 0.01,
       fmtVal: (x) => fmtB(x), resetValue: cartaRef,
-      onChange: (x) => updateCompany(company.id, { valuationB: x, includeInNav: true }),
+      onChange: (x) => set({ valuationB: x }),
       presets: sentimentPresets(ref),
     };
   }
   if (cartaMoic) {
-    const cur = (company.markMultiple ?? 1) * cartaMoic;
+    const cur = (target.markMultiple ?? 1) * cartaMoic;
     return {
       value: cur, min: 0, max: Math.max(60, Math.ceil(cartaMoic * 22)), step: 0.05,
       fmtVal: (x) => x.toFixed(2) + "×", resetValue: cartaMoic,
-      onChange: (m) => updateCompany(company.id, { markMultiple: m / cartaMoic, includeInNav: true }),
+      onChange: (m) => set({ markMultiple: m / cartaMoic }),
       presets: sentimentPresets(cartaMoic),
     };
   }
-  const cur = company.markMultiple ?? 1;
+  const cur = target.markMultiple ?? 1;
   return {
     value: cur, min: 0, max: 40, step: 0.05,
     fmtVal: (x) => x.toFixed(2) + "×", resetValue: 1,
-    onChange: (x) => updateCompany(company.id, { markMultiple: x, includeInNav: true }),
+    onChange: (x) => set({ markMultiple: x }),
     presets: sentimentPresets(1),
   };
 }
@@ -407,4 +541,30 @@ export function companyRepriceState(company, updateCompany) {
       }
     : null;
   return { cfg, dilutionCfg, uplift, canReprice };
+}
+
+/** RepriceControl config for ONE secondary sale's price: the company's reprice
+ *  config pointed at the sale, so the price is entered in the company's own mode
+ *  and units. `write(patch)` gets `{valuationB}` or `{markMultiple}`.
+ *
+ *  `resetValue` is the company's CURRENT mark, not Carta's — clearing a sale's
+ *  price sells at the mark, so the reset chip must sit where that lands. */
+export function saleRepriceConfig(company, sale, write) {
+  const totalFv = company.positions.reduce((s, p) => s + (p.cartaFv || 0), 0);
+  const totalCost = company.positions.reduce((s, p) => s + (p.cost || 0), 0);
+  const args = {
+    totalFv,
+    hasBasis: company.positions.some((p) => p.markBasisB),
+    cartaMoic: totalCost > 0 ? totalFv / totalCost : null,
+    cartaRef: cartaReferenceB(company),
+  };
+  const atMark = repriceConfig(company, { ...args, target: company, write: () => {} });
+  const cfg = repriceConfig(company, { ...args, target: salePrice(company, sale), write });
+  return { ...cfg, resetValue: atMark.value };
+}
+
+/** True when the company's reprice mode is a $ company valuation rather than a
+ *  MOIC multiple — the two units a price can be entered in. */
+export function repricesByValuation(company) {
+  return companyIsWaterfall(company) || company.positions.some((p) => p.markBasisB);
 }
