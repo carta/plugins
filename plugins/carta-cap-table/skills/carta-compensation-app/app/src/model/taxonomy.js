@@ -1,3 +1,31 @@
+// Single source of truth for percentile columns. Set fetched:false to add an
+// interpolated column — the Tag and the value both derive from this row.
+export const PERCENTILES = [
+  { key: "p25", label: "P25", at: 25, fetched: true },
+  { key: "p50", label: "P50", at: 50, fetched: true },
+  { key: "p75", label: "P75", at: 75, fetched: true },
+  { key: "p90", label: "P90", at: 90, fetched: true },
+];
+
+// Enrich each !fetched entry with its bracket + interpolation weight.
+// Guards against extrapolation past the fetched range.
+const _byKey = Object.fromEntries(PERCENTILES.map((p) => [p.key, p]));
+for (const p of PERCENTILES) {
+  if (p.fetched) continue;
+  const lo = [...PERCENTILES].reverse().find((q) => q.fetched && q.at < p.at);
+  const hi = PERCENTILES.find((q) => q.fetched && q.at > p.at);
+  if (!lo || !hi) {
+    throw new Error(
+      `PERCENTILES[${p.key}] has no fetched bracket — cannot interpolate. ` +
+      `Add fetched neighbors on both sides of ${p.at}, or remove ${p.key}.`,
+    );
+  }
+  p.lo = lo.key; p.hi = hi.key;
+  p.t = (p.at - lo.at) / (hi.at - lo.at);
+  p.tooltip = `Interpolated between ${lo.label} and ${hi.label}`;
+}
+export function percentileById(key) { return _byKey[key] || null; }
+
 // CTC taxonomy: ladder/track reconciliation, level ordering, and display casing.
 //
 // Pure — no React, no fetch. Everything here is derived from data the build step

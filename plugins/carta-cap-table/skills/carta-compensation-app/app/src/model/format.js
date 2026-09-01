@@ -87,3 +87,54 @@ export const EQUITY_REPS = [
 ];
 
 export { EM_DASH };
+
+// Linear interpolation between two fetched percentiles.
+function lerp(a, b, t) {
+  if (isBlank(a) || isBlank(b)) return null;
+  return Math.round(a + (b - a) * t);
+}
+
+function lerpEquity(a, b, t) {
+  if (!a || !b) return null;
+  return {
+    notional: lerp(a.notional, b.notional, t),
+    shares: lerp(a.shares, b.shares, t),
+    fdpct: (isBlank(a.fdpct) || isBlank(b.fdpct))
+      ? null : Number((a.fdpct + (b.fdpct - a.fdpct) * t).toFixed(6)),
+  };
+}
+
+// Fill in every derived (fetched:false) percentile on a row from its bracket.
+// Called at load time so benchmarks.json on disk stays server-truth only.
+export function fillDerivedPercentiles(row, percentiles) {
+  for (const p of percentiles) {
+    if (p.fetched) continue;
+    // Skip null/absent metric objects (e.g. no-equity role) — nothing to interpolate from,
+    // and mutating null→{} would trip assertProvenance's null guard downstream.
+    if (row.salary != null) row.salary[p.key] = lerp(row.salary[p.lo], row.salary[p.hi], p.t);
+    if (row.tcc != null) row.tcc[p.key] = lerp(row.tcc[p.lo], row.tcc[p.hi], p.t);
+    if (row.equity != null) row.equity[p.key] = lerpEquity(row.equity[p.lo], row.equity[p.hi], p.t);
+  }
+  return row;
+}
+
+// Throws if a fetched row × fetched percentile cell has no value.
+// Catches hand-added benchmarks that skip the provenance markers.
+export function assertProvenance(row, percentiles) {
+  const rowProv = row.provenance || "fetched";
+  for (const p of percentiles) {
+    if (!p.fetched) continue;
+    if (rowProv !== "fetched") continue;
+    for (const metric of ["salary", "tcc", "equity"]) {
+      if (row[metric] == null) continue; // null/absent metric is valid (e.g. no-equity role)
+      const v = row[metric][p.key];
+      if (v === undefined) {
+        throw new Error(
+          `Missing ${metric}.${p.key} on ${row.job}/${row.ladder}/${row.level}: ` +
+          `row and percentile both claim fetched, but no value is present. ` +
+          `Either mark the row provenance:"estimated" or add ${p.key} to PERCENTILES with fetched:false.`,
+        );
+      }
+    }
+  }
+}

@@ -783,18 +783,43 @@ the published ones are ordinary compensation practice.
 
 **When you add a value the server did not return, you MUST label it.** Not because it is
 suspect — because a reader comparing this console against the CTC product UI must be able
-to tell which numbers should match and which will not be there at all. Two requirements,
-both mandatory:
+to tell which numbers should match and which will not be there at all. The console
+enforces this structurally: you do not hand-render the `Tag`, and you do not
+hand-write interpolated values into `benchmarks.json`. There are two edit points,
+each one line, and the `Tag` renders automatically.
 
-- **In the UI**, mark it with BOTH a `Tag` AND a `title` tooltip naming the calculation —
-  e.g. a `notice`-tone "Estimated" tag on the column header, with
-  `title="Interpolated between P50 and P75"`. `Tag` (`app/src/ui/components.jsx`) already
-  takes both; do not invent a new component. **The tag must be visible on first render** —
-  not behind a help menu, a disclosure toggle, or a legend the reader has to go find; the
-  tooltip then explains the arithmetic on hover. An interpolated number that looks identical
-  to a fetched one is the failure this prevents.
-- **In what you tell the user**, say what it is derived from and that it will not appear
-  in the product UI. One sentence.
+**Recipe A — adding a new percentile column (P30, P45, P60, etc.):**
+Add one row to `PERCENTILES` in `app/src/model/taxonomy.js`:
+
+```js
+{ key: "p45", label: "P45", at: 45, fetched: false },
+```
+
+The registry then does the rest. `Benchmarks.jsx` iterates it, so a `notice`-tone
+`Tag` labeled "Estimated" renders on the column header with a truthful tooltip
+("Interpolated between P25 and P50"). `fillDerivedPercentiles` in
+`app/src/model/format.js` computes salary/tcc/equity values at load time from
+the two nearest fetched neighbors. Extrapolation is blocked: if no fetched
+percentile sits both below and above `at`, the registry throws at module load.
+
+**Recipe B — adding a new benchmark row (a new level, a job area the API did not
+return, etc.):** the row goes into `benchmarks.json` alongside the fetched rows,
+but you MUST set two fields on it:
+
+```json
+{ "job": "ENGINEER", "ladder": "IC", "level": "STAFF3",
+  "provenance": "estimated",
+  "provenanceNote": "Extrapolated from Staff 2 using XYZ scalar",
+  "salary": { ... }, "tcc": { ... }, "equity": { ... } }
+```
+
+The Level cell renders `<Tag tone="notice" title={provenanceNote}>Estimated</Tag>`
+whenever `provenance !== "fetched"`. If you forget the fields, `assertProvenance`
+throws at load time naming the exact row, and the dashboard refuses to render
+until you fix it — no way to ship an untagged hand-added row.
+
+**In what you tell the user**, say what the estimate is derived from and that it
+will not appear in the product UI. One sentence.
 
 Two things that stay off-limits, because they are about invented data rather than UI:
 

@@ -5,6 +5,23 @@
 // offline-capable, and free of per-interaction API round trips.
 
 import { useEffect, useState } from "react";
+import { PERCENTILES } from "../model/taxonomy.js";
+import { fillDerivedPercentiles, assertProvenance } from "../model/format.js";
+
+// Fill derived percentiles + validate provenance on every benchmarks payload,
+// including alternate peer groups. Runs once per load, before render.
+function hydrateBenchmarks(bench) {
+  if (!bench) return bench;
+  const walk = (bucket) => {
+    for (const row of bucket.rows || []) {
+      fillDerivedPercentiles(row, PERCENTILES);
+      assertProvenance(row, PERCENTILES);
+    }
+  };
+  walk(bench);
+  for (const g of Object.values(bench.alternatePeerGroups || {})) walk(g);
+  return bench;
+}
 
 /** The launch URL carries ?t=<token>; serve.py gates /api/* on it. */
 export function apiToken() {
@@ -59,7 +76,7 @@ export function useDashboardData() {
           apiGetOptional("/api/roster"),
         ]);
         if (cancelled) return;
-        setState({ loading: false, error: null, snapshot, benchmarks, roster });
+        setState({ loading: false, error: null, snapshot, benchmarks: hydrateBenchmarks(benchmarks), roster });
       } catch (e) {
         if (cancelled) return;
         setState({
