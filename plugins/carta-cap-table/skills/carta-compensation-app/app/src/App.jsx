@@ -3,6 +3,7 @@ import { C, FS, RADIUS, SANS, SERIF, GLOBAL_CSS } from "./ui/theme.js";
 import { useDashboardData } from "./state/useData.js";
 import Benchmarks from "./views/Benchmarks.jsx";
 import Scorecard from "./views/Scorecard.jsx";
+import RefreshPlanner from "./views/RefreshPlanner.jsx";
 import { Tag } from "./ui/components.jsx";
 
 // Only shipped surfaces appear. Plan Modeling and Reports were previously declared
@@ -15,10 +16,14 @@ import { Tag } from "./ui/components.jsx";
 // whose roster sweep failed — has benchmarks but no roster, so the tab is omitted
 // rather than opening onto nothing. That is why the list is computed per load instead
 // of being a module constant.
+// The refresh planner is gated on the same roster for the same reason: it plans grants
+// for the people on it, so with no roster there is no cohort and the tab would open onto
+// an empty table rather than being absent.
 function tabsFor({ roster }) {
   return [
     { id: "benchmarks", label: "Benchmarks" },
     ...(roster ? [{ id: "scorecard", label: "Scorecard" }] : []),
+    ...(roster ? [{ id: "planner", label: "Refresh planner" }] : []),
   ];
 }
 
@@ -247,6 +252,9 @@ export default function App() {
             failed to load must not render the view against undefined. */}
         {tab === "scorecard" && roster && (
           <Scorecard roster={roster} corporation={snapshot?.source?.corporation} />
+        )}
+        {tab === "planner" && roster && (
+          <RefreshPlanner roster={roster} corporation={snapshot?.source?.corporation} />
         )}
       </main>
       {attribution && (

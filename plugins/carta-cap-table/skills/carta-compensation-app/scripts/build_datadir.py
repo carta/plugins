@@ -779,17 +779,33 @@ def _build_roster(rawdir):
     # rating in an old scorecard is indistinguishable from "no equity" without it.
     scorecard = manifest.get("scorecard") or {}
 
+    # Did this build's capture carry tenure at all? A dashboard built before the
+    # export gained the tenure columns has `tenure: None` on EVERY row, which is
+    # indistinguishable per-row from an employee whose start date was never
+    # recorded — but means something completely different for the planner.
+    #
+    # The distinction decides whether the tenure gate can run: not-fetched must
+    # disable it (with a visible reason), whereas a few genuinely-null rows just
+    # exclude those employees. Answered once here, where the whole roster is in
+    # hand, rather than re-derived per render.
+    tenure_available = any(r.get("tenure") for r in rows)
+
     return {
         "schemaVersion": 1,
         "rows": rows,
         "bandRollup": rollup,
         "defaultMetric": _default_roster_metric(rollup),
         "scorecard": scorecard,
+        "availability": {"tenure": tenure_available},
         "reconciliation": {
             "rosterTotal": len(rows),
             "unscoredOnEveryMetric": unscored_everywhere,
             "sweepComplete": True,
             "totalResultsReported": expected,
+            # Employees the planner's tenure gate cannot judge. Surfaced for the
+            # same reason as unscoredOnEveryMetric: otherwise it is a gap a
+            # reader would have to derive, and therefore wouldn't.
+            "missingTenure": sum(1 for r in rows if not (r.get("tenure") or {}).get("start_date")),
         },
     }
 

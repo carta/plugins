@@ -238,6 +238,13 @@ yet, new `compensation:get:*` endpoints for paybands and report data.
 carrying every benchmarked employee, no paging and no overlap. It is staff-gated and refuses
 above 200 employees, so the paged endpoint below remains the fallback.
 
+Its columns include `tenure_start_date` and `tenure_end_date` (ISO, either may be null),
+which the Refresh planner reads for its tenure gate and to tell an active employee from a
+departed one. A dashboard built before those columns shipped captures `tenure: null` on
+every row — `build_datadir` records that as `availability.tenure: false` so the planner can
+disable the gate rather than treating everyone as a day-one hire. Re-run the fetch to
+populate it; there is nothing to derive locally from an absent start date.
+
 ⚠ The employee-scorecard endpoint oversizes at `page_size ≥ ~25` (verified: 30 fails on a
 134-employee list with `response too large`; use **10**), returns **overlapping rows**
 across pages (dedupe by `ids.external_id`), and its `score` filter keys on a **nullable**

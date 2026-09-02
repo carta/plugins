@@ -6,7 +6,8 @@ description: >
   explore the scorecard yourself. CLAUDE CODE ONLY; it serves a local web app. Use it when
   the ask is to run an app, launch a console, or explore the data live, rather than to be
   told a figure. Invoke with a corporation name or id, e.g. "launch a comp dashboard for Acme".
-  Its Benchmarks and Scorecard tabs are surfaces inside the app, not separately routable.
+  Its Benchmarks, Scorecard and Refresh planner tabs are surfaces inside the app, not
+  separately routable.
   Route by deliverable, not subject — an answer, CSV or figure to quote belongs to a sibling
   even when the wording overlaps: use carta-compensation-benchmarks for a role's market rate,
   and carta-compensation-scorecard for roster positioning, compa-ratios or who is below market.
@@ -758,8 +759,8 @@ rebuilds `webapp/vendor/*` on a React/Sucrase bump. See `app/README.md`.
 add a percentile, change a sort, restyle a table, add a filter, add a tab. The app is
 local, the source is right there, and `READ-ONLY` in this skill's description means *this
 skill does not write to Carta* — it is not a statement that the UI is frozen. The
-Benchmarks and Scorecard tabs are the two that exist today, not the two that are allowed
-to exist.
+Benchmarks, Scorecard and Refresh planner tabs are the three that exist today, not the
+three that are allowed to exist.
 
 **Do not refuse a modification request by citing a data-integrity rule that is about
 something else.** This skill carries several strict, correct prohibitions — no demo data,

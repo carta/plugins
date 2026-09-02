@@ -231,6 +231,18 @@ def _roster_row(entry):
         "leader": role.get("leader"),
         "focus": role.get("focus") or None,
         "location": fields.get("location"),
+        # {start_date, end_date}, both ISO or null. The refresh planner reads
+        # start_date for its tenure gate ("been here N months") and end_date to
+        # tell an active employee from a departed one.
+        #
+        # Captured as the raw node rather than a computed month count: the count
+        # depends on "now", and a number baked in at capture time would silently
+        # age. The browser does that arithmetic against today's date.
+        #
+        # Absent on a dashboard built before the export carried these columns —
+        # build_datadir flags that so the UI disables the gate rather than
+        # treating everyone as a day-one hire.
+        "tenure": fields.get("tenure"),
         "salary": fields.get("salary"),
         "totalCash": fields.get("total_cash"),
         # The employee's own equity holding, for the Equity column's value.
@@ -279,6 +291,25 @@ def _find_scorecard_export(raw):
     if _looks_like_scorecard_export_page(payload):
         return payload
     return None
+
+
+def _tenure_node(values):
+    """Rebuild the nested tenure block from its columnar fields.
+
+    Returns None when neither date is present, which is what an export built
+    before the tenure columns shipped looks like. That matches the absent key
+    the nested response uses, so both capture paths agree on "no tenure" and
+    the builder can tell a missing capture from a real null start date.
+
+    An all-null dict would be worse than useless here: it reads as "we asked and
+    the answer was nothing", which is indistinguishable downstream from an
+    employee whose start date genuinely was not recorded.
+    """
+    start = values.get("tenure_start_date")
+    end = values.get("tenure_end_date")
+    if start is None and end is None:
+        return None
+    return {"start_date": start, "end_date": end}
 
 
 def _rating_node(values, prefix, target_keys):
@@ -363,6 +394,10 @@ def _export_row_to_entry(columns, row):
                     "country": values.get("home_country"),
                 }
             },
+            # None (not an all-null dict) when the export predates these columns,
+            # so this path and the paged one agree on what "no tenure" looks
+            # like. Do NOT substitute a date for a missing start.
+            "tenure": _tenure_node(values),
             "salary": {"amount": values.get("salary"), "currency": currency},
             "total_cash": {"amount": values.get("total_cash"), "currency": currency},
             "equity_v2": {
