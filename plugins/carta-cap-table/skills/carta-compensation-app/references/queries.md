@@ -244,15 +244,17 @@ departed employee appears on a scorecard — so it is captured but nothing consu
 
 ## §6 — Refresh planner
 
-`compensation:export:equity-refresh-report` — one columnar response carrying every
-benchmarked employee's equity holdings and vesting position. This is the data behind
-CTC's Equity Refresh Report at `/reports/equity-refresh/all-employees`, and **the figures
-must tie out against that page**: pass them through unchanged, never re-derive one.
+> ⛔ **The MCP command for this is not released yet, so this section is reference
+> only — there is nothing to call.** The command name is deliberately omitted:
+> carta-mcp's `plugin-command-contract` check fails every PR in that repo when a
+> published skill names a command its registry does not have. Restore the name and
+> the `call_tool` example here when it ships.
 
-```
-call_tool({"name": "compensation__export__equity-refresh-report",
-           "arguments": {"corporation_id": <int>}})
-```
+The equity refresh export returns one columnar response carrying every benchmarked
+employee's equity holdings and vesting position, taking only `corporation_id`. This is
+the data behind CTC's Equity Refresh Report at `/reports/equity-refresh/all-employees`,
+and **the figures must tie out against that page**: pass them through unchanged, never
+re-derive one.
 
 Staff-gated. No paging and no filters — it returns every employee or refuses above the
 row cap. Capture with `save_equity_refresh_page.py`, which refuses a partial sweep.

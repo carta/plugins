@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 """save_equity_refresh_page.py — capture a columnar equity refresh export.
 
-The Refresh-planner counterpart to ``save_roster_page.py``. Run it after a
-``compensation:export:equity-refresh-report`` call instead of hand-copying the
-printed result: these rows carry named employees beside their equity holdings and
-vesting dates, and a retyped digit lands in a figure the planner then presents as
-authoritative.
+The Refresh-planner counterpart to ``save_roster_page.py``. Run it after the equity
+refresh export call instead of hand-copying the printed result: these rows carry named
+employees beside their equity holdings and vesting dates, and a retyped digit lands in a
+figure the planner then presents as authoritative.
+
+The MCP command name is deliberately not written here. carta-mcp's
+``plugin-command-contract`` check fails every PR in that repo when a published skill
+names a command its registry does not have, and this one is not released yet — see
+SKILL.md step 2d-bis.
 
 WHY THIS EXISTS SEPARATELY FROM THE ROSTER CAPTURE
 Both are columnar employee exports, but they answer different questions and come
@@ -144,7 +148,8 @@ def capture(src, raw_dir):
         "total_results": total_results,
         "distinct_employees": distinct,
         "sweep_complete": complete,
-        "source": "compensation:export:equity-refresh-report",
+        # Names the shape, not the MCP command — see the module docstring.
+        "source": "equity-refresh-export",
     }
     _write_json(raw_dir / "equity_refresh.json", manifest)
 

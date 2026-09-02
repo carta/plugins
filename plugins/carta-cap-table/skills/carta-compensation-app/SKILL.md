@@ -695,20 +695,22 @@ and why.
 
 **2d-bis. Equity refresh report** — the Refresh planner tab.
 
-Call **`compensation:export:equity-refresh-report`** with just `corporation_id`, then
-capture it:
-
-```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_equity_refresh_page.py" \
-  "<result path>" "<raw_dir>"
-```
-
-Staff-gated, one call, no paging. These are CTC's Equity Refresh Report figures and the
-console presents them as such, so they are captured and served **verbatim** — never
-rounded, summed or re-derived on the way through. See `references/queries.md` §6.
-
-Optional, like the roster: on failure say which tab is missing and why, then continue.
-`snapshot.json` records `hasPlanner: false` and the tab does not appear.
+> ⛔ **SKIP THIS STEP.** The MCP command this needs is not released yet, and the
+> Refresh planner tab it feeds is hidden (`SHOW_REFRESH_PLANNER` in
+> `app/src/App.jsx`). There is nothing to fetch and nowhere for it to show.
+>
+> `build_datadir` treats the report as optional — with no capture it records
+> `hasPlanner: false` and the tab does not appear, exactly as it does today.
+>
+> **When the command ships**, restore the call and its capture step here, the
+> command name in `references/queries.md` §6, and the `source` field in
+> `scripts/save_equity_refresh_page.py`. The capture script and the builder are
+> already written and tested; only the command reference was removed.
+>
+> Removed deliberately rather than left in place: carta-mcp's
+> `plugin-command-contract` check fails every PR in that repo when a published
+> skill names a command its registry does not have, so a forward reference here
+> blocks unrelated people's work.
 
 **2e. Write `meta.json`** (next to `raw_dir`, per `ctc_paths.py`):
 
