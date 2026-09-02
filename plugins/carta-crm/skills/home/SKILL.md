@@ -4,8 +4,9 @@
 # of the rollout costs an organization nothing.
 name: home
 description: >
-  Renders the Carta CRM Home: a landing view with counts, open tasks, pipeline by
-  stage, this week's meetings, and a directory of the prompts the plugin supports.
+  Renders the Carta CRM Home: a landing view with pipeline by stage, recent
+  contacts, deals, object counts, latest notes, this week's meetings, and a
+  directory of the prompts the plugin supports.
   Use this skill when the user says things like "carta crm home", "show my crm
   home", "my crm dashboard", "what's in my pipeline today", "crm landing page",
   or "/home". Read-only. Do NOT use it to look up a specific record — name the
@@ -89,9 +90,13 @@ crm_view_tool({ "name": "crm:get_crm_home", "arguments": {} })
 
 The view renders the shell and then fetches every available card itself, in parallel,
 each with its own timeout. **Do not call the card tools yourself.** They are
-`get_crm_home_counts`, `get_crm_home_tasks`, `get_crm_home_pipeline` and
-`get_crm_home_meetings`, and calling them here duplicates every fetch the view is
-already making.
+`get_crm_home_pipeline`, `get_crm_home_contacts`, `get_crm_home_deals`,
+`get_crm_home_counts`, `get_crm_home_notes` and `get_crm_home_meetings`, and calling
+them here duplicates every fetch the view is already making.
+
+Read the card set from the manifest rather than from this list. The server ranks the
+cards by the caller's own measured tool use, so both which cards appear and the order
+they appear in vary per user.
 
 If `crm_view_tool` answers that the tool has no view, the MCP App bundle is off for this
 organization. Fall back to summarising the manifest you already hold from Step 1, and say
@@ -101,11 +106,19 @@ the interactive Home needs the CRM UI enabled.
 
 | Card | Shows | When it is missing |
 |---|---|---|
-| Counts | Object counts across the tenant | — |
-| Open tasks | The user's own open tasks | — |
-| Pipeline by stage | Open deals grouped by stage | The deals module is off for this tenant |
-| Meetings this week | The user's next seven days | Interaction tracking is off for this tenant |
+| Pipeline by stage | Open deals grouped by stage | Absent from the manifest when the deals module is off |
+| Contacts added recently | Contacts added in the last 30 days | Never |
+| Deals | The tenant's deals | Absent from the manifest when the deals module is off |
+| Your CRM at a glance | Object counts across the tenant | Never |
+| Latest notes | The most recent notes | Never |
+| Meetings this week | The user's next seven days | Present but unavailable, with a reason, when interaction tracking is off |
 | What you can ask | Prompts the plugin supports | Never. It is static and always renders |
+
+Two gates behave differently, so a card goes missing in two different ways. A module
+gate drops its card from the manifest entirely, because a tenant that does not buy the
+module should not see the tile. An interactions gate keeps the card and marks it
+unavailable with a reason, because an absent tile would be indistinguishable from a
+genuinely empty week.
 
 A card the manifest marks unavailable carries a `reason`. Report the reason if the user
 asks why a card is absent. Do not offer to enable it: these are tenant permissions, not
