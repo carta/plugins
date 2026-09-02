@@ -27,14 +27,23 @@ the Carta connector's display name — what the artifact runtime's mcp capabilit
 addresses a connector by. `{{FIRM}}` is left intact — it is a RUNTIME
 placeholder the artifact fills in from list_contexts.
 
+`{{PAGE_TITLE}}` is the one firm-specific thing baked in: it becomes the page's `<title>`,
+and so the published artifact's name, "Carta Home - <firm>". It has to come from the file —
+the Artifact tool reads `<title>` out of the HTML and only falls back to its own `title`
+parameter when the file carries none, so a template with a fixed title publishes every
+firm's page under that one name. The body stays firm-agnostic and still detects whichever
+firm is active when a viewer opens it.
+
 Usage:
-  uv run scripts/build_artifact.py --mcp-server <connector-display-name> --out <path>/carta-home-<slug>.html
+  uv run scripts/build_artifact.py --mcp-server <connector-display-name> \
+      --firm-name "<firm name>" --out <path>/carta-home-<slug>.html
 """
 import argparse
 import hashlib
 import json
 import re
 import sys
+from html import escape
 from pathlib import Path
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
@@ -71,6 +80,20 @@ VENDOR_MARKERS = {
 }
 APP_JS_MARKER = r"/\*\s*__CARTA_HOME_APP_JS__\s*\*/"
 
+# The published artifact's name, and the key SKILL.md Step 2 matches on to find this
+# firm's existing page. One firm per page, so one title per firm.
+TITLE_PREFIX = "Carta Home - "
+
+
+def page_title(firm_name):
+    """The `<title>` text for this firm's page.
+
+    Escapes only the three characters that would end the tag or start an entity —
+    a firm named `Ash & Rowe <Capital>` otherwise produces malformed HTML. Quotes are
+    left alone: this is element text, not an attribute.
+    """
+    return escape(TITLE_PREFIX + firm_name, quote=False)
+
 
 def compute_build_id(template, parts):
     """Short content hash of all source parts — changes only when a source changes,
@@ -106,7 +129,7 @@ def read_version():
     return version
 
 
-def build(mcp_server):
+def build(mcp_server, firm_name):
     template = (RES / "carta-home.template.html").read_text()
     parts = {name: (RES / name).read_text() for name in MARKERS}
     parts.update({name: (VENDOR_DIR / name).read_text() for name in VENDOR_MARKERS})
@@ -135,6 +158,10 @@ def build(mcp_server):
     if "{{CARTA_MCP_SERVER}}" in out:
         sys.exit("ERROR: {{CARTA_MCP_SERVER}} still present after substitution")
 
+    out = out.replace("{{PAGE_TITLE}}", page_title(firm_name))
+    if "{{PAGE_TITLE}}" in out:
+        sys.exit("ERROR: {{PAGE_TITLE}} still present after substitution")
+
     out = out.replace("{{BUILD_ID}}", build_id)
 
     version = read_version()
@@ -149,16 +176,24 @@ def main():
     ap = argparse.ArgumentParser(description="Assemble the carta-home artifact.")
     ap.add_argument("--mcp-server", required=True,
                     help="Carta connector display name (the {{CARTA_MCP_SERVER}} value)")
+    ap.add_argument("--firm-name", required=True,
+                    help="active firm's name — becomes 'Carta Home - <name>' in the "
+                         "page's <title>, and so the published artifact's name")
     ap.add_argument("--out", required=True, help="output HTML path")
     args = ap.parse_args()
 
-    html, build_id, version = build(args.mcp_server)
+    firm_name = args.firm_name.strip()
+    if not firm_name:
+        sys.exit("ERROR: --firm-name is empty")
+
+    html, build_id, version = build(args.mcp_server, firm_name)
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(html)
     print(
-        "wrote {} ({} bytes) — v{} build {}".format(
-            out_path, len(html.encode("utf-8")), version, build_id
+        'wrote {} ({} bytes) — v{} build {} — publishes as "{}{}"'.format(
+            out_path, len(html.encode("utf-8")), version, build_id,
+            TITLE_PREFIX, firm_name,
         )
     )
 
