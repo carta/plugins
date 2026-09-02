@@ -317,7 +317,7 @@ in the incident run.
 | Value | Default | Tag |
 |---|---|---|
 | Issue date | today | `(default)` |
-| Grant expiration | `issue_date` + 10 years | `(default)` |
+| Grant expiration | the plan's term from `issue_date` ([payload-reference.md](payload-reference.md#grant-expiration-follows-the-plan)) | `(default — plan term)` |
 | Exercise price | the sole active valuation (409A / EMI / CSOP / share price) | `(default — current <source>)` |
 | Option plan | the only non-expired plan | `(default — only active plan)` |
 | Document set | the only set | `(default — only template)` |

@@ -67,7 +67,7 @@ Contents: [Common fields](#common-fields-both-flows) ·
 | `vesting_template` | always | int | Required server-side |
 | `vesting_start_date` | non-milestone template | `MM/DD/YYYY` only (CharField) | Milestone defaults server-side |
 | `acceleration_template` | optional | int | |
-| `grant_expiration_date` | always | `MM/DD/YYYY` only (`CharField`) | Default `issue_date + 10 years`. Required for ISO. ISO `YYYY-MM-DD` is rejected with `Date is invalid` — see [Date format quirks](#date-format-quirks) |
+| `grant_expiration_date` | always | `MM/DD/YYYY` only (`CharField`) | Default is the **plan's** term — see [Grant expiration](#grant-expiration-follows-the-plan). Required for ISO. ISO `YYYY-MM-DD` is rejected with `Date is invalid` — see [Date format quirks](#date-format-quirks) |
 | `exemption` | US issuers | enum | Autofilled by `so_type` — but **omit on US grants**; the server defaults to `Rule 701`. See [so_type auto-fill rules](#so_type-auto-fill-rules) |
 | `state_exemption` | US, optional | string | Free-form; don't default. **Not collected by carta-issuance** (dropped from the panel entirely — design feedback; remains valid server-side for other callers) |
 | `document_set_id` | always | int | |
@@ -141,6 +141,31 @@ our new hires"* is describing the batch, not asserting `New Hire` for each perso
 run that read it that way stamped `New Hire` on employees who had been at the company for
 years. The same applies to `Promotion` from a raise mentioned in passing, or `Retention` from
 context about attrition.
+
+## Grant expiration follows the plan
+
+`grant_expiration_date` is a **silent default**, so getting it wrong is invisible until someone
+tries to exercise. Compute it from the plan the grant sits on, not from a flat ten years.
+
+The plan's own entry in `option_plans` carries both inputs:
+
+| Field | Meaning |
+|---|---|
+| `expiration_years` | the plan's term — usually 10, but read it, don't assume |
+| `minus_one_day` | whether the term ends a day short |
+
+```
+grant_expiration_date = issue_date + expiration_years, minus 1 day if minus_one_day
+```
+
+A grant issued 08/31/2026 on a 10-year plan expires **08/30/2036** when `minus_one_day` is
+true, and 08/31/2036 when it is false. `minus_one_day` defaults **true** server-side, so a flat
++10 years is wrong on more plans than it is right, and lands the date a day late.
+
+`minus_one_day` is tri-state: `true` / `false` / **absent or `null`**, the last meaning the plan
+states no preference. Treat that case as the server does — apply the minus-one-day convention —
+and tag the review `(default — plan term)` either way, so the computed date is visible and
+correctable. If `expiration_years` itself is missing, fall back to 10 years and say so.
 
 ## so_type auto-fill rules
 

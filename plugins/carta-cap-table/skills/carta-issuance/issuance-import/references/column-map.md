@@ -64,8 +64,9 @@ post-termination exercise window, which this skill never sends — the plan supp
 first is mapped; the second stays unmapped and therefore reported. Don't "helpfully" add it as a
 synonym.
 
-**Precedence:** a value in the file wins over the plan's computed default (usually
-`issue_date + 10 years`). If the column is absent or blank the default applies exactly as
+**Precedence:** a value in the file wins over the plan's computed default ([payload-reference.md
+§ Grant expiration](../../references/payload-reference.md#grant-expiration-follows-the-plan)).
+If the column is absent or blank the default applies exactly as
 before. This matters because on a standard ten-year term the two agree and nobody notices,
 while on a shortened term the default silently disagrees and still reads as plausible — the same
 failure shape as an unmatched vesting schedule.

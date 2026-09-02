@@ -186,7 +186,7 @@ The incidents behind these rules — including the ones that look redundant — 
   `(autofill — <so_type> rule)` with a one-line explanation under the review. The review is the
   user's only chance to reject a default, so an unshown default is one they never got to see.
 - **Silent defaults are computable; prompted fields aren't.** If the skill can stamp it
-  (today's date, `issue_date + 10 years`, an autofill rule), stamp it and surface it tagged.
+  (today's date, the plan's grant term, an autofill rule), stamp it and surface it tagged.
   Never ask twice.
 - **Show the full text of legally binding values** (e.g. the legend body), not just the
   template name.

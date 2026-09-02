@@ -48,7 +48,7 @@ trust/LLC/fund/corp); Build/Exercise legend (legal transfer-restriction text —
 shown to read before confirming); Option type (ISO/NSO/INTL/EMI/CSOP/Unapproved/AU types,
 ZEPO = zero-exercise-price); Currency/Exemption autofill (set by the option type's
 jurisdiction); Vesting schedule; Exercise periods (copied from the plan); Grant expiration
-(10 years standard, required for ISO); Documents (form-of-option/exercise/plan docs);
+(the plan's own term, required for ISO); Documents (form-of-option/exercise/plan docs);
 HMRC/ATO notified; Dividend accrual start date (required for non-cash dividend classes,
 forbidden otherwise).
 
