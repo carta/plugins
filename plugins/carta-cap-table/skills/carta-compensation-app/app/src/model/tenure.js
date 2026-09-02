@@ -61,23 +61,6 @@ export function tenureMonths(row, asOf) {
   return monthsBetween(start, asOf || new Date());
 }
 
-/** True when the employee has left, false when active, null when unknowable.
- *
- *  An end_date in the FUTURE still reads as active today — a recorded leaving date
- *  is not a departure until it arrives, and someone serving notice is still on the
- *  roster and still eligible for a refresh cycle that grants before they go.
- */
-export function isActive(row, asOf) {
-  const tenure = (row && row.tenure) || null;
-  // No tenure node at all: this build never captured it, so employment status is
-  // unknown rather than active. Callers must not treat null as a pass.
-  if (!tenure) return null;
-  const end = parseDate(tenure.end_date);
-  if (!end) return true;
-  const now = asOf instanceof Date ? asOf : (parseDate(asOf) || new Date());
-  return end > now;
-}
-
 /** Months as a short human label: 30 -> "2y 6m". Null -> null, so callers em-dash it. */
 export function formatTenure(months) {
   if (months === null || months === undefined || !isFinite(months)) return null;

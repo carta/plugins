@@ -1,134 +1,120 @@
-// Refresh planner — Step 1 of the refresh grant workflow: load the cohort.
+// Refresh planner — the employee list a refresh grant cycle draws from, and the
+// filters that narrow it.
 //
-// This is the employee list a refresh cycle starts from, before any filtering,
-// exceptions or grant settings. It answers one question — "who is in scope, and
-// what do we know about them?" — and deliberately stops there. Filters are Step 2.
+// WHERE THE FIGURES COME FROM
 //
-// WHAT IS DERIVED HERE, AND WHY IT IS LABELLED
+// Every equity value here is CTC's Equity Refresh Report's own, passed through
+// unchanged from /reports/equity-refresh/all-employees. They must tie out against
+// that page row for row, so nothing on this tab recomputes one. The single
+// exception is Total equity, and even that is not a new derivation: the product's
+// own table computes "Total Shares Granted" as vested + unvested at render, and
+// this does the same addition on the same two numbers.
 //
-// Everything on the Scorecard tab is the server's own number. This tab is the first
-// that is not: tenure-in-months and active/departed are computed in the browser from
-// the start and end dates the roster carries. That is unavoidable — a month count
-// depends on today, so a value captured at build time would silently age — but it
-// means these columns have no counterpart in the CTC product UI to reconcile
-// against. Hence the `Modelled` tag in the heading and a title on each derived
-// column, per SKILL.md's derived-value rule.
+// Tenure is the one genuinely modelled column — months from the report's hire_date
+// against today. It is derived at render rather than captured because a month count
+// baked in at build time silently ages: a January dashboard would still claim
+// January's tenure in June.
 //
-// COHORT SOURCE
+// FILTERS BEHAVE DIFFERENTLY FROM THE REPORT
 //
-// The PRD names cap-table stakeholders as the source of truth. That is not reachable:
-// `cap_table:get:stakeholders` has no enumeration — summary mode returns counts, and
-// search mode AND-s its terms so it matches exactly one person. The roster this skill
-// already sweeps IS the employee list, already coverage-gated by build_datadir, so it
-// is what the cohort is built from. Stakeholder ids get joined in Step 2, where they
-// are needed for grant history and where the join can be validated on its own.
+// The CTC page filters to employees "completing vesting in" a window — it KEEPS
+// them. This planner EXCLUDES them, because the cohort it wants is the people who
+// still have runway. Same field, opposite direction, deliberately.
 
 import { useMemo, useState } from "react";
 import { C, FS, RADIUS } from "../ui/theme.js";
 import ExportButton from "../ui/ExportButton.jsx";
-import { MultiSelect, TableAlign, Tag, Th, Td } from "../ui/components.jsx";
-import { jobLabel, levelLabel, trackOf, TRACK_LABELS } from "../model/taxonomy.js";
+import { MultiSelect, Select, TableAlign, Tag, Th, Td } from "../ui/components.jsx";
 import { csvFilename, downloadCsv, toCsv } from "../model/csv.js";
-import { money } from "../model/format.js";
-import { formatTenure, isActive, tenureMonths } from "../model/tenure.js";
+import { shares } from "../model/format.js";
+import { formatTenure, tenureMonths } from "../model/tenure.js";
+import { applyFilters, levelRank, totalEquity } from "../model/cohort.js";
 
-/** Employment status as a chip.
- *
- *  Three states, not two. `null` means this build never captured tenure at all, which
- *  is a different fact from "active" and must not be shown as one — the whole reason
- *  isActive returns a tri-state.
- */
-function StatusChip({ active }) {
-  if (active === null) {
-    return (
-      <Tag tone="notice" title="This dashboard was built before the export carried tenure. Re-run the skill to fetch it.">
-        Unknown
-      </Tag>
-    );
-  }
-  return active
-    ? <Tag tone="positive">Active</Tag>
-    : <Tag tone="neutral" title="Recorded end date has passed">Departed</Tag>;
-}
+// Offered windows, matching the CTC report's own dropdown so the two surfaces stay
+// comparable even though this one inverts the direction.
+const VESTING_WINDOWS = [6, 12, 18, 24];
 
-/** Identity cell — name over title and a truncated id.
+/** A filter control that is unavailable because this build never captured its data.
  *
- *  Mirrors the Scorecard's IdentityCell deliberately: the same person appears on both
- *  tabs and should look the same on each. Same caveat too — this is a named person
- *  beside their pay, it stays local, and it must not be screenshotted into a ticket.
+ *  Rendered in place of the control rather than hiding it: a missing filter reads as
+ *  a product gap, whereas a disabled one with a reason reads as a data gap the user
+ *  can fix by re-fetching. Never silently pass everyone instead.
  */
-function IdentityCell({ row }) {
-  const label = row.name || row.title || "Unknown";
+function UnavailableFilter({ label, reason }) {
   return (
-    <Td ellipsis title={`${label}${row.title && row.name ? ` · ${row.title}` : ""} · ${row.externalId}`}>
-      <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis" }}>
-        {row.name || row.title || <span style={{ color: C.textQuiet }}>Unknown</span>}
-      </span>
-      <span style={{
-        display: "block", fontSize: FS.xs, color: C.textQuiet,
-        overflow: "hidden", textOverflow: "ellipsis",
-      }}>
-        {row.name && row.title ? row.title : `${row.externalId.slice(0, 8)}…`}
-      </span>
-    </Td>
+    <div style={{ display: "grid", gap: 4 }}>
+      <span style={{ fontSize: FS.xs, color: C.textQuiet }}>{label}</span>
+      <Tag tone="notice" title={reason}>Not in this build</Tag>
+    </div>
   );
 }
 
-function CohortTable({ rows, asOf }) {
+function Checkbox({ label, checked, onChange, title }) {
   return (
-    <TableAlign align="center">
-      <table style={{ width: "100%", minWidth: 900, tableLayout: "fixed" }}>
+    <label style={{
+      display: "inline-flex", alignItems: "center", gap: 7, cursor: "pointer",
+      fontSize: FS.md, color: C.textDefault,
+    }} title={title}>
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      {label}
+    </label>
+  );
+}
+
+function EmployeeTable({ rows, asOf }) {
+  return (
+    <TableAlign align="right">
+      <table style={{ width: "100%", minWidth: 1040, tableLayout: "fixed" }}>
         <thead>
           <tr>
-            <Th width="26%">Employee</Th>
-            <Th width="14%">Job area</Th>
-            <Th width="14%">Level</Th>
-            <Th width="12%">Location</Th>
-            {/* Both of these are computed here rather than returned by the API, so
-                both carry a title naming the calculation. */}
-            <Th width="12%">Tenure</Th>
-            <Th width="12%">Status</Th>
-            <Th width="10%">Salary</Th>
+            <Th width="20%" align="left">Name</Th>
+            <Th width="16%" align="left">Job Title</Th>
+            <Th width="9%" align="left">Level</Th>
+            <Th width="12%" align="left">Job Area</Th>
+            <Th width="9%">Tenure</Th>
+            <Th width="10%" align="left">Geo</Th>
+            <Th width="8%">Total equity</Th>
+            <Th width="8%">Total Vested</Th>
+            <Th width="8%">Completing Vesting</Th>
           </tr>
         </thead>
         <tbody>
           {rows.map((r) => {
-            const track = trackOf(r.leader ? "LEADER" : "IC", r.level);
-            const months = tenureMonths(r, asOf);
-            const label = formatTenure(months);
-            const home = (r.location || {}).home_location || {};
-            const place = [home.city, home.state || home.country].filter(Boolean).join(", ");
-            const pay = r.salary || {};
+            const months = tenureMonths({ tenure: { start_date: r.hire_date } }, asOf);
+            const tenure = formatTenure(months);
+            const total = totalEquity(r);
             return (
-              <tr key={r.externalId}>
-                <IdentityCell row={r} />
-                <Td ellipsis title={jobLabel(r.jobArea)}>{jobLabel(r.jobArea)}</Td>
-                <Td ellipsis title={`${levelLabel(r.level, track)} · ${TRACK_LABELS[track] || track}`}>
-                  <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {levelLabel(r.level, track)}
-                  </span>
-                  <span style={{ display: "block", fontSize: FS.xs, color: C.textQuiet }}>
-                    {TRACK_LABELS[track] || track}
-                  </span>
+              <tr key={r.external_id}>
+                <Td align="left" ellipsis title={`${r.full_name || "Unknown"} · ${r.external_id}`}>
+                  {r.full_name || <span style={{ color: C.textQuiet }}>Unknown</span>}
                 </Td>
-                <Td ellipsis subtle={!place} title={place || "No location recorded"}>
-                  {place || "—"}
+                <Td align="left" ellipsis subtle={!r.job_title} title={r.job_title || "No title recorded"}>
+                  {r.job_title || "—"}
                 </Td>
-                {/* Em dash, never "0m", when the start date is missing: an employee
-                    whose start was never recorded is unknown, not a day-one hire. */}
-                <Td mono subtle={label === null}
-                    title={label === null
-                      ? "No start date recorded for this employee"
-                      : `Calculated from start date ${(r.tenure || {}).start_date}`}>
-                  {label === null ? "—" : label}
+                <Td align="left" subtle={!r.job_level}>{r.job_level || "—"}</Td>
+                <Td align="left" ellipsis subtle={!r.job_area} title={r.job_area || "No job area recorded"}>
+                  {r.job_area || "—"}
                 </Td>
-                <Td><StatusChip active={isActive(r, asOf)} /></Td>
-                <Td mono subtle={pay.amount == null}>
-                  {/* No `|| "USD"`. An amount whose currency the API did not supply
-                      renders unsymbolised — `money` already does that for a null
-                      currency — because stamping "$" on an unknown figure misstates
-                      it, and this roster carries USD, GBP and CAD. */}
-                  {pay.amount == null ? "—" : money(pay.amount, pay.currency)}
+                {/* Em dash, never "0m", for a missing hire date: an employee whose
+                    start was never recorded is unknown, not a day-one hire. */}
+                <Td mono subtle={tenure === null}
+                    title={tenure === null
+                      ? "No hire date recorded for this employee"
+                      : `Calculated from hire date ${r.hire_date}`}>
+                  {tenure === null ? "—" : tenure}
+                </Td>
+                <Td align="left" ellipsis subtle={!r.location} title={r.location || "No location recorded"}>
+                  {r.location || "—"}
+                </Td>
+                <Td mono subtle={total === null}
+                    title={total === null ? "No equity in this snapshot" : "Vested plus unvested"}>
+                  {total === null ? "—" : shares(total)}
+                </Td>
+                <Td mono subtle={r.total_vested_shares == null}>
+                  {r.total_vested_shares == null ? "—" : shares(r.total_vested_shares)}
+                </Td>
+                <Td mono subtle={!r.date_of_final_vest}>
+                  {r.date_of_final_vest || "—"}
                 </Td>
               </tr>
             );
@@ -139,85 +125,80 @@ function CohortTable({ rows, asOf }) {
   );
 }
 
-export default function RefreshPlanner({ roster, corporation }) {
+export default function RefreshPlanner({ planner, corporation }) {
   // One "now" for the whole render, so every row is measured against the same
   // instant. Calling new Date() per row would let a table straddle midnight and
-  // report two different tenures for two employees who started the same day.
+  // report two different tenures for two people who started the same day.
   const asOf = useMemo(() => new Date(), []);
 
-  const [areas, setAreas] = useState([]);
+  const all = planner.rows || [];
+  const availability = planner.availability || {};
+  const recon = planner.reconciliation || {};
 
-  const all = roster.rows || [];
+  const [hasGrants, setHasGrants] = useState(false);
+  // A Set, not an array — MultiSelect reads `.has`/`.size` on it. The filter model
+  // takes an array, so this is converted at that boundary rather than here.
+  const [areas, setAreas] = useState(() => new Set());
+  const [levelMin, setLevelMin] = useState(null);
+  const [levelMax, setLevelMax] = useState(null);
+  const [vestWindow, setVestWindow] = useState(0);
 
-  // Job area is the one control here. It is NOT a Step 2 cohort filter — it does not
-  // narrow the cycle, it just makes a 130-row table readable while checking the list.
-  // Real filters (prior grant, level range, geo) come in Step 2 and persist to the
-  // scenario; this is a view control and deliberately does not.
   const areaOptions = useMemo(() => {
-    const seen = new Map();
-    for (const r of all) {
-      if (r.jobArea && !seen.has(r.jobArea)) seen.set(r.jobArea, jobLabel(r.jobArea));
-    }
-    return [...seen.entries()]
-      .map(([value, label]) => ({ value, label }))
-      .sort((a, b) => a.label.localeCompare(b.label));
+    const seen = [...new Set(all.map((r) => r.job_area).filter(Boolean))].sort();
+    return seen.map((a) => ({ value: a, label: a }));
   }, [all]);
 
-  const rows = useMemo(() => {
-    const picked = areas.length ? all.filter((r) => areas.includes(r.jobArea)) : all;
-    // Job area, then level, then id — the same ordering build_datadir writes, which
-    // groups people who are compared against the same market row together.
-    return [...picked].sort((a, b) =>
-      (a.jobArea || "").localeCompare(b.jobArea || "")
-      || (a.level || "").localeCompare(b.level || "")
-      || (a.externalId || "").localeCompare(b.externalId || ""));
-  }, [all, areas]);
-
-  // Counted over the WHOLE roster, not the filtered view: these describe the cohort a
-  // refresh cycle would draw from, and a job-area filter is a reading aid rather than
-  // a change to that cohort.
-  const summary = useMemo(() => {
-    let active = 0, departed = 0, unknown = 0, noTenure = 0;
+  // Built from the levels actually present, so the bounds cannot offer a rung this
+  // corporation has nobody on. Ordered by canonical rank, not label.
+  const levelOptions = useMemo(() => {
+    const seen = new Map();
     for (const r of all) {
-      const a = isActive(r, asOf);
-      if (a === null) unknown += 1;
-      else if (a) active += 1;
-      else departed += 1;
-      if (tenureMonths(r, asOf) === null) noTenure += 1;
+      const rank = levelRank(r.job_level);
+      if (rank !== null && !seen.has(rank)) seen.set(rank, r.job_level);
     }
-    return { active, departed, unknown, noTenure };
-  }, [all, asOf]);
+    return [...seen.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([rank, label]) => ({ value: String(rank), label }));
+  }, [all]);
 
-  const tenureAvailable = (roster.availability || {}).tenure !== false;
+  const { rows, removed } = useMemo(() => applyFilters(
+    all,
+    {
+      hasPriorGrants: hasGrants,
+      jobAreas: [...areas],
+      levelMin: levelMin === null ? null : Number(levelMin),
+      levelMax: levelMax === null ? null : Number(levelMax),
+      excludeVestingWithinMonths: vestWindow,
+    },
+    availability,
+    asOf,
+  ), [all, hasGrants, areas, levelMin, levelMax, vestWindow, availability, asOf]);
 
   const exportCohort = () => {
     // employee_id first and name included, matching the Scorecard export — same
-    // sensitivity caveat applies: a named person beside their salary. Not for
-    // tickets or shared drives.
+    // sensitivity caveat: a named person beside their equity. Not for tickets or
+    // shared drives.
     const header = [
-      "employee_id", "name", "title", "job_area", "level", "track", "focus",
-      "location", "tenure_start_date", "tenure_end_date", "tenure_months",
-      "employment_status", "salary", "currency",
+      "employee_id", "name", "job_title", "job_area", "level", "track",
+      "location", "hire_date", "tenure_months",
+      "total_equity", "total_vested_shares", "total_unvested_shares",
+      "completing_vesting", "live_award_count",
     ];
     const body = rows.map((r) => {
-      const track = trackOf(r.leader ? "LEADER" : "IC", r.level);
-      const home = (r.location || {}).home_location || {};
-      const t = r.tenure || {};
-      const months = tenureMonths(r, asOf);
-      const a = isActive(r, asOf);
-      const pay = r.salary || {};
+      const months = tenureMonths({ tenure: { start_date: r.hire_date } }, asOf);
+      const total = totalEquity(r);
       return [
-        r.externalId, r.name || "", r.title || "",
-        jobLabel(r.jobArea), levelLabel(r.level, track), TRACK_LABELS[track] || track,
-        r.focus || "",
-        [home.city, home.state || home.country].filter(Boolean).join(", "),
-        t.start_date || "", t.end_date || "",
+        r.external_id, r.full_name || "", r.job_title || "", r.job_area || "",
+        r.job_level || "", r.job_track || "", r.location || "",
+        r.hire_date || "",
         // Empty, not 0, for unknown — a spreadsheet would otherwise average a
         // missing tenure as zero and understate the cohort's seniority.
         months === null ? "" : months,
-        a === null ? "unknown" : (a ? "active" : "departed"),
-        pay.amount ?? "",
-        pay.currency || "",
+        total === null ? "" : total,
+        r.total_vested_shares ?? "",
+        r.total_unvested_shares ?? "",
+        r.date_of_final_vest || "",
+        r.live_award_count ?? "",
       ];
     });
     downloadCsv(csvFilename(corporation, "refresh-cohort"), toCsv([header, ...body]));
@@ -229,69 +210,110 @@ export default function RefreshPlanner({ roster, corporation }) {
         background: C.surface, border: `1px solid ${C.border}`, borderRadius: RADIUS,
         padding: 16,
       }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+          <span style={{ fontSize: FS.lg, fontWeight: 600, color: C.text }}>
+            Refresh cohort
+          </span>
+          {/* Only tenure is modelled — the equity figures are the report's own and
+              carry no tag, because tagging a value the product already displays is
+              as misleading as leaving a derived one untagged. */}
+          <Tag tone="notice" title="Tenure is calculated in this console from the report's hire date. Every other figure is Carta's own, as shown in the Equity Refresh Report.">
+            Tenure is modelled
+          </Tag>
+        </div>
+        <div style={{ fontSize: FS.sm, color: C.textSubtle, lineHeight: 1.55 }}>
+          Equity figures come from CTC's Equity Refresh Report and tie out against it.
+        </div>
+
         <div style={{
-          display: "flex", justifyContent: "space-between", alignItems: "baseline",
-          gap: 16, flexWrap: "wrap", marginBottom: 4,
+          display: "flex", gap: 18, flexWrap: "wrap", alignItems: "flex-end", marginTop: 14,
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span style={{ fontSize: FS.lg, fontWeight: 600, color: C.text }}>
-              Step 1 · Load cohort
-            </span>
-            {/* Visible on first render, not behind a disclosure: these columns have no
-                counterpart in the CTC product UI, so a reader has nothing to reconcile
-                them against and must be told they were calculated here. */}
-            <Tag tone="notice" title="Tenure and employment status are calculated in this console from the start and end dates the roster carries. They are not returned by Carta as shown.">
-              Modelled
-            </Tag>
-          </div>
+          {availability.grants === false ? (
+            <UnavailableFilter
+              label="Prior grants"
+              reason="This build captured no equity for any employee, so prior grants cannot be determined. Say 'refresh' to re-fetch."
+            />
+          ) : (
+            <Checkbox
+              label="Has prior grants"
+              checked={hasGrants}
+              onChange={setHasGrants}
+              title="Keeps only employees holding at least one live grant. Cancelled and forfeited awards are already excluded by Carta."
+            />
+          )}
+
           <MultiSelect
             label="Job area"
             options={areaOptions}
             selected={areas}
-            onToggle={(v) => setAreas((prev) =>
-              prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v])}
-            onAll={() => setAreas([])}
-            allLabel="All job areas"
-            minWidth={190}
+            onToggle={(v) => setAreas((prev) => {
+              const next = new Set(prev);
+              if (next.has(v)) next.delete(v);
+              else next.add(v);
+              return next;
+            })}
+            onAll={() => setAreas(new Set())}
+            allLabel={`All (${areaOptions.length})`}
+            minWidth={170}
           />
-        </div>
-        <div style={{ fontSize: FS.sm, color: C.textSubtle, lineHeight: 1.55 }}>
-          Every benchmarked employee on this corporation's roster. Filters, exceptions
-          and grant settings come next — nothing here narrows the cycle yet.
+
+          <Select
+            label="Level from"
+            value={levelMin === null ? "" : levelMin}
+            onChange={(v) => setLevelMin(v === "" ? null : v)}
+            options={[{ value: "", label: "Any" }, ...levelOptions]}
+            minWidth={110}
+          />
+          <Select
+            label="Level to"
+            value={levelMax === null ? "" : levelMax}
+            onChange={(v) => setLevelMax(v === "" ? null : v)}
+            options={[{ value: "", label: "Any" }, ...levelOptions]}
+            minWidth={110}
+          />
+
+          {availability.vesting === false ? (
+            <UnavailableFilter
+              label="Vesting"
+              reason="No completing-vesting dates in this build, so this filter cannot be applied."
+            />
+          ) : (
+            <Select
+              label="Exclude completing vesting within"
+              value={String(vestWindow)}
+              onChange={(v) => setVestWindow(Number(v))}
+              options={[
+                { value: "0", label: "No exclusion" },
+                ...VESTING_WINDOWS.map((m) => ({ value: String(m), label: `${m} months` })),
+              ]}
+              minWidth={190}
+              hint="Removes employees about to fully vest — the opposite of the CTC report's filter, which keeps them."
+            />
+          )}
         </div>
 
-        <div style={{
-          display: "flex", gap: 18, flexWrap: "wrap", marginTop: 12,
-          fontSize: FS.sm, color: C.textSubtle,
-        }}>
-          <span><strong style={{ color: C.text }}>{summary.active}</strong> active</span>
-          {summary.departed > 0 && (
-            <span><strong style={{ color: C.text }}>{summary.departed}</strong> departed</span>
-          )}
-          {summary.unknown > 0 && (
-            <span><strong style={{ color: C.text }}>{summary.unknown}</strong> status unknown</span>
-          )}
-        </div>
-
-        {/* The gate this tab exists to protect. Without tenure the eligibility rule in
-            Step 4 cannot run at all, and saying so here is far better than letting a
-            later step silently admit everyone. */}
-        {!tenureAvailable && (
-          <div style={{
-            marginTop: 12, padding: "10px 12px", borderRadius: RADIUS,
-            background: C.feedbackNoticeSubtle, border: `1px solid ${C.feedbackNotice}`,
-            fontSize: FS.sm, color: C.feedbackNotice, lineHeight: 1.55,
-          }}>
-            <strong>No tenure data in this build.</strong> This dashboard was built before
-            the scorecard export carried start and end dates, so the tenure eligibility
-            rule cannot be applied. Say "refresh" to re-fetch.
+        {removed > 0 && (
+          <div style={{ marginTop: 12 }}>
+            <Tag>{removed} excluded by filters</Tag>
           </div>
         )}
-        {tenureAvailable && summary.noTenure > 0 && (
+
+        {/* Gaps a filter cannot judge, surfaced rather than left for a reader to
+            derive from a shrinking row count. */}
+        {(recon.missingTenure > 0 || recon.missingEquity > 0) && (
           <div style={{ marginTop: 12, fontSize: FS.sm, color: C.textSubtle, lineHeight: 1.55 }}>
-            {summary.noTenure} of {all.length} employees have no recorded start date. A
-            tenure requirement cannot be evaluated for them, so they will need an
-            explicit decision rather than being silently included or dropped.
+            {recon.missingEquity > 0 && (
+              <div>
+                {recon.missingEquity} of {all.length} employees have no equity in this
+                snapshot — shown with an em dash rather than a zero.
+              </div>
+            )}
+            {recon.missingTenure > 0 && (
+              <div>
+                {recon.missingTenure} of {all.length} employees have no recorded hire
+                date, so a tenure requirement cannot be evaluated for them.
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -309,17 +331,17 @@ export default function RefreshPlanner({ roster, corporation }) {
           </div>
           <ExportButton
             onExport={exportCohort}
-            title="Download this cohort as CSV — one row per employee, with tenure and status"
+            title="Download this cohort as CSV — the filtered employee list with equity and vesting"
             disabled={!rows.length}
           />
         </div>
         <div style={{ overflowX: "auto" }}>
-          <CohortTable rows={rows} asOf={asOf} />
+          <EmployeeTable rows={rows} asOf={asOf} />
         </div>
         <div style={{ fontSize: FS.xs, color: C.textFaint, marginTop: 10 }}>
-          Tenure is measured in whole months from the recorded start date — the 24th
-          monthly anniversary counts as 24 months, a day earlier does not. An em dash
-          means no start date was recorded for that employee.
+          Total equity is vested plus unvested, the same total CTC's Equity Refresh
+          Report shows. Tenure is whole months from the hire date — the 24th monthly
+          anniversary counts as 24 months, a day earlier does not.
         </div>
       </div>
     </div>

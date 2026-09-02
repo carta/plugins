@@ -454,10 +454,13 @@ def build(rawdir, out, meta):
     # what the UI reads to decide whether the Scorecard tab exists at all, and it is
     # written last as the marker of a complete build.
     roster = _build_roster(rawdir)
+    planner = _build_planner(rawdir)
 
     counts = {"benchmarkRows": len(rows), "jobs": len(jobs_seen)}
     if roster is not None:
         counts["rosterEmployees"] = roster["reconciliation"]["rosterTotal"]
+    if planner is not None:
+        counts["plannerEmployees"] = planner["reconciliation"]["employeeTotal"]
 
     snapshot = {
         "schemaVersion": SCHEMA_VERSION,
@@ -469,6 +472,7 @@ def build(rawdir, out, meta):
         },
         "counts": counts,
         "hasRoster": roster is not None,
+        "hasPlanner": planner is not None,
         "currencies": currencies,
         "attribution": attribution,
         "benchmarkVersion": benchmarks["benchmarkVersion"],
@@ -481,6 +485,9 @@ def build(rawdir, out, meta):
 
     if roster is not None:
         w("roster.json", roster)
+
+    if planner is not None:
+        w("planner.json", planner)
 
     w("benchmarks.json", benchmarks)
     w("taxonomy.json", taxonomy)
@@ -806,6 +813,76 @@ def _build_roster(rawdir):
             # same reason as unscoredOnEveryMetric: otherwise it is a gap a
             # reader would have to derive, and therefore wouldn't.
             "missingTenure": sum(1 for r in rows if not (r.get("tenure") or {}).get("start_date")),
+        },
+    }
+
+
+def _build_planner(rawdir):
+    """planner.json from equity_refresh.json, or None when no report was captured.
+
+    Returns None (rather than an empty report) when the manifest is absent — a data
+    dir built before this feature, or one whose report sweep was never run, is a
+    legitimate build and the Refresh planner tab simply does not appear for it.
+
+    Refuses to build on an INCOMPLETE sweep, mirroring the roster gate. A partial
+    employee list would silently omit people from a refresh cycle, and unlike a
+    partial benchmark grid there is nothing on screen for a reader to notice.
+    """
+    manifest_path = pathlib.Path(rawdir) / "equity_refresh.json"
+    if not manifest_path.exists():
+        return None
+
+    manifest = _read_json(manifest_path)
+    rows_by_id = manifest.get("rows") or {}
+    rows = list(rows_by_id.values())
+    expected = manifest.get("total_results")
+
+    if not manifest.get("sweep_complete"):
+        sys.exit("[build_datadir] refusing to build — the equity refresh sweep is "
+                 "INCOMPLETE (%s of %s employees captured). Fetch it again before "
+                 "building; a partial list silently drops people from a refresh "
+                 "cycle." % (len(rows), expected if expected is not None else "?"))
+
+    if not rows:
+        sys.exit("[build_datadir] equity_refresh.json has no employees — refusing to "
+                 "publish an empty report. Re-run the fetch.")
+
+    # Same ordering as the roster: job area, then level, then id. Groups people who
+    # are compared against the same market row together, and makes a rebuild produce
+    # no spurious diff.
+    rows.sort(key=lambda r: (
+        r.get("job_area") or "", r.get("job_level") or "", r.get("external_id") or ""))
+
+    # What this build can actually answer, computed once over the whole report rather
+    # than re-derived per render. Each false becomes a disabled filter with a visible
+    # reason — a filter that silently passes everyone is worse than an absent one.
+    #
+    # `equity` is false on a corporation whose latest scorecard run predates its
+    # equity ingest: every holding is null, which is "not in this snapshot" rather
+    # than "no equity", and the tab has to say which.
+    has = lambda key: any(r.get(key) is not None for r in rows)  # noqa: E731
+    availability = {
+        "tenure": has("hire_date"),
+        "equity": has("total_vested_shares") or has("total_unvested_shares"),
+        "vesting": has("date_of_final_vest"),
+        "grants": has("live_award_count"),
+    }
+
+    return {
+        "schemaVersion": 1,
+        "rows": rows,
+        "availability": availability,
+        "reconciliation": {
+            "employeeTotal": len(rows),
+            "sweepComplete": True,
+            "totalResultsReported": expected,
+            # Counts for the gaps a filter cannot judge. Surfaced for the same reason
+            # the roster's unscored count is: otherwise it is a number a reader would
+            # have to derive, and therefore wouldn't.
+            "missingTenure": sum(1 for r in rows if r.get("hire_date") is None),
+            "missingEquity": sum(1 for r in rows if r.get("total_vested_shares") is None
+                                 and r.get("total_unvested_shares") is None),
+            "missingVestingDate": sum(1 for r in rows if r.get("date_of_final_vest") is None),
         },
     }
 

@@ -16,14 +16,14 @@ import { Tag } from "./ui/components.jsx";
 // whose roster sweep failed — has benchmarks but no roster, so the tab is omitted
 // rather than opening onto nothing. That is why the list is computed per load instead
 // of being a module constant.
-// The refresh planner is gated on the same roster for the same reason: it plans grants
-// for the people on it, so with no roster there is no cohort and the tab would open onto
-// an empty table rather than being absent.
-function tabsFor({ roster }) {
+// The refresh planner is gated on its OWN data, not the roster: it reads the equity
+// refresh report, and a corporation can legitimately have a benchmarked roster with no
+// equity report captured. Gating it on the roster would show a tab with nothing in it.
+function tabsFor({ roster, planner }) {
   return [
     { id: "benchmarks", label: "Benchmarks" },
     ...(roster ? [{ id: "scorecard", label: "Scorecard" }] : []),
-    ...(roster ? [{ id: "planner", label: "Refresh planner" }] : []),
+    ...(planner ? [{ id: "planner", label: "Refresh planner" }] : []),
   ];
 }
 
@@ -201,7 +201,7 @@ export default function App() {
   // forever — so after a switch the pill and the dropdown disagreed about what was on
   // screen. One source, one update.
   const [activeGroup, setActiveGroup] = useState(null);
-  const { loading, error, snapshot, benchmarks, roster } = useDashboardData();
+  const { loading, error, snapshot, benchmarks, roster, planner } = useDashboardData();
 
   if (loading) return <Message title="Loading…" body="Reading the local snapshot." />;
   if (error) return <Message title="Couldn't load the dashboard" body={error} tone="warn" />;
@@ -236,7 +236,7 @@ export default function App() {
     ? (activeGroup?.label || benchmarks.peerGroup?.label || snapshot?.peerGroup?.label)
     : null;
 
-  const tabs = tabsFor({ roster });
+  const tabs = tabsFor({ roster, planner });
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, fontFamily: SANS }}>
@@ -253,8 +253,8 @@ export default function App() {
         {tab === "scorecard" && roster && (
           <Scorecard roster={roster} corporation={snapshot?.source?.corporation} />
         )}
-        {tab === "planner" && roster && (
-          <RefreshPlanner roster={roster} corporation={snapshot?.source?.corporation} />
+        {tab === "planner" && planner && (
+          <RefreshPlanner planner={planner} corporation={snapshot?.source?.corporation} />
         )}
       </main>
       {attribution && (

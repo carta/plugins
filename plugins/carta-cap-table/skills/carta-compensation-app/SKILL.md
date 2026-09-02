@@ -41,6 +41,7 @@ allowed-tools:
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/ctc_paths.py *)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_benchmark_result.py *)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_roster_page.py *)
+  - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_equity_refresh_page.py *)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/build_datadir.py *)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/serve.py *)
 ---
@@ -691,6 +692,23 @@ If the roster sweep fails outright, **still build** — `build_datadir.py` omits
 `snapshot.json` records `hasRoster: false`, and the Scorecard tab simply does not appear.
 Losing one tab is better than losing the Benchmarks dashboard too. Say which tab is missing
 and why.
+
+**2d-bis. Equity refresh report** — the Refresh planner tab.
+
+Call **`compensation:export:equity-refresh-report`** with just `corporation_id`, then
+capture it:
+
+```bash
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_equity_refresh_page.py" \
+  "<result path>" "<raw_dir>"
+```
+
+Staff-gated, one call, no paging. These are CTC's Equity Refresh Report figures and the
+console presents them as such, so they are captured and served **verbatim** — never
+rounded, summed or re-derived on the way through. See `references/queries.md` §6.
+
+Optional, like the roster: on failure say which tab is missing and why, then continue.
+`snapshot.json` records `hasPlanner: false` and the tab does not appear.
 
 **2e. Write `meta.json`** (next to `raw_dir`, per `ctc_paths.py`):
 

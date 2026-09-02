@@ -60,28 +60,38 @@ export async function apiGetOptional(path) {
   }
 }
 
-/** Load the snapshot + benchmarks the Benchmarks tab needs, plus the roster if built. */
+/** Load the snapshot + benchmarks the Benchmarks tab needs, plus the roster and the
+ *  equity refresh report if those sweeps have run.
+ *
+ *  Both optional stems are independent: a corporation can have a benchmarked roster
+ *  with no equity report captured, and each tab is gated on its own data rather than
+ *  on the other's.
+ */
 export function useDashboardData() {
   const [state, setState] = useState({
-    loading: true, error: null, snapshot: null, benchmarks: null, roster: null,
+    loading: true, error: null, snapshot: null, benchmarks: null, roster: null, planner: null,
   });
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [snapshot, benchmarks, roster] = await Promise.all([
+        const [snapshot, benchmarks, roster, planner] = await Promise.all([
           apiGet("/api/snapshot"),
           apiGet("/api/benchmarks"),
           apiGetOptional("/api/roster"),
+          apiGetOptional("/api/planner"),
         ]);
         if (cancelled) return;
-        setState({ loading: false, error: null, snapshot, benchmarks: hydrateBenchmarks(benchmarks), roster });
+        setState({
+          loading: false, error: null, snapshot,
+          benchmarks: hydrateBenchmarks(benchmarks), roster, planner,
+        });
       } catch (e) {
         if (cancelled) return;
         setState({
           loading: false, error: e.message || String(e),
-          snapshot: null, benchmarks: null, roster: null,
+          snapshot: null, benchmarks: null, roster: null, planner: null,
         });
       }
     })();

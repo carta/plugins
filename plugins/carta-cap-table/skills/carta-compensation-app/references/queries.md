@@ -238,12 +238,49 @@ yet, new `compensation:get:*` endpoints for paybands and report data.
 carrying every benchmarked employee, no paging and no overlap. It is staff-gated and refuses
 above 200 employees, so the paged endpoint below remains the fallback.
 
-Its columns include `tenure_start_date` and `tenure_end_date` (ISO, either may be null),
-which the Refresh planner reads for its tenure gate and to tell an active employee from a
-departed one. A dashboard built before those columns shipped captures `tenure: null` on
-every row — `build_datadir` records that as `availability.tenure: false` so the planner can
-disable the gate rather than treating everyone as a day-one hire. Re-run the fetch to
-populate it; there is nothing to derive locally from an absent start date.
+Its columns include `tenure_start_date` and `tenure_end_date` (ISO, either may be null).
+Note `tenure_end_date` is null on every row of every corporation reached so far — no
+departed employee appears on a scorecard — so it is captured but nothing consumes it.
+
+## §6 — Refresh planner
+
+`compensation:export:equity-refresh-report` — one columnar response carrying every
+benchmarked employee's equity holdings and vesting position. This is the data behind
+CTC's Equity Refresh Report at `/reports/equity-refresh/all-employees`, and **the figures
+must tie out against that page**: pass them through unchanged, never re-derive one.
+
+```
+call_tool({"name": "compensation__export__equity-refresh-report",
+           "arguments": {"corporation_id": <int>}})
+```
+
+Staff-gated. No paging and no filters — it returns every employee or refuses above the
+row cap. Capture with `save_equity_refresh_page.py`, which refuses a partial sweep.
+
+Columns: `external_id`, `stakeholder_id`, `full_name`, `job_title`, `job_area`,
+`job_level`, `job_track`, `location`, `geo_adjustment`, `hire_date`,
+`total_vested_shares`, `total_unvested_shares`, `date_of_final_vest`,
+`live_award_count`.
+
+Three things a reader gets wrong otherwise:
+
+* **There is no total-equity column.** The product computes "Total Shares Granted" as
+  `total_vested_shares + total_unvested_shares` at render, so the console does the same
+  addition rather than expecting a field.
+* **`job_level` is an annotated level** — `IC 3`, `MGR 6`, `EX 10` — not a level code.
+  The trailing number is the canonical rank and is shared across tracks (`IC 5` and
+  `MGR 5` are both SENIOR2), so ordering by that number is correct across the whole
+  ladder. `LEVEL_RANK` in `taxonomy.js` keys on codes and does not apply here.
+* **`live_award_count` is null, not 0, when no equity was captured** for that employee.
+  Cancelled and forfeited awards are already excluded server-side, so a non-null count is
+  live holdings. Treating null as 0 would let a "has prior grants" filter include people
+  it cannot judge.
+
+`build_datadir` emits `planner.json` with an `availability` block (`tenure`, `equity`,
+`vesting`, `grants`). Any false there means the corresponding filter is disabled in the
+UI with a visible reason — equity is genuinely absent on corporations whose latest
+scorecard run predates their equity ingest, and that is "not in this snapshot" rather
+than "no equity".
 
 ⚠ The employee-scorecard endpoint oversizes at `page_size ≥ ~25` (verified: 30 fails on a
 134-employee list with `response too large`; use **10**), returns **overlapping rows**

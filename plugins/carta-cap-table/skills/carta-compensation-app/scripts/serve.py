@@ -75,6 +75,9 @@ _FILE_ROUTES = {
     # Absent from a benchmarks-only data dir; the handler 404s and the Scorecard tab
     # simply does not appear. Same token gate and path-traversal guard as the rest.
     "/api/roster": "roster.json",
+    # The equity refresh report. Absent until that sweep has run, and the Refresh
+    # planner tab is gated on it the same way.
+    "/api/planner": "planner.json",
 }
 
 
