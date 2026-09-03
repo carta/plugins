@@ -9,7 +9,9 @@ description: >
   The artifact auto-detects the active firm from the Carta MCP context — no hardcoded
   firm name needed. Use this skill whenever the user asks to "build the carta home artifact",
   "rebuild carta home", "set up the carta home page", "deploy carta home", or "restore the
-  carta home dashboard".
+  carta home dashboard". For a company's cap table use carta-cap-table's
+  carta-captable-home-build; for a CRM home of pipeline, deals and contacts use carta-crm's
+  carta-crm-home-build.
 model: sonnet
 allowed-tools:
   # The only source for a connector's name
