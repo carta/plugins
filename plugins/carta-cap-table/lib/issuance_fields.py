@@ -530,8 +530,7 @@ def build_stakeholder_kind(kind: str, force_blank: bool = False) -> str:
 
 
 def build_relationship_select(relationship: str) -> str:
-    """Relationship is always required at issue time (`issue_date_relationship`);
-    this used to render a contradictory "(optional)" placeholder.
+    """Relationship is always required at issue time (`issue_date_relationship`).
     RELATIONSHIP_CHOICES is the full picklist (payload-reference.md) — a
     roster relationship outside the list is prepended as an extra selected
     option rather than dropped, so it's never silently lost."""
