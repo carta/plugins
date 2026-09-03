@@ -21,20 +21,40 @@ form already collects, or a pre-ask for a value that is computable (§4).
 One form. Every field, per stakeholder, every computable default pre-filled. The user edits
 what they want and submits once.
 
-**Before you build it, two prerequisites — in this order:**
+**Never hand-write this form.** Run the generator and pass its output straight through:
 
-1. **Call `read_me` once, with `modules: ["interactive"]`.** `show_widget` refuses to render
-   until `read_me` has run, and this form is an interactive one — that module is the one that
-   carries the form and input guidance. Ask for it by name in a single call: `read_me` re-emits
-   the shared core design system on *every* call, so probing module-by-module to find the right
-   one costs ~6k tokens per probe and returns mostly what you already have.
-2. **Read [payload-reference.md](payload-reference.md).** It is the authoritative field contract
-   ([Hard rule 1](../SKILL.md#hard-rules)) and it governs the fields you are about to build —
-   most sharply the per-field date formats, where `grant_expiration_date`, `vesting_start_date`
-   and `rule_144_date` take `MM/DD/YYYY` while every other date goes out ISO. SKILL.md names it
-   as required-reading-up-front, but on this path SKILL.md's preamble is behind you by the time
-   you reach the form, so read it **here** — before constructing the first row, not after the
-   server rejects one with `Date is invalid`.
+```bash
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-issuance/issuance-config/scripts/build_cowork_form.py" \
+  --security-type <option_grant|certificate> \
+  --data "$WORK/_data.json" --knowns "$WORK/_knowns.json" \
+  --corp-name "<legal name>" --corp-id "<corporation_id>" \
+  --out "$WORK/form.html"
+```
+
+Then call `show_widget` with the file's contents **verbatim** as `widget_code`. The two input
+files are the same ones the Code panel uses —
+[`knowns` is documented in code-adapter.md](code-adapter.md#1-config-panel-build_configpy-builds-every-block),
+and the script derives the exercise-price hint, every default, batch mode, and the import
+markers from them. Full flag reference:
+[issuance-config/SKILL.md § Cowork form](../issuance-config/SKILL.md#cowork-form).
+
+A hand-written form is a re-roll of the same dice every run. One traced run shipped
+`board === "today" ? "'+today+'" : ""` — a string-concatenation artifact that would have
+written the literal `'+today+'` as a board approval date — while also omitting the
+**+ Add stakeholder** control, shipping one footer button where the spec requires two (so
+**Save as draft** was unreachable), and rendering no import markers at all.
+
+**Do not call `read_me`.** The document the generator emits is already complete and
+host-compliant; `read_me`'s `interactive` module carries no repeater guidance that would
+express this form, so the call is ~5k tokens and a round trip for nothing.
+
+**Read [payload-reference.md](payload-reference.md) before Phase 1.** It is the authoritative
+field contract ([Hard rule 1](../SKILL.md#hard-rules)) and it governs how you map the
+submitted rows — most sharply the per-field date formats, where `grant_expiration_date`,
+`vesting_start_date` and `rule_144_date` take `MM/DD/YYYY` while every other date goes out
+ISO. SKILL.md names it as required-reading-up-front, but on this path SKILL.md's preamble is
+behind you by the time the form comes back, so read it **here** — before mapping the first
+row, not after the server rejects one with `Date is invalid`.
 
 **Use `show_widget`, not `AskUserQuestion`.** `AskUserQuestion` renders option cards — it
 cannot take a free-text quantity, price, date, or name. Expressing this form as
@@ -43,13 +63,17 @@ this adapter exists to remove. Same rule the KYC intake skills follow.
 
 ### Fields
 
-**This is the authoritative field enumeration for both adapters** — the Code config panel
-collects the identical set, so the two stay interchangeable. Structure it as a repeater of
-**one full key-value block per stakeholder**: every field lives inside that person's own
-block, never in a page-wide shared section, so a single batch can issue genuinely different
-terms to different people. (A bulk run is not "N people, one set of terms" — it is N
-independently-configured rows. The one exception is [batch mode](#batch-mode--identical-term-bulk-grants)
-below, a rendering optimization for the case where the terms really are identical.)
+**This is the authoritative field enumeration for both adapters** — both build from
+`lib/issuance_fields.py`, so the two surfaces stay interchangeable by construction. The
+generator renders it as a repeater of **one full key-value block per stakeholder**: every
+field lives inside that person's own block, never in a page-wide shared section, so a single
+batch can issue genuinely different terms to different people. (A bulk run is not "N people,
+one set of terms" — it is N independently-configured rows. The one exception is
+[batch mode](#batch-mode--identical-term-bulk-grants) below, a rendering optimization for the
+case where the terms really are identical.)
+
+The list below is what the form collects — read it to know what a submitted row carries and
+what `knowns` can pre-fill, not as a build guide.
 
 **Every block, both types** — name (select an existing stakeholder or type a new one; picking
 an existing match auto-populates email, stakeholder type, and relationship, and locks
@@ -130,8 +154,9 @@ Two obligations, and the second is the one that actually protects the cap table:
 `confidence: "low"` means the value was read out of a document's prose rather than a cell. Say
 so — *"read from the document, confirm it"* — and treat it as needs-confirmation the same way.
 
-The Code adapter gets both behaviours from `build_config.py` automatically; on this path they
-are yours to render.
+**Both behaviours are automatic.** `build_cowork_form.py` renders the markers and blanks every
+noted field straight from `row.import_notes`, so `missingFields()` blocks **Review** until the
+admin resolves each one. Put the notes on the rows in `knowns` and the form does the rest.
 
 ### Batch mode — identical-term bulk grants
 
@@ -142,17 +167,20 @@ terms and N names** — rendering 30 identical blocks is ~30x the form HTML and 
 payload for zero extra information. Batch mode collapses that case to shared terms once +
 a compact per-person table.
 
-**When to use it.** Auto-activate batch mode when **both** hold:
+**When to use it.** `build_cowork_form.py` decides this itself — it activates batch mode when
+**both** hold:
 - More than 10 rows (`knowns.rows.length > 10`, or an equivalent headcount signal per [Hard
   rule 11](../SKILL.md#hard-rules)).
 - Every row's non-personal terms are identical or unset — i.e. the prompt/`knowns` gave one
   shared set of batch-level terms (option type, exercise price, vesting, document set, etc. for
   grants; share class, price, legend, etc. for certs) and no individual row overrides any of
-  them.
+  them. Identity and amount fields (name, email, quantity, relationship, notes) never count as
+  an override, since those differ per person by nature.
 
 If either condition fails — 10 or fewer rows, **or** any row carries its own distinct term —
-render the per-row repeater instead (existing behavior, unchanged). Batch mode is an
-optimization for the common case, not a replacement for the general one.
+it renders the per-row repeater instead. Batch mode is an optimization for the common case,
+not a replacement for the general one. Set `knowns.batch_mode` to `true`/`false` to force
+either layout.
 
 **Layout.** Two sections instead of N blocks:
 1. **Shared terms, once** — the exact same fields as a per-row block's non-personal terms
@@ -165,11 +193,11 @@ optimization for the common case, not a replacement for the general one.
    different terms, that's a mixed-term batch and belongs in the per-row layout instead (tell
    the user to say so, or detect it from the prompt before choosing batch mode).
 
-**Submit contract — must produce the same `rows` shape as the per-row layout.** Batch mode is
-a *rendering* optimization only; the engine never sees the difference. When the form submits,
-expand the shared terms across every table row so the JSON payload is indistinguishable from
-what the per-row form would have sent — same [Submit contract](#submit-contract) shape, one
-entry per person, each carrying the full field set (shared terms copied onto every row,
+**Submit contract — the same `rows` shape as the per-row layout.** Batch mode is a *rendering*
+optimization only; the engine never sees the difference. The form expands the shared terms
+across every table row on submit, so the JSON payload is indistinguishable from what the
+per-row form would have sent — same [Submit contract](#submit-contract) shape, one entry per
+person, each carrying the full field set (shared terms copied onto every row,
 name/email/quantity from that row's own table cells). `row_key` is still assigned per person
 (`r0`, `r1`, …) so [draft-state bookkeeping](save-validate-flow.md#draft-state-bookkeeping)
 works identically to the per-row path.
@@ -181,8 +209,9 @@ gets its own full block.
 
 ### Submit contract
 
-The form's submit button calls `sendPrompt()` with a JSON payload. It must carry the same
-shape the panel's action-request file does, so the engine's "On submit" step is shared:
+The form's submit button calls `sendPrompt()` with the payload prefixed by an
+`ISSUANCE_CONFIG:` marker — everything after the first colon is the JSON below. It carries the
+same shape the panel's action-request file does, so the engine's "On submit" step is shared:
 
 ```json
 {"action": "config_submit",
@@ -194,9 +223,13 @@ shape the panel's action-request file does, so the engine's "On submit" step is 
 ```
 
 `action` is `config_submit` (save + validate, then review) or `save_only` (save, no
-validation, no review) — same two actions, same meanings, as the panel's two footer buttons.
-Keep `row_key` stable per block — see [Draft state on this path](#draft-state-on-this-path)
+validation, no review) — same two actions, same meanings, as the form's two footer buttons.
+`row_key` stays stable per block; see [Draft state on this path](#draft-state-on-this-path)
 below for what threads through it and why position won't do.
+
+**If the reply arrives as text rather than a submit**, the host's `sendPrompt` no-opped and the
+form told the user to paste the payload instead. It is the same `ISSUANCE_CONFIG:` string —
+parse it the same way and carry on.
 
 After rendering the form, say one line and **wait**. Do not stack an `AskUserQuestion` on top
 of it — that spends the second interactive wait before the review even exists.

@@ -638,8 +638,14 @@ authoritative enumeration for both adapters is
 [cowork-adapter.md § Fields](references/cowork-adapter.md#fields); it also covers batch mode
 (shared terms once + a compact name/email/quantity table) for large identical-term batches.
 
-Render the form with `show_widget` and wait for its `sendPrompt()` reply —
+**Build the form with `build_cowork_form.py`, never by hand** — write `_data.json` and
+`_knowns.json`, run the script, and pass its output verbatim as `show_widget`'s `widget_code`,
+then wait for the `sendPrompt()` reply. Recipe and flags:
 [cowork-adapter.md §1](references/cowork-adapter.md#1-collectconfig--the-show_widget-form).
+A hand-written form re-rolls the same dice every run — one traced run wrote a literal
+`'+today+'` as a board approval date and dropped three required controls. **Do not call
+`read_me`**: the generated document is already complete, so that is ~5k tokens for nothing.
+
 **Never express this as a chain of `AskUserQuestion`s**: it is an option-picker that cannot take
 a free-text quantity, price, date, or name, so one prompt per field is the exact serial
 interrogation this phase exists to eliminate. Reserve `AskUserQuestion` for genuinely blocking

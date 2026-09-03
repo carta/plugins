@@ -52,13 +52,54 @@ readiness check (`missingFields()`) — Save isn't a weaker bar.
 
 | File | Purpose |
 |---|---|
-| `scripts/build_config.py` | **Builds every dynamic block** (the toggle-button groups **and** the grantee/holder rows, plus the stakeholder roster for autocomplete) deterministically from the fetched data + the prompt-derived `knowns`. The model never hand-authors panel HTML — doing so once shipped dead `btn-card` buttons and stamped a plan id where a document-set id belonged. |
+| `../../../lib/issuance_fields.py` | **Every field builder, shared by both surfaces.** The Cowork form collects the identical set, so one copy serves both and the two cannot drift. Also emits the `so_type` gate sets as JS (`so_type_js_constants()`) so the browser's idea of which types report to HMRC always matches Python's. |
+| `scripts/build_config.py` | **Builds every dynamic block for the Code panel** (toggle groups, grantee/holder rows, autocomplete roster) from the fetched data + prompt-derived `knowns`. The model never hand-authors panel HTML — doing so once shipped dead `btn-card` buttons and stamped a plan id where a document-set id belonged. |
+| `scripts/build_cowork_form.py` | **Builds the whole Cowork form** as one self-contained `show_widget` document. See [Cowork form](#cowork-form). |
 | `scripts/preview_config.py` | **Design-iteration harness.** Renders the panel to a standalone HTML file with committed sample data — no MCP, no skill run. See [Iterating on the UI](#iterating-on-the-ui). |
 | `references/artifact.yaml` | Shared `required` + per-type `optional` substitutions; `save` + `submit-watcher` capabilities |
 | `references/template.html` | Config panel — both field sets gated by `data-sectype`, shared sticky Review/Save footer |
-| `references/styles.css` | Ink-compliant styles (toggles, date/price inputs, legend attestation box) |
-| `references/Inter-roman.var.woff2` | Inter variable font |
-| `references/SangBleuVersailles-Regular-WebS.ttf` | SangBleu Versailles for corp name |
+| `references/styles.css` | Ink-compliant panel styles (toggles, date/price inputs, legend attestation box) |
+| `references/cowork-template.html` | Cowork form — same class contract, `sendPrompt()` submit, per-row and batch layouts |
+| `references/cowork-styles.css` | Cowork styles — design-system tokens only (see [Cowork form](#cowork-form) for why the panel sheet can't be reused) |
+| `references/Inter-roman.var.woff2` | Inter variable font (panel only) |
+| `references/SangBleuVersailles-Regular-WebS.ttf` | SangBleu Versailles for corp name (panel only) |
+
+## Cowork form
+
+`build_cowork_form.py` emits one self-contained document for `show_widget`. Same fields,
+same `rows` payload as the panel — only the submit path and the styling differ.
+
+```bash
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-issuance/issuance-config/scripts/build_cowork_form.py" \
+  --security-type <option_grant|certificate> \
+  --data "$WORK/_data.json" --knowns "$WORK/_knowns.json" \
+  --corp-name "<legal name>" --corp-id "<corporation_id>" \
+  --out "$WORK/form.html"
+# → prints FORM=<path>. Pass the file's contents VERBATIM as show_widget's widget_code.
+```
+
+`_data.json` and `_knowns.json` are the same two files `build_config.py` takes — the
+[`knowns` table in code-adapter.md](../references/code-adapter.md#1-config-panel-build_configpy-builds-every-block)
+is the contract for both. Add `--no-minify` while iterating on the markup.
+
+**Why the panel's `styles.css` is not reused.** The widget host forbids four things it
+does: hardcoded hex (invisible in dark mode), a background on the outer container (the
+host paints it), `100vh`/sticky positioning (the iframe sizes to content), and
+`@font-face` (the CSP blocks the plugin origin). `position: fixed` is out too — it
+collapses the iframe — so the submit state is an in-flow block, not the panel's modal
+overlay. `cowork-styles.css` uses design-system tokens throughout and keys its
+responsive rule off `@container`, not `@media`: a viewport query would track the user's
+window rather than the form's own width.
+
+**Batch mode** (cowork-adapter.md § Batch mode) activates on >10 rows whose terms are
+all identical or unset, collapsing to shared-terms-once plus a name/email/quantity
+table. `knowns.batch_mode` forces it either way. It is a **rendering** choice only: the
+shared terms are expanded onto every row at submit, so the payload is indistinguishable
+from the per-row layout's — including one `row_key` per person.
+
+**`read_me` is not needed.** `show_widget` renders this document as-is, and the
+`interactive` module carries no repeater guidance that would express this form — the
+call is ~5k tokens and a round trip for nothing.
 
 ## Substitutions
 

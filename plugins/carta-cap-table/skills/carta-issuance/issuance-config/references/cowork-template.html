@@ -1,0 +1,666 @@
+<h2 class="sr-only">Issuance configuration form: set the terms for each stakeholder, then submit for review or save as a draft.</h2>
+<link rel="stylesheet" href="/cowork-styles.css"/>
+<div class="issuance-form">
+
+  <div class="issuance-head">
+    <p class="corp-name">{{CORP_NAME}}</p>
+    <p class="sub">{{FLOW_TITLE}} &nbsp;·&nbsp; {{HEADER_SUB}}</p>
+  </div>
+
+  <div id="form">
+    <div id="batch-error-banner">{{BATCH_ERRORS_HTML}}</div>
+
+    <div class="field-group" id="people-group">
+      <p class="field-label" id="people-label">Grantees</p>
+      <div id="stake-blocks">
+        {{STAKEHOLDER_ROWS}}
+      </div>
+      <button class="btn-add" type="button" onclick="addStakeBlock()">+ Add stakeholder</button>
+    </div>
+
+    <div class="field-group batch-shared" id="batch-mode" style="display:none;">
+      <p class="field-label">Terms for every grantee</p>
+      <div id="batch-shared-terms">{{BATCH_SHARED_TERMS}}</div>
+      <p class="field-label" style="margin-top:1rem;">Grantees</p>
+      <div class="batch-wrap">
+        <table class="batch-table">
+          <thead><tr>
+            <th class="col-num">#</th><th>Name</th><th>Email</th><th>Quantity</th><th class="col-act"></th>
+          </tr></thead>
+          <tbody id="batch-rows">{{BATCH_ROWS}}</tbody>
+        </table>
+      </div>
+      <button class="btn-add" type="button" onclick="addBatchRow()">+ Add stakeholder</button>
+    </div>
+  </div>
+
+  <div class="issuance-footer">
+    <p id="summary-line" class="summary"></p>
+    <button id="btn-save-only" class="btn-default" type="button" onclick="saveOnly()" disabled>Save</button>
+    <button id="btn-start" class="btn-primary" type="button" onclick="submitForm()" disabled>Review</button>
+  </div>
+
+  <div class="submit-status" id="submit-status">
+    <span id="status-msg"></span>
+    <div class="submit-copy" id="status-copy" hidden></div>
+  </div>
+
+</div>
+
+<script>
+  const SEC_TYPE = '{{SECURITY_TYPE}}';
+  const CORP_ID = '{{CORP_ID}}';
+  const BATCH_MODE = {{BATCH_MODE}};
+  const STAKEHOLDERS = "__INJECTED_DATA__";
+
+  const _stakeMap = {};
+  STAKEHOLDERS.forEach(s => {
+    if (!s.name) return;
+    _stakeMap[s.name.trim().toLowerCase()] = {
+      email: s.email || '',
+      kind: s.kind || 'INDIVIDUAL',
+      relationship: s.event_relationship || '',
+    };
+  });
+
+  {{SO_TYPE_CONSTANTS}}
+
+  const MAX_SUGGESTIONS = 8;
+
+  function _escAttr(s) { return String(s).replace(/"/g, '&quot;'); }
+  function _escText(s) {
+    const d = document.createElement('div');
+    d.textContent = String(s);
+    return d.innerHTML;
+  }
+
+  function renderSuggestions(input) {
+    const wrap = input.closest('.stake-name-wrap');
+    const box = wrap && wrap.querySelector('.stake-suggestions');
+    if (!box) return;
+    const q = input.value.trim().toLowerCase();
+    const matches = q
+      ? STAKEHOLDERS.filter(s => s.name && s.name.toLowerCase().includes(q)).slice(0, MAX_SUGGESTIONS)
+      : STAKEHOLDERS.slice(0, MAX_SUGGESTIONS);
+    if (!matches.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+    box.innerHTML = matches.map(s =>
+      `<div class="stake-suggestion-item" data-name="${_escAttr(s.name)}">${_escText(s.name)}</div>`
+    ).join('');
+    box.style.display = 'block';
+  }
+
+  function selectSuggestion(item) {
+    const box = item.closest('.stake-suggestions');
+    const wrap = box && box.closest('.stake-name-wrap');
+    const input = wrap && wrap.querySelector('.stake-name-in');
+    if (!input) return;
+    input.value = item.dataset.name;
+    box.style.display = 'none';
+    onStakeNameInput(input);
+  }
+
+  function onStakeNameFocus(input) { renderSuggestions(input); }
+
+  // mousedown, not click: it fires before the input's blur, so the pick lands
+  // before anything closes the dropdown out from under it.
+  document.addEventListener('mousedown', (e) => {
+    const item = e.target.closest('.stake-suggestion-item');
+    if (item) selectSuggestion(item);
+  });
+  document.addEventListener('click', (e) => {
+    document.querySelectorAll('.stake-suggestions').forEach(box => {
+      const wrap = box.closest('.stake-name-wrap');
+      if (wrap && !wrap.contains(e.target)) box.style.display = 'none';
+    });
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') document.querySelectorAll('.stake-suggestions').forEach(b => b.style.display = 'none');
+  });
+
+  function allBlocks() { return Array.from(document.querySelectorAll('[data-stake-block]')); }
+  function allBatchRows() { return Array.from(document.querySelectorAll('[data-batch-row]')); }
+
+  // Single-select within a toggle group, scoped to the enclosing block —
+  // data-group values repeat across blocks, so a page-wide clear would
+  // cross-contaminate every other stakeholder's selection.
+  function pick(btn) {
+    const scope = btn.closest('[data-stake-block]') || btn.closest('[data-shared-terms]');
+    if (!scope) return;
+    const group = btn.dataset.group;
+    scope.querySelectorAll(`[data-group="${group}"]`).forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    onStakeInput();
+  }
+
+  function toggleConditional(scope, key, show) {
+    scope.querySelectorAll(`[data-conditional="${key}"]`).forEach(el => {
+      el.style.display = show ? '' : 'none';
+    });
+  }
+
+  function syncSoTypeConditionals(scope) {
+    const typeBtn = scope.querySelector('[data-group="type"].selected');
+    const soType = typeBtn ? typeBtn.dataset.value : null;
+    toggleConditional(scope, 'so_type_emi', HMRC_SO_TYPES.includes(soType));
+    toggleConditional(scope, 'so_type_au', ATO_SO_TYPES.includes(soType));
+    toggleConditional(scope, 'so_type_employment_related', EMPLOYMENT_RELATED_SO_TYPES.includes(soType));
+  }
+
+  function pickType(btn) {
+    pick(btn);
+    const scope = btn.closest('[data-stake-block]') || btn.closest('[data-shared-terms]');
+    if (scope) syncSoTypeConditionals(scope);
+  }
+
+  function pickLegend(btn) {
+    pick(btn);
+    const scope = btn.closest('[data-stake-block]') || btn.closest('[data-shared-terms]');
+    const box = scope && scope.querySelector('.block-legend-attest');
+    if (box) {
+      box.textContent = btn.dataset.body || '';
+      box.style.display = btn.dataset.body ? 'block' : 'none';
+    }
+  }
+
+  function pickRule144(btn) {
+    pick(btn);
+    const scope = btn.closest('[data-stake-block]') || btn.closest('[data-shared-terms]');
+    const isOther = btn.dataset.value === 'other';
+    const custom = scope && scope.querySelector('.block-rule144-date');
+    if (custom) custom.style.display = isOther ? 'block' : 'none';
+    const reasonWrap = scope && scope.querySelector('.block-rule144-reason-wrap');
+    if (reasonWrap) reasonWrap.style.display = isOther ? 'block' : 'none';
+  }
+
+  function toggleVestingStartFor(scope) {
+    const sel = scope.querySelector('.block-vesting-select');
+    if (!sel) return;
+    const hasVesting = !!(sel.value && sel.value !== '__none__');
+    const wrap = scope.querySelector('.block-vesting-start-wrap');
+    if (wrap) wrap.style.display = hasVesting ? 'block' : 'none';
+    toggleConditional(scope, 'vesting', hasVesting);
+    // Reset it too, or a stale acceleration_template submits alongside
+    // vesting_template_id: null.
+    if (!hasVesting) {
+      const accelSel = scope.querySelector('.block-acceleration-select');
+      if (accelSel) accelSel.value = '__none__';
+    }
+  }
+  function pickVesting(select) {
+    toggleVestingStartFor(select.closest('[data-stake-block]') || select.closest('[data-shared-terms]'));
+    onStakeInput();
+  }
+
+  // Keep a block's vesting start aligned with its own issue date until the user
+  // edits that start date directly. The per-input data-touched flag is what
+  // keeps one block's edit from freezing every other block's sync.
+  function syncVestingStartFor(scope) {
+    const vestStart = scope.querySelector('.block-vesting-start-date');
+    if (!vestStart || vestStart.dataset.touched === '1') return;
+    const issue = scope.querySelector('.block-issue-date');
+    if (issue) vestStart.value = issue.value;
+  }
+  function updateIssueDate(input) {
+    syncVestingStartFor(input.closest('[data-stake-block]') || input.closest('[data-shared-terms]'));
+    onStakeInput();
+  }
+  function updateVestingStart(input) {
+    input.dataset.touched = '1';
+    onStakeInput();
+  }
+
+  function toggleBoardPending(checkbox) {
+    const scope = checkbox.closest('[data-stake-block]') || checkbox.closest('[data-shared-terms]');
+    const dateInput = scope && scope.querySelector('.block-board-date');
+    if (dateInput) dateInput.disabled = checkbox.checked;
+    onStakeInput();
+  }
+
+  // Fields stay editable on a roster match. Phase 1 always uses the real
+  // cap-table record for an existing stakeholder, so locking them protects
+  // nothing and reads as broken UI.
+  function applyRosterAutofill(input) {
+    const block = input.closest('[data-stake-block]') || input.closest('[data-batch-row]');
+    if (!block) return;
+    const emailInput = block.querySelector('.stake-email-in');
+    const relSelect  = block.querySelector('.stake-relationship');
+    const kindBtns   = block.querySelectorAll('[data-group="kind"]');
+    const rec = _stakeMap[input.value.trim().toLowerCase()];
+    if (!rec) return;
+    if (emailInput) emailInput.value = rec.email;
+    if (relSelect && rec.relationship && Array.from(relSelect.options).some(o => o.value === rec.relationship)) {
+      relSelect.value = rec.relationship;
+    }
+    kindBtns.forEach(b => b.classList.toggle('selected', b.dataset.value === rec.kind));
+  }
+
+  function onStakeNameInput(input) {
+    applyRosterAutofill(input);
+    renderSuggestions(input);
+    onStakeInput();
+  }
+
+  // ── Add / remove stakeholders ──
+  // cloneNode(true) copies DOM *attributes*, not live JS properties: a value the
+  // user typed never updated the underlying attribute, so a naive clone reverts
+  // every edited field to its server-rendered default. copyForwardValues() reads
+  // and writes the live .value/.checked/classList instead.
+  function copyForwardValues(source, clone) {
+    ['type', 'docset', 'shareclass', 'legend', 'rule144'].forEach(group => {
+      const sBtns = source.querySelectorAll(`[data-group="${group}"]`);
+      const cBtns = clone.querySelectorAll(`[data-group="${group}"]`);
+      sBtns.forEach((sb, i) => { if (cBtns[i]) cBtns[i].classList.toggle('selected', sb.classList.contains('selected')); });
+    });
+    const copyVal = (sel) => {
+      const s = source.querySelector(sel), c = clone.querySelector(sel);
+      if (s && c) c.value = s.value;
+    };
+    ['.block-exercise-price', '.block-price-per-share', '.block-issue-date',
+     '.block-board-date', '.block-vesting-select', '.block-vesting-start-date',
+     '.block-rule144-date', '.block-rule144-reason', '.block-acceleration-select',
+     '.block-grant-reason', '.block-hmrc-notified-date'].forEach(copyVal);
+
+    const copyChecked = (sel) => {
+      const s = source.querySelector(sel), c = clone.querySelector(sel);
+      if (s && c) c.checked = s.checked;
+    };
+    ['.block-early-exercise', '.block-auto-exercise-at-vest',
+     '.block-flexible-issue-date', '.block-hmrc-notified',
+     '.block-ato-notified'].forEach(copyChecked);
+
+    const sPending = source.querySelector('.block-board-pending');
+    const cPending = clone.querySelector('.block-board-pending');
+    if (sPending && cPending) cPending.checked = sPending.checked;
+    const cBoardDate = clone.querySelector('.block-board-date');
+    if (cBoardDate) cBoardDate.disabled = !!(sPending && sPending.checked);
+
+    const sVestStart = source.querySelector('.block-vesting-start-date');
+    const cVestStart = clone.querySelector('.block-vesting-start-date');
+    if (sVestStart && cVestStart) cVestStart.dataset.touched = sVestStart.dataset.touched || '';
+
+    const sAttest = source.querySelector('.block-legend-attest');
+    const cAttest = clone.querySelector('.block-legend-attest');
+    if (sAttest && cAttest) {
+      cAttest.textContent = sAttest.textContent;
+      cAttest.style.display = sAttest.style.display;
+    }
+
+    toggleVestingStartFor(clone);
+    if (SEC_TYPE === 'option_grant') syncSoTypeConditionals(clone);
+    const cR144 = clone.querySelector('.block-rule144-date');
+    const r144Selected = clone.querySelector('[data-group="rule144"].selected');
+    if (cR144) cR144.style.display = (r144Selected && r144Selected.dataset.value === 'other') ? 'block' : 'none';
+  }
+
+  function clearIdentity(block) {
+    ['.stake-name-in', '.stake-email-in', '.stake-qty-in', '.stake-relationship',
+     '.block-custom-label', '.block-notes', '.block-prefix-number',
+     '.block-cash-paid', '.block-debt-canceled'].forEach(sel => {
+      const el = block.querySelector(sel);
+      if (el) el.value = '';
+    });
+    block.querySelectorAll('[data-group="kind"]').forEach(b => {
+      b.classList.toggle('selected', b.dataset.value === 'INDIVIDUAL');
+    });
+    // The banner belongs to the source block's prior server response, and the
+    // import markers describe a row that came out of the uploaded file. This
+    // block is a new person, so both would misattribute someone else's data.
+    const banner = block.querySelector('.block-error-banner');
+    if (banner) banner.remove();
+    block.querySelectorAll('.import-note, .import-banner').forEach(el => el.remove());
+  }
+
+  function renumberBlocks() {
+    const blocks = allBlocks();
+    blocks.forEach((b, i) => {
+      const t = b.querySelector('.stake-block-title');
+      if (t) t.textContent = 'Stakeholder ' + (i + 1);
+      const trash = b.querySelector('.btn-trash');
+      if (trash) trash.style.visibility = blocks.length > 1 ? 'visible' : 'hidden';
+    });
+    allBatchRows().forEach((r, i) => {
+      const n = r.querySelector('.col-num');
+      if (n) n.textContent = String(i + 1);
+    });
+  }
+
+  function freshRowKey() {
+    return 'new-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
+  }
+
+  function addStakeBlock() {
+    const container = document.getElementById('stake-blocks');
+    const blocks = allBlocks();
+    const last = blocks[blocks.length - 1];
+    if (!last) return;
+    const clone = last.cloneNode(true);
+    copyForwardValues(last, clone);
+    clearIdentity(clone);
+    clone.dataset.rowKey = freshRowKey();
+    container.appendChild(clone);
+    renumberBlocks();
+    const nameInput = clone.querySelector('.stake-name-in');
+    if (nameInput) nameInput.focus();
+    onStakeInput();
+  }
+
+  function removeStakeBlock(btn) {
+    if (allBlocks().length <= 1) return;
+    const block = btn.closest('[data-stake-block]');
+    if (block) block.remove();
+    renumberBlocks();
+    onStakeInput();
+  }
+
+  function addBatchRow() {
+    const body = document.getElementById('batch-rows');
+    const rows = allBatchRows();
+    const last = rows[rows.length - 1];
+    if (!last) return;
+    const clone = last.cloneNode(true);
+    clone.dataset.rowKey = freshRowKey();
+    ['.stake-name-in', '.stake-email-in', '.stake-qty-in'].forEach(sel => {
+      const el = clone.querySelector(sel);
+      if (el) el.value = '';
+    });
+    body.appendChild(clone);
+    renumberBlocks();
+    const nameInput = clone.querySelector('.stake-name-in');
+    if (nameInput) nameInput.focus();
+    onStakeInput();
+  }
+
+  function removeBatchRow(btn) {
+    if (allBatchRows().length <= 1) return;
+    const row = btn.closest('[data-batch-row]');
+    if (row) row.remove();
+    renumberBlocks();
+    onStakeInput();
+  }
+
+  // ── Readiness ──
+  // Mirrors the "*" markers the builders render. An exact roster match is not
+  // re-validated: Phase 1 trusts the existing record over anything shown here,
+  // even when that record's own relationship is blank.
+  function missingIdentity(scope, opts) {
+    const missing = [];
+    const name = (scope.querySelector('.stake-name-in')?.value || '').trim();
+    if (!name) missing.push('a name');
+    const isRosterMatch = !!_stakeMap[name.toLowerCase()];
+    const email = scope.querySelector('.stake-email-in');
+    if (email && !isRosterMatch && !email.value.trim()) missing.push('an email');
+    const rel = scope.querySelector('.stake-relationship');
+    if (rel && !isRosterMatch && !rel.value) missing.push('a relationship');
+    const qty = (scope.querySelector('.stake-qty-in')?.value || '').trim();
+    if (!qty || Number(qty) <= 0) missing.push('a quantity');
+    if (opts && opts.requireKind && !scope.querySelector('[data-group="kind"].selected')) {
+      missing.push('a stakeholder type');
+    }
+    return missing;
+  }
+
+  function missingTerms(scope) {
+    const missing = [];
+    if (SEC_TYPE === 'certificate') {
+      if (!scope.querySelector('[data-group="shareclass"].selected')) missing.push('a share class');
+      if (!scope.querySelector('[data-group="legend"].selected')) missing.push('a legend');
+      const r144Other = scope.querySelector('[data-group="rule144"].selected')?.dataset.value === 'other';
+      if (r144Other && !scope.querySelector('.block-rule144-reason')?.value) missing.push('a Rule 144 difference reason');
+    } else {
+      // Normally a jurisdiction default is selected, so this only bites when an
+      // import could not match the file's option type and deliberately left it
+      // blank — the tax treatment differs per type, so it cannot default.
+      if (!scope.querySelector('[data-group="type"].selected')) missing.push('an option type');
+      if (!scope.querySelector('.block-vesting-select')?.value) missing.push('a vesting schedule');
+      if (!scope.querySelector('[data-group="docset"].selected')) missing.push('documents');
+      const empRow = scope.querySelector('[data-conditional="so_type_employment_related"]');
+      const empVisible = empRow && empRow.style.display !== 'none';
+      if (empVisible && !scope.querySelector('[data-group="employment-related"].selected')) {
+        missing.push('the employment-related designation');
+      }
+    }
+    return missing;
+  }
+
+  function missingFields(block) {
+    return missingIdentity(block, { requireKind: true }).concat(missingTerms(block));
+  }
+
+  function sharedTermsScope() { return document.querySelector('[data-shared-terms]'); }
+
+  function updateSummary() {
+    const line = document.getElementById('summary-line');
+    const noun = SEC_TYPE === 'certificate' ? 'holder' : 'grantee';
+    const startBtn = document.getElementById('btn-start');
+    const saveBtn = document.getElementById('btn-save-only');
+    const setState = (ready, text) => {
+      // Save gates on the same readiness as Review — Hard rule 9's pre-save
+      // assertion is not a weaker bar for the lighter button.
+      startBtn.disabled = !ready;
+      saveBtn.disabled = !ready;
+      line.textContent = text;
+    };
+
+    if (BATCH_MODE) {
+      const rows = allBatchRows();
+      if (!rows.length) { setState(false, `Add at least one ${noun}.`); return; }
+      const shared = sharedTermsScope();
+      const sharedMissing = shared ? missingTerms(shared) : [];
+      if (sharedMissing.length) {
+        setState(false, `Shared terms need ${sharedMissing.join(', ')}.`);
+        return;
+      }
+      const badIdx = rows.findIndex(r => missingIdentity(r, { requireKind: false }).length > 0);
+      if (badIdx !== -1) {
+        setState(false, `Stakeholder ${badIdx + 1} needs ${missingIdentity(rows[badIdx], { requireKind: false }).join(', ')}.`);
+        return;
+      }
+      setState(true, `${rows.length} ${noun}${rows.length === 1 ? '' : 's'} ready.`);
+      return;
+    }
+
+    const blocks = allBlocks();
+    if (!blocks.length) { setState(false, `Add at least one ${noun}.`); return; }
+    const notReadyIdx = blocks.findIndex(b => missingFields(b).length > 0);
+    if (notReadyIdx !== -1) {
+      setState(false, `Stakeholder ${notReadyIdx + 1} needs ${missingFields(blocks[notReadyIdx]).join(', ')}.`);
+      return;
+    }
+    setState(true, `${blocks.length} ${noun}${blocks.length === 1 ? '' : 's'} ready.`);
+  }
+  function onStakeInput() { updateSummary(); }
+
+  // ── Collect ──
+  function collectTerms(scope, row) {
+    const accelSel = scope.querySelector('.block-acceleration-select');
+    const noAccel = !accelSel || accelSel.value === '__none__';
+    const boardPending = !!scope.querySelector('.block-board-pending')?.checked;
+    const boardDateInput = scope.querySelector('.block-board-date');
+    row.issue_date = scope.querySelector('.block-issue-date')?.value || '';
+    row.board_approval = boardPending ? 'pending' : 'approved_other';
+    row.board_approval_date = boardPending ? null : (boardDateInput?.value || null);
+    row.acceleration_template = noAccel ? null : accelSel.value;
+
+    if (SEC_TYPE === 'certificate') {
+      const shareBtn = scope.querySelector('[data-group="shareclass"].selected');
+      const legendBtn = scope.querySelector('[data-group="legend"].selected');
+      const r144Btn = scope.querySelector('[data-group="rule144"].selected');
+      const r144Mode = r144Btn ? r144Btn.dataset.value : 'issue_date';
+      const vestSel = scope.querySelector('.block-vesting-select');
+      const noVesting = !vestSel || vestSel.value === '__none__';
+      row.share_class_prefix = shareBtn ? shareBtn.dataset.value : null;
+      row.share_class_label  = shareBtn ? shareBtn.dataset.label : null;
+      row.price_per_share = scope.querySelector('.block-price-per-share')?.value || '';
+      row.legend_id = legendBtn ? legendBtn.dataset.value : null;
+      row.legend_label = legendBtn ? legendBtn.dataset.label : null;
+      row.rule_144_mode = r144Mode;
+      row.rule_144_date = r144Mode === 'other' ? (scope.querySelector('.block-rule144-date')?.value || null) : null;
+      row.rule_144_reason = r144Mode === 'other' ? (scope.querySelector('.block-rule144-reason')?.value || null) : null;
+      row.vesting_template_id = noVesting ? null : vestSel.value;
+      row.vesting_start_date = noVesting ? null : (scope.querySelector('.block-vesting-start-date')?.value || null);
+      row.prefix_number = scope.querySelector('.block-prefix-number')?.value || '';
+      row.cash_paid = scope.querySelector('.block-cash-paid')?.value || '';
+      row.debt_canceled = scope.querySelector('.block-debt-canceled')?.value || '';
+    } else {
+      const typeBtn = scope.querySelector('[data-group="type"].selected');
+      const docsetBtn = scope.querySelector('[data-group="docset"].selected');
+      const vestSel = scope.querySelector('.block-vesting-select');
+      const noVesting = !!vestSel && vestSel.value === '__none__';
+      const vestOpt = vestSel ? vestSel.options[vestSel.selectedIndex] : null;
+      row.option_type = typeBtn ? typeBtn.dataset.value : null;
+      row.exercise_price = scope.querySelector('.block-exercise-price')?.value || '';
+      row.vesting_template_id = noVesting ? null : (vestSel ? vestSel.value : null);
+      row.vesting_label = vestOpt ? (vestOpt.dataset.label || vestOpt.text) : null;
+      row.vesting_start_date = noVesting ? null : (scope.querySelector('.block-vesting-start-date')?.value || null);
+      row.document_set_id = docsetBtn ? docsetBtn.dataset.value : null;
+      row.document_set_label = docsetBtn ? docsetBtn.dataset.label : null;
+      row.custom_label = scope.querySelector('.block-custom-label')?.value || '';
+      row.early_exercise = !!scope.querySelector('.block-early-exercise')?.checked;
+      row.auto_exercise_at_vest = !!scope.querySelector('.block-auto-exercise-at-vest')?.checked;
+      row.is_flexible_issue_date = !!scope.querySelector('.block-flexible-issue-date')?.checked;
+      row.grant_reason = scope.querySelector('.block-grant-reason')?.value || '';
+      const soType = typeBtn ? typeBtn.dataset.value : null;
+      // Omit these keys entirely for a type that cannot carry them, mirroring
+      // the conditional-row visibility, rather than sending a stale value.
+      if (HMRC_SO_TYPES.includes(soType)) {
+        row.is_hmrc_notified = !!scope.querySelector('.block-hmrc-notified')?.checked;
+        row.hmrc_notified = scope.querySelector('.block-hmrc-notified-date')?.value || null;
+      }
+      if (ATO_SO_TYPES.includes(soType)) {
+        row.is_ato_notified = !!scope.querySelector('.block-ato-notified')?.checked;
+      }
+      if (EMPLOYMENT_RELATED_SO_TYPES.includes(soType)) {
+        // null while neither button is picked, so an unanswered designation
+        // reads as missing instead of as an explicit "No".
+        const empBtn = scope.querySelector('[data-group="employment-related"].selected');
+        row.employment_related = empBtn ? empBtn.dataset.value === 'yes' : null;
+      }
+    }
+    return row;
+  }
+
+  function collectIdentity(scope) {
+    const kindBtn = scope.querySelector('[data-group="kind"].selected');
+    return {
+      row_key: scope.dataset.rowKey || '',
+      name: (scope.querySelector('.stake-name-in')?.value || '').trim(),
+      email: (scope.querySelector('.stake-email-in')?.value || '').trim(),
+      quantity: (scope.querySelector('.stake-qty-in')?.value || '').trim(),
+      relationship: (scope.querySelector('.stake-relationship')?.value || '').trim(),
+      stakeholder_kind: kindBtn ? kindBtn.dataset.value : 'INDIVIDUAL',
+      notes: scope.querySelector('.block-notes')?.value || '',
+    };
+  }
+
+  // Batch mode is a rendering optimization only: the shared terms are expanded
+  // onto every row so the payload is indistinguishable from the per-row form's.
+  function collectBlocks() {
+    if (BATCH_MODE) {
+      const shared = sharedTermsScope();
+      return allBatchRows().map(r => {
+        const row = collectIdentity(r);
+        if (shared) collectTerms(shared, row);
+        return row;
+      });
+    }
+    return allBlocks().map(b => collectTerms(b, collectIdentity(b)));
+  }
+
+  // ── Submit ──
+  function setFormDisabled(disabled) {
+    if (disabled) {
+      document.querySelectorAll('#form input, #form select, #form button').forEach(el => {
+        if (el.disabled) return;
+        el.disabled = true;
+        el.dataset.formLocked = '1';
+      });
+    } else {
+      document.querySelectorAll('[data-form-locked="1"]').forEach(el => {
+        el.disabled = false;
+        delete el.dataset.formLocked;
+      });
+    }
+  }
+
+  function showStatus(msg, payloadText) {
+    const box = document.getElementById('submit-status');
+    const m = document.getElementById('status-msg');
+    const copy = document.getElementById('status-copy');
+    if (m) m.textContent = msg;
+    if (copy) {
+      if (payloadText) { copy.textContent = payloadText; copy.hidden = false; }
+      else { copy.hidden = true; }
+    }
+    if (box) box.classList.add('shown');
+  }
+
+  function submitAction(action, clickedBtn, busyLabel, idleLabel) {
+    const payload = {
+      action,
+      security_type: SEC_TYPE,
+      corp_id: CORP_ID,
+      rows: collectBlocks(),
+    };
+    const message = 'ISSUANCE_CONFIG:' + JSON.stringify(payload);
+    document.getElementById('btn-start').disabled = true;
+    document.getElementById('btn-save-only').disabled = true;
+    clickedBtn.textContent = busyLabel;
+    setFormDisabled(true);
+    document.querySelectorAll('.stake-suggestions').forEach(b => b.style.display = 'none');
+
+    // sendPrompt is injected only for show_widget renders, and can exist yet
+    // silently no-op. Always leave the payload on screen as a copy fallback so a
+    // no-op is recoverable instead of a dead form.
+    let sent = false;
+    if (typeof sendPrompt === 'function') {
+      try { sendPrompt(message); sent = true; } catch (e) { sent = false; }
+    }
+    if (sent) {
+      showStatus('Sent to Claude — follow the rest in the chat.');
+    } else {
+      clickedBtn.textContent = idleLabel;
+      setFormDisabled(false);
+      updateSummary();
+      showStatus('Could not reach the chat automatically. Copy this into the chat to continue:', message);
+    }
+  }
+
+  function submitForm() {
+    submitAction('config_submit', document.getElementById('btn-start'), 'Reviewing…', 'Review');
+  }
+  function saveOnly() {
+    submitAction('save_only', document.getElementById('btn-save-only'), 'Saving…', 'Save');
+  }
+
+  function applySecType() {
+    document.querySelectorAll('[data-sectype]').forEach(el => {
+      el.style.display = (el.dataset.sectype !== SEC_TYPE) ? 'none' : '';
+    });
+  }
+
+  function initScopeDisplay(scope) {
+    toggleVestingStartFor(scope);
+    if (SEC_TYPE === 'option_grant') syncSoTypeConditionals(scope);
+    const nameInput = scope.querySelector('.stake-name-in');
+    if (nameInput && nameInput.value.trim()) applyRosterAutofill(nameInput);
+  }
+
+  (function init() {
+    const lbl = document.getElementById('people-label');
+    if (lbl) lbl.textContent = SEC_TYPE === 'certificate' ? 'Holders' : 'Grantees';
+    if (BATCH_MODE) {
+      document.getElementById('people-group').style.display = 'none';
+      document.getElementById('batch-mode').style.display = '';
+    }
+    applySecType();
+    allBlocks().forEach(initScopeDisplay);
+    const shared = sharedTermsScope();
+    if (shared) initScopeDisplay(shared);
+    allBatchRows().forEach(r => {
+      const n = r.querySelector('.stake-name-in');
+      if (n && n.value.trim()) applyRosterAutofill(n);
+    });
+    renumberBlocks();
+    updateSummary();
+  })();
+</script>
