@@ -1,6 +1,7 @@
 ---
 name: carta-grant-vesting
-description: Fetch the vesting schedule for ONE specific grant or holder — options (ISO/NSO), RSUs, SARs, or CBUs. Use for "how much has [name] vested", "when does [name]'s cliff hit", "vesting progress for [name]", cliff dates, settlement, or unvested shares. NOT for portfolio-level / all-employees aggregate vesting.
+description: >-
+  Fetch the vesting schedule for ONE specific grant or holder — options (ISO/NSO), RSUs, SARs, or CBUs. Use for "how much has [name] vested", "when does [name]'s cliff hit", "vesting progress for [name]", cliff dates, settlement, or unvested shares. NOT for portfolio-level / all-employees aggregate vesting.
 when_to_use: >-
   Use when asked, for a single named grant or holder, about the vesting
   schedule, when the cliff hits, how many shares have vested or remain

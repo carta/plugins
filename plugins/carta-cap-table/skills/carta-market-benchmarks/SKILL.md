@@ -1,6 +1,7 @@
 ---
 name: carta-market-benchmarks
-description: Computed statistics across portfolio companies — median, average, typical, range — used as market benchmarks. Returns aggregate numbers and percentiles, not raw per-company listings.
+description: >-
+  Computed statistics across portfolio companies — median, average, typical, range — used as market benchmarks. Returns aggregate numbers and percentiles, not raw per-company listings.
 when_to_use: >-
   Use when asked what's typical for a metric, what's normal at a given
   stage, what the median value is, what the average comes out to, how

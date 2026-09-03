@@ -1,6 +1,7 @@
 ---
 name: carta-waterfall-scenarios
-description: Exit, sale, acquisition, and liquidation payouts for a company — answers how much money each holder walks away with at a given sale price, return multiples on holdings, and how proceeds distribute across share classes. Computes dollar amounts at modeled valuations, not abstract rights.
+description: >-
+  Exit, sale, acquisition, and liquidation payouts for a company — answers how much money each holder walks away with at a given sale price, return multiples on holdings, and how proceeds distribute across share classes. Computes dollar amounts at modeled valuations, not abstract rights.
 when_to_use: >-
   Use when asked how much a holder takes home, what each investor walks
   away with, what the MOIC or return multiple is at a sale price, at what

@@ -1,6 +1,7 @@
 ---
 name: carta-discover-commands
-description: META-DISCOVERY ONLY — answers the question "what cap-table tools or commands exist?" when the user is lost about what's available. NEVER use this skill for any request that names a cap-table topic (stakeholders, grants, vesting, SAFEs, notes, valuations, ownership, waterfall, financing, exposure, etc.) — those are always direct data requests, even if the user phrases them vaguely. The matching specialist skill wins every time over this one.
+description: >-
+  META-DISCOVERY ONLY — answers the question "what cap-table tools or commands exist?" when the user is lost about what's available. NEVER use this skill for any request that names a cap-table topic (stakeholders, grants, vesting, SAFEs, notes, valuations, ownership, waterfall, financing, exposure, etc.) — those are always direct data requests, even if the user phrases them vaguely. The matching specialist skill wins every time over this one.
 when_to_use: >-
   Use ONLY when the user explicitly admits they don't know what's
   available and asks a meta question about the toolset itself —

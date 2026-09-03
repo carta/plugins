@@ -1,6 +1,7 @@
 ---
 name: carta-round-history
-description: Financing round history for a company — each priced round with its date, share class issued, price per share, total cash raised, and the investors who participated. Covers what was raised and from whom across the company's funding history.
+description: >-
+  Financing round history for a company — each priced round with its date, share class issued, price per share, total cash raised, and the investors who participated. Covers what was raised and from whom across the company's funding history.
 when_to_use: >-
   Use when asked about funding rounds, financing rounds, the company's
   round history, capital raised totals, how much has been pulled in from

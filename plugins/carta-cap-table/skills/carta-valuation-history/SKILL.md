@@ -1,6 +1,7 @@
 ---
 name: carta-valuation-history
-description: Fetch a company's valuation history and current fair market value (FMV) — 409A, EMI, CSOP or share price. Use for questions about valuations, FMV, exercise prices, or expiry. Not for cross-portfolio comparisons — prefer a portfolio-benchmarks skill.
+description: >-
+  Fetch a company's valuation history and current fair market value (FMV) — 409A, EMI, CSOP or share price. Use for questions about valuations, FMV, exercise prices, or expiry. Not for cross-portfolio comparisons — prefer a portfolio-benchmarks skill.
 when_to_use: >-
   Use when asked about the current valuation, fair market value (FMV),
   common stock exercise price, when the current valuation expires or is

@@ -1,6 +1,7 @@
 ---
 name: carta-witness-signatures
-description: Status of witness and spousal-consent signature requests on option grants, RSAs, PIUs — who still needs to sign, and what's awaiting signature, signed, or expired. Covers one award, one company, or a whole portfolio. Read-only.
+description: >-
+  Status of witness and spousal-consent signature requests on option grants, RSAs, PIUs — who still needs to sign, and what's awaiting signature, signed, or expired. Covers one award, one company, or a whole portfolio. Read-only.
 when_to_use: >-
   Use when asked whether a witness or a spouse has signed, who still
   needs to sign an award, which signature requests are awaiting

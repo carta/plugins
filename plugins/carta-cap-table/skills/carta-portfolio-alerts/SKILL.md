@@ -1,6 +1,7 @@
 ---
 name: carta-portfolio-alerts
-description: Time-bounded and threshold-bounded risk detection across portfolio companies — finds items that are expiring soon, maturing soon, running low, or otherwise at risk. Surfaces what needs attention now, not what the data looks like in general.
+description: >-
+  Time-bounded and threshold-bounded risk detection across portfolio companies — finds items that are expiring soon, maturing soon, running low, or otherwise at risk. Surfaces what needs attention now, not what the data looks like in general.
 when_to_use: >-
   Use when asked which companies have an expiring item (409As, agreements,
   exercise windows), what is maturing in the next N months across the
