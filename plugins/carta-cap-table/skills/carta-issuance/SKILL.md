@@ -175,12 +175,50 @@ The SDK's HITL prompt on that mutate is the final, irreversible gate — never t
     later gate compares the two. Send rows again only to change them, and then with each
     `draft_pk` attached.
 
+12. **Never build a collection surface you cannot prove you have the rules for.** See
+    [Confirm this skill actually loaded](#confirm-this-skill-actually-loaded) — run that check
+    before the surface, and stop rather than building one from partial context.
+
 The incidents behind these rules — including the ones that look redundant — are in
 [references/incidents.md](references/incidents.md). Read it before weakening any of them.
+
+## Confirm this skill actually loaded
+
+A `Skill` invocation can return *"Launching skill: carta-issuance"* and inject **no content**.
+That has happened: the run continued for a full turn on a reference file it had read directly,
+built a config form from it, and shipped a form whose option-type control was hardcoded to
+ISO/NSO instead of gated to the corp's jurisdiction — a UK or AU corp would have been offered
+the wrong tax treatments. The form looked entirely plausible. Nothing failed.
+
+A partial load fails *confidently*, so check for it rather than waiting to notice. **Before
+building any collection surface, confirm you can answer all three from loaded content — not
+from memory, and not from a reference file you happened to open:**
+
+| # | Question | Where the answer lives |
+|---|---|---|
+| 1 | How many numbered items are in [Hard rules](#hard-rules), and what does the **last** one say? | this file — the answer is **12**, and it is this check |
+| 2 | Which **three** `so_type`s does the corp's resolved jurisdiction allow, and what does a wrong `"US"` default show a UK company? | [Phase 0.5](#option-grant-resolve-the-fmv-and-the-jurisdiction-before-building-the-surface) |
+| 3 | Which script builds the surface on this adapter, and what must you never do instead? | [Phase 0.5](#phase-05--configure-the-issuance) |
+
+Question 1 is self-verifying: rule 12 *is* this check, so a run that cannot name it is a run
+that never loaded this file. Answering "11" means the content is stale or partial — stop.
+
+**If any answer is missing, stop and say so.** Do not build the surface, and do not
+reconstruct the rules from a reference file:
+
+> *"The carta-issuance skill didn't load fully, so I don't have the issuance rules in front of
+> me. Re-invoke it (or start a fresh message) and I'll pick this up from the top."*
+
+Re-invoking is cheap. A form built on missing rules issues real securities on the wrong tax
+treatment, and neither the review nor the server catches it.
 
 ---
 
 ## Voice & defaults
+
+<!-- No [PATTERN carta-writing-style] block: the rules below are what this skill's
+     user-facing text actually needs (tagged defaults, no raw ids, jargon explained
+     on first use), and the shared pattern does not cover them. -->
 
 - **Explain anything the skill chose.** Tag `(default)`, `(from existing record)`, or
   `(autofill — <so_type> rule)` with a one-line explanation under the review. The review is the
@@ -637,6 +675,10 @@ person's own block, so a batch can issue genuinely different terms to different 
 authoritative enumeration for both adapters is
 [cowork-adapter.md § Fields](references/cowork-adapter.md#fields); it also covers batch mode
 (shared terms once + a compact name/email/quantity table) for large identical-term batches.
+
+**First, [confirm this skill actually loaded](#confirm-this-skill-actually-loaded)** — Hard rule
+12. This is the gate that check exists for: everything below builds the surface, and a surface
+built on partial context looks right and issues the wrong tax treatment.
 
 **Build the form with `build_cowork_form.py`, never by hand** — write `_data.json` and
 `_knowns.json`, run the script, and pass its output verbatim as `show_widget`'s `widget_code`,
