@@ -9,8 +9,12 @@ description: >
   directory of the prompts the plugin supports.
   Use this skill when the user says things like "carta crm home", "show my crm
   home", "my crm dashboard", "what's in my pipeline today", "crm landing page",
-  or "/home". Read-only. Do NOT use it to look up a specific record — name the
-  record instead and Claude picks the right search skill.
+  or "/home". It is also the skill that decides whether the Home belongs in the
+  conversation or on a published page, so start here even when the user may want
+  a page. Read-only. Do NOT use it to look up a specific record — name the
+  record instead and Claude picks the right search skill. For a fund firm's
+  Carta Home use carta-investors' carta-home-build; for a company's cap table
+  use carta-cap-table's carta-captable-home-build.
 allowed-tools:
   - mcp__carta__crm_call_tool
   - mcp__carta__crm_view_tool
@@ -29,9 +33,9 @@ model: inherit
 
 # Carta CRM Home
 
-The Home is one manifest tool plus one view. The server decides which cards this
+The Home is one manifest tool and two places to put it. The server decides which cards this
 organization may see, and the view fetches each card itself. Your job is to read the
-manifest, route a new user to the tutorial, and render the view.
+manifest, route a new user to the tutorial, pick where the Home goes, and render it.
 
 ## Step 1 — Read the manifest
 
@@ -82,7 +86,54 @@ yourself as well.
 
 When `firstTimeUser` is `false` or absent, continue to Step 3.
 
-## Step 3 — Render the Home
+## Step 3 — Pick where the Home goes
+
+There are two, and they are not alternatives of equal standing:
+
+- **In this conversation.** Step 4 renders it. This works everywhere the CRM MCP is
+  reachable, so it is the floor and the default.
+- **As a published page.** The `carta-crm-home-build` skill publishes it at a stable URL the
+  user can bookmark and reopen cold.
+
+**The page is available only when both of these hold**, so establish it before any rule
+below offers the page or invokes anything:
+
+- The `Artifact` tool is present. Without it this surface cannot publish at all.
+- The `carta-crm-home-build` skill is installed. It is internal today, so a published
+  install does not carry it and no build verb can reach it.
+
+Treat the page as unavailable whenever you cannot confirm both. Never name a page this
+surface cannot produce, and never invoke a skill you have not seen.
+
+Decide in this order, and stop at the first that answers.
+
+**1. What the user asked for.** A build or publish verb, such as "publish my crm home", "pin
+it", or "give me a link I can bookmark", names the page. When the page is available, invoke
+`carta-crm-home-build` and do not render here as well. When it is not, say in one line that a
+bookmarkable page is not available on this surface, then render in the conversation. A plain
+"show my crm home" names neither target, so carry on. A build verb is not a reason to invoke
+a skill that is absent.
+
+**2. What they already told you this session.** If they have already chosen, honour it
+without asking again, as long as that target is still available. A recorded choice for a
+target this surface cannot serve falls through to the next rule rather than failing.
+
+**3. What this surface can do.** If the page is unavailable, render in the conversation and
+say nothing about a page that cannot be built here. If it is available, both targets are
+open, so ask once, in one line:
+
+> Want this as a page you can bookmark, or just here in the chat?
+
+**Ask only when both are genuinely available.** A question with one real answer is friction,
+not a choice.
+
+**Do not persist the answer.** It holds for this session. Getting it wrong costs one sentence
+to redo, which is cheaper than a stored preference nobody remembers setting.
+
+If you cannot tell whether the page is available, render in the conversation. The floor is
+never the wrong answer, and it never depends on the published page existing.
+
+## Step 4 — Render the Home
 
 ```
 crm_view_tool({ "name": "crm:get_crm_home", "arguments": {} })
