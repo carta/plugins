@@ -1,6 +1,7 @@
 ---
 name: carta-spa-audit
-description: SPA coverage audit across your portfolio — categorizes every equity investment as missing, unexecuted, executed, or not needed. Use when asked about SPA coverage, missing SPAs, unexecuted SPAs, or document completeness.
+description: >-
+  SPA coverage audit across your portfolio — categorizes every equity investment as missing, unexecuted, executed, or not needed. Use when asked about SPA coverage, missing SPAs, unexecuted SPAs, or document completeness.
 version: 0.8.0
 model: sonnet
 allowed-tools:

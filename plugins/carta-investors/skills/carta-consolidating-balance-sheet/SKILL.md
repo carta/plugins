@@ -1,7 +1,8 @@
 ---
 name: carta-consolidating-balance-sheet
 model: sonnet
-description: 'Generate a consolidating Balance Sheet for all entities under a firm for a given month and write it as a side-by-side Excel tab with Assets / Liabilities / Equity sections and a Total column. Sourced from Carta MCP (firm/entity resolution + DWH SQL). TRIGGER when the user asks for "balance sheet of all entities of [firm] for [month]", a consolidating BS by entity, or to replicate the "Balance Sheet - consolidating" tab format for a different firm/period. Trigger phrases include "consolidating balance sheet", "BS by entity", "balance sheet of all entities". DO NOT TRIGGER for single-entity BS, P&L / income statement (carta-consolidating-pnl), or ManCo budgeting (carta-manco: budgets, actuals, pacing, what-if). Also DO NOT TRIGGER for a single-fund / fund-level balance sheet or fund account balances as-of a date — use carta-explore-data for those.'
+description: >-
+  Generate a consolidating Balance Sheet for all entities under a firm for a given month and write it as a side-by-side Excel tab with Assets / Liabilities / Equity sections and a Total column. Sourced from Carta MCP (firm/entity resolution + DWH SQL). TRIGGER when the user asks for "balance sheet of all entities of [firm] for [month]", a consolidating BS by entity, or to replicate the "Balance Sheet - consolidating" tab format for a different firm/period. Trigger phrases include "consolidating balance sheet", "BS by entity", "balance sheet of all entities". DO NOT TRIGGER for single-entity BS, P&L / income statement (carta-consolidating-pnl), or ManCo budgeting (carta-manco: budgets, actuals, pacing, what-if). Also DO NOT TRIGGER for a single-fund / fund-level balance sheet or fund account balances as-of a date — use carta-explore-data for those.
 version: 1.1.1
 allowed-tools:
   # Production

@@ -1,7 +1,8 @@
 ---
 name: carta-fund-admin-requests
 model: sonnet
-description: 'Send work to your Carta Fund Admin team and track it. Opens a request the team reads, acts on, and replies to — the off-ramp for anything no other Carta skill or command can do. TRIGGER: "ask Carta to", "have Carta do", "send this to my fund admin", "ask my fund admin team", "can Carta do this for me", "check on my request", "did Carta reply", "what requests do I have open", "reply to Carta", "follow up on my request", plus ANY action request (create/change/send/restate/reconcile/split/fix) that no other skill or Carta command covers. NOT FOR: reporting a bug or feature request about this plugin (call fa:create:feedback directly); questions answerable from Carta data (use carta-explore-data); capital call reminders to LPs (that is a Carta command, not a Fund Admin request).'
+description: >-
+  Send work to your Carta Fund Admin team and track it. Opens a request the team reads, acts on, and replies to — the off-ramp for anything no other Carta skill or command can do. TRIGGER: "ask Carta to", "have Carta do", "send this to my fund admin", "ask my fund admin team", "can Carta do this for me", "check on my request", "did Carta reply", "what requests do I have open", "reply to Carta", "follow up on my request", plus ANY action request (create/change/send/restate/reconcile/split/fix) that no other skill or Carta command covers. NOT FOR: reporting a bug or feature request about this plugin (call fa:create:feedback directly); questions answerable from Carta data (use carta-explore-data); capital call reminders to LPs (that is a Carta command, not a Fund Admin request).
 version: 1.0.0
 allowed-tools:
   # Production
