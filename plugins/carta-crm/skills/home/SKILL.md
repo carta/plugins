@@ -16,8 +16,12 @@ description: >
   Carta Home use carta-investors' carta-home-build; for a company's cap table
   use carta-cap-table's carta-captable-home-build.
 allowed-tools:
-  - mcp__carta__crm_call_tool
-  - mcp__carta__crm_view_tool
+  # Prefix-agnostic so the grant holds whichever form the host registers. Cowork names the
+  # connector by uuid (mcp__2827383e-...), which the literal `mcp__carta__` form never matches.
+  - mcp__*carta*__crm_call_tool
+  - mcp__*Carta*__crm_call_tool
+  - mcp__*carta*__crm_view_tool
+  - mcp__*Carta*__crm_view_tool
   - Skill
 version: 1.0.0
 model: inherit
@@ -152,6 +156,20 @@ they appear in vary per user.
 If `crm_view_tool` answers that the tool has no view, the MCP App bundle is off for this
 organization. Fall back to summarising the manifest you already hold from Step 1, and say
 the interactive Home needs the CRM UI enabled.
+
+### Close with the escape hatch
+
+A third answer exists, and it looks like success: `crm_view_tool` returns the manifest, no
+error, and the host mounts nothing. You cannot tell that apart from a Home that rendered —
+you never see the view — so do not guess, and do not claim it rendered.
+
+Say one line after the call, whenever the published page is available:
+
+> If nothing appeared above, say "publish my crm home" and I'll give you a page instead.
+
+One sentence, offered every time, costs a reader nothing and turns a blank surface into the
+page. Leave it out where `carta-crm-home-build` is unavailable, per the Step 3 checks —
+never name a page this surface cannot produce.
 
 ## What the cards mean
 
