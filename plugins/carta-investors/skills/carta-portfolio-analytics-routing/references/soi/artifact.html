@@ -1387,6 +1387,15 @@
                 if (err && err.code === 'tool_error') {
                     return { isError: true, code: err.code, result: err.result, content: [{ type: 'text', text: err.message || 'tool error' }] };
                 }
+                // server_not_connected means the name this page was published with doesn't
+                // match any connector the viewer has. It fails every call, so raise it as a self-explaining,
+                // user-facing error the callers show verbatim instead of a bare code that
+                // reads as a stuck load.
+                if (err && err.code === 'server_not_connected') {
+                    const e = new Error('Could not reach the Carta connector "' + CARTA_MCP_SERVER + '". Its name may not match the Carta connector in your Claude settings. Ask whoever shared this dashboard to re-publish it. (server_not_connected)');
+                    e.userFacing = true;
+                    throw e;
+                }
                 throw err;
             }
         }
@@ -1630,7 +1639,7 @@
                 render();
                 showContent();
             } catch (error) {
-                showError('Error loading SOI: ' + error.message);
+                showError(error && error.userFacing ? error.message : 'Error loading SOI: ' + error.message);
             }
         }
 
@@ -1676,7 +1685,7 @@
                     throw new Error(msg);
                 }
             } catch (error) {
-                showError('Error pinning firm context: ' + error.message);
+                showError(error && error.userFacing ? error.message : 'Error pinning firm context: ' + error.message);
                 return;
             }
 
