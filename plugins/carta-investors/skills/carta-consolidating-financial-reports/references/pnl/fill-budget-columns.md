@@ -1,6 +1,6 @@
 # Reference: fill the Budget columns on the consolidating P&L
 
-Loaded by `carta-consolidating-pnl/SKILL.md` Gate 9 — the optional budget-fill step that runs after the P&L detail + Summary tabs are written. Merges a budget dataset onto the existing P&L detail tab.
+Loaded by `references/pnl.md` Gate 9 — the optional budget-fill step that runs after the P&L detail + Summary tabs are written. Merges a budget dataset onto the existing P&L detail tab.
 
 ## Caller's inputs
 

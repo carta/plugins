@@ -1,6 +1,6 @@
 # Reference: P&L tag-view tab (category-grouped)
 
-Loaded by `carta-consolidating-pnl/SKILL.md` Gate 6 when the user chose
+Loaded by `references/pnl.md` Gate 6 when the user chose
 **Build a tag-view tab** at Gate 4. This file completely replaces the
 standard Gate 6 detail-tab build for tag-view mode. Gate 7 (Summary)
 does not run.
@@ -65,7 +65,7 @@ compressed by one row to fit the deeper data header:
 | 6 | — | tag header (account + tag values + per-category Total) |
 | 7+ | — | data |
 
-Carta logo at **column D** anchored to D1, height = rows 1–3 — same per-skill override as the standard `carta-consolidating-pnl` detail tab. Gate 6 verification + Hard Rules below assert this anchor; the deeper 3-row data header on rows 4–6 sits to the right of the logo without conflict.
+Carta logo at **column D** anchored to D1, height = rows 1–3 — same per-skill override as the standard `references/pnl.md` detail tab. Gate 6 verification + Hard Rules below assert this anchor; the deeper 3-row data header on rows 4–6 sits to the right of the logo without conflict.
 
 ---
 
@@ -142,7 +142,7 @@ pivot[(gl_code, account_name)][category][tag_value] = {month: <amt>, ytd: <amt>}
 
 - **Categories**: sorted alphabetically (firm-stable ordering).
 - **Tag values within a category**: sorted alphabetically, with `Untagged` always last.
-- Classification and section order: identical to the standard build — load `references/section-map.md` and apply.
+- Classification and section order: identical to the standard build — load `references/pnl/section-map.md` and apply.
 
 **Per-category Total invariant**: for any account, every category's Total within a given period block equals the same number — the underlying account total in that period. The categories are alternative breakdowns of the same dollars.
 
@@ -228,7 +228,7 @@ Section subtotals and `Net Income` formulas use the same row-range SUM pattern a
 
 ### Do NOT freeze panes
 
-This skill follows the Carta budgeting no-freeze convention — same rule as the standard `carta-consolidating-pnl` detail tab and the Summary tab. Even though the 3-row header is deep, do **not** call `freezePanes.freezeAt(...)` here. If long horizontal scrolling becomes a real problem in practice, surface it as a follow-up and we'll change the convention once across all skills rather than diverging Layout E alone.
+This skill follows the Carta budgeting no-freeze convention — same rule as the standard `references/pnl.md` detail tab and the Summary tab. Even though the 3-row header is deep, do **not** call `freezePanes.freezeAt(...)` here. If long horizontal scrolling becomes a real problem in practice, surface it as a follow-up and we'll change the convention once across all skills rather than diverging Layout E alone.
 
 ### Long-format build (when `<TAG_LAYOUT> == "long"`)
 

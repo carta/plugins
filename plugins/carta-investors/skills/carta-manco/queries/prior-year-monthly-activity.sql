@@ -2,7 +2,7 @@
 -- Substitute <entity_name>, <prior_year> before calling the connected
 -- Carta MCP fetch tool with verb "dwh:execute:query".
 --
--- Sign convention (aligned with carta-consolidating-pnl):
+-- Sign convention (aligned with carta-consolidating-financial-reports):
 --   Revenue (4xxx) flipped to positive; Expenses (5xxx+) kept as-is.
 --   Balance Sheet accounts (1xxx/2xxx/3xxx) excluded by ACCOUNT_TYPE >= '4000'.
 

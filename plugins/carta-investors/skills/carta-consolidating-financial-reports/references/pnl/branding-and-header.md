@@ -9,7 +9,7 @@ Canonical spec for the 4-row header band + Carta logo placement. Read whenever a
 | B1 | `<FIRM-FULL-NAME>` | bold, size 10 |
 | B2 | Title with descriptive subtitle (e.g. `2026 Budget (based on 2025 actuals)`) | bold, size 10 |
 | B3 | Source (e.g. `Source: Carta Fund Admin · DWH journal entries`) | italic, size 10 |
-| B4 | Other context (e.g. `Amounts in <fund_currency>` / `As of YYYY-MM-DD`) | italic, size 10 |
+| B4 | Other context (e.g. `Amounts in <resolved_currency>` / `As of YYYY-MM-DD`) | italic, size 10 |
 | B5 | blank | — |
 | Row 6 | Column headers | bold, white on black, centered |
 
@@ -17,7 +17,7 @@ Canonical spec for the 4-row header band + Carta logo placement. Read whenever a
 
 ## Logo placement
 
-- **Anchor:** column E, cell E1 — consistent with the Carta budgeting standard.
+- **Anchor:** column E, cell E1 — consistent with the Carta budgeting standard across all budget and consolidating skills.
 - **Height:** combined height of rows 1–3.
 - **Width:** proportional to PNG aspect ratio.
 - **One logo per tab.** Bundled assets at `assets/powered_by_carta.png` (PNG) and `assets/powered_by_carta.b64.txt` (base64 sidecar for Excel runtime).
@@ -69,7 +69,7 @@ Run this block in a **separate** `execute_office_js` call (not bundled with the 
 {
   "op": "add_image",
   "sheet": "<TAB_NAME>",
-  "path": "${CLAUDE_PLUGIN_ROOT}/skills/carta-consolidating-balance-sheet/assets/powered_by_carta.png",
+  "path": "${CLAUDE_PLUGIN_ROOT}/skills/carta-consolidating-financial-reports/assets/powered_by_carta.png",
   "anchor": "E1",
   "rows": 3
 }

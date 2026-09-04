@@ -2,7 +2,7 @@
 -- Substitute <entity_name>, <period_start>, <period_end> before calling
 -- the connected Carta MCP fetch tool with verb "dwh:execute:query".
 --
--- Schema notes (aligned with carta-consolidating-pnl):
+-- Schema notes (aligned with carta-consolidating-financial-reports):
 --   - EFFECTIVE_DATE is the books date — use this, not POSTED_DATE.
 --   - AMOUNT is a single signed column. Revenue (4xxx) stored as negative
 --     credits; expenses (5xxx+) stored as positive debits. Flip the sign

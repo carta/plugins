@@ -1,46 +1,3 @@
----
-name: carta-consolidating-pnl
-model: sonnet
-description: >-
-  Consolidating P&L (Income Statement) across the entities of a firm, for any period the user picks — a month, quarter, year, or start-to-end date range. Produces TWO Excel tabs: detail P&L (Period + YTD Actual/Budget/Variance/%) and executive Summary P&L formula-linked to detail. Optional tag-view breaks Actuals down by all firm reporting-tag categories with per-category subtotals. Runs in Claude for Excel (writes into the open workbook), and in Cowork, the desktop app, and Claude Code (adds tabs to an attached .xlsx, or creates one). Sourced from Carta MCP. TRIGGER on "consolidating P&L for [firm] [period]", "P&L for all entities of [firm]", "P&L for our funds", "firm-wide income statement", "P&L with executive summary", "P&L by department", "P&L by tag", "income statement by cost center". DO NOT TRIGGER for single-entity P&L, balance sheet (carta-consolidating-balance-sheet), or ManCo budgeting (carta-manco: budgets, actuals, pacing, what-if).
-version: 1.1.1
-allowed-tools:
-  # Production
-  - mcp__claude_ai_Carta__call_tool
-  - mcp__claude_ai_Carta__fetch
-  - mcp__claude_ai_Carta__welcome
-  - mcp__claude_ai_Carta__set_context
-  - mcp__claude_ai_Carta__list_contexts
-  # Carta-installer naming (lowercase)
-  - mcp__carta_production__call_tool
-  - mcp__carta_production__fetch
-  - mcp__carta_production__welcome
-  - mcp__carta_production__set_context
-  - mcp__carta_production__list_contexts
-  # Local / legacy fallback
-  - mcp__carta__call_tool
-  - mcp__carta__fetch
-  - mcp__carta__welcome
-  - mcp__carta__set_context
-  - mcp__carta__list_contexts
-  - Read
-  - AskUserQuestion
-  # local-file runtime (Cowork / desktop app / Claude Code) — without these the
-  # skill has no way to produce a workbook outside the Excel add-in
-  - Write
-  - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/scripts/read_workbook.py *)
-  - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/scripts/write_workbook.py *)
-  - Bash(test *)
----
-
-<!-- carta:instrumentation-fallback -->
-<IMPORTANT>
-`_instrumentation_v2` is anonymous Carta skill-usage telemetry. ALWAYS include it in your Carta MCP tool-call arguments — the plugins' hooks overwrite it when they run, so always sending it is safe. Shape:
-`_instrumentation_v2: {"skills": ["<plugin>:<skill>", ...], "model": "<model-id>", "surface": "<value>"}`
-`skills` is cumulative for the session: list every Carta skill loaded so far, not only the one driving this call. Namespace each entry `"plugin:skill"` and keep them oldest-first, with the most recently used skill last. List only Carta skills (`carta-cap-table:*`, `carta-crm:*`, `carta-investors:*`) — never skills from non-Carta plugins.
-`surface` is the Claude surface you are running in: `"chat"` (claude.ai or the Claude app, i.e. regular chat, not Cowork), `"cowork"` (Cowork mode), `"code-terminal"`, `"code-desktop"`, or `"excel"`. Omit it entirely if none of those describe your surface or you cannot tell — do not guess and do not invent another value.
-</IMPORTANT>
-
 [PATTERN carta-writing-style v0.0.2]
 [PATTERN etiquette v0.0.6]
 [PATTERN text v0.0.8]
@@ -122,7 +79,7 @@ Trigger on any request shaped like:
 Do **NOT** use this skill for:
 
 - **Single-entity P&L** — use `carta-explore-data`; this skill consolidates across a set of entities
-- **Balance Sheet** requests — use `carta-consolidating-balance-sheet`
+- **Balance Sheet** requests — use `read_skill(file_path="references/balance-sheet.md")`
 - **Multi-period trend** analysis (one Actual column per month across a range) or **per-entity side-by-side columns** — clarify before building; this skill produces ONE consolidated Actual column per block
 
 ## Inputs to collect
@@ -154,9 +111,9 @@ Execute all gates silently. Do not narrate tool calls, intermediate results, or 
 
 ## Entry mode — fresh session vs. chained skill
 
-**Mandatory telemetry beacon — run this before any skip-gate check:** If `<SERVER>` and `<FIRM_UUID>` are already in context, call `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-consolidating-pnl"]})` as your very first action. Do not skip this even when all data is already available — it records this skill invocation. If either is unknown, it fires in Gate 0 below.
+**Mandatory telemetry beacon — run this before any skip-gate check:** If `<SERVER>` and `<FIRM_UUID>` are already in context, call `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports"]})` as your very first action. Do not skip this even when all data is already available — it records this skill invocation. If either is unknown, it fires in Gate 0 below.
 
-Before Gate 0, check whether these context variables are already set from an earlier skill call in the same session (e.g. chained from `carta-consolidating-balance-sheet`, or handed down by a calling skill that resolved them up front):
+Before Gate 0, check whether these context variables are already set from an earlier report build in this same skill call (e.g. chained from `references/balance-sheet.md`), or handed down by a calling skill that resolved them up front:
 
 - `<SERVER>` — connected Carta MCP server prefix
 - `<FIRM_NAME>` and `<FIRM_UUID>` — the resolved firm
@@ -165,7 +122,7 @@ Before Gate 0, check whether these context variables are already set from an ear
 - `<RUNTIME>` — `excel-addin` or `local-file`
 - `<TARGET_FILE>` — the workbook to write into (`local-file` runtime only)
 
-**If `<SERVER>` and `<FIRM_UUID>` are both in context:** skip Gate 0. Call `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-consolidating-pnl"]})` to re-anchor the session scope and record this skill invocation, then continue from the first gate whose inputs are still missing.
+**If `<SERVER>` and `<FIRM_UUID>` are both in context:** skip Gate 0. Call `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports"]})` to re-anchor the session scope and record this skill invocation, then continue from the first gate whose inputs are still missing.
 
 **Skip each of these gates only when its own inputs are already set:**
 
@@ -191,7 +148,7 @@ Do not ask "which firm?" when it is already established from the skill the user 
 Scan the tools available in the conversation for any matching `mcp__*__welcome`. Extract the **server identifier** — the middle segment between the first and last `__`. Examples: `mcp__carta__welcome` → `carta`, `mcp__claude_ai_Carta__welcome` → `claude_ai_Carta`.
 
 **If none found:** tell the user no Carta MCP is connected and stop.
-**If exactly one found:** call `mcp__<SERVER>__welcome(_instrumentation={"plugin": "carta-investors", "skills": ["carta-consolidating-pnl"]})` to verify. This is `<SERVER>`.
+**If exactly one found:** call `mcp__<SERVER>__welcome(_instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports"]})` to verify. This is `<SERVER>`.
 **If multiple found:** ask the user which to use via `AskUserQuestion`. Default to `carta` (production) if present.
 **Don't call any other `mcp__<SERVER>__*` tool before `welcome`** — every other command is gated and will return a reminder.
 
@@ -199,8 +156,8 @@ Scan the tools available in the conversation for any matching `mcp__*__welcome`.
 
 ## Gate 1: Resolve firm
 
-1. `mcp__<SERVER>__list_contexts(firm_name="<FIRM>", _instrumentation={"plugin": "carta-investors", "skills": ["carta-consolidating-pnl"]})`. Do not use `call_tool` for `list_contexts` — call the granular tool directly with `_instrumentation` as shown. Multiple matches → `AskUserQuestion`. Wait for confirmation.
-2. `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-consolidating-pnl"]})`. Do not use `call_tool` for `set_context` — call the granular tool directly with `_instrumentation` as shown.
+1. `mcp__<SERVER>__list_contexts(firm_name="<FIRM>", _instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports"]})`. Do not use `call_tool` for `list_contexts` — call the granular tool directly with `_instrumentation` as shown. Multiple matches → `AskUserQuestion`. Wait for confirmation.
+2. `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports"]})`. Do not use `call_tool` for `set_context` — call the granular tool directly with `_instrumentation` as shown.
 
 **DWH param-name traps:** `dwh:execute:query` takes `sql:` not `query:`. `dwh:get:table_schema` takes `table_name:` not `table:`. `format` accepts `"ndjson"` / `"markdown"`, not `"csv"`.
 
@@ -219,7 +176,7 @@ Skip only if `<ENTITY_SCOPE>` is already in context.
 A consolidating P&L spans a set of entities and the user picks the set. Ask.
 
 ```
-call_tool({"name": "fa__list__entities", "arguments": {}, "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-consolidating-pnl"]}})
+call_tool({"name": "fa__list__entities", "arguments": {}, "_instrumentation_v2": {"skills": ["carta-investors:carta-consolidating-financial-reports"]}})
 ```
 
 Classify each returned entity — prefer the API's own `type`, and fall back to
@@ -227,7 +184,7 @@ these name heuristics **in order, first match wins**:
 
 | Label | Heuristic |
 |---|---|
-| `ManCo` | name contains any of `Management`, `Mgmt`, `ManCo`, OR ends in `Capital, LLC` / `Partners Management`, AND does **not** contain `Fund`, `SPV`, `LP`, `Co-Invest`, `Bridge` |
+| `ManCo` | name contains `Management`, `Mgmt`, or `ManCo`, AND does not contain `Fund`, `SPV`, `LP`, `Co-Invest`, `Bridge` |
 | `Fund` | name contains `Fund` |
 | `SPV` | name contains `SPV`, `Co-Invest`, `Bridge` |
 | `Other` | anything else — don't guess |
@@ -329,7 +286,7 @@ Code, so an add-in-only path dead-ends with no output and no actionable error.
 ## Gate 2: Pull the two period blocks
 
 The schema and sign conventions for the Carta DWH journal-entries
-table are documented in `references/schema.md`. Load that file now
+table are documented in `references/pnl/schema.md`. Load that file now
 and apply its rules.
 
 The period boundaries come from Gate 1.5: `<PERIOD_START>`, `<PERIOD_END>`, and
@@ -377,7 +334,7 @@ alone would drop it from the report.
 
 Queries > 50 rows: request `format: "ndjson"`, bucket into a blob. Don't paste large results — triggers `context_snip`. Use `"markdown"` only for ≤50-row previews.
 
-Run via `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "..."}, "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-consolidating-pnl"]}})`.
+Run via `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "..."}, "_instrumentation_v2": {"skills": ["carta-investors:carta-consolidating-financial-reports"]}})`.
 
 SELECT-only.
 
@@ -458,13 +415,13 @@ WHERE FIRM_ID = '<firm_uuid>'
 
 ## Gate 3: Classify and assign to sections
 
-Classify by leading digit of `ACCOUNT_TYPE`, per `references/schema.md`:
+Classify by leading digit of `ACCOUNT_TYPE`, per `references/pnl/schema.md`:
 
 - `4xxx` → **Revenue** — multiply `PERIOD_AMT` and `YTD_AMT` by `-1` for
   positive display (credits stored as negative)
 - `5xxx` – `9xxx` → **Expenses** — keep as-is (debits stored as positive)
 
-Then load `references/section-map.md` and apply its keyword table to assign
+Then load `references/pnl/section-map.md` and apply its keyword table to assign
 each expense account to a section. Order matters — **first match wins**.
 Sort within each section by `ACCOUNT_TYPE` ascending.
 
@@ -560,7 +517,7 @@ Handle each branch:
 
 Compute the **total column count per period block** as: `sum(n_values for each category in <TAG_CATEGORIES>) + len(<TAG_CATEGORIES>)`. The `+ len(...)` term covers the per-category Total columns. Multiply by 2 for the Period + YTD blocks.
 
-If the combined total exceeds 24, ask via `AskUserQuestion`. The `← recommended` marker depends on which side of the 36-column threshold the run falls on (mirrors the Cardinality guard table in `references/tag-view.md`):
+If the combined total exceeds 24, ask via `AskUserQuestion`. The `← recommended` marker depends on which side of the 36-column threshold the run falls on (mirrors the Cardinality guard table in `references/pnl/tag-view.md`):
 
 > The tag-view tab would have `<N>` columns across `<C>` categories (`<cat1>`, `<cat2>`, …). With that many, should I build wide (one column per tag per category per period) or long (one row per tag per account)?
 
@@ -629,7 +586,7 @@ write Budget columns E + N in the same pass as the detail build.
 
 ### Option 1 — Pull from Carta
 
-Read [`references/budget-fetch.md`](references/budget-fetch.md) now and
+Read [`references/pnl/budget-fetch.md`](references/pnl/budget-fetch.md) now and
 follow Part A (entity picker) + Part B (fetch). Then return here with the
 budget rows in the output shape that file documents.
 
@@ -790,7 +747,7 @@ Report-specific inputs it needs from here:
   Summary tab's cross-sheet links. The shared reference changes *how* each write
   is issued, never *what* is written.
 - **Logo anchor:** `E1`, sized to the `E1:E3` row band — see
-  [`references/branding-and-header.md`](references/branding-and-header.md).
+  [`references/pnl/branding-and-header.md`](references/pnl/branding-and-header.md).
 
 **The hard rule from Gate 4 applies here too** — no write runs before Gate 4's
 build approval, and no write to a pre-existing file runs before the shared
@@ -809,7 +766,7 @@ consented to any edit to a pre-existing workbook.
 ### Tag-view branch (if `build_mode == "tag-view"`)
 
 **Stop reading the rest of Gate 6 and switch references.** Load
-[`references/tag-view.md`](references/tag-view.md) now and follow it
+[`references/pnl/tag-view.md`](references/pnl/tag-view.md) now and follow it
 verbatim. That file documents:
 
 - Tab name (`P&L by Reporting Tag - <FIRM-SHORT> <PERIOD-LABEL>`).
@@ -855,7 +812,14 @@ The most common failure mode is bundling cell writes + formatting + logo into on
 
 Returning from Call 1 does NOT finish Gate 6. The verification call must appear in your tool history before Gate 7.
 
-Read `references/formatting.md` AND [`references/branding-and-header.md`](references/branding-and-header.md) now and apply both verbatim. `branding-and-header.md` reserves rows 1–4 for the firm/title/source/context band and places the Carta logo at **column E**, rows 1–3 height. `formatting.md` documents the +4 row shift this introduces — all data row numbers downstream are offset accordingly.
+**`execute_office_js`'s `code` field has no templating step — it runs
+verbatim.** When you need to inject a large computed payload (e.g. a row-plan
+array), build the final JS string yourself with the real JSON inlined as a
+literal (`const plan = [...];`), not a placeholder token like
+`PLAN_JSON_PLACEHOLDER` or a quoted string expecting server-side substitution —
+neither will be replaced, and both fail at parse time.
+
+Read `references/pnl/formatting.md` AND [`references/pnl/branding-and-header.md`](references/pnl/branding-and-header.md) now and apply both verbatim. `branding-and-header.md` reserves rows 1–4 for the firm/title/source/context band and places the Carta logo at **column E**, rows 1–3 height. `formatting.md` documents the +4 row shift this introduces — all data row numbers downstream are offset accordingly.
 
 ### Brand block — verbatim, paste don't paraphrase (DO NOT SKIP)
 
@@ -957,7 +921,7 @@ Paste these EXACT strings; never rewrite them from memory. Excel number-format s
 
 Section order is fixed (Revenue → Human Capital → Contractor → Occupancy →
 Professional Services → Travel & Marketing → Technology & Data → Other),
-documented in `references/section-map.md`. One blank row between sections.
+documented in `references/pnl/section-map.md`. One blank row between sections.
 
 ### Row set: union of actuals + budget (do this BEFORE writing any rows)
 
@@ -973,7 +937,7 @@ If `budget_source != "skip"`:
    YTD budget is non-zero: `{(gl_code, account_name)}`.
 3. Compute the union. For each account, record:
    - `month_actual`, `ytd_actual` — from Gate 2's row, or `null` if budget-only
-   - `month_budget`, `ytd_budget` — matched from Gate 4b per the GL-code → exact-name → prefix-name precedence in `references/fill-budget-columns.md` step 2
+   - `month_budget`, `ytd_budget` — matched from Gate 4b per the GL-code → exact-name → prefix-name precedence in `references/pnl/fill-budget-columns.md` step 2
 4. Classify every account using the same Gate 3 rules. Budget-only
    accounts go through the same section map.
 5. Sort within each section by `ACCOUNT_TYPE` / `gl_code` ascending.
@@ -1014,7 +978,7 @@ Every item below must be applied during Gate 6, not patched in afterward. A firs
 - **Header row 5 bottom border** — thin border under `B5:H5`, `L5:Q5`,
   `J5`, `S5`.
 
-`references/formatting.md` remains the source of truth for cell coordinates and number formats.
+`references/pnl/formatting.md` remains the source of truth for cell coordinates and number formats.
 
 ### Sheet-write hard rules
 
@@ -1036,7 +1000,7 @@ Every item below must be applied during Gate 6, not patched in afterward. A firs
 
 ### Other reminders
 
-- Budget match precedence: GL code → exact name → prefix name (per `references/fill-budget-columns.md`). Write matched values into E and N inline during this build.
+- Budget match precedence: GL code → exact name → prefix name (per `references/pnl/fill-budget-columns.md`). Write matched values into E and N inline during this build.
 - Comments columns (J, S) stay blank in data rows.
 - Totals are `=SUM(...)`; Variance is `=Actual - Budget`; Net Income is `=Revenue subtotal - Total expenses`.
 
@@ -1066,7 +1030,7 @@ After the detail tab is written and read-back has confirmed the row map, call `c
 chose "Build the detail tab only".** Tag-view writes one tab; detail-only
 writes one tab. Both jump straight to Gate 8.
 
-Read `references/summary-tab.md` AND [`references/branding-and-header.md`](references/branding-and-header.md) now and apply both verbatim. The Summary tab follows the same 4-row metadata band as the detail tab — rows 1–4 reserved for firm/title/source/context, and the Carta logo at column E anchored to E1 with height = rows 1–3. If `summary-tab.md`'s legacy layout puts the Executive Summary title on B2 with a larger font, keep it on B2 but trim the font down so it still fits inside the 4-row band (or move auxiliary text to B3/B4).
+Read `references/pnl/summary-tab.md` AND [`references/pnl/branding-and-header.md`](references/pnl/branding-and-header.md) now and apply both verbatim. The Summary tab follows the same 4-row metadata band as the detail tab — rows 1–4 reserved for firm/title/source/context, and the Carta logo at column E anchored to E1 with height = rows 1–3. If `summary-tab.md`'s legacy layout puts the Executive Summary title on B2 with a larger font, keep it on B2 but trim the font down so it still fits inside the 4-row band (or move auxiliary text to B3/B4).
 
 ### Brand block — verbatim, paste don't paraphrase (DO NOT SKIP)
 
@@ -1101,7 +1065,7 @@ formula on the Summary tab. **Never hardcode a number** — every Actual /
 Budget cell on the Summary is a cross-sheet formula pointing at the detail
 tab, so refreshing the detail updates the summary automatically.
 
-Reminders from `references/summary-tab.md`:
+Reminders from `references/pnl/summary-tab.md`:
 
 - Sheet position is index 0 — the Summary appears **before** the detail
   in tab order.
@@ -1124,7 +1088,7 @@ reconciles to the detail for both Period and YTD.
 ## Gate 8: Verify and report
 
 **Tag-view branch (if `build_mode == "tag-view"`):** load
-[`references/tag-view.md`](references/tag-view.md) §"Gate 8 — verification
+[`references/pnl/tag-view.md`](references/pnl/tag-view.md) §"Gate 8 — verification
 + report (tag-view variant)" and follow that section verbatim. Skip the
 rest of this gate — the Summary tie-out, Budget tie-out, and standard
 report shape don't apply in tag-view mode.
@@ -1231,7 +1195,7 @@ inline) and closes with the post-action menu.
 
 ### If `budget_source` is Carta / file / tab (budget data pre-fetched)
 
-Load [`references/fill-budget-columns.md`](references/fill-budget-columns.md)
+Load [`references/pnl/fill-budget-columns.md`](references/pnl/fill-budget-columns.md)
 inline and run the steps that were **not** already handled during Gate 6:
 
 - ~~Insert missing budget rows above the right section subtotal (step 4)~~
@@ -1268,12 +1232,12 @@ of one option, not as a suffix on the `label`.
 3. **Adjust the section mapping for `Other` accounts**
 4. **I'm done**
 
-**When the user selects an option, immediately invoke the corresponding skill via `Skill('<skill-name>')` BEFORE doing any work.** Do not freelance the output — load the downstream skill's SKILL.md so its gates, layout spec, branding rules, and approval flow apply. Routing:
+**When the user selects an option, immediately load the corresponding reference via `read_skill(file_path="...")` BEFORE doing any work.** Do not freelance the output — load the reference so its gates, layout spec, branding rules, and approval flow apply. Routing:
 
-| Option | Skill to invoke |
+| Option | Reference to load |
 |---|---|
-| 1 — Build the Balance Sheet | `Skill('carta-investors:carta-consolidating-balance-sheet')` |
-| 2 — Build the P&L for a different period | `Skill('carta-investors:carta-consolidating-pnl')` re-entry with the new period |
+| 1 — Build the Balance Sheet | `read_skill(file_path="references/balance-sheet.md")` |
+| 2 — Build the P&L for a different period | `read_skill(file_path="references/pnl.md")` re-entry with the new period |
 | 3 — Adjust the section mapping | Stay in this skill — re-run from Gate 5 with the user's revised mapping |
 | 4 — I'm done | No invocation; close cleanly |
 
@@ -1312,4 +1276,4 @@ Never auto-retry. Surface failures, let the user decide.
 - **Don't add columns the skill doesn't ask for** (no Acct # / GL Code column — column C is a 5pt spacer).
 - **Account label = `account_name` only.** Never `"4160 Management fee income"` or any variation. GL code is internal-only.
 - **Do NOT freeze panes** on either tab.
-- **Don't skip branding** — Gate 8 must not run until both tabs carry `CartaLogo` on column E. See [`references/branding-and-header.md`](references/branding-and-header.md).
+- **Don't skip branding** — Gate 8 must not run until both tabs carry `CartaLogo` on column E. See [`references/pnl/branding-and-header.md`](references/pnl/branding-and-header.md).

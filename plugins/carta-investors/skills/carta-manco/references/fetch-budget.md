@@ -444,7 +444,7 @@ Omit the cash-balance clause from either full-budget sentence entirely when `<CA
 
 | Option | What to invoke |
 |---|---|
-| 1 — Build the P&L | `Skill('carta-investors:carta-consolidating-pnl')` (external — consolidating, not budgeting) |
+| 1 — Build the P&L | `Skill('carta-investors:carta-consolidating-financial-reports')` (external — consolidating, not budgeting) |
 | 2 — Refresh actuals | `read_skill(file_path="references/fetch-actuals.md")` |
 | 3 — Pacing analysis | `read_skill(file_path="references/budget-analysis.md")` |
 | 4 — Done | No invocation; close cleanly |

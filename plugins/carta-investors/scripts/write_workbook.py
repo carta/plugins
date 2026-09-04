@@ -55,7 +55,7 @@ Notes for the budget skills:
     - Use the [$$-en-US] locale token in number_format, NOT a bare "$".
       Bare-$ renders in system locale (R$ on pt-BR, etc.).
     - Do NOT include a freeze_panes op for carta-create-budget output — the
-      Carta standard (see carta-consolidating-pnl/references/formatting.md)
+      Carta standard (see carta-consolidating-financial-reports/references/pnl/formatting.md)
       does not freeze.
     - Prefer autofit_columns to set_column_width for accounting-format
       currency cells — fixed widths < 16pt show ##### for 5+ digit values.

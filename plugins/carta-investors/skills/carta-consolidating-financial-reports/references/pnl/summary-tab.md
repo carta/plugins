@@ -35,6 +35,23 @@ Bucket revenue accounts into 3 categories via case-insensitive substring matches
 
 (Rows 10, 14 blank.)
 
+**Unmatched revenue accounts are common — never drop them.** Some firms'
+revenue accounts (e.g. `Management fee income`, `Realized gain/loss`, `Misc
+income`) won't match any of the three keyword buckets above. Do not silently
+exclude them from the Summary — that makes Summary Investment Income diverge
+from the detail tab's `Investment Income` subtotal, which fails Gate 8's
+tie-out.
+
+Instead, treat **`Tax & Other Distributions` (row 7 / row 20) as a plug**:
+`= <detail Investment Income subtotal> - <row 6> - <row 8>` for both Actual and
+Budget, Month and YTD. This guarantees `SUM(C6:C8)` always ties to the detail
+subtotal regardless of which revenue accounts matched cleanly.
+
+If the plug ends up holding revenue that isn't really "tax & other
+distributions" (e.g. it's mostly management fee income or realized gains),
+say so explicitly in Gate 8: name the accounts that landed in the plug and
+flag that the bucket label doesn't fully describe its contents.
+
 **Variance (E):** `=C<n>-D<n>`.
 **% (F):** `=IF(D<n>>0, IF((E<n>/D<n>)>10, "1000+%", E<n>/D<n>), "n/a")`. For row 8 (Unrealized G/L), F = literal `"-"` — % on a swing-around-zero figure is meaningless.
 

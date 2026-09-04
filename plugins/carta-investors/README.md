@@ -49,8 +49,7 @@ Skills that produce accountant-ready Excel workbooks. They run inside **Claude f
 | Skill | Description |
 |-------|-------------|
 | `carta-manco` | Unified ManCo budgeting skill — fetch a stored budget, build a new one from prior-year actuals, refresh actuals against a budget, analyze pacing/variance, or model what-if scenarios (headcount cuts, revenue shocks, new fund raises, expansion hires). |
-| `carta-consolidating-pnl` | Generate a firm-wide consolidating P&L across all entities for a given month — detailed "P&L- with comments" tab plus a one-page executive Summary P&L. |
-| `carta-consolidating-balance-sheet` | Generate a consolidating Balance Sheet across all entities for a given month — side-by-side layout with Assets / Liabilities / Equity. |
+| `carta-consolidating-financial-reports` | Build multi-entity consolidating financial reports across all entities for a given period — P&L (with a one-page executive Summary), Balance Sheet (Assets / Liabilities / Equity), and Trial Balance — individually or all three together. |
 
 For Claude for Excel, enable the Carta connector in **Settings → Connectors** in your claude.ai workspace.
 

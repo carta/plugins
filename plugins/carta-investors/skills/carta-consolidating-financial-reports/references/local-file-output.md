@@ -1,7 +1,7 @@
 # Shared reference: producing an Excel workbook outside Claude for Excel
 
-Used by the consolidating-report skills (`carta-consolidating-pnl`,
-`carta-consolidating-balance-sheet`, `carta-consolidating-trial-balance`). Each
+Used by the consolidating-report references (`references/pnl.md`,
+`references/balance-sheet.md`, `references/trial-balance.md`). Each
 one writes Excel output, and each runs on four surfaces. This file owns the
 mechanics that don't differ between reports; the report keeps its own content and
 layout rules.

@@ -2,7 +2,7 @@
 name: carta-manco
 model: opus
 description: >-
-  ManCo (management company) budgeting in Excel for Carta Fund Admin firms. TRIGGER: build/create/draft a budget, pull/import the Carta budget, add/refresh actuals, interleave Budget/Actual/Variance, sub-account drill-down, pacing/variance analysis, "what did we spend on [X] YTD", "where did we overspend", what-if/scenario modeling (headcount, revenue shocks). ALSO fires on ANY generic management-company ask naming no specific report AND no visual surface, and shows the capability menu: "help with our ManCo", "ManCo financials", "ManCo reporting", "not sure what I need". NOT FOR: a ManCo microapp/dashboard/app/visual report — "build a manco microapp for [firm]", "spin up the ManCo dashboard" → carta-manco-reporting whatever the verb ("build" claims this skill only for a budget); single-FUND financials, portfolio valuations, LP reporting, cap tables, loans (carta-loan-dashboard); a NAMED consolidating statement (P&L, BS, TB, cash flow) — use carta-consolidating-* or fa-manco:carta-consolidating-cash-flow.
+  ManCo (management company) budgeting in Excel for Carta Fund Admin firms. TRIGGER: build/create/draft a budget, pull/import the budget, add/refresh actuals, interleave Budget/Actual/Variance, sub-account drill-down, pacing/variance analysis, "what did we spend on [X] YTD", "where did we overspend", what-if/scenario modeling (headcount, revenue shocks). ALSO fires on ANY generic management-company ask naming no specific report AND no visual surface, and shows the capability menu: "help with our ManCo", "ManCo financials", "ManCo reporting", "not sure what I need". NOT FOR: a ManCo microapp/dashboard/visual report — "build a manco microapp for [firm]", "spin up the ManCo dashboard" → carta-manco-reporting whatever the verb ("build" claims this skill only for a budget); single-FUND financials, portfolio valuations, LP reporting, cap tables, loans (carta-loan-dashboard); a NAMED consolidating statement (P&L, BS, TB, cash flow) → carta-consolidating-financial-reports or fa-manco:carta-consolidating-cash-flow.
 version: 1.0.0
 allowed-tools:
   # Production
@@ -228,9 +228,7 @@ capability by its technical name.** Two paths only:
 | "pull / fetch / get / refresh / sync actuals for [firm/ManCo]", "what did we spend on [category] YTD", "interleave Budget/Actual/Variance", "actuals by department/tag/vendor/sub-account", "add next month column", "extend budget through [month]" | fetch-actuals | `read_skill(file_path="references/fetch-actuals.md")` |
 | "how are we doing", "pacing", "on track", "how are we pacing against budget", "variance analysis", "compare budget vs actuals", "budget vs actuals for [firm]", "are we over on [X]", "where did we overspend or underspend", "drill into [X]" | budget-analysis | `read_skill(file_path="references/budget-analysis.md")` |
 | "what if we cut headcount", "model a revenue shortfall", "preserve $X cash", "raise a new fund", "model hiring N FTEs", "what-if", "scenario", "build me a scenario model" | budget-scenarios | `read_skill(file_path="references/budget-scenarios.md")` |
-| "consolidating P&L", "consolidated income statement", "ManCo P&L", "pull our ManCo P&L", "consolidating P&L across all entities" | consolidating-pnl (external) | `Skill("carta-investors:carta-consolidating-pnl")` |
-| "consolidating balance sheet", "consolidated BS" | consolidating-balance-sheet (external) | `Skill("carta-investors:carta-consolidating-balance-sheet")` |
-| "consolidating trial balance", "show me the trial balance", "TB" | consolidating-trial-balance (external) | `Skill("carta-investors:carta-consolidating-trial-balance")` |
+| "consolidating P&L", "consolidated income statement", "ManCo P&L", "pull our ManCo P&L", "consolidating P&L across all entities", "consolidating balance sheet", "consolidated BS", "consolidating trial balance", "show me the trial balance", "TB" | consolidating-financial-reports (external) | `Skill("carta-investors:carta-consolidating-financial-reports")` |
 | "consolidating cash flow", "cash flow statement for the ManCo" | consolidating-cash-flow (external) | `Skill("fa-manco:carta-consolidating-cash-flow")` |
 
 **If ambiguous** (prompt matches no row, or skill was invoked with no specific task), emit a welcome screen first, then ask via `AskUserQuestion`.
@@ -289,10 +287,8 @@ this session. Never emit a bracketed placeholder.
 - **Drill-down C — consolidating financials:**
   | # | Label | Dispatch to |
   |---|---|---|
-  | 1 | **Consolidating P&L** | `Skill("carta-investors:carta-consolidating-pnl")` |
-  | 2 | **Consolidating balance sheet** | `Skill("carta-investors:carta-consolidating-balance-sheet")` |
-  | 3 | **Consolidating trial balance** | `Skill("carta-investors:carta-consolidating-trial-balance")` |
-  | 4 | **Consolidating cash flow** | `Skill("fa-manco:carta-consolidating-cash-flow")` |
+  | 1 | **Consolidating P&L, balance sheet, or trial balance** | `Skill("carta-investors:carta-consolidating-financial-reports")` |
+  | 2 | **Consolidating cash flow** | `Skill("fa-manco:carta-consolidating-cash-flow")` |
 
 > **Never add a fifth option to any single `AskUserQuestion` call** — split into
 > another grouped question instead. A flat 5+ option menu loses every option past
@@ -527,16 +523,16 @@ split across skills that could drift apart from each other.
 
 This skill's own description does not claim "consolidating P&L / balance
 sheet / trial balance / cash flow" as trigger phrases, even though the
-Router Gate below still dispatches to those 4 capabilities. `carta-
-consolidating-pnl` and `carta-consolidating-balance-sheet` independently
-claim those same phrases in their own descriptions — if this skill's
-description claimed them too, the top-level picker would face a genuine
-ambiguity between two skills for the same utterance. A named consolidating
-ask (e.g. "show consolidating P&L for our firm") therefore reaches the
-standalone skill directly, without this skill ever being selected.
+Router Gate below still dispatches to those 2 capabilities. `carta-
+consolidating-financial-reports` independently claims those same phrases in
+its own description — if this skill's description claimed them too, the
+top-level picker would face a genuine ambiguity between two skills for the
+same utterance. A named consolidating ask (e.g. "show consolidating P&L for
+our firm") therefore reaches the standalone skill directly, without this
+skill ever being selected.
 
 The Router Gate's Route rows and the welcome-screen menu (category 4,
-drill-down C) still dispatch to the 4 consolidating skills — those only run
+drill-down C) still dispatch to the 2 consolidating skills — those only run
 **after** carta-manco is already selected (explicit invocation by name, or a
 genuinely ambiguous "help with our ManCo" request that falls through to the
 menu), so they carry no picker-level collision risk. A user who names the
@@ -545,14 +541,14 @@ carta-manco; a user who asks broadly still finds it as a menu option.
 
 ### Firm-context handoff to consolidating skills (known, accepted inefficiency)
 
-The 4 consolidating skills each track firm context as `<FIRM_NAME>`/
+The 2 consolidating skills each track firm context as `<FIRM_NAME>`/
 `<FIRM_UUID>` internally, while this skill tracks `<ENTITY_NAME>`/
 `<ENTITY_UUID>`. The Dispatch step passes the resolved firm context "so the
 downstream skill can skip its own firm resolution," but the variable-naming
 mismatch means that skip doesn't reliably fire — the downstream skill may
 re-resolve the firm it was just handed. This is a minor extra round-trip, not a
-correctness bug, and fixing it means changing the variable-naming contract of 4
-other skills — out of scope here.
+correctness bug, and fixing it means changing the variable-naming contract of
+the other 2 skills — out of scope here.
 
 ### Telemetry naming feeds an external Metabase dashboard
 

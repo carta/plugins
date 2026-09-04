@@ -1,46 +1,3 @@
----
-name: carta-consolidating-balance-sheet
-model: sonnet
-description: >-
-  Generate a consolidating Balance Sheet for all entities under a firm for a given month and write it as a side-by-side Excel tab with Assets / Liabilities / Equity sections and a Total column. Sourced from Carta MCP (firm/entity resolution + DWH SQL). TRIGGER when the user asks for "balance sheet of all entities of [firm] for [month]", a consolidating BS by entity, or to replicate the "Balance Sheet - consolidating" tab format for a different firm/period. Trigger phrases include "consolidating balance sheet", "BS by entity", "balance sheet of all entities". DO NOT TRIGGER for single-entity BS, P&L / income statement (carta-consolidating-pnl), or ManCo budgeting (carta-manco: budgets, actuals, pacing, what-if). Also DO NOT TRIGGER for a single-fund / fund-level balance sheet or fund account balances as-of a date — use carta-explore-data for those.
-version: 1.1.1
-allowed-tools:
-  # Production
-  - mcp__claude_ai_Carta__call_tool
-  - mcp__claude_ai_Carta__fetch
-  - mcp__claude_ai_Carta__welcome
-  - mcp__claude_ai_Carta__set_context
-  - mcp__claude_ai_Carta__list_contexts
-  # Carta-installer naming (lowercase)
-  - mcp__carta_production__call_tool
-  - mcp__carta_production__fetch
-  - mcp__carta_production__welcome
-  - mcp__carta_production__set_context
-  - mcp__carta_production__list_contexts
-  # Local / legacy fallback
-  - mcp__carta__call_tool
-  - mcp__carta__fetch
-  - mcp__carta__welcome
-  - mcp__carta__set_context
-  - mcp__carta__list_contexts
-  - Read
-  - AskUserQuestion
-  # local-file runtime (Cowork / desktop app / Claude Code) — without these the
-  # skill has no way to produce a workbook outside the Excel add-in
-  - Write
-  - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/scripts/read_workbook.py *)
-  - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/scripts/write_workbook.py *)
-  - Bash(test *)
----
-
-<!-- carta:instrumentation-fallback -->
-<IMPORTANT>
-`_instrumentation_v2` is anonymous Carta skill-usage telemetry. ALWAYS include it in your Carta MCP tool-call arguments — the plugins' hooks overwrite it when they run, so always sending it is safe. Shape:
-`_instrumentation_v2: {"skills": ["<plugin>:<skill>", ...], "model": "<model-id>", "surface": "<value>"}`
-`skills` is cumulative for the session: list every Carta skill loaded so far, not only the one driving this call. Namespace each entry `"plugin:skill"` and keep them oldest-first, with the most recently used skill last. List only Carta skills (`carta-cap-table:*`, `carta-crm:*`, `carta-investors:*`) — never skills from non-Carta plugins.
-`surface` is the Claude surface you are running in: `"chat"` (claude.ai or the Claude app, i.e. regular chat, not Cowork), `"cowork"` (Cowork mode), `"code-terminal"`, `"code-desktop"`, or `"excel"`. Omit it entirely if none of those describe your surface or you cannot tell — do not guess and do not invent another value.
-</IMPORTANT>
-
 [PATTERN carta-writing-style v0.0.2]
 [PATTERN etiquette v0.0.6]
 [PATTERN text v0.0.8]
@@ -73,7 +30,7 @@ Trigger this skill when the user asks for any of the following:
 Do **NOT** use this skill for:
 
 - Single-entity balance sheets (use a plain trial-balance / GL query instead)
-- P&L / income statement requests (use the **carta-consolidating-pnl** skill)
+- P&L / income statement requests (use `read_skill(file_path="references/pnl.md")`)
 - Historical multi-period BS (this skill is point-in-time, single month)
 
 ## UX Rules
@@ -118,7 +75,7 @@ Before running, confirm with the user:
    context (resolved fuzzily). Example: `Acme Ventures`.
 2. **Month** — format as `YYYY-MM` (e.g. `2026-03` for March 2026). The
    period is **cumulative as-of month-end** by default, not month-only
-   activity (see `references/schema.md` for why).
+   activity (see `references/balance-sheet/schema.md` for why).
 
 If the user gave both in the request (e.g. *"balance sheet of all entities of
 Acme Ventures for March 2026"*), proceed without re-asking.
@@ -133,14 +90,14 @@ Execute all gates silently. Do not narrate tool calls, intermediate results, or 
 
 ## Entry mode — fresh session vs. chained skill
 
-**Mandatory telemetry beacon — run this before any skip-gate check:** If `<SERVER>` and `<FIRM_UUID>` are already in context, call `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-consolidating-balance-sheet"]})` as your very first action. Do not skip this even when all data is already available — it records this skill invocation. If either is unknown, it fires in Gate 0 below.
+**Mandatory telemetry beacon — run this before any skip-gate check:** If `<SERVER>` and `<FIRM_UUID>` are already in context, call `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports"]})` as your very first action. Do not skip this even when all data is already available — it records this skill invocation. If either is unknown, it fires in Gate 0 below.
 
-Before Gate 0, check whether these context variables are already set from an earlier skill call in the same session (e.g. chained from `carta-consolidating-pnl`):
+Before Gate 0, check whether these context variables are already set from an earlier report build in this same skill call (e.g. chained from `references/pnl.md`):
 
 - `<SERVER>` — connected Carta MCP server prefix
 - `<FIRM_NAME>` and `<FIRM_UUID>` — the resolved firm
 
-**If both are in context:** skip Gate 0 entirely. In Gate 1, skip the `contexts:list` lookup — but still call `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-consolidating-balance-sheet"]})` to re-anchor the MCP session scope and record this skill invocation, then proceed to `fa:list:entities` to enumerate entities for Gate 2.
+**If both are in context:** skip Gate 0 entirely. In Gate 1, skip the `contexts:list` lookup — but still call `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports"]})` to re-anchor the MCP session scope and record this skill invocation, then proceed to `fa:list:entities` to enumerate entities for Gate 2.
 
 **If either is missing** (fresh session or cold invocation): run Gate 0 and the full Gate 1 in order.
 
@@ -153,7 +110,7 @@ Do not ask "which firm?" when it is already established from the skill the user 
 Scan the tools available in the conversation for any matching `mcp__*__welcome`. Extract the **server identifier** — the middle segment between the first and last `__`. Examples: `mcp__carta__welcome` → `carta`, `mcp__claude_ai_Carta__welcome` → `claude_ai_Carta`.
 
 **If none found:** tell the user no Carta MCP is connected and stop.
-**If exactly one found:** call `mcp__<SERVER>__welcome(_instrumentation={"plugin": "carta-investors", "skills": ["carta-consolidating-balance-sheet"]})` to verify. This is `<SERVER>`.
+**If exactly one found:** call `mcp__<SERVER>__welcome(_instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports"]})` to verify. This is `<SERVER>`.
 **If multiple found:** ask the user which to use via `AskUserQuestion`. Default to `carta` (production) if present.
 **Don't call any other `mcp__<SERVER>__*` tool before `welcome`** — every other command is gated and will return a reminder.
 
@@ -161,11 +118,11 @@ Scan the tools available in the conversation for any matching `mcp__*__welcome`.
 
 ## Gate 1: Resolve the firm and its entities
 
-1. `mcp__<SERVER>__list_contexts(firm_name="<FIRM>", _instrumentation={"plugin": "carta-investors", "skills": ["carta-consolidating-balance-sheet"]})` to find. Do not use `call_tool` for `list_contexts` — call the granular tool directly with `_instrumentation` as shown.
+1. `mcp__<SERVER>__list_contexts(firm_name="<FIRM>", _instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports"]})` to find. Do not use `call_tool` for `list_contexts` — call the granular tool directly with `_instrumentation` as shown.
    the firm. If multiple matches, present them via `AskUserQuestion` and
    confirm.
-2. `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation={"plugin": "carta-investors", "skills": ["carta-consolidating-balance-sheet"]})` to scope the session. Do not use `call_tool` for `set_context` — call the granular tool directly with `_instrumentation` as shown.
-3. `call_tool({"name": "fa__list__entities", "arguments": {}, "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-consolidating-balance-sheet"]}})` to enumerate **every** entity under
+2. `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports"]})` to scope the session. Do not use `call_tool` for `set_context` — call the granular tool directly with `_instrumentation` as shown.
+3. `call_tool({"name": "fa__list__entities", "arguments": {}, "_instrumentation_v2": {"skills": ["carta-investors:carta-consolidating-financial-reports"]}})` to enumerate **every** entity under
    the firm.
 
 Prefer the granular tool when the server exposes it — one fewer hop, sidesteps `fetch`'s param-shape quirks:
@@ -275,7 +232,7 @@ Skip this gate only if `<RUNTIME>` and `<TARGET_FILE>` are already in context
 ## Gate 3: Pull journal entries
 
 The schema and sign conventions for the Carta DWH journal-entries
-table are documented in `references/schema.md`. Load that file now
+table are documented in `references/balance-sheet/schema.md`. Load that file now
 and apply its rules.
 
 **Default query — cumulative as-of (this is what balances):**
@@ -308,7 +265,7 @@ Supported `format` values for `dwh:execute:query`:
 - `ndjson` — best for large results processed by code/agent.
 - `csv` is NOT supported. Do not try it.
 
-Run via `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "..."}, "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-consolidating-balance-sheet"]}})`.
+Run via `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "..."}, "_instrumentation_v2": {"skills": ["carta-investors:carta-consolidating-financial-reports"]}})`.
 SELECT-only.
 
 **Period-only variant** (`EFFECTIVE_DATE BETWEEN <month_start> AND
@@ -322,11 +279,11 @@ If the result set is large, store it in a session blob (e.g.
 
 ### Resolve the presentation currency (`<fund_currency>`)
 
-The number format in `references/formatting.md` is built from `<fund_currency>` —
+The number format in `references/balance-sheet/formatting.md` is built from `<fund_currency>` —
 resolve it here, do **not** assume USD:
 
 1. Probe the journal-entries table for a currency column:
-   `call_tool({"name": "dwh__get__table_schema", "arguments": {"table_name": "<journal_entries_table>"}, "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-consolidating-balance-sheet"]}})`.
+   `call_tool({"name": "dwh__get__table_schema", "arguments": {"table_name": "<journal_entries_table>"}, "_instrumentation_v2": {"skills": ["carta-investors:carta-consolidating-financial-reports"]}})`.
    If it exposes a currency column (e.g. `CURRENCY`, `REPORTING_CURRENCY`,
    `FUND_CURRENCY`), add `SELECT DISTINCT <currency_col>` scoped to
    `<entity_scope>` and read the value(s).
@@ -347,7 +304,7 @@ Equity accounts) — scoped to `<entity_scope>` — and `<fund_currency>` is res
 ## Gate 4: Classify accounts
 
 Classify each row by the leading digit of `ACCOUNT_TYPE`, per
-`references/schema.md`:
+`references/balance-sheet/schema.md`:
 
 - `1xxx` → **Assets** — keep `BALANCE` as-is
 - `2xxx` → **Liabilities** — multiply `BALANCE` by `-1` for positive display
@@ -524,16 +481,23 @@ The most common failure mode is bundling cell writes + formatting + logo into on
 
 Returning from Call 1 does NOT finish Gate 7. The verification call must appear in your tool history before Gate 8.
 
-Read `references/formatting.md` now and apply its layout exactly. That file
+**`execute_office_js`'s `code` field has no templating step — it runs
+verbatim.** When you need to inject a large computed payload (e.g. a row-plan
+array), build the final JS string yourself with the real JSON inlined as a
+literal (`const plan = [...];`), not a placeholder token like
+`PLAN_JSON_PLACEHOLDER` or a quoted string expecting server-side substitution —
+neither will be replaced, and both fail at parse time.
+
+Read `references/balance-sheet/formatting.md` now and apply its layout exactly. That file
 covers sheet name, header rows, section headers, subtotal/grand-total rows,
 the Total column, number formats, column widths, font, and the "do not
 include" list.
 
-**Also read [`references/branding-and-header.md`](references/branding-and-header.md)** for the standard 4-row metadata band (B1 firm / B2 descriptive title like `"Consolidating Balance Sheet · As of Mar-26"` / B3 source / B4 other context) and Carta logo placement (column E, rows 1–3 height). If `formatting.md` and `branding-and-header.md` disagree on where section headers start (e.g. `formatting.md` says `B5 = Assets`), the branding spec wins — shift sections to start at row 6 or below so rows 1–4 stay reserved for metadata.
+**Also read [`references/balance-sheet/branding-and-header.md`](references/balance-sheet/branding-and-header.md)** for the standard 4-row metadata band (B1 firm / B2 descriptive title like `"Consolidating Balance Sheet · As of Mar-26"` / B3 source / B4 other context) and Carta logo placement (column E, rows 1–3 height). If `formatting.md` and `branding-and-header.md` disagree on where section headers start (e.g. `formatting.md` says `B5 = Assets`), the branding spec wins — shift sections to start at row 6 or below so rows 1–4 stay reserved for metadata.
 
 ### Brand block — verbatim, run AFTER the cell writes (DO NOT SKIP)
 
-The output sheet is not "built" until it carries a `CartaLogo` shape. Use the verbatim brand block from [`references/branding-and-header.md`](references/branding-and-header.md) — substitute `<TAB_NAME>` with the BS tab name. Asset access via `blobs.getText("assets/powered_by_carta.b64.txt")` — NOT `Read` or filesystem paths.
+The output sheet is not "built" until it carries a `CartaLogo` shape. Use the verbatim brand block from [`references/balance-sheet/branding-and-header.md`](references/balance-sheet/branding-and-header.md) — substitute `<TAB_NAME>` with the BS tab name. Asset access via `blobs.getText("assets/powered_by_carta.b64.txt")` — NOT `Read` or filesystem paths.
 
 **Brand-verification call (REQUIRED, observable).** Run this as a **separate** `execute_office_js` call before proceeding to Gate 8:
 
@@ -634,12 +598,12 @@ Then offer the post-action menu:
 2. **Build the Balance Sheet for a different period**
 3. **I'm done**
 
-**When the user selects an option, immediately invoke the corresponding skill via `Skill('<skill-name>')` BEFORE doing any work.** Do not freelance the output — load the downstream skill's SKILL.md so its gates, layout spec, branding rules, and approval flow apply. Routing:
+**When the user selects an option, immediately load the corresponding reference via `read_skill(file_path="...")` BEFORE doing any work.** Do not freelance the output — load the reference so its gates, layout spec, branding rules, and approval flow apply. Routing:
 
-| Option | Skill to invoke |
+| Option | Reference to load |
 |---|---|
-| 1 — Build the P&L | `Skill('carta-investors:carta-consolidating-pnl')` |
-| 2 — Build the Balance Sheet for a different period | `Skill('carta-investors:carta-consolidating-balance-sheet')` re-entry with the new period |
+| 1 — Build the P&L | `read_skill(file_path="references/pnl.md")` |
+| 2 — Build the Balance Sheet for a different period | `read_skill(file_path="references/balance-sheet.md")` re-entry with the new period |
 | 3 — I'm done | No invocation; close cleanly |
 
 **Done when:** sheet exists, Key tie-outs reported with status per entity,
@@ -664,6 +628,7 @@ column listings inline; the DWH contract can drift.
 | Query returns 0 rows | No JE activity for the firm through the as-of date | "I didn't find any journal entries for this firm through Mar 31, 2026. Double-check the period or confirm books are open for that month." |
 | Query times out | DWH load, or unusually large date range | Tell the user the query is slow and offer to retry with the same parameters — never auto-retry. |
 | BS doesn't balance per entity | COA accounts not in 1xxx/2xxx/3xxx, or period-only variant ran by mistake | Surface the per-entity imbalance in Gate 8's Key tie-outs table. Suggest reviewing the unclassified accounts. |
+| Every entity shows Assets > Liab+Equity by a consistent, unrealized-gain-sized amount | Firm's COA may have no retained-earnings / unrealized-gain-reserve equity account — unrealized gains sit only in asset accounts (`1101`/`1108`-style) with nothing offsetting them in equity | Query `SELECT DISTINCT ACCOUNT_TYPE, ACCOUNT_NAME FROM <journal_entries_table> WHERE FIRM_ID = '<firm_uuid>' AND ACCOUNT_TYPE BETWEEN 3000 AND 3999` before assuming a query bug. If no such equity account exists, this is a real structural gap in the firm's books, not a data-pull error — report the per-entity imbalance in Gate 8's tie-out with this root cause, do not force a false balance. |
 | Auth / permission error from MCP | The user's Carta session expired or lacks DWH access | Tell them to reconnect Carta in Settings → Connectors. Do not retry automatically. |
 
 Never auto-retry a failed command. Always surface the failure and let the
@@ -680,5 +645,5 @@ user decide whether to retry.
 - **Don't rename accounts.** Use `ACCOUNT_NAME` from JE verbatim.
 - **Don't run period-only variant** without explicit opt-in and a "won't balance" warning.
 - **Don't claim success** without re-reading and verifying per-entity balance in Gate 8.
-- **Don't skip branding.** Gate 8 report must not run until the tab carries `CartaLogo` on column E — see [`references/branding-and-header.md`](references/branding-and-header.md).
+- **Don't skip branding.** Gate 8 report must not run until the tab carries `CartaLogo` on column E — see [`references/balance-sheet/branding-and-header.md`](references/balance-sheet/branding-and-header.md).
 - **Do NOT freeze panes** on this tab.

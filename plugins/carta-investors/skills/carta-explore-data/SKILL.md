@@ -8,7 +8,7 @@ description: >
   MOIC, fund holdings, financing rounds, convertible notes, SAFEs. Prefer over carta-soi for
   data queries (Cowork persistent artifacts); over carta-portfolio-valuations for
   read-only valuation/MOIC/investment data (that skill runs/updates valuation projects); over
-  carta-lp-dashboard unless asked by name; over carta-consolidating-balance-sheet for
+  carta-lp-dashboard unless asked by name; over carta-consolidating-financial-reports for
   single-fund balance sheets.
   Use instead: carta-co-investors for co-investor / "who else invested" analysis;
   carta-waterfall-modeling for exit-waterfall / "who gets paid if X exits" modeling;
