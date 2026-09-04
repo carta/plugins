@@ -16,6 +16,18 @@ import { Tag } from "./ui/components.jsx";
 // whose roster sweep failed — has benchmarks but no roster, so the tab is omitted
 // rather than opening onto nothing. That is why the list is computed per load instead
 // of being a module constant.
+// ⚠️ REFRESH PLANNER IS HIDDEN — WORK IN PROGRESS.
+//
+// The tab is built and its data pipeline works, but the workflow it belongs to is
+// unfinished: selecting employees, the grant settings screen and the issuance handoff
+// are still being built. A half-workflow in a customer-facing console reads as a
+// broken feature rather than an early one, so it stays off until the whole flow lands.
+//
+// TO RE-ENABLE: set this to true and delete this block. Nothing else needs changing —
+// the view, its data and its tests are all live and exercised. Remove the matching
+// notice in SKILL.md at the same time, or the docs will disagree with the app.
+const SHOW_REFRESH_PLANNER = false;
+
 // The refresh planner is gated on its OWN data, not the roster: it reads the equity
 // refresh report, and a corporation can legitimately have a benchmarked roster with no
 // equity report captured. Gating it on the roster would show a tab with nothing in it.
@@ -23,7 +35,7 @@ function tabsFor({ roster, planner }) {
   return [
     { id: "benchmarks", label: "Benchmarks" },
     ...(roster ? [{ id: "scorecard", label: "Scorecard" }] : []),
-    ...(planner ? [{ id: "planner", label: "Refresh planner" }] : []),
+    ...(SHOW_REFRESH_PLANNER && planner ? [{ id: "planner", label: "Refresh planner" }] : []),
   ];
 }
 
@@ -232,28 +244,37 @@ export default function App() {
   // Only shown on the tab that can change it. On the Scorecard the control isn't
   // reachable, so a pill there would state a peer group the reader can't see chosen or
   // change — and after a switch on the other tab it would describe figures not on screen.
-  const activePeerLabel = tab === "benchmarks"
+  const tabs = tabsFor({ roster, planner });
+  // A tab parked in sessionStorage can name a surface that no longer exists — a
+  // hidden feature, or a data dir rebuilt without a roster. Falling back to the
+  // first real tab beats rendering a header over an empty page.
+  //
+  // Declared ABOVE activePeerLabel, which reads it: a const referenced before its
+  // declaration is a TDZ throw, not a hoisted undefined.
+  const activeTab = tabs.some((t) => t.id === tab) ? tab : tabs[0].id;
+
+  const activePeerLabel = activeTab === "benchmarks"
     ? (activeGroup?.label || benchmarks.peerGroup?.label || snapshot?.peerGroup?.label)
     : null;
-
-  const tabs = tabsFor({ roster, planner });
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, fontFamily: SANS }}>
       <Header
         snapshot={snapshot} benchmarks={benchmarks} peerLabel={activePeerLabel}
-        tabs={tabs} tab={tab} setTab={setTab}
+        tabs={tabs} tab={activeTab} setTab={setTab}
       />
       <main style={{ paddingTop: 4 }}>
-        {tab === "benchmarks" && (
+        {activeTab === "benchmarks" && (
           <Benchmarks data={benchmarks} onPeerGroupChange={setActiveGroup} />
         )}
         {/* Guarded on roster as well as the tab id: a stale ?tab= or a roster that
             failed to load must not render the view against undefined. */}
-        {tab === "scorecard" && roster && (
+        {activeTab === "scorecard" && roster && (
           <Scorecard roster={roster} corporation={snapshot?.source?.corporation} />
         )}
-        {tab === "planner" && planner && (
+        {/* Gated on the flag as well as the data: a stale sessionStorage tab would
+            otherwise restore someone onto a hidden view with no tab to leave by. */}
+        {SHOW_REFRESH_PLANNER && activeTab === "planner" && planner && (
           <RefreshPlanner planner={planner} corporation={snapshot?.source?.corporation} />
         )}
       </main>

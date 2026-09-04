@@ -6,8 +6,7 @@ description: >
   explore the scorecard yourself. CLAUDE CODE ONLY; it serves a local web app. Use it when
   the ask is to run an app, launch a console, or explore the data live, rather than to be
   told a figure. Invoke with a corporation name or id, e.g. "launch a comp dashboard for Acme".
-  Its Benchmarks, Scorecard and Refresh planner tabs are surfaces inside the app, not
-  separately routable.
+  Its Benchmarks and Scorecard tabs are surfaces inside the app, not separately routable.
   Route by deliverable, not subject — an answer, CSV or figure to quote belongs to a sibling
   even when the wording overlaps: use carta-compensation-benchmarks for a role's market rate,
   and carta-compensation-scorecard for roster positioning, compa-ratios or who is below market.
@@ -695,9 +694,18 @@ and why.
 
 **2d-bis. Equity refresh report** — the Refresh planner tab.
 
-> ⛔ **SKIP THIS STEP.** The MCP command this needs is not released yet, and the
-> Refresh planner tab it feeds is hidden (`SHOW_REFRESH_PLANNER` in
-> `app/src/App.jsx`). There is nothing to fetch and nowhere for it to show.
+> ⛔ **SKIP THIS STEP.** Two separate reasons, and both still hold:
+>
+> **The MCP command is not released.** The export command this step needs does not
+> exist in carta-mcp's registry yet, so there is nothing to call. It is named
+> nowhere in this file on purpose: carta-mcp's `plugin-command-contract` check
+> fails every PR in that repo when a published skill names a command the registry
+> does not have, so a forward reference here blocks unrelated people's work.
+>
+> **The tab it feeds is hidden.** The workflow it belongs to is unfinished, and a
+> half-workflow in a customer-facing console reads as a broken feature rather than
+> an early one, so it is switched off at `app/src/App.jsx` →
+> `SHOW_REFRESH_PLANNER = false`.
 >
 > `build_datadir` treats the report as optional — with no capture it records
 > `hasPlanner: false` and the tab does not appear, exactly as it does today.
@@ -707,10 +715,9 @@ and why.
 > `scripts/save_equity_refresh_page.py`. The capture script and the builder are
 > already written and tested; only the command reference was removed.
 >
-> Removed deliberately rather than left in place: carta-mcp's
-> `plugin-command-contract` check fails every PR in that repo when a published
-> skill names a command its registry does not have, so a forward reference here
-> blocks unrelated people's work.
+> **When the workflow ships**, flip `SHOW_REFRESH_PLANNER` to `true`, delete the
+> block above it, and remove this notice. Those three must move together, or the
+> docs will promise a tab the app does not show, or vice versa.
 
 **2e. Write `meta.json`** (next to `raw_dir`, per `ctc_paths.py`):
 
@@ -779,8 +786,14 @@ rebuilds `webapp/vendor/*` on a React/Sucrase bump. See `app/README.md`.
 add a percentile, change a sort, restyle a table, add a filter, add a tab. The app is
 local, the source is right there, and `READ-ONLY` in this skill's description means *this
 skill does not write to Carta* — it is not a statement that the UI is frozen. The
-Benchmarks, Scorecard and Refresh planner tabs are the three that exist today, not the
-three that are allowed to exist.
+Benchmarks and Scorecard tabs are the two that are VISIBLE today, not the two that are
+allowed to exist.
+
+A third — **Refresh planner** — is built but hidden behind `SHOW_REFRESH_PLANNER` in
+`app/src/App.jsx` while its workflow is finished. If a user asks for it by name, say it
+is in progress rather than building a second one. Do not flip the flag on to satisfy a
+request to "show" it: the tab renders an employee list with no way to act on it, which
+is why it is off. Step 2d-bis has the full notice.
 
 **Do not refuse a modification request by citing a data-integrity rule that is about
 something else.** This skill carries several strict, correct prohibitions — no demo data,
