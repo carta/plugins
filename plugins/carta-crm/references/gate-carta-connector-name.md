@@ -10,11 +10,11 @@ is the only stable handle: a page runs for many viewers, and connector ids are p
 
 ## Step 1 — `list_connectors` is the only source
 
-Take `name` from the entry that is `connected: true` and matches `carta` case-insensitively,
+Take `name` from the entry that is `connected: true` and matches `Carta` case-insensitively,
 or whose `url` is a Carta domain:
 
 ```json
-{ "name": "carta",
+{ "name": "Carta",
   "url": "https://mcp.app.carta.com/mcp",
   "directoryUuid": "aaaaaaaa-…",
   "connected": true }
@@ -27,15 +27,26 @@ Two things not to do:
 
 - **Don't read the name off your own tool prefixes.** Outside claude.ai web chat they are
   opaque session UUIDs (`mcp__aaaaaaaa-…__welcome`) and carry no name.
-- **Don't guess.** `"carta"` and `"Carta"` are both common, and a guess cannot be tested from
-  here — the string is validated only when a viewer opens the page, where a wrong one fails
-  every card with `server_not_connected`.
+- **Don't guess.** A guess cannot be tested from here — the string is validated only when a
+  viewer opens the page, where a wrong one fails every card with `server_not_connected`. The
+  one documented exception is an empty list in Cowork — see Step 1a.
+
+## Step 1a — empty list in Cowork
+
+In Cowork the native Carta connector is a built-in plugin integration, not a
+registry-installed one, so `list_connectors` comes back `[]` and the tool prefixes
+are opaque session UUIDs — neither carries the name. That empty list is expected on
+this surface; it is **not** the "no connector" failure below.
+
+Tell the two apart with the Step 3 confirmation call. If `mcp__*Carta*__welcome`
+answers, the connector is present — use the name **`Carta`**. If the confirmation
+call does not answer, treat it as the "no connector" failure.
 
 ## Step 2 — with more than one match, ask
 
 | `name` | Points at |
 |---|---|
-| `carta` / `Carta` | the standard Carta MCP endpoint |
+| `Carta` | the standard Carta MCP endpoint |
 | anything parenthesised, e.g. `Carta (Acme Capital)` | a separate deployment — firm-specific or non-production |
 
 Ask the user which one this artifact is for; `url` disambiguates. The page hard-codes what
@@ -55,8 +66,7 @@ Which call depends on the connector: the Carta gateway takes `welcome`; the CRM 
 none and reads `crm_call_tool({"name": "crm:get_current_user"})` instead. Don't hard-code
 `welcome` for a connector that doesn't expose it.
 
-Grant it prefix-agnostically — `mcp__*carta*__welcome`, plus `mcp__*Carta*__welcome`, since
-glob matching is case-sensitive.
+Grant it prefix-agnostically — `mcp__*Carta*__welcome`.
 
 > **Two namespaces, don't mix them.** You call tools by the prefixed name your tool list
 > shows (`mcp__<uuid>__<tool>`). The page calls them by connector name and bare verb
@@ -88,7 +98,7 @@ Reconnect button.
 ## Don't narrate this gate
 
 "Gate", "probe", "display name", `CARTA_MCP_SERVER` — our vocabulary, not the user's. A line
-like *"Gates clear — J. Smith at Acme, connector display name `carta`"* is what not to write.
+like *"Gates clear — J. Smith at Acme, connector display name `Carta`"* is what not to write.
 Pass quietly; on failure use the copy above.
 
 ## Not covered here
