@@ -87,6 +87,16 @@ export const C = {
   // underline, and full-contrast text is exactly what text-default means on either
   // surface. A bespoke pair would be one more thing to keep in step with Ink.
   interactivePrimary: "var(--ink-color-global-brand-black)",
+  // The foreground for text ON interactivePrimary. NOT surfaceDefault: that token
+  // is theme-aware and resolves to near-black in dark mode, where the primary
+  // button's own near-black background made the label invisible. This fill is a
+  // fixed dark in both themes, so its text is a fixed light.
+  onPrimary: "var(--ink-color-global-brand-white)",
+  // Pool-bar segments. A fixed blue rather than a theme-aware surface token: the
+  // bar's meaning is carried entirely by which portion is which colour, so the
+  // two must stay distinguishable in both themes.
+  poolPlanned: "var(--ink-color-global-brand-blue-50)",
+  poolRemaining: "var(--ink-color-global-brand-blue-20)",
   interactivePrimaryOnPage: "var(--ink-color-global-text-default)",
   linkDefault: "var(--ink-color-global-link-default)",
   focusRing: "var(--ink-color-global-border-focus-light)",
@@ -101,8 +111,14 @@ export const C = {
 
   // Tints the table/tag recipes call for.
   rowHover: "var(--ink-color-global-brand-gray-30)",
-  selectedRow: "var(--ink-color-global-brand-blue-20)",
-  totalRow: "var(--ink-color-global-brand-blue-10)",
+  // Row tints, and the SECOND instance of the flat-brand-colour trap the
+  // interactivePrimary comment above describes. Ink's brand-blue ramp does not
+  // adapt, so a row painted with it went near-white under near-white text in dark
+  // mode. The theme-aware pairs live in tokens.css beside the rest of the palette;
+  // see the App row tints block there for why.
+  selectedRow: "var(--app-color-row-selected)",
+  selectionTint: "var(--app-color-selection)",
+  totalRow: "var(--app-color-row-total)",
   infoSubtle: "var(--ink-color-global-brand-blue-10)",
   positiveSubtle: "var(--ink-color-global-feedback-positive-subtle)",
 };
@@ -191,5 +207,5 @@ export const GLOBAL_CSS = `
     outline: none;
     box-shadow: none;
   }
-  ::selection { background: ${C.selectedRow}; }
+  ::selection { background: ${C.selectionTint}; }
 `;

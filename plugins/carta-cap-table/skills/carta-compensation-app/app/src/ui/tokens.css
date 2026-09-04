@@ -359,6 +359,20 @@
      — ≈5px total (1px border + 4px ring). The generic :focus-visible reset below (2px outline + this ring)
      is only the fallback for borderless elements (link buttons, nav, tooltip triggers) with no border to recolor. */
   --ink-focus-ring:  0 0 0 4px var(--ink-color-global-border-focus-light);
+
+  /* === App row tints (not Ink) ===
+     Ink's brand-blue ramp is flat: --ink-color-global-brand-blue-20 is #DFE8F4 in
+     both themes. A table row painted with it in dark mode puts a near-white
+     background under --ink-color-global-text-default, which is #EDEDED there —
+     white on white. Ink ships no theme-aware highlight surface to borrow, so these
+     are declared here as light-dark() pairs, following the shape of Ink's own
+     *-subtle tokens. Kept as CSS variables rather than inlined at the call site so
+     the value survives any environment that does not parse light-dark(). */
+  --app-color-row-selected:   light-dark(#DFE8F4, #1B3049);
+  --app-color-row-total:      light-dark(#EAF0F8, #16283D);
+  /* Darker than both row tints in BOTH themes: ::selection paints over a marked
+     row, and at an equal value the highlighted text vanishes into its background. */
+  --app-color-selection:      light-dark(#C0D1E9, #2C4A70);
 }
 
 /* === Base element styles === */

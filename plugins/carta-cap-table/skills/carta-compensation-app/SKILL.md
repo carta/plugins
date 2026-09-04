@@ -41,6 +41,7 @@ allowed-tools:
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_benchmark_result.py *)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_roster_page.py *)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_equity_refresh_page.py *)
+  - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_report_insights.py *)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/build_datadir.py *)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/serve.py *)
 ---
@@ -702,10 +703,11 @@ and why.
 > fails every PR in that repo when a published skill names a command the registry
 > does not have, so a forward reference here blocks unrelated people's work.
 >
-> **The tab it feeds is hidden.** The workflow it belongs to is unfinished, and a
-> half-workflow in a customer-facing console reads as a broken feature rather than
-> an early one, so it is switched off at `app/src/App.jsx` →
-> `SHOW_REFRESH_PLANNER = false`.
+> **The tab it feeds is hidden.** The workflow it belongs to is unfinished — the
+> selection and grant-policy screens exist but the issuance handoff does not — so
+> it is switched off at `app/src/App.jsx` → `SHOW_REFRESH_PLANNER = false`.
+> A half-workflow in a customer-facing console reads as a broken feature rather
+> than an early one.
 >
 > `build_datadir` treats the report as optional — with no capture it records
 > `hasPlanner: false` and the tab does not appear, exactly as it does today.
@@ -718,6 +720,25 @@ and why.
 > **When the workflow ships**, flip `SHOW_REFRESH_PLANNER` to `true`, delete the
 > block above it, and remove this notice. Those three must move together, or the
 > docs will promise a tab the app does not show, or vice versa.
+
+**2d-ii. The equity pool (optional).** The planner's review step measures a plan's
+draw against the corporation's available pool. That figure is
+`efab.available_shares` from the reports-insights endpoint — the equity ledger's own
+`available`, summed across pools by compensation-service.
+
+There is **no MCP command for it yet**, so this capture only runs when the payload
+is obtained another way. When you have it:
+
+```bash
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_report_insights.py" \
+  "<result path>" "<raw_dir>"
+```
+
+Skip it otherwise. The review step then states that no pool figure is in the build
+instead of showing a guardrail — which is correct, because the endpoint serves a
+cache primed out of band and a corporation whose ledger reports no pools sums to
+exactly `0`. Neither is "this company has no shares left", so neither is ever
+rendered as a zero balance.
 
 **2e. Write `meta.json`** (next to `raw_dir`, per `ctc_paths.py`):
 

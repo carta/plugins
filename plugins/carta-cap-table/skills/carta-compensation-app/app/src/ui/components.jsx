@@ -333,3 +333,31 @@ export function MultiSelect({ label, options, selected, onToggle, onAll, allLabe
     </span>
   );
 }
+
+/** True when the viewport matches `query`. Re-renders on change.
+ *
+ *  This file styles inline rather than through a stylesheet, so a plain CSS media
+ *  query is not available for layout that must actually reflow. Guarded for
+ *  environments without matchMedia (happy-dom under test), where it reports false
+ *  and callers fall back to the narrow, stacked layout — the safe direction, since
+ *  stacking hides nothing.
+ */
+export function useMediaQuery(query) {
+  const get = () =>
+    typeof window !== "undefined"
+    && typeof window.matchMedia === "function"
+    && window.matchMedia(query).matches;
+
+  const [matches, setMatches] = useState(get);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+    const mql = window.matchMedia(query);
+    const onChange = () => setMatches(mql.matches);
+    onChange();
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, [query]);
+
+  return matches;
+}

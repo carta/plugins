@@ -866,11 +866,41 @@ def _build_planner(rawdir):
         "equity": has("total_vested_shares") or has("total_unvested_shares"),
         "vesting": has("date_of_final_vest"),
         "grants": has("live_award_count"),
+        # The benchmark is what a target is computed FROM, so the settings screen
+        # is only useful when at least one employee carries one.
+        "benchmark": has("four_year_grant_benchmark_num_shares"),
+        # Filled in below, once the insights manifest has been read.
+        "pool": False,
     }
+
+    # The corporation's refresh grant policy, if it was captured. None when it was
+    # not — the settings screen then disables its controls and says so, rather than
+    # falling back to Carta's built-in defaults, which are not this corporation's
+    # policy and would read as though they were.
+    policy_path = pathlib.Path(rawdir) / "retention_plan.json"
+    policy = _read_json(policy_path) if policy_path.exists() else None
+    if isinstance(policy, list):
+        policy = policy[0] if policy else None
+    if isinstance(policy, dict) and policy.get("results"):
+        policy = policy["results"][0]
+
+    # The equity pool the planned draw is measured against. Absent unless the
+    # insights capture ran AND returned a usable figure — see save_report_insights
+    # for why a zero is treated as absent rather than as an empty pool.
+    insights_path = pathlib.Path(rawdir) / "report_insights.json"
+    pool_available = None
+    if insights_path.exists():
+        insights = _read_json(insights_path) or {}
+        raw_pool = insights.get("poolAvailableShares")
+        if isinstance(raw_pool, int) and raw_pool > 0:
+            pool_available = raw_pool
+    availability["pool"] = pool_available is not None
 
     return {
         "schemaVersion": 1,
         "rows": rows,
+        "policy": policy,
+        "poolAvailableShares": pool_available,
         "availability": availability,
         "reconciliation": {
             "employeeTotal": len(rows),
