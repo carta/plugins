@@ -35,8 +35,9 @@ import {
 import { useScenario } from "../state/useScenario.js";
 import CartPanel from "./planner/CartPanel.jsx";
 import SettingsStep from "./planner/SettingsStep.jsx";
+import ReviewStep from "./planner/ReviewStep.jsx";
 import {
-  policyToSettings,
+  eligibility, grantForRow, planTotals, policyToSettings,
 } from "../model/policy.js";
 
 // Offered windows, matching the CTC report's own dropdown so the two surfaces stay
@@ -358,7 +359,41 @@ export default function RefreshPlanner({ planner, corporation, corporationId }) 
         settings={liveSettings}
         onSettings={setSettings}
         onBack={() => setStep("cohort")}
+        onNext={() => setStep("review")}
         asOf={asOf}
+      />
+    );
+  }
+
+  if (step === "review") {
+    // Computed here rather than carried from step 2 so the summary cannot drift
+    // from the settings: one source, recomputed on the settings the user actually
+    // left in place. Tenure-ineligible employees are already excluded upstream in
+    // SettingsStep's own totals, so the same filter is applied here.
+    // The SAME predicate step 2 uses, not a reimplementation of it — a summary
+    // that counted a different cohort than the screen before it would be worse
+    // than no summary.
+    const monthsFor = (r) => tenureMonths({ tenure: { start_date: r.hire_date } }, asOf);
+    const eligibleRows = inCartRows.filter(
+      (r) => eligibility(r, liveSettings, monthsFor).eligible);
+    // Per-employee, for the issuance hand-off. Same grantForRow the settings
+    // screen's own table uses, so the prompt cannot disagree with what was on
+    // screen when the user decided to hand it off.
+    const grants = eligibleRows.map((r) => ({
+      name: r.full_name,
+      externalId: r.external_id,
+      shares: grantForRow(r, liveSettings, policySettings).shares,
+    }));
+    return (
+      <ReviewStep
+        totals={planTotals(eligibleRows, liveSettings, policySettings)}
+        poolAvailableShares={planner.poolAvailableShares ?? null}
+        grants={grants}
+        corporation={corporation}
+        corporationId={corporationId}
+        settings={liveSettings}
+        asOf={asOf}
+        onBack={() => setStep("settings")}
       />
     );
   }

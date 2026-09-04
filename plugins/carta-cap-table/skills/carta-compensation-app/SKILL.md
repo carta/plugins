@@ -703,11 +703,11 @@ and why.
 > fails every PR in that repo when a published skill names a command the registry
 > does not have, so a forward reference here blocks unrelated people's work.
 >
-> **The tab it feeds is hidden.** The workflow it belongs to is unfinished — the
-> selection and grant-policy screens exist but the issuance handoff does not — so
-> it is switched off at `app/src/App.jsx` → `SHOW_REFRESH_PLANNER = false`.
-> A half-workflow in a customer-facing console reads as a broken feature rather
-> than an early one.
+> **The tab it feeds is hidden.** The planner's own screens are complete as of
+> this change — cohort, selection, policy, review and the issuance hand-off — but
+> the tab stays switched off at `app/src/App.jsx` → `SHOW_REFRESH_PLANNER = false`
+> until the fetch above can actually run. Without the export command there is no
+> `planner.json`, so the tab would have no data to show even if it were visible.
 >
 > `build_datadir` treats the report as optional — with no capture it records
 > `hasPlanner: false` and the tab does not appear, exactly as it does today.

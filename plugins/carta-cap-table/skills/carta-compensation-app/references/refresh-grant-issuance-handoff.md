@@ -1,7 +1,18 @@
 # Refresh Grant Planner — issuance handoff findings
 
-Status: **design recorded, not built.** Captures why the handoff looks the way it
-does, so the reasoning does not have to be rediscovered when Step 6 is picked up.
+Status: **a copied prompt ships; the file handoff below is not built.**
+
+What Step 3 does today is simpler than anything designed here: an "Issue with
+Claude" button copies a prompt describing the plan — the CSV, the policy that
+produced it, and an explicit list of the terms it does NOT carry — for the user to
+paste into their own Claude session. The write then happens where it always had to
+(the launching session), through `carta-issuance`'s own gates, with no new routes,
+no polling and no receipt state machine.
+
+The constraint analysis below still holds and is why the button copies rather than
+issues. The file-handoff shape from `PUT /api/handoff` onwards remains unbuilt; it
+buys a return path into the app (draft counts, deep link) that a copied prompt
+cannot give, and is worth revisiting if that feedback proves necessary.
 
 Source: PRD "Refresh Grant Workflow (CTC MicroApp v2)" §6 Step 6, §8 Dependencies.
 

@@ -130,7 +130,7 @@ function YearsMonths({ total, onChange, title }) {
  *  missing. The top copy is the one most people will use; the bottom one is there
  *  for anybody who has scrolled to the end of the table.
  */
-function Nav({ onBack }) {
+function Nav({ onBack, onNext }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
       <button
@@ -144,12 +144,24 @@ function Nav({ onBack }) {
       >
         ← Back to cohort
       </button>
+      <button
+        type="button"
+        onClick={onNext}
+        title="Review the plan before handing it off"
+        style={{
+          height: 40, padding: "0 15px", fontSize: FS.md, fontWeight: 500,
+          fontFamily: "inherit", color: C.onPrimary, background: C.interactivePrimary,
+          border: `1px solid ${C.interactivePrimary}`, borderRadius: RADIUS, cursor: "pointer",
+        }}
+      >
+        Review →
+      </button>
     </div>
   );
 }
 
 export default function SettingsStep({
-  rows, policySettings, settings, onSettings, onBack, asOf,
+  rows, policySettings, settings, onSettings, onBack, onNext, asOf,
 }) {
   const [showIneligible, setShowIneligible] = useState(true);
   // Below this the two columns stack; the grants table needs the room.
@@ -193,7 +205,7 @@ export default function SettingsStep({
 
   return (
     <div style={{ padding: "18px 24px 28px", display: "grid", gap: 16 }}>
-      <Nav onBack={onBack} />
+      <Nav onBack={onBack} onNext={onNext} />
 
       <div style={{
         background: C.surface, border: `1px solid ${C.border}`, borderRadius: RADIUS, padding: 16,
@@ -464,7 +476,7 @@ export default function SettingsStep({
         </div>
       </div>
 
-      <Nav onBack={onBack} />
+      <Nav onBack={onBack} onNext={onNext} />
     </div>
   );
 }
