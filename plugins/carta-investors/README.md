@@ -53,11 +53,12 @@ Skills that produce accountant-ready Excel workbooks. They run inside **Claude f
 
 For Claude for Excel, enable the Carta connector in **Settings → Connectors** in your claude.ai workspace.
 
-### Fund modeling
+### Fund modeling & portfolio analytics
 
 | Skill | Description |
 |-------|-------------|
 | `carta-fund-modeling` | Launch an interactive local console to reprice portfolio companies, model exits, and plan reserves for an entire firm — fund modeling React app with Overview, Companies, Exit & IRR, Reserves, and Cohort Standing tabs. Invoke with a firm name, e.g. "fund modeling for Demo Capital". |
+| `carta-portfolio-analytics-app` | Launch an interactive local console for a firm's portfolio-company analytics — every operating KPI the portcos report into Data Collection, plus valuation, cap tables, risk and benchmarking from Fund Admin. Eleven tabs: Overview, Dashboard, Review, Portfolio, Compare, Forecast, Risk, Company 360 (with PDF tearsheet), Val. Multiples, Formulas & covenants, Explore. Invoke with a firm name, e.g. "portfolio analytics for Acme Ventures". |
 
 ## MCP Tools
 
