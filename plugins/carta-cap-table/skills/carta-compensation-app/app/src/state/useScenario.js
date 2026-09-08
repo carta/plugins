@@ -75,14 +75,47 @@ export function cartFromDoc(doc, corporationId) {
 }
 
 /** Write a cart into a document, returning a new document. */
-export function docWithCart(doc, corporationId, cart) {
+export function docWithCart(doc, corporationId, cart, overrides) {
   const base = doc && doc.kind === "ctc-refresh-scenarios" ? doc : emptyDoc(corporationId);
   const activeId = base.activeScenarioId || "default";
   const scenarios = (base.scenarios || []).map((s) =>
     s.id === activeId
-      ? { ...s, cart: [...cart].sort(), updatedAt: new Date().toISOString() }
+      ? {
+        ...s,
+        cart: [...cart].sort(),
+        // Written as a plain object because JSON has no Map. Omitted entirely
+        // when empty, so a scenario nobody edited carries no key rather than an
+        // empty one that reads as "overrides were cleared".
+        ...(overrides && overrides.size
+          ? { grantOverrides: Object.fromEntries([...overrides].sort()) }
+          : {}),
+        updatedAt: new Date().toISOString(),
+      }
       : s);
   return { ...base, corporationId: corporationId ?? base.corporationId ?? null, scenarios };
+}
+
+/** The active scenario's hand-set grants, as a Map. Empty when there are none. */
+export function overridesFromDoc(doc, corporationId) {
+  const cartDoc = doc && doc.kind === "ctc-refresh-scenarios" ? doc : null;
+  if (!cartDoc) return new Map();
+  if (cartDoc.corporationId != null && corporationId != null
+      && cartDoc.corporationId !== corporationId) {
+    return new Map();
+  }
+  const activeId = cartDoc.activeScenarioId || "default";
+  const active = (cartDoc.scenarios || []).find((s) => s.id === activeId);
+  const raw = active && active.grantOverrides;
+  if (!raw || typeof raw !== "object") return new Map();
+  // Coerce and drop anything unusable rather than letting a bad value reach the
+  // arithmetic. Null and "" are rejected BEFORE Number(), which turns both into 0
+  // — a silent zero-share grant is exactly the kind of number nobody would query.
+  return new Map(
+    Object.entries(raw)
+      .filter(([, v]) => typeof v === "number" || (typeof v === "string" && v.trim() !== ""))
+      .map(([k, v]) => [k, Number(v)])
+      .filter(([, v]) => Number.isFinite(v) && v >= 0),
+  );
 }
 
 /** Load the saved cart once, and hand back a debounced save.
@@ -93,6 +126,7 @@ export function docWithCart(doc, corporationId, cart) {
  */
 export function useScenario(corporationId) {
   const [saved, setSaved] = useState(null);
+  const [savedOverrides, setSavedOverrides] = useState(() => new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [conflict, setConflict] = useState(false);
@@ -109,6 +143,7 @@ export function useScenario(corporationId) {
         docRef.current = doc;
         etagRef.current = etag;
         setSaved(cartFromDoc(doc, corporationId));
+        setSavedOverrides(overridesFromDoc(doc, corporationId));
       } catch (e) {
         if (!cancelled) setError(e.message || String(e));
       } finally {
@@ -121,15 +156,16 @@ export function useScenario(corporationId) {
   // Cancel a pending save on unmount so a debounce cannot fire into a dead tree.
   useEffect(() => () => clearTimeout(timerRef.current), []);
 
-  const save = useCallback((cart) => {
+  const save = useCallback((cart, overrides) => {
     clearTimeout(timerRef.current);
     timerRef.current = setTimeout(async () => {
       try {
-        const doc = docWithCart(docRef.current, corporationId, cart);
+        const doc = docWithCart(docRef.current, corporationId, cart, overrides);
         const etag = await putScenarios(doc, etagRef.current);
         docRef.current = doc;
         etagRef.current = etag;
         setSaved(new Set(cart));
+        setSavedOverrides(new Map(overrides || []));
         setConflict(false);
         setError(null);
       } catch (e) {
@@ -142,5 +178,5 @@ export function useScenario(corporationId) {
     }, 600);
   }, [corporationId]);
 
-  return { saved, loading, error, conflict, save };
+  return { saved, savedOverrides, loading, error, conflict, save };
 }

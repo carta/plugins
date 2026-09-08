@@ -93,14 +93,23 @@ export function targetShares(row, targetPct) {
  *  see. Only once the user changes the target does the console compute one, and
  *  that value is flagged so the UI can label it.
  */
-export function grantForRow(row, settings, policySettings) {
+export function grantForRow(row, settings, policySettings, overrides) {
+  // A hand-set figure wins over both. It is neither Carta's number nor one this
+  // console derived, so it is reported as its own kind — `overridden` — and the
+  // caller labels it accordingly. Checked FIRST: a later policy change must not
+  // silently recompute over someone's deliberate edit.
+  const manual = overrides && overrides.get(row && row.external_id);
+  if (manual != null) {
+    return { shares: manual, modelled: false, overridden: true };
+  }
+
   const atPolicy = policySettings != null
     && Math.abs(settings.targetPct - policySettings.targetPct) < 1e-9;
   if (atPolicy) {
     const own = row && row.refresh_grant_num_shares;
-    return { shares: own == null ? null : Number(own), modelled: false };
+    return { shares: own == null ? null : Number(own), modelled: false, overridden: false };
   }
-  return { shares: targetShares(row, settings.targetPct), modelled: true };
+  return { shares: targetShares(row, settings.targetPct), modelled: true, overridden: false };
 }
 
 /** The recommended corridor around a target: [target-below%, target+above%]. */
@@ -110,6 +119,26 @@ export function grantRange(shares, belowPct, abovePct) {
     min: Math.round(shares * (1 - belowPct / 100)),
     max: Math.round(shares * (1 + abovePct / 100)),
   };
+}
+
+/** Where a grant sits against the policy's suggested corridor.
+ *
+ *  Returns "under" / "over" / "within", or null when there is nothing to judge
+ *  against — no benchmark means no target, and a corridor around an unknown target
+ *  is not a range anyone should be warned about.
+ *
+ *  The corridor is guidance, not a rule: a figure outside it is flagged, never
+ *  rejected. Someone deliberately granting above band is doing their job.
+ */
+export function rangeStanding(shares, row, settings) {
+  if (shares == null) return null;
+  const target = targetShares(row, settings.targetPct);
+  if (target == null) return null;
+  const { min, max } = grantRange(target, settings.rangeBelowPct, settings.rangeAbovePct);
+  if (min == null) return null;
+  if (shares < min) return "under";
+  if (shares > max) return "over";
+  return "within";
 }
 
 /** Is this employee eligible under the tenure rule?
@@ -136,12 +165,14 @@ export function eligibility(row, settings, tenureMonthsFn) {
  *  and are counted separately. Averaging nulls as zero would understate the cost
  *  of a cycle — which is the number someone takes to a CFO.
  */
-export function planTotals(rows, settings, policySettings) {
+export function planTotals(rows, settings, policySettings, overrides) {
   let total = 0;
   let counted = 0;
   let noBenchmark = 0;
+  let overridden = 0;
   for (const row of rows) {
-    const { shares } = grantForRow(row, settings, policySettings);
+    const { shares, overridden: isManual } = grantForRow(row, settings, policySettings, overrides);
+    if (isManual) overridden += 1;
     if (shares == null) noBenchmark += 1;
     else { total += shares; counted += 1; }
   }
@@ -151,5 +182,6 @@ export function planTotals(rows, settings, policySettings) {
     avgShares: counted ? Math.round(total / counted) : null,
     counted,
     noBenchmark,
+    overridden,
   };
 }

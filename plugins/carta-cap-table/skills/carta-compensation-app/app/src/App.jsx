@@ -35,7 +35,7 @@ function tabsFor({ roster, planner }) {
   return [
     { id: "benchmarks", label: "Benchmarks" },
     ...(roster ? [{ id: "scorecard", label: "Scorecard" }] : []),
-    ...(SHOW_REFRESH_PLANNER && planner ? [{ id: "planner", label: "Refresh planner" }] : []),
+    ...(SHOW_REFRESH_PLANNER && planner ? [{ id: "planner", label: "Refresh Grant Planner" }] : []),
   ];
 }
 

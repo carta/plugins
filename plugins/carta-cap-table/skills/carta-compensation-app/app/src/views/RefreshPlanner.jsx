@@ -99,19 +99,20 @@ function SelectAllBox({ state, onChange, count }) {
 function EmployeeTable({ rows, asOf, cart, onToggle, headerSel, onToggleAll }) {
   return (
     <TableAlign align="right">
-      <table style={{ width: "100%", minWidth: 1090, tableLayout: "fixed" }}>
+      <table style={{ width: "100%", minWidth: 1210, tableLayout: "fixed" }}>
         <thead>
           <tr>
             <Th width="4%" align="center">
               <SelectAllBox state={headerSel} onChange={onToggleAll} count={rows.length} />
             </Th>
-            <Th width="19%" align="left">Name</Th>
-            <Th width="15%" align="left">Job Title</Th>
-            <Th width="8%" align="left">Level</Th>
-            <Th width="11%" align="left">Job Area</Th>
-            <Th width="9%">Tenure</Th>
-            <Th width="10%" align="left">Geo</Th>
-            <Th width="8%">Total equity</Th>
+            <Th width="16%" align="left">Name</Th>
+            <Th width="13%" align="left">Job Title</Th>
+            <Th width="7%" align="left">Level</Th>
+            <Th width="10%" align="left">Job Area</Th>
+            <Th width="11%" align="left">Specialization</Th>
+            <Th width="8%">Tenure</Th>
+            <Th width="8%" align="left">Geo</Th>
+            <Th width="7%">Total equity</Th>
             <Th width="8%">Total Vested</Th>
             <Th width="8%">Completing Vesting</Th>
           </tr>
@@ -159,6 +160,13 @@ function EmployeeTable({ rows, asOf, cart, onToggle, headerSel, onToggleAll }) {
                 <Td align="left" subtle={!r.job_level}>{r.job_level || "—"}</Td>
                 <Td align="left" ellipsis subtle={!r.job_area} title={r.job_area || "No job area recorded"}>
                   {r.job_area || "—"}
+                </Td>
+                {/* Sparse on real data — 4 of 134 rows on the corporation this was
+                    built against. An em dash says "not recorded"; a blank cell would
+                    read as "this role has no specialization". */}
+                <Td align="left" ellipsis subtle={!r.job_focus}
+                    title={r.job_focus || "No specialization recorded for this role"}>
+                  {r.job_focus || "—"}
                 </Td>
                 {/* Em dash, never "0m", for a missing hire date: an employee whose
                     start was never recorded is unknown, not a day-one hire. */}
@@ -217,7 +225,7 @@ export default function RefreshPlanner({ planner, corporation, corporationId }) 
   const wide = useMediaQuery("(min-width: 900px)");
   const [cart, setCart] = useState(() => new Set());
   const [dropped, setDropped] = useState(0);
-  const { saved, loading: cartLoading, conflict, save } = useScenario(corporationId);
+  const { saved, savedOverrides, loading: cartLoading, conflict, save } = useScenario(corporationId);
   const hydrated = useRef(false);
 
   // Adopt the saved cart once, after it loads. Ids that no longer exist in this
@@ -226,16 +234,40 @@ export default function RefreshPlanner({ planner, corporation, corporationId }) 
   useEffect(() => {
     if (cartLoading || hydrated.current || !saved) return;
     hydrated.current = true;
-    const { cart: kept, dropped: gone } = reconcile(saved, all.map((r) => r.external_id));
+    const ids = all.map((r) => r.external_id);
+    const { cart: kept, dropped: gone } = reconcile(saved, ids);
     setCart(kept);
     setDropped(gone);
-  }, [cartLoading, saved, all]);
+    // Hand-set grants are reconciled the same way: an override for someone no
+    // longer in the snapshot is dropped rather than kept against a ghost row.
+    if (savedOverrides && savedOverrides.size) {
+      const present = new Set(ids);
+      setOverrides(new Map([...savedOverrides].filter(([id]) => present.has(id))));
+    }
+  }, [cartLoading, saved, savedOverrides, all]);
 
   // The corporation's policy, and the settings the user is modelling with. The
   // settings START as the policy and diverge only when edited — `null` until the
   // policy loads, so an absent policy never silently becomes Carta's defaults.
   const policySettings = useMemo(() => policyToSettings(planner.policy), [planner.policy]);
   const [settings, setSettings] = useState(null);
+  // Per-employee hand-set grants, keyed by external_id. A Map rather than an
+  // object so an id that looks numeric cannot be reordered or coerced.
+  const [overrides, setOverrides] = useState(() => new Map());
+
+  const setOverride = (externalId, value) => {
+    setOverrides((prev) => {
+      const next = new Map(prev);
+      // null clears: a blank field means "no longer overriding", which is a
+      // different intent from a deliberate 0.
+      if (value == null) next.delete(externalId);
+      else next.set(externalId, value);
+      // Same debounced write as the cart: an edit that vanished on reload would
+      // be worse than not offering the edit at all.
+      save(cart, next);
+      return next;
+    });
+  };
   useEffect(() => {
     if (policySettings && !settings) setSettings({ ...policySettings });
   }, [policySettings, settings]);
@@ -244,7 +276,7 @@ export default function RefreshPlanner({ planner, corporation, corporationId }) 
   // scheduling the save that persists it.
   const updateCart = (next) => {
     setCart(next);
-    save(next);
+    save(next, overrides);
   };
 
   const areaOptions = useMemo(() => {
@@ -361,6 +393,8 @@ export default function RefreshPlanner({ planner, corporation, corporationId }) 
         onBack={() => setStep("cohort")}
         onNext={() => setStep("review")}
         asOf={asOf}
+        overrides={overrides}
+        onOverride={setOverride}
       />
     );
   }
@@ -382,11 +416,11 @@ export default function RefreshPlanner({ planner, corporation, corporationId }) 
     const grants = eligibleRows.map((r) => ({
       name: r.full_name,
       externalId: r.external_id,
-      shares: grantForRow(r, liveSettings, policySettings).shares,
+      shares: grantForRow(r, liveSettings, policySettings, overrides).shares,
     }));
     return (
       <ReviewStep
-        totals={planTotals(eligibleRows, liveSettings, policySettings)}
+        totals={planTotals(eligibleRows, liveSettings, policySettings, overrides)}
         poolAvailableShares={planner.poolAvailableShares ?? null}
         grants={grants}
         corporation={corporation}

@@ -17,7 +17,7 @@ import { shares } from "../../model/format.js";
 import { tenureMonths } from "../../model/tenure.js";
 import {
   cadenceLabel, eligibility, grantForRow, grantRange, joinMonths, planTotals,
-  scaleTargetForCadence, splitMonths,
+  rangeStanding, scaleTargetForCadence, splitMonths, targetShares,
 } from "../../model/policy.js";
 
 // Cadences the form offers. 18 is included because the policy field is months and
@@ -160,8 +160,79 @@ function Nav({ onBack, onNext }) {
   );
 }
 
+/** The Grant column: a figure, its provenance, and a way to change it.
+ *
+ *  Three provenances, deliberately distinguished — someone reading this column has
+ *  to know whether a number came from Carta, from this console's arithmetic, or
+ *  from a person:
+ *
+ *    untagged   Carta's own refresh_grant_num_shares at the corporation's policy
+ *    Modelled   benchmark x target, calculated here
+ *    Edited     typed by hand, and reset-able back to whichever of the above applies
+ *
+ *  Empty input clears the override rather than setting 0 — a blank field means
+ *  "no longer overriding", and 0 is a real grant someone might mean.
+ */
+function GrantCell({ row, shares: sh, modelled, overridden, standing, targetPct, onEdit }) {
+  const title = overridden
+    ? "Set by hand in this console — Carta's figure is unchanged"
+    : sh == null
+      ? "No benchmark, so no target"
+      : modelled
+        ? `Benchmark x ${targetPct}% — calculated here, not Carta's figure`
+        : "Carta's own refresh grant figure at your current policy";
+
+  return (
+    <Td mono subtle={sh == null && !overridden} title={title}>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 6, justifyContent: "flex-end" }}>
+        <input
+          type="number"
+          min={0}
+          value={sh == null ? "" : sh}
+          aria-label={`Grant for ${row.full_name || row.external_id}`}
+          placeholder="—"
+          onChange={(e) => onEdit(
+            row.external_id,
+            e.target.value === "" ? null : Math.max(0, Number(e.target.value)),
+          )}
+          style={{
+            width: 92, height: 30, padding: "0 7px", textAlign: "right",
+            fontSize: FS.md, fontFamily: "inherit", fontVariantNumeric: "tabular-nums",
+            color: C.textDefault, background: C.surfaceDefault,
+            border: `1px solid ${standing === "under" || standing === "over"
+              ? C.feedbackNotice : C.borderDefault}`,
+            borderRadius: RADIUS,
+          }}
+        />
+        {overridden && (
+          <button
+            type="button"
+            onClick={() => onEdit(row.external_id, null)}
+            title="Discard this edit and go back to the policy figure"
+            style={{
+              background: "none", border: "none", padding: 0, font: "inherit",
+              fontSize: FS.xs, color: C.linkDefault, cursor: "pointer",
+              textDecoration: "underline",
+            }}
+          >
+            reset
+          </button>
+        )}
+      </span>
+      {/* Guidance, not a rule: flagged, never rejected. Someone granting above band
+          on purpose is doing their job, and a blocked field would stop them. */}
+      {(standing === "under" || standing === "over") && (
+        <div style={{ fontSize: FS.xs, color: C.feedbackNotice, marginTop: 2 }}>
+          {standing === "under" ? "below range" : "above range"}
+        </div>
+      )}
+    </Td>
+  );
+}
+
 export default function SettingsStep({
   rows, policySettings, settings, onSettings, onBack, onNext, asOf,
+  overrides, onOverride,
 }) {
   const [showIneligible, setShowIneligible] = useState(true);
   // Below this the two columns stack; the grants table needs the room.
@@ -183,13 +254,13 @@ export default function SettingsStep({
   const judged = useMemo(() => rows.map((r) => ({
     row: r,
     ...eligibility(r, settings, monthsFor),
-    ...grantForRow(r, settings, policySettings),
-  })), [rows, settings, policySettings, asOf]);
+    ...grantForRow(r, settings, policySettings, overrides),
+  })), [rows, settings, policySettings, overrides, asOf]);
 
   const eligible = useMemo(() => judged.filter((j) => j.eligible), [judged]);
   const totals = useMemo(
-    () => planTotals(eligible.map((j) => j.row), settings, policySettings),
-    [eligible, settings, policySettings]);
+    () => planTotals(eligible.map((j) => j.row), settings, policySettings, overrides),
+    [eligible, settings, policySettings, overrides]);
 
   const shown = showIneligible ? judged : eligible;
 
@@ -423,24 +494,46 @@ export default function SettingsStep({
               <table style={{ width: "100%", minWidth: 760, tableLayout: "fixed" }}>
                 <thead>
                   <tr>
-                    <Th width="26%" align="left">Name</Th>
-                    <Th width="10%" align="left">Level</Th>
-                    <Th width="12%">Tenure</Th>
-                    <Th width="16%">Benchmark</Th>
-                    <Th width="16%">Grant</Th>
-                    <Th width="20%">Range</Th>
+                    <Th width="18%" align="left">Name</Th>
+                    <Th width="8%" align="left">Level</Th>
+                    <Th width="11%" align="left">Area</Th>
+                    <Th width="13%" align="left">Specialization</Th>
+                    <Th width="9%">Tenure</Th>
+                    <Th width="13%">Benchmark</Th>
+                    <Th width="13%">Grant</Th>
+                    {/* "Suggested Range" rather than "Range": the policy field above
+                        is already labelled Suggested Grant Range, and the two were
+                        naming the same number differently. */}
+                    <Th width="15%">Suggested Range</Th>
                   </tr>
                 </thead>
                 <tbody>
-                  {shown.map(({ row, eligible: ok, reason, shares: sh, modelled }) => {
+                  {shown.map(({ row, eligible: ok, reason, shares: sh, modelled, overridden }) => {
                     const months = monthsFor(row);
-                    const { min, max } = grantRange(sh, settings.rangeBelowPct, settings.rangeAbovePct);
+                    // The corridor brackets the POLICY target, not the displayed
+                    // figure. Bracketing the displayed one would move the goalposts
+                    // with every edit, so nothing could ever read as out of range.
+                    const target = targetShares(row, settings.targetPct);
+                    const { min, max } = grantRange(
+                      target, settings.rangeBelowPct, settings.rangeAbovePct);
+                    const standing = rangeStanding(sh, row, settings);
                     return (
                       <tr key={row.external_id} style={ok ? undefined : { opacity: 0.55 }}>
                         <Td align="left" ellipsis title={ok ? row.full_name : `Excluded — ${reason}`}>
                           {row.full_name || row.external_id.slice(0, 8)}
                         </Td>
                         <Td align="left" subtle={!row.job_level}>{row.job_level || "—"}</Td>
+                      <Td align="left" ellipsis subtle={!row.job_area}
+                          title={row.job_area || "No job area recorded"}>
+                        {row.job_area || "—"}
+                      </Td>
+                      {/* Sparse on real data — 4 of 134 rows on the corporation this
+                          was built against. An em dash says "not recorded", where a
+                          blank cell reads as "this role has no specialization". */}
+                      <Td align="left" ellipsis subtle={!row.job_focus}
+                          title={row.job_focus || "No specialization recorded for this role"}>
+                        {row.job_focus || "—"}
+                      </Td>
                         <Td mono subtle={months == null}>
                           {months == null ? "—" : `${months} mo`}
                         </Td>
@@ -450,14 +543,15 @@ export default function SettingsStep({
                           {row.four_year_grant_benchmark_num_shares == null
                             ? "—" : shares(row.four_year_grant_benchmark_num_shares)}
                         </Td>
-                        <Td mono subtle={sh == null}
-                            title={sh == null
-                              ? "No benchmark, so no target"
-                              : modelled
-                                ? `Benchmark x ${settings.targetPct}% — calculated here, not Carta's figure`
-                                : "Carta's own refresh grant figure at your current policy"}>
-                          {sh == null ? "—" : shares(sh)}
-                        </Td>
+                        <GrantCell
+                          row={row}
+                          shares={sh}
+                          modelled={modelled}
+                          overridden={overridden}
+                          standing={standing}
+                          targetPct={settings.targetPct}
+                          onEdit={onOverride}
+                        />
                         <Td mono subtle={min == null}>
                           {min == null ? "—" : `${shares(min)} – ${shares(max)}`}
                         </Td>
