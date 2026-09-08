@@ -713,15 +713,24 @@
     // Coverage counts read norm_investments_base, never norm_investments —
     // counting the post-UNION ALL rows double-counts every aliased company in
     // both the numerator and the denominator.
+    //
+    // Every rank below carries a trailing key to make its order total; do not
+    // drop one. Once one SOI record holds another's name as an alias, a single
+    // SPA name scores 100 against two different investments — a firm can hold
+    // both "NewCo (fka OldCo)" and "OldCo, Inc." — and an untied ROW_NUMBER
+    // takes whichever row the plan emits first. The page re-queries on every
+    // load, so that reads as a company renaming itself between reloads.
+    // IS_ALIAS also settles it correctly: a match on the record's own name
+    // beats a match on someone's former name.
     const SPA_CTE = `
       WITH spa_rec AS (SELECT * FROM FUND_ADMIN.DOCUMENT_AI_RECORD WHERE DOCUMENT_TYPE = 'stock_purchase_agreement' AND FIRM_ID = '${FIRM_UUID}'),
       spa_issuer AS (SELECT EXTRACTION_ID, FIRM_ID, ATTRIBUTES:name::VARCHAR AS ISSUER_NAME FROM spa_rec WHERE RECORD_TYPE = 'company'),
       spa_purchaser AS (SELECT EXTRACTION_ID, ATTRIBUTES:name::VARCHAR AS PURCHASER_NAME, ATTRIBUTES:entity_type::VARCHAR AS ENTITY_TYPE, ATTRIBUTES:share_class_name::VARCHAR AS SHARE_CLASS_NAME, ATTRIBUTES:shares_purchased_by_cash::NUMBER AS SHARES_PURCHASED, ATTRIBUTES:total_amount_paid::NUMBER(38,2) AS TOTAL_AMOUNT_PAID FROM spa_rec WHERE RECORD_TYPE = 'investor'),
       spa_deal AS (SELECT EXTRACTION_ID, TRY_TO_DATE(ATTRIBUTES:effective_date::VARCHAR) AS CLOSING_DATE FROM spa_rec WHERE RECORD_TYPE = 'stock_purchase'),
       norm_investments_base AS (SELECT ISSUER_NAME AS INV_NAME, TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(ISSUER_NAME), ' *[(][^)]*[)].*$', '')), ' +(D/?B/?A|F/?K/?A|AKA) +.*$', '')), ',? *(INC|LLC|LTD|LIMITED|CORP|CORPORATION|L[.]P[.]|LP|PBC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]? *$', '')), '[,.]', '')) AS NAME_NORM, REGEXP_SUBSTR(ISSUER_NAME, '[(] *(D[.]?/?B[.]?/?A[.]?|F[.]?/?K[.]?/?A[.]?|N[.]?/?K[.]?/?A[.]?|A[.]?K[.]?A[.]?|FORMERLY( +KNOWN +AS)?)[ :]+([^)]+)[)]', 1, 1, 'ie', 3) AS ALIAS_RAW FROM FUND_ADMIN.AGGREGATE_INVESTMENTS WHERE FIRM_ID = '${FIRM_UUID}' GROUP BY ISSUER_NAME HAVING MAX(CASE WHEN ASSET_CLASS_TYPE IN ('PREFERRED_EQUITY', 'COMMON_EQUITY') THEN 1 ELSE 0 END) = 1),
-      norm_investments AS (SELECT INV_NAME, NAME_NORM FROM norm_investments_base UNION ALL SELECT INV_NAME, TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(ALIAS_RAW), ',? *(INC|LLC|LTD|LIMITED|CORP|CORPORATION|L[.]P[.]|LP|PBC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]? *$', '')), '[,.]', '')) AS NAME_NORM FROM norm_investments_base WHERE ALIAS_RAW IS NOT NULL AND TRIM(ALIAS_RAW) <> ''),
+      norm_investments AS (SELECT INV_NAME, NAME_NORM, 0 AS IS_ALIAS FROM norm_investments_base UNION ALL SELECT INV_NAME, TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(ALIAS_RAW), ',? *(INC|LLC|LTD|LIMITED|CORP|CORPORATION|L[.]P[.]|LP|PBC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]? *$', '')), '[,.]', '')) AS NAME_NORM, 1 AS IS_ALIAS FROM norm_investments_base WHERE ALIAS_RAW IS NOT NULL AND TRIM(ALIAS_RAW) <> ''),
       norm_spa AS (SELECT DISTINCT i.ISSUER_NAME AS SPA_NAME, LOWER(TRIM(i.ISSUER_NAME)) AS NORM_KEY, TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(i.ISSUER_NAME), ' *[(][^)]*[)].*$', '')), ' +(D/?B/?A|F/?K/?A|AKA) +.*$', '')), ',? *(INC|LLC|LTD|LIMITED|CORP|CORPORATION|L[.]P[.]|LP|PBC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]? *$', '')), '[,.]', '')) AS NAME_NORM FROM spa_issuer i WHERE i.FIRM_ID = '${FIRM_UUID}' AND i.ISSUER_NAME IS NOT NULL AND TRIM(i.ISSUER_NAME) <> ''),
-      spa_fuzzy AS (SELECT s.SPA_NAME, s.NORM_KEY, i.INV_NAME AS MATCHED_INV_NAME, ROW_NUMBER() OVER (PARTITION BY s.SPA_NAME ORDER BY JAROWINKLER_SIMILARITY(s.NAME_NORM, i.NAME_NORM) DESC NULLS LAST) AS RN FROM norm_spa s LEFT JOIN norm_investments i ON JAROWINKLER_SIMILARITY(s.NAME_NORM, i.NAME_NORM) >= 90),
+      spa_fuzzy AS (SELECT s.SPA_NAME, s.NORM_KEY, i.INV_NAME AS MATCHED_INV_NAME, ROW_NUMBER() OVER (PARTITION BY s.SPA_NAME ORDER BY JAROWINKLER_SIMILARITY(s.NAME_NORM, i.NAME_NORM) DESC NULLS LAST, i.IS_ALIAS, i.INV_NAME) AS RN FROM norm_spa s LEFT JOIN norm_investments i ON JAROWINKLER_SIMILARITY(s.NAME_NORM, i.NAME_NORM) >= 90),
       canonical_company AS (SELECT NORM_KEY, COALESCE(MIN(MATCHED_INV_NAME), MAX(SPA_NAME)) AS CANONICAL_NAME FROM spa_fuzzy WHERE RN = 1 GROUP BY NORM_KEY)`;
 
     // Query S — one row per purchaser, with the companies they appear alongside
@@ -746,13 +755,18 @@
     // string. Short keys (sc/cd/inv, n/t/p/a) keep the payload small. The RN <= 15
     // cap bounds each round's investor list; the tail past the 15th has near-zero
     // percentage of round and is not rendered prominently in the drill-down.
+    //
+    // That cap is why investor_rows' rank must be total. It decides which
+    // purchasers survive, and per_round groups on the per-purchaser share class,
+    // so a tie changes how many rounds a company appears to have — not just their
+    // order.
     function buildRoundsSql(offset, limit) {
       return `${SPA_CTE},
         doc_metadata AS (SELECT i.EXTRACTION_ID, cc.CANONICAL_NAME AS ISSUER_NAME, s.CLOSING_DATE, MIN(p.SHARE_CLASS_NAME) AS SHARE_CLASS_NAME FROM spa_issuer i JOIN canonical_company cc ON LOWER(TRIM(i.ISSUER_NAME)) = cc.NORM_KEY LEFT JOIN spa_deal s ON i.EXTRACTION_ID = s.EXTRACTION_ID LEFT JOIN spa_purchaser p ON i.EXTRACTION_ID = p.EXTRACTION_ID WHERE i.FIRM_ID = '${FIRM_UUID}' GROUP BY i.EXTRACTION_ID, cc.CANONICAL_NAME, s.CLOSING_DATE),
         dedup_docs AS (SELECT MAX(EXTRACTION_ID) AS EXTRACTION_ID FROM doc_metadata GROUP BY ISSUER_NAME, COALESCE(CAST(CLOSING_DATE AS VARCHAR), SHARE_CLASS_NAME, 'undated')),
-        investor_rows AS (SELECT cc.CANONICAL_NAME AS ISSUER_NAME, p.SHARE_CLASS_NAME, s.CLOSING_DATE, dd.EXTRACTION_ID, p.PURCHASER_NAME, p.ENTITY_TYPE, p.SHARES_PURCHASED, p.TOTAL_AMOUNT_PAID, p.SHARES_PURCHASED / NULLIF(SUM(p.SHARES_PURCHASED) OVER (PARTITION BY dd.EXTRACTION_ID), 0) AS PCT_OF_ROUND, ROW_NUMBER() OVER (PARTITION BY dd.EXTRACTION_ID ORDER BY p.SHARES_PURCHASED DESC NULLS LAST) AS RN FROM dedup_docs dd JOIN spa_issuer i ON dd.EXTRACTION_ID = i.EXTRACTION_ID JOIN canonical_company cc ON LOWER(TRIM(i.ISSUER_NAME)) = cc.NORM_KEY JOIN spa_purchaser p ON dd.EXTRACTION_ID = p.EXTRACTION_ID LEFT JOIN spa_deal s ON dd.EXTRACTION_ID = s.EXTRACTION_ID WHERE p.ENTITY_TYPE NOT ILIKE '%notice%' AND p.ENTITY_TYPE NOT ILIKE '%law firm%'),
-        per_round AS (SELECT ISSUER_NAME, SHARE_CLASS_NAME, CLOSING_DATE, EXTRACTION_ID, ARRAY_AGG(OBJECT_CONSTRUCT('n', PURCHASER_NAME, 't', ENTITY_TYPE, 'p', ROUND(PCT_OF_ROUND, 4), 'a', TOTAL_AMOUNT_PAID)) WITHIN GROUP (ORDER BY PCT_OF_ROUND DESC NULLS LAST) AS INVESTORS FROM investor_rows WHERE RN <= 15 GROUP BY ISSUER_NAME, SHARE_CLASS_NAME, CLOSING_DATE, EXTRACTION_ID)
-        SELECT ISSUER_NAME, TO_JSON(ARRAY_AGG(OBJECT_CONSTRUCT('sc', SHARE_CLASS_NAME, 'cd', CLOSING_DATE, 'inv', INVESTORS)) WITHIN GROUP (ORDER BY CLOSING_DATE DESC NULLS LAST)) AS ROUNDS_JSON
+        investor_rows AS (SELECT cc.CANONICAL_NAME AS ISSUER_NAME, p.SHARE_CLASS_NAME, s.CLOSING_DATE, dd.EXTRACTION_ID, p.PURCHASER_NAME, p.ENTITY_TYPE, p.SHARES_PURCHASED, p.TOTAL_AMOUNT_PAID, p.SHARES_PURCHASED / NULLIF(SUM(p.SHARES_PURCHASED) OVER (PARTITION BY dd.EXTRACTION_ID), 0) AS PCT_OF_ROUND, ROW_NUMBER() OVER (PARTITION BY dd.EXTRACTION_ID ORDER BY p.SHARES_PURCHASED DESC NULLS LAST, p.PURCHASER_NAME) AS RN FROM dedup_docs dd JOIN spa_issuer i ON dd.EXTRACTION_ID = i.EXTRACTION_ID JOIN canonical_company cc ON LOWER(TRIM(i.ISSUER_NAME)) = cc.NORM_KEY JOIN spa_purchaser p ON dd.EXTRACTION_ID = p.EXTRACTION_ID LEFT JOIN spa_deal s ON dd.EXTRACTION_ID = s.EXTRACTION_ID WHERE p.ENTITY_TYPE NOT ILIKE '%notice%' AND p.ENTITY_TYPE NOT ILIKE '%law firm%'),
+        per_round AS (SELECT ISSUER_NAME, SHARE_CLASS_NAME, CLOSING_DATE, EXTRACTION_ID, ARRAY_AGG(OBJECT_CONSTRUCT('n', PURCHASER_NAME, 't', ENTITY_TYPE, 'p', ROUND(PCT_OF_ROUND, 4), 'a', TOTAL_AMOUNT_PAID)) WITHIN GROUP (ORDER BY PCT_OF_ROUND DESC NULLS LAST, PURCHASER_NAME) AS INVESTORS FROM investor_rows WHERE RN <= 15 GROUP BY ISSUER_NAME, SHARE_CLASS_NAME, CLOSING_DATE, EXTRACTION_ID)
+        SELECT ISSUER_NAME, TO_JSON(ARRAY_AGG(OBJECT_CONSTRUCT('sc', SHARE_CLASS_NAME, 'cd', CLOSING_DATE, 'inv', INVESTORS)) WITHIN GROUP (ORDER BY CLOSING_DATE DESC NULLS LAST, SHARE_CLASS_NAME, EXTRACTION_ID)) AS ROUNDS_JSON
         FROM per_round GROUP BY ISSUER_NAME ORDER BY ISSUER_NAME
         LIMIT ${limit} OFFSET ${offset}`;
     }
