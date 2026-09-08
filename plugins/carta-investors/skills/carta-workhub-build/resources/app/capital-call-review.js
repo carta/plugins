@@ -11,6 +11,133 @@ const CCR_TARGET = {
   activityId: ccrBuildValue("{{CCR_ACTIVITY_ID}}"),
 };
 
+// Activated when the build seeds activityId "demo"; API calls are bypassed so
+// the full workflow is explorable without a CCR-enabled firm.
+const CCR_IS_DEMO = CCR_TARGET.activityId === "demo";
+
+const CCR_DEMO_SUMMARY = {
+  fund_name: "Great Basin Capital Partners Fund II",
+  currency: "USD",
+  gross_call_amount: "4750000",
+  total_due_to_fund: "4750000",
+  net_amount: "4750000",
+  total_commitment: "20200000",
+  total_post_call_percent: "0.4312",
+  total_post_call_amount: "8710240",
+  participating_interests_count: 5,
+  interests_count: 6,
+  due_date: "2026-10-15",
+  date_of_notice: "2026-10-01",
+  metrics_effective_date: "2026-09-01",
+  bucket_totals: [
+    {
+      bucket_id: 1, slug: "capital_contributions",
+      display_name: "Capital contributions",
+      total: "4750000", inside_commitment: true, is_adjustment: false,
+    },
+  ],
+  preparation: {
+    prepared_by: "Sarah Mitchell",
+    note_author: "Sarah Mitchell",
+    prepared_on: "2026-08-28",
+    note: "This is a pro-rata capital call for the Series B follow-on investment in Meridian Tech. Please review the allocations and confirm the due date works for each LP. I've already reflected Thornwood's side letter cap (10% below pro-rata) in their allocation.\n\nWire instructions are unchanged from the prior call.",
+  },
+  receiving_account: {
+    bank_name: "First Republic Bank",
+    bank_address: "San Francisco, CA, US",
+    account_name: "Great Basin Capital Partners Fund II, L.P.",
+    account_number: "4400124821",
+    account_number_last_four: "4821",
+    routing_number: "321081669",
+    obi_memo: "FFC Great Basin Capital Partners Fund II, L.P.",
+  },
+  notice_delivery: [{ email_notice_enabled: true, pdf_notice_enabled: true, count: 5 }],
+  contacts: [{ full_name: "Sarah Mitchell", email: "sarah.mitchell@example.com", type: "preparer" }],
+  contact_phone: "+1 (415) 555-0147",
+  non_participating: {
+    count: 1,
+    interests: [{ interest: { name: "Advisor Carry Pool" }, is_on_activity: false }],
+  },
+  rows: {
+    results: [
+      {
+        interest: { id: 101, name: "Cascade Peak Ventures LLC", partner_interest_group_name: "Cascade Peak Ventures LLC" },
+        commitment: "8500000", due_to_fund: "2000000", net_absolute_amount: "2000000",
+        post_call_percent: "0.4588", post_call_percent_inside_commitment: "0.4588",
+        is_participating: true, amount_buckets: [{ bucket_id: 1, amount: "2000000", inside_commitment: true }],
+      },
+      {
+        interest: { id: 102, name: "Ridgeline Family Office", partner_interest_group_name: "Ridgeline Family Office" },
+        commitment: "5200000", due_to_fund: "1225000", net_absolute_amount: "1225000",
+        post_call_percent: "0.4125", post_call_percent_inside_commitment: "0.4125",
+        is_participating: true, amount_buckets: [{ bucket_id: 1, amount: "1225000", inside_commitment: true }],
+      },
+      {
+        interest: { id: 103, name: "Summit Partners IV Trust", partner_interest_group_name: "Summit Partners IV Trust" },
+        commitment: "3000000", due_to_fund: "705000", net_absolute_amount: "705000",
+        post_call_percent: "0.3950", post_call_percent_inside_commitment: "0.3950",
+        is_participating: true, amount_buckets: [{ bucket_id: 1, amount: "705000", inside_commitment: true }],
+      },
+      {
+        interest: { id: 104, name: "Thornwood Capital Group", partner_interest_group_name: "Thornwood Capital Group" },
+        commitment: "2500000", due_to_fund: "590000", net_absolute_amount: "590000",
+        post_call_percent: "0.4160", post_call_percent_inside_commitment: "0.4160",
+        is_participating: true, amount_buckets: [{ bucket_id: 1, amount: "590000", inside_commitment: true }],
+      },
+      {
+        interest: { id: 105, name: "Elkhorn Investment Partners", partner_interest_group_name: "Elkhorn Investment Partners" },
+        commitment: "1000000", due_to_fund: "230000", net_absolute_amount: "230000",
+        post_call_percent: "0.3800", post_call_percent_inside_commitment: "0.3800",
+        is_participating: true, amount_buckets: [{ bucket_id: 1, amount: "230000", inside_commitment: true }],
+      },
+    ],
+  },
+};
+
+function ccrDemoEmail(row) {
+  const s = CCR_DEMO_SUMMARY;
+  const name = ccrRowLabel(row);
+  const amt = ccrMoney(row.due_to_fund, s.currency);
+  const due = ccrDate(s.due_date);
+  const body = "<!DOCTYPE html><html><head><meta charset='utf-8'><style>" +
+    "body{font-family:Arial,sans-serif;font-size:14px;color:#333;max-width:600px;margin:0 auto;padding:24px}" +
+    "p{margin:0 0 14px;line-height:1.5}.amount{font-size:20px;font-weight:bold;margin:16px 0}" +
+    ".box{background:#f7f7f7;border:1px solid #ddd;border-radius:4px;padding:14px;margin:14px 0}" +
+    ".row{display:flex;justify-content:space-between;margin:5px 0;font-size:13px}" +
+    ".label{color:#666}.footer{margin-top:24px;font-size:12px;color:#999;border-top:1px solid #eee;padding-top:12px}" +
+    "</style></head><body>" +
+    "<p>Dear " + escHtml(name) + ",</p>" +
+    "<p>Great Basin Capital Partners Fund II, L.P. (the “Fund”) is calling capital. Your contribution details:</p>" +
+    "<div class='amount'>" + escHtml(amt) + " due " + escHtml(due) + "</div>" +
+    "<div class='box'>" +
+    "<div class='row'><span class='label'>Fund</span><span>Great Basin Capital Partners Fund II, L.P.</span></div>" +
+    "<div class='row'><span class='label'>Your commitment</span><span>" + escHtml(ccrMoney(row.commitment, s.currency)) + "</span></div>" +
+    "<div class='row'><span class='label'>Amount due</span><span><strong>" + escHtml(amt) + "</strong></span></div>" +
+    "<div class='row'><span class='label'>Due date</span><span>" + escHtml(due) + "</span></div>" +
+    "<div class='row'><span class='label'>Purpose</span><span>Capital contributions — Series B follow-on (Meridian Tech)</span></div>" +
+    "</div>" +
+    "<p>Please wire funds by " + escHtml(due) + ":</p>" +
+    "<div class='box'>" +
+    "<div class='row'><span class='label'>Bank</span><span>First Republic Bank</span></div>" +
+    "<div class='row'><span class='label'>Account name</span><span>Great Basin Capital Partners Fund II, L.P.</span></div>" +
+    "<div class='row'><span class='label'>Account</span><span>·4821</span></div>" +
+    "<div class='row'><span class='label'>Wire verification</span><span>+1 (415) 555-0147</span></div>" +
+    "</div>" +
+    "<p>To confirm wire details and view your capital account, log in at [/LINK_CARTA].</p>" +
+    "<p>Questions? Reply to this email or contact your fund administrator.</p>" +
+    "<div class='footer'>Great Basin Capital Partners · San Francisco, CA · Administered by Carta</div>" +
+    "</body></html>";
+  return {
+    subject: "Capital Call Notice — Great Basin Capital Partners Fund II",
+    recipients: [
+      { addr_type: "TO", name: name, email: "investor@example.com" },
+      { addr_type: "CC", name: "Sarah Mitchell", email: "sarah.mitchell@example.com" },
+    ],
+    body: body,
+    body_format: "html",
+  };
+}
+
 // The workflow template a capital call under review carries, and the two tasks
 // on it that mean the GP owes a decision.
 const CCR_WORKFLOW_TEMPLATE = "request-capital-activity";
@@ -29,7 +156,7 @@ let _ccr = null;
 
 // Held across opens so the seed card can name its fund before the panel is
 // opened a second time.
-let _ccrFundName = null;
+let _ccrFundName = CCR_IS_DEMO ? CCR_DEMO_SUMMARY.fund_name : null;
 
 function ccrReset(target, title) {
   _ccr = {
@@ -40,10 +167,10 @@ function ccrReset(target, title) {
     rowsDone: false,
     truncated: false,
     phase: "review",
-    allocOpen: false,
-    payOpen: false,
+    activeTab: 'overview',
     noticeOpen: false,
     noteOpen: false,
+    payShowSensitive: { acct: false, routing: false },
     showAllRows: false,
     lpIndex: 0,
     docTab: "email",
@@ -164,6 +291,18 @@ async function ccrLoad() {
     return;
   }
 
+  if (CCR_IS_DEMO) {
+    snap.summary = CCR_DEMO_SUMMARY;
+    snap.rows = CCR_DEMO_SUMMARY.rows.results;
+    snap.loading = false;
+    snap.rowsDone = true;
+    if (!_ccrFundName) _ccrFundName = CCR_DEMO_SUMMARY.fund_name;
+    ccrRender();
+    renderFarSection();
+    if (snap.activeTab === 'notice') ccrLoadEmail();
+    return;
+  }
+
   try {
     const params = { fund_uuid: t.fundUuid, capital_activity_id: t.activityId };
 
@@ -182,6 +321,7 @@ async function ccrLoad() {
     snap.rows = (summary.rows && summary.rows.results) || [];
     snap.loading = false;
     ccrRender();
+    if (snap.activeTab === 'notice') ccrLoadEmail();
 
     if (summary.fund_name && summary.fund_name !== _ccrFundName) {
       _ccrFundName = summary.fund_name;
@@ -233,6 +373,12 @@ async function ccrLoadEmail() {
   snap.emailError = null;
   ccrRenderNotice();
 
+  if (CCR_IS_DEMO) {
+    snap.email = ccrDemoEmail(row);
+    ccrRenderNotice();
+    return;
+  }
+
   try {
     const res = await _mcp("fetch", {
       command: "fa:get:capital-activity-partner-email-preview",
@@ -267,6 +413,7 @@ async function ccrLoadEmail() {
     snap.emailError = err && err.message ? err.message : "preview failed";
   }
   if (_ccr !== snap) return;
+  ccrRender();
   ccrRenderNotice();
 }
 
@@ -279,6 +426,13 @@ async function ccrSubmitChanges() {
   const btn = document.getElementById("ccr-send-changes");
   if (btn) { btn.disabled = true; btn.textContent = "Sending…"; }
   trackWorkhub("click", "CartaWorkhub.CapitalCallReview.RequestChanges");
+
+  if (CCR_IS_DEMO) {
+    _ccr.sentMessage = text;
+    _ccr.phase = "sent";
+    ccrRender();
+    return;
+  }
 
   try {
     const res = await _mcp("mutate", {
@@ -306,6 +460,12 @@ async function ccrApprove() {
   if (btn) { btn.disabled = true; btn.textContent = "Releasing…"; }
   trackWorkhub("click", "CartaWorkhub.CapitalCallReview.Release");
 
+  if (CCR_IS_DEMO) {
+    _ccr.phase = "released";
+    ccrRender();
+    return;
+  }
+
   try {
     const res = await _mcp("mutate", {
       command: "fa:mutate:approve-capital-activity",
@@ -332,6 +492,114 @@ async function ccrApprove() {
 }
 
 // ── Render ────────────────────────────────────────────────────────────────
+
+function ccrMainTabBar() {
+  const tabs = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'notice', label: 'Notice' },
+    { id: 'alloc', label: 'Allocations' },
+    { id: 'pay', label: 'Payment information' },
+  ];
+  return '<div class="ccr-main-tabs">' +
+    tabs.map((t) =>
+      '<button class="ccr-main-tab' + (_ccr.activeTab === t.id ? ' ccr-main-tab-on' : '') +
+      '" data-ccr-main-tab="' + t.id + '">' + t.label + '</button>').join('') +
+  '</div>';
+}
+
+function ccrOverviewTabBody(s) {
+  const ccy = s.currency;
+  const called = ccrNum(s.gross_call_amount) !== null ? s.gross_call_amount : s.total_due_to_fund;
+  const postPct = ccrPick(s, "total_post_call_percent_inside_commitment", "total_post_call_percent");
+  const postAmt = ccrPick(s, "total_post_call_amount_inside_commitment", "total_post_call_amount");
+  const ratio = ccrNum(postPct);
+  const buckets = (s.bucket_totals || []).filter((b) => !b.is_adjustment);
+
+  return '<div class="ccr-card">' +
+    '<div class="ccr-card-label">Total being called</div>' +
+    '<div class="ccr-card-figure">' + escHtml(ccrMoney(called, ccy)) + '</div>' +
+    '<div class="ccr-card-list">' +
+      '<div class="ccr-kv"><span class="ccr-k">Due from investors</span>' +
+        '<span class="ccr-v ccr-strong">' + escHtml(ccrDate(s.due_date)) + '</span>' +
+        '<span class="ccr-aside">' + escHtml(ccrDaysUntil(s.due_date)) + '</span></div>' +
+      '<div class="ccr-kv"><span class="ccr-k">Purpose</span><span class="ccr-v">' +
+        (buckets.length
+          ? buckets.map((b) => '<span class="ccr-split"><span>' + escHtml(b.display_name || b.slug || "Bucket") +
+              '</span><span>' + escHtml(ccrMoney(b.total, ccy)) + '</span></span>').join('')
+          : 'No buckets on this activity') +
+        '</span></div>' +
+      '<div class="ccr-kv"><span class="ccr-k">Called after this call</span><span class="ccr-v">' +
+        (ratio === null
+          ? '<span class="ccr-muted">Not available</span>'
+          : '<span class="ccr-split"><span class="ccr-strong">' + escHtml(ccrPct(postPct)) + '</span>' +
+            '<span class="ccr-muted">' + escHtml(ccrMoney(postAmt, ccy)) +
+            '<span style="padding:0 5px">of</span>' +
+            escHtml(ccrMoney(s.total_commitment, ccy)) + '</span></span>' +
+            '<span class="ccr-meter"><span style="width:' +
+            Math.max(0, Math.min(100, ratio * 100)).toFixed(2) + '%"></span></span>') +
+        (s.metrics_effective_date
+          ? '<span class="ccr-note">As of ' + escHtml(ccrDate(s.metrics_effective_date)) + '.</span>'
+          : '') +
+        '</span></div>' +
+    '</div>' +
+  '</div>';
+}
+
+function ccrNoticeTabBody(s) {
+  const rows = _ccr.rows.filter((r) => r.is_participating !== false);
+  if (!rows.length) {
+    return _ccr.loading
+      ? '<div class="loading-row" style="padding:20px 0;">Loading investors…</div>'
+      : '<div class="ccr-empty"><p>No participating investors on this call.</p></div>';
+  }
+
+  const options = rows.map((r, i) =>
+    '<option value="' + i + '"' + (i === _ccr.lpIndex ? ' selected' : '') + '>' +
+    escHtml(ccrRowLabel(r)) + '</option>').join('');
+
+  let emailPane;
+  if (_ccr.emailError) {
+    emailPane = '<div class="ccr-empty"><p>This notice could not be previewed.</p>' +
+      '<p class="ccr-note">' + escHtml(_ccr.emailError) + '</p></div>';
+  } else if (!_ccr.email) {
+    emailPane = '<div class="loading-row" style="padding:16px 0;">Rendering the notice…</div>';
+  } else {
+    const e = _ccr.email;
+    const label = (d) => d.name ? d.name + ' <' + d.email + '>' : d.email;
+    const addrs = (kind) => (e.recipients || []).filter((d) => d.addr_type === kind).map(label).join(', ');
+    emailPane = '<div class="ccr-mail-head">' +
+      '<div class="ccr-mail-subject">' + escHtml(e.subject || '') + '</div>' +
+      '<div class="ccr-mail-addr">To: ' + escHtml(addrs('TO')) + '</div>' +
+      '<div class="ccr-mail-addr">CC: ' + escHtml(addrs('CC')) + '</div>' +
+      '</div>' +
+      (e.body_format === 'html'
+        ? '<iframe class="ccr-mail-frame" sandbox="" title="Email preview" srcdoc="' +
+          escHtml(e.body || '') + '"></iframe>'
+        : '<div class="ccr-mail-body">' +
+          escHtml(e.body || '').replace(/\n{2,}/g, '</p><p>').replace(/\n/g, '<br>') + '</div>') +
+      ((e.body || '').indexOf('[/LINK_CARTA]') !== -1
+        ? '<div class="ccr-caveat"><span class="ccr-caveat-arrow">&#8593;</span>' +
+          "<span>Preview only: the address ends in the placeholder [/LINK_CARTA] instead of a " +
+          "link. Each investor's sent email carries a working link to their own capital call. " +
+          "Everything else here is final.</span></div>"
+        : '');
+  }
+
+  const docTabs = '<span class="ccr-tabs">' +
+    '<button class="ccr-tab' + (_ccr.docTab !== 'pdf' ? ' ccr-tab-on' : '') + '" data-ccr-inline-tab="email">Email</button>' +
+    (window.pdfjsLib
+      ? '<button class="ccr-tab' + (_ccr.docTab === 'pdf' ? ' ccr-tab-on' : '') + '" data-ccr-inline-tab="pdf">PDF</button>'
+      : '') +
+    '</span>';
+
+  const contentPane = _ccr.docTab === 'pdf' ? ccrNoticeDoc() : emailPane;
+
+  return '<div class="ccr-notice-bar">' +
+    '<select id="ccr-inline-lp">' + options + '</select>' +
+    docTabs +
+    '</div>' +
+    contentPane;
+}
 
 function ccrSection(id, title, summary, open, bodyHtml) {
   return '<button class="ccr-row-btn" data-ccr-toggle="' + id + '">' +
@@ -431,25 +699,66 @@ function ccrAllocTable(s) {
 function ccrPayBody(s) {
   const a = s.receiving_account;
   const groups = s.notice_delivery || [];
-  const label = (g) => g.email_notice_enabled && g.pdf_notice_enabled ? "email with PDF"
+  const noticeLabel = (g) => g.email_notice_enabled && g.pdf_notice_enabled ? "email with PDF"
     : g.email_notice_enabled ? "email only"
     : g.pdf_notice_enabled ? "PDF only" : "no notice";
 
-  const acct = a
-    ? escHtml([a.bank_name, a.account_number_last_four ? "····" + a.account_number_last_four : ""]
-        .filter(Boolean).join(" ")) + (a.account_name ? "<br>" + escHtml(a.account_name) : "")
-    : (s.uses_fbo_contributions
-        ? "Per-partner virtual accounts"
-        : "No account named on this activity");
-
   const delivery = groups.length
-    ? groups.map((g) => (g.count === null || g.count === undefined ? "—" : g.count) + " " + label(g)).join(" · ")
+    ? groups.map((g) => (g.count === null || g.count === undefined ? "—" : g.count) + " " + noticeLabel(g)).join(" · ")
     : "No delivery detail";
+
+  const maskStr = (v, keepLast) => {
+    if (!v) return null;
+    const s = String(v);
+    return '·'.repeat(Math.max(0, s.length - keepLast)) + s.slice(-keepLast);
+  };
+
+  const inlineReveal = (show, key) =>
+    '<button class="ccr-pay-inline-reveal" data-ccr-pay-reveal="' + key + '">' +
+    (show ? 'Hide details' : 'Show details') + '</button>';
+
+  let wireHtml = '';
+  if (!a) {
+    const fallback = s.uses_fbo_contributions ? "Per-partner virtual accounts" : "No account named on this activity";
+    wireHtml = '<div class="ccr-kv"><span class="ccr-k">Receiving account</span><span class="ccr-v">' + escHtml(fallback) + "</span></div>";
+  } else {
+    const showAcct = _ccr.payShowSensitive.acct;
+    const showRouting = _ccr.payShowSensitive.routing;
+
+    const kvRow = (label, value) => {
+      if (!value) return '';
+      return '<div class="ccr-kv"><span class="ccr-k">' + escHtml(label) + '</span>' +
+        '<span class="ccr-v">' + escHtml(value) + '</span></div>';
+    };
+
+    const kvRowReveal = (label, value, show, key, hasFullNumber) => {
+      if (!value) return '';
+      return '<div class="ccr-kv"><span class="ccr-k">' + escHtml(label) + '</span>' +
+        '<span class="ccr-v">' + escHtml(value) + '</span>' +
+        (hasFullNumber ? inlineReveal(show, key) : '') + '</div>';
+    };
+
+    const acctNum = a.account_number
+      ? (showAcct ? a.account_number : maskStr(a.account_number, 4))
+      : (a.account_number_last_four ? '····' + a.account_number_last_four : null);
+
+    const routingNum = a.routing_number
+      ? (showRouting ? a.routing_number : maskStr(a.routing_number, 4))
+      : null;
+
+    wireHtml =
+      kvRow('Bank name', a.bank_name) +
+      kvRow('Bank address', a.bank_address) +
+      kvRow('Beneficiary', a.account_name) +
+      kvRowReveal('Account number', acctNum, showAcct, 'acct', !!a.account_number) +
+      kvRowReveal('Routing number', routingNum, showRouting, 'routing', !!a.routing_number) +
+      kvRow('OBI / Memo', a.obi_memo);
+  }
 
   // The allocations table is full-bleed because its cells carry their own
   // inset. These rows do not, so the inset lives on the wrapper.
   return '<div class="ccr-pad">' +
-    '<div class="ccr-kv"><span class="ccr-k">Receiving account</span><span class="ccr-v">' + acct + "</span></div>" +
+    wireHtml +
     '<div class="ccr-kv"><span class="ccr-k">Delivery</span><span class="ccr-v">' + escHtml(delivery) +
     (s.contacts && s.contacts.length
       ? "<br><span class='ccr-muted'>" +
@@ -475,15 +784,7 @@ function ccrReviewBody() {
       '<p class="ccr-note">' + escHtml(_ccr.error || "") + "</p></div>";
   }
 
-  const ccy = s.currency;
-  const called = ccrNum(s.gross_call_amount) !== null ? s.gross_call_amount : s.total_due_to_fund;
-  const postPct = ccrPick(s, "total_post_call_percent_inside_commitment", "total_post_call_percent");
-  const postAmt = ccrPick(s, "total_post_call_amount_inside_commitment", "total_post_call_amount");
-  const ratio = ccrNum(postPct);
   const p = s.preparation;
-
-  const buckets = (s.bucket_totals || []).filter((b) => !b.is_adjustment);
-  const partCount = s.participating_interests_count;
 
   return (p && p.note
     ? '<div class="ccr-note-box"><span class="ccr-note-icon">→</span><span class="ccr-note-main">' +
@@ -493,53 +794,13 @@ function ccrReviewBody() {
       "</span></div>"
     : "") +
 
-    '<div class="ccr-card">' +
-      '<div class="ccr-card-label">Total being called</div>' +
-      '<div class="ccr-card-figure">' + escHtml(ccrMoney(called, ccy)) + "</div>" +
-      '<div class="ccr-card-list">' +
-        '<div class="ccr-kv"><span class="ccr-k">Due from investors</span>' +
-          '<span class="ccr-v ccr-strong">' + escHtml(ccrDate(s.due_date)) + "</span>" +
-          '<span class="ccr-aside">' + escHtml(ccrDaysUntil(s.due_date)) + "</span></div>" +
-        '<div class="ccr-kv"><span class="ccr-k">Purpose</span><span class="ccr-v">' +
-          (buckets.length
-            ? buckets.map((b) => '<span class="ccr-split"><span>' + escHtml(b.display_name || b.slug || "Bucket") +
-                "</span><span>" + escHtml(ccrMoney(b.total, ccy)) + "</span></span>").join("")
-            : "No buckets on this activity") +
-          "</span></div>" +
-        '<div class="ccr-kv"><span class="ccr-k">Called after this call</span><span class="ccr-v">' +
-          (ratio === null
-            ? '<span class="ccr-muted">Not available</span>'
-            : '<span class="ccr-split"><span class="ccr-strong">' + escHtml(ccrPct(postPct)) + "</span>" +
-              '<span class="ccr-muted">' + escHtml(ccrMoney(postAmt, ccy)) + " of " +
-              escHtml(ccrMoney(s.total_commitment, ccy)) + "</span></span>" +
-              '<span class="ccr-meter"><span style="width:' +
-              Math.max(0, Math.min(100, ratio * 100)).toFixed(2) + '%"></span></span>') +
-          (s.metrics_effective_date
-            ? '<span class="ccr-note">As of ' + escHtml(ccrDate(s.metrics_effective_date)) + ".</span>"
-            : "") +
-          "</span></div>" +
-      "</div>" +
-    "</div>" +
+    ccrMainTabBar() +
 
-    '<div class="ccr-group">' +
-      '<button class="ccr-row-btn" data-ccr-notice>' +
-        '<span class="ccr-row-title">The notice each investor receives</span>' +
-        '<span class="ccr-row-sum">' +
-          escHtml([s.date_of_notice ? ccrDate(s.date_of_notice) : "", (s.notice_delivery || []).length ? "email + PDF" : ""]
-            .filter(Boolean).join(" · ")) + "</span>" +
-        '<span class="ccr-chev ccr-chev-right"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg></span>' +
-      "</button>" +
-      ccrSection("alloc", "Investor allocations",
-        [s.interests_count, partCount !== null && partCount !== undefined ? partCount + " participating" : ""]
-          .filter((x) => x !== null && x !== undefined && x !== "").join(" · "),
-        _ccr.allocOpen, _ccr.allocOpen ? ccrAllocTable(s) : "") +
-      ccrSection("pay", "Payment and delivery",
-        s.receiving_account
-          ? [s.receiving_account.bank_name,
-             s.receiving_account.account_number_last_four ? "····" + s.receiving_account.account_number_last_four : ""]
-            .filter(Boolean).join(" ")
-          : "no account named",
-        _ccr.payOpen, _ccr.payOpen ? ccrPayBody(s) : "") +
+    '<div class="ccr-tab-pane">' +
+      (_ccr.activeTab === 'overview' ? ccrOverviewTabBody(s)
+        : _ccr.activeTab === 'alloc' ? ccrAllocTable(s)
+        : _ccr.activeTab === 'pay' ? ccrPayBody(s)
+        : ccrNoticeTabBody(s)) +
     "</div>";
 }
 
@@ -555,7 +816,7 @@ function ccrConfirmBody() {
     "Makes " + ccrMoney(s.total_due_to_fund, ccy) + " due from investors" +
       (s.due_date ? " on " + ccrDate(s.due_date) : "") + ".",
   ];
-  return '<p class="ccr-note" style="margin-bottom:12px">Releasing runs all of this in Carta immediately. Read it before you release.</p>' +
+  return '<p class="ccr-confirm-banner">Releasing runs all of this in Carta immediately. Read it before you release.</p>' +
     '<div class="ccr-steps">' + steps.map((t, i) =>
       '<div class="ccr-step"><span class="ccr-step-n">' + (i + 1) + "</span><span>" + escHtml(t) + "</span></div>").join("") +
     "</div>" +
@@ -644,6 +905,9 @@ function ccrRender() {
   const t = document.getElementById("ccr-change-text");
   if (t) t.addEventListener("input", (e) => { _ccr.changeText = e.target.value; });
   ccrBind(overlay);
+  if (_ccr.phase === "review" && _ccr.activeTab === "notice" && _ccr.docTab === "pdf" && _ccr.pdf) {
+    ccrPaintPdf();
+  }
 }
 
 function ccrBind(root) {
@@ -651,19 +915,52 @@ function ccrBind(root) {
     el.addEventListener("click", ccrClose));
   root.querySelectorAll("[data-ccr-phase]").forEach((el) =>
     el.addEventListener("click", () => { _ccr.phase = el.getAttribute("data-ccr-phase"); ccrRender(); }));
-  root.querySelectorAll("[data-ccr-toggle]").forEach((el) =>
+  root.querySelectorAll("[data-ccr-main-tab]").forEach((el) =>
     el.addEventListener("click", () => {
-      const k = el.getAttribute("data-ccr-toggle");
-      if (k === "alloc") _ccr.allocOpen = !_ccr.allocOpen;
-      if (k === "pay") _ccr.payOpen = !_ccr.payOpen;
+      const prev = _ccr.activeTab;
+      _ccr.activeTab = el.getAttribute("data-ccr-main-tab");
       ccrRender();
+      if (_ccr.activeTab === "notice" && prev !== "notice" && !_ccr.email && !_ccr.emailError) {
+        ccrLoadEmail();
+      }
     }));
   root.querySelectorAll("[data-ccr-more]").forEach((el) =>
     el.addEventListener("click", () => { _ccr.showAllRows = !_ccr.showAllRows; ccrRender(); }));
   root.querySelectorAll("[data-ccr-note]").forEach((el) =>
     el.addEventListener("click", () => { _ccr.noteOpen = !_ccr.noteOpen; ccrRender(); }));
+  root.querySelectorAll("[data-ccr-pay-reveal]").forEach((el) =>
+    el.addEventListener("click", () => {
+      const key = el.getAttribute("data-ccr-pay-reveal");
+      _ccr.payShowSensitive[key] = !_ccr.payShowSensitive[key];
+      ccrRender();
+    }));
   root.querySelectorAll("[data-ccr-notice]").forEach((el) =>
     el.addEventListener("click", ccrOpenNotice));
+  root.querySelectorAll("[data-ccr-inline-tab]").forEach((el) =>
+    el.addEventListener("click", () => {
+      _ccr.docTab = el.getAttribute("data-ccr-inline-tab");
+      if (_ccr.docTab === "pdf") trackWorkhub("click", "CartaWorkhub.CapitalCallReview.NoticePdf");
+      ccrRender();
+      if (_ccr.docTab === "pdf") {
+        if (!_ccr.pdf && !_ccr.pdfLoading && !_ccr.pdfError) ccrLoadPdf();
+        else if (_ccr.pdf) ccrPaintPdf();
+      }
+    }));
+  const inlineSel = root.querySelector("#ccr-inline-lp");
+  if (inlineSel) inlineSel.addEventListener("change", (ev) => ccrSelectLp(Number(ev.target.value)));
+  const inlineFrame = root.querySelector(".ccr-mail-frame");
+  if (inlineFrame) {
+    const fit = () => {
+      try {
+        const d = inlineFrame.contentDocument;
+        const h = d && d.documentElement && d.documentElement.scrollHeight;
+        if (h > 0) inlineFrame.style.height = h + "px";
+      } catch (err) { /* opaque origin — CSS height stands */ }
+    };
+    inlineFrame.addEventListener("load", fit);
+    fit();
+    requestAnimationFrame(fit);
+  }
   root.querySelectorAll("[data-ccr-send]").forEach((el) =>
     el.addEventListener("click", ccrSubmitChanges));
   root.querySelectorAll("[data-ccr-approve]").forEach((el) =>
@@ -689,8 +986,9 @@ function ccrSelectLp(index) {
   _ccr.pdf = null;
   _ccr.pdfError = null;
   _ccr.pdfLoading = false;
+  ccrRender();
   ccrRenderNotice();
-  ccrLoadActiveDoc();
+  if (_ccr.activeTab === "notice") ccrLoadActiveDoc();
 }
 
 // Each tab costs a render on Carta's side, so only the visible one is fetched.
@@ -833,6 +1131,12 @@ async function ccrLoadPdf() {
     return;
   }
 
+  if (CCR_IS_DEMO) {
+    _ccr.pdfError = "PDF preview is not available in demo mode.";
+    ccrRenderNotice();
+    return;
+  }
+
   _ccr.pdf = null;
   _ccr.pdfError = null;
   _ccr.pdfLoading = true;
@@ -860,6 +1164,7 @@ async function ccrLoadPdf() {
     _ccr.pdfError = err && err.message ? err.message : "the notice could not be rendered";
   }
   _ccr.pdfLoading = false;
+  ccrRender();
   ccrRenderNotice();
 }
 

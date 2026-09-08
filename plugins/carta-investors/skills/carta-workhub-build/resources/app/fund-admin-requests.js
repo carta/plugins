@@ -22,7 +22,7 @@ const FAR_OPEN_TASK_STATUSES = [0, 1];
 const FAR_STATUS_LABEL = {
   'new': 'Sent',
   'pending-carta': 'Working',
-  'pending-customer': 'Ready for you',
+  'pending-customer': 'Ready',
 };
 // `canceled` rides on the row because it comes from the int status, not from
 // last_task.template — which keeps naming a pending actor after the case closes.
@@ -730,17 +730,27 @@ function farRenderSent() {
   overlay.classList.add('far-overlay-visible');
 }
 
-// ── Sorting ──
+// ── Sorting & view ──
 
 // The queue is grouped by status and rendered into fixed containers, so a sort by
 // status is a no-op — it reorders rows that are then re-partitioned by the same
 // key. Requested date is the only axis with anything to say, so the control is a
 // direction instead of a field.
 let _farSort = 'newest';
+let _farView = 'board';
+
+const FAR_LIST_ICON = '<svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="2" cy="4" r="1.2"/><rect x="5" y="3" width="9" height="2" rx="1"/><circle cx="2" cy="8" r="1.2"/><rect x="5" y="7" width="9" height="2" rx="1"/><circle cx="2" cy="12" r="1.2"/><rect x="5" y="11" width="9" height="2" rx="1"/></svg>';
+const FAR_BOARD_ICON = '<svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>';
 
 function farSetSort(value) {
   _farSort = value;
   trackWorkhub('click', 'CartaWorkhub.FundAdminRequests.Sort');
+  renderFarSection();
+}
+
+function farToggleView() {
+  _farView = _farView === 'board' ? 'list' : 'board';
+  trackWorkhub('click', 'CartaWorkhub.FundAdminRequests.ToggleView');
   renderFarSection();
 }
 
@@ -768,15 +778,14 @@ function farPlanCard(r) {
   const card = document.createElement('div');
   card.className = 'far-card far-card-planned';
   card.innerHTML = `
-    <div class="far-card-title">${escHtml(r.title ?? 'Planned request')}</div>
-    <div class="far-card-sub"><span class="far-card-muted">Not sent yet</span></div>
-    <div class="far-card-status">
-      <span class="far-dot far-dot-planned"></span>
-      <span class="far-card-status-text">Drafted ${escHtml(farDate(r.requested))}</span>
+    <div class="far-card-head">
+      <div class="far-card-title">${escHtml(r.title ?? 'Planned request')}</div>
+      <span class="far-status-tag far-status-tag-planned">Not sent yet</span>
     </div>
+    ${r.requested ? `<div class="far-card-sub">Drafted ${escHtml(farDate(r.requested))}</div>` : ''}
     <div class="far-card-footer">
-      <button class="far-card-view" data-far-plan="${escHtml(r.planId)}">Review and send &rarr;</button>
       <button class="far-card-discard" data-far-plan="${escHtml(r.planId)}">Discard</button>
+      <button class="far-card-view" data-far-plan="${escHtml(r.planId)}">Review and send &rarr;</button>
     </div>`;
   card.querySelector('.far-card-view').addEventListener('click', () => farReviewPlan(r.planId));
   card.querySelector('.far-card-discard').addEventListener('click', () => farDiscardPlan(r.planId));
@@ -824,19 +833,20 @@ function farDate(ts) {
 function farCard(r, withTime) {
   if (r.group === 'planned') return farPlanCard(r);
   const isTodo = r.group === 'todo';
+  const isDone = r.group === 'done';
   const card = document.createElement('div');
   card.className = 'far-card' + (isTodo ? ' far-card-todo' : '');
+  const tagClass = isTodo ? 'far-status-tag-todo' : isDone ? 'far-status-tag-done' : 'far-status-tag-progress';
+  const dateLabel = isTodo ? 'As of' : 'Requested';
   card.innerHTML = `
-    <div class="far-card-title">${escHtml(r.title ?? 'Request to Carta')}</div>
-    ${r.subtitle ? `<div class="far-card-sub">${escHtml(r.subtitle)}</div>` : ''}
-    <div class="far-card-status">
-      <span class="far-dot${isTodo ? ' far-dot-todo' : ''}"></span>
-      <span class="far-card-status-text">${escHtml(farStatusLabel(r))}</span>
+    <div class="far-card-head">
+      <div class="far-card-title">${escHtml(r.title ?? 'Request to Carta')}</div>
+      <span class="far-status-tag ${tagClass}">${escHtml(farStatusLabel(r))}</span>
     </div>
+    ${(() => { const e = r.subtitle ?? r.firm ?? null; const d = r.requested ? (dateLabel + ' ' + escHtml(withTime ? farStamp(r.requested) : farDate(r.requested))) : null; const parts = [e ? escHtml(e) : null, d].filter(Boolean); return parts.length ? `<div class="far-card-sub">${parts.join(' · ')}</div>` : ''; })()}
     <div class="far-card-footer">
       <button class="far-card-view">${isTodo ? 'Review' : 'View'} &rarr;</button>
-      ${r.requested ? `<span class="far-card-age">Requested ${escHtml(withTime ? farStamp(r.requested) : farDate(r.requested))}</span>`
-        : r.footnote ? `<span class="far-card-age">${escHtml(r.footnote)}</span>` : ''}
+      ${r.footnote ? `<span class="far-card-age">${escHtml(r.footnote)}</span>` : ''}
     </div>`;
   card.querySelector('.far-card-view').addEventListener('click', () =>
     r.ccr ? openCapitalCallReview(r.ccr, r.title)
@@ -901,21 +911,97 @@ function toggleFarDone() {
   renderFarSection();
 }
 
-// The composer never hides. With no queue to show it is still the off-ramp, and
-// a section that vanishes entirely takes the entry point with it.
+function farListRow(r) {
+  const isPlanned = r.group === 'planned';
+  const isTodo = r.group === 'todo';
+  const isDone = r.group === 'done';
+  const statusLabel = isPlanned ? 'Planned' : isTodo ? 'Tasks to complete' : isDone ? 'Completed' : 'In progress';
+  const tagClass = isPlanned ? 'far-status-tag-planned' : isTodo ? 'far-status-tag-todo' : isDone ? 'far-status-tag-done' : 'far-status-tag-progress';
+  const actionLabel = isPlanned ? 'Review and send' : isTodo ? 'Review' : 'View';
+
+  const tr = document.createElement('tr');
+  tr.className = 'far-list-row';
+  const entity = r.subtitle ?? r.firm ?? null;
+  tr.innerHTML =
+    `<td class="far-list-cell far-list-status"><span class="far-status-tag ${tagClass}">${escHtml(statusLabel)}</span></td>` +
+    `<td class="far-list-cell far-list-title">${escHtml(r.title ?? 'Request to Carta')}</td>` +
+    `<td class="far-list-cell far-list-entity">${entity ? escHtml(entity) : '<span class="far-list-empty">—</span>'}</td>` +
+    `<td class="far-list-cell far-list-date">${escHtml(r.requested ? farDate(r.requested) : '—')}</td>` +
+    `<td class="far-list-cell far-list-action"><button class="far-card-view">${escHtml(actionLabel)} →</button></td>` +
+    `<td class="far-list-cell far-list-overflow"><div class="far-overflow-wrap">` +
+    `<button class="far-overflow-btn" aria-label="More options">⋮</button>` +
+    `<div class="far-overflow-menu" hidden>${isPlanned ? `<button class="far-overflow-item far-card-discard">Discard</button>` : `<span class="far-overflow-empty">No actions</span>`}</div>` +
+    `</div></td>`;
+
+  tr.querySelector('.far-card-view').addEventListener('click', () =>
+    isPlanned ? farReviewPlan(r.planId)
+      : r.ccr ? openCapitalCallReview(r.ccr, r.title) : openFarThread(r.id));
+
+  const btn = tr.querySelector('.far-overflow-btn');
+  const menu = tr.querySelector('.far-overflow-menu');
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const wasHidden = menu.hidden;
+    document.querySelectorAll('.far-overflow-menu').forEach(m => { m.hidden = true; });
+    menu.hidden = !wasHidden;
+  });
+
+  const discard = tr.querySelector('.far-overflow-item');
+  if (discard) discard.addEventListener('click', () => farDiscardPlan(r.planId));
+
+  return tr;
+}
+
+function farRenderList(rows) {
+  const listView = document.getElementById('far-list-view');
+  if (!listView) return;
+  listView.innerHTML = '';
+  if (!rows.length) return;
+  const table = document.createElement('table');
+  table.className = 'far-list-table';
+  table.innerHTML = '<thead><tr>' +
+    '<th class="far-list-th">Status</th><th class="far-list-th">Request</th>' +
+    '<th class="far-list-th">Entity</th><th class="far-list-th">Date</th>' +
+    '<th class="far-list-th"></th><th class="far-list-th"></th>' +
+    '</tr></thead>';
+  const tbody = document.createElement('tbody');
+  rows.forEach(r => tbody.appendChild(farListRow(r)));
+  table.appendChild(tbody);
+  listView.appendChild(table);
+}
+
+// The composer never hides — a section that vanishes takes the entry point with it.
 function renderFarSection() {
   const section = document.getElementById('far-section');
   if (!section) return;
   section.style.display = '';
 
   const rows = farSorted((_farRows ?? []).concat(farPlanRows()));
-  farRenderGroup('planned', rows.filter(r => r.group === 'planned'));
-  farRenderGroup('todo', rows.filter(r => r.group === 'todo'));
-  farRenderGroup('progress', rows.filter(r => r.group === 'progress'));
-  farRenderDone(rows.filter(r => r.group === 'done'));
+  const isList = _farView === 'list';
+
+  const listView = document.getElementById('far-list-view');
+  const groups = ['planned', 'todo', 'progress', 'done'];
+
+  if (isList) {
+    groups.forEach(k => { const g = document.getElementById('far-group-' + k); if (g) g.style.display = 'none'; });
+    if (listView) { listView.style.display = rows.length ? '' : 'none'; farRenderList(rows); }
+  } else {
+    if (listView) listView.style.display = 'none';
+    farRenderGroup('planned', rows.filter(r => r.group === 'planned'));
+    farRenderGroup('todo', rows.filter(r => r.group === 'todo'));
+    farRenderGroup('progress', rows.filter(r => r.group === 'progress'));
+    farRenderDone(rows.filter(r => r.group === 'done'));
+  }
 
   const sortWrap = document.getElementById('far-sort-wrap');
   if (sortWrap) sortWrap.style.display = rows.length > 1 ? '' : 'none';
+
+  const viewBtn = document.getElementById('far-view-btn');
+  if (viewBtn) {
+    viewBtn.innerHTML = isList ? FAR_BOARD_ICON : FAR_LIST_ICON;
+    viewBtn.setAttribute('aria-label', isList ? 'Switch to board view' : 'Switch to list view');
+    viewBtn.title = isList ? 'Switch to board view' : 'Switch to list view';
+  }
 
   const note = document.getElementById('far-partial-note');
   if (note) note.style.display = _farPartial && rows.length > 0 ? '' : 'none';
@@ -1555,6 +1641,10 @@ async function submitFarReply() {
     if (btn) { btn.disabled = false; btn.textContent = 'Send'; }
   }
 }
+
+document.addEventListener('click', () => {
+  document.querySelectorAll('.far-overflow-menu').forEach(m => { m.hidden = true; });
+});
 
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;

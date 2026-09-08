@@ -29,24 +29,15 @@
 
   <!-- Page header -->
   <h1 class="page-title">Carta Workhub<span class="far-beta">Beta</span></h1>
-  <p class="page-subtitle">Start work with your Carta team, and track it here.<span id="far-firm" class="far-firm"></span></p>
-
-  <div class="far-notice" id="far-notice" role="note">
-    <p class="far-notice-title">Carta Workhub is in beta</p>
-    <p class="far-notice-body">This list covers requests sent through Claude only. Any tasks
-      created in email, phone, or in the Carta app will not appear here yet.</p>
-  </div>
+  <p class="page-subtitle">Start work with your Carta team, and track it here. This list covers requests sent through Claude only — tasks created in email, phone, or in the Carta app will not appear here yet.<span id="far-firm" class="far-firm"></span></p>
 
   <!-- Update banner — rendered by version-check.js when a newer build is published -->
   <div id="update-banner-slot"></div>
 
   <section id="far-section">
     <div class="far-compose-bar">
-      <span class="far-compose-label">
-        <span class="far-compose-icon" aria-hidden="true">&#9998;</span>
-        Ask Carta to do something
-      </span>
-      <button class="far-btn-primary" id="far-compose-open" onclick="openFarCompose()">Compose</button>
+      <span class="far-compose-label">Ask Carta to do something</span>
+      <button class="far-btn-primary" id="far-compose-open" onclick="openFarCompose()"><span class="far-compose-icon" aria-hidden="true">&#9998;</span> Compose</button>
     </div>
 
     <div class="far-sort-wrap" id="far-sort-wrap" style="display:none">
@@ -55,7 +46,10 @@
         <option value="newest">Newest first</option>
         <option value="oldest">Oldest first</option>
       </select>
+      <button class="far-view-btn" id="far-view-btn" onclick="farToggleView()" aria-label="Switch to list view"></button>
     </div>
+
+    <div id="far-list-view" style="display:none"></div>
 
     <div class="far-group" id="far-group-planned" style="display:none">
       <p class="far-group-label">Planned &middot; <span class="far-group-count">0</span><span
