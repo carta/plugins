@@ -232,7 +232,7 @@ function GrantCell({ row, shares: sh, modelled, overridden, standing, targetPct,
 
 export default function SettingsStep({
   rows, policySettings, settings, onSettings, onBack, onNext, asOf,
-  overrides, onOverride,
+  overrides, onOverride, poolBar,
 }) {
   const [showIneligible, setShowIneligible] = useState(true);
   // Below this the two columns stack; the grants table needs the room.
@@ -277,6 +277,8 @@ export default function SettingsStep({
   return (
     <div style={{ padding: "18px 24px 28px", display: "grid", gap: 16 }}>
       <Nav onBack={onBack} onNext={onNext} />
+
+      {poolBar}
 
       <div style={{
         background: C.surface, border: `1px solid ${C.border}`, borderRadius: RADIUS, padding: 16,

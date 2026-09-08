@@ -3,13 +3,8 @@
 // The last thing anyone sees before a refresh cycle leaves this console, so it is
 // the place where every number has to be defensible. Two rules do most of the work:
 //
-// THE POOL GUARDRAIL IS ABSENT OR HONEST, NEVER ZERO
-// `poolAvailableShares` is the equity ledger's own `available`, summed across the
-// corporation's pools. It arrives absent when nobody has warmed the cache that
-// serves it, and — deliberately, in the capture — when the ledger returns no pools
-// at all, because that sums to 0 and is indistinguishable from a genuinely spent
-// pool. An absent pool renders as a stated reason. Showing "0 available" would tell
-// someone their plan overruns a pool we cannot actually see.
+// The pool guardrail lives in PoolBar.jsx and appears on every step; see that file
+// for why an absent pool is never rendered as a pool of zero.
 //
 // EVERY FIGURE HERE IS OURS, SO EVERY FIGURE IS TAGGED
 // Unlike the cohort table, nothing on this screen is a value CTC displays: the
@@ -48,120 +43,6 @@ function Tile({ label, value, sub, title }) {
   );
 }
 
-/** The planned draw against the corporation's pool.
- *
- *  Renders a stated reason instead of a bar when the pool is unknown, matching how
- *  the cohort's filters degrade: a disabled control with a cause reads as a data
- *  gap the user can fix, where a missing one reads as a product that forgot.
- */
-function PoolBar({ available, planned }) {
-  if (available == null) {
-    return (
-      <div style={{
-        background: C.surface, border: `1px solid ${C.border}`, borderRadius: RADIUS,
-        padding: 16,
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <span style={{ fontSize: FS.sm, fontWeight: 600, color: C.textSubtle }}>
-            Equity pool
-          </span>
-          <Tag tone="notice" title="The pool figure is served from a cache primed out of band, and a corporation whose ledger reports no pools is indistinguishable from one that has spent it. Neither is reported as zero.">
-            Not in this build
-          </Tag>
-        </div>
-        <div style={{ fontSize: FS.sm, color: C.textSubtle, lineHeight: 1.55 }}>
-          This plan draws <strong>{shares(planned)}</strong> shares. There is no pool
-          figure in this snapshot to measure that against, so no remaining balance is
-          shown — rather than a zero that would read as an exhausted pool.
-        </div>
-      </div>
-    );
-  }
-
-  const remaining = available - planned;
-  const over = remaining < 0;
-  // Clamped only for the BAR's width. The printed numbers stay exact, so an overrun
-  // reads as a full bar plus a negative remaining rather than a quietly capped one.
-  const pct = available > 0 ? Math.min(100, (planned / available) * 100) : 0;
-
-  return (
-    <div style={{
-      background: C.surface, border: `1px solid ${C.border}`, borderRadius: RADIUS,
-      padding: 16,
-    }}>
-      <div style={{
-        display: "flex", gap: 24, alignItems: "center", flexWrap: "wrap",
-      }}>
-        <div style={{ display: "flex", gap: 24 }}>
-          <div>
-            <div style={{ fontSize: FS.xs, color: C.textQuiet }}>Available</div>
-            <div style={{ fontSize: FS.lg, color: C.text, fontVariantNumeric: "tabular-nums" }}>
-              {shares(available)}
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize: FS.xs, color: C.textQuiet }}>Planned</div>
-            <div style={{ fontSize: FS.lg, color: C.text, fontVariantNumeric: "tabular-nums" }}>
-              {shares(planned)}
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize: FS.xs, color: C.textQuiet }}>Remaining</div>
-            <div style={{
-              fontSize: FS.lg, fontVariantNumeric: "tabular-nums",
-              color: over ? C.feedbackNegative : C.text,
-            }}>
-              {shares(remaining)}
-            </div>
-          </div>
-        </div>
-
-        {/* Two coloured portions, not one bar on a grey track: the planned draw and
-            what would be left. Both segments are named in the legend below, because
-            a colour with no key is a decoration rather than a reading. */}
-        <div style={{ flex: "1 1 240px", minWidth: 200 }}>
-          <div
-            title={`${shares(planned)} planned of ${shares(available)} available`}
-            style={{
-              height: 12, borderRadius: 999, background: C.poolRemaining,
-              overflow: "hidden", display: "flex",
-            }}
-          >
-            <div style={{
-              width: `${pct}%`, height: "100%",
-              background: over ? C.feedbackNegative : C.poolPlanned,
-            }} />
-          </div>
-          <div style={{
-            display: "flex", gap: 14, marginTop: 6, fontSize: FS.xs, color: C.textQuiet,
-          }}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-              <span style={{
-                width: 9, height: 9, borderRadius: 2,
-                background: over ? C.feedbackNegative : C.poolPlanned,
-              }} />
-              Planned
-            </span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-              <span style={{
-                width: 9, height: 9, borderRadius: 2, background: C.poolRemaining,
-              }} />
-              Remaining
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {over && (
-        <div style={{ marginTop: 10, fontSize: FS.sm, color: C.feedbackNegative, lineHeight: 1.55 }}>
-          This plan draws {shares(planned - available)} more shares than the pool has
-          available. Reduce the target, narrow the cohort, or have the pool topped up
-          before issuing.
-        </div>
-      )}
-    </div>
-  );
-}
 
 
 /** Copies a ready-to-paste issuance prompt.
@@ -219,8 +100,8 @@ function HandoffCard({ issuable, prompt, copied, failed }) {
 }
 
 export default function ReviewStep({
-  totals, poolAvailableShares, grants = [], corporation, corporationId, settings,
-  asOf, onBack,
+  totals, grants = [], corporation, corporationId, settings,
+  asOf, onBack, poolBar,
 }) {
   const [copied, setCopied] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -247,7 +128,7 @@ export default function ReviewStep({
         Review + hand off
       </div>
 
-      <PoolBar available={poolAvailableShares} planned={totals.totalShares} />
+      {poolBar}
 
       <div style={{
         background: C.surface, border: `1px solid ${C.border}`, borderRadius: RADIUS, padding: 16,

@@ -36,6 +36,7 @@ import { useScenario } from "../state/useScenario.js";
 import CartPanel from "./planner/CartPanel.jsx";
 import SettingsStep from "./planner/SettingsStep.jsx";
 import ReviewStep from "./planner/ReviewStep.jsx";
+import PoolBar from "./planner/PoolBar.jsx";
 import {
   eligibility, grantForRow, planTotals, policyToSettings,
 } from "../model/policy.js";
@@ -383,9 +384,31 @@ export default function RefreshPlanner({ planner, corporation, corporationId }) 
     targetPct: 0, cadenceMonths: 12, rangeBelowPct: 0, rangeAbovePct: 0, tenureMinMonths: 0,
   };
 
+  // The planned draw, computed ONCE for every step. The pool bar appears on all
+  // three, and a figure that differed between them would be three answers to one
+  // question. Uses the same eligibility predicate and the same grantForRow the
+  // policy table renders from, so the bar cannot disagree with the rows above it.
+  const plannedTotals = useMemo(() => {
+    const monthsFor = (r) => tenureMonths({ tenure: { start_date: r.hire_date } }, asOf);
+    const eligibleRows = inCartRows.filter(
+      (r) => eligibility(r, liveSettings, monthsFor).eligible);
+    return {
+      eligibleRows,
+      totals: planTotals(eligibleRows, liveSettings, policySettings, overrides),
+    };
+  }, [inCartRows, liveSettings, policySettings, overrides, asOf]);
+
+  const poolBar = (
+    <PoolBar
+      available={planner.poolAvailableShares ?? null}
+      planned={plannedTotals.totals.totalShares}
+    />
+  );
+
   if (step === "settings") {
     return (
       <SettingsStep
+        poolBar={poolBar}
         rows={inCartRows}
         policySettings={policySettings}
         settings={liveSettings}
@@ -400,16 +423,7 @@ export default function RefreshPlanner({ planner, corporation, corporationId }) 
   }
 
   if (step === "review") {
-    // Computed here rather than carried from step 2 so the summary cannot drift
-    // from the settings: one source, recomputed on the settings the user actually
-    // left in place. Tenure-ineligible employees are already excluded upstream in
-    // SettingsStep's own totals, so the same filter is applied here.
-    // The SAME predicate step 2 uses, not a reimplementation of it — a summary
-    // that counted a different cohort than the screen before it would be worse
-    // than no summary.
-    const monthsFor = (r) => tenureMonths({ tenure: { start_date: r.hire_date } }, asOf);
-    const eligibleRows = inCartRows.filter(
-      (r) => eligibility(r, liveSettings, monthsFor).eligible);
+    const { eligibleRows } = plannedTotals;
     // Per-employee, for the issuance hand-off. Same grantForRow the settings
     // screen's own table uses, so the prompt cannot disagree with what was on
     // screen when the user decided to hand it off.
@@ -420,8 +434,8 @@ export default function RefreshPlanner({ planner, corporation, corporationId }) 
     }));
     return (
       <ReviewStep
-        totals={planTotals(eligibleRows, liveSettings, policySettings, overrides)}
-        poolAvailableShares={planner.poolAvailableShares ?? null}
+        totals={plannedTotals.totals}
+        poolBar={poolBar}
         grants={grants}
         corporation={corporation}
         corporationId={corporationId}
@@ -434,6 +448,8 @@ export default function RefreshPlanner({ planner, corporation, corporationId }) 
 
   return (
     <div style={{ padding: "18px 24px 28px", display: "grid", gap: 16 }}>
+      {poolBar}
+
       <div style={{
         background: C.surface, border: `1px solid ${C.border}`, borderRadius: RADIUS,
         padding: 16,
