@@ -42,6 +42,7 @@ allowed-tools:
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_roster_page.py *)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_equity_refresh_page.py *)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_report_insights.py *)
+  - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_corporation_info.py *)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/build_datadir.py *)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/serve.py *)
 ---
@@ -739,6 +740,24 @@ instead of showing a guardrail — which is correct, because the endpoint serves
 cache primed out of band and a corporation whose ledger reports no pools sums to
 exactly `0`. Neither is "this company has no shares left", so neither is ever
 rendered as a zero balance.
+
+**2d-iii. Corporation equity units (optional).** The planner can show grants as
+shares, fully diluted ownership or an equity value, matching CTC's own Equity Unit
+dropdown. The last two need a fully diluted share count and a per-share value that
+the refresh report does not carry.
+
+```bash
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_corporation_info.py" \
+  "<result path>" "<raw_dir>"
+```
+
+The source is the corporation info endpoint. **The price is not a choice** — it is
+resolved server-side from the corporation's own settings, so picking between the
+preferred price and the 409A value here would disagree with every other CTC
+surface.
+
+Skip it otherwise. A unit whose input is missing is dropped from the toggle rather
+than shown as `$0` or `0.0000%`, exactly as the product does.
 
 **2e. Write `meta.json`** (next to `raw_dir`, per `ctc_paths.py`):
 

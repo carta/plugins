@@ -1,8 +1,7 @@
 // The equity pool a refresh cycle draws against, shown on every step.
 //
-// Lifted out of the review step so the guardrail is visible while a plan is being
-// BUILT, not only once it is finished. A planner who discovers an overrun on the
-// last screen has already done the work twice.
+// Every step, not just the last one: a planner who only discovers an overrun on the
+// review screen has already done the work twice.
 //
 // AN ABSENT POOL IS NEVER A POOL OF ZERO
 // `available` arrives absent when nobody has warmed the cache that serves it, and

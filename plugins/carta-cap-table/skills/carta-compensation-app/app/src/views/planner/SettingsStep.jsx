@@ -14,6 +14,10 @@ import { useMemo, useState } from "react";
 import { C, FS, RADIUS } from "../../ui/theme.js";
 import { Select, TableAlign, Tag, Th, Td, useMediaQuery } from "../../ui/components.jsx";
 import { shares } from "../../model/format.js";
+import {
+  OWNERSHIP, SHARES, VALUE,
+  availableUnits, currencyOf, formatInUnit, perSharePrice, unitLabel,
+} from "../../model/equityUnits.js";
 import { tenureMonths } from "../../model/tenure.js";
 import {
   cadenceLabel, eligibility, grantForRow, grantRange, joinMonths, planTotals,
@@ -26,7 +30,7 @@ import {
 const CADENCES = [6, 12, 18, 24];
 
 /** A number field with a unit suffix, sized for 2-4 digits. */
-function NumField({ value, onChange, suffix, width = 64, title, min = 0 }) {
+function NumField({ value, onChange, suffix, width = 64, title, min = 0, disabled }) {
   return (
     <span style={{ display: "inline-flex", alignItems: "baseline", gap: 4 }}>
       <input
@@ -34,22 +38,30 @@ function NumField({ value, onChange, suffix, width = 64, title, min = 0 }) {
         min={min}
         value={value}
         title={title}
+        disabled={disabled}
+        readOnly={disabled}
         onChange={(e) => onChange(e.target.value === "" ? 0 : Number(e.target.value))}
         style={{
           width, height: 32, padding: "0 8px", fontSize: FS.md, fontFamily: "inherit",
-          color: C.textDefault, background: C.surfaceDefault,
+          color: disabled ? C.textQuiet : C.textDefault,
+          background: disabled ? C.surfaceUnderlay : C.surfaceDefault,
           border: `1px solid ${C.borderDefault}`, borderRadius: RADIUS,
           fontVariantNumeric: "tabular-nums",
+          cursor: disabled ? "not-allowed" : undefined,
         }}
       />
-      {suffix && <span style={{ fontSize: FS.md, color: C.textSubtle }}>{suffix}</span>}
+      {suffix && (
+        <span style={{ fontSize: FS.md, color: disabled ? C.textQuiet : C.textSubtle }}>
+          {suffix}
+        </span>
+      )}
     </span>
   );
 }
 
-function Tile({ label, value, sub }) {
+function Tile({ label, value, sub, title }) {
   return (
-    <div style={{
+    <div title={title} style={{
       flex: "1 1 150px", minWidth: 140, padding: "12px 14px",
       border: `1px solid ${C.border}`, borderRadius: RADIUS, background: C.surfaceDefault,
     }}>
@@ -102,7 +114,7 @@ function PolicyField({ label, help, info, children }) {
  *  how CTC asks for it, and joining the pair here keeps that a presentation detail
  *  rather than letting two half-durations into the settings object.
  */
-function YearsMonths({ total, onChange, title }) {
+function YearsMonths({ total, onChange, title, disabled }) {
   const { years, months } = splitMonths(total);
   return (
     <span style={{ display: "inline-flex", alignItems: "baseline", gap: 8 }}>
@@ -111,12 +123,14 @@ function YearsMonths({ total, onChange, title }) {
         onChange={(v) => onChange(joinMonths({ years: v, months }))}
         suffix="year(s)"
         title={title}
+        disabled={disabled}
       />
       <NumField
         value={months}
         onChange={(v) => onChange(joinMonths({ years, months: v }))}
         suffix="month(s)"
         title={title}
+        disabled={disabled}
       />
     </span>
   );
@@ -160,6 +174,27 @@ function Nav({ onBack, onNext }) {
   );
 }
 
+/** CTC's Equity Unit dropdown, applied to this table's equity columns.
+ *
+ *  Only units this build can compute are offered — the product removes one from
+ *  its menu rather than showing a $0 or 0.0000% reading, and so does this.
+ */
+function EquityUnitToggle({ unit, onUnit, equityUnits }) {
+  const options = availableUnits(equityUnits);
+  if (options.length < 2) return null;
+  return (
+    <Select
+      label="Equity unit"
+      value={unit}
+      onChange={onUnit}
+      options={options.map((u) => ({ value: u, label: unitLabel(u, equityUnits) }))}
+      minWidth={230}
+      hint="Shows benchmark, grant and range in this unit. Share counts are Carta's own; ownership and value are calculated here from the corporation's fully diluted count and per-share value."
+    />
+  );
+}
+
+
 /** The Grant column: a figure, its provenance, and a way to change it.
  *
  *  Three provenances, deliberately distinguished — someone reading this column has
@@ -173,7 +208,10 @@ function Nav({ onBack, onNext }) {
  *  Empty input clears the override rather than setting 0 — a blank field means
  *  "no longer overriding", and 0 is a real grant someone might mean.
  */
-function GrantCell({ row, shares: sh, modelled, overridden, standing, targetPct, onEdit }) {
+function GrantCell({
+  row, shares: sh, modelled, overridden, standing, targetPct, onEdit,
+  unit, equityUnits,
+}) {
   const title = overridden
     ? "Set by hand in this console — Carta's figure is unchanged"
     : sh == null
@@ -219,6 +257,14 @@ function GrantCell({ row, shares: sh, modelled, overridden, standing, targetPct,
           </button>
         )}
       </span>
+      {/* The figure stays EDITABLE in shares whatever unit is selected: a grant is
+          issued as a share count, and typing a percentage would need a conversion
+          nobody asked for. The chosen unit is shown beneath it instead. */}
+      {unit !== SHARES && sh != null && (
+        <div style={{ fontSize: FS.xs, color: C.textQuiet, marginTop: 2 }}>
+          {formatInUnit(sh, unit, equityUnits, shares)}
+        </div>
+      )}
       {/* Guidance, not a rule: flagged, never rejected. Someone granting above band
           on purpose is doing their job, and a blocked field would stop them. */}
       {(standing === "under" || standing === "over") && (
@@ -232,8 +278,14 @@ function GrantCell({ row, shares: sh, modelled, overridden, standing, targetPct,
 
 export default function SettingsStep({
   rows, policySettings, settings, onSettings, onBack, onNext, asOf,
-  overrides, onOverride, poolBar,
+  overrides, onOverride, poolBar, equityUnits,
 }) {
+  // Shares by default: the report's own figure, and the only unit that needs
+  // no corporation-level input.
+  const [unit, setUnit] = useState(SHARES);
+  const units = availableUnits(equityUnits);
+  const ownershipAvailable = units.includes(OWNERSHIP);
+  const valueAvailable = units.includes(VALUE);
   const [showIneligible, setShowIneligible] = useState(true);
   // Below this the two columns stack; the grants table needs the room.
   const wide = useMediaQuery("(min-width: 1100px)");
@@ -303,6 +355,29 @@ export default function SettingsStep({
             value={totals.avgShares == null ? "—" : shares(totals.avgShares)}
             sub={totals.counted ? `over ${totals.counted}` : "nothing to average"}
           />
+          {/* Shown ALONGSIDE the share counts rather than replacing them: the
+              question "how much of the company is this" is a different one from
+              "how many shares", and a cycle is usually discussed in both. Each
+              appears only when its input was captured — CTC drops the unit rather
+              than reading out a 0.0000% or a $0. */}
+          {ownershipAvailable && (
+            <Tile
+              label="Of the company"
+              value={formatInUnit(totals.totalShares, OWNERSHIP, equityUnits, shares)}
+              sub="fully diluted"
+              title={`${shares(equityUnits.fullyDilutedShares)} fully diluted shares`}
+            />
+          )}
+          {valueAvailable && (
+            <Tile
+              label="Total value"
+              value={formatInUnit(totals.totalShares, VALUE, equityUnits, shares)}
+              sub={`at ${perSharePrice(equityUnits.equityValue, currencyOf(equityUnits))}/share`}
+              title={equityUnits.asOf
+                ? `The corporation's per-share equity value, as of ${equityUnits.asOf}`
+                : "The corporation's per-share equity value"}
+            />
+          )}
         </div>
         {totals.noBenchmark > 0 && (
           <div style={{ marginTop: 10, fontSize: FS.sm, color: C.textSubtle, lineHeight: 1.55 }}>
@@ -402,13 +477,16 @@ export default function SettingsStep({
                       title="Percent of the employee's new-hire benchmark"
                     />
                     <span style={{ fontSize: FS.md, color: C.textSubtle }}>/ every</span>
-                    {/* The SAME stored cadence as the Frequency field below — a target
-                        only means something paired with the period it repeats over.
-                        Editing either moves both, because there is one value. */}
+                    {/* An ECHO of the Frequency field below, not a second control.
+                        There is one stored cadence, and two live inputs over one
+                        value invite the reader to wonder which one wins. Greyed and
+                        read-only says "this is shown here, set there" — the target
+                        still needs the period beside it to mean anything. */}
                     <YearsMonths
                       total={settings.cadenceMonths}
                       onChange={setCadence}
-                      title="How often an employee may receive a refresh grant"
+                      title="Set by the Frequency field below — one cadence, shown here because a target means nothing without the period it repeats over"
+                      disabled
                     />
                   </span>
                 </PolicyField>
@@ -476,8 +554,11 @@ export default function SettingsStep({
             display: "flex", justifyContent: "space-between", alignItems: "center",
             gap: 16, marginBottom: 8,
           }}>
-            <div style={{ fontSize: FS.sm, fontWeight: 600, color: C.textSubtle }}>
-              Grants ({shown.length})
+            <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+              <span style={{ fontSize: FS.sm, fontWeight: 600, color: C.textSubtle }}>
+                Grants ({shown.length})
+              </span>
+              <EquityUnitToggle unit={unit} onUnit={setUnit} equityUnits={equityUnits} />
             </div>
             <label style={{
               display: "inline-flex", alignItems: "center", gap: 7, cursor: "pointer",
@@ -542,8 +623,8 @@ export default function SettingsStep({
                         <Td mono subtle={row.four_year_grant_benchmark_num_shares == null}
                             title={row.four_year_grant_benchmark_num_shares == null
                               ? "No equity benchmark for this role in this snapshot" : undefined}>
-                          {row.four_year_grant_benchmark_num_shares == null
-                            ? "—" : shares(row.four_year_grant_benchmark_num_shares)}
+                          {formatInUnit(
+                            row.four_year_grant_benchmark_num_shares, unit, equityUnits, shares)}
                         </Td>
                         <GrantCell
                           row={row}
@@ -553,9 +634,14 @@ export default function SettingsStep({
                           standing={standing}
                           targetPct={settings.targetPct}
                           onEdit={onOverride}
+                          unit={unit}
+                          equityUnits={equityUnits}
                         />
                         <Td mono subtle={min == null}>
-                          {min == null ? "—" : `${shares(min)} – ${shares(max)}`}
+                          {min == null
+                            ? "—"
+                            : `${formatInUnit(min, unit, equityUnits, shares)} – `
+                              + `${formatInUnit(max, unit, equityUnits, shares)}`}
                         </Td>
                       </tr>
                     );

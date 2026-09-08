@@ -409,6 +409,7 @@ export default function RefreshPlanner({ planner, corporation, corporationId }) 
     return (
       <SettingsStep
         poolBar={poolBar}
+        equityUnits={planner.equityUnits ?? null}
         rows={inCartRows}
         policySettings={policySettings}
         settings={liveSettings}

@@ -896,11 +896,24 @@ def _build_planner(rawdir):
             pool_available = raw_pool
     availability["pool"] = pool_available is not None
 
+    # The inputs for CTC's three equity units. Absent when the capture never ran,
+    # or when the corporation has no valuation — a real state, and one the app
+    # answers by dropping the unit rather than showing a zero.
+    info_path = pathlib.Path(rawdir) / "corporation_info.json"
+    equity_units = _read_json(info_path) if info_path.exists() else None
+    fd_shares = (equity_units or {}).get("fullyDilutedShares")
+    equity_value = (equity_units or {}).get("equityValue")
+    # Zero is as unusable as absent here: dividing by it, or pricing at it, gives
+    # a figure that reads as real and is not.
+    availability["ownership"] = bool(fd_shares)
+    availability["equityValue"] = bool(equity_value)
+
     return {
         "schemaVersion": 1,
         "rows": rows,
         "policy": policy,
         "poolAvailableShares": pool_available,
+        "equityUnits": equity_units,
         "availability": availability,
         "reconciliation": {
             "employeeTotal": len(rows),
