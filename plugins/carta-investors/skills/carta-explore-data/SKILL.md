@@ -70,6 +70,8 @@ The user must have the Carta MCP server connected. If this is the first query in
 2. Call `set_context` with the target `firm_id` if needed
 3. For **cap table queries** — confirm the corporation ID before running. If the user names a portfolio company, resolve its `CORPORATION_ID` from `CORPORATION_BASIC_INFO_V2` first (see Step 2 table below)
 
+> **Named-entity queries do NOT need `list_contexts`.** `list_contexts` only enumerates the Carta client **firms** the user has admin access to — never call it to search for a person, LP, or portfolio-company name. Once firm context is already set and the user names an entity that isn't the active firm (e.g. "Armstrong Capital Partners' capital activity inception to date"), that name is almost always an **LP/investor within the current firm**, not a request to switch firms — proceed straight to Step 1 (`dwh__execute__question`) with the question scoped to that name. Only call `list_contexts` again if the user explicitly asks to switch to a different firm.
+
 > **Tool priority (firm context):** `fa:*` MCP commands → `dwh__execute__question` → semantic-layer SQL (Steps 2–4) → raw `dwh__execute__query`. Never call `cap_table:*` or `cap_table_chart` in firm context — those require a direct tenant role unavailable to investor-portal portcos; use the DWH queries in `cap-table.md` instead.
 
 ## Step 0 — Fetch portfolio companies (MANDATORY GATE)
