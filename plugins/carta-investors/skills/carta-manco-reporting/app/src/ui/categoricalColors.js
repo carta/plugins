@@ -1,14 +1,15 @@
-// Ink's data-viz sequence (Ink's charts.md): tint-3 hues, then
-// positive/negative. Index 8 ("Other") has no data-viz token, so it stays
-// a literal hex — matches MonthlyExpenseBreakdown.jsx's TAIL_DOT_COLOR.
+// Level 2 of Ink's intensity ladder (patterns.md), tried in place of -3
+// for a less-intense palette. Index 8 ("Other") has no data-viz token, so
+// it stays a literal hex — matches MonthlyExpenseBreakdown.jsx's
+// TAIL_DOT_COLOR.
 export const CATEGORICAL_COLORS = [
-  "var(--ink-color-global-data-viz-blue-3)",
-  "var(--ink-color-global-data-viz-turquoise-3)",
-  "var(--ink-color-global-data-viz-brown-3)",
-  "var(--ink-color-global-data-viz-yellow-3)",
-  "var(--ink-color-global-data-viz-lime-3)",
-  "var(--ink-color-global-data-viz-positive-3)",
-  "var(--ink-color-global-data-viz-negative-3)",
+  "var(--local-cat-blue-2)",
+  "var(--local-cat-turquoise-2)",
+  "var(--local-cat-brown-2)",
+  "var(--local-cat-yellow-2)",
+  "var(--local-cat-lime-2)",
+  "var(--local-cat-positive-2)",
+  "var(--local-cat-negative-2)",
   "var(--ink-color-global-brand-blue-40)",
   "#c3c2b7",
 ];

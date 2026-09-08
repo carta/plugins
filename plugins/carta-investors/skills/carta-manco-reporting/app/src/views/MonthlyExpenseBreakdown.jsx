@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { sans, INK, PAPER, LINE, FAINT, MICRO, BORDER_DEFAULT, BLUE, FS } from "../ui/theme.js";
-import { Eyebrow } from "../ui/components.jsx";
+import { sans, INK, LINE, FAINT, MICRO, BLUE, FS } from "../ui/theme.js";
+import { LEDGER_BASE } from "../ui/table.jsx";
 import { fmtCurrencyExact } from "../charts/chartTheme.js";
 import { trackClick } from "../analytics.js";
 
@@ -64,51 +64,64 @@ export default function MonthlyExpenseBreakdown({
   const visibleRows = expanded ? rows : rows.slice(0, DEFAULT_VISIBLE);
   const hiddenTotal = rows.slice(DEFAULT_VISIBLE).reduce((s, r) => s + r.amount, 0);
 
+  const openCategory = (name) => {
+    trackClick("MancoReporting.Dashboard.SelectExpenseCategory");
+    onSelect?.({ category: name });
+  };
+
   return (
     <div style={S.wrap}>
-      {/* Breakdown eyebrow + total for the current range */}
+      {/* DateRangeControls above already shows the picked range. */}
       <div style={S.controlsRow}>
-        <Eyebrow>Break down · {rangeLabel}</Eyebrow>
-        <span style={S.totalLabel}>
-          <span style={{ color: MICRO }}>Total</span>
+        <span style={S.totalRow}>
+          <span style={S.totalLabel}>Total</span>
           <span style={S.totalValue}>{fmtCurrencyExact(rangeTotal)}</span>
         </span>
       </div>
 
-      {/* Column header for the rows */}
-      <div style={S.tableHeader}>
-        <span style={S.headerCategory}>Category</span>
-        <span style={S.headerAmount}>Amount</span>
-        <span style={S.headerPct}>% of range</span>
-        <span style={S.headerArrow} aria-hidden="true" />
-      </div>
-
-      {/* Category rows */}
-      <ul style={S.list}>
-        {visibleRows.map((r) => {
-          const pct = rangeTotal ? (r.amount / rangeTotal) * 100 : 0;
-          return (
-            <li key={r.name} style={S.itemWrap}>
-              <button
-                style={S.itemBtn}
-                onClick={() => { trackClick("MancoReporting.Dashboard.SelectExpenseCategory"); onSelect?.({ category: r.name }); }}
+      <table className="ledger sheet" style={LEDGER_BASE}>
+        <thead>
+          <tr>
+            <th style={S.thCategory}>Category</th>
+            <th style={S.thNum}>Amount</th>
+            <th style={S.thNum}>% of range</th>
+            <th style={S.thArrow} aria-hidden="true" />
+          </tr>
+        </thead>
+        <tbody>
+          {visibleRows.map((r) => {
+            const pct = rangeTotal ? (r.amount / rangeTotal) * 100 : 0;
+            return (
+              <tr
+                key={r.name}
+                style={S.row}
+                tabIndex={0}
+                role="button"
                 title={`Drill into ${r.name} — ${rangeLabel}`}
+                onClick={() => openCategory(r.name)}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openCategory(r.name); } }}
               >
-                <span style={{ ...S.dot, background: r.color }} />
-                <span style={S.itemName}>{r.name}</span>
-                <span style={S.itemAmount}>{fmtCurrencyExact(r.amount)}</span>
-                <span style={S.itemPct}>{pct.toFixed(1)}%</span>
-                <span style={S.itemArrow}>→</span>
-              </button>
-            </li>
-          );
-        })}
-        {rows.length === 0 && (
-          <li style={{ ...sans, fontSize: FS.body, color: MICRO, padding: "8px 0" }}>
-            No expenses recorded for {rangeLabel}.
-          </li>
-        )}
-      </ul>
+                <td>
+                  <span style={S.tdCategory}>
+                    <span style={{ ...S.dot, background: r.color }} />
+                    <span style={S.itemName}>{r.name}</span>
+                  </span>
+                </td>
+                <td style={S.tdNum}>{fmtCurrencyExact(r.amount)}</td>
+                <td style={{ ...S.tdNum, color: FAINT }}>{pct.toFixed(1)}%</td>
+                <td style={S.tdArrow}>→</td>
+              </tr>
+            );
+          })}
+          {rows.length === 0 && (
+            <tr>
+              <td colSpan={4} style={{ ...sans, fontSize: FS.body, color: MICRO, padding: "8px 2px" }}>
+                No expenses recorded for {rangeLabel}.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
 
       {hiddenCount > 0 && (
         <button
@@ -176,75 +189,41 @@ const S = {
     flexWrap: "wrap",
     marginBottom: 12,
   },
-  totalLabel: {
+  totalRow: {
     ...sans,
     marginLeft: "auto",
     display: "inline-flex",
     alignItems: "baseline",
     gap: 8,
-    fontSize: FS.small,
-    fontWeight: 600,
-    letterSpacing: "0.06em",
-    textTransform: "uppercase",
+  },
+  totalLabel: {
+    fontSize: FS.body,
+    fontWeight: 400,
+    color: MICRO,
   },
   totalValue: {
     color: INK,
     fontSize: FS.value,
     fontVariantNumeric: "tabular-nums",
-    letterSpacing: "normal",
-    textTransform: "none",
     fontWeight: 600, // Ink's type scale never exceeds weight 600 (was 700)
   },
-  tableHeader: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    padding: "6px 4px",
-    borderBottom: `1px solid ${BORDER_DEFAULT}`,
-    fontSize: FS.small,
-    fontWeight: 500,
-    color: INK,
+  thCategory: {
+    textAlign: "left",
   },
-  headerCategory: {
-    marginLeft: 20,
-    flex: 1,
-    minWidth: 0,
-  },
-  headerAmount: {
-    width: 110,
+  thNum: {
     textAlign: "right",
     fontVariantNumeric: "tabular-nums",
   },
-  headerPct: {
-    width: 72,
-    textAlign: "right",
-    fontVariantNumeric: "tabular-nums",
-  },
-  headerArrow: {
+  thArrow: {
     width: 18,
   },
-  list: {
-    listStyle: "none",
-    margin: 0,
-    padding: 0,
-    background: PAPER,
+  row: {
+    cursor: "pointer",
   },
-  itemWrap: {
-    borderBottom: `1px solid ${LINE}`,
-  },
-  itemBtn: {
-    ...sans,
+  tdCategory: {
     display: "flex",
     alignItems: "center",
     gap: 10,
-    width: "100%",
-    padding: "8px 4px",
-    background: "transparent",
-    border: "none",
-    cursor: "pointer",
-    fontSize: FS.bodyLg,
-    color: INK,
-    textAlign: "left",
   },
   dot: {
     width: 10,
@@ -260,28 +239,21 @@ const S = {
     whiteSpace: "nowrap",
     color: INK,
   },
-  itemAmount: {
-    width: 110,
+  tdNum: {
     textAlign: "right",
     fontVariantNumeric: "tabular-nums",
     fontWeight: 500,
     color: INK,
     whiteSpace: "nowrap",
   },
-  itemPct: {
-    width: 72,
-    textAlign: "right",
-    fontVariantNumeric: "tabular-nums",
-    color: FAINT,
-    fontWeight: 400,
-    whiteSpace: "nowrap",
-  },
-  itemArrow: {
+  tdArrow: {
     width: 18,
     textAlign: "right",
     color: BLUE,
     fontSize: FS.value,
   },
+  // table.ledger's last row has no border-bottom (theme.js), so this is
+  // the only divider between the table and the toggle — not a duplicate.
   toggleBtn: {
     ...sans,
     display: "flex",
@@ -289,7 +261,6 @@ const S = {
     gap: 8,
     width: "100%",
     padding: "10px 4px",
-    marginTop: 2,
     background: "transparent",
     border: "none",
     borderTop: `1px solid ${LINE}`,

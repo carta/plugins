@@ -194,15 +194,29 @@ export const GLOBAL_CSS = `
        large fill — see Ink's charts.md's conditional-bar-color
        section. Negative L2 from the intensity ladder instead. */
     --local-mark-negative: #E52431;
-    /* One hue (link blue) at three intensities, keyed to role rather than a
-       fourth unrelated series — the ladder from Ink's patterns.md.
-       dark: the widest-horizon or most-emphasized figure (annual budget, a
-       net-cashflow line). tint: a secondary series sharing the chart with
-       the full blue (YTD budget, cashflow expenses). pale: a plan/budget
-       backdrop bar sitting behind the primary (lime) actual bar. */
-    --local-series-blue-dark: #0D366B;
+    /* One hue at multiple intensities, keyed to role — the ladder from
+       Ink's patterns.md. tint: a secondary series sharing the chart with
+       the full blue (cashflow expenses). pale: a plan/budget backdrop bar
+       sitting behind the primary (lime) actual bar. */
     --local-series-blue-tint: #86B6EF;
     --local-series-blue-pale: #CDE2FB;
+    /* Blue L4 (untokenized) — the widest-horizon/most-emphasized figure
+       (annual budget). */
+    --local-series-blue-l4: #1A3E6D;
+    /* Blue L1 (untokenized) — the ladder's lightest rung, so light and
+       dark share the same value; there's nothing lighter to shift to. */
+    --local-series-blue-l1: #8BABD6;
+    /* Level 2 of the intensity ladder (patterns.md) — untokenized, so
+       written here as -3's paler sibling for the fee-income fund
+       sequence. Blue-2 gets a dark-mode arm like blue-l1 above; the
+       rest are mid/high-chroma hues that already survive the flip. */
+    --local-cat-blue-2: #2C67B5;
+    --local-cat-turquoise-2: #68D7D9;
+    --local-cat-brown-2: #C9B8B1;
+    --local-cat-yellow-2: #FBE284;
+    --local-cat-lime-2: #C9EC56;
+    --local-cat-positive-2: #32B0A0;
+    --local-cat-negative-2: #EF7171;
     /* charts.md's single-series house pick (lime-3) is a pure data accent
        with no semantic baggage, unlike blue (reserved for links/focus) or
        green/red. A paler tint of it for the same "provisional/secondary
@@ -224,6 +238,8 @@ export const GLOBAL_CSS = `
     --shadow: none; --shadow-hover: 0 4px 26px -4px rgba(0,0,0,.35);
     --focus-ring: 0 0 0 2px rgba(110,155,214,.5);
     --local-mark-negative: #EF7171;
+    --local-cat-blue-2: #8BABD6;
+    --local-series-blue-l4: #285DA3;
     color-scheme: dark;
   }
 
@@ -362,9 +378,13 @@ export const GLOBAL_CSS = `
   table.ledger { width: 100%; border-collapse: collapse; font-size: ${FS.value}px; }
   table.ledger thead tr { border-bottom: 1px solid ${BORDER_DEFAULT}; }
   table.ledger tbody { font-variant-numeric: tabular-nums; }
-  table.ledger tbody tr { border-bottom: 1px solid ${LINE}; transition: background .1s ${EASE}; }
-  table.ledger tbody tr:last-child { border-bottom: none; }
+  table.ledger tbody tr { transition: background .1s ${EASE}; }
   table.ledger tbody tr:hover { background: var(--row-hover); }
+  /* On <td>, not <tr> — a <tr> border never paints under LEDGER_BASE's
+     border-collapse: separate (browsers drop row/row-group borders there),
+     matching Ink's own .ink-table recipe, which puts it on <td> too. */
+  table.ledger tbody td { border-bottom: 1px solid ${LINE}; }
+  table.ledger tbody tr:last-child td { border-bottom: none; }
   table.ledger th { font-size: ${FS.value}px; letter-spacing: normal; text-transform: none; color: ${INK}; font-weight: 500; white-space: nowrap; padding: 9px 12px; }
   table.ledger td { font-weight: 400; padding: 10px 12px; }
   table.ledger th:first-child, table.ledger td:first-child { padding-left: 2px; }

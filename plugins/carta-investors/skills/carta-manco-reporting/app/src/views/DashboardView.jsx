@@ -8,13 +8,13 @@ import VendorSpend from "../charts/VendorSpend.jsx";
 import MonthlyExpensesByCategory from "../charts/MonthlyExpensesByCategory.jsx";
 import MonthlyExpenseBreakdown from "./MonthlyExpenseBreakdown.jsx";
 import FundSelector from "./FundSelector.jsx";
-import FeeYearFilter from "./FeeYearFilter.jsx";
 import DateRangeControls from "./DateRangeControls.jsx";
 import { fmtCurrencyShort, displayCurrency } from "../charts/chartTheme.js";
 import { dimensionOf } from "../ui/dimension.js";
 import { Capped } from "../shell/AppShell.jsx";
 import { sans, inkNum, INK, PAPER, LINE, FAINT, MICRO, GREEN, RED, FS } from "../ui/theme.js";
-import { H2, HoverCard } from "../ui/components.jsx";
+import { H1, H2, HoverCard, HelpCircleIcon } from "../ui/components.jsx";
+import HoverTip from "../ui/HoverTip.jsx";
 import CashDetailCard from "./CashDetailCard.jsx";
 import { hasCashDetail } from "../ui/cashDetail.js";
 import ExportButton from "../ui/ExportButton.jsx";
@@ -95,18 +95,25 @@ export function cashSubtitle(cash) {
 }
 
 // Label-above-value order, per StatTile's `labelPos="top"` default (Ink's
-// real Tile spec) — label, then value (marginTop: 6), then sub (marginTop: 5).
+// real Tile spec) — label, then value (marginTop: 6). The sub text now sits
+// behind a (?) hint on the label, matching the drilldown drawer's HoverTip.
 function Tile({ value, label, sub, valueColor, detail, detailLabel, detailAlign }) {
   const shown = <span style={{ ...styles.tileVal, color: valueColor || INK }}>{value}</span>;
   return (
     <div style={styles.tile}>
-      <div style={styles.tileLabel}>{label}</div>
+      <div style={styles.tileLabelRow}>
+        <div style={styles.tileLabel}>{label}</div>
+        {sub && (
+          <HoverTip text={sub}>
+            <HelpCircleIcon size={14} strokeWidth={1.6} style={{ color: FAINT }} />
+          </HoverTip>
+        )}
+      </div>
       <div>
         {detail
           ? <HoverCard card={detail} label={detailLabel} align={detailAlign}>{shown}</HoverCard>
           : shown}
       </div>
-      <div style={styles.tileSub}>{sub}</div>
     </div>
   );
 }
@@ -179,32 +186,13 @@ export function varianceCategorySource(v) {
     : "Categories come from the firm's own budget workbook; actuals are matched to them by Carta GL account.";
 }
 
-/** The provenance line under the variance chart. */
-export function varianceCategoryNote(v) {
-  return isCartaBudget(v)
-    ? "Budget from the firm's own Carta budget. Actuals from ManCo entity journal entries, joined to it on GL account."
-    : "Budget from the firm's Excel workbook — pick which one above when several are ingested. Actuals from ManCo entity journal entries, joined on GL account rather than account name, because the workbook's category names and Carta's account names rarely match.";
-}
-
 // What the chart leaves out. A vendor chart covering 43% of spend looks
 // complete unless it says otherwise, and on some firms most expense
 // carries no vendor at all.
 export function vendorNote(v) {
-  const parts = ["Expense journal entries grouped by the vendor Carta recorded."];
-  if (v.other_count > 0) {
-    parts.push(`${v.other_count} smaller vendor${v.other_count === 1 ? "" : "s"} totalling ${fmtCurrencyShort(v.other_amount, 0)} are not charted.`);
-  }
-  if (v.unattributed_amount > 0) {
-    const pct = Math.round((v.unattributed_amount / v.total_expense) * 100);
-    parts.push(`${fmtCurrencyShort(v.unattributed_amount, 0)} (${pct}% of expense) has no vendor on the entry and is not shown — card and reimbursement lines often name only a category.`);
-  }
-  if (v.aggregated_count > 0) {
-    parts.push(`${v.aggregated_count} account${v.aggregated_count === 1 ? " is" : "s are"} grouped under the account name rather than naming individuals; the spend is still counted.`);
-  }
-  if (v.inferred_total > 0) {
-    parts.push(`${fmtCurrencyShort(v.inferred_total, 0)} was inferred from entry descriptions and approved during setup, not recorded as a vendor in Carta.`);
-  }
-  return parts.join(" ");
+  if (!(v.unattributed_amount > 0)) return null;
+  const pct = Math.round((v.unattributed_amount / v.total_expense) * 100);
+  return `${fmtCurrencyShort(v.unattributed_amount, 0)} (${pct}% of expenses) has no vendor on the entry and is not shown.`;
 }
 
 export default function DashboardView({ snapshot, accountsData, drilldown }) {
@@ -308,35 +296,39 @@ export default function DashboardView({ snapshot, accountsData, drilldown }) {
   const [selectedFunds, setSelectedFunds] = useState(allFundNames);
   useEffect(() => { setSelectedFunds(allFundNames); }, [allFundNames]);
 
-  const [feeYearStartIdx, setFeeYearStartIdx] = useState(0);
   const [showProjections, setShowProjections] = useState(true);
-  // Reset year filter and projection toggle when snapshot changes.
-  useEffect(() => { setFeeYearStartIdx(0); setShowProjections(true); }, [feeSchedule]);
+  // Reset the projection toggle when snapshot changes.
+  useEffect(() => { setShowProjections(true); }, [feeSchedule]);
 
   return (
     // The page no longer caps its own width; this view keeps the width it
     // has always had. Only the budget tables want more.
     <Capped id={DASHBOARD_EXPORT_ID}>
-      <div data-export-exclude style={styles.exportRow}>
-        <ExportButton
-          targetId={DASHBOARD_EXPORT_ID}
-          entityName={snapshot?.firmName || "ManCo"}
-          pageLabel="Dashboard"
-          asOf={snapshot?.asOf}
-          filenameBase={`${slugify(snapshot?.firmName) || "manco"}-dashboard`}
-          events={{ click: "MancoReporting.Dashboard.ExportHtml",
-                   succeeded: "MancoReporting.Dashboard.ExportHtmlSucceeded",
-                   failed: "MancoReporting.Dashboard.ExportHtmlFailed" }}
-        />
-      </div>
+      <H1
+        subhead={snapshot?.entityLabel || snapshot?.firmName || "ManCo"}
+        actions={
+          <div data-export-exclude>
+            <ExportButton
+              targetId={DASHBOARD_EXPORT_ID}
+              entityName={snapshot?.firmName || "ManCo"}
+              pageLabel="Dashboard"
+              asOf={snapshot?.asOf}
+              filenameBase={`${slugify(snapshot?.firmName) || "manco"}-dashboard`}
+              events={{ click: "MancoReporting.Dashboard.ExportHtml",
+                       succeeded: "MancoReporting.Dashboard.ExportHtmlSucceeded",
+                       failed: "MancoReporting.Dashboard.ExportHtmlFailed" }}
+            />
+          </div>
+        }
+      >Dashboard</H1>
       <KpiStrip ops={ops} cash={cash} />
 
       <Section
         legend={
           <>
-            <LegendItem color="var(--blue)" label="Income" />
-            <LegendItem color="var(--ink-color-global-data-viz-turquoise-3)" label="Expenses" />
-            <LineLegendItem color="var(--local-series-blue-dark)" label="Net operating income" />
+            <LegendItem color="var(--local-series-blue-l1)" label="Income" />
+            <LegendItem color="var(--ink-color-global-data-viz-brown-3)" label="Expenses" />
+            <LineLegendItem color="var(--ink)" label="Net operating income" />
           </>
         }
       >
@@ -344,7 +336,7 @@ export default function DashboardView({ snapshot, accountsData, drilldown }) {
           monthlyCashflow={monthlyCashflow}
           onSelect={onCashflowSelect}
           title="Monthly P&L"
-          sub="Income and expenses booked to the management company by effective date. Line shows monthly net operating income. Click an income or expense stack to drill in."
+          sub="Income and expenses booked to the management company by effective date."
           asOf={asOf}
         />
       </Section>
@@ -354,18 +346,19 @@ export default function DashboardView({ snapshot, accountsData, drilldown }) {
           <Section
             legend={
               <>
-                <LegendItem color="var(--local-series-blue-dark)" label="Annual budget" />
-                <LegendItem color="var(--local-series-blue-tint)" label="YTD budget" />
+                <LegendItem color="var(--local-series-blue-l4)" label="Annual budget" />
+                <LegendItem color="var(--local-series-blue-l1)" label="YTD budget" />
                 <LegendItem color="var(--blue)" label="YTD actuals" />
               </>
             }
-            note={`Budget sourced from Carta Fund Admin via the budget tool. YTD budget = sum of monthly budget rows ${ytdShort} ${asOf.slice(0,4)}, matching the actuals window.`}
           >
             <BudgetVsActuals
               budget={budget}
               ops={ops}
               title="YTD Budget vs Actuals"
-              sub="Annual budget, YTD budget, and YTD actuals across Income, Expenses, and Net Operating Income."
+              // Blank sub reserves the same line height as Top Vendors'
+              // sub, so both plots start at the same vertical position.
+              sub=" "
               compact
             />
           </Section>
@@ -377,7 +370,7 @@ export default function DashboardView({ snapshot, accountsData, drilldown }) {
               legend={
                 vendorSpend.inferred_total > 0 ? (
                   <>
-                    <LegendItem color="var(--ink-color-global-data-viz-lime-3)" label="From Carta" />
+                    <LegendItem color="var(--local-cat-lime-2)" label="From Carta" />
                     <LegendItem color="var(--local-series-lime-tint)" label="Inferred from description" />
                   </>
                 ) : null
@@ -388,7 +381,7 @@ export default function DashboardView({ snapshot, accountsData, drilldown }) {
                 vendorSpend={vendorSpend}
                 onSelect={onVendorSelect}
                 title="Top Vendors by Spend"
-                sub={`Expense spend by vendor, ${ytdWindow}. Click any bar to drill into that vendor's journal entries.`}
+                sub={`Expense spend by vendor, ${ytdWindow}.`}
                 compact
               />
             </Section>
@@ -396,24 +389,16 @@ export default function DashboardView({ snapshot, accountsData, drilldown }) {
         )}
       </div>
 
-      <Section
-        note={`Fees sourced from fund-level journal entries, filtered to ${ytdShort} each year to match the YTD period selection.`}
-      >
+      <Section>
         <FeeIncome
           feeSchedule={feeSchedule}
           selectedFunds={selectedFunds}
-          yearStartIdx={feeYearStartIdx}
           showProjections={showProjections}
           onSelect={onFeeIncomeSelect}
           title="Management Fee Income by Fund"
-          sub={`Year-to-date management fees received from each fund entity (${ytdShort}), for each year. Click a stack segment to drill into that fund's fee payments.`}
+          sub={`Year-to-date management fees received from each fund entity (${ytdShort}), for each year.`}
           headerControl={
             <div data-export-exclude style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <FeeYearFilter
-                labels={feeSchedule.labels}
-                startIdx={feeYearStartIdx}
-                onChange={setFeeYearStartIdx}
-              />
               <FundSelector
                 funds={feeSchedule.funds}
                 selected={selectedFunds}
@@ -444,9 +429,7 @@ export default function DashboardView({ snapshot, accountsData, drilldown }) {
       {/* A firm that budgets in Carta has no workbook, and telling it the
           categories came from one names a file it never sent. */}
       {varianceByCategory?.budgets?.length ? (
-        <Section
-          note={varianceCategoryNote(varianceByCategory)}
-        >
+        <Section>
           <VarianceByCategory
             varianceByCategory={varianceByCategory}
             onSelect={onVarianceSelect}
@@ -456,7 +439,7 @@ export default function DashboardView({ snapshot, accountsData, drilldown }) {
             // a quarterly budget stops at the last whole quarter — and the
             // chart states its own period a line below. Naming the wrong
             // one here had it contradicting itself on screen.
-            sub={`Budget categories furthest from plan. ${varianceCategorySource(varianceByCategory)} Click any bar to drill into the underlying journal entries.`}
+            sub={`Budget categories furthest from plan. ${varianceCategorySource(varianceByCategory)}`}
           />
         </Section>
       ) : (
@@ -499,7 +482,7 @@ export default function DashboardView({ snapshot, accountsData, drilldown }) {
             dateRange={dateRange}
             onSelect={onMonthlyCatSelect}
             title="Monthly Expenses by Category"
-            sub="Expense stack month-over-month for the ManCo entity's top-8 GL accounts, plus an aggregated 'Other' bucket. Click any segment to drill into that month's entries for that category."
+            sub="Expense stack month-over-month for the ManCo entity's top-8 GL accounts, plus an aggregated 'Other' bucket."
             headerControl={<div data-export-exclude><DateRangeControls value={dateRange} onChange={setDateRange} asOf={asOf} /></div>}
           />
           <div style={styles.chartLegend}>
@@ -520,11 +503,6 @@ export default function DashboardView({ snapshot, accountsData, drilldown }) {
 }
 
 const styles = {
-  exportRow: {
-    display: "flex",
-    justifyContent: "flex-end",
-    marginBottom: 12,
-  },
   // One bordered Ink "Summary" tile card holding all four stats — matches
   // carta-fund-modeling's MetricBar/StatBar exactly: single `.card`-style
   // border/background, a flex row of stats (not a grid of separate boxed
@@ -542,6 +520,12 @@ const styles = {
     flex: "1 1 200px",
     minWidth: 200,
     padding: "0 20px",
+  },
+  // Hint sits on the label's row, not the value's.
+  tileLabelRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 5,
   },
   // Plain sentence-case label (Ink's real Tile label style, per StatTile —
   // not the uppercase/tracked Eyebrow treatment this tile used before),
@@ -569,13 +553,6 @@ const styles = {
     lineHeight: 1.05,
     whiteSpace: "nowrap",
     marginTop: 6,
-  },
-  // marginTop: 5 matches StatTile's own value-to-sub spacing exactly.
-  tileSub: {
-    ...sans,
-    fontSize: FS.small,
-    color: MICRO,
-    marginTop: 5,
   },
   sectionDivider: {
     borderTop: `1px solid ${LINE}`,
@@ -615,6 +592,9 @@ const styles = {
     flexWrap: "wrap",
     fontSize: FS.small,
     color: FAINT,
+    // Matches .ink-chart__legend's own margin-top (theme.js) — the built-in
+    // chart legend charts below use, so the gap above reads the same.
+    marginTop: 12,
     marginBottom: 12,
   },
   legendItem: {

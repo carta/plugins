@@ -17,13 +17,13 @@ export default function Cashflow({ monthlyCashflow, onSelect, title, sub, asOf }
       orientation="vertical"
       layout="stacked"
       domain="signed"
-      // Up/expenses-down position already says which is which, so color
-      // doesn't need to carry that too — non-semantic hues, not green/red.
+      // Cool/warm pairing, not full red/green — blue-3 wrapped locally
+      // for dark-mode legibility, brown-3 as-is.
       series={[
-        { name: "Income", color: "var(--blue)", values: income },
-        { name: "Expenses", color: "var(--ink-color-global-data-viz-turquoise-3)", values: expNeg },
+        { name: "Income", color: "var(--local-series-blue-l1)", values: income },
+        { name: "Expenses", color: "var(--ink-color-global-data-viz-brown-3)", values: expNeg },
       ]}
-      lineOverlay={[{ name: "Monthly net", color: "var(--local-series-blue-dark)", values: net }]}
+      lineOverlay={[{ name: "Monthly net", color: "var(--ink)", values: net }]}
       labels={labels}
       provisionalFrom={provisionalFrom}
       onSelect={

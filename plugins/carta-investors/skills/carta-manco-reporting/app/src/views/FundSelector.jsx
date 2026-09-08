@@ -9,9 +9,23 @@ import { trackClick } from "../analytics.js";
 //
 // Controlled: parent owns `selected` (Set of fund names) and receives
 // updates via `onChange(nextSelected)`.
+
+// Matches S.panel's own maxWidth — checked against the viewport before
+// anchoring the panel to the left edge.
+const PANEL_MAX_WIDTH = 460;
+
 export default function FundSelector({ funds, selected, onChange }) {
   const [open, setOpen] = useState(false);
+  // Left-anchored (grows rightward) unless that would run past the
+  // viewport's right edge, in which case it grows leftward instead.
+  const [alignRight, setAlignRight] = useState(false);
   const wrapRef = useRef(null);
+
+  const openPanel = () => {
+    const rect = wrapRef.current?.getBoundingClientRect();
+    if (rect) setAlignRight(rect.left + PANEL_MAX_WIDTH > window.innerWidth - 16);
+    setOpen(true);
+  };
 
   // Close when clicking outside
   useEffect(() => {
@@ -52,7 +66,7 @@ export default function FundSelector({ funds, selected, onChange }) {
     <div ref={wrapRef} style={S.wrap}>
       <button
         style={{ ...S.button, ...(open ? S.buttonOpen : {}) }}
-        onClick={() => { trackClick("MancoReporting.Dashboard.FundSelectorOpen"); setOpen(v => !v); }}
+        onClick={() => { trackClick("MancoReporting.Dashboard.FundSelectorOpen"); open ? setOpen(false) : openPanel(); }}
         aria-haspopup="listbox"
         aria-expanded={open}
       >
@@ -61,7 +75,10 @@ export default function FundSelector({ funds, selected, onChange }) {
       </button>
 
       {open && (
-        <div style={S.panel} role="listbox" aria-label="Filter funds">
+        <div
+          style={{ ...S.panel, ...(alignRight ? { left: "auto", right: 0 } : { left: 0, right: "auto" }) }}
+          role="listbox" aria-label="Filter funds"
+        >
           <div style={S.panelHeader}>
             <button
               style={{ ...S.linkBtn, ...(allSelected ? S.linkBtnDisabled : {}) }}
@@ -146,7 +163,9 @@ const S = {
   panel: {
     position: "absolute",
     top: "calc(100% + 6px)",
-    left: 0,             // anchor to button's LEFT edge; panel grows rightward
+    // left/right defaults — the call site overrides these once it knows
+    // which way the panel actually fits (see alignRight above).
+    left: 0,
     right: "auto",
     minWidth: 320,
     maxWidth: 460,

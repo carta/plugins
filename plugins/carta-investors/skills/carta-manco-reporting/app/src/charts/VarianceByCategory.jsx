@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { fmtCurrencyShort } from "./chartTheme.js";
 import { InkBarChart, escapeHtml } from "../ui/components.jsx";
-import { sans, INK, FAINT, MICRO, GREEN, RED, LINE, SHADE, PAPER, BORDER_DEFAULT, FS } from "../ui/theme.js";
+import { sans, INK, FAINT, MICRO, LINE, SHADE, PAPER, BORDER_DEFAULT, FS } from "../ui/theme.js";
 import { trackClick } from "../analytics.js";
 
 // Budget categories ranked by how far actuals ran from plan.
@@ -19,7 +19,7 @@ import { trackClick } from "../analytics.js";
 const TOP_N = 8;
 // Pale neutral for the plan, saturated for what actually happened — the
 // same pairing SpendByGL.jsx uses, so the two read consistently.
-const BUDGET_BAR = "var(--local-series-blue-pale)";
+const BUDGET_BAR = "var(--local-series-blue-tint)";
 
 export default function VarianceByCategory({ varianceByCategory, onSelect, title, sub }) {
   const [side, setSide] = useState("over");
@@ -43,7 +43,7 @@ export default function VarianceByCategory({ varianceByCategory, onSelect, title
 
   // Budget and actual as a pair, not a single variance magnitude — a $238K
   // overrun reads differently against an $892K budget than a $50K one.
-  const actualColour = side === "over" ? RED : GREEN;
+  const actualColour = side === "over" ? "var(--local-cat-negative-2)" : "var(--local-cat-positive-2)";
 
   const chartEl = rows.length > 0 && (
     <InkBarChart

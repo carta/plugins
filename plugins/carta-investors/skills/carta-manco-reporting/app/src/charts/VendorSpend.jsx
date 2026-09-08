@@ -18,7 +18,7 @@ export default function VendorSpend({ vendorSpend, onSelect, title, sub, compact
   const inferred = vendors.map((v) => v.inferred_amount);
   const anyInferred = inferred.some((v) => v > 0);
 
-  const series = [{ name: "From Carta", color: "var(--ink-color-global-data-viz-lime-3)", values: ledger }];
+  const series = [{ name: "From Carta", color: "var(--local-cat-lime-2)", values: ledger }];
   if (anyInferred) series.push({ name: "Inferred from description", color: "var(--local-series-lime-tint)", values: inferred });
 
   return (
@@ -37,7 +37,7 @@ export default function VendorSpend({ vendorSpend, onSelect, title, sub, compact
         const v = vendors[i];
         const ledgerAmt = v.amount - v.inferred_amount;
         let rows =
-          `<div class="ink-chart__tip-row"><span class="ink-chart__tip-sw" style="background:var(--ink-color-global-data-viz-lime-3)"></span>` +
+          `<div class="ink-chart__tip-row"><span class="ink-chart__tip-sw" style="background:var(--local-cat-lime-2)"></span>` +
           `<span class="ink-chart__tip-name">From Carta</span><span class="ink-chart__tip-val">${fmt(ledgerAmt, 2)}</span></div>`;
         if (v.inferred_amount > 0) {
           rows += `<div class="ink-chart__tip-row"><span class="ink-chart__tip-sw" style="background:var(--local-series-lime-tint)"></span>` +

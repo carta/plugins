@@ -20,8 +20,8 @@ export default function BudgetVsActuals({ budget, ops, title, sub, compact }) {
       orientation="vertical"
       layout="grouped"
       series={[
-        { name: "Annual budget", color: "var(--local-series-blue-dark)", values: annual },
-        { name: "YTD budget", color: "var(--local-series-blue-tint)", values: ytdBudget },
+        { name: "Annual budget", color: "var(--local-series-blue-l4)", values: annual },
+        { name: "YTD budget", color: "var(--local-series-blue-l1)", values: ytdBudget },
         { name: "YTD actuals", color: "var(--blue)", values: ytdActual },
       ]}
       labels={groups}

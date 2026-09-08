@@ -105,14 +105,21 @@ export const Eyebrow = ({ children, color = FAINT, style }) => (
 );
 
 // Ink's real Heading 1 (28px/48 line-height/400-weight, prominent/serif family) —
-// the page-level title, rendered once per view/route, per the microapp theme contract's H1-vs-H2
-// contract. Not yet wired into any view here — which of this app's current H2 uses is
-// actually a page title (as opposed to an in-page section heading) is a per-view call,
-// flagged for confirmation rather than guessed.
-export const H1 = ({ children, style }) => (
-  <h1 style={{ ...serif, fontSize: FS.display, lineHeight: "48px", fontWeight: 400, margin: 0, color: INK, ...style }}>
-    {children}
-  </h1>
+// the page-level title. `right`/`actions` match carta-fund-modeling's own H1
+// (and this app's H2 below), so a page-level control sits on the title's row.
+export const H1 = ({ children, subhead, right, actions, id, style }) => (
+  <div id={id} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12, gap: 12, flexWrap: "wrap", scrollMarginTop: 20 }}>
+    <div>
+      <h1 style={{ ...serif, fontSize: FS.display, lineHeight: "48px", fontWeight: 400, margin: 0, color: INK, ...style }}>
+        {children}
+      </h1>
+      {subhead && <h3 style={{ ...sans, fontSize: FS.h3, lineHeight: "28px", fontWeight: 500, margin: 0, color: INK }}>{subhead}</h3>}
+    </div>
+    <span style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
+      {right && <span style={{ ...sans, fontSize: FS.small, color: FAINT }}>{right}</span>}
+      {actions}
+    </span>
+  </div>
 );
 
 // Matches Ink's real Heading 2 exactly (20px/36 line-height/500-weight, sans,
@@ -319,13 +326,42 @@ export function niceMax(max) {
 // every tick and the field keeps an even density at any container width.
 export function subdivide(positions, target) {
   let out = positions.slice().sort((a, b) => a - b);
-  while (out.length > 1 && out[1] - out[0] > target * 1.6) {
-    const next = [];
-    for (let i = 0; i < out.length - 1; i++) next.push(out[i], (out[i] + out[i + 1]) / 2);
-    next.push(out[out.length - 1]);
+  if (out.length === 0) return out;
+  // Per-gap: grouped bars have a small within-group gap and a larger
+  // between-group one, so checking only the smallest misses the larger.
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const next = [out[0]];
+    for (let i = 0; i < out.length - 1; i++) {
+      if (out[i + 1] - out[i] > target * 1.6) {
+        next.push((out[i] + out[i + 1]) / 2);
+        changed = true;
+      }
+      next.push(out[i + 1]);
+    }
     out = next;
   }
   return out;
+}
+
+// A flat background grid across [min, max] at ~target spacing, with `points`
+// (real bar/category centers, which are rarely evenly spaced themselves —
+// grouped bars pack tighter within a group than between groups) merged in
+// wherever one doesn't already sit near a grid line. subdivide+extend from
+// the real points alone inherits their own irregular rhythm outward, which
+// reads as a periodic gap wherever that rhythm repeats; a fixed-step grid
+// underneath has no such period to inherit.
+export function gridWithPoints(min, max, points, target) {
+  if (max <= min) return points.slice().sort((a, b) => a - b);
+  const steps = Math.max(1, Math.round((max - min) / target));
+  const step = (max - min) / steps;
+  const out = [];
+  for (let x = min; x <= max + 1e-6; x += step) out.push(x);
+  for (const p of points) {
+    if (!out.some((g) => Math.abs(g - p) < step / 2)) out.push(p);
+  }
+  return out.sort((a, b) => a - b);
 }
 
 const DOT_GAP = 20;   // geometry: the density the field reads best at
@@ -419,6 +455,14 @@ function barPathH(x, y, w, h, r) {
   const rr = Math.max(0, Math.min(r, h / 2, w));
   return `M${x},${y} L${x + w - rr},${y} Q${x + w},${y} ${x + w},${y + rr} ` +
          `L${x + w},${y + h - rr} Q${x + w},${y + h} ${x + w - rr},${y + h} L${x},${y + h} Z`;
+}
+
+// barPathV's mirror for a signed chart's downward (negative) bars, whose
+// baseline sits at their TOP — rounds the bottom two corners instead.
+function barPathVBottom(x, y, w, h, r) {
+  const rr = Math.max(0, Math.min(r, w / 2, h));
+  return `M${x},${y} L${x + w},${y} L${x + w},${y + h - rr} Q${x + w},${y + h} ${x + w - rr},${y + h} ` +
+         `L${x + rr},${y + h} Q${x},${y + h} ${x},${y + h - rr} Z`;
 }
 
 // Diagonal hatch marking a period that has not closed. One pattern per
@@ -786,16 +830,16 @@ export function InkBarChart({
 
       const valTickVals = Array.from({ length: valueTicks + 1 }, (_, t) => (maxV * t) / valueTicks);
       const valTickPos = valTickVals.map(valPos);
-      // Anchor on the plot's own edges too — too few categories (5 fiscal
-      // years) otherwise leaves the outer gutters dotless.
-      const catEdges = vertical ? [pad.left, pad.left + iw] : [pad.top, pad.top + ih];
       // Grouped bars: one dot column per sub-bar, matching single/stacked.
-      const catPositions = [
-        ...(layout === "grouped"
-          ? labels.flatMap((_, i) => series.map((_, si) => catStart(i, si) + subW / 2))
-          : labels.map((_, i) => catMid(i))),
-        ...catEdges,
-      ];
+      const realCatPositions = layout === "grouped"
+        ? labels.flatMap((_, i) => series.map((_, si) => catStart(i, si) + subW / 2))
+        : labels.map((_, i) => catMid(i));
+      const catPositions = gridWithPoints(
+        vertical ? pad.left : pad.top,
+        vertical ? pad.left + iw : pad.top + ih,
+        realCatPositions,
+        DOT_GAP,
+      );
       if (vertical) {
         paintDots(svg, catPositions, valTickPos, "y", baseline);
       } else {
@@ -1038,7 +1082,8 @@ export function InkBarChart({
       const valTickVals = [];
       for (let v = 0; v <= maxPos + step / 2; v += step) valTickVals.push(v);
       for (let v = step; v <= maxNeg + step / 2; v += step) valTickVals.push(-v);
-      paintDots(svg, [...labels.map((_, i) => X(i) + barW / 2), pad.left, pad.left + iw], valTickVals.map(Y), "y", baselineY);
+      const barCenters = labels.map((_, i) => X(i) + barW / 2);
+      paintDots(svg, gridWithPoints(pad.left, pad.left + iw, barCenters, DOT_GAP), valTickVals.map(Y), "y", baselineY);
       svg.append(svgEl("line", { x1: pad.left, x2: pad.left + iw, y1: baselineY, y2: baselineY, class: "ink-chart__axis-line" }));
       [...new Set(valTickVals)].forEach((v) => {
         const el = svgEl("text", { x: pad.left - 12, y: Y(v) + 4, "text-anchor": "end", class: "ink-chart__axis" });
@@ -1066,7 +1111,11 @@ export function InkBarChart({
           const a = Y(from), b = Y(to);
           const top = Math.min(a, b), len = Math.max(0.6, Math.abs(b - a));
           const paint = provisional ? hatchPaint(svg, `${id}-h${si}`, s.color) : s.color;
-          const el = svg.appendChild(svgEl("rect", { x: X(i), y: top, width: barW, height: len }, `fill:${paint}`));
+          // Round the end away from the baseline, up or down by sign.
+          const path = v > 0
+            ? barPathV(X(i), top, barW, len, RADIUS)
+            : barPathVBottom(X(i), top, barW, len, RADIUS);
+          const el = svg.appendChild(svgEl("path", { d: path }, `fill:${paint}`));
           marks.push({ el, i, si });
         });
         if (posTotals[i] > 0) svg.append(valueLabel(
