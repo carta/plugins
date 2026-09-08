@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Carta Mgmt Company Reporting</title>
+    <link rel="icon" href="/favicon.ico" />
+    <!-- @carta/mcp-ui-tracker's browser bundle, vendored verbatim from carta-fund-modeling's
+         webapp/vendor/ — see app/src/analytics.js for what it's used for and why the
+         envelope it sends is narrower here than there. Global <script>, not an import-map
+         entry: it sets window.mcpUiTracker rather than exporting ES modules. -->
+    <script src="/vendor/mcp-ui-tracker.global.js"></script>
+    <!-- Inter loader — same rsms.me canonical distribution the Ink theme contract uses
+         for one-shot artifacts, per the current microapp typography
+         contract. Ships the variable font with tabular-nums as an OpenType feature in
+         one stylesheet. theme.js's SANS stack does NOT @font-face Inter itself, so
+         without this <link> body text silently falls back to "Open Sans"/"Helvetica
+         Neue". If this line is ever removed, also drop "Inter" from theme.js's
+         font-family — never name a face you don't load. Offline-safe: if this CDN
+         request fails, the browser falls through to the next name in the stack — no
+         error, no broken page, just a visually different fallback font.
+         SangBleu Versailles (H1's display font) is self-hosted from /fonts/ instead
+         — see theme.js's GLOBAL_CSS @font-face. -->
+    <link rel="preconnect" href="https://rsms.me/" />
+    <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
+    <!-- Ink token snapshot (raw --ink-color-global-* custom properties).
+         theme.js's GLOBAL_CSS below references these by name for the values
+         that map exactly, instead of hand-copying hex — see ui/tokens.css's
+         own header for how to re-sync it. -->
+    <link rel="stylesheet" href="/src/ui/tokens.css" />
+    <style>
+      html, body { margin: 0; padding: 0; background: #FFFFFF; }
+
+      #mr-error {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 99999;
+        background: rgba(0,0,0,0.85);
+        color: #fff;
+        font-family: ui-monospace, "SF Mono", Consolas, monospace;
+        font-size: 13px;
+        line-height: 1.5;
+        padding: 32px;
+        overflow: auto;
+        box-sizing: border-box;
+      }
+      #mr-error.visible { display: block; }
+      #mr-error pre {
+        white-space: pre-wrap;
+        word-break: break-word;
+        background: rgba(255,255,255,0.08);
+        border-radius: 6px;
+        padding: 16px;
+        margin: 12px 0;
+      }
+      #mr-error .mr-cta {
+        margin-top: 20px;
+        padding: 12px 16px;
+        background: #2563eb;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 14px;
+      }
+    </style>
+
+    <!-- All four React specifiers resolve to one monobundle (see app/build.mjs for
+         why). Absolute paths so they resolve at any client-route depth (serve.py
+         mounts at /). Charts are inline SVG (ui/components.jsx) — no charting
+         library to vendor. -->
+    <script type="importmap">
+    {
+      "imports": {
+        "react":             "/vendor/react.esm.js",
+        "react-dom":         "/vendor/react.esm.js",
+        "react-dom/client":  "/vendor/react.esm.js",
+        "react/jsx-runtime": "/vendor/react.esm.js",
+        "lucide-react":      "/vendor/lucide-react.esm.js"
+      }
+    }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <div id="mr-error"></div>
+
+    <script type="module">
+      // Overlay for all three failure timings: transpile (SW error module),
+      // module-eval, and post-mount React errors.
+      function showError(message) {
+        const el = document.getElementById("mr-error");
+        el.innerHTML =
+          "<h2 style='margin:0 0 8px'>Error</h2>" +
+          "<pre>" + escapeHtml(message) + "</pre>" +
+          "<div class='mr-cta'>Copy this message and paste it back to Claude to fix it.</div>";
+        el.classList.add("visible");
+      }
+      function escapeHtml(s) {
+        return String(s)
+          .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+      }
+      window.addEventListener("error", (e) => showError(e.message || String(e)));
+      window.addEventListener("unhandledrejection", (e) =>
+        showError((e.reason && e.reason.message) || String(e.reason)));
+
+      // Gate the app-module import behind SW control so the module graph is never
+      // fetched before the SW is active (cold-start race fix).
+      if (!("serviceWorker" in navigator)) {
+        showError("Service workers are not supported in this browser. Please use Chrome or Safari (16.4+).");
+      } else {
+        function sleep(ms) {
+          return new Promise((res) => setTimeout(res, ms));
+        }
+
+        try {
+          // Absolute /sw.js + root scope: a hard refresh on a nested client route
+          // must still fetch the SW from / and control the page.
+          await navigator.serviceWorker.register("/sw.js", {
+            type: "module",
+            scope: "/",
+          });
+          await navigator.serviceWorker.ready;
+
+          if (!navigator.serviceWorker.controller) {
+            // First visit: registered but not yet controlling. Wait for
+            // controllerchange (fires after clients.claim()); reload after 3s as a
+            // backstop for browsers that mishandle the event.
+            const claimed = new Promise((res) =>
+              navigator.serviceWorker.addEventListener("controllerchange", res, {
+                once: true,
+              })
+            );
+            await Promise.race([claimed, sleep(3000).then(() => location.reload())]);
+          }
+
+          await import("/src/main.jsx");
+        } catch (err) {
+          const msg = (err && err.message) || String(err);
+          // Some browsers refuse to register the transpiler at all (Claude's sandboxed
+          // Browser pane is the known case) — name the SW-free dev path, not just the error.
+          showError(
+            /serviceworker/i.test(msg)
+              ? msg +
+                  "\n\nThis browser will not register the service worker that transpiles " +
+                  "the app, so nothing can render here. If you are developing this skill, " +
+                  "run `npm run dev` in app/ instead (see app/README.md)."
+              : msg
+          );
+        }
+      }
+    </script>
+  </body>
+</html>

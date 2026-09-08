@@ -1,0 +1,27 @@
+{
+  "name": "manco-reporting",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port ${PORT:-5174}",
+    "build": "node build.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "lucide-react": "^0.462.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.2",
+    "@vitejs/plugin-react": "^4.3.4",
+    "esbuild": "^0.25.12",
+    "happy-dom": "^20.11.1",
+    "sucrase": "^3.35.1",
+    "vite": "^6.0.0",
+    "vitest": "^2.1.8"
+  }
+}

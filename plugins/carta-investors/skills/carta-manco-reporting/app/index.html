@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Carta Mgmt Company Reporting (dev)</title>
+    <link rel="icon" href="/favicon.ico" />
+    <!-- DEV SHELL ONLY, served by `npm run dev`. Users load ../webapp/index.html via
+         scripts/serve.py, which registers webapp/sw.js to transpile JSX in-browser.
+         Vite transforms JSX server-side, so this shell needs no service worker.
+         Keep it minimal: every line copied from the runtime shell can drift, and a
+         drifted dev shell verifies the wrong page. See README.md. -->
+    <link rel="preconnect" href="https://rsms.me/" />
+    <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
+    <link rel="stylesheet" href="/src/ui/tokens.css" />
+    <style>
+      html, body { margin: 0; padding: 0; background: #FFFFFF; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <!-- No import map: Vite resolves "react" from node_modules. -->
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
