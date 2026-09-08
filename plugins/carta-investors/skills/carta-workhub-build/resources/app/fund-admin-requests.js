@@ -656,6 +656,10 @@ async function farFetchRequests() {
     _farRows = ccrWithSeedRow([]);
   }
   renderFarSection();
+  // Period cards come from a second read, so the queue paints first and they join it.
+  if (await frtAttachPeriodRows().catch(e => { console.error('[frt] tracker cards —', e); return false; })) {
+    renderFarSection();
+  }
   // Hydration only improves titles, so it stays outside the try above — sharing
   // that catch let a cosmetic failure reset _farRows and blank a loaded queue.
   if (loaded) await farHydrateTitles().catch(e => console.error('[far] title hydration —', e));
@@ -831,10 +835,13 @@ function farCard(r, withTime) {
     </div>
     <div class="far-card-footer">
       <button class="far-card-view">${isTodo ? 'Review' : 'View'} &rarr;</button>
-      ${r.requested ? `<span class="far-card-age">Requested ${escHtml(withTime ? farStamp(r.requested) : farDate(r.requested))}</span>` : ''}
+      ${r.requested ? `<span class="far-card-age">Requested ${escHtml(withTime ? farStamp(r.requested) : farDate(r.requested))}</span>`
+        : r.footnote ? `<span class="far-card-age">${escHtml(r.footnote)}</span>` : ''}
     </div>`;
   card.querySelector('.far-card-view').addEventListener('click', () =>
-    r.ccr ? openCapitalCallReview(r.ccr, r.title) : openFarThread(r.id));
+    r.ccr ? openCapitalCallReview(r.ccr, r.title)
+      : r.frt ? openFinancialReportingTracker(r.frt, r.title)
+      : openFarThread(r.id));
   return card;
 }
 

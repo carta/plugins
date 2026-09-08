@@ -172,6 +172,30 @@ not inside a fund-data dashboard.
   A release that fails ambiguously does **not** re-enable the button. `server_unavailable` and
   `upstream_error` are not proof the release did not run, so the panel sends the reviewer to Carta
   to check rather than inviting a second press.
+- **Financial reporting tracker** — one card per reporting period that needs the GP, opening the
+  Financial Reporting Tracker for that period: the banner, the combined filter-and-sort menu,
+  entity search, the period selector, and the six-column table with fund families as collapsible
+  rows. Every label and dot is produced from `fa:get:reporting-status` codes by the same rules
+  the backend's own page mappers use, so the panel and the page read identically. Every button
+  carries the backend's absolute `href` and opens Carta in a new tab; nothing is written from here.
+
+  **The cards come from the tracker read, not from `fa:list:workflow`.** On load the queue reads
+  the page's rolling window — the active quarter and the three before it, never earlier than
+  Q3 2023 — one `fa:get:reporting-status` call per period, in parallel. A period whose
+  `rollup.needs_action` is above zero gets a card in Tasks to complete titled
+  `Financial reporting — Q2 2026`, its second line counting the open items by column and its
+  footer naming the soonest deadline. A period the server refuses resolves to no card, so the
+  flag being off, or a firm the viewer cannot read, silently yields nothing rather than an error.
+
+  There is no build flag for this either: the read is gated server-side by
+  `CARTA_MCP_FINANCIAL_REPORTING_TRACKER`, so no card means the environment does not serve it.
+  `--frt-seed-period "Q2 2026"` forces one card for a demo; its panel still reads live.
+
+  **The panel is wider than the review panel** — `min(1120px, 96vw)` by `min(760px, 90vh)` —
+  because six table columns need it; below about 900px the table scrolls inside the panel, never
+  the page. The read returns the whole firm with no paging, so a firm past roughly 80 entities
+  would exceed carta-mcp's 40k reply cap and the period would read as failed; that is accepted
+  for now.
 - **Thread view** — the full conversation from `fa:list:workflow-message`, with a reply box
   writing to `fa:create:workflow-message`. Carta's internal agent output is never surfaced.
 
@@ -244,6 +268,7 @@ codes (`needs_reauth`, `server_not_connected`) are page-level, not per-section.
 |------|---------------|
 | `resources/app/fund-admin-requests.js` | composer, queue, thread overlay — the whole feature |
 | `resources/app/capital-call-review.js` | the capital call review panel and its notice sub-panel |
+| `resources/app/financial-reporting-tracker.js` | the Financial Reporting Tracker cards and panel |
 | `resources/carta-workhub.app.js` | shared helpers (`_mcp`, `escHtml`, `showToast`, `trackWorkhub`) plus firm resolution and boot |
 | `resources/app/version-check.js` | update banner: reads the published version, compares, renders |
 | `resources/carta-workhub.config.js` | `TASK_PRESETS` — the composer's preset tiles |
@@ -263,6 +288,10 @@ Same contract as `carta-home-build`, keyed to `carta-workhub-build` in
 `plugins/carta-investors/.claude-plugin/skill-versions.json`. A deployed artifact is a frozen
 copy, so **change anything under `resources/`, bump the entry in the same PR** — CI enforces it
 via `.forgejo/scripts/validate-artifact-version-bump.py`.
+
+In short, for anyone outside Carta reading this: any change under `resources/` needs the
+`version` in `skill-versions.json` raised in the same change, or users keep the old build with no
+notice.
 
 Patch is the default and raises no banner. Minor and major interrupt every user, so they
 demand a fresh headline written for the person reading it. This skill's frontmatter carries no
@@ -300,8 +329,8 @@ uv run "<SKILL_DIR>/scripts/build_artifact.py" --mcp-server "<CARTA_MCP_SERVER>"
 ```
 
 Add `--ccr-fund-uuid <fund_uuid> --ccr-activity-id <capital_activity_id>` to seed one capital call
-review card. That is for testing the panel before the queue can discover review tasks; a normal
-build omits both.
+review card, or `--frt-seed-period "Q2 2026"` to seed one Financial Reporting Tracker card. Both
+are for testing a panel before the queue would show its card; a normal build omits them.
 
 Locate `<SKILL_DIR>` first. This exact form is what `allowed-tools` permits, so a
 reworded one prompts for permission:

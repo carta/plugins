@@ -57,6 +57,7 @@ APP_JS_PARTS = [
     "carta-workhub.app.js",
     "app/fund-admin-requests.js",
     "app/capital-call-review.js",
+    "app/financial-reporting-tracker.js",
     "app/version-check.js",
 ]
 
@@ -114,7 +115,7 @@ def read_version():
     return version
 
 
-def build(mcp_server, ccr_fund_uuid="", ccr_activity_id=""):
+def build(mcp_server, ccr_fund_uuid="", ccr_activity_id="", frt_seed_period=""):
     template = (RES / "carta-workhub.template.html").read_text()
     parts = {name: (RES / name).read_text() for name in MARKERS}
     parts.update({name: (RES / name).read_text() for name in APP_JS_PARTS})
@@ -151,6 +152,8 @@ def build(mcp_server, ccr_fund_uuid="", ccr_activity_id=""):
     # Empty is the normal case: the panel then opens only from a task card.
     out = out.replace("{{CCR_FUND_UUID}}", ccr_fund_uuid or "")
     out = out.replace("{{CCR_ACTIVITY_ID}}", ccr_activity_id or "")
+    # Empty is the normal case: tracker cards then exist only for periods that need the GP.
+    out = out.replace("{{FRT_SEED_PERIOD}}", frt_seed_period or "")
 
     out = out.replace("{{BUILD_ID}}", build_id)
 
@@ -170,11 +173,13 @@ def main():
                     help="seed the capital call review panel with this fund UUID")
     ap.add_argument("--ccr-activity-id", default="",
                     help="seed the capital call review panel with this activity ShortUUID")
+    ap.add_argument("--frt-seed-period", default="",
+                    help='seed one Financial Reporting Tracker card for this period, e.g. "Q2 2026"')
     ap.add_argument("--out", required=True, help="output HTML path")
     args = ap.parse_args()
 
     html, build_id, version = build(
-        args.mcp_server, args.ccr_fund_uuid, args.ccr_activity_id
+        args.mcp_server, args.ccr_fund_uuid, args.ccr_activity_id, args.frt_seed_period
     )
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
