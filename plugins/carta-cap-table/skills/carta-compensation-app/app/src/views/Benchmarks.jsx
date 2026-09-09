@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { C, FS, RADIUS, SANS } from "../ui/theme.js";
 import ExportButton from "../ui/ExportButton.jsx";
 import { MultiSelect, Select, Tag, Th, Td } from "../ui/components.jsx";
+import AskBar from "../ui/AskBar.jsx";
 import { compareRows, jobLabel, levelLabel, trackOf, TRACK_LABELS, PERCENTILES } from "../model/taxonomy.js";
 import { money, equityValue, EQUITY_REPS } from "../model/format.js";
 import { csvFilename, downloadCsv, toCsv } from "../model/csv.js";
@@ -84,7 +85,7 @@ function MetricTable({ rows, currency, equityRep }) {
   );
 }
 
-export default function Benchmarks({ data, onPeerGroupChange }) {
+export default function Benchmarks({ data, onPeerGroupChange, token }) {
   // A SET of job codes, empty meaning "all". Empty-as-all rather than seeding the set
   // with every code: the two states look identical on screen but behave differently the
   // moment the peer group switches, because a different bucket can cover a different set
@@ -356,6 +357,15 @@ export default function Benchmarks({ data, onPeerGroupChange }) {
                 : `Download ${activeSel.size} of ${jobs.length} job areas as CSV — raw percentile values`
           }
           disabled={!visible.length}
+        />
+      </div>
+
+      {/* Sits with this tab's controls rather than in a bar of its own: it acts on
+          what is below it, so a request here reads as "change this view". */}
+      <div style={{ marginBottom: 18 }}>
+        <AskBar
+          token={token}
+          placeholder="Ask Claude to change this page — e.g. add an interpolated P60 column"
         />
       </div>
 

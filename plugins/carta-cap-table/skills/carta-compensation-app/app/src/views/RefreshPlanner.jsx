@@ -37,6 +37,7 @@ import CartPanel from "./planner/CartPanel.jsx";
 import SettingsStep from "./planner/SettingsStep.jsx";
 import ReviewStep from "./planner/ReviewStep.jsx";
 import PoolBar from "./planner/PoolBar.jsx";
+import AskBar from "../ui/AskBar.jsx";
 import {
   eligibility, grantForRow, planTotals, policyToSettings,
 } from "../model/policy.js";
@@ -199,7 +200,7 @@ function EmployeeTable({ rows, asOf, cart, onToggle, headerSel, onToggleAll }) {
   );
 }
 
-export default function RefreshPlanner({ planner, corporation, corporationId }) {
+export default function RefreshPlanner({ planner, corporation, corporationId, token }) {
   // One "now" for the whole render, so every row is measured against the same
   // instant. Calling new Date() per row would let a table straddle midnight and
   // report two different tenures for two people who started the same day.
@@ -544,6 +545,21 @@ export default function RefreshPlanner({ planner, corporation, corporationId }) 
             <Tag>{removed} excluded by filters</Tag>
           </div>
         )}
+
+        {/* The controls above narrow the cohort. This changes the console itself —
+            a different job, which is why it sits under its own rule rather than
+            reading as a fifth filter. */}
+        <div style={{
+          marginTop: 14, paddingTop: 14, borderTop: `1px solid ${C.border}`,
+        }}>
+          <div style={{ fontSize: FS.sm, fontWeight: 600, color: C.textSubtle, marginBottom: 8 }}>
+            Change this page
+          </div>
+          <AskBar
+            token={token}
+            placeholder="Ask Claude to change this page — e.g. add a column for unvested shares"
+          />
+        </div>
 
         {/* Gaps a filter cannot judge, surfaced rather than left for a reader to
             derive from a shrinking row count. */}

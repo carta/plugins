@@ -5,7 +5,6 @@ import Benchmarks from "./views/Benchmarks.jsx";
 import Scorecard from "./views/Scorecard.jsx";
 import RefreshPlanner from "./views/RefreshPlanner.jsx";
 import { Tag } from "./ui/components.jsx";
-import AskBar from "./ui/AskBar.jsx";
 
 // The ask box edits the app's own source, and the page reloads to pick the edit up
 // (source is transpiled in-browser — there is no HMR to swap a module in place). A
@@ -294,17 +293,21 @@ export default function App() {
       />
       <main style={{ paddingTop: 4 }}>
         {activeTab === "benchmarks" && (
-          <Benchmarks data={benchmarks} onPeerGroupChange={setActiveGroup} />
+          <Benchmarks data={benchmarks} onPeerGroupChange={setActiveGroup} token={apiToken()} />
         )}
         {/* Guarded on roster as well as the tab id: a stale ?tab= or a roster that
             failed to load must not render the view against undefined. */}
         {activeTab === "scorecard" && roster && (
-          <Scorecard roster={roster} corporation={snapshot?.source?.corporation} />
+          <Scorecard roster={roster} corporation={snapshot?.source?.corporation} token={apiToken()} />
         )}
         {/* Gated on the flag as well as the data: a stale sessionStorage tab would
             otherwise restore someone onto a hidden view with no tab to leave by. */}
         {SHOW_REFRESH_PLANNER && activeTab === "planner" && planner && (
-          <RefreshPlanner planner={planner} corporation={snapshot?.source?.corporation} />
+          <RefreshPlanner
+            planner={planner}
+            corporation={snapshot?.source?.corporation}
+            token={apiToken()}
+          />
         )}
       </main>
       {attribution && (
@@ -315,9 +318,6 @@ export default function App() {
           {attribution}
         </footer>
       )}
-      {/* Below the attribution deliberately: the citation belongs with the figures it
-          describes, and the ask box is a control rather than part of the document. */}
-      <AskBar token={apiToken()} />
     </div>
   );
 }

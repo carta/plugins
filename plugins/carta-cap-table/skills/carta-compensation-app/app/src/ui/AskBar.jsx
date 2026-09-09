@@ -1,4 +1,10 @@
-// Ask box — one textfield, pinned to the bottom of the console.
+// Ask box — one textfield, mounted inside whichever tab the user is looking at.
+//
+// It sits with that surface's own controls rather than in a bar pinned to the
+// window, because it acts ON that surface: a bottom bar reads as chrome, while the
+// same box under the Benchmarks filters reads as "change this". It therefore
+// carries NO horizontal styling of its own — every view already supplies the 24px
+// gutter, so one component lines up across all three.
 //
 // The point is to keep a small change ("add an interpolated P60") in the app
 // instead of sending the user back to their Claude session for it. So this is
@@ -185,14 +191,10 @@ export default function AskBar({ token, placeholder = PLACEHOLDER }) {
   const showPanel = busy || reply || error || stuck;
 
   return (
-    <div style={{
-      position: "sticky", bottom: 0, zIndex: 20,
-      background: C.surfaceDefault, borderTop: `1px solid ${C.borderSubtle}`,
-      padding: "12px 24px",
-    }}>
+    <div>
       {showPanel && (
         <div ref={replyRef} style={{
-          maxWidth: 900, margin: "0 auto 10px", fontSize: FS.sm,
+          marginBottom: 10, fontSize: FS.sm,
           color: error ? C.feedbackNegative : C.textSubtle,
           whiteSpace: "pre-wrap", lineHeight: REPLY_LINE_HEIGHT,
           // Three lines, then scroll. Expressed in em rather than a pixel value so
@@ -221,7 +223,7 @@ export default function AskBar({ token, placeholder = PLACEHOLDER }) {
           {reloading && <div style={{ color: C.textQuiet }}>Reloading to show the change…</div>}
         </div>
       )}
-      <div style={{ display: "flex", gap: 8, maxWidth: 900, margin: "0 auto" }}>
+      <div style={{ display: "flex", gap: 8 }}>
         <input
           ref={inputRef}
           type="text"

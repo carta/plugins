@@ -21,6 +21,7 @@
 import { Fragment, useMemo, useState } from "react";
 import { C, FS, RADIUS } from "../ui/theme.js";
 import ExportButton from "../ui/ExportButton.jsx";
+import AskBar from "../ui/AskBar.jsx";
 import { TableAlign, Tag, Th, Td } from "../ui/components.jsx";
 import { jobLabel, levelLabel, trackOf, TRACK_LABELS } from "../model/taxonomy.js";
 import { csvFilename, downloadCsv, toCsv } from "../model/csv.js";
@@ -460,7 +461,7 @@ function compareByName(a, b) {
   return an.localeCompare(bn, undefined, { sensitivity: "base" });
 }
 
-export default function Scorecard({ roster, corporation }) {
+export default function Scorecard({ roster, corporation, token }) {
   // The default comes from the data, not a constant here: a corporation with no
   // salary ratings but real equity ones should open on something populated.
   const [metric, setMetric] = useState(roster.defaultMetric || "salary");
@@ -566,6 +567,14 @@ export default function Scorecard({ roster, corporation }) {
 
         <Distribution entry={entry} />
         <Reconciliation roster={roster} metric={metric} />
+      </div>
+
+      {/* Between the summary and the roster — the same slot the other tabs use. */}
+      <div style={{ marginBottom: 18 }}>
+        <AskBar
+          token={token}
+          placeholder="Ask Claude to change this page — e.g. sort by compa-ratio"
+        />
       </div>
 
       <div style={{
