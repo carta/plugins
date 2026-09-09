@@ -95,6 +95,10 @@ export const C = {
   // Pool-bar segments. A fixed blue rather than a theme-aware surface token: the
   // bar's meaning is carried entirely by which portion is which colour, so the
   // two must stay distinguishable in both themes.
+  // Darker than poolPlanned: what is already granted sits beside the new draw, and
+  // the eye should read the two as "spent" and "about to be spent" rather than as
+  // one block. CTC's own tile uses blue / blue-light for the same pair.
+  poolUsed: "var(--ink-color-global-brand-blue-70)",
   poolPlanned: "var(--ink-color-global-brand-blue-50)",
   poolRemaining: "var(--ink-color-global-brand-blue-20)",
   interactivePrimaryOnPage: "var(--ink-color-global-text-default)",

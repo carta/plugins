@@ -59,6 +59,26 @@ def _unwrap(node):
     return None
 
 
+def _pool_num(efab, *names):
+    """A pool figure as a positive int, or None.
+
+    Zero is treated as absent for the same reason `available` is: a ledger that
+    reports nothing and a pool that genuinely holds nothing arrive identically, and
+    a bar drawn from a zero total is a division nobody can read.
+    """
+    for name in names:
+        if name in efab and efab[name] is not None:
+            try:
+                value = int(efab[name])
+            except (TypeError, ValueError):
+                # Try the next spelling rather than giving up: the names are
+                # alternative conventions for ONE field, so an unusable value under
+                # the first says nothing about the second.
+                continue
+            return value if value > 0 else None
+    return None
+
+
 def _pool_available(payload):
     """The pool's available shares, or None when we cannot honestly say.
 
@@ -86,11 +106,17 @@ def capture(src, raw_dir):
         )
 
     available = _pool_available(payload)
+    efab = payload.get("efab") or {}
     manifest = {
         "schemaVersion": 1,
         "source": "report-insights",
         "insights": payload,
         "poolAvailableShares": available,
+        # The whole pool and what is already spent, so the bar can scale to the
+        # FULL pool rather than only its unused part. Absent on an older payload
+        # that predates them — the bar then falls back to two segments.
+        "poolReservedShares": _pool_num(efab, "reserved_shares", "reservedShares"),
+        "poolOutstandingShares": _pool_num(efab, "outstanding_shares", "outstandingShares"),
     }
 
     out = pathlib.Path(raw_dir)

@@ -402,6 +402,8 @@ export default function RefreshPlanner({ planner, corporation, corporationId }) 
     <PoolBar
       available={planner.poolAvailableShares ?? null}
       planned={plannedTotals.totals.totalShares}
+      reserved={planner.poolReservedShares ?? null}
+      outstanding={planner.poolOutstandingShares ?? null}
     />
   );
 

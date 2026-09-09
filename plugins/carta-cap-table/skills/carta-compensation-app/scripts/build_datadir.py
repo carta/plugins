@@ -889,11 +889,15 @@ def _build_planner(rawdir):
     # for why a zero is treated as absent rather than as an empty pool.
     insights_path = pathlib.Path(rawdir) / "report_insights.json"
     pool_available = None
+    pool_reserved = None
+    pool_outstanding = None
     if insights_path.exists():
         insights = _read_json(insights_path) or {}
         raw_pool = insights.get("poolAvailableShares")
         if isinstance(raw_pool, int) and raw_pool > 0:
             pool_available = raw_pool
+        pool_reserved = insights.get("poolReservedShares")
+        pool_outstanding = insights.get("poolOutstandingShares")
     availability["pool"] = pool_available is not None
 
     # The inputs for CTC's three equity units. Absent when the capture never ran,
@@ -913,6 +917,10 @@ def _build_planner(rawdir):
         "rows": rows,
         "policy": policy,
         "poolAvailableShares": pool_available,
+        # The whole pool and what is already spent. Absent on a capture that
+        # predates them; the bar then shows two segments rather than three.
+        "poolReservedShares": pool_reserved,
+        "poolOutstandingShares": pool_outstanding,
         "equityUnits": equity_units,
         "availability": availability,
         "reconciliation": {
