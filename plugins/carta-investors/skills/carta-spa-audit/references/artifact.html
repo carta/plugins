@@ -1249,6 +1249,9 @@
       if (!m) return null;
       const year = parseInt(m[1], 10), month = parseInt(m[2], 10), day = parseInt(m[3], 10);
       if (month < 1 || month > 12) return null;
+      const isLeap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+      const daysInMonth = [31, isLeap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
+      if (day < 1 || day > daysInMonth) return null;
       return { year, month, day };
     }
 
