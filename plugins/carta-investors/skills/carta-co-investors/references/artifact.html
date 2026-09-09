@@ -299,26 +299,6 @@
       gap: 4px;
       margin-bottom: 16px;
     }
-    .filter-tabs { display: flex; align-items: center; gap: 4px; }
-    .threshold-control {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-left: auto;
-      font-size: 13px;
-      color: var(--text-subtle);
-    }
-    .threshold-control select {
-      height: 32px;
-      padding: 0 8px;
-      border-radius: 4px;
-      border: 1px solid var(--border-default);
-      background: var(--surface-bg);
-      color: var(--text-default);
-      font-family: inherit;
-      font-size: 13px;
-      cursor: pointer;
-    }
     .filter-tab {
       display: inline-flex;
       align-items: center;
@@ -436,10 +416,7 @@
     <div id="content-area" style="display: none">
       <div class="metrics-grid" id="metrics-grid"></div>
 
-      <div class="filter-bar">
-        <div class="filter-tabs" id="filter-tabs"></div>
-        <div class="threshold-control" id="threshold-control"></div>
-      </div>
+      <div class="filter-bar" id="filter-bar"></div>
 
       <div class="table-title" id="table-title">Top Co-Investors by Portfolio Overlap</div>
       <div class="table-container" id="main-table"></div>
@@ -498,23 +475,11 @@
     const PAGE_LIMIT = 10000;
     const MAX_PAGES = 10;
 
-    // Default shared-company threshold. 2 keeps incidental single-company
-    // overlaps out; the picker beside the filter tabs drops it to 1.
-    const DEFAULT_MIN_COMPANIES = 2;
-
-    // Asking for N shared companies from a tab that holds only N of them demands
-    // an investor be in every one. Relax to 1 below this multiple.
-    const THRESHOLD_POOL_FACTOR = 2;
-
     let DATA = null;
     let welcomeCalledThisSession = false;
 
     // Active filter: 'all' | 'live' | 'exited'
     let currentFilter = 'all';
-
-    // Minimum shared companies the viewer has asked for. Applied through
-    // effectiveMin(), which relaxes it on tabs with too few companies.
-    let minCompaniesSelected = DEFAULT_MIN_COMPANIES;
 
     // ── Page state ────────────────────────────────────────────────────────────
 
@@ -964,8 +929,8 @@
       // Sort by overlap, then name so ties order deterministically across loads.
       all.sort((a, b) => (b.companyCount - a.companyCount) || a.name.localeCompare(b.name));
 
-      // Ship every co-investor, single-company overlaps included. The threshold
-      // is a display filter, so lowering it needs no re-query.
+      // Every co-investor, single-company overlaps included. The report makes no
+      // judgment about which overlaps are worth listing.
       return all;
     }
 
@@ -1144,7 +1109,6 @@
 
       renderHeader();
       renderFilterBar();
-      renderThresholdControl();
       renderMetrics('all');
       renderMainTable('all');
       renderFooter('all');
@@ -1223,44 +1187,16 @@
       btn.remove();
     }
 
-    // `min` overrides the tab's own threshold — the footer uses it to count the
-    // rows a stricter threshold is holding back.
-    function getFilteredCoInvestors(filter, min) {
-      // Narrowing to live/exited shrinks each investor's overlap, so the tab's
-      // own threshold decides who still qualifies for it.
-      const threshold = min === undefined ? effectiveMin(filter) : min;
+    // Every co-investor the tab has anything to say about. A row must keep at
+    // least one company or it would render with an empty overlap cell.
+    function getFilteredCoInvestors(filter) {
       return DATA.coInvestors
         .map(inv => {
           const filtered = inv.companies.filter(c => passesFilter(c, filter));
           return { ...inv, companies: filtered, companyCount: filtered.length };
         })
-        .filter(inv => inv.companyCount >= threshold)
+        .filter(inv => inv.companyCount > 0)
         .sort((a, b) => (b.companyCount - a.companyCount) || a.name.localeCompare(b.name));
-    }
-
-    // The companies this tab can show an overlap on — the table's own universe,
-    // so the only fair pool for the threshold. `spaCountForFilter` counts others.
-    function overlapPoolForFilter(filter) {
-      const names = new Set();
-      for (const inv of DATA.coInvestors) {
-        for (const c of inv.companies) {
-          if (passesFilter(c, filter)) names.add(c);
-        }
-      }
-      return names.size;
-    }
-
-    // The threshold this tab applies. A tab whose pool is too small for a count
-    // threshold to mean anything lists every overlap instead.
-    function effectiveMin(filter) {
-      if (minCompaniesSelected <= 1) return 1;
-      return overlapPoolForFilter(filter) >= minCompaniesSelected * THRESHOLD_POOL_FACTOR
-        ? minCompaniesSelected
-        : 1;
-    }
-
-    function thresholdRelaxed(filter) {
-      return effectiveMin(filter) < minCompaniesSelected;
     }
 
     // Count of portfolio companies with an SPA that match a filter.
@@ -1297,9 +1233,9 @@
     function renderFilterBar() {
       const s = DATA.companyStatus;
       // Query T is optional. Without it every Live/Exited tab would read 0 and
-      // filter the table down to nothing, so render no tabs at all.
+      // filter the table down to nothing, so render no bar at all.
       if (!s || Object.keys(s).length === 0) {
-        document.getElementById('filter-tabs').innerHTML = '';
+        document.getElementById('filter-bar').innerHTML = '';
         return;
       }
       const allCount = Object.keys(s).length;
@@ -1312,31 +1248,10 @@
           label + '<span class="filter-count">' + count + '</span></button>';
       }
 
-      document.getElementById('filter-tabs').innerHTML =
+      document.getElementById('filter-bar').innerHTML =
         tab('all', 'All', allCount) +
         tab('live', 'Live', liveCount) +
         tab('exited', 'Exited', exitedCount);
-    }
-
-    function renderThresholdControl() {
-      function opt(value, label) {
-        const selected = minCompaniesSelected === value ? ' selected' : '';
-        return '<option value="' + value + '"' + selected + '>' + label + '</option>';
-      }
-      document.getElementById('threshold-control').innerHTML =
-        '<label for="min-companies">Shared companies</label>' +
-        '<select id="min-companies" onchange="setMinCompanies(this.value)">' +
-          opt(2, '2 or more') +
-          opt(1, '1 or more') +
-        '</select>';
-    }
-
-    function setMinCompanies(value) {
-      minCompaniesSelected = parseInt(value, 10) || 1;
-      // The tab counts are company counts, so the tab bar is unaffected.
-      renderMetrics(currentFilter);
-      renderMainTable(currentFilter);
-      renderFooter(currentFilter);
     }
 
     function renderMetrics(filter) {
@@ -1394,18 +1309,10 @@
         '</div>';
     }
 
-    // "No rows" and "no co-investors" are different claims. Say which one it is,
-    // and name the control that widens the view.
+    // "No rows" and "no co-investors" are different claims. Say which one it is.
     function emptyStateMessage(filter) {
       const scope = filter === 'all' ? 'portfolio' : filter;
-      const pool = overlapPoolForFilter(filter);
-      const min = effectiveMin(filter);
-      if (min > 1) {
-        return 'No investor shares ' + min + ' or more of the ' + pool + ' ' + scope +
-          ' companies named on your SPAs. Set "Shared companies" to 1 or more to see' +
-          ' single-company overlaps.';
-      }
-      if (pool === 0) {
+      if (spaCountForFilter(filter) === 0) {
         return 'None of your ' + scope + ' companies have an SPA on file, so there is' +
           ' nothing to compare here.';
       }
@@ -1439,26 +1346,12 @@
     function renderFooter(filter) {
       const m = DATA.meta;
       let html = '<a class="carta-link" href="' + BASE_URL + '/investors/firm/' + m.firmCartaId + '/portfolio/documents/" target="_blank">View SPA source documents in Carta ↗</a>';
-      // Say what the table leaves out. Both counts come from this tab: a note
-      // that mixes tab and portfolio denominators misleads.
+      // The table holds nothing back, so the note says what it covers rather
+      // than what it omits. The count is the tab's, never the portfolio total.
       const scope = filter === 'all' ? 'portfolio' : filter;
-      const min = effectiveMin(filter);
       const shown = getFilteredCoInvestors(filter).length;
-      const hidden = getFilteredCoInvestors(filter, 1).length - shown;
-      let note = min > 1
-        ? 'Showing ' + shown + ' co-investors sharing ' + min + '+ of your ' + scope +
-          ' companies.'
-        : 'Showing all ' + shown + ' co-investors sharing at least one of your ' + scope +
-          ' companies.';
-      if (hidden > 0) {
-        note += ' ' + hidden + ' more share fewer than ' + min +
-          ' — set "Shared companies" to 1 or more to list them.';
-      }
-      if (thresholdRelaxed(filter)) {
-        note += ' Your ' + minCompaniesSelected + '+ setting does not apply here: only ' +
-          overlapPoolForFilter(filter) + ' ' + scope + ' companies are named on your SPAs,' +
-          ' too few for a ' + minCompaniesSelected + '-company overlap to mean much.';
-      }
+      const note = 'Showing all ' + shown + ' co-investors named on the SPAs for your ' +
+        scope + ' companies.';
       html += '<div class="footer-note">' + esc(note) + '</div>';
       document.getElementById('page-footer').innerHTML = html;
     }

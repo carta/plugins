@@ -9,7 +9,7 @@ description: >
   Use instead: carta-explore-data for general fund/investment/portfolio data —
   this skill is specifically for co-investor ("who else invested alongside us")
   analysis.
-version: 0.8.2
+version: 0.8.3
 model: sonnet
 allowed-tools:
   # The only source for a connector's name
