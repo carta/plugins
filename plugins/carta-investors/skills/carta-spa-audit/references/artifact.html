@@ -1728,7 +1728,11 @@
         if (grand <= 0) { document.getElementById('coverage-bar').innerHTML = ''; return; }
 
         const coveredVal = bucketTotal('executed') + bucketTotal('unexecuted');
-        const valuePct = coveredVal / grand * 100;
+        // Priced-equity only, matching the by-count denominator below — cost
+        // basis in "No SPA Needed" (SAFEs, convertible notes, fund LPs) isn't
+        // part of the population this stat measures coverage over.
+        const equityGrand = grand - bucketTotal('notNeeded');
+        const valuePct = equityGrand > 0 ? coveredVal / equityGrand * 100 : 0;
 
         const covered = filteredBucketRowsByKey('executed').length + filteredBucketRowsByKey('unexecuted').length;
         const notNeededCount = filteredBucketRowsByKey('notNeeded').length;
