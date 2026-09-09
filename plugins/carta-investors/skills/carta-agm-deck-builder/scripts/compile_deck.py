@@ -617,11 +617,11 @@ def build_slide06(funds: list[dict], irr_rows: list[dict], currency: str = "USD"
         name = r.get("fund_name", "")
         yr = fund_vintage_year(r)
         size = to_f(r.get("fund_size", 0))
-        called = to_f(r.get("total_cost_of_investments", size))
+        called = to_f(r.get("total_capital_contribution", size))
         nav = to_f(r.get("ending_total_nav", 0))
         dist = to_f(r.get("total_distribution", 0))
         tvpi = to_f(r.get("total_tvpi", 0))
-        dpi = (dist / called) if called else 0
+        dpi = to_f(r.get("total_dpi", 0))
         irr = r.get("_net_irr", 0.0)
 
         dist_cell = dash_if_zero(dist, fmt_currency) if dist == 0 else f'<td>{fmt_currency(dist)}</td>'
