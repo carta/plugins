@@ -22,8 +22,8 @@ export default function useDrilldown() {
 
   // For the breakdown pane driven by DateRangeControls. `start`/`end` are
   // ISO YYYY-MM-DD strings (inclusive on both ends).
-  const openDateRangeCategory = useCallback((start, end, category) => {
-    setSelection({ kind: "date-range-category", start, end, category });
+  const openDateRangeCategory = useCallback((start, end, category, color) => {
+    setSelection({ kind: "date-range-category", start, end, category, color });
   }, []);
 
   const openMonthSide = useCallback((month, side) => {

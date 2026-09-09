@@ -84,7 +84,7 @@ export default function MonthlyExpenseBreakdown({
           <tr>
             <th style={S.thCategory}>Category</th>
             <th style={S.thNum}>Amount</th>
-            <th style={S.thNum}>% of range</th>
+            <th style={S.thNum}>% of expenses</th>
             <th style={S.thArrow} aria-hidden="true" />
           </tr>
         </thead>

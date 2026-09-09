@@ -253,29 +253,31 @@ export default function DashboardView({ snapshot, accountsData, drilldown }) {
   // move the top-level date range — the chart keeps showing whatever range
   // the user picked (default YTD). The picker is the only thing that
   // changes which bars are visible.
+  const categoryColorOf = (name) =>
+    monthlyCategories?.categories?.find(c => c.name === name)?.color;
   const onMonthlyCatSelect = ({ month, category }) => {
     if (!drilldown) return;
     const yr = Number(asOf.slice(0, 4));
     const start = `${yr}-${String(month).padStart(2, "0")}-01`;
     const end = `${yr}-${String(month).padStart(2, "0")}-${new Date(yr, month, 0).getDate()}`;
-    drilldown.openDateRangeCategory(start, end, category);
+    drilldown.openDateRangeCategory(start, end, category, categoryColorOf(category));
   };
   // Breakdown-row click: drill into the category using the current date range.
   const onBreakdownSelect = ({ category }) => {
-    if (drilldown) drilldown.openDateRangeCategory(dateRange.start, dateRange.end, category);
+    if (drilldown) drilldown.openDateRangeCategory(dateRange.start, dateRange.end, category, categoryColorOf(category));
   };
   const onFeeIncomeSelect = drilldown
     ? ({ fund, yearLabel, isProjected }) => {
+        const colorByName = Object.fromEntries(
+          (feeSchedule?.funds || []).map(f => [f.name, f.color])
+        );
         if (!isProjected) {
-          drilldown.openFundYear(fund, yearLabel);
+          drilldown.openFundYear(fund, yearLabel, { color: colorByName[fund] });
           return;
         }
         const projLabels = feeSchedule?.projectedLabels || [];
         const projFunds  = feeSchedule?.projectedFunds  || [];
         const projIdx    = projLabels.indexOf(yearLabel);
-        const colorByName = Object.fromEntries(
-          (feeSchedule?.funds || []).map(f => [f.name, f.color])
-        );
         const projectedAmounts = projFunds
           .map(pf => ({
             name: pf.name,
@@ -285,7 +287,9 @@ export default function DashboardView({ snapshot, accountsData, drilldown }) {
           .filter(pf => pf.amount > 0)
           .sort((a, b) => b.amount - a.amount);
         const committedCapital = projFunds.find(pf => pf.name === fund)?.committedCapital ?? null;
-        drilldown.openFundYear(fund, yearLabel, { isProjected: true, projectedAmounts, committedCapital });
+        drilldown.openFundYear(fund, yearLabel, {
+          isProjected: true, projectedAmounts, committedCapital, color: colorByName[fund],
+        });
       }
     : undefined;
 

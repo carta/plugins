@@ -104,6 +104,14 @@ export const Eyebrow = ({ children, color = FAINT, style }) => (
   </div>
 );
 
+/** Ink's real table-header recipe: sentence case, 14px/500 weight — not an
+ *  eyebrow. Shared by every drilldown section/chart title. */
+export const ChartTitle = ({ children, as: Tag = "span", style }) => (
+  <Tag style={{ ...sans, fontSize: FS.value, lineHeight: "24px", fontWeight: 500, color: INK, ...style }}>
+    {children}
+  </Tag>
+);
+
 // Ink's real Heading 1 (28px/48 line-height/400-weight, prominent/serif family) —
 // the page-level title. `right`/`actions` match carta-fund-modeling's own H1
 // (and this app's H2 below), so a page-level control sits on the title's row.
@@ -420,7 +428,7 @@ export function placeTipBeside(tip, { barL, barR, plotL, plotR, mouseY, W, H }) 
   const half = tipW / 2;
   let centerX = placeRight ? barR + GAP + half : barL - GAP - half;
   centerX = Math.max(half, Math.min(W - half, centerX));
-  centerX = Math.min(centerX, visibleRight(tip) - half);
+  centerX = Math.max(half, Math.min(centerX, visibleRight(tip) - half));
   tip.classList.remove("is-below");
   tip.style.transform = "translate(-50%, 0)";
   tip.style.left = `${centerX}px`;
@@ -436,7 +444,9 @@ function visibleRight(tip) {
   const host = tip.offsetParent;
   const overlay = typeof document !== "undefined"
     && document.querySelector("[data-overlay-right]");
-  if (!host || !overlay) return Infinity;
+  // A chart INSIDE the overlay (the drawer's own mini chart) isn't covered
+  // by it — skip the clamp, or the reversed distance shoves the tip off-screen.
+  if (!host || !overlay || overlay.contains(host)) return Infinity;
   return overlay.getBoundingClientRect().left
        - host.getBoundingClientRect().left - TIP_GAP;
 }
@@ -714,7 +724,7 @@ export function InkLineChart({
 
     plot.append(svg);
 
-    function showAt(i) {
+    function showAt(i, mouseY = null) {
       root.classList.add("is-hovering");
       cross.setAttribute("x1", X(i)); cross.setAttribute("x2", X(i));
       series.forEach((s, si) => {
@@ -735,13 +745,17 @@ export function InkLineChart({
             `<span class="ink-chart__tip-val">${formatValue(one.values[i])}</span></div>`
         : tipHead(labels[i] + provNote) +
           series.map((s) => tipRow(s.color, s.name, formatValue(s.values[i]))).join("");
-      placeTip(tip, X(i), Math.min(...series.map((s) => Y(s.values[i]))), W);
+      // Tracks the cursor's Y, matching InkBarChart's hover placement.
+      const tipH = tip.offsetHeight;
+      const tipY = mouseY != null ? Math.max(tipH + 10, mouseY) : Math.min(...series.map((s) => Y(s.values[i])));
+      placeTip(tip, X(i), tipY, W);
     }
 
     svg.addEventListener("pointermove", (e) => {
-      const px = e.clientX - svg.getBoundingClientRect().left;
+      const rect = svg.getBoundingClientRect();
+      const px = e.clientX - rect.left, py = e.clientY - rect.top;
       const band = n === 1 ? iw : iw / (n - 1);
-      showAt(Math.max(0, Math.min(n - 1, Math.round((px - pad.left) / band))));
+      showAt(Math.max(0, Math.min(n - 1, Math.round((px - pad.left) / band))), py);
     });
     svg.addEventListener("pointerleave", () => root.classList.remove("is-hovering"));
   };
@@ -969,6 +983,14 @@ export function InkBarChart({
         marks.forEach((m) => m.el.classList.remove("is-dim"));
         cols.forEach((c) => c?.classList?.remove?.("is-dim"));
       }
+      // Darkens the exact segment under the cursor, so a stacked column's
+      // individually-clickable pieces don't all read as one bar.
+      function setActiveSegment(target) {
+        marks.forEach((m) => m.el.classList.toggle("is-active-seg", m.el === target));
+      }
+      function clearActiveSegment() {
+        marks.forEach((m) => m.el.classList.remove("is-active-seg"));
+      }
 
       function showAt(i, mouseY = null) {
         root.classList.add("is-hovering");
@@ -1019,9 +1041,9 @@ export function InkBarChart({
         if (layout !== "stacked" && series.length !== 1) tip.classList.remove("ink-chart__tip--compact");
         tip.innerHTML = html;
         const tipH = tip.offsetHeight;
-        // A multi-bar tooltip sits beside the bars and tracks the cursor's Y,
-        // so hovering never covers what it describes.
-        if (mouseY != null && vertical && (layout === "stacked" || layout === "grouped")) {
+        // A multi-bar tooltip, and a lone bar per category, sit beside the
+        // bar(s) and track the cursor's Y, so hovering never covers them.
+        if (mouseY != null && vertical && (layout === "stacked" || layout === "grouped" || series.length === 1)) {
           const barL = catStart(i);
           const barR = layout === "grouped" ? catStart(i, series.length - 1) + subW : barL + subW;
           placeTipBeside(tip, { barL, barR, plotL: pad.left, plotR: pad.left + iw, mouseY, W, H });
@@ -1037,12 +1059,28 @@ export function InkBarChart({
         const alongCat = vertical ? px - pad.left : py - pad.top;
         return Math.max(0, Math.min(n - 1, Math.floor(alongCat / band)));
       };
+      // A plain single-series trend chart has nothing to say about a
+      // category with no data — skip the hover instead of showing "$0".
+      const skipEmpty = !renderTooltip && !reference && series.length === 1 && layout !== "stacked";
+      const segmentHover = clickable && layout === "stacked";
       svg.addEventListener("pointermove", (e) => {
         const rect = svg.getBoundingClientRect();
         const px = e.clientX - rect.left, py = e.clientY - rect.top;
-        showAt(hitTest(px, py), py);
+        const i = hitTest(px, py);
+        if (skipEmpty && !series[0].values[i]) {
+          root.classList.remove("is-hovering");
+          clearDim();
+          if (segmentHover) clearActiveSegment();
+          return;
+        }
+        showAt(i, py);
+        if (segmentHover) setActiveSegment(e.target);
       });
-      svg.addEventListener("pointerleave", () => { root.classList.remove("is-hovering"); clearDim(); });
+      svg.addEventListener("pointerleave", () => {
+        root.classList.remove("is-hovering");
+        clearDim();
+        if (segmentHover) clearActiveSegment();
+      });
       if (clickable) {
         svg.addEventListener("click", (e) => {
           const rect = svg.getBoundingClientRect();
@@ -1114,7 +1152,7 @@ export function InkBarChart({
           const path = v > 0
             ? barPathV(X(i), top, barW, len, RADIUS)
             : barPathVBottom(X(i), top, barW, len, RADIUS);
-          const el = svg.appendChild(svgEl("path", { d: path }, `fill:${paint}`));
+          const el = svg.appendChild(svgEl("path", { d: path, class: "ink-chart__bar" }, `fill:${paint}`));
           marks.push({ el, i, si });
         });
         if (posTotals[i] > 0) svg.append(valueLabel(
@@ -1183,10 +1221,11 @@ export function InkBarChart({
           Math.max(0, Math.min(labels.length - 1, Math.floor((e.clientX - rect.left - pad.left) / band))),
           e.clientY - rect.top,
         );
+        if (clickable) marks.forEach((m) => m.el.classList.toggle("is-active-seg", m.el === e.target));
       });
       svg.addEventListener("pointerleave", () => {
         root.classList.remove("is-hovering");
-        marks.forEach((m) => m.el.classList.remove("is-dim"));
+        marks.forEach((m) => m.el.classList.remove("is-dim", "is-active-seg"));
       });
       if (clickable) {
         svg.addEventListener("click", (e) => {

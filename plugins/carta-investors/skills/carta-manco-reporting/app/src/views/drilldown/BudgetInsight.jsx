@@ -1,5 +1,5 @@
 import { sans, INK, PAPER, LINE, FAINT, MICRO, GREEN, RED, BORDER_DEFAULT, FS } from "../../ui/theme.js";
-import { Tag, Eyebrow } from "../../ui/components.jsx";
+import { Tag, ChartTitle } from "../../ui/components.jsx";
 import { fmtCurrencyExact, fmtCurrencyShort } from "../../charts/chartTheme.js";
 
 // Follows the carta-budget-analysis drill-down-line pattern:
@@ -24,7 +24,7 @@ export default function BudgetInsight({ account, agg, budgetLine, monthsElapsed 
 
   return (
     <div>
-      <Eyebrow style={{ marginBottom: 8 }}>Budget insight</Eyebrow>
+      <ChartTitle as="div" style={{ marginBottom: 8 }}>Budget insight</ChartTitle>
 
       {/* Stats grid */}
       <div style={S.statsGrid}>

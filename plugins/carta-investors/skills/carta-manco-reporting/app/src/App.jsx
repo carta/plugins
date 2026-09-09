@@ -193,7 +193,7 @@ export default function App() {
         buildJournalUrl={buildJournalUrlFor(snapshot)}
         topCategoryNames={topCategoryNames}
         asOf={snapshot?.asOf}
-        onDrillAccountForMonth={drillAccountForMonthFor(snapshot, drilldown)}
+        onDrillAccountForMonth={drillAccountForMonthFor(snapshot, accountsData, drilldown)}
       />
     </>
   );
@@ -222,16 +222,18 @@ function buildJournalUrlFor(snapshot) {
 // open a single-month date-range-category drill. Reuses the existing
 // date-range-category kind so the sub-drill matches the shape we already
 // render for breakdown-pane clicks.
-function drillAccountForMonthFor(snapshot, drilldown) {
+function drillAccountForMonthFor(snapshot, accountsData, drilldown) {
   const asOf = snapshot?.asOf;
   if (!asOf || !drilldown?.openDateRangeCategory) return null;
   const yr = Number(asOf.slice(0, 4));
+  const categories = accountsData?.monthly_categories?.categories || [];
   return (month, account) => {
     const mm = String(month).padStart(2, "0");
     const lastDay = new Date(yr, month, 0).getDate();
     const start = `${yr}-${mm}-01`;
     const end   = `${yr}-${mm}-${String(lastDay).padStart(2, "0")}`;
-    drilldown.openDateRangeCategory(start, end, account);
+    const color = categories.find(c => c.name === account)?.color;
+    drilldown.openDateRangeCategory(start, end, account, color);
   };
 }
 

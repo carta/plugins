@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { sans, INK, PAPER, LINE, FAINT, MICRO, BORDER_DEFAULT, BLUE, FS } from "../../ui/theme.js";
-import { Eyebrow } from "../../ui/components.jsx";
+import { ChartTitle } from "../../ui/components.jsx";
 import { fmtCurrencyExact } from "../../charts/chartTheme.js";
 import { trackClick } from "../../analytics.js";
 
@@ -25,7 +25,7 @@ export default function MonthSideGLBreakdown({ rows, sideLabel }) {
   return (
     <div>
       <div style={S.headerRow}>
-        <Eyebrow>GL account breakdown</Eyebrow>
+        <ChartTitle>GL account breakdown</ChartTitle>
         <span style={S.headerHint}>{rows.length} account{rows.length === 1 ? "" : "s"}</span>
       </div>
 
@@ -36,12 +36,12 @@ export default function MonthSideGLBreakdown({ rows, sideLabel }) {
       </div>
 
       <ul style={S.list}>
-        {visibleRows.map((r) => {
+        {visibleRows.map((r, i) => {
           const pct = total ? (r.amount / total) * 100 : 0;
+          const isLast = i === visibleRows.length - 1;
           return (
-            <li key={r.name} style={S.itemWrap}>
+            <li key={r.name} style={isLast ? { ...S.itemWrap, borderBottom: "none" } : S.itemWrap}>
               <div style={S.itemRow}>
-                <span style={S.dot} />
                 <span style={S.itemName}>{r.name}</span>
                 <span style={S.itemAmount}>{fmtCurrencyExact(r.amount)}</span>
                 <span style={S.itemPct}>{pct.toFixed(1)}%</span>
@@ -109,7 +109,6 @@ const S = {
     color: INK,
   },
   headerCategory: {
-    marginLeft: 20,
     flex: 1,
     minWidth: 0,
   },
@@ -140,13 +139,6 @@ const S = {
     padding: "8px 4px",
     fontSize: FS.bodyLg,
     color: INK,
-  },
-  dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 2,
-    background: BORDER_DEFAULT,
-    flexShrink: 0,
   },
   itemName: {
     flex: 1,

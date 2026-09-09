@@ -1,5 +1,5 @@
 import { sans, INK, PAPER, LINE, FAINT, MICRO, BORDER_DEFAULT, FS } from "../../ui/theme.js";
-import { Eyebrow } from "../../ui/components.jsx";
+import { ChartTitle } from "../../ui/components.jsx";
 import { fmtCurrencyExactFor } from "../../charts/chartTheme.js";
 
 // The fund's contracted LPA fee terms (FUND_ADMIN.MANAGEMENT_FEE_SCHEDULES) —
@@ -17,7 +17,7 @@ export default function FeeScheduleTerms({ terms }) {
   return (
     <div>
       <div style={S.headerRow}>
-        <Eyebrow>Management fee schedule</Eyebrow>
+        <ChartTitle>Management fee schedule</ChartTitle>
         <span style={S.headerHint}>{terms.length} period{terms.length === 1 ? "" : "s"}</span>
       </div>
 

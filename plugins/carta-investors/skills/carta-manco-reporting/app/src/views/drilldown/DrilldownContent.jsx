@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { sans, INK, PAPER, LINE, FAINT, MICRO, GREEN, RED, FS, SPACING, BANNER_SURFACE_INFO, INFO_STRONG, BANNER_TEXT, BORDER_DEFAULT } from "../../ui/theme.js";
-import { Eyebrow, Btn, Tag, Bubble, Chevron, HelpCircleIcon } from "../../ui/components.jsx";
+import { ChartTitle, Btn, Tag, Bubble, Chevron, HelpCircleIcon } from "../../ui/components.jsx";
 import HoverTip from "../../ui/HoverTip.jsx";
 import { fmtCurrencyShort, fmtCurrencyWhole, fmtCurrencyExact } from "../../charts/chartTheme.js";
 import { varianceColor, fmtVarianceWhole } from "../../ui/variance.js";
@@ -295,7 +295,7 @@ export default function DrilldownContent({
       {typeof selection.budget === "number" && !selection.unmapped && (
         <div>
           <div style={S.paceHeader}>
-            <span style={S.jeHeading}>Budget vs actual over time</span>
+            <ChartTitle>Budget vs actual over time</ChartTitle>
             <HoverTip text={paceNote(paceModeFor(selection.monthlyBudget, selection.quarterlyBudget), selection.period)}>
               <HelpCircleIcon size={16} strokeWidth={1.6} style={{ color: INFO_STRONG }} />
             </HoverTip>
@@ -306,6 +306,12 @@ export default function DrilldownContent({
             monthlyActual={agg.monthly}
             budget={selection.budget}
             period={selection.period}
+            // Same favorable-side rule as varianceColor() above: exceeding
+            // budget is good for income, bad for expense.
+            actualColor={(selection.polarity === "income"
+              ? Math.abs(agg?.total ?? 0) > selection.budget
+              : Math.abs(agg?.total ?? 0) < selection.budget)
+              ? "var(--local-cat-positive-2)" : "var(--local-cat-negative-2)"}
           />
         </div>
       )}
@@ -340,7 +346,7 @@ export default function DrilldownContent({
       {/* Journal-entry table — narrowed by selected tags. */}
       <div>
         <div style={S.jeHeader}>
-          <span style={S.jeHeading}>Carta journal entries</span>
+          <ChartTitle>Carta journal entries</ChartTitle>
         </div>
         <EntriesTable
           entries={tagFiltered}
@@ -651,8 +657,8 @@ function CompositionSection({ selection, agg, categoryMoM }) {
       : `${selection.category} — month over month`;
     return (
       <div>
-        <Eyebrow style={{ marginBottom: 8 }}>{label}</Eyebrow>
-        <CompositionChart kind="monthly" monthly={categoryMoM} highlightIndex={selection.month - 1} />
+        <ChartTitle as="div" style={{ marginBottom: 8 }}>{label}</ChartTitle>
+        <CompositionChart kind="monthly" monthly={categoryMoM} highlightIndex={selection.month - 1} color={selection.color} />
       </div>
     );
   }
@@ -664,7 +670,7 @@ function CompositionSection({ selection, agg, categoryMoM }) {
     if (typeof selection.budget === "number") return null;
     return (
       <div>
-        <Eyebrow style={{ marginBottom: 8 }}>Monthly trend</Eyebrow>
+        <ChartTitle as="div" style={{ marginBottom: 8 }}>Monthly trend</ChartTitle>
         <CompositionChart kind="monthly" monthly={agg.monthly} />
       </div>
     );
@@ -674,8 +680,8 @@ function CompositionSection({ selection, agg, categoryMoM }) {
   if (selection.kind === "fund-year") {
     return (
       <div>
-        <Eyebrow style={{ marginBottom: 8 }}>Monthly bookings within {selection.yearLabel}</Eyebrow>
-        <CompositionChart kind="monthly" monthly={agg.monthly} />
+        <ChartTitle as="div" style={{ marginBottom: 8 }}>Monthly bookings within {selection.yearLabel}</ChartTitle>
+        <CompositionChart kind="monthly" monthly={agg.monthly} color={selection.color} />
       </div>
     );
   }
@@ -761,7 +767,7 @@ function ProjectedFeeSummary({ selection, scheduleTerms }) {
       {!isBucket && quarters.length > 0 && (
         <div>
           <div style={SP.summaryHeaderRow}>
-            <Eyebrow>Management fee summary — {yearLabel}</Eyebrow>
+            <ChartTitle>Management fee summary — {yearLabel}</ChartTitle>
           </div>
           <div style={SP.qtrHeader}>
             <span style={SP.qtrPeriod}>Period</span>
@@ -794,7 +800,7 @@ function ProjectedFeeSummary({ selection, scheduleTerms }) {
           the per-fund breakdown that makes up the bar instead. */}
       {isBucket && projectedAmounts.length > 0 && (
         <div>
-          <Eyebrow style={{ marginBottom: 8 }}>Projected management fees — {yearLabel}</Eyebrow>
+          <ChartTitle as="div" style={{ marginBottom: 8 }}>Projected management fees — {yearLabel}</ChartTitle>
           <ul style={SP.amountList}>
             {projectedAmounts.map(f => (
               <li key={f.name} style={SP.amountRow}>
@@ -1079,15 +1085,6 @@ const S = {
     justifyContent: "space-between",
     alignItems: "baseline",
     marginBottom: 8,
-  },
-  // Ink's real table-header recipe (components-table.html): sentence case,
-  // 14px/500 weight, default text color — not an eyebrow.
-  jeHeading: {
-    ...sans,
-    fontSize: FS.value,
-    lineHeight: "24px",
-    fontWeight: 500,
-    color: INK,
   },
   paceHeader: {
     display: "flex",

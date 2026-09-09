@@ -85,8 +85,9 @@ export default function EntriesTable({ entries, buildJournalUrl }) {
           // e.fund (fund-fee entries) is the paying fund; vendor on those
           // rows is the ManCo itself, so fund wins when both are present.
           const hasAttribution = e.fund || e.vendor || e.partner;
+          const isLast = e === slice[slice.length - 1] && shown >= total;
           return (
-            <li key={e.id} style={S.row}>
+            <li key={e.id} style={isLast ? { ...S.row, borderBottom: "none", paddingBottom: 0 } : S.row}>
               <span style={S.date}>{formatDate(e.date)}</span>
               <div style={S.mid}>
                 {(() => {

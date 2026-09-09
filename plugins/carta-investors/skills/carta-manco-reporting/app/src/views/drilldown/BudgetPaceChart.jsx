@@ -44,7 +44,11 @@ export function paceModeFor(monthlyBudget, quarterlyBudget) {
     : quarterlyBudget?.length === 4 ? "quarterly" : "pace";
 }
 
-export default function BudgetPaceChart({ quarterlyBudget, monthlyBudget, monthlyActual, budget, period, height = 150 }) {
+export default function BudgetPaceChart({
+  quarterlyBudget, monthlyBudget, monthlyActual, budget, period, height = 150,
+  budgetColor = "var(--local-series-blue-tint)",
+  actualColor = "var(--ink-color-global-data-viz-lime-2)",
+}) {
   const mode = paceModeFor(monthlyBudget, quarterlyBudget);
   const actual = monthlyActual || [];
   // Trailing empty months are the year not reaching them yet, not zeros.
@@ -71,8 +75,8 @@ export default function BudgetPaceChart({ quarterlyBudget, monthlyBudget, monthl
         orientation="vertical"
         layout="grouped"
         series={[
-          { name: "Budget", color: "var(--local-series-blue-pale)", values: budgetPer },
-          { name: "Actual", color: "var(--ink-color-global-data-viz-lime-3)", values: actualPer },
+          { name: "Budget", color: budgetColor, values: budgetPer },
+          { name: "Actual", color: actualColor, values: actualPer },
         ]}
         labels={labels}
         legend
@@ -97,7 +101,7 @@ export default function BudgetPaceChart({ quarterlyBudget, monthlyBudget, monthl
       id="pace-line"
       height={height}
       series={[
-        { name: "Actual to date", color: "var(--ink-color-global-data-viz-lime-3)", values: cumulative },
+        { name: "Actual to date", color: actualColor, values: cumulative },
         { name: "Even-spread pace", color: MICRO, dashed: true, width: 1.5,
           values: labels.map((_, i) => Math.round(step * (i + 1))) },
       ]}

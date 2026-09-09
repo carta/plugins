@@ -477,8 +477,12 @@ export const GLOBAL_CSS = `
   .ink-chart.is-hovering .ink-chart__mark { opacity: 1; }
   .ink-chart.is-hovering .ink-chart__col.is-dim,
   .ink-chart.is-hovering .ink-chart__bar.is-dim { opacity: .38; }
+  /* One tint darker under the cursor — a stacked column's segments are each
+     their own click target, and this is the only per-segment cue for that. */
+  .ink-chart.is-hovering .is-active-seg { filter: brightness(0.85); }
   @media (prefers-reduced-motion: no-preference) {
     .ink-chart__cross, .ink-chart__mark, .ink-chart__tip { transition: opacity 80ms ease-out; }
+    .ink-chart__col path, .ink-chart__col rect, .ink-chart__bar { transition: filter 80ms ease-out; }
   }
   .ink-chart__tip {
     position: absolute; left: 0; top: 0;
