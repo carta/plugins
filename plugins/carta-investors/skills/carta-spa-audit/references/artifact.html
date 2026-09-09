@@ -1,0 +1,2319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{TITLE}}</title>
+  <style>
+    /* Inter font — Carta's primary typeface. Loaded explicitly so the artifact
+       renders consistently on systems without "Inter var" installed locally. */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+    /* === SHARED CARTA STYLESHEET === */
+    :root {
+        color-scheme: light;
+        --surface-bg: #FFFFFF;
+        --surface-underlay: #F1F1F1;
+        --surface-darkgray-default: #1A1A1A;
+        --text-default: #1A1A1A;
+        --text-subtle: #656B6B;
+        --border-default: #A7AAAA;
+        --border-subtle: #DEDFDF;
+        --negative-subtle: #FFEEEF;
+        --negative-strong: #E52431;
+        --positive-subtle: #EBF7F6;
+        --positive-strong: #2D9E90;
+        --info-subtle: #EAF0F8;
+        --info-strong: #285DA3;
+        --warning-subtle: #FFFCED;
+        --warning-strong: #C88600;
+        --border-focus-light: #C0D1E9;
+        --surface-lightgray-hover: #E9EAEA;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+        font-family: "Inter var", "Inter", -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        background: var(--surface-bg);
+        color: var(--text-default);
+        padding: 24px;
+        /* Bottom padding clears the fixed-positioned "Powered by Carta"
+           watermark — without this, long tables scroll under the badge
+           and the last few rows render with the wordmark on top. */
+        padding-bottom: 80px;
+    }
+
+    .container { max-width: 1100px; margin: 0 auto; }
+
+    .header { margin-bottom: 32px; }
+    .header h1 { font-size: 28px; font-weight: 500; line-height: 40px; color: var(--text-default); margin-bottom: 8px; letter-spacing: -0.01em; }
+    .header p { color: var(--text-subtle); font-size: 14px; font-weight: 400; line-height: 24px; }
+
+    /* Five-tile stat grid — one tile per bucket. Auto-fits to viewport
+       width; gap buckets carry their full color accent, the trailing two
+       (Executed / No-SPA-needed) get .metric-card--muted to read as
+       secondary so the user's eye lands on the gaps first. */
+    .metrics-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 12px;
+        margin-bottom: 20px;
+    }
+    .metric-card {
+        background: var(--surface-bg);
+        border: 1px solid #E9EAEA;
+        padding: 14px 16px;
+    }
+    .metric-label {
+        font-size: 11px;
+        color: var(--text-subtle);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 6px;
+        font-weight: 500;
+        line-height: 16px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        white-space: nowrap;
+    }
+    .metric-value {
+        font-size: 28px;
+        font-weight: 600;
+        line-height: 36px;
+        color: var(--surface-darkgray-default);
+        font-variant-numeric: tabular-nums;
+    }
+    .metric-sub {
+        font-size: 12px;
+        color: var(--text-subtle);
+        margin-top: 2px;
+        font-weight: 400;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+
+    /* Coverage-by-cost-basis bar — value-weighted companion to the count
+       tiles. A 100%-width stacked bar segmented by bucket, plus a legend and
+       an interpretive callout contrasting count coverage vs value coverage. */
+    .coverage-bar-section { margin-bottom: 20px; }
+    .coverage-bar-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+    .coverage-bar-head .label { font-size: 13px; font-weight: 500; color: var(--text-default); }
+    .coverage-bar-head .value { font-size: 13px; font-weight: 600; color: var(--text-default); font-variant-numeric: tabular-nums; margin-left: auto; }
+    .bar-mode-toggle { display: flex; gap: 2px; }
+    .bar-mode-btn { font-size: 11px; font-family: inherit; padding: 2px 8px; border: 1px solid var(--border-default); border-radius: 4px; background: transparent; color: var(--text-subtle); cursor: pointer; }
+    .bar-mode-btn.active { background: var(--surface-darkgray-default); color: #fff; border-color: var(--surface-darkgray-default); }
+    .coverage-bar-track { display: flex; height: 18px; border-radius: 4px; overflow: hidden; background: var(--surface-underlay); }
+    .coverage-bar-seg { height: 100%; }
+    .coverage-bar-seg.missing    { background: var(--negative-strong); }
+    .coverage-bar-seg.unexecuted { background: var(--warning-strong); }
+    .coverage-bar-seg.executed   { background: var(--positive-strong); }
+    .coverage-bar-seg.notNeeded  { background: var(--text-subtle); }
+    .coverage-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; font-size: 12px; color: var(--text-subtle); }
+    .coverage-legend .item { display: inline-flex; align-items: center; gap: 6px; }
+    .coverage-legend .swatch { width: 10px; height: 10px; border-radius: 2px; }
+    .coverage-legend .swatch.missing    { background: var(--negative-strong); }
+    .coverage-legend .swatch.unexecuted { background: var(--warning-strong); }
+    .coverage-legend .swatch.executed   { background: var(--positive-strong); }
+    .coverage-legend .swatch.notNeeded  { background: var(--text-subtle); }
+    .coverage-callout { font-size: 13px; color: var(--text-default); line-height: 18px; margin-top: 10px; }
+
+    /* Left-edge bucket accent — color encodes the bucket, paired with text label */
+    .metric-card.bucket-missing    { border-left: 3px solid var(--negative-strong); }
+    .metric-card.bucket-unexecuted { border-left: 3px solid var(--warning-strong); }
+    .metric-card.bucket-executed   { border-left: 3px solid var(--positive-strong); }
+    .metric-card.bucket-not-needed { border-left: 3px solid var(--text-subtle); }
+
+    /* Pending-extraction FYI pill — sits inline in the page-header subtitle
+       when pendingExtractionDocs > 0. Hover reveals a tooltip with the full
+       explanation. Pending docs can't be linked to specific portfolio
+       companies pre-extraction, so we keep this as an FYI surface (not a
+       tile / bucket). */
+    .pending-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 1px 8px;
+        background: var(--info-subtle);
+        color: var(--info-strong);
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 18px;
+        position: relative;
+        cursor: help;
+    }
+    .pending-pill-icon { font-size: 13px; line-height: 1; }
+    .pending-pill-text { font-variant-numeric: tabular-nums; }
+
+    /* Unmatched-SPA FYI pill — same Ink chip pattern as the pending pill, but
+       warning-amber instead of info-blue. These are SPAs that have nowhere to
+       land in the four-bucket audit because their issuer name didn't fuzzy-
+       match any portfolio investment. Action-oriented (reconcile names), not
+       just "wait." */
+    .orphaned-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 1px 8px;
+        background: var(--warning-subtle);
+        color: var(--warning-strong);
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 18px;
+        position: relative;
+        cursor: help;
+    }
+    .orphaned-pill-icon { font-size: 13px; line-height: 1; }
+    .orphaned-pill-text { font-variant-numeric: tabular-nums; }
+
+    /* Ink-style tooltip — black bg, white text, caret pointing up into the
+       trigger. Matches the pattern shipped in plugins/skill-dev/skills/
+       theme-with-ink/SKILL.md. */
+    .has-tooltip:focus-visible {
+        outline: 2px solid var(--info-strong);
+        outline-offset: 2px;
+        border-radius: 4px;
+    }
+    .tooltip {
+        position: absolute;
+        top: calc(100% + 10px);
+        left: 0;
+        background: #1A1A1A;
+        color: #FFFFFF;
+        padding: 10px 12px;
+        border-radius: 4px;
+        font-size: 12px;
+        line-height: 18px;
+        font-weight: 400;
+        width: max-content;
+        max-width: 320px;
+        text-align: left;
+        text-transform: none;
+        letter-spacing: normal;
+        white-space: normal;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.15s ease, visibility 0.15s ease;
+        pointer-events: none;
+        z-index: 100;
+    }
+    .tooltip::after {
+        content: '';
+        position: absolute;
+        bottom: 100%;
+        left: 16px;
+        width: 0;
+        height: 0;
+        border-left: 6px solid transparent;
+        border-right: 6px solid transparent;
+        border-bottom: 6px solid #1A1A1A;
+    }
+    .has-tooltip:hover .tooltip,
+    .has-tooltip:focus-visible .tooltip {
+        opacity: 1;
+        visibility: visible;
+    }
+
+    /* Inline help icon for tile labels — small ⓘ that opens a hover tooltip.
+       Used on the "No SPA Needed" tile to explain which asset types land
+       there (SAFEs, convertibles, fund LPs, tokens, warrants). */
+    .help-icon {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-left: 4px;
+        font-size: 11px;
+        color: var(--text-subtle);
+        cursor: help;
+        line-height: 1;
+    }
+    .help-icon:hover { color: var(--text-default); }
+
+    /* Tile-anchored tooltip — same Ink-style as the pending-pill tooltip
+       but right-aligned so the popup doesn't overflow the viewport when
+       triggered on the rightmost tile in the row. */
+    .tooltip--tile {
+        left: auto;
+        right: 0;
+        width: 260px;
+        max-width: 260px;
+    }
+    .tooltip--tile::after {
+        left: auto;
+        right: 8px;
+    }
+
+    /* Muted tile treatment — Executed + No-SPA-needed get visually
+       de-emphasized per Vispan's "surface the gaps" feedback. Same border
+       color (semantics preserved) but lighter background, smaller value. */
+    .metric-card--muted { background: var(--surface-bg); }
+    .metric-card--muted .metric-value { color: var(--text-default); }
+    .metric-card--muted .metric-label { color: var(--text-subtle); }
+    .metric-card--muted .metric-sub { color: var(--text-subtle); }
+
+    /* Bucket badge in the table — color + text label (a11y: never color-only) */
+    .bucket-badge {
+        display: inline-flex;
+        align-items: center;
+        height: 22px;
+        padding: 0 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 1;
+        white-space: nowrap;
+    }
+    .bucket-badge.missing    { background: var(--negative-subtle); color: var(--negative-strong); }
+    .bucket-badge.unexecuted { background: var(--warning-subtle); color: var(--warning-strong); }
+    .bucket-badge.executed   { background: var(--positive-subtle); color: var(--positive-strong); }
+    .bucket-badge.notNeeded  { background: var(--surface-underlay); color: var(--text-subtle); }
+
+    .table-title { font-size: 16px; font-weight: 500; line-height: 28px; color: var(--text-default); margin-bottom: 12px; }
+    .table-container { background: var(--surface-bg); overflow-x: auto; }
+    table { width: 100%; min-width: 480px; border-collapse: collapse; }
+    th { background: var(--surface-bg); padding: 10px 16px; text-align: left; font-size: 14px; font-weight: 500; color: var(--text-default); border-bottom: 1px solid var(--border-default); line-height: 20px; }
+    td { padding: 10px 16px; border-bottom: 1px solid var(--border-subtle); font-size: 14px; color: var(--text-default); line-height: 24px; }
+    tbody tr.clickable { cursor: pointer; }
+    tbody tr.clickable:hover { background: var(--surface-lightgray-hover); }
+    tbody tr:last-child td { border-bottom: none; }
+
+    .number { font-variant-numeric: tabular-nums; font-size: 14px; text-align: right; }
+    .company-name { font-weight: 500; }
+    .row-caret { margin-left: 4px; color: var(--text-subtle); font-size: 12px; }
+    .similarity-asterisk { color: var(--warning-strong); font-weight: 600; cursor: help; margin-left: 4px; }
+
+    /* Toolbar above the table — filter pills on the left, search on the right */
+    .table-toolbar {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 12px;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .filter-bar {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+    .filter-select-label {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-subtle);
+    }
+    .filter-select {
+        height: 28px;
+        padding: 0 30px 0 10px;
+        border: 1px solid var(--border-default);
+        border-radius: 4px;
+        font-size: 13px;
+        font-weight: 500;
+        font-family: inherit;
+        color: var(--text-default);
+        background-color: var(--surface-bg);
+        background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none' stroke='%23656B6B' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><path d='M1 1l4 4 4-4'/></svg>");
+        background-repeat: no-repeat;
+        background-position: right 10px center;
+        cursor: pointer;
+        outline: none;
+        appearance: none;
+        -webkit-appearance: none;
+        transition: border-color 0.12s ease, box-shadow 0.12s ease;
+    }
+    .filter-select:hover { background-color: var(--surface-lightgray-hover); }
+    .filter-select:focus {
+        border-color: var(--info-strong);
+        box-shadow: 0 0 0 3px var(--border-focus-light);
+    }
+    .filter-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 28px;
+        padding: 0 12px;
+        border-radius: 4px;
+        font-size: 13px;
+        font-weight: 500;
+        background: var(--surface-bg);
+        color: var(--text-default);
+        border: 1px solid var(--border-default);
+        cursor: pointer;
+        font-family: inherit;
+    }
+    .filter-pill:hover { background: var(--surface-lightgray-hover); }
+    .filter-pill.active {
+        background: var(--surface-darkgray-default);
+        color: var(--surface-bg);
+        border-color: var(--surface-darkgray-default);
+    }
+    .filter-pill .count { font-variant-numeric: tabular-nums; opacity: 0.8; }
+
+    /* Search input — Ink input pattern: 1px border, 4px radius, 28px height, focus ring */
+    .table-search {
+        position: relative;
+    }
+    .table-search input {
+        width: 240px;
+        height: 28px;
+        padding: 0 8px 0 30px;
+        border: 1px solid var(--border-default);
+        border-radius: 4px;
+        font-size: 13px;
+        font-family: inherit;
+        color: var(--text-default);
+        background: var(--surface-bg);
+        outline: none;
+        transition: border-color 0.12s ease, box-shadow 0.12s ease;
+    }
+    .table-search input::placeholder { color: var(--text-subtle); }
+    .table-search input:focus {
+        border-color: var(--info-strong);
+        box-shadow: 0 0 0 3px var(--border-focus-light);
+    }
+    .table-search svg {
+        position: absolute;
+        left: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--text-subtle);
+        pointer-events: none;
+    }
+
+    /* Sortable column headers — caret indicator on active sort column */
+    th.sortable {
+        cursor: pointer;
+        user-select: none;
+        position: relative;
+    }
+    th.sortable:hover { background: var(--surface-lightgray-hover); }
+    th.sortable .sort-caret {
+        display: inline-block;
+        margin-left: 4px;
+        color: var(--text-subtle);
+        font-size: 10px;
+        line-height: 1;
+        opacity: 0.4;
+    }
+    th.sortable.sort-active .sort-caret { opacity: 1; color: var(--text-default); }
+
+    /* Drawer — lifted verbatim from co-investors */
+    .drawer-backdrop {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.2);
+        z-index: 999;
+    }
+    .drawer-backdrop.open { display: block; }
+    .drawer {
+        position: fixed;
+        right: 0;
+        top: 0;
+        width: 92vw;
+        max-width: 92vw;
+        height: 100vh;
+        background: var(--surface-bg);
+        box-shadow: -4px 0 24px rgba(0,0,0,0.12);
+        transform: translateX(100%);
+        transition: transform 0.25s ease;
+        z-index: 1000;
+        overflow-y: auto;
+        padding: 24px;
+    }
+    .drawer.open { transform: translateX(0); }
+    .drawer table { min-width: max-content; }
+    .drawer-close {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        width: 32px;
+        height: 32px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: transparent;
+        border: none;
+        border-radius: 4px;
+        color: var(--text-default);
+        cursor: pointer;
+        padding: 0;
+        transition: background-color 0.12s ease;
+    }
+    .drawer-close:hover { background: var(--surface-lightgray-hover); }
+    .drawer-close:focus-visible { outline: 2px solid var(--info-strong); outline-offset: 2px; box-shadow: 0 0 0 4px var(--border-focus-light); }
+    .drawer h2 { font-size: 18px; font-weight: 600; color: var(--text-default); margin-bottom: 4px; padding-right: 32px; }
+    .drawer-subtitle { font-size: 13px; color: var(--text-subtle); margin-bottom: 20px; }
+    .drawer-spa-label {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-default);
+        margin: 20px 0 8px;
+        padding-bottom: 6px;
+        border-bottom: 1px solid var(--border-subtle);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .drawer-spa-meta { font-size: 12px; color: var(--text-subtle); font-weight: 400; }
+    .drawer-spa-footnote { font-size: 11px; color: var(--text-subtle); margin: -24px 0 32px; }
+    /* Bounded scroller: each SPA's table-container scrolls internally so a
+       sticky header pins while a long purchaser list scrolls, with horizontal
+       scroll as the fallback. Short tables don't reach max-height. */
+    .drawer .table-container { box-shadow: none; overflow: auto; max-height: 60vh; margin-bottom: 32px; }
+    .drawer thead th {
+        position: sticky;
+        top: 0;
+        background: var(--surface-bg);
+        z-index: 2;
+    }
+    /* Cap the purchaser-name column so long fund names wrap instead of
+       forcing the table wide. */
+    .drawer td.purchaser-name {
+        max-width: 220px;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+    /* Cap the Type column and let its tag wrap instead of forcing width. */
+    .drawer td.entity-type { max-width: 84px; }
+    .drawer td.entity-type .tag {
+        white-space: normal;
+        height: auto;
+        min-height: 22px;
+        padding-top: 3px;
+        padding-bottom: 3px;
+        line-height: 1.3;
+    }
+    .drawer td, .drawer th { padding: 8px 12px; }
+    .drawer tfoot td {
+        font-weight: 600;
+        font-size: 13px;
+        background: var(--info-subtle);
+        border-top: 1px solid var(--border-default);
+    }
+
+    /* Action-CTA cards — sit between the Gaps grid and the Covered grid.
+       Sized in a row so up to two cards can sit side-by-side on wide
+       viewports and stack on narrow ones. Softer treatment than the
+       previous red-banner warning — these are action-oriented prompts,
+       not error states. */
+    .cta-row {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 12px;
+        margin: 0 0 24px;
+    }
+    .cta-card {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 14px 18px;
+        border: 1px solid var(--border-subtle);
+        border-radius: 0;
+    }
+    .cta-card--missing    { background: #FFF7F2; border-left: 3px solid #C77B3F; }
+    .cta-card--unexecuted { background: var(--info-subtle); border-left: 3px solid var(--info-strong); }
+    .cta-card-body { flex: 1; min-width: 0; }
+    .cta-card-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-default);
+        margin-bottom: 2px;
+        line-height: 20px;
+    }
+    .cta-card-text {
+        font-size: 13px;
+        color: var(--text-default);
+        line-height: 18px;
+    }
+    .cta-card-action {
+        flex-shrink: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 32px;
+        padding: 0 14px;
+        border-radius: 4px;
+        font-size: 13px;
+        font-weight: 600;
+        font-family: inherit;
+        color: #FFFFFF;
+        background: var(--surface-darkgray-default);
+        border: none;
+        text-decoration: none;
+        white-space: nowrap;
+        cursor: pointer;
+        transition: background-color 0.12s ease;
+    }
+    .cta-card-action:hover { background: #000000; }
+    .cta-card-action--secondary {
+        background: var(--surface-bg);
+        color: var(--text-default);
+        border: 1px solid var(--border-default);
+    }
+    .cta-card-action--secondary:hover {
+        background: var(--surface-lightgray-hover);
+    }
+    .cta-card-action:focus-visible {
+        outline: 2px solid var(--info-strong);
+        outline-offset: 2px;
+    }
+
+    /* Empty state for buckets with zero companies */
+    .empty-bucket {
+        padding: 24px;
+        text-align: center;
+        color: var(--text-subtle);
+        font-size: 14px;
+        border: 1px dashed var(--border-subtle);
+        border-radius: 0;
+    }
+
+    .footer-note {
+        font-size: 12px;
+        color: var(--text-subtle);
+        margin-top: 16px;
+        line-height: 18px;
+    }
+
+    .page-footer {
+        margin-top: 32px;
+        padding-top: 16px;
+        border-top: 1px solid var(--border-subtle);
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+    .carta-link { font-size: 13px; color: var(--info-strong); text-decoration: none; }
+    .carta-link:hover { text-decoration: underline; }
+    .powered-by-carta {
+        position: fixed;
+        bottom: 20px; right: 20px;
+        width: min(13.5vw, calc(13.5vh * 5.66));
+        height: auto; line-height: 0;
+        pointer-events: none; z-index: 10;
+        /* Hidden until scrolled to the bottom (toggled by setupPoweredBy). */
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.2s ease, visibility 0.2s ease;
+    }
+    .powered-by-carta.visible {
+        opacity: 1;
+        visibility: visible;
+    }
+    .powered-by-carta svg { display: block; width: 100%; height: auto; }
+
+    .tag {
+        display: inline-flex;
+        align-items: center;
+        height: 24px;
+        padding: 0 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 1;
+        white-space: nowrap;
+    }
+    .tag-neutral { background: var(--surface-underlay); color: var(--text-default); }
+
+    /* ── Fund / Geography multi-select filter ─────────────────────────────── */
+    .filter-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .fund-filter-wrap {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+    }
+    .fund-filter-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 5px 10px;
+        font-size: 13px;
+        font-family: inherit;
+        font-weight: 500;
+        color: var(--text-default);
+        background: var(--surface-bg);
+        border: 1px solid var(--border-default);
+        border-radius: 4px;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background 0.12s, border-color 0.12s;
+    }
+    .fund-filter-btn:hover { background: var(--surface-lightgray-hover); }
+    .fund-filter-btn.active {
+        background: var(--info-subtle);
+        border-color: var(--info-strong);
+        color: var(--info-strong);
+    }
+    .fund-caret { font-size: 10px; opacity: 0.7; }
+    .fund-dropdown-panel {
+        display: none;
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        z-index: 200;
+        min-width: 200px;
+        max-height: 280px;
+        overflow-y: auto;
+        background: var(--surface-bg);
+        border: 1px solid var(--border-default);
+        border-radius: 4px;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.10);
+        padding: 6px 0;
+    }
+    .fund-dropdown-panel.open { display: block; }
+    .fund-option {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 14px;
+        font-size: 13px;
+        cursor: pointer;
+        user-select: none;
+        transition: background 0.1s;
+    }
+    .fund-option:hover { background: var(--surface-lightgray-hover); }
+    .fund-option input[type="checkbox"] { accent-color: var(--info-strong); flex-shrink: 0; }
+    .fund-sep { border: none; border-top: 1px solid var(--border-subtle); margin: 4px 0; }
+
+    /* Status filter tab bar (All / Live / Exited) */
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-bottom: 16px;
+    }
+    .status-tab {
+      display: inline-flex;
+      align-items: center;
+      height: 32px;
+      padding: 0 14px;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid var(--border-default);
+      background: var(--surface-bg);
+      color: var(--text-subtle);
+      transition: background-color 0.1s ease, color 0.1s ease, border-color 0.1s ease;
+      font-family: inherit;
+    }
+    .status-tab:hover { background: var(--surface-underlay); color: var(--text-default); }
+    .status-tab.active {
+      background: var(--text-default);
+      color: var(--surface-bg);
+      border-color: var(--text-default);
+    }
+    .status-tab-count {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      border-radius: 9px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-left: 6px;
+      background: rgba(255,255,255,0.2);
+      color: inherit;
+    }
+    .status-tab:not(.active) .status-tab-count {
+      background: var(--surface-underlay);
+      color: var(--text-subtle);
+    }
+
+    /* === Load / error states (live artifact only) ===
+       The page has no data at first paint — it queries Carta on load — so it
+       opens on a shimmer and swaps to content when the fetch resolves. */
+    #loading-state { padding: 8px 0 32px; }
+    #loading-status {
+      font-size: 13px;
+      color: var(--text-subtle);
+      margin-bottom: 16px;
+      min-height: 18px;
+    }
+    .shimmer-row {
+      height: 44px;
+      border-radius: 6px;
+      margin-bottom: 8px;
+      background: linear-gradient(90deg,
+        var(--surface-underlay) 25%,
+        #E8E8E8 37%,
+        var(--surface-underlay) 63%);
+      background-size: 400% 100%;
+      animation: shimmer 1.4s ease-in-out infinite;
+    }
+    @keyframes shimmer {
+      0%   { background-position: 100% 50%; }
+      100% { background-position: 0 50%; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .shimmer-row { animation: none; }
+    }
+    #error-state {
+      display: none;
+      padding: 24px;
+      border: 1px solid #E0E0E0;
+      border-radius: 8px;
+      background: var(--surface-underlay);
+    }
+    #error-state h2 {
+      font-size: 16px;
+      font-weight: 600;
+      margin: 0 0 8px;
+      color: var(--text-default);
+    }
+    #error-state p {
+      font-size: 13px;
+      color: var(--text-subtle);
+      margin: 0 0 6px;
+      line-height: 1.5;
+    }
+    #error-detail {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px;
+      color: var(--text-subtle);
+      word-break: break-word;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header" id="page-header"></div>
+
+    <div id="loading-state">
+      <div id="loading-status">Loading SPA coverage data from Carta…</div>
+      <div class="shimmer-row" style="width: 100%"></div>
+      <div class="shimmer-row" style="width: 92%"></div>
+      <div class="shimmer-row" style="width: 96%"></div>
+      <div class="shimmer-row" style="width: 88%"></div>
+      <div class="shimmer-row" style="width: 94%"></div>
+    </div>
+
+    <div id="error-state">
+      <h2 id="error-title">Couldn't load your SPA coverage data</h2>
+      <p id="error-message"></p>
+      <p id="error-detail"></p>
+    </div>
+
+    <div id="content-area" style="display: none">
+      <div class="coverage-bar-section" id="coverage-bar"></div>
+
+      <div class="metrics-grid" id="metrics-grid"></div>
+
+      <div id="upload-cta"></div>
+
+      <div class="status-bar" id="status-bar"></div>
+
+      <div class="table-title">Portfolio companies — SPA coverage</div>
+      <div class="table-toolbar">
+        <div class="filter-group">
+          <div class="filter-bar" id="filter-bar"></div>
+          <div class="fund-filter-wrap" id="fund-filter-wrap"></div>
+          <div class="fund-filter-wrap" id="geo-filter-wrap"></div>
+        </div>
+        <div class="table-search">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <circle cx="6" cy="6" r="4.5"/>
+            <path d="M9.5 9.5 L12.5 12.5" stroke-linecap="round"/>
+          </svg>
+          <input type="text" id="search-input" placeholder="Search companies…" aria-label="Search companies" oninput="setSearch(this.value)">
+        </div>
+      </div>
+      <div class="table-container" id="main-table"></div>
+      <div class="footer-note" id="footer-note"></div>
+
+      <div class="page-footer" id="page-footer"></div>
+    </div>
+  </div>
+
+  <div class="drawer-backdrop" id="backdrop" onclick="closeDrawer()"></div>
+  <div class="drawer" id="drawer">
+    <button class="drawer-close" onclick="closeDrawer()" aria-label="Close drawer">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
+        <path d="M2 2 L10 10 M10 2 L2 10"/>
+      </svg>
+    </button>
+    <h2 id="drawer-title"></h2>
+    <div class="drawer-subtitle" id="drawer-subtitle"></div>
+    <div id="drawer-content"></div>
+  </div>
+
+  <script type="application/json" id="spa-audit-state">{{STATE_JSON}}</script>
+
+  <script>
+    // ── Injected at render time by scripts/render-artifact.py ─────────────────
+    // FIRM_UUID          the firm this SPA coverage audit covers. Pinned via
+    //                    set_context on load, and substituted into every query.
+    // FIRM_NAME          display name, used in the page header and error copy.
+    // FIRM_CARTA_ID      the numeric organization pk, for the documents deep link.
+    // CARTA_MCP_SERVER   the Carta connector's DISPLAY NAME. The artifact runtime
+    //                    addresses a connector by display name only — never a UUID
+    //                    and never an mcp__…__ tool name — because a published page
+    //                    runs for many viewers and connector ids are per-viewer facts.
+    // BASE_URL           environment web URL, resolved from auth state by the skill.
+    //                    Never hardcode app.carta.com: sandbox firms would deep-link
+    //                    into production.
+    //
+    // Queries this page issues at runtime:
+    //   Query A — buildAuditSql               four-bucket audit, one row per company (required)
+    //   Query D — buildDrilldownSql            per-company SPA + purchaser detail (required)
+    //   Query E — buildEnrichmentSql           fund / geography / SOI valuation (optional)
+    //   Query T — buildStatusSql               live/exited status (optional)
+    //   Query P — buildPendingExtractionSql    pending-extraction FYI count (optional, scalar)
+    //   Query O — buildOrphanedSpasSql         unmatched-SPA FYI count + names (optional, scalar)
+    //   coverage — buildCoverageSpaSql / buildCoverageTotalSql  scalar counts (required)
+    const STATE = JSON.parse(document.getElementById('spa-audit-state').textContent);
+    const FIRM_UUID = '{{FIRM_UUID}}';
+    const FIRM_NAME = STATE.firm_name;
+    const FIRM_CARTA_ID = STATE.firm_carta_id;
+    const CARTA_MCP_SERVER = '{{CARTA_MCP_SERVER}}';
+    const BASE_URL = STATE.base_url;
+    const CARTA_BASE_URL = /^https:\/\//.test(BASE_URL) ? BASE_URL.replace(/\/$/, '') : 'https://app.carta.com';
+
+    const CALL_TOOL = 'call_tool';
+    const SET_CONTEXT_TOOL = 'set_context';
+    const WELCOME_TOOL = 'welcome';
+
+    // Server caps `limit` at 10,000 and signals more rows with a next_offset token
+    // in the response header. One fetch covers every real firm; the paging loop is
+    // the tail guard, not the expected path.
+    const PAGE_LIMIT = 10000;
+    const MAX_PAGES = 10;
+
+    let DATA = null;
+    let welcomeCalledThisSession = false;
+
+    // ── Page state ────────────────────────────────────────────────────────────
+
+    function setLoadingStatus(msg) {
+      const el = document.getElementById('loading-status');
+      if (el) el.textContent = msg;
+    }
+
+    function showContent() {
+      document.getElementById('loading-state').style.display = 'none';
+      document.getElementById('error-state').style.display = 'none';
+      document.getElementById('content-area').style.display = 'block';
+    }
+
+    // `detail` carries the underlying error text. It is shown in a de-emphasized
+    // monospace line rather than hidden in the console: when a viewer reports "it
+    // won't load", the message they can copy is the whole diagnosis.
+    function showError(message, detail) {
+      document.getElementById('loading-state').style.display = 'none';
+      document.getElementById('content-area').style.display = 'none';
+      const el = document.getElementById('error-state');
+      el.style.display = 'block';
+      document.getElementById('error-message').textContent = message;
+      document.getElementById('error-detail').textContent = detail || '';
+    }
+
+    // ── Carta MCP plumbing ────────────────────────────────────────────────────
+
+    // The Carta MCP asks us to call `welcome` when the user's session state has
+    // expired (typically after a few days of inactivity). Match on the word
+    // "welcome" — narrow enough to avoid false positives on unrelated dwh errors,
+    // loose enough to survive minor wording tweaks from the MCP team.
+    function isWelcomeRequiredMessage(text) {
+      return typeof text === 'string' && /welcome/i.test(text);
+    }
+
+    // Every Carta MCP call — call_tool, set_context, welcome alike — must carry
+    // _instrumentation_v2 or the MCP rejects it. Centralized here so every call
+    // site (including the retry and the welcome recovery call) gets it, instead
+    // of each caller having to remember it individually.
+    const INSTRUMENTATION_V2 = { skills: ['carta-investors:carta-spa-audit'], from_ui: true };
+
+    function withInstrumentation(args) {
+      return { ...args, _instrumentation_v2: INSTRUMENTATION_V2 };
+    }
+
+    let _mcpNsPromise = null;
+    // null means this view cannot run mcp — not granted, not served, or failed to
+    // load. Polls up to 5 attempts, 4 × 500 ms gaps (2 s max) to handle
+    // window.claude not yet being ready on first render.
+    function mcpNamespace() {
+      if (!_mcpNsPromise) {
+        _mcpNsPromise = (async () => {
+          for (let i = 0; i < 5; i++) {
+            try {
+              const mcp = await Promise.resolve(window.claude?.use?.('mcp') ?? null);
+              if (mcp) return mcp;
+            } catch (_) {}
+            if (i < 4 && typeof setTimeout === 'function') await new Promise(r => setTimeout(r, 500));
+          }
+          return null;
+        })();
+      }
+      return _mcpNsPromise;
+    }
+
+    // A tool that ran and reported failure comes back as an isError envelope so the
+    // welcome recovery below can read its message. Connector-level codes
+    // (needs_reauth, server_not_connected) rethrow — those are page-level.
+    async function callCartaTool(toolName, args) {
+      const mcp = await mcpNamespace();
+      if (!mcp) {
+        throw new Error('No live Carta connector in this view — the page cannot load data');
+      }
+      try {
+        return await mcp.callTool(CARTA_MCP_SERVER, toolName, withInstrumentation(args || {}));
+      } catch (err) {
+        if (err && err.code === 'tool_error') {
+          return { isError: true, code: err.code, result: err.result, content: [{ type: 'text', text: err.message || 'tool error' }] };
+        }
+        throw err;
+      }
+    }
+
+    // Transparently recovers from "please call welcome first" errors. On the first
+    // such failure per artifact load, call welcome to re-initialize the session and
+    // retry the original call once. Any other error passes through untouched, and
+    // `welcomeCalledThisSession` stops a loop if welcome didn't fix the cause.
+    async function callMcpWithWelcomeRetry(toolName, args) {
+      const result = await callCartaTool(toolName, args);
+      if (!result || !result.isError) return result;
+
+      const errorText = (result.content && result.content[0] && result.content[0].text) || '';
+      if (!isWelcomeRequiredMessage(errorText) || welcomeCalledThisSession) {
+        return result;
+      }
+
+      setLoadingStatus('Reconnecting to Carta…');
+      welcomeCalledThisSession = true;
+      const welcomeResult = await callCartaTool(WELCOME_TOOL, {});
+      if (welcomeResult && welcomeResult.isError) {
+        const msg = (welcomeResult.content && welcomeResult.content[0] && welcomeResult.content[0].text) || '<no message>';
+        throw new Error('Failed to initialize MCP session: ' + msg);
+      }
+
+      return await callCartaTool(toolName, args);
+    }
+
+    // ── NDJSON response parsing ───────────────────────────────────────────────
+    // Query D carries a nested payload — SPAS_JSON is a JSON string per company.
+    // The markdown table format would corrupt it, so every query here asks for
+    // ndjson, which preserves native types.
+
+    function unwrapResponse(result) {
+      if (typeof result === 'string') return result;
+      if (!result || typeof result !== 'object') {
+        throw new Error('Unexpected response shape: ' + (typeof result));
+      }
+      if (result.isError) {
+        const msg = (result.content && result.content[0] && result.content[0].text) || '<no message>';
+        throw new Error(msg);
+      }
+      if (result.content && Array.isArray(result.content) && result.content[0] && typeof result.content[0].text === 'string') {
+        return result.content[0].text;
+      }
+      if (result.structuredContent && typeof result.structuredContent.result === 'string') {
+        return result.structuredContent.result;
+      }
+      throw new Error('Could not find text payload in response');
+    }
+
+    // The MCP tool result is a JSON object of shape {result: "<ndjson body>"}.
+    // Without this unwrap the envelope parses as one valid JSON line whose only
+    // key is `result`, so every real row silently vanishes and the report comes
+    // out empty rather than erroring.
+    function unwrapEnvelope(text) {
+      const stripped = (text || '').trimStart();
+      if (!stripped.startsWith('{')) return text;
+      try {
+        const outer = JSON.parse(stripped);
+        if (outer && typeof outer.result === 'string') return outer.result;
+      } catch (_) { /* not an envelope — probably genuine ndjson */ }
+      return text;
+    }
+
+    // Wire shape:
+    //   total_rows: 33 | offset: 0 | limit: 1000 | format: ndjson
+    //   <blank line>
+    //   {"COL1": val, ...}
+    // Returns {rows, nextOffset}. A single malformed line is logged and skipped
+    // rather than aborting — earlier well-formed rows are still useful if a
+    // transport-layer truncation strikes mid-line.
+    function parseNdjson(text) {
+      const rows = [];
+      let nextOffset = null;
+      if (!text) return { rows, nextOffset };
+
+      let body = text;
+      const stripped = text.trimStart();
+      const firstLine = stripped.split('\n')[0] || '';
+      if (firstLine.startsWith('total_rows:') && text.includes('\n\n')) {
+        const m = firstLine.match(/next_offset:\s*(\d+)/);
+        if (m) nextOffset = parseInt(m[1], 10);
+        body = text.slice(text.indexOf('\n\n') + 2);
+      }
+
+      for (const raw of body.split('\n')) {
+        const line = raw.trim();
+        if (!line || line.startsWith('(Result truncated')) continue;
+        try {
+          const obj = JSON.parse(line);
+          if (obj && typeof obj === 'object' && !Array.isArray(obj)) rows.push(obj);
+        } catch (e) {
+          console.warn('parseNdjson: skipping malformed line', e);
+        }
+      }
+      return { rows, nextOffset };
+    }
+
+    // Runs one query to exhaustion. `buildSql` takes (offset, limit). One fetch
+    // covers every real firm — the loop only engages if the server reports
+    // next_offset, and stops at MAX_PAGES so a misbehaving header can't spin.
+    async function fetchAllRows(buildSql, label) {
+      const all = [];
+      let offset = 0;
+      for (let page = 0; page < MAX_PAGES; page++) {
+        const result = await callMcpWithWelcomeRetry(CALL_TOOL, {
+          name: 'dwh__execute__query',
+          arguments: {
+            sql: buildSql(offset, PAGE_LIMIT),
+            format: 'ndjson',
+            // The server infers delivery shape from clientInfo.name, which cannot
+            // distinguish clients that accept a binary blob from those that reject
+            // it. `inline` forces the always-safe plain-string path.
+            response_mode: 'inline',
+            limit: PAGE_LIMIT,
+          },
+        });
+        const { rows, nextOffset } = parseNdjson(unwrapEnvelope(unwrapResponse(result)));
+        all.push(...rows);
+        if (nextOffset === null || rows.length === 0) return all;
+        offset = nextOffset;
+      }
+      console.warn(label + ': hit MAX_PAGES (' + MAX_PAGES + '); results may be truncated.');
+      return all;
+    }
+
+    // Query P, Query O, and the two coverage counts each return exactly one row —
+    // no pagination needed, just one call and a column read.
+    async function fetchScalarRow(sql) {
+      const result = await callMcpWithWelcomeRetry(CALL_TOOL, {
+        name: 'dwh__execute__query',
+        arguments: { sql, format: 'ndjson', response_mode: 'inline', limit: 10 },
+      });
+      const { rows } = parseNdjson(unwrapEnvelope(unwrapResponse(result)));
+      return rows[0] || null;
+    }
+
+    async function fetchScalar(sql, columnName) {
+      const row = await fetchScalarRow(sql);
+      return row ? row[columnName] : null;
+    }
+
+    async function fetchOrphaned() {
+      const row = await fetchScalarRow(buildOrphanedSpasSql());
+      if (!row) return { count: 0, names: [] };
+      const names = Array.isArray(row.ORPHANED_SPA_NAMES) ? row.ORPHANED_SPA_NAMES.map(String) : [];
+      return { count: toInt(row.ORPHANED_SPAS) || 0, names };
+    }
+
+    // ── SQL ───────────────────────────────────────────────────────────────────
+    // SQL is verbatim — do not retype or "clean up". A retyped string is
+    // how a UUID or join key silently corrupts.
+
+    // Query A — the main four-bucket audit. Identical to Mode B Step B1's query.
+    function buildAuditSql(offset, limit) {
+      return `WITH spa_issuers AS (SELECT ATTRIBUTES:name::STRING AS ISSUER_NAME, ATTRIBUTES:executed_by_issuer::BOOLEAN AS EXECUTED_BY_ISSUER FROM FUND_ADMIN.DOCUMENT_AI_RECORD WHERE FIRM_ID = '${FIRM_UUID}' AND DOCUMENT_TYPE = 'stock_purchase_agreement' AND RECORD_TYPE = 'company' AND ATTRIBUTES:name::STRING IS NOT NULL), norm_spa AS (SELECT ISSUER_NAME AS spa_name, TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(ISSUER_NAME), ' *[(][^)]*[)].*$', '')), ' +(D/?B/?A|F/?K/?A|AKA) +.*$', '')), ',? *(INC|LLC|LTD|LIMITED|CORP|CORPORATION|L[.]P[.]|LP|PBC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]? *$', '')), '[,.]', '')) AS name_norm, MAX(CASE WHEN EXECUTED_BY_ISSUER = TRUE THEN 1 ELSE 0 END) AS has_executed_spa FROM spa_issuers GROUP BY ISSUER_NAME), norm_investments_base AS (SELECT ISSUER_NAME, MAX(CASE WHEN ASSET_CLASS_TYPE = 'PREFERRED_EQUITY' THEN 1 ELSE 0 END) AS has_preferred, MAX(CASE WHEN ASSET_CLASS_TYPE = 'COMMON_EQUITY' THEN 1 ELSE 0 END) AS has_common, MIN(INVESTMENT_DATE) AS first_invested, SUM(TOTAL_COST) AS total_cost_basis, TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(ISSUER_NAME), ' *[(][^)]*[)].*$', '')), ' +(D/?B/?A|F/?K/?A|AKA) +.*$', '')), ',? *(INC|LLC|LTD|LIMITED|CORP|CORPORATION|L[.]P[.]|LP|PBC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]? *$', '')), '[,.]', '')) AS name_norm, REGEXP_SUBSTR(ISSUER_NAME, '[(] *(D[.]?/?B[.]?/?A[.]?|F[.]?/?K[.]?/?A[.]?|N[.]?/?K[.]?/?A[.]?|A[.]?K[.]?A[.]?|FORMERLY( +KNOWN +AS)?)[ :]+([^)]+)[)]', 1, 1, 'ie', 3) AS alias_raw FROM FUND_ADMIN.AGGREGATE_INVESTMENTS WHERE FIRM_ID = '${FIRM_UUID}' GROUP BY ISSUER_NAME), norm_investments AS (SELECT ISSUER_NAME, has_preferred, has_common, first_invested, total_cost_basis, name_norm, 0 AS is_alias FROM norm_investments_base UNION ALL SELECT ISSUER_NAME, has_preferred, has_common, first_invested, total_cost_basis, TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(alias_raw), ',? *(INC|LLC|LTD|LIMITED|CORP|CORPORATION|L[.]P[.]|LP|PBC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]? *$', '')), '[,.]', '')) AS name_norm, 1 AS is_alias FROM norm_investments_base WHERE alias_raw IS NOT NULL AND TRIM(alias_raw) <> ''), fuzzy_matched AS (SELECT i.ISSUER_NAME, i.has_preferred, i.has_common, i.first_invested, i.total_cost_basis, s.spa_name, s.has_executed_spa, ROW_NUMBER() OVER (PARTITION BY i.ISSUER_NAME ORDER BY JAROWINKLER_SIMILARITY(i.name_norm, s.name_norm) DESC, s.has_executed_spa DESC, i.is_alias, s.spa_name) AS rn FROM norm_investments i LEFT JOIN norm_spa s ON JAROWINKLER_SIMILARITY(i.name_norm, s.name_norm) >= 90), best AS (SELECT * FROM fuzzy_matched WHERE rn = 1), labeled AS (SELECT CASE WHEN has_preferred = 0 AND has_common = 0 THEN 4 WHEN spa_name IS NULL THEN 1 WHEN has_executed_spa = 0 THEN 2 ELSE 3 END AS sort_key, CASE WHEN has_preferred = 0 AND has_common = 0 THEN '4. No SPA needed' WHEN spa_name IS NULL THEN '1. Missing SPA' WHEN has_executed_spa = 0 THEN '2. SPA not executed' ELSE '3. Executed SPA' END AS spa_bucket, ISSUER_NAME AS company, spa_name, first_invested, total_cost_basis FROM best) SELECT spa_bucket, company, spa_name, first_invested, total_cost_basis FROM labeled ORDER BY sort_key, total_cost_basis DESC NULLS LAST, company LIMIT ${limit} OFFSET ${offset}`;
+    }
+
+    // Query D — per-company SPA drill-down (batch, all companies). SPAS_JSON
+    // nests every SPA + purchaser breakdown as a compact JSON string, decoded by
+    // buildCompanies() below (short keys num/sc/td/ud/cc/ex/p for SPAs, n/t/sh/pp/a
+    // for purchasers).
+    function buildDrilldownSql(offset, limit) {
+      return `WITH gen_rec AS (SELECT DOCUMENT_ID, RECORD_TYPE, ATTRIBUTES, CREATED_AT FROM FUND_ADMIN.DOCUMENT_AI_RECORD WHERE FIRM_ID = '${FIRM_UUID}' AND DOCUMENT_TYPE = 'stock_purchase_agreement'), spa_docs AS (SELECT c.DOCUMENT_ID, c.ATTRIBUTES:name::STRING AS ISSUER_NAME, c.ATTRIBUTES:executed_by_issuer::BOOLEAN AS EXECUTED_BY_ISSUER, TRY_TO_DATE(e.ATTRIBUTES:closing_dates[0]::STRING) AS CLOSING_DATE, IFF(REGEXP_LIKE(e.ATTRIBUTES:currency_code::STRING, '^[A-Z]{3}$'), e.ATTRIBUTES:currency_code::STRING, NULL) AS CURRENCY_CODE, c.CREATED_AT::DATE AS UPLOAD_DATE FROM gen_rec c LEFT JOIN gen_rec e ON e.DOCUMENT_ID = c.DOCUMENT_ID AND e.RECORD_TYPE = 'stock_purchase' WHERE c.RECORD_TYPE = 'company' AND c.ATTRIBUTES:name::STRING IS NOT NULL), gen_purch AS (SELECT DOCUMENT_ID, ATTRIBUTES:name::STRING AS PURCHASER_NAME, ATTRIBUTES:entity_type::STRING AS ENTITY_TYPE, ATTRIBUTES:share_class_name::STRING AS SHARE_CLASS_NAME, ATTRIBUTES:shares_purchased_by_cash::NUMBER AS SHARES_PURCHASED, ATTRIBUTES:price_per_share::NUMBER AS PRICE_PER_SHARE, ATTRIBUTES:total_amount_paid::NUMBER AS TOTAL_AMOUNT_PAID FROM gen_rec WHERE RECORD_TYPE = 'investor'), purchaser_rows AS (SELECT sd.ISSUER_NAME, DENSE_RANK() OVER (PARTITION BY sd.ISSUER_NAME ORDER BY sd.DOCUMENT_ID) AS spa_num, sd.CLOSING_DATE, sd.CURRENCY_CODE, sd.UPLOAD_DATE AS upload_date, gp.SHARE_CLASS_NAME, gp.PURCHASER_NAME, gp.ENTITY_TYPE, gp.SHARES_PURCHASED, gp.PRICE_PER_SHARE, gp.TOTAL_AMOUNT_PAID, sd.EXECUTED_BY_ISSUER FROM spa_docs sd LEFT JOIN gen_purch gp ON gp.DOCUMENT_ID = sd.DOCUMENT_ID AND (gp.ENTITY_TYPE IS NULL OR (gp.ENTITY_TYPE NOT ILIKE '%notice%' AND gp.ENTITY_TYPE NOT ILIKE '%law firm%'))), per_spa AS (SELECT ISSUER_NAME, spa_num, ANY_VALUE(CLOSING_DATE) AS transaction_date, ANY_VALUE(upload_date) AS upload_date, ANY_VALUE(CURRENCY_CODE) AS currency_code, ANY_VALUE(SHARE_CLASS_NAME) AS share_class, MAX(CASE WHEN EXECUTED_BY_ISSUER = TRUE THEN 1 ELSE 0 END) = 1 AS executed, ARRAY_AGG(OBJECT_CONSTRUCT('n', PURCHASER_NAME, 't', ENTITY_TYPE, 'sh', SHARES_PURCHASED, 'pp', PRICE_PER_SHARE, 'a', TOTAL_AMOUNT_PAID)) WITHIN GROUP (ORDER BY SHARES_PURCHASED DESC NULLS LAST, PURCHASER_NAME) AS purchasers FROM purchaser_rows GROUP BY ISSUER_NAME, spa_num) SELECT ISSUER_NAME, TO_JSON(ARRAY_AGG(OBJECT_CONSTRUCT('num', spa_num, 'sc', share_class, 'td', transaction_date, 'ud', upload_date, 'cc', currency_code, 'ex', executed, 'p', purchasers)) WITHIN GROUP (ORDER BY spa_num)) AS SPAS_JSON FROM per_spa GROUP BY ISSUER_NAME ORDER BY ISSUER_NAME LIMIT ${limit} OFFSET ${offset}`;
+    }
+
+    // Query E — fund / geography / SOI valuation enrichment. Optional: never let
+    // it fail the audit. IS_ACTIVE_INVESTMENT = TRUE scopes to positions with
+    // remaining value, so a fully-exited company returns no row (correctly
+    // degrading to funds=[], regionTag='—', soiValuation=null).
+    function buildEnrichmentSql(offset, limit) {
+      return `SELECT ISSUER_NAME AS COMPANY, ARRAY_AGG(DISTINCT FUND_NAME) WITHIN GROUP (ORDER BY FUND_NAME) AS FUNDS, MAX(GET(GET(TAGS_JSON, '  Region'), 0)::STRING) AS REGION_TAG, SUM(REMAINING_VALUE) AS SOI_VALUATION FROM FUND_ADMIN.AGGREGATE_INVESTMENTS WHERE FIRM_ID = '${FIRM_UUID}' AND IS_ACTIVE_INVESTMENT = TRUE GROUP BY ISSUER_NAME ORDER BY ISSUER_NAME LIMIT ${limit} OFFSET ${offset}`;
+    }
+
+    // Query T — live/exited status per equity investment. Optional: disables the
+    // Live/Exited tabs on failure, never the whole audit.
+    function buildStatusSql(offset, limit) {
+      return `SELECT ISSUER_NAME, IS_ACTIVE_INVESTMENT FROM FUND_ADMIN.AGGREGATE_INVESTMENTS WHERE FIRM_ID = '${FIRM_UUID}' AND ASSET_CLASS_TYPE IN ('PREFERRED_EQUITY', 'COMMON_EQUITY') AND ISSUER_NAME IS NOT NULL ORDER BY ISSUER_NAME LIMIT ${limit} OFFSET ${offset}`;
+    }
+
+    // Query P — pending-extraction count (FYI pill). Scalar, single row, no
+    // pagination. Cross-database read into PROD_DOCUMENT_AI_DB — optional, and
+    // not every firm context has the grant.
+    function buildPendingExtractionSql() {
+      return `SELECT COUNT(DISTINCT document_id) AS pending_extraction_docs FROM PROD_DOCUMENT_AI_DB.DOCUMENT_AI.documents_metadata WHERE owner_id = '${FIRM_UUID}' AND owner_type = 'firm' AND document_type = 'Stock Purchase Agreement (SPA)' AND (extracted_at IS NULL OR enriched_at IS NULL)`;
+    }
+
+    // Query O — orphaned-SPA count + names (FYI pill). Scalar, single row, no
+    // pagination.
+    function buildOrphanedSpasSql() {
+      return `WITH norm_spa AS (SELECT ISSUER_NAME, TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(ISSUER_NAME), ' *[(][^)]*[)].*$', '')), ' +(D/?B/?A|F/?K/?A|AKA) +.*$', '')), ',? *(INC|LLC|LTD|LIMITED|CORP|CORPORATION|L[.]P[.]|LP|PBC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]? *$', '')), '[,.]', '')) AS name_norm FROM (SELECT ATTRIBUTES:name::STRING AS ISSUER_NAME FROM FUND_ADMIN.DOCUMENT_AI_RECORD WHERE FIRM_ID = '${FIRM_UUID}' AND DOCUMENT_TYPE = 'stock_purchase_agreement' AND RECORD_TYPE = 'company' AND ATTRIBUTES:name::STRING IS NOT NULL) GROUP BY ISSUER_NAME), norm_inv_base AS (SELECT TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(ISSUER_NAME), ' *[(][^)]*[)].*$', '')), ' +(D/?B/?A|F/?K/?A|AKA) +.*$', '')), ',? *(INC|LLC|LTD|LIMITED|CORP|CORPORATION|L[.]P[.]|LP|PBC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]? *$', '')), '[,.]', '')) AS name_norm, REGEXP_SUBSTR(ISSUER_NAME, '[(] *(D[.]?/?B[.]?/?A[.]?|F[.]?/?K[.]?/?A[.]?|N[.]?/?K[.]?/?A[.]?|A[.]?K[.]?A[.]?|FORMERLY( +KNOWN +AS)?)[ :]+([^)]+)[)]', 1, 1, 'ie', 3) AS alias_raw FROM FUND_ADMIN.AGGREGATE_INVESTMENTS WHERE FIRM_ID = '${FIRM_UUID}' GROUP BY ISSUER_NAME), norm_inv AS (SELECT name_norm FROM norm_inv_base UNION ALL SELECT TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(alias_raw), ',? *(INC|LLC|LTD|LIMITED|CORP|CORPORATION|L[.]P[.]|LP|PBC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]? *$', '')), '[,.]', '')) AS name_norm FROM norm_inv_base WHERE alias_raw IS NOT NULL AND TRIM(alias_raw) <> ''), matched AS (SELECT DISTINCT s.ISSUER_NAME FROM norm_spa s JOIN norm_inv i ON JAROWINKLER_SIMILARITY(s.name_norm, i.name_norm) >= 90) SELECT COUNT(DISTINCT ns.ISSUER_NAME) AS orphaned_spas, ARRAY_AGG(DISTINCT ns.ISSUER_NAME) WITHIN GROUP (ORDER BY ns.ISSUER_NAME) AS orphaned_spa_names FROM norm_spa ns LEFT JOIN matched m ON ns.ISSUER_NAME = m.ISSUER_NAME WHERE m.ISSUER_NAME IS NULL`;
+    }
+
+    // Coverage scalars — required. If either fails, the whole audit errors (see
+    // bootstrap): a page that can compute buckets but not the headline coverage
+    // fraction would show a wrong or missing number rather than an honest error.
+    function buildCoverageSpaSql() {
+      return `SELECT COUNT(DISTINCT ATTRIBUTES:name::STRING) AS spa_companies FROM FUND_ADMIN.DOCUMENT_AI_RECORD WHERE FIRM_ID = '${FIRM_UUID}' AND DOCUMENT_TYPE = 'stock_purchase_agreement' AND RECORD_TYPE = 'company' AND ATTRIBUTES:name::STRING IS NOT NULL`;
+    }
+
+    function buildCoverageTotalSql() {
+      return `SELECT COUNT(DISTINCT ISSUER_NAME) AS total_companies FROM FUND_ADMIN.AGGREGATE_INVESTMENTS WHERE FIRM_ID = '${FIRM_UUID}'`;
+    }
+
+    // ── Transform ─────────────────────────────────────────────────────────────
+
+    const NULL_STRS = new Set(['', 'null', 'NULL', 'Null', '—', '-']);
+
+    function toFloat(v) {
+      if (v === null || v === undefined) return null;
+      const s = String(v).trim().replace(/,/g, '');
+      if (NULL_STRS.has(s)) return null;
+      const n = parseFloat(s);
+      return Number.isFinite(n) ? n : null;
+    }
+
+    function toInt(v) {
+      const n = toFloat(v);
+      return n === null ? null : Math.trunc(n);
+    }
+
+    function toBool(v) {
+      if (typeof v === 'boolean') return v;
+      if (v === null || v === undefined) return false;
+      return ['true', '1', 'yes', 't'].includes(String(v).trim().toLowerCase());
+    }
+
+    // Return an ISO-4217 code, or null when the extraction didn't yield one. The
+    // extractor occasionally emits prose instead of a code ("Canadian dollars",
+    // "GBP and USD"). Those are not safe to attach to an amount, so they degrade
+    // to null rather than being guessed at.
+    function cleanCurrency(v) {
+      if (v === null || v === undefined) return null;
+      const s = String(v).trim().toUpperCase();
+      if (NULL_STRS.has(s)) return null;
+      return (s.length === 3 && /^[A-Z]{3}$/.test(s)) ? s : null;
+    }
+
+    const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    // Parses the first 10 chars as YYYY-MM-DD, mirroring Python's
+    // datetime.fromisoformat(s[:10]). Returns null on failure.
+    function parseIsoDatePrefix(s) {
+      const m = s.slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (!m) return null;
+      const year = parseInt(m[1], 10), month = parseInt(m[2], 10), day = parseInt(m[3], 10);
+      if (month < 1 || month > 12) return null;
+      return { year, month, day };
+    }
+
+    // `Mmm yyyy` (month-level — first invested standard).
+    function formatMonthYear(val) {
+      if (val === null || val === undefined) return '—';
+      const s = String(val).trim();
+      if (!s || NULL_STRS.has(s)) return '—';
+      const d = parseIsoDatePrefix(s);
+      if (!d) return s;
+      return MONTHS[d.month - 1] + ' ' + d.year;
+    }
+
+    // `Mmm D, yyyy` (day-level — transaction/upload dates).
+    function formatFullDate(val) {
+      if (val === null || val === undefined) return '—';
+      const s = String(val).trim();
+      if (!s || NULL_STRS.has(s)) return '—';
+      const d = parseIsoDatePrefix(s);
+      if (!d) return s;
+      return MONTHS[d.month - 1] + ' ' + d.day + ', ' + d.year;
+    }
+
+    // Query E assembly — funds array (dedupe/trim empties), regionTag defaulting
+    // to '—', soiValuation as float-or-null.
+    function buildEnrichmentLookup(enrichmentRows) {
+      const out = {};
+      for (const row of enrichmentRows) {
+        const company = (row.COMPANY || '').trim();
+        if (!company) continue;
+        const fundsRaw = row.FUNDS;
+        const regionRaw = (row.REGION_TAG || '').trim();
+        out[company] = {
+          funds: Array.isArray(fundsRaw) ? fundsRaw.map(f => String(f).trim()).filter(Boolean) : [],
+          regionTag: regionRaw ? regionRaw : '—',
+          soiValuation: toFloat(row.SOI_VALUATION),
+        };
+      }
+      return out;
+    }
+
+    // Query T assembly — a company is live if ANY of its positions is active; a
+    // realised tranche does not retire the company.
+    function buildCompanyStatus(statusRows) {
+      const out = {};
+      for (const row of statusRows) {
+        const name = (row.ISSUER_NAME || '').trim();
+        if (!name) continue;
+        out[name] = (out[name] || false) || toBool(row.IS_ACTIVE_INVESTMENT);
+      }
+      return out;
+    }
+
+    // Query A assembly — group audit rows into the four bucket arrays, each
+    // sorted by cost basis DESC (null/zero last), then company name ASC. That
+    // tiebreaker is a genuine total ordering because Query A emits exactly one
+    // row per company (see the fuzzy_matched ORDER BY total-ordering note in
+    // SKILL.md Mode B — the same reasoning applies to this JS-side re-sort).
+    function buildBuckets(auditRows, enrichmentLookup) {
+      const BUCKET_KEY = {
+        '1. Missing SPA': 'missing',
+        '2. SPA not executed': 'unexecuted',
+        '3. Executed SPA': 'executed',
+        '4. No SPA needed': 'notNeeded',
+      };
+      const out = { missing: [], unexecuted: [], executed: [], notNeeded: [] };
+      for (const row of auditRows) {
+        const bucketLabel = (row.SPA_BUCKET || '').trim();
+        const bucketKey = BUCKET_KEY[bucketLabel];
+        if (!bucketKey) {
+          console.warn('unknown bucket label', JSON.stringify(bucketLabel), 'for', row.COMPANY);
+          continue;
+        }
+        const spaName = (row.SPA_NAME || '').trim();
+        const entry = {
+          company: (row.COMPANY || '').trim(),
+          firstInvested: formatMonthYear(row.FIRST_INVESTED),
+          costBasis: toFloat(row.TOTAL_COST_BASIS) || 0.0,
+        };
+        if (spaName) entry.drillDownKey = spaName;
+        const enrich = (enrichmentLookup || {})[entry.company] || {};
+        entry.funds = enrich.funds || [];
+        entry.regionTag = enrich.regionTag || '—';
+        entry.soiValuation = enrich.soiValuation !== undefined ? enrich.soiValuation : null;
+        out[bucketKey].push(entry);
+      }
+      for (const key of Object.keys(out)) {
+        out[key].sort((a, b) => (-(a.costBasis || 0) - -(b.costBasis || 0)) || a.company.localeCompare(b.company));
+      }
+      return out;
+    }
+
+    // Query D assembly — decode the short-key SPAS_JSON shape and enrich each
+    // company entry with bucket / firstInvested / costBasis from the audit rows
+    // so the drawer can render its summary header without a second lookup.
+    function buildCompanies(roundsRows, buckets) {
+      // Indexed under BOTH names a bucket row can carry: the investment-side
+      // `company` (Query A's fuzzy-matched ISSUER_NAME) and, when present, the
+      // SPA-side `drillDownKey` (Query A's SPA_NAME). Query D's rows are keyed
+      // by the SPA document's own issuer name — the same name `drillDownKey`
+      // carries — so a company whose SPA was matched under a different
+      // spelling ("Polaris Robotics" investment vs. "Polaris Robotics, Inc."
+      // SPA) still resolves its bucket/firstInvested/costBasis correctly
+      // instead of silently falling through to the ['', '—', 0.0] default.
+      const companyMeta = {};
+      for (const bucketKey of Object.keys(buckets)) {
+        for (const row of buckets[bucketKey]) {
+          const meta = [bucketKey, row.firstInvested, row.costBasis];
+          companyMeta[row.company] = meta;
+          if (row.drillDownKey) companyMeta[row.drillDownKey] = meta;
+        }
+      }
+
+      const out = {};
+      for (const row of roundsRows) {
+        const company = (row.ISSUER_NAME || '').trim();
+        if (!company) continue;
+        const spasRaw = row.SPAS_JSON;
+        if (!spasRaw || (typeof spasRaw === 'string' && NULL_STRS.has(spasRaw.trim()))) continue;
+
+        let spasData;
+        try {
+          spasData = typeof spasRaw === 'string' ? JSON.parse(spasRaw) : spasRaw;
+        } catch (e) {
+          console.warn('could not parse SPAS_JSON for ' + company, e);
+          continue;
+        }
+        if (!Array.isArray(spasData)) continue;
+
+        const spas = [];
+        for (const spa of spasData) {
+          const purchasers = [];
+          // Bracket-quoted access, not dot notation — these are the wire
+          // short keys the SQL's OBJECT_CONSTRUCT emits ('num'/'sc'/'td'/
+          // 'ud'/'cc'/'ex'/'p', 'n'/'t'/'sh'/'pp'/'a'), so the contract with
+          // the SQL side stays a literal, greppable string on both ends.
+          for (const p of spa['p'] || []) {
+            purchasers.push({
+              name: p['n'] || '',
+              entityType: p['t'] || '—',
+              shares: toInt(p['sh']),
+              pricePerShare: toFloat(p['pp']),
+              amountPaid: toFloat(p['a']),
+            });
+          }
+          spas.push({
+            num: toInt(spa['num']) || 0,
+            shareClass: spa['sc'] || '—',
+            transactionDate: formatFullDate(spa['td']),
+            uploadDate: formatFullDate(spa['ud']),
+            // null when the document stated no currency. Never coerce to a
+            // default — the renderer marks these amounts as unstated.
+            currency: cleanCurrency(spa['cc']),
+            executed: toBool(spa['ex']),
+            purchasers,
+          });
+        }
+
+        const meta = companyMeta[company] || ['', '—', 0.0];
+        out[company] = {
+          bucket: meta[0] || 'missing',
+          firstInvested: meta[1],
+          costBasis: meta[2],
+          spas,
+        };
+      }
+      return out;
+    }
+
+    // ── Bootstrap ─────────────────────────────────────────────────────────────
+
+    async function bootstrap() {
+      if (!FIRM_UUID) {
+        showError('This report is missing its firm. Re-run the SPA audit skill to rebuild it.');
+        return;
+      }
+      if (!CARTA_MCP_SERVER) {
+        showError('This report is missing its Carta connection. Re-run the SPA audit skill to rebuild it.');
+        return;
+      }
+
+      // Pin firm context before any query. The warehouse views are firm-scoped
+      // secure views, so an unpinned or wrong context returns zero rows rather
+      // than an error — which would render as "fully covered" or "no SPAs" and
+      // read as fact.
+      try {
+        const contextResult = await callMcpWithWelcomeRetry(SET_CONTEXT_TOOL, { firm_id: FIRM_UUID });
+        if (contextResult && contextResult.isError) {
+          const msg = (contextResult.content && contextResult.content[0] && contextResult.content[0].text) || '<no message>';
+          throw new Error(msg);
+        }
+      } catch (error) {
+        showError(
+          'You may not have access to ' + FIRM_NAME + ' in Carta, or your session has expired. ' +
+          'Try reloading; if it keeps happening, contact your Carta representative.',
+          error.message
+        );
+        return;
+      }
+
+      let auditRows, drilldownRows, enrichmentRows, statusRows, pendingCount, orphaned, coverageSpa, coverageTotal;
+      try {
+        setLoadingStatus('Loading SPA coverage data from Carta…');
+        // Query A, D, and the two coverage scalars are required — a failure on
+        // any of them errors the whole page (below). Query E, T, P, and O each
+        // degrade to a safe default on failure and never fail the audit.
+        [auditRows, drilldownRows, enrichmentRows, statusRows, pendingCount, orphaned, coverageSpa, coverageTotal] = await Promise.all([
+          fetchAllRows(buildAuditSql, 'Query A'),
+          fetchAllRows(buildDrilldownSql, 'Query D'),
+          fetchAllRows(buildEnrichmentSql, 'Query E').catch(err => {
+            console.warn('enrichment query failed; funds/geography/SOI valuation disabled', err);
+            return [];
+          }),
+          fetchAllRows(buildStatusSql, 'Query T').catch(err => {
+            console.warn('status query failed; Live/Exited filter disabled', err);
+            return [];
+          }),
+          fetchScalar(buildPendingExtractionSql(), 'PENDING_EXTRACTION_DOCS').catch(err => {
+            console.warn('pending-extraction query failed; FYI pill disabled', err);
+            return 0;
+          }),
+          fetchOrphaned().catch(err => {
+            console.warn('orphaned-SPA query failed; FYI pill disabled', err);
+            return { count: 0, names: [] };
+          }),
+          fetchScalar(buildCoverageSpaSql(), 'SPA_COMPANIES'),
+          fetchScalar(buildCoverageTotalSql(), 'TOTAL_COMPANIES'),
+        ]);
+      } catch (error) {
+        showError(
+          "Couldn't load your SPA coverage data just now. Try reloading in a moment. " +
+          'If it keeps happening, contact your Carta representative.',
+          error.message
+        );
+        return;
+      }
+
+      // Zero rows here is ambiguous — no SPA-relevant investments on file, or a
+      // firm context that resolved to nothing. Say both rather than asserting
+      // the first.
+      if (auditRows.length === 0) {
+        showError(
+          'No SPA documents were found for ' + FIRM_NAME + '. Either no stock purchase ' +
+          'agreements have been uploaded yet, or your account does not have access to ' +
+          "this firm's documents."
+        );
+        return;
+      }
+
+      setLoadingStatus('Building your report…');
+
+      const enrichmentLookup = buildEnrichmentLookup(enrichmentRows);
+      const buckets = buildBuckets(auditRows, enrichmentLookup);
+      const companies = buildCompanies(drilldownRows, buckets);
+      const companyStatus = statusRows.length ? buildCompanyStatus(statusRows) : null;
+
+      const now = new Date();
+      const generatedAt = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+      DATA = {
+        meta: {
+          firmId: FIRM_UUID,
+          firmName: FIRM_NAME,
+          firmCartaId: FIRM_CARTA_ID,
+          generatedAt,
+        },
+        coverage: {
+          totalCompanies: toInt(coverageTotal) || 0,
+          spaCompanies: toInt(coverageSpa) || 0,
+          pendingExtractionDocs: toInt(pendingCount) || 0,
+          orphanedSpas: (orphaned && orphaned.count) || 0,
+          orphanedSpaNames: (orphaned && orphaned.names) || [],
+        },
+        buckets,
+        companies,
+      };
+      if (companyStatus) DATA.companyStatus = companyStatus;
+
+      computeDerivedState();
+
+      renderHeader();
+      renderStatusFilterBar();
+      renderMetricsGrid();
+      renderCoverageBar();
+      renderUploadCta();
+      renderFilterBar();
+      renderFundFilter();
+      renderGeographyFilter();
+      renderMainTable();
+      renderFooterNote();
+      renderPageFooter();
+      showContent();
+    }
+
+    // ── UI layer ────────────────────────────────────────────────────────────
+    // All render functions below read from DATA, which bootstrap() assembles
+    // before calling any of them. ALL_FUNDS, ALL_REGIONS, HAS_SOI_VALUATION,
+    // and COLUMNS are computed once in computeDerivedState() for the same reason.
+
+    // ---------- Formatters ----------
+    // Cost basis and SOI valuation are firm-level sums with no currency column
+    // in the underlying query (unlike SPA amounts, which carry a per-document
+    // CURRENCY_CODE) — never assume USD, so these render as bare numbers. The
+    // column headers that use this note the ambiguity explicitly.
+    function fmtMoney(n) {
+        if (n === null || n === undefined) return '—';
+        if (n === 0) return '0';
+        return Math.round(n).toLocaleString('en-US');
+    }
+    function fmtPrice(n) {
+        if (n === null || n === undefined) return '—';
+        return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    function fmtNum(n) {
+        if (n === null || n === undefined) return '—';
+        return n.toLocaleString('en-US');
+    }
+    // Compact variants — used in the drawer to keep the Shares / Amount paid
+    // columns narrow. Full-precision value is surfaced via a `title` tooltip.
+    function compactSuffix(n) {
+        const abs = Math.abs(n);
+        if (abs >= 1e9) return [n / 1e9, 'B'];
+        if (abs >= 1e6) return [n / 1e6, 'M'];
+        if (abs >= 1e3) return [n / 1e3, 'K'];
+        return [n, ''];
+    }
+    function trim1(x) { return x.toFixed(1).replace(/\.0$/, ''); }
+    function fmtMoneyCompact(n) {
+        if (n === null || n === undefined) return '—';
+        if (n === 0) return '0';
+        const [v, suf] = compactSuffix(n);
+        return suf ? trim1(v) + suf : Math.round(v).toLocaleString('en-US');
+    }
+    function fmtNumCompact(n) {
+        if (n === null || n === undefined) return '—';
+        const [v, suf] = compactSuffix(n);
+        return suf ? trim1(v) + suf : Math.round(v).toLocaleString('en-US');
+    }
+    // SPA amounts are denominated in whatever currency the document stated, so
+    // they render with an explicit code rather than a hardcoded '$'. A null
+    // code means the document named no currency: show the bare number and let
+    // the caller footnote it, rather than implying one.
+    function ccyTag(ccy) { return ccy ? ' ' + ccy : '*'; }
+    function fmtAmountCcy(n, ccy) {
+        if (n === null || n === undefined) return '—';
+        return Math.round(n).toLocaleString('en-US') + ccyTag(ccy);
+    }
+    function fmtPriceCcy(n, ccy) {
+        if (n === null || n === undefined) return '—';
+        return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ccyTag(ccy);
+    }
+    function fmtAmountCcyCompact(n, ccy) {
+        if (n === null || n === undefined) return '—';
+        if (n === 0) return '0' + ccyTag(ccy);
+        const [v, suf] = compactSuffix(n);
+        return (suf ? trim1(v) + suf : Math.round(v).toLocaleString('en-US')) + ccyTag(ccy);
+    }
+    function esc(s) {
+        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+    function escAttr(s) {
+        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+    }
+
+    // ---------- External links ----------
+    // Cowork Live Artifacts run in a real browser context, so a plain
+    // window.open() works — no save-server / POST /open-url plumbing needed
+    // (that existed only to escape the Claude Desktop preview pane's sandbox).
+    function openExternal(url) {
+        window.open(url, '_blank');
+    }
+
+    // ---------- Bucket metadata ----------
+    // Four bucket tiles. Pending-extraction is NOT a bucket — pending docs
+    // can't be attributed to specific portfolio companies until extraction
+    // completes (the issuer_name comes from extraction), so promoting them
+    // to a bucket tile would imply a precision we don't have. The pending
+    // count is surfaced as an FYI pill in the page-header instead (see
+    // renderHeader below).
+    const BUCKETS = [
+        { key: 'executed',   label: 'Executed',   filterLabel: 'Executed SPA',     icon: '✓', cardClass: 'bucket-executed',   muted: true  },
+        { key: 'unexecuted', label: 'Unexecuted', filterLabel: 'SPA not executed', icon: '○', cardClass: 'bucket-unexecuted', muted: false },
+        { key: 'missing',    label: 'Missing',    filterLabel: 'Missing SPA',      icon: '✕', cardClass: 'bucket-missing',    muted: false },
+        { key: 'notNeeded',  label: 'No SPA Needed', filterLabel: 'No SPA needed', icon: '—', cardClass: 'bucket-not-needed', muted: true,
+          helpText: 'Covers investments that don\'t use Stock Purchase Agreements: SAFEs, convertible notes, fund / LP positions, tokens, and warrants. These have their own document types and don\'t need an SPA on file. SAFEs and convertible notes will move into a different bucket if and when they convert into preferred or common equity.' },
+    ];
+
+    // ---------- Status filter (All / Live / Exited) ----------
+    let STATUS_FILTER = 'all';
+
+    function passesStatusFilter(companyName) {
+        if (STATUS_FILTER === 'all') return true;
+        const s = DATA.companyStatus;
+        if (!s || !(companyName in s)) return false;
+        return STATUS_FILTER === 'live' ? s[companyName] === true : s[companyName] === false;
+    }
+
+    function filteredBucketRows(b) {
+        const rows = DATA.buckets[b.key] || [];
+        if (STATUS_FILTER === 'all' || !DATA.companyStatus) return rows;
+        return rows.filter(r => passesStatusFilter(r.company));
+    }
+
+    function filteredBucketRowsByKey(key) {
+        const b = BUCKETS.find(bkt => bkt.key === key);
+        return b ? filteredBucketRows(b) : [];
+    }
+
+    function bucketCount(b) {
+        return filteredBucketRows(b).length;
+    }
+
+    // ---------- Header (firm name + coverage line + pending pill) ----------
+    // Coverage % rides in the page header as a small contextual line. When
+    // there are pending-extraction docs, a hover-tooltipped pill chip sits
+    // inline in the subtitle to surface the count without claiming any
+    // company-level attribution.
+    function renderHeader() {
+        const m = DATA.meta;
+        const c = DATA.coverage;
+        const pending = c.pendingExtractionDocs || 0;
+        const pendingPill = pending > 0
+            ? ' · <span class="pending-pill has-tooltip" tabindex="0" aria-describedby="pending-tooltip">' +
+                '<span class="pending-pill-icon" aria-hidden="true">ⓘ</span>' +
+                '<span class="pending-pill-text">' + pending + ' pending extraction</span>' +
+                '<span class="tooltip" id="pending-tooltip" role="tooltip">' +
+                    'Heads up: ' + pending + ' SPA documents are still being processed by Carta\'s Document Intelligence. ' +
+                    'Once extraction completes, they\'ll appear in this audit and may move companies out of "Missing SPA."' +
+                '</span>' +
+              '</span>'
+            : '';
+        const orphaned = c.orphanedSpas || 0;
+        const orphanedNames = c.orphanedSpaNames || [];
+        const orphanWord = orphaned === 1 ? 'SPA' : 'SPAs';
+        const orphanedPill = orphaned > 0
+            ? ' · <span class="orphaned-pill has-tooltip" tabindex="0" aria-describedby="orphaned-tooltip">' +
+                '<span class="orphaned-pill-icon" aria-hidden="true">ⓘ</span>' +
+                '<span class="orphaned-pill-text">' + orphaned + ' unmatched ' + orphanWord + '</span>' +
+                '<span class="tooltip" id="orphaned-tooltip" role="tooltip">' +
+                    orphaned + ' ' + orphanWord + ' on file couldn\'t be linked to a portfolio company. ' +
+                    'Typically name mismatches (e.g. SPA filed under "Acme Holdings Inc." vs. investment recorded as "Acme"), ' +
+                    'parent vs. subsidiary entities, or SPAs uploaded for investments not yet booked. ' +
+                    'Compare names in your portfolio against the source SPA documents to reconcile.' +
+                    (orphanedNames.length > 0
+                        ? '<ul style="margin:6px 0 0;padding-left:14px;list-style:disc;">' +
+                            orphanedNames.map(n => '<li>' + esc(n) + '</li>').join('') +
+                          '</ul>'
+                        : '') +
+                '</span>' +
+              '</span>'
+            : '';
+        // Coverage subtitle removed per design — coverage now lives in the
+        // "Coverage by cost basis" section directly below the title. The
+        // pending-extraction and unmatched-SPA FYI pills (when present) still
+        // surface as their own line beneath the title.
+        const fyiPills = (pendingPill + orphanedPill).replace(/^ · /, '');
+        const fyiLine = fyiPills ? '<p>' + fyiPills + '</p>' : '';
+        document.getElementById('page-header').innerHTML =
+            '<h1>' + esc(m.firmName) + ' — SPA coverage audit</h1>' + fyiLine;
+    }
+
+    // ---------- Stat tiles — one per bucket ----------
+    // Four tiles in a single auto-fit row. Gap buckets (Missing / Unexecuted)
+    // read at full visual weight; the trailing two (Executed / No SPA needed)
+    // use muted styling so the user's eye lands on the gaps first.
+    function bucketTotal(key) {
+        return filteredBucketRowsByKey(key).reduce((s, r) => s + (r.costBasis || 0), 0);
+    }
+    function renderMetricsGrid() {
+        // Grand total across all buckets — each tile's cost basis is shown as
+        // a share of this, rather than an absolute dollar figure.
+        const grandTotal = BUCKETS.reduce((s, b) => s + bucketTotal(b.key), 0);
+        const html = BUCKETS.map((b, i) => {
+            const count = bucketCount(b);
+            const total = bucketTotal(b.key);
+            let sub = '';
+            if (filteredBucketRows(b).length > 0) {
+                const pct = grandTotal > 0 ? (total / grandTotal * 100) : 0;
+                sub = pct.toFixed(1) + '% of total cost basis';
+            }
+            // Optional info icon + hover tooltip — used by tiles whose label
+            // doesn't fully convey what's in the bucket (notably "No SPA
+            // Needed" which covers SAFEs / convertibles / fund LPs / tokens).
+            const helpIcon = b.helpText
+                ? ' <span class="help-icon has-tooltip" tabindex="0" aria-describedby="tile-help-' + b.key + '">' +
+                    'ⓘ' +
+                    '<span class="tooltip tooltip--tile" id="tile-help-' + b.key + '" role="tooltip">' + esc(b.helpText) + '</span>' +
+                  '</span>'
+                : '';
+            return '<div class="metric-card ' + b.cardClass + (b.muted ? ' metric-card--muted' : '') + '">' +
+                '<div class="metric-label">' + b.icon + ' ' + esc(b.label) + helpIcon + '</div>' +
+                '<div class="metric-value">' + count + '</div>' +
+                (sub ? '<div class="metric-sub">' + sub + '</div>' : '') +
+            '</div>';
+        }).join('');
+        document.getElementById('metrics-grid').innerHTML = html;
+    }
+
+    // ---------- Coverage bar — stacked bar with by-value / by-count toggle ----------
+    let BAR_MODE = 'weight'; // 'weight' | 'count'
+    function setBarMode(mode) { BAR_MODE = mode; renderCoverageBar(); }
+
+    function renderCoverageBar() {
+        const grand = BUCKETS.reduce((s, b) => s + bucketTotal(b.key), 0);
+        if (grand <= 0) { document.getElementById('coverage-bar').innerHTML = ''; return; }
+
+        const coveredVal = bucketTotal('executed') + bucketTotal('unexecuted');
+        const valuePct = coveredVal / grand * 100;
+
+        const covered = filteredBucketRowsByKey('executed').length + filteredBucketRowsByKey('unexecuted').length;
+        const notNeededCount = filteredBucketRowsByKey('notNeeded').length;
+        const totalCos = BUCKETS.reduce((s, b) => s + filteredBucketRows(b).length, 0);
+        const equityCos = totalCos - notNeededCount;
+        const countPct = equityCos > 0 ? Math.round(covered / equityCos * 100) : 0;
+
+        const ORDER = [
+            { key: 'executed',   label: 'Executed' },
+            { key: 'unexecuted', label: 'Unexecuted' },
+            { key: 'missing',    label: 'Missing' },
+            { key: 'notNeeded',  label: 'No SPA needed' },
+        ];
+
+        const useCount = BAR_MODE === 'count';
+        const totalForBar = useCount ? totalCos : grand;
+
+        let segs = '', legend = '';
+        ORDER.forEach(o => {
+            const v = useCount ? filteredBucketRowsByKey(o.key).length : bucketTotal(o.key);
+            if (v <= 0) return;
+            const p = v / totalForBar * 100;
+            const titleAttr = useCount
+                ? escAttr(o.label + ': ' + v + ' companies (' + p.toFixed(1) + '%)')
+                : escAttr(o.label + ': ' + fmtMoney(v) + ' (' + p.toFixed(1) + '%)');
+            segs += '<div class="coverage-bar-seg ' + o.key + '" style="width:' + p + '%" title="' + titleAttr + '"></div>';
+            legend += '<span class="item"><span class="swatch ' + o.key + '"></span>' +
+                esc(o.label) + ' ' + p.toFixed(1) + '%</span>';
+        });
+
+        const headerValue = useCount
+            ? countPct + '% of companies covered'
+            : valuePct.toFixed(1) + '% of total cost basis covered';
+
+        const toggleHtml =
+            '<div class="bar-mode-toggle">' +
+                '<button class="bar-mode-btn' + (!useCount ? ' active' : '') + '" onclick="setBarMode(\'weight\')" type="button">By value</button>' +
+                '<button class="bar-mode-btn' + (useCount ? ' active' : '') + '" onclick="setBarMode(\'count\')" type="button">By count</button>' +
+            '</div>';
+
+        document.getElementById('coverage-bar').innerHTML =
+            '<div class="coverage-bar-head">' +
+                '<span class="label">Coverage</span>' +
+                toggleHtml +
+                '<span class="value">' + headerValue + '</span>' +
+            '</div>' +
+            '<div class="coverage-bar-track">' + segs + '</div>' +
+            '<div class="coverage-legend">' + legend + '</div>';
+    }
+
+    // ---------- Upload CTAs — softer, action-oriented, split by gap type ----------
+    function renderUploadCta() {
+        const missing = filteredBucketRowsByKey('missing').length;
+        const unexecuted = filteredBucketRowsByKey('unexecuted').length;
+        const el = document.getElementById('upload-cta');
+        if (missing === 0 && unexecuted === 0) {
+            el.innerHTML = '';
+            return;
+        }
+        const m = DATA.meta;
+        const docsUrl = CARTA_BASE_URL + '/investors/firm/' + esc(m.firmCartaId) + '/portfolio/documents/';
+        let html = '<div class="cta-row">';
+
+        if (missing > 0) {
+            const companyWord = missing === 1 ? 'company' : 'companies';
+            html +=
+                '<div class="cta-card cta-card--missing">' +
+                    '<div class="cta-card-body">' +
+                        '<div class="cta-card-title">Close the coverage gap</div>' +
+                        '<div class="cta-card-text">Upload Stock Purchase Agreements for ' +
+                            '<strong>' + missing + ' ' + companyWord + '</strong> ' +
+                            'missing an SPA — unlocks co-investor analysis and more downstream skills.</div>' +
+                    '</div>' +
+                    '<button type="button" class="cta-card-action" onclick="openExternal(\'' + escAttr(docsUrl) + '\')">' +
+                        'Upload missing SPAs <span aria-hidden="true">↗</span>' +
+                    '</button>' +
+                '</div>';
+        }
+
+        if (unexecuted > 0) {
+            const spaWord = unexecuted === 1 ? 'SPA is' : 'SPAs are';
+            const btnLabel = missing > 0 ? 'Upload SPAs' : 'Upload signed copy';
+            html +=
+                '<div class="cta-card cta-card--unexecuted">' +
+                    '<div class="cta-card-body">' +
+                        '<div class="cta-card-title">Get executed copies on file</div>' +
+                        '<div class="cta-card-text"><strong>' + unexecuted + ' ' + spaWord + '</strong> ' +
+                            'marked unexecuted — if you already have a signed copy, upload it now. If not, follow up with the issuer to get it signed.</div>' +
+                    '</div>' +
+                    '<button type="button" class="cta-card-action cta-card-action--secondary" onclick="openExternal(\'' + escAttr(docsUrl) + '\')">' +
+                        btnLabel + ' <span aria-hidden="true">↗</span>' +
+                    '</button>' +
+                '</div>';
+        }
+
+        html += '</div>';
+        el.innerHTML = html;
+    }
+
+    // ---------- Filter pills + search + sort state ----------
+    let ACTIVE_FILTER = 'all';
+    let SEARCH_QUERY = '';
+    // Default sort: cost basis descending (matches what most users want first)
+    let SORT_KEY = 'costBasis';
+    let SORT_DIR = 'desc';
+
+    // Enrichment-backed filters and columns only render when they have something
+    // to show. A dropdown with one option can't narrow anything and a column
+    // that's empty for every company is noise, so both stay hidden — which also
+    // covers Query E being skipped entirely (no funds, no regions, no SOI values).
+    function eachRow(fn) {
+        Object.values(DATA.buckets).forEach(arr => arr.forEach(fn));
+    }
+
+    // Fund multi-select filter (needs 2+ funds to be able to narrow anything).
+    // Geography multi-select filter (needs 2+ populated region tags).
+    // SOI valuation column — hidden when no company has a value.
+    //
+    // These three, plus COLUMNS below, start empty and are filled in by
+    // computeDerivedState() — called once, right after DATA is assembled,
+    // before the first render.
+    let FUND_FILTER = [];       // empty = all funds shown
+    let ALL_FUNDS = [];
+    let GEOGRAPHY_FILTER = [];  // empty = all regions shown
+    let ALL_REGIONS = [];
+    let HAS_SOI_VALUATION = false;
+
+    // Sortable column definitions — keys must match row field names from the
+    // buildBuckets/buildCompanies transform above.
+    const BASE_COLUMNS = [
+        { key: 'rowNum',        label: '#',              align: 'left',  sortable: false },
+        { key: 'company',       label: 'Company',        align: 'left',  sortable: true,  type: 'string' },
+        { key: 'bucketKey',     label: 'Status',         align: 'left',  sortable: true,  type: 'bucket' },
+        { key: 'firstInvested', label: 'First invested', align: 'left',  sortable: true,  type: 'date' },
+        { key: 'costBasis',     label: 'Cost basis (fund currency)',     align: 'right', sortable: true,  type: 'number' },
+        { key: 'soiValuation',  label: 'SOI valuation (fund currency)',  align: 'right', sortable: true,  type: 'number' },
+    ];
+    let COLUMNS = BASE_COLUMNS.filter(c => c.key !== 'soiValuation');
+
+    function computeDerivedState() {
+        const fundsSet = new Set();
+        const regionsSet = new Set();
+        let hasSoi = false;
+        eachRow(r => {
+            (r.funds || []).forEach(f => fundsSet.add(f));
+            if (r.regionTag && r.regionTag !== '—') regionsSet.add(r.regionTag.trim());
+            if (r.soiValuation !== null && r.soiValuation !== undefined) hasSoi = true;
+        });
+        ALL_FUNDS = Array.from(fundsSet).sort();
+        ALL_REGIONS = Array.from(regionsSet).sort();
+        HAS_SOI_VALUATION = hasSoi;
+        COLUMNS = BASE_COLUMNS.filter(c => c.key !== 'soiValuation' || HAS_SOI_VALUATION);
+    }
+
+    // Used for bucket-status sort ordering (lower = listed higher when ASC)
+    const BUCKET_ORDER = { missing: 0, unexecuted: 1, executed: 2, notNeeded: 3 };
+
+    function renderStatusFilterBar() {
+        const s = DATA.companyStatus;
+        // Query T is optional. Without it the Live/Exited tabs would show 0 and
+        // filter the table to nothing, so render no bar when status is absent.
+        if (!s || Object.keys(s).length === 0) {
+            document.getElementById('status-bar').innerHTML = '';
+            return;
+        }
+        const allCount = Object.keys(s).length;
+        const liveCount = Object.values(s).filter(v => v === true).length;
+        const exitedCount = Object.values(s).filter(v => v === false).length;
+
+        function tab(id, label, count) {
+            const active = STATUS_FILTER === id ? ' active' : '';
+            return '<button class="status-tab' + active + '" onclick="setStatusFilter(\'' + id + '\')">' +
+                label + '<span class="status-tab-count">' + count + '</span></button>';
+        }
+
+        document.getElementById('status-bar').innerHTML =
+            tab('all', 'All', allCount) +
+            tab('live', 'Live', liveCount) +
+            tab('exited', 'Exited', exitedCount);
+    }
+
+    function setStatusFilter(filter) {
+        STATUS_FILTER = filter;
+        renderStatusFilterBar();
+        renderMetricsGrid();
+        renderCoverageBar();
+        renderUploadCta();
+        renderFilterBar();
+        renderMainTable();
+    }
+
+    function renderFilterBar() {
+        const total = BUCKETS.reduce((s, b) => s + filteredBucketRows(b).length, 0);
+        let opts = '<option value="all"' + (ACTIVE_FILTER === 'all' ? ' selected' : '') + '>All companies (' + total + ')</option>';
+        BUCKETS.forEach(b => {
+            const count = filteredBucketRows(b).length;
+            const sel = ACTIVE_FILTER === b.key ? ' selected' : '';
+            opts += '<option value="' + b.key + '"' + sel + '>' + esc(b.filterLabel) + ' (' + count + ')</option>';
+        });
+        document.getElementById('filter-bar').innerHTML =
+            '<label class="filter-select-label" for="filter-select">Show</label>' +
+            '<select id="filter-select" class="filter-select" aria-label="Filter by SPA status" onchange="setFilter(this.value)">' + opts + '</select>';
+    }
+    function setFilter(key) {
+        ACTIVE_FILTER = key;
+        renderFilterBar();
+        renderMainTable();
+    }
+    function setSearch(q) {
+        SEARCH_QUERY = (q || '').toLowerCase().trim();
+        renderMainTable();
+    }
+    // ── Fund filter ──────────────────────────────────────────────────────────
+    // Panel markup is built once. Selection changes go through syncFundFilter()
+    // instead of a rebuild: regenerating the panel drops its `open` class, which
+    // would close the dropdown after every checkbox click.
+    function renderFundFilter() {
+        const wrap = document.getElementById('fund-filter-wrap');
+        if (!wrap || ALL_FUNDS.length < 2) return;
+        let items = '<label class="fund-option">'
+            + '<input type="checkbox" data-fund-all onchange="clearFundFilter()">'
+            + 'All funds</label><hr class="fund-sep">';
+        ALL_FUNDS.forEach(f => {
+            items += '<label class="fund-option">'
+                + '<input type="checkbox" data-fund="' + escAttr(f) + '" onchange="toggleFundInput(this)">'
+                + esc(f) + '</label>';
+        });
+        wrap.innerHTML =
+            '<button class="fund-filter-btn" onclick="toggleFundDropdown()" aria-haspopup="listbox"></button>'
+            + '<div class="fund-dropdown-panel" id="fund-dropdown-panel">' + items + '</div>';
+        syncFundFilter();
+    }
+    function syncFundFilter() {
+        const wrap = document.getElementById('fund-filter-wrap');
+        if (!wrap) return;
+        const none = FUND_FILTER.length === 0;
+        const label = none ? 'Fund'
+            : FUND_FILTER.length === 1 ? FUND_FILTER[0]
+            : FUND_FILTER.length + ' funds';
+        const btn = wrap.querySelector('.fund-filter-btn');
+        if (btn) {
+            btn.classList.toggle('active', !none);
+            btn.innerHTML = esc(label) + ' <span class="fund-caret">▾</span>';
+        }
+        const all = wrap.querySelector('input[data-fund-all]');
+        if (all) all.checked = none;
+        wrap.querySelectorAll('input[data-fund]').forEach(cb => {
+            cb.checked = FUND_FILTER.includes(cb.dataset.fund);
+        });
+    }
+    function toggleFundDropdown() {
+        const p = document.getElementById('fund-dropdown-panel');
+        if (p) p.classList.toggle('open');
+    }
+    function toggleFundInput(el) { toggleFund(el.dataset.fund, el.checked); }
+    function toggleFund(fund, checked) {
+        if (checked) { if (!FUND_FILTER.includes(fund)) FUND_FILTER.push(fund); }
+        else { FUND_FILTER = FUND_FILTER.filter(f => f !== fund); }
+        syncFundFilter();
+        renderMainTable();
+    }
+    function clearFundFilter() {
+        FUND_FILTER = [];
+        syncFundFilter();
+        renderMainTable();
+    }
+
+    // ── Geography filter ──────────────────────────────────────────────────────
+    function renderGeographyFilter() {
+        const wrap = document.getElementById('geo-filter-wrap');
+        if (!wrap || ALL_REGIONS.length < 2) return;
+        let items = '<label class="fund-option">'
+            + '<input type="checkbox" data-region-all onchange="clearGeographyFilter()">'
+            + 'All regions</label><hr class="fund-sep">';
+        ALL_REGIONS.forEach(r => {
+            items += '<label class="fund-option">'
+                + '<input type="checkbox" data-region="' + escAttr(r) + '" onchange="toggleRegionInput(this)">'
+                + esc(r) + '</label>';
+        });
+        wrap.innerHTML =
+            '<button class="fund-filter-btn" onclick="toggleGeoDropdown()" aria-haspopup="listbox"></button>'
+            + '<div class="fund-dropdown-panel" id="geo-dropdown-panel">' + items + '</div>';
+        syncGeographyFilter();
+    }
+    function syncGeographyFilter() {
+        const wrap = document.getElementById('geo-filter-wrap');
+        if (!wrap) return;
+        const none = GEOGRAPHY_FILTER.length === 0;
+        const label = none ? 'Geography'
+            : GEOGRAPHY_FILTER.length === 1 ? GEOGRAPHY_FILTER[0]
+            : GEOGRAPHY_FILTER.length + ' regions';
+        const btn = wrap.querySelector('.fund-filter-btn');
+        if (btn) {
+            btn.classList.toggle('active', !none);
+            btn.innerHTML = esc(label) + ' <span class="fund-caret">▾</span>';
+        }
+        const all = wrap.querySelector('input[data-region-all]');
+        if (all) all.checked = none;
+        wrap.querySelectorAll('input[data-region]').forEach(cb => {
+            cb.checked = GEOGRAPHY_FILTER.includes(cb.dataset.region);
+        });
+    }
+    function toggleGeoDropdown() {
+        const p = document.getElementById('geo-dropdown-panel');
+        if (p) p.classList.toggle('open');
+    }
+    function toggleRegionInput(el) { toggleGeography(el.dataset.region, el.checked); }
+    function toggleGeography(region, checked) {
+        if (checked) { if (!GEOGRAPHY_FILTER.includes(region)) GEOGRAPHY_FILTER.push(region); }
+        else { GEOGRAPHY_FILTER = GEOGRAPHY_FILTER.filter(r => r !== region); }
+        syncGeographyFilter();
+        renderMainTable();
+    }
+    function clearGeographyFilter() {
+        GEOGRAPHY_FILTER = [];
+        syncGeographyFilter();
+        renderMainTable();
+    }
+
+    function setSort(key) {
+        if (SORT_KEY === key) {
+            // Toggle direction on repeat click
+            SORT_DIR = SORT_DIR === 'asc' ? 'desc' : 'asc';
+        } else {
+            SORT_KEY = key;
+            // Numeric columns default to descending; string/date default ascending
+            const col = COLUMNS.find(c => c.key === key);
+            SORT_DIR = (col && col.type === 'number') ? 'desc' : 'asc';
+        }
+        renderMainTable();
+    }
+
+    // ---------- Main table ----------
+    function renderMainTable() {
+        // Flatten visible buckets into one sortable list, respecting both the
+        // bucket filter (ACTIVE_FILTER) and the status filter (STATUS_FILTER).
+        let rows = [];
+        BUCKETS.forEach(b => {
+            if (ACTIVE_FILTER === 'all' || ACTIVE_FILTER === b.key) {
+                filteredBucketRows(b).forEach(r => {
+                    rows.push({ ...r, bucketKey: b.key, bucketLabel: b.filterLabel });
+                });
+            }
+        });
+
+        // Apply search filter (substring match on company name, case-insensitive)
+        if (SEARCH_QUERY) {
+            rows = rows.filter(r => r.company.toLowerCase().includes(SEARCH_QUERY));
+        }
+
+        // Apply fund filter (multi-select; empty = all funds shown)
+        if (FUND_FILTER.length > 0) {
+            rows = rows.filter(r => {
+                const rowFunds = r.funds || [];
+                return FUND_FILTER.some(f => rowFunds.includes(f));
+            });
+        }
+
+        // Apply geography filter (multi-select; empty = all regions shown)
+        if (GEOGRAPHY_FILTER.length > 0) {
+            rows = rows.filter(r => GEOGRAPHY_FILTER.includes((r.regionTag || '').trim()));
+        }
+
+        // Apply active sort
+        const col = COLUMNS.find(c => c.key === SORT_KEY) || COLUMNS[4];
+        const dir = SORT_DIR === 'asc' ? 1 : -1;
+        rows.sort((a, b) => {
+            let av, bv;
+            if (col.type === 'number') {
+                av = a[col.key] || 0;
+                bv = b[col.key] || 0;
+                if (av !== bv) return (av - bv) * dir;
+            } else if (col.type === 'bucket') {
+                av = BUCKET_ORDER[a.bucketKey] ?? 99;
+                bv = BUCKET_ORDER[b.bucketKey] ?? 99;
+                if (av !== bv) return (av - bv) * dir;
+            } else if (col.type === 'date') {
+                // firstInvested is "Mmm yyyy" — parse to a comparable yyyy-mm string
+                av = parseMonthYear(a.firstInvested);
+                bv = parseMonthYear(b.firstInvested);
+                if (av !== bv) return av < bv ? -1 * dir : 1 * dir;
+            } else {
+                av = (a[col.key] || '').toString();
+                bv = (b[col.key] || '').toString();
+                if (av !== bv) return av.localeCompare(bv) * dir;
+            }
+            // Stable tiebreaker: cost basis DESC, then company ASC
+            const cbDiff = (b.costBasis || 0) - (a.costBasis || 0);
+            if (cbDiff !== 0) return cbDiff;
+            return a.company.localeCompare(b.company);
+        });
+
+        if (rows.length === 0) {
+            const empty = SEARCH_QUERY
+                ? 'No companies match "' + esc(SEARCH_QUERY) + '".'
+                : 'No companies in this view.';
+            document.getElementById('main-table').innerHTML =
+                '<div class="empty-bucket">' + empty + '</div>';
+            return;
+        }
+
+        // Header row with sort indicators
+        let html = '<table><thead><tr>';
+        COLUMNS.forEach(c => {
+            const alignStyle = c.align === 'right' ? ' style="text-align:right"' : '';
+            if (!c.sortable) {
+                html += '<th' + alignStyle + '>' + esc(c.label) + '</th>';
+            } else {
+                const active = SORT_KEY === c.key;
+                const caret = active ? (SORT_DIR === 'asc' ? '▲' : '▼') : '↕';
+                const cls = 'sortable' + (active ? ' sort-active' : '');
+                html += '<th class="' + cls + '"' + alignStyle + ' onclick="setSort(\'' + c.key + '\')" aria-sort="' + (active ? SORT_DIR + 'ending' : 'none') + '">' + esc(c.label) + '<span class="sort-caret">' + caret + '</span></th>';
+            }
+        });
+        html += '</tr></thead><tbody>';
+
+        rows.forEach((r, i) => {
+            // Drill-down dict is keyed by the SPA-side ISSUER_NAME, which often
+            // differs from the audit-side company name (e.g. "Polaris Robotics"
+            // vs "Polaris Robotics, Inc."). buildBuckets stamps drillDownKey onto
+            // bucket entries from Query A's SPA_NAME column; fall back to the
+            // company name for exact-match cases.
+            const dKey = r.drillDownKey || r.company;
+            const hasDrillDown = !!DATA.companies[dKey];
+            // A data attribute, not an inline onclick: the browser decodes HTML
+            // entities in an attribute value before an inline onclick's text is
+            // parsed as JS, so escAttr('O’Reilly')'s &#39; would decode back
+            // to a bare ' and break the JS string literal — silently killing the
+            // drawer for any company name containing an apostrophe. Reading the
+            // attribute back via .dataset has no such second parse.
+            const clickAttr = hasDrillDown
+                ? ' class="clickable" data-dkey="' + escAttr(dKey) + '"'
+                : '';
+            const badgeClass = r.bucketKey === 'notNeeded' ? 'notNeeded' : r.bucketKey;
+            html += '<tr' + clickAttr + '>' +
+                '<td>' + (i + 1) + '</td>' +
+                '<td class="company-name">' + esc(r.company) + (hasDrillDown ? '<span class="row-caret" aria-hidden="true">›</span>' : '') + '</td>' +
+                '<td><span class="bucket-badge ' + badgeClass + '">' + esc(r.bucketLabel) + '</span></td>' +
+                '<td>' + esc(r.firstInvested) + '</td>' +
+                '<td class="number">' + fmtMoney(r.costBasis) + '</td>' +
+                (HAS_SOI_VALUATION ? '<td class="number">' + fmtMoney(r.soiValuation) + '</td>' : '') +
+                '</tr>';
+        });
+        html += '</tbody></table>';
+        document.getElementById('main-table').innerHTML = html;
+    }
+
+    // Parse "Mmm yyyy" → "yyyy-mm" for date sorting. Unparseable values sort first when ASC.
+    function parseMonthYear(s) {
+        if (!s || s === '—') return '0000-00';
+        const m = s.match(/^([A-Za-z]{3})\s+(\d{4})$/);
+        if (!m) return s;
+        const months = { Jan:'01', Feb:'02', Mar:'03', Apr:'04', May:'05', Jun:'06',
+                         Jul:'07', Aug:'08', Sep:'09', Oct:'10', Nov:'11', Dec:'12' };
+        return m[2] + '-' + (months[m[1]] || '00');
+    }
+
+    // ---------- Footer note + page footer ----------
+    function renderFooterNote() {
+        document.getElementById('footer-note').innerHTML =
+            'Click any company with a Status of "Executed SPA" or "SPA not executed" to view the underlying SPA documents and purchaser breakdown.';
+    }
+    function renderPageFooter() {
+        const m = DATA.meta;
+        const docsUrl = CARTA_BASE_URL + '/investors/firm/' + esc(m.firmCartaId) + '/portfolio/documents/';
+        const html = '<a class="carta-link" href="#" onclick="openExternal(\'' + escAttr(docsUrl) + '\'); return false;">View SPA source documents in Carta ↗</a>';
+        document.getElementById('page-footer').innerHTML = html;
+    }
+
+    // ---------- Drawer ----------
+    function openDrawer(company) {
+        const data = DATA.companies[company];
+        if (!data || !data.spas || data.spas.length === 0) return;
+        document.getElementById('drawer-title').textContent = company;
+        const spaWord = data.spas.length === 1 ? 'SPA' : 'SPAs';
+        document.getElementById('drawer-subtitle').textContent =
+            data.spas.length + ' ' + spaWord + ' on file · First invested ' + data.firstInvested + ' · ' + fmtMoney(data.costBasis) + ' cost basis (fund currency)';
+
+        let html = '';
+        data.spas.forEach(spa => {
+            const execChip = spa.executed
+                ? '<span class="bucket-badge executed">Executed</span>'
+                : '<span class="bucket-badge unexecuted">Not executed</span>';
+            const meta = [
+                spa.shareClass !== '—' ? spa.shareClass : null,
+                spa.transactionDate !== '—' ? 'Closed ' + spa.transactionDate : null,
+                spa.uploadDate !== '—' ? 'Uploaded ' + spa.uploadDate : null,
+            ].filter(Boolean).join(' · ');
+            html +=
+                '<div class="drawer-spa-label">' +
+                    '<span>SPA #' + spa.num + '</span>' +
+                    execChip +
+                    (meta ? '<span class="drawer-spa-meta">' + esc(meta) + '</span>' : '') +
+                '</div>';
+
+            if (spa.purchasers.length === 0) {
+                html += '<div class="empty-bucket" style="margin: 0 0 12px;">No purchaser rows extracted from this SPA.</div>';
+                return;
+            }
+
+            // Compute totalAmount before the row loop so we can show % of round per purchaser
+            const totalAmount = spa.purchasers.reduce((s, p) => s + (p.amountPaid || 0), 0);
+            html += '<div class="table-container"><table><thead><tr>' +
+                '<th>Purchaser</th>' +
+                '<th>Type</th>' +
+                '<th style="text-align:right">Shares</th>' +
+                '<th style="text-align:right">Price/share</th>' +
+                '<th style="text-align:right">Amount paid</th>' +
+                '<th style="text-align:right">% of round</th>' +
+                '</tr></thead><tbody>';
+            const sorted = [...spa.purchasers].sort((a, b) => (b.shares || 0) - (a.shares || 0));
+            sorted.forEach(p => {
+                const pct = totalAmount > 0 && p.amountPaid != null
+                    ? (p.amountPaid / totalAmount * 100).toFixed(1) + '%'
+                    : '—';
+                html += '<tr>' +
+                    '<td class="purchaser-name">' + esc(p.name) + '</td>' +
+                    '<td class="entity-type"><span class="tag tag-neutral">' + esc(p.entityType || '—') + '</span></td>' +
+                    '<td class="number" title="' + escAttr(fmtNum(p.shares)) + '">' + fmtNumCompact(p.shares) + '</td>' +
+                    '<td class="number">' + fmtPriceCcy(p.pricePerShare, spa.currency) + '</td>' +
+                    '<td class="number" title="' + escAttr(fmtAmountCcy(p.amountPaid, spa.currency)) + '">' + fmtAmountCcyCompact(p.amountPaid, spa.currency) + '</td>' +
+                    '<td class="number">' + pct + '</td>' +
+                    '</tr>';
+            });
+            // Safe to total: every purchaser row within one SPA shares that
+            // SPA's currency. Never total across SPAs.
+            const totalShares = spa.purchasers.reduce((s, p) => s + (p.shares || 0), 0);
+            html += '</tbody><tfoot><tr><td colspan="2">Total raised</td><td class="number" title="' + escAttr(fmtNum(totalShares)) + '">' + fmtNumCompact(totalShares) + '</td><td></td><td class="number" title="' + escAttr(fmtAmountCcy(totalAmount, spa.currency)) + '">' + fmtAmountCcyCompact(totalAmount, spa.currency) + '</td><td class="number">100%</td></tr></tfoot></table></div>';
+            if (!spa.currency) {
+                html += '<div class="drawer-spa-footnote">* currency not stated in the source document</div>';
+            }
+        });
+
+        document.getElementById('drawer-content').innerHTML = html;
+        document.getElementById('drawer').classList.add('open');
+        document.getElementById('backdrop').classList.add('open');
+    }
+    function closeDrawer() {
+        document.getElementById('drawer').classList.remove('open');
+        document.getElementById('backdrop').classList.remove('open');
+    }
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') closeDrawer();
+    });
+
+    // Delegated so it keeps working across every renderMainTable() re-render
+    // (sort/filter/search all replace #main-table's innerHTML) without having
+    // to re-attach a listener per row. See the data-dkey comment above.
+    document.getElementById('main-table').addEventListener('click', e => {
+        const row = e.target.closest('tr[data-dkey]');
+        if (row) openDrawer(row.dataset.dkey);
+    });
+
+    // ---------- Powered-by watermark — only visible at page bottom ----------
+    function setupPoweredBy() {
+        const el = document.querySelector('.powered-by-carta');
+        if (!el) return;
+        const update = () => {
+            const atBottom = (window.innerHeight + window.scrollY) >= (document.documentElement.scrollHeight - 4);
+            el.classList.toggle('visible', atBottom);
+        };
+        window.addEventListener('scroll', update, { passive: true });
+        window.addEventListener('resize', update);
+        update();
+    }
+    window.addEventListener('load', setupPoweredBy);
+
+    // Close every dropdown the click landed outside of. A click inside a filter
+    // wrap — including on its checkboxes — leaves that wrap's own panel open.
+    document.addEventListener('click', e => {
+        const wrap = e.target.closest('.fund-filter-wrap');
+        document.querySelectorAll('.fund-dropdown-panel').forEach(p => {
+            if (!wrap || !wrap.contains(p)) p.classList.remove('open');
+        });
+    });
+
+    // ---------- Init ----------
+    // Nothing renders synchronously: the page opens on the shimmer and bootstrap
+    // swaps in the content once Carta answers.
+    bootstrap();
+  </script>
+
+  <div class="powered-by-carta" aria-label="Powered by Carta">
+    <svg width="572" height="101" viewBox="0 0 572 101" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M370.228 0V100.61H571.448V0H370.228ZM567.423 96.5856H374.252V4.0244H567.423V96.5856ZM396.623 52.2674C396.623 42.1817 405.138 36.2615 412.777 36.2615C418.246 36.2615 423.347 38.3119 426.076 43.0367L420.967 45.9988C420.087 44.6697 418.883 43.5796 417.472 42.8341C416.057 42.0885 414.48 41.6995 412.878 41.7116C408.386 41.7116 403.042 45.2167 403.042 52.162C403.042 59.1074 408.151 62.6732 413.304 62.6732C416.888 62.6732 419.864 60.6756 421.628 57.5919L426.85 60.0029C423.894 65.3193 418.611 68.1517 412.477 68.1517C404.761 68.1436 396.623 62.2154 396.623 52.2633V52.2674ZM445.493 68.1517C449.738 68.1517 453.748 66.2796 455.816 63.5607V67.3008H462.125V37.0436H455.816V40.7918C453.85 38.0485 449.746 36.2615 445.493 36.2615C436.2 36.2615 429.701 43.0245 429.701 52.2066C429.701 61.3887 436.261 68.1517 445.493 68.1517ZM446.101 41.9993C451.932 41.9993 455.934 46.3472 455.934 52.2066C455.934 58.066 451.928 62.4139 446.101 62.4139C440.275 62.4139 436.139 58.0052 436.139 52.0851C436.139 46.1649 440.271 41.9993 446.101 41.9993ZM496.029 43.0488H489.481V37.0071H496.09V29.1217H502.59V37.0071H509.195V43.0488H502.59V67.2886H496.029V43.0488ZM527.315 68.1517C531.568 68.1517 535.578 66.2796 537.646 63.5607V67.3008H543.963V37.0436H537.646V40.7918C535.679 38.0485 531.576 36.2615 527.315 36.2615C518.03 36.2615 511.53 43.0245 511.53 52.2066C511.53 61.3887 518.086 68.1517 527.315 68.1517ZM527.931 41.9993C533.753 41.9993 537.767 46.3472 537.767 52.2066C537.767 58.066 533.753 62.4139 527.931 62.4139C522.108 62.4139 517.969 58.0052 517.969 52.0851C517.969 46.1649 522.1 41.9993 527.931 41.9993ZM476.409 67.2602H469.849V37.0031H475.858V42.6355C477.346 39.2885 479.58 37.1084 483.213 36.9261C483.963 36.9139 484.709 36.9261 485.459 37.0071L485.359 43.061C480.14 43.061 476.413 45.8569 476.413 53.6532V67.2643L476.409 67.2602Z" fill="#1A1A1A"/><path d="M0 67.2018V65.4679L2.60086 65.0633C4.62375 64.7743 4.97053 64.3119 4.97053 61.9422V28.6512C4.97053 26.2816 4.62375 25.8192 2.60086 25.5302L0 25.1256V23.3917H19.8243C28.3205 23.3917 37.4524 25.4146 37.4524 35.1245C37.4524 42.9849 30.0544 47.3774 19.8821 47.3774H10.9814V62C10.9814 64.3119 11.3282 64.7743 13.3511 64.9477L17.6858 65.3523V67.2018H0ZM10.9814 27.0907V44.8922H20.5179C26.76 44.8922 30.6323 42.0601 30.6323 35.2979C30.6323 28.5356 26.76 25.7036 20.5179 25.7036H13.8713C11.4438 25.7036 10.9814 25.877 10.9814 27.0907Z" fill="#1A1A1A"/><path d="M54.8109 67.8953C46.3725 67.8953 39.6681 61.8844 39.6681 52.5791C39.6681 43.2738 46.3725 37.263 54.8109 37.263C63.2492 37.263 69.9536 43.2738 69.9536 52.5791C69.9536 61.8844 63.2492 67.8953 54.8109 67.8953ZM54.8109 65.6412C59.6658 65.6412 64.0006 61.7111 64.0006 52.5791C64.0006 43.4472 59.6658 39.5171 54.8109 39.5171C49.9559 39.5171 45.6212 43.4472 45.6212 52.5791C45.6212 61.7111 49.9559 65.6412 54.8109 65.6412Z" fill="#1A1A1A"/><path d="M87.6815 67.8375L76.6423 42.2335C76.1221 41.0776 75.8331 40.6152 73.8102 40.1528L72.0763 39.7482V38.1877H86.41V39.7482L84.5604 40.1528C82.5376 40.6152 81.9596 41.0776 82.4798 42.2335L90.2823 60.6129L96.4088 46.6261L92.8832 38.1877H104.385V39.7482L102.535 40.1528C100.512 40.6152 99.9922 41.0776 100.455 42.2335L107.853 60.6129L115.655 42.2335C116.175 41.0776 115.771 40.6152 113.748 40.1528L111.898 39.7482V38.1877H122.995V39.7482L121.261 40.1528C119.239 40.6152 118.95 41.0776 118.429 42.2335L107.332 67.8375H105.252L97.7381 49.8627L89.7622 67.8375H87.6815Z" fill="#1A1A1A"/><path d="M139.946 67.8953C130.988 67.8953 125.15 61.4221 125.15 52.7525C125.15 43.0427 132.433 37.263 139.599 37.263C146.824 37.263 152.43 41.7711 153.644 49.9205H130.641C130.641 50.0939 130.641 50.2673 130.641 50.4407C130.641 59.0524 135.091 64.2541 141.911 64.2541C146.073 64.2541 150.465 62.6936 152.257 56.4515H154.106C152.488 64.0229 147.518 67.8953 139.946 67.8953ZM139.484 39.4015C135.265 39.4015 131.739 42.2335 130.872 47.6086H147.575C147.113 41.7133 143.818 39.4015 139.484 39.4015Z" fill="#1A1A1A"/><path d="M159.249 67.2018V65.6412L161.099 65.2367C163.122 64.7743 163.469 64.4275 163.469 63.156V42.8693C163.469 41.5977 163.122 41.251 161.099 40.7886L159.249 40.384V38.8235L168.67 37.4942V44.7188C170 39.806 174.045 37.4364 177.282 37.4364C179.594 37.4364 181.443 38.5345 181.443 40.9042C181.443 42.8115 179.998 44.083 178.265 44.083C175.837 44.083 175.201 41.7133 172.889 41.7133C170.924 41.7133 168.67 44.5454 168.67 48.2444V63.156C168.67 64.4275 169.017 64.8321 171.04 65.1211L174.045 65.5257V67.2018H159.249Z" fill="#1A1A1A"/><path d="M199.407 67.8953C190.448 67.8953 184.611 61.4221 184.611 52.7525C184.611 43.0427 191.893 37.263 199.06 37.263C206.285 37.263 211.891 41.7711 213.105 49.9205H190.102C190.102 50.0939 190.102 50.2673 190.102 50.4407C190.102 59.0524 194.552 64.2541 201.372 64.2541C205.533 64.2541 209.926 62.6936 211.718 56.4515H213.567C211.949 64.0229 206.978 67.8953 199.407 67.8953ZM198.945 39.4015C194.725 39.4015 191.2 42.2335 190.333 47.6086H207.036C206.574 41.7133 203.279 39.4015 198.945 39.4015Z" fill="#1A1A1A"/><path d="M232.581 67.8953C225.241 67.8953 218.884 62.1156 218.884 52.9837C218.884 43.794 225.415 37.263 233.911 37.263C237.494 37.263 239.806 38.7657 241.193 40.095V26.6861C241.193 25.4146 240.846 24.8944 238.823 24.6055L235.818 24.2009V22.6404L246.395 21.311V62.2312C246.395 63.5028 246.742 63.8495 248.765 64.3119L250.614 64.7165V66.277L241.193 67.4329V63.7339C240.153 64.8899 237.205 67.8953 232.581 67.8953ZM235.298 64.6587C238.246 64.6587 240.095 63.6184 241.193 62.6936V41.3666C239.517 40.3262 237.841 39.7482 235.356 39.7482C229.229 39.7482 224.663 44.372 224.663 51.9434C224.663 59.8038 229.171 64.6587 235.298 64.6587Z" fill="#1A1A1A"/><path d="M286.714 67.8953C283.131 67.8953 280.53 66.3926 279.143 65.0633L274.635 67.8375H274.23V26.6861C274.23 25.4146 273.883 25.0678 271.86 24.6055L270.011 24.2009V22.6404L279.432 21.311V41.4244C280.472 40.2684 283.42 37.263 288.043 37.263C295.384 37.263 301.741 43.0427 301.741 52.1746C301.741 61.3643 295.21 67.8953 286.714 67.8953ZM285.327 40.4996C282.379 40.4996 280.53 41.5399 279.432 42.4647V63.7917C281.108 64.8321 282.784 65.4101 285.269 65.4101C291.396 65.4101 295.962 60.7863 295.962 53.2149C295.962 45.3545 291.453 40.4996 285.327 40.4996Z" fill="#1A1A1A"/><path d="M311.899 81.8244C310.107 81.8244 309.067 80.495 309.067 79.1657C309.067 77.6052 310.223 76.2759 312.65 75.2933C314.789 74.4264 315.771 74.0218 316.812 71.6521L319.124 66.5082L308.662 42.2335C308.142 41.0776 307.853 40.6152 305.83 40.1528L304.096 39.7482V38.1877H318.43V39.7482L316.581 40.1528C314.558 40.6152 313.98 41.0776 314.5 42.2335L322.071 60.0927L330.105 42.2335C330.625 41.0776 330.221 40.6152 328.198 40.1528L326.348 39.7482V38.1877H337.445V39.7482L335.711 40.1528C333.688 40.6152 333.4 41.0776 332.879 42.2335L317.39 76.3915C315.482 80.6106 313.575 81.8244 311.899 81.8244Z" fill="#1A1A1A"/></svg>
+  </div>
+</body>
+</html>

@@ -2,27 +2,39 @@
 name: carta-spa-audit
 description: >-
   SPA coverage audit across your portfolio — categorizes every equity investment as missing, unexecuted, executed, or not needed. Use when asked about SPA coverage, missing SPAs, unexecuted SPAs, or document completeness.
-version: 0.8.2
+version: 0.9.0
 model: sonnet
 allowed-tools:
+  # The only source for a connector's name
+  - list_connectors
+  # The connector check's observed call. Prefix-agnostic so the grant holds
+  # whichever form the host registers.
+  - mcp__*carta*__welcome
+  - mcp__*Carta*__welcome
+  # Carta MCP — registration prefix varies by host (Claude Code / Claude.ai / Cowork / public)
   - mcp__carta__call_tool
   - mcp__carta__list_contexts
   - mcp__carta__list_accounts
-  - AskUserQuestion
-  - Skill
+  - mcp__carta__set_context
+  - mcp__carta__skill_checkpoint
+  - mcp__claude_ai_carta__call_tool
+  - mcp__claude_ai_carta__list_contexts
+  - mcp__claude_ai_carta__list_accounts
+  - mcp__claude_ai_carta__set_context
+  - mcp__claude_ai_carta__skill_checkpoint
+  # Cowork
+  - Artifact
+  # Local execution
+  - Bash(uv run /sessions/*)
+  - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/*)
+  - Bash(find /sessions *)
+  - Bash(pwd)
   - Read
   - Write
-  - Bash(carta workspace cache *)
-  - Bash(command -v *)
-  - Bash(jq *)
-  - Bash(tee *)
-  - Bash(uv run *)
-  - Bash(test -f *)
-  - Bash(test -d *)
-  - Bash(find *)
-  - Bash(date *)
-  - Bash(mkdir -p *)
-  - Bash(rm -f *)
+  # Interaction
+  - AskUserQuestion
+  - Skill
+  - ToolSearch
 ---
 
 <!-- carta:instrumentation-fallback -->
@@ -105,7 +117,7 @@ Every time you respond in natural language to a human user using this skill, sho
 
 - **Carta MCP connection** — `list_contexts` and `fetch` tools available; user has an active session for at least one investment firm.
 - **SPA documents uploaded** — the firm has Stock Purchase Agreements in Carta's Document Intelligence; without them, all equity companies land in bucket 1 (missing SPA).
-- **`Bash` + `uv` (Mode A only)** — Mode A runs two bundled scripts. **A preview side panel is not a prerequisite.** Where one exists (Claude Desktop) the artifact opens in the panel; everywhere else (Cowork, Claude Code CLI, headless terminal) the identical artifact is written to a file and handed to the user. Only a runtime that cannot execute `uv` at all forces Mode B — and only the Step A0 probe may establish that.
+- **Mode A needs Cowork.** Live Artifacts only render there. Claude Desktop and the Claude Code CLI get Mode B, which is a full text answer, not a degraded one.
 
 ## Accessibility
 
@@ -173,7 +185,7 @@ Tell the user: `Firm context loaded: <firm_name>. Fetching investment records an
 
 ## Step 2: Route
 
-**The default output of this skill is the interactive artifact (Mode A). Proceed directly to Mode A Step A0.**
+**The default output of this skill is the interactive artifact (Mode A). Proceed directly to Mode A Step A1.**
 
 Only route to **text-only (Mode B)** when the user explicitly signals it:
 - Says "text only", "no file", "quick summary", "just tell me", or "list missing only" → Mode B
@@ -181,380 +193,125 @@ Only route to **text-only (Mode B)** when the user explicitly signals it:
 
 Everything else — including any general "audit my SPAs" or "show coverage" request — goes to Mode A.
 
-> **Environment is never a routing reason here.** Do not route to Mode B because you believe this session lacks the scripts, `uv`, a local file system, or a preview panel. That judgement belongs to Step A0's probe, which runs a command and reports facts. Route to Mode A and let A0 decide.
+Route to Mode B when Step A1's gate finds no `Artifact` tool — that means this session is not Cowork.
 
 ---
 
-## Mode A — Interactive artifact
+## Mode A — Live Artifact
 
-Generate a self-contained interactive HTML file showing the four-bucket SPA audit. Each portfolio company row is clickable — clicking it opens a right-side drawer with all SPA documents on file for that company, including per-SPA purchaser breakdowns. A sortable main table, a search input, filter pills per bucket, and a contextual "Upload missing SPAs" CTA (when missing > 0) round out the report.
+The artifact shows the firm's four-bucket SPA audit — missing, unexecuted, executed, no SPA needed — ranked by cost basis within each bucket, with every company that has an SPA on file clickable to open a drawer holding the full SPA and purchaser breakdown for that company.
 
-### Step A0: Resolve workspace and locate the toolchain
-
-> **Never pre-judge the environment.** You cannot tell from your tool list, the session type, or a
-> `${CLAUDE_PLUGIN_ROOT}` that failed to expand whether Mode A is buildable. Run the probe below
-> **before** you say anything about what this session can or cannot do. Until it has run, every one
-> of these statements is forbidden — they have all been wrong in production:
+> **The page fetches its own data.** You issue no warehouse queries in Mode A. The rendered HTML calls Carta at runtime through `claude.use("mcp")`, pinning firm context and running the audit, drill-down, enrichment, status, and coverage queries itself. This is why Mode A costs the same for a 400-company firm as for a 12-company one — no rows ever pass through your context.
 >
-> - "the interactive artifact needs a local script environment that isn't available in this session"
-> - "the scripts for this skill aren't installed here"
-> - "this session doesn't have a file system / can't run Python"
-> - "I'll deliver the text version instead" (as an environment claim rather than a user request)
->
-> The probe searches **both** `.remote-plugins` and `.local-plugins` because both are real install
-> locations — marketplace installs land in the first, side-loaded and dev installs in the second.
-> Searching only one comes up empty on the other and yields exactly the false "not available here"
-> claim above, while `process.py` sits one directory over.
+> Consequences worth holding onto:
+> - There is no NDJSON blob to resolve, no `process.py`, and no data file to assemble.
+> - Do **not** hand-write or edit the artifact HTML. Every render goes through `render-artifact.py`.
+> - Do **not** pre-fetch SPA data "to check it worked". The artifact reports its own errors to the viewer.
+
+### Step A1: Checks before building
+
+Run both checks, and stay quiet about them when they pass:
+
+1. `${CLAUDE_PLUGIN_ROOT}/references/gate-has-artifact-tool.md` — can this session publish at all?
+2. `${CLAUDE_PLUGIN_ROOT}/references/gate-carta-connector-name.md` — the connector name the page will call.
+
+Both sit in the **plugin's** `references/` directory — `${CLAUDE_PLUGIN_ROOT}/references/`, alongside the other plugin-wide references. They are *not* under this skill's own `references/`. Read them by that exact path; don't search for them.
+
+If the `Artifact` tool is missing, this session is not Cowork: go to Mode B and tell the user plainly *"I'll give you the audit as text."* Say nothing about artifacts, Cowork, or sandboxes.
+
+Store the `name` the connector gate resolves as `<CARTA_MCP_SERVER>`. Step A2 passes it to the render script and Step A3 puts it in the `capabilities.mcp` grant. It is one string; there is nothing to derive and nothing to keep in sync.
+
+### Step A2: Render
+
+Locate the script:
 
 ```bash
-# --- Workspace ---------------------------------------------------------
-# The data file, the HTML artifact, and this probe's own record live here.
-# Both the Claude process AND (on Desktop) the preview-panel host must be
-# able to read it — on Cowork demo VMs running macOS 26.5+ the host can no
-# longer see ~/.cache/... or /tmp/....
-if [ -d "${HOME}/mnt/outputs" ] && [ -w "${HOME}/mnt/outputs" ]; then
-  WORKSPACE="${HOME}/mnt/outputs/carta-spa-audit"
-elif command -v carta >/dev/null 2>&1; then
-  WORKSPACE=$(carta workspace cache carta-spa-audit | jq -r .)
-else
-  WORKSPACE="${TMPDIR:-/tmp}/carta-spa-audit"
-fi
-mkdir -p "$WORKSPACE"
-
-# --- Candidate plugin roots -------------------------------------------
-# Claude Code CLI exports CLAUDE_PLUGIN_ROOT and substitutes it inline.
-# Cowork's harness does neither, and bind-mounts plugins under BOTH
-# .remote-plugins (marketplace installs) and .local-plugins (side-loaded /
-# dev installs). Search every root before concluding anything is missing.
-# Positional params, not a space-joined string: zsh does not word-split an
-# unquoted variable, so `for r in $ROOTS` would iterate once over the whole
-# string and find nothing.
-set -- "${CLAUDE_PLUGIN_ROOT:-}" \
-       "${HOME}/mnt/.remote-plugins" \
-       "${HOME}/mnt/.local-plugins" \
-       "${HOME}/.claude/plugins" \
-       "${HOME}/.carta/claude-marketplace/plugins"
-
-# --- carta-spa-audit's own install dir (process.py) --------------------
-# Match on CONTENT, not name: a directory called carta-spa-audit also exists
-# under $WORKSPACE, so a name-only find returns the output dir and every
-# later `uv run …/scripts/process.py` fails.
-SKILL_DIR=""
-for r in "$@"; do
-  [ -n "$r" ] && [ -d "$r" ] || continue
-  hit=$(find "$r" -maxdepth 6 -type d -name carta-spa-audit -exec test -f {}/scripts/process.py \; -print 2>/dev/null | head -1)
-  if [ -n "$hit" ]; then SKILL_DIR="$hit"; break; fi
-done
-
-# --- artifact-manager's install dir (generate.py) ----------------------
-# Per ADR-003 the HTML generator lives in artifact-manager, not here. Its
-# directory name is opaque on Cowork (plugin_<id>/), so identify it by the
-# pair of scripts only artifact-manager ships.
-AM_ROOT=""
-for r in "$@"; do
-  [ -n "$r" ] && [ -d "$r" ] || continue
-  hit=$(find "$r" -maxdepth 6 -type d -name scripts -exec test -f {}/generate.py \; -exec test -f {}/capabilities.py \; -print 2>/dev/null | head -1)
-  if [ -n "$hit" ]; then AM_ROOT=$(dirname "$hit"); break; fi
-done
-
-# --- Record the result for later steps --------------------------------
-# Env vars do NOT survive across Bash tool calls; this file does.
-UV_OK=no; command -v uv >/dev/null 2>&1 && UV_OK=yes
-jq -n --arg workspace "$WORKSPACE" --arg skillDir "$SKILL_DIR" \
-      --arg amRoot "$AM_ROOT" --arg uv "$UV_OK" \
-  '{workspace:$workspace, skillDir:$skillDir, artifactManagerRoot:$amRoot, uv:$uv}' \
-  | tee "$WORKSPACE/.toolchain.json"
+find /sessions "$HOME/mnt" -type f -path '*/carta-spa-audit/scripts/render-artifact.py' 2>/dev/null | head -1
 ```
 
-Do not hardcode `/tmp` — it breaks on Windows and is invisible to the Cowork host on macOS 26.5+.
+If it prints nothing, use `${CLAUDE_PLUGIN_ROOT}/skills/carta-spa-audit/scripts/render-artifact.py`.
 
-Read the printed JSON and act on it:
+Keep the `find` scoped to those two roots — the remote plugin mounts, the only place bash can reach this script, since it cannot reach the path `${CLAUDE_PLUGIN_ROOT}` expands to there. Locally neither exists, the `find` is empty, and the plugin-root path is the correct one. Do not broaden to `$HOME` or `/`: it takes tens of seconds and can resolve a stale cached copy.
 
-| Probe result | Meaning | Do this |
-|---|---|---|
-| `uv: "yes"`, `skillDir` and `artifactManagerRoot` both non-empty | Full toolchain present | Continue to Step A1. Mode A is buildable — with or without a preview panel. |
-| `skillDir` or `artifactManagerRoot` empty | Install path not found in the searched roots | Re-run the probe **once**, widened: `set -- "${HOME}" "${HOME}/mnt"` and `-maxdepth 8` on both finds. Then apply this table again. |
-| Still empty after that one re-run, or `uv: "no"` | Toolchain genuinely absent | Go to Mode B and tell the user plainly: *"I'll give you the audit as text."* Say nothing about scripts, plugins, paths, or sandboxes. |
-
-> **One re-run, then stop.** You get exactly **two** probe attempts total. Do not vary the `find`
-> expression a third time, do not search additional roots one at a time, do not `ls` around looking
-> for the plugin, and do not switch to `Glob`/`Read` to hunt for `process.py`. Two attempts, then
-> Mode B.
-
-This step has no user-facing status line — Step 0's announcement already covers the wait.
-
-### Step A1: Fetch SPA data
-
-Every later Bash call starts with this **standard preamble** — it re-resolves `$WORKSPACE` (env vars
-do not persist across Bash tool calls) and reads back what Step A0 recorded:
+Render, substituting the path found above **literally**. `allowed-tools` matches the command text, so a shell variable in place of the path fails the allowlist and the call has to be approved by hand each time:
 
 ```bash
-# --- Standard preamble (paste at the top of every Mode A Bash call) ----
-if [ -d "${HOME}/mnt/outputs" ] && [ -w "${HOME}/mnt/outputs" ]; then
-  WORKSPACE="${HOME}/mnt/outputs/carta-spa-audit"
-elif command -v carta >/dev/null 2>&1; then
-  WORKSPACE=$(carta workspace cache carta-spa-audit | jq -r .)
-else
-  WORKSPACE="${TMPDIR:-/tmp}/carta-spa-audit"
-fi
-SKILL_DIR=$(jq -r .skillDir "$WORKSPACE/.toolchain.json")
-AM_ROOT=$(jq -r .artifactManagerRoot "$WORKSPACE/.toolchain.json")
+uv run "<SCRIPT_PATH>" \
+    "<CWD>/<firm-slug>-spa-audit.html" \
+    "<firm-slug>-spa-audit" \
+    "<CARTA_MCP_SERVER>" \
+    "<firm_id>" \
+    "<firm_name>" \
+    "<org_pk>" \
+    "<base_url>"
 ```
 
+Positional arguments:
 
-**Fire queries in parallel — issue all `fetch` calls in the SAME assistant turn.** Each is a single high-limit fetch — never paginate. Capture each `saved to …` path and resolve to a readable path via `resolve_blob`.
+1. **Output path** — must be **absolute**, under the session's current working directory (`<CWD>`), and **not under `/tmp`**. Use `pwd` to resolve `<CWD>` if needed.
+2. **Artifact ID** — the kebab-case slug naming this artifact. Must equal `<firm-slug>-spa-audit`.
+3. **Carta connector display name** — `<CARTA_MCP_SERVER>` from Step A1.
+4. **Firm UUID** — from Step 1. The artifact calls `set_context` with this on every load, so the queries succeed even if the user switched contexts elsewhere.
+5. **Firm name** — the human-readable name, shown in the page header.
+6. **Firm Carta ID** — `<org_pk>` from Step 1, the numeric organization pk, for the documents deep link.
+7. **Base URL** — `<base_url>` from Step 1.
 
-> **`response_mode: "inline"` is load-bearing on every ndjson fetch — do not remove it.** The server infers the delivery shape from `clientInfo.name`, and that name cannot distinguish the Claude Code CLI (which accepts a binary blob) from other runtimes that share the same name but reject the blob with `-32602 invalid_union`. `inline` forces the always-safe plain-string path for every client.
+On success the script prints one stdout line: the absolute output path. It exits non-zero on any validation failure (bad UUID, non-numeric Carta ID, base URL with a path or a non-https scheme, unusable connector name, output outside CWD, missing template or placeholders). If it fails, surface the error and stop — do not fall back to hand-writing HTML.
 
-**Query A — main audit (ndjson):** the same SQL as Mode B Step B1 above, with `"format": "ndjson"` and `"limit": 500`. Returns one row per portfolio company with bucket, cost basis, first invested.
+**Slugification rules** (apply to the **firm name**, not any UUID):
 
-**Query D — per-company drill-down (ndjson):** returns one row per company that has at least one SPA on file, with the full SPA list and purchaser breakdowns nested as a compact JSON string (short keys `num/sc/td/ud/cc/ex/p` for SPAs, `n/t/sh/pp/a` for purchasers). `cc` is the SPA's currency code and is `null` when the document did not state one.
+1. Lowercase
+2. Replace whitespace with hyphens
+3. Strip non-alphanumeric characters except hyphens
+4. Collapse consecutive hyphens
+5. Trim leading and trailing hyphens
 
-**Query E — fund / geography / SOI valuation enrichment (ndjson):** one row per active portfolio company, with the fund(s) the company belongs to, its geography region tag, and its current SOI valuation (REMAINING_VALUE). Used to power the Fund and Geography multi-select filters and the SOI valuation column in the artifact. Each of the three renders only when it has something to show: the filters need two or more distinct values to be able to narrow anything, and the column needs at least one company with a valuation.
+Example: `"Acme Capital Partners, L.P."` → slug `"acme-capital-partners-lp"` → output `acme-capital-partners-lp-spa-audit.html`, artifact id `acme-capital-partners-lp-spa-audit`.
 
-> **Run Query E in the same parallel batch as Queries A and D.** `IS_ACTIVE_INVESTMENT = TRUE` scopes to positions with remaining value — fully-exited companies return no row and will show no funds, `—` for region, and `null` for SOI valuation, which is correct. `FUNDS` is an `ARRAY_AGG`, not a `LISTAGG`: fund names commonly contain a comma (`Acme Ventures Fund I, L.P.`), so a delimited string cannot be split back apart reliably. `REGION_TAG` uses `GET(GET(TAGS_JSON, '  Region'), 0)` — note the two leading spaces in the key name as stored by Snowflake.
+Re-running the skill for the same firm produces the same artifact id and filename, so Step A3 updates the artifact in place.
 
-```
-call_tool({"name": "dwh__execute__query", "arguments": {
-  "format": "ndjson",
-  "response_mode": "inline",
-  "limit": 500,
-  "sql": "SELECT ISSUER_NAME AS COMPANY, ARRAY_AGG(DISTINCT FUND_NAME) WITHIN GROUP (ORDER BY FUND_NAME) AS FUNDS, MAX(GET(GET(TAGS_JSON, '  Region'), 0)::STRING) AS REGION_TAG, SUM(REMAINING_VALUE) AS SOI_VALUATION FROM FUND_ADMIN.AGGREGATE_INVESTMENTS WHERE FIRM_ID = '<firm_id>' AND IS_ACTIVE_INVESTMENT = TRUE GROUP BY ISSUER_NAME ORDER BY ISSUER_NAME"
-}})
-```
+### Step A3: Publish
 
-Capture the `saved to …` path and resolve via `resolve_blob` the same way as Queries A and D. Pass the result as `--enrichment "$QUERY_E_BLOB"` to `process.py` in Step A2.
+> **The render script only writes the HTML file. Nothing picks up file changes on its own — you MUST publish after every render, or the reader keeps seeing the prior version.**
 
-> **Query E is optional — never let it fail the audit.** If it throws a permission error or table-not-found, pass `--enrichment` omitted; `process.py` will default all companies to `funds=[]`, `regionTag="—"`, `soiValuation=null`, and the artifact drops both filters and the SOI valuation column.
-
-**Query T — live/exited status (ndjson):** one row per equity investment, with `ISSUER_NAME` and `IS_ACTIVE_INVESTMENT`. Produces the `companyStatus` map that powers the Live / Exited filter tabs in the artifact. Fire in the same parallel batch as Queries A, D, and E.
-
-```
-call_tool({"name": "dwh__execute__query", "arguments": {
-  "format": "ndjson",
-  "response_mode": "inline",
-  "limit": 50000,
-  "sql": "SELECT ISSUER_NAME, IS_ACTIVE_INVESTMENT FROM FUND_ADMIN.AGGREGATE_INVESTMENTS WHERE FIRM_ID = '<firm_id>' AND ASSET_CLASS_TYPE IN ('PREFERRED_EQUITY', 'COMMON_EQUITY') AND ISSUER_NAME IS NOT NULL ORDER BY ISSUER_NAME"
-}})
-```
-
-Capture the `saved to …` path and resolve via `resolve_blob`. Pass the result as `--status "$QUERY_T_BLOB"` to `process.py` in Step A2.
-
-> **Query T is optional — never let it fail the audit.** If it throws for any reason, omit `--status`; `process.py` will produce no `companyStatus` field and the artifact renders normally without the Live / Exited tabs.
+First look for an existing one:
 
 ```
-call_tool({"name": "dwh__execute__query", "arguments": {
-  "format": "ndjson",
-  "response_mode": "inline",
-  "limit": 500,
-  "sql": "WITH gen_rec AS (SELECT DOCUMENT_ID, RECORD_TYPE, ATTRIBUTES, CREATED_AT FROM FUND_ADMIN.DOCUMENT_AI_RECORD WHERE FIRM_ID = '<firm_id>' AND DOCUMENT_TYPE = 'stock_purchase_agreement'), spa_docs AS (SELECT c.DOCUMENT_ID, c.ATTRIBUTES:name::STRING AS ISSUER_NAME, c.ATTRIBUTES:executed_by_issuer::BOOLEAN AS EXECUTED_BY_ISSUER, TRY_TO_DATE(e.ATTRIBUTES:closing_dates[0]::STRING) AS CLOSING_DATE, IFF(REGEXP_LIKE(e.ATTRIBUTES:currency_code::STRING, '^[A-Z]{3}$'), e.ATTRIBUTES:currency_code::STRING, NULL) AS CURRENCY_CODE, c.CREATED_AT::DATE AS UPLOAD_DATE FROM gen_rec c LEFT JOIN gen_rec e ON e.DOCUMENT_ID = c.DOCUMENT_ID AND e.RECORD_TYPE = 'stock_purchase' WHERE c.RECORD_TYPE = 'company' AND c.ATTRIBUTES:name::STRING IS NOT NULL), gen_purch AS (SELECT DOCUMENT_ID, ATTRIBUTES:name::STRING AS PURCHASER_NAME, ATTRIBUTES:entity_type::STRING AS ENTITY_TYPE, ATTRIBUTES:share_class_name::STRING AS SHARE_CLASS_NAME, ATTRIBUTES:shares_purchased_by_cash::NUMBER AS SHARES_PURCHASED, ATTRIBUTES:price_per_share::NUMBER AS PRICE_PER_SHARE, ATTRIBUTES:total_amount_paid::NUMBER AS TOTAL_AMOUNT_PAID FROM gen_rec WHERE RECORD_TYPE = 'investor'), purchaser_rows AS (SELECT sd.ISSUER_NAME, DENSE_RANK() OVER (PARTITION BY sd.ISSUER_NAME ORDER BY sd.DOCUMENT_ID) AS spa_num, sd.CLOSING_DATE, sd.CURRENCY_CODE, sd.UPLOAD_DATE AS upload_date, gp.SHARE_CLASS_NAME, gp.PURCHASER_NAME, gp.ENTITY_TYPE, gp.SHARES_PURCHASED, gp.PRICE_PER_SHARE, gp.TOTAL_AMOUNT_PAID, sd.EXECUTED_BY_ISSUER FROM spa_docs sd LEFT JOIN gen_purch gp ON gp.DOCUMENT_ID = sd.DOCUMENT_ID AND (gp.ENTITY_TYPE IS NULL OR (gp.ENTITY_TYPE NOT ILIKE '%notice%' AND gp.ENTITY_TYPE NOT ILIKE '%law firm%'))), per_spa AS (SELECT ISSUER_NAME, spa_num, ANY_VALUE(CLOSING_DATE) AS transaction_date, ANY_VALUE(upload_date) AS upload_date, ANY_VALUE(CURRENCY_CODE) AS currency_code, ANY_VALUE(SHARE_CLASS_NAME) AS share_class, MAX(CASE WHEN EXECUTED_BY_ISSUER = TRUE THEN 1 ELSE 0 END) = 1 AS executed, ARRAY_AGG(OBJECT_CONSTRUCT('n', PURCHASER_NAME, 't', ENTITY_TYPE, 'sh', SHARES_PURCHASED, 'pp', PRICE_PER_SHARE, 'a', TOTAL_AMOUNT_PAID)) WITHIN GROUP (ORDER BY SHARES_PURCHASED DESC NULLS LAST, PURCHASER_NAME) AS purchasers FROM purchaser_rows GROUP BY ISSUER_NAME, spa_num) SELECT ISSUER_NAME, TO_JSON(ARRAY_AGG(OBJECT_CONSTRUCT('num', spa_num, 'sc', share_class, 'td', transaction_date, 'ud', upload_date, 'cc', currency_code, 'ex', executed, 'p', purchasers)) WITHIN GROUP (ORDER BY spa_num)) AS SPAS_JSON FROM per_spa GROUP BY ISSUER_NAME ORDER BY ISSUER_NAME"
-}})
+Artifact({action: "list", scope: "mine"})
 ```
 
-Also run the two coverage scalar queries (markdown format is fine, no blob needed) in parallel — same SQL as Mode B Step B1.
-
-**Query P — pending extraction count:** counts SPA documents uploaded to Carta but not yet visible in the fund-admin data share (either Document AI hasn't started — `extracted_at IS NULL` — or extraction is done but enrichment hasn't completed — `enriched_at IS NULL`). Surfaced in the artifact as an FYI pill in the page-header subtitle (NOT a bucket tile) — pending docs can't be attributed to specific portfolio companies until extraction completes, so a tile would imply a precision we don't have. The pill lets customers see "X documents are processing" without claiming any company-level impact.
-
-> **Cross-database query.** This query targets `PROD_DOCUMENT_AI_DB.DOCUMENT_AI.documents_metadata` — a separate database from `FUND_ADMIN`. The fund-admin data share's base models intentionally filter out un-extracted docs at the source layer (`WHERE extracted_at IS NOT NULL AND enriched_at IS NOT NULL`), so the raw `documents_metadata` table is the only path to count pending docs. The MCP gateway permits this cross-database read from a fund-admin context (verified Jun 2026 against a sandbox firm with production-shaped SPA data — 40 pending SPA docs surfaced).
->
-> **Schema reference (verified):** `documents_metadata` columns include `document_id`, `document_type` (text — SPA value is the literal string `'Stock Purchase Agreement (SPA)'`), `owner_id` (= firm UUID), `owner_type` (must equal `'firm'`), `extracted_at` (timestamp, NULL when Document AI hasn't started), `enriched_at` (timestamp, NULL when extraction done but enrichment incomplete).
+If a **<Firm Name> — SPA coverage audit** artifact is already published, keep its `url`. Then publish — one call either way, `url` being the only difference:
 
 ```
-call_tool({"name": "dwh__execute__query", "arguments": {
-  "sql": "SELECT COUNT(DISTINCT document_id) AS pending_extraction_docs FROM PROD_DOCUMENT_AI_DB.DOCUMENT_AI.documents_metadata WHERE owner_id = '<firm_id>' AND owner_type = 'firm' AND document_type = 'Stock Purchase Agreement (SPA)' AND (extracted_at IS NULL OR enriched_at IS NULL)"
-}})
+Artifact({
+  file_path: "<absolute path printed by the render script>",
+  url: "<url from the list — omit entirely on a first publish>",
+  title: "<Firm Name> — SPA coverage audit",
+  description: "<Firm Name> — SPA coverage across your portfolio, missing/unexecuted/executed/not-needed",
+  favicon: "📋",
+  capabilities: {
+    mcp: {
+      servers: [
+        { server: "<CARTA_MCP_SERVER>", tools: ["call_tool", "set_context", "welcome"] }
+      ]
+    }
+  }
+})
 ```
 
-Pass the result as `--pending-extraction-docs <query_p_count>` to `process.py` in Step A2.
+All three tools must be in the grant, or the page loads and the matching call rejects with `not_in_manifest`. The artifact only calls `welcome` itself when the MCP reports a "session not initialized" error, then retries the original call once.
 
-> **Query P is optional — never let it fail the audit.** The cross-database read into
-> `PROD_DOCUMENT_AI_DB.DOCUMENT_AI.documents_metadata` requires a grant that not every firm
-> context has. If this query throws (`DataWarehouseError`, permission denied, or the cross-DB
-> object is not visible), **do not retry it and do not error the report** — the pending pill
-> is purely informational. Silently drop it: pass `--pending-extraction-docs 0` and continue
-> assembling the audit from the main + coverage queries, which live entirely in `FUND_ADMIN`.
+Keep `title` and `favicon` stable across redeploys, and restate the whole `capabilities` object every time: a non-empty object replaces the stored grant, so a tool left out is revoked.
 
-**Query O — orphaned-SPA count:** counts distinct SPA issuer names with no fuzzy-match (Jaro-Winkler ≥ 90) to any investment in `AGGREGATE_INVESTMENTS`. Surfaced as a second FYI pill in the page-header subtitle when `> 0`. These are SPAs uploaded to Carta whose issuer name couldn't be linked to a portfolio company — typically name-divergence cases (e.g. SPA filed under "Acme Holdings Inc." vs. investment recorded as "Acme", parent vs. subsidiary entities, or a company renamed since investment). They don't land in any bucket — the audit pivots on investments, so an SPA without an investment record has nowhere to go.
+### Step A4: Confirm
 
-> **Why `norm_inv` / `norm_investments` emit two candidate names per investment.**
-> Both this query and the main bucket query normalize `AGGREGATE_INVESTMENTS.ISSUER_NAME`
-> by stripping parentheticals. That is right for a qualifier — "(a Delaware corporation)",
-> "(Series B only)" — but an SOI record very often carries the *SPA's* name as a
-> parenthetical alias: "LegalCo, L.P. (DBA: BrandCo)", "NewCo, Inc. (FKA: OldCo, Inc.)".
-> Stripping it leaves the legal name on the SOI side and the alias on the SPA side,
-> Jaro-Winkler lands nowhere near 90, and a company with perfectly good executed SPAs
-> lands in **1. Missing SPA** while its SPAs simultaneously surface as orphaned here.
->
-> So `<name>_base` extracts the alias with `REGEXP_SUBSTR(..., 'ie', 3)` when the
-> parenthetical opens with an alias marker (`d/b/a`, `f/k/a`, `n/k/a`, `aka`, `formerly`,
-> `formerly known as`, dotted forms included), and the CTE above it `UNION ALL`s it in as
-> a **second candidate row for the same investment**. **The marker separator is `[ :]+`,
-> not a plain space** — real SOI data carries both `(dba BrandCo)` and `(DBA: BrandCo)`,
-> and a space-only pattern silently misses every colon form.
->
-> This cannot duplicate output rows. The main query's `fuzzy_matched` already ranks
-> `ROW_NUMBER() ... PARTITION BY i.ISSUER_NAME`, so both candidates sit in one partition
-> and only the better-scoring one survives — which is why the alias row must carry the
-> *same* `has_preferred` / `has_common` / `first_invested` / `total_cost_basis` values as
-> its primary row. This query's `matched` CTE is `SELECT DISTINCT`, so duplicates collapse
-> there. A non-alias parenthetical yields NULL and emits no extra row.
+> Your SPA coverage audit for **<Firm Name>** is loading in the Cowork sidebar.
 
-> **SQL note — anti-join pattern, not `NOT EXISTS`.** Snowflake cannot evaluate a correlated `NOT EXISTS` subquery whose `WHERE` clause references a UDF (`JAROWINKLER_SIMILARITY` here): the planner rejects it with `SQL compilation error: Unsupported subquery type cannot be evaluated`. The query below sidesteps the limitation by materializing the matched set in a `matched` CTE and then doing a `LEFT JOIN ... WHERE m.ISSUER_NAME IS NULL` anti-join. Functionally equivalent, executes cleanly.
+Then a 3–5 bullet summary of what it shows — the four-bucket audit (missing, unexecuted, executed, no SPA needed) ranked by cost basis, a coverage stat contrasting count vs. cost-basis coverage, click any company with an SPA on file to see the document and purchaser breakdown in a drawer, fund and geography filters, live/exited tabs. Keep it brief; the customer can see the artifact. Skip the bullets on re-invocation if you've already shown them.
 
-```
-call_tool({"name": "dwh__execute__query", "arguments": {
-  "sql": "WITH norm_spa AS (SELECT ISSUER_NAME, TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(ISSUER_NAME), ' *[(][^)]*[)].*$', '')), ' +(D/?B/?A|F/?K/?A|AKA) +.*$', '')), ',? *(INC|LLC|LTD|LIMITED|CORP|CORPORATION|L[.]P[.]|LP|PBC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]? *$', '')), '[,.]', '')) AS name_norm FROM (SELECT ATTRIBUTES:name::STRING AS ISSUER_NAME FROM FUND_ADMIN.DOCUMENT_AI_RECORD WHERE FIRM_ID = '<firm_id>' AND DOCUMENT_TYPE = 'stock_purchase_agreement' AND RECORD_TYPE = 'company' AND ATTRIBUTES:name::STRING IS NOT NULL) GROUP BY ISSUER_NAME), norm_inv_base AS (SELECT TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(ISSUER_NAME), ' *[(][^)]*[)].*$', '')), ' +(D/?B/?A|F/?K/?A|AKA) +.*$', '')), ',? *(INC|LLC|LTD|LIMITED|CORP|CORPORATION|L[.]P[.]|LP|PBC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]? *$', '')), '[,.]', '')) AS name_norm, REGEXP_SUBSTR(ISSUER_NAME, '[(] *(D[.]?/?B[.]?/?A[.]?|F[.]?/?K[.]?/?A[.]?|N[.]?/?K[.]?/?A[.]?|A[.]?K[.]?A[.]?|FORMERLY( +KNOWN +AS)?)[ :]+([^)]+)[)]', 1, 1, 'ie', 3) AS alias_raw FROM FUND_ADMIN.AGGREGATE_INVESTMENTS WHERE FIRM_ID = '<firm_id>' GROUP BY ISSUER_NAME), norm_inv AS (SELECT name_norm FROM norm_inv_base UNION ALL SELECT TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(alias_raw), ',? *(INC|LLC|LTD|LIMITED|CORP|CORPORATION|L[.]P[.]|LP|PBC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]? *$', '')), '[,.]', '')) AS name_norm FROM norm_inv_base WHERE alias_raw IS NOT NULL AND TRIM(alias_raw) <> ''), matched AS (SELECT DISTINCT s.ISSUER_NAME FROM norm_spa s JOIN norm_inv i ON JAROWINKLER_SIMILARITY(s.name_norm, i.name_norm) >= 90) SELECT COUNT(DISTINCT ns.ISSUER_NAME) AS orphaned_spas, ARRAY_AGG(DISTINCT ns.ISSUER_NAME) WITHIN GROUP (ORDER BY ns.ISSUER_NAME) AS orphaned_spa_names FROM norm_spa ns LEFT JOIN matched m ON ns.ISSUER_NAME = m.ISSUER_NAME WHERE m.ISSUER_NAME IS NULL"
-}})
-```
+**Cross-skill follow-up.** Always append a one-line suggestion to run `carta-co-investors`: *"Want to see who co-invests alongside you in these portfolio companies? Run the `carta-co-investors` skill — it builds an interactive co-investor report from the same SPA data this audit just collected."*
 
-Pass the count as `--orphaned-spas <query_o_count>` and the names array (JSON-serialized) as `--orphaned-spa-names '<query_o_names_json>'` to `process.py` in Step A2.
-
-> **Query O is optional — never let it fail the audit.** Like Query P, this is an FYI-only
-> count. If it throws for any reason (`DataWarehouseError`, missing Document AI data), **do not
-> retry it and do not error the report** — silently drop the orphaned pill: pass
-> `--orphaned-spas 0` and continue. The main audit and coverage queries stand on their own.
-
-Resolve the saved paths in one Bash call — define `resolve_blob` in the same call that uses it, since
-a shell function does not survive to the next Bash tool call any more than an env var does:
-
-```bash
-# --- Blob path resolver ----------------------------------------------
-# dwh:execute:query with response_mode="inline" returns the body as a plain
-# string. When that string is too large for the client's context window, the
-# client harness writes the whole tool result to disk and reports the path as
-# "Output has been saved to <ABSOLUTE_PATH>". resolve_blob translates that to
-# a path THIS shell can read (directly on Claude Code CLI; via the
-# bind-mounted sandbox path on Cowork).
-resolve_blob() {
-  saved="$1"
-  if [ -r "$saved" ]; then echo "$saved"; return 0; fi
-  hit=$(find "${HOME}/mnt/.claude/projects" -name "$(basename "$saved")" 2>/dev/null | head -1)
-  if [ -n "$hit" ] && [ -r "$hit" ]; then echo "$hit"; return 0; fi
-  return 1
-}
-
-QUERY_A_BLOB=$(resolve_blob "<query_a_saved_path>")
-QUERY_D_BLOB=$(resolve_blob "<query_d_saved_path>")
-QUERY_E_BLOB=$(resolve_blob "<query_e_saved_path>")  # empty string if Query E was skipped
-QUERY_T_BLOB=$(resolve_blob "<query_t_saved_path>")  # empty string if Query T was skipped
-```
-
-If `resolve_blob` returns non-zero (rare), re-run that one query once and resolve again. Do **not** narrate paths, "blob", or sandbox mechanics to the user. If it still fails:
-
-> "I couldn't load your SPA data just now. Try running the report again in a moment. If it keeps happening, contact your Carta representative."
-
-Tell the user: `SPA data loaded. Assembling report…`
-
-### Step A2: Assemble JSON
-
-Run this in the **same Bash call** as the blob resolution above, prefixed by the standard preamble
-from Step A1 — `$QUERY_A_BLOB`, `$SKILL_DIR`, and `$WORKSPACE` are all empty in a fresh shell:
-
-```bash
-uv run "$SKILL_DIR/scripts/process.py" \
-  --audit       "$QUERY_A_BLOB" \
-  --rounds      "$QUERY_D_BLOB" \
-  --enrichment  "$QUERY_E_BLOB" \
-  --status      "$QUERY_T_BLOB" \
-  --firm-id "<firm_id>" \
-  --firm-name "<firm_name>" \
-  --firm-carta-id <org_pk> \
-  --spa-companies <spa_companies> \
-  --total-companies <total_companies> \
-  --pending-extraction-docs <query_p_count> \
-  --orphaned-spas <query_o_count> \
-  --orphaned-spa-names '<query_o_names_json>' \
-  --out "$WORKSPACE/carta-spa-audit-data.json"
-```
-
-> `<query_p_count>` is the result of Query P from Step A1 — the DISTINCT count of pending-extraction SPA docs. Pass `0` if Query P returned nothing **or threw** (it is optional — see the note under Query P).
->
-> `<query_o_count>` is the `orphaned_spas` value from Query O. `<query_o_names_json>` is the `orphaned_spa_names` array from Query O, serialized as a JSON string (e.g. `'["Acme Holdings Inc.","Beta Corp"]'`). Pass `0` and `'[]'` if Query O returned nothing **or threw** (it is optional — see the note under Query O).
->
-> `$QUERY_T_BLOB` is the resolved path from Query T in Step A1. Pass an empty string (or omit the flag entirely) if Query T threw — `process.py` gracefully disables the Live / Exited filter when `--status` is absent.
-
-The `--audit`, `--rounds`, and `--status` inputs are the resolved blob paths from Step A1, not files the skill wrote. Output (`carta-spa-audit-data.json`) lands in `$WORKSPACE` and doubles as the Mode B cache.
-
-- **Exit 0** — proceed.
-- **Non-zero exit** — show the script's stderr output to the user and stop.
-
-### Step A3: Render the artifact
-
-Per ADR-003, all artifact infrastructure (HTML generation, preview server, launch.json, port allocation, panel navigation) lives in `artifact-manager`. carta-spa-audit ships only its own template + styles + manifest under `references/` and delegates the rest.
-
-> **Never hand-write the HTML.** The template (`references/template.html`) is the single source of truth for the artifact's structure, tile labels, filter pills, search, sort handlers, drawer behavior, and the upload-missing-SPAs CTA. Hand-written or model-generated HTML diverges from the Ink design system, omits the canonical Carta watermark, and has produced silent "Could not load data" failures in past sessions.
-
-**Two delivery surfaces, one artifact.** A preview side panel exists only in Claude Desktop. Everywhere else the *same* HTML is written to a file and handed to the user — Cowork opens a returned HTML file on its own, and a browser opens it everywhere else. **A missing panel is not a missing artifact, and it is never a reason to fall back to Mode B.**
-
-Pick the surface once:
-
-- Look through the tools already available to you for anything **ending in** `preview_start` / `preview_list` — a prefixed name (e.g. `mcp__Claude_Browser__preview_start`) is the same capability, not a different one.
-- **Found** → Step A3a (panel).
-- **Not found** → Step A3b (file). Go there directly; do **not** invoke `render-panel` first — its Step 0 aborts by design in non-Desktop environments, and that abort is not a signal about Mode A.
-
-#### Step A3a: Panel (Claude Desktop)
-
-Define the inputs for `artifact-manager:render-panel`, then invoke it via `Skill`. **Pass literal values** — env vars do not persist across Bash calls.
-
-| Argument | Value |
-|---|---|
-| `ARTIFACT_YAML` | `<skillDir>/references/artifact.yaml` — the `skillDir` Step A0 resolved (`${CLAUDE_PLUGIN_ROOT}` is unreliable outside Claude Code CLI) |
-| `ARTIFACT_NAME` | `carta-investors-spa-audit-<org_pk>` (scope-id = firm `<org_pk>` — one panel per firm) |
-| `ARTIFACT_FILENAME` | `<org_pk>_spa_audit.html` |
-| `OUT_DIR` | `$WORKSPACE` (the `workspace` Step A0 recorded; pass the literal path) |
-| `SUB_FLAGS` | `--substitute "TITLE=<firm_name> — SPA coverage audit"`, `--substitute "BASE_URL=<base_url>"`, and `--substitute-file "DATA=$WORKSPACE/carta-spa-audit-data.json"` |
-
-> **`BASE_URL`** is the environment web URL resolved in Step 1 (`<base_url>`). It is baked into the artifact so the "Upload missing SPAs" / "Open documents" buttons and the footer link point at the right environment. The artifact opens these via the save server's `POST /open-url` — Claude Desktop's preview pane sandboxes the artifact iframe and blocks `<a target="_blank">` navigation to non-localhost URLs, so a plain link does nothing. `artifact.yaml` declares `capabilities: [save]`, which makes `render-panel` spawn `save_server.py` and substitute `{{SAVE_PORT}}`; the `/open-url` endpoint requires **artifact-manager ≥ 0.13.1**. On older artifact-manager the buttons fall back to `window.open()` (which the preview pane blocks — the audit still renders, only the links are inert).
-
-Now invoke `artifact-manager:render-panel` — same-session loading is the contract documented in render-panel's SKILL.md.
-
-`render-panel` handles `launch.json` upsert, preview-server start, save-server spawn (because of `capabilities: [save]`), `{{SAVE_PORT}}` substitution, and panel navigation. It returns the artifact URL when done.
-
-**If render-panel aborts with "Claude Desktop required"** — the surface check above was wrong about this session. Go to Step A3b and deliver the file. Do **not** go to Mode B, and do not tell the user the panel was unavailable.
-
-#### Step A3b: File (Cowork, Claude Code CLI, headless)
-
-Run the same generator `render-panel` runs, with the same substitutions, and write the artifact into `$WORKSPACE`. Start with the standard preamble from Step A1, then:
-
-```bash
-# --no-project: artifact-manager ships a pyproject.toml, and without this uv
-# tries to create a .venv inside its install dir — which fails on a read-only
-# plugin mount.
-uv run --no-project --with pyyaml "$AM_ROOT/scripts/generate.py" \
-  --config "$SKILL_DIR/references/artifact.yaml" \
-  --out-dir "$WORKSPACE" \
-  --out-name "<org_pk>_spa_audit.html" \
-  --substitute "TITLE=<firm_name> — SPA coverage audit" \
-  --substitute "BASE_URL=<base_url>" \
-  --substitute-file "DATA=$WORKSPACE/carta-spa-audit-data.json"
-```
-
-The result is a single self-contained HTML file — sortable table, search, bucket filter pills, and the click-to-drill-down company drawer all work offline from a browser.
-
-> **`{{SAVE_PORT}}` stays unsubstituted here, and that is correct.** There is no save server without a panel. The template tests the placeholder and routes Carta links through `window.open()` instead — the only difference between the two surfaces. Do not spawn `save_server.py`, do not substitute a port, and do not edit the generated HTML afterwards.
-
-- **Exit 0** — present the file (see below). This is a complete Mode A delivery, not a degraded one.
-- **Non-zero exit** — now, and only now, fall back to Mode B Step B2 using the data already in `$WORKSPACE/carta-spa-audit-data.json`.
-
-#### Step A3c: Present the result
-
-State the artifact's absolute path in your reply and hand the file back as the deliverable — Cowork opens a returned HTML file on its own; elsewhere the user opens that path in a browser.
-
-> **No process commentary.** Do not explain which surface you used, that a preview panel was absent, that you "ran the generator directly", or what a save server is. Report the audit, not the plumbing (see "User-facing language — no internals, ever"). The one exception worth stating plainly: on the file surface, "Upload missing SPAs" opens Carta in your browser.
-
-Tell the user:
-
-> "Report ready: **<pct>%** SPA coverage (<spa_companies> of <total_companies> portfolio companies). Gaps to close: <missing> missing · <unexecuted> unexecuted · <pending> pending Document AI scan. Click any company with a Status of 'Executed SPA' or 'SPA not executed' to view the underlying SPA documents."
->
-> [View or upload SPA documents in Carta](<base_url>/investors/firm/<org_pk>/portfolio/documents/)
-
-**Suggested next step.** When `<missing> + <unexecuted> > 0`, append: *"To close your coverage gap, upload the missing SPAs at the link above — uploaded SPAs unlock co-investor analysis, round-by-round purchaser breakdowns, and more downstream skills."*
-
-**Cross-skill follow-up.** Always append a one-line suggestion to run [[carta-co-investors]]: *"Want to see who co-invests alongside you in these portfolio companies? Run the `carta-co-investors` skill — it builds an interactive co-investor report from the same SPA data this audit just collected."*
-
-### Step A4: Clean up
-
-Nothing to clean. The ndjson query bodies are blobs the MCP client persists into its own session-scoped `tool-results/` directory (read-only from the sandbox, garbage-collected when the session ends). What the skill writes to `$WORKSPACE` is meant to persist: the assembled `carta-spa-audit-data.json` (which doubles as the Mode B cache), the HTML artifact, and `.toolchain.json` (Step A0's resolved paths — a re-run reuses it instead of searching again).
+> **Numbers live in the artifact, not in your reply.** Do not restate coverage percentages, bucket counts, or company names in chat — you have not seen them. The page queries Carta after your turn ends, so any figure you quote is invented.
 
 ---
 
@@ -860,6 +617,9 @@ AskUserQuestion(
 | 0 rows from the unified SPA source | No SPAs uploaded yet, or extractions still processing | All equity companies land in bucket 1 (missing SPA). Include in BLUF: "No SPA documents were found in Carta for your portfolio. Upload SPAs via your Carta portfolio documents page to populate this audit." |
 | Drill-down returns 0 rows | Company name didn't match any SPA issuer name | "No SPA found matching '[name]'. Check the spelling or confirm the SPA is uploaded in Carta." |
 | Company shows as 'Missing SPA' despite having one on file | Company was renamed after investment — fuzzy match can't bridge historical name changes | "This may be a company rename. Try the drill-down with the old company name to locate the SPA manually." |
+| `render-artifact.py` exits non-zero | Bad UUID, non-numeric Carta ID, malformed base URL, unusable connector name, output outside CWD, or a missing template/placeholder | Surface the script's stderr and stop. Never hand-write the artifact HTML. |
+| No `Artifact` tool (Step A1 gate) | This session is not Cowork | Go to Mode B. Tell the user "I'll give you the audit as text" — nothing about Cowork, artifacts, or sandboxes. |
+| Artifact publishes but renders an error | The page's own bootstrap() hit a required-query failure or found 0 audit rows | That error is the page's own and names its cause. Do not re-run Mode A blind; read what the viewer sees first. |
 
 ---
 
