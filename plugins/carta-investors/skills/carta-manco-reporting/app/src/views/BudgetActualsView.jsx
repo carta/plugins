@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { sans, INK, PAPER, LINE, FAINT, MICRO, SHADE, microCaption, FS, RED } from "../ui/theme.js";
-import { Eyebrow, H2 } from "../ui/components.jsx";
+import { H1 } from "../ui/components.jsx";
 import BudgetActualsAccounts, { hasMonthlyDetail } from "./BudgetActualsAccounts.jsx";
 import { glNameMap, glTooltip } from "../ui/glNames.js";
 import { dimensionOf, dimensionValue, dimensionValuesAvailable,
@@ -13,8 +13,8 @@ import { varianceColor, fmtVarianceWhole } from "../ui/variance.js";
 import BudgetActualsOutline from "./BudgetActualsOutline.jsx";
 import BudgetSourceLine from "./BudgetSourceLine.jsx";
 import HoverTip from "../ui/HoverTip.jsx";
-import { FiltersMenu } from "./BudgetPeriodControls.jsx";
-import { MONTH_NAME, trueAsOfMonth } from "./budgetPeriods.js";
+import { FiltersMenu, FilterRibbon, SimplePeriodPicker, S as periodControlsStyles } from "./BudgetPeriodControls.jsx";
+import { MONTH_NAME, trueAsOfMonth, formatPeriodLabel } from "./budgetPeriods.js";
 import { rowBreakouts, defaultBreakout, worthBreakingOut, UNLABELLED } from "./accountBreakout.js";
 import ExportButton from "../ui/ExportButton.jsx";
 import { slugify } from "../ui/exportHtml.js";
@@ -94,7 +94,6 @@ export default function BudgetActualsView({ snapshot, accountsData, drilldown, b
   const otherValues = byTagValue.filter(d => d.tag_value !== "Firm Total");
   const visibleValues = showAll ? otherValues : otherValues.slice(0, TOP_VALUE_DEFAULT_N);
   const columns = firmTotal ? [...visibleValues, firmTotal] : visibleValues;
-  const hiddenCount = otherValues.length - visibleValues.length;
 
   // Row axis: the workbook's own outline, straight from the adapter — its
   // section bands, groupings, subtotals and totals in its own order and at
@@ -196,106 +195,44 @@ export default function BudgetActualsView({ snapshot, accountsData, drilldown, b
                     : isOutline ? "By Line Item"
                     : isTagCrosstab ? `By ${columnLabel}`
                     : "Unsupported View";
+  // The page title itself, sentence-case rather than the eyebrow-style
+  // headingText above (still used for the export's pageLabel).
+  const titleText = isAccounts ? "Budget by account"
+                   : isOutline ? "Budget by line item"
+                   : isTagCrosstab ? `Budget by ${columnLabel.toLowerCase()}`
+                   : "Budget — unsupported view";
 
   return (
     <div id={BVA_EXPORT_ID}>
       {/* Prose keeps the page's old width. The tables below take the
           window — see AppShell's Capped. */}
       <Capped>
-      <Eyebrow>BUDGET VS ACTUALS</Eyebrow>
-      <H2 actions={
-        <div data-export-exclude>
-          <ExportButton
-            targetId={BVA_EXPORT_ID}
-            entityName={snapshot?.firmName || "ManCo"}
-            pageLabel={`Budget vs Actuals — ${headingText}`}
-            asOf={snapshot?.asOf}
-            filenameBase={`${slugify(snapshot?.firmName) || "manco"}-budget-vs-actuals`}
-            events={{ click: "MancoReporting.BudgetVsActuals.ExportHtml",
-                     succeeded: "MancoReporting.BudgetVsActuals.ExportHtmlSucceeded",
-                     failed: "MancoReporting.BudgetVsActuals.ExportHtmlFailed" }}
-          />
-        </div>
-      }>{headingText}</H2>
+      <H1
+        subhead="Budget vs actuals"
+        actions={
+          <div data-export-exclude>
+            <ExportButton
+              targetId={BVA_EXPORT_ID}
+              entityName={snapshot?.firmName || "ManCo"}
+              pageLabel={`Budget vs Actuals — ${headingText}`}
+              asOf={snapshot?.asOf}
+              filenameBase={`${slugify(snapshot?.firmName) || "manco"}-budget-vs-actuals`}
+              events={{ click: "MancoReporting.BudgetVsActuals.ExportHtml",
+                       succeeded: "MancoReporting.BudgetVsActuals.ExportHtmlSucceeded",
+                       failed: "MancoReporting.BudgetVsActuals.ExportHtmlFailed" }}
+            />
+          </div>
+        }
+      >{titleText}</H1>
       <div style={styles.metaRow}>
-        {!ownsPeriodControl(viewKind, budget) && (
+        {!isTagCrosstab && !isOutline && !ownsPeriodControl(viewKind, budget) && (
           <span style={styles.metaChip}>
             {throughToday && canExtendToToday
               ? formatThroughTodayLabel(budget, snapshot?.asOf)
               : formatPeriodLabel(budget, snapshot?.asOf)}
           </span>
         )}
-        {meta?.filename && (
-          <span style={styles.metaFile} title={meta.sheet ? `${meta.filename} · ${meta.sheet}` : meta.filename}>
-            Source: <span style={styles.workbookName}>{meta.filename}</span>
-            {meta.sheet && <> · <span style={styles.workbookSheet}>{meta.sheet}</span></>}
-          </span>
-        )}
       </div>
-      {isTagCrosstab && canExtendToToday && (
-        <div data-export-exclude style={styles.toggleRow}>
-          <button
-            type="button"
-            onClick={() => { trackClick("MancoReporting.BudgetVsActuals.ExtendThroughToday"); setThroughToday(v => !v); }}
-            style={styles.toggleBtn}
-          >
-            {throughToday ? "Use the tab's own window" : "Compare through today instead"}
-          </button>
-          <span style={styles.toggleHint}>
-            {throughToday
-              ? "Budget stays the tab's own total — Variance won't reconcile"
-              : "Matches the tab's own window"}
-          </span>
-        </div>
-      )}
-      <p style={styles.subtitle}>
-        {isAccounts ? (
-          budget?.source === "excel-workbook" ? (
-            <>
-              This budget has no further breakdown, so the account is the
-              axis. Actuals are Carta journal entries over the same months.
-              Click any row to drill into its journal entries.
-            </>
-          ) : (
-            <>
-              This firm keeps its budget in Carta rather than a workbook, and
-              Carta&#39;s budget carries no breakdown of its own — so the account
-              is the axis. Actuals are Carta journal entries over the same
-              months. Click any row to drill into its journal entries.
-            </>
-          )
-        ) : isOutline ? (
-          <>
-            Line items, subtotals and ordering mirror the workbook&#39;s own budget
-            tab. Management fees resolve per fund from fund-side journal
-            entries; expense lines resolve through the Carta chart-of-accounts
-            mapping{tagValuesAvailable
-              ? <> scoped by <code style={styles.code}>{columnLabel}</code></>
-              : <>
-                  , but this firm has no <code style={styles.code}>{columnLabel}</code>{" "}
-                  configured in Carta — scoped lines show firm-wide
-                  actuals instead of a true split
-                </>}. Click any line-item cell to drill into its journal
-            entries for that quarter.
-          </>
-        ) : isTagCrosstab ? (
-          !tagValuesAvailable ? (
-            <>
-              This firm has no <code style={styles.code}>{columnLabel}</code>{" "}
-              configured in Carta, so every column below shows the same
-              firm-wide actuals rather than a true split.
-            </>
-          ) : (
-            <>
-              Actuals from Carta journal entries carrying a{" "}
-              <code style={styles.code}>{columnLabel}</code> value.
-              {" "}Click any cell to drill into the underlying journal entries.
-            </>
-          )
-        ) : (
-          <>Carta doesn&#39;t recognize this budget&#39;s view — see below.</>
-        )}
-      </p>
       </Capped>
 
 
@@ -326,50 +263,41 @@ export default function BudgetActualsView({ snapshot, accountsData, drilldown, b
         />
       )}
 
-      {isTagCrosstab && otherValues.length > TOP_VALUE_DEFAULT_N && (
-        <Capped data-export-exclude style={styles.toggleRow}>
-          <button
-            type="button"
-            onClick={() => { trackClick("MancoReporting.BudgetVsActuals.ToggleShowAll"); setShowAll(v => !v); }}
-            style={styles.toggleBtn}
-          >
-            {showAll
-              ? `Collapse to top ${columnLabelPlural.toLowerCase()}`
-              : `Show all ${otherValues.length} ${columnLabelPlural.toLowerCase()}`}
-          </button>
-          {!showAll && hiddenCount > 0 && (
-            <span style={styles.toggleHint}>
-              {hiddenCount} more hidden (sorted by expenses)
-            </span>
-          )}
+      {isTagCrosstab && (
+        <Capped data-export-exclude>
+          <FilterRibbon>
+            <FiltersMenu
+              breakouts={breakouts}
+              breakoutKey={breakout ? breakout.key : "none"}
+              onBreakoutKey={(k) => { setBreakoutKey(k); setOpenRows(new Set()); }}
+              departments={otherValues.length > TOP_VALUE_DEFAULT_N ? {
+                label: columnLabelPlural,
+                labelPlural: columnLabelPlural.toLowerCase(),
+                topN: TOP_VALUE_DEFAULT_N,
+                total: otherValues.length,
+                showAll,
+                onChange: setShowAll,
+              } : undefined}
+              hiddenRows={hiddenCountRows > 0 ? {
+                count: hiddenCountRows,
+                checked: showHidden,
+                onChange: setShowHidden,
+              } : undefined}
+            />
+            <span style={periodControlsStyles.spacer} />
+            <SimplePeriodPicker
+              options={[
+                { id: "stated", label: shortPeriodLabel(budget) },
+                ...(canExtendToToday ? [{ id: "ytd", label: "Year to date" }] : []),
+              ]}
+              value={throughToday && canExtendToToday ? "ytd" : "stated"}
+              onChange={(id) => {
+                trackClick("MancoReporting.BudgetVsActuals.ExtendThroughToday");
+                setThroughToday(id === "ytd");
+              }}
+            />
+          </FilterRibbon>
         </Capped>
-      )}
-
-      {isTagCrosstab && hiddenCountRows > 0 && (
-        <Capped data-export-exclude style={styles.toggleRow}>
-          <button
-            type="button"
-            onClick={() => { trackClick("MancoReporting.BudgetVsActuals.ToggleShowHidden"); setShowHidden(v => !v); }}
-            style={styles.toggleBtn}
-          >
-            {showHidden
-              ? "Hide collapsed workbook rows"
-              : `Show ${hiddenCountRows} rows hidden in the workbook`}
-          </button>
-          <span style={styles.toggleHint}>
-            {showHidden
-              ? "Showing rows the workbook author collapsed — subtotals already include them"
-              : "Matching what the workbook shows"}
-          </span>
-        </Capped>
-      )}
-
-      {isTagCrosstab && breakouts.length > 0 && (
-        <Capped data-export-exclude><FiltersMenu
-          breakouts={breakouts}
-          breakoutKey={breakout ? breakout.key : "none"}
-          onBreakoutKey={(k) => { setBreakoutKey(k); setOpenRows(new Set()); }}
-        /></Capped>
       )}
 
       {isTagCrosstab && (
@@ -418,7 +346,15 @@ export default function BudgetActualsView({ snapshot, accountsData, drilldown, b
         </TableScroll>
       )}
 
-      {isTagCrosstab && <Capped><BudgetSourceLine meta={meta} /></Capped>}
+      {/* isOutline renders its own BudgetSourceLine internally — see BudgetActualsOutline.jsx. */}
+      {isRecognizedView && !isOutline && (
+        <Capped>
+          <BudgetSourceLine
+            meta={meta}
+            fallback={isAccounts ? "Carta's stored budget" : "the source workbook"}
+          />
+        </Capped>
+      )}
 
       {!isRecognizedView && (
         <Capped>
@@ -436,11 +372,10 @@ export default function BudgetActualsView({ snapshot, accountsData, drilldown, b
 }
 
 // Sub-columns for the shared GroupedTableHead (ui/table.jsx) — one repeated
-// group of 4 per column: Actual/Budget (each with a provenance mark),
-// Var $, Var %.
+// group of 4 per column: Actual, Budget, Var $, Var %.
 export const DEPT_SUB_COLS = [
-  { label: "Actual", mark: "Carta", markTitle: "From Carta journal entries" },
-  { label: "Budget", mark: "Workbook", markTitle: "From the source workbook" },
+  { label: "Actual" },
+  { label: "Budget" },
   { label: "Var $" },
   { label: "Var %" },
 ];
@@ -639,9 +574,10 @@ export function BudgetRow({ row, columns, actualsByTagValue, actualsByKey, label
 // reads as overspend the firm never incurred.
 function ChildCells({ actual }) {
   const num = { ...styles.tdNum, ...LEDGER_ROW, ...styles.childNum };
+  const firstNum = { ...num, ...styles.tdNumFirst };
   return (
     <>
-      <td style={num}>{actual ? fmtCurrencyWhole(actual) : "—"}</td>
+      <td style={firstNum}>{actual ? fmtCurrencyWhole(actual) : "—"}</td>
       <td style={num}>—</td>
       <td style={num}>—</td>
       <td style={num}>—</td>
@@ -717,6 +653,7 @@ function BudgetCell({ actual, budget, comment, unmapped, polarity, onClick, rowS
   // lines that moved.
   const cellStyle = { ...styles.tdNum, ...rowStyle };
   if (onClick) cellStyle.cursor = "pointer";
+  const firstCellStyle = { ...cellStyle, ...styles.tdNumFirst };
   // Same hover wash as the other budget tables (theme.js .cellopen).
   const handler = onClick ? { onClick, className: "cellopen" } : {};
   // Note glyph: superscript speech-bubble style; native title tooltip shows
@@ -725,7 +662,7 @@ function BudgetCell({ actual, budget, comment, unmapped, polarity, onClick, rowS
   if (unmapped) {
     return (
       <>
-        <td style={cellStyle} title="No Carta GL mapped — actual unavailable">—</td>
+        <td style={firstCellStyle} title="No Carta GL mapped — actual unavailable">—</td>
         <td style={cellStyle}>
           {budget === 0 ? "—" : fmtCurrencyWhole(budget)}
           {comment && (
@@ -739,7 +676,7 @@ function BudgetCell({ actual, budget, comment, unmapped, polarity, onClick, rowS
   }
   return (
     <>
-      <td {...handler} style={cellStyle}>
+      <td {...handler} style={firstCellStyle}>
         {actual === 0 && budget === 0 ? "—" : fmtCurrencyWhole(actual)}
       </td>
       <td {...handler} style={cellStyle}>
@@ -801,27 +738,13 @@ function buildRowAxis(byTagValue, firmTotal) {
   return out;
 }
 
-// Format the workbook's covered period into a human-readable chip.
-// Shipped shapes set period_kind to "ytd_through_as_of" (a dept crosstab)
-// or "annual" (a full-year outline). A shape covering multiple years would
-// set period_kind="year" with a period_year, at which point this switches
-// on kind to show per-year chips.
-function formatPeriodLabel(budget, asOfIso) {
-  const meta = budget?.workbook_meta || {};
-  const kind = budget?.period_kind || meta.period_kind || "annual";
-  const yr = budget?.period_year || meta.period_year;
-  // The window the figures on this page were actually summed over. It is
-  // the honest label: a quarter-to-date tab covers Apr–Jun, not January
-  // through today, and saying otherwise invites the reader to compare
-  // across two different spans without noticing.
-  if (budget?.period?.label) return `Period: ${budget.period.label}`;
-  if (kind === "ytd_through_as_of" && asOfIso) {
-    const [y, m, d] = asOfIso.split("-").map(Number);
-    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-    return `Period: Jan 1 – ${months[m - 1]} ${d}, ${y}`;
-  }
-  if (yr) return `Period: FY${yr}`;
-  return "Period: —";
+// A compact month-range label for the Period dropdown's "stated window"
+// option — "Jan – Jun 2026", not the fuller day-level formatPeriodLabel text.
+function shortPeriodLabel(budget) {
+  const first = budget?.period?.first_month ?? 1;
+  const last = budget?.period?.last_month ?? 12;
+  const yr = budget?.period_year || budget?.workbook_meta?.period_year;
+  return `${MONTH_NAME[first - 1]} – ${MONTH_NAME[last - 1]}${yr ? ` ${yr}` : ""}`;
 }
 
 // Labels the widened window plainly once the reader opts into it — the
@@ -1031,10 +954,7 @@ export function breakoutChildren(row, columns, breakoutActuals) {
 }
 
 export const styles = {
-  // Meta row above the subtitle — Period chip on the left, workbook
-  // source citation on the right. Kept compact so the whole header
-  // (Eyebrow + H2 + meta + subtitle) reads as one dense block, not a
-  // wall of text.
+  // Row under H1 holding the account-view period chip, when applicable.
   metaRow: {
     ...sans,
     display: "flex",
@@ -1055,22 +975,6 @@ export const styles = {
     fontVariantNumeric: "tabular-nums",
     whiteSpace: "nowrap",
   },
-  metaFile: {
-    fontSize: FS.body,
-    color: FAINT,
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-    minWidth: 0,
-  },
-  subtitle: {
-    ...sans,
-    fontSize: FS.bodyLg,
-    lineHeight: 1.5,
-    color: FAINT,
-    marginTop: 0,
-    marginBottom: 20,
-  },
   // Loud on purpose — an unrecognized axis rendering nothing must read as
   // a gap to fill, not a quiet page that happens to be empty.
   unsupportedView: {
@@ -1084,14 +988,6 @@ export const styles = {
     marginTop: 4,
     marginBottom: 20,
     maxWidth: 720,
-  },
-  workbookName: {
-    color: INK,
-    fontWeight: 500,
-  },
-  workbookSheet: {
-    color: INK,
-    fontStyle: "italic",
   },
   code: {
     ...sans,
@@ -1114,27 +1010,6 @@ export const styles = {
   // the row above stays the one being read.
   childNum: { color: FAINT },
   childMuted: { color: MICRO, fontStyle: "italic" },
-  toggleRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    marginBottom: 10,
-  },
-  toggleBtn: {
-    ...sans,
-    background: PAPER,
-    border: `1px solid ${LINE}`,
-    borderRadius: 4,
-    padding: "5px 10px",
-    fontSize: FS.body,
-    fontWeight: 500,
-    color: INK,
-    cursor: "pointer",
-  },
-  toggleHint: {
-    fontSize: FS.small,
-    color: FAINT,
-  },
   // Flex is this table's own: the label pairs a name with trailing GL codes.
   tdLabel: {
     ...LEDGER_LABEL,
@@ -1186,7 +1061,10 @@ export const styles = {
   calcMuted: { ...sans, ...microCaption, color: MICRO },
   // borderLeft is this table's own: it repeats per department, so the
   // columns need the boundary its header row draws.
-  tdNum: { ...LEDGER_NUM, borderLeft: `1px solid ${LINE}` },
+  tdNum: LEDGER_NUM,
+  // Only a column's first cell (Actual) carries the divider — continues
+  // the header's own group divider, one per tag rather than per sub-column.
+  tdNumFirst: { borderLeft: `1px solid ${LINE}` },
 
   // Subtle superscript glyph in the Budget column when a workbook Comments
   // cell exists for this (row × dept). Full comment renders in the drawer;

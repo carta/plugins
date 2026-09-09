@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { sans, INK, PAPER, LINE, BORDER_DEFAULT, MICRO, FS } from "../ui/theme.js";
-import { Btn, Tag, Bubble, Chevron, Dropdown, TOOLBAR_CONTROL_STYLE } from "../ui/components.jsx";
+import { Btn, Tag, Bubble, Chevron, Dropdown, MenuItem, TOOLBAR_CONTROL_STYLE } from "../ui/components.jsx";
 import {
   FREQUENCIES, COLUMN_TYPES, MONTH_NAME, canHide, filterChips,
   isDefaultFilters, rangePresets, detectPreset, normalizeRange, DEFAULT_FILTERS,
@@ -9,6 +9,14 @@ import { groupBreakouts } from "./accountBreakout.js";
 import { trackClick, trackRender } from "../analytics.js";
 
 const COLUMN_LABEL = { actual: "actual", budget: "budget", variance: "variance" };
+
+/** Shared toolbar row shell — Period/breakout controls to the left, filter
+ *  chips and a reset in the middle, any trailing control (a range picker)
+ *  pushed to the right by a flex spacer. Every Budget vs Actuals view's
+ *  toolbar renders inside one of these, so they line up identically. */
+export function FilterRibbon({ children }) {
+  return <div style={S.bar}>{children}</div>;
+}
 
 /** The toolbar over a Budget vs Actuals grid: how often to break the year
  *  up, which columns to show, and over what window. */
@@ -34,7 +42,7 @@ export default function BudgetPeriodControls({
   };
 
   return (
-    <div style={S.bar}>
+    <FilterRibbon>
       {frequencyEnabled && (
         <Dropdown
           triggerLabel="Period"
@@ -67,7 +75,7 @@ export default function BudgetPeriodControls({
         <RangePicker range={range} onRange={onRange} presets={presets}
                      preset={preset} year={year} />
       )}
-    </div>
+    </FilterRibbon>
   );
 }
 
@@ -86,8 +94,8 @@ function Chip({ label, onDismiss }) {
 
 /** Whether a Filters button would have any pane behind it. A firm whose data
  *  supports no breakout, on a view with no column filters, gets no button. */
-export function hasFilterPanes({ filters, onFilters, breakouts, onBreakoutKey }) {
-  return !!(filters && onFilters) || !!(breakouts?.length && onBreakoutKey);
+export function hasFilterPanes({ filters, onFilters, breakouts, onBreakoutKey, departments, hiddenRows }) {
+  return !!(filters && onFilters) || !!(breakouts?.length && onBreakoutKey) || !!departments || !!hiddenRows;
 }
 
 // Ported from carta-fund-modeling's `GlobalFilter` (side-nav + right pane +
@@ -95,21 +103,36 @@ export function hasFilterPanes({ filters, onFilters, breakouts, onBreakoutKey })
 // createPortal/boundary-flip
 // logic here: fund-modeling needs that because its toolbar sits inside a
 // clipped scrollable column; this page's toolbar has no such container.
-export function FiltersMenu({ filters, onFilters, ytdPane = true, breakouts, breakoutKey, onBreakoutKey }) {
+export function FiltersMenu({ filters, onFilters, ytdPane = true, breakouts, breakoutKey, onBreakoutKey,
+                              departments, hiddenRows }) {
   const hasColumns = !!(filters && onFilters);
   const hasBreakouts = !!(breakouts?.length && onBreakoutKey);
+  // Which panes exist right now, independent of draft state — the source of
+  // truth for whether a stale activePane still points at something real.
+  const paneKeys = [
+    ...(hasColumns ? ["columns", ...(ytdPane ? ["ytd"] : [])] : []),
+    ...(hasBreakouts ? ["breakouts"] : []),
+    ...(departments ? ["departments"] : []),
+    ...(hiddenRows ? ["hiddenRows"] : []),
+  ];
   const [open, setOpen] = useState(false);
   useEffect(() => { if (open) trackRender("MancoReporting.BudgetFilterPanel.View"); }, [open]);
-  const [activePane, setActivePane] = useState(hasColumns ? "columns" : "breakouts");
+  const [activePane, setActivePane] = useState(paneKeys[0]);
   const [draft, setDraft] = useState(filters || DEFAULT_FILTERS);
   const [draftBreakout, setDraftBreakout] = useState(breakoutKey ?? null);
+  const [draftShowAll, setDraftShowAll] = useState(!!departments?.showAll);
+  const [draftShowHidden, setDraftShowHidden] = useState(!!hiddenRows?.checked);
   const ref = useOutsideClose(open, () => setOpen(false));
 
   useEffect(() => {
     if (open) return;
     setDraft(filters || DEFAULT_FILTERS);
     setDraftBreakout(breakoutKey ?? null);
-  }, [open, filters, breakoutKey]);
+    setDraftShowAll(!!departments?.showAll);
+    setDraftShowHidden(!!hiddenRows?.checked);
+    // A budget switch can drop departments/hiddenRows out from under an open pane.
+    setActivePane((p) => (paneKeys.includes(p) ? p : paneKeys[0]));
+  }, [open, filters, breakoutKey, departments?.showAll, hiddenRows?.checked, paneKeys.join(",")]);
 
   const draftHidden = draft.hidden || [];
   const toggleDraftHidden = (type) => {
@@ -141,11 +164,15 @@ export function FiltersMenu({ filters, onFilters, ytdPane = true, breakouts, bre
   const apply = () => {
     if (hasColumns) onFilters({ ...filters, hidden: draft.hidden, showYtd: draft.showYtd });
     if (hasBreakouts) onBreakoutKey(draftBreakout);
+    if (departments) departments.onChange(draftShowAll);
+    if (hiddenRows) hiddenRows.onChange(draftShowHidden);
     setOpen(false);
   };
   const resetDraft = () => {
     setDraft({ ...draft, hidden: [], showYtd: DEFAULT_FILTERS.showYtd });
     setDraftBreakout("none");
+    setDraftShowAll(false);
+    setDraftShowHidden(false);
   };
 
   const navItems = [
@@ -157,6 +184,12 @@ export function FiltersMenu({ filters, onFilters, ytdPane = true, breakouts, bre
       { key: "breakouts", label: "Break outs",
         count: draftBreakout && draftBreakout !== "none" ? 1 : 0 },
     ] : []),
+    ...(departments ? [
+      { key: "departments", label: departments.label, count: draftShowAll ? 1 : 0 },
+    ] : []),
+    ...(hiddenRows ? [
+      { key: "hiddenRows", label: "Hidden rows", count: draftShowHidden ? 1 : 0 },
+    ] : []),
   ];
 
   // The breakout in force, named beside the button — the panel it was set in
@@ -165,7 +198,7 @@ export function FiltersMenu({ filters, onFilters, ytdPane = true, breakouts, bre
     ? breakouts.find((b) => b.key === breakoutKey)
     : null;
 
-  if (!hasFilterPanes({ filters, onFilters, breakouts, onBreakoutKey })) return null;
+  if (!hasFilterPanes({ filters, onFilters, breakouts, onBreakoutKey, departments, hiddenRows })) return null;
 
   return (
     <div ref={ref} style={S.filterWrap}>
@@ -179,6 +212,18 @@ export function FiltersMenu({ filters, onFilters, ytdPane = true, breakouts, bre
       {appliedBreakout && (
         <Chip label={`Break out: ${appliedBreakout.label}`}
               onDismiss={() => onBreakoutKey("none")} />
+      )}
+
+      {/* Only the non-default state ("show all") is a selection worth
+          naming — the default top-N view isn't a filter someone applied. */}
+      {departments?.showAll && (
+        <Chip label={`Show all ${departments.total} ${departments.labelPlural}`}
+              onDismiss={() => departments.onChange(false)} />
+      )}
+
+      {hiddenRows?.checked && (
+        <Chip label={`Show ${hiddenRows.count} hidden rows`}
+              onDismiss={() => hiddenRows.onChange(false)} />
       )}
 
       {open && (
@@ -230,6 +275,29 @@ export function FiltersMenu({ filters, onFilters, ytdPane = true, breakouts, bre
               {activePane === "breakouts" && (
                 <BreakoutPane breakouts={breakouts} value={draftBreakout}
                               onChange={(k) => { trackClick("MancoReporting.BudgetVsActuals.BreakoutChange"); setDraftBreakout(k); }} />
+              )}
+              {activePane === "departments" && (
+                <>
+                  <h3 className="gf-view__title">{departments.label}</h3>
+                  <div className="gf-check-list">
+                    <Radio name="departments" checked={!draftShowAll}
+                           onChange={() => { trackClick("MancoReporting.BudgetVsActuals.ToggleShowAll"); setDraftShowAll(false); }}
+                           label={`Only show top ${departments.topN} ${departments.labelPlural}`} />
+                    <Radio name="departments" checked={draftShowAll}
+                           onChange={() => { trackClick("MancoReporting.BudgetVsActuals.ToggleShowAll"); setDraftShowAll(true); }}
+                           label={`Show all ${departments.total} ${departments.labelPlural}`} />
+                  </div>
+                </>
+              )}
+              {activePane === "hiddenRows" && (
+                <>
+                  <h3 className="gf-view__title">Hidden rows</h3>
+                  <div className="gf-check-list">
+                    <Check checked={draftShowHidden}
+                           onChange={() => { trackClick("MancoReporting.BudgetVsActuals.ToggleShowHidden"); setDraftShowHidden((v) => !v); }}
+                           label={`Show ${hiddenRows.count} rows hidden in the workbook`} />
+                  </div>
+                </>
               )}
             </div>
 
@@ -304,6 +372,39 @@ function Check({ checked, disabled, onChange, label }) {
       <input type="checkbox" checked={checked} disabled={disabled} onChange={onChange} />
       {label}
     </label>
+  );
+}
+
+/** The same calendar-icon trigger chrome as RangePicker, for a view with a
+ *  fixed set of period choices instead of an arbitrary month range — no
+ *  month fields, just a short options list. */
+export function SimplePeriodPicker({ options, value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useOutsideClose(open, () => setOpen(false));
+  const label = options.find((o) => o.id === value)?.label || options[0]?.label;
+
+  return (
+    <div ref={ref} style={S.wrap}>
+      <button type="button" onClick={() => setOpen((v) => !v)}
+              aria-haspopup="listbox" aria-expanded={open}
+              style={{ ...S.trigger, ...(open ? S.triggerOpen : null) }}>
+        <CalendarIcon />
+        <span>{label}</span>
+        <Chevron rotate={open ? 180 : 0} />
+      </button>
+
+      {open && (
+        <div style={{ ...S.popover, right: 0, left: "auto", minWidth: 200, padding: 4 }}
+             role="listbox" aria-label="Period">
+          {options.map((o) => (
+            <MenuItem key={o.id} selected={o.id === value}
+                      onClick={() => { onChange(o.id); setOpen(false); }}>
+              {o.label}
+            </MenuItem>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

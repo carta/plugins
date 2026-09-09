@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { sans, inkNum, INK, PAPER, LINE, BORDER_DEFAULT, FAINT, MICRO, SHADE, BLUE, FS } from "../ui/theme.js";
-import { Bubble, CollapseCaret } from "../ui/components.jsx";
+import { Bubble, CollapseCaret, Tag } from "../ui/components.jsx";
 import { TableScroll, LEDGER_BASE, TOTAL_ROW_BG, useStickyHeader, StickyClone, GroupedTableHead } from "../ui/table.jsx";
 import { glNameMap, glTooltip, subCodeMap, subOfChildLabel } from "../ui/glNames.js";
 import { dimensionValue, dimensionValuesAvailable, noValueLabel } from "../ui/dimension.js";
@@ -9,13 +9,13 @@ import { fmtCurrencyWhole } from "../charts/chartTheme.js";
 import { varianceColor, rowPolarity, fmtVarianceWhole } from "../ui/variance.js";
 import BudgetSourceLine from "./BudgetSourceLine.jsx";
 import HoverTip from "../ui/HoverTip.jsx";
-import { FiltersMenu } from "./BudgetPeriodControls.jsx";
+import { FiltersMenu, FilterRibbon, S as periodControlsStyles } from "./BudgetPeriodControls.jsx";
 import {
   rowBreakouts, defaultBreakout, breakoutBuckets, worthBreakingOut, opensAnything,
 } from "./accountBreakout.js";
 import { fundMatchRegex } from "./drilldown/util.js";
 import { trackClick } from "../analytics.js";
-import { trueAsOfMonth } from "./budgetPeriods.js";
+import { trueAsOfMonth, formatPeriodLabel } from "./budgetPeriods.js";
 
 // Budget vs Actuals — outline renderer.
 //
@@ -258,8 +258,8 @@ export default function BudgetActualsOutline({ budget, accountsData, periodYear,
     label: q.key === "Total" ? `Total ${yr}` : `${q.label} ${yr}`,
   }));
   const subCols = [
-    { label: "Actual", mark: "Carta", markTitle: "From Carta journal entries" },
-    { label: "Budget", mark: "Workbook", markTitle: "From the source workbook" },
+    { label: "Actual" },
+    { label: "Budget" },
     { label: "Var $" },
   ];
 
@@ -302,8 +302,12 @@ export default function BudgetActualsOutline({ budget, accountsData, periodYear,
   return (
     <>
     <div data-export-exclude>
-      <FiltersMenu breakouts={breakouts} breakoutKey={breakout ? breakout.key : "none"}
-                   onBreakoutKey={setBreakoutKey} />
+      <FilterRibbon>
+        <FiltersMenu breakouts={breakouts} breakoutKey={breakout ? breakout.key : "none"}
+                     onBreakoutKey={setBreakoutKey} />
+        <span style={periodControlsStyles.spacer} />
+        <Tag>{formatPeriodLabel(budget, asOf)}</Tag>
+      </FilterRibbon>
     </div>
     <TableScroll scrollRef={scrollRef}>
       <table style={LEDGER_BASE}>
@@ -988,9 +992,11 @@ function Fragment3({ a, b, v, vColor, bColor, numStyle, onClick, hovered, held, 
     onMouseEnter: onHover ? () => onHover(true) : undefined,
     onMouseLeave: onHover ? () => onHover(false) : undefined,
   } : {};
+  // Continues the header's own quarter divider (table.jsx's thGroup).
+  const firstStyle = { ...numStyle, borderLeft: `1px solid ${LINE}` };
   return (
     <>
-      <td {...h} style={numStyle}>{a}</td>
+      <td {...h} style={firstStyle}>{a}</td>
       <td {...h} style={bColor ? { ...numStyle, color: bColor } : numStyle}>{b}</td>
       <td {...h} style={{ ...numStyle, color: vColor }}>{v}</td>
     </>

@@ -3,6 +3,25 @@
 export const MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
+// Format the workbook's covered period into a human-readable chip.
+// period_kind is "ytd_through_as_of" (a dept crosstab) or "annual" (an outline).
+export function formatPeriodLabel(budget, asOfIso) {
+  const meta = budget?.workbook_meta || {};
+  const kind = budget?.period_kind || meta.period_kind || "annual";
+  const yr = budget?.period_year || meta.period_year;
+  // The window the figures on this page were actually summed over. It is
+  // the honest label: a quarter-to-date tab covers Apr–Jun, not January
+  // through today, and saying otherwise invites the reader to compare
+  // across two different spans without noticing.
+  if (budget?.period?.label) return `Period: ${budget.period.label}`;
+  if (kind === "ytd_through_as_of" && asOfIso) {
+    const [y, m, d] = asOfIso.split("-").map(Number);
+    return `Period: Jan 1 – ${MONTH_ABBR[m - 1]} ${d}, ${y}`;
+  }
+  if (yr) return `Period: FY${yr}`;
+  return "Period: —";
+}
+
 export const MONTH_NAME = ["January", "February", "March", "April", "May", "June",
                            "July", "August", "September", "October", "November", "December"];
 

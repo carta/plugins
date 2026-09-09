@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { sans, FAINT, MICRO, FS } from "../ui/theme.js";
+import { sans, FAINT, MICRO, FS, LINE } from "../ui/theme.js";
 import { fmtCurrencyWhole } from "../charts/chartTheme.js";
 import { varianceColor, fmtVarianceWhole } from "../ui/variance.js";
 import { glNameMap, glTooltip, subCodeMap } from "../ui/glNames.js";
@@ -339,7 +339,10 @@ function SectionRows({ section, drilldown, names, subCodes, columns, subCols, ce
   return (
     <>
       <tr>
-        <td colSpan={spanCols} style={S.sectionHeader}>{section.title}</td>
+        <td colSpan={spanCols} style={S.sectionHeader}>
+          {/* Pinned so the band's label doesn't scroll off with the table. */}
+          <span style={S.bandLabel}>{section.title}</span>
+        </td>
       </tr>
 
       {section.rows.map(r => {
@@ -475,8 +478,9 @@ export function ChildRow({ child, parent, columns, subCols, breakout, polarity, 
           {child.unlabelled ? noValueLabel(breakout) : child.label}
         </span>
       </td>
-      {columns.map(col => subCols.map(sc => (
-        <td key={`${col.key}-${sc.type}`} style={num}
+      {columns.map(col => subCols.map((sc, i) => (
+        <td key={`${col.key}-${sc.type}`}
+            style={i === 0 ? { ...num, borderLeft: `1px solid ${LINE}` } : num}
             onClick={sc.type === "actual" && onClick ? () => onClick(col) : undefined}>
           {/* A month this value never touched is an em dash, the same as on
               the row above — $0 reads as a month that was measured. */}
@@ -503,23 +507,25 @@ function Cells({ cell, subCols, polarity, numStyle, onClick }) {
   const h = onClick ? { onClick, className: "cellopen" } : {};
   return (
     <>
-      {subCols.map(sc => {
+      {subCols.map((sc, i) => {
+        // Continues the header's own month divider (table.jsx's thGroup).
+        const style = i === 0 ? { ...numStyle, borderLeft: `1px solid ${LINE}` } : numStyle;
         if (sc.type === "budget") {
-          return <td key={sc.type} {...h} style={numStyle}>
+          return <td key={sc.type} {...h} style={style}>
             {cell.budget ? fmtCurrencyWhole(cell.budget) : "—"}
           </td>;
         }
         if (sc.type === "actual") {
-          return <td key={sc.type} {...h} style={numStyle}>
+          return <td key={sc.type} {...h} style={style}>
             {empty ? "—" : fmtCurrencyWhole(cell.actual)}
           </td>;
         }
         if (sc.type === "pct") {
-          return <td key={sc.type} {...h} style={{ ...numStyle, color: vColor }}>
+          return <td key={sc.type} {...h} style={{ ...style, color: vColor }}>
             {empty ? "—" : pctOf(cell.variance, cell.budget)}
           </td>;
         }
-        return <td key={sc.type} {...h} style={{ ...numStyle, color: vColor }}>
+        return <td key={sc.type} {...h} style={{ ...style, color: vColor }}>
           {empty ? "—" : fmtVarianceWhole(cell.variance)}
         </td>;
       })}
@@ -542,6 +548,8 @@ export function pctOf(variance, budget) {
 // Mirrors BudgetActualsOutline's recipe so the two tables read as one report.
 export const S = {
   sectionHeader: LEDGER_SECTION,
+  // left:12 matches the frozen column's own inset — see BudgetActualsView's bandLabel.
+  bandLabel: { position: "sticky", left: 12, display: "inline-block" },
   trLine: LEDGER_ROW,
   // Narrower than LEDGER_LABEL's shared 320px — see ACCOUNT_LABEL_MIN_WIDTH.
   // paddingLeft is the outline's depth-1 indent, reserving its 20px caret

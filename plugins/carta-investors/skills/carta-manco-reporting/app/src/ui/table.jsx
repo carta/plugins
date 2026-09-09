@@ -126,7 +126,8 @@ export function useStickyHeader(node, enabled = true) {
       const widthsOf = (row) =>
         Array.from(row?.cells || [], (c) => c.getBoundingClientRect().width);
       const colWidths = widthsOf(topRow);
-      const subWidths = widthsOf(subRow);
+      // subRow's first cell is the label column, not a sub-column — drop it.
+      const subWidths = widthsOf(subRow).slice(1);
       setSticky((s) => (s.floating && s.top === 0 && s.left === slotRect.left && s.width === slotRect.width && s.scrollLeft === scrollLeft && sameWidths(s.colWidths, colWidths) && sameWidths(s.subWidths, subWidths)
         ? s
         : { floating: true, top: 0, left: slotRect.left, width: slotRect.width, colWidths, subWidths, scrollLeft }));
@@ -204,16 +205,15 @@ export function GroupedTableHead({ labelText, labelMinWidth = 320, groups, subCo
   return (
     <>
       <tr>
+        {/* labelText sits on row 2 now, level with Actual/Budget/Var. */}
         <th
           style={{
-            ...styles.thLabel, ...styles.thTop, minWidth: labelMinWidth,
+            ...styles.thTop, minWidth: labelMinWidth,
+            position: "sticky", left: 0, zIndex: 2, borderRight: `1px solid ${LINE}`,
             ...(colWidths ? { width: colWidths[0] } : null),
             ...(scrollLeft ? { transform: `translateX(${scrollLeft}px)` } : null),
           }}
-          rowSpan={2}
-        >
-          {labelText}
-        </th>
+        />
         {groups.map((g, i) => (
           <th key={g.key} data-col-key={g.key} colSpan={subCols.length} style={{ ...styles.thGroup, ...(colWidths ? { width: colWidths[i + 1] } : null) }}>
             {g.label}
@@ -221,6 +221,15 @@ export function GroupedTableHead({ labelText, labelMinWidth = 320, groups, subCo
         ))}
       </tr>
       <tr>
+        <th
+          style={{
+            ...styles.thLabel, minWidth: labelMinWidth,
+            ...(colWidths ? { width: colWidths[0] } : null),
+            ...(scrollLeft ? { transform: `translateX(${scrollLeft}px)` } : null),
+          }}
+        >
+          {labelText}
+        </th>
         {groups.map((g, i) => (
           <SubHeaderCells
             key={g.key}
@@ -240,7 +249,10 @@ function SubHeaderCells({ subCols, widths }) {
   return (
     <>
       {subCols.map((c, i) => (
-        <th key={i} style={{ ...styles.thSub, ...(c.align === "left" ? { textAlign: "left" } : null),
+        <th key={i} style={{ ...styles.thSub,
+                             // Continues thGroup's own divider; not repeated per sub-column.
+                             ...(i === 0 ? { borderLeft: `1px solid ${LINE}` } : null),
+                             ...(c.align === "left" ? { textAlign: "left" } : null),
                              ...(widths?.[i] != null ? { width: widths[i] } : null) }}>
           {c.label}
           {c.mark && <span style={styles.srcMark} title={c.markTitle}>{c.mark}</span>}
@@ -251,17 +263,19 @@ function SubHeaderCells({ subCols, widths }) {
 }
 
 const styles = {
-  thTop: { background: PAPER, borderBottom: `1px solid ${LINE}` },
+  thTop: { background: PAPER },
+  // Ink Heading 3 (16px / 28px leading / weight 500) — ink-font-global-*-heading-3.
   thGroup: {
-    ...sans, fontSize: FS.value, fontWeight: 500, color: INK,
-    padding: "8px 8px",
-    borderBottom: `1px solid ${LINE}`, borderLeft: `1px solid ${LINE}`,
+    ...sans, fontSize: FS.h3, lineHeight: "28px", fontWeight: 500, color: INK,
+    padding: "0 8px",
+    borderLeft: `1px solid ${LINE}`,
     background: PAPER, textAlign: "center", whiteSpace: "nowrap",
   },
+  // Ink Body 2 (14px / 24px leading / weight 500) — ink-font-global-*-body-2.
   thSub: {
-    ...sans, fontSize: FS.bodyLg, fontWeight: 500, color: FAINT,
-    padding: "5px 8px",
-    borderBottom: `1px solid ${LINE}`, borderLeft: `1px solid ${LINE}`,
+    ...sans, fontSize: FS.value, lineHeight: "24px", fontWeight: 500, color: FAINT,
+    padding: "0 8px",
+    borderBottom: `1px solid ${LINE}`,
     background: PAPER, textAlign: "right", whiteSpace: "nowrap",
   },
   thLabel: {
@@ -269,6 +283,9 @@ const styles = {
     padding: "8px 12px", textAlign: "left",
     borderBottom: `1px solid ${LINE}`,
     position: "sticky", left: 0, background: PAPER, zIndex: 2,
+    // Matches the frozen column's own borderRight below it (LEDGER_LABEL) —
+    // without it the rule only starts once the header scrolls past.
+    borderRight: `1px solid ${LINE}`,
   },
   // Source marker on the Actual / Budget sub-headers — sized/coloured to sit
   // under the column label as a caption rather than beside it as a second
