@@ -1178,10 +1178,29 @@
       return `SELECT ISSUER_NAME AS COMPANY, ARRAY_AGG(DISTINCT FUND_NAME) WITHIN GROUP (ORDER BY FUND_NAME) AS FUNDS, MAX(GET(GET(TAGS_JSON, '  Region'), 0)::STRING) AS REGION_TAG, SUM(REMAINING_VALUE) AS SOI_VALUATION FROM FUND_ADMIN.AGGREGATE_INVESTMENTS WHERE FIRM_ID = '${FIRM_UUID}' AND IS_ACTIVE_INVESTMENT = TRUE GROUP BY ISSUER_NAME ORDER BY ISSUER_NAME LIMIT ${limit} OFFSET ${offset}`;
     }
 
-    // Query T — live/exited status per equity investment. Optional: disables the
+    // Query T — live/exited status per company. Optional: disables the
     // Live/Exited tabs on failure, never the whole audit.
+    //
+    // Deliberately spans EVERY asset class, not just priced equity. Query A's
+    // universe is every company in AGGREGATE_INVESTMENTS, and the "No SPA
+    // needed" bucket is by definition the part of it that ISN'T preferred or
+    // common equity — SAFEs, convertible notes, fund / LP positions, tokens,
+    // warrants. Scoping this query to PREFERRED_EQUITY / COMMON_EQUITY left
+    // every one of those companies out of the status map, and
+    // `passesStatusFilter` drops anything the map doesn't contain — so they
+    // vanished from BOTH the Live and the Exited tab. That is why "No SPA
+    // needed" counted correctly under All but read 0 under Live and 0 under
+    // Exited. Query T's scope must match Query A's, not a narrower one.
+    //
+    // GROUP BY collapses to one row per company, so widening the asset-class
+    // scope still returns fewer rows than the old per-position query — that
+    // keeps us clear of the MAX_PAGES truncation ceiling.
+    //
+    // `IS_ACTIVE_INVESTMENT IS NOT NULL` is load-bearing: a company whose
+    // positions carry no status at all stays absent from the map (unchanged
+    // behaviour) rather than folding to false and being mislabelled as exited.
     function buildStatusSql(offset, limit) {
-      return `SELECT ISSUER_NAME, IS_ACTIVE_INVESTMENT FROM FUND_ADMIN.AGGREGATE_INVESTMENTS WHERE FIRM_ID = '${FIRM_UUID}' AND ASSET_CLASS_TYPE IN ('PREFERRED_EQUITY', 'COMMON_EQUITY') AND ISSUER_NAME IS NOT NULL ORDER BY ISSUER_NAME LIMIT ${limit} OFFSET ${offset}`;
+      return `SELECT ISSUER_NAME, MAX(CASE WHEN IS_ACTIVE_INVESTMENT = TRUE THEN 1 ELSE 0 END) AS IS_ACTIVE_INVESTMENT FROM FUND_ADMIN.AGGREGATE_INVESTMENTS WHERE FIRM_ID = '${FIRM_UUID}' AND ISSUER_NAME IS NOT NULL AND IS_ACTIVE_INVESTMENT IS NOT NULL GROUP BY ISSUER_NAME ORDER BY ISSUER_NAME LIMIT ${limit} OFFSET ${offset}`;
     }
 
     // Query P — pending-extraction count (FYI pill). Scalar, single row, no
@@ -1294,7 +1313,9 @@
     }
 
     // Query T assembly — a company is live if ANY of its positions is active; a
-    // realised tranche does not retire the company.
+    // realised tranche does not retire the company. Query T now folds that in
+    // SQL and emits one row per company, so this loop sees a single row each;
+    // the OR is kept because it stays correct either way.
     function buildCompanyStatus(statusRows) {
       const out = {};
       for (const row of statusRows) {
