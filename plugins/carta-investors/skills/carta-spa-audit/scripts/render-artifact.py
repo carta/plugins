@@ -121,10 +121,16 @@ def main() -> int:
         "base_url": base_url,
     }
 
-    content = content.replace("{{STATE_JSON}}", js_safe_json(state_obj))
-    content = content.replace("{{TITLE}}", html.escape(f"{firm_name} — SPA coverage audit"))
-    content = content.replace("{{FIRM_UUID}}", firm_uuid)
-    content = content.replace("{{CARTA_MCP_SERVER}}", mcp_server)
+    replacements = {
+        "{{STATE_JSON}}": js_safe_json(state_obj),
+        "{{TITLE}}": html.escape(f"{firm_name} — SPA coverage audit"),
+        "{{FIRM_UUID}}": firm_uuid,
+        "{{CARTA_MCP_SERVER}}": mcp_server,
+    }
+    # Single pass over the original text: a value (e.g. firm_name) can contain
+    # placeholder-shaped text without being re-scanned by a later substitution.
+    placeholder_pattern = re.compile("|".join(re.escape(p) for p in PLACEHOLDERS))
+    content = placeholder_pattern.sub(lambda m: replacements[m.group(0)], content)
 
     out_path.write_text(content, encoding="utf-8")
     print(out_path)

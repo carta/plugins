@@ -893,7 +893,6 @@
     const MAX_PAGES = 10;
 
     let DATA = null;
-    let welcomeCalledThisSession = false;
 
     // ── Page state ────────────────────────────────────────────────────────────
 
@@ -978,26 +977,51 @@
       }
     }
 
-    // Transparently recovers from "please call welcome first" errors. On the first
-    // such failure per artifact load, call welcome to re-initialize the session and
-    // retry the original call once. Any other error passes through untouched, and
-    // `welcomeCalledThisSession` stops a loop if welcome didn't fix the cause.
+    // Shared in-flight "call welcome" recovery, same idiom as `_mcpNsPromise`
+    // above: the first caller to hit "welcome required" starts the recovery and
+    // stashes the promise here; every other concurrent caller awaits this same
+    // promise instead of racing its own welcome() call or giving up on a stale
+    // error. `bootstrap()` fires ~8 Carta MCP queries in one `Promise.all` — if
+    // the session had actually expired, several of them can independently see
+    // "welcome required" before any of their continuations get a chance to run,
+    // so a plain boolean flag only rescues whichever call happens to resume
+    // first; every other "loser" would see the flag already set and return its
+    // own stale error immediately, without waiting for the winner's welcome()
+    // to finish. A shared promise fixes that: everyone waits for the one
+    // recovery, then each caller retries its own original call.
+    let _welcomeRecoveryPromise = null;
+
+    function recoverSessionOnce() {
+      if (!_welcomeRecoveryPromise) {
+        setLoadingStatus('Reconnecting to Carta…');
+        _welcomeRecoveryPromise = (async () => {
+          const welcomeResult = await callCartaTool(WELCOME_TOOL, {});
+          if (welcomeResult && welcomeResult.isError) {
+            const msg = (welcomeResult.content && welcomeResult.content[0] && welcomeResult.content[0].text) || '<no message>';
+            throw new Error('Failed to initialize MCP session: ' + msg);
+          }
+        })();
+      }
+      return _welcomeRecoveryPromise;
+    }
+
+    // Transparently recovers from "please call welcome first" errors. On the
+    // first such failure, call welcome to re-initialize the session; any
+    // concurrent caller that also hits "welcome required" awaits that same
+    // recovery (see `recoverSessionOnce` above) instead of failing early. Once
+    // recovery settles, each caller retries its own original call once — a
+    // failed recovery propagates to every waiter rather than retrying against a
+    // still-broken session.
     async function callMcpWithWelcomeRetry(toolName, args) {
       const result = await callCartaTool(toolName, args);
       if (!result || !result.isError) return result;
 
       const errorText = (result.content && result.content[0] && result.content[0].text) || '';
-      if (!isWelcomeRequiredMessage(errorText) || welcomeCalledThisSession) {
+      if (!isWelcomeRequiredMessage(errorText)) {
         return result;
       }
 
-      setLoadingStatus('Reconnecting to Carta…');
-      welcomeCalledThisSession = true;
-      const welcomeResult = await callCartaTool(WELCOME_TOOL, {});
-      if (welcomeResult && welcomeResult.isError) {
-        const msg = (welcomeResult.content && welcomeResult.content[0] && welcomeResult.content[0].text) || '<no message>';
-        throw new Error('Failed to initialize MCP session: ' + msg);
-      }
+      await recoverSessionOnce();
 
       return await callCartaTool(toolName, args);
     }
