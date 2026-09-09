@@ -2649,7 +2649,9 @@ def build_vendor_spend(rows, inferred=None, aggregate_accounts=None):
     for r in rows:
         if r.get("kind") != "expense":
             continue
-        amt = abs(float(r.get("amount") or 0))
+        # Signed, as every other chart sums it. A refund posts negative, and
+        # abs() added it to the vendor it came back from.
+        amt = float(r.get("amount") or 0)
         if not amt:
             continue
         # An aggregated account reports under its own name, so the spend
@@ -2683,15 +2685,19 @@ def build_vendor_spend(rows, inferred=None, aggregate_accounts=None):
     total = sum(v["amount"] for v in vendors) + unattributed
     if not total:
         return None
-    top = vendors[:VENDOR_TOP_N]
+    # A vendor refunded more than it charged has no bar to draw on a spend
+    # chart, and ranks last in any case. It stays in the arithmetic below.
+    spending = [v for v in vendors if v["amount"] > 0]
+    top = spending[:VENDOR_TOP_N]
+    rest = spending[VENDOR_TOP_N:] + [v for v in vendors if v["amount"] <= 0]
     return {
         "vendors": [{**v, "amount": round(v["amount"]),
                      "inferred_amount": round(v["inferred_amount"])} for v in top],
         "aggregated_count": sum(1 for v in vendors if v.get("aggregated")),
         # What the chart does not show, so the page can say so rather than
         # implying the top N is the whole of it.
-        "other_amount": round(sum(v["amount"] for v in vendors[VENDOR_TOP_N:])),
-        "other_count": max(0, len(vendors) - VENDOR_TOP_N),
+        "other_amount": round(sum(v["amount"] for v in rest)),
+        "other_count": len(rest),
         "unattributed_amount": round(unattributed),
         "total_expense": round(total),
         "inferred_total": round(sum(v["inferred_amount"] for v in vendors)),
@@ -2736,6 +2742,44 @@ def is_income_section(section):
     return "income" in t or "revenue" in t
 
 
+def _variance_claim_specificity(scopes):
+    """Ranks which category wins a shared entry — a vendor/fund scope
+    outranks a bare department tag, the bucket it was carved out of."""
+    extra = sum(1 for sc in scopes if (sc.get("source") or "reporting_tag") != "reporting_tag")
+    has_tag = any((sc.get("source") or "reporting_tag") == "reporting_tag" for sc in scopes)
+    return extra * 2 + (1 if has_tag else 0)
+
+
+def _resolve_variance_claim_conflicts(claims_pool):
+    """Stop two categories from both counting the same entry.
+
+    Each category's own scopes narrowed it correctly on its own — a
+    department bucket and a vendor carved out of it can both be exactly
+    right and still land on the same entry, the way "Other Taxes / Entity
+    Fees" (Operations) and "State and Local Taxes" (one vendor) both did
+    over gl 7070. Only the more specific category (_variance_claim_specificity,
+    tied broken by the bigger budget, then by workbook order) keeps it;
+    every other claimant has it subtracted back out of its own total.
+    """
+    by_entry = {}
+    for entry, matched, scopes, order in claims_pool:
+        specificity = _variance_claim_specificity(scopes)
+        for e in matched:
+            by_entry.setdefault(id(e), []).append(
+                (entry, float(e.get("amount") or 0), specificity, order))
+    # Sum each loser's full lost amount before rounding once, not per entry.
+    lost = {}
+    for claimants in by_entry.values():
+        if len(claimants) < 2:
+            continue
+        ranked = sorted(claimants, key=lambda c: (-c[2], -abs(c[0]["budget"]), c[3]))
+        for entry, amt, _specificity, _order in ranked[1:]:
+            lost.setdefault(id(entry), [entry, 0.0])[1] += amt
+    for entry, amt in lost.values():
+        entry["actual"] = round(entry["actual"] - amt)
+        entry["variance"] = round(entry["actual"] - entry["budget"])
+
+
 def build_variance_categories(budget_payload, accounts, firm_total_key, as_of_month=12,
                               entries=None, value_aliases=None, tag_category=None,
                               dimension=None, coa_types=None):
@@ -2767,30 +2811,81 @@ def build_variance_categories(budget_payload, accounts, firm_total_key, as_of_mo
         return None
     first, last = window
 
-    # Department-scoped actuals, for outline rows that state a department.
-    # An outline routinely repeats a line once per team — four "Salaries"
-    # rows, all on the same GL — so joining on GL alone hands each of them
-    # the firm-wide total and every one reads as a massive overrun. The BvA
-    # page already scopes these by the Department reporting tag; this does
-    # the same.
+    # long-comment-ok: names the defect this join exists to prevent
+    # Scoped actuals, for lines stating which slice of an account they cover.
+    # An outline repeats a line once per slice — four "Salaries" rows on one
+    # GL, three "Rent - <office>" rows on another — so joining on GL alone
+    # hands each of them the firm-wide total and every one reads as an
+    # overrun. Narrow by all of a line's scopes, as the BvA page does: a
+    # firm cuts spend by a tag, a sub-account or a vendor, often at once.
     aliases = value_aliases or {}
     dimension = dimension or ({"source": "reporting_tag", "category": tag_category}
                               if tag_category else None)
     tag_values_available = has_dimension_values(entries, dimension)
-    actual_by_gl_tag = {}
+
+    entries_by_gl = {}
     for e in (entries or []):
         if e.get("kind") != "expense":
             continue
-        mo = e.get("mo")
-        if not isinstance(mo, int):
+        if not isinstance(e.get("mo"), int):
             continue
         t = e.get("acct_type")
         if t is None:
             continue
-        tag = dimension_value_of(e, dimension)
-        if not tag:
-            continue
-        actual_by_gl_tag.setdefault((int(t), tag), [0.0] * 13)[mo] += float(e.get("amount") or 0)
+        entries_by_gl.setdefault(int(t), []).append(e)
+
+    _available = {}
+
+    def dimension_available(scope):
+        """Whether the firm records the dimension this scope cuts by.
+
+        One it has never recorded would narrow every line to nothing, so a
+        known-wide figure is the better answer — the same call the tag path
+        has always made.
+        """
+        key = (scope.get("source"), scope.get("category"))
+        if key not in _available:
+            _available[key] = has_dimension_values(entries, scope)
+        return _available[key]
+
+    def scope_values(scope):
+        """The Carta values a scope covers.
+
+        Reporting tags carry the workbook-to-Carta aliases: a value the
+        client has since confirmed carries Carta's wording finds nothing
+        under the workbook's own.
+        """
+        if (scope.get("source") or "reporting_tag") == "reporting_tag":
+            return aliases.get(scope["value"]) or [scope["value"]]
+        return [scope["value"]]
+
+    def scoped_total(gls, scopes):
+        """Spend on these accounts carrying every one of a line's values.
+
+        Every, not any: "Rent - <office>" under a department heading is that
+        department's rent for that office, and either filter on its own
+        reports more than the line does.
+
+        Presence is judged over the year and the total over the budget's
+        window, so a scope resolving outside the window reports the zero it
+        is rather than a firm-wide figure the line never covered.
+
+        Returns the entries actually summed too — two categories can each
+        correctly narrow to their own scope and still land on the same
+        entry (a department bucket and a vendor carved out of it, over the
+        same account), and the conflict pass below needs to know which.
+        """
+        total, found, matched = 0.0, False, []
+        for g in gls:
+            for e in entries_by_gl.get(int(g), ()):
+                if any(dimension_value_of(e, sc) not in scope_values(sc)
+                       for sc in scopes):
+                    continue
+                found = True
+                if first <= e["mo"] <= last:
+                    total += float(e.get("amount") or 0)
+                    matched.append(e)
+        return total, found, matched
 
     def claimed_total(gls, claims):
         """Spend on these accounts that a line beside this one reports.
@@ -2833,7 +2928,10 @@ def build_variance_categories(budget_payload, accounts, firm_total_key, as_of_mo
             label_counts[r["label"]] = label_counts.get(r["label"], 0) + 1
 
     cats, no_gl, no_budget, off_book = [], 0, 0, 0
-    for r in rows:
+    # (entry dict, matched entries, scopes, row order) per scoped category —
+    # the conflict pass below needs all four.
+    claims_pool = []
+    for order, r in enumerate(rows):
         if r.get("row_kind") != "line":
             continue
         # Overspend and underspend are expense words, and the workbook says
@@ -2886,17 +2984,16 @@ def build_variance_categories(budget_payload, accounts, firm_total_key, as_of_mo
         # a department's name, each one a several-hundred-percent overrun
         # that was really everybody's spend.
         tags = (aliases.get(dept) or [dept]) if dept else None
-        actual = None
-        if tags and tag_values_available:
-            scoped, found = 0.0, False
-            for g in gls:
-                for tag in tags:
-                    series = actual_by_gl_tag.get((int(g), tag))
-                    if series:
-                        found = True
-                        scoped += sum(series[first:last + 1])
+        # A crosstab states its value as tag_value and carries no scopes of
+        # its own, so the configured dimension supplies the one it means.
+        scopes = [sc for sc in (r.get("scopes") or []) if dimension_available(sc)]
+        if not scopes and dept and dimension and tag_values_available:
+            scopes = [{**dimension, "value": dept}]
+        actual, narrowed, matched = None, False, None
+        if scopes:
+            scoped, found, matched = scoped_total(gls, scopes)
             if found:
-                actual = scoped
+                actual, narrowed = scoped, True
         claims = r.get("excluded_claims") or []
         if actual is None:
             # Nothing posts under that value. A known-wide number beats a
@@ -2907,6 +3004,11 @@ def build_variance_categories(budget_payload, accounts, firm_total_key, as_of_mo
             # bars of the same chart — once under the line that excludes it
             # and again under the line that owns it.
             actual -= claimed_total(gls, claims)
+        # The tag half travels as carta_tags, which predates the others.
+        narrow_tags = list(tags) if (narrowed and tags) else None
+        narrow_scopes = ([sc for sc in scopes
+                          if (sc.get("source") or "reporting_tag") != "reporting_tag"]
+                         or None) if narrowed else None
         entry = {
             # A label repeated across tag_values is ambiguous on its own —
             # four rows reading "Salaries" tell the reader nothing about
@@ -2917,12 +3019,10 @@ def build_variance_categories(budget_payload, accounts, firm_total_key, as_of_mo
             "budget":   round(float(budget)),
             "actual":   round(actual),
             "variance": round(actual - float(budget)),
-            # How this figure was narrowed, so the panel a reader opens can
-            # be narrowed the same way. Without them the drawer answered a
-            # wider question than the bar asked and the two disagreed on
-            # screen.
-            "carta_tags":      list(tags) if (tags and tag_values_available) else None,
-            "excluded_claims": claims or None,
+            # What narrowed this figure, so the drawer narrows the same way.
+            "carta_tags":      narrow_tags,
+            "scopes":          narrow_scopes,
+            "excluded_claims": (claims or None) if not narrowed else None,
         }
         monthly = r.get("monthly") or []
         if any(monthly):
@@ -2937,6 +3037,10 @@ def build_variance_categories(budget_payload, accounts, firm_total_key, as_of_mo
                     round(sum(monthly[i * 3:(i + 1) * 3])) for i in range(4)
                 ]
         cats.append(entry)
+        if narrowed and matched:
+            claims_pool.append((entry, matched, scopes, order))
+
+    _resolve_variance_claim_conflicts(claims_pool)
 
     if not cats:
         return None

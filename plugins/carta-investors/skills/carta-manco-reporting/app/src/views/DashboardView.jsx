@@ -238,15 +238,14 @@ export default function DashboardView({ snapshot, accountsData, drilldown }) {
   const onVarianceSelect = drilldown
     ? (cat, period) => drilldown.openTagValueAccount(
         "Firm Total", cat.name, cat.gl_codes?.[0] ?? null, cat.gl_codes || [],
-        // However the bar was narrowed, narrow the panel the same way: the
-        // tag values it was scoped to, or the claims a neighbouring line
-        // owns. Opened with neither, a scoped bar answered every
-        // department's spend against a figure showing one.
+        // However the bar was narrowed, narrow the panel the same way, or a
+        // scoped bar answers the whole account against a slice of it.
         null, cat.carta_tags || [],
         { budget: cat.budget, actual: cat.actual, polarity: "expense", unmapped: false,
           quarterlyBudget: cat.quarterly_budget || null,
           monthlyBudget: cat.monthly_budget || null },
         period, "budget-category", cat.excluded_claims || null, dimension,
+        cat.scopes || null,
       )
     : undefined;
   // Chart click: open the drill for that single month's category. Does NOT

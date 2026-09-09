@@ -46,7 +46,7 @@ export default function useDrilldown() {
   // budget-vs-actuals comparison, so the drawer has to be able to restate
   // that comparison rather than only the actual side of it, and it restates
   // the table's own numbers instead of recomputing them.
-  const openTagValueAccount = useCallback((tagValue, account, accountType, accountTypeAll, comment, cartaTags, cell, period, origin, excludedClaims, dimension) => {
+  const openTagValueAccount = useCallback((tagValue, account, accountType, accountTypeAll, comment, cartaTags, cell, period, origin, excludedClaims, dimension, scopes) => {
     setSelection({
       kind: "department-account",
       tag_value: tagValue, account,
@@ -68,6 +68,9 @@ export default function useDrilldown() {
       // entries" (Firm Total's semantic).
       cartaTags: Array.isArray(cartaTags) ? cartaTags
                  : (tagValue === "Firm Total" ? [] : [tagValue]),
+      // What else the line states — a sub-account, a vendor. The tag half
+      // travels as cartaTags above, which predates these.
+      scopes: scopes || null,
       // Which dimension the tag values above belong to. Without it the
       // reader that resolves a value returns nothing and the tag filter
       // matches no entry at all — invisible while every caller passed the

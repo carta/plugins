@@ -298,8 +298,12 @@ export function filterEntries(entries, sel, topCategoryNames = []) {
     const last = sel.period?.last_month ?? 12;
     const inPeriod = e => typeof e.mo !== "number" || (e.mo >= first && e.mo <= last);
     const typeSet = new Set(sel.accountTypeAll || []);
+    // What else narrows the line — a sub-account, a vendor. Without them a
+    // whole account's entries sat behind a bar showing one office's rent.
+    const scopes = sel.scopes || [];
     const byType = typeSet.size > 0
-      ? entries.filter(e => typeSet.has(e.acct_type) && inPeriod(e))
+      ? entries.filter(e => typeSet.has(e.acct_type) && inPeriod(e)
+                       && scopes.every(sc => dimensionValue(e, sc) === sc.value))
       : [];
     const tagSet = new Set(sel.cartaTags || (sel.tag_value === "Firm Total" ? [] : [sel.tag_value]));
     if (tagSet.size === 0) {

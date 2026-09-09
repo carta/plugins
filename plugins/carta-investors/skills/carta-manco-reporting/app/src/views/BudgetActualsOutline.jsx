@@ -39,6 +39,11 @@ import { trueAsOfMonth } from "./budgetPeriods.js";
 //   neither     → unmapped. Renders "—" with an explicit marker rather
 //                 than a misleading $0.
 //
+// Two lines can both count the SAME entry — a department bucket and a
+// vendor-carved-out line over the same account, say. The more specific
+// line keeps it (claimSpecificity); the other renders "—" and names it,
+// so a subtotal summing both never double-counts.
+//
 // Aggregate rows (subtotal / total / summary) take their BUDGET from the
 // workbook's own cell — authoritative, and legitimately not always equal
 // to the sum of its constituents (a firm's own department total often
@@ -121,6 +126,9 @@ export default function BudgetActualsOutline({ budget, accountsData, periodYear,
   // Spend these lines handed to a tag-reporting line elsewhere, kept so the
   // report can show it rather than let it leave the page unexplained.
   const elsewhereByKey = lineActuals.elsewhere;
+  // Which line now carries a row's actual, when it shares an account +
+  // scope with another and lost the tie — see computeLineActuals.
+  const sharedWithByKey = lineActuals.sharedWith || {};
 
   // Aggregate rows resolve from constituents; net income is derived from
   // the outline's own totals.
@@ -349,6 +357,7 @@ export default function BudgetActualsOutline({ budget, accountsData, periodYear,
                 dimension={dimension}
                 widened={widenedTotals.has(rowAggKey(row))}
                 elsewhere={row.key ? elsewhereByKey[row.key] : undefined}
+                sharedWithLabel={row.key ? sharedWithByKey[row.key] : undefined}
                 open={row.key
                   ? (flipped.has(row.key) ? !opensByDefault : opensByDefault)
                   : false}
@@ -555,7 +564,7 @@ function OutlineRow({ row, actualsByKey, aggregates, valueAliases, tagValuesAvai
                      periodYear, onDrill, asTotal, extraIndent, sectionFlat, collapsed, onToggleCollapse,
                      closingRow, alignIndent, glNames, subCodes,
                      breakout, entries, dimension, open, onToggleLine, elsewhere,
-                     widened, onDrillTotal, rowByKey,
+                     widened, onDrillTotal, rowByKey, sharedWithLabel,
                      hoverCell, heldCell, onHoverCell }) {
   const kind = row.row_kind;
 
@@ -641,6 +650,10 @@ function OutlineRow({ row, actualsByKey, aggregates, valueAliases, tagValuesAvai
   const scopeUnresolved = kind === "line" && !voided && row.scope_unresolved === true;
   const unmapped = kind === "line" && !voided
     && (scopeUnresolved || (!row.fund_match && !(row.gl_codes || []).length));
+  // A more specific line absorbed EVERY entry this one had. A partial
+  // loss keeps real actual instead — see the elsewhereNote call below.
+  const shared = kind === "line" && !voided && !unmapped && sharedWithLabel
+    && Math.abs(actuals.Total || 0) < 0.005 ? sharedWithLabel : null;
 
   // Why this row's figure doesn't read like a normal one — the workbook's
   // own comment is a separate thing, on its own icon/tooltip below.
@@ -654,12 +667,14 @@ function OutlineRow({ row, actualsByKey, aggregates, valueAliases, tagValuesAvai
           ? `\nDid you mean: ${(row.scope_candidates || []).map(c => c.value).join(" · ")}?`
           : ""),
     voided && "Budget-only by choice: this line has no Carta counterpart.",
+    shared && `Same Carta account and scope as "${shared}" — Carta can't tell the two `
+      + `apart, so the actual is reported there instead of here.`,
     widened && "This workbook's formula sums fewer lines than this total covers. The figure covers all of them.",
     // Spend on this line's accounts that a scoped line elsewhere already
     // reports. It used to sit under the row as its own line, which read as
     // a component of the figure rather than as spend deliberately kept out
     // of it — and it doubled the height of every row that had one.
-    elsewhereNote(elsewhere, row),
+    elsewhereNote(elsewhere, row, sharedWithLabel),
   ].filter(Boolean).join("\n") || null;
 
   const rowStyle =
@@ -781,7 +796,7 @@ function OutlineRow({ row, actualsByKey, aggregates, valueAliases, tagValuesAvai
         const members = isAgg && onDrillTotal && rowByKey
           ? totalMembers(row, rowByKey, valueAliases, tagValuesAvailable) : [];
         const canDrillTotal = members.length > 0 && actualV !== 0;
-        const canDrill = !!onDrill && kind === "line" && !unmapped
+        const canDrill = !!onDrill && kind === "line" && !unmapped && !shared
                          && (actualV !== 0 || !!row.comment);
         const onClickTotal = canDrillTotal
           ? () => onDrillTotal({
@@ -836,17 +851,17 @@ function OutlineRow({ row, actualsByKey, aggregates, valueAliases, tagValuesAvai
             held={heldCell === cellKey}
             onHover={(on) => onHoverCell?.(on ? cellKey : null)}
             a={
-              unmapped ? "—"
+              unmapped || shared ? "—"
               : (actualV === 0 && budgetV === 0) ? "—"
               : fmtCurrencyWhole(actualV)
             }
             b={budgetV === 0 ? "—" : fmtCurrencyWhole(budgetV)}
             v={
-              unmapped ? "—"
+              unmapped || shared ? "—"
               : (actualV === 0 && budgetV === 0) ? "—"
               : fmtVarianceWhole(variance)
             }
-            vColor={unmapped ? FAINT : varianceColor(variance, rowPolarity(row))}
+            vColor={unmapped || shared ? FAINT : varianceColor(variance, rowPolarity(row))}
             numStyle={numStyle}
           />
         );
@@ -872,13 +887,14 @@ function OutlineRow({ row, actualsByKey, aggregates, valueAliases, tagValuesAvai
  *  part of this figure, it is the reason the figure is smaller than the
  *  accounts behind it.
  */
-export function elsewhereNote(elsewhere, row) {
+export function elsewhereNote(elsewhere, row, sharedWithLabel) {
   const amount = elsewhere?.Total;
   if (!amount) return null;
   const names = (row?.excluded_claims || []).map(c => c.value).filter(Boolean);
-  if (!names.length) return null;
+  const dest = names.length ? names.join(", ") : sharedWithLabel;
+  if (!dest) return null;
   return `${fmtCurrencyWhole(amount)} on this line's accounts is reported under `
-       + `${names.join(", ")}, so it is not counted here.`;
+       + `${dest}, so it is not counted here.`;
 }
 
 // A child carries actuals and no budget: the workbook budgets the line, not
@@ -1003,6 +1019,15 @@ function rowAggKey(row) {
   return `${row.section || ""}|${row.subsection || ""}|${row.label}`;
 }
 
+// A row naming a vendor or fund is a deliberate carve-out; a bare
+// department tag is the broad bucket it was carved out of. Ranks which
+// row wins when both would count the same entry (see the conflict pass
+// in computeLineActuals) — higher wins.
+function claimSpecificity(row) {
+  const extra = (row.scopes || []).filter(sc => sc.source !== "reporting_tag");
+  return extra.length * 2 + (row.tag_value ? 1 : 0);
+}
+
 export function computeLineActuals(rows, accountsData, valueAliases, periodYear,
                                    dimension = null) {
   const entries = accountsData?.entries || [];
@@ -1013,6 +1038,9 @@ export function computeLineActuals(rows, accountsData, valueAliases, periodYear,
   const tagValuesAvailable = dimensionValuesAvailable(accountsData);
   const out = {};
   const elsewhereOut = {};
+  // Entries a "line" row's own bucket actually counted, not ceded to
+  // `elsewhere`. The conflict pass below re-walks these lists.
+  const claimedByRow = new Map();
 
   for (const row of rows) {
     // A subtotal covering no lines but naming accounts is a leaf wearing a
@@ -1023,6 +1051,7 @@ export function computeLineActuals(rows, accountsData, valueAliases, periodYear,
     if ((row.row_kind !== "line" && !leafLike) || (!row.key && !leafLike)) continue;
     const bucket = emptyQuarters();
     const elsewhere = emptyQuarters();
+    const claimed = [];
 
     if (row.fund_match) {
       // Per-fund management fee — join fund-side JEs on fund name.
@@ -1076,13 +1105,64 @@ export function computeLineActuals(rows, accountsData, valueAliases, periodYear,
         }
         bucket[q] += amt;
         bucket.Total += amt;
+        claimed.push({ entry: e, q, amt });
       }
     }
     const slot = row.key || rowAggKey(row);
     out[slot] = bucket;
     if (elsewhere.Total) elsewhereOut[slot] = elsewhere;
+    if (row.row_kind === "line" && !row.fund_match && claimed.length) {
+      claimedByRow.set(row, claimed);
+    }
   }
-  return { actuals: out, elsewhere: elsewhereOut };
+
+  // Group every claim by the entry it landed on. Where more than one row
+  // claimed the same entry, only the most specific keeps it (claimSpecificity).
+  const sharedWith = {};
+  const claimsByEntry = new Map();
+  for (const [row, claimed] of claimedByRow) {
+    for (const c of claimed) {
+      if (!claimsByEntry.has(c.entry)) claimsByEntry.set(c.entry, []);
+      claimsByEntry.get(c.entry).push({ row, ...c });
+    }
+  }
+  const lostBucketByRow = new Map();  // loser's row.key -> quarters lost
+  const lostToWinner = new Map();     // loser's row.key -> Map(winner label -> amount)
+  for (const claimants of claimsByEntry.values()) {
+    if (claimants.length < 2) continue;
+    const ranked = [...claimants].sort((a, b) => {
+      const bySpecificity = claimSpecificity(b.row) - claimSpecificity(a.row);
+      if (bySpecificity !== 0) return bySpecificity;
+      const byBudget = Math.abs(b.row.annual || 0) - Math.abs(a.row.annual || 0);
+      return byBudget !== 0 ? byBudget : rows.indexOf(a.row) - rows.indexOf(b.row);
+    });
+    const [winner, ...losers] = ranked;
+    for (const loser of losers) {
+      out[loser.row.key][loser.q] -= loser.amt;
+      out[loser.row.key].Total -= loser.amt;
+      if (!lostBucketByRow.has(loser.row.key)) lostBucketByRow.set(loser.row.key, emptyQuarters());
+      const lost = lostBucketByRow.get(loser.row.key);
+      lost[loser.q] += loser.amt;
+      lost.Total += loser.amt;
+      if (!lostToWinner.has(loser.row.key)) lostToWinner.set(loser.row.key, new Map());
+      const byWinner = lostToWinner.get(loser.row.key);
+      byWinner.set(winner.row.label, (byWinner.get(winner.row.label) || 0) + loser.amt);
+    }
+  }
+  // A row left at zero renders "—" (OutlineRow's `shared`), not a note. One
+  // with real leftover actual gets the lost slice folded into `elsewhere`.
+  for (const [loserKey, byWinner] of lostToWinner) {
+    let best = null;
+    for (const [label, amt] of byWinner) if (!best || amt > best.amt) best = { label, amt };
+    sharedWith[loserKey] = best.label;
+    if (Math.abs(out[loserKey]?.Total || 0) < 0.005) continue;
+    const lost = lostBucketByRow.get(loserKey);
+    const existing = elsewhereOut[loserKey];
+    if (existing) for (const q of QUARTERS) existing[q.key] += lost[q.key] || 0;
+    else elsewhereOut[loserKey] = lost;
+  }
+
+  return { actuals: out, elsewhere: elsewhereOut, sharedWith };
 }
 
 const isHeaderKind = (k) => String(k || "").endsWith("header");
