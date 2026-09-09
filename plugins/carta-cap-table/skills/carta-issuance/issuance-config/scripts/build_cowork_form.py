@@ -26,16 +26,19 @@ from issuance_fields import (  # noqa: E402
     BuildError,
     advanced_accordion_cert,
     advanced_accordion_grant,
+    advanced_accordion_piu,
     board_approval_html,
     build_batch_error_banner,
     build_docsets,
     build_exercise_price_hint,
     build_legends,
+    build_option_plans,
     build_option_type,
     build_rule144_reason_select,
     build_share_classes,
     build_stakeholder_blocks,
     build_stakeholder_list,
+    build_threshold_value_type,
     build_vesting,
     cert_no_vesting,
     default_legend_id,
@@ -52,6 +55,15 @@ from issuance_fields import (  # noqa: E402
     EMPLOYMENT_RELATED_SO_TYPES,
     HMRC_SO_TYPES,
 )
+
+SECURITY_TYPE_CHOICES = ["option_grant", "certificate", "piu"]
+
+# Verb-first: this is a write operation, not a page title.
+FLOW_TITLES = {
+    "option_grant": "Issue Option Grants",
+    "certificate": "Issue Certificates",
+    "piu": "Issue Profits Interest Units",
+}
 
 REFS = Path(__file__).resolve().parent.parent / "references"
 TEMPLATE = REFS / "cowork-template.html"
@@ -188,6 +200,74 @@ def build_shared_terms(security_type: str, data: Dict[str, Any], knowns: Dict[st
             hidden=(so_type not in EMPLOYMENT_RELATED_SO_TYPES), required=True,
         ))
         rows_html.append(advanced_accordion_grant(row, accel_templates, no_vesting, {}))
+    elif security_type == "piu":
+        noun = str(knowns.get("threshold_noun") or "threshold")
+        noun_title = noun[:1].upper() + noun[1:]
+        classes = results(data.get("share_classes"))
+        plans = results(data.get("option_plans"))
+        docsets = results(data.get("document_sets"))
+        templates = results(data.get("vesting_templates"))
+        accel_templates = results(data.get("acceleration_templates"))
+        no_vesting = cert_no_vesting(row, knowns)
+        vest_wrap_style = "" if not no_vesting else ' style="display:none;"'
+
+        rows_html.append(kv_row(
+            "Unit class",
+            f'<div class="toggle-row wrap">{build_share_classes(classes, knowns.get("share_class_prefix"))}</div>',
+            sectype="piu", required=True,
+        ))
+        rows_html.append(kv_row(
+            "Equity plan",
+            f'<p class="field-hint">Optional. With no plan the units come off the unit class\u2019s own '
+            f'authorized total. A plan must use the same unit class as the row.</p>'
+            f'<div class="toggle-row wrap">{build_option_plans(plans, knowns.get("option_plan_id"))}</div>',
+            sectype="piu",
+        ))
+        rows_html.append(kv_row(
+            f"{noun_title} value",
+            f'<p class="field-hint">The unit only shares in value above this amount. Never defaulted '
+            f'\u2014 it is a term of the grant.</p>'
+            f'<div class="price-row"><span class="currency-suffix">{currency}</span>'
+            f'<input class="text-input block-threshold-value" type="text" inputmode="decimal" '
+            f'value="" oninput="onStakeInput()"/></div>',
+            sectype="piu", required=True,
+        ))
+        rows_html.append(kv_row(
+            f"{noun_title} value type",
+            f'<p class="field-hint">Per unit states the amount for each unit; Overall states it once '
+            f'for the whole grant.</p>'
+            f'<div class="toggle-row">{build_threshold_value_type(None)}</div>',
+            sectype="piu", required=True,
+        ))
+        rows_html.append(kv_row(
+            "Issue date",
+            f'<input class="date-input block-issue-date" type="date" value="{esc(today)}" '
+            f'oninput="updateIssueDate(this)"/>',
+            required=True,
+        ))
+        rows_html.append(kv_row(
+            "Board approval",
+            f'<p class="field-hint">Optional for a profits interest. Clear it to issue with no '
+            f'approval date on record.</p>'
+            f'{board_approval_html(row, today, security_type)}',
+            sectype="piu",
+        ))
+        rows_html.append(kv_row(
+            "Vesting schedule",
+            f'<select class="select-input block-vesting-select" onchange="pickVesting(this)">'
+            f'{build_vesting(templates, no_vesting, row_preferred_vesting(row, knowns))}</select>'
+            f'<div class="block-vesting-start-wrap"{vest_wrap_style}>'
+            f'<p class="field-sublabel">Vesting start date</p>'
+            f'<input class="date-input block-vesting-start-date" type="date" value="{esc(today)}" '
+            f'oninput="updateVestingStart(this)"/></div>',
+            sectype="piu",
+        ))
+        rows_html.append(kv_row(
+            "Documents",
+            f'<div class="toggle-row wrap">{build_docsets(docsets, None)}</div>',
+            sectype="piu",
+        ))
+        rows_html.append(advanced_accordion_piu(row, accel_templates, no_vesting, {}))
     else:
         price_default = knowns.get("price_per_share_default", "")
         classes = results(data.get("share_classes"))
@@ -338,13 +418,13 @@ def render(security_type: str, data: Dict[str, Any], knowns: Dict[str, Any],
         css = _minify_css(css)
         html = _minify_inline_js(html)
 
-    noun = "holder" if security_type == "certificate" else "grantee"
+    noun = "grantee" if security_type == "option_grant" else "holder"
     count = len(rows) or 1
     subs = {
         "CORP_NAME": esc(corp_name),
         "CORP_ID": esc(corp_id),
         "SECURITY_TYPE": security_type,
-        "FLOW_TITLE": "Issue Certificates" if security_type == "certificate" else "Issue Option Grants",
+        "FLOW_TITLE": FLOW_TITLES[security_type],
         "HEADER_SUB": f"{count} {noun}{'' if count == 1 else 's'}",
         "BATCH_MODE": "true" if batch else "false",
         "SO_TYPE_CONSTANTS": so_type_js_constants(),
@@ -368,7 +448,7 @@ def render(security_type: str, data: Dict[str, Any], knowns: Dict[str, Any],
 
 def main(argv: Optional[List[str]] = None) -> int:
     p = argparse.ArgumentParser(description="Build the Cowork issuance show_widget form.")
-    p.add_argument("--security-type", required=True, choices=["option_grant", "certificate"])
+    p.add_argument("--security-type", required=True, choices=SECURITY_TYPE_CHOICES)
     p.add_argument("--data", required=True, type=Path, help="JSON of raw MCP reference results")
     p.add_argument("--knowns", required=True, type=Path, help="JSON of what the prompt supplied")
     p.add_argument("--corp-name", default="", help="Company legal name for the header")

@@ -79,6 +79,10 @@ OPTION_TYPES = [
     "Startup Concessions", "Non-Concessional", "ZEPO",
 ]
 
+# `threshold_value_type` (PIU). Not the field manifest's FAIR_MARKET_VALUE/OTHER
+# — the drafts path accepts only these two.
+THRESHOLD_VALUE_TYPES = ["Unit", "Overall"]
+
 # Security types an importer workbook can carry that this skill does not issue
 # (SKILL.md Out of scope). Rows naming one are skipped and reported — never
 # coerced into a grant of a different type.
@@ -110,6 +114,9 @@ ROW_KEYS = {
     "share_class_prefix", "price_per_share", "legend_id", "prefix_number",
     "rule_144_mode", "rule_144_date", "rule_144_reason", "cash_paid",
     "debt_canceled", "returned_invested_capital",
+    # profits interest unit
+    "option_plan", "threshold_value", "threshold_value_type",
+    "corresponding_interest",
 }
 
 # ── Header vocabulary ──
@@ -182,7 +189,7 @@ _syn("_equity_plan", "Equity Plan Name", "Equity Plan", "Plan", "Plan Name",
 
 # certificate
 _syn("share_class_prefix", "Share Class", "Class", "Security Class",
-     "Share Class Name")
+     "Share Class Name", "Unit Class", "Unit Class Name")
 _syn("price_per_share", "Price Per Share", "Purchase Price", "Price",
      "Price Paid Per Share")
 _syn("legend_id", "Legend", "Legend Code", "Build Legend")
@@ -192,6 +199,14 @@ _syn("rule_144_date", "Rule 144 Date", "144 Date")
 _syn("cash_paid", "Cash Paid", "Total Cash Paid")
 _syn("debt_canceled", "Debt Canceled", "Debt Cancelled")
 _syn("returned_invested_capital", "Returned Invested Capital")
+
+# profits interest unit. "Threshold equity value" is the header the PIU import
+# template ships; its own help cell is off by one and names the wrong choices.
+_syn("threshold_value", "Threshold Equity Value", "Threshold Value", "Threshold",
+     "Hurdle Value", "Hurdle")
+_syn("threshold_value_type", "Threshold Value Type", "Threshold Type",
+     "Hurdle Value Type", "Hurdle Type")
+_syn("is_flexible_issue_date", "Flexible Issue Date")
 
 # Headers that identify the flow but carry no payload field of their own.
 _syn("_currency", "Currency")
@@ -203,8 +218,17 @@ GRANT_SIGNALS = {"option_type", "exercise_price", "document_set_id",
 CERT_SIGNALS = {"share_class_prefix", "legend_id", "price_per_share",
                 "rule_144_date", "prefix_number", "cash_paid", "debt_canceled",
                 "returned_invested_capital"}
+# A threshold column appears on no other importable sheet, so it decides
+# outright. The PIU template also trips two GRANT_SIGNALS (equity plan,
+# document set), which would tie the grant/cert comparison below.
+PIU_SIGNALS = {"threshold_value", "threshold_value_type"}
 
 SHEET_NAME_HINTS = [
+    # PIU first: "pius draft set" would otherwise never be reached.
+    ("pius", "piu"),
+    ("piu", "piu"),
+    ("profits interests", "piu"),
+    ("profits interest", "piu"),
     ("equity plan awards", "option_grant"),
     ("awards", "option_grant"),
     ("options", "option_grant"),
@@ -550,10 +574,14 @@ def build_row(record: Dict[str, Any], security_type: str) -> Dict[str, Any]:
         else:
             row["fund_structure"] = fund_flag
 
-    if security_type == "option_grant":
-        _build_grant_fields(record, row)
-    else:
-        _build_cert_fields(record, row)
+    builder = _FIELD_BUILDERS.get(security_type)
+    if builder is None:
+        raise ParseError(
+            "unknown security_type {!r}; known: {}".format(
+                security_type, sorted(_FIELD_BUILDERS)
+            )
+        )
+    builder(record, row)
 
     return row
 
@@ -686,6 +714,71 @@ def _build_cert_fields(record: Dict[str, Any], row: Dict[str, Any]) -> None:
                 row["prefix_number"] = number
 
 
+def _build_piu_fields(record: Dict[str, Any], row: Dict[str, Any]) -> None:
+    # The plan is per row here, so it is staged for resolve() like any other
+    # name — not collected batch-level the way an option grant's is.
+    plan = _text(_cell(record, "_equity_plan"))
+    if plan:
+        row["_option_plan"] = plan
+
+    threshold = _cell(record, "threshold_value")
+    if _text(threshold):
+        value = coerce_number(threshold)
+        if value is None:
+            _note(row, "threshold_value", threshold,
+                  "couldn't read this threshold value — enter it here")
+        else:
+            row["threshold_value"] = value
+
+    type_raw = _cell(record, "threshold_value_type")
+    if _text(type_raw):
+        matched = _match_choice(type_raw, THRESHOLD_VALUE_TYPES)
+        if matched:
+            row["threshold_value_type"] = matched
+        else:
+            _note(row, "threshold_value_type", type_raw,
+                  "not Unit or Overall — pick one")
+
+    cash = _cell(record, "cash_paid")
+    if _text(cash):
+        value = coerce_number(cash)
+        if value is None:
+            _note(row, "cash_paid", cash,
+                  "couldn't read this consideration price — enter it here")
+        else:
+            row["cash_paid"] = value
+
+    flexible = _cell(record, "is_flexible_issue_date")
+    if _text(flexible):
+        flag = coerce_bool(flexible)
+        if flag is None:
+            _note(row, "is_flexible_issue_date", flexible, "couldn't read this as yes/no")
+        else:
+            row["is_flexible_issue_date"] = flag
+
+    security_number = _text(_cell(record, "prefix_number"))
+    if security_number:
+        match = _CERT_ID_RE.match(security_number)
+        if match:
+            row["prefix_number"] = match.group(2)
+            _note(row, "prefix_number", security_number,
+                  "read the security number from {!r}".format(security_number))
+        else:
+            number = coerce_number(security_number)
+            if number is None:
+                _note(row, "prefix_number", security_number,
+                      "couldn't read a security number from this")
+            else:
+                row["prefix_number"] = number
+
+
+_FIELD_BUILDERS = {
+    "option_grant": _build_grant_fields,
+    "certificate": _build_cert_fields,
+    "piu": _build_piu_fields,
+}
+
+
 # ── Parsing ──
 
 def _records(sheet: Sheet, mapping: Dict[int, str], header_idx: int) -> List[Dict[str, Any]]:
@@ -699,6 +792,8 @@ def _records(sheet: Sheet, mapping: Dict[int, str], header_idx: int) -> List[Dic
 
 def _detect_security_type(fields: Iterable[str], sheet_name: str) -> Optional[str]:
     present = set(fields)
+    if present & PIU_SIGNALS:
+        return "piu"
     grant_hits = len(present & GRANT_SIGNALS)
     cert_hits = len(present & CERT_SIGNALS)
     if grant_hits != cert_hits:
@@ -812,7 +907,7 @@ def parse_file(path: Path, sheet: Optional[str] = None) -> Parsed:
         )
 
     batch_errors: List[str] = []
-    if len(plan_names) > 1:
+    if security_type != "piu" and len(plan_names) > 1:
         batch_errors.append(
             "This sheet names more than one equity plan ({}). A draft set is "
             "locked to one plan — split the sheet and import each separately.".format(
@@ -890,6 +985,12 @@ _RESOLVERS = (
     ("_share_class_prefix", "share_classes", ("name", "prefix"), "prefix", "share class"),
 )
 
+# A PIU's equity plan is per row and optional, so it resolves here rather than
+# through the option-grant batch-level plan below.
+_PIU_RESOLVERS = _RESOLVERS + (
+    ("_option_plan", "option_plans", ("name",), "id", "equity plan"),
+)
+
 
 def resolve(parsed: Parsed, reference: Dict[str, Any]) -> Parsed:
     """Turn the staged free-text names into ids, in place.
@@ -905,8 +1006,9 @@ def resolve(parsed: Parsed, reference: Dict[str, Any]) -> Parsed:
     }
     roster = sections["stakeholders"]
 
+    resolvers = _PIU_RESOLVERS if parsed.security_type == "piu" else _RESOLVERS
     for row in parsed.rows:
-        for staged, section, keys, id_field, label in _RESOLVERS:
+        for staged, section, keys, id_field, label in resolvers:
             raw = row.pop(staged, None)
             if not raw:
                 continue
@@ -920,6 +1022,10 @@ def resolve(parsed: Parsed, reference: Dict[str, Any]) -> Parsed:
             if value is None:
                 _note(row, field, raw,
                       "matched a {} with no {} — pick one".format(label, id_field))
+                continue
+            if record.get("is_expired"):
+                _note(row, field, raw,
+                      "the {} {!r} is expired — pick another".format(label, raw))
                 continue
             _resolved(row, field, str(value))
 

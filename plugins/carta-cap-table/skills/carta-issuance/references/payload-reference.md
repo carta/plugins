@@ -10,13 +10,14 @@ a different, earlier-stage contract where every field lives inside each row (see
 [issuance-config/SKILL.md](../issuance-config/SKILL.md#payload-delivered-on-submit)) —
 don't confuse the two when reading `carta-issuance/SKILL.md`'s Phase 0.5/1.
 
-Contents: [Common fields](#common-fields-both-flows) ·
+Contents: [Common fields](#common-fields-all-flows) ·
 [Certificate-only](#certificate-only-fields) · [Option-grant-only](#option-grant-only-fields) ·
+[PIU-only](#piu-only-fields) ·
 [Never emit](#never-emit) · [Picklists](#picklists) ·
 [so_type auto-fill](#so_type-auto-fill-rules) · [Date format quirks](#date-format-quirks) ·
 [camelCase and snake_case](#camelcase-and-snake_case) · [Gotchas](#gotchas)
 
-## Common fields (both flows)
+## Common fields (all flows)
 
 | Field | Required | Type / format | Notes |
 |---|---|---|---|
@@ -25,7 +26,7 @@ Contents: [Common fields](#common-fields-both-flows) ·
 | `stakeholder_kind` | always | enum (uppercase) | `INDIVIDUAL` or `NON-INDIVIDUAL` — **case matters** |
 | `issue_date_relationship` | always | enum | See [Picklists](#picklists) |
 | `issue_date` | always | `YYYY-MM-DD` or `MM/DD/YYYY` | |
-| `board_approval_date` | certs: always. Grants: when `needs_board_approval = false` | `YYYY-MM-DD` or `MM/DD/YYYY` | Usually ≤ `issue_date`. Grants: omit entirely when pending — server rejects empty string. |
+| `board_approval_date` | certs: always. Grants: when `needs_board_approval = false`. **PIU: optional** | `YYYY-MM-DD` or `MM/DD/YYYY` | Usually ≤ `issue_date`. Grants: omit entirely when pending — server rejects empty string. **PIU has no ordering rule against `issue_date` and no pending state** — omit the key to issue with no date on record. |
 | `currency` | always | ISO 4217 | `USD` for US; per-`so_type` autofills for grants |
 | `state_of_residency` | optional | 2-letter US state OR 3-letter ISO country | Server doesn't enforce. **Not collected by carta-issuance** (dropped from the panel entirely — design feedback; remains valid server-side for other callers) |
 | `notes` | optional | string | |
@@ -84,11 +85,42 @@ Contents: [Common fields](#common-fields-both-flows) ·
 
 `equity_plan_id` lives on the draft **set**, not the row — pass on the first mutate only.
 
+## PIU-only fields
+
+| Field | Required | Type / format | Notes |
+|---|---|---|---|
+| `prefix` | always | string (1–10 chars) | The **unit class** prefix. **NOT `share_class` / `share_class_id`** |
+| `quantity` | always | positive number | |
+| `threshold_value` | always | decimal ≥ 0, ≤ 12 dp | The value the unit shares above. **Never defaulted** — a `0` is valid and must survive |
+| `threshold_value_type` | always | enum | `Unit` or `Overall` only — see [Picklists](#picklists) |
+| `exemption` | always | enum | Unconditionally required, unlike a certificate's. Default `Section 4(a)(2)` |
+| `option_plan` | **optional** | plan pk **as a string** | Empty issues off the unit class's own authorized total; set issues off the plan's pool. The plan's share class must match `prefix`. See the gotchas below |
+| `document_set_id` | conditional | int | Server fills `purchase_agreement_doc` + `equity_incentive_plan_doc` from it. Required only when the issuer's properties demand the documents |
+| `vesting_template` | opt-in | int | Certificate posture — defaults to none |
+| `vesting_start_date` | if `vesting_template` set | `MM/DD/YYYY` only (CharField) | |
+| `acceleration_template` | optional | int | |
+| `corresponding_interest` | optional | bool | Also issues the matching interest in the linked operating company. Only `true` is meaningful. Send it **only** when the unit class reported `has_corresponding_interest` |
+| `prefix_number` | optional | int or `<letters>-<digits>` | Server auto-numbers if omitted. Digits only after coercion |
+| `cash_paid` | optional | decimal ≥ 0 | "Consideration price" — UK growth shares only |
+| `is_flexible_issue_date` | optional | bool | Only ever stamped `true` server-side, never `false` |
+| `employment_related` | optional | bool | Accepted, but **not collected by carta-issuance** — no PIU validation rule requires it, unlike an Unapproved grant |
+
+**Not on a PIU at all.** No `exercise_price`, `so_type`, `grant_expiration_date`,
+`law_firm_price`/price-per-share, `legend_id`/`legend`, `rule_144_date`,
+`rule_144_difference_reason`. And a sharper distinction worth keeping straight:
+`dividend_accrual_start_date` and `returned_invested_capital` are declared on
+`DraftCertificate` only — they are **absent from the model**, not merely uncollected, so
+they are not reachable even by another caller.
+
 ## Never emit
 
 Server-resolved, UI-only, or vestigial. Sending these raises `Unknown draft field` or is dropped.
 
 - **Certificates**: `legend` (server fills from `legend_id`), `vesting_acceleration_name`, `vesting_acceleration`, `custom_vesting`, `vesting_type`, `early_exercise`, `milestone_terms`, `publish_board_consent`.
+- **PIUs**: `legend`, `custom_vesting`, `vesting_type`, `vesting_acceleration`,
+  `vesting_acceleration_name`, `early_exercise`, `document_set`, `purchase_agreement_doc`,
+  `equity_incentive_plan_doc`, `attachments_uuid`, `law_firm_price`, and the two
+  `DraftCertificate`-only fields above.
 - **Option grants**: `exercise_periods`; all termination/exercise count+period pairs (`voluntary_termination_count`/`_period`, `involuntary_termination_count`/`_period`, `involuntary_termination_cause_count`/`_period`, `death_exercise_count`/`_period`, `disability_exercise_count`/`_period`, `retirement_exercise_count`/`_period`); `document_set`; `form_of_option_doc`, `form_of_exercise_doc`, `equity_incentive_plan_doc`, `attachments_uuid`.
 
 ## Picklists
@@ -108,7 +140,8 @@ Server-resolved, UI-only, or vestigial. Sending these raises `Unknown draft fiel
 If user gives an unfamiliar value, ask them to pick from this list — never guess.
 
 **`exemption`** (federal, US issuers). The blank default differs by security type: a certificate
-falls back to `Section 4(a)(2)`, an option grant to `Rule 701`.
+and a PIU fall back to `Section 4(a)(2)` (the shared `DraftIssuableMixin` default), an option
+grant to `Rule 701`. On a PIU the field is *unconditionally* required, unlike a certificate's.
 
 - `Section 4(a)(2)`, `Section 4(a)(1-1/2)`, `Section 4(a)(7)`
 - `Rule 144`, `Rule 701`
@@ -125,6 +158,16 @@ falls back to `Section 4(a)(2)`, an option grant to `Rule 701`.
 | AU | `Startup Concessions`, `Non-Concessional`, `ZEPO` |
 
 Frontend enum key for *Startup Concessions* is `ESS`; canonical persisted string is `Startup Concessions`. Always emit `Startup Concessions` regardless of user phrasing. *ESOP* is ambiguous — ask which of `Startup Concessions` / `Non-Concessional` / `ZEPO`.
+
+**`threshold_value_type`** (PIU): `Unit` · `Overall`.
+
+> The **field manifest** declares this field as `FAIR_MARKET_VALUE` / `OTHER`
+> (`eshares/issuables/field_manifest/field_metadata/certificate.py`). That is a different,
+> CLI-facing surface. The drafts path this skill uses accepts **only** `Unit` and
+> `Overall` — `DraftThresholdValueTypeFieldValidator` rejects anything else with *"X is
+> not a valid threshold value type"*, and the Drafts UI renders exactly these two
+> (`draft_certificate_view.py::_get_threshold_value_types`). Never reconcile the skill to
+> the manifest.
 
 **`rule_144_difference_reason`** (only when `rule_144_date` ≠ `issue_date`):
 
@@ -237,7 +280,7 @@ is genuinely unrelated to the fund structure, the match itself is wrong: persist
 Most date fields are `DateField`s and accept both `YYYY-MM-DD` and `MM/DD/YYYY`. Three fields are stored as `CharField(max_length=10)` on the draft model and accept **`MM/DD/YYYY` only** — an ISO `YYYY-MM-DD` string is rejected with `Date is invalid`:
 
 - `rule_144_date` (certificate)
-- `vesting_start_date` (both flows)
+- `vesting_start_date` (all three flows)
 - `grant_expiration_date` (option grant)
 
 `hmrc_notified` (option grant) is a `DateTimeField` — it accepts both `YYYY-MM-DD` and `MM/DD/YYYY` and the server normalises the input.
@@ -246,7 +289,13 @@ Mixing formats across a payload is fine — each field is parsed independently. 
 
 ## camelCase and snake_case
 
-The MCP gateway auto-converts a known allow-list (`lawFirmPrice` → `law_firm_price`, `legendId` → `legend_id`, `soType` → `so_type`, `exercisePrice` → `exercise_price`, `vestingTemplate` → `vesting_template`, `vestingStartDate` → `vesting_start_date`, `accelerationTemplate` → `acceleration_template`, `grantExpirationDate` → `grant_expiration_date`, `customLabel` → `custom_label`, `earlyExercise` → `early_exercise`, `autoExerciseAtVest` → `auto_exercise_at_vest`, `isFlexibleIssueDate` → `is_flexible_issue_date`, `isHmrcNotified` → `is_hmrc_notified`, `hmrcNotified` → `hmrc_notified`, `isAtoNotified` → `is_ato_notified`, `needsBoardApproval` → `needs_board_approval`, `documentSetId` → `document_set_id`, `employeeId` → `employee_id`, `costCenter` → `cost_center`, `jobTitle` → `job_title`, `grantReason` → `grant_reason`, `issueDateRelationship` → `issue_date_relationship`, `stakeholderKind` → `stakeholder_kind`, `stakeholderId` → `stakeholder_id`, `boardApprovalDate` → `board_approval_date`, `issueDate` → `issue_date`, `prefixNumber` → `prefix_number`, `ruleOf144Date` → `rule_144_date`, `rule144Date` → `rule_144_date`, `rule144DifferenceReason` → `rule_144_difference_reason`, `stateOfResidency` → `state_of_residency`, `stateExemption` → `state_exemption`, `cashPaid` → `cash_paid`, `debtCanceled` → `debt_canceled`, `convertibleNote` → `convertible_note`, `dividendAccrualStartDate` → `dividend_accrual_start_date`, `returnedInvestedCapital` → `returned_invested_capital`, `employmentRelated` → `employment_related`, `fundStructure` → `fund_structure`).
+The MCP gateway auto-converts a known allow-list (`lawFirmPrice` → `law_firm_price`, `legendId` → `legend_id`, `soType` → `so_type`, `exercisePrice` → `exercise_price`, `vestingTemplate` → `vesting_template`, `vestingStartDate` → `vesting_start_date`, `accelerationTemplate` → `acceleration_template`, `grantExpirationDate` → `grant_expiration_date`, `customLabel` → `custom_label`, `earlyExercise` → `early_exercise`, `autoExerciseAtVest` → `auto_exercise_at_vest`, `isFlexibleIssueDate` → `is_flexible_issue_date`, `isHmrcNotified` → `is_hmrc_notified`, `hmrcNotified` → `hmrc_notified`, `isAtoNotified` → `is_ato_notified`, `needsBoardApproval` → `needs_board_approval`, `documentSetId` → `document_set_id`, `employeeId` → `employee_id`, `costCenter` → `cost_center`, `jobTitle` → `job_title`, `grantReason` → `grant_reason`, `issueDateRelationship` → `issue_date_relationship`, `stakeholderKind` → `stakeholder_kind`, `stakeholderId` → `stakeholder_id`, `boardApprovalDate` → `board_approval_date`, `issueDate` → `issue_date`, `prefixNumber` → `prefix_number`, `ruleOf144Date` → `rule_144_date`, `rule144Date` → `rule_144_date`, `rule144DifferenceReason` → `rule_144_difference_reason`, `stateOfResidency` → `state_of_residency`, `stateExemption` → `state_exemption`, `cashPaid` → `cash_paid`, `debtCanceled` → `debt_canceled`, `convertibleNote` → `convertible_note`, `dividendAccrualStartDate` → `dividend_accrual_start_date`, `returnedInvestedCapital` → `returned_invested_capital`, `employmentRelated` → `employment_related`, `fundStructure` → `fund_structure`, `optionPlan` → `option_plan`,
+`vestingAccelerationName` → `vesting_acceleration_name`, `correspondingInterest` →
+`corresponding_interest`).
+
+**`documentSet` is an error key, not a payload key.** `validate_drafts` reports a
+document-set problem under that name, but the payload field is `document_set_id` — sending
+`documentSet` is silently dropped rather than rejected.
 
 Unknown camelCase or snake_case typos fail with `UsageError: Unknown draft field <key>`. **Always emit snake_case.**
 
@@ -301,4 +350,8 @@ never came back.
 | Set name length | carta-web rejects `draft_set_name` > 30 chars with a 400. Trim if user volunteers a long label. |
 | Dividend accrual start date is share-class-gated | The resolved share class's `dividend` field (`"Non-cash"` / `"Cash"` / `null`, returned by `cap_table:get:certificate_share_classes`) controls whether to prompt — required for `"Non-cash"`, forbidden otherwise. Sending the wrong shape raises a server validation error; surface verbatim and recover via `AskUserQuestion`. `save_drafts` skips this check (the validator honors `ignore_empty`), so a row missing the field saves cleanly but will fail at issue. |
 | Fund-structure block is server-detected, never predicted | Only carta-web knows whether a holder matches the firm's fund structure, so don't guess and don't pre-prompt. Let `validate_drafts` raise the critical `fundStructure` error, then recover in place — see [fund-structure recovery](#recovering-a-fund-structure-block). Only `true` clears it; a `false` persists but stays blocked. |
+| PIU plan is per row and optional | `option_plan` decides which ceiling the server checks: set → the plan's pool (`DraftPIUEquityPlanAvailableQuantityValidator`); empty → the unit class's authorized total (`DraftPIUShareClassAvailableQuantityValidator`). A plan whose share class differs from the row's `prefix` is rejected with *"Equity plan share class must match the selected share class"*. `equity_plan_id` is **never** sent for a PIU — the plan is a row field. |
+| A PIU plan the issuer doesn't own is silently blanked | `save_drafts` clears an `option_plan` belonging to another corporation instead of erroring (`SaveDraftTaskRunnerV2._validate_option_plan_ownership`). An empty plan on a reloaded draft after a save that set one means the plan wasn't theirs — say so; don't re-send it. |
+| PIU document requirements are corp-property-gated | The grant agreement is required only when the issuer's properties demand it, and the equity incentive plan document only on a plan-issued row. Neither property is readable from any MCP command, so the server is authoritative — the [account-setup gate](../SKILL.md#account-setup-gate-option-grant-and-piu) is deliberately soft here. |
+| A PIU's `threshold_value` is a `CharField` on the draft, a `DecimalField(default=0)` on the issued security | An empty draft threshold becomes `0` at issue rather than erroring, so a missing threshold issues a unit that shares in **all** value. That is why it is an `always` field for the pre-save assertion (Hard rule 9), not merely a validated one. |
 | `law_firm_price = 0` is LLC-only | A `0` price per share validates only for LLC corporations; non-LLC corps are rejected at the validate/issue step with *"Value must be greater than 0"*. Don't pre-block `0` for LLC issuers (alongside ZEPO option grants). Server-gated by the `LLCCW_SUPPORT_ZERO_LAW_FIRM_PRICE_LLC` flag, so treat the server as the source of truth — surface its message verbatim if a non-LLC `0` is rejected. |

@@ -60,18 +60,19 @@ here. `PLAN_CARD` is the one **optional** key (default `""`) — see [Block:
 
 ### Scalars (per type)
 
-| Key | Option grant | Certificate |
-|---|---|---|
-| `FLOW_TITLE` | `Issue Option Grants` | `Issue Certificates` |
-| `SUBHEADING` | `<plan name> &nbsp;·&nbsp; <issue date>` | `<issue date>` (no share-class names — a batch's classes are already shown per-row in `DETAIL_TABLE`, so repeating them here is redundant, and it read oddly with a single class name floating alone next to a date) |
-| `DETAIL_TITLE` | `Grant Detail` | `Certificate Detail` |
-| `DETAIL_INTRO` | `Review before issuing. Use Back to edit to change anything.` | same |
-| `VIEW_URL_PATH` | `options/list/<CORP_ID>/` | `certificates/list/<CORP_ID>/` |
-| `SECURITY_NOUN_PLURAL` | `option grants` | `certificates` |
-| `ISSUE_MODAL_DISCLAIMER` | grant signature-flow sentence (below) | certificate legend-restriction sentence (below) |
+| Key | Option grant | Certificate | PIU |
+|---|---|---|---|
+| `FLOW_TITLE` | `Issue Option Grants` | `Issue Certificates` | `Issue Profits Interest Units` |
+| `SUBHEADING` | `<plan name> &nbsp;·&nbsp; <issue date>` | `<issue date>` (no share-class names — a batch's classes are already shown per-row in `DETAIL_TABLE`, so repeating them here is redundant, and it read oddly with a single class name floating alone next to a date) | `<plan name> &nbsp;·&nbsp; <issue date>` only when **every** row shares one plan; otherwise `<issue date>` alone |
+| `DETAIL_TITLE` | `Grant Detail` | `Certificate Detail` | `Profits Interest Detail` |
+| `DETAIL_INTRO` | `Review before issuing. Use Back to edit to change anything.` | same | same |
+| `VIEW_URL_PATH` | `options/list/<CORP_ID>/` | `certificates/list/<CORP_ID>/` | `options/piu/list/<CORP_ID>/` |
+| `SECURITY_NOUN_PLURAL` | `option grants` | `certificates` | `profits interest units` |
+| `ISSUE_MODAL_DISCLAIMER` | grant signature-flow sentence (below) | certificate legend-restriction sentence (below) | PIU signature-flow sentence (below) |
 
 - **Grant `ISSUE_MODAL_DISCLAIMER`**: *"Confirming will save these grants to Carta and send them to the signatory for signature."*
 - **Cert `ISSUE_MODAL_DISCLAIMER`**: *"Confirming will save these certificates to Carta and issue them to the cap table."*
+- **PIU `ISSUE_MODAL_DISCLAIMER`**: *"Confirming will save these profits interest units to Carta and send them to the signatory for signature."*
 
 **Never append draft-set status to `SUBHEADING`** (e.g. "· new draft set") — this has been
 ad-libbed in production for both types even though it's not part of either pattern above.
@@ -80,8 +81,11 @@ subheading's job is just "what is this, and when" (plan/nothing, then the date).
 
 ### Block: `PLAN_CARD`
 
-Option-grant only — **empty string for certificates** (no equity plan concept
-there; the template renders nothing). A highlighted `<div class="card section
+Rendered for option grants always, and for PIUs **only when every row carries the same
+`option_plan`** — a PIU's plan is per row and optional, so a mixed batch has no batch-wide
+plan to name and claiming one would misstate which pool the other rows draw from. Empty
+string for certificates (no equity plan concept there) and for a plan-less or mixed PIU
+batch; the template then renders nothing, and the per-row **Equity plan** column carries it. A highlighted `<div class="card section
 plan-card">` (blue left-accent bar, tinted background) naming the resolved
 equity plan and its exercise periods — elevated out of `SUBHEADING`'s plain
 text into its own card (design feedback: the plan name used to be buried in a

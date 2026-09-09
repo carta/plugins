@@ -90,8 +90,8 @@ render it without recomputing it.
 
 ### Document-set resolution
 
-The zero-templates stop lives in [SKILL.md § Account-setup gate (option grant
-only)](../SKILL.md#account-setup-gate-option-grant-only), which runs on **both** adapters in
+The zero-templates stop lives in [SKILL.md § Account-setup gate (option grant and
+PIU)](../SKILL.md#account-setup-gate-option-grant-and-piu), which runs on **both** adapters in
 Phase 0.5 immediately after `issuance_init` returns, before any surface is built, reading
 `document_sets.count` under its own section name. This helper, like every section in [SKILL.md §
 Shared resolution helpers](../SKILL.md#shared-resolution-helpers), is a fallback that runs only

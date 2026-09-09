@@ -3,9 +3,9 @@ name: carta-cap-table:issuance-import
 description: >-
   Internal file-ingest sub-skill for carta-issuance. Turns an uploaded
   spreadsheet (.xlsx/.xlsm/.csv/.tsv) or document (.pdf/.docx) into the
-  `knowns.rows` the config panel already consumes, for both certificates and
-  option grants. Not invocable directly — dispatched by carta-issuance
-  Phase 0.25.
+  `knowns.rows` the config panel already consumes, for certificates,
+  option grants and profits interest units. Not invocable directly —
+  dispatched by carta-issuance Phase 0.25.
 owner: carta-cap-table maintainers (#cap-table-eng)
 allowed-tools: []
 ---
@@ -91,6 +91,9 @@ Deterministic end to end.
 - **`security_type`** — decided by header signature first (`Exercise Price` /
   `Equity Plan Name` / `Document Set` → `option_grant`; `Share Class` /
   `Legend` / `Rule 144 Date` → `certificate`), sheet name only as a tiebreak.
+  A **threshold** column decides `piu` outright, before that comparison: the PIU
+  template also carries an equity plan and a document set, which would otherwise
+  tie it with the grant signals.
   Generic headers (`Quantity`, `Email`) are deliberately not signals.
 - **Multiple importable sheets** → `AmbiguousInput`, never a guess and never a
   merge. A batch is one security type (carta-issuance Hard rule 2).

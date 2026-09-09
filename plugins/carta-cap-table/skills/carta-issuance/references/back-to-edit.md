@@ -101,6 +101,24 @@ amount fields now (new this round — don't assume vesting is grant-only):** `ve
 `"__none__"`); `acceleration_template` (same carry-across rule as option grant); and, straight
 copy, optional, omit the key when absent: `prefix_number`, `cash_paid`, `debt_canceled`.
 
+**PIU:** `prefix`→`share_class_prefix`; `threshold_value`→same;
+`threshold_value_type`→same; `document_set_id`→same; `board_approval_date`→same. Two rules
+worth stating because copying the other two types loses them:
+
+- **There is no `needs_board_approval` on a PIU** — the field does not exist on the model, so
+  derive nothing from it. An absent `board_approval_date` means the admin cleared an optional
+  field; leave it absent so the reconstructed block re-renders it empty rather than stamping
+  today.
+- **`option_plan` carries across verbatim, including its absence.** An empty plan is a real
+  answer that issues off the unit class, so an omitted key must stay omitted — substituting a
+  default here would attach a pool the admin never chose. Stamp `option_plan`→same when set.
+
+Vesting and the accordion behave as the certificate does: `vesting_template`→
+`vesting_template_id` (`null`/omitted→`"__none__"`); `vesting_start_date`→same (reformat to
+`YYYY-MM-DD`, only when a real template is set); `acceleration_template`; and, straight copy,
+optional, omit when absent: `prefix_number`, `cash_paid`, `is_flexible_issue_date`,
+`corresponding_interest`.
+
 **Attaching server errors (Phase 1.5 only).** When this same reconstruction is used for a
 [validation-error retry](../SKILL.md#phase-15--save--validate-before-review-or-save-only)
 rather than a "Back to edit" click, two additional keys ride along, straight copy, same as

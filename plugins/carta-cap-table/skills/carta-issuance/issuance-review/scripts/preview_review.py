@@ -81,10 +81,29 @@ SAMPLE_ROWS = {
          "legend_body": "Restricted.", "stakeholder_kind": "NON-INDIVIDUAL",
          "issue_date_relationship": "Investor", "exemption": "Section 4(a)(2)"},
     ],
+    # A mixed batch: Jane draws off the unit class, John from a plan. That
+    # suppresses PLAN_CARD (no batch-wide plan to name) and lights the
+    # "Plan-issued" KPI tile, and Jane's row proves an absent board approval
+    # renders a dash rather than the grant flow's "Pending".
+    "piu": [
+        {"name": "Jane Doe", "email": "jane@acme.com", "prefix": "IU", "quantity": "5000",
+         "threshold_value": "0", "threshold_value_type": "Unit", "currency": "USD",
+         "issue_date": "2026-06-11", "threshold_noun": "hurdle",
+         "stakeholder_kind": "INDIVIDUAL", "issue_date_relationship": "Employee",
+         "exemption": "Section 4(a)(2)"},
+        {"name": "Acme Ventures Trust", "email": "ops@acmeventures.com", "prefix": "IU",
+         "quantity": "1000", "threshold_value": "2.50", "threshold_value_type": "Overall",
+         "currency": "USD", "issue_date": "2026-06-11", "board_approval_date": "2026-06-11",
+         "option_plan": "44", "equity_plan_label": "Profits Interests Plan 2024",
+         "vesting_template": "94", "vesting_start_date": "06/11/2026",
+         "threshold_noun": "hurdle", "stakeholder_kind": "NON-INDIVIDUAL",
+         "issue_date_relationship": "Investor", "exemption": "Section 4(a)(2)"},
+    ],
 }
 
 SAMPLE_CLASSES = [{"prefix": "CS", "name": "Common Stock"},
-                  {"prefix": "PA", "name": "Series A Preferred"}]
+                  {"prefix": "PA", "name": "Series A Preferred"},
+                  {"prefix": "IU", "name": "Incentive Units"}]
 
 SAMPLE_VESTING_TEMPLATES = [{"id": "94", "name": "4yr / 1yr cliff"},
                              {"id": "95", "name": "3yr / no cliff"}]
@@ -112,6 +131,20 @@ SAMPLE_SCALARS = {
         "SECURITY_NOUN_PLURAL": "certificates",
         "ISSUE_MODAL_DISCLAIMER": "Confirming will save these certificates to Carta and "
                                   "issue them to the cap table.",
+    },
+    "piu": {
+        "CORP_NAME": "Acme Holdings LLC", "CORP_ID": "2776",
+        "ENV_HOST": "app.test.carta.rocks",
+        "ISSUE_DATE": "June 11, 2026", "DRAFT_SET_ID": "new",
+        "FLOW_TITLE": "Issue Profits Interest Units",
+        # A mixed batch has no batch-wide plan, so the date stands alone.
+        "SUBHEADING": "June 11, 2026",
+        "DETAIL_TITLE": "Profits Interest Detail",
+        "DETAIL_INTRO": "Review before issuing. Use Back to edit to change anything.",
+        "VIEW_URL_PATH": "options/piu/list/2776/",
+        "SECURITY_NOUN_PLURAL": "profits interest units",
+        "ISSUE_MODAL_DISCLAIMER": "Confirming will save these profits interest units to "
+                                  "Carta and send them to the signatory for signature.",
     },
 }
 
@@ -156,7 +189,7 @@ def render(sectype: str, out_dir: Path) -> Path:
 
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description="Preview the issuance-review panel with sample data.")
-    p.add_argument("--security-type", choices=["option_grant", "certificate"])
+    p.add_argument("--security-type", choices=["option_grant", "certificate", "piu"])
     p.add_argument("--out-dir", type=Path, default=Path(tempfile.gettempdir()) / "issuance-preview")
     p.add_argument("--open", action="store_true")
     args = p.parse_args(argv)

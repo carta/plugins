@@ -67,7 +67,7 @@ Branch on the action from Phase 0.5:
 3. Call `save_drafts`, then, with the `draft_set_id` it returns (or already had):
    ```
    mcp__carta__mutate({"command": "cap_table:mutate:validate_drafts", "params": {
-     "corporation_id": <id>, "security_type": "<certificate|option_grant>",
+     "corporation_id": <id>, "security_type": "<certificate|option_grant|piu>",
      "draft_set_id": <id>}})
    ```
 4. Update `_draft_state.json` (same as `save_only`'s step 4).

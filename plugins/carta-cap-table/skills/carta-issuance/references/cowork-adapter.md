@@ -25,7 +25,7 @@ what they want and submits once.
 
 ```bash
 uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-issuance/issuance-config/scripts/build_cowork_form.py" \
-  --security-type <option_grant|certificate> \
+  --security-type <option_grant|certificate|piu> \
   --data "$WORK/_data.json" --knowns "$WORK/_knowns.json" \
   --corp-name "<legal name>" --corp-id "<corporation_id>" \
   --out "$WORK/form.html"
@@ -104,6 +104,17 @@ collapsed **More fields** accordion, in order: acceleration (optional, shown onc
 set), certificate number, cash paid, debt canceled, returned invested capital (LLC-gated —
 omitted entirely for a corp confirmed non-LLC, not merely hidden), notes.
 
+**PIU, per block** — unit class (labelled "Unit class") · equity plan (**optional**, and
+**not** defaulted even when there is only one — empty issues off the unit class's own
+authorized total) · `<Threshold|Hurdle>` value (**never** pre-filled) · `<Threshold|Hurdle>`
+value type (`Per unit` / `Overall` only) · issue date · board approval (today / other /
+**none** — optional and clearable here) · vesting schedule + start date (opt-in, as certs) ·
+documents · corresponding interest (Yes/No, **only** when the selected unit class reports
+`has_corresponding_interest`) · a collapsed **More fields** accordion: acceleration (once
+vesting is set), security number, consideration price, notes. Threshold labels take
+`knowns.threshold_noun` — "Hurdle" on the UK growth-shares preset. Never on a PIU block:
+exercise price, option type, price per share, legend, Rule 144.
+
 Not on the surface at all — dropped on design feedback, do not add them back: `state_exemption`,
 `state_of_residency`, `employee_id`, `cost_center`, `job_title`, `salary`, `convertible_note`.
 
@@ -112,11 +123,12 @@ Not on the surface at all — dropped on design feedback, do not add them back: 
 does this via `build_config.py`. Blocks are pre-filled one per person named in the prompt. An
 "+ Add stakeholder" control appends a block, copying the most-recently-added block's
 **non-personal, batch-level** terms forward (option type / price / vesting / acceleration /
-dates / documents / HMRC-ATO-notified / early-exercise-style checkboxes, or share class /
-price / vesting / acceleration / legend / Rule 144). Name, email, stakeholder type,
-relationship, quantity, and every identity/amount field in the **More fields** accordion
-(custom label, notes, prefix number, cash paid, debt canceled, returned invested capital)
-start blank on a new block.
+dates / documents / HMRC-ATO-notified / early-exercise-style checkboxes; or share class /
+price / vesting / acceleration / legend / Rule 144; or unit class / equity plan / threshold
+value and type / vesting / acceleration / documents / corresponding interest). Name, email,
+stakeholder type, relationship, quantity, and every identity/amount field in the **More
+fields** accordion (custom label, notes, prefix number, cash paid, debt canceled, returned
+invested capital) start blank on a new block.
 
 **This is where the stakeholder and quantity are collected.** A prompt that omits them shows
 an empty field here, never a chat question — regardless of which shape the prompt takes. Never
@@ -173,8 +185,8 @@ a compact per-person table.
   rule 11](../SKILL.md#hard-rules)).
 - Every row's non-personal terms are identical or unset — i.e. the prompt/`knowns` gave one
   shared set of batch-level terms (option type, exercise price, vesting, document set, etc. for
-  grants; share class, price, legend, etc. for certs) and no individual row overrides any of
-  them. Identity and amount fields (name, email, quantity, relationship, notes) never count as
+  grants; share class, price, legend, etc. for certs; unit class, equity plan, threshold value
+  and type, vesting, documents for PIUs) and no individual row overrides any of them. Identity and amount fields (name, email, quantity, relationship, notes) never count as
   an override, since those differ per person by nature.
 
 If either condition fails — 10 or fewer rows, **or** any row carries its own distinct term —
@@ -184,8 +196,9 @@ either layout.
 
 **Layout.** Two sections instead of N blocks:
 1. **Shared terms, once** — the exact same fields as a per-row block's non-personal terms
-   (option type/exercise price/vesting/documents/etc., or share class/price/vesting/legend/etc.
-   for certs), rendered a single time at the top. Every computable default still applies here
+   (option type/exercise price/vesting/documents/etc.; or share class/price/vesting/legend/etc.
+   for certs; or unit class/equity plan/threshold value and type/vesting/documents for PIUs),
+   rendered a single time at the top. Every computable default still applies here
    ([§4](#4-trust-computable-defaults--never-pre-ask)) — these are the batch-level fallback
    every row inherits.
 2. **Per-grantee table, below** — one row per person, **three columns only**: name · email ·
@@ -356,8 +369,11 @@ in the incident run.
 | Document set | the only set | `(default — only template)` |
 | Legend | the only legend, or the one flagged `default` | `(default)` |
 | Vesting (grant) | the corp's 4yr / 1yr-cliff schedule | `(default)` |
-| Vesting (cert) | none — opt-in | — |
+| Vesting (cert, PIU) | none — opt-in | — |
 | Board approval | today | `(default)` |
+| Board approval (PIU) | today, and clearable — the field is optional | `(default — today)` |
+| PIU equity plan | **none** — never the only plan | — |
+| PIU threshold value / type | **never defaulted** — terms of the grant | — |
 | Exemption / currency | the `so_type` autofill | `(autofill — <so_type> rule)` |
 | Rule 144 date | `issue_date` | `(default)` |
 

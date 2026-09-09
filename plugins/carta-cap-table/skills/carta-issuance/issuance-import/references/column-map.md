@@ -80,7 +80,7 @@ entry, not a per-row value.
 
 | Header (and synonyms) | Row field |
 |---|---|
-| Share Class · Class · Security Class · Share Class Name | `share_class_prefix` *(resolved — matches name **or** prefix)* |
+| Share Class · Class · Security Class · Share Class Name · **Unit Class** · Unit Class Name | `share_class_prefix` *(resolved — matches name **or** prefix)* |
 | Price Per Share · Purchase Price · Price · Price Paid Per Share | `price_per_share` |
 | Legend · Legend Code · Build Legend | `legend_id` *(resolved — matches code, name or label)* |
 | Certificate ID · Certificate Number · Cert ID · Certificate No | `prefix_number` |
@@ -98,6 +98,41 @@ A `Rule 144 Date` that differs from the issue date also sets
 `rule_144_mode: "other"` and notes that a reason is still needed — no template
 column carries `rule_144_difference_reason`, so the admin picks it in the panel.
 
+## Profits interest unit
+
+Anchored on carta-web's own PIU template —
+`static_files/lib/eshares/draft_importer/v3/import_pius_spreadsheet.xlsx`, sheet
+**Samle PIUs draft set.csv** (the typo is in the shipped file, so match on
+`piu`, not the full sheet name). Row 1 is instruction prose, row 2 the header.
+
+| Header (and synonyms) | Row field |
+|---|---|
+| Unit Class · Unit Class Name (and every `share_class_prefix` synonym above) | `share_class_prefix` *(resolved — matches name **or** prefix)* |
+| Equity Plan · Equity Plan Name · Plan · Plan Name | `option_plan` *(resolved **per row** — see below)* |
+| Threshold Equity Value · Threshold Value · Threshold · Hurdle Value · Hurdle | `threshold_value` |
+| Threshold Value Type · Threshold Type · Hurdle Value Type · Hurdle Type | `threshold_value_type` |
+| Flexible Issue Date | `is_flexible_issue_date` |
+| Document Set · Documents · Document Template | `document_set_id` *(resolved)* |
+
+The template's own header is **"Threshold equity value"**, not "Threshold value".
+
+> **The template's help row is off by one from that column onward.** The cell
+> under *Threshold equity value* reads *"Example: Unit or Overall"* and the one
+> under *Threshold value type* repeats the federal-exemption text. That is an
+> upstream carta-web bug — do not read the picklist out of the spreadsheet.
+
+**The equity plan resolves per row, not batch-level.** Unlike an option grant —
+whose draft set is locked to one plan, so two plan names in one sheet is a batch
+error — a PIU's plan is a row field and may legitimately differ row to row, or
+be blank. A blank cell yields no `option_plan` key **and no note**: empty is a
+real answer that issues the units off the unit class's own authorized total. An
+unmatched or expired plan name notes the row and leaves the field unset.
+
+There is **no** Security# and **no** cash-paid column in the PIU template, and
+the sheet's `Federal exemption`, `State exemption`, `Employee ID`, `Job title`,
+`Annual salary` and `State of residency` columns are deliberately unmapped — they
+are reported as columns this flow does not set.
+
 ## Headers recognized but carrying no field
 
 `Currency` — informational. Real payload `currency` comes from the per-`so_type`
@@ -113,6 +148,11 @@ field blank with an `import_notes` entry.
 importer template's own: Advisor · Ex-Advisor · Board member · Ex-Board member ·
 Consultant · Ex-Consultant · Employee · Ex-Employee · Executive · Founder ·
 International Employee · Ex-International Employee · Investor · Officer · Other
+
+**`threshold_value_type`** (PIU) — `Unit` · `Overall`, and nothing else.
+`DraftThresholdValueTypeFieldValidator` rejects any other value. *"per unit"* is
+**not** a match and is noted rather than guessed at — the field manifest's
+`FAIR_MARKET_VALUE` / `OTHER` belong to a different carta-web surface.
 
 **`stakeholder_kind`** — `INDIVIDUAL` from *individual, person, natural person*;
 `NON-INDIVIDUAL` from *non individual, entity, organization, organisation,
@@ -133,7 +173,7 @@ Board · Performance bonus · Boxcar grant
 ## Out-of-scope security types
 
 A row whose `Type` names one of these is **skipped** with a reason pointing at
-the Drafts UI, never coerced into a certificate or grant:
+the Drafts UI, never coerced into a certificate, grant or profits interest unit:
 
 RSU · SAR · CBU · Warrant · RSA · Convertible Note · SAFE
 

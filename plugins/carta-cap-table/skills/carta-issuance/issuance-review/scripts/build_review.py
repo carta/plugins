@@ -280,6 +280,41 @@ def _cert_row(r: Dict[str, Any], share_classes: List[Dict[str, Any]], any_flags:
     )
 
 
+def _threshold_noun(rows: List[Dict[str, Any]]) -> str:
+    """The issuer's own word for a PIU's threshold, Title Cased. "Hurdle" on the
+    UK growth-shares preset; "Threshold" everywhere else."""
+    for r in rows:
+        noun = str(r.get("threshold_noun") or "").strip()
+        if noun:
+            return noun[:1].upper() + noun[1:]
+    return "Threshold"
+
+
+def _piu_row(r: Dict[str, Any], share_classes: List[Dict[str, Any]],
+             vesting_templates: List[Dict[str, Any]]) -> str:
+    prefix = str(r.get("prefix", ""))
+    match = next((c for c in share_classes if str(c.get("prefix")) == prefix), None)
+    class_display = f'{match.get("name")} ({prefix})' if match else _or_dash(prefix)
+    # An empty plan is a real answer, not a gap: the units come off the unit
+    # class instead, so say which rather than showing a bare dash.
+    plan_display = str(r.get("equity_plan_label") or "").strip() or "Direct from unit class"
+    return (
+        '<tr data-stake>'
+        f'<td><div class="stake-name">{_esc(r.get("name",""))}</div>'
+        f'<div class="stake-email">{_esc(r.get("email",""))}</div></td>'
+        f'{_identity_cells(r)}'
+        f'<td>{_esc(class_display)}</td>'
+        f'<td>{_esc(plan_display)}</td>'
+        f'<td>{_qty(r.get("quantity")):,}</td>'
+        f'<td>{_esc(_or_dash(r.get("threshold_value")))}</td>'
+        f'<td>{_esc(_or_dash(r.get("threshold_value_type")))}</td>'
+        f'<td>{_esc(_date_or_dash(r, "board_approval_date"))}</td>'
+        f'<td>{_esc(_date_or_dash(r, "issue_date"))}</td>'
+        f'<td>{_esc(_vesting_label(r, vesting_templates))}</td>'
+        '</tr>'
+    )
+
+
 def build_detail_table(
     security_type: str, rows: List[Dict[str, Any]],
     share_classes: Optional[List[Dict[str, Any]]] = None,
@@ -299,6 +334,17 @@ def build_detail_table(
             '<th>Stakeholder</th><th>Email</th><th>Type</th><th>Quantity</th><th>Exercise price</th>'
             '<th>Board approval</th><th>Issue date</th><th>Vesting schedule</th><th>Vesting start</th>'
             '<th>Grant expiration</th>'
+            f'</tr></thead><tbody>{body}</tbody></table></div>'
+        )
+    if security_type == "piu":
+        noun = _threshold_noun(rows)
+        body = "".join(_piu_row(r, share_classes, vesting_templates) for r in rows)
+        return (
+            '<div class="grantee-table-wrap"><table class="grantee-table"><thead><tr>'
+            '<th>Holder</th><th>Type</th><th>Email</th><th>Relationship</th><th>Unit class</th>'
+            f'<th>Equity plan</th><th>Quantity</th><th>{_esc(noun)} value</th>'
+            f'<th>{_esc(noun)} value type</th><th>Board approval</th><th>Issue date</th>'
+            '<th>Vesting schedule</th>'
             f'</tr></thead><tbody>{body}</tbody></table></div>'
         )
     # certificate
@@ -351,6 +397,13 @@ def build_kpi_strip(security_type: str, rows: List[Dict[str, Any]]) -> str:
         # anything else.
         pending = sum(1 for r in rows if not str(r.get("board_approval_date") or "").strip())
         cells.append(_kpi_cell("Pending board approval", f"{pending:,}"))
+    elif security_type == "piu":
+        cells.append(_kpi_cell("Total units", f"{total:,}"))
+        # Which ceiling carta-web checks depends on this per row, so a mixed
+        # batch is worth stating up front rather than reading off the table.
+        plan_issued = sum(1 for r in rows if str(r.get("option_plan") or "").strip())
+        if plan_issued:
+            cells.append(_kpi_cell("Plan-issued", f"{plan_issued:,} of {recipients:,}"))
     else:
         cells.append(_kpi_cell("Total shares", f"{total:,}"))
     cells.append(_kpi_cell("Currency" if len(currencies) == 1 else "Currencies", ", ".join(currencies)))
@@ -366,7 +419,24 @@ def build_plan_card(security_type: str, rows: List[Dict[str, Any]]) -> str:
     the first row rather than recomputed per row. Elevated into its own card
     (design feedback) instead of being buried in the header subheading, which is
     all that named the plan before."""
-    if security_type != "option_grant" or not rows:
+    if not rows:
+        return ""
+    if security_type == "piu":
+        # A PIU's plan is per row, so only a batch that agrees has one plan to
+        # name. A mixed batch shows it per row in the detail table instead.
+        plans = {str(r.get("option_plan") or "") for r in rows}
+        if len(plans) != 1 or not plans.pop():
+            return ""
+        plan_name = str(rows[0].get("equity_plan_label") or "—")
+        return (
+            '<div class="card section plan-card">'
+            '<div class="plan-card-head">'
+            '<span class="plan-card-label">Equity Plan</span>'
+            f'<span class="plan-card-name">{_esc(plan_name)}</span>'
+            '</div>'
+            '</div>'
+        )
+    if security_type != "option_grant":
         return ""
     plan_name = str(rows[0].get("plan_name") or "—")
     exercise_periods_text = str(rows[0].get("exercise_periods_text") or "")
@@ -386,7 +456,7 @@ def build_plan_card(security_type: str, rows: List[Dict[str, Any]]) -> str:
 
 def main(argv: Optional[List[str]] = None) -> int:
     p = argparse.ArgumentParser(description="Build issuance-review dynamic HTML blocks.")
-    p.add_argument("--security-type", required=True, choices=["option_grant", "certificate"])
+    p.add_argument("--security-type", required=True, choices=["option_grant", "certificate", "piu"])
     p.add_argument("--rows", required=True, type=Path, help="JSON array of resolved rows")
     p.add_argument("--share-classes", type=Path, help="Raw fetched share classes (certificate) — envelope or flat array")
     p.add_argument("--vesting-templates", type=Path, help="Raw fetched vesting templates (option grant) — envelope or flat array")
@@ -408,7 +478,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     # Fail loudly instead of silently mislabeling a real selection as "Custom"
     # (see _vesting_label): if any row picked a vesting template, the caller must
     # have threaded --vesting-templates through so the id can resolve to a name.
-    if args.security_type == "option_grant" and not vesting_templates:
+    if args.security_type in {"option_grant", "piu"} and not vesting_templates:
         if any(r.get("vesting_template") is not None for r in rows):
             print(
                 "ERROR: one or more rows carry a vesting_template id, but "

@@ -406,6 +406,12 @@
       if (!scope.querySelector('[data-group="legend"].selected')) missing.push('a legend');
       const r144Other = scope.querySelector('[data-group="rule144"].selected')?.dataset.value === 'other';
       if (r144Other && !scope.querySelector('.block-rule144-reason')?.value) missing.push('a Rule 144 difference reason');
+    } else if (SEC_TYPE === 'piu') {
+      // The equity plan is deliberately absent: no plan is a real answer that
+      // issues off the unit class, so requiring one would force a wrong choice.
+      if (!scope.querySelector('[data-group="shareclass"].selected')) missing.push('a unit class');
+      if (!scope.querySelector('.block-threshold-value')?.value) missing.push('a threshold value');
+      if (!scope.querySelector('[data-group="thresholdtype"].selected')) missing.push('a threshold value type');
     } else {
       // Normally a jurisdiction default is selected, so this only bites when an
       // import could not match the file's option type and deliberately left it
@@ -430,7 +436,7 @@
 
   function updateSummary() {
     const line = document.getElementById('summary-line');
-    const noun = SEC_TYPE === 'certificate' ? 'holder' : 'grantee';
+    const noun = SEC_TYPE === 'option_grant' ? 'grantee' : 'holder';
     const startBtn = document.getElementById('btn-start');
     const saveBtn = document.getElementById('btn-save-only');
     const setState = (ready, text) => {
@@ -501,6 +507,31 @@
       row.prefix_number = scope.querySelector('.block-prefix-number')?.value || '';
       row.cash_paid = scope.querySelector('.block-cash-paid')?.value || '';
       row.debt_canceled = scope.querySelector('.block-debt-canceled')?.value || '';
+    } else if (SEC_TYPE === 'piu') {
+      const shareBtn = scope.querySelector('[data-group="shareclass"].selected');
+      const planBtn = scope.querySelector('[data-group="optionplan"].selected');
+      const thresholdBtn = scope.querySelector('[data-group="thresholdtype"].selected');
+      const docsetBtn = scope.querySelector('[data-group="docset"].selected');
+      const ciBtn = scope.querySelector('[data-group="correspondinginterest"].selected');
+      const vestSel = scope.querySelector('.block-vesting-select');
+      const noVesting = !vestSel || vestSel.value === '__none__';
+      const vestOpt = vestSel ? vestSel.options[vestSel.selectedIndex] : null;
+      row.share_class_prefix = shareBtn ? shareBtn.dataset.value : null;
+      row.share_class_label  = shareBtn ? shareBtn.dataset.label : null;
+      // An empty data-value is the "no plan" button, not a missing answer.
+      row.option_plan = planBtn ? (planBtn.dataset.value || null) : null;
+      row.option_plan_label = planBtn ? (planBtn.dataset.label || null) : null;
+      row.threshold_value = scope.querySelector('.block-threshold-value')?.value || '';
+      row.threshold_value_type = thresholdBtn ? thresholdBtn.dataset.value : null;
+      row.vesting_template_id = noVesting ? null : vestSel.value;
+      row.vesting_label = noVesting ? null : (vestOpt ? (vestOpt.dataset.label || vestOpt.text) : null);
+      row.vesting_start_date = noVesting ? null : (scope.querySelector('.block-vesting-start-date')?.value || null);
+      row.document_set_id = docsetBtn ? docsetBtn.dataset.value : null;
+      row.document_set_label = docsetBtn ? docsetBtn.dataset.label : null;
+      row.corresponding_interest = ciBtn ? ciBtn.dataset.value === 'yes' : null;
+      row.prefix_number = scope.querySelector('.block-prefix-number')?.value || '';
+      row.cash_paid = scope.querySelector('.block-cash-paid')?.value || '';
+      row.is_flexible_issue_date = !!scope.querySelector('.block-flexible-issue-date')?.checked;
     } else {
       const typeBtn = scope.querySelector('[data-group="type"].selected');
       const docsetBtn = scope.querySelector('[data-group="docset"].selected');
@@ -647,7 +678,7 @@
 
   (function init() {
     const lbl = document.getElementById('people-label');
-    if (lbl) lbl.textContent = SEC_TYPE === 'certificate' ? 'Holders' : 'Grantees';
+    if (lbl) lbl.textContent = SEC_TYPE === 'option_grant' ? 'Grantees' : 'Holders';
     if (BATCH_MODE) {
       document.getElementById('people-group').style.display = 'none';
       document.getElementById('batch-mode').style.display = '';

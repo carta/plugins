@@ -34,7 +34,7 @@ one-confirmation rule, panel lifecycle gotchas) are a separate concern — see
 **Recovery `AskUserQuestion`s after a server short-circuit are fine** — no watcher is running
 at that point. The restriction applies only while a panel is open and awaiting a click.
 
-**The [account-setup gate](../SKILL.md#account-setup-gate-option-grant-only) is not a
+**The [account-setup gate](../SKILL.md#account-setup-gate-option-grant-and-piu) is not a
 divergence** — worth stating because it is the one stop that precedes panel work. It runs on
 this path exactly as the core describes, so an option-grant corporation with zero document sets
 stops in Phase 0.5 and the config panel never renders.
@@ -89,8 +89,10 @@ across the batch. A per-row key (see `rows`) always wins over the batch-level fa
 | `no_vesting` | `true` **only** when the user explicitly said no vesting (fallback default; a row's own `vesting_template_id: "__none__"` overrides per-row). Grant only; omit otherwise |
 | `default_vesting_id` | vesting template id to pre-select when you can identify the corp's 4yr/1yr-cliff schedule; omit to let the script pick. Both types — for a certificate batch, setting this also opts every row into vesting by default (certs otherwise default to **No vesting**, being opt-in) |
 | `price_per_share_default` | default price per share as a bare number, or omit to leave blank. Cert only |
-| `share_class_prefix` | prefix to pre-select when the prompt named a class (*"Series A"* → `"PA"`). Cert only. Omit to let the script default to the most recently fetched class (see [certificate-fields.md § Share-class reconciliation](certificate-fields.md#share-class-reconciliation-certificate)) |
-| `is_llc` | never resolved — no MCP command returns a corporation's `legal_entity_type`; always omit. Cert only |
+| `share_class_prefix` | prefix to pre-select when the prompt named a class (*"Series A"* → `"PA"`). Cert and PIU. Omit to let the script default to the most recently fetched class (see [certificate-fields.md § Share-class reconciliation](certificate-fields.md#share-class-reconciliation-certificate)) |
+| `option_plan_id` | plan pk to pre-select when the prompt named one. **PIU only, and never a default** — omitting it selects "no plan", which issues off the unit class ([piu-fields.md](piu-fields.md#equity-plan-reconciliation--per-row-optional-prefix-matched)) |
+| `threshold_noun` | the issuer's own word for the threshold, from `issuance_init`'s `draft_set_init.thresholdNoun` — `"threshold"` by default, `"hurdle"` on the UK growth-shares preset. PIU only |
+| `is_llc` | `issuance_init`'s `draft_set_init.isLLC`, fetched on the PIU flow. Not available on the certificate flow, which has no `draft_set_init` section — omit it there |
 
 ```bash
 OUT_DIR="$HOME/.carta/cache/issuance-config/<CORP_ID>"

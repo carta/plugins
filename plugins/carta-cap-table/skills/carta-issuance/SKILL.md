@@ -3,14 +3,16 @@ name: carta-issuance
 description: >-
   Issue securities on a Carta cap table. Use when the user asks to issue
   certificates, stock certificates, option grants (ISO, NSO, EMI, CSOP,
-  Unapproved, Startup Concessions, Non-Concessional, ZEPO), to draft
-  shares or grants, or to resume issuing from a draft set. USE WHEN the
-  user says "issue", "grant", "draft", "award", "give equity", "give
-  shares", "give stock", "create a certificate", "create a grant", "set
-  up an option grant", "issue equity to a named person", or names any specific
-  security type above. Also USE WHEN the user points at a spreadsheet, CSV,
-  Carta import template, or a grant/award document as the source of the
-  issuance ("issue the grants in this file", "here's our import template").
+  Unapproved, Startup Concessions, Non-Concessional, ZEPO), profits interest
+  units (PIUs), to draft shares, grants or units, or to resume issuing from a
+  draft set. USE WHEN the user says "issue", "grant", "draft", "award", "give
+  equity", "give shares", "give stock", "create a certificate", "create a
+  grant", "issue a profits interest", "issue PIUs", "grant profits interest
+  units", "set up an option grant", "issue equity to a named person", or names
+  any specific security type above. Also USE WHEN the user points at a
+  spreadsheet, CSV, Carta import template, or a grant/award document as the
+  source of the issuance ("issue the grants in this file", "here's our import
+  template").
 model: inherit
 allowed-tools:
   - AskUserQuestion
@@ -48,24 +50,29 @@ allowed-tools:
 
 # Issue Securities
 
-Walk an admin from raw input to issued certificates or option grants on a Carta cap table.
-Those two are the **only** security types this skill issues.
+Walk an admin from raw input to issued certificates, option grants, or profits interest
+units on a Carta cap table. Those three are the **only** security types this skill issues.
 
 | Flow | Example prompts |
 |---|---|
 | Certificates | "Issue 1 cert for Jane Doe, 1000 Series A at $1.50." · "Draft 5 founder certs on Acme." |
 | Option grants | "Issue 1000 ISOs to Jane at $1.50 on the 2024 Plan." · "Draft 10 ISOs for new hires." · "Issue an EMI grant — 2000 options at £0.50." |
+| Profits interest units | "Issue 5,000 CC units to Jane with a $2.00 per-unit threshold." · "Grant a profits interest — 500 units, overall threshold $1M." · "Draft 5 PIUs on the 2024 Plan." |
 | Spreadsheet / file | "Issue the grants in ~/Downloads/Q3-hires.xlsx." · "Here's our import template — issue these certs." · "Draft the grant in this signed award agreement." |
 | Resume | "Resume draft set 472." · "Continue the 'Q2 hires' draft set." |
 
-To **fix** an already-issued certificate or grant, that's `carta-modify-issuables`, not this
-skill.
+To **fix** an already-issued certificate, grant or unit, that's `carta-modify-issuables`,
+not this skill.
 
 **Out of scope** — stop and route to the Drafts UI in the Carta app for RSUs, SARs, CBUs,
 warrants, convertibles, SAFEs, convertible debt, and for custom legends, vesting,
 acceleration, or exercise periods:
 
-> *"This skill issues certificates and option grants today. For \<thing\>, use the Drafts UI in the Carta app."*
+> *"This skill issues certificates, option grants and profits interest units today. For \<thing\>, use the Drafts UI in the Carta app."*
+
+**Never substitute the certificate flow for a PIU.** Server-side a PIU *is* a certificate row
+with `type="PIU"`, so that path looks like a fallback if a PIU call is refused — it isn't. It
+issues a plain unit certificate with no threshold value, a different security.
 
 Carta's own import template has sheets for several of those, so an uploaded workbook routinely
 contains rows this skill can't issue. [Phase 0.25](#phase-025--ingest-an-uploaded-file) skips
@@ -101,9 +108,10 @@ reading first only delays it:
   field contract: types, formats, picklists, autofills, date quirks.
 
 **The type-specific row file waits for `security_type`.** Read
-[option-grant-fields.md](references/option-grant-fields.md) *or*
-[certificate-fields.md](references/certificate-fields.md) once that resolves — never both, and
-never before. Loading the wrong one is pure cost, and a grant run has no use for Rule 144.
+[option-grant-fields.md](references/option-grant-fields.md), *or*
+[certificate-fields.md](references/certificate-fields.md), *or*
+[piu-fields.md](references/piu-fields.md) once that resolves — exactly one, and never
+before. Loading the wrong one is pure cost, and a grant run has no use for Rule 144.
 
 Both paths end the same way: the `issue_securities` mutate ([Phase 3](#phase-3--on-confirmation-run-the-mutate)).
 The SDK's HITL prompt on that mutate is the final, irreversible gate — never the review gate.
@@ -114,7 +122,7 @@ The SDK's HITL prompt on that mutate is the final, irreversible gate — never t
 
 1. **The field contract lives in [payload-reference.md](references/payload-reference.md).**
    Read it before constructing any payload. No invented keys.
-2. **Never mix certificate and option grant fields in one mutate.** Run the skill twice for a
+2. **Never mix two security types' fields in one mutate.** Run the skill once per type for a
    mixed request.
 3. **One confirmation gate per mutate attempt** — never zero, never two stacked. On Cowork the
    gate is the `AskUserQuestion` in
@@ -198,7 +206,7 @@ from memory, and not from a reference file you happened to open:**
 |---|---|---|
 | 1 | How many numbered items are in [Hard rules](#hard-rules), and what does the **last** one say? | this file — the answer is **12**, and it is this check |
 | 2 | Which **three** `so_type`s does the corp's resolved jurisdiction allow, and what does a wrong `"US"` default show a UK company? | [Phase 0.5](#option-grant-resolve-the-fmv-and-the-jurisdiction-before-building-the-surface) |
-| 3 | Which script builds the surface on this adapter, and what must you never do instead? | [Phase 0.5](#phase-05--configure-the-issuance) |
+| 3 | Which script builds the surface on this adapter, which `--security-type` values does it take, and what must you never do instead? | [Phase 0.5](#phase-05--configure-the-issuance) |
 
 Question 1 is self-verifying: rule 12 *is* this check, so a run that cannot name it is a run
 that never loaded this file. Answering "11" means the content is stale or partial — stop.
@@ -246,11 +254,18 @@ Resolve once, at the top. Pass on every draft-set tool call.
 
 | Cue | `security_type` |
 |---|---|
-| "cert", "certificate", "shares", "Series A", "common" | `certificate` (default) |
+| "cert", "certificate", "shares", "Series A", "common", "membership units" | `certificate` (default) |
 | "option", "ISO", "NSO", "grant" (with plan), "EMI", "CSOP", "Unapproved", "Startup Concessions", "ESS", "Non-Concessional", "ZEPO" | `option_grant` |
+| "PIU", "PIUs", "profits interest", "profits interest unit", "incentive units", "threshold", "hurdle" | `piu` |
 | Ambiguous ("equity") | Ask with `AskUserQuestion` |
-| Mixed in one prompt | Ask which to run first; run the other in a follow-up |
+| Mixed in one prompt | Ask which to run first; run the others in follow-ups |
 | Out-of-scope security | Route to the Drafts UI; stop |
+
+**"units" and "membership units" are not PIU cues.** On an LLC, Carta's equity language
+renames a *certificate* to a membership unit, so bare "units" lands at `certificate` at least
+as often as at `piu`. Read it as `piu` only alongside a real PIU signal — "profits",
+"incentive", a threshold or hurdle amount, or a named equity plan. Without one it is a real
+fork → `AskUserQuestion`, never a silent pick.
 
 ---
 
@@ -456,7 +471,7 @@ lookup bounded by the file's row count, never by roster size.
 duplicate stakeholders on a real cap table. Pass the names as a list; never join them into a
 `search` string.
 
-**The [account-setup gate](#account-setup-gate-option-grant-only) still applies.** Having a
+**The [account-setup gate](#account-setup-gate-option-grant-and-piu) still applies.** Having a
 parsed file in hand is not a reason to push past it: a corp with no option-grant document set
 cannot issue one, whether the rows came from a spreadsheet or from the prompt. Stop where the
 gate says to stop — the parsed rows cost nothing and the file is still there afterwards.
@@ -575,6 +590,12 @@ no dependencies on each other; serial fetches here are pure latency.
     `valuations_409a`, `international_valuations`, `option_plans`.
   - *Certificate* — `certificate_share_classes`, `legends`, `vesting_templates`,
     `acceleration_templates` (cert vesting is opt-in but needs the same two lists once opted in).
+  - *PIU* — `certificate_share_classes` (**read as the unit classes**: same endpoint and
+    shape, so the section keeps that name and its fallback command), `option_plans`,
+    `vesting_templates`, `acceleration_templates`, `document_sets`, `draft_set_init`. **No
+    `legends`, no valuations** — a PIU has no legend and no exercise price. Threshold value
+    types are not a section: they are the fixed pair `Unit` / `Overall`. `draft_set_init`
+    carries the issuer's `thresholdNoun` (`"hurdle"` on the growth-shares preset) and `isLLC`.
   - *Both, only when `stakeholder_names` was passed* — `stakeholders`, already at `detail=full`,
     carrying `id`, `full_name`, `email`, `event_relationship`, and `kind` per person.
 
@@ -589,46 +610,70 @@ no dependencies on each other; serial fetches here are pure latency.
 
   **Read each section under its own name.** Never let one section's `count: 0` stand in for
   another's. Exactly one count may stop the flow — the [Account-setup
-  gate](#account-setup-gate-option-grant-only) below, on `document_sets.count` read under that
+  gate](#account-setup-gate-option-grant-and-piu) below, on `document_sets.count` read under that
   name and no other. Every other count, zero included, never gates: the surface is built and
   opened regardless (Hard rule 10).
 
-### Account-setup gate (option grant only)
+### Account-setup gate (option grant and PIU)
 
 Runs once, immediately after the `issuance_init` payload is read — before FMV, jurisdiction,
-plan, or any surface work — and is skipped entirely when `security_type` is `certificate`. Both
-adapters run it: a zero-template corporation cannot issue from either surface.
+plan, or any surface work — and skipped entirely for `certificate`. Both adapters run it.
 
-Read `document_sets.count` from the `document_sets` section, under that exact name. Confirm the
-section name before acting on the number: a real run aborted a valid issuance by reading
-`acceleration_templates`' zero as this section's ([incidents.md § Reading server data
-wrong](references/incidents.md#reading-server-data-wrong)). Then branch:
+**Read the count from its section under that exact name.** A real run aborted a valid
+issuance by reading `acceleration_templates`' zero as `document_sets`'
+([incidents.md § Reading server data wrong](references/incidents.md#reading-server-data-wrong)).
+`count >= 1` always passes, and no other section's zero ever gates.
 
-- **`count >= 1`** → pass; continue the phase. No other section's count matters here —
-  `acceleration_templates.count: 0`, or any other empty list, is a normal state and never gates.
-- **`count == 0`** → stop before building any surface:
+| `security_type` | Section | On `count == 0` |
+|---|---|---|
+| `option_grant` | `document_sets` | **Hard stop** — `document_set_id` is an `always` field on every grant row |
+| `piu` | `certificate_share_classes` | **Hard stop** — `prefix` is an `always` field, so the batch could never issue |
+| `piu` | `document_sets` | **Soft** — a PIU needs one only when the issuer's own properties demand it, and no MCP command exposes those. Build the surface *without* the Documents row and let `validate_drafts` decide (Hard rule 5) |
+| `certificate` | — | skipped |
 
-  > *"Your corporation doesn't have any option-grant document templates set up yet. Create one in the Carta app, then come back."*
+Hard stop, before building any surface:
 
-- **`document_sets` failed to fetch** — `null` (named in the top-level `errors` or not), absent
-  outright, or present but not the documented `{count, results}` shape (missing or non-numeric
-  `count`) → a failed fetch, **not** `count: 0`. Run the section's fallback,
-  `cap_table:get:document_sets` with `security_type: "option_grant"`, and gate on that count
-  instead. If the fallback errors too, surface its message verbatim and stop as a fetch failure
-  — never with the no-templates message above.
+> *"Your corporation doesn't have any option-grant document templates set up yet. Create one in the Carta app, then come back."*
+> *"Your corporation doesn't have any unit classes set up yet. Create one in the Carta app, then come back."*
+
+Soft, one line alongside the surface:
+
+> *"This company has no profits-interest document templates. Carta will reject the issuance if your company requires a grant agreement — set one up in the Carta app if it does."*
+
+**A section that failed to fetch** — `null`, absent, or not the documented `{count, results}`
+shape — is a failed fetch, **not** `count: 0`. Run that section's own fallback command and
+gate on its count; if the fallback errors too, surface its message verbatim and stop as a
+fetch failure, never with a no-templates message.
 
 **Why stopping here doesn't break Hard rule 10.** Rule 10 forbids asking for *collectible
-fields* — anything the surface has a field for, like who the grantees are — before the surface
-opens. The surface's document-set field picks **among existing templates**; it cannot create
-one. Every grant row requires one (`document_set_id` is an `always` field), so with zero
-templates the field is unfillable from any surface and the batch it collects can never issue. A
-missing template is an **account-setup blocker** — the same category as an unreachable Carta MCP
-(Phase 0 Step 3) — and account setup happens in the Carta app, not on this surface.
+fields* before the surface opens. These fields pick **among existing records** and cannot
+create one, so for an `always` field zero records makes it unfillable from any surface and the
+batch can never issue — an **account-setup blocker**, the same category as an unreachable Carta
+MCP (Phase 0 Step 3), resolved in the Carta app rather than on this surface. For a
+*conditional* field (PIU document sets) the blocker isn't certain, which is why that one is
+soft.
 
-**The gate has exactly one member: `document_sets`, on option grants.** It is not a "stop on any
-empty section" rule and must not be read as one.
+**The gate reads only the sections in the table above.** It is not a "stop on any empty
+section" rule and must not be read as one.
+
+### PIU: check issuer eligibility (before building the surface)
+
+Profits interests belong to LLCs and partnerships. **Nothing server-side rejects a PIU on a
+C-corp** — not the draft-set views, not the validators — so this check exists only here. Read
+`draft_set_init.isLLC` from the `issuance_init` payload:
+
+- **`true`** → continue.
+- **`false`** → warn once with `AskUserQuestion` before collecting anything: *"\<Company\> isn't
+  set up as an LLC or partnership on Carta, and profits interests are normally issued by one.
+  Continue anyway, or switch to certificates?"* Continuing is the admin's call; the server will
+  accept it either way.
+- **absent or `null`** (the section failed, or the field is missing) → treat as **unknown, not
+  as `false`**. Continue without the warning — never block on a failed fetch.
 
 ### Option grant: resolve the FMV and the jurisdiction (before building the surface)
+
+**Skipped entirely for `certificate` and `piu`** — neither has an exercise price, so there is
+no FMV to resolve and no `so_type` jurisdiction to gate.
 
 Both are batch-level: every row in one draft set shares them. Resolve once, pass in `knowns`.
 
@@ -751,6 +796,16 @@ Matching a user-supplied class name, the "most recently created" default, and th
 ambiguous-match table: [certificate-fields.md § Share-class
 reconciliation](references/certificate-fields.md#share-class-reconciliation-certificate).
 
+### Unit-class + equity-plan reconciliation (PIU)
+
+Both live in [piu-fields.md § Resolution
+helpers](references/piu-fields.md#resolution-helpers-piu). Two facts differ sharply from the
+other types: the unit class comes from `certificate_share_classes`, is carried as `prefix`, and
+is **labelled "Unit class"**; and the equity plan is **per row, optional, and never
+defaulted** — an empty plan issues off the unit class's own authorized total, a different
+server-side ceiling, so attaching the only plan silently changes the pool math. `equity_plan_id`
+is never passed on a PIU mutate.
+
 ### Option-plan reconciliation (option grant)
 
 Use the `option_plans` section from the Phase 0.5 `issuance_init` payload.
@@ -811,6 +866,7 @@ template → `vesting_template: <id>`; `"No vesting"` → leave unset. When set,
 | Flow | Default posture | "No vesting" |
 |---|---|---|
 | Certificate | Opt-in (only if the user volunteers) | Normal |
+| PIU | Opt-in (only if the user volunteers) | Normal |
 | Option grant | Required server-side | Accepted, but warn — atypical |
 
 ### Acceleration resolution
@@ -830,6 +886,9 @@ payload. `AskUserQuestion`: one option per template → `acceleration_template: 
 - **Exercise periods, document set, board approval** (option grant) —
   [option-grant-fields.md § Resolution
   helpers](references/option-grant-fields.md#resolution-helpers-option-grant).
+- **Unit class, equity plan, threshold value and type, document set, board approval,
+  corresponding interest** (PIU) — [piu-fields.md § Resolution
+  helpers](references/piu-fields.md#resolution-helpers-piu).
 
 ---
 
@@ -844,6 +903,7 @@ to the mutate.
   row](references/certificate-fields.md#certificate-row).
 - **Option grant** — [option-grant-fields.md § Option-grant
   row](references/option-grant-fields.md#option-grant-row).
+- **PIU** — [piu-fields.md § PIU row](references/piu-fields.md#piu-row).
 
 ## Pre-mutate checklist
 
@@ -852,7 +912,7 @@ final `issue_securities`:
 
 - [ ] `security_type` resolved and passed on every call
 - [ ] Stakeholder lookup ran with `detail=full` → `issue_date_relationship`, `email`, `stakeholder_kind`, `stakeholder_id` stamped on every row
-- [ ] **Cert:** share class resolved → `prefix`. **Grant:** option plan resolved, `so_type` autofills applied (`currency`, `exemption`)
+- [ ] **Cert:** share class resolved → `prefix`. **Grant:** option plan resolved, `so_type` autofills applied (`currency`, `exemption`). **PIU:** unit class resolved → `prefix`, `threshold_value` and `threshold_value_type` both set, equity plan resolved **or deliberately empty**
 - [ ] Every `always` field populated per the row template; pre-save assertion passed (Hard rule 9)
 - [ ] **For `issue_securities` only:** the review surface was opened and confirmed (Phase 2 → 3). Phase 1.5's calls precede the review by design, so this doesn't apply to them
 - [ ] If retry: `draft_set_id` + each row's `draft_pk` in the payload (Hard rule 4)
@@ -899,7 +959,7 @@ is already holding exactly what the user just approved. Issue *those* rows:
 
 ```
 mcp__carta__mutate({"command": "cap_table:mutate:issue_securities", "params": {
-  "corporation_id": <corporation_id>, "security_type": "<certificate|option_grant>",
+  "corporation_id": <corporation_id>, "security_type": "<certificate|option_grant|piu>",
   "draft_set_id": <draft_set_id>}})     # no `drafts` key at all
 ```
 
@@ -972,9 +1032,9 @@ One mutate runs save → validate → check duplicates → issue, atomically. Th
 when you send no rows.
 
 ```
-# The normal case, both security types — the set already holds the reviewed rows
+# The normal case, every security type — the set already holds the reviewed rows
 mcp__carta__mutate({"command": "cap_table:mutate:issue_securities", "params": {
-  "corporation_id": <corporation_id>, "security_type": "<certificate|option_grant>",
+  "corporation_id": <corporation_id>, "security_type": "<certificate|option_grant|piu>",
   "draft_set_id": <draft_set_id>}})
 ```
 
@@ -993,6 +1053,12 @@ mcp__carta__mutate({"command": "cap_table:mutate:issue_securities", "params": {
   "corporation_id": <corporation_id>, "security_type": "option_grant",
   "drafts": [ ...grant rows, each with its draft_pk when the set exists... ],
   "equity_plan_id": <equity_plan_id>,               # first save of a new set only
+  "draft_set_id": <draft_set_id when one exists>}})
+
+# PIU — NO equity_plan_id, ever: the plan is the per-row `option_plan` field
+mcp__carta__mutate({"command": "cap_table:mutate:issue_securities", "params": {
+  "corporation_id": <corporation_id>, "security_type": "piu",
+  "drafts": [ ...PIU rows, each with its draft_pk when the set exists... ],
   "draft_set_id": <draft_set_id when one exists>}})
 ```
 
@@ -1022,9 +1088,11 @@ they aren't in the response.
 
 - **Certificate:** Stakeholder · Share class · Quantity · Issue date.
 - **Option grant:** Stakeholder · Plan · Option type · Quantity · Exercise price · Issue date.
+- **PIU:** Holder · Unit class · Quantity · Threshold value · Issue date.
 
 Link to the ledger at `https://app.carta.com/<VIEW_URL_PATH>`, where `VIEW_URL_PATH` is
-`options/list/<CORP_ID>/` (option grant) or `certificates/list/<CORP_ID>/` (certificate).
+`options/list/<CORP_ID>/` (option grant), `certificates/list/<CORP_ID>/` (certificate), or
+`options/piu/list/<CORP_ID>/` (PIU).
 **Never invent a different path** — `corporations/<corporation_id>/equity/options/` looks
 plausible and is not a real route. `app.carta.com` is a deliberate hardcode: no MCP command
 resolves an environment-specific host, so this link is only correct in production and will
@@ -1039,7 +1107,7 @@ Runs whenever a save-only save is needed: from [Phase 1.5](#phase-15--save--vali
 
 ```
 mcp__carta__mutate({"command": "cap_table:mutate:save_drafts", "params": {
-  "corporation_id": <corporation_id>, "security_type": "<certificate|option_grant>",
+  "corporation_id": <corporation_id>, "security_type": "<certificate|option_grant|piu>",
   "drafts": [ ...rows... ],
   "draft_set_id": <draft_set_id if resuming>, "draft_set_name": <optional, ≤30 chars>,
   "equity_plan_id": <equity_plan_id>}})   # option-grant only, on first save
@@ -1063,7 +1131,7 @@ is complete.
 
 ```
 mcp__carta__mutate({"command": "cap_table:mutate:validate_drafts", "params": {
-  "corporation_id": <corporation_id>, "security_type": "<certificate|option_grant>",
+  "corporation_id": <corporation_id>, "security_type": "<certificate|option_grant|piu>",
   "draft_set_id": <draft_set_id>}})
 ```
 
@@ -1088,6 +1156,7 @@ issue, the issue date in long form (`Month D, YYYY`).
 | Issued, certificate | *"N \<share class\> certificates issued on \<company\> — \<issue date\>. Open [\<company\>'s securities ledger](https://app.carta.com/\<VIEW_URL_PATH\>) in Carta to see the new certificates."* |
 | Issued, grant (uniform) | *"N \<so_type\> option grants issued on \<company\> — \<issue date\>. Open [\<company\>'s securities ledger](https://app.carta.com/\<VIEW_URL_PATH\>) in Carta to see the new grants, or find them under the \<plan name\> plan."* |
 | Issued, grant (mixed) | as above, but *"N option grants (X ISOs, Y NSOs) issued on …"* |
+| Issued, PIU | *"N \<unit class\> profits interest units issued on \<company\> — \<issue date\>. Open [\<company\>'s profits interest ledger](https://app.carta.com/\<VIEW_URL_PATH\>) in Carta to see the new units."* |
 | Saved as draft | *"N \<security type\> drafts saved on \<company\> — finish in the [Drafts UI](https://app.carta.com/drafts/\<security_type\>/\<CORP_ID\>/draft/?draftSetPk=\<draft_set_id\>)."* |
 | Canceled, **a real draft set exists** | *"Issuance canceled on \<company\> — the draft set is still there if you want to come back to it: [Drafts UI](…same URL…)."* |
 | Canceled, **no real draft set** | *"Issuance canceled on \<company\> — nothing was saved to Carta."* (no link — there is nothing to open) |
@@ -1100,6 +1169,7 @@ initial `"new"` placeholder, or when every row's `status` came back an error.
 Every link above hardcodes `app.carta.com` — no MCP command resolves an environment-specific
 host, so this is only correct in production. A deliberate, accepted tradeoff: a sandbox/test
 session gets a link pointing at production. `security_type` in a Drafts-UI path is the
-literal mutate value (`certificate` or `option_grant`).
+literal mutate value (`certificate`, `option_grant` or `piu`).
 
-To **correct** an issued certificate or grant afterward, that's `carta-modify-issuables`.
+To **correct** an issued certificate, grant or unit afterward, that's
+`carta-modify-issuables`.

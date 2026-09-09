@@ -39,7 +39,7 @@ def _load(path: Path) -> Any:
 
 def main(argv: Optional[List[str]] = None) -> int:
     p = argparse.ArgumentParser(description="Build issuance-config dynamic HTML blocks.")
-    p.add_argument("--security-type", required=True, choices=["option_grant", "certificate"])
+    p.add_argument("--security-type", required=True, choices=["option_grant", "certificate", "piu"])
     p.add_argument("--data", required=True, type=Path, help="JSON of raw MCP reference results")
     p.add_argument("--knowns", required=True, type=Path, help="JSON of what the prompt supplied")
     p.add_argument("--out-dir", required=True, type=Path)

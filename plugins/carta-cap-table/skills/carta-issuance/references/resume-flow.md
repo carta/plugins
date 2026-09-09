@@ -36,6 +36,14 @@ as a fresh Phase 1 pass — otherwise the Plan / Documents / Exercise periods co
 
 ---
 
+**PIU — re-derive the review-only labels too.** `load_drafts` returns `prefix`,
+`option_plan` and `document_set_id`, but none of `unit_class_label` / `equity_plan_label` /
+`document_set_label` / `threshold_noun`
+([Review-only fields](piu-fields.md#review-only-fields-piu--never-sent-to-the-mutate)).
+Resolve each id back to its name before Phase 2, and re-read `threshold_noun` from
+`draft_set_init` — otherwise the review labels the threshold columns generically and shows a
+dash where the source of the units belongs.
+
 ## Cleanup unexpected draft rows
 
 Resume, or a batch where a stakeholder block was removed during a
@@ -44,7 +52,10 @@ Resume, or a batch where a stakeholder block was removed during a
 deliberately left alone rather than deleted there) — no-op otherwise. When `load_drafts`
 returns more rows than the skill is tracking: group by per-flow key (cert: `name, email,
 stakeholder_id, prefix, quantity, issue_date`; grant: `name, email, stakeholder_id, so_type,
-quantity, issue_date`), keep the most-populated row per group (rest are **duplicates**), and
+quantity, issue_date`; PIU: `name, email, stakeholder_id, prefix, option_plan, quantity,
+issue_date` — one batch can legitimately give the same person the same quantity out of two
+different unit classes or pools, so the source of the units has to be in the key or those rows
+read as duplicates), keep the most-populated row per group (rest are **duplicates**), and
 flag any row whose `draft_pk` isn't in your tracked set as an **unrelated extra**. Show two
 sub-tables, then `AskUserQuestion`: `"Delete N duplicates and continue"` (drops dedup losers,
 keeps unrelated extras) / `"Keep all rows and issue as-is"` / `"Cancel issuance"`. On delete,

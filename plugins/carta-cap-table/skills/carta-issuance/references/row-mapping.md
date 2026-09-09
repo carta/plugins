@@ -73,3 +73,28 @@ acceleration**), `notes`, `prefix_number`, `cash_paid`, `debt_canceled`.
 Finally, drive the [Dividend accrual start date
 resolution](certificate-fields.md#dividend-accrual-start-date-resolution) from each class's
 `dividend` field.
+
+---
+
+## PIU, per row
+
+| Surface field | Becomes | Notes |
+|---|---|---|
+| `share_class_prefix` | `prefix` | the **unit class** |
+| `option_plan` | `option_plan` | **omit when empty** — empty is a real answer that issues off the unit class, not a missing one. Stamp the resolved plan's name as the review-only `equity_plan_label` |
+| `threshold_value` | `threshold_value` | never defaulted; a `0` survives |
+| `threshold_value_type` | `threshold_value_type` | `Unit` or `Overall` only |
+| `issue_date` | `issue_date` | |
+| `board_approval_date` | `board_approval_date` | **there is no `needs_board_approval` on a PIU** — that field does not exist on the model and sending it fails the whole mutate. An empty date omits the key |
+| `vesting_template_id` | `vesting_template` | `null` on **No vesting** — the PIU default, so like a certificate and unlike a grant, do **not** warn |
+| `vesting_start_date` | `vesting_start_date` | reformat to `MM/DD/YYYY`, only when a real template is set |
+| `document_set_id` | `document_set_id` | server resolves both doc slots from it |
+| `corresponding_interest` | `corresponding_interest` | the surface sends `true`/`false`/`null`; omit the key when the field was never rendered |
+
+**Defaults:** `exemption = "Section 4(a)(2)"`; `currency` per the surface.
+
+**Pass through unchanged:** `acceleration_template` (the surface sends `null` on **No
+acceleration**), `notes`, `prefix_number`, `cash_paid`, `is_flexible_issue_date`.
+
+**Never emit:** `price_per_share`/`law_firm_price`, `legend_id`, `rule_144_*`,
+`exercise_price`, `so_type`, `grant_expiration_date`, `equity_plan_id`.

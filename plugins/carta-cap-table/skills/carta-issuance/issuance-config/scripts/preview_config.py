@@ -83,6 +83,32 @@ SAMPLE_DATA = {
              "kind": "INDIVIDUAL", "event_relationship": "Employee"},
         ]},
     },
+    # One unit class carries the corresponding-interest link and one does not,
+    # so the conditional row is visible in the preview either way.
+    "piu": {
+        "share_classes": {"results": [
+            {"prefix": "IU", "name": "Incentive Units", "has_corresponding_interest": True},
+            {"prefix": "CB", "name": "Class B Units"},
+        ]},
+        "option_plans": {"results": [
+            {"id": "44", "name": "Profits Interests Plan 2024",
+             "available_quantity": 500000, "is_expired": False},
+            {"id": "45", "name": "Retired pool", "available_quantity": 0, "is_expired": True},
+        ]},
+        "document_sets": {"results": [
+            {"id": "21", "name": "PIU award set"},
+        ]},
+        "vesting_templates": {"results": [
+            {"id": "94", "name": "4yr / 1yr cliff"},
+        ]},
+        "acceleration_templates": {"results": [
+            {"id": "3", "name": "Single trigger"},
+        ]},
+        "stakeholders": {"results": [
+            {"name": "Jane Doe", "email": "jane@acme.com", "id": 7,
+             "kind": "INDIVIDUAL", "event_relationship": "Employee"},
+        ]},
+    },
 }
 
 SAMPLE_KNOWNS = {
@@ -123,6 +149,20 @@ SAMPLE_KNOWNS = {
              "vesting_template_id": "94", "acceleration_template": "3"},
         ],
     },
+    # Jane's threshold of "0" is a real value the panel must keep, not a blank,
+    # and she draws off the unit class. John draws from a plan. The issuer's own
+    # noun relabels both threshold rows.
+    "piu": {
+        "today_iso": "2026-06-11", "currency": "USD", "threshold_noun": "hurdle",
+        "share_class_prefix": "IU",
+        "rows": [
+            {"name": "Jane Doe", "quantity": "5000", "threshold_value": "0",
+             "threshold_value_type": "Unit"},
+            {"name": "John Smith", "quantity": "1000", "option_plan": "44",
+             "threshold_value": "2.50", "threshold_value_type": "Overall",
+             "vesting_template_id": "94", "acceleration_template": "3"},
+        ],
+    },
 }
 
 # ── Sample scalar substitutions (the values render-panel would pass at runtime) ──
@@ -136,6 +176,11 @@ SAMPLE_SCALARS = {
         "CORP_NAME": "Acme Corp", "CORP_ID": "2776",
         "FLOW_TITLE": "Issue Certificates", "HEADER_SUB": "1 holder",
         "SECURITY_TYPE": "certificate",
+    },
+    "piu": {
+        "CORP_NAME": "Acme Holdings LLC", "CORP_ID": "2776",
+        "FLOW_TITLE": "Issue Profits Interest Units", "HEADER_SUB": "2 holders",
+        "SECURITY_TYPE": "piu",
     },
 }
 
@@ -188,7 +233,7 @@ def render(sectype: str, out_dir: Path) -> Path:
 
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description="Preview the issuance-config panel with sample data.")
-    p.add_argument("--security-type", choices=["option_grant", "certificate"],
+    p.add_argument("--security-type", choices=["option_grant", "certificate", "piu"],
                    help="Render just one type (default: both).")
     p.add_argument("--out-dir", type=Path, default=Path(tempfile.gettempdir()) / "issuance-preview")
     p.add_argument("--open", action="store_true", help="Open the rendered file(s) in a browser.")

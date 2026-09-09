@@ -48,7 +48,7 @@ There is no Carta UI for this — it only happens here.
 
 ```
 mcp__carta__mutate({"command": "cap_table:mutate:resolve_duplicate_stakeholder", "params": {
-  "security_type": "<certificate|option_grant>", "draft_set_id": <draft_set_id>,
+  "security_type": "<certificate|option_grant|piu>", "draft_set_id": <draft_set_id>,
   "drafts": [{"id": <draft_pk>, "stakeholder_id": <stakeholder_id>},   # merge into existing
              {"id": <draft_pk>}]}})                                    # create as new
 ```

@@ -22,15 +22,22 @@ produces the wrong word.
 | `rule_144_date` | Rule 144 date |
 | `needs_board_approval` | Board approval |
 | `law_firm_price` | Price per share |
-| `prefix` | Share class |
+| `prefix` | Share class — **but "Unit class" on a PIU** (the one per-type label here) |
+| `prefix_number` (PIU) | Security number |
 | `board_approval_date` | Board approval |
+| `option_plan` | Equity plan |
+| `threshold_value` | Threshold value — or the issuer's own noun, e.g. "Hurdle value" |
+| `threshold_value_type` | Threshold value type |
+| `corresponding_interest` | Corresponding interest |
+| `cash_paid` (PIU) | Consideration price |
 
 `quantity`, `exercise_price`, `issue_date`, `currency`, `exemption`, `custom_label`, and
 `notes` humanize correctly under the default rule and are listed here only so you don't go
 looking for them.
 
-Document sets, vesting schedules, option plans, legends, draft sets, and stakeholders are
-always referred to **by name**. Their ids are an internal payload concern.
+Document sets, vesting schedules, option plans, legends, unit classes, draft sets, and
+stakeholders are always referred to **by name**. Their ids are an internal payload concern —
+including a PIU's `option_plan`, which carries a plan pk despite being a text field.
 
 This table cannot be exhaustive against every field `validate_drafts` / `issue_securities`
 might name. For anything not listed, apply the mechanical rule — never surface the raw

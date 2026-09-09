@@ -72,6 +72,10 @@ GRANT_REASON_CHOICES = [
     "Performance bonus", "Boxcar grant",
 ]
 
+# `threshold_value_type` (PIU only) — what DraftThresholdValueTypeFieldValidator
+# accepts. The field manifest's FAIR_MARKET_VALUE/OTHER are a different surface.
+THRESHOLD_VALUE_TYPE_CHOICES = [("Unit", "Per unit"), ("Overall", "Overall")]
+
 
 class BuildError(RuntimeError):
     """Raised when inputs can't be parsed."""
@@ -490,6 +494,65 @@ def build_share_classes(classes: List[Dict[str, Any]], prefill_prefix: Optional[
     return "".join(btns)
 
 
+def build_option_plans(plans: List[Dict[str, Any]], preferred_id: Optional[str] = None) -> str:
+    """Plan buttons for a PIU, led by an explicit "no plan" option.
+
+    Deliberately never defaults to the only plan, unlike every other picker
+    here: for a PIU an empty plan is a real answer that issues off the unit
+    class, and silently attaching a pool changes which ceiling carta-web checks.
+    """
+    chosen = ""
+    if preferred_id is not None and str(preferred_id) in [str(p.get("id")) for p in plans]:
+        chosen = str(preferred_id)
+    btns = [
+        '<button type="button" class="toggle{s}" data-group="optionplan" data-value="" data-label="" '
+        'onclick="pick(this)">No plan — issue from the unit class</button>'.format(s=sel(chosen == ""))
+    ]
+    for p in plans:
+        if p.get("is_expired"):
+            continue
+        pid = str(p.get("id"))
+        name = str(p.get("name", pid))
+        available = p.get("available_quantity")
+        display = f"{name} ({available} available)" if available is not None else name
+        btns.append(
+            '<button type="button" class="toggle{s}" data-group="optionplan" data-value="{v}" '
+            'data-label="{l}" onclick="pick(this)">{disp}</button>'.format(
+                s=sel(pid == chosen), v=esc(pid), l=esc(name), disp=esc(display)
+            )
+        )
+    return "".join(btns)
+
+
+def build_threshold_value_type(value: Optional[str], force_blank: bool = False) -> str:
+    """The two values `DraftThresholdValueTypeFieldValidator` accepts.
+
+    Not the field manifest's FAIR_MARKET_VALUE/OTHER — that is a different
+    surface, and the drafts path rejects those outright.
+    """
+    chosen = None if force_blank else value
+    btns = []
+    for v, label in THRESHOLD_VALUE_TYPE_CHOICES:
+        btns.append(
+            '<button type="button" class="toggle{s}" data-group="thresholdtype" data-value="{v}" '
+            'data-label="{v}" onclick="pick(this)">{l}</button>'.format(
+                s=sel(v == chosen), v=esc(v), l=esc(label)
+            )
+        )
+    return "".join(btns)
+
+
+def build_corresponding_interest(value: Optional[Any]) -> str:
+    chosen = "" if value is None else ("yes" if value in (True, "yes", "Yes") else "no")
+    btns = []
+    for v, label in (("yes", "Yes"), ("no", "No")):
+        btns.append(
+            '<button type="button" class="toggle{s}" data-group="correspondinginterest" data-value="{v}" '
+            'onclick="pick(this)">{l}</button>'.format(s=sel(v == chosen), v=v, l=label)
+        )
+    return "".join(btns)
+
+
 def build_legends(legends: List[Dict[str, Any]], preferred_id: Optional[str] = None,
                   force_blank: bool = False) -> str:
     chosen = None if force_blank else default_legend_id(legends, preferred_id)
@@ -725,6 +788,44 @@ def advanced_accordion_cert(
     return advanced_accordion(field_rows)
 
 
+def advanced_accordion_piu(
+    row: Dict[str, Any], accel_templates: List[Dict[str, Any]], no_vesting: bool,
+    notes: Optional[Dict[str, List[Dict[str, Any]]]] = None,
+) -> str:
+    notes = notes if notes is not None else {}
+    field_rows = [
+        kv_row(
+            "Acceleration",
+            f'<select class="select-input block-acceleration-select" onchange="onStakeInput()">'
+            f'{build_acceleration(accel_templates, None if no_vesting else row.get("acceleration_template"))}</select>',
+            conditional_on="vesting", hidden=no_vesting,
+            notes=notes.pop("acceleration_template", None),
+        ),
+        kv_row(
+            "Security number",
+            f'<input class="text-input block-prefix-number" type="text" '
+            f'placeholder="Server auto-numbers if left blank" '
+            f'value="{esc(row.get("prefix_number", ""))}" oninput="onStakeInput()"/>',
+            notes=notes.pop("prefix_number", None),
+        ),
+        kv_row(
+            "Consideration price",
+            f'<p class="field-hint">Total consideration paid at grant. UK growth shares only — '
+            f'a US profits interest has no price paid at grant.</p>'
+            f'<input class="text-input block-cash-paid" type="text" inputmode="decimal" placeholder="Optional" '
+            f'value="{esc(row.get("cash_paid", ""))}" oninput="onStakeInput()"/>',
+            notes=notes.pop("cash_paid", None),
+        ),
+        kv_row(
+            "Notes",
+            f'<input class="text-input block-notes" type="text" placeholder="Optional" '
+            f'value="{esc(row.get("notes", ""))}" oninput="onStakeInput()"/>',
+            notes=notes.pop("notes", None),
+        ),
+    ]
+    return advanced_accordion(field_rows)
+
+
 # ── Server-error banners (Phase 1.5's save+validate step) ──
 
 def build_error_banner(errors: Optional[List[Any]], *, css_class: str, title: str) -> str:
@@ -841,6 +942,361 @@ def board_approval_html(row: Dict[str, Any], today: str, security_type: str) -> 
     )
 
 
+def _grant_block_rows(
+    row: Dict[str, Any],
+    data: Dict[str, Any],
+    knowns: Dict[str, Any],
+    notes: Dict[str, List[Dict[str, Any]]],
+    unresolved: set,
+    currency: str,
+    today: str,
+) -> List[str]:
+    """The option-grant-only field rows, in display order."""
+    rows_html: List[str] = []
+    exercise_price_default = row.get("exercise_price")
+    if exercise_price_default is None:
+        # Prefill from the single active valuation when there is exactly one.
+        # Two or more (an HMRC report's AMV and UMV) deliberately leaves the
+        # field empty — the hint asks the admin to pick rather than adopting
+        # one price silently. Falls back to the batch-level default, which is
+        # also what the deprecated has_409a shape supplies.
+        exercise_price_default = sole_fmv_price(knowns)
+        if exercise_price_default is None:
+            exercise_price_default = knowns.get("exercise_price_default", "")
+    templates = results(data.get("vesting_templates"))
+    accel_templates = results(data.get("acceleration_templates"))
+    no_vesting = row_no_vesting(row, knowns)
+    vesting_start = row.get("vesting_start_date") or today
+    vest_wrap_style = "" if not no_vesting else ' style="display:none;"'
+    docsets = results(data.get("document_sets"))
+    # Routes through default_so_type so a foreign so_type can't show an
+    # HMRC/ATO field on a form whose Type buttons don't include it.
+    so_type = default_so_type(str(knowns.get("jurisdiction", "US")), [row], row.get("option_type"))
+    hmrc_notified = row.get("hmrc_notified") or today
+
+    rows_html.append(kv_row(
+        "Type",
+        build_option_type(str(knowns.get("jurisdiction", "US")), [row], row.get("option_type"),
+                          "option_type" in unresolved),
+        sectype="option_grant",
+        required=True, notes=notes.pop("option_type", None),
+    ))
+    price_hint = esc(build_exercise_price_hint(knowns, currency))
+    rows_html.append(kv_row(
+        "Exercise price",
+        f'<p class="field-hint">{price_hint}</p>'
+        f'<div class="price-row">'
+        f'<input class="text-input block-exercise-price" type="text" inputmode="decimal" '
+        f'value="{esc(exercise_price_default)}" oninput="onStakeInput()" style="width:140px;"/>'
+        f'<span class="currency-suffix">{currency}</span></div>',
+        sectype="option_grant",
+        required=True, notes=notes.pop("exercise_price", None),
+    ))
+    rows_html.append(kv_row(
+        "Issue date",
+        f'<input class="date-input block-issue-date" type="date" value="{esc(row.get("issue_date") or today)}" '
+        f'oninput="updateIssueDate(this)"/>',
+        required=True, notes=notes.pop("issue_date", None),
+    ))
+    rows_html.append(kv_row(
+        "Board approval",
+        board_approval_html(row, today, "option_grant"),
+        required=True, notes=notes.pop("board_approval_date", None),
+    ))
+    vesting_options = build_vesting(
+        templates, no_vesting, row_preferred_vesting(row, knowns),
+        "vesting_template_id" in unresolved,
+    )
+    rows_html.append(kv_row(
+        "Vesting schedule",
+        f'<select class="select-input block-vesting-select" onchange="pickVesting(this)">'
+        f'{vesting_options}</select>'
+        f'<div class="block-vesting-start-wrap"{vest_wrap_style}>'
+        f'<p class="field-sublabel">Vesting start date</p>'
+        f'<input class="date-input block-vesting-start-date" type="date" value="{esc(vesting_start)}" '
+        f'oninput="updateVestingStart(this)"/></div>',
+        sectype="option_grant",
+        required=True,
+        notes=(notes.pop("vesting_template_id", None) or [])
+              + (notes.pop("vesting_start_date", None) or []) or None,
+    ))
+    rows_html.append(kv_row(
+        "Documents",
+        f'<p class="field-hint">Document templates attached to every grant.</p>'
+        f'<div class="toggle-row wrap">{build_docsets(docsets, row.get("document_set_id"), "document_set_id" in unresolved)}</div>',
+        sectype="option_grant",
+        required=True, notes=notes.pop("document_set_id", None),
+    ))
+    rows_html.append(kv_row(
+        "HMRC notified",
+        f'<label class="pending-label"><input type="checkbox" class="block-hmrc-notified"'
+        f'{" checked" if row.get("is_hmrc_notified") else ""} onchange="onStakeInput()"/> HMRC has been notified</label>'
+        f'<input class="date-input block-hmrc-notified-date" type="date" value="{esc(hmrc_notified)}" '
+        f'oninput="onStakeInput()"/>',
+        sectype="option_grant", conditional_on="so_type_emi", hidden=(so_type not in HMRC_SO_TYPES),
+        notes=(notes.pop("is_hmrc_notified", None) or [])
+              + (notes.pop("hmrc_notified", None) or []) or None,
+    ))
+    rows_html.append(kv_row(
+        "ATO notified",
+        f'<label class="pending-label"><input type="checkbox" class="block-ato-notified"'
+        f'{" checked" if row.get("is_ato_notified") else ""} onchange="onStakeInput()"/> ATO has been notified</label>',
+        sectype="option_grant", conditional_on="so_type_au", hidden=(so_type not in ATO_SO_TYPES),
+        notes=notes.pop("is_ato_notified", None),
+    ))
+    emp_related = row.get("employment_related")
+    rows_html.append(kv_row(
+        "Employment related",
+        f'<p class="field-hint">Was this grant acquired by reason of employment? Required for '
+        f'Unapproved grants so they are reported correctly in the HMRC Other ERS annual return.</p>'
+        f'<div class="toggle-row">'
+        f'<button type="button" class="toggle{sel(emp_related is True)}" data-group="employment-related" '
+        f'data-value="yes" onclick="pick(this)">Yes</button>'
+        f'<button type="button" class="toggle{sel(emp_related is False)}" data-group="employment-related" '
+        f'data-value="no" onclick="pick(this)">No</button></div>',
+        sectype="option_grant",
+        conditional_on="so_type_employment_related",
+        hidden=(so_type not in EMPLOYMENT_RELATED_SO_TYPES),
+        required=True,
+        notes=notes.pop("employment_related", None),
+    ))
+    rows_html.append(advanced_accordion_grant(row, accel_templates, no_vesting, notes))
+    return rows_html
+
+
+def _cert_block_rows(
+    row: Dict[str, Any],
+    data: Dict[str, Any],
+    knowns: Dict[str, Any],
+    notes: Dict[str, List[Dict[str, Any]]],
+    unresolved: set,
+    currency: str,
+    today: str,
+) -> List[str]:
+    """The certificate-only field rows, in display order."""
+    rows_html: List[str] = []
+    price_default = row.get("price_per_share")
+    if price_default is None:
+        price_default = knowns.get("price_per_share_default", "")
+    classes = results(data.get("share_classes"))
+    preferred_prefix = row.get("share_class_prefix") or knowns.get("share_class_prefix")
+    legends = results(data.get("legends"))
+    preferred_legend = row.get("legend_id")
+    chosen_legend_id = default_legend_id(legends, preferred_legend)
+    selected_legend = next((lg for lg in legends if str(lg.get("id")) == chosen_legend_id), None)
+    body = (selected_legend.get("text") or selected_legend.get("body") or "") if selected_legend else ""
+    r144_mode = row.get("rule_144_mode", "issue_date")
+    r144_date = row.get("rule_144_date") or today
+    templates = results(data.get("vesting_templates"))
+    accel_templates = results(data.get("acceleration_templates"))
+    no_vesting_cert = cert_no_vesting(row, knowns)
+    cert_vesting_start = row.get("vesting_start_date") or today
+    cert_vest_wrap_style = "" if not no_vesting_cert else ' style="display:none;"'
+
+    rows_html.append(kv_row(
+        "Share class",
+        f'<div class="toggle-row wrap">{build_share_classes(classes, preferred_prefix, "share_class_prefix" in unresolved)}</div>',
+        sectype="certificate",
+        required=True, notes=notes.pop("share_class_prefix", None),
+    ))
+    # LLC status can't be resolved (no MCP command returns it), so the hint
+    # stays generic rather than confirming either way.
+    price_hint = "0 is only valid for LLC corporations — otherwise enter a price greater than 0."
+    rows_html.append(kv_row(
+        "Price per share",
+        f'<p class="field-hint">{esc(price_hint)}</p>'
+        f'<div class="price-row"><span class="currency-suffix">{currency}</span>'
+        f'<input class="text-input block-price-per-share" type="text" inputmode="decimal" '
+        f'value="{esc(price_default)}" oninput="onStakeInput()" style="width:140px;"/></div>',
+        sectype="certificate",
+        required=True, notes=notes.pop("price_per_share", None),
+    ))
+    rows_html.append(kv_row(
+        "Issue date",
+        f'<input class="date-input block-issue-date" type="date" value="{esc(row.get("issue_date") or today)}" '
+        f'oninput="updateIssueDate(this)"/>',
+        required=True, notes=notes.pop("issue_date", None),
+    ))
+    rows_html.append(kv_row(
+        "Board approval",
+        board_approval_html(row, today, "certificate"),
+        required=True, notes=notes.pop("board_approval_date", None),
+    ))
+    attest_style = "" if body else ' style="display:none;"'
+    rows_html.append(kv_row(
+        "Build legend",
+        f'<p class="field-hint">Legal text printed on every certificate to restrict transfer. Read the full '
+        f'body before continuing — you are attesting to it.</p>'
+        f'<div class="toggle-row wrap">{build_legends(legends, preferred_legend, "legend_id" in unresolved)}</div>'
+        f'<div class="block-legend-attest legend-attest"{attest_style}>{esc(body)}</div>',
+        sectype="certificate",
+        required=True, notes=notes.pop("legend_id", None),
+    ))
+    r144_date_style = "" if r144_mode == "other" else ' style="display:none;"'
+    r144_reason = row.get("rule_144_reason")
+    rows_html.append(kv_row(
+        "Rule 144 date",
+        f'<p class="field-hint">Holding-period start date for restricted securities.</p>'
+        f'<div class="toggle-row">'
+        f'<button type="button" class="toggle{sel(r144_mode != "other")}" data-group="rule144" '
+        f'data-value="issue_date" onclick="pickRule144(this)">Use the issue date</button>'
+        f'<button type="button" class="toggle{sel(r144_mode == "other")}" data-group="rule144" '
+        f'data-value="other" onclick="pickRule144(this)">Use a different date</button></div>'
+        f'<input class="date-input block-rule144-date" type="date" value="{esc(r144_date)}"'
+        f'{r144_date_style} oninput="onStakeInput()"/>'
+        f'<div class="block-rule144-reason-wrap"{r144_date_style}>'
+        f'<p class="field-sublabel">Reason for the different date</p>'
+        f'{build_rule144_reason_select(r144_reason)}</div>',
+        sectype="certificate",
+        required=True,
+        notes=(notes.pop("rule_144_date", None) or [])
+              + (notes.pop("rule_144_reason", None) or []) or None,
+    ))
+    cert_vesting_options = build_vesting(
+        templates, no_vesting_cert, row_preferred_vesting(row, knowns),
+        "vesting_template_id" in unresolved,
+    )
+    rows_html.append(kv_row(
+        "Vesting schedule",
+        f'<select class="select-input block-vesting-select" onchange="pickVesting(this)">'
+        f'{cert_vesting_options}</select>'
+        f'<div class="block-vesting-start-wrap"{cert_vest_wrap_style}>'
+        f'<p class="field-sublabel">Vesting start date</p>'
+        f'<input class="date-input block-vesting-start-date" type="date" value="{esc(cert_vesting_start)}" '
+        f'oninput="updateVestingStart(this)"/></div>',
+        sectype="certificate",
+        notes=(notes.pop("vesting_template_id", None) or [])
+              + (notes.pop("vesting_start_date", None) or []) or None,
+    ))
+    rows_html.append(advanced_accordion_cert(row, accel_templates, no_vesting_cert, notes))
+    return rows_html
+
+
+def _piu_block_rows(
+    row: Dict[str, Any],
+    data: Dict[str, Any],
+    knowns: Dict[str, Any],
+    notes: Dict[str, List[Dict[str, Any]]],
+    unresolved: set,
+    currency: str,
+    today: str,
+) -> List[str]:
+    """The profits-interest-only field rows, in display order."""
+    rows_html: List[str] = []
+    noun = str(knowns.get("threshold_noun") or "threshold")
+    noun_title = noun[:1].upper() + noun[1:]
+    classes = results(data.get("share_classes"))
+    preferred_prefix = row.get("share_class_prefix") or knowns.get("share_class_prefix")
+    plans = results(data.get("option_plans"))
+    preferred_plan = row.get("option_plan") or knowns.get("option_plan_id")
+    doc_sets = results(data.get("document_sets"))
+    templates = results(data.get("vesting_templates"))
+    accel_templates = results(data.get("acceleration_templates"))
+    no_vesting_piu = cert_no_vesting(row, knowns)
+    vesting_start = row.get("vesting_start_date") or today
+    vest_wrap_style = "" if not no_vesting_piu else ' style="display:none;"'
+    selected_class = next(
+        (c for c in classes if str(c.get("prefix", "")) == str(preferred_prefix)), None
+    )
+
+    rows_html.append(kv_row(
+        "Unit class",
+        f'<div class="toggle-row wrap">{build_share_classes(classes, preferred_prefix, "share_class_prefix" in unresolved)}</div>',
+        sectype="piu",
+        required=True, notes=notes.pop("share_class_prefix", None),
+    ))
+    rows_html.append(kv_row(
+        "Equity plan",
+        f'<p class="field-hint">Optional. With no plan the units come off the unit class’s own '
+        f'authorized total. A plan must use the same unit class as the row.</p>'
+        f'<div class="toggle-row wrap">{build_option_plans(plans, preferred_plan)}</div>',
+        sectype="piu",
+        notes=notes.pop("option_plan", None),
+    ))
+    rows_html.append(kv_row(
+        f"{noun_title} value",
+        f'<p class="field-hint">The unit only shares in value above this amount. Never defaulted — '
+        f'it is a term of the grant.</p>'
+        f'<div class="price-row"><span class="currency-suffix">{currency}</span>'
+        f'<input class="text-input block-threshold-value" type="text" inputmode="decimal" '
+        f'value="{esc(row.get("threshold_value", ""))}" oninput="onStakeInput()" style="width:140px;"/></div>',
+        sectype="piu",
+        required=True, notes=notes.pop("threshold_value", None),
+    ))
+    rows_html.append(kv_row(
+        f"{noun_title} value type",
+        f'<p class="field-hint">Per unit states the amount for each unit; Overall states it once '
+        f'for the whole grant.</p>'
+        f'<div class="toggle-row">'
+        f'{build_threshold_value_type(row.get("threshold_value_type"), "threshold_value_type" in unresolved)}</div>',
+        sectype="piu",
+        required=True, notes=notes.pop("threshold_value_type", None),
+    ))
+    rows_html.append(kv_row(
+        "Issue date",
+        f'<input class="date-input block-issue-date" type="date" value="{esc(row.get("issue_date") or today)}" '
+        f'oninput="updateIssueDate(this)"/>',
+        required=True, notes=notes.pop("issue_date", None),
+    ))
+    # Optional server-side, and with no ordering rule against the issue date
+    # (DraftPIUApprovalDateFieldValidator), so the row is clearable.
+    rows_html.append(kv_row(
+        "Board approval",
+        f'<p class="field-hint">Optional for a profits interest. Clear it to issue with no '
+        f'approval date on record.</p>'
+        f'{board_approval_html(row, today, "piu")}',
+        sectype="piu",
+        notes=notes.pop("board_approval_date", None),
+    ))
+    piu_vesting_options = build_vesting(
+        templates, no_vesting_piu, row_preferred_vesting(row, knowns),
+        "vesting_template_id" in unresolved,
+    )
+    rows_html.append(kv_row(
+        "Vesting schedule",
+        f'<select class="select-input block-vesting-select" onchange="pickVesting(this)">'
+        f'{piu_vesting_options}</select>'
+        f'<div class="block-vesting-start-wrap"{vest_wrap_style}>'
+        f'<p class="field-sublabel">Vesting start date</p>'
+        f'<input class="date-input block-vesting-start-date" type="date" value="{esc(vesting_start)}" '
+        f'oninput="updateVestingStart(this)"/></div>',
+        sectype="piu",
+        notes=(notes.pop("vesting_template_id", None) or [])
+              + (notes.pop("vesting_start_date", None) or []) or None,
+    ))
+    rows_html.append(kv_row(
+        "Documents",
+        f'<div class="toggle-row wrap">'
+        f'{build_docsets(doc_sets, row.get("document_set_id"), "document_set_id" in unresolved)}</div>',
+        sectype="piu",
+        notes=notes.pop("document_set_id", None),
+    ))
+    # Rendered only when the unit class carries the ManCo->OpCo link, which
+    # carta-web serializes only for issuers that have the feature.
+    if selected_class is not None and selected_class.get("has_corresponding_interest"):
+        rows_html.append(kv_row(
+            "Corresponding interest",
+            f'<p class="field-hint">Yes also issues the matching interest in the linked operating '
+            f'company.</p>'
+            f'<div class="toggle-row">{build_corresponding_interest(row.get("corresponding_interest"))}</div>',
+            sectype="piu",
+            notes=notes.pop("corresponding_interest", None),
+        ))
+    rows_html.append(advanced_accordion_piu(row, accel_templates, no_vesting_piu, notes))
+    return rows_html
+
+
+# Dispatched, not if/else-d: an unrecognised type must raise rather than fall
+# through to the certificate rows and ship a plausible form for the wrong type.
+_BLOCK_ROW_BUILDERS = {
+    "option_grant": _grant_block_rows,
+    "certificate": _cert_block_rows,
+    "piu": _piu_block_rows,
+}
+
+SECURITY_TYPES = tuple(sorted(_BLOCK_ROW_BUILDERS))
+
+
 def build_stakeholder_block(row: Dict[str, Any], security_type: str, data: Dict[str, Any], knowns: Dict[str, Any]) -> str:
     name = esc(row.get("name", ""))
     email = esc(row.get("email", ""))
@@ -891,210 +1347,12 @@ def build_stakeholder_block(row: Dict[str, Any], security_type: str, data: Dict[
         ),
     ]
 
-    if security_type == "option_grant":
-        exercise_price_default = row.get("exercise_price")
-        if exercise_price_default is None:
-            # Prefill from the single active valuation when there is exactly one.
-            # Two or more (an HMRC report's AMV and UMV) deliberately leaves the
-            # field empty — the hint asks the admin to pick rather than adopting
-            # one price silently. Falls back to the batch-level default, which is
-            # also what the deprecated has_409a shape supplies.
-            exercise_price_default = sole_fmv_price(knowns)
-            if exercise_price_default is None:
-                exercise_price_default = knowns.get("exercise_price_default", "")
-        templates = results(data.get("vesting_templates"))
-        accel_templates = results(data.get("acceleration_templates"))
-        no_vesting = row_no_vesting(row, knowns)
-        vesting_start = row.get("vesting_start_date") or today
-        vest_wrap_style = "" if not no_vesting else ' style="display:none;"'
-        docsets = results(data.get("document_sets"))
-        # Routes through default_so_type so a foreign so_type can't show an
-        # HMRC/ATO field on a form whose Type buttons don't include it.
-        so_type = default_so_type(str(knowns.get("jurisdiction", "US")), [row], row.get("option_type"))
-        hmrc_notified = row.get("hmrc_notified") or today
-
-        rows_html.append(kv_row(
-            "Type",
-            build_option_type(str(knowns.get("jurisdiction", "US")), [row], row.get("option_type"),
-                              "option_type" in unresolved),
-            sectype="option_grant",
-            required=True, notes=notes.pop("option_type", None),
-        ))
-        price_hint = esc(build_exercise_price_hint(knowns, currency))
-        rows_html.append(kv_row(
-            "Exercise price",
-            f'<p class="field-hint">{price_hint}</p>'
-            f'<div class="price-row">'
-            f'<input class="text-input block-exercise-price" type="text" inputmode="decimal" '
-            f'value="{esc(exercise_price_default)}" oninput="onStakeInput()" style="width:140px;"/>'
-            f'<span class="currency-suffix">{currency}</span></div>',
-            sectype="option_grant",
-            required=True, notes=notes.pop("exercise_price", None),
-        ))
-        rows_html.append(kv_row(
-            "Issue date",
-            f'<input class="date-input block-issue-date" type="date" value="{esc(row.get("issue_date") or today)}" '
-            f'oninput="updateIssueDate(this)"/>',
-            required=True, notes=notes.pop("issue_date", None),
-        ))
-        rows_html.append(kv_row(
-            "Board approval",
-            board_approval_html(row, today, security_type),
-            required=True, notes=notes.pop("board_approval_date", None),
-        ))
-        vesting_options = build_vesting(
-            templates, no_vesting, row_preferred_vesting(row, knowns),
-            "vesting_template_id" in unresolved,
+    builder = _BLOCK_ROW_BUILDERS.get(security_type)
+    if builder is None:
+        raise BuildError(
+            "unknown security_type {!r}; known: {}".format(security_type, sorted(_BLOCK_ROW_BUILDERS))
         )
-        rows_html.append(kv_row(
-            "Vesting schedule",
-            f'<select class="select-input block-vesting-select" onchange="pickVesting(this)">'
-            f'{vesting_options}</select>'
-            f'<div class="block-vesting-start-wrap"{vest_wrap_style}>'
-            f'<p class="field-sublabel">Vesting start date</p>'
-            f'<input class="date-input block-vesting-start-date" type="date" value="{esc(vesting_start)}" '
-            f'oninput="updateVestingStart(this)"/></div>',
-            sectype="option_grant",
-            required=True,
-            notes=(notes.pop("vesting_template_id", None) or [])
-                  + (notes.pop("vesting_start_date", None) or []) or None,
-        ))
-        rows_html.append(kv_row(
-            "Documents",
-            f'<p class="field-hint">Document templates attached to every grant.</p>'
-            f'<div class="toggle-row wrap">{build_docsets(docsets, row.get("document_set_id"), "document_set_id" in unresolved)}</div>',
-            sectype="option_grant",
-            required=True, notes=notes.pop("document_set_id", None),
-        ))
-        rows_html.append(kv_row(
-            "HMRC notified",
-            f'<label class="pending-label"><input type="checkbox" class="block-hmrc-notified"'
-            f'{" checked" if row.get("is_hmrc_notified") else ""} onchange="onStakeInput()"/> HMRC has been notified</label>'
-            f'<input class="date-input block-hmrc-notified-date" type="date" value="{esc(hmrc_notified)}" '
-            f'oninput="onStakeInput()"/>',
-            sectype="option_grant", conditional_on="so_type_emi", hidden=(so_type not in HMRC_SO_TYPES),
-            notes=(notes.pop("is_hmrc_notified", None) or [])
-                  + (notes.pop("hmrc_notified", None) or []) or None,
-        ))
-        rows_html.append(kv_row(
-            "ATO notified",
-            f'<label class="pending-label"><input type="checkbox" class="block-ato-notified"'
-            f'{" checked" if row.get("is_ato_notified") else ""} onchange="onStakeInput()"/> ATO has been notified</label>',
-            sectype="option_grant", conditional_on="so_type_au", hidden=(so_type not in ATO_SO_TYPES),
-            notes=notes.pop("is_ato_notified", None),
-        ))
-        emp_related = row.get("employment_related")
-        rows_html.append(kv_row(
-            "Employment related",
-            f'<p class="field-hint">Was this grant acquired by reason of employment? Required for '
-            f'Unapproved grants so they are reported correctly in the HMRC Other ERS annual return.</p>'
-            f'<div class="toggle-row">'
-            f'<button type="button" class="toggle{sel(emp_related is True)}" data-group="employment-related" '
-            f'data-value="yes" onclick="pick(this)">Yes</button>'
-            f'<button type="button" class="toggle{sel(emp_related is False)}" data-group="employment-related" '
-            f'data-value="no" onclick="pick(this)">No</button></div>',
-            sectype="option_grant",
-            conditional_on="so_type_employment_related",
-            hidden=(so_type not in EMPLOYMENT_RELATED_SO_TYPES),
-            required=True,
-            notes=notes.pop("employment_related", None),
-        ))
-        rows_html.append(advanced_accordion_grant(row, accel_templates, no_vesting, notes))
-    else:
-        price_default = row.get("price_per_share")
-        if price_default is None:
-            price_default = knowns.get("price_per_share_default", "")
-        classes = results(data.get("share_classes"))
-        preferred_prefix = row.get("share_class_prefix") or knowns.get("share_class_prefix")
-        legends = results(data.get("legends"))
-        preferred_legend = row.get("legend_id")
-        chosen_legend_id = default_legend_id(legends, preferred_legend)
-        selected_legend = next((lg for lg in legends if str(lg.get("id")) == chosen_legend_id), None)
-        body = (selected_legend.get("text") or selected_legend.get("body") or "") if selected_legend else ""
-        r144_mode = row.get("rule_144_mode", "issue_date")
-        r144_date = row.get("rule_144_date") or today
-        templates = results(data.get("vesting_templates"))
-        accel_templates = results(data.get("acceleration_templates"))
-        no_vesting_cert = cert_no_vesting(row, knowns)
-        cert_vesting_start = row.get("vesting_start_date") or today
-        cert_vest_wrap_style = "" if not no_vesting_cert else ' style="display:none;"'
-
-        rows_html.append(kv_row(
-            "Share class",
-            f'<div class="toggle-row wrap">{build_share_classes(classes, preferred_prefix, "share_class_prefix" in unresolved)}</div>',
-            sectype="certificate",
-            required=True, notes=notes.pop("share_class_prefix", None),
-        ))
-        # LLC status can't be resolved (no MCP command returns it), so the hint
-        # stays generic rather than confirming either way.
-        price_hint = "0 is only valid for LLC corporations — otherwise enter a price greater than 0."
-        rows_html.append(kv_row(
-            "Price per share",
-            f'<p class="field-hint">{esc(price_hint)}</p>'
-            f'<div class="price-row"><span class="currency-suffix">{currency}</span>'
-            f'<input class="text-input block-price-per-share" type="text" inputmode="decimal" '
-            f'value="{esc(price_default)}" oninput="onStakeInput()" style="width:140px;"/></div>',
-            sectype="certificate",
-            required=True, notes=notes.pop("price_per_share", None),
-        ))
-        rows_html.append(kv_row(
-            "Issue date",
-            f'<input class="date-input block-issue-date" type="date" value="{esc(row.get("issue_date") or today)}" '
-            f'oninput="updateIssueDate(this)"/>',
-            required=True, notes=notes.pop("issue_date", None),
-        ))
-        rows_html.append(kv_row(
-            "Board approval",
-            board_approval_html(row, today, security_type),
-            required=True, notes=notes.pop("board_approval_date", None),
-        ))
-        attest_style = "" if body else ' style="display:none;"'
-        rows_html.append(kv_row(
-            "Build legend",
-            f'<p class="field-hint">Legal text printed on every certificate to restrict transfer. Read the full '
-            f'body before continuing — you are attesting to it.</p>'
-            f'<div class="toggle-row wrap">{build_legends(legends, preferred_legend, "legend_id" in unresolved)}</div>'
-            f'<div class="block-legend-attest legend-attest"{attest_style}>{esc(body)}</div>',
-            sectype="certificate",
-            required=True, notes=notes.pop("legend_id", None),
-        ))
-        r144_date_style = "" if r144_mode == "other" else ' style="display:none;"'
-        r144_reason = row.get("rule_144_reason")
-        rows_html.append(kv_row(
-            "Rule 144 date",
-            f'<p class="field-hint">Holding-period start date for restricted securities.</p>'
-            f'<div class="toggle-row">'
-            f'<button type="button" class="toggle{sel(r144_mode != "other")}" data-group="rule144" '
-            f'data-value="issue_date" onclick="pickRule144(this)">Use the issue date</button>'
-            f'<button type="button" class="toggle{sel(r144_mode == "other")}" data-group="rule144" '
-            f'data-value="other" onclick="pickRule144(this)">Use a different date</button></div>'
-            f'<input class="date-input block-rule144-date" type="date" value="{esc(r144_date)}"'
-            f'{r144_date_style} oninput="onStakeInput()"/>'
-            f'<div class="block-rule144-reason-wrap"{r144_date_style}>'
-            f'<p class="field-sublabel">Reason for the different date</p>'
-            f'{build_rule144_reason_select(r144_reason)}</div>',
-            sectype="certificate",
-            required=True,
-            notes=(notes.pop("rule_144_date", None) or [])
-                  + (notes.pop("rule_144_reason", None) or []) or None,
-        ))
-        cert_vesting_options = build_vesting(
-            templates, no_vesting_cert, row_preferred_vesting(row, knowns),
-            "vesting_template_id" in unresolved,
-        )
-        rows_html.append(kv_row(
-            "Vesting schedule",
-            f'<select class="select-input block-vesting-select" onchange="pickVesting(this)">'
-            f'{cert_vesting_options}</select>'
-            f'<div class="block-vesting-start-wrap"{cert_vest_wrap_style}>'
-            f'<p class="field-sublabel">Vesting start date</p>'
-            f'<input class="date-input block-vesting-start-date" type="date" value="{esc(cert_vesting_start)}" '
-            f'oninput="updateVestingStart(this)"/></div>',
-            sectype="certificate",
-            notes=(notes.pop("vesting_template_id", None) or [])
-                  + (notes.pop("vesting_start_date", None) or []) or None,
-        ))
-        rows_html.append(advanced_accordion_cert(row, accel_templates, no_vesting_cert, notes))
+    rows_html.extend(builder(row, data, knowns, notes, unresolved, currency, today))
 
     row_key = esc(row.get("row_key", ""))
     error_banner = build_block_error_banner(row.get("server_errors"))

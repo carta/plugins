@@ -74,6 +74,9 @@ NON_PAYLOAD_FIELDS = frozenset({
     "document_set_label",
     "exercise_periods_text",
     "legend_body",
+    "unit_class_label",
+    "equity_plan_label",
+    "threshold_noun",
 })
 
 # Fields that are legitimately False/0 and must survive the empty-value drop.
@@ -84,6 +87,7 @@ KEEP_IF_FALSY = frozenset({
     "quantity",               # server rejects 0, but let it say so
     "needs_board_approval",   # False is meaningful: approved, not pending
     "vesting_template",       # null after an explicit "No vesting"
+    "threshold_value",        # a PIU with a 0 threshold shares in all value
 })
 
 _ACCEPTED = ("%Y-%m-%d", "%m/%d/%Y")
@@ -140,7 +144,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     p = argparse.ArgumentParser(description="Serialize resolved rows into a drafts array.")
     p.add_argument("--rows", required=True, type=Path)
     p.add_argument("--out", type=Path, help="Write here; otherwise print to stdout")
-    p.add_argument("--security-type", choices=["option_grant", "certificate"],
+    p.add_argument("--security-type", choices=["option_grant", "certificate", "piu"],
                    help="Recorded for symmetry with the other scripts; formats are per-field")
     args = p.parse_args(argv)
 
