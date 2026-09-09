@@ -8,6 +8,11 @@ the JSON the skill wrote to a data dir, plus an editable scenarios document
 (GET with ETag / PUT with If-Match).
 Python stdlib only — no third-party deps — so it runs for non-developers at runtime.
 
+Also hosts the ask box: POST /api/ask streams a `claude` subprocess's stream-json
+output back as SSE so the user can modify the console from inside it ("add an
+interpolated P60") without leaving for their Claude session. See chat_session.py —
+the subprocess gets no Bash and no MCP, so this stays read-only w.r.t. Carta.
+
 Security:
   - binds 127.0.0.1 only
   - a token gates every /api/* request (URL carries ?t=<token>, the page sends it
@@ -32,6 +37,7 @@ Usage:
 """
 
 import argparse
+import atexit
 import hashlib
 import http.client
 import http.server
@@ -46,6 +52,8 @@ import webbrowser
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
+import chat_session
+
 DATA_DIR = None
 WEB_DIR = None
 SRC_DIR = None
@@ -58,6 +66,13 @@ SUSPEND_GAP_SLACK = 55
 _last_heartbeat = time.time()
 _hb_lock = threading.Lock()
 _scenarios_lock = threading.Lock()
+
+# Ask-box sessions, keyed by sessionId: {"session": ChatSession, "lock": Lock}.
+# The lock is per-session single-flight (one in-flight turn each); _SESSIONS_LOCK
+# guards the registry itself, never a turn, so an interrupt is never blocked by
+# the turn it is trying to stop.
+_CHAT_SESSIONS = {}
+_SESSIONS_LOCK = threading.Lock()
 
 _CONTENT_TYPES = {
     ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
@@ -87,6 +102,20 @@ def _touch_heartbeat():
         _last_heartbeat = time.time()
 
 
+def _close_all_sessions():
+    """Reap every ask-box subprocess. Registered on BOTH shutdown paths — normal
+    atexit and the watchdog's os._exit, which skips atexit handlers — because a
+    missed reap orphans a `claude` process for as long as the machine is up."""
+    with _SESSIONS_LOCK:
+        sessions = [e["session"] for e in _CHAT_SESSIONS.values()]
+        _CHAT_SESSIONS.clear()
+    for s in sessions:
+        try:
+            s.close()
+        except Exception:
+            pass
+
+
 def _watchdog(httpd, timeout):
     """Self-terminate after `timeout` seconds without API activity (0 = never)."""
     last_tick = time.time()
@@ -105,6 +134,7 @@ def _watchdog(httpd, timeout):
             idle = now - _last_heartbeat
         if idle > timeout:
             print("[serve] idle %ds - shutting down" % int(idle), flush=True)
+            _close_all_sessions()  # ask-box subprocesses outlive httpd.shutdown() otherwise
             httpd.shutdown()
             return
 
@@ -212,6 +242,124 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def do_HEAD(self):
         self.do_GET()
+
+    # ---- SSE (ask box) ----
+    def _sse_headers(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("X-Accel-Buffering", "no")
+        self.end_headers()
+        self.close_connection = True  # so the client's read() terminates at stream end
+
+    def _read_json_body(self):
+        """Parsed request body, or None when it isn't JSON (caller sends the 400)."""
+        length = int(self.headers.get("Content-Length", 0) or 0)
+        if length > 1024 * 1024:
+            return None
+        try:
+            return json.loads(self.rfile.read(length) or b"{}")
+        except ValueError:
+            return None
+
+    def _ask_interrupt(self, u):
+        """Stop the turn in flight without tearing the session down.
+
+        Deliberately does NOT take the session's turn lock: that lock is held for
+        the whole in-flight turn, so waiting on it would block in exactly the case
+        this endpoint exists to serve. It only needs the registry.
+        """
+        if not self._token_ok(parse_qs(u.query)):
+            return self._send(401, {"error": "unauthorized"})
+        _touch_heartbeat()
+        body = self._read_json_body()
+        if body is None:
+            return self._send(400, {"error": "bad_json"})
+        sid = body.get("sessionId") or "default"
+        with _SESSIONS_LOCK:
+            entry = _CHAT_SESSIONS.get(sid)
+        # A turn that ended between the click and this request is already evicted:
+        # nothing to stop, and nothing went wrong.
+        if entry is None:
+            return self._send(404, {"error": "no_session"})
+        if not entry["session"].interrupt():
+            return self._send(409, {"error": "not_interruptible"})
+        return self._send(200, {"ok": True})
+
+    def _ask(self, u):
+        """Run one ask-box turn, streaming the subprocess's events back as SSE."""
+        if not self._token_ok(parse_qs(u.query)):
+            return self._send(401, {"error": "unauthorized"})
+        _touch_heartbeat()
+        body = self._read_json_body()
+        if body is None:
+            return self._send(400, {"error": "bad_json"})
+        prompt = body.get("prompt")
+        prompt = str(prompt).strip() if prompt is not None else ""
+        if not prompt:
+            return self._send(400, {"error": "empty_prompt"})
+        sid = body.get("sessionId") or "default"
+
+        # Guarded get-or-create. A failed start() is evicted and reported as clean
+        # JSON *before* any SSE headers go out — a 500 after headers would corrupt
+        # the stream and the box would show a parse error instead of the reason.
+        with _SESSIONS_LOCK:
+            entry = _CHAT_SESSIONS.get(sid)
+            if entry is None:
+                sess = chat_session.ChatSession(
+                    cwd=str(SRC_DIR), add_dirs=[str(SRC_DIR), str(DATA_DIR)])
+                try:
+                    sess.start()
+                except (OSError, ValueError):
+                    # Overwhelmingly: `claude` is not on PATH. Say which, because
+                    # "ask failed" sends people looking at the dashboard instead.
+                    return self._send(503, {"error": "claude_unavailable"})
+                entry = {"session": sess, "lock": threading.Lock()}
+                _CHAT_SESSIONS[sid] = entry
+
+        # Single-flight per session: one in-flight turn at a time.
+        if not entry["lock"].acquire(blocking=False):
+            return self._send(409, {"error": "turn_in_progress"})
+        saw_result = False
+        edited = False
+        try:
+            sess = entry["session"]
+            self._sse_headers()
+            try:
+                sess.send(prompt)
+                for ev in sess.events(timeout=120):
+                    # The browser reloads only after a turn that changed source, so
+                    # the flag rides on the terminal frame rather than making the
+                    # client re-derive it from the tool_use events.
+                    if chat_session.touched_app_source(ev):
+                        edited = True
+                    if chat_session.is_turn_end(ev):
+                        saw_result = True
+                        ev = dict(ev, ctcReload=edited)
+                    self.wfile.write(("data: " + json.dumps(ev) + "\n\n").encode())
+                    self.wfile.flush()
+            except Exception:
+                # Poisoned session, or a client that vanished mid-stream.
+                saw_result = False
+        finally:
+            entry["lock"].release()
+            if not saw_result:
+                # Timeout, EOF-without-result, or an exception above: late buffered
+                # events could bleed into the next turn, so evict rather than reuse.
+                sess = entry["session"]
+                with _SESSIONS_LOCK:
+                    if _CHAT_SESSIONS.get(sid) is entry:
+                        del _CHAT_SESSIONS[sid]
+                sess.close()
+
+    # ---- POST (ask box) ----
+    def do_POST(self):
+        u = urlparse(self.path)
+        if u.path == "/api/ask":
+            return self._ask(u)
+        if u.path == "/api/ask/interrupt":
+            return self._ask_interrupt(u)
+        return self._send(404, {"error": "not_found"})
 
     # ---- PUT (local scenario save) ----
     def do_PUT(self):
@@ -403,6 +551,10 @@ def main():
     # Fork before starting the watchdog thread — threads don't survive fork.
     if args.detach:
         _detach_or_warn()
+
+    # Registered after the fork: atexit handlers registered in the parent would
+    # fire when the parent exits, reaping nothing and hiding the real one.
+    atexit.register(_close_all_sessions)
 
     threading.Thread(target=_watchdog, args=(httpd, idle_timeout), daemon=True).start()
     try:

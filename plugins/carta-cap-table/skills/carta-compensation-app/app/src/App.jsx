@@ -1,10 +1,29 @@
 import { useEffect, useState } from "react";
 import { C, FS, RADIUS, SANS, SERIF, GLOBAL_CSS } from "./ui/theme.js";
-import { useDashboardData } from "./state/useData.js";
+import { useDashboardData, apiToken } from "./state/useData.js";
 import Benchmarks from "./views/Benchmarks.jsx";
 import Scorecard from "./views/Scorecard.jsx";
 import RefreshPlanner from "./views/RefreshPlanner.jsx";
 import { Tag } from "./ui/components.jsx";
+import AskBar from "./ui/AskBar.jsx";
+
+// The ask box edits the app's own source, and the page reloads to pick the edit up
+// (source is transpiled in-browser — there is no HMR to swap a module in place). A
+// reload drops in-memory state, so the tab is parked here and restored on mount:
+// otherwise every accepted edit also silently sends the user back to Benchmarks,
+// which reads as the edit having broken something.
+const TAB_KEY = "ctc.tab";
+
+function storedTab() {
+  try {
+    return sessionStorage.getItem(TAB_KEY) || "benchmarks";
+  } catch {
+    // Private browsing and some embedded webviews throw on access rather than
+    // returning null, and a dashboard that will not open is worse than one that
+    // forgets which tab you were on.
+    return "benchmarks";
+  }
+}
 
 // Only shipped surfaces appear. Plan Modeling and Reports were previously declared
 // here as permanently-disabled "soon" tabs — that advertises a roadmap in the product
@@ -201,7 +220,7 @@ function Message({ title, body, tone }) {
 
 export default function App() {
   useGlobalCss();
-  const [tab, setTab] = useState("benchmarks");
+  const [tab, setTab] = useState(storedTab);
   // Declared with the other hooks, ABOVE the early returns below. React requires the
   // same hooks to run in the same order on every render, and the loading/error paths
   // return before the main body — so a useState placed after them runs on the loaded
@@ -214,6 +233,16 @@ export default function App() {
   // screen. One source, one update.
   const [activeGroup, setActiveGroup] = useState(null);
   const { loading, error, snapshot, benchmarks, roster, planner } = useDashboardData();
+
+  // Park the open tab so a post-edit reload returns to it. Above the early returns,
+  // for the same hooks-order reason as the useState calls above.
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(TAB_KEY, tab);
+    } catch {
+      // Storage unavailable — the tab simply is not remembered. Not worth failing on.
+    }
+  }, [tab]);
 
   if (loading) return <Message title="Loading…" body="Reading the local snapshot." />;
   if (error) return <Message title="Couldn't load the dashboard" body={error} tone="warn" />;
@@ -286,6 +315,9 @@ export default function App() {
           {attribution}
         </footer>
       )}
+      {/* Below the attribution deliberately: the citation belongs with the figures it
+          describes, and the ask box is a control rather than part of the document. */}
+      <AskBar token={apiToken()} />
     </div>
   );
 }
