@@ -1019,13 +1019,12 @@ export function InkBarChart({
         if (layout !== "stacked" && series.length !== 1) tip.classList.remove("ink-chart__tip--compact");
         tip.innerHTML = html;
         const tipH = tip.offsetHeight;
-        // Stacked breakdowns sit beside the bar and track the cursor's Y, so
-        // hovering never covers the column itself.
-        if (mouseY != null && vertical && layout === "stacked") {
+        // A multi-bar tooltip sits beside the bars and tracks the cursor's Y,
+        // so hovering never covers what it describes.
+        if (mouseY != null && vertical && (layout === "stacked" || layout === "grouped")) {
           const barL = catStart(i);
-          placeTipBeside(tip, {
-            barL, barR: barL + subW, plotL: pad.left, plotR: pad.left + iw, mouseY, W, H,
-          });
+          const barR = layout === "grouped" ? catStart(i, series.length - 1) + subW : barL + subW;
+          placeTipBeside(tip, { barL, barR, plotL: pad.left, plotR: pad.left + iw, mouseY, W, H });
         } else {
           tip.style.transform = "";
           const tipY = mouseY != null && vertical ? Math.max(tipH + 10, mouseY) : (vertical ? anchorVal : anchorCat);
