@@ -873,7 +873,12 @@
     //   Query T — buildStatusSql               live/exited status (optional)
     //   Query P — buildPendingExtractionSql    pending-extraction FYI count (optional, scalar)
     //   Query O — buildOrphanedSpasSql         unmatched-SPA FYI count + names (optional, scalar)
-    //   coverage — buildCoverageSpaSql / buildCoverageTotalSql  scalar counts (required)
+    //   coverage — buildCoverageSpaSql         scalar count (required). totalCompanies is
+    //              derived client-side from Query A's rows (below) rather than a second
+    //              round trip: norm_investments_base groups the same table by ISSUER_NAME,
+    //              and ROW_NUMBER() guarantees one output row per distinct name — filtered
+    //              to a non-empty COMPANY, matching COUNT(DISTINCT ISSUER_NAME)'s NULL
+    //              exclusion (GROUP BY folds every NULL into one row; COUNT(DISTINCT) does not).
     const STATE = JSON.parse(document.getElementById('spa-audit-state').textContent);
     const FIRM_UUID = '{{FIRM_UUID}}';
     const FIRM_NAME = STATE.firm_name;
@@ -1192,15 +1197,13 @@
       return `WITH norm_spa AS (SELECT ISSUER_NAME, TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(ISSUER_NAME), ' *[(][^)]*[)].*$', '')), ' +(D/?B/?A|F/?K/?A|AKA) +.*$', '')), ',? *(INC|LLC|LTD|LIMITED|CORP|CORPORATION|L[.]P[.]|LP|PBC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]? *$', '')), '[,.]', '')) AS name_norm FROM (SELECT ATTRIBUTES:name::STRING AS ISSUER_NAME FROM FUND_ADMIN.DOCUMENT_AI_RECORD WHERE FIRM_ID = '${FIRM_UUID}' AND DOCUMENT_TYPE = 'stock_purchase_agreement' AND RECORD_TYPE = 'company' AND ATTRIBUTES:name::STRING IS NOT NULL) GROUP BY ISSUER_NAME), norm_inv_base AS (SELECT TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(ISSUER_NAME), ' *[(][^)]*[)].*$', '')), ' +(D/?B/?A|F/?K/?A|AKA) +.*$', '')), ',? *(INC|LLC|LTD|LIMITED|CORP|CORPORATION|L[.]P[.]|LP|PBC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]? *$', '')), '[,.]', '')) AS name_norm, REGEXP_SUBSTR(ISSUER_NAME, '[(] *(D[.]?/?B[.]?/?A[.]?|F[.]?/?K[.]?/?A[.]?|N[.]?/?K[.]?/?A[.]?|A[.]?K[.]?A[.]?|FORMERLY( +KNOWN +AS)?)[ :]+([^)]+)[)]', 1, 1, 'ie', 3) AS alias_raw FROM FUND_ADMIN.AGGREGATE_INVESTMENTS WHERE FIRM_ID = '${FIRM_UUID}' GROUP BY ISSUER_NAME), norm_inv AS (SELECT name_norm FROM norm_inv_base UNION ALL SELECT TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(alias_raw), ',? *(INC|LLC|LTD|LIMITED|CORP|CORPORATION|L[.]P[.]|LP|PBC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]? *$', '')), '[,.]', '')) AS name_norm FROM norm_inv_base WHERE alias_raw IS NOT NULL AND TRIM(alias_raw) <> ''), matched AS (SELECT DISTINCT s.ISSUER_NAME FROM norm_spa s JOIN norm_inv i ON JAROWINKLER_SIMILARITY(s.name_norm, i.name_norm) >= 90) SELECT COUNT(DISTINCT ns.ISSUER_NAME) AS orphaned_spas, ARRAY_AGG(DISTINCT ns.ISSUER_NAME) WITHIN GROUP (ORDER BY ns.ISSUER_NAME) AS orphaned_spa_names FROM norm_spa ns LEFT JOIN matched m ON ns.ISSUER_NAME = m.ISSUER_NAME WHERE m.ISSUER_NAME IS NULL`;
     }
 
-    // Coverage scalars — required. If either fails, the whole audit errors (see
+    // Coverage scalar — required. If it fails, the whole audit errors (see
     // bootstrap): a page that can compute buckets but not the headline coverage
     // fraction would show a wrong or missing number rather than an honest error.
+    // (totalCompanies is derived from Query A's row count instead of a second
+    // scalar query — see the comment above buildAuditSql's call site.)
     function buildCoverageSpaSql() {
       return `SELECT COUNT(DISTINCT ATTRIBUTES:name::STRING) AS spa_companies FROM FUND_ADMIN.DOCUMENT_AI_RECORD WHERE FIRM_ID = '${FIRM_UUID}' AND DOCUMENT_TYPE = 'stock_purchase_agreement' AND RECORD_TYPE = 'company' AND ATTRIBUTES:name::STRING IS NOT NULL`;
-    }
-
-    function buildCoverageTotalSql() {
-      return `SELECT COUNT(DISTINCT ISSUER_NAME) AS total_companies FROM FUND_ADMIN.AGGREGATE_INVESTMENTS WHERE FIRM_ID = '${FIRM_UUID}'`;
     }
 
     // ── Transform ─────────────────────────────────────────────────────────────
@@ -1446,13 +1449,13 @@
         return;
       }
 
-      let auditRows, drilldownRows, enrichmentRows, statusRows, pendingCount, orphaned, coverageSpa, coverageTotal;
+      let auditRows, drilldownRows, enrichmentRows, statusRows, pendingCount, orphaned, coverageSpa;
       try {
         setLoadingStatus('Loading SPA coverage data from Carta…');
-        // Query A, D, and the two coverage scalars are required — a failure on
-        // any of them errors the whole page (below). Query E, T, P, and O each
+        // Query A, D, and the coverage scalar are required — a failure on any
+        // of them errors the whole page (below). Query E, T, P, and O each
         // degrade to a safe default on failure and never fail the audit.
-        [auditRows, drilldownRows, enrichmentRows, statusRows, pendingCount, orphaned, coverageSpa, coverageTotal] = await Promise.all([
+        [auditRows, drilldownRows, enrichmentRows, statusRows, pendingCount, orphaned, coverageSpa] = await Promise.all([
           fetchAllRows(buildAuditSql, 'Query A'),
           fetchAllRows(buildDrilldownSql, 'Query D'),
           fetchAllRows(buildEnrichmentSql, 'Query E').catch(err => {
@@ -1472,7 +1475,6 @@
             return { count: 0, names: [] };
           }),
           fetchScalar(buildCoverageSpaSql(), 'SPA_COMPANIES'),
-          fetchScalar(buildCoverageTotalSql(), 'TOTAL_COMPANIES'),
         ]);
       } catch (error) {
         showError(
@@ -1513,7 +1515,12 @@
           generatedAt,
         },
         coverage: {
-          totalCompanies: toInt(coverageTotal) || 0,
+          // One audit row per distinct ISSUER_NAME (see buildAuditSql), matching
+          // a separate COUNT(DISTINCT ISSUER_NAME) query — except GROUP BY folds
+          // every NULL ISSUER_NAME into one row, which COUNT(DISTINCT) excludes.
+          // Filter it out here the same way buildStatusSql's SQL already does
+          // for the identical table.
+          totalCompanies: auditRows.filter(r => (r.COMPANY || '').trim()).length,
           spaCompanies: toInt(coverageSpa) || 0,
           pendingExtractionDocs: toInt(pendingCount) || 0,
           orphanedSpas: (orphaned && orphaned.count) || 0,
