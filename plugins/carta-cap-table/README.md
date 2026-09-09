@@ -34,6 +34,7 @@ After installing, restart Claude Code and run `/mcp` to complete OAuth authentic
 | `carta-reporting` | Display cap table data — grants, stakeholders, preferred holders, liquidation seniority, SAFEs, notes, round history, and more |
 | `carta-field-definitions` | Explain a column or field within a specific Carta report |
 | `carta-valuation-history` | 409A valuation history |
+| `carta-hmrc-limits` | UK HMRC EMI/CSOP limit usage — company allowance and per-holder headroom |
 | `carta-waterfall-scenarios` | Saved exit scenario / waterfall models |
 | `carta-voting-rights-optimizer` | Legal tool — minimum stockholder coalition to pass a charter amendment or vote |
 | `carta-round-history` | Financing round history |
