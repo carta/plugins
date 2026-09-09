@@ -1673,10 +1673,9 @@
                 '</span>' +
               '</span>'
             : '';
-        // Coverage subtitle removed per design — coverage now lives in the
-        // "Coverage by cost basis" section directly below the title. The
-        // pending-extraction and unmatched-SPA FYI pills (when present) still
-        // surface as their own line beneath the title.
+        // Coverage itself is shown in the "Coverage by cost basis" section
+        // below. The pending-extraction and unmatched-SPA FYI pills (when
+        // present) surface as their own line beneath the title.
         const fyiPills = (pendingPill + orphanedPill).replace(/^ · /, '');
         const fyiLine = fyiPills ? '<p>' + fyiPills + '</p>' : '';
         document.getElementById('page-header').innerHTML =
