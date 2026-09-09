@@ -687,6 +687,11 @@ def read_account_decisions(dashboard_dir):
         return {}
 
 
+# A fund_match line reports the ManCo's own aggregate management-fee-income
+# account by fund name, not by gl_codes — see BudgetActualsOutline.jsx.
+_MANAGEMENT_FEE_INCOME_RX = re.compile(r"management\s+fee", re.IGNORECASE)
+
+
 def unaccounted_accounts(rows, entries, account_names=None, decided=None,
                          window=None):
     """Accounts carrying activity that no budget line reports.
@@ -709,11 +714,14 @@ def unaccounted_accounts(rows, entries, account_names=None, decided=None,
     """
     first, last = window if window else (None, None)
     naming = {}
+    fund_matched = False
     for row in rows or []:
         if row.get("row_kind") != "line" or row.get("void"):
             continue
         for gl in row.get("gl_codes") or []:
             naming.setdefault(gl, []).append(row)
+        if row.get("fund_match"):
+            fund_matched = True
 
     totals, names = {}, dict(account_names or {})
     for e in entries or []:
@@ -733,6 +741,10 @@ def unaccounted_accounts(rows, entries, account_names=None, decided=None,
         names.setdefault(gl, e.get("account"))
         lines = naming.get(gl)
         if not lines:
+            # A fund's own line already reports this account's activity —
+            # it just does it by fund name, not by gl_codes.
+            if fund_matched and _MANAGEMENT_FEE_INCOME_RX.search(names.get(gl) or ""):
+                continue
             t["unreported"] += amt          # nothing names this account
             continue
         # A line with no scope reports the whole account, so nothing is left.
