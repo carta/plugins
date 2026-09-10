@@ -33,6 +33,10 @@ call_tool({"name": "reporting__create__report", "arguments": { corporation_id, r
   # REQUIRED params by report_type — the API fails silently or errors if these are omitted.
   # Collect any that the user has not already provided via AskUserQuestion BEFORE calling this command.
   #
+  # Each entry in the reporting:search:report_types response carries a params_schema for its own
+  # report type, generated from the same source as this table. Prefer it when present; this table
+  # is the fallback for when search was not called.
+  #
   #   stakeholder_ownership_details_report
   #     stakeholder_pk       — the stakeholder to report on (REQUIRED)
   #
@@ -52,7 +56,14 @@ call_tool({"name": "reporting__create__report", "arguments": { corporation_id, r
   #   cap_table_summary_report
   #     reports              — comma-separated sub-reports to include (REQUIRED):
   #                            summary_cap | intermediate_cap | detailed_cap |
-  #                            ledgers | summary_grouped_cap
+  #                            ledgers | drafts | summary_grouped_cap
+  #     # Unrecognised names are dropped silently, and so are names the caller may not run:
+  #     #   intermediate_cap  — never available to a share-class-scoped admin. The sheet rolls every
+  #     #     non-preferred holder into one aggregate row, which would disclose out-of-scope
+  #     #     holdings. Offer summary_cap / detailed_cap / ledgers instead; do not retry.
+  #     #   transactions_ledger — Carta staff only, for every role.
+  #     # A dropped sheet is absent from the workbook, so it reads as filtered_row_count = 0
+  #     # rather than an error. Do not report that as "no rows matched those filters".
   #     group_selected       — grouping dimension, e.g. 'Relationship', 'Cost Center',
   #                            'Job Title' (REQUIRED when reports includes summary_grouped_cap)
   #
@@ -76,12 +87,15 @@ call_tool({"name": "cap_table__get__stakeholders", "arguments": { corporation_id
 call_tool({"name": "cap_table__get__certificate_share_classes", "arguments": { corporation_id }})
   → { results: [{ id, name, prefix }] }
   # Returns available share classes (Common, Series A, etc.) with their numeric id.
-  # Staff-only — call may fail with 403 for non-staff users; fall back to AskUserQuestion.
+  # Not staff-only: admits staff, company editors, HR admins, and in-scope share-class-scoped
+  # admins. A read-only company viewer IS rejected (403) — fall back to AskUserQuestion.
+  # For a scoped admin the result is already narrowed to their share classes.
 
 call_tool({"name": "cap_table__get__option_plans", "arguments": { corporation_id }})
   → { results: [{ id, name, common_share_class_id, size, available_quantity, is_expired }] }
   # Returns equity plans with their numeric id and linked share class id.
-  # Staff-only — call may fail with 403 for non-staff users; fall back to AskUserQuestion.
+  # Not staff-only: same admission as certificate_share_classes above, and likewise pre-narrowed
+  # for a share-class-scoped admin. A read-only company viewer IS rejected (403).
   # common_share_class_id links a plan to its share class — use to resolve equity_plan_ids
   # when the user filters by share class.
 
@@ -110,11 +124,23 @@ call_tool({"name": "cap_table__list__sars", "arguments": { corporation_id, searc
 call_tool({"name": "cap_table__list__cbus", "arguments": { corporation_id, search: "<label>", detail: "minimal" }})
   → { results: [{ id, label, ... }] }   # CBU:<id>
 
+call_tool({"name": "cap_table__get__limited_admin_scope", "arguments": { corporation_id }})
+  → { corporation_id, is_limited_admin, scope_available,
+      share_classes: [{ id, name, prefix }] | null, option_plan_ids: [...] | null }
+  # Whether this caller's cap-table access is narrowed to specific share classes.
+  # null means unrestricted; [] means the grant denies every share class — never read one as the
+  # other. scope_available: false means scoped but unreadable; say so, do not report an empty scope.
+  # A 403/404 or a missing command means "treat as unrestricted" — every other cap_table command
+  # already scopes itself server-side, so this only affects how the result is described.
+
 call_tool({"name": "reporting__search__report_types", "arguments": { corporation_id, query, json_export_supported: true }})
   → {
-      reports: [{report_type, name, similarity, answers_question}],
+      reports: [{report_type, name, similarity, answers_question, params_schema}],
       questions: [{question, similarity, answers, hide_from_ui}]
     }
+  # `reports` is already filtered to what this account may run — a share-class-scoped admin sees a
+  # shorter list. A report type absent from it is unavailable, not mis-ranked: never fall back to a
+  # hardcoded list and never retry it.
 
 call_tool({"name": "reporting__get__report_status", "arguments": { user_report_pk }})
   → { status }   # status: "pending" | "complete" | "error" | "not_found"

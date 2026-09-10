@@ -45,6 +45,8 @@ Sort:
 
 Formulas:
   pct_of_total  {"name": "% of Total",   "op": "pct_of_total", "column": "Shares Issued"}
+                Denominator is the sum of the rows in this file, not the company total. A
+                share-class-scoped caller gets a scoped denominator -- label it accordingly.
   running_sum   {"name": "Running Total", "op": "running_sum",  "column": "Amount"}
   ratio         {"name": "Ratio",         "op": "ratio",        "numerator": "A", "denominator": "B"}
   delta         {"name": "Change",        "op": "delta",        "column": "Price"}

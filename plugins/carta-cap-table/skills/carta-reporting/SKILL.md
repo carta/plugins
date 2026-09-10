@@ -169,6 +169,21 @@ Store the results as `_report_processor_path` and `_engine_html_path`. Every lat
 
    When `_phantom_label_<corporation_id>` is non-null, pass `"label_overrides": {"CBU": "<label>"}` to every `report_processor.py` invocation for that corporation. This applies to schema preview, preview report, and full report processing (step 4d, the markdown skill, and the Excel skill). **Exception:** the `Generate Carta Excel —` prompt-bar path enters `carta-reporting-excel` fresh without session context and cannot apply label overrides — this is a known limitation and out of scope for this fix.
 
+1b. **Detect share-class-scoped access (silent)** — run once per resolved `corporation_id`, on the main thread:
+
+   ```
+   call_tool({"name": "cap_table__get__limited_admin_scope", "arguments": { corporation_id }})
+   ```
+
+   Store the response as `_scope_<corporation_id>`. Some company admins hold a share-class-scoped role: everything they read is already filtered to the share classes granted to them, so the data is safe either way — this call exists only so the report is *described* correctly.
+
+   - `is_limited_admin: false` → nothing to do. Treat every later total as company-wide.
+   - `is_limited_admin: true` → the report covers only `share_classes`. Name them when you present the result, and never call a total or a percentage company-wide.
+   - `scope_available: false` → the caller is scoped but the classes are unknown. Say the report is limited to part of the cap table without naming classes.
+   - The command is missing, or returns 403/404 → carry on exactly as for `is_limited_admin: false`. Do not surface the failure and do not retry.
+
+   **`null` is not `[]`.** `share_classes: null` means unrestricted; an empty list means the grant denies every share class. Never read one as the other.
+
 2. **Find the right report type** — call `call_tool({"name": "reporting__search__report_types", "arguments": { corporation_id, query, json_export_supported: true }})` with a natural-language description of the data the user needs (e.g. `"option grants > 50% vested with exercise prices"`). Use `reports` from the response, ranked by `similarity`. If results are empty, rephrase the query with broader terms and try again.
 
    **Supported report types** (support `export_format: "json"`):
@@ -178,11 +193,28 @@ Store the results as `_report_processor_path` and `_engine_html_path`. Every lat
    `ocx_report`, `options_outstanding_report`, `rule_701_report`,
    `secondary_transaction_seller_model`, `securities_ledger_report`,
    `share_registry_report`, `stakeholder_details_report`, `stakeholder_ledger_report`,
-   `stakeholder_ownership_details_report`, `termination_modeling_report`, `vesting_details_report`
+   `stakeholder_share_registry_report`, `stakeholder_ownership_details_report`,
+   `termination_modeling_report`, `vesting_details_report`
+
+   This list is a fallback for ranking only — `reports` from the search response is authoritative,
+   because it is already narrowed to what this account may run. Seven of the types above are
+   unavailable to a share-class-scoped admin and will never appear in `reports` for one:
+   `exercised_and_settled_report`, `historical_terminations_report`, `ocx_report`,
+   `rule_701_report`, `secondary_transaction_seller_model`, `stakeholder_ledger_report`,
+   `termination_modeling_report`.
 
    When ranking candidates, **always prefer a supported report type over an unsupported one**, even if the unsupported type scores slightly higher. Only fall back to an unsupported type if no supported type has a plausible similarity score. Proceed with the top supported result automatically — only ask for confirmation if the top two supported results have nearly identical similarity scores AND the request is genuinely ambiguous between two different data categories. When the user's prompt clearly names a report type (e.g. "equity awards", "securities ledger", "vesting details", "exercised and settled"), proceed without asking.
 
-   **2a. In MARKDOWN mode, skip this entire step and go straight to "Collect report details".**
+   **2a. In MARKDOWN mode, still make the `reporting__search__report_types` call — skip only the
+   ranking dialogue.** The response is the one place a share-class-scoped admin's narrower
+   catalogue appears, so every matched type must be confirmed against `reports`. Take the top
+   supported result without asking, then continue to "Collect report details".
+
+   **If the type the user named is absent from `reports`, do not fall back to the list above.** It
+   is not available to this account. Say: "The **{Report Type}** report isn't available on your
+   access level — I can run {two or three names from `reports`} instead. Which would you like?"
+   Never retry a type search did not return, and never describe this as lacking access to the
+   company.
 
 3. **Collect report details** — read `references/mcp-tool-reference.md` now (see the [MCP Tool Reference](#mcp-tool-reference) section for the `cat` command) and look up the matched report type in its **REQUIRED params by report_type** table. **Every param listed for that report type is required.** If missing, call `AskUserQuestion`. Default `as_of_date` to today (YYYY-MM-DD). Always use `export_format: "json"`.
 
@@ -406,6 +438,12 @@ Store the results as `_report_processor_path` and `_engine_html_path`. Every lat
 
    If the dataset is large (> 300 rows), append: "This report has {N} rows — you may want to filter before exporting."
 
+   **Percentage columns under a share-class scope.** `pct_of_total` divides by the sum of the rows
+   in the report. When `_scope_<corporation_id>` reports `is_limited_admin: true` that denominator
+   is the in-scope total, not the company's, so name the column "% of {Share Class} Total" — or
+   "% of In-Scope Total" for more than one class — and never present it as ownership of the
+   company. Carta withholds its own formula columns from this role for the same reason.
+
    **Never generate Excel files directly** — no openpyxl, xlsxwriter, SpreadsheetML, or any other method. The only permitted Excel output path is `Skill(carta-cap-table:carta-reporting-excel)`.
 
    If the user requests a change (different filter, sort, or columns), update only the affected config field and re-generate the artifact — do not restart the workflow. When the user says **Export to Excel**, invoke `Skill(carta-cap-table:carta-reporting-excel)`.
@@ -439,8 +477,10 @@ Cache the contents in memory the first time you read it; do not re-`cat` it with
 | Symptom | Cause | Tell user |
 |---|---|---|
 | No matching report types | Query didn't match any known report type | Describe what kinds of reports are available and ask what they're looking for |
-| `403` / access denied | Your account doesn't have permission to access this company's data. | "It looks like you don't have access to this company's Carta data. Reach out to your Carta admin to request access." |
+| `403` with a message naming share classes or an access level | The account holds a share-class-scoped role that cannot run this report type, or cannot run it across several companies. This is a restriction on the report, not on the company. | Relay the message's own wording, then offer an alternative from `reports`. Never say they lack access to the company. |
+| `403` / access denied, no message | Your account doesn't have permission to access this company's data. | "It looks like you don't have access to this company's Carta data. Reach out to your Carta admin to request access." |
 | `status: error` | Report generation failed. If single report: regenerate once sequentially. If parallel reports: retry failed ones one at a time (sequential — parallel retries cause load failures). If still failing after retry: skip and continue. | "I wasn't able to generate the [Report Name] report — continuing with the rest." |
+| `status: error` and `_scope_<corporation_id>` has `is_limited_admin: true` | The status carries no reason, but the most common cause for a scoped account is that no share class in its scope has data for this report. Retry once, then stop — a second failure will not clear. | "I couldn't generate the **{Report Type}** report. Your access covers {share class names}, and this report may have nothing there. Want me to try {alternative from `reports`} instead?" |
 | `status: not_found` | Report expired. Regenerate immediately with same params from this session — no user prompt needed. Poll until `complete`, fetch download URL, run `report_processor.py` automatically. | _(silent recovery — no message needed unless recovery also fails)_ |
 | `filtered_row_count` = 0 | No rows matched the filters | "No rows matched those filters." Offer to loosen the filter or try a different date. |
 | `original_row_count` > ~1,000 rows | Large dataset | "This report has a lot of rows — want to narrow it down by date range, report type, or a specific person?" |

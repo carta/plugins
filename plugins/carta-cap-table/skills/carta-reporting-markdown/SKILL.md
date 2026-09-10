@@ -171,10 +171,15 @@ Formulas are for **mechanical transforms** on values already present in the repo
 
 | Op | Description | Required fields |
 |---|---|---|
-| `pct_of_total` | Each row as % of the column's grand total | `column` |
+| `pct_of_total` | Each row as % of the column's total **in this report** | `column` |
 | `running_sum` | Cumulative total down the column (current sort order) | `column` |
 | `ratio` | numerator ÷ denominator | `numerator`, `denominator` |
 | `delta` | Row-over-row difference (current sort order) | `column` |
+
+`pct_of_total` divides by the sum of the rows present, which is the whole company only when the
+report is. If `_scope_<corporation_id>` reports `is_limited_admin: true` (step 1b of
+`carta-reporting`), name the column "% of {Share Class} Total" — or "% of In-Scope Total" for more
+than one class — and never present it as ownership of the company.
 
 If a user asks for a value that requires understanding cap structure, equity rights, or ownership math, **direct them to the Carta report that already contains it**:
 
