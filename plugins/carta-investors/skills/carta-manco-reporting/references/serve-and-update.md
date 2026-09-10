@@ -81,7 +81,8 @@ If the script exits non-zero, read its stderr, surface the first line to the use
 
 ## Step 5 — Launch the dashboard
 
-**First check that Step 4.7 is done.** A build that left budget lines with
+**First check that Step 4.7 is done** ([budget-unresolved.md](budget-unresolved.md)).
+A build that left budget lines with
 no Carta account has a question to ask before this page is worth showing —
 those lines render a budget against an empty actual, which reads as spend
 that never happened. Ask, record, rebuild, and come back here. Every other

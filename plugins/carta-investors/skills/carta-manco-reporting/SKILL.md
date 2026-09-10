@@ -119,7 +119,7 @@ run on every invocation regardless.
 | 2 | **skipped** whenever 0.2 already knows the entity — a warm OR soft cache hit | Resolve the ManCo entity (GP entity as fallback) | [firm-resolution.md](references/firm-resolution.md) |
 | 2.5 | always | Cache check — decides **only** whether Step 3 runs, and hands it the year/month window to query | [budget-ingest.md](references/budget-ingest.md) |
 | 2.6 | when `accounts-all.txt` is missing or stale | Fetch the chart of accounts, so 2.75 can be asked against it | [data-fetch.md](references/data-fetch.md) |
-| 2.75 | always | Resolve the budget workbook (silent when a ref answers it) | [budget-ingest.md](references/budget-ingest.md) |
+| 2.75 | always | Resolve the budget workbook (silent when a ref answers it) | [budget-ingest.md](references/budget-ingest.md) — routes to [budget-workbook.md](references/budget-workbook.md) only when a workbook needs resolving |
 | 3 | **only** when the cache is cold, or the user said "refresh" | Fetch journal entries from the warehouse | [data-fetch.md](references/data-fetch.md) |
 | 4 | always | Rebuild the datadir | [serve-and-update.md](references/serve-and-update.md) |
 | 5 | always | Reuse or launch the server, emit the URL | [serve-and-update.md](references/serve-and-update.md) |
@@ -173,7 +173,8 @@ datadir build runs silently. Speak only at:
   explicit ask when a GP entity is standing in for a missing ManCo. Silent
   on a warm or soft cache hit, where a previous run already confirmed it
 - Step 2.75 — the budget questions, on a firm never asked before
-- Step 4.7 — the mapping table, whenever the build left budget lines with
+- Step 4.7 ([budget-unresolved.md](references/budget-unresolved.md)) — the
+  mapping table, whenever the build left budget lines with
   no Carta account to resolve against. Asked once, as one table, and
   **before the URL**: an unmapped line renders its budget against no
   actual, which reads as an account nobody spent from rather than one

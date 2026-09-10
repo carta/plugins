@@ -164,7 +164,7 @@ WHERE FUND_UUID = '<MANCO_UUID>'
 
 One column, one row per entry. The build joins it to the expense lines on
 `gluuid` — a field they already carry — and groups those lines under
-"Employee reimbursements" (see [budget-ingest.md](budget-ingest.md) Step
+"Employee reimbursements" (see [budget-vendors.md](budget-vendors.md) Step
 4.6). A firm with no such account returns nothing, and nothing is grouped.
 
 #### Query B — ManCo income → `je-income.txt`

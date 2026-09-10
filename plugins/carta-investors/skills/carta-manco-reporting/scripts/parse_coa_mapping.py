@@ -358,7 +358,7 @@ def parse(
     detected fresh (see `_find_header_row_and_columns`). Pass both to skip
     detection entirely — this is what a re-ingest does: the first parse's
     detected layout is persisted to `.coa-mapping-ref.json` (see this
-    module's `main()` / the skill's budget-ingest.md), and a later
+    module's `main()` / the skill's budget-workbook.md), and a later
     invocation of the same workbook feeds it straight back in rather than
     re-running detection (and re-risking a different outcome) on a sheet
     that hasn't changed shape.
