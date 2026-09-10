@@ -4379,7 +4379,7 @@ def main():
     p.add_argument("--as-of",           required=True, help="ISO date, e.g. 2026-07-15")
     p.add_argument("--as-of-year",      type=int, help="year for YTD calculations (default: parsed from --as-of)")
     p.add_argument("--carta-environment", default="production", choices=["production", "nonprod"],
-                   help="from Step 1's <SERVER>-name classification (firm-resolution.md) — "
+                   help="from Step 1's <SERVER>-name classification (firm-lookup.md) — "
                         "served to the browser's Snowplow tracker; defaults to production")
     args = p.parse_args()
     if not args.as_of_year:

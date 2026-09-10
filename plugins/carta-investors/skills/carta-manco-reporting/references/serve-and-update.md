@@ -72,7 +72,7 @@ uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/build_manco_d
 
 `<CARTA_ENVIRONMENT>` is `"production"` or `"nonprod"`, classified in Step 1
 (from `<SERVER>`'s name) or carried from Step 0.2's cache probe on a WARM
-HIT — see [firm-resolution.md](firm-resolution.md). Served to the
+HIT — see [firm-lookup.md](firm-lookup.md) and [firm-resolution.md](firm-resolution.md). Served to the
 dashboard's Snowplow tracker via `/api/telemetry-context` so nonprod usage
 isn't misattributed as production.
 

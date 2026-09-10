@@ -115,8 +115,8 @@ run on every invocation regardless.
 | Step | Run it? | What it does | Detail |
 |---|---|---|---|
 | 0 | always | Capture the firm, probe the local cache, emit the greeting | [firm-resolution.md](references/firm-resolution.md) |
-| 1 | **skipped** whenever 0.2 already knows the firm — a warm OR soft cache hit | Resolve the firm | [firm-resolution.md](references/firm-resolution.md) |
-| 2 | **skipped** whenever 0.2 already knows the entity — a warm OR soft cache hit | Resolve the ManCo entity (GP entity as fallback) | [firm-resolution.md](references/firm-resolution.md) |
+| 1 | **skipped** whenever 0.2 already knows the firm — a warm OR soft cache hit | Resolve the firm | [firm-lookup.md](references/firm-lookup.md) |
+| 2 | **skipped** whenever 0.2 already knows the entity — a warm OR soft cache hit | Resolve the ManCo entity (GP entity as fallback) | [firm-lookup.md](references/firm-lookup.md) |
 | 2.5 | always | Cache check — decides **only** whether Step 3 runs, and hands it the year/month window to query | [budget-ingest.md](references/budget-ingest.md) |
 | 2.6 | when `accounts-all.txt` is missing or stale | Fetch the chart of accounts, so 2.75 can be asked against it | [data-fetch.md](references/data-fetch.md) |
 | 2.75 | always | Resolve the budget workbook (silent when a ref answers it) | [budget-ingest.md](references/budget-ingest.md) — routes to [budget-workbook.md](references/budget-workbook.md) only when a workbook needs resolving |
