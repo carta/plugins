@@ -59,6 +59,11 @@ Use the `Corporation:` line to confirm which company the export is for. Each ind
 
 If the user asks for Excel without pasting a payload, ask: "Click the **Excel export** bar at the bottom of the artifact to select it, copy and paste it here — I'll generate the Excel with exactly those columns."
 
+**No scope context on this path.** Entering fresh from the prompt bar, this skill cannot know
+whether the account is share-class-scoped, so it cannot label a percentage column for the scope or
+name the in-scope classes — the same limitation as `label_overrides`. The numbers are correct and
+already scoped; only the labelling is generic. Do not describe any total as company-wide.
+
 ## Column source (Claude Code)
 
 Use the column list confirmed during the Customization Checkpoint (resolved in `carta-reporting-markdown`).

@@ -100,6 +100,11 @@ call_tool({"name": "cap_table__get__option_plans", "arguments": { corporation_id
   # when the user filters by share class.
 
 # security_ids — resolve label to TYPE:ID (all available to non-staff users):
+#
+# These resolve a label through the security's LIST endpoint, which is share-class scoped. For a
+# share-class-scoped admin a security outside the scope is simply absent, so the lookup reports the
+# label as not found — identical to a typo. Do not retry it, do not widen the search, and do not
+# call it an error: say the security is not in the part of the cap table this account can see.
 call_tool({"name": "cap_table__get__certificate", "arguments": { corporation_id, label: "<label>" }})
   → { id, label, ... }   # CERTIFICATE:<id>
 
@@ -125,13 +130,12 @@ call_tool({"name": "cap_table__list__cbus", "arguments": { corporation_id, searc
   → { results: [{ id, label, ... }] }   # CBU:<id>
 
 call_tool({"name": "cap_table__get__limited_admin_scope", "arguments": { corporation_id }})
-  → { corporation_id, is_limited_admin, scope_available,
+  → { corporation_id, is_limited_admin,
       share_classes: [{ id, name, prefix }] | null, option_plan_ids: [...] | null }
   # Whether this caller's cap-table access is narrowed to specific share classes.
   # null means unrestricted; [] means the grant denies every share class — never read one as the
-  # other. scope_available: false means scoped but unreadable; say so, do not report an empty scope.
-  # A 403/404 or a missing command means "treat as unrestricted" — every other cap_table command
-  # already scopes itself server-side, so this only affects how the result is described.
+  # other. A 403/404 or a missing command means "treat as unrestricted": every other cap_table
+  # command already scopes itself server-side, so this only affects how the result is described.
 
 call_tool({"name": "reporting__search__report_types", "arguments": { corporation_id, query, json_export_supported: true }})
   → {

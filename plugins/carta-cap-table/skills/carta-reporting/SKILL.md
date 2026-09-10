@@ -178,11 +178,13 @@ Store the results as `_report_processor_path` and `_engine_html_path`. Every lat
    Store the response as `_scope_<corporation_id>`. Some company admins hold a share-class-scoped role: everything they read is already filtered to the share classes granted to them, so the data is safe either way — this call exists only so the report is *described* correctly.
 
    - `is_limited_admin: false` → nothing to do. Treat every later total as company-wide.
-   - `is_limited_admin: true` → the report covers only `share_classes`. Name them when you present the result, and never call a total or a percentage company-wide.
-   - `scope_available: false` → the caller is scoped but the classes are unknown. Say the report is limited to part of the cap table without naming classes.
+   - `is_limited_admin: true` with a non-empty `share_classes` → the report covers only those classes. Name them when you present the result, and never call a total or a percentage company-wide.
+   - `is_limited_admin: true` with `share_classes: []` → the grant denies every share class, so every report will come back empty. Say that plainly and stop; do not queue a report to prove it.
    - The command is missing, or returns 403/404 → carry on exactly as for `is_limited_admin: false`. Do not surface the failure and do not retry.
 
    **`null` is not `[]`.** `share_classes: null` means unrestricted; an empty list means the grant denies every share class. Never read one as the other.
+
+   **When `is_limited_admin` is true, drop `intermediate_cap` and `transactions_ledger` from any `reports` value you send** to `cap_table_summary_report` — see the reference file. Sending them yields a workbook with the sheet missing rather than an error.
 
 2. **Find the right report type** — call `call_tool({"name": "reporting__search__report_types", "arguments": { corporation_id, query, json_export_supported: true }})` with a natural-language description of the data the user needs (e.g. `"option grants > 50% vested with exercise prices"`). Use `reports` from the response, ranked by `similarity`. If results are empty, rephrase the query with broader terms and try again.
 
