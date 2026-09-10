@@ -1164,7 +1164,7 @@
 
     // Query A — the main four-bucket audit. Identical to Mode B Step B1's query.
     function buildAuditSql(offset, limit) {
-      return `WITH spa_issuers AS (SELECT ATTRIBUTES:name::STRING AS ISSUER_NAME, ATTRIBUTES:executed_by_issuer::BOOLEAN AS EXECUTED_BY_ISSUER FROM FUND_ADMIN.DOCUMENT_AI_RECORD WHERE FIRM_ID = '${FIRM_UUID}' AND DOCUMENT_TYPE = 'stock_purchase_agreement' AND RECORD_TYPE = 'company' AND ATTRIBUTES:name::STRING IS NOT NULL), norm_spa AS (SELECT ISSUER_NAME AS spa_name, TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(ISSUER_NAME), ' *[(][^)]*[)].*$', '')), ' +(D/?B/?A|F/?K/?A|AKA) +.*$', '')), '([ ,]+(INCORPORATED|INC|LLC|LTD|LIMITED|CORPORATION|CORP|L[.]P[.]|LLP|LP|PBC|PLC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]?)+ *$', '')), '[,.]', '')) AS name_norm, MAX(CASE WHEN EXECUTED_BY_ISSUER = TRUE THEN 1 ELSE 0 END) AS has_executed_spa FROM spa_issuers GROUP BY ISSUER_NAME), norm_investments_base AS (SELECT ISSUER_NAME, MAX(CASE WHEN ASSET_CLASS_TYPE = 'PREFERRED_EQUITY' THEN 1 ELSE 0 END) AS has_preferred, MAX(CASE WHEN ASSET_CLASS_TYPE = 'COMMON_EQUITY' THEN 1 ELSE 0 END) AS has_common, MIN(INVESTMENT_DATE) AS first_invested, SUM(TOTAL_COST) AS total_cost_basis, TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(ISSUER_NAME), ' *[(][^)]*[)].*$', '')), ' +(D/?B/?A|F/?K/?A|AKA) +.*$', '')), '([ ,]+(INCORPORATED|INC|LLC|LTD|LIMITED|CORPORATION|CORP|L[.]P[.]|LLP|LP|PBC|PLC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]?)+ *$', '')), '[,.]', '')) AS name_norm, COALESCE(REGEXP_SUBSTR(ISSUER_NAME, '[(] *(D[.]?/?B[.]?/?A[.]?|F[.]?/?K[.]?/?A[.]?|N[.]?/?K[.]?/?A[.]?|A[.]?K[.]?A[.]?|FORMERLY( +KNOWN +AS)?)[ :]+([^)]+)[)]', 1, 1, 'ie', 3), REGEXP_SUBSTR(ISSUER_NAME, '[(]([^)]+)[)]', 1, 1, 'e', 1)) AS alias_raw FROM FUND_ADMIN.AGGREGATE_INVESTMENTS WHERE FIRM_ID = '${FIRM_UUID}' GROUP BY ISSUER_NAME), norm_investments AS (SELECT ISSUER_NAME, has_preferred, has_common, first_invested, total_cost_basis, name_norm, 0 AS is_alias FROM norm_investments_base UNION ALL SELECT ISSUER_NAME, has_preferred, has_common, first_invested, total_cost_basis, TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(alias_raw), '([ ,]+(INCORPORATED|INC|LLC|LTD|LIMITED|CORPORATION|CORP|L[.]P[.]|LLP|LP|PBC|PLC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]?)+ *$', '')), '[,.]', '')) AS name_norm, 1 AS is_alias FROM norm_investments_base WHERE alias_raw IS NOT NULL AND TRIM(alias_raw) <> ''), fuzzy_matched AS (SELECT i.ISSUER_NAME, i.has_preferred, i.has_common, i.first_invested, i.total_cost_basis, s.spa_name, s.has_executed_spa, ROW_NUMBER() OVER (PARTITION BY i.ISSUER_NAME ORDER BY JAROWINKLER_SIMILARITY(i.name_norm, s.name_norm) DESC NULLS LAST, s.has_executed_spa DESC, i.is_alias, s.spa_name) AS rn FROM norm_investments i LEFT JOIN norm_spa s ON JAROWINKLER_SIMILARITY(i.name_norm, s.name_norm) >= 90), best AS (SELECT * FROM fuzzy_matched WHERE rn = 1), labeled AS (SELECT CASE WHEN has_preferred = 0 AND has_common = 0 THEN 4 WHEN spa_name IS NULL THEN 1 WHEN has_executed_spa = 0 THEN 2 ELSE 3 END AS sort_key, CASE WHEN has_preferred = 0 AND has_common = 0 THEN '4. No SPA needed' WHEN spa_name IS NULL THEN '1. Missing SPA' WHEN has_executed_spa = 0 THEN '2. SPA not executed' ELSE '3. Executed SPA' END AS spa_bucket, ISSUER_NAME AS company, spa_name, first_invested, total_cost_basis FROM best) SELECT spa_bucket, company, spa_name, first_invested, total_cost_basis FROM labeled ORDER BY sort_key, total_cost_basis DESC NULLS LAST, company LIMIT ${limit} OFFSET ${offset}`;
+      return `WITH spa_issuers AS (SELECT ATTRIBUTES:name::STRING AS ISSUER_NAME, ATTRIBUTES:executed_by_issuer::BOOLEAN AS EXECUTED_BY_ISSUER FROM FUND_ADMIN.DOCUMENT_AI_RECORD WHERE FIRM_ID = '${FIRM_UUID}' AND DOCUMENT_TYPE = 'stock_purchase_agreement' AND RECORD_TYPE = 'company' AND ATTRIBUTES:name::STRING IS NOT NULL), norm_spa AS (SELECT ISSUER_NAME AS spa_name, TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(ISSUER_NAME), ' *[(][^)]*[)].*$', '')), ' +(D/?B/?A|F/?K/?A|AKA) +.*$', '')), '([ ,]+(INCORPORATED|INC|LLC|LTD|LIMITED|CORPORATION|CORP|L[.]P[.]|LLP|LP|PBC|PLC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]?)+ *$', '')), '[,.]', '')) AS name_norm, MAX(CASE WHEN EXECUTED_BY_ISSUER = TRUE THEN 1 ELSE 0 END) AS has_executed_spa FROM spa_issuers GROUP BY ISSUER_NAME), norm_investments_base AS (SELECT ISSUER_NAME, MAX(CASE WHEN ASSET_CLASS_TYPE = 'PREFERRED_EQUITY' THEN 1 ELSE 0 END) AS has_preferred, MAX(CASE WHEN ASSET_CLASS_TYPE = 'COMMON_EQUITY' THEN 1 ELSE 0 END) AS has_common, MIN(INVESTMENT_DATE) AS first_invested, SUM(CASE WHEN IS_FOREIGN_CURRENCY_INVESTMENT THEN BASE_CURRENCY_TOTAL_COST ELSE TOTAL_COST END) AS total_cost_basis, COUNT(DISTINCT CASE WHEN IS_FOREIGN_CURRENCY_INVESTMENT THEN BASE_CURRENCY_CODE ELSE CURRENCY_CODE END) AS currency_count, MAX(CASE WHEN IS_FOREIGN_CURRENCY_INVESTMENT THEN BASE_CURRENCY_CODE ELSE CURRENCY_CODE END) AS currency_code, TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(ISSUER_NAME), ' *[(][^)]*[)].*$', '')), ' +(D/?B/?A|F/?K/?A|AKA) +.*$', '')), '([ ,]+(INCORPORATED|INC|LLC|LTD|LIMITED|CORPORATION|CORP|L[.]P[.]|LLP|LP|PBC|PLC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]?)+ *$', '')), '[,.]', '')) AS name_norm, COALESCE(REGEXP_SUBSTR(ISSUER_NAME, '[(] *(D[.]?/?B[.]?/?A[.]?|F[.]?/?K[.]?/?A[.]?|N[.]?/?K[.]?/?A[.]?|A[.]?K[.]?A[.]?|FORMERLY( +KNOWN +AS)?)[ :]+([^)]+)[)]', 1, 1, 'ie', 3), REGEXP_SUBSTR(ISSUER_NAME, '[(]([^)]+)[)]', 1, 1, 'e', 1)) AS alias_raw FROM FUND_ADMIN.AGGREGATE_INVESTMENTS WHERE FIRM_ID = '${FIRM_UUID}' GROUP BY ISSUER_NAME), norm_investments AS (SELECT ISSUER_NAME, has_preferred, has_common, first_invested, total_cost_basis, currency_count, currency_code, name_norm, 0 AS is_alias FROM norm_investments_base UNION ALL SELECT ISSUER_NAME, has_preferred, has_common, first_invested, total_cost_basis, currency_count, currency_code, TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(alias_raw), '([ ,]+(INCORPORATED|INC|LLC|LTD|LIMITED|CORPORATION|CORP|L[.]P[.]|LLP|LP|PBC|PLC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]?)+ *$', '')), '[,.]', '')) AS name_norm, 1 AS is_alias FROM norm_investments_base WHERE alias_raw IS NOT NULL AND TRIM(alias_raw) <> ''), fuzzy_matched AS (SELECT i.ISSUER_NAME, i.has_preferred, i.has_common, i.first_invested, i.total_cost_basis, i.currency_count, i.currency_code, s.spa_name, s.has_executed_spa, ROW_NUMBER() OVER (PARTITION BY i.ISSUER_NAME ORDER BY JAROWINKLER_SIMILARITY(i.name_norm, s.name_norm) DESC NULLS LAST, s.has_executed_spa DESC, i.is_alias, s.spa_name) AS rn FROM norm_investments i LEFT JOIN norm_spa s ON JAROWINKLER_SIMILARITY(i.name_norm, s.name_norm) >= 90), best AS (SELECT * FROM fuzzy_matched WHERE rn = 1), labeled AS (SELECT CASE WHEN has_preferred = 0 AND has_common = 0 THEN 4 WHEN spa_name IS NULL THEN 1 WHEN has_executed_spa = 0 THEN 2 ELSE 3 END AS sort_key, CASE WHEN has_preferred = 0 AND has_common = 0 THEN '4. No SPA needed' WHEN spa_name IS NULL THEN '1. Missing SPA' WHEN has_executed_spa = 0 THEN '2. SPA not executed' ELSE '3. Executed SPA' END AS spa_bucket, ISSUER_NAME AS company, spa_name, first_invested, total_cost_basis, currency_count, currency_code FROM best) SELECT spa_bucket, company, spa_name, first_invested, total_cost_basis, currency_count, currency_code FROM labeled ORDER BY sort_key, total_cost_basis DESC NULLS LAST, company LIMIT ${limit} OFFSET ${offset}`;
     }
 
     // Query D — per-company SPA drill-down (batch, all companies). SPAS_JSON
@@ -1180,7 +1180,7 @@
     // remaining value, so a fully-exited company returns no row (correctly
     // degrading to funds=[], regionTag='—', soiValuation=null).
     function buildEnrichmentSql(offset, limit) {
-      return `SELECT ISSUER_NAME AS COMPANY, ARRAY_AGG(DISTINCT FUND_NAME) WITHIN GROUP (ORDER BY FUND_NAME) AS FUNDS, MAX(GET(GET(TAGS_JSON, '  Region'), 0)::STRING) AS REGION_TAG, SUM(REMAINING_VALUE) AS SOI_VALUATION FROM FUND_ADMIN.AGGREGATE_INVESTMENTS WHERE FIRM_ID = '${FIRM_UUID}' AND IS_ACTIVE_INVESTMENT = TRUE GROUP BY ISSUER_NAME ORDER BY ISSUER_NAME LIMIT ${limit} OFFSET ${offset}`;
+      return `SELECT ISSUER_NAME AS COMPANY, ARRAY_AGG(DISTINCT FUND_NAME) WITHIN GROUP (ORDER BY FUND_NAME) AS FUNDS, MAX(GET(GET(TAGS_JSON, '  Region'), 0)::STRING) AS REGION_TAG, SUM(CASE WHEN IS_FOREIGN_CURRENCY_INVESTMENT THEN BASE_CURRENCY_REMAINING_VALUE ELSE REMAINING_VALUE END) AS SOI_VALUATION, COUNT(DISTINCT CASE WHEN IS_FOREIGN_CURRENCY_INVESTMENT THEN BASE_CURRENCY_CODE ELSE CURRENCY_CODE END) AS SOI_CURRENCY_COUNT, MAX(CASE WHEN IS_FOREIGN_CURRENCY_INVESTMENT THEN BASE_CURRENCY_CODE ELSE CURRENCY_CODE END) AS SOI_CURRENCY_CODE FROM FUND_ADMIN.AGGREGATE_INVESTMENTS WHERE FIRM_ID = '${FIRM_UUID}' AND IS_ACTIVE_INVESTMENT = TRUE GROUP BY ISSUER_NAME ORDER BY ISSUER_NAME LIMIT ${limit} OFFSET ${offset}`;
     }
 
     // Query T — live/exited status per company. Optional: disables the
@@ -1312,6 +1312,7 @@
           funds: Array.isArray(fundsRaw) ? fundsRaw.map(f => String(f).trim()).filter(Boolean) : [],
           regionTag: regionRaw ? regionRaw : '—',
           soiValuation: toFloat(row.SOI_VALUATION),
+          soiCurrency: toInt(row.SOI_CURRENCY_COUNT) === 1 ? cleanCurrency(row.SOI_CURRENCY_CODE) : null,
         };
       }
       return out;
@@ -1356,12 +1357,16 @@
           company: (row.COMPANY || '').trim(),
           firstInvested: formatMonthYear(row.FIRST_INVESTED),
           costBasis: toFloat(row.TOTAL_COST_BASIS) || 0.0,
+          // null when the company's rows span more than one currency — render
+          // bare rather than stamping a total with a currency it isn't all in.
+          currency: toInt(row.CURRENCY_COUNT) === 1 ? cleanCurrency(row.CURRENCY_CODE) : null,
         };
         if (spaName) entry.drillDownKey = spaName;
         const enrich = (enrichmentLookup || {})[entry.company] || {};
         entry.funds = enrich.funds || [];
         entry.regionTag = enrich.regionTag || '—';
         entry.soiValuation = enrich.soiValuation !== undefined ? enrich.soiValuation : null;
+        entry.soiCurrency = enrich.soiCurrency !== undefined ? enrich.soiCurrency : null;
         out[bucketKey].push(entry);
       }
       for (const key of Object.keys(out)) {
@@ -1385,7 +1390,7 @@
       const companyMeta = {};
       for (const bucketKey of Object.keys(buckets)) {
         for (const row of buckets[bucketKey]) {
-          const meta = [bucketKey, row.firstInvested, row.costBasis];
+          const meta = [bucketKey, row.firstInvested, row.costBasis, row.currency];
           companyMeta[row.company] = meta;
           if (row.drillDownKey) companyMeta[row.drillDownKey] = meta;
         }
@@ -1436,11 +1441,12 @@
           });
         }
 
-        const meta = companyMeta[company] || ['', '—', 0.0];
+        const meta = companyMeta[company] || ['', '—', 0.0, null];
         out[company] = {
           bucket: meta[0] || 'missing',
           firstInvested: meta[1],
           costBasis: meta[2],
+          currency: meta[3] || null,
           spas,
         };
       }
@@ -1585,10 +1591,37 @@
     // and COLUMNS are computed once in computeDerivedState() for the same reason.
 
     // ---------- Formatters ----------
-    // Cost basis and SOI valuation are firm-level sums with no currency column
-    // in the underlying query (unlike SPA amounts, which carry a per-document
-    // CURRENCY_CODE) — never assume USD, so these render as bare numbers. The
-    // column headers that use this note the ambiguity explicitly.
+    // Cost basis and SOI valuation now carry the currency their amount is
+    // denominated in, resolved per company by the same IS_FOREIGN_CURRENCY_INVESTMENT
+    // flag that picks the amount column. fmtMoneyIn() stamps it; fmtMoney()
+    // stays bare and is used where no currency is in hand — including a company
+    // whose own rows span more than one, which must never be stamped with any
+    // single code. Still never assume USD.
+    // Firm-level totals (the coverage bar) may only be stamped when every
+    // company agrees on one currency. Any disagreement, or any company whose
+    // own rows span currencies, returns null and the total renders bare.
+    let FIRM_CCY;
+    function firmCurrency() {
+        if (FIRM_CCY !== undefined) return FIRM_CCY;
+        const seen = new Set();
+        for (const key of Object.keys(DATA.buckets || {})) {
+            for (const r of DATA.buckets[key] || []) {
+                if (!r.costBasis) continue;      // no amount, no opinion
+                if (!r.currency) { FIRM_CCY = null; return FIRM_CCY; }
+                seen.add(r.currency);
+            }
+        }
+        FIRM_CCY = seen.size === 1 ? seen.values().next().value : null;
+        return FIRM_CCY;
+    }
+
+    function fmtMoneyIn(n, ccy) {
+        const bare = fmtMoney(n);
+        if (!ccy || bare === '—') return bare;
+        const sym = CCY_SYMBOL[ccy];
+        return sym ? sym + bare : ccy + ' ' + bare;
+    }
+    const CCY_SYMBOL = { USD: '$', EUR: '€', GBP: '£', JPY: '¥', CAD: 'CA$', AUD: 'A$', CHF: 'CHF ', INR: '₹' };
     function fmtMoney(n) {
         if (n === null || n === undefined) return '—';
         if (n === 0) return '0';
@@ -1820,7 +1853,7 @@
             const p = v / totalForBar * 100;
             const titleAttr = useCount
                 ? escAttr(o.label + ': ' + v + ' companies (' + p.toFixed(1) + '%)')
-                : escAttr(o.label + ': ' + fmtMoney(v) + ' (' + p.toFixed(1) + '%)');
+                : escAttr(o.label + ': ' + fmtMoneyIn(v, firmCurrency()) + ' (' + p.toFixed(1) + '%)');
             segs += '<div class="coverage-bar-seg ' + o.key + '" style="width:' + p + '%" title="' + titleAttr + '"></div>';
             legend += '<span class="item"><span class="swatch ' + o.key + '"></span>' +
                 esc(o.label) + ' ' + p.toFixed(1) + '%</span>';
@@ -1969,8 +2002,8 @@
         { key: 'company',       label: 'Company',        align: 'left',  sortable: true,  type: 'string' },
         { key: 'bucketKey',     label: 'Status',         align: 'left',  sortable: true,  type: 'bucket' },
         { key: 'firstInvested', label: 'First invested', align: 'left',  sortable: true,  type: 'date' },
-        { key: 'costBasis',     label: 'Cost basis (fund currency)',     align: 'right', sortable: true,  type: 'number' },
-        { key: 'soiValuation',  label: 'SOI valuation (fund currency)',  align: 'right', sortable: true,  type: 'number' },
+        { key: 'costBasis',     label: 'Cost basis',     align: 'right', sortable: true,  type: 'number' },
+        { key: 'soiValuation',  label: 'SOI valuation',  align: 'right', sortable: true,  type: 'number' },
     ];
     let COLUMNS = BASE_COLUMNS.filter(c => c.key !== 'soiValuation');
 
@@ -2274,8 +2307,8 @@
                 '<td class="company-name">' + esc(r.company) + (hasDrillDown ? '<span class="row-caret" aria-hidden="true">›</span>' : '') + '</td>' +
                 '<td><span class="bucket-badge ' + badgeClass + '">' + esc(r.bucketLabel) + '</span></td>' +
                 '<td>' + esc(r.firstInvested) + '</td>' +
-                '<td class="number">' + fmtMoney(r.costBasis) + '</td>' +
-                (HAS_SOI_VALUATION ? '<td class="number">' + fmtMoney(r.soiValuation) + '</td>' : '') +
+                '<td class="number">' + fmtMoneyIn(r.costBasis, r.currency) + '</td>' +
+                (HAS_SOI_VALUATION ? '<td class="number">' + fmtMoneyIn(r.soiValuation, r.soiCurrency) + '</td>' : '') +
                 '</tr>';
         });
         html += '</tbody></table>';
@@ -2311,7 +2344,7 @@
         document.getElementById('drawer-title').textContent = company;
         const spaWord = data.spas.length === 1 ? 'SPA' : 'SPAs';
         document.getElementById('drawer-subtitle').textContent =
-            data.spas.length + ' ' + spaWord + ' on file · First invested ' + data.firstInvested + ' · ' + fmtMoney(data.costBasis) + ' cost basis (fund currency)';
+            data.spas.length + ' ' + spaWord + ' on file · First invested ' + data.firstInvested + ' · ' + fmtMoneyIn(data.costBasis, data.currency) + ' cost basis';
 
         let html = '';
         data.spas.forEach(spa => {
