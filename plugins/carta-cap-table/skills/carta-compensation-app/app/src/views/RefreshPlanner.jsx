@@ -46,6 +46,15 @@ import {
 // comparable even though this one inverts the direction.
 const VESTING_WINDOWS = [6, 12, 18, 24];
 
+/** No filters applied — what a scenario means when it stores no `filters` key. */
+const NO_FILTERS = Object.freeze({
+  hasPriorGrants: false,
+  jobAreas: [],
+  levelMin: null,
+  levelMax: null,
+  excludeVestingWithinMonths: 0,
+});
+
 /** A filter control that is unavailable because this build never captured its data.
  *
  *  Rendered in place of the control rather than hiding it: a missing filter reads as
@@ -228,7 +237,8 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
   const [cart, setCart] = useState(() => new Set());
   const [dropped, setDropped] = useState(0);
   const {
-    saved, savedOverrides, loading: cartLoading, conflict, saving, save,
+    saved, savedOverrides, savedSettings, savedFilters,
+    loading: cartLoading, conflict, saving, futureDoc, save,
   } = useScenario(corporationId);
   const hydrated = useRef(false);
 
@@ -248,7 +258,21 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
       const present = new Set(ids);
       setOverrides(new Map([...savedOverrides].filter(([id]) => present.has(id))));
     }
-  }, [cartLoading, saved, savedOverrides, all]);
+    // The cohort filters, restored so a reload lands on the same list. Absent means
+    // this scenario never recorded any, which is the initial state already.
+    if (savedFilters) {
+      setHasGrants(savedFilters.hasPriorGrants);
+      setAreas(new Set(savedFilters.jobAreas));
+      setLevelMin(savedFilters.levelMin === null ? null : String(savedFilters.levelMin));
+      setLevelMax(savedFilters.levelMax === null ? null : String(savedFilters.levelMax));
+      setVestWindow(savedFilters.excludeVestingWithinMonths);
+    }
+    // Settings are adopted through the same one-shot gate rather than their own
+    // effect: the policy-defaulting effect below fires whenever `settings` is null,
+    // and a second effect racing it would flip the target between the scenario's
+    // value and the corporation's on load.
+    if (savedSettings) setSettings(savedSettings);
+  }, [cartLoading, saved, savedOverrides, savedSettings, savedFilters, all]);
 
   // The corporation's policy, and the settings the user is modelling with. The
   // settings START as the policy and diverge only when edited — `null` until the
@@ -301,18 +325,21 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
       .map(([rank, label]) => ({ value: String(rank), label }));
   }, [all]);
 
-  const { rows, removed } = useMemo(() => applyFilters(
-    all,
-    {
-      hasPriorGrants: hasGrants,
-      jobAreas: [...areas],
-      levelMin: levelMin === null ? null : Number(levelMin),
-      levelMax: levelMax === null ? null : Number(levelMax),
-      excludeVestingWithinMonths: vestWindow,
-    },
-    availability,
-    asOf,
-  ), [all, hasGrants, areas, levelMin, levelMax, vestWindow, availability, asOf]);
+  // The five controls as one object — the shape applyFilters consumes AND the shape
+  // persisted to the scenario, so the saved form is the form the filter runs on
+  // rather than a second vocabulary that can drift from it.
+  const currentFilters = useMemo(() => ({
+    hasPriorGrants: hasGrants,
+    jobAreas: [...areas],
+    levelMin: levelMin === null ? null : Number(levelMin),
+    levelMax: levelMax === null ? null : Number(levelMax),
+    excludeVestingWithinMonths: vestWindow,
+  }), [hasGrants, areas, levelMin, levelMax, vestWindow]);
+
+  const { rows, removed } = useMemo(
+    () => applyFilters(all, currentFilters, availability, asOf),
+    [all, currentFilters, availability, asOf],
+  );
 
   // Cart figures, all derived from the one Set. `visibleIds` is the filtered view,
   // which is what select-all acts on — reaching past the filters would add people
@@ -323,12 +350,38 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
   const { added, removed: cartRemoved } = diff(cart, saved);
   const hidden = hiddenCount(cart, visibleIds);
 
+  // Every filter change goes through here, so no path can narrow the cohort
+  // without persisting it — the same rule updateCart follows for the cart. The
+  // NEXT values are passed explicitly rather than read back from state, which has
+  // not committed yet at the moment this runs.
+  const saveFilters = (next) => save({ filters: { ...currentFilters, ...next } });
+
+  const updateHasGrants = (v) => { setHasGrants(v); saveFilters({ hasPriorGrants: v }); };
+  const updateAreas = (next) => { setAreas(next); saveFilters({ jobAreas: [...next] }); };
+  const updateLevelMin = (v) => {
+    setLevelMin(v);
+    saveFilters({ levelMin: v === null ? null : Number(v) });
+  };
+  const updateLevelMax = (v) => {
+    setLevelMax(v);
+    saveFilters({ levelMax: v === null ? null : Number(v) });
+  };
+  const updateVestWindow = (v) => { setVestWindow(v); saveFilters({ excludeVestingWithinMonths: v }); };
+
+  // The user edited the policy they are modelling with. Distinct from the effect
+  // above that DEFAULTS settings from the corporation's policy: that one must not
+  // save, or it would stamp a settings key onto a scenario nobody configured.
+  const updateSettings = (next) => { setSettings(next); save({ settings: next }); };
+
   const clearFilters = () => {
     setHasGrants(false);
     setAreas(new Set());
     setLevelMin(null);
     setLevelMax(null);
     setVestWindow(0);
+    // One save, not five. Five would re-arm the debounce five times and, worse,
+    // each would carry a filter set the other four had not been applied to.
+    save({ filters: NO_FILTERS });
   };
 
   const exportCart = () => {
@@ -418,7 +471,7 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
         rows={inCartRows}
         policySettings={policySettings}
         settings={liveSettings}
-        onSettings={setSettings}
+        onSettings={updateSettings}
         onBack={() => setStep("cohort")}
         onNext={() => setStep("review")}
         asOf={asOf}
@@ -487,7 +540,7 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
             <Checkbox
               label="Has prior grants"
               checked={hasGrants}
-              onChange={setHasGrants}
+              onChange={updateHasGrants}
               title="Keeps only employees holding at least one live grant. Cancelled and forfeited awards are already excluded by Carta."
             />
           )}
@@ -496,13 +549,13 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
             label="Job area"
             options={areaOptions}
             selected={areas}
-            onToggle={(v) => setAreas((prev) => {
-              const next = new Set(prev);
+            onToggle={(v) => {
+              const next = new Set(areas);
               if (next.has(v)) next.delete(v);
               else next.add(v);
-              return next;
-            })}
-            onAll={() => setAreas(new Set())}
+              updateAreas(next);
+            }}
+            onAll={() => updateAreas(new Set())}
             allLabel={`All (${areaOptions.length})`}
             minWidth={170}
           />
@@ -510,14 +563,14 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
           <Select
             label="Level from"
             value={levelMin === null ? "" : levelMin}
-            onChange={(v) => setLevelMin(v === "" ? null : v)}
+            onChange={(v) => updateLevelMin(v === "" ? null : v)}
             options={[{ value: "", label: "Any" }, ...levelOptions]}
             minWidth={110}
           />
           <Select
             label="Level to"
             value={levelMax === null ? "" : levelMax}
-            onChange={(v) => setLevelMax(v === "" ? null : v)}
+            onChange={(v) => updateLevelMax(v === "" ? null : v)}
             options={[{ value: "", label: "Any" }, ...levelOptions]}
             minWidth={110}
           />
@@ -531,7 +584,7 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
             <Select
               label="Exclude completing vesting within"
               value={String(vestWindow)}
-              onChange={(v) => setVestWindow(Number(v))}
+              onChange={(v) => updateVestWindow(Number(v))}
               options={[
                 { value: "0", label: "No exclusion" },
                 ...VESTING_WINDOWS.map((m) => ({ value: String(m), label: `${m} months` })),

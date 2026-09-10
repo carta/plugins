@@ -42,6 +42,40 @@ export async function putScenarios(doc, etag) {
   return res.headers.get("ETag");
 }
 
+/** What this app writes. 2 adds per-scenario `settings` and `filters`.
+ *
+ *  Both are OPTIONAL and both have a correct absent-meaning, which is why there is
+ *  no migration: a scenario with no `settings` falls back to the corporation's own
+ *  policy — exactly what the planner did before any of this existed — and one with
+ *  no `filters` has none applied. A v1 document is therefore read correctly by this
+ *  code as written, and is rewritten only when the user next edits something.
+ */
+export const SCHEMA_VERSION = 2;
+
+/** The modelling settings a scenario stores, matching policyToSettings' output.
+ *
+ *  Listed rather than spread so an unrelated key on the settings object cannot
+ *  reach the file, and so a reader of the raw JSON sees a fixed shape.
+ */
+export const SETTINGS_KEYS = Object.freeze([
+  "targetPct", "cadenceMonths", "rangeBelowPct", "rangeAbovePct", "tenureMinMonths",
+]);
+
+/** The highest version this build understands.
+ *
+ *  Read in one direction only. A document from an OLDER build is fine — see above.
+ *  A document from a NEWER one is not, because a key this build thinks it knows may
+ *  have been redefined, and the failure would be silent. So a newer document is
+ *  reported and, more importantly, NEVER written over: clobbering a scenario file
+ *  written by a build we do not understand is the one unrecoverable outcome here.
+ */
+export const MAX_READABLE_VERSION = 2;
+
+/** True when this document was written by a build newer than this one. */
+export function isFutureDoc(doc) {
+  return !!doc && Number(doc.schemaVersion) > MAX_READABLE_VERSION;
+}
+
 /** The document shape this app writes. Kept in one place so a reader of the raw
  *  file can tell what wrote it and which corporation it belongs to.
  *
@@ -51,7 +85,7 @@ export async function putScenarios(doc, etag) {
  */
 export function emptyDoc(corporationId) {
   return {
-    schemaVersion: 1,
+    schemaVersion: SCHEMA_VERSION,
     kind: "ctc-refresh-scenarios",
     corporationId: corporationId ?? null,
     activeScenarioId: "default",
@@ -66,12 +100,70 @@ export function emptyDoc(corporationId) {
  *  silently would put strangers in a grant cycle, so a mismatch reads as empty.
  */
 export function cartFromDoc(doc, corporationId) {
+  const active = activeScenario(doc, corporationId);
+  return active ? new Set(active.cart || []) : null;
+}
+
+/** The active scenario entry, or null when this document must not be applied.
+ *
+ *  One place for the three checks every reader needs, rather than a fourth copy:
+ *  is this our file, is it from a build we understand, and does it belong to this
+ *  corporation. The corporation test needs BOTH sides non-null on purpose — an
+ *  unrecorded id means "we do not know", and refusing to load someone's only saved
+ *  plan over an unknown would be worse than the mix-up it guards against.
+ */
+function activeScenario(doc, corporationId) {
   if (!doc || doc.kind !== "ctc-refresh-scenarios") return null;
+  if (isFutureDoc(doc)) return null;
   if (corporationId != null && doc.corporationId != null && doc.corporationId !== corporationId) {
     return null;
   }
-  const active = (doc.scenarios || []).find((s) => s.id === (doc.activeScenarioId || "default"));
-  return active ? new Set(active.cart || []) : null;
+  return (doc.scenarios || []).find((s) => s.id === (doc.activeScenarioId || "default")) || null;
+}
+
+/** The active scenario's modelling settings, or null when it has none.
+ *
+ *  NULL IS MEANINGFUL and is not the same as an empty object: it says "this
+ *  scenario never recorded settings", which the planner answers by falling back to
+ *  the corporation's own policy. Returning defaults here would hard-code Carta's
+ *  policy into every v1 scenario and make that fallback impossible to distinguish
+ *  from a deliberate choice to match it.
+ *
+ *  Percent NUMBERS, not fractions — 30 means 30%. `policyToSettings` is the single
+ *  place the conversion happens and this stores its output, so nothing downstream
+ *  has to know which form it is holding.
+ */
+export function settingsFromDoc(doc, corporationId) {
+  const active = activeScenario(doc, corporationId);
+  const raw = active && active.settings;
+  if (!raw || typeof raw !== "object") return null;
+  const out = {};
+  for (const key of SETTINGS_KEYS) {
+    const v = Number(raw[key]);
+    if (Number.isFinite(v)) out[key] = v;
+  }
+  // A settings object missing every key is no settings at all. Half a policy would
+  // silently mix the scenario's target with Carta's cadence.
+  return Object.keys(out).length ? out : null;
+}
+
+/** The active scenario's cohort filters, or null when it has none. */
+export function filtersFromDoc(doc, corporationId) {
+  const active = activeScenario(doc, corporationId);
+  const raw = active && active.filters;
+  if (!raw || typeof raw !== "object") return null;
+  const levelMin = Number(raw.levelMin);
+  const levelMax = Number(raw.levelMax);
+  const within = Number(raw.excludeVestingWithinMonths);
+  return {
+    hasPriorGrants: raw.hasPriorGrants === true,
+    // Coerced to an array of strings: job areas arrive as a Set in the view, and a
+    // stray number here would never match a row's job_area.
+    jobAreas: Array.isArray(raw.jobAreas) ? raw.jobAreas.filter((a) => typeof a === "string") : [],
+    levelMin: Number.isFinite(levelMin) ? levelMin : null,
+    levelMax: Number.isFinite(levelMax) ? levelMax : null,
+    excludeVestingWithinMonths: Number.isFinite(within) ? within : 0,
+  };
 }
 
 /** Write a cart into a document, returning a new document.
@@ -83,23 +175,81 @@ export function cartFromDoc(doc, corporationId) {
  *  contents. See the pendingRef comment in useScenario.
  */
 export function docWithCart(doc, corporationId, cart, overrides, scenarioId) {
+  return docWithPlan(doc, corporationId, { cart, overrides }, scenarioId);
+}
+
+/** True when a filter set leaves the cohort untouched. */
+function noFilters(f) {
+  return !f || (!f.hasPriorGrants
+    && !(f.jobAreas && f.jobAreas.length)
+    && f.levelMin == null && f.levelMax == null
+    && !f.excludeVestingWithinMonths);
+}
+
+/** Write one scenario's whole plan, returning a new document.
+ *
+ *  `plan` carries any of `cart`, `overrides`, `settings` and `filters`. A key that
+ *  is absent from `plan` is LEFT ALONE on the stored scenario rather than cleared,
+ *  so a caller saving a filter change cannot wipe the cart it did not pass.
+ *
+ *  Refuses to write over a document from a newer build — see MAX_READABLE_VERSION.
+ *  Returning the base unchanged means the PUT carries what is already on disk, so
+ *  the ETag still matches and the user sees no spurious conflict; they simply
+ *  cannot save until they are on a build that understands the file.
+ */
+export function docWithPlan(doc, corporationId, plan, scenarioId) {
+  if (isFutureDoc(doc)) return doc;
   const base = doc && doc.kind === "ctc-refresh-scenarios" ? doc : emptyDoc(corporationId);
   const activeId = scenarioId || base.activeScenarioId || "default";
-  const scenarios = (base.scenarios || []).map((s) =>
-    s.id === activeId
-      ? {
-        ...s,
-        cart: [...cart].sort(),
-        // Written as a plain object because JSON has no Map. Omitted entirely
-        // when empty, so a scenario nobody edited carries no key rather than an
-        // empty one that reads as "overrides were cleared".
-        ...(overrides && overrides.size
-          ? { grantOverrides: Object.fromEntries([...overrides].sort()) }
-          : {}),
-        updatedAt: new Date().toISOString(),
+  const has = (k) => Object.prototype.hasOwnProperty.call(plan || {}, k);
+  const scenarios = (base.scenarios || []).map((s) => {
+    if (s.id !== activeId) return s;
+    const next = { ...s, updatedAt: new Date().toISOString() };
+    if (has("cart")) next.cart = [...(plan.cart || [])].sort();
+    if (has("overrides")) {
+      // Written as a plain object because JSON has no Map. Deleted entirely when
+      // empty, so a scenario nobody edited carries no key rather than an empty one
+      // that reads as "overrides were cleared".
+      if (plan.overrides && plan.overrides.size) {
+        next.grantOverrides = Object.fromEntries([...plan.overrides].sort());
+      } else delete next.grantOverrides;
+    }
+    if (has("settings")) {
+      // Written unconditionally once known, unlike filters: a scenario whose whole
+      // point is "the same cohort at a lower multiple" IS its settings, and leaving
+      // the key off would make it fall back to policy and read as unchanged.
+      if (plan.settings) {
+        next.settings = Object.fromEntries(
+          SETTINGS_KEYS
+            .filter((k) => Number.isFinite(Number(plan.settings[k])))
+            .map((k) => [k, Number(plan.settings[k])]),
+        );
+      } else delete next.settings;
+    }
+    if (has("filters")) {
+      // Omitted when neutral, matching grantOverrides: an all-defaults object reads
+      // as "filters were deliberately cleared" rather than "never set one".
+      if (noFilters(plan.filters)) delete next.filters;
+      else {
+        next.filters = {
+          hasPriorGrants: plan.filters.hasPriorGrants === true,
+          jobAreas: [...(plan.filters.jobAreas || [])].sort(),
+          levelMin: plan.filters.levelMin ?? null,
+          levelMax: plan.filters.levelMax ?? null,
+          excludeVestingWithinMonths: plan.filters.excludeVestingWithinMonths || 0,
+        };
       }
-      : s);
-  return { ...base, corporationId: corporationId ?? base.corporationId ?? null, scenarios };
+    }
+    return next;
+  });
+  return {
+    ...base,
+    // Stamped on write, not on read: a document is only v2 once it actually holds
+    // something a v1 build would misread.
+    schemaVersion: SCHEMA_VERSION,
+    corporationId: corporationId ?? base.corporationId ?? null,
+    scenarios,
+  };
 }
 
 /** The active scenario's hand-set grants, as a Map. Empty when there are none. */
@@ -134,6 +284,13 @@ export function overridesFromDoc(doc, corporationId) {
 export function useScenario(corporationId) {
   const [saved, setSaved] = useState(null);
   const [savedOverrides, setSavedOverrides] = useState(() => new Map());
+  // Null means "this scenario recorded none", which the planner answers by falling
+  // back to the corporation's policy — NOT the same as an empty object.
+  const [savedSettings, setSavedSettings] = useState(null);
+  const [savedFilters, setSavedFilters] = useState(null);
+  // A document from a newer build. Readable state is left empty and saving is
+  // refused, because a key this build thinks it knows may have been redefined.
+  const [futureDoc, setFutureDoc] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [conflict, setConflict] = useState(false);
@@ -160,8 +317,11 @@ export function useScenario(corporationId) {
         if (cancelled) return;
         docRef.current = doc;
         etagRef.current = etag;
+        setFutureDoc(isFutureDoc(doc));
         setSaved(cartFromDoc(doc, corporationId));
         setSavedOverrides(overridesFromDoc(doc, corporationId));
+        setSavedSettings(settingsFromDoc(doc, corporationId));
+        setSavedFilters(filtersFromDoc(doc, corporationId));
       } catch (e) {
         if (!cancelled) setError(e.message || String(e));
       } finally {
@@ -181,16 +341,20 @@ export function useScenario(corporationId) {
     if (!payload) return true;
     if (conflictRef.current) return false;
     try {
-      const doc = docWithCart(
-        docRef.current, corporationId, payload.cart, payload.overrides, payload.scenarioId);
+      const doc = docWithPlan(
+        docRef.current, corporationId, payload.plan, payload.scenarioId);
       const etag = await putScenarios(doc, etagRef.current);
       docRef.current = doc;
       etagRef.current = etag;
       // Cleared only on success. A failed write stays queued, so a retry — or the
       // next edit — carries it rather than the edit dying with the error.
       pendingRef.current = null;
-      setSaved(new Set(payload.cart));
-      setSavedOverrides(new Map(payload.overrides || []));
+      const { plan } = payload;
+      const wrote = (k) => Object.prototype.hasOwnProperty.call(plan, k);
+      if (wrote("cart")) setSaved(new Set(plan.cart));
+      if (wrote("overrides")) setSavedOverrides(new Map(plan.overrides || []));
+      if (wrote("settings")) setSavedSettings(plan.settings || null);
+      if (wrote("filters")) setSavedFilters(plan.filters || null);
       setConflict(false);
       setError(null);
       setSaving(false);
@@ -218,21 +382,34 @@ export function useScenario(corporationId) {
     if (pendingRef.current) writePending();
   }, [writePending]);
 
-  const save = useCallback((cart, overrides, scenarioId) => {
-    if (conflictRef.current) return;
+  /** Queue a save. `plan` may carry any of cart, overrides, settings, filters.
+   *
+   *  Also accepts the older `save(cart, overrides)` positional form, because the
+   *  cart is edited from two places and rewriting both to build a plan object added
+   *  nothing. Anything not passed is left alone on the stored scenario.
+   */
+  const save = useCallback((planOrCart, overrides, scenarioId) => {
+    if (conflictRef.current || futureDoc) return;
+    const plan = planOrCart instanceof Set || Array.isArray(planOrCart)
+      ? { cart: planOrCart, overrides }
+      : (planOrCart || {});
+    // Merge onto anything already queued rather than replacing it: a filter change
+    // 100ms after a cart click must not drop the cart click, and each mutation path
+    // only knows about its own slice of the plan.
+    const merged = { ...(pendingRef.current ? pendingRef.current.plan : null), ...plan };
     // The target scenario is captured HERE, not read when the timer fires: by then
     // the user may have switched, and the write would land in the wrong draft.
     pendingRef.current = {
-      cart,
-      overrides,
+      plan: merged,
       scenarioId: scenarioId
+        || (pendingRef.current && pendingRef.current.scenarioId)
         || (docRef.current && docRef.current.activeScenarioId)
         || "default",
     };
     setSaving(true);
     clearTimeout(timerRef.current);
     timerRef.current = setTimeout(writePending, 600);
-  }, [writePending]);
+  }, [writePending, futureDoc]);
 
   /** Write any queued edit immediately. Resolves false when it did not land.
    *
@@ -252,8 +429,11 @@ export function useScenario(corporationId) {
       etagRef.current = etag;
       pendingRef.current = null;
       conflictRef.current = false;
+      setFutureDoc(isFutureDoc(doc));
       setSaved(cartFromDoc(doc, corporationId));
       setSavedOverrides(overridesFromDoc(doc, corporationId));
+      setSavedSettings(settingsFromDoc(doc, corporationId));
+      setSavedFilters(filtersFromDoc(doc, corporationId));
       setConflict(false);
       setError(null);
       setSaving(false);
@@ -264,5 +444,9 @@ export function useScenario(corporationId) {
     }
   }, [corporationId]);
 
-  return { saved, savedOverrides, loading, error, conflict, saving, save, flush, reload };
+  return {
+    saved, savedOverrides, savedSettings, savedFilters,
+    loading, error, conflict, saving, futureDoc,
+    save, flush, reload,
+  };
 }
