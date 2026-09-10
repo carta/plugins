@@ -57,6 +57,21 @@ function tabsFor({ roster, planner }) {
   ];
 }
 
+/** The identity props every view needs from the snapshot.
+ *
+ *  Exported so a test can assert the wiring without mounting the planner, which is
+ *  hidden behind SHOW_REFRESH_PLANNER. That matters more than it looks: every
+ *  planner test supplies `corporationId` itself, so for a long time they all passed
+ *  while the real caller here never passed it at all — the component was correct and
+ *  its integration was not. Assert this, and the PUT payload it ends up in.
+ */
+export function identityProps(snapshot) {
+  return {
+    corporation: snapshot?.source?.corporation,
+    corporationId: snapshot?.source?.corporationId,
+  };
+}
+
 function useGlobalCss() {
   useEffect(() => {
     if (document.getElementById("ctc-global-css")) return;
@@ -302,10 +317,15 @@ export default function App() {
         )}
         {/* Gated on the flag as well as the data: a stale sessionStorage tab would
             otherwise restore someone onto a hidden view with no tab to leave by. */}
+        {/* identityProps carries corporationId, which is not cosmetic: useScenario
+            stamps it into scenarios.json and refuses to apply a saved cart whose id
+            disagrees. Omitted, that guard degrades to permissive and a copied data
+            dir applies one corporation's cohort to another. It is also what puts the
+            corporation into the issuance handoff prompt. */}
         {SHOW_REFRESH_PLANNER && activeTab === "planner" && planner && (
           <RefreshPlanner
             planner={planner}
-            corporation={snapshot?.source?.corporation}
+            {...identityProps(snapshot)}
             token={apiToken()}
           />
         )}

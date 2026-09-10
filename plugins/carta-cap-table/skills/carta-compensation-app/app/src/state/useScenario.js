@@ -74,10 +74,17 @@ export function cartFromDoc(doc, corporationId) {
   return active ? new Set(active.cart || []) : null;
 }
 
-/** Write a cart into a document, returning a new document. */
-export function docWithCart(doc, corporationId, cart, overrides) {
+/** Write a cart into a document, returning a new document.
+ *
+ *  `scenarioId` names the slot to write. It defaults to the document's active
+ *  scenario, but a caller that queued this write MUST pass the id it queued
+ *  against: a debounced save resolved at fire time would land in whichever
+ *  scenario is active by then, silently overwriting one draft with another's
+ *  contents. See the pendingRef comment in useScenario.
+ */
+export function docWithCart(doc, corporationId, cart, overrides, scenarioId) {
   const base = doc && doc.kind === "ctc-refresh-scenarios" ? doc : emptyDoc(corporationId);
-  const activeId = base.activeScenarioId || "default";
+  const activeId = scenarioId || base.activeScenarioId || "default";
   const scenarios = (base.scenarios || []).map((s) =>
     s.id === activeId
       ? {
@@ -130,9 +137,20 @@ export function useScenario(corporationId) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [conflict, setConflict] = useState(false);
+  // True from the moment an edit is queued until it lands. Drives the "Saving…"
+  // indicator, which is the only way a user can tell a draft is not yet on disk.
+  const [saving, setSaving] = useState(false);
   const etagRef = useRef(null);
   const docRef = useRef(null);
   const timerRef = useRef(null);
+  // The queued write, reachable OUTSIDE the timer's closure so it can be flushed
+  // on demand (before a scenario switch) or attempted on unmount. Holding it only
+  // in the setTimeout closure is what made a pending edit unrecoverable.
+  const pendingRef = useRef(null);
+  // Set once a 409 has been seen. Every later save would resend the same stale
+  // ETag and conflict again, so saving STOPS until it is resolved — otherwise the
+  // user goes on editing a draft that is no longer being written anywhere.
+  const conflictRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -153,30 +171,98 @@ export function useScenario(corporationId) {
     return () => { cancelled = true; };
   }, [corporationId]);
 
-  // Cancel a pending save on unmount so a debounce cannot fire into a dead tree.
-  useEffect(() => () => clearTimeout(timerRef.current), []);
-
-  const save = useCallback((cart, overrides) => {
-    clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(async () => {
-      try {
-        const doc = docWithCart(docRef.current, corporationId, cart, overrides);
-        const etag = await putScenarios(doc, etagRef.current);
-        docRef.current = doc;
-        etagRef.current = etag;
-        setSaved(new Set(cart));
-        setSavedOverrides(new Map(overrides || []));
-        setConflict(false);
-        setError(null);
-      } catch (e) {
-        // A 409 means another tab saved first. Do NOT merge silently: two carts
-        // that diverged are two intentions, and picking one without saying so is
-        // how someone ships a plan they did not make.
-        if (e.conflict) setConflict(true);
-        else setError(e.message || String(e));
+  /** Write the queued payload now. Resolves true when nothing is left pending.
+   *
+   *  Shared by the debounce timer, `flush()` and unmount, so there is exactly one
+   *  path that writes — a second copy of this logic is how the three drift apart.
+   */
+  const writePending = useCallback(async () => {
+    const payload = pendingRef.current;
+    if (!payload) return true;
+    if (conflictRef.current) return false;
+    try {
+      const doc = docWithCart(
+        docRef.current, corporationId, payload.cart, payload.overrides, payload.scenarioId);
+      const etag = await putScenarios(doc, etagRef.current);
+      docRef.current = doc;
+      etagRef.current = etag;
+      // Cleared only on success. A failed write stays queued, so a retry — or the
+      // next edit — carries it rather than the edit dying with the error.
+      pendingRef.current = null;
+      setSaved(new Set(payload.cart));
+      setSavedOverrides(new Map(payload.overrides || []));
+      setConflict(false);
+      setError(null);
+      setSaving(false);
+      return true;
+    } catch (e) {
+      // A 409 means another tab saved first. Do NOT merge silently: two carts
+      // that diverged are two intentions, and picking one without saying so is
+      // how someone ships a plan they did not make.
+      if (e.conflict) {
+        conflictRef.current = true;
+        setConflict(true);
+      } else {
+        setError(e.message || String(e));
       }
-    }, 600);
+      setSaving(false);
+      return false;
+    }
   }, [corporationId]);
 
-  return { saved, savedOverrides, loading, error, conflict, save };
+  // On unmount, ATTEMPT the queued write rather than only cancelling the timer.
+  // Cancelling alone is correct about React — a debounce must not fire into a dead
+  // tree — but on its own it silently discarded up to 600ms of the last edit.
+  useEffect(() => () => {
+    clearTimeout(timerRef.current);
+    if (pendingRef.current) writePending();
+  }, [writePending]);
+
+  const save = useCallback((cart, overrides, scenarioId) => {
+    if (conflictRef.current) return;
+    // The target scenario is captured HERE, not read when the timer fires: by then
+    // the user may have switched, and the write would land in the wrong draft.
+    pendingRef.current = {
+      cart,
+      overrides,
+      scenarioId: scenarioId
+        || (docRef.current && docRef.current.activeScenarioId)
+        || "default",
+    };
+    setSaving(true);
+    clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(writePending, 600);
+  }, [writePending]);
+
+  /** Write any queued edit immediately. Resolves false when it did not land.
+   *
+   *  A caller switching scenarios must await this first: a queued write belongs to
+   *  the scenario being left, and switching without it loses that edit.
+   */
+  const flush = useCallback(async () => {
+    clearTimeout(timerRef.current);
+    return writePending();
+  }, [writePending]);
+
+  /** Re-read the document, adopting what is on disk. The way out of a conflict. */
+  const reload = useCallback(async () => {
+    try {
+      const { doc, etag } = await fetchScenarios();
+      docRef.current = doc;
+      etagRef.current = etag;
+      pendingRef.current = null;
+      conflictRef.current = false;
+      setSaved(cartFromDoc(doc, corporationId));
+      setSavedOverrides(overridesFromDoc(doc, corporationId));
+      setConflict(false);
+      setError(null);
+      setSaving(false);
+      return true;
+    } catch (e) {
+      setError(e.message || String(e));
+      return false;
+    }
+  }, [corporationId]);
+
+  return { saved, savedOverrides, loading, error, conflict, saving, save, flush, reload };
 }

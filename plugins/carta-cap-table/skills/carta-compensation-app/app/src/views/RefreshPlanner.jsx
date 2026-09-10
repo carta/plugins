@@ -227,7 +227,9 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
   const wide = useMediaQuery("(min-width: 900px)");
   const [cart, setCart] = useState(() => new Set());
   const [dropped, setDropped] = useState(0);
-  const { saved, savedOverrides, loading: cartLoading, conflict, save } = useScenario(corporationId);
+  const {
+    saved, savedOverrides, loading: cartLoading, conflict, saving, save,
+  } = useScenario(corporationId);
   const hydrated = useRef(false);
 
   // Adopt the saved cart once, after it loads. Ids that no longer exist in this
@@ -638,6 +640,7 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
           removed={cartRemoved}
           hidden={hidden}
           dropped={dropped}
+          saving={saving}
           conflict={conflict}
           onExport={exportCart}
           onClearHidden={clearFilters}
