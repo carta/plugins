@@ -526,6 +526,7 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
         onOverride={setOverride}
         reasons={reasons}
         onReason={setReason}
+        token={token}
       />
     );
   }

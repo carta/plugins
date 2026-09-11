@@ -19,6 +19,7 @@ import {
   availableUnits, currencyOf, formatInUnit, perSharePrice, unitLabel,
 } from "../../model/equityUnits.js";
 import { tenureMonths } from "../../model/tenure.js";
+import AskBar from "../../ui/AskBar.jsx";
 import { DEFAULT_GRANT_REASON, GRANT_REASONS, reasonFor } from "../../model/grantReason.js";
 import {
   cadenceLabel, eligibility, grantForRow, grantRange, joinMonths, planTotals,
@@ -31,7 +32,7 @@ import {
 const CADENCES = [6, 12, 18, 24];
 
 /** A number field with a unit suffix, sized for 2-4 digits. */
-function NumField({ value, onChange, suffix, width = 64, title, min = 0, disabled }) {
+function NumField({ value, onChange, suffix, width = 64, title, min = 0, disabled, label }) {
   return (
     <span style={{ display: "inline-flex", alignItems: "baseline", gap: 4 }}>
       <input
@@ -39,6 +40,7 @@ function NumField({ value, onChange, suffix, width = 64, title, min = 0, disable
         min={min}
         value={value}
         title={title}
+        aria-label={label}
         disabled={disabled}
         readOnly={disabled}
         onChange={(e) => onChange(e.target.value === "" ? 0 : Number(e.target.value))}
@@ -115,7 +117,7 @@ function PolicyField({ label, help, info, children }) {
  *  how CTC asks for it, and joining the pair here keeps that a presentation detail
  *  rather than letting two half-durations into the settings object.
  */
-function YearsMonths({ total, onChange, title, disabled }) {
+function YearsMonths({ total, onChange, title, disabled, label }) {
   const { years, months } = splitMonths(total);
   return (
     <span style={{ display: "inline-flex", alignItems: "baseline", gap: 8 }}>
@@ -125,6 +127,7 @@ function YearsMonths({ total, onChange, title, disabled }) {
         suffix="year(s)"
         title={title}
         disabled={disabled}
+        label={label && `${label}, years`}
       />
       <NumField
         value={months}
@@ -132,6 +135,7 @@ function YearsMonths({ total, onChange, title, disabled }) {
         suffix="month(s)"
         title={title}
         disabled={disabled}
+        label={label && `${label}, months`}
       />
     </span>
   );
@@ -322,7 +326,7 @@ function GrantCell({
 
 export default function SettingsStep({
   rows, policySettings, settings, onSettings, onBack, onNext, asOf,
-  overrides, onOverride, reasons, onReason, poolBar, equityUnits,
+  overrides, onOverride, reasons, onReason, poolBar, equityUnits, token,
 }) {
   // Shares by default: the report's own figure, and the only unit that needs
   // no corporation-level input.
@@ -519,6 +523,7 @@ export default function SettingsStep({
                       onChange={(v) => onSettings({ ...settings, targetPct: v })}
                       suffix="%"
                       title="Percent of the employee's new-hire benchmark"
+                      label="Refresh grant target"
                     />
                     <span style={{ fontSize: FS.md, color: C.textSubtle }}>/ every</span>
                     {/* An ECHO of the Frequency field below, not a second control.
@@ -548,6 +553,7 @@ export default function SettingsStep({
                       onChange={(v) => onSettings({ ...settings, rangeBelowPct: v })}
                       suffix="% below"
                       title="How far under target a manager may flex"
+                      label="Suggested range, percent below target"
                     />
                     <span style={{ fontSize: FS.md, color: C.textSubtle }}>to</span>
                     <NumField
@@ -555,6 +561,7 @@ export default function SettingsStep({
                       onChange={(v) => onSettings({ ...settings, rangeAbovePct: v })}
                       suffix="% above"
                       title="How far over target a manager may flex"
+                      label="Suggested range, percent above target"
                     />
                     <span style={{ fontSize: FS.md, color: C.textSubtle }}>based on Target</span>
                   </span>
@@ -589,6 +596,25 @@ export default function SettingsStep({
               </div>
             </>
           )}
+        </div>
+
+        {/* Between the policy and the table it drives, because it acts on both:
+            "add a column for unvested shares" is a table change, "show the target
+            as a multiple" is a policy one, and a box parked under only one of them
+            would read as belonging to that half. */}
+        <div style={{
+          background: C.surface, border: `1px solid ${C.border}`, borderRadius: RADIUS,
+          padding: 16,
+        }}>
+          <div style={{
+            fontSize: FS.sm, fontWeight: 600, color: C.textSubtle, marginBottom: 8,
+          }}>
+            Change this page
+          </div>
+          <AskBar
+            token={token}
+            placeholder="Ask Claude to change this page — e.g. add a column for unvested shares"
+          />
         </div>
 
         <div style={{

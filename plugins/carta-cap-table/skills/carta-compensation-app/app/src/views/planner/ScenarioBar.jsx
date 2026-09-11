@@ -98,47 +98,107 @@ export default function ScenarioBar({
   return (
     <div style={{
       background: C.surface, border: `1px solid ${C.border}`, borderRadius: RADIUS,
-      padding: "10px 16px", display: "flex", alignItems: "center",
-      gap: 10, flexWrap: "wrap",
+      padding: "10px 16px", display: "grid", gap: 10,
     }}>
-      <span style={{ fontSize: FS.xs, color: C.textQuiet, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-        Scenario
-      </span>
+      {/* Two rows: which plan this is, then what you can do to it.
+          On one line the four actions took a third of the bar and sat at the same
+          weight as the name, so the answer to "which draft am I in?" competed with
+          controls nobody needs on most visits. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        {/* The name as a HEADING, not only as the selected value in a control.
+            Reading a form field to learn which plan you are looking at is the wrong
+            way round — with several drafts open, "which one is this?" is the
+            question the bar exists to answer. The dropdown switches; this says
+            where you are. */}
+        {/* No "SCENARIO" eyebrow above the name. It labelled a title that already
+            says what it is, and the two-line stack stood 48px tall against the
+            switcher's 40 — so centring the stack left the name itself sitting 12px
+            below the control beside it. One line, one baseline. */}
+        {!renaming && (
+          <span
+            title={active.name}
+            style={{
+              fontSize: FS.lg, fontWeight: 600, color: C.textDefault,
+              // Matches the switcher's height so both sit on the same centre line
+              // rather than being centred as boxes of different sizes.
+              height: 40, display: "inline-flex", alignItems: "center",
+              // Truncates rather than wrapping: a long name would otherwise push
+              // the pool bar and the table down on every step.
+              maxWidth: 360, minWidth: 0, overflow: "hidden",
+              textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}
+          >
+            {active.name}
+          </span>
+        )}
 
-      {renaming ? (
-        <input
-          ref={inputRef}
-          value={draftName}
-          aria-label="Scenario name"
-          onChange={(e) => setDraftName(e.target.value)}
-          onBlur={commitRename}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") commitRename();
-            // Escape abandons the edit. A rename half-typed and then dismissed is
-            // not an instruction, so it must not become one.
-            if (e.key === "Escape") setRenaming(false);
-          }}
-          style={{
-            height: 40, minWidth: 200, padding: "0 10px", fontSize: FS.md,
-            fontFamily: "inherit", color: C.textDefault, background: C.surfaceDefault,
-            border: `1px solid ${C.borderDefault}`, borderRadius: RADIUS,
-          }}
-        />
-      ) : (
-        <Select
-          label=""
-          value={active.id}
-          onChange={onSwitch}
-          options={scenarios.map((s) => ({ value: s.id, label: s.name }))}
-          minWidth={200}
-        />
-      )}
+        {renaming ? (
+          <input
+            ref={inputRef}
+            value={draftName}
+            aria-label="Scenario name"
+            onChange={(e) => setDraftName(e.target.value)}
+            onBlur={commitRename}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commitRename();
+              // Escape abandons the edit. A rename half-typed and then dismissed is
+              // not an instruction, so it must not become one.
+              if (e.key === "Escape") setRenaming(false);
+            }}
+            style={{
+              height: 40, minWidth: 220, padding: "0 10px", fontSize: FS.md,
+              fontFamily: "inherit", color: C.textDefault, background: C.surfaceDefault,
+              border: `1px solid ${C.borderDefault}`, borderRadius: RADIUS,
+            }}
+          />
+        ) : (
+          <Select
+            label=""
+            value={active.id}
+            onChange={onSwitch}
+            options={scenarios.map((sc) => ({ value: sc.id, label: sc.name }))}
+            minWidth={150}
+          />
+        )}
 
-      {!only && (
-        <span style={{ fontSize: FS.xs, color: C.textQuiet }}>
-          {scenarios.indexOf(active) + 1} of {scenarios.length}
-        </span>
-      )}
+        {!only && (
+          <span
+            style={{ fontSize: FS.xs, color: C.textQuiet }}
+            title={`${scenarios.length} saved drafts of this plan`}
+          >
+            {scenarios.indexOf(active) + 1} of {scenarios.length}
+          </span>
+        )}
+
+        {/* Save state rides with the NAME, not with the buttons: it describes this
+            draft, and reading "Saved 14:32" beside a Delete button invites parsing
+            it as the outcome of an action. */}
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
+          {futureDoc ? (
+            <Tag tone="notice" title="Saving is disabled so this build cannot overwrite a file it does not understand.">
+              Saved by a newer version — read only
+            </Tag>
+          ) : conflict ? (
+            <>
+              {/* Un-dismissable on purpose: saving has stopped, and a notice the
+                  user can wave away is how an afternoon of edits goes nowhere. */}
+              <Tag tone="notice" title="Another console saved this file first. Nothing is being saved until this is resolved.">
+                Not saving — changed elsewhere
+              </Tag>
+              <Btn onClick={onReload} title="Discard what is on screen and load the other console's version">
+                Reload theirs
+              </Btn>
+            </>
+          ) : (
+            <span
+              style={{ fontSize: FS.xs, color: C.textQuiet }}
+              title={active.updatedAt || "This draft has not been saved yet"}
+            >
+              {saving ? "Saving…" : savedLabel(active.updatedAt)}
+            </span>
+          )}
+        </div>
+      </div>
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         {/* Duplicate leads: "the same cohort at a lower multiple" is the reason
@@ -173,32 +233,6 @@ export default function ScenarioBar({
         >
           Delete
         </Btn>
-      </div>
-
-      <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
-        {futureDoc ? (
-          <Tag tone="notice" title="Saving is disabled so this build cannot overwrite a file it does not understand.">
-            Saved by a newer version — read only
-          </Tag>
-        ) : conflict ? (
-          <>
-            {/* Un-dismissable on purpose: saving has stopped, and a notice the user
-                can wave away is how an afternoon of edits goes nowhere. */}
-            <Tag tone="notice" title="Another console saved this file first. Nothing is being saved until this is resolved.">
-              Not saving — changed elsewhere
-            </Tag>
-            <Btn onClick={onReload} title="Discard what is on screen and load the other console's version">
-              Reload theirs
-            </Btn>
-          </>
-        ) : (
-          <span
-            style={{ fontSize: FS.xs, color: C.textQuiet }}
-            title={active.updatedAt || "This draft has not been saved yet"}
-          >
-            {saving ? "Saving…" : savedLabel(active.updatedAt)}
-          </span>
-        )}
       </div>
     </div>
   );
