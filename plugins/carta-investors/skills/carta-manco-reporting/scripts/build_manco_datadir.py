@@ -1863,7 +1863,12 @@ def apply_budget_mapping(rows, mapping, budget_id=None, ambiguous_bare_addrs=Non
         # it says the line is the net of every account the fund posts to.
         if decision.get("gl_codes") is not None:
             row["gl_codes"] = [int(g) for g in decision["gl_codes"]]
-        if decision.get("scope"):
+        if "scope" in decision and not decision["scope"]:
+            # An explicit null is an answer: this line covers its accounts
+            # whole, whatever sub-account or tag the entries happen to carry.
+            # Absent, the line is merely unanswered and gets asked about.
+            row["scope_none"] = True
+        elif decision.get("scope"):
             row["scope"] = decision["scope"]
             # `scopes` is what the row's actuals, the drawer and the near-scope
             # matcher all read. Recording only the singular left an answered
@@ -2399,7 +2404,7 @@ def resolve_near_scopes(rows, census, account_names=None):
         # A remainder line reports what the claimed lines don't.
         if _label_tokens(row.get("label")) & SCOPE_NEGATIONS:
             continue
-        if row.get("scopes") or row.get("fund_match"):
+        if row.get("scopes") or row.get("fund_match") or row.get("scope_none"):
             continue
         if not (row.get("gl_codes") or []):
             continue
