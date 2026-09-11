@@ -4,9 +4,9 @@
 // returns the bytes over the MCP bridge instead. The server rewrites any tagged
 // blogPost to its parent webPage, so the client only adapts event/webPage/caseStudy.
 // Depends on core.js (carta-home.app.js): _mcp(), escHtml(), trackHome().
+// `NEWS_TAG` comes from carta-home.config.js — the curated tag is content, not logic.
 const NEWS_COUNT = 3; // cards rendered
 const NEWS_FETCH = 12; // entries pulled before filter/dedupe/truncate
-const NEWS_TAG = "pluginCartaHome"; // fixed metadata taxonomy tag
 const NEWS_TAG_SOURCE = "metadata";
 // content_type intentionally UNSET so the query spans event/webPage/caseStudy/blogPost.
 

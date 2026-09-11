@@ -129,10 +129,11 @@ need the full file in context. Edit the small source file for what you're changi
 
 | File | What it holds | Edit it to… |
 |------|---------------|-------------|
-| `resources/carta-home.config.js` | `DIR_CATEGORIES` + per-category `requires` | change which skills/categories show, or their entitlement gate |
+| `resources/carta-home.config.js` | `DIR_CATEGORIES` + per-category `requires`, `NEWS_TAG` | change which skills/categories show, their entitlement gate, or which Contentful tag feeds Plugin news |
 | `resources/carta-home.app.js` | shared/core runtime logic (`_mcp`, format helpers, `fetchLiveData` bootstrap, SOI, Fund Performance, Skill Directory, tour) | change behavior / data fetching for anything not yet split into its own file below |
 | `resources/app/capital-activity.js` | Capital activity cards + detail overlay (fetch/render/dismiss) | change the capital call / distribution cards or their detail modal |
 | `resources/app/version-check.js` | update banner: reads the published version, compares, renders/dismisses | change the banner copy or when it appears |
+| `resources/app/live-content.js` | Plugin news row: Contentful fetch, per-content-type adapters, card render (tag itself lives in the config file above) | change how news cards are fetched, adapted or rendered |
 | `../../.claude-plugin/skill-versions.json` | this skill's `version` + release `headline` | **bump on every user-visible change** — see Versioning |
 | `resources/carta-home.css` | styles (Ink tokens) | change appearance |
 | `resources/carta-home.template.html` | HTML skeleton + injection markers | change page structure |

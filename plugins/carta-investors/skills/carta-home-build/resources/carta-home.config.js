@@ -8,6 +8,10 @@
 // A skill takes either `prompt` (copyable) or `note` (static text, no copy button).
 // Assembled into carta-home by scripts/build_artifact.py — do NOT edit the built HTML.
 
+// Marketing curates the Plugin news row by tagging Contentful entries, so changing
+// what appears there is not a code change. Only the tag ID itself lives here.
+const NEWS_TAG = "pluginHomeInvestors";
+
 // ── Skill directory data ──
 const DIR_CATEGORIES = [
   {
