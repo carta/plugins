@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { sans, inkNum, INK, PAPER, LINE, BORDER_DEFAULT, FAINT, MICRO, SHADE, BLUE, FS } from "../ui/theme.js";
-import { Bubble, CollapseCaret } from "../ui/components.jsx";
+import { Bubble, CollapseCaret, NoteIcon } from "../ui/components.jsx";
 import { TableScroll, LEDGER_BASE, TOTAL_ROW_BG, useStickyHeader, StickyClone, GroupedTableHead } from "../ui/table.jsx";
 import { glNameMap, glTooltip, subCodeMap, subOfChildLabel } from "../ui/glNames.js";
 import { dimensionValue, dimensionValuesAvailable, noValueLabel } from "../ui/dimension.js";
@@ -485,26 +485,6 @@ export function resolveHeaderRanges(displayRows, depthRanges) {
     ranges.set(headerIdx, end);
   }
   return { ranges, closingRowByHeaderIdx };
-}
-
-// Ink's "document"/"note" icon — lucide `file-text`, per
-// Ink's brand-icons.html's own name mapping. Blue as
-// an info accent (theme.js's BLUE), not the row's own text color.
-function NoteIcon(props) {
-  return (
-    <svg
-      width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"
-      focusable="false" role="img" style={{ flexShrink: 0, display: "block", color: BLUE }}
-      {...props}
-    >
-      <path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" />
-      <path d="M14 2v5a1 1 0 0 0 1 1h5" />
-      <path d="M10 9H8" />
-      <path d="M16 13H8" />
-      <path d="M16 17H8" />
-    </svg>
-  );
 }
 
 // A collapsed header, showing the figures of the row it closes (rather than

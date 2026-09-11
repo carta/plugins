@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { sans, INK, PAPER, LINE, FAINT, MICRO, SHADE, microCaption, FS, RED } from "../ui/theme.js";
-import { H1 } from "../ui/components.jsx";
+import { H1, NoteIcon } from "../ui/components.jsx";
 import BudgetActualsAccounts, { hasMonthlyDetail } from "./BudgetActualsAccounts.jsx";
 import { glNameMap, glTooltip } from "../ui/glNames.js";
 import { dimensionOf, dimensionValue, dimensionValuesAvailable,
@@ -85,6 +85,9 @@ export default function BudgetActualsView({ snapshot, accountsData, drilldown, b
   // A callback-ref, not useRef: a stable ref's identity never re-attaches
   // if the view first mounts on a non-crosstab budget. See useStickyHeader.
   const [theadEl, setTheadEl] = useState(null);
+  // Which column group the cursor is on. Lifted here because the four cells
+  // of a figure are siblings, and a CSS :hover reaches only one of them.
+  const [hoverCell, setHoverCell] = useState(null);
   const stickyState = useStickyHeader(theadEl);
 
   // Split the columns into shown / hidden based on progressive-disclosure
@@ -340,6 +343,9 @@ export default function BudgetActualsView({ snapshot, accountsData, drilldown, b
                   dimension={dimension}
                   breakout={breakout}
                   breakoutActuals={breakoutActuals}
+                  hoverCell={hoverCell}
+                  heldCell={drilldown?.selection?.cellKey || null}
+                  onHoverCell={setHoverCell}
                   openRows={openRows}
                   onToggleRow={toggleRow}
                 />
@@ -384,7 +390,8 @@ export const DEPT_SUB_COLS = [
 
 export function BudgetRow({ row, columns, actualsByTagValue, actualsByKey, labelByKey, onDrill, period, glNames,
                     tagValuesAvailable = true, breakout = null, breakoutActuals = null,
-                    openRows = null, onToggleRow = null, dimension = null }) {
+                    openRows = null, onToggleRow = null, dimension = null,
+                    hoverCell = null, onHoverCell = null, heldCell = null }) {
   const kind = row.row_kind || "line";
   const label = row.label ?? row.account_name;
 
@@ -461,6 +468,20 @@ export function BudgetRow({ row, columns, actualsByTagValue, actualsByKey, label
     : kind === "subtotal" ? styles.tdLabelSubtotal
     : styles.tdLabel;
 
+  // One note icon per row, in the label column, as the outline has it. A
+  // crosstab note belongs to a (row x column) cell, so the tooltip names
+  // the column each one came from.
+  const notes = columns
+    .map(col => {
+      const text = commentOf(row, col.tag_value)
+                   ?? col.comments_by_account?.[label] ?? null;
+      return text ? { column: col.tag_value, text } : null;
+    })
+    .filter(Boolean);
+  const noteText = notes.length === 1 && notes[0].column === "Firm Total"
+    ? `Budget note: ${notes[0].text}`
+    : notes.map(n => `${n.column}: ${n.text}`).join("\n");
+
   const indent = 12 + (row.depth || 0) * 14;
 
   return (
@@ -501,23 +522,31 @@ export function BudgetRow({ row, columns, actualsByTagValue, actualsByKey, label
           {label}
         </HoverTip>
         </span>
-        {calc && <CalcMarker calc={calc} labelByKey={labelByKey} />}
-        {unmapped && (
-          <span
-            style={styles.unmapped}
-            title="No Carta GL account maps to this budget line, so actuals can't be resolved for it."
-          >
-            unmapped
-          </span>
-        )}
-        {isAggregate && !calc && (
-          <span
-            style={styles.calcMuted}
-            title="The workbook totals this row, but its formula isn't recoverable from the file — the cell is typed, or computed on another sheet."
-          >
-            total
-          </span>
-        )}
+        {/* Trailing markers ride the cell's right edge, as the outline's do:
+            the label cell spaces its two children apart. */}
+        <span style={styles.labelMeta}>
+          {unmapped && (
+            <span
+              style={styles.unmapped}
+              title="No Carta GL account maps to this budget line, so actuals can't be resolved for it."
+            >
+              unmapped
+            </span>
+          )}
+          {isAggregate && !calc && (
+            <span
+              style={styles.calcMuted}
+              title="The workbook totals this row, but its formula isn't recoverable from the file — the cell is typed, or computed on another sheet."
+            >
+              total
+            </span>
+          )}
+          {notes.length > 0 && (
+            <HoverTip text={noteText}>
+              <NoteIcon aria-label={noteText} />
+            </HoverTip>
+          )}
+        </span>
       </td>
       {columns.map(col => {
         const budget = budgetFor(col);
@@ -537,11 +566,15 @@ export function BudgetRow({ row, columns, actualsByTagValue, actualsByKey, label
           ? () => onDrill(col.tag_value, label, row.account_type,
                           row.account_type_all, comment, cartaTags,
                           { budget, actual, polarity, unmapped }, period,
-                          null, null, dimension)
+                          null, null, dimension, null, cellKey)
           : undefined;
+        const cellKey = `${row.key || label}::${col.tag_value}`;
         return (
           <BudgetCell
             key={col.tag_value}
+            hovered={hoverCell === cellKey}
+            held={heldCell === cellKey}
+            onHover={onClick ? (on) => onHoverCell?.(on ? cellKey : null) : undefined}
             actual={actual}
             budget={budget}
             comment={comment}
@@ -590,36 +623,6 @@ function ChildCells({ actual }) {
 // Marks a row the workbook computes, and says from what. The label is the
 // affordance; the detail — the literal cell formula and the rows it names —
 // rides on the tooltip so the table stays readable at 90+ rows.
-function CalcMarker({ calc, labelByKey }) {
-  const names = (calc.constituents || [])
-    .map(k => labelByKey[k])
-    .filter(Boolean);
-  let reads;
-  if (calc.expression) {
-    reads = calc.expression
-      .map(t => (t.op ? OP_GLYPH[t.op] || t.op : labelByKey[`r${t.row}`] || `row ${t.row}`))
-      .join(" ");
-  } else {
-    reads = names.join("  +  ");
-  }
-  const sample = Object.values(calc.formula_by_column || calc.formula_by_dept || {})[0];
-  const title = [
-    "Calculated by the workbook, not entered.",
-    reads && `= ${reads}`,
-    sample && `Formula in the source tab: ${sample}`,
-  ].filter(Boolean).join("\n\n");
-  // A glyph, not a chip. This applies to every total on the sheet, and a
-  // pill on each one competes with the figures. Matches the weight and
-  // colour of the "*" budget-note marker already used in this table.
-  return (
-    <span style={styles.calcGlyph} title={title} aria-label="Calculated by the workbook">
-      {calc.kind === "expression" ? "\u0192" : "\u2211"}
-    </span>
-  );
-}
-
-const OP_GLYPH = { "-": "−", "+": "+", "*": "×", "/": "÷" };
-
 // Budget for a (row, column). Outline rows carry their own per-column map;
 // older snapshots kept the figure on the column's by_account map instead,
 // so both are read here.
@@ -646,7 +649,8 @@ function commentOf(row, columnName) {
   return budgets[columnName]?.comment ?? null;
 }
 
-function BudgetCell({ actual, budget, comment, unmapped, polarity, onClick, rowStyle }) {
+function BudgetCell({ actual, budget, unmapped, polarity, onClick, rowStyle,
+                      hovered = false, held = false, onHover }) {
   const variance = actual - budget;
   // Colour lives on the variance figures alone. Washing cells as well
   // put four tinted blocks behind every department on every row, which
@@ -656,19 +660,20 @@ function BudgetCell({ actual, budget, comment, unmapped, polarity, onClick, rowS
   if (onClick) cellStyle.cursor = "pointer";
   const firstCellStyle = { ...cellStyle, ...styles.tdNumFirst };
   // Same hover wash as the other budget tables (theme.js .cellopen).
-  const handler = onClick ? { onClick, className: "cellopen" } : {};
-  // Note glyph: superscript speech-bubble style; native title tooltip shows
-  // the full comment on hover (drawer callout renders it in full on click).
-  const noteTitle = comment ? `Note: ${comment}` : undefined;
+  // The four cells of one column are one figure, and the panel reports all
+  // four, so they light together. A CSS :hover cannot reach siblings.
+  const handler = onClick ? {
+    onClick,
+    className: `cellopen${held ? " held" : hovered ? " washed" : ""}`,
+    onMouseEnter: onHover ? () => onHover(true) : undefined,
+    onMouseLeave: onHover ? () => onHover(false) : undefined,
+  } : {};
   if (unmapped) {
     return (
       <>
         <td style={firstCellStyle} title="No Carta GL mapped — actual unavailable">—</td>
         <td style={cellStyle}>
           {budget === 0 ? "—" : fmtCurrencyWhole(budget)}
-          {comment && (
-            <span style={styles.noteGlyph} title={noteTitle} aria-label="Has budget note">*</span>
-          )}
         </td>
         <td style={cellStyle}>—</td>
       </>
@@ -681,9 +686,6 @@ function BudgetCell({ actual, budget, comment, unmapped, polarity, onClick, rowS
       </td>
       <td {...handler} style={cellStyle}>
         {budget === 0 ? "—" : fmtCurrencyWhole(budget)}
-        {comment && (
-          <span style={styles.noteGlyph} title={noteTitle} aria-label="Has budget note">*</span>
-        )}
       </td>
       <td {...handler} style={{ ...cellStyle, color: varianceColor(variance, polarity) }}>
         {actual === 0 && budget === 0 ? "—" : fmtVarianceWhole(variance)}
@@ -994,6 +996,7 @@ export const styles = {
     color: INK,
   },
   labelGroup: { display: "inline-flex", alignItems: "center", gap: 4, minWidth: 0 },
+  labelMeta: { display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0 },
   // Hangs back into the cell's padding so the label beside it starts where
   // every other label starts.
   rowCaret: {
@@ -1066,17 +1069,4 @@ export const styles = {
   // cell exists for this (row × dept). Full comment renders in the drawer;
   // native title attribute exposes it on hover too. Ink link/focus blue to
   // hint at "there's more info here" without shouting.
-  noteGlyph: {
-    marginLeft: 3,
-    fontSize: FS.small,
-    // MICRO grey, not blue. Blue is reserved for links and focus, and this
-    // marker sits inside a Budget figure — colouring it like a link invites
-    // a click that does nothing, and undercuts the convention the rest of
-    // the table leans on. A note marker only has to be findable.
-    color: MICRO,
-    fontWeight: 600,
-    verticalAlign: "super",
-    lineHeight: 0,
-    cursor: "help",
-  },
 };

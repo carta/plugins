@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { sans, serif, INK, FAINT, LINE, PAPER, GRAD_DARK, CARD, FS, EYEBROW_TRACKING, SHADOW_HOVER } from "./theme.js";
+import { sans, serif, INK, FAINT, LINE, PAPER, GRAD_DARK, CARD, FS, EYEBROW_TRACKING, SHADOW_HOVER, BLUE } from "./theme.js";
 
 /** Ink's real dark tooltip chip, matching `carta-fund-modeling`'s own
  *  `InfoTip`. Uses flat `brand-black`/`brand-white`, not
@@ -280,6 +280,26 @@ export function Dropdown({ options, value, onChange, triggerLabel, minWidth, sty
  *  viewBox, path "M6 9l6 6 6-6", stroked not filled. `rotate` points it —
  *  180 for an open dropdown, -90 for a collapsed row. The defaults are what
  *  Ink renders on a dropdown trigger (`.dd-trig .carat`: 16px, stroke 1.5). */
+// Ink's "document"/"note" icon — lucide `file-text`, per
+// Ink's brand-icons.html's own name mapping. Blue as
+// an info accent (theme.js's BLUE), not the row's own text color.
+export function NoteIcon(props) {
+  return (
+    <svg
+      width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"
+      focusable="false" role="img" style={{ flexShrink: 0, display: "block", color: BLUE }}
+      {...props}
+    >
+      <path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" />
+      <path d="M14 2v5a1 1 0 0 0 1 1h5" />
+      <path d="M10 9H8" />
+      <path d="M16 13H8" />
+      <path d="M16 17H8" />
+    </svg>
+  );
+}
+
 export function Chevron({ size = 16, strokeWidth = 1.5, rotate = 0, style }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"

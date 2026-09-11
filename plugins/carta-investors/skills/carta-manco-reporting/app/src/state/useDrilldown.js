@@ -46,9 +46,11 @@ export default function useDrilldown() {
   // budget-vs-actuals comparison, so the drawer has to be able to restate
   // that comparison rather than only the actual side of it, and it restates
   // the table's own numbers instead of recomputing them.
-  const openTagValueAccount = useCallback((tagValue, account, accountType, accountTypeAll, comment, cartaTags, cell, period, origin, excludedClaims, dimension, scopes) => {
+  const openTagValueAccount = useCallback((tagValue, account, accountType, accountTypeAll, comment, cartaTags, cell, period, origin, excludedClaims, dimension, scopes, cellKey) => {
     setSelection({
       kind: "department-account",
+      // Which cell the table holds lit while this panel is open.
+      cellKey: cellKey || null,
       tag_value: tagValue, account,
       // Where the click came from. The Budget vs Actuals page clicks a real
       // (department × account) cell; the variance chart clicks a budget
