@@ -3995,14 +3995,21 @@ def build(args):
     # lines over the same accounts report the rest. Without this, both do.
     _claim_census = dimension_census(all_rows, sources=CLAIMABLE_SOURCES,
                                      values_limit=None)
-    _claims = []
+    # long-comment-ok: states which scope a claim may and may not displace
+    # Per budget, never pooled. Two budgets are two readings of one firm's
+    # spend -- a line-item plan beside an opex-by-bucket one -- and each has
+    # to report every account in full. Pooled, a bucket line's claim was
+    # subtracted from the other budget's line over the same account, where
+    # nothing reported it and the money left the page.
+    _claims_by_budget = {id(_b): [] for _b in excel_budgets}
     _inference_decisions = read_inference_decisions(dashboard)
     for _b in excel_budgets:
+        _own = _claims_by_budget[id(_b)]
         for c in claim_dimension_values(_b.get("rows") or [], _claim_census,
                                         _aliases, _carta_account_names,
                                         _inference_decisions):
-            if c not in _claims:
-                _claims.append(c)
+            if c not in _own:
+                _own.append(c)
     _linked = 0
     for _b in excel_budgets:
         _linked += autolink_exact_accounts(_b.get("rows") or [],
@@ -4033,9 +4040,10 @@ def build(args):
                                             _carta_account_names)
         _scope_applied += _a
         _scope_flagged += _f
+        _own = _claims_by_budget[id(_b)]
         for c in _near:
-            if c not in _claims:
-                _claims.append(c)
+            if c not in _own:
+                _own.append(c)
     if _scope_applied:
         print(f"note: {_scope_applied} line(s) matched a value by name "
               f"(a shortened spelling of it).", file=sys.stderr)
@@ -4116,7 +4124,11 @@ def build(args):
     for _i, _row in enumerate(_mapping_table, 1):
         _row["n"] = _i
     for _b in excel_budgets:
-        apply_dimension_residual(_b.get("rows") or [], _claims, all_rows)
+        apply_dimension_residual(_b.get("rows") or [], _claims_by_budget[id(_b)], all_rows)
+    # The gap report stays firm-wide: a value any budget accounts for is not
+    # a value the firm has left unreported.
+    _all_claims = [c for _b in excel_budgets for c in _claims_by_budget[id(_b)]]
+    _claims = [c for i, c in enumerate(_all_claims) if c not in _all_claims[:i]]
     _unclaimed = unclaimed_dimension_values(_claim_census, _claims)
 
     _gaps = {
