@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { sans, inkNum, INK, PAPER, LINE, BORDER_DEFAULT, FAINT, MICRO, SHADE, BLUE, FS } from "../ui/theme.js";
-import { Bubble, CollapseCaret, Tag } from "../ui/components.jsx";
+import { Bubble, CollapseCaret } from "../ui/components.jsx";
 import { TableScroll, LEDGER_BASE, TOTAL_ROW_BG, useStickyHeader, StickyClone, GroupedTableHead } from "../ui/table.jsx";
 import { glNameMap, glTooltip, subCodeMap, subOfChildLabel } from "../ui/glNames.js";
 import { dimensionValue, dimensionValuesAvailable, noValueLabel } from "../ui/dimension.js";
@@ -9,13 +9,13 @@ import { fmtCurrencyWhole } from "../charts/chartTheme.js";
 import { varianceColor, rowPolarity, fmtVarianceWhole } from "../ui/variance.js";
 import BudgetSourceLine from "./BudgetSourceLine.jsx";
 import HoverTip from "../ui/HoverTip.jsx";
-import { FiltersMenu, FilterRibbon, S as periodControlsStyles } from "./BudgetPeriodControls.jsx";
+import { FiltersMenu, FilterRibbon } from "./BudgetPeriodControls.jsx";
 import {
   rowBreakouts, defaultBreakout, breakoutBuckets, worthBreakingOut, opensAnything,
 } from "./accountBreakout.js";
 import { fundMatchRegex } from "./drilldown/util.js";
 import { trackClick } from "../analytics.js";
-import { trueAsOfMonth, formatPeriodLabel } from "./budgetPeriods.js";
+import { trueAsOfMonth } from "./budgetPeriods.js";
 
 // Budget vs Actuals — outline renderer.
 //
@@ -305,8 +305,6 @@ export default function BudgetActualsOutline({ budget, accountsData, periodYear,
       <FilterRibbon>
         <FiltersMenu breakouts={breakouts} breakoutKey={breakout ? breakout.key : "none"}
                      onBreakoutKey={setBreakoutKey} />
-        <span style={periodControlsStyles.spacer} />
-        <Tag>{formatPeriodLabel(budget, asOf)}</Tag>
       </FilterRibbon>
     </div>
     <TableScroll scrollRef={scrollRef}>

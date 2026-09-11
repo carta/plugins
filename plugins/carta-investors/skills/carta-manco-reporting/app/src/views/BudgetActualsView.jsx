@@ -204,9 +204,9 @@ export default function BudgetActualsView({ snapshot, accountsData, drilldown, b
 
   return (
     <div id={BVA_EXPORT_ID}>
-      {/* Prose keeps the page's old width. The tables below take the
-          window — see AppShell's Capped. */}
-      <Capped>
+      {/* Prose keeps the page's old width. The tables below take the window
+          — see AppShell's Capped. The heading is uncapped with them, so
+          Export right-aligns with the table rather than with the prose. */}
       <H1
         subhead="Budget vs actuals"
         actions={
@@ -224,6 +224,7 @@ export default function BudgetActualsView({ snapshot, accountsData, drilldown, b
           </div>
         }
       >{titleText}</H1>
+      <Capped>
       <div style={styles.metaRow}>
         {!isTagCrosstab && !isOutline && !ownsPeriodControl(viewKind, budget) && (
           <span style={styles.metaChip}>
