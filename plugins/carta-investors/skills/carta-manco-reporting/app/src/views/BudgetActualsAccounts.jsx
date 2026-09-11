@@ -28,18 +28,9 @@ import { trackClick } from "../analytics.js";
 // so the full-width column was mostly blank space.
 export const ACCOUNT_LABEL_MIN_WIDTH = 220;
 
-// The four sub-columns every budget table in this app shows. No source
+// The three sub-columns every budget table in this app shows. No source
 // marks: both columns are Carta's, unlike the workbook views.
 export const ACCOUNT_SUB_COLS = [
-  { label: "Actual" },
-  { label: "Budget" },
-  { label: "Var $" },
-  { label: "Var %" },
-];
-
-// Var % is dropped per month: against a small monthly budget it swings to
-// three figures on a rounding difference and drowns the columns beside it.
-export const MONTH_SUB_COLS = [
   { label: "Actual" },
   { label: "Budget" },
   { label: "Var $" },
@@ -223,7 +214,7 @@ export default function BudgetActualsAccounts({ budget, entries, drilldown, acco
   }, [monthly, filters, window, windowMonths, year, asOfMonth, period]);
 
   const subCols = useMemo(
-    () => subColumns(filters.hidden, columns.length === 1), [filters.hidden, columns]);
+    () => subColumns(filters.hidden), [filters.hidden]);
 
   // Anchor to the current month's column. A filter change can reflow
   // columns over several frames, so poll until the position holds steady.
@@ -520,11 +511,6 @@ function Cells({ cell, subCols, polarity, numStyle, onClick }) {
             {empty ? "—" : fmtCurrencyWhole(cell.actual)}
           </td>;
         }
-        if (sc.type === "pct") {
-          return <td key={sc.type} {...h} style={{ ...style, color: vColor }}>
-            {empty ? "—" : pctOf(cell.variance, cell.budget)}
-          </td>;
-        }
         return <td key={sc.type} {...h} style={{ ...style, color: vColor }}>
           {empty ? "—" : fmtVarianceWhole(cell.variance)}
         </td>;
@@ -536,13 +522,6 @@ function Cells({ cell, subCols, polarity, numStyle, onClick }) {
 // Nothing on either side is an em dash, not a row of zeros.
 export function blank(actual, budget) {
   return !actual && !budget;
-}
-
-// A variance against no budget is not a percentage of anything.
-export function pctOf(variance, budget) {
-  if (!budget) return "—";
-  const p = (variance / Math.abs(budget)) * 100;
-  return `${p > 0 ? "+" : ""}${p.toFixed(0)}%`;
 }
 
 // Mirrors BudgetActualsOutline's recipe so the two tables read as one report.

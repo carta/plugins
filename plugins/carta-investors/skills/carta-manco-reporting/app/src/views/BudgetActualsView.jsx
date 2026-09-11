@@ -375,12 +375,11 @@ export default function BudgetActualsView({ snapshot, accountsData, drilldown, b
 }
 
 // Sub-columns for the shared GroupedTableHead (ui/table.jsx) — one repeated
-// group of 4 per column: Actual, Budget, Var $, Var %.
+// group of 3 per column: Actual, Budget, Var $.
 export const DEPT_SUB_COLS = [
   { label: "Actual" },
   { label: "Budget" },
   { label: "Var $" },
-  { label: "Var %" },
 ];
 
 export function BudgetRow({ row, columns, actualsByTagValue, actualsByKey, labelByKey, onDrill, period, glNames,
@@ -395,7 +394,7 @@ export function BudgetRow({ row, columns, actualsByTagValue, actualsByKey, label
     return (
       <tr>
         <td
-          colSpan={1 + columns.length * 4}
+          colSpan={1 + columns.length * DEPT_SUB_COLS.length}
           style={{
             ...(isSection ? styles.sectionHeader : styles.groupHeader),
             paddingLeft: 12 + (row.depth || 0) * 14,
@@ -649,7 +648,6 @@ function commentOf(row, columnName) {
 
 function BudgetCell({ actual, budget, comment, unmapped, polarity, onClick, rowStyle }) {
   const variance = actual - budget;
-  const pct = budget !== 0 ? variance / budget : null;
   // Colour lives on the variance figures alone. Washing cells as well
   // put four tinted blocks behind every department on every row, which
   // reads as a heat map of the whole sheet rather than a pointer to the
@@ -673,7 +671,6 @@ function BudgetCell({ actual, budget, comment, unmapped, polarity, onClick, rowS
           )}
         </td>
         <td style={cellStyle}>—</td>
-        <td style={cellStyle}>—</td>
       </>
     );
   }
@@ -690,10 +687,6 @@ function BudgetCell({ actual, budget, comment, unmapped, polarity, onClick, rowS
       </td>
       <td {...handler} style={{ ...cellStyle, color: varianceColor(variance, polarity) }}>
         {actual === 0 && budget === 0 ? "—" : fmtVarianceWhole(variance)}
-      </td>
-      <td {...handler} style={{ ...cellStyle,
-                                color: pct == null ? FAINT : varianceColor(variance, polarity) }}>
-        {pct == null ? "—" : `${(pct * 100).toFixed(0)}%`}
       </td>
     </>
   );

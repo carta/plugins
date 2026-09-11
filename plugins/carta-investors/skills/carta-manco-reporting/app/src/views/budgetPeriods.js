@@ -155,20 +155,13 @@ export function detectPreset(range, presets) {
   return hit?.id || "custom";
 }
 
-/** The sub-columns left after the Filters menu has had its say.
- *
- *  Var % rides with Var $ — one question in two units. It shows against a
- *  single period only: per month a small budget swings it to three figures.
- */
-export function subColumns(hidden, withPct) {
+/** The sub-columns left after the Filters menu has had its say. */
+export function subColumns(hidden) {
   const h = new Set(hidden || []);
   const out = [];
   if (!h.has("actual")) out.push({ label: "Actual", type: "actual" });
   if (!h.has("budget")) out.push({ label: "Budget", type: "budget" });
-  if (!h.has("variance")) {
-    out.push({ label: "Var $", type: "var" });
-    if (withPct) out.push({ label: "Var %", type: "pct" });
-  }
+  if (!h.has("variance")) out.push({ label: "Var $", type: "var" });
   return out;
 }
 

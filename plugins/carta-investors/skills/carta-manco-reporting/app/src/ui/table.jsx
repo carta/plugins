@@ -191,10 +191,10 @@ export function subWidthsFor(subWidths, groupIndex, perGroup) {
 
 /** Two-row grouped header — a sticky, rowSpan=2 label column, then one
  *  `<th colSpan={subCols.length}>` per group, then a repeated sub-header row
- *  (Actual/Budget/Var $[/Var %], each optionally captioned with a
+ *  (Actual/Budget/Var $, each optionally captioned with a
  *  provenance mark). Both budget tables hand-rolled a near-identical version
- *  of this before; `groups`/`subCols` parametrize the two differences
- *  (a firm's own column values vs. quarters; 3 vs. 4 sub-columns).
+ *  of this before; `groups`/`subCols` parametrize the difference (a firm's
+ *  own column values vs. quarters).
  *
  *  `colWidths`/`subWidths`/`scrollLeft`, when given, pin each <th> in both
  *  rows to a live-measured width and counter-translate the sticky label
