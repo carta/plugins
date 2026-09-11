@@ -37,6 +37,7 @@ import CartPanel from "./planner/CartPanel.jsx";
 import SettingsStep from "./planner/SettingsStep.jsx";
 import ReviewStep from "./planner/ReviewStep.jsx";
 import PoolBar from "./planner/PoolBar.jsx";
+import ScenarioBar from "./planner/ScenarioBar.jsx";
 import AskBar from "../ui/AskBar.jsx";
 import {
   eligibility, grantForRow, planTotals, policyToSettings,
@@ -238,16 +239,18 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
   const [dropped, setDropped] = useState(0);
   const {
     saved, savedOverrides, savedSettings, savedFilters,
-    loading: cartLoading, conflict, saving, futureDoc, save,
+    scenarios, activeId,
+    loading: cartLoading, conflict, saving, futureDoc, save, reload,
+    switchScenario, createScenario, duplicateScenario, renameScenario, deleteScenario,
   } = useScenario(corporationId);
-  const hydrated = useRef(false);
+  const hydratedFor = useRef(null);
 
   // Adopt the saved cart once, after it loads. Ids that no longer exist in this
   // snapshot are dropped and counted — a rebuild can retire someone, and doing
   // that silently would shrink a plan without saying so.
   useEffect(() => {
-    if (cartLoading || hydrated.current || !saved) return;
-    hydrated.current = true;
+    if (cartLoading || hydratedFor.current === activeId || !saved) return;
+    hydratedFor.current = activeId;
     const ids = all.map((r) => r.external_id);
     const { cart: kept, dropped: gone } = reconcile(saved, ids);
     setCart(kept);
@@ -260,19 +263,22 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
     }
     // The cohort filters, restored so a reload lands on the same list. Absent means
     // this scenario never recorded any, which is the initial state already.
-    if (savedFilters) {
-      setHasGrants(savedFilters.hasPriorGrants);
-      setAreas(new Set(savedFilters.jobAreas));
-      setLevelMin(savedFilters.levelMin === null ? null : String(savedFilters.levelMin));
-      setLevelMax(savedFilters.levelMax === null ? null : String(savedFilters.levelMax));
-      setVestWindow(savedFilters.excludeVestingWithinMonths);
-    }
+    const f = savedFilters || NO_FILTERS;
+    setHasGrants(f.hasPriorGrants);
+    setAreas(new Set(f.jobAreas));
+    setLevelMin(f.levelMin === null ? null : String(f.levelMin));
+    setLevelMax(f.levelMax === null ? null : String(f.levelMax));
+    setVestWindow(f.excludeVestingWithinMonths);
     // Settings are adopted through the same one-shot gate rather than their own
     // effect: the policy-defaulting effect below fires whenever `settings` is null,
     // and a second effect racing it would flip the target between the scenario's
     // value and the corporation's on load.
-    if (savedSettings) setSettings(savedSettings);
-  }, [cartLoading, saved, savedOverrides, savedSettings, savedFilters, all]);
+    // null lets the policy-defaulting effect below fill it, which is exactly what
+    // "this scenario records no settings" should mean.
+    setSettings(savedSettings || null);
+    // Hand-set grants belong to the draft that recorded them.
+    if (!savedOverrides || !savedOverrides.size) setOverrides(new Map());
+  }, [cartLoading, activeId, saved, savedOverrides, savedSettings, savedFilters, all]);
 
   // The corporation's policy, and the settings the user is modelling with. The
   // settings START as the policy and diverge only when edited — `null` until the
@@ -454,13 +460,33 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
     };
   }, [inCartRows, liveSettings, policySettings, overrides, asOf]);
 
+  // The scenario bar rides with the pool bar rather than inside it: PoolBar has a
+  // real early return for an unknown pool figure, and a switcher nested in there
+  // would vanish exactly when the pool is missing. Composing here also means all
+  // three steps get both without changing their props — the switcher has to be
+  // reachable from the review step, not only from the cohort one.
   const poolBar = (
-    <PoolBar
-      available={planner.poolAvailableShares ?? null}
-      planned={plannedTotals.totals.totalShares}
-      reserved={planner.poolReservedShares ?? null}
-      outstanding={planner.poolOutstandingShares ?? null}
-    />
+    <div style={{ display: "grid", gap: 12 }}>
+      <ScenarioBar
+        scenarios={scenarios}
+        activeId={activeId}
+        saving={saving}
+        conflict={conflict}
+        futureDoc={futureDoc}
+        onSwitch={switchScenario}
+        onCreate={createScenario}
+        onDuplicate={duplicateScenario}
+        onRename={renameScenario}
+        onDelete={deleteScenario}
+        onReload={reload}
+      />
+      <PoolBar
+        available={planner.poolAvailableShares ?? null}
+        planned={plannedTotals.totals.totalShares}
+        reserved={planner.poolReservedShares ?? null}
+        outstanding={planner.poolOutstandingShares ?? null}
+      />
+    </div>
   );
 
   if (step === "settings") {

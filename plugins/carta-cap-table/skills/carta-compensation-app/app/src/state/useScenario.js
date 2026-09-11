@@ -252,6 +252,152 @@ export function docWithPlan(doc, corporationId, plan, scenarioId) {
   };
 }
 
+/** A new scenario id.
+ *
+ *  Not derived from the name: renaming must not orphan a scenario, and two drafts
+ *  called "Engineering" is a thing people do. randomUUID needs a secure context,
+ *  which localhost is — the fallback exists because this id outlives the session in
+ *  a file, so "probably unique" is not good enough to rely on silently.
+ */
+function newScenarioId() {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+  return `s-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/** The scenarios in a document, always an array. */
+export function scenariosOf(doc) {
+  if (!doc || doc.kind !== "ctc-refresh-scenarios" || isFutureDoc(doc)) return [];
+  return doc.scenarios || [];
+}
+
+/** The id of the active scenario. */
+export function activeIdOf(doc) {
+  return (doc && doc.activeScenarioId) || "default";
+}
+
+/** A name no existing scenario is using, derived from `base`.
+ *
+ *  `suffix` lets a numbered variant land INSIDE a trailing bracket — "X (copy 2)",
+ *  not "X (copy) 2", which is what reads as a mistake in a dropdown.
+ */
+function uniqueName(scenarios, base, suffix) {
+  const taken = new Set(scenarios.map((s) => s.name));
+  const nth = suffix
+    ? (n) => `${base} (${suffix} ${n})`
+    : (n) => `${base} ${n}`;
+  const first = suffix ? `${base} (${suffix})` : base;
+  if (!taken.has(first)) return first;
+  for (let n = 2; n < 500; n += 1) {
+    if (!taken.has(nth(n))) return nth(n);
+  }
+  return `${first} ${newScenarioId().slice(0, 6)}`;
+}
+
+/** Add an empty scenario and make it active.
+ *
+ *  Deliberately carries NO `settings` key: a new draft starts at the corporation's
+ *  own policy, and omitting the key is how the document says so rather than
+ *  freezing today's policy into it.
+ */
+export function docWithNewScenario(doc, corporationId, name) {
+  if (isFutureDoc(doc)) return doc;
+  const base = doc && doc.kind === "ctc-refresh-scenarios" ? doc : emptyDoc(corporationId);
+  const id = newScenarioId();
+  return {
+    ...base,
+    schemaVersion: SCHEMA_VERSION,
+    corporationId: corporationId ?? base.corporationId ?? null,
+    activeScenarioId: id,
+    scenarios: [...(base.scenarios || []), {
+      id,
+      name: uniqueName(base.scenarios || [], name || "New scenario"),
+      updatedAt: new Date().toISOString(),
+      cart: [],
+    }],
+  };
+}
+
+/** Copy a scenario whole, and make the copy active.
+ *
+ *  Copies EVERYTHING — cart, overrides, settings, filters. The headline use is
+ *  "the same cohort at a lower multiple", so the cart has to come across; and it is
+ *  far easier to narrow a copied cohort than to rebuild a 134-person one. Hand-set
+ *  grants come too, because dropping them silently would make the copy's totals
+ *  differ from the original's for a reason nothing on screen explains.
+ *
+ *  The copy is inserted directly after its source rather than appended, so a list
+ *  read top to bottom keeps a draft next to the thing it was derived from.
+ */
+export function docWithDuplicatedScenario(doc, corporationId, sourceId) {
+  if (isFutureDoc(doc)) return doc;
+  const base = doc && doc.kind === "ctc-refresh-scenarios" ? doc : emptyDoc(corporationId);
+  const scenarios = base.scenarios || [];
+  const at = scenarios.findIndex((s) => s.id === (sourceId || activeIdOf(base)));
+  if (at < 0) return base;
+  const src = scenarios[at];
+  const copy = {
+    ...src,
+    id: newScenarioId(),
+    name: uniqueName(scenarios, src.name, "copy"),
+    updatedAt: new Date().toISOString(),
+    cart: [...(src.cart || [])],
+    ...(src.grantOverrides ? { grantOverrides: { ...src.grantOverrides } } : {}),
+    ...(src.settings ? { settings: { ...src.settings } } : {}),
+    ...(src.filters
+      ? { filters: { ...src.filters, jobAreas: [...(src.filters.jobAreas || [])] } }
+      : {}),
+  };
+  return {
+    ...base,
+    schemaVersion: SCHEMA_VERSION,
+    corporationId: corporationId ?? base.corporationId ?? null,
+    activeScenarioId: copy.id,
+    scenarios: [...scenarios.slice(0, at + 1), copy, ...scenarios.slice(at + 1)],
+  };
+}
+
+/** Rename a scenario.
+ *
+ *  Does NOT touch `updatedAt`: labelling a draft is not editing it, and bumping the
+ *  timestamp would make "last edited" stop answering the question it appears to.
+ */
+export function docWithRenamedScenario(doc, id, name) {
+  if (isFutureDoc(doc)) return doc;
+  const trimmed = String(name || "").trim();
+  if (!doc || !trimmed) return doc;
+  return {
+    ...doc,
+    scenarios: (doc.scenarios || []).map((s) => (s.id === id ? { ...s, name: trimmed } : s)),
+  };
+}
+
+/** Remove a scenario, refusing the last one.
+ *
+ *  An empty `scenarios` array makes every reader return null, which the user sees
+ *  as "nothing saved" rather than as an error — so the document always keeps one.
+ *  Deleting the active scenario activates its neighbour by position, which is the
+ *  one the user was just looking at.
+ */
+export function docWithoutScenario(doc, id) {
+  if (isFutureDoc(doc)) return doc;
+  const scenarios = (doc && doc.scenarios) || [];
+  if (scenarios.length <= 1) return doc;
+  const at = scenarios.findIndex((s) => s.id === id);
+  if (at < 0) return doc;
+  const rest = scenarios.filter((s) => s.id !== id);
+  const active = activeIdOf(doc) === id
+    ? rest[Math.min(at, rest.length - 1)].id
+    : activeIdOf(doc);
+  return { ...doc, activeScenarioId: active, scenarios: rest };
+}
+
+/** Switch the active scenario. */
+export function docWithActiveScenario(doc, id) {
+  if (isFutureDoc(doc) || !doc) return doc;
+  if (!(doc.scenarios || []).some((s) => s.id === id)) return doc;
+  return { ...doc, activeScenarioId: id };
+}
+
 /** The active scenario's hand-set grants, as a Map. Empty when there are none. */
 export function overridesFromDoc(doc, corporationId) {
   const cartDoc = doc && doc.kind === "ctc-refresh-scenarios" ? doc : null;
@@ -291,6 +437,10 @@ export function useScenario(corporationId) {
   // A document from a newer build. Readable state is left empty and saving is
   // refused, because a key this build thinks it knows may have been redefined.
   const [futureDoc, setFutureDoc] = useState(false);
+  // The switcher's own view of the document. Mirrored into state because docRef is
+  // a ref — a change to it would not re-render the list that displays it.
+  const [scenarios, setScenarios] = useState([]);
+  const [activeId, setActiveId] = useState("default");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [conflict, setConflict] = useState(false);
@@ -318,6 +468,8 @@ export function useScenario(corporationId) {
         docRef.current = doc;
         etagRef.current = etag;
         setFutureDoc(isFutureDoc(doc));
+        setScenarios(scenariosOf(doc));
+        setActiveId(activeIdOf(doc));
         setSaved(cartFromDoc(doc, corporationId));
         setSavedOverrides(overridesFromDoc(doc, corporationId));
         setSavedSettings(settingsFromDoc(doc, corporationId));
@@ -349,6 +501,8 @@ export function useScenario(corporationId) {
       // Cleared only on success. A failed write stays queued, so a retry — or the
       // next edit — carries it rather than the edit dying with the error.
       pendingRef.current = null;
+      setScenarios(scenariosOf(doc));
+      setActiveId(activeIdOf(doc));
       const { plan } = payload;
       const wrote = (k) => Object.prototype.hasOwnProperty.call(plan, k);
       if (wrote("cart")) setSaved(new Set(plan.cart));
@@ -430,6 +584,8 @@ export function useScenario(corporationId) {
       pendingRef.current = null;
       conflictRef.current = false;
       setFutureDoc(isFutureDoc(doc));
+      setScenarios(scenariosOf(doc));
+      setActiveId(activeIdOf(doc));
       setSaved(cartFromDoc(doc, corporationId));
       setSavedOverrides(overridesFromDoc(doc, corporationId));
       setSavedSettings(settingsFromDoc(doc, corporationId));
@@ -444,9 +600,84 @@ export function useScenario(corporationId) {
     }
   }, [corporationId]);
 
+
+  /** Write a document straight through, bypassing the debounce.
+   *
+   *  Lifecycle changes are structural — creating, renaming, deleting or switching a
+   *  draft — and must land before the UI reflects them. Debouncing them would let a
+   *  user switch twice in 600ms and have only the second write, leaving the file
+   *  pointing at a scenario the first switch had already left.
+   */
+  const commit = useCallback(async (next) => {
+    if (conflictRef.current || futureDoc || !next) return false;
+    try {
+      const etag = await putScenarios(next, etagRef.current);
+      docRef.current = next;
+      etagRef.current = etag;
+      setScenarios(scenariosOf(next));
+      setActiveId(activeIdOf(next));
+      setSaved(cartFromDoc(next, corporationId));
+      setSavedOverrides(overridesFromDoc(next, corporationId));
+      setSavedSettings(settingsFromDoc(next, corporationId));
+      setSavedFilters(filtersFromDoc(next, corporationId));
+      setError(null);
+      return true;
+    } catch (e) {
+      if (e.conflict) {
+        conflictRef.current = true;
+        setConflict(true);
+      } else setError(e.message || String(e));
+      return false;
+    }
+  }, [corporationId, futureDoc]);
+
+  /** Switch drafts, flushing whatever is queued for the one being left.
+   *
+   *  The flush is the whole point. A queued write belongs to the OUTGOING scenario,
+   *  and switching without it would either lose that edit or — before the target id
+   *  was captured at queue time — land it in the incoming draft.
+   *
+   *  A flush that fails aborts the switch: the user stays where they are with their
+   *  edits intact, rather than being moved away from work that was not saved.
+   */
+  const switchScenario = useCallback(async (id) => {
+    if (id === activeIdOf(docRef.current)) return true;
+    if (!(await flush())) return false;
+    return commit(docWithActiveScenario(docRef.current, id));
+  }, [flush, commit]);
+
+  const createScenario = useCallback(async (name) => {
+    if (!(await flush())) return false;
+    return commit(docWithNewScenario(docRef.current, corporationId, name));
+  }, [flush, commit, corporationId]);
+
+  const duplicateScenario = useCallback(async (sourceId) => {
+    // Flush first for the same reason as a switch: the copy is taken from the
+    // DOCUMENT, so an unsaved edit would be missing from it.
+    if (!(await flush())) return false;
+    return commit(docWithDuplicatedScenario(
+      docRef.current, corporationId, sourceId || activeIdOf(docRef.current)));
+  }, [flush, commit, corporationId]);
+
+  const renameScenario = useCallback(
+    (id, name) => commit(docWithRenamedScenario(docRef.current, id, name)),
+    [commit],
+  );
+
+  const deleteScenario = useCallback(async (id) => {
+    // Anything queued belongs to a scenario that may be the one being deleted, so
+    // drop it rather than flushing a write to a draft about to disappear.
+    clearTimeout(timerRef.current);
+    pendingRef.current = null;
+    setSaving(false);
+    return commit(docWithoutScenario(docRef.current, id));
+  }, [commit]);
+
   return {
     saved, savedOverrides, savedSettings, savedFilters,
+    scenarios, activeId,
     loading, error, conflict, saving, futureDoc,
     save, flush, reload,
+    switchScenario, createScenario, duplicateScenario, renameScenario, deleteScenario,
   };
 }
