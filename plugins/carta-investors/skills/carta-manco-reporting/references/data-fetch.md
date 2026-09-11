@@ -135,7 +135,7 @@ WHERE FUND_UUID = '<MANCO_UUID>'
   AND YEAR(EFFECTIVE_DATE) = <YEAR>
   AND MONTH(EFFECTIVE_DATE) <= <MAX_MO>
   AND ACCOUNT_TYPE >= 5000
-ORDER BY EFFECTIVE_DATE, ACCOUNT_TYPE
+ORDER BY EFFECTIVE_DATE, ACCOUNT_TYPE, JOURNAL_ENTRY_LINE_ID
 LIMIT 1000
 ```
 
@@ -195,7 +195,7 @@ WHERE FIRM_ID = '<FIRM_UUID>'
   AND MONTH(EFFECTIVE_DATE) <= <MAX_MO>
   AND ACCOUNT_TYPE >= 5000
   AND (LOWER(ACCOUNT_NAME) LIKE '%management fee%' OR LOWER(ACCOUNT_NAME) LIKE '%mgmt fee%')
-ORDER BY yr DESC, EFFECTIVE_DATE
+ORDER BY yr DESC, EFFECTIVE_DATE, JOURNAL_ENTRY_LINE_ID
 LIMIT 1000
 ```
 
@@ -383,6 +383,15 @@ it: `--from-session` still works on anything the log already holds.
 than the query found. Act on it — that is the pagination trigger below.
 
 ### Pagination
+
+**Every paginated query ends its `ORDER BY` with `JOURNAL_ENTRY_LINE_ID`, and
+must keep doing so.** `OFFSET` slices by position, and each page is a separate
+execution of the query — so a sort key that leaves rows tied lets the engine
+order those tied rows differently on each run. A row can then land inside one
+page and inside the next, or inside neither. Query A's own key ties 87% of a
+real firm's rows, in groups up to 88 wide; six journal lines were fetched
+twice at the seams before the line id was added. Dropped rows are the same
+bug and nothing detects them.
 
 After saving page 1, check the `total_rows:` banner in the saved file.
 

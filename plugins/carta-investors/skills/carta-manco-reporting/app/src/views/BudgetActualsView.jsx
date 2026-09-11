@@ -265,7 +265,9 @@ export default function BudgetActualsView({ snapshot, accountsData, drilldown, b
       )}
 
       {isTagCrosstab && (
-        <Capped data-export-exclude>
+        // Uncapped, like the outline's ribbon and the heading: the period
+        // picker sits at its right edge, which is the table's.
+        <div data-export-exclude>
           <FilterRibbon>
             <FiltersMenu
               breakouts={breakouts}
@@ -298,7 +300,7 @@ export default function BudgetActualsView({ snapshot, accountsData, drilldown, b
               }}
             />
           </FilterRibbon>
-        </Capped>
+        </div>
       )}
 
       {isTagCrosstab && (

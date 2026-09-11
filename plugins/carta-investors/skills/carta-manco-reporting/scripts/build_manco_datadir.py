@@ -948,7 +948,34 @@ def read_expense_pages(raw_dir):
             f"— a later OFFSET page is missing. Fetch the remaining page(s) "
             f"(see references/data-fetch.md Query A) before rebuilding."
         )
-    return rows
+    # After the guard, which counts what the pages actually carried.
+    return drop_repeated_rows(rows)
+
+
+def drop_repeated_rows(rows):
+    """Rows a page overlap fetched twice.
+
+    A paginated pull whose next OFFSET lands a few rows early repeats those
+    rows, and the ledger then holds one journal line twice. Every chart
+    counts it twice and they all still agree with each other, so nothing
+    downstream can notice — only the pages themselves can.
+
+    Identity is the whole row, not the id: a row repeated verbatim is a
+    fetch artifact, while one id arriving with different content would be
+    real detail this must not drop.
+    """
+    seen, out = set(), []
+    for r in rows:
+        key = json.dumps(r, sort_keys=True, default=str)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(r)
+    dropped = len(rows) - len(out)
+    if dropped:
+        print(f"note: {dropped} journal line(s) arrived twice from overlapping "
+              f"pages and were counted once.", file=sys.stderr)
+    return out
 
 
 def read_reimbursement_entries(raw_dir):
