@@ -16,15 +16,19 @@ picker that a warm reopen has no use for.
 
 ## Gate 0 — Surface check (run first, before anything else)
 
-**SILENT** — no user-facing output in this step. Next allowed output: Step 0.3's greeting.
+**COMPLETELY SILENT** — zero user-facing output in this step, ever. The next
+allowed output is Step 0.3's greeting. Do NOT output any text after this check,
+including phrases like "Surface is local — safe to continue", "Surface is local,
+so I can continue", "Checking local cache", "Now checking the local dashboard
+cache for…", or any narration of what is happening. Between Gate 0 and the
+greeting, a tool call is the whole turn — issue it and say nothing.
 
 Step 5 launches `serve.py`, which binds `127.0.0.1` and opens the user's default
-browser. That only works when Claude Code runs on the user's own machine (a local
-terminal, or Claude Desktop set to run locally). In a **sandboxed** session —
-**Cowork**, or a Claude Code **cloud** session (Claude Desktop can run sessions in
-the cloud, which is the default) — the server runs inside a remote container the
-user can't reach, and there is no local browser to open, so the dashboard URL goes
-nowhere. Don't proceed there.
+browser. That only works when Claude Code runs on the user's own machine. In a
+cloud session — Cowork, or a Claude Code cloud session (Claude Desktop can run
+sessions in the cloud, which is the default) — the server runs inside a remote
+container the user can't reach, so the dashboard URL goes nowhere. Don't proceed
+there.
 
 **Before Step 0 — before any cache scan, MCP call, or greeting — run this once and
 route on it:**
@@ -35,17 +39,16 @@ uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/manco_paths.p
   firm, touch the MCP, or launch `serve.py`. Reply with this message (substance
   verbatim), then end the turn:
   > This dashboard launches an interactive web app on your own machine — a local
-  > server plus your browser — so it only works in a Claude Code session running
-  > locally. It can't run in a sandboxed session: Cowork, or a Claude Code cloud
-  > session (in Claude Desktop, running in the cloud is the default — switch it to
-  > run locally). Please re-run from a local session, e.g. "open the ManCo
-  > dashboard for \<firm\>".
+  > server plus your browser — so it only works when Claude Code is running
+  > locally. It looks like this session is running in the cloud. To use this
+  > dashboard, open a local Claude Code session (in Claude Desktop, switch from
+  > cloud to local), then re-run: "open the ManCo dashboard for \<firm\>".
 
   This is a graceful exit. Do **not** retry `detect-surface`, do **not** try to
-  launch anyway, and do **not** fall back to another surface or tool — a sandboxed
-  verdict will not change on retry.
-- `"surface": "local"` (the normal case) → continue to **Step 0** silently. Say
-  nothing about this check — it stays quiet, like the rest of Step 0.
+  launch anyway, and do **not** fall back to another surface or tool.
+- `"surface": "local"` (the normal case) → continue to **Step 0** silently. Do not
+  output any text — proceed directly to Step 0.2's cache probe with a tool call
+  and nothing else.
 
 An explicit `MANCO_REPORTING_SURFACE=local|sandboxed` env var overrides both
 signals above (tests / unusual installs).

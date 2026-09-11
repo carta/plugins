@@ -191,11 +191,13 @@ Do not paste raw command output, MCP JSON, SQL result headers, or step
 labels. The user sees the greeting, any prompt that genuinely needs an
 answer, and the URL.
 
-**Never announce a step you are about to run.** "Local surface confirmed",
+**Never announce a step you are about to run.** "Surface is local — safe to
+continue", "Surface is local, so I can continue", "Local surface confirmed",
 "Now moving to Step 2.5", "Now proceeding to Step 4 — assembling the
-datadir", "Datadir built successfully" are all output the user did not ask
-for and cannot act on. Between the greeting and the URL, a tool call is the
-whole turn — issue it and say nothing.
+datadir", "Datadir built successfully", "Now checking the local dashboard
+cache for…" are all output the user did not ask for and cannot act on.
+Between the greeting and the URL, a tool call is the whole turn — issue it
+and say nothing.
 
 ## Errors and deferred work
 
