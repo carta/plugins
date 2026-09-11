@@ -260,19 +260,44 @@ def _fmv_option_label(option: Dict[str, Any], currency_fallback: str) -> str:
     return label
 
 
+def common_class_fmv_options(knowns: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """The active valuations an option can be priced from.
+
+    An option prices off the plan's common share class, so a preferred FMV is a
+    different class's price rather than a competing one. Falls back to
+    `common_share_class_name` because carta-mcp omits the type on older rows,
+    and never narrows to nothing — unmatched means the admin still picks.
+    """
+    options = [o for o in (knowns.get("fmv_options") or []) if isinstance(o, dict)]
+    if len(options) < 2:
+        return options
+
+    common = [o for o in options if str(o.get("share_class_type", "")).upper() == "COMMON"]
+    if common:
+        return common
+
+    plan_class = str(knowns.get("common_share_class_name") or "").strip().casefold()
+    if plan_class:
+        named = [
+            o for o in options
+            if str(o.get("share_class_name") or "").strip().casefold() == plan_class
+        ]
+        if named:
+            return named
+
+    return options
+
+
 def sole_fmv_price(knowns: Dict[str, Any]) -> Optional[str]:
-    """The price to prefill, but only when exactly one valuation is active.
+    """The price to prefill, when the plan's common class has exactly one active.
 
     Returns None when there are none or several, so the caller falls through to
     its own default and an ambiguous batch never adopts one of two prices.
     """
-    options = knowns.get("fmv_options") or []
-    if not isinstance(options, list) or len(options) != 1:
+    options = common_class_fmv_options(knowns)
+    if len(options) != 1:
         return None
-    only = options[0]
-    if not isinstance(only, dict):
-        return None
-    price = only.get("price")
+    price = options[0].get("price")
     return None if price is None else str(price)
 
 
@@ -283,13 +308,11 @@ def build_exercise_price_hint(knowns: Dict[str, Any], currency: str) -> str:
     whether a 409A exists — an international company prices grants from an EMI,
     CSOP or share-price valuation and has no 409A at all.
 
-    A batch with more than one active valuation (an HMRC report yields both an
-    AMV and a UMV) never auto-fills: nothing in the payload says which one an
+    Two active valuations on the plan's common class (an HMRC report yields both
+    an AMV and a UMV) never auto-fill: nothing in the payload says which one an
     option is priced from, and guessing wrong has real tax consequences.
     """
-    options = knowns.get("fmv_options") or []
-    if not isinstance(options, list):
-        options = []
+    options = common_class_fmv_options(knowns)
     source = _fmv_source_label(knowns.get("fmv_source"))
 
     # Deprecated: has_409a + exercise_price_default was the pre-international
@@ -304,8 +327,12 @@ def build_exercise_price_hint(knowns: Dict[str, Any], currency: str) -> str:
         source = source or "409A"
 
     if len(options) > 1:
-        rendered = "; ".join(_fmv_option_label(o, currency) for o in options if isinstance(o, dict))
-        prefix = f"This company has more than one active {source} valuation" if source else "This company has more than one active valuation"
+        rendered = "; ".join(_fmv_option_label(o, currency) for o in options)
+        # Name the class the survivors share, so "pick one" says which price.
+        classes = {str(o.get("share_class_name") or "").strip() for o in options}
+        classes.discard("")
+        scope = f" for {classes.pop()}" if len(classes) == 1 else ""
+        prefix = f"This company has more than one active {source} valuation{scope}" if source else f"This company has more than one active valuation{scope}"
         return f"{prefix} — choose the one this grant is priced from: {rendered}"
 
     if len(options) == 1 and isinstance(options[0], dict):
@@ -314,8 +341,10 @@ def build_exercise_price_hint(knowns: Dict[str, Any], currency: str) -> str:
         price = str(opt.get("price", "")).strip()
         vtype = str(opt.get("valuation_type", "")).strip().upper()
         # Name the source so the admin can tell an EMI-priced grant from a 409A one.
-        descriptor = " ".join(p for p in (source, _VALUATION_TYPE_LABELS.get(vtype, "")) if p)
-        descriptor = descriptor or "fair market value"
+        # A share-price valuation labels both halves the same — say it once.
+        type_label = _VALUATION_TYPE_LABELS.get(vtype, "")
+        parts = [source] if type_label == source else [source, type_label]
+        descriptor = " ".join(p for p in parts if p) or "fair market value"
         effective = str(opt.get("effective_date", "")).strip()
         suffix = f" (effective {display_date(effective)})" if effective else ""
         return f"Prefilled with the current {descriptor} of {cur} {price}".rstrip() + suffix

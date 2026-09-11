@@ -138,6 +138,26 @@
   margin-top: 1rem; padding-top: 1rem; border-top: 0.5px solid var(--border);
 }
 .summary { font-size: 13px; color: var(--text-secondary); flex: 1; min-width: 140px; }
+
+/* A blocked submit reports in the danger colour, beside the button that was
+   clicked — grey secondary text left of the footer read as decoration. */
+.summary.summary-blocked { color: var(--text-danger); font-weight: 500; }
+.summary.summary-shake {
+  text-decoration: underline;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 2px;
+}
+
+/* Marks the stakeholder a blocked click sent the user to. */
+.block-blocked {
+  outline: 1.5px solid var(--border-danger);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Batch identity — hidden until a name misses the roster (revealIdentity). */
+.batch-identity-row { margin-top: 4px; }
+.batch-identity-row .stake-relationship { width: 100%; }
 .btn-primary:disabled, .btn-default:disabled { opacity: .5; cursor: not-allowed; }
 
 /* ── Server-error banners (Phase 1.5). Red is reserved for what blocks a save. ── */

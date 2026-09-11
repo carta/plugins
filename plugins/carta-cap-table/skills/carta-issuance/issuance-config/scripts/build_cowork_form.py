@@ -34,8 +34,10 @@ from issuance_fields import (  # noqa: E402
     build_legends,
     build_option_plans,
     build_option_type,
+    build_relationship_select,
     build_rule144_reason_select,
     build_share_classes,
+    build_stakeholder_kind,
     build_stakeholder_blocks,
     build_stakeholder_list,
     build_threshold_value_type,
@@ -346,11 +348,45 @@ def build_shared_terms(security_type: str, data: Dict[str, Any], knowns: Dict[st
     )
 
 
-def build_batch_rows(rows: List[Dict[str, Any]]) -> str:
-    """The compact name / email / quantity table — three columns, nothing else.
+def build_header_sub(rows: List[Dict[str, Any]], noun: str) -> str:
+    """Header line: headcount, the per-row figure when uniform, and the total.
 
-    Per-row terms have no place here by construction: a row that needs its own
-    terms is a mixed batch and belongs in the per-row repeater.
+    *"Issue 111 options to these employees"* reads as 111 each or 111 total, and
+    the form resolved it silently. Stating the arithmetic is the only way the
+    reader can catch a misread before it issues.
+    """
+    count = len(rows) or 1
+    head = f"{count} {noun}{'' if count == 1 else 's'}"
+
+    quantities = []
+    for row in rows:
+        raw = str(row.get("quantity", "") or "").strip().replace(",", "")
+        try:
+            quantities.append(int(float(raw)))
+        except (TypeError, ValueError):
+            return head
+
+    if not quantities:
+        return head
+
+    total = sum(quantities)
+    uniform = len(set(quantities)) == 1 and len(quantities) > 1
+    parts = [head]
+    if uniform:
+        parts.append(f"{quantities[0]:,} each")
+    parts.append(f"{total:,} total")
+    return " · ".join(parts)
+
+
+def build_batch_rows(rows: List[Dict[str, Any]]) -> str:
+    """The compact name / email / quantity table, plus identity for off-roster rows.
+
+    Per-row *terms* have no place here by construction: a row that needs its own
+    terms is a mixed batch and belongs in the per-row repeater. Relationship and
+    stakeholder kind are not terms — they are `always` fields on the payload, and
+    only the roster can supply them. Whether a row matches the roster is known in
+    JS, not here, so every row carries the controls hidden and `revealIdentity()`
+    shows them on a miss.
     """
     if not rows:
         rows = [{}]
@@ -361,6 +397,8 @@ def build_batch_rows(rows: List[Dict[str, Any]]) -> str:
         email = esc(row.get("email", ""))
         qty = row.get("quantity", "")
         qty = "" if qty is None else esc(qty)
+        rel_select = build_relationship_select(str(row.get("relationship") or ""))
+        kind_toggle = build_stakeholder_kind(str(row.get("stakeholder_kind") or ""))
         out.append(
             f'<tr data-batch-row data-row-key="{key}">'
             f'<td class="col-num">{i + 1}</td>'
@@ -368,7 +406,11 @@ def build_batch_rows(rows: List[Dict[str, Any]]) -> str:
             f'<input class="text-input stake-name-in" type="text" autocomplete="off" '
             f'placeholder="Search or type a new name…" value="{name}" '
             f'oninput="onStakeNameInput(this)" onfocus="onStakeNameFocus(this)"/>'
-            f'<div class="stake-suggestions" style="display:none;"></div></div></td>'
+            f'<div class="stake-suggestions" style="display:none;"></div>'
+            f'<div data-identity-extra style="display:none;">'
+            f'<div class="batch-identity-row">{rel_select}</div>'
+            f'<div class="batch-identity-row toggle-group">{kind_toggle}</div>'
+            f'</div></div></td>'
             f'<td><input class="text-input stake-email-in" type="email" placeholder="Email" '
             f'value="{email}" oninput="onStakeInput()"/></td>'
             f'<td><input class="text-input stake-qty-in" type="number" inputmode="numeric" '
@@ -425,7 +467,7 @@ def render(security_type: str, data: Dict[str, Any], knowns: Dict[str, Any],
         "CORP_ID": esc(corp_id),
         "SECURITY_TYPE": security_type,
         "FLOW_TITLE": FLOW_TITLES[security_type],
-        "HEADER_SUB": f"{count} {noun}{'' if count == 1 else 's'}",
+        "HEADER_SUB": build_header_sub(rows, noun),
         "BATCH_MODE": "true" if batch else "false",
         "SO_TYPE_CONSTANTS": so_type_js_constants(),
         "BATCH_ERRORS_HTML": build_batch_error_banner(knowns.get("batch_errors")),

@@ -687,17 +687,25 @@ Read `international_valuations.active` (already filtered to live valuations serv
 
 | `knowns` key | Value |
 |---|---|
-| `fmv_options` | the `active` rows as-is (`price`, `currency`, `valuation_type`, `effective_date`) |
+| `fmv_options` | the `active` rows as-is — keep `share_class_type` and `share_class_name` alongside `price`, `currency`, `valuation_type`, `effective_date` |
 | `fmv_source` | the rows' shared `support_reference_type` (`409A` / `EMI` / `CSOP` / `SHARE_PRICE`) |
 | `fmv_expired_on` | only when `active` is empty and `history` has one — its `expiration_date`, so the hint can say *when* cover lapsed instead of just "none" |
+| `common_share_class_name` | the chosen option plan's `common_share_class_name`. Lets the panel tell a common valuation from a preferred one when a row omits `share_class_type` |
 
-`build_config.py` derives the hint and the prefill from these; don't pre-compute either.
+`build_config.py` derives the hint and the prefill from these; don't pre-compute either — it
+narrows the options to the plan's common share class itself. Pass every active row.
 
-> **Never pick between two active valuations.** An HMRC report yields both an **AMV** (actual
-> market value, discounted for restrictions) and a **UMV** (unrestricted market value). Nothing
-> in the payload says which one a grant is priced from, and the difference changes the holder's
-> tax position — so pass both and let the panel ask. The panel deliberately leaves the field
-> empty in that case; do not "help" by filling one in.
+> **Never pick between two active valuations of the same share class.** An HMRC report yields
+> both an **AMV** (actual market value, discounted for restrictions) and a **UMV** (unrestricted
+> market value). Nothing in the payload says which one a grant is priced from, and the difference
+> changes the holder's tax position — so pass both and let the panel ask. The panel deliberately
+> leaves the field empty in that case; do not "help" by filling one in.
+
+> **Two valuations on *different* classes are not a choice.** An option prices off the plan's
+> common share class, so a live preferred FMV is a different class's price, not an alternative.
+> Pass both rows with their `share_class_type` and let the panel drop the preferred one — do not
+> filter them yourself, and never treat a preferred FMV as the strike. A corp with an Ordinary
+> share price of 0.75 and a Seed Preferred FMV of 1.00 must price its options at **0.75**.
 
 **If the section is missing** — a US-only corp can be refused it (it is permissioned separately),
 in which case it comes back `null` in `errors`. Fall back to `valuations_409a`: use

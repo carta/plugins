@@ -220,6 +220,24 @@ html, body { height: 100%; font-family: var(--font-sans); background: var(--colo
 }
 .summary { font-size: 12px; color: var(--color-gray-50); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* A blocked submit reports in the danger colour beside the clicked button. The
+   reason names fields, so it wraps rather than truncating to an ellipsis. */
+.summary.summary-blocked {
+  color: var(--color-red-60);
+  font-weight: 500;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+.summary.summary-shake {
+  text-decoration: underline;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 2px;
+}
+
+/* Marks the stakeholder block a blocked click sent the user to. */
+.block-blocked { outline: 1.5px solid var(--color-red-60); outline-offset: 2px; border-radius: 6px; }
+
 .btn-primary {
   height: 40px; padding: 0 20px;
   background: var(--color-black); color: var(--color-white);

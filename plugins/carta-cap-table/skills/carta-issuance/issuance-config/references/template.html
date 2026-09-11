@@ -55,8 +55,8 @@
   <!-- Footer -->
   <div id="footer">
     <p id="summary-line" class="summary"></p>
-    <button id="btn-save-only" class="btn-default" type="button" onclick="saveOnly()" disabled>Save</button>
-    <button id="btn-start" class="btn-primary" type="button" onclick="submit()" disabled>Review</button>
+    <button id="btn-save-only" class="btn-default" type="button" onclick="saveOnly()">Save</button>
+    <button id="btn-start" class="btn-primary" type="button" onclick="submit()">Review</button>
   </div>
 
 </div><!-- /shell -->
@@ -473,28 +473,57 @@
   }
   function blockReady(block) { return missingFields(block).length === 0; }
 
+  // The buttons never disable. A click that lands and explains itself beats one
+  // that does nothing — a disabled Review with its reason in small grey text to
+  // the left reads as a broken form.
+  let blockedReason = '';
+  let blockedScope = null;
+
+  function setBlocked(line, text, scope) {
+    blockedReason = text;
+    blockedScope = scope || null;
+    line.textContent = text;
+    line.classList.add('summary-blocked');
+  }
+
   function updateSummary() {
     const line = document.getElementById('summary-line');
     const noun = SEC_TYPE === 'option_grant' ? 'grantee' : 'holder';
     const blocks = allBlocks();
-    const startBtn = document.getElementById('btn-start');
-    const saveBtn = document.getElementById('btn-save-only');
     if (blocks.length === 0) {
-      line.textContent = `Add at least one ${noun}.`;
-      startBtn.disabled = true; saveBtn.disabled = true;
+      setBlocked(line, `Add at least one ${noun}.`, null);
       return;
     }
     const notReadyIdx = blocks.findIndex(b => !blockReady(b));
-    const ready = notReadyIdx === -1;
-    // Save gates on the same readiness as Review — Hard rule 9's pre-save
-    // assertion applies to the lighter Save button too, not a weaker bar.
-    startBtn.disabled = !ready; saveBtn.disabled = !ready;
-    if (!ready) {
+    if (notReadyIdx !== -1) {
       const missing = missingFields(blocks[notReadyIdx]);
-      line.textContent = `Stakeholder ${notReadyIdx + 1} needs ${missing.join(', ')}.`;
+      setBlocked(line, `Stakeholder ${notReadyIdx + 1} needs ${missing.join(', ')}.`,
+                 blocks[notReadyIdx]);
       return;
     }
+    blockedReason = '';
+    blockedScope = null;
+    line.classList.remove('summary-blocked');
     line.textContent = `${blocks.length} ${noun}${blocks.length === 1 ? '' : 's'} ready.`;
+  }
+
+  // Returns true when the click was blocked, having put the reason where the
+  // pointer already is and moved the user to the field that caused it.
+  function reportBlocked() {
+    if (!blockedReason) return false;
+    const line = document.getElementById('summary-line');
+    if (line) {
+      line.classList.add('summary-shake');
+      setTimeout(() => line.classList.remove('summary-shake'), 400);
+    }
+    if (blockedScope) {
+      blockedScope.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const target = blockedScope.querySelector('input:not([disabled]), select:not([disabled])');
+      if (target) { try { target.focus({ preventScroll: true }); } catch (e) { target.focus(); } }
+      blockedScope.classList.add('block-blocked');
+      setTimeout(() => blockedScope.classList.remove('block-blocked'), 1600);
+    }
+    return true;
   }
   function onStakeInput() { updateSummary(); }
 
@@ -658,6 +687,7 @@
   }
 
   function submitAction(action, clickedBtn, busyLabel, idleLabel) {
+    if (reportBlocked()) return;
     const data = {
       action,
       security_type: SEC_TYPE,

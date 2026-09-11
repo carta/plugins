@@ -46,6 +46,11 @@ posts `action: "save_only"` — a lighter escape hatch, `save_drafts` only, no
 validation, no panel re-render. Both gate on the exact same per-block
 readiness check (`missingFields()`) — Save isn't a weaker bar.
 
+**Neither button is ever disabled.** A click on an unready form always lands: it
+scrolls the first offending stakeholder into view, focuses the blocking field and
+states the reason beside the button, in the error colour. A disabled button whose
+reason sits in grey text elsewhere reads as a broken form, not as a gate.
+
 **Do not invoke this skill directly.** Dispatched by `carta-issuance` Phase 0.5.
 
 ## References
@@ -299,8 +304,10 @@ block that diverged from the first via per-row edits or a copy-forward-then-chan
 - `rule_144_mode` is `issue_date` (the default — `rule_144_date` and `rule_144_reason` are both `null`, and the parent skill stamps the issue date as the Rule 144 date) or `other` (`rule_144_date` carries the chosen `YYYY-MM-DD`; `rule_144_reason` carries the enum value picked from the panel's own reason `<select>` — the parent reformats the date to `MM/DD/YYYY` and stamps `rule_144_reason` as `rule_144_difference_reason`, no separate collection step needed).
 - `relationship` in a row is the value the user selected in that block — the full
   `issue_date_relationship` picklist ([payload-reference.md](../references/payload-reference.md#picklists)),
-  **always required** for a new stakeholder (the panel's Review button won't enable until it's
-  set — the template's `missingFields()` checks it). It can still arrive as `""` for a
+  **always required** for a new stakeholder (the template's `missingFields()` checks it, and
+  Review reports it rather than going quiet). In batch mode the relationship and
+  stakeholder-type controls ship hidden and are revealed for any row whose name misses the
+  roster — the roster answers for a match, and nothing answers for a miss. It can still arrive as `""` for a
   **roster-matched** row whose own record has no relationship on file — `missingFields()`
   detects a roster match by re-running the same name lookup `onStakeNameInput()` uses (fields
   are never locked/disabled — [Stakeholder auto-populate](#stakeholder-auto-populate), above —

@@ -167,8 +167,8 @@ Two obligations, and the second is the one that actually protects the cap table:
 so — *"read from the document, confirm it"* — and treat it as needs-confirmation the same way.
 
 **Both behaviours are automatic.** `build_cowork_form.py` renders the markers and blanks every
-noted field straight from `row.import_notes`, so `missingFields()` blocks **Review** until the
-admin resolves each one. Put the notes on the rows in `knowns` and the form does the rest.
+noted field straight from `row.import_notes`, so `missingFields()` holds **Review** until the
+admin resolves each one — the click reports the blocker rather than doing nothing. Put the notes on the rows in `knowns` and the form does the rest.
 
 ### Batch mode — identical-term bulk grants
 
@@ -201,10 +201,13 @@ either layout.
    rendered a single time at the top. Every computable default still applies here
    ([§4](#4-trust-computable-defaults--never-pre-ask)) — these are the batch-level fallback
    every row inherits.
-2. **Per-grantee table, below** — one row per person, **three columns only**: name · email ·
-   quantity. No per-row expansion of the shared terms; if a specific person genuinely needs
-   different terms, that's a mixed-term batch and belongs in the per-row layout instead (tell
-   the user to say so, or detect it from the prompt before choosing batch mode).
+2. **Per-grantee table, below** — one row per person, **three visible columns**: name · email ·
+   quantity. Each row also carries a relationship `<select>` and a stakeholder-type toggle,
+   hidden until that row's name misses the roster: both are `always` fields on the payload, a
+   roster match supplies them, and nothing supplies them for someone typed in fresh. No
+   per-row expansion of the shared *terms*; if a specific person genuinely needs different
+   terms, that's a mixed-term batch and belongs in the per-row layout instead (tell the user
+   to say so, or detect it from the prompt before choosing batch mode).
 
 **Submit contract — the same `rows` shape as the per-row layout.** Batch mode is a *rendering*
 optimization only; the engine never sees the difference. The form expands the shared terms

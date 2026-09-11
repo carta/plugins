@@ -36,8 +36,8 @@
 
   <div class="issuance-footer">
     <p id="summary-line" class="summary"></p>
-    <button id="btn-save-only" class="btn-default" type="button" onclick="saveOnly()" disabled>Save</button>
-    <button id="btn-start" class="btn-primary" type="button" onclick="submitForm()" disabled>Review</button>
+    <button id="btn-save-only" class="btn-default" type="button" onclick="saveOnly()">Save</button>
+    <button id="btn-start" class="btn-primary" type="button" onclick="submitForm()">Review</button>
   </div>
 
   <div class="submit-status" id="submit-status">
@@ -219,6 +219,14 @@
   // Fields stay editable on a roster match. Phase 1 always uses the real
   // cap-table record for an existing stakeholder, so locking them protects
   // nothing and reads as broken UI.
+  // A batch row ships its relationship/kind controls hidden, since the roster
+  // supplies both for a match. Typing a name that isn't on the roster reveals
+  // them — nobody else can answer for that person.
+  function revealIdentity(block, isRosterMatch) {
+    const extra = block.querySelector('[data-identity-extra]');
+    if (extra) extra.style.display = isRosterMatch ? 'none' : '';
+  }
+
   function applyRosterAutofill(input) {
     const block = input.closest('[data-stake-block]') || input.closest('[data-batch-row]');
     if (!block) return;
@@ -226,6 +234,7 @@
     const relSelect  = block.querySelector('.stake-relationship');
     const kindBtns   = block.querySelectorAll('[data-group="kind"]');
     const rec = _stakeMap[input.value.trim().toLowerCase()];
+    revealIdentity(block, !!rec && !!input.value.trim());
     if (!rec) return;
     if (emailInput) emailInput.value = rec.email;
     if (relSelect && rec.relationship && Array.from(relSelect.options).some(o => o.value === rec.relationship)) {
@@ -389,11 +398,16 @@
     const isRosterMatch = !!_stakeMap[name.toLowerCase()];
     const email = scope.querySelector('.stake-email-in');
     if (email && !isRosterMatch && !email.value.trim()) missing.push('an email');
+    // Not `rel && …`: a row with no relationship control at all is missing the
+    // value, not exempt from it. Both are `always` fields on the payload.
     const rel = scope.querySelector('.stake-relationship');
-    if (rel && !isRosterMatch && !rel.value) missing.push('a relationship');
+    if (!isRosterMatch && !rel?.value) missing.push('a relationship');
     const qty = (scope.querySelector('.stake-qty-in')?.value || '').trim();
     if (!qty || Number(qty) <= 0) missing.push('a quantity');
-    if (opts && opts.requireKind && !scope.querySelector('[data-group="kind"].selected')) {
+    // Batch rows pass requireKind:false because the roster answers for a match.
+    // An off-roster row has no such source, so it must answer for itself.
+    const needKind = (opts && opts.requireKind) || !isRosterMatch;
+    if (needKind && !scope.querySelector('[data-group="kind"].selected')) {
       missing.push('a stakeholder type');
     }
     return missing;
@@ -434,17 +448,33 @@
 
   function sharedTermsScope() { return document.querySelector('[data-shared-terms]'); }
 
+  // The buttons never disable. A click that lands and explains itself beats one
+  // that does nothing — a disabled Review with the reason in small grey text to
+  // its left reads as a broken form. blockedReason is what the click reports.
+  let blockedReason = '';
+  let blockedScope = null;
+
+  // The header states the batch arithmetic at render time; this keeps it true as
+  // quantities change, so "111 each" never disagrees with the rows on screen.
+  function quantityTally(scopes) {
+    const qty = scopes.map(s => Number((s.querySelector('.stake-qty-in')?.value || '').trim()));
+    if (!qty.length || qty.some(n => !Number.isFinite(n) || n <= 0)) return '';
+    const total = qty.reduce((a, b) => a + b, 0);
+    const uniform = qty.length > 1 && new Set(qty).size === 1;
+    const each = uniform ? `${qty[0].toLocaleString()} each · ` : '';
+    return ` — ${each}${total.toLocaleString()} total`;
+  }
+
   function updateSummary() {
     const line = document.getElementById('summary-line');
     const noun = SEC_TYPE === 'option_grant' ? 'grantee' : 'holder';
-    const startBtn = document.getElementById('btn-start');
-    const saveBtn = document.getElementById('btn-save-only');
-    const setState = (ready, text) => {
+    const setState = (ready, text, scope) => {
       // Save gates on the same readiness as Review — Hard rule 9's pre-save
       // assertion is not a weaker bar for the lighter button.
-      startBtn.disabled = !ready;
-      saveBtn.disabled = !ready;
+      blockedReason = ready ? '' : text;
+      blockedScope = ready ? null : (scope || null);
       line.textContent = text;
+      line.classList.toggle('summary-blocked', !ready);
     };
 
     if (BATCH_MODE) {
@@ -453,15 +483,15 @@
       const shared = sharedTermsScope();
       const sharedMissing = shared ? missingTerms(shared) : [];
       if (sharedMissing.length) {
-        setState(false, `Shared terms need ${sharedMissing.join(', ')}.`);
+        setState(false, `Shared terms need ${sharedMissing.join(', ')}.`, shared);
         return;
       }
       const badIdx = rows.findIndex(r => missingIdentity(r, { requireKind: false }).length > 0);
       if (badIdx !== -1) {
-        setState(false, `Stakeholder ${badIdx + 1} needs ${missingIdentity(rows[badIdx], { requireKind: false }).join(', ')}.`);
+        setState(false, `Stakeholder ${badIdx + 1} needs ${missingIdentity(rows[badIdx], { requireKind: false }).join(', ')}.`, rows[badIdx]);
         return;
       }
-      setState(true, `${rows.length} ${noun}${rows.length === 1 ? '' : 's'} ready.`);
+      setState(true, `${rows.length} ${noun}${rows.length === 1 ? '' : 's'} ready.${quantityTally(rows)}`);
       return;
     }
 
@@ -469,10 +499,10 @@
     if (!blocks.length) { setState(false, `Add at least one ${noun}.`); return; }
     const notReadyIdx = blocks.findIndex(b => missingFields(b).length > 0);
     if (notReadyIdx !== -1) {
-      setState(false, `Stakeholder ${notReadyIdx + 1} needs ${missingFields(blocks[notReadyIdx]).join(', ')}.`);
+      setState(false, `Stakeholder ${notReadyIdx + 1} needs ${missingFields(blocks[notReadyIdx]).join(', ')}.`, blocks[notReadyIdx]);
       return;
     }
-    setState(true, `${blocks.length} ${noun}${blocks.length === 1 ? '' : 's'} ready.`);
+    setState(true, `${blocks.length} ${noun}${blocks.length === 1 ? '' : 's'} ready.${quantityTally(blocks)}`);
   }
   function onStakeInput() { updateSummary(); }
 
@@ -625,7 +655,33 @@
     if (box) box.classList.add('shown');
   }
 
+  // Returns true when the click was blocked. Puts the reason where the pointer
+  // already is, and moves the user to the field that caused it.
+  function reportBlocked() {
+    if (!blockedReason) return false;
+    const line = document.getElementById('summary-line');
+    if (line) {
+      line.classList.add('summary-shake');
+      setTimeout(() => line.classList.remove('summary-shake'), 400);
+    }
+    const scope = blockedScope;
+    if (scope) {
+      scope.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const firstEmpty = scope.querySelector(
+        '.stake-name-in:placeholder-shown, .stake-email-in:placeholder-shown, ' +
+        '.stake-qty-in:placeholder-shown, .block-exercise-price:placeholder-shown, ' +
+        '.stake-relationship, select:invalid, input:placeholder-shown'
+      );
+      const target = firstEmpty && !firstEmpty.value ? firstEmpty : scope.querySelector('input, select');
+      if (target) { try { target.focus({ preventScroll: true }); } catch (e) { target.focus(); } }
+      scope.classList.add('block-blocked');
+      setTimeout(() => scope.classList.remove('block-blocked'), 1600);
+    }
+    return true;
+  }
+
   function submitAction(action, clickedBtn, busyLabel, idleLabel) {
+    if (reportBlocked()) return;
     const payload = {
       action,
       security_type: SEC_TYPE,
