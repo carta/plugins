@@ -29,6 +29,7 @@ import { csvFilename, downloadCsv, toCsv } from "../model/csv.js";
 import { shares } from "../model/format.js";
 import { formatTenure, tenureMonths } from "../model/tenure.js";
 import { applyFilters, levelRank, totalEquity } from "../model/cohort.js";
+import { DEFAULT_GRANT_REASON, reasonFor } from "../model/grantReason.js";
 import {
   addAll, cartRows, diff, headerState, hiddenCount, reconcile, removeAll, toggle,
 } from "../model/cart.js";
@@ -238,7 +239,7 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
   const [cart, setCart] = useState(() => new Set());
   const [dropped, setDropped] = useState(0);
   const {
-    saved, savedOverrides, savedSettings, savedFilters,
+    saved, savedOverrides, savedReasons, savedSettings, savedFilters,
     scenarios, activeId,
     loading: cartLoading, conflict, saving, futureDoc, save, reload,
     switchScenario, createScenario, duplicateScenario, renameScenario, deleteScenario,
@@ -257,10 +258,15 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
     setDropped(gone);
     // Hand-set grants are reconciled the same way: an override for someone no
     // longer in the snapshot is dropped rather than kept against a ghost row.
+    const present = new Set(ids);
     if (savedOverrides && savedOverrides.size) {
-      const present = new Set(ids);
       setOverrides(new Map([...savedOverrides].filter(([id]) => present.has(id))));
     }
+    // Reasons follow the cart for the same reason: a reason against someone who is
+    // no longer in the snapshot would be written back on the next save.
+    setReasons(savedReasons && savedReasons.size
+      ? new Map([...savedReasons].filter(([id]) => present.has(id)))
+      : new Map());
     // The cohort filters, restored so a reload lands on the same list. Absent means
     // this scenario never recorded any, which is the initial state already.
     const f = savedFilters || NO_FILTERS;
@@ -278,7 +284,7 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
     setSettings(savedSettings || null);
     // Hand-set grants belong to the draft that recorded them.
     if (!savedOverrides || !savedOverrides.size) setOverrides(new Map());
-  }, [cartLoading, activeId, saved, savedOverrides, savedSettings, savedFilters, all]);
+  }, [cartLoading, activeId, saved, savedOverrides, savedReasons, savedSettings, savedFilters, all]);
 
   // The corporation's policy, and the settings the user is modelling with. The
   // settings START as the policy and diverge only when edited — `null` until the
@@ -288,6 +294,21 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
   // Per-employee hand-set grants, keyed by external_id. A Map rather than an
   // object so an id that looks numeric cannot be reordered or coerced.
   const [overrides, setOverrides] = useState(() => new Map());
+  // Why each grant is being made. Sparse: only employees whose reason differs from
+  // the default are held, so an untouched plan carries an empty map.
+  const [reasons, setReasons] = useState(() => new Map());
+
+  const setReason = (externalId, value) => {
+    setReasons((prev) => {
+      const next = new Map(prev);
+      // Back to the default clears the entry rather than storing it — the stored
+      // map is the set of DEVIATIONS, not a row per employee.
+      if (!value || value === DEFAULT_GRANT_REASON) next.delete(externalId);
+      else next.set(externalId, value);
+      save({ reasons: next });
+      return next;
+    });
+  };
 
   const setOverride = (externalId, value) => {
     setOverrides((prev) => {
@@ -503,6 +524,8 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
         asOf={asOf}
         overrides={overrides}
         onOverride={setOverride}
+        reasons={reasons}
+        onReason={setReason}
       />
     );
   }
@@ -516,6 +539,9 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
       name: r.full_name,
       externalId: r.external_id,
       shares: grantForRow(r, liveSettings, policySettings, overrides).shares,
+      // Carried into the handoff CSV's Grant Reason column, per row rather than the
+      // single hardcoded "Refresh" it sent before this column existed.
+      reason: reasonFor(r.external_id, reasons),
     }));
     return (
       <ReviewStep

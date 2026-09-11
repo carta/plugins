@@ -14,6 +14,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiToken } from "./useData.js";
+import { reasonsFromStored, reasonsToStore } from "../model/grantReason.js";
 
 const SCENARIOS = "/api/scenarios";
 
@@ -214,6 +215,13 @@ export function docWithPlan(doc, corporationId, plan, scenarioId) {
         next.grantOverrides = Object.fromEntries([...plan.overrides].sort());
       } else delete next.grantOverrides;
     }
+    if (has("reasons")) {
+      const stored = reasonsToStore(plan.reasons);
+      // Omitted when nothing differs from the default, matching grantOverrides: an
+      // empty object reads as "reasons were cleared" rather than "never set one".
+      if (Object.keys(stored).length) next.grantReasons = stored;
+      else delete next.grantReasons;
+    }
     if (has("settings")) {
       // Written unconditionally once known, unlike filters: a scenario whose whole
       // point is "the same cohort at a lower multiple" IS its settings, and leaving
@@ -398,6 +406,17 @@ export function docWithActiveScenario(doc, id) {
   return { ...doc, activeScenarioId: id };
 }
 
+/** The active scenario's per-employee grant reasons, as a Map.
+ *
+ *  Empty when none were set, which means every grant carries the default. Stored
+ *  sparsely for the same reason overrides are: a map holding "Refresh" for all 134
+ *  employees says nothing a reader could not infer.
+ */
+export function reasonsFromDoc(doc, corporationId) {
+  const active = activeScenario(doc, corporationId);
+  return reasonsFromStored(active && active.grantReasons);
+}
+
 /** The active scenario's hand-set grants, as a Map. Empty when there are none. */
 export function overridesFromDoc(doc, corporationId) {
   const cartDoc = doc && doc.kind === "ctc-refresh-scenarios" ? doc : null;
@@ -430,6 +449,7 @@ export function overridesFromDoc(doc, corporationId) {
 export function useScenario(corporationId) {
   const [saved, setSaved] = useState(null);
   const [savedOverrides, setSavedOverrides] = useState(() => new Map());
+  const [savedReasons, setSavedReasons] = useState(() => new Map());
   // Null means "this scenario recorded none", which the planner answers by falling
   // back to the corporation's policy — NOT the same as an empty object.
   const [savedSettings, setSavedSettings] = useState(null);
@@ -472,6 +492,7 @@ export function useScenario(corporationId) {
         setActiveId(activeIdOf(doc));
         setSaved(cartFromDoc(doc, corporationId));
         setSavedOverrides(overridesFromDoc(doc, corporationId));
+        setSavedReasons(reasonsFromDoc(doc, corporationId));
         setSavedSettings(settingsFromDoc(doc, corporationId));
         setSavedFilters(filtersFromDoc(doc, corporationId));
       } catch (e) {
@@ -507,6 +528,7 @@ export function useScenario(corporationId) {
       const wrote = (k) => Object.prototype.hasOwnProperty.call(plan, k);
       if (wrote("cart")) setSaved(new Set(plan.cart));
       if (wrote("overrides")) setSavedOverrides(new Map(plan.overrides || []));
+      if (wrote("reasons")) setSavedReasons(new Map(plan.reasons || []));
       if (wrote("settings")) setSavedSettings(plan.settings || null);
       if (wrote("filters")) setSavedFilters(plan.filters || null);
       setConflict(false);
@@ -588,6 +610,7 @@ export function useScenario(corporationId) {
       setActiveId(activeIdOf(doc));
       setSaved(cartFromDoc(doc, corporationId));
       setSavedOverrides(overridesFromDoc(doc, corporationId));
+      setSavedReasons(reasonsFromDoc(doc, corporationId));
       setSavedSettings(settingsFromDoc(doc, corporationId));
       setSavedFilters(filtersFromDoc(doc, corporationId));
       setConflict(false);
@@ -618,6 +641,7 @@ export function useScenario(corporationId) {
       setActiveId(activeIdOf(next));
       setSaved(cartFromDoc(next, corporationId));
       setSavedOverrides(overridesFromDoc(next, corporationId));
+      setSavedReasons(reasonsFromDoc(next, corporationId));
       setSavedSettings(settingsFromDoc(next, corporationId));
       setSavedFilters(filtersFromDoc(next, corporationId));
       setError(null);
@@ -674,7 +698,7 @@ export function useScenario(corporationId) {
   }, [commit]);
 
   return {
-    saved, savedOverrides, savedSettings, savedFilters,
+    saved, savedOverrides, savedReasons, savedSettings, savedFilters,
     scenarios, activeId,
     loading, error, conflict, saving, futureDoc,
     save, flush, reload,

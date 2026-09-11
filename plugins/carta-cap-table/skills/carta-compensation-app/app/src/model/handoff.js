@@ -15,6 +15,7 @@
 // path's own rule: unresolved is blank, never inferred.
 
 import { toCsv } from "./csv.js";
+import { DEFAULT_GRANT_REASON, isGrantReason } from "./grantReason.js";
 
 /** Column headers from issuance-import's documented vocabulary.
  *
@@ -32,7 +33,14 @@ const HEADERS = ["Name", "Quantity", "Grant Reason"];
 export function handoffRows(grants) {
   return grants
     .filter((g) => g.shares != null && g.shares > 0)
-    .map((g) => [g.name || "", String(g.shares), "Refresh"]);
+    // An unrecognised reason falls back rather than passing through: issuance-import
+    // matches this column against a synonym list and silently DROPS it on a
+    // near-miss, so a bad value issues a grant with no reason and says nothing.
+    .map((g) => [
+      g.name || "",
+      String(g.shares),
+      isGrantReason(g.reason) ? g.reason : DEFAULT_GRANT_REASON,
+    ]);
 }
 
 export function handoffCsv(grants) {
@@ -145,9 +153,15 @@ export function handoffPrompt({ grants, corporation, corporationId, settings, as
     );
   }
 
+  // Only claim one reason when there IS one. A prompt that says "Refresh for every
+  // row" over a plan holding three different reasons is a statement the CSV beside
+  // it contradicts, and the reader has no way to tell which to believe.
+  const reasons = [...new Set(rows.map((r) => r[2]))];
   lines.push(
     "",
-    "Grant reason is Refresh for every row.",
+    reasons.length === 1
+      ? `Grant reason is ${reasons[0]} for every row.`
+      : `Grant reasons vary by row — ${reasons.join(", ")}. Use the reason in each row.`,
     "",
     "IMPORTANT — these are NOT in the plan and must not be guessed:",
     "- Vesting schedule",

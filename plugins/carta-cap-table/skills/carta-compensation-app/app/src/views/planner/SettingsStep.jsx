@@ -19,6 +19,7 @@ import {
   availableUnits, currencyOf, formatInUnit, perSharePrice, unitLabel,
 } from "../../model/equityUnits.js";
 import { tenureMonths } from "../../model/tenure.js";
+import { DEFAULT_GRANT_REASON, GRANT_REASONS, reasonFor } from "../../model/grantReason.js";
 import {
   cadenceLabel, eligibility, grantForRow, grantRange, joinMonths, planTotals,
   rangeStanding, scaleTargetForCadence, splitMonths, targetShares,
@@ -195,6 +196,49 @@ function EquityUnitToggle({ unit, onUnit, equityUnits }) {
 }
 
 
+/** The Grant reason column — why this grant is being made.
+ *
+ *  NOT a free-text note. The value rides into Carta through the handoff CSV, where
+ *  issuance-import matches it against a synonym list and silently DROPS the column
+ *  on a near-miss — so an invented reason issues a grant with no reason at all and
+ *  nothing says so. The options are Carta's own vocabulary, and nothing else can
+ *  be entered.
+ *
+ *  Everyone defaults to Refresh, which is what the handoff sent for every row
+ *  before this column existed. Only a row that DIFFERS is stored, so an untouched
+ *  plan writes no reasons at all.
+ */
+function ReasonCell({ externalId, name, reasons, onChange }) {
+  const value = reasonFor(externalId, reasons);
+  const isDefault = value === DEFAULT_GRANT_REASON;
+  return (
+    <Td align="left">
+      <select
+        value={value}
+        aria-label={`Grant reason for ${name}`}
+        onChange={(e) => onChange(externalId, e.target.value)}
+        title={isDefault
+          ? "Why this grant is being made. Sent to issuance with the plan."
+          : `Set to ${value} — the rest of this plan is ${DEFAULT_GRANT_REASON}.`}
+        style={{
+          width: "100%", height: 32, padding: "0 6px",
+          fontSize: FS.md, fontFamily: "inherit",
+          // A changed reason is worth seeing at a glance down a 131-row table; the
+          // default is the quiet case and stays unremarkable.
+          color: isDefault ? C.textSubtle : C.textDefault,
+          fontWeight: isDefault ? 400 : 500,
+          background: C.surfaceDefault,
+          border: `1px solid ${C.borderDefault}`, borderRadius: RADIUS,
+        }}
+      >
+        {GRANT_REASONS.map((r) => (
+          <option key={r.value} value={r.value}>{r.label}</option>
+        ))}
+      </select>
+    </Td>
+  );
+}
+
 /** The Grant column: a figure, its provenance, and a way to change it.
  *
  *  Three provenances, deliberately distinguished — someone reading this column has
@@ -278,7 +322,7 @@ function GrantCell({
 
 export default function SettingsStep({
   rows, policySettings, settings, onSettings, onBack, onNext, asOf,
-  overrides, onOverride, poolBar, equityUnits,
+  overrides, onOverride, reasons, onReason, poolBar, equityUnits,
 }) {
   // Shares by default: the report's own figure, and the only unit that needs
   // no corporation-level input.
@@ -577,17 +621,22 @@ export default function SettingsStep({
               <table style={{ width: "100%", minWidth: 760, tableLayout: "fixed" }}>
                 <thead>
                   <tr>
-                    <Th width="18%" align="left">Name</Th>
-                    <Th width="8%" align="left">Level</Th>
-                    <Th width="11%" align="left">Area</Th>
-                    <Th width="13%" align="left">Specialization</Th>
-                    <Th width="9%">Tenure</Th>
-                    <Th width="13%">Benchmark</Th>
-                    <Th width="13%">Grant</Th>
-                    {/* "Suggested Range" rather than "Range": the policy field above
+                    <Th width="15%" align="left">Name</Th>
+                    <Th width="7%" align="left">Level</Th>
+                    <Th width="9%" align="left">Area</Th>
+                    <Th width="11%" align="left">Specialization</Th>
+                    <Th width="7%">Tenure</Th>
+                    <Th width="10%">Benchmark</Th>
+                    {/* Range before Grant: the corridor is the recommendation and the
+                        grant is the decision, so reading left to right goes from what
+                        policy suggests, to what this plan does, to why.
+
+                        "Suggested Range" rather than "Range": the policy field above
                         is already labelled Suggested Grant Range, and the two were
                         naming the same number differently. */}
-                    <Th width="15%">Suggested Range</Th>
+                    <Th width="14%">Suggested Range</Th>
+                    <Th width="12%">Grant</Th>
+                    <Th width="15%" align="left">Grant reason</Th>
                   </tr>
                 </thead>
                 <tbody>
@@ -626,6 +675,12 @@ export default function SettingsStep({
                           {formatInUnit(
                             row.four_year_grant_benchmark_num_shares, unit, equityUnits, shares)}
                         </Td>
+                        <Td mono subtle={min == null}>
+                          {min == null
+                            ? "—"
+                            : `${formatInUnit(min, unit, equityUnits, shares)} – `
+                              + `${formatInUnit(max, unit, equityUnits, shares)}`}
+                        </Td>
                         <GrantCell
                           row={row}
                           shares={sh}
@@ -637,12 +692,12 @@ export default function SettingsStep({
                           unit={unit}
                           equityUnits={equityUnits}
                         />
-                        <Td mono subtle={min == null}>
-                          {min == null
-                            ? "—"
-                            : `${formatInUnit(min, unit, equityUnits, shares)} – `
-                              + `${formatInUnit(max, unit, equityUnits, shares)}`}
-                        </Td>
+                        <ReasonCell
+                          externalId={row.external_id}
+                          name={row.full_name || row.external_id}
+                          reasons={reasons}
+                          onChange={onReason}
+                        />
                       </tr>
                     );
                   })}
