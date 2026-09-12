@@ -850,9 +850,8 @@ def parse_file(path: Path, sheet: Optional[str] = None) -> Parsed:
         security_type = _detect_security_type(mapping.values(), target.name)
         if security_type is None:
             raise ParseError(
-                "Couldn't tell whether {!r} holds certificates or option grants.".format(
-                    target.name
-                )
+                "Couldn't tell whether {!r} holds certificates, option grants or "
+                "profits interest units.".format(target.name)
             )
         candidates = [(target, header_idx, mapping, unmapped, security_type)]
     else:
@@ -884,8 +883,9 @@ def parse_file(path: Path, sheet: Optional[str] = None) -> Parsed:
             skipped.append({
                 "row": line,
                 "name": _text(_cell(record, "name")),
-                "reason": "This skill issues certificates and option grants; "
-                          "{} are done in the Drafts UI.".format(out_of_scope),
+                "reason": "This skill issues certificates, option grants and "
+                          "profits interest units; {} are done in the "
+                          "Drafts UI.".format(out_of_scope),
             })
             continue
         row = build_row(record, security_type)

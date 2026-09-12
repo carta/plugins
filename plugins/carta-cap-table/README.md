@@ -45,7 +45,7 @@ After installing, restart Claude Code and run `/mcp` to complete OAuth authentic
 | `carta-market-benchmarks` | Cap structure patterns as market benchmarks |
 | `carta-compensation-benchmarks` | Carta Total Comp market benchmarks (salary, equity, total cash) for a role |
 | `carta-compensation-rolematcher` | Classify a job title into the CTC compensation taxonomy |
-| `carta-issuance` | Issue certificates and option grants; draft shares or resume from a draft set |
+| `carta-issuance` | Issue certificates, option grants and profits interest units; draft shares, grants or units, or resume from a draft set |
 | `carta-modify-issuables` | Amend issued certificates and option grants — dates, legend, notes, quantity, exercise price |
 | `carta-captable-home-build` | Build or redeploy the `Carta Home - <company>` live artifact — ownership, fully diluted summary, option pool, stakeholders, drafts, and a skill directory for one company |
 | `carta-interaction-reference` | Behavioral rules for presenting cap table data (voice, tone, precision, provenance) |

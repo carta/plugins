@@ -24,9 +24,10 @@ by `carta-issuance` Phase 2. **The panel is read-only** — every field was
 already decided per-stakeholder in the config panel (`issuance-config`), so this
 surface is a confirmation summary, not another editing pass; corrections happen
 via **Back to edit**, which re-opens the config panel with every block restored.
-**One template serves both security types** — the shared chrome (top bar,
+**One template serves all three security types** — the shared chrome (top bar,
 modals, footer, save/submit JS) is fixed, and everything that differs between
-option grants and certificates is injected as a per-type **block substitution**.
+option grants, certificates and profits interest units is injected as a per-type
+**block substitution**.
 Those blocks (`DETAIL_TABLE`, `KPI_STRIP`, `PLAN_CARD`) are produced by
 **`scripts/build_review.py`** from the resolved rows — `carta-issuance` runs the
 script and passes the outputs via `--substitute-file`; **the model never
