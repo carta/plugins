@@ -62,6 +62,31 @@ const PLACEHOLDER = "Ask Claude to change this console — e.g. add an interpola
 // The reply is transient — the durable output is the edit, which the page reloads to
 // show. So it gets a few lines and a scrollbar, not room to grow: this control lives
 // among a tab's other controls, and a panel that resizes on every turn shifts them.
+/** "Working" plus three pulsing dots, for the gap before the first token arrives.
+ *
+ *  The dots are staggered by delay rather than by three separate animations, and
+ *  each is aria-hidden: a screen reader should hear "Working" once, not read three
+ *  full stops. `prefers-reduced-motion` is honoured in GLOBAL_CSS, where the dots
+ *  hold a mid-opacity instead of pulsing.
+ */
+function Working() {
+  return (
+    <span role="status" aria-live="polite">
+      Working
+      {[0, 1, 2].map((i) => (
+        <span
+          key={i}
+          aria-hidden="true"
+          className="ctc-dot"
+          style={{ animationDelay: `${i * 0.16}s` }}
+        >
+          .
+        </span>
+      ))}
+    </span>
+  );
+}
+
 const REPLY_LINES = 3;
 const REPLY_LINE_HEIGHT = 1.5;
 
@@ -204,7 +229,7 @@ export default function AskBar({ token, placeholder = PLACEHOLDER }) {
           maxHeight: `${REPLY_LINE_HEIGHT * REPLY_LINES}em`,
           overflowY: "auto",
         }}>
-          {error ? `⚠️ ${error}` : (reply || "Working…")}
+          {error ? `⚠️ ${error}` : (reply || <Working />)}
           {stuck && (
             <button
               type="button"

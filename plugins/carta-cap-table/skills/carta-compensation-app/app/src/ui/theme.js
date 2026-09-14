@@ -180,6 +180,23 @@ export const GLOBAL_CSS = `
     color: ${C.textDefault};
     font-family: ${SANS};
   }
+  /* The ask box's working indicator. A turn spawns a subprocess and can run for
+     seconds before its first token, and a still "Working…" reads as a hung box.
+     Three dots rather than a spinner: it sits inline with text, so it has to hold
+     a text baseline rather than occupy a box of its own. */
+  @keyframes ctc-dot {
+    0%, 80%, 100% { opacity: 0.25; }
+    40%           { opacity: 1; }
+  }
+  .ctc-dot {
+    animation: ctc-dot 1.4s infinite ease-in-out both;
+  }
+  /* Motion that cannot be turned off is worse than none. The dots hold their
+     mid-state, so the indicator still reads as present without animating. */
+  @media (prefers-reduced-motion: reduce) {
+    .ctc-dot { animation: none; opacity: 0.6; }
+  }
+
   table { border-collapse: collapse; }
   th, td { text-align: left; }
   button { font-family: inherit; cursor: pointer; }

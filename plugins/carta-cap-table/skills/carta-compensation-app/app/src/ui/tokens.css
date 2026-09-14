@@ -31,7 +31,21 @@
 }
 
 :root {
-  color-scheme: light dark;
+  /* Pinned light rather than following the OS.
+   *
+   * The 70 light-dark() pairs below resolve to their light side automatically, so
+   * this one line is the whole change — but it is doing real work. Ink's brand
+   * ramps are FLAT: brand-blue, brand-yellow and brand-black carry no dark
+   * variant, and every time this console rendered dark one of them landed
+   * near-invisible against a near-black ground. That trap cost three separate
+   * fixes (row tints, the primary button's label, the notice card at 3.09:1).
+   *
+   * The console is a local, single-purpose tool, not a site someone lives in, so
+   * the value of honouring an OS preference does not outweigh shipping a surface
+   * whose contrast is only verified in one of its two themes. Revisit if the
+   * brand ramps ever gain dark variants.
+   */
+  color-scheme: light;
 
   /* === Brand colors === */
   --ink-color-global-brand-white: #FFFFFF;
