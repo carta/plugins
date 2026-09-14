@@ -18,8 +18,8 @@
 // — an <option> holds text, not buttons — so they sit alongside as siblings.
 
 import { useEffect, useRef, useState } from "react";
-import { C, FS, RADIUS } from "../../ui/theme.js";
-import { Select, Tag } from "../../ui/components.jsx";
+import { C, FS, HEADING, RADIUS } from "../../ui/theme.js";
+import { Menu, Select, Tag } from "../../ui/components.jsx";
 
 const BTN = {
   height: 40,
@@ -98,40 +98,60 @@ export default function ScenarioBar({
   return (
     <div style={{
       background: C.surface, border: `1px solid ${C.border}`, borderRadius: RADIUS,
-      padding: "10px 16px", display: "grid", gap: 10,
+      // Ink's vertical spacing scale (small / xsmall): 12px of breathing room
+      // around the bar's contents, and 8px between the title and the controls
+      // under it — Section's own header-to-body relationship, which is what this
+      // is. Was 10px/10px, off the scale in both places.
+      padding: "12px 16px", display: "grid", gap: 8,
     }}>
-      {/* Two rows: which plan this is, then what you can do to it.
-          On one line the four actions took a third of the bar and sat at the same
-          weight as the name, so the answer to "which draft am I in?" competed with
-          controls nobody needs on most visits. */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        {/* The name as a HEADING, not only as the selected value in a control.
-            Reading a form field to learn which plan you are looking at is the wrong
-            way round — with several drafts open, "which one is this?" is the
-            question the bar exists to answer. The dropdown switches; this says
-            where you are. */}
-        {/* No "SCENARIO" eyebrow above the name. It labelled a title that already
-            says what it is, and the two-line stack stood 48px tall against the
-            switcher's 40 — so centring the stack left the name itself sitting 12px
-            below the control beside it. One line, one baseline. */}
-        {!renaming && (
-          <span
-            title={active.name}
-            style={{
-              fontSize: FS.lg, fontWeight: 600, color: C.textDefault,
-              // Matches the switcher's height so both sit on the same centre line
-              // rather than being centred as boxes of different sizes.
-              height: 40, display: "inline-flex", alignItems: "center",
-              // Truncates rather than wrapping: a long name would otherwise push
-              // the pool bar and the table down on every step.
-              maxWidth: 360, minWidth: 0, overflow: "hidden",
-              textOverflow: "ellipsis", whiteSpace: "nowrap",
-            }}
-          >
-            {active.name}
-          </span>
-        )}
+      {/* The name on its own line, above the controls.
+          As a HEADING, not only as the selected value in a control: reading a form
+          field to learn which plan you are looking at is the wrong way round, and
+          with several drafts open "which one is this?" is the question the bar
+          exists to answer. The dropdown switches; this says where you are.
 
+          On its own line it also needs no truncation at 360px and no height
+          matching — it is not sharing a baseline with anything, so a long name
+          reads in full. */}
+      {!renaming && (
+        // An h2, not a span. Ink's Heading renders a real text element and takes an
+        // `as`, and product code reaches for heading-3 exactly here — the title of a
+        // named thing beside its controls (car/reporting's report folders do the
+        // same). A span left the one line that says which plan you are looking at
+        // with no heading semantics at all.
+        //
+        // h2 rather than h1 because the page's own <h1> is the corporation name.
+        <h2
+          title={active.name}
+          style={{
+            // Ink's heading-2: 20px/36px at weight 500, base sans.
+            //
+            // heading-3 is the ordinary card title, but Ink keeps heading-2 for a
+            // card that heads a whole screen rather than sitting among others —
+            // RFIBlock overrides Section's default for exactly that, and
+            // StandardTopBar and BillingSummary do the same. This bar names the
+            // plan every one of the three steps below it is about, which is that
+            // case.
+            //
+            // NOT the serif: only heading-1 carries SangBleu, and in product code
+            // heading-1 is a page, app-shell or modal title — nothing labels a card
+            // with it. It would also compete with the "Meetly" h1 above.
+            ...HEADING.h2, color: C.textDefault,
+            // Ink's `trim`, which its own card titles pass: the variant carries a
+            // 16px bottom margin meant for prose, and the grid gap already spaces
+            // this from the controls under it.
+            margin: 0,
+            minWidth: 0, overflow: "hidden",
+            textOverflow: "ellipsis", whiteSpace: "nowrap",
+          }}
+        >
+          {active.name}
+        </h2>
+      )}
+
+      {/* Controls: switcher and position on the left, save state and actions on
+          the right. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         {renaming ? (
           <input
             ref={inputRef}
@@ -197,42 +217,66 @@ export default function ScenarioBar({
               {saving ? "Saving…" : savedLabel(active.updatedAt)}
             </span>
           )}
-        </div>
-      </div>
 
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        {/* Duplicate leads: "the same cohort at a lower multiple" is the reason
-            this feature exists, and it should be the obvious next click. */}
-        <Btn
-          primary
-          onClick={() => onDuplicate(active.id)}
-          title="Copy this draft — cohort, grants and settings — as a starting point"
-        >
-          Duplicate
-        </Btn>
-        <Btn onClick={() => onCreate()} title="Start an empty draft">New</Btn>
-        <Btn
-          onClick={() => { setDraftName(active.name); setRenaming(true); }}
-          title="Rename this draft"
-        >
-          Rename
-        </Btn>
-        <Btn
-          disabled={only}
-          onClick={() => {
-            // The one destructive action here, and a draft can be an afternoon of
-            // work, so it asks. Naming it in the prompt is the point — "are you
-            // sure?" alone does not tell you what you are about to lose.
-            if (confirmDelete(`Delete the scenario "${active.name}"? This cannot be undone.`)) {
-              onDelete(active.id);
-            }
-          }}
-          title={only
-            ? "The last scenario cannot be deleted — there would be no plan to show"
-            : `Delete "${active.name}"`}
-        >
-          Delete
-        </Btn>
+          {/* Duplicate leads, and is the ONLY action kept at full size: "the same
+              cohort at a lower multiple" is the reason this feature exists, and it
+              should be the obvious next click.
+
+              The other three are occasional — New and Rename are rare, and Delete
+              is the one destructive act on the screen. On one row all four stood at
+              equal weight, which put Delete permanently beside the control people
+              reach for most; splitting them onto a second row relieved the
+              crowding without changing that, and cost 50px of height on all three
+              steps. Behind the menu, the bar is one row again and the destructive
+              action takes a deliberate step to reach. */}
+          <Btn
+            primary
+            onClick={() => onDuplicate(active.id)}
+            title="Copy this draft — cohort, grants and settings — as a starting point"
+          >
+            Duplicate
+          </Btn>
+          <Menu
+            label="More scenario actions"
+            align="right"
+            items={[
+              {
+                label: "New scenario",
+                title: "Start an empty draft",
+                onSelect: () => onCreate(),
+              },
+              {
+                label: "Rename…",
+                title: "Rename this draft",
+                onSelect: () => { setDraftName(active.name); setRenaming(true); },
+              },
+              {
+                label: "Delete scenario",
+                // Ruled off because it is a different KIND of action from the two
+                // above, not because it is tinted — Ink's menus carry no
+                // destructive colour, and the confirm dialog is what guards it.
+                separated: true,
+                // Kept VISIBLE but disabled on the last one. Hiding it would leave
+                // "why can't I delete this?" unanswered; the reason rides on the
+                // control instead.
+                disabled: only,
+                title: only
+                  ? "The last scenario cannot be deleted — there would be no plan to show"
+                  : `Delete "${active.name}"`,
+                onSelect: () => {
+                  // A draft can be an afternoon of work, so it asks. Naming it in
+                  // the prompt is the point — "are you sure?" alone does not tell
+                  // you what you are about to lose.
+                  if (confirmDelete(
+                    `Delete the scenario "${active.name}"? This cannot be undone.`,
+                  )) {
+                    onDelete(active.id);
+                  }
+                },
+              },
+            ]}
+          />
+        </div>
       </div>
     </div>
   );

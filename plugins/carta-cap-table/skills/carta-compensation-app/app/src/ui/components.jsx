@@ -15,7 +15,7 @@
 // with OS chrome and did not match Ink's 40px fields sitting next to them.
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
-import { C, FS, RADIUS, SANS } from "./theme.js";
+import { C, FS, RADIUS, SANS, SHADOW } from "./theme.js";
 
 /** Ink's chevron-down. Static: this app's menus only ever open downward.
  *
@@ -289,7 +289,9 @@ export function MultiSelect({ label, options, selected, onToggle, onAll, allLabe
             background: C.surfaceDefault,
             border: `1px solid ${C.borderDefault}`,
             borderRadius: RADIUS,
-            boxShadow: "0 4px 12px rgba(0,0,0,0.12)",
+            // Ink's shadow-medium, as .ink-menu calls for. Was a hand-written
+            // rgba() that no dark-mode surface adapts with.
+            boxShadow: SHADOW.medium,
             padding: 4,
           }}
         >
@@ -327,6 +329,165 @@ export function MultiSelect({ label, options, selected, onToggle, onAll, allLabe
               />
               {o.label}
             </label>
+          ))}
+        </div>
+      )}
+    </span>
+  );
+}
+
+/** A "more actions" menu behind a single trigger.
+ *
+ *  For a group of occasional actions that should not sit permanently at the same
+ *  visual weight as the one people actually reach for — and, when one of them is
+ *  destructive, should take a deliberate extra step to reach.
+ *
+ *  `items` are `{ label, onSelect, title, disabled, separated, trailing }`.
+ *  `separated` draws Ink's rule above the item, for a genuine group break;
+ *  `trailing` is an optional right-pinned node (a Tag, say); `disabled` keeps the
+ *  item VISIBLE with its reason on the control, rather than hiding it, so "why
+ *  can't I delete this?" has an answer on screen.
+ *
+ *  There is deliberately NO danger variant, because Ink's DropdownItem has none —
+ *  see the note in MenuItem.
+ *
+ *  Dismissal is MultiSelect's, deliberately: outside-click and Escape, with the
+ *  listeners bound only while open. A menu that survives the next click covers the
+ *  thing it was opened from.
+ */
+/** One row of a Menu. Its own component because hover and active are per-item
+ *  state, and Ink's .ink-menu__item specifies both — a menu that does not tint
+ *  under the cursor reads as a static list, and one that does not darken on press
+ *  feels unresponsive at the moment of clicking.
+ *
+ *  A disabled item takes NEITHER tint: it is on screen to explain why it cannot be
+ *  used, not to invite the click.
+ */
+function MenuItem({ item, onRun }) {
+  const [hover, setHover] = useState(false);
+  const [active, setActive] = useState(false);
+  const tint = item.disabled ? "transparent"
+    : active ? C.menuItemActive : hover ? C.menuItemHover : "transparent";
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      disabled={item.disabled}
+      title={item.title}
+      onClick={onRun}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => { setHover(false); setActive(false); }}
+      onMouseDown={() => setActive(true)}
+      onMouseUp={() => setActive(false)}
+      style={{
+        // Ink's DropdownItem, value for value: 6px/12px, body-3 (14px/24px),
+        // text-default, full width.
+        //
+        // A FLEX ROW with space-between rather than a block of text — that is what
+        // lets an item carry a trailing badge ("New", "Staff") pinned to the right
+        // edge, as Carta's own overflow menus do. Nothing here uses one yet; the
+        // layout is Ink's, so one can be added without restyling the item.
+        display: "flex", alignItems: "baseline", justifyContent: "space-between",
+        width: "100%", textAlign: "left",
+        font: `400 ${FS.md}px/24px ${SANS}`,
+        // NO danger colour. Ink's DropdownItem has no destructive variant at all —
+        // Carta's own menus render "Terminate stakeholder" in the same text-default
+        // as everything around it, and let the confirm dialog carry the weight. A
+        // red item here would be this console inventing a convention.
+        color: item.disabled ? C.textDisabled : C.textDefault,
+        background: tint,
+        border: "none", borderRadius: 0,
+        padding: "6px 12px",
+        cursor: item.disabled ? "not-allowed" : "pointer",
+        whiteSpace: "nowrap",
+      }}
+    >
+      <span>{item.label}</span>
+      {item.trailing}
+    </button>
+  );
+}
+
+export function Menu({ label = "More actions", items, align = "left" }) {
+  const [open, setOpen] = useState(false);
+  const [hover, setHover] = useState(false);
+  const [focus, setFocus] = useState(false);
+  const wrapRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDown = (e) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+    };
+    const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <span ref={wrapRef} style={{ position: "relative", display: "inline-flex" }}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        onFocus={() => setFocus(true)}
+        onBlur={() => setFocus(false)}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        // An icon-only trigger is guessed at until hovered, so it carries a real
+        // accessible name rather than leaving screen readers with the glyph.
+        aria-label={label}
+        title={label}
+        style={{
+          height: 40, width: 40, padding: 0,
+          font: `500 ${FS.md}px/1 ${SANS}`,
+          color: C.textDefault, background: C.surfaceDefault,
+          border: `1px solid ${focus || open ? C.linkDefault : hover ? C.borderHover : C.borderDefault}`,
+          borderRadius: RADIUS,
+          boxShadow: focus ? `0 0 0 4px ${C.focusRing}` : "none",
+          outline: "none", cursor: "pointer", letterSpacing: "0.08em",
+        }}
+      >
+        ···
+      </button>
+
+      {open && (
+        // Ink's DropdownBox, value for value from ink-inputs: border-subtle,
+        // radius-subtle, shadow-SMALL (the menu floats close to its trigger; medium
+        // is for surfaces that sit further off the page), 2px off the trigger, and
+        // 6px of padding on the block axis only — items run the full width so their
+        // hover tint reaches the surface edge.
+        <div
+          role="menu"
+          aria-label={label}
+          style={{
+            position: "absolute", top: "100%", marginTop: 2, zIndex: 20,
+            [align === "right" ? "right" : "left"]: 0,
+            minWidth: 200,
+            background: C.surfaceDefault,
+            border: `1px solid ${C.borderSubtle}`,
+            borderRadius: RADIUS,
+            boxShadow: SHADOW.small,
+            padding: "6px 0",
+          }}
+        >
+          {items.map((item, i) => (
+            <span key={item.label}>
+              {/* Ink's DropdownSeparator: border-default at 1px with 4px above and
+                  below. Opt-in per item rather than implied by anything, since the
+                  real component separates GROUPS, not "the dangerous one". */}
+              {item.separated && i > 0 && (
+                <span style={{
+                  display: "block", height: 1, background: C.borderDefault, margin: "4px 0",
+                }} />
+              )}
+              <MenuItem item={item} onRun={() => { setOpen(false); item.onSelect(); }} />
+            </span>
           ))}
         </div>
       )}

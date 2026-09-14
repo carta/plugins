@@ -115,6 +115,20 @@ export const C = {
 
   // Tints the table/tag recipes call for.
   rowHover: "var(--ink-color-global-brand-gray-30)",
+
+  // Ink's Dropdown item states, from ink-inputs' DropdownItem/styles.ts. NOT the
+  // brand-gray ramp: the real component uses the surface-lightgray pair, which is
+  // theme-aware where the flat brand ramp is not — the same trap this file's
+  // interactivePrimary and row-tint comments describe.
+  menuItemHover: "var(--ink-color-global-surface-lightgray-hover)",
+  menuItemActive: "var(--ink-color-global-surface-lightgray-active)",
+  // Ink's --ink-dropdown-item-font-color-disabled points at text-disabled, which
+  // upstream is #A7AAAA — the same value as brand-gray-60. This file's tokens.css
+  // carries #CECFCF for that token, a step lighter than upstream, which is what the
+  // textQuiet comment above is working around. Reaching for gray-60 directly gets
+  // the colour Ink's real dropdown renders without editing a shared token that
+  // everything else already depends on at its current value.
+  textDisabled: "var(--ink-color-global-brand-gray-60)",
   // Row tints, and the SECOND instance of the flat-brand-colour trap the
   // interactivePrimary comment above describes. Ink's brand-blue ramp does not
   // adapt, so a row painted with it went near-white under near-white text in dark
@@ -170,6 +184,37 @@ export const FS = {
 // controls. This app previously used a single 6px, which is not an Ink step; 4px is the
 // honest mapping for what RADIUS is actually used on here (chips, buttons, cards).
 export const RADIUS = 4;
+
+/** Ink's elevation scale, for surfaces that float above the page.
+ *
+ *  Named rather than inlined because a hand-written `0 4px 12px rgba(0,0,0,0.12)`
+ *  is the kind of near-miss that reads as almost-Carta: close enough not to be
+ *  noticed in isolation, wrong beside a real Ink surface. `medium` is what
+ *  components.md's .ink-menu recipe calls for.
+ */
+/** Ink's heading scale, as ink-foundations' `Heading variant=` renders it.
+ *
+ *  Section titles in carta-frontend-platform are `heading-3` (Section.tsx), which
+ *  is 16px/28px at weight 500 — NOT the 18px/600 that "looks like a heading" if you
+ *  pick values by eye. The difference is the one between a Carta page and a page
+ *  that resembles one.
+ */
+export const HEADING = {
+  // The card/panel title. What Section renders for `title=`, and what product code
+  // hand-rolls inside a Tile — 126 of those against 83 for heading-2.
+  h3: { fontSize: 16, lineHeight: "28px", fontWeight: 500 },
+  // One step up, for a card that heads a whole screen rather than sitting among
+  // others. The escape hatch RFIBlock takes when it overrides Section's default,
+  // and what StandardTopBar and BillingSummary use. Still the base sans: only
+  // heading-1 carries SangBleu, and that is reserved for page titles.
+  h2: { fontSize: 20, lineHeight: "36px", fontWeight: 500 },
+};
+
+export const SHADOW = {
+  small: "var(--ink-elevation-global-shadow-small)",
+  medium: "var(--ink-elevation-global-shadow-medium)",
+  large: "var(--ink-elevation-global-shadow-large)",
+};
 
 /** Injected once at mount: resets and the few rules inline styles can't express. */
 export const GLOBAL_CSS = `
