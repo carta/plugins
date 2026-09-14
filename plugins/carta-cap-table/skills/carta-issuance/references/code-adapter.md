@@ -215,9 +215,9 @@ uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-issuance/issuance-review/scripts/buil
 # with that same "" default, so an empty file is fine either way).
 ```
 
-Then provide the shared scalars (`CORP_NAME`, `CORP_ID`, `ENV_HOST` hardcoded to
-`app.carta.com` (no MCP command resolves an environment-specific host — a deliberate,
-accepted tradeoff), `ISSUE_DATE` long-form, `DRAFT_SET_ID` (the real id
+Then provide the shared scalars (`CORP_NAME`, `CORP_ID`, `ENV_HOST` — the host from
+`get_current_user`'s `base_url`, without its scheme (`demo.carta.team`), never a hardcoded
+`app.carta.com`, which would link a test issuance into production, `ISSUE_DATE` long-form, `DRAFT_SET_ID` (the real id
 [save-validate-flow.md](save-validate-flow.md) just returned — never the
 literal `"new"`; save-validate-flow always runs first, so there's always a real id by now),
 `FLOW_TITLE`, `SUBHEADING`, `DETAIL_TITLE`, `DETAIL_INTRO`, `VIEW_URL_PATH`,

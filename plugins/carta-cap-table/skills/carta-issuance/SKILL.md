@@ -325,6 +325,12 @@ substitute it everywhere; only the prefix varies — tool and command names neve
 exception: the frontmatter `allowed-tools` entries are literal grant patterns — never
 substitute there.
 
+**Record `BASE_URL` here too**, from the session's `get_current_user` result — it returns
+`base_url` (e.g. `https://demo.carta.team`) alongside `environment`. Every Carta link this
+skill emits is built from it, because a hardcoded host sends the user into a different
+environment than the one they just wrote to. Never derive it from the tool prefix. If it is
+genuinely absent, say the environment is unknown rather than assuming production.
+
 | Purpose | Command | Tool |
 |---|---|---|
 | Reference data for the collection surface, **plus named stakeholders** via `stakeholder_names` | `cap_table:get:issuance_init` | `fetch` |
@@ -1098,15 +1104,15 @@ they aren't in the response.
 - **Option grant:** Stakeholder · Plan · Option type · Quantity · Exercise price · Issue date.
 - **PIU:** Holder · Unit class · Quantity · Threshold value · Issue date.
 
-Link to the ledger at `https://app.carta.com/<VIEW_URL_PATH>`, where `VIEW_URL_PATH` is
+Link to the ledger at `<BASE_URL>/<VIEW_URL_PATH>`, where `BASE_URL` is the host recorded in
+[Step 2a](#step-2a--carta-command-names-hardcoded-never-discovered) and `VIEW_URL_PATH` is
 `options/list/<CORP_ID>/` (option grant), `certificates/list/<CORP_ID>/` (certificate), or
 `options/piu/list/<CORP_ID>/` (PIU).
 **Never invent a different path** — `corporations/<corporation_id>/equity/options/` looks
-plausible and is not a real route. `app.carta.com` is a deliberate hardcode: no MCP command
-resolves an environment-specific host, so this link is only correct in production and will
-misdirect a sandbox/test session — a known, accepted tradeoff, not an oversight. There is no
-verified URL for a specific plan's detail page, so name the plan in plain text, not as a second
-link. Then close per [Closing](#closing).
+plausible and is not a real route. **Never hardcode a host either:** a demo or test issuance
+linked to `app.carta.com` sends the admin to a production company that doesn't hold the
+securities they just issued. There is no verified URL for a specific plan's detail page, so
+name the plan in plain text, not as a second link. Then close per [Closing](#closing).
 
 ## Save as draft (escape hatch)
 
@@ -1161,11 +1167,11 @@ issue, the issue date in long form (`Month D, YYYY`).
 
 | State | Template |
 |---|---|
-| Issued, certificate | *"N \<share class\> certificates issued on \<company\> — \<issue date\>. Open [\<company\>'s securities ledger](https://app.carta.com/\<VIEW_URL_PATH\>) in Carta to see the new certificates."* |
-| Issued, grant (uniform) | *"N \<so_type\> option grants issued on \<company\> — \<issue date\>. Open [\<company\>'s securities ledger](https://app.carta.com/\<VIEW_URL_PATH\>) in Carta to see the new grants, or find them under the \<plan name\> plan."* |
+| Issued, certificate | *"N \<share class\> certificates issued on \<company\> — \<issue date\>. Open \<company\>'s securities ledger in Carta — link text *\<company\>'s securities ledger*, href `\<BASE_URL\>/\<VIEW_URL_PATH\>` — to see the new certificates."* |
+| Issued, grant (uniform) | *"N \<so_type\> option grants issued on \<company\> — \<issue date\>. Open \<company\>'s securities ledger in Carta — link text *\<company\>'s securities ledger*, href `\<BASE_URL\>/\<VIEW_URL_PATH\>` — to see the new grants, or find them under the \<plan name\> plan."* |
 | Issued, grant (mixed) | as above, but *"N option grants (X ISOs, Y NSOs) issued on …"* |
-| Issued, PIU | *"N \<unit class\> profits interest units issued on \<company\> — \<issue date\>. Open [\<company\>'s profits interest ledger](https://app.carta.com/\<VIEW_URL_PATH\>) in Carta to see the new units."* |
-| Saved as draft | *"N \<security type\> drafts saved on \<company\> — finish in the [Drafts UI](https://app.carta.com/drafts/\<security_type\>/\<CORP_ID\>/draft/?draftSetPk=\<draft_set_id\>)."* |
+| Issued, PIU | *"N \<unit class\> profits interest units issued on \<company\> — \<issue date\>. Open \<company\>'s profits interest ledger in Carta — link text *\<company\>'s profits interest ledger*, href `\<BASE_URL\>/\<VIEW_URL_PATH\>` — to see the new units."* |
+| Saved as draft | *"N \<security type\> drafts saved on \<company\> — finish in the Drafts UI — link text *Drafts UI*, href `\<BASE_URL\>/drafts/\<security_type\>/\<CORP_ID\>/draft/?draftSetPk=\<draft_set_id\>`."* |
 | Canceled, **a real draft set exists** | *"Issuance canceled on \<company\> — the draft set is still there if you want to come back to it: [Drafts UI](…same URL…)."* |
 | Canceled, **no real draft set** | *"Issuance canceled on \<company\> — nothing was saved to Carta."* (no link — there is nothing to open) |
 
@@ -1174,10 +1180,10 @@ row from a `save_drafts` / `issue_securities` call this session came back with a
 `status` and therefore a saved `draft_pk`. It is **not** real when `draft_set_id` is still the
 initial `"new"` placeholder, or when every row's `status` came back an error.
 
-Every link above hardcodes `app.carta.com` — no MCP command resolves an environment-specific
-host, so this is only correct in production. A deliberate, accepted tradeoff: a sandbox/test
-session gets a link pointing at production. `security_type` in a Drafts-UI path is the
-literal mutate value (`certificate`, `option_grant` or `piu`).
+Every link above builds on `BASE_URL` — the `base_url` from `get_current_user`, recorded in
+[Step 2a](#step-2a--carta-command-names-hardcoded-never-discovered) — so a demo, sandbox or
+test session links into the environment it actually wrote to. `security_type` in a Drafts-UI
+path is the literal mutate value (`certificate`, `option_grant` or `piu`).
 
 To **correct** an issued certificate, grant or unit afterward, that's
 `carta-modify-issuables`.

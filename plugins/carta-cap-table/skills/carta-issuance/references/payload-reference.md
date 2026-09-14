@@ -190,20 +190,30 @@ context about attrition.
 `grant_expiration_date` is a **silent default**, so getting it wrong is invisible until someone
 tries to exercise. Compute it from the plan the grant sits on, not from a flat ten years.
 
-The plan's own entry in `option_plans` carries both inputs:
+The plan's own entry in `option_plans` carries all three inputs:
 
 | Field | Meaning |
 |---|---|
 | `expiration_years` | the plan's term — usually 10, but read it, don't assume |
 | `minus_one_day` | whether the term ends a day short |
+| `expiration_date` | when the **plan** itself expires — the ceiling on any grant under it |
 
 ```
-grant_expiration_date = issue_date + expiration_years, minus 1 day if minus_one_day
+term_end = issue_date + expiration_years, minus 1 day if minus_one_day
+grant_expiration_date = min(term_end, plan.expiration_date)
 ```
 
 A grant issued 08/31/2026 on a 10-year plan expires **08/30/2036** when `minus_one_day` is
 true, and 08/31/2036 when it is false. `minus_one_day` defaults **true** server-side, so a flat
 +10 years is wrong on more plans than it is right, and lands the date a day late.
+
+**Cap at the plan.** A grant cannot outlive the plan it sits on, and `validate_drafts` rejects
+the attempt — *"Grant expiration date of 09/10/2036 is after "2025 Unapproved Plan" expires on
+05/01/2035"* — one warning per row. A plan issued against late in its life is the normal way to
+hit this: a 2035-expiring plan with a 10-year term produces an over-run on every grant written
+after its tenth-to-last year. When the cap applies, tag the review `(capped — plan expires
+<date>)` instead of `(default — plan term)`, so the shortened term is visible rather than
+looking like an arithmetic slip. If `expiration_date` is absent, use `term_end` unchanged.
 
 `minus_one_day` is tri-state: `true` / `false` / **absent or `null`**, the last meaning the plan
 states no preference. Treat that case as the server does — apply the minus-one-day convention —
