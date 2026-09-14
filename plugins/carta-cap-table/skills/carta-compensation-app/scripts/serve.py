@@ -53,6 +53,7 @@ from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
 import chat_session
+import desktop_handoff
 
 DATA_DIR = None
 WEB_DIR = None
@@ -352,14 +353,57 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         del _CHAT_SESSIONS[sid]
                 sess.close()
 
-    # ---- POST (ask box) ----
+    # ---- POST (ask box, desktop handoff) ----
     def do_POST(self):
         u = urlparse(self.path)
         if u.path == "/api/ask":
             return self._ask(u)
         if u.path == "/api/ask/interrupt":
             return self._ask_interrupt(u)
+        if u.path == "/api/handoff":
+            return self._handoff(u)
         return self._send(404, {"error": "not_found"})
+
+    def _handoff(self, u):
+        """Write the plan where Claude Desktop can read it, and open a session.
+
+        The browser can do neither: it cannot write a file outside a download, and
+        it cannot open a claude:// URL reliably from a fetch. So the console asks
+        the server, which is already local and already trusted with the data dir.
+
+        Every failure returns a reason rather than a bare 500, because the caller
+        falls back to the clipboard and tells the user which route it took. A
+        handoff that looks like it worked and did not is the one outcome worse than
+        asking for a paste.
+        """
+        qs = parse_qs(u.query)
+        if not self._token_ok(qs):
+            return self._send(401, {"error": "unauthorized"})
+        _touch_heartbeat()
+
+        body = self._read_json_body()
+        if body is None or not isinstance(body, dict):
+            return self._send(400, {"error": "bad_json"})
+        prompt = body.get("prompt")
+        if not isinstance(prompt, str) or not prompt.strip():
+            return self._send(400, {"error": "empty_prompt"})
+
+        try:
+            result = desktop_handoff.hand_off(
+                prompt,
+                corporation=body.get("corporation"),
+                employees=int(body.get("employees") or 0),
+                total_shares=body.get("totalShares"),
+            )
+        except FileNotFoundError as exc:
+            # Desktop is not configured for the file route on this machine. A normal
+            # state on someone else's laptop, not an error worth a stack trace.
+            return self._send(200, {"ok": False, "reason": "no_directory",
+                                    "detail": str(exc)})
+        except Exception as exc:  # noqa: BLE001 — the fallback needs a reason, not a crash
+            return self._send(200, {"ok": False, "reason": "failed",
+                                    "detail": str(exc)})
+        return self._send(200, {"ok": True, **result})
 
     # ---- PUT (local scenario save) ----
     def do_PUT(self):

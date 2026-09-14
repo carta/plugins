@@ -598,25 +598,6 @@ export default function SettingsStep({
           )}
         </div>
 
-        {/* Between the policy and the table it drives, because it acts on both:
-            "add a column for unvested shares" is a table change, "show the target
-            as a multiple" is a policy one, and a box parked under only one of them
-            would read as belonging to that half. */}
-        <div style={{
-          background: C.surface, border: `1px solid ${C.border}`, borderRadius: RADIUS,
-          padding: 16,
-        }}>
-          <div style={{
-            fontSize: FS.sm, fontWeight: 600, color: C.textSubtle, marginBottom: 8,
-          }}>
-            Change this page
-          </div>
-          <AskBar
-            token={token}
-            placeholder="Ask Claude to change this page — e.g. add a column for unvested shares"
-          />
-        </div>
-
         <div style={{
           background: C.surface, border: `1px solid ${C.border}`, borderRadius: RADIUS, padding: 16,
         }}>
@@ -737,6 +718,32 @@ export default function SettingsStep({
             calculated here instead — the tooltip on each cell says which.
           </div>
         </div>
+      </div>
+
+      {/* BELOW the policy/grants grid, not inside it, because it acts on both:
+          "add a column for unvested shares" is a table change, "show the target as
+          a multiple" is a policy one, and a box parked within either half would
+          read as belonging to that half.
+
+          It must stay outside the grid. As a grid child it becomes the second
+          child and so takes the second COLUMN, which pushes the grants panel to a
+          row of its own underneath the policy panel — the table then renders below
+          the policy at the narrow column's width however wide the window is.
+          Spanning both columns does not fix it either: source order puts the span
+          in row 2 and the grants panel in row 3, still stacked. */}
+      <div style={{
+        background: C.surface, border: `1px solid ${C.border}`, borderRadius: RADIUS,
+        padding: 16,
+      }}>
+        <div style={{
+          fontSize: FS.sm, fontWeight: 600, color: C.textSubtle, marginBottom: 8,
+        }}>
+          Change this page
+        </div>
+        <AskBar
+          token={token}
+          placeholder="Ask Claude to change this page — e.g. add a column for unvested shares"
+        />
       </div>
 
       <Nav onBack={onBack} onNext={onNext} />
