@@ -70,9 +70,12 @@ Skipping those two is what made a previously ingested workbook
 un-droppable: the budget prompt never ran, the build never ran, and the
 cached `snapshot.json` was served with its budgets already baked in — so
 neither declining at the prompt nor removing the source workbook had any
-effect until the cache aged out. Budget state has to be re-resolved on
-every invocation, because it is the thing the operator is most likely to
-be changing.
+effect until the cache aged out. Budget *state* has to be re-checked on
+every invocation — is there still a ref, does the operator's decline
+still stand, is the workbook still where the ref says, does the cached
+parse still read — even though none of that implies re-parsing the
+workbook itself; see [budget-workbook.md](budget-workbook.md)'s 2.75a for
+what actually triggers a re-parse.
 
 
 ## Step 2.75 — Optional Excel budget ingest (SILENT unless first-time)

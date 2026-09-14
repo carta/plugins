@@ -22,25 +22,25 @@ order:
    what it is rather than what one firm called it, and a ref written before
    that still says the old word. Read it as the new one and carry on; the
    next write records the new spelling.
-   - Carries `path`/`sheet`/`shape` and the file still exists → compare the
-     file's current mtime (`os.path.getmtime`) against the ref's own
-     `workbook_mtime` (2.75c) before deciding whether 2.75b needs to run
-     for real:
-     - **Unchanged** → the parsed `budget*.json` files already reflect
-       this exact file byte-for-byte; skip 2.75b's re-parse entirely and
-       go straight to 2.75c (nothing new to record) / 2.75e. Re-parsing an
-       untouched workbook every invocation costs real seconds for output
-       that comes out identical every time; this is what `workbook_mtime`
-       exists to catch.
-     - **Changed** → the operator edited the workbook since the last
-       ingest. Reuse `path`/`sheet`/`shape` silently (still no need to
-       re-ask which tabs), but go to 2.75b and re-parse for real — this
-       is the case "budget state has to be re-resolved on every
-       invocation" (2.5) exists for, and now it's real work only when
-       something could actually have changed.
-     - **`workbook_mtime` absent** (a ref written before this field
-       existed) → treat as changed: re-parse once, which populates it so
-       every invocation after this one can skip cleanly.
+   - Carries `path`/`sheet`/`shape` and the file still exists → reuse the
+     already-parsed `budget*.json` files silently and skip 2.75b entirely.
+     **A parsed budget is not re-parsed just because the workbook's mtime
+     changed on disk.** Only two things trigger a real re-parse:
+     - **An explicit ask** — the user's invocation passes
+       `--budget-workbook <path>` again (case 1 above), deletes
+       `.workbook-ref.json`, or says something like "refresh the budget" /
+       "re-parse the workbook" / "the workbook changed" for this run.
+       Reuse `path`/`sheet`/`shape` silently (still no need to re-ask which
+       tabs) and go to 2.75b.
+     - **The cached parse is broken** — a budget entry's `file` is missing
+       from `<dashboard_dir>`, or fails to read as the JSON
+       `build_manco_datadir.py` expects. A ref pointing at output that no
+       longer exists or doesn't parse isn't a cache hit for that entry;
+       treat it as absent and re-parse it from `<WORKBOOK_PATH>`.
+     Absent either of those, go straight to 2.75c (nothing new to record)
+     / 2.75e. An edited-but-unmentioned workbook is out of scope for this
+     run — the operator gets a refresh when they ask for one, not on every
+     re-invocation.
    - Carries `path` but the file is gone → go to 2.75a-0 and try to find
      it before giving up.
    - Carries `{"declined": true}` → the operator has already answered.
@@ -521,7 +521,6 @@ budget produced in this ingest — one entry per selected sheet:
 ```json
 {
   "path": "<WORKBOOK_PATH>",
-  "workbook_mtime": 1735689600.0,
   "budgets": [
     {"sheet": "<SHEET_NAME>", "shape": "<SHAPE_ADAPTER>", "file": "budget.json"},
     {"sheet": "<SHEET_NAME>", "shape": "<SHAPE_ADAPTER>", "file": "budget-<slug>.json",
@@ -531,14 +530,14 @@ budget produced in this ingest — one entry per selected sheet:
 }
 ```
 
-`workbook_mtime` is `path`'s own `os.path.getmtime` at the moment this
-write happens — i.e., right after a real 2.75b parse, never copied
-forward from an old ref. 2.75a checks it before reusing this ref at all,
-so it's what lets an untouched workbook skip re-parsing while an edited
-one still gets caught on the very next invocation. Independent of
+No mtime is recorded here. 2.75a reuses this ref — and the `budget*.json`
+files it names — on every invocation without comparing the workbook on
+disk to anything; a real re-parse only happens on an explicit ask or a
+broken cached parse (2.75a). This is independent of
 `derived_from.source_mtime` below, which tracks a different file for a
-different reason (staleness against the client's original, not this
-skip).
+different reason (staleness against the client's original, which is
+still checked on every invocation regardless of this ref's own
+reuse-by-default).
 
 Record every answer the operator gave about a sheet, and pass each back on
 later invocations:
