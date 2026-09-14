@@ -74,6 +74,18 @@ is being parsed (Step 2.75b will run), issue this step's `call_tool` block and S
 2.75b's `parse_budget_workbook.py` Bash calls in the **same tool-use message** — the
 two are independent once Step 2.75a has confirmed the workbook and sheets.
 
+### Instrumentation — every Carta MCP call in this step carries `_instrumentation_v2`
+
+Pass it on **every** `list_contexts`, `set_context`, and `call_tool` call:
+
+```
+_instrumentation_v2={"skills": ["carta-investors:carta-manco-reporting"]}
+```
+
+Add `"model": "<the running model id>"` only if you can introspect it; omit
+the key otherwise — never guess. If a call is rejected for missing
+instrumentation, re-send it silently — do not surface this to the user.
+
 ### Verify the firm context before spending a single DWH call on it
 
 `set_context` in Step 1 can silently no-op or land on the wrong firm, and a stray
@@ -83,13 +95,13 @@ doesn't match — four empty pages read exactly like "this ManCo has no data" un
 something catches it first:
 
 ```
-mcp__<SERVER>__list_contexts()
+mcp__<SERVER>__list_contexts(_instrumentation_v2={"skills": ["carta-investors:carta-manco-reporting"]})
 ```
 
 Find the entry marked active (however this MCP surfaces that — an `is_active: true`
 field, an `(active)` suffix on the firm's line, etc.) and compare its firm UUID
 against `<FIRM_UUID>`. If they don't match, retry
-`mcp__<SERVER>__set_context(firm_id="<FIRM_UUID>")` once; if the second attempt
+`mcp__<SERVER>__set_context(firm_id="<FIRM_UUID>", _instrumentation_v2={"skills": ["carta-investors:carta-manco-reporting"]})` once; if the second attempt
 still doesn't match, stop and tell the user:
 
 > "The Carta session's active firm changed mid-run — please re-invoke the skill."
@@ -113,10 +125,12 @@ Skip the budget calls below when Step 2.75 ended with a workbook in play, even i
 **Issue every call in a SINGLE tool-use message.** Splitting into multiple messages
 turns a ~4s parallel fanout into 20+ seconds of sequential waiting.
 
-Run Queries A–D via `mcp__<SERVER>__call_tool` with `name="dwh__execute__query"` and
-`arguments={"sql": "...", "format": "markdown"}`. Run cash balance and budget calls
-via `mcp__<SERVER>__call_tool` as shown below. All go in **one assistant message** as
-parallel tool calls.
+Run Queries A–D via `mcp__<SERVER>__call_tool` with `name="dwh__execute__query"`,
+`arguments={"sql": "...", "format": "markdown"}`, and
+`_instrumentation_v2={"skills": ["carta-investors:carta-manco-reporting"]}`. Run
+cash balance and budget calls via `mcp__<SERVER>__call_tool` as shown below — each
+also carries `_instrumentation_v2`. All go in **one assistant message** as parallel
+tool calls.
 
 #### Query A — ManCo expenses → `je-expense-page1.txt`
 
@@ -298,7 +312,7 @@ mcp__<SERVER>__call_tool(name="fa__get__cash-balance", arguments={
   "firm_uuid":  "<FIRM_UUID>",
   "as_of_date": "<AS_OF>",
   "entity_ids": [<MANCO_ENTITY_ID>]
-})
+}, _instrumentation_v2={"skills": ["carta-investors:carta-manco-reporting"]})
 ```
 
 `entity_ids` takes the **integer** `<MANCO_ENTITY_ID>` — not the UUID, not `carta_id`.
@@ -320,7 +334,7 @@ mcp__<SERVER>__call_tool(name="fa__list__budgets", arguments={
   "fund_uuid":  "<MANCO_UUID>",
   "start_date": "<YEAR>-<M zero-padded>-01",
   "end_date":   "<YEAR>-<M zero-padded>-<last day of month>"
-})
+}, _instrumentation_v2={"skills": ["carta-investors:carta-manco-reporting"]})
 ```
 
 Include all 12 in the same parallel message as the DWH queries — not a second message.
@@ -338,7 +352,7 @@ that silently changes a firm's numbers, and it is never necessary.
 `entities.json` — the roster Step 4 reads each fund's own `carta_id` from
 for the fee-chart drill-down link (Query C carries no such column). If that
 call has scrolled out of the session log (a long Step 2.75 gap, or a
-compaction), re-issue `fa__list__entities` fresh right before this save —
+compaction), re-issue `mcp__<SERVER>__call_tool(name="fa__list__entities", arguments={}, _instrumentation_v2={"skills": ["carta-investors:carta-manco-reporting"]})` fresh right before this save —
 it's a cheap, idempotent call, unlike Queries A–F.
 
 One Bash call saves everything. It runs the writes concurrently, so this is
