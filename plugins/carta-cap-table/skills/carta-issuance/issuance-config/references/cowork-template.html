@@ -117,6 +117,20 @@
     if (e.key === 'Escape') document.querySelectorAll('.stake-suggestions').forEach(b => b.style.display = 'none');
   });
 
+  // Batch rows ship an empty relationship <select> (one option list, not one per
+  // row). An off-picklist roster value is prepended so it is never silently lost.
+  function fillRelationshipOptions(scope) {
+    (scope || document).querySelectorAll('.stake-relationship:empty').forEach(sel => {
+      const want = sel.dataset.rel || '';
+      const values = RELATIONSHIP_CHOICES.includes(want) || !want
+        ? RELATIONSHIP_CHOICES
+        : [want].concat(RELATIONSHIP_CHOICES);
+      sel.appendChild(new Option('Select relationship…', ''));
+      values.forEach(v => sel.appendChild(new Option(v, v)));
+      sel.value = want;
+    });
+  }
+
   function allBlocks() { return Array.from(document.querySelectorAll('[data-stake-block]')); }
   function allBatchRows() { return Array.from(document.querySelectorAll('[data-batch-row]')); }
 
@@ -372,7 +386,12 @@
       const el = clone.querySelector(sel);
       if (el) el.value = '';
     });
+    // A clone inherits the source's filled options and its value; reset both so
+    // the new person starts blank and fillRelationshipOptions() sees it as empty.
+    const relClone = clone.querySelector('.stake-relationship');
+    if (relClone) { relClone.innerHTML = ''; relClone.dataset.rel = ''; }
     body.appendChild(clone);
+    fillRelationshipOptions(clone);
     renumberBlocks();
     const nameInput = clone.querySelector('.stake-name-in');
     if (nameInput) nameInput.focus();
@@ -743,6 +762,7 @@
     allBlocks().forEach(initScopeDisplay);
     const shared = sharedTermsScope();
     if (shared) initScopeDisplay(shared);
+    fillRelationshipOptions();
     allBatchRows().forEach(r => {
       const n = r.querySelector('.stake-name-in');
       if (n && n.value.trim()) applyRosterAutofill(n);

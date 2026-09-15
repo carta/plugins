@@ -181,7 +181,7 @@ a compact per-person table.
 
 **When to use it.** `build_cowork_form.py` decides this itself — it activates batch mode when
 **both** hold:
-- More than 10 rows (`knowns.rows.length > 10`, or an equivalent headcount signal per [Hard
+- More than 3 rows (`knowns.rows.length > 3`, or an equivalent headcount signal per [Hard
   rule 11](../SKILL.md#hard-rules)).
 - Every row's non-personal terms are identical or unset — i.e. the prompt/`knowns` gave one
   shared set of batch-level terms (option type, exercise price, vesting, document set, etc. for

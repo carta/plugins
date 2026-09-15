@@ -34,7 +34,7 @@ from issuance_fields import (  # noqa: E402
     build_legends,
     build_option_plans,
     build_option_type,
-    build_relationship_select,
+    build_relationship_select_deferred,
     build_rule144_reason_select,
     build_share_classes,
     build_stakeholder_kind,
@@ -75,7 +75,11 @@ STYLES = REFS / "cowork-styles.css"
 # batch is big enough for N identical blocks to be pure waste AND no row carries
 # terms of its own. Either condition failing means a mixed batch, which only the
 # per-row repeater can express.
-BATCH_MODE_MIN_ROWS = 10
+#
+# Three, not ten: a 7-grantee uniform batch rendered 100,803 chars per-row against
+# 44,988 in batch mode, and the per-row layout was the default. The document is a
+# show_widget payload, so its size is a real cost on every issuance.
+BATCH_MODE_MIN_ROWS = 3
 
 # A row key here means "this person's terms differ from the batch", which is what
 # disqualifies batch mode. Identity and amount fields are per-person by nature and
@@ -397,7 +401,7 @@ def build_batch_rows(rows: List[Dict[str, Any]]) -> str:
         email = esc(row.get("email", ""))
         qty = row.get("quantity", "")
         qty = "" if qty is None else esc(qty)
-        rel_select = build_relationship_select(str(row.get("relationship") or ""))
+        rel_select = build_relationship_select_deferred(str(row.get("relationship") or ""))
         kind_toggle = build_stakeholder_kind(str(row.get("stakeholder_kind") or ""))
         out.append(
             f'<tr data-batch-row data-row-key="{key}">'

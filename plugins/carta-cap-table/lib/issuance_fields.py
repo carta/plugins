@@ -87,6 +87,10 @@ def so_type_js_constants() -> str:
     The form JS re-toggles the HMRC / ATO / employment-related rows on every option-type
     change, so it needs these client-side. Emitting them keeps the browser's answer to
     "which types report to HMRC" identical to the server's. Sorted for deterministic output.
+
+    RELATIONSHIP_CHOICES rides along in payload order, not sorted: 15 options repeated
+    per batch row is pure waste, so a batch row ships an empty <select> that the form
+    fills from this list.
     """
     def _arr(values: Any) -> str:
         return json.dumps(sorted(values), separators=(",", ":"))
@@ -94,8 +98,10 @@ def so_type_js_constants() -> str:
     return (
         "const HMRC_SO_TYPES = {hmrc};\n"
         "const ATO_SO_TYPES = {ato};\n"
-        "const EMPLOYMENT_RELATED_SO_TYPES = {emp};"
+        "const EMPLOYMENT_RELATED_SO_TYPES = {emp};\n"
+        "const RELATIONSHIP_CHOICES = {rel};"
     ).format(
+        rel=json.dumps(list(RELATIONSHIP_CHOICES), separators=(",", ":")),
         hmrc=_arr(HMRC_SO_TYPES),
         ato=_arr(ATO_SO_TYPES),
         emp=_arr(EMPLOYMENT_RELATED_SO_TYPES),
@@ -637,6 +643,23 @@ def build_relationship_select(relationship: str) -> str:
         '<option value=""{s}>Select relationship…</option>'
         '{opts}</select>'
     ).format(s=sel(not rel), opts=rel_options)
+
+
+def build_relationship_select_deferred(relationship: str) -> str:
+    """An empty relationship `<select>` the form fills from RELATIONSHIP_CHOICES.
+
+    Same class and `onchange` contract as build_relationship_select, so
+    collectIdentity() and missingIdentity() treat the two identically. For batch
+    rows only: repeating 15 options per row costs ~893 chars each and the options
+    never vary by row. `data-rel` carries the row's own value for the filler to
+    re-select; an off-picklist roster value survives because the filler prepends
+    any value it does not find.
+    """
+    rel = relationship or ""
+    return (
+        '<select class="stake-relationship" aria-label="Relationship" '
+        'data-rel="{v}" onchange="onStakeInput()"></select>'
+    ).format(v=esc(rel))
 
 
 def build_grant_reason_select(reason: Optional[str]) -> str:
