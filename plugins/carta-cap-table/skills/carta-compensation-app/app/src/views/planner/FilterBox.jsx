@@ -154,7 +154,7 @@ export default function FilterBox({
 
       {!preview && !busy && (
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-          <span style={{ fontSize: FS.xs, color: C.textQuiet }}>Try:</span>
+          <span style={{ fontSize: FS.sm, color: C.textQuiet }}>Try:</span>
           {EXAMPLES.map((ex) => (
             <button
               key={ex}
@@ -162,7 +162,7 @@ export default function FilterBox({
               onClick={() => { setText(ex); submit(ex); }}
               style={{
                 background: "none", border: "none", padding: 0, font: "inherit",
-                fontSize: FS.xs, color: C.linkDefault, cursor: "pointer",
+                fontSize: FS.sm, color: C.linkDefault, cursor: "pointer",
                 textDecoration: "underline",
               }}
             >
@@ -223,10 +223,17 @@ export default function FilterBox({
               key={f.id}
               style={{
                 display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
-                fontSize: FS.sm, color: C.textDefault,
+                // The same size and colour as the filter labels this sits under —
+                // a committed filter is one more filter, not an announcement.
+                fontSize: FS.sm, color: C.textSubtle,
               }}
             >
-              <Tag tone="notice" title={`Asked as: ${f.text}`}>Claude filter</Tag>
+              {/* NEUTRAL, not notice. `notice` is this app's warning tone (it is
+                  what an unavailable filter and a save conflict use), and a filter
+                  doing exactly what was asked of it is not a warning — in yellow it
+                  read as one, and as a different visual language from the controls
+                  around it. */}
+              <Tag title={`Asked as: ${f.text}`}>Claude filter</Tag>
               {/* The predicate as a sentence, so a committed filter can be audited
                   by whoever inherits the plan — not only by whoever asked for it. */}
               <span>{f.sentence}</span>
@@ -236,7 +243,9 @@ export default function FilterBox({
                 title="Remove this filter"
                 style={{
                   background: "none", border: "none", padding: 0, font: "inherit",
-                  fontSize: FS.xs, color: C.linkDefault, cursor: "pointer",
+                  // FS.sm, matching the row it sits in. It was FS.xs, the one 11px
+                  // thing on a line of 12px text.
+                  fontSize: FS.sm, color: C.linkDefault, cursor: "pointer",
                   textDecoration: "underline",
                 }}
               >

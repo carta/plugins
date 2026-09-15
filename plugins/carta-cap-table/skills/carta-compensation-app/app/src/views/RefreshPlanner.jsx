@@ -28,7 +28,9 @@ import { MultiSelect, Select, TableAlign, Tag, Th, Td, useMediaQuery } from "../
 import { csvFilename, downloadCsv, toCsv } from "../model/csv.js";
 import { shares } from "../model/format.js";
 import { formatTenure, tenureMonths } from "../model/tenure.js";
-import { applyFilters, levelRank, totalEquity } from "../model/cohort.js";
+import {
+  applyFilters, levelRank, PRIOR_GRANTS, priorGrantsMode, totalEquity,
+} from "../model/cohort.js";
 import { applyPredicate } from "../model/predicate.js";
 import { DEFAULT_GRANT_REASON, reasonFor } from "../model/grantReason.js";
 import {
@@ -51,7 +53,7 @@ const VESTING_WINDOWS = [6, 12, 18, 24];
 
 /** No filters applied — what a scenario means when it stores no `filters` key. */
 const NO_FILTERS = Object.freeze({
-  hasPriorGrants: false,
+  hasPriorGrants: PRIOR_GRANTS.ANY,
   jobAreas: [],
   levelMin: null,
   levelMax: null,
@@ -222,7 +224,7 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
   const availability = planner.availability || {};
   const recon = planner.reconciliation || {};
 
-  const [hasGrants, setHasGrants] = useState(false);
+  const [hasGrants, setHasGrants] = useState(PRIOR_GRANTS.ANY);
   // A Set, not an array — MultiSelect reads `.has`/`.size` on it. The filter model
   // takes an array, so this is converted at that boundary rather than here.
   const [areas, setAreas] = useState(() => new Set());
@@ -276,7 +278,7 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
     // The cohort filters, restored so a reload lands on the same list. Absent means
     // this scenario never recorded any, which is the initial state already.
     const f = savedFilters || NO_FILTERS;
-    setHasGrants(f.hasPriorGrants);
+    setHasGrants(priorGrantsMode(f.hasPriorGrants));
     setAreas(new Set(f.jobAreas));
     setLevelMin(f.levelMin === null ? null : String(f.levelMin));
     setLevelMax(f.levelMax === null ? null : String(f.levelMax));
@@ -528,8 +530,7 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
   // would vanish exactly when the pool is missing. Composing here also means all
   // three steps get both without changing their props — the switcher has to be
   // reachable from the review step, not only from the cohort one.
-  const poolBar = (
-    <div style={{ display: "grid", gap: 12 }}>
+  const scenarioBar = (
       <ScenarioBar
         scenarios={scenarios}
         activeId={activeId}
@@ -543,19 +544,31 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
         onDelete={deleteScenario}
         onReload={reload}
       />
-      <PoolBar
-        available={planner.poolAvailableShares ?? null}
-        planned={plannedTotals.totals.totalShares}
-        reserved={planner.poolReservedShares ?? null}
-        outstanding={planner.poolOutstandingShares ?? null}
-      />
+  );
+
+  const poolOnly = (
+    <PoolBar
+      available={planner.poolAvailableShares ?? null}
+      planned={plannedTotals.totals.totalShares}
+      reserved={planner.poolReservedShares ?? null}
+      outstanding={planner.poolOutstandingShares ?? null}
+    />
+  );
+
+  // Steps 1 and 3 take them stacked, as before. Step 2 places them itself, so the
+  // scenario tile can sit beside the cycle figures rather than above them.
+  const poolBar = (
+    <div style={{ display: "grid", gap: 12 }}>
+      {scenarioBar}
+      {poolOnly}
     </div>
   );
 
   if (step === "settings") {
     return (
       <SettingsStep
-        poolBar={poolBar}
+        scenarioBar={scenarioBar}
+        poolBar={poolOnly}
         equityUnits={planner.equityUnits ?? null}
         rows={inCartRows}
         policySettings={policySettings}
@@ -568,6 +581,9 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
         onOverride={setOverride}
         reasons={reasons}
         onReason={setReason}
+        // Through updateCart, the same path step 1's checkbox takes, so the two
+        // screens write one cart and the removal persists like any other change.
+        onRemove={(id) => updateCart(toggle(cart, id))}
         token={token}
       />
     );
@@ -632,11 +648,28 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
               reason="This build captured no equity for any employee, so prior grants cannot be determined. Say 'refresh' to re-fetch."
             />
           ) : (
-            <Checkbox
-              label="Has prior grants"
-              checked={hasGrants}
+            // A dropdown, not a checkbox. A checkbox has two states and this
+            // filter has three, and the one it could not express — has NONE — is
+            // the one a refresh cycle asks for most: who has never been granted.
+            //
+            // The definition sits UNDER the control rather than in a title. It is
+            // the one filter here whose meaning is not obvious from its name
+            // ("prior" could mean any grant ever, including cancelled ones), and a
+            // definition only reachable by hovering is one most people never read.
+            // NOT wrapped with its help text. The row aligns on flex-END, so a
+            // wrapper's bottom edge is what lines up — and with the help text
+            // inside, that bottom was the text, which lifted the field 37px above
+            // every other control. The definition moved below the row instead.
+            <Select
+              label="Prior grants"
+              value={hasGrants}
               onChange={updateHasGrants}
-              title="Keeps only employees holding at least one live grant. Cancelled and forfeited awards are already excluded by Carta."
+              options={[
+                { value: PRIOR_GRANTS.ANY, label: "Any" },
+                { value: PRIOR_GRANTS.HAS, label: "Has prior grants" },
+                { value: PRIOR_GRANTS.NONE, label: "No prior grants" },
+              ]}
+              minWidth={170}
             />
           )}
 
@@ -690,6 +723,20 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
           )}
         </div>
 
+        {/* Under the row, not inside a control. "Prior grants" is the one filter
+            here whose name does not settle its meaning — it could be read as any
+            grant ever, including cancelled ones — so the definition is on screen
+            rather than in a title attribute. Below the row because the row aligns
+            on flex-end, where a taller control lifts its own field out of line. */}
+        {availability.grants !== false && (
+          <div style={{
+            marginTop: 8, fontSize: FS.xs, color: C.textQuiet, lineHeight: 1.5,
+          }}>
+            Prior grants means a live grant. Cancelled and forfeited awards are
+            already excluded by Carta.
+          </div>
+        )}
+
         {removed > 0 && (
           <div style={{ marginTop: 12 }}>
             <Tag>{removed} excluded by filters</Tag>
@@ -708,7 +755,11 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
         <div style={{
           marginTop: 14, paddingTop: 14, borderTop: `1px solid ${C.border}`,
         }}>
-          <div style={{ fontSize: FS.sm, fontWeight: 600, color: C.textSubtle, marginBottom: 8 }}>
+          {/* The same treatment the filter controls beside it use — Select renders
+              its label at FS.sm weight 400, and this was the one label in the tile
+              at 600, which read as a heading for a different section rather than a
+              label for one more filter. */}
+          <div style={{ fontSize: FS.sm, color: C.textSubtle, marginBottom: 8 }}>
             Add a Claude generated filter
           </div>
           <FilterBox

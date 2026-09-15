@@ -16,6 +16,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { apiToken } from "./useData.js";
 import { reasonsFromStored, reasonsToStore } from "../model/grantReason.js";
 import { validate } from "../model/predicate.js";
+import { priorGrantsMode } from "../model/cohort.js";
 
 const SCENARIOS = "/api/scenarios";
 
@@ -158,7 +159,9 @@ export function filtersFromDoc(doc, corporationId) {
   const levelMax = Number(raw.levelMax);
   const within = Number(raw.excludeVestingWithinMonths);
   return {
-    hasPriorGrants: raw.hasPriorGrants === true,
+    // Through priorGrantsMode, which also reads the boolean older scenarios
+    // stored: `false` meant "no filter" and has to keep meaning it.
+    hasPriorGrants: priorGrantsMode(raw.hasPriorGrants),
     // Coerced to an array of strings: job areas arrive as a Set in the view, and a
     // stray number here would never match a row's job_area.
     jobAreas: Array.isArray(raw.jobAreas) ? raw.jobAreas.filter((a) => typeof a === "string") : [],
@@ -217,7 +220,13 @@ export function docWithCart(doc, corporationId, cart, overrides, scenarioId) {
 function noFilters(f) {
   return !f || (!f.hasPriorGrants
     && !(f.jobAreas && f.jobAreas.length)
-    && f.levelMin == null && f.levelMax == null
+    // Falsy, not `== null`. "Any" is the empty string in the control and becomes
+    // Number("") === 0 on the way here, so a cleared level bound arrives as 0
+    // rather than null — and a `== null` test wrote a filters block of pure
+    // defaults, making a scenario nobody filtered read as one somebody did.
+    // 0 is not a real bound either way: applyFilters gates on `levelMin ||
+    // levelMax`, so it has never filtered anything.
+    && !f.levelMin && !f.levelMax
     && !f.excludeVestingWithinMonths);
 }
 
@@ -287,7 +296,7 @@ export function docWithPlan(doc, corporationId, plan, scenarioId) {
       if (noFilters(plan.filters)) delete next.filters;
       else {
         next.filters = {
-          hasPriorGrants: plan.filters.hasPriorGrants === true,
+          hasPriorGrants: priorGrantsMode(plan.filters.hasPriorGrants),
           jobAreas: [...(plan.filters.jobAreas || [])].sort(),
           levelMin: plan.filters.levelMin ?? null,
           levelMax: plan.filters.levelMax ?? null,

@@ -18,7 +18,7 @@
 // — an <option> holds text, not buttons — so they sit alongside as siblings.
 
 import { useEffect, useRef, useState } from "react";
-import { C, FS, HEADING, RADIUS } from "../../ui/theme.js";
+import { C, FS, RADIUS } from "../../ui/theme.js";
 import { Menu, Select, Tag } from "../../ui/components.jsx";
 
 const BTN = {
@@ -113,6 +113,12 @@ export default function ScenarioBar({
           On its own line it also needs no truncation at 360px and no height
           matching — it is not sharing a baseline with anything, so a long name
           reads in full. */}
+      {/* The name and this draft's save state on one line — the state describes the
+          draft the name identifies, and moving it off the controls row is what
+          lets the dropdown, the count and the buttons fit on one line in a 430px
+          column. It also stops "Saved 14:32" sitting beside a Duplicate button,
+          where it reads as the outcome of pressing it. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
       {!renaming && (
         // An h2, not a span. Ink's Heading renders a real text element and takes an
         // `as`, and product code reaches for heading-3 exactly here — the title of a
@@ -124,19 +130,15 @@ export default function ScenarioBar({
         <h2
           title={active.name}
           style={{
-            // Ink's heading-2: 20px/36px at weight 500, base sans.
-            //
-            // heading-3 is the ordinary card title, but Ink keeps heading-2 for a
-            // card that heads a whole screen rather than sitting among others —
-            // RFIBlock overrides Section's default for exactly that, and
-            // StandardTopBar and BillingSummary do the same. This bar names the
-            // plan every one of the three steps below it is about, which is that
-            // case.
+            // Matches "Refresh grant policy" in the tile below — FS.lg at weight
+            // 600 — so the two card titles on a screen read as the same rank.
+            // This was heading-2 (20px/500), which is a legitimate Ink variant but
+            // made the scenario name outrank every other title on the page.
             //
             // NOT the serif: only heading-1 carries SangBleu, and in product code
-            // heading-1 is a page, app-shell or modal title — nothing labels a card
-            // with it. It would also compete with the "Meetly" h1 above.
-            ...HEADING.h2, color: C.textDefault,
+            // that is a page, app-shell or modal title — nothing labels a card with
+            // it. It would also compete with the "Meetly" h1 above.
+            fontSize: FS.lg, fontWeight: 600, color: C.text,
             // Ink's `trim`, which its own card titles pass: the variant carries a
             // 16px bottom margin meant for prose, and the grid gap already spaces
             // this from the controls under it.
@@ -148,6 +150,32 @@ export default function ScenarioBar({
           {active.name}
         </h2>
       )}
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
+  {futureDoc ? (
+              <Tag tone="notice" title="Saving is disabled so this build cannot overwrite a file it does not understand.">
+                Saved by a newer version — read only
+              </Tag>
+            ) : conflict ? (
+              <>
+                {/* Un-dismissable on purpose: saving has stopped, and a notice the
+                    user can wave away is how an afternoon of edits goes nowhere. */}
+                <Tag tone="notice" title="Another console saved this file first. Nothing is being saved until this is resolved.">
+                  Not saving — changed elsewhere
+                </Tag>
+                <Btn onClick={onReload} title="Discard what is on screen and load the other console's version">
+                  Reload theirs
+                </Btn>
+              </>
+            ) : (
+              <span
+                style={{ fontSize: FS.xs, color: C.textQuiet }}
+                title={active.updatedAt || "This draft has not been saved yet"}
+              >
+                {saving ? "Saving…" : savedLabel(active.updatedAt)}
+              </span>
+            )}
+        </div>
+      </div>
 
       {/* Controls: switcher and position on the left, save state and actions on
           the right. */}
@@ -194,30 +222,6 @@ export default function ScenarioBar({
             draft, and reading "Saved 14:32" beside a Delete button invites parsing
             it as the outcome of an action. */}
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
-          {futureDoc ? (
-            <Tag tone="notice" title="Saving is disabled so this build cannot overwrite a file it does not understand.">
-              Saved by a newer version — read only
-            </Tag>
-          ) : conflict ? (
-            <>
-              {/* Un-dismissable on purpose: saving has stopped, and a notice the
-                  user can wave away is how an afternoon of edits goes nowhere. */}
-              <Tag tone="notice" title="Another console saved this file first. Nothing is being saved until this is resolved.">
-                Not saving — changed elsewhere
-              </Tag>
-              <Btn onClick={onReload} title="Discard what is on screen and load the other console's version">
-                Reload theirs
-              </Btn>
-            </>
-          ) : (
-            <span
-              style={{ fontSize: FS.xs, color: C.textQuiet }}
-              title={active.updatedAt || "This draft has not been saved yet"}
-            >
-              {saving ? "Saving…" : savedLabel(active.updatedAt)}
-            </span>
-          )}
-
           {/* Duplicate leads, and is the ONLY action kept at full size: "the same
               cohort at a lower multiple" is the reason this feature exists, and it
               should be the obvious next click.

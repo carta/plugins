@@ -122,12 +122,44 @@ export function totalEquity(row) {
  *  applied against nulls; `availability` comes from the build, and the UI disables
  *  the corresponding control with a visible reason.
  */
+/** The prior-grants filter's three states.
+ *
+ *  A checkbox could only say "has some" or "don't care", and the state it could
+ *  not express — has NONE — is the one a refresh cycle most often wants: people
+ *  who have never been granted.
+ *
+ *  ANY is the false-y value on purpose. Scenarios saved before this was a
+ *  tri-state store `hasPriorGrants: false` meaning "no filter", and it has to keep
+ *  meaning that — reading a stored `false` as HAS_NONE would silently re-filter
+ *  every saved plan on load.
+ */
+export const PRIOR_GRANTS = Object.freeze({
+  ANY: "",
+  HAS: "has",
+  NONE: "none",
+});
+
+/** A stored value as one of the three states, tolerating the old boolean. */
+export function priorGrantsMode(value) {
+  if (value === PRIOR_GRANTS.HAS || value === true) return PRIOR_GRANTS.HAS;
+  if (value === PRIOR_GRANTS.NONE) return PRIOR_GRANTS.NONE;
+  return PRIOR_GRANTS.ANY;
+}
+
 export function applyFilters(rows, filters, availability, asOf) {
   const all = rows || [];
   const f = filters || {};
   const avail = availability || {};
+  const mode = priorGrantsMode(f.hasPriorGrants);
   const kept = all.filter((row) => {
-    if (f.hasPriorGrants && avail.grants !== false && !hasPriorGrants(row)) return false;
+    // Skipped entirely when this build captured no equity: with nothing to judge,
+    // "has none" would match everyone and "has some" nobody, and both would be an
+    // answer about our data rather than about the employees.
+    if (mode !== PRIOR_GRANTS.ANY && avail.grants !== false) {
+      const has = hasPriorGrants(row);
+      if (mode === PRIOR_GRANTS.HAS && !has) return false;
+      if (mode === PRIOR_GRANTS.NONE && has) return false;
+    }
     if (!jobAreaIn(row, f.jobAreas)) return false;
     if ((f.levelMin || f.levelMax) && !levelInRange(row, f.levelMin, f.levelMax)) return false;
     if (f.excludeVestingWithinMonths && avail.vesting !== false
