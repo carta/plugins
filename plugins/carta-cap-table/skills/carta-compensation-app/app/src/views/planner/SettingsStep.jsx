@@ -11,7 +11,7 @@
 // untagged: one is Carta's number, the other is ours.
 
 import { useMemo, useState } from "react";
-import { C, FS, RADIUS } from "../../ui/theme.js";
+import { C, CARD_TITLE, FS, RADIUS } from "../../ui/theme.js";
 import { Select, TableAlign, Tag, Th, Td, useMediaQuery } from "../../ui/components.jsx";
 import { shares } from "../../model/format.js";
 import {
@@ -365,8 +365,7 @@ function GrantCell({
 
 export default function SettingsStep({
   rows, policySettings, settings, onSettings, onBack, onNext, asOf,
-  overrides, onOverride, reasons, onReason, onRemove, scenarioBar, poolBar,
-  equityUnits, token,
+  overrides, onOverride, reasons, onReason, onRemove, poolBar, equityUnits, token,
 }) {
   // Shares by default: the report's own figure, and the only unit that needs
   // no corporation-level input.
@@ -422,28 +421,31 @@ export default function SettingsStep({
     <div style={{ padding: "18px 24px 28px", display: "grid", gap: 16 }}>
       <Nav onBack={onBack} onNext={onNext} />
 
-      {/* The pool and the scenario on one line: the ceiling this cycle draws
-          against, and which draft is doing the drawing. Both are context for
-          everything below, so they read before the numbers rather than after.
+      {/* Scenario and pool, composed by the planner so all three steps share one
+          header. Reads before the numbers below it: which draft, and what it has
+          to spend. */}
+      {poolBar}
 
-          The pool takes the flexible column — it holds a bar chart that uses
-          whatever width it is given, where the scenario tile's contents are a
-          fixed set of controls. Stacks below the breakpoint, like every other
-          two-column row on this step.
+      {/* The box that edits this page. It was at the FOOT of the page — y=4713 of
+          a 4953px page, below all 83 grant rows — which is indistinguishable from
+          not being here at all.
 
-          NO alignItems:"start" here, unlike the policy/grants row below. These two
-          are cards of similar size sitting side by side, so a 28px step between
-          their bottom edges reads as a mistake; the grants table is four thousand
-          pixels tall, where stretching the policy panel to match would be absurd.
-          Stretch is the default, so this is the absence of a line rather than one
-          — noted because removing it later would silently misalign them again. */}
+          Open, not folded. This step has one of these where the cohort step has
+          two nested ones competing for the same tile; there is nothing here for it
+          to crowd out, so a fold would only hide it again. */}
       <div style={{
-        display: "grid",
-        gridTemplateColumns: wide ? "minmax(0, 1fr) minmax(0, 430px)" : "minmax(0, 1fr)",
-        gap: 16,
+        background: C.surface, border: `1px solid ${C.border}`, borderRadius: RADIUS,
+        padding: 16,
       }}>
-        {poolBar}
-        {scenarioBar}
+        <div style={{
+          fontSize: FS.sm, color: C.textSubtle, marginBottom: 8,
+        }}>
+          Change this page
+        </div>
+        <AskBar
+          token={token}
+          placeholder="Ask Claude to change this page — e.g. add a column for unvested shares"
+        />
       </div>
 
       <div style={{
@@ -527,9 +529,11 @@ export default function SettingsStep({
             gap: 12, flexWrap: "wrap", marginBottom: 10,
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span style={{ fontSize: FS.lg, fontWeight: 600, color: C.text }}>
+              {/* The shared card title, as an h2 — it names this panel, and a bold
+                  span reaches a screen reader as neither. */}
+              <h2 style={{ ...CARD_TITLE, color: C.text, margin: 0 }}>
                 Refresh grant policy
-              </span>
+              </h2>
               {overridden && (
                 <Tag
                   tone="notice"
@@ -781,32 +785,6 @@ export default function SettingsStep({
             calculated here instead — the tooltip on each cell says which.
           </div>
         </div>
-      </div>
-
-      {/* BELOW the policy/grants grid, not inside it, because it acts on both:
-          "add a column for unvested shares" is a table change, "show the target as
-          a multiple" is a policy one, and a box parked within either half would
-          read as belonging to that half.
-
-          It must stay outside the grid. As a grid child it becomes the second
-          child and so takes the second COLUMN, which pushes the grants panel to a
-          row of its own underneath the policy panel — the table then renders below
-          the policy at the narrow column's width however wide the window is.
-          Spanning both columns does not fix it either: source order puts the span
-          in row 2 and the grants panel in row 3, still stacked. */}
-      <div style={{
-        background: C.surface, border: `1px solid ${C.border}`, borderRadius: RADIUS,
-        padding: 16,
-      }}>
-        <div style={{
-          fontSize: FS.sm, fontWeight: 600, color: C.textSubtle, marginBottom: 8,
-        }}>
-          Change this page
-        </div>
-        <AskBar
-          token={token}
-          placeholder="Ask Claude to change this page — e.g. add a column for unvested shares"
-        />
       </div>
 
       <Nav onBack={onBack} onNext={onNext} />

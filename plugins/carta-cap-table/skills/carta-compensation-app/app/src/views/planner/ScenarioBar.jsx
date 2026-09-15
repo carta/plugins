@@ -18,7 +18,7 @@
 // — an <option> holds text, not buttons — so they sit alongside as siblings.
 
 import { useEffect, useRef, useState } from "react";
-import { C, FS, RADIUS } from "../../ui/theme.js";
+import { C, CARD_TITLE, FS, RADIUS } from "../../ui/theme.js";
 import { Menu, Select, Tag } from "../../ui/components.jsx";
 
 const BTN = {
@@ -130,15 +130,15 @@ export default function ScenarioBar({
         <h2
           title={active.name}
           style={{
-            // Matches "Refresh grant policy" in the tile below — FS.lg at weight
-            // 600 — so the two card titles on a screen read as the same rank.
-            // This was heading-2 (20px/500), which is a legitimate Ink variant but
-            // made the scenario name outrank every other title on the page.
+            // The shared card title, so this reads as a peer of "Refresh cohort",
+            // "Refresh grant policy" and "Review + hand off" rather than as its
+            // own thing. Spelled out here it had a 36px line-height and named
+            // `Inter var` where the others named `Inter`.
             //
             // NOT the serif: only heading-1 carries SangBleu, and in product code
             // that is a page, app-shell or modal title — nothing labels a card with
             // it. It would also compete with the "Meetly" h1 above.
-            fontSize: FS.lg, fontWeight: 600, color: C.text,
+            ...CARD_TITLE, color: C.text,
             // Ink's `trim`, which its own card titles pass: the variant carries a
             // 16px bottom margin meant for prose, and the grid gap already spaces
             // this from the controls under it.

@@ -22,7 +22,7 @@
 // still have runway. Same field, opposite direction, deliberately.
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { C, FS, RADIUS } from "../ui/theme.js";
+import { C, CARD_TITLE, FS, RADIUS } from "../ui/theme.js";
 import ExportButton from "../ui/ExportButton.jsx";
 import { MultiSelect, Select, TableAlign, Tag, Th, Td, useMediaQuery } from "../ui/components.jsx";
 import { csvFilename, downloadCsv, toCsv } from "../model/csv.js";
@@ -42,7 +42,7 @@ import SettingsStep from "./planner/SettingsStep.jsx";
 import ReviewStep from "./planner/ReviewStep.jsx";
 import PoolBar from "./planner/PoolBar.jsx";
 import ScenarioBar from "./planner/ScenarioBar.jsx";
-import FilterBox from "./planner/FilterBox.jsx";
+import FilterBox, { CommittedFilters } from "./planner/FilterBox.jsx";
 import {
   eligibility, grantForRow, planTotals, policyToSettings,
 } from "../model/policy.js";
@@ -555,10 +555,26 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
     />
   );
 
-  // Steps 1 and 3 take them stacked, as before. Step 2 places them itself, so the
-  // scenario tile can sit beside the cycle figures rather than above them.
+  /** The header every step shows: which draft, and what it has to spend.
+   *
+   *  One row, scenario on the LEFT — it names the thing the rest of the screen is
+   *  about, so it reads first. The pool takes the flexible column because its bar
+   *  chart uses whatever width it is given, where the scenario tile's contents are
+   *  a fixed set of controls.
+   *
+   *  No alignItems:"start" — these are two cards of similar size side by side, and
+   *  a step between their bottom edges reads as a mistake rather than as a
+   *  difference in content. Stretch is the default, so this is the absence of a
+   *  line; removing it later would silently misalign them.
+   *
+   *  Stacks below the breakpoint, scenario first, which is the same order.
+   */
   const poolBar = (
-    <div style={{ display: "grid", gap: 12 }}>
+    <div style={{
+      display: "grid",
+      gridTemplateColumns: wide ? "minmax(0, 430px) minmax(0, 1fr)" : "minmax(0, 1fr)",
+      gap: 12,
+    }}>
       {scenarioBar}
       {poolOnly}
     </div>
@@ -567,8 +583,7 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
   if (step === "settings") {
     return (
       <SettingsStep
-        scenarioBar={scenarioBar}
-        poolBar={poolOnly}
+        poolBar={poolBar}
         equityUnits={planner.equityUnits ?? null}
         rows={inCartRows}
         policySettings={policySettings}
@@ -624,17 +639,67 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
         background: C.surface, border: `1px solid ${C.border}`, borderRadius: RADIUS,
         padding: 16,
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-          <span style={{ fontSize: FS.lg, fontWeight: 600, color: C.text }}>
-            Refresh cohort
-          </span>
-          {/* Only tenure is modelled — the equity figures are the report's own and
-              carry no tag, because tagging a value the product already displays is
-              as misleading as leaving a derived one untagged. */}
-          <Tag tone="notice" title="Tenure is calculated in this console from the report's hire date. Every other figure is Carta's own, as shown in the Equity Refresh Report.">
-            Tenure is modelled
-          </Tag>
-        </div>
+        {/* The whole tile folds. Collapsed it is a heading and a count — which is
+            the one thing someone scrolling past needs to know is still true.
+
+            A second <details>, nested inside the first's sibling: the Claude box
+            folds on its own because it is occasional even when the filters are in
+            use, and this folds the filters too once a cohort is settled. Both are
+            <details> for the same reasons — real keyboard and screen-reader
+            behaviour, and findable by in-page search while shut. */}
+        <details open className="ctc-fold">
+          {/* The whole summary is the hit target — that is how <details> works, and
+              it is worth keeping — but a heading you can click is not an AFFORDANCE.
+              The browser's own marker is a small OS triangle that reads as
+              decoration, so it is hidden (in the global stylesheet, since
+              ::-webkit-details-marker cannot be set inline) and replaced by a
+              labelled control on the right that says what it does. */}
+          <summary style={{
+            display: "flex", alignItems: "center", gap: 10, cursor: "pointer",
+            marginBottom: 4,
+          }}>
+            {/* An h2, like the scenario title beside it: this names the step, so
+                it should reach a screen reader as a heading rather than as a bold
+                span. margin:0 because the shared style carries no reset. */}
+            <h2 style={{ ...CARD_TITLE, color: C.text, margin: 0 }}>
+              Refresh cohort
+            </h2>
+            {/* Only tenure is modelled — the equity figures are the report's own and
+                carry no tag, because tagging a value the product already displays is
+                as misleading as leaving a derived one untagged. */}
+            <Tag tone="notice" title="Tenure is calculated in this console from the report's hire date. Every other figure is Carta's own, as shown in the Equity Refresh Report.">
+              Tenure is modelled
+            </Tag>
+            {/* The count rides on the SUMMARY so it survives collapsing. A folded
+                tile that does not say how many are excluded is how a narrowed
+                cohort becomes invisible. */}
+            {removed > 0 && <Tag>{removed} excluded by filters</Tag>}
+
+            {/* A span, not a button: a <button> inside a <summary> swallows the
+                click that would toggle it, so this is the label for a control the
+                summary already is. aria-hidden for the same reason — the summary
+                announces the open state itself, and a screen reader hearing both
+                would hear it twice. */}
+            <span
+              aria-hidden="true"
+              style={{
+                marginLeft: "auto", display: "inline-flex", alignItems: "center",
+                // Grey, not link blue: this reveals what is already on the page
+                // rather than navigating anywhere, and blue among these controls
+                // read as the one link on a tile full of fields.
+                gap: 6, fontSize: FS.sm, color: C.textSubtle,
+              }}
+            >
+              <span className="ctc-fold-label" />
+              <span className="ctc-fold-chevron" style={{ display: "inline-flex" }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                  strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                  style={{ stroke: "currentColor" }}>
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </span>
+            </span>
+          </summary>
         <div style={{ fontSize: FS.sm, color: C.textSubtle, lineHeight: 1.55 }}>
           Equity figures come from CTC's Equity Refresh Report and tie out against it.
         </div>
@@ -737,12 +802,6 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
           </div>
         )}
 
-        {removed > 0 && (
-          <div style={{ marginTop: 12 }}>
-            <Tag>{removed} excluded by filters</Tag>
-          </div>
-        )}
-
         {/* A FILTER, not a source edit — the one box on this console that means
             something different from the others.
 
@@ -754,21 +813,49 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
             readable, removable, and saved with the scenario. */}
         <div style={{
           marginTop: 14, paddingTop: 14, borderTop: `1px solid ${C.border}`,
+          display: "grid", gap: 8,
         }}>
-          {/* The same treatment the filter controls beside it use — Select renders
-              its label at FS.sm weight 400, and this was the one label in the tile
-              at 600, which read as a heading for a different section rather than a
-              label for one more filter. */}
-          <div style={{ fontSize: FS.sm, color: C.textSubtle, marginBottom: 8 }}>
-            Add a Claude generated filter
-          </div>
-          <FilterBox
-            rows={rows}
-            asOf={asOf}
-            filters={claudeFilters}
-            onApply={addClaudeFilter}
-            onRemove={removeClaudeFilter}
-          />
+          {/* The filters already applied stay on screen whether the box below is
+              open or not. An active filter is silently narrowing the cohort, and
+              putting one behind a collapsed section is how someone ends up looking
+              at 25 of 134 employees with no visible reason why. */}
+          <CommittedFilters filters={claudeFilters} onRemove={removeClaudeFilter} />
+
+          {/* COLLAPSED BY DEFAULT. The input, its examples and the space the
+              preview needs ran to 151px — a third of a tile that already filled
+              half the fold before the first employee row. Authoring a filter is a
+              deliberate act a few times a session; the preset controls above are
+              what people touch on every visit, so this is the part that folds.
+
+              A <details>, not a hand-rolled toggle: it opens on click and on
+              Enter, announces its own state, and is findable by the browser's own
+              in-page search even while closed — three things a div with an onClick
+              would each need building and would probably get wrong. */}
+          <details className="ctc-fold">
+            {/* The same control as the tile's own fold, so two nested collapsing
+                sections do not each teach a different gesture. */}
+            {/* Chevron FIRST here, unlike the tile's fold. This summary is one
+                short label, so a marker at the end floats away from the words it
+                belongs to; the tile's summary is a heading with tags after it,
+                where a right-hand control reads as belonging to the whole row. */}
+            <summary style={{
+              display: "flex", alignItems: "center", gap: 6,
+              fontSize: FS.sm, color: C.textSubtle, cursor: "pointer",
+            }}>
+              <span aria-hidden="true" className="ctc-fold-chevron"
+                style={{ display: "inline-flex", color: C.textSubtle }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                  strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                  style={{ stroke: "currentColor" }}>
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </span>
+              Add a Claude generated filter
+            </summary>
+            <div style={{ marginTop: 8 }}>
+              <FilterBox rows={rows} asOf={asOf} onApply={addClaudeFilter} />
+            </div>
+          </details>
         </div>
 
         {/* Gaps a filter cannot judge, surfaced rather than left for a reader to
@@ -789,6 +876,7 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
             )}
           </div>
         )}
+        </details>
       </div>
 
       {/* Table and cart side by side, the cart narrow and sticky. minmax(0,1fr)

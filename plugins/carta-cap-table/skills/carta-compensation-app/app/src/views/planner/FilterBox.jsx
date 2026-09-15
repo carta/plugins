@@ -84,7 +84,7 @@ export function cohortVocabulary(rows) {
 }
 
 export default function FilterBox({
-  rows, asOf, filters, onApply, onRemove,
+  rows, asOf, onApply,
   // Injectable so tests can drive every branch without a subprocess. The default
   // is the real endpoint; a test passing its own has no network at all.
   askClaude = defaultAskClaude,
@@ -216,45 +216,56 @@ export default function FilterBox({
         </div>
       )}
 
-      {filters.length > 0 && (
-        <div style={{ display: "grid", gap: 6 }}>
-          {filters.map((f) => (
-            <div
-              key={f.id}
-              style={{
-                display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
-                // The same size and colour as the filter labels this sits under —
-                // a committed filter is one more filter, not an announcement.
-                fontSize: FS.sm, color: C.textSubtle,
-              }}
-            >
-              {/* NEUTRAL, not notice. `notice` is this app's warning tone (it is
-                  what an unavailable filter and a save conflict use), and a filter
-                  doing exactly what was asked of it is not a warning — in yellow it
-                  read as one, and as a different visual language from the controls
-                  around it. */}
-              <Tag title={`Asked as: ${f.text}`}>Claude filter</Tag>
-              {/* The predicate as a sentence, so a committed filter can be audited
-                  by whoever inherits the plan — not only by whoever asked for it. */}
-              <span>{f.sentence}</span>
-              <button
-                type="button"
-                onClick={() => onRemove(f.id)}
-                title="Remove this filter"
-                style={{
-                  background: "none", border: "none", padding: 0, font: "inherit",
-                  // FS.sm, matching the row it sits in. It was FS.xs, the one 11px
-                  // thing on a line of 12px text.
-                  fontSize: FS.sm, color: C.linkDefault, cursor: "pointer",
-                  textDecoration: "underline",
-                }}
-              >
-                remove
-              </button>
-            </div>
-          ))}
+    </div>
+  );
+}
+
+/** The filters already applied, as removable rows.
+ *
+ *  Its OWN component because it is rendered outside the collapsible input above
+ *  it: an active filter is silently narrowing the cohort, so hiding it behind a
+ *  collapsed section is how someone ends up looking at 25 of 134 employees
+ *  without a visible reason. The box that authors a filter can be put away; the
+ *  filters it produced cannot.
+ */
+export function CommittedFilters({ filters, onRemove }) {
+  if (!filters.length) return null;
+  return (
+    <div style={{ display: "grid", gap: 6 }}>
+      {filters.map((f) => (
+        <div
+          key={f.id}
+          style={{
+            display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
+            // The same size and colour as the filter labels this sits under —
+            // a committed filter is one more filter, not an announcement.
+            fontSize: FS.sm, color: C.textSubtle,
+          }}
+        >
+          {/* NEUTRAL, not notice. `notice` is this app's warning tone (it is what
+              an unavailable filter and a save conflict use), and a filter doing
+              exactly what was asked of it is not a warning — in yellow it read as
+              one, and as a different visual language from the controls around it. */}
+          <Tag title={`Asked as: ${f.text}`}>Claude filter</Tag>
+          {/* The predicate as a sentence, so a committed filter can be audited by
+              whoever inherits the plan — not only by whoever asked for it. */}
+          <span>{f.sentence}</span>
+          <button
+            type="button"
+            onClick={() => onRemove(f.id)}
+            title="Remove this filter"
+            style={{
+              background: "none", border: "none", padding: 0, font: "inherit",
+              // FS.sm, matching the row it sits in. It was FS.xs, the one 11px
+              // thing on a line of 12px text.
+              fontSize: FS.sm, color: C.linkDefault, cursor: "pointer",
+              textDecoration: "underline",
+            }}
+          >
+            remove
+          </button>
         </div>
-      )}
+      ))}
     </div>
   );
 }

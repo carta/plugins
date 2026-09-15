@@ -206,15 +206,26 @@ export const RADIUS = 4;
  *  pick values by eye. The difference is the one between a Carta page and a page
  *  that resembles one.
  */
-export const HEADING = {
-  // The card/panel title. What Section renders for `title=`, and what product code
-  // hand-rolls inside a Tile — 126 of those against 83 for heading-2.
-  h3: { fontSize: 16, lineHeight: "28px", fontWeight: 500 },
-  // One step up, for a card that heads a whole screen rather than sitting among
-  // others. The escape hatch RFIBlock takes when it overrides Section's default,
-  // and what StandardTopBar and BillingSummary use. Still the base sans: only
-  // heading-1 carries SangBleu, and that is reserved for page titles.
-  h2: { fontSize: 20, lineHeight: "36px", fontWeight: 500 },
+/** The title of a card or a step. ONE definition, because four of these sit on
+ *  the planner's three screens — "Refresh cohort", "Refresh grant policy", the
+ *  scenario name and "Review + hand off" — and they are peers. Spelled out in four
+ *  places they drifted: same size and weight, but the scenario title carried a
+ *  36px line-height and named its face `Inter var` where the others named `Inter`,
+ *  which is the same typeface by two names and the kind of difference that becomes
+ *  a real one later.
+ *
+ *  16px/600 rather than Ink's heading-3 (16px/500): this app's own card titles have
+ *  always been 600, and matching four titles to each other matters more here than
+ *  matching one of them to a variant nothing else on the page uses.
+ *
+ *  `fontFamily` is explicit so every one of them resolves through SANS rather than
+ *  inheriting whatever the nearest ancestor happens to name.
+ */
+export const CARD_TITLE = {
+  fontSize: 16,
+  lineHeight: "24px",
+  fontWeight: 600,
+  fontFamily: SANS,
 };
 
 export const SHADOW = {
@@ -247,6 +258,25 @@ export const GLOBAL_CSS = `
      mid-state, so the indicator still reads as present without animating. */
   @media (prefers-reduced-motion: reduce) {
     .ctc-dot { animation: none; opacity: 0.6; }
+  }
+
+  /* A collapsible section's own control. The browser's marker is a small OS
+     triangle that reads as decoration rather than as something to press, and
+     ::-webkit-details-marker cannot be set from an inline style — which is the
+     whole reason these three rules live here rather than on the element.
+
+     The label is CSS content because it is the ONE piece of text whose value is
+     the element's open state; deriving it in React would mean tracking that
+     state twice, and the copy going stale the first time someone toggles with a
+     keyboard instead of a click. */
+  .ctc-fold > summary { list-style: none; }
+  .ctc-fold > summary::-webkit-details-marker { display: none; }
+  .ctc-fold > summary .ctc-fold-label::after { content: "Hide"; }
+  .ctc-fold:not([open]) > summary .ctc-fold-label::after { content: "Show"; }
+  .ctc-fold > summary .ctc-fold-chevron { transition: transform 120ms ease; }
+  .ctc-fold:not([open]) > summary .ctc-fold-chevron { transform: rotate(-90deg); }
+  @media (prefers-reduced-motion: reduce) {
+    .ctc-fold > summary .ctc-fold-chevron { transition: none; }
   }
 
   table { border-collapse: collapse; }

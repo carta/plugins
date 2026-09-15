@@ -13,7 +13,7 @@
 // remaining-shares figure is a subtraction we performed.
 
 import { useState } from "react";
-import { C, FS, RADIUS } from "../../ui/theme.js";
+import { C, CARD_TITLE, FS, RADIUS } from "../../ui/theme.js";
 import { Tag } from "../../ui/components.jsx";
 import { shares } from "../../model/format.js";
 import { handoffPrompt } from "../../model/handoff.js";
@@ -185,9 +185,11 @@ export default function ReviewStep({
   };
   return (
     <div style={{ padding: "18px 24px 28px", display: "grid", gap: 16 }}>
-      <div style={{ fontSize: FS.lg, fontWeight: 600, color: C.text }}>
+      {/* The shared card title, as an h2 — it names this step, and a bold div
+          reaches a screen reader as neither a heading nor a landmark. */}
+      <h2 style={{ ...CARD_TITLE, color: C.text, margin: 0 }}>
         Review + hand off
-      </div>
+      </h2>
 
       {poolBar}
 
