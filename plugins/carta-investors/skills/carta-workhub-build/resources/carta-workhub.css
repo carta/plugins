@@ -1195,6 +1195,9 @@
 .frt-group td { font-weight: 600; padding: 14px 10px 8px; }
 .frt-child td { background: var(--ink-color-global-surface-lightgray-default); }
 .frt-child td.frt-c-entity { padding-left: 34px; }
+.frt-depth-2 td.frt-c-entity { padding-left: 58px; }
+.frt-pkg-label { font-weight: 400; color: var(--ink-color-global-text-subtle); }
+.frt-tag { font-size: 12px; color: var(--ink-color-global-text-subtle); white-space: nowrap; margin-top: 2px; }
 .frt-c-twiddle { width: 4%; text-align: center; }
 .frt-twiddle { background: none; border: 0; padding: 2px 4px; line-height: 1; font-size: 12px; color: var(--ink-color-global-text-subtle); cursor: pointer; }
 .frt-c-entity { width: 20%; } .frt-c-due { width: 13%; } .frt-c-cash { width: 17%; }

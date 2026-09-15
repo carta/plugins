@@ -174,18 +174,26 @@ not inside a fund-data dashboard.
   to check rather than inviting a second press.
 - **Financial reporting tracker** — one card per reporting period that needs the GP, opening the
   Financial Reporting Tracker for that period: the banner, the combined filter-and-sort menu,
-  entity search, the period selector, and the six-column table with fund families as collapsible
-  rows. Every label and dot is produced from `fa:get:reporting-status` codes by the same rules
-  the backend's own page mappers use, so the panel and the page read identically. Every button
-  carries the backend's absolute `href` and opens Carta in a new tab; nothing is written from here.
+  entity search, the period selector, and the six-column table with fund families **and any
+  entity holding two or more packages** as collapsible rows. A row with two or more packages
+  beneath it reads a status ("Awaiting your review", "Ready to publish", or the ordinary cell
+  text) instead of a button, tagged "N packages" under its name; each package is a child row of
+  its own with its own button. A fund-family member the combined package covers reads "In
+  combined package"; one publishing packages of its own reads and owes them, nested a level
+  deeper when it holds two or more. Every label, dot and package name is produced straight from
+  `fa:get:reporting-status` — `display_label` and the family's own rollup read are both computed
+  server-side now — so the panel and the page read identically. Every button carries the
+  backend's absolute `href` and opens Carta in a new tab; nothing is written from here.
 
   **The cards come from the tracker read, not from `fa:list:workflow`.** On load the queue reads
   the page's rolling window — the active quarter and the three before it, never earlier than
   Q3 2023 — one `fa:get:reporting-status` call per period, in parallel. A period whose
   `rollup.needs_action` is above zero gets a card in Tasks to complete titled
-  `Financial reporting — Q2 2026`, its second line counting the open items by column and its
-  footer naming the soonest deadline. A period the server refuses resolves to no card, so the
-  flag being off, or a firm the viewer cannot read, silently yields nothing rather than an error.
+  `Financial reporting — Q2 2026`, its second line counting the open items by column — packages
+  needing the GP counted directly, not rows, so a two-package entity awaiting review on both
+  reads "2 packages to review" — and its footer naming the soonest deadline. A period the server
+  refuses resolves to no card, so the flag being off, or a firm the viewer cannot read, silently
+  yields nothing rather than an error.
 
   There is no build flag for this either: the read is gated server-side by
   `CARTA_MCP_FINANCIAL_REPORTING_TRACKER`, so no card means the environment does not serve it.
@@ -194,8 +202,9 @@ not inside a fund-data dashboard.
   **The panel is wider than the review panel** — `min(1120px, 96vw)` by `min(760px, 90vh)` —
   because six table columns need it; below about 900px the table scrolls inside the panel, never
   the page. The read returns the whole firm with no paging, so a firm past roughly 80 entities
-  would exceed carta-mcp's 40k reply cap and the period would read as failed; that is accepted
-  for now.
+  would exceed carta-mcp's 40k reply cap and the period would read as failed; a firm with many
+  multi-package entities hits it sooner, since every package adds its own share of the reply.
+  That is accepted for now.
 - **Thread view** — the full conversation from `fa:list:workflow-message`, with a reply box
   writing to `fa:create:workflow-message`. Carta's internal agent output is never surfaced.
 

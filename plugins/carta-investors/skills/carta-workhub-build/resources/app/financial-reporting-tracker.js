@@ -114,8 +114,10 @@ function frtMapFinancialReport(o) {
     case "with_auditor": return frtWithCarta("With auditor");
     case "awaiting_gp_publish": return o.href ? frtAction("Schedule publish", o.href, true) : frtDone("Approved");
     case "approved_scheduled": { const w = frtDate(o.scheduled_publish_on); return frtDone(w ? `Approved - publishing ${w}` : "Approved"); }
-    case "approved_carta_publishes":
-    case "covered_by_family_package": return frtDone("Approved");
+    case "approved_carta_publishes": return frtDone("Approved");
+    // A covered fund-family member reads this whatever the combined package's state; the
+    // family row carries that state and any button.
+    case "covered_by_family_package": return frtInactive("In combined package");
     case "published": { const w = frtDate(o.published_on); return frtDone(w ? `Published on ${w}` : "Published"); }
     case "approved_wont_publish": { const w = frtDate(o.published_on); return frtDone(w ? `Approved on ${w} but not to be published` : "Approved - not publishing"); }
     default: break;
@@ -123,13 +125,20 @@ function frtMapFinancialReport(o) {
   return frtWithCarta("Carta preparing");
 }
 
+// A row with two or more packages beneath it reads a status instead of a button: the
+// buttons belong to the package children. Every other code reads as it would alone.
+function frtMapFinancialReportRollup(o) {
+  if (o.code === "awaiting_gp_review") return frtStatusCell("Awaiting your review", "needs_action", "notice");
+  if (o.code === "awaiting_gp_publish") return frtStatusCell("Ready to publish", "needs_action", "notice");
+  return frtMapFinancialReport(o);
+}
+
 const FRT_VIEW_REPORT_CODES = ["published", "approved_wont_publish"];
 
 // A View report button takes the cell and its text moves to the trailing note.
-// A family member never carries the button.
-function frtMapFinancialReportColumns(o, isFamilyChild) {
+function frtMapFinancialReportColumns(o) {
   const cell = frtMapFinancialReport(o);
-  const action = (!isFamilyChild && o.href && FRT_VIEW_REPORT_CODES.includes(o.code)) ? { text: "View report", href: o.href } : null;
+  const action = (o.href && FRT_VIEW_REPORT_CODES.includes(o.code)) ? { text: "View report", href: o.href } : null;
   if (action) return { cell: frtHidden(cell.state), action, trailingNote: cell.text };
   return { cell, action: null, trailingNote: null };
 }
@@ -141,8 +150,116 @@ function frtDeadlineNote(days, source, period) {
 }
 
 // ── Rows, as the page's service builds them ────────────────────────────────
+//
+// The rollup read and the package label ladder are both server-computed
+// (family.financial_report reads over combined + members' own; every package
+// carries display_label), so this only decides single- vs multi-package.
 
 const FRT_FUND_TYPES = ["FUND", "SPV", "SYNDICATE_SPV"];
+
+// A package as a row of its own: blank deadline and cash/SOI, its own read.
+function frtPackageChild(pkg, rowId) {
+  const cols = frtMapFinancialReportColumns(pkg.financial_report || {});
+  return {
+    id: `${rowId}:${pkg.package_id}`, name: pkg.display_label,
+    due: null, note: null, cash: FRT_EMPTY_CELL, soi: FRT_EMPTY_CELL,
+    fr: cols.cell, action: cols.action, trailing: cols.trailingNote,
+    isPackage: true, isFamilyPackage: !!pkg.is_family_package, packages: [], children: [],
+  };
+}
+
+// The Financial Report columns for a row over the packages beneath it, and the
+// package children it lists when there are two or more.
+function frtLeafColumns(financialReport, packages, rowId) {
+  const list = packages || [];
+  if (list.length >= 2) {
+    return {
+      fr: frtMapFinancialReportRollup(financialReport || {}), action: null, trailing: null,
+      tag: `${list.length} packages`, packageChildren: list.map(p => frtPackageChild(p, rowId)),
+    };
+  }
+  const cols = frtMapFinancialReportColumns(financialReport || {});
+  return { fr: cols.cell, action: cols.action, trailing: cols.trailingNote, tag: null, packageChildren: [] };
+}
+
+function frtIsExpandable(row) {
+  return !!row.isFamily || (row.packages && row.packages.length > 0);
+}
+
+// Every expandable row is open; the button reads "collapse" only then.
+function frtAllOpen(openRows, ids) {
+  return ids.length > 0 && ids.every(id => openRows[id]);
+}
+
+// Expand-all toggles every expandable row together: open them all, or close
+// them all when they already are.
+function frtToggleAllRows(openRows, ids) {
+  if (frtAllOpen(openRows, ids)) return {};
+  const next = {};
+  ids.forEach(id => { next[id] = true; });
+  return next;
+}
+
+function frtSearchLabels(packages) {
+  return (packages || []).map(p => p.display_label);
+}
+
+function frtEntityRow(e, period) {
+  const lc = frtLeafColumns(e.financial_report, e.packages, String(e.entity_id));
+  return {
+    id: String(e.entity_id), name: e.entity_name, sub: null,
+    group: FRT_FUND_TYPES.includes(e.entity_type) ? "funds" : "gp",
+    due: e.due_date, note: frtDeadlineNote(e.due_date_days, e.due_date_source, period),
+    cash: frtMapCashReconciliation(e.cash_reconciliation || {}),
+    soi: frtMapSoiReview(e.soi_review || {}),
+    fr: lc.fr, action: lc.action, trailing: lc.trailing, tag: lc.tag,
+    packages: lc.packageChildren, children: [], isFamily: false,
+    searchLabels: frtSearchLabels(e.packages),
+  };
+}
+
+// A member beneath its family's row: covered (no packages) reads "In combined
+// package"; one publishing its own reads and owes them, packages included.
+function frtMemberRow(m, period) {
+  const lc = frtLeafColumns(m.financial_report, m.packages, String(m.entity_id));
+  return {
+    id: String(m.entity_id), name: m.entity_name,
+    due: m.due_date, note: frtDeadlineNote(m.due_date_days, m.due_date_source, period),
+    cash: frtMapCashReconciliation(m.cash_reconciliation || {}),
+    soi: frtMapSoiReview(m.soi_review || {}),
+    fr: lc.fr, action: lc.action, trailing: lc.trailing, tag: lc.tag,
+    packages: lc.packageChildren, children: [],
+    searchLabels: frtSearchLabels(m.packages),
+  };
+}
+
+// families[].financial_report already reads over everything beneath the
+// family; this only counts packages to decide single-package vs rollup.
+function frtFamilyRow(f, members, period) {
+  const ownPackages = f.packages || [];
+  const total = ownPackages.length + members.reduce((n, m) => n + (m.packages || []).length, 0);
+  const rowId = `family-${f.family_id}`;
+  let fr, action, trailing, tag = null, packageChildren = [];
+  if (total >= 2) {
+    fr = frtMapFinancialReportRollup(f.financial_report || {});
+    action = null; trailing = null; tag = `${total} packages`;
+    packageChildren = ownPackages.map(p => frtPackageChild(p, rowId));
+  } else {
+    const cols = frtMapFinancialReportColumns(f.financial_report || {});
+    fr = cols.cell; action = cols.action; trailing = cols.trailingNote;
+  }
+  return {
+    id: rowId, name: f.family_name,
+    sub: `Fund family · ${members.length} ${members.length === 1 ? "fund" : "funds"}`,
+    group: "funds", isFamily: true,
+    due: f.due_date, note: frtDeadlineNote(f.due_date_days, f.due_date_source, period),
+    // Cash reconciliation and the SOI exist per member fund only.
+    cash: FRT_EMPTY_CELL, soi: FRT_EMPTY_CELL,
+    fr, action, trailing, tag,
+    packages: packageChildren, children: members.map(m => frtMemberRow(m, period)),
+    searchLabels: frtSearchLabels(ownPackages),
+  };
+}
 
 function frtBuildRows(p) {
   const byFamily = {};
@@ -150,36 +267,9 @@ function frtBuildRows(p) {
     if (e.family_id) (byFamily[e.family_id] = byFamily[e.family_id] || []).push(e);
   });
   const rows = [];
-  (p.entities || []).filter(e => !e.family_id).forEach(e => {
-    const fr = frtMapFinancialReportColumns(e.financial_report || {}, false);
-    rows.push({
-      id: String(e.entity_id), name: e.entity_name, sub: null,
-      group: FRT_FUND_TYPES.includes(e.entity_type) ? "funds" : "gp",
-      due: e.due_date, note: frtDeadlineNote(e.due_date_days, e.due_date_source, p.reporting_period),
-      cash: frtMapCashReconciliation(e.cash_reconciliation || {}),
-      soi: frtMapSoiReview(e.soi_review || {}),
-      fr: fr.cell, action: fr.action, trailing: fr.trailingNote, children: [],
-    });
-  });
+  (p.entities || []).filter(e => !e.family_id).forEach(e => { rows.push(frtEntityRow(e, p.reporting_period)); });
   (p.families || []).forEach(f => {
-    const members = byFamily[f.family_id] || [];
-    const fr = frtMapFinancialReportColumns(f.financial_report || {}, false);
-    rows.push({
-      id: `family-${f.family_id}`, name: f.family_name,
-      sub: `Fund family · ${members.length} ${members.length === 1 ? "fund" : "funds"}`,
-      group: "funds", isFamily: true,
-      due: f.due_date, note: frtDeadlineNote(f.due_date_days, f.due_date_source, p.reporting_period),
-      // Cash reconciliation and the SOI exist per member fund only.
-      cash: FRT_EMPTY_CELL, soi: FRT_EMPTY_CELL,
-      fr: fr.cell, action: fr.action, trailing: fr.trailingNote,
-      children: members.map(m => ({
-        id: String(m.entity_id), name: m.entity_name,
-        due: m.due_date, note: frtDeadlineNote(m.due_date_days, m.due_date_source, p.reporting_period),
-        cash: frtMapCashReconciliation(m.cash_reconciliation || {}),
-        soi: frtMapSoiReview(m.soi_review || {}),
-        fr: frtMapFinancialReportColumns(m.financial_report || {}, true).cell,
-      })),
-    });
+    rows.push(frtFamilyRow(f, byFamily[f.family_id] || [], p.reporting_period));
   });
   return rows;
 }
@@ -217,14 +307,22 @@ function frtSortRows(rows, sort) {
 }
 
 function frtNeedsAction(r) {
-  return [r.cash, r.soi, r.fr].some(c => c && c.state === "needs_action") || (r.children || []).some(frtNeedsAction);
+  return [r.cash, r.soi, r.fr].some(c => c && c.state === "needs_action")
+    || (r.packages || []).some(p => p.fr && p.fr.state === "needs_action")
+    || (r.children || []).some(frtNeedsAction);
+}
+
+// A row matches on its own name, a package's label (a member's own included),
+// or a member's name.
+function frtRowMatchesSearch(r, q) {
+  if (String(r.name).toLowerCase().includes(q)) return true;
+  if ((r.searchLabels || []).some(l => String(l).toLowerCase().includes(q))) return true;
+  return (r.children || []).some(c => frtRowMatchesSearch(c, q));
 }
 
 function frtFilterRows(rows, st) {
   const q = String(st.search || "").trim().toLowerCase();
-  return rows.filter(r =>
-    (!st.statusFilter || frtNeedsAction(r)) &&
-    (!q || String(r.name).toLowerCase().includes(q) || (r.children || []).some(c => String(c.name).toLowerCase().includes(q))));
+  return rows.filter(r => (!st.statusFilter || frtNeedsAction(r)) && (!q || frtRowMatchesSearch(r, q)));
 }
 
 // ── Reading ────────────────────────────────────────────────────────────────
@@ -265,14 +363,17 @@ async function frtFetchPeriod(p) {
   return payload;
 }
 
-// What the card's second line says: the GP's open items by column.
+// What the card's second line says: the GP's open items by column. Packages
+// are counted directly off the payload, not rows -- a two-package entity
+// awaiting review on both reads "2 packages to review", not one.
 function frtNeedsSummary(payload) {
-  const rows = frtBuildRows(payload);
-  const flat = rows.flatMap(r => [r].concat(r.children || []));
-  const count = (pick) => flat.filter(r => { const c = pick(r); return c && c.state === "needs_action"; }).length;
-  const packages = count(r => r.fr);
-  const cash = count(r => r.cash);
-  const soi = count(r => r.soi);
+  const entities = payload.entities || [];
+  const needsAction = c => c && c.state === "needs_action";
+  const cash = entities.filter(e => needsAction(e.cash_reconciliation)).length;
+  const soi = entities.filter(e => needsAction(e.soi_review)).length;
+  const packages = entities.flatMap(e => e.packages || [])
+    .concat((payload.families || []).flatMap(f => f.packages || []))
+    .filter(p => needsAction(p.financial_report)).length;
   const parts = [];
   if (packages) parts.push(`${packages} ${packages === 1 ? "package" : "packages"} to review`);
   if (cash) parts.push(`${cash} cash reconciliation ${cash === 1 ? "item" : "items"}`);
@@ -377,7 +478,7 @@ function frtReset(target, title) {
     search: "",
     statusFilter: null,
     sort: { key: "due_date", direction: "ascending" },
-    openFamilies: {},
+    openRows: {},
     menu: null,
   };
   const key = frtPeriodKey(_frt.period);
@@ -405,7 +506,7 @@ async function frtLoad() {
 function frtSelectPeriod(p) {
   if (!_frt) return;
   _frt.period = { period: p.period, year: p.year };
-  _frt.openFamilies = {};
+  _frt.openRows = {};
   _frt.menu = null;
   frtLoad();
 }
@@ -436,19 +537,23 @@ function frtRenderFinancialReport(row) {
   return `<div class="frt-fr">${frtRenderCell(row.fr)}${btn}</div>`;
 }
 
-function frtRenderRow(row, isChild) {
-  const open = !!_frt.openFamilies[row.id];
-  const twiddle = row.isFamily
-    ? `<button class="frt-twiddle" type="button" data-frt-family="${escHtml(row.id)}" aria-label="${open ? "Collapse" : "Expand"} ${escHtml(row.name)}">${open ? "▾" : "▸"}</button>`
+// depth 0 is a top-level entity or family row; 1 is a member or a package
+// child of one; 2 is a member's own package, nested one level further.
+function frtRenderRow(row, depth) {
+  const open = frtIsExpandable(row) && !!_frt.openRows[row.id];
+  const twiddle = (depth === 0 && frtIsExpandable(row))
+    ? `<button class="frt-twiddle" type="button" data-frt-row="${escHtml(row.id)}" aria-label="${open ? "Collapse" : "Expand"} ${escHtml(row.name)}">${open ? "▾" : "▸"}</button>`
     : "";
   const due = row.due ? `<div class="frt-due">${escHtml(frtDate(row.due))}</div>` : '<div class="frt-em">—</div>';
-  return `<tr class="${isChild ? "frt-child" : ""}">
-    <td class="frt-c-twiddle">${isChild ? "" : twiddle}</td>
-    <td class="frt-c-entity"><div class="frt-ent">${escHtml(row.name)}</div>${row.sub ? `<div class="frt-sub">${escHtml(row.sub)}</div>` : ""}</td>
+  const cls = [depth > 0 ? "frt-child" : "", depth > 1 ? "frt-depth-2" : ""].filter(Boolean).join(" ");
+  const nameCls = row.isPackage ? "frt-ent frt-pkg-label" : "frt-ent";
+  return `<tr class="${cls}">
+    <td class="frt-c-twiddle">${twiddle}</td>
+    <td class="frt-c-entity"><div class="${nameCls}">${escHtml(row.name)}</div>${row.sub ? `<div class="frt-sub">${escHtml(row.sub)}</div>` : ""}${row.tag ? `<div class="frt-tag">${escHtml(row.tag)}</div>` : ""}</td>
     <td class="frt-c-due">${due}${row.note ? `<div class="frt-sub">${escHtml(row.note)}</div>` : ""}</td>
     <td class="frt-c-cash">${frtRenderCell(row.cash)}</td>
     <td class="frt-c-soi">${frtRenderCell(row.soi)}</td>
-    <td class="frt-c-fr">${isChild ? frtRenderCell(row.fr) : frtRenderFinancialReport(row)}</td>
+    <td class="frt-c-fr">${frtRenderFinancialReport(row)}</td>
     <td class="frt-c-act">${row.trailing ? `<span class="frt-sub">${escHtml(row.trailing)}</span>` : ""}</td>
   </tr>`;
 }
@@ -471,8 +576,8 @@ function frtRenderTable() {
   const all = frtBuildRows(_frt.payload);
   const shown = frtSortRows(frtFilterRows(all, _frt), _frt.sort);
   if (!shown.length) return '<div class="frt-empty">No entities match your filters.</div>';
-  const families = shown.filter(r => r.isFamily);
-  const allOpen = families.length > 0 && families.every(r => _frt.openFamilies[r.id]);
+  const expandable = shown.filter(frtIsExpandable);
+  const allOpen = frtAllOpen(_frt.openRows, expandable.map(r => r.id));
   let html = `<div class="frt-table-wrap"><table class="frt-table"><thead><tr>
     <th class="frt-c-twiddle"><button class="frt-twiddle" type="button" data-frt-expand-all aria-label="${allOpen ? "Collapse rows" : "Expand rows"}">${allOpen ? "⊟" : "⊞"}</button></th>
     ${frtHeader("entity_name", "Entity")}
@@ -486,8 +591,14 @@ function frtRenderTable() {
     if (!rows.length) return;
     html += `<tr class="frt-group"><td colspan="7">${escHtml(title)} (${rows.length})</td></tr>`;
     rows.forEach(r => {
-      html += frtRenderRow(r, false);
-      if (r.isFamily && _frt.openFamilies[r.id]) r.children.forEach(c => { html += frtRenderRow(c, true); });
+      html += frtRenderRow(r, 0);
+      if (frtIsExpandable(r) && _frt.openRows[r.id]) {
+        r.packages.forEach(pkg => { html += frtRenderRow(pkg, 1); });
+        r.children.forEach(m => {
+          html += frtRenderRow(m, 1);
+          (m.packages || []).forEach(pkg => { html += frtRenderRow(pkg, 2); });
+        });
+      }
     });
   });
   return html + "</tbody></table></div>";
@@ -590,16 +701,14 @@ function frtBind(root) {
     const p = _frt.window.find(w => frtPeriodKey(w) === b.dataset.frtPeriod);
     if (p) frtSelectPeriod(p);
   }));
-  root.querySelectorAll("[data-frt-family]").forEach(b => b.addEventListener("click", () => {
-    const id = b.dataset.frtFamily;
-    if (_frt.openFamilies[id]) delete _frt.openFamilies[id]; else _frt.openFamilies[id] = true;
+  root.querySelectorAll("[data-frt-row]").forEach(b => b.addEventListener("click", () => {
+    const id = b.dataset.frtRow;
+    if (_frt.openRows[id]) delete _frt.openRows[id]; else _frt.openRows[id] = true;
     frtRender();
   }));
   root.querySelectorAll("[data-frt-expand-all]").forEach(b => b.addEventListener("click", () => {
-    const fams = frtBuildRows(_frt.payload).filter(r => r.isFamily).map(r => r.id);
-    const allOpen = fams.every(f => _frt.openFamilies[f]);
-    _frt.openFamilies = {};
-    if (!allOpen) fams.forEach(f => { _frt.openFamilies[f] = true; });
+    const ids = frtBuildRows(_frt.payload).filter(frtIsExpandable).map(r => r.id);
+    _frt.openRows = frtToggleAllRows(_frt.openRows, ids);
     frtRender();
   }));
   root.querySelectorAll("[data-frt-reset]").forEach(b => b.addEventListener("click", () => {
