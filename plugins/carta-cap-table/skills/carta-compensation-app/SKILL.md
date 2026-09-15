@@ -707,7 +707,8 @@ and why.
 > **The tab it feeds is hidden.** The planner's own screens are complete as of
 > this change — cohort, selection, policy, review and the issuance hand-off — but
 > the tab stays switched off at `app/src/App.jsx` → `SHOW_REFRESH_PLANNER = false`
-> until the fetch above can actually run. Without the export command there is no
+> until the fetch above can actually run. A **staff** caller who asks can see it
+> in their own build — see the staff-preview note under Step 2e. Without the export command there is no
 > `planner.json`, so the tab would have no data to show even if it were visible.
 >
 > `build_datadir` treats the report as optional — with no capture it records
@@ -764,6 +765,37 @@ than shown as `$0` or `0.0000%`, exactly as the product does.
 ```json
 {"corporation": "<canonical name>", "corporationId": <int>, "cartaEnvironment": "production"}
 ```
+
+<details>
+<summary><b>Staff preview — showing the hidden Refresh planner tab</b></summary>
+
+The planner tab is off for everyone (`SHOW_REFRESH_PLANNER = false`). A **staff**
+caller who asks for it can have it in their own build by adding one key:
+
+```json
+{"corporation": "…", "corporationId": 7, "cartaEnvironment": "production",
+ "preview": {"refreshPlanner": true}}
+```
+
+**BOTH conditions, and you check them in this order:**
+
+1. **The user asked.** Not "might find it useful" — an actual request to see the
+   planner, or to QA it. Never add this on your own initiative; a half-built
+   workflow appearing unbidden is the thing the tab is hidden to prevent.
+2. **They are staff.** Call `get_current_user` and read its staff field. Do not
+   infer it from an `@carta.com` address, from the corporation they are looking
+   at, or from their having asked — an email domain is not an authorisation, and
+   the whole point is that the caller does not self-certify.
+
+If they asked and are not staff, say so plainly and build without the key. Do not
+offer a workaround: the flag lives in a file on their own machine and they could
+edit it, which is exactly why this is a courtesy gate and not a security one.
+
+**What it is not.** It withholds no data — the planner reads the same equity
+refresh report already in the directory, and the console has no identity of its
+own to check at render time. It exists so an unfinished workflow is not shown to
+customers, and so a teammate QAing it does not have to patch source.
+</details>
 
 ## Step 3b — Build
 

@@ -479,6 +479,24 @@ def build(rawdir, out, meta):
         "peerGroup": benchmarks["peerGroup"],
     }
 
+    # Work-in-progress surfaces a STAFF caller asked to see. Absent for every
+    # ordinary build, which is what keeps an unfinished workflow away from
+    # customers.
+    #
+    # The staff check happens in the SKILL, before this runs — it asks Carta who
+    # the caller is, and writes the flag into meta.json only for a staff account
+    # that requested the preview. It cannot happen here: this script is handed a
+    # meta file and has no Carta access of its own, and it cannot happen in the
+    # browser, which has no identity at all.
+    #
+    # So this is an OPT-IN RECORD, not an authorisation. It withholds nothing: the
+    # planner reads the same equity refresh report already in this directory.
+    # Hiding the tab is about not showing a half-built workflow, and anyone who can
+    # open the console can edit this file anyway.
+    preview = meta.get("preview")
+    if isinstance(preview, dict) and preview.get("refreshPlanner") is True:
+        snapshot["preview"] = {"refreshPlanner": True}
+
     def w(name, obj):
         with (out / name).open("w", encoding="utf-8") as fh:
             json.dump(obj, fh, indent=2)

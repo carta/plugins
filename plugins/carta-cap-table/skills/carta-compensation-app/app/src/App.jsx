@@ -41,19 +41,44 @@ function storedTab() {
 // are still being built. A half-workflow in a customer-facing console reads as a
 // broken feature rather than an early one, so it stays off until the whole flow lands.
 //
-// TO RE-ENABLE: set this to true and delete this block. Nothing else needs changing —
-// the view, its data and its tests are all live and exercised. Remove the matching
-// notice in SKILL.md at the same time, or the docs will disagree with the app.
+// TO RE-ENABLE FOR EVERYONE: set this to true and delete this block. Nothing else
+// needs changing — the view, its data and its tests are all live and exercised.
+// Remove the matching notice in SKILL.md at the same time, or the docs will
+// disagree with the app.
 const SHOW_REFRESH_PLANNER = false;
+
+/** Does this build's snapshot opt into the staff preview?
+ *
+ *  The console has NO IDENTITY OF ITS OWN — it is a static page reading JSON from a
+ *  data dir, and the browser never calls Carta. So this cannot be a permission
+ *  check at render time, and pretending otherwise would be security theatre: the
+ *  flag is in a file on the reader's own machine, and anyone who can open the
+ *  console can edit it.
+ *
+ *  That is fine, because it is not protecting anything. The planner reads the same
+ *  equity refresh report the rest of the build already contains; hiding the tab is
+ *  about not showing customers a half-finished workflow, not about withholding
+ *  data. The real check happens where a real check is possible — the SKILL asks
+ *  Carta who the caller is before writing this key, and only writes it for a staff
+ *  account that asked for it.
+ */
+function staffPreviewEnabled(snapshot) {
+  return snapshot?.preview?.refreshPlanner === true;
+}
 
 // The refresh planner is gated on its OWN data, not the roster: it reads the equity
 // refresh report, and a corporation can legitimately have a benchmarked roster with no
 // equity report captured. Gating it on the roster would show a tab with nothing in it.
-function tabsFor({ roster, planner }) {
+export function plannerVisible(snapshot, planner) {
+  return Boolean((SHOW_REFRESH_PLANNER || staffPreviewEnabled(snapshot)) && planner);
+}
+
+function tabsFor({ roster, planner, snapshot }) {
+  const showPlanner = plannerVisible(snapshot, planner);
   return [
     { id: "benchmarks", label: "Benchmarks" },
     ...(roster ? [{ id: "scorecard", label: "Scorecard" }] : []),
-    ...(SHOW_REFRESH_PLANNER && planner ? [{ id: "planner", label: "Refresh Grant Planner" }] : []),
+    ...(showPlanner ? [{ id: "planner", label: "Refresh Grant Planner" }] : []),
   ];
 }
 
@@ -287,7 +312,7 @@ export default function App() {
   // Only shown on the tab that can change it. On the Scorecard the control isn't
   // reachable, so a pill there would state a peer group the reader can't see chosen or
   // change — and after a switch on the other tab it would describe figures not on screen.
-  const tabs = tabsFor({ roster, planner });
+  const tabs = tabsFor({ roster, planner, snapshot });
   // A tab parked in sessionStorage can name a surface that no longer exists — a
   // hidden feature, or a data dir rebuilt without a roster. Falling back to the
   // first real tab beats rendering a header over an empty page.
@@ -322,7 +347,7 @@ export default function App() {
             disagrees. Omitted, that guard degrades to permissive and a copied data
             dir applies one corporation's cohort to another. It is also what puts the
             corporation into the issuance handoff prompt. */}
-        {SHOW_REFRESH_PLANNER && activeTab === "planner" && planner && (
+        {plannerVisible(snapshot, planner) && activeTab === "planner" && (
           <RefreshPlanner
             planner={planner}
             {...identityProps(snapshot)}
