@@ -338,7 +338,7 @@ last `__`. Examples: `mcp__carta__welcome` → `carta`,
 `mcp__claude_ai_Carta__welcome` → `claude_ai_Carta`.
 
 **If none found:** tell the user no Carta MCP is connected and stop.
-**If exactly one found:** call `mcp__<SERVER>__welcome(_instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports"]})` to verify. This is `<SERVER>`.
+**If exactly one found:** call `mcp__<SERVER>__welcome(_instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports", "<REPORT_SKILL>"]})` to verify. This is `<SERVER>`.
 **If multiple found:** ask which to use via `AskUserQuestion`. Default to `carta` (production) if present.
 **Don't call any other `mcp__<SERVER>__*` tool before `welcome`** — every other command is gated and will return a reminder.
 
@@ -374,12 +374,36 @@ Pass it on **every** `welcome`, `set_context`, `list_contexts`, `call_tool`, and
 `fetch` call, exactly as written in the examples below:
 
 ```
-_instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports"]}
+_instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports", "<REPORT_SKILL>"]}
 ```
 
 In Claude Code a hook injects this automatically, but in Claude for Excel there
 are no hooks — the call is rejected outright if the skill does not supply it. So
 always send it explicitly; sending it twice is harmless.
+
+**`<REPORT_SKILL>` — the second element attributes the call to one report.**
+Derive it from `<REPORT>`, which the Router Gate always resolves before the
+first MCP call:
+
+| `<REPORT>` | `<REPORT_SKILL>` |
+|---|---|
+| `pnl` | `carta-consolidating-pnl` |
+| `balance-sheet` | `carta-consolidating-balance-sheet` |
+| `trial-balance` | `carta-consolidating-trial-balance` |
+
+These are the three skill identifiers this skill replaced, reused verbatim as
+capability tags so per-report usage stays on one continuous series across the
+merge. Send them exactly as spelled — an external Metabase dashboard filters on
+these literal strings (see `docs/architecture-notes.md`).
+
+When `<REPORT>` is `all`, there is no single value: each report re-fires the
+beacon with its own tag as the batch reaches it (see "Build"). Until the first
+report starts, send the parent name alone — a one-element `skills` array is
+valid.
+
+The report reference files already carry their own tag inline, so once one is
+loaded there is nothing to substitute. `<REPORT_SKILL>` only needs resolving for
+the calls in this file and in `references/entity-picker.md`.
 
 Add `"model": "<the running model id>"` only if you can actually introspect the
 running model. If you cannot, omit the key — never guess a model id, and never
@@ -387,7 +411,7 @@ substitute a family name like `claude-opus`.
 
 ### Resolve the firm
 
-If the user named a firm → `mcp__<SERVER>__list_contexts(firm_name="<entity>", _instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports"]})` → disambiguate via `AskUserQuestion` if multiple → `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports"]})`.
+If the user named a firm → `mcp__<SERVER>__list_contexts(firm_name="<entity>", _instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports", "<REPORT_SKILL>"]})` → disambiguate via `AskUserQuestion` if multiple → `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports", "<REPORT_SKILL>"]})`.
 
 Do not use `call_tool` for `list_contexts` or `set_context` — call the granular
 tools directly with `_instrumentation` as shown.
@@ -552,11 +576,27 @@ Emit exactly one line before the batch starts:
 > **[FIRM_NAME]** — one setup, three tabs.
 
 Then, in this order — P&L, balance sheet, trial balance — emit that report's
-own one-line announcement (as in the single-report case above) and load it:
+own one-line announcement (as in the single-report case above), re-fire the
+telemetry beacon for that report, and load it:
 
 1. `read_skill(file_path="references/pnl.md")`
 2. `read_skill(file_path="references/balance-sheet.md")`
 3. `read_skill(file_path="references/trial-balance.md")`
+
+**Re-fire the beacon before each of the three loads** so the batch attributes to
+all three reports rather than to whichever one happened to run first. Immediately
+before each `read_skill`, send:
+
+```
+mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports", "<REPORT_SKILL>"]})
+```
+
+with `<REPORT_SKILL>` set to that report's tag from the table in Gate 0 —
+`carta-consolidating-pnl`, then `carta-consolidating-balance-sheet`, then
+`carta-consolidating-trial-balance`. The call is otherwise a no-op: the firm
+scope is already set, and re-sending it is harmless. Each report reference opens
+with its own beacon too, so a skipped re-fire here is recoverable — but the
+re-fire is what makes a report show up even if it later fails its data pull.
 
 Follow each file verbatim from its own gates, exactly as in the single-report
 case — including that report's own approval gate before it writes. Do not

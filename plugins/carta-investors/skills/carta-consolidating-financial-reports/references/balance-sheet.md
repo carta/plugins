@@ -90,14 +90,14 @@ Execute all gates silently. Do not narrate tool calls, intermediate results, or 
 
 ## Entry mode — fresh session vs. chained skill
 
-**Mandatory telemetry beacon — run this before any skip-gate check:** If `<SERVER>` and `<FIRM_UUID>` are already in context, call `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports"]})` as your very first action. Do not skip this even when all data is already available — it records this skill invocation. If either is unknown, it fires in Gate 0 below.
+**Mandatory telemetry beacon — run this before any skip-gate check:** If `<SERVER>` and `<FIRM_UUID>` are already in context, call `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports", "carta-consolidating-balance-sheet"]})` as your very first action. Do not skip this even when all data is already available — it records this skill invocation. If either is unknown, it fires in Gate 0 below.
 
 Before Gate 0, check whether these context variables are already set from an earlier report build in this same skill call (e.g. chained from `references/pnl.md`):
 
 - `<SERVER>` — connected Carta MCP server prefix
 - `<FIRM_NAME>` and `<FIRM_UUID>` — the resolved firm
 
-**If both are in context:** skip Gate 0 entirely. In Gate 1, skip the `contexts:list` lookup — but still call `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports"]})` to re-anchor the MCP session scope and record this skill invocation, then proceed to `fa:list:entities` to enumerate entities for Gate 2.
+**If both are in context:** skip Gate 0 entirely. In Gate 1, skip the `contexts:list` lookup — but still call `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports", "carta-consolidating-balance-sheet"]})` to re-anchor the MCP session scope and record this skill invocation, then proceed to `fa:list:entities` to enumerate entities for Gate 2.
 
 **If either is missing** (fresh session or cold invocation): run Gate 0 and the full Gate 1 in order.
 
@@ -110,7 +110,7 @@ Do not ask "which firm?" when it is already established from the skill the user 
 Scan the tools available in the conversation for any matching `mcp__*__welcome`. Extract the **server identifier** — the middle segment between the first and last `__`. Examples: `mcp__carta__welcome` → `carta`, `mcp__claude_ai_Carta__welcome` → `claude_ai_Carta`.
 
 **If none found:** tell the user no Carta MCP is connected and stop.
-**If exactly one found:** call `mcp__<SERVER>__welcome(_instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports"]})` to verify. This is `<SERVER>`.
+**If exactly one found:** call `mcp__<SERVER>__welcome(_instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports", "carta-consolidating-balance-sheet"]})` to verify. This is `<SERVER>`.
 **If multiple found:** ask the user which to use via `AskUserQuestion`. Default to `carta` (production) if present.
 **Don't call any other `mcp__<SERVER>__*` tool before `welcome`** — every other command is gated and will return a reminder.
 
@@ -118,11 +118,11 @@ Scan the tools available in the conversation for any matching `mcp__*__welcome`.
 
 ## Gate 1: Resolve the firm and its entities
 
-1. `mcp__<SERVER>__list_contexts(firm_name="<FIRM>", _instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports"]})` to find. Do not use `call_tool` for `list_contexts` — call the granular tool directly with `_instrumentation` as shown.
+1. `mcp__<SERVER>__list_contexts(firm_name="<FIRM>", _instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports", "carta-consolidating-balance-sheet"]})` to find. Do not use `call_tool` for `list_contexts` — call the granular tool directly with `_instrumentation` as shown.
    the firm. If multiple matches, present them via `AskUserQuestion` and
    confirm.
-2. `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports"]})` to scope the session. Do not use `call_tool` for `set_context` — call the granular tool directly with `_instrumentation` as shown.
-3. `call_tool({"name": "fa__list__entities", "arguments": {}, "_instrumentation_v2": {"skills": ["carta-investors:carta-consolidating-financial-reports"]}})` to enumerate **every** entity under
+2. `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports", "carta-consolidating-balance-sheet"]})` to scope the session. Do not use `call_tool` for `set_context` — call the granular tool directly with `_instrumentation` as shown.
+3. `call_tool({"name": "fa__list__entities", "arguments": {}, "_instrumentation_v2": {"skills": ["carta-investors:carta-consolidating-financial-reports", "carta-consolidating-balance-sheet"]}})` to enumerate **every** entity under
    the firm.
 
 Prefer the granular tool when the server exposes it — one fewer hop, sidesteps `fetch`'s param-shape quirks:
@@ -265,7 +265,7 @@ Supported `format` values for `dwh:execute:query`:
 - `ndjson` — best for large results processed by code/agent.
 - `csv` is NOT supported. Do not try it.
 
-Run via `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "..."}, "_instrumentation_v2": {"skills": ["carta-investors:carta-consolidating-financial-reports"]}})`.
+Run via `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "..."}, "_instrumentation_v2": {"skills": ["carta-investors:carta-consolidating-financial-reports", "carta-consolidating-balance-sheet"]}})`.
 SELECT-only.
 
 **Period-only variant** (`EFFECTIVE_DATE BETWEEN <month_start> AND
@@ -283,7 +283,7 @@ The number format in `references/balance-sheet/formatting.md` is built from `<fu
 resolve it here, do **not** assume USD:
 
 1. Probe the journal-entries table for a currency column:
-   `call_tool({"name": "dwh__get__table_schema", "arguments": {"table_name": "<journal_entries_table>"}, "_instrumentation_v2": {"skills": ["carta-investors:carta-consolidating-financial-reports"]}})`.
+   `call_tool({"name": "dwh__get__table_schema", "arguments": {"table_name": "<journal_entries_table>"}, "_instrumentation_v2": {"skills": ["carta-investors:carta-consolidating-financial-reports", "carta-consolidating-balance-sheet"]}})`.
    If it exposes a currency column (e.g. `CURRENCY`, `REPORTING_CURRENCY`,
    `FUND_CURRENCY`), add `SELECT DISTINCT <currency_col>` scoped to
    `<entity_scope>` and read the value(s).

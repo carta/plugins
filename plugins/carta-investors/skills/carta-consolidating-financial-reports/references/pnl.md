@@ -111,7 +111,7 @@ Execute all gates silently. Do not narrate tool calls, intermediate results, or 
 
 ## Entry mode — fresh session vs. chained skill
 
-**Mandatory telemetry beacon — run this before any skip-gate check:** If `<SERVER>` and `<FIRM_UUID>` are already in context, call `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports"]})` as your very first action. Do not skip this even when all data is already available — it records this skill invocation. If either is unknown, it fires in Gate 0 below.
+**Mandatory telemetry beacon — run this before any skip-gate check:** If `<SERVER>` and `<FIRM_UUID>` are already in context, call `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports", "carta-consolidating-pnl"]})` as your very first action. Do not skip this even when all data is already available — it records this skill invocation. If either is unknown, it fires in Gate 0 below.
 
 Before Gate 0, check whether these context variables are already set from an earlier report build in this same skill call (e.g. chained from `references/balance-sheet.md`), or handed down by a calling skill that resolved them up front:
 
@@ -122,7 +122,7 @@ Before Gate 0, check whether these context variables are already set from an ear
 - `<RUNTIME>` — `excel-addin` or `local-file`
 - `<TARGET_FILE>` — the workbook to write into (`local-file` runtime only)
 
-**If `<SERVER>` and `<FIRM_UUID>` are both in context:** skip Gate 0. Call `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports"]})` to re-anchor the session scope and record this skill invocation, then continue from the first gate whose inputs are still missing.
+**If `<SERVER>` and `<FIRM_UUID>` are both in context:** skip Gate 0. Call `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports", "carta-consolidating-pnl"]})` to re-anchor the session scope and record this skill invocation, then continue from the first gate whose inputs are still missing.
 
 **Skip each of these gates only when its own inputs are already set:**
 
@@ -148,7 +148,7 @@ Do not ask "which firm?" when it is already established from the skill the user 
 Scan the tools available in the conversation for any matching `mcp__*__welcome`. Extract the **server identifier** — the middle segment between the first and last `__`. Examples: `mcp__carta__welcome` → `carta`, `mcp__claude_ai_Carta__welcome` → `claude_ai_Carta`.
 
 **If none found:** tell the user no Carta MCP is connected and stop.
-**If exactly one found:** call `mcp__<SERVER>__welcome(_instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports"]})` to verify. This is `<SERVER>`.
+**If exactly one found:** call `mcp__<SERVER>__welcome(_instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports", "carta-consolidating-pnl"]})` to verify. This is `<SERVER>`.
 **If multiple found:** ask the user which to use via `AskUserQuestion`. Default to `carta` (production) if present.
 **Don't call any other `mcp__<SERVER>__*` tool before `welcome`** — every other command is gated and will return a reminder.
 
@@ -156,8 +156,8 @@ Scan the tools available in the conversation for any matching `mcp__*__welcome`.
 
 ## Gate 1: Resolve firm
 
-1. `mcp__<SERVER>__list_contexts(firm_name="<FIRM>", _instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports"]})`. Do not use `call_tool` for `list_contexts` — call the granular tool directly with `_instrumentation` as shown. Multiple matches → `AskUserQuestion`. Wait for confirmation.
-2. `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports"]})`. Do not use `call_tool` for `set_context` — call the granular tool directly with `_instrumentation` as shown.
+1. `mcp__<SERVER>__list_contexts(firm_name="<FIRM>", _instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports", "carta-consolidating-pnl"]})`. Do not use `call_tool` for `list_contexts` — call the granular tool directly with `_instrumentation` as shown. Multiple matches → `AskUserQuestion`. Wait for confirmation.
+2. `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports", "carta-consolidating-pnl"]})`. Do not use `call_tool` for `set_context` — call the granular tool directly with `_instrumentation` as shown.
 
 **DWH param-name traps:** `dwh:execute:query` takes `sql:` not `query:`. `dwh:get:table_schema` takes `table_name:` not `table:`. `format` accepts `"ndjson"` / `"markdown"`, not `"csv"`.
 
@@ -176,7 +176,7 @@ Skip only if `<ENTITY_SCOPE>` is already in context.
 A consolidating P&L spans a set of entities and the user picks the set. Ask.
 
 ```
-call_tool({"name": "fa__list__entities", "arguments": {}, "_instrumentation_v2": {"skills": ["carta-investors:carta-consolidating-financial-reports"]}})
+call_tool({"name": "fa__list__entities", "arguments": {}, "_instrumentation_v2": {"skills": ["carta-investors:carta-consolidating-financial-reports", "carta-consolidating-pnl"]}})
 ```
 
 Classify each returned entity — prefer the API's own `type`, and fall back to
@@ -334,7 +334,7 @@ alone would drop it from the report.
 
 Queries > 50 rows: request `format: "ndjson"`, bucket into a blob. Don't paste large results — triggers `context_snip`. Use `"markdown"` only for ≤50-row previews.
 
-Run via `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "..."}, "_instrumentation_v2": {"skills": ["carta-investors:carta-consolidating-financial-reports"]}})`.
+Run via `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "..."}, "_instrumentation_v2": {"skills": ["carta-investors:carta-consolidating-financial-reports", "carta-consolidating-pnl"]}})`.
 
 SELECT-only.
 
