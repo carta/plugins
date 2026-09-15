@@ -140,8 +140,12 @@ function dismissCapCard(activityId) {
 // ── Capital activity detail overlay ──
 const _capDetailCache = {}; // activityId → fetched rows (in-memory cache)
 
-const CA_ROWS_PAGE_SIZE = 75; // the command's ceiling
-const CA_ROWS_MAX_PAGES = 10; // 750 rows; the overlay is not a paging surface
+// Sized against carta-mcp's 40k response budget, not the command's own page-size
+// ceiling, which is far higher: a row runs ~750 chars, so anything past ~50
+// overflows the transport and the call is rejected before any data comes back.
+// Same measurement as CCR_PAGE_SIZE in carta-workhub-build/capital-call-review.js.
+const CA_ROWS_PAGE_SIZE = 25;
+const CA_ROWS_MAX_PAGES = 40; // 1000 rows; the overlay is not a paging surface
 
 // The transactional tracker, not the warehouse: it is current the moment a
 // reminder is sent or a payment lands, and it carries amount_pending /
@@ -339,7 +343,9 @@ async function openCapActivityDetail(activityId, fundName, typeLabel, dueDate, t
   const body = document.getElementById('ca-detail-body');
   if (!body) return;
 
-  if (rows.length === 0) {
+  // A half-walked set is discarded rather than rendered: the summary below sums
+  // whatever rows arrived, so drawing the table would understate the call.
+  if (failed || rows.length === 0) {
     body.innerHTML = failed
       ? '<div class="loading-row" style="padding:16px 0;">Partner rows failed to load. Close and reopen to retry.</div>'
       : '<div class="loading-row" style="padding:16px 0;">No partner rows found.</div>';
