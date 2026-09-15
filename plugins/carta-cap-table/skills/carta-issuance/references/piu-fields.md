@@ -184,9 +184,34 @@ server-side rule is that a vesting start date with no schedule fails. Warn on ne
 Offered **only** when the resolved unit class carries a truthy
 `has_corresponding_interest`. carta-web serializes that field only for issuers that have
 the ManCo→OpCo feature, so its presence is the gate — the skill never reads a flag, and a
-corp without the feature sees no field and sends no key.
+corp without the feature sees no field and sends no key. A class that omits the key reads
+as "no link"; absence must never raise.
+
+**Which class is "the resolved unit class".** The same precedence the unit-class buttons
+use to pre-select one (`default_share_class_prefix`), in order:
+
+1. the row's own `share_class_prefix`,
+2. `knowns.share_class_prefix`,
+3. the sole class, when the corp has exactly one,
+4. the last class in the fetched list (the best available proxy for newest).
+
+Steps 3-4 are load-bearing: the skill omits `knowns.share_class_prefix` unless the prompt
+named a unit class, so for the ordinary request (*"issue a PIU to X for 112 units"*) the
+first two are empty. Reading only a named prefix is what kept this row from ever
+rendering.
+
+**The gate is not build-time only.** The link belongs to the unit class, so clicking a
+different class changes the answer. Any class carrying the link puts the row in the DOM
+for every class, tagged `data-conditional="corresponding_interest"` and hidden when the
+selected class has no link; `syncCorrespondingInterest()` re-toggles it on each class
+click, on load, and on a cloned block, reading the per-prefix map the form emits as
+`CORRESPONDING_INTEREST_BY_PREFIX`. When *no* class carries the link the row never enters
+the DOM at all.
+
+Batch mode renders it once in shared terms, from where it expands onto every submitted
+row.
 
 One line for the user: *"Yes also issues the matching interest in the linked operating
 company."* The server then checks permission on that company, its available units, and a
 same-named vesting schedule there; surface those messages verbatim. Only `true` is
-meaningful — omit the key entirely when the field was not rendered.
+meaningful — the form omits the key entirely whenever the row is not visible.

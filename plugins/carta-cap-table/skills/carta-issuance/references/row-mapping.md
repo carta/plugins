@@ -89,7 +89,7 @@ resolution](certificate-fields.md#dividend-accrual-start-date-resolution) from e
 | `vesting_template_id` | `vesting_template` | `null` on **No vesting** — the PIU default, so like a certificate and unlike a grant, do **not** warn |
 | `vesting_start_date` | `vesting_start_date` | reformat to `MM/DD/YYYY`, only when a real template is set |
 | `document_set_id` | `document_set_id` | server resolves both doc slots from it |
-| `corresponding_interest` | `corresponding_interest` | the surface sends `true`/`false`/`null`; omit the key when the field was never rendered |
+| `corresponding_interest` | `corresponding_interest` | the surface sends `true`/`false`/`null` only from a **visible** row and omits the key otherwise — a unit class with no link is not an unanswered question. Only `true` is meaningful |
 
 **Defaults:** `exemption = "Section 4(a)(2)"`; `currency` per the surface.
 

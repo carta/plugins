@@ -26,6 +26,7 @@ from issuance_fields import (  # noqa: E402
     build_batch_error_banner,
     build_stakeholder_blocks,
     build_stakeholder_list,
+    corresponding_interest_js_constants,
     results,
 )
 
@@ -75,6 +76,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         # Panel-level banner for corp-/batch-level server errors (row-level
         # errors live in build_stakeholder_block instead). "" when clean.
         emit("BATCH_ERRORS_HTML", "_batch_errors.html", build_batch_error_banner(knowns.get("batch_errors")))
+
+        # The corresponding-interest gate is per unit class, so the panel needs
+        # the whole map to re-toggle the row when the user picks another class.
+        emit("CORRESPONDING_INTEREST_CONSTANTS", "_corresponding_interest.js",
+             corresponding_interest_js_constants(results(data.get("share_classes"))))
     except BuildError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2

@@ -75,6 +75,7 @@
 <script>
   const SEC_TYPE = '{{SECURITY_TYPE}}';   // 'option_grant' | 'certificate'
   const STAKEHOLDERS = {{STAKEHOLDER_LIST_JSON}};  // [{name, email, kind, event_relationship}, …]
+  {{CORRESPONDING_INTEREST_CONSTANTS}}  // {<share class prefix>: <has the ManCo→OpCo link>}
 
   // Name (lowercased) → {email, kind, relationship} — powers the auto-populate on
   // an exact match in onStakeNameInput().
@@ -190,6 +191,22 @@
     pick(btn);
     const block = btn.closest('[data-stake-block]');
     if (block) syncSoTypeConditionals(block);
+  }
+
+  // The corresponding-interest link is a property of the unit class, so the
+  // answer changes with the selection. An unknown prefix reads as no link.
+  function syncCorrespondingInterest(block) {
+    const classBtn = block.querySelector('[data-group="shareclass"].selected');
+    const prefix = classBtn ? classBtn.dataset.value : null;
+    toggleConditional(block, 'corresponding_interest',
+      !!CORRESPONDING_INTEREST_BY_PREFIX[prefix]);
+  }
+
+  // Share-class buttons additionally re-sync the corresponding-interest row.
+  function pickShareClass(btn) {
+    pick(btn);
+    const block = btn.closest('[data-stake-block]');
+    if (block) syncCorrespondingInterest(block);
   }
 
   // Legend buttons additionally reveal their data-body in this block's attest box.
@@ -358,6 +375,7 @@
     const cloneBlock = clone;
     toggleVestingStartFor(cloneBlock);
     syncSoTypeConditionals(cloneBlock);
+    if (SEC_TYPE === 'piu') syncCorrespondingInterest(cloneBlock);
     const cR144 = clone.querySelector('.block-rule144-date');
     const r144Selected = clone.querySelector('[data-group="rule144"].selected');
     if (cR144) cR144.style.display = (r144Selected && r144Selected.dataset.value === 'other') ? 'block' : 'none';
@@ -574,6 +592,7 @@
         const planBtn = block.querySelector('[data-group="optionplan"].selected');
         const thresholdBtn = block.querySelector('[data-group="thresholdtype"].selected');
         const docsetBtn = block.querySelector('[data-group="docset"].selected');
+        const ciRow = block.querySelector('[data-conditional="corresponding_interest"]');
         const ciBtn = block.querySelector('[data-group="correspondinginterest"].selected');
         const vestSel = block.querySelector('.block-vesting-select');
         const noVesting = !vestSel || vestSel.value === '__none__';
@@ -590,7 +609,12 @@
         row.vesting_start_date = noVesting ? null : (block.querySelector('.block-vesting-start-date')?.value || null);
         row.document_set_id = docsetBtn ? docsetBtn.dataset.value : null;
         row.document_set_label = docsetBtn ? docsetBtn.dataset.label : null;
-        row.corresponding_interest = ciBtn ? ciBtn.dataset.value === 'yes' : null;
+        // Omit the key entirely for a unit class with no link, mirroring the row's
+        // visibility — carta-web drops the field there, so null is not the same as
+        // absent. Only a visible row can answer it.
+        if (ciRow && ciRow.style.display !== 'none') {
+          row.corresponding_interest = ciBtn ? ciBtn.dataset.value === 'yes' : null;
+        }
         row.prefix_number = block.querySelector('.block-prefix-number')?.value || '';
         row.cash_paid = block.querySelector('.block-cash-paid')?.value || '';
         row.is_flexible_issue_date = !!block.querySelector('.block-flexible-issue-date')?.checked;
@@ -754,6 +778,9 @@
   function initBlockDisplay(block) {
     toggleVestingStartFor(block);
     if (SEC_TYPE === 'option_grant') syncSoTypeConditionals(block);
+    // applySecType() clears the inline display on every [data-sectype] row of
+    // the active type, which re-shows a conditional row built hidden.
+    if (SEC_TYPE === 'piu') syncCorrespondingInterest(block);
     const nameInput = block.querySelector('.stake-name-in');
     if (nameInput && nameInput.value.trim()) applyRosterAutofill(nameInput);
   }

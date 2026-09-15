@@ -43,6 +43,8 @@ from issuance_fields import (  # noqa: E402
     build_threshold_value_type,
     build_vesting,
     cert_no_vesting,
+    corresponding_interest_js_constants,
+    corresponding_interest_row,
     default_legend_id,
     default_so_type,
     esc,
@@ -273,6 +275,11 @@ def build_shared_terms(security_type: str, data: Dict[str, Any], knowns: Dict[st
             f'<div class="toggle-row wrap">{build_docsets(docsets, None)}</div>',
             sectype="piu",
         ))
+        # Shared terms expand onto every submitted row, so the batch can carry a
+        # designation the per-row table has no column for.
+        ci_row = corresponding_interest_row(classes, knowns.get("share_class_prefix"))
+        if ci_row:
+            rows_html.append(ci_row)
         rows_html.append(advanced_accordion_piu(row, accel_templates, no_vesting, {}))
     else:
         price_default = knowns.get("price_per_share_default", "")
@@ -474,6 +481,9 @@ def render(security_type: str, data: Dict[str, Any], knowns: Dict[str, Any],
         "HEADER_SUB": build_header_sub(rows, noun),
         "BATCH_MODE": "true" if batch else "false",
         "SO_TYPE_CONSTANTS": so_type_js_constants(),
+        "CORRESPONDING_INTEREST_CONSTANTS": corresponding_interest_js_constants(
+            results(data.get("share_classes"))
+        ),
         "BATCH_ERRORS_HTML": build_batch_error_banner(knowns.get("batch_errors")),
         # Only the active layout is rendered; the other stays an empty slot so a
         # hidden duplicate can never be collected on submit.
