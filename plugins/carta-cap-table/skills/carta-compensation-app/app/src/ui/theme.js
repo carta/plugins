@@ -112,6 +112,13 @@ export const C = {
   // the .ink-tag--warning class name in components.md.
   feedbackNotice: "var(--ink-color-global-brand-yellow-80)",
   feedbackNoticeSubtle: "var(--ink-color-global-brand-yellow-20)",
+  // Notice text ON the subtle notice ground. feedbackNotice (yellow-80) is only
+  // 3.09:1 there, and it is the same in both themes because Ink's brand ramps are
+  // flat — the trap the row-tint comment below describes. yellow-90 is the same
+  // hue at 7.17:1. Use feedbackNotice for borders and icons, where contrast does
+  // not apply, and this for anything a person has to read: a notice nobody can
+  // read is worse than no notice, because it looks like the app said something.
+  feedbackNoticeText: "var(--ink-color-global-brand-yellow-90)",
 
   // Tints the table/tag recipes call for.
   rowHover: "var(--ink-color-global-brand-gray-30)",

@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiToken } from "./useData.js";
 import { reasonsFromStored, reasonsToStore } from "../model/grantReason.js";
+import { validate } from "../model/predicate.js";
 
 const SCENARIOS = "/api/scenarios";
 
@@ -167,6 +168,39 @@ export function filtersFromDoc(doc, corporationId) {
   };
 }
 
+/** The active scenario's Claude-authored filters, as a list.
+ *
+ *  Each entry is validated on the way IN, not only when it was authored: this is
+ *  the user's own file, editable by hand and written by whatever build was
+ *  installed at the time. A predicate that no longer validates — a field removed
+ *  since, a hand-edit that broke it — is DROPPED rather than carried, because
+ *  `evaluate` throws on an unvalidated node and a filter nobody can run must not
+ *  silently become "matches everything".
+ *
+ *  Dropping one bad entry rather than refusing the whole list matches how
+ *  grantOverrides and grantReasons treat unusable values: salvage what is
+ *  readable, since the alternative is losing a plan over one row.
+ */
+export function claudeFiltersFromDoc(doc, corporationId) {
+  const active = activeScenario(doc, corporationId);
+  const raw = active && active.claudeFilters;
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((f) => (
+    f && typeof f === "object"
+    && typeof f.id === "string" && f.id
+    && typeof f.sentence === "string" && f.sentence
+    && f.node && typeof f.node === "object"
+    && validate(f.node).ok
+  )).map((f) => ({
+    id: f.id,
+    // `text` is what the user typed. Kept for audit, defaulted rather than
+    // required: a filter is still usable without knowing how it was asked for.
+    text: typeof f.text === "string" ? f.text : "",
+    sentence: f.sentence,
+    node: f.node,
+  }));
+}
+
 /** Write a cart into a document, returning a new document.
  *
  *  `scenarioId` names the slot to write. It defaults to the document's active
@@ -233,6 +267,19 @@ export function docWithPlan(doc, corporationId, plan, scenarioId) {
             .map((k) => [k, Number(plan.settings[k])]),
         );
       } else delete next.settings;
+    }
+    if (has("claudeFilters")) {
+      // Same rule as the rest: omitted when empty, so a scenario nobody filtered
+      // carries no key rather than an empty array reading as "filters were
+      // cleared". Only the four fields that matter are written — a predicate plus
+      // what it was asked as and what it says it does.
+      const list = (plan.claudeFilters || []).filter(
+        (f) => f && f.node && typeof f.id === "string");
+      if (list.length) {
+        next.claudeFilters = list.map((f) => ({
+          id: f.id, text: f.text || "", sentence: f.sentence || "", node: f.node,
+        }));
+      } else delete next.claudeFilters;
     }
     if (has("filters")) {
       // Omitted when neutral, matching grantOverrides: an all-defaults object reads
@@ -354,6 +401,12 @@ export function docWithDuplicatedScenario(doc, corporationId, sourceId) {
     ...(src.filters
       ? { filters: { ...src.filters, jobAreas: [...(src.filters.jobAreas || [])] } }
       : {}),
+    // Copied entry by entry, like the keys above: `...src` alone would leave both
+    // scenarios pointing at one array, so removing a filter from the copy would
+    // remove it from the original too.
+    ...(Array.isArray(src.claudeFilters) && src.claudeFilters.length
+      ? { claudeFilters: src.claudeFilters.map((f) => ({ ...f })) }
+      : {}),
   };
   return {
     ...base,
@@ -454,6 +507,9 @@ export function useScenario(corporationId) {
   // back to the corporation's policy — NOT the same as an empty object.
   const [savedSettings, setSavedSettings] = useState(null);
   const [savedFilters, setSavedFilters] = useState(null);
+  // A list, not null-when-absent: an empty list IS the meaning of "no Claude
+  // filters", so there is no third state to distinguish.
+  const [savedClaudeFilters, setSavedClaudeFilters] = useState([]);
   // A document from a newer build. Readable state is left empty and saving is
   // refused, because a key this build thinks it knows may have been redefined.
   const [futureDoc, setFutureDoc] = useState(false);
@@ -495,6 +551,7 @@ export function useScenario(corporationId) {
         setSavedReasons(reasonsFromDoc(doc, corporationId));
         setSavedSettings(settingsFromDoc(doc, corporationId));
         setSavedFilters(filtersFromDoc(doc, corporationId));
+        setSavedClaudeFilters(claudeFiltersFromDoc(doc, corporationId));
       } catch (e) {
         if (!cancelled) setError(e.message || String(e));
       } finally {
@@ -613,6 +670,7 @@ export function useScenario(corporationId) {
       setSavedReasons(reasonsFromDoc(doc, corporationId));
       setSavedSettings(settingsFromDoc(doc, corporationId));
       setSavedFilters(filtersFromDoc(doc, corporationId));
+      setSavedClaudeFilters(claudeFiltersFromDoc(doc, corporationId));
       setConflict(false);
       setError(null);
       setSaving(false);
@@ -644,6 +702,7 @@ export function useScenario(corporationId) {
       setSavedReasons(reasonsFromDoc(next, corporationId));
       setSavedSettings(settingsFromDoc(next, corporationId));
       setSavedFilters(filtersFromDoc(next, corporationId));
+      setSavedClaudeFilters(claudeFiltersFromDoc(next, corporationId));
       setError(null);
       return true;
     } catch (e) {
@@ -699,6 +758,7 @@ export function useScenario(corporationId) {
 
   return {
     saved, savedOverrides, savedReasons, savedSettings, savedFilters,
+    savedClaudeFilters,
     scenarios, activeId,
     loading, error, conflict, saving, futureDoc,
     save, flush, reload,

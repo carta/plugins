@@ -54,6 +54,7 @@ from urllib.parse import urlparse, parse_qs
 
 import chat_session
 import desktop_handoff
+import predicate_session
 
 DATA_DIR = None
 WEB_DIR = None
@@ -362,7 +363,62 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._ask_interrupt(u)
         if u.path == "/api/handoff":
             return self._handoff(u)
+        if u.path == "/api/filter":
+            return self._filter(u)
         return self._send(404, {"error": "not_found"})
+
+    def _filter(self, u):
+        """Ask Claude for a cohort predicate. Returns JSON, never a stream.
+
+        Unlike /api/ask this is one question with one answer, so there is nothing
+        to stream and no session to keep: the subprocess is started, asked, and
+        reaped. It also gets NO TOOLS — it only has to emit a JSON object, and a
+        session that cannot read a file cannot leak one.
+
+        The reply is a candidate, not a filter. model/predicate.js validates it in
+        the browser before anything is evaluated, so a malformed predicate is
+        refused rather than applied.
+        """
+        qs = parse_qs(u.query)
+        if not self._token_ok(qs):
+            return self._send(401, {"error": "unauthorized"})
+        _touch_heartbeat()
+
+        body = self._read_json_body()
+        if body is None or not isinstance(body, dict):
+            return self._send(400, {"error": "bad_json"})
+        phrase = body.get("phrase")
+        if not isinstance(phrase, str) or not phrase.strip():
+            return self._send(400, {"error": "empty_phrase"})
+
+        vocabulary = body.get("vocabulary")
+        if not isinstance(vocabulary, dict):
+            vocabulary = {}
+
+        session = chat_session.ChatSession(
+            cwd=str(DATA_DIR),
+            add_dirs=[],
+            # An empty tool set, not the app-editing one.
+            allowed_tools="",
+            system_prompt=predicate_session.system_prompt(),
+        )
+        try:
+            session.start()
+            session.send(predicate_session.build_request(phrase, vocabulary))
+            text = []
+            for event in session.events(timeout=90):
+                chunk = chat_session.event_text(event)
+                if chunk:
+                    text.append(chunk)
+                if chat_session.is_turn_end(event):
+                    break
+            return self._send(200, predicate_session.parse_reply("".join(text)))
+        except Exception as exc:  # noqa: BLE001 — a refusal is the useful failure
+            # Not a 500: the browser's job on any failure is to say nothing was
+            # filtered, and a refusal says exactly that in the shape it expects.
+            return self._send(200, {"refusal": "Could not reach Claude (%s)." % exc})
+        finally:
+            session.close()
 
     def _handoff(self, u):
         """Write the plan where Claude Desktop can read it, and open a session.

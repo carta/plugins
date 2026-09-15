@@ -29,6 +29,7 @@ import { csvFilename, downloadCsv, toCsv } from "../model/csv.js";
 import { shares } from "../model/format.js";
 import { formatTenure, tenureMonths } from "../model/tenure.js";
 import { applyFilters, levelRank, totalEquity } from "../model/cohort.js";
+import { applyPredicate } from "../model/predicate.js";
 import { DEFAULT_GRANT_REASON, reasonFor } from "../model/grantReason.js";
 import {
   addAll, cartRows, diff, headerState, hiddenCount, reconcile, removeAll, toggle,
@@ -39,7 +40,7 @@ import SettingsStep from "./planner/SettingsStep.jsx";
 import ReviewStep from "./planner/ReviewStep.jsx";
 import PoolBar from "./planner/PoolBar.jsx";
 import ScenarioBar from "./planner/ScenarioBar.jsx";
-import AskBar from "../ui/AskBar.jsx";
+import FilterBox from "./planner/FilterBox.jsx";
 import {
   eligibility, grantForRow, planTotals, policyToSettings,
 } from "../model/policy.js";
@@ -228,6 +229,10 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
   const [levelMin, setLevelMin] = useState(null);
   const [levelMax, setLevelMax] = useState(null);
   const [vestWindow, setVestWindow] = useState(0);
+  // Claude-authored filters, stacked after the four presets. A list rather than
+  // one slot: "engineering" and "hired before 2023" are two separate thoughts,
+  // and each has to be removable on its own.
+  const [claudeFilters, setClaudeFilters] = useState([]);
 
   // The cart. Held here rather than in the table so the panel, the counts and the
   // export all read one source.
@@ -240,6 +245,7 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
   const [dropped, setDropped] = useState(0);
   const {
     saved, savedOverrides, savedReasons, savedSettings, savedFilters,
+    savedClaudeFilters,
     scenarios, activeId,
     loading: cartLoading, conflict, saving, futureDoc, save, reload,
     switchScenario, createScenario, duplicateScenario, renameScenario, deleteScenario,
@@ -275,6 +281,9 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
     setLevelMin(f.levelMin === null ? null : String(f.levelMin));
     setLevelMax(f.levelMax === null ? null : String(f.levelMax));
     setVestWindow(f.excludeVestingWithinMonths);
+    // Adopted in the same one-shot gate as the presets, so a scenario's whole
+    // filter state arrives together rather than in two renders.
+    setClaudeFilters(savedClaudeFilters || []);
     // Settings are adopted through the same one-shot gate rather than their own
     // effect: the policy-defaulting effect below fires whenever `settings` is null,
     // and a second effect racing it would flip the target between the scenario's
@@ -284,7 +293,8 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
     setSettings(savedSettings || null);
     // Hand-set grants belong to the draft that recorded them.
     if (!savedOverrides || !savedOverrides.size) setOverrides(new Map());
-  }, [cartLoading, activeId, saved, savedOverrides, savedReasons, savedSettings, savedFilters, all]);
+  }, [cartLoading, activeId, saved, savedOverrides, savedReasons, savedSettings,
+      savedFilters, savedClaudeFilters, all]);
 
   // The corporation's policy, and the settings the user is modelling with. The
   // settings START as the policy and diverge only when edited — `null` until the
@@ -363,10 +373,19 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
     excludeVestingWithinMonths: vestWindow,
   }), [hasGrants, areas, levelMin, levelMax, vestWindow]);
 
-  const { rows, removed } = useMemo(
-    () => applyFilters(all, currentFilters, availability, asOf),
-    [all, currentFilters, availability, asOf],
-  );
+  const { rows, removed } = useMemo(() => {
+    const preset = applyFilters(all, currentFilters, availability, asOf);
+    if (!claudeFilters.length) return preset;
+    // Claude's filters narrow what the presets left, and `removed` counts BOTH —
+    // "N excluded by filters" is one number about one cohort, and splitting it
+    // would make the user reconcile two counts to learn how many people are gone.
+    //
+    // Each predicate was validated before it was committed (FilterBox refuses an
+    // invalid one), so evaluate() only ever sees a predicate that passed the gate.
+    const kept = claudeFilters.reduce(
+      (rows_, f) => applyPredicate(rows_, f.node, { asOf }), preset.rows);
+    return { rows: kept, removed: all.length - kept.length };
+  }, [all, currentFilters, availability, asOf, claudeFilters]);
 
   // Cart figures, all derived from the one Set. `visibleIds` is the filtered view,
   // which is what select-all acts on — reaching past the filters would add people
@@ -394,6 +413,29 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
     saveFilters({ levelMax: v === null ? null : Number(v) });
   };
   const updateVestWindow = (v) => { setVestWindow(v); saveFilters({ excludeVestingWithinMonths: v }); };
+
+  // Claude's filters persist the same way the presets do, so a narrowed cohort
+  // survives a reload and comes across on duplicate. The NEXT list is passed
+  // explicitly rather than read back from state, which has not committed yet.
+  const saveClaudeFilters = (next) => save({ claudeFilters: next });
+
+  const addClaudeFilter = ({ text, node, sentence }) => {
+    // The sentence is stored alongside the predicate rather than re-derived on
+    // read: it is what the user approved, and describe() is free to improve its
+    // wording later without silently rewriting what a saved plan says it does.
+    const next = [...claudeFilters, {
+      id: `f${Date.now()}${Math.random().toString(36).slice(2, 6)}`,
+      text, node, sentence,
+    }];
+    setClaudeFilters(next);
+    saveClaudeFilters(next);
+  };
+
+  const removeClaudeFilter = (id) => {
+    const next = claudeFilters.filter((f) => f.id !== id);
+    setClaudeFilters(next);
+    saveClaudeFilters(next);
+  };
 
   // The user edited the policy they are modelling with. Distinct from the effect
   // above that DEFAULTS settings from the corporation's policy: that one must not
@@ -654,18 +696,27 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
           </div>
         )}
 
-        {/* The controls above narrow the cohort. This changes the console itself —
-            a different job, which is why it sits under its own rule rather than
-            reading as a fifth filter. */}
+        {/* A FILTER, not a source edit — the one box on this console that means
+            something different from the others.
+
+            Elsewhere the ask box edits the app and reloads, which is right for
+            "add a P60 column". Here that would be wrong: "show only engineering"
+            is a filter over these rows, and as a code change it is durable,
+            invisible in the UI, and undoable only by asking again. So it produces
+            a predicate that behaves like the four presets above — previewed,
+            readable, removable, and saved with the scenario. */}
         <div style={{
           marginTop: 14, paddingTop: 14, borderTop: `1px solid ${C.border}`,
         }}>
           <div style={{ fontSize: FS.sm, fontWeight: 600, color: C.textSubtle, marginBottom: 8 }}>
-            Change this page
+            Add a Claude generated filter
           </div>
-          <AskBar
-            token={token}
-            placeholder="Ask Claude to change this page — e.g. add a column for unvested shares"
+          <FilterBox
+            rows={rows}
+            asOf={asOf}
+            filters={claudeFilters}
+            onApply={addClaudeFilter}
+            onRemove={removeClaudeFilter}
           />
         </div>
 
