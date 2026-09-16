@@ -311,9 +311,9 @@ function ExitTimingSection({ company, navAsOf, locked, updateCompany, defaultExi
   );
 }
 
-// ── Exit plan — the company's liquidity timeline: dated partial sales, each at
-// its own price, then the terminal exit selling whatever is left. One list, so
-// "take money off the table" and "multiple exits" stay one concept.
+// ── Partial sales — dated secondaries, each at its own price, taken off the
+// table before the terminal exit sells whatever is left. One list, so "take
+// money off the table" and "multiple exits" stay one concept.
 const SALE_PCT_MAX = 95; // a single sale never claims the last of the stake by drag
 
 const newSaleId = () => "s" + Math.random().toString(36).slice(2, 8);
@@ -341,7 +341,7 @@ function planChips(company, navAsOf, onRemove, locked) {
   });
 }
 
-function ExitPlanTab({ company, navAsOf, locked, updateCompany, defaultExitQ = 0, onDragStart, onDragEnd }) {
+function PartialSalesTab({ company, navAsOf, locked, updateCompany, defaultExitQ = 0, onDragStart, onDragEnd }) {
   const sales = secondarySales(company);
   const retained = retainedFraction(company);
   const exitQ = Math.round(company.exitTimingQ ?? defaultExitQ);
@@ -833,7 +833,8 @@ function companySecondaryLegs(company, navAsOf) {
 }
 
 function CompanyRow({ company, updateCompany, refDate, staleDays, assumptions, portfolio, snapshot, readOnly, onOpenCompany, reload, flush, expanded, onToggle, ownership, onHoverChange, onDragStart, onDragEnd, fundStates, firmAgg, firmLpDelta, firmGpCarry, sliceName, fundScope, onOpenFundSection }) {
-  // which detail sub-modal is open — 'captable' | 'financials' | 'positions' | null
+  // which detail sub-modal is open — 'positions' | 'captable' | 'financials' |
+  // 'partialsales' | null (null = the Scenario-inputs tab, the default)
   const [openModal, setOpenModal] = useState(null);
   // Which scenario slider (if any) is actively being dragged — "mark" | "dilution" |
   // null. Real pointer-down through pointer-up only (RepriceControl's
@@ -1075,10 +1076,12 @@ function CompanyRow({ company, updateCompany, refDate, staleDays, assumptions, p
               <nav className="ink-tabs" role="tablist" style={{ marginBottom: 16 }}>
                 {[
                   { id: null, label: "Scenario inputs" },
-                  { id: "exitplan", label: "Exit plan" },
                   { id: "positions", label: "Positions" },
                   { id: "captable", label: "Cap table" },
                   { id: "financials", label: "Financials" },
+                  // Last: an advanced case. Users hunting for the exit reach for
+                  // Realize on Scenario inputs, not a plan of secondaries.
+                  { id: "partialsales", label: "Partial sales" },
                 ].map((t) => {
                   const active = openModal === t.id;
                   return (
@@ -1104,8 +1107,8 @@ function CompanyRow({ company, updateCompany, refDate, staleDays, assumptions, p
               {openModal === "positions" && (
                 <TableScroll><PositionsTable company={company} refDate={refDate} staleDays={staleDays} /></TableScroll>
               )}
-              {openModal === "exitplan" && (
-                <ExitPlanTab company={company} navAsOf={snapshot?.source?.navAsOf} locked={readOnly}
+              {openModal === "partialsales" && (
+                <PartialSalesTab company={company} navAsOf={snapshot?.source?.navAsOf} locked={readOnly}
                   updateCompany={updateCompany}
                   defaultExitQ={Math.max(0, Math.min(EXIT_Q_MAX,
                     quartersBetween(snapshot?.source?.navAsOf, exitHorizonFor(assumptions, snapshot, company.fundId))))}
@@ -1276,7 +1279,7 @@ function CompanyRow({ company, updateCompany, refDate, staleDays, assumptions, p
                     const sales = secondarySales(company);
                     const open = () => {
                       trackClick("FundModeling.Companies.ExitPlanOpen");
-                      setOpenModal("exitplan");
+                      setOpenModal("partialsales");
                     };
                     if (!sales.length) {
                       return (

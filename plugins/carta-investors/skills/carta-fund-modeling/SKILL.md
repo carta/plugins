@@ -4,7 +4,7 @@ description: >
   Spin up an interactive local web console for FIRM-LEVEL scenario modeling over Carta Fund Admin data — a
   React app to reprice portfolio companies and model exits ACROSS MULTIPLE COMPANIES, with five tabs:
   Overview (fund-family rollup, investment pacing, concentration), Companies (per-company repricing + LP
-  make-whole waterfall + carry banking, plus an exit plan of dated partial sales, each at its own price —
+  make-whole waterfall + carry banking, plus a plan of dated partial sales, each at its own price —
   secondary proceeds off the table before the exit), Exit & IRR (exit scenarios, XIRR, GP & LP returns, plus a per-fund
   DPI/RVPI/TVPI glidepath in the LP Returns view), Reserves (per-fund dry-powder planning), and Cohort
   Standing (peer-cohort + S&P-equivalent benchmarking). Scenarios persist locally. Invoke with a firm name,
