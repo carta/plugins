@@ -40,6 +40,20 @@ If `serve.py` logs `(vendor missing — run npm run build in app/)`, the
 runtime bundles are absent — that is the one case where a build is
 genuinely required.
 
+**Don't run `npm test` / `vitest` after an operator-requested edit,
+either, and don't install anything to make that possible.** `app/`
+carries a unit-test suite for engineers developing this plugin in the
+marketplace repo (see `app/README.md`'s Develop section) — it is not part
+of the runtime loop this file describes. The person asking for the tweak
+is running an already-installed plugin on their own machine, with no
+guarantee of a working `node`/`npm` setup, and nothing here depends on
+the suite passing: a live-transpiled source edit either renders on
+refresh or errors visibly in the console, which is the actual feedback
+loop. If a JS runtime happens to be missing, that is expected, not a
+problem to fix — verify the edit by reading the diff and reloading the
+page (Step 6), not by reaching for `npm ci`/`npm install`/`npm test` or
+reporting their absence as a gap.
+
 ## Step 4 — Assemble the datadir
 
 **SILENT** — no user-facing output in this step. Next allowed output: Step 5's URL.
