@@ -180,10 +180,15 @@ buttoned. **"Decide later"** — records nothing; the table returns next run.
 
 **The rows under "Needs your input" always need an answer of their own,
 whatever gets picked above — none of them carries a proposed value to
-confirm.** Ask for those as free text in the same turn: a pick from
-their options, "void", or "leave it". When Current mapping is empty
-(every entry needs input), skip the `AskUserQuestion` entirely and go
-straight to asking for these.
+confirm.** Ask for these via `AskUserQuestion`, in the same turn — never as
+chat prose you write and move past, and never by picking the nearest option
+yourself to avoid the round trip; that is exactly the call the automatic
+match already refused to make. One question per row, each carrying that
+row's own `options` (plus "void" and "leave it" alongside them); a single
+call carries up to four questions, so batch further when there are more
+than four rows. When Current mapping is empty (every entry needs input),
+skip the mapping-confirmation `AskUserQuestion` above and go straight to
+this one.
 
 **A line that matches no Carta account has three answers, not two.** Say
 them, because two of the three are easy to miss:

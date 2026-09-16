@@ -187,6 +187,18 @@ datadir build runs silently. Speak only at:
 - Step 6 — the offer to update, on a re-invocation
 - Any hard error (MCP unauth, no data, port range exhausted)
 
+**Every entry above that is a question is a tool call, not a rhetorical
+one.** Wherever this page or a reference file says "ask," "confirm," or
+"offer," the next thing you do is invoke `AskUserQuestion` — never write
+the question as chat text and carry on, and never resolve it yourself
+(a best guess, a default, "probably X so I'll proceed") to skip the round
+trip. This applies most where the honest answer is "it's ambiguous" —
+Step 4.7's per-row mapping questions above all — since that is exactly
+where working through the ambiguity yourself feels like progress and is
+actually the thing this skill exists to not do. If you notice you are
+about to fetch, build, or write based on something no `AskUserQuestion`
+has actually confirmed, stop and ask first.
+
 Do not paste raw command output, MCP JSON, SQL result headers, or step
 labels. The user sees the greeting, any prompt that genuinely needs an
 answer, and the URL.
