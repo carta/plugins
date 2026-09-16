@@ -835,17 +835,21 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
           marginTop: 14, paddingTop: 14, borderTop: `1px solid ${C.border}`,
           display: "grid", gap: 8,
         }}>
-          {/* COLLAPSED BY DEFAULT. The input, its examples and the space the
-              preview needs ran to 151px — a third of a tile that already filled
-              half the fold before the first employee row. Authoring a filter is a
-              deliberate act a few times a session; the preset controls above are
-              what people touch on every visit, so this is the part that folds.
+          {/* OPEN by default. It was collapsed to buy back the 151px the input,
+              its examples and the preview space cost — but a box nobody can see is
+              a box nobody uses, and this is the one control on the screen a reader
+              would not guess exists. The presets look like filters; a prompt does
+              not, unless it is on screen.
+
+              It still folds, which is what the collapse was really for: once the
+              cohort is settled it is 151px of a tile you are done with. The
+              default just stops it hiding the feature on first look.
 
               A <details>, not a hand-rolled toggle: it opens on click and on
               Enter, announces its own state, and is findable by the browser's own
               in-page search even while closed — three things a div with an onClick
               would each need building and would probably get wrong. */}
-          <details className="ctc-fold">
+          <details open className="ctc-fold">
             {/* The same control as the tile's own fold, so two nested collapsing
                 sections do not each teach a different gesture. */}
             {/* Chevron FIRST here, unlike the tile's fold. This summary is one
