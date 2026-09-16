@@ -83,9 +83,8 @@ funds AS (
 ),
 
 je_balances AS (
-    -- Borrowings narrowed to debt accounts (2000-2099 typically: LOC, term loans).
-    -- Previously summed 2000-2999, which incorrectly included payables, accrued expenses,
-    -- and due-to-broker — none of which are "borrowings outstanding" under Form ADV §7.B.(1).
+    -- Borrowings narrowed to debt accounts (2000-2099 typically: LOC, term loans) — payables,
+    -- accrued expenses, and due-to-broker are not "borrowings outstanding" under Form ADV §7.B.(1).
     -- other_liabilities is surfaced separately for review but is NOT part of regulatory AUM.
     SELECT
         j.fund_uuid,
@@ -188,9 +187,8 @@ investor_counts AS (
 ),
 
 -- Point-in-time portfolio holdings: use AGGREGATE_INVESTMENTS_HISTORY filtered to
--- EFFECTIVE_DATE <= reporting_date, take the most recent record per fund/issuer/asset.
--- Previously used AGGREGATE_INVESTMENTS (current snapshot), which made Schedule D §5.K.(1)
--- and the asset-composition tiles reflect TODAY's portfolio rather than reporting_date.
+-- EFFECTIVE_DATE <= reporting_date, take the most recent record per fund/issuer/asset, so
+-- Schedule D §5.K.(1) and the asset-composition tiles reflect reporting_date, not today's portfolio.
 portfolio_pit AS (
     SELECT
         aih.fund_uuid,

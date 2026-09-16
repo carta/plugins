@@ -1434,11 +1434,10 @@ def _read_outline_budget(data, path, period_kind, as_of_month, coa_value_aliases
     def _section_total(section):
         """The section's grand total, from the outline's own structure.
 
-        This used to look for the literal labels "Total Income" and "Total
-        Operating Expenses", which is one firm's wording. Firms write
-        "Qtrly Totals", "Total Expenses", "Total Mgmt Fee Including
-        Creator" — all of which resolved to zero, so the dashboard showed
-        a budget of nothing while displaying the lines it was made of.
+        Matching on a literal label like "Total Income" only covers one
+        firm's wording — firms write "Qtrly Totals", "Total Expenses",
+        "Total Mgmt Fee Including Creator", and other variants that a
+        literal match would silently resolve to zero.
 
         A `summary` row is the firm's own bottom-line for the section and
         wins outright. Otherwise take the largest total in the section: a
@@ -1535,10 +1534,10 @@ def _budget_window(budget_payload, as_of_month):
     """The months a budget actually covers, as (first, last) 1-based, plus a
     label for the UI.
 
-    Actuals were previously summed year-to-date regardless of what the budget
-    covered, so a budget stated through June was charged spend through
-    August and every variance read high. Worse, a quarter-to-date budget was
-    compared against eight months of spend.
+    Comparing actuals to budget requires matching the window: a budget
+    stated through June is compared only through June, and a quarter-to-date
+    budget is compared only over its own elapsed quarters — otherwise the
+    variance reads artificially high.
 
     A crosstab states its own end date in its title band. An outline states
     quarters, so it is compared over whole elapsed quarters — a partial
