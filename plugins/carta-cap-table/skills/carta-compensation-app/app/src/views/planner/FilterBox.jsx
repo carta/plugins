@@ -26,7 +26,7 @@
 
 import { useEffect, useState } from "react";
 import { C, FS, RADIUS } from "../../ui/theme.js";
-import { Tag } from "../../ui/components.jsx";
+import { Select, SparkleAI } from "../../ui/components.jsx";
 import { applyPredicate, describe, validate } from "../../model/predicate.js";
 
 const EXAMPLES = [
@@ -124,7 +124,10 @@ export default function FilterBox({
 
   const apply = () => {
     if (!preview || preview.error) return;
-    onApply({ text: preview.text, node: preview.node, sentence: preview.sentence });
+    onApply({
+      text: preview.text, node: preview.node,
+      sentence: preview.sentence, name: preview.name,
+    });
     setText("");
     setPreview(null);
   };
@@ -220,53 +223,62 @@ export default function FilterBox({
   );
 }
 
-/** The filters already applied, as removable rows.
+/** Each applied filter as a control in the filter row, named for what it does.
  *
- *  Its OWN component because it is rendered outside the collapsible input above
- *  it: an active filter is silently narrowing the cohort, so hiding it behind a
- *  collapsed section is how someone ends up looking at 25 of 134 employees
- *  without a visible reason. The box that authors a filter can be put away; the
- *  filters it produced cannot.
+ *  ONE DROPDOWN PER FILTER. Claude's own label is the FIELD LABEL — "Managers" sits
+ *  where "Prior grants" and "Job area" sit, because it is the same kind of thing:
+ *  one more control narrowing this cohort. Inside are the three things you can do
+ *  to it.
+ *
+ *  ENABLED / DISABLED, not just remove. A filter someone spent a prompt writing is
+ *  worth keeping while they check what it was doing — turning it off and back on
+ *  beats deleting it and asking again, and the difference matters most on the
+ *  filter that is hardest to re-describe.
+ *
+ *  The SENTENCE stays in the hint. It is derived from the predicate, so it is the
+ *  description that cannot be wrong, and a control deciding who is in a grant cycle
+ *  has to stay auditable by someone who did not write it.
  */
-export function CommittedFilters({ filters, onRemove }) {
+export function CommittedFilters({ filters, onToggle, onRemove }) {
   if (!filters.length) return null;
   return (
-    <div style={{ display: "grid", gap: 6 }}>
-      {filters.map((f) => (
-        <div
-          key={f.id}
-          style={{
-            display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
-            // The same size and colour as the filter labels this sits under —
-            // a committed filter is one more filter, not an announcement.
-            fontSize: FS.sm, color: C.textSubtle,
-          }}
-        >
-          {/* NEUTRAL, not notice. `notice` is this app's warning tone (it is what
-              an unavailable filter and a save conflict use), and a filter doing
-              exactly what was asked of it is not a warning — in yellow it read as
-              one, and as a different visual language from the controls around it. */}
-          <Tag title={`Asked as: ${f.text}`}>Claude filter</Tag>
-          {/* The predicate as a sentence, so a committed filter can be audited by
-              whoever inherits the plan — not only by whoever asked for it. */}
-          <span>{f.sentence}</span>
-          <button
-            type="button"
-            onClick={() => onRemove(f.id)}
-            title="Remove this filter"
-            style={{
-              background: "none", border: "none", padding: 0, font: "inherit",
-              // FS.sm, matching the row it sits in. It was FS.xs, the one 11px
-              // thing on a line of 12px text.
-              fontSize: FS.sm, color: C.linkDefault, cursor: "pointer",
-              textDecoration: "underline",
+    <>
+      {filters.map((f) => {
+        const on = f.enabled !== false;
+        return (
+          <Select
+            key={f.id}
+            label={f.name || f.sentence}
+            // Marks this as Claude's rather than one of the presets. With the name
+            // on the label there is otherwise nothing to tell them apart, and
+            // "Managers" beside "Job area" reads as a control someone built in.
+            //
+            // The gradient id is per-filter: an SVG gradient is referenced
+            // document-wide, so several of these sharing one id would have every
+            // later copy silently adopt the first's definition.
+            icon={<SparkleAI gradientId={`ctc-sparkle-${f.id}`} />}
+            value={on ? "on" : "off"}
+            onChange={(v) => {
+              if (v === "remove") onRemove(f.id);
+              else onToggle(f.id, v === "on");
             }}
-          >
-            remove
-          </button>
-        </div>
-      ))}
-    </div>
+            options={[
+              { value: "on", label: "Applied" },
+              { value: "off", label: "Not applied" },
+              { value: "remove", label: "Remove" },
+            ]}
+            hint={[
+              f.sentence,
+              f.text ? `Asked as: ${f.text}` : null,
+            ].filter(Boolean).join("\n")}
+            minWidth={150}
+            // The label is DATA — a filter's own name, not a fixed option — so it
+            // needs a ceiling or one long one stretches the row it sits in.
+            maxWidth={220}
+          />
+        );
+      })}
+    </>
   );
 }
 
@@ -293,6 +305,11 @@ export function toPreview(reply, phrase, rows, asOf) {
   return {
     text: phrase,
     node: reply.predicate,
+    // A short label Claude wrote for the control this ends up on — "Managers"
+    // rather than "track is MANAGER". Optional, and never a substitute for the
+    // sentence: `describe()` is DERIVED from the predicate and so cannot claim
+    // something the filter does not do, which a written name can.
+    name: typeof reply.name === "string" ? reply.name : "",
     sentence: describe(reply.predicate),
     kept: kept.length,
     removed: rows.length - kept.length,

@@ -196,6 +196,15 @@ export function claudeFiltersFromDoc(doc, corporationId) {
     && validate(f.node).ok
   )).map((f) => ({
     id: f.id,
+    // Claude's short label for the control. Optional and NOT required by the
+    // filter above: a scenario written before names existed, or by a build whose
+    // model returned none, falls back to the sentence — which is derived from the
+    // predicate and therefore always available and always true.
+    name: typeof f.name === "string" ? f.name : "",
+    // Defaults to ON. A scenario saved before filters could be switched off has
+    // no key, and every filter in it was applied — reading an absent value as
+    // "off" would silently widen a cohort that someone deliberately narrowed.
+    enabled: f.enabled !== false,
     // `text` is what the user typed. Kept for audit, defaulted rather than
     // required: a filter is still usable without knowing how it was asked for.
     text: typeof f.text === "string" ? f.text : "",
@@ -286,7 +295,8 @@ export function docWithPlan(doc, corporationId, plan, scenarioId) {
         (f) => f && f.node && typeof f.id === "string");
       if (list.length) {
         next.claudeFilters = list.map((f) => ({
-          id: f.id, text: f.text || "", sentence: f.sentence || "", node: f.node,
+          id: f.id, text: f.text || "", sentence: f.sentence || "",
+          name: f.name || "", enabled: f.enabled !== false, node: f.node,
         }));
       } else delete next.claudeFilters;
     }

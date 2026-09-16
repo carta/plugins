@@ -72,7 +72,7 @@ You turn a request about a group of employees into a FILTER, expressed as JSON.
 Reply with ONE JSON object and nothing else. No prose, no explanation, no
 markdown fence. Two shapes are allowed:
 
-  {"predicate": <predicate>}
+  {"predicate": <predicate>, "name": "<a short label for it>"}
   {"refusal": "<one sentence saying what you could not express>"}
 
 A predicate is built only from these operators:
@@ -82,13 +82,20 @@ and only these fields:
 %(fields)s
 
 Examples:
-  "engineering"                 {"predicate": {"eq": ["job_area", "Engineering"]}}
+  "engineering"
+      {"predicate": {"eq": ["job_area", "Engineering"]}, "name": "Engineering"}
   "engineering hired before 2023"
       {"predicate": {"and": [{"eq": ["job_area", "Engineering"]},
-                             {"lt": ["hire_date", "2023-01-01"]}]}}
-  "no prior grants"             {"predicate": {"eq": ["live_award_count", 0]}}
-  "IC 5 and above"              {"predicate": {"gte": ["job_level", 5]}}
-  "not in London"               {"predicate": {"not": {"eq": ["location", "London,ENG,GB"]}}}
+                             {"lt": ["hire_date", "2023-01-01"]}]},
+       "name": "Engineering, pre-2023"}
+  "no prior grants"
+      {"predicate": {"eq": ["live_award_count", 0]}, "name": "Never granted"}
+  "IC 5 and above"
+      {"predicate": {"gte": ["job_level", 5]}, "name": "IC 5+"}
+  "not in London"
+      {"predicate": {"not": {"eq": ["location", "London,ENG,GB"]}}, "name": "Outside London"}
+  "managers only"
+      {"predicate": {"eq": ["job_track", "MANAGER"]}, "name": "Managers"}
 
 Rules that matter:
 
@@ -96,6 +103,16 @@ Rules that matter:
   They are read from the employees actually on screen. A value you invent
   matches nobody, and the filter will look broken rather than empty.
 * job_level compares as a NUMBER, never a string: "senior" is not a value, 5 is.
+* THE NAME IS A LABEL, not a summary and not a restatement. It goes on a
+  dropdown in a row of filters, beside "Prior grants" and "Job area", so write
+  what a person would call this group: "Managers", not "track is MANAGER";
+  "Never granted", not "live award count equals 0". Two to four words, no
+  trailing punctuation, sentence case.
+* THE NAME MUST NOT CLAIM MORE THAN THE PREDICATE DOES. It sits on the control
+  that decides who is in a grant cycle, so a name describing a filter you did
+  not write is worse than an ugly one. If the request was broader than what you
+  could express, name what you EXPRESSED — "Engineering" for a filter that only
+  checks job area, even if they asked for "engineering who are underpaid".
 * A filter DESCRIBES WHO TO KEEP. "Remove people with prior grants" keeps those
   without them: {"eq": ["live_award_count", 0]}.
 * REFUSE rather than approximate. If the request needs a field that is not in
@@ -167,6 +184,31 @@ def build_request(phrase, vocabulary=None):
 _FENCE = re.compile(r"```(?:json)?\s*(.+?)\s*```", re.DOTALL)
 
 
+# A label, not a paragraph. The model is asked for two to four words; this is the
+# backstop for when it writes a sentence anyway, or a name with a newline in it
+# that would break the control it sits on.
+_MAX_NAME_CHARS = 40
+
+
+def clean_name(value):
+    # type: (object) -> str
+    """A usable dropdown label, or "" when there is none.
+
+    Returning "" rather than a fallback is deliberate: the caller already has
+    `describe()`, which is DERIVED from the predicate and therefore cannot claim
+    something the filter does not do. A missing name means "use that", which is
+    always correct if less pretty. Inventing one here would put a second unverified
+    description next to the verified one.
+    """
+    if not isinstance(value, str):
+        return ""
+    # Collapse any whitespace, including the newlines a model sometimes emits.
+    name = " ".join(value.split())
+    if len(name) > _MAX_NAME_CHARS:
+        return ""
+    return name
+
+
 def parse_reply(text):
     # type: (str) -> dict
     """Claude's reply as {"predicate": ...} or {"refusal": "..."}.
@@ -205,7 +247,11 @@ def parse_reply(text):
         # knows the field and operator vocabulary; duplicating that here would
         # give two places to keep in step and one of them would drift.
         if isinstance(predicate, dict) and predicate:
-            return {"predicate": predicate}
+            out = {"predicate": predicate}
+            name = clean_name(parsed.get("name"))
+            if name:
+                out["name"] = name
+            return out
         return {"refusal": "Claude returned an empty filter."}
 
     return {"refusal": "Claude's reply did not contain a filter."}
