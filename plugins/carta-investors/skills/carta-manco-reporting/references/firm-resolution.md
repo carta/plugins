@@ -1,7 +1,10 @@
-# Gate 0 and Step 0 — surface check, cache probe, greeting
+# Gate 0 and Step 0 — greeting, surface check, cache probe
 
-The two things that run on **every** invocation: the surface check, and Step 0's
-argument capture, local cache probe and greeting.
+Four things run on **every** invocation, in this order: the greeting's
+opening line, the surface check, Step 0's argument capture and local cache
+probe, and the rest of the greeting. Leading with the opening line means the
+reader has an answer to "what is this going to do" on screen while the
+checks behind it run, rather than a silent pause before anything appears.
 
 **Steps 1 and 2 are the BUILD path and live in [firm-lookup.md](firm-lookup.md).**
 Read that file only when Step 0.2 classifies a **MISS**, or when
@@ -14,14 +17,56 @@ picker that a warm reopen has no use for.
 
 > Steps referenced here that are documented elsewhere: **Steps 1 and 2** → [firm-lookup.md](firm-lookup.md); **Step 2.75** → [budget-ingest.md](budget-ingest.md).
 
-## Gate 0 — Surface check (run first, before anything else)
+## Step 0.0 — Say hello first, before any check runs
 
-**COMPLETELY SILENT** — zero user-facing output in this step, ever. The next
-allowed output is Step 0.3's greeting. Do NOT output any text after this check,
-including phrases like "Surface is local — safe to continue", "Surface is local,
-so I can continue", "Checking local cache", "Now checking the local dashboard
-cache for…", or any narration of what is happening. Between Gate 0 and the
-greeting, a tool call is the whole turn — issue it and say nothing.
+**The very first thing you output, before any tool call** — before Gate 0's
+surface check, before Step 0.1's argument capture, before anything else.
+
+Output this fixed paragraph verbatim, preserving its own line as a plain
+paragraph, flush left — no Markdown blockquote prefix, matching the
+`carta-investors:carta-fund-modeling` house style:
+
+Welcome to Carta Management Company Reporting. This skill builds a local
+React microapp surfacing a management company's financial picture and
+budgeting processes. You can import your own budgeting workbook, so the
+microapp can map that against financials in Carta for deeper budget
+monitoring. You'll also have access to a dashboard covering Key Metrics,
+Monthly P&L, Management Fee Income Projections, and Expense analytics
+broken out by vendor and variances. Reports and charts extend to a side
+panel drill downs with insights and underlying journal entry details.
+
+Do NOT prefix it with a preface like *"I'll launch the dashboard..."* or
+*"Let me start by connecting..."* — this paragraph itself IS the opener, and
+nothing runs before it.
+
+Issue Gate 0's first tool call in the **same assistant message** as this
+paragraph, so the check starts without waiting on a round-trip — the reader
+gets the opening line at the same moment the check begins, not after it.
+
+## Gate 0 — Surface check (runs right after the opening line)
+
+**SILENT from here on** — zero further user-facing output in this step,
+unless the surface turns out to be sandboxed (below). The next allowed
+output is 0.3's continuation of the greeting. Do NOT output any text after
+this check, including phrases like "Surface is local — safe to continue",
+"Checking local cache", "Now checking the local dashboard cache for…",
+"Surface is local, proceeding silently to Step 0.2's cache probe", or any
+other narration of what is happening — **announcing that you're about to
+be quiet is not the same as being quiet, and is exactly as forbidden as any
+other sentence here.** Between this check and 0.3, a tool call is the whole
+turn — issue it and say nothing, not even a single confirming word.
+
+**If the command itself fails to run** — wrong path, missing file,
+permission denied, anything short of a `"surface": "..."` verdict — that is
+not a sandboxed result, and it's the same environment-failure case
+[errors.md](errors.md) covers for every other script this skill calls.
+Retry it once, silently, with no text before or after the retry. A retry
+that then returns a verdict is handled exactly as if it had returned that
+verdict the first time — same silence, same next step. Only if it fails
+the same way twice does errors.md's escalation apply: one plain-English
+line about what's actually wrong, never a status update about the check
+having succeeded on the second try, and never the path or cache directory
+it failed on.
 
 Step 5 launches `serve.py`, which binds `127.0.0.1` and opens the user's default
 browser. That only works when Claude Code runs on the user's own machine. In a
@@ -30,14 +75,14 @@ sessions in the cloud, which is the default) — the server runs inside a remote
 container the user can't reach, so the dashboard URL goes nowhere. Don't proceed
 there.
 
-**Before Step 0 — before any cache scan, MCP call, or greeting — run this once and
-route on it:**
+**Right after 0.0's opening line — before any cache scan, MCP call, or the
+rest of the greeting — run this once and route on it:**
 ```bash
 uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/manco_paths.py" detect-surface
 ```
 - `"surface": "sandboxed"` → **stop immediately.** Do **not** scan caches, resolve a
-  firm, touch the MCP, or launch `serve.py`. Reply with this message (substance
-  verbatim), then end the turn:
+  firm, touch the MCP, or launch `serve.py`. The opening line already went out, so
+  reply with only this message (substance verbatim), then end the turn:
   > This dashboard launches an interactive web app on your own machine — a local
   > server plus your browser — so it only works when Claude Code is running
   > locally. It looks like this session is running in the cloud. To use this
@@ -46,14 +91,14 @@ uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/manco_paths.p
 
   This is a graceful exit. Do **not** retry `detect-surface`, do **not** try to
   launch anyway, and do **not** fall back to another surface or tool.
-- `"surface": "local"` (the normal case) → continue to **Step 0** silently. Do not
-  output any text — proceed directly to Step 0.2's cache probe with a tool call
+- `"surface": "local"` (the normal case) → continue to **Step 0.1** silently. Do not
+  output any text — proceed directly to the cache probe with a tool call
   and nothing else.
 
 An explicit `MANCO_REPORTING_SURFACE=local|sandboxed` env var overrides both
 signals above (tests / unusual installs).
 
-## Step 0 — Capture firm, check the local cache, greet (cache-first — MCP only on a miss)
+## Step 0 — Capture firm, check the local cache, finish the greeting (cache-first — MCP only on a miss)
 
 Mirrors `carta-investors:carta-fund-modeling`'s "cache-first, MCP-lazy" launch
 order: resolve identity and check the local cache **before** touching the
@@ -104,7 +149,7 @@ override Step 2.5 already applies to Step 3.
 
 Everything here is a local dir scan + Read — **no MCP call yet.** Skip this
 whole probe when `<FORCE_REFRESH>` is set (0.1) — go straight to the BUILD
-greeting (0.3) and Step 1. Otherwise, run:
+continuation of the greeting (0.3) and Step 1. Otherwise, run:
 
 ```bash
 uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/manco_paths.py" list-dashboards
@@ -133,7 +178,7 @@ Classify the result:
   entry, and `<CARTA_ENVIRONMENT>` from its `carta_environment` field
   (`"production"` if that field is `null` — a pre-upgrade cache). **Skip
   Step 1 and Step 2 entirely — no MCP call.** Go to the
-  cache-hit greeting (0.3), then **Step 2.5**
+  cache-hit continuation of the greeting (0.3), then **Step 2.5**
   ([budget-ingest.md](budget-ingest.md)), which independently re-checks the
   same `raw_age_days` signal before deciding Step 3 is skippable. Do **not**
   ask the "Build the dashboard for `<MANCO_NAME>`?" confirmation on this
@@ -145,8 +190,9 @@ Classify the result:
   placeholders from the entry exactly as a WARM HIT does, and **skip Step 1
   and Step 2** — resolving a firm and its entity over the MCP to learn what
   the last build already wrote to disk costs two round trips and answers
-  nothing. Go to the greeting (0.3) using the "seen before" variant, then
-  Step 2.5, which will send this run to Step 3 for the refresh.
+  nothing. Go to the greeting's continuation (0.3) using the "seen before"
+  variant, then Step 2.5, which will send this run to Step 3 for the
+  refresh.
 - **Exactly one clean match but an identity field is `null`** (a cache dir
   older than these fields) → treat as a **MISS**: the entry cannot say who
   the entity is, so Step 1/2 must.
@@ -179,31 +225,18 @@ rather than a question asked of them.
 The exception is Carta's own data: *"Carta's stored budget"*, *"Carta's
 marks as of…"* — that is not theirs, and saying so is the point.
 
-### 0.3 — Emit the greeting (plain paragraphs, flush left)
+### 0.3 — Finish the greeting (plain paragraphs, flush left)
 
-Output **exactly one greeting message** as plain paragraphs — three on a
-first invocation, two on a warm reload (no
-leading `>` blockquote markers — flush-left black body text, matching the
-`carta-investors:carta-fund-modeling` house style). This is your FIRST
-substantive output — before the greeting, only an `AskUserQuestion` from 0.1
-or 0.2 (if one fired) is allowed. Do NOT emit a preface like *"I'll launch
-the dashboard..."* or *"Let me start by connecting..."* — the greeting
-itself IS the opener.
+0.0 already said the opening paragraph, before Gate 0 or the cache probe
+ran. This step adds what comes after it: two more paragraphs on a first
+invocation — the "here's how it comes together" paragraph, then the
+branching paragraph — and one on a warm reload, the branching paragraph
+only (0.2's resume picker or "which firm" ask, if either fired, sits
+between 0.0's opening line and this step). Same plain-paragraph, flush-left
+style as 0.0 — no Markdown blockquote prefix, matching the
+`carta-investors:carta-fund-modeling` house style.
 
-**The first paragraph is fixed**, on every path. Preserve the paragraph
-breaks (blank lines between paragraphs) but do **not** add any Markdown
-blockquote prefix:
-
-Welcome to Carta Management Company Reporting. This skill builds a local
-React microapp surfacing a management company's financial picture and
-budgeting processes. You can import your own budgeting workbook, so the
-microapp can map that against financials in Carta for deeper budget
-monitoring. You'll also have access to a dashboard covering Key Metrics,
-Monthly P&L, Management Fee Income Projections, and Expense analytics
-broken out by vendor and variances. Reports and charts extend to a side
-panel drill downs with insights and underlying journal entry details.
-
-**The second paragraph runs on a first invocation only** — a MISS or soft
+**The next paragraph runs on a first invocation only** — a MISS or soft
 hit at 0.2. It describes work that is about to happen, and on a warm reload
 none of it does: firm resolution, entity resolution, the fetch and every
 budget question are all skipped, and the reader wants the link rather than
@@ -216,8 +249,8 @@ to your Carta accounts. Where a line could mean more than one thing, I'll
 ask rather than guess. Then the microapp is built and served locally, and
 I'll hand you the link.
 
-The **last paragraph branches on 0.2's classification** — this is the only
-place the cache-hit/miss distinction shows up to the user:
+The **paragraph after that branches on 0.2's classification** — this is the
+only place the cache-hit/miss distinction shows up to the user:
 
 - **WARM HIT** — use the resolved `<FIRM_NAME>` / `<MANCO_NAME>` (not the
   raw typed text) and the freshness signal already in hand, no new lookup:
@@ -234,10 +267,11 @@ place the cache-hit/miss distinction shows up to the user:
   Fund Admin, this takes a few seconds.
 
 - **MISS** — nothing is resolved yet, so this paragraph is **held back
-  until it is.** Emit paragraphs one and two immediately, in the same
-  message as Step 1's first MCP call — the reader then has text on screen
-  while the lookups run, and they cost no perceived wait. Write this one
-  after Step 2's confirmation, as the transition into the fetch:
+  until it is.** Emit the "here's how it comes together" paragraph right
+  after 0.2 classifies the MISS, in the same message as Step 1's first MCP
+  call — the reader then has text on screen while the lookups run, and they
+  cost no perceived wait. Write this one after Step 2's confirmation, as the
+  transition into the fetch:
 
   Building **`<FIRM_NAME>`** — **`<MANCO_NAME>`**. This takes a few
   seconds.
@@ -245,14 +279,13 @@ place the cache-hit/miss distinction shows up to the user:
   It names what was confirmed rather than asking again; Step 2 owns the
   question.
 
-That's the full greeting — three paragraphs on a first invocation, two on a
-reload. Do NOT append anything else before the next step's first tool
-call — the last paragraph is the transition into silent execution (either
-straight to Step 2.5, on a WARM HIT, or into Step 1's first MCP call
-otherwise).
+That's the rest of the greeting — two paragraphs on a first invocation, one
+on a reload, on top of 0.0's opening line. Do NOT append anything else
+before the next step's first tool call — the last paragraph is the
+transition into silent execution (either straight to Step 2.5, on a WARM
+HIT, or into Step 1's first MCP call otherwise).
 
-**Latency tip**: emit the greeting text and issue the next step's first tool
+**Latency tip**: emit this continuation and issue the next step's first tool
 call in the **same assistant message**. Do not wait for a user turn between
-the greeting and that call — that adds a full network round-trip of
-perceived latency for no reason.
-
+the two — that adds a full network round-trip of perceived latency for no
+reason.
