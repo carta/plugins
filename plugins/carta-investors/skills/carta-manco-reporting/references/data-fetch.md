@@ -27,17 +27,32 @@ It is cheap where the rest of Step 3 is not: one `DISTINCT` over a single
 entity, tens of rows, no paging, no year window. Running it early costs one
 round-trip on a cold run and nothing at all on a warm one.
 
-**Skip it when `<raw_dir>/accounts-all.txt` already exists and Step 2.5 does
-not list it in `needs_fetch`.** A warm cache already holds it from a previous
-run, and its staleness age is 30 days — a chart of accounts is not something
-a firm rewrites between two invocations on the same afternoon.
+**Skip it whenever Step 2.5's `needs_fetch` does not list `accounts-all.txt`.**
+That's the only check — `needs_fetch` already encodes both "does the file
+exist" and "is it stale" (30-day staleness for this file specifically), so
+there is nothing left to verify by reading `<raw_dir>` yourself. A warm cache
+already holds it from a previous run, and a chart of accounts is not
+something a firm rewrites between two invocations on the same afternoon.
 
-Issue Query E exactly as written under Step 3 below, then save it alone:
+Issue Query E's `call_tool` itself exactly as written under Step 3, then save
+it alone:
 
 ```bash
 S="${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/save_query_result.py"
 uv run "$S" --from-session 'DISTINCT ACCOUNT_TYPE' "<raw_dir>/accounts-all.txt"
 ```
+
+**Skip Step 3's "Verify the firm context" preamble.** That `list_contexts()`
+round-trip guards the expensive multi-page JE fetch against silently scoping
+to the wrong firm — not worth paying for one cheap `DISTINCT` whose own
+failure mode is already handled below (empty result → `row_axis: null`, not
+a wrong number). This matters most on a warm or soft cache hit reaching this
+step with Step 1 skipped: `<SERVER>` was never resolved there, so redoing
+Step 3's check would mean re-deriving it from scratch for a guard this query
+doesn't need. Use `<FIRM_UUID>` straight from Step 0.2's cache probe (or
+Step 1, on a BUILD path); identify `<SERVER>` the same bare way Step 1's
+opening paragraph does — scan connected tools for the Carta MCP prefix —
+without running any of Step 1's firm-*lookup* logic.
 
 `<raw_dir>` and `needs_fetch` both come from Step 2.5's `manco_paths.py
 resolve` output.

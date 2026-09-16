@@ -153,7 +153,8 @@ call the MCP just to get it — firm-resolution.md's Step 0 says not to call
 
 Pass `PORT=8787` **only** when the firm has no `.port` yet — a first-ever
 launch. If 8787 is taken, try up to 8797; if all ten are busy, say which
-processes hold them and stop.
+processes hold them and stop. **Never kill anything to free one up** — the
+process on a busy port is not this skill's to end.
 
 When a recorded port is held by some unrelated process, `serve.py` binds
 elsewhere and deliberately leaves `.port` untouched, so the firm's address

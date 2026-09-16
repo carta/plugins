@@ -43,14 +43,17 @@ one field that answers "how old is the underlying journal-entry data?"
 
 - **`raw_age_days` is not null** → skip **Step 3 only** (the DWH fetch),
   no matter how old. Tell the user in one line: *"Using cached data from
-  `<age>`."* Then **continue to Step 2.75 and carry on through 4, 5 and
-  6 as normal.** Do not jump to launching. A warm cache is a statement
-  about journal entries, nothing else. The operator already has a local
-  app for this firm — re-running tens of DWH queries on every
-  re-invocation just to restate data that may not have moved is the wrong
-  default. Step 6 already offers "Refresh the Carta data" once the
-  dashboard is up, so a real re-fetch is one answer away whenever it's
-  actually wanted; Step 2.5 itself never re-fetches on age alone.
+  `<age>`."* That line is not a stopping point — it is not a question,
+  and no reply is coming. **In that same assistant message, immediately
+  make Step 2.75's or Step 4's first tool call next; do not end your turn
+  waiting for the user.** Do not jump to launching either — Step 2.75 and
+  Step 4 both still run. A warm cache is a statement about journal
+  entries, nothing else. The operator already has a local app for this
+  firm — re-running tens of DWH queries on every re-invocation just to
+  restate data that may not have moved is the wrong default. Step 6
+  already offers "Refresh the Carta data" once the dashboard is up, so a
+  real re-fetch is one answer away whenever it's actually wanted; Step
+  2.5 itself never re-fetches on age alone.
 - **`raw_age_days` is null (never fetched)** → proceed to Step 3 and hand
   it `needs_fetch`. A null marker does not mean the directory is empty —
   it is also what an interrupted run leaves behind. Step 3 requests what
