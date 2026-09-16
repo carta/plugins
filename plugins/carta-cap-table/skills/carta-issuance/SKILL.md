@@ -141,7 +141,14 @@ The SDK's HITL prompt on that mutate is the final, irreversible gate — never t
    [payload-reference.md § Timeouts & retries](references/payload-reference.md#timeouts--retries)
    before retrying any mutate that timed out.
 5. **The server is the source of truth.** Don't mirror its validation; surface its messages
-   verbatim.
+   verbatim. Two things follow, and both have shipped wrong securities:
+   - **An absent field is unknown, never a fact.** A read that omits a key may be flag-gated,
+     trimmed, or partial. Never tell the user a thing is "not configured" on that basis —
+     say what you could not see, or let the server answer.
+   - **Never silently drop an explicit request.** If the user asked for something and a read
+     suggests it is unavailable, send it and surface the server's verdict, or stop and say
+     you cannot honor it. Issuing without it ships a security that reads as complete and is
+     not (SECM-5751: a PIU issued with no matching interest in the linked operating company).
 6. **Never delegate to a background agent.** The gates require interactive HITL.
 7. **Templates only — no custom payloads** for legends, vesting, acceleration, or exercise
    periods: *"Custom \<thing\> isn't supported here. Save as draft and finish in the Drafts UI."*

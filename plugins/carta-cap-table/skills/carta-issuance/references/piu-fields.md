@@ -182,10 +182,24 @@ server-side rule is that a vesting start date with no schedule fails. Warn on ne
 ### Corresponding interest
 
 Offered **only** when the resolved unit class carries a truthy
-`has_corresponding_interest`. carta-web serializes that field only for issuers that have
-the ManCo→OpCo feature, so its presence is the gate — the skill never reads a flag, and a
-corp without the feature sees no field and sends no key. A class that omits the key reads
-as "no link"; absence must never raise.
+`has_corresponding_interest`. The skill never reads a feature flag; it reads this field.
+
+**An absent key means UNKNOWN, not "no".** `ShareClassView` gates the serializer field on
+the `CORRESPONDING_INTEREST_ADMIN_ISSUANCE` flag, evaluated per corporation, and pops it
+when the flag is off — so *"this class has no link"* and *"this read could not see links
+at all"* arrive as the same missing key. The read cannot tell them apart, and neither can
+you. Absence must never raise, and must never be reported as fact (SECM-5751).
+
+| What you see | What it means | What to say |
+|---|---|---|
+| `true` | The class carries the link | Offer the row |
+| `false` | The class has no link | No row; say so only if asked |
+| **key absent** | **Unknown — flag off, or a trimmed/partial read** | **Never assert "no link is configured"** |
+
+**Never state a configuration fact you inferred from an absent key.** Saying *"Carta shows
+no corresponding-interest link for this unit class"* on the strength of a missing field is
+an assertion the evidence does not support — it was reported to a user once, on a corp
+whose manage-share-classes page showed the link plainly.
 
 **Which class is "the resolved unit class".** The same precedence the unit-class buttons
 use to pre-select one (`default_share_class_prefix`), in order:
@@ -215,3 +229,22 @@ One line for the user: *"Yes also issues the matching interest in the linked ope
 company."* The server then checks permission on that company, its available units, and a
 same-named vesting schedule there; surface those messages verbatim. Only `true` is
 meaningful — the form omits the key entirely whenever the row is not visible.
+
+#### An explicit request is never silently dropped
+
+When the prompt **asks for a corresponding interest** and the resolved class does not
+report `true`, the read is not the authority — the server is. Do not drop the request and
+issue anyway: that ships a one-sided grant, a PIU in the ManCo with no matching interest
+in the OpCo, and nothing on screen says so.
+
+**Send `corresponding_interest: true` and let the server rule.**
+`DraftCorrespondingInterestValidator` accepts it or rejects it with a precise message
+(*"This unit class has no per-interest corresponding-interest link…"*), which is a fact,
+unlike anything inferrable from the read. Surface that message verbatim.
+
+The one case to resolve before issuing, not after: when the key is **absent** (unknown)
+and the user asked for the designation, **block the review** and say what you are blocked
+on — *"You asked for a corresponding interest; this cap table's share-class read does not
+report whether this unit class has one. Issue without it, or check the unit class in
+Carta first?"* Issuing silently is the one thing that is never acceptable, because the
+result is a grant that reads as complete and is not.

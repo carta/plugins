@@ -33,7 +33,9 @@ KPI strip, so it keeps the full list below.
 **Conditional columns** (render only when the trigger fires): Rule 144 reason (when
 `rule_144_date` ≠ `issue_date`); Dividend accrual start date (share class `dividend =
 "Non-cash"`); grant `HMRC notified` (EMI), `ATO notified` (AU types); PIU `Corresponding
-interest` (when the unit class reports `has_corresponding_interest`) and `Consideration
+interest` (when the unit class reports `has_corresponding_interest`, **or the user asked
+for one** — render it either way, so an explicit request is visible before issuing rather
+than dropped in silence) and `Consideration
 price` (when a row carries `cash_paid`). **Optional columns**
 (append only when at least one row carries the field, then `—` for unset cells):
 certificate number, vesting + start, acceleration, cash paid, debt canceled,

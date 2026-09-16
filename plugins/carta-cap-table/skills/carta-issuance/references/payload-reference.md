@@ -99,7 +99,7 @@ Contents: [Common fields](#common-fields-all-flows) ·
 | `vesting_template` | opt-in | int | Certificate posture — defaults to none |
 | `vesting_start_date` | if `vesting_template` set | `MM/DD/YYYY` only (CharField) | |
 | `acceleration_template` | optional | int | |
-| `corresponding_interest` | optional | bool | Also issues the matching interest in the linked operating company. Only `true` is meaningful. Send it **only** when the unit class reported `has_corresponding_interest` |
+| `corresponding_interest` | optional | bool | Also issues the matching interest in the linked operating company. Only `true` is meaningful. Send it when the unit class reported `has_corresponding_interest`, **or whenever the user explicitly asked for one** — `DraftCorrespondingInterestValidator` is the authority, not the share-class read ([piu-fields.md](piu-fields.md#an-explicit-request-is-never-silently-dropped)) |
 | `prefix_number` | optional | int or `<letters>-<digits>` | Server auto-numbers if omitted. Digits only after coercion |
 | `cash_paid` | optional | decimal ≥ 0 | "Consideration price" — UK growth shares only |
 | `is_flexible_issue_date` | optional | bool | Only ever stamped `true` server-side, never `false` |
