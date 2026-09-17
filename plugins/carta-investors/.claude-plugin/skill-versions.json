@@ -4,7 +4,7 @@
     "headline": "Rebuild to rename this page Carta Home - your firm, so it stops sharing a name with every other Carta Home in your gallery."
   },
   "carta-workhub-build": {
-    "version": "1.8.5",
-    "headline": "Workhub's capital activity review confirm screen now says whether release invites investors not yet on Carta or records the call silently."
+    "version": "1.8.6",
+    "headline": "Workhub's capital activity review runs the health checks fresh as it opens, lists what failed and who can fix it, and holds release while a blocking check fails, as Carta does."
   }
 }

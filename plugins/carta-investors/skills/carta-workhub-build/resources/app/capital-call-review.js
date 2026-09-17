@@ -185,6 +185,9 @@ function ccrReset(target, title) {
     error: null,
     // Set once a release fails ambiguously; never cleared for this panel.
     locked: false,
+    // The fresh health-check run, requested alongside the summary.
+    health: { loading: true, error: null, checks: [] },
+    healthOpen: false,
     loading: true,
   };
 }
@@ -255,6 +258,8 @@ function ccrPick(obj, specific, bare) {
 const ccrRowLabel = (r) =>
   (r.interest && (r.interest.partner_interest_group_name || r.interest.name)) || "Unnamed interest";
 
+const ccrIsDistribution = (s) => !!s && s.activity_type === "distribution";
+
 // Column order and labels come from the summary's bucket_totals, which names
 // every bucket on the activity; a row lists only the buckets it moves.
 function ccrBucketColumns(s) {
@@ -313,6 +318,53 @@ function ccrSignedMoney(v, ccy, sign) {
   return (sign < 0 ? "\u2212" : "+") + txt;
 }
 
+// What holds Approve and release, in the web app's words. The footer shows
+// each entry beside the disabled button.
+function ccrBlockers(s) {
+  const out = [];
+  if (!s) return out;
+  const h = ccrHealth();
+  const event = ccrIsDistribution(s) ? "distribution" : "capital call";
+  if (h.verdict === "blocking") {
+    out.push({
+      key: "health-checks",
+      text: "Cannot send out this " + event + " due to failed blocking health checks" +
+        (h.cartaOnly.length ? "; some of them only Carta can fix" : "") + ".",
+    });
+  } else if (h.verdict === "running") {
+    out.push({ key: "health-checks", text: "Health checks are running." });
+  } else if (h.verdict === "unknown") {
+    out.push({
+      key: "health-checks",
+      text: "Health checks could not be run from here. Open the " + event + " in Carta to run them before releasing.",
+    });
+  }
+  return out;
+}
+
+// The run, read the way the web app's approve gate reads it: a failing
+// blocking check refuses release; a failing advisory one is shown and passed.
+// A state that never requested a run (no health key at all) has nothing to
+// say and holds nothing; only a run that is pending or failed does.
+function ccrHealth() {
+  const h = _ccr.health;
+  if (!h) {
+    return { loading: false, error: null, checks: [], failing: [], blocking: [], advisory: [],
+             cartaOnly: [], passing: 0, verdict: "none" };
+  }
+  const checks = h.checks || [];
+  const failing = checks.filter((c) => c.is_success === false);
+  const blocking = failing.filter((c) => c.is_blocking);
+  const advisory = failing.filter((c) => !c.is_blocking);
+  return {
+    loading: h.loading, error: h.error, checks: checks, failing: failing, blocking: blocking, advisory: advisory,
+    cartaOnly: blocking.filter((c) => c.is_second_party_resolvable === false),
+    passing: checks.length - failing.length,
+    verdict: h.loading ? "running" : h.error ? "unknown"
+      : blocking.length ? "blocking" : advisory.length ? "warnings" : "passing",
+  };
+}
+
 // ── Reads ─────────────────────────────────────────────────────────────────
 
 function ccrPayload(res, has) {
@@ -338,6 +390,7 @@ async function ccrLoad() {
     snap.rows = CCR_DEMO_SUMMARY.rows.results;
     snap.loading = false;
     snap.rowsDone = true;
+    snap.health = { loading: false, error: null, checks: [] };
     if (!_ccrFundName) _ccrFundName = CCR_DEMO_SUMMARY.fund_name;
     ccrRender();
     renderFarSection();
@@ -347,6 +400,10 @@ async function ccrLoad() {
 
   try {
     const params = { fund_uuid: t.fundUuid, capital_activity_id: t.activityId };
+
+    // The web app runs every check as its review page opens; so does this.
+    // Not awaited: the summary must not wait on a run that can take a while.
+    ccrLoadHealth(snap, params);
 
     const sRes = await _mcp("fetch", {
       command: "fa:get:capital-activity-review-summary",
@@ -398,6 +455,25 @@ async function ccrLoad() {
     snap.error = err && err.message ? err.message : "read failed";
     ccrRender();
   }
+}
+
+async function ccrLoadHealth(snap, params) {
+  try {
+    const res = await _mcp("fetch", {
+      command: "fa:get:capital-activity-health-check",
+      params: Object.assign({ include_passing: true }, params),
+    });
+    if (_ccr !== snap) return;
+    if (res.isError) throw new Error(res.content?.[0]?.text ?? "health checks failed");
+    const page = ccrPayload(res, (c) => Array.isArray(c.results));
+    if (!page) throw new Error("Carta answered, but not with health checks");
+    snap.health = { loading: false, error: null, checks: page.results };
+  } catch (err) {
+    if (_ccr !== snap) return;
+    console.error("[ccr] health checks failed —", err);
+    snap.health = { loading: false, error: err && err.message ? err.message : "health checks failed", checks: [] };
+  }
+  ccrRender();
 }
 
 // One preview per interest group, so the partner PK on the row is the key.
@@ -550,6 +626,73 @@ function ccrMainTabBar() {
       '<button class="ccr-main-tab' + (_ccr.activeTab === t.id ? ' ccr-main-tab-on' : '') +
       '" data-ccr-main-tab="' + t.id + '">' + t.label + '</button>').join('') +
   '</div>';
+}
+
+// The web app's health-check roster, run fresh as the panel opens. A GP sees
+// the consequence first, then each failure with what has to become true.
+function ccrHealthStrip(s) {
+  const h = ccrHealth();
+  if (h.verdict === "none") return "";
+  const plural = (n, word) => n + " " + word + (n === 1 ? "" : "s");
+  const event = ccrIsDistribution(s) ? "distribution" : "capital call";
+  let pill, text;
+  if (h.verdict === "running") {
+    pill = '<span class="ccr-pill ccr-pill-muted">Running</span>';
+    text = "Checking this " + event + " now.";
+  } else if (h.verdict === "unknown") {
+    pill = '<span class="ccr-pill ccr-pill-warn">Not run</span>';
+    text = "The checks could not be run from here. Open the " + event + " in Carta to run them.";
+  } else if (h.verdict === "blocking") {
+    pill = '<span class="ccr-pill ccr-pill-bad">Blocking</span>';
+    text = plural(h.blocking.length, "blocking check") + " failed" +
+      (h.advisory.length ? ", " + plural(h.advisory.length, "advisory check") + " flagged" : "") +
+      ". Release is refused until they pass.";
+  } else if (h.verdict === "warnings") {
+    pill = '<span class="ccr-pill ccr-pill-warn">Warnings</span>';
+    text = plural(h.advisory.length, "advisory check") + " flagged something. Release can proceed past them; read them first.";
+  } else {
+    pill = '<span class="ccr-pill ccr-pill-ok">Passing</span>';
+    text = h.checks.length ? plural(h.passing, "check") + " passed." : "Every check passed.";
+  }
+  const cartaTitles = h.cartaOnly.map((c) => c.title || c.code).filter(Boolean);
+  // The detail folds away: a failure at review is rare, and the strip's sentence
+  // plus the footer already carry the consequence.
+  const body =
+    (h.failing.length ? '<div class="ccr-hc-list">' + h.failing.map(ccrHealthItem).join("") + "</div>" : "") +
+    (h.cartaOnly.length
+      ? ccrCallout("bad", "This " + event + " requires Carta's support",
+          "A blocking check only Carta can clear has failed" +
+          (cartaTitles.length ? ": " + cartaTitles.join("; ") : "") +
+          ". Use Request changes to send it back to your Carta team; it cannot be released until they fix it.")
+      : "");
+  const open = body && _ccr.healthOpen;
+  const toggle = body
+    ? '<button class="ccr-strip-toggle" data-ccr-health aria-expanded="' + (open ? "true" : "false") + '">' +
+      (open ? "Hide" : "Show") + " " + h.failing.length + (h.failing.length === 1 ? " check" : " checks") +
+      '<span class="ccr-chev' + (open ? " ccr-chev-open" : "") + '">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg>' +
+      "</span></button>"
+    : "";
+  return '<div class="ccr-strip"><span class="ccr-strip-label">Health checks</span>' + pill +
+    '<span class="ccr-strip-text">' + escHtml(text) + "</span>" +
+    (h.verdict === "unknown" ? '<span class="ccr-strip-when">' + ccrOpenInCarta() + "</span>" : "") +
+    toggle +
+    "</div>" +
+    (open ? '<div class="ccr-hc-body">' + body + "</div>" : "");
+}
+
+function ccrHealthItem(c) {
+  const pill = c.is_blocking
+    ? '<span class="ccr-pill ccr-pill-bad">Blocking</span>'
+    : '<span class="ccr-pill ccr-pill-warn">Advisory</span>';
+  const who = c.is_second_party_resolvable === false
+    ? '<span class="ccr-hc-tag">Carta fixes this</span>'
+    : (c.resolution_path === "platform" ? ccrOpenInCarta("Fix in Carta") : "");
+  return '<div class="ccr-hc">' +
+    '<div class="ccr-hc-head"><span class="ccr-hc-title">' + escHtml(c.title || c.code || "Check") + "</span>" + pill + who + "</div>" +
+    (c.description ? '<div class="ccr-hc-desc">' + escHtml(c.description) + "</div>" : "") +
+    (c.resolution ? '<div class="ccr-hc-fix">' + escHtml(c.resolution) + "</div>" : "") +
+    "</div>";
 }
 
 function ccrOverviewTabBody(s) {
@@ -835,6 +978,11 @@ function ccrAllocTable(s) {
       : "");
 }
 
+function ccrCallout(kind, title, text) {
+  return '<div class="ccr-callout ccr-callout-' + kind + '"><span>' +
+    '<span class="ccr-callout-title">' + escHtml(title) + '</span>' + escHtml(text) + '</span></div>';
+}
+
 function ccrPayBody(s) {
   const a = s.receiving_account;
   const groups = s.notice_delivery || [];
@@ -933,6 +1081,8 @@ function ccrReviewBody() {
       "</span></div>"
     : "") +
 
+    ccrHealthStrip(s) +
+
     ccrMainTabBar() +
 
     '<div class="ccr-tab-pane">' +
@@ -965,10 +1115,15 @@ function ccrConfirmBody() {
         ? "Records the call silently for investors not yet on Carta: no invitations and no new-partner notices."
         : "Records the call silently for investors not yet on Carta: inviting them was never set on this call, and release treats that as off.");
   }
+  const h = ccrHealth();
   return '<p class="ccr-confirm-banner">Releasing runs all of this in Carta immediately. Read it before you release.</p>' +
     '<div class="ccr-steps">' + steps.map((t, i) =>
       '<div class="ccr-step"><span class="ccr-step-n">' + (i + 1) + "</span><span>" + escHtml(t) + "</span></div>").join("") +
     "</div>" +
+    (h.advisory.length
+      ? ccrCallout("warn", "Advisory health checks flagged " + h.advisory.length + " thing" + (h.advisory.length === 1 ? "" : "s"),
+          "Release proceeds past them: " + h.advisory.map((c) => c.title || c.code).filter(Boolean).join("; ") + ".")
+      : "") +
     "<p style='margin-top:14px;font-size:13px;line-height:20px'>Released capital calls cannot be recalled. A correction after release means a new notice to every investor.</p>";
 }
 
@@ -979,11 +1134,13 @@ function ccrFooter() {
 
   if (_ccr.phase === "review") {
     const blocked = !s || _ccr.error || _ccr.locked;
+    const blockers = blocked ? [] : ccrBlockers(s);
     return '<div class="far-panel-footer ccr-footer">' +
-      '<span class="ccr-note">' + escHtml(prepared) + "Nothing has been sent to investors yet.</span>" +
+      '<span class="ccr-note">' + escHtml(prepared) + "Nothing has been sent to investors yet. " + ccrOpenInCarta() + "</span>" +
+      blockers.map((b) => '<span class="ccr-blocker">' + escHtml(b.text) + "</span>").join("") +
       '<span class="ccr-footer-actions">' +
         '<button class="far-btn-secondary" data-ccr-phase="changes"' + (blocked ? " disabled" : "") + ">Request changes</button>" +
-        '<button class="far-btn-primary" data-ccr-phase="confirm"' + (blocked ? " disabled" : "") + ">Approve and release</button>" +
+        '<button class="far-btn-primary" data-ccr-phase="confirm"' + (blocked || blockers.length ? " disabled" : "") + ">Approve and release</button>" +
       "</span></div>";
   }
   if (_ccr.phase === "confirm") {
@@ -1085,6 +1242,8 @@ function ccrBind(root) {
     el.addEventListener("click", () => { _ccr.showDetail = !_ccr.showDetail; ccrRender(); }));
   root.querySelectorAll("[data-ccr-note]").forEach((el) =>
     el.addEventListener("click", () => { _ccr.noteOpen = !_ccr.noteOpen; ccrRender(); }));
+  root.querySelectorAll("[data-ccr-health]").forEach((el) =>
+    el.addEventListener("click", () => { _ccr.healthOpen = !_ccr.healthOpen; ccrRender(); }));
   root.querySelectorAll("[data-ccr-pay-reveal]").forEach((el) =>
     el.addEventListener("click", () => {
       const key = el.getAttribute("data-ccr-pay-reveal");
@@ -1412,11 +1571,36 @@ function openCapitalCallReview(target, title) {
 // review command takes as capital_activity_id.
 function ccrTargetFor(w) {
   if (!w) return null;
-  const fundUuid = (w.fund && w.fund.uuid) ||
-    ((w.funds || []).find(f => f && f.uuid) || {}).uuid || null;
+  const fund = (w.fund && w.fund.uuid) ? w.fund : ((w.funds || []).find(f => f && f.uuid) || null);
+  const fundUuid = fund ? fund.uuid : null;
   const activityId = w.object_id ?? null;
   if (!fundUuid || !activityId) return null;
-  return { fundUuid: String(fundUuid), activityId: String(activityId) };
+  return {
+    fundUuid: String(fundUuid),
+    activityId: String(activityId),
+    webUrl: ccrReviewUrl(w.firm, fund, String(activityId)),
+  };
+}
+
+// The web app's review page for the activity. The workflow list carries the
+// firm's and fund's Carta ids; the connector's name says which environment
+// they belong to, the same way the CLI resolves its base URL.
+function ccrReviewUrl(firm, fund, activityId) {
+  const firmId = firm && (firm.cw_firm_id ?? firm.carta_id ?? null);
+  const fundId = fund && (fund.cw_fund_id ?? fund.carta_id ?? null);
+  if (firmId === null || firmId === undefined || fundId === null || fundId === undefined) return null;
+  const server = typeof CARTA_MCP_SERVER === "string" ? CARTA_MCP_SERVER : "";
+  const host = /sandbox/i.test(server) ? "https://app.sandbox.carta.team" : "https://app.carta.com";
+  return host + "/investors/firm/" + encodeURIComponent(String(firmId)) + "/portfolio/fund/" +
+    encodeURIComponent(String(fundId)) + "/fund-capital-activity/?capitalActivityId=" +
+    encodeURIComponent(activityId);
+}
+
+function ccrOpenInCarta(label) {
+  const url = _ccr.target && _ccr.target.webUrl;
+  if (!url) return "";
+  return '<a class="ccr-link-btn" href="' + escHtml(url) + '" target="_blank" rel="noopener">' +
+    escHtml(label || "Open in Carta") + "</a>";
 }
 
 // The fund the call belongs to, for the card's second line.
