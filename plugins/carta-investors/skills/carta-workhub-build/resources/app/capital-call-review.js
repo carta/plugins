@@ -628,6 +628,11 @@ function ccrSettingsRows(s) {
       ? ccrSettingRow("Log in required", "Yes", "Investors open the notice through a Carta log-in.")
       : ccrSettingRow("Log in required", "No", "Investors get a direct link to the notice PDF; no Carta log-in needed."));
   }
+  if ("cc_on_primary_contact_only" in s) {
+    rows.push(s.cc_on_primary_contact_only === true
+      ? ccrSettingRow("CC contacts", "Primary contacts only", "CC contacts are copied only on emails to each investor's primary contact.")
+      : ccrSettingRow("CC contacts", "Every notice email", "CC contacts are copied on every notice email, including those to secondary contacts."));
+  }
   return rows;
 }
 

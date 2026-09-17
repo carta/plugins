@@ -4,7 +4,7 @@
     "headline": "Rebuild to rename this page Carta Home - your firm, so it stops sharing a name with every other Carta Home in your gallery."
   },
   "carta-workhub-build": {
-    "version": "1.8.2",
-    "headline": "Workhub's capital activity review Overview now shows the notice date beside the due date."
+    "version": "1.8.3",
+    "headline": "Workhub's capital activity review Notice settings now say whether CC contacts are copied only on primary-contact emails or on every notice."
   }
 }
