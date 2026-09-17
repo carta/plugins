@@ -4,7 +4,7 @@
     "headline": "Rebuild to rename this page Carta Home - your firm, so it stops sharing a name with every other Carta Home in your gallery."
   },
   "carta-workhub-build": {
-    "version": "1.8.15",
-    "headline": "Workhub's capital activity review leaves the notice's contacts to the email preview on the Notice tab; the Notice settings tab shows the delivery settings only."
+    "version": "1.8.16",
+    "headline": "Workhub's capital activity review shows a distribution's account once when its paying-from and receiving records are the same account, keeping the release hold."
   }
 }

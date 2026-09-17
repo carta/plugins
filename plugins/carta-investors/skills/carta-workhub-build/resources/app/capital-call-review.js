@@ -1103,7 +1103,23 @@ function ccrCallout(kind, title, text, actionHtml) {
 
 // Where a distribution pays out of. The consent an approver signs names this
 // account, so it is the one block a distribution reviewer must see.
-function ccrPayingFromHtml(s) {
+// A distribution's paying-from account is usually the fund's own account, which
+// the summary also serves as the receiving account. The payments-platform
+// reference identifies an account on both sides; without one on both, the same
+// last four digits under the same account name do. Bank names are not compared:
+// the two records can name the account's bank differently.
+function ccrSameAccount(p, r) {
+  if (!p || !r) return false;
+  if (p.fpi_reference_id && r.fpi_reference_id) return p.fpi_reference_id === r.fpi_reference_id;
+  const last4 = (x) => x.account_number_last_four || (x.account_number ? String(x.account_number).slice(-4) : null);
+  const name = (x) => String(x.account_name || "").trim().toLowerCase().replace(/\s+/g, " ");
+  return !!last4(p) && last4(p) === last4(r) && !!name(p) && name(p) === name(r);
+}
+
+// `extraRows` are the receiving record's wire fields, appended when both
+// records are one account so it is shown once, under the heading that carries
+// its release hold.
+function ccrPayingFromHtml(s, extraRows) {
   const state = ccrPayingFromState(s);
   if (state.kind === "none") return "";
   const pill = state.kind === "ok" ? '<span class="ccr-pill ccr-pill-ok">Active</span>'
@@ -1113,7 +1129,8 @@ function ccrPayingFromHtml(s) {
   const rows = a
     ? ccrKvRow('Bank name', a.bank_name) +
       ccrKvRow('Account name', a.account_name) +
-      ccrKvRow('Account number', a.account_number_last_four ? '····' + a.account_number_last_four : null)
+      ccrKvRow('Account number', a.account_number_last_four ? '····' + a.account_number_last_four : null) +
+      (extraRows || '')
     : '';
   const callout = state.kind === "closed"
     ? ccrCallout("bad", "Active bank account required",
@@ -1131,7 +1148,8 @@ function ccrPayingFromHtml(s) {
 
 function ccrPayBody(s) {
   const a = s.receiving_account;
-  const payingFrom = ccrPayingFromHtml(s);
+  const oneAccount = ccrSameAccount(ccrPayingFromState(s).account, a);
+  let payingFrom = ccrPayingFromHtml(s);
   const groups = s.notice_delivery || [];
   const noticeLabel = (g) => g.email_notice_enabled && g.pdf_notice_enabled ? "email with PDF"
     : g.email_notice_enabled ? "email only"
@@ -1179,14 +1197,27 @@ function ccrPayBody(s) {
       ? (showRouting ? a.routing_number : maskStr(a.routing_number, 4))
       : null;
 
-    wireHtml =
-      (payingFrom ? '<div class="ccr-pay-group-title">Receiving account</div>' : '') +
-      kvRow('Bank name', a.bank_name) +
-      kvRow('Bank address', a.bank_address) +
-      kvRow('Beneficiary', a.account_name) +
-      kvRowReveal('Account number', acctNum, showAcct, 'acct', !!a.account_number) +
-      kvRowReveal('Routing number', routingNum, showRouting, 'routing', !!a.routing_number) +
-      kvRow('OBI / Memo', a.obi_memo);
+    if (payingFrom && oneAccount) {
+      // The same account under one heading: the paying-from rows, plus the wire
+      // fields only the receiving record carries. A mixed activity says why
+      // those fields matter on a distribution.
+      const collects = Number(s.total_due_to_fund) > 0;
+      payingFrom = ccrPayingFromHtml(s,
+        kvRow('Bank address', a.bank_address) +
+        kvRowReveal('Routing number', routingNum, showRouting, 'routing', !!a.routing_number) +
+        kvRow('OBI / Memo', a.obi_memo) +
+        (collects ? '<p class="ccr-row-note">Contributions on this activity are paid into this same account.</p>' : ''));
+      wireHtml = '';
+    } else {
+      wireHtml =
+        (payingFrom ? '<div class="ccr-pay-group-title">Receiving account</div>' : '') +
+        kvRow('Bank name', a.bank_name) +
+        kvRow('Bank address', a.bank_address) +
+        kvRow('Beneficiary', a.account_name) +
+        kvRowReveal('Account number', acctNum, showAcct, 'acct', !!a.account_number) +
+        kvRowReveal('Routing number', routingNum, showRouting, 'routing', !!a.routing_number) +
+        kvRow('OBI / Memo', a.obi_memo);
+    }
   }
 
   // The allocations table is full-bleed because its cells carry their own
