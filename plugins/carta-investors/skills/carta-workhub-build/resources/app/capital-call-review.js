@@ -664,9 +664,8 @@ function ccrMainTabBar() {
     { id: 'alloc', label: 'Allocations' },
     { id: 'pay', label: 'Payment information' },
   ];
-  const served = _ccr.summary || {};
-  if (ccrSettingsRows(served).length || ccrContactRows(served).length) {
-    tabs.splice(2, 0, { id: 'settings', label: 'Notice settings' });
+  if (ccrSettingsRows(_ccr.summary || {}).length) {
+    tabs.splice(2, 0, { id: 'settings', label: 'Email settings' });
   }
   return '<div class="ccr-main-tabs">' +
     tabs.map((t) =>
@@ -862,7 +861,7 @@ function ccrNoticeDateRow(s) {
     '<span class="ccr-aside">' + escHtml(ccrDaysUntil(s.date_of_notice)) + '</span></div>';
 }
 
-// ── Notice settings ───────────────────────────────────────────────────────
+// ── Email settings ────────────────────────────────────────────────────────
 // The "{Event} Details" settings that decide how the notice reaches investors.
 // They apply to every investor on the activity, so they get a tab of their
 // own rather than a place in the per-investor preview. A setting the backend
@@ -896,42 +895,12 @@ function ccrSettingsRows(s) {
   return rows;
 }
 
-// The people the notice names, in the web app's own words: whoever investors
-// reply to, and whoever is copied. A REVIEW contact is the GP the call was sent
-// to for approval, the reader of this panel, not a recipient of the notice.
-function ccrContactRows(s) {
-  if (!("contacts" in s)) return [];
-  const contacts = Array.isArray(s.contacts) ? s.contacts : [];
-  const emails = (type) => contacts
-    .filter((c) => c && c.type === type)
-    .map((c) => c.email || c.full_name)
-    .filter(Boolean);
-  return [
-    ccrContactRow("Contact for investor inquiries", emails("TO")),
-    ccrContactRow("Contacts to CC", emails("CC")),
-  ];
-}
-
-function ccrContactRow(label, emails) {
-  const value = emails.length
-    ? '<span class="ccr-strong">' + emails.map(escHtml).join("<br>") + "</span>"
-    : '<span class="ccr-muted">None</span>';
-  return '<div class="ccr-kv"><span class="ccr-k">' + escHtml(label) + '</span><span class="ccr-v">' + value + "</span></div>";
-}
-
-function ccrSettingsCard(label, rows) {
-  return '<div class="ccr-card"><div class="ccr-card-label">' + escHtml(label) + "</div>" +
-    '<div class="ccr-card-list">' + rows.join("") + "</div></div>";
-}
-
+// Every setting here changes the notice emails and nothing else, so the tab
+// says so and the card needs no header of its own.
 function ccrSettingsTabBody(s) {
   const rows = ccrSettingsRows(s);
-  const contacts = ccrContactRows(s);
-  if (!rows.length && !contacts.length) {
-    return '<div class="ccr-empty"><p>Carta did not serve the notice settings for this call.</p></div>';
-  }
-  return (rows.length ? ccrSettingsCard("Applies to every notice this call sends", rows) : "") +
-    (contacts.length ? ccrSettingsCard("Named on every notice this call sends", contacts) : "");
+  if (!rows.length) return '<div class="ccr-empty"><p>Carta did not serve the email settings for this call.</p></div>';
+  return '<div class="ccr-card"><div class="ccr-card-list">' + rows.join("") + "</div></div>";
 }
 
 function ccrNoticeTabBody(s) {

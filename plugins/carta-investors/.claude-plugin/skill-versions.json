@@ -4,7 +4,7 @@
     "headline": "Rebuild to rename this page Carta Home - your firm, so it stops sharing a name with every other Carta Home in your gallery."
   },
   "carta-workhub-build": {
-    "version": "1.8.14",
-    "headline": "Workhub's capital activity review names the notice's inquiry and CC contacts on the Notice settings tab, in the web app's words, and no longer lists the reviewer as a recipient under Payment information."
+    "version": "1.8.15",
+    "headline": "Workhub's capital activity review leaves the notice's contacts to the email preview on the Notice tab; the Notice settings tab shows the delivery settings only."
   }
 }
