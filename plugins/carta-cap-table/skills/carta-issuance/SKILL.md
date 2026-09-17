@@ -135,10 +135,9 @@ The SDK's HITL prompt on that mutate is the final, irreversible gate — never t
    `validate_drafts`, `resolve_duplicate_stakeholder`; omitting it makes the server auto-create
    a *second* draft set with the same incomplete rows. Each row's `draft_pk` from its first
    save goes on every retry row; omitting `draft_pk` inserts a new row instead of updating.
-   Resending every required field alongside it is belt-and-braces, not a requirement:
-   `save_drafts` now patches, so a row carrying only `draft_pk` plus the fields you mean to
-   change keeps the rest. Send the whole row when you have it; send a correction when that is
-   all you have, and check `cleared_fields` in the response for anything the save emptied.
+   `save_drafts` patches, so a row of `draft_pk` plus the fields you mean to change keeps the
+   rest — resending every required field is belt-and-braces, not required. Check the response's
+   `cleared_fields` for anything a save emptied.
    **A timeout is not an error** — the call may have already succeeded server-side, so retrying
    with the wrong params risks a duplicate draft set or a double-issue. Read
    [payload-reference.md § Timeouts & retries](references/payload-reference.md#timeouts--retries)
@@ -834,8 +833,11 @@ is never passed on a PIU mutate.
 
 Use the `option_plans` section from the Phase 0.5 `issuance_init` payload.
 
+- **The surface already collected one** → use it. The form renders an Equity plan field, so a
+  submitted row carrying `option_plan` has been answered; asking again is a wasted interactive
+  wait on a question the user already saw.
 - **One non-expired plan** → default silently. Tag `(default — only active plan)`.
-- **Multiple non-expired** → `AskUserQuestion`, one option per plan
+- **Multiple non-expired, none collected** → `AskUserQuestion`, one option per plan
   (`"Use \"<name>\" (<available_quantity> available)"`), last option `"Cancel"`.
 - Skip expired plans (`is_expired: true`); **never recompute** `available_quantity`.
 
@@ -1107,8 +1109,10 @@ Every re-call carries `draft_set_id` + each `draft_pk` (Hard rule 4).
 
 ### On success
 
-Render a short table using `MM/DD/YYYY`. Don't fabricate `Label` or `Grant number` columns —
-they aren't in the response.
+Render a short table using `MM/DD/YYYY`. Add a `Label` or `Grant number` column only when
+`issued[]` actually carried one for every row — the list is documented as security pks, and
+some builds return a `label` (`ES-28`) alongside. Never synthesise the value or guess the next
+number in a sequence: a wrong grant number is worse than an absent column.
 
 - **Certificate:** Stakeholder · Share class · Quantity · Issue date.
 - **Option grant:** Stakeholder · Plan · Option type · Quantity · Exercise price · Issue date.

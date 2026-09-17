@@ -32,10 +32,11 @@ uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-issuance/issuance-config/scripts/buil
 ```
 
 Then call `show_widget` with the file's contents **verbatim** as `widget_code`. The two input
-files are the same ones the Code panel uses —
-[`knowns` is documented in code-adapter.md](code-adapter.md#1-config-panel-build_configpy-builds-every-block),
-and the script derives the exercise-price hint, every default, batch mode, and the import
-markers from them. Full flag reference:
+files are the same ones the Code panel uses, so the `knowns` contract is shared: its key table
+lives in [code-adapter.md §1](code-adapter.md#1-config-panel-build_configpy-builds-every-block)
+and applies here unchanged — read that table, not the surrounding Code-only recipe. The script
+derives the exercise-price hint, every default, batch mode, and the import markers from them.
+Full flag reference:
 [issuance-config/SKILL.md § Cowork form](../issuance-config/SKILL.md#cowork-form).
 
 A hand-written form is a re-roll of the same dice every run. One traced run shipped

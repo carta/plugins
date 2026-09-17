@@ -4,7 +4,8 @@ Everything the Code adapter does differently, and the build recipes behind its `
 (config panel) and `showReview` (review panel) capabilities. Selected by [Phase 0 Step
 1](../SKILL.md#step-1--detect-the-environment-from-the-tool-surface) when `preview_start` is
 **present** in the tool surface. Read this file — start at §0 — only when that adapter is
-selected; on the Cowork path it is dead weight.
+selected. On the Cowork path skip §0 and §2, but §1's `knowns` table is the shared contract
+both surfaces build from: read it when you need a key's meaning, whichever adapter you are on.
 
 [SKILL.md](../SKILL.md) documents the engine in its Cowork form, since that is ~95% of usage.
 §0 below lists every point where this adapter diverges from it. Everything §0 does not mention
