@@ -956,6 +956,15 @@ function ccrConfirmBody() {
     "Makes " + ccrMoney(s.total_due_to_fund, ccy) + " due from investors" +
       (s.due_date ? " on " + ccrDate(s.due_date) : "") + ".",
   ];
+  if ("share_commitment" in s) {
+    // Release shares only on an exact true; the web app's staff checkbox
+    // starts checked whatever is stored, so the stored value is spelled out.
+    steps.push(s.share_commitment === true
+      ? "Invites and notifies the investors who are not yet on Carta, and shares their commitment with them."
+      : s.share_commitment === false
+        ? "Records the call silently for investors not yet on Carta: no invitations and no new-partner notices."
+        : "Records the call silently for investors not yet on Carta: inviting them was never set on this call, and release treats that as off.");
+  }
   return '<p class="ccr-confirm-banner">Releasing runs all of this in Carta immediately. Read it before you release.</p>' +
     '<div class="ccr-steps">' + steps.map((t, i) =>
       '<div class="ccr-step"><span class="ccr-step-n">' + (i + 1) + "</span><span>" + escHtml(t) + "</span></div>").join("") +
