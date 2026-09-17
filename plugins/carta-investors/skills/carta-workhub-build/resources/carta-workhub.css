@@ -933,6 +933,7 @@
 .ccr-v { flex: 1; min-width: 0; font-size: 13px; line-height: 20px; font-variant-numeric: tabular-nums; }
 .ccr-aside { flex: none; font-size: 12px; line-height: 20px; color: var(--ink-color-global-text-subtle); }
 .ccr-kv-note { display: block; margin-top: 4px; }
+.ccr-card + .ccr-card { margin-top: 12px; }
 .ccr-split { display: flex; justify-content: space-between; gap: 10px; }
 .ccr-meter { display: block; height: 5px; background: var(--ink-color-global-border-subtle); margin-top: 4px; }
 .ccr-meter > span { display: block; height: 5px; background: var(--ink-color-global-text-default); }

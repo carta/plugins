@@ -4,7 +4,7 @@
     "headline": "Rebuild to rename this page Carta Home - your firm, so it stops sharing a name with every other Carta Home in your gallery."
   },
   "carta-workhub-build": {
-    "version": "1.8.13",
-    "headline": "Workhub's capital activity review shows what a distribution can pay out and who is on hold, in the web app's words, and says how each payment path treats a hold."
+    "version": "1.8.14",
+    "headline": "Workhub's capital activity review names the notice's inquiry and CC contacts on the Notice settings tab, in the web app's words, and no longer lists the reviewer as a recipient under Payment information."
   }
 }

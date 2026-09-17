@@ -52,7 +52,7 @@ const CCR_DEMO_SUMMARY = {
     obi_memo: "FFC Great Basin Capital Partners Fund II, L.P.",
   },
   notice_delivery: [{ email_notice_enabled: true, pdf_notice_enabled: true, count: 5 }],
-  contacts: [{ full_name: "Sarah Mitchell", email: "sarah.mitchell@example.com", type: "preparer" }],
+  contacts: [{ full_name: "Sarah Mitchell", email: "sarah.mitchell@example.com", type: "TO" }],
   contact_phone: "+1 (415) 555-0147",
   non_participating: {
     count: 1,
@@ -664,7 +664,8 @@ function ccrMainTabBar() {
     { id: 'alloc', label: 'Allocations' },
     { id: 'pay', label: 'Payment information' },
   ];
-  if (ccrSettingsRows(_ccr.summary || {}).length) {
+  const served = _ccr.summary || {};
+  if (ccrSettingsRows(served).length || ccrContactRows(served).length) {
     tabs.splice(2, 0, { id: 'settings', label: 'Notice settings' });
   }
   return '<div class="ccr-main-tabs">' +
@@ -895,11 +896,42 @@ function ccrSettingsRows(s) {
   return rows;
 }
 
+// The people the notice names, in the web app's own words: whoever investors
+// reply to, and whoever is copied. A REVIEW contact is the GP the call was sent
+// to for approval, the reader of this panel, not a recipient of the notice.
+function ccrContactRows(s) {
+  if (!("contacts" in s)) return [];
+  const contacts = Array.isArray(s.contacts) ? s.contacts : [];
+  const emails = (type) => contacts
+    .filter((c) => c && c.type === type)
+    .map((c) => c.email || c.full_name)
+    .filter(Boolean);
+  return [
+    ccrContactRow("Contact for investor inquiries", emails("TO")),
+    ccrContactRow("Contacts to CC", emails("CC")),
+  ];
+}
+
+function ccrContactRow(label, emails) {
+  const value = emails.length
+    ? '<span class="ccr-strong">' + emails.map(escHtml).join("<br>") + "</span>"
+    : '<span class="ccr-muted">None</span>';
+  return '<div class="ccr-kv"><span class="ccr-k">' + escHtml(label) + '</span><span class="ccr-v">' + value + "</span></div>";
+}
+
+function ccrSettingsCard(label, rows) {
+  return '<div class="ccr-card"><div class="ccr-card-label">' + escHtml(label) + "</div>" +
+    '<div class="ccr-card-list">' + rows.join("") + "</div></div>";
+}
+
 function ccrSettingsTabBody(s) {
   const rows = ccrSettingsRows(s);
-  if (!rows.length) return '<div class="ccr-empty"><p>Carta did not serve the notice settings for this call.</p></div>';
-  return '<div class="ccr-card"><div class="ccr-card-label">Applies to every notice this call sends</div>' +
-    '<div class="ccr-card-list">' + rows.join("") + "</div></div>";
+  const contacts = ccrContactRows(s);
+  if (!rows.length && !contacts.length) {
+    return '<div class="ccr-empty"><p>Carta did not serve the notice settings for this call.</p></div>';
+  }
+  return (rows.length ? ccrSettingsCard("Applies to every notice this call sends", rows) : "") +
+    (contacts.length ? ccrSettingsCard("Named on every notice this call sends", contacts) : "");
 }
 
 function ccrNoticeTabBody(s) {
@@ -1193,12 +1225,7 @@ function ccrPayBody(s) {
   return '<div class="ccr-pad">' +
     payingFrom +
     wireHtml +
-    '<div class="ccr-kv"><span class="ccr-k">Delivery</span><span class="ccr-v">' + escHtml(delivery) +
-    (s.contacts && s.contacts.length
-      ? "<br><span class='ccr-muted'>" +
-        escHtml(s.contacts.map((c) => (c.full_name || c.email || "") + " (" + (c.type || "?") + ")").join(", ")) +
-        "</span>"
-      : "") + "</span></div>" +
+    '<div class="ccr-kv"><span class="ccr-k">Delivery</span><span class="ccr-v">' + escHtml(delivery) + "</span></div>" +
     (s.contact_phone ? '<div class="ccr-kv"><span class="ccr-k">Wire verification</span><span class="ccr-v">' + escHtml(s.contact_phone) + "</span></div>" : "") +
     '<p class="ccr-row-note">Bank details are shown for confirmation. Your Carta team changes them ' +
     "through a separate verification, never here.</p>" +
