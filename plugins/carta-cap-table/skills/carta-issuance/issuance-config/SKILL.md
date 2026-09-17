@@ -96,7 +96,7 @@ overlay. `cowork-styles.css` uses design-system tokens throughout and keys its
 responsive rule off `@container`, not `@media`: a viewport query would track the user's
 window rather than the form's own width.
 
-**Batch mode** (cowork-adapter.md § Batch mode) activates on >10 rows whose terms are
+**Batch mode** (cowork-adapter.md § Batch mode) activates on >3 rows whose terms are
 all identical or unset, collapsing to shared-terms-once plus a name/email/quantity
 table. `knowns.batch_mode` forces it either way. It is a **rendering** choice only: the
 shared terms are expanded onto every row at submit, so the payload is indistinguishable
