@@ -147,6 +147,19 @@ cash balance and budget calls via `mcp__<SERVER>__call_tool` as shown below — 
 also carries `_instrumentation_v2`. All go in **one assistant message** as parallel
 tool calls.
 
+**Queries A–F below, plus cash balance and the budget calls, are the only
+`dwh__execute__query` / `fa__*` calls this skill ever issues.** Do not compose an
+ad-hoc query for a figure that looks like it should exist in the warehouse — a
+column invented from a plausible-sounding name (e.g. a `COMMITTED_CAPITAL` on
+`JOURNAL_ENTRIES` or `MANAGEMENT_FEE_SCHEDULES`) fails as a Snowflake compilation
+error, not a graceful empty result, and the error surfaces to the user as an
+opaque `DataWarehouseError`. Committed capital specifically is never fetched by
+SQL: `build_manco_datadir.py`'s `_build_fee_projections` infers it from the latest
+actual quarterly management fee divided by that period's rate, and that inference
+is already wired into the build. If a figure genuinely isn't covered
+by Queries A–F, that's a real product gap, not something to work around with a new
+query in the moment.
+
 #### Query A — ManCo expenses → `je-expense-page1.txt`
 
 ```sql
@@ -322,6 +335,16 @@ or budgets.
 
 #### Cash balance → `cash-balance.json`
 
+**`firm_uuid` and `as_of_date` are both required and must not be sent empty or
+omitted.** `<FIRM_UUID>` comes from Step 1 and `<AS_OF>` from Step 2.5's
+`manco_paths.py resolve` output (Step 3's own opening line) — confirm both are
+already resolved, non-empty values before constructing this call. Sending it with
+either missing (an empty `arguments={}`, or `entity_ids` alone with the other two
+dropped) fails with a Pydantic `ValidationError` naming the missing field, wastes
+the round-trip, and — issued inside the single parallel Step 3 message — that
+failure doesn't block Queries A–F or the budget calls, so it is easy to miss unless
+checked for explicitly once responses are back.
+
 ```
 mcp__<SERVER>__call_tool(name="fa__get__cash-balance", arguments={
   "firm_uuid":  "<FIRM_UUID>",
@@ -367,8 +390,10 @@ that silently changes a firm's numbers, and it is never necessary.
 `entities.json` — the roster Step 4 reads each fund's own `carta_id` from
 for the fee-chart drill-down link (Query C carries no such column). If that
 call has scrolled out of the session log (a long Step 2.75 gap, or a
-compaction), re-issue `mcp__<SERVER>__call_tool(name="fa__list__entities", arguments={}, _instrumentation_v2={...})` fresh right before this save —
-it's a cheap, idempotent call, unlike Queries A–F.
+compaction), re-issue `mcp__<SERVER>__call_tool(name="fa__list__entities", arguments={"entity_types": "management_co,fund"}, _instrumentation_v2={"skills": ["carta-investors:carta-manco-reporting"]})` fresh right before this save —
+it's a cheap, idempotent call, unlike Queries A–F. Keep the same `entity_types`
+filter Step 2 used (see [firm-lookup.md](firm-lookup.md)) — refetching unfiltered
+risks the same `ToolError: response too large` Step 2's filter exists to avoid.
 
 One Bash call saves everything. It runs the writes concurrently, so this is
 a couple of seconds regardless of how many stems came back:

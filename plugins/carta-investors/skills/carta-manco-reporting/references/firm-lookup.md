@@ -44,6 +44,18 @@ disruptive (e.g. no interactive turn is available to wait on). Once resolved —
 answer or by default — use that prefix as `<SERVER>` for every tool call in this step
 and after.
 
+**Meta-tools are never routed through `call_tool`.** `list_contexts`, `set_context`,
+`search_tools`, `discover`, `get_current_user`, and `welcome` are each their own
+top-level tool under `<SERVER>` — call them directly, e.g. `mcp__<SERVER>__list_contexts(...)`.
+Never pass one of their names into `call_tool(name="list_contexts", ...)` or
+`call_tool(name="search_tools", ...)` — the proxy's registry only holds Fund
+Admin/DWH domain commands (`fa__...`, `dwh__execute__query`), so a meta-tool name
+sent through it comes back `Unknown tool`, and `search_tools` sent through it comes
+back refusing the call outright ("synthetic search tool and cannot be called via the
+call_tool proxy"). If a **direct** call to one of these meta-tools itself comes back
+`Unknown tool`, the fix is to re-check `<SERVER>` above — not to retry the same name
+through `call_tool`.
+
 **Classify `<CARTA_ENVIRONMENT>` from `<SERVER>`'s name** — served to the
 dashboard's Snowplow tracker so nonprod usage isn't misattributed as
 production. A name containing `test`/`sandbox`/`demo`/`preprod`/
@@ -123,7 +135,19 @@ Then `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation_v2={...})
 Reached in the same cases as Step 1 (a MISS, or `<FORCE_REFRESH>`) — never
 on a WARM HIT or a soft hit, both of which already know the entity.
 
-Call `mcp__<SERVER>__call_tool(name="fa__list__entities", arguments={}, _instrumentation_v2={...})`.
+Call `mcp__<SERVER>__call_tool(name="fa__list__entities", arguments={"entity_types": "management_co,fund"}, _instrumentation_v2={"skills": ["carta-investors:carta-manco-reporting"]})`.
+`entity_types` takes a comma-separated string, not a list — see `carta-soi`'s and
+`carta-portfolio-analytics-routing`'s `fa__list__entities` calls for the same convention.
+
+**Always pass `entity_types` — never fetch this unfiltered.** A firm with many
+`GP Entity`/`SPV`/`Elimination Entity`/`Holding` records (none of which this skill
+ever uses) can push the unfiltered response past `fa__list__entities`'s size cap,
+failing the whole call with `ToolError: response too large` instead of returning
+anything. Both `management_co` and `fund` are requested together — not just
+`management_co` — because this same response also becomes `entities.json` (see
+[data-fetch.md](data-fetch.md)'s "Save all results"), the fund roster Step 4 reads
+each fund's `carta_id` from for the fee-chart drill-down link. Narrowing to
+`management_co` alone would fix this call but silently break that later one.
 
 A firm's entity list is mostly funds. `fa__list__entities` returns
 `Fund`, `GP Entity`, `Management Co`, `SPV`, `Elimination Entity` and
