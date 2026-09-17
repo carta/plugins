@@ -542,6 +542,9 @@ function ccrMainTabBar() {
     { id: 'alloc', label: 'Allocations' },
     { id: 'pay', label: 'Payment information' },
   ];
+  if (ccrSettingsRows(_ccr.summary || {}).length) {
+    tabs.splice(2, 0, { id: 'settings', label: 'Notice settings' });
+  }
   return '<div class="ccr-main-tabs">' +
     tabs.map((t) =>
       '<button class="ccr-main-tab' + (_ccr.activeTab === t.id ? ' ccr-main-tab-on' : '') +
@@ -595,6 +598,37 @@ function ccrOverviewTabBody(s) {
         '</span></div>' +
     '</div>' +
   '</div>';
+}
+
+// ── Notice settings ───────────────────────────────────────────────────────
+// The "{Event} Details" settings that decide how the notice reaches investors.
+// They apply to every investor on the activity, so they get a tab of their
+// own rather than a place in the per-investor preview. A setting the backend
+// did not serve (an older deploy) is left out, and the tab is hidden when
+// none is served.
+
+function ccrSettingRow(label, value, note) {
+  return '<div class="ccr-kv"><span class="ccr-k">' + escHtml(label) + "</span>" +
+    '<span class="ccr-v"><span class="ccr-strong">' + escHtml(value) + "</span>" +
+    '<span class="ccr-note ccr-kv-note">' + escHtml(note) + "</span></span></div>";
+}
+
+function ccrSettingsRows(s) {
+  const rows = [];
+  if ("investor_login_required" in s) {
+    // The notice code treats an unset value as No, so the row does too.
+    rows.push(s.investor_login_required === true
+      ? ccrSettingRow("Log in required", "Yes", "Investors open the notice through a Carta log-in.")
+      : ccrSettingRow("Log in required", "No", "Investors get a direct link to the notice PDF; no Carta log-in needed."));
+  }
+  return rows;
+}
+
+function ccrSettingsTabBody(s) {
+  const rows = ccrSettingsRows(s);
+  if (!rows.length) return '<div class="ccr-empty"><p>Carta did not serve the notice settings for this call.</p></div>';
+  return '<div class="ccr-card"><div class="ccr-card-label">Applies to every notice this call sends</div>' +
+    '<div class="ccr-card-list">' + rows.join("") + "</div></div>";
 }
 
 function ccrNoticeTabBody(s) {
@@ -888,6 +922,7 @@ function ccrReviewBody() {
       (_ccr.activeTab === 'overview' ? ccrOverviewTabBody(s)
         : _ccr.activeTab === 'alloc' ? ccrAllocTable(s)
         : _ccr.activeTab === 'pay' ? ccrPayBody(s)
+        : _ccr.activeTab === 'settings' ? ccrSettingsTabBody(s)
         : ccrNoticeTabBody(s)) +
     "</div>";
 }
