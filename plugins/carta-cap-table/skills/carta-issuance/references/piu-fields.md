@@ -188,7 +188,7 @@ Offered **only** when the resolved unit class carries a truthy
 the `CORRESPONDING_INTEREST_ADMIN_ISSUANCE` flag, evaluated per corporation, and pops it
 when the flag is off — so *"this class has no link"* and *"this read could not see links
 at all"* arrive as the same missing key. The read cannot tell them apart, and neither can
-you. Absence must never raise, and must never be reported as fact (SECM-5751).
+you. Absence must never raise, and must never be reported as fact.
 
 | What you see | What it means | What to say |
 |---|---|---|

@@ -380,8 +380,8 @@ def build_exercise_price_hint(knowns: Dict[str, Any], currency: str) -> str:
         return f"{label} expired on {display_date(expired_on)}. Enter an exercise price."
 
     # Deliberately not "No 409A on file": that reads as a missing US filing to a
-    # company that never needed one.
-    return "No active FMV on file"
+    # company that never needed one. Name the action, as the expired branch does.
+    return "No active valuation on file. Enter an exercise price."
 
 
 # ── Button-group builders ──

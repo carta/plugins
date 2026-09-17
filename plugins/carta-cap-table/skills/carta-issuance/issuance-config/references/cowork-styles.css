@@ -40,12 +40,17 @@
 
 /* ── Toggle buttons ──
    Buttons are pre-styled by the host, so these rules only carry the selected
-   state and the row layout. */
+   state and the row layout. Selection must paint from the accent tints: this
+   host leaves --fill-primary/--on-primary undefined, and an undefined custom
+   property computes to nothing rather than throwing, so a selected toggle
+   styled from those is transparent and reads as unselected. */
 .toggle-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .toggle { white-space: nowrap; }
 .toggle.selected {
-  background: var(--fill-primary); color: var(--on-primary);
-  border-color: var(--fill-primary);
+  background: var(--bg-accent); color: var(--text-accent);
+  border-color: var(--border-accent);
+  box-shadow: inset 0 0 0 1px var(--border-accent);
+  font-weight: 500;
 }
 .toggle:disabled { opacity: .55; cursor: not-allowed; }
 

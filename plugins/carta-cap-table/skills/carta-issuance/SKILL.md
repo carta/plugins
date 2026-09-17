@@ -150,7 +150,7 @@ The SDK's HITL prompt on that mutate is the final, irreversible gate — never t
    - **Never silently drop an explicit request.** If the user asked for something and a read
      suggests it is unavailable, send it and surface the server's verdict, or stop and say
      you cannot honor it. Issuing without it ships a security that reads as complete and is
-     not (SECM-5751: a PIU issued with no matching interest in the linked operating company).
+     not — a PIU with no matching interest in the linked operating company.
 6. **Never delegate to a background agent.** The gates require interactive HITL.
 7. **Templates only — no custom payloads** for legends, vesting, acceleration, or exercise
    periods: *"Custom \<thing\> isn't supported here. Save as draft and finish in the Drafts UI."*
