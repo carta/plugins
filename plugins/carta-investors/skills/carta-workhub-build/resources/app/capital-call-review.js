@@ -569,6 +569,7 @@ function ccrOverviewTabBody(s) {
       '<div class="ccr-kv"><span class="ccr-k">Due from investors</span>' +
         '<span class="ccr-v ccr-strong">' + escHtml(ccrDate(s.due_date)) + '</span>' +
         '<span class="ccr-aside">' + escHtml(ccrDaysUntil(s.due_date)) + '</span></div>' +
+      ccrNoticeDateRow(s) +
       '<div class="ccr-kv"><span class="ccr-k">Called for</span><span class="ccr-v">' +
         (buckets.length
           ? buckets.map((b) => '<span class="ccr-split"><span>' + escHtml(b.display_name || b.slug || "Bucket") +
@@ -598,6 +599,12 @@ function ccrOverviewTabBody(s) {
         '</span></div>' +
     '</div>' +
   '</div>';
+}
+
+function ccrNoticeDateRow(s) {
+  return '<div class="ccr-kv"><span class="ccr-k">Notice to investors</span>' +
+    '<span class="ccr-v ccr-strong">' + escHtml(ccrDate(s.date_of_notice)) + '</span>' +
+    '<span class="ccr-aside">' + escHtml(ccrDaysUntil(s.date_of_notice)) + '</span></div>';
 }
 
 // ── Notice settings ───────────────────────────────────────────────────────

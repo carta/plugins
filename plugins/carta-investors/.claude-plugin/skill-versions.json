@@ -4,7 +4,7 @@
     "headline": "Rebuild to rename this page Carta Home - your firm, so it stops sharing a name with every other Carta Home in your gallery."
   },
   "carta-workhub-build": {
-    "version": "1.8.1",
-    "headline": "Workhub's capital activity review gains a Notice settings tab, starting with whether investors log in to open the notice or get the PDF link."
+    "version": "1.8.2",
+    "headline": "Workhub's capital activity review Overview now shows the notice date beside the due date."
   }
 }
