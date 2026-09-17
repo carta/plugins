@@ -959,6 +959,7 @@
 .ccr-strip-label { font-weight: 600; }
 .ccr-strip-text { flex: 1; min-width: 200px; }
 .ccr-strip-when { margin-left: auto; color: var(--ink-color-global-text-subtle); white-space: nowrap; }
+.ccr-pay-group-title { display: flex; align-items: center; gap: 8px; padding: 14px 0 2px; font-size: 12px; font-weight: 600; }
 .ccr-blocker { display: block; font-size: 12px; line-height: 18px; color: var(--ink-color-global-feedback-negative-strong); }
 .ccr-link-btn { color: var(--ink-color-global-text-default); font-weight: 500; text-decoration: underline; text-underline-offset: 2px; white-space: nowrap; }
 

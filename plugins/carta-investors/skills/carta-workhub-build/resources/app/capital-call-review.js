@@ -318,11 +318,36 @@ function ccrSignedMoney(v, ccy, sign) {
   return (sign < 0 ? "\u2212" : "+") + txt;
 }
 
+// ── Release blockers ──────────────────────────────────────────────────────
+// The states in which the web app disables approve; "Request changes" stays open.
+
+// null + needed is the web app's "Bank account required"; closed is "Active
+// bank account required"; a capital call has neither.
+function ccrPayingFromState(s) {
+  const account = s.paying_from_account;
+  if (account) return { kind: account.is_active === false ? "closed" : "ok", account: account };
+  return { kind: s.needs_distribution_paying_from_account ? "missing" : "none", account: null };
+}
+
 // What holds Approve and release, in the web app's words. The footer shows
 // each entry beside the disabled button.
+// Only Carta can name or change the account a distribution pays from, so both
+// paying-from gaps route to Request changes rather than to a picker this page cannot offer.
 function ccrBlockers(s) {
   const out = [];
   if (!s) return out;
+  const paying = ccrPayingFromState(s).kind;
+  if (paying === "missing") {
+    out.push({
+      key: "paying-from",
+      text: "No paying-from bank account is named on this distribution. Ask your Carta team to add one with Request changes.",
+    });
+  } else if (paying === "closed") {
+    out.push({
+      key: "paying-from",
+      text: "The paying-from bank account on this distribution is closed. Ask your Carta team to select another with Request changes.",
+    });
+  }
   const h = ccrHealth();
   const event = ccrIsDistribution(s) ? "distribution" : "capital call";
   if (h.verdict === "blocking") {
@@ -978,13 +1003,48 @@ function ccrAllocTable(s) {
       : "");
 }
 
+function ccrKvRow(label, value) {
+  if (!value) return '';
+  return '<div class="ccr-kv"><span class="ccr-k">' + escHtml(label) + '</span>' +
+    '<span class="ccr-v">' + escHtml(value) + '</span></div>';
+}
+
 function ccrCallout(kind, title, text) {
   return '<div class="ccr-callout ccr-callout-' + kind + '"><span>' +
     '<span class="ccr-callout-title">' + escHtml(title) + '</span>' + escHtml(text) + '</span></div>';
 }
 
+// Where a distribution pays out of. The consent an approver signs names this
+// account, so it is the one block a distribution reviewer must see.
+function ccrPayingFromHtml(s) {
+  const state = ccrPayingFromState(s);
+  if (state.kind === "none") return "";
+  const pill = state.kind === "ok" ? '<span class="ccr-pill ccr-pill-ok">Active</span>'
+    : state.kind === "closed" ? '<span class="ccr-pill ccr-pill-bad">Closed</span>'
+    : '<span class="ccr-pill ccr-pill-bad">Missing</span>';
+  const a = state.account;
+  const rows = a
+    ? ccrKvRow('Bank name', a.bank_name) +
+      ccrKvRow('Account name', a.account_name) +
+      ccrKvRow('Account number', a.account_number_last_four ? '····' + a.account_number_last_four : null)
+    : '';
+  const callout = state.kind === "closed"
+    ? ccrCallout("bad", "Active bank account required",
+        "The bank account selected for this distribution is closed. Release is held until your Carta team selects " +
+        "another: use Request changes and say which account to pay from.")
+    : state.kind === "missing"
+    ? ccrCallout("bad", "Bank account required",
+        "No paying-from account is named on this distribution. Release is held until your Carta team adds one: " +
+        "use Request changes and say which account to pay from.")
+    : "";
+  // The message sits under the title whether or not an account follows, so a
+  // missing and a closed account read in the same place.
+  return '<div class="ccr-pay-group-title">Paying from ' + pill + '</div>' + callout + rows;
+}
+
 function ccrPayBody(s) {
   const a = s.receiving_account;
+  const payingFrom = ccrPayingFromHtml(s);
   const groups = s.notice_delivery || [];
   const noticeLabel = (g) => g.email_notice_enabled && g.pdf_notice_enabled ? "email with PDF"
     : g.email_notice_enabled ? "email only"
@@ -1006,17 +1066,16 @@ function ccrPayBody(s) {
 
   let wireHtml = '';
   if (!a) {
-    const fallback = s.uses_fbo_contributions ? "Per-partner virtual accounts" : "No account named on this activity";
-    wireHtml = '<div class="ccr-kv"><span class="ccr-k">Receiving account</span><span class="ccr-v">' + escHtml(fallback) + "</span></div>";
+    // A distribution collects nothing, so an absent receiving account is not
+    // a gap there; the paying-from block above is what it shows instead.
+    if (!payingFrom) {
+      const fallback = s.uses_fbo_contributions ? "Per-partner virtual accounts" : "No account named on this activity";
+      wireHtml = '<div class="ccr-kv"><span class="ccr-k">Receiving account</span><span class="ccr-v">' + escHtml(fallback) + "</span></div>";
+    }
   } else {
     const showAcct = _ccr.payShowSensitive.acct;
     const showRouting = _ccr.payShowSensitive.routing;
-
-    const kvRow = (label, value) => {
-      if (!value) return '';
-      return '<div class="ccr-kv"><span class="ccr-k">' + escHtml(label) + '</span>' +
-        '<span class="ccr-v">' + escHtml(value) + '</span></div>';
-    };
+    const kvRow = ccrKvRow;
 
     const kvRowReveal = (label, value, show, key, hasFullNumber) => {
       if (!value) return '';
@@ -1034,6 +1093,7 @@ function ccrPayBody(s) {
       : null;
 
     wireHtml =
+      (payingFrom ? '<div class="ccr-pay-group-title">Receiving account</div>' : '') +
       kvRow('Bank name', a.bank_name) +
       kvRow('Bank address', a.bank_address) +
       kvRow('Beneficiary', a.account_name) +
@@ -1045,6 +1105,7 @@ function ccrPayBody(s) {
   // The allocations table is full-bleed because its cells carry their own
   // inset. These rows do not, so the inset lives on the wrapper.
   return '<div class="ccr-pad">' +
+    payingFrom +
     wireHtml +
     '<div class="ccr-kv"><span class="ccr-k">Delivery</span><span class="ccr-v">' + escHtml(delivery) +
     (s.contacts && s.contacts.length
@@ -1064,11 +1125,12 @@ function ccrReviewBody() {
 
   if (_ccr.error === "unlinked") {
     return '<div class="ccr-empty"><p>This task is not linked to a capital activity that this page can read.</p>' +
-      "<p class='ccr-note'>The workflow row carries no fund and activity id the review commands accept. Open the call in Carta to review it.</p></div>";
+      "<p class='ccr-note'>The workflow row carries no fund and activity id the review commands accept. Open the call in Carta to review it. " +
+      ccrOpenInCarta() + "</p></div>";
   }
   if (_ccr.error || !s) {
     return '<div class="ccr-empty"><p>Could not read this capital call.</p>' +
-      '<p class="ccr-note">' + escHtml(_ccr.error || "") + "</p></div>";
+      '<p class="ccr-note">' + escHtml(_ccr.error || "") + " " + ccrOpenInCarta("Review it in Carta") + "</p></div>";
   }
 
   const p = s.preparation;

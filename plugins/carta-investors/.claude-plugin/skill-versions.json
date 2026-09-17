@@ -4,7 +4,7 @@
     "headline": "Rebuild to rename this page Carta Home - your firm, so it stops sharing a name with every other Carta Home in your gallery."
   },
   "carta-workhub-build": {
-    "version": "1.8.6",
-    "headline": "Workhub's capital activity review runs the health checks fresh as it opens, lists what failed and who can fix it, and holds release while a blocking check fails, as Carta does."
+    "version": "1.8.7",
+    "headline": "Workhub's capital activity review shows the account a distribution pays from, holds release while that account is missing or closed, and links straight to the activity in Carta."
   }
 }
