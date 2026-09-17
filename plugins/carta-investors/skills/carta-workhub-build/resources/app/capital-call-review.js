@@ -633,6 +633,11 @@ function ccrSettingsRows(s) {
       ? ccrSettingRow("CC contacts", "Primary contacts only", "CC contacts are copied only on emails to each investor's primary contact.")
       : ccrSettingRow("CC contacts", "Every notice email", "CC contacts are copied on every notice email, including those to secondary contacts."));
   }
+  if ("display_secondary_contacts_on_primary_email" in s) {
+    rows.push(s.display_secondary_contacts_on_primary_email === true
+      ? ccrSettingRow("Secondary contacts", "Listed in primary emails", "Primary contacts' emails list the other contacts who were notified.")
+      : ccrSettingRow("Secondary contacts", "Not listed", "Primary contacts' emails do not list the other contacts who were notified."));
+  }
   return rows;
 }
 
