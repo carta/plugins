@@ -962,6 +962,9 @@
 .ccr-pay-group-title { display: flex; align-items: center; gap: 8px; padding: 14px 0 2px; font-size: 12px; font-weight: 600; }
 .ccr-blocker { display: block; font-size: 12px; line-height: 18px; color: var(--ink-color-global-feedback-negative-strong); }
 .ccr-link-btn { color: var(--ink-color-global-text-default); font-weight: 500; text-decoration: underline; text-underline-offset: 2px; white-space: nowrap; }
+.ccr-callout-btn { display: block; width: max-content; margin-top: 10px; padding: 7px 14px; border-radius: var(--ink-size-global-radius-default);
+  border: 1px solid currentColor; color: inherit; font-size: 13px; font-weight: 600; text-decoration: none; white-space: nowrap; }
+.ccr-callout-btn:hover { text-decoration: underline; }
 
 .ccr-main-tabs {
   display: flex; margin: 0 -20px 4px;
@@ -1073,7 +1076,20 @@
 .ccr-footer-actions .far-btn-primary {
   border: 1px solid var(--ink-color-global-brand-black);
 }
+/* A locked decision has to look locked: the outlined button fades like the filled one. */
+.ccr-footer-actions .far-btn-secondary:disabled {
+  color: var(--ink-color-global-text-subtle); border-color: var(--ink-color-global-border-subtle); cursor: not-allowed;
+}
 .ccr-footer-end { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
+.ccr-hold { margin-right: auto; }
+
+/* The approver's confirmations: the web app's checkboxes, one per line. */
+.ccr-consent { margin-top: 14px; padding: 12px 14px; border: 1px solid var(--ink-color-global-border-subtle); border-radius: 4px; }
+.ccr-consent-title { font-size: 13px; font-weight: 600; line-height: 18px; margin-bottom: 8px; }
+.ccr-check { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; line-height: 20px; cursor: pointer; }
+.ccr-check + .ccr-check { margin-top: 8px; }
+.ccr-check input { flex: none; width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--ink-color-global-brand-black); }
+.ccr-check a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 
 .ccr-strip-toggle { margin-left: auto; background: none; border: none; cursor: pointer; font-family: inherit;
   font-size: 12px; font-weight: 500; color: var(--ink-color-global-text-subtle); white-space: nowrap; padding: 0; display: inline-flex; align-items: center; gap: 4px; }

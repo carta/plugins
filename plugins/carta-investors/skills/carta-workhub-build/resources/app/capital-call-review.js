@@ -188,6 +188,8 @@ function ccrReset(target, title) {
     // The fresh health-check run, requested alongside the summary.
     health: { loading: true, error: null, checks: [] },
     healthOpen: false,
+    // The approver's own confirmations, ticked in the release step.
+    consent: { call: false, payment: false, limit: false },
     loading: true,
   };
 }
@@ -259,6 +261,11 @@ const ccrRowLabel = (r) =>
   (r.interest && (r.interest.partner_interest_group_name || r.interest.name)) || "Unnamed interest";
 
 const ccrIsDistribution = (s) => !!s && s.activity_type === "distribution";
+
+// The card names a capital call; the summary says what the activity really is.
+function ccrPanelTitle(s) {
+  return ccrIsDistribution(s) ? "Distribution — review and release" : _ccr.title;
+}
 
 // Column order and labels come from the summary's bucket_totals, which names
 // every bucket on the activity; a row lists only the buckets it moves.
@@ -346,6 +353,15 @@ function ccrBlockers(s) {
     out.push({
       key: "paying-from",
       text: "The paying-from bank account on this distribution is closed. Ask your Carta team to select another with Request changes.",
+    });
+  }
+  // An AMM distribution is reviewed in Carta: choosing who is paid and
+  // authorizing the payment are not offered here, so neither decision is.
+  if (s.is_amm_distribution) {
+    out.push({
+      key: "amm",
+      locks: true,
+      text: "This distribution pays through Automated Money Movement and is reviewed in Carta. Open it there to choose who is paid, authorize the payment and release, or to request changes.",
     });
   }
   const h = ccrHealth();
@@ -613,13 +629,15 @@ async function ccrApprove() {
   }
 
   try {
-    const res = await _mcp("mutate", {
-      command: "fa:mutate:approve-capital-activity",
-      params: {
-        fund_uuid: _ccr.target.fundUuid,
-        capital_activity_id: _ccr.target.activityId,
-      },
-    });
+    const params = {
+      fund_uuid: _ccr.target.fundUuid,
+      capital_activity_id: _ccr.target.activityId,
+    };
+    // The consent is the approver's authorization, so it is passed only as
+    // ticked, and only where there is one to record: a plain call's account
+    // confirmation is a gate on this page, not a consent the backend keeps.
+    if (_ccr.consent.call && _ccr.summary && _ccr.summary.uses_fbo_contributions) params.amm_consent = true;
+    const res = await _mcp("mutate", { command: "fa:mutate:approve-capital-activity", params: params });
     if (res.isError) throw new Error(res.content?.[0]?.text ?? "release failed");
     _ccr.phase = "released";
     ccrRender();
@@ -723,25 +741,44 @@ function ccrHealthItem(c) {
     "</div>";
 }
 
+// How the cash leaves. is_amm_distribution is the gate the web app enforces,
+// so it decides the label even where the fund's strategy says otherwise.
+function ccrPaymentMethodRow(s) {
+  if (!s.pays_investors_in_cash) return "";
+  const amm = !!s.is_amm_distribution;
+  return '<div class="ccr-kv"><span class="ccr-k">Payment method</span><span class="ccr-v">' +
+    '<span class="ccr-strong">' + (amm ? "Automated Money Movement" : "Manual wires") + '</span><br>' +
+    '<span class="ccr-muted">' + (amm
+      ? "Carta wires each investor from the paying-from account on release."
+      : "Your fund sends each wire from the paying-from account after release.") +
+    '</span></span></div>';
+}
+
 function ccrOverviewTabBody(s) {
   const ccy = s.currency;
-  const called = ccrNum(s.gross_call_amount) !== null ? s.gross_call_amount : s.total_due_to_fund;
-  const postPct = ccrPick(s, "total_post_call_percent_inside_commitment", "total_post_call_percent");
-  const postAmt = ccrPick(s, "total_post_call_amount_inside_commitment", "total_post_call_amount");
+  const dist = ccrIsDistribution(s);
+  const headline = dist
+    ? (ccrNum(s.net_distribution_amount) !== null ? s.net_distribution_amount : s.total_due_to_investor)
+    : (ccrNum(s.gross_call_amount) !== null ? s.gross_call_amount : s.total_due_to_fund);
+  const postPct = dist ? s.total_post_distribution_percent
+    : ccrPick(s, "total_post_call_percent_inside_commitment", "total_post_call_percent");
+  const postAmt = dist ? s.total_post_distribution_amount
+    : ccrPick(s, "total_post_call_amount_inside_commitment", "total_post_call_amount");
   const ratio = ccrNum(postPct);
   const cols = ccrBucketColumns(s);
   const buckets = cols.main;
   const adj = cols.adjustments;
 
   return '<div class="ccr-card">' +
-    '<div class="ccr-card-label">Total being called</div>' +
-    '<div class="ccr-card-figure">' + escHtml(ccrMoney(called, ccy)) + '</div>' +
+    '<div class="ccr-card-label">' + (dist ? "Total being distributed" : "Total being called") + '</div>' +
+    '<div class="ccr-card-figure">' + escHtml(ccrMoney(headline, ccy)) + '</div>' +
     '<div class="ccr-card-list">' +
-      '<div class="ccr-kv"><span class="ccr-k">Due from investors</span>' +
+      '<div class="ccr-kv"><span class="ccr-k">' + (dist ? "Paid to investors" : "Due from investors") + '</span>' +
         '<span class="ccr-v ccr-strong">' + escHtml(ccrDate(s.due_date)) + '</span>' +
         '<span class="ccr-aside">' + escHtml(ccrDaysUntil(s.due_date)) + '</span></div>' +
       ccrNoticeDateRow(s) +
-      '<div class="ccr-kv"><span class="ccr-k">Called for</span><span class="ccr-v">' +
+      ccrPaymentMethodRow(s) +
+      '<div class="ccr-kv"><span class="ccr-k">' + (dist ? "Distributed as" : "Called for") + '</span><span class="ccr-v">' +
         (buckets.length
           ? buckets.map((b) => '<span class="ccr-split"><span>' + escHtml(b.display_name || b.slug || "Bucket") +
               '</span><span>' + escHtml(ccrMoney(b.total, ccy)) + '</span></span>').join('')
@@ -752,10 +789,10 @@ function ccrOverviewTabBody(s) {
           adj.map((b) => '<span class="ccr-split"><span>' + escHtml(b.display_name || b.slug || "Adjustment") +
             '</span><span class="ccr-adj">' + escHtml(ccrSignedMoney(b.total, ccy, ccrAdjSign(b))) + '</span></span>').join('') +
           '</span></div>' +
-          '<div class="ccr-kv"><span class="ccr-k">Net due from investors</span>' +
-          '<span class="ccr-v ccr-strong">' + escHtml(ccrMoney(s.total_due_to_fund, ccy)) + '</span></div>'
+          '<div class="ccr-kv"><span class="ccr-k">' + (dist ? "Net paid to investors" : "Net due from investors") + '</span>' +
+          '<span class="ccr-v ccr-strong">' + escHtml(ccrMoney(dist ? s.total_due_to_investor : s.total_due_to_fund, ccy)) + '</span></div>'
         : '') +
-      '<div class="ccr-kv"><span class="ccr-k">Called after this call</span><span class="ccr-v">' +
+      '<div class="ccr-kv"><span class="ccr-k">' + (dist ? "Distributed after this" : "Called after this call") + '</span><span class="ccr-v">' +
         (ratio === null
           ? '<span class="ccr-muted">Not available</span>'
           : '<span class="ccr-split"><span class="ccr-strong">' + escHtml(ccrPct(postPct)) + '</span>' +
@@ -1012,9 +1049,9 @@ function ccrKvRow(label, value) {
     '<span class="ccr-v">' + escHtml(value) + '</span></div>';
 }
 
-function ccrCallout(kind, title, text) {
+function ccrCallout(kind, title, text, actionHtml) {
   return '<div class="ccr-callout ccr-callout-' + kind + '"><span>' +
-    '<span class="ccr-callout-title">' + escHtml(title) + '</span>' + escHtml(text) + '</span></div>';
+    '<span class="ccr-callout-title">' + escHtml(title) + '</span>' + escHtml(text) + (actionHtml || "") + '</span></div>';
 }
 
 // Where a distribution pays out of. The consent an approver signs names this
@@ -1147,6 +1184,13 @@ function ccrReviewBody() {
     : "") +
 
     ccrHealthStrip(s) +
+    (s.is_amm_distribution
+      ? ccrCallout("warn", "Review this distribution in Carta",
+          "It pays through Automated Money Movement: Carta wires each investor from the paying-from account on release, " +
+          "and the approver chooses who is paid and authorizes the payment. That review is not supported here, so this " +
+          "page shows the distribution but cannot approve it or send it back. ",
+          ccrOpenInCarta("Open in Carta", "ccr-callout-btn"))
+      : "") +
 
     ccrMainTabBar() +
 
@@ -1159,17 +1203,62 @@ function ccrReviewBody() {
     "</div>";
 }
 
+const CCR_PAYMENT_TERMS_URL = "https://carta.com/legal/terms-agreements/fund-administration-payment-terms-conditions/";
+
+function ccrCheck(key, checked, labelHtml) {
+  return '<label class="ccr-check"><input type="checkbox" data-ccr-consent="' + key + '"' +
+    (checked ? " checked" : "") + '><span>' + labelHtml + "</span></label>";
+}
+
+const ccrTermsLink = () =>
+  '<a href="' + CCR_PAYMENT_TERMS_URL + '" target="_blank" rel="noopener">Carta Fund Administration Payment Terms and Conditions</a>';
+
+// The web app's capital call checkbox, one of two: the Automated Money
+// Movement authorization agreement when Carta collects the money (an AMM call
+// fails its release health check without it), otherwise the payment account
+// confirmation. Both gate release; only the agreement is recorded server-side.
+function ccrCallConsentHtml(s) {
+  if (ccrIsDistribution(s)) return "";
+  const a = s.receiving_account || {};
+  const last4 = a.account_number_last_four || (a.account_number ? String(a.account_number).slice(-4) : null);
+  if (s.uses_fbo_contributions) {
+    return '<div class="ccr-consent"><div class="ccr-consent-title">Capital call authorization agreement</div>' +
+      ccrCheck("call", _ccr.consent.call,
+        "I agree to the " + ccrTermsLink() + " and authorize Carta to initiate receipt of funds on my behalf " +
+        "and credit the " + escHtml(a.bank_name || "bank") + " account" + (last4 ? " ending in " + escHtml(last4) : "") +
+        " for purposes of this capital call.") +
+      "</div>";
+  }
+  return '<div class="ccr-consent"><div class="ccr-consent-title">Capital call payment account confirmation</div>' +
+    ccrCheck("call", _ccr.consent.call,
+      "I confirm that funds are to be sent to the payment account" + (last4 ? " ending in " + escHtml(last4) : "") + ".") +
+    "</div>";
+}
+
+// Why the release button is disabled in the release step, or null.
+function ccrReleaseHold() {
+  const s = _ccr.summary || {};
+  if (!ccrIsDistribution(s) && !_ccr.consent.call) {
+    return s.uses_fbo_contributions ? "Agree to the payment terms to release." : "Confirm the payment account to release.";
+  }
+  return null;
+}
+
 function ccrConfirmBody() {
   const s = _ccr.summary || {};
   const ccy = s.currency;
   const n = s.participating_interests_count;
   const who = n !== null && n !== undefined ? n : "the participating";
+  const dist = ccrIsDistribution(s);
   const steps = [
     "Posts the journal entries to " + (s.fund_name || "the fund") + ".",
     "Generates a notice PDF for each of the " + who + " participating investors.",
     "Emails all " + who + " investors" + (s.date_of_notice ? " on " + ccrDate(s.date_of_notice) : "") + ".",
-    "Makes " + ccrMoney(s.total_due_to_fund, ccy) + " due from investors" +
-      (s.due_date ? " on " + ccrDate(s.due_date) : "") + ".",
+    dist
+      ? "Pays " + ccrMoney(s.total_due_to_investor, ccy) + " to investors" +
+        (s.due_date ? " on " + ccrDate(s.due_date) : "") + "."
+      : "Makes " + ccrMoney(s.total_due_to_fund, ccy) + " due from investors" +
+        (s.due_date ? " on " + ccrDate(s.due_date) : "") + ".",
   ];
   if ("share_commitment" in s) {
     // Release shares only on an exact true; the web app's staff checkbox
@@ -1189,7 +1278,9 @@ function ccrConfirmBody() {
       ? ccrCallout("warn", "Advisory health checks flagged " + h.advisory.length + " thing" + (h.advisory.length === 1 ? "" : "s"),
           "Release proceeds past them: " + h.advisory.map((c) => c.title || c.code).filter(Boolean).join("; ") + ".")
       : "") +
-    "<p style='margin-top:14px;font-size:13px;line-height:20px'>Released capital calls cannot be recalled. A correction after release means a new notice to every investor.</p>";
+    ccrCallConsentHtml(s) +
+    "<p style='margin-top:14px;font-size:13px;line-height:20px'>Released " + (dist ? "distributions" : "capital calls") +
+    " cannot be recalled. A correction after release means a new notice to every investor.</p>";
 }
 
 function ccrFooter() {
@@ -1204,15 +1295,17 @@ function ccrFooter() {
       '<span class="ccr-note">' + escHtml(prepared) + "Nothing has been sent to investors yet. " + ccrOpenInCarta() + "</span>" +
       blockers.map((b) => '<span class="ccr-blocker">' + escHtml(b.text) + "</span>").join("") +
       '<span class="ccr-footer-actions">' +
-        '<button class="far-btn-secondary" data-ccr-phase="changes"' + (blocked ? " disabled" : "") + ">Request changes</button>" +
+        '<button class="far-btn-secondary" data-ccr-phase="changes"' + (blocked || blockers.some((b) => b.locks) ? " disabled" : "") + ">Request changes</button>" +
         '<button class="far-btn-primary" data-ccr-phase="confirm"' + (blocked || blockers.length ? " disabled" : "") + ">Approve and release</button>" +
       "</span></div>";
   }
   if (_ccr.phase === "confirm") {
     const n = s && s.participating_interests_count;
+    const hold = ccrReleaseHold();
     return '<div class="far-panel-footer ccr-footer-end">' +
+      (hold ? '<span class="ccr-note ccr-hold">' + escHtml(hold) + "</span>" : "") +
       '<button class="far-btn-secondary" data-ccr-phase="review">Back to review</button>' +
-      '<button class="far-btn-primary" id="ccr-do-approve" data-ccr-approve>Release' +
+      '<button class="far-btn-primary" id="ccr-do-approve" data-ccr-approve' + (hold ? " disabled" : "") + ">Release" +
       (n !== null && n !== undefined ? " and email " + n + " investors" : "") + "</button></div>";
   }
   if (_ccr.phase === "changes") {
@@ -1226,9 +1319,10 @@ function ccrFooter() {
 
 function ccrDoneBody(released) {
   const s = _ccr.summary || {};
+  const dist = ccrIsDistribution(s);
   return '<div class="ccr-done"><div class="ccr-done-tick">' +
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg></div>' +
-    '<div class="ccr-done-title">' + (released ? "Capital call released" : "Your Carta team is on it") + "</div>" +
+    '<div class="ccr-done-title">' + (released ? (dist ? "Distribution released" : "Capital call released") : "Your Carta team is on it") + "</div>" +
     '<div class="ccr-done-body">' +
       (released
         ? escHtml("Journal entries are posted and the notice PDFs are generated." +
@@ -1236,9 +1330,9 @@ function ccrDoneBody(released) {
         : "Nothing has been sent to investors. They pick this up, redo the work, and put it back in front of you to review.") +
     "</div>" +
     (released
-      ? '<div class="ccr-note">' + escHtml(ccrMoney(s.total_due_to_fund, s.currency)) +
-        " is due from investors" + (s.due_date ? " on " + escHtml(ccrDate(s.due_date)) : "") +
-        ". Your Carta team tracks payments as they arrive.</div>"
+      ? '<div class="ccr-note">' + escHtml(ccrMoney(dist ? s.total_due_to_investor : s.total_due_to_fund, s.currency)) +
+        (dist ? " is due to investors" : " is due from investors") + (s.due_date ? " on " + escHtml(ccrDate(s.due_date)) : "") +
+        (dist ? ". Your Carta team tracks the wires as they go out.</div>" : ". Your Carta team tracks payments as they arrive.</div>")
       : '<div class="ccr-sent-msg">' + escHtml(_ccr.sentMessage) + "</div>") +
     '<div class="ccr-note">This task has moved to ' + (released ? "Completed" : "In progress") + ".</div></div>";
 }
@@ -1265,7 +1359,7 @@ function ccrRender() {
   overlay.innerHTML =
     '<div class="far-panel far-panel-thread ccr-panel">' +
       '<div class="far-panel-header">' +
-        '<span class="far-panel-title">' + escHtml(_ccr.title) + "</span>" +
+        '<span class="far-panel-title">' + escHtml(ccrPanelTitle(s)) + "</span>" +
         (s && s.fund_name ? '<span class="ccr-panel-sub">' + escHtml(s.fund_name) + "</span>" : "") +
         '<button class="far-panel-close" data-ccr-close aria-label="Close">✕</button>' +
       "</div>" +
@@ -1346,6 +1440,11 @@ function ccrBind(root) {
     el.addEventListener("click", ccrSubmitChanges));
   root.querySelectorAll("[data-ccr-approve]").forEach((el) =>
     el.addEventListener("click", ccrApprove));
+  root.querySelectorAll("[data-ccr-consent]").forEach((el) =>
+    el.addEventListener("change", () => {
+      _ccr.consent[el.getAttribute("data-ccr-consent")] = !!el.checked;
+      ccrRender();
+    }));
 }
 
 // ── Notice sub-panel ──────────────────────────────────────────────────────
@@ -1661,10 +1760,10 @@ function ccrReviewUrl(firm, fund, activityId) {
     encodeURIComponent(activityId);
 }
 
-function ccrOpenInCarta(label) {
+function ccrOpenInCarta(label, cls) {
   const url = _ccr.target && _ccr.target.webUrl;
   if (!url) return "";
-  return '<a class="ccr-link-btn" href="' + escHtml(url) + '" target="_blank" rel="noopener">' +
+  return '<a class="' + (cls || "ccr-link-btn") + '" href="' + escHtml(url) + '" target="_blank" rel="noopener">' +
     escHtml(label || "Open in Carta") + "</a>";
 }
 
