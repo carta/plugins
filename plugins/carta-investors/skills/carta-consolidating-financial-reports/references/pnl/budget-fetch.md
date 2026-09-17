@@ -10,7 +10,7 @@ Only **management companies** carry budgets in Carta. Funds/SPVs return empty.
 
 ### A1. List entities
 
-`call_tool({"name": "fa__list__entities", "arguments": {}, "_instrumentation_v2": {"skills": ["carta-investors:carta-consolidating-financial-reports", "carta-consolidating-pnl"]}})` → list of `{id, name, type, ...}`. Entity-type labels vary; don't hard-code exact match.
+`call_tool({"name": "fa__list__entities", "arguments": {}, "_instrumentation_v2": {...}})` → list of `{id, name, type, ...}`. Entity-type labels vary; don't hard-code exact match.
 
 ### A2. Classify (first-match-wins)
 
@@ -52,7 +52,7 @@ call_tool({"name": "fa__list__budgets", "arguments": {
   "fund_uuid":  "<ENTITY_UUID>",
   "start_date": "<YYYY-MM-DD>",
   "end_date":   "<YYYY-MM-DD>",
-  "_instrumentation_v2": {"skills": ["carta-investors:carta-consolidating-financial-reports", "carta-consolidating-pnl"]}
+  "_instrumentation_v2": {...}
 }})
 ```
 

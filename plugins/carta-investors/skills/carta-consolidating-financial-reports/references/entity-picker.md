@@ -16,7 +16,7 @@ period question.
 ### 1. List entities under the active firm
 
 ```
-call_tool({"name": "fa__list__entities", "arguments": {}, "_instrumentation_v2": {"skills": ["carta-investors:carta-consolidating-financial-reports", "<REPORT_SKILL>"]}})
+call_tool({"name": "fa__list__entities", "arguments": {}, "_instrumentation_v2": {...}})
 ```
 
 The response is a list of `{id, name, type, ...}` records. Entity-type labels

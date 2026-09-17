@@ -338,7 +338,7 @@ last `__`. Examples: `mcp__carta__welcome` → `carta`,
 `mcp__claude_ai_Carta__welcome` → `claude_ai_Carta`.
 
 **If none found:** tell the user no Carta MCP is connected and stop.
-**If exactly one found:** call `mcp__<SERVER>__welcome(_instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports", "<REPORT_SKILL>"]})` to verify. This is `<SERVER>`.
+**If exactly one found:** call `mcp__<SERVER>__welcome(_instrumentation_v2={...})` to verify. This is `<SERVER>`.
 **If multiple found:** ask which to use via `AskUserQuestion`. Default to `carta` (production) if present.
 **Don't call any other `mcp__<SERVER>__*` tool before `welcome`** — every other command is gated and will return a reminder.
 
@@ -374,7 +374,7 @@ Pass it on **every** `welcome`, `set_context`, `list_contexts`, `call_tool`, and
 `fetch` call, exactly as written in the examples below:
 
 ```
-_instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports", "<REPORT_SKILL>"]}
+_instrumentation_v2={...}
 ```
 
 In Claude Code a hook injects this automatically, but in Claude for Excel there
@@ -411,7 +411,7 @@ substitute a family name like `claude-opus`.
 
 ### Resolve the firm
 
-If the user named a firm → `mcp__<SERVER>__list_contexts(firm_name="<entity>", _instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports", "<REPORT_SKILL>"]})` → disambiguate via `AskUserQuestion` if multiple → `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports", "<REPORT_SKILL>"]})`.
+If the user named a firm → `mcp__<SERVER>__list_contexts(firm_name="<entity>", _instrumentation_v2={...})` → disambiguate via `AskUserQuestion` if multiple → `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation_v2={...})`.
 
 Do not use `call_tool` for `list_contexts` or `set_context` — call the granular
 tools directly with `_instrumentation` as shown.
@@ -588,7 +588,7 @@ all three reports rather than to whichever one happened to run first. Immediatel
 before each `read_skill`, send:
 
 ```
-mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation_v2={"skills": ["carta-investors:carta-consolidating-financial-reports", "<REPORT_SKILL>"]})
+mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation_v2={...})
 ```
 
 with `<REPORT_SKILL>` set to that report's tag from the table in Gate 0 —

@@ -94,7 +94,7 @@ two are independent once Step 2.75a has confirmed the workbook and sheets.
 Pass it on **every** `list_contexts`, `set_context`, and `call_tool` call:
 
 ```
-_instrumentation_v2={"skills": ["carta-investors:carta-manco-reporting"]}
+_instrumentation_v2={...}
 ```
 
 Add `"model": "<the running model id>"` only if you can introspect it; omit
@@ -110,13 +110,13 @@ doesn't match — four empty pages read exactly like "this ManCo has no data" un
 something catches it first:
 
 ```
-mcp__<SERVER>__list_contexts(_instrumentation_v2={"skills": ["carta-investors:carta-manco-reporting"]})
+mcp__<SERVER>__list_contexts(_instrumentation_v2={...})
 ```
 
 Find the entry marked active (however this MCP surfaces that — an `is_active: true`
 field, an `(active)` suffix on the firm's line, etc.) and compare its firm UUID
 against `<FIRM_UUID>`. If they don't match, retry
-`mcp__<SERVER>__set_context(firm_id="<FIRM_UUID>", _instrumentation_v2={"skills": ["carta-investors:carta-manco-reporting"]})` once; if the second attempt
+`mcp__<SERVER>__set_context(firm_id="<FIRM_UUID>", _instrumentation_v2={...})` once; if the second attempt
 still doesn't match, stop and tell the user:
 
 > "The Carta session's active firm changed mid-run — please re-invoke the skill."
@@ -142,7 +142,7 @@ turns a ~4s parallel fanout into 20+ seconds of sequential waiting.
 
 Run Queries A–D via `mcp__<SERVER>__call_tool` with `name="dwh__execute__query"`,
 `arguments={"sql": "...", "format": "markdown"}`, and
-`_instrumentation_v2={"skills": ["carta-investors:carta-manco-reporting"]}`. Run
+`_instrumentation_v2={...}`. Run
 cash balance and budget calls via `mcp__<SERVER>__call_tool` as shown below — each
 also carries `_instrumentation_v2`. All go in **one assistant message** as parallel
 tool calls.
@@ -327,7 +327,7 @@ mcp__<SERVER>__call_tool(name="fa__get__cash-balance", arguments={
   "firm_uuid":  "<FIRM_UUID>",
   "as_of_date": "<AS_OF>",
   "entity_ids": [<MANCO_ENTITY_ID>]
-}, _instrumentation_v2={"skills": ["carta-investors:carta-manco-reporting"]})
+}, _instrumentation_v2={...})
 ```
 
 `entity_ids` takes the **integer** `<MANCO_ENTITY_ID>` — not the UUID, not `carta_id`.
@@ -349,7 +349,7 @@ mcp__<SERVER>__call_tool(name="fa__list__budgets", arguments={
   "fund_uuid":  "<MANCO_UUID>",
   "start_date": "<YEAR>-<M zero-padded>-01",
   "end_date":   "<YEAR>-<M zero-padded>-<last day of month>"
-}, _instrumentation_v2={"skills": ["carta-investors:carta-manco-reporting"]})
+}, _instrumentation_v2={...})
 ```
 
 Include all 12 in the same parallel message as the DWH queries — not a second message.
@@ -367,7 +367,7 @@ that silently changes a firm's numbers, and it is never necessary.
 `entities.json` — the roster Step 4 reads each fund's own `carta_id` from
 for the fee-chart drill-down link (Query C carries no such column). If that
 call has scrolled out of the session log (a long Step 2.75 gap, or a
-compaction), re-issue `mcp__<SERVER>__call_tool(name="fa__list__entities", arguments={}, _instrumentation_v2={"skills": ["carta-investors:carta-manco-reporting"]})` fresh right before this save —
+compaction), re-issue `mcp__<SERVER>__call_tool(name="fa__list__entities", arguments={}, _instrumentation_v2={...})` fresh right before this save —
 it's a cheap, idempotent call, unlike Queries A–F.
 
 One Bash call saves everything. It runs the writes concurrently, so this is

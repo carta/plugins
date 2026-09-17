@@ -58,7 +58,7 @@ to Step 4's build command.
 Pass it on **every** `list_contexts`, `set_context`, and `call_tool` call:
 
 ```
-_instrumentation_v2={"skills": ["carta-investors:carta-manco-reporting"]}
+_instrumentation_v2={...}
 ```
 
 Add `"model": "<the running model id>"` only if you can introspect it; omit
@@ -68,10 +68,10 @@ above — do not surface this to the user.
 
 Resolve firm identity via `mcp__<SERVER>__list_contexts`. If `<FIRM_ID_HINT>`
 was captured in Step 0.1 (user pasted a firm URL or UUID), call
-`list_contexts(firm_id=<FIRM_ID_HINT>, _instrumentation_v2={"skills": ["carta-investors:carta-manco-reporting"]})` or `firm_uuid=<FIRM_ID_HINT>` for an exact
+`list_contexts(firm_id=<FIRM_ID_HINT>, _instrumentation_v2={...})` or `firm_uuid=<FIRM_ID_HINT>` for an exact
 lookup — skip the fuzzy name path entirely. Otherwise:
 
-Call `mcp__<SERVER>__list_contexts(firm_name="<FIRM_NAME_INPUT>", _instrumentation_v2={"skills": ["carta-investors:carta-manco-reporting"]})`. **Important:** the endpoint does fuzzy/relevance matching against the caller's permission set and will return a *fallback* firm even when nothing truly matches the input token — do NOT trust the top hit blindly. Sanity-check every response as follows:
+Call `mcp__<SERVER>__list_contexts(firm_name="<FIRM_NAME_INPUT>", _instrumentation_v2={...})`. **Important:** the endpoint does fuzzy/relevance matching against the caller's permission set and will return a *fallback* firm even when nothing truly matches the input token — do NOT trust the top hit blindly. Sanity-check every response as follows:
 
 1. **Normalize** `<FIRM_NAME_INPUT>` → `<TOKEN>` (strip whitespace, lowercase, remove punctuation like `-`, `,`, `.`).
 2. Compute the same normalization on each returned firm's canonical name → `<CANON>`.
@@ -113,7 +113,7 @@ Then classify the narrowed clean-match set:
 - **Zero clean matches but non-empty fuzzy results** → do NOT silently accept a fuzzy fallback. Present the top 3 fuzzy results via `AskUserQuestion` with the framing *"No firm exactly matched '<FIRM_NAME_INPUT>' — did you mean one of these?"* plus a "None of these — retype" option. Only proceed once the user picks.
 - **Zero results across all variants** → tell the user *"No firm found matching '<FIRM_NAME_INPUT>'. Want to try a different name?"* and re-prompt via `AskUserQuestion`.
 
-Then `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation_v2={"skills": ["carta-investors:carta-manco-reporting"]})` to activate the firm.
+Then `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation_v2={...})` to activate the firm.
 
 
 ## Step 2 — Resolve ManCo entity (BUILD path only)
@@ -123,7 +123,7 @@ Then `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation_v2={"skil
 Reached in the same cases as Step 1 (a MISS, or `<FORCE_REFRESH>`) — never
 on a WARM HIT or a soft hit, both of which already know the entity.
 
-Call `mcp__<SERVER>__call_tool(name="fa__list__entities", arguments={}, _instrumentation_v2={"skills": ["carta-investors:carta-manco-reporting"]})`.
+Call `mcp__<SERVER>__call_tool(name="fa__list__entities", arguments={}, _instrumentation_v2={...})`.
 
 A firm's entity list is mostly funds. `fa__list__entities` returns
 `Fund`, `GP Entity`, `Management Co`, `SPV`, `Elimination Entity` and
