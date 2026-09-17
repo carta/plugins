@@ -675,7 +675,8 @@ function ccrMainTabBar() {
 }
 
 // The web app's health-check roster, run fresh as the panel opens. A GP sees
-// the consequence first, then each failure with what has to become true.
+// the consequence first, then each failure by name; the check's own prose
+// stays in Carta, where the fix happens.
 function ccrHealthStrip(s) {
   const h = ccrHealth();
   if (h.verdict === "none") return "";
@@ -719,7 +720,7 @@ function ccrHealthStrip(s) {
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg>' +
       "</span></button>"
     : "";
-  return '<div class="ccr-strip"><span class="ccr-strip-label">Health checks</span>' + pill +
+  return '<div class="ccr-strip' + (open ? " ccr-strip-open" : "") + '"><span class="ccr-strip-label">Health checks</span>' + pill +
     '<span class="ccr-strip-text">' + escHtml(text) + "</span>" +
     (h.verdict === "unknown" ? '<span class="ccr-strip-when">' + ccrOpenInCarta() + "</span>" : "") +
     toggle +
@@ -736,8 +737,6 @@ function ccrHealthItem(c) {
     : (c.resolution_path === "platform" ? ccrOpenInCarta("Fix in Carta") : "");
   return '<div class="ccr-hc">' +
     '<div class="ccr-hc-head"><span class="ccr-hc-title">' + escHtml(c.title || c.code || "Check") + "</span>" + pill + who + "</div>" +
-    (c.description ? '<div class="ccr-hc-desc">' + escHtml(c.description) + "</div>" : "") +
-    (c.resolution ? '<div class="ccr-hc-fix">' + escHtml(c.resolution) + "</div>" : "") +
     "</div>";
 }
 

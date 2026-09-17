@@ -1095,17 +1095,15 @@
 .ccr-strip-toggle { margin-left: auto; background: none; border: none; cursor: pointer; font-family: inherit;
   font-size: 12px; font-weight: 500; color: var(--ink-color-global-text-subtle); white-space: nowrap; padding: 0; display: inline-flex; align-items: center; gap: 4px; }
 .ccr-strip-toggle:hover { color: var(--ink-color-global-text-default); }
-.ccr-hc-body { margin-top: -6px; }
-/* Each failing health check, under the strip. */
-.ccr-hc-list { margin: 0 0 10px; border: 1px solid var(--ink-color-global-border-subtle); border-radius: 4px; }
+/* Open, the strip becomes the head of one box: the list continues its sides
+   and each check's top border is the only line between rows. */
+.ccr-strip-open { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.ccr-hc-list { margin: 0 0 10px; border: 1px solid var(--ink-color-global-border-subtle); border-top: none; border-radius: 0 0 4px 4px; }
 .ccr-hc { padding: 10px 14px; border-top: 1px solid var(--ink-color-global-border-subtle); }
-.ccr-hc:first-child { border-top: none; }
 .ccr-hc-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; line-height: 18px; }
 .ccr-hc-title { font-weight: 600; }
 .ccr-hc-tag { font-size: 11px; line-height: 16px; padding: 0 6px; border-radius: 3px;
   background: var(--ink-color-global-feedback-negative-subtle, light-dark(#fdecec, #3a1c1c)); color: var(--ink-color-global-feedback-negative-strong); }
-.ccr-hc-desc { margin-top: 4px; font-size: 12px; line-height: 18px; color: var(--ink-color-global-text-subtle); }
-.ccr-hc-fix { margin-top: 4px; font-size: 12px; line-height: 18px; }
 
 .ccr-done { text-align: center; padding: 12px 8px; }
 .ccr-done-tick {
