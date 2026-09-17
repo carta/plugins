@@ -442,6 +442,9 @@ async function ccrLoad() {
     if (!summary) throw new Error("Carta answered, but not with a review summary");
 
     snap.summary = summary;
+    // The summary's own link is the web app's page for this draft; the one
+    // built from the workflow row only stands in until the summary answers.
+    if (summary._links && summary._links.web_url) t.webUrl = summary._links.web_url;
     snap.rows = (summary.rows && summary.rows.results) || [];
     snap.loading = false;
     ccrRender();
