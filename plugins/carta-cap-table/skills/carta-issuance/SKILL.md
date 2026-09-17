@@ -134,8 +134,11 @@ The SDK's HITL prompt on that mutate is the final, irreversible gate — never t
    mutate goes on every subsequent `issue_securities`, `save_drafts`, `load_drafts`,
    `validate_drafts`, `resolve_duplicate_stakeholder`; omitting it makes the server auto-create
    a *second* draft set with the same incomplete rows. Each row's `draft_pk` from its first
-   save goes on every retry row alongside *every* required field; omitting `draft_pk` inserts a
-   new row instead of updating.
+   save goes on every retry row; omitting `draft_pk` inserts a new row instead of updating.
+   Resending every required field alongside it is belt-and-braces, not a requirement:
+   `save_drafts` now patches, so a row carrying only `draft_pk` plus the fields you mean to
+   change keeps the rest. Send the whole row when you have it; send a correction when that is
+   all you have, and check `cleared_fields` in the response for anything the save emptied.
    **A timeout is not an error** — the call may have already succeeded server-side, so retrying
    with the wrong params risks a duplicate draft set or a double-issue. Read
    [payload-reference.md § Timeouts & retries](references/payload-reference.md#timeouts--retries)

@@ -98,6 +98,11 @@ raw snake_case field name in customer-facing text:
   translate rule) and `validation.errors.issuance` (flat strings, verbatim) both land here.
 - **A `draft_pk` your `_draft_state.json` doesn't recognize** — fold into `batch_errors` as
   `"Unresolved row: <field>: <message>"` instead of silently dropping it.
+- **`cleared_fields` on a `save_drafts` row** — the columns that save emptied, present only
+  when it emptied something. `save_drafts` patches, so this should be absent; a populated list
+  means the row lost data the payload did not mean to clear. Treat it as a batch error naming
+  the fields, not a silent pass — `success: true` is reported either way, which is what made
+  the original loss invisible.
 - **A `save_drafts` failure with only a coarse error code, no message** — translate:
 
   | Code | Message |
