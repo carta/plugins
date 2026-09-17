@@ -172,6 +172,7 @@ function ccrReset(target, title) {
     noteOpen: false,
     payShowSensitive: { acct: false, routing: false },
     showAllRows: false,
+    showDetail: false,
     lpIndex: 0,
     docTab: "email",
     email: null,
@@ -254,21 +255,62 @@ function ccrPick(obj, specific, bare) {
 const ccrRowLabel = (r) =>
   (r.interest && (r.interest.partner_interest_group_name || r.interest.name)) || "Unnamed interest";
 
-// Partition a row's buckets on inside_commitment — never on a label a fund can
-// rename. The flag reaches the MCP row via the summary's bucket_totals.
-function ccrSplit(r, s) {
-  const byId = new Map((s.bucket_totals || []).map((b) => [String(b.bucket_id), b]));
-  let inside = 0, outside = 0, known = false;
-  (r.amount_buckets || []).forEach((ab) => {
-    const meta = byId.get(String(ab.bucket_id)) || {};
-    const flag = ab.inside_commitment !== undefined && ab.inside_commitment !== null
-      ? ab.inside_commitment : meta.inside_commitment;
-    if (flag === undefined || flag === null) return;
-    known = true;
-    const amt = ccrNum(ab.amount) || 0;
-    if (flag) inside += amt; else outside += amt;
+// Column order and labels come from the summary's bucket_totals, which names
+// every bucket on the activity; a row lists only the buckets it moves.
+function ccrBucketColumns(s) {
+  const live = (s.bucket_totals || []).filter((b) => {
+    const n = ccrNum(b.total);
+    return n !== null && n !== 0;
   });
-  return { inside: inside, outside: outside, known: known };
+  return { main: live.filter((b) => !b.is_adjustment), adjustments: live.filter((b) => b.is_adjustment) };
+}
+
+// Column headers for the shared default buckets, keyed by slug. A default's
+// display name is its canonical key, so this only shortens; a fund's own
+// bucket keeps its display name.
+const CCR_BUCKET_HEADERS = {
+  contribution: "Contribution",
+  contribution_management_fees: "Mgmt fees",
+  contribution_management_fees_offset: "Mgmt fee offset",
+  contribution_management_fees_waiver: "Mgmt fee waiver",
+  contribution_management_fees_outside_commitment: "Mgmt fees outside commitment",
+  contribution_outside_commitment: "Outside commitment",
+  contribution_expenses: "Expenses",
+  contribution_investments: "Investments",
+  contribution_adjustments: "Adjustments",
+  contribution_org_costs: "Org. costs",
+  contribution_placement_agent_fees: "Placement agent fees",
+  contribution_rolled: "Rolled",
+  prepaid_contributions_applied: "Prepaid applied",
+  outstanding_balances_applied: "Outstanding applied",
+  distribution_payables_applied: "Dist. payables applied",
+  subsequent_close_interest_due: "Sub-close interest",
+  late_admission_fees_due: "Late admission fees",
+  distribution: "Distribution",
+  distribution_income: "Income",
+  distribution_gain: "Gain",
+  distribution_roc: "Return of capital",
+  distribution_recallable: "Recallable",
+  distribution_tax_withholding: "Tax withholding",
+  distribution_gp_cash_carry: "GP cash carry",
+  distribution_lp_carried_interest: "LP carried interest",
+};
+
+function ccrBucketHeader(b) {
+  return (b.is_default && CCR_BUCKET_HEADERS[b.slug]) || b.display_name || b.slug || "Bucket";
+}
+
+// An adjustment moves what is owed without moving the call, so it reads with
+// the sign of that movement: a credit applied is a reduction.
+function ccrAdjSign(b) {
+  return b.impact_on_owed === "decrease" ? -1 : 1;
+}
+
+function ccrSignedMoney(v, ccy, sign) {
+  const n = ccrNum(v);
+  if (n === null || n === 0) return "\u2014";
+  const txt = ccrMoney(Math.abs(n), ccy);
+  return (sign < 0 ? "\u2212" : "+") + txt;
 }
 
 // ── Reads ─────────────────────────────────────────────────────────────────
@@ -513,7 +555,9 @@ function ccrOverviewTabBody(s) {
   const postPct = ccrPick(s, "total_post_call_percent_inside_commitment", "total_post_call_percent");
   const postAmt = ccrPick(s, "total_post_call_amount_inside_commitment", "total_post_call_amount");
   const ratio = ccrNum(postPct);
-  const buckets = (s.bucket_totals || []).filter((b) => !b.is_adjustment);
+  const cols = ccrBucketColumns(s);
+  const buckets = cols.main;
+  const adj = cols.adjustments;
 
   return '<div class="ccr-card">' +
     '<div class="ccr-card-label">Total being called</div>' +
@@ -522,12 +566,20 @@ function ccrOverviewTabBody(s) {
       '<div class="ccr-kv"><span class="ccr-k">Due from investors</span>' +
         '<span class="ccr-v ccr-strong">' + escHtml(ccrDate(s.due_date)) + '</span>' +
         '<span class="ccr-aside">' + escHtml(ccrDaysUntil(s.due_date)) + '</span></div>' +
-      '<div class="ccr-kv"><span class="ccr-k">Purpose</span><span class="ccr-v">' +
+      '<div class="ccr-kv"><span class="ccr-k">Called for</span><span class="ccr-v">' +
         (buckets.length
           ? buckets.map((b) => '<span class="ccr-split"><span>' + escHtml(b.display_name || b.slug || "Bucket") +
               '</span><span>' + escHtml(ccrMoney(b.total, ccy)) + '</span></span>').join('')
           : 'No buckets on this activity') +
         '</span></div>' +
+      (adj.length
+        ? '<div class="ccr-kv"><span class="ccr-k">Adjustments</span><span class="ccr-v">' +
+          adj.map((b) => '<span class="ccr-split"><span>' + escHtml(b.display_name || b.slug || "Adjustment") +
+            '</span><span class="ccr-adj">' + escHtml(ccrSignedMoney(b.total, ccy, ccrAdjSign(b))) + '</span></span>').join('') +
+          '</span></div>' +
+          '<div class="ccr-kv"><span class="ccr-k">Net due from investors</span>' +
+          '<span class="ccr-v ccr-strong">' + escHtml(ccrMoney(s.total_due_to_fund, ccy)) + '</span></div>'
+        : '') +
       '<div class="ccr-kv"><span class="ccr-k">Called after this call</span><span class="ccr-v">' +
         (ratio === null
           ? '<span class="ccr-muted">Not available</span>'
@@ -612,62 +664,82 @@ function ccrSection(id, title, summary, open, bodyHtml) {
 }
 
 function ccrAllocTable(s) {
+  const isDist = s.activity_type === "distribution";
+  const netLabel = isDist ? "Net distribution" : "Net contribution";
+  const afterLabel = isDist ? "Distributed after" : "Called after";
   const rows = _ccr.rows.filter((r) => r.is_participating !== false);
   const excluded = _ccr.rows.filter((r) => r.is_participating === false);
   rows.sort((a, b) => (ccrNum(b.commitment) || 0) - (ccrNum(a.commitment) || 0));
-
   const shown = _ccr.showAllRows ? rows : rows.slice(0, 5);
-  const split = rows.some((r) => ccrSplit(r, s).known);
   const ccy = s.currency;
 
-  const head = split
-    ? ["Investor", "Commitment", "This call", "Late int.", "Called after"]
-    : ["Investor", "Commitment", "Due to fund", "Net", "Called after"];
+  const cols = ccrBucketColumns(s);
+  // The net is the whole story when one bucket makes it up. Anything more —
+  // a second bucket or an adjustment — earns the breakdown toggle.
+  const composed = cols.main.length > 1 || cols.adjustments.length > 0;
+  const breakdown = composed && _ccr.showDetail;
+  const buckets = breakdown ? cols.main.concat(cols.adjustments) : [];
+  const pinL = breakdown ? " ccr-pin-l" : "";
+  const pinN = breakdown ? " ccr-pin-net" : "";
+  const pinA = breakdown ? " ccr-pin-after" : "";
 
-  const body = shown.map((r) => {
-    const sp = ccrSplit(r, s);
-    const cells = [
-      "<td>" + escHtml(ccrRowLabel(r)) + "</td>",
-      '<td class="ccr-muted">' + escHtml(ccrMoney(r.commitment, ccy)) + "</td>",
-    ];
-    if (split) {
-      cells.push('<td class="ccr-strong">' + escHtml(ccrMoney(sp.inside, ccy)) + "</td>");
-      cells.push("<td" + (sp.outside ? ">" : ' class="ccr-faint">') +
-        (sp.outside ? escHtml(ccrMoney(sp.outside, ccy)) : "—") + "</td>");
-    } else {
-      cells.push('<td class="ccr-strong">' + escHtml(ccrMoney(r.due_to_fund, ccy)) + "</td>");
-      cells.push("<td>" + escHtml(ccrMoney(r.net_absolute_amount, ccy)) + "</td>");
-    }
-    cells.push('<td class="ccr-muted">' +
-      escHtml(ccrPct(ccrPick(r, "post_call_percent_inside_commitment", "post_call_percent"))) + "</td>");
-    return "<tr>" + cells.join("") + "</tr>";
-  }).join("");
+  const head = (breakdown ? ["Investor"] : ["Investor", "Commitment"])
+    .concat(buckets.map((b) => ccrBucketHeader(b)))
+    .concat([netLabel, afterLabel]);
+
+  const bucketCell = (amount, b) => {
+    if (ccrNum(amount) === null) return '<td class="ccr-faint">\u2014</td>';
+    return b.is_adjustment
+      ? '<td class="ccr-adj">' + escHtml(ccrSignedMoney(amount, ccy, ccrAdjSign(b))) + "</td>"
+      : "<td>" + escHtml(ccrMoney(amount, ccy)) + "</td>";
+  };
+  const rowCell = (r, b) => {
+    const hit = (r.amount_buckets || []).find((ab) => String(ab.bucket_id) === String(b.bucket_id));
+    return bucketCell(hit ? hit.amount : null, b);
+  };
+
+  const body = shown.map((r) =>
+    '<tr><td class="' + pinL.trim() + '">' + escHtml(ccrRowLabel(r)) + "</td>" +
+    (breakdown ? "" : '<td class="ccr-muted">' + escHtml(ccrMoney(r.commitment, ccy)) + "</td>") +
+    buckets.map((b) => rowCell(r, b)).join("") +
+    '<td class="ccr-strong' + pinN + '">' + escHtml(ccrMoney(isDist ? r.due_to_investor : r.due_to_fund, ccy)) + "</td>" +
+    '<td class="ccr-muted' + pinA + '">' + escHtml(ccrPct(isDist
+      ? r.post_distribution_percent
+      : ccrPick(r, "post_call_percent_inside_commitment", "post_call_percent"))) + "</td></tr>"
+  ).join("");
 
   const partCount = s.participating_interests_count !== null && s.participating_interests_count !== undefined
     ? s.participating_interests_count
     : (_ccr.rowsDone ? rows.length : null);
 
-  const insideTotal = (s.bucket_totals || []).filter((b) => b.inside_commitment === true)
-    .reduce((a, b) => a + (ccrNum(b.total) || 0), 0);
-  const outsideTotal = (s.bucket_totals || []).filter((b) => b.inside_commitment === false)
-    .reduce((a, b) => a + (ccrNum(b.total) || 0), 0);
+  const totals = ['<td class="' + pinL.trim() + '">' + (partCount === null ? "Totals" : partCount + " participating") + "</td>"]
+    .concat(breakdown ? [] : ["<td></td>"])
+    .concat(buckets.map((b) => bucketCell(b.total, b)))
+    .concat([
+      '<td class="' + pinN.trim() + '">' + escHtml(ccrMoney(isDist ? s.total_due_to_investor : s.total_due_to_fund, ccy)) + "</td>",
+      '<td class="' + pinA.trim() + '">' + escHtml(ccrPct(isDist
+        ? s.total_post_distribution_percent
+        : ccrPick(s, "total_post_call_percent_inside_commitment", "total_post_call_percent"))) + "</td>",
+    ]);
 
-  const totals = ["<td>" + (partCount === null ? "Totals" : partCount + " participating") + "</td>",
-                  "<td></td>"];
-  if (split) {
-    totals.push("<td>" + escHtml(ccrMoney(insideTotal, ccy)) + "</td>");
-    totals.push("<td>" + (outsideTotal ? escHtml(ccrMoney(outsideTotal, ccy)) : "—") + "</td>");
-  } else {
-    totals.push("<td>" + escHtml(ccrMoney(s.total_due_to_fund, ccy)) + "</td>");
-    totals.push("<td>" + escHtml(ccrMoney(s.net_amount, ccy)) + "</td>");
-  }
-  totals.push("<td>" +
-    escHtml(ccrPct(ccrPick(s, "total_post_call_percent_inside_commitment", "total_post_call_percent"))) + "</td>");
+  const bar = composed
+    ? '<div class="ccr-alloc-bar"><button class="ccr-detail-toggle" data-ccr-detail>' +
+      (breakdown ? "Hide breakdown" : "Show breakdown") + "</button></div>"
+    : "";
 
+  // A walk that stopped short must not read as complete: the count the
+  // summary folds is the truth, and the button says how many of them are here.
+  const short = _ccr.rowsDone && partCount !== null && rows.length < partCount;
   const more = rows.length > 5 && _ccr.rowsDone
     ? '<button class="ccr-more" data-ccr-more>' +
-      (_ccr.showAllRows ? "Show fewer" : "Show all " + rows.length + " participating") + "</button>"
-    : (_ccr.rowsDone ? "" : '<div class="ccr-more-loading">Loading the rest…</div>');
+      (_ccr.showAllRows
+        ? "Show fewer"
+        : "Show all " + rows.length + (short ? " of " + partCount + " loaded" : " participating")) + "</button>"
+    : (_ccr.rowsDone ? "" : '<div class="ccr-more-loading">Loading the rest\u2026</div>');
+  const shortNote = short
+    ? '<p class="ccr-note ccr-pad">Only ' + rows.length + " of " + partCount +
+      " participating investors loaded. Totals are the activity's; open the call in Carta for the rest.</p>"
+    : "";
 
   // The summary's fold sees fund interests with no row at all; loaded rows
   // can only ever show the zero-amount kind.
@@ -685,14 +757,30 @@ function ccrAllocTable(s) {
         "</span><span>nothing to pay or receive</span></div>").join("");
   const npCount = fold && fold.count !== null && fold.count !== undefined ? fold.count : excluded.length;
 
-  return '<table class="ccr-table"><thead><tr>' +
-    head.map((h) => "<th>" + escHtml(h) + "</th>").join("") +
+  const complete = _ccr.rowsDone && !short;
+  const unbacked = complete
+    ? cols.main.concat(cols.adjustments).filter((b) =>
+        !rows.some((r) => (r.amount_buckets || []).some((ab) => String(ab.bucket_id) === String(b.bucket_id))))
+    : [];
+  const unbackedNote = unbacked.length
+    ? '<p class="ccr-note ccr-pad">' + escHtml(
+        unbacked.map((b) => ccrBucketHeader(b)).join(", ") +
+        (unbacked.length === 1 ? " has an activity total but no loaded investor carries it." :
+          " have activity totals but no loaded investor carries them.") +
+        " Check the call in Carta before releasing.") + "</p>"
+    : "";
+
+  return bar +
+    '<div class="ccr-table-wrap"><table class="ccr-table"><thead><tr>' +
+    head.map((h, i) => '<th class="' +
+      (i === 0 ? pinL.trim() : i === head.length - 2 ? pinN.trim() : i === head.length - 1 ? pinA.trim() : "") +
+      '">' + escHtml(h) + "</th>").join("") +
     "</tr></thead><tbody>" + body +
-    '<tr class="ccr-total">' + totals.join("") + "</tr></tbody></table>" +
-    more +
+    '<tr class="ccr-total">' + totals.join("") + "</tr></tbody></table></div>" +
+    more + shortNote + unbackedNote +
     (_ccr.truncated ? '<p class="ccr-note">Stopped after ' + CCR_MAX_PAGES + " pages; the rest are on the activity.</p>" : "") +
     (npCount
-      ? '<div class="ccr-np-block"><div class="ccr-np-label">Not participating · ' + npCount + "</div>" + npList + "</div>"
+      ? '<div class="ccr-np-block"><div class="ccr-np-label">Not participating \u00b7 ' + npCount + "</div>" + npList + "</div>"
       : "");
 }
 
@@ -905,6 +993,12 @@ function ccrRender() {
   const t = document.getElementById("ccr-change-text");
   if (t) t.addEventListener("input", (e) => { _ccr.changeText = e.target.value; });
   ccrBind(overlay);
+  const wrap = overlay.querySelector(".ccr-table-wrap");
+  if (wrap) {
+    const last = wrap.querySelector("th.ccr-pin-after");
+    if (last) wrap.style.setProperty("--ccr-pin-after-w", last.offsetWidth + "px");
+    wrap.classList.toggle("ccr-overflow", wrap.scrollWidth > wrap.clientWidth + 1);
+  }
   if (_ccr.phase === "review" && _ccr.activeTab === "notice" && _ccr.docTab === "pdf" && _ccr.pdf) {
     ccrPaintPdf();
   }
@@ -926,6 +1020,8 @@ function ccrBind(root) {
     }));
   root.querySelectorAll("[data-ccr-more]").forEach((el) =>
     el.addEventListener("click", () => { _ccr.showAllRows = !_ccr.showAllRows; ccrRender(); }));
+  root.querySelectorAll("[data-ccr-detail]").forEach((el) =>
+    el.addEventListener("click", () => { _ccr.showDetail = !_ccr.showDetail; ccrRender(); }));
   root.querySelectorAll("[data-ccr-note]").forEach((el) =>
     el.addEventListener("click", () => { _ccr.noteOpen = !_ccr.noteOpen; ccrRender(); }));
   root.querySelectorAll("[data-ccr-pay-reveal]").forEach((el) =>

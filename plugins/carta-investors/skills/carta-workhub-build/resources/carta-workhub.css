@@ -893,7 +893,7 @@
    the reader is harder to work in than one with a little slack. */
 /* One box for both panels: the notice opens on top of the review, so a
    different width or height would read as the modal resizing under the reader. */
-.ccr-panel, .ccr-notice-panel { width: min(720px, 94vw); height: min(660px, 88vh); }
+.ccr-panel, .ccr-notice-panel { width: min(1000px, 94vw); height: min(720px, 88vh); }
 .ccr-notice-panel { display: flex; flex-direction: column; overflow: hidden; }
 .ccr-body, .ccr-notice-body { flex: 1; min-height: 0; overflow-y: auto; }
 .ccr-notice-body { display: flex; flex-direction: column; }
@@ -993,13 +993,25 @@
 .ccr-pay-inline-reveal:hover { text-decoration: underline; }
 
 .ccr-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.ccr-table-wrap { overflow-x: auto; }
+.ccr-table th { white-space: normal; max-width: 168px; line-height: 14px; vertical-align: bottom; }
+.ccr-table td:first-child { white-space: nowrap; }
+.ccr-alloc-bar { display: flex; justify-content: flex-end; padding: 0 14px 8px; }
+.ccr-detail-toggle { background: none; border: 0; padding: 0; font-family: inherit; font-size: 11px; font-weight: 600; color: var(--ink-color-global-link-default); cursor: pointer; white-space: nowrap; }
+.ccr-adj { color: var(--ink-color-global-text-subtle); }
+.ccr-table .ccr-pin-l, .ccr-table .ccr-pin-net, .ccr-table .ccr-pin-after { position: sticky; background: var(--ink-color-global-surface-background-default); z-index: 1; }
+.ccr-table .ccr-pin-l { left: 0; box-shadow: 1px 0 0 var(--ink-color-global-border-subtle); }
+.ccr-table .ccr-pin-after { right: 0; min-width: 84px; }
+.ccr-table .ccr-pin-net { right: var(--ccr-pin-after-w, 96px); box-shadow: -1px 0 0 var(--ink-color-global-border-subtle); }
+.ccr-table-wrap.ccr-overflow { box-shadow: inset -14px 0 12px -12px rgba(0, 0, 0, .16); }
+.ccr-table tr.ccr-total .ccr-pin-l, .ccr-table tr.ccr-total .ccr-pin-net, .ccr-table tr.ccr-total .ccr-pin-after { background: light-dark(#EAF0F8, #122948); }
 .ccr-table th {
   text-align: right; font-size: 10px; text-transform: uppercase; letter-spacing: .04em;
   color: var(--ink-color-global-text-subtle); font-weight: 600; padding: 12px 6px; letter-spacing: calc(.04em + 0.5px); border-bottom: 1px solid var(--ink-color-global-border-subtle);
 }
 .ccr-table th:first-child, .ccr-table td:first-child { text-align: left; padding-left: 14px; }
 .ccr-table th:last-child, .ccr-table td:last-child { padding-right: 14px; }
-.ccr-table td { padding: 12px 6px; font-size: 12px; text-align: right; border-bottom: 1px solid var(--ink-color-global-border-subtle); }
+.ccr-table td { padding: 12px 6px; font-size: 12px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--ink-color-global-border-subtle); }
 .ccr-table tr.ccr-total td { font-weight: 600; background: light-dark(#EAF0F8, #122948); }
 .ccr-more {
   width: 100%; padding: 7px 14px; text-align: left; background: none; border: 0;

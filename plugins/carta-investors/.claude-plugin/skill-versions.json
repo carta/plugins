@@ -4,7 +4,7 @@
     "headline": "Rebuild to rename this page Carta Home - your firm, so it stops sharing a name with every other Carta Home in your gallery."
   },
   "carta-workhub-build": {
-    "version": "1.7.0",
-    "headline": "Your Financial Reporting Tracker in Workhub now groups multi-package entities and fund families the same way the in-app page does, package by package."
+    "version": "1.8.0",
+    "headline": "The capital call review's Allocations tab now shows each investor's net contribution, with a per-bucket breakdown on request and applied adjustments signed instead of dropped."
   }
 }

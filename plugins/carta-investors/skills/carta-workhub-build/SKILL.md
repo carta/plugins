@@ -116,9 +116,8 @@ not inside a fund-data dashboard.
 - **Capital call review** — a `request-capital-activity` workflow carrying an open
   `review-capital-activity` (or `review-capital-activity-changes`) task opens the review panel
   instead of the thread: the preparer's note, what is being called, when it is due,
-  how much of each commitment it consumes, and collapsible Investor allocations / Payment and
-  delivery. A second panel shows the notice each investor receives, as the rendered email and as
-  the real PDF. The footer carries **Request changes** and **Approve and release**, each behind
+  how much of each commitment it consumes, an Allocations tab, and Payment information. A second
+  panel shows the notice each investor receives, as the rendered email and as the real PDF. The footer carries **Request changes** and **Approve and release**, each behind
   its own confirm step. Read from `fa:get:capital-activity-review-summary`,
   `fa:list:capital-activity-review-row`, `fa:get:capital-activity-partner-email-preview` and
   `fa:get:capital-activity-notice-pdf-preview`; written with `fa:mutate:request-capital-activity-changes`
@@ -134,6 +133,21 @@ not inside a fund-data dashboard.
   lands, instead of reporting zero investors until the row walk returns. The walk then replaces
   the seed wholesale rather than emptying it first. A count that is not yet known reads `Totals`,
   never `0`.
+
+  **Allocations reads buckets from `bucket_totals`, never from rows.** The summary's
+  `bucket_totals` is the complete column set, in served order; a row's `amount_buckets` lists only
+  the buckets that move money for that interest, so a bucket absent from a row is a zero cell and
+  the column set must never be derived from rows. The summary view is Investor / Commitment /
+  Net contribution / Called after; when more than one non-adjustment bucket or any adjustment
+  composes the net, **Show breakdown** adds one column per bucket,
+  adjustments last and signed by `impact_on_owed` (decrease reads as a reduction), with Investor
+  pinned left and Net contribution / Called after pinned right while the rest scrolls. Header
+  labels come from `display_name`; a slug-keyed abbreviation map applies only when `is_default`,
+  so a fund's own bucket keeps its name. Nothing reads `inside_commitment`: the post-call figures
+  are served already computed. Totals come from `bucket_totals` and the summary, never by summing
+  a page. When the row walk stops short the table says "Show all N of M loaded", and after a
+  complete walk a bucket whose total no loaded row carries is called out under the table rather
+  than shown as a column of dashes. The review panel is `min(1000px, 94vw)` by `min(720px, 88vh)`.
 
   **The panel is built to `Capital Call Review v3 - Carta Tasks.dc.html`, control for control.**
   The mock has 16 `onClick` handlers and 13 `sc-if` states; every one has a counterpart. When you
