@@ -924,6 +924,7 @@
 .ccr-card { margin-top: 12px; border: 1px solid var(--ink-color-global-border-subtle); padding: 14px; }
 .ccr-card-label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-color-global-text-subtle); }
 .ccr-card-figure { font-family: var(--ink-font-global-family-prominent); font-size: 28px; line-height: 1.15; font-variant-numeric: tabular-nums; margin-top: 2px; }
+.ccr-card-sub { margin-top: 4px; font-size: 13px; line-height: 20px; color: var(--ink-color-global-text-subtle); font-variant-numeric: tabular-nums; }
 .ccr-card-list { margin-top: 12px; border-top: 1px solid var(--ink-color-global-border-subtle); }
 
 .ccr-kv { display: flex; gap: 12px; padding: 16px 0; border-bottom: 1px solid var(--ink-color-global-border-subtle); }

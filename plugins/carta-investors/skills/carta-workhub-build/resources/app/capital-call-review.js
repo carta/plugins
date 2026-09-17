@@ -754,6 +754,52 @@ function ccrPaymentMethodRow(s) {
     '</span></span></div>';
 }
 
+// The web app's "Investor Distribution Summary" header: what can go out, to how
+// many, and who is holding the rest up. Folded server-side, so it is exact.
+function ccrReadinessCard(s) {
+  const r = s.distribution_readiness;
+  if (!r) return "";
+  const ccy = s.currency;
+  const count = (v) => (v === null || v === undefined ? "—" : String(v));
+  const holds = [];
+  if (r.missing_wire_count) holds.push(count(r.missing_wire_count) + " missing wire instructions");
+  if (r.incomplete_wire_count) holds.push(count(r.incomplete_wire_count) + " with incomplete instructions");
+  const path = s.is_amm_distribution
+    ? "You choose who is paid when you approve it in Carta. Investors with confirmed wire instructions start selected; " +
+      "instructions that are unconfirmed or over a year old can be added; missing or incomplete ones cannot be paid."
+    : "Release goes ahead with the investors on hold left unpaid; your fund pays them once their details are in.";
+
+  return '<div class="ccr-card">' +
+    '<div class="ccr-card-label">Ready for transfer</div>' +
+    '<div class="ccr-card-figure">' + escHtml(ccrMoney(r.ready_for_transfer_amount, ccy)) + '</div>' +
+    '<div class="ccr-card-sub">' + escHtml(count(r.receiving_count) + " of " + count(r.unpaid_count) +
+      " unpaid investors receiving payment") + '</div>' +
+    '<div class="ccr-card-list">' +
+      '<div class="ccr-kv"><span class="ccr-k">On hold</span><span class="ccr-v">' +
+        (r.on_hold_count
+          ? '<span class="ccr-strong">' + escHtml(count(r.on_hold_count) + " investors") + '</span><br>' +
+            '<span class="ccr-muted">' + escHtml(holds.join(", ")) +
+            ". Investors missing wire instructions will not receive a distribution until details are provided.</span>"
+          : '<span class="ccr-muted">None. Every unpaid investor has wire instructions release can use.</span>') +
+        '</span></div>' +
+      '<div class="ccr-kv"><span class="ccr-k">How it pays</span><span class="ccr-v">' +
+        '<span class="ccr-muted">' + escHtml(path) + '</span></span></div>' +
+      (r.over_a_year_old_count
+        ? '<div class="ccr-kv"><span class="ccr-k">Worth a second look</span><span class="ccr-v">' +
+          '<span class="ccr-strong">' + escHtml(count(r.over_a_year_old_count) + " receiving") + '</span><br>' +
+          '<span class="ccr-muted">Wire instructions added or confirmed more than a year ago. Usable, ' +
+          'but worth confirming before a large wire.</span></span></div>'
+        : '') +
+      (r.manual_wire_count
+        ? '<div class="ccr-kv"><span class="ccr-k">Manual wires</span><span class="ccr-v">' +
+          '<span class="ccr-strong">' + escHtml(count(r.manual_wire_count)) + '</span><br>' +
+          '<span class="ccr-muted">International wires to some bank countries will be processed manually ' +
+          'via your bank portal.</span></span></div>'
+        : '') +
+    '</div>' +
+  '</div>';
+}
+
 function ccrOverviewTabBody(s) {
   const ccy = s.currency;
   const dist = ccrIsDistribution(s);
@@ -806,7 +852,8 @@ function ccrOverviewTabBody(s) {
           : '') +
         '</span></div>' +
     '</div>' +
-  '</div>';
+  '</div>' +
+  ccrReadinessCard(s);
 }
 
 function ccrNoticeDateRow(s) {
@@ -1250,16 +1297,23 @@ function ccrConfirmBody() {
   const n = s.participating_interests_count;
   const who = n !== null && n !== undefined ? n : "the participating";
   const dist = ccrIsDistribution(s);
+  const r = dist ? s.distribution_readiness : null;
   const steps = [
     "Posts the journal entries to " + (s.fund_name || "the fund") + ".",
     "Generates a notice PDF for each of the " + who + " participating investors.",
     "Emails all " + who + " investors" + (s.date_of_notice ? " on " + ccrDate(s.date_of_notice) : "") + ".",
     dist
-      ? "Pays " + ccrMoney(s.total_due_to_investor, ccy) + " to investors" +
-        (s.due_date ? " on " + ccrDate(s.due_date) : "") + "."
+      ? "Pays " + ccrMoney(r ? r.ready_for_transfer_amount : s.total_due_to_investor, ccy) + " to " +
+        (r && r.receiving_count !== null && r.receiving_count !== undefined ? r.receiving_count + " " : "") +
+        "investors" + (s.due_date ? " on " + ccrDate(s.due_date) : "") + "."
       : "Makes " + ccrMoney(s.total_due_to_fund, ccy) + " due from investors" +
         (s.due_date ? " on " + ccrDate(s.due_date) : "") + ".",
   ];
+  if (r && r.on_hold_count) {
+    const held = (ccrNum(s.total_due_to_investor) || 0) - (ccrNum(r.ready_for_transfer_amount) || 0);
+    steps.push("Holds " + ccrMoney(held, ccy) + " for " + r.on_hold_count +
+      " investors until their wire instructions are provided.");
+  }
   if ("share_commitment" in s) {
     // Release shares only on an exact true; the web app's staff checkbox
     // starts checked whatever is stored, so the stored value is spelled out.
