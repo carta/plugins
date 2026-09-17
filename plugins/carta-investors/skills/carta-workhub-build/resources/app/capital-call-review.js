@@ -917,10 +917,10 @@ function ccrNoticeTabBody(s) {
 
   let emailPane;
   if (_ccr.emailError) {
-    emailPane = '<div class="ccr-empty"><p>This notice could not be previewed.</p>' +
+    emailPane = '<div class="ccr-empty"><p>This email could not be previewed.</p>' +
       '<p class="ccr-note">' + escHtml(_ccr.emailError) + '</p></div>';
   } else if (!_ccr.email) {
-    emailPane = '<div class="loading-row" style="padding:16px 0;">Rendering the notice…</div>';
+    emailPane = '<div class="loading-row" style="padding:16px 0;">Rendering the email…</div>';
   } else {
     const e = _ccr.email;
     const label = (d) => d.name ? d.name + ' <' + d.email + '>' : d.email;
@@ -1585,7 +1585,7 @@ function ccrRenderNotice() {
   if (_ccr.docTab === "pdf") {
     pane = ccrNoticeDoc();
   } else if (_ccr.emailError) {
-    pane = '<div class="ccr-empty"><p>This notice could not be previewed.</p><p class="ccr-note">' +
+    pane = '<div class="ccr-empty"><p>This email could not be previewed.</p><p class="ccr-note">' +
       escHtml(_ccr.emailError) + "</p></div>";
   } else if (!_ccr.email) {
     pane = '<div class="loading-row" style="padding:20px 0;">Rendering the email…</div>';
