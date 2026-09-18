@@ -2707,12 +2707,11 @@
         // True when anything the Reset button would undo is actually set. A control
         // that's permanently visible but can't do anything is just toolbar noise, so
         // it stays hidden at the default view.
+        // Only the two things that actually narrow what's on screen. As of is a
+        // period, not a filter, and sort is a reordering — both are deliberate,
+        // visible choices, so the control neither advertises nor undoes them.
         function viewIsFiltered() {
-            return currentFundUuid !== ALL_ENTITIES_VALUE
-                || currentAsOfDate !== null
-                || filterText !== ''
-                || sortCol !== null
-                || globalSearchTerm !== '';
+            return currentFundUuid !== ALL_ENTITIES_VALUE || filterText !== '';
         }
 
         function syncResetFiltersVisibility() {
@@ -2728,25 +2727,23 @@
         // cross-fund search go with it — loadFund clears those anyway, and leaving
         // them behind would contradict "reset".
         function resetFilters() {
-            const needsReload = currentFundUuid !== ALL_ENTITIES_VALUE || currentAsOfDate !== null;
-            currentAsOfDate = null;
+            const fundNarrowed = currentFundUuid !== ALL_ENTITIES_VALUE;
             filterText = '';
-            sortCol = null;
-            sortDir = 'asc';
-            allExpanded = false;
-            expandedUnderlying = new Set();
-            expandedCompanies = new Set();
+            const input = document.getElementById('searchInput');
+            if (input) input.value = '';
+            // One box drives both the company filter and the cross-fund search, so
+            // clearing it has to clear both.
             clearTimeout(globalSearchDebounce);
             globalSearchTerm = '';
             globalSearchResults = null;
             globalSearchError = null;
             globalSearchLoading = false;
-            if (needsReload) {
-                loadFund(ALL_ENTITIES_VALUE);
+            if (fundNarrowed) {
+                // Widening back to the firm goes through the ordinary fund-change
+                // path rather than loadFund directly: expansion state is keyed by row
+                // index, and those indices mean nothing once the data source changes.
+                switchFund(ALL_ENTITIES_VALUE);
             } else {
-                // Same data, so re-render rather than refetch — but the combos still
-                // need re-syncing because the As of value may have moved.
-                populateFundSelect();
                 render();
             }
         }
