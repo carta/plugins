@@ -112,6 +112,44 @@ export function totalEquity(row) {
   return Number(v || 0) + Number(u || 0);
 }
 
+/** Shares vesting in the NEXT twelve months, or null when not captured.
+ *
+ *  `ntm_vesting` — the CTC product's own term and its own figure, which the planner
+ *  must not re-derive. A plausible approximation is available here (total grant over
+ *  a four-year schedule from the hire date), and it is deliberately NOT computed:
+ *  this column sits beside Carta's figures in a table a user reads as Carta's, so
+ *  a guess wearing the same styling would be indistinguishable from a fact. An em
+ *  dash says "we do not have this"; a modelled number says something false.
+ *
+ *  ZERO IS A REAL ANSWER and must survive: an employee fully vested has nothing
+ *  vesting next year, which is a finding, not missing data. Hence the `== null`
+ *  test rather than a falsy one.
+ *
+ *  AS-OF-TODAY, unlike total_vested_shares: the service computes it from the fetch
+ *  date, so two captures of an unchanged cap table can legitimately differ. Not a
+ *  data error, and the cell's title says so.
+ */
+export function vestingNext12(row) {
+  const v = row && row.ntm_vesting;
+  return v == null ? null : Number(v);
+}
+
+/** Shares that vested in the LAST twelve months, or null when not captured.
+ *
+ *  `ttm_vesting`, the trailing mirror of vestingNext12. Same rule on zero: an
+ *  employee past their final vest has zero here, which is exactly the signal a
+ *  refresh cycle is looking for.
+ *
+ *  NARROWER THAN IT READS. The service counts vesting events on the securities the
+ *  employee still HOLDS — cancelled awards are filtered upstream — so this is not
+ *  "everything that ever vested". A label promising the broader meaning would
+ *  overclaim it, which is why the column header says only "Last 12 Months".
+ */
+export function vestingLast12(row) {
+  const v = row && row.ttm_vesting;
+  return v == null ? null : Number(v);
+}
+
 /** Apply the whole filter set to a list of rows.
  *
  *  Returns { rows, removed } so a caller can show what a filter took out rather

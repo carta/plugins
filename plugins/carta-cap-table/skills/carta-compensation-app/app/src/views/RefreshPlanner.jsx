@@ -30,6 +30,7 @@ import { shares } from "../model/format.js";
 import { formatTenure, tenureMonths } from "../model/tenure.js";
 import {
   applyFilters, levelRank, PRIOR_GRANTS, priorGrantsMode, totalEquity,
+  vestingNext12, vestingLast12,
 } from "../model/cohort.js";
 import { applyPredicate } from "../model/predicate.js";
 import { DEFAULT_GRANT_REASON, reasonFor } from "../model/grantReason.js";
@@ -140,22 +141,34 @@ function SelectAllBox({ state, onChange, count }) {
 function EmployeeTable({ rows, asOf, cart, onToggle, headerSel, onToggleAll }) {
   return (
     <TableAlign align="right">
-      <table style={{ width: "100%", minWidth: 1210, tableLayout: "fixed" }}>
+      {/* 1520, measured. `tableLayout: fixed` clips rather than scrolls when the
+          floor is too low, so this is the sum of what the columns need — header
+          text plus padding, and "Completing Vesting" is the longest at ~139px.
+          At 1420 that one was clipped to 99px. The container scrolls horizontally,
+          so the extra width costs a scrollbar, not layout. */}
+      <table style={{ width: "100%", minWidth: 1520, tableLayout: "fixed" }}>
         <thead>
           <tr>
             <Th width="4%" align="center">
               <SelectAllBox state={headerSel} onChange={onToggleAll} count={rows.length} />
             </Th>
-            <Th width="16%" align="left">Name</Th>
-            <Th width="13%" align="left">Job Title</Th>
-            <Th width="7%" align="left">Level</Th>
-            <Th width="10%" align="left">Job Area</Th>
-            <Th width="11%" align="left">Specialization</Th>
-            <Th width="8%">Tenure</Th>
-            <Th width="8%" align="left">Geo</Th>
-            <Th width="7%">Total equity</Th>
-            <Th width="8%">Total Vested</Th>
-            <Th width="8%">Completing Vesting</Th>
+            <Th width="14%" align="left">Name</Th>
+            <Th width="11%" align="left">Job Title</Th>
+            <Th width="6%" align="left">Level</Th>
+            <Th width="8%" align="left">Job Area</Th>
+            <Th width="9%" align="left">Specialization</Th>
+            <Th width="6%">Tenure</Th>
+            <Th width="7%" align="left">Geo</Th>
+            <Th width="6%">Total equity</Th>
+            <Th width="7%">Total Vested</Th>
+            {/* The two twelve-month windows sit together, and after Total Vested:
+                the row then reads holdings, then what moves around now. Both are
+                Carta's own NTM/TTM figures, not derived here — see vestingNext12. */}
+            <Th width="8%">Next 12 Months</Th>
+            <Th width="8%">Last 12 Months</Th>
+            {/* The longest header in this table (~139px) and the one that was
+                clipped, to 99px, before the floor was raised. */}
+            <Th width="10%">Completing Vesting</Th>
           </tr>
         </thead>
         <tbody>
@@ -163,6 +176,8 @@ function EmployeeTable({ rows, asOf, cart, onToggle, headerSel, onToggleAll }) {
             const months = tenureMonths({ tenure: { start_date: r.hire_date } }, asOf);
             const tenure = formatTenure(months);
             const total = totalEquity(r);
+            const next12 = vestingNext12(r);
+            const last12 = vestingLast12(r);
             const inCart = cart.has(r.external_id);
             // A tint, not a fill. The cells set their own `color` — Td uses a
             // quiet grey for missing values — so the background stays pale enough
@@ -226,6 +241,22 @@ function EmployeeTable({ rows, asOf, cart, onToggle, headerSel, onToggleAll }) {
                 </Td>
                 <Td mono subtle={r.total_vested_shares == null}>
                   {r.total_vested_shares == null ? "—" : shares(r.total_vested_shares)}
+                </Td>
+                {/* Not captured in every build, so the em-dash path is the common
+                    one rather than an edge case. The title says WHICH it is — "no
+                    vesting data in this snapshot" and "nothing vests in this
+                    window" look identical in the cell and mean opposite things. */}
+                <Td mono subtle={next12 === null}
+                    title={next12 === null
+                      ? "Next-12-month vesting is not in this snapshot"
+                      : `${shares(next12)} vesting over the next 12 months`}>
+                  {next12 === null ? "—" : shares(next12)}
+                </Td>
+                <Td mono subtle={last12 === null}
+                    title={last12 === null
+                      ? "Last-12-month vesting is not in this snapshot"
+                      : `${shares(last12)} vested over the last 12 months`}>
+                  {last12 === null ? "—" : shares(last12)}
                 </Td>
                 <Td mono subtle={!r.date_of_final_vest}>
                   {r.date_of_final_vest || "—"}
@@ -454,6 +485,18 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
   const { added, removed: cartRemoved } = diff(cart, saved);
   const hidden = hiddenCount(cart, visibleIds);
 
+  // One reason across every row in the cart. Follows the same sparse rule as
+  // setReason — the default clears the map rather than storing a row per
+  // employee — so "all Refresh" and an untouched plan persist identically.
+  const setAllReasons = (value) => {
+    const next = new Map();
+    if (value && value !== DEFAULT_GRANT_REASON) {
+      for (const r of inCartRows) next.set(r.external_id, value);
+    }
+    setReasons(next);
+    save({ reasons: next });
+  };
+
   // Every filter change goes through here, so no path can narrow the cohort
   // without persisting it — the same rule updateCart follows for the cart. The
   // NEXT values are passed explicitly rather than read back from state, which has
@@ -658,6 +701,7 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
         onOverride={setOverride}
         reasons={reasons}
         onReason={setReason}
+        onAllReasons={setAllReasons}
         // Through updateCart, the same path step 1's checkbox takes, so the two
         // screens write one cart and the removal persists like any other change.
         onRemove={(id) => updateCart(toggle(cart, id))}

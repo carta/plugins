@@ -19,6 +19,7 @@ import {
   availableUnits, currencyOf, formatInUnit, perSharePrice, unitLabel,
 } from "../../model/equityUnits.js";
 import { tenureMonths } from "../../model/tenure.js";
+import { vestingNext12, vestingLast12 } from "../../model/cohort.js";
 import AskBar from "../../ui/AskBar.jsx";
 import { DEFAULT_GRANT_REASON, GRANT_REASONS, reasonFor } from "../../model/grantReason.js";
 import {
@@ -365,11 +366,18 @@ function GrantCell({
 
 export default function SettingsStep({
   rows, policySettings, settings, onSettings, onBack, onNext, asOf,
-  overrides, onOverride, reasons, onReason, onRemove, poolBar, equityUnits, token,
+  overrides, onOverride, reasons, onReason, onAllReasons, onRemove, poolBar,
+  equityUnits, token,
 }) {
   // Shares by default: the report's own figure, and the only unit that needs
   // no corporation-level input.
   const [unit, setUnit] = useState(SHARES);
+  // Whether the policy panel is expanded. Held in React rather than left to
+  // <details>' own DOM state because the GRID needs it: a collapsed panel has to
+  // give its 430px column back to the grants table, and a column width cannot be
+  // expressed in CSS from a sibling's [open] attribute. The <details> is still the
+  // control — this mirrors it via onToggle, so keyboard and click both work.
+  const [policyOpen, setPolicyOpen] = useState(true);
   const units = availableUnits(equityUnits);
   const ownershipAvailable = units.includes(OWNERSHIP);
   const valueAvailable = units.includes(VALUE);
@@ -517,23 +525,51 @@ export default function SettingsStep({
           that hid the cohort step's cart. */}
       <div style={{
         display: "grid",
-        gridTemplateColumns: wide ? "minmax(0, 430px) minmax(0, 1fr)" : "minmax(0, 1fr)",
+        // Collapsed, the policy column shrinks to its own content instead of
+        // holding 430px open — `auto` is what hands the width to the table rather
+        // than leaving a tall empty gutter beside it. Folding only vertically left
+        // the column reserved, which is the thing that looked broken.
+        //
+        // The collapsed panel still occupies a column: it keeps its summary row,
+        // and that row carries the Show control and the override tag. Dropping to
+        // a single column would move the control under the table.
+        gridTemplateColumns: !wide
+          ? "minmax(0, 1fr)"
+          : policyOpen
+            ? "minmax(0, 430px) minmax(0, 1fr)"
+            : "auto minmax(0, 1fr)",
         gap: 16,
         alignItems: "start",
       }}>
         <div style={{
           background: C.surface, border: `1px solid ${C.border}`, borderRadius: RADIUS, padding: 16,
         }}>
-          <div style={{
-            display: "flex", alignItems: "center", justifyContent: "space-between",
-            gap: 12, flexWrap: "wrap", marginBottom: 10,
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {/* Collapsible, reusing step 1's fold: this panel is tall, and once the
+              policy is set the grants table beside it is what the user is actually
+              working in. Open by default — the settings drive every figure in that
+              table, so hiding them by default would hide the explanation. */}
+          <details
+            open={policyOpen}
+            onToggle={(e) => setPolicyOpen(e.currentTarget.open)}
+            className="ctc-fold"
+          >
+            {/* nowrap while collapsed: the summary is the whole width of the
+                column then, and letting the title wrap would make a narrow
+                two-line stub instead of one tidy row. */}
+            <summary style={{
+              display: "flex", alignItems: "center", gap: 10, cursor: "pointer",
+              flexWrap: policyOpen ? "wrap" : "nowrap",
+              whiteSpace: policyOpen ? undefined : "nowrap",
+              marginBottom: policyOpen ? 10 : 0,
+            }}>
               {/* The shared card title, as an h2 — it names this panel, and a bold
                   span reaches a screen reader as neither. */}
               <h2 style={{ ...CARD_TITLE, color: C.text, margin: 0 }}>
                 Refresh grant policy
               </h2>
+              {/* The override tag rides on the SUMMARY so it survives collapsing: a
+                  folded panel that does not say the policy has been overridden is
+                  how a local edit silently becomes the thing nobody notices. */}
               {overridden && (
                 <Tag
                   tone="notice"
@@ -542,21 +578,50 @@ export default function SettingsStep({
                   Local override — not saved to Carta
                 </Tag>
               )}
-            </div>
-            {overridden && (
-              <button
-                type="button"
-                onClick={() => onSettings({ ...policySettings })}
+              {/* A span, not a button: a <button> inside a <summary> swallows the
+                  click that would toggle it. aria-hidden because the summary
+                  announces its own open state, and both would be heard twice. */}
+              <span
+                aria-hidden="true"
                 style={{
-                  height: 32, padding: "0 12px", fontSize: FS.md, fontFamily: "inherit",
-                  color: C.textDefault, background: C.surfaceDefault,
-                  border: `1px solid ${C.borderDefault}`, borderRadius: RADIUS, cursor: "pointer",
+                  // Pinned right only while open, where the column is a fixed
+                  // 430px. Collapsed the column is sized to this row, so an auto
+                  // margin would have nothing to push against — it would widen the
+                  // stub to fill whatever the grid allowed.
+                  marginLeft: policyOpen ? "auto" : 4,
+                  display: "inline-flex", alignItems: "center",
+                  gap: 6, fontSize: FS.sm, color: C.textSubtle,
                 }}
               >
-                Reset to Carta policy
-              </button>
+                <span className="ctc-fold-label" />
+                <span className="ctc-fold-chevron" style={{ display: "inline-flex" }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                    strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                    style={{ stroke: "currentColor" }}>
+                    <path d="M6 9l6 6 6-6" />
+                  </svg>
+                </span>
+              </span>
+            </summary>
+
+            {/* OUTSIDE the summary, deliberately: a <button> in there would eat the
+                toggle click (see the span above). It belongs with the fields it
+                resets anyway, so collapsing the panel takes it along. */}
+            {overridden && (
+              <div style={{ display: "flex", marginBottom: 10 }}>
+                <button
+                  type="button"
+                  onClick={() => onSettings({ ...policySettings })}
+                  style={{
+                    height: 32, padding: "0 12px", fontSize: FS.md, fontFamily: "inherit",
+                    color: C.textDefault, background: C.surfaceDefault,
+                    border: `1px solid ${C.borderDefault}`, borderRadius: RADIUS, cursor: "pointer",
+                  }}
+                >
+                  Reset to Carta policy
+                </button>
+              </div>
             )}
-          </div>
 
           {!havePolicy ? (
             <div style={{
@@ -666,6 +731,7 @@ export default function SettingsStep({
               </div>
             </>
           )}
+          </details>
         </div>
 
         <div style={{
@@ -681,18 +747,73 @@ export default function SettingsStep({
               </span>
               <EquityUnitToggle unit={unit} onUnit={setUnit} equityUnits={equityUnits} />
             </div>
+            {/* One reason across the whole plan. A select that snaps back to its
+                label rather than holding a value: it is an action on every row, not
+                a field describing one, and leaving it showing "Promotion" would
+                claim a uniformity the per-row cells below are free to break. */}
+            <label style={{
+              display: "inline-flex", alignItems: "center", gap: 7,
+              fontSize: FS.sm, color: C.textSubtle,
+            }}>
+              Set all reasons to
+              <select
+                value=""
+                onChange={(e) => { if (e.target.value) onAllReasons(e.target.value); }}
+                title="Applies one grant reason to every employee in this plan, replacing any set per row"
+                style={{
+                  height: 32, padding: "0 6px", fontSize: FS.md, fontFamily: "inherit",
+                  color: C.textDefault, background: C.surfaceDefault,
+                  border: `1px solid ${C.borderDefault}`, borderRadius: RADIUS,
+                }}
+              >
+                <option value="">Choose…</option>
+                {GRANT_REASONS.map((r) => (
+                  <option key={r.value} value={r.value}>{r.label}</option>
+                ))}
+              </select>
+            </label>
           </div>
           <div style={{ overflowX: "auto" }}>
             <TableAlign align="right">
-              <table style={{ width: "100%", minWidth: 760, tableLayout: "fixed" }}>
+              {/* 1414, MEASURED — the sum of what every column actually needs, not
+                  a round number and not a guess.
+
+                  `tableLayout: fixed` splits the width by the percentages below and
+                  CLIPS whatever does not fit, so a floor that is too small squeezes
+                  columns rather than scrolling the container. That is what went
+                  wrong at the old 940: the two new headers got 61px against the
+                  ~103px their text needs, and six headers were clipped at once —
+                  reported from QA as columns overwriting each other.
+
+                  Per column the need is its header text plus 20px of cell padding,
+                  or its widest body cell where that is wider (Name 164,
+                  Specialization 197, Suggested Range 167). Headers alone come to
+                  1002; with the body cells it is 1414.
+
+                  Specialization was ALREADY clipped before the new columns landed
+                  (112 needed, 70 given) — adding two columns to a table with no
+                  slack is what turned a latent squeeze into a visible one.
+
+                  The percentages are each column's share of that 1414, so at the
+                  floor every one gets what it needs and above it they grow
+                  proportionally. Change one and re-measure the rest. */}
+              <table style={{ width: "100%", minWidth: 1414, tableLayout: "fixed" }}>
                 <thead>
                   <tr>
-                    <Th width="15%" align="left">Name</Th>
-                    <Th width="7%" align="left">Level</Th>
-                    <Th width="9%" align="left">Area</Th>
-                    <Th width="9%" align="left">Specialization</Th>
-                    <Th width="7%">Tenure</Th>
-                    <Th width="10%">Benchmark</Th>
+                    <Th width="12%" align="left">Name</Th>
+                    <Th width="4%" align="left">Level</Th>
+                    <Th width="10%" align="left">Area</Th>
+                    <Th width="14%" align="left">Specialization</Th>
+                    <Th width="5%">Tenure</Th>
+                    {/* Before Benchmark, so the row reads context first and the
+                        policy chain (benchmark → range → grant) stays unbroken to
+                        the right. Carta's own NTM/TTM figures — see vestingNext12.
+
+                        Their headers are the longest text in the table (~103px), so
+                        they are sized from that rather than from the values. */}
+                    <Th width="9%">Next 12 Months</Th>
+                    <Th width="8%">Last 12 Months</Th>
+                    <Th width="7%">Benchmark</Th>
                     {/* Range before Grant: the corridor is the recommendation and the
                         grant is the decision, so reading left to right goes from what
                         policy suggests, to what this plan does, to why.
@@ -700,18 +821,20 @@ export default function SettingsStep({
                         "Suggested Range" rather than "Range": the policy field above
                         is already labelled Suggested Grant Range, and the two were
                         naming the same number differently. */}
-                    <Th width="14%">Suggested Range</Th>
-                    <Th width="12%">Grant</Th>
-                    <Th width="13%" align="left">Grant reason</Th>
+                    <Th width="12%">Suggested Range</Th>
+                    <Th width="9%">Grant</Th>
+                    <Th width="8%" align="left">Grant reason</Th>
                     {/* No header text: the column is one control per row,
                         and "Remove" above a column of ✕ buttons labels the
                         column rather than saying anything new. */}
-                    <Th width="4%" align="center"><span aria-hidden="true" /></Th>
+                    <Th width="2%" align="center"><span aria-hidden="true" /></Th>
                   </tr>
                 </thead>
                 <tbody>
                   {shown.map(({ row, eligible: ok, reason, shares: sh, modelled, overridden }) => {
                     const months = monthsFor(row);
+                    const next12 = vestingNext12(row);
+                    const last12 = vestingLast12(row);
                     // The corridor brackets the POLICY target, not the displayed
                     // figure. Bracketing the displayed one would move the goalposts
                     // with every edit, so nothing could ever read as out of range.
@@ -738,6 +861,23 @@ export default function SettingsStep({
                       </Td>
                         <Td mono subtle={months == null}>
                           {months == null ? "—" : `${months} mo`}
+                        </Td>
+                        {/* Through formatInUnit like every other equity figure in
+                            this table, so the %/$ toggle moves them too — a column
+                            of raw shares beside converted ones would misread. */}
+                        <Td mono subtle={next12 === null}
+                            title={next12 === null
+                              ? "Next-12-month vesting is not in this snapshot"
+                              : "Shares vesting over the next 12 months"}>
+                          {next12 === null
+                            ? "—" : formatInUnit(next12, unit, equityUnits, shares)}
+                        </Td>
+                        <Td mono subtle={last12 === null}
+                            title={last12 === null
+                              ? "Last-12-month vesting is not in this snapshot"
+                              : "Shares vested over the last 12 months"}>
+                          {last12 === null
+                            ? "—" : formatInUnit(last12, unit, equityUnits, shares)}
                         </Td>
                         <Td mono subtle={row.four_year_grant_benchmark_num_shares == null}
                             title={row.four_year_grant_benchmark_num_shares == null

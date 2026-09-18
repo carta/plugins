@@ -202,7 +202,6 @@ are:
 | `valuation.no_active_fmv` | `needs_decision` | No live valuation to price from |
 | `valuation.multiple_active_same_class` | `needs_decision` | An HMRC report's AMV and UMV are both live — the admin picks, the panel leaves the field empty |
 | `jurisdiction.unresolved_conflict` | `needs_decision` | Competing signals and **deliberately no verdict** |
-| `acceleration_template.none_exists` | `informational` | Say so alongside the surface; the flow continues |
 
 **`jurisdiction.unresolved_conflict` is the one to be careful with.** `jurisdiction_evidence`
 holds signals and no ranking on purpose: a ranked field is a default, a default gets taken,
