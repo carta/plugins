@@ -44,7 +44,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.85.3</carta-plugin>
+<carta-plugin>carta-cap-table:6.85.4</carta-plugin>
 
 # Issue Securities
 
@@ -74,12 +74,11 @@ wrong path.
 
 | Condition | Path |
 |---|---|
-| a tool whose name **ends in** `cap_table_issuance_panel`, bare or prefixed | **panel** — [the next section](#the-panel-path). Nothing else to read |
+| a tool whose name **ends in** `cap_table_issuance_panel`, bare or prefixed | **panel** — [the next section](#the-panel-path) |
 | else, a tool ending in `preview_start` | **engine + code adapter** — `references/engine.md`, then `references/code-adapter.md` |
 | else | **engine + cowork adapter** — `references/engine.md`, then `references/cowork-adapter.md` |
 
-Record the selection once. Never re-detect per surface, and never leave the panel path
-because it looks slow.
+Record the selection once. Never re-detect per surface.
 
 ## The panel path
 
@@ -125,8 +124,7 @@ named, no plural-**person** language → `quantity: 100` with an empty `stakehol
 recipient, 100 options. Only people-language (*"100 employees"*, *"100 new hires"*) makes N a
 row count.
 
-One call — and no roster, plan or valuation fetch of your own; the form loads what it needs
-outside your context.
+One call — and no roster, plan or valuation fetch of your own.
 
 ### 3. Read `blockers` first
 
@@ -153,8 +151,7 @@ rows, saves and validates the draft set and renders validation errors against th
 None of it reaches you; it ends by sending **one** compact message naming the `draft_set_id`.
 Past that handoff the only files you may need are
 [references/mutate-recovery.md](references/mutate-recovery.md) on a server rejection and the
-import sub-skill if the prompt named a file: building the form and the payload is the panel's
-job, unless you fall back below.
+import sub-skill if the prompt named a file.
 
 **Emit no `AskUserQuestion` while the panel is open** — it suspends the panel's submit watcher,
 so the click never lands. Don't narrate, poll, or re-send the panel.
@@ -175,25 +172,22 @@ mcp__carta__call_tool({"name": "cap_table__mutate__issue_securities", "arguments
 `call_tool` takes `name` + `arguments`, and the wire name carries **double underscores** —
 `cap_table:mutate:issue_securities` is the prose form, never the argument.
 
-**No `drafts` key.** The draft set already holds the rows the user approved; re-sent rows
-are only *probably* identical to the reviewed ones ([hard rule 6](#hard-rules)).
+**No `drafts` key** — the draft set already holds the rows the user approved
+([hard rule 6](#hard-rules)).
 
 The host's confirmation prompt on this mutate is the final, irreversible gate — **and the only
-gate you add here**: the panel's Confirm button was the review gate. Never stack a second one.
+gate you add here**: the panel's Confirm button was the review gate.
 
 Then:
 
 - **Success** → say what was issued per holder: name, quantity, security, any value worth
   checking. Dates `MM/DD/YYYY`. **The response is the record — don't read the security back.**
-  `cap_table__get__piu`, `cap_table__get__certificate` and `cap_table__get__option_grant` are
-  single-security lookups: each needs `corporation_id` **and exactly one** of `label` or
-  `security_id`. None lists a corporation's securities, so `corporation_id` alone is rejected.
+  The `cap_table__get__*` tools are single-security lookups — each needs `corporation_id`
+  **and exactly one** of `label` or `security_id`, and none lists a corporation's securities.
 - **The server rejects or short-circuits** → surface its messages **verbatim**, humanized
-  (`_` → space, Title Case); never paraphrase or pre-empt its validation. Re-call with the
-  **same** `draft_set_id` once the user clears what it named — omitting it mints a second
-  draft set.
-- **A timeout is not an error.** The issue may already have happened, so never retry with fresh
-  params ([hard rule 3](#hard-rules)).
+  ([hard rule 8](#hard-rules)); never pre-empt its validation. Re-call with the **same**
+  `draft_set_id` once the user clears what it named ([hard rule 3](#hard-rules)).
+- **A timeout is not an error** — never retry with fresh params ([hard rule 3](#hard-rules)).
 - **Anything that re-call can't clear** — flagged duplicates, a row that must change — read
   [references/mutate-recovery.md](references/mutate-recovery.md).
 
@@ -250,10 +244,9 @@ Every path, panel included.
 1. **Never mix two security types in one mutate.** Run the skill once per type for a mixed
    request.
 2. **One confirmation gate per mutate attempt** — never zero, never two stacked. The gate is
-   the surface's own Confirm button, or one `AskUserQuestion` on a chat surface. **Never stack
-   an `AskUserQuestion` on an open panel**: it suspends the submit watcher, so the click never
-   lands — unless the user already reported not seeing the panel, which retires the watcher
-   too. Recovery questions after a server short-circuit are unrestricted. The host's
+   the surface's own Confirm button, or one `AskUserQuestion` on a chat surface; **never one
+   stacked on an open panel** — [§ 4](#4-wait) owns that mechanic and its one exception.
+   Recovery questions after a server short-circuit are unrestricted. The host's
    confirmation prompt on the mutate is the final irreversibility gate, never the review
    gate.
 3. **Retry contract — reuse identity from the FIRST response.** Put `draft_set_id` from the
