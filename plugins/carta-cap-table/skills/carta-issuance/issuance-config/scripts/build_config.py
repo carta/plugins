@@ -27,6 +27,7 @@ from issuance_fields import (  # noqa: E402
     build_stakeholder_blocks,
     build_stakeholder_list,
     corresponding_interest_js_constants,
+    load_stakeholder_roster,
     results,
 )
 
@@ -43,6 +44,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.add_argument("--security-type", required=True, choices=["option_grant", "certificate", "piu"])
     p.add_argument("--data", required=True, type=Path, help="JSON of raw MCP reference results")
     p.add_argument("--knowns", required=True, type=Path, help="JSON of what the prompt supplied")
+    p.add_argument("--stakeholders", type=Path,
+                   help="JSON file holding the raw stakeholder roster; supersedes --data's "
+                        "`stakeholders` key")
     p.add_argument("--out-dir", required=True, type=Path)
     args = p.parse_args(argv)
 
@@ -71,7 +75,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         # Roster powers autocomplete here and Phase 1's local name match, so
         # it's fetched once instead of per grantee. Absent → "[]".
         emit("STAKEHOLDER_LIST_JSON", "_stakeholders.json",
-             build_stakeholder_list(results(data.get("stakeholders"))))
+             build_stakeholder_list(load_stakeholder_roster(data, args.stakeholders)))
 
         # Panel-level banner for corp-/batch-level server errors (row-level
         # errors live in build_stakeholder_block instead). "" when clean.

@@ -1,12 +1,9 @@
 # PIU-only fields
 
-Profits-interest-unit-specific row template. Read this file only when
-`security_type = piu` (resolved in [SKILL.md § Resolve
-security_type](../SKILL.md#resolve-security_type)). The certificate and option-grant
-equivalents live in [certificate-fields.md](certificate-fields.md) and
-[option-grant-fields.md](option-grant-fields.md). Shared resolution helpers used by all
-three types (vesting, acceleration) stay in [SKILL.md § Shared resolution
-helpers](../SKILL.md#shared-resolution-helpers).
+Read this file only when `security_type = piu`, resolved in [SKILL.md § Resolve
+security_type](../SKILL.md#resolve-security_type). Vesting and acceleration are shared with the
+other two types and stay in [engine.md § Shared resolution
+helpers](engine.md#shared-resolution-helpers).
 
 A PIU is a **profits interest**: the holder shares only in value **above a threshold**.
 That threshold is the security's economic term, so a PIU has **no price of any kind** — no
@@ -16,9 +13,8 @@ exercise price, no price per share. It also has no legend and no Rule 144 date.
 
 ## PIU row
 
-Fill literally. Every slot must hold a value before review. `None`/empty → skill bug;
-reapply the default, re-call the stakeholder lookup, or ask ([Hard rule
-9](../SKILL.md#hard-rules)).
+Fill literally, under [engine.md § Row templates](engine.md#row-templates)'s rule: every slot
+holds a value before review, and a `None` or empty is a skill bug.
 
 ```python
 {
@@ -55,9 +51,7 @@ field (`option_plan`), not a set field — `CreateDraftSetView` takes only a nam
 
 ### Review-only fields (PIU) — never sent to the mutate
 
-Stamp these onto every resolved row for the review surfaces to render. They are
-**display-only** and must **never** appear in the `issue_securities` / `save_drafts`
-payload:
+Stamp these onto every resolved row for the review surfaces to render:
 
 | Key | Value |
 |---|---|
@@ -87,6 +81,11 @@ differences:
 - **Ignore `dividend`.** `DraftPIU` has no dividend-accrual field, so the
   non-cash-dividend prompt that governs certificates does not apply.
 
+The default rule is the same one, and deliberately so: a sole class is pre-selected, two or
+more leave the control **required and unselected** with `missingFields()` holding **Review**
+on `a unit class`. An explicitly named class is still honoured, row-level or via
+`knowns.share_class_prefix`; pass that key **only when the prompt actually named one.**
+
 ### Equity-plan reconciliation — per row, optional, prefix-matched
 
 The one helper with no analogue anywhere else in this skill. Three rules, each load-bearing:
@@ -103,7 +102,7 @@ The one helper with no analogue anywhere else in this skill. Three rules, each l
    a mismatch with *"Equity plan share class must match the selected share class"*. Filter
    the picker to plans whose share class matches the selected unit class **only if** the
    `option_plans` payload carries a share-class prefix; if it does not, do not
-   pre-validate (Hard rule 5) — show the plan's own class next to the unit class in the
+   pre-validate (SKILL.md hard rule 4) — show the plan's own class next to the unit class in the
    review, and surface the server's message verbatim on rejection.
 
 `option_plan` carries the plan's **primary key as a string**, not its name, even though
@@ -163,18 +162,18 @@ server resolves both from it. Never emit the doc fields or `attachments_uuid`.
 
 Two conditional server rules, neither of them predictable from here — the corporation
 properties behind them are not readable through any MCP command, so the server is
-authoritative (Hard rule 5):
+authoritative (SKILL.md hard rule 4):
 
 - the grant agreement is required when the issuer's properties demand one;
 - the equity incentive plan document is required **only for a plan-issued row**.
 
-That is why the [account-setup gate](../SKILL.md#account-setup-gate-option-grant-and-piu)
+That is why the [account-setup gate](engine.md#account-setup-gate-option-grant-and-piu)
 is soft for PIUs: a corp with no PIU document set may still be able to issue.
 
 ### Vesting
 
-Shared with the other two types — see [SKILL.md § Vesting
-resolution](../SKILL.md#vesting-resolution). PIU takes the **certificate posture: opt-in,
+Shared with the other two types — see [engine.md § Vesting
+resolution](engine.md#vesting-resolution). PIU takes the **certificate posture: opt-in,
 defaulting to No vesting.** The field manifest does not mark `vesting_template` required
 for a PIU, and the import template calls it *"Required, if applicable"*; the only
 server-side rule is that a vesting start date with no schedule fails. Warn on neither.
@@ -207,12 +206,15 @@ use to pre-select one (`default_share_class_prefix`), in order:
 1. the row's own `share_class_prefix`,
 2. `knowns.share_class_prefix`,
 3. the sole class, when the corp has exactly one,
-4. the last class in the fetched list (the best available proxy for newest).
+4. otherwise nothing — several classes and none named leaves the field unselected.
 
-Steps 3-4 are load-bearing: the skill omits `knowns.share_class_prefix` unless the prompt
-named a unit class, so for the ordinary request (*"issue a PIU to X for 112 units"*) the
-first two are empty. Reading only a named prefix is what kept this row from ever
-rendering.
+Step 3 is load-bearing: the skill omits `knowns.share_class_prefix` unless the prompt named
+a unit class, so for the ordinary request (*"issue a PIU to X for 112 units"*) the first two
+are empty. Reading only a named prefix is what kept this row from ever rendering.
+
+Step 4 is deliberate. The class sets the holder's liquidation preference, price and
+economics, so a default picked for them hides the decision the field exists to ask. When
+several classes exist the gate reads "unresolved" and the user chooses.
 
 **The gate is not build-time only.** The link belongs to the unit class, so clicking a
 different class changes the answer. Any class carrying the link puts the row in the DOM

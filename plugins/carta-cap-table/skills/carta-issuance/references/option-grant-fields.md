@@ -1,19 +1,16 @@
 # Option-grant-only fields
 
-Option-grant-specific row template. Read this file only when `security_type = option_grant`
-(resolved in [SKILL.md § Resolve security_type](../SKILL.md#resolve-security_type)). The
-certificate equivalent lives in [certificate-fields.md](certificate-fields.md). Shared
-resolution helpers used by both types (vesting, acceleration, exercise periods, document sets,
-board approval) stay in [SKILL.md § Shared resolution
-helpers](../SKILL.md#shared-resolution-helpers).
+Read this file only when `security_type = option_grant`, resolved in [SKILL.md § Resolve
+security_type](../SKILL.md#resolve-security_type). Vesting and acceleration are shared with the
+other two types and stay in [engine.md § Shared resolution
+helpers](engine.md#shared-resolution-helpers).
 
 ---
 
 ## Option-grant row
 
-Fill literally. Every slot must hold a value before review. `None`/empty → skill bug;
-reapply the default, re-call the stakeholder lookup, or ask ([Hard rule
-9](../SKILL.md#hard-rules)).
+Fill literally, under [engine.md § Row templates](engine.md#row-templates)'s rule: every slot
+holds a value before review, and a `None` or empty is a skill bug.
 
 ```python
 {
@@ -61,24 +58,17 @@ reapply the default, re-call the stakeholder lookup, or ask ([Hard rule
 
 ### Review-only fields (option grant) — never sent to the mutate
 
-Stamp these onto every resolved row alongside the row template above, for the review
-surfaces to render (`issuance-review/SKILL.md`'s Plan / Exercise periods / Documents
-columns) — they are **display-only** and must **never** appear in the `issue_securities` /
-`save_drafts` payload:
+Stamp these onto every resolved row for the review surfaces to render:
 
 | Key | Value |
 |---|---|
-| `plan_name` | the resolved option plan's `name` ([Option-plan reconciliation](../SKILL.md#option-plan-reconciliation-option-grant)) |
+| `plan_name` | the resolved option plan's `name` ([Option-plan reconciliation](engine.md#option-plan-reconciliation-option-grant)) |
 | `document_set_label` | the resolved document set's `name` ([Document-set resolution](#resolution-helpers-option-grant)) |
 | `exercise_periods_text` | one line summarizing the plan's six count+period pairs, tagged `(inherited from <plan name>)` ([Exercise-periods resolution](#resolution-helpers-option-grant)) |
 
 ---
 
 ## Resolution helpers (option grant)
-
-Option-grant-only resolution helpers. Vesting and Acceleration resolution are shared between
-both security types (different default posture per type) and stay in [SKILL.md § Shared
-resolution helpers](../SKILL.md#shared-resolution-helpers).
 
 ### Exercise-periods resolution
 
@@ -90,18 +80,14 @@ render it without recomputing it.
 
 ### Document-set resolution
 
-The zero-templates stop lives in [SKILL.md § Account-setup gate (option grant and
-PIU)](../SKILL.md#account-setup-gate-option-grant-and-piu), which runs on **both** adapters in
-Phase 0.5 immediately after `issuance_init` returns, before any surface is built, reading
-`document_sets.count` under its own section name. This helper, like every section in [SKILL.md §
-Shared resolution helpers](../SKILL.md#shared-resolution-helpers), is a fallback that runs only
-when the collection surface didn't already resolve the field — never pre-emptively, on either
-path. By the time it runs the gate has passed, so the list holds at least one entry: **don't
-re-check the count here, and don't re-issue `cap_table:get:document_sets` for data the gate
-already holds.** Stopping over any *other* section's count is the real incident this file used
-to warn about — a run read `acceleration_templates`' `count: 0` as this section's and aborted a
-valid issuance when `document_sets` had returned `count: 1`
-([incidents.md § Reading server data wrong](incidents.md#reading-server-data-wrong)).
+A fallback, like every [shared resolution helper](engine.md#shared-resolution-helpers) — it
+runs only when the collection surface didn't already resolve the field, never pre-emptively,
+on either adapter. The zero-templates stop already ran in Phase 0.5's [account-setup
+gate](engine.md#account-setup-gate-option-grant-and-piu), so by now the list holds at least
+one entry: **don't re-check the count here, and don't re-issue `cap_table:get:document_sets`
+for data the gate already holds.** Reading some *other* section's zero as this one's is the
+incident behind that gate ([incidents.md § Reading server data
+wrong](incidents.md#reading-server-data-wrong)).
 
 Use the `document_sets` list the gate validated — init's section, or the gate's fallback fetch
 when init named the section in `errors`. One → default silently, stamp `document_set_id`, tag
@@ -109,7 +95,7 @@ when init named the section in `errors`. One → default silently, stamp `docume
 **Never emit** `form_of_option_doc` / `form_of_exercise_doc` / `equity_incentive_plan_doc` /
 `attachments_uuid` — the server populates them from `document_set_id`. Also stamp the chosen
 set's `name` onto every row as `document_set_label` ([Review-only
-fields](#review-only-fields-option-grant--never-sent-to-the-mutate)) — never sent to the mutate.
+fields](#review-only-fields-option-grant--never-sent-to-the-mutate)).
 
 ### Board approval resolution
 

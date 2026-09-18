@@ -1,13 +1,14 @@
 # The Code adapter — side-panel artifact flow
 
 How `carta-issuance` collects input and confirmation on a **live side panel**. This is the
-single source of truth for the rendering machinery; the SKILL.md phases name *what* each
+single source of truth for the rendering machinery; the engine.md phases name *what* each
 surface shows and point here for *how* to open it.
 
 **Read this only on the Code path** — i.e. when
-[Phase 0 Step 1](../SKILL.md#step-1--detect-the-environment-from-the-tool-surface) found
-`preview_start` in the tool surface. In Cowork (~95% of usage) none of this applies; read
-[cowork-adapter.md](cowork-adapter.md) instead. Read it once before opening the first panel.
+[Pick the surface](../SKILL.md#pick-the-surface) found a tool
+whose name **ends in** `preview_start`, bare or prefixed. In Cowork (~95% of usage) none of
+this applies; read [cowork-adapter.md](cowork-adapter.md) instead. Read it once before opening
+the first panel.
 
 This file implements the Code adapter's three capabilities: `collectConfig` (the config
 panel, §2), `showReview` (the review panel, §2), and `confirm` (the panel's own button, §3–4).
@@ -16,7 +17,7 @@ panel, §2), `showReview` (the review panel, §2), and `confirm` (the panel's ow
 
 | # | Surface | Phase | Collects | Button → action |
 |---|---|---|---|---|
-| 1 | **issuance-config** | 0.5 → [1.5](../SKILL.md#phase-15--save--validate-before-review-or-save-only) | one full key-value block per stakeholder — every field, per person | **Review** → `config_submit` (saves + validates, Phase 1.5) · **Save** → `save_only` (saves only) |
+| 1 | **issuance-config** | 0.5 → [1.5](engine.md#phase-15--save--validate-before-review-or-save-only) | one full key-value block per stakeholder — every field, per person | **Review** → `config_submit` (saves + validates, Phase 1.5) · **Save** → `save_only` (saves only) |
 | 2 | **issuance-review** | 2 | read-only summary of the already-saved-and-validated drafts (nothing editable here) | **Confirm & Issue** → `submit` · **Back to edit** → `back_to_edit` |
 
 Both use the same three mechanics below: pick the surface, render it, wake on submit.
@@ -26,8 +27,9 @@ Both use the same three mechanics below: pick the surface, render it, wake on su
 ## 1. You are already on this path
 
 Surface selection happened in
-[Phase 0 Step 1](../SKILL.md#step-1--detect-the-environment-from-the-tool-surface):
-`preview_start` present → Code adapter (this file). If you are reading this file, the side
+[Pick the surface](../SKILL.md#pick-the-surface): a tool
+ending in `preview_start` → Code adapter (this file). Every bare `preview_*` name below means
+the resolved, possibly prefixed name in your tool list. If you are reading this file, the side
 panel **is** the surface for both Phase 0.5 and Phase 2 — there is nothing further to pick,
 probe, or degrade.
 
@@ -36,14 +38,14 @@ probe, or degrade.
 `RENDERER_MISSING` in Cowork (costing a round trip to learn what the tool list already
 said), and in Code it re-derived a fact `preview_start`'s presence already establishes.
 
-**Do not fall back to chat from here.** Once `preview_start` is present, the panel path is
-the path. "The panel might not work here," "this looks chat-only," "Bash may not be
+**Do not fall back to chat from here.** Once a `preview_start` tool is present, the panel path
+is the path. "The panel might not work here," "this looks chat-only," "Bash may not be
 available" — none of these are grounds to abandon the adapter mid-run; each has, for real,
 been used to justify skipping a working panel. If a panel genuinely fails to render, that is
 an error to surface, not a signal to silently re-collect everything via `AskUserQuestion`.
 
 `render-panel` needs the `artifact-manager` plugin, which is separate and could in principle
-be absent even when `preview_start` is present. If invoking `artifact-manager:render-panel`
+be absent even when a `preview_start` tool is. If invoking `artifact-manager:render-panel`
 errors because the sub-skill isn't installed, say so plainly and stop — do not improvise a
 degraded surface:
 
@@ -143,7 +145,7 @@ full shapes in the [config](../issuance-config/SKILL.md) and
 **The watcher is one-shot** — by the time you read the file it has already exited, so an
 `AskUserQuestion` in a *later* recovery loop is safe (there is no wake left to block). A signal
 you haven't branched on yet is never "stale" — every click overwrites the file and re-signals,
-so treat each wake as real and branch on it directly (SKILL.md Phase 3); asking the user to
+so treat each wake as real and branch on it directly (Phase 3 — issue-and-close.md); asking the user to
 confirm their own click already happened both violates §4 below and is what once made a
 Continue click look like it silently did nothing.
 
@@ -178,9 +180,12 @@ review gate.
 - **The panel cannot reliably close itself.** `window.close()` is blocked for a
   host-opened webview and there is no preview-close tool, so on submit the panel shows
   an honest "Sent to Claude — follow the rest in the chat" hand-off with a **Done**
-  button the user dismisses. A best-effort `preview_eval` `window.close()` on the
-  panel's `serverId` is fine (a silent no-op if blocked) but **don't claim it closed
-  or wait on it** — proceed straight to the next step.
+  button the user dismisses. A best-effort `window.close()` is fine (a silent
+  no-op if blocked) — `preview_eval` on the panel's `serverId`, or `javascript_tool`
+  with `action: "javascript_exec"` and the panel's `tabId` where the host ships that
+  family instead. The two take different identifiers, so pass the one belonging to
+  the tool that answered. **Don't claim it closed or wait on it** — proceed straight
+  to the next step.
 - **A config panel's server may linger and be reused next session.** Known
   render-panel limitation; not something to block on.
 - **The panel does not poll for progress** — Claude reports the mutate result in chat.

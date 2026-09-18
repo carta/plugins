@@ -16,7 +16,8 @@ from __future__ import annotations
 import html
 import json
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
 
 # ── Jurisdiction → so_type buttons (carta-issuance Picklists). Primary first. ──
 JURISDICTION_SO_TYPES = {
@@ -156,16 +157,25 @@ def _unwrap(obj: Any) -> Any:
     return obj
 
 
+_RESULT_LIST_KEYS = ("results", "stakeholders")
+
+
+def _result_list(raw: Any) -> Optional[List[Any]]:
+    """The payload's underlying list, or None when it holds no list at all.
+
+    An empty list and a payload that never had one are different failures, and only
+    the caller knows which of them is worth refusing over.
+    """
+    data = _unwrap(raw)
+    for key in _RESULT_LIST_KEYS:
+        if isinstance(data, dict) and key in data:
+            data = data[key]
+    return data if isinstance(data, list) else None
+
+
 def results(raw: Any) -> List[Dict[str, Any]]:
     """Unwrap an MCP payload and return its list of result dicts."""
-    data = _unwrap(raw)
-    if isinstance(data, dict) and "results" in data:
-        data = data["results"]
-    if isinstance(data, dict) and "stakeholders" in data:
-        data = data["stakeholders"]
-    if not isinstance(data, list):
-        return []
-    return [d for d in data if isinstance(d, dict)]
+    return [d for d in (_result_list(raw) or []) if isinstance(d, dict)]
 
 
 def esc(s: Any) -> str:
@@ -519,8 +529,13 @@ def build_docsets(sets: List[Dict[str, Any]], preferred_id: Optional[str] = None
 def default_share_class_prefix(classes: List[Dict[str, Any]],
                                prefill_prefix: Optional[str]) -> Optional[str]:
     """The prefix `build_share_classes` pre-selects: the named class, else the
-    sole class, else the last one (the fetched list carries no creation
-    timestamp, so last by ascending `id` is the best proxy for newest).
+    sole class, else nothing.
+
+    Nothing, deliberately, when several classes exist and none was named. Which
+    class a holder lands in sets their liquidation preference, their price and
+    their economics, so picking one for them hides the decision the field exists
+    to ask. An unselected required field is visible friction; a wrong default is
+    an invisible error.
 
     Shared so a gate asking "which class is selected" cannot disagree with the
     buttons."""
@@ -528,7 +543,7 @@ def default_share_class_prefix(classes: List[Dict[str, Any]],
         return prefill_prefix
     if len(classes) == 1:
         return str(classes[0].get("prefix", ""))
-    return str(classes[-1].get("prefix", "")) if classes else None
+    return None
 
 
 def build_share_classes(classes: List[Dict[str, Any]], prefill_prefix: Optional[str],
@@ -1368,13 +1383,16 @@ def _piu_block_rows(
         notes=(notes.pop("vesting_template_id", None) or [])
               + (notes.pop("vesting_start_date", None) or []) or None,
     ))
-    rows_html.append(kv_row(
-        "Documents",
-        f'<div class="toggle-row wrap">'
-        f'{build_docsets(doc_sets, row.get("document_set_id"), "document_set_id" in unresolved)}</div>',
-        sectype="piu",
-        notes=notes.pop("document_set_id", None),
-    ))
+    # Zero PIU document sets is a soft gate, so the surface still opens. Omit the
+    # row rather than render an empty control; any note falls to the block banner.
+    if doc_sets:
+        rows_html.append(kv_row(
+            "Documents",
+            f'<div class="toggle-row wrap">'
+            f'{build_docsets(doc_sets, row.get("document_set_id"), "document_set_id" in unresolved)}</div>',
+            sectype="piu",
+            notes=notes.pop("document_set_id", None),
+        ))
     ci_row = corresponding_interest_row(
         classes, preferred_prefix, row.get("corresponding_interest"),
         notes.pop("corresponding_interest", None),
@@ -1383,6 +1401,20 @@ def _piu_block_rows(
         rows_html.append(ci_row)
     rows_html.append(advanced_accordion_piu(row, accel_templates, no_vesting_piu, notes))
     return rows_html
+
+
+def piu_term_rows(data: Dict[str, Any], knowns: Dict[str, Any]) -> List[str]:
+    """The PIU term rows for the Cowork batch's shared-terms scope.
+
+    Batch mode renders the terms once for the whole batch, so there is no row to
+    read from — but the rows themselves are the ones a per-row block gets. Going
+    through the same builder is what stops the two modes drifting: a hand-rolled
+    copy is how the unit class came to be pre-selected on one surface only.
+    """
+    return _piu_block_rows(
+        {}, data, knowns, {}, set(),
+        esc(knowns.get("currency", "")), knowns.get("today_iso", ""),
+    )
 
 
 # Dispatched, not if/else-d: an unrecognised type must raise rather than fall
@@ -1532,3 +1564,27 @@ def build_stakeholder_list(stakeholders: List[Dict[str, Any]]) -> str:
     return (
         dumped.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
     )
+
+
+def load_stakeholder_roster(
+    data: Dict[str, Any], path: Optional[Union[str, Path]] = None
+) -> List[Dict[str, Any]]:
+    """Roster rows for both surfaces: from ``path`` when given, from
+    ``data["stakeholders"]`` otherwise.
+
+    A company roster runs to tens of KB, so having the model retype one into
+    ``--data`` spends minutes producing output tokens; pointing at the file the
+    producer already wrote costs nothing.
+    """
+    if path is None:
+        return results(data.get("stakeholders") if isinstance(data, dict) else None)
+    try:
+        raw = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise BuildError(f"could not read/parse {path}: {exc}") from exc
+    if _result_list(raw) is None:
+        raise BuildError(
+            f"{path} holds no stakeholder list: expected a JSON array, or an object "
+            "with a `results` or `stakeholders` key"
+        )
+    return results(raw)

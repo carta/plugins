@@ -8,7 +8,7 @@ This is the **final mutate** contract — unchanged by the config panel's per-st
 block structure (every field below, unchanged). The *panel-side* `config_submit` payload is
 a different, earlier-stage contract where every field lives inside each row (see
 [issuance-config/SKILL.md](../issuance-config/SKILL.md#payload-delivered-on-submit)) —
-don't confuse the two when reading `carta-issuance/SKILL.md`'s Phase 0.5/1.
+don't confuse the two when reading `carta-issuance/references/engine.md`'s Phase 0.5/1.
 
 Contents: [Common fields](#common-fields-all-flows) ·
 [Certificate-only](#certificate-only-fields) · [Option-grant-only](#option-grant-only-fields) ·
@@ -321,8 +321,8 @@ never came back.
 
 - **`validate_drafts` timeout** — retry with `draft_set_id` only, no `drafts` (the
   `draft_set_id`-only path — see [Run the issue securities
-  mutate](../SKILL.md#run-the-issue-securities-mutate) and [Validate without
-  issuing](../SKILL.md#validate-without-issuing)). The rows are already saved server-side
+  mutate](issue-and-close.md#run-the-issue-securities-mutate) and [Validate without
+  issuing](engine.md#validate-without-issuing)). The rows are already saved server-side
   from the preceding `save_drafts` call in this same phase, so re-sending them isn't
   necessary and the smaller payload is also less likely to time out again. Never fall back
   to re-sending the full `drafts` array on a `validate_drafts` retry — that's strictly more
@@ -334,7 +334,7 @@ never came back.
   `draft_pk` update in place instead of creating a duplicate row. Rows that never got a
   `draft_pk` (this is their first save) go in the retry with their full payload, unchanged.
   Never retry a timed-out `save_drafts` by omitting `draft_set_id` — that mints a **second**
-  draft set with the same rows (Hard rule 4), doubling the draft clutter on the corp.
+  draft set with the same rows (SKILL.md hard rule 3), doubling the draft clutter on the corp.
 - **`issue_securities` timeout** — the highest-stakes case: the mutate may have already
   issued live securities before the response was lost. **Never blindly re-call
   `issue_securities`** on a timeout — check the draft set's real state first via
@@ -343,7 +343,7 @@ never came back.
   certificates/grants), the call succeeded despite the timeout — report success, don't
   re-issue. If the rows are still in draft state, the call never completed server-side —
   safe to retry `issue_securities` with the same `draft_set_id` and each row's `draft_pk`,
-  same as any other retry (Hard rule 4). This check is a mandatory gate before any
+  same as any other retry (SKILL.md hard rule 3). This check is a mandatory gate before any
   post-timeout `issue_securities` retry, not an optional precaution — issuing the same
   batch twice creates duplicate live securities with no automatic undo.
 
@@ -362,6 +362,6 @@ never came back.
 | Fund-structure block is server-detected, never predicted | Only carta-web knows whether a holder matches the firm's fund structure, so don't guess and don't pre-prompt. Let `validate_drafts` raise the critical `fundStructure` error, then recover in place — see [fund-structure recovery](#recovering-a-fund-structure-block). Only `true` clears it; a `false` persists but stays blocked. |
 | PIU plan is per row and optional | `option_plan` decides which ceiling the server checks: set → the plan's pool (`DraftPIUEquityPlanAvailableQuantityValidator`); empty → the unit class's authorized total (`DraftPIUShareClassAvailableQuantityValidator`). A plan whose share class differs from the row's `prefix` is rejected with *"Equity plan share class must match the selected share class"*. `equity_plan_id` is **never** sent for a PIU — the plan is a row field. |
 | A PIU plan the issuer doesn't own is silently blanked | `save_drafts` clears an `option_plan` belonging to another corporation instead of erroring (`SaveDraftTaskRunnerV2._validate_option_plan_ownership`). An empty plan on a reloaded draft after a save that set one means the plan wasn't theirs — say so; don't re-send it. |
-| PIU document requirements are corp-property-gated | The grant agreement is required only when the issuer's properties demand it, and the equity incentive plan document only on a plan-issued row. Neither property is readable from any MCP command, so the server is authoritative — the [account-setup gate](../SKILL.md#account-setup-gate-option-grant-and-piu) is deliberately soft here. |
-| A PIU's `threshold_value` is a `CharField` on the draft, a `DecimalField(default=0)` on the issued security | An empty draft threshold becomes `0` at issue rather than erroring, so a missing threshold issues a unit that shares in **all** value. That is why it is an `always` field for the pre-save assertion (Hard rule 9), not merely a validated one. |
+| PIU document requirements are corp-property-gated | The grant agreement is required only when the issuer's properties demand it, and the equity incentive plan document only on a plan-issued row. Neither property is readable from any MCP command, so the server is authoritative — the [account-setup gate](engine.md#account-setup-gate-option-grant-and-piu) is deliberately soft here. |
+| A PIU's `threshold_value` is a `CharField` on the draft, a `DecimalField(default=0)` on the issued security | An empty draft threshold becomes `0` at issue rather than erroring, so a missing threshold issues a unit that shares in **all** value. That is why it is an `always` field for the pre-save assertion (engine rule 4), not merely a validated one. |
 | `law_firm_price = 0` is LLC-only | A `0` price per share validates only for LLC corporations; non-LLC corps are rejected at the validate/issue step with *"Value must be greater than 0"*. Don't pre-block `0` for LLC issuers (alongside ZEPO option grants). Server-gated by the `LLCCW_SUPPORT_ZERO_LAW_FIRM_PRICE_LLC` flag, so treat the server as the source of truth — surface its message verbatim if a non-LLC `0` is rejected. |

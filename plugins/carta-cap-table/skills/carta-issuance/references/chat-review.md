@@ -2,7 +2,7 @@
 
 The **Cowork adapter's** `showReview` content spec — printed as markdown, then confirmed
 with one `AskUserQuestion` ([cowork-adapter.md §2–3](cowork-adapter.md#2-showreview--chat-markdown)).
-Referenced from [SKILL.md Phase 2](../SKILL.md#phase-2--render-the-review-surface-mandatory-pre-save-gate).
+Referenced from [issue-and-close.md § Phase 2](issue-and-close.md#phase-2--render-the-review-surface-mandatory-pre-save-gate).
 The Code adapter renders its panel instead and does not use this file.
 
 Render **every** always-render column when there's no richer surface to lean on;
@@ -10,14 +10,10 @@ defaulted/autofilled/looked-up values appear too, each with a `(default)` /
 `(autofill — <so_type> rule)` / `(from existing record)` tag, never a hidden column (the
 customer consents to defaults too). All date columns in `MM/DD/YYYY`.
 
-**The Code panel's `DETAIL_TABLE` is a deliberately shorter recap, not this same list** — design
-feedback trimmed it to the fields worth a quick per-row scan (see
-[issuance-review/SKILL.md](../issuance-review/SKILL.md#block-detail_table) for the exact
-columns). The panel doesn't lose the dropped fields: Plan and Currency are stated once in the
-header subheading / KPI strip instead of repeating per row, and Relationship / Stakeholder
-type / Exemption / Documents / Exercise periods were already shown and confirmed one screen
-earlier in the config panel — "Back to edit" revisits them. The chat review has no header or
-KPI strip, so it keeps the full list below.
+The chat review has no header bar or KPI strip to carry batch-level values, and no earlier
+screen the user can go back to, so it keeps the **full** list below. (The Code panel's
+`DETAIL_TABLE` is a deliberately shorter recap for exactly those reasons —
+[issuance-review/SKILL.md](../issuance-review/SKILL.md#block-detail_table).)
 
 - **Certificate — always (13):** Stakeholder · Type · Email · Relationship · Share class
   (prefix) · Quantity · Price/share · Board approval · Issue date · Rule 144 date · Build
@@ -66,9 +62,9 @@ forbidden otherwise); Threshold value type (`Unit` states the threshold for each
 directly from the unit class, so the unit class's own authorized total is the ceiling rather
 than a plan pool).
 
-**Confirm** — one `AskUserQuestion`: `"Issue N \<type\> now"` → issue · `"Save as draft"` →
-save · `"Edit a row"` → re-collect, re-present · `"Cancel"` → stop. Free-text affirmatives
-(*"yes"*, *"go"*) map to **Issue now**.
+**Confirm** — hand straight off to
+[cowork-adapter.md §3](cowork-adapter.md#3-confirm--one-askuserquestion), which carries the one
+`AskUserQuestion` and its four options.
 
 ---
 
@@ -79,7 +75,7 @@ uniform batch: 30 grantees at the same terms produces ~300 lines of near-duplica
 When every row genuinely shares the same terms, collapse the review instead of repeating
 them per person.
 
-**When to compress.** After [Phase 1.5](../SKILL.md#phase-15--save--validate-before-review-or-save-only)
+**When to compress.** After [Phase 1.5](engine.md#phase-15--save--validate-before-review-or-save-only)
 saves and validates the batch, compare every row's non-personal terms:
 
 - **Option grant** — `exercise_price`, `issue_date`, `vesting_template`, `document_set_id`,

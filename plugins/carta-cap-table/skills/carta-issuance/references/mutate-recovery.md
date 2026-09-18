@@ -1,20 +1,23 @@
 # Mutate recovery
 
 What to do when a mutate comes back short-circuited. Read this when
-[Run the issue securities mutate](../SKILL.md#run-the-issue-securities-mutate)'s response
+[Run the issue securities mutate](issue-and-close.md#run-the-issue-securities-mutate)'s response
 table sends you here — not on a clean success.
 
 Two rules govern every branch below:
 
 - **Surface server messages verbatim.** The server is the source of truth; don't mirror or
-  paraphrase its validation ([Hard rule 5](../SKILL.md#hard-rules)).
-- **Every re-call carries `draft_set_id` and each row's `draft_pk`** ([Hard rule
-  4](../SKILL.md#hard-rules)). Omitting `draft_set_id` mints a second draft set; omitting
-  `draft_pk` inserts a new row instead of updating.
+  paraphrase its validation ([hard rule 4](../SKILL.md#hard-rules)).
+- **Every re-call carries `draft_set_id` and each row's `draft_pk`** ([hard rule
+  3](../SKILL.md#hard-rules)). Omitting `draft_set_id` mints a second draft set; omitting
+  `draft_pk` inserts a new row instead of updating. `save_drafts` patches, so a row of
+  `draft_pk` plus the fields you mean to change keeps the rest — resending every required
+  field is belt-and-braces, not required. Check the response's `cleared_fields` for anything
+  a save emptied.
 - **Send only the rows you actually changed.** Recovery is the case where a `drafts` payload is
   right — you are editing values, so they must go back. Rows you did not touch are already
-  correct on the server; resending them re-opens the divergence [Hard rule
-  11](../SKILL.md#hard-rules) exists to close. Once the set is clean, the issue re-call needs no
+  correct on the server; resending them re-opens the divergence [hard rule
+  6](../SKILL.md#hard-rules) exists to close. Once the set is clean, the issue re-call needs no
   rows at all.
 
 ---
@@ -29,8 +32,8 @@ Find the missing value in this order, and stop at the first that applies:
    `email`, `stakeholder_kind`, `stakeholder_id` from the record.
 3. `AskUserQuestion` for that field.
 
-Never scrape a value from another grant or certificate ([Hard rule
-8](../SKILL.md#hard-rules)). Then re-call `issue_securities` with the same `draft_set_id` and
+Never scrape a value from another grant or certificate ([engine rule
+3](engine.md#engine-hard-rules)). Then re-call `issue_securities` with the same `draft_set_id` and
 each `draft_pk`.
 
 **Canonical rewrite.** The server's *"Email may be from the company's domain"* becomes:
@@ -47,7 +50,7 @@ There is no Carta UI for this — it only happens here.
 `"Resolve individually"`. Batch the answer into **one** call:
 
 ```
-mcp__carta__mutate({"command": "cap_table:mutate:resolve_duplicate_stakeholder", "params": {
+mcp__carta__call_tool({"name": "cap_table__mutate__resolve_duplicate_stakeholder", "arguments": {
   "security_type": "<certificate|option_grant|piu>", "draft_set_id": <draft_set_id>,
   "drafts": [{"id": <draft_pk>, "stakeholder_id": <stakeholder_id>},   # merge into existing
              {"id": <draft_pk>}]}})                                    # create as new

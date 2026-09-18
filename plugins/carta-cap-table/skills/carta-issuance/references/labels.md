@@ -1,7 +1,7 @@
 # Customer-facing labels
 
 The exception list for the mechanical humanization rule in
-[SKILL.md § Voice & defaults](../SKILL.md#voice--defaults). Read it when rendering a review, a
+[engine.md § Voice & defaults](engine.md#voice--defaults). Read it when rendering a review, a
 confirmation, or a server error back to the user.
 
 The default rule handles most fields: `_` → space, Title Case. These are the ones where that

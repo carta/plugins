@@ -1,10 +1,9 @@
 # Certificate-only fields
 
-Certificate-specific reconciliation, resolution, and row-template detail. Read this file
-only when `security_type = certificate` (resolved in [SKILL.md § Resolve
-security_type](../SKILL.md#resolve-security_type)). The option-grant equivalents (vesting,
-acceleration, exercise periods, document sets, board approval) are shared or option-grant-only
-and stay in [SKILL.md § Shared resolution helpers](../SKILL.md#shared-resolution-helpers).
+Read this file only when `security_type = certificate`, resolved in [SKILL.md § Resolve
+security_type](../SKILL.md#resolve-security_type). Vesting and acceleration are shared with the
+other two types and stay in [engine.md § Shared resolution
+helpers](engine.md#shared-resolution-helpers).
 
 ---
 
@@ -12,7 +11,7 @@ and stay in [SKILL.md § Shared resolution helpers](../SKILL.md#shared-resolutio
 
 Use the `certificate_share_classes` section from the Phase 0.5 `issuance_init` payload — no
 separate call (fall back to
-`mcp__carta__fetch({"command": "cap_table:get:certificate_share_classes", "params": {"corporation_id": <id>}})`
+`mcp__carta__call_tool({"name": "cap_table__get__certificate_share_classes", "arguments": {"corporation_id": <id>}})`
 only if init named it in `errors`).
 
 Each result has `id`, `name`, `prefix`, `authorized`, `outstanding`, `available`
@@ -24,12 +23,21 @@ unmatched names, build one table (User-supplied / Suggested match / Confidence) 
 **once**: `"Accept suggested mappings"` / `"Map manually"` / `"Skip unmatched rows"` —
 never per-row.
 
-**No class named or implied → default to the most recently created one.** The response
-carries no creation timestamp, so `build_config.py` uses the **last** entry in `results` as
-the proxy for "latest" (every corp's response observed so far returns classes in ascending
-`id` order, which is ascending creation order). Pass `knowns.share_class_prefix` only when the
-prompt actually named or implied a class — omitting it is how the script's own default
-applies; don't compute "latest" yourself and pass it as if the user asked for it.
+**No class named or implied → the builders pre-select a class only when the corp has
+exactly one.** With two or more the control renders **required and unselected**, and
+`missingFields()` holds **Review** on `a share class` until a human picks. Nothing is ranked:
+which class a holder lands in sets their liquidation preference, their price and their
+economics, so a ranked default hides the decision the field exists to capture — and the
+response order is not dependable anyway. Metal corporation 7 returns its eight classes in
+neither `id` nor `created` order, so the last entry there is `PC` (Series C, created 2016)
+while the newest class is `PSB` (2019); "the last one" was never reliably "the latest one".
+
+Pass `knowns.share_class_prefix` only when the prompt actually named or implied a class.
+Omitting it is what leaves the control unselected; never pick a class yourself and pass it as
+if the user had asked for it.
+
+**A PIU follows the identical rule** under the name "unit class" — see [piu-fields.md §
+Unit-class reconciliation](piu-fields.md#unit-class-reconciliation).
 
 ---
 
@@ -72,9 +80,8 @@ set. Read `rule_144_reason` off the submitted row and stamp it as
 
 ## Certificate row
 
-Fill literally. Every slot must hold a value before review. `None`/empty → skill bug;
-reapply the default, re-call the stakeholder lookup, or ask ([Hard rule
-9](../SKILL.md#hard-rules)).
+Fill literally, under [engine.md § Row templates](engine.md#row-templates)'s rule: every slot
+holds a value before review, and a `None` or empty is a skill bug.
 
 ```python
 {
@@ -107,9 +114,7 @@ reapply the default, re-call the stakeholder lookup, or ask ([Hard rule
 
 ### Review-only fields (certificate) — never sent to the mutate
 
-Stamp this onto every resolved row alongside the row template above, for the review surface
-to render — **display-only**, must **never** appear in the `issue_securities` / `save_drafts`
-payload:
+Stamp this onto every resolved row for the review surface to render:
 
 | Key | Value |
 |---|---|

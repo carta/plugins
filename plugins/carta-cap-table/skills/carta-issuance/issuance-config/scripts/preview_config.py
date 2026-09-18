@@ -216,6 +216,10 @@ def _build_blocks(sectype: str, work: Path) -> dict:
     return blocks
 
 
+# Every type the builder accepts, so the default run previews all of them.
+SECURITY_TYPES = ("option_grant", "certificate", "piu")
+
+
 def render(sectype: str, out_dir: Path) -> Path:
     with tempfile.TemporaryDirectory() as td:
         blocks = _build_blocks(sectype, Path(td))
@@ -233,13 +237,13 @@ def render(sectype: str, out_dir: Path) -> Path:
 
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description="Preview the issuance-config panel with sample data.")
-    p.add_argument("--security-type", choices=["option_grant", "certificate", "piu"],
-                   help="Render just one type (default: both).")
+    p.add_argument("--security-type", choices=SECURITY_TYPES,
+                   help="Render just one type (default: all).")
     p.add_argument("--out-dir", type=Path, default=Path(tempfile.gettempdir()) / "issuance-preview")
     p.add_argument("--open", action="store_true", help="Open the rendered file(s) in a browser.")
     args = p.parse_args(argv)
 
-    types = [args.security_type] if args.security_type else ["option_grant", "certificate"]
+    types = [args.security_type] if args.security_type else list(SECURITY_TYPES)
     for t in types:
         out = render(t, args.out_dir)
         print(out)

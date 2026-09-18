@@ -1,57 +1,50 @@
 # Phase 1.5 — Save + validate before review (or save-only) detail
 
-Full mechanics for [SKILL.md § Phase
-1.5](../SKILL.md#phase-15--save--validate-before-review-or-save-only). Read this file once
+Full mechanics for [engine.md § Phase
+1.5](engine.md#phase-15--save--validate-before-review-or-save-only). Read this file once
 you've reached Phase 1.5 — i.e. immediately after Phase 1 resolves every row, for **both**
 config-panel footer buttons; Phase 1 itself runs identically regardless of which one fired.
 
-This phase exists because of a real incident: a user set an absurd quantity, clicked Review,
-reviewed an unvalidated summary, then only found out at the final **Confirm & Issue** that the
-server rejected it ("Not enough shares in the option plan") — after a draft row had already
-been silently created. `cap_table:mutate:validate_drafts` runs nearly the same
-field/integration-level checks `issue_securities` does (option-pool headroom, share-class
-headroom, custom-label uniqueness, vesting-template/share-class validity, issue-date/FMV
-checks, quantity precision, document-set requirement) — everything except one corp-level
-check (missing signatory) that only `issue_securities` itself can catch. It needs an
-existing `draft_set_id`, so validating early means saving early too.
+`cap_table:mutate:validate_drafts` runs nearly the same field/integration-level checks
+`issue_securities` does — option-pool headroom, share-class headroom, custom-label uniqueness,
+vesting-template/share-class validity, issue-date/FMV checks, quantity precision, document-set
+requirement — everything except the corp-level missing-signatory check that only
+`issue_securities` itself can catch. It needs an existing `draft_set_id`, so validating early
+means saving early too. The incident that put this before the review rather than after is in
+[incidents.md § Silent data loss](incidents.md#silent-data-loss).
 
 ## The assertion is not advisory
 
-[Hard rule 9](../SKILL.md#hard-rules)'s pre-save assertion runs before **both** branches below,
+[Engine rule 4](engine.md#engine-hard-rules)'s pre-save assertion runs before **both** branches below,
 and it either passes or it stops the call. `save_drafts` persisting a row is not evidence the
 row is complete — it accepts a missing `email` or `stakeholder_id` without complaint, and the
-gap only surfaces later as a validation failure or, worse, as a stakeholder record created with
+gap surfaces later as a validation failure or, worse, as a stakeholder record created with
 nothing in it.
 
-So when an `always` field is missing and recovery (a) → (b) → (c) hasn't filled it:
+So when an `always` field is missing and recovery (a) → (b) → (c) hasn't filled it, **fix it,
+don't route around it**: ask for the value with `AskUserQuestion` and send the row once it is
+complete. **Never present the server's tolerance as a choice** — *"Carta will accept these rows
+but they'll fail validation"* is not an option to offer; a real run said exactly that about
+missing addresses and the user reasonably read it as permission to continue. **This is
+identical on both adapters**, whatever holds the draft state: two admins doing the same thing
+must not get different answers about whether an address is required.
 
-- **Fix it, don't route around it.** Ask for the value with `AskUserQuestion` and send the row
-  once it's complete.
-- **Never present the server's tolerance as a choice.** *"Carta will accept these rows but
-  they'll fail validation"* is not an option to offer — it describes the exact silent-corruption
-  path the assertion exists to prevent. A real run said this to a user about missing addresses;
-  the user reasonably read it as permission to continue.
-- **Apply it identically on both adapters.** The Code path has `_draft_state.json` and the
-  Cowork path has tracked context, but neither changes what counts as a complete row. Two
-  admins doing the same thing must not get different answers about whether an address is
-  required.
-
-`email` is the field this bites most often, because a name typed into the surface for a new
-stakeholder carries no address with it — but the rule is the whole `always` set, not one field.
+`email` bites most often, because a name typed into the surface for a new stakeholder carries
+no address with it — but the rule is the whole `always` set, not one field.
 
 Branch on the action from Phase 0.5:
 
 ## `action: "save_only"` (the **Save** button)
 
 1. Build the `drafts` array from the Phase-1-resolved rows ([Row
-   templates](../SKILL.md#row-templates) keys only — same construction as [Build the mutate
-   payload](../SKILL.md#build-the-mutate-payload-from-your-phase-1-resolved-rows), used again
+   templates](engine.md#row-templates) keys only — same construction as [Build the mutate
+   payload](engine.md#build-the-mutate-payload-from-your-phase-1-resolved-rows), used again
    one phase later for Confirm & Issue).
 2. Thread `draft_set_id` + each row's `draft_pk` from your [draft
    state](#draft-state-bookkeeping) if present — the file on Code, tracked context on Cowork
-   ([Hard rule 4](../SKILL.md#hard-rules)).
+   ([hard rule 3](../SKILL.md#hard-rules)).
 3. Call `cap_table:mutate:save_drafts` exactly as in [Save as draft
-   (escape hatch)](../SKILL.md#save-as-draft-escape-hatch) — **no `validate_drafts`**, by design.
+   (escape hatch)](engine.md#save-as-draft-escape-hatch) — **no `validate_drafts`**, by design.
 4. Record the returned `draft_set_id` + each row's `draft_pk` — into `_draft_state.json` on
    Code, into tracked context on Cowork.
 5. Report in **chat only** — no panel re-render. All rows saved → the existing success
@@ -62,11 +55,11 @@ Branch on the action from Phase 0.5:
 ## `action: "config_submit"` (the **Review** button) — save + validate
 
 1. Build the `drafts` array (same construction as above).
-2. Thread `draft_set_id` + `draft_pk`s from `_draft_state.json` ([Hard rule
-   4](../SKILL.md#hard-rules)).
+2. Thread `draft_set_id` + `draft_pk`s from `_draft_state.json` ([hard rule
+   3](../SKILL.md#hard-rules)).
 3. Call `save_drafts`, then, with the `draft_set_id` it returns (or already had):
    ```
-   mcp__carta__mutate({"command": "cap_table:mutate:validate_drafts", "params": {
+   mcp__carta__call_tool({"name": "cap_table__mutate__validate_drafts", "arguments": {
      "corporation_id": <id>, "security_type": "<certificate|option_grant|piu>",
      "draft_set_id": <id>}})
    ```
@@ -80,13 +73,13 @@ Branch on the action from Phase 0.5:
      `AskUserQuestion` triage into this retry loop, on top of the new error-banner
      mechanism, is scope this phase doesn't need.
    - **Clean** → proceed to [Phase
-     2](../SKILL.md#phase-2--render-the-review-surface-mandatory-pre-save-gate).
+     2](issue-and-close.md#phase-2--render-the-review-surface-mandatory-pre-save-gate).
      `DRAFT_SET_ID` is now always this real, just-returned id, never the literal `"new"`.
    - **Not clean** → [Re-render the config panel with server errors](#re-render-the-config-panel-with-server-errors).
 
 ## Translating server errors into `knowns`
 
-Use [SKILL.md § Voice & defaults](../SKILL.md#voice--defaults)'s translation table — never a
+Use [engine.md § Voice & defaults](engine.md#voice--defaults)'s translation table — never a
 raw snake_case field name in customer-facing text:
 
 - **Per-row `server_errors`** — for each numeric `draft_pk` key in `validation.errors` (or a
@@ -159,22 +152,18 @@ into `data-row-key`, carried through `config_submit`/`save_only`'s `rows[].row_k
   which desyncs position-based matching and threads the wrong `draft_pk` onto the wrong
   person. `row_key` is tied to the block's identity, not its position, so it survives
   adds/removes.
-- **Discard on a genuinely fresh batch.** `OUT_DIR` is keyed only by `corporation_id` and
-  persists indefinitely — a `_draft_state.json` already sitting there when Phase 0.5 renders
-  the config panel for a **new** user request (not a Phase 1.5 error-retry re-render, which
-  reuses the same in-progress batch) is a leftover from an unrelated earlier session on this
-  same corp, not this batch's own state. Delete it (or simply never read it) the moment Phase
-  0.5 opens a fresh config panel; only start trusting it once THIS batch's own Phase 1.5 has
-  written it at least once. Reading a stale file here would thread a stranger's already-saved
-  `draft_pk` onto this batch's rows (the positional `row_key`s `build_config.py` assigns —
-  `r0`, `r1`, … — repeat identically across unrelated batches) and, for a first-ever grant
-  save, wrongly skip sending `equity_plan_id` because the stale file's mere existence looks
-  like a retry.
+- **Discard on a genuinely fresh batch.** Phase 0.5 deletes this file before it opens a new
+  config panel ([code-adapter.md §1](code-adapter.md#1-config-panel-build_configpy-builds-every-block)),
+  so only start trusting it once THIS batch's own Phase 1.5 has written it at least once. A
+  leftover from an unrelated session on the same corp carries the same positional `r0`/`r1`
+  keys, so reading it threads a stranger's already-saved `draft_pk` onto these rows and, on a
+  first-ever grant save, wrongly skips `equity_plan_id` because the file's mere existence
+  looks like a retry.
 - Check `security_type` in the file against the current run's before trusting it — a
   mismatch means start fresh, same discipline as the point above, for the narrower case where
   the file exists but is for the other security type.
 - A `row_key` present in the file but absent from this submission (the user removed that
   block) — leave its `draft_pk` alone here; it surfaces at Phase 3 via [Cleanup unexpected
-  draft rows](../SKILL.md#cleanup-unexpected-draft-rows), not a second competing cleanup path.
+  draft rows](issue-and-close.md#cleanup-unexpected-draft-rows), not a second competing cleanup path.
 - `equity_plan_id` (option grant): include only when `_draft_state.json` doesn't exist yet
   (the true first save); omit on every retry (locked server-side after).

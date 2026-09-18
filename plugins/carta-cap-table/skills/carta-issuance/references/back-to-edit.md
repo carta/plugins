@@ -1,16 +1,22 @@
 # Back to edit — reconstructing the config panel
 
-Referenced from [code-adapter.md § Back to edit](code-adapter.md#back-to-edit). The user clicked
+Referenced from [code-adapter.md § Back to edit](code-adapter.md#back-to-edit). Every bare
+`preview_list` / `preview_eval` below means the resolved name [Pick the
+surface](../SKILL.md#pick-the-surface) resolved, prefix included — and on a host whose browser
+family ships `javascript_tool` instead of `preview_eval`, step 4's second branch is the live
+one.
+
+The user clicked
 **Back to edit** — no confirmation modal, since the review is read-only with nothing
 further to confirm before returning to edit (the rows were already saved by [Phase
-1.5](../SKILL.md#phase-15--save--validate-before-review-or-save-only)'s earlier
+1.5](engine.md#phase-15--save--validate-before-review-or-save-only)'s earlier
 save+validate step, but re-editing and saving again just updates those same rows in place,
 it doesn't create a second copy or lose anything). Re-open the config panel with every
 stakeholder block's **field values** restored as they left them: read
 `$OUT_DIR/_review_rows.json` (written before Phase 2 rendered) and map each resolved row back
 onto a `knowns.rows` entry — the inverse of [On submit — read each row's own
 fields](row-mapping.md). Reconstruct every key **from the
-resolved row's actual fields** (per [Row templates](../SKILL.md#row-templates)) — several need
+resolved row's actual fields** (per [Row templates](engine.md#row-templates)) — several need
 a derived value, not a straight copy, and getting this wrong silently corrupts data on the
 round-trip:
 
@@ -120,7 +126,7 @@ optional, omit when absent: `prefix_number`, `cash_paid`, `is_flexible_issue_dat
 `corresponding_interest`.
 
 **Attaching server errors (Phase 1.5 only).** When this same reconstruction is used for a
-[validation-error retry](../SKILL.md#phase-15--save--validate-before-review-or-save-only)
+[validation-error retry](engine.md#phase-15--save--validate-before-review-or-save-only)
 rather than a "Back to edit" click, two additional keys ride along, straight copy, same as
 `notes`: `row_key` (each row's own — carried through unchanged; **never** regenerate it or
 `build_stakeholder_blocks()`'s positional-fallback logic silently invents a fresh one, which
@@ -144,15 +150,26 @@ nothing. Navigating the visible tab instead is both fixable and more honest:
    rare, but possible), skip to the fallback below instead of inventing a port.
 3. Call `preview_list` again (or reuse the same result) for
    `name == "carta-cap-table-issuance-review-<CORP_ID>"` — the review panel, i.e. the tab the
-   user is actually looking at right now — and read **its** `serverId`.
-4. `preview_eval` with **the review panel's `serverId`** (not the config panel's):
+   user is actually looking at right now — and read **its** `serverId` and `tabId`.
+4. Navigate that tab, with whichever eval tool this host has — **the review panel's**
+   identifier, never the config panel's:
+   - `preview_eval` with the review panel's **`serverId`**, or
+   - `javascript_tool` with `action: "javascript_exec"` and the review panel's **`tabId`**,
+     the JavaScript in its `text` argument.
+
+   Either way the JavaScript is
    `window.location.href = 'http://localhost:<config_port>/<CORP_ID>_config.html'`.
+
+   **The two take different identifiers.** A `serverId` handed to `javascript_tool` addresses
+   no tab, and `preview_eval`/`serverId` are not expressible in the browser family at all —
+   `preview_start`'s `tabId` is what that one navigates by. Use the pair that belongs to the
+   tool that answered.
 
 This reuses the tab already in front of the user instead of silently touching a different,
 backgrounded one. Because the navigation genuinely happened in the visible tab, it's now
 accurate to tell the user *"I've switched your browser back to the config panel with your
-previous entries."* — not a "should have" claim, an observed one (the `preview_eval` call
-either succeeds or errors; only say it switched if the call actually returned success).
+previous entries."* — not a "should have" claim, an observed one (the eval call either
+succeeds or errors; only say it switched if the call actually returned success).
 
 **Fallback — the config panel's `preview_list` entry is missing:** its server process is
 gone, so there's nothing to navigate to. Re-open it the normal way

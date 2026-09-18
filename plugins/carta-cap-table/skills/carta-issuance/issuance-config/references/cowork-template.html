@@ -505,7 +505,7 @@
     const line = document.getElementById('summary-line');
     const noun = SEC_TYPE === 'option_grant' ? 'grantee' : 'holder';
     const setState = (ready, text, scope) => {
-      // Save gates on the same readiness as Review — Hard rule 9's pre-save
+      // Save gates on the same readiness as Review — engine rule 4's pre-save
       // assertion is not a weaker bar for the lighter button.
       blockedReason = ready ? '' : text;
       blockedScope = ready ? null : (scope || null);

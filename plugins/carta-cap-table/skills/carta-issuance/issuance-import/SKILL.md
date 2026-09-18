@@ -19,7 +19,7 @@ add a path around any gate. Phase 1 still resolves stakeholders, Phase 1.5 still
 saves and validates, Phase 2 still reviews, Phase 3 is still the only mutate.
 
 **Do not invoke this skill directly.** Dispatched by `carta-issuance`
-[Phase 0.25](../SKILL.md#phase-025--ingest-an-uploaded-file).
+[Phase 0.25](../references/engine.md#phase-025--ingest-an-uploaded-file).
 
 ## References
 
@@ -72,6 +72,142 @@ stdout is `KEY=value` lines (`IMPORT_KNOWNS`, `IMPORT_REPORT`, `ROW_COUNT`,
 `SECURITY_TYPE`). Exit 0 parsed, exit 2 nothing usable — the stderr line says
 which (`ERROR:` or `AMBIGUOUS:` plus `CANDIDATES=`).
 
+## Running the phase — step by step
+
+`carta-issuance` [Phase 0.25](../references/engine.md#phase-025--ingest-an-uploaded-file) hands you the
+whole ingest and expects `knowns.rows` back. These are its steps; nothing here is repeated in
+`SKILL.md`, so work through them in order and return to [Phase
+0.5](../references/engine.md#phase-05--configure-the-issuance) at the end.
+
+### Step 0 — Confirm you can actually run the parser
+
+The parser is a local script, so this phase needs `Bash(uv run *)`. **Check your own tool
+surface for Bash before promising an import** — it is present on the Code adapter and is not
+guaranteed on Cowork.
+
+No Bash → **do not hand-read the file.** Reading a workbook by eye is the failure this whole
+phase exists to prevent, and offering it as a fallback would make the parser's guarantees
+optional. Say so and route to the feature built for this:
+
+> *"I can't read spreadsheets in this session. Two options: import it directly in Carta's Drafts
+> UI, which takes this same template — or paste the rows here as text and I'll set them up."*
+
+Pasted-as-text rows are fine: they arrive in the prompt, so the ordinary prompt-driven flow
+handles them with the user's own values in plain sight. That is different in kind from silently
+parsing a binary nobody can see.
+
+### Step 1 — Locate the file
+
+Take the path straight from the prompt; a pasted `~/Downloads/…` path is the norm. Only if the
+user said "the attached file" with no path, list the likely directories (`ls -t ~/Downloads`,
+`~/Desktop`, the cwd) and look for a supported extension recently modified. Zero or several
+plausible matches → `AskUserQuestion` which one (allowed by engine rule 5's file carve-out).
+`Bash(find *)` is deliberately not granted to this skill — use `ls`.
+
+### Step 2 — Parse, before spending any round trip
+
+```bash
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-issuance/issuance-import/scripts/parse_upload.py" \
+  --file "<path>" --out-dir "$OUT_DIR"
+```
+
+This first run is deliberately **without** `--reference`: it costs nothing, and its output tells
+you the two things Phase 0.5's fetches need — the `security_type` and the names in the file. It
+prints `SECURITY_TYPE=`, `ROW_COUNT=`, and the paths it wrote.
+
+- **Exit 2 with `AMBIGUOUS:` + `CANDIDATES=[…]`** — the workbook has more than one importable
+  sheet. `AskUserQuestion` which, then re-run with `--sheet "<name>"`. **Never merge two
+  sheets into one batch** (carta-issuance hard rule 1) and never pick for the user.
+- **Exit 2 with `ERROR:`** — nothing usable. Surface the message verbatim and fall back to the
+  ordinary prompt-driven flow; do not guess at rows.
+
+**Reconcile `security_type` with the prompt.** File and prompt disagreeing is a real fork →
+`AskUserQuestion`. The file wins only when the prompt never said.
+
+### Step 3 — Fetch reference data (Phase 0.5's fetches, informed by the file)
+
+Run [Phase 0.5](../references/engine.md#phase-05--configure-the-issuance)'s fetches exactly as documented, with
+`issuance_init`'s `security_type` now supplied by the file. The roster half follows the adapter
+you selected in [Pick the surface](../SKILL.md#pick-the-surface):
+
+- **Cowork** — pass `stakeholder_names` covering **the names the file contains** rather than
+  the names the prompt named, which keeps the lookup bounded by the file's row count instead of
+  roster size. Pass the whole list at once; a 40-row sheet resolved through a concatenated
+  `search=` matches **nobody** and would create 40 duplicate stakeholders on a real cap table.
+- **Code** — no names, full roster, exactly as [engine.md's Step
+  1](../references/engine.md#step-1--what-the-surface-selection-changes-before-your-first-carta-call)
+  says. The file's names change
+  nothing here.
+
+**The [account-setup gate](../references/engine.md#account-setup-gate-option-grant-and-piu) still applies.** Having a
+parsed file in hand is not a reason to push past it: a corp with no option-grant document set
+cannot issue one, whether the rows came from a spreadsheet or from the prompt. Stop where the
+gate says to stop — the parsed rows cost nothing and the file is still there afterwards.
+
+### Step 4 — Re-run the parser to resolve names to ids
+
+```bash
+uv run "…/parse_upload.py" --file "<path>" [--sheet "<name>"] \
+  --reference "$OUT_DIR/_data.json" --out-dir "$OUT_DIR"
+```
+
+`--reference` is the same `_data.json` you just built for the surface's builder script. The
+parser matches the file's free text against it — vesting schedule, acceleration terms, share
+class (by name **or** prefix), legend (by code or name), document set, equity plan, and the
+roster — and writes `_import_knowns.json`. A cell matching nothing leaves its field **unset**
+with an `import_notes` entry; there is no fuzzy matching, and do not add any by hand.
+
+On Code the roster is in its own file rather than in `_data.json`, so the parser resolves
+everything except the roster pre-fill. Nothing is lost: the panel auto-fills email, stakeholder
+type and relationship from `STAKEHOLDER_LIST_JSON` on an exact name match, and Phase 1
+re-resolves all three authoritatively either way.
+
+### Step 5 — Merge into `knowns` and open the surface
+
+`_import_knowns.json` holds `{security_type, rows, equity_plan_id?, batch_errors?}`. Its `rows`
+**are** your `knowns.rows` — merge them in and continue into Phase 0.5 unchanged. The row count
+comes from the file, so engine rule 5's quantity-vs-headcount heuristic doesn't apply here (a
+40-row sheet is unambiguously 40 blocks). Carry `batch_errors` through to the surface's
+panel-level banner, and hold `equity_plan_id` for the first mutate only.
+
+Each row may carry `import_notes` — `[{field, raw_value, reason}]`, **display-only**. The
+surface must both **show every note against the field it names** and **render that field with
+nothing selected**, so its own readiness check blocks submission until the admin picks. A
+marker alone is ignorable; the blocked button is what actually prevents a silent wrong
+issuance. Both builder scripts do this for you straight from `row.import_notes` — put the notes
+on the rows in `knowns` and the form does the rest
+([cowork-adapter.md § Import markers](../references/cowork-adapter.md#import-markers-uploaded-file-rows),
+[code-adapter.md §0](../references/code-adapter.md#0-phase-overrides--what-differs-from-the-core)).
+
+**Strip `import_notes` before any mutate** — same discipline as the review-only fields
+([Build the mutate payload](../references/engine.md#build-the-mutate-payload-from-your-phase-1-resolved-rows)).
+The server rejects unknown keys.
+
+### Step 6 — Say what happened, in one line, before the surface opens
+
+Read `_import_report.json` and report totals — never silently drop a column or a row. A dropped
+`Exercise Price` column is a wrong-priced grant the user has no way to notice.
+
+> *"Read 38 rows from Q3-grants.xlsx. State of Residency and Employee ID aren't fields this
+> flow sets, and 3 values I couldn't match are flagged in the form — everything else is filled
+> in. Review and submit when ready."*
+
+**Name the skipped rows and the unmapped columns, not just their counts.** Rows this skill
+can't issue (RSUs, SARs, CBUs, warrants, RSAs, convertibles) are skipped by the parser with a
+reason and need the Drafts UI — an admin who thinks a 40-row sheet issued 40 securities when it
+issued 37 has been misled. `unmapped_columns` holds the headers this skill has no field for;
+several ([cowork-adapter.md](../references/cowork-adapter.md#fields) lists them) are dropped by
+design, and *"2 columns I couldn't map"* leaves an admin who deliberately filled one in
+believing it landed. Say which: *"State of Residency and Employee ID aren't fields this flow
+sets — add them on the stakeholder record in Carta."*
+
+### Documents (`.pdf` / `.docx`)
+
+Build the rows yourself per [Document mode](#document-mode-pdf--docx) below, then continue
+from Step 3.
+
+---
+
 ## Spreadsheet mode
 
 Deterministic end to end.
@@ -88,7 +224,7 @@ Deterministic end to end.
   tie it with the grant signals.
   Generic headers (`Quantity`, `Email`) are deliberately not signals.
 - **Multiple importable sheets** → `AmbiguousInput`, never a guess and never a
-  merge. A batch is one security type (carta-issuance Hard rule 2).
+  merge. A batch is one security type (carta-issuance hard rule 1).
 - **Values** — dates to `YYYY-MM-DD`; numbers stripped of thousands separators,
   currency symbols and parenthesised negatives; `Individual` / `Non Individual`
   to `INDIVIDUAL` / `NON-INDIVIDUAL` (**hyphen** — matches
@@ -117,6 +253,11 @@ something that issues.
 If the text comes back empty the file is a scan — the script exits 2 saying so.
 Route the admin to OCR it or type the values into the panel; never infer values
 from a filename.
+
+**Take only what the document states.** A grant agreement rarely names a vesting template by
+the company's own template name, so leave `vesting_template_id` unset rather than inferring it
+from prose like "vests monthly over four years" — that is the fuzzy match rule 1 forbids, done
+by hand.
 
 ## Row schema
 

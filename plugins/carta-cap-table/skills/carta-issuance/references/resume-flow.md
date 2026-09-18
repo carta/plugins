@@ -1,8 +1,8 @@
 # Resume flow detail
 
-Full mechanics for [SKILL.md § Resume an existing draft
-set](../SKILL.md#resume-an-existing-draft-set) and [SKILL.md § Cleanup unexpected draft
-rows](../SKILL.md#cleanup-unexpected-draft-rows). Read this file when the user asks to resume
+Full mechanics for [engine.md § Resume an existing draft
+set](engine.md#resume-an-existing-draft-set) and [issue-and-close.md § Cleanup unexpected draft
+rows](issue-and-close.md#cleanup-unexpected-draft-rows). Read this file when the user asks to resume
 an in-progress draft set (by id or name), or when `load_drafts` returns more rows than the
 skill is tracking.
 
@@ -17,13 +17,13 @@ Draft sets are scoped by `security_type` — always pass it.
   proceed; multiple → present a table + `AskUserQuestion`; zero → fall back to fresh input.
 
 Take returned rows as the working set; jump to the [Phase 2
-review](../SKILL.md#phase-2--render-the-review-surface-mandatory-pre-save-gate). The set's
+review](issue-and-close.md#phase-2--render-the-review-surface-mandatory-pre-save-gate). The set's
 `security_type` is locked once created — never ask to change it on resume. If `load_drafts`
 returns more rows than you're tracking, see [Cleanup unexpected draft rows](#cleanup-unexpected-draft-rows).
 
 **Keep the `draft_set_id` you resumed from.** The rows are already on the server, so unless the
 user edits them, Phase 3 issues with that id and no `drafts` payload
-([Hard rule 11](../SKILL.md#hard-rules)).
+([hard rule 6](../SKILL.md#hard-rules)).
 
 **Option grant — re-derive the review-only display fields.** `load_drafts` returns
 `equity_plan_id` (set-level) and `document_set_id` (per row) but never `plan_name` /

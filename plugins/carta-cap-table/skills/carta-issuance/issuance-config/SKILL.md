@@ -30,8 +30,8 @@ rows (not type-gated) inside every block.
 
 **Two footer buttons.** **Review** posts `action: "config_submit"` — the parent
 skill saves *and* validates (`save_drafts` + `validate_drafts`) before ever
-rendering the review surface ([carta-issuance SKILL.md's Phase
-1.5](../SKILL.md#phase-15--save--validate-before-review-or-save-only)); any
+rendering the review surface ([engine.md's Phase
+1.5](../references/engine.md#phase-15--save--validate-before-review-or-save-only)); any
 server error re-renders this same panel with a banner (see [Server-error
 banners](#server-error-banners), below), never silently moves on. **Save**
 posts `action: "save_only"` — a lighter escape hatch, `save_drafts` only, no
@@ -135,7 +135,7 @@ below document what the script produces (and what a reviewer should expect) for
 **each** stakeholder block. Each button carries the attributes the template's JS
 reads, and the row's own default is marked `selected` (falling back to the
 batch-level `knowns` default when the row didn't specify its own value — see
-[carta-issuance SKILL.md](../SKILL.md#phase-05--configure-the-issuance)). The
+[carta-issuance engine.md](../references/engine.md#phase-05--configure-the-issuance)). The
 **No vesting** (grant) option is part of the script's output too.
 
 | Group | Per-button HTML |
@@ -147,7 +147,7 @@ batch-level `knowns` default when the row didn't specify its own value — see
 | HMRC notified | Grant-only. A checkbox (`.block-hmrc-notified`, bound to `is_hmrc_notified`) + date input (`.block-hmrc-notified-date`, bound to `hmrc_notified`), tagged `data-conditional="so_type_emi"` — shown only when the row's `so_type` is `EMI`, hidden (and omitted from the submit payload) otherwise. `pickType()` toggles this row when the type selection changes. |
 | ATO notified | Grant-only. A checkbox (`.block-ato-notified`, bound to `is_ato_notified`), tagged `data-conditional="so_type_au"` — shown only when `so_type` is `Startup Concessions`/`Non-Concessional`/`ZEPO`, hidden (and omitted) otherwise. |
 | Employment related | Grant-only, `required`. A Yes/No toggle pair (`data-group="employment-related"`, bound to `employment_related`), tagged `data-conditional="so_type_employment_related"` — shown only when `so_type` is `Unapproved`, hidden (and omitted) otherwise. A **tri-state**, unlike the two checkboxes above: neither button starts selected, and `collectBlocks()` sends `null` while none is picked, so an unanswered designation stays distinguishable from an explicit "No". This is what `validate_drafts` rejects — collecting it here is the whole point, since the failure would otherwise land after the draft set already exists. |
-| Share class | `<button class="toggle[ selected]" data-group="shareclass" data-value="<prefix>" data-label="<class name>" onclick="pick(this)">(<prefix>) <class name></button>` — one per share class (button text carries the prefix, e.g. `(CS) Common`, so the user can tell classes apart without decoding it themselves; `data-label` stays the bare name). `selected` on the prompt-named/row's-own class; else the only class when there's just one; else the **last** class in the fetched list (proxy for "most recently created" — no creation timestamp in the response, see [certificate-fields.md's Share-class reconciliation](../references/certificate-fields.md#share-class-reconciliation-certificate)). |
+| Share class | `<button class="toggle[ selected]" data-group="shareclass" data-value="<prefix>" data-label="<class name>" onclick="pick(this)">(<prefix>) <class name></button>` — one per share class (button text carries the prefix, e.g. `(CS) Common`, so the user can tell classes apart without decoding it themselves; `data-label` stays the bare name). `selected` on the prompt-named/row's-own class; else the only class when there's just one; else **nothing** — two or more classes are never ranked, and the readiness gate holds **Review** until a human picks (see [certificate-fields.md's Share-class reconciliation](../references/certificate-fields.md#share-class-reconciliation-certificate)). Identical for a PIU's Unit class. |
 | Legend | `<button class="toggle[ selected]" data-group="legend" data-value="<legend id>" data-label="<legend name>" data-body="<full legal body, HTML-escaped>" onclick="pickLegend(this)"><legend name></button>` — one per legend; mark the default/only/row's-own legend `selected`. Selecting one reveals its `data-body` in that block's attestation box. |
 | Rule 144 reason | `<select class="select-input block-rule144-reason">` with the 5-value `rule_144_difference_reason` enum (payload-reference.md); pre-selected with this row's own value. Lives inside `.block-rule144-reason-wrap`, shown/hidden by `pickRule144()` in lockstep with the Rule 144 date input — visible only when "Use a different date" is picked. Collected here, in the panel, instead of a separate post-submit `AskUserQuestion` (the prior design) — the reason is required at the same moment the date is, so there's no reason to make it a second round-trip. The Rule 144 date field itself carries the `required=True` marker (`*`) — design feedback that it read as optional without one, even though it's always collected (defaulting to the issue date). |
 | Advanced fields (grant) | A collapsed `<details class="advanced-fields"><summary>More fields (optional)</summary>`, in order: `custom_label`, `grant_reason` (`<select>` — carta-web's own picklist, [carta-modify-issuables/references/field-contract.md](../../carta-modify-issuables/references/field-contract.md): New Hire, Merit, Promotion, Refresh, Corporate transaction, Relationship change, Retention, Advisor, Consultant, Board, Performance bonus, Boxcar grant — was free text, which silently invited server-rejected values), `acceleration_template` (moved in from its own top-level row; still tagged `data-conditional="vesting"`, hidden when the block's own vesting is "No vesting"), `early_exercise`, `auto_exercise_at_vest`, `is_flexible_issue_date`, `notes` (moved in from the shared section). Collapsed is presentation only: `collectBlocks()` reads every one of these fields regardless of the accordion's open/closed state. (`state_exemption`/`employee_id`/`cost_center`/`job_title`/`salary` were dropped from the panel entirely — design feedback.) |
@@ -161,8 +161,8 @@ attestation box and your record of what the user attested to).
 
 ### Server-error banners
 
-Two additive, display-only inputs support [carta-issuance SKILL.md's Phase
-1.5](../SKILL.md#phase-15--save--validate-before-review-or-save-only) — neither is ever sent
+Two additive, display-only inputs support [engine.md's Phase
+1.5](../references/engine.md#phase-15--save--validate-before-review-or-save-only) — neither is ever sent
 to a mutate:
 
 - **`row.row_key`** — stamped onto every block's `data-row-key` (`build_stakeholder_blocks()`

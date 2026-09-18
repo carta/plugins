@@ -2,8 +2,9 @@
 
 How `carta-issuance` implements its three adapter capabilities (`collectConfig`,
 `showReview`, `confirm`) in Cowork, where there is no side panel. Selected by
-[Phase 0 Step 1](../SKILL.md#step-1--detect-the-environment-from-the-tool-surface) when
-`preview_start` is **absent** from the tool surface. This is ~95% of real usage.
+[Pick the surface](../SKILL.md#pick-the-surface) when the
+tool surface holds **no** tool whose name ends in `preview_start` — bare or prefixed. This is
+~95% of real usage.
 
 The Code adapter's equivalent lives in [artifact-flow.md](artifact-flow.md) — you only need
 one of the two. Everything outside these three capabilities (row resolution, save, validate,
@@ -39,23 +40,25 @@ derives the exercise-price hint, every default, batch mode, and the import marke
 Full flag reference:
 [issuance-config/SKILL.md § Cowork form](../issuance-config/SKILL.md#cowork-form).
 
-A hand-written form is a re-roll of the same dice every run. One traced run shipped
-`board === "today" ? "'+today+'" : ""` — a string-concatenation artifact that would have
-written the literal `'+today+'` as a board approval date — while also omitting the
-**+ Add stakeholder** control, shipping one footer button where the spec requires two (so
-**Save as draft** was unreachable), and rendering no import markers at all.
+On this path `_data.json`'s roster is `issuance_init`'s `stakeholders` section — the people the
+prompt named, already in context, so writing it inline costs nothing. For any roster you would
+otherwise have to transcribe, use `--stakeholders <path>` instead
+([code-adapter.md §1](code-adapter.md#1-config-panel-build_configpy-builds-every-block)).
+
+A hand-written form re-rolls the same dice every run. One traced one wrote the literal
+`'+today+'` as a board approval date, omitted the **+ Add stakeholder** control, shipped one
+footer button where the spec requires two (so **Save as draft** was unreachable), and rendered
+no import markers at all.
 
 **Do not call `read_me`.** The document the generator emits is already complete and
 host-compliant; `read_me`'s `interactive` module carries no repeater guidance that would
 express this form, so the call is ~5k tokens and a round trip for nothing.
 
-**Read [payload-reference.md](payload-reference.md) before Phase 1.** It is the authoritative
-field contract ([Hard rule 1](../SKILL.md#hard-rules)) and it governs how you map the
-submitted rows — most sharply the per-field date formats, where `grant_expiration_date`,
-`vesting_start_date` and `rule_144_date` take `MM/DD/YYYY` while every other date goes out
-ISO. SKILL.md names it as required-reading-up-front, but on this path SKILL.md's preamble is
-behind you by the time the form comes back, so read it **here** — before mapping the first
-row, not after the server rejects one with `Date is invalid`.
+**Read [payload-reference.md](payload-reference.md) before Phase 1**, not after the server
+rejects a row with `Date is invalid`. It is the authoritative field contract ([engine rule
+1](engine.md#engine-hard-rules)) and governs how you map the submitted rows — most sharply the
+per-field date formats. engine.md names it as required reading up front, but by the time the
+form comes back that preamble is behind you.
 
 **Use `show_widget`, not `AskUserQuestion`.** `AskUserQuestion` renders option cards — it
 cannot take a free-text quantity, price, date, or name. Expressing this form as
@@ -79,7 +82,7 @@ what `knowns` can pre-fill, not as a build guide.
 **Every block, both types** — name (select an existing stakeholder or type a new one; picking
 an existing match auto-populates email, stakeholder type, and relationship, and locks
 relationship, since the cap-table record wins regardless per
-[Phase 1](../SKILL.md#phase-1--resolve-each-row--reconcile-share-classes)) · email ·
+[Phase 1](engine.md#phase-1--resolve-each-row--reconcile-share-classes)) · email ·
 stakeholder type (Individual / Non-individual) · relationship (the full
 `issue_date_relationship` picklist — [payload-reference.md](payload-reference.md#picklists) —
 **always required**; collecting it here is what removes a Phase 1 follow-up prompt) ·
@@ -105,13 +108,17 @@ collapsed **More fields** accordion, in order: acceleration (optional, shown onc
 set), certificate number, cash paid, debt canceled, returned invested capital (LLC-gated —
 omitted entirely for a corp confirmed non-LLC, not merely hidden), notes.
 
-**PIU, per block** — unit class (labelled "Unit class") · equity plan (**optional**, and
+**PIU, per block** — unit class (labelled "Unit class"; the sole class when the corp has one,
+otherwise unselected unless the prompt named a class, with the form holding submission until
+one is picked — two or more classes are never ranked, because which class a unit sits in
+changes the holder's tax position) · equity plan (**optional**, and
 **not** defaulted even when there is only one — empty issues off the unit class's own
 authorized total) · `<Threshold|Hurdle>` value (**never** pre-filled) · `<Threshold|Hurdle>`
 value type (`Per unit` / `Overall` only) · issue date · board approval (today / other /
 **none** — optional and clearable here) · vesting schedule + start date (opt-in, as certs) ·
-documents · corresponding interest (Yes/No, shown **only** while the selected unit class
-reports `has_corresponding_interest`, and re-evaluated on every unit-class click — see
+documents (row omitted entirely when the corp has no PIU document set) · corresponding
+interest (Yes/No, shown **only** while the selected unit class reports
+`has_corresponding_interest`, and re-evaluated on every unit-class click — see
 [piu-fields.md](piu-fields.md#corresponding-interest)) · a collapsed **More fields** accordion: acceleration (once
 vesting is set), security number, consideration price, notes. Threshold labels take
 `knowns.threshold_noun` — "Hurdle" on the UK growth-shares preset. Never on a PIU block:
@@ -135,15 +142,15 @@ invested capital) start blank on a new block.
 **This is where the stakeholder and quantity are collected.** A prompt that omits them shows
 an empty field here, never a chat question — regardless of which shape the prompt takes. Never
 invent a name or quantity, and never ask who the grantees are before rendering the form
-([Hard rule 10](../SKILL.md#hard-rules)).
+([engine rule 5](engine.md#engine-hard-rules)).
 
 **Row-count rule is the engine's, not the adapter's** — a bare "N \<securities\>" is a
 quantity for **one** recipient, not a headcount; only people-language ("100 employees") makes
-N a row count. See [Hard rule 10](../SKILL.md#hard-rules).
+N a row count. See [engine rule 5](engine.md#engine-hard-rules).
 
 ### Import markers (uploaded-file rows)
 
-Only when [Phase 0.25](../SKILL.md#phase-025--ingest-an-uploaded-file) built the rows from a
+Only when [Phase 0.25](engine.md#phase-025--ingest-an-uploaded-file) built the rows from a
 spreadsheet or document. Each row may carry `import_notes` —
 `[{field, raw_value, reason, confidence?}]`, display-only, and **never** part of any mutate
 payload.
@@ -181,35 +188,27 @@ terms and N names** — rendering 30 identical blocks is ~30x the form HTML and 
 payload for zero extra information. Batch mode collapses that case to shared terms once +
 a compact per-person table.
 
-**When to use it.** `build_cowork_form.py` decides this itself — it activates batch mode when
-**both** hold:
-- More than 3 rows (`knowns.rows.length > 3`, or an equivalent headcount signal per [Hard
-  rule 11](../SKILL.md#hard-rules)).
-- Every row's non-personal terms are identical or unset — i.e. the prompt/`knowns` gave one
-  shared set of batch-level terms (option type, exercise price, vesting, document set, etc. for
-  grants; share class, price, legend, etc. for certs; unit class, equity plan, threshold value
-  and type, vesting, documents for PIUs) and no individual row overrides any of them. Identity and amount fields (name, email, quantity, relationship, notes) never count as
-  an override, since those differ per person by nature.
-
-If either condition fails — 3 or fewer rows, **or** any row carries its own distinct term —
-it renders the per-row repeater instead. Batch mode is an optimization for the common case,
-not a replacement for the general one. Set `knowns.batch_mode` to `true`/`false` to force
-either layout.
+**When to use it.** `build_cowork_form.py` decides this itself, activating batch mode when
+**both** hold: more rows than `BATCH_MODE_MIN_ROWS` (3 at the time of writing — read the
+constant, not this number), or an equivalent headcount signal per [engine rule
+5](engine.md#engine-hard-rules); and every row's non-personal terms identical or unset — one
+shared set of batch-level terms with no row overriding any of them. Identity and amount
+fields (name, email, quantity, relationship, notes) never count as an override, since those
+differ per person by nature. Either condition failing renders the per-row repeater instead;
+batch mode is an optimization for the common case, not a replacement for the general one.
+`knowns.batch_mode` (`true`/`false`) forces either layout.
 
 **Layout.** Two sections instead of N blocks:
-1. **Shared terms, once** — the exact same fields as a per-row block's non-personal terms
-   (option type/exercise price/vesting/documents/etc.; or share class/price/vesting/legend/etc.
-   for certs; or unit class/equity plan/threshold value and type/vesting/documents for PIUs),
-   rendered a single time at the top. Every computable default still applies here
-   ([§4](#4-trust-computable-defaults--never-pre-ask)) — these are the batch-level fallback
-   every row inherits.
+1. **Shared terms, once** — a per-row block's non-personal terms for this type
+   ([Fields](#fields) above), rendered a single time at the top. Every computable default
+   still applies here ([§4](#4-trust-computable-defaults--never-pre-ask)) — these are the
+   batch-level fallback every row inherits.
 2. **Per-grantee table, below** — one row per person, **three visible columns**: name · email ·
    quantity. Each row also carries a relationship `<select>` and a stakeholder-type toggle,
    hidden until that row's name misses the roster: both are `always` fields on the payload, a
    roster match supplies them, and nothing supplies them for someone typed in fresh. No
-   per-row expansion of the shared *terms*; if a specific person genuinely needs different
-   terms, that's a mixed-term batch and belongs in the per-row layout instead (tell the user
-   to say so, or detect it from the prompt before choosing batch mode).
+   per-row expansion of the shared *terms*; a person who genuinely needs different terms makes
+   this a mixed-term batch, which belongs in the per-row layout.
 
 **Submit contract — the same `rows` shape as the per-row layout.** Batch mode is a *rendering*
 optimization only; the engine never sees the difference. The form expands the shared terms
@@ -261,7 +260,7 @@ describes this in Code-adapter terms — `$OUT_DIR/_draft_state.json`, written a
 exists here.** Read that section for the *reasoning*; the mechanism below is what you actually
 run.
 
-[Hard rule 4](../SKILL.md#hard-rules) still binds in full, so track the same three things in
+[Hard rule 3](../SKILL.md#hard-rules) still binds in full, so track the same three things in
 context, from the first mutate response onward:
 
 | Track | From | Goes on |
@@ -270,9 +269,7 @@ context, from the first mutate response onward:
 | each row's `draft_pk` | that row's first save | that row on every retry, alongside *every* required field |
 | each row's `row_key` | the `row_key` you assigned in the form | the key you match `draft_pk` back by — **never** array position |
 
-Omitting `draft_set_id` makes the server auto-create a *second* draft set holding the same
-incomplete rows. Omitting a row's `draft_pk` inserts a new row instead of updating the
-existing one. Both fail silently — you get a success response either way.
+Both omissions fail silently — you get a success response either way.
 
 **The error-retry is where position-matching breaks.** Re-rendering the form after a
 validation error is an ordinary editable-form action, and the user may add or remove a
@@ -287,12 +284,10 @@ stakeholder block before re-submitting. When they do:
 - **Every surviving block** — keeps the `row_key` it already had, and therefore the
   `draft_pk` already threaded to it, regardless of where it now sits in the array.
 
-**The stale-state rule has no teeth here, and that is the one way Cowork is simpler.** The
-Code path must actively discard a leftover `_draft_state.json`, because `OUT_DIR` is keyed
-only by `corporation_id` and persists across unrelated sessions — so a stranger's `draft_pk`
-can be sitting there under an identical `r0`/`r1` key. On this path a fresh request starts
-with empty context and there is nothing on disk to inherit, so a genuinely fresh batch is
-fresh by construction. What still applies: **within** one conversation, if the user pivots to
+**The Code path's stale-file rule has no teeth here, and that is the one way Cowork is
+simpler** — a fresh request starts with empty context and there is nothing on disk to inherit,
+so a genuinely fresh batch is fresh by construction. What still applies: **within** one
+conversation, if the user pivots to
 a genuinely new batch (a different corporation, a different `security_type`, or plainly a new
 request rather than a retry of the one in flight), drop the tracked `draft_set_id` and every
 `draft_pk` and start clean. Carrying them forward re-saves the new batch into the old set, and
@@ -306,15 +301,13 @@ a retry.
 Print the resolved, already-saved-and-validated rows as markdown. **This does not block** —
 it is output, immediately followed by the §3 confirm in the same turn.
 
-**The review is printed *before* the confirm tool call, always.** This is an explicit exception
-to any host instruction about not writing prose between tool calls, or holding output until a
-final response. Such a directive is a style rule about narrating intermediate results; the
-review is not narration, it **is** the gate. A confirm that reaches the user before the review
-does is a failed gate — they approved an irreversible issuance without seeing the terms — and
-backfilling the review afterwards does not repair it, because the answer was already given.
-
-If you find yourself about to call `AskUserQuestion` and the review text is not yet on screen,
-stop and print it first. Order over habit, every run.
+**The review is printed *before* the confirm tool call, always** — an explicit exception to any
+host instruction about not writing prose between tool calls. That directive is a style rule
+about narrating intermediate results; the review is not narration, it **is** the gate. A
+confirm that reaches the user first is a failed gate — they approved an irreversible issuance
+without seeing the terms, and backfilling the review afterwards cannot repair an answer
+already given. If you are about to call `AskUserQuestion` and the review is not on screen,
+print it first. Order over habit, every run.
 
 Column spec, conditional/optional columns, per-value default explanations, and the
 `ZEPO` / pending-board-approval renderings are all in
@@ -340,8 +333,8 @@ over a fixed option set, with no free text to collect.
 
 | Option | Engine path |
 |---|---|
-| `"Issue N <type> now"` | [Run the issue securities mutate](../SKILL.md#run-the-issue-securities-mutate) |
-| `"Save as draft"` | [Save as draft](../SKILL.md#save-as-draft-escape-hatch) |
+| `"Issue N <type> now"` | [Run the issue securities mutate](issue-and-close.md#run-the-issue-securities-mutate) |
+| `"Save as draft"` | [Save as draft](engine.md#save-as-draft-escape-hatch) |
 | `"Edit a row"` | re-render the §1 form pre-filled with the resolved rows |
 | `"Cancel"` | stop — *Canceled* closing |
 
@@ -371,12 +364,13 @@ in the incident run.
 | Grant expiration | the plan's term from `issue_date` ([payload-reference.md](payload-reference.md#grant-expiration-follows-the-plan)) | `(default — plan term)` |
 | Exercise price | the sole active valuation (409A / EMI / CSOP / share price) | `(default — current <source>)` |
 | Option plan | the only non-expired plan | `(default — only active plan)` |
-| Document set | the only set | `(default — only template)` |
+| Document set | the only set — on a PIU with no sets the row is absent entirely | `(default — only template)` |
 | Legend | the only legend, or the one flagged `default` | `(default)` |
 | Vesting (grant) | the corp's 4yr / 1yr-cliff schedule | `(default)` |
 | Vesting (cert, PIU) | none — opt-in | — |
 | Board approval | today | `(default)` |
 | Board approval (PIU) | today, and clearable — the field is optional | `(default — today)` |
+| Share class / PIU unit class | the only class when there is one; **never ranked** — two or more stay unselected until a human picks | `(default — only class)` |
 | PIU equity plan | **none** — never the only plan | — |
 | PIU threshold value / type | **never defaulted** — terms of the grant | — |
 | Exemption / currency | the `so_type` autofill | `(autofill — <so_type> rule)` |

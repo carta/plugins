@@ -36,7 +36,7 @@ TEMPLATE = REFS / "template.html"
 STYLES = REFS / "styles.css"
 
 SAMPLE_ROWS = {
-    # Field names match the Row templates in ../../SKILL.md#row-templates — the
+    # Field names match the Row templates in ../../references/engine.md#row-templates — the
     # same shape used for the issue_securities/save_drafts mutate payload, since
     # _review_rows.json is written straight from the Phase-1-resolved rows. In
     # particular board_approval_date is OMITTED (not "") on a pending row, and

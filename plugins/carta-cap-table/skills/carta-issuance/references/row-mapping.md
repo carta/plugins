@@ -1,7 +1,7 @@
 # Submit → row mapping
 
 How each row of the config submission becomes a resolved row. Read this once, at the end of
-[Phase 0.5](../SKILL.md#phase-05--configure-the-issuance), when the collection surface has
+[Phase 0.5](engine.md#phase-05--configure-the-issuance), when the collection surface has
 returned its `rows`.
 
 Both surfaces deliver the same payload — Cowork from the form's `sendPrompt()`
@@ -12,11 +12,11 @@ block. There are no batch-wide scalars left to stamp: every row decided its own 
 surface, so a single batch can genuinely mix `so_type`s and currencies.
 
 Apply the mapping below to **each row individually**. `relationship` may be `""` when the user
-left it blank — [Phase 1](../SKILL.md#phase-1--resolve-each-row--reconcile-share-classes) only
+left it blank — [Phase 1](engine.md#phase-1--resolve-each-row--reconcile-share-classes) only
 honors it for stakeholders with no roster match.
 
 **Omission rule (both types):** an empty string, `false`, or `null` on a pass-through field
-means **omit the key entirely** from the payload — see [Row templates](../SKILL.md#row-templates).
+means **omit the key entirely** from the payload — see [Row templates](engine.md#row-templates).
 
 ---
 

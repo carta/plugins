@@ -169,7 +169,7 @@ Each `ROW_PER_GRANTEE` (every cell plain text):
 ```
 
 - Every `*_OR_DASH` = the resolved value, or `—` when the row doesn't carry it. **Source field
-  names are the Row-template keys** (`../../SKILL.md#row-templates`) — `BOARD_DATE_OR_DASH`
+  names are the Row-template keys** (`../references/engine.md#row-templates`) — `BOARD_DATE_OR_DASH`
   reads `board_approval_date` (never present on a pending row — that's how the KPI strip's
   Pending-board-approval count works), `VESTING_START_OR_DASH` reads `vesting_start_date`.
   Neither is the short `board_date`/`vesting_start` name a stale prior version of this table
@@ -188,7 +188,7 @@ Each `ROW_PER_GRANTEE` (every cell plain text):
   with a stderr message) if any row carries a `vesting_template` id and `--vesting-templates`
   came back empty — this used to silently render `"Custom"` for a perfectly real selection
   whenever the reference-data file wasn't threaded through, which is actively misleading
-  (this skill can never set genuinely custom vesting — Hard rule 7). An id that's still
+  (this skill can never set genuinely custom vesting — engine rule 2). An id that's still
   unresolved despite a non-empty list (e.g. a template deleted after being fetched) renders
   `"Selected — details unavailable"`, never `"Custom"`.
   - **Pass the raw fetched result to `--vesting-templates`/`--share-classes` — don't
@@ -276,7 +276,7 @@ the save-server (the **side-panel** JSON — see
 Cowork path the parent skill confirms with one `AskUserQuestion` instead of this JSON
 contract — see [cowork-adapter.md §3](../references/cowork-adapter.md#3-confirm--one-askuserquestion)). **No `rows`** — the panel is read-only, so there is nothing on the surface
 to collect; `carta-issuance` builds the mutate payload straight from its own Phase-1-resolved
-rows (see [carta-issuance SKILL.md](../SKILL.md#build-the-mutate-payload-from-your-phase-1-resolved-rows)).
+rows (see [carta-issuance engine.md](../references/engine.md#build-the-mutate-payload-from-your-phase-1-resolved-rows)).
 The save-server write wakes `carta-issuance` via the submit-watcher; the generic wake /
 panel-close / no-poll mechanics live once in
 [../references/artifact-flow.md](../references/artifact-flow.md) §3, §5. On **Confirm &

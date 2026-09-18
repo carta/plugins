@@ -34,7 +34,7 @@ Usage (--vesting-templates is option-grant only):
     --out-dir <OUT_DIR>
 
 ``--rows`` is a JSON array of the RESOLVED rows (post Phase 1) — same field names
-as the Row templates in ../../SKILL.md#row-templates. ``--vesting-templates``
+as the Row templates in ../../references/engine.md#row-templates. ``--vesting-templates``
 (option grant) / ``--share-classes`` (certificate) are the fetched reference-data
 lists, used only to resolve an id on the row into a display name. Pass the RAW
 fetched MCP result straight through — this script unwraps the standard
@@ -202,7 +202,7 @@ def _cert_flags(r: Dict[str, Any]) -> str:
 
 # ── Read-only rows ──
 #
-# Field names below match the Row templates in ../../SKILL.md#row-templates — the
+# Field names below match the Row templates in ../../references/engine.md#row-templates — the
 # same dict shape used for the issue_securities/save_drafts mutate payload — since
 # _review_rows.json is written straight from the Phase-1-resolved rows. In
 # particular: `board_approval_date` (NOT `board_date`) is omitted entirely on a
@@ -212,7 +212,7 @@ def _cert_flags(r: Dict[str, Any]) -> str:
 
 def _vesting_label(r: Dict[str, Any], vesting_templates: List[Dict[str, Any]]) -> str:
     """Never fabricate "Custom" for an unresolved id — this skill can never set a
-    genuinely custom vesting schedule (Hard rule 7: "Templates only"), so that
+    genuinely custom vesting schedule (engine rule 2: "Templates only"), so that
     word actively misrepresents what happened. An unresolved id means the caller
     forgot to thread `--vesting-templates` through (guarded against in `main()`
     below) or a template was deleted from Carta after being fetched — either way,
