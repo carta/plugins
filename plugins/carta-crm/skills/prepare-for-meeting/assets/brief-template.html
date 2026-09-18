@@ -21,14 +21,25 @@
   - Meeting time: futureInteractions[0].startDate — format as "Thu 11 Jun · 14:30"
     (abbreviated weekday, no year, 24-hour clock, no seconds).
 
-  BRIEFING FLAGS (SECTION: briefing)
-  Each flag-item is one line, ~90 chars max. Choose severity class:
-  - flag-high:     risk or blocker — changes how the meeting opens
-  - flag-watch:    something to monitor or follow up on
-  - flag-note:     neutral context, background, or FYI
-  - flag-strength: positive signal or relationship strength to lean on
-  Order: flag-high first, then flag-watch, then flag-note, then flag-strength.
-  Max 5 items. Delete the whole [[ SECTION: briefing ]] block only if there are no flags.
+  CONTEXT (SECTION: context)
+  Three prose paragraphs, ~45 words each, in this fixed order:
+  1. context-history  — what has passed between the reader and these people: the last
+                        exchange and its substance, what is outstanding, what was promised.
+  2. context-person   — who the reader is meeting: role, how long they have been the
+                        contact, what they have handled before.
+  3. context-firm     — what the counterparty firm is and what it does.
+  Drop a paragraph whose data is missing rather than padding it. No severity labels and no
+  label prefixes ("Risk:", "FYI:") — the sentence says why it matters.
+  Delete the whole [[ SECTION: context ]] block only if all three are empty.
+
+  SCENARIO (SECTION: scenario)
+  The playbook's own facts, max 4 rows, each a scenario-label plus a scenario-value.
+  - Adviser:  fees paid to date, the mandates behind them, any live process
+  - Investor: commitment, vehicle, closing status
+  - Founder:  round, stage, maturity signals
+  Set scenario-title to the playbook's own heading ("Fees & mandates", "Commitment",
+  "Funding"). Delete the whole [[ SECTION: scenario ]] block for the Other playbook, or
+  whenever the playbook's calls came back empty.
 
   PEOPLE (SECTION: people)
   Avatars: 2-char initials — first initial + last initial only (e.g. "JD" not "JDR").
@@ -154,46 +165,59 @@ body {
     padding: 0 28px 20px;
 }
 
-/* ---------- Briefing block ---------- */
-.briefing {
+/* ---------- Context block ---------- */
+.context {
     margin: 18px 0 16px;
 }
 
-.flag-item {
+/* 13px against the 12px body: this is the block the reader actually reads, and the step up
+   is what separates it from the reference material below without a rule or a heading. */
+.context p {
+    font-size: 13px;
+    line-height: 20px;
+    color: var(--text-default);
+}
+
+.context p + p { margin-top: 10px; }
+
+/* ---------- Scenario strip ---------- */
+/* A full-width strip rather than a third column: the bottom grid's right track is 240px
+   and already holds deals, and the A4 print box is 718px, so a third track would force the
+   people column under its min-content width. */
+.scenario {
     display: flex;
-    align-items: baseline;
-    gap: 10px;
-    padding: 7px 0;
-    border-bottom: 1px solid var(--border-subtle);
-    line-height: 18px;
+    flex-wrap: wrap;
+    gap: 8px 28px;
+    align-items: flex-start;
+    padding: 10px 0 12px;
+    /* Top rule only. The bottom grid draws its own border-top directly below, so a bottom
+       rule here renders as a doubled line whenever both sections are present. */
+    border-top: 1px solid var(--border-subtle);
 }
 
-.flag-item:last-child { border-bottom: none; }
-
-.flag-badge {
-    display: inline-block;
-    /* Fixed width so every flag's text starts at the same x. Left to hug their labels the
-       badges range from 34px (NOTE) to 57px (STRENGTH), and that 23px spread reads as a
-       ragged left edge down the most-read block on the page. 58px clears the widest label. */
-    min-width: 58px;
-    text-align: center;
-    padding: 2px 6px;
-    border-radius: 2px;
+.scenario-title {
+    flex: 0 0 100%;
     font-family: var(--mono);
-    font-size: 8px;
-    font-weight: 500;
+    font-size: 9px;
     text-transform: uppercase;
-    letter-spacing: .8px;
-    white-space: nowrap;
-    flex-shrink: 0;
+    letter-spacing: 1.2px;
+    font-weight: 500;
+    color: var(--text-subtle);
 }
 
-.flag-high     { background: var(--negative-subtle); color: var(--negative-strong); }
-.flag-watch    { background: var(--warning-subtle);  color: var(--warning-strong); }
-.flag-note     { background: var(--info-subtle);     color: var(--info-strong); }
-.flag-strength { background: var(--positive-subtle); color: var(--positive-strong); }
+.scenario-label {
+    display: block;
+    font-size: 10px;
+    color: var(--text-subtle);
+    line-height: 14px;
+}
 
-.flag-text { font-size: 12px; color: var(--text-default); }
+.scenario-value {
+    display: block;
+    font-size: 13px;
+    line-height: 18px;
+    color: var(--text-default);
+}
 
 /* ---------- Two-column bottom: people | deals ---------- */
 .bottom-grid {
@@ -374,7 +398,7 @@ body {
     .bottom-grid { grid-template-columns: 1fr 200px; gap: 0 20px; }
     .deals { padding-left: 16px; }
     a { color: var(--text-default); text-decoration: none; }
-    .flag-item, .person, .deal-card { break-inside: avoid; }
+    .context p, .scenario-item, .person, .deal-card { break-inside: avoid; }
     * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
 
@@ -405,29 +429,38 @@ body {
 
     <div class="body">
 
-        <!-- SECTION: briefing -->
-        <div class="briefing">
-            <!-- FILL: 1–5 flag-items. Each is one line, ~90 chars max.
-                 Order: flag-high first, then flag-watch, then flag-note, then flag-strength.
-                 Delete the whole section only if there are no flags at all. -->
-            <div class="flag-item">
-                <span class="flag-badge flag-high">High</span>
-                <span class="flag-text">The most important thing that changes how this meeting opens.</span>
+        <!-- SECTION: context -->
+        <div class="context">
+            <!-- FILL: what has actually passed between the reader and these people — the
+                 last exchange and its substance, what is outstanding, what was promised.
+                 ~45 words. Delete this paragraph if there is no history to state. -->
+            <p class="context-history">Your history with these people: the last exchange, what it was about, and what is still open between you.</p>
+            <!-- FILL: who the reader is meeting — role, how long they have been the
+                 contact, what they have handled before. ~45 words. -->
+            <p class="context-person">Who you are meeting: their role, how long they have been your contact, and what they have handled for you before.</p>
+            <!-- FILL: what the counterparty firm is and what it does, at the level a
+                 stranger needs. ~45 words. -->
+            <p class="context-firm">Their firm: what it is, what it does, and how it makes its money.</p>
+        </div>
+        <!-- /SECTION: context -->
+
+        <!-- SECTION: scenario -->
+        <div class="scenario">
+            <!-- FILL: the playbook's heading — "Fees &amp; mandates", "Commitment", "Funding". -->
+            <span class="scenario-title">Playbook heading</span>
+            <!-- FILL: up to 4 label/value pairs from the playbook's own calls.
+                 Delete the whole section for the Other playbook, or when the calls
+                 came back empty. -->
+            <div class="scenario-item">
+                <span class="scenario-label">Label</span>
+                <span class="scenario-value">Value</span>
             </div>
-            <div class="flag-item">
-                <span class="flag-badge flag-watch">Watch</span>
-                <span class="flag-text">Something to monitor or follow up on during the conversation.</span>
-            </div>
-            <div class="flag-item">
-                <span class="flag-badge flag-note">Note</span>
-                <span class="flag-text">Neutral context or background the reader should carry in.</span>
-            </div>
-            <div class="flag-item">
-                <span class="flag-badge flag-strength">Strength</span>
-                <span class="flag-text">A positive signal or relationship strength to lean on.</span>
+            <div class="scenario-item">
+                <span class="scenario-label">Second label</span>
+                <span class="scenario-value">Second value</span>
             </div>
         </div>
-        <!-- /SECTION: briefing -->
+        <!-- /SECTION: scenario -->
 
         <div class="bottom-grid">
 

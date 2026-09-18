@@ -54,8 +54,8 @@ Lead with the meeting, not the process. No "let me…" preamble about your own s
 
 Two more rules that keep this fast and honest:
 
-- **Never invent CRM data.** If a field isn't in the CRM, omit it and say so in
-  "Unknowns". A confidently wrong brief is worse than a thin one.
+- **Never invent CRM data.** If a field isn't in the CRM, leave it out. A confidently
+  wrong brief is worse than a thin one.
 - **Prefer `crm:get_adviser_profile` over hand-assembling context.** One call returns the
   company, top contacts with interaction counts, active deals, the next scheduled
   interaction and recent notes. Don't rebuild that from ten calls.
@@ -78,8 +78,10 @@ crm_call_tool({ "name": "crm:<tool>", "arguments": { ... } })
 - the entity-appropriate interactions call (below) — the meeting, plus the history timeline
 - `crm:get_adviser_profile` — company, top contacts, deals, notes, next interaction
 - `crm:get_current_user` — needed only for the acting user's domain
+- `crm:get_tenant_custom_instructions` — the reader's own standing preferences (Step 4a)
 
-**Wave 2** — only what Wave 1 left genuinely missing, again in parallel:
+**Wave 2** — the playbook's own calls (Step 4) plus whatever Wave 1 left genuinely
+missing, again in parallel:
 
 - `crm:search_contacts` for external attendees who did **not** appear in `topContacts`
 - `crm:get_company_angles`
@@ -232,17 +234,71 @@ Use `count` from Step 1 as the relationship-depth signal, and `interactions[]` a
 recent-history timeline. Highlight the last interaction and anything that looks like a
 change since it.
 
-## Step 4 — Classify the primary context
+## Step 4 — Pick the playbook
 
-Label the brief so the reader knows what kind of conversation this is. Pick the first
-that applies:
+A meeting with an LP and a meeting with a banker need different pages. Pick one of four
+playbooks from the counterparty, and let it decide both what Wave 2 fetches and what the
+brief leads with.
 
-1. Whatever the user explicitly named
-2. An open deal on this domain
-3. An active fundraising
-4. An investor / LP relationship
-5. A company relationship
-6. Person-only — no institutional object yet, so treat it as a first contact
+**Precedence — take the first that applies.** Stop at the first hit; do not score them
+against each other.
+
+| # | Playbook | It applies when |
+|---|---|---|
+| 1 | Whatever the user named | The request says "investor meeting", "banker call", "meeting the founder" |
+| 2 | **Adviser** — M&A banker, adviser, broker | `get_adviser_profile` returned `company.adviserViewEnabled: true`, **or** any fee is linked to this company or its contacts |
+| 3 | **Investor** — LP, fund investor | `crm:search_investors` resolves the counterparty, **or** it holds a fundraising relationship |
+| 4 | **Founder** — a target or portfolio company | The counterparty resolves to a company record and an attendee's title reads founder, co-founder, CEO or owner |
+| 5 | **Other** | None of the above. A first contact, a service provider, an internal-ish catch-up |
+
+The masthead context tag names the playbook you chose (`ADVISER · M&A`, `INVESTOR · LP`,
+`FOUNDER · SERIES B`, or the deal context for Other). Printing it is what lets the reader
+see a wrong call and correct you in one line, so never omit it.
+
+Each playbook adds its own Wave 2 calls and its own scenario block. The people and deals
+blocks are the same in all four.
+
+**Adviser** — what we have paid them and what we have run with them.
+
+- `crm:get_fees_by_contact` for the attendees you resolved, or `crm:search_fees` filtered
+  to the company. Read `totalAmount` from the response; never add the rows up yourself.
+- `crm:search_deals` for live **and** closed mandates, so the brief can say sell-side or
+  buy-side and name what is running now.
+- Scenario block: fees paid to date, the mandates behind them, and any live process.
+
+**Investor** — what they committed to and what they asked for.
+
+- `crm:get_investor_interactions` for the relationship timeline.
+- `crm:get_fundraising` or `crm:search_fundraising` for the vehicle they are in, and
+  `crm:get_fund_closings_status` when a close is in flight.
+- Scenario block: commitment, vehicle and closing status, plus the open question from the
+  most recent note.
+
+**Founder** — who the company is and how far along it is.
+
+- `crm:preview_company` or `crm:find_company` for what the business actually does.
+- `crm:get_company_angles` for warm paths in. Its argument is `domain`, not `companyDomain` —
+  the wrong name is rejected outright and costs a whole round trip.
+- Scenario block: round, stage and maturity signals, with the last note's substance.
+
+**Other** — no scenario block. The three context paragraphs, the people, and any deals.
+
+### Step 4a — The reader's own preferences
+
+`crm:get_tenant_custom_instructions` returns `{ content }`: free text an admin set for the
+tenant and the reader set for themselves. If it holds a `## Meeting prep` section, follow
+that section for this brief.
+
+It **reorders and re-weights** — which block leads, what earns a paragraph, what to always
+mention. A reader who writes "for banker meetings show deals and fees first" gets the
+scenario block above the people block.
+
+It **never authorises an invented fact**. A preference cannot conjure a fee the CRM does
+not hold. When the preference asks for something absent, leave it out silently; do not
+write a line saying the CRM lacks it.
+
+No `## Meeting prep` section, or no content at all, is the normal case. Say nothing and
+use the playbook as written.
 
 ## Step 5 — Build the document
 
@@ -293,23 +349,35 @@ Hard constraints on the document:
   into an HTML attribute.
 - **One page — item counts AND prose length both matter.** The limits below are measured
   against A4, but they are a ceiling on *count*, not a guarantee: a brief inside every limit
-  still spills to a second page if the entries are wordy. Keep each briefing flag to a single
-  line at ~90 characters. Cut ruthlessly — three sharp flags beat ten hedged ones.
+  still spills to a second page if the entries are wordy. Cut ruthlessly — three sharp
+  sentences beat ten hedged ones.
 
   | Section | Max |
   |---|---|
-  | Briefing flags | 5 |
+  | Context — paragraphs | 3, each ~45 words |
+  | Scenario — rows | 4 |
   | People — external attendees | 4 |
   | People — internal attendees | 3 |
   | Deals | 3 |
 
   Format rules the layout depends on:
 
-  - **Briefing flags are one line each** — ~90 characters max. Choose the correct severity:
-    `flag-high` for anything that changes how the meeting opens, `flag-watch` for items to
-    monitor, `flag-note` for context or FYI, `flag-strength` for positive signals. Order:
-    high → watch → note → strength. Delete the whole briefing section only if you have
-    nothing at all to flag.
+  - **The context block is three paragraphs, in this order.** They answer the three
+    questions a reader has walking in, and they are prose, not labelled fragments.
+    1. **Your history with these people** — what has actually passed between you. The last
+       exchange and its substance, what is outstanding, what was promised. "Guy asked for
+       the revised fee schedule on 27 Aug and it has not gone out" beats "4 interactions".
+    2. **Who you are meeting** — the person. Their role, how long they have been the
+       contact, what they have handled for you before.
+    3. **Their firm** — what it is and what it does, at the level a stranger needs.
+    Drop a paragraph whose data you do not have rather than padding it. One honest
+    paragraph is a brief; three hedged ones are noise.
+  - **No severity labels anywhere.** No `High`, `Watch`, `Note` or `Strength` prefixes, and
+    no badge substitutes such as `Risk:` or `FYI:`. If something matters, the sentence says
+    why it matters. A label is what the reader has to decode instead of reading.
+  - **The scenario block is the playbook's own facts**, at most 4 rows, each a figure or a
+    short phrase with its label. Fees paid, commitment and closing status, round and stage.
+    Delete the whole section for the Other playbook, or whenever the calls came back empty.
   - **Never invent a value.** Every name, figure and date on the page must come from a tool
     response. When a field is absent, leave it out — do not fill it from a note, a
     neighbouring record, or inference. Two traps that have both produced wrong briefs:
