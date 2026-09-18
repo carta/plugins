@@ -14,11 +14,11 @@ import { sans, INK, PAPER, LINE, FAINT, MICRO, FS } from "./theme.js";
  *  budget table has user-driven column sorting today, so none was added. */
 
 /** Ink's own `.ink-table tr.is-total` fill (Ink's components.md) —
- *  `--ink-color-global-brand-blue-10`, #EAF0F8. carta-fund-modeling's own
- *  `.totrow` independently landed on the same blue (its
- *  `--ink-color-global-feedback-info-subtle`) rather than a gray wash — two
- *  independent reads of the same Ink recipe agreeing on blue. */
-export const TOTAL_ROW_BG = "#EAF0F8";
+ *  `--ink-color-global-feedback-info-subtle`, `light-dark(#EAF0F8, #122948)`.
+ *  Bound to the token, not the raw hex — the hex only ever resolved the
+ *  light half, leaving total/summary rows near-white (and near-illegible) in
+ *  dark mode. */
+export const TOTAL_ROW_BG = "var(--ink-color-global-feedback-info-subtle)";
 
 /** Base `<table>` style both budget tables share — 14px per Ink's
  *  `.ink-table` recipe (Ink's real NewTable), not a smaller size either view

@@ -18,6 +18,7 @@ import HoverTip from "../ui/HoverTip.jsx";
 import CashDetailCard from "./CashDetailCard.jsx";
 import { hasCashDetail } from "../ui/cashDetail.js";
 import ExportButton from "../ui/ExportButton.jsx";
+import ThemeToggleButton from "../ui/ThemeToggleButton.jsx";
 import { slugify } from "../ui/exportHtml.js";
 import { trackClick } from "../analytics.js";
 
@@ -195,7 +196,7 @@ export function vendorNote(v) {
   return `${fmtCurrencyShort(v.unattributed_amount, 0)} (${pct}% of expenses) has no vendor on the entry and is not shown.`;
 }
 
-export default function DashboardView({ snapshot, accountsData, drilldown }) {
+export default function DashboardView({ snapshot, accountsData, drilldown, dark, onToggleTheme }) {
   const { ops, cash, monthlyCashflow, budget, feeSchedule, spendByGL } = snapshot;
   const vendorSpend = snapshot.vendorSpend;
   const varianceByCategory = snapshot.varianceByCategory;
@@ -310,7 +311,8 @@ export default function DashboardView({ snapshot, accountsData, drilldown }) {
       <H1
         subhead={snapshot?.entityLabel || snapshot?.firmName || "ManCo"}
         actions={
-          <div data-export-exclude>
+          <div data-export-exclude style={{ display: "flex", gap: 8 }}>
+            {onToggleTheme && <ThemeToggleButton dark={dark} onToggle={onToggleTheme} />}
             <ExportButton
               targetId={DASHBOARD_EXPORT_ID}
               entityName={snapshot?.firmName || "ManCo"}

@@ -17,6 +17,7 @@ import { FiltersMenu, FilterRibbon, SimplePeriodPicker, S as periodControlsStyle
 import { MONTH_NAME, trueAsOfMonth, formatPeriodLabel } from "./budgetPeriods.js";
 import { rowBreakouts, defaultBreakout, worthBreakingOut, UNLABELLED } from "./accountBreakout.js";
 import ExportButton from "../ui/ExportButton.jsx";
+import ThemeToggleButton from "../ui/ThemeToggleButton.jsx";
 import { slugify } from "../ui/exportHtml.js";
 import { trackClick } from "../analytics.js";
 
@@ -66,7 +67,7 @@ export function ownsPeriodControl(viewKind, budget) {
   return viewKind === "by-account" && hasMonthlyDetail(budget);
 }
 
-export default function BudgetActualsView({ snapshot, accountsData, drilldown, budgetId }) {
+export default function BudgetActualsView({ snapshot, accountsData, drilldown, budgetId, dark, onToggleTheme }) {
   // The build writes the dimension beside the entries it scopes, in
   // accounts.json. Snapshot is the fallback for a cache written earlier.
   const dimension = dimensionOf(accountsData) || dimensionOf(snapshot);
@@ -213,7 +214,8 @@ export default function BudgetActualsView({ snapshot, accountsData, drilldown, b
       <H1
         subhead="Budget vs actuals"
         actions={
-          <div data-export-exclude>
+          <div data-export-exclude style={{ display: "flex", gap: 8 }}>
+            {onToggleTheme && <ThemeToggleButton dark={dark} onToggle={onToggleTheme} />}
             <ExportButton
               targetId={BVA_EXPORT_ID}
               entityName={snapshot?.firmName || "ManCo"}

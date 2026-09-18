@@ -56,6 +56,17 @@ export default function App() {
   const firmSlug = slugify(displayFirmName(snapshot?.firmName));
   const [route, navigate] = usePathRoute(firmSlug);
 
+  // Opt-in and persisted; defaults to light.
+  const [dark, setDark] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("theme") === "dark";
+  });
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", dark);
+    try { localStorage.setItem("theme", dark ? "dark" : "light"); } catch { /* private mode */ }
+  }, [dark]);
+  const toggleTheme = () => setDark((d) => !d);
+
   useEffect(() => {
     // Parallel fetch snapshot + accounts (accounts is optional; drill-downs
     // just don't render if it's absent).
@@ -171,6 +182,8 @@ export default function App() {
             snapshot={snapshot}
             accountsData={accountsData}
             drilldown={accountsData ? drilldown : null}
+            dark={dark}
+            onToggleTheme={toggleTheme}
           />
         )}
         {snapshot && activeParent === "budget-vs-actuals" && (
@@ -179,6 +192,8 @@ export default function App() {
             accountsData={accountsData}
             drilldown={accountsData ? drilldown : null}
             budgetId={activeBudgetId}
+            dark={dark}
+            onToggleTheme={toggleTheme}
           />
         )}
       </AppShell>
