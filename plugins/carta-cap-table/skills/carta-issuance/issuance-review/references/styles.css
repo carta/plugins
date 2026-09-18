@@ -14,31 +14,56 @@
   src: url('SangBleuVersailles-Regular-WebS.ttf') format('truetype');
 }
 
-/* ── Ink design tokens ── */
+/* ── Ink design tokens ──
+   Values are Carta Ink's real light-dark() pairs (plugins/skill-dev/skills/theme-with-ink/tokens.css),
+   kept under their original legacy names so every rule and inline style below needs no further
+   edits — only the token VALUES changed, not their names. --btn-*-bg/-fg are the one addition:
+   Ink's button surfaces invert opposite to --color-black/--color-white (a black-on-white button
+   in light mode is white-on-black in dark, not black-on-black), so they need their own tokens
+   rather than reusing the text/surface roles. */
 :root {
-  --color-cream:    #FBFAF9;
-  --color-white:    #ffffff;
-  --color-black:    #1A1A1A;
-  --color-gray-80:  #2C3030;
-  --color-gray-70:  #394040;
-  --color-gray-60:  #656B6B;
-  --color-gray-50:  #9C9F9F;
-  --color-gray-40:  #A7AAAA;
-  --color-gray-30:  #DEDFDF;
-  --color-gray-20:  #EDEDED;
-  --color-blue-70:  #285DA3;
-  --color-blue-20:  #C0D1E9;
-  --color-blue-15:  #EAF0F8;
-  --color-blue-10:  #F7FAFE;
-  --color-red-70:   #C62128;
-  --color-red-60:   #E52431;
-  --color-red-10:   #FFEEEF;
-  --color-amber-60: #C88600;
-  --color-amber-50: #9A5700;
-  --color-amber-30: #DDB31F;
-  --color-amber-10: #FFFCED;
+  color-scheme: light dark;
 
-  --radius-small: 4px;
+  --color-cream:    light-dark(#FFFFFF, rgb(18 18 18));   /* page background (Ink surface-background-default) */
+  --color-white:    light-dark(#FFFFFF, #202020);         /* card / control surface */
+  --color-black:    light-dark(#1A1A1A, #EDEDED);         /* body text (Ink text-default) */
+  --color-gray-80:  light-dark(#2C3030, #9C9F9F);
+  --color-gray-70:  light-dark(#394040, #A7AAAA);
+  --color-gray-60:  light-dark(#656B6B, #A7AAAA);         /* subtle text (Ink text-subtle) */
+  --color-gray-50:  light-dark(#9C9F9F, #394040);         /* very-subtle text (Ink text-very-subtle) */
+  --color-gray-40:  light-dark(#A7AAAA, #656B6B);         /* default border (Ink border-default) */
+  --color-gray-30:  light-dark(#DEDFDF, #2D2D2D);         /* subtle border (Ink border-subtle) */
+  --color-gray-20:  light-dark(#EDEDED, #2D2D2D);
+  --color-blue-70:  light-dark(#285DA3, #8BABD6);         /* focus border + link (Ink border-focus-default / link-default) */
+  --color-blue-20:  light-dark(#C0D1E9, #1A3E6D);         /* focus ring (Ink border-focus-light) */
+  --color-blue-15:  light-dark(#EAF0F8, #122948);         /* Ink feedback-info-subtle */
+  --color-blue-10:  light-dark(#F7FAFE, #122948);
+  --color-red-70:   light-dark(#A82020, #A82020);         /* hover/active on danger (Ink brand-red-80) */
+  --color-red-60:   light-dark(#E52431, #FAD9D7);         /* Ink feedback-negative-strong */
+  --color-red-10:   light-dark(#FFEEEF, #401018);         /* Ink feedback-negative-subtle */
+  --color-amber-60: light-dark(#C88600, #DDB31F);
+  --color-amber-50: light-dark(#9A5700, #FBE284);
+  --color-amber-30: light-dark(#DDB31F, #705010);
+  --color-amber-10: light-dark(#FFFCED, #341C00);         /* Ink feedback-warning-subtle */
+
+  --radius-small: 4px;   /* buttons, inputs, tags — Ink radius-subtle */
+  --radius-card:  8px;   /* cards, KPI grid, plan card — Ink radius-default */
+  /* Ink elevation-small. Cards share the page's own surface color, so border + this shadow is
+     what reads as a distinct surface, not a fill contrast. */
+  --shadow-card: 0 4px 12px 0 rgb(0 0 0 / 0.08);
+
+  /* Ink's button surfaces invert for dark mode; these are its real component tokens, not a
+     hand-rolled guess (theme-with-ink docs: never route a primary button through a fixed
+     black/white pair). */
+  --btn-primary-bg:          light-dark(#1A1A1A, #FFFFFF);
+  --btn-primary-bg-hover:    light-dark(#202020, #CECFCF);
+  --btn-primary-bg-down:     light-dark(#394040, #A7AAAA);
+  --btn-primary-fg:          light-dark(#FFFFFF, #1A1A1A);
+  --btn-secondary-bg:        light-dark(#FFFFFF, rgb(18 18 18));
+  --btn-secondary-border:    light-dark(#A7AAAA, #656B6B);
+  --btn-secondary-border-hover: light-dark(#656B6B, #9C9F9F);
+  --btn-secondary-fg:        light-dark(#1A1A1A, #EDEDED);
+  --btn-danger-fg:           light-dark(#FFFFFF, #1A1A1A);
 
   --font-sans:  'Inter var', 'Inter', system-ui, sans-serif;
   --font-serif: 'SangBleu Versailles', Georgia, serif;
@@ -50,14 +75,15 @@
     .mono { font-family: var(--font-mono); font-size: 13px; }
     .serif { font-family: var(--font-serif); }
 
-    /* ── Logo row ── */
-    #logo-row { background: var(--color-white); border-bottom: 1px solid var(--color-gray-30); padding: 14px 24px; display: flex; align-items: center; gap: 14px; }
-    #header-meta { display: flex; flex-direction: column; gap: 2px; }
-    .corp-name { font-family: var(--font-serif); font-size: 20px; font-weight: 400; color: var(--color-black); line-height: 1.2; }
-    .sub { font-size: 12px; color: var(--color-gray-60); }
+    /* ── Page header — logo, title, and subheading sit directly on the page
+       background (never carded), per Carta's Ink canonical page shell. ── */
+    #logo-row { padding: 20px 24px 0; display: flex; align-items: center; }
+    #header-meta { padding: 12px 24px 4px; display: flex; flex-direction: column; gap: 4px; }
+    .page-title { font-family: var(--font-serif); font-size: 24px; font-weight: 400; color: var(--color-black); line-height: 1.25; }
+    .page-subheading { font-size: 13px; color: var(--color-gray-60); }
 
     /* ── Page content ── */
-    #page { padding: 24px 80px 48px; }
+    #page { padding: 12px 80px 48px; }
 
     /* ── Sticky action bar — primary CTAs pinned bottom-right (design feedback:
        confirm after reviewing without scrolling back up) ── */
@@ -69,27 +95,29 @@
 
     /* ── Buttons ── */
     .btn-primary {
-      height: 40px; padding: 0 15px; background: var(--color-black); color: var(--color-white);
+      height: 40px; padding: 0 15px; background: var(--btn-primary-bg); color: var(--btn-primary-fg);
       border: none; border-radius: var(--radius-small); font-size: 14px; font-weight: 500;
       cursor: pointer; font-family: var(--font-sans); box-shadow: none; white-space: nowrap;
     }
-    .btn-primary:hover  { background: var(--color-gray-80); }
-    .btn-primary:active { background: var(--color-gray-70); }
+    .btn-primary:hover  { background: var(--btn-primary-bg-hover); }
+    .btn-primary:active { background: var(--btn-primary-bg-down); }
     .btn-default {
-      height: 40px; padding: 0 15px; background: var(--color-white); color: var(--color-black);
-      border: 1px solid var(--color-gray-40); border-radius: var(--radius-small); font-size: 14px;
+      height: 40px; padding: 0 15px; background: var(--btn-secondary-bg); color: var(--btn-secondary-fg);
+      border: 1px solid var(--btn-secondary-border); border-radius: var(--radius-small); font-size: 14px;
       cursor: pointer; font-family: var(--font-sans); box-shadow: none; white-space: nowrap;
     }
-    .btn-default:hover { border-color: var(--color-gray-60); }
+    .btn-default:hover { border-color: var(--btn-secondary-border-hover); }
     .btn-danger {
-      height: 40px; padding: 0 15px; background: var(--color-red-60); color: var(--color-white);
+      height: 40px; padding: 0 15px; background: var(--color-red-60); color: var(--btn-danger-fg);
       border: none; border-radius: var(--radius-small); font-size: 14px; font-weight: 500;
       cursor: pointer; font-family: var(--font-sans); box-shadow: none; white-space: nowrap;
     }
-    .btn-danger:hover { background: var(--color-red-70); }
+    /* red-70 is the same dark red in both color schemes, so white text is always correct here
+       — unlike the base state, this one never needs a light-dark() pair. */
+    .btn-danger:hover { background: var(--color-red-70); color: #FFFFFF; }
 
     /* ── Cards ── */
-    .card { background: var(--color-white); border: 1px solid var(--color-gray-30); }
+    .card { background: var(--color-white); border: 1px solid var(--color-gray-30); border-radius: var(--radius-card); box-shadow: var(--shadow-card); }
     /* auto-fit (not a fixed repeat(4,1fr)) — certificates render 3 tiles (no
        "Pending board approval", which can never be anything but 0 for a
        security type with no pending state), grants render 4; this adapts to

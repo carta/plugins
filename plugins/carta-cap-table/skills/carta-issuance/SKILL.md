@@ -44,7 +44,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.85.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.85.3</carta-plugin>
 
 # Issue Securities
 
@@ -99,7 +99,8 @@ Bare tool names mean the session's resolved, possibly prefixed ones.
   link, "sandbox", "demo", "production" — **hard stop and ask.**
 - **Resolve the corporation:** `list_accounts(search="<name>")`, never an unfiltered
   `list_accounts()` — its truncated page may never reach the name. Ask only on zero or several
-  matches.
+  matches. **Extract the numeric id** — `list_accounts` returns `id: "corporation_pk:<n>"`;
+  pass only `<n>` as `corporation_id`, or the panel tool rejects it.
 - **Resolve `security_type`** per [the table below](#resolve-security_type).
 - **A file in the prompt goes through [the import sub-skill](issuance-import/SKILL.md)
   first** — the panel can't read a local file.
@@ -218,6 +219,10 @@ surface has to be rendered (`references/code-adapter.md` if a tool ends in `prev
 else `references/cowork-adapter.md`): trigger 3 renders nothing, but it still needs the engine
 and the payload reference. If the panel already saved a draft set, carry its `draft_set_id` in
 rather than starting a second.
+
+**If trigger 3 opens a replacement surface** (a human is present, just not the panel that
+failed), say once: *this fallback form is a different design than the panel that didn't
+render — not a stale plugin.*
 
 ## Resolve `security_type`
 
