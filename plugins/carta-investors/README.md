@@ -25,7 +25,7 @@ After installing, restart Claude Code and run `/mcp` to complete OAuth authentic
 - "Pull our Form ADV data for 2025"
 - "How does Fund I compare to its benchmark?"
 - "What journal entries were posted last quarter?"
-- "Build a 2026 budget for Delta-v Capital from last year's actuals"
+- "Build a 2026 budget for [company] from last year's actuals"
 - "How are we pacing against the budget this year?"
 - "Consolidating P&L for Krakatoa Ventures for March"
 
