@@ -22,6 +22,9 @@ allowed-tools:
   - Artifact
 ---
 
+<!-- carta:plugin-version -->
+<carta-plugin>carta-cap-table:6.85.2</carta-plugin>
+
 # Benchmark Query
 
 Look up Carta Total Compensation (CTC) market salary and equity benchmarks for a role at a specific corporation.

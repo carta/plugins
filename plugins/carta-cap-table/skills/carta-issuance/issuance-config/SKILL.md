@@ -13,6 +13,9 @@ owner: carta-cap-table maintainers (#cap-table-eng)
 allowed-tools: []
 ---
 
+<!-- carta:plugin-version -->
+<carta-plugin>carta-cap-table:6.85.2</carta-plugin>
+
 # issuance-config panel
 
 Pre-flight configuration panel for issuance. Replaces the `AskUserQuestion` chain

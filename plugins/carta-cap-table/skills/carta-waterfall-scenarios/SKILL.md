@@ -19,6 +19,9 @@ allowed-tools:
   - AskUserQuestion
 ---
 
+<!-- carta:plugin-version -->
+<carta-plugin>carta-cap-table:6.85.2</carta-plugin>
+
 <!-- Part of the official Carta AI Agent Plugin -->
 
 # Waterfall Scenarios

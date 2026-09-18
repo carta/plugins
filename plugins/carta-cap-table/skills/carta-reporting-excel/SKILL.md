@@ -15,6 +15,9 @@ allowed-tools:
   - Bash(UV_PYTHON_DOWNLOADS=never uv run*)
 ---
 
+<!-- carta:plugin-version -->
+<carta-plugin>carta-cap-table:6.85.2</carta-plugin>
+
 # Excel Export
 
 **Context expected from the calling skill (must be in session before this skill is invoked):**

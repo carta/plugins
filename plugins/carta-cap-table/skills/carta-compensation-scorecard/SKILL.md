@@ -19,6 +19,9 @@ allowed-tools:
   - Read
 ---
 
+<!-- carta:plugin-version -->
+<carta-plugin>carta-cap-table:6.85.2</carta-plugin>
+
 # CTC Scorecard
 
 Show how a corporation's compensation stacks up against market — at the corp level (band distribution rollup) or at the employee level (per-employee compa-ratio table) — using Carta Total Compensation data.

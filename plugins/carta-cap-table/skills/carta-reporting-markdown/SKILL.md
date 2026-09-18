@@ -15,6 +15,9 @@ allowed-tools:
   - Skill(carta-cap-table:carta-reporting-excel)
 ---
 
+<!-- carta:plugin-version -->
+<carta-plugin>carta-cap-table:6.85.2</carta-plugin>
+
 # Transform Configuration
 
 Called from `carta-reporting` step 4d (Claude Code / MARKDOWN path). Use values resolved earlier in this session: data file path, `corporation_id`, `user_report_pk`, and `_report_processor_path` (the script path the parent skill resolved once — reuse it instead of re-running `find`).

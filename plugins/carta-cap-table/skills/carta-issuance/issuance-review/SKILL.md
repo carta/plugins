@@ -9,6 +9,9 @@ owner: carta-cap-table maintainers (#cap-table-eng)
 allowed-tools: []
 ---
 
+<!-- carta:plugin-version -->
+<carta-plugin>carta-cap-table:6.85.2</carta-plugin>
+
 # issuance-review artifact
 
 This skill holds the `references/` assets for the issuance review panel rendered

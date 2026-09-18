@@ -10,6 +10,9 @@ owner: carta-cap-table maintainers (#cap-table-eng)
 allowed-tools: []
 ---
 
+<!-- carta:plugin-version -->
+<carta-plugin>carta-cap-table:6.85.2</carta-plugin>
+
 # issuance-import
 
 Reads a file the admin already has — typically the Carta importer template they

@@ -9,6 +9,9 @@ allowed-tools:
   - AskUserQuestion
 ---
 
+<!-- carta:plugin-version -->
+<carta-plugin>carta-cap-table:6.85.2</carta-plugin>
+
 # CTC RoleMatcher
 
 Map any job title or description to the Carta Total Compensation benchmark taxonomy — returning a standardized job area, focus, level, and track.

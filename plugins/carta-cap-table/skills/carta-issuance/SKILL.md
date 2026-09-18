@@ -43,6 +43,9 @@ allowed-tools:
   - javascript_tool
 ---
 
+<!-- carta:plugin-version -->
+<carta-plugin>carta-cap-table:6.85.2</carta-plugin>
+
 # Issue Securities
 
 From raw input to issued securities on a Carta cap table. These three types, and no others:
@@ -155,6 +158,11 @@ job, unless you fall back below.
 **Emit no `AskUserQuestion` while the panel is open** — it suspends the panel's submit watcher,
 so the click never lands. Don't narrate, poll, or re-send the panel.
 
+**The only thing that ends the wait: the user says they don't see it.** No timeout or
+liveness signal exists — treat their *first* report as
+[trigger 3](#6-falling-back-off-this-path) firing, no second check. That report also retires
+the submit watcher, so `AskUserQuestion` is unrestricted again.
+
 ### 5. On that message, issue
 
 ```
@@ -196,8 +204,9 @@ Three triggers, all observable — never a hunch that it looks slow:
    or timeout is transient — **retry exactly once** first; a second failure means falling back,
    not a third attempt.
 2. **The user asks for a different surface.**
-3. **Nobody will submit the panel** — no interactive human in the session — **or it errors
-   after opening.** The rows and the payload are then yours to build: read
+3. **Nobody will submit the panel** — no interactive human in the session, **one user report
+   they don't see it** (the only observable proof), **or it errors after opening.** The rows
+   and the payload are then yours to build: read
    [references/payload-reference.md](references/payload-reference.md), **including its
    "Never emit" list**, before you build them. A field the panel would have resolved is not a
    field you may send — a hand-built row carrying `vesting_acceleration_name` is rejected as an
@@ -238,7 +247,8 @@ Every path, panel included.
 2. **One confirmation gate per mutate attempt** — never zero, never two stacked. The gate is
    the surface's own Confirm button, or one `AskUserQuestion` on a chat surface. **Never stack
    an `AskUserQuestion` on an open panel**: it suspends the submit watcher, so the click never
-   lands. Recovery questions after a server short-circuit are unrestricted. The host's
+   lands — unless the user already reported not seeing the panel, which retires the watcher
+   too. Recovery questions after a server short-circuit are unrestricted. The host's
    confirmation prompt on the mutate is the final irreversibility gate, never the review
    gate.
 3. **Retry contract — reuse identity from the FIRST response.** Put `draft_set_id` from the
