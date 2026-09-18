@@ -81,8 +81,7 @@ string for certificates (no equity plan concept there) and for a plan-less or mi
 batch; the template then renders nothing, and the per-row **Equity plan** column carries it. A highlighted `<div class="card section
 plan-card">` (blue left-accent bar, tinted background) naming the resolved
 equity plan and its exercise periods — elevated out of `SUBHEADING`'s plain
-text into its own card (design feedback: the plan name used to be buried in a
-subheading line with no visual weight). Built once by `build_review.py`'s
+text into its own card for visual weight. Built once by `build_review.py`'s
 `build_plan_card()` from the **first** resolved row's `plan_name` /
 `exercise_periods_text` (every row in one draft set shares the same
 `equity_plan_id` — Phase 1's Option-plan reconciliation — so there's nothing to
