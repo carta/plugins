@@ -6,10 +6,17 @@ refresh export call instead of hand-copying the printed result: these rows carry
 employees beside their equity holdings and vesting dates, and a retyped digit lands in a
 figure the planner then presents as authoritative.
 
-The MCP command name is deliberately not written here. carta-mcp's
-``plugin-command-contract`` check fails every PR in that repo when a published skill
-names a command its registry does not have, and this one is not released yet — see
-SKILL.md step 2d-bis.
+The command is ``compensation:export:equity-refresh-report`` (generated tool name
+``compensation__export__equity-refresh-report``), released and callable, but gated
+``staff_only`` — a non-staff caller gets a permission error rather than an empty
+list. See SKILL.md step 2d-bis.
+
+The name was omitted here for a while: carta-mcp's ``plugin-command-contract``
+check fails every PR in that repo when a published skill names a command its
+registry does not have, and for a few hours on the day this shipped that was true
+of this one. It is in the registry now, so naming it is safe — and leaving the
+omission in place cost a staff teammate a QA session, because the skill told
+Claude the command did not exist and Claude stopped before checking anything else.
 
 WHY THIS EXISTS SEPARATELY FROM THE ROSTER CAPTURE
 Both are columnar employee exports, but they answer different questions and come

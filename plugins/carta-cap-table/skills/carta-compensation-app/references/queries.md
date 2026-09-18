@@ -244,11 +244,22 @@ departed employee appears on a scorecard — so it is captured but nothing consu
 
 ## §6 — Refresh planner
 
-> ⛔ **The MCP command for this is not released yet, so this section is reference
-> only — there is nothing to call.** The command name is deliberately omitted:
-> carta-mcp's `plugin-command-contract` check fails every PR in that repo when a
-> published skill names a command its registry does not have. Restore the name and
-> the `call_tool` example here when it ships.
+> **Released, staff accounts only.** `compensation:export:equity-refresh-report` is
+> in carta-mcp's registry and callable today, but it carries `staff_only: True` —
+> the same gate as `compensation:export:scorecard` and
+> `compensation:get:employee-scorecard`. A non-staff caller gets a permission
+> error, not an empty list, and that difference matters: reporting it as "no
+> employees" would describe the corporation instead of the caller's access.
+>
+> The tab it feeds is a separate gate and still off by default — see the
+> staff-preview note in SKILL.md Step 2e. Both have to line up for a staff QA
+> build: the capture below AND the `preview.refreshPlanner` key.
+
+```
+compensation:export:equity-refresh-report
+  generated tool name: compensation__export__equity-refresh-report
+  arguments: { "corporation_id": <int> }
+```
 
 The equity refresh export returns one columnar response carrying every benchmarked
 employee's equity holdings and vesting position, taking only `corporation_id`. This is
@@ -259,12 +270,19 @@ re-derive one.
 Staff-gated. No paging and no filters — it returns every employee or refuses above the
 row cap. Capture with `save_equity_refresh_page.py`, which refuses a partial sweep.
 
-Columns: `external_id`, `stakeholder_id`, `full_name`, `job_title`, `job_area`,
-`job_level`, `job_track`, `location`, `geo_adjustment`, `hire_date`,
-`total_vested_shares`, `total_unvested_shares`, `date_of_final_vest`,
-`live_award_count`.
+Columns, in wire order — the client zips these against each row's value array, so
+the ORDER is the contract:
 
-Three things a reader gets wrong otherwise:
+`external_id`, `stakeholder_id`, `full_name`, `job_title`, `job_area`, `job_level`,
+`job_track`, `location`, `geo_adjustment`, `hire_date`, `total_vested_shares`,
+`total_unvested_shares`, `date_of_final_vest`, `live_award_count`,
+`four_year_grant_benchmark_num_shares`, `refresh_grant_num_shares`, `job_focus`,
+`ntm_vesting`, `ttm_vesting`.
+
+New columns are APPENDED for that reason, so read by zipping rather than by
+position — a hardcoded index breaks on the next addition.
+
+Five things a reader gets wrong otherwise:
 
 * **There is no total-equity column.** The product computes "Total Shares Granted" as
   `total_vested_shares + total_unvested_shares` at render, so the console does the same
@@ -277,6 +295,18 @@ Three things a reader gets wrong otherwise:
   Cancelled and forfeited awards are already excluded server-side, so a non-null count is
   live holdings. Treating null as 0 would let a "has prior grants" filter include people
   it cannot judge.
+* **`ntm_vesting` / `ttm_vesting` are FLOW, not stock.** Shares vesting in the next
+  twelve months and vested in the last twelve — the amount moving through a window,
+  never a balance at its edge. Reading either as an unvested total is wrong by
+  roughly the length of the schedule. Same null rule as `live_award_count`, and
+  here the zero carries the signal: an employee past their final vest has `0`
+  vesting next year, which is exactly who a refresh cycle is looking for, while
+  `null` means their equity was never captured.
+* **Both are computed as of the request date**, unlike `total_vested_shares`. Two
+  calls against an unchanged cap table can legitimately differ; never report that
+  as a data error. And `ttm_vesting` counts events on securities the employee STILL
+  HOLDS — cancelled awards are filtered upstream — so it is not a history of
+  everything that ever vested, and must not be described as one.
 
 `build_datadir` emits `planner.json` with an `availability` block (`tenure`, `equity`,
 `vesting`, `grants`). Any false there means the corresponding filter is disabled in the

@@ -48,7 +48,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.85.4</carta-plugin>
+<carta-plugin>carta-cap-table:6.85.5</carta-plugin>
 
 <!-- [PATTERN carta-writing-style v0.0.2] [PATTERN etiquette v0.0.6] [PATTERN text v0.0.8] [PATTERN tables v0.0.12] [PATTERN carta-watermark v0.0.10] [PATTERN base v0.1.0] -->
 
@@ -691,32 +691,43 @@ and why.
 
 **2d-bis. Equity refresh report** — the Refresh planner tab.
 
-> ⛔ **SKIP THIS STEP.** Two separate reasons, and both still hold:
+> **Run this when the caller asked for the planner.** Otherwise skip it: the tab is
+> still hidden by default (`app/src/App.jsx` → `SHOW_REFRESH_PLANNER = false`), so
+> for an ordinary build the capture is wasted work.
 >
-> **The MCP command is not released.** The export command this step needs does not
-> exist in carta-mcp's registry yet, so there is nothing to call. It is named
-> nowhere in this file on purpose: carta-mcp's `plugin-command-contract` check
-> fails every PR in that repo when a published skill names a command the registry
-> does not have, so a forward reference here blocks unrelated people's work.
->
-> **The tab it feeds is hidden.** The planner's own screens are complete as of
-> this change — cohort, selection, policy, review and the issuance hand-off — but
-> the tab stays switched off at `app/src/App.jsx` → `SHOW_REFRESH_PLANNER = false`
-> until the fetch above can actually run. A **staff** caller who asks can see it
-> in their own build — see the staff-preview note under Step 2e. Without the export command there is no
-> `planner.json`, so the tab would have no data to show even if it were visible.
->
-> `build_datadir` treats the report as optional — with no capture it records
-> `hasPlanner: false` and the tab does not appear, exactly as it does today.
->
-> **When the command ships**, restore the call and its capture step here, the
-> command name in `references/queries.md` §6, and the `source` field in
-> `scripts/save_equity_refresh_page.py`. The capture script and the builder are
-> already written and tested; only the command reference was removed.
->
-> **When the workflow ships**, flip `SHOW_REFRESH_PLANNER` to `true`, delete the
-> block above it, and remove this notice. Those three must move together, or the
-> docs will promise a tab the app does not show, or vice versa.
+> A **staff** caller who asks to QA the planner gets both halves — this capture AND
+> the preview key in `meta.json`. See the staff-preview note under Step 2e. Doing
+> only the key produces a visible tab with no `planner.json` behind it, which reads
+> as a broken feature rather than a hidden one.
+
+Call `compensation:export:equity-refresh-report` — generated tool name
+`compensation__export__equity-refresh-report` — with `corporation_id`. It takes no
+other arguments: no paging, no filters, one response carrying every benchmarked
+employee. Then:
+
+```bash
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_equity_refresh_page.py" \
+  "<result path>" "<raw_dir>"
+```
+
+Three things that will bite:
+
+- **It is staff-gated.** A non-staff caller gets a permission error, not an empty
+  list. Say so plainly and build without the planner rather than reporting that the
+  corporation has no employees.
+- **`400` "at most 190 fit in one export response"** means the corporation is too
+  large. There is no paged fallback for this report — say which corporation and
+  stop, rather than narrowing the list, which would silently drop people from a
+  refresh cycle.
+- **The figures are the report's own.** They tie out against CTC's Equity Refresh
+  Report; pass them through unchanged and never re-derive one.
+
+`build_datadir` treats the report as optional — with no capture it records
+`hasPlanner: false` and the tab does not appear.
+
+> **When the workflow ships**, flip `SHOW_REFRESH_PLANNER` to `true` and delete the
+> staff-preview note under Step 2e. Both must move together, or the docs will
+> promise a tab the app does not show, or vice versa.
 
 **2d-ii. The equity pool (optional).** The planner's review step measures a plan's
 draw against the corporation's available pool. That figure is
