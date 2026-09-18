@@ -22,11 +22,13 @@ Usage:
 The template is resolved relative to this file, so callers only locate the script.
 
 <funds_file> is a path to a JSON file whose contents are a non-empty list of
-{"uuid": "...", "name": "...", "currency": "...", "fund_family_name": "..."} dicts.
-uuid, name, and currency are required on every entry; fund_family_name is optional
-(omit it, or set it to null, for a standalone fund with no family) — the artifact
-groups the fund dropdown by fund_family_name when any entry has one, and adds an
-"All of <family>" rollup option per family with more than one fund. It is a path
+{"uuid": "...", "name": "...", "currency": "...", "fund_family_name": "...",
+"vintage_date": "YYYY-MM-DD"} dicts. uuid, name, and currency are required on
+every entry; fund_family_name and vintage_date are both optional (omit, or set
+to null, when not applicable/known). fund_family_name groups the fund dropdown
+by family, adding an "All of <family>" rollup option per family with more than
+one fund. vintage_date sorts the dropdown most-recent-vintage-first; funds
+missing it sort last. It is a path
 (not a positional JSON string) because
 legitimate fund names contain apostrophes ("O'Reilly Capital",
 "St. James's Place Holdings"), JSON does not escape ', and shell single-quoting
@@ -35,7 +37,8 @@ The tempfile bridge eliminates that hazard.
 
 Embedded state block (in the rendered HTML, consumed at runtime by artifact.html):
     <script type="application/json" id="soi-funds-state">
-    {"firm_uuid": "...", "firm_name": "...", "funds": [{"uuid": "...", "name": "...", "currency": "..."}]}
+    {"firm_uuid": "...", "firm_name": "...", "funds": [{"uuid": "...", "name": "...",
+    "currency": "...", "vintage_date": "..."}]}
     </script>
 
 On success, one line is printed to stdout: the absolute output path. The calling
@@ -72,6 +75,7 @@ UUID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
     re.IGNORECASE,
 )
+DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 # The artifact runtime addresses a connector by display name. Names are viewer-facing
 # text, so only reject what would break the page: empty, or a stray quote/angle bracket
 # that could escape the JS string literal it lands in.
@@ -140,14 +144,14 @@ def load_funds(funds_file: Path) -> "list | None":
         if not isinstance(entry, dict):
             print(f"error: fund entry #{i} is not an object: {entry!r}", file=sys.stderr)
             return None
-        allowed_keys = {"uuid", "name", "currency", "fund_family_name"}
+        allowed_keys = {"uuid", "name", "currency", "fund_family_name", "vintage_date"}
         required_keys = {"uuid", "name", "currency"}
         extra = entry.keys() - allowed_keys
         missing = required_keys - entry.keys()
         if extra or missing:
             print(
                 f"error: fund entry #{i} must have 'uuid', 'name', 'currency', and optionally "
-                f"'fund_family_name', got {sorted(entry.keys())}",
+                f"'fund_family_name'/'vintage_date', got {sorted(entry.keys())}",
                 file=sys.stderr,
             )
             return None
@@ -157,6 +161,16 @@ def load_funds(funds_file: Path) -> "list | None":
             if not isinstance(entry["fund_family_name"], str) or entry["fund_family_name"] == "":
                 print(
                     f"error: fund entry #{i} has invalid fund_family_name: {entry['fund_family_name']!r}",
+                    file=sys.stderr,
+                )
+                return None
+        # vintage_date is optional (omit or null when unknown) — used only to sort the
+        # fund dropdown most-recent-first. Undated funds sort last, not rejected.
+        if "vintage_date" in entry and entry["vintage_date"] is not None:
+            if not isinstance(entry["vintage_date"], str) or not DATE_RE.match(entry["vintage_date"]):
+                print(
+                    f"error: fund entry #{i} has invalid vintage_date (want YYYY-MM-DD or null): "
+                    f"{entry['vintage_date']!r}",
                     file=sys.stderr,
                 )
                 return None

@@ -17,6 +17,9 @@ allowed-tools:
   - AskUserQuestion
 ---
 
+<!-- carta:plugin-version -->
+<carta-plugin>carta-investors:6.31.0</carta-plugin>
+
 # Fund Forecasting
 
 Read-only access to Carta Fund Forecasting (formerly Tactyc) fund data via the Carta MCP server. **This is a read-only tool today.** (Write paths — add-investment, update-KPI — are coming soon but are not yet available via MCP.)

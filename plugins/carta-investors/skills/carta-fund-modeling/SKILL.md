@@ -40,6 +40,9 @@ allowed-tools:
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-modeling/scripts/serve.py *)
 ---
 
+<!-- carta:plugin-version -->
+<carta-plugin>carta-investors:6.31.0</carta-plugin>
+
 [PATTERN carta-writing-style v0.0.2]
 [PATTERN etiquette v0.0.6]
 [PATTERN text v0.0.8]

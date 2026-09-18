@@ -32,6 +32,9 @@ allowed-tools:
   - Artifact
 ---
 
+<!-- carta:plugin-version -->
+<carta-plugin>carta-investors:6.31.0</carta-plugin>
+
 # Carta Home — Build / Redeploy
 
 Deploys the `carta-home` live artifact, published as **`Carta Home - <firm>`**. It is

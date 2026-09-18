@@ -39,6 +39,9 @@ allowed-tools:
   - mcp__carta__skill_checkpoint
 ---
 
+<!-- carta:plugin-version -->
+<carta-plugin>carta-investors:6.31.0</carta-plugin>
+
 # AGM Deck Builder
 
 ## Overview

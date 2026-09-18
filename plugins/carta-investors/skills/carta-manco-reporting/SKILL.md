@@ -41,6 +41,9 @@ allowed-tools:
   - Bash(curl -sf -o /dev/null -w * http://127.0.0.1:*)
 ---
 
+<!-- carta:plugin-version -->
+<carta-plugin>carta-investors:6.31.0</carta-plugin>
+
 # ManCo Reporting Dashboard
 
 Launches a local React dashboard for a management company's YTD financial

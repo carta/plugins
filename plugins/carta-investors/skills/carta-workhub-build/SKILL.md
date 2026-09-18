@@ -19,6 +19,9 @@ allowed-tools:
   - Artifact
 ---
 
+<!-- carta:plugin-version -->
+<carta-plugin>carta-investors:6.31.0</carta-plugin>
+
 # Carta Workhub — Build / Redeploy
 
 Deploys the `carta-workhub` Cowork live artifact. It is **assembled** from source parts in

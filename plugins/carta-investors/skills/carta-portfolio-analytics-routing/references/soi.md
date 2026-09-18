@@ -13,6 +13,7 @@ Render a firm's Schedule of Investments as a persistent, refreshable Live Artifa
 - "Show me [Fund Name]'s portfolio breakdown"
 - "What are [Fund Name]'s holdings?"
 - "Show me the SOIs for [Firm Name]" (no specific fund named)
+- "What is [Fund Name] invested in, including look-through to underlying funds" (fund-of-funds firms — see Step 2b)
 
 ## Prerequisites
 
@@ -53,7 +54,7 @@ With the firm list in hand:
 
 > **Run in parallel with Step 3.** Fund enumeration (this step) and MCP UUID discovery (Step 3) are fully independent — issue both tool batches concurrently in the same response, not sequentially. 
 
-Call `call_tool({"name": "fa__list__entities", "arguments": { entity_types: "fund,spv" }})`. The filter excludes entity types that can't hold investments so it is critical. Capture the full `[{uuid, name, currency, fund_family_id, fund_family_name}, ...]` list from the response — the `currency` field is the fund's reporting currency (e.g. `"USD"`, `"EUR"`) and is needed for correct amount formatting in the artifact. `fund_family_name` is non-null for funds that belong to a fund family (e.g. side-by-side vehicles of the same strategy) and null/absent for standalone funds — carry it through verbatim to Step 4a so the artifact can group the fund dropdown by family.
+Call `call_tool({"name": "fa__list__entities", "arguments": { entity_types: "fund,spv" }})`. The filter excludes entity types that can't hold investments so it is critical. Capture the full `[{uuid, name, currency, fund_family_id, fund_family_name}, ...]` list from the response — the `currency` field is the fund's reporting currency (e.g. `"USD"`, `"EUR"`) and is needed for correct amount formatting in the artifact. `fund_family_name` is non-null for funds that belong to a fund family (e.g. side-by-side vehicles of the same strategy) and null/absent for standalone funds — carry it through verbatim to Step 4a so the artifact can group the fund dropdown by family. This response does **not** include `vintage_date` — see Step 2c.
 
 **Pick the initial fund** for the dropdown and capture two variables — `initial_fund_uuid` and `name_status` — that Step 6 will read by name.
 
@@ -65,6 +66,29 @@ Call `call_tool({"name": "fa__list__entities", "arguments": { entity_types: "fun
 | User did not name a fund | alphabetically-first fund's uuid | `unnamed` | — |
 
 `named_but_missing` is **not** a blocker — render the artifact with the full firm fund list anyway. The user can pick their intended fund from the dropdown; Step 6 surfaces the miss in the confirmation message.
+
+### Step 2b — Fund-of-funds look-through (no action needed, narration only)
+
+The rendered artifact **always** carries fund-of-funds look-through support — drill-down into `UNDERLYING_INVESTMENTS`/`_HISTORY`, bulk prefetch, tranche merging, cross-fund search, and the as-of quarter selector are baked into `artifact.html`/`render-artifact.py` and self-gate on the data: a company row only gets an expand affordance when its own `ASSET_CLASS_TYPE = 'FUND_INVESTMENT'` positions exist for that fund. There is nothing to check and nothing to load before Step 4 — the template is identical for every firm.
+
+The only thing this step affects is **narration**. If you already know (from the user's request, or from having looked at this firm before) that it holds LP interests in other funds, you may mention look-through in the Step 6 bullet summary (e.g. "drill into each fund-of-funds position to see the underlying portfolio"). Otherwise say nothing about it — don't run a probe query just to decide whether to mention it. See `${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-analytics-routing/references/soi/lookthrough.md` for the query patterns and data-quality notes behind this feature, useful for debugging or explaining behavior, not for deciding whether to render it.
+
+### Step 2c — Vintage dates and duplicate-fund cleanup
+
+Run one dwh query, scoped to every fund UUID from Step 2:
+
+```sql
+SELECT FUND_UUID, FUND_NAME, VINTAGE_DATE, FUND_SIZE, IS_ADMINISTERED_BY_CARTA
+FROM FUND_ADMIN.FUNDS
+WHERE FUND_UUID IN (<all fund uuids from Step 2>)
+```
+
+Use the result for two things:
+
+1. **Vintage dates.** Merge `VINTAGE_DATE` onto the matching fund by `FUND_UUID` — this is where `vintage_date` for Step 4a actually comes from; `fa__list__entities` doesn't return it. Omit the key for a fund whose `VINTAGE_DATE` is null rather than fabricating one.
+2. **Duplicate fund records.** `FUND_ADMIN.FUNDS` can have multiple UUIDs sharing the exact same `FUND_NAME` — usually one real, Carta-administered fund plus dead placeholders. When a name collides across ≥2 rows and **exactly one** of them is a clear "real" record (`IS_ADMINISTERED_BY_CARTA = TRUE` and at least one of `VINTAGE_DATE`/`FUND_SIZE` non-null) while every other colliding row is a clear dead placeholder (`IS_ADMINISTERED_BY_CARTA = FALSE` and both `VINTAGE_DATE` and `FUND_SIZE` null), drop the placeholders from the Step 4a funds list — don't render them as separate dropdown entries. If a name collision doesn't fit that clean pattern (e.g. two rows both look administered, or the signal is ambiguous), leave every colliding row in — don't guess which one to drop.
+
+This step needs the firm's `FUND_UUID`s from Step 2, so it runs after Step 2, not in parallel with it.
 
 ### Step 3 — Checks before building
 
@@ -92,19 +116,21 @@ grant. It is one string; there is nothing to derive and nothing to keep in sync.
 
 Three sub-steps:
 
-**4a.** Use the `Write` tool to drop the firm's fund list to a JSON file inside the session's current working directory. Filename should be `<firm-slug>-funds.json`. Contents must be a JSON array of `{"uuid", "name", "currency"}` objects — all three keys required; `currency` is the fund's own code from Step 2, not a default. Add `"fund_family_name"` on any entry whose Step 2 `fund_family_name` was non-null — omit the key entirely (don't set it to `null`) for standalone funds:
+**4a.** Use the `Write` tool to drop the firm's fund list to a JSON file inside the session's current working directory. Filename should be `<firm-slug>-funds.json`. Contents must be a JSON array of `{"uuid", "name", "currency"}` objects — all three keys required; `currency` is the fund's own code from Step 2, not a default. Add `"fund_family_name"` on any entry whose Step 2 `fund_family_name` was non-null, and `"vintage_date"` on any entry whose Step 2c `VINTAGE_DATE` was non-null — omit either key entirely (don't set it to `null`) when the fund doesn't have one:
 
 ```json
 [
-  {"uuid": "<fund_uuid_1>", "name": "<fund_name_1>", "currency": "<currency_code_1>", "fund_family_name": "<family_name>"},
-  {"uuid": "<fund_uuid_2>", "name": "<fund_name_2>", "currency": "<currency_code_2>", "fund_family_name": "<family_name>"},
+  {"uuid": "<fund_uuid_1>", "name": "<fund_name_1>", "currency": "<currency_code_1>", "fund_family_name": "<family_name>", "vintage_date": "<YYYY-MM-DD>"},
+  {"uuid": "<fund_uuid_2>", "name": "<fund_name_2>", "currency": "<currency_code_2>", "fund_family_name": "<family_name>", "vintage_date": "<YYYY-MM-DD>"},
   {"uuid": "<fund_uuid_3>", "name": "<fund_name_3>", "currency": "<currency_code_3>"}
 ]
 ```
 
-The fund list comes straight from Step 2's `fa:list:entities` response. Preserve the entity name verbatim — including apostrophes, ampersands, commas, and any punctuation. The script JSON-escapes hostile characters at substitution time.
+The fund list comes straight from Step 2's `fa:list:entities` response, enriched by Step 2c. Preserve the entity name verbatim — including apostrophes, ampersands, commas, and any punctuation. The script JSON-escapes hostile characters at substitution time.
 
 If any fund in the firm has a `fund_family_name`, the artifact automatically groups the fund dropdown by family: the family name is a bold, selectable row that pools every fund beneath it — same pooling behavior as "All Entities", including the "Held By" column — with its member funds indented under it. Families of one fund and standalone funds render as plain rows. No extra step or render argument is needed; this is driven entirely by whether `fund_family_name` is present in the funds file.
+
+The dropdown (and each family's members) sorts by `vintage_date` descending — most recent vintage first, undated funds last. This is the default for every firm, not just fund-of-funds ones; there's nothing to opt into.
 
 **4b.** Locate the script:
 

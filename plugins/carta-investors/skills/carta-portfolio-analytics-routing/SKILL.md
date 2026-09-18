@@ -1,6 +1,6 @@
 ---
 name: carta-portfolio-analytics-routing
-version: 2.1.1
+version: 2.2.0
 description: >
   Routes to Schedule of Investments, Co-Investor Lookup, or Performance
   Benchmarks. Trigger on any of:
@@ -49,6 +49,9 @@ allowed-tools:
   - ToolSearch
 ---
 
+<!-- carta:plugin-version -->
+<carta-plugin>carta-investors:6.31.0</carta-plugin>
+
 # carta-portfolio-analytics-routing — Portfolio Analytics Router (mirror)
 
 Routes to Schedule of Investments, Co-Investor Lookup, or Performance
@@ -82,6 +85,7 @@ Use this as the semantic layer when Step 1 signal phrases don't produce an exact
 | What the customer is trying to do | Typical phrasing | Route |
 |---|---|---|
 | **View fund holdings / portfolio breakdown** | "show me the SOI", "what companies is the fund invested in", "portfolio breakdown for our flagship fund", "what does Fund III hold right now" | `soi` |
+| **Fund-of-funds look-through** | "what does our LP interest in Fund X actually hold", "look through to the underlying portfolio", "who else holds Acme via our fund investments" | `soi` (look-through is a conditional addition inside the SOI route — see `references/soi.md` Step 2b) |
 | **Find who else invested alongside us** | "show me my co-investors", "who co-invested with us in Acme", "who else participated in the Series B for TechCorp", "co-invest analysis by stage" | `co-investors` |
 | **Benchmark fund performance against peers** | "run performance benchmarks for Fund I", "how does our fund compare to peers", "how does Fund II stack up against vintage 2019 peers", "are we top-quartile for our vintage" | `benchmarks` |
 
@@ -99,13 +103,12 @@ Respond immediately without extended reasoning.
 | "K-1", "capital call notice", "distribution notice", "LP documents", "LP quarterly report", "AGM deck", "tear sheet" | **Stop.** LP reporting is handled separately. Tell the user: "LP documents and reporting live in a separate skill set — try `/carta-lp-reporting-routing` or say 'show me my LP documents'." |
 | "comparable companies", "comp set", "GPC comps", "select comps", "find comps", "add comparables", "update the comp set", "trading comps", "browse comps", "add ticker", "industry comparables" | **Stop.** Comparable company selection is handled by the Portfolio Valuations skill set. Tell the user: "Comparable company selection lives in the Portfolio Valuations skill — try `/carta-valuations-routing` or say 'update my comp set'." |
 | "SPA audit", "SPA coverage", "missing SPAs", "Form ADV", "regulatory AUM" | **Stop.** SPA audit and Form ADV are handled separately. Tell the user: "SPA audit and Form ADV live in a separate skill set — try `/carta-compliance-routing`." |
-| "fund of funds", "FoF", "fund-of-funds" | **Stop.** Fund of Funds is an upcoming capability and not yet available. Tell the user: "Fund of Funds is on the roadmap but isn't available yet — check back soon or contact your Carta account manager for the latest on availability." |
 
 **Route rows — classify and proceed to Step 2.5:**
 
 | Message signals | Route |
 |---|---|
-| "SOI", "schedule of investments", "fund holdings", "what is the fund invested in", "what companies is the fund in", "portfolio breakdown", "portfolio companies", "fund portfolio view", "investments by stage", "portfolio list", "what has [fund] invested in", "show me the portfolio" | `soi` → proceed to Step 2.5 |
+| "SOI", "schedule of investments", "fund holdings", "what is the fund invested in", "what companies is the fund in", "portfolio breakdown", "portfolio companies", "fund portfolio view", "investments by stage", "portfolio list", "what has [fund] invested in", "show me the portfolio", "fund of funds", "FoF", "fund-of-funds", "look-through", "look through to underlying funds", "underlying fund holdings" | `soi` → proceed to Step 2.5 |
 | "co-investor", "coinvestor", "co-invest", "who co-invested", "who else invested", "co-investors by stage", "co-investors by round", "co-invest analysis", "who are our co-investors", "co-investors on Aumni", "which funds invest alongside us" | `co-investors` → proceed to Step 2.5 |
 | "performance benchmark", "fund benchmark", "peer comparison", "percentile ranking", "IRR vs peers", "TVPI benchmark", "net IRR benchmark", "how does our fund compare", "how does Fund [X] stack up", "fund performance vs cohort", "vintage year benchmark", "benchmark cohort", "peer benchmark" | `benchmarks` → proceed to Step 2.5 |
 
@@ -151,7 +154,6 @@ Fire only if Step 1 returned no clear match.
 | SPA audit, Form ADV, regulatory AUM | `/carta-compliance-routing` |
 | LP documents, K-1, LP reporting, AGM decks, tear sheets | `/carta-lp-reporting-routing` |
 | Cap table ownership, equity management, 409A | Carta cap table tools |
-| Fund of Funds | Not yet available — see STOP rows |
 | Wants Carta's Fund Admin team to *do* something | `carta-fund-admin-requests` |
 
 ---
@@ -224,7 +226,6 @@ Do not summarize what the target skill will do beyond the announcement itself. D
 | User asks about LP documents, K-1s, or LP reporting | Out of scope — see STOP rows, redirect to `/carta-lp-reporting-routing` |
 | User asks about SPA audit, Form ADV, or regulatory filings | Out of scope — see STOP rows, redirect to `/carta-compliance-routing` |
 | User asks about cap table, equity grants, or 409A | Out of scope — redirect to the cap table skills |
-| User asks about Fund of Funds | Not yet available — tell the user it is upcoming and to contact their account manager |
 | User asks about a loan dashboard, loan portfolio, or draw balances | Not yet GA externally — see **Future routes** below |
 
 ---
@@ -325,9 +326,14 @@ dispatched.
   both of its Step 4b paths — the `find` pattern and the `${CLAUDE_PLUGIN_ROOT}`
   fallback — to this router's own `references/soi/` copy. `carta-soi`'s body
   points them at `skills/carta-soi/`, which the publish pipeline strips.
-  `render-artifact.py` and `artifact.html` need no rewrite — the script probes
-  both template offsets — so those two files stay byte-identical across both
-  locations and re-mirror with `cp`. Keep them that way.
+  Its Step 2b `Read` path needs the same treatment: rewrite
+  `skills/carta-soi/references/lookthrough.md` to
+  `skills/carta-portfolio-analytics-routing/references/soi/lookthrough.md`.
+  `render-artifact.py`, `artifact.html`, and `lookthrough.md` need no rewrite of
+  their own *contents* — the script probes both template offsets and
+  `lookthrough.md` has no internal paths — so those three files stay
+  byte-identical across both locations and re-mirror with `cp`. Keep them that
+  way.
 - `carta-performance-benchmarks` is entirely self-contained SQL/logic with no
   sub-references or scripts at all.
 - `carta-co-investors` needs no re-mirroring at all — dispatch reaches the
@@ -386,6 +392,7 @@ carta-portfolio-analytics-routing/
     ├── soi.md                ← mirror of carta-soi/SKILL.md — ACTIVE
     ├── soi/                  ← copies of carta-soi's script + template (see below)
     │   ├── artifact.html
+    │   ├── lookthrough.md    ← copy of carta-soi/references/lookthrough.md (fund-of-funds look-through)
     │   └── scripts/render-artifact.py
     │                         (no co-investors file — that route is dispatched, see Step 3)
     ├── benchmarks.md         ← mirror of carta-performance-benchmarks/SKILL.md — ACTIVE

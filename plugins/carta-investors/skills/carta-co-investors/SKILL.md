@@ -41,6 +41,9 @@ allowed-tools:
   - ToolSearch
 ---
 
+<!-- carta:plugin-version -->
+<carta-plugin>carta-investors:6.31.0</carta-plugin>
+
 <!-- Part of the official Carta AI Agent Plugin -->
 
 # Co-investor analysis

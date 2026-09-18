@@ -12,6 +12,9 @@ allowed-tools:
   - AskUserQuestion
 ---
 
+<!-- carta:plugin-version -->
+<carta-plugin>carta-investors:6.31.0</carta-plugin>
+
 <!-- Part of the official Carta AI Agent Plugin -->
 
 # Download Tearsheet

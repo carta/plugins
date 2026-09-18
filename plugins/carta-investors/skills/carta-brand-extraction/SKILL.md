@@ -21,6 +21,9 @@ allowed-tools:
   - mcp__claude_ai_carta__call_tool
 ---
 
+<!-- carta:plugin-version -->
+<carta-plugin>carta-investors:6.31.0</carta-plugin>
+
 # Build Brand Board
 
 ## Overview

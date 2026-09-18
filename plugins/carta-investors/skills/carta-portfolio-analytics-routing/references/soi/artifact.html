@@ -561,6 +561,77 @@
         .empty-state.error {
             color: var(--negative-strong);
         }
+
+        /* ── Underlying (look-through) rows — one level deeper than asset rows ──
+           Hidden by default like .asset-row; shown via the shared asset-group-N
+           class so collapsing the parent company row hides these too. */
+        tr.underlying-row { display: none; }
+        tr.underlying-row.visible { display: table-row; }
+        tr.underlying-row td,
+        tr.underlying-row td:first-child { background: #EFEFEF; }
+        tr.underlying-row td:first-child { padding-left: 80px; }
+        tr.underlying-row:hover td,
+        tr.underlying-row:hover td:first-child { background: #E4E4E4; }
+
+        .underlying-status {
+            color: var(--text-subtle);
+            font-style: italic;
+            text-align: left !important;
+        }
+        .underlying-status.error { color: var(--negative-strong); font-style: normal; }
+
+        .underlying-name { font-weight: 400; color: var(--text-default); }
+        .underlying-source {
+            font-size: 11px;
+            color: var(--text-subtle);
+            margin-left: 8px;
+        }
+
+        .asset-name.expandable { cursor: pointer; }
+        .asset-name.expandable:hover { text-decoration: underline; }
+        .underlying-toggle { cursor: pointer; }
+
+        /* ── Global (cross-fund) search results panel ── */
+        .global-search-panel {
+            margin: -4px 0 12px 0;
+            border: 1px solid var(--border-subtle);
+            background: var(--surface-bg);
+            max-height: 280px;
+            overflow-y: auto;
+        }
+        .global-search-header {
+            padding: 8px 12px;
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-subtle);
+            background: var(--surface-underlay);
+            border-bottom: 1px solid var(--border-subtle);
+            position: sticky;
+            top: 0;
+        }
+        .global-search-status {
+            padding: 12px;
+            font-size: 13px;
+            color: var(--text-subtle);
+        }
+        .global-search-status.error { color: var(--negative-strong); }
+        .global-search-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 8px 12px;
+            font-size: 13px;
+            border-bottom: 1px solid var(--border-subtle);
+            cursor: pointer;
+        }
+        .global-search-row:last-child { border-bottom: none; }
+        .global-search-row:hover { background: var(--surface-underlay); }
+        .gsr-main { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+        .gsr-company { font-weight: 500; color: var(--text-default); }
+        .gsr-via { font-size: 12px; color: var(--text-subtle); }
+        .gsr-fund { font-size: 12px; color: var(--text-subtle); white-space: nowrap; }
+        .gsr-value { font-variant-numeric: tabular-nums; font-weight: 500; white-space: nowrap; }
     </style>
 </head>
 <body>
@@ -598,8 +669,12 @@
 
         <div class="content-area" id="contentArea">
             <div class="fund-switcher" id="fundSwitcher">
-                <span class="fund-switcher-label">Fund:</span>
-                <div class="select-wrapper"><select class="fund-select" id="fundSelect" onchange="switchFund(this.value)"></select><span class="select-chevron"><svg viewBox="0 0 10 6" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l4 4 4-4"/></svg></span></div>
+                <span id="fundSwitcherFundPart">
+                    <span class="fund-switcher-label">Fund:</span>
+                    <div class="select-wrapper"><select class="fund-select" id="fundSelect" onchange="switchFund(this.value)"></select><span class="select-chevron"><svg viewBox="0 0 10 6" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l4 4 4-4"/></svg></span></div>
+                </span>
+                <span class="fund-switcher-label" style="margin-left:8px;">As of:</span>
+                <div class="select-wrapper"><select class="fund-select" id="asOfSelect" onchange="switchAsOf(this.value)" style="min-width:170px;"></select><span class="select-chevron"><svg viewBox="0 0 10 6" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l4 4 4-4"/></svg></span></div>
             </div>
 
             <div id="metricsContainer"></div>
@@ -610,6 +685,8 @@
                     <input type="text" class="search-input" id="searchInput" placeholder="Search companies...">
                 </div>
             </div>
+
+            <div class="global-search-panel" id="globalSearchPanel" style="display:none;"></div>
 
             <div class="table-scroll">
                 <table>
@@ -661,26 +738,171 @@
         const PAGE_SIZE = 200;
         const MAX_PAGES = 50;  // hard cap (10K rows) to prevent runaway loops
 
-        function buildSoiSql(fundUuid, offset, limit) {
+        // asOfDate is a 'YYYY-MM-DD' quarter-end string, or null/undefined for the
+        // live/current position. Live reads AGGREGATE_INVESTMENTS (is_active_investment
+        // scoped); a historical as-of reads the point-in-time AGGREGATE_INVESTMENTS_HISTORY
+        // table instead, per the standard "state effective over [effective_date,
+        // next_effective_date)" pattern. That table has no investment_date,
+        // remaining_value_per_share, or base-currency columns, so those come back NULL
+        // for historical snapshots (acquisition date blank; per-share values recomputed
+        // client-side in transformData; FX badge simply doesn't appear).
+        function buildSoiSql(fundUuid, offset, limit, asOfDate) {
+            if (!asOfDate) {
+                return `SELECT
+                    ISSUER_NAME                        AS issuer_name,
+                    ASSET_NAME                         AS asset_name,
+                    ASSET_CLASS_TYPE                   AS asset_class_type,
+                    INVESTMENT_DATE                    AS acquisition_date,
+                    COUNT_REMAINING_SHARES             AS count_remaining_shares,
+                    TOTAL_COST_BASIS                   AS cost_basis,
+                    REMAINING_VALUE                    AS fmv,
+                    TOTAL_UNREALIZED_GAIN_LOSS         AS unrealized_gain_loss,
+                    REMAINING_VALUE_PER_SHARE          AS remaining_value_per_share,
+                    LATEST_FMV_EFFECTIVE_DATE          AS latest_fmv_effective_date,
+                    BASE_CURRENCY_CODE                 AS base_currency_code,
+                    BASE_CURRENCY_COST                 AS base_currency_cost,
+                    BASE_CURRENCY_REMAINING_VALUE      AS base_currency_remaining_value,
+                    BASE_CURRENCY_UNREALIZED_GAIN_LOSS AS base_currency_unrealized_gain_loss
+                FROM FUND_ADMIN.AGGREGATE_INVESTMENTS
+                WHERE FUND_UUID = '${fundUuid}'
+                  AND IS_ACTIVE_INVESTMENT = TRUE
+                ORDER BY issuer_name, asset_name
+                LIMIT ${limit} OFFSET ${offset}`;
+            }
             return `SELECT
-                ISSUER_NAME                        AS issuer_name,
-                ASSET_NAME                         AS asset_name,
-                INVESTMENT_DATE                    AS acquisition_date,
-                COUNT_REMAINING_SHARES             AS count_remaining_shares,
-                TOTAL_COST_BASIS                   AS cost_basis,
-                REMAINING_VALUE                    AS fmv,
-                TOTAL_UNREALIZED_GAIN_LOSS         AS unrealized_gain_loss,
-                REMAINING_VALUE_PER_SHARE          AS remaining_value_per_share,
-                LATEST_FMV_EFFECTIVE_DATE          AS latest_fmv_effective_date,
-                BASE_CURRENCY_CODE                 AS base_currency_code,
-                BASE_CURRENCY_COST                 AS base_currency_cost,
-                BASE_CURRENCY_REMAINING_VALUE      AS base_currency_remaining_value,
-                BASE_CURRENCY_UNREALIZED_GAIN_LOSS AS base_currency_unrealized_gain_loss
-            FROM FUND_ADMIN.AGGREGATE_INVESTMENTS
+                ISSUER_NAME                AS issuer_name,
+                ASSET_NAME                 AS asset_name,
+                ASSET_CLASS_TYPE           AS asset_class_type,
+                NULL                       AS acquisition_date,
+                COUNT_REMAINING_SHARES     AS count_remaining_shares,
+                TOTAL_COST_BASIS           AS cost_basis,
+                REMAINING_VALUE            AS fmv,
+                TOTAL_UNREALIZED_GAIN_LOSS AS unrealized_gain_loss,
+                NULL                       AS remaining_value_per_share,
+                effective_date             AS latest_fmv_effective_date,
+                NULL                       AS base_currency_code,
+                NULL                       AS base_currency_cost,
+                NULL                       AS base_currency_remaining_value,
+                NULL                       AS base_currency_unrealized_gain_loss
+            FROM FUND_ADMIN.AGGREGATE_INVESTMENTS_HISTORY
             WHERE FUND_UUID = '${fundUuid}'
-              AND IS_ACTIVE_INVESTMENT = TRUE
+              AND effective_date <= '${asOfDate}'
+              AND (next_effective_date IS NULL OR next_effective_date > '${asOfDate}')
             ORDER BY issuer_name, asset_name
             LIMIT ${limit} OFFSET ${offset}`;
+        }
+
+        // Look-through drill-down — one fund-of-funds parent issuer's underlying
+        // holdings, prorated by the firm's ownership fraction in the underlying fund.
+        // FUND_UUID (not FUND_NAME) scopes the parent side: several firms have entities
+        // that share a display name across distinct records, so name-based scoping
+        // would silently blend them.
+        function escSqlLiteral(str) {
+            return String(str).replace(/'/g, "''");
+        }
+
+        // LIKE-pattern escape. escSqlLiteral alone only neutralizes quotes, so a
+        // search term containing % or _ reaches LIKE as a wildcard — a lone "%"
+        // renders '%%' and returns the firm's entire underlying-holdings catalog
+        // unfiltered. Backslashes are doubled because the escape passes two
+        // parsers: the SQL string literal, then LIKE's own ESCAPE handling.
+        function escSqlLikePattern(str) {
+            // Neutralize the wildcards for LIKE, then double every backslash so the
+            // escape survives the SQL string literal ahead of it.
+            const pattern = String(str).replace(/[\\%_]/g, '\\$&');
+            return escSqlLiteral(pattern.replace(/\\/g, '\\\\'));
+        }
+
+        // asOfDate branches CARTA_INVESTORS' current-state table to its point-in-time
+        // history table — same effective_date/next_effective_date pattern as the SOI
+        // query above. Default sort is REMAINING_VALUE DESC (highest look-through
+        // value first) per (fund, parent issuer) group, per default-sort requirement.
+        function buildUnderlyingSql(fundUuid, parentIssuerName, asOfDate) {
+            const table = asOfDate ? 'UNDERLYING_INVESTMENTS_HISTORY' : 'UNDERLYING_INVESTMENTS';
+            const dateFilter = asOfDate
+                ? ` AND EFFECTIVE_DATE <= '${asOfDate}' AND (NEXT_EFFECTIVE_DATE IS NULL OR NEXT_EFFECTIVE_DATE > '${asOfDate}')`
+                : '';
+            return `SELECT
+                FUND_UUID                    AS fund_uuid,
+                FUND_NAME                    AS fund_name,
+                PARENT_ISSUER_NAME           AS parent_issuer_name,
+                UNDERLYING_FUND_NAME         AS underlying_fund_name,
+                UNDERLYING_ISSUER_NAME       AS underlying_issuer_name,
+                ASSET_NAME                   AS asset_name,
+                SOURCE                       AS source,
+                OWNERSHIP_FRACTION           AS ownership_fraction,
+                IS_PRORATED                  AS is_prorated,
+                TOTAL_COST_BASIS             AS cost_basis,
+                REMAINING_VALUE              AS fmv,
+                TOTAL_UNREALIZED_GAIN_LOSS   AS unrealized_gain_loss,
+                COUNT_REMAINING_SHARES       AS count_remaining_shares,
+                REMAINING_VALUE_PER_SHARE    AS remaining_value_per_share,
+                CURRENCY_CODE                AS currency_code
+            FROM FUND_ADMIN.${table}
+            WHERE FUND_UUID = '${escSqlLiteral(fundUuid)}'
+              AND PARENT_ISSUER_NAME = '${escSqlLiteral(parentIssuerName)}'${dateFilter}
+            ORDER BY remaining_value DESC NULLS LAST, underlying_issuer_name
+            LIMIT 500`;
+        }
+
+        // Bulk look-through fetch — every underlying holding across a set of parent
+        // funds in one paginated query, grouped client-side by (fund_uuid,
+        // parent_issuer_name). This is what powers automatic drill-down: rather than
+        // waiting for the user to expand each fund-of-funds position one at a time,
+        // loadFund() calls this once per fund load and every position's underlying
+        // holdings are ready before the table renders.
+        function buildUnderlyingBulkSql(fundUuids, offset, limit, asOfDate) {
+            const table = asOfDate ? 'UNDERLYING_INVESTMENTS_HISTORY' : 'UNDERLYING_INVESTMENTS';
+            const dateFilter = asOfDate
+                ? ` AND EFFECTIVE_DATE <= '${asOfDate}' AND (NEXT_EFFECTIVE_DATE IS NULL OR NEXT_EFFECTIVE_DATE > '${asOfDate}')`
+                : '';
+            const uuidList = fundUuids.map(u => `'${escSqlLiteral(u)}'`).join(', ');
+            return `SELECT
+                FUND_UUID                    AS fund_uuid,
+                FUND_NAME                    AS fund_name,
+                PARENT_ISSUER_NAME           AS parent_issuer_name,
+                UNDERLYING_FUND_NAME         AS underlying_fund_name,
+                UNDERLYING_ISSUER_NAME       AS underlying_issuer_name,
+                ASSET_NAME                   AS asset_name,
+                SOURCE                       AS source,
+                OWNERSHIP_FRACTION           AS ownership_fraction,
+                IS_PRORATED                  AS is_prorated,
+                TOTAL_COST_BASIS             AS cost_basis,
+                REMAINING_VALUE              AS fmv,
+                TOTAL_UNREALIZED_GAIN_LOSS   AS unrealized_gain_loss,
+                COUNT_REMAINING_SHARES       AS count_remaining_shares,
+                REMAINING_VALUE_PER_SHARE    AS remaining_value_per_share,
+                CURRENCY_CODE                AS currency_code
+            FROM FUND_ADMIN.${table}
+            WHERE FUND_UUID IN (${uuidList})${dateFilter}
+            ORDER BY fund_uuid, parent_issuer_name, remaining_value DESC NULLS LAST
+            LIMIT ${limit} OFFSET ${offset}`;
+        }
+
+        // Cross-fund search — every look-through holding across every one of the firm's funds
+        // (row access is already firm-scoped by the set_context call in bootstrap(),
+        // so no explicit fund list is needed here) whose underlying company name
+        // matches the search term. Powers "type a portfolio company, see every
+        // vehicle in the firm that holds it via a fund-of-funds position."
+        function buildGlobalUnderlyingSearchSql(term, limit, asOfDate) {
+            const table = asOfDate ? 'UNDERLYING_INVESTMENTS_HISTORY' : 'UNDERLYING_INVESTMENTS';
+            const dateFilter = asOfDate
+                ? ` AND EFFECTIVE_DATE <= '${asOfDate}' AND (NEXT_EFFECTIVE_DATE IS NULL OR NEXT_EFFECTIVE_DATE > '${asOfDate}')`
+                : '';
+            return `SELECT
+                FUND_UUID                    AS fund_uuid,
+                FUND_NAME                    AS fund_name,
+                PARENT_ISSUER_NAME           AS parent_issuer_name,
+                UNDERLYING_FUND_NAME         AS underlying_fund_name,
+                UNDERLYING_ISSUER_NAME       AS underlying_issuer_name,
+                TOTAL_COST_BASIS             AS cost_basis,
+                REMAINING_VALUE              AS fmv,
+                TOTAL_UNREALIZED_GAIN_LOSS   AS unrealized_gain_loss,
+                CURRENCY_CODE                AS currency_code
+            FROM FUND_ADMIN.${table}
+            WHERE LOWER(UNDERLYING_ISSUER_NAME) LIKE '%${escSqlLikePattern(term.toLowerCase())}%' ESCAPE '\\\\'${dateFilter}
+            ORDER BY fund_name, parent_issuer_name, remaining_value DESC NULLS LAST
+            LIMIT ${limit}`;
         }
 
         // All-Entities rollup — same shape as buildSoiSql plus FUND_UUID so the
@@ -689,26 +911,51 @@
         // Uses an explicit IN-list of the firm's own fund UUIDs (already known from
         // FUNDS) rather than a FIRM_UUID column, so it needs no schema assumption
         // beyond what buildSoiSql already relies on.
-        function buildSoiSqlAllFunds(fundUuids, offset, limit) {
-            const uuidList = fundUuids.map(u => `'${u}'`).join(', ');
+        function buildSoiSqlAllFunds(fundUuids, offset, limit, asOfDate) {
+            const uuidList = fundUuids.map(u => `'${escSqlLiteral(u)}'`).join(', ');
+            if (!asOfDate) {
+                return `SELECT
+                    FUND_UUID                          AS fund_uuid,
+                    ISSUER_NAME                        AS issuer_name,
+                    ASSET_NAME                          AS asset_name,
+                    ASSET_CLASS_TYPE                   AS asset_class_type,
+                    INVESTMENT_DATE                    AS acquisition_date,
+                    COUNT_REMAINING_SHARES             AS count_remaining_shares,
+                    TOTAL_COST_BASIS                   AS cost_basis,
+                    REMAINING_VALUE                    AS fmv,
+                    TOTAL_UNREALIZED_GAIN_LOSS         AS unrealized_gain_loss,
+                    REMAINING_VALUE_PER_SHARE          AS remaining_value_per_share,
+                    LATEST_FMV_EFFECTIVE_DATE          AS latest_fmv_effective_date,
+                    BASE_CURRENCY_CODE                 AS base_currency_code,
+                    BASE_CURRENCY_COST                 AS base_currency_cost,
+                    BASE_CURRENCY_REMAINING_VALUE      AS base_currency_remaining_value,
+                    BASE_CURRENCY_UNREALIZED_GAIN_LOSS AS base_currency_unrealized_gain_loss
+                FROM FUND_ADMIN.AGGREGATE_INVESTMENTS
+                WHERE FUND_UUID IN (${uuidList})
+                  AND IS_ACTIVE_INVESTMENT = TRUE
+                ORDER BY issuer_name, asset_name
+                LIMIT ${limit} OFFSET ${offset}`;
+            }
             return `SELECT
-                FUND_UUID                          AS fund_uuid,
-                ISSUER_NAME                        AS issuer_name,
-                ASSET_NAME                          AS asset_name,
-                INVESTMENT_DATE                    AS acquisition_date,
-                COUNT_REMAINING_SHARES             AS count_remaining_shares,
-                TOTAL_COST_BASIS                   AS cost_basis,
-                REMAINING_VALUE                    AS fmv,
-                TOTAL_UNREALIZED_GAIN_LOSS         AS unrealized_gain_loss,
-                REMAINING_VALUE_PER_SHARE          AS remaining_value_per_share,
-                LATEST_FMV_EFFECTIVE_DATE          AS latest_fmv_effective_date,
-                BASE_CURRENCY_CODE                 AS base_currency_code,
-                BASE_CURRENCY_COST                 AS base_currency_cost,
-                BASE_CURRENCY_REMAINING_VALUE      AS base_currency_remaining_value,
-                BASE_CURRENCY_UNREALIZED_GAIN_LOSS AS base_currency_unrealized_gain_loss
-            FROM FUND_ADMIN.AGGREGATE_INVESTMENTS
+                FUND_UUID                  AS fund_uuid,
+                ISSUER_NAME                AS issuer_name,
+                ASSET_NAME                 AS asset_name,
+                ASSET_CLASS_TYPE           AS asset_class_type,
+                NULL                       AS acquisition_date,
+                COUNT_REMAINING_SHARES     AS count_remaining_shares,
+                TOTAL_COST_BASIS           AS cost_basis,
+                REMAINING_VALUE            AS fmv,
+                TOTAL_UNREALIZED_GAIN_LOSS AS unrealized_gain_loss,
+                NULL                       AS remaining_value_per_share,
+                effective_date             AS latest_fmv_effective_date,
+                NULL                       AS base_currency_code,
+                NULL                       AS base_currency_cost,
+                NULL                       AS base_currency_remaining_value,
+                NULL                       AS base_currency_unrealized_gain_loss
+            FROM FUND_ADMIN.AGGREGATE_INVESTMENTS_HISTORY
             WHERE FUND_UUID IN (${uuidList})
-              AND IS_ACTIVE_INVESTMENT = TRUE
+              AND effective_date <= '${asOfDate}'
+              AND (next_effective_date IS NULL OR next_effective_date > '${asOfDate}')
             ORDER BY issuer_name, asset_name
             LIMIT ${limit} OFFSET ${offset}`;
         }
@@ -808,7 +1055,65 @@
         // contributing row shares one currency. When it isn't, we still compute a sum
         // for internal bookkeeping but mark the company `mixedCurrency: true` so the
         // renderer shows a per-currency breakdown instead of a misleading single total.
-        function transformData(investments, fundMetaByUuid) {
+        // Fold every FUND_INVESTMENT asset row for one company into a single combined
+        // row (summed shares/cost/value/gain-loss; earliest acquisition date; latest
+        // last-updated date). A fund-of-funds LP interest built up via an initial
+        // commitment plus later capital calls otherwise shows as several separate
+        // "Partnership Interest" lines under the same company, each pointing at the
+        // exact same underlying look-through position — confusing, and it would
+        // trigger the drill-down fetch redundantly. Non-FUND_INVESTMENT assets (direct
+        // equity positions) pass through untouched.
+        function mergeFundInvestmentAssets(assets) {
+            const fundInvestments = assets.filter(a => a.isFundInvestment);
+            if (fundInvestments.length <= 1) return assets;
+            const others = assets.filter(a => !a.isFundInvestment);
+
+            // Only merge tranches of the same parent fund (repeated capital calls
+            // into one LP interest). Two of the firm's own funds can each hold an
+            // LP interest in the same underlying fund — those must stay separate
+            // rows, each with its own drill-down, not collapse into one that
+            // silently drops the other fund's look-through data.
+            const byFundUuid = new Map();
+            fundInvestments.forEach(a => {
+                const key = a.fundUuid;
+                if (!byFundUuid.has(key)) byFundUuid.set(key, []);
+                byFundUuid.get(key).push(a);
+            });
+
+            const mergedRows = Array.from(byFundUuid.values()).map(tranches => {
+                const merged = {
+                    name: tranches[0].name,
+                    date: '',
+                    lastDate: '',
+                    shares: 0,
+                    cost: 0,
+                    value: 0,
+                    gl: 0,
+                    currency: tranches[0].currency,
+                    fundName: tranches[0].fundName,
+                    fundUuid: tranches[0].fundUuid,
+                    assetClassType: 'FUND_INVESTMENT',
+                    isFundInvestment: true,
+                    tranches: tranches.length,
+                    fxCode: null, fxCost: undefined, fxValue: undefined, fxGl: undefined,
+                };
+                tranches.forEach(a => {
+                    merged.shares += a.shares || 0;
+                    merged.cost += a.cost || 0;
+                    merged.value += a.value || 0;
+                    merged.gl += a.gl || 0;
+                    if (a.date && (!merged.date || parseDate(a.date) < parseDate(merged.date))) merged.date = a.date;
+                    if (a.lastDate && (!merged.lastDate || parseDate(a.lastDate) > parseDate(merged.lastDate))) merged.lastDate = a.lastDate;
+                });
+                merged.cps = merged.shares > 0 ? merged.cost / merged.shares : null;
+                merged.vps = merged.shares > 0 ? merged.value / merged.shares : null;
+                return merged;
+            });
+
+            return [...others, ...mergedRows];
+        }
+
+        function transformData(investments, fundMetaByUuid, singleFundUuid) {
             const byCompany = {};
 
             investments.forEach(inv => {
@@ -851,10 +1156,20 @@
                     value: inv.fmv || 0,
                     gl: inv.unrealized_gain_loss || 0,
                     cps: shares > 0 ? cost / shares : null,
-                    vps: inv.remaining_value_per_share,
+                    // Historical (as-of) rows don't carry remaining_value_per_share —
+                    // fall back to a client-computed value/shares so per-share figures
+                    // still render for a past quarter instead of going blank.
+                    vps: inv.remaining_value_per_share != null ? inv.remaining_value_per_share : (shares > 0 ? (inv.fmv || 0) / shares : null),
                     lastDate: formatDateShort(inv.latest_fmv_effective_date),
                     currency: rowCurrency,
                     fundName: fundMeta ? fundMeta.name : null,
+                    // Fund identity for the look-through drill-down — the parent
+                    // (fund-of-funds) fund's UUID, used to scope the
+                    // UNDERLYING_INVESTMENTS query for this row's "Partnership
+                    // Interest" / FUND_INVESTMENT asset.
+                    fundUuid: inv.fund_uuid != null ? inv.fund_uuid : singleFundUuid,
+                    assetClassType: inv.asset_class_type || null,
+                    isFundInvestment: inv.asset_class_type === 'FUND_INVESTMENT',
                     // Base currency fields — present when the asset was purchased in a different
                     // currency than the fund. Company summary rows intentionally omit these.
                     fxCode: inv.base_currency_code || null,
@@ -880,6 +1195,12 @@
                     c.lastDate = lastDates.reduce((max, d) => parseDate(d) > parseDate(max) ? d : max);
                 }
                 c.mixedCurrency = c.currencies.size > 1;
+                // Combine multiple FUND_INVESTMENT tranches into the same underlying
+                // partnership (e.g. an initial commitment plus later capital calls
+                // recorded as separate asset rows on different dates) into one
+                // "Partnership Interest" line — they're the same look-through position
+                // and should get one drill-down, not one per tranche.
+                c.assets = mergeFundInvestmentAssets(c.assets);
             });
 
             return Object.values(byCompany).sort((a, b) => a.name.localeCompare(b.name));
@@ -929,7 +1250,26 @@
         // the SOI rarely changes within a single sidebar session, so persistent caching
         // isn't worth the complexity yet.
         let currentFundUuid = INITIAL_FUND_UUID;
-        const fundCache = new Map();  // fundUuid → companies[]
+        // 'YYYY-MM-DD' quarter-end string, or null for the live/current position.
+        let currentAsOfDate = null;
+        const fundCache = new Map();  // `${fundUuid}::${asOfDate||'current'}` → companies[]
+
+        // ── Look-through drill-down state ──
+        // Underlying-holdings cache, keyed by `${fundUuid}::${parentIssuerName}`.
+        // Value is one of: undefined (never fetched), 'loading', an array of parsed
+        // rows, or an Error (fetch failed — shown inline, doesn't block the rest of
+        // the table).
+        const underlyingCache = new Map();
+        // Which asset-row keys (`${companyIdx}-${assetIdx}`) currently have their
+        // underlying holdings expanded. Cleared on fund switch (see switchFund).
+        let expandedUnderlying = new Set();
+
+        // ── Global (cross-fund) search state ──
+        let globalSearchDebounce = null;
+        let globalSearchTerm = '';
+        let globalSearchResults = null;   // null = not run / cleared; array = last result
+        let globalSearchLoading = false;
+        let globalSearchError = null;
 
         // Sentinel dropdown value for the firm-wide rollup. Not a real fund UUID —
         // never sent to the warehouse as FUND_UUID; buildSoiSqlAllFunds below expands
@@ -1025,6 +1365,19 @@
                 .replace(/>/g, '&gt;')
                 .replace(/"/g, '&quot;')
                 .replace(/'/g, '&#39;');
+        }
+
+        // Escape a value for safe interpolation as a single-quoted JS string literal
+        // sitting inside a double-quoted HTML attribute (onclick="..."). Order matters:
+        // escape backslash/quote for the JS string FIRST (producing literal \\ and \'
+        // two-character sequences), THEN escape &, <, >, " for the HTML attribute.
+        // Escaping the single quote as &#39; (the way escHtml does) would be wrong here —
+        // the browser HTML-unescapes attribute values before handing them to the JS
+        // parser, so &#39; would decode back to a bare ' and terminate the string early.
+        function escJs(str) {
+            if (str == null) return '';
+            const jsSafe = String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+            return jsSafe.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         }
 
         function parseDate(str) {
@@ -1217,10 +1570,15 @@
                 `;
                 tbody.appendChild(cr);
 
-                c.assets.forEach(a => {
+                c.assets.forEach((a, ai) => {
+                    const underlyingKey = `${i}-${ai}`;
+                    const isExpandable = !!a.isFundInvestment;
+                    const isExpanded = isExpandable && expandedUnderlying.has(underlyingKey);
+
                     const ar = document.createElement('tr');
                     ar.className = `asset-row asset-group-${i}`;
                     if (allExpanded) ar.classList.add('visible');
+                    if (isExpandable) ar.classList.add('fund-investment-row');
 
                     // Build fx icon markup for a given base-currency amount and column label.
                     // The tooltip uses &#10; (newline entity) so the browser parses it as \n,
@@ -1240,8 +1598,20 @@
                     const assetHeldByCell = isPooledUuid(currentFundUuid)
                         ? `<td>${escHtml(a.fundName || '—')}</td>`
                         : '';
+
+                    // FUND_INVESTMENT rows (a fund-of-funds LP interest, e.g. "Partnership
+                    // Interest") get their own expand chevron so a user can drill from the
+                    // parent LP interest into the underlying fund's own portfolio companies,
+                    // look-through prorated by the firm's ownership fraction.
+                    const trancheTag = a.tranches > 1
+                        ? `<span class="tooltip-trigger" data-tooltip="Combines ${a.tranches} separate investment tranches into this partnership interest" style="margin-left:6px;font-size:11px;color:var(--text-subtle);">(${a.tranches} tranches)</span>`
+                        : '';
+                    const nameCell = isExpandable
+                        ? `<span class="expand-icon underlying-toggle" id="underlying-icon-${underlyingKey}" onclick="event.stopPropagation(); toggleUnderlying('${underlyingKey}', '${escJs(a.fundUuid)}', '${escJs(c.name)}')">${inkIcon(isExpanded ? 'down' : 'forward', 9)}</span><span class="asset-name expandable" onclick="event.stopPropagation(); toggleUnderlying('${underlyingKey}', '${escJs(a.fundUuid)}', '${escJs(c.name)}')">${escHtml(a.name)}</span>${trancheTag}`
+                        : `<span class="asset-name">${escHtml(a.name)}</span>`;
+
                     ar.innerHTML = `
-                        <td><span class="asset-name">${escHtml(a.name)}</span></td>
+                        <td>${nameCell}</td>
                         ${assetHeldByCell}
                         <td>${escHtml(a.date)}</td>
                         <td class="number">${fmtShares(a.shares)}</td>
@@ -1253,6 +1623,10 @@
                         <td class="number">${fmtDec(a.vps, a.currency)}</td>
                     `;
                     tbody.appendChild(ar);
+
+                    if (isExpandable) {
+                        tbody.appendChild(renderUnderlyingRows(underlyingKey, i, a, c.name, isExpanded));
+                    }
                 });
             });
 
@@ -1297,8 +1671,10 @@
 
         function toggleAll() {
             allExpanded = !allExpanded;
-            document.querySelectorAll('.asset-row').forEach(r => r.classList.toggle('visible', allExpanded));
-            document.querySelectorAll('.expand-icon').forEach(ic => {
+            document.querySelectorAll('.asset-row, .underlying-row').forEach(r => r.classList.toggle('visible', allExpanded));
+            // Exclude .underlying-toggle — a FUND_INVESTMENT row's own drill-down
+            // expand/collapse is independent of the company-row expand-all state.
+            document.querySelectorAll('.expand-icon:not(.underlying-toggle)').forEach(ic => {
                 ic.innerHTML = inkIcon(allExpanded ? 'down' : 'forward', 10);
             });
             const t = document.getElementById('expandAllToggle');
@@ -1308,6 +1684,237 @@
         function filterCompanies(val) {
             filterText = val;
             render();
+            scheduleGlobalSearch(val);
+        }
+
+        // ── Look-through drill-down: render + fetch ──
+
+        // Renders the underlying-holdings rows for one expanded FUND_INVESTMENT asset.
+        // Returns a DocumentFragment (possibly empty when collapsed) so render() can
+        // append it directly to tbody alongside the flat company/asset rows — no
+        // nested <table>, so sticky-first-column and sort/filter logic don't need to
+        // know this level exists.
+        function renderUnderlyingRows(key, companyIdx, asset, parentIssuerName, isExpanded) {
+            const frag = document.createDocumentFragment();
+            if (!isExpanded) return frag;
+
+            const colCount = getColumns().length;
+            const cacheKey = `${asset.fundUuid}::${parentIssuerName}::${currentAsOfDate || 'current'}`;
+            const cached = underlyingCache.get(cacheKey);
+            const showHeldBy = isPooledUuid(currentFundUuid);
+
+            // underlying rows carry the same `asset-group-${companyIdx}` class as the
+            // asset row above them, so toggle()/toggleAll() (which operate on that
+            // class, oblivious to nesting level) hide/show them together with the
+            // rest of the company's rows — a collapsed company row shouldn't leave
+            // its look-through rows visible underneath it.
+            const groupClass = `asset-group-${companyIdx}`;
+            const visibleClass = allExpanded ? ' visible' : '';
+
+            const statusRow = (text, isError) => {
+                const tr = document.createElement('tr');
+                tr.className = `underlying-row underlying-group-${key} ${groupClass}${visibleClass}`;
+                tr.innerHTML = `<td colspan="${colCount}" class="underlying-status${isError ? ' error' : ''}">${escHtml(text)}</td>`;
+                return tr;
+            };
+
+            if (cached === undefined || cached === 'loading') {
+                frag.appendChild(statusRow('Loading underlying holdings…', false));
+                return frag;
+            }
+            if (cached instanceof Error) {
+                frag.appendChild(statusRow("Couldn't load underlying holdings: " + cached.message, true));
+                return frag;
+            }
+            if (!Array.isArray(cached) || cached.length === 0) {
+                frag.appendChild(statusRow('No look-through holdings available for this position — sharing may not be enabled, or the underlying fund isn’t Carta-administered.', false));
+                return frag;
+            }
+
+            cached.forEach(u => {
+                const tr = document.createElement('tr');
+                tr.className = `underlying-row underlying-group-${key} ${groupClass}${visibleClass}`;
+                const pct = u.ownership_fraction != null ? u.ownership_fraction * 100 : null;
+                const pctTip = pct != null
+                    ? `${STATE.firm_name}'s look-through share of ${u.underlying_fund_name || parentIssuerName}: ${pct.toFixed(2)}%`
+                    : 'Ownership share unavailable — figures shown unprorated';
+                const sourceLabel = u.source === 'LPPA' ? 'self-reported' : 'Carta-administered';
+                const shares = u.count_remaining_shares || 0;
+                const cost = u.cost_basis || 0;
+                const cps = shares > 0 ? cost / shares : null;
+                const heldByCell = showHeldBy ? '<td>—</td>' : '';
+                tr.innerHTML = `
+                    <td><span class="underlying-name tooltip-trigger" data-tooltip="${escHtml(pctTip)}">${escHtml(u.underlying_issuer_name)}</span><span class="underlying-source">${sourceLabel}</span></td>
+                    ${heldByCell}
+                    <td>—</td>
+                    <td class="number">${fmtShares(u.count_remaining_shares)}</td>
+                    <td class="number">${fmt(cost, u.currency_code)}</td>
+                    <td class="number">${fmt(u.fmv || 0, u.currency_code)}</td>
+                    <td>—</td>
+                    <td class="number">${glCell(u.unrealized_gain_loss || 0, u.currency_code)}</td>
+                    <td class="number">${fmtDec(cps, u.currency_code)}</td>
+                    <td class="number">${fmtDec(u.remaining_value_per_share, u.currency_code)}</td>
+                `;
+                frag.appendChild(tr);
+            });
+            return frag;
+        }
+
+        // Expand/collapse one FUND_INVESTMENT asset's underlying holdings, fetching
+        // (and caching) from UNDERLYING_INVESTMENTS on first expand. Re-renders after
+        // both the optimistic "loading" state and the resolved result/error so the
+        // user sees progress rather than a frozen row.
+        async function toggleUnderlying(key, fundUuid, parentIssuerName) {
+            if (expandedUnderlying.has(key)) {
+                expandedUnderlying.delete(key);
+                render();
+                return;
+            }
+            expandedUnderlying.add(key);
+
+            // This is the fallback path — the normal path is loadFund's bulk prefetch,
+            // which already populates underlyingCache (with an explicit [] for
+            // positions with no look-through data) before the table renders. This
+            // per-row fetch only fires if that bulk prefetch missed this key, e.g. it
+            // partially failed.
+            const cacheKey = `${fundUuid}::${parentIssuerName}::${currentAsOfDate || 'current'}`;
+            if (!underlyingCache.has(cacheKey)) {
+                underlyingCache.set(cacheKey, 'loading');
+                render();
+                try {
+                    const result = await callMcpWithWelcomeRetry(CALL_TOOL, {
+                        name: 'dwh__execute__query',
+                        arguments: { sql: buildUnderlyingSql(fundUuid, parentIssuerName, currentAsOfDate) },
+                    });
+                    const rows = parseDwhQueryResult(result);
+                    underlyingCache.set(cacheKey, rows);
+                } catch (err) {
+                    underlyingCache.set(cacheKey, err instanceof Error ? err : new Error(String(err)));
+                }
+            }
+            render();
+        }
+
+        // ── Global (cross-fund) search ──
+        // Debounced so every keystroke doesn't fire a warehouse query. Runs
+        // independently of the local top-level company filter — the two answer
+        // different questions ("which of THIS fund's top-level positions match" vs.
+        // "which of ANY fund's look-through holdings match").
+
+        function scheduleGlobalSearch(term) {
+            globalSearchTerm = (term || '').trim();
+            clearTimeout(globalSearchDebounce);
+            if (globalSearchTerm.length < 2) {
+                globalSearchResults = null;
+                globalSearchError = null;
+                globalSearchLoading = false;
+                renderGlobalSearchPanel();
+                return;
+            }
+            globalSearchDebounce = setTimeout(() => runGlobalSearch(globalSearchTerm), 400);
+        }
+
+        async function runGlobalSearch(term) {
+            if (term !== globalSearchTerm) return; // superseded by a later keystroke
+            globalSearchLoading = true;
+            globalSearchError = null;
+            renderGlobalSearchPanel();
+            try {
+                const result = await callMcpWithWelcomeRetry(CALL_TOOL, {
+                    name: 'dwh__execute__query',
+                    arguments: { sql: buildGlobalUnderlyingSearchSql(term, 200, currentAsOfDate) },
+                });
+                const rows = parseDwhQueryResult(result);
+                if (term !== globalSearchTerm) return; // stale by the time it resolved
+                globalSearchResults = rows;
+            } catch (err) {
+                if (term !== globalSearchTerm) return;
+                globalSearchError = (err && err.message) || String(err);
+                globalSearchResults = null;
+            } finally {
+                if (term === globalSearchTerm) {
+                    globalSearchLoading = false;
+                    renderGlobalSearchPanel();
+                }
+            }
+        }
+
+        function renderGlobalSearchPanel() {
+            const panel = document.getElementById('globalSearchPanel');
+            if (!panel) return;
+
+            if (!globalSearchTerm || globalSearchTerm.length < 2) {
+                panel.style.display = 'none';
+                panel.innerHTML = '';
+                return;
+            }
+            panel.style.display = 'block';
+
+            if (globalSearchLoading) {
+                panel.innerHTML = '<div class="global-search-status">Searching underlying holdings across all your funds…</div>';
+                return;
+            }
+            if (globalSearchError) {
+                panel.innerHTML = `<div class="global-search-status error">Couldn't search underlying holdings: ${escHtml(globalSearchError)}</div>`;
+                return;
+            }
+            if (!globalSearchResults || globalSearchResults.length === 0) {
+                panel.innerHTML = `<div class="global-search-status">No underlying (look-through) holdings match "${escHtml(globalSearchTerm)}".</div>`;
+                return;
+            }
+
+            const rowsHtml = globalSearchResults.map(r => {
+                const value = fmt(r.fmv || 0, r.currency_code);
+                return `<div class="global-search-row" onclick="jumpToMatch('${escJs(r.fund_uuid)}', '${escJs(r.parent_issuer_name)}', '${escJs(r.underlying_issuer_name)}')">
+                    <div class="gsr-main">
+                        <span class="gsr-company">${escHtml(r.underlying_issuer_name)}</span>
+                        <span class="gsr-via">via ${escHtml(r.parent_issuer_name)}</span>
+                    </div>
+                    <div class="gsr-fund">${escHtml(r.fund_name)}</div>
+                    <div class="gsr-value">${value}</div>
+                </div>`;
+            }).join('');
+
+            const count = globalSearchResults.length;
+            panel.innerHTML = `<div class="global-search-header">Also held (look-through) across your funds — ${count} match${count === 1 ? '' : 'es'}</div>${rowsHtml}`;
+        }
+
+        // Switches to the matched fund (if needed), expands the matched parent LP
+        // interest's underlying holdings, and scrolls it into view. The local text
+        // filter is cleared so the parent row isn't hidden by an unrelated filter
+        // term left over from before the fund switch; the global search box itself
+        // (and its panel) are left alone so the user can keep browsing other matches.
+        async function jumpToMatch(fundUuid, parentIssuerName, underlyingIssuerName) {
+            if (fundUuid && fundUuid !== currentFundUuid) {
+                await loadFund(fundUuid);
+                // loadFund rebuilds the DOM (ensureContentSkeleton), which wipes the
+                // search input and the global-search panel — restore both so the
+                // panel the user clicked from is still visible after the jump.
+                const input = document.getElementById('searchInput');
+                if (input) input.value = globalSearchTerm;
+                renderGlobalSearchPanel();
+            }
+            filterText = '';
+
+            const idx = companies.findIndex(c => c.name === parentIssuerName);
+            if (idx === -1) { render(); return; }
+
+            const assetIdx = companies[idx].assets.findIndex(a => a.isFundInvestment);
+            render();
+
+            if (assetIdx !== -1) {
+                const key = `${idx}-${assetIdx}`;
+                if (!expandedUnderlying.has(key)) {
+                    await toggleUnderlying(key, fundUuid, parentIssuerName);
+                }
+            }
+
+            requestAnimationFrame(() => {
+                const groupRows = document.querySelectorAll(`.asset-group-${idx}`);
+                const companyRows = document.querySelectorAll('tr.company-row');
+                const target = groupRows[0] || companyRows[idx];
+                if (target && target.scrollIntoView) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            });
         }
 
         // ── Loading / error / empty-fund states ──
@@ -1505,9 +2112,16 @@
             return allRows;
         }
 
+        // Sort key for vintage-descending order. Funds with no vintage_date sort
+        // last (below every dated fund), as a plain-string fallback that is always
+        // lexicographically smaller than a real ISO date.
+        function vintageSortKey(f) {
+            return f.vintage_date || '0000-00-00';
+        }
+
         // Group funds by fund_family_name (present) vs standalone (absent/null).
-        // Families are sorted alphabetically by name; funds within a family and the
-        // standalone funds are each sorted alphabetically by fund name.
+        // Members within a family, and standalone funds, are each sorted by
+        // vintage — most recent first, undated last, then alphabetically.
         function groupFundsByFamily() {
             const families = new Map();
             const standalone = [];
@@ -1519,10 +2133,11 @@
                     standalone.push(f);
                 }
             });
-            const familyNames = [...families.keys()].sort((a, b) => a.localeCompare(b));
-            familyNames.forEach(name => families.get(name).sort((a, b) => a.name.localeCompare(b.name)));
-            standalone.sort((a, b) => a.name.localeCompare(b.name));
-            return { familyNames, families, standalone };
+            const byVintageThenName = (a, b) =>
+                vintageSortKey(b).localeCompare(vintageSortKey(a)) || a.name.localeCompare(b.name);
+            families.forEach(members => members.sort(byVintageThenName));
+            standalone.sort(byVintageThenName);
+            return { families, standalone };
         }
 
         function makeOption(value, label, selectedUuid) {
@@ -1543,34 +2158,109 @@
                 select.appendChild(makeOption(ALL_ENTITIES_VALUE, 'All Entities', currentFundUuid));
             }
 
-            const { familyNames, families, standalone } = groupFundsByFamily();
+            const { families, standalone } = groupFundsByFamily();
 
-            if (familyNames.length === 0) {
-                // No fund families in this firm — flat list, unchanged from before.
-                FUNDS.forEach(f => select.appendChild(makeOption(f.uuid, f.name, currentFundUuid)));
-            } else {
-                familyNames.forEach(name => {
-                    const funds = families.get(name);
-                    if (funds.length > 1) {
+            // Build one unified, orderable list of dropdown entries — a fund family
+            // is positioned by its most-recent member's vintage — then sort the
+            // whole list together so the dropdown reads most-recent-vintage-first
+            // end to end, not "all families, then all standalone funds."
+            const entries = [];
+            families.forEach((members, name) => {
+                entries.push({ kind: 'family', name, members, sortKey: vintageSortKey(members[0]) });
+            });
+            standalone.forEach(f => {
+                entries.push({ kind: 'fund', fund: f, sortKey: vintageSortKey(f) });
+            });
+            entries.sort((a, b) => b.sortKey.localeCompare(a.sortKey));
+
+            entries.forEach(entry => {
+                if (entry.kind === 'family') {
+                    if (entry.members.length > 1) {
                         // The family name itself is the rollup option: an <optgroup> label renders
                         // the family but cannot be selected, so pooling would need a second row.
-                        const header = makeOption(FAMILY_PREFIX + name, name, currentFundUuid);
+                        const header = makeOption(FAMILY_PREFIX + entry.name, entry.name, currentFundUuid);
                         header.style.fontWeight = 'bold';
                         select.appendChild(header);
                         // Non-breaking spaces — leading plain whitespace collapses in some browsers.
-                        funds.forEach(f => select.appendChild(makeOption(f.uuid, '\u00a0\u00a0\u00a0\u00a0' + f.name, currentFundUuid)));
+                        entry.members.forEach(f => select.appendChild(makeOption(f.uuid, '\u00a0\u00a0\u00a0\u00a0' + f.name, currentFundUuid)));
                     } else {
                         // A family of one fund has nothing to pool, so it reads as a plain fund.
-                        funds.forEach(f => select.appendChild(makeOption(f.uuid, f.name, currentFundUuid)));
+                        entry.members.forEach(f => select.appendChild(makeOption(f.uuid, f.name, currentFundUuid)));
                     }
-                });
-                standalone.forEach(f => select.appendChild(makeOption(f.uuid, f.name, currentFundUuid)));
-            }
+                } else {
+                    select.appendChild(makeOption(entry.fund.uuid, entry.fund.name, currentFundUuid));
+                }
+            });
 
-            const switcher = document.getElementById('fundSwitcher');
-            if (switcher) {
-                switcher.classList.toggle('hidden', FUNDS.length <= 1);
+            // Only the Fund dropdown hides for a single-fund firm — the As of
+            // dropdown is always relevant, regardless of fund count.
+            const fundPart = document.getElementById('fundSwitcherFundPart');
+            if (fundPart) fundPart.hidden = FUNDS.length <= 1;
+
+            populateAsOfSelect();
+        }
+
+        // Builds the last N quarter-end dates (most recent completed quarter first)
+        // plus a leading "Current" option. Computed from the viewer's local clock —
+        // there's no server-side "as of" catalog to read, so this is an assumption
+        // (calendar quarters, not fiscal quarters) rather than a fetched fact.
+        function computeQuarterOptions(count) {
+            const opts = [{ value: '', label: 'Current' }];
+            const now = new Date();
+            let year = now.getFullYear();
+            let qEndMonth = Math.floor(now.getMonth() / 3) * 3 + 2; // 2,5,8,11 → Mar/Jun/Sep/Dec
+            let d = new Date(year, qEndMonth + 1, 0); // last day of that month
+            if (d > now) {
+                qEndMonth -= 3;
+                if (qEndMonth < 0) { qEndMonth += 12; year -= 1; }
+                d = new Date(year, qEndMonth + 1, 0);
             }
+            for (let i = 0; i < count; i++) {
+                const y = d.getFullYear();
+                const m = d.getMonth();
+                const iso = `${y}-${String(m + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                const q = Math.floor(m / 3) + 1;
+                opts.push({ value: iso, label: `Q${q} ${y} (${iso})` });
+                let nm = m - 3, ny = y;
+                if (nm < 0) { nm += 12; ny -= 1; }
+                d = new Date(ny, nm + 1, 0);
+            }
+            return opts;
+        }
+
+        function populateAsOfSelect() {
+            const select = document.getElementById('asOfSelect');
+            if (!select) return;
+            select.innerHTML = '';
+            computeQuarterOptions(12).forEach(opt => {
+                const el = document.createElement('option');
+                el.value = opt.value;
+                el.textContent = opt.label;
+                if (opt.value === (currentAsOfDate || '')) el.selected = true;
+                select.appendChild(el);
+            });
+        }
+
+        // Reloads the current fund at a different as-of date. A quarter-end pulls
+        // from the point-in-time history tables (AGGREGATE_INVESTMENTS_HISTORY /
+        // UNDERLYING_INVESTMENTS_HISTORY) instead of the live current-state tables —
+        // see buildSoiSql / buildUnderlyingBulkSql. Cached independently per
+        // (fund, as-of) pair, so flipping back and forth doesn't re-fetch.
+        function switchAsOf(value) {
+            const newAsOf = value || null;
+            if (newAsOf === currentAsOfDate) return;
+            currentAsOfDate = newAsOf;
+            filterText = '';
+            sortCol = null;
+            sortDir = 'asc';
+            allExpanded = false;
+            expandedUnderlying = new Set();
+            clearTimeout(globalSearchDebounce);
+            globalSearchTerm = '';
+            globalSearchResults = null;
+            globalSearchError = null;
+            globalSearchLoading = false;
+            loadFund(currentFundUuid);
         }
 
         // Show the shimmer skeleton again (used when switching to an uncached fund).
@@ -1608,9 +2298,13 @@
                 currentCurrency = fundMeta ? fundMeta.currency : null;
             }
 
-            // Cache hit → render immediately.
-            if (fundCache.has(fundUuid)) {
-                companies = fundCache.get(fundUuid);
+            const cacheKey = `${fundUuid}::${currentAsOfDate || 'current'}`;
+
+            // Cache hit → render immediately (underlying holdings were already
+            // prefetched and cached the first time this fund/as-of pair was loaded).
+            if (fundCache.has(cacheKey)) {
+                companies = fundCache.get(cacheKey);
+                expandedUnderlying = defaultExpandedUnderlying(companies);
                 if (companies.length === 0) { renderEmptyFund(); return; }
                 renderMetrics();
                 render();
@@ -1622,24 +2316,83 @@
             showLoading();
             try {
                 let transformed;
+                const scopeFundUuids = isPooled ? pooled.map(f => f.uuid) : [fundUuid];
                 if (isPooled) {
                     const fundMetaByUuid = {};
                     pooled.forEach(f => { fundMetaByUuid[f.uuid] = { name: f.name, currency: f.currency }; });
                     const investments = await fetchAllPages((offset, limit) =>
-                        buildSoiSqlAllFunds(pooled.map(f => f.uuid), offset, limit));
+                        buildSoiSqlAllFunds(scopeFundUuids, offset, limit, currentAsOfDate));
                     transformed = transformData(investments, fundMetaByUuid);
                 } else {
-                    const investments = await fetchAllPages((offset, limit) => buildSoiSql(fundUuid, offset, limit));
-                    transformed = transformData(investments);
+                    const investments = await fetchAllPages((offset, limit) => buildSoiSql(fundUuid, offset, limit, currentAsOfDate));
+                    transformed = transformData(investments, null, fundUuid);
                 }
-                fundCache.set(fundUuid, transformed);
+
+                // Automatically calculate look-through holdings for every
+                // FUND_INVESTMENT position in one bulk query, instead of waiting for
+                // the user to expand each one — see buildUnderlyingBulkSql.
+                setLoadingStatus('Calculating underlying (look-through) holdings…');
+                await prefetchUnderlyingHoldings(transformed, scopeFundUuids, currentAsOfDate);
+
+                fundCache.set(cacheKey, transformed);
                 companies = transformed;
+                expandedUnderlying = defaultExpandedUnderlying(companies);
                 if (companies.length === 0) { renderEmptyFund(); return; }
                 renderMetrics();
                 render();
                 showContent();
             } catch (error) {
                 showError(error && error.userFacing ? error.message : 'Error loading SOI: ' + error.message);
+            }
+        }
+
+        // Every FUND_INVESTMENT position starts expanded — its underlying holdings
+        // are already computed by the time the table renders, so there's nothing to
+        // wait for. Keyed by `${companyIdx}-${assetIdx}`, matching toggleUnderlying.
+        function defaultExpandedUnderlying(companiesList) {
+            const keys = new Set();
+            companiesList.forEach((c, ci) => {
+                c.assets.forEach((a, ai) => {
+                    if (a.isFundInvestment) keys.add(`${ci}-${ai}`);
+                });
+            });
+            return keys;
+        }
+
+        // One bulk query for every FUND_INVESTMENT position across the funds in
+        // scope, grouped client-side by (fund_uuid, parent_issuer_name) and written
+        // straight into underlyingCache. Positions with no look-through rows get an
+        // explicit [] (not left undefined) so they render "no data" instead of a
+        // perpetual loading state; positions the query never reached because it threw
+        // get an explicit Error so they render a retryable failure instead.
+        async function prefetchUnderlyingHoldings(companiesList, fundUuids, asOfDate) {
+            const targets = [];
+            companiesList.forEach(c => {
+                c.assets.forEach(a => {
+                    if (a.isFundInvestment) targets.push({ fundUuid: a.fundUuid, parentIssuerName: c.name });
+                });
+            });
+            if (targets.length === 0) return;
+
+            try {
+                const rows = await fetchAllPages((offset, limit) =>
+                    buildUnderlyingBulkSql(fundUuids, offset, limit, asOfDate));
+                const grouped = new Map();
+                rows.forEach(r => {
+                    const key = `${r.fund_uuid}::${r.parent_issuer_name}::${asOfDate || 'current'}`;
+                    if (!grouped.has(key)) grouped.set(key, []);
+                    grouped.get(key).push(r);
+                });
+                targets.forEach(t => {
+                    const key = `${t.fundUuid}::${t.parentIssuerName}::${asOfDate || 'current'}`;
+                    if (!underlyingCache.has(key)) underlyingCache.set(key, grouped.get(key) || []);
+                });
+            } catch (err) {
+                const asError = err instanceof Error ? err : new Error(String(err));
+                targets.forEach(t => {
+                    const key = `${t.fundUuid}::${t.parentIssuerName}::${asOfDate || 'current'}`;
+                    if (!underlyingCache.has(key)) underlyingCache.set(key, asError);
+                });
             }
         }
 
@@ -1651,6 +2404,12 @@
             sortCol = null;
             sortDir = 'asc';
             allExpanded = false;
+            expandedUnderlying = new Set();
+            clearTimeout(globalSearchDebounce);
+            globalSearchTerm = '';
+            globalSearchResults = null;
+            globalSearchError = null;
+            globalSearchLoading = false;
             loadFund(fundUuid);
         }
 

@@ -28,6 +28,9 @@ allowed-tools:
   - AskUserQuestion
 ---
 
+<!-- carta:plugin-version -->
+<carta-plugin>carta-investors:6.31.0</carta-plugin>
+
 # carta-compliance-routing — Compliance Router
 
 Routes to Form ADV for regulatory filing data, executed inline from a content
