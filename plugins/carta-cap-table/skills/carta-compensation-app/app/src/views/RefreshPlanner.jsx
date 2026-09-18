@@ -51,6 +51,31 @@ import {
 // comparable even though this one inverts the direction.
 const VESTING_WINDOWS = [6, 12, 18, 24];
 
+const STEP_KEY = "ctc.planner.step";
+const STEPS = ["cohort", "settings", "review"];
+
+/** Which step to open on.
+ *
+ *  Parked in sessionStorage for one reason: the ask box RELOADS the page after an
+ *  accepted edit (source is transpiled in-browser, so there is no HMR), and a
+ *  reload dropped this state — so asking Claude to change the policy screen landed
+ *  the user back on the cohort step, reading as the edit having undone their work.
+ *  App.jsx parks the open tab for exactly the same reason.
+ *
+ *  A stored value is checked against the real step list: it is user-writable
+ *  storage, and an unknown name would render no step at all.
+ */
+function storedStep() {
+  try {
+    const step = sessionStorage.getItem(STEP_KEY);
+    return STEPS.includes(step) ? step : "cohort";
+  } catch {
+    // Private browsing and some embedded webviews throw on access rather than
+    // returning null. Forgetting the step is fine; failing to open is not.
+    return "cohort";
+  }
+}
+
 /** No filters applied — what a scenario means when it stores no `filters` key. */
 const NO_FILTERS = Object.freeze({
   hasPriorGrants: PRIOR_GRANTS.ANY,
@@ -240,7 +265,7 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
   // export all read one source.
   // Two steps, one state. No router: this is a two-screen flow inside one tab,
   // and a router would be more machinery than the thing it navigates.
-  const [step, setStep] = useState("cohort");
+  const [step, setStep] = useState(storedStep);
   // Below this the cart stacks under the table rather than sitting off-screen.
   const wide = useMediaQuery("(min-width: 900px)");
   const [cart, setCart] = useState(() => new Set());
@@ -254,7 +279,34 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
   } = useScenario(corporationId);
   const hydratedFor = useRef(null);
 
+  // Steps 2 and 3 are built from the cart, so a restored step with an empty cart
+  // has nothing to show. Correct the STATE rather than branching the render: the
+  // cohort step is this function's own final return, and it is also where the cart
+  // gets filled, which is what someone landing on an empty plan needs.
+  //
+  // Gated on hydratedFor, NOT on cartLoading. cartLoading goes false when the
+  // document arrives, which is a render BEFORE the effect below copies the saved
+  // cart into state — so a cartLoading gate saw an empty cart every time and
+  // bounced to step 1, overwriting the stored step on the way.
+  useEffect(() => {
+    if (step !== "cohort" && hydratedFor.current !== null && cart.size === 0) {
+      setStep("cohort");
+    }
+  }, [step, cart]);
+
   // Adopt the saved cart once, after it loads. Ids that no longer exist in this
+  // Park the open step so the ask box's post-edit reload returns to it. Mirrors
+  // App.jsx's tab effect, and sits above the cart hydration for the same
+  // hooks-order reason the useState calls do.
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(STEP_KEY, step);
+    } catch {
+      // Storage unavailable — the step simply is not remembered. Not worth
+      // failing on.
+    }
+  }, [step]);
+
   // snapshot are dropped and counted — a rebuild can retire someone, and doing
   // that silently would shrink a plan without saying so.
   useEffect(() => {
