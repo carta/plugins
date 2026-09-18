@@ -180,3 +180,54 @@ func TestDispatchShim_NoMarketplaceSiblingFailsOpen(t *testing.T) {
 		t.Errorf("output = %q, want %q", out, want)
 	}
 }
+
+// TestDispatchShim_WalksUpToMonorepoToolsBin reproduces a plain checkout (or a
+// git worktree of one): the shim runs from plugins/<name>/hooks/ with no bin/
+// sibling and no marketplaces/ dir, and the binary is committed at
+// <repo>/tools/hooks/bin/. Before this lookup existed the shim failed open on
+// every event, silently disabling every hook for --plugin-dir and clone users.
+func TestDispatchShim_WalksUpToMonorepoToolsBin(t *testing.T) {
+	var goos string
+	switch runtime.GOOS {
+	case "darwin":
+		goos = "darwin"
+	case "linux":
+		goos = "linux"
+	default:
+		t.Skipf("unsupported test host OS %q for stub-exec check", runtime.GOOS)
+	}
+	arch := "amd64"
+	if runtime.GOARCH == "arm64" {
+		arch = "arm64"
+	}
+
+	root := t.TempDir()
+	hooksDir := filepath.Join(root, "plugins", "carta-cap-table", "hooks")
+	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+		t.Fatalf("mkdir hooks dir: %v", err)
+	}
+	src, err := os.ReadFile("dispatch.sh")
+	if err != nil {
+		t.Fatalf("read dispatch.sh: %v", err)
+	}
+	dest := filepath.Join(hooksDir, "dispatch.sh")
+	if err := os.WriteFile(dest, src, 0o755); err != nil {
+		t.Fatalf("write dispatch.sh copy: %v", err)
+	}
+
+	binDir := filepath.Join(root, "tools", "hooks", "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatalf("mkdir tools/hooks/bin: %v", err)
+	}
+	stubPath := filepath.Join(binDir, "hooks-"+goos+"-"+arch)
+	stub := "#!/bin/sh\necho \"stub-invoked: $1\"\n"
+	if err := os.WriteFile(stubPath, []byte(stub), 0o755); err != nil {
+		t.Fatalf("write stub binary: %v", err)
+	}
+
+	out := runDispatch(t, dest, "capture-active-skill")
+	want := "stub-invoked: capture-active-skill\n"
+	if out != want {
+		t.Errorf("output = %q, want %q", out, want)
+	}
+}

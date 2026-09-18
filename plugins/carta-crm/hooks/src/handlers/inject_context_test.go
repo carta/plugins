@@ -91,6 +91,42 @@ func TestInjectContext_InvestorsBlurbRoutesActionsToFundAdmin(t *testing.T) {
 	}
 }
 
+// The feedback command is reachable only through call_tool, and only when its
+// own feature flag is on. A blurb that names `mutate` or fires blind turns
+// every handled error into a second, unhandled one.
+func TestInjectContext_FeedbackBlurbNamesCallToolAndChecksAvailability(t *testing.T) {
+	for _, plugin := range []string{"carta-cap-table", "carta-investors"} {
+		t.Run(plugin, func(t *testing.T) {
+			setupPluginRoot(t, plugin, "1.0.0")
+
+			out, err := InjectContext([]byte(`{"hook_event_name":"SessionStart"}`))
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, additionalContext := parseSessionStartOutput(t, out)
+
+			for _, want := range []string{
+				`call_tool({"name": "fa__create__feedback"`,
+				`search_tools("report a bug feedback")`,
+				"CHECK THE COMMAND IS THERE BEFORE YOU CALL IT",
+				"do not retry a call that came back \"Unknown tool\"",
+			} {
+				if !strings.Contains(additionalContext, want) {
+					t.Errorf("additionalContext is missing %q", want)
+				}
+			}
+			// `mutate` is gateway-gated off by default, so the blurb may only
+			// name it to forbid it.
+			if strings.Contains(additionalContext, `call mutate(command="fa:create:feedback") directly`) {
+				t.Error("the blurb still tells the model to file feedback through the mutate gateway")
+			}
+			if !strings.Contains(additionalContext, `Do NOT call mutate(command="fa:create:feedback")`) {
+				t.Error("the blurb does not rule out the mutate gateway path")
+			}
+		})
+	}
+}
+
 func TestInjectContext_PluginWithNoBlurb(t *testing.T) {
 	setupPluginRoot(t, "carta-crm", "1.0.0")
 
