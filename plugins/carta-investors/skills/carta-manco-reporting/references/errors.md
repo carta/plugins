@@ -13,15 +13,28 @@
   interpreter, anything that is about *where this is running*, not about the
   firm's data. **Retry once, silently — no text before or after the retry,
   whatever the fix turns out to be** (a corrected path, a writable cache
-  directory, anything else). A retry that then succeeds is handled exactly
-  as if it had succeeded the first time: same silence, same next step.
-  Only when the same call fails the same way twice is it worth a word, and
-  even then say only what's actually wrong, in plain English — never the
-  path it tried, the cache directory, or the fact that a retry happened:
+  directory, anything else) — but retry the *identical* command. Do not
+  invent a workaround to try instead of a plain retry: no hardcoding a
+  resolved or guessed absolute path in place of `${CLAUDE_PLUGIN_ROOT}`, no
+  prefixing the command with your own `CLAUDE_PLUGIN_ROOT=<value>` (a bash
+  prefix assignment like that doesn't even feed the `${CLAUDE_PLUGIN_ROOT}`
+  expansion later in the same command — it only reaches the child process's
+  environment — so it silently fails to fix anything while looking like it
+  might), and no trying a second candidate path "just in case." Each of
+  those is a fresh guess dressed up as a retry, not the one retry this
+  contract allows. A retry that then succeeds is handled exactly as if it
+  had succeeded the first time: same silence, same next step. Only when the
+  same call fails the same way twice is it worth a word, and even then say
+  only what's actually wrong, in plain English, **and nothing else** — never
+  the path it tried, the cache directory, the session or plugin-install
+  directory, or the fact that a retry happened, never a list of possible
+  fixes to pick from, and never `AskUserQuestion` to ask the user which
+  workaround to try:
   *"This dashboard can't run one of its own scripts right now — try
   reinstalling or updating the carta-investors plugin, or re-running this
-  skill."* The reader can act on that; a plugin path or a cache-directory
-  name is not theirs to fix.
+  skill."* That single line is the entire response. The reader can act on
+  that; a plugin path or a cache-directory name is not theirs to fix, and
+  which remediation to attempt is not a decision to hand them mid-run.
 - **Empty JE rows** — every ManCo has SOME journal entries by definition, so zero rows is a claim worth checking before making. Step 3 already verifies context via `list_contexts` right before issuing its queries and fails fast on a mismatch (see `data-fetch.md`), so this shouldn't reach here on a normal run — but if it does anyway (Step 3 finished cleanly and the build still shows zero income/expenses), the same check applies again: confirm the MCP session's firm context is still the one Step 1 resolved before concluding anything. `dwh__execute__query` returns an empty result, with no error, when the session's active firm is not the firm whose UUID is in the SQL; `fa__list__budgets` takes `fund_uuid` as a parameter and keeps working, so a run can show budgets alongside zero journal entries and look like a data problem. Only once the context checks out: the ManCo probably isn't onboarded to Fund Admin. Surface that in plain English.
 - **Query A or Query C hits its pagination cap (5 pages) with `total_rows` still uncovered** — see `data-fetch.md`. Don't fetch a 6th page. Tell the user the ledger is larger than the cap covers and stop; don't hand the partial pages to `build_manco_datadir.py` and let it fail — the honest failure happens here, before the build step.
 - **`build_manco_datadir.py` fails** — read the stderr, quote the first line to the user, stop. Do not fabricate a datadir. (This also catches a truncated `je-expense-page*.txt` pull that snuck past the cap above — its own `total_rows` guard raises with the row counts and page filename — and a `je-income.txt`/`fund-fees.txt` that `.fetched-at` says should exist but doesn't: Step 3's save call for it never ran, so the build refuses rather than show $0 as if it were a genuine result. Re-run Step 3 for the named file(s), don't retry the build as-is.)

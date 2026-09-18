@@ -60,13 +60,20 @@ turn — issue it and say nothing, not even a single confirming word.
 permission denied, anything short of a `"surface": "..."` verdict — that is
 not a sandboxed result, and it's the same environment-failure case
 [errors.md](errors.md) covers for every other script this skill calls.
-Retry it once, silently, with no text before or after the retry. A retry
-that then returns a verdict is handled exactly as if it had returned that
-verdict the first time — same silence, same next step. Only if it fails
-the same way twice does errors.md's escalation apply: one plain-English
-line about what's actually wrong, never a status update about the check
-having succeeded on the second try, and never the path or cache directory
-it failed on.
+Retry it once, silently, with no text before or after the retry — **the
+identical command, byte for byte.** Do not vary it: no swapping in an
+explicit `CLAUDE_PLUGIN_ROOT=<value>` prefix, no substituting a hardcoded or
+derived absolute path in place of `${CLAUDE_PLUGIN_ROOT}`, no trying a
+`uv run` vs `python3` variant — each of those is a second *different* attempt
+dressed up as a retry, and none of them are yours to invent. A retry that
+then returns a verdict is handled exactly as if it had returned that verdict
+the first time — same silence, same next step. Only if it fails the same way
+twice does errors.md's escalation apply: one plain-English line about what's
+actually wrong, and nothing else in that message or after it — never the
+path or cache directory it failed on, never a menu of technical workarounds
+to choose from, and never `AskUserQuestion` for how to proceed. The fix
+(reinstall, update, re-run) is the user's to trigger, not yours to attempt
+on their behalf inside this session.
 
 Step 5 launches `serve.py`, which binds `127.0.0.1` and opens the user's default
 browser. That only works when Claude Code runs on the user's own machine. In a
