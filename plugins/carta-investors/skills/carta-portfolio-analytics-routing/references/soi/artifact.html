@@ -13,20 +13,46 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=EB+Garamond:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            color-scheme: light;
-            --surface-bg: #FFFFFF;
-            --surface-underlay: #F7F7F7;
-            --text-default: #1A1A1A;
-            --text-subtle: #656B6B;
-            --border-default: #A7AAAA;
-            --border-subtle: #DEDFDF;
-            --negative-strong: #E52431;
-            --positive-strong: #2D9E90;
-            --accent-primary: #FF7D55;
-            --surface-info-subtle: #EAF0F8;
+            color-scheme: light dark;
+            --surface-bg: light-dark(#FFFFFF, rgb(18 18 18));
+            --surface-underlay: light-dark(#F1F1F1, #2D2D2D);
+            --surface-info-subtle: light-dark(#EAF0F8, #122948);
+            /* Sand (Ink's "brown" scale, steps 10/20/30/40) for the asset/underlying
+               row backgrounds specifically — not a site-wide swap of
+               --surface-underlay, which stays the cooler gray everywhere else
+               (hover states, shimmer, tile backgrounds, and now asset-row's own
+               hover too — every level's hover reads as the same neutral gray,
+               only the resting backgrounds carry the sand distinction). Light
+               mode only: a saturated brown reads as loud against this page's
+               otherwise near-monochrome dark theme, so dark mode falls back to
+               the same restrained neutral grays (gray-90/100) used elsewhere
+               on the page rather than a dark variant of the brown scale. */
+            --surface-sand: light-dark(#FBFAF9, #2D2D2D);
+            --surface-sand-deep: light-dark(#F8F8F7, #202020);
+            --text-default: light-dark(#1A1A1A, #EDEDED);
+            --text-subtle: light-dark(#656B6B, #A7AAAA);
+            --border-default: light-dark(#A7AAAA, #656B6B);
+            --border-subtle: light-dark(#DEDFDF, #2D2D2D);
+            --border-focus-default: light-dark(#285DA3, #8BABD6);
+            --border-focus-light: light-dark(#C0D1E9, #1A3E6D);
+            --negative-strong: light-dark(#E52431, #FAD9D7);
+            --positive-strong: light-dark(#2D9E90, #2D9E90);
+            --link-default: light-dark(#285DA3, #8BABD6);
+            --link-hover: light-dark(#1A3E6D, #4176BC);
+            /* Ink feedback-info-strong. Close to --link-default in light mode but a
+               different value in dark, so the Bubble can't just borrow the link color. */
+            --feedback-info-strong: light-dark(#285DA3, #2C67B5);
+            --surface-lightgray-hover: light-dark(#DEDFDF, #2D2D2D);
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        /* Fallback for any borderless focusable element (links, native buttons) —
+           bordered controls get their own border-recolor + ring above instead. */
+        :focus-visible {
+            outline: 2px solid var(--border-focus-default);
+            box-shadow: 0 0 0 4px var(--border-focus-light);
+        }
 
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -42,21 +68,15 @@
 
         /* ── Header ── */
         .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
             margin-bottom: 24px;
         }
 
-        .header-logo {
-            flex-shrink: 0;
-            margin-left: 24px;
-            padding-top: 4px;
-        }
-
-        .header-logo svg {
-            width: 80px;
-            height: auto;
+        .carta-logo {
+            display: block;
+            width: 64px;
+            height: 32px;
+            margin-bottom: 24px;
+            color: var(--text-default);
         }
 
         .header-eyebrow {
@@ -82,7 +102,7 @@
         }
 
         .shimmer-bone {
-            background: linear-gradient(90deg, var(--surface-underlay) 25%, #EEEEEE 50%, var(--surface-underlay) 75%);
+            background: linear-gradient(90deg, var(--surface-underlay) 25%, var(--border-default) 50%, var(--surface-underlay) 75%);
             background-size: 800px 100%;
             animation: shimmer 1.5s infinite ease-in-out;
             border-radius: 4px;
@@ -127,39 +147,66 @@
         .content-area.loaded { opacity: 1; }
 
         /* ── Metrics strip ── */
+        /* CSS grid, not flex-wrap — a wrapping row can strand the last tile
+           alone on its own line at in-between widths. Three fixed tiers, no
+           free-wrap state between them: 2x2 by default (the realistic width
+           for an artifact panel is too narrow for four full dollar amounts
+           side by side — 4-up truncates), 4-across once there's genuinely
+           room (900px+), and the existing single-column mobile stack below
+           640px, unchanged. */
         .metrics-strip {
-            display: flex;
-            flex-wrap: wrap;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            column-gap: 16px;
             row-gap: 12px;
-            border-left: 4px solid var(--accent-primary);
-            background: var(--surface-underlay);
+            border: 1px solid var(--border-subtle);
+            background: var(--surface-bg);
             padding: 14px 16px;
             margin-bottom: 24px;
         }
 
-        .metric-item {
-            flex: 1 1 auto;
-            min-width: 0;
-            border-right: 1px solid var(--border-subtle);
-            padding-right: 16px;
-            margin-right: 16px;
-            white-space: nowrap;
-        }
+        .metric-item { min-width: 0; }
 
-        .metric-item:last-child {
-            border-right: none;
-            padding-right: 0;
-            margin-right: 0;
-        }
+        /* Each tier owns its dividers inside its own width range. Putting any of
+           them in the base layer instead would leak: a media query adds no
+           specificity, so a base `:nth-child()` rule outranks a plain
+           `.metric-item` override inside one and the wrong dividers survive. */
 
-        @media (max-width: 640px) {
-            .metrics-strip { flex-direction: column; gap: 12px; }
+        /* 2x2: divider down the middle, divider between the two rows. */
+        @media (min-width: 641px) and (max-width: 899px) {
             .metric-item {
+                border-right: 1px solid var(--border-subtle);
+                padding-right: 16px;
+            }
+            .metric-item:nth-child(2n) {
                 border-right: none;
-                border-bottom: 1px solid var(--border-subtle);
                 padding-right: 0;
+            }
+            .metric-item:nth-child(-n+2) {
+                border-bottom: 1px solid var(--border-subtle);
                 padding-bottom: 12px;
-                margin-right: 0;
+            }
+        }
+
+        /* 4-across: one row, so vertical dividers only. */
+        @media (min-width: 900px) {
+            .metrics-strip { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+            .metric-item {
+                border-right: 1px solid var(--border-subtle);
+                padding-right: 16px;
+            }
+            .metric-item:last-child {
+                border-right: none;
+                padding-right: 0;
+            }
+        }
+
+        /* Stacked: one column, so horizontal dividers only. */
+        @media (max-width: 640px) {
+            .metrics-strip { grid-template-columns: 1fr; }
+            .metric-item {
+                border-bottom: 1px solid var(--border-subtle);
+                padding-bottom: 12px;
             }
             .metric-item:last-child {
                 border-bottom: none;
@@ -173,6 +220,9 @@
             margin-bottom: 4px;
             font-weight: 500;
             line-height: 20px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         .metric-value {
@@ -181,63 +231,440 @@
             line-height: 28px;
             color: var(--text-default);
             font-variant-numeric: tabular-nums;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
-        /* ── Fund switcher ── */
-        .fund-switcher {
+        /* ── Fund switcher ──
+           The two controls read as one grouped object: the container owns the
+           border, each segment is divided by a hairline. It wraps rather than
+           overflows, which is the narrow-sidebar case. */
+        /* The picker and its reset share a row; the reset sits outside the bordered
+           unit so its scope reads as the whole toolbar rather than either segment.
+           It wraps below the picker when there isn't room. */
+        .switcher-row {
             display: flex;
             align-items: center;
             gap: 12px;
+            flex-wrap: wrap;
             margin-bottom: 16px;
         }
+
+        .fund-switcher {
+            display: inline-flex;
+            flex-wrap: wrap;
+            align-items: stretch;
+            width: fit-content;
+            max-width: 100%;
+            background-color: var(--surface-bg);
+            border: 1px solid var(--border-subtle);
+        }
+
+        /* Ink ghost button — transparent at rest, light gray on hover. Ink's own
+           GlobalFilter pairs a ghost Reset with a primary Apply, the same pairing
+           as this panel's footer. Deliberately not a blue link: Clear all in the
+           panel is the link, and two blue controls with different scopes would
+           read as one control shown twice. */
+        .ink-btn--ghost {
+            height: 32px;
+            padding: 0 12px;
+            border: 1px solid transparent;
+            border-radius: 4px;
+            background: transparent;
+            color: var(--text-default);
+            font-family: inherit;
+            font-size: 12px;
+            font-weight: 500;
+            line-height: 18px;
+            cursor: pointer;
+            appearance: none;
+        }
+
+        .ink-btn--ghost:hover { background: var(--surface-lightgray-hover); }
+        .ink-btn--ghost:focus-visible {
+            outline: 0;
+            border-color: var(--border-focus-default);
+            box-shadow: 0 0 0 4px var(--border-focus-light);
+        }
+        .ink-btn--ghost[hidden] { display: none; }
+
+        .switcher-segment {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 12px;
+            min-width: 0;
+        }
+
+        .switcher-segment + .switcher-segment {
+            border-left: 1px solid var(--border-subtle);
+        }
+
+        /* Stacked, the segments are full-width rows: a left divider would double
+           up against the container edge, so it becomes a top divider. The label
+           min-width lines both values up on the same left edge. */
+        @media (max-width: 640px) {
+            .fund-switcher { width: 100%; }
+            .switcher-segment { width: 100%; }
+            /* Stacked below the switcher, the button's own left padding would hang
+               its label 12px inside the switcher's border. Pull the box left so the
+               text lines up with the edge above it and the hover fill stays centred. */
+            .switcher-row .ink-btn--ghost { margin-left: -12px; }
+            .switcher-segment + .switcher-segment {
+                border-left: none;
+                border-top: 1px solid var(--border-subtle);
+            }
+            .fund-switcher-label { min-width: 48px; }
+            .switcher-segment { position: relative; }
+        }
+
+        /* `hidden` on a flex element needs an explicit override. */
+        .switcher-segment[hidden] { display: none; }
 
         .fund-switcher-label {
             font-size: 13px;
             color: var(--text-subtle);
             font-weight: 500;
+            white-space: nowrap;
         }
 
-        /* Wrapper owns the border, background, and chevron.
-           The select itself is transparent so the ::after chevron isn't
-           covered by the select's white background — the most reliable
-           cross-browser approach. */
-        .select-wrapper {
+        /* ── Combobox ──
+           A native <select> can't be searched, which stops scaling once a firm
+           has dozens of funds. This is the minimum that replaces it: a trigger,
+           a filterable listbox, and full keyboard support. */
+        .combo {
             position: relative;
             display: inline-flex;
-            align-items: center;
-            background-color: var(--surface-bg);
-            border: 1px solid var(--border-subtle);
+            min-width: 0;
         }
 
-        .select-chevron {
+        .combo-trigger {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            max-width: 260px;
+            padding: 0;
+            border: none;
+            background: transparent;
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-default);
+            cursor: pointer;
+            text-align: left;
+        }
+
+        .combo-trigger:focus-visible {
+            outline: 2px solid var(--border-focus-default);
+            outline-offset: 3px;
+        }
+
+        .combo-trigger-value {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* Multi-select trigger. A slightly wider budget than the single-select one
+           because it carries an overflow count as well as a name, but still one
+           line that never wraps — Fund and As of read as a single unit, and a
+           wrapping trigger would change the toolbar's height on every pick. */
+        .combo-trigger--multi {
+            max-width: 320px;
+            white-space: nowrap;
+        }
+
+        /* Ink Bubble, count variant: 18px pill, info colors, tabular figures.
+           The same treatment Ink's GlobalFilter uses for an applied-filter count.
+           It never shrinks — the count is the only signal that the trigger's label
+           isn't the whole selection, so it must not be what gets ellipsed away. */
+        .bub {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            height: 18px;
+            min-width: 18px;
+            padding: 0 6px;
+            border: 1px solid var(--feedback-info-strong);
+            border-radius: 999px;
+            background: var(--surface-info-subtle);
+            color: var(--feedback-info-strong);
+            font-size: 12px;
+            font-weight: 500;
+            line-height: 1;
+            letter-spacing: 0.01em;
+            font-variant-numeric: tabular-nums;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        /* ── Ink Checkbox ──
+           20px box at radius-subtle. The box stays white in both themes and the
+           glyph is a dark stroke — Ink does not fill the box on check. */
+        .ink-chk {
+            position: relative;
+            display: inline-flex;
+            flex: 0 0 auto;
+            align-items: center;
+        }
+
+        .ink-chk > input {
             position: absolute;
-            right: 10px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--border-default);
+            opacity: 0;
             pointer-events: none;
+            width: 20px;
+            height: 20px;
+            margin: 0;
+        }
+
+        .ink-chk > .ink-chk-box {
+            width: 20px;
+            height: 20px;
+            border: 1px solid var(--border-default);
+            border-radius: 4px;
+            background: #FFFFFF;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: border-color 0.12s, box-shadow 0.12s;
+        }
+
+        .ink-chk > .ink-chk-box > svg {
+            display: block;
+            opacity: 0;
+            color: #394040;
+        }
+
+        .combo-option:hover .ink-chk > .ink-chk-box { border-color: light-dark(#394040, #9C9F9F); }
+        .ink-chk.is-checked > .ink-chk-box > .ink-chk-check,
+        .ink-chk.is-mixed > .ink-chk-box > .ink-chk-dash { opacity: 1; }
+
+        .ink-chk > input:focus-visible + .ink-chk-box {
+            border-color: var(--border-focus-default);
+            box-shadow: 0 0 0 4px var(--border-focus-light);
+        }
+
+        /* Ink's Dropdown.Trigger caret: 16px, inheriting the trigger's own color
+           rather than a lighter gray — it reads as part of the label, not as a
+           border. Ink rotates it only when a menu opens upward, so a downward
+           panel leaves it alone. */
+        .combo-chevron {
+            width: 16px;
+            height: 16px;
+            margin-left: 2px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: currentColor;
+            flex-shrink: 0;
+        }
+
+        .combo-panel {
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            z-index: 50;
+            min-width: 320px;
+            max-width: 380px;
+            background: var(--surface-bg);
+            border: 1px solid var(--border-subtle);
+            /* Ink Dropdown surface: radius-subtle + elevation shadow-medium. */
+            border-radius: 4px;
+            box-shadow: 0 4px 20px 0 rgb(0 0 0 / 0.1);
+            padding: 4px 0;
+        }
+
+        /* Right-anchored when the trigger sits near the viewport edge. */
+        .combo-panel.align-right { left: auto; right: 0; }
+
+        .combo-search-wrap { padding: 8px; border-bottom: 1px solid var(--border-subtle); }
+
+        /* Ink Input: 40px tall, radius-subtle, and the interactive border weight —
+           an input reads as clickable, a container border doesn't. */
+        .combo-search {
+            width: 100%;
+            height: 40px;
+            padding: 0 12px;
+            font-family: inherit;
+            font-size: 14px;
+            line-height: 1;
+            color: var(--text-default);
+            background: var(--surface-bg);
+            border: 1px solid var(--border-default);
+            border-radius: 4px;
+            outline: none;
+        }
+
+        .combo-search:focus {
+            border-color: var(--border-focus-default);
+            box-shadow: 0 0 0 4px var(--border-focus-light);
+        }
+
+        .combo-list {
+            max-height: 340px;
+            overflow-y: auto;
+            /* Reserve the scrollbar's width so it can't sit on top of the
+               right-aligned vintage column. */
+            scrollbar-gutter: stable;
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* Ink menu item: 400 14px/24px with 8px 12px padding. The 8px gap is the
+           checkbox's own label gap, so the box and label sit at Ink's spacing. */
+        .combo-option {
             display: flex;
             align-items: center;
-            z-index: 1;
-        }
-
-        .fund-select {
-            padding: 6px 28px 6px 10px;
-            border: none;
-            font-size: 13px;
-            font-family: inherit;
-            background-color: transparent;
+            gap: 8px;
+            padding: 8px 12px;
+            font-size: 14px;
+            line-height: 24px;
             color: var(--text-default);
-            outline: none;
             cursor: pointer;
-            min-width: 280px;
-            appearance: none;
-            -webkit-appearance: none;
-            position: relative;
-            z-index: 0;
         }
 
-        .select-wrapper:focus-within { border-color: var(--border-default); }
+        /* Reserves the tick column so labels align whether or not a row is selected. */
+        .combo-check {
+            width: 14px;
+            flex-shrink: 0;
+            color: var(--text-default);
+            visibility: hidden;
+            display: flex;
+            align-items: center;
+        }
+
+        .combo-option[aria-selected="true"] .combo-check { visibility: visible; }
+        .combo-option[aria-selected="true"] { font-weight: 600; }
+        /* In the multi list the checkbox already carries the state, so bolding every
+           ticked fund on top of it just makes a long selection look shouty. */
+        .combo-list[aria-multiselectable="true"] .combo-option[aria-selected="true"] { font-weight: 400; }
+        .combo-list[aria-multiselectable="true"] .combo-option.is-family > .combo-option-label { font-weight: 600; }
+
+        /* Pointer hover and keyboard focus share one highlight, so arrowing
+           through the list reads the same as moving the mouse. */
+        .combo-option:hover,
+        .combo-option.active { background: var(--surface-underlay); }
+
+        .combo-option-label {
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .combo-option.is-family > .combo-option-label { font-weight: 600; }
+        .combo-option.is-member > .combo-option-label { padding-left: 16px; }
+
+        /* Firm-wide sits above the fund list rather than inside it, so it gets a
+           rule under it — the one divider here that belongs to a component. */
+        .combo-option.is-all {
+            border-bottom: 1px solid var(--border-subtle);
+            margin-bottom: 2px;
+            padding-bottom: 10px;
+        }
+        .combo-option.is-all > .combo-option-label { font-weight: 500; }
+
+        .combo-meta {
+            font-size: 12px;
+            color: var(--text-subtle);
+            font-variant-numeric: tabular-nums;
+            flex-shrink: 0;
+        }
+
+        .combo-empty, .combo-footer {
+            padding: 10px 12px;
+            font-size: 12px;
+            color: var(--text-subtle);
+        }
+
+        .combo-footer {
+            border-top: 1px solid var(--border-subtle);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        /* Multi-select footer pairs the selection count with Clear all. */
+        .combo-footer--split {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .combo-clear-all {
+            border: 0;
+            background: none;
+            padding: 0;
+            font-family: inherit;
+            font-size: 12px;
+            font-weight: 500;
+            letter-spacing: normal;
+            text-transform: none;
+            color: var(--link-default);
+            cursor: pointer;
+        }
+
+        .combo-clear-all:hover { color: var(--link-hover); text-decoration: underline; }
+        .combo-clear-all:focus-visible {
+            outline: 2px solid var(--border-focus-default);
+            outline-offset: 2px;
+        }
+        .combo-clear-all:disabled {
+            color: var(--text-subtle);
+            cursor: default;
+            text-decoration: none;
+            opacity: 0.6;
+        }
+
+        /* Ink Button, primary + small. Black in light mode, white in dark — the
+           action color. Never blue; blue stays reserved for links and focus. */
+        .ink-btn--primary {
+            height: 32px;
+            padding: 0 12px;
+            border: 1px solid transparent;
+            border-radius: 4px;
+            background: light-dark(#1A1A1A, #FFFFFF);
+            color: light-dark(#FFFFFF, #1A1A1A);
+            font-family: inherit;
+            font-size: 12px;
+            font-weight: 500;
+            line-height: 1;
+            letter-spacing: normal;
+            text-transform: none;
+            cursor: pointer;
+            appearance: none;
+        }
+
+        .ink-btn--primary:hover { background: light-dark(#202020, #CECFCF); }
+        .ink-btn--primary:focus-visible {
+            outline: 0;
+            border-color: var(--border-focus-default);
+            box-shadow: 0 0 0 4px var(--border-focus-light);
+        }
+        .ink-btn--primary:disabled {
+            background: light-dark(#EDEDED, #394040);
+            color: light-dark(#CECFCF, #656B6B);
+            cursor: not-allowed;
+        }
+
+        /* Must follow the .combo rules above to win at equal specificity.
+           Stacked, each segment spans the full width, so anchoring the panel to
+           the segment keeps it on-screen — anchored to the trigger it is wider
+           than its own offset from the edge and clips. */
+        @media (max-width: 640px) {
+            .combo { position: static; flex: 1; min-width: 0; }
+            .combo-trigger { max-width: 100%; }
+            .combo-panel,
+            .combo-panel.align-right {
+                left: 0;
+                right: 0;
+                min-width: 0;
+                max-width: none;
+            }
+        }
 
         /* Hidden until FUNDS has > 1 entry — keeps the single-fund case visually clean. */
         .fund-switcher.hidden { display: none; }
@@ -246,6 +673,7 @@
         .toolbar {
             display: flex;
             align-items: center;
+            gap: 12px;
             margin-bottom: 12px;
         }
 
@@ -277,15 +705,43 @@
         }
 
         .search-input::placeholder { color: var(--text-subtle); }
-        .search-input:focus { border-color: var(--border-default); }
+        .search-input:focus {
+            border-color: var(--border-focus-default);
+            box-shadow: 0 0 0 4px var(--border-focus-light);
+        }
 
         /* ── Table ── */
+        .table-scroll-wrap {
+            position: relative;
+        }
+
         .table-scroll {
             overflow-x: auto;
         }
 
+        /* Right-edge fade hinting there's more to see on horizontal scroll.
+           Positioned on the non-scrolling wrapper (not .table-scroll itself)
+           so it stays pinned to the viewport edge instead of scrolling away
+           with the table content. */
+        .table-scroll-wrap::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 32px;
+            pointer-events: none;
+            background: linear-gradient(to right, transparent, var(--surface-bg));
+            opacity: 0;
+            transition: opacity 0.15s;
+        }
+
+        .table-scroll-wrap.has-more-right::after {
+            opacity: 1;
+        }
+
         table {
-            width: 100%;
+            min-width: 100%;
             border-collapse: collapse;
         }
 
@@ -353,8 +809,12 @@
             z-index: 2;
             background: var(--surface-bg);
             padding-left: 8px;
-            min-width: 240px;
-            max-width: 400px;
+            /* Investment is the densest column — full company names, partnership
+               interests, and an inline source tag all share it. Give it real
+               room so those stay on one line; the numeric columns are narrow
+               and fixed-width, so the space comes cheaply. */
+            min-width: 380px;
+            max-width: 46%;
             white-space: normal;
             word-wrap: break-word;
         }
@@ -390,16 +850,24 @@
         tr.company-row:hover td:first-child { background: var(--surface-underlay); }
 
         /* ── Asset rows ── */
-        tr.asset-row { display: none; }
+        /* Two classes, not one: `.visible` flips display so the row occupies
+           layout space; `.shown` (added a frame later) drives the opacity
+           transition. Adding both at once would animate from the same paint,
+           i.e. no animation — see setRowVisible() in the script below. */
+        tr.asset-row { display: none; opacity: 0; transition: opacity 0.15s ease; }
         tr.asset-row.visible { display: table-row; }
+        tr.asset-row.visible.shown { opacity: 1; }
 
         tr.asset-row td,
-        tr.asset-row td:first-child { background: var(--surface-underlay); }
+        tr.asset-row td:first-child { background: var(--surface-sand); }
 
-        tr.asset-row td:first-child { padding-left: 48px; }
+        /* Each level's disclosure sits directly under its parent's label: one
+           28px step (16px icon + 12px gap) per depth. An underlying row has no
+           disclosure of its own, so its name takes that slot. */
+        tr.asset-row td:first-child { padding-left: 36px; }
 
         tr.asset-row:hover td,
-        tr.asset-row:hover td:first-child { background: var(--border-subtle); }
+        tr.asset-row:hover td:first-child { background: var(--surface-underlay); }
 
         /* ── Ink icons ── */
         .ink-icon {
@@ -431,7 +899,7 @@
         }
 
         .company-name {
-            font-weight: 500;
+            font-weight: 600;
             color: var(--text-default);
         }
 
@@ -456,7 +924,21 @@
 
         /* ── Asset name ── */
         .asset-name {
+            color: var(--text-default);
+        }
+
+        /* Name + its own secondary informational line (e.g. tranche count) —
+           stacked vertically instead of crammed inline, so long names and
+           their annotations each get full column width to wrap into. */
+        .asset-name-stack {
+            display: inline-flex;
+            flex-direction: column;
+        }
+
+        .tranche-note {
+            font-size: 11px;
             color: var(--text-subtle);
+            margin-top: 2px;
         }
 
         /* ── Numeric cells ── */
@@ -484,8 +966,7 @@
         /* ── Totals row ── */
         .totals-row td {
             border-top: none;
-            box-shadow: inset 0 1px 0 0 var(--text-default);
-            border-bottom: 1px solid var(--text-default);
+            border-bottom: none;
             font-weight: 500;
             height: 40px;
             background: var(--surface-info-subtle);
@@ -495,7 +976,7 @@
         .totals-row td:first-child {
             padding-left: 36px;
             background: var(--surface-info-subtle);
-            color: var(--text-subtle);
+            color: var(--text-default);
             font-weight: 500;
         }
 
@@ -546,12 +1027,15 @@
             margin-left: 4px;
         }
 
-        .mixed-badge {
-            color: var(--text-subtle);
-            font-style: italic;
-        }
+        .mixed-badge { color: var(--text-subtle); }
 
-        /* ── Empty / loading / error states ── */
+        .mixed-line { color: var(--text-default); }
+        .mixed-sep { color: var(--text-subtle); margin: 0 10px; }
+
+        /* ── Empty / loading / error states ──
+           One convention everywhere: neutral status is --text-subtle, errors are
+           --negative-strong, and nothing is italic (Ink has no italic idiom).
+           Retry controls are links, so they take the link color, not the error's. */
         .empty-state {
             text-align: center;
             padding: 48px 16px;
@@ -565,30 +1049,66 @@
         /* ── Underlying (look-through) rows — one level deeper than asset rows ──
            Hidden by default like .asset-row; shown via the shared asset-group-N
            class so collapsing the parent company row hides these too. */
-        tr.underlying-row { display: none; }
+        tr.underlying-row { display: none; opacity: 0; transition: opacity 0.15s ease; }
         tr.underlying-row.visible { display: table-row; }
+        tr.underlying-row.visible.shown { opacity: 1; }
+
+        @media (prefers-reduced-motion: reduce) {
+            tr.asset-row, tr.underlying-row { transition: none; }
+        }
         tr.underlying-row td,
-        tr.underlying-row td:first-child { background: #EFEFEF; }
-        tr.underlying-row td:first-child { padding-left: 80px; }
+        tr.underlying-row td:first-child { background: var(--surface-sand-deep); }
+        tr.underlying-row td:first-child { padding-left: 64px; }
+
         tr.underlying-row:hover td,
-        tr.underlying-row:hover td:first-child { background: #E4E4E4; }
+        tr.underlying-row:hover td:first-child { background: var(--surface-underlay); }
 
         .underlying-status {
             color: var(--text-subtle);
-            font-style: italic;
             text-align: left !important;
         }
-        .underlying-status.error { color: var(--negative-strong); font-style: normal; }
+        .underlying-status.error { color: var(--negative-strong); }
+
+        /* An action, not part of the error — so it takes Ink's link color rather
+           than inheriting the message's red. Matches Ink's <a> spec. */
+        .retry-link {
+            margin-left: 6px;
+            padding: 0;
+            border: none;
+            background: none;
+            font: inherit;
+            color: var(--link-default);
+            text-decoration: underline;
+            text-decoration-thickness: 1px;
+            text-underline-offset: 2px;
+            cursor: pointer;
+        }
+
+        .retry-link:hover { color: var(--link-hover); }
+
+        .retry-link:focus-visible {
+            outline: 2px solid var(--border-focus-default);
+            outline-offset: 2px;
+        }
 
         .underlying-name { font-weight: 400; color: var(--text-default); }
+        /* Scaled-down Ink Tag (base/neutral variant: gray-10 bg, text-default,
+           radius-subtle) — Ink's own spec is a fixed 28px tall, oversized for
+           this table's 40px dense rows, so the box is shrunk while keeping the
+           same token-sourced colors and corner treatment. */
         .underlying-source {
-            font-size: 11px;
-            color: var(--text-subtle);
+            display: inline-flex;
+            align-items: center;
+            height: 20px;
+            padding: 0 6px;
             margin-left: 8px;
+            font-size: 11px;
+            border-radius: 4px;
+            background: var(--surface-underlay);
+            color: var(--text-default);
         }
 
         .asset-name.expandable { cursor: pointer; }
-        .asset-name.expandable:hover { text-decoration: underline; }
         .underlying-toggle { cursor: pointer; }
 
         /* ── Global (cross-fund) search results panel ── */
@@ -638,13 +1158,9 @@
     <script type="application/json" id="soi-funds-state">{{FUNDS_JSON}}</script>
     <div class="container">
         <div class="header">
-            <div class="header-text">
-                <div class="header-eyebrow">{{FIRM_NAME}}</div>
-                <h1>Schedule of Investments</h1>
-            </div>
-            <div class="header-logo">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 528 264"><path fill="#1a1a1a" d="M0,0v264h528V0H0ZM517.44,253.44H10.56V10.56h506.88v242.88ZM69.26,137.15c0-26.47,22.34-42,42.39-42,14.35,0,27.74,5.38,34.9,17.78l-13.4,7.77c-2.31-3.49-5.47-6.35-9.17-8.3-3.71-1.96-7.85-2.98-12.05-2.95-11.79,0-25.81,9.2-25.81,27.42s13.41,27.58,26.93,27.58c9.4,0,17.21-5.24,21.84-13.33l13.7,6.33c-7.76,13.95-21.62,21.38-37.72,21.38-20.25-.02-41.6-15.58-41.6-41.69h0ZM197.5,178.83c11.14,0,21.66-4.91,27.09-12.05v9.81h16.55v-79.39h-16.55v9.83c-5.16-7.2-15.93-11.89-27.09-11.89-24.38,0-41.44,17.75-41.44,41.84s17.21,41.84,41.44,41.84ZM199.09,110.21c15.3,0,25.8,11.41,25.8,26.78s-10.51,26.78-25.8,26.78-26.14-11.57-26.14-27.1,10.84-26.47,26.14-26.47ZM330.1,112.96h-17.18v-15.85h17.34v-20.69h17.05v20.69h17.33v15.85h-17.33v63.61h-17.21v-63.61ZM412.2,178.83c11.16,0,21.68-4.91,27.11-12.05v9.81h16.58v-79.39h-16.58v9.83c-5.16-7.2-15.93-11.89-27.11-11.89-24.36,0-41.42,17.75-41.42,41.84s17.2,41.84,41.42,41.84ZM413.81,110.21c15.28,0,25.81,11.41,25.81,26.78s-10.53,26.78-25.81,26.78-26.14-11.57-26.14-27.1,10.84-26.47,26.14-26.47ZM278.62,176.49h-17.21v-79.39h15.77v14.78c3.9-8.78,9.77-14.5,19.3-14.98,1.97-.03,3.93,0,5.89.21l-.26,15.89c-13.69,0-23.47,7.34-23.47,27.79v35.72h-.01Z"/></svg>
-            </div>
+            <svg class="carta-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 528 264" role="img" aria-label="Carta"><path fill="currentColor" d="M0,0v264h528V0H0ZM517.44,253.44H10.56V10.56h506.88v242.88ZM69.26,137.15c0-26.47,22.34-42,42.39-42,14.35,0,27.74,5.38,34.9,17.78l-13.4,7.77c-2.31-3.49-5.47-6.35-9.17-8.3-3.71-1.96-7.85-2.98-12.05-2.95-11.79,0-25.81,9.2-25.81,27.42s13.41,27.58,26.93,27.58c9.4,0,17.21-5.24,21.84-13.33l13.7,6.33c-7.76,13.95-21.62,21.38-37.72,21.38-20.25-.02-41.6-15.58-41.6-41.69h0ZM197.5,178.83c11.14,0,21.66-4.91,27.09-12.05v9.81h16.55v-79.39h-16.55v9.83c-5.16-7.2-15.93-11.89-27.09-11.89-24.38,0-41.44,17.75-41.44,41.84s17.21,41.84,41.44,41.84ZM199.09,110.21c15.3,0,25.8,11.41,25.8,26.78s-10.51,26.78-25.8,26.78-26.14-11.57-26.14-27.1,10.84-26.47,26.14-26.47ZM330.1,112.96h-17.18v-15.85h17.34v-20.69h17.05v20.69h17.33v15.85h-17.33v63.61h-17.21v-63.61ZM412.2,178.83c11.16,0,21.68-4.91,27.11-12.05v9.81h16.58v-79.39h-16.58v9.83c-5.16-7.2-15.93-11.89-27.11-11.89-24.36,0-41.42,17.75-41.42,41.84s17.2,41.84,41.42,41.84ZM413.81,110.21c15.28,0,25.81,11.41,25.81,26.78s-10.53,26.78-25.81,26.78-26.14-11.57-26.14-27.1,10.84-26.47,26.14-26.47ZM278.62,176.49h-17.21v-79.39h15.77v14.78c3.9-8.78,9.77-14.5,19.3-14.98,1.97-.03,3.93,0,5.89.21l-.26,15.89c-13.69,0-23.47,7.34-23.47,27.79v35.72h-.01Z"/></svg>
+            <div class="header-eyebrow">{{FIRM_NAME}}</div>
+            <h1>Schedule of Investments</h1>
         </div>
 
         <div id="loadingState">
@@ -668,31 +1184,27 @@
         </div>
 
         <div class="content-area" id="contentArea">
-            <div class="fund-switcher" id="fundSwitcher">
-                <span id="fundSwitcherFundPart">
-                    <span class="fund-switcher-label">Fund:</span>
-                    <div class="select-wrapper"><select class="fund-select" id="fundSelect" onchange="switchFund(this.value)"></select><span class="select-chevron"><svg viewBox="0 0 10 6" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l4 4 4-4"/></svg></span></div>
-                </span>
-                <span class="fund-switcher-label" style="margin-left:8px;">As of:</span>
-                <div class="select-wrapper"><select class="fund-select" id="asOfSelect" onchange="switchAsOf(this.value)" style="min-width:170px;"></select><span class="select-chevron"><svg viewBox="0 0 10 6" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l4 4 4-4"/></svg></span></div>
-            </div>
+            <!-- Filled by switcherMarkup() on init — see ensureContentSkeleton. -->
+            <div id="switcherMount"></div>
 
             <div id="metricsContainer"></div>
 
             <div class="toolbar" id="toolbar">
                 <div class="search-wrapper">
                     <span class="search-icon" id="searchIcon"></span>
-                    <input type="text" class="search-input" id="searchInput" placeholder="Search companies...">
+                    <input type="text" class="search-input" id="searchInput" placeholder="Filter by company...">
                 </div>
             </div>
 
             <div class="global-search-panel" id="globalSearchPanel" style="display:none;"></div>
 
-            <div class="table-scroll">
-                <table>
-                    <thead id="tableHead"></thead>
-                    <tbody id="tableBody"></tbody>
-                </table>
+            <div class="table-scroll-wrap">
+                <div class="table-scroll">
+                    <table>
+                        <thead id="tableHead"></thead>
+                        <tbody id="tableBody"></tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
@@ -1042,9 +1554,9 @@
         //   cost_basis               → company.cost / asset.cost (summed at company level)
         //   fmv                      → company.value / asset.value (summed at company level)
         //   unrealized_gain_loss     → company.gl / asset.gl (summed at company level)
-        //   latest_fmv_effective_date → company.lastDate / asset.lastDate (MM/DD/YYYY)
+        //   latest_fmv_effective_date → company.lastDate / asset.lastDate (MMM DD, YYYY)
         //   asset_name               → asset.name
-        //   acquisition_date         → asset.date (MM/DD/YYYY)
+        //   acquisition_date         → asset.date (MMM DD, YYYY)
         //   count_remaining_shares   → asset.shares
         //   remaining_value_per_share → asset.vps
         //   cost_basis / shares      → asset.cps (computed; null when shares == 0)
@@ -1207,10 +1719,16 @@
         }
 
         // Parse ISO YYYY-MM-DD as a local date string (no Date object → no timezone shift).
+        const MONTH_ABBRS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                             'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+        // ISO date → "Mar 05, 2018". The day stays zero-padded so the
+        // right-aligned date columns keep a consistent width. parseDate reads
+        // this format back for sorting, so the two must stay in step.
         function formatDateShort(dateStr) {
             if (!dateStr) return '';
             const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
-            if (m) return m[2] + '/' + m[3] + '/' + m[1];
+            if (m) return `${MONTH_ABBRS[Number(m[2]) - 1]} ${m[3]}, ${m[1]}`;
             return dateStr;
         }
 
@@ -1264,6 +1782,15 @@
         // underlying holdings expanded. Cleared on fund switch (see switchFund).
         let expandedUnderlying = new Set();
 
+        // Which companies (by their current position in the sorted/filtered
+        // list — same index asset-group-N uses) are individually expanded.
+        // render() consults this so a manually-expanded company survives a
+        // full re-render — critical because toggleUnderlying() re-renders on
+        // every open/close of a look-through drill-down, and without this the
+        // re-render would only honor the global allExpanded flag, silently
+        // collapsing whichever company the user had opened by hand.
+        let expandedCompanies = new Set();
+
         // ── Global (cross-fund) search state ──
         let globalSearchDebounce = null;
         let globalSearchTerm = '';
@@ -1275,25 +1802,83 @@
         // never sent to the warehouse as FUND_UUID; buildSoiSqlAllFunds below expands
         // it into an IN-list of every real fund UUID instead.
         const ALL_ENTITIES_VALUE = '__all_entities__';
+        const ALL_ENTITIES_LABEL = 'All Entities';
 
         // Sentinel prefix for a fund-family rollup (e.g. 'family::Healthcare Partners
         // Fund V'). Same pooling mechanism as ALL_ENTITIES_VALUE, scoped to the funds
         // sharing one fund_family_name instead of every fund in the firm.
         const FAMILY_PREFIX = 'family::';
 
+        // Sentinel prefix for an arbitrary multi-fund selection (e.g.
+        // 'set::<uuid>,<uuid>'). Same pooling mechanism again, over whichever funds
+        // the user ticked rather than a family or the whole firm. The uuid list is
+        // always in FUNDS order (see canonicalSelectionValue) so one selection has
+        // exactly one string form — the value doubles as a cache key, and two
+        // spellings of the same set would fetch twice and compare as different.
+        const SET_PREFIX = 'set::';
+
         function isPooledUuid(uuid) {
-            return uuid === ALL_ENTITIES_VALUE || (typeof uuid === 'string' && uuid.startsWith(FAMILY_PREFIX));
+            return uuid === ALL_ENTITIES_VALUE
+                || (typeof uuid === 'string' && (uuid.startsWith(FAMILY_PREFIX) || uuid.startsWith(SET_PREFIX)));
         }
 
-        // Funds backing a pooled selection: every fund for All Entities, or just the
-        // funds sharing a family name for a family selection.
+        // Funds backing a pooled selection: every fund for All Entities, the funds
+        // sharing a family name for a family selection, or the ticked funds for an
+        // arbitrary set.
         function pooledFunds(fundUuid) {
             if (fundUuid === ALL_ENTITIES_VALUE) return FUNDS;
             if (fundUuid.startsWith(FAMILY_PREFIX)) {
                 const familyName = fundUuid.slice(FAMILY_PREFIX.length);
                 return FUNDS.filter(f => f.fund_family_name === familyName);
             }
+            if (fundUuid.startsWith(SET_PREFIX)) {
+                const picked = new Set(fundUuid.slice(SET_PREFIX.length).split(','));
+                return FUNDS.filter(f => picked.has(f.uuid));
+            }
             return [];
+        }
+
+        // Collapses a set of ticked fund uuids into the single value the rest of the
+        // artifact already understands. One fund stays a plain uuid so a single-fund
+        // selection behaves exactly as it always has (no Held By column, one
+        // currency) rather than becoming a pool of one.
+        //
+        // Returns null for an empty selection: no funds is not a view the table can
+        // render, so it has no value form and callers gate Apply on it.
+        function canonicalSelectionValue(selection) {
+            const ordered = FUNDS.filter(f => selection.has(f.uuid)).map(f => f.uuid);
+            if (!ordered.length) return null;
+            if (ordered.length === 1) return ordered[0];
+            // Every fund ticked *is* the firm-wide view. Checked before the family
+            // case so the broader label wins if one family happens to be the whole
+            // firm. A one-fund firm is excluded: it isn't offered the firm-wide
+            // option, and the render script rejects the sentinel below two funds.
+            if (ordered.length === FUNDS.length && FUNDS.length > 1) return ALL_ENTITIES_VALUE;
+            // A set that happens to be exactly one family's membership is that
+            // family. Identical funds either way, but it lets the trigger say
+            // "Cendana Capital IV, L.P." instead of naming one class and counting
+            // the others — and it keeps one cache key for one pool, however the
+            // user assembled it.
+            const { families } = groupFundsByFamily();
+            for (const [name, members] of families) {
+                if (members.length === ordered.length
+                    && members.every(f => selection.has(f.uuid))) {
+                    return FAMILY_PREFIX + name;
+                }
+            }
+            return SET_PREFIX + ordered.join(',');
+        }
+
+        // Inverse of canonicalSelectionValue: the ticked-fund set a value implies.
+        // Firm-wide expands to every fund rather than to nothing, so the rows below
+        // "All Entities" show as checked instead of contradicting it.
+        function selectionFromValue(value) {
+            if (!value) return new Set();
+            if (value === ALL_ENTITIES_VALUE) return new Set(FUNDS.map(f => f.uuid));
+            if (value.startsWith(FAMILY_PREFIX) || value.startsWith(SET_PREFIX)) {
+                return new Set(pooledFunds(value).map(f => f.uuid));
+            }
+            return new Set([value]);
         }
 
         // True only while viewing All Entities AND the firm's funds don't share one
@@ -1304,11 +1889,11 @@
 
         const BASE_COLUMNS = [
             { key: 'name',     label: 'Investment',          num: false, expandToggle: true },
-            { key: 'date',     label: 'Investment date',     num: false },
+            { key: 'date',     label: 'Investment date',     num: true  },
             { key: 'shares',   label: 'Shares / Principal',  num: true  },
             { key: 'cost',     label: 'Cost',                num: true  },
             { key: 'value',    label: 'Value',               num: true  },
-            { key: 'lastDate', label: 'Last updated',        num: false },
+            { key: 'lastDate', label: 'Last updated',        num: true  },
             { key: 'gl',       label: 'Gain / Loss',         num: true  },
             { key: 'cps',      label: 'Cost per share',      num: true  },
             { key: 'vps',      label: 'Value per share',     num: true  },
@@ -1380,10 +1965,12 @@
             return jsSafe.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         }
 
+        // Reads back what formatDateShort renders ("Mar 05, 2018").
         function parseDate(str) {
             if (!str) return 0;
-            const [m, d, y] = str.split('/').map(Number);
-            return new Date(y, m - 1, d).getTime();
+            const m = /^([A-Za-z]{3}) (\d{2}), (\d{4})$/.exec(str);
+            if (!m) return 0;
+            return new Date(Number(m[3]), MONTH_ABBRS.indexOf(m[1]), Number(m[2])).getTime();
         }
 
         function computeTotals(rows) {
@@ -1481,12 +2068,14 @@
                 companies.forEach(c => c.assets.forEach(a => {
                     if (a.currency) costByCurrency[a.currency] = (costByCurrency[a.currency] || 0) + a.cost;
                 }));
+                // A middot separator, never '+': these are separate per-currency
+                // figures, and an arithmetic operator would imply they sum.
                 const breakdown = Object.entries(costByCurrency)
-                    .map(([cur, cost]) => fmt(cost, cur))
-                    .join(' + ');
+                    .map(([cur, cost]) => `<span class="mixed-line">${fmt(cost, cur)}</span>`)
+                    .join('<span class="mixed-sep">·</span>');
                 document.getElementById('metricsContainer').innerHTML = `
                     <div class="metrics-strip">
-                        <div class="metric-item" style="flex: 1 1 100%;">
+                        <div class="metric-item" style="grid-column: 1 / -1; border-right: none; padding-right: 0; border-bottom: none; padding-bottom: 0;">
                             <div class="metric-label"><span class="tooltip-trigger" data-tooltip="This firm's funds report in more than one currency, so cost/value/gain-loss aren't summed into one figure.">Total cost by currency</span></div>
                             <div class="metric-value mixed-badge">${breakdown || '—'}</div>
                         </div>
@@ -1522,10 +2111,15 @@
             const tbody = document.getElementById('tableBody');
             tbody.innerHTML = '';
 
+            // render() is the funnel every filter and sort change passes through, so
+            // it's the one place the Reset control's visibility can't drift from the
+            // state it describes.
+            syncResetFiltersVisibility();
             renderHead();
 
             if (data.length === 0) {
                 tbody.innerHTML = `<tr><td colspan="${getColumns().length}" class="empty-state">No companies match your filter.</td></tr>`;
+                updateScrollAffordances();
                 return;
             }
 
@@ -1563,7 +2157,7 @@
                     <td></td>
                     <td class="number">${companyCost}</td>
                     <td class="number">${companyValue}</td>
-                    <td>${escHtml(c.lastDate)}</td>
+                    <td class="number">${escHtml(c.lastDate)}</td>
                     <td class="number">${companyGl}</td>
                     <td></td>
                     <td></td>
@@ -1577,7 +2171,7 @@
 
                     const ar = document.createElement('tr');
                     ar.className = `asset-row asset-group-${i}`;
-                    if (allExpanded) ar.classList.add('visible');
+                    if (allExpanded || expandedCompanies.has(i)) ar.classList.add('visible', 'shown');
                     if (isExpandable) ar.classList.add('fund-investment-row');
 
                     // Build fx icon markup for a given base-currency amount and column label.
@@ -1604,20 +2198,20 @@
                     // parent LP interest into the underlying fund's own portfolio companies,
                     // look-through prorated by the firm's ownership fraction.
                     const trancheTag = a.tranches > 1
-                        ? `<span class="tooltip-trigger" data-tooltip="Combines ${a.tranches} separate investment tranches into this partnership interest" style="margin-left:6px;font-size:11px;color:var(--text-subtle);">(${a.tranches} tranches)</span>`
+                        ? `<span class="tranche-note tooltip-trigger" data-tooltip="Combines ${a.tranches} separate investment tranches into this partnership interest">(${a.tranches} tranches)</span>`
                         : '';
                     const nameCell = isExpandable
-                        ? `<span class="expand-icon underlying-toggle" id="underlying-icon-${underlyingKey}" onclick="event.stopPropagation(); toggleUnderlying('${underlyingKey}', '${escJs(a.fundUuid)}', '${escJs(c.name)}')">${inkIcon(isExpanded ? 'down' : 'forward', 9)}</span><span class="asset-name expandable" onclick="event.stopPropagation(); toggleUnderlying('${underlyingKey}', '${escJs(a.fundUuid)}', '${escJs(c.name)}')">${escHtml(a.name)}</span>${trancheTag}`
+                        ? `<span class="expand-icon underlying-toggle" id="underlying-icon-${underlyingKey}" onclick="event.stopPropagation(); toggleUnderlying('${underlyingKey}', '${escJs(a.fundUuid)}', '${escJs(c.name)}')">${inkIcon(isExpanded ? 'down' : 'forward', 9)}</span><span class="asset-name-stack"><span class="asset-name expandable" onclick="event.stopPropagation(); toggleUnderlying('${underlyingKey}', '${escJs(a.fundUuid)}', '${escJs(c.name)}')">${escHtml(a.name)}</span>${trancheTag}</span>`
                         : `<span class="asset-name">${escHtml(a.name)}</span>`;
 
                     ar.innerHTML = `
                         <td>${nameCell}</td>
                         ${assetHeldByCell}
-                        <td>${escHtml(a.date)}</td>
+                        <td class="number">${escHtml(a.date)}</td>
                         <td class="number">${fmtShares(a.shares)}</td>
                         <td class="number">${fxIcon(a.fxCost, 'Original purchase')}${fmt(a.cost, a.currency)}${currencyTag}</td>
                         <td class="number">${fxIcon(a.fxValue, 'Base currency value')}${fmt(a.value, a.currency)}${currencyTag}</td>
-                        <td>${escHtml(a.lastDate)}</td>
+                        <td class="number">${escHtml(a.lastDate)}</td>
                         <td class="number">${fxIcon(a.fxGl, 'Base currency unrealized G/L')}${glCell(a.gl, a.currency)}${currencyTag}</td>
                         <td class="number">${fmtDec(a.cps, a.currency)}</td>
                         <td class="number">${fmtDec(a.vps, a.currency)}</td>
@@ -1652,12 +2246,37 @@
                 `;
                 tbody.appendChild(tr);
             }
+
+            updateScrollAffordances();
+        }
+
+        // Symmetric fade for asset-row/underlying-row disclosure. `.visible` and
+        // `.shown` are deliberately separate (see the CSS comment above
+        // tr.asset-row): expanding adds `.visible` first so the row occupies
+        // layout space, then `.shown` a frame later so the opacity transition
+        // has a starting value to animate from. Collapsing reverses that —
+        // drop `.shown` to fade out, then remove `.visible` once the
+        // transition actually finishes so display:none doesn't cut it short.
+        function setRowVisible(row, show) {
+            if (!row) return;
+            if (show) {
+                row.classList.add('visible');
+                requestAnimationFrame(() => requestAnimationFrame(() => row.classList.add('shown')));
+            } else {
+                row.classList.remove('shown');
+                const finish = () => row.classList.remove('visible');
+                row.addEventListener('transitionend', finish, { once: true });
+                // Fallback for prefers-reduced-motion (transition: none never fires
+                // transitionend) and any other case the event doesn't land.
+                setTimeout(finish, 200);
+            }
         }
 
         function toggle(i) {
             const rows = document.querySelectorAll(`.asset-group-${i}`);
             const expanding = !rows[0]?.classList.contains('visible');
-            rows.forEach(r => r.classList.toggle('visible', expanding));
+            rows.forEach(r => setRowVisible(r, expanding));
+            if (expanding) expandedCompanies.add(i); else expandedCompanies.delete(i);
             const icon = document.getElementById(`icon-${i}`);
             if (icon) icon.innerHTML = inkIcon(expanding ? 'down' : 'forward', 10);
 
@@ -1671,7 +2290,12 @@
 
         function toggleAll() {
             allExpanded = !allExpanded;
-            document.querySelectorAll('.asset-row, .underlying-row').forEach(r => r.classList.toggle('visible', allExpanded));
+            if (allExpanded) {
+                document.querySelectorAll('.company-row').forEach((_, i) => expandedCompanies.add(i));
+            } else {
+                expandedCompanies.clear();
+            }
+            document.querySelectorAll('.asset-row, .underlying-row').forEach(r => setRowVisible(r, allExpanded));
             // Exclude .underlying-toggle — a FUND_INVESTMENT row's own drill-down
             // expand/collapse is independent of the company-row expand-all state.
             document.querySelectorAll('.expand-icon:not(.underlying-toggle)').forEach(ic => {
@@ -1709,25 +2333,30 @@
             // rest of the company's rows — a collapsed company row shouldn't leave
             // its look-through rows visible underneath it.
             const groupClass = `asset-group-${companyIdx}`;
-            const visibleClass = allExpanded ? ' visible' : '';
+            const visibleClass = (allExpanded || expandedCompanies.has(companyIdx)) ? ' visible shown' : '';
 
-            const statusRow = (text, isError) => {
+            // `extra` carries trailing markup (the retry control); the message
+            // itself is always escaped.
+            const statusRow = (text, isError, extra) => {
                 const tr = document.createElement('tr');
                 tr.className = `underlying-row underlying-group-${key} ${groupClass}${visibleClass}`;
-                tr.innerHTML = `<td colspan="${colCount}" class="underlying-status${isError ? ' error' : ''}">${escHtml(text)}</td>`;
+                tr.innerHTML = `<td colspan="${colCount}" class="underlying-status${isError ? ' error' : ''}">${escHtml(text)}${extra || ''}</td>`;
                 return tr;
             };
 
             if (cached === undefined || cached === 'loading') {
-                frag.appendChild(statusRow('Loading underlying holdings…', false));
+                frag.appendChild(statusRow('Loading look-through holdings…', false));
                 return frag;
             }
             if (cached instanceof Error) {
-                frag.appendChild(statusRow("Couldn't load underlying holdings: " + cached.message, true));
+                // The underlying error is deliberately not shown — it's raw warehouse
+                // text. It goes to the console at the catch site instead.
+                const retry = `<button type="button" class="retry-link" onclick="retryUnderlying('${escJs(asset.fundUuid)}', '${escJs(parentIssuerName)}')">Try again</button>`;
+                frag.appendChild(statusRow("Couldn't load look-through holdings.", true, retry));
                 return frag;
             }
             if (!Array.isArray(cached) || cached.length === 0) {
-                frag.appendChild(statusRow('No look-through holdings available for this position — sharing may not be enabled, or the underlying fund isn’t Carta-administered.', false));
+                frag.appendChild(statusRow('No look-through holdings available. Sharing may be disabled or the underlying fund isn’t on Carta.', false));
                 return frag;
             }
 
@@ -1746,11 +2375,11 @@
                 tr.innerHTML = `
                     <td><span class="underlying-name tooltip-trigger" data-tooltip="${escHtml(pctTip)}">${escHtml(u.underlying_issuer_name)}</span><span class="underlying-source">${sourceLabel}</span></td>
                     ${heldByCell}
-                    <td>—</td>
+                    <td class="number">—</td>
                     <td class="number">${fmtShares(u.count_remaining_shares)}</td>
                     <td class="number">${fmt(cost, u.currency_code)}</td>
                     <td class="number">${fmt(u.fmv || 0, u.currency_code)}</td>
-                    <td>—</td>
+                    <td class="number">—</td>
                     <td class="number">${glCell(u.unrealized_gain_loss || 0, u.currency_code)}</td>
                     <td class="number">${fmtDec(cps, u.currency_code)}</td>
                     <td class="number">${fmtDec(u.remaining_value_per_share, u.currency_code)}</td>
@@ -1779,19 +2408,33 @@
             // partially failed.
             const cacheKey = `${fundUuid}::${parentIssuerName}::${currentAsOfDate || 'current'}`;
             if (!underlyingCache.has(cacheKey)) {
-                underlyingCache.set(cacheKey, 'loading');
-                render();
-                try {
-                    const result = await callMcpWithWelcomeRetry(CALL_TOOL, {
-                        name: 'dwh__execute__query',
-                        arguments: { sql: buildUnderlyingSql(fundUuid, parentIssuerName, currentAsOfDate) },
-                    });
-                    const rows = parseDwhQueryResult(result);
-                    underlyingCache.set(cacheKey, rows);
-                } catch (err) {
-                    underlyingCache.set(cacheKey, err instanceof Error ? err : new Error(String(err)));
-                }
+                await loadUnderlyingInto(cacheKey, fundUuid, parentIssuerName);
             }
+            render();
+        }
+
+        // Fetches one position's look-through rows into the cache. Shared by the
+        // cache-miss path above and by the retry on a failed row.
+        async function loadUnderlyingInto(cacheKey, fundUuid, parentIssuerName) {
+            underlyingCache.set(cacheKey, 'loading');
+            render();
+            try {
+                const result = await callMcpWithWelcomeRetry(CALL_TOOL, {
+                    name: 'dwh__execute__query',
+                    arguments: { sql: buildUnderlyingSql(fundUuid, parentIssuerName, currentAsOfDate) },
+                });
+                underlyingCache.set(cacheKey, parseDwhQueryResult(result));
+            } catch (err) {
+                console.error('SOI: look-through query failed for', parentIssuerName, err);
+                underlyingCache.set(cacheKey, err instanceof Error ? err : new Error(String(err)));
+            }
+        }
+
+        // The bulk prefetch failed for this fund, so retry with the much narrower
+        // single-position query rather than repeating the query that just failed.
+        async function retryUnderlying(fundUuid, parentIssuerName) {
+            const cacheKey = `${fundUuid}::${parentIssuerName}::${currentAsOfDate || 'current'}`;
+            await loadUnderlyingInto(cacheKey, fundUuid, parentIssuerName);
             render();
         }
 
@@ -1829,7 +2472,8 @@
                 globalSearchResults = rows;
             } catch (err) {
                 if (term !== globalSearchTerm) return;
-                globalSearchError = (err && err.message) || String(err);
+                console.error('SOI: cross-fund look-through search failed', err);
+                globalSearchError = true;
                 globalSearchResults = null;
             } finally {
                 if (term === globalSearchTerm) {
@@ -1855,7 +2499,7 @@
                 return;
             }
             if (globalSearchError) {
-                panel.innerHTML = `<div class="global-search-status error">Couldn't search underlying holdings: ${escHtml(globalSearchError)}</div>`;
+                panel.innerHTML = `<div class="global-search-status error">Couldn't search holdings. <button type="button" class="retry-link" onclick="runGlobalSearch(globalSearchTerm)">Try again</button></div>`;
                 return;
             }
             if (!globalSearchResults || globalSearchResults.length === 0) {
@@ -2031,6 +2675,82 @@
             return await callCartaTool(toolName, args);
         }
 
+        // Lucide chevron-down, which is what Ink's `down-bold` icon maps to, inlined
+        // verbatim — the artifact sandbox blocks the Lucide CDN. Ink's Dropdown.Trigger
+        // renders it at 16px with a 1.5 stroke on the 24-unit box.
+        const CHEVRON_SVG_INNER = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+        const CHECK_SVG = '<svg viewBox="0 0 14 14" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 7.5l3.5 3.5L12 3.5"/></svg>';
+        // Ink checkbox glyphs — a check and an indeterminate dash, both 14px strokes
+        // sitting on the white box rather than filling it.
+        const CHECK_SVG_SMALL = '<svg class="ink-chk-check" viewBox="0 0 12 12" width="14" height="14" fill="none"><path d="M2 6.2l2.6 2.6L10 3.4" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+        const DASH_SVG = '<svg class="ink-chk-dash" viewBox="0 0 12 12" width="14" height="14" fill="none"><path d="M2.5 6h7" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/></svg>';
+
+        // Single source for the switcher. Both the initial page shell and
+        // ensureContentSkeleton() render this, so the two can't drift apart.
+        function switcherMarkup() {
+            return `
+                <div class="switcher-row">
+                    <div class="fund-switcher" id="fundSwitcher">
+                        <span class="switcher-segment" id="fundSwitcherFundPart">
+                            <span class="fund-switcher-label" id="fundComboLabel">Fund</span>
+                            <div class="combo" id="fundCombo"></div>
+                        </span>
+                        <span class="switcher-segment">
+                            <span class="fund-switcher-label" id="asOfComboLabel">As of</span>
+                            <div class="combo" id="asOfCombo"></div>
+                        </span>
+                    </div>
+                    <button type="button" class="ink-btn--ghost" id="resetFilters" hidden>Reset filters</button>
+                </div>`;
+        }
+
+        // True when anything the Reset button would undo is actually set. A control
+        // that's permanently visible but can't do anything is just toolbar noise, so
+        // it stays hidden at the default view.
+        function viewIsFiltered() {
+            return currentFundUuid !== ALL_ENTITIES_VALUE
+                || currentAsOfDate !== null
+                || filterText !== ''
+                || sortCol !== null
+                || globalSearchTerm !== '';
+        }
+
+        function syncResetFiltersVisibility() {
+            const btn = document.getElementById('resetFilters');
+            if (!btn) return;
+            // A single-fund firm can't reach the firm-wide view, so "reset" has no
+            // fund component and the whole control would be misleading.
+            btn.hidden = FUNDS.length <= 1 || !viewIsFiltered();
+        }
+
+        // Puts the whole toolbar back to how the artifact opens: firm-wide funds,
+        // current period, no company filter, default sort. Expansions and the
+        // cross-fund search go with it — loadFund clears those anyway, and leaving
+        // them behind would contradict "reset".
+        function resetFilters() {
+            const needsReload = currentFundUuid !== ALL_ENTITIES_VALUE || currentAsOfDate !== null;
+            currentAsOfDate = null;
+            filterText = '';
+            sortCol = null;
+            sortDir = 'asc';
+            allExpanded = false;
+            expandedUnderlying = new Set();
+            expandedCompanies = new Set();
+            clearTimeout(globalSearchDebounce);
+            globalSearchTerm = '';
+            globalSearchResults = null;
+            globalSearchError = null;
+            globalSearchLoading = false;
+            if (needsReload) {
+                loadFund(ALL_ENTITIES_VALUE);
+            } else {
+                // Same data, so re-render rather than refetch — but the combos still
+                // need re-syncing because the As of value may have moved.
+                populateFundSelect();
+                render();
+            }
+        }
+
         // Idempotent rebuild of contentArea's child structure. Called from every render
         // path so that whatever the prior state was (shimmer, empty, error, populated
         // table), the next render has a clean skeleton to write into. Doing it here
@@ -2041,29 +2761,29 @@
             if (document.getElementById('tableBody')) return;
             const area = document.getElementById('contentArea');
             area.innerHTML = `
-                <div class="fund-switcher" id="fundSwitcher">
-                    <span class="fund-switcher-label">Fund:</span>
-                    <div class="select-wrapper"><select class="fund-select" id="fundSelect" onchange="switchFund(this.value)"></select><span class="select-chevron"><svg viewBox="0 0 10 6" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l4 4 4-4"/></svg></span></div>
-                </div>
+                <div id="switcherMount"></div>
                 <div id="metricsContainer"></div>
                 <div class="toolbar" id="toolbar">
                     <div class="search-wrapper">
                         <span class="search-icon" id="searchIcon"></span>
-                        <input type="text" class="search-input" id="searchInput" placeholder="Search companies...">
+                        <input type="text" class="search-input" id="searchInput" placeholder="Filter by company...">
                     </div>
                 </div>
-                <div class="table-scroll">
-                    <table>
-                        <thead id="tableHead"></thead>
-                        <tbody id="tableBody"></tbody>
-                    </table>
+                <div class="table-scroll-wrap">
+                    <div class="table-scroll">
+                        <table>
+                            <thead id="tableHead"></thead>
+                            <tbody id="tableBody"></tbody>
+                        </table>
+                    </div>
                 </div>
             `;
             document.getElementById('searchIcon').innerHTML = inkIcon('search', 14);
             populateFundSelect();
         }
 
-        function showError(msg) {
+        // `onRetry`, when given, adds a Try again control that re-runs it.
+        function showError(msg, onRetry) {
             // Don't wipe contentArea — the user needs the fund switcher above to escape
             // from an error state. Write the error into the table area only.
             ensureContentSkeleton();
@@ -2076,6 +2796,14 @@
             td.colSpan = getColumns().length;
             td.className = 'empty-state error';
             td.textContent = msg;
+            if (onRetry) {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'retry-link';
+                btn.textContent = 'Try again';
+                btn.addEventListener('click', onRetry);
+                td.append(' ', btn);
+            }
             tr.appendChild(td);
             tbody.appendChild(tr);
             showContent();
@@ -2140,22 +2868,429 @@
             return { families, standalone };
         }
 
-        function makeOption(value, label, selectedUuid) {
-            const opt = document.createElement('option');
-            opt.value = value;
-            opt.textContent = label;
-            if (value === selectedUuid) opt.selected = true;
-            return opt;
+
+        // Fills an empty #switcherMount. Both render paths reach this through
+        // populateFundSelect, so the switcher is never half-built.
+        function ensureSwitcherMounted() {
+            if (document.getElementById('fundCombo')) return;
+            const mount = document.getElementById('switcherMount');
+            if (!mount) return;
+            mount.innerHTML = switcherMarkup();
+            // Bound here rather than delegated from document: the switcher is rebuilt
+            // wholesale on every skeleton rebuild, so the listener has to come back
+            // with it.
+            const reset = document.getElementById('resetFilters');
+            if (reset) reset.addEventListener('click', resetFilters);
+        }
+
+        // ── Combobox ──
+        // State per instance, keyed by the mount element's id. Rebuilding the
+        // switcher (see ensureContentSkeleton) discards the old DOM, so each
+        // combo is re-created from its items rather than resurrected.
+        const combos = new Map();
+
+        // A search box on a handful of options is noise; past this it earns its place.
+        const COMBO_SEARCH_THRESHOLD = 8;
+
+        function comboSelectedLabel(state) {
+            const hit = state.items.find(i => i.value === state.value);
+            return hit ? hit.label : '';
+        }
+
+        // The multi-select trigger summarises the applied selection as text: the
+        // firm-wide label, one fund's name, or the first name plus a count bubble.
+        // It reads the *applied* value, not the staged one — the trigger describes
+        // what the table below is showing, and staged edits aren't showing anything
+        // until Apply.
+        function comboSummaryMarkup(state) {
+            const label = v => `<span class="combo-trigger-value">${escHtml(v)}</span>`;
+            if (!state.value || state.value === ALL_ENTITIES_VALUE) return label(ALL_ENTITIES_LABEL);
+            // A family rollup names the family — it's one choice, not N funds, so a
+            // count would be describing something the user didn't pick one by one.
+            if (state.value.startsWith(FAMILY_PREFIX)) {
+                return label(state.value.slice(FAMILY_PREFIX.length));
+            }
+            const picked = FUNDS.filter(f => selectionFromValue(state.value).has(f.uuid));
+            if (!picked.length) return label(ALL_ENTITIES_LABEL);
+            const rest = picked.length - 1;
+            return label(picked[0].name)
+                + (rest > 0 ? `<span class="bub">+${rest}</span>` : '');
+        }
+
+        function setCombo(mountId, config) {
+            const mount = document.getElementById(mountId);
+            if (!mount) return;
+            const prev = combos.get(mountId);
+            const state = Object.assign({ mountId, query: '', open: false, activeIndex: -1 }, prev, config);
+            combos.set(mountId, state);
+            renderComboTrigger(state);
+            if (state.open) renderComboList(state);
+        }
+
+        function renderComboTrigger(state) {
+            const mount = document.getElementById(state.mountId);
+            if (!mount) return;
+            // Both variants are a plain <button>: the multi trigger only ever holds
+            // text and a count, so there's nothing nested inside it that would need
+            // its own controls (and a <button> can't legally nest in a <button>).
+            mount.innerHTML = `
+                <button type="button" class="combo-trigger${state.multi ? ' combo-trigger--multi' : ''}"
+                        id="${state.mountId}-trigger"
+                        aria-haspopup="listbox" aria-expanded="${state.open}"
+                        aria-labelledby="${state.labelId} ${state.mountId}-trigger">
+                    ${state.multi
+                        ? comboSummaryMarkup(state)
+                        : `<span class="combo-trigger-value">${escHtml(comboSelectedLabel(state))}</span>`}
+                    <span class="combo-chevron">${CHEVRON_SVG_INNER}</span>
+                </button>
+                <div class="combo-panel" id="${state.mountId}-panel" hidden>
+                    ${state.items.length >= COMBO_SEARCH_THRESHOLD ? `
+                    <div class="combo-search-wrap">
+                        <input type="text" class="combo-search" id="${state.mountId}-search"
+                               placeholder="${escHtml(state.searchPlaceholder)}" autocomplete="off"
+                               aria-controls="${state.mountId}-list">
+                    </div>` : ''}
+                    <ul class="combo-list" role="listbox" id="${state.mountId}-list" tabindex="-1"
+                        ${state.multi ? 'aria-multiselectable="true"' : ''}
+                        aria-labelledby="${state.labelId}"></ul>
+                    <div class="combo-footer${state.multi ? ' combo-footer--split' : ''}" id="${state.mountId}-footer"></div>
+                </div>`;
+
+            mount.querySelector('.combo-trigger').addEventListener('click', () => toggleCombo(state.mountId));
+            mount.querySelector('.combo-trigger').addEventListener('keydown', e => onComboTriggerKey(e, state.mountId));
+
+            const search = mount.querySelector('.combo-search');
+            if (search) {
+                search.addEventListener('input', e => {
+                    const s = combos.get(state.mountId);
+                    s.query = e.target.value;
+                    s.activeIndex = 0;
+                    renderComboList(s);
+                });
+                search.addEventListener('keydown', e => onComboPanelKey(e, state.mountId));
+            }
+            mount.querySelector('.combo-list').addEventListener('keydown', e => onComboPanelKey(e, state.mountId));
+        }
+
+        // The fund uuids an option stands for: itself for a plain fund, every member
+        // for a family rollup, and none for All Entities — which clears the selection
+        // rather than adding to it.
+        function comboItemUuids(item) {
+            if (item.value === ALL_ENTITIES_VALUE) return [];
+            if (item.value.startsWith(FAMILY_PREFIX)) return pooledFunds(item.value).map(f => f.uuid);
+            return [item.value];
+        }
+
+        // 'checked' | 'mixed' | 'empty'. A family row reports mixed when only some of
+        // its members are ticked, which is what earns it the indeterminate dash.
+        function comboItemSelectState(state, item) {
+            if (item.value === ALL_ENTITIES_VALUE) {
+                // Firm-wide is a plain roll-up of the rows beneath it: checked when
+                // every fund is, mixed the moment one is dropped, empty when none
+                // are. Nothing special-cased — untick a fund and this follows.
+                const n = state.selection.size;
+                if (n === 0) return 'empty';
+                return n === FUNDS.length ? 'checked' : 'mixed';
+            }
+            const uuids = comboItemUuids(item);
+            const hits = uuids.filter(u => state.selection.has(u)).length;
+            if (!hits) return 'empty';
+            return hits === uuids.length ? 'checked' : 'mixed';
+        }
+
+        function comboCheckboxMarkup(state, item) {
+            const sel = comboItemSelectState(state, item);
+            const cls = sel === 'checked' ? ' is-checked' : (sel === 'mixed' ? ' is-mixed' : '');
+            // Exactly one glyph goes in the box. Emitting both and toggling opacity
+            // puts two 14px children in a 20px flex box, so centering centres the
+            // pair and the visible glyph sits off to one side.
+            const glyph = sel === 'checked' ? CHECK_SVG_SMALL : (sel === 'mixed' ? DASH_SVG : '');
+            return `<span class="ink-chk${cls}">
+                <input type="checkbox" tabindex="-1" ${sel === 'checked' ? 'checked' : ''}
+                       aria-hidden="true">
+                <span class="ink-chk-box">${glyph}</span>
+            </span>`;
+        }
+
+        // An item survives filtering on its own text, and a family's members stay
+        // visible when the family name matches (and vice versa) so a matched group
+        // never renders as a header with nothing under it.
+        function comboVisibleItems(state) {
+            const q = state.query.trim().toLowerCase();
+            if (!q) return state.items;
+            const matches = i => (i.label + ' ' + (i.meta || '')).toLowerCase().includes(q);
+            const matchedGroups = new Set(state.items.filter(i => i.isFamily && matches(i)).map(i => i.label));
+            return state.items.filter(i =>
+                matches(i) ||
+                (i.groupName && matchedGroups.has(i.groupName)) ||
+                (i.isFamily && state.items.some(c => c.groupName === i.label && matches(c))));
+        }
+
+        function renderComboList(state) {
+            const list = document.getElementById(state.mountId + '-list');
+            const footer = document.getElementById(state.mountId + '-footer');
+            if (!list) return;
+            const visible = comboVisibleItems(state);
+
+            if (!visible.length) {
+                list.innerHTML = `<li class="combo-empty">No ${escHtml(state.unit.toLowerCase())} match “${escHtml(state.query)}”.</li>`;
+            } else {
+                list.innerHTML = visible.map((item, idx) => {
+                    const cls = ['combo-option'];
+                    if (item.value === ALL_ENTITIES_VALUE) cls.push('is-all');
+                    if (item.isFamily) cls.push('is-family');
+                    if (item.groupName) cls.push('is-member');
+                    if (idx === state.activeIndex) cls.push('active');
+                    const control = state.multi
+                        ? comboCheckboxMarkup(state, item)
+                        : `<span class="combo-check">${CHECK_SVG}</span>`;
+                    return `<li class="${cls.join(' ')}" role="option" id="${state.mountId}-opt-${idx}"
+                                aria-selected="${state.multi ? comboItemSelectState(state, item) === 'checked' : item.value === state.value}"
+                                data-value="${escHtml(item.value)}">
+                        ${control}
+                        <span class="combo-option-label">${escHtml(item.label)}</span>
+                        ${item.meta ? `<span class="combo-meta">${escHtml(item.meta)}</span>` : ''}
+                    </li>`;
+                }).join('');
+                list.querySelectorAll('.combo-option').forEach(li => {
+                    li.addEventListener('click', e => {
+                        if (state.multi) {
+                            // Toggling re-renders the list, which detaches this <li>.
+                            // The document-level click-outside handler runs after
+                            // that and would see a target no longer inside the mount
+                            // — closing the panel on every tick. Stop here instead:
+                            // a click inside the panel is never an outside click.
+                            e.stopPropagation();
+                            toggleComboValue(state.mountId, li.dataset.value);
+                        } else {
+                            chooseComboValue(state.mountId, li.dataset.value);
+                        }
+                    });
+                });
+            }
+
+            if (footer) {
+                if (state.multi) {
+                    const n = state.selection.size;
+                    const next = canonicalSelectionValue(state.selection);
+                    // Nothing ticked has nothing to show, and a selection identical
+                    // to what's on screen has nothing to do — Apply is dead in both
+                    // cases. The count is dropped at zero because "Apply (0)" reads
+                    // like a broken button.
+                    const canApply = next !== null && next !== state.value;
+                    footer.innerHTML = `
+                        <button type="button" class="combo-clear-all" ${n === 0 ? 'disabled' : ''}>Clear all</button>
+                        <button type="button" class="ink-btn--primary combo-apply" ${canApply ? '' : 'disabled'}>
+                            Apply${n > 0 ? ` (${n})` : ''}
+                        </button>`;
+                    const clear = footer.querySelector('.combo-clear-all');
+                    if (clear) clear.addEventListener('click', e => {
+                        e.stopPropagation();   // same detach-then-close trap as the options
+                        clearComboSelection(state.mountId);
+                    });
+                    const apply = footer.querySelector('.combo-apply');
+                    if (apply) apply.addEventListener('click', e => {
+                        e.stopPropagation();
+                        applyComboSelection(state.mountId);
+                    });
+                } else {
+                    // The ratio only says something while filtering; unfiltered it would
+                    // print the same number twice and read as static chrome.
+                    footer.textContent = visible.length === state.items.length
+                        ? `${state.items.length} ${state.unit}`
+                        : `${visible.length} of ${state.items.length} ${state.unit}`;
+                }
+            }
+            const active = list.querySelector('.combo-option.active');
+            if (active) {
+                active.scrollIntoView({ block: 'nearest' });
+                const input = document.getElementById(state.mountId + '-search');
+                if (input) input.setAttribute('aria-activedescendant', active.id);
+            }
+        }
+
+        function openCombo(mountId) {
+            combos.forEach((s, id) => { if (id !== mountId && s.open) closeCombo(id, false); });
+            const state = combos.get(mountId);
+            if (!state) return;
+            state.open = true;
+            state.query = '';
+            // Start staging from what's actually applied, so a panel reopened after
+            // a dismissed edit shows the loaded view rather than the abandoned one.
+            if (state.multi) state.selection = selectionFromValue(state.value);
+            const visible = comboVisibleItems(state);
+            state.activeIndex = Math.max(0, visible.findIndex(i => i.value === state.value));
+            const panel = document.getElementById(mountId + '-panel');
+            const trigger = document.getElementById(mountId + '-trigger');
+            panel.hidden = false;
+            trigger.setAttribute('aria-expanded', 'true');
+            alignComboPanel(panel);
+            renderComboList(state);
+            const search = document.getElementById(mountId + '-search');
+            if (search) { search.value = ''; search.focus(); } else { document.getElementById(mountId + '-list').focus(); }
+        }
+
+        function closeCombo(mountId, refocus) {
+            const state = combos.get(mountId);
+            if (!state || !state.open) return;
+            state.open = false;
+            const panel = document.getElementById(mountId + '-panel');
+            const trigger = document.getElementById(mountId + '-trigger');
+            if (panel) panel.hidden = true;
+            if (trigger) {
+                trigger.setAttribute('aria-expanded', 'false');
+                if (refocus) trigger.focus();
+            }
+            // Apply is the only way to commit, so any other close discards whatever
+            // was staged. applyComboSelection calls this too — it reads the staged
+            // value before closing, so the discard here is a no-op for that path.
+            discardComboSelection(mountId);
+        }
+
+        function toggleCombo(mountId) {
+            const state = combos.get(mountId);
+            if (state && state.open) closeCombo(mountId, true); else openCombo(mountId);
+        }
+
+        function chooseComboValue(mountId, value) {
+            const state = combos.get(mountId);
+            if (!state) return;
+            closeCombo(mountId, true);
+            if (value === state.value) return;
+            state.value = value;
+            renderComboTrigger(state);
+            state.onChange(value);
+        }
+
+        // Ticks or unticks an option without closing the panel — picking several
+        // funds is the whole point, so the menu has to survive each click. Nothing
+        // is fetched until Apply: every commit refetches from the warehouse, and
+        // reloading five times while someone assembles a five-fund view is waste.
+        function toggleComboValue(mountId, value) {
+            const state = combos.get(mountId);
+            if (!state) return;
+            const item = state.items.find(i => i.value === value);
+            if (!item) return;
+
+            if (value === ALL_ENTITIES_VALUE) {
+                // Select-all behaviour: anything short of complete fills in the rest,
+                // so getting back to the whole firm never means hunting down the one
+                // fund you unticked. Only a fully-checked row clears.
+                const complete = comboItemSelectState(state, item) === 'checked';
+                state.selection = complete ? new Set() : new Set(FUNDS.map(f => f.uuid));
+            } else {
+                const uuids = comboItemUuids(item);
+                // A family row moves all of its members together: partially selected
+                // or empty, it fills in; fully selected, it clears.
+                const turnOn = comboItemSelectState(state, item) !== 'checked';
+                uuids.forEach(u => turnOn ? state.selection.add(u) : state.selection.delete(u));
+            }
+
+            // Only the list and footer move: the trigger reports the applied value,
+            // which staging hasn't changed. Leaving the trigger alone also keeps the
+            // panel's DOM (and the focused search box) intact.
+            renderComboList(state);
+        }
+
+        function clearComboSelection(mountId) {
+            const state = combos.get(mountId);
+            if (!state || !state.selection.size) return;
+            state.selection.clear();
+            renderComboList(state);
+        }
+
+        // Applies the staged selection and closes. The only path that commits.
+        function applyComboSelection(mountId) {
+            const state = combos.get(mountId);
+            if (!state || !state.multi) return;
+            const next = canonicalSelectionValue(state.selection);
+            // No funds ticked has no view to show. Apply is disabled in that state;
+            // this is the guard for a keyboard or programmatic route past the button.
+            if (next === null) return;
+            const changed = next !== state.value;
+            // Promote the staged value *before* closing: closeCombo discards back to
+            // state.value, which would otherwise undo the very selection being
+            // applied. With the new value in place that discard is a no-op.
+            state.value = next;
+            closeCombo(mountId, true);
+            if (!changed) return;
+            renderComboTrigger(state);
+            state.onChange(next);
+        }
+
+        // Flips the panel when it would otherwise run past the right edge.
+        function alignComboPanel(panel) {
+            const rect = panel.getBoundingClientRect();
+            panel.classList.toggle('align-right', rect.right > window.innerWidth - 8);
+        }
+
+        // Throws away staged ticks, putting the panel back in step with what's
+        // actually loaded. Called on every close that isn't an Apply, so dismissing
+        // the panel never silently changes the view.
+        function discardComboSelection(mountId) {
+            const state = combos.get(mountId);
+            if (!state || !state.multi) return;
+            state.selection = selectionFromValue(state.value);
+        }
+
+        function onComboTriggerKey(e, mountId) {
+            if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                openCombo(mountId);
+            }
+        }
+
+        function onComboPanelKey(e, mountId) {
+            const state = combos.get(mountId);
+            if (!state) return;
+            const visible = comboVisibleItems(state);
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                closeCombo(mountId, true);
+            } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (!visible.length) return;
+                const step = e.key === 'ArrowDown' ? 1 : -1;
+                state.activeIndex = (state.activeIndex + step + visible.length) % visible.length;
+                renderComboList(state);
+            } else if (e.key === 'Enter'
+                       || (e.key === ' ' && state.multi && !e.target.classList.contains('combo-search'))) {
+                // Space toggles the active row, but not while the search box has
+                // focus — fund names have spaces in them, and swallowing the key
+                // there would make the filter untypeable.
+                e.preventDefault();
+                const item = visible[state.activeIndex];
+                if (!item) return;
+                if (state.multi) toggleComboValue(mountId, item.value);
+                else chooseComboValue(mountId, item.value);
+            } else if (e.key === 'Tab') {
+                closeCombo(mountId, false);
+            }
+        }
+
+        document.addEventListener('click', e => {
+            combos.forEach((state, id) => {
+                if (!state.open) return;
+                const mount = document.getElementById(id);
+                if (mount && !mount.contains(e.target)) closeCombo(id, false);
+            });
+        });
+
+        // Vintage year as the option's trailing metadata. Fund size isn't part of
+        // the injected fund list, so the year is all we can show truthfully.
+        function fundMeta(f) {
+            return f.vintage_date ? String(f.vintage_date).slice(0, 4) : '';
         }
 
         function populateFundSelect() {
-            const select = document.getElementById('fundSelect');
-            if (!select) return;
-            select.innerHTML = '';
+            ensureSwitcherMounted();
+            if (!document.getElementById('fundCombo')) return;
+
+            const items = [];
 
             // "All Entities" only makes sense with more than one fund to combine.
             if (FUNDS.length > 1) {
-                select.appendChild(makeOption(ALL_ENTITIES_VALUE, 'All Entities', currentFundUuid));
+                items.push({ value: ALL_ENTITIES_VALUE, label: ALL_ENTITIES_LABEL });
             }
 
             const { families, standalone } = groupFundsByFamily();
@@ -2176,20 +3311,30 @@
             entries.forEach(entry => {
                 if (entry.kind === 'family') {
                     if (entry.members.length > 1) {
-                        // The family name itself is the rollup option: an <optgroup> label renders
-                        // the family but cannot be selected, so pooling would need a second row.
-                        const header = makeOption(FAMILY_PREFIX + entry.name, entry.name, currentFundUuid);
-                        header.style.fontWeight = 'bold';
-                        select.appendChild(header);
-                        // Non-breaking spaces — leading plain whitespace collapses in some browsers.
-                        entry.members.forEach(f => select.appendChild(makeOption(f.uuid, '\u00a0\u00a0\u00a0\u00a0' + f.name, currentFundUuid)));
+                        // The family name is itself a selectable rollup option, not a
+                        // header — choosing it pools every member fund.
+                        items.push({ value: FAMILY_PREFIX + entry.name, label: entry.name, isFamily: true });
+                        entry.members.forEach(f => items.push({
+                            value: f.uuid, label: f.name, meta: fundMeta(f), groupName: entry.name,
+                        }));
                     } else {
                         // A family of one fund has nothing to pool, so it reads as a plain fund.
-                        entry.members.forEach(f => select.appendChild(makeOption(f.uuid, f.name, currentFundUuid)));
+                        entry.members.forEach(f => items.push({ value: f.uuid, label: f.name, meta: fundMeta(f) }));
                     }
                 } else {
-                    select.appendChild(makeOption(entry.fund.uuid, entry.fund.name, currentFundUuid));
+                    items.push({ value: entry.fund.uuid, label: entry.fund.name, meta: fundMeta(entry.fund) });
                 }
+            });
+
+            setCombo('fundCombo', {
+                items,
+                value: currentFundUuid,
+                selection: selectionFromValue(currentFundUuid),
+                multi: true,
+                labelId: 'fundComboLabel',
+                unit: 'funds',
+                searchPlaceholder: 'Search funds',
+                onChange: switchFund,
             });
 
             // Only the Fund dropdown hides for a single-fund firm — the As of
@@ -2198,6 +3343,9 @@
             if (fundPart) fundPart.hidden = FUNDS.length <= 1;
 
             populateAsOfSelect();
+            // Fund and As of both feed viewIsFiltered, and neither goes through
+            // render() when it changes — the reload path rebuilds the switcher.
+            syncResetFiltersVisibility();
         }
 
         // Builds the last N quarter-end dates (most recent completed quarter first)
@@ -2219,8 +3367,9 @@
                 const y = d.getFullYear();
                 const m = d.getMonth();
                 const iso = `${y}-${String(m + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-                const q = Math.floor(m / 3) + 1;
-                opts.push({ value: iso, label: `Q${q} ${y} (${iso})` });
+                // The quarter leads; the exact date rides alongside so the period
+                // stays unambiguous for a firm whose fiscal year isn't calendar.
+                opts.push({ value: iso, label: `Q${Math.floor(m / 3) + 1} ${y}`, meta: formatDateShort(iso) });
                 let nm = m - 3, ny = y;
                 if (nm < 0) { nm += 12; ny -= 1; }
                 d = new Date(ny, nm + 1, 0);
@@ -2229,15 +3378,14 @@
         }
 
         function populateAsOfSelect() {
-            const select = document.getElementById('asOfSelect');
-            if (!select) return;
-            select.innerHTML = '';
-            computeQuarterOptions(12).forEach(opt => {
-                const el = document.createElement('option');
-                el.value = opt.value;
-                el.textContent = opt.label;
-                if (opt.value === (currentAsOfDate || '')) el.selected = true;
-                select.appendChild(el);
+            if (!document.getElementById('asOfCombo')) return;
+            setCombo('asOfCombo', {
+                items: computeQuarterOptions(12),
+                value: currentAsOfDate || '',
+                labelId: 'asOfComboLabel',
+                unit: 'dates',
+                searchPlaceholder: 'Search dates',
+                onChange: switchAsOf,
             });
         }
 
@@ -2255,6 +3403,7 @@
             sortDir = 'asc';
             allExpanded = false;
             expandedUnderlying = new Set();
+            expandedCompanies = new Set();
             clearTimeout(globalSearchDebounce);
             globalSearchTerm = '';
             globalSearchResults = null;
@@ -2273,12 +3422,23 @@
         async function loadFund(fundUuid) {
             currentFundUuid = fundUuid;
             ensureContentSkeleton();  // Recovers DOM if prior render was empty/error.
-            // Keep the <select>'s selected attribute in sync with state. The live
-            // `.value` is already correct via the user's change event, but the
-            // attribute can lag — set it explicitly so programmatic reads and any
-            // future "reset" of the dropdown reflect the active fund.
-            const select = document.getElementById('fundSelect');
-            if (select) select.value = fundUuid;
+            // loadFund is also reachable without going through the combo (initial
+            // load, error recovery), so re-sync the trigger to the fund actually
+            // being loaded rather than assuming a click set it.
+            const fundCombo = combos.get('fundCombo');
+            if (fundCombo && fundCombo.value !== fundUuid) {
+                fundCombo.value = fundUuid;
+                // The chips and tick states derive from the selection set, so it has
+                // to follow the value — a jump-to-match (global search) or an error
+                // retry changes the fund without going through the combo at all.
+                fundCombo.selection = selectionFromValue(fundUuid);
+                renderComboTrigger(fundCombo);
+            }
+            // Every fund and as-of change funnels through here, whatever renders
+            // afterwards. render() can't be relied on for this: the empty-fund and
+            // error paths render their own thing instead, and an empty fund still
+            // needs the Reset control to escape back to the firm-wide view.
+            syncResetFiltersVisibility();
 
             const isPooled = isPooledUuid(fundUuid);
             const pooled = isPooled ? pooledFunds(fundUuid) : [];
@@ -2314,6 +3474,12 @@
 
             // Cache miss → shimmer + fetch.
             showLoading();
+            // Name what's loading. This is the longest wait in the page, and a bare
+            // shimmer with no caption reads as a hung screen.
+            const loadingFund = FUNDS.find(f => f.uuid === fundUuid);
+            setLoadingStatus(isPooled
+                ? `Loading investments across ${pooled.length} funds…`
+                : `Loading ${loadingFund ? loadingFund.name : 'fund'} investments…`);
             try {
                 let transformed;
                 const scopeFundUuids = isPooled ? pooled.map(f => f.uuid) : [fundUuid];
@@ -2342,7 +3508,8 @@
                 render();
                 showContent();
             } catch (error) {
-                showError(error && error.userFacing ? error.message : 'Error loading SOI: ' + error.message);
+                console.error('SOI: fund load failed', error);
+                showError(error && error.userFacing ? error.message : "Couldn't load this fund's investments.", () => loadFund(fundUuid));
             }
         }
 
@@ -2405,6 +3572,7 @@
             sortDir = 'asc';
             allExpanded = false;
             expandedUnderlying = new Set();
+            expandedCompanies = new Set();
             clearTimeout(globalSearchDebounce);
             globalSearchTerm = '';
             globalSearchResults = null;
@@ -2437,6 +3605,7 @@
             // firm-scoped and the artifact is firm-scoped, so we don't re-fire on
             // fund switches. If the MCP session has expired this is the first
             // place we'd notice; the wrapper handles the welcome-then-retry.
+            setLoadingStatus('Connecting to Carta…');
             try {
                 const contextResult = await callMcpWithWelcomeRetry(SET_CONTEXT_TOOL, { firm_id: FIRM_UUID });
                 if (contextResult && contextResult.isError) {
@@ -2444,7 +3613,8 @@
                     throw new Error(msg);
                 }
             } catch (error) {
-                showError(error && error.userFacing ? error.message : 'Error pinning firm context: ' + error.message);
+                console.error('SOI: pinning firm context failed', error);
+                showError(error && error.userFacing ? error.message : "Couldn't connect to Carta.", () => bootstrap());
                 return;
             }
 
@@ -2455,14 +3625,33 @@
 
         document.getElementById('searchIcon').innerHTML = inkIcon('search', 14);
 
+        // Shared by the scroll listener, render(), and the resize listener below —
+        // whichever last changed either the scroll position or the table's content
+        // width needs to re-decide whether the sticky-column shadow and the
+        // right-edge "more to scroll" fade should show.
+        function updateScrollAffordances(scroller) {
+            if (!scroller) scroller = document.querySelector('.table-scroll');
+            if (!scroller) return;
+            scroller.classList.toggle('scrolled', scroller.scrollLeft > 0);
+            const wrap = scroller.closest('.table-scroll-wrap');
+            if (wrap) {
+                const hasMore = scroller.scrollWidth - scroller.scrollLeft - scroller.clientWidth > 1;
+                wrap.classList.toggle('has-more-right', hasMore);
+            }
+        }
+
         // Use capture-phase delegation on document — the .table-scroll element gets
         // rebuilt when we show the shimmer between fund switches, so binding directly
         // to it would leak listeners across switches and miss events on the new node.
         // Scroll events don't bubble; capture phase reaches them.
         document.addEventListener('scroll', e => {
             const scroller = e.target.closest && e.target.closest('.table-scroll');
-            if (scroller) scroller.classList.toggle('scrolled', scroller.scrollLeft > 0);
+            if (scroller) updateScrollAffordances(scroller);
         }, true);
+
+        // Column widths change on filter/sort/expand without a scroll event firing,
+        // and the viewport can change width too — both need the same re-check.
+        window.addEventListener('resize', () => updateScrollAffordances());
 
         // Delegate the search-box 'input' listener too, for the same DOM-rebuild
         // reason. Also more robust against any Cowork-side rewriting of inline

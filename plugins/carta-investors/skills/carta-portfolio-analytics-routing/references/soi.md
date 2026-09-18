@@ -62,8 +62,26 @@ Call `call_tool({"name": "fa__list__entities", "arguments": { entity_types: "fun
 |---|---|---|---|
 | User named a fund, **one** match | the matched fund's uuid | `named_and_found` | — |
 | User named a fund, **multiple** matches | the user-chosen uuid (via `AskUserQuestion`) | `named_and_found` | — |
-| User named a fund, **no** match | alphabetically-first fund's uuid | `named_but_missing` | `named_term` = the term the user used |
-| User did not name a fund | alphabetically-first fund's uuid | `unnamed` | — |
+| User named a fund, **no** match | `__all_entities__` | `named_but_missing` | `named_term` = the term the user used |
+| User did not name a fund, firm has **< 40** funds | the first fund or fund family in the vintage-sorted order from Step 2c | `unnamed` | — |
+| User did not name a fund, firm has **≥ 40** funds | `__all_entities__` | `unnamed` | — |
+
+`__all_entities__` opens the artifact on the pooled firm-wide view — every fund at
+once, with a Held By column naming which fund holds each position. Most firms want
+the whole portfolio first and narrow from there, so an unasked-for single fund is
+the wrong opening shot for a firm small enough to actually see its whole book at once.
+Above the 40-fund line, though, "whole book" stops being readable as one table —
+default those firms to their most recent fund (or fund family) instead, and let
+them pool up manually when they want to. Pass the sentinel through verbatim when
+it applies; the render script accepts it in place of a fund UUID.
+
+The fund-count check needs Step 2's full fund list, so it can't run until Step 2
+(and, for the vintage-sorted pick, Step 2c) has returned — this is a one-time count
+of `fa__list__entities` results, not a live threshold.
+
+**A single-fund firm can't pool.** The artifact only offers the firm-wide option
+when there is more than one fund, and the render script rejects the sentinel below
+two — so for a one-fund firm, use that fund's uuid regardless of the table above.
 
 `named_but_missing` is **not** a blocker — render the artifact with the full firm fund list anyway. The user can pick their intended fund from the dropdown; Step 6 surfaces the miss in the confirmation message.
 
@@ -239,7 +257,7 @@ Pick the branch from the `name_status` value captured in Step 2.
 
 > The Schedule of Investments for **<Fund Name>** is now loading in your Cowork sidebar. Use the **Fund** dropdown in the header to switch between any of the **<N>** funds in **<Firm Name>** you have access to.
 
-**`name_status == "named_but_missing"`** — the user named a fund we couldn't find; initial selection fell back to alphabetically-first:
+**`name_status == "named_but_missing"`** — the user named a fund we couldn't find; initial selection fell back to the firm-wide view:
 
 > I couldn't find a fund named **<named_term>** in **<Firm Name>**. I've loaded the Schedule of Investments artifact with the **<N>** funds you do have access to — use the **Fund** dropdown in the header to pick the one you meant.
 

@@ -82,6 +82,10 @@ DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 MCP_SERVER_RE = re.compile(r"^[^\r\n\'\"<>\\]{1,120}$")
 ARTIFACT_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]*[a-z0-9]$")
 
+# Must match the artifact's own ALL_ENTITIES_VALUE.
+ALL_ENTITIES_VALUE = "__all_entities__"
+
+
 
 def js_safe_json(obj) -> str:
     """JSON-encode for embedding inside a <script> block.
@@ -203,8 +207,14 @@ def main() -> int:
     if not UUID_RE.match(firm_uuid):
         print(f"error: firm_uuid is not a valid UUID: {firm_uuid!r}", file=sys.stderr)
         return 1
-    if not UUID_RE.match(initial_fund_uuid):
-        print(f"error: initial_fund_uuid is not a valid UUID: {initial_fund_uuid!r}", file=sys.stderr)
+    # The artifact's own sentinel for its pooled firm-wide scope, so a firm can
+    # open on every fund at once instead of an arbitrary single one.
+    if initial_fund_uuid != ALL_ENTITIES_VALUE and not UUID_RE.match(initial_fund_uuid):
+        print(
+            f"error: initial_fund_uuid must be a fund UUID or {ALL_ENTITIES_VALUE!r}; "
+            f"got: {initial_fund_uuid!r}",
+            file=sys.stderr,
+        )
         return 1
     if not MCP_SERVER_RE.match(mcp_server):
         print(
@@ -229,7 +239,17 @@ def main() -> int:
     if funds is None:
         return 1
 
-    if not any(f["uuid"] == initial_fund_uuid for f in funds):
+    if initial_fund_uuid == ALL_ENTITIES_VALUE:
+        # The artifact only offers the pooled option when there is more than one
+        # fund to pool, so a single-fund firm has to open on that fund.
+        if len(funds) < 2:
+            print(
+                f"error: initial_fund_uuid {ALL_ENTITIES_VALUE!r} needs at least two funds; "
+                f"funds_file has {len(funds)}",
+                file=sys.stderr,
+            )
+            return 1
+    elif not any(f["uuid"] == initial_fund_uuid for f in funds):
         print(
             f"error: initial_fund_uuid {initial_fund_uuid} is not present in funds_file",
             file=sys.stderr,
