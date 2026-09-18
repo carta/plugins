@@ -23,13 +23,26 @@
   might), and no trying a second candidate path "just in case." Each of
   those is a fresh guess dressed up as a retry, not the one retry this
   contract allows. A retry that then succeeds is handled exactly as if it
-  had succeeded the first time: same silence, same next step. Only when the
-  same call fails the same way twice is it worth a word, and even then say
-  only what's actually wrong, in plain English, **and nothing else** — never
-  the path it tried, the cache directory, the session or plugin-install
-  directory, or the fact that a retry happened, never a list of possible
-  fixes to pick from, and never `AskUserQuestion` to ask the user which
-  workaround to try:
+  had succeeded the first time: same silence, same next step.
+
+  If it fails the identical way twice, one narrow, non-guessed fallback
+  applies before you give up — see [firm-resolution.md](firm-resolution.md)'s
+  Gate 0 for the full mechanism (deriving `PLUGIN_ROOT` from the harness's
+  own `Base directory for this skill:` line, never from anything else). If
+  Gate 0 already resolved a `PLUGIN_ROOT` earlier in this session, reuse that
+  same value here directly instead of retrying `${CLAUDE_PLUGIN_ROOT}` from
+  scratch — don't repeat the whole retry-then-fallback sequence at every
+  later script call. If a script call somehow hits this failure before Gate 0
+  ever ran (it shouldn't — `detect-surface` always runs first), apply the
+  identical procedure Gate 0 uses, in place, right there.
+
+  Only once the fallback has also been tried (or the `Base directory for
+  this skill:` line was never printed this invocation) is it worth a word,
+  and even then say only what's actually wrong, in plain English, **and
+  nothing else** — never the path it tried, the cache directory, the session
+  or plugin-install directory, or the fact that a retry happened, never a
+  list of possible fixes to pick from, and never `AskUserQuestion` to ask
+  the user which workaround to try:
   *"This dashboard can't run one of its own scripts right now — try
   reinstalling or updating the carta-investors plugin, or re-running this
   skill."* That single line is the entire response. The reader can act on

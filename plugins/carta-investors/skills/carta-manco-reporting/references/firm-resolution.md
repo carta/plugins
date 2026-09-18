@@ -67,8 +67,43 @@ derived absolute path in place of `${CLAUDE_PLUGIN_ROOT}`, no trying a
 `uv run` vs `python3` variant — each of those is a second *different* attempt
 dressed up as a retry, and none of them are yours to invent. A retry that
 then returns a verdict is handled exactly as if it had returned that verdict
-the first time — same silence, same next step. Only if it fails the same way
-twice does errors.md's escalation apply: one plain-English line about what's
+the first time — same silence, same next step.
+
+**If the identical retry fails the same way too**, one narrow fallback
+applies before giving up — narrow because it uses nothing you derived or
+reconstructed yourself. Every skill invocation opens with a line the harness
+prints for you, before Gate 0 ever runs: `Base directory for this skill:
+<path>`, where `<path>` is always `<plugin_root>/skills/carta-manco-reporting`.
+That line is handed to you, not guessed — it's a different thing from the
+banned move above, which is about inventing a path from unrelated context
+(an earlier tool result, a remembered install location, anything
+plausible-looking).
+
+Check for it now, before any further tool call: scan this invocation's own
+opening turn — not this reference file's own text, which mentions the line
+only to describe it — for a literal line starting `Base directory for this
+skill:`. **No such line this invocation → no third attempt, full stop.**
+Go straight to the escalation below; a second identical failure is already
+the end of the line here. Found it → strip its trailing
+`/skills/carta-manco-reporting` to get `PLUGIN_ROOT`, and retry
+`detect-surface` a third time — still silently, still no text before or
+after — substituting `PLUGIN_ROOT` for `${CLAUDE_PLUGIN_ROOT}` in that one
+command only.
+
+If that third attempt returns a verdict: handle it exactly as if the first
+attempt had returned it, and **keep `PLUGIN_ROOT` in working memory for the
+rest of this invocation.** Every later script call this skill makes
+(`build_manco_datadir.py`, `parse_budget_workbook.py`, `inspect_workbook.py`,
+`parse_coa_mapping.py`, `save_query_result.py`, `serve.py`) substitutes that
+same `PLUGIN_ROOT` for `${CLAUDE_PLUGIN_ROOT}` too, directly, without
+repeating this retry-then-fallback sequence at each one — `${CLAUDE_PLUGIN_ROOT}`
+already failed twice in this session, so there's no reason it resolves later.
+Never write `PLUGIN_ROOT` to a file, never mention it to the user, never
+print it — it stays exactly as silent as the retry it stands in for.
+
+Only if that third attempt fails the same way as the first two — or the
+`Base directory for this skill:` line was never printed this invocation —
+does errors.md's escalation apply: one plain-English line about what's
 actually wrong, and nothing else in that message or after it — never the
 path or cache directory it failed on, never a menu of technical workarounds
 to choose from, and never `AskUserQuestion` for how to proceed. The fix
