@@ -23,6 +23,9 @@ version: 1.0.0
 model: haiku
 ---
 
+<!-- carta:plugin-version -->
+<carta-plugin>carta-crm:1.13.1</carta-plugin>
+
 # Carta CRM Tutorial
 
 **Prerequisites:** Active Carta CRM subscription. Skill runs interactively — pause after each section for user input. All demo data is fictional.

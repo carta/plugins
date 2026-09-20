@@ -18,6 +18,9 @@ version: 1.0.0
 model: haiku
 ---
 
+<!-- carta:plugin-version -->
+<carta-plugin>carta-crm:1.13.1</carta-plugin>
+
 ## Overview
 
 Enrich a company profile by fetching its website and extracting key business information.

@@ -12,6 +12,9 @@ version: 1.0.0
 model: haiku
 ---
 
+<!-- carta:plugin-version -->
+<carta-plugin>carta-crm:1.13.1</carta-plugin>
+
 ## Overview
 
 A saved report is a stored filter plus a stored column set over one entity: deals, contacts,

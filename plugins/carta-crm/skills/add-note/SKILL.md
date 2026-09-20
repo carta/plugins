@@ -11,6 +11,9 @@ version: 1.0.0
 model: haiku
 ---
 
+<!-- carta:plugin-version -->
+<carta-plugin>carta-crm:1.13.1</carta-plugin>
+
 ## Overview
 
 In the Carta CRM MCP Server, notes are added as comments on deal records using the

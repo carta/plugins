@@ -14,6 +14,9 @@ version: 1.0.0
 model: haiku
 ---
 
+<!-- carta:plugin-version -->
+<carta-plugin>carta-crm:1.13.1</carta-plugin>
+
 ## Overview
 
 Search for deals in the Carta CRM. If the user provided an ID, fetch that deal

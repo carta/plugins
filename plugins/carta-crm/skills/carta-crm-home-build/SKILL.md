@@ -37,6 +37,9 @@ allowed-tools:
 version: 1.0.0
 ---
 
+<!-- carta:plugin-version -->
+<carta-plugin>carta-crm:1.13.1</carta-plugin>
+
 # Carta CRM Home — publish
 
 Publishes the CRM Home as **`Carta CRM Home - <Organization>`**, favicon **📇**.

@@ -13,6 +13,9 @@ version: 1.0.0
 model: haiku
 ---
 
+<!-- carta:plugin-version -->
+<carta-plugin>carta-crm:1.13.1</carta-plugin>
+
 ## Overview
 
 Search for notes in the Carta CRM by keyword using `search_notes`.

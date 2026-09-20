@@ -23,6 +23,9 @@ version: 1.0.0
 model: inherit
 ---
 
+<!-- carta:plugin-version -->
+<carta-plugin>carta-crm:1.13.1</carta-plugin>
+
 ## Overview
 
 The user has a meeting coming up and two minutes to prepare. Produce a scannable
@@ -42,6 +45,12 @@ naming the mechanics makes a bespoke brief read as something pre-baked.
 rendering, HTML, artifacts, file paths, tool names, or this skill. Per Carta writing style,
 favour domain terms over internal system names.
 
+**Never describe your own search.** The searches you ran, the records you opened, the
+lookups that returned nothing and the conclusion you drew from them are all machinery. They
+belong in neither the brief nor the chat. A line like "That deal result is unrelated, so no
+deal record exists for this company. I have enough to write the brief" is reasoning left on
+the page. State the finding, never the hunt for it.
+
 Progress lines are welcome, but phrase them in the user's world:
 
 | Don't say | Say |
@@ -49,6 +58,7 @@ Progress lines are welcome, but phrase them in the user's world:
 | "Now let me look at the template and gather CRM data." | "Pulling your history with DataStream AI…" |
 | "I'll fill in the sections and render the HTML." | *(say nothing — just produce the brief)* |
 | "Calling get_adviser_profile…" | "Checking who covers this account…" |
+| "That search returned nothing, so I have enough to write the brief." | *(say nothing about the search)* |
 
 Lead with the meeting, not the process. No "let me…" preamble about your own steps.
 
@@ -59,6 +69,34 @@ Two more rules that keep this fast and honest:
 - **Prefer `crm:get_adviser_profile` over hand-assembling context.** One call returns the
   company, top contacts with interaction counts, active deals, the next scheduled
   interaction and recent notes. Don't rebuild that from ten calls.
+
+## Substance: what earns a place on the page
+
+The brief prepares the reader for the meeting. Every line must help them in the room. Seven
+rules decide what stays.
+
+1. **Address the reader as "you".** Never write the reader's name. Never tell the reader to
+   confirm something with themselves, with the meeting owner or with the organizer when that
+   person is the reader. The reader booked the meeting, so "confirm the agenda with the
+   meeting owner" tells them to talk to themselves.
+2. **Give no CRM housekeeping.** Never tell the reader to log, record or capture anything in
+   the CRM. Never ask the reader to create a company record or a contact record. Never
+   suggest taking notes. The brief prepares the meeting. It does not hand out chores.
+3. **Every line must be about these people.** Cut any line that would fit any other meeting.
+   "Listen carefully and build rapport" is filler. If you cannot tie a line to this
+   counterparty, this deal or this history, it does not go on the page.
+4. **State an absence at most once.** Say once that the CRM holds nothing on the
+   counterparty. Never say it a second time further down the page. An item that repeats
+   the opening is redundant and costs a line the reader needs.
+5. **An empty CRM is the last answer, not the first.** Report an empty CRM only when the CRM
+   record, the external company profile and the interaction history are all empty. Read
+   `companyProfile`, `externalProfile`, `crm:preview_company` and `recentInteractions`
+   before you conclude there is nothing. Two emails with the domain and a profile of what the company does are a
+   brief. "Zero contacts, zero deals and zero notes" is a count the reader already knows.
+6. **Budget 3 to 5 items, each under 45 words.** An item is whatever the page carries to
+   brief the reader. Fewer than three means you stopped researching too early. More than
+   five means the reader has to triage the brief.
+7. **Never describe your own search.** See Voice above.
 
 ## Fetch plan — two waves, issued in parallel
 
@@ -85,6 +123,10 @@ missing, again in parallel:
 
 - `crm:search_contacts` for external attendees who did **not** appear in `topContacts`
 - `crm:get_company_angles`
+- `crm:preview_company` when neither the CRM record nor `externalProfile` says what the
+  counterparty does
+- `crm:list_interactions_by_domain` when `recentInteractions.count` is larger than the
+  number of items the profile returned
 
 Never serialise these. Two waves is the target; more than three means something is being
 fetched that the brief cannot show.
@@ -203,11 +245,37 @@ That returns the company, `topContacts[]` with `totalRelationsCount` /
 `nextScheduledInteraction` and `recentNotes`. Read it before deciding what else you
 need.
 
+Three fields on the same response carry most of the substance:
+
+- **`companyProfile`** holds the CRM company record's own `description`, `industry`,
+  `location`, `website`, `founded` and `employeeCount`. It is the tenant's own copy, so read
+  it first. Most company records carry a description, so this is usually where the answer
+  is. The field is null when the record holds none of these.
+- **`externalProfile`** says what the company does, from the external data provider. It comes
+  back when `companyProfile` carries no description, so treat it as the fallback rather than
+  the first source.
+- **`recentInteractions: { count, items }`** holds the 5 most recent past emails and meetings
+  with anyone at the domain, across the whole organization. `items` holds the subject, the
+  date and the people. Read them. Two emails already exchanged with the domain tell the
+  reader more than any count of CRM objects. When `count` is larger than the number of
+  items, read the rest with `crm:list_interactions_by_domain`.
+
+**Say what the counterparty does.** Take the description from `companyProfile` first, then
+`externalProfile`. Only when neither describes the business, call `crm:preview_company`,
+which returns the name, industry, location, employee count, funding and description. A
+reader who walks in knowing what the company sells is prepared. A reader who walks in
+knowing the CRM row count is not.
+
 Top up only what came back thin, and **stop at 3 enrichment calls**. Ask for no more than
 the brief can show: the history list displays 4 entries, so `limit: 6` is ample — pulling 50
 costs tokens on rows nobody sees.
 
 - `crm:get_company_angles` — warm paths. Nothing else returns these.
+- `crm:preview_company`: what the company does, when neither `companyProfile` nor
+  `externalProfile` says. This call takes priority over the rest of this list on a thin
+  domain: it is the difference between a brief and a row count.
+- `crm:list_interactions_by_domain`: the interactions beyond the 5 in
+  `recentInteractions.items`, when `count` says there are more.
 - `crm:search_contacts` — **only** for external attendees missing from `topContacts`.
 - `crm:get_contact_interactions` — only when you need per-person detail `topContacts`
   lacks, and only for 1–2 people.
@@ -343,6 +411,7 @@ Hard constraints on the document:
   also why the template ships no JS.
 - **Keep the CSS inline** and images to absolute `https://` URLs. The document must stand
   alone in all three delivery paths below.
+- **Every item on the page passes the Substance rules above.**
 - **Escape every value you interpolate.** CRM field values are untrusted — a tenant's
   tag, dropdown option, note body or company name can contain arbitrary text. Convert
   `&` → `&amp;`, `<` → `&lt;`, `>` → `&gt;`, `"` → `&quot;`. Never drop a raw CRM value

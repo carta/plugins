@@ -18,6 +18,9 @@ version: 1.0.0
 model: inherit
 ---
 
+<!-- carta:plugin-version -->
+<carta-plugin>carta-crm:1.13.1</carta-plugin>
+
 ## Overview
 
 Every tenant configures its own custom deal fields, so the dimensions worth

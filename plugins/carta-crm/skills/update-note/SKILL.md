@@ -12,6 +12,9 @@ version: 1.0.0
 model: haiku
 ---
 
+<!-- carta:plugin-version -->
+<carta-plugin>carta-crm:1.13.1</carta-plugin>
+
 ## Overview
 
 Notes in the Carta CRM MCP are accessible via `search_notes` but are edited as

@@ -27,6 +27,9 @@ version: 1.0.0
 model: inherit
 ---
 
+<!-- carta:plugin-version -->
+<carta-plugin>carta-crm:1.13.1</carta-plugin>
+
 # Carta CRM Home
 
 The Home is one manifest tool and two places to put it. The server decides which cards this

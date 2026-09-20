@@ -25,6 +25,9 @@ version: 1.0.0
 model: inherit
 ---
 
+<!-- carta:plugin-version -->
+<carta-plugin>carta-crm:1.13.1</carta-plugin>
+
 ## Overview
 
 The user wants into a company they have no relationship with. Answer the question they

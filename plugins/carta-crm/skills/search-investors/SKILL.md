@@ -14,6 +14,9 @@ version: 1.0.0
 model: haiku
 ---
 
+<!-- carta:plugin-version -->
+<carta-plugin>carta-crm:1.13.1</carta-plugin>
+
 ## Overview
 
 Look up investors in the Carta CRM. A request about **one named investor** renders that
