@@ -1,1 +1,6 @@
-{}
+{
+  "carta-captable-home-build": {
+    "version": "0.12.1",
+    "headline": "The cap table page now charts fully diluted composition as one stacked bar, with a legend per share class and option plan."
+  }
+}

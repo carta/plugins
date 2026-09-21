@@ -18,7 +18,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.85.7</carta-plugin>
+<carta-plugin>carta-cap-table:6.86.0</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
