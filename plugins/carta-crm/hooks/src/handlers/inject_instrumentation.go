@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"os"
+	"runtime"
 	"strings"
 
 	"com.carta.claude_plugins.hooks/internal/hookio"
@@ -39,6 +40,9 @@ type instrumentationV2 struct {
 	// nil when the hook has no signal — the AI fallback fills it in then.
 	Surface          *string `json:"surface"`
 	CumulativeTokens *int64  `json:"cumulative_tokens,omitempty"`
+	// "<os>/<arch>" of the machine running the hook. Always known, so never
+	// in fallbackPreserveFields.
+	Platform string `json:"platform"`
 }
 
 // InjectInstrumentation injects an _instrumentation_v2 payload into the tool
@@ -77,6 +81,7 @@ func buildInstrumentationV2(ident plugin.Identity, evt hookio.InjectEvent, skill
 		namespaced[i] = ident.Name + ":" + s
 	}
 	surface := resolveSurface()
+	platform := resolvePlatform()
 
 	var tokens *int64
 	if total, ok := tokenusage.CumulativeSessionTokensForSession(evt.TranscriptPath); ok {
@@ -95,6 +100,7 @@ func buildInstrumentationV2(ident plugin.Identity, evt hookio.InjectEvent, skill
 		FromHook:         true,
 		Surface:          surface,
 		CumulativeTokens: tokens,
+		Platform:         platform,
 	}
 
 	if err := session.WriteRecord(evt.SessionID, ident.Name, ident.Version, namespaced); err != nil {
@@ -118,6 +124,7 @@ func buildInstrumentationV2(ident plugin.Identity, evt hookio.InjectEvent, skill
 		FromHook:         true,
 		Surface:          surface,
 		CumulativeTokens: tokens,
+		Platform:         platform,
 	}
 }
 
@@ -152,6 +159,12 @@ func resolveSurface() *string {
 		return &entrypoint
 	}
 	return nil
+}
+
+// resolvePlatform returns the OS/arch of the machine running the hook
+// binary as "<os>/<arch>" (e.g. "darwin/arm64"). Always available.
+func resolvePlatform() string {
+	return runtime.GOOS + "/" + runtime.GOARCH
 }
 
 // buildUpdatedInput injects instr into tool_input, nesting it under
