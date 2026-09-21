@@ -42,7 +42,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.33.0</carta-plugin>
+<carta-plugin>carta-investors:6.34.0</carta-plugin>
 
 # ManCo Reporting Dashboard
 
@@ -171,7 +171,8 @@ datadir build runs silently. Speak only at:
 - Step 2.75 — the budget questions, on a firm never asked before
 - Step 4.7 ([budget-unresolved.md](references/budget-unresolved.md)) — the
   mapping table, whenever the build left budget lines with
-  no Carta account to resolve against. Asked once, as one table, and
+  no Carta account to resolve against. Confirm the confident rows first,
+  then work through the rest — the two never share one turn — and
   **before the URL**: an unmapped line renders its budget against no
   actual, which reads as an account nobody spent from rather than one
   nobody matched. Every other question in this skill waits until the

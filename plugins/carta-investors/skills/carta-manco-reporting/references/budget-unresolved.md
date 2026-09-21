@@ -23,20 +23,25 @@ budget line that will render budget-only, and what each needs — a fund, an
 account, which half of a fee, a tag value. Ask about them rather than
 shipping a page of zeros the reader has to notice for themselves.
 
-### Ask once, as two tables
+### Confirm the confident rows first, then work through the rest
 
 `accountsData.mappingTable` is those same questions numbered in the
 workbook's own order, each pre-filled where the build could work the
-answer out. **Print two tables, not one, and ask for one confirmation.**
-A firm arrives with dozens of these, they are all the same kind of
-question, and asked one at a time they are an afternoon — by the tenth
-the operator has stopped reading them.
+answer out. Split it into two tables, but **do not show them
+together.** Show **Current mapping** first, on its own, with one
+confirm-all question — and wait for that answer before showing
+**Needs your input** at all. Confirming the easy rows is a one-tap
+action; making the operator scroll past a wall of judgment calls before
+they can even do that one tap defeats the point of splitting the tables
+in the first place. The exception is when **Current mapping** is
+empty — nothing to confirm, so go straight to **Needs your input** in
+this same turn (see below).
 
-**The tables are chat text, not a summary folded into the question.**
-Render both markdown tables as your own response text, in the same turn,
-*before* the `AskUserQuestion` call below — never skip straight from
-reading `mappingTable` to asking the question. The question's wording
-says "confirm the mappings above": that phrase is a lie unless a table
+**Each table is chat text, not a summary folded into the question.**
+Render the markdown table as your own response text *before* the
+`AskUserQuestion` call it belongs to — never skip straight from reading
+`mappingTable` to asking the question. The question's wording says
+"confirm the mappings above": that phrase is a lie unless a table
 actually sits above it on screen. Cramming the row list into an option's
 `description` field (a comma-separated string of category names, say)
 does not satisfy this — the operator cannot check a GL account number,
@@ -178,34 +183,45 @@ absent), `line` → `Budget line`, `proposed` → `Proposed GL account(s)` —
 plural, because a line can map to more than one Carta account — with
 `options` as what a change can be changed to. Then:
 
-When **Current mapping** has at least one row, ask with a single
-`AskUserQuestion`:
+When **Current mapping** has at least one row, print it, then ask with a
+single `AskUserQuestion`:
 
 > **Confirm the `<N>` mappings above?**
 > Matched against your Carta chart of accounts — some read straight off an
 > exact name, some off your workbook's own formulas, some are my own best
 > read of what a line means; either way, tell me if anything should
-> change. None of this is final — say so any time, this run or a later
-> one, and I'll update it and rebuild.
+> change. **Nothing here is locked in — you can always come back and
+> change a mapping later, this run or a future one.**
 
-Options: **"Yes, confirm all"** — records every entry in Current mapping
-as-is, one `record_budget_mapping()` call. **"No — a few need
-changing"** — free text next, since which rows and how differs every
-time (e.g. "3 is the fee account", "2 is budget-only") and can't be
-buttoned. **"Decide later"** — records nothing; the table returns next run.
+Options, each restating that these aren't final so the reassurance
+survives even if the question's own prose gets trimmed in the render:
+**"Yes, confirm all — I can always update these later"** — records every
+entry in Current mapping as-is, one `record_budget_mapping()` call.
+**"No — a few need changing"** — free text next, since which rows and how
+differs every time (e.g. "3 is the fee account", "2 is budget-only") and
+can't be buttoned. **"Decide later"** — records nothing; the table
+returns next run.
 
-**The rows under "Needs your input" always need an answer of their own,
-whatever gets picked above — none of them carries a proposed value to
-confirm.** Ask for these via `AskUserQuestion`, in the same turn — never as
-chat prose you write and move past, and never by picking the nearest option
-yourself to avoid the round trip; that is exactly the call the automatic
-match already refused to make. One question per row, each carrying that
-row's own `options` (plus "void" and "leave it" alongside them, and "read
-the formulas" too whenever the row carries a `source_formula` the
-mechanical pass couldn't resolve); a single call carries up to four
-questions, so batch further when there are more than four rows. When
-Current mapping is empty (every entry needs input), skip the
-mapping-confirmation `AskUserQuestion` above and go straight to this one.
+**Wait for that answer before doing anything else.** Do not print
+**Needs your input** in the same turn, and do not call its
+`AskUserQuestion`s until this one has come back — that table is the next
+step, not a second half of this one. When **Current mapping** is empty
+(every entry needs input), there is nothing to wait for: skip the
+confirm-all question and go straight to **Needs your input**, in this
+same turn.
+
+**Once the confirm-all answer is in (or immediately, if there was nothing
+to confirm), print Needs your input and ask about every row in it.** Each
+of these rows always needs an answer of its own — none of them carries a
+proposed value to confirm. Ask via `AskUserQuestion`, in the same turn
+the table is printed — never as chat prose you write and move past, and
+never by picking the nearest option yourself to avoid the round trip;
+that is exactly the call the automatic match already refused to make. One
+question per row, each carrying that row's own `options` (plus "void" and
+"leave it" alongside them, and "read the formulas" too whenever the row
+carries a `source_formula` the mechanical pass couldn't resolve); a
+single call carries up to four questions, so batch further when there
+are more than four rows.
 
 **A line that matches no Carta account has three answers, not two — four
 when it also carries a `source_formula`.** Say them, because most of these
