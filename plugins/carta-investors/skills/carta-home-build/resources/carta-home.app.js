@@ -161,6 +161,9 @@ let _soiFundRows = [];          // hoisted so starred card can read it
 let _benchLabels = null;        // hoisted so starred perf card can draw
 let _benchDatasets = null;
 let _fundColorMap  = {};        // { fundName → hex } — populated in fetchBenchmarkData
+// Generic palette — cycles for any number of funds. Shared by the benchmark chart
+// path and the AGGREGATE_FUND_METRICS fallback so both colour funds identically.
+const _BENCH_COLORS = ["#285DA3","#2D9E90","#DDB31F","#94B524","#B29990","#58B8BC","#656B6B"];
 let _latestByFund  = {};        // { fundName → latest metrics row } — for starred perf card table
 let _firmDisplayName = 'your firm'; // set by fetchLiveData once firm is resolved
 
@@ -264,7 +267,7 @@ async function fetchBenchmarkData() {
     });
     if (res.isError) throw new Error("DWH failed");
     const rows = parseDWH(res);
-    if (!rows.length) return;
+    if (!rows.length) { await fetchBenchmarkFallback(); return; }
 
     // Build sorted date list
     const dateSet = new Set(rows.map(r => r.PERFORMANCE_QUARTER_START_DATE));
@@ -281,8 +284,7 @@ async function fetchBenchmarkData() {
       if (r.NET_IRR_50TH != null) byFundP50[r.FUND_NAME][r.PERFORMANCE_QUARTER_START_DATE] = r.NET_IRR_50TH;
     });
 
-    // Generic palette — cycles for any number of funds
-    const DATA_VIZ_COLORS = ["#285DA3","#2D9E90","#DDB31F","#94B524","#B29990","#58B8BC","#656B6B"];
+    const DATA_VIZ_COLORS = _BENCH_COLORS;
     // Derive shortest unique label by stripping common prefix and ", L.P." suffix
     const fundNames = Object.keys(byFund).slice(0, 3); // show max 3 funds
     const commonPrefix = fundNames.reduce((pfx, n) => {
@@ -327,34 +329,115 @@ async function fetchBenchmarkData() {
     });
     _latestByFund = latestByFund;
 
-    const metricsEl = document.getElementById("benchmark-metrics");
-    if (metricsEl && Object.keys(latestByFund).length) {
+    if (Object.keys(latestByFund).length) {
       const asOf = _fmtQtr(Object.values(latestByFund)[0].PERFORMANCE_QUARTER_START_DATE);
-      metricsEl.innerHTML = `
-        <div style="margin-top:10px;border-top:1px solid var(--ink-color-global-border-subtle);padding-top:8px;">
-          <div style="display:flex;gap:4px;justify-content:space-between;margin-bottom:4px;">
-            <span style="font-size:9px;color:var(--ink-color-global-text-subtle);text-transform:uppercase;letter-spacing:.04em;flex:2;">Fund · ${asOf}</span>
-            <span style="font-size:9px;color:var(--ink-color-global-text-subtle);text-align:right;flex:1;">Net IRR</span>
-            <span style="font-size:9px;color:var(--ink-color-global-text-subtle);text-align:right;flex:1;">TVPI</span>
-            <span style="font-size:9px;color:var(--ink-color-global-text-subtle);text-align:right;flex:1;">DPI</span>
-          </div>
-          ${Object.values(latestByFund).map(r => {
-            const shortName = r.FUND_NAME.replace(/, L\.P\.$/, "").replace(/, LP$/, "").split(" ").slice(-2).join(" ");
-            const color = _fundColorMap[r.FUND_NAME] || "#285DA3";
-            return `<div style="display:flex;gap:4px;justify-content:space-between;padding:2px 0;">
-              <span style="font-size:10px;color:var(--ink-color-global-text-default);flex:2;display:flex;align-items:center;gap:5px;">
-                <span style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0;"></span>${shortName}
-              </span>
-              <span style="font-size:10px;color:var(--ink-color-global-text-default);text-align:right;flex:1;font-variant-numeric:tabular-nums;">${r.NET_IRR != null ? parseFloat(r.NET_IRR).toFixed(1)+"%" : "—"}</span>
-              <span style="font-size:10px;color:var(--ink-color-global-text-subtle);text-align:right;flex:1;font-variant-numeric:tabular-nums;">${r.TVPI != null ? parseFloat(r.TVPI).toFixed(2)+"x" : "—"}</span>
-              <span style="font-size:10px;color:var(--ink-color-global-text-subtle);text-align:right;flex:1;font-variant-numeric:tabular-nums;">${r.DPI != null ? parseFloat(r.DPI).toFixed(2)+"x" : "—"}</span>
-            </div>`;
-          }).join("")}
-        </div>`;
+      _renderBenchMetricsTable(Object.values(latestByFund).map(r => ({
+        name: r.FUND_NAME,
+        color: _fundColorMap[r.FUND_NAME] || _BENCH_COLORS[0],
+        irr: r.NET_IRR, tvpi: r.TVPI, dpi: r.DPI,
+      })), asOf);
     }
   } catch(e) {
-    // silent fail — card stays blank rather than showing bad data
+    // Benchmark query failed (not just empty) — try the same AGGREGATE_FUND_METRICS
+    // fallback the empty-rows path uses, so a benchmark-pipeline hiccup doesn't blank
+    // the card when the firm has real fund metrics.
+    try { await fetchBenchmarkFallback(); } catch(_) {}
   }
+}
+
+// Card's per-fund returns table. items: [{ name, color, irr, tvpi, dpi }] — irr in
+// percent, tvpi/dpi as multiples (raw or null). Same markup for both card paths.
+function _renderBenchMetricsTable(items, asOf) {
+  const metricsEl = document.getElementById("benchmark-metrics");
+  if (!metricsEl || !items.length) return;
+  metricsEl.innerHTML = `
+    <div style="margin-top:10px;border-top:1px solid var(--ink-color-global-border-subtle);padding-top:8px;">
+      <div style="display:flex;gap:4px;justify-content:space-between;margin-bottom:4px;">
+        <span style="font-size:9px;color:var(--ink-color-global-text-subtle);text-transform:uppercase;letter-spacing:.04em;flex:2;">Fund · ${asOf}</span>
+        <span style="font-size:9px;color:var(--ink-color-global-text-subtle);text-align:right;flex:1;">Net IRR</span>
+        <span style="font-size:9px;color:var(--ink-color-global-text-subtle);text-align:right;flex:1;">TVPI</span>
+        <span style="font-size:9px;color:var(--ink-color-global-text-subtle);text-align:right;flex:1;">DPI</span>
+      </div>
+      ${items.map(it => {
+        const shortName = String(it.name).replace(/, L\.P\.$/, "").replace(/, LP$/, "").split(" ").slice(-2).join(" ");
+        return `<div style="display:flex;gap:4px;justify-content:space-between;padding:2px 0;">
+          <span style="font-size:10px;color:var(--ink-color-global-text-default);flex:2;display:flex;align-items:center;gap:5px;">
+            <span style="width:8px;height:8px;border-radius:50%;background:${it.color};flex-shrink:0;"></span>${shortName}
+          </span>
+          <span style="font-size:10px;color:var(--ink-color-global-text-default);text-align:right;flex:1;font-variant-numeric:tabular-nums;">${it.irr != null ? parseFloat(it.irr).toFixed(1)+"%" : "—"}</span>
+          <span style="font-size:10px;color:var(--ink-color-global-text-subtle);text-align:right;flex:1;font-variant-numeric:tabular-nums;">${it.tvpi != null ? parseFloat(it.tvpi).toFixed(2)+"x" : "—"}</span>
+          <span style="font-size:10px;color:var(--ink-color-global-text-subtle);text-align:right;flex:1;font-variant-numeric:tabular-nums;">${it.dpi != null ? parseFloat(it.dpi).toFixed(2)+"x" : "—"}</span>
+        </div>`;
+      }).join("")}
+    </div>`;
+}
+
+// Replace the trend chart with a short note (used when there's no peer-benchmark
+// series to plot but the card still has fund metrics to show below it).
+function _benchShowChartNote(msg) {
+  const canvas = document.getElementById("benchmark-chart");
+  const wrap = canvas ? canvas.closest(".chart-wrap") : document.querySelector(".card-preview .chart-wrap");
+  if (!wrap) return;
+  if (_benchmarkChartInst) { _benchmarkChartInst.destroy(); _benchmarkChartInst = null; }
+  wrap.innerHTML = `<div class="bench-chart-note">${msg}</div>`;
+}
+
+// When the benchmarks table has no qualifying rows, preview the detail page's
+// source (AGGREGATE_FUND_METRICS) instead of blanking. Returns false when no fund
+// data exists anywhere, leaving the card blank as before.
+async function fetchBenchmarkFallback() {
+  if (!(await mcpAvailable()) || !_benchmarkFirmId) return false;
+  // IRR/TVPI/DPI are almost always null for these firms; TOTAL_VALUE is populated,
+  // so the card previews that (with per-fund currency — never assume USD).
+  const res = await _mcp("fetch", {
+    command: "dwh:execute:query",
+    params: {
+      sql: `SELECT FUND_NAME, FUND_UUID, TOTAL_VALUE, FUND_REPORTING_CURRENCY, ENDING_TOTAL_NAV, MONTH_END_DATE
+            FROM FUND_ADMIN.AGGREGATE_FUND_METRICS
+            WHERE FIRM_ID = '${_benchmarkFirmId}'
+            QUALIFY ROW_NUMBER() OVER (PARTITION BY FUND_UUID ORDER BY MONTH_END_DATE DESC NULLS LAST) = 1
+            ORDER BY ENDING_TOTAL_NAV DESC NULLS LAST
+            LIMIT 3`,
+    }
+  });
+  if (res.isError) throw new Error("DWH fallback failed");
+  const rows = parseDWH(res).filter(r => r.FUND_UUID);
+  if (!rows.length) return false;  // no fund data at all — leave the card blank
+
+  rows.forEach((r, i) => { _fundColorMap[r.FUND_NAME] = _BENCH_COLORS[i % _BENCH_COLORS.length]; });
+  // AGGREGATE_FUND_METRICS is a latest-month snapshot per fund, not a quarterly
+  // series — derive the "as of" label from MONTH_END_DATE when present.
+  const asOf = rows[0].MONTH_END_DATE ? _fmtQtr(String(rows[0].MONTH_END_DATE).substring(0, 10)) : "latest";
+  _benchShowChartNote("No peer-benchmark trend for this firm yet");
+  _renderBenchValueTable(rows.map(r => ({
+    name: r.FUND_NAME,
+    color: _fundColorMap[r.FUND_NAME],
+    value: r.TOTAL_VALUE, currency: r.FUND_REPORTING_CURRENCY,
+  })), asOf);
+  return true;
+}
+
+// Fallback card table: fund + Total Value (currency-correct per fund). Mirrors the
+// benchmark table's dot + short-name layout but with one value column.
+function _renderBenchValueTable(items, asOf) {
+  const metricsEl = document.getElementById("benchmark-metrics");
+  if (!metricsEl || !items.length) return;
+  metricsEl.innerHTML = `
+    <div style="margin-top:10px;border-top:1px solid var(--ink-color-global-border-subtle);padding-top:8px;">
+      <div style="display:flex;gap:4px;justify-content:space-between;margin-bottom:4px;">
+        <span style="font-size:9px;color:var(--ink-color-global-text-subtle);text-transform:uppercase;letter-spacing:.04em;flex:2;">Fund · ${asOf}</span>
+        <span style="font-size:9px;color:var(--ink-color-global-text-subtle);text-align:right;flex:1;">Total Value</span>
+      </div>
+      ${items.map(it => {
+        const shortName = String(it.name).replace(/, L\.P\.$/, "").replace(/, LP$/, "").split(" ").slice(-2).join(" ");
+        return `<div style="display:flex;gap:4px;justify-content:space-between;padding:2px 0;">
+          <span style="font-size:10px;color:var(--ink-color-global-text-default);flex:2;display:flex;align-items:center;gap:5px;">
+            <span style="width:8px;height:8px;border-radius:50%;background:${it.color};flex-shrink:0;"></span>${shortName}
+          </span>
+          <span style="font-size:10px;color:var(--ink-color-global-text-default);text-align:right;flex:1;font-variant-numeric:tabular-nums;">${fmtCurrency(it.value, it.currency)}</span>
+        </div>`;
+      }).join("")}
+    </div>`;
 }
 
 // ── Static fallback data ──

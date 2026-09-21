@@ -33,7 +33,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.34.0</carta-plugin>
+<carta-plugin>carta-investors:6.34.2</carta-plugin>
 
 # Carta Home — Build / Redeploy
 
@@ -54,7 +54,11 @@ own sidebar tile.
   coloring, and company drill-down. Pulled from `FUND_ADMIN.AGGREGATE_INVESTMENTS`.
 - **Fund Performance** — Net IRR, TVPI, DPI charts vs. peer benchmarks. Pulled from
   `FUND_ADMIN.TEMPORAL_FUND_COHORT_BENCHMARKS` — queries all funds for the active firm
-  automatically (no hardcoded fund names).
+  automatically (no hardcoded fund names). When that table has no qualifying rows for
+  the firm, the card falls back to `FUND_ADMIN.AGGREGATE_FUND_METRICS` (the detail page's
+  source) and previews each fund's Total Value (per-fund currency) with a "no benchmark
+  trend" note, instead of rendering blank. IRR/TVPI/DPI are near-always null for those
+  firms, so Total Value — the figure the detail list leads with — is what the card shows.
 - **P&L Card** — Unrealized gain/loss and total expenses from `FUND_ADMIN.STATEMENT_OF_OPS`
   (pre-aggregated, fast — no journal entry scan).
 - **Balance Sheet Card** — Portfolio value, LP NAV, GP NAV, Total NAV from
@@ -387,7 +391,7 @@ the Carta Home dashboard as a whole, not on requests for one of those cards in i
 | Card | DWH Table | Notes |
 |------|-----------|-------|
 | SOI | `FUND_ADMIN.AGGREGATE_INVESTMENTS` + `FUND_ADMIN.FUNDS` | Joined on FUND_UUID |
-| Fund Performance | `FUND_ADMIN.TEMPORAL_FUND_COHORT_BENCHMARKS` | All funds for the firm, ≥ 2021-06-01 |
+| Fund Performance | `FUND_ADMIN.TEMPORAL_FUND_COHORT_BENCHMARKS` (chart + metrics); `FUND_ADMIN.AGGREGATE_FUND_METRICS` (Total Value fallback when benchmarks empty) | All funds for the firm, ≥ 2021-06-01 |
 | P&L | `FUND_ADMIN.STATEMENT_OF_OPS` | Pre-aggregated per-firm; no journal scan |
 | Balance Sheet | `FUND_ADMIN.MONTHLY_NAV_CALCULATIONS` | IS_FIRM_ROLLUP = TRUE, latest month |
 | Tear Sheets | `FUND_ADMIN.AGGREGATE_INVESTMENTS` + `FUND_ADMIN.CORPORATION_BASIC_INFO_V2` | Company list |

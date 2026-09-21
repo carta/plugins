@@ -385,6 +385,9 @@
 
     /* ── Chart wrapper ── */
     .chart-wrap { position: relative; height: 130px; }
+    /* Shown in place of the trend chart when the firm has fund metrics but no
+       peer-benchmark series (the card falls back to AGGREGATE_FUND_METRICS). */
+    .bench-chart-note { height: 100%; display: flex; align-items: center; justify-content: center; text-align: center; padding: 0 12px; font-size: 11px; font-style: italic; color: var(--ink-color-global-text-subtle); }
 
     /* ── Tear sheet preview ── */
     .tearsheet-preview {
