@@ -34,9 +34,14 @@ parameter when the file carries none, so a template with a fixed title publishes
 firm's page under that one name. The body stays firm-agnostic and still detects whichever
 firm is active when a viewer opens it.
 
+`{{DASHBOARD_URLS}}` (in carta-home.config.js) becomes a JSON object of the dashboard
+artifact URLs published earlier in the same build run, keyed by a DASHBOARDS entry. A key
+that is absent leaves that card on its copyable prompt.
+
 Usage:
   uv run scripts/build_artifact.py --mcp-server <connector-display-name> \
-      --firm-name "<firm name>" --out <path>/carta-home-<slug>.html
+      --firm-name "<firm name>" --out <path>/carta-home-<slug>.html \
+      [--dashboard-url soi=https://… --dashboard-url perf=https://…]
 """
 import argparse
 import hashlib
@@ -129,7 +134,24 @@ def read_version():
     return version
 
 
-def build(mcp_server, firm_name):
+def parse_dashboard_urls(pairs):
+    """Turn repeated --dashboard-url key=url into the {{DASHBOARD_URLS}} JSON object.
+
+    A dashboard whose skill was skipped at build time is simply absent; the page then
+    renders that tile's prompt instead of a link.
+    """
+    urls = {}
+    for pair in pairs or []:
+        key, sep, url = pair.partition("=")
+        if not sep or not key.strip() or not url.strip():
+            sys.exit("ERROR: --dashboard-url expects key=url, got {!r}".format(pair))
+        if not url.startswith(("http://", "https://")):
+            sys.exit("ERROR: --dashboard-url {} must be an http(s) URL, got {!r}".format(key, url))
+        urls[key.strip()] = url.strip()
+    return urls
+
+
+def build(mcp_server, firm_name, dashboard_urls=None):
     template = (RES / "carta-home.template.html").read_text()
     parts = {name: (RES / name).read_text() for name in MARKERS}
     parts.update({name: (VENDOR_DIR / name).read_text() for name in VENDOR_MARKERS})
@@ -161,6 +183,9 @@ def build(mcp_server, firm_name):
     out = out.replace("{{PAGE_TITLE}}", page_title(firm_name))
     if "{{PAGE_TITLE}}" in out:
         sys.exit("ERROR: {{PAGE_TITLE}} still present after substitution")
+    out = out.replace("{{DASHBOARD_URLS}}", json.dumps(dashboard_urls or {}, sort_keys=True))
+    if "{{DASHBOARD_URLS}}" in out:
+        sys.exit("ERROR: {{DASHBOARD_URLS}} still present after substitution")
 
     out = out.replace("{{BUILD_ID}}", build_id)
 
@@ -180,13 +205,17 @@ def main():
                     help="active firm's name — becomes 'Carta Home - <name>' in the "
                          "page's <title>, and so the published artifact's name")
     ap.add_argument("--out", required=True, help="output HTML path")
+    ap.add_argument("--dashboard-url", action="append", metavar="KEY=URL", default=[],
+                    help="published dashboard artifact URL, keyed by a DASHBOARDS entry "
+                         "in carta-home.config.js (repeatable). Omit one to leave that "
+                         "tile on its copyable prompt.")
     args = ap.parse_args()
 
     firm_name = args.firm_name.strip()
     if not firm_name:
         sys.exit("ERROR: --firm-name is empty")
 
-    html, build_id, version = build(args.mcp_server, firm_name)
+    html, build_id, version = build(args.mcp_server, firm_name, parse_dashboard_urls(args.dashboard_url))
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(html)

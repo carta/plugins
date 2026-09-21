@@ -76,9 +76,7 @@
             <div class="loading-row">Loading…</div>
           </div>
         </div>
-        <div class="card-footer">
-          <button class="run-btn" onclick="openSoiPage()">View full SOI →</button>
-        </div>
+        <div class="card-footer" id="soi-card-footer"></div>
       </div>
 
       <!-- Fund Performance -->
@@ -95,9 +93,7 @@
           </div>
           <div id="benchmark-metrics"></div>
         </div>
-        <div class="card-footer">
-          <button class="run-btn" onclick="openPerfPage()">View fund performance →</button>
-        </div>
+        <div class="card-footer" id="perf-card-footer"></div>
       </div>
 
     </div>
@@ -247,11 +243,6 @@
 <!-- Toast notification -->
 <div id="toast" role="status" aria-live="polite">Skill queued in chat ↗</div>
 
-<!-- Tooltip target for the .perf-th-info metric-definition buttons. Present in
-     the markup (rather than only created on first hover) so aria-describedby
-     resolves for keyboard users the moment a trigger takes focus. -->
-<div id="perf-tip"></div>
-
 <!-- ── Guided Tour ── -->
 <!-- Overlay is click-to-advance only; the same action is on the Next button, so
      it is hidden from AT rather than announced as an unlabelled control. -->
@@ -276,115 +267,6 @@
 /* __CARTA_HOME_APP_JS__ */
 </script>
 
-<!-- ── SOI Full-Page Overlay ── -->
-<div id="soi-page" style="display:none; position:fixed; inset:0; z-index:200; background:var(--ink-color-global-surface-background-default); overflow-y:auto; flex-direction:column;">
-  <div style="position:sticky; top:0; z-index:10; background:var(--ink-color-global-surface-background-default); border-bottom:1px solid var(--ink-color-global-border-subtle); padding:0 32px;">
-    <div style="max-width:1100px; margin:0 auto; display:flex; align-items:center; gap:16px; height:56px;">
-      <button onclick="closeSoiPage()" style="display:flex; align-items:center; gap:6px; background:none; border:none; cursor:pointer; color:var(--ink-color-global-text-subtle); font-size:13px; font-family:inherit; padding:6px 0;">
-        <svg viewBox="0 0 16 16" fill="none" width="16" height="16"><path d="M10 12L6 8l4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        Back
-      </button>
-      <span style="color:var(--ink-color-global-border-default);">|</span>
-      <span style="font-size:13px; color:var(--ink-color-global-text-subtle); text-transform:uppercase; letter-spacing:.06em; font-weight:600;" id="soi-page-label">Schedule of Investments</span>
-      <div style="flex:1;"></div>
-      <!-- Multi-select fund dropdown -->
-      <div id="soi-multi-wrap" style="position:relative; display:none;">
-        <button id="soi-fund-btn" onclick="soiToggleMultiDrop(event)" style="font-family:inherit; font-size:13px; background:transparent; color:var(--ink-color-global-text-default); padding:4px 28px 4px 10px; border-radius:var(--ink-size-global-radius-subtle); cursor:pointer; border:1px solid var(--ink-color-global-border-subtle); position:relative; white-space:nowrap; min-width:130px; text-align:left;">
-          All funds <span style="position:absolute; right:8px; top:50%; transform:translateY(-50%); font-size:10px; pointer-events:none;">▼</span>
-        </button>
-        <div id="soi-multi-drop" style="display:none; position:absolute; top:calc(100% + 4px); right:0; min-width:240px; background:var(--ink-color-global-surface-background-default); border:1px solid var(--ink-color-global-border-subtle); border-radius:6px; box-shadow:0 4px 16px rgba(0,0,0,.12); z-index:300; padding:0;">
-          <div style="padding:7px 12px 7px; border-bottom:1px solid var(--ink-color-global-border-subtle); display:flex; align-items:center; justify-content:space-between;">
-            <span style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-color-global-text-subtle);">Funds</span>
-            <button onclick="soiToggleAllFunds()" id="soi-toggle-all-btn" style="font-family:inherit; font-size:12px; color:var(--ink-color-global-interactive-default); background:none; border:none; cursor:pointer; padding:0; font-weight:500;">Unselect all</button>
-          </div>
-          <div id="soi-fund-checkboxes" style="max-height:280px; overflow-y:auto; padding:4px 0;"></div>
-        </div>
-      </div>
-    </div>
-  </div>
-  <div style="max-width:1100px; margin:0 auto; padding:24px 32px; width:100%; box-sizing:border-box;">
-    <div id="soi-page-metrics" style="display:flex; gap:0; margin-bottom:20px; border:1px solid var(--ink-color-global-border-subtle);">
-    </div>
-    <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
-      <input id="soi-page-search" type="search" placeholder="Filter by company…" oninput="soiFilterCompanies(this.value)"
-        style="flex:1; max-width:320px; padding:7px 12px; font-family:inherit; font-size:13px; border-radius:var(--ink-size-global-radius-subtle); background:transparent; color:var(--ink-color-global-text-default);" />
-      <span id="soi-page-count" style="font-size:12px; color:var(--ink-color-global-text-subtle);"></span>
-    </div>
-    <div id="soi-page-status" style="color:var(--ink-color-global-text-subtle); font-size:13px; font-style:italic; padding:40px 0; text-align:center; display:none;"></div>
-    <div id="soi-page-table-wrap" style="overflow-x:auto;">
-      <table id="soi-page-table" style="width:100%; border-collapse:collapse; font-size:13px; display:none;">
-        <thead id="soi-page-thead"></thead>
-        <tbody id="soi-page-tbody"></tbody>
-      </table>
-    </div>
-  </div>
-</div>
-<!-- ── Fund Performance nested page ── -->
-<div id="perf-page" style="display:none; position:fixed; inset:0; z-index:200; background:var(--ink-color-global-surface-background-default); overflow-y:auto; flex-direction:column;">
-  <div style="position:sticky; top:0; z-index:10; background:var(--ink-color-global-surface-background-default); border-bottom:1px solid var(--ink-color-global-border-subtle); padding:0 32px;">
-    <div style="max-width:1100px; margin:0 auto; display:flex; align-items:center; gap:16px; height:56px;">
-      <button id="perf-back-btn" onclick="closePerfPage()" style="display:flex;align-items:center;gap:6px;background:none;border:none;cursor:pointer;color:var(--ink-color-global-text-subtle);font-size:13px;font-family:inherit;padding:6px 0;">
-        <svg viewBox="0 0 16 16" fill="none" width="16" height="16"><path d="M10 12L6 8l4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <span id="perf-back-text">Back</span>
-      </button>
-      <span style="color:var(--ink-color-global-border-default);">|</span>
-      <!-- Fund title + chevron — acts as dropdown trigger in detail view -->
-      <div style="position:relative;">
-        <button id="perf-fund-title-btn" onclick="perfToggleFundDropdown(event)">
-          <span style="font-size:13px;color:var(--ink-color-global-text-subtle);text-transform:uppercase;letter-spacing:.06em;font-weight:600;" id="perf-page-label">Fund Performance</span>
-          <svg id="perf-fund-chevron" style="display:none;color:var(--ink-color-global-text-subtle);flex-shrink:0;" width="12" height="12" viewBox="0 0 16 16" fill="none">
-            <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </button>
-        <div id="perf-fund-dropdown"></div>
-      </div>
-      <div style="flex:1;"></div>
-    </div>
-  </div>
-  <!-- ── All-funds list view ── -->
-  <div id="perf-list-view" style="max-width:1200px; margin:0 auto; padding:24px 32px; width:100%; box-sizing:border-box;">
-    <div class="perf-list-status">Loading fund performance…</div>
-  </div>
-  <!-- ── Single-fund detail view (charts) ── -->
-  <div id="perf-detail-view" style="display:none; max-width:1100px; margin:0 auto; padding:24px 32px; width:100%; box-sizing:border-box;">
-    <div class="perf-metrics-strip" id="perf-page-metrics"></div>
-    <div id="perf-detail-metrics-table" style="margin-top:20px;margin-bottom:8px;"></div>
-    <div id="perf-cohort-label" style="display:none;font-size:10px;color:var(--ink-color-global-text-subtle);margin-bottom:20px;letter-spacing:.01em;"></div>
-    <div id="perf-page-status" style="color:var(--ink-color-global-text-subtle);font-size:13px;font-style:italic;padding:40px 0;text-align:center;display:none;"></div>
-    <div class="perf-chart-grid" id="perf-chart-grid">
-      <!-- TVPI half-width -->
-      <div class="perf-chart-card">
-        <div class="perf-chart-header">
-          <div class="perf-chart-title">TVPI vs Benchmarks</div>
-        </div>
-        <div class="perf-chart-wrap"><canvas id="perf-tvpi-chart"></canvas></div>
-      </div>
-      <!-- DPI half-width -->
-      <div class="perf-chart-card">
-        <div class="perf-chart-header">
-          <div class="perf-chart-title">DPI vs Benchmarks</div>
-        </div>
-        <div class="perf-chart-wrap"><canvas id="perf-dpi-chart"></canvas></div>
-      </div>
-      <!-- Net IRR half-width -->
-      <div class="perf-chart-card">
-        <div class="perf-chart-header">
-          <div class="perf-chart-title">Net IRR vs Benchmarks</div>
-        </div>
-        <div class="perf-legend" id="perf-irr-legend"></div>
-        <div class="perf-chart-wrap"><canvas id="perf-irr-chart"></canvas></div>
-      </div>
-      <!-- MOIC half-width -->
-      <div class="perf-chart-card">
-        <div class="perf-chart-header">
-          <div class="perf-chart-title">MOIC vs Benchmarks</div>
-        </div>
-        <div class="perf-chart-wrap"><canvas id="perf-moic-chart"></canvas></div>
-      </div>
-    </div>
-  </div>
-
-</div>
 
 <!-- ── Customize popover (shared, floating) ── -->
 <div id="customize-popover">
