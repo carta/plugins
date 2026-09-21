@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -646,5 +647,29 @@ func TestInjectInstrumentation_HookTypeWinsOverFallback(t *testing.T) {
 	instr := injectAndGetInstr(t, stdin)
 	if typ := fieldAsString(t, instr, "surface"); typ == nil || *typ != "code-terminal" {
 		t.Errorf("surface = %v, want hook's own resolved \"code-terminal\" to win", typ)
+	}
+}
+
+// TestInjectInstrumentation_PlatformAlwaysResolved covers platform being set
+// from the hook's own runtime, unconditionally.
+func TestInjectInstrumentation_PlatformAlwaysResolved(t *testing.T) {
+	isolateEnv(t)
+	setupPluginRoot(t, "carta-crm", "1.0.0")
+
+	stdin := `{"tool_name":"some_tool","tool_input":{"foo":"bar"},"session_id":"s1"}`
+	instr := injectAndGetInstr(t, stdin)
+	want := runtime.GOOS + "/" + runtime.GOARCH
+	if got := fieldAsString(t, instr, "platform"); got == nil || *got != want {
+		t.Errorf("platform = %v, want %q", got, want)
+	}
+}
+
+// TestInjectInstrumentation_HookPlatformWinsOverFallback: unlike surface, an
+// AI-supplied platform must never override the hook's own.
+func TestInjectInstrumentation_HookPlatformWinsOverFallback(t *testing.T) {
+	instr := injectWithAISupplied(t, `{"platform":"windows/amd64"}`)
+	want := runtime.GOOS + "/" + runtime.GOARCH
+	if got := fieldAsString(t, instr, "platform"); got == nil || *got != want {
+		t.Errorf("platform = %v, want hook's own %q to win", got, want)
 	}
 }
