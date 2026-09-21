@@ -23,6 +23,7 @@ if str(_LIB) not in sys.path:
 
 from issuance_fields import (  # noqa: E402
     BuildError,
+    FieldSpec,
     build_batch_error_banner,
     build_stakeholder_blocks,
     build_stakeholder_list,
@@ -47,6 +48,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.add_argument("--stakeholders", type=Path,
                    help="JSON file holding the raw stakeholder roster; supersedes --data's "
                         "`stakeholders` key")
+    # Optional by design: without it every field keeps the label, requiredness and
+    # options this builder hardcodes, so an older server costs nothing.
+    p.add_argument("--field-spec", type=Path,
+                   help="JSON file holding issuance_init's `field_spec`; supplies the "
+                        "server's own label, requiredness and static choices")
     p.add_argument("--out-dir", required=True, type=Path)
     args = p.parse_args(argv)
 
@@ -65,12 +71,15 @@ def main(argv: Optional[List[str]] = None) -> int:
             path.write_text(content, encoding="utf-8")
             written.append(f"{key}={path}")
 
+        spec = FieldSpec.from_file(args.field_spec) if args.field_spec else FieldSpec()
+
         rows = knowns.get("rows") or []
         if not isinstance(rows, list):
             rows = []
         rows = [r for r in rows if isinstance(r, dict)]
 
-        emit("STAKEHOLDER_ROWS", "_rows.html", build_stakeholder_blocks(rows, args.security_type, data, knowns))
+        emit("STAKEHOLDER_ROWS", "_rows.html",
+             build_stakeholder_blocks(rows, args.security_type, data, knowns, spec))
 
         # Roster powers autocomplete here and Phase 1's local name match, so
         # it's fetched once instead of per grantee. Absent → "[]".

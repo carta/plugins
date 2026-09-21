@@ -14,7 +14,7 @@ allowed-tools: []
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.86.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.87.0</carta-plugin>
 
 # issuance-config panel
 
@@ -73,6 +73,7 @@ same `rows` payload as the panel — only the submit path and the styling differ
 uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-issuance/issuance-config/scripts/build_cowork_form.py" \
   --security-type <option_grant|certificate|piu> \
   --data "$WORK/_data.json" --knowns "$WORK/_knowns.json" \
+  --field-spec "$WORK/_field_spec.json" \
   --corp-name "<legal name>" --corp-id "<corporation_id>" \
   --out "$WORK/form.html"
 # → prints FORM=<path>. Pass the file's contents VERBATIM as show_widget's widget_code.
@@ -81,6 +82,11 @@ uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-issuance/issuance-config/scripts/buil
 `_data.json` and `_knowns.json` are the same two files `build_config.py` takes — the
 [`knowns` table in code-adapter.md](../references/code-adapter.md#1-config-panel-build_configpy-builds-every-block)
 is the contract for both. Add `--no-minify` while iterating on the markup.
+
+`--field-spec` is **optional on both builders**: hand it `issuance_init`'s `field_spec` and
+every field in `FIELD_SPEC_MAP` takes its label, requiredness and static choices from the
+issuer's own manifest, the same source the panel surface reads. Omit it — an older server, a
+manifest that failed — and every field keeps the builder's hardcoded answer.
 
 **Why the panel's `styles.css` is not reused.** The widget host forbids four things it
 does: hardcoded hex (invisible in dark mode), a background on the outer container (the
@@ -145,7 +151,7 @@ batch-level `knowns` default when the row didn't specify its own value — see
 |---|---|
 | Stakeholder type | `<button class="toggle[ selected]" data-group="kind" data-value="INDIVIDUAL\|NON-INDIVIDUAL" onclick="pick(this)">Individual\|Non-individual</button>` — two buttons; `INDIVIDUAL` selected by default. Auto-selected (but still clickable/editable) by template JS on an exact roster-name match. |
 | Type (`so_type`) | `<div class="toggle-row">` of the corp's own resolved jurisdiction's 3 `so_type` buttons only, each `<button class="toggle[ selected]" data-group="type" data-value="<so_type>" onclick="pickType(this)"><so_type></button>` — US `ISO`/`NSO`/`INTL`, UK `EMI`/`CSOP`/`Unapproved`, or AU `Startup Concessions`/`Non-Concessional`/`ZEPO`, gated by `knowns.jurisdiction` (design feedback reversed an earlier "show all 9 across all 3 jurisdictions, grouped by jurisdiction" layout — a corp only ever issues one jurisdiction's types, so the other 6 read as clutter, not a genuine affordance). Mark this row's resolved type `selected` when it has one. `pickType()` (not the generic `pick()`) additionally re-syncs the HMRC/ATO conditional rows below for the newly-selected type. |
-| Vesting | `<select class="select-input block-vesting-select">` with one `<option data-label="<name>">` per template plus the **No vesting** sentinel (`value="__none__"`). **Grants**: always shown, defaults to the 4yr/1yr cliff (or this row's own prior value) — `vesting_template` is `always` server-side (payload-reference.md). **Certificates**: also shown (opt-in server-side), but defaults to **No vesting** unless the row or the batch `knowns` default already names a real template — the opposite default from grants. |
+| Vesting | `<select class="select-input block-vesting-select">` with one `<option data-label="<name>">` per template plus the **No vesting** sentinel (`value="__none__"`). **Every security type** defaults to **No vesting**: a schedule is a term of the grant, so only this row's own `vesting_template_id` or the batch `knowns.default_vesting_id` pre-selects one. Nothing is inferred from a template's name. |
 | Documents | `<button class="toggle[ selected]" data-group="docset" data-value="<set id>" data-label="<set name>" onclick="pick(this)"><name></button>` — one per set; mark `selected` when only one set exists or this row already named one. |
 | HMRC notified | Grant-only. A checkbox (`.block-hmrc-notified`, bound to `is_hmrc_notified`) + date input (`.block-hmrc-notified-date`, bound to `hmrc_notified`), tagged `data-conditional="so_type_emi"` — shown only when the row's `so_type` is `EMI`, hidden (and omitted from the submit payload) otherwise. `pickType()` toggles this row when the type selection changes. |
 | ATO notified | Grant-only. A checkbox (`.block-ato-notified`, bound to `is_ato_notified`), tagged `data-conditional="so_type_au"` — shown only when `so_type` is `Startup Concessions`/`Non-Concessional`/`ZEPO`, hidden (and omitted) otherwise. |

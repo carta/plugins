@@ -24,6 +24,8 @@ if str(_LIB) not in sys.path:
 
 from issuance_fields import (  # noqa: E402
     BuildError,
+    EMPTY_FIELD_SPEC,
+    FieldSpec,
     advanced_accordion_cert,
     advanced_accordion_grant,
     board_approval_html,
@@ -39,7 +41,6 @@ from issuance_fields import (  # noqa: E402
     build_stakeholder_blocks,
     build_stakeholder_list,
     build_vesting,
-    cert_no_vesting,
     corresponding_interest_js_constants,
     corresponding_interest_row,
     default_legend_id,
@@ -117,7 +118,8 @@ def use_batch_mode(rows: List[Dict[str, Any]], knowns: Dict[str, Any]) -> bool:
     return len(rows) > BATCH_MODE_MIN_ROWS and not rows_carry_own_terms(rows)
 
 
-def build_shared_terms(security_type: str, data: Dict[str, Any], knowns: Dict[str, Any]) -> str:
+def build_shared_terms(security_type: str, data: Dict[str, Any], knowns: Dict[str, Any],
+                       spec: FieldSpec = EMPTY_FIELD_SPEC) -> str:
     """The non-personal terms every batch row inherits, rendered once.
 
     Same builders, same classes and `data-*` contract as a per-row block, so the
@@ -142,7 +144,7 @@ def build_shared_terms(security_type: str, data: Dict[str, Any], knowns: Dict[st
 
         rows_html.append(kv_row(
             "Type", build_option_type(jurisdiction, None, None),
-            sectype="option_grant", required=True,
+            sectype="option_grant", required=True, field="option_type", spec=spec,
         ))
         rows_html.append(kv_row(
             "Exercise price",
@@ -151,32 +153,33 @@ def build_shared_terms(security_type: str, data: Dict[str, Any], knowns: Dict[st
             f'<input class="text-input block-exercise-price" type="text" inputmode="decimal" '
             f'value="{esc(price)}" oninput="onStakeInput()"/>'
             f'<span class="currency-suffix">{currency}</span></div>',
-            sectype="option_grant", required=True,
+            sectype="option_grant", required=True, field="exercise_price", spec=spec,
         ))
         rows_html.append(kv_row(
             "Issue date",
             f'<input class="date-input block-issue-date" type="date" value="{esc(today)}" '
             f'oninput="updateIssueDate(this)"/>',
-            required=True,
+            required=True, field="issue_date", spec=spec,
         ))
         rows_html.append(kv_row(
             "Board approval", board_approval_html(row, today, security_type), required=True,
+            field="board_approval_date", spec=spec,
         ))
         rows_html.append(kv_row(
             "Vesting schedule",
             f'<select class="select-input block-vesting-select" onchange="pickVesting(this)">'
             f'{build_vesting(templates, no_vesting, row_preferred_vesting(row, knowns))}</select>'
             f'<div class="block-vesting-start-wrap"{vest_wrap_style}>'
-            f'<p class="field-sublabel">Vesting start date</p>'
+            f'<p class="field-sublabel">{esc(spec.label("vesting_start_date", "Vesting start date"))}</p>'
             f'<input class="date-input block-vesting-start-date" type="date" value="{esc(today)}" '
             f'oninput="updateVestingStart(this)"/></div>',
-            sectype="option_grant", required=True,
+            sectype="option_grant", required=True, field="vesting_template_id", spec=spec,
         ))
         rows_html.append(kv_row(
             "Documents",
             f'<p class="field-hint">Document templates attached to every grant.</p>'
             f'<div class="toggle-row wrap">{build_docsets(docsets, None)}</div>',
-            sectype="option_grant", required=True,
+            sectype="option_grant", required=True, field="document_set_id", spec=spec,
         ))
         rows_html.append(kv_row(
             "HMRC notified",
@@ -205,19 +208,20 @@ def build_shared_terms(security_type: str, data: Dict[str, Any], knowns: Dict[st
             f'data-value="no" onclick="pick(this)">No</button></div>',
             sectype="option_grant", conditional_on="so_type_employment_related",
             hidden=(so_type not in EMPLOYMENT_RELATED_SO_TYPES), required=True,
+            field="employment_related", spec=spec,
         ))
-        rows_html.append(advanced_accordion_grant(row, accel_templates, no_vesting, {}))
+        rows_html.append(advanced_accordion_grant(row, accel_templates, no_vesting, {}, spec))
     elif security_type == "piu":
         # Shared terms are the same rows a per-row block gets, so both modes
         # inherit one unit-class rule and one Documents rule.
-        rows_html.extend(piu_term_rows(data, knowns))
+        rows_html.extend(piu_term_rows(data, knowns, spec))
     else:
         price_default = knowns.get("price_per_share_default", "")
         classes = results(data.get("share_classes"))
         legends = results(data.get("legends"))
         templates = results(data.get("vesting_templates"))
         accel_templates = results(data.get("acceleration_templates"))
-        no_vesting = cert_no_vesting(row, knowns)
+        no_vesting = row_no_vesting(row, knowns)
         chosen_legend_id = default_legend_id(legends, None)
         selected_legend = next((lg for lg in legends if str(lg.get("id")) == chosen_legend_id), None)
         body = (selected_legend.get("text") or selected_legend.get("body") or "") if selected_legend else ""
@@ -226,7 +230,7 @@ def build_shared_terms(security_type: str, data: Dict[str, Any], knowns: Dict[st
         rows_html.append(kv_row(
             "Share class",
             f'<div class="toggle-row wrap">{build_share_classes(classes, knowns.get("share_class_prefix"))}</div>',
-            sectype="certificate", required=True,
+            sectype="certificate", required=True, field="share_class_prefix", spec=spec,
         ))
         rows_html.append(kv_row(
             "Price per share",
@@ -235,16 +239,17 @@ def build_shared_terms(security_type: str, data: Dict[str, Any], knowns: Dict[st
             f'<div class="price-row"><span class="currency-suffix">{currency}</span>'
             f'<input class="text-input block-price-per-share" type="text" inputmode="decimal" '
             f'value="{esc(price_default)}" oninput="onStakeInput()"/></div>',
-            sectype="certificate", required=True,
+            sectype="certificate", required=True, field="price_per_share", spec=spec,
         ))
         rows_html.append(kv_row(
             "Issue date",
             f'<input class="date-input block-issue-date" type="date" value="{esc(today)}" '
             f'oninput="updateIssueDate(this)"/>',
-            required=True,
+            required=True, field="issue_date", spec=spec,
         ))
         rows_html.append(kv_row(
             "Board approval", board_approval_html(row, today, security_type), required=True,
+            field="board_approval_date", spec=spec,
         ))
         attest_style = "" if body else ' style="display:none;"'
         rows_html.append(kv_row(
@@ -253,7 +258,7 @@ def build_shared_terms(security_type: str, data: Dict[str, Any], knowns: Dict[st
             f'the full body before continuing — you are attesting to it.</p>'
             f'<div class="toggle-row wrap">{build_legends(legends, None)}</div>'
             f'<div class="block-legend-attest legend-attest"{attest_style}>{esc(body)}</div>',
-            sectype="certificate", required=True,
+            sectype="certificate", required=True, field="legend_id", spec=spec,
         ))
         rows_html.append(kv_row(
             "Rule 144 date",
@@ -267,20 +272,20 @@ def build_shared_terms(security_type: str, data: Dict[str, Any], knowns: Dict[st
             f' style="display:none;" oninput="onStakeInput()"/>'
             f'<div class="block-rule144-reason-wrap" style="display:none;">'
             f'<p class="field-sublabel">Reason for the different date</p>'
-            f'{build_rule144_reason_select(None)}</div>',
-            sectype="certificate", required=True,
+            f'{build_rule144_reason_select(None, spec)}</div>',
+            sectype="certificate", required=True, field="rule_144_date", spec=spec,
         ))
         rows_html.append(kv_row(
             "Vesting schedule",
             f'<select class="select-input block-vesting-select" onchange="pickVesting(this)">'
             f'{build_vesting(templates, no_vesting, row_preferred_vesting(row, knowns))}</select>'
             f'<div class="block-vesting-start-wrap"{vest_wrap_style}>'
-            f'<p class="field-sublabel">Vesting start date</p>'
+            f'<p class="field-sublabel">{esc(spec.label("vesting_start_date", "Vesting start date"))}</p>'
             f'<input class="date-input block-vesting-start-date" type="date" value="{esc(today)}" '
             f'oninput="updateVestingStart(this)"/></div>',
-            sectype="certificate",
+            sectype="certificate", field="vesting_template_id", spec=spec,
         ))
-        rows_html.append(advanced_accordion_cert(row, accel_templates, no_vesting, {}))
+        rows_html.append(advanced_accordion_cert(row, accel_templates, no_vesting, {}, spec))
 
     return (
         f'<div class="stake-block" data-shared-terms>'
@@ -387,7 +392,8 @@ def _minify_inline_js(html: str) -> str:
 
 def render(security_type: str, data: Dict[str, Any], knowns: Dict[str, Any],
            corp_name: str, corp_id: str, minify: bool = True,
-           stakeholders: Optional[Path] = None) -> str:
+           stakeholders: Optional[Path] = None,
+           spec: FieldSpec = EMPTY_FIELD_SPEC) -> str:
     """Fill the template into one self-contained document.
 
     The CSS `<link>` is a sentinel the widget host could never resolve, so it is
@@ -418,8 +424,9 @@ def render(security_type: str, data: Dict[str, Any], knowns: Dict[str, Any],
         "BATCH_ERRORS_HTML": build_batch_error_banner(knowns.get("batch_errors")),
         # Only the active layout is rendered; the other stays an empty slot so a
         # hidden duplicate can never be collected on submit.
-        "STAKEHOLDER_ROWS": "" if batch else build_stakeholder_blocks(rows, security_type, data, knowns),
-        "BATCH_SHARED_TERMS": build_shared_terms(security_type, data, knowns) if batch else "",
+        "STAKEHOLDER_ROWS": "" if batch else build_stakeholder_blocks(
+            rows, security_type, data, knowns, spec),
+        "BATCH_SHARED_TERMS": build_shared_terms(security_type, data, knowns, spec) if batch else "",
         "BATCH_ROWS": build_batch_rows(rows) if batch else "",
     }
     for token, value in subs.items():
@@ -441,6 +448,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.add_argument("--stakeholders", type=Path,
                    help="JSON file holding the raw stakeholder roster; supersedes --data's "
                         "`stakeholders` key")
+    # Optional by design: without it every field keeps the label, requiredness and
+    # options this builder hardcodes, so an older server costs nothing.
+    p.add_argument("--field-spec", type=Path,
+                   help="JSON file holding issuance_init's `field_spec`; supplies the "
+                        "server's own label, requiredness and static choices")
     p.add_argument("--corp-name", default="", help="Company legal name for the header")
     p.add_argument("--corp-id", default="", help="corporation_id, echoed in the submit payload")
     p.add_argument("--out", type=Path, help="Write the document here")
@@ -458,8 +470,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         if not isinstance(data, dict) or not isinstance(knowns, dict):
             print("ERROR: --data and --knowns must each be a JSON object", file=sys.stderr)
             return 2
+        spec = FieldSpec.from_file(args.field_spec) if args.field_spec else FieldSpec()
         html = render(args.security_type, data, knowns, args.corp_name, args.corp_id,
-                      minify=not args.no_minify, stakeholders=args.stakeholders)
+                      minify=not args.no_minify, stakeholders=args.stakeholders, spec=spec)
     except BuildError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2

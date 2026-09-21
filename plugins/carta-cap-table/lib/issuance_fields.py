@@ -9,6 +9,9 @@ stay interchangeable, so one implementation serves both. Docs: `docs/issuance-fo
 
 A wrong `*_SO_TYPES` set misreports a grant to a tax authority rather than failing
 visibly, so the form JS gets those values from `so_type_js_constants()`, never a copy.
+
+Labels, requiredness and the static picklists come from carta-web's field manifest when
+the caller passes one — see `FIELD_SPEC_MAP`. Without it every value below still stands.
 Python 3.9-safe: `uv` can resolve to macOS's system 3.9.
 """
 from __future__ import annotations
@@ -203,33 +206,205 @@ def sel(is_selected: bool) -> str:
     return " selected" if is_selected else ""
 
 
+# ── Field spec (carta-web's field manifest, via issuance_init's `field_spec`) ──
+#
+# One table, because the two vocabularies are not the same: the key is what this
+# surface calls a control in its own row shape, `spec` is the draft-payload `name`
+# the manifest keys on. `spec: None` means the control has no manifest counterpart
+# and keeps every hardcoded answer.
+#
+# Defaults per entry: label and requiredness come from the manifest, options do
+# not. `skip` names the facts this surface answers for itself anyway, and mirrors
+# the panel's own per-field veto list so the two cannot drift apart field by field.
+# `values: True` opts a static picklist into the manifest's own choices.
+#
+# long-comment-ok: the table is the contract between two surfaces' field names,
+# and a wrong row silently relabels or un-requires a field on a live cap table.
+FIELD_SPEC_MAP = {
+    # Identity — every security type.
+    "name": {"spec": "name"},
+    "email": {"spec": "email"},
+    # Options stay local: the wire contract here is INDIVIDUAL / NON-INDIVIDUAL,
+    # while the manifest declares the raw Django enum's ORGANIZATION.
+    "stakeholder_kind": {"spec": "stakeholder_kind"},
+    # Options stay local too: the form ships this picklist to the browser as a flat
+    # value array, which cannot express a manifest value whose label differs.
+    "relationship": {"spec": "issue_date_relationship"},
+    # Quantity is per-person and always required here, whatever the manifest says
+    # about a single draft row.
+    "quantity": {"spec": "quantity", "skip": ("label", "required")},
+
+    # Option grant.
+    # so_type options stay local: the manifest lists all 11 types across every
+    # jurisdiction, and showing a UK type on a US grant misreports it to HMRC.
+    "option_type": {"spec": "so_type"},
+    "exercise_price": {"spec": "exercise_price"},
+    "custom_label": {"spec": "custom_label"},
+    "grant_reason": {"spec": "grant_reason", "values": True},
+    "early_exercise": {"spec": "early_exercise"},
+    # Required server-side only for Unapproved grants; this surface renders the row
+    # only for those, so the `*` is unconditional once it is on screen.
+    "employment_related": {"spec": "employment_related", "skip": ("required",)},
+
+    # Certificate.
+    "price_per_share": {"spec": "law_firm_price"},
+    "legend_id": {"spec": "legend"},
+    # Required only when the corp's Rule 144 property is set; the row is always on
+    # screen here and always answered, because "use the issue date" is an answer.
+    "rule_144_date": {"spec": "rule_144_date", "skip": ("required",)},
+    # A sub-label inside the Rule 144 row ("Reason for the different date"), so the
+    # manifest's own field label would not read as one.
+    "rule_144_reason": {"spec": "rule_144_difference_reason",
+                        "skip": ("label", "required"), "values": True},
+    "cash_paid": {"spec": "cash_paid"},
+    "debt_canceled": {"spec": "debt_canceled"},
+
+    # Certificate and PIU.
+    "share_class_prefix": {"spec": "prefix"},
+    "prefix_number": {"spec": "prefix_number"},
+
+    # PIU.
+    "option_plan": {"spec": "option_plan"},
+    # Labels follow `knowns.threshold_noun` — the issuer's own word, "hurdle" on the
+    # UK growth-shares preset.
+    "threshold_value": {"spec": "threshold_value", "skip": ("label",)},
+    # Options stay local: the drafts path takes Unit / Overall and rejects the
+    # manifest's FAIR_MARKET_VALUE / OTHER outright.
+    "threshold_value_type": {"spec": "threshold_value_type", "skip": ("label",)},
+
+    # Shared.
+    # Optional on the manifest's option-grant list; this surface stamps a date on
+    # every row, so the field is always answered and always marked.
+    "issue_date": {"spec": "issue_date", "skip": ("required",)},
+    # The row holds the pending toggle as well as the date, so "Board approval date"
+    # under-describes it.
+    "board_approval_date": {"spec": "board_approval_date", "skip": ("label",)},
+    # Requiredness stays local: the manifest requires a template, this surface
+    # (like the panel) treats "No vesting" as a valid answer.
+    "vesting_template_id": {"spec": "vesting_template", "skip": ("required",)},
+    "vesting_start_date": {"spec": "vesting_start_date", "skip": ("required",)},
+    # The manifest keys this on the column the id is stored in; the free-text
+    # vesting_acceleration_name is a different column on the same model.
+    "acceleration_template": {"spec": "acceleration_template"},
+    "notes": {"spec": "notes"},
+
+    # No counterpart in the manifest — each keeps its hardcoded label,
+    # requiredness and options.
+    "row_key": {"spec": None},                # client-side row bookkeeping, never a field
+    "rule_144_mode": {"spec": None},          # this form's issue-date/other toggle
+    "board_approval": {"spec": None},         # the pending flag; the manifest's
+                                              # `needs_board_approval` is its own field,
+                                              # folded into the Board approval row here
+    "document_set_id": {"spec": None},        # documents are excluded from draft manifests
+    "corresponding_interest": {"spec": None}, # ManCo→OpCo link, not a manifest field
+    "is_hmrc_notified": {"spec": None},       # HMRC / ATO / auto-exercise / flexible-date
+    "hmrc_notified": {"spec": None},          # are feature-flag-gated columns the
+    "is_ato_notified": {"spec": None},        # manifest deliberately never declares
+    "auto_exercise_at_vest": {"spec": None},
+    "is_flexible_issue_date": {"spec": None},
+}
+
+
+def _as_pairs(choices: Any) -> List[Any]:
+    """`[(value, label), …]` from either that or a flat list of values."""
+    return [c if isinstance(c, tuple) else (c, c) for c in (choices or [])]
+
+
+class FieldSpec:
+    """The manifest's label / requiredness / static choices, for the fields both
+    surfaces express.
+
+    An enhancement, never a dependency. An empty spec, a control `FIELD_SPEC_MAP`
+    maps to nothing, and a field the manifest omits all answer with the caller's
+    own hardcoded value, so the form renders exactly as it did before `field_spec`
+    reached this path.
+    """
+
+    __slots__ = ("_fields",)
+
+    def __init__(self, fields: Optional[Dict[str, Dict[str, Any]]] = None) -> None:
+        self._fields = fields or {}
+
+    @classmethod
+    def from_payload(cls, raw: Any) -> "FieldSpec":
+        """Read a `field_spec` out of an MCP envelope, an `issuance_init` result, or
+        the bare object. A payload without one yields an empty spec, not an error —
+        an older server simply doesn't send it."""
+        data = _unwrap(raw)
+        if isinstance(data, dict) and "field_spec" in data:
+            data = _unwrap(data.get("field_spec"))
+        entries = data.get("fields") if isinstance(data, dict) else data
+        fields: Dict[str, Dict[str, Any]] = {}
+        for f in entries if isinstance(entries, list) else []:
+            # A hidden field is one the issuer doesn't have; it must not relabel a
+            # row this surface renders for its own reasons.
+            if isinstance(f, dict) and f.get("name") and not f.get("hidden"):
+                fields[str(f["name"])] = f
+        return cls(fields)
+
+    @classmethod
+    def from_file(cls, path: Union[str, Path]) -> "FieldSpec":
+        try:
+            raw = json.loads(Path(path).read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            raise BuildError(f"could not read/parse {path}: {exc}") from exc
+        return cls.from_payload(raw)
+
+    def _entry(self, field: str, fact: str) -> Dict[str, Any]:
+        rule = FIELD_SPEC_MAP.get(field) or {}
+        name = rule.get("spec")
+        if not name or fact in rule.get("skip", ()):
+            return {}
+        return self._fields.get(name) or {}
+
+    def label(self, field: str, fallback: str) -> str:
+        label = self._entry(field, "label").get("label")
+        return str(label) if label else fallback
+
+    def required(self, field: str, fallback: bool) -> bool:
+        value = self._entry(field, "required").get("required")
+        return value if isinstance(value, bool) else fallback
+
+    def choices(self, field: str, fallback: Any) -> List[Any]:
+        """`[(value, label), …]` for a picklist opted in with ``values: True``.
+
+        Falls back whole rather than per-option: a value the manifest sends with no
+        label would render as a blank choice, which is worse than a stale list.
+        """
+        if not (FIELD_SPEC_MAP.get(field) or {}).get("values"):
+            return _as_pairs(fallback)
+        entry = self._entry(field, "values")
+        values = entry.get("values")
+        if not isinstance(values, list) or not values:
+            return _as_pairs(fallback)
+        labels = entry.get("enum_labels") or {}
+        pairs = [(str(v), str(labels.get(v, v))) for v in values]
+        if any(not v or not lbl for v, lbl in pairs):
+            return _as_pairs(fallback)
+        return pairs
+
+
+# Every builder takes a spec, so no call site has to test for one first.
+EMPTY_FIELD_SPEC = FieldSpec()
+
+
 # ── Default-selection heuristics ──
-
-def is_four_one_cliff(name: str) -> bool:
-    """The conventional 4-year-with-cliff schedule, matched conservatively by name.
-    Requires a real cliff ("no cliff" is rejected) and a 4-year signal — so
-    "1/24 monthly, no cliff" does not match, while "4yr / 1yr cliff" and
-    "1/48 monthly, 1 year cliff" do."""
-    n = name.lower()
-    if "cliff" not in n or "no cliff" in n:
-        return False
-    return "4" in n or "four" in n
-
 
 def pick_default_vesting(
     templates: List[Dict[str, Any]], preferred_id: Optional[str] = None
 ) -> Optional[str]:
-    """Id of the template to pre-select. The caller's preferred_id wins when it
-    names a real template; otherwise the 4yr/1yr-cliff schedule; otherwise the
-    first. (Default selection only; the user can change it in the form.)"""
+    """Id of the template to pre-select: the caller's preferred_id when it names a
+    real template, and otherwise nothing.
+
+    No schedule is guessed. Vesting terms are a term of the grant, the field
+    manifest declares `vesting_template` optional with no default, and the panel
+    surface pre-selects "No vesting" — so a batch that named no schedule lands on
+    "No vesting" here too instead of on whichever template looked conventional."""
     if preferred_id is not None:
         pid = str(preferred_id)
         if any(str(t.get("id")) == pid for t in templates):
             return pid
-    for t in templates:
-        if is_four_one_cliff(str(t.get("name", ""))):
-            return str(t.get("id"))
-    return str(templates[0].get("id")) if templates else None
+    return None
 
 
 def default_legend_id(legends: List[Dict[str, Any]], preferred_id: Optional[str] = None) -> Optional[str]:
@@ -449,12 +624,12 @@ def build_vesting(
     force_blank: bool = False,
 ) -> str:
     """``force_blank`` renders an empty placeholder as the selection instead of
-    the 4yr/1yr-cliff heuristic. Used when an import couldn't resolve the file's
-    vesting schedule: the heuristic default would otherwise silently issue terms
-    the file never asked for, and unlike a bad quantity the server can't catch
-    it. The empty value also makes ``missingFields()`` block **Review** until the
-    admin picks one, which is the actual gate — an amber marker alone is
-    ignorable."""
+    "No vesting". Used when an import couldn't resolve the file's vesting
+    schedule: "No vesting" is a real answer, and adopting it for a file that
+    plainly asked for *some* schedule would issue terms the file never asked
+    for, which unlike a bad quantity the server can't catch. The empty value
+    also makes ``missingFields()`` block **Review** until the admin picks one,
+    which is the actual gate — an amber marker alone is ignorable."""
     if force_blank:
         opts = ['<option value="" selected>Select a vesting schedule…</option>']
         for t in templates:
@@ -474,9 +649,11 @@ def build_vesting(
                 s=" selected" if tid == chosen else "", v=esc(tid), l=esc(name)
             )
         )
+    # Selected whenever no template is. An unselected <select> resolves to its
+    # first <option>, which would hand the row a template nobody chose.
     opts.append(
         '<option value="__none__" data-label="No vesting"{s}>No vesting</option>'.format(
-            s=" selected" if no_vesting else ""
+            s=sel(chosen is None)
         )
     )
     return "".join(opts)
@@ -646,10 +823,12 @@ def build_legends(legends: List[Dict[str, Any]], preferred_id: Optional[str] = N
     return "".join(btns)
 
 
-def build_rule144_reason_select(reason: Optional[str]) -> str:
+def build_rule144_reason_select(reason: Optional[str],
+                                spec: "FieldSpec" = EMPTY_FIELD_SPEC) -> str:
     opts = ['<option value="">Select a reason…</option>']
-    for v, label in RULE_144_REASON_CHOICES:
-        opts.append('<option value="{v}"{s}>{l}</option>'.format(v=v, s=sel(v == reason), l=esc(label)))
+    for v, label in spec.choices("rule_144_reason", RULE_144_REASON_CHOICES):
+        opts.append('<option value="{v}"{s}>{l}</option>'.format(
+            v=esc(v), s=sel(v == reason), l=esc(label)))
     return (
         '<select class="select-input block-rule144-reason" onchange="onStakeInput()">'
         + "".join(opts) + "</select>"
@@ -703,11 +882,15 @@ def build_relationship_select_deferred(relationship: str) -> str:
     ).format(v=esc(rel))
 
 
-def build_grant_reason_select(reason: Optional[str]) -> str:
+def build_grant_reason_select(reason: Optional[str],
+                              spec: "FieldSpec" = EMPTY_FIELD_SPEC) -> str:
     opts = ['<option value="">Select a reason…</option>']
-    extra = [reason] if reason and reason not in GRANT_REASON_CHOICES else []
-    for v in extra + GRANT_REASON_CHOICES:
-        opts.append('<option value="{v}"{s}>{v}</option>'.format(v=esc(v), s=sel(v == reason)))
+    choices = spec.choices("grant_reason", GRANT_REASON_CHOICES)
+    # A reason off the picklist is prepended rather than dropped, as elsewhere.
+    extra = [(reason, reason)] if reason and reason not in [v for v, _ in choices] else []
+    for v, label in extra + choices:
+        opts.append('<option value="{v}"{s}>{l}</option>'.format(
+            v=esc(v), s=sel(v == reason), l=esc(label)))
     return (
         '<select class="select-input block-grant-reason" onchange="onStakeInput()">'
         + "".join(opts) + "</select>"
@@ -719,10 +902,17 @@ def build_grant_reason_select(reason: Optional[str]) -> str:
 # specifies its own terms — reproduces today's single-shared-default behavior). ──
 
 def row_no_vesting(row: Dict[str, Any], knowns: Dict[str, Any]) -> bool:
+    """True when this row lands on "No vesting" — for every security type.
+
+    Vesting is opt-in everywhere now: a row with no template of its own and no
+    batch-level ``default_vesting_id`` gets none, rather than the schedule whose
+    name looked conventional."""
     v = row.get("vesting_template_id")
     if v is not None:
         return v == "__none__"
-    return bool(knowns.get("no_vesting"))
+    if knowns.get("no_vesting"):
+        return True
+    return not knowns.get("default_vesting_id")
 
 
 def row_preferred_vesting(row: Dict[str, Any], knowns: Dict[str, Any]) -> Optional[str]:
@@ -732,24 +922,18 @@ def row_preferred_vesting(row: Dict[str, Any], knowns: Dict[str, Any]) -> Option
     return knowns.get("default_vesting_id")
 
 
-def cert_no_vesting(row: Dict[str, Any], knowns: Dict[str, Any]) -> bool:
-    """Certificate vesting is opt-in (payload-reference.md: `vesting_template` |
-    opt-in), the opposite default from grants (`vesting_template` | always). A
-    cert row defaults to "No vesting" unless the row or the batch-level knowns
-    default names a real template id."""
-    v = row.get("vesting_template_id")
-    if v is not None:
-        return v == "__none__"
-    return not knowns.get("default_vesting_id")
-
-
 def kv_row(
     label: str, input_html: str, sectype: Optional[str] = None, required: bool = False,
     conditional_on: Optional[str] = None, hidden: bool = False,
     notes: Optional[List[Dict[str, Any]]] = None,
+    field: Optional[str] = None, spec: "FieldSpec" = EMPTY_FIELD_SPEC,
 ) -> str:
     """One "label | input" row in a stakeholder's key-value block (a flex pair,
     not a literal HTML <table>).
+
+    ``field`` names this row in ``FIELD_SPEC_MAP``; with a non-empty ``spec`` the
+    server's own label and requiredness then win over the two passed here, which
+    stay as the fallback for a run with no manifest.
 
     ``required=True`` renders a ``*`` — only for rows that always render and
     always need a decision; never mark a sometimes-hidden row required.
@@ -760,6 +944,9 @@ def kv_row(
 
     ``notes`` are this field's ``import_notes`` (issuance-import), rendered as an
     inline marker under the input. Display-only — never collected on submit."""
+    if field is not None:
+        label = spec.label(field, label)
+        required = spec.required(field, required)
     attr = f' data-sectype="{sectype}"' if sectype else ""
     if conditional_on:
         attr += f' data-conditional="{esc(conditional_on)}"'
@@ -776,6 +963,7 @@ def kv_row(
 def corresponding_interest_row(
     classes: List[Dict[str, Any]], preferred_prefix: Optional[Any],
     value: Optional[Any] = None, notes: Optional[List[Dict[str, Any]]] = None,
+    spec: "FieldSpec" = EMPTY_FIELD_SPEC,
 ) -> str:
     """The Corresponding interest row, or "" when no unit class carries the link.
 
@@ -798,7 +986,7 @@ def corresponding_interest_row(
         sectype="piu",
         conditional_on="corresponding_interest",
         hidden=not (selected is not None and selected.get("has_corresponding_interest")),
-        notes=notes,
+        notes=notes, field="corresponding_interest", spec=spec,
     )
 
 
@@ -817,6 +1005,7 @@ def advanced_accordion(rows_html: List[str]) -> str:
 def advanced_accordion_grant(
     row: Dict[str, Any], accel_templates: List[Dict[str, Any]], no_vesting: bool,
     notes: Optional[Dict[str, List[Dict[str, Any]]]] = None,
+    spec: "FieldSpec" = EMPTY_FIELD_SPEC,
 ) -> str:
     notes = notes if notes is not None else {}
     return advanced_accordion([
@@ -825,11 +1014,11 @@ def advanced_accordion_grant(
             f'<input class="text-input block-custom-label" type="text" '
             f'placeholder="Server auto-generates (e.g. ES-1) if left blank" '
             f'value="{esc(row.get("custom_label", ""))}" oninput="onStakeInput()"/>',
-            notes=notes.pop("custom_label", None),
+            notes=notes.pop("custom_label", None), field="custom_label", spec=spec,
         ),
         kv_row(
-            "Grant reason", build_grant_reason_select(row.get("grant_reason")),
-            notes=notes.pop("grant_reason", None),
+            "Grant reason", build_grant_reason_select(row.get("grant_reason"), spec),
+            notes=notes.pop("grant_reason", None), field="grant_reason", spec=spec,
         ),
         kv_row(
             "Acceleration",
@@ -837,13 +1026,14 @@ def advanced_accordion_grant(
             f'{build_acceleration(accel_templates, None if no_vesting else row.get("acceleration_template"))}</select>',
             conditional_on="vesting", hidden=no_vesting,
             notes=notes.pop("acceleration_template", None),
+            field="acceleration_template", spec=spec,
         ),
         kv_row(
             "Early exercise",
             f'<label class="pending-label"><input type="checkbox" class="block-early-exercise"'
             f'{" checked" if row.get("early_exercise") else ""} onchange="onStakeInput()"/> '
             f'Allow early exercise</label>',
-            notes=notes.pop("early_exercise", None),
+            notes=notes.pop("early_exercise", None), field="early_exercise", spec=spec,
         ),
         kv_row(
             "Auto-exercise at vest",
@@ -863,7 +1053,7 @@ def advanced_accordion_grant(
             "Notes",
             f'<input class="text-input block-notes" type="text" placeholder="Optional" '
             f'value="{esc(row.get("notes", ""))}" oninput="onStakeInput()"/>',
-            notes=notes.pop("notes", None),
+            notes=notes.pop("notes", None), field="notes", spec=spec,
         ),
     ])
 
@@ -871,6 +1061,7 @@ def advanced_accordion_grant(
 def advanced_accordion_cert(
     row: Dict[str, Any], accel_templates: List[Dict[str, Any]], no_vesting: bool,
     notes: Optional[Dict[str, List[Dict[str, Any]]]] = None,
+    spec: "FieldSpec" = EMPTY_FIELD_SPEC,
 ) -> str:
     notes = notes if notes is not None else {}
     field_rows = [
@@ -880,32 +1071,33 @@ def advanced_accordion_cert(
             f'{build_acceleration(accel_templates, None if no_vesting else row.get("acceleration_template"))}</select>',
             conditional_on="vesting", hidden=no_vesting,
             notes=notes.pop("acceleration_template", None),
+            field="acceleration_template", spec=spec,
         ),
         kv_row(
             "Certificate number",
             f'<input class="text-input block-prefix-number" type="text" '
             f'placeholder="Server auto-numbers if left blank" '
             f'value="{esc(row.get("prefix_number", ""))}" oninput="onStakeInput()"/>',
-            notes=notes.pop("prefix_number", None),
+            notes=notes.pop("prefix_number", None), field="prefix_number", spec=spec,
         ),
         kv_row(
             "Cash paid",
             f'<input class="text-input block-cash-paid" type="text" inputmode="decimal" placeholder="Optional" '
             f'value="{esc(row.get("cash_paid", ""))}" oninput="onStakeInput()"/>',
-            notes=notes.pop("cash_paid", None),
+            notes=notes.pop("cash_paid", None), field="cash_paid", spec=spec,
         ),
         kv_row(
             "Debt canceled",
             f'<input class="text-input block-debt-canceled" type="text" inputmode="decimal" placeholder="Optional" '
             f'value="{esc(row.get("debt_canceled", ""))}" oninput="onStakeInput()"/>',
-            notes=notes.pop("debt_canceled", None),
+            notes=notes.pop("debt_canceled", None), field="debt_canceled", spec=spec,
         ),
     ]
     field_rows.append(kv_row(
         "Notes",
         f'<input class="text-input block-notes" type="text" placeholder="Optional" '
         f'value="{esc(row.get("notes", ""))}" oninput="onStakeInput()"/>',
-        notes=notes.pop("notes", None),
+        notes=notes.pop("notes", None), field="notes", spec=spec,
     ))
     return advanced_accordion(field_rows)
 
@@ -913,6 +1105,7 @@ def advanced_accordion_cert(
 def advanced_accordion_piu(
     row: Dict[str, Any], accel_templates: List[Dict[str, Any]], no_vesting: bool,
     notes: Optional[Dict[str, List[Dict[str, Any]]]] = None,
+    spec: "FieldSpec" = EMPTY_FIELD_SPEC,
 ) -> str:
     notes = notes if notes is not None else {}
     field_rows = [
@@ -922,13 +1115,14 @@ def advanced_accordion_piu(
             f'{build_acceleration(accel_templates, None if no_vesting else row.get("acceleration_template"))}</select>',
             conditional_on="vesting", hidden=no_vesting,
             notes=notes.pop("acceleration_template", None),
+            field="acceleration_template", spec=spec,
         ),
         kv_row(
             "Security number",
             f'<input class="text-input block-prefix-number" type="text" '
             f'placeholder="Server auto-numbers if left blank" '
             f'value="{esc(row.get("prefix_number", ""))}" oninput="onStakeInput()"/>',
-            notes=notes.pop("prefix_number", None),
+            notes=notes.pop("prefix_number", None), field="prefix_number", spec=spec,
         ),
         kv_row(
             "Consideration price",
@@ -936,13 +1130,13 @@ def advanced_accordion_piu(
             f'a US profits interest has no price paid at grant.</p>'
             f'<input class="text-input block-cash-paid" type="text" inputmode="decimal" placeholder="Optional" '
             f'value="{esc(row.get("cash_paid", ""))}" oninput="onStakeInput()"/>',
-            notes=notes.pop("cash_paid", None),
+            notes=notes.pop("cash_paid", None), field="cash_paid", spec=spec,
         ),
         kv_row(
             "Notes",
             f'<input class="text-input block-notes" type="text" placeholder="Optional" '
             f'value="{esc(row.get("notes", ""))}" oninput="onStakeInput()"/>',
-            notes=notes.pop("notes", None),
+            notes=notes.pop("notes", None), field="notes", spec=spec,
         ),
     ]
     return advanced_accordion(field_rows)
@@ -1072,6 +1266,7 @@ def _grant_block_rows(
     unresolved: set,
     currency: str,
     today: str,
+    spec: "FieldSpec" = EMPTY_FIELD_SPEC,
 ) -> List[str]:
     """The option-grant-only field rows, in display order."""
     rows_html: List[str] = []
@@ -1102,6 +1297,7 @@ def _grant_block_rows(
                           "option_type" in unresolved),
         sectype="option_grant",
         required=True, notes=notes.pop("option_type", None),
+        field="option_type", spec=spec,
     ))
     price_hint = esc(build_exercise_price_hint(knowns, currency))
     rows_html.append(kv_row(
@@ -1113,17 +1309,20 @@ def _grant_block_rows(
         f'<span class="currency-suffix">{currency}</span></div>',
         sectype="option_grant",
         required=True, notes=notes.pop("exercise_price", None),
+        field="exercise_price", spec=spec,
     ))
     rows_html.append(kv_row(
         "Issue date",
         f'<input class="date-input block-issue-date" type="date" value="{esc(row.get("issue_date") or today)}" '
         f'oninput="updateIssueDate(this)"/>',
         required=True, notes=notes.pop("issue_date", None),
+        field="issue_date", spec=spec,
     ))
     rows_html.append(kv_row(
         "Board approval",
         board_approval_html(row, today, "option_grant"),
         required=True, notes=notes.pop("board_approval_date", None),
+        field="board_approval_date", spec=spec,
     ))
     vesting_options = build_vesting(
         templates, no_vesting, row_preferred_vesting(row, knowns),
@@ -1134,11 +1333,11 @@ def _grant_block_rows(
         f'<select class="select-input block-vesting-select" onchange="pickVesting(this)">'
         f'{vesting_options}</select>'
         f'<div class="block-vesting-start-wrap"{vest_wrap_style}>'
-        f'<p class="field-sublabel">Vesting start date</p>'
+        f'<p class="field-sublabel">{esc(spec.label("vesting_start_date", "Vesting start date"))}</p>'
         f'<input class="date-input block-vesting-start-date" type="date" value="{esc(vesting_start)}" '
         f'oninput="updateVestingStart(this)"/></div>',
         sectype="option_grant",
-        required=True,
+        required=True, field="vesting_template_id", spec=spec,
         notes=(notes.pop("vesting_template_id", None) or [])
               + (notes.pop("vesting_start_date", None) or []) or None,
     ))
@@ -1148,6 +1347,7 @@ def _grant_block_rows(
         f'<div class="toggle-row wrap">{build_docsets(docsets, row.get("document_set_id"), "document_set_id" in unresolved)}</div>',
         sectype="option_grant",
         required=True, notes=notes.pop("document_set_id", None),
+        field="document_set_id", spec=spec,
     ))
     rows_html.append(kv_row(
         "HMRC notified",
@@ -1181,8 +1381,9 @@ def _grant_block_rows(
         hidden=(so_type not in EMPLOYMENT_RELATED_SO_TYPES),
         required=True,
         notes=notes.pop("employment_related", None),
+        field="employment_related", spec=spec,
     ))
-    rows_html.append(advanced_accordion_grant(row, accel_templates, no_vesting, notes))
+    rows_html.append(advanced_accordion_grant(row, accel_templates, no_vesting, notes, spec))
     return rows_html
 
 
@@ -1194,6 +1395,7 @@ def _cert_block_rows(
     unresolved: set,
     currency: str,
     today: str,
+    spec: "FieldSpec" = EMPTY_FIELD_SPEC,
 ) -> List[str]:
     """The certificate-only field rows, in display order."""
     rows_html: List[str] = []
@@ -1211,7 +1413,7 @@ def _cert_block_rows(
     r144_date = row.get("rule_144_date") or today
     templates = results(data.get("vesting_templates"))
     accel_templates = results(data.get("acceleration_templates"))
-    no_vesting_cert = cert_no_vesting(row, knowns)
+    no_vesting_cert = row_no_vesting(row, knowns)
     cert_vesting_start = row.get("vesting_start_date") or today
     cert_vest_wrap_style = "" if not no_vesting_cert else ' style="display:none;"'
 
@@ -1220,6 +1422,7 @@ def _cert_block_rows(
         f'<div class="toggle-row wrap">{build_share_classes(classes, preferred_prefix, "share_class_prefix" in unresolved)}</div>',
         sectype="certificate",
         required=True, notes=notes.pop("share_class_prefix", None),
+        field="share_class_prefix", spec=spec,
     ))
     # LLC status can't be resolved (no MCP command returns it), so the hint
     # stays generic rather than confirming either way.
@@ -1232,17 +1435,20 @@ def _cert_block_rows(
         f'value="{esc(price_default)}" oninput="onStakeInput()" style="width:140px;"/></div>',
         sectype="certificate",
         required=True, notes=notes.pop("price_per_share", None),
+        field="price_per_share", spec=spec,
     ))
     rows_html.append(kv_row(
         "Issue date",
         f'<input class="date-input block-issue-date" type="date" value="{esc(row.get("issue_date") or today)}" '
         f'oninput="updateIssueDate(this)"/>',
         required=True, notes=notes.pop("issue_date", None),
+        field="issue_date", spec=spec,
     ))
     rows_html.append(kv_row(
         "Board approval",
         board_approval_html(row, today, "certificate"),
         required=True, notes=notes.pop("board_approval_date", None),
+        field="board_approval_date", spec=spec,
     ))
     attest_style = "" if body else ' style="display:none;"'
     rows_html.append(kv_row(
@@ -1253,6 +1459,7 @@ def _cert_block_rows(
         f'<div class="block-legend-attest legend-attest"{attest_style}>{esc(body)}</div>',
         sectype="certificate",
         required=True, notes=notes.pop("legend_id", None),
+        field="legend_id", spec=spec,
     ))
     r144_date_style = "" if r144_mode == "other" else ' style="display:none;"'
     r144_reason = row.get("rule_144_reason")
@@ -1268,9 +1475,9 @@ def _cert_block_rows(
         f'{r144_date_style} oninput="onStakeInput()"/>'
         f'<div class="block-rule144-reason-wrap"{r144_date_style}>'
         f'<p class="field-sublabel">Reason for the different date</p>'
-        f'{build_rule144_reason_select(r144_reason)}</div>',
+        f'{build_rule144_reason_select(r144_reason, spec)}</div>',
         sectype="certificate",
-        required=True,
+        required=True, field="rule_144_date", spec=spec,
         notes=(notes.pop("rule_144_date", None) or [])
               + (notes.pop("rule_144_reason", None) or []) or None,
     ))
@@ -1283,14 +1490,14 @@ def _cert_block_rows(
         f'<select class="select-input block-vesting-select" onchange="pickVesting(this)">'
         f'{cert_vesting_options}</select>'
         f'<div class="block-vesting-start-wrap"{cert_vest_wrap_style}>'
-        f'<p class="field-sublabel">Vesting start date</p>'
+        f'<p class="field-sublabel">{esc(spec.label("vesting_start_date", "Vesting start date"))}</p>'
         f'<input class="date-input block-vesting-start-date" type="date" value="{esc(cert_vesting_start)}" '
         f'oninput="updateVestingStart(this)"/></div>',
-        sectype="certificate",
+        sectype="certificate", field="vesting_template_id", spec=spec,
         notes=(notes.pop("vesting_template_id", None) or [])
               + (notes.pop("vesting_start_date", None) or []) or None,
     ))
-    rows_html.append(advanced_accordion_cert(row, accel_templates, no_vesting_cert, notes))
+    rows_html.append(advanced_accordion_cert(row, accel_templates, no_vesting_cert, notes, spec))
     return rows_html
 
 
@@ -1302,6 +1509,7 @@ def _piu_block_rows(
     unresolved: set,
     currency: str,
     today: str,
+    spec: "FieldSpec" = EMPTY_FIELD_SPEC,
 ) -> List[str]:
     """The profits-interest-only field rows, in display order."""
     rows_html: List[str] = []
@@ -1314,7 +1522,7 @@ def _piu_block_rows(
     doc_sets = results(data.get("document_sets"))
     templates = results(data.get("vesting_templates"))
     accel_templates = results(data.get("acceleration_templates"))
-    no_vesting_piu = cert_no_vesting(row, knowns)
+    no_vesting_piu = row_no_vesting(row, knowns)
     vesting_start = row.get("vesting_start_date") or today
     vest_wrap_style = "" if not no_vesting_piu else ' style="display:none;"'
 
@@ -1323,6 +1531,7 @@ def _piu_block_rows(
         f'<div class="toggle-row wrap">{build_share_classes(classes, preferred_prefix, "share_class_prefix" in unresolved)}</div>',
         sectype="piu",
         required=True, notes=notes.pop("share_class_prefix", None),
+        field="share_class_prefix", spec=spec,
     ))
     rows_html.append(kv_row(
         "Equity plan",
@@ -1330,7 +1539,7 @@ def _piu_block_rows(
         f'authorized total. A plan must use the same unit class as the row.</p>'
         f'<div class="toggle-row wrap">{build_option_plans(plans, preferred_plan)}</div>',
         sectype="piu",
-        notes=notes.pop("option_plan", None),
+        notes=notes.pop("option_plan", None), field="option_plan", spec=spec,
     ))
     rows_html.append(kv_row(
         f"{noun_title} value",
@@ -1341,6 +1550,7 @@ def _piu_block_rows(
         f'value="{esc(row.get("threshold_value", ""))}" oninput="onStakeInput()" style="width:140px;"/></div>',
         sectype="piu",
         required=True, notes=notes.pop("threshold_value", None),
+        field="threshold_value", spec=spec,
     ))
     rows_html.append(kv_row(
         f"{noun_title} value type",
@@ -1350,12 +1560,14 @@ def _piu_block_rows(
         f'{build_threshold_value_type(row.get("threshold_value_type"), "threshold_value_type" in unresolved)}</div>',
         sectype="piu",
         required=True, notes=notes.pop("threshold_value_type", None),
+        field="threshold_value_type", spec=spec,
     ))
     rows_html.append(kv_row(
         "Issue date",
         f'<input class="date-input block-issue-date" type="date" value="{esc(row.get("issue_date") or today)}" '
         f'oninput="updateIssueDate(this)"/>',
         required=True, notes=notes.pop("issue_date", None),
+        field="issue_date", spec=spec,
     ))
     # Optional server-side, and with no ordering rule against the issue date
     # (DraftPIUApprovalDateFieldValidator), so the row is clearable.
@@ -1366,6 +1578,7 @@ def _piu_block_rows(
         f'{board_approval_html(row, today, "piu")}',
         sectype="piu",
         notes=notes.pop("board_approval_date", None),
+        field="board_approval_date", spec=spec,
     ))
     piu_vesting_options = build_vesting(
         templates, no_vesting_piu, row_preferred_vesting(row, knowns),
@@ -1376,10 +1589,10 @@ def _piu_block_rows(
         f'<select class="select-input block-vesting-select" onchange="pickVesting(this)">'
         f'{piu_vesting_options}</select>'
         f'<div class="block-vesting-start-wrap"{vest_wrap_style}>'
-        f'<p class="field-sublabel">Vesting start date</p>'
+        f'<p class="field-sublabel">{esc(spec.label("vesting_start_date", "Vesting start date"))}</p>'
         f'<input class="date-input block-vesting-start-date" type="date" value="{esc(vesting_start)}" '
         f'oninput="updateVestingStart(this)"/></div>',
-        sectype="piu",
+        sectype="piu", field="vesting_template_id", spec=spec,
         notes=(notes.pop("vesting_template_id", None) or [])
               + (notes.pop("vesting_start_date", None) or []) or None,
     ))
@@ -1392,18 +1605,20 @@ def _piu_block_rows(
             f'{build_docsets(doc_sets, row.get("document_set_id"), "document_set_id" in unresolved)}</div>',
             sectype="piu",
             notes=notes.pop("document_set_id", None),
+            field="document_set_id", spec=spec,
         ))
     ci_row = corresponding_interest_row(
         classes, preferred_prefix, row.get("corresponding_interest"),
-        notes.pop("corresponding_interest", None),
+        notes.pop("corresponding_interest", None), spec,
     )
     if ci_row:
         rows_html.append(ci_row)
-    rows_html.append(advanced_accordion_piu(row, accel_templates, no_vesting_piu, notes))
+    rows_html.append(advanced_accordion_piu(row, accel_templates, no_vesting_piu, notes, spec))
     return rows_html
 
 
-def piu_term_rows(data: Dict[str, Any], knowns: Dict[str, Any]) -> List[str]:
+def piu_term_rows(data: Dict[str, Any], knowns: Dict[str, Any],
+                  spec: "FieldSpec" = EMPTY_FIELD_SPEC) -> List[str]:
     """The PIU term rows for the Cowork batch's shared-terms scope.
 
     Batch mode renders the terms once for the whole batch, so there is no row to
@@ -1413,7 +1628,7 @@ def piu_term_rows(data: Dict[str, Any], knowns: Dict[str, Any]) -> List[str]:
     """
     return _piu_block_rows(
         {}, data, knowns, {}, set(),
-        esc(knowns.get("currency", "")), knowns.get("today_iso", ""),
+        esc(knowns.get("currency", "")), knowns.get("today_iso", ""), spec,
     )
 
 
@@ -1428,7 +1643,9 @@ _BLOCK_ROW_BUILDERS = {
 SECURITY_TYPES = tuple(sorted(_BLOCK_ROW_BUILDERS))
 
 
-def build_stakeholder_block(row: Dict[str, Any], security_type: str, data: Dict[str, Any], knowns: Dict[str, Any]) -> str:
+def build_stakeholder_block(row: Dict[str, Any], security_type: str, data: Dict[str, Any],
+                            knowns: Dict[str, Any],
+                            spec: "FieldSpec" = EMPTY_FIELD_SPEC) -> str:
     name = esc(row.get("name", ""))
     email = esc(row.get("email", ""))
     qty = row.get("quantity", "")
@@ -1453,28 +1670,30 @@ def build_stakeholder_block(row: Dict[str, Any], security_type: str, data: Dict[
             f'oninput="onStakeNameInput(this)" onfocus="onStakeNameFocus(this)"/>'
             f'<div class="stake-suggestions" style="display:none;"></div>'
             f'</div>',
-            required=True, notes=notes.pop("name", None),
+            required=True, notes=notes.pop("name", None), field="name", spec=spec,
         ),
         kv_row(
             "Email",
             f'<input class="text-input stake-email-in" type="email" placeholder="Email" '
             f'value="{email}" oninput="onStakeInput()"/>',
-            required=True, notes=notes.pop("email", None),
+            required=True, notes=notes.pop("email", None), field="email", spec=spec,
         ),
         kv_row(
             "Stakeholder type",
             f'<div class="toggle-row">{build_stakeholder_kind(row.get("stakeholder_kind", ""), "stakeholder_kind" in unresolved)}</div>',
             required=True, notes=notes.pop("stakeholder_kind", None),
+            field="stakeholder_kind", spec=spec,
         ),
         kv_row(
             "Relationship", build_relationship_select(row.get("relationship", "")),
             required=True, notes=notes.pop("relationship", None),
+            field="relationship", spec=spec,
         ),
         kv_row(
             "Quantity",
             f'<input class="text-input stake-qty-in" type="number" inputmode="numeric" '
             f'placeholder="Quantity" value="{qty}" oninput="onStakeInput()"/>',
-            required=True, notes=notes.pop("quantity", None),
+            required=True, notes=notes.pop("quantity", None), field="quantity", spec=spec,
         ),
     ]
 
@@ -1483,7 +1702,7 @@ def build_stakeholder_block(row: Dict[str, Any], security_type: str, data: Dict[
         raise BuildError(
             "unknown security_type {!r}; known: {}".format(security_type, sorted(_BLOCK_ROW_BUILDERS))
         )
-    rows_html.extend(builder(row, data, knowns, notes, unresolved, currency, today))
+    rows_html.extend(builder(row, data, knowns, notes, unresolved, currency, today, spec))
 
     row_key = esc(row.get("row_key", ""))
     error_banner = build_block_error_banner(row.get("server_errors"))
@@ -1503,7 +1722,9 @@ def build_stakeholder_block(row: Dict[str, Any], security_type: str, data: Dict[
     )
 
 
-def build_stakeholder_blocks(rows: List[Dict[str, Any]], security_type: str, data: Dict[str, Any], knowns: Dict[str, Any]) -> str:
+def build_stakeholder_blocks(rows: List[Dict[str, Any]], security_type: str, data: Dict[str, Any],
+                             knowns: Dict[str, Any],
+                             spec: "FieldSpec" = EMPTY_FIELD_SPEC) -> str:
     """One key-value block per named person; a single blank block when none
     were named.
 
@@ -1528,7 +1749,7 @@ def build_stakeholder_blocks(rows: List[Dict[str, Any]], security_type: str, dat
                 candidate = f"r{probe}"
             existing_keys.add(candidate)
             r = {**r, "row_key": candidate}
-        out.append(build_stakeholder_block(r, security_type, data, knowns))
+        out.append(build_stakeholder_block(r, security_type, data, knowns, spec))
     return "".join(out)
 
 

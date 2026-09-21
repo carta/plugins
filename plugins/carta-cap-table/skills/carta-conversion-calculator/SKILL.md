@@ -19,7 +19,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.86.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.87.0</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 

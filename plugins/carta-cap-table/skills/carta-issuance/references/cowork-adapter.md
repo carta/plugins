@@ -28,9 +28,16 @@ what they want and submits once.
 uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-issuance/issuance-config/scripts/build_cowork_form.py" \
   --security-type <option_grant|certificate|piu> \
   --data "$WORK/_data.json" --knowns "$WORK/_knowns.json" \
+  --field-spec "$WORK/_field_spec.json" \
   --corp-name "<legal name>" --corp-id "<corporation_id>" \
   --out "$WORK/form.html"
 ```
+
+`--field-spec` is **optional**. Write `issuance_init`'s `field_spec` key to that file when the
+call returned one and pass it; every mapped field then takes its label, its requiredness and
+its static choices from the server, exactly as the panel surface does. Omit the flag on a
+server that sends no `field_spec` and every field keeps the builder's own answer — nothing
+degrades, so never block a form on a missing manifest.
 
 Then call `show_widget` with the file's contents **verbatim** as `widget_code`. The two input
 files are the same ones the Code panel uses, so the `knowns` contract is shared: its key table
@@ -93,7 +100,8 @@ quantity · notes (optional).
 sole active valuation, whatever its source — 409A, EMI, CSOP or share price; left empty when
 two are active, e.g. an HMRC report's AMV and UMV, so the admin picks; ZEPO forces `0`) ·
 issue date · board approval (today / other / pending) · vesting
-schedule + start date (default 4yr/1yr cliff) · documents · HMRC notified (checkbox + date,
+schedule + start date (defaults to **No vesting** — a schedule is a term of the grant and is
+never guessed) · documents · HMRC notified (checkbox + date,
 shown only for EMI) · ATO notified (checkbox, shown only for the 3 AU types) · a collapsed
 **More fields** accordion, in order: custom label, grant reason (`<select>`, carta-web's own
 picklist — [carta-modify-issuables/references/field-contract.md](../../carta-modify-issuables/references/field-contract.md)),
@@ -165,7 +173,8 @@ Two obligations, and the second is the one that actually protects the cap table:
    ([labels.md](labels.md)).
 2. **Render a noted field with nothing pre-selected, and refuse to submit until it's set.** A
    marker alone is ignorable. This matters most for the fields with an appealing-looking
-   default: vesting schedule (don't fall back to 4yr/1yr cliff), share class (don't fall back to
+   default: vesting schedule (don't fall back to **No vesting** — the file named a real one), share class
+   (don't fall back to
    the most recent), option type (don't fall back to the jurisdiction's primary — the tax
    treatment differs), stakeholder type (don't default an entity to Individual), document set
    (don't auto-pick the only one). Each of those defaults is right for a prompt that said
@@ -366,8 +375,7 @@ in the incident run.
 | Option plan | the only non-expired plan | `(default — only active plan)` |
 | Document set | the only set — on a PIU with no sets the row is absent entirely | `(default — only template)` |
 | Legend | the only legend, or the one flagged `default` | `(default)` |
-| Vesting (grant) | the corp's 4yr / 1yr-cliff schedule | `(default)` |
-| Vesting (cert, PIU) | none — opt-in | — |
+| Vesting (all three types) | **none** — opt-in; only `knowns.default_vesting_id` or the row's own `vesting_template_id` pre-selects a schedule | — |
 | Board approval | today | `(default)` |
 | Board approval (PIU) | today, and clearable — the field is optional | `(default — today)` |
 | Share class / PIU unit class | the only class when there is one; **never ranked** — two or more stay unselected until a human picks | `(default — only class)` |

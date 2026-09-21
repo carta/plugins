@@ -96,8 +96,8 @@ across the batch. A per-row key (see `rows`) always wins over the batch-level fa
 | `common_share_class_name` | the chosen option plan's `common_share_class_name`. The fallback the script matches on when a valuation row omits `share_class_type`. Grant only |
 | `exercise_price_default` | fallback prefill as a bare number, used when `fmv_options` doesn't resolve one. Grant only |
 | `has_409a` | **Deprecated** — the pre-international shape, honoured with `exercise_price_default` for one release so a panel rebuilt mid-conversation still renders a price. Use `fmv_options`/`fmv_source` instead |
-| `no_vesting` | `true` **only** when the user explicitly said no vesting (fallback default; a row's own `vesting_template_id: "__none__"` overrides per-row). Grant only; omit otherwise |
-| `default_vesting_id` | vesting template id to pre-select when you can identify the corp's 4yr/1yr-cliff schedule; omit to let the script pick. Both types — for a certificate batch, setting this also opts every row into vesting by default (certs otherwise default to **No vesting**, being opt-in) |
+| `no_vesting` | `true` **only** when the user explicitly said no vesting (fallback default; a row's own `vesting_template_id: "__none__"` overrides per-row). All three types now — it is redundant unless `default_vesting_id` is also set, since omitting both already means no vesting |
+| `default_vesting_id` | vesting template id to pre-select. **Omitting it selects "No vesting"** — for every security type, not just certificates: nothing infers a schedule from a template's name any more. Set it only when the run actually knows which schedule the batch wants; a row's own `vesting_template_id` still wins over it |
 | `price_per_share_default` | default price per share as a bare number, or omit to leave blank. Cert only |
 | `share_class_prefix` | prefix to pre-select when the prompt named a class (*"Series A"* → `"PA"`). Cert and PIU. Omitting it selects the corp's only class when it has exactly one, and **nothing** when it has several — the control then renders required and unselected and the panel holds Review until a human picks, because ranking the classes hands the holder a class nobody chose ([certificate-fields.md](certificate-fields.md#share-class-reconciliation-certificate), [piu-fields.md](piu-fields.md#unit-class-reconciliation)) |
 | `option_plan_id` | plan pk to pre-select when the prompt named one. **PIU only, and never a default** — omitting it selects "no plan", which issues off the unit class ([piu-fields.md](piu-fields.md#equity-plan-reconciliation--per-row-optional-prefix-matched)) |
@@ -177,7 +177,9 @@ PYEOF
 uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-issuance/issuance-config/scripts/build_config.py" \
   --security-type <option_grant|certificate|piu> \
   --data "$OUT_DIR/_data.json" --knowns "$OUT_DIR/_knowns.json" \
-  --stakeholders "$OUT_DIR/_roster.json" --out-dir "$OUT_DIR"
+  --stakeholders "$OUT_DIR/_roster.json" \
+  --field-spec "$OUT_DIR/_field_spec.json" \
+  --out-dir "$OUT_DIR"
 # → prints STAKEHOLDER_ROWS=… STAKEHOLDER_LIST_JSON=…
 
 # 4) SUB_FLAGS — just the shared frame scalars + the two script-built blocks
@@ -192,17 +194,24 @@ SUB_FLAGS+=(--substitute-file "STAKEHOLDER_ROWS=$OUT_DIR/_rows.html")
 SUB_FLAGS+=(--substitute-file "STAKEHOLDER_LIST_JSON=$OUT_DIR/_stakeholders.json")
 ```
 
-**The three files you write from the two results:**
+**The files you write from the two results** (the fourth only when the result carries it):
 
 | File | Holds | Goes to |
 |---|---|---|
 | `_data.json` | every reference section, `certificate_share_classes` renamed to the `share_classes` key the builder reads | `build_config.py --data` |
 | `_roster.json` | the stakeholders envelope as returned — `{"stakeholders": [...], "count": N, "total": N}`, no reshaping, no field-picking, no pretty-printing; the script reads either a `stakeholders` or a `results` key, keeps the five fields it needs (`full_name`, `email`, `id`, `kind`, `event_relationship`) and ignores the rest | `build_config.py --stakeholders` |
 | `_knowns.json` | the result's `knowns_seed` plus what only you know | `build_config.py --knowns` |
+| `_field_spec.json` | the result's `field_spec` — the issuer's own field descriptors, when the call returned one | `build_config.py --field-spec` (optional) |
 
 Write each one **once** and read nothing back: a file re-read into context is the 129-second
 defect wearing a new hat. A `stakeholders` key inside `_data.json` still works as a fallback
 for `--stakeholders`, and the same flag exists on `build_cowork_form.py`.
+
+**`--field-spec` is optional.** When the result carries a `field_spec`, write it to
+`_field_spec.json` and pass the flag: the mapped fields then take their label,
+requiredness and static choices from the issuer's own manifest, which is where the panel
+surface gets them too. No `field_spec` means no flag, and every field keeps the builder's
+own answer — never hold the surface for a missing manifest.
 
 **`knowns_seed` already speaks the builder's vocabulary**, so its keys copy across unchanged:
 `today_iso`, `issue_date`, `currency` / `currency_candidates`, `fmv_options`, `fmv_source`,
