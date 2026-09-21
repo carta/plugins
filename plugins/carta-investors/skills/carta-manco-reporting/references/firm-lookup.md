@@ -190,22 +190,27 @@ clean match the caller is permissioned for proceeds straight here, since
 `list_contexts` matches against the caller's own permission set. Nothing
 below re-litigates the firm.
 
-This is the entity gate, and it **always runs on a build** — whether one
-entity was found or several. Step 3 is a long fetch, and this is the last
-cheap place to catch a wrong entity; a dashboard built on the wrong one is
-wrong in every figure, under this skill's own name.
+This is the entity gate. It asks whenever there's a real choice to confirm
+— several ManCos, or a GP entity standing in for a missing one — and skips
+asking when there isn't, below. Step 3 is a long fetch, and where it does
+ask, this is the last cheap place to catch a wrong entity; a dashboard
+built on the wrong one is wrong in every figure, under this skill's own
+name.
 
 It does **not** run on a warm or soft cache hit. Both reopen an entity a
 previous run already confirmed, and re-asking on every reload is the
 question that teaches a reader to stop reading questions.
 
-**Exactly one management company** → confirm it:
-
-> **Build the dashboard for `<MANCO_NAME>`?**
-> `<FIRM_NAME>` · `<entity type>`
-
-Offer *"Yes, build it"*, *"No — different entity"* (re-open the list for
-this firm) and *"No — different firm"* (back to Step 1).
+**Exactly one management company** → skip the confirmation outright; hold
+it and move straight into the build. There is nothing to disambiguate —
+Step 1 already settled which firm this is, and this is the only entity
+Carta's Fund Admin has for it. Asking "Build the dashboard for
+`<MANCO_NAME>`?" when there is no other candidate it could be is a
+question with only one honest answer, not a real check — unlike the
+several-ManCo picker below, where the ask *is* the disambiguation. This
+runs whether or not a budget workbook has been mentioned yet; the entity
+and the workbook are two independent questions, and finding only one
+ManCo already answers the first one on its own.
 
 **Several management companies** → the picker is the confirmation:
 

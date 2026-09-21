@@ -42,7 +42,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.35.0</carta-plugin>
+<carta-plugin>carta-investors:6.36.0</carta-plugin>
 
 # ManCo Reporting Dashboard
 
@@ -164,10 +164,12 @@ datadir build runs silently. Speak only at:
   itself ask a resume picker, or "which firm" — both local, no MCP — before
   the rest of the greeting completes
 - Step 1 — firm disambiguation, if several firms match
-- Step 2 — the entity confirmation, on every build: a picker when the firm
-  has several management companies, a yes/no when it has one, and always an
-  explicit ask when a GP entity is standing in for a missing ManCo. Silent
-  on a warm or soft cache hit, where a previous run already confirmed it
+- Step 2 — the entity confirmation, on a build with several management
+  companies (a picker) or a GP entity standing in for a missing ManCo
+  (always an explicit ask). Silent on a warm or soft cache hit, where a
+  previous run already confirmed it — and silent whenever the firm has
+  exactly one management company, since there's nothing left to
+  disambiguate at that point
 - Step 2.75 — the budget questions, on a firm never asked before
 - Step 4.7 ([budget-unresolved.md](references/budget-unresolved.md)) — the
   mapping table, whenever the build left budget lines with

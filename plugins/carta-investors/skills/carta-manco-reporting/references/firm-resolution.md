@@ -312,14 +312,15 @@ only place the cache-hit/miss distinction shows up to the user:
   until it is.** Emit the "here's how it comes together" paragraph right
   after 0.2 classifies the MISS, in the same message as Step 1's first MCP
   call — the reader then has text on screen while the lookups run, and they
-  cost no perceived wait. Write this one after Step 2's confirmation, as the
-  transition into the fetch:
+  cost no perceived wait. Write this one after Step 2 resolves the entity —
+  whether by an explicit confirmation or, on the single-ManCo firm, without
+  asking one at all — as the transition into the fetch:
 
   Building **`<FIRM_NAME>`** — **`<MANCO_NAME>`**. This takes a few
   seconds.
 
-  It names what was confirmed rather than asking again; Step 2 owns the
-  question.
+  It names what was resolved rather than asking again; Step 2 owns the
+  question, when it asks one at all.
 
 That's the rest of the greeting — two paragraphs on a first invocation, one
 on a reload, on top of 0.0's opening line. Do NOT append anything else
