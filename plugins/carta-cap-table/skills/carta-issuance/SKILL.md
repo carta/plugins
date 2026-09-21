@@ -26,10 +26,6 @@ allowed-tools:
   - Bash(test *)
   - Bash(ls *)
   # No `Bash(find *)`: the surface comes from the tool list, not the disk.
-  # Read-only CLI producers only — writes go through `call_tool`.
-  - Bash(carta web list *)
-  - Bash(carta web get *)
-  - Bash(carta web download *)
   # `mcp__carta__*` is literal here; in prose it stands for the session prefix.
   - mcp__carta__call_tool
   - mcp__carta__search_tools
@@ -44,7 +40,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.86.0</carta-plugin>
+<carta-plugin>carta-cap-table:6.86.1</carta-plugin>
 
 # Issue Securities
 
@@ -67,15 +63,16 @@ exercise periods:
 
 ## Pick the surface
 
-One branch, from **your own tool list** — never the disk, never an env var. Match on the
-**suffix**: on real hosts these names arrive prefixed (`mcp__Claude_Browser__preview_start`;
-the Carta prefix is often an opaque session UUID), so literal equality silently picks the
-wrong path.
+Take the **first** row that matches. Rows 2–4 read **your own tool list** — never the disk,
+never an env var — and match on the **suffix**: on real hosts these names arrive prefixed
+(`mcp__Claude_Browser__preview_start`; the Carta prefix is often an opaque session UUID), so
+literal equality silently picks the wrong path.
 
 | Condition | Path |
 |---|---|
+| the user asked for the **form or artifact** — *"generate the artifact"*, *"build the form"* | **engine + adapter** — `references/engine.md`, then the adapter rows 3–4 name |
 | a tool whose name **ends in** `cap_table_issuance_panel`, bare or prefixed | **panel** — [the next section](#the-panel-path) |
-| else, a tool ending in `preview_start` | **engine + code adapter** — `references/engine.md`, then `references/code-adapter.md` |
+| a tool ending in `preview_start` | **engine + code adapter** — `references/engine.md`, then `references/code-adapter.md` |
 | else | **engine + cowork adapter** — `references/engine.md`, then `references/cowork-adapter.md` |
 
 Record the selection once. Never re-detect per surface.

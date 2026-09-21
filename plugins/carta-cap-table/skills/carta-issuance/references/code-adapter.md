@@ -28,8 +28,8 @@ one-confirmation rule, panel lifecycle gotchas) are a separate concern — see
 | Core step | Cowork does | You do instead |
 |---|---|---|
 | **Phase 0.25** — import markers | render `import_notes` in the form yourself, and blank any noted field | **nothing extra** — `build_config.py` renders the amber markers and blanks noted fields (so `missingFields()` holds **Review**, which reports the blocker on click) straight from `row.import_notes` |
-| **Phase 0.5** — reference data | `issuance_init` with `stakeholder_names`, resolved server-side into its `stakeholders` section | `issuance_init` **plus** one `cap_table:get:stakeholders` for the full roster the panel's autocomplete needs — issued in one turn, each result written to a file and passed by path, never retyped ([§1](#1-config-panel-build_configpy-builds-every-block)). The roster becomes `STAKEHOLDER_LIST_JSON`; oversized rosters: [§1 Roster fetch](#roster-fetch-for-large-corporations). **On a CLI that lists `issuance-bootstrap`** (absent through `carta-web-cli` 27.24.0 — check `carta web download --help`), `carta web download issuance-bootstrap --corporation-id <corporation_id> --security-type <option_grant\|certificate\|piu> --out-dir "$OUT_DIR"` replaces both and computes `blockers` too |
-| **Phase 0.5** — blockers | none; the core's own gates are all there is | the bootstrap computes `blockers` server-side and they are binding — a `hard_stop` means **no surface** ([§1 Blockers](#blockers--what-the-bootstrap-worked-out-so-you-dont-have-to)) |
+| **Phase 0.5** — reference data | `issuance_init` with `stakeholder_names`, resolved server-side into its `stakeholders` section | `issuance_init` with **`include_bootstrap: true`** and **`issue_date`**, **plus** one `cap_table:get:stakeholders` for the full roster the panel's autocomplete needs — both issued in one turn, both written to files and passed by path ([§1](#1-config-panel-build_configpy-builds-every-block)). The roster becomes `STAKEHOLDER_LIST_JSON`, and is paged: [§1 Roster fetch](#roster-fetch--page-until-you-have-everyone) |
+| **Phase 0.5** — blockers | none; the core's own gates are all there is | `include_bootstrap` computes `blockers` server-side and they are binding — a `hard_stop` means **no surface** ([§1 Blockers](#blockers--what-the-server-worked-out-so-you-dont-have-to)) |
 | **Phase 0.5** — `collectConfig` | one `show_widget` form | the config panel — [§1](#1-config-panel-build_configpy-builds-every-block) |
 | **Phase 0.5** — cache hygiene | nothing to clear; the state is your context | `rm -f "$OUT_DIR/_draft_state.json"` **before building** ([§1](#1-config-panel-build_configpy-builds-every-block)). `OUT_DIR` is keyed only by `corporation_id` and persists, so a file left by an unrelated session on this corp reuses the same `r0`/`r1` keys and threads a stranger's `draft_pk` onto these rows |
 | **Phase 0.5** — on submit | read the form's `sendPrompt()` JSON | `cat "$OUT_DIR/<CORP_ID>_action_request.json"` — same shape, same [row mapping](row-mapping.md) |
@@ -72,9 +72,8 @@ round-trip. Full field-by-field mapping: [back-to-edit.md](back-to-edit.md).
 
 Render the config in the side panel — the Code adapter's `collectConfig`
 (artifact-flow §1): its submit watcher fires the moment the user clicks, with no extra step.
-You never hand-author panel HTML. One bootstrap call puts every fetched list into `OUT_DIR`
-as a file, you write a
-`knowns` object beside them, run `build_config.py` (it emits the toggle groups **and** the grantee rows with
+You never hand-author panel HTML. Two MCP reads give you everything; you write their results
+into `OUT_DIR` as three files, run `build_config.py` (it emits the toggle groups **and** the grantee rows with
 the exact `class`/`data-*`/`onclick` the template's JS reads), then assemble `SUB_FLAGS`
 and invoke render-panel per [artifact-flow §2](artifact-flow.md#2-render-the-side-panel).
 The full substitution list is in the [issuance-config sub-skill](../issuance-config/SKILL.md).
@@ -112,6 +111,8 @@ surface to show it: a grant meant to be pending records as approved. For approve
 key and set `board_approval_date`; for pending, send the literal `"pending"` and omit the
 date.
 
+**0) Prepare `OUT_DIR`.**
+
 ```bash
 OUT_DIR="$HOME/.carta/cache/issuance-config/<CORP_ID>"
 mkdir -p "$OUT_DIR"
@@ -123,26 +124,47 @@ cp "$REFS/SangBleuVersailles-Regular-WebS.ttf" "$OUT_DIR/" 2>/dev/null || true
 # corp would thread a stranger's draft_pk onto these rows under the same r0/r1
 # key (save-validate-flow.md § Draft-state bookkeeping).
 rm -f "$OUT_DIR/_draft_state.json"
+```
 
-# 1) ONE read call, ~3s, replacing the whole Phase 0.5 fan-out — but only on a CLI
-#    that HAS this subcommand: it is absent from released carta-web-cli through
-#    27.24.0, which fails with `Unknown command "issuance-bootstrap"`. Check
-#    `carta web download --help` first; when it is not listed, take the Fallback
-#    below. Pass --issue-date whenever the run knows it (see Blockers below). Read
-#    the printed SUMMARY and nothing else — the files are handed on by path.
-carta web download issuance-bootstrap \
-  --corporation-id <corporation_id> \
-  --security-type <option_grant|certificate|piu> \
-  --issue-date <YYYY-MM-DD> \
-  --out-dir "$OUT_DIR"
+**1) Both reads, in ONE turn.** `include_bootstrap: true` adds `blockers`, `blockers_summary`
+and `knowns_seed` to the reference payload; `issue_date` is what lets the grant-expiration
+check run at all ([Blockers](#blockers--what-the-server-worked-out-so-you-dont-have-to)). An
+unparseable `issue_date` is refused, not ignored — send `YYYY-MM-DD` or omit the key.
 
-# 2) _knowns.json = the seed plus what only you know. Read the seed FROM DISK.
+```
+mcp__carta__call_tool({"name": "cap_table__get__issuance_init", "arguments": {
+  "corporation_id": <corporation_id>, "security_type": "<option_grant|certificate|piu>",
+  "include_bootstrap": true, "issue_date": "<YYYY-MM-DD>"}})
+
+mcp__carta__call_tool({"name": "cap_table__get__stakeholders", "arguments": {
+  "corporation_id": <corporation_id>, "detail": "full", "page_size": 200, "page": 1}})
+```
+
+**2) Write the three files** — one heredoc, one pass. Both results exist only in your context,
+so this is the one place you transcribe them; everything downstream reads the files.
+
+```bash
 uv run python - <<'PYEOF'
 import json, pathlib
 d = pathlib.Path("<OUT_DIR>")   # substitute the literal path; env vars don't cross Bash calls
-seed = json.loads((d / "_knowns_seed.json").read_text())
+
+init   = { }   # the issuance_init result, verbatim
+roster = { }   # the stakeholders envelope, every page's `stakeholders` concatenated
+
+# The builder reads `share_classes`; the response section is `certificate_share_classes`.
+skip = ("certificate_share_classes", "blockers", "blockers_summary", "knowns_seed", "errors")
+data = {k: v for k, v in init.items() if k not in skip}
+if init.get("certificate_share_classes") is not None:
+    data["share_classes"] = init["certificate_share_classes"]
+(d / "_data.json").write_text(json.dumps(data))
+(d / "_roster.json").write_text(json.dumps(roster))
+
+seed = init["knowns_seed"]
+# Copy what the seed already answers; a null never reaches `knowns` (is_llc and
+# threshold_noun come back null on the flows that have no draft_set_init).
 knowns = {k: seed[k] for k in ("today_iso", "currency", "fmv_options", "fmv_source",
-                               "fmv_expired_on") if seed.get(k) is not None}
+                               "fmv_expired_on", "threshold_noun", "is_llc")
+          if seed.get(k) is not None}
 knowns.update({
     "jurisdiction": "UK",                             # YOUR decision — never seeded
     "common_share_class_name": "Ordinary",            # the chosen plan's
@@ -170,26 +192,27 @@ SUB_FLAGS+=(--substitute-file "STAKEHOLDER_ROWS=$OUT_DIR/_rows.html")
 SUB_FLAGS+=(--substitute-file "STAKEHOLDER_LIST_JSON=$OUT_DIR/_stakeholders.json")
 ```
 
-**The three files, and why you never open them:**
+**The three files you write from the two results:**
 
 | File | Holds | Goes to |
 |---|---|---|
-| `_data.json` | every reference section, `certificate_share_classes` already renamed to the `share_classes` key the builder reads | `build_config.py --data` |
-| `_roster.json` | the full roster as the raw envelope, already trimmed server-side to the five fields the builder keeps | `build_config.py --stakeholders` |
-| `_knowns_seed.json` | `today_iso`, `issue_date`, `currency` / `currency_candidates`, `fmv_options`, `fmv_source`, `fmv_expired_on`, `jurisdiction_evidence`, plus `blockers` and `blockers_summary` | seeds `_knowns.json` (step 2) |
+| `_data.json` | every reference section, `certificate_share_classes` renamed to the `share_classes` key the builder reads | `build_config.py --data` |
+| `_roster.json` | the stakeholders envelope as returned — `{"stakeholders": [...], "count": N, "total": N}`, no reshaping, no field-picking, no pretty-printing; the script reads either a `stakeholders` or a `results` key, keeps the five fields it needs (`full_name`, `email`, `id`, `kind`, `event_relationship`) and ignores the rest | `build_config.py --stakeholders` |
+| `_knowns.json` | the result's `knowns_seed` plus what only you know | `build_config.py --knowns` |
 
-Reading one back into context is the 129-second defect wearing a new hat. The printed summary
-already gives you the file sizes, the per-section counts, the roster count and every blocker.
+Write each one **once** and read nothing back: a file re-read into context is the 129-second
+defect wearing a new hat. A `stakeholders` key inside `_data.json` still works as a fallback
+for `--stakeholders`, and the same flag exists on `build_cowork_form.py`.
 
-**The seed already speaks the builder's vocabulary**, so its keys copy across unchanged. The
-one thing it deliberately does not carry is `jurisdiction`: it gives you
+**`knowns_seed` already speaks the builder's vocabulary**, so its keys copy across unchanged:
+`today_iso`, `issue_date`, `currency` / `currency_candidates`, `fmv_options`, `fmv_source`,
+`fmv_expired_on`. The one thing it deliberately does not carry is `jurisdiction`: it gives you
 `jurisdiction_evidence` instead, because that is a decision, not a value to copy.
 
-### Blockers — what the bootstrap worked out so you don't have to
+### Blockers — what the server worked out so you don't have to
 
-`_knowns_seed.json` carries `blockers` (a list of `{key, severity, message, evidence}`) and
-`blockers_summary` (`{total, hard_stop, needs_decision, informational}`). The printed summary
-marks each one `[STOP]` / `[DECIDE]` / `[INFO]`, so you can act without opening the file.
+`include_bootstrap: true` adds `blockers` (a list of `{key, severity, message, evidence}`) and
+`blockers_summary` (`{total, hard_stop, needs_decision, informational, keys}`) to the result.
 Branch on `key`, never on the message text. What each severity obliges you to do is in
 [engine.md § Blockers](engine.md#blockers--act-on-them-before-building-anything); the keys
 are:
@@ -198,7 +221,7 @@ are:
 |---|---|---|
 | `option_plan.none_selectable` | `hard_stop` | No plan this grant could issue from — every one expired, or none with shares available |
 | `grant_expiration.before_issue_date` | `hard_stop` | The plan-derived expiry lands before the issue date, so the server rejects the grant |
-| `grant_expiration.unchecked_no_issue_date` | `informational` | No `--issue-date` was passed, so the check above could not run; carries each plan's derived expiry instead |
+| `grant_expiration.unchecked_no_issue_date` | `informational` | No `issue_date` was passed, so the check above could not run; carries each plan's derived expiry instead |
 | `valuation.no_active_fmv` | `needs_decision` | No live valuation to price from |
 | `valuation.multiple_active_same_class` | `needs_decision` | An HMRC report's AMV and UMV are both live — the admin picks, the panel leaves the field empty |
 | `jurisdiction.unresolved_conflict` | `needs_decision` | Competing signals and **deliberately no verdict** |
@@ -211,70 +234,23 @@ and use their answer as `knowns.jurisdiction`. **Do not run the precedence ladde
 over it** — that ladder is for a run with no blocker to consult, and re-deriving a verdict
 here is the silent default this blocker exists to prevent.
 
-### The common case — an installed CLI without `issuance-bootstrap`
+### Roster fetch — page until you have everyone
 
-**This is the path a released CLI takes** (no `issuance-bootstrap` through 27.24.0), so treat
-the one-command recipe above as the optimisation and this as the default. Six read calls
-instead of one, and **no blockers at all**, so run [engine.md's live-plan
-check](engine.md#blockers--act-on-them-before-building-anything) by hand before building
-anything — and the account-level hard stops even earlier
-([engine.md Step 5](engine.md#step-5--run-the-account-level-hard-stops-first)).
+**Code adapter only.** `page_size: 200` is the ceiling. A larger page is **refused outright,
+not shortened**, so asking for 500 costs a round trip and returns nothing.
 
-**The roster call caps at 500 and the file cannot tell you it did.** `--size` maxes out at
-500 rows per page, and the `count` written into `_roster.json` is that **page's** count, not
-the corporation's total — a 2,400-person roster writes `count: 500` and looks complete.
-The only live warning goes to stderr, which the `>` redirect discards. So after the redirect,
-**read `has_next` out of the written file**; if it is `true`, walk `--page 2`, `--page 3` …
-and concatenate the `results` before building. Skipping that reads everyone past row 500 as
-a new person and issues them as **duplicate stakeholders on a live cap table**. The bootstrap
-path has none of this — it returns the whole roster in one file.
+**The response's `total` is the corporation; `stakeholders` is the page.** Count the rows you
+have gathered against `total` and fetch `page: 2`, `page: 3` … until they match, concatenating
+each page's `stakeholders` before you write `_roster.json`. Stopping at the first page reads everyone past row
+200 as a new person and issues them as **duplicate stakeholders on a live cap table**.
 
-```bash
-carta web list stakeholders           --corporation-id <corporation_id> --size 500 > "$OUT_DIR/_roster.json"
-carta web list vesting-templates      --corporation-id <corporation_id> > "$OUT_DIR/_vesting_templates.json"
-carta web list acceleration-templates --corporation-id <corporation_id> > "$OUT_DIR/_acceleration_templates.json"
-carta web list document-sets          --corporation-id <corporation_id> --security-type option_grant > "$OUT_DIR/_document_sets.json"
-#    …certificate and PIU take share classes and legends instead of document sets:
-carta web list share-classes          --corporation-id <corporation_id> --size 500 > "$OUT_DIR/_classes.json"
-carta web list legends                --corporation-id <corporation_id> > "$OUT_DIR/_legends.json"
-
-# Assemble _data.json FROM THOSE FILES — nothing is retyped. Same key rename:
-# the builder expects `share_classes`, the MCP section is `certificate_share_classes`.
-uv run python - <<'PYEOF'
-import json, pathlib
-d = pathlib.Path("<OUT_DIR>")
-load = lambda n: json.loads((d / n).read_text())
-data = {"vesting_templates": load("_vesting_templates.json"),
-        "acceleration_templates": load("_acceleration_templates.json"),
-        "document_sets": load("_document_sets.json")}          # option grant
-# certificate / PIU: {"share_classes": load("_classes.json"), "legends": load("_legends.json"),
-#                     "vesting_templates": …, "acceleration_templates": …}
-(d / "_data.json").write_text(json.dumps(data))
-PYEOF
-```
-
-Holding a section only in context — from an `issuance_init` payload rather than a file — is
-the one case where you write it out by hand. Do it **once**, into that section's own file,
-and let the assembly read it back.
-
-**`--stakeholders <path>` takes the raw envelope exactly as the producer wrote it** —
-`{"results": [...], "count": N, …}`, no reshaping, no field-picking, no pretty-printing. The
-script keeps the five fields it needs (`name`, `email`, `id`, `kind`, `event_relationship`)
-and ignores the rest. A `stakeholders` key inside `_data.json` still works as a fallback. The
-same flag exists on `build_cowork_form.py`.
-
-### Roster fetch for large corporations
-
-**Code adapter only.** The bootstrap returns most corps' rosters whole into `_roster.json`;
-the summary prints the row count, so you can tell without opening it. If a roster is still too
-large to come back in one call, take what came
-back and let Phase 1's per-miss lookup cover the rest — never loop one `search` call per
-name. **Exception: if the prompt named specific people and one of them has no
-case-insensitive match in what came back**, issue one supplemental `search` covering just
-the missing name(s) before building the panel, and merge the results into
-`STAKEHOLDER_LIST_JSON` — a roster page that happens to cut off before the very person the
-user typed defeats the panel's auto-populate (email/type/relationship) for exactly the
-people it matters most for. This is still one extra call, not one per grantee.
+**If a roster is too large to page through**, take what came back and let Phase 1's per-miss
+lookup cover the rest — never loop one `search` call per name. **Exception: if the prompt
+named specific people and one of them has no case-insensitive match in what came back**, issue
+one supplemental `search` covering just the missing name(s) before building the panel, and
+merge the results into `STAKEHOLDER_LIST_JSON` — a roster that happens to cut off before the
+very person the user typed defeats the panel's auto-populate (email/type/relationship) for
+exactly the people it matters most for. This is still one extra call, not one per grantee.
 
 ---
 

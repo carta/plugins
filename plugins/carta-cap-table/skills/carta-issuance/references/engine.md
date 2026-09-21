@@ -6,6 +6,12 @@ collection surface and the payload. A panel run reaches it only by falling back 
 submit the panel, the tool errored, or the user asked for another surface
 ([SKILL.md § Falling back](../SKILL.md#6-falling-back-off-this-path)).
 
+**Being here is not a degraded run.** The server hides the panel tool from a host that cannot
+render its view, so its absence is a decision, not a gap — and a user who asked for the form
+asked for what this path builds. It needs nothing this session lacks: never report it as
+unavailable, never offer to start a dev server, and never say it is blocked on a CLI, a tool
+or a connection.
+
 The transaction is identical on both; only the surface that collects and reviews it varies.
 
 - **The engine** is this file: resolve `security_type` → fetch reference data → assemble rows →
@@ -166,17 +172,17 @@ surface is already selected ([SKILL.md](../SKILL.md#pick-the-surface)), and that
 free. Steps 2–5 are the only round trips this preflight may spend: one `ToolSearch`, one
 connectivity check, one `list_accounts` (plus at most three disambiguation probes), and one
 `issuance_init` that doubles as the account-level hard stop. Phase 0.5 then spends **one** more on Cowork
-(`issuance_init`, which carries the stakeholder lookup with it) or **one** on Code (the
-bootstrap CLI call).
+(`issuance_init`, which carries the stakeholder lookup with it) or **two** on Code
+(`issuance_init` plus the roster).
 
 ### Step 1 — What the surface selection changes before your first Carta call
 
 | | Cowork | Code |
 |---|---|---|
-| Phase 0.5 producer | `cap_table:get:issuance_init`, with `stakeholder_names` for the people the prompt named; they come back as the payload's `stakeholders` section | the same `cap_table:get:issuance_init` call, plus one `cap_table:get:stakeholders` for the full roster the panel's autocomplete needs. Write both results to files and pass them by path — never retype one into a heredoc ([code-adapter.md §1](code-adapter.md#1-config-panel-build_configpy-builds-every-block)). A CLI that has `carta web download issuance-bootstrap` can do both in one call and compute `blockers` too; check with `carta web download --help` before using it, and fall back to the two commands when it is absent |
+| Phase 0.5 producer | `cap_table:get:issuance_init`, with `stakeholder_names` for the people the prompt named; they come back as the payload's `stakeholders` section | the same `cap_table:get:issuance_init` call with `include_bootstrap: true` and `issue_date`, plus one `cap_table:get:stakeholders` for the full roster the panel's autocomplete needs. Write both results to files and pass them by path ([code-adapter.md §1](code-adapter.md#1-config-panel-build_configpy-builds-every-block)) |
 | Phase 1 match set | that `stakeholders` section | the full roster (`STAKEHOLDER_LIST_JSON`). **There is no `stakeholders` section on this path** — matching against one finds nothing and every grantee is classified new |
-| Phase 0.5 fetch budget | 1 call | 1 call |
-| Blockers | none — the gates below are all there is | none from `issuance_init`; run the [hard stops](#step-5--run-the-account-level-hard-stops-first) yourself. Where the bootstrap CLI is present it computes `blockers` server-side and they are binding ([Blockers](#blockers--act-on-them-before-building-anything)) |
+| Phase 0.5 fetch budget | 1 call | 2 calls, plus one per extra roster page |
+| Blockers | none — the gates below are all there is | `include_bootstrap: true` computes them server-side and they are binding ([Blockers](#blockers--act-on-them-before-building-anything)) |
 
 Everything else the adapters differ on is a *surface* difference, not a call difference.
 **A Cowork run needs nothing further from either adapter file until it builds the surface.**
@@ -254,8 +260,7 @@ production) and `get_current_user`'s `environment` / `base_url` confirm it.
   say nothing.
 - **The request names or implies one** — a host, a Carta link, "local", "metal", "sandbox",
   "demo", "production" — **and it differs** → **hard stop before the first Carta call.**
-- **Two Carta surfaces are connected and they disagree**, or you are mixing `carta web …` with
-  MCP calls and cannot establish that both resolve to the same environment → **hard stop.**
+- **Two Carta surfaces are connected and they disagree** → **hard stop.**
 
 > *"Your Carta connection points at \<connected\>, and this request looks like it's about
 > \<intended\>. Corporation ids don't match across environments, so I'd be reading — and then
@@ -406,12 +411,10 @@ for the full roster the panel's autocomplete needs — issued together in one tu
 written to a file and passed by path
 ([code-adapter.md §1](code-adapter.md#1-config-panel-build_configpy-builds-every-block)).
 
-> **If this CLI has `carta web download issuance-bootstrap`**, it replaces both calls: it writes
-> every section, the full roster and a knowns seed to files and computes
-> [blockers](#blockers--act-on-them-before-building-anything) server-side. It is absent from
-> released `carta-web-cli` through 27.24.0, so **check `carta web download --help` first** and
-> use the two commands above when it is not listed. Never let a missing subcommand become a
-> hand-read of the reference data.
+> **On Code, pass `include_bootstrap: true` and `issue_date` to that `issuance_init` call.** It
+> adds [blockers](#blockers--act-on-them-before-building-anything), `blockers_summary` and a
+> `knowns_seed` to the same response, for no extra round trip. Cowork leaves it **off**: it
+> costs an extra corporation read server-side, and the gates below already cover that path.
 
 - **Stakeholder lookup — Cowork** — pass the people the prompt named as `stakeholder_names` on
   the **same** `issuance_init` call below. The server resolves them alongside the reference
@@ -420,7 +423,7 @@ written to a file and passed by path
   stakeholder fetch here. **If the prompt named nobody, pass no names at all**: there is nobody
   to resolve yet, and [Phase 1](#phase-1--resolve-each-row--reconcile-share-classes) resolves
   whatever names the user types into the form.
-  **On Code there is no name list to pass** — the bootstrap writes the full roster to a file
+  **On Code there is no name list to pass** — the separate roster call already covers everyone
   ([Step 1](#step-1--what-the-surface-selection-changes-before-your-first-carta-call)).
 
   > **Never put two people in one `search=`.** It AND-s its whitespace-separated terms, so it
@@ -525,10 +528,10 @@ is always emitted, so an empty list means clean — never read absence as "old s
 | `needs_decision` | Build the surface, but put the decision to the human. Never resolve it yourself, and never re-derive a verdict the blocker deliberately withheld |
 | `informational` | Note it in the one line you say alongside the surface. Do not block |
 
-**Pass the intended issue date to the producer whenever the run knows it.** Without it the
-grant-expiration check cannot run at all and downgrades to an `informational` entry carrying
-each plan's derived expiry — so a grant whose expiry lands before its issue date reaches the
-server and is rejected there instead.
+**Pass `issue_date` alongside `include_bootstrap` whenever the run knows the date.** Without it
+the grant-expiration check cannot run at all and downgrades to an `informational` entry
+carrying each plan's derived expiry — so a grant whose expiry lands before its issue date
+reaches the server and is rejected there instead. An unparseable date is refused, not ignored.
 
 **Option grants: no live plan is a `hard_stop`.** `equity_plan_id` is required on the first
 mutate, so a corporation with no plan this grant could issue from cannot issue at all — and
@@ -542,9 +545,9 @@ date so the admin knows what to fix:
 > option grant without a live plan — adopt a new one or extend that one in the Carta app, then
 > come back."*
 
-**Where no producer returns blockers** — the Cowork path, or the Code fallback when the CLI
-has no `issuance-bootstrap` — run that one check by hand before building: count the
-`option_plans` rows whose `is_expired` is **false**, and stop on zero with the same message.
+**On Cowork, which does not set `include_bootstrap`**, run that one check by hand before
+building: count the `option_plans` rows whose `is_expired` is **false**, and stop on zero with
+the same message.
 The expiry also caps `grant_expiration_date`
 ([option-grant-fields.md](option-grant-fields.md#option-grant-row)), so a plan that expired
 years ago produces an expiry before the issue date too.
@@ -626,11 +629,11 @@ surface built on partial context looks right and issues the wrong tax treatment.
 **Build the surface with its script, never by hand.** Write `_data.json` and `_knowns.json`
 and run the builder for the selected adapter.
 
-**A fetched result reaches the builder as a file whenever it can.** Retyping one into a
-heredoc is dead time with no tool call in it — one traced run spent 129 seconds on a roster.
-So: if it has a CLI producer, redirect it to disk and pass the path; if it arrived through MCP
-and exists only in your context, write it out **once** and derive anything else from that
-file. Never transcribe the same result twice.
+**A fetched result reaches the builder as a file, and is written out exactly once.** Every
+result arrives through MCP and exists only in your context, so one transcription is
+unavoidable — a second is dead time with no tool call in it, and one traced run spent 129
+seconds on a roster that way. Derive anything else from the file you already wrote, and never
+read one back.
 
 **On Code, clear the cache directory's `_draft_state.json` before you build.** `OUT_DIR` is
 keyed only by `corporation_id` and persists indefinitely, so a file left there by an unrelated
