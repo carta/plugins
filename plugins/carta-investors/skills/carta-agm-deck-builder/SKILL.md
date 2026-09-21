@@ -40,7 +40,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.32.3</carta-plugin>
+<carta-plugin>carta-investors:6.32.4</carta-plugin>
 
 # AGM Deck Builder
 

@@ -1063,6 +1063,12 @@
         tr.underlying-row:hover td,
         tr.underlying-row:hover td:first-child { background: var(--surface-underlay); }
 
+        /* A look-through company with more than one tranche/class renders as a
+           clickable summary row (like a company row one level up) plus its
+           per-class tranche rows, indented one step further. */
+        tr.underlying-company-row { cursor: pointer; }
+        tr.underlying-tranche-row td:first-child { padding-left: 88px; }
+
         .underlying-status {
             color: var(--text-subtle);
             text-align: left !important;
@@ -1095,8 +1101,11 @@
         /* Scaled-down Ink Tag (base/neutral variant: gray-10 bg, text-default,
            radius-subtle) — Ink's own spec is a fixed 28px tall, oversized for
            this table's 40px dense rows, so the box is shrunk while keeping the
-           same token-sourced colors and corner treatment. */
-        .underlying-source {
+           same token-sourced colors and corner treatment. Shows the underlying
+           holding's share class (asset_name) — the same company can appear as
+           several rows (separate tranches/classes), and without this tag they
+           were indistinguishable. */
+        .underlying-class {
             display: inline-flex;
             align-items: center;
             height: 20px;
@@ -1791,6 +1800,17 @@
         // collapsing whichever company the user had opened by hand.
         let expandedCompanies = new Set();
 
+        // Which underlying (look-through) companies are individually expanded to
+        // show their per-share-class tranche rows, keyed by
+        // `${underlyingKey}::${underlying_issuer_name}::${currency_code}` — name
+        // and currency together, never a positional index, so a re-sort that
+        // shifts group order can't toggle the wrong company's expand state.
+        // The app's own SOI groups every company's positions under one row instead
+        // of listing each share class as its own top-level line — this mirrors that
+        // for look-through holdings, where the same underlying company can show up
+        // via more than one tranche/class.
+        let expandedUnderlyingGroups = new Set();
+
         // ── Global (cross-fund) search state ──
         let globalSearchDebounce = null;
         let globalSearchTerm = '';
@@ -2360,20 +2380,42 @@
                 return frag;
             }
 
+            // One row per look-through position looked identical-to-flat when the
+            // same underlying company shows up via more than one tranche/share
+            // class — the app's own SOI groups those under one company row
+            // instead of listing each class as its own top-level line. Group here
+            // the same way, preserving first-seen order (the query already sorts
+            // by REMAINING_VALUE DESC). Grouped by (name, currency), not name
+            // alone — a company held via tranches in different currencies must
+            // never have its cost/value/G-L summed together into one currency's
+            // display (CLAUDE.md: never sum across currencies).
+            const groups = [];
+            const groupsById = new Map();
             cached.forEach(u => {
+                const name = u.underlying_issuer_name;
+                const groupId = `${name}::${u.currency_code}`;
+                let g = groupsById.get(groupId);
+                if (!g) { g = { name, currency: u.currency_code, rows: [] }; groupsById.set(groupId, g); groups.push(g); }
+                g.rows.push(u);
+            });
+
+            const buildRow = (u, extraClass) => {
                 const tr = document.createElement('tr');
-                tr.className = `underlying-row underlying-group-${key} ${groupClass}${visibleClass}`;
+                tr.className = `underlying-row underlying-group-${key} ${groupClass}${visibleClass}${extraClass ? ' ' + extraClass : ''}`;
                 const pct = u.ownership_fraction != null ? u.ownership_fraction * 100 : null;
                 const pctTip = pct != null
                     ? `${STATE.firm_name}'s look-through share of ${u.underlying_fund_name || parentIssuerName}: ${pct.toFixed(2)}%`
                     : 'Ownership share unavailable — figures shown unprorated';
-                const sourceLabel = u.source === 'LPPA' ? 'self-reported' : 'Carta-administered';
+                // The same underlying company can hold several tranches/classes
+                // (e.g. a SAFE plus a later preferred round) — without a class tag
+                // those rows are identical-looking and impossible to tell apart.
+                const classTag = u.asset_name ? `<span class="underlying-class">${escHtml(u.asset_name)}</span>` : '';
                 const shares = u.count_remaining_shares || 0;
                 const cost = u.cost_basis || 0;
                 const cps = shares > 0 ? cost / shares : null;
                 const heldByCell = showHeldBy ? '<td>—</td>' : '';
                 tr.innerHTML = `
-                    <td><span class="underlying-name tooltip-trigger" data-tooltip="${escHtml(pctTip)}">${escHtml(u.underlying_issuer_name)}</span><span class="underlying-source">${sourceLabel}</span></td>
+                    <td><span class="underlying-name tooltip-trigger" data-tooltip="${escHtml(pctTip)}">${escHtml(u.underlying_issuer_name)}</span>${classTag}</td>
                     ${heldByCell}
                     <td class="number">—</td>
                     <td class="number">${fmtShares(u.count_remaining_shares)}</td>
@@ -2384,9 +2426,62 @@
                     <td class="number">${fmtDec(cps, u.currency_code)}</td>
                     <td class="number">${fmtDec(u.remaining_value_per_share, u.currency_code)}</td>
                 `;
-                frag.appendChild(tr);
+                return tr;
+            };
+
+            groups.forEach(g => {
+                if (g.rows.length === 1) {
+                    frag.appendChild(buildRow(g.rows[0]));
+                    return;
+                }
+
+                // Multiple tranches/classes in the same underlying company — a
+                // clickable summary row (aggregated cost/value/G-L, like the outer
+                // table's company row) plus its per-class tranche rows underneath.
+                // Keyed by company name + currency (not a positional index) so a
+                // re-sort that shifts group order doesn't toggle the wrong
+                // company's expand state.
+                const groupKey = `${key}::${g.name}::${g.currency}`;
+                const isGroupExpanded = expandedUnderlyingGroups.has(groupKey);
+                const cost = g.rows.reduce((s, u) => s + (u.cost_basis || 0), 0);
+                const fmv = g.rows.reduce((s, u) => s + (u.fmv || 0), 0);
+                const gl = g.rows.reduce((s, u) => s + (u.unrealized_gain_loss || 0), 0);
+                const currency = g.currency;
+                const pct = g.rows[0].ownership_fraction != null ? g.rows[0].ownership_fraction * 100 : null;
+                const pctTip = pct != null
+                    ? `${STATE.firm_name}'s look-through share of ${g.rows[0].underlying_fund_name || parentIssuerName}: ${pct.toFixed(2)}%`
+                    : 'Ownership share unavailable — figures shown unprorated';
+                const heldByCell = showHeldBy ? '<td>—</td>' : '';
+                const summaryTr = document.createElement('tr');
+                summaryTr.className = `underlying-row underlying-group-${key} ${groupClass}${visibleClass} underlying-company-row`;
+                summaryTr.onclick = () => toggleUnderlyingGroup(groupKey);
+                summaryTr.innerHTML = `
+                    <td><span class="expand-icon underlying-toggle">${inkIcon(isGroupExpanded ? 'down' : 'forward', 9)}</span><span class="underlying-name tooltip-trigger" data-tooltip="${escHtml(pctTip)}">${escHtml(g.name)}</span><span class="tranche-note">(${g.rows.length} positions)</span></td>
+                    ${heldByCell}
+                    <td class="number">—</td>
+                    <td class="number">—</td>
+                    <td class="number">${fmt(cost, currency)}</td>
+                    <td class="number">${fmt(fmv, currency)}</td>
+                    <td class="number">—</td>
+                    <td class="number">${glCell(gl, currency)}</td>
+                    <td class="number">—</td>
+                    <td class="number">—</td>
+                `;
+                frag.appendChild(summaryTr);
+
+                if (isGroupExpanded) {
+                    g.rows.forEach(u => frag.appendChild(buildRow(u, 'underlying-tranche-row')));
+                }
             });
             return frag;
+        }
+
+        // Expand/collapse one look-through company's tranche/share-class rows
+        // (only shown when that company has more than one position).
+        function toggleUnderlyingGroup(groupKey) {
+            if (expandedUnderlyingGroups.has(groupKey)) expandedUnderlyingGroups.delete(groupKey);
+            else expandedUnderlyingGroups.add(groupKey);
+            render();
         }
 
         // Expand/collapse one FUND_INVESTMENT asset's underlying holdings, fetching
@@ -3401,6 +3496,7 @@
             allExpanded = false;
             expandedUnderlying = new Set();
             expandedCompanies = new Set();
+            expandedUnderlyingGroups = new Set();
             clearTimeout(globalSearchDebounce);
             globalSearchTerm = '';
             globalSearchResults = null;
@@ -3570,6 +3666,7 @@
             allExpanded = false;
             expandedUnderlying = new Set();
             expandedCompanies = new Set();
+            expandedUnderlyingGroups = new Set();
             clearTimeout(globalSearchDebounce);
             globalSearchTerm = '';
             globalSearchResults = null;
