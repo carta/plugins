@@ -451,7 +451,13 @@ matching on a prefix would silently resolve half a line.
 (Employer) + Workers Comp" is two Carta accounts wearing one label;
 offering only the first is the case that looks resolved and is not.
 `suggestions` carries the `component` each candidate answers, so the
-question can show which half it covers and accept both.
+question can show which half it covers.
+
+**Ask this one as a checkbox, not a single pick.** Set `multiSelect: true`
+on the `AskUserQuestion` and list every component's candidates as options
+— the operator checks one (or more, if a component itself is ambiguous)
+per component in the same action, rather than the question forcing an
+either/or choice on a line that genuinely means both.
 
 **Offer the firm's own Carta values**, filtered to what the line needs:
 
