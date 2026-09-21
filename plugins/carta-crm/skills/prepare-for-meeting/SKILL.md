@@ -29,7 +29,7 @@ model: inherit
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.14.0</carta-plugin>
+<carta-plugin>carta-crm:1.14.1</carta-plugin>
 
 ## Overview
 
@@ -360,8 +360,7 @@ blocks are the same in all four.
 - `companyProfile` from `get_adviser_profile` for what the business actually does. It is
   the tenant's own record and Wave 1 already has it. Fall back to `crm:preview_company`
   or `crm:find_company` only when that field and `externalProfile` are both empty.
-- `crm:get_company_angles` for warm paths in. Its argument is `domain`, not `companyDomain` —
-  the wrong name is rejected outright and costs a whole round trip.
+- `crm:get_company_angles` for warm paths in. Its argument is `domain`.
 - Scenario block: round, stage and maturity signals, with the last note's substance.
 
 **Other** — no scenario block. The three context paragraphs, the people, and any deals.
