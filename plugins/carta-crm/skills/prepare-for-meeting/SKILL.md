@@ -1,8 +1,10 @@
 ---
 name: prepare-for-meeting
 description: >
-  Builds a one-page tear sheet for the next upcoming meeting with a counterparty, from CRM
-  data only. Use this skill when the user says things like "prepare me for my meeting",
+  Builds a one-page tear sheet for the next upcoming meeting with a counterparty. Every
+  fact about the people, the firm and the deals comes from the CRM. The one exception is a
+  single line about the venue, written only when the invite names a place. Use this skill
+  when the user says things like "prepare me for my meeting",
   "meeting brief", "brief me for this meeting", "prep for upcoming meeting", "what do I
   need to know before my call with [company]", or "/prepare-for-meeting". Compiles the
   invitees and their interaction history, the organization's notes and relationship
@@ -13,6 +15,9 @@ allowed-tools:
   # runtime and has no name to resolve. The call renders a connector card with a
   # Reconnect button per connector, which is a visible cost for nothing.
   - mcp__carta__crm_call_tool
+  # WebSearch has one use: the venue line in Step 4b, after the meeting is already
+  # resolved. It never resolves a meeting, a company or a person. The CRM does that.
+  - WebSearch
   - Artifact
   - AskUserQuestion
   - Bash(cp "${CLAUDE_PLUGIN_ROOT}/skills/prepare-for-meeting/assets/brief-template.html" *)
@@ -24,7 +29,7 @@ model: inherit
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.13.1</carta-plugin>
+<carta-plugin>carta-crm:1.14.0</carta-plugin>
 
 ## Overview
 
@@ -127,6 +132,7 @@ missing, again in parallel:
   counterparty does
 - `crm:list_interactions_by_domain` when `recentInteractions.count` is larger than the
   number of items the profile returned
+- one `WebSearch` for the venue (Step 4b), and only when the event carries a `location`
 
 Never serialise these. Two waves is the target; more than three means something is being
 fetched that the brief cannot show.
@@ -173,9 +179,15 @@ it expands domain aliases for the org, filters out private email providers, and 
 ID lookup. Keep the same call's `interactions[]` — that is the past-meeting history for
 Step 3, so you don't need a second request for it.
 
-Each interaction is `{title, type, date, sender, participants[{email, name, domain}]}`.
-`sender` is the organizer. There is no end time, meeting type, or RSVP status in this
-payload — omit those fields rather than guessing at them.
+Each interaction is `{title, type, date, sender, participants[{email, name, domain}]}`,
+plus `location` when the invite named one. `sender` is the organizer. There is no end
+time, meeting type, or RSVP status in this payload — omit those fields rather than
+guessing at them.
+
+`location` is the invite's own text, so it is whatever the organizer typed: a full street
+address, a restaurant name, a room name, or a video link. The key is absent when the
+invite named no place, and an absent key is the one honest signal that there is no venue
+to write about. Step 4b is the only place it is used.
 
 If a Google Calendar or Microsoft 365 connector happens to be available in this session
 and the user named no counterparty, read the next event from it and use its external
@@ -190,7 +202,8 @@ meeting, stop and tell the user plainly that the CRM shows no upcoming meeting w
 that counterparty. Do not: re-run the same lookup with a reworded query, switch to a
 different entity tool hoping for a hit, widen to a bare company-name search, or reach
 for `WebSearch`. Each of those looks like a fresh attempt and will burn the cap without
-adding information.
+adding information. `WebSearch` answers one question in this skill, the venue in Step 4b.
+The web cannot say whether the CRM holds a meeting.
 
 **Sanity-check the date.** State the meeting date in the brief. If it is more than about
 two weeks out, add a single line noting so — it usually means the wrong counterparty
@@ -344,7 +357,9 @@ blocks are the same in all four.
 
 **Founder** — who the company is and how far along it is.
 
-- `crm:preview_company` or `crm:find_company` for what the business actually does.
+- `companyProfile` from `get_adviser_profile` for what the business actually does. It is
+  the tenant's own record and Wave 1 already has it. Fall back to `crm:preview_company`
+  or `crm:find_company` only when that field and `externalProfile` are both empty.
 - `crm:get_company_angles` for warm paths in. Its argument is `domain`, not `companyDomain` —
   the wrong name is rejected outright and costs a whole round trip.
 - Scenario block: round, stage and maturity signals, with the last note's substance.
@@ -367,6 +382,32 @@ write a line saying the CRM lacks it.
 
 No `## Meeting prep` section, or no content at all, is the normal case. Say nothing and
 use the playbook as written.
+
+### Step 4b — The venue, when the invite names one
+
+A reader who knows the place walks in better prepared. This is the one line on the page
+that does not come from the CRM, so it is fenced tightly.
+
+**The gate is the event's `location` field.** Read it from the meeting you resolved in
+Step 1: `futureInteractions[0].location`, or `nextScheduledInteraction.location` on
+`get_adviser_profile`. **No `location` key means no venue line.** Delete
+`SECTION: venue` and say nothing about it, in the brief or in the chat. Never infer a
+place from a company's address, a contact's city, or the meeting title.
+
+**A video link is not a venue.** A `location` that is a Zoom, Meet, Teams or Webex URL,
+or any bare URL, names no place to walk into. Treat it exactly like an absent field:
+delete the section. The reader already has the link in their own calendar.
+
+**One `WebSearch`, one line.** Search the place as it is written, with the city when the
+`location` carries one. Write a single sentence: what the place is, and the one thing
+worth knowing before walking in, such as the kind of food, the dress code, or how long a
+table usually takes. Stop at one search. A second search is a research project, and the
+reader has two minutes.
+
+**Say nothing you did not find.** An address that returns nothing recognisable gets no
+line. A room name in your own building gets no line. Half a fact is worse than silence
+here, because every other line on the page is CRM truth and this one rides on that trust.
+The label on the block says the line is not CRM data, so keep it.
 
 ## Step 5 — Build the document
 
@@ -424,6 +465,7 @@ Hard constraints on the document:
   | Section | Max |
   |---|---|
   | Context — paragraphs | 3, each ~45 words |
+  | Venue — lines | 1, ~25 words |
   | Scenario — rows | 4 |
   | People — external attendees | 4 |
   | People — internal attendees | 3 |
@@ -444,6 +486,11 @@ Hard constraints on the document:
   - **No severity labels anywhere.** No `High`, `Watch`, `Note` or `Strength` prefixes, and
     no badge substitutes such as `Risk:` or `FYI:`. If something matters, the sentence says
     why it matters. A label is what the reader has to decode instead of reading.
+  - **The venue line is one sentence, and only with a `location` on the event.** Keep its
+    label, which marks it as the one line on the page that is not CRM data. It sits
+    outside the 3-to-5 item budget: it is colour around the meeting, so it neither counts
+    towards that budget nor excuses a thin brief. Delete `SECTION: venue` when the invite
+    named no place, when it named only a video link, and when the search found nothing.
   - **The scenario block is the playbook's own facts**, at most 4 rows, each a figure or a
     short phrase with its label. Fees paid, commitment and closing status, round and stage.
     Delete the whole section for the Other playbook, or whenever the calls came back empty.

@@ -32,6 +32,13 @@
   label prefixes ("Risk:", "FYI:") — the sentence says why it matters.
   Delete the whole [[ SECTION: context ]] block only if all three are empty.
 
+  VENUE (SECTION: venue)
+  One line about the place, and only when the invite named a physical one. The event's
+  `location` field carries it. A video link (Zoom, Meet, Teams, Webex) names no place, so
+  delete the block for it. Everything in this line comes from the web and not from the CRM,
+  which is why the label says so.
+  Delete the whole [[ SECTION: venue ]] block whenever the invite named no place.
+
   SCENARIO (SECTION: scenario)
   The playbook's own facts, max 4 rows, each a scenario-label plus a scenario-value.
   - Adviser:  fees paid to date, the mandates behind them, any live process
@@ -179,6 +186,26 @@ body {
 }
 
 .context p + p { margin-top: 10px; }
+
+/* ---------- Venue line ---------- */
+/* Subtle, at the body size: the venue is colour around the meeting, so it must not compete
+   with the context paragraphs a step above it. */
+.venue {
+    font-size: 11px;
+    line-height: 16px;
+    color: var(--text-subtle);
+    margin: 0 0 16px;
+}
+
+.venue-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    font-weight: 500;
+    color: var(--text-subtle);
+    margin-right: 8px;
+}
 
 /* ---------- Scenario strip ---------- */
 /* A full-width strip rather than a third column: the bottom grid's right track is 240px
@@ -398,7 +425,7 @@ body {
     .bottom-grid { grid-template-columns: 1fr 200px; gap: 0 20px; }
     .deals { padding-left: 16px; }
     a { color: var(--text-default); text-decoration: none; }
-    .context p, .scenario-item, .person, .deal-card { break-inside: avoid; }
+    .context p, .venue, .scenario-item, .person, .deal-card { break-inside: avoid; }
     * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
 
@@ -443,6 +470,14 @@ body {
             <p class="context-firm">Their firm: what it is, what it does, and how it makes its money.</p>
         </div>
         <!-- /SECTION: context -->
+
+        <!-- SECTION: venue -->
+        <!-- FILL: one line about the place the invite named, from the web. Name the venue,
+             then the one thing worth knowing before walking in. Keep the "Not CRM data"
+             label. Delete this whole block when the invite named no physical place, or
+             named only a video link. -->
+        <p class="venue"><span class="venue-label">Venue &middot; not CRM data</span>The place the invite names, and the one thing worth knowing about it.</p>
+        <!-- /SECTION: venue -->
 
         <!-- SECTION: scenario -->
         <div class="scenario">
