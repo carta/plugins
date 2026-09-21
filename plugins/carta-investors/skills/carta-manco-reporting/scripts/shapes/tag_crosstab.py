@@ -161,6 +161,9 @@ def parse(workbook_path: str | Path, sheet_name: str, **_) -> dict:
                 key_of[n] for n in calc.pop("constituent_rows") if n in key_of
             ]
             row["calculated"] = calc
+        if r.get("source_formula"):
+            row["source_formula"] = r["source_formula"]
+            row["row_ix"] = r["row_ix"]
         rows.append(row)
 
     return {
@@ -268,6 +271,13 @@ def _scan_rows(ws, wsf, dept_blocks, first_data_row: int, gl_col: int = 1) -> li
         if kind == "section_header":
             section = label.strip()
 
+        # Raw formula only; build_manco_datadir.py resolves it once every
+        # sibling row's own GL identity has settled, not before.
+        source_formula = (
+            _formula_for_row(wsf, row_ix, dept_blocks)
+            if kind == "line" and not gl_codes else None
+        )
+
         # Whether a figure beating its budget is good news. Spending over
         # plan is bad; earning over plan is good, and colouring both the
         # same way reports a revenue shortfall as favourable. Read from the
@@ -290,6 +300,7 @@ def _scan_rows(ws, wsf, dept_blocks, first_data_row: int, gl_col: int = 1) -> li
             "calculated": calculated,
             "row_kind": kind,
             "has_value": has_value,
+            "source_formula": source_formula,
         })
     return out
 
@@ -366,6 +377,16 @@ def _calculated_for(wsf, row_ix, dept_blocks) -> dict | None:
         # operators are preserved for the UI to render literally.
         calc["expression"] = _operator_form(sample)
     return calc
+
+
+def _formula_for_row(wsf, row_ix, dept_blocks):
+    """This row's own value formula — the first department column that
+    holds one, same selection rule `_calculated_for` uses."""
+    for _dept, cols in dept_blocks.items():
+        f = wsf.cell(row_ix, cols["budget"]).value
+        if isinstance(f, str) and f.startswith("="):
+            return f
+    return None
 
 
 def _formula_rows(formula: str) -> list[int]:

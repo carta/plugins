@@ -78,6 +78,20 @@ the same single `AskUserQuestion` below is where the operator confirms or
 overrules it, exactly like a mechanically-proposed row — you are adding
 candidates to that gate, never recording an answer ahead of it.
 
+**An entry carrying `source_formula` has already had its formula checked
+mechanically — read it yourself before falling back to the label.** The
+workbook's own Actual/Budget formula for a bucket line is stronger evidence
+than its wording: a `SUM` over other rows, or a reference into another
+sheet, names the real account(s) the line pulls from, where the label
+alone is just a category name a person chose. A single GL code the build
+resolved this way is already promoted to **Current mapping**, tagged "read
+off your workbook's own formula" — nothing further to do. An entry that
+still carries `source_formula` here is one the mechanical pass couldn't
+resolve on its own (a lookup table, a chain of references, criteria this
+pass doesn't evaluate); read that formula the same way you'd read any
+other close call, and set `proposed` yourself when tracing it settles the
+question.
+
 Two things stay out of this, both already ruled out above and repeated
 here because this is exactly where they'd creep back in:
 
@@ -168,9 +182,11 @@ When **Current mapping** has at least one row, ask with a single
 `AskUserQuestion`:
 
 > **Confirm the `<N>` mappings above?**
-> Matched by name against your Carta chart of accounts — some read
-> straight off an exact name, some are my own best read of what a line
-> means; either way, tell me if anything should change.
+> Matched against your Carta chart of accounts — some read straight off an
+> exact name, some off your workbook's own formulas, some are my own best
+> read of what a line means; either way, tell me if anything should
+> change. None of this is final — say so any time, this run or a later
+> one, and I'll update it and rebuild.
 
 Options: **"Yes, confirm all"** — records every entry in Current mapping
 as-is, one `record_budget_mapping()` call. **"No — a few need
@@ -184,17 +200,27 @@ confirm.** Ask for these via `AskUserQuestion`, in the same turn — never as
 chat prose you write and move past, and never by picking the nearest option
 yourself to avoid the round trip; that is exactly the call the automatic
 match already refused to make. One question per row, each carrying that
-row's own `options` (plus "void" and "leave it" alongside them); a single
-call carries up to four questions, so batch further when there are more
-than four rows. When Current mapping is empty (every entry needs input),
-skip the mapping-confirmation `AskUserQuestion` above and go straight to
-this one.
+row's own `options` (plus "void" and "leave it" alongside them, and "read
+the formulas" too whenever the row carries a `source_formula` the
+mechanical pass couldn't resolve); a single call carries up to four
+questions, so batch further when there are more than four rows. When
+Current mapping is empty (every entry needs input), skip the
+mapping-confirmation `AskUserQuestion` above and go straight to this one.
 
-**A line that matches no Carta account has three answers, not two.** Say
-them, because two of the three are easy to miss:
+**A line that matches no Carta account has three answers, not two — four
+when it also carries a `source_formula`.** Say them, because most of these
+are easy to miss:
 
 - **It is one of these accounts** — the row's `options` carry the near
   names, and picking one records `gl_codes`.
+- **Read the formulas from the workbook to figure this out** — offered
+  whenever the row carries `source_formula`: open the workbook with
+  formulas intact, read what that line's own formula sums, filters, or
+  references, and answer from that rather than from the label. This is
+  judgment applied to one row, not a second automated pass — record the
+  result the same way any other answer to this row is recorded, and note
+  in `notes` that it came from the formula so a later table view still
+  shows an honest reason.
 - **It is not in Carta** — the firm budgets for something their ledger has
   no account for. Record `status: "void"`: the line renders budget-only,
   it stops being asked about, and the Step 5 read-out counts it among the

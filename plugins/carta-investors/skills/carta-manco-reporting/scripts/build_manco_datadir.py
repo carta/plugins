@@ -42,6 +42,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from shapes import canonical as canonical_budget
+from shapes import formula_infer
 
 MONTH_LABELS_FULL_YEAR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul",
                           "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -2439,6 +2440,82 @@ def resolve_near_scopes(rows, census, account_names=None):
     return claims, applied, flagged
 
 
+def _formula_row_index(excel_budgets):
+    """`{(sheet_name, row_ix): row}` across every parsed budget for this
+    firm, so a formula on one sheet can resolve against another's rows."""
+    index = {}
+    for b in excel_budgets:
+        sheet = (b.get("workbook_meta") or {}).get("sheet")
+        if not sheet:
+            continue
+        for r in b.get("rows") or []:
+            if r.get("row_ix") is not None:
+                index[(sheet, r["row_ix"])] = r
+    return index
+
+
+def _index_row_gl_codes(index, sheet_name):
+    return lambda row_ix: (index.get((sheet_name, row_ix)) or {}).get("gl_codes") or []
+
+
+def resolve_formula_gl_evidence(excel_budgets, known_gl_codes=None):
+    """Fill in `formula_gl_codes` for a row whose formula sums other rows'
+    GL identity, or whose `SUMIF`/`SUMIFS` names a literal GL code.
+
+    Run after autolink/native-code/mapping-file resolution — a referenced
+    row's `gl_codes` is only as complete as whatever ran ahead of this.
+    No `cell_value` hook: this reads parsed JSON, not the live workbook.
+    """
+    index = _formula_row_index(excel_budgets)
+    for b in excel_budgets:
+        sheet = (b.get("workbook_meta") or {}).get("sheet")
+        for row in b.get("rows") or []:
+            if row.get("gl_codes") or not row.get("source_formula"):
+                continue
+            formula = row["source_formula"]
+            other_sheet = formula_infer.referenced_sheet(formula)
+            other_lookup = None
+            if other_sheet and other_sheet != "__ambiguous__":
+                other_lookup = _index_row_gl_codes(index, other_sheet)
+            result = formula_infer.infer_gl_codes(
+                formula,
+                row_gl_codes=_index_row_gl_codes(index, sheet),
+                other_sheet_row_gl_codes=({other_sheet: other_lookup} if other_lookup else None),
+                known_gl_codes=known_gl_codes,
+            )
+            if result["resolved"]:
+                row["formula_gl_codes"] = result["resolved"]
+
+
+def _formula_gl_suggestions(row, account_names):
+    """Formula-derived GL candidates for a line with no GL code of its own.
+
+    Filtered to codes Carta actually has — a formula resolving to a code
+    outside the roster is not a real account to propose.
+    """
+    codes = [c for c in (row.get("formula_gl_codes") or []) if c in account_names]
+    return [{"gl": c, "name": account_names.get(c),
+             "why": "read off your workbook's own formula", "component": None}
+            for c in codes]
+
+
+def _merge_formula_and_name_suggestions(formula_accounts, name_accounts):
+    """Formula evidence outranks a name match, but disagreement between the
+    two is surfaced, never silently resolved either way — see
+    `mapping_table()`'s single-suggestion rule for what "returned alone"
+    (one candidate list) buys a row versus every candidate kept.
+    """
+    if len(formula_accounts) == 1:
+        only = formula_accounts[0]
+        agrees = not name_accounts or (
+            len(name_accounts) == 1 and name_accounts[0].get("gl") == only.get("gl")
+        )
+        if agrees:
+            return formula_accounts
+    seen = {a.get("gl") for a in formula_accounts}
+    return formula_accounts + [a for a in name_accounts if a.get("gl") not in seen]
+
+
 def unresolved_budget_rows(rows, mapping_records=None, account_names=None,
                            fund_names=None):
     """Budget lines that will render with no actuals, and what each needs.
@@ -2469,7 +2546,11 @@ def unresolved_budget_rows(rows, mapping_records=None, account_names=None,
                                        account_names or {},
                                        section=row.get("section"))
         if needs == "gl_account":
-            entry["suggestions"] = accounts
+            formula_accounts = _formula_gl_suggestions(row, account_names or {})
+            entry["suggestions"] = _merge_formula_and_name_suggestions(formula_accounts, accounts)
+            # Feeds the "read the formulas" option in budget-unresolved.md.
+            if row.get("source_formula") and not formula_accounts:
+                entry["source_formula"] = row["source_formula"]
         else:
             entry["suggestions"] = suggest_funds(row.get("label"), fund_names)
             # Not every income line is a fund's — a firm earns interest too.
@@ -4055,6 +4136,10 @@ def build(args):
         print(f"note: {_scope_flagged} line(s) name a value that could not be "
               f"matched; their actuals are withheld pending an answer.",
               file=sys.stderr)
+
+    # After every other resolution pass, so a bucket line's formula reads
+    # its referenced rows' most complete GL identity, not their parse-time one.
+    resolve_formula_gl_evidence(excel_budgets, known_gl_codes=_carta_account_names.keys())
 
     # Asked only about what nothing above could resolve — a gate that
     # repeats a question already answered teaches the operator to skim it.

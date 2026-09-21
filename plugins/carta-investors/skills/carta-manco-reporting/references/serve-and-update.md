@@ -330,7 +330,12 @@ After the orientation line, ask a single `AskUserQuestion`:
 - **Resolve the lines that found no actuals** → the fallback for lines
   left unanswered at Step 4.7, or ones a later re-parse introduced. Offer
   it whenever the build printed a mapping-decision count, and lead with
-  the one table Step 4.7 describes rather than a question per line
+  the one table Step 4.7 describes rather than a question per line. A row
+  already confirmed doesn't resurface here on its own — it isn't
+  unresolved — but the operator can still name one directly ("row 3 should
+  be the fee account instead") through the free-text option below; record
+  the new answer in `budget-mapping.json` the same way Step 4.7 would and
+  rebuild
 
 Anything else the operator types goes through `AskUserQuestion`'s free-text
 option — treat it as a request and route it to the matching step.

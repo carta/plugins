@@ -197,6 +197,21 @@ def _formula_sum_start_row(wsf, row_ix, layout):
     return None
 
 
+def _formula_for_row(wsf, layout, row_ix):
+    """This row's own value formula, or None for a hard-coded figure.
+
+    The total column when the sheet has one, else the first period column
+    holding one — build_manco_datadir.py resolves it later, once every
+    sibling row's own GL identity has settled.
+    """
+    cols = [layout["total_col"]] if layout.get("total_col") else list(layout["period_cols"])
+    for col in cols:
+        f = wsf.cell(row_ix, col).value
+        if isinstance(f, str) and f.startswith("="):
+            return f
+    return None
+
+
 def _looks_like_aggregate(wsf, row_ix, text, layout):
     """Whether a value row is positively an aggregate, independent of
     indentation: its wording says "Total", or its own formula sums rows
@@ -588,6 +603,11 @@ def parse(workbook_path, sheet_name, mapping_records=None,
                 row.pop("key", None)
             else:
                 pending_section.append(key)
+                if not gls:
+                    formula = _formula_for_row(wsf, layout, row_ix)
+                    if formula:
+                        row["source_formula"] = formula
+                        row["row_ix"] = row_ix
             rows.append(row)
             if is_net_income and stop_label is None:
                 # The budget ends at its own bottom line. Anything below is
@@ -621,6 +641,11 @@ def parse(workbook_path, sheet_name, mapping_records=None,
             row["gl_codes"] = gls
             if mapped_sub:
                 row["sub_account"] = mapped_sub
+        else:
+            formula = _formula_for_row(wsf, layout, row_ix)
+            if formula:
+                row["source_formula"] = formula
+                row["row_ix"] = row_ix
         rows.append(row)
 
         pending_subtotal.append(key)
