@@ -1,12 +1,12 @@
 ---
-name: financials-upload
-description: Upload a portfolio company's financial document (or pasted figures) to Carta for extraction. Deterministic entry into the carta-financials skill's upload route.
+name: portco-financials-and-kpis-upload
+description: Upload a portfolio company's financial document (or pasted figures) to Carta for extraction. Deterministic entry into the carta-portco-financials-and-kpis skill's upload route.
 argument-hint: "<file path>[, <file path>...]  [corporation-id=<corporation_id>]  [org-id=<org_pk>]"
 ---
 
-# /carta-investors:financials-upload
+# /carta-investors:portco-financials-and-kpis-upload
 
-Invoke `Skill(carta-investors:carta-financials)` with the arguments `upload $ARGUMENTS`.
+Invoke `Skill(carta-investors:carta-portco-financials-and-kpis)` with the arguments `upload $ARGUMENTS`.
 
 The first word, `upload`, is the route. Everything after it is what the skill's `file-path`,
 `corporation-id` and `org-id` arguments accept: one or more absolute paths (all for the
