@@ -211,10 +211,18 @@ One column, one row per entry. The build joins it to the expense lines on
 
 #### Query B — ManCo income → `je-income.txt`
 
-Same SELECT as Query A (including `tags_json`), but `ABS(AMOUNT) AS amt` and
+Same SELECT as Query A (including `tags_json`), but `-AMOUNT AS amt` and
 `ACCOUNT_TYPE >= 4000 AND ACCOUNT_TYPE < 5000`, `LIMIT 1000`. Income keeps its
 upper bound — 4000-4999 is the income band; expenses start at 5000, so
 Query A's `>= 5000` (no upper bound) picks up everything above it.
+
+**`-AMOUNT`, not `ABS(AMOUNT)`.** Income posts as a credit, which the
+warehouse signs negative, so both turn an ordinary fee into a positive
+figure. They part company on a debit — a fee reduction, a stepdown
+returned, a reversal — which `ABS` reports as income earned. Measured on
+one firm, a single 250,000 stepdown return moved reported fee income by
+500,000, in the wrong direction. Negating keeps a credit positive and
+lets a debit reduce the account, which is what the ledger means.
 
 #### Query C — Fund-side management fee entries → `fund-fees.txt`
 
@@ -333,6 +341,49 @@ shows no fee-schedule terms for that fund without complaint). Do not retry
 this one query and do not let its failure abort Queries A–E, cash balance,
 or budgets.
 
+#### Query G — ManCo management fee income → `manco-fee-income.txt`
+
+The fee chart's own source. A fee has two sides — the fund expenses it
+(Query C), the ManCo earns it — and only the ManCo's side is on the
+trial balance this dashboard reports.
+
+```sql
+SELECT JOURNAL_ENTRY_LINE_ID AS id, JOURNAL_ENTRY_GLUUID AS gluuid,
+       EFFECTIVE_DATE AS date, YEAR(EFFECTIVE_DATE) AS yr, MONTH(EFFECTIVE_DATE) AS mo,
+       ACCOUNT_NAME AS account, ACCOUNT_TYPE AS acct_type,
+       COALESCE(RELATED_ENTITY_ID, 0) AS related_entity_id,
+       -AMOUNT AS amt, COALESCE(EVENT_TYPE, '') AS event_type,
+       LEFT(COALESCE(JOURNAL_ENTRY_DESCRIPTION, ''), 70) AS descr
+FROM JOURNAL_ENTRIES
+WHERE FIRM_ID = '<FIRM_UUID>'
+  AND FUND_UUID = '<MANCO_UUID>'
+  AND YEAR(EFFECTIVE_DATE) BETWEEN <YEAR>-5 AND <YEAR>
+  AND ACCOUNT_TYPE >= 4000 AND ACCOUNT_TYPE < 5000
+  AND (LOWER(ACCOUNT_NAME) LIKE '%management fee%' OR LOWER(ACCOUNT_NAME) LIKE '%mgmt fee%')
+ORDER BY yr DESC, EFFECTIVE_DATE, JOURNAL_ENTRY_LINE_ID
+LIMIT 1000
+```
+
+**`RELATED_ENTITY_ID` is what keeps the chart per fund.** It is the
+numeric `id` from `fa__list__entities`, so `entities.json` resolves it to
+the fund the line bills. Without it the ManCo's side is one undivided
+figure. A line that carries none — a migrated year, a lump payment
+covering several funds — is split across the funds the schedule says
+were billing that quarter, so the year still totals what the ManCo
+booked.
+
+**No `MONTH(EFFECTIVE_DATE) <= <MAX_MO>` here, unlike Query C.** A closed
+year is reported whole. The current year is year to date and completes
+itself with the quarters the fee schedule still expects, so clipping the
+closed years to match would understate every one of them and drop a
+fourth quarter billed years ago.
+
+**Overlaps Query B by design.** The current year's fee lines are in both
+files; Query B cannot serve this alone because it is one year, and has
+no `RELATED_ENTITY_ID`. Both now sign with `-AMOUNT`, so the two agree
+on the year they share — if they ever disagree, that is a bug, not a
+rounding difference.
+
 #### Cash balance → `cash-balance.json`
 
 **`firm_uuid` and `as_of_date` are both required and must not be sent empty or
@@ -405,6 +456,7 @@ uv run "$S" --from-session "FUND_UUID = '<MANCO_UUID>'" \
             --from-session 'ACCOUNT_TYPE >= 5000'        "$R/je-expense-page1.txt" &
 uv run "$S" --from-session 'ACCOUNT_TYPE >= 4000'        "$R/je-income.txt" &
 uv run "$S" --from-session "FUND_UUID != '<MANCO_UUID>'" "$R/fund-fees.txt" &
+uv run "$S" --from-session 'related_entity_id'           "$R/manco-fee-income.txt" &
 uv run "$S" --from-session 'DISTINCT ACCOUNT_TYPE'          "$R/accounts-all.txt" &  # only if Step 2.6 skipped it
 uv run "$S" --from-session 'AGGREGATE_FUND_METRICS'      "$R/manco-currency.txt" &
 uv run "$S" --from-session 'MANAGEMENT_FEE_SCHEDULES'    "$R/management-fee-schedules.txt" &

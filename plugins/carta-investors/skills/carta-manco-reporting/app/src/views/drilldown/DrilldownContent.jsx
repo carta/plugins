@@ -31,6 +31,7 @@ export default function DrilldownContent({
   selection,
   entries,
   fundFeeEntries,
+  mancoFeeEntries = [],
   feeScheduleTerms,
   spendByGL,
   buildJournalUrl,
@@ -52,26 +53,26 @@ export default function DrilldownContent({
   }, [selection, spendByGL]);
   // For fund-year drills, filter the fund-side fee entries (separate dataset
   // than ManCo entries). For other drill kinds, use the ManCo entries as before.
+  // A fee figure on this report is the ManCo's, so its journals are the
+  // ManCo's. An older cache has no such dataset and keeps the fund side.
+  const feeEntries = mancoFeeEntries.length ? mancoFeeEntries : fundFeeEntries;
   const filtered = useMemo(() => {
-    if (selection?.kind === "fund-year") {
-      return filterFundFeeEntries(fundFeeEntries, selection);
+    if (selection?.kind === "fund-year"
+        || (selection?.kind === "outline-cell" && selection.fundMatch)) {
+      // A row answered to the funds' ledger reads there; everything else
+      // reads the ManCo's, which is whose report this is.
+      const src = selection.crossEntityGl?.length ? fundFeeEntries : feeEntries;
+      return filterFundFeeEntries(src, selection);
     }
-    // Outline cells on a per-fund management-fee line resolve from the
-    // fund-side dataset too — the ManCo's own GL 4160 aggregates Fund II
-    // + Fund III and can't be split by fund.
-    if (selection?.kind === "outline-cell" && selection.fundMatch) {
-      return filterFundFeeEntries(fundFeeEntries, selection);
-    }
-    // A total can cover both kinds of line — per-fund fee lines resolve
-    // against the fund-side dataset, everything else against the ManCo's
-    // own entries — so it draws from both and the drawer holds the whole
-    // of what the figure summed.
+    // The ManCo's entries already hold its fee lines, so drawing the fee
+    // side again would list every fee entry twice.
     if (selection?.kind === "outline-total") {
       return [...filterEntries(entries, selection, topCategoryNames),
-              ...filterFundFeeEntries(fundFeeEntries, selection)];
+              ...(mancoFeeEntries.length
+                  ? [] : filterFundFeeEntries(fundFeeEntries, selection))];
     }
     return filterEntries(entries, selection, topCategoryNames);
-  }, [entries, fundFeeEntries, selection, topCategoryNames]);
+  }, [entries, fundFeeEntries, mancoFeeEntries, feeEntries, selection, topCategoryNames]);
 
   // Contracted LPA fee terms for a fund-year drill — a different dataset
   // than the fee actuals above (what the LPA says vs. what was booked).
@@ -353,6 +354,17 @@ export default function DrilldownContent({
           buildJournalUrl={buildJournalUrl}
         />
       </div>
+
+      {/* What the schedule still expects, after what posted — the quarters
+          ahead follow the entries behind, in the order they happen. */}
+      {/* One table for the year's schedule: the quarters split out of a
+          lump the ManCo booked, and the quarters it has yet to bill. */}
+      {(selection.basisQuarters?.length || selection.expectedQuarters?.length) > 0 && (
+        <FeeScheduleSummary
+          quarters={mergeScheduleQuarters(selection)}
+          yearLabel={selection.yearLabel}
+        />
+      )}
 
       {/* What the filters currently add up to. Sticky, because the answer
           to "what did I just narrow this to" should not require scrolling
@@ -738,6 +750,67 @@ function formatQtrDate(iso) {
 // Projected year drawer: fee schedule (unchanged, same as every other
 // fund-year drill) plus a per-quarter summary below it, mirroring Carta's
 // own Management fees page.
+// The year's schedule, in one list. A quarter split out of a lump the
+// ManCo booked and a quarter it has yet to bill are both the schedule's
+// account of the year — two tables said so twice.
+function mergeScheduleQuarters(selection) {
+  const tag = (qs, booked) => (qs || []).map((q) => ({ ...q, booked }));
+  return [...tag(selection.basisQuarters, true),
+          ...tag(selection.expectedQuarters, false)]
+    .sort((a, b) => String(a.quarterLabel).localeCompare(String(b.quarterLabel)));
+}
+
+// Quarters a still-billing year expects and has not seen. Same table as the
+// projected-year summary, so a reader moving between them reads one thing.
+function FeeScheduleSummary({ quarters, yearLabel }) {
+  const stillExpected = quarters
+    .filter((q) => !q.booked)
+    .reduce((sum, q) => sum + q.amount, 0);
+  return (
+    <div>
+      <div style={SP.summaryHeaderRow}>
+        <ChartTitle>Fee schedule by quarter — {yearLabel}</ChartTitle>
+      </div>
+      <div style={SP.qtrHeader}>
+        <span style={SP.qtrPeriod}>Period</span>
+        <span style={SP.qtrDate}>Start</span>
+        <span style={SP.qtrDate}>End</span>
+        <span style={SP.qtrRate}>Fee %</span>
+        <span style={SP.qtrAmountHeader}>Fees + Savings - Reductions</span>
+      </div>
+      <ul style={SP.qtrList}>
+        {quarters.map(q => (
+          <li key={q.quarterLabel} style={SP.qtrRow}>
+            <div style={SP.qtrMainRow}>
+              <span style={SP.qtrPeriod}>
+                {q.quarterLabel}
+                <div style={SP.qtrPeriodName}>
+                  {q.periodName}
+                  {" · "}
+                  {q.booked ? "booked, split by schedule" : "not yet billed"}
+                </div>
+              </span>
+              <span style={SP.qtrDate}>{formatQtrDate(q.startDate)}</span>
+              <span style={SP.qtrDate}>{formatQtrDate(q.endDate)}</span>
+              <span style={SP.qtrRate}>{(Math.round(q.feeRate * 100 * 10000) / 10000)}%</span>
+              <span style={SP.qtrAmount}>{fmtCurrencyExact(q.amount)}</span>
+            </div>
+            {q.basis && <div style={SP.qtrBasisRow}>Basis: {q.basis}</div>}
+          </li>
+        ))}
+      </ul>
+      {stillExpected > 0 && (
+        // Only the quarters still to come. A booked quarter is already in
+        // the entries above, and adding it here would count it twice.
+        <div style={SP.qtrBasisRow}>
+          Still expected: {fmtCurrencyExact(stillExpected)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 function ProjectedFeeSummary({ selection, scheduleTerms }) {
   const { projectedAmounts = [], committedCapital, yearLabel, fund } = selection;
   const isBucket = fund === "Other funds";  // several real funds summed — no single schedule to show

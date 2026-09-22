@@ -24,7 +24,7 @@ const DRILL_NAMES = {
   "outline-total": "OutlineTotal",
 };
 
-export default function DrilldownDrawer({ selection, onClose, entries, fundFeeEntries, feeScheduleTerms, spendByGL, buildJournalUrl, topCategoryNames, asOf, onDrillAccountForMonth }) {
+export default function DrilldownDrawer({ selection, onClose, entries, fundFeeEntries, mancoFeeEntries, feeScheduleTerms, spendByGL, buildJournalUrl, topCategoryNames, asOf, onDrillAccountForMonth }) {
   const open = !!selection;
   const drawerRef = useRef(null);
 
@@ -104,6 +104,7 @@ export default function DrilldownDrawer({ selection, onClose, entries, fundFeeEn
             selection={selection}
             entries={entries}
             fundFeeEntries={fundFeeEntries}
+            mancoFeeEntries={mancoFeeEntries}
             feeScheduleTerms={feeScheduleTerms}
             spendByGL={spendByGL}
             buildJournalUrl={buildJournalUrl}

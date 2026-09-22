@@ -560,7 +560,9 @@ const tipRow = (color, name, value) =>
 
 function legendHtml(series, extras = []) {
   return [
-    ...series.map((s) =>
+    // A fund's estimated half shares its booked half's colour and key.
+    // Listing it again would read as a second fund.
+    ...series.filter((s) => !s.legendHidden).map((s) =>
       `<li><span class="ink-chart__legend-sw" style="background:${s.color}"></span>${escapeHtml(s.name)}</li>`),
     // A reference is a line, not an area, so its key is a dashed rule —
     // naming it here is what lets it drop its own in-plot label.
@@ -804,7 +806,7 @@ export function InkBarChart({
   id, height = 240, orientation = "vertical", layout = "single", domain = "zero",
   series, labels, xTick, reference, headline, title, sub, headerControl,
   legend = false, legendExtras = [], formatValue = String, ariaLabel = "",
-  provisionalFrom, projectedFrom, valueTicks = 4, padding, onSelect, colorFor,
+  provisionalFrom, provisionalPaint = true, projectedFrom, valueTicks = 4, padding, onSelect, colorFor,
   renderTooltip, stackedTooltip = "breakdown", lineOverlay,
 }) {
   const rootRef = useRef(null);
@@ -936,7 +938,8 @@ export function InkBarChart({
         labels.forEach((_, i) => {
           const g = svgEl("g", { class: "ink-chart__col" });
           const projected  = projectedFrom != null && i >= projectedFrom;
-          const provisional = !projected && provisionalFrom != null && i >= provisionalFrom;
+          const provisional = provisionalPaint && !projected
+                              && provisionalFrom != null && i >= provisionalFrom;
           const topIdx = series.reduce((last, s, si) => ((s.values[i] || 0) > 0 ? si : last), -1);
           let acc = 0;
           series.forEach((s, si) => {
@@ -948,7 +951,10 @@ export function InkBarChart({
             const rect = vertical
               ? { x: catStart(i), y: top, w: subW, h: len }
               : { x: top, y: catStart(i), w: len, h: subW };
-            const paint = projected    ? hatchPaint(svg, `${id}-p${si}`, s.color)
+            // A series can carry the projected hatch on its own, so a column
+            // can hold booked figures solid beside an estimate that is not.
+            const paint = projected || s.estimated
+                            ? hatchPaint(svg, `${id}-p${si}`, s.color)
                        : provisional ? hatchPaint(svg, `${id}-h${si}`, s.color)
                        : s.color;
             const style = `fill:${paint}`;

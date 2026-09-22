@@ -115,6 +115,9 @@ export default function useDrilldown() {
       // so a drawer that kept them would contradict the cell it opened from.
       excludedClaims: opts.excludedClaims || null,
       fundMatch: opts.fundMatch || null,
+      // The mapping step answered this fee offset to the funds' ledger, so
+      // the drawer reads there too and its journals total the cell.
+      crossEntityGl: opts.crossEntityGl || null,
       // A breakout row under the line — one value of one dimension, on top
       // of everything the line itself is filtered by.
       childScope: opts.childScope || null,

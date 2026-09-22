@@ -630,8 +630,16 @@ function OutlineRow({ row, actualsByKey, aggregates, valueAliases, tagValuesAvai
   // real figure. Withheld like an unmapped line: a blank is a question, a
   // wrong number is an answer.
   const scopeUnresolved = kind === "line" && !voided && row.scope_unresolved === true;
+  // A fee offset the ManCo books no account for. Until the mapping step
+  // is answered there is no figure to report, and once answered "omit"
+  // there is deliberately none — a blank is a question, a wrong number is
+  // an answer, and the funds' figure here would be another entity's.
+  const offsetPending = kind === "line"
+    && ((row.fee_offset_unresolved || []).length > 0
+        || (row.no_manco_equivalent || []).length > 0);
   const unmapped = kind === "line" && !voided
-    && (scopeUnresolved || (!row.fund_match && !(row.gl_codes || []).length));
+    && (scopeUnresolved || offsetPending
+        || (!row.fund_match && !(row.gl_codes || []).length));
   // A more specific line absorbed EVERY entry this one had. A partial
   // loss keeps real actual instead — see the elsewhereNote call below.
   const shared = kind === "line" && !voided && !unmapped && sharedWithLabel
@@ -649,6 +657,21 @@ function OutlineRow({ row, actualsByKey, aggregates, valueAliases, tagValuesAvai
           ? `\nDid you mean: ${(row.scope_candidates || []).map(c => c.value).join(" · ")}?`
           : ""),
     voided && "Budget-only by choice: this line has no Carta counterpart.",
+    // A waiver the ManCo nets into fee income rather than booking beside
+    // it. Blank is the honest figure; unexplained it reads as a load
+    // failure, which is what sent the last reader looking for the bug.
+    (row.no_manco_equivalent || []).length > 0
+      && `The management company books no separate account for this — it nets `
+        + `it into management fee income, which the fee lines above already `
+        + `report. Showing it here would count the same amount twice.`,
+    (row.cross_entity_gl || []).length > 0
+      && `This figure comes from the funds' own ledger (${
+          row.cross_entity_gl.join(", ")}), not the management company's, `
+        + `because the management company books no separate account for it.`,
+    (row.fee_offset_unresolved || []).length > 0
+      && `The management company books no account for this offset. Answer `
+        + `this line in the mapping step to leave it out or report it from `
+        + `the funds' ledger.`,
     shared && `Same Carta account and scope as "${shared}" — Carta can't tell the two `
       + `apart, so the actual is reported there instead of here.`,
     widened && "This workbook's formula sums fewer lines than this total covers. The figure covers all of them.",
@@ -804,6 +827,9 @@ function OutlineRow({ row, actualsByKey, aggregates, valueAliases, tagValuesAvai
               cartaTags:  (row.tag_value && tagValuesAvailable)
                           ? (valueAliases[row.tag_value] || [row.tag_value]) : null,
               fundMatch:  row.fund_match || null,
+              // Answered to the funds' ledger: the drawer reads there too,
+              // or its journals would not add up to the cell above them.
+              crossEntityGl: row.cross_entity_gl || null,
               comment:    row.comment || null,
               tag_value:  row.tag_value || null,
               dimension,
@@ -1016,6 +1042,7 @@ export function computeLineActuals(rows, accountsData, valueAliases, periodYear,
                                    dimension = null) {
   const entries = accountsData?.entries || [];
   const fundFees = accountsData?.fund_fee_entries || [];
+  const mancoFees = accountsData?.manco_fee_entries || [];
   const yr = String(periodYear || "");
   // No JE this firm has carries a Department tag: a dept-scoped row would
   // sum to $0 forever, so treat it as firm-wide like an unscoped row.
@@ -1038,14 +1065,19 @@ export function computeLineActuals(rows, accountsData, valueAliases, periodYear,
     const claimed = [];
 
     if (row.fund_match) {
-      // Per-fund management fee — join fund-side JEs on fund name.
+      // Per-fund management fee. The ManCo's own entries by default —
+      // this is its report — and the funds' only where the mapping step
+      // recorded that answer for an offset it books no account for.
+      const crossEntity = (row.cross_entity_gl || []).length > 0;
+      const feeRows = crossEntity ? fundFees
+                                  : (mancoFees.length ? mancoFees : fundFees);
       const rx = fundMatchRegex(row.fund_match);
       // A fund's fees and the offsets against them are different Carta
       // accounts. A line naming one reports that one: two sections can
       // name the same fund and mean different halves of it.
       const only = new Set(row.gl_codes || []);
       const mine = [];
-      for (const e of fundFees) {
+      for (const e of feeRows) {
         if (yr && String(e.yr ?? "") !== yr) continue;
         if (!rx.test(e.fund || "")) continue;
         if (only.size && !only.has(e.acct_type)) continue;

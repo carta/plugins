@@ -21,6 +21,8 @@ Expected files under --raw-dir (relative paths):
   je-expense-page2.txt       — (optional) rows 1000+; the LLM writes it only when total_rows > 1000
   je-income.txt              — ACCOUNT_TYPE 4000-4999 JE lines
   fund-fees.txt              — cross-fund mgmt fee JEs 2021 onwards
+  manco-fee-income.txt       — the ManCo's own mgmt fee income, with the
+                               related-entity key that names the fund
   cash-balance.json          — fa:get:cash-balance response for the ManCo entity
   budget-<year>-01.json .. -12.json — fa:list:budgets per-month payloads (may be empty; all 12 months)
 
@@ -1008,6 +1010,47 @@ def read_income(raw_dir):
     return [norm_je_row(r, "income") for r in parse_pipe_table(f.read_text())]
 
 
+def read_manco_fee_income(raw_dir):
+    """The ManCo's own fee income lines — its books, not the funds'.
+
+    A fee has two sides: the fund expenses it, the ManCo earns it. Only the
+    second is on the ManCo's trial balance, which is what this dashboard
+    reports, so the fee chart reads these.
+    """
+    f = raw_dir / "manco-fee-income.txt"
+    if not f.exists():
+        return []
+    return parse_pipe_table(f.read_text())
+
+
+def read_entity_roster(raw_dir):
+    """Entity `id` -> uuid and name, from fa:list:entities.
+
+    A fee income line names the fund it bills through RELATED_ENTITY_ID,
+    which is this `id`. Without the roster the line has no fund.
+    """
+    f = raw_dir / "entities.json"
+    if not f.exists():
+        return {}
+    try:
+        data = json.loads(f.read_text())
+    except Exception:
+        return {}
+    if isinstance(data, dict):
+        data = data.get("entities") or []
+    out = {}
+    for e in data:
+        if not isinstance(e, dict):
+            continue
+        try:
+            eid = int(e["id"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        out[eid] = {"uuid": e.get("uuid"), "name": e.get("name"),
+                    "carta_id": e.get("carta_id")}
+    return out
+
+
 def read_fund_fees(raw_dir):
     f = raw_dir / "fund-fees.txt"
     if not f.exists():
@@ -1102,6 +1145,242 @@ def _build_fee_projections(fund_fee_entries, fee_schedule_terms, top_fund_uuids,
     return [str(y) for y in future_years], proj_funds
 
 
+def _fund_schedules(fee_schedule_terms):
+    """fund_uuid -> its live fee periods, and a lookup for the one on a date.
+
+    A waived period, or one on a basis this builder cannot compute, carries
+    no rate it could apply, so it is left out entirely.
+    """
+    schedules = {}
+    for t in fee_schedule_terms or []:
+        if t["fee_rate"] is None or t["uses_custom_calculation_base"] or t["waived"]:
+            continue
+        # An open-ended period has no end date, and it is the one most
+        # likely in force now — treat it as running to the far future.
+        schedules.setdefault(t["fund_uuid"], []).append({
+            "start": _date.fromisoformat(t["start_date"]),
+            "end": (_date.fromisoformat(t["end_date"]) if t["end_date"]
+                    else _date(9999, 12, 31)),
+            "rate": t["fee_rate"], "name": t.get("period_name"),
+            "basis": t.get("calculation_base"),
+        })
+
+    def period_on(uid, d):
+        for p in schedules.get(uid, []):
+            if p["start"] <= d <= p["end"]:
+                return p
+        return None
+
+    return schedules, period_on
+
+
+def _infer_committed(entries, period_on, fund_uuids, ytd_year):
+    """fund_uuid -> committed capital, back-solved from a posted fee.
+
+    Size the fund off the fee it bills repeatedly, not off its latest
+    entry: a quarter in progress posts a stub, a catch-up a multiple.
+    """
+    committed = {}
+    for uid in fund_uuids:
+        by_rate = {}
+        for e in sorted((e for e in entries
+                         if e["fund_uuid"] == uid and e["amount"] > 0),
+                        key=lambda e: (e["yr"], e["mo"])):
+            p = period_on(uid, _date(e["yr"], e["mo"], 15))
+            if p and p["rate"] > 0:
+                by_rate.setdefault(p["rate"], []).append(round(e["amount"], 2))
+        # Prefer the rate in force now; fall back to any rate with history.
+        rate_now = (period_on(uid, _date(ytd_year, 7, 1)) or {}).get("rate")
+        rate = rate_now if rate_now in by_rate else next(iter(by_rate), None)
+        if rate:
+            amounts = by_rate[rate]
+            modal = max(amounts, key=lambda a: (amounts.count(a),
+                                                amounts.index(a)))
+            committed[uid] = modal / (rate / 4)
+    return committed
+
+
+def _quarter_estimate(period_on, uid, cap, yr, q):
+    """What the schedule says one quarter is worth, or None if uncovered."""
+    start = _date(yr, 3 * (q - 1) + 1, 1)
+    end = _date(yr, 3 * q, _QUARTER_LAST_DAY[q])
+    p = period_on(uid, start) or period_on(uid, end)
+    if not p or not p["rate"]:
+        return None
+    return p, round(cap * p["rate"] / 4, 2)
+
+
+def _allocate_manco_fees(manco_entries, fee_schedule_terms, fund_uuids,
+                         ytd_year, committed_entries, years=()):
+    """Split the ManCo's booked fee income across the funds it billed.
+
+    The booked dollars are always the amount; the schedule only decides
+    whose they were, for a line that does not name its fund. So a year
+    totals what the ManCo booked, even where it cannot say per fund.
+    """
+    _, period_on = _fund_schedules(fee_schedule_terms)
+    committed = _infer_committed(committed_entries, period_on,
+                                 fund_uuids, ytd_year)
+
+    by_fund_year, unlinked, booked_quarters, unattributed = {}, {}, set(), {}
+    conversions = {}
+    # Which quarters a fund's share was split out of, and on what terms —
+    # the only account of a year the ManCo booked without naming the fund.
+    detail = {}
+    for e in manco_entries:
+        q = (e["mo"] - 1) // 3 + 1
+        key = (e["fund_uuid"], e["yr"])
+        if e["fund_uuid"]:
+            by_fund_year[key] = by_fund_year.get(key, 0.0) + e["amount"]
+            if e["amount"] > 0:
+                booked_quarters.add((e["fund_uuid"], e["yr"], q))
+        else:
+            unlinked[(e["yr"], q)] = unlinked.get((e["yr"], q), 0.0) + e["amount"]
+
+    for (yr, q), amt in unlinked.items():
+        if not amt:
+            continue
+        weights, terms = {}, {}
+        for uid in fund_uuids:
+            cap = committed.get(uid)
+            if not cap:
+                continue
+            est = _quarter_estimate(period_on, uid, cap, yr, q)
+            if est:
+                terms[uid], weights[uid] = est
+        total_w = sum(weights.values())
+        # An onboarding entry holds every pre-Carta year on one date.
+        # It is not that quarter's income, and it dwarfs the chart.
+        if total_w > 0 and amt > CONVERSION_MULTIPLE * total_w:
+            conversions[yr] = conversions.get(yr, 0.0) + amt
+            continue
+        if total_w <= 0:
+            # Nothing was scheduled to bill that quarter, so there is no
+            # honest way to say whose the money was.
+            unattributed[yr] = unattributed.get(yr, 0.0) + amt
+            continue
+        for uid, w in weights.items():
+            share = amt * (w / total_w)
+            by_fund_year[(uid, yr)] = by_fund_year.get((uid, yr), 0.0) + share
+            if amt > 0:
+                booked_quarters.add((uid, yr, q))
+            p = terms[uid]
+            detail.setdefault((uid, yr), []).append({
+                "quarterLabel": f"Q{q} {yr}",
+                "periodName": p["name"],
+                "startDate": _date(yr, 3 * (q - 1) + 1, 1).isoformat(),
+                "endDate": _date(yr, 3 * q, _QUARTER_LAST_DAY[q]).isoformat(),
+                "feeRate": p["rate"],
+                "basis": p["basis"],
+                "amount": round(share, 2),
+            })
+
+    # A year the ManCo booked nothing for at all — its books start later
+    # than the chart does. The schedule is the only account of it.
+    booked_years = ({e["yr"] for e in manco_entries if e["amount"]}
+                    - set(conversions))
+    for yr in years:
+        if yr in booked_years or yr >= ytd_year:
+            continue
+        for uid in fund_uuids:
+            cap = committed.get(uid)
+            if not cap:
+                continue
+            for q in (1, 2, 3, 4):
+                est = _quarter_estimate(period_on, uid, cap, yr, q)
+                if not est:
+                    continue
+                p, amount = est
+                by_fund_year[(uid, yr)] = by_fund_year.get((uid, yr), 0.0) + amount
+                detail.setdefault((uid, yr), []).append({
+                    "quarterLabel": f"Q{q} {yr}",
+                    "periodName": p["name"],
+                    "startDate": _date(yr, 3 * (q - 1) + 1, 1).isoformat(),
+                    "endDate": _date(yr, 3 * q, _QUARTER_LAST_DAY[q]).isoformat(),
+                    "feeRate": p["rate"],
+                    "basis": p["basis"],
+                    "amount": amount,
+                })
+
+    for quarters in detail.values():
+        quarters.sort(key=lambda x: x["quarterLabel"])
+    return by_fund_year, booked_quarters, unattributed, detail, conversions
+
+
+def _expected_remaining_this_year(fund_fee_entries, fee_schedule_terms, top_fund_uuids,
+                                  display_name_by_uuid, ytd_year,
+                                  booked_quarters=None):
+    """What each fund's schedule still expects this year, by quarter.
+
+    The YTD bar reports what posted. A fund billing quarterly has quarters
+    of the current year still to come, and the schedule already says what
+    they are -- without them the year reads as a shortfall against every
+    prior one, and the drawer answers "what happened" where the reader is
+    asking "what is still coming".
+
+    A quarter counts as remaining when the fund's schedule covers it at a
+    live rate and no fee has posted for it this year. The schedule, not the
+    billing history -- the fee entries this builder reads are clipped to the
+    as-of month so that each year compares like for like year to date, which
+    means a quarter later in the year than the as-of date is absent from
+    *every* year in the dataset. A history rule reading those entries could
+    never predict such a quarter for any fund, and would under-claim by a
+    quarter for all of them. The schedule has no such blind spot.
+    """
+    if not fee_schedule_terms:
+        return []
+    _, period_on = _fund_schedules(fee_schedule_terms)
+    committed = _infer_committed(fund_fee_entries, period_on,
+                                 top_fund_uuids, ytd_year)
+
+    out = []
+    for uid in top_fund_uuids:
+        cap = committed.get(uid)
+        name = display_name_by_uuid.get(uid)
+        if not cap or not name:
+            continue
+        # Any posting marks the quarter billed, so a part-booked quarter is
+        # not topped up. The quarter-end review and lock settles it.
+        if booked_quarters is not None:
+            posted = {q for (u, y, q) in booked_quarters
+                      if u == uid and y == ytd_year}
+        else:
+            posted = {(e["mo"] - 1) // 3 + 1 for e in fund_fee_entries
+                      if e["fund_uuid"] == uid and e["yr"] == ytd_year
+                      and e["amount"] > 0}
+        quarters = []
+        for q in sorted({1, 2, 3, 4} - posted):
+            est = _quarter_estimate(period_on, uid, cap, ytd_year, q)
+            if not est:
+                continue
+            p, amount = est
+            quarters.append({
+                "quarterLabel": f"Q{q} {ytd_year}",
+                "periodName": p["name"],
+                "startDate": _date(ytd_year, 3 * (q - 1) + 1, 1).isoformat(),
+                "endDate": _date(ytd_year, 3 * q, _QUARTER_LAST_DAY[q]).isoformat(),
+                "feeRate": p["rate"],
+                "basis": p["basis"],
+                "amount": amount,
+            })
+        if quarters:
+            out.append({
+                "name": name,
+                "committedCapital": round(cap),
+                "amount": round(sum(q["amount"] for q in quarters), 2),
+                "quarters": quarters,
+            })
+    return out
+
+
+_QUARTER_LAST_DAY = {1: 31, 2: 30, 3: 30, 4: 31}
+
+# How far past a quarter's scheduled fees an unattributed entry may run
+# before it is read as an onboarding balance rather than that quarter's
+# income.
+CONVERSION_MULTIPLE = 3
+
+
 def read_fee_schedule_terms(raw_dir):
     """Contracted management-fee schedule terms (FUND_ADMIN.MANAGEMENT_FEE_SCHEDULES) —
     the fund's LPA-configured rate/basis/frequency, distinct from fund_fee_entries
@@ -1142,7 +1421,8 @@ def read_fee_schedule_terms(raw_dir):
 # A missing file after a completed fetch means its save call never ran —
 # different from a genuine 0-row result, which read_cash_balance already
 # distinguishes via unavailable_reason.
-_FETCH_REQUIRED_FILES = ("je-income.txt", "fund-fees.txt")
+_FETCH_REQUIRED_FILES = ("je-income.txt", "fund-fees.txt",
+                         "manco-fee-income.txt")
 
 
 def check_fetch_completeness(raw_dir):
@@ -1153,11 +1433,12 @@ def check_fetch_completeness(raw_dir):
     if missing:
         raise SystemExit(
             f"{raw_dir}/.fetched-at records a completed fetch, but "
-            f"{', '.join(missing)} is missing — Query B/C's save call never ran "
+            f"{', '.join(missing)} is missing — a save call never ran "
             f"this fetch (see references/data-fetch.md's 'Capture that follow-up "
             f"message' discipline). Do not build from this raw_dir: a missing "
             f"file is not the same as a genuine 0-row result, and building now "
-            f"would silently understate income/fund-fees. Re-run Step 3 for "
+            f"would silently understate income, or report the fee chart from "
+            f"the funds' ledger instead of the ManCo's. Re-run Step 3 for "
             f"{', '.join(missing)} before rebuilding."
         )
 
@@ -1827,6 +2108,80 @@ def record_budget_mapping(dashboard_dir, answers):
     return changed
 
 
+def rehome_fee_rows_to_manco(rows, manco_fee_accounts, foreign_fee_accounts,
+                             unmatched_foreign=()):
+    """Point a fee row at the ManCo's own fee account, never a fund's.
+
+    This report is the ManCo's. A mapping that sends one of its lines to
+    an account on a fund's ledger makes the fund's books answer for the
+    ManCo's, so the figure and its journals belong to another entity.
+
+    An account in `unmatched_foreign` has no counterpart on the ManCo at
+    all — a waiver it nets inside fee income rather than booking beside
+    it. There is no sound rewrite for that, so the row is left for the
+    operator to decide in the mapping step.
+    """
+    if not manco_fee_accounts:
+        return []
+    notes = []
+    for row in rows:
+        gl = row.get("gl_codes") or []
+        foreign = [g for g in gl if g in foreign_fee_accounts]
+        if not foreign:
+            continue
+        orphan = [g for g in foreign if g in unmatched_foreign]
+        if orphan:
+            # Answered already? Honour it. Otherwise ask.
+            if row.get("fee_source") == "fund_ledger":
+                row["cross_entity_gl"] = orphan
+                notes.append(
+                    f"{row.get('label') or row.get('addr')}: reporting "
+                    f"{orphan} from the funds' ledger, as recorded.")
+            elif row.get("fee_source") == "omit":
+                row["gl_codes"] = sorted(set(gl) - set(orphan))
+                row["no_manco_equivalent"] = orphan
+            else:
+                row["fee_offset_unresolved"] = orphan
+            continue
+        row["gl_codes"] = sorted(set(gl) - set(foreign) | set(manco_fee_accounts))
+        row["rehomed_from"] = foreign
+        notes.append(
+            f"{row.get('label') or row.get('addr')}: fee mapping pointed at "
+            f"{foreign} on a fund's ledger; reporting the ManCo's "
+            f"{sorted(manco_fee_accounts)} instead."
+        )
+    return notes
+
+
+def fee_offset_asks(rows, manco_fee_accounts):
+    """The offsets the ManCo books no account for, as mapping questions.
+
+    A workbook can break a fee into gross and waiver where the ManCo
+    records only the net. Neither answer is ours to pick: leaving it out
+    understates a line the reader can see in their own workbook, and
+    filling it from the funds reports another entity's books here.
+    """
+    out = []
+    for row in rows or []:
+        orphan = row.get("fee_offset_unresolved")
+        if not orphan:
+            continue
+        out.append({
+            "key": row.get("key"), "addr": row.get("addr"),
+            "label": row.get("label"), "needs": "fee_offset",
+            "hint": f"{orphan} on the funds' ledger",
+            "suggestions": [
+                {"value": "omit", "label": "Leave out — the ManCo nets it "
+                 f"into {sorted(manco_fee_accounts)}",
+                 "why": "the fee line above already reports it net"},
+                {"value": "fund_ledger",
+                 "label": f"Report {orphan} from the funds' ledger",
+                 "why": "the only place the offset is booked separately"},
+            ],
+        })
+    return out
+
+
 def apply_budget_mapping(rows, mapping, budget_id=None, ambiguous_bare_addrs=None):
     """Apply recorded decisions. Returns the rows that survive.
 
@@ -1859,6 +2214,10 @@ def apply_budget_mapping(rows, mapping, budget_id=None, ambiguous_bare_addrs=Non
             row["void"] = True
         if decision.get("fund"):
             row["fund_match"] = decision["fund"]
+        # How to report a fee offset the ManCo books no account for:
+        # "omit" or "fund_ledger". See fee_offset_asks.
+        if decision.get("fee_source"):
+            row["fee_source"] = decision["fee_source"]
         # An empty list is an answer, not a missing one: on a per-fund line
         # it says the line is the net of every account the fund posts to.
         if decision.get("gl_codes") is not None:
@@ -2583,7 +2942,8 @@ def unconfirmed_inferences(rows, decisions=None):
     return sorted(out.values(), key=lambda x: -len(x["lines"]))
 
 
-_ASK_ORDER = {"fund": 0, "fund_account": 1, "gl_account": 2, "scope": 3}
+_ASK_ORDER = {"fund": 0, "fund_account": 1, "gl_account": 2, "scope": 3,
+              "fee_offset": 4}
 
 # Below this, an account is still shown but is not its own question.
 # Measured across three real firms: a $1,000 floor halves the rows on the
@@ -2594,6 +2954,7 @@ _ACCOUNT_ASK_FLOOR = 1000
 
 _ASK_WANTS = {"fund": "which fund", "fund_account": "which half of the fee",
               "gl_account": "which account(s)", "scope": "which value",
+              "fee_offset": "how to report the offset",
               "account_line": "which line reports it",
               "account_line_bulk": "are any of these expected",
               "inference": "is this what the wording means"}
@@ -3868,8 +4229,28 @@ def build(args):
         uuid = r["fund_uuid"]
         name = r["fund"]
         fund_name_by_uuid[uuid] = name
-        if yr == args.as_of_year:
-            fund_totals[uuid] += amt
+        # Every year, not just this one: a fund that has finished billing
+        # still owns its share of the years it did bill.
+        fund_totals[uuid] += amt
+
+    # A fund the ManCo bills need not appear on the fund side at all.
+    # Rank it on what the ManCo booked against it, so it is not missed.
+    roster = read_entity_roster(raw)
+    manco_fee_rows = read_manco_fee_income(raw)
+    for r in manco_fee_rows:
+        try:
+            ent = roster.get(int(r.get("related_entity_id") or 0)) or {}
+            amt = float(r["amt"])
+        except (TypeError, ValueError):
+            continue
+        uid = ent.get("uuid")
+        if not uid:
+            continue
+        fund_name_by_uuid.setdefault(uid, ent.get("name") or uid)
+        fund_totals[uid] += amt
+
+    _carta_id_by_uuid = {v["uuid"]: v.get("carta_id")
+                         for v in roster.values() if v.get("uuid")}
 
     TOP_N_FUNDS = 8
     top_fund_uuids = [u for u, _ in sorted(fund_totals.items(), key=lambda kv: -kv[1])[:TOP_N_FUNDS]]
@@ -3901,28 +4282,116 @@ def build(args):
             # to special-case fund-fee rows to a flat-string fallback.
             "tags":          _parse_tags(r),
             "display_fund":  display_fund(r),
+            # The entity this journal is booked on — never another one.
+            "entity_carta_id": _carta_id_by_uuid.get(r["fund_uuid"]),
         })
 
     # --- Fee schedule terms (contracted rate/basis/frequency, not actuals) -----
     fee_schedule_terms = read_fee_schedule_terms(raw)
 
-    years = sorted({e["yr"] for e in fund_fee_entries})
-    ytd_year = args.as_of_year
-    fee_labels = [str(y) if y != ytd_year else f"{y} YTD" for y in years]
-    fee_funds = []
-    displayed = [display_name_by_uuid[u] for u in top_fund_uuids] + ["Other funds"]
-    for fund_name in displayed:
-        per_year = {y: 0.0 for y in years}
-        for e in fund_fee_entries:
-            if e["display_fund"] == fund_name:
-                per_year[e["yr"]] += e["amount"]
-        if not any(per_year.values()):
-            continue
-        fee_funds.append({
-            "name":  fund_name,
-            "data":  [round(per_year[y], 2) for y in years],
+    # --- ManCo-side fee income: the anchor for the fee chart -----
+    # Only this side is on the trial balance the dashboard reports. Each
+    # line names the fund it bills through RELATED_ENTITY_ID.
+    manco_fee_entries = []
+    for r in manco_fee_rows:
+        try:
+            rel = int(r.get("related_entity_id") or 0)
+        except (TypeError, ValueError):
+            rel = 0
+        ent = roster.get(rel) or {}
+        uuid = ent.get("uuid") or ""
+        manco_fee_entries.append({
+            "id":            r["id"],
+            "gluuid":        r["gluuid"],
+            "fund":          ent.get("name") or "",
+            "fund_uuid":     uuid,
+            "date":          r["date"],
+            "yr":            int(r["yr"]),
+            "mo":            int(r["mo"]),
+            "account":       r["account"],
+            "acct_type":     int(r["acct_type"]),
+            "sub":           None,
+            "amount":        float(r["amt"]),
+            "description":   r.get("descr", ""),
+            "vendor":        None,
+            "partner":       None,
+            "event_type":    r.get("event_type") or None,
+            "tags":          [],
+            "display_fund":  display_name_by_uuid.get(uuid, "Other funds")
+                             if uuid else "Unattributed",
+            # Booked on the ManCo, whichever fund it bills.
+            "entity_carta_id": args.manco_carta_id,
         })
+
+    # A raw dir fetched before the ManCo query existed has no such file.
+    # Fall back to the fund side rather than report a wholly estimated year.
+    manco_anchored = bool(manco_fee_entries)
+    series_entries = manco_fee_entries if manco_anchored else fund_fee_entries
+
+    # Which fee accounts are the ManCo's own, and which sit on a fund's
+    # ledger. A budget row of this report may only name the first kind.
+    manco_fee_accounts = {e["acct_type"] for e in manco_fee_entries
+                          if e.get("acct_type") is not None}
+    foreign_fee_accounts = {e["acct_type"] for e in fund_fee_entries
+                            if e.get("acct_type") is not None} - manco_fee_accounts
+
+    # An offset nets negative. Without one of its own the ManCo records
+    # it inside fee income, where the fee line already reports it.
+    def _nets_negative(entries, acct):
+        return sum(e["amount"] for e in entries
+                   if e.get("acct_type") == acct) < 0
+    _manco_has_contra = any(_nets_negative(manco_fee_entries, a)
+                            for a in manco_fee_accounts)
+    unmatched_foreign = set() if _manco_has_contra else {
+        a for a in foreign_fee_accounts if _nets_negative(fund_fee_entries, a)
+    }
+
+    ytd_year = args.as_of_year
+    years = sorted({e["yr"] for e in fund_fee_entries}
+                   | {e["yr"] for e in series_entries})
+    fee_labels = [str(y) if y != ytd_year else f"{y} YTD" for y in years]
+
+    if manco_anchored:
+        by_fund_year, booked_quarters, unattributed, alloc_detail, conversions = \
+            _allocate_manco_fees(
+                manco_fee_entries, fee_schedule_terms, top_fund_uuids,
+                ytd_year, fund_fee_entries, years,
+            )
+        schedule_basis = {}
+        for (uid, yr), quarters in alloc_detail.items():
+            name = display_name_by_uuid.get(uid)
+            if name:
+                schedule_basis.setdefault(name, {})[str(yr)] = quarters
+        per_year_by_name = {}
+        for (uid, yr), amt in by_fund_year.items():
+            name = display_name_by_uuid.get(uid, "Other funds")
+            per_year_by_name.setdefault(name, {})[yr] = \
+                per_year_by_name.setdefault(name, {}).get(yr, 0.0) + amt
+        if any(unattributed.values()):
+            per_year_by_name["Unattributed"] = unattributed
+    else:
+        booked_quarters = {
+            (e["fund_uuid"], e["yr"], (e["mo"] - 1) // 3 + 1)
+            for e in series_entries if e["fund_uuid"] and e["amount"] > 0
+        }
+        schedule_basis = {}
+        per_year_by_name = {}
+        for e in series_entries:
+            per_year_by_name.setdefault(e["display_fund"], {}).setdefault(e["yr"], 0.0)
+            per_year_by_name[e["display_fund"]][e["yr"]] += e["amount"]
+
+    fee_funds = []
+    displayed = ([display_name_by_uuid[u] for u in top_fund_uuids]
+                 + ["Other funds", "Unattributed"])
+    for fund_name in displayed:
+        per_year = per_year_by_name.get(fund_name) or {}
+        data = [round(per_year.get(y, 0.0), 2) for y in years]
+        if not any(data):
+            continue
+        fee_funds.append({"name": fund_name, "data": data})
     fee_schedule = {"labels": fee_labels, "funds": fee_funds}
+    if schedule_basis:
+        fee_schedule["scheduleBasis"] = schedule_basis
 
     # --- Fee projections (future years from schedule × inferred committed capital) -----
     proj_labels, proj_funds = _build_fee_projections(
@@ -3932,6 +4401,17 @@ def build(args):
     if proj_labels:
         fee_schedule["projectedLabels"] = proj_labels
         fee_schedule["projectedFunds"] = proj_funds
+
+    # What the schedule still expects in the YTD year itself.
+    expected = _expected_remaining_this_year(
+        fund_fee_entries, fee_schedule_terms, top_fund_uuids,
+        display_name_by_uuid, ytd_year,
+        # A quarter counts as billed when the ManCo booked it, which is
+        # what the chart reports.
+        booked_quarters=booked_quarters,
+    )
+    if expected:
+        fee_schedule["expectedRemaining"] = expected
 
     # --- Budget + spend-by-GL -----
     #
@@ -3969,10 +4449,20 @@ def build(args):
     _ambiguous_bare_addrs = {a for a, ids in _bare_addr_budgets.items() if len(ids) > 1}
 
     _row_mapping = read_budget_mapping(dashboard)
+    _fee_offset_asks = []
     for _b in excel_budgets:
         _b["rows"] = apply_budget_mapping(_b.get("rows") or [], _row_mapping,
                                           budget_id=_b.get("id"),
                                           ambiguous_bare_addrs=_ambiguous_bare_addrs)
+        _rehomed = rehome_fee_rows_to_manco(_b.get("rows") or [],
+                                            manco_fee_accounts, foreign_fee_accounts,
+                                            unmatched_foreign)
+        for _note in _rehomed:
+            print(f"note: {_note}")
+        _fee_offset_asks.extend(
+            {**entry, "budget_id": _b.get("id"), "budget_label": _b.get("label")}
+            for entry in fee_offset_asks(_b.get("rows") or [], manco_fee_accounts)
+        )
 
     # A line's own GL number is only Carta's when Carta agrees it is.
     # Seed from every account the ManCo has ever used, then let the window's
@@ -4138,7 +4628,7 @@ def build(args):
 
     # Asked only about what nothing above could resolve — a gate that
     # repeats a question already answered teaches the operator to skim it.
-    _unresolved = []
+    _unresolved = list(_fee_offset_asks)
     _widened = 0
     for _b in excel_budgets:
         _widened += mark_widened_totals(_b.get("rows") or [])
@@ -4431,6 +4921,9 @@ def build(args):
         "monthly_categories": monthly_categories,
         "entries":            all_rows,
         "fund_fee_entries":   fund_fee_entries,
+        # The fee chart's own drilldown: the ManCo's entries, which are the
+        # ones its trial balance holds and the ones its deep links open.
+        "manco_fee_entries":  manco_fee_entries,
         # Contracted LPA terms per fund/period (rate, basis, frequency) —
         # empty when management-fee-schedules.txt was never fetched (older
         # raw dirs, or a Data Explorer environment that doesn't have the

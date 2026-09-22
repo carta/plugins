@@ -203,6 +203,7 @@ export default function App() {
         onClose={drilldown.close}
         entries={accountsData?.entries || []}
         fundFeeEntries={accountsData?.fund_fee_entries || []}
+        mancoFeeEntries={accountsData?.manco_fee_entries || []}
         feeScheduleTerms={accountsData?.fee_schedule_terms || []}
         spendByGL={snapshot?.spendByGL}
         buildJournalUrl={buildJournalUrlFor(snapshot)}
@@ -219,17 +220,17 @@ export default function App() {
 // against BOOKING_BASE patterns in cash-reconciliation + ramp skills):
 //   https://app.carta.com/investors/firm/{firm}/portfolio/fund/{fund}/fund-accounting/booking-interface/view/{gluuid}/
 //
-// Always routes through the ManCo's own carta_id, even for fund-fee entries
-// booked on a fund's books — a link into a fund's own navigation context
-// requires the viewer to have access to that fund, which a ManCo-side
-// reader of this dashboard may not have.
+// Routes to the entity the entry is booked on. Substituting another —
+// the ManCo's id on a fund's entry — opens a real journal inside the
+// wrong entity's page, which reads as that entity having booked it.
 const CARTA_BASE_URL = "https://app.carta.com";
-function buildJournalUrlFor(snapshot) {
+export function buildJournalUrlFor(snapshot) {
   const ids = snapshot?.cartaIds;
-  if (!ids?.firm || !ids?.manco_fund) return () => null;
+  if (!ids?.firm) return () => null;
   return (entry) => {
-    if (!entry?.gluuid) return null;
-    return `${CARTA_BASE_URL}/investors/firm/${ids.firm}/portfolio/fund/${ids.manco_fund}/fund-accounting/booking-interface/view/${entry.gluuid}/`;
+    const entity = entry?.entity_carta_id ?? ids.manco_fund;
+    if (!entry?.gluuid || !entity) return null;
+    return `${CARTA_BASE_URL}/investors/firm/${ids.firm}/portfolio/fund/${entity}/fund-accounting/booking-interface/view/${entry.gluuid}/`;
   };
 }
 

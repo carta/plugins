@@ -272,7 +272,27 @@ export default function DashboardView({ snapshot, accountsData, drilldown, dark,
           (feeSchedule?.funds || []).map(f => [f.name, f.color])
         );
         if (!isProjected) {
-          drilldown.openFundYear(fund, yearLabel, { color: colorByName[fund] });
+          // A year still billing has quarters the schedule expects and the
+          // ledger has not seen. The drawer says what happened; without
+          // these it cannot say what is still to come.
+          // Only the year still billing: the quarters are that year's, so
+          // hanging them off a closed year dates them to the wrong one.
+          const expected = /YTD/i.test(yearLabel)
+            ? (feeSchedule?.expectedRemaining || []).find(f => f.name === fund)
+            : null;
+          // A year the ManCo booked without naming the fund has no journal
+          // of its own to show. The schedule that split it is the account.
+          const basis = (feeSchedule?.scheduleBasis || {})[fund] || {};
+          const basisQuarters = basis[String(parseInt(yearLabel, 10))] || null;
+          drilldown.openFundYear(fund, yearLabel, {
+            color: colorByName[fund],
+            expectedQuarters: expected?.quarters || null,
+            expectedTotal: expected?.amount ?? null,
+            basisQuarters,
+            basisTotal: basisQuarters
+              ? basisQuarters.reduce((s, q) => s + q.amount, 0)
+              : null,
+          });
           return;
         }
         const projLabels = feeSchedule?.projectedLabels || [];
@@ -401,7 +421,7 @@ export default function DashboardView({ snapshot, accountsData, drilldown, dark,
           showProjections={showProjections}
           onSelect={onFeeIncomeSelect}
           title="Management Fee Income by Fund"
-          sub={`Year-to-date management fees received from each fund entity (${ytdShort}), for each year.`}
+          sub={`Management fee income the company booked against each fund. Closed years are full years; ${ytdShort} is booked to date plus what the fee schedule still expects.`}
           headerControl={
             <div data-export-exclude style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <FundSelector

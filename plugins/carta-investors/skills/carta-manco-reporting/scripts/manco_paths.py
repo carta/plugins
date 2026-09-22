@@ -117,7 +117,7 @@ def raw_as_of(raw_dir):
 
 
 _JE_FILES = ["je-expense-page1.txt", "je-income.txt", "fund-fees.txt",
-             "cash-balance.json"]
+             "manco-fee-income.txt", "cash-balance.json"]
 
 
 def _budget_max_age(month, max_mo):
