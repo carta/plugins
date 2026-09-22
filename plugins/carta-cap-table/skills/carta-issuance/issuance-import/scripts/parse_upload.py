@@ -9,7 +9,7 @@
 """Turn an uploaded spreadsheet or document into carta-issuance's `knowns.rows`.
 
 The file feeds the FRONT of the existing pipeline: this script's whole output
-contract is the same `knowns.rows` shape build_config.py already consumes, so
+contract is the same row shape every carta-issuance surface consumes, so
 the config panel opens prefilled and every downstream gate (Phase 1 resolve →
 Phase 1.5 save+validate → Phase 2 review → Phase 3 mutate) runs untouched.
 Nothing here writes to Carta.
@@ -43,7 +43,7 @@ Usage:
   uv run parse_upload.py --file <path> [--sheet <name>] \
       [--reference <ref.json>] --out-dir <OUT_DIR>
 
-`--reference` is the same JSON build_config.py takes as `--data` (raw MCP
+`--reference` is the `issuance_init` payload written to a file (raw MCP
 section envelopes plus `stakeholders`). Omit it to parse without resolving.
 
 Writes to --out-dir:
@@ -65,7 +65,7 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
-# ── Enums, copied from build_config.py so a parsed value is panel-legal ──
+# ── Enums, mirroring lib/issuance_fields.py so a parsed value is legal ──
 
 RELATIONSHIP_CHOICES = [
     "Advisor", "Ex-Advisor", "Board member", "Ex-Board member",
@@ -97,7 +97,7 @@ GRANT_REASON_CHOICES = [
     "Performance bonus", "Boxcar grant",
 ]
 
-# Every key build_config.py reads off a row. A row carrying anything else would
+# Every key a row may carry. A row carrying anything else would
 # survive into the save_drafts payload and be rejected server-side.
 ROW_KEYS = {
     # shared
@@ -479,7 +479,7 @@ def _resolved(row: Dict[str, Any], field: str, value: Any) -> None:
 
     A note means "the file said something I couldn't turn into a value". Once
     something else supplies that value — the roster, typically — the note is
-    stale and must go, because `build_config.py` keys its force-blank behaviour
+    stale and must go, because a surface keys its force-blank behaviour
     off `import_notes` alone. Leaving it would blank a correctly-resolved field
     and tell the admin to pick one, inviting a wrong Individual/Non-individual
     or relationship choice over the cap-table-correct value.
@@ -939,7 +939,7 @@ def _out_of_scope(record: Dict[str, Any]) -> Optional[str]:
 # ── Resolution against the reference payload ──
 
 def _unwrap(obj: Any) -> Any:
-    """Peel the MCP result envelopes build_config.py's _unwrap also handles."""
+    """Peel the MCP result envelopes every reference reader has to handle."""
     seen = 0
     while isinstance(obj, dict) and seen < 6:
         for key in ("result", "data", "content", "value"):
@@ -1131,12 +1131,12 @@ def _write(out_dir: Path, name: str, payload: Any) -> Path:
 
 def main(argv: Optional[List[str]] = None) -> int:
     p = argparse.ArgumentParser(
-        description="Parse an uploaded spreadsheet/document into carta-issuance knowns.rows."
+        description="Parse an uploaded spreadsheet/document into carta-issuance draft rows."
     )
     p.add_argument("--file", required=True, type=Path)
     p.add_argument("--sheet", help="Sheet to import when the workbook has several")
     p.add_argument("--reference", type=Path,
-                   help="JSON of raw MCP reference sections (build_config's --data shape)")
+                   help="JSON of raw MCP reference sections (the issuance_init payload)")
     p.add_argument("--out-dir", required=True, type=Path)
     args = p.parse_args(argv)
 

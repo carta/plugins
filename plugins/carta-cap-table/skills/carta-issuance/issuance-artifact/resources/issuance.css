@@ -1,0 +1,279 @@
+    /* `html:root`, not `:root`: the artifact runtime wraps this file in its own
+       skeleton whose head sets `color-scheme: light` on `:root` and a system font on
+       `body`. Equal specificity there would leave the winner to source order, and if
+       the skeleton won, every light-dark() token below would freeze light and dark
+       mode would be dead. The type selector settles it either way. */
+    html:root {
+      color-scheme: light dark;
+      --ink-color-global-brand-black: light-dark(#1A1A1A, #F2F3F3);
+      --ink-color-global-brand-white: light-dark(#FFFFFF, #1A1A1A);
+      --ink-color-global-brand-gray-90: light-dark(#3D4242, #C8CBCB);
+      --ink-color-global-brand-gray-70: light-dark(#656B6B, #9DA1A1);
+      --ink-color-global-brand-gray-50: light-dark(#DEDFDF, #3B4040);
+      --ink-color-global-brand-gray-30: light-dark(#EFF0F0, #2C3030);
+      --ink-color-global-brand-gray-10: light-dark(#F7F8F8, #232626);
+      --ink-color-global-brand-orange-60: light-dark(#C24D18, #FF922B);
+      --ink-color-global-brand-red-60: light-dark(#B02525, #FF8A8A);
+      --ink-font-global-family-base: Inter, system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+      --ink-font-global-family-prominent: "SangBleu Versailles", Georgia, "Times New Roman", serif;
+      --ink-spacing-global-vertical-xsmall: 8px;
+      --ink-spacing-global-vertical-small: 12px;
+      --ink-spacing-global-vertical-medium: 20px;
+      /* Glyphs are data-URI SVGs used as masks: a mask takes its colour from the
+         token under it, so one asset serves both themes. No icon font is loadable. */
+      --ink-glyph-caret: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.75 4.5 6 7.75 9.25 4.5' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      --ink-glyph-calendar: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cg fill='none' stroke='%23000' stroke-width='1.2' stroke-linecap='round'%3E%3Crect x='1.6' y='2.6' width='10.8' height='9.8' rx='1.6'/%3E%3Cpath d='M1.6 5.6h10.8M4.6 1.4v2.2M9.4 1.4v2.2'/%3E%3C/g%3E%3C/svg%3E");
+    }
+    /* The only [data-theme] rules: bridge the host's runtime theme toggle to
+       color-scheme so every light-dark() token flips at once. */
+    html:root[data-theme="light"] { color-scheme: light; }
+    html:root[data-theme="dark"] { color-scheme: dark; }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* The skeleton guarantees this rule; declared here too so the same file renders
+       the same way opened straight from disk. */
+    [hidden] { display: none !important; }
+
+    html:root body {
+      background: var(--ink-color-global-brand-white);
+      color: var(--ink-color-global-brand-black);
+      font-family: var(--ink-font-global-family-base);
+      font-size: 14px;
+      line-height: 1.45;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding-block: var(--ink-spacing-global-vertical-medium);
+      padding-inline: 16px;
+    }
+
+    .logo { width: 64px; height: 32px; color: var(--ink-color-global-brand-black); display: block; }
+
+    h1 {
+      font-family: var(--ink-font-global-family-prominent);
+      font-size: 26px;
+      font-weight: 400;
+      line-height: 1.2;
+      margin-block: var(--ink-spacing-global-vertical-small) 2px;
+    }
+
+    .sub { color: var(--ink-color-global-brand-gray-70); font-size: 13px; }
+    .sub b { color: var(--ink-color-global-brand-black); font-weight: 500; }
+
+    .card {
+      background: var(--ink-color-global-brand-white);
+      border: 1px solid var(--ink-color-global-brand-gray-50);
+      border-radius: 8px;
+      padding: var(--ink-spacing-global-vertical-small);
+      margin-top: var(--ink-spacing-global-vertical-medium);
+    }
+
+    h2 {
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      color: var(--ink-color-global-brand-gray-70);
+      margin-bottom: var(--ink-spacing-global-vertical-small);
+    }
+
+    /* 210px, not 170px: the track holds a real legend name beside the caret. */
+    .grid { display: grid; gap: var(--ink-spacing-global-vertical-small); grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+    .f { min-width: 0; }
+    .f.wide { grid-column: 1 / -1; }
+    label { display: block; font-size: 12px; font-weight: 500; color: var(--ink-color-global-brand-gray-90); margin-bottom: 3px; }
+    .req { color: var(--ink-color-global-brand-red-60); }
+
+    /* `appearance: none` is what makes these one system. Without it the browser
+       paints the OS dropdown and calendar on top. Checkboxes keep their native box. */
+    input:not([type="checkbox"]), select, textarea {
+      width: 100%;
+      font: inherit;
+      font-size: 13px;
+      line-height: 18px;
+      color: var(--ink-color-global-brand-black);
+      background: var(--ink-color-global-brand-white);
+      border: 1px solid var(--ink-color-global-brand-gray-50);
+      border-radius: 6px;
+      padding: 6px 8px;
+      min-height: 32px;
+      appearance: none;
+      -webkit-appearance: none;
+    }
+    input:not([type="checkbox"]):hover:not([disabled]):not([readonly]),
+    select:hover:not([disabled]) { border-color: var(--ink-color-global-brand-gray-70); }
+    input:focus, select:focus, textarea:focus { outline: 2px solid var(--ink-color-global-brand-black); outline-offset: -1px; }
+    input[disabled], select[disabled], input[readonly] {
+      background: var(--ink-color-global-brand-gray-10);
+      color: var(--ink-color-global-brand-gray-70);
+      cursor: default;
+    }
+
+    /* Our caret, in the padding reserved for it. `text-overflow` ends an
+       over-long legend or plan name in an ellipsis, not mid-word. */
+    .ctl { position: relative; display: block; }
+    .ctl::after {
+      content: ""; position: absolute; pointer-events: none;
+      right: 10px; top: 50%; margin-top: -6px; width: 12px; height: 12px;
+      background-color: var(--ink-color-global-brand-gray-70);
+      -webkit-mask-image: var(--ink-glyph-caret); mask-image: var(--ink-glyph-caret);
+      -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+      -webkit-mask-size: 12px 12px; mask-size: 12px 12px;
+      -webkit-mask-position: center; mask-position: center;
+    }
+    .ctl:has(select:disabled)::after { opacity: .4; }
+    select { padding-right: 30px; cursor: pointer; text-overflow: ellipsis; }
+    textarea { min-height: 60px; }
+
+    /* Date: the picker indicator stays clickable, it just wears our glyph. */
+    input[type="date"] { padding-right: 30px; font-variant-numeric: tabular-nums; }
+    input[type="date"]::-webkit-calendar-picker-indicator {
+      width: 14px; height: 14px; padding: 0; margin: 0 -4px 0 6px; cursor: pointer; opacity: 1;
+      background-color: var(--ink-color-global-brand-gray-70);
+      -webkit-mask-image: var(--ink-glyph-calendar); mask-image: var(--ink-glyph-calendar);
+      -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+      -webkit-mask-size: 14px 14px; mask-size: 14px 14px;
+    }
+    input[type="date"]::-webkit-datetime-edit { padding: 0; }
+    input[type="date"]::-webkit-inner-spin-button,
+    input[type="date"]::-webkit-clear-button { display: none; }
+    input[type="date"][disabled]::-webkit-calendar-picker-indicator { opacity: .4; }
+
+    input.num { font-variant-numeric: tabular-nums; text-align: right; }
+    .hint { font-size: 11px; color: var(--ink-color-global-brand-gray-70); margin-top: 2px; }
+    .hint.echo { font-variant-numeric: tabular-nums; text-align: right; }
+    .err { font-size: 11px; color: var(--ink-color-global-brand-red-60); margin-top: 2px; font-weight: 500; }
+    .bad input, .bad select { border-color: var(--ink-color-global-brand-red-60); }
+
+    /* Wraps so a checkbox that carries a hint puts it on its own line under the label. */
+    .chk { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 13px; padding-top: 14px; }
+    .chk input { width: auto; min-height: 0; }
+    .chk label { margin: 0; font-size: 13px; }
+    .chk .hint { flex: 0 0 100%; margin-top: 0; }
+
+    /* Blockers + notices */
+    .note { border: 1px solid var(--ink-color-global-brand-gray-50); border-radius: 8px; padding: 10px 12px; margin-top: var(--ink-spacing-global-vertical-small); }
+    .note.stop { border-color: var(--ink-color-global-brand-red-60); }
+    .note-t { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; background: var(--ink-color-global-brand-orange-60); }
+    .note.stop .dot { background: var(--ink-color-global-brand-red-60); }
+    .note ul { list-style: none; margin-top: 5px; }
+    .note li { font-size: 13px; color: var(--ink-color-global-brand-gray-90); padding-left: 13px; position: relative; }
+    .note li::before { content: "—"; position: absolute; left: 0; color: var(--ink-color-global-brand-gray-70); }
+    /* The fix for a hard stop is an action, so it reads as a sentence, not a bullet. */
+    .note p { font-size: 13px; color: var(--ink-color-global-brand-gray-90); margin-top: 5px; }
+
+    /* Stakeholder rows */
+    .row { border: 1px solid var(--ink-color-global-brand-gray-50); border-radius: 8px; padding: 10px; margin-bottom: var(--ink-spacing-global-vertical-xsmall); background: var(--ink-color-global-brand-gray-10); }
+    .row-top { display: grid; gap: var(--ink-spacing-global-vertical-xsmall); grid-template-columns: minmax(0, 2fr) minmax(90px, 1fr) auto; align-items: start; }
+    .combo { position: relative; }
+    .sug {
+      list-style: none; position: absolute; z-index: 5; inset-inline: 0; top: calc(100% + 2px);
+      max-height: 210px; overflow-y: auto;
+      background: var(--ink-color-global-brand-white);
+      border: 1px solid var(--ink-color-global-brand-gray-50); border-radius: 6px;
+      box-shadow: 0 4px 12px light-dark(rgba(26,26,26,.12), rgba(0,0,0,.5));
+    }
+    .sug li { padding: 6px 8px; cursor: pointer; font-size: 13px; }
+    .sug li:hover, .sug li[aria-selected="true"] { background: var(--ink-color-global-brand-gray-30); }
+    .sug .e { color: var(--ink-color-global-brand-gray-70); font-size: 11px; }
+
+    /* A filled face and medium weight stop these reading as empty outlines
+       beside the solid black primary. */
+    button {
+      font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; border-radius: 6px;
+      border: 1px solid var(--ink-color-global-brand-gray-50);
+      background: var(--ink-color-global-brand-gray-10);
+      color: var(--ink-color-global-brand-black);
+      padding: 7px 12px; min-height: 32px;
+    }
+    button:hover:not([disabled]) {
+      background: var(--ink-color-global-brand-gray-30);
+      border-color: var(--ink-color-global-brand-gray-70);
+    }
+    button:focus-visible { outline: 2px solid var(--ink-color-global-brand-black); outline-offset: 1px; }
+    button[disabled] { opacity: .45; cursor: not-allowed; }
+    .x {
+      width: 32px; padding: 0; margin-top: 17px; line-height: 1;
+      display: inline-flex; align-items: center; justify-content: center;
+      color: var(--ink-color-global-brand-gray-70);
+    }
+    .x:hover:not([disabled]) {
+      color: var(--ink-color-global-brand-red-60);
+      border-color: var(--ink-color-global-brand-red-60);
+    }
+    .link {
+      background: none; border: none; padding: 2px 0; min-height: 0; margin-right: 14px;
+      text-decoration: underline; text-underline-offset: 2px;
+      color: var(--ink-color-global-brand-gray-90); font-size: 12px;
+    }
+    .link:hover:not([disabled]) { background: none; color: var(--ink-color-global-brand-black); }
+    .row > .grid { margin-top: var(--ink-spacing-global-vertical-xsmall); }
+    .ov { margin-top: var(--ink-spacing-global-vertical-xsmall); }
+    .ov .grid { margin-top: var(--ink-spacing-global-vertical-xsmall); }
+
+    .add { margin-top: var(--ink-spacing-global-vertical-xsmall); }
+
+    footer { margin-top: var(--ink-spacing-global-vertical-medium); display: flex; flex-wrap: wrap; gap: var(--ink-spacing-global-vertical-xsmall); align-items: center; }
+    .primary {
+      background: var(--ink-color-global-brand-black);
+      color: var(--ink-color-global-brand-white);
+      border-color: var(--ink-color-global-brand-black);
+      font-weight: 500;
+    }
+    .primary:hover:not([disabled]) { opacity: .88; }
+    .why { flex: 1 1 200px; font-size: 12px; color: var(--ink-color-global-brand-gray-70); min-width: 0; }
+
+    .status { margin-top: var(--ink-spacing-global-vertical-small); font-size: 13px; }
+    .status.bad { color: var(--ink-color-global-brand-red-60); }
+    /* A saved draft set number is the one thing the user must be able to act on if
+       the hand-off never lands, so it is read back rather than buried in prose. */
+    .status b { font-variant-numeric: tabular-nums; }
+
+    /* Review */
+    .rv-h, .rv-r { display: grid; grid-template-columns: minmax(0, 1fr) 96px 132px; gap: 10px; }
+    .rv-h { font-size: 11px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; color: var(--ink-color-global-brand-gray-70); padding-bottom: 5px; }
+    .rv-r { padding-block: 7px; align-items: baseline; }
+    .rv-n { font-variant-numeric: tabular-nums; text-align: right; }
+    .rv-s { font-size: 12px; color: var(--ink-color-global-brand-gray-70); }
+    .rv-tag { font-size: 11px; color: var(--ink-color-global-brand-gray-70); }
+    .rv-t { display: grid; grid-template-columns: minmax(0, 1fr) 96px 132px; gap: 10px; margin-top: var(--ink-spacing-global-vertical-xsmall); padding-top: 9px; font-weight: 600; }
+    .rv-terms { margin-top: var(--ink-spacing-global-vertical-medium); display: grid; gap: 5px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+    .rv-terms div { min-width: 0; }
+    .rv-terms dt { font-size: 11px; color: var(--ink-color-global-brand-gray-70); }
+    .rv-terms dd { font-size: 13px; }
+
+    /* The holder attests to these words, so they are readable, selectable and wrap
+       rather than scroll off. */
+    .legend { margin-top: var(--ink-spacing-global-vertical-medium); border: 1px solid var(--ink-color-global-brand-gray-50); border-radius: 8px; padding: 10px 12px; }
+    .legend summary { font-size: 13px; font-weight: 500; cursor: pointer; }
+    .legend pre {
+      margin-top: var(--ink-spacing-global-vertical-xsmall);
+      max-height: 320px; overflow-y: auto;
+      white-space: pre-wrap; overflow-wrap: break-word;
+      font-family: inherit; font-size: 12px; line-height: 1.5;
+      color: var(--ink-color-global-brand-gray-90);
+    }
+
+    /* What Confirm commits to. Sits at the foot of the review, directly above the
+       Issue button, so it is the last thing read. */
+    .rv-commit {
+      margin-top: var(--ink-spacing-global-vertical-medium);
+      padding-top: var(--ink-spacing-global-vertical-small);
+      border-top: 1px solid var(--ink-color-global-brand-gray-50);
+      font-size: 13px; font-weight: 500;
+    }
+
+    .stamp { margin-top: var(--ink-spacing-global-vertical-medium); text-align: right; font-size: 11px; color: var(--ink-color-global-brand-gray-70); font-variant-numeric: tabular-nums; }
+
+    @media (max-width: 560px) {
+      h1 { font-size: 22px; }
+      .row-top { grid-template-columns: minmax(0, 1fr) auto; }
+      .row-top .qty-f { grid-column: 1; }
+      .x { margin-top: 0; grid-row: 1; grid-column: 2; }
+      .rv-h, .rv-r, .rv-t { grid-template-columns: minmax(0, 1fr) 62px 106px; gap: 6px; }
+    }

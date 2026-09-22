@@ -1,61 +1,63 @@
 # Phase 2 to Closing — review, issue, close
 
-The tail of the engine, shared by both adapters: the review gate, the confirmation branch,
-the `issue_securities` call, and every terminal message. Referenced from
-[engine.md](engine.md#phase-2--closing).
+The tail of the engine: the review gate, the confirmation branch, the `issue_securities` call,
+and every terminal message. Referenced from [engine.md](engine.md#phase-2--closing).
 
 **Read this when you reach Phase 2** — after [Phase
 1.5](engine.md#phase-15--save--validate-before-review-or-save-only) returns clean, or
 straight away on a [resume](resume-flow.md#resume-an-existing-draft-set). It is deliberately
-not part of the up-front read: by the time you need it the collection surface is already open
-on Code and already submitted on Cowork, so nobody is waiting on this read.
+not part of the up-front read: by then the collect is done, so nobody is waiting on it.
 
 `mcp__carta__` below is the same placeholder it is everywhere else — substitute the session's
 real Carta prefix ([engine.md Step
-2a](engine.md#step-2a--carta-command-names-hardcoded-never-discovered)).
+2](engine.md#step-2--command-names-and-base_url)).
 
 ---
 
-## Phase 2 — Render the review surface (mandatory pre-save gate)
+## Phase 2 — the review gate
 
-The engine's `showReview` + `confirm`. Phase 1.5 has already saved and validated these rows, so
-this is a **read-only** confirmation before the irreversible `issue_securities` call, not
-another save.
+Phase 1.5 has already saved and validated these rows, so this is a **read-only** confirmation
+before the irreversible `issue_securities` call, not another save.
 
-**On Code, none of the rest of this section applies** — render the review panel and let its
-**Confirm & Issue** button be the gate
-([code-adapter.md §0](code-adapter.md#0-phase-overrides--what-differs-from-the-core)).
-The config panel is still open, and an `AskUserQuestion` stacked on an open panel suspends its
-submit watcher: the click silently does nothing and the issue never runs.
+Print the review as markdown, then confirm with one `AskUserQuestion` —
+[chat-surface.md §2–3](chat-surface.md#2-review--printed-markdown-non-blocking). **That order
+is mandatory and overrides any host rule about prose between tool calls**; the review is the
+gate, not narration of one. The full always/conditional/optional column spec, the
+default-explanation text, the confirm prompt, and the compressed format for identical-term
+batches are in [references/chat-review.md](chat-review.md).
 
-**On Cowork:** print the review as chat markdown, then confirm with one `AskUserQuestion` —
-[cowork-adapter.md §2–3](cowork-adapter.md#2-showreview--chat-markdown). **That
-order is mandatory and overrides any host rule about prose between tool calls**; the review is
-the gate, not narration of one. The full
-always/conditional/optional column spec, the default-explanation text, the confirm prompt, and
-the compressed format for identical-term batches are in
-[references/chat-review.md](chat-review.md).
-
-> **Tool pre-load:** `call_tool` must already be loaded (Phase 0 batched it) before you open this
-> surface. Do not `ToolSearch` here — it adds serial latency after the user has confirmed. If
+> **Tool pre-load:** `call_tool` must already be loaded (Phase 0 batched it) before you print
+> the review. Do not `ToolSearch` here — it adds serial latency after the user has confirmed. If
 > for any reason it isn't loaded, load it now, *before* rendering the review.
+
+### Say what confirming actually does — it differs by type
+
+A grant or a unit goes out for signature; a certificate lands on the cap table. Whoever is
+confirming is entitled to know which, so carry the matching sentence into the confirm:
+
+| Type | Sentence |
+|---|---|
+| Option grant | *"Confirming will save these grants to Carta and send them to the signatory for signature."* |
+| Certificate | *"Confirming will save these certificates to Carta and issue them to the cap table."* |
+| PIU | *"Confirming will save these profits interest units to Carta and send them to the signatory for signature."* |
+
+The panel and the artifact carry this in their own Confirm step; on the chat surface it is
+yours to say, in the same turn as the review.
 
 
 ---
 
 ## Phase 3 — On confirmation, run the mutate
 
-You reach Phase 3 when the review surface confirms. **The confirmation already happened — do
-not re-ask**, and don't second-guess a fresh signal as a stale replay. Branch directly on what
-that surface returned — the `AskUserQuestion` answer on Cowork, the `action` in the panel's
-request file on Code:
+You reach Phase 3 when the confirm comes back. **The confirmation already happened — do not
+re-ask.** Branch directly on the answer:
 
-| Cowork answer | Code `action` | Do |
-|---|---|---|
-| `"Issue … now"` / any free-text affirmative | `"submit"` | [Run the issue securities mutate](#run-the-issue-securities-mutate) |
-| `"Save as draft"` | *not offered* — the review panel has no Save button, since Phase 1.5's **Save** already covered it | [Save as draft](engine.md#save-as-draft-escape-hatch) |
-| `"Edit a row"` | `"back_to_edit"` | re-render the Phase 0.5 surface, pre-filled with the resolved rows — on Code via [back-to-edit.md](back-to-edit.md) |
-| `"Cancel"` | typed "cancel" | stop — *Canceled* closing |
+| Answer | Do |
+|---|---|
+| `"Issue … now"` / any free-text affirmative | [Run the issue securities mutate](#run-the-issue-securities-mutate) |
+| `"Save as draft"` | [Save as draft](engine.md#save-as-draft-escape-hatch) |
+| `"Edit a row"` | re-ask for that row's changed fields, then Phase 1.5 and Phase 2 again |
+| `"Cancel"` | stop — *Canceled* closing |
 
 ### First: do you need a payload at all?
 
@@ -81,9 +83,9 @@ divergence. Sending no rows makes it impossible.
 
 **Build a `drafts` payload only when the rows aren't already on the server:**
 
-- **Rows changed after Phase 1.5 saved them** — an error-retry that edited a value, or a
-  [back-to-edit](back-to-edit.md) round trip. Send the changed rows **with their
-  `draft_pk`s** so they update rather than insert (SKILL.md hard rule 3), then the set is current again.
+- **Rows changed after Phase 1.5 saved them** — an error-retry that edited a value, or an
+  *Edit a row* round trip. Send the changed rows **with their `draft_pk`s** so they update
+  rather than insert (SKILL.md hard rule 3), then the set is current again.
 - **No `draft_set_id`** — nothing was ever saved, so there is no set to issue from. Rare on this
   path: Phase 1.5 runs before the review by design, so reaching Phase 3 without one means an
   earlier step was skipped.
@@ -161,7 +163,7 @@ and the failed call is the only thing the user sees for it.
 - **PIU:** Holder · Unit class · Quantity · Threshold value · Issue date.
 
 Link to the ledger at `<BASE_URL>/<VIEW_URL_PATH>`, where `BASE_URL` is the host recorded in
-[Step 2a](engine.md#step-2a--carta-command-names-hardcoded-never-discovered) and `VIEW_URL_PATH` is
+[Step 2a](engine.md#step-2--command-names-and-base_url) and `VIEW_URL_PATH` is
 `options/list/<CORP_ID>/` (option grant), `certificates/list/<CORP_ID>/` (certificate), or
 `options/piu/list/<CORP_ID>/` (PIU).
 **Never invent a different path** — `corporations/<corporation_id>/equity/options/` looks
@@ -200,7 +202,7 @@ row from a `save_drafts` / `issue_securities` call this session came back with a
 initial `"new"` placeholder, or when every row's `status` came back an error.
 
 Every link above builds on `BASE_URL` — the `base_url` from `get_current_user`, recorded in
-[Step 2a](engine.md#step-2a--carta-command-names-hardcoded-never-discovered) — so a demo, sandbox or
+[Step 2a](engine.md#step-2--command-names-and-base_url) — so a demo, sandbox or
 test session links into the environment it actually wrote to. `security_type` in a Drafts-UI
 path is the literal mutate value (`certificate`, `option_grant` or `piu`).
 

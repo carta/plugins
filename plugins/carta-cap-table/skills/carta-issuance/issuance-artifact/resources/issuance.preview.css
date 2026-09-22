@@ -1,0 +1,81 @@
+
+    /* ---------- the preview harness's own chrome ----------
+       Deliberately unlike the form beneath it: dark, dashed and full-bleed, so nobody
+       reads this bar as part of the product. Only appended to a --preview build. */
+    .pv {
+      position: sticky;
+      top: env(safe-area-inset-top, 0px);
+      z-index: 20;
+      background: light-dark(#2B1A55, #1B1436);
+      color: #EFEAFB;
+      border-bottom: 2px dashed light-dark(#A78BFA, #6D5BC4);
+      padding: 10px 16px;
+      font-family: var(--ink-font-global-family-base);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .pv-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    .pv-tag {
+      border: 1px solid #C4B5FD;
+      border-radius: 999px;
+      padding: 1px 9px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.10em;
+      text-transform: uppercase;
+    }
+
+    .pv-lab {
+      margin-left: 6px;
+      color: #C9BEEA;
+      text-transform: uppercase;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+    }
+
+    .pv-seg { display: inline-flex; gap: 2px; }
+
+    .pv-b {
+      font: inherit;
+      color: #EFEAFB;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      border-radius: 6px;
+      padding: 3px 10px;
+      cursor: pointer;
+    }
+    .pv-b:hover { background: rgba(255, 255, 255, 0.18); }
+    .pv-b[aria-pressed="true"] {
+      background: #EFEAFB;
+      color: #2B1A55;
+      border-color: #EFEAFB;
+      font-weight: 600;
+    }
+    .pv-b:focus-visible { outline: 2px solid #C4B5FD; outline-offset: 2px; }
+
+    .pv-try { margin-left: auto; border-style: dashed; }
+    .pv-count { color: #C9BEEA; font-variant-numeric: tabular-nums; }
+
+    .pv-say,
+    .pv-note {
+      max-width: 1000px;
+      margin: 6px auto 0;
+      color: #D8CFF2;
+    }
+    .pv-note { font-weight: 600; }
+    .pv-note.bad { color: #FFC7C7; }
+
+    /* Wrapped onto five lines, a pinned bar owns a third of a phone screen. */
+    @media (max-width: 560px) {
+      .pv { position: static; }
+      .pv-try { margin-left: 0; }
+    }

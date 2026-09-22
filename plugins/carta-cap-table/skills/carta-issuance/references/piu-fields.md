@@ -69,7 +69,8 @@ Stamp these onto every resolved row for the review surfaces to render:
 Use the `certificate_share_classes` section from the Phase 0.5 `issuance_init` payload.
 **Read it as the unit classes** — a PIU uses the same share-class endpoint and the same
 response shape as a certificate, so the section keeps that name (and with it its
-`cap_table:get:certificate_share_classes` per-section fallback).
+`cap_table:get:certificate_share_classes` — wire
+`cap_table__get__certificate_share_classes` — per-section fallback).
 
 Match a user-supplied class name case-insensitively; capture the **`prefix`**, which is
 what the payload carries. The unmatched-name and ambiguous-match handling is identical to
@@ -84,7 +85,7 @@ differences:
 The default rule is the same one, and deliberately so: a sole class is pre-selected, two or
 more leave the control **required and unselected** with `missingFields()` holding **Review**
 on `a unit class`. An explicitly named class is still honoured, row-level or via
-`knowns.share_class_prefix`; pass that key **only when the prompt actually named one.**
+the prefix the prompt named; carry one in **only when the prompt actually named one.**
 
 ### Equity-plan reconciliation — per row, optional, prefix-matched
 
@@ -204,11 +205,11 @@ whose manage-share-classes page showed the link plainly.
 use to pre-select one (`default_share_class_prefix`), in order:
 
 1. the row's own `share_class_prefix`,
-2. `knowns.share_class_prefix`,
+2. a prefix the prompt named,
 3. the sole class, when the corp has exactly one,
 4. otherwise nothing — several classes and none named leaves the field unselected.
 
-Step 3 is load-bearing: the skill omits `knowns.share_class_prefix` unless the prompt named
+Step 3 is load-bearing: the skill carries no prefix in unless the prompt named
 a unit class, so for the ordinary request (*"issue a PIU to X for 112 units"*) the first two
 are empty. Reading only a named prefix is what kept this row from ever rendering.
 

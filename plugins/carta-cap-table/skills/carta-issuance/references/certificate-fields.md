@@ -32,7 +32,7 @@ response order is not dependable anyway. Metal corporation 7 returns its eight c
 neither `id` nor `created` order, so the last entry there is `PC` (Series C, created 2016)
 while the newest class is `PSB` (2019); "the last one" was never reliably "the latest one".
 
-Pass `knowns.share_class_prefix` only when the prompt actually named or implied a class.
+Carry a share-class prefix into the surface only when the prompt actually named or implied a class.
 Omitting it is what leaves the control unselected; never pick a class yourself and pass it as
 if the user had asked for it.
 
@@ -44,7 +44,7 @@ Unit-class reconciliation](piu-fields.md#unit-class-reconciliation).
 ## Legend resolution (certificate)
 
 Use the `legends` section from the Phase 0.5 `issuance_init` payload (fall back to
-`cap_table:get:legends` only if init named it in `errors`). One legend → default silently;
+`cap_table:get:legends`, wire `cap_table__get__legends`, only if init named it in `errors`). One legend → default silently;
 multiple → `AskUserQuestion`, one
 option per template. Stamp the chosen `id` as `legend_id`; **never send `legend` body** (the
 server resolves it). **Also stamp the chosen legend's full body text onto the row as
@@ -67,11 +67,11 @@ Certificate only. Read the resolved share class's `dividend` field:
 
 ## Rule 144 difference reason
 
-Certificate only; only when `rule_144_date` ≠ `issue_date`. **Side panel**: collected inline —
-`build_config.py` renders a reason `<select>` in the same block, shown the moment "Use a
-different date" is picked (same enum as below), and the panel won't enable Review until it's
-set. Read `rule_144_reason` off the submitted row and stamp it as
-`rule_144_difference_reason` — no separate prompt needed. **Cowork path only** (no panel):
+Certificate only; only when `rule_144_date` ≠ `issue_date`. **The panel and the artifact
+collect it inline** — a reason `<select>` in the same row, shown the moment "Use a different
+date" is picked, and neither will submit until it is set; read `rule_144_reason` off the row and
+stamp it as `rule_144_difference_reason`. **On the chat surface**, ask for it in the
+[collect batch](chat-surface.md#1-collect--one-batch-and-only-what-is-genuinely-open):
 `AskUserQuestion`, one option per enum (label → value): "Has determined 144 date" →
 `has_determined_144_date`; "Non-restricted 144" → `non_restricted_144`; "Relevance provision"
 → `relevance_provision`; "Affiliates" → `affiliates`; "Non-affiliates" → `non_affiliates`.

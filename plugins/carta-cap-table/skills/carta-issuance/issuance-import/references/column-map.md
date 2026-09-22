@@ -157,7 +157,7 @@ International Employee · Ex-International Employee · Investor · Officer · Ot
 **`stakeholder_kind`** — `INDIVIDUAL` from *individual, person, natural person*;
 `NON-INDIVIDUAL` from *non individual, entity, organization, organisation,
 company, corporation, trust, llc*. Note the **hyphen**: it matches
-`build_config.py`'s `STAKEHOLDER_KIND_CHOICES`, not the Django enum's
+`lib/issuance_fields.py`'s `STAKEHOLDER_KIND_CHOICES`, not the Django enum's
 `ORGANIZATION`.
 
 **`option_type`** — ISO · NSO · INTL · EMI · CSOP · Unapproved ·

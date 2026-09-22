@@ -1,73 +1,52 @@
 # The issuance engine — build the surface yourself
 
-Read this on the two paths [SKILL.md § Pick the surface](../SKILL.md#pick-the-surface) names
-**engine + code adapter** and **engine + cowork adapter**: the ones where *you* build the
-collection surface and the payload. A panel run reaches it only by falling back — no human to
-submit the panel, the tool errored, or the user asked for another surface
-([SKILL.md § Falling back](../SKILL.md#6-falling-back-off-this-path)).
+Read this on the **chat surface** and nowhere else: the one path where *you* collect the terms
+and assemble the payload. [SKILL.md § Pick the surface](../SKILL.md#pick-the-surface) selects
+it when the host has no panel tool and no `Artifact` tool; a panel or artifact run reaches it
+only by falling back.
 
-**Being here is not a degraded run.** The server hides the panel tool from a host that cannot
-render its view, so its absence is a decision, not a gap — and a user who asked for the form
-asked for what this path builds. It needs nothing this session lacks: never report it as
-unavailable, never offer to start a dev server, and never say it is blocked on a CLI, a tool
-or a connection.
+**Being here is not a degraded run.** It needs nothing this session lacks: never report it as
+unavailable, never offer to start a dev server, and never say it is blocked on a CLI, a tool or
+a connection.
 
-The transaction is identical on both; only the surface that collects and reviews it varies.
+The engine is this file: resolve `security_type` → fetch reference data → run the gates →
+collect → assemble rows → `save_drafts` / `validate_drafts` / `issue_securities` → recovery.
 
-- **The engine** is this file: resolve `security_type` → fetch reference data → assemble rows →
-  `save_drafts` / `validate_drafts` / `issue_securities` → recovery. It never knows which
-  surface is in play.
-- **The adapter** implements exactly three capabilities. Nothing else may branch on
-  environment.
+Three more reads, each at its own moment:
 
-| Adapter | `collectConfig` (0.5) | `showReview` (2) | `confirm` (2→3) |
-|---|---|---|---|
-| **Cowork** | one `show_widget` form | chat markdown | one `AskUserQuestion` |
-| **Code** | `render-panel` config panel | `render-panel` review panel | the panel's **Confirm & Issue** button |
-
-**This file documents the Cowork path**, since that is nearly all fallback usage. If the
-surface table selected the Code adapter, read [code-adapter.md](code-adapter.md) **before
-Phase 0.25 or Phase 0.5 issues its first Carta call** — its **§0** lists every point where
-that adapter diverges, two of which change that call, and anything §0 does not mention behaves
-exactly as described here.
-
-Two more reads, each at its own moment:
-
-- **[cowork-adapter.md](cowork-adapter.md)** — the form, the chat review, the confirm, and the
-  authoritative per-block field list. Read it **in parallel with the first Carta fetch**, not
-  before it: [Phase 0.5](#phase-05--configure-the-issuance)'s `issuance_init` has no dependency
-  on it, so reading first only delays it. Skip it entirely on the Code adapter.
+- **[chat-surface.md](chat-surface.md)** — the collect, the review and the confirm, plus the
+  computable defaults you must never ask for. Read it **in parallel with the first Carta
+  fetch**, not before it: [Phase 0.5](#phase-05--configure-the-issuance)'s `issuance_init` has
+  no dependency on it, so reading first only delays it.
 - **[payload-reference.md](payload-reference.md)** — the authoritative field contract: types,
   formats, picklists, autofills, date quirks. Read it **before
-  [Phase 1](#phase-1--resolve-each-row--reconcile-share-classes)**, on both adapters. Nothing
-  earlier builds a payload, and it is the largest file either path reads — pulling it in ahead
-  of the collection surface delays the one thing the user is waiting for.
+  [Phase 1](#phase-1--resolve-each-row--reconcile-share-classes)**. Nothing earlier builds a
+  payload, and it is the largest file this path reads — pulling it in ahead of the collect
+  delays the one thing the user is waiting for.
+- **The type-specific row file waits for `security_type`.** Read
+  [option-grant-fields.md](option-grant-fields.md), *or*
+  [certificate-fields.md](certificate-fields.md), *or* [piu-fields.md](piu-fields.md) once that
+  resolves — exactly one, and never before. Loading the wrong one is pure cost, and a grant run
+  has no use for Rule 144.
 
-**The type-specific row file waits for `security_type`.** Read
-[option-grant-fields.md](option-grant-fields.md), *or*
-[certificate-fields.md](certificate-fields.md), *or* [piu-fields.md](piu-fields.md) once that
-resolves — exactly one, and never before. Loading the wrong one is pure cost, and a grant run
-has no use for Rule 144.
-
-Both paths end the same way: the `issue_securities` mutate
-([Phase 3](issue-and-close.md#phase-3--on-confirmation-run-the-mutate)). The host's HITL prompt
-on that mutate is the final, irreversible gate — never the review gate.
+The path ends at the `issue_securities` mutate
+([Phase 3](issue-and-close.md#phase-3--on-confirmation-run-the-mutate)). The host's
+confirmation prompt on that mutate is the final, irreversible gate — never the review gate.
 
 ---
 
 ## Engine hard rules
 
 [SKILL.md § Hard rules](../SKILL.md#hard-rules) binds on every path and still binds here. These
-six bind on **this** path, because they govern building a surface and a payload by hand.
+five bind on **this** path, because they govern building a surface and a payload by hand.
 
 1. **The field contract lives in [payload-reference.md](payload-reference.md).** Read it before
    constructing any payload. No invented keys.
 2. **Templates only — no custom payloads** for legends, vesting, acceleration, or exercise
    periods: *"Custom \<thing\> isn't supported here. Save as draft and finish in the Drafts UI."*
 3. **No id sniffing.** Required values come from user input, the stakeholder roster this run
-   resolved against (`cap_table:get:stakeholders` at `detail=full`, or the roster file the Code
-   path hands its builder), or a documented default — never scraped from another grant or
-   certificate. If none of the three applies, ask via `AskUserQuestion`.
+   resolved against, or a documented default — never scraped from another grant or certificate.
+   If none of the three applies, ask via `AskUserQuestion`.
 4. **Pre-save assertion.** Before *any* `save_drafts` or `issue_securities` call, walk every row
    and confirm each `always` field (per [Row templates](#row-templates)) holds a non-null value.
    If one is missing, recover **before** the call, in order: (a) the row template's documented
@@ -79,62 +58,23 @@ six bind on **this** path, because they govern building a surface and a payload 
    accepts a row is therefore never a reason to send one — **never offer to save past a missing
    `always` field, and never describe the server's tolerance to the user as an option**
    ([save-validate-flow.md § The assertion is not advisory](save-validate-flow.md#the-assertion-is-not-advisory)).
-5. **Never ask who the grantees are before opening the collection surface.** A missing
-   recipient is an empty field on the surface, never a chat question — this is the single most
-   common way this skill goes wrong. Two sub-rules follow from it:
+5. **Never ask who the grantees are before collecting the rest.** A missing recipient is one
+   field inside the batch, never a gating question ahead of it — this is the single most common
+   way this skill goes wrong. Two sub-rules follow from it:
    - **A bare "N \<securities\>" is a quantity, not a headcount.** *"100 option grants"*,
      *"100 certificates"* — the server's `quantity` field counts shares/options for **one**
-     recipient, so with no named people and no plural-**person** language, open **one** blank
-     block with `quantity` pre-filled to N (`knowns.rows = [{"quantity": "100"}]`).
-   - **Only pre-render multiple blank blocks when the language counts people** — *"100
-     employees"*, *"grants for 100 new hires"*, or an explicit list of names. Then
-     `knowns.rows` is that many empty dicts, so the surface opens pre-sized.
+     recipient, so with no named people and no plural-**person** language, collect **one** row
+     with `quantity` already set to N.
+   - **Only open multiple rows when the language counts people** — *"100 employees"*, *"grants
+     for 100 new hires"*, or an explicit list of names.
    - Two questions that are real forks, **not** this forbidden one: a genuinely ambiguous
      quantity-vs-headcount (rare), and *"which file did you mean?"* when the prompt referenced
      a file and [Phase 0.25](#phase-025--ingest-an-uploaded-file) found zero or several
      candidates, or the workbook has several importable sheets. Never ask *who* is in the
      file, and never ask in place of parsing a path the prompt already gave.
-6. **Never build a collection surface you cannot prove you have the rules for.** See
-   [Confirm this skill actually loaded](#confirm-this-skill-actually-loaded) — run that check
-   before the surface, and stop rather than building one from partial context.
 
 The incidents behind these rules — including the ones that look redundant — are in
 [incidents.md](incidents.md). Read it before weakening any of them.
-
-## Confirm this skill actually loaded
-
-A `Skill` invocation can return *"Launching skill: carta-issuance"* and inject **no content**.
-That has happened: the run carried on from a reference file it had read directly and shipped a
-config form whose option-type control was hardcoded to ISO/NSO instead of gated to the corp's
-jurisdiction, offering a UK or AU corp the wrong tax treatments. It looked entirely plausible;
-nothing failed. A partial load fails *confidently*, so check for it rather than waiting to
-notice.
-
-**Before building any collection surface, confirm you can answer all three from content this
-run actually loaded — SKILL.md, this file, and the reference files they sent you to — not from
-memory:**
-
-| # | Question | Where the answer lives |
-|---|---|---|
-| 1 | How many numbered items are in [Engine hard rules](#engine-hard-rules), and what does the **last** one say? | this file — the answer is **6**, and it is this check |
-| 2 | **Option grant:** name all **three** `so_type`s the resolved jurisdiction allows, and say how you resolved that jurisdiction. **Certificate or PIU:** name the field its row template marks `always` that neither other type has. | grant: [payload-reference.md § Picklists](payload-reference.md#picklists) for the three-per-region table, [Phase 0.5](#option-grant-resolve-the-fmv-and-the-jurisdiction-before-building-the-surface) for the derivation · cert: [certificate-fields.md](certificate-fields.md#certificate-row) · PIU: [piu-fields.md](piu-fields.md#piu-row) |
-| 3 | Which builder makes the surface **on the adapter the surface table selected**, which `--security-type` values does it take, and what must you never do instead? | [Phase 0.5](#phase-05--configure-the-issuance) — its table names both |
-
-Question 1 is self-verifying: engine rule 6 *is* this check, so a run that cannot name it is a
-run that never loaded this file. Answering "5" means the content is stale or partial — stop.
-
-**If any answer is missing, stop and say so.** Do not build the surface, and do not
-reconstruct the rules from a reference file:
-
-> *"The carta-issuance skill didn't load fully, so I don't have the issuance rules in front of
-> me. Re-invoke it (or start a fresh message) and I'll pick this up from the top."*
-
-Re-invoking is cheap. A form built on missing rules issues real securities on the wrong tax
-treatment, and neither the review nor the server catches it.
-
-**This check has no counterpart on the panel path**, and belongs to this file rather than
-SKILL.md, because the failure it catches is a *form built from partial instructions*. When the
-server builds the form, a partial skill load cannot produce a wrong one.
 
 ---
 
@@ -149,117 +89,119 @@ server builds the form, a partial skill load cannot produce a wrong one.
   user's only chance to reject a default, so an unshown default is one they never got to see.
 - **Silent defaults are computable; prompted fields aren't.** If the skill can stamp it
   (today's date, the plan's grant term, an autofill rule), stamp it and surface it tagged.
-  Never ask twice.
+  Never ask twice. The full table is
+  [chat-surface.md § 4](chat-surface.md#4-computable-defaults--apply-and-show-never-ask).
 - **Show the full text of legally binding values** (e.g. the legend body), not just the
   template name.
 - **Dates display as `MM/DD/YYYY`** everywhere the user sees them. Payload formats follow
   [payload-reference.md](payload-reference.md).
 - **Explain jargon on first use** (Rule 144 date, Section 4(a)(2), INDIVIDUAL, legend).
 - **No raw ids or payload field names in customer-facing text — ever**
-  ([SKILL.md hard rule 8](../SKILL.md#hard-rules)). Not in headers, status lines, prompts,
-  confirmations, or error renderings. Never write the word "ID" (✅ *"looking up Jane"* /
-  ❌ *"pulling stakeholder id 12345"*), and never render `(<number>)` after a name. Translate
-  payload keys before surfacing them, including when echoing server `banner_errors` back:
-  humanize mechanically (`_` → space, Title Case), with the exceptions listed in
+  ([SKILL.md hard rule 8](../SKILL.md#hard-rules)). Humanize payload keys before surfacing
+  them, server `banner_errors` included: `_` → space, Title Case, with the exceptions listed in
   [labels.md](labels.md).
 
 ---
 
 ## Phase 0 — Preflight
 
-Five steps, in order, **all before any user interaction and before gathering any input.** The
+Four steps, in order, **all before any user interaction and before gathering any input.** The
 surface is already selected ([SKILL.md](../SKILL.md#pick-the-surface)), and that selection is
-free. Steps 2–5 are the only round trips this preflight may spend: one `ToolSearch`, one
-connectivity check, one `list_accounts` (plus at most three disambiguation probes), and one
-`issuance_init` that doubles as the account-level hard stop. Phase 0.5 then spends **one** more on Cowork
-(`issuance_init`, which carries the stakeholder lookup with it) or **two** on Code
-(`issuance_init` plus the roster).
+free. These steps are the only round trips this preflight may spend: one `ToolSearch`, one
+`list_accounts` (plus at most three disambiguation probes), and one `issuance_init` that
+doubles as the account-level hard stop and as Phase 0.5's reference-data fetch.
 
-### Step 1 — What the surface selection changes before your first Carta call
-
-| | Cowork | Code |
-|---|---|---|
-| Phase 0.5 producer | `cap_table:get:issuance_init`, with `stakeholder_names` for the people the prompt named; they come back as the payload's `stakeholders` section | the same `cap_table:get:issuance_init` call with `include_bootstrap: true` and `issue_date`, plus one `cap_table:get:stakeholders` for the full roster the panel's autocomplete needs. Write both results to files and pass them by path ([code-adapter.md §1](code-adapter.md#1-config-panel-build_configpy-builds-every-block)) |
-| Phase 1 match set | that `stakeholders` section | the full roster (`STAKEHOLDER_LIST_JSON`). **There is no `stakeholders` section on this path** — matching against one finds nothing and every grantee is classified new |
-| Phase 0.5 fetch budget | 1 call | 2 calls, plus one per extra roster page |
-| Blockers | none — the gates below are all there is | `include_bootstrap: true` computes them server-side and they are binding ([Blockers](#blockers--act-on-them-before-building-anything)) |
-
-Everything else the adapters differ on is a *surface* difference, not a call difference.
-**A Cowork run needs nothing further from either adapter file until it builds the surface.**
-**A Code run must read [code-adapter.md](code-adapter.md) §0 before Phase 0.25 or Phase 0.5
-issues anything** — §0 carries the remaining overrides, and reading it after the call is
-already formed is what produced a wasted second roster fetch.
-
-Every bare `preview_start` / `preview_list` / `preview_eval` in this file and its references
-means the resolved, possibly prefixed name from the tool list — or `javascript_tool` as the
-eval fallback.
-
-### Step 2 — Load every tool in ONE ToolSearch call
+### Step 1 — Load every tool in ONE ToolSearch call
 
 ```
 ToolSearch: "select:mcp__carta__call_tool,mcp__carta__search_tools,mcp__carta__welcome,mcp__carta__list_accounts"
 ```
 
-`mcp__carta__` is the placeholder prefix
-([Step 2a](#step-2a--carta-command-names-hardcoded-never-discovered)) — when the session's
-Carta tools carry a different prefix, substitute it into the `select:` string; the names after
-the prefix never change. Zero matches on the literal `mcp__carta__` names means the wrong
-prefix, not a disconnected server — re-check the session's tool list before treating it as the
-Step 3 stop.
+`mcp__carta__` is the placeholder prefix ([Step 2](#step-2--command-names-and-base_url)) — when
+the session's Carta tools carry a different prefix, substitute it into the `select:` string; the
+names after the prefix never change. Zero matches on the literal `mcp__carta__` names means the
+wrong prefix, not a disconnected server — re-check the session's tool list
+([SKILL.md § Carta is connected](../SKILL.md#carta-is-connected--read-this-before-you-conclude-otherwise)).
 
-One call, four tools, the complete set for the run. **`call_tool` is loaded here, up front**,
-so Phase 2 never has to load it after the user confirms — that would be serial latency at the
-worst possible moment. On the Cowork path, add `mcp__visualize__show_widget` to the same
-`select:` list if it isn't already loaded.
+One call, four tools, the complete set for the run. **`call_tool` is loaded here, up front**, so
+Phase 2 never has to load it after the user confirms — that would be serial latency at the worst
+possible moment.
 
-**Don't call `search_tools` in the hot path.** Every command name is hardcoded below, and
-`call_tool` reaches all of them directly; looking up a name you already know is a pure round
-trip. `search_tools` is for a command this file does not name.
+**Don't call `search_tools` in the hot path.** Every command name is hardcoded in
+[Step 2](#step-2--command-names-and-base_url), and `call_tool` reaches all of them directly;
+looking up a name you already know is a pure round trip. `search_tools` is for a command that
+table doesn't name.
 
-### Step 2a — Carta command names (hardcoded, never discovered)
+### Step 2 — Command names and `BASE_URL`
 
-Reads and writes both go through **one** tool, `call_tool`. It takes `name` and
-`arguments` — and the name carries **double underscores** where this skill's prose uses
-colons:
+Reads and writes both go through **one** tool, `call_tool`. It takes `name` and `arguments` —
+and the name carries **double underscores** where this skill's prose uses colons:
 
 ```
-mcp__carta__call_tool({"name": "cap_table__get__<noun>",    "arguments": {…}})
-mcp__carta__call_tool({"name": "cap_table__mutate__<noun>", "arguments": {…}})
+mcp__carta__call_tool({"name": "cap_table__get__issuance_init",    "arguments": {…}})
+mcp__carta__call_tool({"name": "cap_table__mutate__save_drafts",   "arguments": {…}})
 ```
 
-**Translate every command name in this file the same way**: the table below reads
-`cap_table:get:issuance_init`, and the wire name is `cap_table__get__issuance_init`. Colons in
-prose, double underscores in the call; `arguments`, never `params`. Getting either wrong costs
-a round trip on an `Unknown tool` or an argument-shape rejection.
+This is the authoritative spelling table. Translate every command name in this file the same
+way; `arguments`, never `params`. Names this skill once got wrong are marked.
+
+| Prose form | Wire name |
+|---|---|
+| `cap_table:get:issuance_bootstrap` | `cap_table__get__issuance_bootstrap` |
+| `cap_table:get:issuance_init` | `cap_table__get__issuance_init` |
+| `cap_table:get:issuable_field_manifest` | `cap_table__get__issuable_field_manifest` |
+| `cap_table:get:stakeholders` | `cap_table__get__stakeholders` |
+| `cap_table:get:option_plans` | `cap_table__get__option_plans` |
+| `cap_table:get:certificate_share_classes` | `cap_table__get__certificate_share_classes` |
+| `cap_table:get:document_sets` | `cap_table__get__document_sets` |
+| `cap_table:get:legends` | `cap_table__get__legends` |
+| `cap_table:get:vesting_templates` | `cap_table__get__vesting_templates` |
+| `cap_table:get:acceleration_templates` | `cap_table__get__acceleration_templates` |
+| `cap_table:get:409a_valuations` — **not** `valuations_409a` | `cap_table__get__409a_valuations` |
+| `cap_table:get:valuations` — the international ones; **not** `international_valuations` | `cap_table__get__valuations` |
+| `cap_table:get:load_drafts` | `cap_table__get__load_drafts` |
+| `cap_table:list:draft_sets` — resume by name | `cap_table__list__draft_sets` |
+| `cap_table:get:cap_table_by_share_class` — context math only | `cap_table__get__cap_table_by_share_class` |
+| `cap_table:mutate:save_drafts` | `cap_table__mutate__save_drafts` |
+| `cap_table:mutate:validate_drafts` | `cap_table__mutate__validate_drafts` |
+| `cap_table:mutate:issue_securities` | `cap_table__mutate__issue_securities` |
+| `cap_table:mutate:resolve_duplicate_stakeholder` | `cap_table__mutate__resolve_duplicate_stakeholder` |
+
+There is no `cap_table:get:cap_table_summary` and no `cap_table:get:draft_set_init`. Don't
+reach for either; both were invented on a fallback path, so they failed exactly when the run
+was already degraded. `draft_set_init` is a **section** of `issuance_init`'s response, not a
+command of its own.
+
+> **The totals source has a breakdown-sounding name.** `cap_table:get:cap_table_by_share_class`
+> — `corporation_id` alone — returns authorized, outstanding, fully diluted, and ownership %.
+> Context math only (e.g. percent-of-fully-diluted for a grant), never a payload source.
 
 **`mcp__carta__` is a placeholder** — here, in every code block below, and in every reference
 file. The real prefix is environment-dependent (`mcp__carta-test__call_tool`, plugin-scoped and
-UUID-suffixed connector forms all occur). Resolve it from the session's tool list and
-substitute it everywhere; only the prefix varies — tool and command names never do. The one
-exception: SKILL.md's frontmatter `allowed-tools` entries are literal grant patterns — never
-substitute there.
+UUID-suffixed connector forms all occur). Resolve it from the session's tool list and substitute
+it everywhere; only the prefix varies — tool and command names never do. The one exception:
+SKILL.md's frontmatter `allowed-tools` entries are literal grant patterns — never substitute
+there. `call_tool` is the only surface: the `fetch`/`mutate` gateway pair sits behind a flag
+that defaults off, so `mcp__carta__fetch` comes back *"No such tool available"*
+([incidents.md § Round-trips](incidents.md#round-trips-that-bought-nothing)). And **never call
+`set_context`** — every command takes `corporation_id` as a direct param.
 
-**Record `BASE_URL` here too**, from the session's `get_current_user` result — it returns
-`base_url` (e.g. `https://demo.carta.team`) alongside `environment`. Every Carta link this
-skill emits is built from it, because a hardcoded host sends the user into a different
-environment than the one they just wrote to. Never derive it from the tool prefix. If it is
-genuinely absent, say the environment is unknown rather than assuming production.
+**Record `BASE_URL` here**, from the session's `get_current_user` result — it returns `base_url`
+(e.g. `https://demo.carta.team`) alongside `environment`. Every Carta link this skill emits is
+built from it, because a hardcoded host sends the user into a different environment than the one
+they just wrote to. Never derive it from the tool prefix. If it is genuinely absent, say the
+environment is unknown rather than assuming production.
 
 #### The connected Carta must be the intended Carta — check before the first call
 
-**A Carta server being connected is not evidence it is the right one.** `corporation_id` is
-not unique across environments: corp 3 on demo is a different company from corp 3 on
-production or on a local stack, so aiming at the wrong one does not fail — it reads one
-company's cap table and later issues real securities onto it.
+The hard stop is [SKILL.md § The panel § 1](../SKILL.md#1-preflight)'s, and it binds here too:
+`corporation_id` is not unique across environments, so aiming at the wrong one reads one
+company's cap table and later issues real securities onto it. The tool prefix names the
+connected environment (`…_Carta_Demo__` → demo, a `-test` or sandbox suffix likewise, unsuffixed
+→ production) and `get_current_user`'s `environment` / `base_url` confirm it. Three cases:
 
-Resolve the connected environment before Phase 0.25 or 0.5 calls anything: the tool prefix
-names it (`…_Carta_Demo__` → demo, a `-test` or sandbox suffix likewise, unsuffixed →
-production) and `get_current_user`'s `environment` / `base_url` confirm it.
-
-- **The request names no environment** → the connected one is the intended one. Continue,
-  say nothing.
-- **The request names or implies one** — a host, a Carta link, "local", "metal", "sandbox",
-  "demo", "production" — **and it differs** → **hard stop before the first Carta call.**
+- **The request names no environment** → the connected one is intended. Continue, say nothing.
+- **It names or implies one and that differs** → **hard stop before the first Carta call.**
 - **Two Carta surfaces are connected and they disagree** → **hard stop.**
 
 > *"Your Carta connection points at \<connected\>, and this request looks like it's about
@@ -270,66 +212,22 @@ production) and `get_current_user`'s `environment` / `base_url` confirm it.
 **Never settle this yourself** by using the connected server because it is the only one
 present. Being the only option is not the same as being the right one.
 
-| Purpose | Command (prose form) | Wire name for `call_tool` |
-|---|---|---|
-| Reference data for the collection surface, **plus named stakeholders** via `stakeholder_names` | `cap_table:get:issuance_init` | `cap_table__get__issuance_init` |
-| Stakeholder lookup for a roster **miss** — pass `names=` for several, `search=` for exactly one | `cap_table:get:stakeholders` | `cap_table__get__stakeholders` |
-| Load an existing set's rows | `cap_table:get:load_drafts` | `cap_table__get__load_drafts` |
-| List draft sets (resume by name) | `cap_table:list:draft_sets` | `cap_table__list__draft_sets` |
-| Cap-table totals for context math — authorized, outstanding, fully diluted, ownership % | `cap_table:get:cap_table_by_share_class` | `cap_table__get__cap_table_by_share_class` |
-| Save rows, no validation | `cap_table:mutate:save_drafts` | `cap_table__mutate__save_drafts` |
-| Validate a saved set | `cap_table:mutate:validate_drafts` | `cap_table__mutate__validate_drafts` |
-| Save + validate + dedupe + issue | `cap_table:mutate:issue_securities` | `cap_table__mutate__issue_securities` |
-| Resolve flagged duplicates | `cap_table:mutate:resolve_duplicate_stakeholder` | `cap_table__mutate__resolve_duplicate_stakeholder` |
+#### When a call fails
 
-> **The totals source has a breakdown-sounding name.** `cap_table:get:cap_table_by_share_class`
-> — `corporation_id` alone — returns authorized, outstanding, fully diluted, and ownership %.
-> Context math only (e.g. percent-of-fully-diluted for a grant), never a payload source. There
-> is no `cap_table:get:cap_table_summary`, and the similar-sounding `cap_table_summary_report`
-> belongs to a different plugin; the row above is this skill's totals source.
-
-**`call_tool` is the surface; the `fetch`/`mutate` gateway pair is not.** The runtime's tool
-descriptions deprecate `fetch` in favour of `call_tool`, and on a normal session that is the
-whole story: the gateway pair sits behind a flag that defaults off, so `mcp__carta__fetch`
-comes back *"No such tool available"* and a `ToolSearch` for it resolves nothing. Load
-`call_tool` (Step 2) and address every command by its double-underscore wire name. Scope and
-staff checks are enforced inside the command executor either way. Full story:
-[incidents.md § Round-trips](incidents.md#round-trips-that-bought-nothing).
-
-**Never call `set_context` for a corporation-scoped command.** Every command above takes
-`corporation_id` as a direct param — pass it.
-
-### Step 3 — Confirm Carta MCP connectivity
-
-The whole flow depends on the Carta MCP server. When it doesn't answer, **classify the failure
-before reporting it** — "not connected" and "Carta is briefly down" need opposite responses from
-the user, and telling someone to reconnect a connection that was fine is its own failure.
-
-| Signal | Meaning | Do |
-|---|---|---|
-| No Carta MCP tool in the tool list at all | Genuinely not connected | Stop with the message below |
-| A call fails with HTTP 5xx / 502 / 503 / a gateway or HTML error body / a timeout | Transient upstream — the server is connected and briefly unhealthy | **Retry once**, then stop with the *temporary problem* message |
-
-**Genuinely not connected** — stop before gathering any input:
-
-> *"I can't reach Carta — the Carta MCP server isn't connected. Connect the Carta MCP server and try again."*
-
-**Transient upstream** — retry the failed call exactly **once**. If the retry succeeds, continue
-the run normally and say nothing about it. If it fails again, stop:
-
-> *"Carta is having a temporary problem on its end — the connection is fine. Give it a minute and try again."*
+[SKILL.md § Carta is connected](../SKILL.md#carta-is-connected--read-this-before-you-conclude-otherwise)
+classifies the failure: no Carta tool under any prefix means genuinely disconnected and you
+stop; a 5xx, gateway error, HTML body or timeout is transient and gets **one** retry.
 
 **The retry cap is one, and it is a hard cap.** It counts **the failing operation, not the
 call**: if `save_drafts` fails twice, a follow-up `issue_securities` against the same draft set
 is not a fresh attempt — it is the third try at the same write, and a traced run burned three
 500s that way. A second failure means waiting: re-running the same call against a 502 cannot
-succeed, and repeated attempts are the inner-loop thrash this skill's budgets exist to
-prevent. Do not vary the call to make a retry
-look novel, do not fall back to a different tool or a `discover`/`search_tools` probe, and do not
-treat an HTML error body as a data payload to parse — an HTML response to a JSON call is an
-outage signal, never content.
+succeed, and repeated attempts are the inner-loop thrash this skill's budgets exist to prevent.
+Do not vary the call to make a retry look novel, do not fall back to a different tool or a
+`discover`/`search_tools` probe, and do not treat an HTML error body as a data payload to parse
+— an HTML response to a JSON call is an outage signal, never content.
 
-### Step 4 — Resolve the corporation by name
+### Step 3 — Resolve the corporation by name
 
 If the prompt named a company and you don't already have its `corporation_id`, call
 `list_accounts(search="<name>")` — **never** an unfiltered `list_accounts()`, which returns a
@@ -342,7 +240,8 @@ carries no extra distinguishing field), then swept the list corp by corp — twi
 of its calls before any issuance work began. Instead:
 
 1. If the prompt named a holder, probe **at most three** candidates with
-   `cap_table:get:stakeholders(corporation_id=<id>, search="<that person>")`.
+   `cap_table:get:stakeholders` — wire `cap_table__get__stakeholders` —
+   with `{"corporation_id": <id>, "search": "<that person>"}`.
 2. **Stop at the first hit** and use that corporation.
 3. If more than one hits, or none does inside three probes, **stop and ask which company**
    with `AskUserQuestion`, listing the candidates by any detail that differs.
@@ -351,14 +250,14 @@ of its calls before any issuance work began. Instead:
 different arguments, or a loop that "looks different" because the id changed are all the same
 bug. Zero matches, or several with no named holder to probe with, go straight to step 3.
 
-### Step 5 — Run the account-level hard stops first
+### Step 4 — Run the account-level hard stops first
 
 **As soon as you have `security_type` and `corporation_id`, run the account-level hard stops —
-before the roster, before the rest of the reference data, before any surface work.** One
+before the rest of the reference data, before any collection.** One
 `cap_table:get:issuance_init` call answers all of them, and each one ends the run:
 
 - **Option grant:** no plan this grant could issue from — the
-  [live-plan check](#blockers--act-on-them-before-building-anything).
+  [live-plan check](#blockers--act-on-them-first).
 - **Option grant:** `document_sets.count == 0`, and **PIU:** `certificate_share_classes.count
   == 0` — the [account-setup gate](#account-setup-gate-option-grant-and-piu).
 
@@ -377,14 +276,12 @@ add a path around any gate: Phase 1 still resolves, Phase 1.5 still saves and va
 still reviews, Phase 3 is still the only mutate.
 
 Supported: `.xlsx` `.xlsm` `.csv` `.tsv` (deterministic) and `.pdf` `.docx` (text extraction).
-Parsing is a local script, so the phase needs `Bash(uv run *)` — present on the Code adapter,
-not guaranteed on Cowork.
+Parsing is a local script, so the phase needs `Bash(uv run *)`.
 
 **[../issuance-import/SKILL.md](../issuance-import/SKILL.md) owns this phase end to end**: the
-Bash check and what to say when there is none, locating the file, both parser runs, the roster
-half of Phase 0.5's fetches, merging the result into `knowns.rows`, and what to tell the user
-before the surface opens. Read it now, follow it, and come back at
-[Phase 0.5](#phase-05--configure-the-issuance).
+Bash check and what to say when there is none, locating the file, both parser runs, merging the
+result into the rows, and what to tell the user before the collect. Read it now, follow it, and
+come back at [Phase 0.5](#phase-05--configure-the-issuance).
 
 **Never hand-read a workbook.** A column read by eye is how a quantity lands in an
 exercise-price field — it is the failure this whole phase exists to prevent, and it is not a
@@ -398,77 +295,92 @@ never reshape an RSU row into an option grant to make it fit.
 
 ## Phase 0.5 — Configure the issuance
 
-Collect everything on **one** surface — every field, per stakeholder — so the user submits once
-instead of answering a chain of questions, and so a single batch can carry genuinely different
-terms for different people. This is the engine's `collectConfig`; the selected adapter decides
-what the surface is.
+Fetch the reference data, run the gates, then collect. Collect **in one batch** — every open
+field at once, so the user answers once instead of working through a chain of questions, and so
+a single batch can carry genuinely different terms for different people.
+[chat-surface.md § 1](chat-surface.md#1-collect--one-batch-and-only-what-is-genuinely-open) owns
+the collect itself; this section owns what has to be true before it runs.
 
-**Fetch the reference data first, and issue every call below in ONE assistant turn.** They have
-no dependencies on each other; serial fetches here are pure latency.
+**One call, and it is the same call Step 4 already made:**
 
-**On Code the producer is the same `issuance_init` call**, plus one `cap_table:get:stakeholders`
-for the full roster the panel's autocomplete needs — issued together in one turn, each result
-written to a file and passed by path
-([code-adapter.md §1](code-adapter.md#1-config-panel-build_configpy-builds-every-block)).
+```
+mcp__carta__call_tool({"name": "cap_table__get__issuance_init", "arguments": {
+  "corporation_id": <corporation_id>, "security_type": "<option_grant|certificate|piu>",
+  "stakeholder_names": ["<each person the prompt named>"],
+  "include_bootstrap": true, "issue_date": "<YYYY-MM-DD>"}})
+```
 
-> **On Code, pass `include_bootstrap: true` and `issue_date` to that `issuance_init` call.** It
-> adds [blockers](#blockers--act-on-them-before-building-anything), `blockers_summary` and a
-> `knowns_seed` to the same response, for no extra round trip. Cowork leaves it **off**: it
-> costs an extra corporation read server-side, and the gates below already cover that path.
-
-- **Stakeholder lookup — Cowork** — pass the people the prompt named as `stakeholder_names` on
-  the **same** `issuance_init` call below. The server resolves them alongside the reference
-  data in one round trip, and they come back as that payload's `stakeholders` section, same
-  shape as the standalone `cap_table:get:stakeholders` command. There is no separate
-  stakeholder fetch here. **If the prompt named nobody, pass no names at all**: there is nobody
-  to resolve yet, and [Phase 1](#phase-1--resolve-each-row--reconcile-share-classes) resolves
-  whatever names the user types into the form.
-  **On Code there is no name list to pass** — the separate roster call already covers everyone
-  ([Step 1](#step-1--what-the-surface-selection-changes-before-your-first-carta-call)).
+- **`stakeholder_names`** resolves the people the prompt named alongside the reference data, in
+  one round trip. They come back as the payload's `stakeholders` section, at `detail=full`,
+  carrying `id`, `full_name`, `email`, `event_relationship` and `kind` per person — the same
+  shape as the standalone `cap_table:get:stakeholders` command. **If the prompt named nobody,
+  pass no names at all**: there is nobody to resolve yet, and
+  [Phase 1](#phase-1--resolve-each-row--reconcile-share-classes) resolves whatever names the
+  user gives during the collect.
 
   > **Never put two people in one `search=`.** It AND-s its whitespace-separated terms, so it
   > matches **one person only**; two names in one `search` come back an empty list with a
   > perfectly healthy `200`. Several people go through `stakeholder_names` (here) or `names=`
   > ([Phase 1](#phase-1--resolve-each-row--reconcile-share-classes), which carries the full
   > rule and what it costs when broken).
-- **Reference data** — `cap_table:get:issuance_init` with the active `security_type`, plus
-  `stakeholder_names` on Cowork when the prompt named people. **One call** returns every
-  section the surface and Phase 1 need, each with the same `{count, results}` shape as its
-  standalone command:
-  - *Option grant* — `vesting_templates`, `acceleration_templates`, `document_sets`,
-    `valuations_409a`, `international_valuations`, `option_plans`.
-  - *Certificate* — `certificate_share_classes`, `legends`, `vesting_templates`,
-    `acceleration_templates` (cert vesting is opt-in but needs the same two lists once opted in).
-  - *PIU* — `certificate_share_classes` (**read as the unit classes**: same endpoint and
-    shape, so the section keeps that name and its fallback command), `option_plans`,
-    `vesting_templates`, `acceleration_templates`, `document_sets`, `draft_set_init`. **No
-    `legends`, no valuations** — a PIU has no legend and no exercise price. Threshold value
-    types are not a section: they are the fixed pair `Unit` / `Overall`. `draft_set_init`
-    carries the issuer's `thresholdNoun` (`"hurdle"` on the growth-shares preset) and `isLLC`.
-  - *Both, only when `stakeholder_names` was passed* — `stakeholders`, already at `detail=full`,
-    carrying `id`, `full_name`, `email`, `event_relationship`, and `kind` per person.
 
-  Every section is fetched server-side in parallel, so adding `stakeholder_names` costs no extra
-  wall-clock — it removes a round trip rather than adding one.
+- **`include_bootstrap: true`** adds [`blockers`](#blockers--act-on-them-first),
+  `blockers_summary` and a `knowns_seed` to the same response for no extra round trip. The seed
+  carries what the server could derive — the corporation's legal name, the issuer's LLC flag and
+  threshold noun, currency and its candidates, the active FMV rows with their source, and
+  `jurisdiction_evidence.signals`. It deliberately does **not** carry a jurisdiction verdict.
+- **`issue_date`** is what lets the grant-expiration check run at all. Pass it whenever the run
+  knows the date; without it that check downgrades to an `informational` entry carrying each
+  plan's derived expiry, and a grant whose expiry lands before its issue date reaches the server
+  and is rejected there instead. An unparseable date is **refused, not ignored** — send
+  `YYYY-MM-DD` or omit the key.
 
-  **Partial failure is non-fatal.** A section that failed comes back `null` and is named in the
-  top-level `errors` array (`[{section, message}]`); fall back to that section's individual
-  `cap_table:get:<section>` command. An empty `errors` means full success — use the payload
-  directly. This is the only fallback path; the rest of this file just says "from the
-  `issuance_init` payload".
+**The sections it returns, per type** — each with the same `{count, results}` shape as its
+standalone command:
 
-  **Read each section under its own name.** Never let one section's `count: 0` stand in for
-  another's. Exactly one count may stop the flow — the [Account-setup
-  gate](#account-setup-gate-option-grant-and-piu) below, on `document_sets.count` read under that
-  name and no other. Every other count, zero included, never gates: the surface is built and
-  opened regardless (engine rule 5).
+- *Option grant* — `vesting_templates`, `acceleration_templates`, `document_sets`,
+  `valuations_409a`, `international_valuations`, `option_plans`.
+- *Certificate* — `certificate_share_classes`, `legends`, `vesting_templates`,
+  `acceleration_templates` (cert vesting is opt-in but needs the same two lists once opted in).
+- *PIU* — `certificate_share_classes` (**read as the unit classes**: same endpoint and shape, so
+  the section keeps that name and its fallback command), `option_plans`, `vesting_templates`,
+  `acceleration_templates`, `document_sets`, `draft_set_init`. **No `legends`, no valuations** —
+  a PIU has no legend and no exercise price. Threshold value types are not a section: they are
+  the fixed pair `Unit` / `Overall`. `draft_set_init` carries the issuer's `thresholdNoun`
+  (`"hurdle"` on the growth-shares preset) and `isLLC`.
+
+Every section is fetched server-side in parallel, so `stakeholder_names` and
+`include_bootstrap` cost no extra wall-clock — they remove round trips rather than adding them.
+
+**Partial failure is non-fatal.** A section that failed comes back `null` and is named in the
+top-level `errors` array (`[{section, message}]`); fall back to that section's own standalone
+command. **The command name is not always the section name** — two of them differ, and both
+sit on this fallback path, so they fail exactly when the run is already degraded:
+
+| Failed section | Fallback command | Wire name |
+|---|---|---|
+| `valuations_409a` | `cap_table:get:409a_valuations` | `cap_table__get__409a_valuations` |
+| `international_valuations` | `cap_table:get:valuations` | `cap_table__get__valuations` |
+| `option_plans`, `document_sets`, `vesting_templates`, `acceleration_templates`, `legends`, `certificate_share_classes`, `stakeholders` | `cap_table:get:<section name>` | `cap_table__get__<section name>` |
+
+`draft_set_init` has **no** standalone command — it arrives only as a section of this response.
+When it is missing, treat its fields as unknown ([PIU eligibility](#piu-check-issuer-eligibility)
+and [piu-fields.md](piu-fields.md)), never as `false`.
+
+An empty `errors` means full success — use the payload directly. This is the only fallback path;
+the rest of this file just says "from the `issuance_init` payload".
+
+**Read each section under its own name.** Never let one section's `count: 0` stand in for
+another's. Exactly one count may stop the flow — the [account-setup
+gate](#account-setup-gate-option-grant-and-piu) below, on `document_sets.count` read under that
+name and no other. Every other count, zero included, never gates: the collect runs regardless
+(engine rule 5).
 
 ### Account-setup gate (option grant and PIU)
 
 Runs once, immediately after the `issuance_init` payload is read — before FMV, jurisdiction,
-plan, or any surface work, and before the roster
-([Step 5](#step-5--run-the-account-level-hard-stops-first)) — and skipped entirely for
-`certificate`. Both adapters run it.
+plan, or any collection ([Step 4](#step-4--run-the-account-level-hard-stops-first)) — and
+skipped entirely for `certificate`.
 
 **Read the count from its section under that exact name.** A real run aborted a valid
 issuance by reading `acceleration_templates`' zero as `document_sets`'
@@ -479,15 +391,15 @@ issuance by reading `acceleration_templates`' zero as `document_sets`'
 |---|---|---|
 | `option_grant` | `document_sets` | **Hard stop** — `document_set_id` is an `always` field on every grant row |
 | `piu` | `certificate_share_classes` | **Hard stop** — `prefix` is an `always` field, so the batch could never issue |
-| `piu` | `document_sets` | **Soft** — a PIU needs one only when the issuer's own properties demand it, and no MCP command exposes those. Both builders omit the Documents row when the list is empty, so there is nothing to do beyond the one-liner below; `validate_drafts` decides ([SKILL.md hard rule 4](../SKILL.md#hard-rules)) |
+| `piu` | `document_sets` | **Soft** — a PIU needs one only when the issuer's own properties demand it, and no MCP command exposes those. Omit the documents question when the list is empty and say the one-liner below; `validate_drafts` decides ([SKILL.md hard rule 4](../SKILL.md#hard-rules)) |
 | `certificate` | — | skipped |
 
-Hard stop, before building any surface:
+Hard stop, before collecting anything:
 
 > *"Your corporation doesn't have any option-grant document templates set up yet. Create one in the Carta app, then come back."*
 > *"Your corporation doesn't have any unit classes set up yet. Create one in the Carta app, then come back."*
 
-Soft, one line alongside the surface:
+Soft, one line alongside the collect:
 
 > *"This company has no profits-interest document templates. Carta will reject the issuance if your company requires a grant agreement — set one up in the Carta app if it does."*
 
@@ -506,56 +418,69 @@ wrong securities:
   PIU with no matching interest in the linked operating company.
 
 **Why stopping here doesn't break engine rule 5.** Rule 5 forbids asking for *collectible
-fields* before the surface opens. These fields pick **among existing records** and cannot
-create one, so for an `always` field zero records makes it unfillable from any surface and the
-batch can never issue — an **account-setup blocker**, the same category as an unreachable Carta
-MCP (Phase 0 Step 3), resolved in the Carta app rather than on this surface. For a
-*conditional* field (PIU document sets) the blocker isn't certain, which is why that one is
-soft.
+fields* before the collect. These fields pick **among existing records** and cannot create one,
+so for an `always` field zero records makes it unfillable from any surface and the batch can
+never issue — an **account-setup blocker**, the same category as an unreachable Carta MCP,
+resolved in the Carta app rather than here. For a *conditional* field (PIU document sets) the
+blocker isn't certain, which is why that one is soft.
 
 **The gate reads only the sections in the table above.** It is not a "stop on any empty
 section" rule and must not be read as one.
 
-### Blockers — act on them before building anything
+### Blockers — act on them first
 
-Where Phase 0.5's producer returns `blockers`, they are the gate, not advice. Each entry is
-`{key, severity, message, evidence}`; branch on `key`, never on the message text. **`blockers`
-is always emitted, so an empty list means clean — never read absence as "old server".**
+`include_bootstrap: true` returns `blockers`, a list of `{key, severity, message, evidence}`,
+plus `blockers_summary` (`{total, hard_stop, needs_decision, informational, keys}`). They are
+the gate, not advice. **Branch on `key`, never on the message text.** **`blockers` is always
+emitted, so an empty list means clean — never read absence as "old server".**
 
 | Severity | What you do |
 |---|---|
-| `hard_stop` | **Do not build the surface.** Stop and tell the user what is wrong, in the blocker's own `message` |
-| `needs_decision` | Build the surface, but put the decision to the human. Never resolve it yourself, and never re-derive a verdict the blocker deliberately withheld |
-| `informational` | Note it in the one line you say alongside the surface. Do not block |
+| `hard_stop` | **Collect nothing.** Stop and tell the user what is wrong, in the blocker's own `message` |
+| `needs_decision` | Continue, but put the decision to the human. Never resolve it yourself, and never re-derive a verdict the blocker deliberately withheld |
+| `informational` | Note it in the one line you say alongside the collect. Do not block |
 
-**Pass `issue_date` alongside `include_bootstrap` whenever the run knows the date.** Without it
-the grant-expiration check cannot run at all and downgrades to an `informational` entry
-carrying each plan's derived expiry — so a grant whose expiry lands before its issue date
-reaches the server and is rejected there instead. An unparseable date is refused, not ignored.
+The keys:
+
+| Key | Severity | Means |
+|---|---|---|
+| `option_plan.none_selectable` | `hard_stop` | No plan this grant could issue from — every one expired, or none with shares available |
+| `grant_expiration.before_issue_date` | `hard_stop` | The plan-derived expiry lands before the issue date, so the server rejects the grant |
+| `grant_expiration.unchecked_no_issue_date` | `informational` | No `issue_date` was passed, so the check above could not run; carries each plan's derived expiry instead |
+| `valuation.no_active_fmv` | `needs_decision` | No live valuation to price from |
+| `valuation.multiple_active_same_class` | `needs_decision` | An HMRC report's AMV and UMV are both live — the admin picks; leave the exercise price unanswered until they do |
+| `jurisdiction.unresolved_conflict` | `needs_decision` | Competing signals and **deliberately no verdict** |
+
+**`jurisdiction.unresolved_conflict` is the one to be careful with.** `jurisdiction_evidence`
+holds signals and no ranking on purpose: a ranked field is a default, a default gets taken, and
+the wrong one sets real holders' tax treatment. Put the competing evidence to the admin and use
+their answer. **Do not run the precedence ladder
+[below](#option-grant-resolve-the-fmv-and-the-jurisdiction) over it** — that ladder is for a run
+with no blocker to consult, and re-deriving a verdict here is the silent default this blocker
+exists to prevent.
 
 **Option grants: no live plan is a `hard_stop`.** `equity_plan_id` is required on the first
 mutate, so a corporation with no plan this grant could issue from cannot issue at all — and
-nothing downstream says so. The account-setup gate reads `document_sets` and passes, the
-surface builds and collects every field, and the run dies at `save_drafts` after the admin has
-filled the whole thing in. `option_plan.none_selectable` is the mechanism: it catches expired
-plans **and** plans with no available shares. Stop with its message, naming the plan and its
-date so the admin knows what to fix:
+nothing downstream says so. The account-setup gate reads `document_sets` and passes, the collect
+gathers every field, and the run dies at `save_drafts` after the admin has answered everything.
+`option_plan.none_selectable` is the mechanism: it catches expired plans **and** plans with no
+available shares. Stop with its message, naming the plan and its date so the admin knows what to
+fix:
 
 > *"\<Company\>'s only equity plan, \<name\>, expired on \<MM/DD/YYYY\>. Carta can't issue an
 > option grant without a live plan — adopt a new one or extend that one in the Carta app, then
 > come back."*
 
-**On Cowork, which does not set `include_bootstrap`**, run that one check by hand before
-building: count the `option_plans` rows whose `is_expired` is **false**, and stop on zero with
-the same message.
-The expiry also caps `grant_expiration_date`
-([option-grant-fields.md](option-grant-fields.md#option-grant-row)), so a plan that expired
-years ago produces an expiry before the issue date too.
+**If `blockers` is absent** — the bootstrap extras failed, or the flag was omitted — run that
+one check by hand before collecting: count the `option_plans` rows whose `is_expired` is
+**false**, and stop on zero with the same message. The expiry also caps
+`grant_expiration_date` ([option-grant-fields.md](option-grant-fields.md#option-grant-row)), so
+a plan that expired years ago produces an expiry before the issue date too.
 
 One or more live plans → carry them to [Option-plan
 reconciliation](#option-plan-reconciliation-option-grant), which picks among them.
 
-### PIU: check issuer eligibility (before building the surface)
+### PIU: check issuer eligibility
 
 Profits interests belong to LLCs and partnerships. **Nothing server-side rejects a PIU on a
 C-corp** — not the draft-set views, not the validators — so this check exists only here. Read
@@ -569,43 +494,48 @@ C-corp** — not the draft-set views, not the validators — so this check exist
 - **absent or `null`** (the section failed, or the field is missing) → treat as **unknown, not
   as `false`**. Continue without the warning — never block on a failed fetch.
 
-### Option grant: resolve the FMV and the jurisdiction (before building the surface)
+### Option grant: resolve the FMV and the jurisdiction
 
 **Skipped entirely for `certificate` and `piu`** — neither has an exercise price, so there is
 no FMV to resolve and no `so_type` jurisdiction to gate.
 
-Both are batch-level: every row in one draft set shares them. Resolve once, pass in `knowns`.
+Both are batch-level: every row in one draft set shares them. Resolve once.
 
 **The FMV is not "the 409A".** A company outside the US prices grants from an EMI, CSOP or
 share-price valuation and may have no 409A at all — reading only `valuations_409a` is what left
 those admins with an empty exercise price. Prefer `international_valuations`, which covers every
 source *including* 409A and carries the currency and status that `valuations_409a` cannot.
 
-Read `international_valuations.active` (already filtered to live valuations server-side — do
-**not** re-derive it from dates) and set four `knowns` keys, specified in full in the shared
-[`knowns` table](code-adapter.md#1-config-panel-build_configpy-builds-every-block):
-`fmv_options` (every `active` row **as-is**, keeping `share_class_type` and `share_class_name`
-alongside `price`, `currency`, `valuation_type`, `effective_date`), `fmv_source` (their shared
-`support_reference_type`), `fmv_expired_on` (only when `active` is empty and `history` isn't),
-and `common_share_class_name` (the chosen plan's). The builder derives the hint and the prefill
-from these — don't pre-compute either, and pass every active row.
+Read `international_valuations.active` — already filtered to live valuations server-side, so do
+**not** re-derive it from dates. Each row carries `price`, `currency`, `valuation_type`,
+`effective_date`, `share_class_type` and `share_class_name`. Then, in this order:
 
-> **Never filter or choose among the active rows; that is the surface's job.** Two on the
-> **same** class is a real question for the admin — an HMRC report yields both an **AMV**
-> (actual market value, discounted for restrictions) and a **UMV** (unrestricted market value),
-> nothing in the payload says which a grant is priced from, and the difference changes the
-> holder's tax position — so the surface leaves the field empty. Do not "help" by filling one
-> in. Two on **different** classes is not a choice at all: an option prices off the plan's
-> common share class, so a live preferred FMV is another class's price and the surface drops
-> it. A corp with an Ordinary share price of 0.75 and a Seed Preferred FMV of 1.00 must price
-> its options at **0.75**.
+1. **Narrow to the chosen option plan's common share class** (`common_share_class_name` on the
+   plan — the fallback to match on when a valuation row omits `share_class_type`). An option
+   prices off the plan's common share class, so a live preferred FMV is another class's price
+   and is dropped. A corp with an Ordinary share price of 0.75 and a Seed Preferred FMV of 1.00
+   must price its options at **0.75**.
+2. **Exactly one row survives** → that price is the exercise-price default. Show it tagged
+   `(default — current <source>)`, where the source is the rows' shared
+   `support_reference_type` — `409A` / `EMI` / `CSOP` / `SHARE_PRICE` (the
+   `*_VALUATION_REPORT` wire forms mean the same thing).
+3. **Two or more survive on the same class** → **do not pick.** An HMRC report yields both an
+   **AMV** (actual market value, discounted for restrictions) and a **UMV** (unrestricted market
+   value); nothing in the payload says which a grant is priced from, and the difference changes
+   the holder's tax position. Put both to the admin in the collect batch and use their answer.
+4. **`active` is empty but `history` isn't** → say when cover ended (the lapsed
+   `expiration_date`) rather than just "none on file", and ask for the price.
 
-**If the section is missing** — a US-only corp can be refused it (it is permissioned separately),
-in which case it comes back `null` in `errors`. Fall back to `valuations_409a`: use
-`current_409a` when its `is_expired` is false, and treat `is_expired: true` as the expired case.
+**If the section is missing** — a US-only corp can be refused it, since it is permissioned
+separately, in which case it comes back `null` in `errors`. Fall back to `valuations_409a`
+(command `cap_table:get:409a_valuations`): use `current_409a` when its `is_expired` is false,
+and treat `is_expired: true` as the expired case.
 
-**Derive `knowns.jurisdiction` too** — `build_config.py` defaults it to `"US"`, which shows a UK
-company ISO/NSO buttons instead of EMI/CSOP. In precedence order:
+**Derive the jurisdiction too** — it gates which three `so_type`s the option-type question may
+offer ([payload-reference.md § Picklists](payload-reference.md#picklists)), and offering a UK
+company ISO/NSO instead of EMI/CSOP hands the holder the wrong tax treatment. Prefer
+`jurisdiction_evidence.signals` from the bootstrap seed; where it does not settle the question,
+the precedence order is:
 
 1. the active valuation's `currency` (`GBP` → UK, `AUD` → AU, `USD` → US);
 2. `option_plans[].scheme_type == "EMI"` → UK;
@@ -613,78 +543,39 @@ company ISO/NSO buttons instead of EMI/CSOP. In precedence order:
 4. otherwise `US` — and say so in the review as `(default — assumed US)`, so a wrong guess is
    visible and correctable rather than silent.
 
-Set `knowns.currency` from the same source. See
-[code-adapter.md § knowns](code-adapter.md#1-config-panel-build_configpy-builds-every-block).
+**Never gate the option-type question to all nine types across US/UK/AU at once.** Three, for
+the resolved jurisdiction. Set the batch `currency` from the same source the jurisdiction came
+from, and remember the payload `currency` and `exemption` are ultimately the per-`so_type`
+autofill's ([payload-reference.md](payload-reference.md#so_type-auto-fill-rules)), not this one.
 
-**The surface's fields** — one full key-value block per stakeholder, every field inside that
-person's own block, so a batch can issue genuinely different terms to different people. The
-authoritative enumeration for both adapters is
-[cowork-adapter.md § Fields](cowork-adapter.md#fields); it also covers batch mode
-(shared terms once + a compact name/email/quantity table) for large identical-term batches.
-
-**First, [confirm this skill actually loaded](#confirm-this-skill-actually-loaded)** — engine
-rule 6. This is the gate that check exists for: everything below builds the surface, and a
-surface built on partial context looks right and issues the wrong tax treatment.
-
-**Build the surface with its script, never by hand.** Write `_data.json` and `_knowns.json`
-and run the builder for the selected adapter.
-
-**A fetched result reaches the builder as a file, and is written out exactly once.** Every
-result arrives through MCP and exists only in your context, so one transcription is
-unavoidable — a second is dead time with no tool call in it, and one traced run spent 129
-seconds on a roster that way. Derive anything else from the file you already wrote, and never
-read one back.
-
-**On Code, clear the cache directory's `_draft_state.json` before you build.** `OUT_DIR` is
-keyed only by `corporation_id` and persists indefinitely, so a file left there by an unrelated
-earlier session on the same corp reuses the same `r0`/`r1` row keys and threads a stranger's
-`draft_pk` onto these rows. The `rm -f` is part of the
-[§1 recipe](code-adapter.md#1-config-panel-build_configpy-builds-every-block);
-Cowork holds this state in context and has nothing to clear.
-
-| Adapter | Builder | `--security-type` | Then |
-|---|---|---|---|
-| Cowork | `build_cowork_form.py` | `option_grant` · `certificate` · `piu` | pass its output verbatim as `show_widget`'s `widget_code` and wait for the `sendPrompt()` reply — [cowork-adapter.md §1](cowork-adapter.md#1-collectconfig--the-show_widget-form) |
-| Code | `build_config.py` | `option_grant` · `certificate` · `piu` | assemble `SUB_FLAGS` and invoke `render-panel` — [code-adapter.md §1](code-adapter.md#1-config-panel-build_configpy-builds-every-block) |
-
-A hand-built surface re-rolls the same dice every run — one traced run wrote a literal
-`'+today+'` as a board approval date and dropped three required controls. **Do not call
-`read_me`**: the generated document is already complete, so that is ~5k tokens for nothing.
-
-**Never express this as a chain of `AskUserQuestion`s**: it is an option-picker that cannot take
-a free-text quantity, price, date, or name, so one prompt per field is the exact serial
-interrogation this phase exists to eliminate. Reserve `AskUserQuestion` for genuinely blocking
-single choices — an ambiguous `security_type`, a multi-plan pick, the Phase 2 confirm.
-
-**On submit** — the `sendPrompt()` JSON on Cowork, the panel's action-request file on Code,
-same shape — take the returned `rows` as your working set and map each row's own fields onto a
-resolved row: [row-mapping.md](row-mapping.md). Then go to Phase 1.
+**Then collect** — [chat-surface.md § 1](chat-surface.md#1-collect--one-batch-and-only-what-is-genuinely-open).
+Every value in
+[its § 4](chat-surface.md#4-computable-defaults--apply-and-show-never-ask) is a default you
+stamp and show, never a question. Once the answers are in, map each row's fields onto a resolved
+row: [row-mapping.md](row-mapping.md). Then go to Phase 1.
 
 ---
 
 ## Phase 1 — Resolve each row + reconcile share classes
 
-Your working set is the `rows` from Phase 0.5 — one entry per grantee/holder, each already
+Your working set is the rows from Phase 0.5 — one entry per grantee/holder, each already
 carrying its own quantity and full field set. Phase 1 *resolves* each row; it does **not**
-re-collect the person, the quantity, or any field the surface already carries.
+re-collect the person, the quantity, or any field already answered.
 
-**Read [payload-reference.md](payload-reference.md) first if you haven't** — both
-adapters, every run. It is the field contract (engine rule 1) and it governs the mapping you
-are about to do, most sharply the per-field date formats. Reading it here rather than before
-the surface is deliberate: nothing earlier in the run constructs a payload.
+**Read [payload-reference.md](payload-reference.md) first if you haven't** — every run. It is
+the field contract (engine rule 1) and it governs the mapping you are about to do, most sharply
+the per-field date formats. Reading it here rather than before the collect is deliberate:
+nothing earlier in the run constructs a payload.
 
-**Resolve from what Phase 0.5 already fetched.** Match each `rows[].name` case-insensitively
-against **that adapter's match set** — on Cowork the `issuance_init` payload's `stakeholders`
-section, on Code the full roster you fetched alongside it (`STAKEHOLDER_LIST_JSON`); there is
-no `stakeholders` section on the Code path, and matching against a section that isn't there
-finds nothing, classifies every grantee as new, and creates **duplicate stakeholders on a real
-cap table**. Either set carries `full_name`, `email`, `id`, `kind`, and `event_relationship`
-per person:
+**Resolve from what Phase 0.5 already fetched.** Match each row's name case-insensitively
+against the `issuance_init` payload's `stakeholders` section, which carries `full_name`,
+`email`, `id`, `kind` and `event_relationship` per person:
 
 - **Exactly one match** → reuse `email`, `event_relationship`, `kind`, `id`. Stamp
   `stakeholder_id` to bypass duplicate detection. Tag `(from existing record)`. **No MCP call.**
-- **No match** → the person is new, or was typed into the form after Phase 0.5 fetched (routine
-  on Cowork). Batch *only these misses* into **one** `cap_table:get:stakeholders` call passing
+- **No match** → the person is new, or was named during the collect after Phase 0.5 fetched
+  (routine). Batch *only these misses* into **one** `cap_table:get:stakeholders`
+  (`cap_table__get__stakeholders`) call passing
   `names=` (a list of the missed names), not `search=`. A genuine no-match is a new stakeholder —
   never ask for an email that is already on the cap table.
 - **Multiple matches on one name** → disambiguate with `AskUserQuestion`.
@@ -702,11 +593,10 @@ per person:
 > concatenating every row's name into one `search` to make that loop look batched is the same bug
 > wearing a disguise, with the added defect that it silently matches nobody.
 
-**Precedence for the two fields the surface can also supply:** a non-empty `relationship`
+**Precedence for the two fields the collect can also supply:** a non-empty `relationship`
 stamps `issue_date_relationship`, and `stakeholder_kind` (defaulting to `INDIVIDUAL`) stamps
 itself — but **only when the lookup found no match**. For an existing stakeholder the cap-table
-record always wins; the surface auto-populates and locks these on an exact name match precisely
-so the two agree. Tag `(from config surface — new stakeholder)`.
+record always wins. Tag `(from the collect — new stakeholder)`.
 
 Dropping any of `email`, `issue_date_relationship`, `stakeholder_kind`, or `stakeholder_id`
 from a stamped row is a contract violation (engine rule 4).
@@ -737,16 +627,14 @@ silently changes the pool math. `equity_plan_id` is never passed on a PIU mutate
 
 Use the `option_plans` section from the Phase 0.5 `issuance_init` payload.
 
-- **The surface already collected one** → use it. The form renders an Equity plan field, so a
-  submitted row carrying `option_plan` has been answered; asking again is a wasted interactive
+- **The collect already answered it** → use that answer. Asking again is a wasted interactive
   wait on a question the user already saw.
 - **One non-expired plan** → default silently. Tag `(default — only active plan)`.
-- **Multiple non-expired, none collected** → `AskUserQuestion`, one option per plan
+- **Multiple non-expired, none answered** → `AskUserQuestion`, one option per plan
   (`"Use \"<name>\" (<available_quantity> available)"`), last option `"Cancel"`.
 - **Zero non-expired** → you should never arrive here: [Phase 0.5's live-plan
-  check](#blockers--act-on-them-before-building-anything) already stopped the
-  run before the surface was built. If you do, stop now with that same message rather than
-  issuing off an expired plan.
+  check](#blockers--act-on-them-first) already stopped the run. If you do, stop now with that
+  same message rather than issuing off an expired plan.
 - Skip expired plans (`is_expired: true`); **never recompute** `available_quantity`.
 
 Pass `equity_plan_id` **only on the first mutate** that creates the set — it is locked
@@ -758,16 +646,14 @@ never sent to the mutate.
 
 ## Phase 1.5 — Save + validate before review (or save-only)
 
-Reached immediately after Phase 1 resolves every row, for **both** of the surface's footer
-buttons. Saving and validating *before* the review exists is deliberate: `validate_drafts` runs
-nearly every check `issue_securities` does — all but the corp-level missing-signatory check —
-and it needs an existing `draft_set_id`, so validating early means saving early too. Reviewing
-an unvalidated summary means the user first learns of a rejection at the final confirm, after a
-draft row has already been created.
+Reached immediately after Phase 1 resolves every row. Saving and validating *before* the review
+exists is deliberate: `validate_drafts` runs nearly every check `issue_securities` does — all but
+the corp-level missing-signatory check — and it needs an existing `draft_set_id`, so validating
+early means saving early too. Reviewing an unvalidated summary means the user first learns of a
+rejection at the final confirm, after a draft row has already been created.
 
-Full mechanics — branching on `save_only` / `config_submit`, translating server errors back
-into `knowns`, re-rendering the surface, and draft-state bookkeeping:
-[save-validate-flow.md](save-validate-flow.md).
+Full mechanics — the save-only branch, translating server errors into something sayable,
+re-asking, and draft-state bookkeeping: [save-validate-flow.md](save-validate-flow.md).
 
 ## Resume an existing draft set
 
@@ -778,16 +664,13 @@ straight to Phase 2: [resume-flow.md](resume-flow.md#resume-an-existing-draft-se
 
 ## Shared resolution helpers
 
-The collection surface already gathers legend, vesting, acceleration, and document set as
-fields inside each stakeholder's block, so on a normal run the row arrives already carrying the
-resolved id/label and **these procedures don't run**. They are the fallback for anything the
-surface didn't resolve. Picklist source, default posture, and what gets stamped are identical
-either way.
+On this path these are the **primary** collection mechanism — nothing else has gathered legend,
+vesting, acceleration or document set. Put each one in the
+[§ 1 batch](chat-surface.md#1-collect--one-batch-and-only-what-is-genuinely-open) rather than
+asking them one at a time. Picklist source, default posture, and what gets stamped are below.
 
-Board approval is the exception to "the surface already did this": it *is* a surface field, but
-the pointed-to section documents the underlying `needs_board_approval` logic both paths
-converge on. Dividend accrual start date is a further exception — it has no surface field at
-all yet and always goes through chat.
+Dividend accrual start date is the one field with no natural place in the batch: it depends on
+the resolved share class, so it is asked after the class is known.
 
 ### Vesting resolution
 
@@ -822,10 +705,9 @@ payload. `AskUserQuestion`: one option per template → `acceleration_template: 
   helpers](option-grant-fields.md#resolution-helpers-option-grant).
 - **Unit class, equity plan, threshold value and type, document set, board approval,
   corresponding interest** (PIU) — [piu-fields.md § Resolution
-  helpers](piu-fields.md#resolution-helpers-piu). **The unit class is a surface
-  field that arrives resolved only when the prompt named a class.** With none named the
-  builder pre-selects a sole class and otherwise leaves the control unselected, blocking
-  submission until a human picks — never fill it in for them.
+  helpers](piu-fields.md#resolution-helpers-piu). **The unit class is never ranked.** A sole
+  class is the default; with two or more, ask — filling it in for the user puts the holder in a
+  class nobody chose.
 
 ---
 
@@ -848,18 +730,17 @@ Tick before any mutate — Phase 1.5's `save_drafts` / `validate_drafts` include
 final `issue_securities`:
 
 - [ ] `security_type` resolved and passed on every call
-- [ ] Every row's `issue_date_relationship`, `email`, `stakeholder_kind` and `stakeholder_id` came from the roster the run actually resolved against — the `issuance_init` `stakeholders` section on Cowork, the roster file handed to the builder on Code — not from the surface alone
+- [ ] Every row's `issue_date_relationship`, `email`, `stakeholder_kind` and `stakeholder_id` came from the `issuance_init` `stakeholders` section (or the Phase 1 `names=` lookup), not from the collect alone
 - [ ] **Cert:** share class resolved → `prefix`. **Grant:** option plan resolved, `so_type` autofills applied (`currency`, `exemption`). **PIU:** unit class resolved → `prefix`, `threshold_value` and `threshold_value_type` both set, equity plan resolved **or deliberately empty**
 - [ ] Every `always` field populated per the row template; pre-save assertion passed (engine rule 4)
-- [ ] **For `issue_securities` only:** the review surface was opened and confirmed (Phase 2 → 3). Phase 1.5's calls precede the review by design, so this doesn't apply to them
+- [ ] **For `issue_securities` only:** the review was printed and confirmed (Phase 2 → 3). Phase 1.5's calls precede the review by design, so this doesn't apply to them
 - [ ] If retry: `draft_set_id` + each row's `draft_pk` in the payload ([SKILL.md hard rule 3](../SKILL.md#hard-rules))
 
 ---
 
 ## Build the mutate payload from your Phase-1-resolved rows
 
-Three rules govern the `drafts` payload on **both** paths, and each one fails the whole mutate
-when got wrong:
+Three rules govern the `drafts` payload, and each one fails the whole mutate when got wrong:
 
 - **Per-field date formats.** `grant_expiration_date`, `vesting_start_date` and `rule_144_date`
   are `CharField(10)` and take **`MM/DD/YYYY` only** — an ISO string comes back
@@ -872,21 +753,17 @@ when got wrong:
 - **Empty means omit**, while a real `0` price, `needs_board_approval: false`, and an explicit
   `vesting_template: null` all survive.
 
-**On Cowork — apply all three by hand.** There is no serializer on this path: the script below
-reads and writes `$OUT_DIR` files that only the Code adapter has. The date rule bites hardest on
-an [imported](#phase-025--ingest-an-uploaded-file) batch, where rows arrive prefilled in ISO (the
-form's date inputs accept nothing else), so all three CharFields need converting — Phases 0.5/1
-did not touch them. Strip `row_key` here too: you needed it to thread `draft_pk`
-([cowork-adapter.md § Draft state](cowork-adapter.md#draft-state-on-this-path)), and
-it is an unknown field to the server.
+The date rule bites hardest on an [imported](#phase-025--ingest-an-uploaded-file) batch, where
+rows arrive in ISO, so all three `CharField`s need converting — Phases 0.5 and 1 did not touch
+them.
 
-**On Code — run the serializer**, which enforces all three, and pass what it returns as `drafts`
-verbatim:
+**Let the serializer enforce all three** rather than doing it by hand, and pass what it returns
+as `drafts` verbatim. `$WORK` is your scratchpad directory:
 
 ```bash
 uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-issuance/scripts/serialize_drafts.py" \
   --security-type <option_grant|certificate|piu> \
-  --rows "$OUT_DIR/_review_rows.json" --out "$OUT_DIR/_drafts.json"
+  --rows "$WORK/_rows.json" --out "$WORK/_drafts.json"
 ```
 
 Exit 2 with the row and field named means a date couldn't be read — fix it and re-run rather
@@ -898,9 +775,9 @@ Re-run the pre-save assertion (engine rule 4) on the resolved rows, then mutate.
 
 ## Save as draft (escape hatch)
 
-Runs whenever a save-only save is needed: from [Phase 1.5](#phase-15--save--validate-before-review-or-save-only)'s
-**Save** button (the common case, both adapters), or from the Phase 3 answer `"Save as draft"`
-(Cowork only).
+Runs whenever a save-only save is needed: from
+[Phase 1.5](#phase-15--save--validate-before-review-or-save-only), or from the Phase 3 answer
+`"Save as draft"`.
 
 ```
 mcp__carta__call_tool({"name": "cap_table__mutate__save_drafts", "arguments": {
@@ -940,10 +817,9 @@ report.
 ## Phase 2 → Closing
 
 Everything from the review gate to the closing line lives in
-[issue-and-close.md](issue-and-close.md): Phase 2's review surface and its single confirmation,
-Phase 3's branch table, the `issue_securities` call and its response handling, the success
-rendering, draft-row cleanup, and every closing template.
+[issue-and-close.md](issue-and-close.md): Phase 2's review and its single confirmation, Phase 3's
+branch table, the `issue_securities` call and its response handling, the success rendering,
+draft-row cleanup, and every closing template.
 
 **Read it when you reach Phase 2**, not before — after Phase 1.5 returns clean, or straight
-away on a resume. Both adapters reach it the same way, and by then the surface the user was
-waiting on is already open (Code) or already submitted (Cowork).
+away on a resume.

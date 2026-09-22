@@ -1,9 +1,9 @@
 # Chat review content
 
-The **Cowork adapter's** `showReview` content spec — printed as markdown, then confirmed
-with one `AskUserQuestion` ([cowork-adapter.md §2–3](cowork-adapter.md#2-showreview--chat-markdown)).
-Referenced from [issue-and-close.md § Phase 2](issue-and-close.md#phase-2--render-the-review-surface-mandatory-pre-save-gate).
-The Code adapter renders its panel instead and does not use this file.
+The content spec for the chat surface's review — printed as markdown, then confirmed with one
+`AskUserQuestion` ([chat-surface.md §2–3](chat-surface.md#2-review--printed-markdown-non-blocking)).
+Referenced from [issue-and-close.md § Phase 2](issue-and-close.md#phase-2--the-review-gate).
+The panel and the artifact render their own reviews and do not use this file.
 
 Render **every** always-render column when there's no richer surface to lean on;
 defaulted/autofilled/looked-up values appear too, each with a `(default)` /
@@ -11,9 +11,7 @@ defaulted/autofilled/looked-up values appear too, each with a `(default)` /
 customer consents to defaults too). All date columns in `MM/DD/YYYY`.
 
 The chat review has no header bar or KPI strip to carry batch-level values, and no earlier
-screen the user can go back to, so it keeps the **full** list below. (The Code panel's
-`DETAIL_TABLE` is a deliberately shorter recap for exactly those reasons —
-[issuance-review/SKILL.md](../issuance-review/SKILL.md#block-detail_table).)
+screen the user can go back to, so it keeps the **full** list below.
 
 - **Certificate — always (13):** Stakeholder · Type · Email · Relationship · Share class
   (prefix) · Quantity · Price/share · Board approval · Issue date · Rule 144 date · Build
@@ -63,8 +61,8 @@ directly from the unit class, so the unit class's own authorized total is the ce
 than a plan pool).
 
 **Confirm** — hand straight off to
-[cowork-adapter.md §3](cowork-adapter.md#3-confirm--one-askuserquestion), which carries the one
-`AskUserQuestion` and its four options.
+[chat-surface.md §3](chat-surface.md#3-confirm--exactly-one-askuserquestion), which carries the
+one `AskUserQuestion` and its four options.
 
 ---
 

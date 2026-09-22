@@ -17,13 +17,12 @@ holds a value before review, and a `None` or empty is a skill bug.
     "name":                    <stakeholder.name>,                # always
     "email":                   <stakeholder.email>,               # always
     "stakeholder_id":          <stakeholder.id>,                  # always
-    "stakeholder_kind":        <stakeholder.kind | "INDIVIDUAL">, # always — the config panel's
-                                                                   # Stakeholder-type toggle collects
-                                                                   # this per row for grants too (real
-                                                                   # Carta option grants can go to a
-                                                                   # non-individual holder, same as
-                                                                   # certificates); resolve it the same
-                                                                   # way as the certificate row
+    "stakeholder_kind":        <stakeholder.kind | "INDIVIDUAL">, # always — collected per row for
+                                                                   # grants too (real Carta option
+                                                                   # grants can go to a non-individual
+                                                                   # holder, same as certificates);
+                                                                   # resolve it the same way as the
+                                                                   # certificate row
                                                                    # (certificate-fields.md)
     "issue_date_relationship": <stakeholder.event_relationship>,  # always
     "so_type":                 <user/picklist>,                   # always
@@ -32,9 +31,10 @@ holds a value before review, and a `None` or empty is a skill bug.
     "currency":                <autofill per so_type>,            # always
     "needs_board_approval":    <bool>,                            # always — true=pending, false=approved
     "board_approval_date":     <user, YYYY-MM-DD>,                # omit when needs_board_approval=true
-    "issue_date":              <user, YYYY-MM-DD>,                # always
+    "issue_date":              <user, YYYY-MM-DD>,                # always — OMIT when needs_board_approval is true
     "vesting_template":        <template.id | null>,              # always — null only after explicit "No vesting"
     "vesting_start_date":      <issue_date as MM/DD/YYYY>,        # non-milestone template (CharField)
+    # A pending grant has no issue date: the server refuses one before the board approves.
     "grant_expiration_date":   <plan term from issue_date, capped at the plan's own expiration, as MM/DD/YYYY>,  # always — silent default; CharField (MM/DD/YYYY only)
     "exemption":               <autofill per so_type, or omit>, # US — omit; server defaults to Rule 701
     "document_set_id":         <doc_set.id>,                      # always

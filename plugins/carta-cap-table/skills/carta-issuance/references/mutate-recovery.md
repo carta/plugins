@@ -64,7 +64,7 @@ Then re-call `issue_securities`.
 
 | Server message | Action |
 |---|---|
-| *"Fair market value is required for …"* | Surface verbatim. `AskUserQuestion`: `"Update FMV in Carta UI"` / `"Cancel"`. This skill cannot update FMV. Point a non-US corp (`knowns.jurisdiction` ≠ `US`, or an EMI/CSOP `fmv_source`) at the international valuations dashboard, `/corporations/<CORP_ID>/valuations/international/` — the 409A ledger is the wrong place for a company that prices from an EMI or CSOP valuation. |
+| *"Fair market value is required for …"* | Surface verbatim. `AskUserQuestion`: `"Update FMV in Carta UI"` / `"Cancel"`. This skill cannot update FMV. Point a non-US corp (a resolved jurisdiction other than `US`, or an EMI/CSOP valuation source) at the international valuations dashboard, `/corporations/<CORP_ID>/valuations/international/` — the 409A ledger is the wrong place for a company that prices from an EMI or CSOP valuation. |
 | Custom label clash | Re-render the row; ask for a new label or clear it (the server auto-generates one). Re-call with `draft_pk`. |
 | *"Vesting start date is required"* | Collect `MM/DD/YYYY`, re-call with `draft_pk`. |
 | *"Custom vesting must sum to total quantity"* | Route to the app: *"Custom vesting was set outside the skill. Finish in the Drafts UI."* |

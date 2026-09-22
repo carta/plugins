@@ -27,12 +27,12 @@ by the parser in ISO (correct — `<input type="date">` accepts nothing else) an
 Phases 0.5/1 have nothing to do for it. So the conversion moved here.
 
 Idempotent by construction: every date is parsed to a `date` first, then
-formatted once. A row that is already `MM/DD/YYYY` — hand-edited, or from a run
-that followed the old prose rule — round-trips unchanged.
+formatted once. A row that is already `MM/DD/YYYY` — hand-edited, or converted by hand —
+round-trips unchanged.
 
 Usage:
   uv run serialize_drafts.py --security-type option_grant \
-      --rows <OUT_DIR>/_review_rows.json --out <OUT_DIR>/_drafts.json
+      --rows <work-dir>/_rows.json --out <work-dir>/_drafts.json
 
 Reads a JSON array of resolved rows; writes the `drafts` array. Pass the result
 as the mutate's `drafts` argument verbatim.
@@ -57,7 +57,7 @@ CHARFIELD_DATE_FIELDS = frozenset({
     "rule_144_date",
 })
 
-# DateFields: either format is accepted. Sent as ISO, the form every panel input
+# DateFields: either format is accepted. Sent as ISO, the form every date input
 # and the parser already produce, so there is nothing to convert.
 ISO_DATE_FIELDS = frozenset({
     "issue_date",

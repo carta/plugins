@@ -3,7 +3,7 @@ name: carta-cap-table:issuance-import
 description: >-
   Internal file-ingest sub-skill for carta-issuance. Turns an uploaded
   spreadsheet (.xlsx/.xlsm/.csv/.tsv) or document (.pdf/.docx) into the
-  `knowns.rows` the config panel already consumes, for certificates,
+  prefilled rows every carta-issuance surface consumes, for certificates,
   option grants and profits interest units. Not invocable directly —
   dispatched by carta-issuance Phase 0.25.
 owner: carta-cap-table maintainers (#cap-table-eng)
@@ -11,13 +11,13 @@ allowed-tools: []
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.87.0</carta-plugin>
+<carta-plugin>carta-cap-table:6.88.0</carta-plugin>
 
 # issuance-import
 
 Reads a file the admin already has — typically the Carta importer template they
-downloaded from the app — and hands `carta-issuance` Phase 0.5 a prefilled
-`knowns.rows`. The file feeds the **front** of the existing pipeline; it does not
+downloaded from the app — and hands `carta-issuance` a prefilled set of rows. The
+file feeds the **front** of the existing pipeline; it does not
 add a path around any gate. Phase 1 still resolves stakeholders, Phase 1.5 still
 saves and validates, Phase 2 still reviews, Phase 3 is still the only mutate.
 
@@ -51,14 +51,14 @@ saves and validates, Phase 2 still reviews, Phase 3 is still the only mutate.
 uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-issuance/issuance-import/scripts/parse_upload.py" \
   --file "<path>" \
   [--sheet "<sheet name>"] \
-  [--reference "$OUT_DIR/_data.json"] \
-  --out-dir "$OUT_DIR"
+  [--reference "$WORK/_reference.json"] \
+  --out-dir "$WORK"
 ```
 
 - `--sheet` — only needed when the workbook has more than one importable sheet
   (the script exits 2 with `CANDIDATES=[…]`; ask which, then re-run).
-- `--reference` — the **same JSON `build_config.py` takes as `--data`**: raw MCP
-  section envelopes plus `stakeholders`. Pass it to get ids resolved in the same
+- `--reference` — the `issuance_init` payload written to a file: its raw section
+  envelopes plus `stakeholders`. Pass it to get ids resolved in the same
   run. Omit it and every name comes back as an `import_notes` entry with the
   field left blank, which is correct but makes the admin re-pick by hand — so
   pass it whenever Phase 0.5's fetches have landed.
@@ -67,7 +67,7 @@ uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-issuance/issuance-import/scripts/pars
 
 | File | Contents |
 |---|---|
-| `_import_knowns.json` | `{security_type, rows, equity_plan_id?, batch_errors?}` — merge `rows` into your `_knowns.json` |
+| `_import_knowns.json` | `{security_type, rows, equity_plan_id?, batch_errors?}` — its `rows` are the batch |
 | `_import_report.json` | `{mode, source_file, sheet, row_count, unmapped_columns, skipped_rows, plan_name, batch_errors, notes_by_row}` |
 | `_import_text.txt` | Document mode only — extracted text |
 
@@ -78,15 +78,14 @@ which (`ERROR:` or `AMBIGUOUS:` plus `CANDIDATES=`).
 ## Running the phase — step by step
 
 `carta-issuance` [Phase 0.25](../references/engine.md#phase-025--ingest-an-uploaded-file) hands you the
-whole ingest and expects `knowns.rows` back. These are its steps; nothing here is repeated in
+whole ingest and hands back the rows the surface seeds from. These are its steps; nothing here is repeated in
 `SKILL.md`, so work through them in order and return to [Phase
 0.5](../references/engine.md#phase-05--configure-the-issuance) at the end.
 
 ### Step 0 — Confirm you can actually run the parser
 
 The parser is a local script, so this phase needs `Bash(uv run *)`. **Check your own tool
-surface for Bash before promising an import** — it is present on the Code adapter and is not
-guaranteed on Cowork.
+surface for Bash before promising an import** — no host guarantees it.
 
 No Bash → **do not hand-read the file.** Reading a workbook by eye is the failure this whole
 phase exists to prevent, and offering it as a fallback would make the parser's guarantees
@@ -111,7 +110,7 @@ plausible matches → `AskUserQuestion` which one (allowed by engine rule 5's fi
 
 ```bash
 uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-issuance/issuance-import/scripts/parse_upload.py" \
-  --file "<path>" --out-dir "$OUT_DIR"
+  --file "<path>" --out-dir "$WORK"
 ```
 
 This first run is deliberately **without** `--reference`: it costs nothing, and its output tells
@@ -127,60 +126,52 @@ prints `SECURITY_TYPE=`, `ROW_COUNT=`, and the paths it wrote.
 **Reconcile `security_type` with the prompt.** File and prompt disagreeing is a real fork →
 `AskUserQuestion`. The file wins only when the prompt never said.
 
-### Step 3 — Fetch reference data (Phase 0.5's fetches, informed by the file)
+### Step 3 — Resolve the names to ids (chat surface only)
 
-Run [Phase 0.5](../references/engine.md#phase-05--configure-the-issuance)'s fetches exactly as documented, with
-`issuance_init`'s `security_type` now supplied by the file. The roster half follows the adapter
-you selected in [Pick the surface](../SKILL.md#pick-the-surface):
+**On the panel and the artifact, skip to Step 5.** Those surfaces fetch their own reference
+data and resolve the file's free text themselves, so a `--reference` pass here would be a round
+trip for a result they replace.
 
-- **Cowork** — pass `stakeholder_names` covering **the names the file contains** rather than
-  the names the prompt named, which keeps the lookup bounded by the file's row count instead of
-  roster size. Pass the whole list at once; a 40-row sheet resolved through a concatenated
-  `search=` matches **nobody** and would create 40 duplicate stakeholders on a real cap table.
-- **Code** — no names, full roster, exactly as [engine.md's Step
-  1](../references/engine.md#step-1--what-the-surface-selection-changes-before-your-first-carta-call)
-  says. The file's names change
-  nothing here.
+On the chat surface, run [Phase
+0.5](../references/engine.md#phase-05--configure-the-issuance)'s `issuance_init` call exactly as
+documented, with `security_type` now supplied by the file, and pass `stakeholder_names`
+covering **the names the file contains** rather than the names the prompt named — that keeps
+the lookup bounded by the file's row count instead of roster size. Pass the whole list at once;
+a 40-row sheet resolved through a concatenated `search=` matches **nobody** and would create 40
+duplicate stakeholders on a real cap table.
 
 **The [account-setup gate](../references/engine.md#account-setup-gate-option-grant-and-piu) still applies.** Having a
 parsed file in hand is not a reason to push past it: a corp with no option-grant document set
 cannot issue one, whether the rows came from a spreadsheet or from the prompt. Stop where the
 gate says to stop — the parsed rows cost nothing and the file is still there afterwards.
 
-### Step 4 — Re-run the parser to resolve names to ids
+### Step 4 — Re-run the parser with that payload
 
 ```bash
 uv run "…/parse_upload.py" --file "<path>" [--sheet "<name>"] \
-  --reference "$OUT_DIR/_data.json" --out-dir "$OUT_DIR"
+  --reference "$WORK/_reference.json" --out-dir "$WORK"
 ```
 
-`--reference` is the same `_data.json` you just built for the surface's builder script. The
+`--reference` is the `issuance_init` payload you just wrote to a file. The
 parser matches the file's free text against it — vesting schedule, acceleration terms, share
 class (by name **or** prefix), legend (by code or name), document set, equity plan, and the
 roster — and writes `_import_knowns.json`. A cell matching nothing leaves its field **unset**
 with an `import_notes` entry; there is no fuzzy matching, and do not add any by hand.
 
-On Code the roster is in its own file rather than in `_data.json`, so the parser resolves
-everything except the roster pre-fill. Nothing is lost: the panel auto-fills email, stakeholder
-type and relationship from `STAKEHOLDER_LIST_JSON` on an exact name match, and Phase 1
-re-resolves all three authoritatively either way.
-
-### Step 5 — Merge into `knowns` and open the surface
+### Step 5 — Hand the rows back
 
 `_import_knowns.json` holds `{security_type, rows, equity_plan_id?, batch_errors?}`. Its `rows`
-**are** your `knowns.rows` — merge them in and continue into Phase 0.5 unchanged. The row count
+**are** the batch — return them and continue. The row count
 comes from the file, so engine rule 5's quantity-vs-headcount heuristic doesn't apply here (a
-40-row sheet is unambiguously 40 blocks). Carry `batch_errors` through to the surface's
-panel-level banner, and hold `equity_plan_id` for the first mutate only.
+40-row sheet is unambiguously 40 rows). Surface `batch_errors` alongside the rows, and
+hold `equity_plan_id` for the first mutate only.
 
-Each row may carry `import_notes` — `[{field, raw_value, reason}]`, **display-only**. The
-surface must both **show every note against the field it names** and **render that field with
-nothing selected**, so its own readiness check blocks submission until the admin picks. A
-marker alone is ignorable; the blocked button is what actually prevents a silent wrong
-issuance. Both builder scripts do this for you straight from `row.import_notes` — put the notes
-on the rows in `knowns` and the form does the rest
-([cowork-adapter.md § Import markers](../references/cowork-adapter.md#import-markers-uploaded-file-rows),
-[code-adapter.md §0](../references/code-adapter.md#0-phase-overrides--what-differs-from-the-core)).
+Each row may carry `import_notes` — `[{field, raw_value, reason}]`, **display-only**. Whatever
+collects the terms must both **report every note against the field it names** and **leave that
+field unanswered**, so nothing can be submitted until the admin settles it. A marker alone is
+ignorable; the withheld default is what actually prevents a silent wrong issuance
+([chat-surface.md § 1](../references/chat-surface.md#1-collect--one-batch-and-only-what-is-genuinely-open)).
+The panel and the artifact do this for themselves from `row.import_notes`.
 
 **Strip `import_notes` before any mutate** — same discipline as the review-only fields
 ([Build the mutate payload](../references/engine.md#build-the-mutate-payload-from-your-phase-1-resolved-rows)).
@@ -199,9 +190,10 @@ Read `_import_report.json` and report totals — never silently drop a column or
 can't issue (RSUs, SARs, CBUs, warrants, RSAs, convertibles) are skipped by the parser with a
 reason and need the Drafts UI — an admin who thinks a 40-row sheet issued 40 securities when it
 issued 37 has been misled. `unmapped_columns` holds the headers this skill has no field for;
-several ([cowork-adapter.md](../references/cowork-adapter.md#fields) lists them) are dropped by
-design, and *"2 columns I couldn't map"* leaves an admin who deliberately filled one in
-believing it landed. Say which: *"State of Residency and Employee ID aren't fields this flow
+several — `state_exemption`, `state_of_residency`, `employee_id`, `cost_center`, `job_title`,
+`salary`, `convertible_note` — are dropped by design
+([chat-review.md](../references/chat-review.md)), and *"2 columns I couldn't map"* leaves an
+admin who deliberately filled one in believing it landed. Say which: *"State of Residency and Employee ID aren't fields this flow
 sets — add them on the stakeholder record in Carta."*
 
 ### Documents (`.pdf` / `.docx`)
@@ -231,15 +223,15 @@ Deterministic end to end.
 - **Values** — dates to `YYYY-MM-DD`; numbers stripped of thousands separators,
   currency symbols and parenthesised negatives; `Individual` / `Non Individual`
   to `INDIVIDUAL` / `NON-INDIVIDUAL` (**hyphen** — matches
-  `build_config.py`'s `STAKEHOLDER_KIND_CHOICES`, not the Django enum);
-  relationship, option type and grant reason matched exactly against the
-  panel's own picklists.
+  `lib/issuance_fields.py`'s `STAKEHOLDER_KIND_CHOICES`, not the Django enum);
+  relationship, option type and grant reason matched exactly against
+  [payload-reference.md § Picklists](../references/payload-reference.md#picklists).
 - **Out-of-scope rows skipped, not coerced.** An importer sheet can carry RSUs,
   SARs, CBUs, warrants, RSAs, convertibles. Those rows are skipped with a reason
   naming the Drafts UI — never reshaped into a grant of a different type.
 - **Multiple equity plans in one sheet** → a `batch_errors` entry. A draft set
-  is locked to one plan server-side, so this has to surface before the panel
-  rather than failing at Phase 1.5.
+  is locked to one plan server-side, so this has to surface before the terms are
+  collected rather than failing at Phase 1.5.
 
 ## Document mode (`.pdf` / `.docx`)
 
@@ -249,12 +241,12 @@ A signed grant doc or board consent has no fixed layout, so turning it into rows
 is a judgement call — doing it in the script would mean guessing silently, which
 is rule 2 inverted. So: read `_import_text.txt`, write the rows yourself **in
 this script's own row schema**, and mark every field you filled this way with an
-`import_notes` entry carrying `"confidence": "low"`. The panel renders those as
+`import_notes` entry carrying `"confidence": "low"`. Every surface treats those as
 needs-confirmation, so a misread date is something the admin sees rather than
 something that issues.
 
 If the text comes back empty the file is a scan — the script exits 2 saying so.
-Route the admin to OCR it or type the values into the panel; never infer values
+Route the admin to OCR it or give the values directly; never infer values
 from a filename.
 
 **Take only what the document states.** A grant agreement rarely names a vesting template by
@@ -264,19 +256,17 @@ by hand.
 
 ## Row schema
 
-The keys are exactly the ones `build_config.py` reads off a `knowns.rows` entry —
-`ROW_KEYS` in `parse_upload.py` is the authoritative list, and
-`test_rows_only_carry_keys_build_config_reads` fails if a stray key creeps in
-(it would survive into the `save_drafts` payload and be rejected server-side).
+`ROW_KEYS` in `parse_upload.py` is the authoritative list. A stray key would survive into the
+`save_drafts` payload and be rejected server-side, so nothing outside it belongs on a row.
 
 Two additions beyond that list:
 
 | Key | Meaning |
 |---|---|
-| `row_key` | Positional `r0`, `r1`, … — same contract `build_config.py` stamps, so Phase 1.5 can re-match a row to its `draft_pk` |
+| `row_key` | Positional `r0`, `r1`, … — the key Phase 1.5 re-matches a row to its `draft_pk` by ([save-validate-flow.md](../references/save-validate-flow.md#draft-state-bookkeeping)) |
 | `import_notes` | `[{field, raw_value, reason}]` — display-only. **Never** send to any mutate; `scripts/serialize_drafts.py` strips it at the payload boundary |
 
 Dates in a row are **always ISO** (`YYYY-MM-DD`) — that is what `<input type="date">` accepts
 and reads back. Three of them (`grant_expiration_date`, `vesting_start_date`, `rule_144_date`)
 are `CharField`s the API only takes as `MM/DD/YYYY`; `serialize_drafts.py` converts them on the
-way out. Do not emit `MM/DD/YYYY` here — it would break the panel.
+way out. Do not emit `MM/DD/YYYY` here — a date input reads back ISO and nothing else.

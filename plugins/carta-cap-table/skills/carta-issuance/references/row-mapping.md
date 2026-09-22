@@ -1,15 +1,11 @@
-# Submit → row mapping
+# Collected value → payload key
 
-How each row of the config submission becomes a resolved row. Read this once, at the end of
-[Phase 0.5](engine.md#phase-05--configure-the-issuance), when the collection surface has
-returned its `rows`.
+How each collected row becomes a resolved row. Read this once, at the end of
+[Phase 0.5](engine.md#phase-05--configure-the-issuance), when the collect has its answers.
 
-Both surfaces deliver the same payload — Cowork from the form's `sendPrompt()`
-([cowork-adapter.md § Submit contract](cowork-adapter.md#submit-contract)), Code from
-`cat "$OUT_DIR/<CORP_ID>_action_request.json"`. Each carries `security_type` and `rows`, one
-entry per stakeholder, **each already carrying its own full field set** from that person's
-block. There are no batch-wide scalars left to stamp: every row decided its own terms on the
-surface, so a single batch can genuinely mix `so_type`s and currencies.
+One entry per stakeholder, **each carrying its own full field set**. There are no batch-wide
+scalars left to stamp: every row carries its own terms, so a single batch can genuinely mix
+`so_type`s and currencies.
 
 Apply the mapping below to **each row individually**. `relationship` may be `""` when the user
 left it blank — [Phase 1](engine.md#phase-1--resolve-each-row--reconcile-share-classes) only
@@ -22,7 +18,7 @@ means **omit the key entirely** from the payload — see [Row templates](engine.
 
 ## Option grant, per row
 
-| Surface field | Becomes | Notes |
+| Collected as | Becomes | Notes |
 |---|---|---|
 | `option_type` | `so_type` | then apply that row's `so_type` autofill for `currency` / `exemption` ([payload-reference.md § so_type auto-fill rules](payload-reference.md#so_type-auto-fill-rules)) |
 | `exercise_price` | `exercise_price` | ZEPO hard-sets `"0"` |
@@ -33,28 +29,27 @@ means **omit the key entirely** from the payload — see [Row templates](engine.
 | `document_set_id` | `document_set_id` | |
 | `stakeholder_kind` | `stakeholder_kind` | Phase 1 decides whether this or the roster's own value wins |
 
-**Pass through unchanged:** `acceleration_template` (the surface sends `null` on **No
-acceleration**), `notes`, `custom_label`, `early_exercise`, `auto_exercise_at_vest`,
+**Pass through unchanged:** `acceleration_template` (`null` on **No acceleration**), `notes`, `custom_label`, `early_exercise`, `auto_exercise_at_vest`,
 `is_flexible_issue_date`, `grant_reason`.
 
 `is_hmrc_notified` / `hmrc_notified`, `is_ato_notified`, and `employment_related` are already
-conditionally absent from the row unless the surface's `so_type` matched (EMI, the three AU
+conditionally absent from the row unless that row's `so_type` matched (EMI, the three AU
 types, and `Unapproved`, respectively), so no additional gating is needed here.
 
 Pass `employment_related` through as the boolean it is — **do not coerce a `false` to omitted**.
 `false` ("No") is the answer that satisfies the Unapproved validation; only a missing value
 fails it.
 
-`fund_structure` follows the same tri-state rule on **both** security types, but the surface
-never collects it: it is present only when an import sheet supplied it or a prior
-`validate_drafts` block was recovered. Carry whatever the row holds — `true`, `false`, or
+`fund_structure` follows the same tri-state rule on **both** security types, but it is never
+collected: it is present only when an import sheet supplied it or a prior `validate_drafts`
+block was recovered. Carry whatever the row holds — `true`, `false`, or
 absent — and never synthesize a value the admin didn't give.
 
 ---
 
 ## Certificate, per row
 
-| Surface field | Becomes | Notes |
+| Collected as | Becomes | Notes |
 |---|---|---|
 | `share_class_prefix` | `prefix` | |
 | `price_per_share` | `law_firm_price` | |
@@ -65,10 +60,9 @@ absent — and never synthesize a value the admin didn't give.
 | `vesting_template_id` | `vesting_template` | `null` on **No vesting** — this is the certificate default, so unlike a grant, do **not** warn |
 | `vesting_start_date` | `vesting_start_date` | reformat to `MM/DD/YYYY`, only when a real template is set |
 
-**Defaults:** `exemption = "Section 4(a)(2)"`; `currency` per the surface.
+**Defaults:** `exemption = "Section 4(a)(2)"`; `currency` per the resolved jurisdiction.
 
-**Pass through unchanged:** `acceleration_template` (the surface sends `null` on **No
-acceleration**), `notes`, `prefix_number`, `cash_paid`, `debt_canceled`.
+**Pass through unchanged:** `acceleration_template` (`null` on **No acceleration**), `notes`, `prefix_number`, `cash_paid`, `debt_canceled`.
 
 Finally, drive the [Dividend accrual start date
 resolution](certificate-fields.md#dividend-accrual-start-date-resolution) from each class's
@@ -78,7 +72,7 @@ resolution](certificate-fields.md#dividend-accrual-start-date-resolution) from e
 
 ## PIU, per row
 
-| Surface field | Becomes | Notes |
+| Collected as | Becomes | Notes |
 |---|---|---|
 | `share_class_prefix` | `prefix` | the **unit class** |
 | `option_plan` | `option_plan` | **omit when empty** — empty is a real answer that issues off the unit class, not a missing one. Stamp the resolved plan's name as the review-only `equity_plan_label` |
@@ -89,12 +83,11 @@ resolution](certificate-fields.md#dividend-accrual-start-date-resolution) from e
 | `vesting_template_id` | `vesting_template` | `null` on **No vesting** — the PIU default, so like a certificate and unlike a grant, do **not** warn |
 | `vesting_start_date` | `vesting_start_date` | reformat to `MM/DD/YYYY`, only when a real template is set |
 | `document_set_id` | `document_set_id` | server resolves both doc slots from it |
-| `corresponding_interest` | `corresponding_interest` | the surface sends `true`/`false`/`null` only from a **visible** row and omits the key otherwise. **Exception — the user explicitly asked for one:** send `true` even when the row did not render, and surface the server's verdict ([piu-fields.md](piu-fields.md#an-explicit-request-is-never-silently-dropped)). Never drop an explicit request |
+| `corresponding_interest` | `corresponding_interest` | send `true`/`false`/`null` only when the question was asked, and omit the key otherwise. **Exception — the user explicitly asked for one:** send `true` even when the question wasn't asked, and surface the server's verdict ([piu-fields.md](piu-fields.md#an-explicit-request-is-never-silently-dropped)). Never drop an explicit request |
 
-**Defaults:** `exemption = "Section 4(a)(2)"`; `currency` per the surface.
+**Defaults:** `exemption = "Section 4(a)(2)"`; `currency` per the resolved jurisdiction.
 
-**Pass through unchanged:** `acceleration_template` (the surface sends `null` on **No
-acceleration**), `notes`, `prefix_number`, `cash_paid`, `is_flexible_issue_date`.
+**Pass through unchanged:** `acceleration_template` (`null` on **No acceleration**), `notes`, `prefix_number`, `cash_paid`, `is_flexible_issue_date`.
 
 **Never emit:** `price_per_share`/`law_firm_price`, `legend_id`, `rule_144_*`,
 `exercise_price`, `so_type`, `grant_expiration_date`, `equity_plan_id`.

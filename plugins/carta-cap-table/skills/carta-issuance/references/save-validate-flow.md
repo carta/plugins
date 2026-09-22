@@ -2,8 +2,8 @@
 
 Full mechanics for [engine.md § Phase
 1.5](engine.md#phase-15--save--validate-before-review-or-save-only). Read this file once
-you've reached Phase 1.5 — i.e. immediately after Phase 1 resolves every row, for **both**
-config-panel footer buttons; Phase 1 itself runs identically regardless of which one fired.
+you've reached Phase 1.5 — i.e. immediately after Phase 1 resolves every row. Phase 1 runs
+identically whichever of the two branches below fires.
 
 `cap_table:mutate:validate_drafts` runs nearly the same field/integration-level checks
 `issue_securities` does — option-pool headroom, share-class headroom, custom-label uniqueness,
@@ -25,37 +25,33 @@ So when an `always` field is missing and recovery (a) → (b) → (c) hasn't fil
 don't route around it**: ask for the value with `AskUserQuestion` and send the row once it is
 complete. **Never present the server's tolerance as a choice** — *"Carta will accept these rows
 but they'll fail validation"* is not an option to offer; a real run said exactly that about
-missing addresses and the user reasonably read it as permission to continue. **This is
-identical on both adapters**, whatever holds the draft state: two admins doing the same thing
-must not get different answers about whether an address is required.
+missing addresses and the user reasonably read it as permission to continue.
 
-`email` bites most often, because a name typed into the surface for a new stakeholder carries
-no address with it — but the rule is the whole `always` set, not one field.
+`email` bites most often, because a name given for a new stakeholder carries no address with
+it — but the rule is the whole `always` set, not one field.
 
-Branch on the action from Phase 0.5:
+## Branch A — save without validating
 
-## `action: "save_only"` (the **Save** button)
+The user asked to save and stop, rather than to review and issue.
 
 1. Build the `drafts` array from the Phase-1-resolved rows ([Row
    templates](engine.md#row-templates) keys only — same construction as [Build the mutate
    payload](engine.md#build-the-mutate-payload-from-your-phase-1-resolved-rows), used again
-   one phase later for Confirm & Issue).
+   one phase later for the issue).
 2. Thread `draft_set_id` + each row's `draft_pk` from your [draft
-   state](#draft-state-bookkeeping) if present — the file on Code, tracked context on Cowork
-   ([hard rule 3](../SKILL.md#hard-rules)).
-3. Call `cap_table:mutate:save_drafts` exactly as in [Save as draft
+   state](#draft-state-bookkeeping) if present ([hard rule 3](../SKILL.md#hard-rules)).
+3. Call `cap_table:mutate:save_drafts` (wire `cap_table__mutate__save_drafts`) exactly as in
+   [Save as draft
    (escape hatch)](engine.md#save-as-draft-escape-hatch) — **no `validate_drafts`**, by design.
-4. Record the returned `draft_set_id` + each row's `draft_pk` — into `_draft_state.json` on
-   Code, into tracked context on Cowork.
-5. Report in **chat only** — no panel re-render. All rows saved → the existing success
-   message; any row errored → [Error recovery](mutate-recovery.md#error-recovery)'s chat flow. The
-   config panel stays open and untouched; the user can click **Save** or **Review** again at
-   any time.
+4. Record the returned `draft_set_id` + each row's `draft_pk` into your tracked state.
+5. Report it. All rows saved → the *Saved as draft*
+   [closing](issue-and-close.md#closing); any row errored →
+   [Error recovery](mutate-recovery.md#error-recovery).
 
-## `action: "config_submit"` (the **Review** button) — save + validate
+## Branch B — save + validate, before the review
 
 1. Build the `drafts` array (same construction as above).
-2. Thread `draft_set_id` + `draft_pk`s from `_draft_state.json` ([hard rule
+2. Thread `draft_set_id` + `draft_pk`s from your tracked state ([hard rule
    3](../SKILL.md#hard-rules)).
 3. Call `save_drafts`, then, with the `draft_set_id` it returns (or already had):
    ```
@@ -63,39 +59,39 @@ Branch on the action from Phase 0.5:
      "corporation_id": <id>, "security_type": "<certificate|option_grant|piu>",
      "draft_set_id": <id>}})
    ```
-4. Update `_draft_state.json` (same as `save_only`'s step 4).
+4. Update your tracked state (same as Branch A's step 4).
 5. **Clean or not:**
    - A `save_drafts` row whose `status` isn't a success value is a row-level error too —
      fold it into the same per-row bucket as `validate_drafts`'s errors (below).
    - `validate_drafts`'s `validation.errors` — empty/absent → clean.
    - `validate_drafts`'s `duplicates` is **intentionally not checked here** — duplicate
      resolution stays at `issue_securities` time (Phase 3), unchanged; folding a 3-way
-     `AskUserQuestion` triage into this retry loop, on top of the new error-banner
-     mechanism, is scope this phase doesn't need.
+     `AskUserQuestion` triage into this retry loop, on top of the error reporting below, is
+     scope this phase doesn't need.
    - **Clean** → proceed to [Phase
-     2](issue-and-close.md#phase-2--render-the-review-surface-mandatory-pre-save-gate).
-     `DRAFT_SET_ID` is now always this real, just-returned id, never the literal `"new"`.
-   - **Not clean** → [Re-render the config panel with server errors](#re-render-the-config-panel-with-server-errors).
+     2](issue-and-close.md#phase-2--the-review-gate).
+   - **Not clean** → [Re-ask with the server's errors](#re-ask-with-the-servers-errors).
 
-## Translating server errors into `knowns`
+## Translating server errors into something sayable
 
-Use [engine.md § Voice & defaults](engine.md#voice--defaults)'s translation table — never a
+Use [engine.md § Voice & defaults](engine.md#voice--defaults)'s translation rule — never a
 raw snake_case field name in customer-facing text:
 
-- **Per-row `server_errors`** — for each numeric `draft_pk` key in `validation.errors` (or a
-  failed `save_drafts` row), match it to the row currently holding that `draft_pk` in
-  `_draft_state.json`; append one `"<Translated field label>: <message, verbatim>"` string
-  per `{field: [msgs]}` entry. Stamp onto `knowns.rows[i].server_errors` — **replace**, never
-  accumulate across retries (a fixed error must actually disappear on the next render).
-- **`knowns.batch_errors`** — `validation.errors.corporation` (`{field: [msgs]}`, same
-  translate rule) and `validation.errors.issuance` (flat strings, verbatim) both land here.
-- **A `draft_pk` your `_draft_state.json` doesn't recognize** — fold into `batch_errors` as
+- **Per-row errors** — for each numeric `draft_pk` key in `validation.errors` (or a
+  failed `save_drafts` row), match it to the row currently holding that `draft_pk`, and say one
+  `"<Translated field label>: <message, verbatim>"` line per `{field: [msgs]}` entry against
+  that person. **Replace, never accumulate across retries** — a fixed error must actually
+  disappear next time round.
+- **Batch-level errors** — `validation.errors.corporation` (`{field: [msgs]}`, same
+  translate rule) and `validation.errors.issuance` (flat strings, verbatim) both belong to the
+  batch, not to a person. Say them once, above the per-row lines.
+- **A `draft_pk` your tracked state doesn't recognize** — report it as a batch-level
   `"Unresolved row: <field>: <message>"` instead of silently dropping it.
 - **`cleared_fields` on a `save_drafts` row** — the columns that save emptied, present only
   when it emptied something. `save_drafts` patches, so this should be absent; a populated list
-  means the row lost data the payload did not mean to clear. Treat it as a batch error naming
-  the fields, not a silent pass — `success: true` is reported either way, which is what made
-  the original loss invisible.
+  means the row lost data the payload did not mean to clear. Treat it as a batch-level error
+  naming the fields, not a silent pass — `success: true` is reported either way, which is what
+  made the original loss invisible.
 - **A `save_drafts` failure with only a coarse error code, no message** — translate:
 
   | Code | Message |
@@ -108,62 +104,49 @@ raw snake_case field name in customer-facing text:
   `save_drafts` response carries a code not in this table, use the generic fallback rather
   than guessing at its meaning.
 
-## Re-render the config panel with server errors
+## Re-ask with the server's errors
 
-Unlike [Back to edit](code-adapter.md#back-to-edit) (which retargets a *different*, already-open
-Review tab back to config), this retry never left the config tab — the click came from there.
-This is a plain re-open of the **same** artifact, not a cross-tab navigation:
-
-1. Reconstruct `knowns.rows` from this turn's own Phase-1-resolved rows using the same
-   field-by-field mapping [back-to-edit.md](back-to-edit.md) documents — the
-   transform is identical; only the source differs (this turn's freshly-resolved rows, not
-   a persisted `_review_rows.json`, since Phase 2 was never reached).
-2. Attach `server_errors` per row and `batch_errors` at the top level (above).
-3. Re-run `build_config.py` against the same `$OUT_DIR/_data.json` — no new MCP fetches.
-4. Re-invoke `artifact-manager:render-panel` with the **identical** `ARTIFACT_YAML`,
-   `ARTIFACT_NAME`, `ARTIFACT_FILENAME`, `OUT_DIR` as the original Phase 0.5 open — this
-   reuses the already-open tab/server in place (Step 4 navigates the same tab the user is
-   already looking at); Step 5 restarts the submit-watcher (required — the previous one
-   already fired, one-shot).
-5. Tell the user one line and stop (no `AskUserQuestion` — the panel's open again):
-   > *"A few things need fixing before this can be saved — see the highlighted
-   > stakeholder(s) in the side panel. If the panel doesn't appear, open
-   > http://localhost:\<port\>/\<file\>.html directly."*
+1. Print the translated errors: the batch-level ones once, then the per-row ones named against
+   the person they belong to.
+2. Ask for the corrected values in **one** `AskUserQuestion` — only the fields the server
+   actually refused, never a re-run of the whole collect
+   ([chat-surface.md § 1](chat-surface.md#1-collect--one-batch-and-only-what-is-genuinely-open)).
+   A recovery question is not charged against the 2-wait budget.
+3. Re-run Phase 1's mapping on the changed rows, then come back to Branch B with the same
+   `draft_set_id` and each row's `draft_pk` attached.
 
 ## Draft-state bookkeeping
 
-> **The file mechanics below are Code-only** — `$OUT_DIR`, `_draft_state.json` and
-> `build_config.py` do not exist on the Cowork path. What the state *is* and why `row_key`
-> beats array position applies to both; how you hold it does not. Cowork's equivalent is
-> [cowork-adapter.md § Draft state on this path](cowork-adapter.md#draft-state-on-this-path).
+**Your context is the state.** There is no file: track `draft_set_id` and each row's
+`draft_pk`, keyed by the row's own `row_key` — **not** array position — from the first mutate
+response onward ([hard rule 3](../SKILL.md#hard-rules)):
 
-`$OUT_DIR/_draft_state.json` (new, alongside `_data.json`/`_knowns.json`) persists
-`draft_set_id` + each row's `draft_pk`, keyed by `row_key` (stamped by `build_config.py`
-into `data-row-key`, carried through `config_submit`/`save_only`'s `rows[].row_key`) —
-**not** array position:
+| Track | From | Goes on |
+|---|---|---|
+| `draft_set_id` | the first mutate response | every subsequent `issue_securities`, `save_drafts`, `load_drafts`, `validate_drafts`, `resolve_duplicate_stakeholder` |
+| each row's `draft_pk` | that row's first save | that row on every retry, alongside *every* required field |
+| each row's `row_key` | the key you assigned the row when you collected it | the key you match `draft_pk` back by |
 
-```json
-{"draft_set_id": "8842", "security_type": "option_grant",
- "rows": [{"row_key": "r0", "draft_pk": 3928}, {"row_key": "r1", "draft_pk": 3929}]}
-```
+Both omissions fail silently — you get a success response either way.
 
-- **Why not array position:** a user fixing a validation error can add or remove a
-  stakeholder block before re-clicking Review/Save — an ordinary use of an editable panel —
-  which desyncs position-based matching and threads the wrong `draft_pk` onto the wrong
-  person. `row_key` is tied to the block's identity, not its position, so it survives
-  adds/removes.
-- **Discard on a genuinely fresh batch.** Phase 0.5 deletes this file before it opens a new
-  config panel ([code-adapter.md §1](code-adapter.md#1-config-panel-build_configpy-builds-every-block)),
-  so only start trusting it once THIS batch's own Phase 1.5 has written it at least once. A
-  leftover from an unrelated session on the same corp carries the same positional `r0`/`r1`
-  keys, so reading it threads a stranger's already-saved `draft_pk` onto these rows and, on a
-  first-ever grant save, wrongly skips `equity_plan_id` because the file's mere existence
-  looks like a retry.
-- Check `security_type` in the file against the current run's before trusting it — a
-  mismatch means start fresh, same discipline as the point above, for the narrower case where
-  the file exists but is for the other security type.
-- A `row_key` present in the file but absent from this submission (the user removed that
-  block) — leave its `draft_pk` alone here; it surfaces at Phase 3 via [Cleanup unexpected
-  draft rows](issue-and-close.md#cleanup-unexpected-draft-rows), not a second competing cleanup path.
-- `equity_plan_id` (option grant): include only when `_draft_state.json` doesn't exist yet
-  (the true first save); omit on every retry (locked server-side after).
+- **Why not array position:** a user fixing a validation error can add or drop a recipient
+  before re-submitting, which desyncs position-based matching and threads the wrong `draft_pk`
+  onto the wrong person. `row_key` is tied to the row's identity, not its place in the array,
+  so it survives adds and removes.
+  - **A row the user dropped** — remove its `row_key` from your tracking. Do **not** shift the
+    remaining `draft_pk`s up to fill the gap; that is precisely the corruption `row_key`
+    matching prevents. It surfaces at Phase 3 via [Cleanup unexpected draft
+    rows](issue-and-close.md#cleanup-unexpected-draft-rows), not a second competing cleanup
+    path.
+  - **A row the user added** — new `row_key`, **no** `draft_pk`. Send it without one; the
+    server inserts it and returns its `draft_pk`. Never hand it a `draft_pk` borrowed from
+    another row.
+  - **Every surviving row** — keeps the `row_key` it had, and therefore the `draft_pk` already
+    threaded to it, wherever it now sits.
+- **Drop it on a genuinely new batch.** Within one conversation, if the user pivots to a
+  different corporation, a different `security_type`, or plainly a new request rather than a
+  retry of the one in flight, discard the tracked `draft_set_id` and every `draft_pk` and start
+  clean. Carrying them forward re-saves the new batch into the old set, and for a first-ever
+  grant save it also wrongly skips `equity_plan_id` because the run looks like a retry.
+- `equity_plan_id` (option grant): include only on the true first save; omit on every retry
+  (locked server-side after).

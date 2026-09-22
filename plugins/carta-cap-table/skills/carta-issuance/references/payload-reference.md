@@ -4,11 +4,9 @@ Authoritative shape for the `drafts` payload on `issue_securities` and
 `save_drafts`. Read this before constructing any payload — no invented keys.
 Unknown keys fail with `Unknown draft field` or are dropped silently.
 
-This is the **final mutate** contract — unchanged by the config panel's per-stakeholder
-block structure (every field below, unchanged). The *panel-side* `config_submit` payload is
-a different, earlier-stage contract where every field lives inside each row (see
-[issuance-config/SKILL.md](../issuance-config/SKILL.md#payload-delivered-on-submit)) —
-don't confuse the two when reading `carta-issuance/references/engine.md`'s Phase 0.5/1.
+This is the **final mutate** contract. What the collect gathers is an earlier-stage shape whose
+field names don't all match — [row-mapping.md](row-mapping.md) is the translation, and the keys
+below are what actually goes on the wire.
 
 Contents: [Common fields](#common-fields-all-flows) ·
 [Certificate-only](#certificate-only-fields) · [Option-grant-only](#option-grant-only-fields) ·
@@ -25,10 +23,10 @@ Contents: [Common fields](#common-fields-all-flows) ·
 | `email` | always | valid email | |
 | `stakeholder_kind` | always | enum (uppercase) | `INDIVIDUAL` or `NON-INDIVIDUAL` — **case matters** |
 | `issue_date_relationship` | always | enum | See [Picklists](#picklists) |
-| `issue_date` | always | `YYYY-MM-DD` or `MM/DD/YYYY` | |
+| `issue_date` | always, except a pending-board option grant | `YYYY-MM-DD` or `MM/DD/YYYY` | **Omit the key entirely when `needs_board_approval` is `true`.** `DraftOptionsIssueDateFieldValidator` rejects it: *"Issue date is not applicable for grants that are not board approved."* A grant takes its issue date from the board's approval, so there is none to send yet |
 | `board_approval_date` | certs: always. Grants: when `needs_board_approval = false`. **PIU: optional** | `YYYY-MM-DD` or `MM/DD/YYYY` | Usually ≤ `issue_date`. Grants: omit entirely when pending — server rejects empty string. **PIU has no ordering rule against `issue_date` and no pending state** — omit the key to issue with no date on record. |
 | `currency` | always | ISO 4217 | `USD` for US; per-`so_type` autofills for grants |
-| `state_of_residency` | optional | 2-letter US state OR 3-letter ISO country | Server doesn't enforce. **Not collected by carta-issuance** (dropped from the panel entirely — design feedback; remains valid server-side for other callers) |
+| `state_of_residency` | optional | 2-letter US state OR 3-letter ISO country | Server doesn't enforce. **Not collected by carta-issuance** (dropped from this skill's surfaces entirely — design feedback; remains valid server-side for other callers) |
 | `notes` | optional | string | |
 | `draft_pk` | retry | int | Pk of existing draft row — updates in place |
 | `stakeholder_id` | optional | int | Bypasses duplicate detection |
@@ -47,15 +45,15 @@ Contents: [Common fields](#common-fields-all-flows) ·
 | `prefix_number` | optional | int or `<letters>-<digits>` | Server auto-numbers if omitted. Free-form strings raise `ValueError` |
 | `cash_paid` | optional | decimal ≥ 0 | |
 | `debt_canceled` | optional | decimal ≥ 0 | |
-| `convertible_note` | optional | string ≤ 256 | Pk or label — no server FK validation. **Not collected by carta-issuance** (dropped from the panel entirely — design feedback; remains valid server-side for other callers) |
-| `returned_invested_capital` | optional — LLC only | decimal ≥ 0 | **Not collected by carta-issuance** (no MCP command can confirm LLC status, so the field is dropped from the panel entirely; remains valid server-side for other callers) |
+| `convertible_note` | optional | string ≤ 256 | Pk or label — no server FK validation. **Not collected by carta-issuance** (dropped from this skill's surfaces entirely — design feedback; remains valid server-side for other callers) |
+| `returned_invested_capital` | optional — LLC only | decimal ≥ 0 | **Not collected by carta-issuance** (no MCP command can confirm LLC status, so the field is dropped from this skill's surfaces entirely; remains valid server-side for other callers) |
 | `rule_144_date` | US restricted | `MM/DD/YYYY` only (CharField) | Optional at save; enforced at issue |
 | `rule_144_difference_reason` | if `rule_144_date` ≠ `issue_date` | enum | |
 | `vesting_template` | opt-in | int | |
 | `vesting_start_date` | if `vesting_template` set | `MM/DD/YYYY` only (CharField) | |
 | `acceleration_template` | optional | int | |
 | `dividend_accrual_start_date` | when share class has non-cash dividends | `YYYY-MM-DD` or `MM/DD/YYYY` | Required for non-cash dividend share classes; server rejects when set on cash / no-dividend share classes. Omit entirely outside that case |
-| `employment_related` | optional — UK issuers | bool (Yes/No) | UK HMRC "Other ERS" designation. Accepted, but **not collected by carta-issuance** — unlike Unapproved option grants, no certificate validation rule requires it, so the panel doesn't ask. Remains valid server-side for other callers |
+| `employment_related` | optional — UK issuers | bool (Yes/No) | UK HMRC "Other ERS" designation. Accepted, but **not collected by carta-issuance** — unlike Unapproved option grants, no certificate validation rule requires it, so this skill doesn't ask. Remains valid server-side for other callers |
 
 ## Option-grant-only fields
 
@@ -70,7 +68,7 @@ Contents: [Common fields](#common-fields-all-flows) ·
 | `acceleration_template` | optional | int | |
 | `grant_expiration_date` | always | `MM/DD/YYYY` only (`CharField`) | Default is the **plan's** term — see [Grant expiration](#grant-expiration-follows-the-plan). Required for ISO. ISO `YYYY-MM-DD` is rejected with `Date is invalid` — see [Date format quirks](#date-format-quirks) |
 | `exemption` | US issuers | enum | Autofilled by `so_type` — but **omit on US grants**; the server defaults to `Rule 701`. See [so_type auto-fill rules](#so_type-auto-fill-rules) |
-| `state_exemption` | US, optional | string | Free-form; don't default. **Not collected by carta-issuance** (dropped from the panel entirely — design feedback; remains valid server-side for other callers) |
+| `state_exemption` | US, optional | string | Free-form; don't default. **Not collected by carta-issuance** (dropped from this skill's surfaces entirely — design feedback; remains valid server-side for other callers) |
 | `document_set_id` | always | int | |
 | `custom_label` | optional | string | Server auto-generates `ES-{n}`. Unique per corp |
 | `early_exercise` | optional | bool | **Rejected for ZEPO** |
@@ -81,7 +79,7 @@ Contents: [Common fields](#common-fields-all-flows) ·
 | `is_ato_notified` | ESS/Non-Concessional/ZEPO only, optional | bool | |
 | `employment_related` | **`Unapproved` — required** | bool (Yes/No) | UK HMRC "Other ERS" designation. `validate_drafts` rejects a blank one, so **collect it up front**. `No` is a valid answer; only unanswered fails. Not required for `EMI` / `CSOP` (own returns) — omit for every other `so_type`. See [so_type auto-fill rules](#so_type-auto-fill-rules) |
 | `grant_reason` | optional | enum | See [Picklists](#picklists) — schema-enforced, not free text. **Never infer it**; leave unset unless the user or file named one |
-| `employee_id`, `cost_center`, `job_title`, `salary` | optional | string / decimal | Pass-through — **not collected by carta-issuance** (design feedback dropped these from the panel entirely; they remain valid server-side for other callers) |
+| `employee_id`, `cost_center`, `job_title`, `salary` | optional | string / decimal | Pass-through — **not collected by carta-issuance** (design feedback dropped these from this skill's surfaces entirely; they remain valid server-side for other callers) |
 
 `equity_plan_id` lives on the draft **set**, not the row — pass on the first mutate only.
 
@@ -338,7 +336,8 @@ never came back.
 - **`issue_securities` timeout** — the highest-stakes case: the mutate may have already
   issued live securities before the response was lost. **Never blindly re-call
   `issue_securities`** on a timeout — check the draft set's real state first via
-  `cap_table:get:load_drafts` (`corporation_id`, `security_type`, `draft_set_id`). If the
+  `cap_table:get:load_drafts` — wire `cap_table__get__load_drafts` — with `corporation_id`,
+  `security_type`, `draft_set_id`. If the
   loaded rows show securities already issued (or the corp's ledger reflects the new
   certificates/grants), the call succeeded despite the timeout — report success, don't
   re-issue. If the rows are still in draft state, the call never completed server-side —
@@ -358,7 +357,7 @@ never came back.
 | FMV gate (grants) | If `corporation.require_fmv() AND draft.from_plan` and no current FMV: server returns *"Fair market value is required"* with a link. Skill cannot update FMV — surface verbatim, route to UI. |
 | Custom-label clash | User-supplied `custom_label` colliding with `ES-{n}` or another grant's label is rejected. Ask for new label or clear, re-save with `draft_pk`. |
 | Set name length | carta-web rejects `draft_set_name` > 30 chars with a 400. Trim if user volunteers a long label. |
-| Dividend accrual start date is share-class-gated | The resolved share class's `dividend` field (`"Non-cash"` / `"Cash"` / `null`, returned by `cap_table:get:certificate_share_classes`) controls whether to prompt — required for `"Non-cash"`, forbidden otherwise. Sending the wrong shape raises a server validation error; surface verbatim and recover via `AskUserQuestion`. `save_drafts` skips this check (the validator honors `ignore_empty`), so a row missing the field saves cleanly but will fail at issue. |
+| Dividend accrual start date is share-class-gated | The resolved share class's `dividend` field (`"Non-cash"` / `"Cash"` / `null`, returned by `cap_table:get:certificate_share_classes`, wire `cap_table__get__certificate_share_classes`) controls whether to prompt — required for `"Non-cash"`, forbidden otherwise. Sending the wrong shape raises a server validation error; surface verbatim and recover via `AskUserQuestion`. `save_drafts` skips this check (the validator honors `ignore_empty`), so a row missing the field saves cleanly but will fail at issue. |
 | Fund-structure block is server-detected, never predicted | Only carta-web knows whether a holder matches the firm's fund structure, so don't guess and don't pre-prompt. Let `validate_drafts` raise the critical `fundStructure` error, then recover in place — see [fund-structure recovery](#recovering-a-fund-structure-block). Only `true` clears it; a `false` persists but stays blocked. |
 | PIU plan is per row and optional | `option_plan` decides which ceiling the server checks: set → the plan's pool (`DraftPIUEquityPlanAvailableQuantityValidator`); empty → the unit class's authorized total (`DraftPIUShareClassAvailableQuantityValidator`). A plan whose share class differs from the row's `prefix` is rejected with *"Equity plan share class must match the selected share class"*. `equity_plan_id` is **never** sent for a PIU — the plan is a row field. |
 | A PIU plan the issuer doesn't own is silently blanked | `save_drafts` clears an `option_plan` belonging to another corporation instead of erroring (`SaveDraftTaskRunnerV2._validate_option_plan_ownership`). An empty plan on a reloaded draft after a save that set one means the plan wasn't theirs — say so; don't re-send it. |

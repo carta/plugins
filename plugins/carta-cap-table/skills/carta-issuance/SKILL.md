@@ -19,9 +19,9 @@ allowed-tools:
   - Skill
   - Read
   - Write
+  - Artifact
   - Bash(uv run *)
   - Bash(mkdir *)
-  - Bash(cp *)
   - Bash(cat *)
   - Bash(test *)
   - Bash(ls *)
@@ -31,16 +31,12 @@ allowed-tools:
   - mcp__carta__search_tools
   - mcp__carta__list_accounts
   - mcp__carta__welcome
+  - mcp__carta__get_current_user
   - mcp__carta__cap_table_issuance_panel
-  - mcp__visualize__show_widget
-  - preview_start
-  - preview_list
-  - preview_eval
-  - javascript_tool
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.87.0</carta-plugin>
+<carta-plugin>carta-cap-table:6.88.0</carta-plugin>
 
 # Issue Securities
 
@@ -56,164 +52,51 @@ A spreadsheet or award document sources those same three types; *"resume draft s
 re-enters a saved one. To **fix** an already-issued security, use `carta-modify-issuables`.
 
 **Out of scope** — stop and route to the Drafts UI for RSUs, SARs, CBUs, warrants,
-convertibles, SAFEs, convertible debt, and for custom legends, vesting, acceleration or
-exercise periods:
+convertibles, SAFEs, convertible debt, and for anything **custom**: a legend, schedule or
+exercise period the corporation has no template for. Picking one it does have is in scope,
+and a grant's vesting schedule is the normal case, not a deflection.
 
 > *"This skill issues certificates, option grants and profits interest units today. For \<thing\>, use the Drafts UI in the Carta app."*
 
+## Carta is connected — read this before you conclude otherwise
+
+**An opaque tool prefix is not a disconnected server.** On most hosts the Carta tools
+arrive prefixed with a session UUID — `mcp__33b9b857-…__call_tool`. Match on the
+**suffix**, never on the literal string `mcp__carta__…`, and never on a readable name.
+
+Two things that look like "Carta is not connected" and are not:
+
+- **A `carta` entry in a "needs authentication" list.** That is a *local* stdio server, not
+  the Carta connector — which can be working fine while that entry sits unauthenticated.
+- **A 5xx, a gateway error, or an HTML body** from a Carta call. Transient: retry the
+  operation exactly once, then report a temporary problem. Never an auth failure.
+
+Only when **no** tool ending in `call_tool` / `list_accounts` / `welcome` exists, under any
+prefix, is Carta genuinely absent. Say so then, and stop.
+
 ## Pick the surface
 
-Take the **first** row that matches. Rows 2–4 read **your own tool list** — never the disk,
-never an env var — and match on the **suffix**: on real hosts these names arrive prefixed
-(`mcp__Claude_Browser__preview_start`; the Carta prefix is often an opaque session UUID), so
-literal equality silently picks the wrong path.
+Take the **first** row that matches. Every row reads **your own tool list** — never the
+disk, never an env var — and matches on the **suffix**.
 
-| Condition | Path |
+| Condition | Surface |
 |---|---|
-| the user asked for the **form or artifact** — *"generate the artifact"*, *"build the form"* | **engine + adapter** — `references/engine.md`, then the adapter rows 3–4 name |
-| a tool whose name **ends in** `cap_table_issuance_panel`, bare or prefixed | **panel** — [the next section](#the-panel-path) |
-| a tool ending in `preview_start` | **engine + code adapter** — `references/engine.md`, then `references/code-adapter.md` |
-| else | **engine + cowork adapter** — `references/engine.md`, then `references/cowork-adapter.md` |
+| the user asked for a **different surface** than the one you would pick | the one they asked for |
+| a tool whose name **ends in** `cap_table_issuance_panel` | **panel** — [§ The panel](#the-panel) |
+| the **`Artifact`** tool is present | **artifact** — [references/artifact-surface.md](references/artifact-surface.md) |
+| else | **chat** — [references/chat-surface.md](references/chat-surface.md) |
 
-Record the selection once. Never re-detect per surface.
+Record the selection once. Never re-detect.
 
-## The panel path
+The panel and the artifact both render a real form that collects, saves and validates on
+its own, and neither puts its HTML anywhere near your context. They are the two good
+paths. The chat surface exists for a host that has neither, and it is the only path that
+spends your turns on data entry.
 
-**Call the tool from here — there is nothing further to read.** Its arguments below are the
-whole interface: pass the user's words through, and everything else — the form, its reference
-data, its validation, the draft set — is the panel's job. A panel run also needs no skill-load
-self-check: when the server builds the form, a partial skill load cannot produce a wrong one.
-Bare tool names mean the session's resolved, possibly prefixed ones.
-
-### 1. Preflight
-
-- **One `ToolSearch`** for the panel tool, `mcp__carta__call_tool`, and `mcp__carta__list_accounts`
-  if you need a lookup. Load `call_tool` now, not after the confirm.
-- **The connected Carta must be the intended Carta.** `corporation_id` is not unique across
-  environments, so aiming at the wrong one issues real securities onto the wrong company. When
-  the request implies an environment that differs from the connected one — a host, a Carta
-  link, "sandbox", "demo", "production" — **hard stop and ask.**
-- **Resolve the corporation:** `list_accounts(search="<name>")`, never an unfiltered
-  `list_accounts()` — its truncated page may never reach the name. Ask only on zero or several
-  matches. **Extract the numeric id** — `list_accounts` returns `id: "corporation_pk:<n>"`;
-  pass only `<n>` as `corporation_id`, or the panel tool rejects it.
-- **Resolve `security_type`** per [the table below](#resolve-security_type).
-- **A file in the prompt goes through [the import sub-skill](issuance-import/SKILL.md)
-  first** — the panel can't read a local file.
-
-### 2. Call the panel tool once
-
-```
-cap_table_issuance_panel({"corporation_id": <corporation_id>,
-                          "security_type": "<option_grant|certificate|piu>",
-                          "stakeholders": ["<names exactly as the user said them>"],
-                          "quantity": "<only if the user named one>"})
-```
-
-**Pass the names and quantity verbatim.** Don't pre-resolve a name, fetch the roster, or ask
-who the grantees are — a missing recipient is an empty field on the panel, never a chat
-question. The server resolves names; one it cannot pin down comes back in `prefill.ambiguous`
-with no prefill, for the user to settle in the panel — a prefilled row reads as the user's own
-answer, so never fill one in.
-
-**A bare "N \<securities\>" is a quantity, not a headcount.** *"100 option grants"*, nobody
-named, no plural-**person** language → `quantity: 100` with an empty `stakeholders` list: one
-recipient, 100 options. Only people-language (*"100 employees"*, *"100 new hires"*) makes N a
-row count.
-
-One call — and no roster, plan or valuation fetch of your own.
-
-### 3. Read `blockers` first
-
-Each entry is `{key, severity, message, evidence}`. Branch on `key`, never message text.
-`blockers` is always present: an empty list means clean, never "old server".
-
-| Severity | What you do |
-|---|---|
-| `hard_stop` | **Say what is wrong in plain language and stop.** Don't open the panel around it or offer to continue |
-| `warn` / `informational` | Surface it in the line you say alongside the panel; continue |
-
-**`jurisdiction.unresolved_conflict` returns competing evidence and no verdict.** There is no
-`resolved`, `recommended` or `most_likely` key, deliberately: a ranked field is a default and a
-default gets taken. **Never run a precedence ladder over that evidence and never pick a side** —
-the wrong answer sets real holders' tax treatment; the human chooses in the panel.
-
-Then say one short line: the result's `_terminal_fallback`, plus any warn. Echo nothing else —
-no ids, no field names ([hard rule 8](#hard-rules)).
-
-### 4. Wait
-
-**When the panel opens, your next action is to wait.** It loads its own data, collects the
-rows, saves and validates the draft set and renders validation errors against their own fields.
-None of it reaches you; it ends by sending **one** compact message naming the `draft_set_id`.
-Past that handoff the only files you may need are
-[references/mutate-recovery.md](references/mutate-recovery.md) on a server rejection and the
-import sub-skill if the prompt named a file.
-
-**Emit no `AskUserQuestion` while the panel is open** — it suspends the panel's submit watcher,
-so the click never lands. Don't narrate, poll, or re-send the panel.
-
-**The only thing that ends the wait: the user says they don't see it.** No timeout or
-liveness signal exists — treat their *first* report as
-[trigger 3](#6-falling-back-off-this-path) firing, no second check. That report also retires
-the submit watcher, so `AskUserQuestion` is unrestricted again.
-
-### 5. On that message, issue
-
-```
-mcp__carta__call_tool({"name": "cap_table__mutate__issue_securities", "arguments": {
-  "corporation_id": <corporation_id>, "security_type": "<certificate|option_grant|piu>",
-  "draft_set_id": <draft_set_id from the panel's message>}})
-```
-
-`call_tool` takes `name` + `arguments`, and the wire name carries **double underscores** —
-`cap_table:mutate:issue_securities` is the prose form, never the argument.
-
-**No `drafts` key** — the draft set already holds the rows the user approved
-([hard rule 6](#hard-rules)).
-
-The host's confirmation prompt on this mutate is the final, irreversible gate — **and the only
-gate you add here**: the panel's Confirm button was the review gate.
-
-Then:
-
-- **Success** → say what was issued per holder: name, quantity, security, any value worth
-  checking. Dates `MM/DD/YYYY`. **The response is the record — don't read the security back.**
-  The `cap_table__get__*` tools are single-security lookups — each needs `corporation_id`
-  **and exactly one** of `label` or `security_id`, and none lists a corporation's securities.
-- **The server rejects or short-circuits** → surface its messages **verbatim**, humanized
-  ([hard rule 8](#hard-rules)); never pre-empt its validation. Re-call with the **same**
-  `draft_set_id` once the user clears what it named ([hard rule 3](#hard-rules)).
-- **A timeout is not an error** — never retry with fresh params ([hard rule 3](#hard-rules)).
-- **Anything that re-call can't clear** — flagged duplicates, a row that must change — read
-  [references/mutate-recovery.md](references/mutate-recovery.md).
-
-### 6. Falling back off this path
-
-Three triggers, all observable — never a hunch that it looks slow:
-
-1. **The panel tool call returns an error**, or the tool is absent. A 5xx, gateway, HTML body
-   or timeout is transient — **retry exactly once** first; a second failure means falling back,
-   not a third attempt.
-2. **The user asks for a different surface.**
-3. **Nobody will submit the panel** — no interactive human in the session, **one user report
-   they don't see it** (the only observable proof), **or it errors after opening.** The rows
-   and the payload are then yours to build: read
-   [references/payload-reference.md](references/payload-reference.md), **including its
-   "Never emit" list**, before you build them. A field the panel would have resolved is not a
-   field you may send — a hand-built row carrying `vesting_acceleration_name` is rejected as an
-   `Unknown draft field`, and the panel's camelCase view names several such fields.
-
-[references/engine.md](references/engine.md) is the entry point for all three. Add the adapter
-the [surface table](#pick-the-surface) names for your tool list only when a replacement
-surface has to be rendered (`references/code-adapter.md` if a tool ends in `preview_start`,
-else `references/cowork-adapter.md`): trigger 3 renders nothing, but it still needs the engine
-and the payload reference. If the panel already saved a draft set, carry its `draft_set_id` in
-rather than starting a second.
-
-**If trigger 3 opens a replacement surface** (a human is present, just not the panel that
-failed), say once: *this fallback form is a different design than the panel that didn't
-render — not a stale plugin.*
+**Never render a form with `show_widget` or `preview_start`**, whatever else is missing.
+A widget is for one small question or one short status; an issuance form rendered in one
+cannot be submitted at all on some hosts
+([incidents.md](references/incidents.md#surfaces-that-cannot-carry-a-form)).
 
 ## Resolve `security_type`
 
@@ -234,14 +117,150 @@ as often as at `piu`. Read it as `piu` only alongside a real PIU signal — "pro
 "incentive", a threshold or hurdle amount, or a named equity plan. Without one it is a real
 fork → `AskUserQuestion`, never a silent pick.
 
+**A bare "N \<securities\>" is a quantity, not a headcount.** *"100 option grants"*, nobody
+named, no plural-**person** language → one recipient getting 100. Only people-language
+(*"100 employees"*, *"100 new hires"*) makes N a row count. This holds on every surface:
+never open a form with 100 blank rows, and never ask who the recipients are before the
+form opens — a missing recipient is an empty field on the form, not a chat question.
+
+## The panel
+
+**Call the tool from here — there is nothing further to read.** Its arguments below are the
+whole interface: pass the user's words through, and everything else — the form, its reference
+data, its validation, the draft set — is the panel's job.
+
+### 1. Preflight
+
+- **One `ToolSearch`** for the panel tool, `mcp__carta__call_tool`, and
+  `mcp__carta__list_accounts` if you need a lookup. Load `call_tool` now, not after the
+  confirm. Don't call `search_tools` for a name this file already gives you.
+- **The connected Carta must be the intended Carta.** `corporation_id` is not unique across
+  environments, so aiming at the wrong one issues real securities onto the wrong company.
+  When the request implies an environment that differs from the connected one — a host, a
+  Carta link, "sandbox", "demo", "production" — **hard stop and ask.**
+- **Let the panel resolve the corporation.** It takes a `corporation` name and resolves it
+  server-side. Pass `list_accounts(search="<name>")`'s numeric id when you already have one
+  — `list_accounts` returns `id: "corporation_pk:<n>"`, and only `<n>` is valid — but do not
+  make that call just to feed the panel.
+- **A file in the prompt goes through [the import sub-skill](issuance-import/SKILL.md)
+  first** — the panel can't read a local file.
+
+### 2. Call the panel tool once
+
+```
+cap_table_issuance_panel({"corporation_id": <corporation_id>,   // or:
+                          "corporation": "<the name the user said>",
+                          "security_type": "<option_grant|certificate|piu>",
+                          "stakeholders": ["<names exactly as the user said them>"],
+                          "quantity": "<only if the user named one>"})
+```
+
+Pass **one** of `corporation_id` or `corporation`, preferring an id you already have. A name
+it cannot pin down returns `corporationId: null` and one `corporation.unresolved` blocker
+naming the candidates — the panel's cue to ask rather than guess.
+
+Pass names and quantity **verbatim**. The server resolves them; one it cannot pin down comes
+back in `prefill.ambiguous` with no prefill, for the user to settle in the panel — a
+prefilled row reads as the user's own answer, so never fill one in.
+
+One call — and no roster, plan or valuation fetch of your own.
+
+### 3. Read `blockers` first
+
+Each entry is `{key, severity, message, evidence}`. Branch on `key`, never message text.
+`blockers` is always present: an empty list means clean, never "old server".
+
+| Severity | What you do |
+|---|---|
+| `hard_stop` | **Say what is wrong in plain language and stop.** Don't open the panel around it or offer to continue |
+| `needs_decision` | A fork the server refused to settle. Don't settle it either, and don't hint at a preference — the surface asks the human. Continue |
+| `warn` / `informational` | Surface it in the line you say alongside the panel; continue |
+
+The panel folds `needs_decision` into `warn` on its own wire; only
+`cap_table:get:issuance_bootstrap` reports it, and keeps each `evidence`.
+
+**`jurisdiction.unresolved_conflict` returns competing evidence and no verdict.** There is no
+`resolved`, `recommended` or `most_likely` key, deliberately: a ranked field is a default and a
+default gets taken. **Never run a precedence ladder over that evidence and never pick a side** —
+the wrong answer sets real holders' tax treatment; the human chooses in the panel.
+
+Then say one short line: the result's `_terminal_fallback`, plus any warn. Echo nothing else —
+no ids, no field names ([hard rule 8](#hard-rules)).
+
+### 4. Wait
+
+**When the panel opens, your next action is to wait.** It loads its own data, collects the
+rows, saves and validates the draft set and renders validation errors against their own fields.
+None of it reaches you; it ends by sending **one** compact message naming the `draft_set_id`.
+
+**Emit no `AskUserQuestion` while the panel is open** — it suspends the panel's submit watcher,
+so the click never lands. Don't narrate, poll, or re-send the panel.
+
+**The only thing that ends the wait: the user says they don't see it.** No timeout or
+liveness signal exists — treat their *first* report as
+[trigger 3](#5-falling-back-off-this-path) firing, no second check. That report also retires
+the submit watcher, so `AskUserQuestion` is unrestricted again.
+
+### 5. Falling back off this path
+
+Three triggers, all observable — never a hunch that it looks slow:
+
+1. **The panel tool call returns an error.** A 5xx, gateway, HTML body or timeout is
+   transient — **retry exactly once** first; a second failure means falling back, not a
+   third attempt.
+2. **The user asks for a different surface.**
+3. **The panel opened and nobody can submit it** — **one user report they don't see it**, or
+   it errors after opening.
+
+Fall back to the next matching row of [the surface table](#pick-the-surface): the artifact if
+`Artifact` is present, else the chat surface. Carry the panel's `draft_set_id` in if it
+already saved one, rather than starting a second.
+
+**No interactive human means stop, not fall back.** Every surface needs someone to approve the
+terms, so there is nothing to fall back *to*, and hand-building the payload to get past that
+issues securities nobody reviewed ([rules 2 and 5](#hard-rules)). If you ever do build rows by
+hand, read [payload-reference.md](references/payload-reference.md) first — **including its
+"Never emit" list**; one bad key fails the whole mutate.
+
+Say once, when a replacement surface opens: *this is a different form than the panel that
+didn't render — not a stale plugin.*
+
+## Issue
+
+Every surface ends the same way: a saved, validated `draft_set_id`, and **you** perform the
+irreversible write so the host's own confirmation prompt fires.
+
+```
+mcp__carta__call_tool({"name": "cap_table__mutate__issue_securities", "arguments": {
+  "corporation_id": <corporation_id>, "security_type": "<certificate|option_grant|piu>",
+  "draft_set_id": <draft_set_id>}})
+```
+
+`call_tool` takes `name` + `arguments`, and the wire name carries **double underscores** —
+`cap_table:mutate:issue_securities` is the prose form, never the argument.
+
+**No `drafts` key** — the draft set already holds the rows the user approved
+([hard rule 6](#hard-rules)).
+
+**Don't call `validate_drafts` again first.** The surface already validated, and
+`issue_securities` re-validates server-side before it writes. A third validation buys
+nothing and costs a round trip.
+
+The host's confirmation prompt on this mutate is the final, irreversible gate — **and the
+only gate you add here**: the form's Confirm button was the review gate.
+
+Then read [references/issue-and-close.md](references/issue-and-close.md) for the response
+branches, what to say per holder, and the closing lines. On a rejection that a re-call
+cannot clear, read [references/mutate-recovery.md](references/mutate-recovery.md).
+
 ## Hard rules
 
-Every path, panel included.
+Every surface.
 
 1. **Never mix two security types in one mutate.** Run the skill once per type for a mixed
    request.
 2. **One confirmation gate per mutate attempt** — never zero, never two stacked. The gate is
-   the surface's own Confirm button, or one `AskUserQuestion` on a chat surface; **never one
+   the surface's own Confirm button, or one `AskUserQuestion` on the chat surface; **never one
    stacked on an open panel** — [§ 4](#4-wait) owns that mechanic and its one exception.
    Recovery questions after a server short-circuit are unrestricted. The host's
    confirmation prompt on the mutate is the final irreversibility gate, never the review
@@ -277,11 +296,14 @@ Every rule here comes from a real run that went wrong ([incidents.md](references
 
 Every path below starts `${CLAUDE_PLUGIN_ROOT}/skills/carta-issuance/` — that variable anchors
 at the **plugin** root, so the skill segment belongs in the path. Read them there, and **do
-not search**: in Cowork `Glob` and `find` cannot reach the plugin mount and return empty every
-time.
+not search**: on several hosts `Glob` and `find` cannot reach the plugin mount and return
+empty every time.
 
-- `references/engine.md` — both fallback paths: preflight, every phase, row templates, payload
-  rules, its own hard rules. It names the rest as you need them.
+- `references/artifact-surface.md` — the artifact path, end to end. Nothing else needed.
+- `references/chat-surface.md` — the last-resort path: its phases, and what it reads.
+- `references/issue-and-close.md` — the mutate's response branches and the closing lines.
+- `references/mutate-recovery.md` — on a server rejection a re-call can't clear.
+- `references/resume-flow.md` — *"resume draft set 472"*.
 - `references/incidents.md` — before weakening or arguing with any rule.
 - `issuance-import/SKILL.md` — the prompt points at a spreadsheet, CSV or award document. On
-  every path, before any surface opens. It owns parsing; **never hand-read a workbook**.
+  every surface, before any form opens. It owns parsing; **never hand-read a workbook**.
