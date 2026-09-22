@@ -263,6 +263,7 @@ async function fetchBenchmarkData() {
               AND NET_IRR IS NOT NULL
               AND PERFORMANCE_QUARTER_START_DATE >= '2021-06-01'
               ORDER BY PERFORMANCE_QUARTER_START_DATE, FUND_NAME`,
+        format: 'ndjson',
       }
     });
     if (res.isError) throw new Error("DWH failed");
@@ -398,6 +399,8 @@ async function fetchBenchmarkFallback() {
             QUALIFY ROW_NUMBER() OVER (PARTITION BY FUND_UUID ORDER BY MONTH_END_DATE DESC NULLS LAST) = 1
             ORDER BY ENDING_TOTAL_NAV DESC NULLS LAST
             LIMIT 3`,
+      format: 'ndjson',
+      response_mode: 'inline',
     }
   });
   if (res.isError) throw new Error("DWH fallback failed");
@@ -525,9 +528,16 @@ function fmtCurrency(v, curr) {
   return num < 0 ? "(" + fmt + ")" : fmt;
 }
 
+function unwrapEnvelope(text) {
+  const s = (text || '').trimStart();
+  if (!s.startsWith('{')) return text;
+  try { const o = JSON.parse(s); if (o && typeof o.result === 'string') return o.result; } catch (_) {}
+  return text;
+}
+
 function parseDWH(res) {
-  const text = res?.content?.[0]?.text ?? "";
-  const rows = parseMarkdownRows(text);
+  const text = unwrapEnvelope(res?.content?.[0]?.text ?? "");
+  const rows = parseNdjson(text).rows;
   return rows.map(r => {
     const out = {};
     Object.keys(r).forEach(k => { out[k.toUpperCase()] = r[k]; });
@@ -691,7 +701,8 @@ async function fetchLiveData() {
         command: "dwh:execute:query",
         params: {
           sql: `SELECT f.FUND_UUID, f.FUND_NAME, SUM(ai.REMAINING_VALUE) AS TOTAL_VALUE, SUM(ai.TOTAL_UNREALIZED_GAIN_LOSS) AS TOTAL_GL FROM FUND_ADMIN.AGGREGATE_INVESTMENTS ai JOIN FUND_ADMIN.FUNDS f ON ai.FUND_UUID = f.FUND_UUID WHERE ai.IS_ACTIVE_INVESTMENT = TRUE AND f.FIRM_ID = '${firmId}' GROUP BY f.FUND_UUID, f.FUND_NAME ORDER BY TOTAL_VALUE DESC NULLS LAST`,
-        }
+          format: 'ndjson',
+          }
       });
       if (!dwhRes.isError) {
         dwhFundRows = parseDWH(dwhRes);
@@ -732,8 +743,9 @@ async function fetchLiveData() {
           sql: `SELECT
   SUM(UNREALIZED_GAIN_LOSS) AS unrealized_gl,
   SUM(COALESCE(COST_MANAGEMENT_FEES,0)+COALESCE(COST_ALL_OTHER_EXPENSES,0)+COALESCE(COST_LEGAL_FEES,0)+COALESCE(COST_FA_FEES,0)+COALESCE(COST_AUDIT,0)+COALESCE(COST_TAX_PREP_FEES,0)+COALESCE(COST_FILING_FEES,0)+COALESCE(COST_OTHER_PROFESSIONAL_FEES,0)+COALESCE(COST_ORGANIZATION_COSTS,0)+COALESCE(COST_INSURANCE_EXPENSE,0)+COALESCE(COST_TRAVEL,0)+COALESCE(COST_SYNDICATION_COSTS,0)+COALESCE(COST_SOFTWARE_AND_TECHNOLOGY,0)+COALESCE(COST_DUES_AND_SUBSCRIPTIONS,0)+COALESCE(COST_MEAL,0)+COALESCE(COST_ACCOUNTING_EXPENSE,0)+COALESCE(COST_PAYROLL_SALARY,0)+COALESCE(COST_EVENTS,0)) AS total_expenses
-FROM FUND_ADMIN.STATEMENT_OF_OPS WHERE FIRM_ID = '${firmId}'`
-        }
+FROM FUND_ADMIN.STATEMENT_OF_OPS WHERE FIRM_ID = '${firmId}'`,
+          format: 'ndjson',
+          }
       });
       if (!opsRes.isError) {
         const r = parseDWH(opsRes)[0] ?? {};
@@ -762,8 +774,9 @@ FROM FUND_ADMIN.STATEMENT_OF_OPS WHERE FIRM_ID = '${firmId}'`
           sql: `SELECT ENDING_TOTAL_NAV, ENDING_LP_NAV, ENDING_GP_NAV, TOTAL_VALUE
 FROM FUND_ADMIN.MONTHLY_NAV_CALCULATIONS
 WHERE FIRM_ID = '${firmId}' AND IS_FIRM_ROLLUP = TRUE
-ORDER BY MONTH_END_DATE DESC LIMIT 1`
-        }
+ORDER BY MONTH_END_DATE DESC LIMIT 1`,
+          format: 'ndjson',
+          }
       });
       if (!navRes.isError) {
         const r = parseDWH(navRes)[0] ?? {};
@@ -792,8 +805,9 @@ ORDER BY MONTH_END_DATE DESC LIMIT 1`
       const tsCompRes = await _mcp("fetch", {
         command: "dwh:execute:query",
         params: {
-          sql: `SELECT ISSUER_NAME, MIN(INVESTMENT_DATE) AS HELD_SINCE, SUM(REMAINING_VALUE) AS ITD_VALUE, SUM(TOTAL_UNREALIZED_GAIN_LOSS) AS GAIN_LOSS FROM FUND_ADMIN.AGGREGATE_INVESTMENTS WHERE FIRM_ID = '${firmId}' AND IS_ACTIVE_INVESTMENT = TRUE GROUP BY ISSUER_NAME ORDER BY SUM(REMAINING_VALUE) DESC`
-        }
+          sql: `SELECT ISSUER_NAME, MIN(INVESTMENT_DATE) AS HELD_SINCE, SUM(REMAINING_VALUE) AS ITD_VALUE, SUM(TOTAL_UNREALIZED_GAIN_LOSS) AS GAIN_LOSS FROM FUND_ADMIN.AGGREGATE_INVESTMENTS WHERE FIRM_ID = '${firmId}' AND IS_ACTIVE_INVESTMENT = TRUE GROUP BY ISSUER_NAME ORDER BY SUM(REMAINING_VALUE) DESC`,
+          format: 'ndjson',
+          }
       });
       let topName = null;
       if (!tsCompRes.isError) {
@@ -815,8 +829,9 @@ ORDER BY MONTH_END_DATE DESC LIMIT 1`
       const tsIrrRes = await _mcp("fetch", {
         command: "dwh:execute:query",
         params: {
-          sql: `SELECT ISSUER_NAME, DEAL_IRR FROM (SELECT ISSUER_NAME, DEAL_IRR, ROW_NUMBER() OVER (PARTITION BY ISSUER_NAME ORDER BY PERFORMANCE_QUARTER_END_DATE DESC) AS rn FROM FUND_ADMIN.TEMPORAL_DEAL_IRR WHERE FIRM_ID = '${firmId}') WHERE rn = 1`
-        }
+          sql: `SELECT ISSUER_NAME, DEAL_IRR FROM (SELECT ISSUER_NAME, DEAL_IRR, ROW_NUMBER() OVER (PARTITION BY ISSUER_NAME ORDER BY PERFORMANCE_QUARTER_END_DATE DESC) AS rn FROM FUND_ADMIN.TEMPORAL_DEAL_IRR WHERE FIRM_ID = '${firmId}') WHERE rn = 1`,
+          format: 'ndjson',
+          }
       });
       if (!tsIrrRes.isError) {
         parseDWH(tsIrrRes).forEach(r => { _tsIrrMap[r.ISSUER_NAME] = r.DEAL_IRR; });
@@ -826,8 +841,9 @@ ORDER BY MONTH_END_DATE DESC LIMIT 1`
       const ts409aRes = await _mcp("fetch", {
         command: "dwh:execute:query",
         params: {
-          sql: `SELECT b.CORPORATION_NAME, a.PRICE, a.CURRENCY_CODE, a.EFFECTIVE_DATE FROM (SELECT CORPORATION_UUID, PRICE, CURRENCY_CODE, EFFECTIVE_DATE, ROW_NUMBER() OVER (PARTITION BY CORPORATION_UUID ORDER BY EFFECTIVE_DATE DESC) AS rn FROM FUND_ADMIN.IRC409A_VALUE WHERE IS_COMMON = TRUE) a JOIN FUND_ADMIN.CORPORATION_BASIC_INFO_V2 b ON b.CORPORATION_UUID = a.CORPORATION_UUID WHERE b.FIRM_ID = '${firmId}' AND a.rn = 1`
-        }
+          sql: `SELECT b.CORPORATION_NAME, a.PRICE, a.CURRENCY_CODE, a.EFFECTIVE_DATE FROM (SELECT CORPORATION_UUID, PRICE, CURRENCY_CODE, EFFECTIVE_DATE, ROW_NUMBER() OVER (PARTITION BY CORPORATION_UUID ORDER BY EFFECTIVE_DATE DESC) AS rn FROM FUND_ADMIN.IRC409A_VALUE WHERE IS_COMMON = TRUE) a JOIN FUND_ADMIN.CORPORATION_BASIC_INFO_V2 b ON b.CORPORATION_UUID = a.CORPORATION_UUID WHERE b.FIRM_ID = '${firmId}' AND a.rn = 1`,
+          format: 'ndjson',
+          }
       });
       if (!ts409aRes.isError) {
         parseDWH(ts409aRes).forEach(r => {
@@ -854,8 +870,9 @@ WHERE IS_ACTIVE_INVESTMENT = TRUE AND FIRM_ID = '${firmId}'
 GROUP BY ISSUER_NAME
 HAVING SUM(TOTAL_COST) > 0
 ORDER BY SUM(REMAINING_VALUE) / NULLIF(SUM(TOTAL_COST), 0) DESC NULLS LAST
-LIMIT 5`
-        }
+LIMIT 5`,
+          format: 'ndjson',
+          }
       });
       if (!valRes.isError) {
         const valRows = parseDWH(valRes);
@@ -895,8 +912,9 @@ LIMIT 5`
   SUM(COALESCE(COST_PAYROLL_SALARY,0))            AS payroll,
   SUM(COALESCE(COST_SOFTWARE_AND_TECHNOLOGY,0))   AS software,
   SUM(COALESCE(COST_ALL_OTHER_EXPENSES,0))        AS other_exp
-FROM FUND_ADMIN.STATEMENT_OF_OPS WHERE FIRM_ID = '${firmId}'`
-        }
+FROM FUND_ADMIN.STATEMENT_OF_OPS WHERE FIRM_ID = '${firmId}'`,
+          format: 'ndjson',
+          }
       });
       if (!mancoRes.isError) {
         const mr = parseDWH(mancoRes)[0] ?? {};
@@ -959,8 +977,9 @@ FROM FUND_ADMIN.STATEMENT_OF_OPS WHERE FIRM_ID = '${firmId}'`
             sql: `SELECT ENDING_TOTAL_NAV
 FROM FUND_ADMIN.MONTHLY_NAV_CALCULATIONS
 WHERE FIRM_ID = '${firmId}' AND IS_FIRM_ROLLUP = TRUE
-ORDER BY MONTH_END_DATE DESC LIMIT 1`
-          }
+ORDER BY MONTH_END_DATE DESC LIMIT 1`,
+            format: 'ndjson',
+              }
         });
         if (!navFallRes.isError) {
           const nr = parseDWH(navFallRes)[0] ?? {};
@@ -1032,23 +1051,31 @@ function shortName(name) {
 }
 
 // ── Helpers ──
-function parseMarkdownRows(text) {
-  if (!text) return [];
-  const lines = text.split(/\r?\n/).filter(l => l.trim());
-  const start = lines[0].startsWith('total_rows:') ? 1 : 0;
-  if (lines.length <= start) return [];
-  const headers = lines[start].split(' | ').map(h => h.trim().toLowerCase().replace(/\s+/g, '_'));
-  let di = start + 1;
-  if (lines[di] && /^[\s\-|]+$/.test(lines[di])) di++;
+function parseNdjson(text) {
   const rows = [];
-  for (let i = di; i < lines.length; i++) {
-    const cells = lines[i].split(' | ').map(c => c.trim());
-    if (cells.length !== headers.length) continue;
-    const row = {};
-    headers.forEach((h, j) => { row[h] = cells[j] === 'NULL' ? null : cells[j]; });
-    rows.push(row);
+  let nextOffset = null;
+  if (!text) return { rows, nextOffset };
+
+  let body = text;
+  const stripped = text.trimStart();
+  const firstLine = stripped.split('\n')[0] || '';
+  if (firstLine.startsWith('total_rows:') && text.includes('\n\n')) {
+    const m = firstLine.match(/next_offset:\s*(\d+)/);
+    if (m) nextOffset = parseInt(m[1], 10);
+    body = text.slice(text.indexOf('\n\n') + 2);
   }
-  return rows;
+
+  for (const raw of body.split('\n')) {
+    const line = raw.trim();
+    if (!line || line.startsWith('(Result truncated')) continue;
+    try {
+      const obj = JSON.parse(line);
+      if (obj && typeof obj === 'object' && !Array.isArray(obj)) rows.push(obj);
+    } catch (e) {
+      console.warn('parseNdjson: skipping malformed line', e);
+    }
+  }
+  return { rows, nextOffset };
 }
 function fmtSharesShort(v) {
   if (v == null || v === '' || v === 'NULL') return "—";

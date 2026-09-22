@@ -1488,7 +1488,11 @@
 
         function parseDwhQueryResult(result) {
             const text = unwrapResponse(result);
-            return parseMarkdownTable(text);
+            return parseNdjson(text).rows.map(r => {
+                const out = {};
+                Object.keys(r).forEach(k => { out[k.toLowerCase()] = r[k]; });
+                return out;
+            });
         }
 
         function unwrapResponse(result) {
@@ -1509,47 +1513,31 @@
             throw new Error('Could not find text payload in response');
         }
 
-        function parseMarkdownTable(text) {
-            if (!text || typeof text !== 'string') return [];
-            const lines = text.split(/\r?\n/).map(l => l.trimEnd()).filter(l => l.length > 0);
-            if (lines.length === 0) return [];
-
-            // The dwh response now prefixes the markdown table with a metadata line:
-            //   total_rows: 11 | offset: 0 | limit: 1000 | format: markdown
-            // Skip it so we don't mistake those four "columns" for headers and then
-            // silently drop every data row on column-count mismatch.
-            const headerIdx = lines[0].startsWith('total_rows:') ? 1 : 0;
-            if (headerIdx >= lines.length) return [];
-
-            const headers = lines[headerIdx].split(' | ').map(h => h.trim().toLowerCase());
-            let dataStart = headerIdx + 1;
-            if (lines.length > dataStart && /^[\s\-|]+$/.test(lines[dataStart])) dataStart++;
-
+        function parseNdjson(text) {
             const rows = [];
-            for (let i = dataStart; i < lines.length; i++) {
-                const cells = lines[i].split(' | ').map(c => c.trim());
-                if (cells.length !== headers.length) {
-                    // Pipe-in-string is a known limitation; skip the bad row, log, continue.
-                    console.warn('parseMarkdownTable: row ' + i + ' has ' + cells.length + ' cells, expected ' + headers.length + '. Skipping.');
-                    continue;
-                }
-                const row = {};
-                for (let j = 0; j < headers.length; j++) row[headers[j]] = coerceCell(cells[j]);
-                rows.push(row);
-            }
-            return rows;
-        }
+            let nextOffset = null;
+            if (!text) return { rows, nextOffset };
 
-        function coerceCell(raw) {
-            if (raw === 'NULL') return null;
-            if (raw === 'TRUE') return true;
-            if (raw === 'FALSE') return false;
-            if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
-            if (/^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(raw)) {
-                const n = parseFloat(raw);
-                if (Number.isFinite(n)) return n;
+            let body = text;
+            const stripped = text.trimStart();
+            const firstLine = stripped.split('\n')[0] || '';
+            if (firstLine.startsWith('total_rows:') && text.includes('\n\n')) {
+                const m = firstLine.match(/next_offset:\s*(\d+)/);
+                if (m) nextOffset = parseInt(m[1], 10);
+                body = text.slice(text.indexOf('\n\n') + 2);
             }
-            return raw;
+
+            for (const raw of body.split('\n')) {
+                const line = raw.trim();
+                if (!line || line.startsWith('(Result truncated')) continue;
+                try {
+                    const obj = JSON.parse(line);
+                    if (obj && typeof obj === 'object' && !Array.isArray(obj)) rows.push(obj);
+                } catch (e) {
+                    console.warn('parseNdjson: skipping malformed line', e);
+                }
+            }
+            return { rows, nextOffset };
         }
 
         // === Data transform ===
@@ -2920,10 +2908,12 @@
             for (let page = 0; page < MAX_PAGES; page++) {
                 const result = await callMcpWithWelcomeRetry(CALL_TOOL, {
                     name: 'dwh__execute__query',
-                    arguments: { sql: buildSql(page * PAGE_SIZE, PAGE_SIZE) },
+                    arguments: {
+                        sql: buildSql(page * PAGE_SIZE, PAGE_SIZE),
+                        format: 'ndjson',
+                    },
                 });
-                // Parser unwraps { content: [{ text: <markdown> }], isError? }
-                // and throws on error envelopes.
+                // Parser unwraps the response envelope and throws on error envelopes.
                 const pageRows = parseDwhQueryResult(result);
                 allRows.push(...pageRows);
                 if (pageRows.length < PAGE_SIZE) return allRows;
