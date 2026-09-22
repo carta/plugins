@@ -116,8 +116,8 @@ async function resolveSeededNames() {
   softRender();
 }
 
-/** Settle the page on a company the server could not pin down. The blocker carries the
-    candidates; there is nothing left to load, so nothing should still say it is. */
+/** Settle the page on a boot that produced no company. The notice above carries the
+    reason; there is nothing left to load, so nothing should still say it is. */
 function stopUnresolved() {
   S.termsLoading = false;
   S.rosterLoading = false;
@@ -125,32 +125,75 @@ function stopUnresolved() {
   flag();
 }
 
-(async () => {
-  // 1. Paint from the prompt. Nothing here awaits the transport.
-  ingest(firstPaint());
-  const base = snapshot();
-  // 2. No connector is a state, not a crash: say what to do and stop.
-  if (!(await connect())) { degrade(); return; }
-  // Unawaited, and first paint is already done: a capability this view does not serve
-  // answers only after ~10s, and the hand-off must not wait for that answer.
-  openStore();
-  // 3. One call: resolve the named people server-side and take the reference data
-  //    with them. Skipped on a resume — re-seeding those rows drops the draft_pk
-  //    map, which inserts duplicates into the set being edited.
+/** First paint, which every later load diffs against so a re-run cannot discard a value
+    typed while it was in flight. */
+let bootBase = null;
+let bootRunning = false;
+let autoRetried = false;
+
+/** The load itself: resolve the named people, take the reference data, match the rest.
+    Reads only, so running it again is safe — nothing here writes to Carta. */
+async function runBoot() {
+  // 1. One call: the named people resolved server-side, reference data with them.
+  //    Never over a draft set: re-seeding drops the draft_pk map and duplicates it.
   let fat = false;
-  if (!RESUMING) {
-    try { fat = await bootstrap(base); }
+  if (!RESUMING && S.draftSetId == null) {
+    try { fat = await bootstrap(bootBase); }
     catch (err) {
       console.error("issuance artifact: bootstrap failed", err);
       // No live Carta: the page says so once, and nothing further is called.
       if (deadRead(err)) return;
+      // Nothing was learned about the company, so localBlockers() must not blame its name.
+      S.bootFailed = true;
       noteFailures(["bootstrap"]);
     }
   }
-  // 4. The fan-out addresses every command by corporation id, so an unresolved company
-  //    has nothing to ask — and its hard stop is already on screen.
+  // 2. The fan-out addresses every command by corporation id, so an unresolved company
+  //    has nothing to ask — and its notice is already on screen.
   if (S.corpId == null) { stopUnresolved(); return; }
   if (!fat) await boot();
-  // 5. Anything bootstrap could not resolve, match against the roster instead.
+  // 3. Anything bootstrap could not resolve, match against the roster instead.
   await resolveSeededNames();
+}
+
+/** Run the load again in place, from the failure notice or from the page coming back
+    into view. One at a time: a second run in flight would mint a second set of rows. */
+async function retryBoot() {
+  if (bootRunning || bootBase == null || S.connErr) return;
+  bootRunning = true;
+  S.bootFailed = false;
+  S.loadFailed = []; S.loadErr = "";
+  S.termsLoading = true; S.rosterLoading = true; S.booted = false;
+  render();
+  flag();
+  try { await runBoot(); }
+  finally { bootRunning = false; autoRetried = false; }
+}
+
+/** A viewer who was away — or who has just granted the connector — is looking at the
+    page again. Once per failure, and never over a load already running. */
+function retryOnReturn() {
+  if (!S.loadErr || bootRunning || autoRetried) return;
+  autoRetried = true;
+  retryBoot();
+}
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) retryOnReturn();
+});
+if (typeof window.addEventListener === "function") {
+  window.addEventListener("focus", retryOnReturn);
+}
+
+(async () => {
+  // Paint from the prompt. Nothing here awaits the transport.
+  ingest(firstPaint());
+  bootBase = snapshot();
+  // No connector is a state, not a crash: say what to do and stop.
+  if (!(await connect())) { degrade(); return; }
+  // Unawaited, and first paint is already done: a capability this view does not serve
+  // answers only after ~10s, and the hand-off must not wait for that answer.
+  openStore();
+  bootRunning = true;
+  try { await runBoot(); }
+  finally { bootRunning = false; }
 })();

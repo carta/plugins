@@ -1,8 +1,8 @@
 # The chat surface
 
 Selected by [SKILL.md § Pick the surface](../SKILL.md#pick-the-surface) when the host has
-**no** panel tool and **no `Artifact`** tool. The only path that spends your own turns on data
-entry, and the only one where you assemble the payload by hand.
+**no `Artifact`** tool. The only path that spends your own turns on data entry, and the only
+one where you assemble the payload by hand.
 
 **No HTML on this path — at all.** Not a widget, not an inline document, not a built file.
 Chat *is* the surface: prose, `AskUserQuestion`, printed markdown. Being here is not a degraded

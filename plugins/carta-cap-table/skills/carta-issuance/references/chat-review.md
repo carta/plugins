@@ -3,7 +3,7 @@
 The content spec for the chat surface's review — printed as markdown, then confirmed with one
 `AskUserQuestion` ([chat-surface.md §2–3](chat-surface.md#2-review--printed-markdown-non-blocking)).
 Referenced from [issue-and-close.md § Phase 2](issue-and-close.md#phase-2--the-review-gate).
-The panel and the artifact render their own reviews and do not use this file.
+The artifact renders its own review and does not use this file.
 
 Render **every** always-render column when there's no richer surface to lean on;
 defaulted/autofilled/looked-up values appear too, each with a `(default)` /

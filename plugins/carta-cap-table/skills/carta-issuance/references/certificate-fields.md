@@ -67,9 +67,9 @@ Certificate only. Read the resolved share class's `dividend` field:
 
 ## Rule 144 difference reason
 
-Certificate only; only when `rule_144_date` ≠ `issue_date`. **The panel and the artifact
-collect it inline** — a reason `<select>` in the same row, shown the moment "Use a different
-date" is picked, and neither will submit until it is set; read `rule_144_reason` off the row and
+Certificate only; only when `rule_144_date` ≠ `issue_date`. **The artifact collects it
+inline** — a reason `<select>` in the same row, shown the moment "Use a different
+date" is picked, and it will not submit until it is set; read `rule_144_reason` off the row and
 stamp it as `rule_144_difference_reason`. **On the chat surface**, ask for it in the
 [collect batch](chat-surface.md#1-collect--one-batch-and-only-what-is-genuinely-open):
 `AskUserQuestion`, one option per enum (label → value): "Has determined 144 date" →

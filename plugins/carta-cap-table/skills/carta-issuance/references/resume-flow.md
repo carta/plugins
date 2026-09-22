@@ -26,8 +26,7 @@ see [Cleanup unexpected draft rows](#cleanup-unexpected-draft-rows).
 
 | Surface | What to do with the rows |
 |---|---|
-| **panel** | Pass the `draft_set_id` to the panel tool; it loads the set itself |
-| **artifact** | Seed them: `rows` (each with its `draft_pk`) plus `draft_set_id`, then build and publish as usual — [artifact-surface.md § 2](artifact-surface.md#2-build-the-page). The page edits and re-saves that same set |
+| **artifact** | Seed them: `rows` (each with its `draft_pk`) plus `draft_set_id`, then build and publish as usual — [SKILL.md § 2](../SKILL.md#2-build-the-page). The page edits and re-saves that same set |
 | **chat** | Jump to the [Phase 2 review](issue-and-close.md#phase-2--the-review-gate) |
 
 **Keep the `draft_set_id` you resumed from.** The rows are already on the server, so unless the

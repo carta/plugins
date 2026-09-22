@@ -41,8 +41,8 @@ confirming is entitled to know which, so carry the matching sentence into the co
 | Certificate | *"Confirming will save these certificates to Carta and issue them to the cap table."* |
 | PIU | *"Confirming will save these profits interest units to Carta and send them to the signatory for signature."* |
 
-The panel and the artifact carry this in their own Confirm step; on the chat surface it is
-yours to say, in the same turn as the review.
+The artifact carries this in its own Confirm step; on the chat surface it is yours to say, in
+the same turn as the review.
 
 
 ---
@@ -147,7 +147,9 @@ some builds return a `label` (`ES-28`) alongside. Never synthesise the value or 
 number in a sequence: a wrong grant number is worse than an absent column.
 
 **Don't read the securities back to confirm the issue.** A non-empty `issued` *is* the
-confirmation, and there is no read that would add to it — the response carries no labels, and
+confirmation, and there is no read that would add to it. A server that names what it wrote
+puts `label`, `quantity` and `stakeholder_name` on each entry already; one that does not
+leaves ids, and a read cannot close that gap either —
 the only per-security lookups are `cap_table__get__piu`, `cap_table__get__certificate` and
 `cap_table__get__option_grant`, each of which needs a label or id you don't have. They are
 **single-security** lookups: `corporation_id` **plus exactly one** of `label` or

@@ -15,11 +15,12 @@
 
 const PREVIEW_TYPES = [["option_grant", "Option grant"], ["certificate", "Certificate"],
   ["piu", "PIU"]];
-const PREVIEW_STAGES = [["form", "Form"], ["review", "Review"], ["errors", "Validation errors"]];
+const PREVIEW_STAGES = [["form", "Form"], ["review", "Review"], ["errors", "Validation errors"],
+  ["issued", "Issued"]];
 /** The whole allowlist. Deny by default: a command this page has never needed is
     refused and named, rather than assumed harmless. */
 const PREVIEW_READ = "cap_table__get__";
-const PREVIEW = { stage: "form", refusals: 0, busy: false };
+const PREVIEW = { stage: "form", refusals: 0, busy: false, issued: 0 };
 
 /* ---------- transport guard ---------- */
 const previewSend = one;
@@ -130,7 +131,14 @@ function previewFill() {
 }
 
 /* ---------- stages ---------- */
+/** The issued stage seals the page, so every other stage has to unseal it. */
+function previewUnissue() {
+  S.issued = 0; S.issuedRows = []; S.untold = false; S.stuck = "";
+  if (S.stage === "issued") S.stage = "edit";
+}
+
 function previewFormStage() {
+  previewUnissue();
   S.srv = {}; S.errs = {}; S.banner = ""; S.bannerBad = false;
   const back = el("back-to-edit");
   if (S.stage === "review" && back && !back.hidden && !back.disabled) back.click();
@@ -141,6 +149,7 @@ function previewFormStage() {
 /** The page's own Review and issue button, so what renders is the page's own
     reviewHtml() after the page's own validation. */
 function previewReviewStage() {
+  previewUnissue();
   previewFill();
   render();
   const go = el("confirm-issue");
@@ -174,12 +183,53 @@ function previewErrorPayload() {
 }
 
 function previewErrorStage() {
+  previewUnissue();
   previewFill();
   S.stage = "edit";
   absorb(previewErrorPayload());
   render();
   previewNote("Row errors land on the fields that own them; the rest are batch-level notes at the top.",
     false);
+}
+
+/* ---------- the issued stage ----------
+   long-comment-ok: why this one is set rather than driven. The other three stages are
+   reached by pressing the page's own buttons, which is the point of them. This one is
+   only reachable through `issue_securities`, and a preview refuses every write before
+   the wire — so the state the write would have produced is set directly instead.
+   Three shapes have to be looked at, and pressing Issued again steps to the next. */
+const PREVIEW_ISSUED = [
+  ["named", "Carta named each security. Press Issued again for the ids-only answer."],
+  ["unnamed", "The same call answering with ids alone: no security column, and the rows "
+    + "are the only source. Press Issued again for a hand-off that did not land."],
+  ["untold", "Issued, and Claude was never told — the page is the only record. Press "
+    + "Issued again to start over."],
+];
+
+/** What an enriched `issued[]` looks like, built from the form's own answers so the
+    labels read like this corporation's. Example values, like every other row here. */
+function previewIssuedRows(named) {
+  const prefix = S.type === "option_grant"
+    ? (S.shared.so_type || "Grant") : (S.shared.prefix || shortLabel());
+  return S.rows.map((r, i) => (named
+    ? { id: 90001 + i, label: `${prefix}-${101 + i}`, quantity: Number(r.quantity),
+        stakeholder_name: r.name }
+    : { id: 90001 + i }));
+}
+
+function previewIssuedStage() {
+  previewFill();
+  const [kind, note] = PREVIEW_ISSUED[PREVIEW.issued % PREVIEW_ISSUED.length];
+  PREVIEW.issued += 1;
+  S.issuedRows = previewIssuedRows(kind !== "unnamed");
+  S.issued = S.issuedRows.length;
+  S.untold = kind === "untold";
+  S.stage = "issued";
+  S.banner = "";
+  S.bannerBad = false;
+  closeSheet();
+  render();
+  previewNote(note, false);
 }
 
 /* ---------- type switching ---------- */
@@ -196,6 +246,8 @@ async function previewSwitchType(type) {
   S.loadFailed = []; S.loadErr = ""; S.srv = {}; S.errs = {};
   S.banner = ""; S.bannerBad = false; S.stage = "edit"; S.busy = false;
   S.draftSetId = null; S.drafts = {};
+  previewUnissue();
+  PREVIEW.issued = 0;
   S.termsLoading = true;
   // The page's own first paint for the new type: seedShared() and seedRows() run
   // inside it, so no field of the previous type survives.
@@ -256,6 +308,7 @@ function previewClick(ev) {
   PREVIEW.stage = t.getAttribute("data-pv-stage");
   if (PREVIEW.stage === "form") previewFormStage();
   else if (PREVIEW.stage === "review") previewReviewStage();
+  else if (PREVIEW.stage === "issued") previewIssuedStage();
   else previewErrorStage();
   previewRenderBar();
 }

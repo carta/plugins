@@ -17,6 +17,7 @@ model: inherit
 allowed-tools:
   - AskUserQuestion
   - Skill
+  - ToolSearch
   - Read
   - Write
   - Artifact
@@ -32,11 +33,10 @@ allowed-tools:
   - mcp__carta__list_accounts
   - mcp__carta__welcome
   - mcp__carta__get_current_user
-  - mcp__carta__cap_table_issuance_panel
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.88.3</carta-plugin>
+<carta-plugin>carta-cap-table:6.89.0</carta-plugin>
 
 # Issue Securities
 
@@ -58,44 +58,55 @@ and a grant's vesting schedule is the normal case, not a deflection.
 
 > *"This skill issues certificates, option grants and profits interest units today. For \<thing\>, use the Drafts UI in the Carta app."*
 
-## Carta is connected — read this before you conclude otherwise
+## Do not diagnose the Carta connection
 
-**Your tool list is the whole check.** On most hosts the Carta tools arrive prefixed with a
-session UUID — `mcp__33b9b857-…__call_tool`. Match on the **suffix**; never on the literal
-`mcp__carta__…`, never on a readable name.
+**The artifact path needs no Carta tool of your own.** The page finds the connector at
+runtime, resolves the company, fetches its own reference data, and renders its own
+no-connection copy naming a real fix. So on that path you never assess, mention or report
+Carta's connectivity — not as a check, not as a caveat, not as a status line. Build the page.
 
-Three things that look like "Carta is not connected" and are not:
+Two things read like a verdict and carry none:
 
-- **A `carta` entry in a "needs authentication" list** — a *local* stdio server, not the
-  connector, which works fine while that entry sits unauthenticated. One run declared a live
-  connector dead off it and threw the turn away.
-- **A 5xx, a gateway error, or an HTML body** from a Carta call. Transient: retry the
-  operation exactly once, then report a temporary problem. Never an auth failure.
-- **An empty `ToolSearch`** you ran without looking first. These hosts load the Carta tools
-  already, so a pre-emptive search returns the one answer that means *absent*. Never open the
-  turn with it.
+- **An `mcp__carta__authenticate`-shaped name** in your tool list or in a "needs
+  authentication" list. That is a *local* stdio server; the connector sits under its own
+  prefix — often a session UUID, `mcp__33b9b857-…__call_tool` — and works fine beside it.
+- **A system-reminder saying a connector requires authentication.** It reports some
+  connector's state, not this run's.
 
-`ToolSearch` settles an absence and nothing else: **say nothing about the connection until one
-for those suffixes has come back empty.** Only when no tool ending in `call_tool` /
-`list_accounts` / `welcome` exists, under any prefix, is Carta genuinely gone. Say so, stop.
+Neither is an input to anything: don't weigh them, don't mention them, don't act on them.
+
+**A 5xx, a gateway error, or an HTML body** from a Carta call is transient — retry that
+operation **exactly once**, then report a temporary problem. Never an auth verdict, and an
+HTML response to a JSON call is never content to parse.
+
+The chat surface does load Carta tools, and
+[engine.md § Step 1](references/engine.md#step-1--load-every-tool-in-one-toolsearch-call) is
+the **only** place this skill ever concludes anything about the connection.
+
+## The connected Carta must be the intended Carta
+
+`corporation_id` is not unique across environments, so aiming at the wrong one issues real
+securities onto the wrong company. When the request implies an environment that differs from
+the connected one — a host, a Carta link, "sandbox", "demo", "production" — **hard stop and
+ask.** Being the only connected server is not the same as being the right one.
 
 ## Pick the surface
 
 Take the **first** row that matches. Every row reads **your own tool list** — never the
-disk, never an env var — and matches on the **suffix**.
+disk, never an env var.
 
 | Condition | Surface |
 |---|---|
 | the user asked for a **different surface** than the one you would pick | the one they asked for |
-| a tool whose name **ends in** `cap_table_issuance_panel` | **panel** — [§ The panel](#the-panel) |
-| the **`Artifact`** tool is present | **artifact** — [references/artifact-surface.md](references/artifact-surface.md), read in the same block as the company lookup it will ask for |
+| the **`Artifact`** tool is present | **artifact** — [§ The artifact surface](#the-artifact-surface) |
 | else | **chat** — [references/chat-surface.md](references/chat-surface.md) |
 
 Record the selection once. Never re-detect.
 
-The panel and the artifact each render a real form that collects, saves and validates on its
-own, with its HTML nowhere near your context. Chat is for a host with neither, and is the
-only path that spends your turns on data entry.
+**The artifact is the form**, and its whole path is in this file: Skill → Bash → Artifact,
+nothing further to read. The page collects, saves and validates on its own, with its HTML
+nowhere near your context. **Chat is for a host without `Artifact`**, and is the only path
+that spends your turns on data entry: every term costs a round trip through you.
 
 **Never render a form with `show_widget` or `preview_start`**, whatever else is missing.
 A widget is for one small question or one short status; an issuance form rendered in one
@@ -127,115 +138,211 @@ named, no plural-**person** language → one recipient getting 100; only people-
 rows, and never ask who the recipients are before it opens — a missing recipient is an empty
 field on the form, not a chat question.
 
-## The panel
+## The artifact surface
 
-**Call the tool from here — there is nothing further to read.** Its arguments below are the
-whole interface: pass the user's words through, and everything else — the form, its reference
-data, its validation, the draft set — is the panel's job.
+**Budget: two tool calls, one turn, to a form on screen** — one `Bash`, one `Artifact`. If
+you are about to make a third before the user sees anything, something below has been
+skipped.
+
+The page does the work: it resolves the company, the connector and the named people against
+the cap table, fetches its own reference data, collects the terms, saves and validates the
+draft set, shows the review, and issues on confirmation. None of it reaches your context —
+not the roster, not the field manifest, not the HTML. **You run one script and publish it.**
 
 ### 1. Preflight
 
-- **One `ToolSearch`** for the panel tool, `mcp__carta__call_tool`, and
-  `mcp__carta__list_accounts` if you need a lookup. Load `call_tool` now, not after the
-  confirm. Don't call `search_tools` for a name this file already gives you.
-- **The connected Carta must be the intended Carta.** `corporation_id` is not unique across
-  environments, so aiming at the wrong one issues real securities onto the wrong company.
-  When the request implies an environment that differs from the connected one — a host, a
-  Carta link, "sandbox", "demo", "production" — **hard stop and ask.**
-- **Let the panel resolve the corporation.** It takes a `corporation` name and resolves it
-  server-side. Pass `list_accounts(search="<name>")`'s numeric id when you already have one
-  — `list_accounts` returns `id: "corporation_pk:<n>"`, and only `<n>` is valid — but do not
-  make that call just to feed the panel.
+- **The connected Carta must be the intended Carta** —
+  [the hard stop above](#the-connected-carta-must-be-the-intended-carta) binds here.
+- **Do not resolve the company.** Pass the name the user said to `--company-name` and build.
+  The page's own boot call takes a name, resolves it server-side, and comes back with the
+  company, the named people already matched to stakeholders, the plan, the price and the
+  dates. A `list_accounts` lookup first buys nothing and costs a round trip.
+- **`list_accounts(search="<name>")` is the fallback**, for when the page reports it could
+  not pin the company down — never unfiltered, whose truncated page may never reach the
+  name. It returns `id: "corporation_pk:<n>"`; `--corporation-id` takes only `<n>`.
 - **A file in the prompt goes through [the import sub-skill](issuance-import/SKILL.md)
-  first** — the panel can't read a local file.
+  first,** before the build. Its `rows` become the seed's `rows`.
 
-### 2. Call the panel tool once
+Nothing else. **Do not fetch reference data, the roster, plans, valuations, share classes or
+the field manifest** — the page fetches what it needs, and anything you fetch is a round trip
+plus context the page will fetch again anyway.
+
+### 2. Build the page
+
+One `Bash` call. The seed is optional and small: it is only what the *prompt* supplied, so
+the page can prefill it. Write it only when you have something to put in it.
+
+**Set `SKILL` to the absolute `skills/carta-issuance/` path
+[§ Where everything else lives](#where-everything-else-lives) resolves for you — paste it.**
+The plugin-root variable is not exported into the Bash tool's shell, so a command that still
+carries it unresolved fails on a path starting `/skills/` — and nothing else in the command
+is wrong when that happens.
+
+```bash
+SKILL=<paste the resolved absolute path>
+WORK=<your scratchpad dir>
+mkdir -p "$WORK"
+cat > "$WORK/_seed.json" <<'JSON'
+{"stakeholders": ["Tagg Palmer"], "quantity": "100"}
+JSON
+uv run "$SKILL/issuance-artifact/scripts/build_artifact.py" \
+  --company-name "IMIM" \
+  --security-type option_grant \
+  --seed "$WORK/_seed.json" \
+  --out "$WORK/issuance-imim-option_grant.html"
+```
+
+- **No `--corporation-id`.** The page resolves the name. Add `--corporation-id <n>` only
+  when you already hold a bare numeric id — from the fallback lookup, or from a resume.
+- `--seed` takes a **path**, never an inline blob. Omit the flag entirely when the prompt
+  named nobody and no terms; the page then opens with one blank recipient row, which is
+  correct.
+- Seed keys: `stakeholders` (names verbatim, as the user said them), `quantity`,
+  `issue_date`, and `rows` when the import sub-skill produced them. Nothing else. An
+  unknown key fails the build rather than opening a form that quietly ignores it.
+- **Resuming a saved draft set** adds two more: `draft_set_id`, and a `draft_pk` on each
+  row. Call `cap_table:get:load_drafts` first ([resume-flow.md](references/resume-flow.md))
+  and seed what it returns. Both are load-bearing — without the set id the page mints a
+  *second* draft set of the same rows, and without each row's `draft_pk` the row inserts
+  instead of updating ([hard rule 3](#hard-rules)).
+- **`--out` is a stable path for this company and type** — a lowercase company slug plus the
+  type, as above. Republishing the same path in one conversation keeps the artifact's URL.
+- The script exits non-zero and names the problem on a bad id, a missing part, or an
+  unresolved placeholder. Surface that verbatim and stop — a build fault, not a retry.
+
+**Never read the built file back.** It is ~135KB; reading it is the defect this whole path
+exists to remove.
+
+### 3. Publish it
 
 ```
-cap_table_issuance_panel({"corporation_id": <corporation_id>,   // or:
-                          "corporation": "<the name the user said>",
-                          "security_type": "<option_grant|certificate|piu>",
-                          "stakeholders": ["<names exactly as the user said them>"],
-                          "quantity": "<only if the user named one>"})
+Artifact({
+  file_path: "<the --out path>",
+  description: "Collect and review the option grants before issuing them.",
+  icon: "grant",            // "certificate" | "grant" | "units", per security_type
+  capabilities: {
+    mcp: { servers: [{ server: "<the connector segment — see below>", tools: ["call_tool"] }] },
+    db: {}
+  }
+})
 ```
 
-Pass **one** of `corporation_id` or `corporation`, preferring an id you already have. A name
-it cannot pin down returns `corporationId: null` and one `corporation.unresolved` blocker
-naming the candidates — the panel's cue to ask rather than guess.
+**`server` is the connector's display name**, and only one host hands it to you. Where your
+MCP instructions introduce a connector by name — `## claude.ai Carta (Test)` — the name is
+that heading minus the `claude.ai ` prefix, and the publish lands first time. Where they are
+keyed by id instead, which is the common case, the name is nowhere in your context: send
+**the tool-name segment** between `mcp__` and the next `__` — for
+`mcp__33b9b857-8443-4b2d-b191-2d9b6c50eb86__call_tool` it is
+`33b9b857-8443-4b2d-b191-2d9b6c50eb86` — exactly, case included, and expect the handshake
+below. Never guess a display name from a readable prefix.
 
-Pass names and quantity **verbatim**. The server resolves them; one it cannot pin down comes
-back in `prefill.ambiguous` with no prefill, for the user to settle in the panel — a
-prefilled row reads as the user's own answer, so never fill one in.
+**When you send a connector id, the publish rejects it and names the connector:**
+*"…is the id of connector "Carta (Test)" — set "server" to "Carta (Test)"."* That rejection
+**is** the lookup. So publish once more with the name it gave you, changing nothing else.
+One retry, expected,
+and the first attempt created nothing: **do not report it as a failure and do not conclude
+the plugin is broken.** Never guess a display name no rejection has given you.
 
-One call — and no roster, plan or valuation fetch of your own.
+- **Omit `url`, and don't call `action: "list"` first.** The same file path in the same
+  conversation already redeploys to the same URL, and reaching for an *earlier*
+  conversation's artifact hands you its whole ~135KB page — which you are replacing anyway.
+- `icon` goes on the first publish only. Omit it on a redeploy.
+- Restate the **whole** `capabilities` object on any redeploy that passes it: a non-empty
+  object replaces the stored grant, so a capability you leave out is revoked. Omitting the
+  field entirely carries the stored grant forward — that is the cheaper redeploy.
+- Keep `tools` at that one. It is a viewer-consented grant, and every Carta command the
+  page sends goes through the `call_tool` proxy.
 
-### 3. Read `blockers` first
+**Read the publish result's warnings.** One matters: if it reports that it could not resolve
+the connector name, the grant is not wired and every card in the page will come up empty.
+That is the one condition that sends this run to
+[the chat surface](references/chat-surface.md) instead. Any other warning is informational.
 
-Each entry is `{key, severity, message, evidence}`. Branch on `key`, never message text.
-`blockers` is always present: an empty list means clean, never "old server".
+Then say **one short line, then the URL on its own line as bare text**:
 
-| Severity | What you do |
-|---|---|
-| `hard_stop` | **Say what is wrong in plain language and stop.** Don't open the panel around it or offer to continue |
-| `needs_decision` | A fork the server refused to settle. Don't settle it either, and don't hint at a preference — the surface asks the human. Continue |
-| `warn` / `informational` | Surface it in the line you say alongside the panel; continue |
+> The option-grant form is open — set the terms once, add recipients, and hit Review. It'll
+> flag anything Carta needs before you can issue.
+>
+> https://claude.ai/code/artifact/58fa48f8-693e-43e3-8491-018976b769d6
 
-The panel folds `needs_decision` into `warn` on its own wire; only
-`cap_table:get:issuance_bootstrap` reports it, and keeps each `evidence`.
+**Never a markdown link.** On the host that opens the form in a side panel it renders as the
+title alone — so when that panel is what failed, the address is the one thing the user cannot
+see or copy. Bare URL every time, including when the panel did open.
 
-**`jurisdiction.unresolved_conflict` returns competing evidence and no verdict.** There is no
-`resolved`, `recommended` or `most_likely` key, deliberately: a ranked field is a default and a
-default gets taken. **Never run a precedence ladder over that evidence and never pick a side** —
-the wrong answer sets real holders' tax treatment; the human chooses in the panel.
+Echo nothing else — no ids, no field names, no summary of what you prefilled
+([hard rule 8](#hard-rules)). The first open asks the viewer to allow the Carta connection;
+until they do, the page shows its own no-connection state and says what to do.
 
-Then say one short line: the result's `_terminal_fallback`, plus any warn. Echo nothing else —
-no ids, no field names ([hard rule 8](#hard-rules)).
+### 4. The page issues; you report
 
-### 4. Wait
+**This surface performs the irreversible write itself.** The page saves, validates, shows the
+review, and asks for one confirmation in its own sheet — that click is the gate, and the write
+goes out under the viewer's own connector grant. A hand-off document cannot wake this session,
+so a page stopping at a saved draft set could never issue.
 
-**When the panel opens, your next action is to wait.** It loads its own data, collects the
-rows, saves and validates the draft set and renders validation errors against their own fields.
-None of it reaches you; it ends by sending **one** compact message naming the `draft_set_id`.
+After the write the page seals itself — no further save or issue — whenever the outcome is
+settled or unknowable: issued, a timeout, or accepted-and-nothing-reported. A refused value
+and a duplicate stakeholder both leave it usable, because neither wrote anything.
 
-**Emit no `AskUserQuestion` while the panel is open** — it suspends the panel's submit watcher,
-so the click never lands. Don't narrate, poll, or re-send the panel.
+So there is nothing to do after § 3. **End your turn on that one line.** Do not read the
+store yet, do not poll, do not narrate and do not re-publish: filling an issuance form is
+minutes of human work.
 
-**The only thing that ends the wait: the user says they don't see it.** No timeout or
-liveness signal exists — treat their *first* report as
-[trigger 3](#5-falling-back-off-this-path) firing, no second check. That report also retires
-the submit watcher, so `AskUserQuestion` is unrestricted again.
+Then at the start of your **next** turn, whatever the user typed, read what the page
+recorded:
 
-### 5. Falling back off this path
+```
+Artifact({action: "read_db", url: "<the URL the publish returned>",
+          db_op: "get", collection: "issuance", doc_id: "handoff"})
+```
 
-Three triggers, all observable — never a hunch that it looks slow:
+```json
+{ "status": "issued", "issued": 1, "draft_set_id": 472, "security_type": "option_grant",
+  "holders": ["Tagg Palmer"], "totals": {"USD": {"quantity": 100, "value": null}},
+  "issue_date": "2026-09-21" }
+```
 
-1. **The panel tool call returns an error.** A 5xx, gateway, HTML body or timeout is
-   transient — **retry exactly once** first; a second failure means falling back, not a
-   third attempt.
-2. **The user asks for a different surface.**
-3. **The panel opened and nobody can submit it** — **one user report they don't see it**, or
-   it errors after opening.
+Branch on `status`, never on `summary`. `holders`, `totals` and `issue_date` are for the
+closing line:
 
-Fall back to the next matching row of [the surface table](#pick-the-surface): the artifact if
-`Artifact` is present, else the chat surface. Carry the panel's `draft_set_id` in if it
-already saved one, rather than starting a second.
+| `status` | What it means | What you do |
+|---|---|---|
+| *not found* | they have not finished. The normal state | Answer whatever they asked. Not an error, and never reported as one |
+| `issued` | **the securities are on the cap table** | Report it and close per [issue-and-close.md § On success](references/issue-and-close.md#on-success). **Do not call `issue_securities`** — that would issue a second time |
+| `draft` | saved, validated, not issued | Say the draft is saved and they can come back to it, and **stop**. A saved draft is not an approval to issue |
+| `needs_claude` | the page tried and could not finish | Read `reason`: `duplicates` → [mutate-recovery.md § Duplicate resolution](references/mutate-recovery.md#duplicate-resolution); `unknown_outcome` → **read the set's state before any write**, the rows may already be issued; `nothing_issued` → [mutate-recovery.md](references/mutate-recovery.md) |
 
-**No interactive human means stop, not fall back.** Every surface needs someone to approve the
-terms, so there is nothing to fall back *to*, and hand-building the payload to get past that
-issues securities nobody reviewed ([rules 2 and 5](#hard-rules)). If you do build rows by hand,
-read [payload-reference.md](references/payload-reference.md) first — **including its "Never
-emit" list**; one bad key fails the whole mutate.
+### When something is wrong
 
-When a replacement surface opens, say once that it is a different form from the panel that
-didn't render, not a stale plugin.
+| What you see | What it means | What you do |
+|---|---|---|
+| The publish warns it could not resolve the connector | the page has no Carta access | [chat surface](references/chat-surface.md) |
+| The user says the page cannot find the company, or asks which one you meant | the name matched none or several | `list_accounts(search="<name>")`, settle it, and rebuild with `--corporation-id <n>` to the **same** `--out` path |
+| The user says the page is empty, or every section says it couldn't load | the viewer hasn't allowed the connector, or Carta is down for them | Tell them to allow the Carta connection when the page asks, or to reconnect Carta in Settings → Connectors. Re-publishing does not help |
+| The user says they see a hard stop in the page | the account isn't set up for this issuance | Read it back to them in plain language and stop. The fix is in Carta, not here |
+| The user reports validation errors they can't clear | the server refused a value | Those belong to the page, which shows them against their own fields. Only if a message is one the page can't act on — a fund-structure block, a duplicate stakeholder, a missing FMV — read [mutate-recovery.md](references/mutate-recovery.md) |
+| The user says it issued but no document appears | the store write failed after the write landed | **Do not issue.** The page names the draft set on screen; ask for it and read its state |
+| The user wants to change a term after confirming | — | Tell them to hit Back in the page's sheet and confirm again. Don't rebuild rows yourself; the draft set is the record |
+
+### What not to do on this path
+
+- **Don't ask who the recipients are, or for anything the form collects** — a blank field on
+  the form is the question.
+- **Don't pre-ask for a computable value.** Exercise price, grant expiration, jurisdiction
+  and the sole-option defaults are all things the page derives and shows.
+- **Don't stack an `AskUserQuestion` on the open page** for anything the page collects. It is
+  unrestricted for a genuine fork the page cannot present — two Carta environments, a mixed
+  security type — and for recovery after a server rejection.
+- **Don't build the payload yourself.** Reading
+  [payload-reference.md](references/payload-reference.md) here means you are on the wrong
+  path: that file is for the chat surface and for recovery.
 
 ## Issue
 
-The panel and the chat surface end at a saved, validated `draft_set_id`, and **you** perform
-the irreversible write so the host's own confirmation prompt fires. **The artifact surface
+The chat surface ends at a saved, validated `draft_set_id`, and **you** perform the
+irreversible write so the host's own confirmation prompt fires. **The artifact surface
 issues from the page instead** — its own Confirm sheet is that gate, so you report the
-result and never re-issue
-([artifact-surface.md § 4](references/artifact-surface.md#4-the-page-issues-you-report)).
+result and never re-issue ([§ 4](#4-the-page-issues-you-report)).
 
 ```
 mcp__carta__call_tool({"name": "cap_table__mutate__issue_securities", "arguments": {
@@ -263,8 +370,8 @@ Every surface.
 1. **Never mix two security types in one mutate.** Run the skill once per type for a mixed
    request.
 2. **One confirmation gate per mutate attempt** — never zero, never two stacked. The gate is
-   the surface's own Confirm button, or one `AskUserQuestion` on the chat surface; **never one
-   stacked on an open panel** — [§ 4](#4-wait) owns that mechanic and its one exception.
+   the artifact's own Confirm sheet, or one `AskUserQuestion` on the chat surface — **never
+   one stacked on an open page** ([§ What not to do on this path](#what-not-to-do-on-this-path)).
    Recovery questions after a server short-circuit are unrestricted.
 3. **Retry contract — reuse identity from the FIRST response.** Put `draft_set_id` from the
    first mutate on every later `issue_securities`, `save_drafts`, `load_drafts`,
@@ -299,7 +406,6 @@ Every path below starts `${CLAUDE_PLUGIN_ROOT}/skills/carta-issuance/` — that 
 at the **plugin** root, so the skill segment belongs in the path. **Do not search** for them:
 on several hosts `Glob` and `find` cannot reach the plugin mount and return empty every time.
 
-- `references/artifact-surface.md` — the artifact path, end to end. Nothing else needed.
 - `references/chat-surface.md` — the last-resort path: its phases, and what it reads.
 - `references/issue-and-close.md` — the mutate's response branches and the closing lines.
 - `references/mutate-recovery.md` — on a server rejection a re-call can't clear.

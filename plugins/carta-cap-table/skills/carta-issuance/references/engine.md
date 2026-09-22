@@ -2,8 +2,7 @@
 
 Read this on the **chat surface** and nowhere else: the one path where *you* collect the terms
 and assemble the payload. [SKILL.md § Pick the surface](../SKILL.md#pick-the-surface) selects
-it when the host has no panel tool and no `Artifact` tool; a panel or artifact run reaches it
-only by falling back.
+it when the host has no `Artifact` tool; an artifact run reaches it only by falling back.
 
 **Being here is not a degraded run.** It needs nothing this session lacks: never report it as
 unavailable, never offer to start a dev server, and never say it is blocked on a CLI, a tool or
@@ -120,8 +119,13 @@ ToolSearch: "select:mcp__carta__call_tool,mcp__carta__search_tools,mcp__carta__w
 `mcp__carta__` is the placeholder prefix ([Step 2](#step-2--command-names-and-base_url)) — when
 the session's Carta tools carry a different prefix, substitute it into the `select:` string; the
 names after the prefix never change. Zero matches on the literal `mcp__carta__` names means the
-wrong prefix, not a disconnected server — re-check the session's tool list
-([SKILL.md § Carta is connected](../SKILL.md#carta-is-connected--read-this-before-you-conclude-otherwise)).
+wrong prefix, not a disconnected server — re-check the session's tool list and re-run the
+`select:` with the prefix it actually carries.
+
+**This call is the only place this skill concludes anything about the connection.** Only when
+no tool ending in `call_tool` / `list_accounts` / `welcome` exists, under any prefix, is Carta
+genuinely gone: say so and stop. Everything else that looks like an answer is not one
+([SKILL.md § Do not diagnose the Carta connection](../SKILL.md#do-not-diagnose-the-carta-connection)).
 
 One call, four tools, the complete set for the run. **`call_tool` is loaded here, up front**, so
 Phase 2 never has to load it after the user confirms — that would be serial latency at the worst
@@ -194,7 +198,9 @@ environment is unknown rather than assuming production.
 
 #### The connected Carta must be the intended Carta — check before the first call
 
-The hard stop is [SKILL.md § The panel § 1](../SKILL.md#1-preflight)'s, and it binds here too:
+The hard stop is
+[SKILL.md § The connected Carta must be the intended Carta](../SKILL.md#the-connected-carta-must-be-the-intended-carta)'s,
+and it binds here too:
 `corporation_id` is not unique across environments, so aiming at the wrong one reads one
 company's cap table and later issues real securities onto it. The tool prefix names the
 connected environment (`…_Carta_Demo__` → demo, a `-test` or sandbox suffix likewise, unsuffixed
@@ -214,9 +220,10 @@ present. Being the only option is not the same as being the right one.
 
 #### When a call fails
 
-[SKILL.md § Carta is connected](../SKILL.md#carta-is-connected--read-this-before-you-conclude-otherwise)
-classifies the failure: no Carta tool under any prefix means genuinely disconnected and you
-stop; a 5xx, gateway error, HTML body or timeout is transient and gets **one** retry.
+Classify the failure before you report it: no Carta tool under any prefix means genuinely
+disconnected and you stop ([Step 1](#step-1--load-every-tool-in-one-toolsearch-call)); a 5xx,
+gateway error, HTML body or timeout is transient and gets **one** retry
+([SKILL.md § Do not diagnose the Carta connection](../SKILL.md#do-not-diagnose-the-carta-connection)).
 
 **The retry cap is one, and it is a hard cap.** It counts **the failing operation, not the
 call**: if `save_drafts` fails twice, a follow-up `issue_securities` against the same draft set

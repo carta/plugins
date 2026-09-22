@@ -239,7 +239,12 @@
     .rv-h { font-size: 11px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; color: var(--ink-color-global-brand-gray-70); padding-bottom: 5px; }
     .rv-r { padding-block: 7px; align-items: baseline; }
     .rv-n { font-variant-numeric: tabular-nums; text-align: right; }
+    /* The issued screen's last column is a name, not a figure: it keeps the review's
+       column width but reads left to right and breaks rather than overflowing. */
+    .rv-w { min-width: 0; overflow-wrap: anywhere; }
     .rv-s { font-size: 12px; color: var(--ink-color-global-brand-gray-70); }
+    /* A line above a table needs air under it, or it reads as part of the header. */
+    .rv-lead { margin-bottom: var(--ink-spacing-global-vertical-small); }
     .rv-tag { font-size: 11px; color: var(--ink-color-global-brand-gray-70); }
     .rv-t { display: grid; grid-template-columns: minmax(0, 1fr) 96px 132px; gap: 10px; margin-top: var(--ink-spacing-global-vertical-xsmall); padding-top: 9px; font-weight: 600; }
     .rv-terms { margin-top: var(--ink-spacing-global-vertical-medium); display: grid; gap: 5px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }

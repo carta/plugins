@@ -256,7 +256,7 @@ Server-side the field is gated per-issuer (UK incorporation + the `SIB_1160_EMPL
 `fund_structure` is the one conditionally-required field the skill **must not ask about
 up front**. It applies to a single customer, the gate is server-owned (paper corp + the
 `BBO_DRAFT_ISSUANCE_HOLDING_ENTITY` flag), and a run that never touches it must behave
-exactly as before. So: no panel field, no chat question, no prompt. Accept it when the
+exactly as before. So: no form field, no chat question, no prompt. Accept it when the
 caller supplies it — as a `save_drafts` parameter or the sheet's "Part of fund structure"
 column — and otherwise wait for the server to ask.
 
@@ -293,7 +293,7 @@ Most date fields are `DateField`s and accept both `YYYY-MM-DD` and `MM/DD/YYYY`.
 
 `hmrc_notified` (option grant) is a `DateTimeField` — it accepts both `YYYY-MM-DD` and `MM/DD/YYYY` and the server normalises the input.
 
-Mixing formats across a payload is fine — each field is parsed independently. Date inputs in the panel return ISO; reformat the three CharFields to `MM/DD/YYYY` before the mutate.
+Mixing formats across a payload is fine — each field is parsed independently. Date inputs in a rendered form return ISO; reformat the three CharFields to `MM/DD/YYYY` before the mutate.
 
 ## camelCase and snake_case
 

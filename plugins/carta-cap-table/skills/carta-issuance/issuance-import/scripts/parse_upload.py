@@ -10,7 +10,7 @@
 
 The file feeds the FRONT of the existing pipeline: this script's whole output
 contract is the same row shape every carta-issuance surface consumes, so
-the config panel opens prefilled and every downstream gate (Phase 1 resolve →
+the form opens prefilled and every downstream gate (Phase 1 resolve →
 Phase 1.5 save+validate → Phase 2 review → Phase 3 mutate) runs untouched.
 Nothing here writes to Carta.
 
@@ -36,7 +36,7 @@ Two rules the rest of the file exists to uphold:
    server cannot catch it.
 2. **Nothing is dropped silently.** Unmapped columns, skipped rows, and
    uncoercible cells all land in _import_report.json and, per row, in
-   `import_notes` so the panel can flag them. A dropped Exercise Price column
+   `import_notes` so the form can flag them. A dropped Exercise Price column
    is a wrong-priced grant the user has no way to notice.
 
 Usage:
@@ -379,7 +379,7 @@ _DATE_FORMATS = ("%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y", "%m-%d-%Y", "%d-%m-%Y",
 
 
 def coerce_date(value: Any) -> Optional[str]:
-    """→ YYYY-MM-DD, the format every panel date input wants.
+    """→ YYYY-MM-DD, the format every date input wants.
 
     Ambiguous DD/MM vs MM/DD is resolved as MM/DD first (the template's own US
     example) and only re-read as DD/MM when the first field cannot be a month.
@@ -557,7 +557,7 @@ def build_row(record: Dict[str, Any], security_type: str) -> Dict[str, Any]:
                 _note(row, field, raw, "couldn't read this date — enter it here")
 
     # Names resolve() will turn into ids; staged under private keys so a row can
-    # never reach the panel carrying a label where an id belongs.
+    # never reach the form carrying a label where an id belongs.
     for field in ("vesting_template_id", "acceleration_template",
                   "document_set_id", "legend_id", "share_class_prefix"):
         text = _text(_cell(record, field))
@@ -688,7 +688,7 @@ def _build_cert_fields(record: Dict[str, Any], row: Dict[str, Any]) -> None:
         else:
             row["rule_144_date"] = value
             issue = row.get("issue_date")
-            # The panel's Rule 144 toggle is issue-date-or-other; a date that
+            # The form's Rule 144 toggle is issue-date-or-other; a date that
             # differs also needs a reason, which no template column carries.
             if issue and value != issue:
                 row["rule_144_mode"] = "other"
@@ -702,7 +702,7 @@ def _build_cert_fields(record: Dict[str, Any], row: Dict[str, Any]) -> None:
             row["prefix_number"] = match.group(2)
             # "CS-1" is a share-class prefix plus a number; only the number is a
             # payload field, so keep the original visible instead of silently
-            # reshaping it (and let the panel show what the sheet actually said).
+            # reshaping it (and let the form show what the sheet actually said).
             _note(row, "prefix_number", cert_id,
                   "read the certificate number from {!r}".format(cert_id))
         else:
@@ -996,7 +996,7 @@ def resolve(parsed: Parsed, reference: Dict[str, Any]) -> Parsed:
     """Turn the staged free-text names into ids, in place.
 
     A name that doesn't match exactly stays unset and gets an import_note, so
-    the panel falls back to its own default and shows what the file said. There
+    the form falls back to its own default and shows what the file said. There
     is no fuzzy fallback by design — see the module docstring.
     """
     sections = {
@@ -1034,7 +1034,7 @@ def resolve(parsed: Parsed, reference: Dict[str, Any]) -> Parsed:
             match = _lookup(roster, name, ("full_name", "name"))
             if match:
                 # The cap-table record wins over the sheet for these three; Phase
-                # 1 re-resolves authoritatively, this just pre-fills the panel.
+                # 1 re-resolves authoritatively, this just pre-fills the form.
                 if match.get("email"):
                     _resolved(row, "email", match["email"])
                 if match.get("kind"):

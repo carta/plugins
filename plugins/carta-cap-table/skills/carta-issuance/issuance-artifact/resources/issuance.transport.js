@@ -66,8 +66,8 @@ const CONN_COPY = {
 const code = (e) => (e && typeof e.code === "string" ? e.code : "");
 const msgOf = (e) => String((e && (e.message || e.error || e.detail)) || "");
 
-/** The one error type the form sees. `fromServer` keeps the panel's meaning exactly:
-    Carta rejected the call, as opposed to the call never reaching Carta. submit()
+/** The one error type the form sees. `fromServer` draws the distinction the copy turns
+    on: Carta rejected the call, as opposed to the call never reaching Carta. submit()
     picks its copy off it. */
 function tErr(kind, message, src) {
   const e = new Error(String(message || kind).slice(0, 300));
@@ -263,19 +263,28 @@ async function store() {
     allowlist rather than a mutate-blocklist, so a name nobody anticipated is a write. */
 const isRead = (name) => /^cap_table__(get|list)__/.test(String(name));
 
-/** A hung call otherwise sits on the host's ~130s reply budget, which the page shows
-    as a grey skeleton and the word "Loading…". The server's own ceiling is 20s, so
-    this only fires when nothing is coming. Writes never carry a signal: an aborted
-    write is an unknown outcome, and this page must never create one. */
-const READ_DEADLINE_MS = 25000;
-const readSignal = () => {
+/** A hung call otherwise sits on the host's ~130s reply budget, which the page shows as
+    a grey skeleton and the word "Loading…". Writes never carry a signal: an aborted
+    write is an unknown outcome, and this page must never create one.
+    long-comment-ok: why the two reads are timed differently. The first attempt is cut
+    short so a read that has stalled is retried while the reader is still waiting. The
+    retry gets the server's own 20s ceiling, so a read that is merely slow still lands
+    rather than being cut off twice, and the pair stays well inside the host's budget. */
+const READ_DEADLINE_MS = 14000;
+const READ_RETRY_DEADLINE_MS = 20000;
+const readSignal = (ms) => {
   try {
     if (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function") {
-      return AbortSignal.timeout(READ_DEADLINE_MS);
+      return AbortSignal.timeout(ms);
     }
   } catch { /* an older host has no timeout signal; the call simply has no deadline */ }
   return undefined;
 };
+
+/** Transient on a READ, so a second attempt is worth making. `cancelled` is here because
+    on a read it is the deadline above firing — which is the case this exists for. */
+const TRANSIENT_READ = new Set(["read_timeout", "cancelled", "upstream_error",
+  "server_unavailable"]);
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -289,9 +298,10 @@ async function one(name, args) {
     try { performance.measure("carta-issuance:bridge:" + name, { start: t0 }); }
     catch { /* measure with a start option is not universal; timing is optional */ }
   };
-  const send = () => {
+  const send = (retry) => {
     const opts = { cache: false };
-    const signal = isRead(name) ? readSignal() : undefined;
+    const signal = isRead(name)
+      ? readSignal(retry ? READ_RETRY_DEADLINE_MS : READ_DEADLINE_MS) : undefined;
     if (signal) opts.signal = signal;
     // The stamp lands on the proxy call AND on the target command's own arguments,
     // both from UI_CALL, so the gateway records the origin of each.
@@ -305,13 +315,15 @@ async function one(name, args) {
   try {
     try { res = await send(); }
     catch (first) {
-      /* One retry, reads only. The host stamps `retryable` itself, and the case this
-         exists for is the first call on a connector whose consent could not be asked
-         just then — that call never reached Carta, and without this the whole boot
-         lands on an empty form. A write is never re-sent: see UNKNOWN_OUTCOME. */
-      if (!first || !first.retryable || !isRead(name)) throw first;
+      /* One retry, reads only, fenced by isRead() — a write whose outcome is unknown is
+         never re-sent: see UNKNOWN_OUTCOME. Two cases: the host stamped `retryable`
+         itself (the first call on a connector whose consent could not be asked just
+         then, which never reached Carta), and a read that stalled or that Carta could
+         not answer this second. Without either, the whole boot lands on an empty form. */
+      const again = first && (first.retryable || TRANSIENT_READ.has(code(first)));
+      if (!again || !isRead(name)) throw first;
       await sleep(Math.min(Number(first.retryAfterMs) || 700 + Math.random() * 500, 8000));
-      res = await send();
+      res = await send(true);
     }
   } catch (err) {
     done();

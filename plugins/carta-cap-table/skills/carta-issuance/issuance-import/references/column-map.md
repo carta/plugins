@@ -92,11 +92,11 @@ entry, not a per-row value.
 `Certificate ID` in the template is a prefix plus a number (`CS-1`), but only
 the number is a payload field — the prefix comes from the resolved share class.
 The script keeps the numeric part and records the original in `import_notes`, so
-the panel shows what the sheet actually said instead of silently reshaping it.
+the form shows what the sheet actually said instead of silently reshaping it.
 
 A `Rule 144 Date` that differs from the issue date also sets
 `rule_144_mode: "other"` and notes that a reason is still needed — no template
-column carries `rule_144_difference_reason`, so the admin picks it in the panel.
+column carries `rule_144_difference_reason`, so the admin picks it in the form.
 
 ## Profits interest unit
 
@@ -140,7 +140,7 @@ autofill, not the sheet (carta-issuance Phase 0.5).
 
 ## Value picklists
 
-Matched exactly against the panel's own choices, case- and
+Matched exactly against the form's own choices, case- and
 punctuation-insensitively. **No fuzzy matching** — an unmatched value leaves the
 field blank with an `import_notes` entry.
 
@@ -195,6 +195,6 @@ sidesteps the ambiguity entirely.
 **`MM/DD` wins over `DD/MM` when both parse** — the template's own examples are
 US-format, and a silent flip between them is the kind of error that reaches the
 cap table looking plausible. `03/04/2026` reads as March 4. A non-US admin whose
-sheet means April 3 sees the date in the panel before anything is saved, which is
+sheet means April 3 sees the date in the form before anything is saved, which is
 the intended catch — but if UK/AU imports turn out to trip on this regularly,
 the fix is an explicit `--date-order` flag, not a heuristic.

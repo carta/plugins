@@ -11,7 +11,7 @@ allowed-tools: []
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.88.3</carta-plugin>
+<carta-plugin>carta-cap-table:6.89.0</carta-plugin>
 
 # issuance-import
 
@@ -128,9 +128,9 @@ prints `SECURITY_TYPE=`, `ROW_COUNT=`, and the paths it wrote.
 
 ### Step 3 — Resolve the names to ids (chat surface only)
 
-**On the panel and the artifact, skip to Step 5.** Those surfaces fetch their own reference
-data and resolve the file's free text themselves, so a `--reference` pass here would be a round
-trip for a result they replace.
+**On the artifact, skip to Step 5.** The page fetches its own reference data and resolves the
+file's free text itself, so a `--reference` pass here would be a round trip for a result it
+replaces.
 
 On the chat surface, run [Phase
 0.5](../references/engine.md#phase-05--configure-the-issuance)'s `issuance_init` call exactly as
@@ -171,7 +171,7 @@ collects the terms must both **report every note against the field it names** an
 field unanswered**, so nothing can be submitted until the admin settles it. A marker alone is
 ignorable; the withheld default is what actually prevents a silent wrong issuance
 ([chat-surface.md § 1](../references/chat-surface.md#1-collect--one-batch-and-only-what-is-genuinely-open)).
-The panel and the artifact do this for themselves from `row.import_notes`.
+The artifact does this for itself from `row.import_notes`.
 
 **Strip `import_notes` before any mutate** — same discipline as the review-only fields
 ([Build the mutate payload](../references/engine.md#build-the-mutate-payload-from-your-phase-1-resolved-rows)).

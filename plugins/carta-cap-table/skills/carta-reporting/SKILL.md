@@ -34,7 +34,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.88.3</carta-plugin>
+<carta-plugin>carta-cap-table:6.89.0</carta-plugin>
 
 # Custom Reports
 
