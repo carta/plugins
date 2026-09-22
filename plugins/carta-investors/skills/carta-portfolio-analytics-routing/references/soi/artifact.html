@@ -580,14 +580,11 @@
             color: var(--text-subtle);
         }
 
+        /* Only multi-select panels get a footer, and it pairs Clear all with Apply. */
         .combo-footer {
             border-top: 1px solid var(--border-subtle);
             text-transform: uppercase;
             letter-spacing: 0.06em;
-        }
-
-        /* Multi-select footer pairs the selection count with Clear all. */
-        .combo-footer--split {
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -3035,7 +3032,8 @@
                     <ul class="combo-list" role="listbox" id="${state.mountId}-list" tabindex="-1"
                         ${state.multi ? 'aria-multiselectable="true"' : ''}
                         aria-labelledby="${state.labelId}"></ul>
-                    <div class="combo-footer${state.multi ? ' combo-footer--split' : ''}" id="${state.mountId}-footer"></div>
+                    ${state.multi ? `
+                    <div class="combo-footer" id="${state.mountId}-footer"></div>` : ''}
                 </div>`;
 
             mount.querySelector('.combo-trigger').addEventListener('click', () => toggleCombo(state.mountId));
@@ -3175,12 +3173,6 @@
                         e.stopPropagation();
                         applyComboSelection(state.mountId);
                     });
-                } else {
-                    // The ratio only says something while filtering; unfiltered it would
-                    // print the same number twice and read as static chrome.
-                    footer.textContent = visible.length === state.items.length
-                        ? `${state.items.length} ${state.unit}`
-                        : `${visible.length} of ${state.items.length} ${state.unit}`;
                 }
             }
             const active = list.querySelector('.combo-option.active');
