@@ -4,7 +4,7 @@
     "headline": "The SOI and fund performance cards now open full dashboards of their own."
   },
   "carta-workhub-build": {
-    "version": "1.8.18",
-    "headline": "Workhub's capital activity review no longer shows the health-check list; checks still run and still hold release, and a failure only Carta can fix is still called out."
+    "version": "1.8.19",
+    "headline": "Workhub's capital activity review cards read \"Capital activity — review and release\" until opened, instead of calling every distribution a capital call."
   }
 }

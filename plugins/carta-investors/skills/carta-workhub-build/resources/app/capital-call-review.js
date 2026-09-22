@@ -147,7 +147,9 @@ const CCR_CHANGES_TASK = "review-capital-activity-changes";
 // TaskStatus PENDING and ACTIVE. A resolved review is a decision already taken.
 const CCR_OPEN_TASK_STATUSES = [0, 1];
 
-const CCR_CARD_TITLE = "Capital call — review and release";
+// The workflow row does not say whether the activity is a call or a
+// distribution, so the card stays neutral until the summary names it.
+const CCR_CARD_TITLE = "Capital activity — review and release";
 
 const CCR_PAGE_SIZE = 12;   // carta-mcp's cap, measured against its 40k budget
 const CCR_MAX_PAGES = 40;
@@ -261,9 +263,9 @@ const ccrRowLabel = (r) =>
 
 const ccrIsDistribution = (s) => !!s && s.activity_type === "distribution";
 
-// The card names a capital call; the summary says what the activity really is.
 function ccrPanelTitle(s) {
-  return ccrIsDistribution(s) ? "Distribution — review and release" : _ccr.title;
+  if (!s) return _ccr.title;
+  return ccrIsDistribution(s) ? "Distribution — review and release" : "Capital call — review and release";
 }
 
 // Column order and labels come from the summary's bucket_totals, which names
