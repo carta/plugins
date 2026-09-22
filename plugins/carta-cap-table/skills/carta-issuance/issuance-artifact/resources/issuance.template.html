@@ -12,6 +12,7 @@
   </svg>
   <h1 data-testid="title">Issue securities</h1>
   <p class="sub" data-testid="subtitle"></p>
+  <div class="load" data-testid="loading" hidden><span></span></div>
 
   <div data-testid="blockers"></div>
   <div data-testid="notices"></div>
@@ -42,6 +43,19 @@
   <p class="status" data-testid="status" hidden></p>
 
   <p class="stamp" data-testid="build-stamp">build {{BUILD_ID}}</p>
+</div>
+
+<!-- The irreversible write happens from here: the sheet carries the save, the check,
+     the one confirmation and the result, so nothing commits off a stale screen. -->
+<div class="scrim" data-testid="modal" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <h3 id="modal-title" data-testid="modal-title"></h3>
+    <div data-testid="modal-body"></div>
+    <div class="sheet-f">
+      <button id="modal-close" data-testid="modal-close" type="button" hidden></button>
+      <button class="primary" id="modal-go" data-testid="modal-go" type="button" hidden></button>
+    </div>
+  </div>
 </div>
 
 <script>

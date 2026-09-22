@@ -63,9 +63,12 @@ function reapplyEdits(base, edited) {
 
 /** The one two-path branch in this page: `issuance_bootstrap` is not deployed on
     every MCP yet, so an unknown-command rejection is expected, not an error to
-    show — loadTerms()'s reference-data fan-out covers that case by itself. */
+    show — loadTerms()'s reference-data fan-out covers that case by itself.
+    Returns true when the payload carried the reference data too, which is what
+    lets the whole form arrive in this one round trip. */
 async function bootstrap(base) {
-  const args = { corporation_id: CORP_ID, security_type: SECURITY_TYPE };
+  const args = { corporation_id: CORP_ID, security_type: SECURITY_TYPE,
+    include_sections: true };
   // Forwarding the knowns is the point of the call: it resolves each name to a
   // stakeholder id, email, kind and relationship, and reports the unmatched ones.
   if (seedNames().length) args.stakeholders = seedNames();
@@ -74,13 +77,16 @@ async function bootstrap(base) {
   let res;
   try { res = await one("cap_table__get__issuance_bootstrap", args); }
   catch (err) {
-    if (isMissingCommand(err)) return;
+    if (isMissingCommand(err) || isUnknownParam(err, "include_sections")) return false;
     throw err;
   }
+  const d = payload(res);
   const edited = snapshot();
-  ingest(payload(res));
+  ingest(d);
   reapplyEdits(base, edited);
-  render();
+  const fat = ingestSections(d);
+  if (fat) settleTerms(); else render();
+  return fat;
 }
 
 /** An unresolved prompt row reads as a brand-new person, and a duplicate stakeholder on
@@ -105,17 +111,19 @@ async function resolveSeededNames() {
   const base = snapshot();
   // 2. No connector is a state, not a crash: say what to do and stop.
   if (!(await connect())) { degrade(); return; }
-  // 3. Resolve the named people server-side. Skipped on a resume: re-seeding those rows
-  //    drops the draft_pk map, which inserts duplicates into the set being edited.
+  // 3. One call: resolve the named people server-side and take the reference data
+  //    with them. Skipped on a resume — re-seeding those rows drops the draft_pk
+  //    map, which inserts duplicates into the set being edited.
+  let fat = false;
   if (!RESUMING) {
-    try { await bootstrap(base); }
+    try { fat = await bootstrap(base); }
     catch (err) {
       console.error("issuance artifact: bootstrap failed", err);
       noteFailures(["bootstrap"]);
     }
   }
-  // 4. Reference data for the dropdowns, plus the first roster page.
-  await boot();
+  // 4. Only when that call did not carry them: the per-section fan-out.
+  if (!fat) await boot();
   // 5. Anything bootstrap could not resolve, match against the roster instead.
   await resolveSeededNames();
 })();

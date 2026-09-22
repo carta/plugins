@@ -35,7 +35,7 @@ const MONTHS = ["January", "February", "March", "April", "May", "June", "July",
 
 const S = {
   stage: "edit",
-  ready: false, corpId: null, corpName: "", type: "option_grant", token: null,
+  ready: false, corpId: null, corpName: "", type: "option_grant", token: null, today: "",
   counts: {}, prefill: {}, blockers: [], narrowed: null, thresholdNoun: "Threshold",
   roster: [], plans: [], classes: [], vesting: [], accel: [], docSets: [], legends: [], vals: [],
   intl: { active: [], history: [] }, intlOk: false, isLLC: null,
@@ -44,7 +44,7 @@ const S = {
   loadErr: "", loadFailed: [], connErr: "", shared: {}, rows: [], seq: 0,
   searching: false, searchErr: false, searched: new Set(),
   errs: {}, srv: {}, banner: "", bannerBad: false, busy: false,
-  draftSetId: null, drafts: {},
+  draftSetId: null, drafts: {}, sheet: null, issued: 0, stuck: "",
 };
 
 /* ---------- helpers ---------- */
@@ -52,7 +52,26 @@ const el = (t) => document.querySelector(`[data-testid="${t}"]`);
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g,
   (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const iso = (d) => (typeof d === "string" && /^\d{4}-\d{2}-\d{2}/.test(d) ? d.slice(0, 10) : "");
-const today = () => new Date().toISOString().slice(0, 10);
+const pad2 = (n) => String(n).padStart(2, "0");
+/** The browser's own calendar day. `toISOString()` reads UTC, which is a day ahead
+    of anyone west of it for part of every day — and Carta's draft validator asks
+    its own clock, so a UTC read prefills tomorrow and the save comes back "Issue
+    date can't be in the future". */
+function localToday() {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+/** The day to date an issuance. The server's own, when the bootstrap sent one, because
+    it is the day Carta compares against and so is always accepted. */
+const today = () => S.today || localToday();
+/** The latest day a picker offers, which is not the same day. Carta anchors a
+    corporation ahead of its own clock — Australia, New Zealand — to that corporation's
+    date, so capping at the server's would refuse those holders their real today. The
+    server still has the last word on anything past this. */
+const latestDate = () => {
+  const local = localToday();
+  return S.today && S.today > local ? S.today : local;
+};
 /** MM/DD/YYYY — required by the three CharField(10) date fields. */
 function us(d) {
   const s = iso(d);
@@ -78,6 +97,12 @@ function list(res, ...keys) {
   for (const v of Object.values(p)) if (Array.isArray(v)) return v;
   return [];
 }
+/** A list, whatever arrived. Every server list this page maps over goes through here:
+    `render()` draws them all, so one string where a list was expected throws inside the
+    render that would have shown the error, and the form stays on its loading skeleton. */
+const arr = (v) => (Array.isArray(v) ? v : []);
+/** Drop the entries that would throw on a field read. */
+const objs = (v) => arr(v).filter((x) => x && typeof x === "object");
 const isPiuLike = () => S.type === "piu";
 const classNoun = () => (isPiuLike() ? "Unit class" : "Share class");
 /** The issuer's own noun at the head of a label. The server sends it lowercase —
@@ -90,17 +115,24 @@ const capNoun = (s) => (s ? String(s).charAt(0).toUpperCase() + String(s).slice(
 const LOAD_LABEL = { roster: "the stakeholder list", init: "the shared terms",
   plans: "the equity plans", classes: "the share classes",
   vals: "the 409A valuations", bootstrap: "this issuance's starting point" };
+/** Each line ends as a sentence. Carta punctuates some messages and not others, so
+    without this a list mixes the two. */
+const sentence = (s) => {
+  const t = String(s == null ? "" : s).trim();
+  return !t || /[.!?]$/.test(t) ? t : `${t}.`;
+};
+
 /** Every server error as one list, in the server's own words. A payload key is never
     customer-facing, and the message already names its field; a row's line leads with the
     recipient, because "Quantity exceeds…" alone does not say whose row it is. */
 function serverErrorLines() {
-  const out = [...(S.srv.batch || [])];
+  const out = (S.srv.batch || []).map(sentence);
   for (const r of S.rows) {
     const msgs = S.srv.rows && S.srv.rows[r.key];
     if (!msgs) continue;
     const who = (r.name || "").trim();
     for (const m of Object.values(msgs)) {
-      const text = [].concat(m).join("; ");
+      const text = [].concat(m).map(sentence).join(" ");
       out.push(who ? `${who} — ${text}` : text);
     }
   }
@@ -115,11 +147,13 @@ function ingest(data) {
   S.corpName = d.corporationName || d.corporation_name || S.corpName;
   S.type = d.securityType || d.security_type || S.type;
   S.token = d.panelToken || d.panel_token || S.token;
+  // Before seedShared(), which anchors every date on it.
+  S.today = iso(d.today) || S.today;
   // A resume: saveArgs() then updates this set instead of minting a second one.
   S.draftSetId = d.draftSetId ?? d.draft_set_id ?? S.draftSetId;
   S.counts = d.counts || {};
   S.prefill = d.prefill || {};
-  S.blockers = Array.isArray(d.blockers) ? d.blockers : [];
+  S.blockers = objs(d.blockers);
   S.narrowed = d._narrowed || null;
   if (d.prefill && d.prefill.thresholdNoun) S.thresholdNoun = d.prefill.thresholdNoun;
   S.ready = true;
@@ -133,8 +167,7 @@ function ingest(data) {
 
 function seedShared() {
   const p = S.prefill;
-  // The only client-clock read left: a last-resort default for the issue
-  // date itself when the server sent none. Every other date anchors to it.
+  // Every other date anchors on this one.
   const issue = iso(p.issueDate) || today();
   const sh = {
     issue_date: issue,
@@ -185,7 +218,7 @@ function seedShared() {
 function seedRows() {
   S.rows = [];
   S.drafts = {};
-  for (const r of S.prefill.rows || []) {
+  for (const r of objs(S.prefill.rows)) {
     const row = mkRow({
       stakeholderId: r.stakeholderId ?? r.stakeholder_id ?? null,
       name: r.name || "", email: r.email || "",
@@ -222,6 +255,78 @@ function boot() {
   S.booted = true;
   loadTerms();
   return loadRoster();
+}
+
+/* ---------- the one-call path ----------
+   `include_sections` returns the reference rows the bootstrap already fetched, so the
+   whole form arrives in the same round trip that resolves the named people. The
+   fan-out above stays as the fallback for an MCP that does not send them. */
+
+/** A 409A row wears different names than an international one, and `fmvCandidates`
+    reads the international shape. Same mapping the fan-out's `fmvRows` applies. */
+const as409aRow = (r) => ({
+  price: r.fair_market_value ?? r.price_per_share ?? null,
+  expiration_date: r.expiration_date,
+  support_reference_type: "409A", share_class_type: "COMMON",
+});
+
+/** True when the payload carried the reference data, so the fan-out can be skipped.
+    False keeps the fan-out, which is the safe answer: a second read costs a round trip,
+    where a wrongly skipped one leaves required dropdowns empty with nothing said. */
+function ingestSections(d) {
+  const sec = d && d.sections;
+  if (!sec || typeof sec !== "object") return false;
+  let landed = 0;
+  const take = (key, apply) => {
+    const rows = sect(sec[key]);
+    if (!rows.length) return;
+    apply(rows);
+    landed += 1;
+  };
+  take("option_plans", (v) => { S.plans = v; });
+  take("certificate_share_classes", (v) => { S.classes = v; });
+  take("vesting_templates", (v) => { S.vesting = v; });
+  take("acceleration_templates", (v) => { S.accel = v; });
+  take("document_sets", (v) => { S.docSets = v; });
+  take("legends", (v) => { S.legends = v; });
+  // Chosen on which one has rows, not which key is present: a refused international
+  // read arrives empty and would otherwise hide the 409A rows sitting beside it.
+  const iv = sec.international_valuations || {};
+  const intl = { active: sect(iv.active), history: sect(iv.history) };
+  if (!intl.active.length && !intl.history.length) {
+    const v409 = sec.valuations_409a || {};
+    intl.active = sect(v409.active).map(as409aRow);
+    intl.history = sect(v409.history).map(as409aRow);
+  }
+  if (intl.active.length || intl.history.length) {
+    S.intl = intl;
+    S.intlOk = true;
+    landed += 1;
+  }
+  const init = sec.draft_set_init;
+  if (init && typeof init === "object") {
+    if (init.thresholdNoun) S.thresholdNoun = init.thresholdNoun;
+    if (typeof init.isLLC === "boolean") S.isLLC = init.isLLC;
+    landed += 1;
+  }
+  const fields = d.field_manifest && sect(d.field_manifest.fields);
+  if (fields && fields.length) { S.manifest = mfIndex(fields); landed += 1; }
+  const roster = sect(d.roster);
+  if (roster.length) { mergeRoster(roster); landed += 1; }
+  if (!landed) return false;
+  S.termsLoading = false;
+  S.rosterLoading = false;
+  S.booted = true;
+  return true;
+}
+
+/** What both paths do once the reference data is in. */
+function settleTerms() {
+  mfDefaults();
+  applyDerived();
+  render();
+  mark("terms");
+  flag();
 }
 
 function mark(name) {
@@ -266,7 +371,7 @@ async function loadTerms() {
       if (ds.thresholdNoun) S.thresholdNoun = ds.thresholdNoun;
       // A missing or null isLLC is UNKNOWN, never false.
       if (typeof ds.isLLC === "boolean") S.isLLC = ds.isLLC;
-    } else if (tag === "manifest") S.manifest = mfIndex(res.value);
+    } else if (tag === "manifest") S.manifest = mfIndex((payload(res.value) || {}).fields);
     else if (tag === "intl") {
       const p = payload(res.value) || {};
       S.intl = { active: sect(p.active), history: sect(p.history) };
@@ -278,11 +383,7 @@ async function loadTerms() {
   });
   S.termsLoading = false;
   noteFailures(failed);
-  mfDefaults();
-  applyDerived();
-  render();
-  mark("terms");
-  flag();
+  settleTerms();
 }
 /** Every issuance_init section arrives as its own command's `{count, results}`
     envelope, never a bare array. Reading one as an array yields an empty control
@@ -544,17 +645,12 @@ function fmvLapsed() {
   return `No valuation is live — the last one expired ${longDate(dates[dates.length - 1])}. Set the price this grant uses.`;
 }
 
-/** Why the page could not price this grant, when it could not. A price it did find
-    is provenance, and the review carries it. */
+/** Why the page could not price this grant, when it could not. */
 function fmvWarning() {
   const v = fmv();
   if (v.ambiguous) return "More than one valuation is live on this share class — set the price this grant uses.";
   if (v.price != null && v.source) return "";
   return fmvLapsed();
-}
-function fmvProv() {
-  const v = fmv();
-  return v.price != null && v.source ? `default — current ${v.source}` : "";
 }
 function plan() { return S.plans.find((p) => String(p.id) === String(S.shared.option_plan_id)); }
 function chosenClass() { return S.classes.find((c) => c.prefix === S.shared.prefix); }
@@ -566,17 +662,21 @@ const isMilestone = () => { const t = tmpl(); return !!t && /milestone/i.test(t.
 function grantExpiry(from) {
   const p = plan(); const base = from || S.shared.issue_date;
   if (!p || !base) return S.shared.grant_expiration_date || "";
-  const yrs = Number(p.expiration_years ?? p.option_term_years ?? 10);
+  // A non-numeric term makes the Date invalid, and `toISOString` on an invalid Date
+  // throws — inside `spec()`, which every render walks.
+  const term = Number(p.expiration_years ?? p.option_term_years ?? 10);
+  const yrs = Number.isFinite(term) ? term : 10;
   const d = new Date(`${base}T00:00:00Z`);
   d.setUTCFullYear(d.getUTCFullYear() + yrs);
   if (p.minus_one_day !== false) d.setUTCDate(d.getUTCDate() - 1);
+  if (Number.isNaN(d.getTime())) return S.shared.grant_expiration_date || "";
   let end = d.toISOString().slice(0, 10);
   const cap = iso(p.expiration_date);
   if (cap && cap < end) end = cap;
   return end;
 }
 
-const candidates = () => (S.prefill.jurisdictionCandidates || []).filter((c) => SO[c]);
+const candidates = () => arr(S.prefill.jurisdictionCandidates).filter((c) => SO[c]);
 /** The server reported competing signals and returned no verdict. The choice
     stays on screen after the user makes it, so they can change it. */
 const regionAmbiguous = () =>
@@ -613,7 +713,8 @@ function txt(id, v, o) {
   o = o || {};
   return `<input id="${id}" data-testid="${id}" data-k="${o.k || id}" data-scope="${o.scope || "shared"}"
     type="${o.type || "text"}" value="${esc(v)}" class="${o.num ? "num" : ""}"
-    ${o.ro ? "readonly" : ""} ${o.dis ? "disabled" : ""} ${o.ph ? `placeholder="${esc(o.ph)}"` : ""}>`;
+    ${o.ro ? "readonly" : ""} ${o.dis ? "disabled" : ""} ${o.ph ? `placeholder="${esc(o.ph)}"` : ""}
+    ${o.max ? `max="${esc(o.max)}"` : ""}>`;
 }
 function sel(id, v, opts, o) {
   o = o || {};
@@ -718,9 +819,9 @@ const mfField = (k) => S.manifest[mfName(k)];
 /** Index by field name. `hidden` is always false on the wire — the server drops
     a suppressed field from the list entirely — but an entry that ever arrives
     hidden describes a control nobody types into, so it speaks for nothing. */
-function mfIndex(res) {
+function mfIndex(fields) {
   const out = {};
-  for (const f of sect((payload(res) || {}).fields)) {
+  for (const f of sect(fields)) {
     if (f && typeof f.name === "string" && !f.hidden) out[f.name] = f;
   }
   return out;
@@ -784,26 +885,21 @@ function mfDefaults() {
 
 /* ---------- one field spec drives render, per-row overrides and validation ---------- */
 // `req` doubles as the footer's phrase, `over` marks a row-overridable field, and
-// `prov` tags the review with what the page chose. Conditional fields are absent.
+// `noFuture` caps a date the server refuses past today. Conditional fields are absent.
 function spec() {
   const sh = S.shared, t = S.type, s = [];
   const F = (k, label, kind, x) => s.push(mfApply(Object.assign({ k, label, kind }, x || {})));
-  const soleProv = (n, what) => (n === 1 ? `default — only ${what}` : "");
   const vest = () => {
-    const grant = t === "option_grant";
     const chosen = tmpl();
     // "No vesting" is a real option and the default, so a blank one above it would
     // be a second way to say the same thing.
     F("vesting_template", "Vesting", "sel", { opts: vestOpts(), over: 1, noPh: 1,
-      // A grant that does not vest is accepted and atypical, so the review says so.
-      prov: grant && sh.vesting_template === NONE ? "default — no vesting" : "",
       // The closed control truncates a long template name, and what it drops
       // is the schedule itself — the only way to tell two templates apart.
       hint: (chosen && chosen.summary_short) || "" });
     const real = sh.vesting_template && sh.vesting_template !== NONE;
     if (real && !isMilestone()) {
-      F("vesting_start_date", "Vesting start", "date",
-        { over: 1, req: "a vesting start date", prov: "default — the issue date" });
+      F("vesting_start_date", "Vesting start", "date", { over: 1, req: "a vesting start date" });
     }
     if (real && accelOpts().length) {
       F("acceleration_template", "Acceleration", "sel",
@@ -811,14 +907,13 @@ function spec() {
     }
   };
   const cls = () => F("prefix", classNoun(), "sel", { opts: classOpts(), over: 1,
-    req: `a ${classNoun().toLowerCase()}`, prov: soleProv(S.classes.length, "class") });
+    req: `a ${classNoun().toLowerCase()}` });
 
   if (t === "option_grant") {
     const zepo = sh.so_type === "ZEPO";
     // The plan is the draft set's, not the row's — carta-web locks equity_plan_id
     // once the set exists — so this one term stays shared.
-    F("option_plan_id", "Option plan", "sel", { opts: planOpts(), req: "an option plan",
-      prov: soleProv(selectablePlans().length, "plan") });
+    F("option_plan_id", "Option plan", "sel", { opts: planOpts(), req: "an option plan" });
     if (regionAmbiguous()) {
       // Scopes which grant types are legal rather than reaching the payload; so_type
       // itself is the per-row answer.
@@ -832,10 +927,8 @@ function spec() {
         hint: rg ? "" : "Choose a jurisdiction first." });
     F("exercise_price", "Exercise price", "num", { over: 1, min: 0, dis: zepo,
       val: zepo ? "0" : sh.exercise_price, req: !zepo && "an exercise price",
-      prov: zepo ? "autofill — ZEPO rule" : fmvProv(),
       hint: zepo ? "ZEPO — fixed at 0" : fmvWarning() });
-    F("currency", "Currency", curOpts().length ? "sel" : "text", { over: 1,
-      opts: curOpts(), prov: sh.so_type ? `autofill — ${sh.so_type} rule` : "" });
+    F("currency", "Currency", curOpts().length ? "sel" : "text", { over: 1, opts: curOpts() });
     F("board_mode", "Board approval", "sel", { over: 1, noPh: 1,
       opts: [["approved", "Approved"], ["pending", "Pending board approval"]] });
     // A grant gets its issue date from the board's approval, so the server
@@ -843,16 +936,15 @@ function spec() {
     // are not board approved." Pending grants therefore have no issue date to
     // collect, and `rowPayload` leaves the key off.
     if (sh.board_mode === "approved") {
-      F("issue_date", "Issue date", "date", { over: 1, req: "an issue date" });
+      F("issue_date", "Issue date", "date", { over: 1, req: "an issue date", noFuture: 1 });
       F("board_approval_date", "Board approval date", "date",
-        { over: 1, req: "a board approval date" });
+        { over: 1, req: "a board approval date", noFuture: 1 });
     }
     // Editable, but still derived: choosing another plan or issue date recomputes it.
-    F("grant_expiration_date", "Grant expiration", "date", { over: 1,
-      prov: plan() ? "default — plan term" : "" });
+    F("grant_expiration_date", "Grant expiration", "date", { over: 1 });
     vest();
     F("document_set_id", "Document set", "sel", { opts: docOpts(), req: "a document set",
-      over: 1, prov: soleProv(S.docSets.length, "document set") });
+      over: 1 });
     if (!zepo) F("early_exercise", "Early exercise", "check", { over: 1 });
     if (sh.so_type === "Unapproved") {
       F("employment_related", "Employment related", "sel", { over: 1,
@@ -872,11 +964,10 @@ function spec() {
     cls();
     F("law_firm_price", "Price per share", "num", { over: 1, min: 0, req: "a price per share" });
     F("currency", "Currency", curOpts().length ? "sel" : "text", { over: 1, opts: curOpts() });
-    F("issue_date", "Issue date", "date", { over: 1, req: "an issue date" });
+    F("issue_date", "Issue date", "date", { over: 1, req: "an issue date", noFuture: 1 });
     F("board_approval_date", "Board approval date", "date",
-      { over: 1, req: "a board approval date" });
-    F("legend_id", "Legend", "sel", { opts: legendOpts(), req: "a legend",
-      over: 1, prov: soleProv(S.legends.length, "legend") });
+      { over: 1, req: "a board approval date", noFuture: 1 });
+    F("legend_id", "Legend", "sel", { opts: legendOpts(), req: "a legend", over: 1 });
     F("rule_144_mode", "Rule 144 date", "sel", { over: 1, noPh: 1,
       opts: [["issue_date", "Same as issue date"], ["other", "A different date"]] });
     if (sh.rule_144_mode === "other") {
@@ -891,7 +982,7 @@ function spec() {
     }
     vest();
   } else {
-    const noun = S.thresholdNoun, Noun = capNoun(noun);
+    const noun = String(S.thresholdNoun || "Threshold"), Noun = capNoun(noun);
     cls();
     F("threshold_value_type", `${Noun} type`, "sel", { over: 1, req: `a ${noun.toLowerCase()} type`,
       opts: [["Unit", "Unit — per unit"], ["Overall", "Overall — once for the whole grant"]] });
@@ -899,11 +990,10 @@ function spec() {
       req: `a ${noun.toLowerCase()} value` });
     F("option_plan", "Equity plan", "sel", { opts: planOpts(), over: 1, ph: "No plan" });
     F("currency", "Currency", curOpts().length ? "sel" : "text", { over: 1, opts: curOpts() });
-    F("issue_date", "Issue date", "date", { over: 1, req: "an issue date" });
-    F("board_approval_date", "Board approval date", "date", { over: 1 });
+    F("issue_date", "Issue date", "date", { over: 1, req: "an issue date", noFuture: 1 });
+    F("board_approval_date", "Board approval date", "date", { over: 1, noFuture: 1 });
     if (S.docSets.length) {
-      F("document_set_id", "Document set", "sel", { opts: docOpts(), over: 1,
-        prov: soleProv(S.docSets.length, "document set") });
+      F("document_set_id", "Document set", "sel", { opts: docOpts(), over: 1 });
     }
     vest();
     const cc = chosenClass();
@@ -931,9 +1021,21 @@ function control(d, id, v, scope, ph) {
     return sel(id, v, d.opts, { k: d.k, scope,
       placeholder: ph || (d.noPh ? false : (empty ? "Loading…" : d.ph)) });
   }
+  // `max` on a date Carta refuses past today: the picker stops offering the day that
+  // would come back rejected, instead of the form learning it from a round trip.
   return txt(id, v, { k: d.k, scope, num: d.kind === "num", ro: d.ro, dis: d.dis,
-    type: d.kind === "date" ? "date" : "text", ph: ph || d.ph });
+    type: d.kind === "date" ? "date" : "text", ph: ph || d.ph,
+    max: d.noFuture ? latestDate() : "" });
 }
+/** Placeholders in the shape the real controls will take, so the card does not
+    resize under the reader when the terms arrive. */
+const SKELETON_FIELDS = { option_grant: 8, certificate: 8, piu: 7 };
+function skeletonHtml() {
+  const n = SKELETON_FIELDS[S.type] || 8;
+  return Array.from({ length: n }, () =>
+    '<div class="f" aria-hidden="true"><div class="sk-l"></div><div class="sk"></div></div>').join("");
+}
+
 function specHtml() {
   return spec().map((d) => {
     const id = `shared-${d.k}`;
@@ -953,9 +1055,7 @@ function specHtml() {
 function subtitleHtml() {
   const via = T.server ? ` · via ${esc(T.server)}` : "";
   const who = `<b>${esc(S.corpName)}</b> · ${esc(typeLabel())}${via}`;
-  if (S.connErr) return `${who} · no live data`;
-  if (S.rosterLoading) return `${who} · loading stakeholders…`;
-  return who;
+  return S.connErr ? `${who} · no live data` : who;
 }
 /** Blockers the page decides for itself. Derived at render time rather than stored, so
     an ingest cannot drop them and a changed plan or unit class cannot leave one stale. */
@@ -975,7 +1075,7 @@ function localBlockers() {
   }
   return out;
 }
-const allBlockers = () => S.blockers.concat(localBlockers());
+const allBlockers = () => objs(S.blockers).concat(localBlockers());
 /** A hard stop means nothing on this form can be issued, so the form does not
     render around it — the problems and their fix are the whole page. */
 const hardStops = () => allBlockers().filter((b) => b.severity === "hard_stop");
@@ -1003,10 +1103,16 @@ function render() {
       // Cleared, not just hidden: a stale review must not outlive the stage it belongs
       // to, least of all the sentence saying what confirming commits to.
       el("review").innerHTML = "";
-      el("shared-grid").innerHTML = specHtml();
+      // Until the terms land every select here is empty, which reads as a form with
+      // no answers rather than a form still loading.
+      el("shared-grid").innerHTML = S.termsLoading && !S.connErr
+        ? skeletonHtml() : specHtml();
       el("rows").innerHTML = S.rows.map((r, i) => rowHtml(r, i)).join("");
     }
     renderFooter();
+    renderSheet();
+    const load = el("loading");
+    if (load) load.hidden = !!S.connErr || !(S.termsLoading || S.rosterLoading);
     const st = el("status");
     st.hidden = !S.banner;
     st.className = `status${S.bannerBad ? " bad" : ""}`;
@@ -1087,7 +1193,7 @@ function renderBlockers() {
 
 function renderNotices() {
   const p = S.prefill, out = [];
-  const amb = p.ambiguous || [], un = p.unmatched || [];
+  const amb = objs(p.ambiguous), un = arr(p.unmatched).filter((n) => typeof n === "string");
   if (S.connErr) {
     out.push(noteBox("notice-no-live-data", true,
       "This page has no live Carta data", [], S.connErr));
@@ -1105,7 +1211,7 @@ function renderNotices() {
   if (S.narrowed) {
     // Carta caps the bootstrap's size and says what it gave up. Clipped rows
     // mean recipients are missing from the form — never leave that unsaid.
-    const applied = (S.narrowed.applied || []).map(String);
+    const applied = arr(S.narrowed.applied).map(String);
     const lostRows = applied.some((a) => /row/i.test(a));
     out.push(noteBox("notice-narrowed", lostRows,
       lostRows ? "Not every recipient reached this form"
@@ -1123,9 +1229,7 @@ function renderNotices() {
   }
   const all = serverErrorLines();
   if (all.length) {
-    out.push(noteBox("notice-server-errors", true,
-      all.length === 1 ? "Carta would not save this"
-        : `Carta would not save this — ${all.length} things to fix`,
+    out.push(noteBox("notice-server-errors", true, "Errors",
       all.map((m) => `<li>${esc(m)}</li>`)));
   }
   el("notices").innerHTML = out.join("");
@@ -1241,7 +1345,6 @@ function reviewHtml() {
     && specVal(d) !== false).map((d) => `<div data-testid="review-term-${d.k}">
       <dt>${esc(d.label)}</dt>
       <dd>${esc(d.kind === "check" ? "Yes" : shDisp(d))}</dd>
-      ${d.prov ? `<dt class="rv-tag" data-testid="review-prov-${d.k}">${esc(d.prov)}</dt>` : ""}
     </div>`).join("");
 
   return `<div class="rv-h"><div>Stakeholder</div><div class="rv-n">Quantity</div>
@@ -1320,21 +1423,28 @@ function renderFooter() {
   // dead transport disables a button. An incomplete form does not: a dead greyed-out
   // button says nothing about what is wrong, whereas a click paints the offending
   // fields, and the server has the last word on the rest.
-  const stopped = hardStops().length > 0;
+  // Nothing may be written again over a set that has committed, or one whose outcome
+  // nobody here can establish — so every action goes away rather than sitting live.
+  const done = S.issued > 0 || !!S.stuck;
+  const stopped = !done && hardStops().length > 0;
   const dead = !!S.connErr;
   const blocked = S.termsLoading || S.busy || dead;
   const reviewing = S.stage === "review";
-  el("confirm-issue").hidden = reviewing || stopped;
-  el("issue").hidden = !reviewing || stopped;
-  el("back-to-edit").hidden = !reviewing || stopped;
-  el("save-draft").hidden = stopped;
+  el("confirm-issue").hidden = done || reviewing || stopped;
+  el("issue").hidden = done || !reviewing || stopped;
+  el("back-to-edit").hidden = done || !reviewing || stopped;
+  el("save-draft").hidden = done || stopped;
   el("confirm-issue").disabled = blocked;
   el("issue").disabled = blocked;
   el("back-to-edit").disabled = S.busy;
   el("save-draft").disabled = blocked;
   const why = el("blocked-reason");
   why.className = "why";
-  why.textContent = stopped ? "Nothing can be issued until the problems above are fixed."
+  // Not `one`: that name is the transport's single call site, one scope away.
+  const [sing, many] = unitNoun();
+  why.textContent = S.stuck ? S.stuck
+    : S.issued ? `Issued — ${plural(S.issued, sing, many)} on the cap table.`
+    : stopped ? "Nothing can be issued until the problems above are fixed."
     : dead ? "No live connection to Carta — nothing can be saved from here."
     : S.termsLoading ? "Loading…"
     : "";
@@ -1348,9 +1458,15 @@ function validate(write) {
     const id = `shared-${d.k}`, v = specVal(d);
     const blank = v === "" || v == null;
     if (d.req) need(id, d.req, !blank);
-    if (blank || d.kind !== "num") continue;
-    if (d.min != null && !(Number(v) >= d.min)) e[id] = `Must be ${d.min} or more`;
-    else if (d.dp && (String(v).split(".")[1] || "").length > d.dp) e[id] = `At most ${d.dp} decimal places`;
+    if (blank) continue;
+    // Through `need`, not `e` alone: `missing` is what the footer counts, so a
+    // field left out of it paints red and lets Issue through anyway.
+    if (d.noFuture && iso(v) > latestDate()) need(id, d.label, false, "Can't be in the future");
+    if (d.kind !== "num") continue;
+    if (d.min != null && !(Number(v) >= d.min)) need(id, d.label, false, `Must be ${d.min} or more`);
+    else if (d.dp && (String(v).split(".")[1] || "").length > d.dp) {
+      need(id, d.label, false, `At most ${d.dp} decimal places`);
+    }
   }
   if (!S.rows.length) missing.push("a stakeholder");
   S.rows.forEach((r, i) => {
@@ -1490,6 +1606,95 @@ function saveArgs() {
   return a;
 }
 
+/* ---------- the issue sheet ---------- */
+const SAVE_STEPS = ["Saving the draft set", "Checking it with Carta"];
+
+function openSheet(phase, extra) {
+  S.sheet = Object.assign({ phase, step: 0 }, extra || {});
+  renderSheet();
+}
+function closeSheet() { S.sheet = null; renderSheet(); }
+
+/** One line per step, so a wait names what it is waiting on rather than spinning. */
+const stepsHtml = (labels, at) => labels.map((l, i) => {
+  const mark = i < at ? "✓" : i === at ? '<span class="spin"></span>' : "·";
+  const cls = i < at ? "done" : i === at ? "now" : "";
+  return `<div class="step ${cls}"><span class="mark">${mark}</span>${esc(l)}</div>`;
+}).join("");
+
+const plural = (n, one, many) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
+const unitNoun = () => ({ option_grant: ["option grant", "option grants"],
+  certificate: ["certificate", "certificates"],
+  piu: ["profits interest unit", "profits interest units"] }[S.type] || ["security", "securities"]);
+/** Counts securities, not quantity: one row is one grant, certificate or award, and
+    the quantity inside it is shares or units. The totals line carries that. */
+function issueVerb() {
+  const [sing, many] = unitNoun();
+  return `Issue ${plural(S.rows.length, sing, many)}`;
+}
+
+function sheetSummary() {
+  const who = S.rows.length === 1
+    ? esc((S.rows[0].name || "").trim() || "1 stakeholder")
+    : `${S.rows.length} stakeholders`;
+  const rows = [...totals().entries()].map(([cur, t]) =>
+    `<div class="tot"><span>Total — ${esc(cur)}</span><span>${t.qty.toLocaleString()}${
+      t.priced ? ` · ${esc(money(t.value, cur))}` : ""}</span></div>`).join("");
+  const on = S.shared.issue_date ? `, dated ${esc(longDate(S.shared.issue_date))}` : "";
+  return `<p>For <b>${who}</b> on <b>${esc(S.corpName)}</b>${on}.</p>${rows}`;
+}
+
+function renderSheet() {
+  const box = el("modal");
+  if (!box) return;
+  const m = S.sheet;
+  box.hidden = !m;
+  if (!m) return;
+  const title = el("modal-title"), body = el("modal-body");
+  const go = el("modal-go"), close = el("modal-close");
+  go.hidden = true; close.hidden = true; go.disabled = false;
+  if (m.phase === "saving") {
+    title.textContent = m.mode === "draft" ? "Saving your draft" : "Checking these terms with Carta";
+    body.innerHTML = stepsHtml(SAVE_STEPS, m.step);
+  } else if (m.phase === "confirm") {
+    const warned = (m.warnings || []).length;
+    title.textContent = warned ? "Carta flagged something first" : "Ready to issue";
+    body.innerHTML = (warned
+      ? `<div class="warn-note"><ul>${m.warnings.map((w) => `<li>${esc(w)}</li>`).join("")}</ul></div>`
+      : "")
+      + sheetSummary()
+      + `<p>${esc(CONFIRM_LINE[S.type] || "")} This cannot be undone here.</p>`;
+    go.hidden = false;
+    go.textContent = warned ? "Acknowledge and issue" : issueVerb();
+    close.hidden = false; close.textContent = "Back";
+  } else if (m.phase === "issuing") {
+    title.textContent = "Issuing on Carta";
+    body.innerHTML = stepsHtml(["Writing these securities to the cap table"], 0)
+      + "<p>Leave this open — it can take a moment.</p>";
+  } else if (m.phase === "issued") {
+    const [sing, many] = unitNoun();
+    title.textContent = "Issued";
+    body.innerHTML = `<p>${esc(plural(m.count || S.rows.length, sing, many))} ${
+      m.count === 1 ? "is" : "are"} on <b>${esc(S.corpName)}</b>'s cap table.</p>`
+      + `<p>Claude has the result and can open the ledger for you in the chat.</p>`;
+    close.hidden = false; close.textContent = "Done";
+  } else if (m.phase === "saved") {
+    title.textContent = "Draft saved";
+    body.innerHTML = `<p>Nothing is issued. ${esc(S.corpName)} has a saved draft set with ${
+      esc(plural(S.rows.length, "stakeholder", "stakeholders"))} on it, and no problems were found.</p>`
+      + "<p>Claude can pick it up from here, or you can come back to this page.</p>";
+    close.hidden = false; close.textContent = "Done";
+  } else {
+    title.textContent = "That did not go through";
+    body.innerHTML = m.dup
+      ? `<p class="fail-note">Carta found ${esc(plural(Number(m.dup.count) || 1, "stakeholder", "stakeholders"))
+        } here who may already be on the cap table, so nothing was issued.</p>`
+        + "<p>Ask Claude to sort the duplicates out — it can merge them or create the new records, then issue.</p>"
+      : `<p class="fail-note">${esc(m.message || "")}</p>`;
+    close.hidden = false; close.textContent = "Close";
+  }
+}
+
 /* ---------- submit ---------- */
 /** True when the form cannot go forward, having said so on the fields and in the
     banner. Both buttons stay live, so a click is the only place left to say it. */
@@ -1503,80 +1708,186 @@ function incomplete() {
   return true;
 }
 
-async function submit(mode) {
-  // A draft is a place to put work in progress, so it goes to the server as it
-  // stands and comes back with the server's own per-field errors. Issuing is the
-  // irreversible one, so it still asks the form first.
-  if (mode === "issue" && incomplete()) return;
-  S.busy = true; S.banner = mode === "issue" ? "Saving and checking…" : "Saving draft…";
-  S.bannerBad = false; S.srv = {}; render();
-  try {
-    const saved = payload(await one("cap_table__mutate__save_drafts", saveArgs())) || {};
-    S.draftSetId = saved.draft_set_id ?? saved.draftSetId ?? S.draftSetId;
-    for (const d of saved.drafts || saved.rows || []) {
-      if (d.temp_id && d.draft_pk) S.drafts[d.temp_id] = d.draft_pk;
-    }
-    const v = payload(await one("cap_table__mutate__validate_drafts", {
-      corporation_id: S.corpId, security_type: S.type, draft_set_id: S.draftSetId,
-    })) || {};
-    const bad = absorb(v);
-    S.busy = false;
-    if (bad) {
-      // Server errors anchor to form fields, so go back where those fields are.
-      S.stage = "edit";
-      S.banner = "Some details need fixing — see the fields below. Nothing has been issued.";
-      S.bannerBad = true; render(); return;
-    }
-    // The hand-off never throws, so a hand-off that does not land cannot be
-    // reported as a save that did not land.
-    const landed = await handoff(mode === "issue" ? "ready" : "draft");
-    if (mode === "draft") {
-      S.banner = `Saved as draft set ${S.draftSetId} — ${S.rows.length} stakeholder${S.rows.length > 1 ? "s" : ""}, no problems found.`
-        + (landed ? " Claude can pick it up from here."
-                  : ` Nothing is issued. Tell Claude: resume draft set ${S.draftSetId}.`);
-      render(); return;
-    }
-    S.banner = landed
-      ? `Draft set ${S.draftSetId} is saved and checked, and Claude has it — confirm in the chat to issue it. Nothing is issued yet.`
-      : `Draft set ${S.draftSetId} is saved and checked. Nothing is issued. Tell Claude: issue draft set ${S.draftSetId}.`;
-    render();
-  } catch (err) {
-    console.error("issuance artifact: Carta call failed", err);
-    S.busy = false;
-    S.banner = err && err.fromServer
-      ? `Carta would not save this: ${err.message}`
-      : err && err.needsConnector
-      ? connReason(err.code)
-      : err && err.unknownOutcome
-      ? (S.draftSetId
-        ? `Carta did not answer. Draft set ${S.draftSetId} may or may not have saved — ask Claude to check it before trying again.`
-        : "Carta did not answer. The save may or may not have landed — ask Claude to check for a new draft set before trying again.")
-      : "Could not reach Carta. Nothing was saved — try again.";
-    S.bannerBad = true; render();
+/** Record what the save returned, whichever call made it. */
+function absorbSaved(res) {
+  S.draftSetId = res.draft_set_id ?? res.draftSetId ?? S.draftSetId;
+  for (const d of res.drafts || res.rows || []) {
+    if (d.temp_id && d.draft_pk) S.drafts[d.temp_id] = d.draft_pk;
   }
 }
 
-/** The page stops at a saved-and-validated draft set and hands it over; the model
-    runs the irreversible write, so the host's own confirmation prompt still fires.
-    This page never calls cap_table:mutate:issue_securities. */
-async function handoff(status) {
-  const by = {};
-  for (const [cur, t] of totals().entries()) {
-    by[cur] = { quantity: t.qty, value: t.priced ? t.value : null };
-  }
+/** Save the rows and get Carta's verdict on them — validation errors and duplicates.
+ *
+ * `issue_securities` can do this in one call with `validate_only`, and deliberately is
+ * not used for it: that would put a second call to the issuing command in this page,
+ * one boolean away from issuing rows nobody had confirmed. A round trip is cheaper
+ * than that risk, and it happens behind the sheet's own progress.
+ */
+async function saveAndCheck() {
+  absorbSaved(payload(await one("cap_table__mutate__save_drafts", saveArgs())) || {});
+  if (S.sheet) { S.sheet.step = 1; renderSheet(); }
+  return payload(await one("cap_table__mutate__validate_drafts", {
+    corporation_id: S.corpId, security_type: S.type, draft_set_id: S.draftSetId,
+  })) || {};
+}
+
+/** Save, then check, then confirm, then issue — all inside the sheet, so the click
+    that commits is the one taken against terms Carta has just accepted. A draft
+    stops after the check. */
+async function submit(mode) {
+  // Ours to guard, not the footer's attributes: a second save in flight mints a second
+  // draft set, and an issued or unestablished set must take no further write.
+  if (S.busy || S.sheet || S.issued || S.stuck) return;
+  if (mode === "issue" && incomplete()) return;
+  S.banner = ""; S.bannerBad = false; S.srv = {};
+  S.busy = true;
+  openSheet("saving", { mode, step: 0 });
+  render();
   try {
+    const checked = await saveAndCheck();
+    S.busy = false;
+    if (absorb(checked)) { backToFields(); return; }
+    if (mode === "draft") {
+      openSheet("saved"); render();
+      await handoff("draft");
+      return;
+    }
+    // The check reports duplicates too, so they surface before the confirmation rather
+    // than as a failed issue after it.
+    const dup = checked.duplicates && checked.duplicates.has_duplicates
+      ? checked.duplicates : null;
+    if (dup) {
+      openSheet("failed", { dup }); render();
+      await handoff("needs_claude", { reason: "duplicates", duplicates: dup.count || null });
+      return;
+    }
+    openSheet("confirm", { warnings: warnLines(checked) }); render();
+  } catch (err) {
+    S.busy = false;
+    await sheetError(err, "save");
+  }
+}
+
+/** The irreversible write. The human confirmed it in the sheet against a checked
+    draft set, which is this flow's one gate — so nothing here re-asks, and a call
+    whose outcome is unknown is never retried.
+
+    The phase is the one-shot guard, and it has to be: `renderSheet` re-enables its own
+    buttons on every draw, and that draw happens synchronously inside this function, so
+    a disabled attribute is already false again by the second click of a double-click.
+    Leaving the confirm phase is what closes the door, and it happens before any await. */
+async function issueNow() {
+  if (!S.sheet || S.sheet.phase !== "confirm") return;
+  S.busy = true; S.srv = {};
+  openSheet("issuing"); render();
+  let r;
+  try {
+    r = payload(await one("cap_table__mutate__issue_securities", {
+      corporation_id: S.corpId, security_type: S.type, draft_set_id: S.draftSetId,
+    })) || {};
+  } catch (err) {
+    S.busy = false;
+    await sheetError(err, "issue");
+    return;
+  }
+  S.busy = false;
+  const issued = Array.isArray(r.issued) ? r.issued : [];
+  if (issued.length) {
+    // The result goes on screen before the hand-off is recorded, not after: a sheet
+    // still reading "Issuing on Carta" offers no way out, and the write has landed.
+    S.issued = issued.length;
+    openSheet("issued", { count: issued.length }); render();
+    await handoff("issued", { issued: issued.length });
+    return;
+  }
+  if (absorb(r)) { backToFields(); return; }
+  const dup = r.duplicates && r.duplicates.has_duplicates ? r.duplicates : null;
+  if (dup) {
+    // Retryable on purpose: the server refuses a duplicate rather than half-issuing, so
+    // nothing landed, and the batch can go again once the duplicates are sorted out.
+    openSheet("failed", { dup }); render();
+    await handoff("needs_claude", { reason: "duplicates", duplicates: dup.count || null });
+    return;
+  }
+  const warns = warnLines(r);
+  if (warns.length) { openSheet("confirm", { warnings: warns }); render(); return; }
+  // Accepted and nothing reported: the same unestablished outcome as a timeout, so the
+  // page seals itself rather than offering a second attempt it just said it cannot judge.
+  S.stuck = "Carta accepted the request and reported nothing issued — ask Claude to check "
+    + "this draft set in Carta. Do not issue again from here.";
+  openSheet("failed", { message: S.stuck }); render();
+  await handoff("needs_claude", { reason: "nothing_issued" });
+}
+
+/** Carta refused a value. Those messages belong to the fields that own them, so the
+    sheet closes and the form takes over. */
+function backToFields() {
+  closeSheet();
+  S.stage = "edit";
+  S.banner = "Some details need fixing — see the fields below. Nothing has been issued.";
+  S.bannerBad = true;
+  render();
+}
+
+/** Batch-level warnings, whatever shape they arrive in. */
+function warnLines(r) {
+  const w = (r.validation && r.validation.warnings) || r.warnings || {};
+  const flat = Array.isArray(w) ? w : Object.values(w).flatMap((x) => [].concat(x));
+  return flat.filter(Boolean).map(sentence);
+}
+
+async function sheetError(err, when) {
+  console.error("issuance artifact: Carta call failed", err);
+  const unknown = err && err.unknownOutcome;
+  const message = err && err.needsConnector ? connReason(err.code)
+    : unknown && when === "issue"
+    ? "Carta did not answer. These securities may or may not have been issued — ask Claude "
+      + "to check this draft set in Carta. Do not issue again from here."
+    : unknown
+    ? "Carta did not answer. The save may or may not have landed — ask Claude to check this "
+      + "draft set before trying again."
+    : err && err.fromServer ? sentence(err.message)
+    // "Nothing was sent" is only true while there is no draft set: once the save has
+    // returned one, something did land, whatever threw afterwards.
+    : S.draftSetId
+    ? "Could not reach Carta. The rows are saved but the check did not finish — try again."
+    : "Could not reach Carta. Nothing was sent — try again.";
+  // Awaited: the sheet tells the user to ask Claude to check, so the record Claude
+  // reads has to be there before that sentence is on screen.
+  if (unknown) {
+    // Nothing more may be written from this page. The rows may already be on the cap
+    // table, and the sheet has just said so — a live Issue button contradicts it.
+    S.stuck = message;
+    await handoff("needs_claude", { reason: "unknown_outcome", at: when });
+  }
+  openSheet("failed", { message });
+  render();
+}
+
+/** What the model reads to close the loop in chat. It never throws: a hand-off that
+    does not land must not be reported as a write that did not land. */
+async function handoff(status, extra) {
+  try {
+    // Inside the try: `totals()` re-serializes every row, so it can throw for the same
+    // reasons a save can, and this runs after the write it is recording.
+    const by = {};
+    for (const [cur, t] of totals().entries()) {
+      by[cur] = { quantity: t.qty, value: t.priced ? t.value : null };
+    }
     const db = await store();
     if (!db) return false;
-    await db.doc("issuance/handoff").set({
+    await db.doc("issuance/handoff").set(Object.assign({
       status,
       draft_set_id: S.draftSetId,
       corporation_id: S.corpId,
       security_type: S.type,
       recipients: S.rows.length,
+      holders: S.rows.map((r) => (r.name || "").trim()).filter(Boolean),
       totals: by,
-      summary: issueMessage(),
+      issue_date: S.shared.issue_date || null,
+      summary: issueMessage(status),
       confirmed_at: new Date().toISOString(),
-    });
+    }, extra || {}));
     return true;
   } catch (err) {
     console.error("issuance artifact: hand-off write failed", err);
@@ -1604,13 +1915,15 @@ function absorb(v) {
   return bad;
 }
 
-function issueMessage() {
+/** The one sentence the model reads back to the user. It reports what happened here;
+    it never asks for a write, because by this point the page has already made it. */
+function issueMessage(status) {
   const q = S.rows.reduce((a, r) => a + Number(r.quantity || 0), 0);
   const who = S.rows.length === 1 ? (S.rows[0].name || "1 stakeholder") : `${S.rows.length} stakeholders`;
-  return `Issue draft set ${S.draftSetId} for ${S.corpName}: ${q.toLocaleString()} ${typeLabel().toLowerCase()} ` +
-    `across ${who}, saved and validated clean from the issuance panel. ` +
-    `Run cap_table:mutate:issue_securities with corporation_id ${S.corpId}, ` +
-    `security_type ${S.type}, draft_set_id ${S.draftSetId}. Do not re-collect any terms.`;
+  const what = `${q.toLocaleString()} ${typeLabel().toLowerCase()} across ${who} on ${S.corpName}`;
+  if (status === "issued") return `Issued ${what} from the issuance form. Nothing further to write.`;
+  if (status === "draft") return `Saved ${what} as a draft set from the issuance form, validated clean and not issued.`;
+  return `Saved ${what} as a draft set from the issuance form. The issue did not complete.`;
 }
 
 /* ---------- events ---------- */
@@ -1755,5 +2068,20 @@ document.addEventListener("click", (ev) => {
     S.stage = "edit"; S.banner = ""; render(); return;
   }
   if (ev.target.closest && ev.target.closest('[data-testid="issue"]')) { submit("issue"); return; }
+  if (ev.target.closest && ev.target.closest('[data-testid="modal-go"]')) {
+    // `issueNow` owns the one-shot guard; this only has to not swallow the click.
+    issueNow();
+    return;
+  }
+  if (ev.target.closest && ev.target.closest('[data-testid="modal-close"]')) {
+    const terminal = S.issued || S.stuck
+      || (S.sheet && (S.sheet.phase === "issued" || S.sheet.phase === "saved"));
+    closeSheet();
+    // A terminal page keeps the review it committed; only a recoverable refusal goes
+    // back to a stage the user can act on.
+    if (!terminal) { S.stage = "review"; }
+    render();
+    return;
+  }
   document.querySelectorAll(".sug").forEach((n) => { n.hidden = true; });
 });

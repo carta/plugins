@@ -75,6 +75,19 @@ function isMissingCommand(err) {
     && /(tool|command|_get__|issuance_bootstrap)/i.test(m);
 }
 
+/** A deployed command that does not know `name`. The refusal happens before the call
+    leaves the gateway, so nothing ran and the caller can retry without the argument —
+    which is what makes a newly added optional argument safe to send blind.
+
+    It must name the argument. A looser rule reads a genuine refusal — no access to this
+    corporation, no such company — as "drop the argument and retry", and the retry then
+    succeeds without the blockers the first call would have reported. */
+function isUnknownParam(err, name) {
+  if (!err || !err.fromServer || !name) return false;
+  return new RegExp(`\\b${name}\\b`).test(msgOf(err))
+    && /(unknown|unexpected|unsupported|not a valid|invalid|extra|undeclared)/i.test(msgOf(err));
+}
+
 /* ---------- envelopes ---------- */
 function unwrap(o) {
   if (o && typeof o.result === "string") { try { return JSON.parse(o.result); } catch { return o; } }
@@ -132,8 +145,12 @@ async function connect() {
     const r = await mcp.listTools();
     servers = (r && r.servers) || [];
   } catch (err) { T.reason = code(err) || "server_unavailable"; return false; }
-  const carta = servers.find((s) => s && s.kind !== "artifact" && /carta/i.test(s.server || ""));
-  if (!carta || !carta.server) { T.reason = "no_connector"; return false; }
+  // A name match is preferred, never required: the manifest granted one connector, and
+  // whoever added it named it — "Carta" is not promised.
+  const usable = servers.filter((s) => s && s.server && s.kind !== "artifact"
+    && (!Array.isArray(s.tools) || s.tools.includes(GATEWAY)));
+  const carta = usable.find((s) => /carta/i.test(s.server)) || usable[0];
+  if (!carta) { T.reason = "no_connector"; return false; }
   T.mcp = mcp;
   T.server = carta.server;
   T.reason = "";

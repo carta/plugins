@@ -36,7 +36,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.88.0</carta-plugin>
+<carta-plugin>carta-cap-table:6.88.1</carta-plugin>
 
 # Issue Securities
 
@@ -71,6 +71,9 @@ Two things that look like "Carta is not connected" and are not:
 - **A 5xx, a gateway error, or an HTML body** from a Carta call. Transient: retry the
   operation exactly once, then report a temporary problem. Never an auth failure.
 
+**Say nothing about the connection until a `ToolSearch` for those suffixes has come back
+empty.** It settles this in milliseconds and is the only evidence that does — a real run
+declared a live connector dead off the `authenticate` entry alone and threw its turn away.
 Only when **no** tool ending in `call_tool` / `list_accounts` / `welcome` exists, under any
 prefix, is Carta genuinely absent. Say so then, and stop.
 
@@ -227,8 +230,11 @@ didn't render — not a stale plugin.*
 
 ## Issue
 
-Every surface ends the same way: a saved, validated `draft_set_id`, and **you** perform the
-irreversible write so the host's own confirmation prompt fires.
+The panel and the chat surface end at a saved, validated `draft_set_id`, and **you** perform
+the irreversible write so the host's own confirmation prompt fires. **The artifact surface
+issues from the page instead** — its own Confirm sheet is that gate, so you report the
+result and never re-issue
+([artifact-surface.md § 4](references/artifact-surface.md#4-the-page-issues-you-report)).
 
 ```
 mcp__carta__call_tool({"name": "cap_table__mutate__issue_securities", "arguments": {
@@ -243,11 +249,7 @@ mcp__carta__call_tool({"name": "cap_table__mutate__issue_securities", "arguments
 ([hard rule 6](#hard-rules)).
 
 **Don't call `validate_drafts` again first.** The surface already validated, and
-`issue_securities` re-validates server-side before it writes. A third validation buys
-nothing and costs a round trip.
-
-The host's confirmation prompt on this mutate is the final, irreversible gate — **and the
-only gate you add here**: the form's Confirm button was the review gate.
+`issue_securities` re-validates server-side before it writes.
 
 Then read [references/issue-and-close.md](references/issue-and-close.md) for the response
 branches, what to say per holder, and the closing lines. On a rejection that a re-call
@@ -262,9 +264,7 @@ Every surface.
 2. **One confirmation gate per mutate attempt** — never zero, never two stacked. The gate is
    the surface's own Confirm button, or one `AskUserQuestion` on the chat surface; **never one
    stacked on an open panel** — [§ 4](#4-wait) owns that mechanic and its one exception.
-   Recovery questions after a server short-circuit are unrestricted. The host's
-   confirmation prompt on the mutate is the final irreversibility gate, never the review
-   gate.
+   Recovery questions after a server short-circuit are unrestricted.
 3. **Retry contract — reuse identity from the FIRST response.** Put `draft_set_id` from the
    first mutate on every later `issue_securities`, `save_drafts`, `load_drafts`,
    `validate_drafts`, `resolve_duplicate_stakeholder`: omit it and the server mints a *second*
