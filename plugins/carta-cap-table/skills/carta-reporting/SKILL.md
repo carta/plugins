@@ -27,14 +27,13 @@ allowed-tools:
   - Bash(find ~ -name "report_processor.py"*)
   - Bash(find ~ -name "artifact_engine.html"*)
   - Bash(cat "$_engine_html_path"*)
-  - Skill(carta-cli:btg)
   - Skill(carta-cap-table:carta-reporting-markdown)
   - Bash(UV_PYTHON_DOWNLOADS=never uv run*)
   - Skill(carta-cap-table:carta-reporting-excel)
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.89.0</carta-plugin>
+<carta-plugin>carta-cap-table:6.89.1</carta-plugin>
 
 # Custom Reports
 
@@ -484,6 +483,8 @@ Cache the contents in memory the first time you read it; do not re-`cat` it with
 | `401` / session expired | Auth expired | "It looks like your Carta session expired — reconnect and try again." |
 | `user_report_pk` missing from response | Transient API error | "Something went wrong generating this report — it may be a temporary issue. Try again in a moment, or contact your Carta team if it keeps happening." |
 | `missing_columns` or `skipped_formulas` non-empty | Column name mismatch or formula source column not included | "Heads up — '[Column]' wasn't available in this report type and was left out." |
+| `unknown_filter_columns` non-empty | A filter named a column this sheet does not have, so **that filter did not run** and the rows shown are broader than asked for. Never present the result as filtered. | "I couldn't filter on '[Column]' — it isn't in this report, so these rows are unfiltered. Here are the columns I can filter on: […]" Offer to re-run against a real column. |
+| `filtered_row_count` == `original_row_count` with filters set | The filters matched every row. Legitimate, but confirm it is not a mis-typed filter before presenting. | State plainly that the filter matched all N rows. |
 
 ---
 
@@ -509,6 +510,24 @@ UV_PYTHON_DOWNLOADS=never uv run "${_report_processor_path:-$(find ~ -name "repo
 }
 EOF
 ```
+
+**Filter ops** — a filter's `op` must be exactly one of:
+
+| Op | Meaning | Applies to |
+|---|---|---|
+| `>` `<` `>=` `<=` | ordering comparison | numeric and date columns |
+| `=` | equals | all types (string match is case-insensitive) |
+| `!=` | not equals | all types |
+| `contains` | substring match | all types (case-insensitive) |
+
+**Equality is `=`, not `==`. `==` is not a valid op** — nor are `eq`, `in`, `startswith`,
+or any SQL/pandas operator. Anything outside the table above raises an error and the
+report does not run.
+
+`filters` uses the column's **display name** exactly as it appears in the sheet's
+`columns`. A filter naming a column the sheet does not have is reported in
+`stats.unknown_filter_columns` and applies no restriction — check that field before
+presenting a filtered report, the same way you check `missing_columns`.
 
 `label_overrides` — optional dict mapping raw string cell values to display names. Applied to all string-typed columns across every sheet. Use to replace Carta's internal security type codes with the corporation's configured equity language names (e.g. `{"CBU": "Phantom Units"}`). Matching is exact and case-sensitive.
 
@@ -550,7 +569,8 @@ All fields except the file source are optional — omit or set to `null` to skip
 {
   "data":  {sheet_name: {"columns": [...], "rows": [...]}},
   "stats": {sheet_name: {"original_row_count": N, "filtered_row_count": N,
-                         "displayed_row_count": N, "missing_columns": [],
+                         "empty_rows_dropped": N, "displayed_row_count": N,
+                         "missing_columns": [], "unknown_filter_columns": [],
                          "skipped_formulas": []}}
 }
 ```

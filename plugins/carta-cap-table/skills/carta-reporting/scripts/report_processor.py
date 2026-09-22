@@ -201,12 +201,31 @@ def download(url):
 # Filter
 # ---------------------------------------------------------------------------
 
+VALID_FILTER_OPS = (">", "<", ">=", "<=", "=", "!=", "contains")
+
+
 def _make_filter_predicate(columns, filters):
-    """Return a (row) -> bool predicate for the given filter list."""
+    """Return a (predicate, unknown_columns) pair for the given filter list.
+
+    Raises ValueError on an unrecognized op. A silently-ignored op would leave
+    every row kept, which reads as a successful filter that returned everything.
+    """
     if not filters:
-        return lambda row: True
+        return (lambda row: True), []
     idx_map  = _col_map(columns)
     type_map = {col["name"]: col["type"] for col in columns}
+
+    bad_ops = sorted({f["op"] for f in filters if f["op"] not in VALID_FILTER_OPS})
+    if bad_ops:
+        raise ValueError(
+            f"Unrecognized filter op(s): {', '.join(repr(o) for o in bad_ops)}. "
+            f"Valid ops are: {', '.join(VALID_FILTER_OPS)}. "
+            "Note equality is '=', not '=='."
+        )
+
+    # A filter on a column the sheet does not have cannot be evaluated. Report it
+    # rather than dropping it, so the caller can surface the typo.
+    unknown_columns = sorted({f["column"] for f in filters if f["column"] not in idx_map})
 
     def predicate(row):
         for f in filters:
@@ -253,13 +272,13 @@ def _make_filter_predicate(columns, filters):
                 return False
         return True
 
-    return predicate
+    return predicate, unknown_columns
 
 
 def apply_filters(columns, rows, filters):
     if not filters:
         return rows
-    pred = _make_filter_predicate(columns, filters)
+    pred, _ = _make_filter_predicate(columns, filters)
     return [row for row in rows if pred(row)]
 
 
@@ -658,11 +677,16 @@ def main():
         rows = apply_label_overrides(cols, rows, label_overrides)
 
         # Filter with index tracking
+        unknown_filter_cols: list = []
         if filters:
-            pred  = _make_filter_predicate(cols, filters)
+            pred, unknown_filter_cols = _make_filter_predicate(cols, filters)
             pairs = [(oi, r) for oi, r in zip(orig_indices, rows) if pred(r)]
             orig_indices = [p[0] for p in pairs]
             rows         = [p[1] for p in pairs]
+
+        # Count what the filters matched, before the unrelated empty-row drop below.
+        # Folding the drop into this number made a no-op filter look like it worked.
+        filtered_count = len(rows)
 
         # Automatically drop rows where all numeric/value columns are null or zero.
         # This removes placeholder security-type rows (e.g. Options, RSAs) that
@@ -674,7 +698,7 @@ def main():
             orig_indices = [p[0] for p in pairs]
             rows         = [p[1] for p in pairs]
 
-        filtered_count = len(rows)
+        empty_rows_dropped = filtered_count - len(rows)
 
         cols, rows, missing_cols = select_columns(cols, rows, columns)
 
@@ -726,11 +750,13 @@ def main():
                               "row_currencies": row_currencies,
                               "summary_meta": summary_meta}
         stats[sheet_name]  = {
-            "original_row_count":  original_count,
-            "filtered_row_count":  filtered_count,
-            "displayed_row_count": len(displayed),
-            "missing_columns":     missing_cols,
-            "skipped_formulas":    skipped_fmls,
+            "original_row_count":    original_count,
+            "filtered_row_count":    filtered_count,
+            "empty_rows_dropped":    empty_rows_dropped,
+            "displayed_row_count":   len(displayed),
+            "missing_columns":       missing_cols,
+            "unknown_filter_columns": unknown_filter_cols,
+            "skipped_formulas":      skipped_fmls,
         }
 
     # merge_sheets: {"Target Tab Name": ["Source Sheet A", "Source Sheet B"]}
@@ -771,8 +797,10 @@ def main():
                                    "summary_meta": merged_summary}
             stats[target_name] = {"original_row_count": len(merged_rows),
                                   "filtered_row_count": len(merged_rows),
+                                  "empty_rows_dropped": 0,
                                   "displayed_row_count": len(merged_rows),
-                                  "missing_columns": [], "skipped_formulas": [],
+                                  "missing_columns": [], "unknown_filter_columns": [],
+                                  "skipped_formulas": [],
                                   "merged_from": sources,
                                   **({"schema_warnings": schema_warnings} if schema_warnings else {})}
 
