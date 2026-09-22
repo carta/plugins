@@ -36,7 +36,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.88.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.88.3</carta-plugin>
 
 # Issue Securities
 
@@ -60,22 +60,24 @@ and a grant's vesting schedule is the normal case, not a deflection.
 
 ## Carta is connected — read this before you conclude otherwise
 
-**An opaque tool prefix is not a disconnected server.** On most hosts the Carta tools
-arrive prefixed with a session UUID — `mcp__33b9b857-…__call_tool`. Match on the
-**suffix**, never on the literal string `mcp__carta__…`, and never on a readable name.
+**Your tool list is the whole check.** On most hosts the Carta tools arrive prefixed with a
+session UUID — `mcp__33b9b857-…__call_tool`. Match on the **suffix**; never on the literal
+`mcp__carta__…`, never on a readable name.
 
-Two things that look like "Carta is not connected" and are not:
+Three things that look like "Carta is not connected" and are not:
 
-- **A `carta` entry in a "needs authentication" list.** That is a *local* stdio server, not
-  the Carta connector — which can be working fine while that entry sits unauthenticated.
+- **A `carta` entry in a "needs authentication" list** — a *local* stdio server, not the
+  connector, which works fine while that entry sits unauthenticated. One run declared a live
+  connector dead off it and threw the turn away.
 - **A 5xx, a gateway error, or an HTML body** from a Carta call. Transient: retry the
   operation exactly once, then report a temporary problem. Never an auth failure.
+- **An empty `ToolSearch`** you ran without looking first. These hosts load the Carta tools
+  already, so a pre-emptive search returns the one answer that means *absent*. Never open the
+  turn with it.
 
-**Say nothing about the connection until a `ToolSearch` for those suffixes has come back
-empty.** It settles this in milliseconds and is the only evidence that does — a real run
-declared a live connector dead off the `authenticate` entry alone and threw its turn away.
-Only when **no** tool ending in `call_tool` / `list_accounts` / `welcome` exists, under any
-prefix, is Carta genuinely absent. Say so then, and stop.
+`ToolSearch` settles an absence and nothing else: **say nothing about the connection until one
+for those suffixes has come back empty.** Only when no tool ending in `call_tool` /
+`list_accounts` / `welcome` exists, under any prefix, is Carta genuinely gone. Say so, stop.
 
 ## Pick the surface
 
@@ -86,15 +88,14 @@ disk, never an env var — and matches on the **suffix**.
 |---|---|
 | the user asked for a **different surface** than the one you would pick | the one they asked for |
 | a tool whose name **ends in** `cap_table_issuance_panel` | **panel** — [§ The panel](#the-panel) |
-| the **`Artifact`** tool is present | **artifact** — [references/artifact-surface.md](references/artifact-surface.md) |
+| the **`Artifact`** tool is present | **artifact** — [references/artifact-surface.md](references/artifact-surface.md), read in the same block as the company lookup it will ask for |
 | else | **chat** — [references/chat-surface.md](references/chat-surface.md) |
 
 Record the selection once. Never re-detect.
 
-The panel and the artifact both render a real form that collects, saves and validates on
-its own, and neither puts its HTML anywhere near your context. They are the two good
-paths. The chat surface exists for a host that has neither, and it is the only path that
-spends your turns on data entry.
+The panel and the artifact each render a real form that collects, saves and validates on its
+own, with its HTML nowhere near your context. Chat is for a host with neither, and is the
+only path that spends your turns on data entry.
 
 **Never render a form with `show_widget` or `preview_start`**, whatever else is missing.
 A widget is for one small question or one short status; an issuance form rendered in one
@@ -117,14 +118,14 @@ Resolve once, at the top. Pass on every draft-set tool call.
 **"units" and "membership units" are not PIU cues.** On an LLC, Carta's equity language
 renames a *certificate* to a membership unit, so bare "units" lands at `certificate` at least
 as often as at `piu`. Read it as `piu` only alongside a real PIU signal — "profits",
-"incentive", a threshold or hurdle amount, or a named equity plan. Without one it is a real
-fork → `AskUserQuestion`, never a silent pick.
+"incentive", a threshold or hurdle amount, or a named equity plan. Without one it is a fork →
+`AskUserQuestion`, never a silent pick.
 
 **A bare "N \<securities\>" is a quantity, not a headcount.** *"100 option grants"*, nobody
-named, no plural-**person** language → one recipient getting 100. Only people-language
-(*"100 employees"*, *"100 new hires"*) makes N a row count. This holds on every surface:
-never open a form with 100 blank rows, and never ask who the recipients are before the
-form opens — a missing recipient is an empty field on the form, not a chat question.
+named, no plural-**person** language → one recipient getting 100; only people-language
+(*"100 employees"*, *"100 new hires"*) makes N a row count. Never open a form with 100 blank
+rows, and never ask who the recipients are before it opens — a missing recipient is an empty
+field on the form, not a chat question.
 
 ## The panel
 
@@ -221,12 +222,12 @@ already saved one, rather than starting a second.
 
 **No interactive human means stop, not fall back.** Every surface needs someone to approve the
 terms, so there is nothing to fall back *to*, and hand-building the payload to get past that
-issues securities nobody reviewed ([rules 2 and 5](#hard-rules)). If you ever do build rows by
-hand, read [payload-reference.md](references/payload-reference.md) first — **including its
-"Never emit" list**; one bad key fails the whole mutate.
+issues securities nobody reviewed ([rules 2 and 5](#hard-rules)). If you do build rows by hand,
+read [payload-reference.md](references/payload-reference.md) first — **including its "Never
+emit" list**; one bad key fails the whole mutate.
 
-Say once, when a replacement surface opens: *this is a different form than the panel that
-didn't render — not a stale plugin.*
+When a replacement surface opens, say once that it is a different form from the panel that
+didn't render, not a stale plugin.
 
 ## Issue
 
@@ -295,9 +296,8 @@ Every rule here comes from a real run that went wrong ([incidents.md](references
 ## Where everything else lives
 
 Every path below starts `${CLAUDE_PLUGIN_ROOT}/skills/carta-issuance/` — that variable anchors
-at the **plugin** root, so the skill segment belongs in the path. Read them there, and **do
-not search**: on several hosts `Glob` and `find` cannot reach the plugin mount and return
-empty every time.
+at the **plugin** root, so the skill segment belongs in the path. **Do not search** for them:
+on several hosts `Glob` and `find` cannot reach the plugin mount and return empty every time.
 
 - `references/artifact-surface.md` — the artifact path, end to end. Nothing else needed.
 - `references/chat-surface.md` — the last-resort path: its phases, and what it reads.

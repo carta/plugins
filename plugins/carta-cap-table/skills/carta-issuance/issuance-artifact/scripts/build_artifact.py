@@ -29,13 +29,16 @@ and the validation-error state on one page, with every Carta write refused in th
 transport. It adds resources/issuance.preview.{js,css} and nothing else; without the
 flag the output is byte-for-byte the production page.
 
+`--corporation-id` is optional. Without it the page resolves `--company-name` on its
+own boot call, which is one round trip the model does not have to spend first; pass an
+id only when you already hold one.
+
 Usage:
-  uv run scripts/build_artifact.py --corporation-id <corporation_id> \
-      --company-name "<company legal name>" --security-type option_grant \
+  uv run scripts/build_artifact.py --company-name "<company legal name>" \
+      --security-type option_grant \
       --seed <path>/seed.json --out <path>/issuance-<slug>-option-grant.html
 
-  uv run scripts/build_artifact.py --corporation-id <corporation_id> \
-      --company-name "<company legal name>" --preview \
+  uv run scripts/build_artifact.py --company-name "<company legal name>" --preview \
       --out <path>/issuance-<slug>-preview.html
 """
 import argparse
@@ -119,10 +122,13 @@ def js_json(value):
 def corporation_id_js(raw):
     """The corporation id as a JS literal — a bare number when it is one, a quoted
     string otherwise, so an integer pk and a uuid pk both reach the wire unchanged.
+
+    `null` when no id was given: the page's own boot call resolves the company from
+    its name server-side, so an id is an optimisation, not a requirement.
     """
     value = (raw or "").strip()
     if not value:
-        sys.exit("ERROR: --corporation-id is empty")
+        return "null"
     if value.startswith(CORP_ID_PREFIX):
         sys.exit(
             "ERROR: --corporation-id must be the bare pk, not {!r} — strip the {!r} prefix".format(
@@ -253,8 +259,10 @@ def build(corporation_id, company_name, security_type, seed, preview=False):
 
 def main():
     ap = argparse.ArgumentParser(description="Assemble the issuance live artifact.")
-    ap.add_argument("--corporation-id", required=True,
-                    help="bare corporation pk this page is built for (no corporation_pk: prefix)")
+    ap.add_argument("--corporation-id",
+                    help="bare corporation pk this page is built for (no corporation_pk: "
+                         "prefix). Optional: without it the page resolves --company-name "
+                         "server-side on its own boot call, which saves a round trip")
     ap.add_argument("--company-name", required=True,
                     help="company display name — shown on the page and, with the "
                          "security type, in the <title> and so the published "

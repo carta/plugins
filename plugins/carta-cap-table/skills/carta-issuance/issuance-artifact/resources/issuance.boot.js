@@ -67,8 +67,19 @@ function reapplyEdits(base, edited) {
     Returns true when the payload carried the reference data too, which is what
     lets the whole form arrive in this one round trip. */
 async function bootstrap(base) {
-  const args = { corporation_id: CORP_ID, security_type: SECURITY_TYPE,
-    include_sections: true };
+  /* `"true"`, not `true`. The gateway types a plain command's scalars as
+     `str | int | dict | list` — no `bool` — so a JSON boolean arrives as `1`, the
+     server's `is True` check misses it, and the sections come back absent with no error
+     to show for it. Measured: the whole one-call boot silently became seven calls.
+     long-comment-ok: a wire quirk that reads as a typo and reverts itself otherwise. */
+  const args = { security_type: SECURITY_TYPE, include_sections: "true" };
+  /* The page resolves the company itself when the build was given only a name — one
+     round trip the model no longer spends before this page exists. Exactly one of the
+     two goes on the wire: sending both earns a `corporation.name_ignored` warning. A
+     name it cannot pin down comes back with no id and one `corporation.unresolved`
+     hard stop naming the candidates, which is the blockers section's job to show. */
+  if (CORP_ID == null) args.corporation = COMPANY_NAME;
+  else args.corporation_id = CORP_ID;
   // Forwarding the knowns is the point of the call: it resolves each name to a
   // stakeholder id, email, kind and relationship, and reports the unmatched ones.
   if (seedNames().length) args.stakeholders = seedNames();
@@ -105,12 +116,24 @@ async function resolveSeededNames() {
   softRender();
 }
 
+/** Settle the page on a company the server could not pin down. The blocker carries the
+    candidates; there is nothing left to load, so nothing should still say it is. */
+function stopUnresolved() {
+  S.termsLoading = false;
+  S.rosterLoading = false;
+  render();
+  flag();
+}
+
 (async () => {
   // 1. Paint from the prompt. Nothing here awaits the transport.
   ingest(firstPaint());
   const base = snapshot();
   // 2. No connector is a state, not a crash: say what to do and stop.
   if (!(await connect())) { degrade(); return; }
+  // Unawaited, and first paint is already done: a capability this view does not serve
+  // answers only after ~10s, and the hand-off must not wait for that answer.
+  openStore();
   // 3. One call: resolve the named people server-side and take the reference data
   //    with them. Skipped on a resume — re-seeding those rows drops the draft_pk
   //    map, which inserts duplicates into the set being edited.
@@ -119,10 +142,14 @@ async function resolveSeededNames() {
     try { fat = await bootstrap(base); }
     catch (err) {
       console.error("issuance artifact: bootstrap failed", err);
+      // No live Carta: the page says so once, and nothing further is called.
+      if (deadRead(err)) return;
       noteFailures(["bootstrap"]);
     }
   }
-  // 4. Only when that call did not carry them: the per-section fan-out.
+  // 4. The fan-out addresses every command by corporation id, so an unresolved company
+  //    has nothing to ask — and its hard stop is already on screen.
+  if (S.corpId == null) { stopUnresolved(); return; }
   if (!fat) await boot();
   // 5. Anything bootstrap could not resolve, match against the roster instead.
   await resolveSeededNames();

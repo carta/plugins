@@ -44,7 +44,7 @@ const S = {
   loadErr: "", loadFailed: [], connErr: "", shared: {}, rows: [], seq: 0,
   searching: false, searchErr: false, searched: new Set(),
   errs: {}, srv: {}, banner: "", bannerBad: false, busy: false,
-  draftSetId: null, drafts: {}, sheet: null, issued: 0, stuck: "",
+  draftSetId: null, drafts: {}, sheet: null, issued: 0, stuck: "", untold: false,
 };
 
 /* ---------- helpers ---------- */
@@ -352,12 +352,17 @@ async function loadTerms() {
 
   const out = await Promise.allSettled(jobs.map((j) => j[1]));
   const failed = [];
+  let dead = null;
   out.forEach((res, i) => {
     const tag = jobs[i][0];
-    // Neither is a dependency. Without the manifest every field keeps the label and
-    // requiredness written below; the international valuations are permissioned apart
-    // and a US-only corp is refused them by design, with the 409A set as the fallback.
-    if (res.status !== "fulfilled") { if (tag !== "manifest" && tag !== "intl") failed.push(tag); return; }
+    if (res.status !== "fulfilled") {
+      // Neither is a dependency: without the manifest each field keeps the label written
+      // below, and a US-only corp is refused the international set, which 409A backs.
+      if (tag === "manifest" || tag === "intl") return;
+      if (res.reason && res.reason.noWrites) dead = dead || res.reason;
+      else failed.push(tag);
+      return;
+    }
     if (tag === "init") {
       const p = payload(res.value) || {};
       const sec = unwrap(p) || {};
@@ -382,7 +387,8 @@ async function loadTerms() {
     else if (tag === "vals") S.vals = list(res.value, "valuations", "409a_valuations");
   });
   S.termsLoading = false;
-  noteFailures(failed);
+  // One message, not one per section: the connector notice already says what to do.
+  if (!deadRead(dead)) noteFailures(failed);
   settleTerms();
 }
 /** Every issuance_init section arrives as its own command's `{count, results}`
@@ -408,12 +414,21 @@ function flag() {
 
 /** No live data at all. The form stays readable so the user can see what was asked
     for, but a write cannot reach Carta, so the footer takes its buttons away. */
-function degrade() {
-  S.connErr = connReason();
+function degrade(kind) {
+  S.connErr = connReason(kind);
   S.termsLoading = false;
   S.rosterLoading = false;
   render();
   flag();
+}
+
+/** A read that failed for a reason no retry can clear — a declined connector prompt is
+    the common one, since the first call IS the prompt. That is the page's own condition
+    rather than one section's gap: said once, and nothing else is called after it. */
+function deadRead(err) {
+  if (!err || !err.noWrites) return false;
+  if (!S.connErr) degrade(err.code);
+  return true;
 }
 
 /** 200 is the page the roster command documents as fitting its response cap at every
@@ -436,8 +451,9 @@ async function loadRoster() {
   try {
     res = await one("cap_table__get__stakeholders",
       { corporation_id: S.corpId, page_size: PAGE, page: 1, fields: ROSTER_FIELDS });
-  } catch {
+  } catch (err) {
     S.rosterLoading = false;
+    if (deadRead(err)) return;
     noteFailures(["roster"]);
     applyDerived(); softRender(); flag();
     return;
@@ -476,7 +492,8 @@ function searchRoster(q) {
   const term = (q || "").trim();
   clearTimeout(searchTimer);
   if (searchSettle) { searchSettle(); searchSettle = null; }
-  if (term.length < 2 || S.searched.has(term.toLowerCase())) return Promise.resolve();
+  // A page with no live Carta has nothing to search, and each keystroke would ask again.
+  if (S.connErr || term.length < 2 || S.searched.has(term.toLowerCase())) return Promise.resolve();
   return new Promise((settle) => {
     searchSettle = settle;
     searchTimer = setTimeout(async () => {
@@ -490,9 +507,9 @@ function searchRoster(q) {
         S.searched.add(term.toLowerCase());
         S.searchErr = false;
         mergeRoster(list(res, "stakeholders"));
-      } catch {
+      } catch (err) {
         // The names already loaded still answer; the notice says search is degraded.
-        S.searchErr = true;
+        if (!deadRead(err)) S.searchErr = true;
       }
       if (seq === searchSeq) S.searching = false;
       applyDerived();
@@ -1061,6 +1078,13 @@ function subtitleHtml() {
     an ingest cannot drop them and a changed plan or unit class cannot leave one stale. */
 function localBlockers() {
   const out = [];
+  // Every command is addressed by corporation id, so without one nothing can be read or
+  // written. The server says so itself; this covers a boot that got no answer at all.
+  if (S.ready && S.corpId == null && !S.termsLoading) {
+    out.push({ key: "corporation.unresolved", severity: "hard_stop",
+      message: `Carta could not tell which company "${S.corpName}" is, so nothing can be `
+        + "issued here. Tell Claude the company's full legal name and open this again." });
+  }
   if (S.type === "option_grant" && fmv().ambiguous) {
     out.push({ key: "valuation.multiple_active_same_class", severity: "needs_decision",
       message: "More than one valuation is live on this plan's share class. An HMRC report "
@@ -1221,7 +1245,8 @@ function renderNotices() {
         ? "Add the missing people below, or ask Claude to split this into smaller batches."
         : "The terms and the recipients are unaffected."));
   }
-  if (S.loadErr) out.push(noteBox("notice-load-error", true, S.loadErr, []));
+  // Stacked under the connector notice this reads as a second, different problem.
+  if (S.loadErr && !S.connErr) out.push(noteBox("notice-load-error", true, S.loadErr, []));
   if (S.searchErr) {
     out.push(noteBox("notice-search-error", false,
       "Searching Carta for more stakeholders failed", [],
@@ -1317,7 +1342,10 @@ function reviewHtml() {
       terms.push(cc ? cc.name || cc.prefix : d.prefix);
       if (S.type === "piu" && d.option_plan) terms.push(nameOf(S.plans, d.option_plan));
     }
-    terms.push(d.vesting_template ? nameOf(S.vesting, d.vesting_template) : "No vesting");
+    // `null` is the only "no vesting" on the wire. A truthiness read calls template
+    // id 0 unvested, on the screen whose job is to state what each holder gets.
+    terms.push(d.vesting_template != null
+      ? nameOf(S.vesting, d.vesting_template) : "No vesting");
     const ovKeys = Object.keys(r.ov);
     const ovLabels = ovKeys.length
       ? spec().filter((x) => ovKeys.includes(x.k)).map((x) => x.label)
@@ -1443,11 +1471,21 @@ function renderFooter() {
   // Not `one`: that name is the transport's single call site, one scope away.
   const [sing, many] = unitNoun();
   why.textContent = S.stuck ? S.stuck
-    : S.issued ? `Issued — ${plural(S.issued, sing, many)} on the cap table.`
+    : S.issued ? `Issued — ${plural(S.issued, sing, many)} on the cap table.${untoldLine()}`
     : stopped ? "Nothing can be issued until the problems above are fixed."
     : dead ? "No live connection to Carta — nothing can be saved from here."
     : S.termsLoading ? "Loading…"
     : "";
+}
+
+/** Outlives the sheet, because dismissing that sheet would otherwise take the one number
+    this issuance can be found by off the screen. */
+function untoldLine() {
+  if (!S.untold) return "";
+  const set = draftSetPhrase();
+  return set
+    ? ` We could not tell Claude — give it ${set}, and do not issue again from here.`
+    : " We could not tell Claude. Do not issue again from here.";
 }
 
 /* ---------- validation ---------- */
@@ -1676,23 +1714,41 @@ function renderSheet() {
     title.textContent = "Issued";
     body.innerHTML = `<p>${esc(plural(m.count || S.rows.length, sing, many))} ${
       m.count === 1 ? "is" : "are"} on <b>${esc(S.corpName)}</b>'s cap table.</p>`
-      + `<p>Claude has the result and can open the ledger for you in the chat.</p>`;
+      + toldHtml(m, `<p>Claude has the result and can open the ledger for you in the chat.</p>`);
     close.hidden = false; close.textContent = "Done";
   } else if (m.phase === "saved") {
     title.textContent = "Draft saved";
     body.innerHTML = `<p>Nothing is issued. ${esc(S.corpName)} has a saved draft set with ${
       esc(plural(S.rows.length, "stakeholder", "stakeholders"))} on it, and no problems were found.</p>`
-      + "<p>Claude can pick it up from here, or you can come back to this page.</p>";
+      + toldHtml(m, "<p>Claude can pick it up from here, or you can come back to this page.</p>");
     close.hidden = false; close.textContent = "Done";
   } else {
     title.textContent = "That did not go through";
-    body.innerHTML = m.dup
+    body.innerHTML = (m.dup
       ? `<p class="fail-note">Carta found ${esc(plural(Number(m.dup.count) || 1, "stakeholder", "stakeholders"))
         } here who may already be on the cap table, so nothing was issued.</p>`
         + "<p>Ask Claude to sort the duplicates out — it can merge them or create the new records, then issue.</p>"
-      : `<p class="fail-note">${esc(m.message || "")}</p>`;
+      : `<p class="fail-note">${esc(m.message || "")}</p>`) + toldHtml(m, "");
     close.hidden = false; close.textContent = "Close";
   }
+}
+
+/** The draft set as the reader gives it to Claude. It is the recovery path whenever the
+    page could not hand over by itself, so it is a number on screen and nothing else. */
+const draftSetPhrase = () => (S.draftSetId == null || S.draftSetId === ""
+  ? "" : `draft set ${S.draftSetId}`);
+
+/** Whether Claude was told. A hand-off that did not land leaves this page as the only
+    record of what happened here, so it has to be legible on its own. */
+function toldHtml(m, ok) {
+  if (m.told !== false) return ok;
+  const set = draftSetPhrase();
+  const where = set
+    ? `This is ${esc(set)} on ${esc(S.corpName)} — give Claude that number to pick it up.`
+    : "Ask Claude to check this issuance in Carta.";
+  const again = S.issued > 0 ? " Do not issue again from here." : "";
+  return `<p class="fail-note" data-testid="handoff-not-recorded">We could not tell Claude `
+    + `automatically. ${where}${again}</p>`;
 }
 
 /* ---------- submit ---------- */
@@ -1716,16 +1772,20 @@ function absorbSaved(res) {
   }
 }
 
-/** Save the rows and get Carta's verdict on them — validation errors and duplicates.
+/** Write the rows to a draft set and record what came back. */
+async function saveDrafts() {
+  absorbSaved(payload(await one("cap_table__mutate__save_drafts", saveArgs())) || {});
+  if (S.sheet) { S.sheet.step = 1; renderSheet(); }
+}
+
+/** Carta's verdict on the saved rows — validation errors and duplicates.
  *
  * `issue_securities` can do this in one call with `validate_only`, and deliberately is
  * not used for it: that would put a second call to the issuing command in this page,
  * one boolean away from issuing rows nobody had confirmed. A round trip is cheaper
  * than that risk, and it happens behind the sheet's own progress.
  */
-async function saveAndCheck() {
-  absorbSaved(payload(await one("cap_table__mutate__save_drafts", saveArgs())) || {});
-  if (S.sheet) { S.sheet.step = 1; renderSheet(); }
+async function checkDrafts() {
   return payload(await one("cap_table__mutate__validate_drafts", {
     corporation_id: S.corpId, security_type: S.type, draft_set_id: S.draftSetId,
   })) || {};
@@ -1743,29 +1803,31 @@ async function submit(mode) {
   S.busy = true;
   openSheet("saving", { mode, step: 0 });
   render();
-  try {
-    const checked = await saveAndCheck();
-    S.busy = false;
-    if (absorb(checked)) { backToFields(); return; }
-    if (mode === "draft") {
-      openSheet("saved"); render();
-      await handoff("draft");
-      return;
-    }
-    // The check reports duplicates too, so they surface before the confirmation rather
-    // than as a failed issue after it.
-    const dup = checked.duplicates && checked.duplicates.has_duplicates
-      ? checked.duplicates : null;
-    if (dup) {
-      openSheet("failed", { dup }); render();
-      await handoff("needs_claude", { reason: "duplicates", duplicates: dup.count || null });
-      return;
-    }
-    openSheet("confirm", { warnings: warnLines(checked) }); render();
-  } catch (err) {
-    S.busy = false;
-    await sheetError(err, "save");
+  // Two calls, two tags. A check that fails over a save that worked leaves a clean
+  // saved draft set, and sealing the page over it is how that set gets lost.
+  try { await saveDrafts(); }
+  catch (err) { S.busy = false; await sheetError(err, "save"); return; }
+  let checked;
+  try { checked = await checkDrafts(); }
+  catch (err) { S.busy = false; await sheetError(err, "check"); return; }
+  S.busy = false;
+  if (absorb(checked)) { backToFields(); return; }
+  if (mode === "draft") {
+    openSheet("saved"); render();
+    noteHandoff(S.sheet, await handoff("draft"));
+    return;
   }
+  // The check reports duplicates too, so they surface before the confirmation rather
+  // than as a failed issue after it.
+  const dup = checked.duplicates && checked.duplicates.has_duplicates
+    ? checked.duplicates : null;
+  if (dup) {
+    openSheet("failed", { dup }); render();
+    noteHandoff(S.sheet, await handoff("needs_claude",
+      { reason: "duplicates", duplicates: dup.count || null }));
+    return;
+  }
+  openSheet("confirm", { warnings: warnLines(checked) }); render();
 }
 
 /** The irreversible write. The human confirmed it in the sheet against a checked
@@ -1797,7 +1859,7 @@ async function issueNow() {
     // still reading "Issuing on Carta" offers no way out, and the write has landed.
     S.issued = issued.length;
     openSheet("issued", { count: issued.length }); render();
-    await handoff("issued", { issued: issued.length });
+    noteHandoff(S.sheet, await handoff("issued", { issued: issued.length }));
     return;
   }
   if (absorb(r)) { backToFields(); return; }
@@ -1806,7 +1868,8 @@ async function issueNow() {
     // Retryable on purpose: the server refuses a duplicate rather than half-issuing, so
     // nothing landed, and the batch can go again once the duplicates are sorted out.
     openSheet("failed", { dup }); render();
-    await handoff("needs_claude", { reason: "duplicates", duplicates: dup.count || null });
+    noteHandoff(S.sheet, await handoff("needs_claude",
+      { reason: "duplicates", duplicates: dup.count || null }));
     return;
   }
   const warns = warnLines(r);
@@ -1816,7 +1879,7 @@ async function issueNow() {
   S.stuck = "Carta accepted the request and reported nothing issued — ask Claude to check "
     + "this draft set in Carta. Do not issue again from here.";
   openSheet("failed", { message: S.stuck }); render();
-  await handoff("needs_claude", { reason: "nothing_issued" });
+  noteHandoff(S.sheet, await handoff("needs_claude", { reason: "nothing_issued" }));
 }
 
 /** Carta refused a value. Those messages belong to the fields that own them, so the
@@ -1838,7 +1901,9 @@ function warnLines(r) {
 
 async function sheetError(err, when) {
   console.error("issuance artifact: Carta call failed", err);
-  const unknown = err && err.unknownOutcome;
+  // The check writes nothing, so its failure can never be an unknown outcome — the rows
+  // are saved either way, and sealing the page here would throw that set away.
+  const unknown = !!(err && err.unknownOutcome) && when !== "check";
   const message = err && err.needsConnector ? connReason(err.code)
     : unknown && when === "issue"
     ? "Carta did not answer. These securities may or may not have been issued — ask Claude "
@@ -1847,36 +1912,69 @@ async function sheetError(err, when) {
     ? "Carta did not answer. The save may or may not have landed — ask Claude to check this "
       + "draft set before trying again."
     : err && err.fromServer ? sentence(err.message)
-    // "Nothing was sent" is only true while there is no draft set: once the save has
-    // returned one, something did land, whatever threw afterwards.
+    : when === "check"
+    ? "These rows are saved and nothing is issued. Carta did not finish checking them — "
+      + "try again."
+    // "Nothing was sent" holds only while there is no draft set. And an issue whose
+    // outcome is open took the unknown branch above, so here nothing is issued.
     : S.draftSetId
-    ? "Could not reach Carta. The rows are saved but the check did not finish — try again."
+    ? "Could not reach Carta. The rows are saved and nothing is issued — try again."
     : "Could not reach Carta. Nothing was sent — try again.";
-  // Awaited: the sheet tells the user to ask Claude to check, so the record Claude
-  // reads has to be there before that sentence is on screen.
-  if (unknown) {
-    // Nothing more may be written from this page. The rows may already be on the cap
-    // table, and the sheet has just said so — a live Issue button contradicts it.
-    S.stuck = message;
-    await handoff("needs_claude", { reason: "unknown_outcome", at: when });
-  }
+  // Nothing more may be written from this page. The rows may already be on the cap
+  // table, and the sheet is about to say so — a live Issue button contradicts it.
+  if (unknown) S.stuck = message;
+  // The failure goes on screen before the hand-off is recorded, not after: an unserved
+  // store answers only after ~10s, and the page already knows what it is going to say.
   openSheet("failed", { message });
   render();
+  if (unknown) {
+    noteHandoff(S.sheet, await handoff("needs_claude", { reason: "unknown_outcome", at: when }));
+  }
+}
+
+/** A figure the document can carry. JSON holds no NaN, and `submit("draft")` does not
+    run incomplete() — so one unchecked price would take the whole write down. */
+const fin = (n) => (typeof n === "number" && Number.isFinite(n) ? n : null);
+
+/** One write, with one retry. `unavailable` is the store's own transient code; a refusal
+    is not, and repeating one only holds up the sheet the reader is already looking at. */
+async function putHandoff(db, doc, retry) {
+  try {
+    await db.doc("issuance/handoff").set(doc);
+    return true;
+  } catch (err) {
+    if (!retry || String(err && err.code) !== "unavailable") throw err;
+    await sleep(300 + Math.random() * 500);
+    return putHandoff(db, doc, false);
+  }
+}
+
+/** Say that Claude was not told: on S, because the page is then the only record and the
+    reader can dismiss the sheet — and on that sheet, if it is still the one on screen. */
+function noteHandoff(sheet, told) {
+  // The document is one path, so a later hand-off that lands replaces what an earlier
+  // one could not say, and the page stops saying it too.
+  S.untold = !told;
+  renderFooter();
+  if (told || !sheet || S.sheet !== sheet) return;
+  sheet.told = false;
+  renderSheet();
 }
 
 /** What the model reads to close the loop in chat. It never throws: a hand-off that
-    does not land must not be reported as a write that did not land. */
+    does not land must not be reported as a write that did not land. Every caller reads
+    the answer — an untold page is the only record of what it did. */
 async function handoff(status, extra) {
   try {
     // Inside the try: `totals()` re-serializes every row, so it can throw for the same
     // reasons a save can, and this runs after the write it is recording.
     const by = {};
     for (const [cur, t] of totals().entries()) {
-      by[cur] = { quantity: t.qty, value: t.priced ? t.value : null };
+      by[cur] = { quantity: fin(t.qty), value: t.priced ? fin(t.value) : null };
     }
     const db = await store();
     if (!db) return false;
-    await db.doc("issuance/handoff").set(Object.assign({
+    return await putHandoff(db, Object.assign({
       status,
       draft_set_id: S.draftSetId,
       corporation_id: S.corpId,
@@ -1887,28 +1985,52 @@ async function handoff(status, extra) {
       issue_date: S.shared.issue_date || null,
       summary: issueMessage(status),
       confirmed_at: new Date().toISOString(),
-    }, extra || {}));
-    return true;
+    }, extra || {}), true);
   } catch (err) {
     console.error("issuance artifact: hand-off write failed", err);
     return false;
   }
 }
 
+const msgs = (v) => [].concat(v == null ? [] : v).filter((m) => typeof m === "string" && m);
+
+/** Every refusal that belongs to the whole set rather than to one row.
+    long-comment-ok: the four wire shapes, because only one of them is obvious.
+    `banner_errors` carries a refused or vanished draft set and a validator that would
+    not build; `corporation_errors` is the missing-signatory refusal issue raises and
+    validate does not; `issuance_errors` is the rest of the set-level text. All three sit
+    BESIDE `errors`, never inside it — so an empty `errors` map is not a pass. */
+function setLines(validation) {
+  if (!validation) return [];
+  return [
+    ...msgs(validation.banner_errors),
+    ...Object.values(validation.corporation_errors || {}).flatMap(msgs),
+    ...msgs(validation.issuance_errors),
+  ];
+}
+
 /** validate_drafts errors are keyed by draft_pk; map them back to the row. */
 function absorb(v) {
-  const errs = (v.validation && v.validation.errors) || v.errors || {};
+  const validation = (v && v.validation) || null;
+  const errs = (validation && validation.errors) || (v && v.errors) || {};
   const byPk = {}; for (const [k, pk] of Object.entries(S.drafts)) byPk[String(pk)] = k;
   const rows = {}; const batch = []; let bad = false;
+  const set = setLines(validation);
+  if (set.length) { batch.push(...set); bad = true; }
+  // A verdict that is present and not `true` is a refusal even when it names nothing —
+  // a failed workflow reports exactly that, and reading `errors` alone called it clean.
+  if (validation && validation.success !== true) bad = true;
   for (const [k, val] of Object.entries(errs)) {
-    if (k === "issuance") { if (val && val.length) { batch.push(...[].concat(val)); bad = true; } continue; }
+    // The nested form, for a caller that hands the strategy's own errors through
+    // unmerged. The merged form arrives in setLines() above.
+    if (k === "issuance") { if (val && val.length) { batch.push(...msgs(val)); bad = true; } continue; }
     if (k === "corporation") {
-      const m = Object.values(val || {}).flatMap((ms) => [].concat(ms));
+      const m = Object.values(val || {}).flatMap(msgs);
       if (m.length) { batch.push(...m); bad = true; } continue;
     }
     const rk = byPk[String(k)];
     if (rk) rows[rk] = val;
-    else batch.push(...Object.values(val || {}).flatMap((ms) => [].concat(ms)));
+    else batch.push(...Object.values(val || {}).flatMap(msgs));
     bad = true;
   }
   S.srv = { rows, batch };
@@ -1918,9 +2040,11 @@ function absorb(v) {
 /** The one sentence the model reads back to the user. It reports what happened here;
     it never asks for a write, because by this point the page has already made it. */
 function issueMessage(status) {
-  const q = S.rows.reduce((a, r) => a + Number(r.quantity || 0), 0);
+  // A draft can hold a quantity nobody checked, and "NaN option grants" is worse than
+  // a sentence that leaves the figure out.
+  const q = fin(S.rows.reduce((a, r) => a + Number(r.quantity || 0), 0));
   const who = S.rows.length === 1 ? (S.rows[0].name || "1 stakeholder") : `${S.rows.length} stakeholders`;
-  const what = `${q.toLocaleString()} ${typeLabel().toLowerCase()} across ${who} on ${S.corpName}`;
+  const what = `${q == null ? "" : `${q.toLocaleString()} `}${typeLabel().toLowerCase()} across ${who} on ${S.corpName}`;
   if (status === "issued") return `Issued ${what} from the issuance form. Nothing further to write.`;
   if (status === "draft") return `Saved ${what} as a draft set from the issuance form, validated clean and not issued.`;
   return `Saved ${what} as a draft set from the issuance form. The issue did not complete.`;

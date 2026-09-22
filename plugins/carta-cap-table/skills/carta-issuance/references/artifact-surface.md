@@ -3,13 +3,14 @@
 Selected by [SKILL.md § Pick the surface](../SKILL.md#pick-the-surface) when no panel tool
 is present and the **`Artifact`** tool is. This is the whole path.
 
-**Budget: three tool calls, one turn, to a form on screen.** If you are about to make a
-fourth before the user sees anything, something below has been skipped.
+**Budget: two tool calls, one turn, to a form on screen** — one `Bash`, one `Artifact`. If
+you are about to make a third before the user sees anything, something below has been
+skipped.
 
-The page does the work: it resolves the connector, fetches its own reference data, collects
-the terms, saves and validates the draft set, shows the review, and issues on confirmation.
-None of that reaches your context — not the roster, not the field manifest, not the HTML.
-**You resolve the company, run one script, and publish.**
+The page does the work: it resolves the company, the connector and the named people against
+the cap table, fetches its own reference data, collects the terms, saves and validates the
+draft set, shows the review, and issues on confirmation. None of it reaches your context —
+not the roster, not the field manifest, not the HTML. **You run one script and publish it.**
 
 ---
 
@@ -17,10 +18,13 @@ None of that reaches your context — not the roster, not the field manifest, no
 
 - **The connected Carta must be the intended Carta** — the environment rule in
   [SKILL.md § 1](../SKILL.md#1-preflight) applies here identically. Hard stop and ask.
-- **Resolve the company:** `list_accounts(search="<name>")`, never an unfiltered
-  `list_accounts()` — its truncated page may never reach the name. Ask only on zero or
-  several matches. It returns `id: "corporation_pk:<n>"`; the builder takes only `<n>` and
-  rejects the prefixed form. Keep the exact legal name — the page's title uses it.
+- **Do not resolve the company.** Pass the name the user said to `--company-name` and build.
+  The page's own boot call takes a name, resolves it server-side, and comes back with the
+  company, the named people already matched to stakeholders, the plan, the price and the
+  dates. A `list_accounts` lookup first buys nothing and costs a round trip.
+- **`list_accounts(search="<name>")` is the fallback**, for when the page reports it could
+  not pin the company down — never unfiltered, whose truncated page may never reach the
+  name. It returns `id: "corporation_pk:<n>"`; `--corporation-id` takes only `<n>`.
 - **A file in the prompt goes through [the import sub-skill](../issuance-import/SKILL.md)
   first,** before the build. Its `rows` become the seed's `rows`.
 - Resolve `security_type` per [SKILL.md](../SKILL.md#resolve-security_type).
@@ -47,13 +51,14 @@ cat > "$WORK/_seed.json" <<'JSON'
 {"stakeholders": ["Tagg Palmer"], "quantity": "100"}
 JSON
 uv run "$SKILL/issuance-artifact/scripts/build_artifact.py" \
-  --corporation-id 40 \
   --company-name "IMIM" \
   --security-type option_grant \
   --seed "$WORK/_seed.json" \
-  --out "$WORK/issuance-40-option_grant.html"
+  --out "$WORK/issuance-imim-option_grant.html"
 ```
 
+- **No `--corporation-id`.** The page resolves the name. Add `--corporation-id <n>` only
+  when you already hold a bare numeric id — from the fallback lookup, or from a resume.
 - `--seed` takes a **path**, never an inline blob. Omit the flag entirely when the prompt
   named nobody and no terms; the page then opens with one blank recipient row, which is
   correct.
@@ -64,13 +69,11 @@ uv run "$SKILL/issuance-artifact/scripts/build_artifact.py" \
   row. Call `cap_table:get:load_drafts` first ([resume-flow.md](resume-flow.md)) and seed
   what it returns. Both are load-bearing — without the set id the page mints a *second*
   draft set of the same rows, and without each row's `draft_pk` the row inserts instead of
-  updating ([hard rule 3](../SKILL.md#hard-rules)). `draft_pk`s with no `draft_set_id` is
-  incoherent and fails the build.
-- **`--out` is a stable path for this company and type**, as above: republishing the same
-  file path in one conversation keeps the artifact's URL.
+  updating ([hard rule 3](../SKILL.md#hard-rules)).
+- **`--out` is a stable path for this company and type** — a lowercase company slug plus the
+  type, as above. Republishing the same path in one conversation keeps the artifact's URL.
 - The script exits non-zero and names the problem on a bad id, a missing part, or an
-  unresolved placeholder. Surface that verbatim and stop — it is a build fault, not
-  something a retry fixes.
+  unresolved placeholder. Surface that verbatim and stop — a build fault, not a retry.
 
 **Never read the built file back.** It is ~135KB; reading it is the defect this whole path
 exists to remove.
@@ -115,10 +118,16 @@ the connector name, the grant is not wired and every card in the page will come 
 That is the one condition that sends this run to
 [the chat surface](chat-surface.md) instead. Any other warning is informational.
 
-Then say **one short line** and give the URL as a link. Something like:
+Then say **one short line, then the URL on its own line as bare text**:
 
 > The option-grant form is open — set the terms once, add recipients, and hit Review. It'll
 > flag anything Carta needs before you can issue.
+>
+> https://claude.ai/code/artifact/58fa48f8-693e-43e3-8491-018976b769d6
+
+**Never a markdown link.** On the host that opens the form in a side panel it renders as the
+title alone — so when that panel is what failed, the address is the one thing the user
+cannot see or copy. Bare URL every time, including when the panel did open.
 
 Echo nothing else — no ids, no field names, no summary of what you prefilled
 ([hard rule 8](../SKILL.md#hard-rules)). The first open asks the viewer to allow the Carta
@@ -126,13 +135,13 @@ connection; until they do, the page shows its own no-connection state and says w
 
 ## 4. The page issues; you report
 
-**This surface performs the irreversible write itself.** The page saves, validates, shows
-the review, and asks for one confirmation in its own sheet — that click is the gate, and
-the write goes out under the viewer's own connector grant. A hand-off document cannot wake
-this session, so a page that stopped at a saved draft set could never issue on its own.
+**This surface performs the irreversible write itself.** The page saves, validates, shows the
+review, and asks for one confirmation in its own sheet — that click is the gate, and the write
+goes out under the viewer's own connector grant. A hand-off document cannot wake this session,
+so a page stopping at a saved draft set could never issue.
 
-After the write the page seals itself — no further save or issue from it — whenever the
-outcome is settled or unknowable: issued, a timeout, or accepted-and-nothing-reported. A
+After the write the page seals itself — no further save or issue — whenever the outcome is
+settled or unknowable: issued, a timeout, or accepted-and-nothing-reported. A
 refused value and a duplicate stakeholder both leave it usable, because neither wrote
 anything.
 
@@ -169,6 +178,7 @@ closing line:
 | What you see | What it means | What you do |
 |---|---|---|
 | The publish warns it could not resolve the connector | the page has no Carta access | [chat surface](chat-surface.md) |
+| The user says the page cannot find the company, or asks which one you meant | the name matched none or several | `list_accounts(search="<name>")`, settle it, and rebuild with `--corporation-id <n>` to the **same** `--out` path |
 | The user says the page is empty, or every section says it couldn't load | the viewer hasn't allowed the connector, or Carta is down for them | Tell them to allow the Carta connection when the page asks, or to reconnect Carta in Settings → Connectors. Re-publishing does not help |
 | The user says they see a hard stop in the page | the account isn't set up for this issuance | Read it back to them in plain language and stop. The fix is in Carta, not here |
 | The user reports validation errors they can't clear | the server refused a value | Those belong to the page, which shows them against their own fields. Only if a message is one the page can't act on — a fund-structure block, a duplicate stakeholder, a missing FMV — read [mutate-recovery.md](mutate-recovery.md) |

@@ -63,7 +63,12 @@ The user asked to save and stop, rather than to review and issue.
 5. **Clean or not:**
    - A `save_drafts` row whose `status` isn't a success value is a row-level error too —
      fold it into the same per-row bucket as `validate_drafts`'s errors (below).
-   - `validate_drafts`'s `validation.errors` — empty/absent → clean.
+   - **Clean is `validation.success === true`, never an empty `validation.errors`.** Three
+     kinds of refusal never appear in that map: `banner_errors` (a refused or vanished
+     draft set), `corporation_errors` (`{field: [msgs]}` — the missing-signatory refusal
+     `issue_securities` raises and `validate_drafts` does not), and `issuance_errors`
+     (flat strings). A failed workflow reports only a `success` that is not `true` and
+     names nothing at all. Reading the map alone called every one of these clean.
    - `validate_drafts`'s `duplicates` is **intentionally not checked here** — duplicate
      resolution stays at `issue_securities` time (Phase 3), unchanged; folding a 3-way
      `AskUserQuestion` triage into this retry loop, on top of the error reporting below, is
@@ -82,9 +87,12 @@ raw snake_case field name in customer-facing text:
   `"<Translated field label>: <message, verbatim>"` line per `{field: [msgs]}` entry against
   that person. **Replace, never accumulate across retries** — a fixed error must actually
   disappear next time round.
-- **Batch-level errors** — `validation.errors.corporation` (`{field: [msgs]}`, same
-  translate rule) and `validation.errors.issuance` (flat strings, verbatim) both belong to the
-  batch, not to a person. Say them once, above the per-row lines.
+- **Batch-level errors** — `validation.banner_errors`, `validation.corporation_errors`
+  (`{field: [msgs]}`, same translate rule) and `validation.issuance_errors` (flat strings,
+  verbatim). All three sit **beside** `validation.errors`, not inside it. They belong to
+  the batch, not to a person: say them once, above the per-row lines. A caller that hands
+  the strategy's own errors through unmerged nests them as `errors.corporation` /
+  `errors.issuance` instead — read both places.
 - **A `draft_pk` your tracked state doesn't recognize** — report it as a batch-level
   `"Unresolved row: <field>: <message>"` instead of silently dropping it.
 - **`cleared_fields` on a `save_drafts` row** — the columns that save emptied, present only
