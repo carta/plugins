@@ -3194,10 +3194,12 @@ def find_excel_budget_files(dashboard_dir):
     Parsed budgets are only honoured when `.workbook-ref.json` records that
     a workbook is in use for this firm. The ref is the record of intent; the
     JSON beside it is derived output. Reading the derived files on their own
-    means a budget, once ingested, renders forever — surviving a decline at
-    the prompt, and surviving the source workbook being deleted. Orphans are
-    reported rather than silently used, because a budget appearing with no
-    provenance is worse than none appearing at all.
+    means a budget, once ingested, renders forever even past a decline at
+    the prompt. Orphans (parsed files with no ref) are reported rather than
+    silently used. A ref that names its files is provenance enough on its
+    own — the source workbook itself is never read here, and its later
+    absence from disk (moved, renamed, deleted) says nothing about whether
+    the parse is still good.
     """
     d = Path(dashboard_dir)
     primary = d / "budget.json"
@@ -3229,15 +3231,8 @@ def find_excel_budget_files(dashboard_dir):
         # The operator was asked and said this firm has no Excel budget.
         return []
 
-    src = ref.get("path")
-    if src and not Path(src).expanduser().exists():
-        print(
-            f"warn: the workbook this firm's budget was parsed from is no longer at "
-            f"{src}; ignoring the parsed budget rather than showing figures whose "
-            f"source can't be confirmed.",
-            file=sys.stderr,
-        )
-        return []
+    # Deliberately not checking whether ref["path"] still exists: this reads
+    # only the already-parsed JSON below, and the ref is its provenance record.
 
     # The ref names the budgets it produced. Use those, and only those.
     # Globbing whatever is on disk means a budget from an earlier ingest

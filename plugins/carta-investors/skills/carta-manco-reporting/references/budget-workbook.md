@@ -22,27 +22,37 @@ order:
    what it is rather than what one firm called it, and a ref written before
    that still says the old word. Read it as the new one and carry on; the
    next write records the new spelling.
-   - Carries `path`/`sheet`/`shape` and the file still exists → reuse the
-     already-parsed `budget*.json` files silently and skip 2.75b entirely.
-     **A parsed budget is not re-parsed just because the workbook's mtime
-     changed on disk.** Only two things trigger a real re-parse:
+   - Carries `path`/`sheet`/`shape` → decide **whether a re-parse is
+     needed at all** before ever checking whether the source workbook is
+     still on disk. Only two things call for a real re-parse:
      - **An explicit ask** — the user's invocation passes
        `--budget-workbook <path>` again (case 1 above), deletes
        `.workbook-ref.json`, or says something like "refresh the budget" /
        "re-parse the workbook" / "the workbook changed" for this run.
-       Reuse `path`/`sheet`/`shape` silently (still no need to re-ask which
-       tabs) and go to 2.75b.
      - **The cached parse is broken** — a budget entry's `file` is missing
        from `<dashboard_dir>`, or fails to read as the JSON
        `build_manco_datadir.py` expects. A ref pointing at output that no
        longer exists or doesn't parse isn't a cache hit for that entry;
-       treat it as absent and re-parse it from `<WORKBOOK_PATH>`.
-     Absent either of those, go straight to 2.75c (nothing new to record)
-     / 2.75e. An edited-but-unmentioned workbook is out of scope for this
+       treat it as absent and in need of re-parsing.
+
+     **Neither applies** → reuse the already-parsed `budget*.json` files
+     silently and skip 2.75b entirely — **without checking whether the
+     source workbook at `path` still exists.** Resurfacing a dashboard is
+     served from this cache, never from the source `.xlsx` again, so a
+     workbook the operator has since moved, renamed, or deleted off their
+     machine is not a reason to take Budget vs Actuals down on a run that
+     never needed to open it. **A parsed budget is not re-parsed just
+     because the workbook's mtime changed on disk, or the file moved, or
+     it's gone entirely** — go straight to 2.75c (nothing new to record) /
+     2.75e. An edited-but-unmentioned workbook is out of scope for this
      run — the operator gets a refresh when they ask for one, not on every
      re-invocation.
-   - Carries `path` but the file is gone → go to 2.75a-0 and try to find
-     it before giving up.
+
+     **Either trigger applies** → an actual re-parse is coming, so now —
+     only now — the source file's presence matters:
+     - File still at `path` → reuse `path`/`sheet`/`shape` silently (still
+       no need to re-ask which tabs) and go to 2.75b.
+     - File is gone → go to 2.75a-0 and try to find it before giving up.
    - Carries `{"declined": true}` → the operator has already answered.
      Skip 2.75 silently.
    - Carries `{"declined": true, "deferred": true}` → written by an
@@ -566,12 +576,15 @@ list wholesale — so dropping a tab from the selection drops its view.
 
 **This file is what makes a parsed budget count.** `build_manco_datadir.py`
 ignores `budget*.json` in a firm's cache dir unless the ref accounts for
-them and the source workbook is still where the ref says. The ref is the
-record of intent; the JSON beside it is derived output. Without that rule
-a budget, once ingested, renders forever — outliving a decline at the
-prompt and outliving the workbook it came from. If the build script warns
-about orphaned budget files, it means parsed output is present with no ref
-to explain it, and the fix is to re-ingest rather than to trust it.
+them. The ref is the record of intent; the JSON beside it is derived
+output. Without that rule a budget, once ingested, renders forever —
+outliving a decline at the prompt. If the build script warns about
+orphaned budget files, it means parsed output is present with no ref to
+explain it, and the fix is to re-ingest rather than to trust it. **The
+build script does not check whether the source workbook is still where
+the ref says** — it never reads that file, only the parsed JSON beside it,
+so the operator moving or deleting their own workbook after ingest has no
+effect on a dashboard resurfacing from cache.
 
 #### When `<WORKBOOK_PATH>` is a locally-transformed copy, not the client's own file
 
