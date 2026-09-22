@@ -930,7 +930,7 @@
 .ccr-card-list:first-child { margin-top: 0; border-top: 0; }
 
 .ccr-kv { display: flex; gap: 12px; padding: 16px 0; border-bottom: 1px solid var(--ink-color-global-border-subtle); }
-.ccr-kv:last-child { border-bottom: 0; }
+.ccr-kv:last-of-type { border-bottom: 0; }
 .ccr-k { flex: none; width: 132px; font-size: 12px; line-height: 20px; color: var(--ink-color-global-text-subtle); }
 .ccr-v { flex: 1; min-width: 0; font-size: 13px; line-height: 20px; font-variant-numeric: tabular-nums; }
 .ccr-aside { flex: none; font-size: 12px; line-height: 20px; color: var(--ink-color-global-text-subtle); }
@@ -949,19 +949,11 @@
 .ccr-pill-ok { background: var(--ink-color-global-feedback-positive-subtle); color: var(--ink-color-global-feedback-positive-strong); }
 .ccr-pill-warn { background: var(--ink-color-global-feedback-warning-subtle); color: var(--carta-warning-text); }
 .ccr-pill-bad { background: var(--ink-color-global-feedback-negative-subtle); color: var(--ink-color-global-feedback-negative-strong); }
-.ccr-pill-muted { background: var(--ink-color-global-surface-lightgray-default); color: var(--ink-color-global-text-subtle); }
 .ccr-callout { display: flex; gap: 10px; margin-top: 12px; padding: 10px 12px; border-radius: 4px; font-size: 12px; line-height: 18px; }
 .ccr-callout-warn { background: var(--ink-color-global-feedback-warning-subtle); color: var(--carta-warning-text); }
 .ccr-callout-bad { background: var(--ink-color-global-feedback-negative-subtle); color: var(--ink-color-global-feedback-negative-strong); }
 .ccr-callout-info { background: var(--ink-color-global-feedback-info-subtle); color: light-dark(#122948, #a8c4db); }
 .ccr-callout-title { display: block; font-weight: 600; }
-.ccr-strip {
-  display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; padding: 8px 12px;
-  border: 1px solid var(--ink-color-global-border-subtle); border-radius: 4px; font-size: 12px; line-height: 18px;
-}
-.ccr-strip-label { font-weight: 600; }
-.ccr-strip-text { flex: 1; min-width: 200px; }
-.ccr-strip-when { margin-left: auto; color: var(--ink-color-global-text-subtle); white-space: nowrap; }
 .ccr-pay-group-title { display: flex; align-items: center; gap: 8px; padding: 14px 0 2px; font-size: 12px; font-weight: 600; }
 .ccr-blocker { display: block; font-size: 12px; line-height: 18px; color: var(--ink-color-global-feedback-negative-strong); }
 .ccr-link-btn { color: var(--ink-color-global-text-default); font-weight: 500; text-decoration: underline; text-underline-offset: 2px; white-space: nowrap; }
@@ -1094,18 +1086,6 @@
 .ccr-check input { flex: none; width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--ink-color-global-brand-black); }
 .ccr-check a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 
-.ccr-strip-toggle { margin-left: auto; background: none; border: none; cursor: pointer; font-family: inherit;
-  font-size: 12px; font-weight: 500; color: var(--ink-color-global-text-subtle); white-space: nowrap; padding: 0; display: inline-flex; align-items: center; gap: 4px; }
-.ccr-strip-toggle:hover { color: var(--ink-color-global-text-default); }
-/* Open, the strip becomes the head of one box: the list continues its sides
-   and each check's top border is the only line between rows. */
-.ccr-strip-open { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
-.ccr-hc-list { margin: 0 0 10px; border: 1px solid var(--ink-color-global-border-subtle); border-top: none; border-radius: 0 0 4px 4px; }
-.ccr-hc { padding: 10px 14px; border-top: 1px solid var(--ink-color-global-border-subtle); }
-.ccr-hc-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; line-height: 18px; }
-.ccr-hc-title { font-weight: 600; }
-.ccr-hc-tag { font-size: 11px; line-height: 16px; padding: 0 6px; border-radius: 3px;
-  background: var(--ink-color-global-feedback-negative-subtle, light-dark(#fdecec, #3a1c1c)); color: var(--ink-color-global-feedback-negative-strong); }
 
 .ccr-done { text-align: center; padding: 12px 8px; }
 .ccr-done-tick {

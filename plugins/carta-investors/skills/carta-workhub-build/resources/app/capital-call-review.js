@@ -187,7 +187,6 @@ function ccrReset(target, title) {
     locked: false,
     // The fresh health-check run, requested alongside the summary.
     health: { loading: true, error: null, checks: [] },
-    healthOpen: false,
     // The approver's own confirmations, ticked in the release step.
     consent: { call: false, payment: false, limit: false },
     loading: true,
@@ -674,70 +673,17 @@ function ccrMainTabBar() {
   '</div>';
 }
 
-// The web app's health-check roster, run fresh as the panel opens. A GP sees
-// the consequence first, then each failure by name; the check's own prose
-// stays in Carta, where the fix happens.
-function ccrHealthStrip(s) {
+// Health checks run for everyone and gate release, but their roster is staff
+// detail the web app hides from GPs. A GP sees only a failure Carta must fix.
+function ccrCartaOnlyCallout(s) {
   const h = ccrHealth();
-  if (h.verdict === "none") return "";
-  const plural = (n, word) => n + " " + word + (n === 1 ? "" : "s");
+  if (!h.cartaOnly.length) return "";
   const event = ccrIsDistribution(s) ? "distribution" : "capital call";
-  let pill, text;
-  if (h.verdict === "running") {
-    pill = '<span class="ccr-pill ccr-pill-muted">Running</span>';
-    text = "Checking this " + event + " now.";
-  } else if (h.verdict === "unknown") {
-    pill = '<span class="ccr-pill ccr-pill-warn">Not run</span>';
-    text = "The checks could not be run from here. Open the " + event + " in Carta to run them.";
-  } else if (h.verdict === "blocking") {
-    pill = '<span class="ccr-pill ccr-pill-bad">Blocking</span>';
-    text = plural(h.blocking.length, "blocking check") + " failed" +
-      (h.advisory.length ? ", " + plural(h.advisory.length, "advisory check") + " flagged" : "") +
-      ". Release is refused until they pass.";
-  } else if (h.verdict === "warnings") {
-    pill = '<span class="ccr-pill ccr-pill-warn">Warnings</span>';
-    text = plural(h.advisory.length, "advisory check") + " flagged something. Release can proceed past them; read them first.";
-  } else {
-    pill = '<span class="ccr-pill ccr-pill-ok">Passing</span>';
-    text = h.checks.length ? plural(h.passing, "check") + " passed." : "Every check passed.";
-  }
-  const cartaTitles = h.cartaOnly.map((c) => c.title || c.code).filter(Boolean);
-  // The detail folds away: a failure at review is rare, and the strip's sentence
-  // plus the footer already carry the consequence.
-  const body =
-    (h.failing.length ? '<div class="ccr-hc-list">' + h.failing.map(ccrHealthItem).join("") + "</div>" : "") +
-    (h.cartaOnly.length
-      ? ccrCallout("bad", "This " + event + " requires Carta's support",
-          "A blocking check only Carta can clear has failed" +
-          (cartaTitles.length ? ": " + cartaTitles.join("; ") : "") +
-          ". Use Request changes to send it back to your Carta team; it cannot be released until they fix it.")
-      : "");
-  const open = body && _ccr.healthOpen;
-  const toggle = body
-    ? '<button class="ccr-strip-toggle" data-ccr-health aria-expanded="' + (open ? "true" : "false") + '">' +
-      (open ? "Hide" : "Show") + " " + h.failing.length + (h.failing.length === 1 ? " check" : " checks") +
-      '<span class="ccr-chev' + (open ? " ccr-chev-open" : "") + '">' +
-      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg>' +
-      "</span></button>"
-    : "";
-  return '<div class="ccr-strip' + (open ? " ccr-strip-open" : "") + '"><span class="ccr-strip-label">Health checks</span>' + pill +
-    '<span class="ccr-strip-text">' + escHtml(text) + "</span>" +
-    (h.verdict === "unknown" ? '<span class="ccr-strip-when">' + ccrOpenInCarta() + "</span>" : "") +
-    toggle +
-    "</div>" +
-    (open ? '<div class="ccr-hc-body">' + body + "</div>" : "");
-}
-
-function ccrHealthItem(c) {
-  const pill = c.is_blocking
-    ? '<span class="ccr-pill ccr-pill-bad">Blocking</span>'
-    : '<span class="ccr-pill ccr-pill-warn">Advisory</span>';
-  const who = c.is_second_party_resolvable === false
-    ? '<span class="ccr-hc-tag">Carta fixes this</span>'
-    : (c.resolution_path === "platform" ? ccrOpenInCarta("Fix in Carta") : "");
-  return '<div class="ccr-hc">' +
-    '<div class="ccr-hc-head"><span class="ccr-hc-title">' + escHtml(c.title || c.code || "Check") + "</span>" + pill + who + "</div>" +
-    "</div>";
+  const titles = h.cartaOnly.map((c) => c.title || c.code).filter(Boolean);
+  return ccrCallout("bad", "This " + event + " requires Carta's support",
+    "A blocking check only Carta can clear has failed" +
+    (titles.length ? ": " + titles.join("; ") : "") +
+    ". Use Request changes to send it back to your Carta team; it cannot be released until they fix it.");
 }
 
 // How the cash leaves. is_amm_distribution is the gate the web app enforces,
@@ -1256,7 +1202,7 @@ function ccrReviewBody() {
       "</span></div>"
     : "") +
 
-    ccrHealthStrip(s) +
+    ccrCartaOnlyCallout(s) +
     (s.is_amm_distribution
       ? ccrCallout("warn", "Review this distribution in Carta",
           "It pays through Automated Money Movement: Carta wires each investor from the paying-from account on release, " +
@@ -1349,15 +1295,10 @@ function ccrConfirmBody() {
         ? "Records the call silently for investors not yet on Carta: no invitations and no new-partner notices."
         : "Records the call silently for investors not yet on Carta: inviting them was never set on this call, and release treats that as off.");
   }
-  const h = ccrHealth();
   return '<p class="ccr-confirm-banner">Releasing runs all of this in Carta immediately. Read it before you release.</p>' +
     '<div class="ccr-steps">' + steps.map((t, i) =>
       '<div class="ccr-step"><span class="ccr-step-n">' + (i + 1) + "</span><span>" + escHtml(t) + "</span></div>").join("") +
     "</div>" +
-    (h.advisory.length
-      ? ccrCallout("warn", "Advisory health checks flagged " + h.advisory.length + " thing" + (h.advisory.length === 1 ? "" : "s"),
-          "Release proceeds past them: " + h.advisory.map((c) => c.title || c.code).filter(Boolean).join("; ") + ".")
-      : "") +
     ccrCallConsentHtml(s) +
     "<p style='margin-top:14px;font-size:13px;line-height:20px'>Released " + (dist ? "distributions" : "capital calls") +
     " cannot be recalled. A correction after release means a new notice to every investor.</p>";
@@ -1481,8 +1422,6 @@ function ccrBind(root) {
     el.addEventListener("click", () => { _ccr.showDetail = !_ccr.showDetail; ccrRender(); }));
   root.querySelectorAll("[data-ccr-note]").forEach((el) =>
     el.addEventListener("click", () => { _ccr.noteOpen = !_ccr.noteOpen; ccrRender(); }));
-  root.querySelectorAll("[data-ccr-health]").forEach((el) =>
-    el.addEventListener("click", () => { _ccr.healthOpen = !_ccr.healthOpen; ccrRender(); }));
   root.querySelectorAll("[data-ccr-pay-reveal]").forEach((el) =>
     el.addEventListener("click", () => {
       const key = el.getAttribute("data-ccr-pay-reveal");

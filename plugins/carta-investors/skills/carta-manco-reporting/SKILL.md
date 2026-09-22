@@ -42,7 +42,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.37.7</carta-plugin>
+<carta-plugin>carta-investors:6.37.10</carta-plugin>
 
 # ManCo Reporting Dashboard
 
