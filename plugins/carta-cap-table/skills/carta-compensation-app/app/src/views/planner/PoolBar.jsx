@@ -20,7 +20,7 @@ import { shares } from "../../model/format.js";
  *  the cohort's filters degrade: a disabled control with a cause reads as a data
  *  gap the user can fix, where a missing one reads as a product that forgot.
  */
-export default function PoolBar({ available, planned, reserved, outstanding }) {
+export default function PoolBar({ available, planned, reserved, used }) {
   if (available == null) {
     return (
       <div style={{
@@ -58,14 +58,14 @@ export default function PoolBar({ available, planned, reserved, outstanding }) {
   // WHETHER TO DRAW A USED SEGMENT: only when something is actually granted.
   //
   // These come apart, and coupling them was a bug: a pool can be authorised with
-  // nothing granted yet (`outstanding` 0) while `available` still sits well below
+  // nothing granted yet (`used` 0) while `available` still sits well below
   // `reserved`, because the ledger also nets off non-returning, poured-out and
   // terminated shares. Corp 7 shows the gap even with grants — reserved minus
-  // outstanding is 44,274,151 against an available of 44,260,517. Scaling such a
+  // used is 44,274,151 against an available of 44,260,517. Scaling such a
   // pool to `available` would defeat the point of the change.
   const total = reserved > 0 ? reserved : available;
-  const showsUsed = reserved > 0 && outstanding > 0;
-  const usedPct = showsUsed ? (outstanding / total) * 100 : 0;
+  const showsUsed = reserved > 0 && used > 0;
+  const usedPct = showsUsed ? (used / total) * 100 : 0;
   // Clamped only for the BAR's width. The printed numbers stay exact, so an overrun
   // reads as a full bar plus a negative remaining rather than a quietly capped one.
   const pct = total > 0 ? Math.min(100 - usedPct, (planned / total) * 100) : 0;
@@ -112,7 +112,7 @@ export default function PoolBar({ available, planned, reserved, outstanding }) {
           <div
             title={reserved > 0
               ? (showsUsed
-                ? `${shares(outstanding)} already granted, ${shares(planned)} planned, `
+                ? `${shares(used)} used, ${shares(planned)} planned, `
                   + `of ${shares(reserved)} reserved`
                 : `${shares(planned)} planned of ${shares(reserved)} reserved`)
               : `${shares(planned)} planned of ${shares(available)} available`}
@@ -135,7 +135,7 @@ export default function PoolBar({ available, planned, reserved, outstanding }) {
             {showsUsed && (
               <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
                 <span style={{ width: 9, height: 9, borderRadius: 2, background: C.poolUsed }} />
-                Already granted
+                Used
               </span>
             )}
             <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>

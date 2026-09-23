@@ -323,40 +323,41 @@ must page in the script, dedupe, and gate on completeness before publishing.
 ## §7 — Equity pool (for the planner's Equity Pool tile)
 
 ```
-compensation:get:reports-insights
-  generated tool name: compensation__get__reports-insights
+cap_table:get:equity-pool-utilization
+  generated tool name: cap_table__get__equity-pool-utilization
   arguments: { "corporation_id": <int> }
 ```
 
-Returns a fixed three-object envelope:
+Returns:
 
 ```json
 {
-  "equity_refresh": { "num_employees": <int|null> },
-  "cost_to_market": { "num_employees": <int|null> },
-  "efab": {
-    "available_shares":   <int|null>,
-    "reserved_shares":    <int|null>,
-    "outstanding_shares": <int|null>
-  }
+  "totalEquityAvailable": <int|null>,
+  "totalReservedShares":  <int|null>,
+  "fullyDilutedShares":   <int|null>,
+  "usedShares":           <int|null>
 }
 ```
 
-Only the `efab` block feeds the planner today — `available_shares` populates the
-Equity Pool tile's Available count, and `reserved_shares` / `outstanding_shares`
-scale the segmented bar. The two `num_employees` counts come along in the same
-call and are captured for parity with the product UI but are not currently rendered.
+**This is the same source the CTC product UI's Refresh Grant Planner "Equity pool
+impact" panel reads** (`/api/corporations/<id>/manage-employees/retain/equity-pool-utilization/`
+on carta-web). The endpoint makes a **live gRPC read** against the equity ledger
+per request — no Redis cache in the request path, so no cache-warming ritual is
+required. Values tie out against the product UI to the share.
 
-**The figure is the equity ledger's own `available`**, summed across pools by
-compensation-service, so the Equity Pool tile ties out against CTC's Refresh Grant
-Planner exactly — that is the whole reason the microapp reads this endpoint
-instead of Carta Web (the two systems compute pool numbers differently).
+Capture with `save_equity_pool_utilization.py`; the script derives `poolUsedShares`
+locally when the wire didn't already include it, and enforces the same "null is
+not 0" invariant `save_report_insights.py` does.
 
-⚠ **`null` is not `0`.** `efab.*` is null when compensation-service's Redis cache
-of the equity ledger has not been warmed. A corporation whose ledger legitimately
-reports no pools also sums to exactly `0`. The two are indistinguishable at the
-wire, so `save_report_insights.py` treats both as "not in this build" — the tile
-renders its empty-state notice rather than "0 shares available".
+⚠ **`null` is not `0`.** If any field comes back null (unusual — the endpoint is
+live) or a corporation legitimately reports no pools (sum of 0), the tile renders
+its empty-state notice rather than "0 shares available".
 
-Capture with `save_report_insights.py`; skip the capture entirely when every
-`efab.*` field is null.
+### Why not `compensation:get:reports-insights.efab.*`?
+
+That endpoint reads a **different** snapshot — compensation-service's Redis cache
+of the equity ledger, warmed only by the out-of-band `SendCompensationOverviewNotification`
+Celery task. Different denominators (scope filters), a stale cache, and its own
+arithmetic mean its `efab.*` numbers can drift from what the product UI shows.
+Use `reports-insights` for its `equity_refresh.num_employees` and
+`cost_to_market.num_employees` counts — never for the pool tile.

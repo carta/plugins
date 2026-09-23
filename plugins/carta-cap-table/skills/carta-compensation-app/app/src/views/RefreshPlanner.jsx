@@ -656,7 +656,7 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
       available={planner.poolAvailableShares ?? null}
       planned={plannedTotals.totals.totalShares}
       reserved={planner.poolReservedShares ?? null}
-      outstanding={planner.poolOutstandingShares ?? null}
+      used={planner.poolUsedShares ?? null}
     />
   );
 

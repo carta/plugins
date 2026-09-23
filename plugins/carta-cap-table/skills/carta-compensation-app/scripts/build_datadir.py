@@ -902,20 +902,36 @@ def _build_planner(rawdir):
     if isinstance(policy, dict) and policy.get("results"):
         policy = policy["results"][0]
 
-    # The equity pool the planned draw is measured against. Absent unless the
-    # insights capture ran AND returned a usable figure — see save_report_insights
-    # for why a zero is treated as absent rather than as an empty pool.
+    # Prefer the carta-web capture (matches the product UI); fall back to the
+    # older reports-insights capture for microapps built before this shift.
+    util_path = pathlib.Path(rawdir) / "equity_pool_utilization.json"
     insights_path = pathlib.Path(rawdir) / "report_insights.json"
     pool_available = None
     pool_reserved = None
-    pool_outstanding = None
-    if insights_path.exists():
+    pool_used = None
+    pool_fully_diluted = None
+    if util_path.exists():
+        util = _read_json(util_path) or {}
+        raw_available = util.get("poolAvailableShares")
+        if isinstance(raw_available, int) and raw_available > 0:
+            pool_available = raw_available
+        pool_reserved = util.get("poolReservedShares")
+        pool_used = util.get("poolUsedShares")
+        pool_fully_diluted = util.get("poolFullyDilutedShares")
+    elif insights_path.exists():
         insights = _read_json(insights_path) or {}
         raw_pool = insights.get("poolAvailableShares")
         if isinstance(raw_pool, int) and raw_pool > 0:
             pool_available = raw_pool
         pool_reserved = insights.get("poolReservedShares")
-        pool_outstanding = insights.get("poolOutstandingShares")
+        # Derive used from reserved - available when both present.
+        if (
+            isinstance(pool_reserved, int)
+            and pool_reserved > 0
+            and pool_available is not None
+        ):
+            diff = pool_reserved - pool_available
+            pool_used = diff if diff > 0 else None
     availability["pool"] = pool_available is not None
 
     # The inputs for CTC's three equity units. Absent when the capture never ran,
@@ -938,7 +954,8 @@ def _build_planner(rawdir):
         # The whole pool and what is already spent. Absent on a capture that
         # predates them; the bar then shows two segments rather than three.
         "poolReservedShares": pool_reserved,
-        "poolOutstandingShares": pool_outstanding,
+        "poolUsedShares": pool_used,
+        "poolFullyDilutedShares": pool_fully_diluted,
         "equityUnits": equity_units,
         "availability": availability,
         "reconciliation": {
