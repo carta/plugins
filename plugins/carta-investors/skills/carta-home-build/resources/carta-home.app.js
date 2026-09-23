@@ -1102,12 +1102,30 @@ function renderDashboardLaunchers() {
     const footer = document.getElementById(d.footerId);
     if (!footer) return;
     const url = DASHBOARD_URLS[d.key];
-    footer.innerHTML = url
-      ? `<a class="run-btn" href="${escHtml(url)}"
-            onclick="trackHome('click','CartaHome.Dashboard.Open.${escHtml(d.key)}')">${escHtml(d.label)} →</a>`
-      : `<button class="run-btn" data-prompt="${escHtml(d.prompt)}" data-skill="${escHtml(d.key)}"
+    const promptHtml = `<button class="run-btn" data-prompt="${escHtml(d.prompt)}" data-skill="${escHtml(d.key)}"
             onclick="dashShowPrompt(this)">${escHtml(d.label)}</button>`;
+    if (url === DASH_BUILDING) {
+      // Named after the launcher it becomes. The estimate covers the whole fan-out:
+      // every card resolves together when home redeploys, measured at 2m43s for two.
+      const target = d.label.replace(/^Open\s+/i, '');
+      footer.innerHTML = `<span class="dash-building">Preparing ${escHtml(target)}…
+            <span class="dash-building__eta">about 3 min</span></span>`;
+      dashExpireBuilding(footer, promptHtml);
+    } else if (url) {
+      footer.innerHTML = `<a class="run-btn" href="${escHtml(url)}"
+            onclick="trackHome('click','CartaHome.Dashboard.Open.${escHtml(d.key)}')">${escHtml(d.label)} →</a>`;
+    } else {
+      footer.innerHTML = promptHtml;
+    }
   });
+}
+
+// The redeploy replaces this footer, so a card still showing the building state this long
+// after load is one whose build never finished. Hand back the prompt rather than pulse on.
+function dashExpireBuilding(footer, promptHtml) {
+  setTimeout(() => {
+    if (footer.querySelector('.dash-building')) footer.innerHTML = promptHtml;
+  }, DASH_BUILDING_TIMEOUT_MS);
 }
 
 // Launchers are built after the .run-btn[data-prompt] binding pass has run, so they

@@ -38,8 +38,13 @@ const DASHBOARDS = [
   },
 ];
 
-// Baked in at build time by build_artifact.py from --dashboard-url key=url.
-// `{}` when nothing was published — every tile then renders its prompt instead.
+// Baked in at build time by build_artifact.py from --dashboard-url key=url, or this
+// sentinel from --dashboard-building key. `{}` when nothing was passed — every tile then
+// renders its prompt instead.
+const DASH_BUILDING = 'building';
+// A build that dies between publishes never redeploys, so the card would sit on
+// "Preparing" forever. Generous against the ~3min fan-out: late is cheap, early is wrong.
+const DASH_BUILDING_TIMEOUT_MS = 5 * 60 * 1000;
 const DASHBOARD_URLS = {{DASHBOARD_URLS}};
 
 // ── Skill directory data ──

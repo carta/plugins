@@ -1,7 +1,7 @@
 {
   "carta-home-build": {
-    "version": "1.10.1",
-    "headline": "The SOI and fund performance cards now open full dashboards of their own."
+    "version": "1.11.0",
+    "headline": "Carta Home opens first and its dashboard cards say they are being prepared, turning into links once each dashboard is ready."
   },
   "carta-workhub-build": {
     "version": "1.8.20",

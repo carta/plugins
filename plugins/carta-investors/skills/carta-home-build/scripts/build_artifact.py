@@ -36,12 +36,14 @@ firm is active when a viewer opens it.
 
 `{{DASHBOARD_URLS}}` (in carta-home.config.js) becomes a JSON object of the dashboard
 artifact URLs published earlier in the same build run, keyed by a DASHBOARDS entry. A key
-that is absent leaves that card on its copyable prompt.
+passed to --dashboard-building carries the string "building" instead, so home can publish
+before its dashboards exist and redeploy over itself once they do. A key absent from both
+leaves that card on its copyable prompt.
 
 Usage:
   uv run scripts/build_artifact.py --mcp-server <connector-display-name> \
       --firm-name "<firm name>" --out <path>/carta-home-<slug>.html \
-      [--dashboard-url soi=https://… --dashboard-url perf=https://…]
+      [--dashboard-url soi=https://… --dashboard-building perf]
 """
 import argparse
 import hashlib
@@ -53,10 +55,25 @@ from pathlib import Path
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
 RES = SKILL_DIR / "resources"
-VENDOR_DIR = SKILL_DIR.parent.parent / "vendor"  # plugin root / vendor/
+# Two ship locations: inside a plugin, and standing alone as a single uploaded skill.
+# Probing both lets the same bundle build either way.
+def _first_existing(*candidates):
+    for path in candidates:
+        if path.exists():
+            return path
+    return candidates[0]
+
+
+VENDOR_DIR = _first_existing(
+    SKILL_DIR.parent.parent / "vendor",  # plugin root / vendor/
+    SKILL_DIR / "vendor",
+)
 
 SKILL_NAME = SKILL_DIR.name
-VERSIONS_FILE = SKILL_DIR.parent.parent / ".claude-plugin" / "skill-versions.json"
+VERSIONS_FILE = _first_existing(
+    SKILL_DIR.parent.parent / ".claude-plugin" / "skill-versions.json",
+    SKILL_DIR / ".claude-plugin" / "skill-versions.json",
+)
 # A built artifact can never update itself, so it carries its version with it and
 # compares against the published one at runtime. Strict major.minor.patch: the
 # comparison is semver, and the banner fires on major/minor only.
@@ -134,11 +151,15 @@ def read_version():
     return version
 
 
-def parse_dashboard_urls(pairs):
+BUILDING = "building"
+
+
+def parse_dashboard_urls(pairs, building=None):
     """Turn repeated --dashboard-url key=url into the {{DASHBOARD_URLS}} JSON object.
 
-    A dashboard whose skill was skipped at build time is simply absent; the page then
-    renders that tile's prompt instead of a link.
+    A key marked --dashboard-building carries the BUILDING sentinel instead of a URL, so
+    the first publish can say a dashboard is on its way before one exists. A key that is
+    absent from both renders that tile's prompt instead.
     """
     urls = {}
     for pair in pairs or []:
@@ -148,6 +169,13 @@ def parse_dashboard_urls(pairs):
         if not url.startswith(("http://", "https://")):
             sys.exit("ERROR: --dashboard-url {} must be an http(s) URL, got {!r}".format(key, url))
         urls[key.strip()] = url.strip()
+    # The marker wins over a URL for the same key: a rebuild replaces the page that URL
+    # points at, so the card says so rather than linking to data on its way out.
+    for key in building or []:
+        key = key.strip()
+        if not key:
+            sys.exit("ERROR: --dashboard-building expects a key")
+        urls[key] = BUILDING
     return urls
 
 
@@ -209,13 +237,17 @@ def main():
                     help="published dashboard artifact URL, keyed by a DASHBOARDS entry "
                          "in carta-home.config.js (repeatable). Omit one to leave that "
                          "tile on its copyable prompt.")
+    ap.add_argument("--dashboard-building", action="append", metavar="KEY", default=[],
+                    help="mark a DASHBOARDS key as still being built (repeatable). The "
+                         "tile says so and keeps its prompt until a redeploy passes the "
+                         "real --dashboard-url for that key.")
     args = ap.parse_args()
 
     firm_name = args.firm_name.strip()
     if not firm_name:
         sys.exit("ERROR: --firm-name is empty")
 
-    html, build_id, version = build(args.mcp_server, firm_name, parse_dashboard_urls(args.dashboard_url))
+    html, build_id, version = build(args.mcp_server, firm_name, parse_dashboard_urls(args.dashboard_url, args.dashboard_building))
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(html)

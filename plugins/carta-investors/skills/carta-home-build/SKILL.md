@@ -25,7 +25,7 @@ allowed-tools:
   # dashboard skills so the fan-out doesn't re-ask.
   - mcp__*carta*__list_contexts
   - mcp__*Carta*__list_contexts
-  # The dashboard fan-out (Step 3). A skill that isn't installed is skipped.
+  # The dashboard fan-out (Step 5). A skill that isn't installed is skipped.
   - Skill
   - AskUserQuestion
   - Bash(uv run *build_artifact.py *)
@@ -36,7 +36,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.38.10</carta-plugin>
+<carta-plugin>carta-investors:6.39.0</carta-plugin>
 
 # Carta Home — Build / Redeploy
 
@@ -117,16 +117,22 @@ artifact, published by their own skill, so there is exactly one implementation o
 | `footerId` | the card footer element the launcher renders into |
 | `prompt` | **the contract** — copied into chat when no URL was baked in |
 | `label` | the launcher's visible text |
-| `buildSkill` | build-time only: candidates Step 3 fans out to, in preference order. Optional. |
+| `buildSkill` | build-time only: candidates Step 5 fans out to, in preference order. Optional. |
 
 **`prompt` is the contract, and `buildSkill` follows it.** The same sentence routes to
 whichever skill owns that dashboard in the current install — `carta-soi` here, and
 `carta-portfolio-analytics-routing` in the published `carta/plugins` tree, where `carta-soi`
 does not exist. `buildSkill` lists both so the build-time fan-out reaches the same owner the
-prompt would: Step 3 takes the first candidate that resolves. Home never needs to know which.
+prompt would: Step 5 takes the first candidate that resolves. Home never needs to know which.
+
+**Home publishes before its dashboards exist.** It goes out with each launcher marked as
+building, the fan-out runs, then home redeploys over itself with the real links — a
+redeploy reaches viewers who already have it open. Home is published first because a
+published artifact surfaces itself, so publishing it last would land the viewer on a
+dashboard instead.
 
 **Degradation is automatic.** A `buildSkill` whose every candidate is absent or unavailable
-is skipped in Step 3, so no `--dashboard-url` is passed for that key, so the tile renders its
+is skipped in Step 5, so no `--dashboard-url` reaches that key, so the tile renders its
 prompt in the same popover every other run button uses. There is no separate public/internal branch
 and no error state — a dashboard that could not be published simply reverts to the copyable
 prompt. Adding a dashboard later is one registry entry plus its skill.
@@ -276,7 +282,7 @@ This is a live artifact: the rendered HTML calls Carta at runtime through `claud
 
 **Connector check — run it before publishing, and stay quiet when it passes.** Call `welcome`, then `get_current_user`, using *your own* prefixed tool names (`mcp__<prefix>__welcome`). `welcome` confirms the connector actually answers — being listed is registry state, not proof — and publishing without one observed call earns the platform's "published against an unobserved interface" warning. `get_current_user` is not a second check; this skill needs its payload (see below). If either call errors, tell the user Carta isn't responding and stop — do not publish. If both succeed, say nothing about them and get on with the build.
 
-Keep `get_current_user`'s response: Step 5 grants that tool, and the Skill Directory's entitlement gate reads `has_tactyc` / `has_active_manco` from the same payload at runtime.
+Keep `get_current_user`'s response: Step 4 grants that tool, and the Skill Directory's entitlement gate reads `has_tactyc` / `has_active_manco` from the same payload at runtime.
 
 ### Step 1: Resolve the firm once, for everyone
 
@@ -287,8 +293,8 @@ ask with `AskUserQuestion` if you cannot infer confidently. If `list_contexts` r
 firm at all, tell the user their connector has no firm in context and stop; the title names
 the firm and cannot be guessed.
 
-**Capture the firm name and firm UUID.** The name is what Step 5's title and Step 2's lookup
-key are built from. Step 3 hands both to the dashboard skills so they do not re-ask the user
+**Capture the firm name and firm UUID.** The name is what Step 3's title and Step 2's lookup
+key are built from. Step 5 hands both to the dashboard skills so they do not re-ask the user
 the same question — `carta-soi` explicitly reuses a firm list already in conversation context
 rather than calling `list_contexts` again.
 
@@ -326,38 +332,7 @@ carrying **📊** belongs to carta-cap-table's `carta-captable-home-build` and h
 company's cap table; leave it alone, publishing over it would replace that cap table with
 this firm's dashboard.
 
-### Step 3: Publish the dashboard artifacts
-
-For each `DASHBOARDS` entry in `resources/carta-home.config.js` that has a `buildSkill`,
-work down its candidates in order and invoke the **first one that resolves**, keeping the
-artifact URL it returns, keyed by the entry's `key`. A candidate that is not installed is
-not a failure — move to the next one. Once a candidate returns a URL, stop; do not invoke
-the rest, or the same dashboard is published twice.
-
-A router candidate serves several dashboards, so it needs the entry's `prompt` to know
-which one to build. Lead with that sentence, then the same context every candidate gets.
-
-Tell each one the firm is already settled, and hand it its existing URL from Step 2 —
-e.g. for the `soi` entry:
-
-> <the entry's `prompt`>
->
-> Publish the SOI artifact for firm **<firm name>** (`<firm_uuid>`), already resolved —
-> do not call `list_contexts` and do not ask me to pick a firm. Load every fund in the firm
-> and pick the initial fund yourself. Redeploy to `<url from Step 2>` if given, so the link
-> stays stable. Return only the published artifact URL.
-
-`carta-fund-performance` resolves its own firm at runtime and needs no context passed —
-it still takes the existing URL so its link stays stable. It is the `perf` entry's only
-candidate: the router's benchmarks route answers in chat rather than publishing an
-artifact, so an install without it leaves that card on its prompt.
-
-**If every candidate is missing, or the one that ran errors or returns no URL: skip the
-entry, say nothing, and move on.** Do not retry it, do not reach for a skill outside the
-candidate list, and do not stop the build — the card falls back to its prompt, which is a
-working affordance, not a failure. Never block the home build on a dashboard.
-
-### Step 4: Build the self-contained artifact (no need to read any HTML)
+### Step 3: Build the self-contained artifact (no need to read any HTML)
 
 Run the build script — it assembles CSS + config + app into one file and substitutes the
 server id. The script lives in **this skill's own `scripts/` directory**.
@@ -379,8 +354,8 @@ keeps the paths apart.
 uv run "<SKILL_DIR>/scripts/build_artifact.py" \
   --mcp-server "<CARTA_MCP_SERVER>" \
   --firm-name "<firm name from Step 0>" \
-  --dashboard-url soi=<url from Step 3> \
-  --dashboard-url perf=<url from Step 3> \
+  --dashboard-building soi \
+  --dashboard-building perf \
   --out <outputs-directory>/carta-home-<slug>.html
 ```
 
@@ -388,15 +363,31 @@ uv run "<SKILL_DIR>/scripts/build_artifact.py" \
 names the published artifact. It is the only firm-specific thing in the bundle; the body
 still detects whichever firm is active when a viewer opens it.
 
-Pass one `--dashboard-url` per dashboard Step 3 actually published. **Omit the flag for
-any that was skipped** — do not pass an empty value or a guessed URL. An omitted key leaves
-that card on its copyable prompt, which is the intended fallback.
+**This build runs twice.** On this pass, every entry with a `buildSkill` takes
+`--dashboard-building <key>` and nothing else — including one whose artifact Step 2
+already found. Step 5 rebuilds that artifact too, so linking to it now would point at the
+page this run is about to replace. Step 6 runs the same command again with the URLs Step 5
+returns, and the cards become launchers.
+
+**An existing URL is not a reason to skip Step 5.** Every entry with a `buildSkill` is
+rebuilt on every run, so the dashboards carry the current version of their skill rather
+than whatever shipped whenever they were last published. Step 2's URL tells the dashboard
+skill where to redeploy; it never stands in for building.
+
+**Omit both flags for an entry with no `buildSkill`** — do not pass an empty value or a
+guessed URL. An omitted key leaves that card on its copyable prompt, which is the intended
+fallback.
 
 `<SKILL_DIR>` is this skill's base directory — e.g. in Cowork
 `/sessions/<name>/mnt/.remote-plugins/plugin_<id>/skills/carta-home-build`, in Claude Code
 `${CLAUDE_PLUGIN_ROOT}/skills/carta-home-build`.
 
-### Step 5: Publish the home artifact
+### Step 4: Publish the home artifact
+
+Publishing here, before the dashboards exist, is what puts the viewer on home rather than
+on whichever dashboard was built last — a published artifact surfaces itself, so the only
+way home is the landing surface is for it to be the first one published. **Keep the URL
+this returns**; Step 6 redeploys over it.
 
 One call either way. `action` defaults to `"publish"`, so it is omitted below; `url` is
 the only difference between a first publish and a redeploy.
@@ -446,14 +437,64 @@ Artifact({
 > in the viewer's Carta context when they open it. A viewer who switches firm sees a title
 > that no longer matches the body. Rebuild for that firm to fix it.
 
-### Step 6: Validate
+### Step 5: Publish the dashboard artifacts
+
+**This step always runs.** Home is live by now with its cards marked as building, and this
+is what fills them in. Skipping it because a card already points somewhere leaves the
+starter pack unbuilt and every dashboard on whatever version it was last published from.
+
+For each `DASHBOARDS` entry in `resources/carta-home.config.js` that has a `buildSkill`,
+work down its candidates in order and invoke the **first one that resolves**, keeping the
+artifact URL it returns, keyed by the entry's `key`. A candidate that is not installed is
+not a failure — move to the next one. Once a candidate returns a URL, stop; do not invoke
+the rest, or the same dashboard is published twice.
+
+A router candidate serves several dashboards, so it needs the entry's `prompt` to know
+which one to build. Lead with that sentence, then the same context every candidate gets.
+
+Tell each one the firm is already settled, and hand it its existing URL from Step 2 —
+e.g. for the `soi` entry:
+
+> <the entry's `prompt`>
+>
+> Publish the SOI artifact for firm **<firm name>** (`<firm_uuid>`), already resolved —
+> do not call `list_contexts` and do not ask me to pick a firm. Load every fund in the firm
+> and pick the initial fund yourself. Redeploy to `<url from Step 2>` if given, so the link
+> stays stable. Return only the published artifact URL.
+
+`carta-fund-performance` resolves its own firm at runtime and needs no context passed —
+it still takes the existing URL so its link stays stable. It is the `perf` entry's only
+candidate: the router's benchmarks route answers in chat rather than publishing an
+artifact, so an install without it leaves that card on its prompt.
+
+**If every candidate is missing, or the one that ran errors or returns no URL: skip the
+entry, say nothing, and move on.** Do not retry it, do not reach for a skill outside the
+candidate list, and do not stop the build — the card falls back to its prompt, which is a
+working affordance, not a failure. Never block the home build on a dashboard.
+
+### Step 6: Redeploy home with the dashboard links
+
+Run Step 3's build command again, this time passing `--dashboard-url <key>=<url>` for every
+dashboard Step 5 published, and dropping `--dashboard-building` for those keys. Keep
+`--dashboard-building` only for an entry that was meant to build and did not, so its card
+still explains itself.
+
+Then run Step 4's `Artifact` call again with `url` set to the home URL it returned, so this
+redeploys in place instead of claiming a second page. A redeploy reaches viewers who
+already have home open, so the cards change from building to links under them — no reload.
+
+**If a dashboard was skipped, redeploy anyway.** The card falls back to its prompt, which
+is the working affordance. Leaving home on "building" for a dashboard that will never
+arrive is the one outcome to avoid.
+
+### Step 7: Validate
 
 Open the published URL and check that it displays fund data for the active firm without
 errors — SOI rows, Fund Performance charts, and the P&L/Balance Sheet cards should all
 populate. The first open asks the viewer to consent to the Carta connector; until they
 accept, every card shows its no-connector state.
 
-### Step 7: Confirm
+### Step 8: Confirm
 
 Give the user the artifact's URL, name the firm in its title, and tell them it is live.
 
