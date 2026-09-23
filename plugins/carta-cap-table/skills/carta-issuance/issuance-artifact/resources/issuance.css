@@ -89,8 +89,8 @@
     .req { color: var(--ink-color-global-brand-red-60); }
 
     /* `appearance: none` is what makes these one system. Without it the browser
-       paints the OS dropdown and calendar on top. Checkboxes keep their native box. */
-    input:not([type="checkbox"]), select, textarea {
+       paints the OS dropdown and calendar on top. */
+    input, select, textarea {
       width: 100%;
       font: inherit;
       font-size: 13px;
@@ -104,7 +104,7 @@
       appearance: none;
       -webkit-appearance: none;
     }
-    input:not([type="checkbox"]):hover:not([disabled]):not([readonly]),
+    input:hover:not([disabled]):not([readonly]),
     select:hover:not([disabled]) { border-color: var(--ink-color-global-brand-gray-70); }
     input:focus, select:focus, textarea:focus { outline: 2px solid var(--ink-color-global-brand-black); outline-offset: -1px; }
     input[disabled], select[disabled], input[readonly] {
@@ -142,6 +142,14 @@
     input[type="date"]::-webkit-inner-spin-button,
     input[type="date"]::-webkit-clear-button { display: none; }
     input[type="date"][disabled]::-webkit-calendar-picker-indicator { opacity: .4; }
+    .dt { position: relative; display: block; }
+    .dt:has(.clr) input { padding-right: 52px; }
+    .dt .clr {
+      position: absolute; right: 30px; top: 50%; transform: translateY(-50%);
+      width: 18px; height: 18px; padding: 0; border: 0; border-radius: 4px; background: none;
+      font-size: 11px; line-height: 18px; color: var(--ink-color-global-brand-gray-70); cursor: pointer;
+    }
+    .dt .clr:hover { color: var(--ink-color-global-brand-black); background: var(--ink-color-global-brand-gray-10); }
 
     input.num { font-variant-numeric: tabular-nums; text-align: right; }
     .hint { font-size: 11px; color: var(--ink-color-global-brand-gray-70); margin-top: 2px; }
@@ -149,12 +157,6 @@
     .hint.warn { color: var(--ink-color-global-brand-orange-60); }
     .err { font-size: 12px; color: var(--ink-color-global-brand-red-60); margin-top: 2px; font-weight: 500; }
     .bad input, .bad select { border-color: var(--ink-color-global-brand-red-60); }
-
-    /* Wraps so a checkbox that carries a hint puts it on its own line under the label. */
-    .chk { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 13px; padding-top: 14px; }
-    .chk input { width: auto; min-height: 0; }
-    .chk label { margin: 0; font-size: 13px; }
-    .chk .hint { flex: 0 0 100%; margin-top: 0; }
 
     /* Blockers + notices */
     .note { border: 1px solid var(--ink-color-global-brand-gray-50); border-radius: 8px; padding: 10px 12px; margin-top: var(--ink-spacing-global-vertical-small); }
@@ -247,7 +249,7 @@
     /* Review */
     .rv-h, .rv-r { display: grid; grid-template-columns: minmax(0, 1fr) 96px 132px; gap: 10px; }
     .rv-h { font-size: 11px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; color: var(--ink-color-global-brand-gray-70); padding-bottom: 5px; }
-    .rv-r { padding-block: 7px; align-items: baseline; }
+    .rv-r { padding-block: 7px; align-items: center; }
     .rv-n { font-variant-numeric: tabular-nums; text-align: right; }
     /* The issued screen's last column is a name, not a figure: it keeps the review's
        column width but reads left to right and breaks rather than overflowing. */

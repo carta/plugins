@@ -792,13 +792,6 @@ function sel(id, v, opts, o) {
     ${o.dis ? "disabled" : ""}>${o.placeholder !== false
     ? `<option value=""${v ? "" : " selected"}>${esc(o.placeholder || "Select…")}</option>` : ""}${items}</select></span>`;
 }
-function chk(id, v, label, o) {
-  o = o || {};
-  return `<div class="f chk"><input id="${id}" data-testid="${id}" data-k="${o.k || id}"
-    data-scope="${o.scope || "shared"}" type="checkbox"${v ? " checked" : ""}>
-    <label for="${id}">${esc(label)}</label>
-    ${o.hint ? `<div class="hint">${esc(o.hint)}</div>` : ""}</div>`;
-}
 /** `foot` is the sentence that says what to do about it — a stop has a fix, not
     another bullet. */
 function noteBox(t, stop, title, items, foot, action, attrs) {
@@ -950,7 +943,7 @@ const MF_SKIP = {
   // and "Overall — once for the whole grant" says what the bare word means.
   threshold_value: { label: 1 },
   threshold_value_type: { label: 1, values: 1 },
-  // The label says what the checkbox does to the linked operating company; the
+  // The label says what a Yes does to the linked operating company; the
   // manifest's is the column name.
   corresponding_interest: { label: 1 },
   // Required because of a choice made elsewhere on this form. The manifest says
@@ -1043,7 +1036,7 @@ function mfDefaults() {
 /* ---------- one field spec drives render, per-row overrides and validation ---------- */
 // `req` doubles as the footer's phrase, `over` marks a row-overridable field, and
 // `noFuture` caps a date the server refuses past today. Conditional fields are absent.
-function spec() {
+function spec(board) {
   const sh = S.shared, t = S.type, s = [];
   const F = (k, label, kind, x) => s.push(mfApply(Object.assign({ k, label, kind }, x || {})));
   const vest = () => {
@@ -1092,7 +1085,7 @@ function spec() {
     // refuses one before then: "Issue date is not applicable for grants that
     // are not board approved." Pending grants therefore have no issue date to
     // collect, and `rowPayload` leaves the key off.
-    if (sh.board_mode === "approved") {
+    if ((board || sh.board_mode) === "approved") {
       F("issue_date", "Issue date", "date", { over: 1, req: "an issue date", noFuture: 1 });
       F("board_approval_date", "Board approval date", "date",
         { over: 1, req: "a board approval date", noFuture: 1 });
@@ -1157,14 +1150,15 @@ function spec() {
     }
     vest();
     const cc = chosenClass();
-    const LINK = "Also issue the matching interest in the linked operating company";
+    const LINK = "Issue linked interest";
     if (cc && cc.has_corresponding_interest) {
-      F("corresponding_interest", LINK, "check", { over: 1 });
+      F("corresponding_interest", LINK, "check",
+        { over: 1, hint: "Yes also issues the matching interest in the linked operating company." });
     } else if (cc && !("has_corresponding_interest" in cc)) {
       // An absent key is UNKNOWN, never "no": carta-web pops the field when the feature
       // is off, so "no link" and "could not see links" arrive identically.
       F("corresponding_interest", LINK, "check",
-        { over: 1, hint: "Carta did not report whether this unit class has a link. Tick it if you "
+        { over: 1, hint: "Carta did not report whether this unit class has a link. Choose Yes if you "
           + "know it does — Carta refuses it if not." });
     }
   }
@@ -1172,8 +1166,9 @@ function spec() {
   return s;
 }
 
+const YES_NO = [["true", "Yes"], ["false", "No"]];
 const specVal = (d) => ("val" in d ? d.val : S.shared[d.k]);
-function control(d, id, v, scope, ph) {
+function control(d, id, v, scope, ph, clr) {
   if (d.kind === "sel") {
     // Offered so the control can show it; choosing anything else replaces it.
     if (v === AS_SAVED) d = Object.assign({}, d, { opts: [[AS_SAVED, AS_SAVED_LABEL]].concat(d.opts || []) });
@@ -1186,9 +1181,14 @@ function control(d, id, v, scope, ph) {
   // `max` on a date Carta refuses past today: the picker stops offering the day that
   // would come back rejected, instead of the form learning it from a round trip.
   const kept = v === AS_SAVED;
-  return txt(id, kept ? "" : v, { k: d.k, scope, num: d.kind === "num", ro: d.ro, dis: d.dis,
+  const input = txt(id, kept ? "" : v, { k: d.k, scope, num: d.kind === "num", ro: d.ro, dis: d.dis,
     type: d.kind === "date" ? "date" : "text", ph: kept ? AS_SAVED_LABEL : ph || d.ph,
     max: d.noFuture ? latestDate() : "" });
+  if (d.kind !== "date") return input;
+  // A native date input has no way to empty it with the mouse.
+  const x = clr !== false && !kept && !d.dis && !d.ro && v !== "" && v != null
+    ? `<button type="button" class="clr" data-clear="${id}" data-testid="${id}-clear" aria-label="Clear ${esc(d.label)}">✕</button>` : "";
+  return `<span class="dt">${input}${x}</span>`;
 }
 /** Placeholders in the shape the real controls will take, so the card does not
     resize under the reader when the terms arrive. */
@@ -1204,7 +1204,13 @@ function specHtml() {
     const id = `shared-${d.k}`;
     const v = specVal(d);
     if (v === AS_SAVED && (d.kind === "check" || d.kind === "date")) d = Object.assign({}, d, { hint: AS_SAVED_LABEL });
-    if (d.kind === "check") return chk(id, v === true, d.label, { k: d.k, hint: d.hint });
+    // Every yes/no term is a dropdown, so "No" is an answer that can be seen.
+    if (d.kind === "check") {
+      d = Object.assign({}, d, { kind: "sel", noPh: v !== AS_SAVED,
+        opts: v === AS_SAVED ? [[AS_SAVED, AS_SAVED_LABEL]].concat(YES_NO) : YES_NO });
+      return fld(id, d.label, control(d, id, v === AS_SAVED ? v : String(v === true || v === "true"), "shared"),
+        { hint: d.hint });
+    }
     const g = d.kind === "num" ? grouped(v) : "";
     return fld(id, d.label, control(d, id, v, "shared"),
       { req: !!d.req, hint: g || d.hint, hintCls: g ? "echo" : d.hintCls || "", wide: d.wide });
@@ -1481,29 +1487,31 @@ function identityHtml(r, i) {
 
 function ovHtml(r, i) {
   const p = `row-${i}`, o = [];
-  for (const d of spec()) {
+  for (const d of rowSpec(r)) {
     if (!d.over) continue;
     const id = `${p}-ov-${d.k}`;
     const v = d.k in r.ov ? r.ov[d.k] : inheritedVal(d, r);
-    // A row answers a checkbox with a Yes / No of its own, so it reads as a choice.
-    const yn = [["true", "Yes"], ["false", "No"]];
     const cv = v === AS_SAVED || v === "" ? v : String(v === true || v === "true");
     const body = d.kind === "check"
-      ? sel(id, cv, v === AS_SAVED ? [[AS_SAVED, AS_SAVED_LABEL]].concat(yn) : yn,
+      ? sel(id, cv, v === AS_SAVED ? [[AS_SAVED, AS_SAVED_LABEL]].concat(YES_NO) : YES_NO,
         { k: d.k, scope: `ov-${i}`, placeholder: cv === "" ? "Select…" : false })
-      : control(Object.assign({}, d, { noPh: d.noPh || (v !== "" && v != null) }), id, v, `ov-${i}`);
+      : control(Object.assign({}, d, { noPh: d.noPh || (v !== "" && v != null) }), id, v, `ov-${i}`, "", d.k in r.ov);
     o.push(fld(id, d.label, body));
   }
   return o.join("");
 }
+/** The terms a row's own override panel draws: a grant row on its own board answer has
+    the dates that answer carries, not the batch's. */
+const rowSpec = (r) => spec(S.type === "option_grant" && r && "board_mode" in r.ov ? r.ov.board_mode : "");
+
 /** What a row shows for a term it has not overridden: the shared value, except a term
     the load could not read, which a row added to a resumed set does not inherit. */
 function inheritedVal(d, r) {
   const v = specVal(d);
   return v === AS_SAVED && !r.resumed ? "" : v;
 }
-/** One term's value as a reader sees it. A row's override of a checkbox is the string
-    "false", which is truthy, so a tick is read by value rather than by truthiness. */
+/** One term's value as a reader sees it. A chosen yes/no is the string "false", which is
+    truthy, so a Yes is read by value rather than by truthiness. */
 function disp(d, v) {
   if (v === AS_SAVED) return AS_SAVED_LABEL;
   if (d.kind === "check") return v === true || v === "true" ? "Yes" : "No";
@@ -1567,7 +1575,7 @@ function reviewHtml() {
     // The values, not just the field names: the details block states the batch's
     // answer, so a row that overrode one has it nowhere else.
     const ovLabels = ovKeys.length
-      ? spec().filter((x) => ovKeys.includes(x.k))
+      ? rowSpec(r).filter((x) => ovKeys.includes(x.k))
         .map((x) => `${x.label}: ${disp(x, r.ov[x.k])}`)
       : [];
     // A row added to a resumed set gets none of the terms shown "As saved in Carta".
@@ -1964,7 +1972,7 @@ function rowValues(r) {
   // Whether this row answered a term itself, which is what makes a derived value
   // the row's own rather than the batch's.
   const own = (k) => k in r.ov && r.ov[k] !== "";
-  // A shared checkbox is a boolean; a row's override of one is "true" / "false".
+  // A yes/no term starts as a boolean; once chosen in a dropdown it is "true" / "false".
   const yes = (k) => g(k) === true || g(k) === "true";
   // `temp_id` is the wire name for r.key: the server echoes it beside draft_pk.
   const d = { temp_id: r.key };
@@ -2015,7 +2023,7 @@ function rowValues(r) {
     if (so === "ZEPO") d.early_exercise = false;
     else if (yes("early_exercise")) d.early_exercise = true;
     if (so === "Unapproved") d.employment_related = yes("employment_related");
-    // Explicit, so unticking one and re-saving the same draft_pk clears it.
+    // Explicit, so answering No and re-saving the same draft_pk clears it.
     // `hmrc_notified` is a DateTimeField: ISO as-is, not the us() family.
     if (HMRC_SO_TYPES.has(so)) {
       d.is_hmrc_notified = yes("is_hmrc_notified");
@@ -2050,7 +2058,7 @@ function rowValues(r) {
       : S.classes.find((c) => c.prefix === d.prefix);
     if (cc && cc.has_corresponding_interest) d.corresponding_interest = yes("corresponding_interest");
     // The read is not the authority when it cannot see the link — the server is. An
-    // explicit tick goes out as true and DraftCorrespondingInterestValidator rules on it.
+    // explicit Yes goes out as true and DraftCorrespondingInterestValidator rules on it.
     else if (cc && !("has_corresponding_interest" in cc) && yes("corresponding_interest")) {
       d.corresponding_interest = true;
     }
@@ -2222,15 +2230,10 @@ function totalLine(t) {
 }
 
 function sheetSummary() {
-  const who = S.rows.length === 1
-    ? esc((S.rows[0].name || "").trim() || "1 stakeholder")
-    : `${S.rows.length} stakeholders`;
   const groups = [...totals().entries()];
-  const rows = groups.map(([cur, t]) =>
+  return groups.map(([cur, t]) =>
     `<div class="tot"><span>${esc(groups.length > 1 && cur ? `Total — ${cur}` : "Total")}</span><span>${
       esc(totalLine(t))}</span></div>`).join("");
-  const on = iso(S.shared.issue_date) ? `, dated ${esc(longDate(S.shared.issue_date))}` : "";
-  return `<p>For <b>${who}</b> on <b>${esc(S.corpName)}</b>${on}.</p>${rows}`;
 }
 
 function renderSheet() {
@@ -2261,8 +2264,7 @@ function renderSheet() {
     close.hidden = false; close.textContent = "Back";
   } else if (m.phase === "issuing") {
     title.textContent = "Issuing on Carta";
-    body.innerHTML = stepsHtml(["Writing these securities to the cap table"], 0)
-      + '<p data-testid="modal-keep-open">Keep this page open until it finishes.</p>';
+    body.innerHTML = stepsHtml(["Writing these securities to the cap table"], 0);
   } else if (m.phase === "saved") {
     title.textContent = "Draft saved";
     const lost = arr(m.unsaved);
@@ -2906,7 +2908,7 @@ function rowSlot(r, field) {
   const k = formKey(f);
   // Only a term the override panel draws: an override the form no longer shows — a
   // Rule 144 date left over from "a different date" — has no control to carry it.
-  return k in r.ov && spec().some((d) => d.over && d.k === k) ? `ov-${k}` : "";
+  return k in r.ov && rowSpec(r).some((d) => d.over && d.k === k) ? `ov-${k}` : "";
 }
 
 /** The form's own key for a server field. An option grant's plan belongs to the set. */
@@ -3099,7 +3101,7 @@ function commit(ev) {
   const k = t.getAttribute("data-k");
   if (!k || t.readOnly) return;
   const scope = t.getAttribute("data-scope");
-  const val = t.type === "checkbox" ? t.checked : t.value;
+  const val = t.value;
   // An edit answers Carta's refusal of that field, and makes the saved draft stale.
   clearSrvField(t.id, scope, k);
   S.savedNote = "";
@@ -3130,7 +3132,7 @@ function commit(ev) {
     if (!r) return;
     r.touched.add(k);
     // Matching the shared value, or cleared, is inheriting it: the row follows the batch.
-    const d = spec().find((x) => x.k === k);
+    const d = rowSpec(r).find((x) => x.k === k);
     const inherited = d ? inheritedVal(d, r) : "";
     if (val === "" || val === false || String(val) === String(inherited)) delete r.ov[k];
     else r.ov[k] = val;
@@ -3256,6 +3258,12 @@ document.addEventListener("click", (ev) => {
   if (ev.target.closest && ev.target.closest('[data-testid="retry-load"]')) {
     // Absent whenever the form runs without its bring-up, as the test harnesses do.
     if (typeof retryBoot === "function") retryBoot();
+    return;
+  }
+  const clr = ev.target.closest && ev.target.closest("[data-clear]");
+  if (clr) {
+    const input = el(clr.getAttribute("data-clear"));
+    if (input) { input.value = ""; input.dispatchEvent(new Event("change", { bubbles: true })); }
     return;
   }
   const b = ev.target.closest && ev.target.closest("[data-act]");
