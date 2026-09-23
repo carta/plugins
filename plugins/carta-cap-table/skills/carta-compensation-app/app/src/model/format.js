@@ -44,12 +44,13 @@ export function shares(v) {
 /**
  * Format a fully-diluted percentage.
  *
- * The API returns a FRACTION (0.0004 = 0.04%), not a percent. Three decimals keeps
- * small early-stage grants legible — 0.040% rather than a rounded-to-nothing 0.0%.
+ * The API returns the value already scaled as a percentage number — 0.400
+ * means 0.400%, not 40%. Three decimals keeps small early-stage grants
+ * legible — 0.040% rather than a rounded-to-nothing 0.0%.
  */
 export function fdPct(v) {
   if (isBlank(v)) return EM_DASH;
-  return (v * 100).toFixed(3) + "%";
+  return Number(v).toFixed(3) + "%";
 }
 
 /**

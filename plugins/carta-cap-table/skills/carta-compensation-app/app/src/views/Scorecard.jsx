@@ -246,9 +246,8 @@ function equityValueText(node) {
   const shares = node.as_shares ?? node.shares ?? node.quantity;
   if (shares != null) return `${shares} shares`;
   const fd = node.as_fd_percentage ?? node.fd_percentage;
-  // The API returns FD as a FRACTION, not a percent (0.0004 = 0.04%) — see
-  // references/queries.md. Labelled explicitly so it cannot be misread as 0.0004%.
-  if (fd != null) return `${(Number(fd) * 100).toFixed(4)}% FD`;
+  // API returns FD already scaled as a percent (0.040 = 0.040%). "% FD" suffix disambiguates.
+  if (fd != null) return `${Number(fd).toFixed(4)}% FD`;
   return null;
 }
 

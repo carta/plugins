@@ -215,7 +215,7 @@ Salary/TCC percentiles are **flat**; equity percentiles are **nested objects**:
 ```
 salary_benchmarks.percentiles.p50              -> "164000.00"   (decimal STRING)
 equity_benchmarks.percentiles.p50.as_shares    -> "24745"
-equity_benchmarks.percentiles.p50.as_fd_percentage  -> "0.0004"  (FRACTION, not percent)
+equity_benchmarks.percentiles.p50.as_fd_percentage  -> "0.040"   (PERCENT number, i.e. 0.040 means 0.040%)
 equity_benchmarks.percentiles.p50.as_notional_value -> "133000"
 ```
 
