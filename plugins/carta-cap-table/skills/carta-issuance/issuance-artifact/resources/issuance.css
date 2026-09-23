@@ -258,7 +258,6 @@
     .rv-tag { font-size: 11px; color: var(--ink-color-global-brand-gray-70); }
     .rv-t { display: grid; grid-template-columns: minmax(0, 1fr) 96px 132px; gap: 10px; margin-top: var(--ink-spacing-global-vertical-xsmall); padding-top: 9px; font-weight: 600; }
     /* What a money total is the total of, under it, so the price column is not read as one. */
-    .rv-cap { font-size: 11px; font-weight: 400; color: var(--ink-color-global-brand-gray-70); }
     /* Issued: the holder's name takes the room it needs; the label and the figure do not. */
     .rv-h.iss, .rv-r.iss { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) 96px; }
     .rv-terms { margin-top: var(--ink-spacing-global-vertical-medium); display: grid; gap: 5px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }

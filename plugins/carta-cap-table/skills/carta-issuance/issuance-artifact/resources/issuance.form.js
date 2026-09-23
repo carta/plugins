@@ -1433,7 +1433,7 @@ function renderNotices() {
   if (un.length) {
     out.push(noteBox("notice-unmatched", false,
       `${un.length} name${un.length > 1 ? "s" : ""} not on the cap table`,
-      un.map((n) => `<li data-testid="unmatched-${esc(n)}">${esc(n)} — set up below as a new stakeholder. Add their email, or pick them from the list if they are on the cap table under another name.</li>`)));
+      un.map((n) => `<li data-testid="unmatched-${esc(n)}">${esc(n)}</li>`)));
   }
   if (S.narrowed && !done) {
     // Carta caps the bootstrap's size and says what it gave up. Clipped rows
@@ -1544,14 +1544,13 @@ function totals(byCurrency) {
   }
   return by;
 }
-/** What a money total is the total of. A price per share times shares is what the
-    holder pays; per option, what exercising every option would cost. */
-const VALUE_OF = { option_grant: "total exercise cost" };
 /** The quantity inside each row, which is not the count of rows. */
 const QTY_NOUN = { option_grant: ["option", "options"], certificate: ["share", "shares"],
   piu: ["unit", "units"] };
 const qtyNoun = () => QTY_NOUN[S.type] || ["unit", "units"];
 const qtyHead = () => capNoun(qtyNoun()[1]);
+/** The review's column head, the same word for every security type. */
+const REVIEW_QTY_HEAD = "Quantity";
 /** "Total" alone when one currency covers the batch, which is the usual case. */
 const totalLabel = (cur, n) => (S.type === "piu" ? "Total units"
   : n > 1 ? `Total — ${cur}` : "Total");
@@ -1598,7 +1597,7 @@ function reviewHtml() {
       <div>${esc(totalLabel(cur, groups.length))}</div>
       <div class="rv-n" data-testid="review-total-qty-${esc(cur || "units")}">${t.qty.toLocaleString()}</div>
       <div class="rv-n" data-testid="review-total-value-${esc(cur || "units")}">${t.priced
-        ? `${esc(money(t.value, cur))}${VALUE_OF[S.type] ? `<div class="rv-cap">${esc(VALUE_OF[S.type])}</div>` : ""}` : ""}</div>
+        ? esc(money(t.value, cur)) : ""}</div>
     </div>`).join("");
 
   const priced = PRICE_KEYS[S.type] || [];
@@ -1612,7 +1611,7 @@ function reviewHtml() {
   // Once the page is sealed it will confirm nothing more, so it does not say what
   // confirming would do.
   const sealed = !!(S.stuck || S.issued);
-  return `<div class="rv-h"><div>Stakeholder</div><div class="rv-n">${esc(qtyHead())}</div>
+  return `<div class="rv-h"><div>Stakeholder</div><div class="rv-n">${esc(REVIEW_QTY_HEAD)}</div>
       <div class="rv-n">${esc(priceHead)}</div></div>
     <div data-testid="review-rows">${rows}</div>
     ${tot}
@@ -2216,11 +2215,10 @@ function issueVerb() {
   return `Issue ${plural(S.rows.length, sing, many)}`;
 }
 
-/** 130,000 options · 305,500.00 USD total exercise cost. */
-function totalLine(t, cur) {
+/** 130,000 options. */
+function totalLine(t) {
   const [one, many] = qtyNoun();
-  const q = plural(t.qty, one, many);
-  return t.priced && VALUE_OF[S.type] ? `${q} · ${money(t.value, cur)} ${VALUE_OF[S.type]}` : q;
+  return plural(t.qty, one, many);
 }
 
 function sheetSummary() {
@@ -2230,7 +2228,7 @@ function sheetSummary() {
   const groups = [...totals().entries()];
   const rows = groups.map(([cur, t]) =>
     `<div class="tot"><span>${esc(groups.length > 1 && cur ? `Total — ${cur}` : "Total")}</span><span>${
-      esc(totalLine(t, cur))}</span></div>`).join("");
+      esc(totalLine(t))}</span></div>`).join("");
   const on = iso(S.shared.issue_date) ? `, dated ${esc(longDate(S.shared.issue_date))}` : "";
   return `<p>For <b>${who}</b> on <b>${esc(S.corpName)}</b>${on}.</p>${rows}`;
 }
