@@ -1,9 +1,11 @@
 ---
 name: carta-portfolio-analytics-routing
-version: 2.2.0
+version: 2.3.0
 description: >
-  Routes to Schedule of Investments, Co-Investor Lookup, or Performance
-  Benchmarks. Trigger on any of:
+  Routes to the Portfolio Analytics App, Schedule of Investments, Co-Investor
+  Lookup, or Performance Benchmarks. Trigger on any of:
+  "portfolio analytics app", "analytics app", "portfolio analytics dashboard", "KPI dashboard",
+  "company KPIs", "portfolio console", "microapp", "portfolio analytics for [firm]",
   "SOI", "schedule of investments", "fund holdings", "what is the fund invested in", "portfolio breakdown",
   "co-investor", "coinvestor", "who co-invested", "who else invested", "co-investors by stage",
   "performance benchmark", "peer comparison", "fund percentile", "IRR vs peers", "TVPI benchmark", "how does my fund stack up",
@@ -50,17 +52,17 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.37.18</carta-plugin>
+<carta-plugin>carta-investors:6.38.0</carta-plugin>
 
 # carta-portfolio-analytics-routing — Portfolio Analytics Router (mirror)
 
-Routes to Schedule of Investments, Co-Investor Lookup, or Performance
-Benchmarks. SOI and Benchmarks execute inline from a content mirror of their
-specialist skill; Co-Investor Lookup dispatches the specialist directly via the
-`Skill` tool. See **execution modes** in Architecture Notes below. The
-fourth Portfolio Analytics capability (Loan Dashboard) is internal-stage today
-and will be wired into this router as it reaches general availability for
-external users.
+Routes to the Portfolio Analytics App, Schedule of Investments, Co-Investor
+Lookup, or Performance Benchmarks. SOI and Benchmarks execute inline from a
+content mirror of their specialist skill; the Portfolio Analytics App and
+Co-Investor Lookup dispatch the specialist directly via the `Skill` tool. See
+**execution modes** in Architecture Notes below. The remaining Portfolio
+Analytics capability (Loan Dashboard) is internal-stage today and will be
+wired into this router as it reaches general availability for external users.
 
 > **Scope note:** This router covers the Portfolio Analytics skills available
 > to external customers today. Loan Dashboard exists as an internal-stage skill
@@ -72,6 +74,7 @@ external users.
 
 | Intent | Skill |
 |---|---|
+| Interactive portfolio-company analytics console (KPIs, valuations, cap tables) | `carta-investors:carta-portfolio-analytics-app` (dispatched) |
 | View fund holdings — Schedule of Investments (SOI) | `references/soi.md` |
 | Who co-invested alongside us in portfolio companies | `carta-investors:carta-co-investors` (dispatched) |
 | Benchmark a fund's performance against peer cohorts | `references/benchmarks.md` |
@@ -84,6 +87,7 @@ Use this as the semantic layer when Step 1 signal phrases don't produce an exact
 
 | What the customer is trying to do | Typical phrasing | Route |
 |---|---|---|
+| **Explore the whole portfolio interactively / track company KPIs over time** | "show me the portfolio analytics app for Great Basin Capital", "open the KPI dashboard", "portfolio analytics for Acme Ventures", "track ARR across my portfolio companies", "launch the analytics console" | `app` |
 | **View fund holdings / portfolio breakdown** | "show me the SOI", "what companies is the fund invested in", "portfolio breakdown for our flagship fund", "what does Fund III hold right now" | `soi` |
 | **Fund-of-funds look-through** | "what does our LP interest in Fund X actually hold", "look through to the underlying portfolio", "who else holds Acme via our fund investments" | `soi` (look-through is a conditional addition inside the SOI route — see `references/soi.md` Step 2b) |
 | **Find who else invested alongside us** | "show me my co-investors", "who co-invested with us in Acme", "who else participated in the Series B for TechCorp", "co-invest analysis by stage" | `co-investors` |
@@ -108,11 +112,19 @@ Respond immediately without extended reasoning.
 
 | Message signals | Route |
 |---|---|
+| "portfolio analytics app", "analytics app", "the microapp", "micro-app", "portfolio analytics dashboard", "analytics dashboard", "KPI dashboard", "company KPIs", "KPI pivot", "track KPIs", "operating KPIs", "portfolio console", "analytics console", "portfolio analytics for [firm name]", "analytics for [firm name]" | `app` → proceed **directly to Step 3** (Step 2.5 does not apply to this route — see its note) |
 | "SOI", "schedule of investments", "fund holdings", "what is the fund invested in", "what companies is the fund in", "portfolio breakdown", "portfolio companies", "fund portfolio view", "investments by stage", "portfolio list", "what has [fund] invested in", "show me the portfolio", "fund of funds", "FoF", "fund-of-funds", "look-through", "look through to underlying funds", "underlying fund holdings" | `soi` → proceed to Step 2.5 |
 | "co-investor", "coinvestor", "co-invest", "who co-invested", "who else invested", "co-investors by stage", "co-investors by round", "co-invest analysis", "who are our co-investors", "co-investors on Aumni", "which funds invest alongside us" | `co-investors` → proceed to Step 2.5 |
 | "performance benchmark", "fund benchmark", "peer comparison", "percentile ranking", "IRR vs peers", "TVPI benchmark", "net IRR benchmark", "how does our fund compare", "how does Fund [X] stack up", "fund performance vs cohort", "vintage year benchmark", "benchmark cohort", "peer benchmark" | `benchmarks` → proceed to Step 2.5 |
 
-If exactly one route matches: proceed to Step 2.5.
+**Precedence when `app` and another row both match:** a message that names the
+app, a dashboard, a console, or KPIs alongside a broader signal ("show me the
+portfolio analytics app" contains the SOI signal "show me the portfolio")
+routes to `app`. The word "app" / "dashboard" / "console" / "KPI" is the
+tiebreaker — the user is asking for the interactive surface, not a one-off
+table.
+
+If exactly one route matches: proceed to Step 2.5 (or straight to Step 3 for `app`).
 If zero or multiple routes match: proceed to Step 2.
 
 ---
@@ -126,9 +138,10 @@ Fire only if Step 1 returned no clear match.
 | Ambiguous phrase | Signal that tips the balance |
 |---|---|
 | "fund performance" alone | "vs peers" / "benchmark" / "cohort" / "percentile" → `benchmarks`; "company-level performance" / "individual portco" → may not be portfolio analytics — ask |
-| "portfolio" alone | "what's in the portfolio" / "portfolio breakdown" / "holdings" → `soi`; "portfolio dashboard" → ask — could mean SOI or (not-yet-active) loan portfolio |
+| "portfolio" alone | "what's in the portfolio" / "portfolio breakdown" / "holdings" → `soi`; "portfolio dashboard" → ask — could mean the interactive app, SOI, or (not-yet-active) loan portfolio |
 | "loans" / "loan portfolio" | Not yet GA externally — see **Future routes** below; do not route |
 | "analytics" alone (bare noun) | Ask — too broad to route without more context |
+| "KPIs" / "metrics" for one company vs the portfolio | Either way → `app` — the console covers single-company deep-dives (Company page) and portfolio-wide pivots alike |
 
 **If you need to ask**, present once:
 
@@ -136,14 +149,16 @@ Fire only if Step 1 returned no clear match.
 > 1. **Schedule of Investments (SOI)** — fund holdings and portfolio breakdown
 > 2. **Co-investor lookup** — who else invested in our portfolio companies
 > 3. **Performance benchmarks** — fund IRR/TVPI vs peer cohorts
-> 4. **Something else** — Describe what you need and I'll point you in the right direction
+> 4. **Portfolio analytics app** — interactive console for company KPIs, valuations, cap tables, and benchmarking across the whole portfolio
+> 5. **Something else** — Describe what you need and I'll point you in the right direction
 
 | User picks | Action |
 |---|---|
 | Option 1 — SOI | Proceed to Step 2.5 |
 | Option 2 — Co-investor lookup | Proceed to Step 2.5 |
 | Option 3 — Performance benchmarks | Proceed to Step 2.5 |
-| Option 4 — Something else | Respond: "I specialize in fund holdings (SOI), co-investor lookups, and performance benchmarks. Tell me what you're trying to do and I'll point you to the right Carta workflow." Then stop. |
+| Option 4 — Portfolio analytics app | Proceed directly to Step 3 (Step 2.5 does not apply) |
+| Option 5 — Something else | Respond: "I specialize in fund holdings (SOI), co-investor lookups, performance benchmarks, and the interactive portfolio analytics app. Tell me what you're trying to do and I'll point you to the right Carta workflow." Then stop. |
 
 ### Out-of-scope
 
@@ -159,6 +174,13 @@ Fire only if Step 1 returned no clear match.
 ---
 
 ## Step 2.5 — Fund Admin access preflight [Active proxy gate]
+
+**The `app` route skips this step entirely** — proceed straight to Step 3.
+The Portfolio Analytics App works for Data Collection–only firms with no Fund
+Admin product (its KPI data comes from `COMPANY_FINANCIALS`; Fund Admin data is
+an enrichment, not a requirement), so an FA reachability probe would
+false-block exactly those firms. The app skill does its own firm resolution
+and degrades gracefully when Fund Admin data is absent.
 
 If the Carta MCP server is not connected (`noMcp` environment), skip this step and proceed to Step 3.
 
@@ -200,18 +222,19 @@ other step of the matched route's own workflow, including its own "Announce"
 step if it has one — happens in the **next** turn, after this one, never
 instead of it or merged into the same turn as a tool call.
 
-Then hand the run off. Two routes read a reference file; one dispatches a skill.
+Then hand the run off. Two routes read a reference file; two dispatch a skill.
 Use the exact action for the matched route:
 
 | Route | Display Name | Action |
 |---|---|---|
+| `app` | Portfolio Analytics App | `Skill('carta-investors:carta-portfolio-analytics-app')` |
 | `soi` | Schedule of Investments | `Read ${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-analytics-routing/references/soi.md` |
 | `co-investors` | Co-Investor Lookup | `Skill('carta-investors:carta-co-investors')` |
 | `benchmarks` | Performance Benchmarks | `Read ${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-analytics-routing/references/benchmarks.md` |
 
 For the two `Read` routes: follow the matched file's instructions exactly, starting from its own Step 1/Workflow entry point with the user's original message as context. Each reference file resolves its own internal script and data paths independently (see Architecture Notes) — do not rewrite them.
 
-For `co-investors`: dispatch the skill and let it run its own workflow from its own entry point. Do not read a reference file for this route — there isn't one, and `references/` holds no copy of the co-investor workflow. Do not re-implement any part of it here, and do not pre-collect its inputs (firm, fund, date range) on its behalf; it asks for what it needs. If the dispatch fails because the skill is unavailable, say so plainly and stop — do not fall back to writing the analysis yourself.
+For the two dispatched routes (`app`, `co-investors`): dispatch the skill and let it run its own workflow from its own entry point. Do not read a reference file for these routes — there isn't one, and `references/` holds no copy of either workflow. Do not re-implement any part of them here, and do not pre-collect their inputs (firm, fund, date range) on their behalf; each asks for what it needs (the app's own Step 0 prompts for the Investment Firm Account when the message doesn't name one). If a dispatch fails because the skill is unavailable, say so plainly and stop — do not fall back to writing the analysis or building the dashboard yourself.
 
 Do not summarize what the target skill will do beyond the announcement itself. Do not add any other output before the routing announcement.
 
@@ -245,26 +268,28 @@ external users.
 | Mode | Routes | How the route runs |
 |---|---|---|
 | **Mirror** | `soi`, `benchmarks` | `references/<route>.md` holds a copy of the specialist's `SKILL.md` body, plus real copies of any scripts it runs under `references/<route>/`. Runs inside this skill's turn, under **this** skill's `allowed-tools`. |
-| **Dispatch** | `co-investors` | `Skill('carta-investors:carta-co-investors')`. The specialist runs under **its own** frontmatter and owns its whole workflow. No reference file exists for this route. |
+| **Dispatch** | `app`, `co-investors` | `Skill('carta-investors:carta-portfolio-analytics-app')` / `Skill('carta-investors:carta-co-investors')`. The specialist runs under **its own** frontmatter and owns its whole workflow. No reference file exists for these routes. |
 
 **Dispatch is the preferred mode.** A mirror is a copy, so it can drift from its
 specialist, and keeping it honest costs either a declarable codemod
 (`tests/carta-investors/mirror_sync.py`) or a human merge. Dispatch has nothing
 to drift and nothing to re-mirror. It also keeps this router's `allowed-tools`
 minimal: a dispatched skill brings its own tools, so `carta-co-investors`'
-`Bash(uv run *)`, `Bash(tee *)`, and `skill_checkpoint` are deliberately **not**
-duplicated here.
+`Bash(uv run *)`, `Bash(tee *)`, `skill_checkpoint`, and
+`carta-portfolio-analytics-app`'s script/serve Bash grants are deliberately
+**not** duplicated here.
 
 The remaining two routes are mirrors only because their specialists are
 `publish: false`, so the publish pipeline strips them and there would be nothing
 for a dispatch to reach. Convert either one to dispatch by publishing it.
 
-### Scope decision (as of v2.1.0)
+### Scope decision (as of v2.3.0)
 
-SOI, Co-Investor Lookup, and Performance Benchmarks are GA for external users.
-`carta-co-investors` carries `publish: true` — **the dispatch route depends on
-it.** Strip that skill from the published plugin and the route dead-ends for
-external users, since the dispatch has no skill to reach.
+The Portfolio Analytics App, SOI, Co-Investor Lookup, and Performance
+Benchmarks are GA for external users. `carta-co-investors` and
+`carta-portfolio-analytics-app` carry `publish: true` — **both dispatch routes
+depend on it.** Strip either skill from the published plugin and its route
+dead-ends for external users, since the dispatch has no skill to reach.
 `tests/carta-investors/test_router_mirror_parity.py` guards this. `carta-soi` and
 `carta-performance-benchmarks` stay `publish: false`; their mirrors are what
 reach external users. Loan Dashboard
@@ -281,11 +306,11 @@ and carta-compliance-routing (the reference routing skills), extended to
 | Pattern | Applied here |
 |---|---|
 | Step 1 `[Deterministic]` + "Respond immediately" | No over-reasoning on signal classification; STOP rows short-circuit valuations/LP-reporting/comps/compliance/FoF before route classification |
-| Step 2 `AskUserQuestion` | SOI (1) / Co-investors (2) / Benchmarks (3) / Something else (4) — three active routes, same shape as the single-route pattern in valuations-routing and compliance-routing, just with more options |
-| Customer Intent Framework | All three active routes; loans documented separately below |
-| Explicit skip logic | Match → Step 2.5; no match → Step 2 |
-| Step 2.5 (active proxy gate) | `welcome` + one `fa__list__entities` probe — not a real entitlement check (see below), but no longer purely passive |
-| Step 3 `[Deterministic]` | Mirror read for `soi`/`benchmarks`, `Skill()` dispatch for `co-investors` |
+| Step 2 `AskUserQuestion` | SOI (1) / Co-investors (2) / Benchmarks (3) / App (4) / Something else (5) — four active routes, same shape as the single-route pattern in valuations-routing and compliance-routing, just with more options |
+| Customer Intent Framework | All four active routes; loans documented separately below |
+| Explicit skip logic | Match → Step 2.5 (`app` → straight to Step 3); no match → Step 2 |
+| Step 2.5 (active proxy gate) | `welcome` + one `fa__list__entities` probe — not a real entitlement check (see below), but no longer purely passive. Skipped for `app`, which supports Data Collection–only firms with no Fund Admin |
+| Step 3 `[Deterministic]` | Mirror read for `soi`/`benchmarks`, `Skill()` dispatch for `app`/`co-investors` |
 
 ### Fund Admin access preflight — proxy, not a real SKU check
 
@@ -340,6 +365,10 @@ dispatched.
   specialist itself, and it resolves its own scripts and
   `canonical-investors.json` exactly as it does when the picker invokes it
   directly.
+- `carta-portfolio-analytics-app` needs no re-mirroring either — same reason:
+  dispatch reaches the specialist, which resolves its own `scripts/`, `app/`,
+  and `webapp/` assets via `${CLAUDE_PLUGIN_ROOT}` exactly as it does when the
+  picker invokes it directly.
 
 None of the three specialists had its workflow modified.
 `carta-investors:carta-performance-benchmarks` had only its `description`
@@ -369,12 +398,14 @@ fully invocable directly by name. Added `version: 1.0.0` — the skill had no
 prior `version:` field, matching the WARN default the frontmatter validator
 recommends rather than fabricating a bump from a nonexistent prior release.
 
-**Known limitation — `carta-soi` and `carta-co-investors` only:** because
-these two specialists still have trigger-phrase-rich descriptions and remain
-standalone invocable skills, specific prompts ("show me the SOI") can still win
-the skill picker directly and bypass this router. This is a known, accepted
-limitation — and for `co-investors` it is now harmless, since the picker and the
-router both end up running the same skill. See the `failing: true` trigger
+**Known limitation — `carta-soi`, `carta-co-investors`, and
+`carta-portfolio-analytics-app`:** because these specialists still have
+trigger-phrase-rich descriptions and remain standalone invocable skills,
+specific prompts ("show me the SOI", "portfolio analytics for Acme Ventures")
+can still win the skill picker directly and bypass this router. This is a
+known, accepted limitation — and for the two dispatched routes
+(`co-investors`, `app`) it is harmless, since the picker and the router both
+end up running the same skill. See the `failing: true` trigger
 tests in `carta-portfolio-analytics-routing.test.yaml` and
 `carta-portfolio-analytics-routing-triggers.test.yaml` for the two remaining
 un-de-tuned routes; the former benchmarks picker test is now a hard assertion,
@@ -394,7 +425,7 @@ carta-portfolio-analytics-routing/
     │   ├── artifact.html
     │   ├── lookthrough.md    ← copy of carta-soi/references/lookthrough.md (fund-of-funds look-through)
     │   └── scripts/render-artifact.py
-    │                         (no co-investors file — that route is dispatched, see Step 3)
+    │                         (no app or co-investors file — those routes are dispatched, see Step 3)
     ├── benchmarks.md         ← mirror of carta-performance-benchmarks/SKILL.md — ACTIVE
     ├── loan-dashboard.md     ← mirror of carta-loan-dashboard/SKILL.md — NOT YET WIRED (future route)
     └── loan-dashboard/
@@ -404,12 +435,13 @@ carta-portfolio-analytics-routing/
 `soi/` holds real copies of `carta-soi`'s script and template: the publish
 pipeline strips the whole directory of any `publish: false` skill, so a published
 route must not reference `skills/carta-soi/`. `soi.md` points at those copies;
-`benchmarks.md` needs none (self-contained SQL). The co-investors route needs no
-copies for the opposite reason — `carta-co-investors` is `publish: true`, so
-`skills/carta-co-investors/` and its `scripts/` survive publish and the
-dispatched skill runs them in place. **That publish flag is load-bearing:
-flipping it back to `false` silently breaks this route in the published plugin**,
-since the dispatch would have no skill to reach. `loan-dashboard.md` is different
+`benchmarks.md` needs none (self-contained SQL). The two dispatched routes need
+no copies for the opposite reason — `carta-co-investors` and
+`carta-portfolio-analytics-app` are `publish: true`, so their skill directories
+(scripts, app assets and all) survive publish and the dispatched skill runs
+them in place. **Those publish flags are load-bearing: flipping either back to
+`false` silently breaks its route in the published plugin**, since the dispatch
+would have no skill to reach. `loan-dashboard.md` is different
 again: its primary render path
 (`$SKILL_DIR/references/artifact_template.html`, Step 7c) also resolves
 correctly with no rewrite, since `$SKILL_DIR` is probed by literal name
@@ -431,6 +463,7 @@ to active" below, not a re-mirroring job.
 
 | Route | Reference file | Status |
 |---|---|---|
+| `app` | — (dispatched) | GA — external users, `Skill('carta-investors:carta-portfolio-analytics-app')` |
 | `soi` | `references/soi.md` | GA — external users, executed inline (mirror of `carta-investors:carta-soi`) |
 | `co-investors` | — (dispatched) | GA — external users, `Skill('carta-investors:carta-co-investors')` |
 | `benchmarks` | `references/benchmarks.md` | GA — external users, executed inline (mirror of `carta-investors:carta-performance-benchmarks`) |
