@@ -161,8 +161,9 @@ function previewReviewStage() {
   S.stage !== "review");
 }
 
-/** Both error shapes Carta sends back: per-draft field errors, which absorb() maps to
-    the row that owns them, and the batch-level notes, which belong to no row. */
+/** Every error shape Carta sends back: per-draft errors on a row's own fields, which
+    absorb() puts on that row; per-draft errors on a shared term, which Carta repeats on
+    every row that inherits it; and the batch-level notes, which belong to no row. */
 function previewErrorPayload() {
   const errors = {};
   const pks = S.rows.map((r, i) => {
@@ -170,12 +171,12 @@ function previewErrorPayload() {
     S.drafts[r.key] = pk;
     return String(pk);
   });
-  errors[pks[0]] = {
-    quantity: ["Quantity exceeds the shares remaining in this plan."],
-    issue_date: ["Issue date cannot be earlier than the board approval date."],
-  };
+  const shared = { issueDate: ["Issue date cannot be earlier than the board approval date."] };
+  errors[pks[0]] = Object.assign({
+    quantity: ["Quantity exceeds the shares remaining in this plan."] }, shared);
   if (pks[1]) {
-    errors[pks[1]] = { email: ["A stakeholder with this email is already on the cap table."] };
+    errors[pks[1]] = Object.assign({
+      email: ["A stakeholder with this email is already on the cap table."] }, shared);
   }
   errors.issuance = ["This draft set has more securities than the plan can cover."];
   errors.corporation = { option_plan: ["This plan expired before the issue date on this set."] };
@@ -188,8 +189,8 @@ function previewErrorStage() {
   S.stage = "edit";
   absorb(previewErrorPayload());
   render();
-  previewNote("Row errors land on the fields that own them; the rest are batch-level notes at the top.",
-    false);
+  previewNote("A row's own errors sit on that row; set-level errors, and a shared term "
+    + "refused on every row, are listed once at the top.", false);
 }
 
 /* ---------- the issued stage ----------
@@ -197,31 +198,42 @@ function previewErrorStage() {
    reached by pressing the page's own buttons, which is the point of them. This one is
    only reachable through `issue_securities`, and a preview refuses every write before
    the wire — so the state the write would have produced is set directly instead.
-   Three shapes have to be looked at, and pressing Issued again steps to the next. */
+   Four shapes have to be looked at, and pressing Issued again steps to the next. */
 const PREVIEW_ISSUED = [
-  ["named", "Carta named each security. Press Issued again for the ids-only answer."],
+  ["named", "Carta named each security and the draft it came from, but no quantity — "
+    + "issuing a saved set sends no rows to read one off. Each quantity here is the "
+    + "submitted row's. Press Issued again for the same answer with no draft named."],
+  ["nodraft", "Named, with no quantity and no draft to tie an entry to its row. With more "
+    + "than one recipient nothing proves whose quantity is whose, so none is shown. Press "
+    + "Issued again for the ids-only answer."],
   ["unnamed", "The same call answering with ids alone: no security column, and the rows "
     + "are the only source. Press Issued again for a hand-off that did not land."],
   ["untold", "Issued, and Claude was never told — the page is the only record. Press "
     + "Issued again to start over."],
 ];
 
-/** What an enriched `issued[]` looks like, built from the form's own answers so the
-    labels read like this corporation's. Example values, like every other row here. */
-function previewIssuedRows(named) {
+/** What `issued[]` looks like when a saved set is issued, built from the form's own
+    answers so the labels read like this corporation's. Example values, like every other
+    row here. The save that came first is what put a draft_pk on each row. */
+function previewIssuedRows(kind) {
   const prefix = S.type === "option_grant"
     ? (S.shared.so_type || "Grant") : (S.shared.prefix || shortLabel());
-  return S.rows.map((r, i) => (named
-    ? { id: 90001 + i, label: `${prefix}-${101 + i}`, quantity: Number(r.quantity),
-        stakeholder_name: r.name }
-    : { id: 90001 + i }));
+  return S.rows.map((r, i) => {
+    const pk = 900001 + i;
+    S.drafts[r.key] = pk;
+    if (kind === "unnamed") return { id: 90001 + i };
+    const x = { id: 90001 + i, label: `${prefix}-${101 + i}`, quantity: null,
+      stakeholder_name: r.name };
+    if (kind !== "nodraft") x.draft_pk = pk;
+    return x;
+  });
 }
 
 function previewIssuedStage() {
   previewFill();
   const [kind, note] = PREVIEW_ISSUED[PREVIEW.issued % PREVIEW_ISSUED.length];
   PREVIEW.issued += 1;
-  S.issuedRows = previewIssuedRows(kind !== "unnamed");
+  S.issuedRows = previewIssuedRows(kind);
   S.issued = S.issuedRows.length;
   S.untold = kind === "untold";
   S.stage = "issued";

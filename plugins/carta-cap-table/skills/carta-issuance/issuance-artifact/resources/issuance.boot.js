@@ -45,6 +45,9 @@ function snapshot() {
 const ROW_EDITABLE = ["name", "email", "quantity", "kind", "relationship", "query",
   "stakeholderId", "isNew"];
 
+/** A row added or removed since first paint, which a join by position would misplace. */
+const rowsEdited = (base, edited) => base.rows.map((r) => r.key).join() !== edited.rows.map((r) => r.key).join();
+
 /** Put back whatever changed between first paint and now, so a re-seed cannot discard a
     value typed while bootstrap was in flight. Rows join by position — that is the only
     join available, since a re-seed mints fresh keys. */
@@ -52,6 +55,7 @@ function reapplyEdits(base, edited) {
   for (const k of Object.keys(edited.shared)) {
     if (edited.shared[k] !== base.shared[k]) S.shared[k] = edited.shared[k];
   }
+  if (S.rows === edited.rows) return;
   edited.rows.forEach((was, i) => {
     const now = S.rows[i], from = base.rows[i];
     if (!now || !from) return;
@@ -66,7 +70,7 @@ function reapplyEdits(base, edited) {
     show — loadTerms()'s reference-data fan-out covers that case by itself.
     Returns true when the payload carried the reference data too, which is what
     lets the whole form arrive in this one round trip. */
-async function bootstrap(base) {
+async function bootstrap(base, resume) {
   /* `"true"`, not `true`. The gateway types a plain command's scalars as
      `str | int | dict | list` — no `bool` — so a JSON boolean arrives as `1`, the
      server's `is True` check misses it, and the sections come back absent with no error
@@ -93,19 +97,78 @@ async function bootstrap(base) {
   }
   const d = payload(res);
   const edited = snapshot();
+  const drafts = Object.assign({}, S.drafts);
+  const kept = { docPicked: S.docPicked, curFor: S.curFor };
   ingest(d);
+  // A resume takes its rows and terms from the set itself; the bootstrap is only its
+  // reference data, so nothing the page already holds is re-seeded from it.
+  if (resume) {
+    S.rows = edited.rows; S.drafts = drafts; S.shared = edited.shared;
+    Object.assign(S, kept);
+    const fat = ingestSections(d);
+    if (fat) settleTerms(); else render();
+    return fat;
+  }
+  // Rows added or removed while this was in flight no longer line up with first paint
+  // by position, so they are kept whole and matched by name afterwards.
+  if (rowsEdited(base, edited)) S.rows = edited.rows;
+  else keepSeededRows(base.rows, d);
   reapplyEdits(base, edited);
   const fat = ingestSections(d);
   if (fat) settleTerms(); else render();
   return fat;
 }
 
+/** The bootstrap answers with a row only for a name it matched, and ingest() seeds from
+    that, so every other person the prompt named would vanish. They come back in the
+    prompt's order — which keeps reapplyEdits()' join by position on the same person: an
+    unmatched name as a new stakeholder, an ambiguous one as a row still to pick. */
+function keepSeededRows(seeded, d) {
+  const p = (d && d.prefill) || {};
+  const unmatched = new Set(arr(p.unmatched).map(nameKey));
+  const ambiguous = new Set(objs(p.ambiguous).map((a) => nameKey(a.term)));
+  const found = S.rows.filter((r) => r.stakeholderId != null);
+  const has = (v) => String(v == null ? "" : v).trim() !== "";
+  const toPick = (s) => Object.assign(mkRow({ quantity: s.quantity, email: s.email }), { query: s.name });
+  // Exact name or email first, then a name that contains the term — Carta matches
+  // "Tagg" to "Tagg Palmer". A term neither finds is never handed someone else's row:
+  // past the ten names Carta lists it only counts, so an unlisted term is searched for.
+  const claim = (key) => {
+    let at = found.findIndex((r) => nameKey(r.name) === key || nameKey(r.email) === key);
+    if (at < 0) {
+      const near = found.filter((r) => nameKey(r.name).includes(key) || nameKey(r.email).includes(key));
+      at = near.length === 1 ? found.indexOf(near[0]) : -1;
+    }
+    return at >= 0 ? found.splice(at, 1)[0] : null;
+  };
+  const out = [];
+  for (const s of seeded) {
+    const key = nameKey(s.name);
+    if (!key) { if (has(s.quantity)) out.push(mkRow({ quantity: s.quantity })); continue; }
+    if (unmatched.has(key)) {
+      out.push(mkRow({ name: s.name, email: s.email, quantity: s.quantity, isNew: true }));
+      continue;
+    }
+    if (ambiguous.has(key)) { out.push(toPick(s)); continue; }
+    const hit = claim(key);
+    if (hit && has(s.quantity)) hit.quantity = String(s.quantity);
+    out.push(hit || toPick(s));
+  }
+  out.push(...found);
+  if (out.length) S.rows = out;
+}
+
 /** An unresolved prompt row reads as a brand-new person, and a duplicate stakeholder on
     a live cap table is the worst outcome here. Exact matches only — the user picks. */
 async function resolveSeededNames() {
-  const pending = () => S.rows.filter(
-    (r) => !r.isNew && r.stakeholderId == null && (r.query || "").trim());
-  for (const r of pending()) resolveExact(r);
+  // A name Carta already found more than once stays the user's pick: the notice above
+  // says so, and a first match here would quietly choose for them.
+  const ambiguous = new Set(objs(S.prefill.ambiguous).map((a) => nameKey(a.term)));
+  const pending = () => S.rows.filter((r) => !r.isNew && r.stakeholderId == null
+    && (r.query || "").trim() && !ambiguous.has(nameKey(r.query)));
+  // A full first page may hold one namesake while another sits on the next, and one
+  // match on this page is then no proof there is only one — so search before picking.
+  if (headcount() < PAGE) for (const r of pending()) resolveExact(r);
   // One search per name still unresolved. `search` AND-s its terms and matches one
   // person, so names are never joined into a single query.
   for (const r of pending()) {
@@ -128,6 +191,7 @@ function stopUnresolved() {
 /** First paint, which every later load diffs against so a re-run cannot discard a value
     typed while it was in flight. */
 let bootBase = null;
+let bootDrafts = {};
 let bootRunning = false;
 let autoRetried = false;
 
@@ -136,8 +200,9 @@ let autoRetried = false;
 async function runBoot() {
   // 1. One call: the named people resolved server-side, reference data with them.
   //    Never over a draft set: re-seeding drops the draft_pk map and duplicates it.
+  if (RESUMING) { await resumeBoot(); return; }
   let fat = false;
-  if (!RESUMING && S.draftSetId == null) {
+  if (S.draftSetId == null) {
     try { fat = await bootstrap(bootBase); }
     catch (err) {
       console.error("issuance artifact: bootstrap failed", err);
@@ -154,6 +219,42 @@ async function runBoot() {
   if (!fat) await boot();
   // 3. Anything bootstrap could not resolve, match against the roster instead.
   await resolveSeededNames();
+}
+
+/** What load_drafts answered, or the failure it threw — never both, and never a throw. */
+const loadStored = () => one("cap_table__get__load_drafts", { corporation_id: S.corpId,
+  security_type: SECURITY_TYPE, draft_set_id: SEED.draft_set_id })
+  .then((res) => ({ res: payload(res) }), (err) => ({ err }));
+
+/** A resume: the same reference data a fresh page loads, and the set's own rows and terms
+    read back from Carta, both at once when the company is already known. The rows the
+    prompt carried are only the fallback for a load that failed. */
+async function resumeBoot() {
+  // A retry over a page already read back reloads reference data only: reading the set
+  // again would drop every edit and bring back rows the user removed.
+  const again = S.hydrated;
+  const early = S.corpId != null && !again ? loadStored() : null;
+  let fat = false;
+  try { fat = await bootstrap(bootBase, true); }
+  catch (err) {
+    console.error("issuance artifact: bootstrap failed", err);
+    if (deadRead(err)) return;
+    S.bootFailed = true;
+    noteFailures(["bootstrap"]);
+  }
+  if (S.corpId == null) { stopUnresolved(); return; }
+  if (!fat) await boot();
+  if (again) { render(); return; }
+  const got = await (early || loadStored());
+  if (got.err && deadRead(got.err)) return;
+  if (got.err) console.error("issuance artifact: load_drafts failed", got.err);
+  if (!hydrateFromDrafts(got.res)) {
+    S.rows = bootBase.rows.map((r) => Object.assign({}, r, { ov: {} }));
+    S.drafts = Object.assign({}, bootDrafts);
+    markUnhydrated();
+  }
+  applyDerived();
+  render();
 }
 
 /** Run the load again in place, from the failure notice or from the page coming back
@@ -173,7 +274,9 @@ async function retryBoot() {
 /** A viewer who was away — or who has just granted the connector — is looking at the
     page again. Once per failure, and never over a load already running. */
 function retryOnReturn() {
-  if (!S.loadErr || bootRunning || autoRetried) return;
+  // Never under a sheet or a write in flight: the reload redraws the form behind them.
+  if (!S.loadErr || bootRunning || autoRetried || S.sheet || S.busy || S.stuck || S.issued
+    || S.stage !== "edit") return;
   autoRetried = true;
   retryBoot();
 }
@@ -188,6 +291,7 @@ if (typeof window.addEventListener === "function") {
   // Paint from the prompt. Nothing here awaits the transport.
   ingest(firstPaint());
   bootBase = snapshot();
+  bootDrafts = Object.assign({}, S.drafts);
   // No connector is a state, not a crash: say what to do and stop.
   if (!(await connect())) { degrade(); return; }
   // Unawaited, and first paint is already done: a capability this view does not serve

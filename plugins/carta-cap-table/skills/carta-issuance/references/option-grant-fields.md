@@ -48,7 +48,7 @@ holds a value before review, and a `None` or empty is a skill bug.
     "hmrc_notified":           <user, YYYY-MM-DD or MM/DD/YYYY, or omit>,  # EMI only
     "employment_related":      <bool>,                             # REQUIRED for Unapproved on UK issuers — ask up
                                                                    # front, never leave to validation; omit otherwise
-    "is_ato_notified":         <bool or omit>,                     # AU types only (Startup Concessions/Non-Concessional/ZEPO)
+    "ato_notified":         <bool or omit>,                     # AU types only (Startup Concessions/Non-Concessional/ZEPO)
     "grant_reason":            <user or omit>,                    # optional — picklist (carta-web's own field-contract.md), not free-form
     "draft_pk":                <previous_save.draft_pk or omit>,  # retry only
 }

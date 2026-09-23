@@ -36,7 +36,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.89.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.89.3</carta-plugin>
 
 # Issue Securities
 
@@ -200,11 +200,10 @@ uv run "$SKILL/issuance-artifact/scripts/build_artifact.py" \
 - Seed keys: `stakeholders` (names verbatim, as the user said them), `quantity`,
   `issue_date`, and `rows` when the import sub-skill produced them. Nothing else. An
   unknown key fails the build rather than opening a form that quietly ignores it.
-- **Resuming a saved draft set** adds two more: `draft_set_id`, and a `draft_pk` on each
-  row. Call `cap_table:get:load_drafts` first ([resume-flow.md](references/resume-flow.md))
-  and seed what it returns. Both are load-bearing — without the set id the page mints a
-  *second* draft set of the same rows, and without each row's `draft_pk` the row inserts
-  instead of updating ([hard rule 3](#hard-rules)).
+- **Resuming a saved draft set** adds `draft_set_id` — without it the page mints a *second*
+  draft set of the same rows ([hard rule 3](#hard-rules)). The page reads the set's rows and
+  terms back itself; seed the `load_drafts` rows, each with its `draft_pk`, only as its
+  fallback ([resume-flow.md](references/resume-flow.md)). Never relay terms.
 - **`--out` is a stable path for this company and type** — a lowercase company slug plus the
   type, as above. Republishing the same path in one conversation keeps the artifact's URL.
 - The script exits non-zero and names the problem on a bad id, a missing part, or an
@@ -227,21 +226,20 @@ Artifact({
 })
 ```
 
-**`server` is the connector's display name**, and only one host hands it to you. Where your
-MCP instructions introduce a connector by name — `## claude.ai Carta (Test)` — the name is
-that heading minus the `claude.ai ` prefix, and the publish lands first time. Where they are
-keyed by id instead, which is the common case, the name is nowhere in your context: send
-**the tool-name segment** between `mcp__` and the next `__` — for
-`mcp__33b9b857-8443-4b2d-b191-2d9b6c50eb86__call_tool` it is
-`33b9b857-8443-4b2d-b191-2d9b6c50eb86` — exactly, case included, and expect the handshake
-below. Never guess a display name from a readable prefix.
+**`server` is the connector's display name.** Take the first your MCP instructions give:
 
-**When you send a connector id, the publish rejects it and names the connector:**
-*"…is the id of connector "Carta (Test)" — set "server" to "Carta (Test)"."* That rejection
-**is** the lookup. So publish once more with the name it gave you, changing nothing else.
-One retry, expected,
-and the first attempt created nothing: **do not report it as a failure and do not conclude
-the plugin is broken.** Never guess a display name no rejection has given you.
+1. **A heading naming it** — `## claude.ai Carta (Test)` → `Carta (Test)`.
+2. **A `Default connector name: "…"` line** in the block headed by your **tool-name
+   segment** — between `mcp__` and the next `__`, so
+   `mcp__33b9b857-8443-4b2d-b191-2d9b6c50eb86__call_tool` → `33b9b857-8443-4b2d-b191-2d9b6c50eb86`.
+3. **Neither:** send the segment itself, case included. The publish rejects it and names the
+   connector — *"…is the id of connector "Carta (Test)" — set "server" to "Carta (Test)"."*
+   That rejection **is** the lookup: republish with that name, changing nothing else. One
+   retry, expected, and the first attempt created nothing — **do not report it as a failure.**
+
+Never guess a name from a readable prefix. The publish never checks a name — right or wrong,
+the result reads the same — so if the user later says the page can't see Carta after a step 2
+name, their connector was renamed: republish with step 3.
 
 - **Omit `url`, and don't call `action: "list"` first.** The same file path in the same
   conversation already redeploys to the same URL, and reaching for an *earlier*
@@ -309,8 +307,8 @@ closing line:
 |---|---|---|
 | *not found* | they have not finished. The normal state | Answer whatever they asked. Not an error, and never reported as one |
 | `issued` | **the securities are on the cap table** | Report it and close per [issue-and-close.md § On success](references/issue-and-close.md#on-success). **Do not call `issue_securities`** — that would issue a second time |
-| `draft` | saved, validated, not issued | Say the draft is saved and they can come back to it, and **stop**. A saved draft is not an approval to issue |
-| `needs_claude` | the page tried and could not finish | Read `reason`: `duplicates` → [mutate-recovery.md § Duplicate resolution](references/mutate-recovery.md#duplicate-resolution); `unknown_outcome` → **read the set's state before any write**, the rows may already be issued; `nothing_issued` → [mutate-recovery.md](references/mutate-recovery.md) |
+| `draft` | saved, not validated, not issued | Say the draft is saved and they can come back to it, and **stop**. A saved draft is not an approval to issue |
+| `needs_claude` | the page tried and could not finish | Read `reason`: `duplicates` → [mutate-recovery.md § Duplicate resolution](references/mutate-recovery.md#duplicate-resolution); `unknown_outcome` → **read the set's state before any write**, the rows may already be issued; `partly_issued` → some rows are issued: read the set's state and never issue it again; `rows_removed` → the named `rows` were deleted to change their document set and not saved back: have the user retry, or re-save them; `nothing_issued` → [mutate-recovery.md](references/mutate-recovery.md), or with `board_approval: true` the grants await a board consent — send it with `cap_table:mutate:publish_board_consent` |
 
 ### When something is wrong
 
@@ -318,7 +316,7 @@ closing line:
 |---|---|---|
 | The publish warns it could not resolve the connector | the page has no Carta access | [chat surface](references/chat-surface.md) |
 | The user says the page cannot find the company, or asks which one you meant | the name matched none or several | `list_accounts(search="<name>")`, settle it, and rebuild with `--corporation-id <n>` to the **same** `--out` path |
-| The user says the page is empty, or every section says it couldn't load | the viewer hasn't allowed the connector, or Carta is down for them | Tell them to allow the Carta connection when the page asks, or to reconnect Carta in Settings → Connectors. Re-publishing does not help |
+| The user says the page is empty, or every section says it couldn't load | the viewer hasn't allowed the connector, or Carta is down for them | Tell them to allow the Carta connection when the page asks, or to reconnect Carta in Settings → Connectors. Re-publishing does not help — unless `server` came from step 2 of [§ 3](#3-publish-it) |
 | The user says they see a hard stop in the page | the account isn't set up for this issuance | Read it back to them in plain language and stop. The fix is in Carta, not here |
 | The user reports validation errors they can't clear | the server refused a value | Those belong to the page, which shows them against their own fields. Only if a message is one the page can't act on — a fund-structure block, a duplicate stakeholder, a missing FMV — read [mutate-recovery.md](references/mutate-recovery.md) |
 | The user says it issued but no document appears | the store write failed after the write landed | **Do not issue.** The page names the draft set on screen; ask for it and read its state |

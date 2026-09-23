@@ -32,7 +32,7 @@ means **omit the key entirely** from the payload — see [Row templates](engine.
 **Pass through unchanged:** `acceleration_template` (`null` on **No acceleration**), `notes`, `custom_label`, `early_exercise`, `auto_exercise_at_vest`,
 `is_flexible_issue_date`, `grant_reason`.
 
-`is_hmrc_notified` / `hmrc_notified`, `is_ato_notified`, and `employment_related` are already
+`is_hmrc_notified` / `hmrc_notified`, `ato_notified`, and `employment_related` are already
 conditionally absent from the row unless that row's `so_type` matched (EMI, the three AU
 types, and `Unapproved`, respectively), so no additional gating is needed here.
 

@@ -37,9 +37,9 @@ confirming is entitled to know which, so carry the matching sentence into the co
 
 | Type | Sentence |
 |---|---|
-| Option grant | *"Confirming will save these grants to Carta and send them to the signatory for signature."* |
-| Certificate | *"Confirming will save these certificates to Carta and issue them to the cap table."* |
-| PIU | *"Confirming will save these profits interest units to Carta and send them to the signatory for signature."* |
+| Option grant | *"Confirming will send these grants to the signatory for signature."* |
+| Certificate | *"Confirming will issue these certificates to the cap table."* |
+| PIU | *"Confirming will send these profits interest units to the signatory for signature."* |
 
 The artifact carries this in its own Confirm step; on the chat surface it is yours to say, in
 the same turn as the review.

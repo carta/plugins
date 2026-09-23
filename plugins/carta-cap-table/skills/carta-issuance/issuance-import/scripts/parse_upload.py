@@ -109,7 +109,7 @@ ROW_KEYS = {
     "option_type", "exercise_price", "document_set_id", "custom_label",
     "grant_reason", "early_exercise", "auto_exercise_at_vest",
     "is_flexible_issue_date", "is_hmrc_notified", "hmrc_notified",
-    "is_ato_notified", "grant_expiration_date", "employment_related",
+    "ato_notified", "grant_expiration_date", "employment_related",
     # certificate
     "share_class_prefix", "price_per_share", "legend_id", "prefix_number",
     "rule_144_mode", "rule_144_date", "rule_144_reason", "cash_paid",
@@ -175,7 +175,7 @@ _syn("early_exercise", "Early Exercise", "Allow Early Exercise")
 _syn("auto_exercise_at_vest", "Auto Exercise At Vest", "Auto Exercise")
 _syn("is_hmrc_notified", "HMRC Notified", "HMRC Notification")
 _syn("hmrc_notified", "HMRC Notified Date", "HMRC Notification Date")
-_syn("is_ato_notified", "ATO Notified", "ATO Notification")
+_syn("ato_notified", "ATO Notified", "ATO Notification")
 _syn("employment_related", "Employment Related", "Employment Related Securities",
      "Employment-Related", "ERS")
 _syn("fund_structure", "Part of fund structure", "Fund Structure")
@@ -214,7 +214,7 @@ _syn("_currency", "Currency")
 # Header signatures that decide security_type. Weighted: a header that only ever
 # appears on one kind of sheet counts, generic ones (Quantity, Email) don't.
 GRANT_SIGNALS = {"option_type", "exercise_price", "document_set_id",
-                 "_equity_plan", "is_hmrc_notified", "is_ato_notified"}
+                 "_equity_plan", "is_hmrc_notified", "ato_notified"}
 CERT_SIGNALS = {"share_class_prefix", "legend_id", "price_per_share",
                 "rule_144_date", "prefix_number", "cash_paid", "debt_canceled",
                 "returned_invested_capital"}
@@ -615,7 +615,7 @@ def _build_grant_fields(record: Dict[str, Any], row: Dict[str, Any]) -> None:
                   "not one of Carta's grant reasons — pick one")
 
     for field in ("early_exercise", "auto_exercise_at_vest", "is_hmrc_notified",
-                  "is_ato_notified"):
+                  "ato_notified"):
         raw = _cell(record, field)
         if not _text(raw):
             continue

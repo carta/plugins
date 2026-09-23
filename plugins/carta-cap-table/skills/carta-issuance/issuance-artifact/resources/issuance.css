@@ -146,7 +146,8 @@
     input.num { font-variant-numeric: tabular-nums; text-align: right; }
     .hint { font-size: 11px; color: var(--ink-color-global-brand-gray-70); margin-top: 2px; }
     .hint.echo { font-variant-numeric: tabular-nums; text-align: right; }
-    .err { font-size: 11px; color: var(--ink-color-global-brand-red-60); margin-top: 2px; font-weight: 500; }
+    .hint.warn { color: var(--ink-color-global-brand-orange-60); }
+    .err { font-size: 12px; color: var(--ink-color-global-brand-red-60); margin-top: 2px; font-weight: 500; }
     .bad input, .bad select { border-color: var(--ink-color-global-brand-red-60); }
 
     /* Wraps so a checkbox that carries a hint puts it on its own line under the label. */
@@ -166,9 +167,12 @@
     .note li::marker { color: var(--ink-color-global-brand-gray-70); }
     /* The fix for a hard stop is an action, so it reads as a sentence, not a bullet. */
     .note p { font-size: 13px; color: var(--ink-color-global-brand-gray-90); margin-top: 5px; }
+    .note > button { margin-top: var(--ink-spacing-global-vertical-xsmall); }
 
     /* Stakeholder rows */
     .row { border: 1px solid var(--ink-color-global-brand-gray-50); border-radius: 8px; padding: 10px; margin-bottom: var(--ink-spacing-global-vertical-xsmall); background: var(--ink-color-global-brand-gray-10); }
+    .row.refused { border-color: var(--ink-color-global-brand-red-60); }
+    .row .err:focus { outline: none; }
     .row-top { display: grid; gap: var(--ink-spacing-global-vertical-xsmall); grid-template-columns: minmax(0, 2fr) minmax(90px, 1fr) auto; align-items: start; }
     .combo { position: relative; }
     .sug {
@@ -179,7 +183,9 @@
       box-shadow: 0 4px 12px light-dark(rgba(26,26,26,.12), rgba(0,0,0,.5));
     }
     .sug li { padding: 6px 8px; cursor: pointer; font-size: 13px; }
-    .sug li:hover, .sug li[aria-selected="true"] { background: var(--ink-color-global-brand-gray-30); }
+    .sug li:hover { background: var(--ink-color-global-brand-gray-30); }
+    .sug li[aria-selected="true"] { background: var(--ink-color-global-brand-gray-50);
+      box-shadow: inset 3px 0 0 var(--ink-color-global-brand-black); }
     .sug .e { color: var(--ink-color-global-brand-gray-70); font-size: 11px; }
 
     /* A filled face and medium weight stop these reading as empty outlines
@@ -218,7 +224,10 @@
 
     .add { margin-top: var(--ink-spacing-global-vertical-xsmall); }
 
-    footer { margin-top: var(--ink-spacing-global-vertical-medium); display: flex; flex-wrap: wrap; gap: var(--ink-spacing-global-vertical-xsmall); align-items: center; }
+    /* The primary action sits bottom-right; Back to edit anchors the left, and the reason
+       line gets a row of its own under the buttons rather than splitting them. */
+    footer { margin-top: var(--ink-spacing-global-vertical-medium); display: flex; flex-wrap: wrap; gap: var(--ink-spacing-global-vertical-xsmall); align-items: center; justify-content: flex-end; }
+    footer #back-to-edit { margin-right: auto; }
     .primary {
       background: var(--ink-color-global-brand-black);
       color: var(--ink-color-global-brand-white);
@@ -226,7 +235,8 @@
       font-weight: 500;
     }
     .primary:hover:not([disabled]) { opacity: .88; }
-    .why { flex: 1 1 200px; font-size: 12px; color: var(--ink-color-global-brand-gray-70); min-width: 0; }
+    .why { order: 10; flex: 1 0 100%; text-align: right; font-size: 12px; color: var(--ink-color-global-brand-gray-70); min-width: 0; }
+    .why:empty { display: none; }
 
     .status { margin-top: var(--ink-spacing-global-vertical-small); font-size: 13px; }
     .status.bad { color: var(--ink-color-global-brand-red-60); }
@@ -247,6 +257,10 @@
     .rv-lead { margin-bottom: var(--ink-spacing-global-vertical-small); }
     .rv-tag { font-size: 11px; color: var(--ink-color-global-brand-gray-70); }
     .rv-t { display: grid; grid-template-columns: minmax(0, 1fr) 96px 132px; gap: 10px; margin-top: var(--ink-spacing-global-vertical-xsmall); padding-top: 9px; font-weight: 600; }
+    /* What a money total is the total of, under it, so the price column is not read as one. */
+    .rv-cap { font-size: 11px; font-weight: 400; color: var(--ink-color-global-brand-gray-70); }
+    /* Issued: the holder's name takes the room it needs; the label and the figure do not. */
+    .rv-h.iss, .rv-r.iss { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) 96px; }
     .rv-terms { margin-top: var(--ink-spacing-global-vertical-medium); display: grid; gap: 5px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
     .rv-terms div { min-width: 0; }
     .rv-terms dt { font-size: 11px; color: var(--ink-color-global-brand-gray-70); }
@@ -339,7 +353,10 @@
       border-top: 1px solid var(--ink-color-global-brand-gray-50);
       font-variant-numeric: tabular-nums; }
     .warn-note { margin-top: var(--ink-spacing-global-vertical-small);
+      margin-bottom: var(--ink-spacing-global-vertical-small);
       border-left: 2px solid var(--ink-color-global-brand-orange-60); padding-left: 10px; }
+    .slow { color: var(--ink-color-global-brand-gray-70); }
+    .sheet h3:focus, h1:focus, .note:focus { outline: none; }
     .fail-note { color: var(--ink-color-global-brand-red-60); }
 
     @media (max-width: 560px) {
@@ -348,4 +365,5 @@
       .row-top .qty-f { grid-column: 1; }
       .x { margin-top: 0; grid-row: 1; grid-column: 2; }
       .rv-h, .rv-r, .rv-t { grid-template-columns: minmax(0, 1fr) 62px 106px; gap: 6px; }
+      .rv-h.iss, .rv-r.iss { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 62px; }
     }

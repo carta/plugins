@@ -42,7 +42,7 @@ const PAGE_BUG = new Set(["bad_request", "transform_error", "bad_envelope"]);
     fix; `connReason` falls back to the no-capability line for anything newer. */
 const CONN_COPY = {
   no_connector: "This page cannot see a Carta connector. Connect Carta in Settings → Connectors, then ask Claude to open this page again.",
-  server_not_connected: "Carta is not connected. Connect it in Settings → Connectors, then ask Claude to open this page again.",
+  server_not_connected: "This page can't reach Carta. Check Carta is connected in Settings → Connectors, then ask Claude to open this page again.",
   needs_reauth: "Carta needs you to sign in again. Reconnect Carta in Settings → Connectors, then ask Claude to open this page again.",
   selection_required: "You have more than one Carta connector. Pick the one this page should use when Claude asks, or choose it in Settings → Connectors, then open this page again.",
   not_granted: "This page was not granted access to Carta. Ask Claude to open it again and allow the Carta connector.",
@@ -344,7 +344,12 @@ async function one(name, args) {
 /** `cancelled` means two different things and only the call site can tell them apart:
     on a read it is READ_DEADLINE_MS firing, on a write it is the viewer declining the
     host's own confirm. Splitting them here keeps both copies honest. */
+/** Every code this page has an answer for. A code the host adds later is read as Carta
+    not answering, which on a write is the outcome nobody here can establish. */
+const KNOWN_KINDS = new Set([...NEEDS_CONNECTOR, ...UNKNOWN_OUTCOME, ...NO_LIVE_DATA,
+  ...NOT_ALLOWED, ...PAGE_BUG, "tool_error", "cancelled", "rate_limited", "read_timeout"]);
 function kindOf(err, name) {
   const k = code(err) || "upstream_error";
-  return k === "cancelled" && isRead(name) ? "read_timeout" : k;
+  if (k === "cancelled" && isRead(name)) return "read_timeout";
+  return KNOWN_KINDS.has(k) ? k : "upstream_error";
 }
