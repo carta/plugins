@@ -355,7 +355,6 @@
     .warn-note { margin-top: var(--ink-spacing-global-vertical-small);
       margin-bottom: var(--ink-spacing-global-vertical-small);
       border-left: 2px solid var(--ink-color-global-brand-orange-60); padding-left: 10px; }
-    .slow { color: var(--ink-color-global-brand-gray-70); }
     .sheet h3:focus, h1:focus, .note:focus { outline: none; }
     .fail-note { color: var(--ink-color-global-brand-red-60); }
 

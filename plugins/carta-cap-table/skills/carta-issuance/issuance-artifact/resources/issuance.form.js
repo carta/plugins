@@ -822,6 +822,7 @@ const classOpts = () => S.classes.map((c) => [c.prefix, `${c.name || c.prefix} (
 const CHOSEN_FOR = {
   only_class: "Chosen for you — the only class",
   most_recent: "Chosen for you — the most recent class",
+  latest_created: "Chosen for you — the latest class",
 };
 /** Why the class came prefilled, when the server said. A preselected class sets the
     holder's liquidation preference, so a default must not read as their own answer.
@@ -1060,13 +1061,9 @@ function spec() {
   const sh = S.shared, t = S.type, s = [];
   const F = (k, label, kind, x) => s.push(mfApply(Object.assign({ k, label, kind }, x || {})));
   const vest = () => {
-    const chosen = tmpl();
     // "No vesting" is a real option and the default, so a blank one above it would
     // be a second way to say the same thing.
-    F("vesting_template", "Vesting", "sel", { opts: vestOpts(), over: 1, noPh: 1,
-      // The closed control truncates a long template name, and what it drops
-      // is the schedule itself — the only way to tell two templates apart.
-      hint: (chosen && chosen.summary_short) || "" });
+    F("vesting_template", "Vesting", "sel", { opts: vestOpts(), over: 1, noPh: 1 });
     const real = sh.vesting_template && sh.vesting_template !== NONE;
     if (real && !isMilestone()) {
       F("vesting_start_date", "Vesting start", "date", { over: 1, req: "a vesting start date" });
@@ -1195,8 +1192,8 @@ function control(d, id, v, scope, ph) {
     // Offered so the control can show it; choosing anything else replaces it.
     if (v === AS_SAVED) d = Object.assign({}, d, { opts: [[AS_SAVED, AS_SAVED_LABEL]].concat(d.opts || []) });
     const empty = S.termsLoading && !(d.opts || []).length;
-    // `ph` is the override's "Shared: …", which a row always needs to fall back on,
-    // so it outranks `noPh` — that only suppresses the shared control's blank option.
+    // `noPh` drops the blank option: a shared control whose default is a real choice,
+    // or an override already holding the value it inherits.
     return sel(id, v, d.opts, { k: d.k, scope, dis: d.dis,
       placeholder: ph || (d.noPh ? false : (empty ? "Loading…" : d.ph)) });
   }
@@ -1501,19 +1498,23 @@ function ovHtml(r, i) {
   for (const d of spec()) {
     if (!d.over) continue;
     const id = `${p}-ov-${d.k}`;
-    const v = d.k in r.ov ? r.ov[d.k] : "";
-    // A date input ignores `placeholder`, so the shared value it would fall
-    // back to goes in the hint instead. Every override says what it inherits.
-    const inherits = `Shared: ${shDisp(d)}`;
-    // A tick has no third state, and blank is what "inherit" is made of, so a
-    // row answers a checkbox with a Yes / No of its own.
+    const v = d.k in r.ov ? r.ov[d.k] : inheritedVal(d, r);
+    // A row answers a checkbox with a Yes / No of its own, so it reads as a choice.
+    const yn = [["true", "Yes"], ["false", "No"]];
+    const cv = v === AS_SAVED || v === "" ? v : String(v === true || v === "true");
     const body = d.kind === "check"
-      ? sel(id, v, [["true", "Yes"], ["false", "No"]],
-        { k: d.k, scope: `ov-${i}`, placeholder: inherits })
-      : control(d, id, v, `ov-${i}`, inherits);
-    o.push(fld(id, d.label, body, d.kind === "date" && !v ? { hint: inherits } : {}));
+      ? sel(id, cv, v === AS_SAVED ? [[AS_SAVED, AS_SAVED_LABEL]].concat(yn) : yn,
+        { k: d.k, scope: `ov-${i}`, placeholder: cv === "" ? "Select…" : false })
+      : control(Object.assign({}, d, { noPh: d.noPh || (v !== "" && v != null) }), id, v, `ov-${i}`);
+    o.push(fld(id, d.label, body));
   }
   return o.join("");
+}
+/** What a row shows for a term it has not overridden: the shared value, except a term
+    the load could not read, which a row added to a resumed set does not inherit. */
+function inheritedVal(d, r) {
+  const v = specVal(d);
+  return v === AS_SAVED && !r.resumed ? "" : v;
 }
 /** One term's value as a reader sees it. A row's override of a checkbox is the string
     "false", which is truthy, so a tick is read by value rather than by truthiness. */
@@ -1559,7 +1560,7 @@ function totals(byCurrency) {
 }
 /** What a money total is the total of. A price per share times shares is what the
     holder pays; per option, what exercising every option would cost. */
-const VALUE_OF = { option_grant: "total exercise cost", certificate: "total purchase price" };
+const VALUE_OF = { option_grant: "total exercise cost" };
 /** The quantity inside each row, which is not the count of rows. */
 const QTY_NOUN = { option_grant: ["option", "options"], certificate: ["share", "shares"],
   piu: ["unit", "units"] };
@@ -1611,7 +1612,7 @@ function reviewHtml() {
       <div>${esc(totalLabel(cur, groups.length))}</div>
       <div class="rv-n" data-testid="review-total-qty-${esc(cur || "units")}">${t.qty.toLocaleString()}</div>
       <div class="rv-n" data-testid="review-total-value-${esc(cur || "units")}">${t.priced
-        ? `${esc(money(t.value, cur))}<div class="rv-cap">${esc(VALUE_OF[S.type] || "")}</div>` : ""}</div>
+        ? `${esc(money(t.value, cur))}${VALUE_OF[S.type] ? `<div class="rv-cap">${esc(VALUE_OF[S.type])}</div>` : ""}` : ""}</div>
     </div>`).join("");
 
   const priced = PRICE_KEYS[S.type] || [];
@@ -1619,7 +1620,7 @@ function reviewHtml() {
     && specVal(d) !== "" && specVal(d) != null
     && specVal(d) !== false).map((d) => `<div data-testid="review-term-${d.k}">
       <dt>${esc(d.label)}</dt>
-      <dd>${esc(d.kind === "check" ? disp(d, specVal(d)) : termDisp(d))}</dd>
+      <dd>${esc(shDisp(d))}</dd>
     </div>`).join("");
 
   // Once the page is sealed it will confirm nothing more, so it does not say what
@@ -1634,13 +1635,6 @@ function reviewHtml() {
     ${legendHtml()}
     ${sealed ? "" : `<p class="rv-commit" data-testid="review-commit">${esc(CONFIRM_LINE[S.type] || "")}</p>`}`;
 }
-/** A vesting template reads by name on the form, where its schedule is the hint; the
-    review has no hint, so it carries both. */
-function termDisp(d) {
-  const t = d.k === "vesting_template" ? tmpl() : null;
-  return t && t.summary_short ? `${shDisp(d)} — ${t.summary_short}` : shDisp(d);
-}
-
 /** The holder attests to the legend's words, not its template name, so the full body is
     readable here before Confirm. `legend_body` is review-only and never sent — the
     server resolves the body from legend_id. */
@@ -1679,6 +1673,8 @@ function issuedFrom(x) {
     sent, and issuing a saved set sends none — so the submitted row fills the gap. */
 const issuedWho = (x) => txtOf(x.stakeholder_name) || txtOf(x.stakeholderName)
   || txtOf(x.holder_name) || txtOf(x.holderName) || ((issuedFrom(x) || {}).name || "").trim();
+const issuedEmail = (x) => txtOf(x.stakeholder_email) || txtOf(x.email)
+  || ((issuedFrom(x) || {}).email || "").trim();
 const issuedQty = (x) => {
   const q = x.quantity != null ? x.quantity : x.shares;
   return q != null ? q : (issuedFrom(x) || {}).quantity;
@@ -1704,11 +1700,11 @@ function issuedHtml() {
     + toldHtml({ told: !S.untold }, "");
   const named = entries.length > 0 && entries.every((x) => issuedLabel(x));
   let cells;
-  if (named) cells = entries.map((x) => [issuedWho(x), issuedLabel(x), issuedQty(x)]);
-  else if (entries.length === S.rows.length) cells = S.rows.map((r) => [(r.name || "").trim(), "", r.quantity]);
+  if (named) cells = entries.map((x) => [issuedWho(x), issuedLabel(x), issuedQty(x), issuedEmail(x)]);
+  else if (entries.length === S.rows.length) cells = S.rows.map((r) => [(r.name || "").trim(), "", r.quantity, (r.email || "").trim()]);
   else return head;
-  const rows = cells.map(([who, sec, q], i) => `<div class="rv-r iss" data-testid="issued-row-${i}">
-      <div class="rv-w">${esc(who)}</div>
+  const rows = cells.map(([who, sec, q, mail], i) => `<div class="rv-r iss" data-testid="issued-row-${i}">
+      <div class="rv-w">${esc(who)}${mail ? `<div class="hint" data-testid="issued-row-${i}-email">${esc(mail)}</div>` : ""}</div>
       <div>${esc(sec)}</div>
       <div class="rv-n">${esc(qtyText(q))}</div>
     </div>`).join("");
@@ -2181,34 +2177,20 @@ function saveArgs(rows, part) {
 }
 
 /* ---------- the issue sheet ---------- */
-const SAVE_STEPS = ["Saving the draft set", "Validating the draft set"];
+const SAVE_STEPS = ["Saving and validating the draft set"];
 /** A draft is saved and nothing else: validating is what Review and issue does. */
-const DRAFT_STEPS = SAVE_STEPS.slice(0, 1);
+const DRAFT_STEPS = ["Saving the draft set"];
 
-/** A save that queues behind other work can take a minute; past this, the sheet says so
-    rather than spinning as if it had stalled. */
-const SLOW_MS = 8000;
 const WAITING = new Set(["saving", "issuing"]);
-let slowTimer = 0;
 
 function openSheet(phase, extra) {
   // Where focus goes back to when the reader dismisses the sheet.
   if (!S.sheet) S.opener = document.activeElement || null;
   S.sheet = Object.assign({ phase, step: 0 }, extra || {});
-  clearTimeout(slowTimer);
-  if (WAITING.has(phase)) {
-    const sheet = S.sheet;
-    slowTimer = setTimeout(() => {
-      if (S.sheet !== sheet) return;
-      sheet.slow = true;
-      renderSheet();
-    }, SLOW_MS);
-  }
   renderSheet();
   focusSheet();
 }
 function closeSheet() {
-  clearTimeout(slowTimer);
   S.sheet = null;
   renderSheet();
 }
@@ -2228,17 +2210,13 @@ function sheetStops() {
   return ["modal-close", "modal-go"].map(el).filter((n) => n && !n.hidden && !n.disabled);
 }
 
-/** One line per step, so a wait names what it is waiting on rather than spinning.
-    Every step from `at` through `through` is in progress: one round trip that does
-    both cannot say which half it is on, so neither is ticked before it answers. */
-const stepsHtml = (labels, at, through) => labels.map((l, i) => {
-  const now = i >= at && i <= (through == null ? at : through);
+/** One line per step, so a wait names what it is waiting on rather than spinning. */
+const stepsHtml = (labels, at) => labels.map((l, i) => {
+  const now = i === at;
   const mark = i < at ? "✓" : now ? '<span class="spin"></span>' : "·";
   const cls = i < at ? "done" : now ? "now" : "";
   return `<div class="step ${cls}"><span class="mark">${mark}</span>${esc(l)}</div>`;
 }).join("");
-
-const SLOW_LINE = '<p class="slow" data-testid="modal-slow">Still working — Carta can take up to a minute on busy days.</p>';
 
 const plural = (n, one, many) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
 /** What one row is: a certificate, an option grant, a PIU grant. */
@@ -2285,7 +2263,7 @@ function renderSheet() {
   go.hidden = true; close.hidden = true; go.disabled = false;
   if (m.phase === "saving") {
     title.textContent = m.mode === "draft" ? "Saving your draft" : "Checking these terms";
-    body.innerHTML = stepsHtml(m.steps || SAVE_STEPS, m.step, m.through) + (m.slow ? SLOW_LINE : "");
+    body.innerHTML = stepsHtml(m.steps || SAVE_STEPS, m.step);
   } else if (m.phase === "confirm") {
     const warned = (m.warnings || []).length;
     title.textContent = warned ? "Carta flagged something first" : "Ready to issue";
@@ -2300,8 +2278,7 @@ function renderSheet() {
   } else if (m.phase === "issuing") {
     title.textContent = "Issuing on Carta";
     body.innerHTML = stepsHtml(["Writing these securities to the cap table"], 0)
-      + '<p data-testid="modal-keep-open">Keep this page open until it finishes.</p>'
-      + (m.slow ? SLOW_LINE : "");
+      + '<p data-testid="modal-keep-open">Keep this page open until it finishes.</p>';
   } else if (m.phase === "saved") {
     title.textContent = "Draft saved";
     const lost = arr(m.unsaved);
@@ -2447,7 +2424,8 @@ async function prepareDrafts(rows, part) {
 async function saveDrafts(rows, part) {
   const res = payload(await one("cap_table__mutate__save_drafts", saveArgs(rows, part))) || {};
   absorbSaved(res);
-  if (S.sheet) { S.sheet.step = 1; renderSheet(); }
+  const m = S.sheet;
+  if (m && m.step < arr(m.steps || SAVE_STEPS).length - 1) { m.step += 1; renderSheet(); }
   return res;
 }
 
@@ -2562,7 +2540,7 @@ async function submit(mode) {
   if (incomplete()) return;
   S.banner = ""; S.bannerBad = false; S.srv = {};
   S.busy = true;
-  openSheet("saving", { mode, step: 0, through: 1, steps: SAVE_STEPS });
+  openSheet("saving", { mode, step: 0, steps: SAVE_STEPS });
   render();
   if (!(await dropStaleDocRows())) return;
   const split = planSplit(S.rows);
@@ -2580,7 +2558,6 @@ async function submit(mode) {
       // That is the save branch's own case, and its copy already states it.
       S.busy = false; await sheetError(err, "save", { blind: blindCombined(err) }); return;
     }
-    if (S.sheet) { S.sheet.through = null; S.sheet.step = 0; renderSheet(); }
     // Two calls, two tags. A check that fails over a save that worked leaves a clean
     // saved draft set, and sealing the page over it is how that set gets lost.
     let saved;
@@ -3168,7 +3145,11 @@ function commit(ev) {
     const r = S.rows[Number(scope.slice(3))];
     if (!r) return;
     r.touched.add(k);
-    if (val === "" || val === false) delete r.ov[k]; else r.ov[k] = val;
+    // Matching the shared value, or cleared, is inheriting it: the row follows the batch.
+    const d = spec().find((x) => x.k === k);
+    const inherited = d ? inheritedVal(d, r) : "";
+    if (val === "" || val === false || String(val) === String(inherited)) delete r.ov[k];
+    else r.ov[k] = val;
     // A row's own expiry, read back for its old issue date, moves with the new one.
     if (k === "issue_date" && S.type === "option_grant" && "grant_expiration_date" in r.ov
       && !r.touched.has("grant_expiration_date")) r.ov.grant_expiration_date = grantExpiry(val);
