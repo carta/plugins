@@ -49,7 +49,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.89.10</carta-plugin>
+<carta-plugin>carta-cap-table:6.89.11</carta-plugin>
 
 <!-- [PATTERN carta-writing-style v0.0.2] [PATTERN etiquette v0.0.6] [PATTERN text v0.0.8] [PATTERN tables v0.0.12] [PATTERN carta-watermark v0.0.10] [PATTERN base v0.1.0] -->
 
@@ -733,13 +733,13 @@ Three things that will bite:
 **2d-ii. The equity pool (optional).** The planner's review step measures a plan's
 draw against the corporation's available pool — the same figures the CTC product
 UI's Refresh Grant Planner "Equity pool impact" tile renders. Read them from the
-carta-web endpoint the product UI itself uses (`equity-pool-utilization`), so the
+carta-web endpoint the product UI itself uses (`equity_pool_utilization`), so the
 microapp ties out against the product to the share.
 
 Fetch via the MCP:
 
 ```
-call_tool({"name": "cap_table__get__equity-pool-utilization",
+call_tool({"name": "cap_table__get__equity_pool_utilization",
            "arguments": {"corporation_id": <corporation_pk>}})
 ```
 

@@ -323,8 +323,8 @@ must page in the script, dedupe, and gate on completeness before publishing.
 ## §7 — Equity pool (for the planner's Equity Pool tile)
 
 ```
-cap_table:get:equity-pool-utilization
-  generated tool name: cap_table__get__equity-pool-utilization
+cap_table:get:equity_pool_utilization
+  generated tool name: cap_table__get__equity_pool_utilization
   arguments: { "corporation_id": <int> }
 ```
 
