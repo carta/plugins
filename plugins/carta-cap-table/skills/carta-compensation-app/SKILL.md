@@ -48,7 +48,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.89.4</carta-plugin>
+<carta-plugin>carta-cap-table:6.89.5</carta-plugin>
 
 <!-- [PATTERN carta-writing-style v0.0.2] [PATTERN etiquette v0.0.6] [PATTERN text v0.0.8] [PATTERN tables v0.0.12] [PATTERN carta-watermark v0.0.10] [PATTERN base v0.1.0] -->
 
@@ -734,19 +734,27 @@ draw against the corporation's available pool. That figure is
 `efab.available_shares` from the reports-insights endpoint — the equity ledger's own
 `available`, summed across pools by compensation-service.
 
-There is **no MCP command for it yet**, so this capture only runs when the payload
-is obtained another way. When you have it:
+Fetch it via the MCP:
+
+```
+call_tool({"name": "compensation__get__reports-insights",
+           "arguments": {"corporation_id": <corporation_pk>}})
+```
+
+Then always hand the result to the capture script — the script owns the
+null-vs-zero decision:
 
 ```bash
 uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_report_insights.py" \
   "<result path>" "<raw_dir>"
 ```
 
-Skip it otherwise. The review step then states that no pool figure is in the build
-instead of showing a guardrail — which is correct, because the endpoint serves a
-cache primed out of band and a corporation whose ledger reports no pools sums to
-exactly `0`. Neither is "this company has no shares left", so neither is ever
-rendered as a zero balance.
+Skip the whole step only when the MCP call itself failed (no result path to
+hand it). The review step then states that no pool figure is in the build
+instead of showing a guardrail — which is correct, because the endpoint
+serves a cache primed out of band and a corporation whose ledger reports no
+pools sums to exactly `0`. Neither is "this company has no shares left", so
+neither is ever rendered as a zero balance.
 
 **2d-iii. Corporation equity units (optional).** The planner can show grants as
 shares, fully diluted ownership or an equity value, matching CTC's own Equity Unit
