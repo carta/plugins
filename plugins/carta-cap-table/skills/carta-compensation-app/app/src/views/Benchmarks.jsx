@@ -43,14 +43,16 @@ function MetricTable({ rows, currency, equityRep }) {
           ))}
         </tr>
         <tr>
-          <Th>Level</Th>
+          <Th valign="bottom">Level</Th>
           {METRIC_BLOCKS.map((m) =>
             PERCENTILES.map((p) => (
-              <Th key={`${m.key}-${p.key}`} align="right">
-                {p.label}
+              <Th key={`${m.key}-${p.key}`} align="right" valign="bottom">
+                {/* Stacked and bottom-aligned: an inline or middle-aligned pill would
+                    misalign this column against its single-line neighbors. */}
                 {!p.fetched && (
-                  <> <Tag tone="notice" title={p.tooltip}>Estimated</Tag></>
+                  <div><Tag tone="notice" pill title={p.tooltip}>Estimated</Tag></div>
                 )}
+                <div>{p.label}</div>
               </Th>
             )))}
         </tr>
@@ -66,7 +68,7 @@ function MetricTable({ rows, currency, equityRep }) {
               <Td ellipsis title={levelLabel(r.level, track)}>
                 {levelLabel(r.level, track)}
                 {est && (
-                  <> <Tag tone="notice" title={r.provenanceNote || "User-added row"}>Estimated</Tag></>
+                  <> <Tag tone="notice" pill title={r.provenanceNote || "User-added row"}>Estimated</Tag></>
                 )}
               </Td>
               {METRIC_BLOCKS.map((m) =>

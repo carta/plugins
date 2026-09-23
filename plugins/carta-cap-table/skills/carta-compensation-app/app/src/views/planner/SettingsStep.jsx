@@ -463,7 +463,7 @@ export default function SettingsStep({
           <span style={{ fontSize: FS.sm, fontWeight: 600, color: C.textSubtle }}>
             This cycle
           </span>
-          <Tag tone="notice" title="Counts and totals are calculated in this console from the settings above and the benchmark each employee carries.">
+          <Tag tone="notice" pill title="Counts and totals are calculated in this console from the settings above and the benchmark each employee carries.">
             Modelled
           </Tag>
         </div>
@@ -573,6 +573,7 @@ export default function SettingsStep({
               {overridden && (
                 <Tag
                   tone="notice"
+                  pill
                   title={`Local to this console. Carta's policy for this corporation is unchanged: ${policySettings.targetPct}% every ${cadenceLabel(policySettings.cadenceMonths)}, ${policySettings.tenureMinMonths}-month tenure requirement, ${policySettings.rangeBelowPct}–${policySettings.rangeAbovePct}% range.`}
                 >
                   Local override — not saved to Carta

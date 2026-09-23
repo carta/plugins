@@ -96,7 +96,7 @@ function UnavailableFilter({ label, reason }) {
   return (
     <div style={{ display: "grid", gap: 4 }}>
       <span style={{ fontSize: FS.xs, color: C.textQuiet }}>{label}</span>
-      <Tag tone="notice" title={reason}>Not in this build</Tag>
+      <Tag tone="notice" pill title={reason}>Not in this build</Tag>
     </div>
   );
 }
@@ -773,13 +773,13 @@ export default function RefreshPlanner({ planner, corporation, corporationId, to
             {/* Only tenure is modelled — the equity figures are the report's own and
                 carry no tag, because tagging a value the product already displays is
                 as misleading as leaving a derived one untagged. */}
-            <Tag tone="notice" title="Tenure is calculated in this console from the report's hire date. Every other figure is Carta's own, as shown in the Equity Refresh Report.">
+            <Tag tone="notice" pill title="Tenure is calculated in this console from the report's hire date. Every other figure is Carta's own, as shown in the Equity Refresh Report.">
               Tenure is modelled
             </Tag>
             {/* The count rides on the SUMMARY so it survives collapsing. A folded
                 tile that does not say how many are excluded is how a narrowed
                 cohort becomes invisible. */}
-            {removed > 0 && <Tag>{removed} excluded by filters</Tag>}
+            {removed > 0 && <Tag pill>{removed} excluded by filters</Tag>}
 
             {/* A span, not a button: a <button> inside a <summary> swallows the
                 click that would toggle it, so this is the label for a control the

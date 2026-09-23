@@ -197,14 +197,18 @@ export default function AskBar({ token, placeholder = PLACEHOLDER }) {
         }
         flushText();
       }
-      flushText();
+      // Commit synchronously: reload below isn't deferred, so flushText's
+      // requestAnimationFrame can lose the race and never paint.
+      cancelAnimationFrame(frameRef.current);
+      setReply(textRef.current);
 
       if (shouldReload) {
-        // Persist first: the reload drops in-memory state, and landing the user
-        // back on a different tab than they left would read as the edit breaking
-        // something. App.jsx restores from sessionStorage on mount.
+        // Persist first: reload drops in-memory state. App.jsx restores the
+        // tab from sessionStorage on mount.
         setReloading(true);
-        window.location.reload();
+
+        // Delayed so the browser can paint the answer before navigating away.
+        setTimeout(() => window.location.reload(), 1400);
       }
     } catch (e) {
       setError(e.message || String(e));

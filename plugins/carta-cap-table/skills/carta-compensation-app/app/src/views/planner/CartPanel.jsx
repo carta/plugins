@@ -19,7 +19,7 @@ function DiffChip({ added, removed }) {
   if (added) parts.push(`${added} added`);
   if (removed) parts.push(`${removed} removed`);
   return (
-    <Tag tone="notice" title="Unsaved change since this cart was last written to disk.">
+    <Tag tone="notice" pill title="Unsaved change since this cart was last written to disk.">
       {parts.join(" · ")}
     </Tag>
   );

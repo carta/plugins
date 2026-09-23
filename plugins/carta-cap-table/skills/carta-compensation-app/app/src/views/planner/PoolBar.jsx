@@ -31,7 +31,7 @@ export default function PoolBar({ available, planned, reserved, outstanding }) {
           <span style={{ fontSize: FS.sm, fontWeight: 600, color: C.textSubtle }}>
             Equity pool
           </span>
-          <Tag tone="notice" title="The pool figure is served from a cache primed out of band, and a corporation whose ledger reports no pools is indistinguishable from one that has spent it. Neither is reported as zero.">
+          <Tag tone="notice" pill title="The pool figure is served from a cache primed out of band, and a corporation whose ledger reports no pools is indistinguishable from one that has spent it. Neither is reported as zero.">
             Not in this build
           </Tag>
         </div>

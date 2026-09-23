@@ -180,15 +180,23 @@ export const TAG_TONES = {
   notice: { fg: C.feedbackNotice, bd: C.feedbackNotice, bg: C.feedbackNoticeSubtle },
 };
 
-export function Tag({ tone = "neutral", children, title }) {
+// `pill` is a compact, fully-rounded variant for a badge sitting under its own
+// label rather than inline with text — e.g. a header's "Estimated" marker.
+export function Tag({ tone = "neutral", pill = false, children, title }) {
   const t = TAG_TONES[tone] || TAG_TONES.neutral;
   return (
     <span
       title={title}
       style={{
-        display: "inline-block", padding: "1px 7px",
-        borderRadius: RADIUS,
-        fontSize: FS.sm, fontWeight: 400, whiteSpace: "nowrap",
+        display: pill ? "inline-flex" : "inline-block",
+        alignItems: "center", justifyContent: "center",
+        height: pill ? 18 : undefined,
+        padding: pill ? "2px 8px" : "1px 7px",
+        borderRadius: pill ? 999 : RADIUS,
+        fontSize: FS.sm, fontWeight: pill ? 500 : 400,
+        lineHeight: pill ? "12px" : undefined,
+        letterSpacing: pill ? "0.255px" : undefined,
+        whiteSpace: "nowrap",
         color: t.fg, background: t.bg, border: `1px solid ${t.bd}`,
       }}
     >
@@ -214,7 +222,7 @@ export function TableAlign({ align, children }) {
  *  border-default (medium gray) under-rule — clearly darker than the hairline between
  *  body rows, nowhere near the near-black text color. Deliberately NOT the
  *  uppercase/tracked/tiny "ledger" look, which Ink drops. */
-export function Th({ children, align, width, colSpan, group }) {
+export function Th({ children, align, valign, width, colSpan, group }) {
   const ctx = useContext(AlignContext);
   // Explicit prop wins, then the table-wide value, then the historical default.
   align = align || ctx || "left";
@@ -223,7 +231,7 @@ export function Th({ children, align, width, colSpan, group }) {
       colSpan={colSpan}
       style={{
         padding: "8px 10px", fontSize: FS.md, fontWeight: 500, color: C.textDefault,
-        textAlign: align, whiteSpace: "nowrap", width,
+        textAlign: align, verticalAlign: valign, whiteSpace: "nowrap", width,
         // A `group` heading spans several columns above the real ones, so it takes the
         // hairline: the darker under-rule belongs on the row that actually labels the
         // columns, or the table reads as having two competing header baselines.
@@ -234,12 +242,13 @@ export function Th({ children, align, width, colSpan, group }) {
 }
 
 /** Ink's table body cell: 14px/weight-400, border-subtle hairline between rows. */
-export function Td({ children, align, subtle, mono, ellipsis, title }) {
+export function Td({ children, align, valign, subtle, mono, ellipsis, title }) {
   const ctx = useContext(AlignContext);
   align = align || ctx || "left";
   return (
     <td title={title} style={{
       padding: "7px 10px", fontSize: FS.md, fontWeight: 400, textAlign: align,
+      verticalAlign: valign,
       color: subtle ? C.textQuiet : C.textDefault,
       fontVariantNumeric: mono ? "tabular-nums" : undefined,
       borderBottom: `1px solid ${C.borderSubtle}`, whiteSpace: "nowrap",

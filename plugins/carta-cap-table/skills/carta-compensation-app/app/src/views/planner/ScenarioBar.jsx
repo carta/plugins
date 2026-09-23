@@ -152,14 +152,14 @@ export default function ScenarioBar({
       )}
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
   {futureDoc ? (
-              <Tag tone="notice" title="Saving is disabled so this build cannot overwrite a file it does not understand.">
+              <Tag tone="notice" pill title="Saving is disabled so this build cannot overwrite a file it does not understand.">
                 Saved by a newer version — read only
               </Tag>
             ) : conflict ? (
               <>
                 {/* Un-dismissable on purpose: saving has stopped, and a notice the
                     user can wave away is how an afternoon of edits goes nowhere. */}
-                <Tag tone="notice" title="Another console saved this file first. Nothing is being saved until this is resolved.">
+                <Tag tone="notice" pill title="Another console saved this file first. Nothing is being saved until this is resolved.">
                   Not saving — changed elsewhere
                 </Tag>
                 <Btn onClick={onReload} title="Discard what is on screen and load the other console's version">

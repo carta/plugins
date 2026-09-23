@@ -23,7 +23,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.89.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.89.2</carta-plugin>
 
 # Benchmark Query
 

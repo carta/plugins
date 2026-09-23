@@ -74,7 +74,7 @@ function BandChip({ band }) {
   if (!band || !BANDS.includes(band)) {
     return <span style={{ color: C.textQuiet }} title="Not scored on this metric">—</span>;
   }
-  return <Tag tone={BAND_TONES[band]}>{BAND_LABELS[band]}</Tag>;
+  return <Tag tone={BAND_TONES[band]} pill>{BAND_LABELS[band]}</Tag>;
 }
 
 /** Horizontal stacked distribution for one metric. */
@@ -272,7 +272,7 @@ function MetricCells({ row, metric }) {
   const ratio = (row.compaRatios || {})[metric];
   return (
     <>
-      <Td mono subtle={value == null}>
+      <Td mono valign="top" subtle={value == null}>
         {value == null
           ? <span title="No amount recorded for this employee">—</span>
           : value}
@@ -290,8 +290,8 @@ function MetricCells({ row, metric }) {
           </span>
         )}
       </Td>
-      <Td mono subtle={isBlank(ratio)}>{formatRatio(ratio)}</Td>
-      <Td>
+      <Td mono valign="top" subtle={isBlank(ratio)}>{formatRatio(ratio)}</Td>
+      <Td valign="top">
         <BandChip band={(row.bands || {})[metric]} />
         {/* Percentile beneath the band: the band is a three-way bucket, so two people
             both "below market" can sit 20 percentile points apart. */}
@@ -322,7 +322,7 @@ function MetricCells({ row, metric }) {
 function IdentityCell({ row }) {
   const label = row.name || row.title || "Unknown";
   return (
-    <Td ellipsis title={`${label}${row.title && row.name ? ` · ${row.title}` : ""} · ${row.externalId}`}>
+    <Td ellipsis valign="top" title={`${label}${row.title && row.name ? ` · ${row.title}` : ""} · ${row.externalId}`}>
       <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis" }}>
         {row.name || row.title || <span style={{ color: C.textQuiet }}>Unknown</span>}
       </span>
@@ -380,11 +380,11 @@ function RosterTable({ rows }) {
           return (
             <tr key={r.externalId}>
               <IdentityCell row={r} />
-              <Td ellipsis title={jobLabel(r.jobArea)}>{jobLabel(r.jobArea)}</Td>
+              <Td ellipsis valign="top" title={jobLabel(r.jobArea)}>{jobLabel(r.jobArea)}</Td>
               {/* Track folded into the level cell: it is a property OF the level
                   (Senior 2 IC vs Senior 2 Manager), and three metric groups need the
                   horizontal room more than it needs its own column. */}
-              <Td ellipsis title={`${levelLabel(r.level, track)} · ${TRACK_LABELS[track] || track}`}>
+              <Td ellipsis valign="top" title={`${levelLabel(r.level, track)} · ${TRACK_LABELS[track] || track}`}>
                 <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis" }}>
                   {levelLabel(r.level, track)}
                 </span>

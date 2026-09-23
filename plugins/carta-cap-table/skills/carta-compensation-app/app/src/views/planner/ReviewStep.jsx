@@ -200,7 +200,7 @@ export default function ReviewStep({
           <span style={{ fontSize: FS.sm, fontWeight: 600, color: C.textSubtle }}>
             Plan summary
           </span>
-          <Tag tone="notice" title="Every figure here is calculated in this console from the policy settings and each employee's benchmark. None of it is a value Carta returned.">
+          <Tag tone="notice" pill title="Every figure here is calculated in this console from the policy settings and each employee's benchmark. None of it is a value Carta returned.">
             Modelled
           </Tag>
         </div>
