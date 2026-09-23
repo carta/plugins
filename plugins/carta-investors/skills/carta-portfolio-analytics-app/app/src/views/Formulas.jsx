@@ -64,6 +64,7 @@ export function FormulaEditor({ data, dashboard, onSaved, initial = null, onCanc
   const [name, setName] = useState(initial ? initial.name : "");
   const [expr, setExpr] = useState(initial ? (initial.expr || "") : "");
   const [unit, setUnit] = useState(initial ? (initial.unit || "Number") : "Number");
+  const [attempted, setAttempted] = useState(false); // a Save click happened while the form was invalid
 
   const compiled = useMemo(() => compile(expr), [expr]);
   const resolved = useMemo(() => resolveRefs(compiled.refs, metrics), [compiled, metrics]);
@@ -72,6 +73,14 @@ export function FormulaEditor({ data, dashboard, onSaved, initial = null, onCanc
     [formulas, editingId, name],
   );
   const valid = !compiled.error && compiled.fn && resolved.unknown.length === 0 && name.trim().length > 0 && !nameTaken;
+
+  // Per-field errors: filled-but-wrong states show live; empty required fields
+  // only flag after a Save attempt, so an untouched form doesn't open with errors.
+  const nameError = nameTaken ? `A KPI named “${name.trim()}” already exists.`
+    : attempted && !name.trim() ? "Name is required" : null;
+  const exprError = compiled.error ? compiled.error
+    : resolved.unknown.length ? `Unknown KPI: ${resolved.unknown.join(", ")}`
+    : attempted && !expr.trim() ? "Formula is required" : null;
 
   const preview = useMemo(() => {
     if (compiled.error || !compiled.fn || resolved.unknown.length) return null;
@@ -92,6 +101,8 @@ export function FormulaEditor({ data, dashboard, onSaved, initial = null, onCanc
   const insert = (s) => setExpr((e) => e + (e && !/[\s(]$/.test(e) ? " " : "") + s);
   const loadPreset = (p) => { setName(p.name); setExpr(p.expr); setUnit(p.unit); };
   const save = () => {
+    if (!valid) { setAttempted(true); return; }
+    setAttempted(false);
     if (editingId) {
       dashboard.update((d) => updateMetric(d, editingId, { name: name.trim(), expr, unit }));
       onSaved?.(editingId);
@@ -123,13 +134,17 @@ export function FormulaEditor({ data, dashboard, onSaved, initial = null, onCanc
         </div>
       )}
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
-        <TextInput placeholder="KPI name (e.g. EBITDA)" value={name} onChange={(e) => setName(e.target.value)} style={{ width: 240 }} />
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <TextInput placeholder="KPI name (e.g. EBITDA)" value={name} onChange={(e) => setName(e.target.value)} style={{ width: 240 }} />
+          {nameError && <span style={errText}>* {nameError}</span>}
+        </div>
         <span style={{ ...sans, fontSize: FS.small, color: MICRO }}>Result format:</span>
         <Segmented small options={UNITS} value={unit} onChange={setUnit} />
       </div>
 
       <TextInput placeholder="yoy({Revenue}) + {EBITDA} ÷ {Revenue}" value={expr} onChange={(e) => setExpr(e.target.value)}
-        style={{ width: "100%", fontFamily: mono.fontFamily, marginBottom: 10 }} />
+        style={{ width: "100%", fontFamily: mono.fontFamily, marginBottom: exprError ? 4 : 10 }} />
+      {exprError && <div style={{ ...errText, marginBottom: 10 }}>* {exprError}</div>}
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
         <Dropdown options={metricOptions(metrics)} value={null} nullLabel="Insert KPI…" minWidth={190}
@@ -145,12 +160,8 @@ export function FormulaEditor({ data, dashboard, onSaved, initial = null, onCanc
         <button onClick={() => setExpr("")} style={{ ...opBtn, width: "auto", padding: "0 10px" }}>Clear</button>
       </div>
 
-      {/* validity + preview */}
       <div style={{ minHeight: 22, marginBottom: 10 }}>
-        {compiled.error && <span style={{ ...sans, fontSize: FS.small, color: "var(--ink-color-global-feedback-negative-strong)" }}>⚠ {compiled.error}</span>}
-        {!compiled.error && resolved.unknown.length > 0 && <span style={{ ...sans, fontSize: FS.small, color: "var(--ink-color-global-feedback-negative-strong)" }}>⚠ Unknown KPI: {resolved.unknown.join(", ")}</span>}
-        {!compiled.error && resolved.unknown.length === 0 && nameTaken && <span style={{ ...sans, fontSize: FS.small, color: "var(--ink-color-global-feedback-negative-strong)" }}>⚠ A KPI named “{name.trim()}” already exists.</span>}
-        {!compiled.error && resolved.unknown.length === 0 && !nameTaken && preview && (
+        {preview && (
           <span style={{ ...sans, fontSize: FS.small, color: MICRO }}>
             Evaluates for <strong style={{ color: "var(--ink-color-global-text-default)" }}>{preview.length}</strong> companies
             {preview.length > 0 && (() => { const m = preview[Math.floor(preview.length / 2)]; return (
@@ -161,8 +172,9 @@ export function FormulaEditor({ data, dashboard, onSaved, initial = null, onCanc
       </div>
 
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-        <Btn kind="primary" onClick={() => { trackClick("PortfolioAnalytics.Formulas.SaveMetric"); save(); }} disabled={!valid}>{editingId ? "Update KPI" : "Save KPI"}</Btn>
+        <Btn kind="primary" onClick={() => { trackClick("PortfolioAnalytics.Formulas.SaveMetric"); save(); }}>{editingId ? "Update KPI" : "Save KPI"}</Btn>
         {editingId && onCancel && <Btn onClick={onCancel}>Cancel</Btn>}
+        {attempted && !valid && <span style={errText}>⚠ Fix the highlighted fields to save</span>}
       </div>
     </div>
   );
@@ -287,6 +299,7 @@ function FormulaCard({ f, data, metrics, total, onEdit, onAssign, onDelete }) {
   );
 }
 
+const errText = { ...sans, fontSize: FS.small, color: "var(--ink-color-global-feedback-negative-strong)" };
 const code = { fontFamily: mono.fontFamily, fontSize: FS.small, background: "var(--ink-color-global-surface-lightgray-default)", padding: "2px 6px", borderRadius: 4, color: "var(--ink-color-global-text-default)" };
 const opBtn = { ...mono, width: 34, height: 34, borderRadius: 4, border: `1px solid var(--ink-color-global-border-default)`, background: "var(--ink-color-global-surface-background-default)", color: "var(--ink-color-global-text-default)", cursor: "pointer", fontSize: FS.bodyLg, fontWeight: 600 };
 
