@@ -2,17 +2,14 @@
 name: carta-home-build
 description: >
   Builds or rebuilds the Carta Home live artifact — a Cowork dashboard home page that works
-  for any Carta firm. Shows a live Schedule of Investments, Fund Performance benchmarks,
-  P&L (from STATEMENT_OF_OPS), Balance Sheet (from MONTHLY_NAV_CALCULATIONS), LP Reporting,
-  Portfolio Valuations (top holdings by MOIC), ManCo expense actuals by category,
-  Form ADV regulatory AUM, and a Skill Directory with one-click copyable prompts.
-  Also publishes the standalone dashboard artifacts the home cards link out to, by running
-  their owning skills first. The artifact auto-detects the active firm from the Carta MCP
-  context — no hardcoded firm name needed. Use this skill whenever the user asks to
-  "build the carta home artifact", "rebuild carta home", "set up the carta home page",
-  "deploy carta home", or "restore the carta home dashboard". For a company's cap table use
-  carta-cap-table's carta-captable-home-build; for a CRM home of pipeline, deals and
-  contacts use carta-crm's carta-crm-home-build.
+  for any Carta firm. Summary cards for Schedule of Investments, Fund Performance, P&L,
+  Balance Sheet, LP Reporting, Portfolio Valuations, ManCo actuals and Form ADV, plus a
+  Skill Directory of copyable prompts. Auto-detects the active firm from the Carta MCP
+  context. Use whenever the user asks to "build the carta home artifact", "rebuild carta
+  home", "set up the carta home page", or "deploy carta home". Do NOT use it to build or
+  change one dashboard: a Schedule of Investments is carta-soi, a fund performance page is
+  carta-fund-performance. For a company's cap table use carta-cap-table's
+  carta-captable-home-build; for a CRM home use carta-crm's carta-crm-home-build.
 model: sonnet
 allowed-tools:
   # The only source for a connector's name
@@ -39,7 +36,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.38.4</carta-plugin>
+<carta-plugin>carta-investors:6.38.7</carta-plugin>
 
 # Carta Home — Build / Redeploy
 
