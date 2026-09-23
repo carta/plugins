@@ -82,6 +82,11 @@ SECURITY_TYPES = ("option_grant", "certificate", "piu")
 # skills/carta-issuance/references/artifact-surface.md. Not a server payload.
 SEED_KEYS = ("stakeholders", "quantity", "issue_date", "rows", "draft_set_id")
 
+# One person the prompt named. The page reads the name only from `name`, so the other
+# spellings a model reaches for are folded into it rather than opening nameless rows.
+PERSON_KEYS = ("name", "quantity", "email")
+NAME_ALIASES = ("stakeholder", "stakeholder_name", "full_name", "holder")
+
 # The published artifact's name, and what SKILL.md matches on to find this company's
 # existing page. One page per company and type, so one title per pair.
 TITLE_VERB = {
@@ -175,6 +180,56 @@ def compute_build_id(template, parts):
     return h.hexdigest()[:8]
 
 
+def _fold_name(entry):
+    out = dict(entry)
+    for alias in NAME_ALIASES:
+        if alias in out:
+            value = out.pop(alias)
+            if not str(out.get("name") or "").strip():
+                out["name"] = value
+    return out
+
+
+def _person(entry):
+    """A `stakeholders` entry as `{name, quantity?, email?}`: a bare name string, or an
+    object when people get different quantities."""
+    if isinstance(entry, str):
+        entry = {"name": entry}
+    if not isinstance(entry, dict):
+        sys.exit("ERROR: seed 'stakeholders' entries must be a name string or "
+                 '{"name": ..., "quantity": ...}')
+    entry = _fold_name(entry)
+    unknown = sorted(k for k in entry if k not in PERSON_KEYS)
+    if unknown:
+        sys.exit("ERROR: unknown key(s) {} on a seed 'stakeholders' entry — it holds only "
+                 "{}".format(", ".join(unknown), ", ".join(PERSON_KEYS)))
+    if not isinstance(entry.get("name"), str) or not entry["name"].strip():
+        sys.exit("ERROR: every seed 'stakeholders' entry needs a 'name'")
+    if not isinstance(entry.get("quantity", ""), (str, int, float)):
+        sys.exit("ERROR: seed 'stakeholders' quantity must be a number or a string")
+    return {k: entry[k] for k in PERSON_KEYS if entry.get(k) not in (None, "")}
+
+
+def normalize_seed(seed):
+    """The one shape the page reads: `stakeholders` as person objects, row names under
+    `name`. Rows that only say who gets how many are people, so they take the
+    stakeholders path and its server-side name match."""
+    seed = dict(seed)
+    rows = seed.get("rows")
+    if isinstance(rows, list) and all(isinstance(r, dict) for r in rows):
+        rows = [_fold_name(r) for r in rows]
+        seed["rows"] = rows
+        if (rows and "stakeholders" not in seed and seed.get("draft_set_id") in (None, "")
+                and all(set(r) <= set(PERSON_KEYS) and r.get("name") for r in rows)):
+            seed["stakeholders"] = seed.pop("rows")
+    names = seed.get("stakeholders")
+    if names is not None:
+        if not isinstance(names, list):
+            sys.exit("ERROR: seed 'stakeholders' must be a list")
+        seed["stakeholders"] = [_person(n) for n in names]
+    return seed
+
+
 def check_seed_shape(seed):
     """The seed holds what the prompt supplied and nothing else.
 
@@ -185,10 +240,6 @@ def check_seed_shape(seed):
     if unknown:
         sys.exit("ERROR: unknown seed key(s): {} — the seed holds only {}".format(
             ", ".join(unknown), ", ".join(SEED_KEYS)))
-    names = seed.get("stakeholders")
-    if names is not None and not (isinstance(names, list)
-                                  and all(isinstance(n, str) for n in names)):
-        sys.exit("ERROR: seed 'stakeholders' must be a list of name strings")
     rows = seed.get("rows")
     if rows is not None and not (isinstance(rows, list)
                                  and all(isinstance(r, dict) for r in rows)):
@@ -210,6 +261,7 @@ def build(corporation_id, company_name, security_type, seed, preview=False):
         sys.exit("ERROR: --security-type must be one of {}".format(
             ", ".join(SECURITY_TYPES)))
     check_seed_shape(seed)
+    seed = normalize_seed(seed)
 
     template = (RES / TEMPLATE).read_text()
     parts = {name: (RES / name).read_text() for name, _ in MARKERS}

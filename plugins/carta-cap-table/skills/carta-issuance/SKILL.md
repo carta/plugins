@@ -36,7 +36,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.89.5</carta-plugin>
+<carta-plugin>carta-cap-table:6.89.6</carta-plugin>
 
 # Issue Securities
 
@@ -200,6 +200,9 @@ uv run "$SKILL/issuance-artifact/scripts/build_artifact.py" \
 - Seed keys: `stakeholders` (names verbatim, as the user said them), `quantity`,
   `issue_date`, and `rows` when the import sub-skill produced them. Nothing else. An
   unknown key fails the build rather than opening a form that quietly ignores it.
+- **Different quantities per person** go on each entry, never dropped:
+  `{"stakeholders": [{"name": "Tagg Palmer", "quantity": 100}, {"name": "Emily Wilson", "quantity": 50}]}`.
+  Top-level `quantity` is for everyone who has none of their own.
 - **Resuming a saved draft set** adds `draft_set_id` — without it the page mints a *second*
   draft set of the same rows ([hard rule 3](#hard-rules)). The page reads the set's rows and
   terms back itself; seed the `load_drafts` rows, each with its `draft_pk`, only as its

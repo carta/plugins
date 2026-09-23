@@ -8,7 +8,10 @@ const SECURITY_TYPE = "{{SECURITY_TYPE}}";
 const SEED = {{SEED_JSON}};
 
 const seedQty = () => (SEED.quantity == null || SEED.quantity === "" ? "" : String(SEED.quantity));
-const seedNames = () => (Array.isArray(SEED.stakeholders) ? SEED.stakeholders : []);
+/** `{name, quantity?, email?}` per person; a bare name is one with no quantity of its own. */
+const seedPeople = () => (Array.isArray(SEED.stakeholders) ? SEED.stakeholders : [])
+  .map((p) => (typeof p === "string" ? { name: p } : p));
+const seedNames = () => seedPeople().map((p) => p.name);
 /** A resume. Its rows came from load_drafts already resolved, and each carries the
     draft_pk that makes a save update rather than insert. */
 const RESUMING = SEED.draft_set_id != null && SEED.draft_set_id !== "";
@@ -20,7 +23,8 @@ function promptPrefill() {
   const qty = seedQty();
   let rows = Array.isArray(SEED.rows) && SEED.rows.length
     ? SEED.rows
-    : seedNames().map((name) => ({ name: String(name), quantity: qty }));
+    : seedPeople().map((p) => ({ name: String(p.name), email: p.email || "",
+      quantity: p.quantity == null || p.quantity === "" ? qty : String(p.quantity) }));
   if (!rows.length && qty) rows = [{ quantity: qty }];
   const p = {};
   if (rows.length) p.rows = rows;

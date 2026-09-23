@@ -819,20 +819,6 @@ const planOpts = () => {
   return p ? opts.concat([[String(p.id), p.name || "Unnamed plan"]]) : opts;
 };
 const classOpts = () => S.classes.map((c) => [c.prefix, `${c.name || c.prefix} (${c.prefix})`]);
-const CHOSEN_FOR = {
-  only_class: "Chosen for you — the only class",
-  most_recent: "Chosen for you — the most recent class",
-  latest_created: "Chosen for you — the latest class",
-};
-/** Why the class came prefilled, when the server said. A preselected class sets the
-    holder's liquidation preference, so a default must not read as their own answer.
-    Copy only: an unknown or absent reason just means no hint, and once the user picks
-    a different class the answer is theirs. */
-function classChoiceHint() {
-  const chose = S.prefill.shareClassPrefix;
-  if (!chose || S.shared.prefix !== chose) return "";
-  return CHOSEN_FOR[S.prefill.shareClassPrefixReason] || "";
-}
 const vestOpts = () => [[NONE, "No vesting"], ...S.vesting.map((t) => [String(t.id), t.name])];
 /* ---------- which documents a set carries ----------
    Carta refuses a draft whose document set lacks a document the corporation requires,
@@ -1074,7 +1060,7 @@ function spec() {
     }
   };
   const cls = () => F("prefix", classNoun(), "sel", { opts: classOpts(), over: 1,
-    req: `a ${classNoun().toLowerCase()}`, hint: classChoiceHint() });
+    req: `a ${classNoun().toLowerCase()}` });
 
   if (t === "option_grant") {
     const zepo = sh.so_type === "ZEPO";
