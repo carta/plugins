@@ -4,7 +4,7 @@
     "headline": "The SOI and fund performance cards now open full dashboards of their own."
   },
   "carta-workhub-build": {
-    "version": "1.8.19",
+    "version": "1.8.20",
     "headline": "Workhub's capital activity review cards read \"Capital activity — review and release\" until opened, instead of calling every distribution a capital call."
   }
 }

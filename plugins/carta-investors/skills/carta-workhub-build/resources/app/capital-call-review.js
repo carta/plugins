@@ -1010,6 +1010,13 @@ function ccrAllocTable(s) {
         '<div class="ccr-np"><span>' + escHtml(ccrRowLabel(r)) +
         "</span><span>nothing to pay or receive</span></div>").join("");
   const npCount = fold && fold.count !== null && fold.count !== undefined ? fold.count : excluded.length;
+  // The fold names only its largest commitments; the rest are on the
+  // activity but never paged, unlike participating rows.
+  const npShown = fold && (fold.interests || []).length ? fold.interests.length : excluded.length;
+  const npNote = fold && fold.truncated
+    ? '<p class="ccr-note ccr-pad">Showing ' + npShown + " of " + npCount + ". " +
+      ccrOpenInCarta("See the rest in Carta", "ccr-link-btn") + "</p>"
+    : "";
 
   const complete = _ccr.rowsDone && !short;
   const unbacked = complete
@@ -1034,7 +1041,7 @@ function ccrAllocTable(s) {
     more + shortNote + unbackedNote +
     (_ccr.truncated ? '<p class="ccr-note">Stopped after ' + CCR_MAX_PAGES + " pages; the rest are on the activity.</p>" : "") +
     (npCount
-      ? '<div class="ccr-np-block"><div class="ccr-np-label">Not participating \u00b7 ' + npCount + "</div>" + npList + "</div>"
+      ? '<div class="ccr-np-block"><div class="ccr-np-label">Not participating \u00b7 ' + npCount + "</div>" + npList + npNote + "</div>"
       : "");
 }
 
