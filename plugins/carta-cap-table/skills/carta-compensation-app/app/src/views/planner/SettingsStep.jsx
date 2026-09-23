@@ -630,10 +630,11 @@ export default function SettingsStep({
               background: C.feedbackNoticeSubtle, border: `1px solid ${C.feedbackNotice}`,
               fontSize: FS.sm, color: C.feedbackNotice, lineHeight: 1.55,
             }}>
-              <strong>No refresh grant policy in this build.</strong> The settings below
-              cannot be applied, and Carta's built-in defaults are deliberately not shown
-              in their place — they are not this corporation's policy. Say "refresh" to
-              fetch it.
+              <strong>Refresh grant policy could not be fetched.</strong> The corporation's
+              own policy isn't in this build — either the account has no CTC role on it,
+              or the fetch itself failed. So the settings below can't be applied. Say
+              "refresh" to rebuild; if it fails again, the backend is degraded and this
+              needs escalating rather than retrying.
             </div>
           ) : (
             <>

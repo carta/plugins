@@ -13,7 +13,7 @@ description: >
   So "what are our comp benchmarks" is a sibling even though it names them, while "open our
   comp benchmarks so I can filter them" is this skill. NOT for a single role lookup. READ-ONLY.
 argument-hint: "<corporation name or numeric corporation id — required>"
-version: 0.1.0
+version: 0.2.0
 model: inherit
 allowed-tools:
   - mcp__carta__welcome
@@ -43,13 +43,14 @@ allowed-tools:
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_equity_refresh_page.py *)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_report_insights.py *)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_equity_pool_utilization.py *)
+  - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_retention_plan.py *)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_corporation_info.py *)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/build_datadir.py *)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/serve.py *)
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.89.12</carta-plugin>
+<carta-plugin>carta-cap-table:6.90.0</carta-plugin>
 
 <!-- [PATTERN carta-writing-style v0.0.2] [PATTERN etiquette v0.0.6] [PATTERN text v0.0.8] [PATTERN tables v0.0.12] [PATTERN carta-watermark v0.0.10] [PATTERN base v0.1.0] -->
 
@@ -779,6 +780,39 @@ surface.
 
 Skip it otherwise. A unit whose input is missing is dropped from the toggle rather
 than shown as `$0` or `0.0000%`, exactly as the product does.
+
+**2d-iv. Refresh grant policy (planner-only).** The Settings step of the Refresh
+Grant Planner applies the corporation's refresh grant policy — target %, cadence,
+tenure gate and the recommended corridor. Without this capture the step falls back
+to a "policy could not be fetched" banner and disables its controls.
+
+Run this whenever 2d-bis ran (i.e. the caller asked for the planner). Skip otherwise.
+
+```
+call_tool({"name": "compensation__get__retention-plan",
+           "arguments": {"corporation_id": <corporation_pk>}})
+```
+
+Then hand the result to the capture script:
+
+```bash
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_retention_plan.py" \
+  "<result path>" "<raw_dir>"
+```
+
+- **The endpoint is never empty.** On a corporation that has never opened CTC's
+  Plan Settings, it lazily provisions Carta's initial defaults (24-month tenure,
+  30% every 12 months, 15%–50% corridor) and returns them — the same behaviour
+  the CTC product's Plan Settings modal has. Treat the returned record as the
+  corporation's real starting policy, not a fallback the console invented. If the
+  response IS empty, that is a backend degradation, not a normal state; the
+  script exits so you notice, and this build should stop rather than model
+  against a policy nobody set.
+- **`403` — no CTC role on this corp:** stop this capture and build without it.
+  Same rule as 2d-bis; the planner's Settings step then shows its "policy could
+  not be fetched" banner instead of modelling against fabricated numbers.
+- **The percent fields are FRACTIONS on the wire** (0.30 == 30%). The console does
+  the ×100 conversion once, in `model/policy.js`; do not rescale in flight.
 
 **2e. Write `meta.json`** (next to `raw_dir`, per `ctc_paths.py`):
 
