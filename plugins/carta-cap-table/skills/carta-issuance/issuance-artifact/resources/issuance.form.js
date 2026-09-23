@@ -56,7 +56,8 @@ const S = {
   loadErr: "", loadFailed: [], connErr: "", shared: {}, rows: [], seq: 0,
   searching: false, searchErr: false, searched: new Set(),
   errs: {}, srv: {}, banner: "", bannerBad: false, busy: false,
-  draftSetId: null, drafts: {}, sheet: null, issued: 0, issuedRows: [],
+  draftSetId: null, draftSetName: "", drafts: {}, sheet: null, issued: 0, issuedRows: [],
+  pendingRows: [], links: {},
   stuck: "", untold: false, bootFailed: false, docPicked: false, removed: [], savedNote: "",
   sent: {}, lastPayload: {}, removedGone: 0, hydrated: false, touchedShared: new Set(),
   rewriting: [],
@@ -1223,6 +1224,7 @@ function specHtml() {
 /** Name the Carta this page writes to. A corporation id is not unique across
     environments, so this is the only place a viewer can catch the wrong one. */
 function subtitleHtml() {
+  if (S.stage === "issued") return `<b>${esc(S.corpName)}</b> · ${esc(draftSetLabel())}`;
   const via = T.server ? ` · via ${esc(T.server)}` : "";
   const who = `<b>${esc(S.corpName)}</b> · ${esc(typeLabel())}${via}`;
   return S.connErr ? `${who} · no live data` : who;
@@ -1279,7 +1281,7 @@ function render() {
     // After the fact the page names what happened, not what to do.
     const h1 = el("title");
     const noun = unitNoun()[1];
-    if (h1) h1.textContent = done ? `${noun[0].toUpperCase()}${noun.slice(1)} issued` : `Issue ${noun}`;
+    if (h1) h1.textContent = done ? issuedTitle() : `Issue ${noun}`;
     el("shared-card").hidden = done || reviewing || stopped;
     el("rows-card").hidden = done || reviewing || stopped;
     el("review-card").hidden = done || !reviewing || stopped;
@@ -1555,7 +1557,6 @@ function totals(byCurrency) {
 const QTY_NOUN = { option_grant: ["option", "options"], certificate: ["share", "shares"],
   piu: ["unit", "units"] };
 const qtyNoun = () => QTY_NOUN[S.type] || ["unit", "units"];
-const qtyHead = () => capNoun(qtyNoun()[1]);
 /** The review's column head, the same word for every security type. */
 const REVIEW_QTY_HEAD = "Quantity";
 /** "Total" alone when one currency covers the batch, which is the usual case. */
@@ -1732,36 +1733,111 @@ const issuedQty = (x) => {
 const qtyText = (v) => (v === "" || v == null || !Number.isFinite(Number(v))
   ? "—" : Number(v).toLocaleString());
 
-/** A certificate lands on the cap table; a grant or a unit goes to the signatory. */
-function issuedSentence(n) {
-  const [sing, many] = unitNoun();
-  const what = esc(plural(n, sing, many));
-  return S.type === "certificate"
-    ? `${what} ${n === 1 ? "is" : "are"} on <b>${esc(S.corpName)}</b>'s cap table.`
-    : `${what} ${n === 1 ? "was" : "were"} issued on <b>${esc(S.corpName)}</b> and sent for signature.`;
+/** What a signatory signs, in the words the Carta app's own success page uses. */
+const SIGN_NOUN = { option_grant: "options", certificate: "certificates", piu: "PIUs" };
+const signNoun = () => SIGN_NOUN[S.type] || "securities";
+const finished = () => S.issued > 0 || S.stage === "issued";
+const draftSetLabel = () => S.draftSetName
+  || (S.draftSetId != null && S.draftSetId !== "" ? `Draft set ${S.draftSetId}` : typeLabel());
+
+function issuedTitle() {
+  const noun = unitNoun()[1];
+  const Noun = `${noun[0].toUpperCase()}${noun.slice(1)}`;
+  if (!S.links.board) return `${Noun} issued`;
+  if (!S.issued) return `${Noun} pending board approval`;
+  const p = heldRows().length;
+  return p ? `${S.issued.toLocaleString()} of ${(S.issued + p).toLocaleString()} ${noun} issued` : `${Noun} issued`;
+}
+
+/** Only an absolute http(s) URL the server built for this environment opens: a relative
+    path would resolve against the artifact's own host, not Carta's. */
+function extLink(url, text, id) {
+  if (typeof url !== "string" || !/^https?:\/\//i.test(url)) return "";
+  return `<a class="ext" href="${esc(url)}" target="_blank" rel="noopener" data-testid="${id}">${esc(text)} ↗</a>`;
+}
+
+/** Rows a board-gated issue held back. Carta's own read names them; without it, the
+    submitted rows that produced no security, provable only by draft_pk; failing that,
+    the rows the form sent as pending. */
+function heldRows() {
+  const server = objs(S.pendingRows);
+  if (server.length) {
+    return server.map((x) => {
+      const r = S.rows.find((row) => String(S.drafts[row.key]) === String(x.draft_pk)) || {};
+      return { who: txtOf(x.stakeholder_name) || (r.name || "").trim(), email: (r.email || "").trim(),
+        qty: x.quantity != null ? x.quantity : r.quantity };
+    });
+  }
+  if (!S.links.board) return [];
+  const pks = objs(S.issuedRows).map((x) => x.draft_pk ?? x.draftPk);
+  const rows = pks.length && pks.every((pk) => pk != null)
+    ? S.rows.filter((r) => !pks.some((pk) => String(pk) === String(S.drafts[r.key])))
+    : S.rows.filter((r) => S.type === "option_grant"
+      && ("board_mode" in r.ov ? r.ov.board_mode : S.shared.board_mode) === "pending");
+  return rows.map((r) => ({ who: (r.name || "").trim(), email: (r.email || "").trim(), qty: r.quantity }));
+}
+
+function nextTable(cells, second, testid) {
+  if (!cells.length) return "";
+  const rows = cells.map(([who, mail, sec, q], i) => `<div class="rv-r iss" data-testid="${testid}-row-${i}">
+      <div class="rv-w">${esc(who)}${mail ? `<div class="hint" data-testid="${testid}-row-${i}-email">${esc(mail)}</div>` : ""}</div>
+      <div>${sec}</div>
+      <div class="rv-n">${esc(qtyText(q))}</div>
+    </div>`).join("");
+  return `<div class="rv-h iss"><div>Stakeholder</div><div>${esc(second)}</div>
+      <div class="rv-n">${esc(REVIEW_QTY_HEAD)}</div></div>
+    <div data-testid="${testid}-rows">${rows}</div>`;
+}
+
+function nextItem(kind, testid, title, lines, action) {
+  return `<div class="nx" data-testid="${testid}">
+    <span class="nx-ic ${kind}" aria-hidden="true"></span>
+    <div class="nx-b"><p class="nx-t">${esc(title)}</p>${lines.map((l) => `<p class="nx-d">${esc(l)}</p>`).join("")}
+      ${action ? `<div class="nx-a">${action}</div>` : ""}</div>
+  </div>`;
+}
+
+function signedHtml() {
+  const entries = objs(S.issuedRows);
+  const named = entries.length > 0 && entries.every((x) => issuedLabel(x));
+  const held = S.links.board ? heldRows().length : 0;
+  let cells = [];
+  if (named) cells = entries.map((x) => [issuedWho(x), issuedEmail(x), esc(issuedLabel(x)), issuedQty(x)]);
+  else if (entries.length === S.rows.length && !held) {
+    cells = S.rows.map((r) => [(r.name || "").trim(), (r.email || "").trim(), "", r.quantity]);
+  }
+  const noun = signNoun();
+  return `<div class="nx-g">${nextItem("ok", "issued-signatories", `Signatories were notified to sign ${noun}`,
+    ["Once signatories sign, securities will be sent to stakeholders."],
+    extLink(S.links.issued, `View issued ${noun} in Carta`, "issued-view-link"))}
+    ${nextTable(cells, named ? "Security" : "", "issued")}</div>`;
+}
+
+function heldHtml() {
+  const b = S.links.board || {};
+  const lines = ["These grants are not issued yet. Once the board approves, Carta emails signatories to sign them."];
+  let action = "";
+  if (b.action === "view_consent") {
+    lines[0] = "A board consent was sent to the board. Once every board member approves, Carta issues these grants and emails signatories to sign them.";
+    action = extLink(b.url, "View board consent in Carta", "board-consent-link");
+  } else if (b.action === "ask_board_admin") {
+    lines.push(`Only a board admin at ${S.corpName} can create the board consent.`);
+    action = extLink(b.url, "Open drafts in Carta", "board-consent-link");
+  } else {
+    action = extLink(b.url, "Create board consent in Carta", "board-consent-link");
+  }
+  const cells = heldRows().map((x) => [x.who, x.email, `<span class="pill" data-testid="pending-draft">Draft</span>`, x.qty]);
+  return `<div class="nx-g">${nextItem("wait", "pending-board", "New grants are pending board approval", lines, action)}
+    ${nextTable(cells, "Status", "pending")}</div>`;
 }
 
 function issuedHtml() {
-  const entries = objs(S.issuedRows);
-  const n = S.issued || entries.length;
+  const out = [];
+  if (S.issued > 0) out.push(signedHtml());
+  if (S.links.board) out.push(heldHtml());
   // The page is the only record when Claude was never told, so it says so here, where it
   // stays, rather than on a sheet the reader can dismiss.
-  const head = `<p class="rv-s rv-lead" data-testid="issued-summary">${issuedSentence(n)}</p>`
-    + toldHtml({ told: !S.untold }, "");
-  const named = entries.length > 0 && entries.every((x) => issuedLabel(x));
-  let cells;
-  if (named) cells = entries.map((x) => [issuedWho(x), issuedLabel(x), issuedQty(x), issuedEmail(x)]);
-  else if (entries.length === S.rows.length) cells = S.rows.map((r) => [(r.name || "").trim(), "", r.quantity, (r.email || "").trim()]);
-  else return head;
-  const rows = cells.map(([who, sec, q, mail], i) => `<div class="rv-r iss" data-testid="issued-row-${i}">
-      <div class="rv-w">${esc(who)}${mail ? `<div class="hint" data-testid="issued-row-${i}-email">${esc(mail)}</div>` : ""}</div>
-      <div>${esc(sec)}</div>
-      <div class="rv-n">${esc(qtyText(q))}</div>
-    </div>`).join("");
-  return `${head}
-    <div class="rv-h iss"><div>Stakeholder</div><div>${named ? "Security" : ""}</div>
-      <div class="rv-n">${esc(qtyHead())}</div></div>
-    <div data-testid="issued-rows">${rows}</div>`;
+  return `${out.join("")}${toldHtml({ told: !S.untold }, "")}`;
 }
 
 function rowHtml(r, i) {
@@ -2215,7 +2291,7 @@ function saveArgs(rows, part) {
   const deletes = part === "new" ? [] : S.removed.map((pk) => ({ draft_pk: pk, delete: true }));
   const a = { corporation_id: S.corpId, security_type: S.type, drafts: drafts.concat(deletes) };
   if (S.draftSetId) a.draft_set_id = S.draftSetId;
-  else a.draft_set_name = `${shortLabel()} ${iso(S.shared.issue_date) || today()}`.slice(0, 30);
+  else a.draft_set_name = S.draftSetName = `${shortLabel()} ${iso(S.shared.issue_date) || today()}`.slice(0, 30);
   // cw_resources fills every row's exercise periods from the plan named here, so a row
   // added after the first save needs it too. Never over a resumed row: its periods may be
   // its own, and the plan's would replace them.
@@ -2362,7 +2438,7 @@ function toldHtml(m, ok) {
   const where = set
     ? `This is ${esc(set)} on ${esc(S.corpName)} — give Claude that number to pick it up.`
     : "Ask Claude to check this issuance in Carta.";
-  const again = S.issued > 0 ? " Do not issue again from here." : "";
+  const again = finished() ? " Do not issue again from here." : "";
   return `<p class="fail-note" data-testid="handoff-not-recorded">We could not tell Claude `
     + `automatically. ${where}${again}</p>`;
 }
@@ -2578,7 +2654,7 @@ async function saveDraft() {
 async function submit(mode) {
   // Ours to guard, not the footer's attributes: a second save in flight mints a second
   // draft set, and an issued or unestablished set must take no further write.
-  if (S.busy || S.sheet || S.issued || S.stuck) return;
+  if (S.busy || S.sheet || finished() || S.stuck) return;
   if (mode === "draft") { await saveDraft(); return; }
   if (incomplete()) return;
   S.banner = ""; S.bannerBad = false; S.srv = {};
@@ -2678,18 +2754,24 @@ async function issueNow() {
   }
   S.busy = false;
   const issued = Array.isArray(r.issued) ? r.issued : [];
-  if (issued.length) {
+  // A grant awaiting its board stays a draft. Carta says so through where it would send
+  // the user next, and a mixed set issues its approved rows beside the held ones.
+  const board = r.board_approval && typeof r.board_approval === "object" ? r.board_approval
+    : /\/board(?:room)?\//.test(typeof r.redirect_url === "string" ? r.redirect_url : "")
+      ? { action: /\/boardroom\//.test(r.redirect_url) ? "view_consent" : "create_consent" } : null;
+  if (issued.length || board) {
     // The result goes on screen before the hand-off is recorded, not after: a sheet
     // still reading "Issuing on Carta" offers no way out, and the write has landed.
-    // No sheet to dismiss: the page itself now lists what was written, and says there
-    // whether Claude was told.
     S.issued = issued.length;
     S.issuedRows = issued;
+    S.pendingRows = objs(r.pending_board_approval);
+    S.links = { issued: r.issued_ledger_url, board };
     S.stage = "issued";
     closeSheet(); render();
     const h1 = el("title");
     if (h1 && h1.focus) h1.focus();
-    noteHandoff(null, await handoff("issued", { issued: issued.length }));
+    noteHandoff(null, await handoff("issued", { issued: issued.length,
+      pending_board: board ? heldRows().length || null : 0, board_action: board ? board.action || null : null }));
     render();
     return;
   }
@@ -2709,15 +2791,6 @@ async function issueNow() {
     openSheet("failed", { dup }); render();
     noteHandoff(S.sheet, await handoff("needs_claude",
       { reason: "duplicates", duplicates: dup.count || null }));
-    return;
-  }
-  // A grant awaiting its board comes back issued: [] with where to send the consent.
-  const url = typeof r.redirect_url === "string" ? r.redirect_url : "";
-  if (/\/board(?:room)?\//.test(url)) {
-    await seal("Waiting on board approval", "Nothing is issued yet: these grants need their "
-      + `board's approval first. Ask Claude to send the board consent for ${draftSetPhrase()
-        || "this draft set"} — the grants are issued once every board member signs.`,
-      "nothing_issued", { board_approval: true, redirect_url: url });
     return;
   }
   // After an issue call nothing goes back to a confirm: a second press is a second issue.
@@ -3046,6 +3119,9 @@ function issueMessage(status) {
   const q = fin(S.rows.reduce((a, r) => a + Number(r.quantity || 0), 0));
   const who = S.rows.length === 1 ? (S.rows[0].name || "1 stakeholder") : `${S.rows.length} stakeholders`;
   const what = `${q == null ? "" : `${q.toLocaleString()} `}${typeLabel().toLowerCase()} across ${who} on ${S.corpName}`;
+  if (status === "issued" && S.links.board) {
+    return `Issued ${S.issued} of ${what} from the issuance form; the rest await board approval. Nothing further to write.`;
+  }
   if (status === "issued") return `Issued ${what} from the issuance form. Nothing further to write.`;
   if (status === "draft") return `Saved ${what} as a draft set from the issuance form, not yet validated and not issued.`;
   return `Saved ${what} as a draft set from the issuance form. The issue did not complete.`;
@@ -3133,6 +3209,7 @@ function hydrateFromDrafts(res) {
   const stored = objs(res && res.drafts).filter((x) => x.draft_pk != null);
   if (!stored.length) return false;
   S.hydrated = true;
+  if (typeof res.draft_set_name === "string" && res.draft_set_name.trim()) S.draftSetName = res.draft_set_name.trim();
   S.rows = stored.map(storedRow);
   S.drafts = {};
   S.sent = {};
@@ -3405,7 +3482,7 @@ function removeRow(i) {
     returns to one the user can act on. */
 function dismissSheet() {
   if (!S.sheet || WAITING.has(S.sheet.phase)) return;
-  const terminal = S.issued || S.stuck || S.sheet.phase === "saved";
+  const terminal = finished() || S.stuck || S.sheet.phase === "saved";
   const opener = S.opener;
   closeSheet();
   if (!terminal) S.stage = "review";

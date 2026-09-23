@@ -36,7 +36,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.90.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.90.3</carta-plugin>
 
 # Issue Securities
 
@@ -312,9 +312,9 @@ closing line:
 | `status` | What it means | What you do |
 |---|---|---|
 | *not found* | they have not finished. The normal state | Answer whatever they asked. Not an error, and never reported as one |
-| `issued` | **the securities are on the cap table** | Report it and close per [issue-and-close.md § On success](references/issue-and-close.md#on-success). **Do not call `issue_securities`** — that would issue a second time |
+| `issued` | **the page is done**. `pending_board` counts option grants held for a board consent: drafts, not issued | Close per [issue-and-close.md § On success](references/issue-and-close.md#on-success): signatories were notified to sign; once they sign, securities go to stakeholders. With `pending_board`, add that those grants await board approval and the page links to the consent in Carta. **Never call `issue_securities` or send a consent** — the first issues twice |
 | `draft` | saved, not validated, not issued | Say the draft is saved and they can come back to it, and **stop**. A saved draft is not an approval to issue |
-| `needs_claude` | the page tried and could not finish | Read `reason`: `duplicates` → [mutate-recovery.md § Duplicate resolution](references/mutate-recovery.md#duplicate-resolution); `unknown_outcome` → **read the set's state before any write**, the rows may already be issued; `partly_issued` → some rows are issued: read the set's state and never issue it again; `rows_removed` → the named `rows` were deleted to change their document set and not saved back: have the user retry, or re-save them; `nothing_issued` → [mutate-recovery.md](references/mutate-recovery.md), or with `board_approval: true` the grants await a board consent — send it with `cap_table:mutate:publish_board_consent` |
+| `needs_claude` | the page tried and could not finish | Read `reason`: `duplicates` → [mutate-recovery.md § Duplicate resolution](references/mutate-recovery.md#duplicate-resolution); `unknown_outcome` → **read the set's state before any write**, the rows may already be issued; `partly_issued` → some rows are issued: read the set's state and never issue it again; `rows_removed` → the named `rows` were deleted to change their document set and not saved back: have the user retry, or re-save them; `nothing_issued` → [mutate-recovery.md](references/mutate-recovery.md) |
 
 ### When something is wrong
 

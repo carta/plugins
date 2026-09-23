@@ -133,7 +133,7 @@ function previewFill() {
 /* ---------- stages ---------- */
 /** The issued stage seals the page, so every other stage has to unseal it. */
 function previewUnissue() {
-  S.issued = 0; S.issuedRows = []; S.untold = false; S.stuck = "";
+  S.issued = 0; S.issuedRows = []; S.pendingRows = []; S.links = {}; S.untold = false; S.stuck = "";
   if (S.stage === "issued") S.stage = "edit";
 }
 
@@ -198,7 +198,7 @@ function previewErrorStage() {
    reached by pressing the page's own buttons, which is the point of them. This one is
    only reachable through `issue_securities`, and a preview refuses every write before
    the wire — so the state the write would have produced is set directly instead.
-   Four shapes have to be looked at, and pressing Issued again steps to the next. */
+   Each shape has to be looked at, and pressing Issued again steps to the next. */
 const PREVIEW_ISSUED = [
   ["named", "Carta named each security and the draft it came from, but no quantity — "
     + "issuing a saved set sends no rows to read one off. Each quantity here is the "
@@ -209,8 +209,19 @@ const PREVIEW_ISSUED = [
   ["unnamed", "The same call answering with ids alone: no security column, and the rows "
     + "are the only source. Press Issued again for a hand-off that did not land."],
   ["untold", "Issued, and Claude was never told — the page is the only record. Press "
-    + "Issued again to start over."],
+    + "Issued again for a set the board holds in part."],
+  ["mixed", "Option grants only: the first row issued and went to its signatory, the rest "
+    + "wait on a board consent. Press Issued again for a set the board holds entirely."],
+  ["held", "Every row waits on a board consent, so nothing is issued yet. Press Issued "
+    + "again for an editor who is not a board admin."],
+  ["admin", "Held by the board, and this user cannot create the consent. Press Issued "
+    + "again to start over."],
 ];
+
+/** Example Carta URLs on the test environment, standing in for the server-built ones. */
+const PREVIEW_APP = "https://app.test.carta.rocks";
+const PREVIEW_LEDGER = { option_grant: "options/list", certificate: "certificates/list",
+  piu: "options/piu/list" };
 
 /** What `issued[]` looks like when a saved set is issued, built from the form's own
     answers so the labels read like this corporation's. Example values, like every other
@@ -233,8 +244,21 @@ function previewIssuedStage() {
   previewFill();
   const [kind, note] = PREVIEW_ISSUED[PREVIEW.issued % PREVIEW_ISSUED.length];
   PREVIEW.issued += 1;
-  S.issuedRows = previewIssuedRows(kind);
+  const board = ["mixed", "held", "admin"].includes(kind);
+  // A board hold is an option grant state; the other types step straight past it.
+  if (board && S.type !== "option_grant") { previewIssuedStage(); return; }
+  const all = previewIssuedRows(board ? "named" : kind);
+  const cut = kind === "mixed" ? 1 : board ? 0 : all.length;
+  S.issuedRows = all.slice(0, cut);
   S.issued = S.issuedRows.length;
+  S.pendingRows = board ? S.rows.slice(cut).map((r) => ({ draft_pk: S.drafts[r.key],
+    stakeholder_name: r.name, quantity: r.quantity })) : [];
+  S.links = { issued: `${PREVIEW_APP}/${PREVIEW_LEDGER[S.type]}/${S.corpId}/`,
+    board: !board ? null : kind === "admin"
+      ? { action: "ask_board_admin", url: `${PREVIEW_APP}/drafts/option_grant/${S.corpId}/draft-management` }
+      : { action: "create_consent",
+        url: `${PREVIEW_APP}/corporations/${S.corpId}/board/resolutions/new/?templateId=4` } };
+  S.draftSetName = [shortLabel(), iso(S.shared.issue_date) || today()].join(" ");
   S.untold = kind === "untold";
   S.stage = "issued";
   S.banner = "";

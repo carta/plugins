@@ -23,6 +23,8 @@
          token under it, so one asset serves both themes. No icon font is loadable. */
       --ink-glyph-caret: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.75 4.5 6 7.75 9.25 4.5' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
       --ink-glyph-calendar: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cg fill='none' stroke='%23000' stroke-width='1.2' stroke-linecap='round'%3E%3Crect x='1.6' y='2.6' width='10.8' height='9.8' rx='1.6'/%3E%3Cpath d='M1.6 5.6h10.8M4.6 1.4v2.2M9.4 1.4v2.2'/%3E%3C/g%3E%3C/svg%3E");
+      --ink-glyph-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M3 7.4 5.8 10 11 4.2' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      --ink-glyph-clock: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cg fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round'%3E%3Ccircle cx='7' cy='7' r='5.2'/%3E%3Cpath d='M7 4.2V7l2 1.3'/%3E%3C/g%3E%3C/svg%3E");
     }
     /* The only [data-theme] rules: bridge the host's runtime theme toggle to
        color-scheme so every light-dark() token flips at once. */
@@ -262,6 +264,20 @@
     /* What a money total is the total of, under it, so the price column is not read as one. */
     /* Issued: the holder's name takes the room it needs; the label and the figure do not. */
     .rv-h.iss, .rv-r.iss { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) 96px; }
+    /* What happens next: one group per outcome, each an item over the rows it covers. */
+    .nx-g + .nx-g { margin-top: var(--ink-spacing-global-vertical-small); padding-top: var(--ink-spacing-global-vertical-small); border-top: 1px solid var(--ink-color-global-brand-gray-50); }
+    .nx { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; align-items: start; margin-bottom: var(--ink-spacing-global-vertical-xsmall); }
+    .nx-ic { width: 28px; height: 28px; border-radius: 50%; background: var(--ink-color-global-brand-gray-30); position: relative; }
+    .nx-ic::after { content: ""; position: absolute; inset: 7px; -webkit-mask: center / contain no-repeat; mask: center / contain no-repeat; background: var(--ink-color-global-brand-black); }
+    .nx-ic.ok::after { -webkit-mask-image: var(--ink-glyph-check); mask-image: var(--ink-glyph-check); }
+    .nx-ic.wait { background: color-mix(in srgb, var(--ink-color-global-brand-orange-60) 16%, transparent); }
+    .nx-ic.wait::after { background: var(--ink-color-global-brand-orange-60); -webkit-mask-image: var(--ink-glyph-clock); mask-image: var(--ink-glyph-clock); }
+    .nx-t { font-weight: 600; }
+    .nx-d { font-size: 13px; color: var(--ink-color-global-brand-gray-90); margin-top: 2px; }
+    .nx-a { margin-top: var(--ink-spacing-global-vertical-xsmall); }
+    .ext { font-size: 13px; color: var(--ink-color-global-brand-black); text-decoration: underline; text-underline-offset: 2px; }
+    .ext:focus-visible { outline: 2px solid var(--ink-color-global-brand-black); outline-offset: 2px; border-radius: 2px; }
+    .pill { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 999px; background: var(--ink-color-global-brand-gray-30); color: var(--ink-color-global-brand-gray-90); }
     /* One grid for the whole table, so term columns line up across rows. */
     .rv-scroll { overflow-x: auto; }
     .rv-mx { --rv-q: 96px; --rv-p: 132px; display: grid; column-gap: 16px; align-items: baseline;

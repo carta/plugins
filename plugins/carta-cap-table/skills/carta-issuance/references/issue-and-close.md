@@ -141,6 +141,14 @@ Every re-call carries `draft_set_id` + each `draft_pk` (SKILL.md hard rule 3).
 
 ### On success
 
+Lead with what happens next, in the Carta app's words: **Signatories were notified to sign
+options** (certificates, PIUs), then *"Once signatories sign, securities will be sent to
+stakeholders."* When the response carries `board_approval`, the rows in
+`pending_board_approval` are drafts awaiting a board consent, not issued: say so and link
+`board_approval.url` — `create_consent` is where the user creates it, `ask_board_admin` means a
+board admin has to, `view_consent` means it was sent. Prefer `issued_ledger_url` over the
+ledger link built below.
+
 Render a short table using `MM/DD/YYYY`. Add a `Label` or `Grant number` column only when
 `issued[]` actually carried one for every row — the list is documented as security pks, and
 some builds return a `label` (`ES-28`) alongside. Never synthesise the value or guess the next
