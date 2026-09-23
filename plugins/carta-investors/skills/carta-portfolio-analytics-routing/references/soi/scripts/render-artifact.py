@@ -63,7 +63,38 @@ TEMPLATE_CANDIDATES = (
     Path(__file__).resolve().parent.parent / "artifact.html",
 )
 
+# The two ship locations sit at different depths under the plugin, so walk up to the
+# .claude-plugin directory rather than counting parents.
+def _plugin_root():
+    for parent in Path(__file__).resolve().parents:
+        if (parent / ".claude-plugin" / "skill-versions.json").exists():
+            return parent
+    return None
+
+
+ARTIFACT_SKILL = "carta-soi"
+
+
+def read_version():
+    """This artifact's version, for the update banner it renders at runtime.
+
+    A missing registry is not fatal: the banner simply never fires, which is better
+    than refusing to render a Schedule of Investments over it.
+    """
+    root = _plugin_root()
+    if root is None:
+        return ""
+    try:
+        data = json.loads((root / ".claude-plugin" / "skill-versions.json").read_text())
+    except (ValueError, OSError):
+        return ""
+    entry = data.get(ARTIFACT_SKILL)
+    version = entry.get("version") if isinstance(entry, dict) else None
+    return version if isinstance(version, str) else ""
+
+
 PLACEHOLDERS = (
+    "{{ARTIFACT_VERSION}}",
     "{{FUNDS_JSON}}",
     "{{INITIAL_FUND_UUID}}",
     "{{CARTA_MCP_SERVER}}",
@@ -285,6 +316,7 @@ def main() -> int:
     content = content.replace("{{CARTA_MCP_SERVER}}", mcp_server)
     content = content.replace("{{FIRM_NAME}}", html.escape(firm_name))
     content = content.replace("{{FIRM_UUID}}", firm_uuid)
+    content = content.replace("{{ARTIFACT_VERSION}}", read_version())
 
     out_path.write_text(content, encoding="utf-8")
     print(out_path)

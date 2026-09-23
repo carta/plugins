@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Schedule of Investments</title>
+    <title>{{FIRM_NAME}} — Schedule of Investments</title>
     <!-- SangBleu Versailles is Carta's brand serif but isn't licensed for distribution
          outside Carta's environments, so it's referenced as the first font-family
          option for staff-machine fidelity and falls back to EB Garamond / Georgia
@@ -1158,6 +1158,29 @@
         .gsr-via { font-size: 12px; color: var(--text-subtle); }
         .gsr-fund { font-size: 12px; color: var(--text-subtle); white-space: nowrap; }
         .gsr-value { font-variant-numeric: tabular-nums; font-weight: 500; white-space: nowrap; }
+
+        .soi-update-banner {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 16px;
+            padding: 12px 14px;
+            border: 1px solid var(--border-subtle, #DEDFDF);
+            border-radius: 4px;
+            background: var(--surface-nested, #F1F1F1);
+        }
+        .soi-update-banner__body { flex: 1; font-size: 13px; line-height: 1.5; }
+        .soi-update-banner__title { font-weight: 600; margin: 0 0 2px; }
+        .soi-update-banner__message { margin: 0; color: var(--text-subtle, #656B6B); }
+        .soi-update-banner__dismiss {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 2px;
+            color: var(--text-subtle, #656B6B);
+            font-size: 15px;
+            line-height: 1;
+        }
     </style>
 </head>
 <body>
@@ -1168,6 +1191,8 @@
             <div class="header-eyebrow">{{FIRM_NAME}}</div>
             <h1>Schedule of Investments</h1>
         </div>
+
+        <div id="update-banner-slot"></div>
 
         <div id="loadingState">
             <div id="loadingStatus" style="display: none; font-size: 13px; color: var(--text-subtle); margin-bottom: 12px;"></div>
@@ -3768,6 +3793,70 @@
         // the table head doesn't need to render until data arrives. render()
         // calls renderHead() itself once data is in.
         bootstrap();
+
+        // ── Update banner: is this page behind the published build? ──
+        // A rendered artifact is a frozen copy and the sandbox blocks outbound fetches,
+        // so carta-mcp reads the published version and this compares it to the stamp.
+        const ARTIFACT_VERSION = "{{ARTIFACT_VERSION}}";
+        const UPDATE_DISMISS_KEY = "cartaSoi.dismissedUpdateVersion";
+        const UPDATE_PROMPT_TEXT = "Rebuild my Schedule of Investments artifact";
+
+        // Patch ships copy and style nudges; banner-worthy change starts at minor.
+        function soiParseMajorMinor(v) {
+            const m = /^(\d+)\.(\d+)\.\d+$/.exec(String(v || ""));
+            return m ? [Number(m[1]), Number(m[2])] : null;
+        }
+
+        function soiUpdateAvailable(current, latest) {
+            const c = soiParseMajorMinor(current);
+            const l = soiParseMajorMinor(latest);
+            if (!c || !l) return false;
+            if (l[0] !== c[0]) return l[0] > c[0];
+            return l[1] > c[1];
+        }
+
+        function soiReadDismissed() {
+            try { return localStorage.getItem(UPDATE_DISMISS_KEY); } catch (e) { return null; }
+        }
+
+        function soiRenderUpdateBanner(latest, headline) {
+            const slot = document.getElementById("update-banner-slot");
+            if (!slot) return;
+            const lead = headline ? escHtml(headline) + " " : "";
+            slot.innerHTML = `
+                <div class="soi-update-banner" role="status">
+                    <div class="soi-update-banner__body">
+                        <p class="soi-update-banner__title">A newer Schedule of Investments is available</p>
+                        <p class="soi-update-banner__message">${lead}Ask Claude to rebuild it: &ldquo;${escHtml(UPDATE_PROMPT_TEXT)}&rdquo;</p>
+                    </div>
+                    <button class="soi-update-banner__dismiss" aria-label="Dismiss">&times;</button>
+                </div>`;
+            slot.querySelector(".soi-update-banner__dismiss").addEventListener("click", () => {
+                try { localStorage.setItem(UPDATE_DISMISS_KEY, latest); } catch (e) { /* best effort */ }
+                slot.innerHTML = "";
+            });
+        }
+
+        // Silent on every failure: a banner the user cannot act on is worse than none.
+        async function soiCheckForUpdate() {
+            try {
+                const res = await callMcpWithWelcomeRetry("fetch", {
+                    command: "plugin:get:version",
+                    params: { plugin: "carta-investors", skill: "carta-soi" },
+                });
+                const payload = (res && typeof res === "object" && typeof res.version === "string")
+                    ? res
+                    : null;
+                const latest = payload && payload.version;
+                if (!latest || !soiUpdateAvailable(ARTIFACT_VERSION, latest)) return;
+                if (soiReadDismissed() === latest) return;
+                soiRenderUpdateBanner(latest, payload.headline);
+            } catch (e) {
+                console.log("[carta-soi] update check unavailable:", e && e.message);
+            }
+        }
+
+        setTimeout(soiCheckForUpdate, 0);
     </script>
 </body>
 </html>

@@ -232,22 +232,31 @@ If a **<Firm Name> — Schedule of Investments** artifact is already published, 
 Artifact({
   file_path: "<absolute path printed by the render script>",
   url: "<url from the list — omit entirely on a first publish>",
-  title: "<Firm Name> — Schedule of Investments",
   description: "<Firm Name> — fund Schedule of Investments",
   favicon: "📈",
   capabilities: {
     mcp: {
       servers: [
-        { server: "<CARTA_MCP_SERVER>", tools: ["call_tool", "set_context", "welcome"] }
+        { server: "<CARTA_MCP_SERVER>", tools: ["call_tool", "set_context", "welcome", "fetch"] }
       ]
     }
   }
 })
 ```
 
-All three tools must be in the grant, or the page loads and the matching call rejects with `not_in_manifest`. The artifact only calls `welcome` itself when the MCP reports a "session not initialized" error on the first dwh query or set_context call — see **Session re-initialization** under Caveats.
+All four tools must be in the grant, or the page loads and the matching call rejects with `not_in_manifest`. `fetch` carries the update check, which asks carta-mcp for the published version and raises a banner when this page is behind it. The artifact only calls `welcome` itself when the MCP reports a "session not initialized" error on the first dwh query or set_context call — see **Session re-initialization** under Caveats.
 
-Keep `title` and `favicon` stable across redeploys, and restate the whole `capabilities` object every time: a non-empty object replaces the stored grant, so a tool left out is revoked.
+**No `title` here, and do not add one.** The tool reads the title out of the file's
+`<title>` tag and uses its `title` parameter only when the file has none, so a `title`
+passed alongside a rendered page is silently dropped. The render script stamps
+`<Firm Name> — Schedule of Investments` into the tag from the firm name you pass it. If the
+artifact comes out named wrong, the render is wrong — check what Step 1 resolved, not this
+call. The name is also the key a caller matches on to find this firm's existing page, so a
+page published under a bare title is invisible to that lookup and the next run publishes a
+second one.
+
+Keep `favicon` stable across redeploys, and restate the whole `capabilities` object every
+time: a non-empty object replaces the stored grant, so a tool left out is revoked.
 
 ### Step 6 — Confirm to the user
 
