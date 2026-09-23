@@ -1520,7 +1520,6 @@ function disp(d, v) {
   const m = (d.opts || []).find((x) => String(x[0]) === String(v));
   return m ? m[1] : String(v);
 }
-const shDisp = (d) => disp(d, specVal(d));
 
 /* ---------- review ---------- */
 // Reads rowValues(), the row as the form holds it — the same values a save derives its
@@ -1563,68 +1562,126 @@ const REVIEW_QTY_HEAD = "Quantity";
 const totalLabel = (cur, n) => (S.type === "piu" ? "Total units"
   : n > 1 ? `Total — ${cur}` : "Total");
 
+/** A term a row added to a resumed set does not inherit from "As saved in Carta". */
+const NOT_SET = "__not_set__";
+/** Past this many varying terms, columns get too narrow and each row lists its own. */
+const REVIEW_MAX_COLS = 4;
+
+/** The terms a row carries, read against its own answers: no vesting has no vesting
+    start, and a row's own grant type brings that type's fields. */
+function reviewSpec(r) {
+  const was = S.shared;
+  S.shared = Object.assign({}, was);
+  for (const [k, v] of Object.entries(r.ov)) if (v !== "") S.shared[k] = v;
+  try { return spec(); } finally { S.shared = was; }
+}
+/** One term on one row as it goes out; blank when the row does not carry it. */
+function rowTerm(r, k, rs, vals) {
+  const d = rs.find((x) => x.k === k);
+  if (!d) return "";
+  if ("val" in d) return d.val;
+  if (k === "currency" && vals.currency) return vals.currency;
+  if (k === "grant_expiration_date" && vals.grant_expiration_date) return anyDateIso(vals.grant_expiration_date);
+  if (k in r.ov && r.ov[k] !== "") return r.ov[k];
+  const v = S.shared[k];
+  return v === AS_SAVED && !r.resumed ? NOT_SET : v;
+}
+const cellDisp = (d, v) => (v === NOT_SET ? "Not set" : v === "" || v == null ? "—" : disp(d, v));
+/** The value most rows hold, or null on a tie, when no row is the odd one out. */
+function usual(texts) {
+  const n = new Map();
+  for (const t of texts) n.set(t, (n.get(t) || 0) + 1);
+  const [a, b] = [...n.values()].sort((x, y) => y - x);
+  return b === undefined || a > b ? [...n.entries()].find(([, c]) => c === a)[0] : null;
+}
+const derivedExpiry = (r) => S.type === "option_grant" && !r.ov.grant_expiration_date
+  && !!r.ov.issue_date && (!r.resumed || r.touched.has("issue_date"));
+
+/** Each term shows once: in "Same for everyone" when every row holds it, else as a column. */
 function reviewHtml() {
   const priceHead = S.type === "option_grant" ? "Exercise price"
     : S.type === "certificate" ? "Price / share" : capNoun(S.thresholdNoun);
-  const rows = S.rows.map((r, i) => {
-    const d = rowValues(r);
-    // Who the row is. Every shared term the sub-line used to carry is in the details
-    // block below, so repeating it here said the same thing twice per recipient.
-    const who = [r.email, d.issue_date_relationship].filter(Boolean).join(" · ");
-    const ovKeys = Object.keys(r.ov);
-    // The values, not just the field names: the details block states the batch's
-    // answer, so a row that overrode one has it nowhere else.
-    const ovLabels = ovKeys.length
-      ? rowSpec(r).filter((x) => ovKeys.includes(x.k))
-        .map((x) => `${x.label}: ${disp(x, r.ov[x.k])}`)
-      : [];
-    // A row added to a resumed set gets none of the terms shown "As saved in Carta".
-    const unset = r.resumed ? [] : spec().filter((x) => x.over && S.shared[x.k] === AS_SAVED
-      && !(x.k in r.ov)).map((x) => x.label);
-    // A row's own issue date moves its expiry, which goes out with it; say so here.
-    if (S.type === "option_grant" && "issue_date" in r.ov && !("grant_expiration_date" in r.ov)
-      && (!r.resumed || r.touched.has("issue_date")) && d.grant_expiration_date) ovLabels.push(`Grant expiration: ${longDate(anyDateIso(d.grant_expiration_date))}`);
+  const priced = PRICE_KEYS[S.type] || [];
+  const all = S.rows.map((r) => ({ r, vals: rowValues(r), rs: reviewSpec(r) }));
+  const defs = spec().filter((d) => !priced.includes(d.k));
+  for (const { rs } of all) {
+    for (const d of rs) if (!priced.includes(d.k) && !defs.some((x) => x.k === d.k)) defs.push(d);
+  }
+  const same = [], varies = [];
+  let notes = { same: true, text: "" };
+  for (const d of defs) {
+    const cells = all.map(({ r, rs, vals }) => rowTerm(r, d.k, rs, vals));
+    const texts = cells.map((v) => cellDisp(d, v));
+    const one = texts.every((t) => t === texts[0]);
+    if (d.k === "notes") {
+      notes = { same: one, text: one && cells[0] && cells[0] !== NOT_SET ? texts[0] : "" };
+      continue;
+    }
+    if (!one) varies.push({ d, texts, usual: usual(texts) });
+    else if (!cells.every((v) => v === "" || v == null || v === false)) same.push({ d, text: texts[0] });
+  }
+  const cols = varies.length <= REVIEW_MAX_COLS ? varies : [];
+  const listed = cols.length ? [] : varies;
+  const mark = (t, u) => (u !== null && t !== u ? `<span class="rv-d">${esc(t)}</span>` : esc(t));
+  const expiryNote = (r, k) => (k === "grant_expiration_date" && derivedExpiry(r)
+    ? `<div class="rv-s">from its issue date</div>` : "");
+
+  const prices = all.map(({ r, vals: d }) => {
     const priceKey = PRICE_KEYS[S.type][0];
     const kept = (priceKey in r.ov ? r.ov[priceKey] : S.shared[priceKey]) === AS_SAVED;
-    const price = kept ? AS_SAVED_LABEL : S.type === "piu"
+    return kept ? AS_SAVED_LABEL : S.type === "piu"
       ? `${money(d.threshold_value, d.currency)} ${d.threshold_value_type === "Overall" ? "overall" : "/ unit"}`
       : money(unitPrice(d), d.currency);
+  });
+  const usualPrice = S.rows.length > 1 ? usual(prices) : null;
+
+  const rows = all.map(({ r, vals: d }, i) => {
+    const who = [r.email, d.issue_date_relationship].filter(Boolean).join(" · ");
+    const own = listed.length ? `<dl class="rv-own" data-testid="review-row-${i}-terms">${listed.map((v) =>
+      `<div data-testid="review-row-${i}-term-${v.d.k}"><dt>${esc(v.d.label)}</dt><dd>${mark(v.texts[i], v.usual)}${expiryNote(r, v.d.k)}</dd></div>`).join("")}</dl>`
+      // At phone width the columns fold into this list, so they are never scrolled out of view.
+      : cols.length ? `<dl class="rv-own rv-m">${cols.map((v) =>
+        `<div><dt>${esc(v.d.label)}</dt><dd>${mark(v.texts[i], v.usual)}${expiryNote(r, v.d.k)}</dd></div>`).join("")}</dl>` : "";
+    const note = !notes.same && d.notes
+      ? `<div class="rv-s" data-testid="review-row-${i}-notes">Notes: ${esc(d.notes)}</div>` : "";
     return `<div class="rv-r" data-testid="review-row-${i}">
       <div><b>${esc(r.name)}</b>${r.stakeholderId == null && (!r.resumed || r.touched.has("stakeholder")) ? " <span class=\"rv-tag\">(new)</span>" : ""}
-        <div class="rv-s">${esc(who)}</div>
-        ${ovLabels.length ? `<div class="rv-tag" data-testid="review-row-${i}-override">Overridden — ${esc(ovLabels.join(" · "))}</div>` : ""}
-        ${unset.length ? `<div class="rv-tag" data-testid="review-row-${i}-unset">Not set on this row: ${esc(unset.join(", "))}</div>` : ""}</div>
+        <div class="rv-s">${esc(who)}</div>${note}${own}</div>
       <div class="rv-n">${Number(d.quantity).toLocaleString()}</div>
-      <div class="rv-n">${esc(price)}</div>
+      <div class="rv-n">${mark(prices[i], usualPrice)}</div>${cols.map((v) =>
+        `<div class="rv-v" data-testid="review-row-${i}-term-${v.d.k}">${mark(v.texts[i], v.usual)}${expiryNote(r, v.d.k)}</div>`).join("")}
     </div>`;
   }).join("");
 
+  const pad = cols.map(() => '<div class="rv-vh"></div>').join("");
   const groups = [...totals().entries()];
   const tot = groups.map(([cur, t]) =>
     `<div class="rv-t" data-testid="review-total-${esc(cur || "units")}">
       <div>${esc(totalLabel(cur, groups.length))}</div>
       <div class="rv-n" data-testid="review-total-qty-${esc(cur || "units")}">${t.qty.toLocaleString()}</div>
       <div class="rv-n" data-testid="review-total-value-${esc(cur || "units")}">${t.priced
-        ? esc(money(t.value, cur)) : ""}</div>
+        ? esc(money(t.value, cur)) : ""}</div>${pad}
     </div>`).join("");
 
-  const priced = PRICE_KEYS[S.type] || [];
-  const terms = spec().filter((d) => d.k !== "notes" && !priced.includes(d.k)
-    && specVal(d) !== "" && specVal(d) != null
-    && specVal(d) !== false).map((d) => `<div data-testid="review-term-${d.k}">
+  const terms = same.map(({ d, text }) => `<div data-testid="review-term-${d.k}">
       <dt>${esc(d.label)}</dt>
-      <dd>${esc(shDisp(d))}</dd>
+      <dd>${esc(text)}</dd>
     </div>`).join("");
+  const lead = listed.length ? `<p class="rv-s rv-lead" data-testid="review-varies">These terms differ by person, so each row lists its own: ${esc(listed.map((v) => v.d.label).join(", "))}. Shaded values differ from most rows.</p>` : "";
 
   // Once the page is sealed it will confirm nothing more, so it does not say what
   // confirming would do.
   const sealed = !!(S.stuck || S.issued);
-  return `<div class="rv-h"><div>Stakeholder</div><div class="rv-n">${esc(REVIEW_QTY_HEAD)}</div>
-      <div class="rv-n">${esc(priceHead)}</div></div>
-    <div data-testid="review-rows">${rows}</div>
+  return `${lead}<div class="rv-scroll"><div class="rv-mx c${cols.length}" data-testid="review-table">
+    <div class="rv-h"><div>Stakeholder</div><div class="rv-n">${esc(REVIEW_QTY_HEAD)}</div>
+      <div class="rv-n">${esc(priceHead)}</div>${cols.map((v) =>
+        `<div class="rv-vh" data-testid="review-head-${v.d.k}">${esc(v.d.label)}</div>`).join("")}</div>
+    <div class="rv-rows" data-testid="review-rows">${rows}</div>
     ${tot}
+    </div></div>
+    ${terms ? `<p class="rv-terms-h" data-testid="review-terms-heading">${S.rows.length > 1 ? "Same for everyone" : "Terms"}</p>` : ""}
     <dl class="rv-terms" data-testid="review-terms">${terms}</dl>
-    ${S.shared.notes ? `<p class="rv-s" data-testid="review-notes">Notes: ${esc(disp({}, S.shared.notes))}</p>` : ""}
+    ${notes.same && notes.text ? `<p class="rv-s" data-testid="review-notes">Notes: ${esc(notes.text)}</p>` : ""}
     ${legendHtml()}
     ${sealed ? "" : `<p class="rv-commit" data-testid="review-commit">${esc(CONFIRM_LINE[S.type] || "")}</p>`}`;
 }
@@ -1743,7 +1800,7 @@ function rowHtml(r, i) {
       ${!r.isNew ? `<button class="link" id="${p}-new-toggle" data-testid="${p}-new-toggle" data-act="new" data-i="${i}" type="button">Not on the cap table? Create a new stakeholder</button>`
         : `<button class="link" id="${p}-new-toggle" data-testid="${p}-new-toggle" data-act="existing" data-i="${i}" type="button">Pick an existing stakeholder</button>`}
       <button class="link" id="${p}-override-toggle" data-testid="${p}-override-toggle" data-act="ov" data-i="${i}" type="button">
-        ${r.open ? "▾" : "▸"} Override shared terms${Object.keys(r.ov).length ? ` (${Object.keys(r.ov).length})` : ""}</button>
+        ${r.open ? "▾" : "▸"} Different terms for this person${Object.keys(r.ov).length ? ` (${Object.keys(r.ov).length})` : ""}</button>
       ${r.open ? `<div class="grid" data-testid="${p}-overrides">${ovHtml(r, i)}</div>` : ""}
       ${rowErrHtml(r, p)}
     </div></div>`;
@@ -3061,6 +3118,16 @@ function storedRow(x) {
   return row;
 }
 
+/** The batch value for a term the stored rows may disagree on: the most common one, so
+    fewer rows read as different. Blank wins whenever a row is blank, because a blank
+    override falls back to the batch value in rowValues() and would stop being blank. */
+function storedBaseline(vals) {
+  if (vals.includes("")) return "";
+  const n = new Map();
+  for (const v of vals) n.set(v, (n.get(v) || 0) + 1);
+  return [...n.entries()].reduce((best, e) => (e[1] > best[1] ? e : best))[0];
+}
+
 /** Take a load_drafts answer as the page's state. False when it carried no rows. */
 function hydrateFromDrafts(res) {
   const stored = objs(res && res.drafts).filter((x) => x.draft_pk != null);
@@ -3072,8 +3139,8 @@ function hydrateFromDrafts(res) {
   S.rows.forEach((r, i) => { S.drafts[r.key] = stored[i].draft_pk; });
   const terms = stored.map(storedTerms);
   for (const k of Object.keys(terms[0])) {
-    S.shared[k] = terms[0][k];
-    S.rows.forEach((r, i) => { if (terms[i][k] !== terms[0][k]) r.ov[k] = terms[i][k]; });
+    S.shared[k] = storedBaseline(terms.map((t) => t[k]));
+    S.rows.forEach((r, i) => { if (terms[i][k] !== S.shared[k]) r.ov[k] = terms[i][k]; });
   }
   for (const k of NOT_LOADED[S.type] || []) S.shared[k] = AS_SAVED;
   if (S.type === "option_grant") {
@@ -3127,6 +3194,7 @@ function commit(ev) {
     if (k === "issue_date") {
       if (S.shared.rule_144_mode === "issue_date") S.shared.rule_144_date = val;
     }
+    dropOverridesMatchingShared();
   } else if (scope.startsWith("ov-")) {
     const r = S.rows[Number(scope.slice(3))];
     if (!r) return;
@@ -3146,6 +3214,18 @@ function commit(ev) {
     r.touched.add(k === "query" ? "stakeholder" : k);
     if (k === "kind") r.kindUnknown = false;
     if (k === "query") { r.stakeholderId = null; resolveExact(r); }
+  }
+}
+
+/** A row's own value that the batch now holds too is no longer the row's own. */
+function dropOverridesMatchingShared() {
+  for (const r of S.rows) {
+    for (const k of Object.keys(r.ov)) {
+      if (r.ov[k] === "" || r.ov[k] === AS_SAVED || String(r.ov[k]) !== String(S.shared[k])) continue;
+      // Kept: without it the row would derive a new expiry from its own issue date.
+      if (k === "grant_expiration_date" && "issue_date" in r.ov) continue;
+      delete r.ov[k];
+    }
   }
 }
 

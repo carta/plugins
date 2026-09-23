@@ -262,6 +262,30 @@
     /* What a money total is the total of, under it, so the price column is not read as one. */
     /* Issued: the holder's name takes the room it needs; the label and the figure do not. */
     .rv-h.iss, .rv-r.iss { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) 96px; }
+    /* One grid for the whole table, so term columns line up across rows. */
+    .rv-scroll { overflow-x: auto; }
+    .rv-mx { --rv-q: 96px; --rv-p: 132px; display: grid; column-gap: 16px; align-items: baseline;
+      grid-template-columns: minmax(0, 1fr) var(--rv-q) var(--rv-p); }
+    .rv-mx.c1 { grid-template-columns: minmax(120px, 1fr) var(--rv-q) var(--rv-p) minmax(96px, 200px); }
+    .rv-mx.c2 { grid-template-columns: minmax(120px, 1fr) var(--rv-q) var(--rv-p) repeat(2, minmax(96px, 200px)); }
+    .rv-mx.c3 { grid-template-columns: minmax(120px, 1fr) var(--rv-q) var(--rv-p) repeat(3, minmax(96px, 200px)); }
+    .rv-mx.c4 { grid-template-columns: minmax(120px, 1fr) var(--rv-q) var(--rv-p) repeat(4, minmax(96px, 200px)); }
+    .rv-mx .rv-h, .rv-mx .rv-rows, .rv-mx .rv-r, .rv-mx .rv-t { display: contents; }
+    .rv-mx .rv-h > div { padding-bottom: 5px; }
+    .rv-mx .rv-r > div { padding-block: 7px; min-width: 0; }
+    .rv-mx .rv-t > div { margin-top: var(--ink-spacing-global-vertical-xsmall); padding-top: 9px; }
+    .rv-v { overflow-wrap: anywhere; }
+    .rv-d { background: color-mix(in srgb, var(--ink-color-global-brand-orange-60) 16%, transparent);
+      border-radius: 4px; padding: 1px 5px; margin-left: -5px; font-weight: 500;
+      -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+    .rv-n .rv-d { margin-left: 0; }
+    .rv-own { margin-top: 6px; display: grid; gap: 3px 14px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+    .rv-own dt { font-size: 11px; color: var(--ink-color-global-brand-gray-70); }
+    .rv-own dd { font-size: 13px; }
+    .rv-own.rv-m { display: none; }
+    .rv-terms-h { margin-top: var(--ink-spacing-global-vertical-medium); font-size: 11px; font-weight: 600;
+      letter-spacing: .02em; text-transform: uppercase; color: var(--ink-color-global-brand-gray-70); }
+    .rv-terms-h + .rv-terms { margin-top: 6px; }
     .rv-terms { margin-top: var(--ink-spacing-global-vertical-medium); display: grid; gap: 5px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
     .rv-terms div { min-width: 0; }
     .rv-terms dt { font-size: 11px; color: var(--ink-color-global-brand-gray-70); }
@@ -365,5 +389,9 @@
       .row-top .qty-f { grid-column: 1; }
       .x { margin-top: 0; grid-row: 1; grid-column: 2; }
       .rv-h, .rv-r, .rv-t { grid-template-columns: minmax(0, 1fr) 62px 106px; gap: 6px; }
+      .rv-mx { --rv-q: 62px; --rv-p: 106px; column-gap: 10px; }
+      .rv-mx.c1, .rv-mx.c2, .rv-mx.c3, .rv-mx.c4 { grid-template-columns: minmax(0, 1fr) var(--rv-q) var(--rv-p); }
+      .rv-mx .rv-v, .rv-mx .rv-vh { display: none; }
+      .rv-own.rv-m { display: grid; }
       .rv-h.iss, .rv-r.iss { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 62px; }
     }
