@@ -154,6 +154,10 @@ const CCR_CARD_TITLE = "Capital activity — review and release";
 const CCR_PAGE_SIZE = 12;   // carta-mcp's cap, measured against its 40k budget
 const CCR_MAX_PAGES = 40;
 
+// Health checks usually refuse within this time, so a refusal is not shown as a
+// release in progress first.
+const CCR_RELEASE_ACK_MS = 4000;
+
 let _ccr = null;
 
 // Held across opens so the seed card can name its fund before the panel is
@@ -618,42 +622,77 @@ async function ccrSubmitChanges() {
   }
 }
 
-async function ccrApprove() {
+// A refusal names the health check that stopped the release. Long text is a stack
+// trace or a wall of detail, which a toast cannot carry.
+function ccrErrText(res) {
+  const t = res && res.content && res.content[0] && res.content[0].text;
+  return typeof t === "string" && t.length <= 240 ? t : "";
+}
+
+function ccrApprove() {
+  const snap = _ccr;
   const btn = document.getElementById("ccr-do-approve");
   if (btn) { btn.disabled = true; btn.textContent = "Releasing…"; }
   trackWorkhub("click", "CartaWorkhub.CapitalCallReview.Release");
 
   if (CCR_IS_DEMO) {
-    _ccr.phase = "released";
+    snap.phase = "released";
     ccrRender();
     return;
   }
 
-  try {
-    const params = {
-      fund_uuid: _ccr.target.fundUuid,
-      capital_activity_id: _ccr.target.activityId,
-    };
-    // The consent is the approver's authorization, so it is passed only as
-    // ticked, and only where there is one to record: a plain call's account
-    // confirmation is a gate on this page, not a consent the backend keeps.
-    if (_ccr.consent.call && _ccr.summary && _ccr.summary.uses_fbo_contributions) params.amm_consent = true;
-    const res = await _mcp("mutate", { command: "fa:mutate:approve-capital-activity", params: params });
-    if (res.isError) throw new Error(res.content?.[0]?.text ?? "release failed");
-    _ccr.phase = "released";
+  const params = {
+    fund_uuid: snap.target.fundUuid,
+    capital_activity_id: snap.target.activityId,
+  };
+  // The consent is the approver's authorization, so it is passed only as
+  // ticked, and only where there is one to record: a plain call's account
+  // confirmation is a gate on this page, not a consent the backend keeps.
+  if (snap.consent.call && snap.summary && snap.summary.uses_fbo_contributions) params.amm_consent = true;
+  _mcp("mutate", { command: "fa:mutate:approve-capital-activity", params: params }).then(
+    (res) => ccrReleaseAnswered(snap, res, null),
+    (err) => ccrReleaseAnswered(snap, null, err),
+  );
+
+  // Still on the confirm step means no reply yet: show the release as under way.
+  setTimeout(() => {
+    if (_ccr !== snap || snap.phase !== "confirm") return;
+    snap.phase = "releasing";
     ccrRender();
     farFetchRequests();
-  } catch (err) {
-    console.error("[ccr] approve-and-release failed —", err);
-    // An ambiguous failure must not read as "nothing happened": the release may
-    // have run. Send the reviewer to Carta rather than inviting a second press.
-    _ccr.phase = "review";
-    // Not _ccr.error: that doubles as the body's message and would replace the
-    // call the reviewer now has to go and check.
-    _ccr.locked = true;
+  }, CCR_RELEASE_ACK_MS);
+}
+
+// Runs whenever the reply lands — before the panel gave up waiting, or well after.
+function ccrReleaseAnswered(snap, res, err) {
+  if (_ccr !== snap) return;
+
+  if (err) {
+    // No verdict reached us, so the release may still have run. Send the reviewer to
+    // Carta rather than inviting a second press.
+    console.error("[ccr] release did not confirm —", err);
+    snap.phase = "review";
+    // Not snap.error: that doubles as the body's message and would replace the call
+    // the reviewer now has to go and check.
+    snap.locked = true;
     ccrRender();
     showToast("Release did not confirm. Check the call in Carta before trying again.");
+    return;
   }
+
+  if (res && res.isError) {
+    // Release runs its blocking health checks first and sends nothing when one fails,
+    // so a refusal leaves the call as it was. Keep the panel usable.
+    console.error("[ccr] release refused —", res);
+    snap.phase = "review";
+    ccrRender();
+    showToast(ccrErrText(res) || "Carta did not release this call. Nothing was sent to investors.");
+    return;
+  }
+
+  snap.phase = "released";
+  ccrRender();
+  farFetchRequests();
 }
 
 // ── Render ────────────────────────────────────────────────────────────────
@@ -1347,6 +1386,18 @@ function ccrFooter() {
     '<button class="far-btn-primary" data-ccr-close>Back to tasks</button></div>';
 }
 
+// Reached without a reply, so whether the journal posted is unknown. Say only what
+// is certain: the release is running and leaving does not stop it.
+function ccrReleasingBody() {
+  return '<div class="ccr-done">' +
+    '<div class="ccr-done-title">Release in progress</div>' +
+    '<div class="ccr-done-body">' +
+      escHtml("Carta is generating notices and posting journals for this capital activity.") +
+    "</div>" +
+    '<div class="ccr-note">It\'ll show up under Completed when it\'s done. ' +
+    "Come back anytime to check.</div></div>";
+}
+
 function ccrDoneBody(released) {
   const s = _ccr.summary || {};
   const dist = ccrIsDistribution(s);
@@ -1382,6 +1433,7 @@ function ccrRender() {
       escHtml(_ccr.changeText) + "</textarea>" +
       '<p class="ccr-note" style="margin-top:8px">This task moves to In progress until it comes back to you.</p>';
   }
+  else if (_ccr.phase === "releasing") body = ccrReleasingBody();
   else if (_ccr.phase === "released") body = ccrDoneBody(true);
   else if (_ccr.phase === "sent") body = ccrDoneBody(false);
   else body = ccrReviewBody();

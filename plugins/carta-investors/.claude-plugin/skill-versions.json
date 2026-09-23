@@ -4,7 +4,7 @@
     "headline": "Carta Home opens first and its dashboard cards say they are being prepared, turning into links once each dashboard is ready."
   },
   "carta-workhub-build": {
-    "version": "1.8.20",
+    "version": "1.8.21",
     "headline": "Workhub's capital activity review cards read \"Capital activity — review and release\" until opened, instead of calling every distribution a capital call."
   }
 }
