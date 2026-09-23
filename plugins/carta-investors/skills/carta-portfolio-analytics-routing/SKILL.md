@@ -52,7 +52,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.39.3</carta-plugin>
+<carta-plugin>carta-investors:6.39.4</carta-plugin>
 
 # carta-portfolio-analytics-routing — Portfolio Analytics Router (mirror)
 
