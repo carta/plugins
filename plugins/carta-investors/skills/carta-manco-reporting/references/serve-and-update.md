@@ -142,8 +142,13 @@ it.
 ```bash
 LOG="<dashboard_dir>/serve.log"
 nohup python3 "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/serve.py" \
-  --data-dir "<dashboard_dir>" > "$LOG" 2>&1 &
+  --data-dir "<dashboard_dir>" --detach > "$LOG" 2>&1 &
 ```
+
+`--detach` forks and daemonizes the server so it outlives this launching
+process/session — the same flag `carta-fund-modeling`'s `serve.py` uses.
+Cleanup is now the idle timeout (`--idle-timeout`, 24h default), not the
+launcher going away.
 
 **Only when the session already carries `pk`** from `get_current_user` (a connected Carta
 MCP has it from bootstrap), append `--user-id <pk>` so telemetry names a real user. Never

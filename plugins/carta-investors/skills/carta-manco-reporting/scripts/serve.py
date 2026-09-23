@@ -57,7 +57,7 @@ DATA_DIR = None
 WEB_DIR = None
 SRC_DIR = None
 TOKEN = None
-HEARTBEAT_TIMEOUT = 1800
+IDLE_TIMEOUT_DEFAULT = 86400  # 24h backstop; should never fire during active use
 WATCHDOG_INTERVAL = 10
 SUSPEND_GAP_SLACK = 55
 _last_heartbeat = time.time()
@@ -88,22 +88,42 @@ def _touch_heartbeat():
         _last_heartbeat = time.time()
 
 
-def _watchdog(httpd):
+def _watchdog(httpd, timeout):
     last_tick = time.time()
     while True:
         time.sleep(WATCHDOG_INTERVAL)
         now = time.time()
+        # A large jump means the host slept, not real idleness — forgive it and
+        # let the reopened tab resume before reaping.
         if now - last_tick > WATCHDOG_INTERVAL + SUSPEND_GAP_SLACK:
             _touch_heartbeat()
             last_tick = now
             continue
         last_tick = now
+        if timeout <= 0:
+            continue
         with _hb_lock:
             idle = now - _last_heartbeat
-        if idle > HEARTBEAT_TIMEOUT:
+        if idle > timeout:
             print("[serve] idle %ds - shutting down" % int(idle), flush=True)
             httpd.shutdown()
             os._exit(0)
+
+
+def _detach_or_warn():
+    """Daemonize so the server outlives the process that launched it. No-op (warns)
+    where os.fork is unavailable."""
+    if os.name != "posix" or not hasattr(os, "fork"):
+        print("[serve] --detach unsupported on os=%s; staying in foreground" % os.name, flush=True)
+        return
+    if os.fork() > 0:
+        os._exit(0)
+    os.setsid()  # own session, so a process-group signal to the launcher can't reach us
+    if os.fork() > 0:
+        os._exit(0)
+    devnull = os.open(os.devnull, os.O_RDWR)
+    for fd in (0, 1, 2):
+        os.dup2(devnull, fd)
 
 
 def _safe_join(base, rel):
@@ -343,6 +363,16 @@ def main():
         help="integer Carta id of the launching user, for the browser's Snowplow tracker; "
         "omit when unknown",
     )
+    ap.add_argument(
+        "--detach", action="store_true",
+        help="Run as a background daemon that outlives the launching process and returns "
+             "immediately. Cleanup is the idle timeout. No-op (warns) where os.fork is "
+             "unavailable.")
+    ap.add_argument(
+        "--idle-timeout", type=int,
+        default=int(os.environ.get("IDLE_TIMEOUT", str(IDLE_TIMEOUT_DEFAULT))),
+        help="seconds of API inactivity before the server self-terminates (0 = never)",
+    )
     args = ap.parse_args()
 
     DATA_DIR = Path(args.data_dir).resolve()
@@ -373,6 +403,7 @@ def main():
     except OSError:
         pass
 
+    idle_timeout = max(0, args.idle_timeout)
     url = "http://127.0.0.1:%d/?t=%s" % (port, TOKEN)
     print("[serve] manco-reporting at %s" % url, flush=True)
     print("[serve] data-dir: %s" % DATA_DIR, flush=True)
@@ -382,9 +413,15 @@ def main():
     if not (WEB_DIR / "vendor" / "mcp-ui-tracker.global.js").exists():
         print("[serve] WARNING: vendor/mcp-ui-tracker.global.js missing — no telemetry will be sent", flush=True)
     print("[serve] src-dir:  %s%s" % (SRC_DIR, "" if SRC_DIR.exists() else "  (missing)"), flush=True)
+    print("[serve] idle-timeout: %s" % ("disabled" if idle_timeout <= 0 else "%ds" % idle_timeout), flush=True)
 
-    threading.Thread(target=_watchdog, args=(httpd,), daemon=True).start()
     _maybe_open_browser(url, args.no_open)
+
+    # Fork before starting the watchdog thread — threads don't survive fork.
+    if args.detach:
+        _detach_or_warn()
+
+    threading.Thread(target=_watchdog, args=(httpd, idle_timeout), daemon=True).start()
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
