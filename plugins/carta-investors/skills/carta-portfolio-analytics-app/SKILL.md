@@ -43,7 +43,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.41.1</carta-plugin>
+<carta-plugin>carta-investors:6.42.2</carta-plugin>
 
 <!-- Carta investor tooling. React app (in-browser JSX transpile) fed by Data Collection KPIs. -->
 
@@ -224,14 +224,16 @@ The build summary reports `capTableCompanies`, `capTableClasses` and `soiCompani
 them, and expect the cap table to be far better covered than the holdings detail.
 
 ## Step 2 — Fetch the KPI data → raw query files
-All 10 stems (`funds`, `financials`, `forecasts`, `holdings`, `fdshares`, `deal_irr`, `capstack`, `holdings_history`, `entity_identity`, `corporation_links` — see `references/queries.md` for what each covers and powers) are **static SQL**: none of them filters on a hand-templated `fund_uuid` IN-list. `holdings`/`fdshares`/`deal_irr`/`holdings_history` reach fund scope through a `NOT ILIKE '%SPV%'` subquery over `MONTHLY_NAV_CALCULATIONS` (same shape as `funds`'s own query); `capstack` has no fund/firm column to filter on at all; everything else is scoped by `set_context`.
+All 10 stems (`funds`, `financials`, `forecasts`, `holdings`, `fdshares`, `deal_irr`, `capstack`, `holdings_history`, `entity_identity`, `corporation_links` — see `references/queries.md` for what each covers and powers) filter on no hand-templated `fund_uuid` IN-list. `holdings`/`fdshares`/`deal_irr`/`holdings_history` reach fund scope through a `NOT ILIKE '%SPV%'` subquery over `MONTHLY_NAV_CALCULATIONS` (same shape as `funds`'s own query); `capstack` has no fund/firm column to filter on at all.
+
+**Firm-scope guard — pass the firm on every emit AND every save.** `set_context` row scoping alone is not trusted: a staff user's row-access grant is one shared slot per user (not per session), and the user's other surfaces (another Claude session, fund-admin Data Explorer, the `carta dwh` CLI) can rewrite it mid-refresh — that once served another firm's entire Data Collection universe into a build. So every `emit_stem_sql.py` call below takes `--firm-uuid "<firm_uuid>"` (Step 1's firm), which pins each firm-bearing stem with `firm_id = '<firm_uuid>'` and selects `firm_id`; every `save_query_result.py` / `save_batch_result.py` call takes `--expect-firm "<firm_uuid>"`, which refuses any page whose rows carry another firm (writing `<stem>.ndjson.scope_error` and nothing else). `capstack` alone has no firm column: `save_batch_result.py` skips its row check but refuses the whole batch when any sibling stem fails, and a truncated `capstack` paged singularly is fetched in the same session moments later. On a scope failure: **do not build** — re-run `set_context {firm_id:<firm_uuid>}` and re-fetch the affected stem (or the whole batch) from offset 0; if it fails twice, stop and report it to the user (their grant is being actively rewritten by another surface).
 
 5 of the 10 stems — `funds`, `holdings`, `fdshares`, `deal_irr`, `capstack` — are light enough to batch into one `dwh__execute__queries` call, collapsing 5 serial per-stem model turns into one with no fund-UUID list ever hand-templated or emitted. `financials`, `forecasts` and `holdings_history` are deliberately kept OUT of the batch and fetched separately (step 5 below) because they are the large, heavily-paged time-series stems (`financials` alone can run several MB on a large firm), and bundling them into the same parallel batch as the light stems risks exceeding the MCP session/exec timeout — confirmed on a large firm where a batch of all stems failed but the light-stems-only batch completed reliably in about 45s. `entity_identity` is also fetched on its own rather than in the light batch, but for a different reason: it is small, not paged, but its `--verify-complete --unique-key entity_link_id` integrity check needs to run against its own result rather than a batch response shared with four other stems.
 
 1. **Emit the batch:**
    ```bash
    uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-analytics-app/scripts/emit_stem_sql.py" \
-     batch ${SINCE:+--since "$SINCE"}
+     batch --firm-uuid "<firm_uuid>" ${SINCE:+--since "$SINCE"}
    ```
    Prints a JSON array of batch objects — `{"batch":0,"format":"ndjson","limit":10000,
    "stems":[...],"queries":[...]}` — with `stems[i]` aligned to `queries[i]`. Only the 5
@@ -267,7 +269,8 @@ All 10 stems (`funds`, `financials`, `forecasts`, `holdings`, `fdshares`, `deal_
      then pass that file.
    ```bash
    uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-analytics-app/scripts/save_batch_result.py" \
-     <result_path> "<raw_dir>" --stems funds,holdings,fdshares,deal_irr,capstack
+     <result_path> "<raw_dir>" --stems funds,holdings,fdshares,deal_irr,capstack \
+     --expect-firm "<firm_uuid>"
    ```
    It writes each stem's `<raw_dir>/<stem>.ndjson` — an empty file for 0 rows or a failed
    query, so the fetch contract's "the file must exist" still holds — and prints one
@@ -284,7 +287,7 @@ All 10 stems (`funds`, `financials`, `forecasts`, `holdings`, `fdshares`, `deal_
    fetch the next page with a single `dwh__execute__query`:
    ```bash
    uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-analytics-app/scripts/emit_stem_sql.py" \
-     sql <stem> ${SINCE:+--since "$SINCE"}
+     sql <stem> --firm-uuid "<firm_uuid>" ${SINCE:+--since "$SINCE"}
    ```
    ```
    call_tool({"name":"dwh__execute__query","arguments":{"sql": <that SQL>, "limit": 10000,
@@ -292,7 +295,8 @@ All 10 stems (`funds`, `financials`, `forecasts`, `holdings`, `fdshares`, `deal_
    ```
    ```bash
    uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-analytics-app/scripts/save_query_result.py" \
-     <result_path> "<raw_dir>/<stem>.ndjson" --append --verify-complete --unique-key "<key>"
+     <result_path> "<raw_dir>/<stem>.ndjson" --append --verify-complete --unique-key "<key>" \
+     --expect-firm "<firm_uuid>"
    ```
    Repeat with `offset` = the newly reported `next_offset` until no `<stem>.ndjson.truncated`
    marker remains. Use the stem's `--unique-key` from the per-stem list in the **Fallback**
@@ -306,7 +310,7 @@ All 10 stems (`funds`, `financials`, `forecasts`, `holdings`, `fdshares`, `deal_
    status:
    ```bash
    uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-analytics-app/scripts/emit_stem_sql.py" \
-     sql financials ${SINCE:+--since "$SINCE"}
+     sql financials --firm-uuid "<firm_uuid>" ${SINCE:+--since "$SINCE"}
    ```
    ```
    call_tool({"name":"dwh__execute__query","arguments":{"sql": <that SQL>, "limit": 10000,
@@ -315,13 +319,15 @@ All 10 stems (`funds`, `financials`, `forecasts`, `holdings`, `fdshares`, `deal_
    ```bash
    uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-analytics-app/scripts/save_query_result.py" \
      <result_path> "<raw_dir>/financials.ndjson" \
-     --verify-complete --unique-key "legal_name,mnemonic|name,frequency,period_end"
+     --verify-complete --unique-key "legal_name,mnemonic|name,frequency,period_end" \
+     --expect-firm "<firm_uuid>"
    ```
    Then repeat with `sql <stem> --append` at each reported `next_offset`, passing the same `--verify-complete --unique-key "legal_name,mnemonic|name,frequency,period_end"` flags on every paged call:
    ```bash
    uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-analytics-app/scripts/save_query_result.py" \
      <result_path> "<raw_dir>/financials.ndjson" --append \
-     --verify-complete --unique-key "legal_name,mnemonic|name,frequency,period_end"
+     --verify-complete --unique-key "legal_name,mnemonic|name,frequency,period_end" \
+     --expect-firm "<firm_uuid>"
    ```
    until no `financials.ndjson.truncated` marker remains — same loop as step 4. `financials`
    is deduped by its own `QUALIFY` (latest `as_of_date` per
@@ -332,15 +338,16 @@ All 10 stems (`funds`, `financials`, `forecasts`, `holdings`, `fdshares`, `deal_
    0 rows when the firm isn't in Data Collection — save the empty file, build anyway, and
    tell the user their portcos don't currently report KPIs into Carta.
 
-   Fetch `forecasts` the same way, but its `save_query_result.py` calls pass only `--verify-complete` (no `--unique-key`): forecasts keeps every vintage, so it has no unique key to check — only that the assembled row count matches the server's `total_rows`.
+   Fetch `forecasts` the same way, but its `save_query_result.py` calls pass `--verify-complete --expect-firm "<firm_uuid>"` and no `--unique-key`: forecasts keeps every vintage, so it has no unique key to check — only that the assembled row count matches the server's `total_rows`.
 
-   Fetch `holdings_history` the same way too (paged, from offset 0), passing `--verify-complete --unique-key "_pk"` on every call — `_pk` is the table's unique row key, so the integrity check catches any mis-tiled or dropped page. It is **optional**: a firm with no fund administration returns 0 rows (save the empty file and build — the Company page's "SOI performance" card hides itself). `emit_stem_sql.py sql holdings_history` → `dwh__execute__query` → `save_query_result.py <result_path> "<raw_dir>/holdings_history.ndjson" --verify-complete --unique-key "_pk"` (`--append` on later pages). If the query errors in an environment that lacks the table, write an empty `holdings_history.ndjson` and proceed — do not block the build on it.
+   Fetch `holdings_history` the same way too (paged, from offset 0), passing `--verify-complete --unique-key "_pk"` on every call — `_pk` is the table's unique row key, so the integrity check catches any mis-tiled or dropped page. It is **optional**: a firm with no fund administration returns 0 rows (save the empty file and build — the Company page's "SOI performance" card hides itself). `emit_stem_sql.py sql holdings_history --firm-uuid "<firm_uuid>"` → `dwh__execute__query` → `save_query_result.py <result_path> "<raw_dir>/holdings_history.ndjson" --verify-complete --unique-key "_pk" --expect-firm "<firm_uuid>"` (`--append` on later pages). If the query errors in an environment that lacks the table, write an empty `holdings_history.ndjson` and proceed — do not block the build on it.
 
-   Fetch `entity_identity` the same way (singular, from offset 0), passing `--verify-complete --unique-key "entity_link_id"` — `emit_stem_sql.py sql entity_identity` → `dwh__execute__query` → `save_query_result.py <result_path> "<raw_dir>/entity_identity.ndjson" --verify-complete --unique-key "entity_link_id"`. It is the company-identity bridge (`references/queries.md` §6): one row per portfolio company with its numeric Carta `corporation_id`, `corporation_uuid` and `is_carta_customer`. Attempt it always; 0 rows is legitimate — save the empty file and build (companies then keep typed fallback ids and `entityKind: null`). If `--unique-key entity_link_id` reports duplicates, the view returned rows with a NULL entity link; re-run the save without `--unique-key`, build, and expect `entityKind: null` for the affected rows.
+   Fetch `entity_identity` the same way (singular, from offset 0), passing `--verify-complete --unique-key "entity_link_id"` — `emit_stem_sql.py sql entity_identity --firm-uuid "<firm_uuid>"` → `dwh__execute__query` → `save_query_result.py <result_path> "<raw_dir>/entity_identity.ndjson" --verify-complete --unique-key "entity_link_id" --expect-firm "<firm_uuid>"`. It is the company-identity bridge (`references/queries.md` §6): one row per portfolio company with its numeric Carta `corporation_id`, `corporation_uuid` and `is_carta_customer`. Attempt it always; 0 rows is legitimate — save the empty file and build (companies then keep typed fallback ids and `entityKind: null`). If `--unique-key entity_link_id` reports duplicates, the view returned rows with a NULL entity link; re-run the save without `--unique-key`, build, and expect `entityKind: null` for the affected rows.
 
-   Fetch `corporation_links` the same way (singular, from offset 0), passing `--verify-complete --unique-key "general_ledger_issuer_id,corporation_id"` — `emit_stem_sql.py sql corporation_links` → `dwh__execute__query` → `save_query_result.py <result_path> "<raw_dir>/corporation_links.ndjson" --verify-complete --unique-key "general_ledger_issuer_id,corporation_id"`. It lists every Carta corporation each GL issuer is linked to (`references/queries.md` §7), so KPIs and cap tables that report from a corporation the entity link does not name still land on that company. A firm with no rows writes an empty file — the build still runs.
+   Fetch `corporation_links` the same way (singular, from offset 0), passing `--verify-complete --unique-key "general_ledger_issuer_id,corporation_id"` — `emit_stem_sql.py sql corporation_links --firm-uuid "<firm_uuid>"` → `dwh__execute__query` → `save_query_result.py <result_path> "<raw_dir>/corporation_links.ndjson" --verify-complete --unique-key "general_ledger_issuer_id,corporation_id" --expect-firm "<firm_uuid>"`. It lists every Carta corporation each GL issuer is linked to (`references/queries.md` §7), so KPIs and cap tables that report from a corporation the entity link does not name still land on that company. A firm with no rows writes an empty file — the build still runs.
 
    - If any `save_query_result.py` page prints `INTEGRITY CHECK FAILED` and exits non-zero (a `<stem>.ndjson.integrity_error` sidecar appears), the paged fetch tiled incorrectly or dropped a page. **Do not build.** Delete `<raw_dir>/<stem>.ndjson` and its markers and re-fetch the stem from offset 0; if it fails again, stop and report the mismatch to the user rather than building a partial dashboard.
+   - If any `save_query_result.py` / `save_batch_result.py` call prints `SCOPE CHECK FAILED` and exits non-zero (a `<stem>.ndjson.scope_error` sidecar appears), the warehouse served another firm's rows — the session's row-access grant was switched mid-refresh by another surface of the same user. **Do not build.** Re-run `set_context {firm_id:<firm_uuid>}`, then re-fetch that stem (or the whole batch) from offset 0; if it fails a second time, stop and tell the user another of their sessions/surfaces is actively switching their firm context.
 
 **Fallback — per-stem serial fetch.** If `dwh__execute__queries` is unavailable (`Unknown
 tool` / `NotFoundError` on an older MCP), the ndjson call is rejected client-side, or
@@ -352,7 +359,8 @@ fetches `financials`/`forecasts`: `emit_stem_sql.py sql <stem>` →
 "<raw_dir>/<stem>.ndjson"`. Same pagination rules and the same 0-rows-is-fine-for-`financials`
 guidance apply.
 
-Pass `--verify-complete --unique-key "<key>"` on every page of each light stem (same as
+Pass `--verify-complete --unique-key "<key>"`, plus `--expect-firm "<firm_uuid>"` on every
+stem except `capstack`, on every page of each light stem (same as
 `financials`/`holdings_history` in step 5), so a saved-rows vs server `total_rows` mismatch
 fails the fetch instead of silently building on a short/duplicated stem. Per-stem keys:
 `holdings` → `fund_investment_key`; `fdshares` → `corporation_id,fund_id`; `deal_irr` →

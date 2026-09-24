@@ -12,8 +12,16 @@ arrays) and writes each query's rows to ``<raw_dir>/<stem>.ndjson``, reusing
 shape the single-query path does.
 
 Usage:
-  uv run save_batch_result.py <src_path|-> <raw_dir> --stems funds,financials,... [--limit 10000]
+  uv run save_batch_result.py <src_path|-> <raw_dir> --stems funds,financials,... \
+      [--limit 10000] [--expect-firm <firm_uuid>]
   uv run save_batch_result.py <src_path|-> <raw_dir> --dump-shape   # inspect the envelope
+
+``--expect-firm`` verifies every firm-bearing stem's rows carry that ``firm_id`` (see
+``save_query_result.py``'s check). All five slices come from ONE call under ONE
+row-access grant, so a single foreign stem means the whole batch is suspect — nothing
+is written (capstack included, which has no firm column to verify), the failing stems
+get ``<stem>.ndjson.scope_error`` sidecars, and the exit is 2: re-run ``set_context``
+and re-fetch the batch.
 
 Per stem it prints one summary line. When a stem's envelope-reported ``total_rows``
 equals ``--limit`` (default 10000, matching ``emit_stem_sql.py``'s batch limit), the DWH
@@ -46,6 +54,10 @@ import save_query_result as sqr
 
 # Keys under which an aggregate dict is most likely to carry the ordered result list.
 _LIST_KEYS = ("results", "data", "queries", "responses", "items", "rows", "content", "result")
+
+# Stems whose source view has no firm_id column; --expect-firm cannot verify them
+# directly — they are covered by the batch-wide refusal when any sibling stem fails.
+_NO_FIRM_STEMS = frozenset({"capstack"})
 
 
 def _b64_text(blob):
@@ -294,9 +306,16 @@ def main(argv):
                 sys.stderr.write("save_batch_result: --limit must be an integer\n")
                 return 2
         args = args[:i] + args[i + 2:]
+    expect_firm = None
+    if "--expect-firm" in args:
+        i = args.index("--expect-firm")
+        if i + 1 < len(args):
+            expect_firm = args[i + 1]
+        args = args[:i] + args[i + 2:]
     if len(args) != 2:
         sys.stderr.write("usage: save_batch_result.py <src|-> <raw_dir> "
-                         "--stems a,b,c [--limit N] [--dump-shape]\n")
+                         "--stems a,b,c [--limit N] [--expect-firm firm_uuid] "
+                         "[--dump-shape]\n")
         return 2
     src, raw_dir = args
     if src != "-" and not os.path.exists(src):
@@ -325,6 +344,39 @@ def main(argv):
         return 2
 
     os.makedirs(raw_dir, exist_ok=True)
+
+    if expect_firm:
+        scope_failed = []
+        for stem, chunk in zip(stems, slices):
+            if stem in _NO_FIRM_STEMS:
+                continue
+            if isinstance(chunk, dict) and chunk.get("error"):
+                continue
+            rows = extract(chunk)
+            errors, foreign, missing = sqr.scope_errors(rows, expect_firm)
+            dest = os.path.join(raw_dir, stem + ".ndjson")
+            if errors:
+                scope_failed.append(stem)
+                with open(sqr.scope_error_path(dest), "w", encoding="utf-8") as fh:
+                    json.dump({"expected_firm": expect_firm, "foreign_firms": foreign,
+                               "missing_firm_id_rows": missing, "errors": errors}, fh)
+                    fh.write("\n")
+                for msg in errors:
+                    sys.stderr.write("save_batch_result: SCOPE CHECK FAILED stem=%s: %s\n"
+                                     % (stem, msg))
+            else:
+                try:
+                    os.remove(sqr.scope_error_path(dest))
+                except OSError:
+                    pass
+        if scope_failed:
+            # One grant served all five slices, so every stem is suspect: write nothing.
+            sys.stderr.write(
+                "save_batch_result: the row-access grant was switched mid-refresh — "
+                "no stem was written. Re-run set_context for the intended firm, then "
+                "re-fetch the whole batch.\n")
+            return 2
+
     truncated, errored = [], []
     for stem, chunk in zip(stems, slices):
         dest = os.path.join(raw_dir, stem + ".ndjson")

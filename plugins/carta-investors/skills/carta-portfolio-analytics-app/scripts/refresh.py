@@ -269,16 +269,40 @@ def _py(script_dir, name, *args, **kwargs):
                            % (name, timeout), needs_human=True)
 
 
-def _stem_sql(script_dir, stem, since, after_instance=None):
-    # type: (str, str, Optional[str], Optional[int]) -> str
+def _stem_sql(script_dir, stem, since, after_instance=None, firm_uuid=None):
+    # type: (str, str, Optional[str], Optional[int], Optional[str]) -> str
     args = ["sql", stem] + (["--since", since] if since else [])
     if after_instance is not None:
         args += ["--after-instance", str(after_instance)]
+    if firm_uuid:
+        args += ["--firm-uuid", firm_uuid]
     r = _py(script_dir, "emit_stem_sql.py", *args)
     if r.returncode != 0:
         raise RefreshError("Couldn't build the query for %s: %s"
                            % (stem, r.stderr.strip()), needs_human=True)
     return r.stdout.strip()
+
+
+# capstack's source has no firm_id column; every other stem's save asserts the firm
+# on every page (the shared staff grant can be rewritten mid-refresh — see SKILL.md).
+def _scope_flags(stem, firm_uuid):
+    # type: (str, Optional[str]) -> list
+    if not firm_uuid or stem == "capstack":
+        return []
+    return ["--expect-firm", firm_uuid]
+
+
+_SCOPE_RE = re.compile(r"SCOPE CHECK FAILED")
+
+
+def _scope_refresh_error(stem, stderr):
+    # type: (str, str) -> RefreshError
+    return RefreshError(
+        "Carta returned another firm's rows for %s — this session's firm context was "
+        "switched mid-refresh (another Claude session or Data Explorer tab of yours can "
+        "do this). Nothing was saved. Run the refresh again; if it repeats, close your "
+        "other Carta sessions first." % _STEM_LABEL.get(stem, stem),
+        needs_human=True, detail=stderr)
 
 
 def _dwh_args(sql=None, queries=None, limit=PAGE_LIMIT, offset=0, response_mode=RESPONSE_MODE):
@@ -364,8 +388,11 @@ def _paginate(session, script_dir, raw_dir, call_box, stem, next_off, sql, dest,
         if not captured:
             raise RefreshError("Paging %s failed: %s" % (stem, err or "no result"), needs_human=True)
         src = _capture_src(captured, os.path.join(raw_dir, "%s_p%d.raw" % (stem, next_off)))
-        r = _py(script_dir, "save_query_result.py", src, dest, "--append", *verify)
+        r = _py(script_dir, "save_query_result.py", src, dest, "--append", *verify,
+                *_scope_flags(stem, call_box.get("firm_uuid")))
         if r.returncode != 0:
+            if _SCOPE_RE.search(r.stderr or ""):
+                raise _scope_refresh_error(stem, r.stderr.strip())
             raise RefreshError("Couldn't append a %s page: %s"
                                % (stem, r.stderr.strip() or "no rows"), needs_human=True)
         pages += 1
@@ -482,8 +509,11 @@ def _save_pages(session, script_dir, raw_dir, call_box, stem, src, sql, target, 
     """Save the first page into `target` and page the rest after it, discarding the file
     and its markers if anything stops the fetch short."""
     try:
-        r = _py(script_dir, "save_query_result.py", src, target, *_VERIFY_FLAGS.get(stem, []))
+        r = _py(script_dir, "save_query_result.py", src, target, *_VERIFY_FLAGS.get(stem, []),
+                *_scope_flags(stem, call_box.get("firm_uuid")))
         if r.returncode != 0:
+            if _SCOPE_RE.search(r.stderr or ""):
+                raise _scope_refresh_error(stem, r.stderr.strip())
             raise RefreshError("Couldn't refresh %s." % _STEM_LABEL.get(stem, stem), needs_human=True,
                                detail=r.stderr.strip() or "no rows")
         m = _TRUNC_SINGLE_RE.search((r.stdout or "") + (r.stderr or ""))
@@ -504,7 +534,8 @@ def _fetch_stem_once(session, script_dir, raw_dir, call_box, stem, since, emit):
     emit("fetch", "Fetching %s…" % label, active=[stem])
     dest = os.path.join(raw_dir, "%s.ndjson" % stem)
     after = _stem_watermark(raw_dir, stem) if stem in _INCREMENTAL else None
-    sql = _stem_sql(script_dir, stem, since, after_instance=after)
+    sql = _stem_sql(script_dir, stem, since, after_instance=after,
+                    firm_uuid=call_box.get("firm_uuid"))
     captured, err, _n = _dwh_turn(session, call_box, "dwh__execute__query", _dwh_args(sql=sql))
     if not call_box["call"]:
         raise RefreshError("Couldn't reach the Carta data warehouse.", needs_human=True,
@@ -550,7 +581,7 @@ def _retry_stem(session, script_dir, raw_dir, call_box, stem, since, emit):
     silently blank data the dashboard needs. Returns True on recovery."""
     for _ in range(MAX_STEM_RETRIES):
         emit("fetch", "Retrying %s…" % stem)
-        sql = _stem_sql(script_dir, stem, since)
+        sql = _stem_sql(script_dir, stem, since, firm_uuid=call_box.get("firm_uuid"))
         captured, _err, _n = _dwh_turn(session, call_box, "dwh__execute__query", _dwh_args(sql=sql))
         if not captured:
             continue
@@ -569,7 +600,10 @@ def _retry_stem(session, script_dir, raw_dir, call_box, stem, since, emit):
 def _fetch_batch(session, script_dir, raw_dir, call_box, since, emit, warnings):
     """Refresh-all fast path: the 5 light stems in one dwh__execute__queries call, run on
     the first turn (welcome + set_context resolve the prefix), then page/retry per stem."""
-    r = _py(script_dir, "emit_stem_sql.py", "batch", *(["--since", since] if since else []))
+    firm_uuid = call_box.get("firm_uuid")
+    r = _py(script_dir, "emit_stem_sql.py", "batch",
+            *(["--since", since] if since else []),
+            *(["--firm-uuid", firm_uuid] if firm_uuid else []))
     if r.returncode != 0:
         raise RefreshError("Couldn't build the fetch queries: %s" % r.stderr.strip())
     batches = json.loads(r.stdout)
@@ -588,14 +622,17 @@ def _fetch_batch(session, script_dir, raw_dir, call_box, since, emit, warnings):
             raise RefreshError("A data fetch failed on batch %d of %d: %s"
                                % (i, total, err or "no result"), needs_human=True)
         src = _capture_src(captured, os.path.join(raw_dir, "batch%d.raw" % i))
-        r = _py(script_dir, "save_batch_result.py", src, raw_dir, "--stems", ",".join(stems))
+        r = _py(script_dir, "save_batch_result.py", src, raw_dir, "--stems", ",".join(stems),
+                *(["--expect-firm", firm_uuid] if firm_uuid else []))
         out = (r.stdout or "") + (r.stderr or "")
         if r.returncode != 0:
+            if _SCOPE_RE.search(out):
+                raise _scope_refresh_error("batch %d" % i, r.stderr.strip())
             raise RefreshError("Couldn't parse batch %d of %d: %s"
                                % (i, total, r.stderr.strip() or "envelope mismatch"), needs_human=True)
         for stem_name, next_off in _truncated_stems(out):
             _paginate(session, script_dir, raw_dir, call_box, stem_name, next_off,
-                      _stem_sql(script_dir, stem_name, since),
+                      _stem_sql(script_dir, stem_name, since, firm_uuid=firm_uuid),
                       os.path.join(raw_dir, "%s.ndjson" % stem_name), emit)
         for stem_name, detail in _stem_errors(out):
             if _retry_stem(session, script_dir, raw_dir, call_box, stem_name, since, emit):

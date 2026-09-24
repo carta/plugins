@@ -29,7 +29,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.41.1</carta-plugin>
+<carta-plugin>carta-investors:6.42.2</carta-plugin>
 
 # carta-compliance-routing — Compliance Router
 

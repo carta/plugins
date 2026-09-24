@@ -1110,6 +1110,19 @@ def build(raw, out, meta, as_of_max=None):
               "entity link the directory lacks); their entityKind is null."
               % (_unplaced, len(companies)), file=sys.stderr)
 
+    # Backstop for a mid-refresh row-access-grant flip that the fetch-time firm checks
+    # could not see (e.g. a stale cache built before them): a leaked Data Collection
+    # universe shows up as a wall of companies with no fund-anchored source.
+    _anchored = sum(1 for c in companies
+                    if c["funds"] or any(k in c for k in ("soi", "ownership", "dealIrr", "capTable")))
+    _dc_only = len(companies) - _anchored
+    if _dc_only >= 50 and _dc_only > 3 * max(_anchored, 1):
+        print("WARNING: possible cross-firm scope leak — %d of %d companies come only from "
+              "Data Collection (financials/forecasts) and tie to no fund-anchored stem. "
+              "If that doesn't match this portfolio, re-fetch the stems with the firm-scope "
+              "guard (emit_stem_sql --firm-uuid + save --expect-firm) before trusting this "
+              "build." % (_dc_only, len(companies)), file=sys.stderr)
+
     metrics = [metrics_meta[k] for k in metric_order]
     fund_dim = sorted({f for c in companies for f in c["funds"]})
     _tag_vals = {}

@@ -21,12 +21,18 @@ list_contexts   {"firm_name":"<firm words>"}    # → firm_uuid (see SKILL.md St
 set_context     {"firm_id":"<firm_uuid>"}
 ```
 Enumerate the firm's Fund/GP entities (excludes SPVs) — compact, never `fa:list:entities`.
-This table is already row-scoped to the firm by `set_context`, so no `firm_id` filter:
+`set_context` row-scopes this table, but the SQL ALSO pins the firm explicitly: a staff
+user's row-access grant is one shared slot per user, and the user's other surfaces
+(another Claude session, fund-admin Data Explorer, the `carta dwh` CLI) can rewrite it
+mid-refresh — the context scope alone once served another firm's rows. Every firm-bearing
+stem therefore takes `--firm-uuid` (`emit_stem_sql.py` injects the predicate and selects
+`firm_id`, which `save_query_result.py --expect-firm` verifies on every captured page):
 ```sql
-SELECT DISTINCT fund_uuid, fund_name, entity_type_name
+SELECT DISTINCT fund_uuid, fund_name, entity_type_name, firm_id
 FROM FUND_ADMIN.MONTHLY_NAV_CALCULATIONS
 WHERE is_firm_rollup = FALSE
   AND entity_type_name NOT ILIKE '%SPV%'
+  AND firm_id = '<firm_uuid>'
 ORDER BY entity_type_name, fund_name, fund_uuid
 ```
 `fund_uuid` ends the order so it is a unique total order — the MCP hoists this
@@ -48,9 +54,10 @@ SELECT COUNT(*) AS row_count,
 FROM FUND_ADMIN.COMPANY_FINANCIALS
 WHERE instance_type = 'Actual'
   AND (float_value IS NOT NULL OR (string_value IS NOT NULL AND string_value <> ''))
+  AND firm_id = '<firm_uuid>'
 ```
-Context-scoped like §1 — no `firm_id` filter, and the same predicate as §1 so the
-probe counts what the fetch will actually pull. In practice this returns on the order
+Same predicates as §1 — the explicit firm pin included — so the probe counts what the
+scoped fetch will actually pull. In practice this returns on the order
 of ~100k rows for a large portfolio and ~14k for a smaller one.
 
 base `FUND_ADMIN.COMPANY_FINANCIALS` table (the legacy `COMPANY_FINANCIALS_LATEST`
@@ -59,11 +66,12 @@ real submission — with `QUALIFY`, and page it with a **stable `ORDER BY`**:
 ```sql
 SELECT legal_name, name, mnemonic, report_type, unit_type, currency,
        float_value, string_value, period_end, period_start, frequency, as_of_date,
-       instance_id, general_ledger_issuer_id, corporation_id, llc_entity_id
+       instance_id, general_ledger_issuer_id, corporation_id, llc_entity_id, firm_id
 FROM FUND_ADMIN.COMPANY_FINANCIALS
 WHERE instance_type = 'Actual'
   AND (float_value IS NOT NULL OR (string_value IS NOT NULL AND string_value <> ''))
   AND as_of_date <= CURRENT_DATE          -- ignore forward-dated submissions
+  AND firm_id = '<firm_uuid>'             -- injected by --firm-uuid (see §0)
   -- OPTIONAL history window; add only when the user chose one (see SKILL Step 1b):
   -- AND period_end >= '<since>'
   -- OPTIONAL incremental floor; the in-app refresh sets it to the cached max instance_id:
@@ -99,13 +107,17 @@ period_end`), so a September filing "as of 2026-06-30" would slip under any date
    not happened yet (a restatement artifact); `as_of_date <= CURRENT_DATE` removes
    it so it cannot win the period.
 4. **Page over a TOTAL order, and dedup in SQL.** `LIMIT/OFFSET` re-runs the query as an independent execution per page; the warehouse gives no stable physical order to rows that tie on the `ORDER BY`, so tied rows can silently overlap and gap across pages, dropping whole companies at the page seam. Order over a *total* key: because `QUALIFY` keeps exactly one row per `(legal_name, COALESCE(mnemonic, name), COALESCE(frequency, ''), period_end)`, ordering by all four of those columns fully determines row order, so OFFSET paging is repeatable. Ordering by only three of them is not enough.
-**Row-scoped to the firm set via `set_context`** — do **NOT** add a `firm_id` /
-`firm_name` filter (redundant with the context scope; a mismatch silently returns
-zero rows). Coverage is **partial**: only portcos that report into Data Collection
+**Row-scoped via `set_context` AND explicitly pinned with `firm_id = '<firm_uuid>'`**
+(emit with `--firm-uuid`; see §0 for why the context scope alone cannot be trusted).
+On a drifted grant the predicate fails to 0 rows instead of pulling foreign data, and
+the selected `firm_id` lets `save_query_result.py --expect-firm <firm_uuid>` verify
+every captured page — a failing page writes `financials.ndjson.scope_error` and
+nothing else. Coverage is **partial**: only portcos that report into Data Collection
 appear. Save to `<raw_dir>/financials.ndjson`. If a firm reports none, the query
 returns 0 rows legitimately — write an empty file and proceed (the dashboard shows
-a clean empty state). Large result → pass `"format":"ndjson"` and capture the
-tool-results path with `save_query_result.py`.
+a clean empty state), but only after `funds` (fetched with the same firm pin)
+returned rows; all-stems-empty means the scope, not the data. Large result → pass
+`"format":"ndjson"` and capture the tool-results path with `save_query_result.py`.
 
 Every distinct `mnemonic` (or, when blank, `name`) becomes a selectable metric —
 no curated allow-list. `unit_type` (`Dollar`/`Number`/`Percentage`) drives value
@@ -136,9 +148,10 @@ filter `is_latest` (the builder computes latest itself).
 ```sql
 SELECT legal_name, name, mnemonic, unit_type, currency,
        as_of_date, period_end, float_value, is_latest, instance_id,
-       general_ledger_issuer_id, corporation_id, llc_entity_id
+       general_ledger_issuer_id, corporation_id, llc_entity_id, firm_id
 FROM FUND_ADMIN.COMPANY_FINANCIALS
 WHERE instance_type = 'Estimate' AND float_value IS NOT NULL
+  AND firm_id = '<firm_uuid>'             -- injected by --firm-uuid (see §0)
   -- Same optional window, applied to the TARGET period (never to as_of_date — a
   -- recent forecast about an old quarter is exactly what the accuracy backtest needs):
   -- AND period_end >= '<since>'
@@ -156,7 +169,7 @@ The forecast panels are built on arithmetic the qualitative kinds can't support:
 curves, actual-vs-estimate error and the accuracy backtest. A qualitative estimate has
 nowhere to land there, so it is left out rather than carried and then ignored.
 
-Row-scoped to the firm context (no `firm_id` filter), same as §1. Save to
+Firm-pinned and page-verified exactly like §1 (`--firm-uuid` + `--expect-firm`). Save to
 `<raw_dir>/forecasts.ndjson`. Legitimately 0 rows for a firm with no forecasts —
 save an empty file; the Forecast card then reports that no forecast was logged. Large result
 → `"format":"ndjson"` + `save_query_result.py`. Forecast target periods run into
@@ -176,9 +189,10 @@ cross-references elsewhere in this doc, in SKILL.md, and in
 Implied valuation = **latest PPS × fully-diluted shares**; the Company 360 page also
 shows cost/MOIC/IRR/sector/last-round. Three stems.
 
-These tables row-scope to the firm via `set_context`; the subquery only re-applies
-the SPV exclusion, so no fund-UUID list is emitted (mirrors carta-fund-modeling's
-corp-scope subquery).
+These tables row-scope to the firm via `set_context`, with the explicit
+`firm_id = '<firm_uuid>'` pin injected by `--firm-uuid` on both the stem and its
+SPV-exclusion subquery (§0 has the why); no fund-UUID list is emitted (mirrors
+carta-fund-modeling's corp-scope subquery).
 
 **`holdings` — PPS + cost basis + sector, from the fund's Fund Admin marks.**
 `AGGREGATE_INVESTMENTS` carries `REMAINING_VALUE_PER_SHARE` (latest per-share FMV),

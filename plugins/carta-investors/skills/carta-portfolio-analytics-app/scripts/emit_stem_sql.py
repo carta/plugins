@@ -4,26 +4,34 @@
 # ///
 """emit_stem_sql.py — single source of truth for the DWH stem SQL + batch emitter.
 
-Every stem's SQL is fully STATIC: none of it filters by a hand-templated
-`fund_uuid IN (...)` list. `funds` is scoped by the MCP `set_context` call (no
-`firm_id` filter needed); `financials`/`forecasts` are likewise context-scoped;
-`holdings`/`fdshares`/`deal_irr` reach fund scope through a `NOT ILIKE '%SPV%'`
-subquery over `MONTHLY_NAV_CALCULATIONS` instead of an IN-list read back out of
-a previously-fetched stem; `capstack` has no fund/firm column to
-filter on at all. So there is no `fund_uuids.txt` step and no substitution
-slot — this is simpler than the fund-modeling equivalent (see
+No stem filters by a hand-templated `fund_uuid IN (...)` list. `holdings`/
+`fdshares`/`deal_irr`/`holdings_history` reach fund scope through a `NOT ILIKE
+'%SPV%'` subquery over `MONTHLY_NAV_CALCULATIONS` instead of an IN-list read back
+out of a previously-fetched stem; `capstack` has no fund/firm column to filter on
+at all. So there is no `fund_uuids.txt` step and no per-firm fund-list slot — this
+is simpler than the fund-modeling equivalent (see
 `carta-fund-modeling/scripts/emit_stem_sql.py`), which still fills a
 `{fund_uuids}` IN-list per firm.
 
-Two runtime parameters, both for `financials` and `forecasts` only (the two
-time-series stems), both injected into the WHERE clause before the QUALIFY:
-  --since YYYY-MM-DD      the history window, `period_end >= '<since>'`
+`set_context` row scoping alone is NOT trusted: for a staff user it is one shared
+grant per user (not per session), and any other surface of the same user (another
+Claude session, fund-admin Data Explorer, the carta dwh CLI) can rewrite it MID-
+REFRESH — that returned another firm's entire Data Collection universe once. So
+--firm-uuid pins every stem whose view exposes `firm_id` (all but `capstack`) with
+an explicit `firm_id = '<uuid>'` predicate AND selects `firm_id`, which
+`save_query_result.py --expect-firm` verifies on every captured page. On a
+clobbered grant the predicate returns 0 rows (fail-empty) instead of foreign data.
+
+Runtime parameters:
+  --firm-uuid UUID        firm scope, injected into all firm-bearing stems (above)
+  --since YYYY-MM-DD      the history window, `period_end >= '<since>'` —
+                          `financials`/`forecasts` (the two time-series stems) only
   --after-instance N      an incremental floor, `instance_id > N` — the in-app
                           refresh passes the cached stem's max instance_id so
                           only submissions logged since the last pull come back.
 
 Usage:
-  uv run emit_stem_sql.py batch [--since YYYY-MM-DD]
+  uv run emit_stem_sql.py batch [--firm-uuid UUID] [--since YYYY-MM-DD]
       Prints a JSON array of `dwh__execute__queries` batch objects:
       {"batch": int, "format": "ndjson", "limit": 10000,
        "stems": [str, ...], "queries": [str, ...]}
@@ -31,7 +39,7 @@ Usage:
       (`_BATCH_ORDER`) -- financials/forecasts are excluded and must be
       fetched via their own sql <stem> paged calls (see SKILL.md Step 2).
       All 5 fit in one batch (the cap is 10 queries per batch).
-  uv run emit_stem_sql.py sql <stem> [--since YYYY-MM-DD] [--after-instance N]
+  uv run emit_stem_sql.py sql <stem> [--firm-uuid UUID] [--since YYYY-MM-DD] [--after-instance N]
       Prints one stem's SQL verbatim (for paging or re-running a single stem;
       resolves any of the 9 stems, including the paged-separately
       financials/forecasts/holdings_history/entity_identity).
@@ -53,22 +61,28 @@ _ORDER = ["funds", "financials", "forecasts", "holdings", "fdshares",
 _BATCH_ORDER = ["funds", "holdings", "fdshares", "deal_irr", "capstack"]
 _MAX_PER_BATCH = 10
 
-# Both runtime values are interpolated into SQL, so they are shape-checked first.
+# All runtime values are interpolated into SQL, so they are shape-checked first.
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}"
+                      r"-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 
+# {spv_firm_pred} pins the fund set to the firm even when the row-access grant
+# has drifted to another firm (see the module docstring).
 _SPV_SCOPE = (
     "(SELECT DISTINCT fund_uuid FROM FUND_ADMIN.MONTHLY_NAV_CALCULATIONS\n"
-    "                    WHERE is_firm_rollup = FALSE AND entity_type_name NOT ILIKE '%SPV%')"
+    "                    WHERE is_firm_rollup = FALSE AND entity_type_name NOT ILIKE '%SPV%'"
+    "{spv_firm_pred})"
 )
 
 # Paging contract: each stem ends with a UNIQUE total order over its own SELECT
 # columns. The MCP hoists that trailing ORDER BY onto its LIMIT/OFFSET wrapper, so a
 # non-unique or non-output ordering lets tied rows overlap and drop across pages.
 _FUNDS_SQL = (
-    "SELECT DISTINCT fund_uuid, fund_name, entity_type_name\n"
+    "SELECT DISTINCT fund_uuid, fund_name, entity_type_name{firm_col}\n"
     "FROM FUND_ADMIN.MONTHLY_NAV_CALCULATIONS\n"
     "WHERE is_firm_rollup = FALSE\n"
     "  AND entity_type_name NOT ILIKE '%SPV%'\n"
+    "{firm_pred}"
     "ORDER BY entity_type_name, fund_name, fund_uuid"
 )
 
@@ -80,11 +94,12 @@ _FUNDS_SQL = (
 _FINANCIALS_TEMPLATE = (
     "SELECT legal_name, name, mnemonic, report_type, unit_type, currency,\n"
     "       float_value, string_value, period_end, period_start, frequency, as_of_date,\n"
-    "       instance_id, general_ledger_issuer_id, corporation_id, llc_entity_id\n"
+    "       instance_id, general_ledger_issuer_id, corporation_id, llc_entity_id{firm_col}\n"
     "FROM FUND_ADMIN.COMPANY_FINANCIALS\n"
     "WHERE instance_type = 'Actual'\n"
     "  AND (float_value IS NOT NULL OR (string_value IS NOT NULL AND string_value <> ''))\n"
     "  AND as_of_date <= CURRENT_DATE          -- ignore forward-dated submissions\n"
+    "{firm_pred}"
     "{since_clause}"
     "{after_clause}"
     "QUALIFY ROW_NUMBER() OVER (\n"
@@ -101,9 +116,10 @@ _FINANCIALS_SINCE_PLACEHOLDER = (
 _FORECASTS_TEMPLATE = (
     "SELECT legal_name, name, mnemonic, unit_type, currency,\n"
     "       as_of_date, period_end, float_value, is_latest, instance_id,\n"
-    "       general_ledger_issuer_id, corporation_id, llc_entity_id\n"  # identity keys for company_key()
+    "       general_ledger_issuer_id, corporation_id, llc_entity_id{firm_col}\n"  # identity keys for company_key()
     "FROM FUND_ADMIN.COMPANY_FINANCIALS\n"
     "WHERE instance_type = 'Estimate' AND float_value IS NOT NULL\n"
+    "{firm_pred}"
     "{since_clause}"
     "{after_clause}"
     "ORDER BY legal_name, name, mnemonic, period_end, as_of_date,\n"
@@ -125,9 +141,10 @@ _HOLDINGS_SQL = (
     "       total_cost, total_proceeds, total_unrealized_gain_loss, investment_date, tags_json,\n"
     "       is_active_investment, is_option_or_warrant_asset, is_public_asset,\n"
     "       entity_link_id, general_ledger_issuer_id,\n"  # identity keys for company_key()
-    "       fund_investment_key\n"  # unique per row; the paging tiebreaker below
+    "       fund_investment_key{firm_col}\n"  # unique per row; the paging tiebreaker below
     "FROM FUND_ADMIN.AGGREGATE_INVESTMENTS\n"
     "WHERE fund_uuid IN " + _SPV_SCOPE + "\n"
+    "{firm_pred}"
     "ORDER BY issuer_name, fund_uuid, asset_name, asset_class_type, fund_investment_key"
 )
 
@@ -142,10 +159,11 @@ _HOLDINGS_SQL = (
 _FDSHARES_SQL = (
     "WITH own AS (\n"
     "  SELECT CORPORATION_ID, FUND_ID, AS_OF_DATE, FULLY_DILUTED, OWNERSHIP_QUANTITY,\n"
-    "         TRY_TO_NUMBER(PERCENTAGE, 38, 18) AS own_pct\n"
+    "         TRY_TO_NUMBER(PERCENTAGE, 38, 18) AS own_pct{own_firm_col}\n"
     "  FROM FUND_ADMIN.FUND_CORPORATION_OWNERSHIP\n"
     "  WHERE FUND_ID IN " + _SPV_SCOPE + "\n"
     "    AND FULLY_DILUTED > 1000 AND IS_PRO_FORMA = FALSE\n"
+    "{own_firm_pred}"
     "  QUALIFY ROW_NUMBER() OVER (PARTITION BY CORPORATION_ID, FUND_ID ORDER BY AS_OF_DATE DESC)=1\n"
     "),\n"
     "fin AS (\n"
@@ -157,7 +175,7 @@ _FDSHARES_SQL = (
     "SELECT o.CORPORATION_ID AS corporation_id, f.investment_name AS name,\n"
     "       o.FUND_ID AS fund_id, o.own_pct, o.OWNERSHIP_QUANTITY AS own_qty,\n"
     "       o.FULLY_DILUTED AS fd_shares, o.AS_OF_DATE AS as_of,\n"
-    "       f.round, f.post_money_valuation AS post_money, f.round_date\n"
+    "       f.round, f.post_money_valuation AS post_money, f.round_date{fd_firm_col}\n"
     "FROM own o\n"
     "JOIN fin f ON o.CORPORATION_ID = f.corporation_id\n"
     "WHERE f.investment_name IS NOT NULL\n"
@@ -165,9 +183,10 @@ _FDSHARES_SQL = (
 )
 
 _DEAL_IRR_SQL = (
-    "SELECT issuer_name, fund_uuid, deal_irr, performance_quarter_end_date\n"
+    "SELECT issuer_name, fund_uuid, deal_irr, performance_quarter_end_date{firm_col}\n"
     "FROM FUND_ADMIN.TEMPORAL_DEAL_IRR\n"
     "WHERE fund_uuid IN " + _SPV_SCOPE + "\n"
+    "{firm_pred}"
     "QUALIFY ROW_NUMBER() OVER (PARTITION BY issuer_name, fund_uuid\n"
     "                           ORDER BY performance_quarter_end_date DESC, deal_irr DESC)=1\n"
     "ORDER BY issuer_name, fund_uuid"  # one row per (issuer, fund) from the QUALIFY — unique
@@ -218,9 +237,10 @@ _HOLDINGS_HISTORY_SQL = (
     "       effective_date, next_effective_date, is_current_state,\n"
     "       count_remaining_shares, remaining_value, remaining_value_per_share,\n"
     "       total_cost, total_unrealized_gain_loss, total_proceeds,\n"
-    "       is_option_or_warrant_asset, entity_link_id, general_ledger_issuer_id, _pk\n"  # _pk unique per row; the paging tiebreaker below
+    "       is_option_or_warrant_asset, entity_link_id, general_ledger_issuer_id, _pk{firm_col}\n"  # _pk unique per row; the paging tiebreaker below
     "FROM FUND_ADMIN.AGGREGATE_INVESTMENTS_HISTORY\n"
     "WHERE fund_uuid IN " + _SPV_SCOPE + "\n"
+    "{firm_pred}"
     "ORDER BY issuer_name, fund_uuid, asset_name, asset_class_type,\n"
     "         effective_date, next_effective_date, _pk"
 )
@@ -230,16 +250,18 @@ _HOLDINGS_HISTORY_SQL = (
 # bridge from a holdings/KPI row's key to the Carta corporation (numeric id, UUID,
 # is_carta_customer). Context-scoped; no corporation filter, or the non-customers vanish.
 _ENTITY_IDENTITY_SQL = (
-    "SELECT entity_link_id, corporation_id, corporation_uuid, is_carta_customer, corporation_name\n"
+    "SELECT entity_link_id, corporation_id, corporation_uuid, is_carta_customer, corporation_name{firm_col}\n"
     "FROM FUND_ADMIN.CORPORATION_BASIC_INFO_V2\n"
+    "{firm_where}"
     "ORDER BY corporation_name, entity_link_id"  # entity_link_id is per-firm unique — a total order
 )
 
 # One row per (GL issuer, corporation) link; an issuer often links to several corporations.
 # It is how a KPI or cap-table row keyed only by corporation UUID reaches its entity link.
 _CORPORATION_LINKS_SQL = (
-    "SELECT general_ledger_issuer_id, corporation_id, is_carta_customer\n"
+    "SELECT general_ledger_issuer_id, corporation_id, is_carta_customer{firm_col}\n"
     "FROM FUND_ADMIN.CORPORATION_ENTITY_LINKS\n"
+    "{firm_where}"
     "ORDER BY general_ledger_issuer_id, corporation_id"
 )
 
@@ -256,47 +278,73 @@ def _check_after_instance(after_instance):
     return after_instance
 
 
-def _stems(since=None, after_instance=None):
+def _check_firm_uuid(firm_uuid):
+    if firm_uuid is not None and not _UUID_RE.match(firm_uuid):
+        raise ValueError("--firm-uuid must be a UUID, got %r" % (firm_uuid,))
+    return firm_uuid
+
+
+def _firm_scope(firm_uuid):
+    """Format-slot values for the firm scope; all-empty when no firm_uuid is given,
+    so the emitted SQL is byte-identical to the unscoped shape."""
+    if not firm_uuid:
+        return {"firm_col": "", "firm_pred": "", "firm_where": "", "spv_firm_pred": "",
+                "own_firm_col": "", "own_firm_pred": "", "fd_firm_col": ""}
+    return {
+        "firm_col": ", firm_id",
+        "firm_pred": "  AND firm_id = '%s'\n" % firm_uuid,
+        "firm_where": "WHERE firm_id = '%s'\n" % firm_uuid,
+        "spv_firm_pred": ("\n                      AND firm_id = '%s'" % firm_uuid),
+        "own_firm_col": ", FIRM_ID",
+        "own_firm_pred": "    AND FIRM_ID = '%s'\n" % firm_uuid,
+        "fd_firm_col": ",\n       o.FIRM_ID AS firm_id",
+    }
+
+
+def _stems(since=None, after_instance=None, firm_uuid=None):
     """Return an ordered dict {stem: sql}, `_ORDER`-aligned. `since` ('YYYY-MM-DD')
     injects `AND period_end >= '<since>'` and `after_instance` (int) injects
     `AND instance_id > <after_instance>`, each into `financials` and `forecasts`
     only — the two time-series stems — in place of their placeholder comment,
-    before the QUALIFY."""
+    before the QUALIFY. `firm_uuid` injects the explicit firm scope into every
+    firm-bearing stem (all but `capstack`) — see the module docstring."""
     _check_since(since)
     _check_after_instance(after_instance)
+    _check_firm_uuid(firm_uuid)
+    kw = _firm_scope(firm_uuid)
     if since:
-        financials_since = "  AND period_end >= '%s'\n" % since
-        forecasts_since = "  AND period_end >= '%s'\n" % since
+        kw_fin = dict(kw, since_clause="  AND period_end >= '%s'\n" % since)
+        kw_fc = dict(kw, since_clause="  AND period_end >= '%s'\n" % since)
     else:
-        financials_since = _FINANCIALS_SINCE_PLACEHOLDER
-        forecasts_since = _FORECASTS_SINCE_PLACEHOLDER
+        kw_fin = dict(kw, since_clause=_FINANCIALS_SINCE_PLACEHOLDER)
+        kw_fc = dict(kw, since_clause=_FORECASTS_SINCE_PLACEHOLDER)
     if after_instance is not None:
-        after = "  AND instance_id > %d\n" % after_instance
+        kw_fin["after_clause"] = kw_fc["after_clause"] = "  AND instance_id > %d\n" % after_instance
     else:
-        after = _AFTER_PLACEHOLDER
+        kw_fin["after_clause"] = kw_fc["after_clause"] = _AFTER_PLACEHOLDER
 
     out = {
-        "funds": _FUNDS_SQL,
-        "financials": _FINANCIALS_TEMPLATE.format(since_clause=financials_since, after_clause=after),
-        "forecasts": _FORECASTS_TEMPLATE.format(since_clause=forecasts_since, after_clause=after),
-        "holdings": _HOLDINGS_SQL,
-        "fdshares": _FDSHARES_SQL,
-        "deal_irr": _DEAL_IRR_SQL,
+        "funds": _FUNDS_SQL.format(**kw),
+        "financials": _FINANCIALS_TEMPLATE.format(**kw_fin),
+        "forecasts": _FORECASTS_TEMPLATE.format(**kw_fc),
+        "holdings": _HOLDINGS_SQL.format(**kw),
+        "fdshares": _FDSHARES_SQL.format(**kw),
+        "deal_irr": _DEAL_IRR_SQL.format(**kw),
         "capstack": _CAPSTACK_SQL,
-        "holdings_history": _HOLDINGS_HISTORY_SQL,
-        "entity_identity": _ENTITY_IDENTITY_SQL,
-        "corporation_links": _CORPORATION_LINKS_SQL,
+        "holdings_history": _HOLDINGS_HISTORY_SQL.format(**kw),
+        "entity_identity": _ENTITY_IDENTITY_SQL.format(**kw),
+        "corporation_links": _CORPORATION_LINKS_SQL.format(**kw),
     }
     return {stem: out[stem] for stem in _ORDER}
 
 
-def batches(since=None):
+def batches(since=None, firm_uuid=None):
     """Group the 5 light (non-paged) stems into `dwh__execute__queries` batch
     objects of at most `_MAX_PER_BATCH` queries, preserving `_BATCH_ORDER`.
     `financials`/`forecasts` are excluded — see `_BATCH_ORDER` comment above.
     `stems[i]` aligns with `queries[i]` so the caller can map each result back
     to its stem."""
-    all_stems = _stems(since)
+    all_stems = _stems(since, firm_uuid=firm_uuid)
     items = [(stem, all_stems[stem]) for stem in _BATCH_ORDER]
     out = []
     for i in range(0, len(items), _MAX_PER_BATCH):
@@ -318,6 +366,9 @@ def main(argv):
     p_batch = sub.add_parser("batch", help="print the 5 light stems as dwh__execute__queries batches")
     p_batch.add_argument("--since", metavar="YYYY-MM-DD",
                           help="inject a period_end history window into financials/forecasts")
+    p_batch.add_argument("--firm-uuid", metavar="UUID",
+                          help="pin every firm-bearing stem to this firm (defense-in-depth "
+                               "against a drifted row-access grant)")
 
     p_sql = sub.add_parser("sql", help="print one stem's SQL")
     p_sql.add_argument("stem", choices=_ORDER)
@@ -325,14 +376,18 @@ def main(argv):
                         help="inject a period_end history window into financials/forecasts")
     p_sql.add_argument("--after-instance", metavar="N", type=int,
                         help="inject an incremental floor `instance_id > N` into financials/forecasts")
+    p_sql.add_argument("--firm-uuid", metavar="UUID",
+                        help="pin every firm-bearing stem to this firm (defense-in-depth "
+                             "against a drifted row-access grant)")
 
     a = ap.parse_args(argv[1:])
 
     try:
         if a.command == "batch":
-            sys.stdout.write(json.dumps(batches(a.since), ensure_ascii=False) + "\n")
+            sys.stdout.write(json.dumps(batches(a.since, firm_uuid=a.firm_uuid),
+                                        ensure_ascii=False) + "\n")
             return 0
-        sys.stdout.write(_stems(a.since, a.after_instance)[a.stem] + "\n")
+        sys.stdout.write(_stems(a.since, a.after_instance, firm_uuid=a.firm_uuid)[a.stem] + "\n")
     except ValueError as e:
         sys.stderr.write("emit_stem_sql: %s\n" % e)
         return 2

@@ -55,6 +55,15 @@ failing means a page was dropped or the tiling overlapped — exits 2 and writes
 ``<dest>.integrity_error`` with the failure details, so a caller never silently builds on
 an incomplete or duplicated stem.
 
+**Firm-scope check, for stems emitted with --firm-uuid.** ``--expect-firm <firm_uuid>``
+runs on EVERY page: each extracted row's ``firm_id`` must equal it (case-insensitive).
+Staff row scoping is one shared grant per user, rewritable by the user's other surfaces
+mid-refresh, so a page can carry another firm's rows while the session still believes
+its own ``set_context``. A failing page writes ``<dest>.scope_error`` and NOTHING else —
+the poisoned rows never land — and exits 2; re-run ``set_context`` and re-fetch the stem
+from offset 0. Rows with no ``firm_id`` column fail too (the SQL wasn't emitted with
+``--firm-uuid``, so nothing was verified).
+
 Usage:  uv run save_query_result.py <src_path> <dest.ndjson> [--append]
         uv run save_query_result.py - <dest.ndjson>   # read the raw result from stdin
                                                       # (for small INLINE results)
@@ -154,6 +163,40 @@ def detect_total_rows(text):
 def integrity_error_path(dest_path):
     """Sidecar marking an assembled file that failed its completeness check."""
     return dest_path + ".integrity_error"
+
+
+def scope_error_path(dest_path):
+    """Sidecar marking a page whose rows belong to the wrong firm."""
+    return dest_path + ".scope_error"
+
+
+def scope_errors(rows, expect_firm):
+    """Check every row's firm_id against ``expect_firm`` (case-insensitive key and
+    value); non-empty ``errors`` means the page must not be written. A missing
+    firm_id column also fails — the stem SQL ran without --firm-uuid, so nothing
+    was verified. Returns ``(errors, foreign_firms, missing)``."""
+    expected = expect_firm.lower()
+    foreign = {}
+    missing = 0
+    for r in rows:
+        v = None
+        for k, val in r.items():
+            if k.lower() == "firm_id":
+                v = val
+                break
+        if v is None:
+            missing += 1
+        elif str(v).lower() != expected:
+            foreign[str(v)] = foreign.get(str(v), 0) + 1
+    errors = []
+    if foreign:
+        errors.append("%d row(s) belong to %d other firm(s): %s"
+                      % (sum(foreign.values()), len(foreign),
+                         ", ".join(sorted(foreign))))
+    if missing:
+        errors.append("%d row(s) carry no firm_id column — emit the stem SQL with "
+                      "--firm-uuid so the scope is verifiable" % missing)
+    return (errors, foreign, missing)
 
 
 def _row_key(row, key_cols):
@@ -453,13 +496,39 @@ def _read_source(src):
         return fh.read()
 
 
-def normalize_text(text, dest_path, append=False):
+class ScopeError(Exception):
+    """The page's rows fail the --expect-firm check; nothing was written."""
+
+    def __init__(self, errors):
+        super().__init__("; ".join(errors))
+        self.errors = errors
+
+
+def _check_scope(payload, dest_path, expect_firm):
+    """Refuse the page (ScopeError + ``.scope_error`` sidecar) when any row fails
+    the firm check; clear a stale sidecar when the page is clean."""
+    errors, foreign, missing = scope_errors(payload, expect_firm)
+    if not errors:
+        try:
+            os.remove(scope_error_path(dest_path))
+        except OSError:
+            pass
+        return
+    with open(scope_error_path(dest_path), "w", encoding="utf-8") as fh:
+        json.dump({"expected_firm": expect_firm, "foreign_firms": foreign,
+                   "missing_firm_id_rows": missing, "errors": errors}, fh)
+        fh.write("\n")
+    raise ScopeError(errors)
+
+
+def normalize_text(text, dest_path, append=False, expect_firm=None):
     """Convert raw result ``text`` into clean ndjson at ``dest_path``.
 
     Returns ``(rows_written_this_page, next_offset)``. ``rows_written_this_page`` is 0
     when nothing usable was found. ``next_offset`` is None when this page completed the
     stem — in which case any stale ``.truncated`` marker is cleared, so a resumed
-    pagination that finally catches up leaves a clean raw dir behind."""
+    pagination that finally catches up leaves a clean raw dir behind. ``expect_firm``
+    raises ScopeError (writing nothing) when any row's firm_id is not that firm."""
     kind, payload = parse_query_output(text)
     dest_dir = os.path.dirname(os.path.abspath(dest_path))
     if dest_dir:
@@ -469,6 +538,8 @@ def normalize_text(text, dest_path, append=False):
         payload = [r for r in payload if not _is_summary(r)]  # drop MCP summary blocks
     if not (kind == "rows" and payload):
         return (0, None)
+    if expect_firm:
+        _check_scope(payload, dest_path, expect_firm)
 
     with open(dest_path, "a" if append else "w", encoding="utf-8") as fh:
         for r in payload:
@@ -494,6 +565,7 @@ def main(argv):
     append = "--append" in rest
     verify = "--verify-complete" in rest
     unique_key = None
+    expect_firm = None
     positional = []
     i = 0
     while i < len(rest):
@@ -502,6 +574,10 @@ def main(argv):
             i += 1
             if i < len(rest):
                 unique_key = [c.strip() for c in rest[i].split(",") if c.strip()]
+        elif tok == "--expect-firm":
+            i += 1
+            if i < len(rest):
+                expect_firm = rest[i]
         elif tok in ("--append", "--verify-complete"):
             pass
         else:
@@ -509,7 +585,8 @@ def main(argv):
         i += 1
     if len(positional) != 2:
         sys.stderr.write("usage: save_query_result.py <src_path|-> <dest.ndjson> "
-                         "[--append] [--verify-complete] [--unique-key cols]\n")
+                         "[--append] [--verify-complete] [--unique-key cols] "
+                         "[--expect-firm firm_uuid]\n")
         return 2
     src, dest = positional
     if src != "-" and not os.path.exists(src):
@@ -520,7 +597,18 @@ def main(argv):
     except OSError as e:
         sys.stderr.write("save_query_result: could not read %s: %s\n" % (src, e))
         return 2
-    n, next_offset = normalize_text(text, dest, append=append)
+    try:
+        n, next_offset = normalize_text(text, dest, append=append, expect_firm=expect_firm)
+    except ScopeError as e:
+        sys.stderr.write("save_query_result: SCOPE CHECK FAILED for %s:\n" % dest)
+        for msg in e.errors:
+            sys.stderr.write("  - %s\n" % msg)
+        sys.stderr.write(
+            "  The warehouse returned another firm's rows: the session's row-access "
+            "grant was switched mid-refresh (it is shared across this user's surfaces). "
+            "Nothing was written. Re-run set_context for the intended firm, then "
+            "re-fetch this stem from offset 0.\n")
+        return 2
     if n < 1:
         preview = text.strip().replace("\n", " ")[:200]
         sys.stderr.write(
