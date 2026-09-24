@@ -33,7 +33,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.39.9</carta-plugin>
+<carta-plugin>carta-investors:6.40.1</carta-plugin>
 
 [PATTERN carta-writing-style v0.0.2]
 [PATTERN etiquette v0.0.6]
@@ -247,6 +247,7 @@ Here's what I can help you with:
 - **Analyze pacing & variance** — Compare actuals to budget, assess on-track status, drill into over/under lines.
 - **Model a what-if scenario** — Simulate headcount cuts, revenue shocks, new fund raises, or expansion hires.
 - **Consolidating financials** — Firm-wide P&L, balance sheet, trial balance, or cash flow.
+- **ManCo Microapp** — Open the interactive ManCo reporting microapp instead of a spreadsheet.
 
 **Headline variant:** swap the first line for *"**Connected to [FIRM] via Carta
 Fund Admin.**"* only when a real firm name is already known from a chained call
