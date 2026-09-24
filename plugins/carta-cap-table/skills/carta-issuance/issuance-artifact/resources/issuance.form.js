@@ -1236,7 +1236,9 @@ function localBlockers() {
   const out = [];
   // Only when the boot answered. A boot that failed learned nothing about the company,
   // so blaming its name sends the user to fix a name that was never wrong.
-  if (noCorporation() && !S.bootFailed && !S.connErr) {
+  // The server's own refusal names the cause; this one is for a boot that sent none.
+  if (noCorporation() && !S.bootFailed && !S.connErr
+      && !objs(S.blockers).some((b) => b.key === "corporation.unresolved")) {
     out.push({ key: "corporation.unresolved", severity: "hard_stop",
       message: `Carta could not tell which company "${S.corpName}" is. Tell Claude the `
         + "company's full legal name, then open this page again." });

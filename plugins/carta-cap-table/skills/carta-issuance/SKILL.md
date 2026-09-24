@@ -36,7 +36,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.90.8</carta-plugin>
+<carta-plugin>carta-cap-table:6.90.9</carta-plugin>
 
 # Issue Securities
 
@@ -160,9 +160,9 @@ the form, not a chat question.
 
 ## The artifact surface
 
-**Budget: two tool calls, one turn, to a form on screen** — one `Bash`, one `Artifact`, plus
-the environment check only when [it applies](#the-connected-carta-must-be-the-intended-carta).
-Any third call before the user sees anything means something below was skipped.
+**Budget: two turns to a form on screen** — `Bash`, then `Artifact` with
+[the company check](#check-the-company-beside-the-publish) beside it, plus the environment
+check only when [it applies](#the-connected-carta-must-be-the-intended-carta).
 
 The page does the work: it resolves the company, the connector and the named people against
 the cap table, fetches its own reference data, collects the terms, saves and validates the
@@ -173,13 +173,8 @@ not the roster, field manifest, or HTML. **You run one script and publish it.**
 
 - **The connected Carta must be the intended Carta** —
   [the hard stop above](#the-connected-carta-must-be-the-intended-carta) binds here.
-- **Do not resolve the company.** Pass the name the user said to `--company-name` and build.
-  The page's own boot call takes a name, resolves it server-side, and returns the company,
-  the named people already matched to stakeholders, the plan, price and dates. A
-  `list_accounts` lookup first buys nothing and costs a round trip.
-- **`list_accounts(search="<name>")` is the fallback**, for when the page reports it
-  couldn't pin the company down — never unfiltered, whose truncated page may never reach
-  the name. It returns `id: "corporation_pk:<n>"`; `--corporation-id` takes only `<n>`.
+- **Don't resolve the company before the build.** Pass the user's name to `--company-name`;
+  the page resolves it. A deferred `call_tool` loads via `ToolSearch` beside the `Bash`.
 - **A file in the prompt goes through [the import sub-skill](issuance-import/SKILL.md)
   first,** before the build. Its `rows` become the seed's `rows`.
 
@@ -296,6 +291,19 @@ Echo nothing else — no ids, field names, or summary of what you prefilled
 ([hard rule 8](#hard-rules)). The first open asks the viewer to allow the Carta connection;
 until then the page shows its no-connection state and says what to do.
 
+#### Check the company beside the publish
+
+Parallel with the `Artifact` call (skip it with `--corporation-id`): `call_tool`
+`cap_table:get:resolve_company` `{"name": "<--company-name>"}`.
+
+- `resolved` / `unavailable` → nothing.
+- `ambiguous` / `suggestions` → `AskUserQuestion` "Which company did you mean?", one option
+  per `candidates` name (max 4; twins get `Carta ID <corporation_id>` as description).
+  **Never pick one yourself**, even a lone suggestion.
+- `not_found` → ask for the name as Carta shows it; re-check.
+
+Then rebuild with `--corporation-id` to the **same** `--out` and republish (no `icon`).
+
 ### 4. The page issues; you report
 
 **This surface performs the irreversible write itself.** The page saves, validates, shows
@@ -339,7 +347,7 @@ closing line:
 | What you see | What it means | What you do |
 |---|---|---|
 | Publish warns it couldn't resolve the connector | the page has no Carta access | [chat surface](references/chat-surface.md) |
-| User says the page can't find the company, or asks which one you meant | the name matched none or several | `list_accounts(search="<name>")`, settle it, rebuild with `--corporation-id <n>` to the **same** `--out` path |
+| User says the page can't find the company | the name matched none or several | [Check the company](#check-the-company-beside-the-publish) |
 | User says the page is empty, or every section couldn't load | the viewer hasn't allowed the connector, or Carta is down for them | Tell them to allow the Carta connection when asked, or reconnect Carta in Settings → Connectors. Re-publishing doesn't help — unless `server` came from step 2 of [§ 3](#3-publish-it) |
 | User sees a hard stop in the page | the account isn't set up for this issuance | Read it back in plain language and stop. The fix is in Carta, not here |
 | User reports validation errors they can't clear | the server refused a value | Those belong to the page, shown against its own fields. Only if the page can't act on a message — a fund-structure block, a duplicate stakeholder, a missing FMV — read [mutate-recovery.md](references/mutate-recovery.md) |
