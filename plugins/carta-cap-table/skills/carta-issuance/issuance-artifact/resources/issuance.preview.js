@@ -218,8 +218,8 @@ const PREVIEW_ISSUED = [
     + "again to start over."],
 ];
 
-/** Example Carta URLs on the test environment, standing in for the server-built ones. */
-const PREVIEW_APP = "https://app.test.carta.rocks";
+/** Example Carta URLs, standing in for the server-built ones. */
+const PREVIEW_APP = "https://app.carta.com";
 const PREVIEW_LEDGER = { option_grant: "options/list", certificate: "certificates/list",
   piu: "options/piu/list" };
 

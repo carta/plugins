@@ -113,7 +113,7 @@ doubles as the account-level hard stop and as Phase 0.5's reference-data fetch.
 ### Step 1 — Load every tool in ONE ToolSearch call
 
 ```
-ToolSearch: "select:mcp__carta__call_tool,mcp__carta__search_tools,mcp__carta__welcome,mcp__carta__list_accounts"
+ToolSearch: "select:mcp__carta__call_tool,mcp__carta__search_tools,mcp__carta__welcome,mcp__carta__list_accounts,mcp__carta__get_current_user"
 ```
 
 `mcp__carta__` is the placeholder prefix ([Step 2](#step-2--command-names-and-base_url)) — when
@@ -127,7 +127,7 @@ no tool ending in `call_tool` / `list_accounts` / `welcome` exists, under any pr
 genuinely gone: say so and stop. Everything else that looks like an answer is not one
 ([SKILL.md § Do not diagnose the Carta connection](../SKILL.md#do-not-diagnose-the-carta-connection)).
 
-One call, four tools, the complete set for the run. **`call_tool` is loaded here, up front**, so
+One call, five tools, the complete set for the run. **`call_tool` is loaded here, up front**, so
 Phase 2 never has to load it after the user confirms — that would be serial latency at the worst
 possible moment.
 
@@ -181,7 +181,7 @@ command of its own.
 > Context math only (e.g. percent-of-fully-diluted for a grant), never a payload source.
 
 **`mcp__carta__` is a placeholder** — here, in every code block below, and in every reference
-file. The real prefix is environment-dependent (`mcp__carta-test__call_tool`, plugin-scoped and
+file. The real prefix is environment-dependent (`mcp__claude_ai_Carta__call_tool`, plugin-scoped and
 UUID-suffixed connector forms all occur). Resolve it from the session's tool list and substitute
 it everywhere; only the prefix varies — tool and command names never do. The one exception:
 SKILL.md's frontmatter `allowed-tools` entries are literal grant patterns — never substitute
@@ -202,9 +202,12 @@ The hard stop is
 [SKILL.md § The connected Carta must be the intended Carta](../SKILL.md#the-connected-carta-must-be-the-intended-carta)'s,
 and it binds here too:
 `corporation_id` is not unique across environments, so aiming at the wrong one reads one
-company's cap table and later issues real securities onto it. The tool prefix names the
-connected environment (`…_Carta_Demo__` → demo, a `-test` or sandbox suffix likewise, unsuffixed
-→ production) and `get_current_user`'s `environment` / `base_url` confirm it. Three cases:
+company's cap table and later issues real securities onto it. The connected environment is
+the one behind the `call_tool` you loaded in Step 1 — a readable prefix names it
+(`…_Carta_Demo__` → demo, a `-test` or sandbox suffix likewise, unsuffixed → production), and
+`get_current_user`'s `environment` settles it, including behind a UUID prefix (its `base_url`
+host when `environment` reads `unknown`). A connector offering only `authenticate` is not
+connected, and no example in this skill names the user's environment. Three cases:
 
 - **The request names no environment** → the connected one is intended. Continue, say nothing.
 - **It names or implies one and that differs** → **hard stop before the first Carta call.**
