@@ -10,7 +10,7 @@
 // second is tagged. Tagging the first would be as wrong as leaving the second
 // untagged: one is Carta's number, the other is ours.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { C, CARD_TITLE, FS, RADIUS } from "../../ui/theme.js";
 import { Select, TableAlign, Tag, Th, Td, useMediaQuery } from "../../ui/components.jsx";
 import { shares } from "../../model/format.js";
@@ -32,19 +32,56 @@ import {
 // settings expose.
 const CADENCES = [6, 12, 18, 24];
 
+/** Shared buffer/emit/blur for controlled <input type="number">.
+ *
+ *  Controlled numeric inputs reconcile by NUMBER — a DOM "012" whose parsed
+ *  form matches the prop is left alone, leaving a sticky leading zero. The
+ *  buffer holds the raw string; parse maps empty/invalid input to a numeric
+ *  emit value; blur snaps the display back to the canonical string.
+ */
+function useNumericBuffer(value, onChange, parse = (raw) => (raw === "" ? 0 : Number(raw))) {
+  const [buffer, setBuffer] = useState(String(value));
+  // Guards the sync effect against the user's mid-typing buffer being clobbered
+  // by our own onChange round-tripping through the numeric prop.
+  const lastEmittedRef = useRef(value);
+
+  useEffect(() => {
+    if (value !== lastEmittedRef.current) {
+      lastEmittedRef.current = value;
+      setBuffer(String(value));
+    }
+  }, [value]);
+
+  return {
+    value: buffer,
+    onChange: (e) => {
+      const raw = e.target.value;
+      setBuffer(raw);
+      const next = parse(raw);
+      lastEmittedRef.current = next;
+      onChange(next);
+    },
+    onBlur: () => {
+      setBuffer(String(lastEmittedRef.current));
+    },
+  };
+}
+
 /** A number field with a unit suffix, sized for 2-4 digits. */
 function NumField({ value, onChange, suffix, width = 64, title, min = 0, disabled, label }) {
+  const buffered = useNumericBuffer(value, onChange);
   return (
     <span style={{ display: "inline-flex", alignItems: "baseline", gap: 4 }}>
       <input
         type="number"
         min={min}
-        value={value}
+        value={buffered.value}
         title={title}
         aria-label={label}
         disabled={disabled}
         readOnly={disabled}
-        onChange={(e) => onChange(e.target.value === "" ? 0 : Number(e.target.value))}
+        onChange={buffered.onChange}
+        onBlur={buffered.onBlur}
         style={{
           width, height: 32, padding: "0 8px", fontSize: FS.md, fontFamily: "inherit",
           color: disabled ? C.textQuiet : C.textDefault,
@@ -283,19 +320,11 @@ function ReasonCell({ externalId, name, reasons, onChange }) {
   );
 }
 
-/** The Grant column: a figure, its provenance, and a way to change it.
- *
- *  Three provenances, deliberately distinguished — someone reading this column has
- *  to know whether a number came from Carta, from this console's arithmetic, or
- *  from a person:
- *
- *    untagged   Carta's own refresh_grant_num_shares at the corporation's policy
- *    Modelled   benchmark x target, calculated here
- *    Edited     typed by hand, and reset-able back to whichever of the above applies
- *
- *  Empty input clears the override rather than setting 0 — a blank field means
- *  "no longer overriding", and 0 is a real grant someone might mean.
- */
+/** The Grant column: figure + provenance + editor. Provenance may be untagged
+ *  (Carta's `refresh_grant_num_shares` at policy), `Modelled` (benchmark x
+ *  target, calculated here), or `Edited` (typed by hand). Clearing the field
+ *  records a deliberate 0 override; the `reset` link is the only path back to
+ *  the policy/modelled figure. */
 function GrantCell({
   row, shares: sh, modelled, overridden, standing, targetPct, onEdit,
   unit, equityUnits,
@@ -308,19 +337,25 @@ function GrantCell({
         ? `Benchmark x ${targetPct}% — calculated here, not Carta's figure`
         : "Carta's own refresh grant figure at your current policy";
 
+  // Grant parse rule: empty typed input records a deliberate 0 override; the
+  // `reset` link is the only path back to the policy figure (see docstring).
+  const buffered = useNumericBuffer(
+    sh == null ? "" : sh,
+    (v) => onEdit(row.external_id, v),
+    (raw) => (raw === "" ? 0 : Math.max(0, Number(raw))),
+  );
+
   return (
     <Td mono subtle={sh == null && !overridden} title={title}>
       <span style={{ display: "inline-flex", alignItems: "center", gap: 6, justifyContent: "flex-end" }}>
         <input
           type="number"
           min={0}
-          value={sh == null ? "" : sh}
+          value={buffered.value}
           aria-label={`Grant for ${row.full_name || row.external_id}`}
           placeholder="—"
-          onChange={(e) => onEdit(
-            row.external_id,
-            e.target.value === "" ? null : Math.max(0, Number(e.target.value)),
-          )}
+          onChange={buffered.onChange}
+          onBlur={buffered.onBlur}
           style={{
             width: 92, height: 30, padding: "0 7px", textAlign: "right",
             fontSize: FS.md, fontFamily: "inherit", fontVariantNumeric: "tabular-nums",

@@ -13,7 +13,7 @@ description: >
   So "what are our comp benchmarks" is a sibling even though it names them, while "open our
   comp benchmarks so I can filter them" is this skill. NOT for a single role lookup. READ-ONLY.
 argument-hint: "<corporation name or numeric corporation id — required>"
-version: 0.2.0
+version: 0.2.1
 model: inherit
 allowed-tools:
   - mcp__carta__welcome
@@ -50,7 +50,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.90.3</carta-plugin>
+<carta-plugin>carta-cap-table:6.90.4</carta-plugin>
 
 <!-- [PATTERN carta-writing-style v0.0.2] [PATTERN etiquette v0.0.6] [PATTERN text v0.0.8] [PATTERN tables v0.0.12] [PATTERN carta-watermark v0.0.10] [PATTERN base v0.1.0] -->
 
