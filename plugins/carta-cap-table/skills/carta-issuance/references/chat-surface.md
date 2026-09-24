@@ -120,7 +120,7 @@ belongs in the §1 batch here.
 | Issue date | today | `(default)` |
 | Grant expiration | the plan's term from `issue_date` ([payload-reference.md](payload-reference.md#grant-expiration-follows-the-plan)) | `(default — plan term)` |
 | Exercise price | the sole active valuation on the plan's common share class, whatever its source — 409A, EMI, CSOP or share price ([engine.md § FMV](engine.md#option-grant-resolve-the-fmv-and-the-jurisdiction)) | `(default — current <source>)` |
-| Option plan | the only non-expired plan | `(default — only active plan)` |
+| Option plan | the latest non-expired plan with shares left (highest `id`) | `(default — latest active plan)` |
 | Document set | the only set — on a PIU with no sets there is nothing to ask | `(default — only template)` |
 | Legend | the only legend, or the one flagged `default` | `(default)` |
 | Vesting — certificate, PIU | **none** — opt-in; nothing infers a schedule from a template's name | — |
@@ -138,6 +138,6 @@ Which class a security sits in changes the holder's tax position, and an HMRC re
 UMV are both live with nothing saying which a grant prices from. Those are real forks — §1
 batch, never this table.
 
-Ask only when the value is genuinely **not** computable: several non-expired plans, an
+Ask only when the value is genuinely **not** computable: an
 ambiguous `security_type`, a duplicate-name collision, a jurisdiction the evidence doesn't
 settle. *"The user might want something else"* is not a reason to ask — that is what §2 is for.

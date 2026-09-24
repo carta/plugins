@@ -36,7 +36,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.90.13</carta-plugin>
+<carta-plugin>carta-cap-table:6.90.14</carta-plugin>
 
 # Issue Securities
 
@@ -298,13 +298,15 @@ state and says what to do.
 Parallel with the `Artifact` call (skip it with `--corporation-id`): `call_tool`
 `cap_table:get:resolve_company` `{"name": "<--company-name>"}`.
 
-- `resolved` / `unavailable` → nothing.
+- `resolved` / `unavailable` → nothing. **No rebuild** — the page already resolves the name.
 - `ambiguous` / `suggestions` → `AskUserQuestion` "Which company did you mean?", one option
   per `candidates` name (max 4; twins get `Carta ID <corporation_id>` as description).
   **Never pick one yourself**, even a lone suggestion.
 - `not_found` → ask for the name as Carta shows it; re-check.
 
-Then rebuild with `--corporation-id` to the **same** `--out` and republish (no `icon`).
+Only after the user answers one of those: rebuild with the same flags plus
+`--corporation-id` (`--company-name` stays required) to the **same** `--out`, and republish
+(no `icon`).
 
 ### 4. The page issues; you report
 

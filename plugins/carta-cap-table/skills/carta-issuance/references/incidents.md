@@ -133,6 +133,14 @@ the turn ended at 67, nine model turns against a budget of three.
 | The closing line dropped the environment banner that the carta-cli hook asks every response to end with. The skill's *"echo nothing else"* read as overriding it. | A footer a hook asks for still goes at the end ([SKILL.md § 3](../SKILL.md#3-publish-it)). |
 | The five grants issued **fully vested**, expiring on the plan's end date (7 years out, not the consent's 10) and board-approved on the grant date instead of the consent's effective date. The seed could carry only names, quantities and the issue date, so none of the consent's terms reached the form; "No vesting" was the silent default, and the page capped every grant at the plan's end — a cap Carta's own Drafts and board-consent flows do not apply. The user changed only the grant type and issued. | A document's terms go in the seed's `terms`; the page matches plan and vesting names against Carta's lists, and a stated schedule that matches no template is asked for, never sent as none ([SKILL.md § 2](../SKILL.md#2-build-the-page)). |
 
+## The artifact surface, fourth traced run
+
+*"I want to issue option grants for biscuitbyte"*: four Carta calls where two do.
+
+| Incident | Rule it produced |
+|---|---|
+| `resolve_company` returned `resolved`, and the model rebuilt with `--corporation-id` anyway. The rebuild dropped `--company-name` and exited 2, so one resolved name cost two extra builds. The section read *"Then rebuild…"* after the bullets, as if it followed every status. | Rebuild only after the user answers an `ambiguous`, `suggestions` or `not_found`, with every original flag kept ([SKILL.md § 3](../SKILL.md#check-the-company-beside-the-publish)). |
+
 ## Refusals the page read as approvals
 
 Found by reading the wire against the server rather than from a run, so there is no user

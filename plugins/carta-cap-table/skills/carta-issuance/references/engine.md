@@ -639,9 +639,8 @@ Use the `option_plans` section from the Phase 0.5 `issuance_init` payload.
 
 - **The collect already answered it** → use that answer. Asking again is a wasted interactive
   wait on a question the user already saw.
-- **One non-expired plan** → default silently. Tag `(default — only active plan)`.
-- **Multiple non-expired, none answered** → `AskUserQuestion`, one option per plan
-  (`"Use \"<name>\" (<available_quantity> available)"`), last option `"Cancel"`.
+- **Otherwise** → default silently to the latest non-expired plan with shares left (the
+  highest `id`). Tag `(default — latest active plan)`.
 - **Zero non-expired** → you should never arrive here: [Phase 0.5's live-plan
   check](#blockers--act-on-them-first) already stopped the run. If you do, stop now with that
   same message rather than issuing off an expired plan.

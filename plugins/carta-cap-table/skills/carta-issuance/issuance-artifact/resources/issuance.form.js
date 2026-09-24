@@ -694,10 +694,9 @@ function applyDerived() {
 }
 
 function fillDefaults(sh) {
-  // Sole option plan / document set / legend / vesting-free class default silently.
+  // Latest option plan / sole document set / legend / vesting-free class default silently.
   fillSeedTerms(sh);
-  const plans = selectablePlans();
-  if (S.type === "option_grant" && !sh.option_plan_id && plans.length === 1) sh.option_plan_id = String(plans[0].id);
+  if (S.type === "option_grant" && !sh.option_plan_id) sh.option_plan_id = latestPlanId();
   pickDocSet();
   if (S.type === "certificate" && !sh.legend_id && S.legends.length === 1) sh.legend_id = String(S.legends[0].id);
   // A class is preselected ONLY when there is exactly one. Two or more and none
@@ -769,6 +768,11 @@ function applySoFill() {
 // empty pool is why the server emits option_plan.none_selectable.
 const selectablePlans = () => S.plans.filter((p) =>
   !p.is_expired && Number(p.available_quantity ?? Infinity) > 0);
+/** The plan created last, by id — the same rule the bootstrap picks a share class by. */
+function latestPlanId() {
+  const ids = selectablePlans().map((p) => Number(p.id)).filter(Number.isFinite);
+  return ids.length ? String(Math.max(...ids)) : "";
+}
 /** The live valuation rows to price from. `active` is already filtered server-side, so
     it is never re-derived from dates. A 409A row carries no share class, so it is tagged
     COMMON — an option is the only thing a 409A prices. */
@@ -1210,13 +1214,12 @@ function spec(board) {
       // Scopes which grant types are legal rather than reaching the payload; so_type
       // itself is the per-row answer.
       F("jurisdiction", "Jurisdiction", "sel", { req: "a jurisdiction",
-        opts: candidates().map((c) => [c, JUR[c] || c]),
-        hint: "We cannot tell which country's rules apply. Your answer sets the holder's tax treatment." });
+        opts: candidates().map((c) => [c, JUR[c] || c]) });
     }
+    // No region only while the jurisdiction above is unanswered, and that field blocks.
     const rg = region();
     F("so_type", rg ? `Grant type (${rg})` : "Grant type", "sel",
-      { opts: rg ? SO[rg].map((v) => [v, v]) : [], over: 1, req: "a grant type",
-        hint: rg ? "" : "Choose a jurisdiction first." });
+      { opts: rg ? SO[rg].map((v) => [v, v]) : [], over: 1, req: rg && "a grant type", dis: !rg });
     F("exercise_price", "Exercise price", "num", { over: 1, min: 0, dis: zepo,
       val: zepo ? "0" : sh.exercise_price, req: !zepo && "an exercise price",
       hint: zepo ? "ZEPO — fixed at 0" : fmvWarning() });
@@ -1246,8 +1249,7 @@ function spec(board) {
     // Both optional, and both exist server-side only for their own option types.
     if (HMRC_SO_TYPES.has(sh.so_type)) {
       F("is_hmrc_notified", "HMRC has been notified", "check", { over: 1 });
-      F("hmrc_notified", "Date HMRC was notified", "date",
-        { over: 1, hint: "Optional — leave blank if you have not notified HMRC yet." });
+      F("hmrc_notified", "Date HMRC was notified", "date", { over: 1 });
     }
     if (ATO_SO_TYPES.has(sh.so_type)) {
       F("ato_notified", "ATO has been notified", "check", { over: 1 });
@@ -1528,8 +1530,7 @@ function renderBlockers() {
     (stops.length ? noteBox("blockers-stop", true, "Nothing can be issued from this page yet",
       stops.map(li)) : "")
     + (decide.length ? noteBox("blockers-decide", false,
-      decide.length === 1 ? "Your call — nothing was chosen for you"
-        : `${decide.length} choices are yours — nothing was chosen for you`, decide.map(li),
+      decide.length === 1 ? "Your call" : `${decide.length} choices are yours`, decide.map(li),
       "Carta holds competing answers here, so picking one for you could set the wrong terms. Choose below before you review.") : "")
     + (warns.length ? noteBox("blockers-warn", false,
       warns.length === 1 ? "Worth checking first"
@@ -1582,7 +1583,7 @@ function renderNotices() {
   if (amb.length) {
     out.push(noteBox("notice-ambiguous", false,
       `${amb.length} name${amb.length > 1 ? "s" : ""} matched more than one stakeholder`,
-      amb.map((a) => `<li data-testid="ambiguous-${esc(a.term)}">“${esc(a.term)}” matches ${Number(a.count)} stakeholders — pick the right one below; nothing was chosen for you.</li>`)));
+      amb.map((a) => `<li data-testid="ambiguous-${esc(a.term)}">“${esc(a.term)}” matches ${Number(a.count)} stakeholders — pick the right one below.</li>`)));
   }
   if (un.length) {
     out.push(noteBox("notice-unmatched", false,
@@ -2168,7 +2169,7 @@ function whoHtml(r, i) {
     <ul class="sug" id="${p}-suggestions" role="listbox" data-testid="${p}-suggestions" hidden></ul></div>`;
   return fld(`${p}-stakeholder`, "Stakeholder", combo,
     { req: true, bare: true, hint: r.stakeholderId != null ? r.email : "" })
-    + (r.stakeholderId == null ? `<button class="link" id="${p}-new-toggle" data-testid="${p}-new-toggle" data-act="new" data-i="${i}" type="button">Not on the cap table? Create a new stakeholder</button>` : "");
+    + (r.stakeholderId == null ? `<button class="link" id="${p}-new-toggle" data-testid="${p}-new-toggle" data-act="new" data-i="${i}" type="button">Create a new stakeholder</button>` : "");
 }
 
 function rowHtml(r, i) {
