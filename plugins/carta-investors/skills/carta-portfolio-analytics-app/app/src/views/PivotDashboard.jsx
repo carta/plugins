@@ -636,7 +636,7 @@ export default function PivotDashboard({ data, dashboard }) {
       {hitsByCompany[companyId] && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginTop: 5, marginLeft: NAME_INSET }}>
           {hitsByCompany[companyId].map((s) => (
-            <Badge key={s.ruleId} tone={s.tone} title={s.detail} style={{ height: "auto", padding: "1px 6px", fontSize: 10, lineHeight: "16px" }}>{s.tag}</Badge>
+            <Badge key={s.ruleId} tone={s.tone} title={s.detail} style={{ height: "auto", padding: "1px 6px", fontSize: 10, lineHeight: "16px", whiteSpace: "normal", overflowWrap: "anywhere", maxWidth: 220, textAlign: "left" }}>{s.tag}</Badge>
           ))}
         </div>
       )}

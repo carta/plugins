@@ -10,6 +10,10 @@ import { STATUS_CAT, toneForStatus } from "../model/status.js";
 
 const CHIP = { height: "auto", padding: "1px 6px", fontSize: 10, lineHeight: "16px" };
 
+// A long custom tag has no spaces, so Badge's default nowrap grows it sideways
+// into the next column. Wrap and cap width; overflowWrap:anywhere breaks the string.
+const WRAP = { whiteSpace: "normal", overflowWrap: "anywhere", height: "auto", maxWidth: 220, textAlign: "left" };
+
 /** Status is colour-coded by outcome; every other Carta category keeps the
  *  single "info" blue, so colour stays meaningful rather than decorative. */
 const toneFor = (t) => (t.cat === STATUS_CAT ? toneForStatus(t.value) : "info");
@@ -42,7 +46,7 @@ export function CompanyTags({ company, compact = false }) {
   const chipBtn = { border: "none", background: "transparent", padding: 0, margin: 0, cursor: "pointer", lineHeight: 0 };
   const chip = (t) => (
     <Badge key={tagId(t.cat, t.value)} tone={toneFor(t)} title={titleFor(t)}
-      style={{ ...(compact ? CHIP : {}), cursor: "default" }}>
+      style={{ ...(compact ? CHIP : {}), ...WRAP, cursor: "default" }}>
       {t.value}
     </Badge>
   );

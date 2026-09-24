@@ -732,7 +732,7 @@ function RiskBlock({ data, company, dashboard }) {
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {signals.map((s, i) => (
               <div key={i} style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
-                <Badge tone={s.tone}>{s.tag}</Badge>
+                <Badge tone={s.tone} style={{ height: "auto", whiteSpace: "normal", overflowWrap: "anywhere", maxWidth: 260, textAlign: "left", flexShrink: 0 }}>{s.tag}</Badge>
                 {s.custom && <Badge tone="muted" variant="text">custom</Badge>}
                 <span style={{ ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)" }}>{s.detail}</span>
               </div>
