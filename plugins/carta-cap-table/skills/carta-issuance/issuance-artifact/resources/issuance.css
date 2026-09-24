@@ -313,6 +313,7 @@
     /* What happens next: one group per outcome, each an item over the rows it covers. */
     .nx-g + .nx-g { margin-top: var(--ink-spacing-global-vertical-small); padding-top: var(--ink-spacing-global-vertical-small); border-top: 1px solid var(--ink-color-global-brand-gray-50); }
     .nx { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; align-items: start; margin-bottom: var(--ink-spacing-global-vertical-xsmall); }
+    .nx + .rv-h { margin-top: var(--ink-spacing-global-vertical-medium); }
     .nx-ic { width: 28px; height: 28px; border-radius: 50%; background: var(--ink-color-global-brand-gray-30); position: relative; }
     .nx-ic::after { content: ""; position: absolute; inset: 7px; -webkit-mask: center / contain no-repeat; mask: center / contain no-repeat; background: var(--ink-color-global-brand-black); }
     .nx-ic.ok::after { -webkit-mask-image: var(--ink-glyph-check); mask-image: var(--ink-glyph-check); }

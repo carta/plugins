@@ -36,7 +36,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.90.9</carta-plugin>
+<carta-plugin>carta-cap-table:6.90.10</carta-plugin>
 
 # Issue Securities
 
@@ -174,18 +174,20 @@ not the roster, field manifest, or HTML. **You run one script and publish it.**
 - **The connected Carta must be the intended Carta** —
   [the hard stop above](#the-connected-carta-must-be-the-intended-carta) binds here.
 - **Don't resolve the company before the build.** Pass the user's name to `--company-name`;
-  the page resolves it. A deferred `call_tool` loads via `ToolSearch` beside the `Bash`.
-- **A file in the prompt goes through [the import sub-skill](issuance-import/SKILL.md)
-  first,** before the build. Its `rows` become the seed's `rows`.
+  the page resolves it.
+- **Deferred `call_tool`: `ToolSearch` it in the same message as the `Bash`.** Unloaded,
+  it's refused for a missing top-level `_instrumentation_v2`.
+- **A spreadsheet or CSV goes through [the import sub-skill](issuance-import/SKILL.md)
+  first;** its `rows` become the seed's. **An attached document is already in context:**
+  seed from it, no `Read`.
 
 Nothing else. **Don't fetch reference data, the roster, plans, valuations, share classes or
-the field manifest** — the page fetches what it needs; anything you fetch is a round trip
-plus context the page fetches again anyway.
+the field manifest** — the page fetches what it needs, so yours is a wasted round trip.
 
 ### 2. Build the page
 
-One `Bash` call. The seed is optional and small: it's only what the *prompt* supplied, so
-the page can prefill it. Write it only when you have something to put in it.
+One `Bash` call: `mkdir`, seed heredoc and build together, no `Write`. The seed is optional
+and small: only what the *prompt* supplied, so the page can prefill it.
 
 **Set `SKILL` to the absolute path
 [§ Where everything else lives](#where-everything-else-lives) resolves for you — paste it.**
@@ -227,8 +229,7 @@ uv run "$SKILL/issuance-artifact/scripts/build_artifact.py" \
 - The script exits non-zero and names the problem on a bad id, a missing part, or an
   unresolved placeholder. Surface that verbatim and stop — a build fault, not a retry.
 
-**Never read the built file back.** It's ~135KB; reading it is the defect this path exists
-to remove.
+**Never read the built file back** — it's ~135KB this path exists to keep out of context.
 
 ### 3. Publish it
 
@@ -288,8 +289,9 @@ title alone — if that panel failed, the address is the one thing the user can'
 copy. Bare URL every time, panel or not.
 
 Echo nothing else — no ids, field names, or summary of what you prefilled
-([hard rule 8](#hard-rules)). The first open asks the viewer to allow the Carta connection;
-until then the page shows its no-connection state and says what to do.
+([hard rule 8](#hard-rules)). A hook's footer still goes last. The first open
+asks the viewer to allow the Carta connection; until then the page shows its no-connection
+state and says what to do.
 
 #### Check the company beside the publish
 
@@ -442,4 +444,5 @@ for them: on several hosts `Glob`/`find` can't reach the plugin mount and return
 - `references/resume-flow.md` — *"resume draft set 472"*.
 - `references/incidents.md` — before weakening or arguing with any rule.
 - `issuance-import/SKILL.md` — the prompt points at a spreadsheet, CSV or award document. On
-  every surface, before any form opens. It owns parsing; **never hand-read a workbook**.
+  every surface, before any form opens ([§ 1](#1-preflight) has the one exception). It owns
+  parsing; **never hand-read a workbook**.

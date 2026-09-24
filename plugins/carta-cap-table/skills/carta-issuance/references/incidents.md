@@ -119,6 +119,19 @@ to settle and no probe to run. On the chat surface,
 `select:` call supersedes them both — it loads the tools and is the one place an absence is
 ever concluded.
 
+## The artifact surface, third traced run
+
+*"See the board consent document that I attached and use it alongside the carta issuance skill
+to issue Option Grants for IMIM"*, with the PDF attached. The form was published in 40 seconds;
+the turn ended at 67, nine model turns against a budget of three.
+
+| Incident | Rule it produced |
+|---|---|
+| `resolve_company` was refused twice with *"this tool call did not include `_instrumentation_v2`"*: once bare, once with the field nested inside `arguments`. `call_tool` was deferred and never loaded, so the model never saw that its schema requires `_instrumentation_v2` at the **top level**. A third call after a `ToolSearch` of its own worked. The publish beside the failures warned that the page's connector was unobserved. A trim of this file had just shortened *"load it in the **same message** as the `Bash` build, never in a turn of its own"* to *"loads via `ToolSearch` beside the `Bash`"*. | Load a deferred `call_tool` in the same message as the build, and say why: an unloaded call is refused ([SKILL.md § 1](../SKILL.md#1-preflight)). |
+| The PDF was attached to the prompt, and the run's first call was a `Read` of it anyway: about 10k tokens and a round trip to learn what was already in context. | An attached document goes straight into the seed ([SKILL.md § 1](../SKILL.md#1-preflight)). `parse_upload.py` only extracts a document's text and leaves the rows to the model, so it has nothing to add either. |
+| The build took three calls (`mkdir`, a `Write` of the seed, the build) where the skill shows one `Bash` with a heredoc. | One `Bash`: `mkdir`, the seed and the build together ([SKILL.md § 2](../SKILL.md#2-build-the-page)). |
+| The closing line dropped the environment banner that the carta-cli hook asks every response to end with. The skill's *"echo nothing else"* read as overriding it. | A footer a hook asks for still goes at the end ([SKILL.md § 3](../SKILL.md#3-publish-it)). |
+
 ## Refusals the page read as approvals
 
 Found by reading the wire against the server rather than from a run, so there is no user
