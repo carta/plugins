@@ -824,8 +824,15 @@ function KpiTable({ data, company, quarterly, metrics }) {
   const show = (v, unit, str, cur) => (full ? fmtFull(v, unit, str, cur) : fmtVal(v, unit, str, cur));
 
   const csvExport = () => {
-    const head = ["KPI", "Unit", ...periods].map(csvCell).join(",");
-    const body = rows.map((r) => [r.m.label, r.m.unit,
+    // A money row exports its real ISO currency, not the generic "Dollar" type;
+    // non-money rows keep their unit type, which has no currency.
+    const rowCurrencyOrUnit = (r) => {
+      if (r.m.unit !== "Dollar") return r.m.unit;
+      const p = periods.find((d) => r.byP.get(d) && r.byP.get(d).cur);
+      return (p && r.byP.get(p).cur) || data.source?.currency || r.m.unit;
+    };
+    const head = ["KPI", "Currency / unit", ...periods].map(csvCell).join(",");
+    const body = rows.map((r) => [r.m.label, rowCurrencyOrUnit(r),
       ...periods.map((p) => { const c = r.byP.get(p); return c == null ? "" : (c.s != null ? c.s : c.v); })].map(csvCell).join(","));
     const blob = new Blob([[head, ...body].join("\n")], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");

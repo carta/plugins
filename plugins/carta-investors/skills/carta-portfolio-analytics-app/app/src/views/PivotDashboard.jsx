@@ -481,9 +481,16 @@ export default function PivotDashboard({ data, dashboard }) {
   }, [rows]);
 
   const exportCsv = () => {
+    // A money row exports its real ISO currency, not the generic "Dollar" type;
+    // non-money rows keep their unit type, which has no currency.
+    const rowCurrencyOrUnit = (r) => {
+      if (r.unit !== "Dollar") return r.unit;
+      const p = periods.find((d) => r.partsByP && r.partsByP[d] && r.partsByP[d].cur);
+      return (p && r.partsByP[p].cur) || data.source?.currency || r.unit;
+    };
     // Mark forecast columns in the header — exported to Excel, an estimate and an
     // actual are otherwise indistinguishable numbers.
-    const head = ["Company", showPos ? "KPI / position" : "KPI", "Unit",
+    const head = ["Company", showPos ? "KPI / position" : "KPI", "Currency / unit",
       ...(showPos ? ["Current", "Current as of"] : []),
       ...periods.map((p) => shortDate(p, qOnly) + (futureSet.has(p) ? " (forecast)" : ""))];
     const lines = [head.join(",")];
@@ -499,7 +506,7 @@ export default function PivotDashboard({ data, dashboard }) {
       const cur = showPos
         ? [r.position && r.posValue != null ? r.posValue : "", r.position ? (r.posAsOf || "latest") : ""]
         : [];
-      lines.push([csv(r.companyName), csv(label), r.unit, ...cur, ...cells].join(","));
+      lines.push([csv(r.companyName), csv(label), csv(rowCurrencyOrUnit(r)), ...cur, ...cells].join(","));
     }
     const blob = new Blob([lines.join("\n")], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
