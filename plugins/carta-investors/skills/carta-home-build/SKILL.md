@@ -25,6 +25,9 @@ allowed-tools:
   # dashboard skills so the fan-out doesn't re-ask.
   - mcp__*carta*__list_contexts
   - mcp__*Carta*__list_contexts
+  # Step 1: switch to the firm the user means.
+  - mcp__*carta*__set_context
+  - mcp__*Carta*__set_context
   # The dashboard fan-out (Step 5). A skill that isn't installed is skipped.
   - Skill
   - AskUserQuestion
@@ -36,7 +39,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.42.3</carta-plugin>
+<carta-plugin>carta-investors:6.43.3</carta-plugin>
 
 # Carta Home — Build / Redeploy
 
@@ -286,20 +289,41 @@ Keep `get_current_user`'s response: Step 4 grants that tool, and the Skill Direc
 
 ### Step 1: Resolve the firm once, for everyone
 
-Call `list_contexts` with no firm filter. If exactly one firm is accessible, take it. If
-several are, take the firm whose `is_active` is true — the same resolution `fetchLiveData()`
-does at runtime in `carta-home.app.js`. If none is active, infer from the user's request, and
-ask with `AskUserQuestion` if you cannot infer confidently. If `list_contexts` returns no
-firm at all, tell the user their connector has no firm in context and stop; the title names
-the firm and cannot be guessed.
+Build for the firm the user means, even if another firm is active. Call `list_contexts`,
+passing the name if they gave one:
+
+```
+list_contexts({"firm_name": "<firm_name>"})
+```
+
+Read `firms` and `active_firm_id` from the structured result. For a Carta staff account the
+name is a search across all firms. For everyone else it is ignored and you get their own
+firms, so match the name yourself. Ask with `AskUserQuestion` if several match; say so and
+stop if none do.
+
+If they named no firm, call `list_contexts` with no arguments and take the single firm, or
+the one whose `is_active` is true, or ask. An empty list is normal for a staff account —
+staff can reach every firm, so they have no default — so ask which firm rather than
+stopping.
+
+If that firm is not already active, switch to it before going on:
+
+```
+set_context({"firm_id": "<firm_uuid>"})
+```
+
+The title must name the firm the page shows, and the page reads the active firm when it
+opens — the same `is_active` resolution `fetchLiveData()` does in `carta-home.app.js`. The
+switch keeps the two in step, and gives the dashboard skills Step 5 hands off to the same firm.
 
 **Capture the firm name and firm UUID.** The name is what Step 3's title and Step 2's lookup
 key are built from. Step 5 hands both to the dashboard skills so they do not re-ask the user
 the same question — `carta-soi` explicitly reuses a firm list already in conversation context
 rather than calling `list_contexts` again.
 
-The published home artifact still auto-detects the firm at runtime. This resolution is for
-the *build session* only: it fixes the title and lets the fan-out run unattended.
+The published home artifact still auto-detects the firm at runtime. This step fixes the
+title and lets the fan-out run unattended; a switch also changes the user's active firm in
+Carta, which is why it only happens when the firm is not already active.
 
 ### Step 2: Find what is already published
 
@@ -353,7 +377,7 @@ keeps the paths apart.
 ```
 uv run "<SKILL_DIR>/scripts/build_artifact.py" \
   --mcp-server "<CARTA_MCP_SERVER>" \
-  --firm-name "<firm name from Step 0>" \
+  --firm-name "<firm name from Step 1>" \
   --dashboard-building soi \
   --dashboard-building perf \
   --out <outputs-directory>/carta-home-<slug>.html
