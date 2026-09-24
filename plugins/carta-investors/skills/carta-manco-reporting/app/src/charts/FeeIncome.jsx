@@ -80,9 +80,9 @@ export default function FeeIncome({
       series={plotted}
       labels={labels.map(cleanLabel)}
       provisionalFrom={provisionalFrom}
-      // Hatching the whole column would fade the booked half too, and the
-      // bar could no longer say where the ledger ends.
-      provisionalPaint={!showExpected}
+      // Booked is booked, whether or not the estimate above it is shown.
+      // Hatching the column would fade the ledger's own figures.
+      provisionalPaint={false}
       projectedFrom={projectedFrom}
       legend
       onSelect={onSelect
