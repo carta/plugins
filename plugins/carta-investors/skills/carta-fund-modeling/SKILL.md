@@ -41,7 +41,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.42.2</carta-plugin>
+<carta-plugin>carta-investors:6.42.3</carta-plugin>
 
 [PATTERN carta-writing-style v0.0.2]
 [PATTERN etiquette v0.0.6]
@@ -274,20 +274,32 @@ Read `${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-modeling/references/queries.md`. S
 `raw_dir`** for `<raw_dir>` in every command below. The dir is created on demand by the first writer that
 touches it (the Write tool, `save_query_result.py`, or `touch-empty`); there is no shell `CACHE`/`RAW` variable
 to set.
-Enumerate the firm's entities with the **compact DWH directory query in queries.md §0** (a firm-scoped
-`MONTHLY_NAV_CALCULATIONS` SELECT) — **not the fund-admin entity-list command**, which returns verbose per-entity objects and
-**exceeds the MCP 40k-char limit on large firms** (a firm with ~100+ SPVs breaks it). The §0 query **excludes SPVs**
-(`entity_type_name NOT ILIKE '%SPV%'`) — single-deal SPVs are out of scope and are what blow the limit — so it
-stays tiny and returns only Fund/GP entities. Then **write that query's `fund_uuid` column to
-`<raw_dir>/fund_uuids.txt` (one uuid per line)** with the Write tool — this is the only value you extract by hand;
-because SPVs are already filtered out of the directory, no SPV is ever fetched. From here the queries
-are generated deterministically: **do NOT hand-write SQL or paste an IN-list.** Get every stem's ready-to-run
-query from the emitter, which fills the `fund_uuid` / `corporation_id` IN-list from the manifest
-(`scripts/stem_queries.py`, the source of truth for stem SQL).
+Enumerate the firm's entities with the **§0 firm directory query**. Print it with the emitter — never hand-write
+it (it is a three-table UNION; queries.md §0 explains why):
+```bash
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-modeling/scripts/emit_stem_sql.py" --directory --firm-uuid "<firm_uuid>"
+```
+Run the printed `{"sql","limit","format"}` through `dwh__execute__query`, then capture the result **with the
+helper, not the Write tool**:
+```bash
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-modeling/scripts/save_query_result.py" <result_path> "<raw_dir>/_enumerate.ndjson"
+```
+`_enumerate.ndjson` is the census: the emitter fills every stem's IN-list from its `fund_uuid` column and
+`build_datadir.py` seeds the fund universe from it, so no id is transcribed by hand. It is **not the fund-admin
+entity-list command** (verbose per-entity objects that **exceed the MCP 40k-char limit on large firms** — a firm
+with ~100+ SPVs breaks it); the directory **excludes SPVs** and returns only Fund/GP entities, so no SPV is ever
+fetched. From here the queries are generated deterministically: **do NOT hand-write SQL or paste an IN-list.**
+Get every stem's ready-to-run query from the emitter (`scripts/stem_queries.py` is the source of truth for stem SQL).
+
+**Zero rows means a lapsed firm context, not an empty firm.** These tables are row-scoped by `set_context`; when
+the context lapses every query returns 0 rows with no error. If the directory query — or, later, a rows-required
+stem (`nav_latest`, `investments`) — comes back empty, re-run `set_context {"firm_id": "<firm_uuid>"}` and reissue
+that one query **once**. A second empty result is final: stop the fetch and report it (the strict build refuses to
+launch on it). Do not vary the SQL, widen the filter, or try another table.
 
 ### GP carry opt-in check (before Wave 1)
 
-`gp_carry` contains **per-member names** — run this check after writing `fund_uuids.txt` and before emitting Wave 1:
+`gp_carry` contains **per-member names** — run this check after capturing `_enumerate.ndjson` and before emitting Wave 1:
 
 **1. Probe for data access.** Emit the `gp_carry` query and run it with `limit: 1` to check both permission and data presence:
 ```bash

@@ -42,7 +42,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.42.2</carta-plugin>
+<carta-plugin>carta-investors:6.42.3</carta-plugin>
 
 # ManCo Reporting Dashboard
 
@@ -102,15 +102,16 @@ cache. If the user doesn't name a firm, ask via `AskUserQuestion` — do
 
 ## The flow
 
-Seven steps, cache-first: Step 0's local cache probe decides whether Steps 1
-and 2 need the Carta MCP at all, the same way `carta-fund-modeling` resolves
-identity from a local cache before ever touching the MCP. Steps 4, 5 and 6
-run on every invocation regardless.
+Eight steps, cache-first: Step 0's local cache probe decides whether Steps 1,
+1.5, and 2 need the Carta MCP at all, the same way `carta-fund-modeling`
+resolves identity from a local cache before ever touching the MCP. Steps 4, 5
+and 6 run on every invocation regardless.
 
 | Step | Run it? | What it does | Detail |
 |---|---|---|---|
 | 0 | always | Say hello, run the surface check, capture the firm, probe the local cache, finish the greeting | [firm-resolution.md](references/firm-resolution.md) |
 | 1 | **skipped** whenever 0.2 already knows the firm — a warm OR soft cache hit | Resolve the firm | [firm-lookup.md](references/firm-lookup.md) |
+| 1.5 | **skipped** whenever 0.2 already knows the firm — a warm OR soft cache hit (same condition as Step 1) | ManCo eligibility hard gate — confirms an active Fund Admin subscription and an active management company before proceeding | [firm-lookup.md](references/firm-lookup.md) |
 | 2 | **skipped** whenever 0.2 already knows the entity — a warm OR soft cache hit | Resolve the ManCo entity (GP entity as fallback) | [firm-lookup.md](references/firm-lookup.md) |
 | 2.5 | always | Cache check — decides **only** whether Step 3 runs, and hands it the year/month window to query | [budget-ingest.md](references/budget-ingest.md) |
 | 2.6 | when `accounts-all.txt` is missing or stale | Fetch the chart of accounts, so 2.75 can be asked against it | [data-fetch.md](references/data-fetch.md) |
@@ -164,6 +165,9 @@ datadir build runs silently. Speak only at:
   itself ask a resume picker, or "which firm" — both local, no MCP — before
   the rest of the greeting completes
 - Step 1 — firm disambiguation, if several firms match
+- Step 1.5 — one of the three eligibility denial messages, verbatim, when the
+  firm lacks an active Fund Admin subscription or an active management
+  company. Silent when eligibility is confirmed
 - Step 2 — the entity confirmation, on a build with several management
   companies (a picker) or a GP entity standing in for a missing ManCo
   (always an explicit ask). Silent on a warm or soft cache hit, where a

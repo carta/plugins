@@ -4,14 +4,14 @@
 Reads the fund id list from the raw dir and prints, per stem, the exact
 ``dwh__execute__query`` arguments (``sql`` with its ``fund_uuid`` IN-list
 substituted, plus ``limit`` and ``format``). This removes the last hand-templating
-step from Step 2: the LLM enumerates entities once, writes
-``<raw_dir>/fund_uuids.txt``, runs this emitter, and pastes each printed
-``arguments`` object straight into ``call_tool`` — no SQL authored or IN-list
-pasted by hand.
+step from Step 2: the LLM captures the §0 directory once, runs this emitter, and
+pastes each printed ``arguments`` object straight into ``call_tool`` — no SQL
+authored or IN-list pasted by hand.
 
-Id source (under --raw): ``<raw_dir>/fund_uuids.txt`` — one uuid per line, written
-by the LLM from the §0 entity directory query. That is the **only** id source;
-every stem is fund-scoped, including the three corporation-filtered ones
+Id source (under --raw): ``<raw_dir>/_enumerate.ndjson`` — the §0 entity directory
+result as captured by ``save_query_result.py`` (its ``fund_uuid`` column, in order),
+else ``<raw_dir>/fund_uuids.txt`` — one uuid per line. Nothing else seeds an
+IN-list; every stem is fund-scoped, including the three corporation-filtered ones
 (`financing`, `captable`, `corporations`), which reach their corporation scope via
 a subquery over FUND_CORPORATION_OWNERSHIP rather than an id list read back out of
 a previously-fetched stem (see ``stem_queries._CORP_SCOPE``). There is therefore no
@@ -19,6 +19,11 @@ ordering dependency between stems — the whole manifest emits and fetches in on
 
 Usage:
   uv run emit_stem_sql.py --raw <raw_dir> [--all] [--wave 1] [--stem <name>] [--wide]
+  uv run emit_stem_sql.py --directory --firm-uuid <firm_uuid>
+
+``--directory`` prints the §0 firm directory query (stem_queries.DIRECTORY_SQL) with
+the firm uuid filled in — run it first and capture the result to
+``<raw_dir>/_enumerate.ndjson``; that file then seeds every stem below.
 
 ``--wide`` emits `SELECT *` superset queries (see stem_queries.WIDE) that reliably
 persist to a tool-results file, so small-firm results are captured by path instead
@@ -38,24 +43,28 @@ import stem_queries as sq
 
 
 def _fund_uuids(raw):
-    path = os.path.join(raw, "fund_uuids.txt")
+    # The captured directory wins over a hand-written list: a stale fund_uuids.txt
+    # left by an earlier build must not shadow a fresh enumeration.
+    ids = sq.directory_fund_uuids(os.path.join(raw, "_enumerate.ndjson"))
+    if ids:
+        return ids
     try:
-        fh = open(path, encoding="utf-8", errors="replace")
+        with open(os.path.join(raw, "fund_uuids.txt"), encoding="utf-8", errors="replace") as fh:
+            lines = fh.read().splitlines()
     except OSError:
         return []
     seen, out = set(), []
-    with fh:
-        for line in fh:
-            u = line.strip()
-            if u and u not in seen:
-                seen.add(u)
-                out.append(u)
+    for u in lines:
+        u = u.strip()
+        if u and u not in seen:
+            seen.add(u)
+            out.append(u)
     return out
 
 
 def emit(raw, stems, wide=False):
     """Return (out_map, missing) where out_map is {stem: {sql, limit, format}} and
-    missing lists stems skipped for lack of ids (empty ``fund_uuids.txt``). When
+    missing lists stems skipped for lack of ids (no fund ids under ``raw``). When
     ``wide`` is set, stems with a WIDE variant emit the superset query that reliably
     persists to a file (captured by path, not inline)."""
     fund_uuids = _fund_uuids(raw)
@@ -96,7 +105,10 @@ def batches(out_map, max_n):
 
 def main(argv):
     ap = argparse.ArgumentParser(description="Emit ready-to-run DWH stem queries.")
-    ap.add_argument("--raw", required=True, help="raw dir holding fund_uuids.txt")
+    ap.add_argument("--raw", help="raw dir holding _enumerate.ndjson (or fund_uuids.txt)")
+    ap.add_argument("--directory", action="store_true",
+                    help="emit the §0 firm directory query for --firm-uuid instead of stems")
+    ap.add_argument("--firm-uuid", help="firm uuid for --directory")
     ap.add_argument("--stem", help="emit a single stem (prints its arguments object)")
     # Every stem is fund-scoped and therefore wave 1; the flag is kept so an explicit
     # `--wave 1` still works, but `--wave 2` is rejected rather than silently emitting
@@ -119,6 +131,17 @@ def main(argv):
                          "(e.g. gp_carry after the opt-in check)")
     a = ap.parse_args(argv[1:])
 
+    if a.directory:
+        if not a.firm_uuid:
+            sys.stderr.write("emit_stem_sql: --directory requires --firm-uuid\n")
+            return 2
+        sql, limit, fmt = sq.render_directory(a.firm_uuid)
+        sys.stdout.write(json.dumps({"sql": sql, "limit": limit, "format": fmt},
+                                    ensure_ascii=False) + "\n")
+        return 0
+    if not a.raw:
+        sys.stderr.write("emit_stem_sql: --raw is required\n")
+        return 2
     if a.batch and a.stem:
         sys.stderr.write("emit_stem_sql: --batch and --stem are mutually exclusive\n")
         return 2
@@ -153,8 +176,8 @@ def main(argv):
 
     out, missing = emit(a.raw, stems, wide=(a.wide and not a.batch))
     for stem in missing:
-        sys.stderr.write("emit_stem_sql: %s skipped — no ids in fund_uuids.txt "
-                         "(write an empty %s.ndjson)\n" % (stem, stem))
+        sys.stderr.write("emit_stem_sql: %s skipped — no fund ids in _enumerate.ndjson "
+                         "or fund_uuids.txt (write an empty %s.ndjson)\n" % (stem, stem))
     if a.batch:
         sys.stderr.write("emit_stem_sql: note — financials (§14) is not in the manifest; "
                          "run it as its own query or append it to a batch's queries.\n")

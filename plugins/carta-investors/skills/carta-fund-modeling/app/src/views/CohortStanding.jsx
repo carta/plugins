@@ -170,7 +170,7 @@ export default function CohortStanding({ snapshot, fundStates }) {
   // Each fund evaluates ALL THREE metrics independently — a fund can be
   // benchmarked on TVPI but uncohorted on DPI, so this is a map, not one value.
   const rows = fundStates.map((f) => {
-    if (f.lpPaidIn === 0) return { f, kind: "deploying", metrics: null };
+    if (f.hasNav === false || !(f.lpPaidIn > 0)) return { f, kind: "deploying", metrics: null };
     const metrics = {};
     for (const m of METRICS) {
       const cohortMarks = snapshot.benchmarks[f.id]?.[m.id];
@@ -280,7 +280,9 @@ export default function CohortStanding({ snapshot, fundStates }) {
                   </span>
                   <span style={{ ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", marginLeft: 8 }}>
                     {kind === "deploying"
-                      ? `${f.vintage ?? "—"} · deploying · committed ${fmtM(f.committed)} · winds down ${snapshot.windDownYear[f.id]}`
+                      ? f.hasNav === false
+                        ? `${f.vintage ?? "—"} · no NAV close yet · winds down ${snapshot.windDownYear[f.id]}`
+                        : `${f.vintage ?? "—"} · deploying · committed ${fmtM(f.committed)} · winds down ${snapshot.windDownYear[f.id]}`
                       : `${f.vintage ?? "—"} · ${f.cohortSize ?? "—"} funds in cohort`}
                   </span>
                 </div>
@@ -290,7 +292,9 @@ export default function CohortStanding({ snapshot, fundStates }) {
                 <div style={{ position: "relative", height: RAIL_H }}>
                   <div style={{ position: "absolute", top: 20, left: 0, right: 0, height: 3, borderRadius: 2, background: "var(--ink-color-global-border-subtle)" }} />
                   <span style={{ position: "absolute", top: 26, left: 0, ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)" }}>
-                    capital not yet called — standing begins with deployment
+                    {f.hasNav === false
+                      ? "no month-end NAV close booked yet — standing begins with the first close"
+                      : "capital not yet called — standing begins with deployment"}
                   </span>
                 </div>
               ) : (

@@ -176,6 +176,7 @@ export function computeFundStates(snapshot, portfolio) {
       id: f.id,
       name: f.name,
       vintage: f.vintage,
+      hasNav: f.hasNav !== false, // false: booked holdings but no month-end NAV close yet
       committed: f.committed,
       lpPaidIn: f.lpPaidIn,
       lpDistributed,

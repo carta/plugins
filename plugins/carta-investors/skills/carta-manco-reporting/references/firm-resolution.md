@@ -6,16 +6,16 @@ probe, and the rest of the greeting. Leading with the opening line means the
 reader has an answer to "what is this going to do" on screen while the
 checks behind it run, rather than a silent pause before anything appears.
 
-**Steps 1 and 2 are the BUILD path and live in [firm-lookup.md](firm-lookup.md).**
+**Steps 1, 1.5, and 2 are the BUILD path and live in [firm-lookup.md](firm-lookup.md).**
 Read that file only when Step 0.2 classifies a **MISS**, or when
-`<FORCE_REFRESH>` was set. A warm or soft cache hit skips both steps and goes
-straight to Step 2.5, so on those runs the BUILD path is never needed.
+`<FORCE_REFRESH>` was set. A warm or soft cache hit skips all three steps and
+goes straight to Step 2.5, so on those runs the BUILD path is never needed.
 
 Splitting them is deliberate: Step 0 is marked *always*, so anything beside it
-is re-read on every warm reopen — including the MCP firm lookup and the ManCo
-picker that a warm reopen has no use for.
+is re-read on every warm reopen — including the MCP firm lookup, the ManCo
+eligibility gate, and the ManCo picker that a warm reopen has no use for.
 
-> Steps referenced here that are documented elsewhere: **Steps 1 and 2** → [firm-lookup.md](firm-lookup.md); **Step 2.75** → [budget-ingest.md](budget-ingest.md).
+> Steps referenced here that are documented elsewhere: **Steps 1, 1.5, and 2** → [firm-lookup.md](firm-lookup.md); **Step 2.75** → [budget-ingest.md](budget-ingest.md).
 
 ## Step 0.0 — Say hello first, before any check runs
 
@@ -145,8 +145,8 @@ signals above (tests / unusual installs).
 Mirrors `carta-investors:carta-fund-modeling`'s "cache-first, MCP-lazy" launch
 order: resolve identity and check the local cache **before** touching the
 Carta MCP at all. A fresh, unambiguous cache hit reopens with **zero MCP
-calls** — Step 1 and Step 2 below are the BUILD path, reached only on a
-cache miss, an ambiguous local match, a stale cache, or an explicit refresh.
+calls** — Step 1, Step 1.5, and Step 2 below are the BUILD path, reached only
+on a cache miss, an ambiguous local match, a stale cache, or an explicit refresh.
 
 **Do NOT call `mcp__<SERVER>__welcome`, ever.** Calling `welcome` renders the
 Carta connector widget in the transcript (a large card showing plugin-check
@@ -219,7 +219,7 @@ Classify the result:
   `<MANCO_CARTA_ID>`, `<MANCO_ENTITY_ID>`, `<MANCO_NAME>` straight from that
   entry, and `<CARTA_ENVIRONMENT>` from its `carta_environment` field
   (`"production"` if that field is `null` — a pre-upgrade cache). **Skip
-  Step 1 and Step 2 entirely — no MCP call.** Go to the
+  Step 1, Step 1.5, and Step 2 entirely — no MCP call.** Go to the
   cache-hit continuation of the greeting (0.3), then **Step 2.5**
   ([budget-ingest.md](budget-ingest.md)), which independently re-checks the
   same `raw_age_days` signal before deciding Step 3 is skippable. Do **not**
@@ -229,25 +229,25 @@ Classify the result:
 - **Exactly one clean match, `raw_age_days` null/≥24, and every identity
   field above present** → a **soft hit**: this firm has been seen before,
   and what is stale is its DATA, not who it is. Set all seven identity
-  placeholders from the entry exactly as a WARM HIT does, and **skip Step 1
-  and Step 2** — resolving a firm and its entity over the MCP to learn what
-  the last build already wrote to disk costs two round trips and answers
-  nothing. Go to the greeting's continuation (0.3) using the "seen before"
-  variant, then Step 2.5, which will send this run to Step 3 for the
-  refresh.
+  placeholders from the entry exactly as a WARM HIT does, and **skip Step 1,
+  Step 1.5, and Step 2** — resolving a firm and its entity over the MCP, and
+  re-confirming eligibility, to learn what the last build already wrote to
+  disk costs round trips and answers nothing. Go to the greeting's
+  continuation (0.3) using the "seen before" variant, then Step 2.5, which
+  will send this run to Step 3 for the refresh.
 - **Exactly one clean match but an identity field is `null`** (a cache dir
   older than these fields) → treat as a **MISS**: the entry cannot say who
-  the entity is, so Step 1/2 must.
-- **Zero or multiple clean matches** → **MISS.** Go to Step 1/2 (BUILD)
+  the entity is, so Step 1/1.5/2 must.
+- **Zero or multiple clean matches** → **MISS.** Go to Step 1/1.5/2 (BUILD)
   using `<FIRM_NAME_INPUT>` exactly as today.
 
 **No firm was typed, and at least one cached dashboard exists** — offer a
 **local-only** resume picker via `AskUserQuestion` (still no MCP): list up
 to 4 cached `(firm_name, manco_name)` pairs, each labeled with the names and
 (when available) `raw_age_days`, plus "Something else" for a new name.
-Picking a row is a WARM HIT on that row (skip Step 1/2, same as above);
+Picking a row is a WARM HIT on that row (skip Step 1/1.5/2, same as above);
 "Something else" (or free text) becomes `<FIRM_NAME_INPUT>` and re-enters
-0.2 once — if it still doesn't resolve locally, it falls to Step 1/2 as a
+0.2 once — if it still doesn't resolve locally, it falls to Step 1/1.5/2 as a
 MISS.
 
 **No firm was typed, and no cached dashboard exists** — ask via a single

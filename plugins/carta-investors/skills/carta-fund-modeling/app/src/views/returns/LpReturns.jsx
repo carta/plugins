@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { FS, sans, inkNum, MICRO } from "../../ui/theme.js";
 import { fmtM, fmtX, fmtPct, fmtAsOf, fmt$ } from "../../ui/format.js";
-import { H1, H2, H3, Eyebrow, Segmented, MethodNote, SourceNote, FundPicker, StatBar, Badge, fundLabel, SectionChips } from "../../ui/components.jsx";
+import { H1, H2, H3, Eyebrow, Segmented, MethodNote, SourceNote, FundPicker, StatBar, Badge, fundLabel, SectionChips, EmptyState } from "../../ui/components.jsx";
 import { TableHead, useTableSort, TableScroll } from "../../ui/table.jsx";
 import { useFirmData } from "../../state/FirmData.jsx";
 import { useScenarioModel } from "./useScenarioModel.js";
@@ -212,9 +212,24 @@ export default function LpReturns(props) {
     },
   ];
 
+  const picker = <FundPicker funds={snapshot.funds} value={fundId} onChange={setFundScope} includeAll={false} />;
+  // No NAV close means no LP cash flows: say why rather than render a $0 / n/m grid.
+  if (fs.hasNav === false) {
+    return (
+      <div>
+        <H1 actions={picker}>LP Returns</H1>
+        <EmptyState type="page" icon="pending"
+          text={`${fundLabel(fs.name)} has no month-end NAV close booked in Carta yet, so its LP cash flows and returns aren't available. Its holdings are on the Companies tab.`} />
+        <section id="lp-partners" style={{ scrollMarginTop: 64 }}>
+          <LpPartnersTable funds={snapshot.funds} />
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div>
-      <H1 actions={<FundPicker funds={snapshot.funds} value={fundId} onChange={setFundScope} includeAll={false} />}>LP Returns</H1>
+      <H1 actions={picker}>LP Returns</H1>
       <p style={{ ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", margin: "0 0 16px" }}>
         At Carta marks: {fmtX(m.cartaNet)} Net TVPI on total incl. future calls
       </p>

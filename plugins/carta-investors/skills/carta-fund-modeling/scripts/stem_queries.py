@@ -25,6 +25,7 @@ Keep each `sql` in lockstep with its queries.md section — the STEM_CONTRACT
 drift-guard test asserts every stem's SELECT still covers the builder's
 load-bearing columns. Stdlib-only, Python 3.9-safe.
 """
+import json
 
 # The corporation scope, expressed server-side.
 #
@@ -46,6 +47,62 @@ _CORP_SCOPE = (
     "(SELECT DISTINCT CORPORATION_ID FROM FUND_ADMIN.FUND_CORPORATION_OWNERSHIP\n"
     "                        WHERE FUND_ID IN ({fund_uuids}))"
 )
+
+# §0 firm directory, the census every fund-scoped stem is filtered by. Three tables
+# because none alone lists every fund: MONTHLY_NAV_CALCULATIONS has only funds with a
+# month-end NAV close, and a fund can hold booked investments before its first close.
+DIRECTORY_SQL = (
+    "WITH entities AS (\n"
+    "  SELECT fund_uuid, fund_name, entity_type_name\n"
+    "  FROM FUND_ADMIN.MONTHLY_NAV_CALCULATIONS\n"
+    "  WHERE firm_id = '{firm_uuid}' AND is_firm_rollup = FALSE\n"
+    "  UNION\n"
+    "  SELECT fund_uuid, fund_name, fund_entity_type_name\n"
+    "  FROM FUND_ADMIN.AGGREGATE_INVESTMENTS\n"
+    "  WHERE firm_id = '{firm_uuid}'\n"
+    "  UNION\n"
+    "  SELECT fund_uuid, fund_name, entity_type_name\n"
+    "  FROM FUND_ADMIN.AGGREGATE_FUND_METRICS\n"
+    "  WHERE firm_id = '{firm_uuid}'\n"
+    ")\n"
+    "SELECT fund_uuid, MAX(fund_name) AS fund_name, MAX(entity_type_name) AS entity_type_name\n"
+    "FROM entities\n"
+    "WHERE fund_uuid IS NOT NULL\n"
+    "GROUP BY fund_uuid\n"
+    "HAVING COALESCE(MAX(entity_type_name), '') NOT ILIKE '%SPV%'\n"
+    "ORDER BY entity_type_name, fund_name, fund_uuid"
+)
+DIRECTORY_LIMIT = 2000
+
+
+def render_directory(firm_uuid):
+    """Return (sql, limit, format) for the §0 directory query scoped to one firm."""
+    return DIRECTORY_SQL.replace("{firm_uuid}", str(firm_uuid)), DIRECTORY_LIMIT, "ndjson"
+
+
+def directory_fund_uuids(path):
+    """Ordered, de-duplicated fund_uuid column of a captured §0 directory (ndjson,
+    DWH-uppercase or lowercase keys). Preamble and unparseable lines are skipped."""
+    seen, out = set(), []
+    try:
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line.startswith("{"):
+                    continue
+                try:
+                    row = json.loads(line)
+                except ValueError:
+                    continue
+                u = next((str(v).strip() for k, v in row.items()
+                          if str(k).lower() == "fund_uuid" and v), "")
+                if u and u not in seen:
+                    seen.add(u)
+                    out.append(u)
+    except OSError:
+        return []
+    return out
+
 
 # stem -> {id_param, wave, limit, format, sql}
 STEMS = {

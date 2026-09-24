@@ -21,17 +21,7 @@ from typing import Callable, List, Optional
 
 import chat_session
 import fm_paths
-
-# §0 firm entity enumeration — mirrors references/queries.md §0 (SPV-excluded firm
-# directory). Kept here because a refresh runs it directly, not through emit_stem_sql
-# (which fills fund-scoped IN-lists from the fund_uuids.txt this query produces).
-ENUMERATE_SQL = (
-    "SELECT DISTINCT fund_uuid, fund_name, entity_type_name "
-    "FROM FUND_ADMIN.MONTHLY_NAV_CALCULATIONS "
-    "WHERE firm_id = '{firm_uuid}' AND is_firm_rollup = FALSE "
-    "AND entity_type_name NOT ILIKE '%SPV%' "
-    "ORDER BY entity_type_name, fund_name"
-)
+import stem_queries
 
 REFRESH_SYSTEM_PROMPT = (
     "You are a data-fetch executor for a fund-modeling refresh. You have a Carta MCP "
@@ -369,14 +359,14 @@ def run_fetch(data_dir, emit, claude_bin=None, model=None, on_session=None):
         # Role-based first turn: the model resolves the (possibly deferred) carta tools,
         # and we read the real prefix from its reply.
         emit("enumerate", "Finding this firm's funds…")
-        enum_sql = ENUMERATE_SQL.format(firm_uuid=firm_uuid)
+        enum_sql, enum_limit, enum_fmt = stem_queries.render_directory(firm_uuid)
         enum_prompt = (
             "Do these three tool calls in order, then reply DONE:\n"
             "1. Call the Carta MCP welcome tool with {}.\n"
             "2. Call the Carta MCP set_context tool with {\"firm_id\": \"%s\"}.\n"
             "3. Call the Carta MCP call_tool tool with {\"name\": \"dwh__execute__query\", "
-            "\"arguments\": {\"sql\": %s, \"format\": \"ndjson\", \"limit\": 2000}}."
-            % (firm_uuid, json.dumps(enum_sql))
+            "\"arguments\": {\"sql\": %s, \"format\": \"%s\", \"limit\": %d}}."
+            % (firm_uuid, json.dumps(enum_sql), enum_fmt, enum_limit)
         )
         ok, captured, err, matched = _run_turn(
             session, enum_prompt, capture_suffix="__call_tool",
@@ -399,7 +389,7 @@ def run_fetch(data_dir, emit, claude_bin=None, model=None, on_session=None):
         if r.returncode != 0:
             raise RefreshError("Couldn't read the firm's fund list: %s"
                                % (r.stderr.strip() or "empty result"), needs_human=True)
-        fund_uuids = _read_fund_uuids(enum_ndjson)
+        fund_uuids = stem_queries.directory_fund_uuids(enum_ndjson)
         if not fund_uuids:
             raise RefreshError("Carta returned no funds for this firm.", needs_human=True)
         with open(os.path.join(raw_dir, "fund_uuids.txt"), "w") as fh:
@@ -499,24 +489,6 @@ def run_refresh(data_dir, emit, claude_bin=None, model=None, build_lock=None):
     built = run_build(data_dir, emit, build_lock=build_lock)
     return {"ok": True, "asOf": built.get("asOf"), "warnings": fetched.get("warnings", []),
             "funds": built.get("funds"), "companies": built.get("companies")}
-
-
-def _read_fund_uuids(ndjson_path):
-    # type: (str) -> List[str]
-    seen, out = set(), []
-    try:
-        with open(ndjson_path) as fh:
-            for line in fh:
-                line = line.strip()
-                if not line:
-                    continue
-                u = _ci_get(json.loads(line), "fund_uuid")
-                if u and u not in seen:
-                    seen.add(u)
-                    out.append(u)
-    except (OSError, ValueError):
-        return []
-    return out
 
 
 def _last_json_line(text):

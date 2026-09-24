@@ -75,27 +75,49 @@ scenario; the booked history comes from dated LP flows and NAV marks (§5 `snaps
 list_contexts                        {"firm_name": "<firm words>"}  # resolve the FIRM by name → firm_uuid (see SKILL.md Step 1)
 set_context                          {"firm_id": "<firm_uuid>"}
 ```
-Then enumerate the firm's entities with a **compact DWH directory query — NOT the fund-admin entity-list command**. The
-fund-admin entity/fund list commands return verbose per-entity objects and **blow the MCP 40k-char response limit on
-large firms** (e.g. a firm with ~100+ SPVs → the list errors out). This query returns just three columns and
-**excludes SPVs**, so it stays tiny (that same firm → ~18 rows) and never trips the limit:
+Then enumerate the firm's entities with the **firm directory query below — NOT the fund-admin entity-list
+command**. The fund-admin entity/fund list commands return verbose per-entity objects and **blow the MCP 40k-char
+response limit on large firms** (e.g. a firm with ~100+ SPVs → the list errors out). This query returns just three
+columns and **excludes SPVs**, so it stays tiny (that same firm → ~18 rows) and never trips the limit. Print it
+filled in with `uv run scripts/emit_stem_sql.py --directory --firm-uuid <firm_uuid>` (the executable copy is
+`stem_queries.DIRECTORY_SQL`; keep this block in lockstep):
 ```sql
-SELECT DISTINCT fund_uuid, fund_name, entity_type_name
-FROM FUND_ADMIN.MONTHLY_NAV_CALCULATIONS
-WHERE firm_id = '<firm_uuid>' AND is_firm_rollup = FALSE
-  AND entity_type_name NOT ILIKE '%SPV%'
-ORDER BY entity_type_name, fund_name
+WITH entities AS (
+  SELECT fund_uuid, fund_name, entity_type_name
+  FROM FUND_ADMIN.MONTHLY_NAV_CALCULATIONS
+  WHERE firm_id = '<firm_uuid>' AND is_firm_rollup = FALSE
+  UNION
+  SELECT fund_uuid, fund_name, fund_entity_type_name
+  FROM FUND_ADMIN.AGGREGATE_INVESTMENTS
+  WHERE firm_id = '<firm_uuid>'
+  UNION
+  SELECT fund_uuid, fund_name, entity_type_name
+  FROM FUND_ADMIN.AGGREGATE_FUND_METRICS
+  WHERE firm_id = '<firm_uuid>'
+)
+SELECT fund_uuid, MAX(fund_name) AS fund_name, MAX(entity_type_name) AS entity_type_name
+FROM entities
+WHERE fund_uuid IS NOT NULL
+GROUP BY fund_uuid
+HAVING COALESCE(MAX(entity_type_name), '') NOT ILIKE '%SPV%'
+ORDER BY entity_type_name, fund_name, fund_uuid
 LIMIT 2000
 ```
-`firm_id` is the `firm_uuid` from `list_contexts`. **SPVs are excluded by design** — single-deal vehicles are
-out of scope for firm/fund-level modeling, and enumerating them is what breaks large firms. Each returned row
-is a **Fund** or **GP** entity with its `fund_uuid`, name, and type. **Write the `fund_uuid` column to
-`<raw_dir>/fund_uuids.txt` (one uuid per line)** — this seeds every fund-filtered stem below, so nothing SPV is
-ever fetched. GP entities stay in the enumeration (their `fund_uuid`s scope the GP-carry / GP-partner stems),
-but `build_datadir.py` keeps **only `Fund`-type entities in `snapshot.funds[]`** — a GP LLC's capital is its
-paired fund's GP commitment (surfaced as that fund's `gpCommit`), so listing the GP entity as its own fund
-would double-count it in the LP-NAV-by-fund chart and firm rollup. Disambiguate the firm with AskUserQuestion;
-also accept a pasted firm URL / UUID.
+`firm_id` is the `firm_uuid` from `list_contexts`. **No single table is a complete census.**
+`MONTHLY_NAV_CALCULATIONS` lists only funds with a month-end NAV close; a fund can hold booked investments
+(`AGGREGATE_INVESTMENTS`, whose type column is `fund_entity_type_name`) or carry a metrics row
+(`AGGREGATE_FUND_METRICS`) before its first close, so a NAV-only directory misses it from every stem and from the
+firm rollup — the UNION captures any fund present in any of the three. **SPVs are excluded
+by design** — single-deal vehicles are out of scope for firm/fund-level modeling, and enumerating them is what
+breaks large firms. Each returned row is a **Fund** or **GP** entity with its `fund_uuid`, name, and type.
+**Capture the result to `<raw_dir>/_enumerate.ndjson` with `save_query_result.py`** — the emitter fills every
+fund-filtered stem's IN-list from its `fund_uuid` column, so nothing SPV is ever fetched, and `build_datadir.py`
+seeds the fund universe from it (a fund with holdings but no NAV close is kept, with its NAV-derived fields null →
+"—"). GP entities stay in the enumeration (their `fund_uuid`s scope the GP-carry / GP-partner stems), but
+`build_datadir.py` keeps **only `Fund`-type entities in `snapshot.funds[]`** — a GP LLC's capital is its paired
+fund's GP commitment (surfaced as that fund's `gpCommit`), so listing the GP entity as its own fund would
+double-count it in the LP-NAV-by-fund chart and firm rollup. Disambiguate the firm with AskUserQuestion; also
+accept a pasted firm URL / UUID.
 
 **Firm overview row** (per entity) = `{ id, name, type, vintage, committed, called, pctCalled,
 distributions, nav, dryPowder, tvpi, dpi, rvpi, grossMoic, netIrr, mgmtFees, numInvestments }` assembled

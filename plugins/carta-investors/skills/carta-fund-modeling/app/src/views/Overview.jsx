@@ -641,6 +641,10 @@ export default function Overview({ fundStates, snapshot, portfolio, onOpenFund }
           <tbody>
               {sortedFunds.map((f) => {
                 const fundName = fundNameOnly(f.name);
+                // No NAV close: render dashes; a repriced $0 would look like a booked figure.
+                const dash = f.hasNav === false
+                  ? <td style={{ ...RT, color: "var(--ink-color-global-text-subtle)" }} title="No month-end NAV close booked yet">—</td>
+                  : null;
                 return (
                 <tr key={f.id} data-datum-id={f.id} data-datum-type="fund" data-datum-label={fundName}
                   onClick={() => { trackClick("FundModeling.Overview.OpenFund"); onOpenFund(f.id); }}
@@ -652,11 +656,11 @@ export default function Overview({ fundStates, snapshot, portfolio, onOpenFund }
                   <td style={{ color: "var(--ink-color-global-text-default)", textAlign: "right" }}>{f.vintage ?? "—"}</td>
                   <td style={RT}>{fmt$(f.committed)}</td>
                   <td style={RT}>{fmt$(f.lpPaidIn)}</td>
-                  <DeltaTd cur={f.lpDistributed} base={f.baseLpDistributed} fmt={fmt$} eps={0.5} />
-                  <DeltaTd cur={f.lpNav} base={f.baseLpNav} fmt={fmt$} eps={0.5} />
-                  <DeltaTd cur={f.dpi} base={f.lpPaidIn > 0 ? f.baseLpDistributed / f.lpPaidIn : 0} fmt={(n) => fmtX(n)} eps={0.005} />
-                  <DeltaTd cur={f.rvpi} base={f.lpPaidIn > 0 ? f.baseLpNav / f.lpPaidIn : 0} fmt={(n) => fmtX(n)} eps={0.005} />
-                  <DeltaTd cur={f.tvpi} base={f.baseTvpi} fmt={(n) => fmtX(n)} eps={0.005} />
+                  {dash ?? <DeltaTd cur={f.lpDistributed} base={f.baseLpDistributed} fmt={fmt$} eps={0.5} />}
+                  {dash ?? <DeltaTd cur={f.lpNav} base={f.baseLpNav} fmt={fmt$} eps={0.5} />}
+                  {dash ?? <DeltaTd cur={f.dpi} base={f.lpPaidIn > 0 ? f.baseLpDistributed / f.lpPaidIn : 0} fmt={(n) => fmtX(n)} eps={0.005} />}
+                  {dash ?? <DeltaTd cur={f.rvpi} base={f.lpPaidIn > 0 ? f.baseLpNav / f.lpPaidIn : 0} fmt={(n) => fmtX(n)} eps={0.005} />}
+                  {dash ?? <DeltaTd cur={f.tvpi} base={f.baseTvpi} fmt={(n) => fmtX(n)} eps={0.005} />}
                   <DeltaTd cur={f.grossMoic} base={f.baseGrossMoic} fmt={(n) => fmtX(n)} eps={0.005} />
                   {/* Avg Own % — capital-weighted fund ownership; the delta is the dilution
                       guard (scenario dilution vs the undiluted baseline) */}
@@ -664,7 +668,7 @@ export default function Overview({ fundStates, snapshot, portfolio, onOpenFund }
                   {/* Net LP IRR — Carta booked; reprices never restate it, so no scenario delta */}
                   <td style={RT}>{f.netLpIrr == null ? "—" : fmtPct(f.netLpIrr)}</td>
                   <DeltaTd cur={gpCarryOf(f)} base={f.baseAccruedCarry} fmt={fmt$} eps={0.5} />
-                  <DeltaTd cur={f.gpCapitalNavLive} base={f.gpCapitalNav} fmt={fmt$} eps={0.5} />
+                  {dash ?? <DeltaTd cur={f.gpCapitalNavLive} base={f.gpCapitalNav} fmt={fmt$} eps={0.5} />}
                 </tr>
               );})}
               <tr className="totrow">

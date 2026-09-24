@@ -561,35 +561,56 @@ def build(rawdir, out, meta):
         })
     waterfall_of = {u: v[1] for u, v in waterfall_of.items()}
 
-    # ---- fund headline (MONTHLY_NAV latest) ----
+    # ---- fund universe: §0 directory census, then the nav_latest overlay ----
+    # The directory seeds every entity because a fund can hold investments before its
+    # first NAV close; such a fund keeps hasNav=False and null NAV fields downstream.
     funds = {}
+
+    def seed_fund(u, name, etype):
+        # LP funds only: a GP entity's capital is already its paired fund's gpCommit, and
+        # SPVs, management companies ("Mgt Company" in AGGREGATE_INVESTMENTS) and
+        # elimination entities aren't funds LPs commit to. A non-fund type from any
+        # source removes an earlier seed; untyped rows stay.
+        etype_l = (etype or "").strip().lower()
+        if any(t in etype_l for t in ("gp", "spv", "management", "mgt", "elimination")):
+            funds.pop(u, None)
+            return None
+        f = funds.get(u)
+        if f is None:
+            fm = fmetrics.get(u, {})
+            f = funds[u] = {
+                "uuid": u, "id": fid(name), "name": name, "type": etype or "Fund",
+                # vintage from AGGREGATE_FUND_METRICS (authoritative), else the cohort
+                # table, else None — a real year only, never a hardcoded fallback.
+                "vintage": fm.get("vintage") or vintage_of.get(u),
+                "committed": 0.0, "lpPaidIn": 0.0, "lpDistributed": 0.0,
+                "lpNav": 0.0, "gpNav": 0.0, "gpContrib": None,
+                "lpDpi": 0.0, "lpRvpi": 0.0, "lpTvpi": 0.0,
+                "moic": fund_moic.get(u),
+                "accrued": accrued_of.get(u, 0.0),
+                "carryDistributed": dist_carry_of.get(u, 0.0),
+                "mgmtFees": fm.get("mgmtFees", 0.0),
+                "opex": fm.get("opex", 0.0),
+                "dryPowder": fm.get("dryPowder", 0.0),
+                "hasNav": False,
+            }
+        return f
+
+    for r in parse_table(find(rawdir, "_enumerate")):
+        u, name = col(r, "fund_uuid"), col(r, "fund_name")
+        if u and name:
+            seed_fund(u, name, col(r, "entity_type_name"))
     for r in parse_table(find(rawdir, "nav_latest", "fund_metrics")):
-        u = col(r, "fund_uuid")
-        name = col(r, "fund_name")
+        u, name = col(r, "fund_uuid"), col(r, "fund_name")
         if not u or not name:
             continue
-        # Keep only LP funds. The entity enumeration (queries.md §0) returns Fund
-        # AND GP entities (and a stale/hand-edited fund_uuids.txt could reintroduce an
-        # SPV), so every non-fund vehicle is dropped here — it must never enter the
-        # firm/fund-level model. GP LLCs are the load-bearing case: a GP entity's
-        # capital IS the GP's commitment to its paired fund, already captured as that
-        # fund's `gpCommit` (gp_partners stem) and its GP economics. Listing the GP
-        # entity as its own "fund" double-counts that capital (its committed == the
-        # fund's gpCommit) and clutters LP-facing views — the LP-NAV-by-fund chart, the
-        # firm rollup, the navSeries trend. SPVs (single-deal), management companies and
-        # elimination entities likewise aren't funds LPs commit to. A row with no
-        # entity_type_name is kept (defensive default, matching `type` below) so the
-        # fund_metrics fallback path is never dropped.
-        etype = (col(r, "type", "entity_type_name") or "").strip().lower()
-        if any(t in etype for t in ("gp", "spv", "management", "elimination")):
+        f = seed_fund(u, name, col(r, "type", "entity_type_name"))
+        if f is None:
             continue
-        fm = fmetrics.get(u, {})
-        funds[u] = {
-            "uuid": u, "id": fid(name), "name": name,
-            "type": col(r, "type", "entity_type_name") or "Fund",
-            # vintage from AGGREGATE_FUND_METRICS (authoritative), else the cohort
-            # table, else None — a real year only, never a hardcoded fallback.
-            "vintage": fm.get("vintage") or vintage_of.get(u),
+        # The NAV row's spelling wins: the slug keys saved per-fund scenario settings,
+        # and the census picks whichever table's spelling sorts last.
+        f.update({
+            "name": name, "id": fid(name),
             "committed": num(col(r, "cumulative_commitment_amount", "committed", "fund_size")),
             "lpPaidIn": num(col(r, "cumulative_lp_contributions", "lp_paid_in")),
             "lpDistributed": abs(num(col(r, "cumulative_lp_distributions", "lp_distributed"))),
@@ -599,14 +620,15 @@ def build(rawdir, out, meta):
             "lpDpi": num(col(r, "lp_dpi")),
             "lpRvpi": num(col(r, "lp_rvpi")),
             "lpTvpi": num(col(r, "lp_tvpi")),
-            "moic": fund_moic.get(u),
-            "accrued": accrued_of.get(u, 0.0),
-            "carryDistributed": dist_carry_of.get(u, 0.0),
-            "mgmtFees": fm.get("mgmtFees", 0.0),
-            "opex": fm.get("opex", 0.0),
-            "dryPowder": fm.get("dryPowder", 0.0),
-        }
-    funds = {u: f for u, f in funds.items() if f["committed"] or f["lpNav"] or f["lpPaidIn"]}
+            "hasNav": True,
+        })
+    held = set()
+    for r in parse_table(find(rawdir, "investments")):
+        if (num(col(r, "total_cost", "cost")) or num(col(r, "remaining_value", "remaining"))
+                or num(col(r, "total_proceeds", "proceeds"))):
+            held.add(col(r, "fund_uuid"))
+    funds = {u: f for u, f in funds.items()
+             if f["committed"] or f["lpNav"] or f["lpPaidIn"] or u in held}
     SLUG = {u: f["id"] for u, f in funds.items()}
 
     # Firm display currency — the reporting currency (FUND_REPORTING_CURRENCY)
@@ -994,15 +1016,20 @@ def build(rawdir, out, meta):
         # the vintage: real vintage, else the earliest cash-flow year, else nav year.
         first_flow_year = min((int(d[:4]) for d, _ in flows_by_fund.get(f["uuid"], []) if len(d) >= 4 and d[:4].isdigit()), default=None)
         calc_vint = vint or first_flow_year or (int(nav[:4]) if len(nav) >= 4 and nav[:4].isdigit() else 2020)
-        standing = "%.2fx net LP TVPI%s (vintage %s)." % (
-            f["lpTvpi"], (" · %.1f%% net IRR" % (nirr * 100)) if nirr is not None else "", vint if vint else "—")
+        if f["hasNav"]:
+            standing = "%.2fx net LP TVPI%s (vintage %s)." % (
+                f["lpTvpi"], (" · %.1f%% net IRR" % (nirr * 100)) if nirr is not None else "", vint if vint else "—")
+        else:
+            standing = "No month-end NAV close booked yet — holdings from booked investments only."
+        # Null, not $0, for a fund with no NAV close: $0 would look like a booked figure.
+        nav_val = (lambda v, d=2: round(v, d)) if f["hasNav"] else (lambda v, d=2: None)
         snap_funds.append({
-            "id": i, "name": display(f), "type": f["type"], "vintage": vint,
-            "committed": round(f["committed"], 2), "lpPaidIn": round(f["lpPaidIn"], 2),
-            "lpDistributed": round(f["lpDistributed"], 2), "overviewLpNav": round(f["lpNav"], 2),
-            "lpDpi": round(f["lpDpi"], 4), "lpRvpi": round(f["lpRvpi"], 4), "lpTvpi": round(f["lpTvpi"], 4),
+            "id": i, "name": display(f), "type": f["type"], "vintage": vint, "hasNav": f["hasNav"],
+            "committed": nav_val(f["committed"]), "lpPaidIn": nav_val(f["lpPaidIn"]),
+            "lpDistributed": nav_val(f["lpDistributed"]), "overviewLpNav": nav_val(f["lpNav"]),
+            "lpDpi": nav_val(f["lpDpi"], 4), "lpRvpi": nav_val(f["lpRvpi"], 4), "lpTvpi": nav_val(f["lpTvpi"], 4),
             "netLpIrr": round(nirr, 4) if nirr is not None else None,
-            "cohortStanding": standing, "gpCapitalNav": round(f["gpNav"], 2),
+            "cohortStanding": standing, "gpCapitalNav": nav_val(f["gpNav"]),
             "waterfall": waterfall_of.get(f["uuid"]),
             "gpCommit": (lambda g: round(g, 2) if g is not None else None)(gp_commit_of(f["uuid"], f["gpContrib"])),
             "grossMoic": fmetrics.get(f["uuid"], {}).get("grossMoic"),
@@ -1017,7 +1044,7 @@ def build(rawdir, out, meta):
         windDownYear[i] = calc_vint + 10
         cashflows[i] = {"flows": flows, "paidInTotal": round(f["lpPaidIn"], 2),
                         "terminalDate": "%d-12-31" % (calc_vint + 10)}
-    snap_funds.sort(key=lambda x: x["committed"], reverse=True)
+    snap_funds.sort(key=lambda x: x["committed"] or 0, reverse=True)
 
     most = []
     for c in companies:
@@ -1084,7 +1111,8 @@ def build(rawdir, out, meta):
     lp_agg = collections.OrderedDict()
     for r in parse_table(find(rawdir, "partners")):
         name = col(r, "partner_name")
-        if not name:
+        # GP entities and uninvested shells share the IN-list; their members aren't fund LPs.
+        if not name or col(r, "fund_uuid") not in funds:
             continue
         a = lp_agg.setdefault(name, {"name": name, "region": region_bucket(col(r, "partner_country")),
                                      "commitment": 0.0, "contributed": 0.0, "distributed": 0.0,
@@ -1228,12 +1256,12 @@ def build(rawdir, out, meta):
         if pct is None or pct <= 0:
             continue
         cid = corp_to_cid.get(col(r, "corporation_id", "corp_id"))
-        if not cid:
+        # Stakes of entities outside the universe would inflate Own % against the shown FV.
+        fund_slug = SLUG.get(col(r, "fund_id", "fund_uuid"))
+        if not cid or not fund_slug:
             continue
         own_pct[cid] += pct
-        fund_slug = SLUG.get(col(r, "fund_id", "fund_uuid"))
-        if fund_slug:
-            own_by_fund[cid][fund_slug] += pct
+        own_by_fund[cid][fund_slug] += pct
         a = col(r, "as_of", "as_of_date")
         if a and a > own_asof.get(cid, ""):
             own_asof[cid] = a
@@ -1345,6 +1373,7 @@ def build(rawdir, out, meta):
         w("company-ownership.json", ownership)
 
     return {"funds": len(snap_funds), "companies": len(companies),
+            "fundsWithoutNav": [f["name"] for f in funds.values() if not f["hasNav"]],
             "droppedNoId": dropped_no_id,
             "dealIrr": sum(1 for c in companies if c.get("dealIrr") is not None),
             "lastRound": sum(1 for c in companies if c.get("lastRound")),

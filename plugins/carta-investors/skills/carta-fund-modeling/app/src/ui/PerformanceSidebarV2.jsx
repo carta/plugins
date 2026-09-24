@@ -127,6 +127,11 @@ function FundCard({ f, snapshot, portfolio, onOpenFundSection, isLast, reserves,
       {/* Invested/FV are holdings figures with no dedicated Returns view — plain, not links (like Reserves earmarked below). */}
       <Row label="Invested" value={f.invested} fmt={fmtM} alignCols />
       <Row label="FV" value={f.fv} fmt={fmtM} delta={f.fv - f.baseFv} forceDelta alignCols />
+      {f.hasNav === false ? (
+        <div style={{ ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", lineHeight: 1.45, margin: "2px 0 6px" }}>
+          No month-end NAV close booked yet — NAV, TVPI, IRR, distributions and carry aren't available for this fund.
+        </div>
+      ) : (<>
       <Row label="NAV" value={f.lpNav} fmt={fmtM} delta={f.lpNav - f.baseLpNav} forceDelta alignCols onClick={openExit} title={exitTitle} />
       <Row label="TVPI" value={f.tvpi} fmt={(n) => fmtX(n)} delta={f.tvpi - f.baseTvpi} eps={0.005} forceDelta alignCols onClick={openExit} title={exitTitle} />
       <Row label={`Net LP IRR · exit ${m?.thisYear ?? "—"}`} value={m?.netLpIrr} fmt={(n) => fmtPct(n)}
@@ -156,6 +161,7 @@ function FundCard({ f, snapshot, portfolio, onOpenFundSection, isLast, reserves,
           an absence of one. */}
       <Row label="Reserves earmarked" value={reserves?.byFund?.[f.id] || 0} fmt={fmtM}
         delta={(reserves?.byFund?.[f.id] || 0) - (baseReserves?.byFund?.[f.id] || 0)} forceDelta alignCols />
+      </>)}
     </div>
   );
 }

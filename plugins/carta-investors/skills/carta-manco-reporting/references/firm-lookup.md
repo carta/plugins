@@ -1,7 +1,7 @@
-# Steps 1 and 2 — resolve the firm and its ManCo over MCP (BUILD path)
+# Steps 1, 1.5, and 2 — resolve the firm, confirm ManCo eligibility, and resolve its ManCo entity over MCP (BUILD path)
 
 Reached only when Step 0.2 classified a **MISS**, or `<FORCE_REFRESH>` was set.
-A warm or soft cache hit skips both of these steps entirely — see
+A warm or soft cache hit skips all three of these steps entirely — see
 [firm-resolution.md](firm-resolution.md), which owns Gate 0 and Step 0 and
 routes here.
 
@@ -127,6 +127,61 @@ Then classify the narrowed clean-match set:
 
 Then `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation_v2={...})` to activate the firm.
 
+## Step 1.5 — ManCo eligibility (HARD GATE)
+
+> **STOP. This is a hard gate.** This dashboard requires an active Carta
+> Fund Admin subscription AND an active management company. Verify here,
+> right after the firm resolves in Step 1; do not proceed to Step 2, fetch
+> any data, or launch the dashboard until eligibility is confirmed.
+
+Reached in the same cases as Step 1 (a MISS, or `<FORCE_REFRESH>`) — never on
+a WARM HIT or a soft hit, both of which already built successfully before,
+so eligibility was already confirmed on that earlier BUILD-path run.
+
+Call the eligibility pre-check, silently, right after Step 1's `set_context`:
+
+```
+mcp__<SERVER>__call_tool(name="fa__get__manco_eligibility", arguments={}, _instrumentation_v2={"skills": ["carta-investors:carta-manco-reporting"]})
+```
+
+This returns `{available, has_active_manco, has_fund_admin, fa_product_codes}` — a fast, cached pre-check against the firm `set_context` just activated.
+
+| `available` | `has_fund_admin` | `has_active_manco` | Action |
+|---|---|---|---|
+| `false` | — | — | Enrichment not yet synced or a transient DWH outage — **not** a denial. Surface the **Try again** message below and STOP. |
+| `true` | `false` | — | Surface the **No Fund Admin** message below and STOP. |
+| `true` | `true` | `false` | Set `<HAS_MANCO> = false`. Surface the **No ManCo** message below and STOP. |
+| `true` | `true` | `true` | Set `<HAS_MANCO> = true`. Proceed to Step 2. |
+| Call errors / times out | | | Do NOT auto-retry. Tell the user, plainly, that the eligibility check failed and to try again shortly, and STOP. |
+
+### Hard-gate discipline (non-negotiable)
+
+A `false` gating result is FINAL. You get **at most one**
+`fa__get__manco_eligibility` probe per invocation. After it returns a
+denial, you MUST stop. Do NOT:
+- re-run `fa__get__manco_eligibility` hoping the cached result changes within the same invocation,
+- fall back to `fa__list__entities` or a DWH query to "look for a ManCo another way,"
+- proceed to Step 2, fetch data, or launch the dashboard "to see if it works anyway,"
+- re-call `set_context` to re-authenticate — a fresh token does not grant a product the firm hasn't bought.
+
+### No ManCo message (surface verbatim, no preamble)
+
+Copy-paste the exact text below word for word — every sentence. Do not drop, reorder, or rephrase any part of it. Do not add anything before or after it.
+
+> I don't see Management Company Administration as part of your Carta plan. That's built for firm-level operations: firm-level financial position, expense allocations across entities, and managing your operating budget.
+>
+> Reach out to your account team or [request a demo →](https://carta.com/demo/fund-admin/?&utm_medium=product&utm_source=claude&utm_campaign=manco-plugin-inq-ww-q3-26) to get access. I can help you pull fund-level performance, LP reporting, or capital activity in the meantime.
+
+### No Fund Admin message (surface verbatim)
+
+> I can't find a Carta Fund Admin firm on your account, and these ManCo features run on Fund Admin data. If your firm uses Carta Fund Admin, reconnect Carta in **Settings → Connectors**; otherwise reach out to your Carta account manager to get Fund Admin set up.
+
+### Try again message (surface verbatim)
+
+> I'm still syncing your account details — this can take a moment for new or recently updated accounts. Please try again shortly.
+
+After surfacing any of these messages, this invocation ends here — do not
+proceed to Step 2, Step 3, or `serve.py`.
 
 ## Step 2 — Resolve ManCo entity (BUILD path only)
 
