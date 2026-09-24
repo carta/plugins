@@ -16,7 +16,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.90.6</carta-plugin>
+<carta-plugin>carta-cap-table:6.90.7</carta-plugin>
 
 # Transform Configuration
 

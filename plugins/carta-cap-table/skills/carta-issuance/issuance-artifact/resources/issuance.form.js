@@ -60,7 +60,7 @@ const S = {
   pendingRows: [], links: {},
   stuck: "", untold: false, bootFailed: false, docPicked: false, removed: [], savedNote: "",
   sent: {}, lastPayload: {}, removedGone: 0, hydrated: false, touchedShared: new Set(),
-  rewriting: [],
+  rewriting: [], rowQ: "", rowFilter: "all",
 };
 
 /* ---------- helpers ---------- */
@@ -763,8 +763,9 @@ function fld(id, label, body, o) {
   const said = e ? `err-${id}` : hint ? `hint-${id}` : "";
   // The control is named by the field, so it is the one tag that carries the state.
   const aria = `${e || flagged ? ' aria-invalid="true"' : ""}${said ? ` aria-describedby="${said}"` : ""}`;
-  return `<div class="f${o.wide ? " wide" : ""}${e || flagged ? " bad" : ""}" data-f="${id}">
-    <label for="${id}">${esc(label)}${o.req ? ' <span class="req">*</span>' : ""}</label>
+  // `bare`: a table cell, where the column header is the visible label.
+  return `<div class="f${o.wide ? " wide" : ""}${o.cls ? ` ${o.cls}` : ""}${e || flagged ? " bad" : ""}" data-f="${id}">
+    <label for="${id}"${o.bare ? ' class="vh"' : ""}>${esc(label)}${o.req ? ' <span class="req">*</span>' : ""}</label>${o.after || ""}
     ${aria ? body.replace(`id="${id}"`, `id="${id}"${aria}`) : body}
     ${hint}
     ${e ? `<div class="err" id="err-${id}" data-testid="err-${id}">${esc(e)}</div>` : ""}
@@ -1303,7 +1304,7 @@ function render() {
       // no answers rather than a form still loading.
       el("shared-grid").innerHTML = S.termsLoading && !S.connErr
         ? skeletonHtml() : specHtml();
-      el("rows").innerHTML = S.rows.map((r, i) => rowHtml(r, i)).join("");
+      el("rows").innerHTML = rowsHtml();
     }
     const rh = el("review-heading");
     if (rh) rh.textContent = S.stuck ? "What was sent to Carta" : "Review before issuing";
@@ -1480,14 +1481,13 @@ function renderNotices() {
 
 /** Who the row is, as opposed to what terms they get. These belong to the row itself,
     so they sit on it rather than inside the shared-terms override panel. */
-function identityHtml(r, i) {
+const REL_OPTS = REL.map((x) => [x, x]);
+/** Asked for only once the row names someone, which is also when validate() needs it. */
+function relHtml(r, i) {
   const p = `row-${i}`;
-  return fld(`${p}-kind`, "Stakeholder type",
-    sel(`${p}-kind`, r.kind, [["INDIVIDUAL", "Individual"], ["NON-INDIVIDUAL", "Entity"]],
-      { k: "kind", scope: p, placeholder: false }), { req: true })
-    + fld(`${p}-relationship`, "Relationship",
-      sel(`${p}-relationship`, r.relationship, REL.map((x) => [x, x]), { k: "relationship", scope: p }),
-      { req: true });
+  if (!r.isNew && r.stakeholderId == null) return '<span class="muted">—</span>';
+  return fld(`${p}-relationship`, "Relationship",
+    sel(`${p}-relationship`, r.relationship, REL_OPTS, { k: "relationship", scope: p }), { req: true, bare: true });
 }
 
 function ovHtml(r, i) {
@@ -1501,9 +1501,24 @@ function ovHtml(r, i) {
       ? sel(id, cv, v === AS_SAVED ? [[AS_SAVED, AS_SAVED_LABEL]].concat(YES_NO) : YES_NO,
         { k: d.k, scope: `ov-${i}`, placeholder: cv === "" ? "Select…" : false })
       : control(Object.assign({}, d, { noPh: d.noPh || (v !== "" && v != null) }), id, v, `ov-${i}`, "", d.k in r.ov);
-    o.push(fld(id, d.label, body));
+    const own = d.k in r.ov;
+    o.push(fld(id, d.label, body, own ? { cls: "dif",
+      after: `<button type="button" class="link reset" data-act="ov-reset" data-i="${i}" data-k="${d.k}" data-testid="${id}-reset">Use shared</button>` } : null));
   }
   return o.join("");
+}
+
+/** Back to the batch's value. Touched, so a resumed row sends the shared value rather
+    than keeping the one Carta stored for it. */
+function resetOv(r, keys) {
+  for (const k of keys) {
+    r.touched.add(k);
+    delete r.ov[k];
+    // An expiry derived from the row's own issue date follows that date back.
+    if (k === "issue_date" && "grant_expiration_date" in r.ov && !r.touched.has("grant_expiration_date")) {
+      delete r.ov.grant_expiration_date;
+    }
+  }
 }
 /** The terms a row's own override panel draws: a grant row on its own board answer has
     the dates that answer carries, not the batch's. */
@@ -1843,46 +1858,108 @@ function issuedHtml() {
   return `${out.join("")}${toldHtml({ told: !S.untold }, "")}`;
 }
 
-function rowHtml(r, i) {
+/* ---------- stakeholder table ---------- */
+// Search and filters earn their place once the list is longer than a screen.
+const ROW_TOOLS = 10;
+const TRASH = '<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.4" '
+  + 'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 4.5h11M6.5 4.5V3a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v1.5'
+  + 'M4 4.5l.7 8.6a1 1 0 0 0 1 .9h4.6a1 1 0 0 0 1-.9l.7-8.6M6.8 7v4.5M9.2 7v4.5"/></svg>';
+const KIND_OPTS = [["INDIVIDUAL", "Individual"], ["NON-INDIVIDUAL", "Entity"]];
+
+const rowRefused = (r) => Object.keys((S.srv.rows || {})[r.key] || {}).length
+  || Object.keys((S.srv.fields || {})[r.key] || {}).length;
+const rowAttn = (r, i) => !!rowRefused(r) || Object.keys(S.errs).some((k) => k.startsWith(`row-${i}-`));
+const rowWho = (r) => ((r.isNew || r.stakeholderId != null ? r.name : r.query) || "").trim();
+const ovCount = (r) => Object.keys(r.ov).length;
+
+function rowShown(r, i) {
+  if (S.rows.length <= ROW_TOOLS) return true;
+  const q = S.rowQ.trim().toLowerCase();
+  if (q && !`${rowWho(r)} ${r.email || ""}`.toLowerCase().includes(q)) return false;
+  if (S.rowFilter === "diff") return ovCount(r) > 0;
+  if (S.rowFilter === "attn") return rowAttn(r, i);
+  return true;
+}
+
+function rowsSummary() {
+  const n = S.rows.length;
+  const total = S.rows.reduce((t, r) => t + (Number(r.quantity) > 0 ? Number(r.quantity) : 0), 0);
+  const [one, many] = qtyNoun();
+  return `<b>${n.toLocaleString()}</b> ${n === 1 ? "stakeholder" : "stakeholders"} · `
+    + `<b>${total.toLocaleString()}</b> ${total === 1 ? one : many}`;
+}
+
+function rowsBar() {
+  let tools = "";
+  if (S.rows.length > ROW_TOOLS) {
+    const diff = S.rows.filter((r) => ovCount(r)).length;
+    const attn = S.rows.filter(rowAttn).length;
+    const chip = (f, label, n) => `<button type="button" class="chip" data-act="filter" data-f="${f}" data-testid="rows-filter-${f}"
+      aria-pressed="${S.rowFilter === f}">${label}${n != null ? ` <span class="n">${n}</span>` : ""}</button>`;
+    tools = `<input id="rows-search" data-testid="rows-search" class="search" type="search" autocomplete="off"
+      placeholder="Find a stakeholder" aria-label="Find a stakeholder" value="${esc(S.rowQ)}">
+      <span class="chips" role="group" aria-label="Show">${chip("all", "All")}${diff ? chip("diff", "Different terms", diff) : ""}${
+        attn ? chip("attn", "Needs attention", attn) : ""}</span>`;
+  }
+  return `<div class="st-bar">${tools}<span class="summary" data-testid="rows-summary">${rowsSummary()}</span></div>`;
+}
+
+function rowsHtml() {
+  if (S.rows.length <= ROW_TOOLS) { S.rowQ = ""; S.rowFilter = "all"; }
+  else if ((S.rowFilter === "diff" && !S.rows.some(ovCount))
+    || (S.rowFilter === "attn" && !S.rows.some(rowAttn))) S.rowFilter = "all";
+  const body = S.rows.map((r, i) => (rowShown(r, i) ? rowHtml(r, i) : "")).join("");
+  return `${rowsBar()}<table class="st" data-testid="rows-table">
+    <thead><tr><th class="ic"><span class="vh">Different terms</span></th><th>Stakeholder</th><th class="rel">Relationship</th>
+      <th class="n">Quantity</th><th class="terms">Terms</th><th class="ic"><span class="vh">Remove</span></th></tr></thead>
+    <tbody>${body || `<tr><td colspan="6" class="empty">No stakeholders match.
+      <button type="button" class="link" data-act="filter" data-f="clear" data-testid="rows-filter-clear">Show everyone</button></td></tr>`}</tbody>
+  </table>`;
+}
+
+function whoHtml(r, i) {
   const p = `row-${i}`;
-  const top = r.isNew
-    ? fld(`${p}-new-name`, "Name",
-        txt(`${p}-new-name`, r.name, { k: "name", scope: p }), { req: true })
-    : fld(`${p}-stakeholder`, "Name",
-        `<div class="combo"><input id="${p}-stakeholder" data-testid="${p}-stakeholder"
-          data-k="query" data-scope="${p}" data-combo="${i}" type="text" autocomplete="off"
-          role="combobox" aria-autocomplete="list" aria-expanded="false"
-          aria-controls="${p}-suggestions" value="${esc(r.query)}" placeholder="${esc(comboPlaceholder())}">
-          <ul class="sug" id="${p}-suggestions" role="listbox" data-testid="${p}-suggestions" hidden></ul></div>`,
-        { req: true, hint: r.stakeholderId != null ? `${esc(r.email)} · ${esc(r.relationship || "—")}` : "" });
-  // `wide` puts the email on its own line under the whole row, and the grid's own
-  // gap is what separates it from the name above.
-  const email = r.isNew
-    ? fld(`${p}-new-email`, "Email",
-        txt(`${p}-new-email`, r.email, { k: "email", scope: p, type: "email" }),
-        { req: true, wide: true })
-    : "";
-  const named = r.isNew || r.stakeholderId != null;
-  const refused = Object.keys((S.srv.rows || {})[r.key] || {}).length
-    || Object.keys((S.srv.fields || {})[r.key] || {}).length;
-  return `<div class="row${refused ? " refused" : ""}" data-testid="${p}" data-row-key="${r.key}">
-    <div class="row-top">
-      <div>${top}</div>
-      <div class="qty-f">${fld(`${p}-quantity`, "Quantity",
-        txt(`${p}-quantity`, r.quantity, { k: "quantity", scope: p, num: true }),
-        { req: true, hint: grouped(r.quantity), hintCls: "echo" })}</div>
-      <button class="x" id="${p}-remove" data-testid="${p}-remove" data-act="remove" data-i="${i}" type="button" aria-label="Remove this stakeholder">✕</button>
-      ${email}
-    </div>
-    ${named ? `<div class="grid" data-testid="${p}-identity">${identityHtml(r, i)}</div>` : ""}
-    <div class="ov">
-      ${!r.isNew ? `<button class="link" id="${p}-new-toggle" data-testid="${p}-new-toggle" data-act="new" data-i="${i}" type="button">Not on the cap table? Create a new stakeholder</button>`
-        : `<button class="link" id="${p}-new-toggle" data-testid="${p}-new-toggle" data-act="existing" data-i="${i}" type="button">Pick an existing stakeholder</button>`}
-      <button class="link" id="${p}-override-toggle" data-testid="${p}-override-toggle" data-act="ov" data-i="${i}" type="button">
-        ${r.open ? "▾" : "▸"} Different terms for this person${Object.keys(r.ov).length ? ` (${Object.keys(r.ov).length})` : ""}</button>
-      ${r.open ? `<div class="grid" data-testid="${p}-overrides">${ovHtml(r, i)}</div>` : ""}
-      ${rowErrHtml(r, p)}
-    </div></div>`;
+  if (r.isNew) {
+    return `<div class="who-new">${fld(`${p}-new-name`, "Name",
+        txt(`${p}-new-name`, r.name, { k: "name", scope: p, ph: "Full name" }), { req: true, bare: true, wide: true })}
+      ${fld(`${p}-new-email`, "Email",
+        txt(`${p}-new-email`, r.email, { k: "email", scope: p, type: "email", ph: "Email" }), { req: true, bare: true })}
+      ${fld(`${p}-kind`, "Stakeholder type",
+        sel(`${p}-kind`, r.kind, KIND_OPTS, { k: "kind", scope: p, placeholder: false }), { req: true, bare: true })}</div>
+      <button class="link" id="${p}-new-toggle" data-testid="${p}-new-toggle" data-act="existing" data-i="${i}" type="button">Pick an existing stakeholder</button>`;
+  }
+  const combo = `<div class="combo"><input id="${p}-stakeholder" data-testid="${p}-stakeholder"
+    data-k="query" data-scope="${p}" data-combo="${i}" type="text" autocomplete="off"
+    role="combobox" aria-autocomplete="list" aria-expanded="false"
+    aria-controls="${p}-suggestions" value="${esc(r.query)}" placeholder="${esc(comboPlaceholder())}">
+    <ul class="sug" id="${p}-suggestions" role="listbox" data-testid="${p}-suggestions" hidden></ul></div>`;
+  return fld(`${p}-stakeholder`, "Stakeholder", combo,
+    { req: true, bare: true, hint: r.stakeholderId != null ? r.email : "" })
+    + (r.stakeholderId == null ? `<button class="link" id="${p}-new-toggle" data-testid="${p}-new-toggle" data-act="new" data-i="${i}" type="button">Not on the cap table? Create a new stakeholder</button>` : "");
+}
+
+function rowHtml(r, i) {
+  const p = `row-${i}`, n = ovCount(r);
+  const who = esc(rowWho(r) || "this stakeholder");
+  const ctl = r.open ? ` aria-controls="${p}-terms-row"` : "";
+  const terms = n
+    ? `<button type="button" class="pill" data-act="ov" data-i="${i}" data-testid="${p}-terms" aria-expanded="${!!r.open}"${ctl}>${n} different</button>`
+    : `<span class="muted" data-testid="${p}-terms">Shared terms</span>`;
+  const errs = rowErrHtml(r, p);
+  return `<tr class="row${r.open ? " on" : ""}${rowRefused(r) ? " refused" : ""}" data-testid="${p}" data-row-key="${r.key}">
+    <td class="ic"><button class="exp${n ? " has" : ""}" id="${p}-override-toggle" data-testid="${p}-override-toggle" data-act="ov" data-i="${i}"
+      type="button" aria-expanded="${!!r.open}"${ctl} aria-label="Different terms for ${who}"></button></td>
+    <td class="who">${whoHtml(r, i)}</td>
+    <td class="rel">${relHtml(r, i)}</td>
+    <td class="n">${fld(`${p}-quantity`, "Quantity", txt(`${p}-quantity`, r.quantity, { k: "quantity", scope: p, num: true }),
+      { req: true, bare: true, hint: grouped(r.quantity), hintCls: "echo" })}</td>
+    <td class="terms">${terms}</td>
+    <td class="ic rm"><button class="x" id="${p}-remove" data-testid="${p}-remove" data-act="remove" data-i="${i}" type="button"
+      aria-label="Remove ${who}" title="Remove">${TRASH}</button></td>
+  </tr>${errs ? `<tr class="row-err"><td></td><td colspan="5">${errs}</td></tr>` : ""}${r.open ? `<tr class="xp" id="${p}-terms-row"><td colspan="6">
+    <div class="xp-h"><b>Different terms for ${who}</b><span class="hint">Change only what differs. Everything else follows the shared terms.</span>
+      ${n ? `<button type="button" class="link" data-act="ov-reset-all" data-i="${i}" data-testid="${p}-reset-all">Use shared terms for all</button>` : ""}</div>
+    <div class="grid" data-testid="${p}-overrides">${ovHtml(r, i)}</div></td></tr>` : ""}`;
 }
 
 /** Carta's refusals of this row that no field of the row can carry. */
@@ -2556,7 +2633,10 @@ function incomplete() {
   const missing = validate(true);
   if (!missing.length) return false;
   S.banner = `Fix ${missing.length} field${missing.length > 1 ? "s" : ""} before issuing.`;
-  S.bannerBad = true; render();
+  S.bannerBad = true;
+  // A hidden row cannot show its error, so a long list narrows to the rows to fix.
+  if (S.rows.length > ROW_TOOLS) { S.rowQ = ""; S.rowFilter = S.rows.some(rowAttn) ? "attn" : "all"; }
+  render();
   const first = document.querySelector(".bad input, .bad select");
   if (first) first.focus();
   return true;
@@ -3460,13 +3540,13 @@ function suggest(input, i) {
       if (hits.length >= 25) break;
     }
   }
+  const typed = (input.value || "").trim();
   box.innerHTML = hits.length
     ? hits.map((s, j) => `<li role="option" aria-selected="false" id="row-${i}-opt-${j}" data-pick="${esc(s.id)}" data-i="${i}">${esc(s.name)} <span class="e">${esc(s.email)}</span></li>`).join("")
-    : `<li role="option" aria-disabled="true" data-none="1">${S.rosterLoading
-        ? "Still loading the stakeholder list…"
-        : S.searching
-        ? "Searching Carta…"
-        : "No match — use “Create a new stakeholder”."}</li>`;
+    : S.rosterLoading || S.searching
+    ? `<li role="option" aria-disabled="true" data-none="1">${S.rosterLoading
+        ? "Still loading the stakeholder list…" : "Searching Carta…"}</li>`
+    : `<li role="option" aria-selected="false" id="row-${i}-opt-new" data-new="1" data-i="${i}">No match. Create “${esc(typed)}” as a new stakeholder</li>`;
   box.hidden = false;
   input.setAttribute("aria-expanded", "true");
   input.removeAttribute("aria-activedescendant");
@@ -3476,9 +3556,13 @@ function suggest(input, i) {
 // and the caret. Conditional fields all hang off <select>s, which fire `change`.
 document.addEventListener("input", (ev) => {
   if (rendering) return;
+  // The table's own search box is the one input that redraws: it filters the rows.
+  if (ev.target.id === "rows-search") { S.rowQ = ev.target.value; render(); return; }
   const combo = ev.target.getAttribute && ev.target.getAttribute("data-combo");
   commit(ev);
   if (combo != null) { searchRoster(ev.target.value); suggest(ev.target, Number(combo)); }
+  const sum = el("rows-summary");
+  if (sum) sum.innerHTML = rowsSummary();
   renderFooter();
 });
 // `rendering` also stops the re-entrant render: this event came from the render
@@ -3503,7 +3587,7 @@ document.addEventListener("change", (ev) => {
 // suggestion before the click reaches it. Only the suggestion, so the list's own
 // scrollbar still drags.
 document.addEventListener("mousedown", (ev) => {
-  if (ev.target.closest && ev.target.closest(".sug li[data-pick]")) ev.preventDefault();
+  if (ev.target.closest && ev.target.closest(".sug li[data-pick], .sug li[data-new]")) ev.preventDefault();
 });
 
 document.addEventListener("click", (ev) => {
@@ -3518,6 +3602,8 @@ document.addEventListener("click", (ev) => {
     closeSuggestions();
     return;
   }
+  const mk = ev.target.closest && ev.target.closest(".sug li[data-new]");
+  if (mk) { createFromCombo(Number(mk.getAttribute("data-i"))); return; }
   if (ev.target.closest && ev.target.closest('[data-testid="retry-load"]')) {
     // Absent whenever the form runs without its bring-up, as the test harnesses do.
     if (typeof retryBoot === "function") retryBoot();
@@ -3532,23 +3618,34 @@ document.addEventListener("click", (ev) => {
   const b = ev.target.closest && ev.target.closest("[data-act]");
   if (b) {
     const act = b.getAttribute("data-act"); const i = Number(b.getAttribute("data-i"));
+    // Filters change what is shown, not what is answered, so the painted errors stay.
+    if (act === "filter") {
+      const f = b.getAttribute("data-f");
+      if (f === "clear") { S.rowQ = ""; S.rowFilter = "all"; } else S.rowFilter = f;
+      render(); return;
+    }
+    if (act === "ov-reset" || act === "ov-reset-all") {
+      const r = S.rows[i];
+      const keys = act === "ov-reset" ? [b.getAttribute("data-k")] : Object.keys(r.ov);
+      for (const k of keys) clearSrvField(`row-${i}-ov-${k}`, `ov-${i}`, k);
+      resetOv(r, keys);
+      S.savedNote = ""; S.errs = {}; render();
+      const back = act === "ov-reset" ? el(`row-${i}-ov-${keys[0]}`) : el(`row-${i}-override-toggle`);
+      if (back) back.focus();
+      return;
+    }
     if (act === "remove") removeRow(i);
     else if (act === "ov") S.rows[i].open = !S.rows[i].open;
-    else if (act === "new") {
-      const r = S.rows[i];
-      // A row that already resolved to someone starts blank: reusing their
-      // name here is how a duplicate record gets created for a person who
-      // is already on the cap table.
-      if (r.stakeholderId != null) { r.name = ""; r.email = ""; r.query = ""; }
-      r.isNew = true; r.stakeholderId = null; r.touched.add("stakeholder");
-      if (!r.relationship) r.relationship = "Employee";
-    }
+    else if (act === "new") startNew(S.rows[i]);
     else if (act === "existing") { const r = S.rows[i]; r.isNew = false; r.query = r.name; r.touched.add("stakeholder"); }
     if (act !== "ov") S.savedNote = "";
     S.errs = {}; render(); return;
   }
   if (ev.target.closest && ev.target.closest('[data-testid="add-stakeholder"]')) {
-    S.rows.push(mkRow({})); S.errs = {}; S.savedNote = ""; render(); return;
+    S.rows.push(mkRow({})); S.errs = {}; S.savedNote = ""; S.rowQ = ""; S.rowFilter = "all"; render();
+    const box = el(`row-${S.rows.length - 1}-stakeholder`);
+    if (box) box.focus();
+    return;
   }
   if (ev.target.closest && ev.target.closest('[data-testid="save-draft"]')) { submit("draft"); return; }
   // Confirm & Issue opens the review; only the review's Issue hands over.
@@ -3571,6 +3668,24 @@ document.addEventListener("click", (ev) => {
   if (ev.target.closest && ev.target.closest('[data-testid="modal-close"]')) { dismissSheet(); return; }
   closeSuggestions();
 });
+
+/** A row that already resolved to someone starts blank: reusing their name here is how a
+    duplicate record gets created for a person who is already on the cap table. An
+    unmatched name carries over, since that is the person being created. */
+function startNew(r) {
+  if (r.stakeholderId != null) { r.name = ""; r.email = ""; r.query = ""; }
+  else r.name = (r.query || r.name || "").trim();
+  r.isNew = true; r.stakeholderId = null; r.touched.add("stakeholder");
+  if (!r.relationship) r.relationship = "Employee";
+}
+function createFromCombo(i) {
+  const r = S.rows[i];
+  if (!r) return;
+  startNew(r);
+  S.errs = {}; S.savedNote = ""; render(); closeSuggestions();
+  const next = el(r.name ? `row-${i}-new-email` : `row-${i}-new-name`);
+  if (next) next.focus();
+}
 
 /** A saved row that leaves the form leaves the set with the next save, or confirming
     would issue it anyway. */
@@ -3609,12 +3724,13 @@ function comboKey(ev, input) {
   const box = input.parentNode && input.parentNode.querySelector(".sug");
   // Down reopens a list Escape closed.
   if (ev.key === "ArrowDown" && box && box.hidden) suggest(input, Number(input.getAttribute("data-combo")));
-  const opts = box && !box.hidden ? [...box.querySelectorAll("li[data-pick]")] : [];
+  const opts = box && !box.hidden ? [...box.querySelectorAll("li[data-pick], li[data-new]")] : [];
   const at = opts.findIndex((o) => o.getAttribute("aria-selected") === "true");
   if (ev.key === "Escape" && box && !box.hidden) { ev.preventDefault(); closeSuggestions(); return; }
   if (ev.key === "Enter" && at >= 0) {
     ev.preventDefault();
     const i = Number(input.getAttribute("data-combo"));
+    if (opts[at].getAttribute("data-new") != null) { createFromCombo(i); return; }
     const m = S.roster.find((x) => String(x.id) === opts[at].getAttribute("data-pick"));
     if (m && S.rows[i]) pick(S.rows[i], m);
     render();
