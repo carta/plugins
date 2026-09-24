@@ -6,6 +6,9 @@ const CORP_ID = {{CORPORATION_ID}};
 const COMPANY_NAME = {{COMPANY_NAME_JSON}};
 const SECURITY_TYPE = "{{SECURITY_TYPE}}";
 const SEED = {{SEED_JSON}};
+// Minted per build, so a reload of this page gets its form back and a new build starts
+// clean. Empty on the preview page, which keeps nothing.
+const PAGE_KEY = "{{PAGE_KEY}}";
 
 const seedQty = () => (SEED.quantity == null || SEED.quantity === "" ? "" : String(SEED.quantity));
 /** `{name, quantity?, email?}` per person; a bare name is one with no quantity of its own. */
@@ -198,6 +201,9 @@ let bootBase = null;
 let bootDrafts = {};
 let bootRunning = false;
 let autoRetried = false;
+/** A reload over a form whose boot had finished: the rows it holds are already resolved
+    and may carry drafts, so the bootstrap only brings reference data back. */
+let keptSettled = false;
 
 /** The load itself: resolve the named people, take the reference data, match the rest.
     Reads only, so running it again is safe — nothing here writes to Carta. */
@@ -206,8 +212,8 @@ async function runBoot() {
   //    Never over a draft set: re-seeding drops the draft_pk map and duplicates it.
   if (RESUMING) { await resumeBoot(); return; }
   let fat = false;
-  if (S.draftSetId == null) {
-    try { fat = await bootstrap(bootBase); }
+  if (S.draftSetId == null || keptSettled) {
+    try { fat = await bootstrap(bootBase, keptSettled); }
     catch (err) {
       console.error("issuance artifact: bootstrap failed", err);
       // No live Carta: the page says so once, and nothing further is called.
@@ -296,11 +302,19 @@ if (typeof window.addEventListener === "function") {
   ingest(firstPaint());
   bootBase = snapshot();
   bootDrafts = Object.assign({}, S.drafts);
+  // After the base: an unsettled form's edits then replay over the bootstrap as if
+  // typed while it was in flight.
+  const kept = restoreKept(PAGE_KEY);
+  keptSettled = !!(kept && kept.settled);
   // No connector is a state, not a crash: say what to do and stop.
   if (!(await connect())) { degrade(); return; }
   // Unawaited, and first paint is already done: a capability this view does not serve
   // answers only after ~10s, and the hand-off must not wait for that answer.
   openStore();
+  if (kept && kept.sealed) {
+    handoff("needs_claude", { reason: "unknown_outcome", at: kept.sealed, reloaded: true })
+      .then((told) => noteHandoff(null, told));
+  }
   bootRunning = true;
   try { await runBoot(); }
   finally { bootRunning = false; }

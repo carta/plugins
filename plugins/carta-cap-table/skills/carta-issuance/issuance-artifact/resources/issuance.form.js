@@ -1269,6 +1269,7 @@ const pageStopped = () => hardStops().length > 0 || noCorporation();
 let rendering = false;
 function render() {
   if (!S.ready) return;
+  keepSoon();
   rendering = true;
   try {
     const keep = grabFocus();
@@ -1291,7 +1292,9 @@ function render() {
       el("issued").innerHTML = issuedHtml();
     } else if (stopped) { /* nothing to draw: the notes above are the page */
     } else if (reviewing) {
-      el("review").innerHTML = reviewHtml();
+      // Only a review restored by a reload draws before the terms land, and its plan
+      // and document set would read as bare ids.
+      el("review").innerHTML = S.termsLoading && !S.connErr ? skeletonHtml() : reviewHtml();
     } else {
       // Cleared, not just hidden: a stale review must not outlive the stage it belongs
       // to, least of all the sentence saying what confirming commits to.
@@ -1891,6 +1894,7 @@ function rowErrHtml(r, p) {
 }
 
 function renderFooter() {
+  keepSoon();
   // Only a write in flight, a form with no options to show yet, a hard stop or a
   // dead transport disables a button. An incomplete form does not: a dead greyed-out
   // button says nothing about what is wrong, whereas a click paints the offending
@@ -2313,13 +2317,115 @@ function openSheet(phase, extra) {
   // Where focus goes back to when the reader dismisses the sheet.
   if (!S.sheet) S.opener = document.activeElement || null;
   S.sheet = Object.assign({ phase, step: 0 }, extra || {});
+  // Before the write this phase is about to start, so a reload knows one was in flight.
+  keepNow();
   renderSheet();
   focusSheet();
 }
 function closeSheet() {
   S.sheet = null;
+  keepNow();
   renderSheet();
 }
+
+/* ---------- kept across a reload ----------
+   The host unloads this page when the viewer switches away and loads it fresh on
+   return, which would drop everything typed. The form goes to this browser's own
+   storage under a key minted per build, and comes back before first paint. */
+const KEEP = { key: "", timer: 0 };
+const KEEP_PREFIX = "carta-issuance:";
+const KEEP_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
+/** The user's work and what Carta already holds of it. Reference data is fetched again. */
+const KEEP_FIELDS = ["stage", "corpId", "corpName", "shared", "seq", "drafts", "draftSetId",
+  "draftSetName", "removed", "sent", "docPicked", "curFor", "hydrated", "rewriting",
+  "savedNote", "issued", "issuedRows", "pendingRows", "links", "stuck", "stuckTitle"];
+
+/** Null wherever the browser refuses storage — the page then just forgets on reload. */
+function storage() {
+  try { return globalThis.localStorage || null; } catch { return null; }
+}
+
+function keepNow() {
+  clearTimeout(KEEP.timer);
+  KEEP.timer = 0;
+  const ls = KEEP.key && S.ready ? storage() : null;
+  if (!ls) return;
+  const doc = {
+    at: Date.now(),
+    sheet: S.sheet ? S.sheet.phase : "",
+    settled: S.corpId != null && !S.termsLoading && !S.connErr,
+    rows: S.rows.map((r) => Object.assign({}, r, { touched: [...r.touched] })),
+    touchedShared: [...S.touchedShared],
+  };
+  for (const k of KEEP_FIELDS) doc[k] = S[k];
+  const text = JSON.stringify(doc);
+  try { ls.setItem(KEEP.key, text); }
+  catch {
+    // Full: older pages' forms go first, this one is the one being filled in.
+    try { pruneKept(ls, 0); ls.setItem(KEEP.key, text); }
+    catch (err) { console.warn("issuance artifact: could not keep the form", err); }
+  }
+}
+function keepSoon() {
+  if (KEEP.key && !KEEP.timer) KEEP.timer = setTimeout(keepNow, 250);
+}
+
+/** Every other page's kept form older than `age`. */
+function pruneKept(ls, age) {
+  const now = Date.now();
+  for (let i = ls.length - 1; i >= 0; i--) {
+    const k = ls.key(i);
+    if (!k || !k.startsWith(KEEP_PREFIX) || k === KEEP.key) continue;
+    let at = 0;
+    try { at = Number(JSON.parse(ls.getItem(k)).at) || 0; } catch { /* unreadable: drop */ }
+    if (now - at >= age) ls.removeItem(k);
+  }
+}
+
+/** A first save whose answer never came back may have minted the set, so saving again
+    could mint a second one. A save over rows that all have their draft is an update. */
+const blindReload = () => S.rewriting.length > 0
+  || S.rows.some((r) => !S.drafts[r.key] && !untouched(r));
+
+/** Put back what this build's last load kept, and start keeping from here on. Null when
+    there was nothing; otherwise `settled` says the boot had finished, and `sealed` names
+    the write that was in flight when the page went away. */
+function restoreKept(key) {
+  KEEP.key = key ? KEEP_PREFIX + key : "";
+  const ls = KEEP.key ? storage() : null;
+  if (!ls) return null;
+  let doc = null;
+  try {
+    pruneKept(ls, KEEP_MAX_AGE_MS);
+    doc = JSON.parse(ls.getItem(KEEP.key) || "null");
+  } catch { return null; }
+  if (!doc || typeof doc !== "object" || !objs(doc.rows).length) return null;
+  for (const k of KEEP_FIELDS) if (k in doc) S[k] = doc[k];
+  S.rows = objs(doc.rows).map((r) => Object.assign(r, {
+    touched: new Set(arr(r.touched)), ov: r.ov && typeof r.ov === "object" ? r.ov : {} }));
+  S.touchedShared = new Set(arr(doc.touchedShared));
+  const set = draftSetPhrase() || "this issuance";
+  // Never pressed again for them: a second issue issues twice, a second first save
+  // mints a second set.
+  let sealed = "";
+  if (doc.sheet === "issuing" && !S.issued && !S.stuck) {
+    sealed = "issue";
+    S.stuck = "This page reloaded while Carta was issuing, so these securities may or may not "
+      + `have been issued — ask Claude to check ${set} in Carta. Do not issue again from here.`;
+  } else if (doc.sheet === "saving" && !S.stuck && blindReload()) {
+    sealed = "save";
+    S.stuck = "This page reloaded while the draft set was saving, so the save may or may not "
+      + `have landed — ask Claude to check ${set} before trying again.`;
+  }
+  if (sealed) S.stuckTitle = "Outcome unknown";
+  render();
+  return { settled: !!doc.settled, sealed };
+}
+
+if (typeof document.addEventListener === "function") {
+  document.addEventListener("visibilitychange", () => { if (document.hidden) keepNow(); });
+}
+if (typeof window.addEventListener === "function") window.addEventListener("pagehide", keepNow);
 
 /** The confirm button when there is a decision to make, the dismiss button when the
     sheet only reports, and the title while a wait has nothing to press. */

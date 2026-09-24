@@ -45,6 +45,7 @@ import argparse
 import hashlib
 import json
 import re
+import secrets
 import sys
 from html import escape
 from pathlib import Path
@@ -73,7 +74,7 @@ PREVIEW_PARTS = (("issuance.css", "issuance.preview.css"),
 PREVIEW_FIRST_TYPE = "option_grant"
 
 TOKENS = ("CORPORATION_ID", "COMPANY_NAME_JSON", "SECURITY_TYPE", "SEED_JSON",
-          "PAGE_TITLE", "BUILD_ID")
+          "PAGE_TITLE", "BUILD_ID", "PAGE_KEY")
 TOKEN_RE = re.compile(r"\{\{([A-Z][A-Z0-9_]*)\}\}")
 
 SECURITY_TYPES = ("option_grant", "certificate", "piu")
@@ -256,7 +257,10 @@ def check_seed_shape(seed):
                  "a resume needs both, or the save creates a second draft set")
 
 
-def build(corporation_id, company_name, security_type, seed, preview=False):
+def build(corporation_id, company_name, security_type, seed, preview=False, nonce=""):
+    """`nonce` makes the page's browser-storage key, so a host reload of the page restores
+    its form and a rebuild starts clean. Empty keeps nothing, and keeps the output a pure
+    function of the sources — the CLI always passes one."""
     if security_type not in SECURITY_TYPES:
         sys.exit("ERROR: --security-type must be one of {}".format(
             ", ".join(SECURITY_TYPES)))
@@ -299,6 +303,7 @@ def build(corporation_id, company_name, security_type, seed, preview=False):
         "SEED_JSON": js_json(seed),
         "PAGE_TITLE": page_title(company_name, security_type, preview),
         "BUILD_ID": build_id,
+        "PAGE_KEY": "{}-{}".format(build_id, nonce) if nonce and not preview else "",
     }
     for token in TOKENS:
         placeholder = "{{%s}}" % token
@@ -345,7 +350,7 @@ def main():
         security_type = PREVIEW_FIRST_TYPE
 
     html, build_id = build(args.corporation_id, company_name, security_type,
-                           read_seed(args.seed), args.preview)
+                           read_seed(args.seed), args.preview, secrets.token_hex(6))
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(html)
