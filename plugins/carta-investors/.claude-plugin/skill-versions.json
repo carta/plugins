@@ -4,7 +4,7 @@
     "headline": "Carta Home opens first and its dashboard cards say they are being prepared, turning into links once each dashboard is ready."
   },
   "carta-workhub-build": {
-    "version": "1.8.22",
-    "headline": "Workhub's capital activity review has a Delivery tab listing how each investor gets the notice, with filters, search and sorting, beside the email settings."
+    "version": "1.8.23",
+    "headline": "Workhub's capital activity review opens each investor's notice on the PDF, with the email one click away."
   }
 }

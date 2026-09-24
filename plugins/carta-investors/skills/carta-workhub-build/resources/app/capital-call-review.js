@@ -186,7 +186,9 @@ function ccrReset(target, title) {
     showDetail: false,
     delivery: { filter: "all", q: "", sort: null, dir: 1 },
     lpIndex: 0,
-    docTab: "email",
+    // The notice PDF opens first; the email stands in where no PDF can be
+    // rendered (no bundled viewer, or demo mode).
+    docTab: typeof window !== "undefined" && window.pdfjsLib && !CCR_IS_DEMO ? "pdf" : "email",
     email: null,
     emailError: null,
     pdf: null,
@@ -446,7 +448,7 @@ async function ccrLoad() {
     if (!_ccrFundName) _ccrFundName = CCR_DEMO_SUMMARY.fund_name;
     ccrRender();
     renderFarSection();
-    if (snap.activeTab === 'notice') ccrLoadEmail();
+    if (snap.activeTab === 'notice') ccrLoadActiveDoc();
     return;
   }
 
@@ -475,7 +477,7 @@ async function ccrLoad() {
     snap.rows = (summary.rows && summary.rows.results) || [];
     snap.loading = false;
     ccrRender();
-    if (snap.activeTab === 'notice') ccrLoadEmail();
+    if (snap.activeTab === 'notice') ccrLoadActiveDoc();
 
     if (summary.fund_name && summary.fund_name !== _ccrFundName) {
       _ccrFundName = summary.fund_name;
@@ -1067,10 +1069,10 @@ function ccrNoticeTabBody(s) {
   }
 
   const docTabs = '<span class="ccr-tabs">' +
-    '<button class="ccr-tab' + (_ccr.docTab !== 'pdf' ? ' ccr-tab-on' : '') + '" data-ccr-inline-tab="email">Email</button>' +
     (window.pdfjsLib
       ? '<button class="ccr-tab' + (_ccr.docTab === 'pdf' ? ' ccr-tab-on' : '') + '" data-ccr-inline-tab="pdf">PDF</button>'
       : '') +
+    '<button class="ccr-tab' + (_ccr.docTab !== 'pdf' ? ' ccr-tab-on' : '') + '" data-ccr-inline-tab="email">Email</button>' +
     '</span>';
 
   const contentPane = _ccr.docTab === 'pdf' ? ccrNoticeDoc() : emailPane;
@@ -1615,9 +1617,7 @@ function ccrBind(root) {
       const prev = _ccr.activeTab;
       _ccr.activeTab = el.getAttribute("data-ccr-main-tab");
       ccrRender();
-      if (_ccr.activeTab === "notice" && prev !== "notice" && !_ccr.email && !_ccr.emailError) {
-        ccrLoadEmail();
-      }
+      if (_ccr.activeTab === "notice" && prev !== "notice") ccrLoadActiveDoc();
     }));
   root.querySelectorAll("[data-ccr-more]").forEach((el) =>
     el.addEventListener("click", () => { _ccr.showAllRows = !_ccr.showAllRows; ccrRender(); }));
@@ -1717,8 +1717,8 @@ function ccrSelectLp(index) {
 // Each tab costs a render on Carta's side, so only the visible one is fetched.
 function ccrLoadActiveDoc() {
   if (_ccr.docTab === "pdf") {
-    if (!_ccr.pdf && !_ccr.pdfLoading) ccrLoadPdf();
-  } else if (!_ccr.email) {
+    if (!_ccr.pdf && !_ccr.pdfLoading && !_ccr.pdfError) ccrLoadPdf();
+  } else if (!_ccr.email && !_ccr.emailError) {
     ccrLoadEmail();
   }
 }
@@ -1790,8 +1790,8 @@ function ccrRenderNotice() {
       '<div class="ccr-notice-bar">' +
         '<select id="ccr-lp">' + options + "</select>" +
         '<span class="ccr-tabs">' +
-          '<button class="ccr-tab' + (_ccr.docTab !== "pdf" ? " ccr-tab-on" : "") + '" data-ccr-tab="email">Email</button>' +
           '<button class="ccr-tab' + (_ccr.docTab === "pdf" ? " ccr-tab-on" : "") + '" data-ccr-tab="pdf">Notice PDF</button>' +
+          '<button class="ccr-tab' + (_ccr.docTab !== "pdf" ? " ccr-tab-on" : "") + '" data-ccr-tab="email">Email</button>' +
         "</span>" +
       "</div>" +
       '<div class="far-panel-body ccr-notice-body">' + pane + "</div>" +
@@ -1850,12 +1850,14 @@ async function ccrLoadPdf() {
   const row = _ccr.rows[_ccr.lpIndex];
   if (!row || !row.interest || row.interest.id == null) {
     _ccr.pdfError = "This row carries no interest id, so its notice cannot be rendered.";
+    ccrRender();
     ccrRenderNotice();
     return;
   }
 
   if (CCR_IS_DEMO) {
     _ccr.pdfError = "PDF preview is not available in demo mode.";
+    ccrRender();
     ccrRenderNotice();
     return;
   }
