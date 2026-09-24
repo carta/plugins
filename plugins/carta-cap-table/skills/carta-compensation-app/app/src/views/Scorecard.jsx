@@ -572,6 +572,7 @@ export default function Scorecard({ roster, corporation, token }) {
       <div style={{ marginBottom: 18 }}>
         <AskBar
           token={token}
+          page="Scorecard"
           placeholder="Ask Claude to change this page — e.g. sort by compa-ratio"
         />
       </div>

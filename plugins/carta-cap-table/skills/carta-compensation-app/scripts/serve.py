@@ -301,6 +301,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if not prompt:
             return self._send(400, {"error": "empty_prompt"})
         sid = body.get("sessionId") or "default"
+        page = body.get("page")
 
         # Guarded get-or-create. A failed start() is evicted and reported as clean
         # JSON *before* any SSE headers go out — a 500 after headers would corrupt
@@ -328,7 +329,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             sess = entry["session"]
             self._sse_headers()
             try:
-                sess.send(prompt)
+                hint = chat_session.page_hint_for(page)
+                sess.send(hint + "\n\n" + prompt if hint else prompt)
                 for ev in sess.events(timeout=120):
                     # The browser reloads only after a turn that changed source, so
                     # the flag rides on the terminal frame rather than making the

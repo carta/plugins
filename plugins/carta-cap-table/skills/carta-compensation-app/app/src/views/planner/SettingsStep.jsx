@@ -487,6 +487,7 @@ export default function SettingsStep({
         </div>
         <AskBar
           token={token}
+          page="RefreshPlanner:SettingsStep"
           placeholder="Ask Claude to change this page — e.g. add a column for unvested shares"
         />
       </div>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { C, FS, RADIUS, SANS } from "../ui/theme.js";
 import ExportButton from "../ui/ExportButton.jsx";
-import { MultiSelect, Select, Tag, Th, Td } from "../ui/components.jsx";
+import { MultiSelect, Select, SparkleAI, Tag, Th, Td } from "../ui/components.jsx";
 import AskBar from "../ui/AskBar.jsx";
 import { compareRows, jobLabel, levelLabel, trackOf, TRACK_LABELS, PERCENTILES } from "../model/taxonomy.js";
 import { money, equityValue, EQUITY_REPS } from "../model/format.js";
@@ -23,7 +23,7 @@ const METRIC_BLOCKS = [
 ];
 
 /** All three metrics for one job/track group, sharing one Level column. */
-function MetricTable({ rows, currency, equityRep }) {
+function MetricTable({ rows, currency, equityRep, groupKey }) {
   // tableLayout:fixed keeps declared widths authoritative; minWidth scales with
   // PCTS length so the wrapper scrolls before currency cells mash together.
   const minWidth = 260 + PCTS.length * 3 * 75;
@@ -47,10 +47,12 @@ function MetricTable({ rows, currency, equityRep }) {
           {METRIC_BLOCKS.map((m) =>
             PERCENTILES.map((p) => (
               <Th key={`${m.key}-${p.key}`} align="right" valign="bottom">
-                {/* Stacked and bottom-aligned: an inline or middle-aligned pill would
-                    misalign this column against its single-line neighbors. */}
+                {/* Icon-only marker for AI/interpolated values; the header's own title
+                    tooltip carries the source. Non-AI notices still use Tag. */}
                 {!p.fetched && (
-                  <div><Tag tone="notice" pill title={p.tooltip}>Estimated</Tag></div>
+                  <div title={p.tooltip}>
+                    <SparkleAI gradientId={`ctc-sparkle-bench-${groupKey}-${m.key}-${p.key}`} />
+                  </div>
                 )}
                 <div>{p.label}</div>
               </Th>
@@ -68,7 +70,9 @@ function MetricTable({ rows, currency, equityRep }) {
               <Td ellipsis title={levelLabel(r.level, track)}>
                 {levelLabel(r.level, track)}
                 {est && (
-                  <> <Tag tone="notice" pill title={r.provenanceNote || "User-added row"}>Estimated</Tag></>
+                  <> <span title={r.provenanceNote || "User-added row"}>
+                    <SparkleAI gradientId={`ctc-sparkle-bench-row-${r.job}-${r.ladder}-${r.level}`} />
+                  </span></>
                 )}
               </Td>
               {METRIC_BLOCKS.map((m) =>
@@ -367,6 +371,7 @@ export default function Benchmarks({ data, onPeerGroupChange, token }) {
       <div style={{ marginBottom: 18 }}>
         <AskBar
           token={token}
+          page="Benchmarks"
           placeholder="Ask Claude to change this page — e.g. add an interpolated P60 column"
         />
       </div>
@@ -390,7 +395,8 @@ export default function Benchmarks({ data, onPeerGroupChange, token }) {
           {/* One table, so it scrolls horizontally as a unit rather than three grid
               tracks resizing independently. */}
           <div style={{ overflowX: "auto" }}>
-            <MetricTable rows={g.rows} currency={currency} equityRep={equityRep} />
+            <MetricTable rows={g.rows} currency={currency} equityRep={equityRep}
+              groupKey={`${g.job}-${g.track}`} />
           </div>
         </div>
       ))}

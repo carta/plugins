@@ -90,7 +90,7 @@ function Working() {
 const REPLY_LINES = 3;
 const REPLY_LINE_HEIGHT = 1.5;
 
-export default function AskBar({ token, placeholder = PLACEHOLDER }) {
+export default function AskBar({ token, page, placeholder = PLACEHOLDER }) {
   const [prompt, setPrompt] = useState("");
   const [busy, setBusy] = useState(false);
   const [reply, setReply] = useState("");
@@ -165,7 +165,7 @@ export default function AskBar({ token, placeholder = PLACEHOLDER }) {
       const res = await fetch("/api/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Dash-Token": token },
-        body: JSON.stringify({ prompt: text, sessionId: "default" }),
+        body: JSON.stringify({ prompt: text, sessionId: "default", page }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));

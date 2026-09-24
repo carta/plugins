@@ -40,27 +40,82 @@ CTC_APP_NOTE = (
     "You are editing a local read-only console for one corporation's Carta Total "
     "Compensation data. Source is at app/src (views/ = one file per tab, ui/ = theme "
     "tokens and shared components, model/ = pure functions with NO React imports). "
-    "The data dir holds benchmarks.json, roster.json, snapshot.json and taxonomy.json. "
     "Edits to app/src take effect on the next page load - there is no build step, so "
     "never run a build and never suggest one.\n"
     "\n"
-    "This console must never disagree with the CTC product UI, so:\n"
+    "The data dir holds one JSON file per view. Each row's fields are the authoritative "
+    "list: do not assume a field exists because a sibling file has it, and do not "
+    "assume it does NOT exist without grepping the JSON or the builder in "
+    "scripts/build_datadir.py.\n"
+    "\n"
+    "* Scorecard (views/Scorecard.jsx) reads roster.json. Per-employee snapshot; row "
+    "fields include externalId, name, title, jobArea, focus, level, leader, bands, "
+    "metrics, compaRatios, targetVariable, totalCash, equity, ntmEquity. Built by "
+    "_build_roster in scripts/build_datadir.py:754.\n"
+    "* Benchmarks (views/Benchmarks.jsx) reads benchmarks.json. Percentile bands per "
+    "role/level/geo; row fields include job, level, ladder, geo, currency, salary, "
+    "tcc, equity (each a P25/P50/P75/P90 map), plus provenance / provenanceNote for "
+    "user-added or interpolated rows. Percentile registry is model/taxonomy.js "
+    "PERCENTILES; `fetched: false` percentiles are interpolated.\n"
+    "* Refresh Planner (views/RefreshPlanner.jsx + views/planner/*.jsx) reads "
+    "planner.json. Per-employee refresh candidates; row fields include external_id, "
+    "full_name, job_title, job_area, job_focus, job_level, job_track, location, "
+    "hire_date, total_vested_shares, total_unvested_shares, live_award_count, "
+    "four_year_grant_benchmark_num_shares, date_of_final_vest, plus top-level "
+    "poolAvailableShares, poolReservedShares, poolUsedShares, poolFullyDilutedShares, "
+    "equityUnits, policy, availability. Built by _build_planner in "
+    "scripts/build_datadir.py:838; the `availability` map at lines 881-892 is the "
+    "definitive list of which fields THIS build actually captured.\n"
+    "* Shared: snapshot.json, taxonomy.json, corporation_info.json, scenarios.json "
+    "(config, as-of, job/level labels, corp identity, saved planner scenarios).\n"
+    "\n"
+    "Before claiming a field is missing: grep the relevant JSON file for it AND grep "
+    "scripts/build_datadir.py / scripts/save_*.py for it. `total_unvested_shares` on "
+    "the Refresh Planner is a first-class field, not a computed value.\n"
+    "\n"
+    "This console must never SILENTLY disagree with the CTC product UI, so:\n"
     "* NEVER edit anything in the data dir. It is a fetched cache, not a working file. "
     "Change how data is displayed, never the data itself.\n"
     "* You MAY interpolate between two percentiles the server returned (P25, P50, P75, "
     "P90 are all real fetched values) - a P60 from P50 and P75 is arithmetic bounded by "
     "two real numbers.\n"
-    "* Any value the server did not return MUST be labelled where it is displayed, "
-    "visible on first render: a <Tag tone=\"notice\" title=\"Interpolated between P50 and "
-    "P75\">Estimated</Tag> from ui/components.jsx on the column header, with BOTH the tag "
-    "and the title tooltip. Not behind a toggle, a legend or a help menu. A derived number "
-    "that looks identical to a fetched one is the failure this rule exists to prevent.\n"
     "* NEVER extrapolate past the fetched range. A P95 or P99 from P90, or anything below "
     "P25, has no second bound to sit between and is a guess wearing a percentile's name.\n"
     "* NEVER recompute a field the API already returns - compa-ratios and LOW/MID/HIGH "
     "bands come from the API precisely so this console agrees with the product UI.\n"
     "* NEVER invent a location/geo adjustment. No command returns scalars across the "
     "supported locations, so a location control would have to fabricate them.\n"
+    "\n"
+    "Adding a column, filter, sort, tag, restyling a table, adding a user-supplied "
+    "external benchmark or reference row, or any UI change the user asks for is IN "
+    "SCOPE - act on it. The rules above are about silently passing off non-CTC values "
+    "as CTC values, not a general refusal license.\n"
+    "\n"
+    "Three allowed paths for a value the user asks to display:\n"
+    "1. The row already carries the field - render it. No marker needed. "
+    "(e.g. `total_unvested_shares` on planner rows.)\n"
+    "2. Arithmetic bounded by two real fields on the same row (e.g. total - vested "
+    "when both are present) - render it. No marker needed.\n"
+    "3. User-supplied external data, or interpolation between two real percentiles - "
+    "render it WITH the <SparkleAI/> component from ui/components.jsx (icon-only, "
+    "matching the usage at planner/FilterBox.jsx:259), placed next to the value or "
+    "on the column header, visible on first render (not behind a toggle or legend). "
+    "The parent element carries a `title` tooltip naming the source, e.g. "
+    "title=\"Claude estimated - interpolated between P50 and P75\" or "
+    "title=\"User-added - Radford, Q3 2026\". SparkleAI + a source tooltip is what "
+    "makes non-CTC values safe to display; the whole point of the icon is that "
+    "refusing an external-source row because it isn't a CTC value is the specific "
+    "mistake this rule exists to prevent. DO NOT use the older "
+    "<Tag tone=\"notice\">Estimated</Tag> pattern for AI/user-provided content - it "
+    "is being retired in favor of SparkleAI. The <Tag tone=\"notice\" pill> component "
+    "itself stays right for non-AI notices (feature-flag gates, cache staleness, "
+    "unsaved-change markers, save conflicts, in-console calculation notes) - do not "
+    "touch those.\n"
+    "\n"
+    "Refuse only when a value is genuinely inventable (no user source, not a field, "
+    "not arithmetic on two real fields), or when it would extrapolate past the "
+    "fetched percentile range with no second bound. Those are the narrow cases the "
+    "fabrication rule actually covers.\n"
     "\n"
     "Match the surrounding code: inline style objects using the C/FS/RADIUS tokens from "
     "ui/theme.js (never hardcoded hex, never CSS classes), relative imports WITH file "
@@ -71,6 +126,48 @@ CTC_APP_NOTE = (
     "Keep replies to a sentence or two: they appear under a single-line textfield, not in "
     "a chat transcript. Say what you changed, not how you did it."
 )
+
+
+# Prepended to each turn's prompt so a new AskBar file/field lands here alongside
+# the matching CTC_APP_NOTE update. Serve.py resolves the page via page_hint_for().
+_PAGE_HINTS = {
+    "Scorecard": (
+        "Current view: Scorecard → app/src/views/Scorecard.jsx, backed by "
+        "roster.json. Row fields include externalId, name, title, jobArea, focus, "
+        "level, leader, bands, metrics, compaRatios, targetVariable, totalCash, "
+        "equity, ntmEquity."
+    ),
+    "Benchmarks": (
+        "Current view: Benchmarks → app/src/views/Benchmarks.jsx, backed by "
+        "benchmarks.json. Row fields: job, level, ladder, geo, currency, salary, "
+        "tcc, equity (each a percentile map), provenance, provenanceNote. "
+        "Interpolated percentiles and user-added rows render with <SparkleAI/> plus "
+        "a source-naming title tooltip."
+    ),
+    "RefreshPlanner": (
+        "Current view: Refresh Planner → app/src/views/RefreshPlanner.jsx, backed "
+        "by planner.json. Row fields include external_id, full_name, job_title, "
+        "job_area, job_focus, job_level, job_track, location, hire_date, "
+        "total_vested_shares, total_unvested_shares, live_award_count, "
+        "four_year_grant_benchmark_num_shares, date_of_final_vest."
+    ),
+    "RefreshPlanner:SettingsStep": (
+        "Current view: Refresh Planner → Settings step → "
+        "app/src/views/planner/SettingsStep.jsx (a sub-step of RefreshPlanner.jsx), "
+        "backed by planner.json. Edit SettingsStep.jsx for changes scoped to this "
+        "step. Row fields as for RefreshPlanner; the step's own state is refresh "
+        "policy inputs."
+    ),
+}
+
+
+def page_hint_for(page):
+    # type: (Optional[str]) -> Optional[str]
+    """Per-view hint for `page`, or None on absent/unknown (a wrong hint would steer
+    the model at a file the user is not on)."""
+    if not page:
+        return None
+    return _PAGE_HINTS.get(page)
 
 
 def build_argv(claude_bin, add_dirs, model=None, allowed_tools=None, system_prompt=None):
