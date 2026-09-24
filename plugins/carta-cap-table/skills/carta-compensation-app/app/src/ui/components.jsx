@@ -36,42 +36,17 @@ function ChevronDown({ size = 16 }) {
   );
 }
 
-/** Ink's own AI mark — SparkleAI from ink-foundations' icon set, path data and
- *  gradient copied verbatim rather than redrawn.
- *
- *  Carta already has an icon for "a model made this", so using it beats inventing
- *  a marker or approximating a brand mark from memory. The gradient is the icon's
- *  own (gold to coral) and is deliberately NOT themed — it is the thing that makes
- *  the mark recognisable, and a currentColor version would read as a generic
- *  sparkle.
- *
- *  `gradientId` because an SVG gradient is referenced by a document-wide id: two of
- *  these on one page sharing `paint` would have the second silently adopt the
- *  first's definition. One filter row can hold several.
- */
-export function SparkleAI({ size = 14, gradientId = "ctc-sparkle-ai" }) {
+/** Marks a value this console derived or edited, rather than one Carta returned. */
+export function SparkleAI({ size = 14 }) {
   return (
     <svg
-      width={size} height={size} viewBox="0 0 32 31" fill="none"
+      width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
       style={{ flex: "0 0 auto" }} aria-hidden
     >
-      <path
-        d="M12.3676 5.99231C13.0601 5.99231 13.6749 6.43803 13.8939 7.09884L16.2539 14.2203L23.3338 16.5942C23.9908 16.8144 24.4339 17.4329 24.4339 18.1294C24.4339 18.826 23.9908 19.4444 23.3338 19.6646L16.2539 22.0385L13.8939 29.16C13.6749 29.8208 13.0601 30.2665 12.3676 30.2665C11.6751 30.2665 11.0603 29.8208 10.8413 29.16L8.48132 22.0385L1.40135 19.6646C0.744393 19.4444 0.30127 18.826 0.30127 18.1294C0.30127 17.4329 0.744393 16.8144 1.40135 16.5942L8.48132 14.2203L10.8413 7.09884C11.0603 6.43803 11.6751 5.99231 12.3676 5.99231ZM12.3676 12.728L11.2795 16.0114C11.1194 16.4947 10.7424 16.8739 10.262 17.0349L6.99772 18.1294L10.262 19.2239C10.7424 19.385 11.1194 19.7641 11.2795 20.2474L12.3676 23.5308L13.4557 20.2474C13.6158 19.7641 13.9928 19.385 14.4732 19.2239L17.7375 18.1294L14.4732 17.0349C13.9928 16.8739 13.6158 16.4947 13.4557 16.0114L12.3676 12.728Z"
-        fill={`url(#${gradientId})`}
-      />
-      <path
-        d="M25.2383 0.166504C25.6538 0.166504 26.0227 0.433938 26.1541 0.830425L27.4092 4.61784L31.1746 5.88031C31.5687 6.01247 31.8346 6.38352 31.8346 6.80145C31.8346 7.21938 31.5687 7.59043 31.1746 7.72259L27.4092 8.98506L26.1541 12.7725C26.0227 13.169 25.6538 13.4364 25.2383 13.4364C24.8228 13.4364 24.454 13.169 24.3226 12.7725L23.0675 8.98506L19.3021 7.72259C18.908 7.59043 18.6421 7.21938 18.6421 6.80145C18.6421 6.38352 18.908 6.01247 19.3021 5.88031L23.0675 4.61784L24.3226 0.830425C24.454 0.433938 24.8228 0.166504 25.2383 0.166504Z"
-        fill={`url(#${gradientId})`}
-      />
-      <defs>
-        <linearGradient
-          id={gradientId} x1="0" y1="16" x2="32" y2="16"
-          gradientUnits="userSpaceOnUse"
-        >
-          <stop stopColor="#edd66f" />
-          <stop offset="0.6" stopColor="#ff7b55" />
-        </linearGradient>
-      </defs>
+      <path d="M2 21a8 8 0 0 1 10.821-7.487" />
+      <path d="M21.378 16.626a1 1 0 0 0-3.004-3.004l-4.01 4.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z" />
+      <circle cx="10" cy="8" r="5" />
     </svg>
   );
 }
@@ -222,7 +197,7 @@ export function TableAlign({ align, children }) {
  *  border-default (medium gray) under-rule — clearly darker than the hairline between
  *  body rows, nowhere near the near-black text color. Deliberately NOT the
  *  uppercase/tracked/tiny "ledger" look, which Ink drops. */
-export function Th({ children, align, valign, width, colSpan, group }) {
+export function Th({ children, align, valign, width, colSpan, group, divider }) {
   const ctx = useContext(AlignContext);
   // Explicit prop wins, then the table-wide value, then the historical default.
   align = align || ctx || "left";
@@ -236,13 +211,14 @@ export function Th({ children, align, valign, width, colSpan, group }) {
         // hairline: the darker under-rule belongs on the row that actually labels the
         // columns, or the table reads as having two competing header baselines.
         borderBottom: `1px solid ${group ? C.borderSubtle : C.borderDefault}`,
+        borderLeft: divider ? `1px solid ${C.borderDefault}` : undefined,
       }}
     >{children}</th>
   );
 }
 
 /** Ink's table body cell: 14px/weight-400, border-subtle hairline between rows. */
-export function Td({ children, align, valign, subtle, mono, ellipsis, title }) {
+export function Td({ children, align, valign, subtle, mono, ellipsis, title, divider }) {
   const ctx = useContext(AlignContext);
   align = align || ctx || "left";
   return (
@@ -252,6 +228,7 @@ export function Td({ children, align, valign, subtle, mono, ellipsis, title }) {
       color: subtle ? C.textQuiet : C.textDefault,
       fontVariantNumeric: mono ? "tabular-nums" : undefined,
       borderBottom: `1px solid ${C.borderSubtle}`, whiteSpace: "nowrap",
+      borderLeft: divider ? `1px solid ${C.borderDefault}` : undefined,
       ...(ellipsis ? { overflow: "hidden", textOverflow: "ellipsis" } : null),
     }}>{children}</td>
   );

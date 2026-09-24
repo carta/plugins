@@ -249,14 +249,9 @@ export function CommittedFilters({ filters, onToggle, onRemove }) {
           <Select
             key={f.id}
             label={f.name || f.sentence}
-            // Marks this as Claude's rather than one of the presets. With the name
-            // on the label there is otherwise nothing to tell them apart, and
-            // "Managers" beside "Job area" reads as a control someone built in.
-            //
-            // The gradient id is per-filter: an SVG gradient is referenced
-            // document-wide, so several of these sharing one id would have every
-            // later copy silently adopt the first's definition.
-            icon={<SparkleAI gradientId={`ctc-sparkle-${f.id}`} />}
+            // Marks this as Claude's rather than a preset, since the name
+            // alone reads as a control someone built in.
+            icon={<SparkleAI />}
             value={on ? "on" : "off"}
             onChange={(v) => {
               if (v === "remove") onRemove(f.id);

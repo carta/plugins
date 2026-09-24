@@ -23,7 +23,7 @@ const METRIC_BLOCKS = [
 ];
 
 /** All three metrics for one job/track group, sharing one Level column. */
-function MetricTable({ rows, currency, equityRep, groupKey }) {
+function MetricTable({ rows, currency, equityRep }) {
   // tableLayout:fixed keeps declared widths authoritative; minWidth scales with
   // PCTS length so the wrapper scrolls before currency cells mash together.
   const minWidth = 260 + PCTS.length * 3 * 75;
@@ -34,8 +34,8 @@ function MetricTable({ rows, currency, equityRep, groupKey }) {
             reads as P25/P50/P75/P90 three times with nothing saying which is which. */}
         <tr>
           <Th width="13%" group />
-          {METRIC_BLOCKS.map((m) => (
-            <Th key={m.key} colSpan={PCTS.length} align="center" group>
+          {METRIC_BLOCKS.map((m, mi) => (
+            <Th key={m.key} colSpan={PCTS.length} align="center" group divider={mi > 0}>
               {m.key === "equity"
                 ? `${m.label} — ${EQUITY_REPS.find((r) => r.value === equityRep)?.label} (4-year grant)`
                 : m.label}
@@ -44,17 +44,16 @@ function MetricTable({ rows, currency, equityRep, groupKey }) {
         </tr>
         <tr>
           <Th valign="bottom">Level</Th>
-          {METRIC_BLOCKS.map((m) =>
-            PERCENTILES.map((p) => (
-              <Th key={`${m.key}-${p.key}`} align="right" valign="bottom">
-                {/* Icon-only marker for AI/interpolated values; the header's own title
-                    tooltip carries the source. Non-AI notices still use Tag. */}
-                {!p.fetched && (
-                  <div title={p.tooltip}>
-                    <SparkleAI gradientId={`ctc-sparkle-bench-${groupKey}-${m.key}-${p.key}`} />
-                  </div>
-                )}
-                <div>{p.label}</div>
+          {METRIC_BLOCKS.map((m, mi) =>
+            PERCENTILES.map((p, pi) => (
+              <Th key={`${m.key}-${p.key}`} align="right" valign="bottom" divider={mi > 0 && pi === 0}>
+                <div
+                  title={!p.fetched ? p.tooltip : undefined}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 4 }}
+                >
+                  {!p.fetched && <SparkleAI />}
+                  <span>{p.label}</span>
+                </div>
               </Th>
             )))}
         </tr>
@@ -68,16 +67,17 @@ function MetricTable({ rows, currency, equityRep, groupKey }) {
               {/* The level name is the one variable-width cell; let it ellipsize rather
                   than widen the table past its container. */}
               <Td ellipsis title={levelLabel(r.level, track)}>
-                {levelLabel(r.level, track)}
                 {est && (
-                  <> <span title={r.provenanceNote || "User-added row"}>
-                    <SparkleAI gradientId={`ctc-sparkle-bench-row-${r.job}-${r.ladder}-${r.level}`} />
-                  </span></>
+                  <span title={r.provenanceNote || "User-added row"}>
+                    <SparkleAI />
+                  </span>
                 )}
+                {est && " "}
+                {levelLabel(r.level, track)}
               </Td>
-              {METRIC_BLOCKS.map((m) =>
-                PCTS.map((pct) => (
-                  <Td key={`${m.key}-${pct}`} align="right" mono>
+              {METRIC_BLOCKS.map((m, mi) =>
+                PCTS.map((pct, pi) => (
+                  <Td key={`${m.key}-${pct}`} align="right" mono divider={mi > 0 && pi === 0}>
                     {m.key === "equity"
                       ? equityValue(r.equity?.[pct], equityRep, r.currency || currency)
                       : money(r[m.key]?.[pct], r.currency || currency)}
@@ -395,8 +395,7 @@ export default function Benchmarks({ data, onPeerGroupChange, token }) {
           {/* One table, so it scrolls horizontally as a unit rather than three grid
               tracks resizing independently. */}
           <div style={{ overflowX: "auto" }}>
-            <MetricTable rows={g.rows} currency={currency} equityRep={equityRep}
-              groupKey={`${g.job}-${g.track}`} />
+            <MetricTable rows={g.rows} currency={currency} equityRep={equityRep} />
           </div>
         </div>
       ))}
