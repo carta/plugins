@@ -2,7 +2,7 @@
 name: carta-spa-audit
 description: >-
   SPA coverage audit across your portfolio — categorizes every equity investment as missing, unexecuted, executed, or not needed, and can drill into a specific company's SPA documents. Use when asked about SPA coverage, missing SPAs, unexecuted SPAs, document completeness, or a named company's SPA. Do NOT use for general portfolio metrics, capital deployment analysis, or co-investor lookups — use carta-co-investors for who else invested alongside you.
-version: 0.9.4
+version: 0.9.5
 model: sonnet
 allowed-tools:
   # The only source for a connector's name
@@ -38,7 +38,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.39.7</carta-plugin>
+<carta-plugin>carta-investors:6.39.9</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 

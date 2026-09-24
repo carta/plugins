@@ -12,9 +12,21 @@ Usage:
 
 import html
 import json
-import re
 import sys
 from pathlib import Path
+
+_LIB = next(p for p in Path(__file__).resolve().parents if (p / "lib" / "live_artifact_render").is_dir()) / "lib"
+sys.path.insert(0, str(_LIB))
+
+from live_artifact_render import (  # noqa: E402
+    ARTIFACT_ID_RE,
+    BASE_URL_RE,
+    CARTA_ID_RE,
+    MCP_SERVER_RE,
+    UUID_RE,
+    check_path_under_cwd,
+    js_safe_json,
+)
 
 TEMPLATE = Path(__file__).resolve().parent.parent / "references" / "artifact.html"
 CANONICAL = Path(__file__).resolve().parent.parent / "canonical-investors.json"
@@ -25,49 +37,6 @@ PLACEHOLDERS = (
     "{{FIRM_UUID}}",
     "{{CARTA_MCP_SERVER}}",
 )
-
-UUID_RE = re.compile(
-    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
-    re.IGNORECASE,
-)
-# Connector display names are viewer-facing text, so reject only what would escape
-# the JS string literal they land in.
-MCP_SERVER_RE = re.compile(r"^[^\r\n\'\"<>\\]{1,120}$")
-ARTIFACT_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]*[a-z0-9]$")
-CARTA_ID_RE = re.compile(r"^[0-9]{1,19}$")
-# The page concatenates this into an href, so a quote or javascript: scheme would
-# land inside the link. Require a plain https origin.
-BASE_URL_RE = re.compile(r"^https://[A-Za-z0-9.\-]+(:[0-9]{1,5})?$")
-
-
-def js_safe_json(obj) -> str:
-    """JSON-encode for embedding in a <script> block.
-
-    A <script type="application/json"> block closes on the first </script> in its
-    content, so an unescaped name could close the block early and leak its tail.
-    """
-    return (
-        json.dumps(obj, ensure_ascii=False)
-        .replace("<", "\\u003c")
-        .replace(">", "\\u003e")
-        .replace("&", "\\u0026")
-        .replace("'", "\\u0027")
-    )
-
-
-def check_path_under_cwd(p: Path, label: str):
-    """Resolve p, or return None if it escapes CWD or lands in /tmp.
-
-    A prompt-injected LLM could pass an arbitrary path; this is the enforcement.
-    """
-    resolved = p.resolve()
-    if not resolved.is_relative_to(Path.cwd().resolve()):
-        print(f"error: {label} must be under the current working directory: {resolved}", file=sys.stderr)
-        return None
-    if resolved.is_relative_to(Path("/tmp").resolve()):
-        print(f"error: {label} must not be under /tmp: {resolved}", file=sys.stderr)
-        return None
-    return resolved
 
 
 def load_vehicle_names(path: Path):

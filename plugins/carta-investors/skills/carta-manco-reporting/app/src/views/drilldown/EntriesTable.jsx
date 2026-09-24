@@ -138,7 +138,17 @@ export default function EntriesTable({ entries, buildJournalUrl }) {
                 {hasAttribution && (
                   <span style={S.attribution}>
                     {e.fund
-                      ? <span style={S.vendor}>{e.fund}</span>
+                      ? <span style={S.vendor}>
+                          {e.fund}
+                          {/* The line named no fund of its own — this one
+                              was read off the description beside it. */}
+                          {e.fund_inferred && (
+                            <span style={S.inferred}
+                                  title="The journal line does not name a fund of its own.">
+                              {" "}inferred
+                            </span>
+                          )}
+                        </span>
                       : e.vendor && (
                           // A vendor read off the description, not one Carta
                           // recorded — flagged inline where it was judged.

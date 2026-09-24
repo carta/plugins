@@ -1,6 +1,6 @@
 ---
 name: carta-portfolio-analytics-routing
-version: 2.3.0
+version: 2.3.1
 description: >
   Routes to the Portfolio Analytics App, Schedule of Investments, Co-Investor
   Lookup, or Performance Benchmarks. Trigger on any of:
@@ -52,7 +52,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.39.7</carta-plugin>
+<carta-plugin>carta-investors:6.39.9</carta-plugin>
 
 # carta-portfolio-analytics-routing — Portfolio Analytics Router (mirror)
 

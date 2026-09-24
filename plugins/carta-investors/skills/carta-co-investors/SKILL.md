@@ -9,7 +9,7 @@ description: >
   Use instead: carta-explore-data for general fund/investment/portfolio data —
   this skill is specifically for co-investor ("who else invested alongside us")
   analysis.
-version: 0.8.5
+version: 0.8.6
 model: sonnet
 allowed-tools:
   # The only source for a connector's name
@@ -42,7 +42,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.39.7</carta-plugin>
+<carta-plugin>carta-investors:6.39.9</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -351,14 +351,14 @@ uv run "<SCRIPT_PATH>" \
 
 Positional arguments:
 
-1. **Output path** — must be **absolute**, under the session's current working directory (`<CWD>`), and **not under `/tmp`**. Use `pwd` to resolve `<CWD>` if needed.
+1. **Output path** — must be **absolute** and under the session's current working directory (`<CWD>`). Use `pwd` to resolve `<CWD>` if needed.
 2. **Artifact ID** — the kebab-case slug naming this artifact. Must equal `<firm-slug>-co-investors`.
 3. **Carta connector display name** — `<CARTA_MCP_SERVER>` from Step A1.
 4. **Firm UUID** — from Step 1. The artifact calls `set_context` with this on every load, so the queries succeed even if the user switched contexts elsewhere.
 5. **Firm name** — the human-readable name. Also the first firm-vehicle match pattern.
 6. **Firm Carta ID** — the numeric organization pk, for the documents deep link.
 7. **Base URL** — `<base_url>` from Step 1.
-8. **Vehicles file** — optional; the absolute path from 2a, also under CWD and not under `/tmp`.
+8. **Vehicles file** — optional; the absolute path from 2a, also under CWD.
 
 On success the script prints one stdout line: the absolute output path. It exits non-zero on any validation failure (bad UUID, non-numeric Carta ID, base URL with a path or a non-https scheme, unusable connector name, output or vehicles file outside CWD, malformed vehicles file, missing template or placeholders). If it fails, surface the error and stop — do not fall back to hand-writing HTML.
 

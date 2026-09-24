@@ -194,12 +194,12 @@ it fails too, stop rather than hand-writing the HTML.
 
 Positional arguments:
 
-1. **Output path** — must be **absolute**, under the session's current working directory (`<CWD>`), and **not under `/tmp`**. Use `pwd` to resolve `<CWD>` if needed. Filename is `<firm-slug>-fund-soi-collection.html`.
+1. **Output path** — must be **absolute** and under the session's current working directory (`<CWD>`). Use `pwd` to resolve `<CWD>` if needed. Filename is `<firm-slug>-fund-soi-collection.html`.
 2. **Artifact ID** — the kebab-case slug that names this artifact. Must equal `<firm-slug>-fund-soi-collection`.
 3. **Carta connector display name** — `CARTA_MCP_SERVER` from Step 3.
 4. **Firm UUID** — the firm's UUID from Step 1. The artifact calls `set_context` with this on every load to pin the user's MCP firm context, so the dwh query succeeds even if the user switched contexts elsewhere.
 5. **Firm name** — the human-readable firm name from Step 1.
-6. **Funds file path** — the absolute path to the JSON file you wrote in 4a. Must also be under CWD and not under `/tmp`.
+6. **Funds file path** — the absolute path to the JSON file you wrote in 4a. Must also be under CWD.
 7. **Initial fund UUID** — the `initial_fund_uuid` chosen in Step 2. Must be one of the uuids in the funds file; the script refuses if it isn't.
 
 On success, the script prints one stdout line: the absolute output path. The script exits non-zero on any validation failure (bad UUID, unusable connector name, output or funds file outside CWD, empty funds list, malformed fund entries, initial_fund_uuid not present in the list, template missing, missing placeholders). If it fails, surface the error and abort.

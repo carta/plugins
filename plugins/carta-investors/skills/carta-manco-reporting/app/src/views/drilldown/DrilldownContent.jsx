@@ -149,7 +149,7 @@ export default function DrilldownContent({
   // month. Also respect the tag filter so the graph updates as pills toggle.
   const categoryMoM = useMemo(() => {
     if (selection?.kind !== "date-range-category") return null;
-    const monthly = [0, 0, 0, 0, 0, 0, 0];
+    const monthly = new Array(12).fill(0);
     const topSet = new Set(topCategoryNames);
     const matchesOther = (e) => e.kind === "expense" && !topSet.has(e.account);
     const categoryHits = entries.filter(e =>
@@ -176,6 +176,14 @@ export default function DrilldownContent({
   // `aggFiltered.total`: the tag pills below narrow the entry list, and a
   // variance that moved as pills toggled would be measuring a subset of the
   // actual against the whole budget.
+  // A year the ledger holds nothing for, but the schedule does — a
+  // closed year before the ManCo's books begin, or one it booked as a
+  // lump. Its figure is the schedule's, and there are no entries to
+  // count, so the entry furniture would only report zero.
+  const scheduleQuarters = mergeScheduleQuarters(selection);
+  const scheduleTotal = scheduleQuarters.reduce((sum, q) => sum + q.amount, 0);
+  const scheduleOnly = agg.count === 0 && scheduleQuarters.length > 0;
+
   const hasBudget = typeof selection.budget === "number";
   const variance = hasBudget && typeof selection.actual === "number"
     ? selection.actual - selection.budget
@@ -198,8 +206,10 @@ export default function DrilldownContent({
               cell the reader clicked, and a Total that moved as they ticked
               a box would stop being the thing they came to check — the
               footer carries the filtered figure instead. */}
-          <StatBlock label="Total" value={fmtCurrencyWhole(agg.total)} valueColor={netColor} />
-          <StatBlock label="Entries" value={String(agg.count)} />
+          <StatBlock label="Total"
+            value={fmtCurrencyWhole(scheduleOnly ? scheduleTotal : agg.total)}
+            valueColor={netColor} />
+          {!scheduleOnly && <StatBlock label="Entries" value={String(agg.count)} />}
           {hasBudget && (
             <StatBlock
               label="Budget"
@@ -345,15 +355,17 @@ export default function DrilldownContent({
       )}
 
       {/* Journal-entry table — narrowed by selected tags. */}
-      <div>
-        <div style={S.jeHeader}>
-          <ChartTitle>Carta journal entries</ChartTitle>
+      {!scheduleOnly && (
+        <div>
+          <div style={S.jeHeader}>
+            <ChartTitle>Carta journal entries</ChartTitle>
+          </div>
+          <EntriesTable
+            entries={tagFiltered}
+            buildJournalUrl={buildJournalUrl}
+          />
         </div>
-        <EntriesTable
-          entries={tagFiltered}
-          buildJournalUrl={buildJournalUrl}
-        />
-      </div>
+      )}
 
       {/* What the schedule still expects, after what posted — the quarters
           ahead follow the entries behind, in the order they happen. */}
@@ -370,12 +382,14 @@ export default function DrilldownContent({
           to "what did I just narrow this to" should not require scrolling
           to the end of the list to read. The count is of the whole filtered
           set, not of the rows built so far, and the total with it. */}
-      <div style={S.footer}>
-        <span style={S.footerCount}>
-          {`${aggFiltered.count} of ${agg.count} journal entries visible`}
-        </span>
-        <span style={S.footerTotal}>{fmtCurrencyWhole(aggFiltered.total)}</span>
-      </div>
+      {!scheduleOnly && (
+        <div style={S.footer}>
+          <span style={S.footerCount}>
+            {`${aggFiltered.count} of ${agg.count} journal entries visible`}
+          </span>
+          <span style={S.footerTotal}>{fmtCurrencyWhole(aggFiltered.total)}</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -787,7 +801,13 @@ function FeeScheduleSummary({ quarters, yearLabel }) {
                 <div style={SP.qtrPeriodName}>
                   {q.periodName}
                   {" · "}
-                  {q.booked ? "booked, split by schedule" : "not yet billed"}
+                  {q.booked ? "booked" : "not yet billed"}
+                  {/* Same quiet treatment an inferred entry carries: the
+                      figure is the schedule's, not a journal's. */}
+                  <span style={SP.inferred}
+                        title="Worked out from the fee schedule.">
+                    {" "}inferred
+                  </span>
                 </div>
               </span>
               <span style={SP.qtrDate}>{formatQtrDate(q.startDate)}</span>
@@ -1009,6 +1029,10 @@ const SP = {
   qtrPeriod: {
     flex: 1,
     minWidth: 64,
+  },
+  inferred: {
+    color: MICRO,
+    fontStyle: "italic",
   },
   qtrPeriodName: {
     ...sans,

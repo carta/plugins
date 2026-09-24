@@ -45,9 +45,9 @@ On success, one line is printed to stdout: the absolute output path. The calling
 skill publishes it with the Artifact tool, passing the existing artifact's `url`
 when one is already published so the page redeploys in place.
 
-Output path and funds-file path are constrained to live under CWD and not under
-/tmp. SKILL.md says the same thing in prose, but a prompt-injected LLM could
-pass an arbitrary path; the bounds checks are the actual enforcement.
+Output path and funds-file path are constrained to live under CWD. SKILL.md
+says the same thing in prose, but a prompt-injected LLM could pass an
+arbitrary path; the bounds check is the actual enforcement.
 """
 
 import html
@@ -55,6 +55,17 @@ import json
 import re
 import sys
 from pathlib import Path
+
+_LIB = next(p for p in Path(__file__).resolve().parents if (p / "lib" / "live_artifact_render").is_dir()) / "lib"
+sys.path.insert(0, str(_LIB))
+
+from live_artifact_render import (  # noqa: E402
+    ARTIFACT_ID_RE,
+    MCP_SERVER_RE,
+    UUID_RE,
+    check_path_under_cwd,
+    js_safe_json,
+)
 
 # Two ship locations with different template offsets; probing both keeps the
 # carta-soi and carta-portfolio-analytics-routing copies byte-identical.
@@ -102,58 +113,10 @@ PLACEHOLDERS = (
     "{{FIRM_UUID}}",
 )
 
-UUID_RE = re.compile(
-    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
-    re.IGNORECASE,
-)
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-# The artifact runtime addresses a connector by display name. Names are viewer-facing
-# text, so only reject what would break the page: empty, or a stray quote/angle bracket
-# that could escape the JS string literal it lands in.
-MCP_SERVER_RE = re.compile(r"^[^\r\n\'\"<>\\]{1,120}$")
-ARTIFACT_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]*[a-z0-9]$")
 
 # Must match the artifact's own ALL_ENTITIES_VALUE.
 ALL_ENTITIES_VALUE = "__all_entities__"
-
-
-
-def js_safe_json(obj) -> str:
-    """JSON-encode for embedding inside a <script> block.
-
-    Even a <script type="application/json"> block is closed by the FIRST
-    </script> in its content, so a fund name containing </script> would close
-    our state block early and leak its tail. Escape `<`, `>`, `&`, `'` to
-    their \\uXXXX form — still valid JSON, no longer hostile in HTML.
-    """
-    return (
-        json.dumps(obj, ensure_ascii=False)
-        .replace("<", "\\u003c")
-        .replace(">", "\\u003e")
-        .replace("&", "\\u0026")
-        .replace("'", "\\u0027")
-    )
-
-
-def check_path_under_cwd(p: Path, label: str) -> "Path | None":
-    """Return the resolved path if it lives under CWD and not under /tmp;
-    otherwise print an error and return None. Used for both <output> and
-    <funds_file> — the same bounds protect against a prompt-injected LLM
-    asking us to write or read arbitrary filesystem locations.
-    """
-    resolved = p.resolve()
-    cwd = Path.cwd().resolve()
-    tmp = Path("/tmp").resolve()
-    if not resolved.is_relative_to(cwd):
-        print(
-            f"error: {label} must be under the current working directory: {resolved}",
-            file=sys.stderr,
-        )
-        return None
-    if resolved.is_relative_to(tmp):
-        print(f"error: {label} must not be under /tmp: {resolved}", file=sys.stderr)
-        return None
-    return resolved
 
 
 def load_funds(funds_file: Path) -> "list | None":

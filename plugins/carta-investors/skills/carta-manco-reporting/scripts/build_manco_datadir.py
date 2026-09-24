@@ -1051,6 +1051,92 @@ def read_entity_roster(raw_dir):
     return out
 
 
+# A fund's series suffix, which is the whole of what tells two funds of one
+# family apart: "Fund III" from "Fund II", "IV" from "I".
+_FUND_SERIES_RX = re.compile(r"\b([IVXL]+|\d+)\b\s*(?:,|$|\s)", re.IGNORECASE)
+
+
+def _memo_fund_patterns(name):
+    """The ways a journal memo might name this fund, most specific first.
+
+    A memo rarely repeats a fund's legal name. It writes the series ("Fund
+    III"), or the house shorthand ("UVFIII") — initials of the name's own
+    words with the series appended. Both are derived from the roster name,
+    so no firm's vocabulary is hardcoded.
+    """
+    bare = _FUND_LEGAL_SUFFIX_RX.sub("", name or "").strip(" ,")
+    words = [w for w in re.findall(r"[A-Za-z0-9]+", bare)]
+    if not words:
+        return []
+    series = None
+    m = list(_FUND_SERIES_RX.finditer(bare + " "))
+    if m:
+        series = m[-1].group(1)
+    pats = [re.escape(bare)]
+    if series:
+        initials = "".join(w[0] for w in words if w.lower() != series.lower())
+        pats.append(re.escape(f"{initials}{series}"))
+        pats.append(r"fund\s+" + re.escape(series))
+    return pats
+
+
+def infer_fund_from_memo(descr, candidates):
+    """Which fund a memo names, or None.
+
+    `candidates` is [(uuid, name)]. Longest match wins, so "Fund III"
+    never resolves as "Fund I": a shorter series is only accepted when no
+    longer one matches the same text.
+    """
+    text = f" {(descr or '')} "
+    best = None
+    for uuid, name in candidates:
+        for pat in _memo_fund_patterns(name):
+            m = re.search(rf"(?<![A-Za-z0-9]){pat}(?![A-Za-z0-9])", text, re.IGNORECASE)
+            if m and (best is None or len(m.group(0)) > best[2]):
+                best = (uuid, name, len(m.group(0)))
+    return (best[0], best[1]) if best else None
+
+
+# Only digits behind ACCOUNT or a "**" mask. A bare number is a document id
+# or the period's own year, and matching those attributes a line at random.
+_MEMO_ACCOUNT_RX = re.compile(
+    r"(?:ACCOUNT\s+X*(\d{4,})|\*\*\s*(\d{4,}))", re.IGNORECASE)
+
+# The ManCo's own receiving account fails both bars: every fund's fees land
+# there, so no one fund dominates it.
+_ACCOUNT_MIN_LINES = 5
+_ACCOUNT_MIN_SHARE = 0.8
+
+
+def memo_bank_accounts(descr):
+    """The last four digits of every bank account a memo names."""
+    return {(a or b)[-4:] for a, b in _MEMO_ACCOUNT_RX.findall(descr or "")}
+
+
+def learn_bank_accounts(rows, fund_of):
+    """Which fund each bank account belongs to, learned from named lines.
+
+    `fund_of(row)` gives the fund a line already names, or None. An account
+    is only claimed when one fund holds nearly all of its lines: a fund's
+    own account reads that way, and the ManCo's receiving account cannot.
+    """
+    tally = {}
+    for row in rows:
+        uuid = fund_of(row)
+        if not uuid:
+            continue
+        for acct in memo_bank_accounts(row.get("descr")):
+            tally.setdefault(acct, {})
+            tally[acct][uuid] = tally[acct].get(uuid, 0) + 1
+    learned = {}
+    for acct, funds in tally.items():
+        uuid, n = max(funds.items(), key=lambda kv: kv[1])
+        total = sum(funds.values())
+        if n >= _ACCOUNT_MIN_LINES and n / total >= _ACCOUNT_MIN_SHARE:
+            learned[acct] = uuid
+    return learned
+
+
 def read_fund_fees(raw_dir):
     f = raw_dir / "fund-fees.txt"
     if not f.exists():
@@ -1240,40 +1326,23 @@ def _allocate_manco_fees(manco_entries, fee_schedule_terms, fund_uuids,
     for (yr, q), amt in unlinked.items():
         if not amt:
             continue
-        weights, terms = {}, {}
+        # An onboarding entry holds every pre-Carta year on one date. It
+        # is not that quarter's income, and it dwarfs the chart.
+        scheduled = 0.0
         for uid in fund_uuids:
             cap = committed.get(uid)
             if not cap:
                 continue
             est = _quarter_estimate(period_on, uid, cap, yr, q)
             if est:
-                terms[uid], weights[uid] = est
-        total_w = sum(weights.values())
-        # An onboarding entry holds every pre-Carta year on one date.
-        # It is not that quarter's income, and it dwarfs the chart.
-        if total_w > 0 and amt > CONVERSION_MULTIPLE * total_w:
+                scheduled += est[1]
+        if scheduled > 0 and amt > CONVERSION_MULTIPLE * scheduled:
             conversions[yr] = conversions.get(yr, 0.0) + amt
             continue
-        if total_w <= 0:
-            # Nothing was scheduled to bill that quarter, so there is no
-            # honest way to say whose the money was.
-            unattributed[yr] = unattributed.get(yr, 0.0) + amt
-            continue
-        for uid, w in weights.items():
-            share = amt * (w / total_w)
-            by_fund_year[(uid, yr)] = by_fund_year.get((uid, yr), 0.0) + share
-            if amt > 0:
-                booked_quarters.add((uid, yr, q))
-            p = terms[uid]
-            detail.setdefault((uid, yr), []).append({
-                "quarterLabel": f"Q{q} {yr}",
-                "periodName": p["name"],
-                "startDate": _date(yr, 3 * (q - 1) + 1, 1).isoformat(),
-                "endDate": _date(yr, 3 * q, _QUARTER_LAST_DAY[q]).isoformat(),
-                "feeRate": p["rate"],
-                "basis": p["basis"],
-                "amount": round(share, 2),
-            })
+        # Neither the line nor its description says whose this was.
+        # Spreading it across the funds by schedule would put a figure
+        # under a fund's name that nothing attributes to it.
+        unattributed[yr] = unattributed.get(yr, 0.0) + amt
 
     # A year the ManCo booked nothing for at all — its books start later
     # than the chart does. The schedule is the only account of it.
@@ -4237,16 +4306,51 @@ def build(args):
     # Rank it on what the ManCo booked against it, so it is not missed.
     roster = read_entity_roster(raw)
     manco_fee_rows = read_manco_fee_income(raw)
-    for r in manco_fee_rows:
+    # Every fund the roster knows, as a memo might write it.
+    _memo_candidates = [(v["uuid"], v["name"]) for v in roster.values()
+                        if v.get("uuid") and v.get("name")]
+    roster_name_by_uuid = dict(_memo_candidates)
+
+    def _keyed_fund(row):
+        """The fund a ManCo fee line names outright, through its key."""
         try:
-            ent = roster.get(int(r.get("related_entity_id") or 0)) or {}
+            ent = roster.get(int(row.get("related_entity_id") or 0)) or {}
+        except (TypeError, ValueError):
+            ent = {}
+        return ent.get("uuid")
+
+    def _named_fund(row):
+        """The fund a line names by key or in words, before any account."""
+        return _keyed_fund(row) or (
+            infer_fund_from_memo(row.get("descr"), _memo_candidates) or (None,))[0]
+
+    # Learned from the lines that name a fund, then read back onto those that
+    # do not: a fee wired from a fund's own account was that fund's fee.
+    _bank_accounts = learn_bank_accounts(manco_fee_rows, _named_fund)
+
+    def _manco_fund(row):
+        """The fund a ManCo fee line bills: its key, else memo, else account."""
+        uuid = _keyed_fund(row)
+        if uuid:
+            return uuid, roster_name_by_uuid.get(uuid), False
+        hit = infer_fund_from_memo(row.get("descr"), _memo_candidates)
+        if hit:
+            return hit[0], hit[1], True
+        for acct in memo_bank_accounts(row.get("descr")):
+            uuid = _bank_accounts.get(acct)
+            if uuid:
+                return uuid, roster_name_by_uuid.get(uuid), True
+        return None, None, False
+
+    for r in manco_fee_rows:
+        uid, nm, _ = _manco_fund(r)
+        try:
             amt = float(r["amt"])
         except (TypeError, ValueError):
             continue
-        uid = ent.get("uuid")
         if not uid:
             continue
-        fund_name_by_uuid.setdefault(uid, ent.get("name") or uid)
+        fund_name_by_uuid.setdefault(uid, nm or uid)
         fund_totals[uid] += amt
 
     _carta_id_by_uuid = {v["uuid"]: v.get("carta_id")
@@ -4294,12 +4398,9 @@ def build(args):
     # line names the fund it bills through RELATED_ENTITY_ID.
     manco_fee_entries = []
     for r in manco_fee_rows:
-        try:
-            rel = int(r.get("related_entity_id") or 0)
-        except (TypeError, ValueError):
-            rel = 0
-        ent = roster.get(rel) or {}
-        uuid = ent.get("uuid") or ""
+        _uid, _nm, _inferred = _manco_fund(r)
+        ent = {"uuid": _uid, "name": _nm} if _uid else {}
+        uuid = _uid or ""
         manco_fee_entries.append({
             "id":            r["id"],
             "gluuid":        r["gluuid"],
@@ -4319,6 +4420,9 @@ def build(args):
             "tags":          [],
             "display_fund":  display_name_by_uuid.get(uuid, "Other funds")
                              if uuid else "Unattributed",
+            # The line named no fund of its own; this one was read off its
+            # description. Carried so the reader is told, never silently.
+            "fund_inferred": _inferred,
             # Booked on the ManCo, whichever fund it bills.
             "entity_carta_id": args.manco_carta_id,
         })

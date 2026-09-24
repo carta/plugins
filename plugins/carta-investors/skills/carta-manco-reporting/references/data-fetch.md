@@ -353,7 +353,7 @@ SELECT JOURNAL_ENTRY_LINE_ID AS id, JOURNAL_ENTRY_GLUUID AS gluuid,
        ACCOUNT_NAME AS account, ACCOUNT_TYPE AS acct_type,
        COALESCE(RELATED_ENTITY_ID, 0) AS related_entity_id,
        -AMOUNT AS amt, COALESCE(EVENT_TYPE, '') AS event_type,
-       LEFT(COALESCE(JOURNAL_ENTRY_DESCRIPTION, ''), 70) AS descr
+       COALESCE(JOURNAL_ENTRY_DESCRIPTION, '') AS descr
 FROM JOURNAL_ENTRIES
 WHERE FIRM_ID = '<FIRM_UUID>'
   AND FUND_UUID = '<MANCO_UUID>'
@@ -363,6 +363,13 @@ WHERE FIRM_ID = '<FIRM_UUID>'
 ORDER BY yr DESC, EFFECTIVE_DATE, JOURNAL_ENTRY_LINE_ID
 LIMIT 1000
 ```
+
+**The description is taken whole, not truncated.** A migrated line names
+no fund in `RELATED_ENTITY_ID`, and the only record of which fund it
+billed is its own description — often in the tail, after the account
+number. Clipping it to a preview length silently costs a year of
+attribution: on one firm a 70-character limit cut "- Unusual Ventures
+Fund I, LP" off every 2021 line and left the whole year unattributed.
 
 **`RELATED_ENTITY_ID` is what keeps the chart per fund.** It is the
 numeric `id` from `fa__list__entities`, so `entities.json` resolves it to

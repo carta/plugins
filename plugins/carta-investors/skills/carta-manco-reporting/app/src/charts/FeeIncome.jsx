@@ -48,7 +48,9 @@ export default function FeeIncome({
   const expectedByFund = new Map(expectedRemaining.map((f) => [f.name, f.amount]));
   const expectedTotal = visible.reduce((sum, f) => sum + (expectedByFund.get(f.name) || 0), 0);
 
-  const showExpected = provisionalFrom != null && expectedTotal > 0;
+  // "Hide projections" hides every estimate, including this year's. The
+  // quarters it has yet to bill are a projection like any other.
+  const showExpected = showProjections && provisionalFrom != null && expectedTotal > 0;
 
   // Every estimate sits above every booked figure, in the fund's own
   // colour: the bar reads as what the ledger holds, then what is to come.

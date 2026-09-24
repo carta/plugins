@@ -351,7 +351,9 @@ export function tagKey(cat, val) {
 // Tag rollup is keyed by (category, value) tuples; the returned top_tags list
 // is grouped by category downstream in the UI.
 export function aggregate(entries) {
-  const monthly = [0, 0, 0, 0, 0, 0, 0];
+  // Twelve. Seeded with seven, a booking after July wrote past the end
+  // and left holes, which took the chart's whole scale with them.
+  const monthly = new Array(12).fill(0);
   const vendors = new Map();
   const tags    = new Map();  // key = tagKey(cat, val)
   const partners = new Map();
