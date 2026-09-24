@@ -1700,12 +1700,103 @@ function reviewHtml() {
     <div class="rv-rows" data-testid="review-rows">${rows}</div>
     ${tot}
     </div></div>
+    ${sealed ? "" : utilizationHtml(all.map((x) => x.vals))}
     ${terms ? `<p class="rv-terms-h" data-testid="review-terms-heading">${S.rows.length > 1 ? "Same for everyone" : "Terms"}</p>` : ""}
     <dl class="rv-terms" data-testid="review-terms">${terms}</dl>
     ${notes.same && notes.text ? `<p class="rv-s" data-testid="review-notes">Notes: ${esc(notes.text)}</p>` : ""}
     ${legendHtml()}
     ${sealed ? "" : `<p class="rv-commit" data-testid="review-commit">${esc(CONFIRM_LINE[S.type] || "")}</p>`}`;
 }
+/* ---------- utilization ----------
+   The Carta app's review bar, one per plan or class this batch draws from. The counts
+   are the bootstrap's, as of boot, and carta-web leaves unissued drafts out of
+   `available` — so the form's own rows are the whole of "this issuance". */
+const count = (v) => (v === "" || v == null || !Number.isFinite(Number(v)) ? null : Number(v));
+const qtyFmt = (n) => n.toLocaleString(undefined, { maximumFractionDigits: 4 });
+
+/** Draws from, keyed by plan id or class prefix, in row order with the shared one first. */
+function utilizationDraws(vals) {
+  const by = new Map();
+  const add = (kind, id, q) => {
+    if (id === "" || id == null || id === AS_SAVED) return;
+    const key = `${kind}:${id}`;
+    const e = by.get(key) || { kind, id: String(id), q: 0 };
+    // Rounded to the review table's 4 places, so decimal units never read as "Over by 0".
+    e.q = Math.round((e.q + q) * 1e4) / 1e4;
+    by.set(key, e);
+  };
+  for (const d of vals) {
+    const q = Number(d.quantity || 0);
+    if (S.type === "option_grant") add("plan", S.shared.option_plan_id, q);
+    else {
+      add("class", d.prefix, q);
+      if (S.type === "piu") add("plan", d.option_plan, q);
+    }
+  }
+  const shared = (e) => e.id === String(S.shared[e.kind === "class" ? "prefix" : "option_plan"]);
+  const rank = (e) => (e.kind === "class" ? 0 : 2) - (shared(e) ? 1 : 0);
+  return [...by.values()].sort((a, b) => rank(a) - rank(b));
+}
+
+/** Null when Carta sent nothing to draw from, which an older carta-mcp does. */
+function utilizationPool(e) {
+  if (e.kind === "plan") {
+    const p = objs(S.plans).find((x) => String(x.id) === e.id);
+    const avail = p && count(p.available_quantity);
+    if (avail == null || count(p.size) == null) return null;
+    // A flexible sub-pool reports its parent's headroom, which can exceed its own size.
+    const total = Math.max(count(p.size), avail);
+    return { name: p.name || "Unnamed plan", total, avail, issued: total - avail, reserved: 0,
+      usedWord: "Already granted", totalWord: "in the plan", grow: "plan" };
+  }
+  const c = objs(S.classes).find((x) => x.prefix === e.id);
+  if (!c || count(c.available) == null) return null;
+  const name = c.name || c.prefix;
+  const authorized = count(c.authorized);
+  if (authorized == null) return { name, noAuthorized: true };
+  const avail = Math.max(count(c.available), 0);
+  const total = Math.max(authorized, avail);
+  const issued = Math.min(Math.max(count(c.outstanding) || 0, 0), total - avail);
+  const unit = isPiuLike() ? "units" : "shares";
+  return { name, total, avail, issued, reserved: total - avail - issued,
+    usedWord: "Issued", totalWord: "authorized", grow: `authorized ${unit}`,
+    reservedWord: c.is_common ? "Reserved for plans & warrants" : "Reserved for warrants" };
+}
+
+function utilizationHtml(vals) {
+  const noun = qtyNoun()[1];
+  const blocks = utilizationDraws(vals).map((e, i) => {
+    const u = utilizationPool(e);
+    if (!u) return "";
+    const id = `utilization-${i}`;
+    if (u.noAuthorized) {
+      return `<p class="rv-s ut-p" data-testid="${id}-no-authorized">Carta has no authorized ${isPiuLike() ? "unit" : "share"} count for ${esc(u.name)}, so its utilization can't be shown.</p>`;
+    }
+    const q = e.q, over = Math.max(q - u.avail, 0), left = Math.max(u.avail - q, 0);
+    const span = u.total + over;
+    if (span <= 0) return "";
+    const w = (n) => `${(n / span * 100).toFixed(3)}%`;
+    const seg = (cls, n, tip, grow) => (n > 0
+      ? `<i class="${cls}" style="flex:${grow ? "1 1 0" : `0 0 ${w(n)}`}" title="${esc(tip)}"></i>` : "");
+    const items = [["ut-used", u.usedWord, u.issued]];
+    if (u.reserved > 0) items.push(["ut-res", u.reservedWord, u.reserved]);
+    items.push(["ut-new", "This issuance", q]);
+    items.push(over ? ["ut-over", "Over by", over] : ["ut-left", "Left", left]);
+    const label = `${u.name}: ${qtyFmt(u.issued + u.reserved)} used, ${qtyFmt(q)} in this issuance, `
+      + (over ? `${qtyFmt(over)} more than is left` : `${qtyFmt(left)} left`);
+    return `<div class="ut-p" data-testid="${id}">
+      <p class="ut-h"><b>${esc(u.name)} utilization</b> <span class="rv-s">· ${qtyFmt(u.total)} ${u.totalWord}</span></p>
+      <div class="ut-bar" role="img" aria-label="${esc(label)}">${seg("ut-used", u.issued, `${u.usedWord}: ${qtyFmt(u.issued)}`)}${seg("ut-res", u.reserved, `${u.reservedWord}: ${qtyFmt(u.reserved)}`)}${seg("ut-new", Math.min(q, u.avail), `This issuance: ${qtyFmt(q)} ${noun}`)}${seg("ut-left", left, `Left after this issuance: ${qtyFmt(left)}`, true)}${seg("ut-over", over, `Over by ${qtyFmt(over)} ${noun}`, true)}</div>
+      <div class="ut-lg" data-testid="${id}-legend">${items.map(([cls, word, n]) =>
+        `<span><i class="${cls}"></i>${esc(word)} <b>${qtyFmt(n)}</b></span>`).join("")}</div>
+      ${over ? `<div class="ut-over-note" role="alert" data-testid="${id}-over"><b>This issuance asks for ${qtyFmt(q)} ${noun}, ${qtyFmt(over)} more than ${esc(u.name)} has left (${qtyFmt(u.avail)}).</b> Lower a quantity, or increase the ${u.grow} in Carta before you issue.</div>` : ""}
+    </div>`;
+  }).filter(Boolean);
+  if (!blocks.length) return "";
+  return `<div class="ut" data-testid="review-utilization">${blocks.join("")}
+    <p class="rv-s">As of when this page opened. Other drafts that aren't issued yet aren't counted.</p></div>`;
+}
+
 /** The holder attests to the legend's words, not its template name, so the full body is
     readable here before Confirm. `legend_body` is review-only and never sent — the
     server resolves the body from legend_id. */

@@ -22,6 +22,9 @@
       /* A row's own term wears the tint the review uses for a differing value. */
       --issuance-dif-bg: color-mix(in srgb, var(--ink-color-global-brand-orange-60) 14%, transparent);
       --issuance-dif-line: color-mix(in srgb, var(--ink-color-global-brand-orange-60) 45%, transparent);
+      /* Utilization bar. The used share stays neutral so this issuance is what stands out. */
+      --issuance-ut-used: light-dark(#7E8787, #5F6969);
+      --issuance-ut-new: light-dark(#285DA3, #6391D6);
       /* Glyphs are data-URI SVGs used as masks: a mask takes its colour from the
          token under it, so one asset serves both themes. No icon font is loadable. */
       --ink-glyph-caret: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.75 4.5 6 7.75 9.25 4.5' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
@@ -353,6 +356,30 @@
     .rv-terms div { min-width: 0; }
     .rv-terms dt { font-size: 11px; color: var(--ink-color-global-brand-gray-70); }
     .rv-terms dd { font-size: 13px; }
+
+    /* Utilization: one bar per plan or class, under the totals. */
+    .ut { margin-top: var(--ink-spacing-global-vertical-medium); display: grid; gap: var(--ink-spacing-global-vertical-small); }
+    .ut-p { display: grid; gap: 6px; }
+    .ut-h { font-size: 13px; }
+    .ut-h b { font-weight: 500; }
+    .ut-bar { display: flex; gap: 2px; height: 12px; }
+    .ut-bar > i { display: block; min-width: 0; }
+    .ut-bar > i:first-child { border-top-left-radius: 4px; border-bottom-left-radius: 4px; }
+    .ut-bar > i:last-child { border-top-right-radius: 4px; border-bottom-right-radius: 4px; }
+    .ut-used { background: var(--issuance-ut-used); }
+    .ut-res { background: repeating-linear-gradient(135deg, var(--issuance-ut-used) 0 2px, transparent 2px 5px); box-shadow: inset 0 0 0 1px var(--issuance-ut-used); }
+    .ut-new { background: var(--issuance-ut-new); }
+    /* Never thinner than a line, however small the batch is against the class. */
+    .ut-bar > .ut-new { min-width: 3px; }
+    .ut-left { background: var(--ink-color-global-brand-gray-30); }
+    .ut-over { background: repeating-linear-gradient(45deg, var(--ink-color-global-brand-red-60) 0 3px, transparent 3px 6px); box-shadow: inset 0 0 0 1.5px var(--ink-color-global-brand-red-60); }
+    .ut-lg { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--ink-color-global-brand-gray-90); }
+    .ut-lg span { display: inline-flex; align-items: center; gap: 6px; }
+    .ut-lg i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+    .ut-lg b { font-weight: 600; font-variant-numeric: tabular-nums; }
+    .ut-over-note { font-size: 13px; padding: 8px 12px; border-radius: 8px; border-left: 3px solid var(--ink-color-global-brand-red-60);
+      background: color-mix(in srgb, var(--ink-color-global-brand-red-60) 10%, transparent); }
+    .ut-over-note b { font-weight: 600; color: var(--ink-color-global-brand-red-60); }
 
     /* The holder attests to these words, so they are readable, selectable and wrap
        rather than scroll off. */
