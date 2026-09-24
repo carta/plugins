@@ -1,7 +1,7 @@
 /* ---------- bring-up ---------- */
 // Baked at build time. SEED is what the prompt supplied — stakeholders, quantity,
-// issue_date, rows — never a server payload. Identity comes from the build, because
-// the page's title and build id are per company and per security type.
+// issue_date, rows, a document's terms — never a server payload. Identity comes from the
+// build, because the page's title and build id are per company and per security type.
 const CORP_ID = {{CORPORATION_ID}};
 const COMPANY_NAME = {{COMPANY_NAME_JSON}};
 const SECURITY_TYPE = "{{SECURITY_TYPE}}";
@@ -32,6 +32,7 @@ function promptPrefill() {
   const p = {};
   if (rows.length) p.rows = rows;
   if (SEED.issue_date) p.issueDate = SEED.issue_date;
+  if (SEED.terms && typeof SEED.terms === "object") p.terms = SEED.terms;
   return p;
 }
 

@@ -20,8 +20,8 @@ Source parts (all in the skill's resources/ dir):
 
 One built page serves one company and one security type. `--seed` takes a PATH to a
 JSON file, never an inline payload. The seed is what the *prompt* supplied — names,
-quantity, issue date, or rows from the import sub-skill — so the page can prefill the
-form on first paint and resolve those names against the cap table itself. An absent or
+quantity, issue date, a document's terms, or rows from the import sub-skill — so the page
+can prefill the form on first paint and resolve those names against the cap table itself. An absent or
 empty seed is fine: the page then opens with one blank recipient row.
 
 `--preview` builds a development page instead: all three types, their review stages
@@ -81,7 +81,17 @@ SECURITY_TYPES = ("option_grant", "certificate", "piu")
 
 # Everything the seed may carry — the prompt's own knowns, per
 # skills/carta-issuance/references/artifact-surface.md. Not a server payload.
-SEED_KEYS = ("stakeholders", "quantity", "issue_date", "rows", "draft_set_id")
+SEED_KEYS = ("stakeholders", "quantity", "issue_date", "rows", "draft_set_id", "terms")
+
+# What an award document or the prompt stated about the security itself. The page matches
+# the named ones (plan, class, vesting) against the company's own lists.
+TERM_KEYS = ("option_plan", "grant_type", "exercise_price", "board_approval_date", "vesting",
+             "vesting_start_date", "term_years", "grant_expiration_date", "early_exercise",
+             "share_class", "price_per_share", "threshold_value")
+TERM_DATES = ("board_approval_date", "vesting_start_date", "grant_expiration_date")
+TERM_NUMBERS = ("exercise_price", "term_years", "price_per_share", "threshold_value")
+VESTING_KEYS = ("text", "months", "cliff_months")
+ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 # One person the prompt named. The page reads the name only from `name`, so the other
 # spellings a model reaches for are folded into it rather than opening nameless rows.
@@ -228,7 +238,48 @@ def normalize_seed(seed):
         if not isinstance(names, list):
             sys.exit("ERROR: seed 'stakeholders' must be a list")
         seed["stakeholders"] = [_person(n) for n in names]
+    if isinstance(seed.get("terms"), dict):
+        seed["terms"] = normalize_terms(seed["terms"])
     return seed
+
+
+def check_terms(terms):
+    """A term the page cannot read would open a form that quietly drops it."""
+    if not isinstance(terms, dict):
+        sys.exit("ERROR: seed 'terms' must be an object")
+    unknown = sorted(k for k in terms if k not in TERM_KEYS)
+    if unknown:
+        sys.exit("ERROR: unknown term(s): {} — 'terms' holds only {}".format(
+            ", ".join(unknown), ", ".join(TERM_KEYS)))
+    for k in TERM_DATES:
+        if terms.get(k) not in (None, "") and not ISO_DATE_RE.match(str(terms[k])):
+            sys.exit("ERROR: term '{}' must be a YYYY-MM-DD string".format(k))
+    for k in TERM_NUMBERS:
+        v = terms.get(k)
+        if v in (None, ""):
+            continue
+        try:
+            float(str(v).replace(",", "").lstrip("$"))
+        except ValueError:
+            sys.exit("ERROR: term '{}' must be a number".format(k))
+    vesting = terms.get("vesting")
+    if isinstance(vesting, dict):
+        extra = sorted(k for k in vesting if k not in VESTING_KEYS)
+        if extra:
+            sys.exit("ERROR: unknown key(s) {} on term 'vesting' — it holds only {}".format(
+                ", ".join(extra), ", ".join(VESTING_KEYS)))
+    elif vesting is not None and not isinstance(vesting, str):
+        sys.exit("ERROR: term 'vesting' must be the document's words or "
+                 '{"text": ..., "months": ..., "cliff_months": ...}')
+
+
+def normalize_terms(terms):
+    """Numbers as plain strings — "$1.45" and "1,000" reach the form as 1.45 and 1000."""
+    out = {k: v for k, v in terms.items() if v not in (None, "")}
+    for k in TERM_NUMBERS:
+        if k in out:
+            out[k] = str(out[k]).replace(",", "").lstrip("$").strip()
+    return out
 
 
 def check_seed_shape(seed):
@@ -249,6 +300,8 @@ def check_seed_shape(seed):
         sys.exit("ERROR: seed 'quantity' must be a number or a string")
     if not isinstance(seed.get("issue_date", ""), str):
         sys.exit("ERROR: seed 'issue_date' must be a YYYY-MM-DD string")
+    if "terms" in seed:
+        check_terms(seed["terms"])
     # A draft_pk only means anything inside its own set. Without the set id the save
     # mints a second draft set of the same rows.
     pks = [r for r in (rows or []) if r.get("draft_pk") is not None]
@@ -333,8 +386,8 @@ def main():
                          "state, with every write to Carta refused in the transport")
     ap.add_argument("--seed",
                     help="PATH to a JSON file holding what the prompt supplied: "
-                         "stakeholders (names verbatim), quantity, issue_date, rows, and "
-                         "draft_set_id on a resume. Omit it when the prompt named nobody "
+                         "stakeholders (names verbatim), quantity, issue_date, terms, rows, "
+                         "and draft_set_id on a resume. Omit it when the prompt named nobody "
                          "and no terms")
     ap.add_argument("--out", required=True, help="output HTML path")
     args = ap.parse_args()

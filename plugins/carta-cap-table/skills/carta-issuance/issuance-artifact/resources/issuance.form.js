@@ -166,7 +166,10 @@ function ingest(data) {
   // A resume: saveArgs() then updates this set instead of minting a second one.
   S.draftSetId = d.draftSetId ?? d.draft_set_id ?? S.draftSetId;
   S.counts = d.counts || {};
+  // The server's prefill never carries the document's terms, so they outlive its arrival.
+  const terms = S.prefill.terms;
   S.prefill = d.prefill || {};
+  if (terms && !S.prefill.terms) S.prefill.terms = terms;
   S.blockers = objs(d.blockers);
   S.narrowed = d._narrowed || null;
   if (d.prefill && d.prefill.thresholdNoun) S.thresholdNoun = d.prefill.thresholdNoun;
@@ -197,7 +200,8 @@ function seedShared() {
     sh.so_type = p.soType || "";
     sh.exercise_price = p.exercisePrice != null ? String(p.exercisePrice) : "";
     sh.document_set_id = p.documentSetId ? String(p.documentSetId) : "";
-    sh.grant_expiration_date = iso(p.grantExpirationDate) || "";
+    // A fresh form derives it in grantExpiry(); the server's copy caps it at the plan's end.
+    sh.grant_expiration_date = freshSet() ? "" : iso(p.grantExpirationDate) || "";
     sh.board_mode = p.boardApprovalDate ? "approved" : "pending";
     sh.board_approval_date = iso(p.boardApprovalDate) || issue;
     sh.early_exercise = false;
@@ -223,11 +227,145 @@ function seedShared() {
     sh.document_set_id = p.documentSetId ? String(p.documentSetId) : "";
     sh.corresponding_interest = false;
   }
+  if (freshSet()) applySeedTerms(sh);
   S.shared = sh;
   // Which so_type the currency was stamped for. A fresh seed has stamped none.
   S.curFor = null;
   // A set that came in with the seed was chosen already, in chat or on the saved draft.
   S.docPicked = !!p.documentSetId;
+}
+
+/* ---------- the document's terms ----------
+   What an award document or the prompt stated, carried in the seed's `terms`. A stated
+   term beats every derived default. A resumed set's terms are Carta's, so none apply. */
+const freshSet = () => S.draftSetId == null || S.draftSetId === "";
+function seedTerm(k) {
+  const t = S.prefill.terms;
+  const v = t && typeof t === "object" ? t[k] : null;
+  return v == null || v === "" ? null : v;
+}
+const yes = (v) => v === true || /^(true|yes|y|1)$/i.test(String(v).trim());
+/** A document's words for a grant type, in the vocabulary SO offers. */
+function soTypeOf(v) {
+  const s = String(v).trim();
+  if (/^iso$|incentive stock/i.test(s)) return "ISO";
+  if (/^n(q)?so$|^nq$|non.?(qualified|statutory)/i.test(s)) return "NSO";
+  const all = Object.values(SO).flat();
+  return all.find((x) => x.toLowerCase() === s.toLowerCase()) || "";
+}
+
+function applySeedTerms(sh) {
+  const board = seedTerm("board_approval_date");
+  if (iso(board)) {
+    sh.board_approval_date = iso(board);
+    if (S.type === "option_grant") sh.board_mode = "approved";
+  }
+  if (iso(seedTerm("vesting_start_date"))) sh.vesting_start_date = iso(seedTerm("vesting_start_date"));
+  if (S.type === "option_grant") {
+    if (seedTerm("grant_type")) sh.so_type = soTypeOf(seedTerm("grant_type")) || sh.so_type;
+    if (seedTerm("exercise_price") != null) sh.exercise_price = String(seedTerm("exercise_price"));
+    if (iso(seedTerm("grant_expiration_date"))) sh.grant_expiration_date = iso(seedTerm("grant_expiration_date"));
+    if (seedTerm("early_exercise") != null) sh.early_exercise = yes(seedTerm("early_exercise"));
+  } else if (S.type === "certificate") {
+    if (seedTerm("price_per_share") != null) sh.law_firm_price = String(seedTerm("price_per_share"));
+  } else if (seedTerm("threshold_value") != null) {
+    sh.threshold_value = String(seedTerm("threshold_value"));
+  }
+}
+
+const termKey = (s) => String(s == null ? "" : s).toLowerCase().replace(/\bone\b/g, "1")
+  .replace(/[^a-z0-9]+/g, " ").replace(/\b(year|month)s\b/g, "$1").trim();
+/** The one option whose name is the term's, else the one whose name holds it or is held
+    by it — "IMIM, Inc. Equity Incentive Plan" is the plan named "Equity Incentive Plan".
+    Two candidates is no match: which one is the user's call. */
+function matchByName(list, term, nameOf) {
+  const want = termKey(term);
+  if (!want) return null;
+  const exact = list.filter((x) => termKey(nameOf(x)) === want);
+  if (exact.length) return exact.length === 1 ? exact[0] : null;
+  const near = list.filter((x) => {
+    const n = termKey(nameOf(x));
+    return n && (want.includes(n) || n.includes(want));
+  });
+  return near.length === 1 ? near[0] : null;
+}
+
+/** The schedule's text as the document put it, for the hint that asks for a pick. */
+function vestText() {
+  const v = seedTerm("vesting");
+  if (!v) return "";
+  return typeof v === "object" ? String(v.text || v.name || "") : String(v);
+}
+/** {months, cliff, immediate, every} from a document's words; a structured seed wins. */
+function vestShape(v) {
+  const o = v && typeof v === "object" ? v : {};
+  const s = termKey(typeof v === "object" ? o.text || o.name : v);
+  const every = /quarter/.test(s) ? 3 : /annual|yearly/.test(s) ? 12 : /month/.test(s) ? 1 : null;
+  if (/fully vested|immediate|100 vest/.test(s)) return { months: 0, cliff: 0, immediate: true, every };
+  const cm = /(\d+) ?(year|month) cliff|cliff of (\d+) ?(year|month)/.exec(s);
+  const cliff = o.cliff_months != null ? Number(o.cliff_months)
+    : cm ? Number(cm[1] || cm[3]) * ((cm[2] || cm[4]) === "year" ? 12 : 1) : 0;
+  const rest = cm ? s.replace(cm[0], " ") : s;
+  const frac = /\b1 (\d+)(?:th)?\b/.exec(rest);
+  const mo = /(\d+) month/.exec(rest);
+  const yr = /(\d+) year/.exec(rest);
+  const months = o.months != null ? Number(o.months)
+    : frac ? Number(frac[1]) * (every || 1) : mo ? Number(mo[1]) : yr ? Number(yr[1]) * 12 : null;
+  return { months, cliff, immediate: false, every };
+}
+const PERIOD_MONTHS = { Year: 12, Month: 1, Day: 0 };
+/** A template's schedule in the same shape. `remaining_months` counts the cliff's months. */
+function tmplShape(t) {
+  const every = /quarter/i.test(t.remaining_method || "") ? 3
+    : /year|annual/i.test(t.remaining_method || "") ? 12 : 1;
+  return {
+    months: Number(t.remaining_months || 0),
+    cliff: t.cliff_count ? Number(t.cliff_count) * (PERIOD_MONTHS[t.cliff_period] ?? 1) : 0,
+    immediate: Number(t.immediate_percentage || 0) >= 100,
+    every,
+  };
+}
+/** The one template the document's schedule names: by name first, then by shape. A
+    boxcar, milestone or performance template only ever matches by name. */
+function matchVesting() {
+  const v = seedTerm("vesting");
+  if (!v || !S.vesting.length) return null;
+  const named = matchByName(S.vesting, vestText(), (t) => t.name);
+  if (named) return named;
+  const want = vestShape(v);
+  if (!want.immediate && !want.months) return null;
+  const hits = S.vesting.filter((t) => {
+    if (t.is_boxcar_vesting || t.has_performance_condition || /milestone/i.test(t.vesting_type || "")) return false;
+    const got = tmplShape(t);
+    if (want.immediate || got.immediate) return want.immediate === got.immediate;
+    return got.months === want.months && got.cliff === want.cliff && (!want.every || got.every === want.every);
+  });
+  return hits.length === 1 ? hits[0] : null;
+}
+/** The document named a schedule this company has no single template for. */
+const vestUnmatched = () => freshSet() && !!seedTerm("vesting") && S.shared.vesting_template === "";
+
+/** The reference-data half of the document's terms, once that data is in. A term the
+    user has set since is theirs. */
+function fillSeedTerms(sh) {
+  if (!freshSet()) return;
+  const mine = (k) => S.touchedShared.has(k);
+  if (seedTerm("option_plan") && S.type !== "certificate") {
+    const k = S.type === "option_grant" ? "option_plan_id" : "option_plan";
+    const pool = S.type === "option_grant" ? selectablePlans() : S.plans;
+    const p = !mine(k) && matchByName(pool, seedTerm("option_plan"), (x) => x.name);
+    if (p) sh[k] = String(p.id);
+  }
+  if (seedTerm("share_class") && S.type !== "option_grant" && !mine("prefix")) {
+    const c = matchByName(S.classes, seedTerm("share_class"), (x) => x.name || x.prefix)
+      || S.classes.find((x) => termKey(x.prefix) === termKey(seedTerm("share_class")));
+    if (c) sh.prefix = c.prefix || "";
+  }
+  if (seedTerm("vesting") && S.vesting.length && !mine("vesting_template")) {
+    const t = matchVesting();
+    // Blank rather than "No vesting": a stated schedule must never go out as none.
+    sh.vesting_template = t ? String(t.id) : "";
+  }
 }
 
 /** One row per person the user actually named. An `ambiguous` entry creates NO row. */
@@ -557,6 +695,7 @@ function applyDerived() {
 
 function fillDefaults(sh) {
   // Sole option plan / document set / legend / vesting-free class default silently.
+  fillSeedTerms(sh);
   const plans = selectablePlans();
   if (S.type === "option_grant" && !sh.option_plan_id && plans.length === 1) sh.option_plan_id = String(plans[0].id);
   pickDocSet();
@@ -709,23 +848,22 @@ function chosenClass() { return S.classes.find((c) => c.prefix === S.shared.pref
 function tmpl() { return S.vesting.find((t) => String(t.id) === String(S.shared.vesting_template)); }
 const isMilestone = () => { const t = tmpl(); return !!t && /milestone/i.test(t.vesting_type || ""); };
 
-/** min(issue_date + plan term [- 1 day], plan.expiration_date). Silent default.
+/** issue_date + term [- 1 day], as Carta's Drafts and board-consent flows compute it: the
+    document's term when it stated one, else the plan's grant term. The plan's own end date
+    only stops new grants, so it never shortens one. Silent default.
     `from` is the row's own issue date where it overrode the batch's. */
 function grantExpiry(from) {
   const p = plan(); const base = from || S.shared.issue_date;
   if (!p || !base) return S.shared.grant_expiration_date || "";
   // A non-numeric term makes the Date invalid, and `toISOString` on an invalid Date
   // throws — inside `spec()`, which every render walks.
-  const term = Number(p.expiration_years ?? p.option_term_years ?? 10);
+  const term = Number(seedTerm("term_years") ?? p.expiration_years ?? p.option_term_years ?? 10);
   const yrs = Number.isFinite(term) ? term : 10;
   const d = new Date(`${base}T00:00:00Z`);
   d.setUTCFullYear(d.getUTCFullYear() + yrs);
   if (p.minus_one_day !== false) d.setUTCDate(d.getUTCDate() - 1);
   if (Number.isNaN(d.getTime())) return S.shared.grant_expiration_date || "";
-  let end = d.toISOString().slice(0, 10);
-  const cap = iso(p.expiration_date);
-  if (cap && cap < end) end = cap;
-  return end;
+  return d.toISOString().slice(0, 10);
 }
 
 const candidates = () => arr(S.prefill.jurisdictionCandidates).filter((c) => SO[c]);
@@ -1043,8 +1181,10 @@ function spec(board) {
   const F = (k, label, kind, x) => s.push(mfApply(Object.assign({ k, label, kind }, x || {})));
   const vest = () => {
     // "No vesting" is a real option and the default, so a blank one above it would
-    // be a second way to say the same thing.
-    F("vesting_template", "Vesting", "sel", { opts: vestOpts(), over: 1, noPh: 1 });
+    // be a second way to say the same thing — unless the document stated a schedule.
+    const ask = vestUnmatched() && `The document says “${vestText()}”. Pick the schedule that matches.`;
+    F("vesting_template", "Vesting", "sel", { opts: vestOpts(), over: 1, noPh: !ask,
+      req: ask && "a vesting schedule", reqMsg: ask, hint: ask || "", hintCls: ask ? "warn" : "" });
     const real = sh.vesting_template && sh.vesting_template !== NONE;
     if (real && !isMilestone()) {
       F("vesting_start_date", "Vesting start", "date", { over: 1, req: "a vesting start date" });
@@ -2116,7 +2256,7 @@ function validate(write) {
     const id = `shared-${d.k}`, v = specVal(d);
     if (v === AS_SAVED) continue;
     const blank = v === "" || v == null;
-    if (d.req) need(id, d.req, !blank);
+    if (d.req) need(id, d.req, !blank, d.reqMsg);
     if (blank) continue;
     // Through `need`, not `e` alone: `missing` is what the footer counts, so a
     // field left out of it paints red and lets Issue through anyway.

@@ -36,7 +36,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.90.12</carta-plugin>
+<carta-plugin>carta-cap-table:6.90.13</carta-plugin>
 
 # Issue Securities
 
@@ -212,10 +212,14 @@ uv run "$SKILL/issuance-artifact/scripts/build_artifact.py" \
 - **No `--corporation-id`.** The page resolves the name. Add `--corporation-id <n>` only
   when you already hold a bare numeric id — from the fallback lookup, or from a resume.
 - `--seed` takes a **path**, never an inline blob. Omit it entirely when the prompt named
-  nobody and no terms; the page then opens with one blank recipient row, which is correct.
-- Seed keys: `stakeholders` (names verbatim), `quantity`, `issue_date`, and `rows` when the
-  import sub-skill produced them. Nothing else — an unknown key fails the build rather than
-  opening a form that quietly ignores it.
+  nobody and no terms; the page then opens with one blank recipient row.
+- Seed keys: `stakeholders` (names verbatim), `quantity`, `issue_date`, `terms`, and `rows`
+  from the import sub-skill. An unknown key fails the build.
+- **`terms` carries every term the document or prompt states**, in its words; the page
+  matches names to Carta's lists and asks only for what matches nothing:
+  `{"option_plan": "<plan name>", "grant_type": "<ISO|NSO|…>", "exercise_price": "<price>", "board_approval_date": "<YYYY-MM-DD>", "vesting": {"text": "<the schedule's words>", "months": <total>, "cliff_months": <cliff>}, "term_years": <years>}`.
+  Also `vesting_start_date`, `grant_expiration_date`, `early_exercise`, `share_class`,
+  `price_per_share`, `threshold_value`. Omit unstated ones.
 - **Different quantities per person** go on each entry, never dropped:
   `{"stakeholders": [{"name": "Tagg Palmer", "quantity": 100}, {"name": "Emily Wilson", "quantity": 50}]}`.
   Top-level `quantity` is for everyone without one of their own.
@@ -224,12 +228,11 @@ uv run "$SKILL/issuance-artifact/scripts/build_artifact.py" \
   terms back itself; seed `load_drafts` rows, each with its `draft_pk`, only as its fallback
   ([resume-flow.md](references/resume-flow.md)). Never relay terms.
 - **`--out` is a stable path for this company and type** — a lowercase company slug plus
-  the type, as above. Republishing the same path in one conversation keeps the artifact's
-  URL.
+  the type, as above.
 - The script exits non-zero and names the problem on a bad id, a missing part, or an
   unresolved placeholder. Surface that verbatim and stop — a build fault, not a retry.
 
-**Never read the built file back** — it's ~135KB this path exists to keep out of context.
+**Never read the built file back** — ~135KB kept out of context.
 
 ### 3. Publish it
 
@@ -263,15 +266,12 @@ Never guess a name from a readable prefix. The publish never checks it — right
 reads the same — so if the user says the page can't see Carta after a step 2 name, their
 connector was renamed: republish with step 3.
 
-- **Omit `url`; skip `action: "list"`.** The same file path in the same conversation
-  redeploys to the same URL. An *earlier* conversation's artifact hands you its whole
-  ~135KB page, which you're replacing anyway.
+- **Omit `url`; skip `action: "list"`.** The same file path redeploys to the same URL.
 - `icon` goes on the first publish only; omit on redeploy.
 - Restate the **whole** `capabilities` object on any redeploy that passes it: a non-empty
   object replaces the stored grant, so an omitted capability is revoked. Omit the field
   entirely to carry the grant forward — the cheaper redeploy.
-- Keep `tools` at that one. It's a viewer-consented grant; every Carta command goes
-  through the `call_tool` proxy.
+- Keep `tools` at that one: every Carta command goes through the `call_tool` proxy.
 
 **Read the publish result's warnings.** One matters: an unresolved connector name means
 the grant isn't wired and every card comes up empty — that sends this run to
@@ -360,8 +360,7 @@ closing line:
 
 - **Don't ask who the recipients are, or anything the form collects** — a blank field on
   the form is the question.
-- **Don't pre-ask for a computable value.** Exercise price, grant expiration, jurisdiction
-  and sole-option defaults are all things the page derives and shows.
+- **Don't pre-ask for a computable value** — the page derives and shows it.
 - **Don't stack an `AskUserQuestion` on the open page** for anything the page collects. It's
   unrestricted for a genuine fork the page can't present — two Carta environments, a mixed
   security type — and for recovery after a server rejection.
