@@ -1050,6 +1050,47 @@
 .ccr-np > span:first-child { flex: none; width: 140px; font-weight: 600; }
 .ccr-np > span:last-child { flex: 1; color: var(--ink-color-global-text-subtle); }
 
+/* Delivery tab: a labelled section per concern, and an investor table in a
+   fixed-height box so a long fund scrolls inside it, not the whole panel. */
+.ccr-dlv-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding-bottom: 10px; }
+.ccr-dlv-head-next { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--ink-color-global-border-subtle); }
+.ccr-dlv-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-color-global-text-subtle); }
+.ccr-dlv-summary { font-size: 12px; line-height: 18px; color: var(--ink-color-global-text-subtle); font-variant-numeric: tabular-nums; }
+.ccr-dlv-seg {
+  background: none; border: 0; padding: 0; font-family: inherit; font-size: inherit; color: var(--ink-color-global-text-default);
+  text-decoration: underline; text-decoration-color: var(--ink-color-global-border-default); text-underline-offset: 3px; cursor: pointer;
+}
+.ccr-dlv-seg:hover, .ccr-dlv-seg-on { color: var(--ink-color-global-link-default); text-decoration-color: currentColor; }
+.ccr-dlv-dot { padding: 0 4px; }
+.ccr-dlv-controls { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding-bottom: 10px; }
+.ccr-dlv-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.ccr-dlv-chip {
+  padding: 3px 10px; border: 1px solid var(--ink-color-global-border-default); border-radius: var(--ink-radius-pill);
+  background: var(--ink-color-global-surface-background-default); font-family: inherit; font-size: 11px; font-weight: 500;
+  color: var(--ink-color-global-text-subtle); cursor: pointer; font-variant-numeric: tabular-nums;
+}
+.ccr-dlv-chip b { margin-left: 4px; font-weight: 600; color: var(--ink-color-global-text-default); }
+.ccr-dlv-chip-on, .ccr-dlv-chip-on b { color: var(--ink-color-global-link-default); }
+.ccr-dlv-chip-on { border-color: var(--ink-color-global-link-default); background: light-dark(#EAF0F8, #122948); }
+.ccr-dlv-search {
+  width: 180px; max-width: 100%; height: 30px; padding: 0 8px; font-family: inherit; font-size: 12px;
+  color: var(--ink-color-global-text-default); background: var(--ink-color-global-surface-background-default);
+  border: 1px solid var(--ink-color-global-border-default); border-radius: 4px;
+}
+.ccr-dlv-box { height: 300px; overflow: auto; overscroll-behavior: contain; border: 1px solid var(--ink-color-global-border-subtle); }
+.ccr-dlv-table th { position: sticky; top: 0; z-index: 1; background: var(--ink-color-global-surface-background-default); }
+.ccr-table .ccr-dlv-toggle { text-align: center; }
+.ccr-dlv-sort {
+  display: inline-flex; align-items: center; gap: 4px; background: none; border: 0; padding: 0; cursor: pointer;
+  font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit;
+}
+.ccr-dlv-sort:hover { color: var(--ink-color-global-text-default); }
+.ccr-dlv-sort-on { color: var(--ink-color-global-link-default); }
+.ccr-dlv-arrow { font-size: 8px; min-width: 8px; }
+.ccr-table .ccr-dlv-empty { text-align: center; white-space: normal; padding: 24px 14px; color: var(--ink-color-global-text-subtle); }
+.ccr-pill-off { background: var(--ink-color-global-surface-lightgray-default); color: var(--ink-color-global-text-subtle); }
+.ccr-dlv-foot { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 8px 0 4px; font-size: 11px; line-height: 17px; color: var(--ink-color-global-text-subtle); font-variant-numeric: tabular-nums; }
+
 .ccr-confirm-banner {
   background: light-dark(#EAF0F8, #122948);
   border-radius: 4px; padding: 10px 14px; margin-bottom: 12px;

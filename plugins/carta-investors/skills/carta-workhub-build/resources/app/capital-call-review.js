@@ -64,31 +64,36 @@ const CCR_DEMO_SUMMARY = {
         interest: { id: 101, name: "Cascade Peak Ventures LLC", partner_interest_group_name: "Cascade Peak Ventures LLC" },
         commitment: "8500000", due_to_fund: "2000000", net_absolute_amount: "2000000",
         post_call_percent: "0.4588", post_call_percent_inside_commitment: "0.4588",
-        is_participating: true, amount_buckets: [{ bucket_id: 1, amount: "2000000", inside_commitment: true }],
+        is_participating: true, email_notice_enabled: true, pdf_notice_enabled: true, wire_instructions_enabled: true,
+        amount_buckets: [{ bucket_id: 1, amount: "2000000", inside_commitment: true }],
       },
       {
         interest: { id: 102, name: "Ridgeline Family Office", partner_interest_group_name: "Ridgeline Family Office" },
         commitment: "5200000", due_to_fund: "1225000", net_absolute_amount: "1225000",
         post_call_percent: "0.4125", post_call_percent_inside_commitment: "0.4125",
-        is_participating: true, amount_buckets: [{ bucket_id: 1, amount: "1225000", inside_commitment: true }],
+        is_participating: true, email_notice_enabled: true, pdf_notice_enabled: true, wire_instructions_enabled: true,
+        amount_buckets: [{ bucket_id: 1, amount: "1225000", inside_commitment: true }],
       },
       {
         interest: { id: 103, name: "Summit Partners IV Trust", partner_interest_group_name: "Summit Partners IV Trust" },
         commitment: "3000000", due_to_fund: "705000", net_absolute_amount: "705000",
         post_call_percent: "0.3950", post_call_percent_inside_commitment: "0.3950",
-        is_participating: true, amount_buckets: [{ bucket_id: 1, amount: "705000", inside_commitment: true }],
+        is_participating: true, email_notice_enabled: true, pdf_notice_enabled: true, wire_instructions_enabled: true,
+        amount_buckets: [{ bucket_id: 1, amount: "705000", inside_commitment: true }],
       },
       {
         interest: { id: 104, name: "Thornwood Capital Group", partner_interest_group_name: "Thornwood Capital Group" },
         commitment: "2500000", due_to_fund: "590000", net_absolute_amount: "590000",
         post_call_percent: "0.4160", post_call_percent_inside_commitment: "0.4160",
-        is_participating: true, amount_buckets: [{ bucket_id: 1, amount: "590000", inside_commitment: true }],
+        is_participating: true, email_notice_enabled: true, pdf_notice_enabled: true, wire_instructions_enabled: true,
+        amount_buckets: [{ bucket_id: 1, amount: "590000", inside_commitment: true }],
       },
       {
         interest: { id: 105, name: "Elkhorn Investment Partners", partner_interest_group_name: "Elkhorn Investment Partners" },
         commitment: "1000000", due_to_fund: "230000", net_absolute_amount: "230000",
         post_call_percent: "0.3800", post_call_percent_inside_commitment: "0.3800",
-        is_participating: true, amount_buckets: [{ bucket_id: 1, amount: "230000", inside_commitment: true }],
+        is_participating: true, email_notice_enabled: true, pdf_notice_enabled: true, wire_instructions_enabled: true,
+        amount_buckets: [{ bucket_id: 1, amount: "230000", inside_commitment: true }],
       },
     ],
   },
@@ -179,6 +184,7 @@ function ccrReset(target, title) {
     payShowSensitive: { acct: false, routing: false },
     showAllRows: false,
     showDetail: false,
+    delivery: { filter: "all", q: "", sort: null, dir: 1 },
     lpIndex: 0,
     docTab: "email",
     email: null,
@@ -701,12 +707,10 @@ function ccrMainTabBar() {
   const tabs = [
     { id: 'overview', label: 'Overview' },
     { id: 'notice', label: 'Notice' },
+    { id: 'settings', label: 'Delivery' },
     { id: 'alloc', label: 'Allocations' },
     { id: 'pay', label: 'Payment information' },
   ];
-  if (ccrSettingsRows(_ccr.summary || {}).length) {
-    tabs.splice(2, 0, { id: 'settings', label: 'Email settings' });
-  }
   return '<div class="ccr-main-tabs">' +
     tabs.map((t) =>
       '<button class="ccr-main-tab' + (_ccr.activeTab === t.id ? ' ccr-main-tab-on' : '') +
@@ -850,10 +854,9 @@ function ccrNoticeDateRow(s) {
 
 // ── Email settings ────────────────────────────────────────────────────────
 // The "{Event} Details" settings that decide how the notice reaches investors.
-// They apply to every investor on the activity, so they get a tab of their
-// own rather than a place in the per-investor preview. A setting the backend
-// did not serve (an older deploy) is left out, and the tab is hidden when
-// none is served.
+// They apply to every investor on the activity, so they sit on the Delivery
+// tab rather than in the per-investor preview. A setting the backend did not
+// serve (an older deploy) is left out.
 
 function ccrSettingRow(label, value, note) {
   return '<div class="ccr-kv"><span class="ccr-k">' + escHtml(label) + "</span>" +
@@ -882,12 +885,145 @@ function ccrSettingsRows(s) {
   return rows;
 }
 
-// Every setting here changes the notice emails and nothing else, so the tab
-// says so and the card needs no header of its own.
+// ── Delivery ──────────────────────────────────────────────────────────────
+// How each participating investor is told: the web app's per-row Email
+// notifications, PDF and Attach wire details toggles. The summary line reads
+// notice_delivery, which counts every investor; the table reads the rows the
+// panel has walked, the same list Allocations shows.
+
+const CCR_DELIVERY_GROUPS = [
+  { id: "emailpdf", email: true, pdf: true, label: "email with PDF" },
+  { id: "email", email: true, pdf: false, label: "email only" },
+  { id: "pdf", email: false, pdf: true, label: "PDF only" },
+  { id: "none", email: false, pdf: false, label: "no notice" },
+];
+
+// Release treats an unset email or PDF toggle as on, but the notice carries
+// wire details only when that toggle is true, so an unset one is off.
+const ccrEmailOn = (r) => r.email_notice_enabled !== false;
+const ccrPdfOn = (r) => r.pdf_notice_enabled !== false;
+const ccrWireOn = (r) => r.wire_instructions_enabled === true;
+
+const ccrDeliveryGroup = (email, pdf) =>
+  CCR_DELIVERY_GROUPS.find((g) => g.email === !!email && g.pdf === !!pdf);
+
+const CCR_DELIVERY_COLS = [
+  { id: "name", label: "Investor" },
+  { id: "email", label: "Email notifications", on: ccrEmailOn },
+  { id: "pdf", label: "PDF", on: ccrPdfOn },
+  { id: "wire", label: "Attach wire details", on: ccrWireOn },
+];
+
+function ccrDeliveryState() {
+  if (!_ccr.delivery) _ccr.delivery = { filter: "all", q: "", sort: null, dir: 1 };
+  return _ccr.delivery;
+}
+
+function ccrDeliverySummary(s) {
+  const d = ccrDeliveryState();
+  const groups = s.notice_delivery || [];
+  if (!groups.length) return "No delivery detail";
+  return groups.map((g) => {
+    const n = g.count === null || g.count === undefined ? "—" : g.count;
+    const grp = ccrDeliveryGroup(g.email_notice_enabled, g.pdf_notice_enabled);
+    return '<button class="ccr-dlv-seg' + (d.filter === grp.id ? " ccr-dlv-seg-on" : "") +
+      '" data-ccr-dlv-filter="' + grp.id + '">' + escHtml(n + " " + grp.label) + "</button>";
+  }).join('<span class="ccr-dlv-dot">·</span>');
+}
+
+function ccrDeliveryRows() {
+  const d = ccrDeliveryState();
+  const q = d.q.trim().toLowerCase();
+  const rows = _ccr.rows.filter((r) => r.is_participating !== false)
+    .filter((r) => {
+      if (d.filter === "all") return true;
+      if (d.filter === "nowire") return !ccrWireOn(r);
+      return ccrDeliveryGroup(ccrEmailOn(r), ccrPdfOn(r)).id === d.filter;
+    })
+    .filter((r) => !q || ccrRowLabel(r).toLowerCase().includes(q));
+  const byName = (a, b) => ccrRowLabel(a).localeCompare(ccrRowLabel(b));
+  const col = CCR_DELIVERY_COLS.find((c) => c.id === d.sort);
+  if (!col) return rows.sort((a, b) => (ccrNum(b.commitment) || 0) - (ccrNum(a.commitment) || 0));
+  if (col.id === "name") return rows.sort((a, b) => d.dir * byName(a, b));
+  // A toggle column puts Off first on its first click.
+  return rows.sort((a, b) => d.dir * (Number(col.on(a)) - Number(col.on(b))) || byName(a, b));
+}
+
+function ccrDeliveryTable(s) {
+  const d = ccrDeliveryState();
+  const participating = _ccr.rows.filter((r) => r.is_participating !== false);
+  const partCount = s.participating_interests_count !== null && s.participating_interests_count !== undefined
+    ? s.participating_interests_count
+    : (_ccr.rowsDone ? participating.length : null);
+  const short = _ccr.rowsDone && partCount !== null && participating.length < partCount;
+
+  const chip = (id, label, count) =>
+    '<button class="ccr-dlv-chip' + (d.filter === id ? " ccr-dlv-chip-on" : "") + '" data-ccr-dlv-filter="' + id + '">' +
+    escHtml(label) + (count === null ? "" : "<b>" + count + "</b>") + "</button>";
+  const chips = [chip("all", "All", partCount)].concat((s.notice_delivery || []).map((g) => {
+    const grp = ccrDeliveryGroup(g.email_notice_enabled, g.pdf_notice_enabled);
+    return chip(grp.id, grp.label.charAt(0).toUpperCase() + grp.label.slice(1), g.count === undefined ? null : g.count);
+  }));
+  // The summary has no wire count, so the chip waits for every row.
+  const noWire = _ccr.rowsDone && !short ? participating.filter((r) => !ccrWireOn(r)).length : 0;
+  if (noWire) chips.push(chip("nowire", "No wire details", noWire));
+
+  const head = CCR_DELIVERY_COLS.map((c) => {
+    const on = d.sort === c.id;
+    return '<th class="' + (c.on ? "ccr-dlv-toggle" : "") + '"><button class="ccr-dlv-sort' + (on ? " ccr-dlv-sort-on" : "") +
+      '" data-ccr-dlv-sort="' + c.id + '">' + escHtml(c.label) +
+      '<span class="ccr-dlv-arrow">' + (on ? (d.dir > 0 ? "▲" : "▼") : "") + "</span></button></th>";
+  }).join("");
+
+  const rows = ccrDeliveryRows();
+  const pill = (on) => on
+    ? '<span class="ccr-pill ccr-pill-ok">On</span>'
+    : '<span class="ccr-pill ccr-pill-off">Off</span>';
+  let body;
+  if (rows.length) {
+    body = rows.map((r) =>
+      "<tr><td>" + escHtml(ccrRowLabel(r)) + "</td>" +
+      CCR_DELIVERY_COLS.filter((c) => c.on).map((c) => '<td class="ccr-dlv-toggle">' + pill(c.on(r)) + "</td>").join("") +
+      "</tr>").join("");
+  } else {
+    const why = !participating.length && !_ccr.rowsDone ? "Loading investors…"
+      : d.q.trim() ? 'No investors match "' + d.q.trim() + '".'
+      : !_ccr.rowsDone ? "None of the investors loaded so far are in this group."
+      : "No investors in this group.";
+    body = '<tr><td colspan="' + CCR_DELIVERY_COLS.length + '" class="ccr-dlv-empty">' + escHtml(why) + "</td></tr>";
+  }
+
+  const narrowed = d.filter !== "all" || d.q.trim() || !_ccr.rowsDone || short;
+  const count = partCount === null ? rows.length + " participating"
+    : narrowed ? "Showing " + rows.length + " of " + partCount + " participating"
+    : partCount + " participating";
+
+  return '<div class="ccr-dlv-controls"><div class="ccr-dlv-chips">' + chips.join("") + "</div>" +
+      '<input class="ccr-dlv-search" id="ccr-dlv-search" type="search" placeholder="Find an investor" aria-label="Find an investor" value="' +
+      escHtml(d.q) + '"></div>' +
+    '<div class="ccr-dlv-box"><table class="ccr-table ccr-dlv-table"><thead><tr>' + head + "</tr></thead><tbody>" + body +
+      "</tbody></table></div>" +
+    '<div class="ccr-dlv-foot"><span>' + escHtml(count) +
+      (d.sort ? ' · <button class="ccr-dlv-seg" data-ccr-dlv-sort="reset">Reset</button>' : "") + "</span>" +
+      "<span>" + (_ccr.rowsDone ? "To change a setting, use Request changes." : "Loading the rest…") + "</span></div>" +
+    (short
+      ? '<p class="ccr-note">Only ' + participating.length + " of " + partCount +
+        " participating investors loaded. Open the call in Carta for the rest.</p>"
+      : "");
+}
+
+// The Delivery tab: each investor's toggles, then the settings that apply to
+// every notice email. Always shown, since every activity has investors.
 function ccrSettingsTabBody(s) {
   const rows = ccrSettingsRows(s);
-  if (!rows.length) return '<div class="ccr-empty"><p>Carta did not serve the email settings for this call.</p></div>';
-  return '<div class="ccr-card"><div class="ccr-card-list">' + rows.join("") + "</div></div>";
+  return '<div class="ccr-dlv-head"><span class="ccr-dlv-title">Delivery</span>' +
+      '<span class="ccr-dlv-summary">' + ccrDeliverySummary(s) + "</span></div>" +
+    ccrDeliveryTable(s) +
+    '<div class="ccr-dlv-head ccr-dlv-head-next"><span class="ccr-dlv-title">Email settings</span>' +
+      '<span class="ccr-dlv-summary">Apply to every investor</span></div>' +
+    (rows.length
+      ? '<div class="ccr-card"><div class="ccr-card-list">' + rows.join("") + "</div></div>"
+      : '<div class="ccr-empty"><p>Carta did not serve the email settings for this call.</p></div>');
 }
 
 function ccrNoticeTabBody(s) {
@@ -1144,14 +1280,6 @@ function ccrPayBody(s) {
   const a = s.receiving_account;
   const oneAccount = ccrSameAccount(ccrPayingFromState(s).account, a);
   let payingFrom = ccrPayingFromHtml(s);
-  const groups = s.notice_delivery || [];
-  const noticeLabel = (g) => g.email_notice_enabled && g.pdf_notice_enabled ? "email with PDF"
-    : g.email_notice_enabled ? "email only"
-    : g.pdf_notice_enabled ? "PDF only" : "no notice";
-
-  const delivery = groups.length
-    ? groups.map((g) => (g.count === null || g.count === undefined ? "—" : g.count) + " " + noticeLabel(g)).join(" · ")
-    : "No delivery detail";
 
   const maskStr = (v, keepLast) => {
     if (!v) return null;
@@ -1219,7 +1347,6 @@ function ccrPayBody(s) {
   return '<div class="ccr-pad">' +
     payingFrom +
     wireHtml +
-    '<div class="ccr-kv"><span class="ccr-k">Delivery</span><span class="ccr-v">' + escHtml(delivery) + "</span></div>" +
     (s.contact_phone ? '<div class="ccr-kv"><span class="ccr-k">Wire verification</span><span class="ccr-v">' + escHtml(s.contact_phone) + "</span></div>" : "") +
     '<p class="ccr-row-note">Bank details are shown for confirmation. Your Carta team changes them ' +
     "through a separate verification, never here.</p>" +
@@ -1438,6 +1565,14 @@ function ccrRender() {
   else if (_ccr.phase === "sent") body = ccrDoneBody(false);
   else body = ccrReviewBody();
 
+  // Every walked page re-renders the panel, so the Delivery search keeps its
+  // caret and the investor box its scroll across the swap.
+  const focused = document.activeElement;
+  const searching = focused && focused.id === "ccr-dlv-search";
+  const caret = searching ? focused.selectionStart : null;
+  const prevBox = overlay.querySelector(".ccr-dlv-box");
+  const boxTop = prevBox ? prevBox.scrollTop : 0;
+
   overlay.innerHTML =
     '<div class="far-panel far-panel-thread ccr-panel">' +
       '<div class="far-panel-header">' +
@@ -1452,6 +1587,13 @@ function ccrRender() {
   const t = document.getElementById("ccr-change-text");
   if (t) t.addEventListener("input", (e) => { _ccr.changeText = e.target.value; });
   ccrBind(overlay);
+  const box = overlay.querySelector(".ccr-dlv-box");
+  if (box) box.scrollTop = boxTop;
+  const search = searching ? document.getElementById("ccr-dlv-search") : null;
+  if (search) {
+    search.focus();
+    search.setSelectionRange(caret, caret);
+  }
   const wrap = overlay.querySelector(".ccr-table-wrap");
   if (wrap) {
     const last = wrap.querySelector("th.ccr-pin-after");
@@ -1479,6 +1621,27 @@ function ccrBind(root) {
     }));
   root.querySelectorAll("[data-ccr-more]").forEach((el) =>
     el.addEventListener("click", () => { _ccr.showAllRows = !_ccr.showAllRows; ccrRender(); }));
+  root.querySelectorAll("[data-ccr-dlv-filter]").forEach((el) =>
+    el.addEventListener("click", () => {
+      const d = ccrDeliveryState();
+      const id = el.getAttribute("data-ccr-dlv-filter");
+      d.filter = d.filter === id && id !== "all" ? "all" : id;
+      ccrRender();
+    }));
+  root.querySelectorAll("[data-ccr-dlv-sort]").forEach((el) =>
+    el.addEventListener("click", () => {
+      const d = ccrDeliveryState();
+      const id = el.getAttribute("data-ccr-dlv-sort");
+      if (id === "reset") { d.sort = null; d.dir = 1; }
+      else if (d.sort === id) d.dir = -d.dir;
+      else { d.sort = id; d.dir = 1; }
+      ccrRender();
+    }));
+  const dlvSearch = root.querySelector("#ccr-dlv-search");
+  if (dlvSearch) dlvSearch.addEventListener("input", (ev) => {
+    ccrDeliveryState().q = ev.target.value;
+    ccrRender();
+  });
   root.querySelectorAll("[data-ccr-detail]").forEach((el) =>
     el.addEventListener("click", () => { _ccr.showDetail = !_ccr.showDetail; ccrRender(); }));
   root.querySelectorAll("[data-ccr-note]").forEach((el) =>
