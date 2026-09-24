@@ -39,7 +39,7 @@ const CONFIRM_LINE = {
 const SHEET_COMMIT = {
   option_grant: "Confirming issues these grants and sends them to the signatory for signature.",
   certificate: "Confirming issues these certificates to the cap table.",
-  piu: "Confirming issues these PIU grants and sends them to the signatory for signature.",
+  piu: "Confirming issues these PIUs and sends them to the signatory for signature.",
 };
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July",
@@ -360,6 +360,9 @@ function fillSeedTerms(sh) {
     const c = matchByName(S.classes, seedTerm("share_class"), (x) => x.name || x.prefix)
       || S.classes.find((x) => termKey(x.prefix) === termKey(seedTerm("share_class")));
     if (c) sh.prefix = c.prefix || "";
+    // The document's class beats a plan it never named.
+    const pc = S.type === "piu" && planClassPrefix(sh.option_plan);
+    if (c && pc && pc !== sh.prefix && !seedTerm("option_plan") && !mine("option_plan")) sh.option_plan = "";
   }
   if (seedTerm("vesting") && S.vesting.length && !mine("vesting_template")) {
     const t = matchVesting();
@@ -690,6 +693,7 @@ function applyDerived() {
     applySoFill();
     dropUnofferedChoices();
   }
+  syncPlanClass();
   backfillRows();
 }
 
@@ -956,6 +960,37 @@ const planOpts = () => {
   return p ? opts.concat([[String(p.id), p.name || "Unnamed plan"]]) : opts;
 };
 const classOpts = () => S.classes.map((c) => [c.prefix, `${c.name || c.prefix} (${c.prefix})`]);
+/** The unit class a PIU plan issues from — Carta refuses a draft on any other. By
+    prefix, else by a name only one class here carries; null when neither says. */
+function planClassPrefix(id) {
+  const p = id && id !== AS_SAVED && objs(S.plans).find((x) => String(x.id) === String(id));
+  if (!p) return null;
+  const pre = p.common_share_class_prefix;
+  if (pre && S.classes.some((c) => c.prefix === pre)) return pre;
+  const name = nameKey(p.common_share_class_name);
+  const hits = name ? S.classes.filter((c) => nameKey(c.name) === name) : [];
+  return hits.length === 1 ? hits[0].prefix : null;
+}
+const plansForClass = (prefix) => planOpts().filter(([id]) => {
+  const c = planClassPrefix(id);
+  return !prefix || prefix === AS_SAVED || !c || c === prefix;
+});
+/** Keeps every PIU row's class on its plan's, shared and per row alike. */
+function syncPlanClass() {
+  if (S.type !== "piu") return;
+  const sh = S.shared;
+  const cp = planClassPrefix(sh.option_plan);
+  if (cp && sh.prefix !== cp) { sh.prefix = cp; S.touchedShared.add("prefix"); }
+  for (const r of S.rows) {
+    const own = planClassPrefix(r.ov.option_plan);
+    const want = own || (cp ? sh.prefix : null);
+    if (!want) continue;
+    const had = r.ov.prefix;
+    if (want === sh.prefix) delete r.ov.prefix;
+    else r.ov.prefix = want;
+    if (had !== r.ov.prefix) r.touched.add("prefix");
+  }
+}
 const vestOpts = () => [[NONE, "No vesting"], ...S.vesting.map((t) => [String(t.id), t.name])];
 /* ---------- which documents a set carries ----------
    Carta refuses a draft whose document set lacks a document the corporation requires,
@@ -1180,7 +1215,7 @@ function mfDefaults() {
 /* ---------- one field spec drives render, per-row overrides and validation ---------- */
 // `req` doubles as the footer's phrase, `over` marks a row-overridable field, and
 // `noFuture` caps a date the server refuses past today. Conditional fields are absent.
-function spec(board) {
+function spec(board, row) {
   const sh = S.shared, t = S.type, s = [];
   const F = (k, label, kind, x) => s.push(mfApply(Object.assign({ k, label, kind }, x || {})));
   const vest = () => {
@@ -1198,8 +1233,8 @@ function spec(board) {
         { opts: accelOpts(), over: 1, ph: "No acceleration" });
     }
   };
-  const cls = () => F("prefix", classNoun(), "sel", { opts: classOpts(), over: 1,
-    req: `a ${classNoun().toLowerCase()}` });
+  const cls = (x) => F("prefix", classNoun(), "sel", Object.assign({ opts: classOpts(), over: 1,
+    req: `a ${classNoun().toLowerCase()}` }, x));
 
   if (t === "option_grant") {
     const zepo = sh.so_type === "ZEPO";
@@ -1277,12 +1312,14 @@ function spec(board) {
     vest();
   } else {
     const noun = String(S.thresholdNoun || "Threshold"), Noun = capNoun(noun);
-    cls();
+    // Drafts' rule: a plan fixes the unit class, and a chosen class narrows the plans.
+    const eff = (k) => (row && k in row.ov ? row.ov[k] : sh[k]);
+    cls({ dis: !!planClassPrefix(eff("option_plan")) });
     F("threshold_value_type", `${Noun} type`, "sel", { over: 1, req: `a ${noun.toLowerCase()} type`,
       opts: [["Unit", "Unit — per unit"], ["Overall", "Overall — once for the whole grant"]] });
     F("threshold_value", `${Noun} value`, "num", { over: 1, min: 0, dp: 12,
       req: `a ${noun.toLowerCase()} value` });
-    F("option_plan", "Equity plan", "sel", { opts: planOpts(), over: 1, ph: "No plan" });
+    F("option_plan", "Equity plan", "sel", { opts: plansForClass(eff("prefix")), over: 1, ph: "No plan" });
     F("currency", "Currency", curOpts().length ? "sel" : "text", { over: 1, opts: curOpts() });
     F("issue_date", "Issue date", "date", { over: 1, req: "an issue date", noFuture: 1 });
     F("board_approval_date", "Board approval date", "date", { over: 1, noFuture: 1 });
@@ -1547,9 +1584,6 @@ const nameKey = (s) => String(s == null ? "" : s).trim().toLowerCase();
 function nameNoticesLive() {
   return S.stage === "edit" && !S.sheet && !hardStops().length;
 }
-/** Unmatched names come in as new-stakeholder rows; each still needs its email. */
-const unmatchedOpen = (n) => S.rows.some((r) => r.isNew && nameKey(r.name) === nameKey(n)
-  && !r.email.trim());
 /** An ambiguous name comes in as a row still to be picked from the list. */
 const ambiguousOpen = (term) => S.rows.some((r) => !r.isNew && r.stakeholderId == null
   && nameKey(r.query) === nameKey(term));
@@ -1573,8 +1607,6 @@ function renderNotices() {
   const done = S.stage === "issued";
   const live = nameNoticesLive();
   const amb = live ? objs(p.ambiguous).filter((a) => ambiguousOpen(a.term)) : [];
-  const un = live
-    ? arr(p.unmatched).filter((n) => typeof n === "string" && unmatchedOpen(n)) : [];
   out.push(outcomeNote());
   if (S.connErr) {
     out.push(noteBox("notice-no-live-data", true,
@@ -1584,11 +1616,6 @@ function renderNotices() {
     out.push(noteBox("notice-ambiguous", false,
       `${amb.length} name${amb.length > 1 ? "s" : ""} matched more than one stakeholder`,
       amb.map((a) => `<li data-testid="ambiguous-${esc(a.term)}">“${esc(a.term)}” matches ${Number(a.count)} stakeholders — pick the right one below.</li>`)));
-  }
-  if (un.length) {
-    out.push(noteBox("notice-unmatched", false,
-      `${un.length} name${un.length > 1 ? "s" : ""} not on the cap table`,
-      un.map((n) => `<li data-testid="unmatched-${esc(n)}">${esc(n)}</li>`)));
   }
   if (S.narrowed && !done) {
     // Carta caps the bootstrap's size and says what it gave up. Clipped rows
@@ -1662,10 +1689,11 @@ function resetOv(r, keys) {
       delete r.ov.grant_expiration_date;
     }
   }
+  if (keys.includes("option_plan")) syncPlanClass();
 }
 /** The terms a row's own override panel draws: a grant row on its own board answer has
     the dates that answer carries, not the batch's. */
-const rowSpec = (r) => spec(S.type === "option_grant" && r && "board_mode" in r.ov ? r.ov.board_mode : "");
+const rowSpec = (r) => spec(S.type === "option_grant" && r && "board_mode" in r.ov ? r.ov.board_mode : "", r);
 
 /** What a row shows for a term it has not overridden: the shared value, except a term
     the load could not read, which a row added to a resumed set does not inherit. */
@@ -1934,8 +1962,7 @@ function utilizationHtml(vals) {
     </div>`;
   }).filter(Boolean);
   if (!blocks.length) return "";
-  return `<div class="ut" data-testid="review-utilization">${blocks.join("")}
-    <p class="rv-s">As of when this page opened. Other drafts that aren't issued yet aren't counted.</p></div>`;
+  return `<div class="ut" data-testid="review-utilization">${blocks.join("")}</div>`;
 }
 
 /** The holder attests to the legend's words, not its template name, so the full body is
@@ -2191,7 +2218,7 @@ function rowHtml(r, i) {
     <td class="ic rm"><button class="x" id="${p}-remove" data-testid="${p}-remove" data-act="remove" data-i="${i}" type="button"
       aria-label="Remove ${who}" title="Remove">${TRASH}</button></td>
   </tr>${errs ? `<tr class="row-err"><td></td><td colspan="5">${errs}</td></tr>` : ""}${r.open ? `<tr class="xp" id="${p}-terms-row"><td colspan="6">
-    <div class="xp-h"><b>Different terms for ${who}</b><span class="hint">Change only what differs. Everything else follows the shared terms.</span>
+    <div class="xp-h"><b>Different terms for ${who}</b>
       ${n ? `<button type="button" class="link" data-act="ov-reset-all" data-i="${i}" data-testid="${p}-reset-all">Use shared terms for all</button>` : ""}</div>
     <div class="grid" data-testid="${p}-overrides">${ovHtml(r, i)}</div></td></tr>` : ""}`;
 }
@@ -2762,10 +2789,10 @@ const stepsHtml = (labels, at) => labels.map((l, i) => {
 }).join("");
 
 const plural = (n, one, many) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
-/** What one row is: a certificate, an option grant, a PIU grant. */
+/** What one row is: a certificate, an option grant, a PIU. */
 const unitNoun = () => ({ option_grant: ["option grant", "option grants"],
   certificate: ["certificate", "certificates"],
-  piu: ["PIU grant", "PIU grants"] }[S.type] || ["security", "securities"]);
+  piu: ["PIU", "PIUs"] }[S.type] || ["security", "securities"]);
 /** Counts securities, not quantity: one row is one grant, certificate or award, and
     the quantity inside it is shares or units. The totals line carries that. */
 function issueVerb() {
@@ -3712,6 +3739,7 @@ function commit(ev) {
     if (k === "kind") r.kindUnknown = false;
     if (k === "query") { r.stakeholderId = null; resolveExact(r); }
   }
+  if (k === "option_plan") syncPlanClass();
 }
 
 /** A row's own value that the batch now holds too is no longer the row's own. */

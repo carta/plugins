@@ -212,7 +212,7 @@
     .st tr.xp > td { background: var(--ink-color-global-brand-gray-10); padding: 4px 12px 14px 50px; }
     .st .empty { padding: 18px; text-align: center; color: var(--ink-color-global-brand-gray-70); }
     .who .link { margin-top: 4px; }
-    .who-new { display: grid; gap: 6px; grid-template-columns: minmax(0, 1fr) minmax(0, 140px); }
+    .who-new { display: grid; gap: 6px; grid-template-columns: minmax(0, 1fr); }
     .exp { width: 28px; height: 28px; min-height: 0; padding: 0; display: inline-grid; place-items: center; background: none; border-color: transparent; }
     .exp::before {
       content: ""; width: 12px; height: 12px; background-color: var(--ink-color-global-brand-gray-90);
@@ -490,7 +490,6 @@
       .st td.rel label.vh, .st td.n label.vh { position: static !important; width: auto; height: auto; margin: 0 0 3px; overflow: visible; clip: auto; }
       .st tr.xp > td { padding: 4px 12px 14px; }
       .summary { margin-left: 0; flex-basis: 100%; }
-      .who-new { grid-template-columns: minmax(0, 1fr); }
     }
     @media (max-width: 560px) {
       h1 { font-size: 22px; }

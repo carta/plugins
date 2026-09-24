@@ -100,11 +100,12 @@ The one helper with no analogue anywhere else in this skill. Three rules, each l
    the unit class moves real numbers on a real cap table, and nothing downstream catches
    it. The default is **no plan**; the surface offers the list.
 3. **The plan's unit class must match the row's.** `DraftOptionPlanFieldValidator` rejects
-   a mismatch with *"Equity plan share class must match the selected share class"*. Filter
-   the picker to plans whose share class matches the selected unit class **only if** the
-   `option_plans` payload carries a share-class prefix; if it does not, do not
-   pre-validate (SKILL.md hard rule 4) — show the plan's own class next to the unit class in the
-   review, and surface the server's message verbatim on rejection.
+   a mismatch with *"Equity plan share class must match the selected share class"*. Follow
+   the Drafts grid: a chosen plan sets the unit class to its `common_share_class_prefix`
+   and locks it; a chosen class with no plan narrows the picker to that class's plans.
+   A plan row with no prefix falls back to a `common_share_class_name` only one class
+   carries; with neither, do not pre-validate (SKILL.md hard rule 4) and surface the
+   server's message verbatim on rejection.
 
 `option_plan` carries the plan's **primary key as a string**, not its name, even though
 the underlying field is a `CharField`. Skip expired plans (`is_expired: true`) and never
