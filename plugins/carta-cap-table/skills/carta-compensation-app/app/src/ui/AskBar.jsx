@@ -41,18 +41,13 @@ export function parseSSE(buffer) {
 }
 
 // Pull the human-readable text out of one stream-json event. Token deltas arrive as
-// stream_event/content_block_delta; the `assistant` shape is the non-streaming
-// fallback the CLI still emits when partial messages are unavailable.
+// stream_event/content_block_delta. The `assistant` events carry the full accumulated
+// message (--include-partial-messages is always on) and are intentionally ignored here
+// — appending both the delta and the accumulated text would duplicate every sentence.
 export function eventText(ev) {
   if (ev.type === "stream_event") {
     const d = ev.event?.delta;
     return d?.type === "text_delta" ? d.text || "" : "";
-  }
-  if (ev.type === "assistant") {
-    return (ev.message?.content || [])
-      .filter((b) => b.type === "text")
-      .map((b) => b.text || "")
-      .join("");
   }
   return "";
 }
