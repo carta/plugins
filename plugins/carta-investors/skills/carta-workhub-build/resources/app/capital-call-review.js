@@ -533,6 +533,88 @@ async function ccrLoadHealth(snap, params) {
   ccrRender();
 }
 
+// Carta renders each document fresh on every call, so one render per activity and
+// investor serves the page for its whole life. The promise is what is kept: a second
+// ask while the first is in flight waits on it, and an answer that lands after the
+// reader moved on is still there when they come back. A failure is dropped so the
+// next ask retries. Memory only — a write clears the activity's entries, and a new
+// page load starts clean, so a revised draft is never shown from an old render.
+const _ccrDocCache = new Map();
+
+function ccrDocKey(kind, activityId, id) {
+  return kind + ":" + activityId + ":" + id;
+}
+
+// The resolved value, for render paths that must not flash a loading state.
+function ccrDocHit(kind, activityId, id) {
+  const e = _ccrDocCache.get(ccrDocKey(kind, activityId, id));
+  return e && e.done ? e.value : null;
+}
+
+function ccrCachedDoc(kind, activityId, id, load) {
+  const key = ccrDocKey(kind, activityId, id);
+  const hit = _ccrDocCache.get(key);
+  if (hit) return hit.promise;
+  const entry = { done: false, value: null, promise: null };
+  entry.promise = load().then(
+    (value) => { entry.done = true; entry.value = value; return value; },
+    (err) => { _ccrDocCache.delete(key); throw err; },
+  );
+  _ccrDocCache.set(key, entry);
+  return entry.promise;
+}
+
+function ccrForgetDocs(activityId) {
+  const mark = ":" + activityId + ":";
+  for (const key of Array.from(_ccrDocCache.keys())) {
+    if (key.includes(mark)) _ccrDocCache.delete(key);
+  }
+}
+
+async function ccrFetchEmail(target, partnerId) {
+  const res = await _mcp("fetch", {
+    command: "fa:get:capital-activity-partner-email-preview",
+    params: {
+      fund_uuid: target.fundUuid,
+      capital_activity_id: target.activityId,
+      partner_id: partnerId,
+      body_format: "html",
+    },
+  });
+  let p = res.isError ? null : ccrPayload(res, (c) => "subject" in c || "body" in c);
+  if (!p) {
+    // The command's own oversize hint: markup can exceed the response budget.
+    const alt = await _mcp("fetch", {
+      command: "fa:get:capital-activity-partner-email-preview",
+      params: {
+        fund_uuid: target.fundUuid,
+        capital_activity_id: target.activityId,
+        partner_id: partnerId,
+        body_format: "text",
+      },
+    });
+    if (alt.isError) throw new Error(alt.content?.[0]?.text ?? "preview failed");
+    p = ccrPayload(alt, (c) => "subject" in c || "body" in c);
+  }
+  if (!p) throw new Error("no preview in the response");
+  return p;
+}
+
+async function ccrFetchPdf(target, interestId) {
+  const res = await _mcp("fetch", {
+    command: "fa:get:capital-activity-notice-pdf-preview",
+    params: {
+      fund_uuid: target.fundUuid,
+      capital_activity_id: target.activityId,
+      interest_id: interestId,
+    },
+  });
+  if (res.isError) throw new Error(res.content?.[0]?.text ?? "the notice could not be rendered");
+  const p = ccrPayload(res, (c) => "data_uri" in c);
+  if (!p) throw new Error("no document in the response");
+  return p;
+}
+
 // One preview per interest group, so the partner PK on the row is the key.
 async function ccrLoadEmail() {
   // Same ownership rule as ccrLoad: a reopen must not receive this preview.
@@ -544,9 +626,7 @@ async function ccrLoadEmail() {
     return;
   }
 
-  snap.email = null;
   snap.emailError = null;
-  ccrRenderNotice();
 
   if (CCR_IS_DEMO) {
     snap.email = ccrDemoEmail(row);
@@ -554,40 +634,27 @@ async function ccrLoadEmail() {
     return;
   }
 
+  const partnerId = row.interest.id;
+  snap.email = ccrDocHit("email", snap.target.activityId, partnerId);
+  if (snap.email) {
+    ccrRender();
+    ccrRenderNotice();
+    return;
+  }
+  ccrRenderNotice();
+
+  // The investor on screen can change while this renders; the cache keeps the answer
+  // either way, so only its display is dropped.
+  const want = snap.lpIndex;
   try {
-    const res = await _mcp("fetch", {
-      command: "fa:get:capital-activity-partner-email-preview",
-      params: {
-        fund_uuid: snap.target.fundUuid,
-        capital_activity_id: snap.target.activityId,
-        partner_id: row.interest.id,
-        body_format: "html",
-      },
-    });
-    if (_ccr !== snap) return;
-    let p = res.isError ? null : ccrPayload(res, (c) => "subject" in c || "body" in c);
-    if (!p) {
-      // The command's own oversize hint: markup can exceed the response budget.
-      const alt = await _mcp("fetch", {
-        command: "fa:get:capital-activity-partner-email-preview",
-        params: {
-          fund_uuid: snap.target.fundUuid,
-          capital_activity_id: snap.target.activityId,
-          partner_id: row.interest.id,
-          body_format: "text",
-        },
-      });
-      if (_ccr !== snap) return;
-      if (alt.isError) throw new Error(alt.content?.[0]?.text ?? "preview failed");
-      p = ccrPayload(alt, (c) => "subject" in c || "body" in c);
-    }
-    if (!p) throw new Error("no preview in the response");
+    const p = await ccrCachedDoc("email", snap.target.activityId, partnerId,
+      () => ccrFetchEmail(snap.target, partnerId));
+    if (_ccr !== snap || want !== snap.lpIndex) return;
     snap.email = p;
   } catch (err) {
-    if (_ccr !== snap) return;
+    if (_ccr !== snap || want !== snap.lpIndex) return;
     snap.emailError = err && err.message ? err.message : "preview failed";
   }
-  if (_ccr !== snap) return;
   ccrRender();
   ccrRenderNotice();
 }
@@ -619,6 +686,7 @@ async function ccrSubmitChanges() {
       },
     });
     if (res.isError) throw new Error(res.content?.[0]?.text ?? "request failed");
+    ccrForgetDocs(_ccr.target.activityId);
     _ccr.sentMessage = text;
     _ccr.phase = "sent";
     ccrRender();
@@ -698,6 +766,7 @@ function ccrReleaseAnswered(snap, res, err) {
     return;
   }
 
+  ccrForgetDocs(snap.target.activityId);
   snap.phase = "released";
   ccrRender();
   farFetchRequests();
@@ -1659,10 +1728,8 @@ function ccrBind(root) {
       _ccr.docTab = el.getAttribute("data-ccr-inline-tab");
       if (_ccr.docTab === "pdf") trackWorkhub("click", "CartaWorkhub.CapitalCallReview.NoticePdf");
       ccrRender();
-      if (_ccr.docTab === "pdf") {
-        if (!_ccr.pdf && !_ccr.pdfLoading && !_ccr.pdfError) ccrLoadPdf();
-        else if (_ccr.pdf) ccrPaintPdf();
-      }
+      ccrLoadActiveDoc();
+      if (_ccr.docTab === "pdf" && _ccr.pdf) ccrPaintPdf();
     }));
   const inlineSel = root.querySelector("#ccr-inline-lp");
   if (inlineSel) inlineSel.addEventListener("change", (ev) => ccrSelectLp(Number(ev.target.value)));
@@ -1711,7 +1778,7 @@ function ccrSelectLp(index) {
   _ccr.pdfLoading = false;
   ccrRender();
   ccrRenderNotice();
-  if (_ccr.activeTab === "notice") ccrLoadActiveDoc();
+  if (_ccr.activeTab === "notice" || _ccr.noticeOpen) ccrLoadActiveDoc();
 }
 
 // Each tab costs a render on Carta's side, so only the visible one is fetched.
@@ -1862,33 +1929,32 @@ async function ccrLoadPdf() {
     return;
   }
 
-  _ccr.pdf = null;
-  _ccr.pdfError = null;
-  _ccr.pdfLoading = true;
+  const snap = _ccr;
+  const interestId = row.interest.id;
+  snap.pdfError = null;
+  snap.pdf = ccrDocHit("pdf", snap.target.activityId, interestId);
+  if (snap.pdf) {
+    snap.pdfLoading = false;
+    ccrRender();
+    ccrRenderNotice();
+    return;
+  }
+  snap.pdfLoading = true;
   ccrRenderNotice();
 
-  // Carta renders the document on every call, which is slow enough that the
-  // reader can pick another investor first; that answer is no longer wanted.
-  const want = _ccr.lpIndex;
+  // Slow enough that the reader can pick another investor first. The cache keeps
+  // this render for when they come back; only its display is dropped.
+  const want = snap.lpIndex;
   try {
-    const res = await _mcp("fetch", {
-      command: "fa:get:capital-activity-notice-pdf-preview",
-      params: {
-        fund_uuid: _ccr.target.fundUuid,
-        capital_activity_id: _ccr.target.activityId,
-        interest_id: row.interest.id,
-      },
-    });
-    if (want !== _ccr.lpIndex) return;
-    if (res.isError) throw new Error(res.content?.[0]?.text ?? "the notice could not be rendered");
-    const p = ccrPayload(res, (c) => "data_uri" in c);
-    if (!p) throw new Error("no document in the response");
-    _ccr.pdf = p;
+    const p = await ccrCachedDoc("pdf", snap.target.activityId, interestId,
+      () => ccrFetchPdf(snap.target, interestId));
+    if (_ccr !== snap || want !== snap.lpIndex) return;
+    snap.pdf = p;
   } catch (err) {
-    if (want !== _ccr.lpIndex) return;
-    _ccr.pdfError = err && err.message ? err.message : "the notice could not be rendered";
+    if (_ccr !== snap || want !== snap.lpIndex) return;
+    snap.pdfError = err && err.message ? err.message : "the notice could not be rendered";
   }
-  _ccr.pdfLoading = false;
+  snap.pdfLoading = false;
   ccrRender();
   ccrRenderNotice();
 }

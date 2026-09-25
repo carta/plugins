@@ -20,7 +20,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.44.6</carta-plugin>
+<carta-plugin>carta-investors:6.44.7</carta-plugin>
 
 # Carta Workhub — Build / Redeploy
 
@@ -172,7 +172,9 @@ not inside a fund-data dashboard.
 
   **Each render costs.** Carta renders the document through Prince or Carbone on every call and
   stores it, so the panel fetches only the visible tab and only for the investor on screen —
-  never a walk down the picker. A measured notice is 2 pages and ~45 KB.
+  never a walk down the picker. A measured notice is 2 pages and ~45 KB. Each render is then
+  kept in memory for the page's life, keyed by activity and investor, so returning to an
+  investor costs nothing; a request for changes or a release clears that activity's renders.
 
   **The activity link is read off the workflow row**, not guessed: `fund.uuid` plus whichever of
   `capital_activity_id` / `object_id` the row carries. A row with neither opens the panel to a
