@@ -24,7 +24,7 @@ holds a value before review, and a `None` or empty is a skill bug.
     "stakeholder_kind":        <stakeholder.kind | "INDIVIDUAL">, # always
     "issue_date_relationship": <stakeholder.event_relationship>,  # always
     "prefix":                  <unit_class.prefix>,               # always — NOT share_class
-    "quantity":                <user>,                            # always
+    "quantity":                <user>,                            # always — a percentage on a PERCENT class (payload-reference.md § PBO quantity)
     "currency":                <corp currency, e.g. "USD">,       # always
     "threshold_value":         <user>,                            # always — never defaulted
     "threshold_value_type":    "Unit" | "Overall",                # always — never guessed

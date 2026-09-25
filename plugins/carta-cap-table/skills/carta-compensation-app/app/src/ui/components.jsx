@@ -197,7 +197,7 @@ export function TableAlign({ align, children }) {
  *  border-default (medium gray) under-rule — clearly darker than the hairline between
  *  body rows, nowhere near the near-black text color. Deliberately NOT the
  *  uppercase/tracked/tiny "ledger" look, which Ink drops. */
-export function Th({ children, align, valign, width, colSpan, group, divider }) {
+export function Th({ children, align, valign, width, colSpan, group, tinted }) {
   const ctx = useContext(AlignContext);
   // Explicit prop wins, then the table-wide value, then the historical default.
   align = align || ctx || "left";
@@ -211,14 +211,14 @@ export function Th({ children, align, valign, width, colSpan, group, divider }) 
         // hairline: the darker under-rule belongs on the row that actually labels the
         // columns, or the table reads as having two competing header baselines.
         borderBottom: `1px solid ${group ? C.borderSubtle : C.borderDefault}`,
-        borderLeft: divider ? `1px solid ${C.borderDefault}` : undefined,
+        background: tinted ? C.surfaceTinted : undefined,
       }}
     >{children}</th>
   );
 }
 
 /** Ink's table body cell: 14px/weight-400, border-subtle hairline between rows. */
-export function Td({ children, align, valign, subtle, mono, ellipsis, title, divider }) {
+export function Td({ children, align, valign, subtle, mono, ellipsis, title, tinted }) {
   const ctx = useContext(AlignContext);
   align = align || ctx || "left";
   return (
@@ -228,7 +228,7 @@ export function Td({ children, align, valign, subtle, mono, ellipsis, title, div
       color: subtle ? C.textQuiet : C.textDefault,
       fontVariantNumeric: mono ? "tabular-nums" : undefined,
       borderBottom: `1px solid ${C.borderSubtle}`, whiteSpace: "nowrap",
-      borderLeft: divider ? `1px solid ${C.borderDefault}` : undefined,
+      background: tinted ? C.surfaceTinted : undefined,
       ...(ellipsis ? { overflow: "hidden", textOverflow: "ellipsis" } : null),
     }}>{children}</td>
   );

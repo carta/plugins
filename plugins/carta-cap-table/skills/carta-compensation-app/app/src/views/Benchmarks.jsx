@@ -35,7 +35,7 @@ function MetricTable({ rows, currency, equityRep }) {
         <tr>
           <Th width="13%" group />
           {METRIC_BLOCKS.map((m, mi) => (
-            <Th key={m.key} colSpan={PCTS.length} align="center" group divider={mi > 0}>
+            <Th key={m.key} colSpan={PCTS.length} align="center" group tinted={mi % 2 === 1}>
               {m.key === "equity"
                 ? `${m.label} — ${EQUITY_REPS.find((r) => r.value === equityRep)?.label} (4-year grant)`
                 : m.label}
@@ -46,7 +46,7 @@ function MetricTable({ rows, currency, equityRep }) {
           <Th valign="bottom">Level</Th>
           {METRIC_BLOCKS.map((m, mi) =>
             PERCENTILES.map((p, pi) => (
-              <Th key={`${m.key}-${p.key}`} align="right" valign="bottom" divider={mi > 0 && pi === 0}>
+              <Th key={`${m.key}-${p.key}`} align="right" valign="bottom" tinted={mi % 2 === 1}>
                 <div
                   title={!p.fetched ? p.tooltip : undefined}
                   style={{ display: "inline-flex", alignItems: "center", gap: 4 }}
@@ -77,7 +77,7 @@ function MetricTable({ rows, currency, equityRep }) {
               </Td>
               {METRIC_BLOCKS.map((m, mi) =>
                 PCTS.map((pct, pi) => (
-                  <Td key={`${m.key}-${pct}`} align="right" mono divider={mi > 0 && pi === 0}>
+                  <Td key={`${m.key}-${pct}`} align="right" mono tinted={mi % 2 === 1}>
                     {m.key === "equity"
                       ? equityValue(r.equity?.[pct], equityRep, r.currency || currency)
                       : money(r[m.key]?.[pct], r.currency || currency)}

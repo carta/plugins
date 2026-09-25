@@ -853,6 +853,23 @@ function fmvWarning() {
 }
 function plan() { return S.plans.find((p) => String(p.id) === String(S.shared.option_plan_id)); }
 function chosenClass() { return S.classes.find((c) => c.prefix === S.shared.prefix); }
+/** What a quantity measures on a class. Carta sends it only when the corporation accepts
+    PBO issuance; without it every quantity counts shares or units. */
+function classSemantics(prefix) {
+  if (S.type === "option_grant") return "UNIT";
+  const c = objs(S.classes).find((x) => x.prefix === prefix);
+  return (c && c.quantity_semantics) || "UNIT";
+}
+const rowPrefix = (r) => ("prefix" in r.ov && r.ov.prefix !== "" ? r.ov.prefix : S.shared.prefix);
+/** The quantity is percentage points, 0 to 100: 2.75 is 2.75%. */
+const isPct = (r) => classSemantics(rowPrefix(r)) === "PERCENT";
+/** Invested capital sets the ownership, so the quantity is optional. */
+const isCapital = (r) => classSemantics(rowPrefix(r)) === "INVESTED_CAPITAL";
+/** The decimal places carta-web keeps on a percentage. */
+const PCT_DP = 12;
+const pctSum = (a, b) => Math.round((a + b) * 10 ** PCT_DP) / 10 ** PCT_DP;
+const pctFmt = (v) => `${Number(v).toLocaleString(undefined, { maximumFractionDigits: PCT_DP })}%`;
+const pctEcho = (v) => (String(v == null ? "" : v).trim() !== "" && Number.isFinite(Number(v)) ? pctFmt(v) : "");
 function tmpl() { return S.vesting.find((t) => String(t.id) === String(S.shared.vesting_template)); }
 const isMilestone = () => { const t = tmpl(); return !!t && /milestone/i.test(t.vesting_type || ""); };
 
@@ -1731,14 +1748,20 @@ function totals(byCurrency) {
   for (const r of S.rows) {
     const d = rowValues(r);
     const cur = S.type === "piu" && !byCurrency ? "" : d.currency || "—";
-    const t = by.get(cur) || { qty: 0, value: 0, priced: false };
+    const t = by.get(cur) || { qty: 0, value: 0, priced: false, pct: 0, pctRows: 0, unitRows: 0 };
+    by.set(cur, t);
+    if (isPct(r)) {
+      t.pct = pctSum(t.pct, Number(d.quantity || 0));
+      t.pctRows += 1;
+      continue;
+    }
+    t.unitRows += 1;
     t.qty += Number(d.quantity || 0);
     const p = unitPrice(d);
     if (p !== null && p !== "" && p != null) {
       t.priced = true;
       t.value += Number(p) * Number(d.quantity || 0);
     }
-    by.set(cur, t);
   }
   return by;
 }
@@ -1748,9 +1771,17 @@ const QTY_NOUN = { option_grant: ["option", "options"], certificate: ["share", "
 const qtyNoun = () => QTY_NOUN[S.type] || ["unit", "units"];
 /** The review's column head, the same word for every security type. */
 const REVIEW_QTY_HEAD = "Quantity";
+/** "Ownership %" when every row is a percentage. */
+const qtyHead = () => (S.rows.length && S.rows.every(isPct) ? "Ownership %" : REVIEW_QTY_HEAD);
 /** "Total" alone when one currency covers the batch, which is the usual case. */
-const totalLabel = (cur, n) => (S.type === "piu" ? "Total units"
+const totalLabel = (cur, n) => (S.type === "piu" ? (S.rows.length && S.rows.every(isPct) ? "Total ownership" : "Total units")
   : n > 1 ? `Total — ${cur}` : "Total");
+/** Units and percentages never add up to one figure, so each shows on its own. */
+const totalQtyText = (t) => [t.unitRows || !t.pctRows ? t.qty.toLocaleString() : "",
+  t.pctRows ? pctFmt(t.pct) : ""].filter(Boolean).join(" · ");
+/** One row's quantity as a reader sees it. */
+const rowQtyText = (r, q) => (q === "" || q == null || !Number.isFinite(Number(q)) ? "—"
+  : isPct(r) ? pctFmt(q) : Number(q).toLocaleString());
 
 /** A term a row added to a resumed set does not inherit from "As saved in Carta". */
 const NOT_SET = "__not_set__";
@@ -1837,7 +1868,7 @@ function reviewHtml() {
     return `<div class="rv-r" data-testid="review-row-${i}">
       <div><b>${esc(r.name)}</b>${r.stakeholderId == null && (!r.resumed || r.touched.has("stakeholder")) ? " <span class=\"rv-tag\">(new)</span>" : ""}
         <div class="rv-s">${esc(who)}</div>${note}${own}</div>
-      <div class="rv-n">${Number(d.quantity).toLocaleString()}</div>
+      <div class="rv-n">${esc(rowQtyText(r, d.quantity))}</div>
       <div class="rv-n">${mark(prices[i], usualPrice)}</div>${cols.map((v) =>
         `<div class="rv-v" data-testid="review-row-${i}-term-${v.d.k}">${mark(v.texts[i], v.usual)}${expiryNote(r, v.d.k)}</div>`).join("")}
     </div>`;
@@ -1848,7 +1879,7 @@ function reviewHtml() {
   const tot = groups.map(([cur, t]) =>
     `<div class="rv-t" data-testid="review-total-${esc(cur || "units")}">
       <div>${esc(totalLabel(cur, groups.length))}</div>
-      <div class="rv-n" data-testid="review-total-qty-${esc(cur || "units")}">${t.qty.toLocaleString()}</div>
+      <div class="rv-n" data-testid="review-total-qty-${esc(cur || "units")}">${esc(totalQtyText(t))}</div>
       <div class="rv-n" data-testid="review-total-value-${esc(cur || "units")}">${t.priced
         ? esc(money(t.value, cur)) : ""}</div>${pad}
     </div>`).join("");
@@ -1863,7 +1894,7 @@ function reviewHtml() {
   // confirming would do.
   const sealed = !!(S.stuck || S.issued);
   return `${lead}<div class="rv-scroll"><div class="rv-mx c${cols.length}" data-testid="review-table">
-    <div class="rv-h"><div>Stakeholder</div><div class="rv-n">${esc(REVIEW_QTY_HEAD)}</div>
+    <div class="rv-h"><div>Stakeholder</div><div class="rv-n">${esc(qtyHead())}</div>
       <div class="rv-n">${esc(priceHead)}</div>${cols.map((v) =>
         `<div class="rv-vh" data-testid="review-head-${v.d.k}">${esc(v.d.label)}</div>`).join("")}</div>
     <div class="rv-rows" data-testid="review-rows">${rows}</div>
@@ -1895,6 +1926,8 @@ function utilizationDraws(vals) {
     by.set(key, e);
   };
   for (const d of vals) {
+    // A percentage or invested-capital quantity is not a count, so it takes no headroom.
+    if (classSemantics(d.prefix) !== "UNIT") continue;
     const q = Number(d.quantity || 0);
     if (S.type === "option_grant") add("plan", S.shared.option_plan_id, q);
     else {
@@ -2009,7 +2042,7 @@ const issuedQty = (x) => {
   const q = x.quantity != null ? x.quantity : x.shares;
   return q != null ? q : (issuedFrom(x) || {}).quantity;
 };
-const qtyText = (v) => (v === "" || v == null || !Number.isFinite(Number(v))
+const qtyText = (v, r) => (r ? rowQtyText(r, v) : v === "" || v == null || !Number.isFinite(Number(v))
   ? "—" : Number(v).toLocaleString());
 
 /** What a signatory signs, in the words the Carta app's own success page uses. */
@@ -2058,10 +2091,10 @@ function heldRows() {
 
 function nextTable(cells, second, testid) {
   if (!cells.length) return "";
-  const rows = cells.map(([who, mail, sec, q], i) => `<div class="rv-r iss" data-testid="${testid}-row-${i}">
+  const rows = cells.map(([who, mail, sec, q, r], i) => `<div class="rv-r iss" data-testid="${testid}-row-${i}">
       <div class="rv-w">${esc(who)}${mail ? `<div class="hint" data-testid="${testid}-row-${i}-email">${esc(mail)}</div>` : ""}</div>
       <div>${sec}</div>
-      <div class="rv-n">${esc(qtyText(q))}</div>
+      <div class="rv-n">${esc(qtyText(q, r))}</div>
     </div>`).join("");
   return `<div class="rv-h iss"><div>Stakeholder</div><div>${esc(second)}</div>
       <div class="rv-n">${esc(REVIEW_QTY_HEAD)}</div></div>
@@ -2081,9 +2114,9 @@ function signedHtml() {
   const named = entries.length > 0 && entries.every((x) => issuedLabel(x));
   const held = S.links.board ? heldRows().length : 0;
   let cells = [];
-  if (named) cells = entries.map((x) => [issuedWho(x), issuedEmail(x), esc(issuedLabel(x)), issuedQty(x)]);
+  if (named) cells = entries.map((x) => [issuedWho(x), issuedEmail(x), esc(issuedLabel(x)), issuedQty(x), issuedFrom(x)]);
   else if (entries.length === S.rows.length && !held) {
-    cells = S.rows.map((r) => [(r.name || "").trim(), (r.email || "").trim(), "", r.quantity]);
+    cells = S.rows.map((r) => [(r.name || "").trim(), (r.email || "").trim(), "", r.quantity, r]);
   }
   const noun = signNoun();
   return `<div class="nx-g">${nextItem("ok", "issued-signatories", `Signatories were notified to sign ${noun}`,
@@ -2144,10 +2177,14 @@ function rowShown(r, i) {
 
 function rowsSummary() {
   const n = S.rows.length;
-  const total = S.rows.reduce((t, r) => t + (Number(r.quantity) > 0 ? Number(r.quantity) : 0), 0);
+  const units = S.rows.filter((r) => !isPct(r));
+  const pcts = S.rows.filter(isPct);
+  const total = units.reduce((t, r) => t + (Number(r.quantity) > 0 ? Number(r.quantity) : 0), 0);
+  const pct = pcts.reduce((t, r) => pctSum(t, Number(r.quantity) > 0 ? Number(r.quantity) : 0), 0);
   const [one, many] = qtyNoun();
-  return `<b>${n.toLocaleString()}</b> ${n === 1 ? "stakeholder" : "stakeholders"} · `
-    + `<b>${total.toLocaleString()}</b> ${total === 1 ? one : many}`;
+  return `<b>${n.toLocaleString()}</b> ${n === 1 ? "stakeholder" : "stakeholders"}`
+    + (units.length || !pcts.length ? ` · <b>${total.toLocaleString()}</b> ${total === 1 ? one : many}` : "")
+    + (pcts.length ? ` · <b>${esc(pctFmt(pct))}</b> ownership` : "");
 }
 
 function rowsBar() {
@@ -2172,7 +2209,7 @@ function rowsHtml() {
   const body = S.rows.map((r, i) => (rowShown(r, i) ? rowHtml(r, i) : "")).join("");
   return `${rowsBar()}<table class="st" data-testid="rows-table">
     <thead><tr><th class="ic"><span class="vh">Different terms</span></th><th>Stakeholder</th><th class="rel">Relationship</th>
-      <th class="n">Quantity</th><th class="terms">Terms</th><th class="ic"><span class="vh">Remove</span></th></tr></thead>
+      <th class="n">${esc(qtyHead())}</th><th class="terms">Terms</th><th class="ic"><span class="vh">Remove</span></th></tr></thead>
     <tbody>${body || `<tr><td colspan="6" class="empty">No stakeholders match.
       <button type="button" class="link" data-act="filter" data-f="clear" data-testid="rows-filter-clear">Show everyone</button></td></tr>`}</tbody>
   </table>`;
@@ -2212,8 +2249,7 @@ function rowHtml(r, i) {
       type="button" aria-expanded="${!!r.open}"${ctl} aria-label="Different terms for ${who}"></button></td>
     <td class="who">${whoHtml(r, i)}</td>
     <td class="rel">${relHtml(r, i)}</td>
-    <td class="n">${fld(`${p}-quantity`, "Quantity", txt(`${p}-quantity`, r.quantity, { k: "quantity", scope: p, num: true }),
-      { req: true, bare: true, hint: grouped(r.quantity), hintCls: "echo" })}</td>
+    <td class="n">${qtyCell(r, p)}</td>
     <td class="terms">${terms}</td>
     <td class="ic rm"><button class="x" id="${p}-remove" data-testid="${p}-remove" data-act="remove" data-i="${i}" type="button"
       aria-label="Remove ${who}" title="Remove">${TRASH}</button></td>
@@ -2221,6 +2257,15 @@ function rowHtml(r, i) {
     <div class="xp-h"><b>Different terms for ${who}</b>
       ${n ? `<button type="button" class="link" data-act="ov-reset-all" data-i="${i}" data-testid="${p}-reset-all">Use shared terms for all</button>` : ""}</div>
     <div class="grid" data-testid="${p}-overrides">${ovHtml(r, i)}</div></td></tr>` : ""}`;
+}
+
+function qtyCell(r, p) {
+  const pct = isPct(r), capital = isCapital(r);
+  const blank = String(r.quantity == null ? "" : r.quantity).trim() === "";
+  const hint = pct ? pctEcho(r.quantity) : capital && blank ? "Optional" : grouped(r.quantity);
+  return fld(`${p}-quantity`, pct ? "Ownership %" : "Quantity",
+    txt(`${p}-quantity`, r.quantity, { k: "quantity", scope: p, num: true, ph: pct ? "%" : "" }),
+    { req: !capital, bare: true, hint, hintCls: "echo" });
 }
 
 /** Carta's refusals of this row that no field of the row can carry. */
@@ -2325,8 +2370,15 @@ function validate(write) {
       if (write && r.touched.has("document_set_id")) r.open = true;
     }
     const q = String(r.quantity == null ? "" : r.quantity).trim();
-    need(`${p}-quantity`, "a quantity", q !== "" && Number(q) > 0,
-      q === "" ? "Enter a quantity" : "Must be greater than 0");
+    if (isPct(r)) {
+      const n = Number(q), inRange = q !== "" && Number.isFinite(n) && n >= 0 && n <= 100;
+      const dp = (q.split(".")[1] || "").length;
+      need(`${p}-quantity`, "an ownership percentage", inRange && dp <= PCT_DP,
+        q === "" ? "Enter a percentage" : !inRange ? "Must be between 0 and 100" : `At most ${PCT_DP} decimal places`);
+    } else if (!(isCapital(r) && q === "")) {
+      need(`${p}-quantity`, "a quantity", q !== "" && Number(q) > 0,
+        q === "" ? "Enter a quantity" : "Must be greater than 0");
+    }
     // Asked for only once the row names someone — that is also when the row renders
     // the select to answer it in.
     if (!r.isNew && r.stakeholderId == null) return;
@@ -3413,7 +3465,8 @@ async function handoff(status, extra) {
     // reasons a save can, and this runs after the write it is recording.
     const by = {};
     for (const [cur, t] of totals(true).entries()) {
-      by[cur] = { quantity: fin(t.qty), value: t.priced ? fin(t.value) : null };
+      by[cur] = Object.assign({ quantity: fin(t.qty), value: t.priced ? fin(t.value) : null },
+        t.pctRows ? { percent: fin(t.pct) } : {});
     }
     const db = await store();
     if (!db) return false;
@@ -3563,7 +3616,8 @@ function absorb(v) {
 function issueMessage(status) {
   // A draft can hold a quantity nobody checked, and "NaN option grants" is worse than
   // a sentence that leaves the figure out.
-  const q = fin(S.rows.reduce((a, r) => a + Number(r.quantity || 0), 0));
+  const units = S.rows.filter((r) => !isPct(r));
+  const q = units.length ? fin(units.reduce((a, r) => a + Number(r.quantity || 0), 0)) : null;
   const who = S.rows.length === 1 ? (S.rows[0].name || "1 stakeholder") : `${S.rows.length} stakeholders`;
   const what = `${q == null ? "" : `${q.toLocaleString()} `}${typeLabel().toLowerCase()} across ${who} on ${S.corpName}`;
   if (status === "issued" && S.links.board) {

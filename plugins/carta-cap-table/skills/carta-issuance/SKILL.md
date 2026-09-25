@@ -36,7 +36,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.90.15</carta-plugin>
+<carta-plugin>carta-cap-table:6.90.16</carta-plugin>
 
 # Issue Securities
 
@@ -222,7 +222,7 @@ uv run "$SKILL/issuance-artifact/scripts/build_artifact.py" \
   `price_per_share`, `threshold_value`. Omit unstated ones.
 - **Different quantities per person** go on each entry, never dropped:
   `{"stakeholders": [{"name": "Tagg Palmer", "quantity": 100}, {"name": "Emily Wilson", "quantity": 50}]}`.
-  Top-level `quantity` is for everyone without one of their own.
+  Top-level `quantity` covers everyone else. A percentage stays one: 2.75% is `"2.75"`.
 - **Resuming a saved draft set** adds `draft_set_id` — without it the page mints a *second*
   draft set of the same rows ([hard rule 3](#hard-rules)). The page reads the set's rows and
   terms back itself; seed `load_drafts` rows, each with its `draft_pk`, only as its fallback

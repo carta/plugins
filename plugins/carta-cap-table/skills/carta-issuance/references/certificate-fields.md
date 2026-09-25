@@ -92,7 +92,7 @@ holds a value before review, and a `None` or empty is a skill bug.
     "issue_date_relationship": <stakeholder.event_relationship>,  # always
     "currency":                "USD",                             # always — US default
     "prefix":                  <share_class.prefix>,              # always — NOT share_class
-    "quantity":                <user>,                            # always
+    "quantity":                <user>,                            # always — a percentage on a PERCENT class (payload-reference.md § PBO quantity)
     "law_firm_price":          <user>,                            # paid issuances; 0 only for LLC corps
     "board_approval_date":     <user, YYYY-MM-DD>,                # always
     "issue_date":              <user, YYYY-MM-DD>,                # always
