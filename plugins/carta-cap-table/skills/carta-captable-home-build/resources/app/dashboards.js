@@ -10,23 +10,34 @@ function setDashboardBody(id, html) {
 
 // ── Cap table tile: share class + option pool from the cap_table_chart response ──
 
-// One row per share class and option plan, largest fully diluted first.
+// One row per share class, option plan and warrant block, largest ownership first.
+// Ownership is of the whole company, also for an admin scoped to some share classes,
+// and it is the only figure a percentage-based class with no share count carries.
 function capTableRows(chartData) {
   const shareClasses = Array.isArray(chartData.share_classes) ? chartData.share_classes : [];
   const optionPlans = Array.isArray(chartData.option_plans) ? chartData.option_plans : [];
+  const warrantBlocks = Array.isArray(chartData.warrant_blocks) ? chartData.warrant_blocks : [];
   return shareClasses
     .map(sc => ({
       name: sc.name || "Share class",
       outstanding: numOrZero(sc.outstanding_shares),
       fullyDiluted: numOrZero(sc.fully_diluted_shares),
+      ownership: numOrZero(sc.fully_diluted_ownership),
     }))
     .concat(optionPlans.map(p => ({
       name: p.name || "Option plan",
       outstanding: numOrZero(p.outstanding_shares),
       fullyDiluted: numOrZero(p.fully_diluted_shares),
+      ownership: numOrZero(p.outstanding_ownership) + numOrZero(p.available_ownership),
     })))
-    .filter(r => r.fullyDiluted > 0 || r.outstanding > 0)
-    .sort((a, b) => b.fullyDiluted - a.fullyDiluted);
+    .concat(warrantBlocks.map(wb => ({
+      name: wb.name || "Warrants",
+      outstanding: 0,
+      fullyDiluted: numOrZero(wb.fully_diluted_shares),
+      ownership: numOrZero(wb.fully_diluted_ownership),
+    })))
+    .filter(r => r.ownership > 0 || r.fullyDiluted > 0 || r.outstanding > 0)
+    .sort((a, b) => b.ownership - a.ownership || b.fullyDiluted - a.fullyDiluted);
 }
 
 const CAP_TABLE_TILE_ROWS = 4;
@@ -46,12 +57,12 @@ function renderCapTableTile() {
   setDashboardBody("captable-dash-body", `
     <div class="tbl-row tbl-header">
       <span class="tbl-col-name">SHARE CLASS</span>
-      <span class="tbl-col-val">FULLY DILUTED</span>
+      <span class="tbl-col-val">% FULLY DILUTED</span>
     </div>
     ${shown.map(r => `
       <div class="tbl-row">
         <div class="tbl-col-name">${escHtml(r.name)}</div>
-        <div class="tbl-col-val">${escHtml(fmtSharesShort(r.fullyDiluted))}</div>
+        <div class="tbl-col-val">${escHtml(fmtOwnershipPct(r.ownership))}</div>
       </div>`).join("")}
     ${remaining > 0 ? `<div class="tbl-more">+ ${remaining} more</div>` : ""}
   `);
@@ -72,11 +83,16 @@ function renderCapTablePage() {
     return;
   }
   const totalFd = rows.reduce((sum, r) => sum + r.fullyDiluted, 0);
+  const shownOwnership = rows.reduce((sum, r) => sum + r.ownership, 0);
+  const ownershipNote = 1 - shownOwnership >= OWNERSHIP_REST_MIN
+    ? `<p class="fp-chart-note">These rows hold ${escHtml(fmtOwnershipPct(shownOwnership))} of the company, fully diluted.</p>`
+    : "";
   body.innerHTML = `
     <div class="fp-chart-head">
       <span class="fp-chart-total">${escHtml(fmtSharesFull(totalFd))}</span>
       <span class="fp-chart-total-label">Fully diluted shares</span>
     </div>
+    ${ownershipNote}
     <div class="fp-stack-wrap"><canvas id="ownership-chart"></canvas></div>
     ${ownershipLegendHtml(buildOwnershipSegments(_capTableChartData))}
     <table class="fp-table">
@@ -89,7 +105,7 @@ function renderCapTablePage() {
             <td>${escHtml(r.name)}</td>
             <td class="num">${escHtml(fmtSharesShort(r.outstanding))}</td>
             <td class="num">${escHtml(fmtSharesShort(r.fullyDiluted))}</td>
-            <td class="num">${totalFd > 0 ? (r.fullyDiluted / totalFd * 100).toFixed(1) + "%" : "—"}</td>
+            <td class="num">${escHtml(fmtOwnershipPct(r.ownership))}</td>
           </tr>`).join("")}
       </tbody>
     </table>

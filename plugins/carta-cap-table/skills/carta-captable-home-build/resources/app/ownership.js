@@ -57,22 +57,45 @@ function destroyOwnershipChart() {
   if (_ownershipChart) { _ownershipChart.destroy(); _ownershipChart = null; }
 }
 
-// Caps at 6 segments — past that, adjacent slices of one stacked bar stop reading
-// apart. A 7th+ class folds into "Other"; the table below still lists every row.
+// Plots ownership, not share counts. Ownership is of the whole company, so the part
+// the rows do not hold (for a scoped admin, the classes out of scope) is drawn as
+// "Rest of the company". Caps at 6 segments — past that, adjacent slices of one
+// stacked bar stop reading apart. A 7th+ row folds into "Other"; the table below
+// still lists every row.
+const OWNERSHIP_REST_MIN = 0.0005;
 function buildOwnershipSegments(chartData) {
-  const shareClasses = Array.isArray(chartData.share_classes) ? chartData.share_classes : [];
-  const optionPlans = Array.isArray(chartData.option_plans) ? chartData.option_plans : [];
-  const segments = shareClasses.map(sc => ({ label: sc.name || "Share class", value: numOrZero(sc.fully_diluted_shares) }))
-    .concat(optionPlans.map(p => ({ label: p.name || "Option plan", value: numOrZero(p.fully_diluted_shares) })))
-    .filter(s => s.value > 0)
-    .sort((a, b) => b.value - a.value);
+  const segments = capTableRows(chartData)
+    .filter(r => r.ownership > 0)
+    .map(r => ({ label: r.name, value: r.ownership, shares: r.fullyDiluted }));
 
   const MAX_SEGMENTS = 6;
-  if (segments.length <= MAX_SEGMENTS) return segments;
-  const kept = segments.slice(0, MAX_SEGMENTS - 1);
-  const otherTotal = segments.slice(MAX_SEGMENTS - 1).reduce((sum, s) => sum + s.value, 0);
-  if (otherTotal > 0) kept.push({ label: "Other", value: otherTotal });
+  let kept = segments;
+  if (segments.length > MAX_SEGMENTS) {
+    kept = segments.slice(0, MAX_SEGMENTS - 1);
+    const tail = segments.slice(MAX_SEGMENTS - 1);
+    kept.push({
+      label: "Other",
+      value: tail.reduce((sum, s) => sum + s.value, 0),
+      shares: tail.reduce((sum, s) => sum + s.shares, 0),
+    });
+  }
+  const shown = kept.reduce((sum, s) => sum + s.value, 0);
+  if (kept.length && 1 - shown >= OWNERSHIP_REST_MIN) {
+    kept.push({ label: "Rest of the company", value: 1 - shown, shares: 0, rest: true });
+  }
   return kept;
+}
+
+function fmtOwnershipPct(fraction) {
+  return (numOrZero(fraction) * 100).toFixed(1) + "%";
+}
+
+// Canvas can't read light-dark(), so this mirrors --carta-chart-rest by hand.
+const OWNERSHIP_REST_LIGHT = "#D5D8D8";
+const OWNERSHIP_REST_DARK = "#3F4444";
+function ownershipSegmentColor(segment, i) {
+  if (segment.rest) return prefersDarkScheme() ? OWNERSHIP_REST_DARK : OWNERSHIP_REST_LIGHT;
+  return ownershipPalette()[i];
 }
 
 // A value rides inside its own segment, but only where it fits: a clipped label is
@@ -90,7 +113,7 @@ const ownershipValueLabels = {
       const bar = chart.getDatasetMeta(i).data[0];
       if (!bar) return;
       const { x, y, base } = bar.getProps(["x", "y", "base"], true);
-      const text = fmtSharesShort(dataset.data[0]);
+      const text = fmtOwnershipPct(dataset.data[0]);
       if (ctx.measureText(text).width + IN_SEGMENT_LABEL_PADDING * 2 > Math.abs(x - base)) return;
       ctx.fillStyle = onFillTextColor(bar.options.backgroundColor);
       ctx.fillText(text, (x + base) / 2, y);
@@ -107,11 +130,11 @@ function drawOwnershipChart() {
   const segments = buildOwnershipSegments(_capTableChartData);
   if (!segments.length) return;
 
-  const total = segments.reduce((sum, s) => sum + s.value, 0);
+  const whole = segments.reduce((sum, s) => sum + s.value, 0);
   const lastIndex = segments.length - 1;
   destroyOwnershipChart();
-  // One stacked bar: fully diluted shares is the whole, each share class or option
-  // plan a slice of it. Horizontal so the long names sit in a legend, not on an axis.
+  // One stacked bar: the whole company is the whole, each row a slice of it.
+  // Horizontal so the long names sit in a legend, not on an axis.
   _ownershipChart = new Chart(canvas, {
     type: "bar",
     data: {
@@ -119,7 +142,7 @@ function drawOwnershipChart() {
       datasets: segments.map((segment, i) => ({
         label: segment.label,
         data: [segment.value],
-        backgroundColor: () => ownershipPalette()[i],
+        backgroundColor: () => ownershipSegmentColor(segment, i),
         // 1px of surface on each side of two neighbours is the 2px gap that separates
         // them — never a stroke drawn around the segment.
         borderColor: () => chartSurfaceColor(),
@@ -144,15 +167,16 @@ function drawOwnershipChart() {
           callbacks: {
             title: () => [],
             label: (ctx) => {
-              const pct = total > 0 ? (ctx.parsed.x / total * 100).toFixed(1) : "0.0";
-              return `${ctx.dataset.label}: ${fmtSharesShort(ctx.parsed.x)} (${pct}% fully diluted)`;
+              const segment = segments[ctx.datasetIndex];
+              const shares = segment.shares > 0 ? `${fmtSharesShort(segment.shares)} shares, ` : "";
+              return `${segment.label}: ${shares}${fmtOwnershipPct(segment.value)} of the company, fully diluted`;
             },
           },
         },
       },
       // No axis: the total above the bar states the whole and the legend names the parts.
       scales: {
-        x: { stacked: true, display: false },
+        x: { stacked: true, display: false, min: 0, max: whole },
         y: { stacked: true, display: false },
       },
     },
@@ -167,7 +191,7 @@ function ownershipLegendHtml(segments) {
     <ul class="chart-legend">
       ${segments.map((segment, i) => `
         <li class="chart-legend-item">
-          <span class="chart-legend-swatch" style="background:var(--carta-chart-series-${i + 1})"></span>
+          <span class="chart-legend-swatch" style="background:var(${segment.rest ? "--carta-chart-rest" : `--carta-chart-series-${i + 1}`})"></span>
           ${escHtml(segment.label)}
         </li>`).join("")}
     </ul>`;

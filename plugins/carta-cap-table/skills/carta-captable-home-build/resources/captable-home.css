@@ -75,6 +75,8 @@
       --carta-chart-series-5:                        light-dark(#e87ba4, #d55181);
       --carta-chart-series-6:                        light-dark(#008300, #008300);
       --carta-chart-series-1-track:                  light-dark(#DCE8F7, #24384F);
+      /* "Rest of the company" segment; mirrors OWNERSHIP_REST_* in app/ownership.js. */
+      --carta-chart-rest:                            light-dark(#D5D8D8, #3F4444);
     }
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -477,6 +479,7 @@
     /* Proportional figures on purpose: tabular-nums reads loose at this size. */
     .fp-chart-total { font-size: 26px; font-weight: 600; line-height: 1.2; color: var(--ink-color-global-text-default); }
     .fp-chart-total-label { font-size: 13px; color: var(--ink-color-global-text-subtle); }
+    .fp-chart-note { font-size: 12px; color: var(--ink-color-global-text-subtle); margin: -4px 0 10px; }
 
     .chart-legend { list-style: none; display: flex; flex-wrap: wrap; gap: 7px 22px; padding: 13px 0 0; margin-bottom: 28px; }
     .chart-legend-item { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--ink-color-global-text-subtle); }
