@@ -38,21 +38,38 @@ function ChevronDown({ size = 16 }) {
 
 /** Marks a value this console derived or edited, rather than one Carta returned. */
 export function SparkleAI({ size = 14, title }) {
+  const [hover, setHover] = useState(false);
   return (
-    <span title={title} style={{
-      display: "inline-flex", alignItems: "center", justifyContent: "center",
-      background: "#FFF7F5", borderRadius: "9999px", padding: 3, flex: "0 0 auto",
-      cursor: title ? "help" : undefined,
-    }}>
-      <svg
-        width={size} height={size} viewBox="0 0 24 24" fill="none"
-        stroke="#E8704C" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
-        style={{ display: "block" }} aria-hidden
-      >
-        <path d="M2 21a8 8 0 0 1 10.821-7.487" />
-        <path d="M21.378 16.626a1 1 0 0 0-3.004-3.004l-4.01 4.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z" />
-        <circle cx="10" cy="8" r="5" />
-      </svg>
+    <span
+      style={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center", flex: "0 0 auto" }}
+      onMouseEnter={title ? () => setHover(true) : undefined}
+      onMouseLeave={title ? () => setHover(false) : undefined}
+    >
+      <span style={{
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        background: "#FFF7F5", borderRadius: "9999px", padding: 3,
+      }}>
+        <svg
+          width={size} height={size} viewBox="0 0 24 24" fill="none"
+          stroke="#E8704C" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
+          style={{ display: "block" }} aria-hidden
+        >
+          <path d="M2 21a8 8 0 0 1 10.821-7.487" />
+          <path d="M21.378 16.626a1 1 0 0 0-3.004-3.004l-4.01 4.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z" />
+          <circle cx="10" cy="8" r="5" />
+        </svg>
+      </span>
+      {hover && title && (
+        <span style={{
+          position: "absolute", bottom: "calc(100% + 6px)", left: "50%", transform: "translateX(-50%)",
+          background: C.surfaceDefault, color: C.textDefault, border: `1px solid ${C.borderDefault}`,
+          borderRadius: 6, padding: "4px 8px", fontSize: FS.xs, whiteSpace: "nowrap",
+          pointerEvents: "none", zIndex: 10,
+          boxShadow: "0 2px 8px rgba(0,0,0,.12)",
+        }}>
+          {title}
+        </span>
+      )}
     </span>
   );
 }
