@@ -51,7 +51,7 @@ function MetricTable({ rows, currency, equityRep }) {
                   title={!p.fetched ? p.tooltip : undefined}
                   style={{ display: "inline-flex", alignItems: "center", gap: 4 }}
                 >
-                  {!p.fetched && <SparkleAI />}
+                  {!p.fetched && <SparkleAI title={p.tooltip} />}
                   <span>{p.label}</span>
                 </div>
               </Th>
@@ -68,9 +68,7 @@ function MetricTable({ rows, currency, equityRep }) {
                   than widen the table past its container. */}
               <Td ellipsis title={levelLabel(r.level, track)}>
                 {est && (
-                  <span title={r.provenanceNote || "User-added row"}>
-                    <SparkleAI />
-                  </span>
+                  <SparkleAI title={r.provenanceNote || "User-added row"} />
                 )}
                 {est && " "}
                 {levelLabel(r.level, track)}

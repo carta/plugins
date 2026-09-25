@@ -37,11 +37,12 @@ function ChevronDown({ size = 16 }) {
 }
 
 /** Marks a value this console derived or edited, rather than one Carta returned. */
-export function SparkleAI({ size = 14 }) {
+export function SparkleAI({ size = 14, title }) {
   return (
-    <span style={{
+    <span title={title} style={{
       display: "inline-flex", alignItems: "center", justifyContent: "center",
       background: "#FFF7F5", borderRadius: "9999px", padding: 3, flex: "0 0 auto",
+      cursor: title ? "help" : undefined,
     }}>
       <svg
         width={size} height={size} viewBox="0 0 24 24" fill="none"
