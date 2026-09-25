@@ -92,9 +92,9 @@ export const C = {
   // button's own near-black background made the label invisible. This fill is a
   // fixed dark in both themes, so its text is a fixed light.
   onPrimary: "var(--ink-color-global-brand-white)",
-  // Pool-bar segments: blue (used) vs teal (planned) for hue contrast.
+  // Pool-bar segments: blue (used) vs turquoise (planned) for hue contrast.
   poolUsed: "var(--ink-color-global-brand-blue-70)",
-  poolPlanned: "var(--ink-color-global-brand-teal-50)",
+  poolPlanned: "var(--ink-color-global-brand-turquoise-70)",
   poolRemaining: "var(--ink-color-global-brand-blue-20)",
   interactivePrimaryOnPage: "var(--ink-color-global-text-default)",
   linkDefault: "var(--ink-color-global-link-default)",
