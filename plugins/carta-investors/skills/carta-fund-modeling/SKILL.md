@@ -41,7 +41,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.44.7</carta-plugin>
+<carta-plugin>carta-investors:6.44.9</carta-plugin>
 
 [PATTERN carta-writing-style v0.0.2]
 [PATTERN etiquette v0.0.6]
@@ -477,8 +477,9 @@ modeled estimate (e.g. `committed/99`).
 
 **Company financials (optional) — §14.** Portfolio-company financials (revenue / ARR / KPIs reported *by the
 portfolio company*, Carta Data Collection) come from the base `FUND_ADMIN.COMPANY_FINANCIALS` table (the legacy
-`COMPANY_FINANCIALS_LATEST` view is deprecated/empty). Run the §14 query (`is_latest = TRUE AND instance_type =
-'Actual'`), saving the rows to `<raw_dir>/financials.ndjson`. **`COMPANY_FINANCIALS` is row-scoped to the firm
+`COMPANY_FINANCIALS_LATEST` view is deprecated/empty). Run the §14 query **verbatim** — its `WHERE` narrows to
+the exact metrics the builder renders and its `ORDER BY` keeps offset paging stable; do not drop either to
+"simplify" it — saving the rows to `<raw_dir>/financials.ndjson`. **`COMPANY_FINANCIALS` is row-scoped to the firm
 you set as context via `set_context` in Step 1** — do NOT add a `firm_id` filter (redundant with the context scope, and a mismatch
 silently returns zero rows); this scoping is also why the table looks "empty" if queried from another firm's
 context. See queries.md §14.

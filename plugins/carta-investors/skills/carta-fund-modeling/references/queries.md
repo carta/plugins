@@ -529,14 +529,28 @@ Carta **Data Collection** financials (revenue / ARR / KPIs reported *by the port
 **base `COMPANY_FINANCIALS`** table (the legacy `COMPANY_FINANCIALS_LATEST` view is deprecated/empty). This is a
 **required-attempt** stem — `build_datadir.py` hard-fails (exit 2) if `financials.ndjson` is ABSENT, so a rebuild
 must run it EVERY time. It legitimately returns **0 rows** for a firm whose portcos don't report into Data
-Collection — that's fine (write an empty file to record the attempt), but you may not skip the fetch. Keep only
-the latest actual per metric:
+Collection — that's fine (write an empty file to record the attempt), but you may not skip the fetch. Fetch only
+the latest actuals for the metrics the dashboard renders:
 ```sql
 SELECT legal_name, name, mnemonic, report_type, float_value, unit_type, currency, period_end
 FROM FUND_ADMIN.COMPANY_FINANCIALS
 WHERE is_latest = TRUE AND instance_type = 'Actual' AND float_value IS NOT NULL
+  AND (UPPER(TRIM(mnemonic)) IN ('FS_REVENUE', 'FS_ARR_END', 'ARR', 'FS_EBITDA', 'FS_GROSS_PROFIT',
+                                 'FS_COGS', 'FS_NET_INCOME', 'FS_CASH_AND_CASH_EQUIVALENTS', 'FS_HEADCOUNT')
+       OR LOWER(TRIM(name)) = 'revenue'
+       OR LOWER(name) LIKE '%recurring revenue%')
+  AND LOWER(COALESCE(name, '')) NOT LIKE '%deferred%'
+  AND LOWER(COALESCE(name, '')) NOT LIKE '%forecast%'
+ORDER BY legal_name, mnemonic, name, period_end, report_type
 LIMIT 10000
 ```
+The `WHERE` mirrors `build_datadir.py`'s `METRIC_DEFS` matcher exactly (the same mnemonics, the same
+`revenue` / `recurring revenue` name fallbacks, the same deferred/forecast exclusion) — the builder discards
+every other row, so fetching them only burns DWH pages. `COMPANY_FINANCIALS` is one row per company × metric ×
+period for the whole firm, so it is the one stem that outgrows the 10,000-row clamp on a large firm; without
+this filter a firm with many custom KPIs can exceed even the 5-page (50,000-row) pagination cap. The `ORDER BY`
+is required: offset paging is only stable over an ordered result. Add a metric to `METRIC_DEFS` → add it
+here in the same change.
 **`COMPANY_FINANCIALS` is row-scoped to the active firm context** — it returns *only* the firm you `SET_CTX`'d
 in Step 1. Do **not** add a `firm_id`/`firm_name` filter: it is redundant with the context scope, and a value
 that doesn't match the row's own `firm_id` silently returns zero rows. Rely on the Step-1 `set_context`. (This

@@ -780,7 +780,8 @@ def build(rawdir, out, meta):
     # Curated metrics surfaced on the company card + time-series chart. Matched by
     # mnemonic (preferred) or lowercased name; ORDER drives the UI metric dropdown.
     # (key, label, unit, matcher(mnemonic_upper, name_lower)). Forecast/deferred
-    # variants are excluded — operating actuals only.
+    # variants are excluded — operating actuals only. Mirrored in queries.md §14's
+    # WHERE so the fetch only pulls rows this matcher keeps — change both together.
     METRIC_DEFS = [
         ("revenue",     "Revenue",      "Dollar", lambda mn, nm: mn == "FS_REVENUE" or nm == "revenue"),
         ("arr",         "ARR",          "Dollar", lambda mn, nm: mn in ("FS_ARR_END", "ARR") or "recurring revenue" in nm),
