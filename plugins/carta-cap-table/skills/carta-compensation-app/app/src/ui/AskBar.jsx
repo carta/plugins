@@ -90,6 +90,8 @@ export default function AskBar({ token, page, placeholder = PLACEHOLDER }) {
   const [busy, setBusy] = useState(false);
   const [reply, setReply] = useState("");
   const [error, setError] = useState("");
+  const [submitted, setSubmitted] = useState("");
+  const [done, setDone] = useState(false);
   // A previous turn still holds the session lock. Distinct from `busy`, which is
   // about THIS tab's request — the stuck turn may belong to a tab that is gone.
   const [stuck, setStuck] = useState(false);
@@ -153,7 +155,9 @@ export default function AskBar({ token, page, placeholder = PLACEHOLDER }) {
     setError("");
     setStuck(false);
     setReply("");
+    setDone(false);
     textRef.current = "";
+    setSubmitted(text);
     setPrompt("");
 
     try {
@@ -196,6 +200,7 @@ export default function AskBar({ token, page, placeholder = PLACEHOLDER }) {
       // requestAnimationFrame can lose the race and never paint.
       cancelAnimationFrame(frameRef.current);
       setReply(textRef.current);
+      setDone(true);
 
       if (shouldReload) {
         // Persist first: reload drops in-memory state. App.jsx restores the
@@ -212,7 +217,7 @@ export default function AskBar({ token, page, placeholder = PLACEHOLDER }) {
     }
   }
 
-  const showPanel = busy || reply || error || stuck;
+  const showPanel = busy || reply || error || stuck || submitted;
 
   return (
     <div>
@@ -228,7 +233,17 @@ export default function AskBar({ token, page, placeholder = PLACEHOLDER }) {
           maxHeight: `${REPLY_LINE_HEIGHT * REPLY_LINES}em`,
           overflowY: "auto",
         }}>
-          {error ? `⚠️ ${error}` : (reply || <Working />)}
+          {submitted && (
+            <div style={{ marginBottom: 4, color: C.textQuiet }}>
+              You: {submitted}
+            </div>
+          )}
+          {error
+            ? `⚠️ ${error}`
+            : done && reply
+              ? <><span style={{ color: C.feedbackPositive }}>✓ Done</span> — {reply}</>
+              : (reply || <Working />)
+          }
           {stuck && (
             <button
               type="button"
