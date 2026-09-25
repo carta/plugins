@@ -70,7 +70,7 @@ def emit(raw, stems, wide=False):
     fund_uuids = _fund_uuids(raw)
     out, missing = {}, []
     for stem in stems:
-        if not fund_uuids:
+        if not fund_uuids and sq.STEMS[stem]["id_param"] is not None:
             missing.append(stem)
             continue
         sql, limit, fmt = sq.render(stem, fund_uuids, wide=wide)
@@ -179,8 +179,6 @@ def main(argv):
         sys.stderr.write("emit_stem_sql: %s skipped — no fund ids in _enumerate.ndjson "
                          "or fund_uuids.txt (write an empty %s.ndjson)\n" % (stem, stem))
     if a.batch:
-        sys.stderr.write("emit_stem_sql: note — financials (§14) is not in the manifest; "
-                         "run it as its own query or append it to a batch's queries.\n")
         sys.stdout.write(json.dumps(batches(out, a.max), ensure_ascii=False, indent=2) + "\n")
         return 0
     if a.stem:

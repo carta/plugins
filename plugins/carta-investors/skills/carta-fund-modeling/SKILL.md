@@ -41,7 +41,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.44.9</carta-plugin>
+<carta-plugin>carta-investors:6.44.11</carta-plugin>
 
 [PATTERN carta-writing-style v0.0.2]
 [PATTERN etiquette v0.0.6]
@@ -294,8 +294,10 @@ Get every stem's ready-to-run query from the emitter (`scripts/stem_queries.py` 
 **Zero rows means a lapsed firm context, not an empty firm.** These tables are row-scoped by `set_context`; when
 the context lapses every query returns 0 rows with no error. If the directory query — or, later, a rows-required
 stem (`nav_latest`, `investments`) — comes back empty, re-run `set_context {"firm_id": "<firm_uuid>"}` and reissue
-that one query **once**. A second empty result is final: stop the fetch and report it (the strict build refuses to
-launch on it). Do not vary the SQL, widen the filter, or try another table.
+it **once**: the directory query on its own, or the **whole batch** the empty stem came from (a lapsed context
+empties every query in that batch, so re-fetching one stem leaves the others silently empty). A second empty result
+is final: stop the fetch and report it (the strict build refuses to launch on it). Do not vary the SQL, widen the
+filter, or try another table.
 
 ### GP carry opt-in check (before Wave 1)
 
@@ -412,9 +414,10 @@ hand-reconstructed file is exactly the "0 funds / 0 companies" / silently-trunca
 `emit_stem_sql.py` call returns all of them and there is no ordering dependency between any two:
 `nav_latest`, `investments`, `cashflows`, `fund_metrics`, `accrued_carry`, `distributed_carry`, `waterfall`,
 `cohort`, `deal_irr`, `partners`, `gp_partners`, `gp_carry` (if opted in — see the GP carry opt-in check above),
-`ownership`, `financing` (§11), `captable` (§15), `corporations` (§16). Issue them together, then normalize each
-returned result with `save_query_result.py`. **Also run the §14 `financials` query in the same batch** (it takes
-no `fund_uuid` list — it is firm-context-scoped). The whole build runs off the MCP DWH and these local helpers only.
+`ownership`, `financing` (§11), `captable` (§15), `corporations` (§16), `financials` (§14 — firm-context-scoped,
+so its query carries no IN-list; the emitter includes it like every other stem). Issue them together, then
+normalize each returned result with `save_query_result.py`. The whole build runs off the MCP DWH and these local
+helpers only.
 
 **Do not stop after the fund-level stems** — `financing` supplies each company's last priced round, `captable`
 populates its cap table on the dashboard, and `corporations` is the id bridge those enrichments (cap table AND
@@ -460,8 +463,8 @@ earned"; feeds the "Carry distributed" callout, $0→"—"), `cohort`(§8), `dea
 aren't Carta cap-table customers, but the file itself must exist), `corporations`(§16 — the entity_link ->
 corporation_uuid bridge that `captable` and `financing`'s "Latest round" enrichment depend on; same
 empty-file-OK, absent-file-fails rule).
-`financials`(§14, **portfolio-company financials via Carta Data Collection**) is fetched via its own §14 query
-below and is *not* gated by the builder. `waterfall`(§6, `PROFIT_ALLOCATION_WATERFALL_CONFIG` — real per-fund
+`financials`(§14, **portfolio-company financials via Carta Data Collection**) is firm-context-scoped (no IN-list)
+and attempt-required: an empty file is fine, an absent file fails the build. `waterfall`(§6, `PROFIT_ALLOCATION_WATERFALL_CONFIG` — real per-fund
 carry / preferred return / GP catch-up), `gp_carry`(§7b, `ALLOCATIONS` GP-entity `Carried interest accrued`) and
 `gp_partners`(§9, `IS_GENERAL_PARTNER`) are **optional** wave-1 stems the emitter includes automatically.
 `waterfall` seeds real carry/hurdle/catch-up (else the flat `carryRate` defaults). `gp_carry` is the **primary**
@@ -477,9 +480,9 @@ modeled estimate (e.g. `committed/99`).
 
 **Company financials (optional) — §14.** Portfolio-company financials (revenue / ARR / KPIs reported *by the
 portfolio company*, Carta Data Collection) come from the base `FUND_ADMIN.COMPANY_FINANCIALS` table (the legacy
-`COMPANY_FINANCIALS_LATEST` view is deprecated/empty). Run the §14 query **verbatim** — its `WHERE` narrows to
-the exact metrics the builder renders and its `ORDER BY` keeps offset paging stable; do not drop either to
-"simplify" it — saving the rows to `<raw_dir>/financials.ndjson`. **`COMPANY_FINANCIALS` is row-scoped to the firm
+`COMPANY_FINANCIALS_LATEST` view is deprecated/empty). The emitter includes the §14 query in the fetch batch and
+`save_batch_result.py` writes `<raw_dir>/financials.ndjson`; its `WHERE` narrows to the exact metrics the builder
+renders and its `ORDER BY` keeps offset paging stable, so never hand-edit the emitted SQL. **`COMPANY_FINANCIALS` is row-scoped to the firm
 you set as context via `set_context` in Step 1** — do NOT add a `firm_id` filter (redundant with the context scope, and a mismatch
 silently returns zero rows); this scoping is also why the table looks "empty" if queried from another firm's
 context. See queries.md §14.

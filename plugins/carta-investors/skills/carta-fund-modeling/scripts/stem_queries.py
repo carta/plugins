@@ -8,9 +8,10 @@ reads this to print ready-to-run queries so the LLM never hand-templates SQL or
 pastes an IN-list by hand.
 
 `sql` carries a single ``{fund_uuids}`` slot (matching ``id_param``);
-`emit_stem_sql.py` fills it with a quoted, comma-joined IN-list. **Every stem is
-fund-scoped**, so `wave` is 1 for all of them and the whole fetch is one concurrent
-batch (SKILL.md Step 2) with no ordering dependency between stems. The three
+`emit_stem_sql.py` fills it with a quoted, comma-joined IN-list. A firm-context stem
+(``id_param`` None — `financials`) has no slot: its table is row-scoped by
+`set_context`, so it renders as-is. Every stem is `wave` 1 and the whole fetch is one
+concurrent batch (SKILL.md Step 2) with no ordering dependency between stems. The three
 corporation-filtered stems (`financing`, `captable`, `corporations`) reach their
 corporation scope through a subquery — see ``_CORP_SCOPE``.
 
@@ -314,10 +315,8 @@ STEMS = {
     },
     # corporations: CORPORATION_BASIC_INFO_V2 — the entity_link -> corporation bridge
     # every other corp enrichment resolves through. The table is itself row-scoped to
-    # the active firm context, so the filter is belt-and-braces rather than load-
-    # bearing; it stays because the manifest has no firm-context/no-IN-list mechanism
-    # (see test_manifest_id_param_matches_placeholder, which requires every stem's
-    # declared id_param placeholder to appear literally in its SQL). Note the join key:
+    # the active firm context, so the filter only narrows to the enumerated funds'
+    # portcos. Note the join key:
     # this table's `corporation_uuid` IS ownership's `CORPORATION_ID`. Optional — a firm
     # whose portcos aren't Carta cap-table customers has no rows, so a missing/empty
     # file must NOT gate the build.
@@ -327,6 +326,24 @@ STEMS = {
             "SELECT entity_link_id, corporation_uuid, corporation_name\n"
             "FROM FUND_ADMIN.CORPORATION_BASIC_INFO_V2\n"
             "WHERE corporation_uuid IN " + _CORP_SCOPE
+        ),
+    },
+    # financials: row-scoped to the set_context firm, one row per company x metric x
+    # period. The WHERE mirrors build_datadir's METRIC_DEFS (the builder drops every
+    # other row); the ORDER BY keeps offset paging stable.
+    "financials": {
+        "id_param": None, "wave": 1, "limit": 10000, "format": "ndjson",
+        "sql": (
+            "SELECT legal_name, name, mnemonic, report_type, float_value, unit_type, currency, period_end\n"
+            "FROM FUND_ADMIN.COMPANY_FINANCIALS\n"
+            "WHERE is_latest = TRUE AND instance_type = 'Actual' AND float_value IS NOT NULL\n"
+            "  AND (UPPER(TRIM(mnemonic)) IN ('FS_REVENUE', 'FS_ARR_END', 'ARR', 'FS_EBITDA', 'FS_GROSS_PROFIT',\n"
+            "                                 'FS_COGS', 'FS_NET_INCOME', 'FS_CASH_AND_CASH_EQUIVALENTS', 'FS_HEADCOUNT')\n"
+            "       OR LOWER(TRIM(name)) = 'revenue'\n"
+            "       OR LOWER(name) LIKE '%recurring revenue%')\n"
+            "  AND LOWER(COALESCE(name, '')) NOT LIKE '%deferred%'\n"
+            "  AND LOWER(COALESCE(name, '')) NOT LIKE '%forecast%'\n"
+            "ORDER BY legal_name, mnemonic, name, period_end, report_type"
         ),
     },
 }
@@ -439,5 +456,7 @@ def render(stem, ids, wide=False):
     reliably persists to a file so the result is captured by path, not inline)."""
     spec = STEMS[stem]
     template = WIDE[stem] if (wide and stem in WIDE) else spec["sql"]
+    if spec["id_param"] is None:
+        return template, spec["limit"], spec["format"]
     sql = template.replace("{%s}" % spec["id_param"], in_list(ids))
     return sql, spec["limit"], spec["format"]

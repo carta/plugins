@@ -1452,12 +1452,9 @@ STEM_CONTRACT = [
     ("corporations",  "file", ["entity_link_id", "corporation_uuid"]),
 ]
 
-# Firm-CONTEXT stems fetched OUTSIDE the fund/corp-filtered manifest — they ride the
-# set_context firm scope (no IN-list), so they aren't in stem_queries.STEMS. Still
-# ATTEMPT-required so a bare "rebuild" runs them EVERY time: an absent file is a
-# skipped fetch (hard-fail), a present-but-empty file is legitimate (the firm has no
-# such data / access-denied). This is why §14 company financials can no longer be
-# silently omitted. (stem, [load-bearing columns])
+# Firm-CONTEXT stems: row-scoped by set_context (manifest entries with no IN-list). ATTEMPT-required so a bare "rebuild" runs them EVERY time: an absent file
+# is a skipped fetch (hard-fail), a present-but-empty file is legitimate (the firm has
+# no such data / access-denied). (stem, [load-bearing columns])
 FIRM_SCOPED_REQUIRED = [
     ("financials", ["legal_name", "float_value", "period_end"]),
 ]

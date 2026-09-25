@@ -31,7 +31,7 @@ first-build; run the emitter (SKILL.md Step 2).
 `uv run scripts/build_datadir.py --raw <raw_dir> --out <dashboard_dir> --meta meta.json` — the deterministic, firm-agnostic
 generator that writes every console-schema file (SKILL.md Step 3). **Do not hand-author the JSON.** Stems map to
 the sections below: `nav_latest`(§2), `investments`(§3), `ownership`(§4), `cashflows`(§5), `accrued_carry`(§7),
-`cohort`(§8), `partners`(§9), `deal_irr`(§10), `financing`(§11), `fund_metrics`(§1/§12). The mapping table
+`cohort`(§8), `partners`(§9), `deal_irr`(§10), `financing`(§11), `fund_metrics`(§1/§12), `financials`(§14 — firm-context-scoped, no IN-list). The mapping table
 below documents the fields the generator derives from each.
 
 ## Output → console-schema mapping (produced by `scripts/build_datadir.py`; consumed by `src/model/*`)
@@ -556,6 +556,7 @@ in Step 1. Do **not** add a `firm_id`/`firm_name` filter: it is redundant with t
 that doesn't match the row's own `firm_id` silently returns zero rows. Rely on the Step-1 `set_context`. (This
 scoping is also why a cross-firm `COUNT(*)` looks "empty" when run from a different firm's context — it is not
 empty, it is filtered.)
-→ save to `<raw_dir>/financials.ndjson`. The builder matches `legal_name` to the issuer-name slug and surfaces
+Captured as the `financials` stem: it is in `stem_queries.py` with no IN-list slot, so the emitter includes it
+in the batch without substitution → `<raw_dir>/financials.ndjson`. The builder matches `legal_name` to the issuer-name slug and surfaces
 revenue / ARR in the Companies expand. Coverage is **partial** — only portcos that report into Carta Data
 Collection appear, and a company must also be a tracked holding to surface on its card; render only when present.

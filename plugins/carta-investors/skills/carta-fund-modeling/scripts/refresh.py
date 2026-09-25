@@ -19,6 +19,7 @@ import subprocess
 import sys
 from typing import Callable, List, Optional
 
+import build_datadir
 import chat_session
 import fm_paths
 import stem_queries
@@ -144,6 +145,9 @@ def _run_turn(session, prompt, capture_suffix=None, on_step=None, timeout=TURN_T
 
 
 _STEM_ERR_RE = re.compile(r"ERROR stem=(\S+?):?\s+(.*)")
+_EMPTY_STEM_RE = re.compile(r"save_batch_result:\s+(\S+)\s+0 rows")  # the helper pads the stem to 16 cols
+# Zero rows on these means the firm context lapsed, not an empty firm (SKILL.md Step 2).
+ROWS_REQUIRED = tuple(s for s, required, _cols in build_datadir.STEM_CONTRACT if required is True)
 _TRUNC_BATCH_RE = re.compile(r"TRUNCATED stem=(\S+)\s+next_offset=(\d+)")
 _TRUNC_SINGLE_RE = re.compile(r"TRUNCATED next_offset=(\d+)")
 
@@ -152,6 +156,11 @@ def _truncated_stems(out):
     # type: (str) -> List[tuple]
     """(stem, next_offset) for each stem save_batch_result flagged as incomplete."""
     return [(m.group(1), int(m.group(2))) for m in _TRUNC_BATCH_RE.finditer(out or "")]
+
+
+def _lapsed_stems(out):
+    # type: (str) -> List[str]
+    return [m.group(1) for m in _EMPTY_STEM_RE.finditer(out or "") if m.group(1) in ROWS_REQUIRED]
 
 
 def _stem_errors(out):
@@ -267,9 +276,7 @@ def _paginate(session, script_dir, raw_dir, call, stem, next_off, emit):
         emit("fetch", "Fetching more %s rows…" % stem, page=pages + 1)
         args = dict(base_args)
         args["offset"] = next_off
-        prompt = ("Run exactly one tool call, then reply DONE:\n%s {\"name\": "
-                  "\"dwh__execute__query\", \"arguments\": %s}" % (call, json.dumps(args)))
-        ok, captured, err, _name = _run_turn(session, prompt, capture_suffix="__call_tool")
+        ok, captured, err, _name = _run_turn(session, _query_prompt(call, args), capture_suffix="__call_tool")
         if not ok or not captured:
             raise RefreshError("Paging %s failed: %s" % (stem, err or "no result"),
                                needs_human=True)
@@ -283,6 +290,32 @@ def _paginate(session, script_dir, raw_dir, call, stem, next_off, emit):
         next_off = int(m.group(1)) if m else None
 
 
+def _tool_prompt(tool, args):
+    # type: (str, dict) -> str
+    return "Run exactly one tool call, then reply DONE:\n%s %s" % (tool, json.dumps(args))
+
+
+def _query_prompt(call, args):
+    # type: (str, dict) -> str
+    return _tool_prompt(call, {"name": "dwh__execute__query", "arguments": args})
+
+
+def _repin_context(session, set_ctx, firm_uuid, emit, phase):
+    # type: (object, str, str, Callable, str) -> None
+    emit(phase, "Re-establishing the firm context…")
+    _run_turn(session, _tool_prompt(set_ctx, {"firm_id": firm_uuid}), capture_suffix="__set_context")
+
+
+def _save_directory(script_dir, captured, raw_dir, enum_ndjson):
+    # type: (str, str, str, str) -> tuple
+    """(fund_uuids, detail): detail is the capture helper's stderr when it produced no rows."""
+    src_path = _capture_src(captured, os.path.join(raw_dir, "_enumerate.raw"))
+    r = _py(script_dir, "save_query_result.py", src_path, enum_ndjson)
+    if r.returncode != 0:
+        return [], (r.stderr or "").strip()
+    return stem_queries.directory_fund_uuids(enum_ndjson), ""
+
+
 def _retry_stem(session, script_dir, raw_dir, call, stem, emit):
     # type: (object, str, str, str, str, Callable) -> bool
     """Re-fetch one errored stem as a single dwh__execute__query, so a transient fault
@@ -294,9 +327,7 @@ def _retry_stem(session, script_dir, raw_dir, call, stem, emit):
         if r.returncode != 0:
             continue
         args = json.loads(r.stdout)
-        prompt = ("Run exactly one tool call, then reply DONE:\n%s {\"name\": "
-                  "\"dwh__execute__query\", \"arguments\": %s}" % (call, json.dumps(args)))
-        ok, captured, _err, _name = _run_turn(session, prompt, capture_suffix="__call_tool")
+        ok, captured, _err, _name = _run_turn(session, _query_prompt(call, args), capture_suffix="__call_tool")
         if not ok or not captured:
             continue
         dest = os.path.join(raw_dir, "%s.ndjson" % stem)
@@ -309,6 +340,28 @@ def _retry_stem(session, script_dir, raw_dir, call, stem, emit):
             _paginate(session, script_dir, raw_dir, call, stem, int(m.group(1)), emit)
         return True
     return False
+
+
+def _fetch_batch(session, script_dir, raw_dir, call, batch, i, total, emit, tag=""):
+    # type: (object, str, str, str, dict, int, int, Callable, str) -> str
+    """Returns the splitter's output; the caller reads truncation / empty / error lines from it."""
+    args = {"queries": batch["queries"], "limit": batch.get("limit", 10000),
+            "format": batch.get("format", "ndjson")}
+    prompt = _tool_prompt(call, {"name": "dwh__execute__queries", "arguments": args})
+
+    def step(kind):
+        emit("fetch", "Waiting on Carta…" if kind == "issued" else "Saving fetched data…",
+             step=i, total=total)
+    ok, captured, err, _n = _run_turn(session, prompt, capture_suffix="__call_tool", on_step=step)
+    if not ok or not captured:
+        raise RefreshError("A data fetch failed on batch %d of %d: %s"
+                           % (i, total, err or "no result"), needs_human=True)
+    src_path = _capture_src(captured, os.path.join(raw_dir, "batch%d%s.raw" % (i, tag)))
+    r = _py(script_dir, "save_batch_result.py", src_path, raw_dir, "--stems", ",".join(batch["stems"]))
+    if r.returncode != 0:
+        raise RefreshError("Couldn't parse batch %d of %d: %s"
+                           % (i, total, r.stderr.strip() or "envelope mismatch"), needs_human=True)
+    return (r.stdout or "") + (r.stderr or "")
 
 
 def run_fetch(data_dir, emit, claude_bin=None, model=None, on_session=None):
@@ -382,16 +435,22 @@ def run_fetch(data_dir, emit, claude_bin=None, model=None, on_session=None):
                                "Run “refresh Carta holdings” from Claude instead.",
                                needs_human=True)
         call = "mcp__%s__call_tool" % prefix
+        set_ctx = "mcp__%s__set_context" % prefix
 
         enum_ndjson = os.path.join(raw_dir, "_enumerate.ndjson")
-        src_path = _capture_src(captured, os.path.join(raw_dir, "_enumerate.raw"))
-        r = _py(script_dir, "save_query_result.py", src_path, enum_ndjson)
-        if r.returncode != 0:
-            raise RefreshError("Couldn't read the firm's fund list: %s"
-                               % (r.stderr.strip() or "empty result"), needs_human=True)
-        fund_uuids = stem_queries.directory_fund_uuids(enum_ndjson)
+        fund_uuids, detail = _save_directory(script_dir, captured, raw_dir, enum_ndjson)
         if not fund_uuids:
-            raise RefreshError("Carta returned no funds for this firm.", needs_human=True)
+            _repin_context(session, set_ctx, firm_uuid, emit, "enumerate")
+            emit("enumerate", "Reading the fund directory…")
+            enum_prompt = _query_prompt(call, {"sql": enum_sql, "format": enum_fmt, "limit": enum_limit})
+            ok, captured, err, _n = _run_turn(session, enum_prompt, capture_suffix="__call_tool")
+            if not ok or not captured:
+                raise RefreshError("Couldn't reach the Carta data warehouse: %s"
+                                   % (err or "no result"), needs_human=True)
+            fund_uuids, detail = _save_directory(script_dir, captured, raw_dir, enum_ndjson)
+        if not fund_uuids:
+            raise RefreshError("Carta returned no funds for this firm%s."
+                               % (": " + detail if detail else ""), needs_human=True)
         with open(os.path.join(raw_dir, "fund_uuids.txt"), "w") as fh:
             fh.write("\n".join(fund_uuids) + "\n")
 
@@ -406,29 +465,16 @@ def run_fetch(data_dir, emit, claude_bin=None, model=None, on_session=None):
         total = len(batches)
         for i, batch in enumerate(batches, 1):
             emit("fetch", "Fetching fund data from Carta…", step=i, total=total)
-            stems = batch["stems"]
-            args = {"queries": batch["queries"], "limit": batch.get("limit", 10000),
-                    "format": batch.get("format", "ndjson")}
-            prompt = ("Run exactly one tool call, then reply DONE:\n%s {\"name\": "
-                      "\"dwh__execute__queries\", \"arguments\": %s}"
-                      % (call, json.dumps(args)))
-
-            def step(kind, i=i):
-                emit("fetch", "Waiting on Carta…" if kind == "issued"
-                     else "Saving fetched data…", step=i, total=total)
-            ok, captured, err, _n = _run_turn(session, prompt, capture_suffix="__call_tool",
-                                              on_step=step)
-            if not ok or not captured:
-                raise RefreshError("A data fetch failed on batch %d of %d: %s"
-                                   % (i, total, err or "no result"), needs_human=True)
-            src_path = _capture_src(captured, os.path.join(raw_dir, "batch%d.raw" % i))
-            r = _py(script_dir, "save_batch_result.py", src_path, raw_dir,
-                    "--stems", ",".join(stems))
-            out = (r.stdout or "") + (r.stderr or "")
-            if r.returncode != 0:
-                raise RefreshError("Couldn't parse batch %d of %d: %s"
-                                   % (i, total, r.stderr.strip() or "envelope mismatch"),
-                                   needs_human=True)
+            out = _fetch_batch(session, script_dir, raw_dir, call, batch, i, total, emit)
+            if _lapsed_stems(out):
+                # A lapsed context empties every query in the batch, so re-fetching only the
+                # rows-required stems would let the strict build pass on a partial dataset.
+                _repin_context(session, set_ctx, firm_uuid, emit, "fetch")
+                out = _fetch_batch(session, script_dir, raw_dir, call, batch, i, total, emit, tag="_repin")
+                for stem_name in _lapsed_stems(out):
+                    issue = "Carta returned no %s rows for this firm." % stem_name
+                    warnings.append(issue)
+                    emit("issue", issue)
             for stem_name, next_off in _truncated_stems(out):
                 _paginate(session, script_dir, raw_dir, call, stem_name, next_off, emit)
             for stem_name, detail in _stem_errors(out):
