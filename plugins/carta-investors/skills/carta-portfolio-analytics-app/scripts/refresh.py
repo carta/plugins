@@ -23,6 +23,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 from typing import Callable, List, Optional
 
 
@@ -269,13 +270,15 @@ def _py(script_dir, name, *args, **kwargs):
                            % (name, timeout), needs_human=True)
 
 
-def _stem_sql(script_dir, stem, since, after_instance=None, firm_uuid=None):
-    # type: (str, str, Optional[str], Optional[int], Optional[str]) -> str
+def _stem_sql(script_dir, stem, since, after_instance=None, firm_uuid=None, companies_file=None):
+    # type: (str, str, Optional[str], Optional[int], Optional[str], Optional[str]) -> str
     args = ["sql", stem] + (["--since", since] if since else [])
     if after_instance is not None:
         args += ["--after-instance", str(after_instance)]
     if firm_uuid:
         args += ["--firm-uuid", firm_uuid]
+    if companies_file:
+        args += ["--companies-file", companies_file]
     r = _py(script_dir, "emit_stem_sql.py", *args)
     if r.returncode != 0:
         raise RefreshError("Couldn't build the query for %s: %s"
@@ -408,18 +411,21 @@ def _is_integrity_failure(e):
     return bool(_INTEGRITY_RE.search("%s %s" % (e, e.detail or "")))
 
 
-def _fetch_single_stem(session, script_dir, raw_dir, call_box, stem, since, emit):
+def _fetch_single_stem(session, script_dir, raw_dir, call_box, stem, since, emit,
+                       companies_file=None, since_override=None):
     """Fetch one stem, re-fetching once if its pages failed the integrity check: the
     warehouse tables refresh every few minutes, and a refresh that lands mid-fetch
     shifts every later OFFSET page (seen on QED: 554 rows duplicated, 554 missed)."""
     try:
-        _fetch_stem_once(session, script_dir, raw_dir, call_box, stem, since, emit)
+        _fetch_stem_once(session, script_dir, raw_dir, call_box, stem, since, emit,
+                         companies_file, since_override)
     except RefreshError as e:
         if not _is_integrity_failure(e):
             raise
         emit("fetch", "Carta's data changed mid-fetch; fetching %s again…"
              % _STEM_LABEL.get(stem, stem), active=[stem])
-        _fetch_stem_once(session, script_dir, raw_dir, call_box, stem, since, emit)
+        _fetch_stem_once(session, script_dir, raw_dir, call_box, stem, since, emit,
+                         companies_file, since_override)
 
 
 def _stem_watermark(raw_dir, stem):
@@ -462,10 +468,56 @@ def _no_rows(src):
         return False
 
 
+_CONTEXT_ERR_RE = re.compile(r"No firm context set|not found or not authorized", re.I)
+
+
+def _context_failure(src):
+    # type: (str) -> Optional[str]
+    """The raw refusal text when the captured result is the MCP's firm-context error,
+    else None. set_context failed upstream, so every query this session would return
+    this instead of data — fail the run with a clear message instead of limping into
+    a confusing extract error downstream."""
+    try:
+        with open(src, encoding="utf-8", errors="replace") as fh:
+            head = fh.read(400)
+    except OSError:
+        return None
+    return head.strip() if _CONTEXT_ERR_RE.search(head) else None
+
+
+def _raise_on_context_failure(src):
+    # type: (str) -> None
+    detail = _context_failure(src)
+    if detail:
+        raise RefreshError("Carta couldn't set this firm's context — this account isn't "
+                           "authorized for the firm on the connected Carta environment. "
+                           "Fix access or switch the Carta connector, then try again.",
+                           needs_human=True, detail=detail)
+
+
 def _merge_delta(script_dir, stem, dest, delta):
     spec = _INCREMENTAL[stem]
     args = ([dest, delta, "--key", spec["key"], "--order", spec["order"]] if spec
             else [dest, delta, "--append-only"])
+    r = _py(script_dir, "merge_stem_delta.py", *args)
+    if r.returncode != 0:
+        raise RefreshError("Couldn't merge new %s rows." % _STEM_LABEL.get(stem, stem),
+                           needs_human=True, detail=r.stderr.strip() or "merge failed")
+    try:
+        os.remove(delta)
+    except OSError:
+        pass
+
+
+def _merge_company_delta(script_dir, stem, dest, delta, companies_file, since=None):
+    """Fold a company-scoped fetch into the cached stem: drop the selected companies'
+    existing rows (only their period_end >= since rows when the run was date-narrowed,
+    so older history survives), append the freshly-fetched ones, leave every other
+    company alone. Callers guarantee `dest` exists — a stem with no cache takes the
+    full-fetch path instead. See merge_stem_delta.py's --replace-companies mode."""
+    args = [dest, delta, "--replace-companies", "--companies-file", companies_file]
+    if since:
+        args += ["--since", since]
     r = _py(script_dir, "merge_stem_delta.py", *args)
     if r.returncode != 0:
         raise RefreshError("Couldn't merge new %s rows." % _STEM_LABEL.get(stem, stem),
@@ -524,18 +576,26 @@ def _save_pages(session, script_dir, raw_dir, call_box, stem, src, sql, target, 
         raise
 
 
-def _fetch_stem_once(session, script_dir, raw_dir, call_box, stem, since, emit):
-    """Fetch one stem (paging the rest). An incremental stem with a cached watermark
-    fetches only rows past it into a delta file and merges; anything else is a full
-    fetch from offset 0 into a staging file that replaces the stem once complete. The
-    session's first call also runs welcome + set_context and resolves the mcp prefix
-    into call_box['call']."""
+def _fetch_stem_once(session, script_dir, raw_dir, call_box, stem, since, emit,
+                     companies_file=None, since_override=None):
+    """Fetch one stem: company-scoped delta merge (filter set + cached base), watermark
+    delta merge, or full fetch via staging. A company filter with NO cached base falls
+    back to an unfiltered full fetch, so a narrow delta never becomes the whole cache.
+    `since_override` narrows only the delta paths; a full fetch keeps the stored window
+    so history never silently shrinks. The session's first call also runs welcome +
+    set_context and resolves the mcp prefix into call_box['call']."""
     label = _STEM_LABEL.get(stem, stem)
     emit("fetch", "Fetching %s…" % label, active=[stem])
     dest = os.path.join(raw_dir, "%s.ndjson" % stem)
-    after = _stem_watermark(raw_dir, stem) if stem in _INCREMENTAL else None
-    sql = _stem_sql(script_dir, stem, since, after_instance=after,
-                    firm_uuid=call_box.get("firm_uuid"))
+    # Only the two time-series stems take the company/since filters.
+    filterable = stem in _INCREMENTAL
+    company_scoped = bool(companies_file) and filterable and os.path.exists(dest)
+    after = _stem_watermark(raw_dir, stem) if (filterable and not company_scoped) else None
+    incremental = company_scoped or after is not None
+    use_since = since_override if (since_override and filterable and incremental) else since
+    sql = _stem_sql(script_dir, stem, use_since, after_instance=after,
+                    firm_uuid=call_box.get("firm_uuid"),
+                    companies_file=companies_file if company_scoped else None)
     captured, err, _n = _dwh_turn(session, call_box, "dwh__execute__query", _dwh_args(sql=sql))
     if not call_box["call"]:
         raise RefreshError("Couldn't reach the Carta data warehouse.", needs_human=True,
@@ -544,16 +604,23 @@ def _fetch_stem_once(session, script_dir, raw_dir, call_box, stem, since, emit):
         raise RefreshError("Couldn't refresh %s." % label, needs_human=True,
                            detail=err or "no result")
     src = _capture_src(captured, os.path.join(raw_dir, "%s.raw" % stem))
+    _raise_on_context_failure(src)
     if _no_rows(src):
-        # Nothing new since the watermark (keep the cache), or a stem this firm has no
-        # rows for at all (an empty file is the contract). Either way it is fresh now.
-        if after is None:
+        # Empty company-scoped fetch keeps the cache; the post-run no-rows scan
+        # (run_fetch) turns "filter matched nothing" into per-company warnings.
+        if company_scoped:
+            os.utime(dest, None)
+        elif after is None:
             open(dest, "w").close()
         else:
             os.utime(dest, None)
         emit("fetch", "Saved %s." % label, active=[], completed=[stem])
         return
-    if after is not None:
+    if company_scoped:
+        delta = os.path.join(raw_dir, "%s.delta.ndjson" % stem)
+        _save_pages(session, script_dir, raw_dir, call_box, stem, src, sql, delta, emit)
+        _merge_company_delta(script_dir, stem, dest, delta, companies_file, since_override)
+    elif after is not None:
         delta = os.path.join(raw_dir, "%s.delta.ndjson" % stem)
         _save_pages(session, script_dir, raw_dir, call_box, stem, src, sql, delta, emit)
         _merge_delta(script_dir, stem, dest, delta)
@@ -564,12 +631,14 @@ def _fetch_stem_once(session, script_dir, raw_dir, call_box, stem, since, emit):
     emit("fetch", "Saved %s." % label, active=[], completed=[stem])
 
 
-def _fetch_optional_stem(session, script_dir, raw_dir, call_box, stem, since, emit, warnings):
+def _fetch_optional_stem(session, script_dir, raw_dir, call_box, stem, since, emit, warnings,
+                         companies_file=None, since_override=None):
     """Fetch a stem whose failure should NOT abort the whole refresh — the other datasets
     that already succeeded are worth keeping. Turns a failure into a warning + continues,
     mirroring how the light batch handles a bad stem."""
     try:
-        _fetch_single_stem(session, script_dir, raw_dir, call_box, stem, since, emit)
+        _fetch_single_stem(session, script_dir, raw_dir, call_box, stem, since, emit,
+                           companies_file, since_override)
     except RefreshError as e:
         issue = "Couldn't refresh %s." % _STEM_LABEL.get(stem, stem)
         warnings.append(issue)
@@ -622,6 +691,7 @@ def _fetch_batch(session, script_dir, raw_dir, call_box, since, emit, warnings):
             raise RefreshError("A data fetch failed on batch %d of %d: %s"
                                % (i, total, err or "no result"), needs_human=True)
         src = _capture_src(captured, os.path.join(raw_dir, "batch%d.raw" % i))
+        _raise_on_context_failure(src)
         r = _py(script_dir, "save_batch_result.py", src, raw_dir, "--stems", ",".join(stems),
                 *(["--expect-firm", firm_uuid] if firm_uuid else []))
         out = (r.stdout or "") + (r.stderr or "")
@@ -654,12 +724,139 @@ def _read_source(data_dir):
                            "from Claude before refreshing.", needs_human=True)
 
 
-def run_fetch(data_dir, emit, stems=None, claude_bin=None, model=None, on_session=None):
-    # type: (str, Callable, Optional[object], Optional[str], Optional[str], Optional[Callable]) -> dict
+def _identity_reverse_maps(raw_dir):
+    """(gl_by_el, corp_by_el) from the cached identity stems, canonical-folded —
+    the same mapping the builder's company_key() attributes rows with."""
+    bkd = _sibling("build_kpi_datadir")
+    ident = bkd.load_identity(raw_dir)
+    canon = ident.get("canonical") or {}
+    gl_by_el = {}
+    for gl, el in ident["by_gl_issuer"].items():
+        gl_by_el.setdefault(canon.get(el, el), set()).add(gl)
+    corp_by_el = {}
+    for cu, rec in ident["by_corp_uuid"].items():
+        el = canon.get(rec["entityLinkId"], rec["entityLinkId"])
+        corp_by_el.setdefault(el, set()).add(cu)
+    return canon, gl_by_el, corp_by_el
+
+
+def _resolve_company_filter(raw_dir, company_ids):
+    # type: (str, List[str]) -> tuple
+    """Resolve kpi.json company ids to warehouse identity values. Returns
+    (aggregate, per_company, skipped_ids): the aggregate feeds SQL + the merge, the
+    per-company map drives the post-run no-rows scan, skipped ids surface as
+    structured warnings. Raises when NOTHING resolves — a scoped run whose whole
+    selection dropped must not report success."""
+    canon, gl_by_el, corp_by_el = _identity_reverse_maps(raw_dir)
+    per_company = {}
+    skipped = []
+    for cid in company_ids:
+        gl, corp, llc = set(), set(), set()
+        if cid.startswith("gl:"):
+            gl.add(cid[3:])
+        elif cid.startswith("llc:"):
+            llc.add(cid[4:])
+        elif cid.startswith("corp:"):
+            corp.add(cid[5:])
+        elif cid.startswith("name:"):
+            skipped.append(cid)  # name-keyed companies have no identity columns to filter by
+            continue
+        else:
+            el = canon.get(cid, cid)
+            gl = set(gl_by_el.get(el) or ())
+            corp = set(corp_by_el.get(el) or ())
+            if not gl and not corp:
+                skipped.append(cid)
+                continue
+        per_company[cid] = {"gl": gl, "corp": corp, "llc": llc}
+    if not per_company:
+        raise RefreshError("None of the selected companies could be matched to Carta "
+                           "identities. Select all companies and refresh all datasets "
+                           "once, then try again.", needs_human=True)
+    agg = {"glIssuerIds": sorted(set().union(*(c["gl"] for c in per_company.values()))),
+           "corporationUuids": sorted(set().union(*(c["corp"] for c in per_company.values()))),
+           "llcEntityIds": sorted(set().union(*(c["llc"] for c in per_company.values())))}
+    return agg, per_company, skipped
+
+
+def _eligible_company_map(raw_dir):
+    # type: (str) -> dict
+    """Per-company identity map for every company the identity stems can key — the
+    population a date-only no-rows scan checks. Companies keyed only by an unlinked
+    GL issuer or an LLC id aren't enumerable here; they're covered on subset pulls."""
+    _canon, gl_by_el, corp_by_el = _identity_reverse_maps(raw_dir)
+    per = {}
+    for el, gls in gl_by_el.items():
+        per.setdefault(el, {"gl": set(), "corp": set(), "llc": set()})["gl"].update(gls)
+    for el, cus in corp_by_el.items():
+        per.setdefault(el, {"gl": set(), "corp": set(), "llc": set()})["corp"].update(cus)
+    return per
+
+
+def _scan_company_rows(raw_dir, stem, per_company, since):
+    # type: (str, str, dict, Optional[str]) -> set
+    """Company ids from per_company with at least one cached row in the requested
+    window (period_end >= since when set) for this stem. Runs on the merged cache,
+    so it reflects what the dashboard will actually show for that window."""
+    by_val = [{}, {}, {}]
+    for cid, t in per_company.items():
+        for i, k in enumerate(("gl", "corp", "llc")):
+            for v in t[k]:
+                by_val[i][v] = cid
+    cols = ("general_ledger_issuer_id", "corporation_id", "llc_entity_id")
+    found = set()
+    path = os.path.join(raw_dir, "%s.ndjson" % stem)
+    try:
+        fh = open(path, encoding="utf-8")
+    except OSError:
+        return found
+    with fh:
+        for line in fh:
+            if not line.strip():
+                continue
+            try:
+                row = json.loads(line)
+            except ValueError:
+                continue
+            folded = {k.lower(): v for k, v in row.items()}
+            if since:
+                pe = folded.get("period_end")
+                if isinstance(pe, str) and pe < since:
+                    continue
+            for i, col in enumerate(cols):
+                v = folded.get(col)
+                cid = by_val[i].get(str(v)) if v is not None else None
+                if cid:
+                    found.add(cid)
+                    break
+            if len(found) == len(per_company):
+                break
+    return found
+
+
+def _write_companies_file(resolved):
+    # type: (Optional[dict]) -> Optional[str]
+    """Write the resolved filter to a run-scoped temp file the subprocess scripts read.
+    The caller deletes it when the run ends — the filter never outlives its pull."""
+    if not resolved:
+        return None
+    fd, path = tempfile.mkstemp(prefix="pa_company_filter_", suffix=".json")
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        json.dump(resolved, fh)
+    return path
+
+
+def run_fetch(data_dir, emit, stems=None, claude_bin=None, model=None, on_session=None,
+              since_override=None, companies=None):
+    # type: (str, Callable, Optional[object], Optional[str], Optional[str], Optional[Callable], Optional[str], Optional[List[str]]) -> dict
     """Fetch this firm's Carta data into the raw dir; emit streams progress. stems=None
     (or "all") refreshes everything; a list of dataset keys refreshes only those. Writes
     ONLY raw ndjson (never kpi.json/firms.json/portfolio.json), so the app stays usable —
     run_build does the rebuild+swap. Returns {ok, warnings} or raises RefreshError.
+
+    since_override ('YYYY-MM-DD') and companies (a list of kpi.json company ids, resolved
+    here to warehouse identity values) narrow this run's time-series pulls only — a speed
+    lever to pull less; widening still needs a full rebuild. Neither outlives the run.
 
     emit(phase, message, **extra) phase strings are a client contract (UpdateDataButton.jsx):
     preflight, fetch, build, issue.
@@ -672,6 +869,8 @@ def run_fetch(data_dir, emit, stems=None, claude_bin=None, model=None, on_sessio
         raise RefreshError("This cache predates firm-id tracking, so an in-app refresh "
                            "can't target it. Ask Claude to “Refresh KPI data” once.",
                            needs_human=True)
+    # The stored window is the run's baseline; since_override narrows only the
+    # time-series delta paths (see _fetch_stem_once), never another stem's SQL.
     since = src.get("since")
     prefer_nonprod = (src.get("cartaEnvironment") == "nonprod")
 
@@ -687,6 +886,14 @@ def run_fetch(data_dir, emit, stems=None, claude_bin=None, model=None, on_sessio
     raw_dir = str(fm_paths.raw_dir(slug))
     os.makedirs(raw_dir, exist_ok=True)
     warnings = []
+    per_company, skipped = {}, []
+    companies_file = None
+    if companies:
+        resolved, per_company, skipped = _resolve_company_filter(raw_dir, companies)
+        companies_file = _write_companies_file(resolved)
+    elif since_override:
+        # Date-only run: the no-rows scan checks every company the identity stems can key.
+        per_company = _eligible_company_map(raw_dir)
 
     session = chat_session.ChatSession(
         cwd=raw_dir, add_dirs=[raw_dir], claude_bin=claude_bin,
@@ -709,21 +916,47 @@ def run_fetch(data_dir, emit, stems=None, claude_bin=None, model=None, on_sessio
             # optional — its failure warns rather than aborting the whole refresh.
             _fetch_batch(session, script_dir, raw_dir, call_box, since, emit, warnings)
             for stem in _PAGED_STEMS:
-                _fetch_optional_stem(session, script_dir, raw_dir, call_box, stem, since, emit, warnings)
+                _fetch_optional_stem(session, script_dir, raw_dir, call_box, stem, since, emit,
+                                     warnings, companies_file, since_override)
         else:
             # The FIRST targeted stem runs the welcome/set_context turn and resolves the
             # prefix, so its failure is fatal; the rest are optional (warn + continue).
             for idx, stem in enumerate(target):
                 if idx == 0:
-                    _fetch_single_stem(session, script_dir, raw_dir, call_box, stem, since, emit)
+                    _fetch_single_stem(session, script_dir, raw_dir, call_box, stem, since, emit,
+                                       companies_file, since_override)
                 else:
-                    _fetch_optional_stem(session, script_dir, raw_dir, call_box, stem, since, emit, warnings)
+                    _fetch_optional_stem(session, script_dir, raw_dir, call_box, stem, since, emit,
+                                         warnings, companies_file, since_override)
     finally:
         session.close()
         if on_session:
             on_session(None)
+        if companies_file:
+            with contextlib.suppress(OSError):
+                os.remove(companies_file)
 
-    return {"ok": True, "warnings": warnings}
+    # Post-run no-rows scan (filtered runs only): per selected company, per time-series
+    # dataset in the run, does the merged cache hold any rows in the requested window?
+    company_warnings = []
+    if per_company or skipped:
+        run_stems = [s for s in (target if target is not None else _PAGED_STEMS)
+                     if s in _INCREMENTAL]
+        no_rows = {}
+        for stem in run_stems:
+            have = _scan_company_rows(raw_dir, stem, per_company, since_override)
+            ds_key = _datasets.STEM_TO_DATASET.get(stem, stem)
+            for cid in per_company:
+                if cid not in have:
+                    no_rows.setdefault(cid, []).append(ds_key)
+        for cid in sorted(no_rows):
+            company_warnings.append({"id": cid, "noRows": no_rows[cid]})
+        for cid in skipped:
+            company_warnings.append({"id": cid, "skipped": True})
+
+    return {"ok": True, "warnings": warnings, "companyWarnings": company_warnings,
+            "selectedCount": (len(per_company) + len(skipped)) or None,
+            "filterSince": since_override}
 
 
 def _ensure_meta(raw_dir, kpi):
@@ -786,8 +1019,13 @@ def run_build(data_dir, emit, build_lock=None):
         return {"ok": True, "builtAt": built_at}
 
 
-def run_refresh(data_dir, emit, stems=None, claude_bin=None, model=None, build_lock=None):
-    # type: (str, Callable, Optional[object], Optional[str], Optional[str], Optional[object]) -> dict
-    fetched = run_fetch(data_dir, emit, stems=stems, claude_bin=claude_bin, model=model)
+def run_refresh(data_dir, emit, stems=None, claude_bin=None, model=None, build_lock=None,
+                since_override=None, companies=None):
+    # type: (str, Callable, Optional[object], Optional[str], Optional[str], Optional[object], Optional[str], Optional[List[str]]) -> dict
+    fetched = run_fetch(data_dir, emit, stems=stems, claude_bin=claude_bin, model=model,
+                        since_override=since_override, companies=companies)
     built = run_build(data_dir, emit, build_lock=build_lock)
-    return {"ok": True, "builtAt": built.get("builtAt"), "warnings": fetched.get("warnings", [])}
+    return {"ok": True, "builtAt": built.get("builtAt"), "warnings": fetched.get("warnings", []),
+            "companyWarnings": fetched.get("companyWarnings", []),
+            "selectedCount": fetched.get("selectedCount"),
+            "filterSince": fetched.get("filterSince")}

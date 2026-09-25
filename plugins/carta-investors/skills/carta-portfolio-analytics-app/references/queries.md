@@ -364,7 +364,7 @@ WITH corp AS (
   SELECT corporation_uuid, corporation_name
   FROM FUND_ADMIN.CORPORATION_BASIC_INFO_V2
   WHERE corporation_uuid IS NOT NULL
-  QUALIFY ROW_NUMBER() OVER (PARTITION BY corporation_uuid ORDER BY last_refreshed_at DESC) = 1
+  QUALIFY ROW_NUMBER() OVER (PARTITION BY corporation_uuid ORDER BY _loaded_at DESC) = 1
 )
 SELECT s.legal_name, COALESCE(c.corporation_name, s.legal_name) AS corp_name,
        s.corporation_id, s.security_class_id, s.security_class_name,

@@ -43,7 +43,9 @@ export default function useRefresh() {
     stopPolling();
     if (s.status === "fetched") {
       if (initiatedRef.current) trackClick("PortfolioAnalytics.UpdateData.Fetched");
-      setSt({ status: "fetched", warnings: s.warnings || [] });
+      setSt({ status: "fetched", warnings: s.warnings || [],
+              companyWarnings: s.companyWarnings || [],
+              selectedCount: s.selectedCount ?? null, filterSince: s.filterSince ?? null });
     } else if (s.status === "error" && initiatedRef.current) {
       setSt({ status: "error", message: s.message, detail: s.detail, needsHuman: !!s.needs_human, retry: "fetch" });
     } else setSt({ status: "idle", warnings: [] });
@@ -74,15 +76,21 @@ export default function useRefresh() {
     return () => { alive = false; stopPolling(); };
   }, [startPolling, applyStatus]);
 
-  const runRefresh = useCallback(async (datasets) => {
+  // opts.since ('YYYY-MM-DD') and opts.companies ({ids: [kpi.json company ids]}) narrow
+  // the fetch; the server applies both to Operating KPIs & Forecasts only.
+  const runRefresh = useCallback(async (datasets, opts = {}) => {
     if (running) return;
     trackClick("PortfolioAnalytics.UpdateData.Start");
     initiatedRef.current = true;
     setSt({ status: "running", phase: "preflight", target: datasets ?? null, warnings: [] });
     try {
+      const payload = {};
+      if (datasets) payload.datasets = datasets;
+      if (opts.since) payload.since = opts.since;
+      if (opts.companies) payload.companies = opts.companies;
       const res = await fetch("/api/refresh", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(datasets ? { datasets } : {}),
+        body: JSON.stringify(payload),
       });
       // 409 = another tab already started one; adopt and follow its progress.
       if (res.status === 409 || res.ok) { startPolling(); return; }

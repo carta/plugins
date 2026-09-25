@@ -144,6 +144,9 @@ export const CloseIcon = icon(["M18 6 6 18", "m6 6 12 12"]);
 // fund-modeling hand-off callout (replaces an inline emoji, per the no-emoji rule above).
 export const TrendingUpIcon = icon(["M16 7h6v6", "m22 7-8.5 8.5-5-5L2 17"]);
 export const SearchIcon = icon(["M3 11a8 8 0 1 0 16 0a8 8 0 1 0 -16 0", "M21 21l-4.35-4.35"]);
+// Lucide calendar — marks a field whose click opens the native date picker.
+export const CalendarIcon = icon(["M8 2v4", "M16 2v4",
+  "M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z", "M3 10h18"]);
 // Lucide "filter" — the funnel every Overview column header carries.
 export const FilterIcon = icon(["M22 3H2l8 9.46V19l4 2v-8.54L22 3z"]);
 // Lucide "pencil" — Ink's "edit"/"pencil" glyph per brand.md's Ink→Lucide icon map.

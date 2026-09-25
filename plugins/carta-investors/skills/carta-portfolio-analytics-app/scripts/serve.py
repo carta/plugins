@@ -115,6 +115,35 @@ def _refresh_supported():
     return shutil.which(claude_bin) is not None and bool(_kpi_source().get("firmUuid"))
 
 
+_SINCE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+# A refresh filter can name at most this many companies; the picker never sends more,
+# and the cap keeps a hostile body from queuing an oversized resolution.
+_MAX_COMPANIES = 2000
+# kpi.json company ids are short opaque keys; anything longer is not one of ours.
+_MAX_COMPANY_ID_LEN = 200
+
+
+def _parse_filters(body):
+    """(since, companies, error) from a refresh body. `since` is a YYYY-MM-DD string or
+    None; `companies` is a list of kpi.json company ids or None — refresh.py resolves
+    them to warehouse identity values, so no user string ever reaches SQL. `error` is a
+    non-empty error code when the body is malformed (the values are then meaningless)."""
+    since = body.get("since")
+    if since is not None and (not isinstance(since, str) or not _SINCE_RE.match(since)):
+        return None, None, "bad_since"
+    raw = body.get("companies")
+    if raw is None:
+        return since, None, None
+    if not isinstance(raw, dict) or not isinstance(raw.get("ids", []), list):
+        return None, None, "bad_companies"
+    ids = raw.get("ids") or []
+    if not all(isinstance(v, str) and 0 < len(v) <= _MAX_COMPANY_ID_LEN for v in ids):
+        return None, None, "bad_companies"
+    if len(ids) > _MAX_COMPANIES:
+        return None, None, "too_many_companies"
+    return since, (ids or None), None
+
+
 def _set_refresh_state(**fields):
     with _refresh_state_lock:
         _refresh_state.update(fields)
@@ -166,9 +195,15 @@ def _run_refresh_bg():
     try:
         with _refresh_state_lock:
             target = _refresh_state.get("target")  # dataset keys, or None for all
+            since = _refresh_state.get("since")
+            companies = _refresh_state.get("companies")
         result = refresh.run_fetch(str(DATA_DIR), _refresh_progress, stems=target,
-                                   on_session=_track_refresh_session)
-        _set_refresh_state(status="fetched", progress=None, warnings=result.get("warnings", []))
+                                   on_session=_track_refresh_session,
+                                   since_override=since, companies=companies)
+        _set_refresh_state(status="fetched", progress=None, warnings=result.get("warnings", []),
+                           companyWarnings=result.get("companyWarnings", []),
+                           selectedCount=result.get("selectedCount"),
+                           filterSince=result.get("filterSince"))
     except refresh.RefreshError as e:
         _set_refresh_state(status="error", progress=None, message=str(e),
                            detail=e.detail, needs_human=e.needs_human)
@@ -179,11 +214,12 @@ def _run_refresh_bg():
         _refresh_lock.release()
 
 
-def _start_refresh_bg(target):
+def _start_refresh_bg(target, since=None, companies=None):
     with _refresh_state_lock:
         _refresh_state.clear()
         _refresh_state.update({"status": "running", "phase": "preflight",
                                "startedAt": time.time(), "target": target, "warnings": [],
+                               "since": since, "companies": companies,
                                "activeStems": [], "doneStems": []})
     threading.Thread(target=_run_refresh_bg, daemon=True).start()
 
@@ -419,6 +455,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if not isinstance(target, list) or not target or \
                     any(k not in _datasets._KEYS for k in target):
                 return self._send(400, {"error": "unknown_dataset"})
+        since, companies, err = _parse_filters(body)
+        if err:
+            return self._send(400, {"error": err})
         if _build_lock.locked():
             return self._send(409, {"error": "apply_in_progress"})
         if not _refresh_lock.acquire(blocking=False):
@@ -431,7 +470,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             _refresh_lock.release()
             return self._send(409, {"error": "refresh_in_progress"})
         try:
-            _start_refresh_bg(target)
+            _start_refresh_bg(target, since, companies)
         except Exception as e:  # noqa: BLE001 — release the lock or every later refresh 409s
             _refresh_lock.release()
             _set_refresh_state(status="error", progress=None,

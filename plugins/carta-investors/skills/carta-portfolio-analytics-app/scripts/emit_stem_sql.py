@@ -29,6 +29,17 @@ Runtime parameters:
   --after-instance N      an incremental floor, `instance_id > N` — the in-app
                           refresh passes the cached stem's max instance_id so
                           only submissions logged since the last pull come back.
+  --companies-file PATH   a JSON file {"glIssuerIds": [...], "corporationUuids":
+                          [...], "llcEntityIds": [...]} — the RESOLVED identity
+                          values (refresh.py resolves the user's company picks
+                          against the cached identity stems; no display name ever
+                          reaches SQL). Injects `AND (general_ledger_issuer_id IN
+                          (...) OR corporation_id IN (...) OR llc_entity_id IN
+                          (...))` — the same identity columns the builder's
+                          company_key() attributes rows by. Every value is
+                          shape-checked before it interpolates into warehouse SQL.
+                          Used by the in-app company-scoped refresh; a no-op for
+                          every other stem.
 
 Usage:
   uv run emit_stem_sql.py batch [--firm-uuid UUID] [--since YYYY-MM-DD]
@@ -39,7 +50,7 @@ Usage:
       (`_BATCH_ORDER`) -- financials/forecasts are excluded and must be
       fetched via their own sql <stem> paged calls (see SKILL.md Step 2).
       All 5 fit in one batch (the cap is 10 queries per batch).
-  uv run emit_stem_sql.py sql <stem> [--firm-uuid UUID] [--since YYYY-MM-DD] [--after-instance N]
+  uv run emit_stem_sql.py sql <stem> [--firm-uuid UUID] [--since YYYY-MM-DD] [--after-instance N] [--companies-file PATH]
       Prints one stem's SQL verbatim (for paging or re-running a single stem;
       resolves any of the 9 stems, including the paged-separately
       financials/forecasts/holdings_history/entity_identity).
@@ -65,6 +76,9 @@ _MAX_PER_BATCH = 10
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}"
                       r"-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+# GL issuer / LLC entity ids interpolate into quoted SQL literals; a strict token
+# shape (no quotes, whitespace, or control chars) makes escaping unnecessary.
+_ID_TOKEN_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,64}$")
 
 # {spv_firm_pred} pins the fund set to the firm even when the row-access grant
 # has drifted to another firm (see the module docstring).
@@ -101,6 +115,7 @@ _FINANCIALS_TEMPLATE = (
     "  AND as_of_date <= CURRENT_DATE          -- ignore forward-dated submissions\n"
     "{firm_pred}"
     "{since_clause}"
+    "{company_clause}"
     "{after_clause}"
     "QUALIFY ROW_NUMBER() OVER (\n"
     "    PARTITION BY legal_name, COALESCE(mnemonic, name),\n"
@@ -121,6 +136,7 @@ _FORECASTS_TEMPLATE = (
     "WHERE instance_type = 'Estimate' AND float_value IS NOT NULL\n"
     "{firm_pred}"
     "{since_clause}"
+    "{company_clause}"
     "{after_clause}"
     "ORDER BY legal_name, name, mnemonic, period_end, as_of_date,\n"
     "         unit_type, currency, float_value, is_latest, instance_id"
@@ -133,6 +149,10 @@ _FORECASTS_SINCE_PLACEHOLDER = (
 _AFTER_PLACEHOLDER = (
     "  -- OPTIONAL incremental floor; the in-app refresh sets it to the cached max instance_id:\n"
     "  -- AND instance_id > <after_instance>\n"
+)
+_COMPANY_PLACEHOLDER = (
+    "  -- OPTIONAL company filter; the in-app company-scoped refresh narrows to the chosen set:\n"
+    "  -- AND (general_ledger_issuer_id IN (...) OR corporation_id IN (...) OR llc_entity_id IN (...))\n"
 )
 
 _HOLDINGS_SQL = (
@@ -197,7 +217,9 @@ _CAPSTACK_SQL = (
     "  SELECT corporation_uuid, corporation_name\n"
     "  FROM FUND_ADMIN.CORPORATION_BASIC_INFO_V2\n"
     "  WHERE corporation_uuid IS NOT NULL\n"
-    "  QUALIFY ROW_NUMBER() OVER (PARTITION BY corporation_uuid ORDER BY last_refreshed_at DESC) = 1\n"
+    # _loaded_at is the model's own per-row metadata column, present in every env;
+    # last_refreshed_at is per-TABLE (uniform across all rows) and absent off prod.
+    "  QUALIFY ROW_NUMBER() OVER (PARTITION BY corporation_uuid ORDER BY _loaded_at DESC) = 1\n"
     ")\n"
     "SELECT s.legal_name, COALESCE(c.corporation_name, s.legal_name) AS corp_name,\n"
     "       s.corporation_id, s.security_class_id, s.security_class_name,\n"
@@ -278,6 +300,60 @@ def _check_after_instance(after_instance):
     return after_instance
 
 
+def _check_uuid(value):
+    if not isinstance(value, str) or not _UUID_RE.match(value):
+        raise ValueError("company corporationUuid must be a UUID, got %r" % (value,))
+    return value
+
+
+def _check_id_token(value, field):
+    if not isinstance(value, str) or not _ID_TOKEN_RE.match(value):
+        raise ValueError("company %s must be a plain id token, got %r" % (field, value))
+    return value
+
+
+def _company_clause(gl_issuer_ids, corp_uuids, llc_entity_ids):
+    """`AND (general_ledger_issuer_id IN (...) OR corporation_id IN (...) OR
+    llc_entity_id IN (...))`, or "" when no list has entries. The OR spans the three
+    identity columns of ONE company set (a row carries whichever its source filled),
+    mirroring how the builder's company_key() attributes rows."""
+    parts = []
+    if gl_issuer_ids:
+        vals = ", ".join("'%s'" % _check_id_token(v, "glIssuerId") for v in gl_issuer_ids)
+        parts.append("general_ledger_issuer_id IN (%s)" % vals)
+    if corp_uuids:
+        vals = ", ".join("'%s'" % _check_uuid(u) for u in corp_uuids)
+        parts.append("corporation_id IN (%s)" % vals)
+    if llc_entity_ids:
+        vals = ", ".join("'%s'" % _check_id_token(v, "llcEntityId") for v in llc_entity_ids)
+        parts.append("llc_entity_id IN (%s)" % vals)
+    if not parts:
+        return ""
+    return "  AND (%s)\n" % " OR ".join(parts)
+
+
+def _read_companies_file(path):
+    """(glIssuerIds, corporationUuids, llcEntityIds) from the JSON companies file, or
+    ([], [], []) when no path is given. Raises ValueError on a malformed file so a bad
+    filter fails loud rather than silently fetching every company. merge_stem_delta.py
+    carries a deliberately identical copy — keep the two field-for-field in sync."""
+    if not path:
+        return [], [], []
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, ValueError) as e:
+        raise ValueError("couldn't read --companies-file %r: %s" % (path, e))
+    if not isinstance(data, dict):
+        raise ValueError("--companies-file must be a JSON object")
+    gl_ids = data.get("glIssuerIds") or []
+    corp_uuids = data.get("corporationUuids") or []
+    llc_ids = data.get("llcEntityIds") or []
+    if not all(isinstance(v, list) for v in (gl_ids, corp_uuids, llc_ids)):
+        raise ValueError("glIssuerIds, corporationUuids and llcEntityIds must be JSON arrays")
+    return gl_ids, corp_uuids, llc_ids
+
+
 def _check_firm_uuid(firm_uuid):
     if firm_uuid is not None and not _UUID_RE.match(firm_uuid):
         raise ValueError("--firm-uuid must be a UUID, got %r" % (firm_uuid,))
@@ -301,13 +377,16 @@ def _firm_scope(firm_uuid):
     }
 
 
-def _stems(since=None, after_instance=None, firm_uuid=None):
+def _stems(since=None, after_instance=None, firm_uuid=None, gl_issuer_ids=None,
+           corp_uuids=None, llc_entity_ids=None):
     """Return an ordered dict {stem: sql}, `_ORDER`-aligned. `since` ('YYYY-MM-DD')
-    injects `AND period_end >= '<since>'` and `after_instance` (int) injects
-    `AND instance_id > <after_instance>`, each into `financials` and `forecasts`
-    only — the two time-series stems — in place of their placeholder comment,
-    before the QUALIFY. `firm_uuid` injects the explicit firm scope into every
-    firm-bearing stem (all but `capstack`) — see the module docstring."""
+    injects `AND period_end >= '<since>'`, `after_instance` (int) injects
+    `AND instance_id > <after_instance>`, and the identity lists inject
+    `AND (general_ledger_issuer_id IN (...) OR corporation_id IN (...) OR
+    llc_entity_id IN (...))` — each into `financials` and `forecasts` only (the two
+    time-series stems), in place of their placeholder comment, before the QUALIFY.
+    `firm_uuid` injects the explicit firm scope into every firm-bearing stem (all
+    but `capstack`) — see the module docstring."""
     _check_since(since)
     _check_after_instance(after_instance)
     _check_firm_uuid(firm_uuid)
@@ -322,6 +401,8 @@ def _stems(since=None, after_instance=None, firm_uuid=None):
         kw_fin["after_clause"] = kw_fc["after_clause"] = "  AND instance_id > %d\n" % after_instance
     else:
         kw_fin["after_clause"] = kw_fc["after_clause"] = _AFTER_PLACEHOLDER
+    kw_fin["company_clause"] = kw_fc["company_clause"] = (
+        _company_clause(gl_issuer_ids, corp_uuids, llc_entity_ids) or _COMPANY_PLACEHOLDER)
 
     out = {
         "funds": _FUNDS_SQL.format(**kw),
@@ -379,6 +460,10 @@ def main(argv):
     p_sql.add_argument("--firm-uuid", metavar="UUID",
                         help="pin every firm-bearing stem to this firm (defense-in-depth "
                              "against a drifted row-access grant)")
+    p_sql.add_argument("--companies-file", metavar="PATH",
+                        help="JSON {\"glIssuerIds\": [...], \"corporationUuids\": [...], "
+                             "\"llcEntityIds\": [...]} (resolved identity values) to narrow "
+                             "financials/forecasts to those companies")
 
     a = ap.parse_args(argv[1:])
 
@@ -387,7 +472,10 @@ def main(argv):
             sys.stdout.write(json.dumps(batches(a.since, firm_uuid=a.firm_uuid),
                                         ensure_ascii=False) + "\n")
             return 0
-        sys.stdout.write(_stems(a.since, a.after_instance, firm_uuid=a.firm_uuid)[a.stem] + "\n")
+        gl_ids, corp_uuids, llc_ids = _read_companies_file(a.companies_file)
+        sys.stdout.write(_stems(a.since, a.after_instance, firm_uuid=a.firm_uuid,
+                                gl_issuer_ids=gl_ids, corp_uuids=corp_uuids,
+                                llc_entity_ids=llc_ids)[a.stem] + "\n")
     except ValueError as e:
         sys.stderr.write("emit_stem_sql: %s\n" % e)
         return 2

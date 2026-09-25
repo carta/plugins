@@ -250,6 +250,15 @@ export default function App({ firm }) {
     });
   }, [dashboard.doc, rawData]);
 
+  // Update-data company filter list. Name-keyed companies have no identity columns
+  // for the server to resolve, so they are not offered (a full refresh covers them).
+  const refreshCompanies = useMemo(
+    () => (rawData?.companies || [])
+      .filter((c) => c.keyType !== "name")
+      .map((c) => ({ id: c.id, name: c.name })),
+    [rawData],
+  );
+
   // Shared by the chart export stamp, the tab title, and the header below —
   // branding name > raw source label > the `firm` prop/slug.
   const resolvedFirmName = data?.branding?.firmName || data?.source?.firm || firm;
@@ -373,7 +382,7 @@ export default function App({ firm }) {
           <div style={{ ...sans, fontSize: 13, fontWeight: 600, color: "var(--ink-color-global-text-default)" }}>Portfolio Analytics</div>
           <DataStatusLine source={data.source} />
         </div>
-        <UpdateDataButton variant="sidebar" datasets={data.source?.datasets} builtAt={data.source?.builtAt} />
+        <UpdateDataButton variant="sidebar" datasets={data.source?.datasets} builtAt={data.source?.builtAt} companies={refreshCompanies} />
       </div>
     </aside>
   );
@@ -383,7 +392,7 @@ export default function App({ firm }) {
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <Mark size={24} />
         <span style={{ ...serif, fontSize: FS.h3, fontWeight: 700, color: "var(--ink-color-global-text-default)" }}>{resolvedFirmName}</span>
-        <span style={{ flex: 1 }} />{currencyMenu}<UpdateDataButton datasets={data.source?.datasets} builtAt={data.source?.builtAt} />{themeToggle}
+        <span style={{ flex: 1 }} />{currencyMenu}<UpdateDataButton datasets={data.source?.datasets} builtAt={data.source?.builtAt} companies={refreshCompanies} />{themeToggle}
       </div>
       <div style={{ display: "flex", gap: 4, overflowX: "auto", alignItems: "center" }}>
         {NAV_TABS.map((t) => {
