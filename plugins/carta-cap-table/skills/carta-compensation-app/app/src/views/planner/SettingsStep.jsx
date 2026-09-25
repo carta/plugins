@@ -180,13 +180,7 @@ function YearsMonths({ total, onChange, title, disabled, label }) {
 }
 
 
-/** Back / forward, rendered BOTH above and below the content.
- *
- *  The grants table runs one row per selected employee — 131 of them on a real
- *  cohort — so a footer-only Next sits several screens below the fold and reads as
- *  missing. The top copy is the one most people will use; the bottom one is there
- *  for anybody who has scrolled to the end of the table.
- */
+/** Back / forward navigation for the settings step. */
 function Nav({ onBack, onNext }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
@@ -965,7 +959,6 @@ export default function SettingsStep({
         </div>
       </div>
 
-      <Nav onBack={onBack} onNext={onNext} />
     </div>
   );
 }
