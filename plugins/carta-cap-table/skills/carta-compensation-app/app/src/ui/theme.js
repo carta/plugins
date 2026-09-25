@@ -146,7 +146,7 @@ export const C = {
   totalRow: "var(--app-color-row-total)",
   infoSubtle: "var(--ink-color-global-brand-blue-10)",
   positiveSubtle: "var(--ink-color-global-feedback-positive-subtle)",
-  surfaceTinted: "var(--ink-color-global-brand-gray-10)",
+  surfaceTinted: "var(--ink-color-global-brand-brown-20)",
 };
 
 // ---- Legacy aliases -------------------------------------------------------------
