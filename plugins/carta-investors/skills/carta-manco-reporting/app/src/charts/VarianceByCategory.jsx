@@ -1,8 +1,8 @@
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { fmtCurrencyShort } from "./chartTheme.js";
 import { InkBarChart, escapeHtml } from "../ui/components.jsx";
 import { sans, INK, FAINT, MICRO, LINE, SHADE, PAPER, BORDER_DEFAULT, FS } from "../ui/theme.js";
-import { trackClick } from "../analytics.js";
+import { trackClick, trackRender } from "../analytics.js";
 
 // Budget categories ranked by how far actuals ran from plan.
 //
@@ -40,6 +40,8 @@ export default function VarianceByCategory({ varianceByCategory, onSelect, title
     const picked = (side === "over" ? over : under).slice(0, TOP_N);
     return { rows: picked, overCount: over.length, underCount: under.length };
   }, [active, side]);
+  const empty = rows.length === 0;
+  useEffect(() => { if (empty) trackRender("MancoReporting.Dashboard.VarianceEmpty"); }, [empty, active?.id, side]);
 
   // Budget and actual as a pair, not a single variance magnitude — a $238K
   // overrun reads differently against an $892K budget than a $50K one.

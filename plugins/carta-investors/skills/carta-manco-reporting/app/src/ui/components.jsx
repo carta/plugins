@@ -148,17 +148,19 @@ export const H2 = ({ children, right, actions, id }) => (
  *  Opens on focus as well as hover so the detail is reachable from the
  *  keyboard, which a `title` attribute is not.
  */
-export const HoverCard = ({ children, card, align = "left", label }) => {
+export const HoverCard = ({ children, card, align = "left", label, onOpen }) => {
   const [open, setOpen] = useState(false);
   if (!card) return children;
+  // Hover and focus both open it; `onOpen` hears the opening, not each of them.
+  const show = () => { if (!open) onOpen?.(); setOpen(true); };
   return (
     <span
       style={HOVER.anchor}
       tabIndex={0}
       aria-label={label}
-      onMouseEnter={() => setOpen(true)}
+      onMouseEnter={show}
       onMouseLeave={() => setOpen(false)}
-      onFocus={() => setOpen(true)}
+      onFocus={show}
       onBlur={() => setOpen(false)}
     >
       {children}

@@ -8,7 +8,7 @@ import DrilldownDrawer from "./views/DrilldownDrawer.jsx";
 import useDrilldown from "./state/useDrilldown.js";
 import { setDisplayCurrency } from "./charts/chartTheme.js";
 import { assignCategoricalColors, assignExpenseCategoryColors } from "./ui/categoricalColors.js";
-import { trackRender } from "./analytics.js";
+import { trackClick, trackRender } from "./analytics.js";
 
 // This server only ever hosts one firm — the URL's firm segment is cosmetic,
 // corrected to the real slug once the snapshot resolves it, never looked up.
@@ -65,7 +65,7 @@ export default function App() {
     document.documentElement.classList.toggle("dark", dark);
     try { localStorage.setItem("theme", dark ? "dark" : "light"); } catch { /* private mode */ }
   }, [dark]);
-  const toggleTheme = () => setDark((d) => !d);
+  const toggleTheme = () => { trackClick("MancoReporting.App.ToggleTheme"); setDark((d) => !d); };
 
   useEffect(() => {
     // Parallel fetch snapshot + accounts (accounts is optional; drill-downs

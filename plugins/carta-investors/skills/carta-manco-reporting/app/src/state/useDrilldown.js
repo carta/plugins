@@ -12,6 +12,7 @@ export default function useDrilldown() {
   // `context` may narrow the account: `months` to the column that was
   // clicked, `childScope` to one value of a breakout beneath the row.
   // Neither is required — the dashboard opens a whole account with neither.
+  // `from` names the page that opened it, for DrilldownDrawer's open event.
   const openAccount = useCallback((name, context) => {
     setSelection({ kind: "account", name, ...(context || {}) });
   }, []);
@@ -21,9 +22,10 @@ export default function useDrilldown() {
   }, []);
 
   // For the breakdown pane driven by DateRangeControls. `start`/`end` are
-  // ISO YYYY-MM-DD strings (inclusive on both ends).
-  const openDateRangeCategory = useCallback((start, end, category, color) => {
-    setSelection({ kind: "date-range-category", start, end, category, color });
+  // ISO YYYY-MM-DD strings (inclusive on both ends). `from` names the control
+  // that opened it, for DrilldownDrawer's open event only.
+  const openDateRangeCategory = useCallback((start, end, category, color, from) => {
+    setSelection({ kind: "date-range-category", start, end, category, color, from });
   }, []);
 
   const openMonthSide = useCallback((month, side) => {

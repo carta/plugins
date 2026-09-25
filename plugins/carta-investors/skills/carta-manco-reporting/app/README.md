@@ -9,6 +9,10 @@ Source in `src/` is served **directly** at runtime — `scripts/serve.py` serves
 `/src/*` and `../webapp/sw.js` transpiles the JSX in-browser with Sucrase. There is no
 build step for source edits: edit a file in `src/`, refresh, done.
 
+**Instrument what you change.** A new or changed control, page, panel, drill or
+shown/hidden state ships with its analytics event and catalogue row, in the same change.
+See `../references/analytics.md` → "Changing the app".
+
 **Do NOT run `npm run build` after editing source.** It rebuilds only the vendored ESM
 bundles (`../webapp/vendor/{react,sucrase,lucide-react}.esm.js`), so it is needed **only**
 when bumping one of those packages — never per edit.

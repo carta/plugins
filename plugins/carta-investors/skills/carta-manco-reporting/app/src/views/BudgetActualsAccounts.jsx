@@ -342,6 +342,7 @@ function SectionRows({ section, drilldown, names, subCodes, columns, subCols, ce
         // row's whole window, as it always did.
         const onClick = drilldown
           ? (col) => drilldown.openAccount(r.label, {
+              from: "budget-vs-actuals",
               budget: col ? cellOf(r, col).budget : r.budgeted,
               actual: col ? cellOf(r, col).actual : r.actual,
               polarity: section.polarity,
@@ -448,6 +449,7 @@ export function ChildRow({ child, parent, columns, subCols, breakout, polarity, 
   const scope = { ...breakout, value: child.unlabelled ? null : child.label };
   const onClick = drilldown
     ? (col) => drilldown.openAccount(parent.label, {
+        from: "budget-vs-actuals",
         // No budget, not a zero one. The workbook budgets the account, not
         // the vendors inside it, and a zero here printed a variance equal to
         // the whole figure — the same invented comparison the outline's

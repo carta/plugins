@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { sans, INK, LINE, FAINT, MICRO, BLUE, FS } from "../ui/theme.js";
 import { LEDGER_BASE } from "../ui/table.jsx";
 import { fmtCurrencyExact } from "../charts/chartTheme.js";
-import { trackClick } from "../analytics.js";
+import { trackClick, trackRender } from "../analytics.js";
 
 const DEFAULT_VISIBLE = 10;
 
@@ -58,14 +58,20 @@ export default function MonthlyExpenseBreakdown({
   // Reset back to collapsed whenever the range changes so switching to a
   // narrower period doesn't leave the user staring at a giant expanded list.
   const [expanded, setExpanded] = useState(false);
+  const empty = rows.length === 0;
+  useEffect(() => {
+    if (empty) trackRender("MancoReporting.Dashboard.ExpenseBreakdownEmpty");
+  }, [empty, dateRange?.start, dateRange?.end]);
   useEffect(() => { setExpanded(false); }, [dateRange?.start, dateRange?.end]);
 
   const hiddenCount = Math.max(0, rows.length - DEFAULT_VISIBLE);
   const visibleRows = expanded ? rows : rows.slice(0, DEFAULT_VISIBLE);
   const hiddenTotal = rows.slice(DEFAULT_VISIBLE).reduce((s, r) => s + r.amount, 0);
 
+  // Untracked here: the drawer it opens reports it as
+  // Drilldown.Open.DateRangeCategory.Breakdown, and a second event for the
+  // same click would double every rate built on it.
   const openCategory = (name) => {
-    trackClick("MancoReporting.Dashboard.SelectExpenseCategory");
     onSelect?.({ category: name });
   };
 

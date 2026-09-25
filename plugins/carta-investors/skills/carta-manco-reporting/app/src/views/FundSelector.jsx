@@ -66,7 +66,11 @@ export default function FundSelector({ funds, selected, onChange }) {
     <div ref={wrapRef} style={S.wrap}>
       <button
         style={{ ...S.button, ...(open ? S.buttonOpen : {}) }}
-        onClick={() => { trackClick("MancoReporting.Dashboard.FundSelectorOpen"); open ? setOpen(false) : openPanel(); }}
+        onClick={() => {
+          if (open) { setOpen(false); return; }
+          trackClick("MancoReporting.Dashboard.FundSelectorOpen");
+          openPanel();
+        }}
         aria-haspopup="listbox"
         aria-expanded={open}
       >

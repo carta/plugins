@@ -42,7 +42,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.44.5</carta-plugin>
+<carta-plugin>carta-investors:6.44.6</carta-plugin>
 
 # ManCo Reporting Dashboard
 
@@ -229,6 +229,16 @@ reasonable attempt is exhausted does this break silence, and even then with
 one plain-English line about what's actually wrong (see
 [errors.md](references/errors.md)) — never an account of what was tried
 before that.
+
+## Changing the app
+
+Any change to `app/src` that adds or changes something a user can see or do must add or
+update its analytics event **in the same change**. That covers a control, a page, a panel,
+a drill entry point, or a state that shows or hides content. Follow
+[analytics.md](references/analytics.md): name the id by its conventions (never customer
+data), keep one event per user act, and add or update its row in the event catalogue.
+A change with no user-visible behaviour, such as a refactor, a data fix or styling, needs
+no event.
 
 ## Errors and deferred work
 

@@ -11,7 +11,11 @@ export default function ExportButton({ targetId, entityName, pageLabel, asOf, fi
   const onClick = async () => {
     if (events) trackClick(events.click);
     const el = document.getElementById(targetId);
-    if (!el) return;
+    if (!el) {
+      // Without this the click is counted with no outcome after it.
+      if (events) trackClick(events.failed);
+      return;
+    }
     setState("busy");
     try {
       await exportElementAsHtml(el, { entityName, pageLabel, asOf, filenameBase });

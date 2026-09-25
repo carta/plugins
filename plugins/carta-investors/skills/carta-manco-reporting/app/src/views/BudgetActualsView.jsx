@@ -19,7 +19,7 @@ import { rowBreakouts, defaultBreakout, worthBreakingOut, UNLABELLED } from "./a
 import ExportButton from "../ui/ExportButton.jsx";
 import ThemeToggleButton from "../ui/ThemeToggleButton.jsx";
 import { slugify } from "../ui/exportHtml.js";
-import { trackClick } from "../analytics.js";
+import { trackClick, trackRender } from "../analytics.js";
 
 const BVA_EXPORT_ID = "manco-export-budget-vs-actuals";
 
@@ -49,6 +49,14 @@ const TOP_VALUE_DEFAULT_N = 3;             // + Firm Total = 4 columns by defaul
 // The only axes this page renders. Matching against this fixed list, not
 // "isn't X or Y so it must be Z", stops an unrecognized axis from falling
 // through to the department crosstab and joining actuals on the wrong tag.
+// Layout -> the render it reports, so a budget switch that swaps renderers is
+// visible. Keyed on the classified kind, never on the budget's own id.
+const LAYOUT_EVENTS = {
+  "by-account": "MancoReporting.BudgetVsActuals.LayoutAccounts",
+  "by-line-item": "MancoReporting.BudgetVsActuals.LayoutOutline",
+  "by-tag-crosstab": "MancoReporting.BudgetVsActuals.LayoutCrosstab",
+};
+
 export function classifyBudgetView(viewKinds) {
   const kinds = viewKinds || [];
   if (kinds.includes("by-account")) return "by-account";
@@ -174,11 +182,14 @@ export default function BudgetActualsView({ snapshot, accountsData, drilldown, b
     [accountsData, byTagValue, effectivePeriod, tagValuesAvailable, dimension, breakout]
   );
   const [openRows, setOpenRows] = useState(() => new Set());
-  const toggleRow = (key) => setOpenRows(prev => {
-    const next = new Set(prev);
-    if (next.has(key)) next.delete(key); else next.add(key);
-    return next;
-  });
+  const toggleRow = (key) => {
+    trackClick("MancoReporting.BudgetVsActuals.CrosstabExpandRow");
+    setOpenRows(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
 
   const meta = budget?.workbook_meta;
 
@@ -191,6 +202,12 @@ export default function BudgetActualsView({ snapshot, accountsData, drilldown, b
   const isAccounts = viewKind === "by-account";
   const isTagCrosstab = viewKind === "by-tag-crosstab";
   const isRecognizedView = viewKind != null;
+  // The page's .View fires once from App.jsx; this says which renderer it got,
+  // and fires again when a sidebar budget switch changes it.
+  useEffect(() => {
+    if (!budget) return;
+    trackRender(LAYOUT_EVENTS[viewKind] || "MancoReporting.BudgetVsActuals.UnsupportedView");
+  }, [viewKind, budget?.id]);
   // The firm's own word for what its columns are. "By Department" was one
   // client's category leaking into every client's heading.
   const columnLabel = dimensionLabel(dimension);

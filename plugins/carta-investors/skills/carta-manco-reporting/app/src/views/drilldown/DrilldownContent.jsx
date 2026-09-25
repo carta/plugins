@@ -160,6 +160,14 @@ export default function DrilldownContent({
     return monthly;
   }, [entries, selection, topCategoryNames, selectedTagKeys]);
 
+  // A drill that shows no entry list says why, once per selection. The empty
+  // list itself is EntriesTable's to report.
+  const stateEvent = !selection ? null
+    : selection.isProjected ? "MancoReporting.Drilldown.ProjectedYear"
+    : agg.count === 0 && mergeScheduleQuarters(selection).length > 0 ? "MancoReporting.Drilldown.ScheduleOnly"
+    : null;
+  useEffect(() => { if (stateEvent) trackRender(stateEvent); }, [selection]);
+
   if (!selection) return null;
 
   const netColor = selection.kind === "month-side" && selection.side === "income" ? GREEN
@@ -446,7 +454,10 @@ function ReportingTagsFilter({ allTags, selectedTagKeys, onApply,
   // isn't — it closes over the draft — so the ref keeps it current instead
   // of committing whatever the draft was when the panel opened.
   const applyRef = useRef(null);
-  useOutsideClose(open, () => applyRef.current?.(), [triggerRef, panelRef]);
+  useOutsideClose(open, () => {
+    trackClick("MancoReporting.Drilldown.FilterApplyOnClose");
+    applyRef.current?.();
+  }, [triggerRef, panelRef]);
 
   // Portaled + position:fixed (as in carta-fund-modeling's GlobalFilter): a
   // plain absolute popover would get clipped by the drawer's own scroll body.
@@ -602,7 +613,7 @@ function ReportingTagsFilter({ allTags, selectedTagKeys, onApply,
                       {accounts.map(a => (
                         <label key={a.acct_type} className="gf-check-row">
                           <input type="checkbox" checked={draftAccounts.has(a.acct_type)}
-                                 onChange={() => toggleDraftAccount(a.acct_type)} />
+                                 onChange={() => { trackClick("MancoReporting.Drilldown.ToggleAccountFilter"); toggleDraftAccount(a.acct_type); }} />
                           <span style={S.checkLabel}>{a.acct_type} — {a.name}</span>
                           <span style={S.checkAmount}>{fmtCurrencyShort(a.amount, 1)}</span>
                         </label>
@@ -619,7 +630,7 @@ function ReportingTagsFilter({ allTags, selectedTagKeys, onApply,
                         return (
                           <label key={k} className="gf-check-row">
                             <input type="checkbox" checked={draft.has(k)}
-                                   onChange={() => toggleDraft(k)} />
+                                   onChange={() => { trackClick("MancoReporting.Drilldown.ToggleTagFilter"); toggleDraft(k); }} />
                             <span style={S.checkLabel}>{t.value}</span>
                             <span style={S.checkAmount}>{fmtCurrencyShort(t.amount, 1)}</span>
                           </label>

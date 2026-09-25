@@ -61,7 +61,8 @@ export default function BudgetPeriodControls({
       ))}
 
       {dirty && (
-        <button type="button" className="gf-reset" onClick={() => onFilters({ ...DEFAULT_FILTERS })}>
+        <button type="button" className="gf-reset"
+                onClick={() => { trackClick("MancoReporting.BudgetVsActuals.FiltersClear"); onFilters({ ...DEFAULT_FILTERS }); }}>
           Reset
         </button>
       )}
@@ -83,7 +84,8 @@ function Chip({ label, onDismiss }) {
   return (
     <Tag tone="info" style={S.chip}>
       {label}
-      <button type="button" className="tag-close-btn" aria-label={`Clear ${label}`} onClick={onDismiss}>
+      <button type="button" className="tag-close-btn" aria-label={`Clear ${label}`}
+              onClick={() => { trackClick("MancoReporting.BudgetVsActuals.FilterChipRemove"); onDismiss(); }}>
         <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
           <path d="M2 2L8 8M8 2L2 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
         </svg>
@@ -97,6 +99,15 @@ function Chip({ label, onDismiss }) {
 export function hasFilterPanes({ filters, onFilters, breakouts, onBreakoutKey, departments, hiddenRows }) {
   return !!(filters && onFilters) || !!(breakouts?.length && onBreakoutKey) || !!departments || !!hiddenRows;
 }
+
+// Filter pane key -> its tab event.
+const PANE_EVENTS = {
+  columns: "MancoReporting.BudgetVsActuals.FilterTabColumns",
+  ytd: "MancoReporting.BudgetVsActuals.FilterTabYtd",
+  breakouts: "MancoReporting.BudgetVsActuals.FilterTabBreakouts",
+  departments: "MancoReporting.BudgetVsActuals.FilterTabDepartments",
+  hiddenRows: "MancoReporting.BudgetVsActuals.FilterTabHiddenRows",
+};
 
 // Ported from carta-fund-modeling's `GlobalFilter` (side-nav + right pane +
 // Reset/Apply footer over a draft, committed on Apply). No
@@ -143,6 +154,12 @@ export function FiltersMenu({ filters, onFilters, ytdPane = true, breakouts, bre
     });
   };
 
+  const selectPane = (key) => {
+    const id = PANE_EVENTS[key];
+    if (id) trackClick(id);
+    setActivePane(key);
+  };
+
   // Scoped per instance: three views can each mount a Filters panel.
   const uid = useId();
   const tabId = (k) => `${uid}tab-${k}`;
@@ -157,7 +174,7 @@ export function FiltersMenu({ filters, onFilters, ytdPane = true, breakouts, bre
     e.preventDefault();
     const keys = navItems.map((n) => n.key);
     const next = keys[(keys.indexOf(activePane) + step + keys.length) % keys.length];
-    setActivePane(next);
+    selectPane(next);
     document.getElementById(tabId(next))?.focus();
   };
 
@@ -238,7 +255,7 @@ export function FiltersMenu({ filters, onFilters, ytdPane = true, breakouts, bre
                       aria-selected={activePane === key} aria-controls={paneId(key)}
                       tabIndex={activePane === key ? 0 : -1}
                       className={`gf-navitem${activePane === key ? " gf-navitem--active" : ""}`}
-                      onClick={() => setActivePane(key)} onKeyDown={onTabKeyDown}>
+                      onClick={() => selectPane(key)} onKeyDown={onTabKeyDown}>
                 {label}
                 {count > 0 && <Bubble tone="info">{count}</Bubble>}
               </button>
@@ -256,7 +273,7 @@ export function FiltersMenu({ filters, onFilters, ytdPane = true, breakouts, bre
                       <Check key={type}
                              checked={draftHidden.includes(type)}
                              disabled={!canHide(draftHidden, type)}
-                             onChange={() => toggleDraftHidden(type)}
+                             onChange={() => { trackClick("MancoReporting.BudgetVsActuals.ToggleHideColumn"); toggleDraftHidden(type); }}
                              label={`Hide ${COLUMN_LABEL[type]} column`} />
                     ))}
                   </div>
@@ -267,7 +284,7 @@ export function FiltersMenu({ filters, onFilters, ytdPane = true, breakouts, bre
                   <h3 className="gf-view__title">Year-to-date</h3>
                   <div className="gf-check-list">
                     <Check checked={!!draft.showYtd}
-                           onChange={() => setDraft({ ...draft, showYtd: !draft.showYtd })}
+                           onChange={() => { trackClick("MancoReporting.BudgetVsActuals.ToggleShowYtd"); setDraft({ ...draft, showYtd: !draft.showYtd }); }}
                            label="Show YTD column" />
                   </div>
                 </>
@@ -380,6 +397,7 @@ function Check({ checked, disabled, onChange, label }) {
  *  month fields, just a short options list. */
 export function SimplePeriodPicker({ options, value, onChange }) {
   const [open, setOpen] = useState(false);
+  useEffect(() => { if (open) trackRender("MancoReporting.BudgetPeriodPanel.View"); }, [open]);
   const ref = useOutsideClose(open, () => setOpen(false));
   const label = options.find((o) => o.id === value)?.label || options[0]?.label;
 
@@ -436,7 +454,8 @@ function RangePicker({ range, onRange, presets, preset, year }) {
         <div style={{ ...S.popover, right: 0, left: "auto", minWidth: 300 }}
              role="dialog" aria-label="Date range">
           <label style={S.fieldLabel}>Date range</label>
-          <select style={S.select} value={preset} onChange={(e) => pick(e.target.value)}>
+          <select style={S.select} value={preset}
+                  onChange={(e) => { trackClick("MancoReporting.BudgetVsActuals.PeriodPreset"); pick(e.target.value); }}>
             {presets.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
           </select>
           <div style={S.row}>
@@ -456,7 +475,7 @@ function MonthField({ label, value, onChange }) {
     <div style={S.field}>
       <label style={S.fieldLabel}>{label}</label>
       <select style={S.select} value={value} aria-label={`${label} month`}
-              onChange={(e) => { trackClick("MancoReporting.BudgetVsActuals.PeriodChange"); onChange(Number(e.target.value)); }}>
+              onChange={(e) => { trackClick("MancoReporting.BudgetVsActuals.PeriodCustom"); onChange(Number(e.target.value)); }}>
         {MONTH_NAME.map((name, i) => (
           <option key={name} value={i + 1}>{name}</option>
         ))}

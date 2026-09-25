@@ -3,7 +3,7 @@ import { sans, INK, PAPER, LINE, FAINT, MICRO, BORDER_DEFAULT, BLUE, FS } from "
 import { Tag } from "../../ui/components.jsx";
 import { fmtCurrencyExact } from "../../charts/chartTheme.js";
 import { normalizeTags } from "./util.js";
-import { trackClick } from "../../analytics.js";
+import { trackClick, trackRender } from "../../analytics.js";
 
 // Rendered up front, and again each time the reader reaches the end. A
 // drill can hold hundreds of entries and almost nobody reads past the
@@ -40,7 +40,11 @@ export default function EntriesTable({ entries, buildJournalUrl }) {
   // what the list HOLDS, not on the array's identity: one caller rebuilding
   // its props each render would otherwise pin this at the first chunk.
   const listKey = `${entries.length}:${entries[0]?.id ?? ""}:${entries[entries.length - 1]?.id ?? ""}`;
-  useEffect(() => { setShown(CHUNK); }, [listKey]);
+  // Reading past the first chunk is reported once per list, and only when a
+  // scroll asked for it — the mount-time top-up below is not the reader's act.
+  const loadMoreReported = useRef(false);
+  useEffect(() => { setShown(CHUNK); loadMoreReported.current = false; }, [listKey]);
+  useEffect(() => { if (!entries.length) trackRender("MancoReporting.Drilldown.EmptyEntries"); }, [listKey]);
 
   const total = entries.length;
   const slice = entries.slice(0, shown);
@@ -59,14 +63,19 @@ export default function EntriesTable({ entries, buildJournalUrl }) {
     if (!box) return undefined;
     // Ahead of the end, so the next rows exist before they are reached.
     const NEAR = 400;
-    const grow = () => {
+    const grow = (byScroll) => {
       if (box.scrollHeight - box.scrollTop - box.clientHeight <= NEAR) {
+        if (byScroll && !loadMoreReported.current) {
+          loadMoreReported.current = true;
+          trackClick("MancoReporting.Drilldown.EntriesLoadMore");
+        }
         setShown(n => Math.min(total, n + CHUNK));
       }
     };
-    grow();          // a list shorter than the panel never fires a scroll
-    box.addEventListener("scroll", grow, { passive: true });
-    return () => box.removeEventListener("scroll", grow);
+    grow(false);     // a list shorter than the panel never fires a scroll
+    const onScroll = () => grow(true);
+    box.addEventListener("scroll", onScroll, { passive: true });
+    return () => box.removeEventListener("scroll", onScroll);
   }, [shown, total]);
 
   if (!total) {

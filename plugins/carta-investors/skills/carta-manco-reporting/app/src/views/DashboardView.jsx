@@ -20,7 +20,7 @@ import { hasCashDetail } from "../ui/cashDetail.js";
 import ExportButton from "../ui/ExportButton.jsx";
 import ThemeToggleButton from "../ui/ThemeToggleButton.jsx";
 import { slugify } from "../ui/exportHtml.js";
-import { trackClick } from "../analytics.js";
+import { trackClick, trackRender } from "../analytics.js";
 
 const DASHBOARD_EXPORT_ID = "manco-export-dashboard";
 
@@ -30,6 +30,8 @@ const DASHBOARD_EXPORT_ID = "manco-export-dashboard";
 // ABOVE its value, spaced by an unbroken flex row rather than a grid of
 // separate boxes.
 function KpiStrip({ ops, cash }) {
+  const cashMissing = cash.balance == null;
+  useEffect(() => { if (cashMissing) trackRender("MancoReporting.Dashboard.CashUnavailable"); }, [cashMissing]);
   const netIncome = ops.total_income - ops.total_expenses;
   const netIsPos  = netIncome >= 0;
   return (
@@ -59,6 +61,7 @@ function KpiStrip({ ops, cash }) {
         detailLabel="Cash balance by account"
         // Last tile in the strip — a left-anchored card runs off its edge.
         detailAlign="right"
+        onDetailOpen={() => trackClick("MancoReporting.Dashboard.CashDetailHover")}
       />
     </div>
   );
@@ -98,7 +101,7 @@ export function cashSubtitle(cash) {
 // Label-above-value order, per StatTile's `labelPos="top"` default (Ink's
 // real Tile spec) — label, then value (marginTop: 6). The sub text now sits
 // behind a (?) hint on the label, matching the drilldown drawer's HoverTip.
-function Tile({ value, label, sub, valueColor, detail, detailLabel, detailAlign }) {
+function Tile({ value, label, sub, valueColor, detail, detailLabel, detailAlign, onDetailOpen }) {
   const shown = <span style={{ ...styles.tileVal, color: valueColor || INK }}>{value}</span>;
   return (
     <div style={styles.tile}>
@@ -112,7 +115,7 @@ function Tile({ value, label, sub, valueColor, detail, detailLabel, detailAlign 
       </div>
       <div>
         {detail
-          ? <HoverCard card={detail} label={detailLabel} align={detailAlign}>{shown}</HoverCard>
+          ? <HoverCard card={detail} label={detailLabel} align={detailAlign} onOpen={onDetailOpen}>{shown}</HoverCard>
           : shown}
       </div>
     </div>
@@ -225,7 +228,7 @@ export default function DashboardView({ snapshot, accountsData, drilldown, dark,
     ? ({ vendor }) => drilldown.openVendor(vendor)
     : undefined;
   const onSpendSelect = drilldown
-    ? ({ name }) => drilldown.openAccount(name)
+    ? ({ name }) => drilldown.openAccount(name, { from: "dashboard" })
     : undefined;
   // A variance bar is a budget category, which can span several GL accounts
   // ("Travel" covering airfare, hotels and taxis). Drill on the category's
@@ -260,11 +263,11 @@ export default function DashboardView({ snapshot, accountsData, drilldown, dark,
     const yr = Number(asOf.slice(0, 4));
     const start = `${yr}-${String(month).padStart(2, "0")}-01`;
     const end = `${yr}-${String(month).padStart(2, "0")}-${new Date(yr, month, 0).getDate()}`;
-    drilldown.openDateRangeCategory(start, end, category, categoryColorOf(category));
+    drilldown.openDateRangeCategory(start, end, category, categoryColorOf(category), "chart");
   };
   // Breakdown-row click: drill into the category using the current date range.
   const onBreakdownSelect = ({ category }) => {
-    if (drilldown) drilldown.openDateRangeCategory(dateRange.start, dateRange.end, category, categoryColorOf(category));
+    if (drilldown) drilldown.openDateRangeCategory(dateRange.start, dateRange.end, category, categoryColorOf(category), "breakdown");
   };
   const onFeeIncomeSelect = drilldown
     ? ({ fund, yearLabel, isProjected }) => {
@@ -323,6 +326,18 @@ export default function DashboardView({ snapshot, accountsData, drilldown, dark,
   const [showProjections, setShowProjections] = useState(true);
   // Reset the projection toggle when snapshot changes.
   useEffect(() => { setShowProjections(true); }, [feeSchedule]);
+
+  // A card the firm's data can't fill is left out, not shown empty — so its
+  // absence has to be reported, or a missing card reads as one nobody used.
+  useEffect(() => {
+    if (!(vendorSpend?.vendors?.length > 0)) trackRender("MancoReporting.Dashboard.VendorSpendHidden");
+    if (!feeSchedule) trackRender("MancoReporting.Dashboard.FeeIncomeHidden");
+    if (!budget || !ops) trackRender("MancoReporting.Dashboard.BudgetChartHidden");
+    // SpendByGL only stands in when there is no variance chart.
+    if (!varianceByCategory?.budgets?.length && !spendByGL?.accounts?.length) {
+      trackRender("MancoReporting.Dashboard.SpendByGLHidden");
+    }
+  }, [snapshot]);
 
   return (
     // The page no longer caps its own width; this view keeps the width it
