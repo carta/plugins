@@ -60,6 +60,7 @@ DATA_DIR = None
 WEB_DIR = None
 SRC_DIR = None
 TOKEN = None
+CLAUDE_BIN = None
 IDLE_TIMEOUT_DEFAULT = 28800  # 8h backstop; should never fire during active use
 # Watchdog cadence, and the slack above it that distinguishes a real suspend
 # (laptop sleep) from ordinary scheduling jitter — a gap beyond the sum is sleep.
@@ -310,7 +311,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             entry = _CHAT_SESSIONS.get(sid)
             if entry is None:
                 sess = chat_session.ChatSession(
-                    cwd=str(SRC_DIR), add_dirs=[str(SRC_DIR), str(DATA_DIR)])
+                    cwd=str(SRC_DIR), add_dirs=[str(SRC_DIR), str(DATA_DIR)],
+                    claude_bin=CLAUDE_BIN)
                 try:
                     sess.start()
                 except (OSError, ValueError):
@@ -400,6 +402,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         session = chat_session.ChatSession(
             cwd=str(DATA_DIR),
             add_dirs=[],
+            claude_bin=CLAUDE_BIN,
             # An empty tool set, not the app-editing one.
             allowed_tools="",
             system_prompt=predicate_session.system_prompt(),
@@ -584,7 +587,7 @@ def _detach_or_warn():
 
 
 def main():
-    global DATA_DIR, WEB_DIR, SRC_DIR, TOKEN
+    global DATA_DIR, WEB_DIR, SRC_DIR, TOKEN, CLAUDE_BIN
     ap = argparse.ArgumentParser()
     ap.add_argument("--data-dir", required=True)
     ap.add_argument("--web-dir", default=str(Path(__file__).resolve().parent.parent / "webapp"))
@@ -602,11 +605,16 @@ def main():
         default=int(os.environ.get("IDLE_TIMEOUT", str(IDLE_TIMEOUT_DEFAULT))),
         help="seconds of API inactivity before the server self-terminates (0 = never)",
     )
+    ap.add_argument(
+        "--claude-bin", default=None,
+        help="absolute path to the claude CLI binary for the ask box",
+    )
     args = ap.parse_args()
 
     DATA_DIR = Path(args.data_dir).resolve()
     WEB_DIR = Path(args.web_dir).resolve()
     SRC_DIR = Path(args.src_dir).resolve() if args.src_dir else (WEB_DIR.parent / "app" / "src")
+    CLAUDE_BIN = args.claude_bin
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
     port_file = DATA_DIR / ".port"

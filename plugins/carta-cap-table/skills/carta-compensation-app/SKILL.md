@@ -45,12 +45,13 @@ allowed-tools:
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_equity_pool_utilization.py *)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_retention_plan.py *)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_corporation_info.py *)
+  - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/preflight_claude.py *)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/build_datadir.py *)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/serve.py *)
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.90.16</carta-plugin>
+<carta-plugin>carta-cap-table:6.90.17</carta-plugin>
 
 <!-- [PATTERN carta-writing-style v0.0.2] [PATTERN etiquette v0.0.6] [PATTERN text v0.0.8] [PATTERN tables v0.0.12] [PATTERN carta-watermark v0.0.10] [PATTERN base v0.1.0] -->
 
@@ -193,6 +194,37 @@ No corporation in the invocation → `ctc_paths.py list-dashboards` to offer res
 
 **Run this silently.** The user's first line should be the greeting, not narration of the steps.
 Cache age in words ("3 days old"), never as a raw `field=value`.
+
+## Step 0.5 — Preflight: Claude CLI for the ask box
+
+The ask box spawns a `claude` subprocess. If the binary is not discoverable, the ask box
+returns an error after the dashboard is already open. Detect this early so the skill can
+resolve it before the user waits through the data-fetch cycle.
+
+**This step is non-blocking.** The dashboard is fully functional without the CLI — only the
+ask box needs it. Never fail the skill over a missing CLI.
+
+```bash
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/preflight_claude.py" check
+```
+
+- `claude_bin=<path>` → capture the path for Step 4. No output to user.
+- `claude_bin=none` → ask via `AskUserQuestion`:
+  > "The ask box in the dashboard needs the `claude` CLI, which wasn't found on your PATH.
+  > Want me to install it? (runs `npm install -g @anthropic-ai/claude-code`)"
+  - **Yes** → run `preflight_claude.py install`, then use the printed path. If it still
+    prints `claude_bin=none`, tell the user the install did not succeed and they can install
+    manually later — then continue.
+  - **No** → continue. The dashboard works; the ask box will show a message explaining it
+    needs the CLI.
+
+When Step 4 launches `serve.py`, pass the discovered path as `--claude-bin "<path>"` (only
+when a non-`none` path was found). This threads it to `ChatSession` without relying on PATH.
+
+**Reused daemon caveat:** if `serve.py` detects an already-running daemon for this corp, it
+reuses it and exits — the new `--claude-bin` does not reach the running process. If the user
+just installed the CLI and the ask box was broken on the previous launch, tell them to close
+and relaunch the dashboard to pick up the new binary.
 
 ## Step 1 — BUILD: identify the Carta MCP + resolve the corporation
 
@@ -865,8 +897,11 @@ not a bug to work around. Fix the fetch and re-run.
 
 ```bash
 uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/serve.py" \
-  --data-dir "<dashboard_dir>" --detach
+  --data-dir "<dashboard_dir>" --detach --claude-bin "<claude_bin>"
 ```
+
+Include `--claude-bin` only when Step 0.5 found a path (not `none`). Omit it otherwise — the
+server falls back to `CTC_CLAUDE_BIN` env var, then bare `claude` on PATH.
 
 Run with **Bash run_in_background**; read the printed `http://127.0.0.1:<port>/?t=<token>` and
 give the user that URL. Tell them it **opens in their default browser automatically** — if it
