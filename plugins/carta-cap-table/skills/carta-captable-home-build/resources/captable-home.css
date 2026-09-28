@@ -149,6 +149,7 @@
     }
     .fd-strip .stat-row { gap: 8px 40px; }
     .fd-strip .meter-block { border-bottom: none; padding-bottom: 0; max-width: 420px; }
+    .fd-strip-note { font-size: 12px; color: var(--ink-color-global-text-subtle); margin-top: 8px; }
 
     .skill-card {
       background: light-dark(var(--ink-color-global-surface-background-default), var(--carta-surface-card-elevated));

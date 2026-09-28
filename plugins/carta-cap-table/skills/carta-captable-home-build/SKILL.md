@@ -30,7 +30,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.90.27</carta-plugin>
+<carta-plugin>carta-cap-table:6.90.28</carta-plugin>
 
 # Carta Home (cap table) — Build / Redeploy
 
@@ -55,7 +55,10 @@ which claims its own artifact and its own URL.
   error here — the option pool and round history role states never raise it.
 - **Fully diluted summary** — a strip above the tiles: stat tiles for fully diluted
   shares, outstanding shares, and amount raised, plus a meter for outstanding as a share
-  of fully diluted. It carries no card chrome and nothing to click, because it summarizes
+  of fully diluted. When every row is a percentage-based or invested-capital class, the
+  share totals add percentage points or nothing, so the strip shows the fully diluted
+  ownership the rows hold in place of the share tiles and the meter — never the empty
+  state. It carries no card chrome and nothing to click, because it summarizes
   rather than drills in. Amount raised carries its own currency when
   `cap_table:list:financing_history` resolves to exactly one, one tile per currency when
   it resolves to more than one, and stays unitless when it can't be determined — never
@@ -69,9 +72,13 @@ which claims its own artifact and its own URL.
     diluted, and % fully diluted. The bar and every % use the ownership fields, never
     share counts: a percentage-based or invested-capital class can hold ownership with
     no share count, and an admin scoped to some share classes gets only the rows in
-    scope, each with its part of the whole company. So the part the rows do not hold is
-    a grey "Rest of the company" segment, and a line above the bar says how much of the
-    company the rows hold. Both read the one `cap_table_chart` response, so the pair
+    scope, each with its part of the whole company. So the part out of scope is a grey
+    "Rest of the company" segment, and a line above the bar says how much of the
+    company the rows hold. Both come from `totals.total_fully_diluted_ownership`, never
+    from the sum of the rows: committed RSAs are in the fully diluted total but in no
+    row, so for a full admin the rows can add up to less than the whole with nothing
+    out of scope. When every row is a percentage-based or invested-capital class, the
+    heading above the bar is that ownership, not a share count. Both read the one `cap_table_chart` response, so the pair
     costs no extra fetch. Each
     segment wears its own hue from the categorical order, separated by a 2px gap in the
     surface color, and is named in the HTML legend below the bar — never color alone. A
@@ -384,8 +391,8 @@ delete it from their artifact gallery.
 | What to try next | `get_current_user` — `recommendations`, filtered to entries that are not `is_skill_gap` and carry a `recommended_prompt` |
 | Update banner | `plugin:get:version` via `fetch`, with `plugin` + `skill` params |
 | Plugin news | `marketing:list:content` (tag `NEWS_TAG`, `tag_source: "metadata"`) then `marketing:get:asset_data` per image. Images must arrive as `data:` URIs — the sandbox CSP is `img-src 'self' data:`, so a remote asset URL renders nothing |
-| Ownership composition bar (on the Cap table page) | `cap_table_chart` — `chart_data.share_classes` and `chart_data.warrant_blocks` by `fully_diluted_ownership`, `chart_data.option_plans` by `outstanding_ownership + available_ownership`, largest first and capped at six segments, plus "Rest of the company" when the rows hold less than the whole |
-| Fully diluted summary | `cap_table_chart` — `chart_data.totals` for share counts (same call again, no extra fetch), upgraded by the Round history dashboard's `cap_table:list:financing_history` response, which the dashboard hands over via `applyAmountRaised` — one currency renders plainly, more than one renders a per-currency breakdown (never summed), none/failure keeps the unitless fallback |
+| Ownership composition bar (on the Cap table page) | `cap_table_chart` — `chart_data.share_classes` and `chart_data.warrant_blocks` by `fully_diluted_ownership`, `chart_data.option_plans` by `outstanding_ownership + available_ownership`, largest first and capped at six segments, plus "Rest of the company" when `chart_data.totals.total_fully_diluted_ownership` is less than the whole |
+| Fully diluted summary | `cap_table_chart` — `chart_data.totals` for share counts, or `total_fully_diluted_ownership` when every share class row's `quantity_semantics` is `PERCENT` or `INVESTED_CAPITAL` (same call again, no extra fetch), upgraded by the Round history dashboard's `cap_table:list:financing_history` response, which the dashboard hands over via `applyAmountRaised` — one currency renders plainly, more than one renders a per-currency breakdown (never summed), none/failure keeps the unitless fallback |
 | Option pool | `cap_table:get:option_plans` (403 for non-staff users falls back to a plain "not available for your role" state, not an error banner) |
 | Stakeholders | `cap_table:get:stakeholders` (summary mode — no `search` param, no names/PII). `by_type` keys vary per corporation, so they are always iterated, never matched against a hardcoded enum |
 | Drafts | `cap_table:list:draft_sets` called **twice** — once per required `security_type` (`certificate`, `option_grant`) — and merged; one call can fail without blocking the other |

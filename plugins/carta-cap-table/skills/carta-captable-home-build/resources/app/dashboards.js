@@ -23,18 +23,21 @@ function capTableRows(chartData) {
       outstanding: numOrZero(sc.outstanding_shares),
       fullyDiluted: numOrZero(sc.fully_diluted_shares),
       ownership: numOrZero(sc.fully_diluted_ownership),
+      shareBased: !NON_SHARE_BASED_SEMANTICS.includes(sc.quantity_semantics),
     }))
     .concat(optionPlans.map(p => ({
       name: p.name || "Option plan",
       outstanding: numOrZero(p.outstanding_shares),
       fullyDiluted: numOrZero(p.fully_diluted_shares),
       ownership: numOrZero(p.outstanding_ownership) + numOrZero(p.available_ownership),
+      shareBased: true,
     })))
     .concat(warrantBlocks.map(wb => ({
       name: wb.name || "Warrants",
       outstanding: 0,
       fullyDiluted: numOrZero(wb.fully_diluted_shares),
       ownership: numOrZero(wb.fully_diluted_ownership),
+      shareBased: true,
     })))
     .filter(r => r.ownership > 0 || r.fullyDiluted > 0 || r.outstanding > 0)
     .sort((a, b) => b.ownership - a.ownership || b.fullyDiluted - a.fullyDiluted);
@@ -83,14 +86,19 @@ function renderCapTablePage() {
     return;
   }
   const totalFd = rows.reduce((sum, r) => sum + r.fullyDiluted, 0);
-  const shownOwnership = rows.reduce((sum, r) => sum + r.ownership, 0);
-  const ownershipNote = 1 - shownOwnership >= OWNERSHIP_REST_MIN
+  const shownOwnership = ownershipShown(_capTableChartData);
+  const ownershipOnly = isOwnershipOnly(rows);
+  const chartHead = ownershipOnly
+    ? `<span class="fp-chart-total">${escHtml(fmtOwnershipPct(shownOwnership))}</span>
+      <span class="fp-chart-total-label">of the company, fully diluted</span>`
+    : `<span class="fp-chart-total">${escHtml(fmtSharesFull(totalFd))}</span>
+      <span class="fp-chart-total-label">Fully diluted shares</span>`;
+  const ownershipNote = !ownershipOnly && 1 - shownOwnership >= OWNERSHIP_REST_MIN
     ? `<p class="fp-chart-note">These rows hold ${escHtml(fmtOwnershipPct(shownOwnership))} of the company, fully diluted.</p>`
     : "";
   body.innerHTML = `
     <div class="fp-chart-head">
-      <span class="fp-chart-total">${escHtml(fmtSharesFull(totalFd))}</span>
-      <span class="fp-chart-total-label">Fully diluted shares</span>
+      ${chartHead}
     </div>
     ${ownershipNote}
     <div class="fp-stack-wrap"><canvas id="ownership-chart"></canvas></div>

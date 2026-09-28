@@ -57,6 +57,22 @@ function destroyOwnershipChart() {
   if (_ownershipChart) { _ownershipChart.destroy(); _ownershipChart = null; }
 }
 
+// The part of the whole company the rows hold, as carta-web sends it: 1 for a full admin,
+// the in-scope part for a scoped admin. Never the sum of the rows: committed RSAs are
+// in the fully diluted total but in no row, so that sum can be less than 1 with
+// nothing out of scope.
+function ownershipShown(chartData) {
+  const shown = (chartData.totals || {}).total_fully_diluted_ownership;
+  return shown == null ? 1 : numOrZero(shown);
+}
+
+// A percentage-based or invested-capital class holds ownership with no share count, so
+// when every row is one, carta-web's share totals add percentage points or nothing.
+const NON_SHARE_BASED_SEMANTICS = ["PERCENT", "INVESTED_CAPITAL"];
+function isOwnershipOnly(rows) {
+  return rows.length > 0 && rows.every(r => !r.shareBased);
+}
+
 // Plots ownership, not share counts. Ownership is of the whole company, so the part
 // the rows do not hold (for a scoped admin, the classes out of scope) is drawn as
 // "Rest of the company". Caps at 6 segments — past that, adjacent slices of one
@@ -79,9 +95,9 @@ function buildOwnershipSegments(chartData) {
       shares: tail.reduce((sum, s) => sum + s.shares, 0),
     });
   }
-  const shown = kept.reduce((sum, s) => sum + s.value, 0);
-  if (kept.length && 1 - shown >= OWNERSHIP_REST_MIN) {
-    kept.push({ label: "Rest of the company", value: 1 - shown, shares: 0, rest: true });
+  const rest = 1 - ownershipShown(chartData);
+  if (kept.length && rest >= OWNERSHIP_REST_MIN) {
+    kept.push({ label: "Rest of the company", value: rest, shares: 0, rest: true });
   }
   return kept;
 }
@@ -220,10 +236,12 @@ let _capTableChartData = null;
 function resetFdSummaryState() { _fdShareTotals = null; _fdAmountRaisedRows = null; _capTableChartData = null; }
 
 // Absent chart_data.totals, or one with nothing to show, gets its own empty
-// state rather than three dash rows.
-function fdTotalsAreEmpty(totals) {
+// state rather than three dash rows. Rows that hold ownership with no share count
+// are something to show.
+function fdTotalsAreEmpty(totals, rows) {
   if (!totals) return true;
-  return numOrZero(totals.total_fully_diluted) === 0 && numOrZero(totals.total_outstanding) === 0;
+  const noShares = numOrZero(totals.total_fully_diluted) === 0 && numOrZero(totals.total_outstanding) === 0;
+  return noShares && !rows.some(r => r.ownership > 0);
 }
 
 // No currency on totals.total_cash_raised — render the magnitude and say so, never guess.
@@ -258,6 +276,15 @@ function renderFdSummaryFromState() {
   const el = document.getElementById("fd-summary-strip");
   if (!el || !_fdShareTotals) return;
   const raised = _fdAmountRaisedRows || defaultAmountRaisedRows(_fdShareTotals);
+  if (_capTableChartData && isOwnershipOnly(capTableRows(_capTableChartData))) {
+    el.innerHTML = `
+    <div class="stat-row">
+      ${statTile("Fully diluted ownership", fmtOwnershipPct(ownershipShown(_capTableChartData)))}
+      ${raised.map(([name, val]) => statTile(name, val)).join("")}
+    </div>
+    <p class="fd-strip-note">These share classes hold ownership by percentage or invested capital, not by share count.</p>`;
+    return;
+  }
   el.innerHTML = `
     <div class="stat-row">
       ${statTile("Fully diluted", fmtSharesShort(_fdShareTotals.total_fully_diluted))}
@@ -304,10 +331,14 @@ async function fetchOwnershipAndFdSummary(corporationId) {
     reportCardFailure("cap_table_chart returned no chart data for this corporation.");
     return;
   }
-  _capTableChartData = withChart.chart_data;
+  renderCapTableChart(withChart.chart_data);
+}
+
+function renderCapTableChart(chartData) {
+  _capTableChartData = chartData;
   renderCapTableTile();
-  const totals = withChart.chart_data.totals;
-  if (fdTotalsAreEmpty(totals)) { renderFdSummaryEmpty(); return; }
+  const totals = chartData.totals;
+  if (fdTotalsAreEmpty(totals, capTableRows(chartData))) { renderFdSummaryEmpty(); return; }
   _fdShareTotals = totals;
   renderFdSummaryFromState();
 }

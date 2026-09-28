@@ -1,6 +1,6 @@
 {
   "carta-captable-home-build": {
-    "version": "0.13.0",
-    "headline": "The Cap table dashboard now shows what each share class owns of the whole company, including percentage-based and invested-capital classes."
+    "version": "0.14.0",
+    "headline": "The Cap table dashboard shows the grey rest-of-company slice only for classes you cannot see, and the summary shows ownership for percentage-based and invested-capital classes."
   }
 }
