@@ -360,12 +360,12 @@ function ccrBlockers(s) {
   if (paying === "missing") {
     out.push({
       key: "paying-from",
-      text: "No paying-from bank account is named on this distribution. Ask your Carta team to add one with Request changes.",
+      text: "No paying-from bank account is named. Ask your Carta team to add one with Request changes.",
     });
   } else if (paying === "closed") {
     out.push({
       key: "paying-from",
-      text: "The paying-from bank account on this distribution is closed. Ask your Carta team to select another with Request changes.",
+      text: "The paying-from bank account is closed. Ask your Carta team to select another with Request changes.",
     });
   }
   // An AMM distribution is reviewed in Carta: choosing who is paid and
@@ -374,16 +374,20 @@ function ccrBlockers(s) {
     out.push({
       key: "amm",
       locks: true,
-      text: "This distribution pays through Automated Money Movement and is reviewed in Carta. Open it there to choose who is paid, authorize the payment and release, or to request changes.",
+      text: "This distribution pays through Automated Money Movement, so it is reviewed and released in Carta.",
+      // "in Carta" opens the activity there, when the panel knows its address.
+      html: escHtml("This distribution pays through Automated Money Movement, so it is reviewed and released ") +
+        (ccrOpenInCarta("in Carta", "ccr-blocker-link") || "in Carta") + ".",
     });
   }
   const h = ccrHealth();
   const event = ccrIsDistribution(s) ? "distribution" : "capital call";
+  // The check roster is staff detail the web app hides from GPs, so no check is named;
+  // Carta clears a failure once the reviewer sends the activity back.
   if (h.verdict === "blocking") {
     out.push({
       key: "health-checks",
-      text: "Cannot send out this " + event + " due to failed blocking health checks" +
-        (h.cartaOnly.length ? "; some of them only Carta can fix" : "") + ".",
+      text: "Health checks are failing. Use Request changes to send this " + event + " back to your Carta team.",
     });
   } else if (h.verdict === "running") {
     out.push({ key: "health-checks", text: "Health checks are running." });
@@ -404,7 +408,7 @@ function ccrHealth() {
   const h = _ccr.health;
   if (!h) {
     return { loading: false, error: null, checks: [], failing: [], blocking: [], advisory: [],
-             cartaOnly: [], passing: 0, verdict: "none" };
+             passing: 0, verdict: "none" };
   }
   const checks = h.checks || [];
   const failing = checks.filter((c) => c.is_success === false);
@@ -412,7 +416,6 @@ function ccrHealth() {
   const advisory = failing.filter((c) => !c.is_blocking);
   return {
     loading: h.loading, error: h.error, checks: checks, failing: failing, blocking: blocking, advisory: advisory,
-    cartaOnly: blocking.filter((c) => c.is_second_party_resolvable === false),
     passing: checks.length - failing.length,
     verdict: h.loading ? "running" : h.error ? "unknown"
       : blocking.length ? "blocking" : advisory.length ? "warnings" : "passing",
@@ -787,19 +790,6 @@ function ccrMainTabBar() {
       '<button class="ccr-main-tab' + (_ccr.activeTab === t.id ? ' ccr-main-tab-on' : '') +
       '" data-ccr-main-tab="' + t.id + '">' + t.label + '</button>').join('') +
   '</div>';
-}
-
-// Health checks run for everyone and gate release, but their roster is staff
-// detail the web app hides from GPs. A GP sees only a failure Carta must fix.
-function ccrCartaOnlyCallout(s) {
-  const h = ccrHealth();
-  if (!h.cartaOnly.length) return "";
-  const event = ccrIsDistribution(s) ? "distribution" : "capital call";
-  const titles = h.cartaOnly.map((c) => c.title || c.code).filter(Boolean);
-  return ccrCallout("bad", "This " + event + " requires Carta's support",
-    "A blocking check only Carta can clear has failed" +
-    (titles.length ? ": " + titles.join("; ") : "") +
-    ". Use Request changes to send it back to your Carta team; it cannot be released until they fix it.");
 }
 
 // How the cash leaves. is_amm_distribution is the gate the web app enforces,
@@ -1340,111 +1330,90 @@ function ccrSameAccount(p, r) {
   return !!last4(p) && last4(p) === last4(r) && !!name(p) && name(p) === name(r);
 }
 
-// `extraRows` are the receiving record's wire fields, appended when both
-// records are one account so it is shown once, under the heading that carries
-// its release hold.
-function ccrPayingFromHtml(s, extraRows) {
-  const state = ccrPayingFromState(s);
-  if (state.kind === "none") return "";
-  const pill = state.kind === "ok" ? '<span class="ccr-pill ccr-pill-ok">Active</span>'
-    : state.kind === "closed" ? '<span class="ccr-pill ccr-pill-bad">Closed</span>'
+// Only a problem gets a badge. The summary marks only a closed account (is_active
+// false), so any other account named on the activity is taken as active.
+function ccrAccountPill(kind) {
+  return kind === "ok" ? ""
+    : kind === "closed" ? '<span class="ccr-pill ccr-pill-bad">Closed</span>'
     : '<span class="ccr-pill ccr-pill-bad">Missing</span>';
-  const a = state.account;
-  const rows = a
-    ? ccrKvRow('Bank name', a.bank_name) +
-      ccrKvRow('Account name', a.account_name) +
-      ccrKvRow('Account number', a.account_number_last_four ? '····' + a.account_number_last_four : null) +
-      (extraRows || '')
-    : '';
-  const callout = state.kind === "closed"
+}
+
+function ccrAccountGroup(title, pill, body) {
+  return '<div class="ccr-pay-group"><div class="ccr-pay-group-title">' + escHtml(title) + (pill ? " " + pill : "") +
+    "</div>" + body + "</div>";
+}
+
+// Investors owe money on every capital call, and on a distribution that also calls from some of them.
+const ccrCollects = (s) => !ccrIsDistribution(s) || (ccrNum(s.total_due_to_fund) || 0) > 0;
+
+// The message sits under the title whether or not an account follows, so a
+// missing and a closed account read in the same place.
+function ccrPayingFromCallout(kind) {
+  return kind === "closed"
     ? ccrCallout("bad", "Active bank account required",
         "The bank account selected for this distribution is closed. Release is held until your Carta team selects " +
         "another: use Request changes and say which account to pay from.")
-    : state.kind === "missing"
+    : kind === "missing"
     ? ccrCallout("bad", "Bank account required",
         "No paying-from account is named on this distribution. Release is held until your Carta team adds one: " +
         "use Request changes and say which account to pay from.")
     : "";
-  // The message sits under the title whether or not an account follows, so a
-  // missing and a closed account read in the same place.
-  return '<div class="ccr-pay-group-title">Paying from ' + pill + '</div>' + callout + rows;
 }
 
 function ccrPayBody(s) {
-  const a = s.receiving_account;
-  const oneAccount = ccrSameAccount(ccrPayingFromState(s).account, a);
-  let payingFrom = ccrPayingFromHtml(s);
+  const to = ccrCollects(s) ? s.receiving_account : null;
+  const from = ccrPayingFromState(s);
+  const kvRow = ccrKvRow;
 
   const maskStr = (v, keepLast) => {
     if (!v) return null;
-    const s = String(v);
-    return '·'.repeat(Math.max(0, s.length - keepLast)) + s.slice(-keepLast);
+    const str = String(v);
+    return '·'.repeat(Math.max(0, str.length - keepLast)) + str.slice(-keepLast);
   };
-
   const inlineReveal = (show, key) =>
     '<button class="ccr-pay-inline-reveal" data-ccr-pay-reveal="' + key + '">' +
     (show ? 'Hide details' : 'Show details') + '</button>';
-
-  let wireHtml = '';
-  if (!a) {
-    // A distribution collects nothing, so an absent receiving account is not
-    // a gap there; the paying-from block above is what it shows instead.
-    if (!payingFrom) {
-      const fallback = s.uses_fbo_contributions ? "Per-partner virtual accounts" : "No account named on this activity";
-      wireHtml = '<div class="ccr-kv"><span class="ccr-k">Receiving account</span><span class="ccr-v">' + escHtml(fallback) + "</span></div>";
-    }
-  } else {
+  const kvRowReveal = (label, value, show, key, hasFullNumber) => {
+    if (!value) return '';
+    return '<div class="ccr-kv"><span class="ccr-k">' + escHtml(label) + '</span>' +
+      '<span class="ccr-v">' + escHtml(value) + '</span>' +
+      (hasFullNumber ? inlineReveal(show, key) : '') + '</div>';
+  };
+  const last4 = (a) => a.account_number_last_four ? '····' + a.account_number_last_four : null;
+  // The receiving record carries the wire fields investors pay with.
+  const wireRows = (a, nameLabel) => {
     const showAcct = _ccr.payShowSensitive.acct;
     const showRouting = _ccr.payShowSensitive.routing;
-    const kvRow = ccrKvRow;
+    return kvRow('Bank name', a.bank_name) +
+      kvRow('Bank address', a.bank_address) +
+      kvRow(nameLabel, a.account_name) +
+      kvRowReveal('Account number', a.account_number ? (showAcct ? a.account_number : maskStr(a.account_number, 4)) : last4(a),
+        showAcct, 'acct', !!a.account_number) +
+      kvRowReveal('Routing number', a.routing_number ? (showRouting ? a.routing_number : maskStr(a.routing_number, 4)) : null,
+        showRouting, 'routing', !!a.routing_number) +
+      kvRow('OBI / Memo', a.obi_memo);
+  };
 
-    const kvRowReveal = (label, value, show, key, hasFullNumber) => {
-      if (!value) return '';
-      return '<div class="ccr-kv"><span class="ccr-k">' + escHtml(label) + '</span>' +
-        '<span class="ccr-v">' + escHtml(value) + '</span>' +
-        (hasFullNumber ? inlineReveal(show, key) : '') + '</div>';
-    };
-
-    const acctNum = a.account_number
-      ? (showAcct ? a.account_number : maskStr(a.account_number, 4))
-      : (a.account_number_last_four ? '····' + a.account_number_last_four : null);
-
-    const routingNum = a.routing_number
-      ? (showRouting ? a.routing_number : maskStr(a.routing_number, 4))
-      : null;
-
-    if (payingFrom && oneAccount) {
-      // The same account under one heading: the paying-from rows, plus the wire
-      // fields only the receiving record carries. A mixed activity says why
-      // those fields matter on a distribution.
-      const collects = Number(s.total_due_to_fund) > 0;
-      payingFrom = ccrPayingFromHtml(s,
-        kvRow('Bank address', a.bank_address) +
-        kvRowReveal('Routing number', routingNum, showRouting, 'routing', !!a.routing_number) +
-        kvRow('OBI / Memo', a.obi_memo) +
-        (collects ? '<p class="ccr-row-note">Contributions on this activity are paid into this same account.</p>' : ''));
-      wireHtml = '';
-    } else {
-      wireHtml =
-        (payingFrom ? '<div class="ccr-pay-group-title">Receiving account</div>' : '') +
-        kvRow('Bank name', a.bank_name) +
-        kvRow('Bank address', a.bank_address) +
-        kvRow('Beneficiary', a.account_name) +
-        kvRowReveal('Account number', acctNum, showAcct, 'acct', !!a.account_number) +
-        kvRowReveal('Routing number', routingNum, showRouting, 'routing', !!a.routing_number) +
-        kvRow('OBI / Memo', a.obi_memo);
-    }
+  let groups;
+  if (to && from.account && ccrSameAccount(from.account, to)) {
+    const kind = to.is_active === false || from.kind === "closed" ? "closed" : "ok";
+    groups = [ccrAccountGroup("Paying to and from", ccrAccountPill(kind), ccrPayingFromCallout(from.kind) + wireRows(to, "Account name"))];
+  } else {
+    const toGroup = !ccrCollects(s) ? ""
+      : to ? ccrAccountGroup("Paying to", ccrAccountPill(to.is_active === false ? "closed" : "ok"), wireRows(to, "Beneficiary"))
+      : s.uses_fbo_contributions ? ccrAccountGroup("Paying to", "", kvRow("Accounts", "Per-partner virtual accounts"))
+      : ccrAccountGroup("Paying to", ccrAccountPill("missing"), '<p class="ccr-note">No account is named on this activity.</p>');
+    const fromGroup = from.kind === "none" ? ""
+      : ccrAccountGroup("Paying from", ccrAccountPill(from.kind), ccrPayingFromCallout(from.kind) +
+          (from.account ? kvRow('Bank name', from.account.bank_name) + kvRow('Account name', from.account.account_name) +
+            kvRow('Account number', last4(from.account)) : ""));
+    // A mixed activity leads with its main direction.
+    groups = ccrIsDistribution(s) ? [fromGroup, toGroup] : [toGroup, fromGroup];
   }
 
   // The allocations table is full-bleed because its cells carry their own
   // inset. These rows do not, so the inset lives on the wrapper.
-  return '<div class="ccr-pad">' +
-    payingFrom +
-    wireHtml +
-    (s.contact_phone ? '<div class="ccr-kv"><span class="ccr-k">Wire verification</span><span class="ccr-v">' + escHtml(s.contact_phone) + "</span></div>" : "") +
-    '<p class="ccr-row-note">Bank details are shown for confirmation. Your Carta team changes them ' +
-    "through a separate verification, never here.</p>" +
-  "</div>";
+  return '<div class="ccr-pad">' + groups.join("") + "</div>";
 }
 
 function ccrReviewBody() {
@@ -1470,15 +1439,6 @@ function ccrReviewBody() {
       '<span class="' + (_ccr.noteOpen ? "ccr-note-full" : "ccr-note-clamp") + '">' + escHtml(p.note) + "</span>" +
       "</span></div>"
     : "") +
-
-    ccrCartaOnlyCallout(s) +
-    (s.is_amm_distribution
-      ? ccrCallout("warn", "Review this distribution in Carta",
-          "It pays through Automated Money Movement: Carta wires each investor from the paying-from account on release, " +
-          "and the approver chooses who is paid and authorizes the payment. That review is not supported here, so this " +
-          "page shows the distribution but cannot approve it or send it back. ",
-          ccrOpenInCarta("Open in Carta", "ccr-callout-btn"))
-      : "") +
 
     ccrMainTabBar() +
 
@@ -1583,7 +1543,7 @@ function ccrFooter() {
     const blockers = blocked ? [] : ccrBlockers(s);
     return '<div class="far-panel-footer ccr-footer">' +
       '<span class="ccr-note">' + escHtml(prepared) + "Nothing has been sent to investors yet. " + ccrOpenInCarta() + "</span>" +
-      blockers.map((b) => '<span class="ccr-blocker">' + escHtml(b.text) + "</span>").join("") +
+      blockers.map((b) => '<span class="ccr-blocker">' + (b.html || escHtml(b.text)) + "</span>").join("") +
       '<span class="ccr-footer-actions">' +
         '<button class="far-btn-secondary" data-ccr-phase="changes"' + (blocked || blockers.some((b) => b.locks) ? " disabled" : "") + ">Request changes</button>" +
         '<button class="far-btn-primary" data-ccr-phase="confirm"' + (blocked || blockers.length ? " disabled" : "") + ">Approve and release</button>" +

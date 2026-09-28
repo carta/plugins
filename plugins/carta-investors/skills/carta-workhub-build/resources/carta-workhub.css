@@ -961,10 +961,7 @@
 .ccr-settings .ccr-k { width: 200px; }
 .ccr-contact { display: block; }
 .ccr-contact + .ccr-contact { margin-top: 8px; }
-.ccr-callout-btn { display: block; width: max-content; margin-top: 10px; padding: 7px 14px; border-radius: var(--ink-size-global-radius-default);
-  border: 1px solid currentColor; color: inherit; font-size: 13px; font-weight: 600; text-decoration: none; white-space: nowrap; }
-.ccr-callout-btn:hover { text-decoration: underline; }
-
+.ccr-blocker-link { color: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
 .ccr-main-tabs {
   display: flex; margin: 0 -20px 4px;
   border-bottom: 1px solid var(--ink-color-global-border-subtle);
