@@ -39,7 +39,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.46.0</carta-plugin>
+<carta-plugin>carta-investors:6.46.1</carta-plugin>
 
 # Carta Home — Build / Redeploy
 
@@ -472,6 +472,18 @@ work down its candidates in order and invoke the **first one that resolves**, ke
 artifact URL it returns, keyed by the entry's `key`. A candidate that is not installed is
 not a failure — move to the next one. Once a candidate returns a URL, stop; do not invoke
 the rest, or the same dashboard is published twice.
+
+**Invoke every entry's first candidate in parallel — one message, multiple `Skill` calls —
+never one entry after another.** The `soi` and `perf` entries build independently, so
+running them one after the other only adds wall-clock time for no benefit, and pushes
+real-world builds closer to (or past) the client-side timeout that reverts a card's
+"Preparing" state (`DASH_BUILDING_TIMEOUT_MS` in `carta-home.config.js`). Building both at
+once is the actual fix for a slow fan-out — not a longer wait.
+
+**However long the fan-out actually takes, wait for it and carry every URL through to Step
+6.** A dashboard build that is running long is not a signal to move on without it — stopping
+before a slow-but-successful build finishes is worse than the build simply taking a while,
+because it leaves that dashboard's URL uncaptured and Step 6 redeploys without it.
 
 A router candidate serves several dashboards, so it needs the entry's `prompt` to know
 which one to build. Lead with that sentence, then the same context every candidate gets.

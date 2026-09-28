@@ -1105,12 +1105,13 @@ function renderDashboardLaunchers() {
     const promptHtml = `<button class="run-btn" data-prompt="${escHtml(d.prompt)}" data-skill="${escHtml(d.key)}"
             onclick="dashShowPrompt(this)">${escHtml(d.label)}</button>`;
     if (url === DASH_BUILDING) {
-      // Named after the launcher it becomes. The estimate covers the whole fan-out:
-      // every card resolves together when home redeploys, measured at 2m43s for two.
+      // Named after the launcher it becomes. "A few minutes" on purpose, not a specific
+      // number — the fan-out has run well past 3 min for some firms, and a wrong specific
+      // estimate reads as broken even when the build is still perfectly on track.
       const target = d.label.replace(/^Open\s+/i, '');
       footer.innerHTML = `<span class="dash-building">Preparing ${escHtml(target)}…
-            <span class="dash-building__eta">about 3 min</span></span>`;
-      dashExpireBuilding(footer, promptHtml);
+            <span class="dash-building__eta">usually a few minutes</span></span>`;
+      dashExpireBuilding(footer, target, promptHtml);
     } else if (url) {
       footer.innerHTML = `<a class="run-btn" href="${escHtml(url)}"
             onclick="trackHome('click','CartaHome.Dashboard.Open.${escHtml(d.key)}')">${escHtml(d.label)} →</a>`;
@@ -1120,11 +1121,15 @@ function renderDashboardLaunchers() {
   });
 }
 
-// The redeploy replaces this footer, so a card still showing the building state this long
-// after load is one whose build never finished. Hand back the prompt rather than pulse on.
-function dashExpireBuilding(footer, promptHtml) {
+// A card still on "Preparing" this long after load has outlasted the typical fan-out, but
+// the redeploy can still land after this fires — don't tell the viewer the dashboard is
+// gone. Keep the "still working" framing and offer the copyable prompt as a fallback
+// action alongside it, rather than silently swapping to the exact same markup a dashboard
+// that never started would show. The redeploy (when it lands) replaces this footer outright.
+function dashExpireBuilding(footer, target, promptHtml) {
   setTimeout(() => {
-    if (footer.querySelector('.dash-building')) footer.innerHTML = promptHtml;
+    if (!footer.querySelector('.dash-building')) return;
+    footer.innerHTML = `<span class="dash-building dash-building--slow">Still preparing ${escHtml(target)} — this is taking longer than usual. Try again shortly, or:</span>${promptHtml}`;
   }, DASH_BUILDING_TIMEOUT_MS);
 }
 

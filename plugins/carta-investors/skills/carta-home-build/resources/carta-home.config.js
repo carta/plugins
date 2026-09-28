@@ -44,6 +44,10 @@ const DASHBOARDS = [
 const DASH_BUILDING = 'building';
 // A build that dies between publishes never redeploys, so the card would sit on
 // "Preparing" forever. Generous against the ~3min fan-out: late is cheap, early is wrong.
+// When this fires, the card does NOT claim the dashboard is gone — see
+// dashExpireBuilding in carta-home.app.js — because a slow-but-still-running build can
+// (and regularly does) redeploy after this timer, and the card should look no different
+// than "still working" until it actually does.
 const DASH_BUILDING_TIMEOUT_MS = 5 * 60 * 1000;
 const DASHBOARD_URLS = {{DASHBOARD_URLS}};
 

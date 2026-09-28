@@ -250,6 +250,8 @@
     @media (prefers-reduced-motion: reduce) {
       .dash-building::before { animation: none; opacity: 0.6; }
     }
+    /* Past the expected fan-out window — still not gone, just slower than usual. */
+    .dash-building--slow::before { animation: none; opacity: 0.4; }
     .run-btn {
       font-family: inherit;
       font-size: 13px;
