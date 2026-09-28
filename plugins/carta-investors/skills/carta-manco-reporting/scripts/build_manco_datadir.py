@@ -3884,6 +3884,47 @@ def _carry_forward_names(row):
     return out
 
 
+def sync_crosstab_account_types(budget):
+    """Refresh a crosstab budget's by_tag_value account_type maps from its
+    rows' current `gl_codes`, after apply_budget_mapping and the other
+    GL-rewriting passes (drop_foreign_gl_codes, autolink_exact_accounts,
+    rehome_fee_rows_to_manco) have had their turn on it.
+
+    read_excel_budget builds account_type_by_name / account_type_all_by_name
+    once, from the workbook's own parse — before any of those passes, or a
+    client's own budget-mapping.json decision, ever touch a row's GL
+    identity. Left alone, a resolved crosstab line's mapped code never
+    reaches the map BudgetActualsView.jsx actually joins Carta actuals
+    against (see its account_type_by_name / account_type_all_by_name
+    reads). No-op for a budget with no department axis (by_tag_value
+    absent) or no rows.
+    """
+    rows = budget.get("rows") or []
+    by_tag_value = budget.get("by_tag_value") or []
+    if not rows or not by_tag_value:
+        return
+    type_by_name = defaultdict(dict)
+    all_by_name = defaultdict(lambda: defaultdict(set))
+    for r in rows:
+        if r.get("row_kind") != "line":
+            continue
+        name = r.get("label")
+        gls = (r.get("gl_codes") or r.get("account_type_all")
+               or ([r["account_type"]] if r.get("account_type") is not None else []))
+        if not name or not gls:
+            continue
+        for dept in (r.get("by_column") or {}):
+            type_by_name[dept][name] = gls[0]
+            all_by_name[dept][name].update(gls)
+    for entry in by_tag_value:
+        dept = entry.get("tag_value")
+        if dept in type_by_name:
+            entry["account_type_by_name"] = type_by_name[dept]
+            entry["account_type_all_by_name"] = {
+                n: sorted(s) for n, s in all_by_name[dept].items()
+            }
+
+
 def read_excel_budget(dashboard_dir, as_of_month, budget_file=None):
     """Load a client-supplied Excel budget from <dashboard_dir>/budget.json
     (or the file named by `budget_file`).
@@ -3967,6 +4008,21 @@ def read_excel_budget(dashboard_dir, as_of_month, budget_file=None):
             print(f"note: backfilled {n} GL code(s) from coa-mapping.json's "
                   f"category names onto {p.name} lines missing one.",
                   file=sys.stderr)
+
+    # A crosstab row carries its GL identity as account_type /
+    # account_type_all (see shapes/tag_crosstab.py); apply_budget_mapping,
+    # drop_foreign_gl_codes, autolink_exact_accounts and
+    # unresolved_budget_rows all key on gl_codes instead — the field an
+    # outline row carries. Seeding it here, once, lets a crosstab row take
+    # every one of those passes exactly as an outline row would, including
+    # a client's own recorded decision. sync_crosstab_account_types (called
+    # from main after those passes run) writes the result back the other
+    # way, into account_type/account_type_all and the by_tag_value maps the
+    # UI actually reads.
+    for r in rows:
+        if r.get("row_kind") == "line":
+            r.setdefault("gl_codes", r.get("account_type_all") or
+                         ([r["account_type"]] if r.get("account_type") is not None else []))
 
     # Which department column is the sheet's roll-up. It is the column
     # the workbook totals into, so it drives the firm-level scalars and
@@ -4729,6 +4785,12 @@ def build(args):
     # After every other resolution pass, so a bucket line's formula reads
     # its referenced rows' most complete GL identity, not their parse-time one.
     resolve_formula_gl_evidence(excel_budgets, known_gl_codes=_carta_account_names.keys())
+
+    # A crosstab row's mapped/resolved gl_codes only reaches the UI through
+    # by_tag_value's account_type maps, which were built once at parse time —
+    # before any of the passes above ran. Write the settled identity back.
+    for _b in excel_budgets:
+        sync_crosstab_account_types(_b)
 
     # Asked only about what nothing above could resolve — a gate that
     # repeats a question already answered teaches the operator to skim it.

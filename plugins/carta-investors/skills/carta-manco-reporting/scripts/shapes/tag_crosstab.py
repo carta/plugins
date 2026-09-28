@@ -14,9 +14,12 @@ Layout, all of it discovered from the file rather than hardcoded:
                for detection — the super-header is the department name.
   Sub-header   One of {Actual, Budget, Budget Variance, % of Budget,
                Comments} per column within each department block.
-  Data rows    Col A = GL account_type (int), or comma-separated ints for
-               multi-GL lines (e.g. "4170, 4175"), or None for
-               subtotal/section-header rows. Col B = indented line name.
+  Data rows    GL account_type (int, or comma-separated ints for multi-GL
+               lines like "4170, 4175", or absent for subtotal/section-
+               header rows) and the indented line name — normally columns
+               A and B, but detected rather than assumed: a workbook that
+               leaves A blank for outline/grouping shifts both right (see
+               `_detect_gl_label_columns`).
 
 We mirror the tab's own outline. Rows keep the workbook's line items, in
 the workbook's order, at the workbook's nesting depth — its section
@@ -125,9 +128,21 @@ def parse(workbook_path: str | Path, sheet_name: str, **_) -> dict:
 
     # A dedicated "Account #"-style column outranks column A when the
     # header names one — some workbooks give column A to a label instead.
-    gl_col = find_gl_header_column(ws, range(1, subheader_row + 1)) or 1
+    gl_col = find_gl_header_column(ws, range(1, subheader_row + 1))
+    label_col = 2
+    if gl_col is None:
+        # No header names it — some workbooks leave A blank for outline/
+        # grouping and shift the real code and label columns right (B/C
+        # instead of A/B). Guess from the data itself, scoped to the
+        # columns left of the first department block: money and comments
+        # live to the right and would otherwise look like codes too.
+        first_anchor_col = min(cols["anchor"] for cols in dept_blocks.values())
+        gl_col, detected_label_col = _detect_gl_label_columns(
+            ws, first_data_row, max(1, first_anchor_col - 1))
+        if detected_label_col is not None:
+            label_col = detected_label_col
 
-    scanned = _scan_rows(ws, wsf, dept_blocks, first_data_row, gl_col)
+    scanned = _scan_rows(ws, wsf, dept_blocks, first_data_row, gl_col, label_col)
     depth_of = _depth_scale(r["indent"] for r in scanned)
     kept = _drop_scaffolding(scanned)
 
@@ -201,7 +216,8 @@ _RANGE_RX = re.compile(r"\$?[A-Z]{1,3}\$?(\d+)\s*:\s*\$?[A-Z]{1,3}\$?(\d+)")
 _TOTAL_LABEL_RX = re.compile(r"^(total|net)\b", re.IGNORECASE)
 
 
-def _scan_rows(ws, wsf, dept_blocks, first_data_row: int, gl_col: int = 1) -> list[dict]:
+def _scan_rows(ws, wsf, dept_blocks, first_data_row: int, gl_col: int | None = 1,
+               label_col: int = 2) -> list[dict]:
     """Read every data row into an intermediate record.
 
     Classification happens here because it needs both loads of the sheet:
@@ -211,9 +227,9 @@ def _scan_rows(ws, wsf, dept_blocks, first_data_row: int, gl_col: int = 1) -> li
     out: list[dict] = []
     section = None
     for row_ix in range(first_data_row, ws.max_row + 1):
-        raw_label = ws.cell(row_ix, 2).value
+        raw_label = ws.cell(row_ix, label_col).value
         label = str(raw_label).rstrip() if raw_label is not None else ""
-        gl_codes = _parse_gl_codes(ws.cell(row_ix, gl_col).value)
+        gl_codes = _parse_gl_codes(ws.cell(row_ix, gl_col).value) if gl_col else []
         if not label.strip() and not gl_codes:
             continue
 
@@ -631,6 +647,52 @@ def _parse_gl_codes(value) -> list[int]:
         codes = [int(m) for m in _GL_CODE_RX.findall(value)]
         return codes
     return []
+
+
+def _detect_gl_label_columns(ws, first_data_row: int, last_col: int,
+                              scan: int = 40) -> tuple[int | None, int | None]:
+    """Guess the GL-code and label columns from the data itself, when no
+    header names a GL column (see `find_gl_header_column`).
+
+    Column A conventionally holds the code and B the label, but a workbook
+    that leaves A blank for outline/grouping and posts codes in B (labels
+    in C) shifts the layout right. Rather than assume a position, test
+    occupancy: a code column is a bare integer/int-like string on a
+    majority of its non-empty rows in the window; a label column is the
+    remaining column with the most plain text. Scoped to the columns left
+    of the first department block — money and comments live to the right
+    and would otherwise look like codes or labels too.
+    """
+    end = min(ws.max_row, first_data_row + scan)
+    stats = {}
+    for c in range(1, last_col + 1):
+        seen = codes = texts = 0
+        for r in range(first_data_row, end + 1):
+            v = ws.cell(r, c).value
+            if v is None or (isinstance(v, str) and not v.strip()):
+                continue
+            seen += 1
+            if isinstance(v, (int, float)) or (isinstance(v, str) and v.strip().isdigit()):
+                codes += 1
+            elif isinstance(v, str):
+                texts += 1
+        stats[c] = (seen, codes, texts)
+
+    gl_col = None
+    best_codes = 0
+    for c, (seen, codes, _texts) in stats.items():
+        if seen and codes * 2 > seen and codes > best_codes:
+            gl_col, best_codes = c, codes
+
+    label_col = None
+    best_texts = 0
+    for c, (seen, _codes, texts) in stats.items():
+        if c == gl_col or not seen:
+            continue
+        if texts > best_texts:
+            label_col, best_texts = c, texts
+
+    return gl_col, label_col
 
 
 def _clean_label(value) -> str:
