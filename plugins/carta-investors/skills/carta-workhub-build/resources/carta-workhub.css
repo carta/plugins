@@ -957,6 +957,10 @@
 .ccr-pay-group-title { display: flex; align-items: center; gap: 8px; padding: 14px 0 2px; font-size: 12px; font-weight: 600; }
 .ccr-blocker { display: block; font-size: 12px; line-height: 18px; color: var(--ink-color-global-feedback-negative-strong); }
 .ccr-link-btn { color: var(--ink-color-global-text-default); font-weight: 500; text-decoration: underline; text-underline-offset: 2px; white-space: nowrap; }
+/* Wide enough for "Contact for investor inquiries" on one line. */
+.ccr-settings .ccr-k { width: 200px; }
+.ccr-contact { display: block; }
+.ccr-contact + .ccr-contact { margin-top: 8px; }
 .ccr-callout-btn { display: block; width: max-content; margin-top: 10px; padding: 7px 14px; border-radius: var(--ink-size-global-radius-default);
   border: 1px solid currentColor; color: inherit; font-size: 13px; font-weight: 600; text-decoration: none; white-space: nowrap; }
 .ccr-callout-btn:hover { text-decoration: underline; }

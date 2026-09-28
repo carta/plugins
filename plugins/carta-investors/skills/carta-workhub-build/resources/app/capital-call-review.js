@@ -935,18 +935,35 @@ function ccrSettingRow(label, value, note) {
     '<span class="ccr-note ccr-kv-note">' + escHtml(note) + "</span></span></div>";
 }
 
+// A contact reads as its name over its address, the way the app's pickers list them.
+function ccrContactRow(label, contacts) {
+  const lines = contacts.map((c) => '<span class="ccr-contact">' +
+    '<span class="ccr-strong">' + escHtml(c.full_name || c.email) + "</span>" +
+    (c.full_name && c.email ? '<span class="ccr-note ccr-kv-note">' + escHtml(c.email) + "</span>" : "") + "</span>");
+  return '<div class="ccr-kv"><span class="ccr-k">' + escHtml(label) + '</span><span class="ccr-v">' +
+    (lines.length ? lines.join("") : '<span class="ccr-strong">None</span>') + "</span></div>";
+}
+
 function ccrSettingsRows(s) {
   const rows = [];
+  // REVIEW contacts are the fund's own approvers, not people the notice names.
+  const contacts = Array.isArray(s.contacts) ? s.contacts.filter((c) => c && (c.full_name || c.email)) : null;
+  const ofType = (type) => (contacts || []).filter((c) => c.type === type);
   if ("investor_login_required" in s) {
     // The notice code treats an unset value as No, so the row does too.
     rows.push(s.investor_login_required === true
       ? ccrSettingRow("Log in required", "Yes", "Investors open the notice through a Carta log-in.")
       : ccrSettingRow("Log in required", "No", "Investors get a direct link to the notice PDF; no Carta log-in needed."));
   }
-  if ("cc_on_primary_contact_only" in s) {
+  if (contacts) {
+    rows.push(ccrContactRow("Contact for investor inquiries", ofType("TO")));
+    rows.push(ccrContactRow("Contacts to CC", ofType("CC")));
+  }
+  // Which emails carry the CC contacts only matters when there are some.
+  if ("cc_on_primary_contact_only" in s && !(contacts && !ofType("CC").length)) {
     rows.push(s.cc_on_primary_contact_only === true
-      ? ccrSettingRow("CC contacts", "Primary contacts only", "CC contacts are copied only on emails to each investor's primary contact.")
-      : ccrSettingRow("CC contacts", "Every notice email", "CC contacts are copied on every notice email, including those to secondary contacts."));
+      ? ccrSettingRow("CC'd on", "Emails to primary contacts only", "CC contacts are copied only on emails to each investor's primary contact.")
+      : ccrSettingRow("CC'd on", "Every notice email", "CC contacts are copied on every notice email, including those to secondary contacts."));
   }
   if ("display_secondary_contacts_on_primary_email" in s) {
     rows.push(s.display_secondary_contacts_on_primary_email === true
