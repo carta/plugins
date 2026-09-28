@@ -39,7 +39,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.46.14</carta-plugin>
+<carta-plugin>carta-investors:6.46.15</carta-plugin>
 
 # Carta Home — Build / Redeploy
 
@@ -249,8 +249,11 @@ describes the previous release.
 
 Two things that follow from the published tree being the source of truth:
 
-- The banner appears only once the change is **published to `carta/plugins`**, not when
-  it merges here.
+- The banner appears only once the change is **published to `carta/plugins`** and a
+  week old, not when it merges here — carta-mcp announces a release only after users'
+  installs have had time to pick it up.
+- A page stays silent for **7 days after it is built**: a fresh build is already the
+  newest one the user can get, so asking them to rebuild it is always wrong.
 - Internal builds run **ahead** of published, so you cannot dogfood the banner from a
   local build — it correctly stays silent when your version is newer. To see it, stub
   the command's response or temporarily lower your local entry.

@@ -50,6 +50,7 @@ import hashlib
 import json
 import re
 import sys
+from datetime import datetime, timezone
 from html import escape
 from pathlib import Path
 
@@ -216,6 +217,11 @@ def build(mcp_server, firm_name, dashboard_urls=None):
         sys.exit("ERROR: {{DASHBOARD_URLS}} still present after substitution")
 
     out = out.replace("{{BUILD_ID}}", build_id)
+
+    # The update banner stays quiet for a week after this time (see version-check.js).
+    out = out.replace("{{BUILT_AT}}", datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
+    if "{{BUILT_AT}}" in out:
+        sys.exit("ERROR: {{BUILT_AT}} still present after substitution")
 
     version = read_version()
     out = out.replace("{{ARTIFACT_VERSION}}", version)

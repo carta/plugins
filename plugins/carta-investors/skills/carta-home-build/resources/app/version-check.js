@@ -13,6 +13,10 @@ const PLUGIN = "carta-investors";
 // user never sees, so keying the banner to it would raise one almost daily, forever.
 const SKILL = "carta-home-build";
 const ARTIFACT_VERSION = "{{ARTIFACT_VERSION}}";
+const BUILT_AT = "{{BUILT_AT}}";
+// A fresh build is already the newest the user can get. Matches carta-mcp's week-old
+// release pick, so after this window the banner names only a release a rebuild reaches.
+const QUIET_AFTER_BUILD_DAYS = 7;
 const UPDATE_PROMPT = "Rebuild my Carta Home artifact";
 const UPDATE_INSTRUCTION =
   "To get the latest version, tell Claude to update the Carta Home artifact.";
@@ -24,6 +28,13 @@ const DISMISS_KEY = "cartaHome.dismissedUpdateVersion";
 function parseMajorMinor(v) {
   const m = /^(\d+)\.(\d+)\.\d+$/.exec(String(v || ""));
   return m ? [Number(m[1]), Number(m[2])] : null;
+}
+
+// An unparseable stamp counts as fresh: better to miss a banner than to raise a wrong one.
+function isFreshBuild(builtAt, now) {
+  const built = Date.parse(builtAt);
+  if (Number.isNaN(built)) return true;
+  return now - built < QUIET_AFTER_BUILD_DAYS * 24 * 60 * 60 * 1000;
 }
 
 function isUpdateAvailable(current, latest) {
@@ -128,6 +139,7 @@ function extractVersionPayload(res) {
 // Silent on every failure path — an artifact that can't reach the manifest shows no
 // banner, which is strictly better than showing one the user can't act on.
 async function checkForUpdate() {
+  if (isFreshBuild(BUILT_AT, Date.now())) return;
   try {
     const res = await _mcp("fetch", {
       command: "plugin:get:version",
