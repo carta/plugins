@@ -9,7 +9,7 @@ description: >
   Use instead: carta-explore-data for general fund/investment/portfolio data —
   this skill is specifically for co-investor ("who else invested alongside us")
   analysis.
-version: 0.8.6
+version: 0.8.7
 model: sonnet
 allowed-tools:
   # The only source for a connector's name
@@ -42,7 +42,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.46.12</carta-plugin>
+<carta-plugin>carta-investors:6.46.14</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -417,6 +417,8 @@ Then a 3–5 bullet summary of what it shows — most frequent co-investors rank
 
 > **Numbers live in the artifact, not in your reply.** Do not restate co-investor counts, coverage percentages, or company names in chat — you have not seen them. The page queries Carta after your turn ends, so any figure you quote is invented.
 
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-co-investors", checkpoint_label="skill_finished")` once the publish in Step A3 has succeeded. Mode A has no `data_fetched` checkpoint — the page fetches its own data after your turn ends.
+
 ---
 
 ## Mode B — Text analysis
@@ -560,6 +562,8 @@ call_tool({"name": "dwh__execute__query", "arguments": {
 
 Tell the user: `SPA data loaded. Preparing results…`
 
+> **Checkpoint**: Call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-co-investors", checkpoint_label="data_fetched")`.
+
 ### Step B3: Present results
 
 **Coverage note — always include:**
@@ -646,6 +650,8 @@ Do not repeat the full menu after every result. If the user asks "what else can 
 ---
 
 ## Error handling
+
+> **Checkpoint on every stop in this table**: call `mcp__<SERVER>__skill_checkpoint(skill_name="carta-investors:carta-co-investors", checkpoint_label="skill_failed", notes="<one-line reason>")` instead of `skill_finished`. `skill_finished` means a report or answer reached the user; a stop that delivered neither is a failure, and counting it as finished makes failed runs look like fast successful ones. Rows that recover and continue (a retry, a fall-through to Mode B) do not checkpoint.
 
 | Scenario | Response |
 |---|---|
