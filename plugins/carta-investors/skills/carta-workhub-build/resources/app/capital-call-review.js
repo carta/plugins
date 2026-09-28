@@ -1407,16 +1407,19 @@ const CCR_EDIT_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor
 
 const ccrLpRows = (snap) => (snap || _ccr).rows.filter((r) => r.is_participating !== false);
 
+// A tab with something to look at says so: Delivery with a dot.
 function ccrSubnav() {
+  const s = _ccr.summary;
   const tabs = [
     { id: "alloc", label: "Allocations" },
     { id: "notice", label: "Notice" },
-    { id: "delivery", label: "Delivery" },
+    { id: "delivery", label: "Delivery", dot: !!s && ccrDeliveryFlagged(s) },
   ];
   return '<div class="ccr-subnav" role="tablist">' + tabs.map((t) => {
     const on = _ccr.activeTab === t.id;
+    const badge = t.dot ? '<span class="ccr-tab-dot" aria-label="needs a look"></span>' : "";
     return '<button class="ccr-subtab' + (on ? " ccr-subtab-on" : "") + '" role="tab" aria-selected="' + on +
-      '" data-ccr-tab="' + t.id + '">' + escHtml(t.label) + "</button>";
+      '" data-ccr-tab="' + t.id + '">' + escHtml(t.label) + badge + "</button>";
   }).join("") +
     '<span class="ccr-subnav-end"><button class="ccr-edit ccr-edit-icon" data-ccr-modal="changes" data-ccr-prefix="tab"' +
       ' aria-label="Request change" title="Request change"' + (ccrCanRequest() ? "" : " disabled") + ">" + CCR_EDIT_ICON + "</button></span>" +
@@ -1532,6 +1535,15 @@ function ccrSettingsTabBody(s) {
     (rows.length
       ? '<div class="ccr-card ccr-settings"><div class="ccr-card-list">' + rows.join("") + "</div></div>"
       : '<div class="ccr-empty"><p>Carta did not serve the email settings for this call.</p></div>');
+}
+
+// Whether any investor misses part of the notice: no notice, no email, no PDF, or a
+// call's notice without the wire details they need. The wire check waits for every row.
+function ccrDeliveryFlagged(s) {
+  if ((s.notice_delivery || []).some((g) => g.count && !(g.email_notice_enabled !== false && g.pdf_notice_enabled !== false))) return true;
+  const rows = ccrLpRows();
+  const all = s.participating_interests_count;
+  return _ccr.rowsDone && all !== null && all !== undefined && rows.length === all && rows.some(ccrWireMissing);
 }
 
 // Where the money goes, and for a distribution where it comes from.

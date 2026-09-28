@@ -959,6 +959,9 @@
   background: none; border: 0; border-bottom: 2px solid transparent; cursor: pointer;
   font-family: inherit; font-size: 13px; line-height: 20px; color: var(--ink-color-global-text-subtle);
 }
+/* Sits at the label's top-right corner, like a notification dot. */
+.ccr-tab-dot { display: inline-block; width: 7px; height: 7px; margin-left: 2px; border-radius: 50%;
+  background: var(--ink-color-global-link-default); vertical-align: 7px; }
 /* Reserves the same scrollbar gutter as the content below, so its right edge meets theirs. */
 .ccr-subnav-end { margin-left: auto; align-self: center; overflow: hidden; scrollbar-gutter: stable; padding: 4px 16px 4px 4px; }
 .ccr-subtab:hover { color: var(--ink-color-global-text-default); }

@@ -4,7 +4,7 @@
     "headline": "Dashboard cards build in parallel and no longer look abandoned if a build runs long — they say so instead of silently reverting to the copy-paste prompt."
   },
   "carta-workhub-build": {
-    "version": "1.8.33",
+    "version": "1.8.34",
     "headline": "Workhub's capital activity review loads the investor email when you pick its tab, and shows a notice you have already opened straight away."
   }
 }
