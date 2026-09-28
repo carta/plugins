@@ -1,6 +1,6 @@
 {
   "carta-home-build": {
-    "version": "1.12.1",
+    "version": "1.12.2",
     "headline": "Dashboard cards build in parallel and no longer look abandoned if a build runs long — they say so instead of silently reverting to the copy-paste prompt."
   },
   "carta-workhub-build": {

@@ -82,8 +82,8 @@ const DIR_CATEGORIES = [
     name: 'Fund accounting',
     tagline: 'Claude for Excel: build consolidated P&L, trial balance, and balance sheets.',
     skills: [
-      { name: 'Consolidating balance sheet', prompt: "Show me my firm's balance sheet as of this month" },
-      { name: 'Consolidating P&L',           prompt: "Show me my firm's P&L as of this month" },
+      { name: 'Consolidated balance sheet', prompt: "Show me my firm's balance sheet as of this month" },
+      { name: 'Consolidated P&L',           prompt: "Show me my firm's P&L as of this month" },
     ]
   },
   {

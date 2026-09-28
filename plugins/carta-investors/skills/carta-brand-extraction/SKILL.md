@@ -22,7 +22,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.46.16</carta-plugin>
+<carta-plugin>carta-investors:6.46.17</carta-plugin>
 
 # Build Brand Board
 

@@ -80,8 +80,8 @@ const SKILLS = {
   soi:        { name: "Schedule of investments",      desc: "Full holdings with cost, marks and MOIC." },
   benchmarks: { name: "Fund performance",       desc: "Net IRR against peer-group percentiles." },
   tearsheet:  { name: "Tear sheet download",          desc: "One-page tear sheet with metrics." },
-  pnl:        { name: "Consolidating P&L",            desc: "Profit and loss across funds." },
-  bs:         { name: "Consolidating balance sheet",  desc: "Consolidated balance sheet." },
+  pnl:        { name: "Consolidated P&L",             desc: "Profit and loss across funds." },
+  bs:         { name: "Consolidated balance sheet",   desc: "Assets, liabilities and equity across funds." },
 };
 
 // ── Run a skill ──
