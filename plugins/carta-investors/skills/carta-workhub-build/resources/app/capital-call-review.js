@@ -1492,6 +1492,16 @@ function ccrReleaseHold() {
   return null;
 }
 
+const ccrInvestors = (n) => n + (n === 1 ? " investor" : " investors");
+
+// Participating investors who get an email and a PDF, from the delivery toggles; null when not served.
+function ccrNoticeCounts(s) {
+  const groups = (s && s.notice_delivery) || [];
+  if (!groups.length) return null;
+  const sum = (on) => groups.reduce((t, g) => t + (on(g) ? Number(g.count) || 0 : 0), 0);
+  return { email: sum((g) => g.email_notice_enabled !== false), pdf: sum((g) => g.pdf_notice_enabled !== false) };
+}
+
 function ccrConfirmBody() {
   const s = _ccr.summary || {};
   const ccy = s.currency;
@@ -1499,21 +1509,27 @@ function ccrConfirmBody() {
   const who = n !== null && n !== undefined ? n : "the participating";
   const dist = ccrIsDistribution(s);
   const r = dist ? s.distribution_readiness : null;
+  const sent = ccrNoticeCounts(s);
+  const on = s.date_of_notice ? " on " + ccrDate(s.date_of_notice) : "";
   const steps = [
-    "Posts the journal entries to " + (s.fund_name || "the fund") + ".",
-    "Generates a notice PDF for each of the " + who + " participating investors.",
-    "Emails all " + who + " investors" + (s.date_of_notice ? " on " + ccrDate(s.date_of_notice) : "") + ".",
+    "Posts the journal entries to " + (s.fund_name || "the fund").replace(/\.$/, "") + ".",
+    !sent || sent.pdf === n ? "Generates a notice PDF for each of the " + who + " participating investors."
+      : "Generates a notice PDF for " + sent.pdf + " of the " + who + " participating investors.",
+    !sent || sent.email === n ? "Emails all " + who + " investors" + on + "."
+      : sent.email ? "Emails " + sent.email + " of the " + who + " investors" + on + "."
+      : "Emails no investors: email is off for every one.",
     dist
       ? "Pays " + ccrMoney(r ? r.ready_for_transfer_amount : s.total_due_to_investor, ccy) + " to " +
-        (r && r.receiving_count !== null && r.receiving_count !== undefined ? r.receiving_count + " " : "") +
-        "investors" + (s.due_date ? " on " + ccrDate(s.due_date) : "") + "."
+        (r && r.receiving_count !== null && r.receiving_count !== undefined
+          ? ccrInvestors(Number(r.receiving_count)) : "investors") +
+        (s.due_date ? " on " + ccrDate(s.due_date) : "") + "."
       : "Makes " + ccrMoney(s.total_due_to_fund, ccy) + " due from investors" +
         (s.due_date ? " on " + ccrDate(s.due_date) : "") + ".",
   ];
   if (r && r.on_hold_count) {
     const held = (ccrNum(s.total_due_to_investor) || 0) - (ccrNum(r.ready_for_transfer_amount) || 0);
-    steps.push("Holds " + ccrMoney(held, ccy) + " for " + r.on_hold_count +
-      " investors until their wire instructions are provided.");
+    steps.push("Holds " + ccrMoney(held, ccy) + " for " + ccrInvestors(Number(r.on_hold_count)) +
+      " until their wire instructions are provided.");
   }
   if ("share_commitment" in s) {
     // Release shares only on an exact true; the web app's staff checkbox
@@ -1550,13 +1566,14 @@ function ccrFooter() {
       "</span></div>";
   }
   if (_ccr.phase === "confirm") {
-    const n = s && s.participating_interests_count;
+    const sent = ccrNoticeCounts(s);
+    const n = sent ? sent.email : s && s.participating_interests_count;
     const hold = ccrReleaseHold();
     return '<div class="far-panel-footer ccr-footer-end">' +
       (hold ? '<span class="ccr-note ccr-hold">' + escHtml(hold) + "</span>" : "") +
       '<button class="far-btn-secondary" data-ccr-phase="review">Back to review</button>' +
       '<button class="far-btn-primary" id="ccr-do-approve" data-ccr-approve' + (hold ? " disabled" : "") + ">Release" +
-      (n !== null && n !== undefined ? " and email " + n + " investors" : "") + "</button></div>";
+      (n ? " and email " + ccrInvestors(n) : "") + "</button></div>";
   }
   if (_ccr.phase === "changes") {
     return '<div class="far-panel-footer ccr-footer-end">' +
