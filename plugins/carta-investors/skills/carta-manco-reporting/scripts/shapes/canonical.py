@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 1
 
 BY_ACCOUNT = "by-account"
 BY_LINE_ITEM = "by-line-item"
