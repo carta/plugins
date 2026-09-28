@@ -963,10 +963,10 @@ function ccrSettingsRows(s) {
 // panel has walked, the same list Allocations shows.
 
 const CCR_DELIVERY_GROUPS = [
-  { id: "emailpdf", email: true, pdf: true, label: "email with PDF" },
-  { id: "email", email: true, pdf: false, label: "email only" },
-  { id: "pdf", email: false, pdf: true, label: "PDF only" },
-  { id: "none", email: false, pdf: false, label: "no notice" },
+  { id: "emailpdf", email: true, pdf: true, label: "Email with PDF" },
+  { id: "email", email: true, pdf: false, label: "No PDF" },
+  { id: "pdf", email: false, pdf: true, label: "No Email" },
+  { id: "none", email: false, pdf: false, label: "No notice" },
 ];
 
 // Release treats an unset email or PDF toggle as on, but the notice carries
@@ -974,6 +974,10 @@ const CCR_DELIVERY_GROUPS = [
 const ccrEmailOn = (r) => r.email_notice_enabled !== false;
 const ccrPdfOn = (r) => r.pdf_notice_enabled !== false;
 const ccrWireOn = (r) => r.wire_instructions_enabled === true;
+
+// Wire instructions print only on the PDF, and only for an investor who owes the fund money,
+// so a missing toggle matters only there.
+const ccrWireMissing = (r) => ccrPdfOn(r) && (ccrNum(r.due_to_fund) || 0) > 0 && !ccrWireOn(r);
 
 const ccrDeliveryGroup = (email, pdf) =>
   CCR_DELIVERY_GROUPS.find((g) => g.email === !!email && g.pdf === !!pdf);
@@ -1008,7 +1012,7 @@ function ccrDeliveryRows() {
   const rows = _ccr.rows.filter((r) => r.is_participating !== false)
     .filter((r) => {
       if (d.filter === "all") return true;
-      if (d.filter === "nowire") return !ccrWireOn(r);
+      if (d.filter === "nowire") return ccrWireMissing(r);
       return ccrDeliveryGroup(ccrEmailOn(r), ccrPdfOn(r)).id === d.filter;
     })
     .filter((r) => !q || ccrRowLabel(r).toLowerCase().includes(q));
@@ -1033,13 +1037,15 @@ function ccrDeliveryTable(s) {
     escHtml(label) + (count === null ? "" : "<b>" + count + "</b>") + "</button>";
   const chips = [chip("all", "All", partCount)].concat((s.notice_delivery || []).map((g) => {
     const grp = ccrDeliveryGroup(g.email_notice_enabled, g.pdf_notice_enabled);
-    return chip(grp.id, grp.label.charAt(0).toUpperCase() + grp.label.slice(1), g.count === undefined ? null : g.count);
+    return chip(grp.id, grp.label, g.count === undefined ? null : g.count);
   }));
   // The summary has no wire count, so the chip waits for every row.
-  const noWire = _ccr.rowsDone && !short ? participating.filter((r) => !ccrWireOn(r)).length : 0;
-  if (noWire) chips.push(chip("nowire", "No wire details", noWire));
+  const noWire = _ccr.rowsDone && !short ? participating.filter(ccrWireMissing).length : 0;
+  if (noWire) chips.push(chip("nowire", "No Wire details", noWire));
 
-  const head = CCR_DELIVERY_COLS.map((c) => {
+  // Wire details print only on a capital call's notice, so a distribution has no such toggle to review.
+  const cols = CCR_DELIVERY_COLS.filter((c) => c.id !== "wire" || !ccrIsDistribution(s));
+  const head = cols.map((c) => {
     const on = d.sort === c.id;
     return '<th class="' + (c.on ? "ccr-dlv-toggle" : "") + '"><button class="ccr-dlv-sort' + (on ? " ccr-dlv-sort-on" : "") +
       '" data-ccr-dlv-sort="' + c.id + '">' + escHtml(c.label) +
@@ -1054,14 +1060,14 @@ function ccrDeliveryTable(s) {
   if (rows.length) {
     body = rows.map((r) =>
       "<tr><td>" + escHtml(ccrRowLabel(r)) + "</td>" +
-      CCR_DELIVERY_COLS.filter((c) => c.on).map((c) => '<td class="ccr-dlv-toggle">' + pill(c.on(r)) + "</td>").join("") +
+      cols.filter((c) => c.on).map((c) => '<td class="ccr-dlv-toggle">' + pill(c.on(r)) + "</td>").join("") +
       "</tr>").join("");
   } else {
     const why = !participating.length && !_ccr.rowsDone ? "Loading investors…"
       : d.q.trim() ? 'No investors match "' + d.q.trim() + '".'
       : !_ccr.rowsDone ? "None of the investors loaded so far are in this group."
       : "No investors in this group.";
-    body = '<tr><td colspan="' + CCR_DELIVERY_COLS.length + '" class="ccr-dlv-empty">' + escHtml(why) + "</td></tr>";
+    body = '<tr><td colspan="' + cols.length + '" class="ccr-dlv-empty">' + escHtml(why) + "</td></tr>";
   }
 
   const narrowed = d.filter !== "all" || d.q.trim() || !_ccr.rowsDone || short;
