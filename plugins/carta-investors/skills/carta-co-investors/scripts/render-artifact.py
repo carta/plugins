@@ -7,7 +7,7 @@
 long-comment-ok: positional-argument contract for a CLI entry point
 Usage:
     uv run render-artifact.py <output> <artifact_id> <mcp_server> \\
-        <firm_uuid> <firm_name> <firm_carta_id> <base_url> [vehicles_file]
+        <firm_uuid> <firm_name> <firm_carta_id> <base_url>
 """
 
 import html
@@ -37,26 +37,6 @@ PLACEHOLDERS = (
     "{{FIRM_UUID}}",
     "{{CARTA_MCP_SERVER}}",
 )
-
-
-def load_vehicle_names(path: Path):
-    """Read the firm's own vehicle names, or return None on error."""
-    if not path.is_file():
-        print(f"error: vehicles_file not found or not a regular file: {path}", file=sys.stderr)
-        return None
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as e:
-        print(f"error: vehicles_file is not valid JSON: {e}", file=sys.stderr)
-        return None
-    if not isinstance(data, list):
-        print(f"error: vehicles_file must contain a JSON array, got {type(data).__name__}", file=sys.stderr)
-        return None
-    for i, name in enumerate(data):
-        if not isinstance(name, str) or not name.strip():
-            print(f"error: vehicle name #{i} must be a non-empty string, got {name!r}", file=sys.stderr)
-            return None
-    return [n.strip() for n in data]
 
 
 def load_canonical_groupings():
@@ -110,16 +90,15 @@ def validate_args(artifact_id, mcp_server, firm_uuid, firm_name, firm_carta_id, 
 
 
 def main() -> int:
-    if len(sys.argv) not in (8, 9):
+    if len(sys.argv) != 8:
         print(
             "usage: render-artifact.py <output> <artifact_id> <mcp_server> "
-            "<firm_uuid> <firm_name> <firm_carta_id> <base_url> [vehicles_file]",
+            "<firm_uuid> <firm_name> <firm_carta_id> <base_url>",
             file=sys.stderr,
         )
         return 2
 
     output, artifact_id, mcp_server, firm_uuid, firm_name, firm_carta_id, base_url = sys.argv[1:8]
-    vehicles_file = sys.argv[8] if len(sys.argv) == 9 else None
 
     if not validate_args(artifact_id, mcp_server, firm_uuid, firm_name, firm_carta_id, base_url):
         return 1
@@ -127,26 +106,6 @@ def main() -> int:
     out_path = check_path_under_cwd(Path(output), "output path")
     if out_path is None:
         return 1
-
-    # The firm's own name always matches; the file only adds vehicles named
-    # differently from it.
-    vehicle_names = [firm_name.strip()]
-    if vehicles_file is None:
-        # The firm name alone rarely matches its funds ("Acme Ventures" vs "Acme
-        # Fund VI, LP"), so without this list the firm tops its own report.
-        print(
-            "warning: no vehicles_file — only the firm name will be excluded from "
-            "the co-investor list. Pass every fa:list:entities name.",
-            file=sys.stderr,
-        )
-    else:
-        vehicles_path = check_path_under_cwd(Path(vehicles_file), "vehicles_file path")
-        if vehicles_path is None:
-            return 1
-        extra = load_vehicle_names(vehicles_path)
-        if extra is None:
-            return 1
-        vehicle_names.extend(n for n in extra if n not in vehicle_names)
 
     groupings = load_canonical_groupings()
     if groupings is None:
@@ -167,7 +126,6 @@ def main() -> int:
         "firm_carta_id": firm_carta_id,
         "base_url": base_url,
         "canonical_groupings": groupings,
-        "firm_vehicle_names": vehicle_names,
     }
 
     content = content.replace("{{STATE_JSON}}", js_safe_json(state_obj))

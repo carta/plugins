@@ -443,7 +443,8 @@
     // ── Injected at render time by scripts/render-artifact.py ─────────────────
     // FIRM_UUID          the firm whose co-investors this page shows. Pinned via
     //                    set_context on load, and substituted into every query.
-    // FIRM_NAME          display name, also the first firm-vehicle match pattern.
+    // FIRM_NAME          display name, and a firm-vehicle match pattern that holds
+    //                    even when the vehicles query below fails.
     // FIRM_CARTA_ID      the numeric organization pk, for the documents deep link.
     // CARTA_MCP_SERVER   the Carta connector's DISPLAY NAME. The artifact runtime
     //                    addresses a connector by display name only — never a UUID
@@ -454,8 +455,6 @@
     //                    into production.
     // CANONICAL_GROUPINGS  the {canonical, patterns} list from canonical-investors.json,
     //                    embedded so no agent has to build a 2,700-char SQL CASE.
-    // FIRM_VEHICLE_NAMES the firm's own fund vehicles, excluded from the co-investor
-    //                    list and flagged as `isFirm` inside each round.
     const STATE = JSON.parse(document.getElementById('co-investors-state').textContent);
     const FIRM_UUID = '{{FIRM_UUID}}';
     const FIRM_NAME = STATE.firm_name;
@@ -463,7 +462,6 @@
     const CARTA_MCP_SERVER = '{{CARTA_MCP_SERVER}}';
     const BASE_URL = STATE.base_url;
     const CANONICAL_GROUPINGS = STATE.canonical_groupings;
-    const FIRM_VEHICLE_NAMES = STATE.firm_vehicle_names;
 
     const CALL_TOOL = 'call_tool';
     const SET_CONTEXT_TOOL = 'set_context';
@@ -793,6 +791,19 @@
         LIMIT ${limit} OFFSET ${offset}`;
     }
 
+    // Query V — the firm's own entities (funds, SPVs, GPs, management companies),
+    // excluded from the co-investor list and flagged as `isFirm` inside each round.
+    // Read here rather than handed in by the agent: a firm with hundreds of SPVs
+    // overflows the fa:list:entities response limit, and the page has no such cap.
+    function buildVehiclesSql(offset, limit) {
+      return `SELECT DISTINCT FUND_NAME
+        FROM FUND_ADMIN.FUNDS
+        WHERE FIRM_ID = '${FIRM_UUID}'
+          AND FUND_NAME IS NOT NULL
+        ORDER BY FUND_NAME
+        LIMIT ${limit} OFFSET ${offset}`;
+    }
+
     // Query T — live/exited status per equity investment, behind the filter tabs.
     function buildStatusSql(offset, limit) {
       return `SELECT ISSUER_NAME, IS_ACTIVE_INVESTMENT
@@ -888,10 +899,20 @@
       return stem.includes(' ') ? stem : null;
     }
 
-    const FIRM_VEHICLE_MATCHERS = FIRM_VEHICLE_NAMES
-      .filter(Boolean)
-      .map(v => { const norm = normalizeName(v); return { norm, stem: usableStem(norm) }; })
-      .filter(m => m.norm);
+    function vehicleMatchers(names) {
+      return names
+        .filter(Boolean)
+        .map(v => { const norm = normalizeName(v); return { norm, stem: usableStem(norm) }; })
+        .filter(m => m.norm);
+    }
+
+    // The firm name alone until Query V returns; setFirmVehicles adds the rest.
+    let FIRM_VEHICLE_MATCHERS = vehicleMatchers([FIRM_NAME]);
+
+    function setFirmVehicles(vehicleRows) {
+      const names = vehicleRows.map(r => (r.FUND_NAME || '').trim());
+      FIRM_VEHICLE_MATCHERS = vehicleMatchers([FIRM_NAME, ...names]);
+    }
 
     // True when the purchaser IS one of the firm's own vehicles.
     //
@@ -1073,18 +1094,24 @@
         return;
       }
 
-      let summaryRows, roundsRows, statusRows;
+      let summaryRows, roundsRows, statusRows, vehicleRows;
       try {
         setLoadingStatus('Loading co-investor data from Carta…');
-        // Fully independent — issue all three concurrently so the wait is
-        // max(S, R, T) rather than S + R + T.
-        [summaryRows, roundsRows, statusRows] = await Promise.all([
+        // Fully independent — issue all four concurrently so the wait is the
+        // slowest query rather than their sum.
+        [summaryRows, roundsRows, statusRows, vehicleRows] = await Promise.all([
           fetchAllRows(buildSummarySql, 'Query S'),
           fetchAllRows(buildRoundsSql, 'Query R'),
           // Status only narrows the Live/Exited tabs, so it must never fail the
           // report. On error the tabs fall back to counts without status.
           fetchAllRows(buildStatusSql, 'Query T').catch(err => {
             console.warn('status query failed; Live/Exited filter disabled', err);
+            return [];
+          }),
+          // Without vehicles the firm name is still excluded, so a failure here
+          // degrades the report rather than blocking it.
+          fetchAllRows(buildVehiclesSql, 'Query V').catch(err => {
+            console.warn('vehicles query failed; excluding the firm name only', err);
             return [];
           }),
         ]);
@@ -1110,6 +1137,7 @@
 
       setLoadingStatus('Building your report…');
 
+      setFirmVehicles(vehicleRows);
       const coInvestors = buildCoInvestors(summaryRows);
       const { spa, total } = coverageFromSummary(summaryRows);
       const companyRounds = buildCompanyRounds(roundsRows);
