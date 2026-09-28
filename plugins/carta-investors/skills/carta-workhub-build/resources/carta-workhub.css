@@ -1002,6 +1002,14 @@
 .ccr-alloc-views { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .ccr-alloc-views .ccr-dlv-chip:disabled { opacity: .55; cursor: default; }
 .ccr-alloc-loading { font-size: 12px; color: var(--ink-color-global-text-subtle); }
+/* The column an adjustment in the summary asked for, marked while the eye finds it.
+   light-dark() inside @keyframes crashes Chromium, so the colour comes in through a variable. */
+.ccr-alloc { --ccr-col-flash: light-dark(#EAF0F8, #122948); }
+.ccr-alloc .ccr-table .ccr-col-focus { animation: ccr-col-flash 1.8s ease-out; }
+/* Sticky cells fade back to their own fill, or the rows scrolling under them show through. */
+.ccr-alloc .ccr-table thead th { --ccr-col-rest: var(--ink-color-global-surface-background-default); }
+.ccr-alloc .ccr-table tr.ccr-total td { --ccr-col-rest: light-dark(#EAF0F8, #122948); }
+@keyframes ccr-col-flash { 0%, 45% { background: var(--ccr-col-flash); } 100% { background: var(--ccr-col-rest, transparent); } }
 
 /* Summary box: label and value pairs, no rules, as tall as its rows. */
 .ccr-sum { flex: none; display: flex; flex-direction: column; gap: 10px; }
@@ -1017,6 +1025,13 @@
 .ccr-sum-item { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; line-height: 18px; }
 .ccr-sum-item > :first-child { min-width: 0; }
 .ccr-sum-item > :last-child { flex: none; color: var(--ink-color-global-text-subtle); font-variant-numeric: tabular-nums; }
+.ccr-sum-more { align-self: flex-start; background: none; border: 0; padding: 0; font: inherit; font-size: 11px; line-height: 16px;
+  color: var(--ink-color-global-text-subtle); cursor: pointer; }
+.ccr-sum-more:hover { color: var(--ink-color-global-link-default); text-decoration: underline; }
+/* An adjustment opens the breakdown at its column. */
+.ccr-sum-adj { width: 100%; background: none; border: 0; font-family: inherit; color: inherit; text-align: left; cursor: pointer; }
+.ccr-sum-adj:hover > :first-child { color: var(--ink-color-global-link-default); text-decoration: underline; }
+.ccr-sum-adj:focus-visible, .ccr-sum-more:focus-visible { outline: 2px solid var(--ink-color-global-border-focus-default); outline-offset: 2px; }
 
 /* Footer columns line up with the body's, so each action sits under what it acts on. */
 .ccr-foot {

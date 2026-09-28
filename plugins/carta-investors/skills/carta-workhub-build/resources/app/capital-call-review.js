@@ -194,6 +194,7 @@ function ccrReset(target, title) {
     blockersOpen: false,
     payShowSensitive: { acct: false, routing: false },
     showDetail: false,
+    focusBucket: null,
     // Which investors the Allocations table lists: "part" or "np".
     allocView: "part",
     delivery: { filter: "all", q: "", sort: null, dir: 1 },
@@ -964,11 +965,12 @@ function ccrAllocPane(s) {
     .concat(buckets.map((b) => ccrBucketHeader(b)))
     .concat([netLabel, afterLabel]);
 
+  const focus = (b) => (_ccr.focusBucket && String(b.bucket_id) === _ccr.focusBucket ? " ccr-col-focus" : "");
   const bucketCell = (amount, b) => {
-    if (ccrNum(amount) === null) return '<td class="ccr-faint">\u2014</td>';
+    if (ccrNum(amount) === null) return '<td class="ccr-faint' + focus(b) + '">\u2014</td>';
     return b.is_adjustment
-      ? '<td class="ccr-adj">' + escHtml(ccrSignedMoney(amount, ccy, ccrAdjSign(b))) + "</td>"
-      : "<td>" + escHtml(ccrMoney(amount, ccy)) + "</td>";
+      ? '<td class="ccr-adj' + focus(b) + '">' + escHtml(ccrSignedMoney(amount, ccy, ccrAdjSign(b))) + "</td>"
+      : '<td class="' + focus(b).trim() + '">' + escHtml(ccrMoney(amount, ccy)) + "</td>";
   };
   const rowCell = (r, b) => {
     const hit = (r.amount_buckets || []).find((ab) => String(ab.bucket_id) === String(b.bucket_id));
@@ -1066,7 +1068,7 @@ function ccrAllocPane(s) {
       const b = buckets[i - 2];
       return '<th class="' +
         (i === 0 ? pinL.trim() : i === 1 && breakdown ? "ccr-pin-cls" : i === cols_head.length - 2 ? pinN.trim()
-          : i === cols_head.length - 1 ? pinA.trim() : "") +
+          : i === cols_head.length - 1 ? pinA.trim() : b ? focus(b).trim() : "") +
         '"' + (b ? ' data-ccr-col="' + escHtml(String(b.bucket_id)) + '"' : "") + ">" + escHtml(h) + "</th>";
     }).join("") +
     "</tr></thead><tbody>" + body +
@@ -1474,6 +1476,9 @@ function ccrEmailPane() {
 
 // ── Review body ───────────────────────────────────────────────────────────
 
+// Adjustments past this many fold into "+N more", so the box never outgrows its column.
+const CCR_SUMMARY_ADJ_MAX = 3;
+
 // The call at a glance: what it asks for, when, and what is credited against it.
 function ccrSummaryBox(s) {
   if (!s) {
@@ -1487,14 +1492,19 @@ function ccrSummaryBox(s) {
   const sumRow = ([label, v]) => '<div class="ccr-sum-row"><span class="ccr-sum-k">' + escHtml(label) + "</span>" +
     '<span class="ccr-sum-v">' + escHtml(v) + "</span></div>";
   const readiness = ccrReadinessRows(s);
+  const adjLine = (b) => (b.display_name || b.slug || "Adjustment") + " " + ccrSignedMoney(b.total, ccy, ccrAdjSign(b));
 
   const adj = ccrBucketColumns(s).adjustments;
+  const rest = adj.slice(CCR_SUMMARY_ADJ_MAX);
   const adjustments = adj.length
     ? '<div class="ccr-sum-group"><span class="ccr-sum-k">Adjustments</span>' +
-      adj.map((b) =>
-        '<div class="ccr-sum-item">' +
+      adj.slice(0, CCR_SUMMARY_ADJ_MAX).map((b) =>
+        '<button class="ccr-sum-item ccr-sum-adj" data-ccr-adj="' + escHtml(String(b.bucket_id)) + '">' +
         "<span>" + escHtml(b.display_name || b.slug || "Adjustment") + "</span>" +
-        "<span>" + escHtml(ccrSignedMoney(b.total, ccy, ccrAdjSign(b))) + "</span></div>").join("") +
+        "<span>" + escHtml(ccrSignedMoney(b.total, ccy, ccrAdjSign(b))) + "</span></button>").join("") +
+      (rest.length
+        ? '<button class="ccr-sum-more" data-ccr-adj="" title="' + escHtml(rest.map(adjLine).join("\n")) + '">+' + rest.length + " more</button>"
+        : "") +
       "</div>"
     : "";
 
@@ -1751,6 +1761,19 @@ function ccrMeasureTable(root) {
   wrap.classList.toggle("ccr-overflow", wrap.scrollWidth > wrap.clientWidth + 1);
 }
 
+// Brings a bucket column into view between the pinned columns on either side.
+function ccrScrollToColumn(bucketId) {
+  const o = document.getElementById("ccr-overlay");
+  const wrap = o && o.querySelector(".ccr-table-wrap");
+  const th = wrap && [...wrap.querySelectorAll("th[data-ccr-col]")].find((el) => el.getAttribute("data-ccr-col") === bucketId);
+  if (!th) return;
+  const width = (sel) => [...wrap.querySelectorAll(sel)].reduce((w, el) => w + el.offsetWidth, 0);
+  const left = th.offsetLeft - width("th.ccr-pin-l, th.ccr-pin-cls");
+  const right = th.offsetLeft + th.offsetWidth - (wrap.clientWidth - width("th.ccr-pin-net, th.ccr-pin-after"));
+  if (wrap.scrollLeft > left) wrap.scrollLeft = left;
+  else if (wrap.scrollLeft < right) wrap.scrollLeft = right;
+}
+
 function ccrBind(root) {
   const on = (sel, ev, fn) => root.querySelectorAll(sel).forEach((el) => el.addEventListener(ev, (e) => fn(el, e)));
 
@@ -1808,6 +1831,21 @@ function ccrBind(root) {
   });
 
   on("[data-ccr-detail]", "click", () => { _ccr.showDetail = !_ccr.showDetail; ccrRender(); });
+  // An adjustment in the summary opens the breakdown at its column; the sidebar
+  // slides away first, so the scroll waits for that.
+  on("[data-ccr-adj]", "click", (el) => {
+    const id = el.getAttribute("data-ccr-adj") || null;
+    trackWorkhub("click", "CartaWorkhub.CapitalCallReview.SummaryAdjustment");
+    _ccr.activeTab = "alloc";
+    _ccr.allocView = "part";
+    _ccr.showDetail = true;
+    _ccr.focusBucket = id;
+    ccrRender();
+    if (!id) return;
+    const snap = _ccr;
+    setTimeout(() => { if (_ccr === snap) ccrScrollToColumn(id); }, 320);
+    setTimeout(() => { if (_ccr === snap && _ccr.focusBucket === id) _ccr.focusBucket = null; }, 2000);
+  });
   on("[data-ccr-alloc-view]", "click", (el) => { _ccr.allocView = el.getAttribute("data-ccr-alloc-view"); ccrRender(); });
 
   on("[data-ccr-note]", "click", () => { _ccr.noteOpen = !_ccr.noteOpen; ccrRender(); });
