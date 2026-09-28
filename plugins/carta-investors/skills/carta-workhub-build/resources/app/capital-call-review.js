@@ -286,39 +286,10 @@ function ccrBucketColumns(s) {
   return { main: live.filter((b) => !b.is_adjustment), adjustments: live.filter((b) => b.is_adjustment) };
 }
 
-// Column headers for the shared default buckets, keyed by slug. A default's
-// display name is its canonical key, so this only shortens; a fund's own
-// bucket keeps its display name.
-const CCR_BUCKET_HEADERS = {
-  contribution: "Contribution",
-  contribution_management_fees: "Mgmt fees",
-  contribution_management_fees_offset: "Mgmt fee offset",
-  contribution_management_fees_waiver: "Mgmt fee waiver",
-  contribution_management_fees_outside_commitment: "Mgmt fees outside commitment",
-  contribution_outside_commitment: "Outside commitment",
-  contribution_expenses: "Expenses",
-  contribution_investments: "Investments",
-  contribution_adjustments: "Adjustments",
-  contribution_org_costs: "Org. costs",
-  contribution_placement_agent_fees: "Placement agent fees",
-  contribution_rolled: "Rolled",
-  prepaid_contributions_applied: "Prepaid applied",
-  outstanding_balances_applied: "Outstanding applied",
-  distribution_payables_applied: "Dist. payables applied",
-  subsequent_close_interest_due: "Sub-close interest",
-  late_admission_fees_due: "Late admission fees",
-  distribution: "Distribution",
-  distribution_income: "Income",
-  distribution_gain: "Gain",
-  distribution_roc: "Return of capital",
-  distribution_recallable: "Recallable",
-  distribution_tax_withholding: "Tax withholding",
-  distribution_gp_cash_carry: "GP cash carry",
-  distribution_lp_carried_interest: "LP carried interest",
-};
-
+// A bucket reads by its full name, never an abbreviation.
 function ccrBucketHeader(b) {
-  return (b.is_default && CCR_BUCKET_HEADERS[b.slug]) || b.display_name || b.slug || "Bucket";
+  // "Contribution - Expenses" keeps its dash with the word before it when the header wraps.
+  return String(b.display_name || b.slug || "Bucket").replace(/ - /g, "\u00a0- ");
 }
 
 // An adjustment moves what is owed without moving the call, so it reads with
@@ -1081,10 +1052,11 @@ function ccrAllocPane(s) {
   return '<div class="ccr-alloc">' + head +
     '<div class="ccr-table-wrap"><table class="ccr-table' + (breakdown ? " ccr-table-breakdown" : "") + '"><thead><tr>' +
     cols_head.map((h, i) => {
+      const b = buckets[i - 2];
       return '<th class="' +
         (i === 0 ? pinL.trim() : i === 1 && breakdown ? "ccr-pin-cls" : i === cols_head.length - 2 ? pinN.trim()
           : i === cols_head.length - 1 ? pinA.trim() : "") +
-        '">' + escHtml(h) + "</th>";
+        '"' + (b ? ' data-ccr-col="' + escHtml(String(b.bucket_id)) + '"' : "") + ">" + escHtml(h) + "</th>";
     }).join("") +
     "</tr></thead><tbody>" + body +
     (np ? "" : '<tr class="ccr-total">' + totals.join("") + "</tr>") + "</tbody></table></div>" +

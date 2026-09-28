@@ -20,7 +20,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.46.8</carta-plugin>
+<carta-plugin>carta-investors:6.46.9</carta-plugin>
 
 # Carta Workhub — Build / Redeploy
 
@@ -139,8 +139,7 @@ not inside a fund-data dashboard.
   adjustments last and signed by `impact_on_owed` (decrease reads as a reduction), with Investor
   and Partner class pinned left and Net contribution / Called after pinned right while the rest
   scrolls; the sidebar steps aside while the breakdown is open. Header
-  labels come from `display_name`; a slug-keyed abbreviation map applies only when `is_default`,
-  so a fund's own bucket keeps its name. Nothing reads `inside_commitment`: the post-call figures
+  labels are the full `display_name`, balanced over at most two lines and never abbreviated. Nothing reads `inside_commitment`: the post-call figures
   are served already computed. Totals come from `bucket_totals` and the summary, never by summing
   a page. The Participating and Non-participating counts above the table switch which investors it
   lists. When the row walk stops short the table says "Only N of M participating investors
