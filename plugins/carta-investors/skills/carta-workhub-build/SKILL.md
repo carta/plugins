@@ -20,7 +20,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.46.9</carta-plugin>
+<carta-plugin>carta-investors:6.46.10</carta-plugin>
 
 # Carta Workhub — Build / Redeploy
 
@@ -114,7 +114,8 @@ not inside a fund-data dashboard.
   dates, any adjustments, and for a distribution what it can pay out) and the payment accounts,
   beside the preparer's note and the **Allocations**, **Notice** and **Delivery** tabs. The Notice
   tab shows the notice each investor receives, as the real PDF and as the rendered email. The footer carries **Request
-  changes** and **Approve and release**, each behind its own confirm step. Read from `fa:get:capital-activity-review-summary`,
+  changes**, which opens a modal and keeps an unsent request as a draft on this computer, and
+  **Approve and release**, behind its own confirm step. Read from `fa:get:capital-activity-review-summary`,
   `fa:list:capital-activity-review-row`, `fa:get:capital-activity-partner-email-preview` and
   `fa:get:capital-activity-notice-pdf-preview`; written with `fa:mutate:request-capital-activity-changes`
   and `fa:mutate:approve-capital-activity`. All of them ride the `fetch` and `mutate` tools

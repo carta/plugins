@@ -937,7 +937,18 @@
 .ccr-pay-card .ccr-pay-group-title { padding: 0 0 4px; }
 .ccr-pay-card .ccr-pay-group + .ccr-pay-group { margin-top: 18px; }
 
-.ccr-subtab:focus-visible, .ccr-changes-btn:focus-visible {
+/* Edit is a link-weight control: the decision lives in the footer. */
+.ccr-edit {
+  background: none; border: 0; padding: 0; font-family: inherit; font-size: 12px; font-weight: 600;
+  color: var(--ink-color-global-link-default); cursor: pointer; white-space: nowrap;
+}
+.ccr-edit:hover { text-decoration: underline; text-underline-offset: 2px; }
+.ccr-edit:disabled { color: var(--ink-color-global-text-subtle); cursor: default; text-decoration: none; }
+.ccr-edit-icon { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 4px; }
+.ccr-edit-icon svg { width: 16px; height: 16px; }
+.ccr-edit-icon:hover:not(:disabled) { background: var(--ink-color-global-surface-lightgray-default); }
+.ccr-changes-btn svg { flex: none; width: 16px; height: 16px; }
+.ccr-edit:focus-visible, .ccr-subtab:focus-visible, .ccr-changes-btn:focus-visible {
   outline: 2px solid var(--ink-color-global-border-focus-default); outline-offset: 2px; border-radius: 2px;
 }
 
@@ -948,6 +959,8 @@
   background: none; border: 0; border-bottom: 2px solid transparent; cursor: pointer;
   font-family: inherit; font-size: 13px; line-height: 20px; color: var(--ink-color-global-text-subtle);
 }
+/* Reserves the same scrollbar gutter as the content below, so its right edge meets theirs. */
+.ccr-subnav-end { margin-left: auto; align-self: center; overflow: hidden; scrollbar-gutter: stable; padding: 4px 16px 4px 4px; }
 .ccr-subtab:hover { color: var(--ink-color-global-text-default); }
 .ccr-subtab-on { color: var(--ink-color-global-text-default); font-weight: 600; border-bottom-color: var(--ink-color-global-border-active); }
 .ccr-main-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; padding: 16px 16px 8px 0; }
@@ -1019,6 +1032,7 @@
   transition: background .13s;
 }
 .ccr-changes-btn:hover { background: var(--ink-color-global-surface-lightgray-default); }
+.ccr-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-color-global-feedback-negative-strong); flex: none; }
 .ccr-changes-btn:disabled {
   color: var(--ink-color-global-text-subtle); border-color: var(--ink-color-global-border-subtle); background: transparent; cursor: not-allowed;
 }
@@ -1027,6 +1041,34 @@
   opacity: 1; cursor: not-allowed;
   background: var(--ink-color-global-surface-lightgray-hover); color: var(--ink-color-global-text-subtle);
 }
+
+/* Modals sit inside the panel, over the review they act on. */
+.ccr-scrim {
+  position: absolute; inset: 0; z-index: 5; padding: 16px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgb(0 0 0 / .32); border-radius: inherit;
+}
+.ccr-modal {
+  width: min(560px, 100%); max-height: 100%; display: flex; flex-direction: column; overflow: hidden;
+  background: var(--ink-color-global-surface-background-default);
+  border: 1px solid var(--ink-color-global-border-subtle); border-radius: var(--ink-size-global-radius-default);
+  box-shadow: var(--ink-elevation-global-shadow-large);
+}
+.ccr-modal-wide { width: min(660px, 100%); }
+.ccr-modal-head { position: relative; flex: none; padding: 18px 20px 12px; border-bottom: 1px solid var(--ink-color-global-border-subtle); }
+.ccr-modal-title { display: block; padding-right: 28px; font-family: var(--ink-font-global-family-prominent); font-size: 20px; line-height: 1.2; text-wrap: balance; }
+.ccr-modal-body { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding: 16px 20px; }
+.ccr-modal-lede { font-size: 13px; line-height: 20px; color: var(--ink-color-global-text-subtle); }
+.ccr-modal-foot { flex: none; display: flex; align-items: center; gap: 10px; padding: 12px 20px 16px; border-top: 1px solid var(--ink-color-global-border-subtle); }
+.ccr-grow { margin-right: auto; }
+.ccr-discard-note { font-size: 13px; line-height: 20px; font-weight: 500; }
+.ccr-modal-foot .ccr-btn-danger { background: var(--ink-color-global-feedback-negative-strong); color: var(--ink-color-global-surface-background-default); }
+.ccr-modal-foot .ccr-btn-danger:hover { filter: brightness(.92); }
+.ccr-modal-foot .far-btn-secondary {
+  padding: 8px 16px; border: 1px solid var(--ink-color-global-border-active); border-radius: var(--ink-size-global-radius-default);
+  color: var(--ink-color-global-text-default);
+}
+.ccr-modal-foot .far-btn-primary { padding: 9px 18px; border-radius: var(--ink-size-global-radius-default); }
 
 @media (max-width: 860px) {
   .ccr-body-split { display: block; overflow-y: auto; }

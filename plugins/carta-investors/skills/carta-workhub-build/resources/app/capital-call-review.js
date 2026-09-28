@@ -178,9 +178,17 @@ function ccrReset(target, title) {
     rowsDone: false,
     truncated: false,
     phase: "review",
+    // null, or "changes" while the request-changes modal is open.
+    modal: null,
     activeTab: "alloc",
     renderedTab: null,
+    autofocus: null,
+    // The request-changes text while the modal is open; saved only by Save and continue.
     changeText: "",
+    // Set when the modal is closed with unsaved edits, to ask before dropping them.
+    confirmDiscard: false,
+    caretAt: null,
+    sending: false,
     releasing: false,
     noteOpen: false,
     blockersOpen: false,
@@ -630,39 +638,42 @@ async function ccrLoadEmail() {
 // ── Writes ────────────────────────────────────────────────────────────────
 
 async function ccrSubmitChanges() {
-  const text = (document.getElementById("ccr-change-text") || {}).value || "";
-  if (!text.trim()) { showToast("Write what needs to change first."); return; }
-
-  const btn = document.getElementById("ccr-send-changes");
-  if (btn) { btn.disabled = true; btn.textContent = "Sending…"; }
+  const snap = _ccr;
+  const text = ccrChangeContent(snap.changeText);
+  if (!text) { showToast("Write what needs to change first."); return; }
+  snap.sending = true;
+  ccrRender();
   trackWorkhub("click", "CartaWorkhub.CapitalCallReview.RequestChanges");
 
-  if (CCR_IS_DEMO) {
-    _ccr.sentMessage = text;
-    _ccr.phase = "sent";
-    ccrRender();
-    return;
-  }
+  // Sent means the review is over for now, so the panel closes back to the queue.
+  const done = () => {
+    ccrSetDraft(snap.target.activityId, "");
+    snap.sending = false;
+    snap.modal = null;
+    ccrClose();
+    showToast("Sent to your Carta team. This task is In progress until it comes back to you.");
+  };
+  if (CCR_IS_DEMO) { done(); return; }
 
   try {
     const res = await _mcp("mutate", {
       command: "fa:mutate:request-capital-activity-changes",
       params: {
-        fund_uuid: _ccr.target.fundUuid,
-        capital_activity_id: _ccr.target.activityId,
+        fund_uuid: snap.target.fundUuid,
+        capital_activity_id: snap.target.activityId,
         comment: text,
       },
     });
+    if (_ccr !== snap) return;
     if (res.isError) throw new Error(res.content?.[0]?.text ?? "request failed");
-    ccrForgetDocs(_ccr.target.activityId);
-    _ccr.sentMessage = text;
-    _ccr.phase = "sent";
-    ccrRender();
-    farFetchRequests();
+    ccrForgetDocs(snap.target.activityId);
+    done();
   } catch (err) {
     console.error("[ccr] request-changes failed —", err);
-    showToast("Could not send that to your Carta team. Nothing changed.");
-    if (btn) { btn.disabled = false; btn.textContent = "Send to Carta"; }
+    if (_ccr !== snap) return;
+    snap.sending = false;
+    ccrRender();
+    showToast("Could not send that to your Carta team. Nothing changed, and your text is still here.");
   }
 }
 
@@ -1322,6 +1333,56 @@ function ccrDoneBody(released) {
     '<div class="ccr-note">This task has moved to ' + (released ? "Completed" : "In progress") + ".</div></div>";
 }
 
+// ── Change request ────────────────────────────────────────────────────────
+// What the reviewer has written for Carta but not yet sent, per activity. It is
+// kept on this computer where storage allows, so closing the panel or reloading
+// the page does not lose it.
+
+const CCR_DRAFTS_KEY = "cartaWorkhub.ccrChangeDrafts";
+const _ccrMemDrafts = {};
+
+function ccrDrafts() {
+  if (!farStorageOk()) return _ccrMemDrafts;
+  try { return JSON.parse(localStorage.getItem(CCR_DRAFTS_KEY) ?? "{}") || {}; } catch (e) { return {}; }
+}
+
+const ccrDraft = (activityId) => ccrDrafts()[activityId] || "";
+
+// The line a Request change link starts, keyed by where it sits; "tab" follows the open tab.
+const CCR_CHANGE_LABELS = {
+  payment: "Payment account",
+  alloc: "Allocations",
+  notice: "Notice/Email customizations",
+  delivery: "Delivery settings",
+};
+
+// A label with nothing after it is a prompt, not content: it neither sends nor counts as an edit.
+function ccrChangeContent(text) {
+  return String(text || "").split("\n").filter((l) => !/^[^:\n]{1,40}:\s*$/.test(l.trim())).join("\n").trim();
+}
+
+// Adds the label on its own line, once; returns the text and where the caret goes.
+function ccrWithLabel(text, label) {
+  const lines = String(text || "").replace(/\s+$/, "").split("\n");
+  const at = lines.findIndex((l) => l.trim().toLowerCase().startsWith(label.toLowerCase() + ":"));
+  if (at >= 0) {
+    const caret = lines.slice(0, at + 1).join("\n").length;
+    return { text: lines.join("\n"), caret: caret };
+  }
+  const base = lines.join("\n").trim() ? lines.join("\n") + "\n" : "";
+  const out = base + label + ": ";
+  return { text: out, caret: out.length };
+}
+
+const ccrChangesDirty = () => ccrChangeContent(_ccr.changeText) !== ccrChangeContent(ccrDraft(_ccr.target.activityId));
+
+function ccrSetDraft(activityId, text) {
+  const all = ccrDrafts();
+  if (String(text || "").trim()) all[activityId] = text; else delete all[activityId];
+  if (!farStorageOk()) return;
+  try { localStorage.setItem(CCR_DRAFTS_KEY, JSON.stringify(all)); } catch (e) { /* storage full: this draft lasts the session */ }
+}
+
 // Release or a request is only offered while nothing holds the panel.
 function ccrCanRequest() {
   const s = _ccr.summary;
@@ -1334,6 +1395,11 @@ function ccrHeadline(s) {
     ? (ccrNum(s.net_distribution_amount) !== null ? s.net_distribution_amount : s.total_due_to_investor)
     : (ccrNum(s.gross_call_amount) !== null ? s.gross_call_amount : s.total_due_to_fund);
 }
+
+// A pencil for every way into Request changes.
+const CCR_EDIT_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" ' +
+  'stroke-linejoin="round" aria-hidden="true"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>' +
+  '<path d="M18.4 2.6a1 1 0 0 1 3 3l-9 9a2 2 0 0 1-.85.5l-2.87.84a.5.5 0 0 1-.62-.62l.84-2.87a2 2 0 0 1 .5-.85Z"></path></svg>';
 
 // ── Right-hand subpages ───────────────────────────────────────────────────
 
@@ -1350,6 +1416,8 @@ function ccrSubnav() {
     return '<button class="ccr-subtab' + (on ? " ccr-subtab-on" : "") + '" role="tab" aria-selected="' + on +
       '" data-ccr-tab="' + t.id + '">' + escHtml(t.label) + "</button>";
   }).join("") +
+    '<span class="ccr-subnav-end"><button class="ccr-edit ccr-edit-icon" data-ccr-modal="changes" data-ccr-prefix="tab"' +
+      ' aria-label="Request change" title="Request change"' + (ccrCanRequest() ? "" : " disabled") + ">" + CCR_EDIT_ICON + "</button></span>" +
     "</div>";
 }
 
@@ -1459,7 +1527,9 @@ function ccrSettingsTabBody(s) {
 // Where the money goes, and for a distribution where it comes from.
 function ccrPaymentCard(s) {
   return '<section class="ccr-sheet ccr-pay-card" aria-label="Payment information">' +
-    '<div class="ccr-sheet-head"><span class="ccr-card-label">Payment information</span></div>' +
+    '<div class="ccr-sheet-head"><span class="ccr-card-label">Payment information</span>' +
+      '<button class="ccr-edit ccr-edit-icon" data-ccr-modal="changes" data-ccr-prefix="payment"' +
+        ' aria-label="Request change" title="Request change"' + (ccrCanRequest() ? "" : " disabled") + ">" + CCR_EDIT_ICON + "</button></div>" +
     (s ? ccrPayBody(s) : '<p class="ccr-note">Reading the capital call\u2026</p>') +
     "</section>";
 }
@@ -1499,7 +1569,7 @@ function ccrReviewBody() {
     "</div>";
 }
 
-// ── Footer ────────────────────────────────────────────────────────────────
+// ── Footer and modals ─────────────────────────────────────────────────────
 
 function ccrFooter() {
   const s = _ccr.summary;
@@ -1514,11 +1584,6 @@ function ccrFooter() {
         (_ccr.releasing ? "Releasing…" : "Release" + (n ? " and email " + ccrInvestors(n) : "")) +
       "</button></div>";
   }
-  if (_ccr.phase === "changes") {
-    return '<div class="far-panel-footer ccr-footer-end">' +
-      '<button class="far-btn-secondary" data-ccr-phase="review">Back to review</button>' +
-      '<button class="far-btn-primary" id="ccr-send-changes" data-ccr-send>Send to Carta</button></div>';
-  }
   if (_ccr.phase !== "review") {
     return '<div class="far-panel-footer far-panel-footer-center">' +
       '<button class="far-btn-primary" data-ccr-close>Back to tasks</button></div>';
@@ -1526,10 +1591,12 @@ function ccrFooter() {
   const blocked = !s || _ccr.error || _ccr.locked;
   // A reason that locks the panel leads, so the one line shows what the reviewer must do first.
   const blockers = blocked ? [] : ccrBlockers(s).sort((x, y) => (y.locks ? 1 : 0) - (x.locks ? 1 : 0));
-  const lines = blockers.map((b) => b.html || escHtml(b.text));
+  const pending = !!ccrDraft(_ccr.target.activityId).trim();
+  const lines = blockers.map((b) => b.html || escHtml(b.text))
+    .concat(pending ? [escHtml("Send or cancel your request for changes to approve.")] : []);
   return '<div class="far-panel-footer ccr-foot">' +
-    '<div class="ccr-foot-side"><button class="ccr-changes-btn" data-ccr-phase="changes"' + (ccrCanRequest() ? "" : " disabled") +
-      ">Request changes</button></div>" +
+    '<div class="ccr-foot-side"><button class="ccr-changes-btn" data-ccr-modal="changes"' + (ccrCanRequest() ? "" : " disabled") + ">" +
+      CCR_EDIT_ICON + "Request changes" + (pending ? '<span class="ccr-dot" aria-label="a request is waiting to send"></span>' : "") + "</button></div>" +
     '<div class="ccr-foot-main">' +
       // One line by default, never cut: further reasons open in place.
       (_ccr.blockersOpen ? lines : lines.slice(0, 1)).map((t, i) =>
@@ -1537,9 +1604,59 @@ function ccrFooter() {
         (i === 0 && lines.length > 1
           ? ' <button class="ccr-blocker-more" data-ccr-blockers>' + (_ccr.blockersOpen ? "Show less" : "+" + (lines.length - 1) + " more") + "</button>"
           : "") + "</span>").join("") +
-      '<button class="far-btn-primary ccr-approve" data-ccr-phase="confirm"' + (blocked || blockers.length ? " disabled" : "") +
+      '<button class="far-btn-primary ccr-approve" data-ccr-phase="confirm"' + (blocked || blockers.length || pending ? " disabled" : "") +
         ">Approve and release</button>" +
     "</div></div>";
+}
+
+function ccrModal(title, bodyHtml, footHtml, wide) {
+  return '<div class="ccr-scrim" data-ccr-scrim>' +
+    '<div class="ccr-modal' + (wide ? " ccr-modal-wide" : "") + '" role="dialog" aria-modal="true" aria-labelledby="ccr-modal-title">' +
+      '<div class="ccr-modal-head"><span class="ccr-modal-title" id="ccr-modal-title">' + escHtml(title) + "</span>" +
+        '<button class="far-panel-close" data-ccr-modal-close aria-label="Close">✕</button></div>' +
+      '<div class="ccr-modal-body">' + bodyHtml + "</div>" +
+      '<div class="ccr-modal-foot">' + footHtml + "</div>" +
+    "</div></div>";
+}
+
+function ccrCloseChanges() {
+  _ccr.modal = null;
+  _ccr.confirmDiscard = false;
+  _ccr.changeText = "";
+  ccrRender();
+}
+
+// Back to the text, with the caret at its end where the reader was most likely typing.
+function ccrKeepEditing() {
+  _ccr.confirmDiscard = false;
+  _ccr.autofocus = "ccr-change-text";
+  _ccr.caretAt = (_ccr.changeText || "").length;
+  ccrRender();
+}
+
+function ccrTryCloseChanges() {
+  if (_ccr.sending) return;
+  if (ccrChangesDirty()) { _ccr.confirmDiscard = true; ccrRender(); return; }
+  ccrCloseChanges();
+}
+
+function ccrChangesModal() {
+  const has = !!ccrChangeContent(_ccr.changeText);
+  const body =
+    '<p class="ccr-modal-lede">This goes to your Carta fund admin team as written. ' +
+    "They redo the work and send it back for review. Nothing reaches investors.</p>" +
+    '<textarea id="ccr-change-text" class="far-textarea" rows="7" aria-label="Changes to request">' +
+      escHtml(_ccr.changeText || "") + "</textarea>" +
+    '<p class="ccr-note">This task moves to In progress until it comes back to you.</p>';
+  const foot = _ccr.confirmDiscard
+    ? '<span class="ccr-grow ccr-discard-note">Discard your unsaved changes?</span>' +
+      '<button class="far-btn-secondary" data-ccr-keep>Keep editing</button>' +
+      '<button class="far-btn-primary ccr-btn-danger" data-ccr-discard>Discard changes</button>'
+    : '<span class="ccr-grow"></span>' +
+      '<button class="far-btn-secondary" data-ccr-save-continue>Save and continue</button>' +
+      '<button class="far-btn-primary" id="ccr-send-changes" data-ccr-send' + (has && !_ccr.sending ? "" : " disabled") + ">" +
+        (_ccr.sending ? "Sending…" : "Send to Carta") + "</button>";
+  return ccrModal("Request changes", body, foot, false);
 }
 
 // ── Render ────────────────────────────────────────────────────────────────
@@ -1555,13 +1672,6 @@ function ccrRender() {
   _ccr.renderedWide = wide;
 
   const body = _ccr.phase === "confirm" ? ccrConfirmBody()
-    : _ccr.phase === "changes"
-      ? '<p class="ccr-note" style="margin-bottom:10px">Write what you want different, in your own words. ' +
-        "This goes to your Carta fund admin team as written. They redo the work and send it back for review. " +
-        "Nothing reaches investors.</p>" +
-        '<textarea id="ccr-change-text" class="far-textarea" rows="5" placeholder="Push the due date to the 25th.">' +
-        escHtml(_ccr.changeText) + "</textarea>" +
-        '<p class="ccr-note" style="margin-top:8px">This task moves to In progress until it comes back to you.</p>'
     : _ccr.phase === "releasing" ? ccrReleasingBody()
     : _ccr.phase === "released" ? ccrDoneBody(true)
     : _ccr.phase === "sent" ? ccrDoneBody(false)
@@ -1573,7 +1683,7 @@ function ccrRender() {
   const focusId = focused && overlay.contains(focused) && focused.id ? focused.id : null;
   const caret = focusId && typeof focused.selectionStart === "number" ? [focused.selectionStart, focused.selectionEnd] : null;
   const keep = {};
-  [".ccr-side", ".ccr-main-body", ".ccr-dlv-box", ".ccr-table-wrap"].forEach((sel) => {
+  [".ccr-side", ".ccr-main-body", ".ccr-dlv-box", ".ccr-modal-body", ".ccr-table-wrap"].forEach((sel) => {
     const el = overlay.querySelector(sel);
     if (el) keep[sel] = [el.scrollTop, el.scrollLeft];
   });
@@ -1594,6 +1704,7 @@ function ccrRender() {
       "</div>" +
       '<div class="far-panel-body ccr-body' + (reviewing ? " ccr-body-split" : "") + '">' + body + "</div>" +
       ccrFooter() +
+      (reviewing && _ccr.modal === "changes" ? ccrChangesModal() : "") +
     "</div>";
 
   Object.keys(keep).forEach((sel) => {
@@ -1603,10 +1714,15 @@ function ccrRender() {
   });
   ccrBind(overlay);
 
-  const target = focusId ? document.getElementById(focusId) : null;
+  const want = _ccr.autofocus || focusId;
+  _ccr.autofocus = null;
+  const target = want ? document.getElementById(want) : null;
   if (target) {
     target.focus();
-    if (caret && typeof target.setSelectionRange === "function" && target.type !== "date") {
+    if (_ccr.caretAt !== null && want === "ccr-change-text") {
+      target.setSelectionRange(_ccr.caretAt, _ccr.caretAt);
+      _ccr.caretAt = null;
+    } else if (caret && want === focusId && typeof target.setSelectionRange === "function" && target.type !== "date") {
       try { target.setSelectionRange(caret[0], caret[1]); } catch (e) { /* inputs without a selection */ }
     }
   }
@@ -1653,7 +1769,37 @@ function ccrBind(root) {
     ccrRender();
     ccrLoadActiveDoc();
   });
-  on("#ccr-change-text", "input", (el) => { _ccr.changeText = el.value; });
+  on("[data-ccr-modal]", "click", (el) => {
+    const key = el.getAttribute("data-ccr-prefix");
+    trackWorkhub("click", "CartaWorkhub.CapitalCallReview.OpenChanges" + (key ? "." + key : ""));
+    const saved = ccrDraft(_ccr.target.activityId);
+    const label = CCR_CHANGE_LABELS[key === "tab" ? _ccr.activeTab : key];
+    const start = label ? ccrWithLabel(saved, label) : { text: saved, caret: saved.length };
+    _ccr.changeText = start.text;
+    _ccr.caretAt = start.caret;
+    _ccr.autofocus = "ccr-change-text";
+    _ccr.confirmDiscard = false;
+    _ccr.modal = "changes";
+    ccrRender();
+  });
+  on("[data-ccr-modal-close]", "click", () => ccrTryCloseChanges());
+  on("[data-ccr-scrim]", "click", (el, e) => { if (e.target === el) ccrTryCloseChanges(); });
+  on("#ccr-change-text", "input", (el) => {
+    _ccr.changeText = el.value;
+    const send = root.querySelector("#ccr-send-changes");
+    if (send && !_ccr.sending) send.disabled = !ccrChangeContent(el.value);
+  });
+  on("[data-ccr-save-continue]", "click", () => {
+    trackWorkhub("click", "CartaWorkhub.CapitalCallReview.SaveChanges");
+    // A draft holding only labels is no draft: saving it clears the saved request.
+    ccrSetDraft(_ccr.target.activityId, ccrChangeContent(_ccr.changeText) ? _ccr.changeText.replace(/\s+$/, "") : "");
+    ccrCloseChanges();
+  });
+  on("[data-ccr-keep]", "click", () => ccrKeepEditing());
+  on("[data-ccr-discard]", "click", () => {
+    trackWorkhub("click", "CartaWorkhub.CapitalCallReview.DiscardChanges");
+    ccrCloseChanges();
+  });
   on("[data-ccr-send]", "click", () => ccrSubmitChanges());
   on("[data-ccr-approve]", "click", () => ccrApprove());
   on("[data-ccr-consent]", "change", (el) => {
@@ -1712,6 +1858,16 @@ function ccrBind(root) {
     requestAnimationFrame(fit);
   }
 }
+
+// Escape backs out one step: the discard question, else the modal itself.
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || !_ccr || _ccr.phase !== "review") return;
+  const overlay = document.getElementById("ccr-overlay");
+  if (!overlay || !overlay.classList.contains("far-overlay-visible")) return;
+  if (!_ccr.modal) return;
+  if (_ccr.confirmDiscard) ccrKeepEditing();
+  else ccrTryCloseChanges();
+});
 
 // Both documents belong to the investor on screen, so switching drops them —
 // pdfLoading included, or the guard below refuses to start the new render while
@@ -1865,6 +2021,16 @@ function openCapitalCallReview(target, title) {
   trackWorkhub("click", "CartaWorkhub.CapitalCallReview.Open");
   ccrReset(target, title);
   const overlay = farEnsureOverlay("ccr-overlay", "far-overlay");
+  // The shared overlay closes on any backdrop click. With the change-request modal open
+  // that would drop unsaved text, so the click goes through the modal's own close first.
+  if (!overlay.dataset.ccrGuard) {
+    overlay.dataset.ccrGuard = "1";
+    overlay.addEventListener("click", (e) => {
+      if (e.target !== overlay || !_ccr || !_ccr.modal) return;
+      e.stopImmediatePropagation();
+      ccrTryCloseChanges();
+    }, true);
+  }
   overlay.classList.add("far-overlay-visible");
   ccrRender();
   ccrLoad();
