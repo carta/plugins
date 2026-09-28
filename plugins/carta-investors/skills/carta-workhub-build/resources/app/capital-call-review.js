@@ -178,13 +178,18 @@ function ccrReset(target, title) {
     rowsDone: false,
     truncated: false,
     phase: "review",
-    activeTab: 'overview',
-    noticeOpen: false,
+    activeTab: "alloc",
+    renderedTab: null,
+    changeText: "",
+    releasing: false,
     noteOpen: false,
+    blockersOpen: false,
     payShowSensitive: { acct: false, routing: false },
-    showAllRows: false,
     showDetail: false,
+    // Which investors the Allocations table lists: "part" or "np".
+    allocView: "part",
     delivery: { filter: "all", q: "", sort: null, dir: 1 },
+    deliveryOpen: false,
     lpIndex: 0,
     // The notice PDF opens first; the email stands in where no PDF can be
     // rendered (no bundled viewer, or demo mode).
@@ -194,7 +199,6 @@ function ccrReset(target, title) {
     pdf: null,
     pdfError: null,
     pdfLoading: false,
-    changeText: "",
     sentMessage: "",
     error: null,
     // Set once a release fails ambiguously; never cleared for this panel.
@@ -236,29 +240,21 @@ function ccrPct(v) {
   return n === null ? "—" : (n * 100).toFixed(2) + "%";
 }
 
-// A bare @dc_exposed hint emits MM/DD/YYYY, not ISO. Accept both.
-function ccrDate(s) {
-  if (!s) return "—";
+// A bare @dc_exposed hint emits MM/DD/YYYY, not ISO. Accept both. Local midnight.
+function ccrParseDate(s) {
+  if (!s) return null;
   const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
   const us = /^(\d{2})\/(\d{2})\/(\d{4})/.exec(s);
   let d = null;
   if (iso) d = new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
   else if (us) d = new Date(Number(us[3]), Number(us[1]) - 1, Number(us[2]));
-  if (!d || isNaN(d)) return s;
-  return d.toLocaleDateString("en-US", { day: "numeric", month: "long", year: "numeric" });
+  return d && !isNaN(d) ? d : null;
 }
 
-function ccrDaysUntil(s) {
-  if (!s) return "";
-  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
-  const us = /^(\d{2})\/(\d{2})\/(\d{4})/.exec(s);
-  let d = null;
-  if (iso) d = new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
-  else if (us) d = new Date(Number(us[3]), Number(us[1]) - 1, Number(us[2]));
-  if (!d || isNaN(d)) return "";
-  const days = Math.round((d - new Date()) / 86400000);
-  if (days === 0) return "today";
-  return days > 0 ? "in " + days + " days" : Math.abs(days) + " days ago";
+function ccrDate(s) {
+  if (!s) return "—";
+  const d = ccrParseDate(s);
+  return d ? d.toLocaleDateString("en-US", { day: "numeric", month: "long", year: "numeric" }) : s;
 }
 
 // ── Field readers ─────────────────────────────────────────────────────────
@@ -451,7 +447,7 @@ async function ccrLoad() {
     if (!_ccrFundName) _ccrFundName = CCR_DEMO_SUMMARY.fund_name;
     ccrRender();
     renderFarSection();
-    if (snap.activeTab === 'notice') ccrLoadActiveDoc();
+    ccrLoadActiveDoc();
     return;
   }
 
@@ -480,7 +476,7 @@ async function ccrLoad() {
     snap.rows = (summary.rows && summary.rows.results) || [];
     snap.loading = false;
     ccrRender();
-    if (snap.activeTab === 'notice') ccrLoadActiveDoc();
+    ccrLoadActiveDoc();
 
     if (summary.fund_name && summary.fund_name !== _ccrFundName) {
       _ccrFundName = summary.fund_name;
@@ -622,10 +618,10 @@ async function ccrFetchPdf(target, interestId) {
 async function ccrLoadEmail() {
   // Same ownership rule as ccrLoad: a reopen must not receive this preview.
   const snap = _ccr;
-  const row = snap.rows[snap.lpIndex];
+  const row = ccrLpRows(snap)[snap.lpIndex];
   if (!row || !row.interest || row.interest.id == null) {
     snap.emailError = "This row carries no partner id, so its notice cannot be previewed.";
-    ccrRenderNotice();
+    ccrRender();
     return;
   }
 
@@ -633,7 +629,7 @@ async function ccrLoadEmail() {
 
   if (CCR_IS_DEMO) {
     snap.email = ccrDemoEmail(row);
-    ccrRenderNotice();
+    ccrRender();
     return;
   }
 
@@ -641,10 +637,9 @@ async function ccrLoadEmail() {
   snap.email = ccrDocHit("email", snap.target.activityId, partnerId);
   if (snap.email) {
     ccrRender();
-    ccrRenderNotice();
     return;
   }
-  ccrRenderNotice();
+  ccrRender();
 
   // The investor on screen can change while this renders; the cache keeps the answer
   // either way, so only its display is dropped.
@@ -659,7 +654,6 @@ async function ccrLoadEmail() {
     snap.emailError = err && err.message ? err.message : "preview failed";
   }
   ccrRender();
-  ccrRenderNotice();
 }
 
 // ── Writes ────────────────────────────────────────────────────────────────
@@ -710,11 +704,14 @@ function ccrErrText(res) {
 
 function ccrApprove() {
   const snap = _ccr;
-  const btn = document.getElementById("ccr-do-approve");
-  if (btn) { btn.disabled = true; btn.textContent = "Releasing…"; }
+  if (snap.releasing) return;
+  // Held in state rather than on the button, so a re-render cannot re-enable it mid-release.
+  snap.releasing = true;
+  ccrRender();
   trackWorkhub("click", "CartaWorkhub.CapitalCallReview.Release");
 
   if (CCR_IS_DEMO) {
+    snap.releasing = false;
     snap.phase = "released";
     ccrRender();
     return;
@@ -736,6 +733,7 @@ function ccrApprove() {
   // Still on the confirm step means no reply yet: show the release as under way.
   setTimeout(() => {
     if (_ccr !== snap || snap.phase !== "confirm") return;
+    snap.releasing = false;
     snap.phase = "releasing";
     ccrRender();
     farFetchRequests();
@@ -745,6 +743,7 @@ function ccrApprove() {
 // Runs whenever the reply lands — before the panel gave up waiting, or well after.
 function ccrReleaseAnswered(snap, res, err) {
   if (_ccr !== snap) return;
+  snap.releasing = false;
 
   if (err) {
     // No verdict reached us, so the release may still have run. Send the reviewer to
@@ -775,146 +774,10 @@ function ccrReleaseAnswered(snap, res, err) {
   farFetchRequests();
 }
 
-// ── Render ────────────────────────────────────────────────────────────────
-
-function ccrMainTabBar() {
-  const tabs = [
-    { id: 'overview', label: 'Overview' },
-    { id: 'notice', label: 'Notice' },
-    { id: 'settings', label: 'Delivery' },
-    { id: 'alloc', label: 'Allocations' },
-    { id: 'pay', label: 'Payment information' },
-  ];
-  return '<div class="ccr-main-tabs">' +
-    tabs.map((t) =>
-      '<button class="ccr-main-tab' + (_ccr.activeTab === t.id ? ' ccr-main-tab-on' : '') +
-      '" data-ccr-main-tab="' + t.id + '">' + t.label + '</button>').join('') +
-  '</div>';
-}
-
-// How the cash leaves. is_amm_distribution is the gate the web app enforces,
-// so it decides the label even where the fund's strategy says otherwise.
-function ccrPaymentMethodRow(s) {
-  if (!s.pays_investors_in_cash) return "";
-  const amm = !!s.is_amm_distribution;
-  return '<div class="ccr-kv"><span class="ccr-k">Payment method</span><span class="ccr-v">' +
-    '<span class="ccr-strong">' + (amm ? "Automated Money Movement" : "Manual wires") + '</span><br>' +
-    '<span class="ccr-muted">' + (amm
-      ? "Carta wires each investor from the paying-from account on release."
-      : "Your fund sends each wire from the paying-from account after release.") +
-    '</span></span></div>';
-}
-
-// The web app's "Investor Distribution Summary" header: what can go out, to how
-// many, and who is holding the rest up. Folded server-side, so it is exact.
-function ccrReadinessCard(s) {
-  const r = s.distribution_readiness;
-  if (!r) return "";
-  const ccy = s.currency;
-  const count = (v) => (v === null || v === undefined ? "—" : String(v));
-  const holds = [];
-  if (r.missing_wire_count) holds.push(count(r.missing_wire_count) + " missing wire instructions");
-  if (r.incomplete_wire_count) holds.push(count(r.incomplete_wire_count) + " with incomplete instructions");
-  const path = s.is_amm_distribution
-    ? "You choose who is paid when you approve it in Carta. Investors with confirmed wire instructions start selected; " +
-      "instructions that are unconfirmed or over a year old can be added; missing or incomplete ones cannot be paid."
-    : "Release goes ahead with the investors on hold left unpaid; your fund pays them once their details are in.";
-
-  return '<div class="ccr-card">' +
-    '<div class="ccr-card-label">Ready for transfer</div>' +
-    '<div class="ccr-card-figure">' + escHtml(ccrMoney(r.ready_for_transfer_amount, ccy)) + '</div>' +
-    '<div class="ccr-card-sub">' + escHtml(count(r.receiving_count) + " of " + count(r.unpaid_count) +
-      " unpaid investors receiving payment") + '</div>' +
-    '<div class="ccr-card-list">' +
-      '<div class="ccr-kv"><span class="ccr-k">On hold</span><span class="ccr-v">' +
-        (r.on_hold_count
-          ? '<span class="ccr-strong">' + escHtml(count(r.on_hold_count) + " investors") + '</span><br>' +
-            '<span class="ccr-muted">' + escHtml(holds.join(", ")) +
-            ". Investors missing wire instructions will not receive a distribution until details are provided.</span>"
-          : '<span class="ccr-muted">None. Every unpaid investor has wire instructions release can use.</span>') +
-        '</span></div>' +
-      '<div class="ccr-kv"><span class="ccr-k">How it pays</span><span class="ccr-v">' +
-        '<span class="ccr-muted">' + escHtml(path) + '</span></span></div>' +
-      (r.over_a_year_old_count
-        ? '<div class="ccr-kv"><span class="ccr-k">Worth a second look</span><span class="ccr-v">' +
-          '<span class="ccr-strong">' + escHtml(count(r.over_a_year_old_count) + " receiving") + '</span><br>' +
-          '<span class="ccr-muted">Wire instructions added or confirmed more than a year ago. Usable, ' +
-          'but worth confirming before a large wire.</span></span></div>'
-        : '') +
-      (r.manual_wire_count
-        ? '<div class="ccr-kv"><span class="ccr-k">Manual wires</span><span class="ccr-v">' +
-          '<span class="ccr-strong">' + escHtml(count(r.manual_wire_count)) + '</span><br>' +
-          '<span class="ccr-muted">International wires to some bank countries will be processed manually ' +
-          'via your bank portal.</span></span></div>'
-        : '') +
-    '</div>' +
-  '</div>';
-}
-
-function ccrOverviewTabBody(s) {
-  const ccy = s.currency;
-  const dist = ccrIsDistribution(s);
-  const headline = dist
-    ? (ccrNum(s.net_distribution_amount) !== null ? s.net_distribution_amount : s.total_due_to_investor)
-    : (ccrNum(s.gross_call_amount) !== null ? s.gross_call_amount : s.total_due_to_fund);
-  const postPct = dist ? s.total_post_distribution_percent
-    : ccrPick(s, "total_post_call_percent_inside_commitment", "total_post_call_percent");
-  const postAmt = dist ? s.total_post_distribution_amount
-    : ccrPick(s, "total_post_call_amount_inside_commitment", "total_post_call_amount");
-  const ratio = ccrNum(postPct);
-  const cols = ccrBucketColumns(s);
-  const buckets = cols.main;
-  const adj = cols.adjustments;
-
-  return '<div class="ccr-card">' +
-    '<div class="ccr-card-label">' + (dist ? "Total being distributed" : "Total being called") + '</div>' +
-    '<div class="ccr-card-figure">' + escHtml(ccrMoney(headline, ccy)) + '</div>' +
-    '<div class="ccr-card-list">' +
-      '<div class="ccr-kv"><span class="ccr-k">' + (dist ? "Paid to investors" : "Due from investors") + '</span>' +
-        '<span class="ccr-v ccr-strong">' + escHtml(ccrDate(s.due_date)) + '</span>' +
-        '<span class="ccr-aside">' + escHtml(ccrDaysUntil(s.due_date)) + '</span></div>' +
-      ccrNoticeDateRow(s) +
-      ccrPaymentMethodRow(s) +
-      '<div class="ccr-kv"><span class="ccr-k">' + (dist ? "Distributed as" : "Called for") + '</span><span class="ccr-v">' +
-        (buckets.length
-          ? buckets.map((b) => '<span class="ccr-split"><span>' + escHtml(b.display_name || b.slug || "Bucket") +
-              '</span><span>' + escHtml(ccrMoney(b.total, ccy)) + '</span></span>').join('')
-          : 'No buckets on this activity') +
-        '</span></div>' +
-      (adj.length
-        ? '<div class="ccr-kv"><span class="ccr-k">Adjustments</span><span class="ccr-v">' +
-          adj.map((b) => '<span class="ccr-split"><span>' + escHtml(b.display_name || b.slug || "Adjustment") +
-            '</span><span class="ccr-adj">' + escHtml(ccrSignedMoney(b.total, ccy, ccrAdjSign(b))) + '</span></span>').join('') +
-          '</span></div>' +
-          '<div class="ccr-kv"><span class="ccr-k">' + (dist ? "Net paid to investors" : "Net due from investors") + '</span>' +
-          '<span class="ccr-v ccr-strong">' + escHtml(ccrMoney(dist ? s.total_due_to_investor : s.total_due_to_fund, ccy)) + '</span></div>'
-        : '') +
-      '<div class="ccr-kv"><span class="ccr-k">' + (dist ? "Distributed after this" : "Called after this call") + '</span><span class="ccr-v">' +
-        (ratio === null
-          ? '<span class="ccr-muted">Not available</span>'
-          : '<span class="ccr-split"><span class="ccr-strong">' + escHtml(ccrPct(postPct)) + '</span>' +
-            '<span class="ccr-muted">' + escHtml(ccrMoney(postAmt, ccy)) +
-            '<span style="padding:0 5px">of</span>' +
-            escHtml(ccrMoney(s.total_commitment, ccy)) + '</span></span>' +
-            '<span class="ccr-meter"><span style="width:' +
-            Math.max(0, Math.min(100, ratio * 100)).toFixed(2) + '%"></span></span>') +
-        (s.metrics_effective_date
-          ? '<span class="ccr-note">As of ' + escHtml(ccrDate(s.metrics_effective_date)) + '.</span>'
-          : '') +
-        '</span></div>' +
-    '</div>' +
-  '</div>' +
-  ccrReadinessCard(s);
-}
-
-function ccrNoticeDateRow(s) {
-  return '<div class="ccr-kv"><span class="ccr-k">Notice to investors</span>' +
-    '<span class="ccr-v ccr-strong">' + escHtml(ccrDate(s.date_of_notice)) + '</span>' +
-    '<span class="ccr-aside">' + escHtml(ccrDaysUntil(s.date_of_notice)) + '</span></div>';
-}
+// ── Shared pieces ─────────────────────────────────────────────────────────
 
 // ── Email settings ────────────────────────────────────────────────────────
-// The "{Event} Details" settings that decide how the notice reaches investors.
+// The "{Event} Details" settings and contacts that decide how the notice reaches investors.
 // They apply to every investor on the activity, so they sit on the Delivery
 // tab rather than in the per-investor preview. A setting the backend did not
 // serve (an older deploy) is left out.
@@ -981,7 +844,6 @@ const CCR_DELIVERY_GROUPS = [
 const ccrEmailOn = (r) => r.email_notice_enabled !== false;
 const ccrPdfOn = (r) => r.pdf_notice_enabled !== false;
 const ccrWireOn = (r) => r.wire_instructions_enabled === true;
-
 // Wire instructions print only on the PDF, and only for an investor who owes the fund money,
 // so a missing toggle matters only there.
 const ccrWireMissing = (r) => ccrPdfOn(r) && (ccrNum(r.due_to_fund) || 0) > 0 && !ccrWireOn(r);
@@ -1001,17 +863,6 @@ function ccrDeliveryState() {
   return _ccr.delivery;
 }
 
-function ccrDeliverySummary(s) {
-  const d = ccrDeliveryState();
-  const groups = s.notice_delivery || [];
-  if (!groups.length) return "No delivery detail";
-  return groups.map((g) => {
-    const n = g.count === null || g.count === undefined ? "—" : g.count;
-    const grp = ccrDeliveryGroup(g.email_notice_enabled, g.pdf_notice_enabled);
-    return '<button class="ccr-dlv-seg' + (d.filter === grp.id ? " ccr-dlv-seg-on" : "") +
-      '" data-ccr-dlv-filter="' + grp.id + '">' + escHtml(n + " " + grp.label) + "</button>";
-  }).join('<span class="ccr-dlv-dot">·</span>');
-}
 
 function ccrDeliveryRows() {
   const d = ccrDeliveryState();
@@ -1096,107 +947,38 @@ function ccrDeliveryTable(s) {
       : "");
 }
 
-// The Delivery tab: each investor's toggles, then the settings that apply to
-// every notice email. Always shown, since every activity has investors.
-function ccrSettingsTabBody(s) {
-  const rows = ccrSettingsRows(s);
-  return '<div class="ccr-dlv-head"><span class="ccr-dlv-title">Delivery</span>' +
-      '<span class="ccr-dlv-summary">' + ccrDeliverySummary(s) + "</span></div>" +
-    ccrDeliveryTable(s) +
-    '<div class="ccr-dlv-head ccr-dlv-head-next"><span class="ccr-dlv-title">Email settings</span>' +
-      '<span class="ccr-dlv-summary">Apply to every investor</span></div>' +
-    (rows.length
-      ? '<div class="ccr-card"><div class="ccr-card-list">' + rows.join("") + "</div></div>"
-      : '<div class="ccr-empty"><p>Carta did not serve the email settings for this call.</p></div>');
+// The net is the whole story when one bucket makes it up. Anything more —
+// a second bucket or an adjustment — earns the breakdown toggle.
+function ccrAllocComposed(s) {
+  const cols = ccrBucketColumns(s);
+  return cols.main.length > 1 || cols.adjustments.length > 0;
 }
 
-function ccrNoticeTabBody(s) {
-  const rows = _ccr.rows.filter((r) => r.is_participating !== false);
-  if (!rows.length) {
-    return _ccr.loading
-      ? '<div class="loading-row" style="padding:20px 0;">Loading investors…</div>'
-      : '<div class="ccr-empty"><p>No participating investors on this call.</p></div>';
-  }
-
-  const options = rows.map((r, i) =>
-    '<option value="' + i + '"' + (i === _ccr.lpIndex ? ' selected' : '') + '>' +
-    escHtml(ccrRowLabel(r)) + '</option>').join('');
-
-  let emailPane;
-  if (_ccr.emailError) {
-    emailPane = '<div class="ccr-empty"><p>This email could not be previewed.</p>' +
-      '<p class="ccr-note">' + escHtml(_ccr.emailError) + '</p></div>';
-  } else if (!_ccr.email) {
-    emailPane = '<div class="loading-row" style="padding:16px 0;">Rendering the email…</div>';
-  } else {
-    const e = _ccr.email;
-    const label = (d) => d.name ? d.name + ' <' + d.email + '>' : d.email;
-    const addrs = (kind) => (e.recipients || []).filter((d) => d.addr_type === kind).map(label).join(', ');
-    emailPane = '<div class="ccr-mail-head">' +
-      '<div class="ccr-mail-subject">' + escHtml(e.subject || '') + '</div>' +
-      '<div class="ccr-mail-addr">To: ' + escHtml(addrs('TO')) + '</div>' +
-      '<div class="ccr-mail-addr">CC: ' + escHtml(addrs('CC')) + '</div>' +
-      '</div>' +
-      (e.body_format === 'html'
-        ? '<iframe class="ccr-mail-frame" sandbox="" title="Email preview" srcdoc="' +
-          escHtml(e.body || '') + '"></iframe>'
-        : '<div class="ccr-mail-body">' +
-          escHtml(e.body || '').replace(/\n{2,}/g, '</p><p>').replace(/\n/g, '<br>') + '</div>') +
-      ((e.body || '').indexOf('[/LINK_CARTA]') !== -1
-        ? '<div class="ccr-caveat"><span class="ccr-caveat-arrow">&#8593;</span>' +
-          "<span>Preview only: the address ends in the placeholder [/LINK_CARTA] instead of a " +
-          "link. Each investor's sent email carries a working link to their own capital call. " +
-          "Everything else here is final.</span></div>"
-        : '');
-  }
-
-  const docTabs = '<span class="ccr-tabs">' +
-    (window.pdfjsLib
-      ? '<button class="ccr-tab' + (_ccr.docTab === 'pdf' ? ' ccr-tab-on' : '') + '" data-ccr-inline-tab="pdf">PDF</button>'
-      : '') +
-    '<button class="ccr-tab' + (_ccr.docTab !== 'pdf' ? ' ccr-tab-on' : '') + '" data-ccr-inline-tab="email">Email</button>' +
-    '</span>';
-
-  const contentPane = _ccr.docTab === 'pdf' ? ccrNoticeDoc() : emailPane;
-
-  return '<div class="ccr-notice-bar">' +
-    '<select id="ccr-inline-lp">' + options + '</select>' +
-    docTabs +
-    '</div>' +
-    contentPane;
+// The breakdown takes the panel's full width: the sidebar steps aside while it is open.
+function ccrWideLayout() {
+  const s = _ccr.summary;
+  return _ccr.phase === "review" && _ccr.activeTab === "alloc" && _ccr.showDetail && !!s && ccrAllocComposed(s);
 }
 
-function ccrSection(id, title, summary, open, bodyHtml) {
-  return '<button class="ccr-row-btn" data-ccr-toggle="' + id + '">' +
-    '<span class="ccr-row-title">' + escHtml(title) + "</span>" +
-    '<span class="ccr-row-sum">' + escHtml(summary) + "</span>" +
-    '<span class="ccr-chev' + (open ? " ccr-chev-open" : "") + '">' +
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg>' +
-    "</span></button>" +
-    (open ? '<div class="ccr-row-body">' + bodyHtml + "</div>" : "");
-}
-
-function ccrAllocTable(s) {
+function ccrAllocPane(s) {
+  if (!s) return '<div class="loading-row" style="padding:20px 14px;">Reading the capital call\u2026</div>';
   const isDist = s.activity_type === "distribution";
   const netLabel = isDist ? "Net distribution" : "Net contribution";
   const afterLabel = isDist ? "Distributed after" : "Called after";
   const rows = _ccr.rows.filter((r) => r.is_participating !== false);
   const excluded = _ccr.rows.filter((r) => r.is_participating === false);
   rows.sort((a, b) => (ccrNum(b.commitment) || 0) - (ccrNum(a.commitment) || 0));
-  const shown = _ccr.showAllRows ? rows : rows.slice(0, 5);
   const ccy = s.currency;
 
   const cols = ccrBucketColumns(s);
-  // The net is the whole story when one bucket makes it up. Anything more —
-  // a second bucket or an adjustment — earns the breakdown toggle.
-  const composed = cols.main.length > 1 || cols.adjustments.length > 0;
+  const composed = ccrAllocComposed(s);
   const breakdown = composed && _ccr.showDetail;
   const buckets = breakdown ? cols.main.concat(cols.adjustments) : [];
   const pinL = breakdown ? " ccr-pin-l" : "";
   const pinN = breakdown ? " ccr-pin-net" : "";
   const pinA = breakdown ? " ccr-pin-after" : "";
 
-  const head = (breakdown ? ["Investor"] : ["Investor", "Commitment"])
+  const cols_head = (breakdown ? ["Investor", "Partner class"] : ["Investor", "Commitment"])
     .concat(buckets.map((b) => ccrBucketHeader(b)))
     .concat([netLabel, afterLabel]);
 
@@ -1211,9 +993,11 @@ function ccrAllocTable(s) {
     return bucketCell(hit ? hit.amount : null, b);
   };
 
-  const body = shown.map((r) =>
+  const partRows = rows.map((r) =>
     '<tr><td class="' + pinL.trim() + '">' + escHtml(ccrRowLabel(r)) + "</td>" +
-    (breakdown ? "" : '<td class="ccr-muted">' + escHtml(ccrMoney(r.commitment, ccy)) + "</td>") +
+    (breakdown
+      ? '<td class="ccr-muted ccr-cls ccr-pin-cls">' + escHtml((r.interest && r.interest.class_name) || "") + "</td>"
+      : '<td class="ccr-muted">' + escHtml(ccrMoney(r.commitment, ccy)) + "</td>") +
     buckets.map((b) => rowCell(r, b)).join("") +
     '<td class="ccr-strong' + pinN + '">' + escHtml(ccrMoney(isDist ? r.due_to_investor : r.due_to_fund, ccy)) + "</td>" +
     '<td class="ccr-muted' + pinA + '">' + escHtml(ccrPct(isDist
@@ -1225,8 +1009,7 @@ function ccrAllocTable(s) {
     ? s.participating_interests_count
     : (_ccr.rowsDone ? rows.length : null);
 
-  const totals = ['<td class="' + pinL.trim() + '">' + (partCount === null ? "Totals" : partCount + " participating") + "</td>"]
-    .concat(breakdown ? [] : ["<td></td>"])
+  const totals = ['<td class="' + pinL.trim() + '">Totals</td>', '<td class="' + (breakdown ? "ccr-pin-cls" : "") + '"></td>']
     .concat(buckets.map((b) => bucketCell(b.total, b)))
     .concat([
       '<td class="' + pinN.trim() + '">' + escHtml(ccrMoney(isDist ? s.total_due_to_investor : s.total_due_to_fund, ccy)) + "</td>",
@@ -1235,47 +1018,52 @@ function ccrAllocTable(s) {
         : ccrPick(s, "total_post_call_percent_inside_commitment", "total_post_call_percent"))) + "</td>",
     ]);
 
-  const bar = composed
-    ? '<div class="ccr-alloc-bar"><button class="ccr-detail-toggle" data-ccr-detail>' +
-      (breakdown ? "Hide breakdown" : "Show breakdown") + "</button></div>"
-    : "";
 
   // A walk that stopped short must not read as complete: the count the
-  // summary folds is the truth, and the button says how many of them are here.
+  // summary folds is the truth, and the note under the table says how many are here.
   const short = _ccr.rowsDone && partCount !== null && rows.length < partCount;
-  const more = rows.length > 5 && _ccr.rowsDone
-    ? '<button class="ccr-more" data-ccr-more>' +
-      (_ccr.showAllRows
-        ? "Show fewer"
-        : "Show all " + rows.length + (short ? " of " + partCount + " loaded" : " participating")) + "</button>"
-    : (_ccr.rowsDone ? "" : '<div class="ccr-more-loading">Loading the rest\u2026</div>');
   const shortNote = short
     ? '<p class="ccr-note ccr-pad">Only ' + rows.length + " of " + partCount +
       " participating investors loaded. Totals are the activity's; open the call in Carta for the rest.</p>"
     : "";
 
-  // The summary's fold sees fund interests with no row at all; loaded rows
-  // can only ever show the zero-amount kind.
+  // The fold names fund interests with no row at all; loaded rows can only ever
+  // add the zero-amount kind.
   const fold = s.non_participating;
-  const npList = fold && (fold.interests || []).length
-    ? (fold.interests || []).map((n) => {
+  const npItems = fold && (fold.interests || []).length
+    ? fold.interests.map((n) => {
         const i = n.interest || {};
-        return '<div class="ccr-np"><span>' +
-          escHtml(i.partner_interest_group_name || i.name || "Unnamed") + "</span><span>" +
-          escHtml(n.is_on_activity === false ? "not on this activity" : "nothing to pay or receive") +
-          "</span></div>";
-      }).join("")
-    : excluded.map((r) =>
-        '<div class="ccr-np"><span>' + escHtml(ccrRowLabel(r)) +
-        "</span><span>nothing to pay or receive</span></div>").join("");
+        return { name: i.partner_interest_group_name || i.name || "Unnamed", cls: i.class_name || "",
+          commitment: n.commitment, called: n.percent_called_inside_commitment };
+      })
+    : excluded.map((r) => ({ name: ccrRowLabel(r), cls: (r.interest && r.interest.class_name) || "",
+        commitment: r.commitment, called: ccrPick(r, "post_call_percent_inside_commitment", "post_call_percent") }));
   const npCount = fold && fold.count !== null && fold.count !== undefined ? fold.count : excluded.length;
-  // The fold names only its largest commitments; the rest are on the
-  // activity but never paged, unlike participating rows.
-  const npShown = fold && (fold.interests || []).length ? fold.interests.length : excluded.length;
-  const npNote = fold && fold.truncated
-    ? '<p class="ccr-note ccr-pad">Showing ' + npShown + " of " + npCount + ". " +
-      ccrOpenInCarta("See the rest in Carta", "ccr-link-btn") + "</p>"
-    : "";
+  // The two counts are the table's navigation: which investors it lists.
+  const np = _ccr.allocView === "np" && npCount > 0;
+  const view = (id, label, n) => '<button class="ccr-dlv-chip' + ((id === "np") === np ? " ccr-dlv-chip-on" : "") +
+    '" data-ccr-alloc-view="' + id + '" aria-pressed="' + ((id === "np") === np) + '"' + (n === 0 ? " disabled" : "") + ">" +
+    escHtml(label) + (n === null ? "" : "<b>" + n + "</b>") + "</button>";
+  const head = '<div class="ccr-alloc-head"><span class="ccr-alloc-views" role="group" aria-label="Investors">' +
+      view("part", "Participating", partCount) + view("np", "Non-participating", npCount) +
+      (_ccr.rowsDone ? "" : '<span class="ccr-alloc-loading">Loading the rest\u2026</span>') + "</span>" +
+    (composed ? '<button class="ccr-detail-toggle" data-ccr-detail>' + (breakdown ? "Hide breakdown" : "Show breakdown") + "</button>" : "") +
+    "</div>";
+
+  const width = cols_head.length;
+  const npRows = npItems.map((n) =>
+    '<tr><td class="' + pinL.trim() + '">' + escHtml(n.name) + "</td>" +
+    (breakdown
+      ? '<td class="ccr-muted ccr-cls ccr-pin-cls">' + escHtml(n.cls) + "</td>"
+      : '<td class="ccr-muted">' + escHtml(ccrMoney(n.commitment, ccy)) + "</td>") +
+    buckets.map(() => '<td class="ccr-faint">\u2014</td>').join("") +
+    '<td class="ccr-faint' + pinN + '">\u2014</td>' +
+    '<td class="ccr-muted' + pinA + '">' + (isDist || ccrNum(n.called) === null ? '<span class="ccr-faint">\u2014</span>' : escHtml(ccrPct(n.called))) + "</td></tr>").join("") +
+    (fold && fold.truncated
+      ? '<tr><td colspan="' + width + '" class="ccr-note">Showing ' + npItems.length + " of " + npCount + ". " +
+        ccrOpenInCarta("See the rest in Carta", "ccr-link-btn") + "</td></tr>"
+      : "");
+  const body = np ? npRows : partRows;
 
   const complete = _ccr.rowsDone && !short;
   const unbacked = complete
@@ -1290,18 +1078,19 @@ function ccrAllocTable(s) {
         " Check the call in Carta before releasing.") + "</p>"
     : "";
 
-  return bar +
-    '<div class="ccr-table-wrap"><table class="ccr-table"><thead><tr>' +
-    head.map((h, i) => '<th class="' +
-      (i === 0 ? pinL.trim() : i === head.length - 2 ? pinN.trim() : i === head.length - 1 ? pinA.trim() : "") +
-      '">' + escHtml(h) + "</th>").join("") +
+  return '<div class="ccr-alloc">' + head +
+    '<div class="ccr-table-wrap"><table class="ccr-table' + (breakdown ? " ccr-table-breakdown" : "") + '"><thead><tr>' +
+    cols_head.map((h, i) => {
+      return '<th class="' +
+        (i === 0 ? pinL.trim() : i === 1 && breakdown ? "ccr-pin-cls" : i === cols_head.length - 2 ? pinN.trim()
+          : i === cols_head.length - 1 ? pinA.trim() : "") +
+        '">' + escHtml(h) + "</th>";
+    }).join("") +
     "</tr></thead><tbody>" + body +
-    '<tr class="ccr-total">' + totals.join("") + "</tr></tbody></table></div>" +
-    more + shortNote + unbackedNote +
-    (_ccr.truncated ? '<p class="ccr-note">Stopped after ' + CCR_MAX_PAGES + " pages; the rest are on the activity.</p>" : "") +
-    (npCount
-      ? '<div class="ccr-np-block"><div class="ccr-np-label">Not participating \u00b7 ' + npCount + "</div>" + npList + npNote + "</div>"
-      : "");
+    (np ? "" : '<tr class="ccr-total">' + totals.join("") + "</tr>") + "</tbody></table></div>" +
+    (np ? "" : shortNote + unbackedNote) +
+    (_ccr.truncated ? '<p class="ccr-note ccr-pad">Stopped after ' + CCR_MAX_PAGES + " pages; the rest are on the activity.</p>" : "") +
+    "</div>";
 }
 
 function ccrKvRow(label, value) {
@@ -1360,6 +1149,21 @@ function ccrPayingFromCallout(kind) {
     : "";
 }
 
+// What a distribution can pay out on release, as [label, value] pairs.
+// Folded server-side, so the counts are exact.
+function ccrReadinessRows(s) {
+  const r = s.distribution_readiness;
+  if (!r) return [];
+  const n = (v) => (v === null || v === undefined ? null : Number(v));
+  return [
+    ccrNum(r.ready_for_transfer_amount) === null ? null : ["Ready for transfer", ccrMoney(r.ready_for_transfer_amount, s.currency)],
+    n(r.receiving_count) !== null && n(r.unpaid_count) !== null
+      ? ["Receiving payment", r.receiving_count + " of " + ccrInvestors(n(r.unpaid_count))] : null,
+    n(r.over_a_year_old_count) ? ["Instructions over a year old", ccrInvestors(n(r.over_a_year_old_count))] : null,
+    n(r.manual_wire_count) ? ["Manual wires", ccrInvestors(n(r.manual_wire_count))] : null,
+  ].filter(Boolean);
+}
+
 function ccrPayBody(s) {
   const to = ccrCollects(s) ? s.receiving_account : null;
   const from = ccrPayingFromState(s);
@@ -1414,41 +1218,6 @@ function ccrPayBody(s) {
   // The allocations table is full-bleed because its cells carry their own
   // inset. These rows do not, so the inset lives on the wrapper.
   return '<div class="ccr-pad">' + groups.join("") + "</div>";
-}
-
-function ccrReviewBody() {
-  const s = _ccr.summary;
-  if (_ccr.loading) return '<div class="loading-row" style="padding:20px 0;">Reading the capital call…</div>';
-
-  if (_ccr.error === "unlinked") {
-    return '<div class="ccr-empty"><p>This task is not linked to a capital activity that this page can read.</p>' +
-      "<p class='ccr-note'>The workflow row carries no fund and activity id the review commands accept. Open the call in Carta to review it. " +
-      ccrOpenInCarta() + "</p></div>";
-  }
-  if (_ccr.error || !s) {
-    return '<div class="ccr-empty"><p>Could not read this capital call.</p>' +
-      '<p class="ccr-note">' + escHtml(_ccr.error || "") + " " + ccrOpenInCarta("Review it in Carta") + "</p></div>";
-  }
-
-  const p = s.preparation;
-
-  return (p && p.note
-    ? '<div class="ccr-note-box"><span class="ccr-note-icon">→</span><span class="ccr-note-main">' +
-      '<span class="ccr-note-head">' + escHtml((p.note_author || p.prepared_by || "Your Carta team") + " left a note") +
-      '<button class="ccr-note-toggle" data-ccr-note>' + (_ccr.noteOpen ? "Show less" : "Read full note") + "</button></span>" +
-      '<span class="' + (_ccr.noteOpen ? "ccr-note-full" : "ccr-note-clamp") + '">' + escHtml(p.note) + "</span>" +
-      "</span></div>"
-    : "") +
-
-    ccrMainTabBar() +
-
-    '<div class="ccr-tab-pane">' +
-      (_ccr.activeTab === 'overview' ? ccrOverviewTabBody(s)
-        : _ccr.activeTab === 'alloc' ? ccrAllocTable(s)
-        : _ccr.activeTab === 'pay' ? ccrPayBody(s)
-        : _ccr.activeTab === 'settings' ? ccrSettingsTabBody(s)
-        : ccrNoticeTabBody(s)) +
-    "</div>";
 }
 
 const CCR_PAYMENT_TERMS_URL = "https://carta.com/legal/terms-agreements/fund-administration-payment-terms-conditions/";
@@ -1549,41 +1318,6 @@ function ccrConfirmBody() {
     " cannot be recalled. A correction after release means a new notice to every investor.</p>";
 }
 
-function ccrFooter() {
-  const s = _ccr.summary;
-  const p = s && s.preparation;
-  const prepared = p && p.prepared_on ? "Prepared " + ccrDate(p.prepared_on) + ". " : "";
-
-  if (_ccr.phase === "review") {
-    const blocked = !s || _ccr.error || _ccr.locked;
-    const blockers = blocked ? [] : ccrBlockers(s);
-    return '<div class="far-panel-footer ccr-footer">' +
-      '<span class="ccr-note">' + escHtml(prepared) + "Nothing has been sent to investors yet. " + ccrOpenInCarta() + "</span>" +
-      blockers.map((b) => '<span class="ccr-blocker">' + (b.html || escHtml(b.text)) + "</span>").join("") +
-      '<span class="ccr-footer-actions">' +
-        '<button class="far-btn-secondary" data-ccr-phase="changes"' + (blocked || blockers.some((b) => b.locks) ? " disabled" : "") + ">Request changes</button>" +
-        '<button class="far-btn-primary" data-ccr-phase="confirm"' + (blocked || blockers.length ? " disabled" : "") + ">Approve and release</button>" +
-      "</span></div>";
-  }
-  if (_ccr.phase === "confirm") {
-    const sent = ccrNoticeCounts(s);
-    const n = sent ? sent.email : s && s.participating_interests_count;
-    const hold = ccrReleaseHold();
-    return '<div class="far-panel-footer ccr-footer-end">' +
-      (hold ? '<span class="ccr-note ccr-hold">' + escHtml(hold) + "</span>" : "") +
-      '<button class="far-btn-secondary" data-ccr-phase="review">Back to review</button>' +
-      '<button class="far-btn-primary" id="ccr-do-approve" data-ccr-approve' + (hold ? " disabled" : "") + ">Release" +
-      (n ? " and email " + ccrInvestors(n) : "") + "</button></div>";
-  }
-  if (_ccr.phase === "changes") {
-    return '<div class="far-panel-footer ccr-footer-end">' +
-      '<button class="far-btn-secondary" data-ccr-phase="review">Back to review</button>' +
-      '<button class="far-btn-primary" id="ccr-send-changes" data-ccr-send>Send to Carta</button></div>';
-  }
-  return '<div class="far-panel-footer far-panel-footer-center">' +
-    '<button class="far-btn-primary" data-ccr-close>Back to tasks</button></div>';
-}
-
 // Reached without a reply, so whether the journal posted is unknown. Say only what
 // is certain: the release is running and leaving does not stop it.
 function ccrReleasingBody() {
@@ -1616,154 +1350,395 @@ function ccrDoneBody(released) {
     '<div class="ccr-note">This task has moved to ' + (released ? "Completed" : "In progress") + ".</div></div>";
 }
 
+// Release or a request is only offered while nothing holds the panel.
+function ccrCanRequest() {
+  const s = _ccr.summary;
+  if (!s || _ccr.error || _ccr.locked) return false;
+  return !ccrBlockers(s).some((b) => b.locks);
+}
+
+function ccrHeadline(s) {
+  return ccrIsDistribution(s)
+    ? (ccrNum(s.net_distribution_amount) !== null ? s.net_distribution_amount : s.total_due_to_investor)
+    : (ccrNum(s.gross_call_amount) !== null ? s.gross_call_amount : s.total_due_to_fund);
+}
+
+// ── Right-hand subpages ───────────────────────────────────────────────────
+
+const ccrLpRows = (snap) => (snap || _ccr).rows.filter((r) => r.is_participating !== false);
+
+function ccrSubnav() {
+  const tabs = [
+    { id: "alloc", label: "Allocations" },
+    { id: "notice", label: "Notice" },
+    { id: "delivery", label: "Delivery" },
+  ];
+  return '<div class="ccr-subnav" role="tablist">' + tabs.map((t) => {
+    const on = _ccr.activeTab === t.id;
+    return '<button class="ccr-subtab' + (on ? " ccr-subtab-on" : "") + '" role="tab" aria-selected="' + on +
+      '" data-ccr-tab="' + t.id + '">' + escHtml(t.label) + "</button>";
+  }).join("") +
+    "</div>";
+}
+
+// One investor on screen, and which of their two documents is showing.
+function ccrDocBar() {
+  const pdf = _ccr.docTab === "pdf";
+  return '<div class="ccr-notice-bar"><select id="ccr-lp" aria-label="Investor">' +
+    ccrLpRows().map((r, i) => '<option value="' + i + '"' + (i === _ccr.lpIndex ? " selected" : "") + ">" +
+      escHtml(ccrRowLabel(r)) + "</option>").join("") +
+    "</select>" +
+    '<span class="ccr-tabs">' +
+      (window.pdfjsLib ? '<button class="ccr-tab' + (pdf ? " ccr-tab-on" : "") + '" data-ccr-doc="pdf">PDF</button>' : "") +
+      '<button class="ccr-tab' + (pdf ? "" : " ccr-tab-on") + '" data-ccr-doc="email">Email</button>' +
+    "</span></div>";
+}
+
+function ccrNoticeTabBody() {
+  if (!ccrLpRows().length) return ccrNoInvestors();
+  return _ccr.docTab === "pdf" ? ccrNoticeDoc() : ccrEmailPane();
+}
+
+function ccrNoInvestors() {
+  return _ccr.loading || !_ccr.rowsDone
+    ? '<div class="loading-row" style="padding:20px 0;">Loading investors…</div>'
+    : '<div class="ccr-empty"><p>No participating investors on this call.</p></div>';
+}
+
+function ccrEmailPane() {
+  if (_ccr.emailError) {
+    return '<div class="ccr-empty"><p>This email could not be previewed.</p>' +
+      '<p class="ccr-note">' + escHtml(_ccr.emailError) + "</p></div>";
+  }
+  if (!_ccr.email) return '<div class="loading-row" style="padding:16px 0;">Rendering the email…</div>';
+  const e = _ccr.email;
+  const label = (d) => d.name ? d.name + " <" + d.email + ">" : d.email;
+  const addrs = (kind) => (e.recipients || []).filter((d) => d.addr_type === kind).map(label).join(", ");
+  // The body is the email's own document; a scriptless frame shows it as the
+  // investor receives it and keeps it out of this page's DOM and styles.
+  return '<div class="ccr-mail-head">' +
+      '<div class="ccr-mail-subject">' + escHtml(e.subject || "") + "</div>" +
+      '<div class="ccr-mail-addr">To: ' + escHtml(addrs("TO")) + "</div>" +
+      '<div class="ccr-mail-addr">CC: ' + escHtml(addrs("CC")) + "</div>" +
+    "</div>" +
+    (e.body_format === "html"
+      ? '<iframe class="ccr-mail-frame" sandbox="" title="Email preview" srcdoc="' + escHtml(e.body || "") + '"></iframe>'
+      : '<div class="ccr-mail-body">' + escHtml(e.body || "").replace(/\n{2,}/g, "</p><p>").replace(/\n/g, "<br>") + "</div>") +
+    ((e.body || "").indexOf("[/LINK_CARTA]") !== -1
+      ? '<div class="ccr-caveat"><span class="ccr-caveat-arrow">&#8593;</span>' +
+        "<span>Preview only: the address ends in the placeholder [/LINK_CARTA] instead of a " +
+        "link. Each investor's sent email carries a working link to their own capital call. " +
+        "Everything else here is final.</span></div>"
+      : "");
+}
+
+// ── Review body ───────────────────────────────────────────────────────────
+
+// The call at a glance: what it asks for, when, and what is credited against it.
+function ccrSummaryBox(s) {
+  if (!s) {
+    return '<section class="ccr-sheet ccr-sum" aria-label="Summary"><p class="ccr-note">' +
+      escHtml(_ccr.error ? "Could not read this capital call." : "Reading the capital call…") + "</p></section>";
+  }
+  const ccy = s.currency;
+  const dist = ccrIsDistribution(s);
+  const dateRow = (label, v) => '<div class="ccr-sum-row"><span class="ccr-sum-k">' + escHtml(label) + "</span>" +
+    '<span class="ccr-sum-v ccr-sum-date">' + escHtml(ccrDate(v)) + "</span></div>";
+  const sumRow = ([label, v]) => '<div class="ccr-sum-row"><span class="ccr-sum-k">' + escHtml(label) + "</span>" +
+    '<span class="ccr-sum-v">' + escHtml(v) + "</span></div>";
+  const readiness = ccrReadinessRows(s);
+
+  const adj = ccrBucketColumns(s).adjustments;
+  const adjustments = adj.length
+    ? '<div class="ccr-sum-group"><span class="ccr-sum-k">Adjustments</span>' +
+      adj.map((b) =>
+        '<div class="ccr-sum-item">' +
+        "<span>" + escHtml(b.display_name || b.slug || "Adjustment") + "</span>" +
+        "<span>" + escHtml(ccrSignedMoney(b.total, ccy, ccrAdjSign(b))) + "</span></div>").join("") +
+      "</div>"
+    : "";
+
+  return '<section class="ccr-sheet ccr-sum" aria-label="Summary">' +
+    '<div><span class="ccr-card-label">' + (dist ? "Total being distributed" : "Total being called") + "</span>" +
+    '<div class="ccr-card-figure">' + escHtml(ccrMoney(ccrHeadline(s), ccy)) + "</div></div>" +
+    '<div class="ccr-sum-list">' +
+      '<div class="ccr-sum-rows">' + dateRow("Notice date", s.date_of_notice) +
+        dateRow(dist ? "Payment date" : "Due date", s.due_date) + "</div>" +
+      adjustments +
+      (readiness.length ? '<div class="ccr-sum-rows">' + readiness.map(sumRow).join("") + "</div>" : "") +
+    "</div>" +
+    "</section>";
+}
+
+// The Delivery tab: each investor's toggles, then the settings that apply to
+// every notice email. Always shown, since every activity has investors.
+function ccrSettingsTabBody(s) {
+  if (!s) return '<div class="loading-row" style="padding:20px 0;">Reading the capital call\u2026</div>';
+  const rows = ccrSettingsRows(s);
+  return '<div class="ccr-dlv-head"><span class="ccr-dlv-title">Delivery</span></div>' +
+    ccrDeliveryTable(s) +
+    '<div class="ccr-dlv-head ccr-dlv-head-next"><span class="ccr-dlv-title">Email settings</span>' +
+      '<span class="ccr-dlv-summary">Apply to every investor</span></div>' +
+    (rows.length
+      ? '<div class="ccr-card ccr-settings"><div class="ccr-card-list">' + rows.join("") + "</div></div>"
+      : '<div class="ccr-empty"><p>Carta did not serve the email settings for this call.</p></div>');
+}
+
+// Where the money goes, and for a distribution where it comes from.
+function ccrPaymentCard(s) {
+  return '<section class="ccr-sheet ccr-pay-card" aria-label="Payment information">' +
+    '<div class="ccr-sheet-head"><span class="ccr-card-label">Payment information</span></div>' +
+    (s ? ccrPayBody(s) : '<p class="ccr-note">Reading the capital call\u2026</p>') +
+    "</section>";
+}
+
+// The preparer's note, read before the tabs.
+function ccrReviewCallouts(s) {
+  const p = s && s.preparation;
+  if (!p || !p.note) return "";
+  return '<div class="ccr-callouts"><div class="ccr-note-box"><span class="ccr-note-icon">→</span><span class="ccr-note-main">' +
+    '<span class="ccr-note-head">' + escHtml((p.note_author || p.prepared_by || "Your Carta team") + " left a note") +
+    '<button class="ccr-note-toggle" data-ccr-note>' + (_ccr.noteOpen ? "Show less" : "Read full note") + "</button></span>" +
+    '<span class="' + (_ccr.noteOpen ? "ccr-note-full" : "ccr-note-clamp") + '">' + escHtml(p.note) + "</span>" +
+    "</span></div></div>";
+}
+
+function ccrReviewBody() {
+  if (_ccr.error === "unlinked") {
+    return '<div class="ccr-layout"><div class="ccr-empty"><p>This task is not linked to a capital activity that this page can read.</p>' +
+      "<p class='ccr-note'>The workflow row carries no fund and activity id the review commands accept. Open the call in Carta to review it. " +
+      ccrOpenInCarta() + "</p></div></div>";
+  }
+  if (_ccr.error) {
+    return '<div class="ccr-layout"><div class="ccr-empty"><p>Could not read this capital call.</p>' +
+      '<p class="ccr-note">' + escHtml(_ccr.error) + " " + ccrOpenInCarta("Review it in Carta") + "</p></div></div>";
+  }
+  const pane = _ccr.activeTab === "notice" ? ccrNoticeTabBody()
+    : _ccr.activeTab === "alloc" ? ccrAllocPane(_ccr.summary)
+    : ccrSettingsTabBody(_ccr.summary);
+  const bar = _ccr.activeTab === "notice" && ccrLpRows().length ? ccrDocBar() : "";
+  // Drawn in the state it was last shown in; ccrRender moves it to the new one, so the change animates.
+  const wide = _ccr.layoutFrom;
+  return '<div class="ccr-layout' + (wide ? " ccr-layout-wide" : "") + '">' +
+    '<aside class="ccr-side"' + (wide ? ' aria-hidden="true"' : "") + '><div class="ccr-side-inner">' +
+      ccrSummaryBox(_ccr.summary) + ccrPaymentCard(_ccr.summary) + "</div></aside>" +
+    '<section class="ccr-main">' + ccrReviewCallouts(_ccr.summary) + ccrSubnav() + bar +
+      '<div class="ccr-main-body' + (_ccr.activeTab === "alloc" ? " ccr-main-alloc" : "") + '">' + pane + "</div></section>" +
+    "</div>";
+}
+
+// ── Footer ────────────────────────────────────────────────────────────────
+
+function ccrFooter() {
+  const s = _ccr.summary;
+  if (_ccr.phase === "confirm") {
+    const sent = ccrNoticeCounts(s);
+    const n = sent ? sent.email : s && s.participating_interests_count;
+    const hold = ccrReleaseHold();
+    return '<div class="far-panel-footer ccr-footer-end">' +
+      (hold ? '<span class="ccr-note ccr-hold">' + escHtml(hold) + "</span>" : "") +
+      '<button class="far-btn-secondary" data-ccr-phase="review"' + (_ccr.releasing ? " disabled" : "") + ">Back to review</button>" +
+      '<button class="far-btn-primary" id="ccr-do-approve" data-ccr-approve' + (hold || _ccr.releasing ? " disabled" : "") + ">" +
+        (_ccr.releasing ? "Releasing…" : "Release" + (n ? " and email " + ccrInvestors(n) : "")) +
+      "</button></div>";
+  }
+  if (_ccr.phase === "changes") {
+    return '<div class="far-panel-footer ccr-footer-end">' +
+      '<button class="far-btn-secondary" data-ccr-phase="review">Back to review</button>' +
+      '<button class="far-btn-primary" id="ccr-send-changes" data-ccr-send>Send to Carta</button></div>';
+  }
+  if (_ccr.phase !== "review") {
+    return '<div class="far-panel-footer far-panel-footer-center">' +
+      '<button class="far-btn-primary" data-ccr-close>Back to tasks</button></div>';
+  }
+  const blocked = !s || _ccr.error || _ccr.locked;
+  // A reason that locks the panel leads, so the one line shows what the reviewer must do first.
+  const blockers = blocked ? [] : ccrBlockers(s).sort((x, y) => (y.locks ? 1 : 0) - (x.locks ? 1 : 0));
+  const lines = blockers.map((b) => b.html || escHtml(b.text));
+  return '<div class="far-panel-footer ccr-foot">' +
+    '<div class="ccr-foot-side"><button class="ccr-changes-btn" data-ccr-phase="changes"' + (ccrCanRequest() ? "" : " disabled") +
+      ">Request changes</button></div>" +
+    '<div class="ccr-foot-main">' +
+      // One line by default, never cut: further reasons open in place.
+      (_ccr.blockersOpen ? lines : lines.slice(0, 1)).map((t, i) =>
+        '<span class="ccr-blocker">' + t +
+        (i === 0 && lines.length > 1
+          ? ' <button class="ccr-blocker-more" data-ccr-blockers>' + (_ccr.blockersOpen ? "Show less" : "+" + (lines.length - 1) + " more") + "</button>"
+          : "") + "</span>").join("") +
+      '<button class="far-btn-primary ccr-approve" data-ccr-phase="confirm"' + (blocked || blockers.length ? " disabled" : "") +
+        ">Approve and release</button>" +
+    "</div></div>";
+}
+
+// ── Render ────────────────────────────────────────────────────────────────
+
 function ccrRender() {
   const overlay = document.getElementById("ccr-overlay");
   if (!overlay) return;
   const s = _ccr.summary;
+  const reviewing = _ccr.phase === "review";
+  // Settled before the body is built: the body draws the layout in the state it starts from.
+  const wide = ccrWideLayout();
+  _ccr.layoutFrom = _ccr.renderedWide === undefined ? wide : _ccr.renderedWide;
+  _ccr.renderedWide = wide;
 
-  let body;
-  if (_ccr.phase === "confirm") body = ccrConfirmBody();
-  else if (_ccr.phase === "changes") {
-    body = '<p class="ccr-note" style="margin-bottom:10px">Write what you want different, in your own words. ' +
-      "This goes to your Carta fund admin team as written. They redo the work and send it back for review. " +
-      "Nothing reaches investors.</p>" +
-      '<textarea id="ccr-change-text" class="far-textarea" rows="5" placeholder="Push the due date to the 25th.">' +
-      escHtml(_ccr.changeText) + "</textarea>" +
-      '<p class="ccr-note" style="margin-top:8px">This task moves to In progress until it comes back to you.</p>';
-  }
-  else if (_ccr.phase === "releasing") body = ccrReleasingBody();
-  else if (_ccr.phase === "released") body = ccrDoneBody(true);
-  else if (_ccr.phase === "sent") body = ccrDoneBody(false);
-  else body = ccrReviewBody();
+  const body = _ccr.phase === "confirm" ? ccrConfirmBody()
+    : _ccr.phase === "changes"
+      ? '<p class="ccr-note" style="margin-bottom:10px">Write what you want different, in your own words. ' +
+        "This goes to your Carta fund admin team as written. They redo the work and send it back for review. " +
+        "Nothing reaches investors.</p>" +
+        '<textarea id="ccr-change-text" class="far-textarea" rows="5" placeholder="Push the due date to the 25th.">' +
+        escHtml(_ccr.changeText) + "</textarea>" +
+        '<p class="ccr-note" style="margin-top:8px">This task moves to In progress until it comes back to you.</p>'
+    : _ccr.phase === "releasing" ? ccrReleasingBody()
+    : _ccr.phase === "released" ? ccrDoneBody(true)
+    : _ccr.phase === "sent" ? ccrDoneBody(false)
+    : ccrReviewBody();
 
-  // Every walked page re-renders the panel, so the Delivery search keeps its
-  // caret and the investor box its scroll across the swap.
+  // Every walked page of rows re-renders the panel, so whatever the reader is
+  // typing into keeps its caret, and each scroller its position, across the swap.
   const focused = document.activeElement;
-  const searching = focused && focused.id === "ccr-dlv-search";
-  const caret = searching ? focused.selectionStart : null;
-  const prevBox = overlay.querySelector(".ccr-dlv-box");
-  const boxTop = prevBox ? prevBox.scrollTop : 0;
+  const focusId = focused && overlay.contains(focused) && focused.id ? focused.id : null;
+  const caret = focusId && typeof focused.selectionStart === "number" ? [focused.selectionStart, focused.selectionEnd] : null;
+  const keep = {};
+  [".ccr-side", ".ccr-main-body", ".ccr-dlv-box", ".ccr-table-wrap"].forEach((sel) => {
+    const el = overlay.querySelector(sel);
+    if (el) keep[sel] = [el.scrollTop, el.scrollLeft];
+  });
+  const view = [_ccr.activeTab, _ccr.docTab, _ccr.lpIndex].join("|");
+  const sameTab = _ccr.renderedTab === view;
+  _ccr.renderedTab = view;
+
+  const sub = [s && s.fund_name, s && s.preparation && s.preparation.prepared_by
+    ? "Prepared by " + s.preparation.prepared_by + (s.preparation.prepared_on ? ", " + ccrDate(s.preparation.prepared_on) : "")
+    : null].filter(Boolean).join(" · ");
 
   overlay.innerHTML =
-    '<div class="far-panel far-panel-thread ccr-panel">' +
+    '<div class="far-panel ccr-panel">' +
       '<div class="far-panel-header">' +
         '<span class="far-panel-title">' + escHtml(ccrPanelTitle(s)) + "</span>" +
-        (s && s.fund_name ? '<span class="ccr-panel-sub">' + escHtml(s.fund_name) + "</span>" : "") +
+        '<span class="ccr-panel-sub">' + escHtml(sub) + (sub && ccrOpenInCarta() ? " · " : "") + ccrOpenInCarta() + "</span>" +
         '<button class="far-panel-close" data-ccr-close aria-label="Close">✕</button>' +
       "</div>" +
-      '<div class="far-panel-body ccr-body">' + body + "</div>" +
+      '<div class="far-panel-body ccr-body' + (reviewing ? " ccr-body-split" : "") + '">' + body + "</div>" +
       ccrFooter() +
     "</div>";
 
-  const t = document.getElementById("ccr-change-text");
-  if (t) t.addEventListener("input", (e) => { _ccr.changeText = e.target.value; });
+  Object.keys(keep).forEach((sel) => {
+    if (sel === ".ccr-main-body" && !sameTab) return;
+    const el = overlay.querySelector(sel);
+    if (el) { el.scrollTop = keep[sel][0]; el.scrollLeft = keep[sel][1]; }
+  });
   ccrBind(overlay);
-  const box = overlay.querySelector(".ccr-dlv-box");
-  if (box) box.scrollTop = boxTop;
-  const search = searching ? document.getElementById("ccr-dlv-search") : null;
-  if (search) {
-    search.focus();
-    search.setSelectionRange(caret, caret);
+
+  const target = focusId ? document.getElementById(focusId) : null;
+  if (target) {
+    target.focus();
+    if (caret && typeof target.setSelectionRange === "function" && target.type !== "date") {
+      try { target.setSelectionRange(caret[0], caret[1]); } catch (e) { /* inputs without a selection */ }
+    }
   }
-  const wrap = overlay.querySelector(".ccr-table-wrap");
-  if (wrap) {
-    const last = wrap.querySelector("th.ccr-pin-after");
-    if (last) wrap.style.setProperty("--ccr-pin-after-w", last.offsetWidth + "px");
-    wrap.classList.toggle("ccr-overflow", wrap.scrollWidth > wrap.clientWidth + 1);
+
+  const layout = overlay.querySelector(".ccr-layout");
+  if (layout && _ccr.layoutFrom !== wide) {
+    void layout.offsetWidth;  // commit the old state first, or the browser skips the transition
+    layout.classList.toggle("ccr-layout-wide", wide);
+    const side = layout.querySelector(".ccr-side");
+    if (wide) side.setAttribute("aria-hidden", "true"); else side.removeAttribute("aria-hidden");
+    side.addEventListener("transitionend", (e) => { if (e.target === side && e.propertyName === "width") ccrMeasureTable(overlay); });
   }
-  if (_ccr.phase === "review" && _ccr.activeTab === "notice" && _ccr.docTab === "pdf" && _ccr.pdf) {
-    ccrPaintPdf();
-  }
+  ccrMeasureTable(overlay);
+  if (reviewing && _ccr.activeTab === "notice" && _ccr.docTab === "pdf" && _ccr.pdf) ccrPaintPdf();
+}
+
+// Pinned columns need the rendered width of the last one, and the scroll shadow
+// needs to know whether the table overflows. Both change when the layout widens.
+function ccrMeasureTable(root) {
+  const wrap = root.querySelector(".ccr-table-wrap");
+  if (!wrap) return;
+  const first = wrap.querySelector("th.ccr-pin-l");
+  if (first) wrap.style.setProperty("--ccr-pin-l-w", first.offsetWidth + "px");
+  const last = wrap.querySelector("th.ccr-pin-after");
+  if (last) wrap.style.setProperty("--ccr-pin-after-w", last.offsetWidth + "px");
+  wrap.classList.toggle("ccr-overflow", wrap.scrollWidth > wrap.clientWidth + 1);
 }
 
 function ccrBind(root) {
-  root.querySelectorAll("[data-ccr-close]").forEach((el) =>
-    el.addEventListener("click", ccrClose));
-  root.querySelectorAll("[data-ccr-phase]").forEach((el) =>
-    el.addEventListener("click", () => { _ccr.phase = el.getAttribute("data-ccr-phase"); ccrRender(); }));
-  root.querySelectorAll("[data-ccr-main-tab]").forEach((el) =>
-    el.addEventListener("click", () => {
-      const prev = _ccr.activeTab;
-      _ccr.activeTab = el.getAttribute("data-ccr-main-tab");
-      ccrRender();
-      if (_ccr.activeTab === "notice" && prev !== "notice") ccrLoadActiveDoc();
-    }));
-  root.querySelectorAll("[data-ccr-more]").forEach((el) =>
-    el.addEventListener("click", () => { _ccr.showAllRows = !_ccr.showAllRows; ccrRender(); }));
-  root.querySelectorAll("[data-ccr-dlv-filter]").forEach((el) =>
-    el.addEventListener("click", () => {
-      const d = ccrDeliveryState();
-      const id = el.getAttribute("data-ccr-dlv-filter");
-      d.filter = d.filter === id && id !== "all" ? "all" : id;
-      ccrRender();
-    }));
-  root.querySelectorAll("[data-ccr-dlv-sort]").forEach((el) =>
-    el.addEventListener("click", () => {
-      const d = ccrDeliveryState();
-      const id = el.getAttribute("data-ccr-dlv-sort");
-      if (id === "reset") { d.sort = null; d.dir = 1; }
-      else if (d.sort === id) d.dir = -d.dir;
-      else { d.sort = id; d.dir = 1; }
-      ccrRender();
-    }));
-  const dlvSearch = root.querySelector("#ccr-dlv-search");
-  if (dlvSearch) dlvSearch.addEventListener("input", (ev) => {
-    ccrDeliveryState().q = ev.target.value;
+  const on = (sel, ev, fn) => root.querySelectorAll(sel).forEach((el) => el.addEventListener(ev, (e) => fn(el, e)));
+
+  on("[data-ccr-close]", "click", () => ccrClose());
+  on("[data-ccr-phase]", "click", (el) => {
+    const phase = el.getAttribute("data-ccr-phase");
+    if (phase === "confirm") trackWorkhub("click", "CartaWorkhub.CapitalCallReview.OpenRelease");
+    _ccr.phase = phase;
     ccrRender();
   });
-  root.querySelectorAll("[data-ccr-detail]").forEach((el) =>
-    el.addEventListener("click", () => { _ccr.showDetail = !_ccr.showDetail; ccrRender(); }));
-  root.querySelectorAll("[data-ccr-note]").forEach((el) =>
-    el.addEventListener("click", () => { _ccr.noteOpen = !_ccr.noteOpen; ccrRender(); }));
-  root.querySelectorAll("[data-ccr-pay-reveal]").forEach((el) =>
-    el.addEventListener("click", () => {
-      const key = el.getAttribute("data-ccr-pay-reveal");
-      _ccr.payShowSensitive[key] = !_ccr.payShowSensitive[key];
-      ccrRender();
-    }));
-  root.querySelectorAll("[data-ccr-notice]").forEach((el) =>
-    el.addEventListener("click", ccrOpenNotice));
-  root.querySelectorAll("[data-ccr-inline-tab]").forEach((el) =>
-    el.addEventListener("click", () => {
-      _ccr.docTab = el.getAttribute("data-ccr-inline-tab");
-      if (_ccr.docTab === "pdf") trackWorkhub("click", "CartaWorkhub.CapitalCallReview.NoticePdf");
-      ccrRender();
-      ccrLoadActiveDoc();
-      if (_ccr.docTab === "pdf" && _ccr.pdf) ccrPaintPdf();
-    }));
-  const inlineSel = root.querySelector("#ccr-inline-lp");
-  if (inlineSel) inlineSel.addEventListener("change", (ev) => ccrSelectLp(Number(ev.target.value)));
-  const inlineFrame = root.querySelector(".ccr-mail-frame");
-  if (inlineFrame) {
+  on("[data-ccr-tab]", "click", (el) => {
+    const id = el.getAttribute("data-ccr-tab");
+    if (id === _ccr.activeTab) return;
+    trackWorkhub("click", "CartaWorkhub.CapitalCallReview.Tab." + id);
+    _ccr.activeTab = id;
+    ccrRender();
+    ccrLoadActiveDoc();
+  });
+  on("#ccr-change-text", "input", (el) => { _ccr.changeText = el.value; });
+  on("[data-ccr-send]", "click", () => ccrSubmitChanges());
+  on("[data-ccr-approve]", "click", () => ccrApprove());
+  on("[data-ccr-consent]", "change", (el) => {
+    _ccr.consent[el.getAttribute("data-ccr-consent")] = !!el.checked;
+    ccrRender();
+  });
+
+  on("[data-ccr-detail]", "click", () => { _ccr.showDetail = !_ccr.showDetail; ccrRender(); });
+  on("[data-ccr-alloc-view]", "click", (el) => { _ccr.allocView = el.getAttribute("data-ccr-alloc-view"); ccrRender(); });
+
+  on("[data-ccr-note]", "click", () => { _ccr.noteOpen = !_ccr.noteOpen; ccrRender(); });
+  on("[data-ccr-blockers]", "click", () => { _ccr.blockersOpen = !_ccr.blockersOpen; ccrRender(); });
+  on("[data-ccr-pay-reveal]", "click", (el) => {
+    const key = el.getAttribute("data-ccr-pay-reveal");
+    _ccr.payShowSensitive[key] = !_ccr.payShowSensitive[key];
+    ccrRender();
+  });
+  on("[data-ccr-dlv-fold]", "click", () => { _ccr.deliveryOpen = !_ccr.deliveryOpen; ccrRender(); });
+  on("[data-ccr-dlv-filter]", "click", (el) => {
+    const d = ccrDeliveryState();
+    const id = el.getAttribute("data-ccr-dlv-filter");
+    d.filter = d.filter === id && id !== "all" ? "all" : id;
+    ccrRender();
+  });
+  on("[data-ccr-dlv-sort]", "click", (el) => {
+    const d = ccrDeliveryState();
+    const id = el.getAttribute("data-ccr-dlv-sort");
+    if (id === "reset") { d.sort = null; d.dir = 1; }
+    else if (d.sort === id) d.dir = -d.dir;
+    else { d.sort = id; d.dir = 1; }
+    ccrRender();
+  });
+  on("#ccr-dlv-search", "input", (el) => { ccrDeliveryState().q = el.value; ccrRender(); });
+  on("#ccr-lp", "change", (el) => ccrSelectLp(Number(el.value)));
+
+  on("[data-ccr-doc]", "click", (el) => {
+    const doc = el.getAttribute("data-ccr-doc");
+    if (doc === _ccr.docTab) return;
+    if (doc === "pdf") trackWorkhub("click", "CartaWorkhub.CapitalCallReview.NoticePdf");
+    _ccr.docTab = doc;
+    ccrRender();
+    ccrLoadActiveDoc();
+  });
+
+  const frame = root.querySelector(".ccr-mail-frame");
+  if (frame) {
     const fit = () => {
       try {
-        const d = inlineFrame.contentDocument;
+        const d = frame.contentDocument;
         const h = d && d.documentElement && d.documentElement.scrollHeight;
-        if (h > 0) inlineFrame.style.height = h + "px";
-      } catch (err) { /* opaque origin — CSS height stands */ }
+        if (h > 0) frame.style.height = h + "px";
+      } catch (err) { /* opaque origin — the CSS height stands */ }
     };
-    inlineFrame.addEventListener("load", fit);
+    frame.addEventListener("load", fit);
     fit();
     requestAnimationFrame(fit);
   }
-  root.querySelectorAll("[data-ccr-send]").forEach((el) =>
-    el.addEventListener("click", ccrSubmitChanges));
-  root.querySelectorAll("[data-ccr-approve]").forEach((el) =>
-    el.addEventListener("click", ccrApprove));
-  root.querySelectorAll("[data-ccr-consent]").forEach((el) =>
-    el.addEventListener("change", () => {
-      _ccr.consent[el.getAttribute("data-ccr-consent")] = !!el.checked;
-      ccrRender();
-    }));
-}
-
-// ── Notice sub-panel ──────────────────────────────────────────────────────
-
-function ccrOpenNotice() {
-  trackWorkhub("click", "CartaWorkhub.CapitalCallReview.OpenNotice");
-  _ccr.noticeOpen = true;
-  ccrRenderNotice();
-  ccrLoadActiveDoc();
 }
 
 // Both documents belong to the investor on screen, so switching drops them —
@@ -1777,130 +1752,17 @@ function ccrSelectLp(index) {
   _ccr.pdfError = null;
   _ccr.pdfLoading = false;
   ccrRender();
-  ccrRenderNotice();
-  if (_ccr.activeTab === "notice" || _ccr.noticeOpen) ccrLoadActiveDoc();
+  ccrLoadActiveDoc();
 }
 
-// Each tab costs a render on Carta's side, so only the visible one is fetched.
+// Each document costs a render on Carta's side, so only the one on screen is fetched.
 function ccrLoadActiveDoc() {
+  if (_ccr.activeTab !== "notice") return;
   if (_ccr.docTab === "pdf") {
-    if (!_ccr.pdf && !_ccr.pdfLoading && !_ccr.pdfError) ccrLoadPdf();
+    if (window.pdfjsLib && !_ccr.pdf && !_ccr.pdfLoading && !_ccr.pdfError) ccrLoadPdf();
   } else if (!_ccr.email && !_ccr.emailError) {
     ccrLoadEmail();
   }
-}
-
-function ccrCloseNotice() {
-  _ccr.noticeOpen = false;
-  const o = document.getElementById("ccr-notice-overlay");
-  if (o) o.classList.remove("far-overlay-visible");
-}
-
-function ccrRenderNotice() {
-  if (!_ccr.noticeOpen) return;
-  const overlay = farEnsureOverlay("ccr-notice-overlay", "far-overlay");
-  overlay.classList.add("ccr-overlay-top");
-  const s = _ccr.summary || {};
-  const rows = _ccr.rows.filter((r) => r.is_participating !== false);
-
-  const count = s.participating_interests_count !== null && s.participating_interests_count !== undefined
-    ? s.participating_interests_count
-    : (rows.length || null);
-
-  const options = rows.map((r, i) =>
-    '<option value="' + i + '"' + (i === _ccr.lpIndex ? " selected" : "") + ">" +
-    escHtml(ccrRowLabel(r) + " — " + ccrMoney(r.commitment, s.currency) + " committed") + "</option>").join("");
-
-  let pane;
-  if (_ccr.docTab === "pdf") {
-    pane = ccrNoticeDoc();
-  } else if (_ccr.emailError) {
-    pane = '<div class="ccr-empty"><p>This email could not be previewed.</p><p class="ccr-note">' +
-      escHtml(_ccr.emailError) + "</p></div>";
-  } else if (!_ccr.email) {
-    pane = '<div class="loading-row" style="padding:20px 0;">Rendering the email…</div>';
-  } else {
-    const e = _ccr.email;
-    const label = (d) => d.name ? d.name + " <" + d.email + ">" : d.email;
-    const addrs = (kind) => (e.recipients || [])
-      .filter((d) => d.addr_type === kind).map(label).join(", ");
-
-    // The body is the email's own HTML document. A scriptless iframe shows it
-    // as the LP receives it and keeps it out of this page's DOM and styles.
-    pane = '<div class="ccr-mail-head">' +
-        '<div class="ccr-mail-subject">' + escHtml(e.subject || "") + "</div>" +
-        '<div class="ccr-mail-addr">To: ' + escHtml(addrs("TO")) + "</div>" +
-        '<div class="ccr-mail-addr">CC: ' + escHtml(addrs("CC")) + "</div>" +
-      "</div>" +
-      (e.body_format === "html"
-        ? '<iframe class="ccr-mail-frame" sandbox="" title="Email preview" srcdoc="' +
-          escHtml(e.body || "") + '"></iframe>'
-        : '<div class="ccr-mail-body">' +
-          escHtml(e.body || "").replace(/\n{2,}/g, "</p><p>").replace(/\n/g, "<br>") + "</div>") +
-      ((e.body || "").indexOf("[/LINK_CARTA]") !== -1
-        ? '<div class="ccr-caveat"><span class="ccr-caveat-arrow">&#8593;</span>' +
-          "<span>Preview only: the address ends in the placeholder [/LINK_CARTA] instead of a " +
-          "link. Each investor's sent email carries a working link to their own capital call. " +
-          "Everything else here is final.</span></div>"
-        : "");
-  }
-
-  overlay.innerHTML =
-    '<div class="far-panel ccr-notice-panel">' +
-      '<div class="far-panel-header">' +
-        '<span class="far-panel-title">What each investor receives</span>' +
-        '<span class="ccr-panel-sub">' +
-          escHtml(s.date_of_notice ? "Exactly as it will arrive on " + ccrDate(s.date_of_notice) : "As it will arrive") +
-        "</span>" +
-        '<button class="far-panel-close" data-ccr-notice-close aria-label="Close">✕</button>' +
-      "</div>" +
-      '<div class="ccr-notice-bar">' +
-        '<select id="ccr-lp">' + options + "</select>" +
-        '<span class="ccr-tabs">' +
-          '<button class="ccr-tab' + (_ccr.docTab === "pdf" ? " ccr-tab-on" : "") + '" data-ccr-tab="pdf">Notice PDF</button>' +
-          '<button class="ccr-tab' + (_ccr.docTab !== "pdf" ? " ccr-tab-on" : "") + '" data-ccr-tab="email">Email</button>' +
-        "</span>" +
-      "</div>" +
-      '<div class="far-panel-body ccr-notice-body">' + pane + "</div>" +
-      '<div class="far-panel-footer ccr-notice-footer">' +
-        '<span class="ccr-note">' + escHtml(
-          (count !== null ? count + " recipient" + (count === 1 ? "" : "s") + " · " : "") +
-          "showing " + ccrRowLabel(rows[_ccr.lpIndex] || {})) + "</span>" +
-        '<button class="far-btn-secondary" data-ccr-notice-close>Back to review</button>' +
-      "</div>" +
-    "</div>";
-  overlay.classList.add("far-overlay-visible");
-
-  // allow-same-origin lets the height be measured; without allow-scripts the
-  // email's own markup still cannot execute anything. A srcdoc frame often
-  // finishes loading before a listener can attach, so measure now as well.
-  const frame = document.getElementById("ccr-mail-frame");
-  if (frame) {
-    const fit = () => {
-      try {
-        const d = frame.contentDocument;
-        const h = d && d.documentElement && d.documentElement.scrollHeight;
-        if (h > 0) frame.style.height = h + "px";
-      } catch (err) { /* opaque origin — the CSS height stands */ }
-    };
-    frame.addEventListener("load", fit);
-    fit();
-    requestAnimationFrame(fit);
-  }
-
-  overlay.querySelectorAll("[data-ccr-notice-close]").forEach((el) =>
-    el.addEventListener("click", ccrCloseNotice));
-  overlay.querySelectorAll("[data-ccr-tab]").forEach((el) =>
-    el.addEventListener("click", () => {
-      _ccr.docTab = el.getAttribute("data-ccr-tab");
-      if (_ccr.docTab === "pdf") trackWorkhub("click", "CartaWorkhub.CapitalCallReview.NoticePdf");
-      ccrRenderNotice();
-      ccrLoadActiveDoc();
-    }));
-  const sel = document.getElementById("ccr-lp");
-  if (sel) sel.addEventListener("change", (ev) => ccrSelectLp(Number(ev.target.value)));
-
-  if (_ccr.docTab === "pdf") ccrPaintPdf();
 }
 
 
@@ -1914,18 +1776,16 @@ function ccrRenderNotice() {
 // the reader sees is the file itself, never a redrawing of it from figures.
 
 async function ccrLoadPdf() {
-  const row = _ccr.rows[_ccr.lpIndex];
+  const row = ccrLpRows()[_ccr.lpIndex];
   if (!row || !row.interest || row.interest.id == null) {
     _ccr.pdfError = "This row carries no interest id, so its notice cannot be rendered.";
     ccrRender();
-    ccrRenderNotice();
     return;
   }
 
   if (CCR_IS_DEMO) {
     _ccr.pdfError = "PDF preview is not available in demo mode.";
     ccrRender();
-    ccrRenderNotice();
     return;
   }
 
@@ -1936,11 +1796,9 @@ async function ccrLoadPdf() {
   if (snap.pdf) {
     snap.pdfLoading = false;
     ccrRender();
-    ccrRenderNotice();
     return;
   }
   snap.pdfLoading = true;
-  ccrRenderNotice();
 
   // Slow enough that the reader can pick another investor first. The cache keeps
   // this render for when they come back; only its display is dropped.
@@ -1956,7 +1814,6 @@ async function ccrLoadPdf() {
   }
   snap.pdfLoading = false;
   ccrRender();
-  ccrRenderNotice();
 }
 
 function ccrB64Bytes(b64) {
@@ -1999,14 +1856,14 @@ async function ccrPaintPdf() {
     if (token !== _ccrPaintToken) return;
     _ccr.pdfError = "The document arrived but could not be rendered: " +
       ((err && err.message) || "unknown error");
-    ccrRenderNotice();
+    ccrRender();
   }
 }
 
 function ccrNoticeDoc() {
   if (!window.pdfjsLib) {
     return '<div class="ccr-empty"><p>This build carries no PDF renderer, so the notice cannot be shown here.</p>' +
-      '<p class="ccr-note">Open the capital call in Carta and use Preview notice. The Email tab is unaffected.</p></div>';
+      '<p class="ccr-note">Open the capital call in Carta and use Preview notice. The email on the Delivery tab is unaffected.</p></div>';
   }
   if (_ccr.pdfError) {
     return '<div class="ccr-empty"><p>This notice could not be rendered.</p>' +
@@ -2027,7 +1884,6 @@ function ccrNoticeDoc() {
 // ── Open / close ──────────────────────────────────────────────────────────
 
 function ccrClose() {
-  ccrCloseNotice();
   const o = document.getElementById("ccr-overlay");
   if (o) o.classList.remove("far-overlay-visible");
   farFetchRequests();

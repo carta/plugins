@@ -20,7 +20,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.46.6</carta-plugin>
+<carta-plugin>carta-investors:6.46.8</carta-plugin>
 
 # Carta Workhub — Build / Redeploy
 
@@ -110,10 +110,11 @@ not inside a fund-data dashboard.
   the session context. Its rows name no pending actor; that comes off `tasks[]`.
 - **Capital call review** — a `request-capital-activity` workflow carrying an open
   `review-capital-activity` (or `review-capital-activity-changes`) task opens the review panel
-  instead of the thread: the preparer's note, what is being called, when it is due,
-  how much of each commitment it consumes, an Allocations tab, and Payment information. A second
-  panel shows the notice each investor receives, as the rendered email and as the real PDF. The footer carries **Request changes** and **Approve and release**, each behind
-  its own confirm step. Read from `fa:get:capital-activity-review-summary`,
+  instead of the thread. It is one page: a sidebar with the summary (the total, the notice and due
+  dates, any adjustments, and for a distribution what it can pay out) and the payment accounts,
+  beside the preparer's note and the **Allocations**, **Notice** and **Delivery** tabs. The Notice
+  tab shows the notice each investor receives, as the real PDF and as the rendered email. The footer carries **Request
+  changes** and **Approve and release**, each behind its own confirm step. Read from `fa:get:capital-activity-review-summary`,
   `fa:list:capital-activity-review-row`, `fa:get:capital-activity-partner-email-preview` and
   `fa:get:capital-activity-notice-pdf-preview`; written with `fa:mutate:request-capital-activity-changes`
   and `fa:mutate:approve-capital-activity`. All of them ride the `fetch` and `mutate` tools
@@ -136,18 +137,16 @@ not inside a fund-data dashboard.
   Net contribution / Called after; when more than one non-adjustment bucket or any adjustment
   composes the net, **Show breakdown** adds one column per bucket,
   adjustments last and signed by `impact_on_owed` (decrease reads as a reduction), with Investor
-  pinned left and Net contribution / Called after pinned right while the rest scrolls. Header
+  and Partner class pinned left and Net contribution / Called after pinned right while the rest
+  scrolls; the sidebar steps aside while the breakdown is open. Header
   labels come from `display_name`; a slug-keyed abbreviation map applies only when `is_default`,
   so a fund's own bucket keeps its name. Nothing reads `inside_commitment`: the post-call figures
   are served already computed. Totals come from `bucket_totals` and the summary, never by summing
-  a page. When the row walk stops short the table says "Show all N of M loaded", and after a
+  a page. The Participating and Non-participating counts above the table switch which investors it
+  lists. When the row walk stops short the table says "Only N of M participating investors
+  loaded", and after a
   complete walk a bucket whose total no loaded row carries is called out under the table rather
-  than shown as a column of dashes. The review panel is `min(1000px, 94vw)` by `min(720px, 88vh)`.
-
-  **The panel is built to `Capital Call Review v3 - Carta Tasks.dc.html`, control for control.**
-  The mock has 16 `onClick` handlers and 13 `sc-if` states; every one has a counterpart. When you
-  change this panel, re-derive that list from the mock rather than reading the diff — a control
-  that exists in the mock and not here does not announce itself.
+  than shown as a column of dashes. The review panel is `min(1160px, 96vw)` by `min(780px, 92vh)`.
 
   **The email preview follows `carta-home`'s `renderEmailPreview`** — the same command, the same
   envelope-plus-scriptless-iframe shape, the same `[/LINK_CARTA]` caveat. Recipients key on
@@ -210,7 +209,7 @@ not inside a fund-data dashboard.
   `CARTA_MCP_FINANCIAL_REPORTING_TRACKER`, so no card means the environment does not serve it.
   `--frt-seed-period "Q2 2026"` forces one card for a demo; its panel still reads live.
 
-  **The panel is wider than the review panel** — `min(1120px, 96vw)` by `min(760px, 90vh)` —
+  **The panel is sized for its table** — `min(1120px, 96vw)` by `min(760px, 90vh)` —
   because six table columns need it; below about 900px the table scrolls inside the panel, never
   the page. The read returns the whole firm with no paging, so a firm past roughly 80 entities
   would exceed carta-mcp's 40k reply cap and the period would read as failed; a firm with many
@@ -287,7 +286,7 @@ codes (`needs_reauth`, `server_not_connected`) are page-level, not per-section.
 | File | What it holds |
 |------|---------------|
 | `resources/app/fund-admin-requests.js` | composer, queue, thread overlay — the whole feature |
-| `resources/app/capital-call-review.js` | the capital call review panel and its notice sub-panel |
+| `resources/app/capital-call-review.js` | the capital call review panel |
 | `resources/app/financial-reporting-tracker.js` | the Financial Reporting Tracker cards and panel |
 | `resources/carta-workhub.app.js` | shared helpers (`_mcp`, `escHtml`, `showToast`, `trackWorkhub`) plus firm resolution and boot |
 | `resources/app/version-check.js` | update banner: reads the published version, compares, renders |
