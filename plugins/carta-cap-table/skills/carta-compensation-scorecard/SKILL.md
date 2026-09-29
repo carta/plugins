@@ -20,7 +20,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.90.28</carta-plugin>
+<carta-plugin>carta-cap-table:6.90.29</carta-plugin>
 
 # CTC Scorecard
 
@@ -56,16 +56,21 @@ This skill calls compensation-service's scorecard endpoints (the same endpoints 
 
 > **Use MCP, not CLI.** Every API call in this skill goes through the carta MCP. Do not shell out to the `carta` CLI — that bypasses the formatters, the 403 handler, and the attribution requirement.
 >
-> **⚠️ Two different invocation paths in this skill — do not conflate them.**
+> **⚠️ Every compensation command goes through `call_tool` — copy the tool names exactly.**
 >
-> | Command | Invoke with | Why |
+> Examples below use the shorthand `call_tool({...})` — read it as `mcp__carta__call_tool({"name": ..., "arguments": {...}})`. Do **not** use `fetch` or `discover`: both are deprecated and usually not registered, so they fail with *"No such tool available"*.
+>
+> The tool name is the command name with **colons turned into `__`. Hyphens and underscores inside a segment stay as they are.** The names are irregular, so never guess one:
+>
+> | Command | Tool name (pass as `name`) | ✗ Not a real tool |
 > |---|---|---|
-> | `subscription_status`, `plan` | `mcp__carta__call_tool({"name": "compensation__get__…", "arguments": {…}})` | Registered as flat `call_tool` tools (the plugin-wide convention, same as the benchmarks skill). |
-> | `employee-scorecard`, `corporation-scorecard` | `mcp__carta__fetch({"command": "compensation:get:…", "params": {…}})` | Registered only as MCP *commands*. They are **NOT** flat `call_tool` tools — `call_tool({"name": "compensation__get__employee_scorecard"})` returns *"Unknown tool"* and silently wastes calls. |
+> | `compensation:get:subscription_status` | `compensation__get__subscription_status` | — |
+> | `compensation:get:plan` | `compensation__get__plan` | — |
+> | `compensation:get:employee-scorecard` | `compensation__get__employee-scorecard` (**hyphen**) | `compensation__get__employee_scorecard` → *"Unknown tool"* |
+> | `compensation:get:corporation-scorecard` | `compensation__get__corporation-scorecard` (**hyphen**) | `compensation__get__corporation_scorecard` → *"Unknown tool"* |
+> | `context_tools:get:profile` | `context_tools__get__profile` | — |
 >
-> The scorecard commands are the trap: an LLM carrying `call_tool` muscle memory from the benchmarks skill will call the wrong tool. **In this skill, the `call_tool(...)` shorthand is used ONLY for `subscription_status` and `plan`.** Every `employee-scorecard` / `corporation-scorecard` example below is written out in full as `mcp__carta__fetch(...)` — invoke it exactly as written, do not "translate" it back to `call_tool`.
->
-> For the `fetch` commands, note the shapes that trip agents up: the command name is **hyphenated/colon** (`compensation:get:employee-scorecard`), the argument key is **`params`** (not `arguments`), and `page_size` is **snake_case**.
+> Arguments go in **`arguments`** (not `params`), and `page_size` is **snake_case**.
 
 > **Showing employee names is correct.**
 >
@@ -194,12 +199,12 @@ Capture `plan.id` and `benchmark_version` metadata (for the citation later).
 For *"how are we positioned"*, *"what's the band distribution"*, *"are we paying market"* — where the user wants **counts, not a per-person table** — get the overall-band counts directly with three filtered calls. Read only `total_results` from each (you don't need the rows):
 
 ```
-mcp__carta__fetch({"command": "compensation:get:employee-scorecard",
-                   "params": {"corporation_id": <corporation_pk>, "score": "LOW",  "page_size": 1}})   → total_results = Low count
-mcp__carta__fetch({"command": "compensation:get:employee-scorecard",
-                   "params": {"corporation_id": <corporation_pk>, "score": "MID",  "page_size": 1}})   → total_results = Mid count
-mcp__carta__fetch({"command": "compensation:get:employee-scorecard",
-                   "params": {"corporation_id": <corporation_pk>, "score": "HIGH", "page_size": 1}})   → total_results = High count
+call_tool({"name": "compensation__get__employee-scorecard",
+           "arguments": {"corporation_id": <corporation_pk>, "score": "LOW",  "page_size": 1}})   → total_results = Low count
+call_tool({"name": "compensation__get__employee-scorecard",
+           "arguments": {"corporation_id": <corporation_pk>, "score": "MID",  "page_size": 1}})   → total_results = Mid count
+call_tool({"name": "compensation__get__employee-scorecard",
+           "arguments": {"corporation_id": <corporation_pk>, "score": "HIGH", "page_size": 1}})   → total_results = High count
 ```
 
 Plus one unfiltered call (`page_size: 1`) to read the roster `total_results`, for reconciliation.
@@ -216,8 +221,8 @@ This path is cheap (4 calls, no paging) and exact for the overall band. Continue
 For *"give me the salary / equity / total-cash breakdown"*, or whenever you also need the per-person rows, sweep the roster at the safe page size and count each metric's own band:
 
 ```
-mcp__carta__fetch({"command": "compensation:get:employee-scorecard",
-                   "params": {"corporation_id": <corporation_pk>, "page_size": 10, "page": 1}})
+call_tool({"name": "compensation__get__employee-scorecard",
+           "arguments": {"corporation_id": <corporation_pk>, "page_size": 10, "page": 1}})
 # fetch successive pages 2,3,… until you have collected total_results unique rows
 ```
 
@@ -246,9 +251,9 @@ You are **reading** the band the API already returns per row — never recompute
 > **When to use `corporation-scorecard` instead.** Only when the user is comparing a **draft / in-flight plan** against the active plan ("how would our positioning change under the new plan?"). It requires the **draft** plan's `plan_id` (a non-active plan), never the active plan's id:
 >
 > ```
-> mcp__carta__fetch({"command": "compensation:get:corporation-scorecard",
->                    "params": {"corporation_id": <corporation_pk>,
->                               "plan_id":        <DRAFT_plan.id>}})
+> call_tool({"name": "compensation__get__corporation-scorecard",
+>            "arguments": {"corporation_id": <corporation_pk>,
+>                          "plan_id":        <DRAFT_plan.id>}})
 > ```
 >
 > It returns `{active_plan_counts_per_band, current_plan_counts_per_band}` for the side-by-side comparison in Step 5a. If you only have the active plan (no draft is being modeled), this endpoint is the wrong tool — use the employee-derived rollup above. If you pass the active id and get *"Cannot compare active plan to itself"*, do not surface that error — fall back to Path 1.
@@ -256,9 +261,9 @@ You are **reading** the band the API already returns per row — never recompute
 ### Step 4b — Per-employee scorecard
 
 ```
-mcp__carta__fetch({"command": "compensation:get:employee-scorecard",
-                   "params": {"corporation_id": <corporation_pk>,
-                              "page_size": 10}})
+call_tool({"name": "compensation__get__employee-scorecard",
+           "arguments": {"corporation_id": <corporation_pk>,
+                         "page_size": 10}})
 ```
 
 > The param is `page_size` (snake_case) — camelCase `pageSize` is silently dropped by the tool layer, leaving you on the default page size. And keep `page_size` small (~10): the endpoint returns *"response too large"* at `page_size` ≥ ~25 on larger rosters.
@@ -309,15 +314,15 @@ Use Title Case in narration even when passing the raw enum to the API. Example: 
 
 #### Single-employee lookup
 
-There is **no single-employee scorecard endpoint** — an individual's compa-ratio and percentile only exist as a row inside the corporation's batch-computed scorecard, scored relative to the whole roster. To answer *"show me [person]'s scorecard"*, query the same `employee_scorecard` endpoint **filtered to that one person**:
+There is **no single-employee scorecard endpoint** — an individual's compa-ratio and percentile only exist as a row inside the corporation's batch-computed scorecard, scored relative to the whole roster. To answer *"show me [person]'s scorecard"*, query the same `compensation__get__employee-scorecard` tool **filtered to that one person**:
 
 - If you have their employee UUID, pass `employee_id` (exact match — returns at most one row).
 - Otherwise pass `name` (substring match against full / first / last name — may return more than one person).
 
 ```
-mcp__carta__fetch({"command": "compensation:get:employee-scorecard",
-                   "params": {"corporation_id": <corporation_pk>,
-                              "name": "Ada Lovelace"}})
+call_tool({"name": "compensation__get__employee-scorecard",
+           "arguments": {"corporation_id": <corporation_pk>,
+                         "name": "Ada Lovelace"}})
 ```
 
 Then:
@@ -558,6 +563,7 @@ Do not retry. Do not surface the raw HTTP status, stack trace, or error body. Do
 | `corporation-scorecard` errors with *"Cannot compare active plan to itself"* | You passed the **active** plan id to a comparison-only endpoint. Expected — don't surface it to the user. Fall back to the employee-derived rollup (Step 4a, Path 1). Only use `corporation-scorecard` with a **draft** plan id. |
 | Scorecard regeneration is in flight (response carries `task_status.state: PENDING` / `RUNNING`) | Surface the partial data if present, append: *"The scorecard is currently regenerating in the background. Numbers may shift in the next few minutes."* |
 | Unknown band value (anything other than LOW / MID / HIGH) | Render verbatim in chat; don't substitute. The API enum may have grown. |
+| *"Unknown tool"* or *"No such tool available"* on a compensation call | The tool name is wrong. Scorecard tool names keep their hyphen: `compensation__get__employee-scorecard`, not `…employee_scorecard`. Use the exact name from the tool-name table at the top of this skill, through `call_tool`, and retry once. Do not switch to `fetch` / `discover`, and do not guess name variations. |
 | Network/transport error | One retry. If it fails again, surface: *"Couldn't reach compensation-service. Try again in a moment — if this keeps happening, contact Carta support."* |
 | Response too large (*"response too large (limit 40000 chars)"*) | Drop `page_size` to ~10 and page through. Never estimate a distribution from a partial sweep — complete it or tell the user it couldn't be completed. |
 
