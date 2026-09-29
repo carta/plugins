@@ -30,10 +30,10 @@ export default function usePortfolio(firm, { onLockedEdit } = {}) {
       fetch(`/api/snapshot${q}`).then((r) => r.json()),
       fetch(`/api/portfolio${q}`).then(async (r) => { etag.current = r.headers.get("etag"); return r.json(); }),
     ]);
+    if (s?.error === "not_ready" || pr?.error === "not_ready" || !s?.funds || !Array.isArray(pr?.slices)) return;
     setSnapshot(s);
-    // Runs on post-refresh reloads too, so a late-resolved id lands without a relaunch.
     setTrackingFirm(s?.source?.firmId);
-    setDoc(hydrateDoc(pr)); // resolve on-disk edits deltas to full slices for the in-memory model
+    setDoc(hydrateDoc(pr));
   }, [q]);
   useEffect(() => { load(); }, [load]);
   useEffect(() => { docRef.current = doc; }, [doc]);
@@ -251,7 +251,7 @@ export default function usePortfolio(firm, { onLockedEdit } = {}) {
     [mutateDoc]
   );
 
-  const slice = doc ? activeSlice(doc) : null;
+  const slice = doc?.slices ? activeSlice(doc) : null;
 
   return {
     snapshot,

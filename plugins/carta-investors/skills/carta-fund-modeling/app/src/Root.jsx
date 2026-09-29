@@ -15,6 +15,7 @@ export default function Root() {
   const firm = useSyncExternalStore(subscribeNav, () => parseRoute().firm, () => null);
   const [extras, setExtras] = useState(null); // { slug, pacing, ownership, lpBase } for `firm`
   const [error, setError] = useState(null);
+  const [loadingStep, setLoadingStep] = useState(null); // SSE step from /api/load-firm
 
   // Pick / clear the firm by navigating the path; also remember it for next launch.
   const choose = useCallback((slug) => {
@@ -62,33 +63,75 @@ export default function Root() {
     return () => { live = false; };
   }, [firm, fetchFirms]);
 
-  // load the firm's extras whenever the firm changes
+  // Load the firm's extras whenever the firm changes. If snapshot data isn't
+  // ready yet (fresh OAuth session), trigger /api/load-firm to fetch from MCP.
   useEffect(() => {
     if (!firm) return;
     let live = true;
-    setExtras(null); // drop a previous firm's extras (e.g. back/forward between firms)
+    setExtras(null);
     setError(null);
+    setLoadingStep(null);
     const q = `?firm=${encodeURIComponent(firm)}`;
-    // company-ownership is optional (only present once the skill has written it);
-    // tolerate a 404 / not_ready so the firm still loads without it
-    const ownership = fetch(`/api/report/company-ownership.json${q}`)
-      .then((r) => r.json()).then((d) => (d && !d.error ? d : {})).catch(() => ({}));
-    // LP base is optional (firm-wide PARTNER_DATA); tolerate its absence. Shown on LP Returns.
-    const lpBase = fetch(`/api/report/lp-base.json${q}`)
-      .then((r) => r.json()).then((d) => (d && !d.error ? d : null)).catch(() => null);
-    // GP base is optional: only written when the gp_carry stem was fetched (the skill
-    // gates it behind an explicit opt-in), so absence is the normal case. Feeds the
-    // GP Economics "GP partner carry" table.
-    const gpBase = fetch(`/api/report/gp-base.json${q}`)
-      .then((r) => r.json()).then((d) => (d && !d.error ? d : null)).catch(() => null);
-    Promise.all([
-      fetch(`/api/pacing${q}`).then((r) => r.json()),
-      ownership,
-      lpBase,
-      gpBase,
-    ])
-      .then(([pacing, ownership, lpBase, gpBase]) => { if (live) setExtras({ slug: firm, pacing, ownership, lpBase, gpBase }); })
-      .catch((e) => { if (live) setError(String(e)); });
+
+    async function loadExtras() {
+      // Check if snapshot data exists for this session
+      const snap = await fetch(`/api/snapshot${q}`).then((r) => r.json());
+      if (snap?.error === "not_ready") {
+        // No data yet — fetch from MCP via SSE stream
+        setLoadingStep("Connecting to Carta…");
+        const res = await fetch("/api/load-firm", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ slug: firm }),
+        });
+        // 401/403/400 come back as JSON, not SSE. The frame parser finds no
+        // "data: " line in those bytes, so the failure would pass silently.
+        if (!res.ok) {
+          const body = await res.json().catch(() => null);
+          if (live) {
+            setLoadingStep(null);
+            setError(body?.message || body?.error || `Load failed (${res.status})`);
+          }
+          return;
+        }
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split("\n");
+          buf = lines.pop();
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            try {
+              const evt = JSON.parse(line.slice(6));
+              if (!live) return;
+              if (evt.error) { setError(evt.error); return; }
+              if (evt.step && !evt.done) setLoadingStep(evt.step);
+            } catch {}
+          }
+        }
+        if (!live) return;
+        setLoadingStep(null);
+      }
+
+      // Now load extras (snapshot is ready)
+      const ownership = fetch(`/api/report/company-ownership.json${q}`)
+        .then((r) => r.json()).then((d) => (d && !d.error ? d : {})).catch(() => ({}));
+      const lpBase = fetch(`/api/report/lp-base.json${q}`)
+        .then((r) => r.json()).then((d) => (d && !d.error ? d : null)).catch(() => null);
+      const gpBase = fetch(`/api/report/gp-base.json${q}`)
+        .then((r) => r.json()).then((d) => (d && !d.error ? d : null)).catch(() => null);
+      const [pacing, own, lp, gp] = await Promise.all([
+        fetch(`/api/pacing${q}`).then((r) => r.json()),
+        ownership, lpBase, gpBase,
+      ]);
+      if (live) setExtras({ slug: firm, pacing, ownership: own, lpBase: lp, gpBase: gp });
+    }
+
+    loadExtras().catch((e) => { if (live) setError(String(e)); });
     return () => { live = false; };
   }, [firm]);
 
@@ -112,7 +155,7 @@ export default function Root() {
   if (!extras) {
     return (
       <div style={{ ...sans, minHeight: "100vh", background: "var(--ink-color-global-surface-background-default)", color: "var(--ink-color-global-text-subtle)", display: "grid", placeItems: "center" }}>
-        <div style={{ fontSize: FS.bodyLg }}>Loading {firm}…</div>
+        <div style={{ fontSize: FS.bodyLg }}>{loadingStep || `Loading ${firm}…`}</div>
       </div>
     );
   }

@@ -1,0 +1,31 @@
+# Copy to wrangler.toml and fill in. That file is gitignored —
+# it carries account IDs, namespace IDs and customer slugs.
+
+name = "portfolio-analytics"
+account_id = "YOUR_CLOUDFLARE_ACCOUNT_ID"
+compatibility_date = "2024-12-01"
+main = "server/worker.js"
+workers_dev = true
+
+[assets]
+directory = "./webapp"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = true
+
+# webapp/src is a symlink to app/src — wrangler follows it
+
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = "YOUR_KV_NAMESPACE_ID"
+
+# Maps each URL label to the firm-slug prefix it may read.
+# An unmapped label resolves to null, and every firm is denied.
+[vars]
+TENANTS = '{"<label>":"<firm-slug>"}'
+
+# One route per customer. custom_domain provisions DNS and TLS per
+# hostname; a wildcard cert does not cover this second subdomain level.
+[[routes]]
+pattern = "analytics.<label>.carta.cloud"
+custom_domain = true

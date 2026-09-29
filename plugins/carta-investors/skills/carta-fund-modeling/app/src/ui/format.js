@@ -16,7 +16,13 @@ let SYMBOL = "$";
  *  back to a "<CODE> " prefix so an unmapped currency is still labeled, never
  *  silently shown as USD. Idempotent; safe to call on every render. */
 export function setDisplayCurrency(code) {
-  if (!code) return;
+  // A null code means the data named no currency: amounts render bare, because
+  // a "$" on a fund reporting in EUR is worse than no symbol.
+  if (!code) {
+    CURRENCY_CODE = null;
+    SYMBOL = "";
+    return;
+  }
   CURRENCY_CODE = String(code).toUpperCase();
   SYMBOL = SYMBOLS[CURRENCY_CODE] || CURRENCY_CODE + " ";
 }

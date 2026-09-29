@@ -86,7 +86,10 @@ export default function useShare() {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}),
       });
       if (res.status === 409) throw new Error("Another sharing action is already running.");
-      if (!res.ok) throw new Error(`Couldn't start (${res.status}).`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.error || `Couldn't start (${res.status}).`);
+      }
       startPolling();
     } catch (e) {
       window.__fmPortfolioCtl?.resumeAutosave?.();

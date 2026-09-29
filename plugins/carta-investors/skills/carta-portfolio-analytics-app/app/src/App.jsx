@@ -213,7 +213,11 @@ function DataStatusLine({ source }) {
 }
 
 export default function App({ firm }) {
-  const { data: rawData, error } = useKpi(firm);
+  const [userName, setUserName] = useState(null);
+  useEffect(() => {
+    fetch("/auth/check").then((r) => r.json()).then((d) => { if (d.userName) setUserName(d.userName); }).catch(() => {});
+  }, []);
+  const { data: rawData, error, step: loadStep } = useKpi(firm);
   const dashboard = useDashboard(firm);
   // Custom metrics splice in as derived KPIs (Formulas itself gets rawData). Key the
   // memo on slice CONTENT — update() clones the doc, so identity changes on any edit.
@@ -320,7 +324,16 @@ export default function App({ firm }) {
     return <Center><div style={{ fontSize: FS.bodyLg }}>Couldn’t load KPI data ({error}). Try “Refresh KPI data”.</div></Center>;
   }
   if (!data) {
-    return <Center><Mark size={56} style={{ margin: "0 auto", opacity: 0.9 }} /><div style={{ marginTop: 12, fontSize: FS.bodyLg }}>Loading KPI data…</div></Center>;
+    return <Center><Mark size={56} style={{ margin: "0 auto", opacity: 0.9 }} />
+      <div style={{ marginTop: 16, fontSize: FS.bodyLg }}>{loadStep ? loadStep.label + "…" : "Loading KPI data…"}</div>
+      {loadStep && <div style={{ marginTop: 10, display: "flex", gap: 3, justifyContent: "center" }}>
+        {Array.from({ length: loadStep.total }, (_, i) => (
+          <div key={i} style={{ width: 20, height: 3, borderRadius: 1.5,
+            background: i < loadStep.index ? "var(--ink-color-global-text-default)" : i === loadStep.index ? "var(--ink-color-global-text-subtle)" : "var(--ink-color-global-border-subtle)",
+            transition: "background 0.2s" }} />
+        ))}
+      </div>}
+    </Center>;
   }
 
   const toggleTheme = () => { trackClick("PortfolioAnalytics.Chrome.ToggleTheme"); setDark((d) => !d); };
@@ -336,11 +349,11 @@ export default function App({ firm }) {
     </button>
   );
   const currencyMenu = (
-    <CurrencyMenu present={presentCurrencies(rawData)} fundCurrency={data.source?.currency || "USD"}
+    <CurrencyMenu present={presentCurrencies(rawData)} fundCurrency={data.source?.currency || null}
       value={currency} onChange={(next) => dashboard.update((d) => { d.currency = next; return d; })} />
   );
   const currencyMenuSidebar = (
-    <CurrencyMenu variant="sidebar" present={presentCurrencies(rawData)} fundCurrency={data.source?.currency || "USD"}
+    <CurrencyMenu variant="sidebar" present={presentCurrencies(rawData)} fundCurrency={data.source?.currency || null}
       value={currency} onChange={(next) => dashboard.update((d) => { d.currency = next; return d; })} />
   );
 
@@ -359,7 +372,7 @@ export default function App({ firm }) {
             = −5px — so a one-line name centres on the logo and a two-line name hangs
             its second line below. */}
         <div style={{ padding: "4px 14px", display: "flex", alignItems: "flex-start", gap: 12 }}>
-          <Mark size={30} style={{ flex: "none", transform: "translateY(-5px)" }} />
+          <Mark branding={data.branding} size={30} style={{ flex: "none", transform: "translateY(-5px)" }} />
           <div style={{ minWidth: 0 }}>
             <div style={{ ...sans, fontSize: 14, fontWeight: 600, lineHeight: "20px", letterSpacing: "-0.01em", color: "var(--ink-color-global-text-default)", wordBreak: "break-word" }}>{resolvedFirmName}</div>
           </div>
@@ -383,6 +396,12 @@ export default function App({ firm }) {
           <DataStatusLine source={data.source} />
         </div>
         <UpdateDataButton variant="sidebar" datasets={data.source?.datasets} builtAt={data.source?.builtAt} companies={refreshCompanies} />
+        {userName && (
+          <div style={{ padding: "8px 12px 0", borderTop: "1px solid var(--ink-color-global-border-subtle)", marginTop: 4, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+            <span style={{ ...sans, fontSize: 12, fontWeight: 500, color: "var(--ink-color-global-text-subtle)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{userName}</span>
+            <a href="/auth/logout" style={{ ...sans, fontSize: 12, fontWeight: 500, color: "var(--ink-color-global-text-subtle)", textDecoration: "none", whiteSpace: "nowrap", flex: "none" }}>Sign out</a>
+          </div>
+        )}
       </div>
     </aside>
   );
@@ -390,7 +409,7 @@ export default function App({ firm }) {
   const narrowHeader = (
     <div className="no-print" style={{ borderBottom: `1px solid var(--ink-color-global-border-subtle)`, background: "var(--ink-color-global-surface-background-default)", padding: "12px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <Mark size={24} />
+        <Mark branding={data.branding} size={24} />
         <span style={{ ...serif, fontSize: FS.h3, fontWeight: 700, color: "var(--ink-color-global-text-default)" }}>{resolvedFirmName}</span>
         <span style={{ flex: 1 }} />{currencyMenu}<UpdateDataButton datasets={data.source?.datasets} builtAt={data.source?.builtAt} companies={refreshCompanies} />{themeToggle}
       </div>

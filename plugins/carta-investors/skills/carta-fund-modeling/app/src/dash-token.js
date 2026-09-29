@@ -43,6 +43,13 @@ export async function resolveDashToken() {
     return token;
   }
 
+  // OAuth mode: no dash token needed — the session cookie handles auth.
+  // If heartbeat passes with just cookies, skip the token gate.
+  try {
+    const res = await fetch("/api/heartbeat");
+    if (res.ok) return "__cookie_auth__";
+  } catch {}
+
   try {
     localStorage.removeItem(KEY); // no valid token — drop any stale stored one
   } catch {
@@ -53,7 +60,7 @@ export async function resolveDashToken() {
 
 // Patch fetch so the existing bare /api calls carry the token, unchanged.
 export function installApiAuth(token) {
-  if (!token) return;
+  if (!token || token === "__cookie_auth__") return;
   const orig = window.fetch.bind(window);
   window.fetch = (input, init = {}) => {
     const url = typeof input === "string" ? input : (input && input.url) || "";

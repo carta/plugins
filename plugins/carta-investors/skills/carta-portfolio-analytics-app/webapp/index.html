@@ -74,12 +74,13 @@
     <script type="module">
       // Overlay for all three failure timings: transpile (SW error module),
       // module-eval, and post-mount React errors.
+      const hasDashToken = new URLSearchParams(location.search).has("t") || !!localStorage.getItem("pa_dash_token");
       function showError(message) {
         const el = document.getElementById("cpa-error");
         el.innerHTML =
           "<h2 style='margin:0 0 8px'>Error</h2>" +
           "<pre>" + escapeHtml(message) + "</pre>" +
-          "<div class='fm-cta'>Copy this message and paste it back to Claude to fix it.</div>";
+          (hasDashToken ? "<div class='fm-cta'>Copy this message and paste it back to Claude to fix it.</div>" : "");
         el.classList.add("visible");
       }
       function escapeHtml(s) {
