@@ -84,8 +84,14 @@ def infer_gl_codes(
 
     `row_gl_codes`/`other_sheet_row_gl_codes` map a row number (this sheet,
     or one named other sheet) to its own GL codes. Returns `{"resolved":
-    [...], "sources": [...], "unresolved_reason": None}`, or an empty
-    `resolved` with a plain-English `unresolved_reason` — never a guess.
+    [...], "sources": [...], "unresolved_reason": None, "unresolved_rows":
+    [...]}` — `unresolved_rows` names every summed row `lookup` came back
+    empty for, whether or not the others resolved; a caller that wants to
+    chase one of those down some other way (its own label, say) knows
+    exactly which row numbers are still open. This module still never
+    reads or resolves what such a row contains — that stays the caller's
+    job, on a sheet+row number this module only ever reports, never looks
+    at itself.
     """
     if not isinstance(formula, str) or not formula.strip().startswith("="):
         return _unresolved("not a formula")
@@ -185,8 +191,9 @@ def _resolve_rows(rows: list[int], lookup) -> dict:
         reason = "none of the referenced rows carry a GL code of their own"
         if no_identity:
             reason += f" (rows {no_identity})"
-        return _unresolved(reason)
-    return {"resolved": sorted(resolved), "sources": sources, "unresolved_reason": None}
+        return _unresolved(reason, no_identity)
+    return {"resolved": sorted(resolved), "sources": sources,
+            "unresolved_reason": None, "unresolved_rows": no_identity}
 
 
 def _resolve_criteria_func(func, args_str, known_gl_codes, known_tag_values, cell_value) -> dict:
@@ -230,6 +237,7 @@ def _resolve_criteria_func(func, args_str, known_gl_codes, known_tag_values, cel
             "resolved": sorted(resolved_gl),
             "sources": [{"criteria": "literal"}],
             "unresolved_reason": None,
+            "unresolved_rows": [],
         }
     assert matched_tag_only
     return _unresolved(
@@ -298,5 +306,6 @@ def _literal_value(s: str):
         return None
 
 
-def _unresolved(reason: str) -> dict:
-    return {"resolved": [], "sources": [], "unresolved_reason": reason}
+def _unresolved(reason: str, unresolved_rows=()) -> dict:
+    return {"resolved": [], "sources": [], "unresolved_reason": reason,
+            "unresolved_rows": list(unresolved_rows)}

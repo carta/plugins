@@ -2930,15 +2930,77 @@ def _index_row_gl_codes(index, sheet_name):
     return lambda row_ix: (index.get((sheet_name, row_ix)) or {}).get("gl_codes") or []
 
 
-def resolve_formula_gl_evidence(excel_budgets, known_gl_codes=None):
+def _dashboard_workbook_path(dashboard_dir):
+    """The source workbook `.workbook-ref.json` recorded, if it is still
+    there to read.
+
+    Best-effort only, for the raw-label fallback below — a moved, renamed,
+    or deleted workbook just means that fallback finds nothing, same as if
+    it were never attempted. This does not affect the existing parsed-JSON
+    pipeline (`find_excel_budget_files`), which deliberately never checks
+    this path exists at all.
+    """
+    if not dashboard_dir:
+        return None
+    try:
+        ref = json.loads((Path(dashboard_dir) / ".workbook-ref.json").read_text())
+    except (OSError, ValueError):
+        return None
+    path = ref.get("path")
+    return path if path and Path(path).is_file() else None
+
+
+def _raw_row_label(workbook_path, sheet_name, row_ix, _cache):
+    """The text one column left of an arbitrary row on a sheet this build
+    never parsed as a budget of its own — the label convention this
+    plugin's own budget shapes already assume everywhere else.
+
+    `_cache` (a plain dict the caller owns for one `resolve_formula_gl_evidence`
+    run) keeps this to one `load_workbook` per source file regardless of how
+    many rows get looked up. Silent on any failure — a missing file, a
+    renamed sheet, or a blank cell all just mean no label to match; nothing
+    here is asserted to succeed.
+    """
+    if not workbook_path or not sheet_name:
+        return None
+    if workbook_path not in _cache:
+        try:
+            from openpyxl import load_workbook
+            _cache[workbook_path] = load_workbook(
+                workbook_path, read_only=True, data_only=True)
+        except Exception:
+            _cache[workbook_path] = None
+    wb = _cache[workbook_path]
+    if wb is None or sheet_name not in wb.sheetnames:
+        return None
+    try:
+        value = wb[sheet_name].cell(row=row_ix, column=1).value
+    except Exception:
+        return None
+    text = str(value).strip() if value not in (None, "") else ""
+    return text or None
+
+
+def resolve_formula_gl_evidence(excel_budgets, known_gl_codes=None,
+                                 account_names=None, dashboard_dir=None):
     """Fill in `formula_gl_codes` for a row whose formula sums other rows'
     GL identity, or whose `SUMIF`/`SUMIFS` names a literal GL code.
 
     Run after autolink/native-code/mapping-file resolution — a referenced
     row's `gl_codes` is only as complete as whatever ran ahead of this.
-    No `cell_value` hook: this reads parsed JSON, not the live workbook.
+    `formula_infer` itself reads parsed JSON, not the live workbook — but a
+    referenced row it still can't identify (no `gl_codes` of its own,
+    typically because the row lives on a sheet this build never parsed as
+    a budget) gets one further, optional try here: read that row's own
+    label straight off the source workbook and match it against Carta's
+    chart of accounts, exactly as a budget line's own label is matched
+    elsewhere. Only ever on an unambiguous single match — a label that
+    reads like more than one account, or none, is left for Step 4.7 to
+    ask about, the same as before this existed.
     """
     index = _formula_row_index(excel_budgets)
+    workbook_path = _dashboard_workbook_path(dashboard_dir)
+    workbook_cache = {}
     for b in excel_budgets:
         sheet = (b.get("workbook_meta") or {}).get("sheet")
         for row in b.get("rows") or []:
@@ -2955,8 +3017,29 @@ def resolve_formula_gl_evidence(excel_budgets, known_gl_codes=None):
                 other_sheet_row_gl_codes=({other_sheet: other_lookup} if other_lookup else None),
                 known_gl_codes=known_gl_codes,
             )
-            if result["resolved"]:
-                row["formula_gl_codes"] = result["resolved"]
+            resolved = set(result["resolved"])
+            unresolved_rows = result.get("unresolved_rows") or []
+            if unresolved_rows and account_names and workbook_path:
+                label_sheet = other_sheet if other_sheet and other_sheet != "__ambiguous__" else sheet
+                for r in unresolved_rows:
+                    label = _raw_row_label(workbook_path, label_sheet, r, workbook_cache)
+                    resolved.update(_label_gl_codes_if_unambiguous(label, account_names))
+            if resolved:
+                row["formula_gl_codes"] = sorted(resolved)
+
+
+def _label_gl_codes_if_unambiguous(label, account_names):
+    """A referenced row's own raw label, matched to exactly one Carta
+    account — never a guess between two, never picked from none.
+
+    Reuses `suggest_gl_accounts`'s name-matching rather than a second
+    matcher: the standard for "unambiguous" here is the same one
+    `mapping_table()` already applies to a budget line's own label.
+    """
+    if not label or not account_names:
+        return []
+    candidates = suggest_gl_accounts(label, None, account_names)
+    return [candidates[0]["gl"]] if len(candidates) == 1 else []
 
 
 def _formula_gl_suggestions(row, account_names):
@@ -4875,7 +4958,9 @@ def build(args):
 
     # After every other resolution pass, so a bucket line's formula reads
     # its referenced rows' most complete GL identity, not their parse-time one.
-    resolve_formula_gl_evidence(excel_budgets, known_gl_codes=_carta_account_names.keys())
+    resolve_formula_gl_evidence(
+        excel_budgets, known_gl_codes=_carta_account_names.keys(),
+        account_names=_carta_account_names, dashboard_dir=dashboard)
 
     # A crosstab row's mapped/resolved gl_codes only reaches the UI through
     # by_tag_value's account_type maps, which were built once at parse time —

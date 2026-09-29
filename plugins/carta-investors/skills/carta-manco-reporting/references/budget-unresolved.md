@@ -148,6 +148,21 @@ pass doesn't evaluate); read that formula the same way you'd read any
 other close call, and set `proposed` yourself when tracing it settles the
 question.
 
+**This is not optional and not a fallback you reach for only if the
+operator asks for it — do it before you print a single table.**
+`AskUserQuestion` is where a real judgment call goes, not where a
+question the workbook has already answered goes to be asked anyway. Open
+the workbook (with formulas intact) and trace every `source_formula` you
+haven't traced yet as part of this same read-through, before "Needs your
+input" is built. Skipping straight to the table with these rows still
+untraced, then only tracing one if the operator happens to ask, is the
+same violation as skipping `AskUserQuestion` itself elsewhere in this
+skill: a question the workbook already answered, asked anyway, because
+the answer was reached silently (by not looking) instead of checked. If
+you find yourself about to print **Needs your input** and a row in it
+still carries `source_formula`, stop and open the workbook for that row
+first — do not rely on the operator to ask you to.
+
 Two things stay out of this, both already ruled out above and repeated
 here because this is exactly where they'd creep back in:
 
@@ -281,13 +296,18 @@ are easy to miss:
 - **It is one of these accounts** — the row's `options` carry the near
   names, and picking one records `gl_codes`.
 - **Read the formulas from the workbook to figure this out** — offered
-  whenever the row carries `source_formula`: open the workbook with
-  formulas intact, read what that line's own formula sums, filters, or
-  references, and answer from that rather than from the label. This is
-  judgment applied to one row, not a second automated pass — record the
-  result the same way any other answer to this row is recorded, and note
-  in `notes` that it came from the formula so a later table view still
-  shows an honest reason.
+  whenever the row carries `source_formula`. By this point you should
+  already have tried tracing it (see "Read the unresolved rows yourself
+  before splitting the table" above) — a row still carrying
+  `source_formula` here is one that attempt didn't settle, not one you
+  haven't looked at yet. Offer this option anyway, and never drop it from
+  the question just because your own first pass came up short: open the
+  workbook with formulas intact, read what that line's own formula sums,
+  filters, or references, and answer from that rather than from the
+  label. Judgment applied to one row, not a second automated pass —
+  record the result the same way any other answer to this row is
+  recorded, and note in `notes` that it came from the formula so a later
+  table view still shows an honest reason.
 - **It is not in Carta** — the firm budgets for something their ledger has
   no account for. Record `status: "void"`: the line renders budget-only,
   it stops being asked about, and the Step 5 read-out counts it among the
