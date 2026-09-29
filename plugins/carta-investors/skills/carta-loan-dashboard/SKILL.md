@@ -3,8 +3,7 @@ name: carta-loan-dashboard
 description: >
   Loan portfolio dashboard as a persistent Cowork artifact — KPI tiles and every
   loan in the portfolio, data from Carta via the MCP. This is the LOAN portfolio
-  (borrowers, advances, commitments). Do NOT use for LP investment portfolios —
-  use carta-lp-dashboard instead.
+  (borrowers, advances, commitments). Do NOT use for LP investment portfolios.
 
   Triggers: "loan dashboard", "loan ops dashboard", "loan portfolio",
   "show my loans", "pull up my loan portfolio", "what are my outstanding loans",
@@ -39,7 +38,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.47.3</carta-plugin>
+<carta-plugin>carta-investors:6.47.4</carta-plugin>
 
 [PATTERN carta-writing-style v0.0.2]
 [PATTERN etiquette v0.0.6]
