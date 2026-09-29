@@ -23,6 +23,16 @@ async function accepted(token) {
 
 export async function resolveDashToken() {
   if (typeof window === "undefined") return "";
+
+  // Cookie-auth mode (Cloudflare Worker): no token needed.
+  try {
+    const authResp = await fetch("/auth/check");
+    if (authResp.ok) {
+      const authData = await authResp.json();
+      if (authData.authenticated) return "cookie-auth";
+    }
+  } catch { /* /auth/check not available (local serve.py) — fall through to token flow */ }
+
   const params = new URLSearchParams(window.location.search);
   const fromUrl = params.get("t");
   let stored = "";
@@ -54,7 +64,7 @@ export async function resolveDashToken() {
 
 // Patch fetch so the existing bare /api calls carry the token, unchanged.
 export function installApiAuth(token) {
-  if (!token) return;
+  if (!token || token === "cookie-auth") return;
   const orig = window.fetch.bind(window);
   window.fetch = (input, init = {}) => {
     const url = typeof input === "string" ? input : (input && input.url) || "";

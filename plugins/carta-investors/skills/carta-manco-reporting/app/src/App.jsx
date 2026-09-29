@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { sans, FAINT, GLOBAL_CSS, FS } from "./ui/theme.js";
 import AppShell from "./shell/AppShell.jsx";
 import { parseRoute, navigate as navigateRoute, subscribeNav } from "./shell/route.js";
@@ -67,32 +67,83 @@ export default function App() {
   }, [dark]);
   const toggleTheme = () => { trackClick("MancoReporting.App.ToggleTheme"); setDark((d) => !d); };
 
-  useEffect(() => {
-    // Parallel fetch snapshot + accounts (accounts is optional; drill-downs
-    // just don't render if it's absent).
+  const [loadStatus, setLoadStatus] = useState(null);
+
+  const fetchData = useCallback(() => {
     fetch("/api/snapshot")
       .then(r => r.json())
       .then(data => {
         if (data?.error) { reportSnapshotError(data.error); setError(data.error); return; }
-        // Older cached snapshots (pre-currency field) omit `currency`;
-        // setDisplayCurrency() no-ops on a falsy code, leaving the USD default.
+        if (data?.ops) {
+          data.ops.total_income = data.ops.total_income ?? data.ops.ytdIncome ?? 0;
+          data.ops.total_expenses = data.ops.total_expenses ?? data.ops.ytdExpenses ?? 0;
+          data.ops.net = data.ops.net ?? (data.ops.total_income - data.ops.total_expenses);
+        }
         setDisplayCurrency(data?.currency);
         if (data?.feeSchedule?.funds) assignCategoricalColors(data.feeSchedule.funds);
         setSnapshot(data);
+        setError(null);
       })
       .catch(e => { reportSnapshotError(String(e)); setError(String(e)); });
 
     fetch("/api/accounts")
       .then(r => r.json())
       .then(data => {
-        // Optional to render, but losing it disables every drill-down — so the UI
-        // stays silent and telemetry does not.
         if (data?.error) { trackRender("MancoReporting.App.AccountsUnavailable"); return; }
         if (data?.monthly_categories?.categories) assignExpenseCategoryColors(data.monthly_categories.categories);
         setAccountsData(data);
       })
       .catch(() => trackRender("MancoReporting.App.AccountsUnavailable"));
   }, []);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Auto-load: when snapshot returns not_ready, trigger /api/load-firm via SSE.
+  useEffect(() => {
+    if (error !== "not_ready") return;
+    let cancelled = false;
+    (async () => {
+      try {
+        let slug;
+        const cfg = await fetch("/api/app-config").then(r => r.json());
+        slug = cfg?.defaultFirm;
+        if (!slug) {
+          const firms = await fetch("/api/firms").then(r => r.json()).catch(() => []);
+          if (Array.isArray(firms) && firms.length > 0) slug = firms[0].slug;
+        }
+        if (!slug || cancelled) return;
+        setLoadStatus("Loading firm data…");
+        const resp = await fetch("/api/load-firm", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ slug }),
+        });
+        const reader = resp.body?.getReader();
+        if (!reader) return;
+        const decoder = new TextDecoder();
+        let buf = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done || cancelled) break;
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split("\n");
+          buf = lines.pop() || "";
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            try {
+              const msg = JSON.parse(line.slice(6));
+              setLoadStatus(msg.step || "Loading…");
+              if (msg.done) { fetchData(); setLoadStatus(null); return; }
+              if (msg.error) { setError(msg.error); setLoadStatus(null); return; }
+            } catch { /* skip */ }
+          }
+        }
+      } catch (e) {
+        if (!cancelled) setError(String(e));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [error, fetchData]);
 
   // Tab title names the firm, mirroring carta-fund-modeling. No iframe here,
   // so document.title is set directly instead of posted to an outer shell.
@@ -168,14 +219,14 @@ export default function App() {
       <AppShell sidebarProps={sidebarProps}>
         {error === "not_ready" && (
           <p style={{ ...sans, fontSize: FS.bodyLg, color: FAINT }}>
-            Waiting for data — the skill hasn&#39;t written snapshot.json into the dashboard dir yet.
+            {loadStatus || "· Loading fund data…"}
           </p>
         )}
         {error && error !== "not_ready" && (
           <p style={{ ...sans, fontSize: FS.bodyLg, color: "var(--red)" }}>Error: {error}</p>
         )}
         {!error && !snapshot && (
-          <p style={{ ...sans, fontSize: FS.bodyLg, color: FAINT }}>Loading…</p>
+          <p style={{ ...sans, fontSize: FS.bodyLg, color: FAINT }}>{loadStatus || "Loading…"}</p>
         )}
         {snapshot && activeParent === "dashboard" && (
           <DashboardView

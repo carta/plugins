@@ -15,9 +15,15 @@ let SYMBOL = "$";
 
 /** Set the ManCo's display currency (ISO code). Symbol is looked up, falling
  *  back to a "<CODE> " prefix so an unmapped currency is still labeled, never
- *  silently shown as USD. Idempotent; safe to call on every render. */
+ *  silently shown as USD. Idempotent; safe to call on every render.
+ *  A null code means the data named no currency: figures then render bare,
+ *  because a "$" on a ManCo reporting in EUR is worse than no symbol. */
 export function setDisplayCurrency(code) {
-  if (!code) return;
+  if (!code) {
+    CURRENCY_CODE = null;
+    SYMBOL = "";
+    return;
+  }
   CURRENCY_CODE = String(code).toUpperCase();
   SYMBOL = SYMBOLS[CURRENCY_CODE] || CURRENCY_CODE + " ";
 }

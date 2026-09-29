@@ -30,7 +30,9 @@ const DASHBOARD_EXPORT_ID = "manco-export-dashboard";
 // ABOVE its value, spaced by an unbroken flex row rather than a grid of
 // separate boxes.
 function KpiStrip({ ops, cash }) {
-  const cashMissing = cash.balance == null;
+  // The Worker omits cash entirely when the ManCo has no bank accounts, so
+  // this reads through a null cash as well as a null balance.
+  const cashMissing = cash?.balance == null;
   useEffect(() => { if (cashMissing) trackRender("MancoReporting.Dashboard.CashUnavailable"); }, [cashMissing]);
   const netIncome = ops.total_income - ops.total_expenses;
   const netIsPos  = netIncome >= 0;
@@ -53,16 +55,15 @@ function KpiStrip({ ops, cash }) {
         sub="Total income less total expenses"
         valueColor={netIsPos ? GREEN : RED}
       />
-      <Tile
+      {cash && <Tile
         value={fmtCurrencyShort(cash.balance)}
         label="Cash Balance"
         sub={cashSubtitle(cash)}
         detail={hasCashDetail(cash) ? <CashDetailCard cash={cash} /> : null}
         detailLabel="Cash balance by account"
-        // Last tile in the strip — a left-anchored card runs off its edge.
         detailAlign="right"
         onDetailOpen={() => trackClick("MancoReporting.Dashboard.CashDetailHover")}
-      />
+      />}
     </div>
   );
 }
