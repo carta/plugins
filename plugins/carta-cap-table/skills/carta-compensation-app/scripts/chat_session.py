@@ -91,6 +91,14 @@ CTC_APP_NOTE = (
     "SCOPE - act on it. The rules above are about silently passing off non-CTC values "
     "as CTC values, not a general refusal license.\n"
     "\n"
+    "MARK WHAT YOU ADD. Every column, filter, sort, grouping, tag or other element you "
+    "add on the user's behalf renders <SparkleAI title=\"...\"/> from ui/components.jsx "
+    "- on the column header, beside the filter control, or next to the section label, "
+    "visible on first render. The title says what you added, e.g. "
+    "title=\"Added by Claude - filter: Level at or above Senior\" or "
+    "title=\"Added by Claude - sorted by compa-ratio\". Restyling existing UI (colour, "
+    "spacing, wording) gets no icon.\n"
+    "\n"
     "Three allowed paths for a value the user asks to display:\n"
     "1. The row already carries the field - render it. No marker needed. "
     "(e.g. `total_unvested_shares` on planner rows.)\n"
@@ -98,9 +106,10 @@ CTC_APP_NOTE = (
     "when both are present) - render it. No marker needed.\n"
     "3. User-supplied external data, or interpolation between two real percentiles - "
     "render it WITH the <SparkleAI/> component from ui/components.jsx (icon-only, "
-    "matching the usage at planner/FilterBox.jsx:259), placed next to the value or "
-    "on the column header, visible on first render (not behind a toggle or legend). "
-    "The parent element carries a `title` tooltip naming the source, e.g. "
+    "matching its usage in CommittedFilters in planner/FilterBox.jsx), placed next to "
+    "the value or on the column header, visible on first render (not behind a toggle "
+    "or legend). Pass its `title` prop naming the source - it renders an instant "
+    "hover tooltip - e.g. "
     "title=\"Claude estimated - interpolated between P50 and P75\" or "
     "title=\"User-added - Radford, Q3 2026\". SparkleAI + a source tooltip is what "
     "makes non-CTC values safe to display; the whole point of the icon is that "
@@ -128,6 +137,11 @@ CTC_APP_NOTE = (
 )
 
 
+_MARK_ADDITIONS = (
+    " Any column, filter, sort or tag you add here renders with "
+    "<SparkleAI title=\"Added by Claude - ...\"/> from ui/components.jsx."
+)
+
 # Prepended to each turn's prompt so a new AskBar file/field lands here alongside
 # the matching CTC_APP_NOTE update. Serve.py resolves the page via page_hint_for().
 _PAGE_HINTS = {
@@ -135,28 +149,28 @@ _PAGE_HINTS = {
         "Current view: Scorecard → app/src/views/Scorecard.jsx, backed by "
         "roster.json. Row fields include externalId, name, title, jobArea, focus, "
         "level, leader, bands, metrics, compaRatios, targetVariable, totalCash, "
-        "equity, ntmEquity."
+        "equity, ntmEquity." + _MARK_ADDITIONS
     ),
     "Benchmarks": (
         "Current view: Benchmarks → app/src/views/Benchmarks.jsx, backed by "
         "benchmarks.json. Row fields: job, level, ladder, geo, currency, salary, "
         "tcc, equity (each a percentile map), provenance, provenanceNote. "
-        "Interpolated percentiles and user-added rows render with <SparkleAI/> plus "
-        "a source-naming title tooltip."
+        "Interpolated percentiles and user-added rows render "
+        "<SparkleAI title={...}/> naming the source." + _MARK_ADDITIONS
     ),
     "RefreshPlanner": (
         "Current view: Refresh Planner → app/src/views/RefreshPlanner.jsx, backed "
         "by planner.json. Row fields include external_id, full_name, job_title, "
         "job_area, job_focus, job_level, job_track, location, hire_date, "
         "total_vested_shares, total_unvested_shares, live_award_count, "
-        "four_year_grant_benchmark_num_shares, date_of_final_vest."
+        "four_year_grant_benchmark_num_shares, date_of_final_vest." + _MARK_ADDITIONS
     ),
     "RefreshPlanner:SettingsStep": (
         "Current view: Refresh Planner → Settings step → "
         "app/src/views/planner/SettingsStep.jsx (a sub-step of RefreshPlanner.jsx), "
         "backed by planner.json. Edit SettingsStep.jsx for changes scoped to this "
         "step. Row fields as for RefreshPlanner; the step's own state is refresh "
-        "policy inputs."
+        "policy inputs." + _MARK_ADDITIONS
     ),
 }
 

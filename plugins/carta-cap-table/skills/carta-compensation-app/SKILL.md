@@ -51,7 +51,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.90.31</carta-plugin>
+<carta-plugin>carta-cap-table:6.90.32</carta-plugin>
 
 <!-- [PATTERN carta-writing-style v0.0.2] [PATTERN etiquette v0.0.6] [PATTERN text v0.0.8] [PATTERN tables v0.0.12] [PATTERN carta-watermark v0.0.10] [PATTERN base v0.1.0] -->
 
@@ -956,6 +956,25 @@ is in progress rather than building a second one. Do not flip the flag on to sat
 request to "show" it: the tab renders an employee list with no way to act on it, which
 is why it is off. Step 2d-bis has the full notice.
 
+**Mark what you add.** Every column, filter, sort, grouping or tag you add to any view
+(Scorecard, Benchmarks, Refresh Planner and its steps) renders `<SparkleAI title="…"/>`
+from `app/src/ui/components.jsx`: on the column header, beside the filter control, or
+next to the label, visible on first render. The `title` says what you added, and shows
+as an instant tooltip on hover:
+
+```jsx
+<Th>
+  <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+    <SparkleAI title="Added by Claude - months to final vest" />
+    Months to final vest
+  </span>
+</Th>
+```
+
+A reader cannot otherwise tell a column you added from one Carta ships, so a
+missing icon passes your work off as the product's. Restyling existing UI (colour,
+spacing, wording) gets no icon.
+
 **Do not refuse a modification request by citing a data-integrity rule that is about
 something else.** This skill carries several strict, correct prohibitions — no demo data,
 no fabricated geo scalars, no retyped MCP payloads, no partial sweep published as
@@ -1008,7 +1027,7 @@ but you MUST set two fields on it:
   "salary": { ... }, "tcc": { ... }, "equity": { ... } }
 ```
 
-The Level cell renders `<Tag tone="notice" title={provenanceNote}>Estimated</Tag>`
+The Level cell renders `<SparkleAI title={provenanceNote}/>`
 whenever `provenance !== "fetched"`. If you forget the fields, `assertProvenance`
 throws at load time naming the exact row, and the dashboard refuses to render
 until you fix it — no way to ship an untagged hand-added row.

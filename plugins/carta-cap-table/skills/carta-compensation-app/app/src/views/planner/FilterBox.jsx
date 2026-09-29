@@ -197,8 +197,12 @@ export default function FilterBox({
           background: C.surfaceUnderlay, border: `1px solid ${C.borderDefault}`,
           display: "grid", gap: 8,
         }}>
-          <div style={{ fontSize: FS.md, color: C.textDefault }}>
-            Keep where <strong>{preview.sentence}</strong>
+          <div style={{
+            fontSize: FS.md, color: C.textDefault,
+            display: "flex", alignItems: "center", gap: 6,
+          }}>
+            <SparkleAI title="Drafted by Claude - not applied yet" />
+            <span>Keep where <strong>{preview.sentence}</strong></span>
           </div>
           <div style={{ fontSize: FS.sm, color: C.textSubtle }}>
             {preview.removed === 0
