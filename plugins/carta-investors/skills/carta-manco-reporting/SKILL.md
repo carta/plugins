@@ -55,7 +55,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.47.2</carta-plugin>
+<carta-plugin>carta-investors:6.47.3</carta-plugin>
 
 # ManCo Reporting Dashboard
 
@@ -223,9 +223,21 @@ answer, and the URL.
 continue", "Surface is local, so I can continue", "Local surface confirmed",
 "Now moving to Step 2.5", "Now proceeding to Step 4 — assembling the
 datadir", "Datadir built successfully", "Now checking the local dashboard
-cache for…" are all output the user did not ask for and cannot act on.
-Between the greeting and the URL, a tool call is the whole turn — issue it
-and say nothing.
+cache for…", "Now Step 2 — resolve the ManCo entity" are all output the
+user did not ask for and cannot act on. Between the greeting and the URL,
+a tool call is the whole turn — issue it and say nothing.
+
+**This applies to the reasoning that leads up to a question, not only to
+steps that end silently.** Every entry in the list above (Step 2's entity
+confirmation, Step 2.75's workbook question, Step 4.7's mapping rows) is
+itself reached silently — the question `AskUserQuestion` puts in front of
+the user is the first visible thing, never a sentence explaining why the
+question is coming. "No ref exists for this firm — this needs an explicit
+ask, via `AskUserQuestion`, before Step 3" is exactly the same violation as
+the phrases above: it narrates the internal branch (no persisted ref found,
+so the 2.75a-i ask is next) instead of just asking
+[the question itself](references/budget-workbook.md#2.75a-i--ask-whether-theres-a-budget-workbook).
+Reaching a question is silent; asking it is the one visible act.
 
 **A failed command is troubleshot exactly as silently as a working one runs —
 everywhere in this skill, not only in the step that happened to fail.**

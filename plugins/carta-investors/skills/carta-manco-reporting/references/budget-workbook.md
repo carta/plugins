@@ -58,10 +58,13 @@ order:
    - Carries `{"declined": true, "deferred": true}` → written by an
      earlier version that defaulted rather than asking, so this firm has
      never actually been asked. Treat it as unanswered: go to 2.75a-i.
-3. **Neither** → this firm has never been asked. Go to 2.75a-i and ask,
-   before the dashboard is built. The budget is what the operator came
-   for; building on a fallback they were never offered, and raising it
-   afterwards, means the first thing they see is the wrong report.
+3. **Neither** → this firm has never been asked. Silently go to 2.75a-i and
+   ask, before the dashboard is built. Do not narrate the branch that got
+   you here ("no ref exists for this firm" or similar) — the question
+   2.75a-i asks is the first visible output, not an explanation of why it's
+   coming. The budget is what the operator came for; building on a
+   fallback they were never offered, and raising it afterwards, means the
+   first thing they see is the wrong report.
 
 #### 2.75a-0 — The ref's workbook is missing
 

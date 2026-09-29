@@ -185,7 +185,10 @@ proceed to Step 2, Step 3, or `serve.py`.
 
 ## Step 2 — Resolve ManCo entity (BUILD path only)
 
-**SILENT** apart from the entity question below — no narration of what is being resolved.
+**SILENT** apart from the entity question below — no narration of what is being resolved,
+and no announcement that this step is starting ("Now Step 2 — resolve the ManCo entity" is
+exactly the kind of output [SKILL.md](../SKILL.md) forbids). Reaching this step is silent;
+the entity question, when one is actually needed, is the only visible output.
 
 Reached in the same cases as Step 1 (a MISS, or `<FORCE_REFRESH>`) — never
 on a WARM HIT or a soft hit, both of which already know the entity.
