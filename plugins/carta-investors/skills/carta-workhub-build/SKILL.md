@@ -20,7 +20,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.46.18</carta-plugin>
+<carta-plugin>carta-investors:6.46.22</carta-plugin>
 
 # Carta Workhub — Build / Redeploy
 
@@ -112,11 +112,13 @@ not inside a fund-data dashboard.
   `review-capital-activity` (or `review-capital-activity-changes`) task opens the review panel
   instead of the thread. It is one page: a sidebar with the summary (the total, the notice and due
   dates, any adjustments, and for a distribution what it can pay out) and the payment accounts,
-  beside the preparer's note and the **Allocations**, **Notice** and **Delivery** tabs. The Notice
+  beside the preparer's note and the **Allocations**, **Notice** and **Delivery** tabs, and **Wires** for an
+  activity that pays out. The Notice
   tab shows the notice each investor receives, as the real PDF and as the rendered email. The footer carries **Request
   changes**, which opens a modal and keeps an unsent request as a draft on this computer, and
   **Approve and release**, behind its own confirm step. Read from `fa:get:capital-activity-review-summary`,
-  `fa:list:capital-activity-review-row`, `fa:get:capital-activity-partner-email-preview` and
+  `fa:list:capital-activity-review-row` (its rows carry each group's `wire_status` for the Wires
+  tab), `fa:get:capital-activity-partner-email-preview` and
   `fa:get:capital-activity-notice-pdf-preview`; written with `fa:mutate:request-capital-activity-changes`
   and `fa:mutate:approve-capital-activity`. All of them ride the `fetch` and `mutate` tools
   already in the grant, so adding a command never changes the publish call.

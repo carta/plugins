@@ -959,6 +959,9 @@
   background: none; border: 0; border-bottom: 2px solid transparent; cursor: pointer;
   font-family: inherit; font-size: 13px; line-height: 20px; color: var(--ink-color-global-text-subtle);
 }
+.ccr-tab-count { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px;
+  margin-left: -2px; border-radius: 9px; background: var(--ink-color-global-feedback-negative-strong); color: var(--ink-color-global-surface-background-default);
+  font-size: 9px; font-weight: 600; line-height: 1; vertical-align: 1px; }
 /* Sits at the label's top-right corner, like a notification dot. */
 .ccr-tab-dot { display: inline-block; width: 7px; height: 7px; margin-left: 2px; border-radius: 50%;
   background: var(--ink-color-global-link-default); vertical-align: 7px; }
@@ -1221,6 +1224,7 @@
 .ccr-dlv-seg:hover { color: var(--ink-color-global-link-default); text-decoration-color: currentColor; }
 .ccr-dlv-controls { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding-bottom: 10px; }
 .ccr-dlv-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.ccr-wire-table td.ccr-wire-status, .ccr-wire-table td.ccr-wire-date, .ccr-wire-table th { text-align: left; }
 .ccr-dlv-chip {
   padding: 3px 10px; border: 1px solid var(--ink-color-global-border-default); border-radius: var(--ink-radius-pill);
   background: var(--ink-color-global-surface-background-default); font-family: inherit; font-size: 11px; font-weight: 500;
@@ -1235,6 +1239,8 @@
   border: 1px solid var(--ink-color-global-border-default); border-radius: 4px;
 }
 .ccr-dlv-box { height: 300px; overflow: auto; overscroll-behavior: contain; border: 1px solid var(--ink-color-global-border-subtle); }
+/* Nothing sits under the wire table, so it takes the tab's height before it scrolls. */
+.ccr-wire-box { height: auto; max-height: 440px; }
 .ccr-dlv-table th { position: sticky; top: 0; z-index: 1; background: var(--ink-color-global-surface-background-default); }
 .ccr-table .ccr-dlv-toggle { text-align: center; }
 .ccr-dlv-sort {

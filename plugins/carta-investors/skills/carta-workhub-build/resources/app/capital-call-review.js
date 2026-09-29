@@ -199,6 +199,7 @@ function ccrReset(target, title) {
     allocView: "part",
     delivery: { filter: "all", q: "", sort: null, dir: 1 },
     deliveryOpen: false,
+    wireView: { filter: "all" },
     lpIndex: 0,
     // The notice PDF opens first; the email stands in where no PDF can be
     // rendered (no bundled viewer, or demo mode).
@@ -491,6 +492,77 @@ async function ccrLoad() {
     snap.error = err && err.message ? err.message : "read failed";
     ccrRender();
   }
+}
+
+// ── Wire instructions ─────────────────────────────────────────────────────
+// Each investor group's wire instructions, served on the review rows for an activity
+// that pays out. A deploy whose rows carry no wire_status shows no Wires tab.
+
+const ccrPays = (s) => !!s && (ccrIsDistribution(s) || ccrPayingFromState(s).kind !== "none");
+
+// fund-admin's statuses, most serious first. Missing and incomplete instructions hold a
+// payment; added is on file but never confirmed; over a year old is past its confirmation.
+const CCR_WIRE_STATUSES = [
+  { id: "missing", label: "Missing", pill: "bad" },
+  { id: "incomplete", label: "Incomplete", pill: "bad" },
+  { id: "added", label: "Not confirmed", pill: "warn" },
+  { id: "over_a_year_old", label: "Over a year old", pill: "warn" },
+  { id: "confirmed", label: "Confirmed", pill: "ok" },
+];
+// An FFC tag the bank needs and the instructions lack is one way of being incomplete.
+const ccrWireStatusOf = (r) => (r.wire_status === "incomplete_ffc_missing" ? "incomplete" : r.wire_status || null);
+
+// Instructions are held at the interest group, so every row of a group carries the same wire
+// fields. One entry per group, in first-row order, with the group's rows for anything summed.
+function ccrWireGroups(rows) {
+  const groups = new Map();
+  rows.forEach((r) => {
+    const i = r.interest || {};
+    const key = String(i.partner_interest_group_uuid || i.uuid || ccrRowLabel(r));
+    if (!groups.has(key)) {
+      groups.set(key, { uuid: key, name: ccrRowLabel(r), rows: [], wire_status: r.wire_status || null,
+        wire_confirmed: r.wire_confirmed ?? null, wire_setup: r.wire_setup || null,
+        wire_confirmed_on: r.wire_confirmed_on || null, wire_added_on: r.wire_added_on || null });
+    }
+    groups.get(key).rows.push(r);
+  });
+  return [...groups.values()];
+}
+
+// Waits for every row, so a partly walked table never shows a short count.
+const ccrWiresReady = () => !!_ccr.rowsDone && ccrPays(_ccr.summary) && ccrLpRows().some((r) => r.wire_status);
+const ccrWiresMissing = () => (ccrWiresReady() ? ccrWireGroups(ccrLpRows()).filter((g) => g.wire_status === "missing").length : 0);
+
+function ccrWiresTabBody(s) {
+  if (!s) return '<div class="loading-row" style="padding:20px 0;">Reading the capital call\u2026</div>';
+  const v = _ccr.wireView;
+  const rank = (g) => { const i = CCR_WIRE_STATUSES.findIndex((st) => st.id === ccrWireStatusOf(g)); return i < 0 ? CCR_WIRE_STATUSES.length : i; };
+  const all = ccrWireGroups(ccrLpRows());
+  const count = (id) => all.filter((g) => ccrWireStatusOf(g) === id).length;
+  const chip = (id, label, n) =>
+    '<button class="ccr-dlv-chip' + (v.filter === id ? " ccr-dlv-chip-on" : "") + '" data-ccr-wire-filter="' + id + '">' +
+    escHtml(label) + "<b>" + n + "</b></button>";
+  const chips = [chip("all", "All", all.length)].concat(CCR_WIRE_STATUSES.filter((st) => count(st.id)).map((st) => chip(st.id, st.label, count(st.id))));
+  const groups = all.filter((g) => v.filter === "all" || ccrWireStatusOf(g) === v.filter)
+    .sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
+  const pill = (g) => {
+    const st = CCR_WIRE_STATUSES.find((o) => o.id === ccrWireStatusOf(g));
+    return st ? '<span class="ccr-pill ccr-pill-' + st.pill + '">' + escHtml(st.label) + "</span>" : '<span class="ccr-faint">\u2014</span>';
+  };
+  const date = (g) => g.wire_confirmed_on ? escHtml(ccrDate(String(g.wire_confirmed_on).slice(0, 10))) : '<span class="ccr-faint">\u2014</span>';
+  const body = groups.length
+    ? groups.map((g) => "<tr><td>" + escHtml(g.name) + "</td>" +
+        '<td class="ccr-wire-status">' + pill(g) + "</td>" +
+        '<td class="ccr-wire-date">' + date(g) + "</td></tr>").join("")
+    : '<tr><td colspan="3" class="ccr-dlv-empty">No investors in this group.</td></tr>';
+  const narrowed = v.filter !== "all";
+  return '<div class="ccr-dlv-head"><span class="ccr-dlv-title">Wire instructions</span></div>' +
+    '<div class="ccr-dlv-controls"><div class="ccr-dlv-chips">' + chips.join("") + "</div></div>" +
+    '<div class="ccr-dlv-box ccr-wire-box"><table class="ccr-table ccr-dlv-table ccr-wire-table"><thead><tr>' +
+      "<th>Investor</th><th>Status</th><th>Last confirmed</th>" +
+    "</tr></thead><tbody>" + body + "</tbody></table></div>" +
+    '<div class="ccr-dlv-foot"><span>' + escHtml(narrowed ? "Showing " + groups.length + " of " + ccrInvestors(all.length) : ccrInvestors(all.length)) + "</span>" +
+      "<span>Missing and incomplete instructions hold an investor's payment; unconfirmed and year-old ones are still paid.</span></div>";
 }
 
 async function ccrLoadHealth(snap, params) {
@@ -1144,7 +1216,9 @@ function ccrReadinessRows(s) {
     ccrNum(r.ready_for_transfer_amount) === null ? null : ["Ready for transfer", ccrMoney(r.ready_for_transfer_amount, s.currency)],
     n(r.receiving_count) !== null && n(r.unpaid_count) !== null
       ? ["Receiving payment", r.receiving_count + " of " + ccrInvestors(n(r.unpaid_count))] : null,
-    n(r.over_a_year_old_count) ? ["Instructions over a year old", ccrInvestors(n(r.over_a_year_old_count))] : null,
+    // The Wires tab lists these once the rows carry wire status.
+    n(r.over_a_year_old_count) && !ccrWiresReady()
+      ? ["Instructions over a year old", ccrInvestors(n(r.over_a_year_old_count))] : null,
     n(r.manual_wire_count) ? ["Manual wires", ccrInvestors(n(r.manual_wire_count))] : null,
   ].filter(Boolean);
 }
@@ -1356,6 +1430,7 @@ const CCR_CHANGE_LABELS = {
   alloc: "Allocations",
   notice: "Notice/Email customizations",
   delivery: "Delivery settings",
+  wires: "Wire instructions",
 };
 
 // A label with nothing after it is a prompt, not content: it neither sends nor counts as an edit.
@@ -1407,17 +1482,20 @@ const CCR_EDIT_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor
 
 const ccrLpRows = (snap) => (snap || _ccr).rows.filter((r) => r.is_participating !== false);
 
-// A tab with something to look at says so: Delivery with a dot.
+// A tab with something to look at says so: Delivery with a dot, Wires with how
+// many investors' instructions are missing.
 function ccrSubnav() {
   const s = _ccr.summary;
+  const missing = ccrWiresMissing();
   const tabs = [
     { id: "alloc", label: "Allocations" },
     { id: "notice", label: "Notice" },
     { id: "delivery", label: "Delivery", dot: !!s && ccrDeliveryFlagged(s) },
-  ];
+  ].concat(ccrWiresReady() ? [{ id: "wires", label: "Wires", count: missing }] : []);
   return '<div class="ccr-subnav" role="tablist">' + tabs.map((t) => {
     const on = _ccr.activeTab === t.id;
-    const badge = t.dot ? '<span class="ccr-tab-dot" aria-label="needs a look"></span>' : "";
+    const badge = t.count ? '<span class="ccr-tab-count" aria-label="' + ccrInvestors(t.count) + ' missing wire instructions">' + t.count + "</span>"
+      : t.dot ? '<span class="ccr-tab-dot" aria-label="needs a look"></span>' : "";
     return '<button class="ccr-subtab' + (on ? " ccr-subtab-on" : "") + '" role="tab" aria-selected="' + on +
       '" data-ccr-tab="' + t.id + '">' + escHtml(t.label) + badge + "</button>";
   }).join("") +
@@ -1579,6 +1657,7 @@ function ccrReviewBody() {
   }
   const pane = _ccr.activeTab === "notice" ? ccrNoticeTabBody()
     : _ccr.activeTab === "alloc" ? ccrAllocPane(_ccr.summary)
+    : _ccr.activeTab === "wires" ? ccrWiresTabBody(_ccr.summary)
     : ccrSettingsTabBody(_ccr.summary);
   const bar = _ccr.activeTab === "notice" && ccrLpRows().length ? ccrDocBar() : "";
   // Drawn in the state it was last shown in; ccrRender moves it to the new one, so the change animates.
@@ -1884,6 +1963,12 @@ function ccrBind(root) {
   });
   on("#ccr-dlv-search", "input", (el) => { ccrDeliveryState().q = el.value; ccrRender(); });
   on("#ccr-lp", "change", (el) => ccrSelectLp(Number(el.value)));
+
+  on("[data-ccr-wire-filter]", "click", (el) => {
+    const id = el.getAttribute("data-ccr-wire-filter");
+    _ccr.wireView.filter = _ccr.wireView.filter === id && id !== "all" ? "all" : id;
+    ccrRender();
+  });
 
   on("[data-ccr-doc]", "click", (el) => {
     const doc = el.getAttribute("data-ccr-doc");
