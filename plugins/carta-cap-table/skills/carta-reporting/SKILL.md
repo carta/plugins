@@ -33,7 +33,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.90.30</carta-plugin>
+<carta-plugin>carta-cap-table:6.90.31</carta-plugin>
 
 # Custom Reports
 

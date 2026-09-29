@@ -175,8 +175,8 @@ def build_prompt(plan_path: Path, corporation: "str | None", employees: int,
     """
     who = corporation or "this corporation"
     lines = [
-        f"Read the refresh grant plan at {plan_path} and draft the option grants"
-        f" it describes in Carta for {who}.",
+        f"Read the refresh grant plan at {plan_path} and use the carta-issuance"
+        f" skill to draft the grants it describes for {who}.",
         "",
         f"That file holds the full plan — {employees}"
         f" employee{'' if employees == 1 else 's'}"

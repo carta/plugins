@@ -103,9 +103,9 @@ function count(n, noun) {
 /** The prompt to paste into a Claude session.
  *
  *  Written as an instruction to Claude, not as prose about the plan: the user
- *  pastes it verbatim, so it has to be directly actionable. It names the skill's
- *  own trigger words ("draft option grants" from a CSV) so the right flow starts,
- *  and states the omissions up front so the gates ask rather than assume.
+ *  pastes it verbatim, so it has to be directly actionable. It names the
+ *  carta-issuance skill explicitly so the right flow starts, and states the
+ *  omissions up front so the gates ask rather than assume.
  */
 export function handoffPrompt({ grants, corporation, corporationId, settings, asOf }) {
   const rows = handoffRows(grants);
@@ -113,9 +113,9 @@ export function handoffPrompt({ grants, corporation, corporationId, settings, as
   const skipped = grants.length - rows.length;
 
   const lines = [
-    `Draft option grants in Carta for ${corporation || "this corporation"}`
-      + `${corporationId ? ` (corporation ${corporationId})` : ""} from the refresh`
-      + ` plan below.`,
+    `Use the carta-issuance skill to draft the grants from the refresh plan below`
+      + ` for ${corporation || "this corporation"}`
+      + `${corporationId ? ` (corporation ${corporationId})` : ""}.`,
     "",
     `This is a refresh cycle for ${count(rows.length, "employee")}, `
       + `${total.toLocaleString("en-US")} shares in total, planned in the CTC`
