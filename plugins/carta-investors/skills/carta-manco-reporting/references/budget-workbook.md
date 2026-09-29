@@ -499,7 +499,13 @@ Read the check name in the error and work it through:
   last row of the real budget and re-run with `--stop-label "<that row>"`.
   When the sum is *smaller*, lines the total covers weren't read as lines
   — that's a parser limit, not a missing answer, so say so plainly rather
-  than sending them looking for a setting that doesn't exist.
+  than sending them looking for a setting that doesn't exist. Note a
+  *section's grand total that rolls up subtotals* is not this case: the
+  gate re-sums the last total in a section against every line row beneath
+  it (the same widening the outline view renders), so a total whose own
+  formula names only its final sub-block — e.g. a mgmt-fee grand total
+  reading `<funds subtotal> + <creator>` — ties on its own and is not
+  refused when the lines under it add up.
 
 - **`coverage`** — far fewer rows emitted than the sheet has numbers in.
   The shape or the sheet is wrong; re-confirm both.

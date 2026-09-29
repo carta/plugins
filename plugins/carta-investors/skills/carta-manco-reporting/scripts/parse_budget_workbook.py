@@ -207,6 +207,49 @@ def _is_additive(row: dict) -> bool:
     return calc.get("kind") != "expression"
 
 
+def _is_header_kind(kind) -> bool:
+    return str(kind or "").endswith("header")
+
+
+def _is_total_kind(kind) -> bool:
+    return kind in ("total", "subtotal", "summary")
+
+
+def _lines_covered_by(rows: list, i: int) -> list:
+    """The line rows a section's LAST total visibly sits over.
+
+    A grand total is often derived by a formula that names only its final
+    sub-block — a mgmt-fee grand total whose cell reads `=<last fund> +
+    <creator>` while it plainly covers every fund line above it. Its
+    recorded `constituents` then hold that short list, so a naive tie-out
+    compares the whole-section figure against one line and refuses a parse
+    that is actually correct.
+
+    This is the exact widening the outline view already applies
+    (`linesCoveredBy` in BudgetActualsOutline.jsx): only the LAST total
+    before the next header gets it — an earlier total covers just its own
+    run and is checked against its own constituents — and it gathers every
+    `line` row back to the section header. Keeping the two in lockstep is
+    the point: the credibility gate and the rendered total must agree on
+    which lines a grand total sums.
+    """
+    if not _is_total_kind(rows[i].get("row_kind")):
+        return []
+    # Not the section's last total — leave it to its own constituents.
+    for j in range(i + 1, len(rows)):
+        if _is_header_kind(rows[j].get("row_kind")):
+            break
+        if _is_total_kind(rows[j].get("row_kind")):
+            return []
+    keys = []
+    for j in range(i - 1, -1, -1):
+        if _is_header_kind(rows[j].get("row_kind")):
+            break
+        if rows[j].get("row_kind") == "line" and rows[j].get("key"):
+            keys.append(rows[j]["key"])
+    return keys
+
+
 def _all_zero_check(rows: list) -> dict:
     """Refuse a budget whose line rows are uniformly zero or blank.
 
@@ -253,10 +296,17 @@ def _tie_out_check(rows: list) -> dict:
     don't fully resolve to emitted rows is skipped rather than compared
     against a partial sum, which would be more misleading than no check
     at all.
+
+    When the recorded constituents don't tie, a section's last total is
+    re-summed against the line rows it actually covers (`_lines_covered_by`)
+    before it's called a mismatch — the same widening the outline view
+    renders, so a grand total whose formula named only its final sub-block
+    (e.g. a mgmt-fee total reading `<funds subtotal> + <creator>`) is not
+    refused when the lines beneath it do add up.
     """
     key_to_row = {r["key"]: r for r in rows if r.get("key")}
     comparisons = []
-    for row in rows:
+    for i, row in enumerate(rows):
         is_total_like = row.get("row_kind") in ("total", "summary") or bool(
             _TOTAL_LABEL_RX.search(row.get("label") or "")
         )
@@ -277,12 +327,30 @@ def _tie_out_check(rows: list) -> dict:
             for dim, val in _row_values(cr).items():
                 computed_map[dim] = computed_map.get(dim, 0.0) + val
 
+        # Fallback sum over the line rows this total visibly sits over —
+        # consulted only when the recorded constituents don't tie, so it
+        # can rescue a correct-but-under-recorded total without ever
+        # turning a genuine mismatch into a pass.
+        covered_map: dict = {}
+        for cr in (key_to_row[k] for k in _lines_covered_by(rows, i)
+                   if k in key_to_row):
+            for dim, val in _row_values(cr).items():
+                covered_map[dim] = covered_map.get(dim, 0.0) + val
+
         for dim, stated in stated_map.items():
             computed = computed_map.get(dim, 0.0)
             tolerance = max(
                 _TIE_OUT_ABS_TOL,
                 _TIE_OUT_REL_TOL * max(abs(stated), abs(computed)),
             )
+            if abs(stated - computed) > tolerance and dim in covered_map:
+                covered = covered_map[dim]
+                cov_tol = max(
+                    _TIE_OUT_ABS_TOL,
+                    _TIE_OUT_REL_TOL * max(abs(stated), abs(covered)),
+                )
+                if abs(stated - covered) <= cov_tol:
+                    computed, tolerance = covered, cov_tol
             comparisons.append({
                 "label": row.get("label"),
                 "row_kind": row.get("row_kind"),
