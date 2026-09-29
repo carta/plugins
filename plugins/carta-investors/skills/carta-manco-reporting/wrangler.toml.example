@@ -15,6 +15,8 @@ run_worker_first = true
 
 # webapp/src is a symlink to app/src — wrangler follows it
 
+# One namespace per app. Never share one between apps: cached firm data is keyed by
+# firm, so the apps overwrite each other's.
 [[kv_namespaces]]
 binding = "SESSIONS"
 id = "YOUR_KV_NAMESPACE_ID"

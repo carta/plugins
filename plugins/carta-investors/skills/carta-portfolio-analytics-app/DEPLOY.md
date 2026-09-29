@@ -62,7 +62,7 @@ ciphertext, so a blob copied under another session's key does not open. A Worker
 secret refuses to store a session; it never falls back to plaintext.
 
 Set it once per Worker. **Each Worker gets its own key**, so one app cannot open another's
-sessions even though they share a KV namespace:
+sessions:
 
 ```bash
 openssl rand -base64 32 | wrangler-microapps secret put SESSION_KEY
@@ -76,7 +76,10 @@ encryption existed read as signed out.
 Copy `wrangler.toml.example` to `wrangler.toml` and fill in:
 
 - `account_id` — the target Cloudflare account
-- `[[kv_namespaces]].id` — the KV namespace backing sessions and cached data
+- `[[kv_namespaces]].id` — the KV namespace backing sessions and cached data. **Each app has its own
+  namespace.** Never point two apps at one: cached firm data is keyed by firm, so the apps
+  overwrite each other's (one app's snapshot replaced another's, and the second waited forever
+  on a snapshot in the wrong shape). Create one with `wrangler kv namespace create portfolio-analytics-sessions`
 - `[vars].TENANTS` — JSON mapping each URL label to the firm UUID it may read
 - `[[routes]]` — one `custom_domain` entry per customer hostname
 
