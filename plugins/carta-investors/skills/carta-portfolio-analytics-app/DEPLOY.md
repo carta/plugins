@@ -40,14 +40,36 @@ One Worker serves every customer. Each customer gets a vanity hostname,
 Three checks run before any firm's data is read:
 
 1. `tenantOf()` parses the Host header into a label and looks it up in the `TENANTS` map.
-   An unmapped label yields a null prefix.
-2. `tenantAllows()` permits a firm slug only when it equals the mapped prefix or begins with
-   `<prefix>-`. This stops one customer's hostname reaching another's data.
-3. `authorizedFirm()` confirms through MCP `list_contexts` that the signed-in user actually
-   has the firm, then caches the allow or deny in KV.
+   An unmapped label yields a null UUID.
+2. `tenantFirm()` asks Carta for that one firm: it calls MCP `set_context` with the label's
+   UUID. Carta is the access check. It switches to the firm for a user who holds it, and for
+   Carta staff (who reach any firm), and returns a plain "not found or not authorized" result
+   for anyone else. The Worker never lists a user's firms on a vanity hostname, so a
+   hostname can only ever open its own firm.
+3. `authorizedFirm()` allows a firm only when it is that tenant firm and its slug matches
+   the URL. The allow or deny is cached per session under `tenant-firm:<sid>:<firm_uuid>`.
+   A failed Carta call is not cached.
 
 **There is no `DEFAULT_FIRM`.** Setting one would pin every vanity hostname to a single firm's
 data, which on a shared Worker means cross-tenant exposure.
+
+### Session encryption
+
+Each signed-in user's Carta access and refresh tokens are stored in KV under `session:<sid>`
+as AES-GCM ciphertext. The key is the Worker secret `SESSION_KEY` (base64 of 32 random
+bytes), so read access to KV alone yields nothing usable. The KV key name is bound into the
+ciphertext, so a blob copied under another session's key does not open. A Worker without the
+secret refuses to store a session; it never falls back to plaintext.
+
+Set it once per Worker. **Each Worker gets its own key**, so one app cannot open another's
+sessions even though they share a KV namespace:
+
+```bash
+openssl rand -base64 32 | wrangler-microapps secret put SESSION_KEY
+```
+
+Rotating the key signs every user out, which is the safe direction. Sessions written before
+encryption existed read as signed out.
 
 ## Configuration
 
@@ -55,10 +77,10 @@ Copy `wrangler.toml.example` to `wrangler.toml` and fill in:
 
 - `account_id` — the target Cloudflare account
 - `[[kv_namespaces]].id` — the KV namespace backing sessions and cached data
-- `[vars].TENANTS` — JSON mapping each URL label to the firm-slug prefix it may read
+- `[vars].TENANTS` — JSON mapping each URL label to the firm UUID it may read
 - `[[routes]]` — one `custom_domain` entry per customer hostname
 
-To find a firm slug, read it from the firm's Carta URL or ask the customer.
+To find a firm UUID, query `PROD_DB.DBT_VERIFIED_TRANSFORM.TRANSFORM_FUND_ADMIN_FIRMS` (`ID`, by `CARTA_ID` or `NAME`).
 
 ## Deploy
 
@@ -69,7 +91,7 @@ npx wrangler deploy
 
 ## Add a customer
 
-1. Add the label and its firm slug to `[vars].TENANTS`.
+1. Add the label and its firm UUID to `[vars].TENANTS`.
 2. Add a route:
 
 ```toml
@@ -127,10 +149,17 @@ Serve over plain HTTP, not `--local-protocol https`:
 `tenantOf()` returns null off `carta.cloud`, so local runs are unrestricted by tenant. Point
 local runs at a non-production account and KV namespace.
 
+`wrangler dev` needs the key too. Put a throwaway one in `.dev.vars` next to `wrangler.toml`
+(gitignored):
+
+```bash
+echo "SESSION_KEY=$(openssl rand -base64 32)" > .dev.vars
+```
+
 ## Troubleshooting
 
 **OAuth redirect loop**: The Worker uses dynamic client registration with `mcp.app.carta.com`.
 Make sure the Worker URL matches the registered redirect URI (`https://<worker-url>/auth/callback`).
 
-**403 or an empty firm list**: Either the label is missing from `TENANTS`, or the slug does not
-match that label's prefix, or the signed-in user genuinely lacks the firm in `list_contexts`.
+**403 or an empty firm list**: Either the label is missing from `TENANTS`, or the UUID in `TENANTS` is wrong,
+or Carta refused `set_context` for that firm (the signed-in user is not staff and does not hold it).

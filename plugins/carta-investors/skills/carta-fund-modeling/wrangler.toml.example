@@ -19,10 +19,10 @@ run_worker_first = true
 binding = "SESSIONS"
 id = "YOUR_KV_NAMESPACE_ID"
 
-# Maps each URL label to the firm-slug prefix it may read.
+# Maps each URL label to the firm UUID it may read.
 # An unmapped label resolves to null, and every firm is denied.
 [vars]
-TENANTS = '{"<label>":"<firm-slug>"}'
+TENANTS = '{"<label>":"<firm_uuid>"}'
 
 # One route per customer. custom_domain provisions DNS and TLS per
 # hostname; a wildcard cert does not cover this second subdomain level.

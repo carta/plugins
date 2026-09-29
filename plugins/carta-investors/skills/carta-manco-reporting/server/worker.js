@@ -20,6 +20,51 @@ function sidCookie(sid, maxAge = SESSION_TTL) {
   return `sid=${sid}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;
 }
 
+// Tokens sit in KV only as AES-GCM ciphertext. The key is a Worker secret (SESSION_KEY,
+// base64 of 32 bytes), so read access to KV alone yields nothing usable. The KV key name is
+// bound in as additional data, so a blob copied under another session's key will not open.
+let sessionKeyCache = null;
+async function sessionCryptoKey(env) {
+  if (!env.SESSION_KEY) throw new Error("SESSION_KEY is not set");
+  if (sessionKeyCache?.raw === env.SESSION_KEY) return sessionKeyCache.key;
+  const bytes = Uint8Array.from(atob(env.SESSION_KEY), (c) => c.charCodeAt(0));
+  if (bytes.length !== 32) throw new Error("SESSION_KEY must be 32 bytes, base64-encoded");
+  const key = await crypto.subtle.importKey("raw", bytes, "AES-GCM", false, ["encrypt", "decrypt"]);
+  sessionKeyCache = { raw: env.SESSION_KEY, key };
+  return key;
+}
+const toB64 = (bytes) => btoa(String.fromCharCode(...bytes));
+const fromB64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+export async function putSession(env, sid, session) {
+  const name = `session:${sid}`;
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await sessionCryptoKey(env);
+  const ct = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv, additionalData: new TextEncoder().encode(name) },
+    key,
+    new TextEncoder().encode(JSON.stringify(session)),
+  );
+  await env.SESSIONS.put(name, `v1.${toB64(iv)}.${toB64(new Uint8Array(ct))}`, { expirationTtl: 86400 });
+}
+// A missing, tampered, or pre-encryption (plaintext) entry reads as signed out.
+export async function getStoredSession(env, sid) {
+  const name = `session:${sid}`;
+  const raw = await env.SESSIONS.get(name);
+  if (!raw) return null;
+  const [version, iv, ct] = raw.split(".");
+  if (version !== "v1" || !iv || !ct) return null;
+  const key = await sessionCryptoKey(env);
+  try {
+    const plain = await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv: fromB64(iv), additionalData: new TextEncoder().encode(name) },
+      key,
+      fromB64(ct),
+    );
+    return JSON.parse(new TextDecoder().decode(plain));
+  } catch {
+    return null;
+  }
+}
 function generateId() {
   const bytes = new Uint8Array(24);
   crypto.getRandomValues(bytes);
@@ -87,9 +132,7 @@ async function getSession(req, env) {
   }
   const sid = getCookie(req, "sid");
   if (!sid) return [null, null];
-  const raw = await env.SESSIONS.get(`session:${sid}`);
-  if (!raw) return [sid, null];
-  return [sid, JSON.parse(raw)];
+  return [sid, await getStoredSession(env, sid)];
 }
 
 async function refreshAccessToken(session, sid, env) {
@@ -110,7 +153,7 @@ async function refreshAccessToken(session, sid, env) {
   session.access_token = tokens.access_token;
   session.refresh_token = tokens.refresh_token || session.refresh_token;
   session.expires_at = Date.now() + (tokens.expires_in || 3600) * 1000;
-  await env.SESSIONS.put(`session:${sid}`, JSON.stringify(session), { expirationTtl: SESSION_TTL });
+  await putSession(env, sid, session);
   return tokens.access_token;
 }
 
@@ -170,7 +213,7 @@ async function mcpCallTool(name, args, accessToken, sid, env) {
   };
   let resp = await mcpFetch(body, accessToken, sid, env);
   if (resp.status === 401) {
-    const session = JSON.parse(await env.SESSIONS.get(`session:${sid}`) || "{}");
+    const session = (await getStoredSession(env, sid)) || {};
     const refreshed = await refreshAccessToken(session, sid, env);
     if (refreshed) resp = await mcpFetch(body, refreshed, sid, env);
     else throw new Error("token_expired");
@@ -243,13 +286,13 @@ async function handleAuthCallback(req, env) {
     // later needs the URI this session registered under.
     redirectUri,
   };
-  await env.SESSIONS.put(`session:${sid}`, JSON.stringify(session), { expirationTtl: SESSION_TTL });
+  await putSession(env, sid, session);
   try {
     const user = await mcpCallTool("get_current_user", {}, tokens.access_token, sid, env);
     if (user?.content?.[0]?.text) {
       const info = JSON.parse(user.content[0].text);
       session.userName = info.full_name || info.email || null;
-      await env.SESSIONS.put(`session:${sid}`, JSON.stringify(session), { expirationTtl: SESSION_TTL });
+      await putSession(env, sid, session);
     }
   } catch { /* non-fatal */ }
   return new Response(null, {
@@ -340,8 +383,8 @@ async function handleMcpCall(req, env) {
 
 const TENANT_ZONE = ".carta.cloud";
 
-// {app}.{customer}.carta.cloud — the customer label picks the firm prefix this
-// hostname may read. An unmapped label gets a null prefix and is denied.
+// {app}.{customer}.carta.cloud — the customer label picks the one firm UUID this
+// hostname may read. An unmapped label gets a null UUID and is denied.
 export function tenantOf(req, env) {
   const host = new URL(req.url).hostname;
   if (!host.endsWith(TENANT_ZONE)) return null;
@@ -353,12 +396,77 @@ export function tenantOf(req, env) {
     // an unparseable map denies every firm, which is the safe direction
   }
   const label = labels.length === 2 ? labels[1] : "";
-  return { label, prefix: Object.prototype.hasOwnProperty.call(tenants, label) ? tenants[label] : null };
+  const uuid = Object.prototype.hasOwnProperty.call(tenants, label) ? tenants[label] : null;
+  return { label, firmUuid: typeof uuid === "string" && uuid ? uuid.toLowerCase() : null };
 }
 
-export function tenantAllows(tenant, slug) {
-  if (!tenant) return true;
-  return !!tenant.prefix && (slug === tenant.prefix || slug.startsWith(`${tenant.prefix}-`));
+function toolText(result) {
+  const sc = result?.structuredContent;
+  if (typeof sc?.result === "string") return sc.result;
+  const text = (result?.content || []).filter((b) => b.type === "text").map((b) => b.text || "").join("\n");
+  try {
+    const j = JSON.parse(text);
+    if (typeof j?.result === "string") return j.result;
+  } catch {
+    // plain text
+  }
+  return text;
+}
+
+// Carta keeps the active firm per user, so another session signed in as the same user can
+// switch it while this request is fetching. Call this right before caching what was
+// fetched: data pulled under another firm must never land under this firm's key.
+function activeFirmId(result) {
+  const sc = result?.structuredContent;
+  if (sc?.active_firm_id) return sc.active_firm_id;
+  for (const b of result?.content || []) {
+    try {
+      const v = JSON.parse(b.text);
+      if (v?.active_firm_id) return v.active_firm_id;
+    } catch {
+      // plain text
+    }
+  }
+  return parseFirms(result).find((f) => f.active)?.firmUuid || null;
+}
+
+export async function assertActiveFirm(firmUuid, session, sid, env) {
+  const result = await mcpCallTool("list_contexts", {}, session.access_token, sid, env);
+  if (String(activeFirmId(result) || "").toLowerCase() !== String(firmUuid).toLowerCase()) {
+    throw new Error("The active firm changed while loading (another session switched it). Nothing was saved; reload to retry.");
+  }
+}
+
+async function firmNameByUuid(firmUuid, session, sid, env) {
+  const result = await mcpCallTool("list_contexts", { firm_uuid: firmUuid }, session.access_token, sid, env).catch(() => null);
+  return parseFirms(result).find((f) => f.firmUuid?.toLowerCase() === firmUuid)?.name || "";
+}
+
+// A hostname's one firm. set_context is Carta's own access check: it switches to the
+// firm for a user who holds it (or a staff user) and returns an ordinary "not found or
+// not authorized" result, not an error, for anyone else. Allow and deny are cached per
+// session, so one user's result never widens another's. A failed call is not cached.
+export async function tenantFirm(tenant, sid, session, env) {
+  if (!tenant?.firmUuid) return null;
+  const key = `tenant-firm:${sid}:${tenant.firmUuid}`;
+  const cached = await env.SESSIONS.get(key, "json");
+  if (cached) return cached.denied ? null : cached;
+  let result;
+  try {
+    result = await mcpCallTool("set_context", { firm_id: tenant.firmUuid }, session.access_token, sid, env);
+  } catch {
+    return null;
+  }
+  const m = /^Context set to firm:[ \t]*(.+)$/m.exec(toolText(result));
+  let name = m ? m[1].trim() : "";
+  // A staff user gets the id echoed back instead of the firm's name. The slug must
+  // come from the name, so look it up.
+  if (name.toLowerCase() === tenant.firmUuid) name = (await firmNameByUuid(tenant.firmUuid, session, sid, env)) || name;
+  const firm = name
+    ? { slug: slugify(name), name, firmUuid: tenant.firmUuid, firmId: null, active: true, funds: 0, navAsOf: null }
+    : null;
+  await env.SESSIONS.put(key, JSON.stringify(firm || { denied: true }), { expirationTtl: DATA_TTL });
+  return firm;
 }
 
 export function parseFirms(result) {
@@ -390,7 +498,11 @@ export function parseFirms(result) {
 // session, so one user's lookup can never widen another's access.
 export async function authorizedFirm(req, slug, sid, session, env) {
   if (!slug) return null;
-  if (!tenantAllows(tenantOf(req, env), slug)) return null;
+  const tenant = tenantOf(req, env);
+  if (tenant) {
+    const firm = await tenantFirm(tenant, sid, session, env);
+    return firm && firm.slug === slug ? firm : null;
+  }
   const key = `allowed-firm:${sid}:${slug}`;
   const cached = await env.SESSIONS.get(key, "json");
   if (cached) return cached.denied ? null : cached;
@@ -413,8 +525,7 @@ async function handleAppConfig(req, env) {
   if (!tenant) return Response.json({ defaultFirm: null });
   const [sid, session] = await getSession(req, env);
   if (!sid || !session?.access_token) return Response.json({ defaultFirm: null });
-  const cached = await env.SESSIONS.get(`firms:${sid}`, "json");
-  const firm = (cached || []).find((f) => tenantAllows(tenant, f.slug));
+  const firm = await tenantFirm(tenant, sid, session, env);
   return Response.json({ defaultFirm: firm?.slug || null });
 }
 
@@ -423,6 +534,12 @@ async function handleAppConfig(req, env) {
 async function handleFirms(req, env) {
   const [sid, session, authErr] = await requireAuth(req, env);
   if (authErr) return authErr;
+
+  const tenant = tenantOf(req, env);
+  if (tenant) {
+    const firm = await tenantFirm(tenant, sid, session, env);
+    return Response.json(firm ? [firm] : []);
+  }
 
   const url = new URL(req.url);
   const query = url.searchParams.get("q") || "";
@@ -440,8 +557,7 @@ async function handleFirms(req, env) {
     if (firms.length && !query) {
       await env.SESSIONS.put(firmsKey, JSON.stringify(firms), { expirationTtl: DATA_TTL });
     }
-    const tenant = tenantOf(req, env);
-    return Response.json(tenant ? firms.filter((f) => tenantAllows(tenant, f.slug)) : firms);
+    return Response.json(firms);
   } catch (e) {
     console.error("list_contexts error:", e.message);
     return Response.json([]);
@@ -523,8 +639,63 @@ function isMancoEntity(e) {
   return false;
 }
 
-async function resolveMancoEntity(firmUuid, accessToken, sid, env) {
-  const result = await mcpCallTool("fa__list__entities", {}, accessToken, sid, env);
+// fa__list__entities returns its list as a JSON array, but the MCP layer can carry it as
+// bare text, as {"result": "<array as a string>"} text, or in structuredContent.
+export function entityRows(result) {
+  const sc = result?.structuredContent;
+  if (Array.isArray(sc?.entities)) return sc.entities;
+  if (Array.isArray(sc?.result)) return sc.result;
+  const texts = [];
+  if (typeof sc?.result === "string") texts.push(sc.result);
+  for (const b of result?.content || []) if (b.type === "text") texts.push(b.text || "");
+  for (const text of texts) {
+    let v;
+    try { v = JSON.parse(text); } catch { continue; }
+    if (typeof v?.result === "string") {
+      try { v = JSON.parse(v.result); } catch { continue; }
+    } else if (v?.result) {
+      v = v.result;
+    }
+    if (Array.isArray(v)) return v;
+    if (Array.isArray(v?.entities)) return v.entities;
+  }
+  return [];
+}
+
+export async function resolveMancoEntity(firmUuid, accessToken, sid, env) {
+  // Never unfiltered: a firm with many funds and SPVs exceeds the tool's 40,000-character
+  // response cap and the whole call fails. entity_types is a comma-separated string.
+  const result = await mcpCallTool("fa__list__entities", { entity_types: "management_co" }, accessToken, sid, env);
+  if (result?.isError) {
+    // Carta refused the call. Say why, rather than reporting the firm as having no ManCo.
+    const reason = (result.content || []).map((b) => b.text || "").join(" ").trim().slice(0, 300);
+    throw new Error(`Carta could not list this firm's entities: ${reason || "no reason given"}`);
+  }
+  // The tool lists the caller's active firm, which Carta keeps per user, not per request:
+  // another tab or app signed in as the same user can switch it between our set_context
+  // and this call. Keep only this hostname's firm, and refuse another firm's entities.
+  const all = entityRows(result);
+  const listed = all.filter((e) => String(e.firm_id || "").toLowerCase() === String(firmUuid).toLowerCase());
+  if (all.length && !listed.length) {
+    throw new Error("Carta returned another firm's entities. The active firm was switched by another session; reload to retry.");
+  }
+  const hit = (listed.length ? listed.find(isMancoEntity) : mancoFromRows(result)) || null;
+  if (!hit) {
+    // Structure only, never entity names: this goes to the Worker log.
+    const text = String(result?.content?.[0]?.text || "");
+    console.error("no ManCo entity", JSON.stringify({
+      listed: listed.length,
+      types: [...new Set(listed.map((e) => e.entity_type_string ?? e.entity_type))],
+      resultKeys: Object.keys(result || {}),
+      isError: !!result?.isError,
+      textStart: text.slice(0, 1),
+      textLength: text.length,
+    }));
+  }
+  return hit;
+}
+
+function mancoFromRows(result) {
   const rows = parseQueryRows(result);
   if (!rows.length && result?.content) {
     for (const block of result.content) {
@@ -746,6 +917,7 @@ async function handleLoadFirm(req, env) {
         budgetByAccount,
       });
 
+      await assertActiveFirm(meta.firmUuid, session, sid, env);
       await send({ step: "Storing data" });
       const snapshotKey = dataKey("data", sid, slug, "snapshot", env);
       const accountsKey = dataKey("data", sid, slug, "accounts", env);
