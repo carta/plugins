@@ -257,6 +257,10 @@ export function rollUpQuarters(pts, metric) {
     }
     // A qualitative reading rolls up as "last"; carry its display string.
     if (src.s != null) pt.s = src.s;
+    // A staged correction names one reading; a quarter assembled from several
+    // months has no single reading to flag, so the badge appears only when the
+    // quarter IS that reading.
+    if (src.edit && (qtr || ps.length === 1)) pt.edit = src.edit;
     out.push(pt);
   }
   return out.sort((a, b) => (a.d < b.d ? -1 : 1));

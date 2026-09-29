@@ -2,11 +2,12 @@
 name: carta-portfolio-analytics-app
 description: >
   Spin up an interactive local web console for firm-wide PORTFOLIO-COMPANY ANALYTICS over
-  Carta Fund Admin + Data Collection data — a read-only React app spanning operating
-  KPIs, valuation, cap tables, risk and benchmarking. Five tabs: Overview (ranked,
-  configurable investment-health table with filters and favorites); Company KPIs (a
-  company × KPI pivot over time); Insights (quadrant, signals, benchmarks); Reporting
-  health (completeness, data quality, what changed); and Custom formulas + covenants.
+  Carta Fund Admin + Data Collection data — a React app (read, plus inline KPI corrections
+  published to Carta) spanning operating KPIs, valuation, cap tables, risk and benchmarking.
+  Five tabs: Overview (ranked, configurable investment-health table with filters and
+  favorites); Company KPIs (a company × KPI pivot over time); Insights (quadrant, signals,
+  benchmarks); Reporting health (completeness, data quality, what changed); and Custom
+  formulas + covenants.
   Click any company name for its own one-page Company page (returns, cap table, peers,
   credit & leverage, data quality; PDF tearsheet). Surfaces EVERY KPI a company
   reports (revenue, ARR, EBITDA, headcount, custom KPIs…), not a fixed list. Invoke with a
@@ -43,7 +44,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.47.9</carta-plugin>
+<carta-plugin>carta-investors:6.49.0</carta-plugin>
 
 <!-- Carta investor tooling. React app (in-browser JSX transpile) fed by Data Collection KPIs. -->
 
@@ -424,6 +425,7 @@ There are two ways to refresh, and they share the same downstream scripts:
 - **Operating KPIs and Forecasts refresh incrementally.** Both time-series stems select `instance_id` (one submission = one instance; the ids are monotonic). A refresh reads the cached stem's max `instance_id` and fetches only `instance_id > <max>` — the submissions logged since the last pull — into `<stem>.delta.ndjson`, then merges: `financials` replaces by its dedup key (`legal_name, mnemonic|name, frequency, period_end`) keeping the row that wins the SQL's own order (`as_of_date`, then `instance_id`), so a restated period takes the newer figure; `forecasts` appends, since every vintage is kept. Zero new rows keeps the cache and marks the dataset fresh. A cache built before `instance_id` was selected has no watermark, so its first refresh is one full pull that seeds it — no rebuild needed. Snapshot stems (`funds`, `holdings`, `fdshares`, `deal_irr`, `capstack`) and `holdings_history` stay full-replace. The history window (`source.since`) is unchanged: incremental changes how much of the window is re-fetched, not the window. What a delta cannot see: a submission edited in place or deleted upstream — the chat rebuild below refreshes those. A cache whose rows predate the identity columns (general_ledger_issuer_id, corporation_id, llc_entity_id) takes one full pull first, so old and new rows never key the same company two ways.
 - **Companies are keyed by identity, not name.** `kpi.json` `companies[].id` is the company's Fund Admin `entity_link_id` (or a typed fallback `gl:` / `llc:` / `corp:` / `name:` when the `entity_identity` stem cannot place the row); `keyType` says which. Every company also carries `entityKind` (`carta-customer` / `paper` / `gl-issuer` / null), `cartaCorporationId` (numeric), `cartaCorporationUuid` and `cartaEntityLinkId`. The display name is never an identity — see `references/queries.md` §6. A company that first appears in a KPI-only refresh keys as `gl:<id>` until Holdings has been refreshed and supplies its entity link, so favourites and notes saved in that window move to the new id only if re-saved; the in-app pull refreshes every dataset, so this is a one-time window per new company.
 - **Chat ("Refresh KPI data").** Re-run Steps 1–3 (overwrite JSON); the app reloads it. Still the fallback for anything the in-app button escalates.
+- **In-app KPI corrections (Company KPIs tab).** A numeric KPI cell that maps to one reported reading has a pencil; editing it stages a correction in the portfolio document (`pendingEdits`) and the corrected figure shows everywhere immediately. A correction's state is a colored dot beside the value (hover it for the meaning): yellow while a draft is staged or publishing, blue once sent to Carta and awaiting the next refresh, red when Carta rejected it or the value changed upstream. The sidebar's **Publish N changes** control lists the batch (old → new per company · metric · period) and POSTs `/api/publish-edits`; `serve.py` runs `scripts/publish.py`, which reuses the refresh sandbox — a headless `claude` allowed only the Carta MCP's `welcome` / `set_context` / `list_accounts` / `call_tool` — to issue one `financials__mutate__store_kpis` call per company and currency, one attempt each. The browser polls `/api/publish/status`; each edit lands `published` (pending until the next Operating-KPIs refresh confirms it) or `failed` with Carta's reason. On refresh the app settles published edits: confirmed ones disappear, lagging ones stay pending, and a value changed upstream to something else becomes a **conflict**. Conflicts are never part of the publish batch — the red **Resolve N conflicts** control opens a view that groups them by company or KPI and settles each (or a whole group) as keep-mine (re-queued as a draft) or take-Carta's (dropped). Editing needs a Carta write target — the linked corporation or LLC when one exists (edits always write to that leaf entity, never the FA-issuer record behind it), else the FA issuer itself for a standalone issuer; only name-matched companies have nothing to write to — plus per-point cadence (`f`/`ps`, stamped from `frequency` / `period_start`). A cache built before those shows no pencils and the pivot footer says why. The owner organization is `source.firmId`; when a session lacks it, `publish.py` does exactly one `list_accounts` search on the firm name and stops (`needs_human`) on anything but one exact match. `/api/capabilities.publish` mirrors `refresh`.
 
 Everything the user builds in the app — Overview columns and filters,
 KPIs saved views and conditional formats, formulas, covenants, signal rules, notes,
@@ -432,8 +434,7 @@ tags and favorites — is saved locally by the app via `PUT /api/portfolio` (one
 
 ## Safety
 Company names are untrusted — the app HTML-escapes; serve.py is localhost-bound +
-token-gated. DWH is SELECT-only; the writes are the user's local app state
-(`portfolio.json`) and the in-app refresh (raw ndjson + a `kpi.json` rebuild). The browser never calls the Carta MCP —
+token-gated. DWH is SELECT-only. Local writes are the user's portfolio document (layouts, staged corrections) and the in-app refresh (raw ndjson + a `kpi.json` rebuild). The one write to Carta is the in-app publish of KPI corrections: `financials__mutate__store_kpis`, additive per period bucket, issued only from the sandboxed headless `claude` subprocess with exactly the readings the user staged and reviewed. The browser never calls the Carta MCP —
 the in-app refresh proxies through a sandboxed headless `claude` subprocess that may call
 only the Carta MCP's welcome/set_context/call_tool and never authors SQL.
 

@@ -11,6 +11,10 @@ import { fmtVal, fmtFull, shortDate, TrendSparkline, TREND_SPARK_W } from "../ui
 import { metricsFor, metricOptions, metricOf, pointNearMonthsBack, metricCadence,
   seriesPoints, forecastSeriesPoints, forecastPeriods, forecastMetricsFor,
   isQualitative, kindRank, quarterlyMonthlyGap } from "../model/kpi.js";
+import EditableValue from "../ui/EditableValue.jsx";
+import { editTarget, addTarget, stageEdit, canEditCompany } from "../model/pendingEdits.js";
+import { currencyActive, DEFAULT_CURRENCY } from "../model/currency.js";
+import { useCanPublish } from "../state/usePublish.js";
 import { customSignalsForCompany, OPS } from "../model/rules.js";
 import { signalsForCompany, BUILTIN_SIGNALS } from "../model/signals.js";
 import { availablePositionMetrics, positionMetricOptions, positionMetricOf } from "../model/position.js";
@@ -22,6 +26,7 @@ import { FavoriteStar } from "../ui/favorites.jsx";
 import { isFavorite, favoriteCount } from "../model/favorites.js";
 import { openCompany } from "../state/focus.js";
 import { withCommas } from "../ui/format.js";
+import { openCorrections } from "../ui/correctionEvents.js";
 
 const EMPTY_RULES = [];
 const NEG = "var(--ink-color-global-feedback-negative-strong)";
@@ -55,6 +60,30 @@ export default function PivotDashboard({ data, dashboard }) {
   // read it, so it has to be a dependency of the row memo.
   const dashDoc = dashboard?.doc;
   const companyById = useMemo(() => new Map((data.companies || []).map((c) => [c.id, c])), [data]);
+  // The capability bit is the feature-flag stand-in: no publish capability, no pencils.
+  const canPublish = useCanPublish();
+  // convPoint (model/currency.js) overwrites `cur` with no record of the original, so a
+  // converted cell can't be told apart from a native one here — gate grid-wide, not per-cell.
+  const currencyActiveNow = currencyActive(dashDoc?.currency || DEFAULT_CURRENCY);
+  const editable = !!dashboard?.update && canPublish && !currencyActiveNow;
+  // Gate for adding a value to a dash cell: the period must have started (UTC date).
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const stage = (target, value) => {
+    trackClick("PortfolioAnalytics.Corrections.EditCell");
+    dashboard.update((d) => stageEdit(d, target, value, new Date().toISOString()));
+  };
+  // Status renders as a 7px dot after the value; the tooltip names the state. Pending is
+  // deliberately blue (sent, not yet confirmed), never green.
+  const DOT_COLOR = { draft: "var(--ink-color-global-brand-yellow-80)", publishing: "var(--ink-color-global-brand-yellow-80)",
+    published: "var(--ink-color-global-feedback-info-strong)", failed: "var(--ink-color-global-feedback-negative-strong)",
+    conflict: "var(--ink-color-global-feedback-negative-strong)" };
+  const DOT_LABEL = {
+    draft: ["Draft correction", "Draft — staged locally, shown everywhere via the overlay; not yet sent."],
+    publishing: ["Publishing correction", "Publishing — being sent to Carta now."],
+    published: ["Pending correction", "Pending — published to Carta; confirmed and cleared by the next refresh."],
+    failed: ["Failed correction", "Failed — Carta rejected it; the reason is in Publish changes. Retry or discard there."],
+    conflict: ["Conflicted correction", "Conflict — the value changed upstream; resolve it in the Conflicts view. Publishing does not clear it."],
+  };
   // The full id universes for the two default-all filters, and whether the current
   // selection still covers every one — snapshots canonicalize "all" back to [].
   const allMetricKeys = useMemo(() => metrics.map((m) => m.key), [metrics]);
@@ -346,6 +375,14 @@ export default function PivotDashboard({ data, dashboard }) {
 
   const companyCount = new Set(rows.map((r) => r.companyId)).size;
   const favTotal = favoriteCount(dashDoc);
+  // Companies present in the grid (excluding POS-only rows) with no Carta record to
+  // write a correction back to — the footer's "N companies can't be corrected" note.
+  const unlinkedCount = useMemo(() => {
+    const ids = new Set(rows.filter((r) => !r.position).map((r) => r.companyId));
+    let n = 0;
+    for (const id of ids) if (!canEditCompany(companyById.get(id))) n += 1;
+    return n;
+  }, [rows, companyById]);
 
   // Full figures overflow the tight uniform PERIOD_W and collide; when they're on,
   // widen every period column to fit the widest figure shown (~7.5px/mono char + pad).
@@ -911,9 +948,29 @@ export default function PivotDashboard({ data, dashboard }) {
                         fontStyle: fc ? "italic" : undefined,
                         color: fc ? "var(--ink-color-global-text-default)" : cf ? cf.fg : missing ? "var(--ink-color-global-border-default)" : "var(--ink-color-global-text-default)" }}>
                         <div style={r.qual ? TRUNCATE : undefined}>
-                          {missing ? "—" : (fullFig ? fmtFull(v, r.unit, part && part.s, part && part.cur) : fmtVal(v, r.unit, part && part.s, part && part.cur))}
+                          {(() => {
+                            const shown = missing ? "—" : (fullFig ? fmtFull(v, r.unit, part && part.s, part && part.cur) : fmtVal(v, r.unit, part && part.s, part && part.cur));
+                            const co = companyById.get(r.companyId);
+                            const m = metricOf(data, r.metricKey);
+                            // A dash (or a staged addition's own overlay point) edits through
+                            // addTarget — there is no reading to correct, only one to add.
+                            const target = !editable || fc || r.position || !co || !m ? null
+                              : part && !part.added ? editTarget(co, m, part, qOnly)
+                              : addTarget(co, m, p, qOnly, todayIso);
+                            return target
+                              ? <EditableValue value={part ? part.v : null} unit={r.unit} display={shown}
+                                  ariaLabel={`${r.metricLabel} for ${r.companyName}, ${shortDate(p, qOnly)}`}
+                                  onCommit={(val) => stage(target, val)} />
+                              : shown;
+                          })()}
                           {partial && <span style={{ color: NEG, fontWeight: 700, marginLeft: 3 }} >*</span>}
                           {!partial && gap && <span style={{ color: MICRO, fontWeight: 700, marginLeft: 3 }} >ⁱ</span>}
+                          {part && part.edit && DOT_LABEL[part.edit.status] && (
+                            <button type="button" aria-label={DOT_LABEL[part.edit.status][0]} data-tip={DOT_LABEL[part.edit.status][1]}
+                              onClick={(e) => { e.stopPropagation(); openCorrections(part.edit); }}
+                              style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", verticalAlign: "middle",
+                                border: "none", padding: 0, background: DOT_COLOR[part.edit.status], marginLeft: 6, cursor: "pointer" }} />
+                          )}
                         </div>
                         {growthMode && !missing && (
                           <div style={{ fontSize: 11, fontWeight: 500, marginTop: 1,
@@ -973,6 +1030,7 @@ export default function PivotDashboard({ data, dashboard }) {
           items are <strong>summed</strong>, balances (incl. period-end cash) take the <strong>closing</strong> value;
           <span style={{ color: NEG, fontWeight: 700 }}> *</span> marks a partial quarter,
           <span style={{ color: MICRO, fontWeight: 700 }}> ⁱ</span> a quarterly figure that differs from its monthly filings</>}
+        {editable && unlinkedCount > 0 && <> · {unlinkedCount} compan{unlinkedCount === 1 ? "y" : "ies"} can't be corrected here (matched by name only, or built before identity tracking — refresh Operating KPIs)</>}
       </div>
       </section>
     </section>

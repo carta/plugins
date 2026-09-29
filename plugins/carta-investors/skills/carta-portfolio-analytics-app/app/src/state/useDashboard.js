@@ -20,7 +20,9 @@ const EMPTY = { version: 1, widgets: [], customMetrics: [], notes: {}, rules: []
   filters: [],
   // starred company ids (model/favorites.js); seededFavorites gates the one-time
   // top-quartile-by-cost-basis auto-star so an un-starred pick never returns.
-  favorites: [], seededFavorites: false };
+  favorites: [], seededFavorites: false,
+  // staged KPI corrections — see model/pendingEdits.js
+  pendingEdits: [] };
 
 export default function useDashboard(firm) {
   const q = firm ? `?firm=${encodeURIComponent(firm)}` : "";

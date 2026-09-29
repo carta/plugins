@@ -16,6 +16,9 @@ Security:
     same firm, so the URL stays stable. The data dir already holds the confidential
     JSON, so storing the token alongside it adds no meaningful exposure.
   - all reads/writes stay under the data dir / web dir (path-traversal guarded)
+  - the in-app publish of KPI corrections (`POST /api/publish-edits`) runs `publish.py` in
+    the same sandboxed headless `claude` subprocess as the refresh; the browser never calls
+    Carta.
 
 Stable URL: the port and token are remembered in the firm's data dir (.port /
 .token) and reused on relaunch, so relaunching the same firm reopens the same
@@ -57,6 +60,7 @@ def _sibling(name):
 
 _datasets = _sibling("datasets")
 refresh = _sibling("refresh")
+publish = _sibling("publish")
 
 DATA_DIR = None
 WEB_DIR = None
@@ -78,6 +82,18 @@ _build_lock = threading.Lock()
 _refresh_state = {"status": "idle"}
 _refresh_state_lock = threading.Lock()
 _refresh_session = None
+
+# Single-flight publish of staged KPI corrections, polled by the browser and persisted to
+# publish-state.json so a tab that closed mid-publish can fold in the results on reopen.
+_publish_lock = threading.Lock()
+_publish_state = {"status": "idle"}
+_publish_state_lock = threading.Lock()
+_publish_session = None
+PUBLISH_STATE_FILE = "publish-state.json"
+_EDIT_FIELDS = ("id", "companyId", "metricKey", "period", "freq", "fromDate", "appliesTo", "value", "cur")
+# cur is optional on the wire: it only matters for additions, and an older tab's
+# payload without it must still publish (build_groups falls back to the firm currency).
+_REQUIRED_EDIT_FIELDS = tuple(f for f in _EDIT_FIELDS if f != "cur")
 
 _CONTENT_TYPES = {
     ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
@@ -113,6 +129,100 @@ def _refresh_supported():
     """The in-app refresh can run only with a claude binary on PATH and a firm-id'd cache."""
     claude_bin = os.environ.get("PORTFOLIO_ANALYTICS_CLAUDE_BIN", "claude")
     return shutil.which(claude_bin) is not None and bool(_kpi_source().get("firmUuid"))
+
+
+def _publish_supported():
+    """Same preconditions as refresh, plus a kill switch: with no feature-flag system,
+    this bit is how the edit UI is turned off wholesale without a plugin change."""
+    if os.environ.get("PORTFOLIO_ANALYTICS_PUBLISH", "1") == "0":
+        return False
+    return _refresh_supported()
+
+
+def _set_publish_state(**fields):
+    with _publish_state_lock:
+        _publish_state.update(fields)
+
+
+def _publish_progress(phase, message):
+    with _publish_state_lock:
+        _publish_state["phase"] = phase
+        _publish_state["progress"] = message
+    _touch_heartbeat()
+
+
+def _track_publish_session(session):
+    global _publish_session
+    with _publish_state_lock:
+        _publish_session = session
+
+
+def _close_publish_session():
+    """Reap an in-flight publish subprocess so idle shutdown doesn't orphan it."""
+    with _publish_state_lock:
+        session = _publish_session
+    if session is not None:
+        try:
+            session.close()
+        except Exception:  # noqa: BLE001 — best-effort on the way out
+            pass
+
+
+def _persist_publish_state():
+    with _publish_state_lock:
+        snapshot = dict(_publish_state)
+    try:
+        tmp = DATA_DIR / (PUBLISH_STATE_FILE + ".tmp")
+        tmp.write_text(json.dumps(snapshot))
+        os.replace(tmp, DATA_DIR / PUBLISH_STATE_FILE)
+    except OSError:
+        pass
+
+
+def _read_publish_state():
+    """In-memory state while a run is live or just finished; otherwise the last persisted
+    outcome, so results survive a server restart; otherwise idle."""
+    with _publish_state_lock:
+        if _publish_state.get("status") != "idle":
+            return dict(_publish_state)
+    try:
+        data = json.loads((DATA_DIR / PUBLISH_STATE_FILE).read_text())
+        if isinstance(data, dict) and data.get("status") in ("done", "error"):
+            return data
+    except (OSError, ValueError):
+        pass
+    return {"status": "idle"}
+
+
+def _run_publish_bg(run_id, edits):
+    """Publish on a daemon thread; releases _publish_lock in finally — its only release path."""
+    try:
+        result = publish.run_publish(str(DATA_DIR), edits, _publish_progress,
+                                     on_session=_track_publish_session)
+        _set_publish_state(status="done", progress=None, results=result.get("results", []),
+                           warnings=result.get("warnings", []), finishedAt=time.time())
+    except publish.PublishError as e:
+        _set_publish_state(status="error", progress=None, message=str(e), detail=e.detail,
+                           needs_human=e.needs_human, finishedAt=time.time())
+    except Exception as e:  # noqa: BLE001 — a bg thread must never crash silently
+        _set_publish_state(status="error", progress=None, message="The publish didn't finish.",
+                           detail=str(e), needs_human=True, finishedAt=time.time())
+    finally:
+        _persist_publish_state()
+        _publish_lock.release()
+
+
+def _start_publish_bg(run_id, edits):
+    with _publish_state_lock:
+        _publish_state.clear()
+        _publish_state.update({"status": "running", "runId": run_id, "phase": "preflight",
+                               "startedAt": time.time(), "count": len(edits)})
+    threading.Thread(target=_run_publish_bg, args=(run_id, edits), daemon=True).start()
+
+
+def _valid_edit(e):
+    return isinstance(e, dict) and all(k in e for k in _REQUIRED_EDIT_FIELDS) and isinstance(e.get("id"), str) \
+        and e["id"] and isinstance(e.get("value"), (int, float)) and not isinstance(e.get("value"), bool)
 
 
 _SINCE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -244,6 +354,7 @@ def _watchdog(httpd, timeout):
         if idle > timeout:
             print("[serve] idle %ds - shutting down" % int(idle), flush=True)
             _close_refresh_session()
+            _close_publish_session()
             httpd.shutdown()
             os._exit(0)
 
@@ -372,8 +483,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/api/refresh/status":
             with _refresh_state_lock:
                 return self._send(200, dict(_refresh_state))
+        if path == "/api/publish/status":
+            return self._send(200, _read_publish_state())
         if path == "/api/capabilities":
-            return self._send(200, {"refresh": _refresh_supported()})
+            return self._send(200, {"refresh": _refresh_supported(), "publish": _publish_supported()})
         if path == "/api/portfolio":
             return self._get_portfolio()
         if path in _FILE_ROUTES:
@@ -431,6 +544,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._refresh()
         if u.path == "/api/refresh/apply":
             return self._refresh_apply()
+        if u.path == "/api/publish-edits":
+            return self._publish()
         return self._send(404, {"error": "not_found"})
 
     def _body_json(self):
@@ -502,6 +617,31 @@ class Handler(http.server.BaseHTTPRequestHandler):
                                     "detail": str(e), "needs_human": True})
         finally:
             _build_lock.release()
+
+    def _publish(self):
+        """Start a background publish of staged KPI corrections (single-flight) and return
+        202; the browser polls GET /api/publish/status. Body {runId, edits:[…]}."""
+        if not _publish_supported():
+            return self._send(403, {"error": "publish_disabled"})
+        body = self._body_json()
+        if body is None or not isinstance(body, dict):
+            return self._send(400, {"error": "bad_json"})
+        run_id = body.get("runId")
+        edits = body.get("edits")
+        if not isinstance(run_id, str) or not run_id or not isinstance(edits, list) or not edits:
+            return self._send(400, {"error": "no_edits"})
+        if not all(_valid_edit(e) for e in edits):
+            return self._send(400, {"error": "bad_edit"})
+        if not _publish_lock.acquire(blocking=False):
+            return self._send(409, {"error": "publish_in_progress"})
+        try:
+            _start_publish_bg(run_id, [{k: e.get(k) for k in _EDIT_FIELDS} for e in edits])
+        except Exception as e:  # noqa: BLE001 — release the lock or every later publish 409s
+            _publish_lock.release()
+            _set_publish_state(status="error", progress=None, message="Couldn't start the publish: %s" % e,
+                               needs_human=True)
+            return self._send(500, {"error": "publish_start_failed"})
+        return self._send(202, {"ok": True})
 
     # ---- portfolio GET with ETag ----
     def _get_portfolio(self):

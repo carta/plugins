@@ -305,8 +305,9 @@ def _int_or_none(v):
 def load_identity(raw):
     """Identity directory for company_key(): entity-link records by link and by corporation
     UUID, `canonical` folding links that share a corporation onto the first, the GL issuer
-    -> entity link bridge from the holdings stems, and the corporations each GL issuer is
-    linked to (corporation_links.ndjson) so KPI rows keyed only by corporation resolve."""
+    -> entity link bridge from the holdings stems (plus its reverse, `gl_of`), and the
+    corporations each GL issuer is linked to (corporation_links.ndjson) so KPI rows keyed
+    only by corporation resolve."""
     raw = Path(raw)
     ident = {"by_entity_link": {}, "by_gl_issuer": {}, "by_corp_uuid": {}, "canonical": {}}
     gl_fanout = 0
@@ -334,6 +335,7 @@ def load_identity(raw):
             el, gl = _s(col(r, "entity_link_id")), _s(col(r, "general_ledger_issuer_id"))
             if el and gl:
                 el = canon.get(el, el)
+                ident.setdefault("gl_of", {}).setdefault(el, gl)
                 existing = ident["by_gl_issuer"].get(gl)
                 if existing is None:
                     ident["by_gl_issuer"][gl] = el
@@ -458,14 +460,18 @@ def norm_freq(f):
     return f or None
 
 
-def series_point(period, val, cur, disp, qtr):
-    # `q` is the quarterly figure for the quarter ending on `d`; it rides with the
-    # monthly `v` so the app shows the quarter without re-summing the months.
+def series_point(period, val, cur, disp, qtr, freq=None, ps=None):
+    # `q` is the quarter's own figure, riding with the monthly `v`. `f`/`ps` are the
+    # reported cadence and period start, needed to name the exact reading a correction replaces.
     pt = {"d": period, "v": val, "cur": cur}
     if disp is not None:
         pt["s"] = disp
     if qtr is not None:
         pt["q"] = qtr
+    if freq:
+        pt["f"] = freq
+    if ps:
+        pt["ps"] = ps
     return pt
 
 
@@ -528,14 +534,14 @@ def build(raw, out, meta, as_of_max=None):
             comp_funds.setdefault(cid, set()).add(fn)
 
     # ---- financials: discover metrics + build per-company time series ----
-    # metrics_meta[key] = {"key","label","unit"}  (first spelling wins for label)
+    # metrics_meta[key] = {"key","label","unit","mnemonic"}  (first spelling wins for label)
     metrics_meta = {}
     metric_order = []
-    # series[company id][key][period] = (value, currency, display, freq)  (one pt / period)
+    # series[company id][key][period] = (value, currency, display, qval, freq, period_start), one pt / period.
     # display is set only for a qualitative KPI; value is None for free text.
     series = {}
     # Raw financial rows staged for cadence-aware collapse (see collapse loop below):
-    # fin_acc[company id][key][period_end][freq] = [(as_of_str, value, currency, display), ...]
+    # fin_acc[company id][key][period_end][freq] = [(as_of_str, value, currency, display, period_start), ...]
     fin_acc = {}
     display_name = {}          # company id -> a real display name (first seen)
     fin_currency = None
@@ -546,12 +552,13 @@ def build(raw, out, meta, as_of_max=None):
         ck = key + MONTHS_TO_SUFFIX
         if ck not in metrics_meta:
             metrics_meta[ck] = {"key": ck, "label": "Months to " + metrics_meta[key]["label"],
-                                "unit": "Number", "reportType": metrics_meta[key].get("reportType"),
+                                "unit": "Number", "mnemonic": None,
+                                "reportType": metrics_meta[key].get("reportType"),
                                 "agg": "last", "derivedFrom": key}
             metric_order.append(ck)
         gap = months_between(period, target)
         if gap is not None:
-            series.setdefault(nm_norm, {}).setdefault(ck, {})[str(period)] = (gap, None, None, None)
+            series.setdefault(nm_norm, {}).setdefault(ck, {})[str(period)] = (gap, None, None, None, None, None)
 
     for r in read_ndjson(raw / "financials.ndjson"):
         legal = col(r, "legal_name", "company", "name_legal")
@@ -575,7 +582,7 @@ def build(raw, out, meta, as_of_max=None):
             rtype = col(r, "report_type") or None
             # Never sum a flag, a date or prose, whatever statement it arrived on.
             metrics_meta[key] = {"key": key, "label": metric_label(reported, key), "unit": unit,
-                                 "reportType": rtype,
+                                 "mnemonic": (mnemonic or None), "reportType": rtype,
                                  "agg": "last" if kind else agg_mode(mnemonic, reported, rtype)}
             if kind:
                 metrics_meta[key]["kind"] = kind
@@ -596,9 +603,10 @@ def build(raw, out, meta, as_of_max=None):
             prev = last_responded.get(nm_norm)
             if prev is None or asof_day > prev:
                 last_responded[nm_norm] = asof_day
+        ps = str(col(r, "period_start") or "")[:10] or None
         (fin_acc.setdefault(nm_norm, {}).setdefault(key, {})
                 .setdefault(str(period), {}).setdefault(freq, [])
-                .append((asof, v4, cur, disp)))
+                .append((asof, v4, cur, disp, ps)))
         if qdate is not None:
             add_months_to(nm_norm, key, period, qdate)
 
@@ -613,8 +621,8 @@ def build(raw, out, meta, as_of_max=None):
                     best[fr] = max(live, key=lambda x: x[0])
                 qval = best["Q"][1] if "Q" in best else None
                 fr = "M" if "M" in best else ("Q" if "Q" in best else next(iter(best)))
-                _asof, v4, cur, disp = best[fr]
-                series.setdefault(nm, {}).setdefault(key, {})[pe] = (v4, cur, disp, qval)
+                _asof, v4, cur, disp, ps = best[fr]
+                series.setdefault(nm, {}).setdefault(key, {})[pe] = (v4, cur, disp, qval, fr, ps)
 
     # ---- forecasts (instance_type='Estimate'): keep EVERY vintage ----
     # A forecast is rewritten over time, so each (company, metric, target period)
@@ -639,7 +647,8 @@ def build(raw, out, meta, as_of_max=None):
             unit = col(r, "unit_type", "unit") or "Number"
             rtype = col(r, "report_type") or None
             metrics_meta[key] = {"key": key, "label": metric_label(col(r, "name"), key), "unit": unit,
-                                 "reportType": rtype, "agg": agg_mode(col(r, "mnemonic"), col(r, "name"), rtype)}
+                                 "mnemonic": (col(r, "mnemonic") or None), "reportType": rtype,
+                                 "agg": agg_mode(col(r, "mnemonic"), col(r, "name"), rtype)}
             metric_order.append(key)
         cur = col(r, "currency") or None
         display_name.setdefault(nm_norm, legal)
@@ -1019,7 +1028,7 @@ def build(raw, out, meta, as_of_max=None):
         for key, pts in series.get(nm_norm, {}).items():
             ordered = sorted(pts.items())  # by period ascending
             all_periods.update(p for p, _ in ordered)
-            rec_series[key] = [series_point(p, v, c, s, f) for p, (v, c, s, f) in ordered]
+            rec_series[key] = [series_point(p, *rest) for p, rest in ordered]
         entry = {
             "id": nm_norm,
             "keyType": key_type.get(nm_norm),
@@ -1031,6 +1040,13 @@ def build(raw, out, meta, as_of_max=None):
             "funds": sorted(comp_funds.get(nm_norm, [])),
             "series": rec_series,
         }
+        # A standalone GL issuer needs its own write target (FA_ISSUER); the reverse
+        # of by_gl_issuer gives an entity-linked company one too, when holdings paired it with one.
+        kt = key_type.get(nm_norm)
+        gl = (ident.get("gl_of") or {}).get(nm_norm) if kt == "entity_link" \
+            else (nm_norm[3:] if kt == "gl_issuer" else None)
+        if gl:
+            entry["glIssuerId"] = gl
         entry["lastResponded"] = last_responded.get(nm_norm)
         # Carta investment tags, every category the firm uses. Flat and sorted so the
         # app can group them without re-deriving an order.

@@ -139,7 +139,9 @@ class RefreshError(Exception):
 
 def bootstrap_allowed_tools(prefer_nonprod=False):
     # type: (bool) -> str
-    prefixes = _PREFIXES_PROD + (_PREFIXES_NONPROD if prefer_nonprod else ())
+    # One environment only: the sandboxed model picks any allowed server, and a
+    # mixed list let a nonprod cache reach a production connector silently.
+    prefixes = _PREFIXES_NONPROD if prefer_nonprod else _PREFIXES_PROD
     return ",".join("mcp__%s__%s" % (p, t)
                     for p in prefixes for t in ("welcome", "set_context", "call_tool"))
 

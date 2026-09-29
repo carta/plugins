@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useMemo, useSyncExternalStore } from "reac
 import { FS, serif, sans, GLOBAL_CSS, MICRO } from "./ui/theme.js";
 import { Mark, SunIcon, MoonIcon, useDismissable, Eyebrow, TooltipLayer, Dropdown, TextInput } from "./ui/components.jsx";
 import UpdateDataButton from "./ui/UpdateDataButton.jsx";
+import PublishEditsButton from "./ui/PublishEditsButton.jsx";
+import { ConflictsButton } from "./ui/ConflictsPanel.jsx";
 import { capTableCompanies } from "./model/captable.js";
 import { getFocus, openPortfolio } from "./state/focus.js";
 import { setDisplayCurrency, fmtAsOf, fmtRelative, oldestDatasetFetch } from "./ui/format.js";
@@ -15,6 +17,7 @@ import { ChartPrefsProvider } from "./state/chartPrefs.js";
 import { setChartContext, TrendSparklineDefs } from "./ui/charts.jsx";
 import { withCustomMetrics } from "./model/derived.js";
 import { withCurrency, presentCurrencies, DEFAULT_CURRENCY } from "./model/currency.js";
+import { withPendingEdits, reconcileEdits } from "./model/pendingEdits.js";
 import { seedDefaultFormulas } from "./model/formula.js";
 import { seedFavorites } from "./model/favorites.js";
 import Overview from "./views/Overview.jsx";
@@ -226,9 +229,13 @@ export default function App({ firm }) {
   // Convert BEFORE custom metrics so formulas compute on converted values.
   const currency = dashboard.doc?.currency || DEFAULT_CURRENCY;
   const currencyKey = JSON.stringify(currency);
+  // Staged corrections overlay FIRST so currency conversion and formulas compute on the
+  // corrected figures; key on content, since update() clones the doc on every edit.
+  const pendingEdits = dashboard.doc?.pendingEdits || [];
+  const editsKey = JSON.stringify(pendingEdits);
   const data = useMemo(
-    () => withCustomMetrics(withCurrency(rawData, currency), customMetrics),
-    [rawData, customKey, currencyKey],
+    () => withCustomMetrics(withCurrency(withPendingEdits(rawData, pendingEdits), currency), customMetrics),
+    [rawData, editsKey, customKey, currencyKey],
   );
   // Seed the built-in formulas (Gross Profit Margin %) the first time a firm's doc loads, so
   // the derived KPI is already available everywhere instead of waiting for someone
@@ -252,6 +259,15 @@ export default function App({ firm }) {
       const afterFavorites = seedFavorites(afterFormulas || d, rawData.companies);
       return afterFavorites || afterFormulas;
     });
+  }, [dashboard.doc, rawData]);
+
+  // Settle published corrections against each newly loaded dataset: confirmed ones drop,
+  // lagging ones stay pending, changed-upstream ones become conflicts. Once per rawData.
+  const reconciledRef = useRef(null);
+  useEffect(() => {
+    if (!dashboard.doc || !rawData || reconciledRef.current === rawData) return;
+    reconciledRef.current = rawData;
+    dashboard.update((d) => reconcileEdits(d, rawData));
   }, [dashboard.doc, rawData]);
 
   // Update-data company filter list. Name-keyed companies have no identity columns
@@ -389,13 +405,21 @@ export default function App({ firm }) {
         </div>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "0 12px" }}>
-        {currencyMenuSidebar}
-        {themeToggleSidebar}
+        {/* Transient work first: this group only exists while edits await a decision. */}
+        {(dashboard?.doc?.pendingEdits || []).length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingBottom: 12,
+            borderBottom: "1px solid var(--ink-color-global-border-subtle)" }}>
+            <ConflictsButton variant="sidebar" data={data} dashboard={dashboard} />
+            <PublishEditsButton variant="sidebar" data={data} dashboard={dashboard} />
+          </div>
+        )}
         <div style={{ padding: "4px 12px 0", display: "flex", flexDirection: "column", gap: 4 }}>
           <div style={{ ...sans, fontSize: 13, fontWeight: 600, color: "var(--ink-color-global-text-default)" }}>Portfolio Analytics</div>
           <DataStatusLine source={data.source} />
         </div>
         <UpdateDataButton variant="sidebar" datasets={data.source?.datasets} builtAt={data.source?.builtAt} companies={refreshCompanies} />
+        {currencyMenuSidebar}
+        {themeToggleSidebar}
         {userName && (
           <div style={{ padding: "8px 12px 0", borderTop: "1px solid var(--ink-color-global-border-subtle)", marginTop: 4, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
             <span style={{ ...sans, fontSize: 12, fontWeight: 500, color: "var(--ink-color-global-text-subtle)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{userName}</span>
@@ -411,7 +435,7 @@ export default function App({ firm }) {
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <Mark branding={data.branding} size={24} />
         <span style={{ ...serif, fontSize: FS.h3, fontWeight: 700, color: "var(--ink-color-global-text-default)" }}>{resolvedFirmName}</span>
-        <span style={{ flex: 1 }} />{currencyMenu}<UpdateDataButton datasets={data.source?.datasets} builtAt={data.source?.builtAt} companies={refreshCompanies} />{themeToggle}
+        <span style={{ flex: 1 }} />{currencyMenu}<UpdateDataButton datasets={data.source?.datasets} builtAt={data.source?.builtAt} companies={refreshCompanies} /><PublishEditsButton data={data} dashboard={dashboard} /><ConflictsButton data={data} dashboard={dashboard} />{themeToggle}
       </div>
       <div style={{ display: "flex", gap: 4, overflowX: "auto", alignItems: "center" }}>
         {NAV_TABS.map((t) => {
