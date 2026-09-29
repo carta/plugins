@@ -40,6 +40,7 @@ After installing, restart Claude Code and run `/mcp` to complete OAuth authentic
 | `carta-performance-benchmarks` | Compare fund performance against peer benchmark cohorts |
 | `carta-download-tearsheet` | Generate tearsheet PDFs for one or more portcos — single PDF preview or bulk ZIP download |
 | `carta-fund-forecasting` | Read-only Carta Fund Forecasting (formerly Tactyc) — list funds, fund-wide KPIs (TVPI, DPI, IRR, MOIC, NAV, reserves), performance tables, and per-investment analytics. |
+| `carta-loan-dashboard` | Loan portfolio dashboard as a live Cowork artifact — KPI tiles (commitments, drawn, outstanding, scheduled payments) and every active loan, with a side panel per loan for terms, key dates, payments and draws. Refreshes from Carta each time it is opened. Invoke with "show my loans" or "loan dashboard". |
 | `carta-manco-reporting` | Interactive management-company reporting dashboard — a local React app over live ManCo financials with P&L drill-down, Budget vs Actuals, management fee income by fund, expense breakdowns, and journal-entry detail. Invoke with a firm name, e.g. "ManCo reporting for Demo Capital". |
 | `deal-group-wf-health` | Read-only dashboard of waterfall health across a firm's deal groups (pass any firm/org id) — model assignment (stranded/none), ownership-link defects, orphaned models, and whether recent runs reached every entity. Internal-only. |
 
