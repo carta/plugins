@@ -30,7 +30,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.90.29</carta-plugin>
+<carta-plugin>carta-cap-table:6.90.30</carta-plugin>
 
 # Carta Home (cap table) — Build / Redeploy
 
@@ -114,7 +114,12 @@ which claims its own artifact and its own URL.
   fallback cards; `live-content.js` replaces them with live Contentful entries tagged
   `NEWS_TAG`. Every failure path keeps the static cards, so the row is never empty.
 - **Skill Directory** — categorized index of carta-cap-table skills, each with two or
-  three copyable example prompts covering that skill's distinct use cases.
+  three copyable example prompts covering that skill's distinct use cases. The entries
+  come from the plugin's `.claude-plugin/skill-directory.json`: the build bakes them in,
+  and `skill-directory.js` swaps in the published copy from `plugin:list:skills` when the
+  page opens, so a skill that ships later appears without a rebuild. Any failure keeps
+  the baked list. See `docs/skill-directory.md` in the marketplace repo for the entry
+  format.
 
 Every prompt — the What to try next cards, the foot of each drill-down page, and the
 directory's copy buttons — is written with a `{{COMPANY}}` placeholder and resolved at
@@ -150,7 +155,8 @@ rejects with `not_in_manifest`:
   `marketing:list:content` / `marketing:get:asset_data` for the Plugin news row. The
   marketing commands only exist on some environments; a missing one leaves the static
   news cards in place.
-- `fetch` — carries `plugin:get:version` for the update banner, and remains the legacy
+- `fetch` — carries `plugin:get:version` for the update banner and `plugin:list:skills`
+  for the Skill Directory, and remains the legacy
   dispatch path for environments without `call_tool`
 - `get_current_user` — `recommendations` for the Capabilities cards
 
@@ -162,7 +168,7 @@ the full file in context. Edit the small source file for what you're changing:
 
 | File | What it holds | Edit it to… |
 |------|---------------|-------------|
-| `resources/captable-home.config.js` | all page content: `DIR_CATEGORIES` (directory, each skill carries a `prompts` array), `CAP_PROMPTS` (What to try next fallbacks + dedupe `topics`), `DASHBOARD_PROMPTS` (one per drill-down page, keyed by page id), `WHATS_NEW`, `NEWS_TAG` | change which skills/categories show, their example prompts, the capability, dashboard or what's-new prompts, or which Contentful tag feeds Plugin news |
+| `resources/captable-home.config.js` | all page content: `DIR_CATEGORIES` (directory categories: `id`, name, tagline), `CAP_PROMPTS` (What to try next fallbacks + dedupe `topics`), `DASHBOARD_PROMPTS` (one per drill-down page, keyed by page id), `WHATS_NEW`, `NEWS_TAG` | change the directory's categories, the capability, dashboard or what's-new prompts, or which Contentful tag feeds Plugin news |
 | `resources/captable-home.app.js` | shared/core runtime logic (`_mcp`, `_mcpResultCandidates`, `_mcpErrorMessage`, format helpers, `fullPagePrompt`/`fpCopyPrompt`, the baked company constants + `selectCompany`, `loadCompanyData`, tab switching, Skill Directory render, fallback empty states) | change behavior for anything not yet split into its own file |
 | `resources/app/ownership.js` | the ownership composition bar (`drawOwnershipChart` + `ownershipLegendHtml`, both used by the Cap table page) + the Fully diluted summary strip, all from `cap_table_chart`; the categorical palette and its surface/label color helpers; the shared `statTile` helper; and `applyAmountRaised`, which dashboards.js calls with the financing currency | change how the stacked bar, its legend, the FD stat tiles, the dilution meter, or the amount-raised currency logic render |
 | `resources/app/option-pool.js` | Option pool tile (one meter per plan) + its full-page per-plan table | change option-pool rendering |
@@ -171,6 +177,8 @@ the full file in context. Edit the small source file for what you're changing:
 | `resources/app/dashboards.js` | the Cap table and Round history tiles, `openDashboardPage`/`closeDashboardPage` and every `open*Page()` entry point, plus the one `financing_history` fetch that feeds both the round history and the FD summary's currency | change the cap-table or round-history dashboards, or how any drill-down page opens |
 | `resources/app/capabilities.js` | What to try next — recommendation fetch, static padding, copy | change how capability cards are chosen or rendered |
 | `resources/app/whats-new.js` | What's new — renders `WHATS_NEW` | change how what's-new cards render (edit the content in the config) |
+| `../../.claude-plugin/skill-directory.json` | the Skill Directory's entries, keyed by skill: `category` (a `DIR_CATEGORIES` id), `name`, `order`, `prompts`; `null` opts a skill out | change which skills show or their example prompts — no rebuild needed once published |
+| `resources/app/skill-directory.js` | reads the published directory (`plugin:list:skills`), validates it, and re-renders over the baked list | change how the published list is merged or when it loads |
 | `resources/app/version-check.js` | update banner: reads the published version, compares, renders/dismisses | change the banner copy or when it appears |
 | `resources/app/live-content.js` | Plugin news — live Contentful fetch, adapters, asset resolution | change which content types render or how news cards look |
 | `../../.claude-plugin/skill-versions.json` | this skill's `version` + release `headline` | **bump on every user-visible change** — see Versioning |
@@ -191,7 +199,8 @@ throws `ReferenceError` the moment that function reads one of its own constants 
 takes the whole page with it. Two rules follow:
 
 - Each module does its own first paint at the bottom of its own file (see
-  `capabilities.js`, `whats-new.js`, `version-check.js`, `live-content.js`).
+  `capabilities.js`, `whats-new.js`, `version-check.js`, `live-content.js`,
+  `skill-directory.js`).
 - Every top-level name across all parts has to be unique. A duplicate `const` is a
   parse-time `SyntaxError` that kills every card at once; `test_bundle_parses` catches it.
 
@@ -390,6 +399,7 @@ delete it from their artifact gallery.
 | Round history dashboard | `cap_table:list:financing_history` — one row per share class, already aggregated and date-sorted, carrying `closing_date`, `original_issue_price`, `shares_issued`, `post_money`, and `cash_raised_by_currency`. **Not `cap_table:get:financing_history`:** that command is deprecated *with* a replacement, and the gateway raises `ToolError` on any such command, so calling it renders nothing but the card's error state |
 | What to try next | `get_current_user` — `recommendations`, filtered to entries that are not `is_skill_gap` and carry a `recommended_prompt` |
 | Update banner | `plugin:get:version` via `fetch`, with `plugin` + `skill` params |
+| Skill Directory | baked from `.claude-plugin/skill-directory.json` at build time, then `plugin:list:skills` via `fetch` with `plugin` — entries at the plugin's stable tag, only for published skills. `skills: null` or an unusable list keeps the baked one |
 | Plugin news | `marketing:list:content` (tag `NEWS_TAG`, `tag_source: "metadata"`) then `marketing:get:asset_data` per image. Images must arrive as `data:` URIs — the sandbox CSP is `img-src 'self' data:`, so a remote asset URL renders nothing |
 | Ownership composition bar (on the Cap table page) | `cap_table_chart` — `chart_data.share_classes` and `chart_data.warrant_blocks` by `fully_diluted_ownership`, `chart_data.option_plans` by `outstanding_ownership + available_ownership`, largest first and capped at six segments, plus "Rest of the company" when `chart_data.totals.total_fully_diluted_ownership` is less than the whole |
 | Fully diluted summary | `cap_table_chart` — `chart_data.totals` for share counts, or `total_fully_diluted_ownership` when every share class row's `quantity_semantics` is `PERCENT` or `INVESTED_CAPITAL` (same call again, no extra fetch), upgraded by the Round history dashboard's `cap_table:list:financing_history` response, which the dashboard hands over via `applyAmountRaised` — one currency renders plainly, more than one renders a per-currency breakdown (never summed), none/failure keeps the unitless fallback |

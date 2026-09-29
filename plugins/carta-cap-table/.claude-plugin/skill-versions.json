@@ -1,6 +1,6 @@
 {
   "carta-captable-home-build": {
-    "version": "0.14.0",
-    "headline": "The Cap table dashboard shows the grey rest-of-company slice only for classes you cannot see, and the summary shows ownership for percentage-based and invested-capital classes."
+    "version": "0.15.0",
+    "headline": "The Skill Directory now updates itself as new cap table skills ship, so you no longer need to rebuild to see them."
   }
 }

@@ -301,6 +301,13 @@ function setAllCardsLoading() {
 const BAKED_CORPORATION_ID = "{{CORPORATION_ID}}";
 const BAKED_COMPANY_NAME = {{COMPANY_NAME_JSON}};
 
+// The Skill Directory as it stood at build time, from .claude-plugin/skill-directory.json
+// with opt-outs and skills absent from the install already dropped: a list of
+// {skill, category, name, order, prompts}. It is the fallback — app/skill-directory.js
+// replaces _directorySkills with the published list once it arrives.
+const BAKED_SKILL_DIRECTORY = {{SKILL_DIRECTORY_JSON}};
+let _directorySkills = BAKED_SKILL_DIRECTORY;
+
 // Every in-flight fetch compares against this after each await and discards its
 // result if it no longer matches.
 let _selectedCorporationId = null;
@@ -336,10 +343,21 @@ function switchTab(id) {
   });
 }
 
+// Each category in DIR_CATEGORIES order, holding its entries sorted by `order`. An
+// entry naming no known category is dropped, and a category left empty is hidden.
+function directoryCategories(entries) {
+  return DIR_CATEGORIES.map(cat => ({
+    ...cat,
+    skills: entries
+      .filter(e => e.category === cat.id)
+      .sort((a, b) => (a.order || 0) - (b.order || 0) || a.name.localeCompare(b.name)),
+  })).filter(cat => cat.skills.length);
+}
+
 function renderDirectory() {
   const grid = document.getElementById('dir-grid');
   if (!grid) return;
-  grid.innerHTML = DIR_CATEGORIES.map(cat => `
+  grid.innerHTML = directoryCategories(_directorySkills).map(cat => `
     <div class="dir-cat-card">
       <div class="dir-cat-header">
         <div>
