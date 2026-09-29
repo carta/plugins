@@ -39,6 +39,20 @@ costs a glance; a wrong guess applied silently costs a wrong dashboard.
 names a GL-code/budget-category lookup tab, read by parse_coa_mapping.py
 instead. `is_mapping` marks that case so a caller piping `likely_shape`
 into --shape doesn't have to special-case the one string that isn't one.
+
+A mapping tab is recognized by what its columns actually hold, not by a
+name or a fixed layout: one column naming Carta's side (a GL code or an
+account name the chart of accounts has) paired with one column naming the
+firm's own side (its own code, its own category words, a reporting-tag
+value, a sub-account, or a vendor) is a mapping regardless of which pair it
+is or what the sheet is called. `--accounts` (plus the optional
+`--tags-from`/`--vendors-from`) is what lets this read column *values*
+against the firm's real data; without it, detection falls back to the
+older repeat-ratio heuristic below, which only ever found the one shape
+that heuristic was tuned on (a repeating GL-code column). `mapping_columns`
+reports which role each detected column plays, and `mapping_kind` states
+the pairing in one line (e.g. "Carta accounts, by name, to your own
+categories") for the skill to say when it uses the tab silently.
 """
 
 from __future__ import annotations
@@ -239,9 +253,10 @@ def shape_is_settled(shape, why):
     return any(str(why or "").startswith(r) for r in _SETTLED_REASONS)
 
 
-def _classify(ws) -> tuple[str | None, str]:
-    """Guess which adapter suits a sheet, from its header block alone.
-    A "coa-mapping" guess is not a valid --shape; main() flags that below."""
+def _classify_budget_shape(ws) -> tuple[str | None, str | None]:
+    """Guess which budget adapter suits a sheet, from its header block
+    alone. `None, None` when it looks like neither — the caller then tries
+    mapping detection instead of a budget shape."""
     subheader_hits = 0
     first_subheader_row = None
     quarters = 0
@@ -277,23 +292,47 @@ def _classify(ws) -> tuple[str | None, str]:
         return "tag-crosstab", "named super-headers over repeated Actual/Budget/Variance blocks"
     if _month_label_count(ws, _SCAN_ROWS + 8) >= 12 and subheader_hits >= 1:
         return "monthly-crosstab", "twelve month-label columns with Actual/Budget markers"
+    return None, None
 
-    # Neither budget shape: check for a Carta GL ↔ Budget Category mapping
-    # sheet instead. A GL-code column paired with descriptive text columns
-    # is necessary but not sufficient — see the repeat-ratio and row-count
-    # guards above for why a plain GL-code column alone over-matches every
-    # financial statement and raw ledger extract in the workbook.
-    if ws.max_row <= _COA_MAX_ROWS:
-        for r in range(1, min(_SCAN_ROWS, ws.max_row) + 1):
-            col = _find_gl_code_column(ws, r)
-            if col is None:
-                continue
-            ratio, n = _gl_column_repeat_ratio(ws, r, col)
-            if n >= _COA_MIN_SAMPLE and ratio >= _COA_MIN_DUP_RATIO:
-                return ("coa-mapping",
-                        "a GL-code column repeating per department/context, "
-                        "paired with descriptive text columns")
 
+def _detect_ratio_mapping(ws) -> tuple[str | None, str | None]:
+    """Heuristic mapping detection: a GL-code column repeating per
+    department/context, paired with descriptive text columns.
+
+    Used when no firm data (`--accounts`/`--tags-from`/`--vendors-from`) is
+    available for `_detect_content_mapping` — the only signal left is how
+    the GL column itself behaves. See that function's docstring for why
+    content wins whenever the data to check it against is in hand.
+    """
+    if ws.max_row > _COA_MAX_ROWS:
+        return None, None
+    for r in range(1, min(_SCAN_ROWS, ws.max_row) + 1):
+        col = _find_gl_code_column(ws, r)
+        if col is None:
+            continue
+        ratio, n = _gl_column_repeat_ratio(ws, r, col)
+        if n >= _COA_MIN_SAMPLE and ratio >= _COA_MIN_DUP_RATIO:
+            return ("coa-mapping",
+                    "a GL-code column repeating per department/context, "
+                    "paired with descriptive text columns")
+    return None, None
+
+
+def _classify(ws) -> tuple[str | None, str]:
+    """Guess which adapter suits a sheet, from its header block alone.
+    A "coa-mapping" guess is not a valid --shape; main() flags that below.
+
+    This is the no-firm-data path (no `--accounts` given) — `main()` tries
+    `_detect_content_mapping` first when it has data to read column values
+    against, and only falls back to this for a sheet content detection
+    didn't claim.
+    """
+    shape, why = _classify_budget_shape(ws)
+    if shape:
+        return shape, why
+    shape, why = _detect_ratio_mapping(ws)
+    if shape:
+        return shape, why
     return None, "no recognizable budget or mapping header block"
 
 
@@ -454,6 +493,235 @@ def _row_axis(ws, account_names, scan=400):
     return best
 
 
+# Header keywords for the two roles content detection can't tell apart
+# from values alone with no prior build to check against (`--tags-from`/
+# `--vendors-from` omitted). Mirrors parse_coa_mapping.py's own
+# `_HEADER_FIELD_TESTS` for these two fields — duplicated, not imported,
+# since this script runs standalone (see the module docstring).
+_TAG_HEADER_WORDS = (
+    "department", "tag_value", "cost center", "cost centre", "team",
+    "carta tag", "reporting tag", "tag", "office", "location",
+    "initiative", "project", "program", "programme", "entity", "class",
+)
+_VENDOR_HEADER_WORDS = ("vendor", "payee", "supplier")
+
+_STRIP_PARENS_RX = re.compile(r"\s*\([^)]*\)\s*")
+
+
+def _strip_parenthetical(s: str) -> str:
+    return _STRIP_PARENS_RX.sub("", s).strip()
+
+
+def _norm_tag(v) -> str:
+    return " ".join(str(v or "").strip().lower().split())
+
+
+def read_json_values(path, key) -> set:
+    """Distinct string values of `key` out of a JSON file — tolerant of a
+    missing or unreadable file, since the caller only has one to read
+    after a firm's first build (`accounts.json`)."""
+    try:
+        data = json.loads(Path(path).expanduser().read_text())
+    except Exception:
+        return set()
+    out = set()
+    if isinstance(data, dict):
+        data = data.get(key) or data.get("tagCategories") or []
+    if isinstance(data, list):
+        for item in data:
+            if isinstance(item, str):
+                out.add(item)
+            elif isinstance(item, dict):
+                v = item.get("value") or item.get("name") or item.get(key)
+                if isinstance(v, str):
+                    out.add(v)
+                for sub in (item.get("values") or []):
+                    if isinstance(sub, str):
+                        out.add(sub)
+                    elif isinstance(sub, dict) and isinstance(sub.get("value"), str):
+                        out.add(sub["value"])
+    return out
+
+
+def _column_text_values(ws, header_row: int, col: int, sample: int = 60) -> list[str]:
+    out = []
+    for r in range(header_row + 1, min(ws.max_row, header_row + sample) + 1):
+        v = ws.cell(r, col).value
+        if isinstance(v, str) and v.strip():
+            out.append(v.strip())
+    return out
+
+
+def _column_value_overlap(ws, header_row: int, col: int, known: set,
+                          strip_parens: bool = False) -> tuple[float, int]:
+    """Fraction of a text column's values that match a known value set,
+    plus how many were checked. `known` is pre-normalized by the caller."""
+    if not known:
+        return 0.0, 0
+    values = _column_text_values(ws, header_row, col)
+    if not values:
+        return 0.0, 0
+    hits = 0
+    for v in values:
+        key = _norm_tag(_strip_parenthetical(v) if strip_parens else v)
+        if key in known or _norm_tag(v) in known:
+            hits += 1
+    return hits / len(values), len(values)
+
+
+def _looks_like_own_code(v) -> bool:
+    """A short whole number that reads as an account code, not a dollar
+    amount — 2-6 digits, no decimal part. `_parse_gl_codes`'s own
+    1000-8999 window is deliberately not used here: the firm's own code
+    space has no reason to fall in Carta's range at all (that is rather
+    the point — see `test_firms_own_code_to_carta_gl_is_detected`)."""
+    if isinstance(v, bool):
+        return False
+    if isinstance(v, int):
+        n = v
+    elif isinstance(v, float) and v.is_integer():
+        n = int(v)
+    elif isinstance(v, str) and re.fullmatch(r"\d{2,6}", v.strip()):
+        n = int(v.strip())
+    else:
+        return False
+    return 10 <= n <= 999999 and len(str(abs(n))) <= 6
+
+
+def _column_numeric_ratio(ws, header_row: int, col: int, sample: int = 20) -> float:
+    checked = matched = 0
+    for r in range(header_row + 1, min(header_row + 1 + sample, ws.max_row + 1)):
+        v = ws.cell(r, col).value
+        if v is None or (isinstance(v, str) and not v.strip()):
+            continue
+        checked += 1
+        if _looks_like_own_code(v):
+            matched += 1
+    return (matched / checked) if checked >= 3 else 0.0
+
+
+# Role labels the content detector assigns to a column, and the plain
+# words used to describe each side of a mapping in `mapping_kind`.
+_CARTA_ROLES = {"carta_gl": "Carta accounts, by GL code",
+                "carta_account": "Carta accounts, by name"}
+_OWN_ROLES = {"own_code": "your own codes", "own_category": "your own categories",
+              "tag": "a reporting tag", "sub_account": "a sub-account",
+              "vendor": "a vendor"}
+
+_MIN_SAMPLE = 5
+
+
+def _detect_content_mapping(ws, account_names: dict, tag_values: set,
+                             sub_accounts: set, vendor_names: set,
+                             category_hints: set) -> tuple[dict | None, str | None]:
+    """A mapping tab recognized by what its columns hold, not by its name
+    or a fixed column layout.
+
+    A firm's own COA-to-budget mapping comes in whatever shape the firm
+    built it in: Carta GL codes to their own category words, Carta account
+    *names* to their own codes, a plain 1:1 bucket list, or any of those
+    plus a reporting-tag/sub-account/vendor column. None of that is
+    findable from the sheet's header text or a fixed guess at column
+    position — the header can say anything, and there is no canonical
+    layout to assume. What is checkable is whether a column's actual
+    values are mostly Carta's own (an account this firm's chart of
+    accounts has, by code or by name) paired with a column that mostly
+    isn't (the firm's own code, its own category wording, or one of its
+    real reporting-tag/sub-account/vendor values) — that pairing is what a
+    mapping table *is*, independent of which two roles it pairs.
+
+    Returns `(columns, kind)` — `columns` maps a role name (see
+    `_CARTA_ROLES`/`_OWN_ROLES`) to its 1-based column index, and `kind` is
+    a one-line description of the pairing found. `(None, None)` when no
+    such pairing is in this sheet, or when there's no firm data at all
+    (`account_names` empty) to check column values against.
+    """
+    if not account_names or ws.max_row > _COA_MAX_ROWS:
+        return None, None
+    known_gl = set(account_names.keys())
+    known_names = {_norm_name(n) for n in account_names.values() if _norm_name(n)}
+    known_tags = {_norm_tag(v) for v in tag_values}
+    known_subs = {_norm_tag(v) for v in sub_accounts}
+    known_vendors = {_norm_tag(v) for v in vendor_names}
+    known_hints = {_norm_name(v) for v in category_hints}
+
+    max_col = min(ws.max_column, 20)
+    for header_row in range(1, min(_SCAN_ROWS, ws.max_row) + 1):
+        scores: dict[int, tuple[str, float, int]] = {}
+        for col in range(1, max_col + 1):
+            best_role, best_score, best_n = None, 0.0, 0
+
+            # Carta's side: a code the chart has, or a name the chart has.
+            checked = matched = 0
+            for r in range(header_row + 1, min(header_row + 1 + 20, ws.max_row + 1)):
+                v = ws.cell(r, col).value
+                if v is None or (isinstance(v, str) and not v.strip()):
+                    continue
+                checked += 1
+                codes = _parse_gl_codes(v)
+                if codes and any(c in known_gl for c in codes):
+                    matched += 1
+            if checked >= 3 and (matched / checked) >= 0.5:
+                best_role, best_score, best_n = "carta_gl", matched / checked, checked
+
+            ratio, n = _column_value_overlap(ws, header_row, col, known_names)
+            if n >= _MIN_SAMPLE and ratio >= 0.5 and ratio > best_score:
+                best_role, best_score, best_n = "carta_account", ratio, n
+
+            # The firm's own side: overlap with real tag/sub-account/vendor
+            # values outranks a header-keyword guess, same reasoning as
+            # parse_coa_mapping.py's `_column_by_tag_overlap`.
+            ratio, n = _column_value_overlap(ws, header_row, col, known_tags, strip_parens=True)
+            if n >= _MIN_SAMPLE and ratio >= 0.4 and ratio > best_score:
+                best_role, best_score, best_n = "tag", ratio, n
+            ratio, n = _column_value_overlap(ws, header_row, col, known_subs, strip_parens=True)
+            if n >= _MIN_SAMPLE and ratio >= 0.4 and ratio > best_score:
+                best_role, best_score, best_n = "sub_account", ratio, n
+            ratio, n = _column_value_overlap(ws, header_row, col, known_vendors)
+            if n >= _MIN_SAMPLE and ratio >= 0.4 and ratio > best_score:
+                best_role, best_score, best_n = "vendor", ratio, n
+
+            if best_role is None:
+                header = ws.cell(header_row, col).value
+                header_text = header.strip().lower() if isinstance(header, str) else ""
+                if any(k in header_text for k in _VENDOR_HEADER_WORDS):
+                    best_role, best_score, best_n = "vendor", 0.0, 0
+                elif any(k in header_text for k in _TAG_HEADER_WORDS):
+                    best_role, best_score, best_n = "tag", 0.0, 0
+                elif _column_numeric_ratio(ws, header_row, col) >= 0.6:
+                    # A code column the chart doesn't recognize — the
+                    # firm's own code, not a Carta one.
+                    best_role, best_score, best_n = "own_code", 0.0, 0
+                else:
+                    values = _column_text_values(ws, header_row, col)
+                    if len(values) >= _MIN_SAMPLE:
+                        # Extra evidence: this column's words are budget
+                        # line labels elsewhere in the same workbook — the
+                        # tell for "own category" over an incidental notes
+                        # column, which the header alone can't rule out.
+                        hint_hits = sum(1 for v in values if _norm_name(v) in known_hints)
+                        distinct_ratio = len(set(values)) / len(values)
+                        if hint_hits >= _MIN_SAMPLE or distinct_ratio <= 0.7:
+                            best_role, best_score, best_n = "own_category", 0.0, 0
+
+            if best_role:
+                scores[col] = (best_role, best_score, best_n)
+
+        cols_by_role: dict[str, int] = {}
+        for col, (role, score, n) in scores.items():
+            if role not in cols_by_role or score > scores[cols_by_role[role]][1]:
+                cols_by_role[role] = col
+
+        carta_role = next((r for r in ("carta_gl", "carta_account") if r in cols_by_role), None)
+        own_role = next((r for r in ("own_code", "own_category", "tag", "sub_account", "vendor")
+                          if r in cols_by_role), None)
+        if carta_role and own_role and len(cols_by_role) >= 2:
+            kind = f"{_CARTA_ROLES[carta_role]} to {_OWN_ROLES[own_role]}"
+            return cols_by_role, kind
+
+    return None, None
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(
         description="List a workbook's sheets, with a shape hint per sheet."
@@ -478,8 +746,25 @@ def main() -> int:
             "Path to the firm's chart-of-accounts dump (accounts-all.txt). "
             "Adds a row_axis per sheet: whether its rows name Carta's own "
             "accounts or the firm's own categories. Omitted, row_axis is "
-            "null and nothing is inferred from it."
+            "null and nothing is inferred from it. Also what content-based "
+            "mapping-tab detection checks a candidate GL/account column "
+            "against — omitted, that detection falls back to the older "
+            "repeat-ratio heuristic (GL-code columns only)."
         ),
+    )
+    ap.add_argument(
+        "--tags-from",
+        help=(
+            "Path to a prior build's accounts.json, for the firm's real "
+            "reporting-tag and sub-account values. Sharpens content-based "
+            "mapping detection the same way --carta-tags-from sharpens "
+            "parse_coa_mapping.py — omitted on a first-ever ingest, where "
+            "there's no build yet to read."
+        ),
+    )
+    ap.add_argument(
+        "--vendors-from",
+        help="Path to a prior build's accounts.json, for the firm's real vendor names.",
     )
     args = ap.parse_args()
 
@@ -509,11 +794,40 @@ def main() -> int:
         return 3
 
     account_names = read_account_names(args.accounts) if args.accounts else {}
+    tag_values = read_json_values(args.tags_from, "tagCategories") if args.tags_from else set()
+    sub_accounts = read_json_values(args.tags_from, "subAccounts") if args.tags_from else set()
+    vendor_names = read_json_values(args.vendors_from, "vendors") if args.vendors_from else set()
+
+    # First pass: budget shapes only, so a mapping tab can be checked
+    # against the budget's own line labels as extra own-category evidence
+    # (a workbook's mapping tab restates its budget's own words).
+    budget_shapes: dict[str, tuple[str | None, str | None]] = {}
+    category_hints: set = set()
+    for name in wb.sheetnames:
+        ws = wb[name]
+        shape, why = _classify_budget_shape(ws)
+        budget_shapes[name] = (shape, why)
+        if shape:
+            first = _first_data_row(ws)
+            for r in range(1, min(first + 400, ws.max_row) + 1):
+                v = ws.cell(r, 1).value
+                if isinstance(v, str) and v.strip():
+                    category_hints.add(v.strip())
 
     sheets = []
     for name in wb.sheetnames:
         ws = wb[name]
-        shape, why = _classify(ws)
+        shape, why = budget_shapes[name]
+        mapping_columns = None
+        if not shape:
+            mapping_columns, kind = _detect_content_mapping(
+                ws, account_names, tag_values, sub_accounts, vendor_names, category_hints)
+            if mapping_columns:
+                shape, why = "coa-mapping", kind
+            else:
+                shape, why = _detect_ratio_mapping(ws)
+                if not shape:
+                    why = "no recognizable budget or mapping header block"
         sheets.append({
             "name":         name,
             "hidden":       ws.sheet_state != "visible",
@@ -523,10 +837,13 @@ def main() -> int:
             # "coa-mapping" is a real hint but not a valid --shape value.
             "is_mapping":   shape == "coa-mapping",
             "why":          why,
+            # Which column plays which role, when content detection (not
+            # the repeat-ratio fallback) is what found this mapping.
+            "mapping_columns": mapping_columns,
             # Whether the classification is structural evidence or a best
             # guess — see `shape_is_settled`. The skill states a settled
             # shape and asks about an unsettled one.
-            "shape_settled": shape_is_settled(shape, why),
+            "shape_settled": shape_is_settled(shape, why) or mapping_columns is not None,
             "row_axis":     _row_axis(ws, account_names),
         })
 

@@ -623,6 +623,7 @@ def parse(workbook_path, sheet_name, mapping_records=None,
                if section == _SECTION_INCOME
                else _gl_codes_for(mapping, subsection_section, text, value_aliases))
         mapped_sub = _sub_account_for(mapping, subsection_section, text, value_aliases)
+        mapped_vendor = _vendor_for(mapping, subsection_section, text, value_aliases)
 
         row = {
             "row_kind": "line",
@@ -641,6 +642,8 @@ def parse(workbook_path, sheet_name, mapping_records=None,
             row["gl_codes"] = gls
             if mapped_sub:
                 row["sub_account"] = mapped_sub
+            if mapped_vendor:
+                row["vendor"] = mapped_vendor
         else:
             formula = _formula_for_row(wsf, layout, row_ix)
             if formula:
@@ -987,6 +990,23 @@ def _sub_account_for(mapping, section, label, aliases=None):
             if sub:
                 subs.add(sub)
     return subs.pop() if len(subs) == 1 else None
+
+
+def _vendor_for(mapping, section, label, aliases=None):
+    """The vendor every matched mapping record agrees this line is scoped
+    to — same reasoning as `_sub_account_for`, for a mapping tab that
+    names which vendor a budget line's spend belongs to (e.g. a payroll
+    line whose actuals should be read against one processor)."""
+    vendors = set()
+    for rec in (mapping or []):
+        if not _section_matches((rec.get("section") or "").strip(), section, aliases):
+            continue
+        cat = (rec.get("category") or "").strip()
+        if cat and cat == label.strip():
+            vendor = (rec.get("vendor") or "").strip()
+            if vendor:
+                vendors.add(vendor)
+    return vendors.pop() if len(vendors) == 1 else None
 
 
 def _gl_codes_for(mapping, section, label, aliases=None):

@@ -1,12 +1,63 @@
 # Budget lines that found no actuals
 
-Step 4.7 in full: how to split the unresolved rows, what to ask, and how to
-read the client's own wording back into GL codes. Reached from
+Steps 4.6 and 4.7 in full: whether the native mapping needs a file behind
+it, how to split the unresolved rows, what to ask, and how to read the
+client's own wording back into GL codes. Reached from
 [budget-ingest.md](budget-ingest.md), and gated by
 [serve-and-update.md](serve-and-update.md) — which will not emit the dashboard
-URL until this step is done.
+URL until both are done.
 
-> Steps referenced here that are documented elsewhere: **Step 4** → [serve-and-update.md](serve-and-update.md).
+> Steps referenced here that are documented elsewhere: **Step 4** → [serve-and-update.md](serve-and-update.md); **2.75e** → [budget-workbook.md](budget-workbook.md).
+
+## Step 4.6 — Ask for a mapping file only when the native mapping falls short
+
+2.75e uses whatever a mapping tab, the workbook's own formulas
+(`resolve_formula_gl_evidence`) and a line's own stated GL code already
+combine to. Whether that combination was *enough* is not answerable until
+Step 4 has actually tried it — so this is where it's asked, not before.
+
+**Skip this step entirely** — go straight to Step 4.7 — when any of these
+is true:
+- `--coa-mapping <path>` was passed for this run.
+- `<dashboard_dir>/.coa-mapping-ref.json` already records a mapping, or
+  `{"declined": true}` from an earlier invocation.
+- `accountsData.nativeMapping.needsMappingFile` is false.
+
+`nativeMapping` (`build_manco_datadir.py`'s `native_mapping_coverage`)
+counts every budget line against how many the build could actually resolve
+(`resolved`) or pre-fill a candidate for (`proposed` — a `mappingTable`
+row Step 4.7 lets the operator confirm in one tap). `needsMappingFile` is
+true when those two together cover under half the budget's lines — thin
+enough that Step 4.7's per-row table isn't really fixing the gap, it's
+asking about most of the budget one line at a time.
+
+When it's true, ask once, via a single `AskUserQuestion`, stating the
+coverage so the ask isn't a bare request:
+
+> **Do you have a Carta GL-to-budget-category mapping for this workbook?**
+> I matched `<resolved + proposed>` of `<lines>` budget line(s) from the
+> workbook's own codes, formulas and mapping tab. A mapping file would
+> resolve the rest by name and department/tag correspondence, rather than
+> asking about each one individually.
+
+Options:
+- **Yes, I have one** → collect it per [budget-workbook.md's Asking for a
+  file](budget-workbook.md#asking-for-a-file), then parse it exactly as
+  2.75e does (including `--carta-accounts-from` if the sheet names
+  accounts by text), **re-parse every `pnl-outline` sheet** the same way
+  2.75e's own note describes, and re-run Step 4 before continuing.
+- **No mapping file — I'll map natively to Carta** → proceed with no
+  further action here. Say: *"I'll match the rest to your Carta chart of
+  accounts directly — anything I can't resolve with confidence, you'll
+  get to confirm below."* This still only covers GL-account matching by
+  name (Step 4.7 does that regardless of a mapping file); deriving
+  department/tag correspondence from the firm's own Carta data is
+  planned, not yet built (see [errors.md](errors.md)).
+
+Record the answer in `.coa-mapping-ref.json` (`{"declined": true}` for the
+second option) so this isn't asked again for this firm. Either way, go on
+to Step 4.7 next — a mapping file changes how many rows have a `proposed`
+value, not whether the gate itself runs.
 
 ## Step 4.7 — Resolve budget lines that found no actuals
 

@@ -181,7 +181,9 @@ exactly, and getting it wrong fails the parse:
 ```bash
 <UV_BIN> run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/inspect_workbook.py" \
   --workbook "<WORKBOOK_PATH>" \
-  --accounts "<raw_dir>/accounts-all.txt"
+  --accounts "<raw_dir>/accounts-all.txt" \
+  --tags-from "<dashboard_dir>/accounts.json" \
+  --vendors-from "<dashboard_dir>/accounts.json"
 ```
 
 The JSON lists every sheet, ordered so budget-looking tabs come first and
@@ -193,6 +195,12 @@ whether the shape is stated or asked about.
 
 `--accounts` points at the chart of accounts Step 2.6 fetched. **Drop the
 flag when that file does not exist** — the run stays correct without it.
+It is also what lets `coa-mapping` detection read a candidate tab's actual
+column values (see 2.75e) instead of only the older repeat-ratio guess.
+`--tags-from`/`--vendors-from` sharpen that further with the firm's real
+reporting-tag and vendor values, the same way `--carta-tags-from` sharpens
+`parse_coa_mapping.py` — **drop both on a first-ever ingest**, where
+`<dashboard_dir>/accounts.json` doesn't exist yet.
 
 With it, each sheet also carries a `row_axis`: which label column its rows
 live in, how many of them name an account Carta already holds, and a
@@ -643,101 +651,50 @@ their own way, and those labels have to be bridged to Carta's GL codes and
 `<dashboard_dir>/.coa-mapping-ref.json` already records one — go straight
 to the parse below.
 
-**Look in the workbook already in play before asking for a file.** Step
-2.75a-ii's `inspect_workbook.py` run classifies every sheet, and a client
-who maintains a Carta-GL-to-budget-category mapping usually keeps it as a
-tab in the same file — `likely_shape: "coa-mapping"`. When one is there,
-use it: parse that sheet and say so in one line, rather than asking for a
-file the operator would have to go and find inside the workbook they just
-sent. Ask only when no sheet is classified that way. Carry its name
-forward as `<COA_MAPPING_SHEET_NAME>` — the parser matches by exact sheet
-name and does not default to whichever tab was just classified.
+**Look in the workbook already in play before asking for a file — and read
+every candidate tab by what its columns actually hold, not by its name.**
+Step 2.75a-ii's `inspect_workbook.py` run (with `--accounts`/`--tags-from`/
+`--vendors-from`) already checked every non-budget sheet's columns against
+the firm's real chart of accounts, reporting tags, sub-accounts and
+vendors. A sheet carrying `likely_shape: "coa-mapping"` is a mapping
+whatever it pairs — Carta's own GL code or account name against the
+firm's own code, its own category words, a reporting tag, a sub-account or
+a vendor — and `mapping_columns` names which column plays which role.
+Use it: parse that sheet and say what pairing it found, in one line, from
+`mapping_kind` (e.g. *"Reading `<sheet>` as a mapping — Carta accounts, by
+name, to your own categories."*). **Ask for a file only when no sheet is
+detected as a mapping at all.** Carry its name forward as
+`<COA_MAPPING_SHEET_NAME>` — the parser matches by exact sheet name and
+does not default to whichever tab was just classified.
 
-This is not a small convenience. Without the mapping, a budget written in
+This is not a small convenience. Without a mapping, a budget written in
 the firm's own words resolves almost no actuals — one real workbook went
 from 5 of 92 lines carrying Carta GL codes to 38, and the Actual column
 from blank to populated, on nothing but reading a tab that was already
 in the file.
 
-**Check whether any selected sheet is `pnl-outline` first — it changes
-which options are honest to offer.** `shapes/pnl_outline.py`'s GL-code
-resolution (`_gl_codes_for`) tries a supplied mapping record's category
-first, then falls back to a Carta account number the line's own label
-states (a 4-digit code, leading 4-7 — e.g. "4100 - Client Fees"). A line
-named only in the firm's own words ("Salaries, Benefits, and Payroll
-Taxes") still needs a mapping; a line already carrying its own Carta code
-resolves with no mapping file at all. `tag-crosstab` remains stronger
-still — its GL codes come straight out of column A for every row,
-independent of a line's label text or any mapping file.
-
-Ask once, via a single `AskUserQuestion` — the wording depends on whether
-any selected sheet is `pnl-outline`:
-
-**No `pnl-outline` sheet selected** (tag-crosstab only) — the original
-three-way question, unchanged:
-
-> **Does this budget use your own category or breakout names?**
-> Line items, and whatever the budget breaks them out by, have to be
-> matched to Carta GL accounts and your own reporting-tag values before
-> actuals can be resolved against them.
-
-Options:
-- **Yes, and I have the mapping file** → collect it per [Asking for a
-  file](#asking-for-a-file), then parse it as below. This is the reliable
-  route and worth asking for.
-- **No mapping file — I'll map natively to Carta** → proceed. Say the
-  caveat below. This still only covers GL-account matching by name (Step
-  4.7 does that regardless of a mapping file); deriving department/tag
-  correspondence from the firm's own Carta data is planned, not yet
-  built.
-- **No — the tab already carries Carta GL codes** → skip, no caveat
-  needed. A tag-crosstab with GL codes in column A is the common case
-  here, and this shape genuinely resolves them without a mapping file.
-
-**At least one `pnl-outline` sheet selected** — drop the third option
-entirely, since a sheet mixing coded and named lines can't promise every
-line resolves:
-
-> **Do you have a Carta GL-to-budget-category mapping for this workbook?**
-> `<sheet name>` reads top-to-bottom like an income statement. Lines
-> already named after a Carta account (e.g. "4100 - Client Fees") resolve
-> on their own; lines named only in your own words ("Salaries,
-> Benefits, and Payroll Taxes") need a mapping file to match to a Carta
-> account.
-
-Options:
-- **Yes, I have one** → collect it per [Asking for a
-  file](#asking-for-a-file), then parse it as below.
-- **No mapping file — I'll map natively to Carta** → proceed. Say the
-  caveat below.
-
-**Say this whenever proceeding without a mapping file** (either "No
-mapping file — I'll map natively to Carta" branch above): *"I'll match
-each budget line to your Carta chart of accounts directly — anything I
-can't resolve with confidence, you'll get to confirm before the
-dashboard renders."* Name the attempt up front rather than only the
-failure mode: Step 4.7 is where that confirmation actually happens,
-matching lines by name against the firm's own Carta accounts and asking
-about the close calls — this runs whether or not a mapping file was
-supplied. It doesn't cover department/reporting-tag correspondence,
-which a mapping file resolves and this path can't yet derive on its own
-(see [errors.md](errors.md)). For any selected `pnl-outline` sheet
-specifically, the native-mapping attempt covers only the lines named in
-the firm's own words — a line already stating its own Carta account
-number resolves regardless — so say which kind you mean rather than let
-the operator assume the whole sheet is dark.
-
-Record the answer in `.coa-mapping-ref.json` (`{"declined": true}` for
-either "no mapping" branch) so this isn't asked again for this firm.
+**No sheet detected as a mapping is not, on its own, a reason to ask for
+one.** The mapping tab is one of three things this build combines —
+alongside the workbook's own formulas (a bucket line's Actual/Budget cell
+that sums other rows, or a `SUMIF`/`SUMIFS` naming a literal GL code — see
+[budget-unresolved.md](budget-unresolved.md)) and any GL code a line
+already states about itself. Proceed to 2.75b/2.75c with no mapping in
+hand; **the question of whether that combination was enough is asked once,
+after Step 4 has actually tried it — Step 4.6 in
+[budget-unresolved.md](budget-unresolved.md).** Asking here, before a
+single line has been matched, means asking about a shortfall that may not
+exist: a `tag-crosstab` budget with GL codes in column A, or an outline
+whose lines already state their own Carta account numbers, routinely needs
+no mapping file at all.
 
 **A note on what a mapping can and can't be inferred.** Line items often
 carry enough signal to match by name — a budget line "Salaries" against
-Carta's "Gross Wages and Salaries". Department names frequently do not: a
+Carta's "Gross Wages and Salaries" — which is what the workbook's own
+formulas and native codes cover. Department names frequently do not: a
 workbook column headed "Client Services" against journal entries Carta
 tags "CS" share nothing a matcher can use, because the relationship is
 institutional knowledge rather than string similarity. That is precisely
-the case the mapping file exists to carry, which is why it's worth one
-question rather than an assumption.
+the case a mapping tab or file exists to carry.
 
 ```bash
 <UV_BIN> run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/parse_coa_mapping.py" \
@@ -747,6 +704,12 @@ question rather than an assumption.
   --dept-vocabulary-from "<dashboard_dir>/budget.json" \
   --carta-tags-from "<dashboard_dir>/accounts.json"
 ```
+
+Add `--carta-accounts-from "<raw_dir>/accounts-all.txt"` whenever
+`mapping_kind` named the Carta side by account text rather than GL code
+(`mapping_columns` carries `carta_account`, not `carta_gl`) — it resolves
+each matched name back to its `gl`, and reports one that matches nothing
+in `unmatched_accounts` rather than dropping the row silently.
 
 `--carta-subs-from` does the same for a sub-account column, and defaults to
 the same file. A firm heads that column with their own word — "Office",

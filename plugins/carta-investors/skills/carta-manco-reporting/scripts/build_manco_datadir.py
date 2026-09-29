@@ -428,6 +428,49 @@ _GL_NAME_STOPWORDS = {"and", "the", "of", "fee", "fees", "income", "expense",
                       "expenses", "other", "misc"}
 
 
+_LABEL_PREFIX_RX = re.compile(r"^\s*([^\s].*?)\s*[-–—:]\s+")
+
+
+def translate_own_codes_from_coa(rows, coa_records):
+    """Fill in `gl_codes` for a budget line stated in the firm's own chart
+    of accounts, when the mapping tab records that code's Carta equivalent.
+
+    A firm's own code can coincidentally fall in Carta's leading-4-to-7-
+    digit income/expense range (`pnl_outline._native_gl_code`'s own
+    signal for "this label states a Carta account") — nothing about a
+    firm's numbering has to avoid Carta's, since the two schemes are
+    unrelated. `own_code` on a coa-mapping.json record is the one place
+    that distinction is actually made, so this pass runs ahead of
+    `drop_foreign_gl_codes`: a translated line has a real `gl` behind it,
+    not a guess to be second-guessed by a name-token comparison.
+
+    Only a line with no `gl_codes` yet is touched — never overrides a code
+    a stronger pass (the mapping's own category match, or an operator's
+    recorded decision) already settled.
+    """
+    by_own_code = {}
+    for rec in coa_records or []:
+        code = str(rec.get("own_code") or "").strip().lower()
+        gl = rec.get("gl")
+        if code and isinstance(gl, int):
+            by_own_code.setdefault(code, gl)
+    if not by_own_code:
+        return 0
+    translated = 0
+    for row in rows or []:
+        if row.get("row_kind") != "line" or row.get("gl_codes"):
+            continue
+        label = str(row.get("label") or "")
+        m = _LABEL_PREFIX_RX.match(label)
+        prefix = (m.group(1) if m else label).strip().lower()
+        gl = by_own_code.get(prefix)
+        if gl is None:
+            continue
+        row["gl_codes"] = [gl]
+        translated += 1
+    return translated
+
+
 def drop_foreign_gl_codes(rows, account_name_by_type):
     """Un-map a line whose GL number is its own chart of accounts, not Carta's.
 
@@ -473,7 +516,7 @@ def _norm_account(value):
 # A value read off a line's own wording, rather than stated by the workbook
 # in a column of its own. TAG_VALUE is the crosstab's own column: the firm
 # wrote the value there, so nothing was inferred.
-INFERRED_FROM = ("sub_account", "label", "subsection", "section")
+INFERRED_FROM = ("sub_account", "vendor", "label", "subsection", "section")
 
 
 def inference_key(scope, field):
@@ -565,10 +608,11 @@ def claim_dimension_values(rows, census, aliases=None, account_names=None,
                 if sc not in claims:
                     claims.append(sc)
             continue
-        # Most specific first: a line naming a sub-account says more about
-        # itself than the heading above it, and it is both at once.
+        # Most specific first: a line naming a sub-account or a vendor says
+        # more about itself than the heading above it, and it is both at once.
         scopes, sources, inferred = [], set(), []
         for field, text in (("sub_account", row.get("sub_account")),
+                            ("vendor", row.get("vendor")),
                             ("label", row.get("label")),
                             ("tag_value", row.get("tag_value")),
                             ("subsection", row.get("subsection")),
@@ -2841,7 +2885,7 @@ def resolve_near_scopes(rows, census, account_names=None):
         # way it does in a line label, and the heading is where a whole
         # block of lines gets its meaning.
         cands, matched_on = [], None
-        for field in ("sub_account", "label", "tag_value", "subsection", "section"):
+        for field in ("sub_account", "vendor", "label", "tag_value", "subsection", "section"):
             cands = suggest_scopes(row.get(field), census, generic=generic)
             if cands:
                 matched_on = field
@@ -2988,6 +3032,47 @@ def unresolved_budget_rows(rows, mapping_records=None, account_names=None,
     return out
 
 
+# A mapping tab, the workbook's own formulas and GL codes are combined
+# before this ever runs (see backfill_account_type_from_coa,
+# translate_own_codes_from_coa, resolve_formula_gl_evidence and the
+# autolink pass). Below half the budget still left with neither an actual
+# nor a candidate is the signal that those together weren't enough — see
+# `native_mapping_coverage`.
+_MAPPING_FILE_COVERAGE_FLOOR = 0.5
+
+
+def native_mapping_coverage(excel_budgets, mapping_table):
+    """How much of a firm's budget the native mapping (mapping tab +
+    formulas + the workbook's own GL codes) already accounts for, and
+    whether that's thin enough to ask for a mapping file over.
+
+    `resolved` is a line the build could actually join to an actual —
+    `gl_codes`/`account_type`/`account_type_all`, or a fund match on an
+    income line. `proposed` is one `mapping_table` pre-filled a candidate
+    for (a formula- or name-matched account, still awaiting confirmation).
+    Together they're what Step 4.7's table lets the operator confirm or
+    correct in one pass; a budget where neither covers half its lines is
+    one that pass can't fix on its own — the honest options table needs
+    a file, not more per-row guessing.
+    """
+    proposed_addrs = {row.get("addr") for row in (mapping_table or [])
+                       if row.get("proposed")}
+    lines = resolved = proposed = 0
+    for b in excel_budgets or []:
+        for row in b.get("rows") or []:
+            if row.get("row_kind") != "line" or row.get("void"):
+                continue
+            lines += 1
+            if (row.get("gl_codes") or row.get("account_type") is not None
+                    or row.get("account_type_all") or row.get("fund_match")):
+                resolved += 1
+            elif row.get("addr") in proposed_addrs:
+                proposed += 1
+    needs_mapping_file = bool(lines) and (resolved + proposed) < lines * _MAPPING_FILE_COVERAGE_FLOOR
+    return {"lines": lines, "resolved": resolved, "proposed": proposed,
+            "needsMappingFile": needs_mapping_file}
+
+
 def unconfirmed_inferences(rows, decisions=None):
     """Values read off a line's wording that nobody has confirmed.
 
@@ -3030,6 +3115,7 @@ _ASK_WANTS = {"fund": "which fund", "fund_account": "which half of the fee",
 
 
 _FIELD_SAID = {"label": "the line's own name", "sub_account": "the line's sub-account",
+               "vendor": "the line's vendor",
                "subsection": "the heading above it", "section": "the section it is in"}
 
 
@@ -4719,6 +4805,11 @@ def build(args):
     tag_category = (dimension or {}).get("category")
 
     for _b in excel_budgets:
+        _n_own_code = translate_own_codes_from_coa(_b.get("rows") or [], _coa_records)
+        if _n_own_code:
+            print(f"note: translated {_n_own_code} budget line(s) from the "
+                  f"firm's own chart-of-accounts code to Carta's GL, per "
+                  f"coa-mapping.json.", file=sys.stderr)
         drop_foreign_gl_codes(_b.get("rows") or [], _carta_account_names)
 
     # A section given to a dimension value reports that spend; the untagged
@@ -4841,6 +4932,7 @@ def build(args):
         _inferences.extend(unconfirmed_inferences(_b.get("rows") or [],
                                                   _inference_decisions))
     _mapping_table.extend(inference_rows(_inferences))
+    _native_mapping = native_mapping_coverage(excel_budgets, _mapping_table)
     # Spend the report cannot show at all: an account no line names, or the
     # part of one that the scoped lines naming it do not cover. Asked over
     # every budget's lines at once — an account reported by one budget's
@@ -5110,6 +5202,10 @@ def build(args):
         # about — where the money belongs, or that it is not expected here.
         "unaccountedAccounts": _unaccounted,
         "mappingTable":  _mapping_table,
+        # How much of the budget the mapping tab + formulas + the
+        # workbook's own GL codes already cover, and whether that's thin
+        # enough to ask for a mapping file over — see Step 4.6.
+        "nativeMapping": _native_mapping,
         "dimension":     dimension,
         "dimensions":    _census,
         "tagCategory":   tag_category,

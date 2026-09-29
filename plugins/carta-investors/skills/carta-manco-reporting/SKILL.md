@@ -55,7 +55,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.47.4</carta-plugin>
+<carta-plugin>carta-investors:6.47.5</carta-plugin>
 
 # ManCo Reporting Dashboard
 
@@ -187,7 +187,15 @@ datadir build runs silently. Speak only at:
   previous run already confirmed it — and silent whenever the firm has
   exactly one management company, since there's nothing left to
   disambiguate at that point
-- Step 2.75 — the budget questions, on a firm never asked before
+- Step 2.75 — the budget questions, on a firm never asked before. Custom
+  categories (2.75e) are matched natively — a mapping tab in the workbook
+  (whatever it pairs), the workbook's own formulas, and any GL code a line
+  already states — and stay silent whenever that combination is found; no
+  question here about a mapping file
+- Step 4.6 ([budget-unresolved.md](references/budget-unresolved.md)) — a
+  mapping-file ask, but only when `nativeMapping.needsMappingFile` is
+  true: the native mapping above covered under half the budget's lines.
+  Silent otherwise
 - Step 4.7 ([budget-unresolved.md](references/budget-unresolved.md)) — the
   mapping table, whenever the build left budget lines with
   no Carta account to resolve against. Confirm the confident rows first,
@@ -195,8 +203,8 @@ datadir build runs silently. Speak only at:
   **before the URL**: an unmapped line renders its budget against no
   actual, which reads as an account nobody spent from rather than one
   nobody matched. Every other question in this skill waits until the
-  report is up, because the report is right without it; this one is not.
-  Answer it, rebuild (Step 4), then emit the URL
+  report is up, because the report is right without it; these two are not.
+  Answer them, rebuild (Step 4), then emit the URL
 - Step 5 — the dashboard URL, its orientation line, and — only when the
   build reported gaps — one line counting where the report and the
   client's own workbook differ (5c)
@@ -209,7 +217,8 @@ one.** Wherever this page or a reference file says "ask," "confirm," or
 the question as chat text and carry on, and never resolve it yourself
 (a best guess, a default, "probably X so I'll proceed") to skip the round
 trip. This applies most where the honest answer is "it's ambiguous" —
-Step 4.7's per-row mapping questions above all — since that is exactly
+Step 4.6's mapping-file ask and Step 4.7's per-row mapping questions above
+all — since that is exactly
 where working through the ambiguity yourself feels like progress and is
 actually the thing this skill exists to not do. If you notice you are
 about to fetch, build, or write based on something no `AskUserQuestion`

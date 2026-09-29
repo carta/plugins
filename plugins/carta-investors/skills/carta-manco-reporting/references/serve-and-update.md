@@ -95,12 +95,15 @@ If the script exits non-zero, read its stderr, surface the first line to the use
 
 ## Step 5 — Launch the dashboard
 
-**First check that Step 4.7 is done** ([budget-unresolved.md](budget-unresolved.md)).
-A build that left budget lines with
-no Carta account has a question to ask before this page is worth showing —
-those lines render a budget against an empty actual, which reads as spend
-that never happened. Ask, record, rebuild, and come back here. Every other
-question in this skill waits until the URL is out; that one cannot.
+**First check that Steps 4.6 and 4.7 are done** ([budget-unresolved.md](budget-unresolved.md)).
+4.6 asks for a COA mapping file, but only when the native mapping (a
+mapping tab, the workbook's own formulas, and its own GL codes) covers
+under half the budget. 4.7 is what always runs: a build that left budget
+lines with no Carta account has a question to ask before this page is
+worth showing — those lines render a budget against an empty actual, which
+reads as spend that never happened. Ask, record, rebuild, and come back
+here. Every other question in this skill waits until the URL is out; these
+two cannot.
 
 Two things happen here, in order: **reuse-or-launch**, then **emit the
 URL**. Then go to Step 6 — the URL is not the end of the run.

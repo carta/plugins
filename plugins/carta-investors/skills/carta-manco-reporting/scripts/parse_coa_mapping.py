@@ -34,10 +34,19 @@ column, encoding the department context inside the tag itself (e.g.
 "GAP (FS)": "GAP" is the Carta tag, "(FS)" is what resolves the department).
 
 The sheet itself is also discovered, not assumed by a fixed default name:
-`inspect_workbook.py`'s `coa-mapping` shape classification finds it by the
-same GL-code-column signal, guarded against matching a financial statement
-or a raw ledger dump (see that module for the row-count and repeat-ratio
-guards this needs).
+`inspect_workbook.py`'s `coa-mapping` shape classification finds it by
+reading every candidate sheet's columns against the firm's real chart of
+accounts, reporting tags, sub-accounts and vendors — a mapping is any
+pairing of Carta's own GL code or account name against the firm's own
+code, category words, tag, sub-account or vendor, not one fixed layout
+(see that module for the guards against matching a financial statement or
+a raw ledger dump instead).
+
+Carta's side of that pairing need not be a GL code at all — a sheet can
+key it by account *name* instead (`--carta-accounts-from`, resolved to
+`gl` via the firm's chart), and the firm's own side can carry its own
+internal code (`own_code`) or a vendor (`vendor`) alongside or instead of
+its own category wording.
 
 `header_row`/`columns` are round-tripped in the output's `workbook_meta` so
 a caller can persist them (the skill does, in `.coa-mapping-ref.json`) and
@@ -62,8 +71,10 @@ actually uses, by matching their values to the workbook's columns.
 
 Emitted coa-mapping.json shape:
   {
-    "records": [{gl, gl_name, carta_tag, section, category, confidence, notes}, ...],
+    "records": [{gl, gl_name, carta_tag, sub_account, own_code, vendor,
+                 section, category, confidence, notes}, ...],
     "value_aliases": {"<workbook_dept>": ["<carta_tag_1>", ...]},
+    "unmatched_accounts": ["<account name the sheet named that matched none>", ...],
     "tag_category": "<Carta reporting-tag category>",   # optional
     "workbook_meta": {"filename": "...", "parsed_at": "..."}
   }
@@ -141,6 +152,15 @@ _HEADER_FIELD_TESTS = (
     ("category",   lambda t: any(k in t for k in (
                        "category", "line item", "budget line", "budget category",
                    ))),
+    # The firm's own code for the line — a different number than the Carta
+    # `gl` column above, e.g. an internal chart-of-accounts code the firm
+    # maps onto a Carta GL. Header wording, same caveat as carta_tag above:
+    # broad but never exhaustive.
+    ("own_code",   lambda t: any(k in t for k in (
+                       "our code", "our gl", "internal code", "internal gl",
+                       "firm code", "own code", "client code",
+                   ))),
+    ("vendor",     lambda t: any(k in t for k in ("vendor", "payee", "supplier"))),
     ("confidence", lambda t: any(k in t for k in ("confidence", "match quality", "certainty"))),
     ("notes",      lambda t: any(k in t for k in ("notes", "comment", "remark"))),
 )
@@ -162,6 +182,50 @@ def carta_sub_accounts(path):
         if d.get("source") == "sub_account":
             out |= {(v.get("value") or "").strip() for v in (d.get("values") or [])}
     return {v for v in out if v}
+
+
+def carta_vendor_names(path):
+    """Every vendor name the firm's own journal entries carry.
+
+    Same ground truth pattern as `carta_tag_values`/`carta_sub_accounts` —
+    identifies a mapping sheet's vendor column by its actual values,
+    since a firm can head that column "Vendor", "Payee", or "Supplier".
+    """
+    try:
+        payload = json.loads(Path(path).expanduser().read_text())
+    except Exception:
+        return set()
+    return {(e.get("vendor") or "").strip() for e in (payload.get("entries") or [])
+            if (e.get("vendor") or "").strip()}
+
+
+def carta_account_names(path):
+    """{gl: name} from the chart-of-accounts dump Step 3 saves.
+
+    Lets a mapping sheet key its Carta side by account *name* instead of
+    code — a firm's own mapping is exactly as likely to read "Management
+    fee income" as "4170". Same pipe-table format `inspect_workbook.py`'s
+    `read_account_names` reads; duplicated rather than imported since both
+    scripts run standalone.
+    """
+    out = {}
+    try:
+        text = Path(path).expanduser().read_text()
+    except Exception:
+        return out
+    for line in text.splitlines():
+        if "|" not in line:
+            continue
+        parts = [p.strip() for p in line.split("|")]
+        if len(parts) < 2:
+            continue
+        try:
+            gl = int(parts[0])
+        except ValueError:
+            continue
+        if parts[1]:
+            out.setdefault(gl, parts[1])
+    return out
 
 
 def carta_tag_values(path):
@@ -255,7 +319,9 @@ def _column_looks_like_gl_codes(ws, header_row: int, col: int,
     return checked >= 3 and (matched / checked) >= threshold
 
 
-def _find_header_row_and_columns(ws) -> tuple[int, dict[str, int]] | tuple[None, None]:
+def _find_header_row_and_columns(
+    ws, known_account_names: dict | None = None,
+) -> tuple[int, dict[str, int]] | tuple[None, None]:
     """Locate the real header row and which column holds each field.
 
     Two independent signals, deliberately combined rather than either one
@@ -268,8 +334,16 @@ def _find_header_row_and_columns(ws) -> tuple[int, dict[str, int]] | tuple[None,
     being mistaken for the header — a banner row has no adjacent column
     carrying real GL-code data below it, so content detection correctly
     rejects it even on a row whose own text happens to mention "GL Account".
+
+    A sheet with no numeric GL column at all — the Carta side named by
+    account text instead ("Management fee income", not "4170") — is just
+    as real a mapping. `known_account_names` (from `--carta-accounts-from`)
+    lets that column be found the same way: not by header wording, but by
+    its values actually being names the firm's own chart of accounts has.
     """
     max_col = min(ws.max_column, 15)
+    known_names = ({_norm_tag(n) for n in known_account_names.values()}
+                   if known_account_names else None)
     for r in range(1, min(15, ws.max_row + 1)):
         cols: dict[str, int] = {}
         for c in range(1, max_col + 1):
@@ -289,8 +363,14 @@ def _find_header_row_and_columns(ws) -> tuple[int, dict[str, int]] | tuple[None,
                     break
         if gl_col is not None:
             cols["gl"] = gl_col
+        elif known_names:
+            # No numeric GL column anywhere on this row — see whether one
+            # instead carries the firm's real account names.
+            name_col = _column_by_tag_overlap(ws, r, known_names)
+            if name_col is not None:
+                cols["carta_account"] = name_col
 
-        if "gl" in cols and len(cols) >= 2:
+        if ("gl" in cols or "carta_account" in cols) and len(cols) >= 2:
             return r, cols
     return None, None
 
@@ -350,6 +430,7 @@ def parse(
     columns: dict[str, int] | None = None,
     known_tag_values: set | None = None,
     known_sub_accounts: set | None = None,
+    known_account_names: dict | None = None,
     no_tag_axis: bool = False,
 ) -> dict:
     """Parse a COA mapping sheet.
@@ -363,6 +444,12 @@ def parse(
     re-running detection (and re-risking a different outcome) on a sheet
     that hasn't changed shape.
 
+    `known_account_names` (`--carta-accounts-from`) is `{gl: name}` from the
+    firm's own chart of accounts. It resolves a `carta_account` column (the
+    Carta side named by account text — "Management fee income" — rather than
+    a numeric code) back to a `gl`, and reports a name matching nothing in
+    `unmatched_accounts` rather than silently dropping the row.
+
     `no_tag_axis` confirms a missing tag column is real, not
     undetected — see the ValueError below for why one is otherwise required.
     """
@@ -375,7 +462,7 @@ def parse(
     ws = wb[sheet_name]
 
     if header_row is None or columns is None:
-        header_row, cols = _find_header_row_and_columns(ws)
+        header_row, cols = _find_header_row_and_columns(ws, known_account_names)
     else:
         cols = columns
 
@@ -410,6 +497,13 @@ def parse(
             "a GL account column plus at least two others — department tag, "
             "section, category, confidence, or notes). Is this the right sheet?"
         )
+    if "gl" not in cols and "carta_account" not in cols:
+        raise ValueError(
+            "No Carta-side column found — neither a GL-code column nor an "
+            "account-name column matching the firm's chart of accounts "
+            "(pass --carta-accounts-from if the sheet names accounts by "
+            "text rather than by code). Is this the right sheet?"
+        )
     if "carta_tag" not in cols and not no_tag_axis:
         # A GL-only sheet would otherwise parse clean and derive zero
         # aliases — indistinguishable from a healthy mapping with nothing to flag.
@@ -435,24 +529,48 @@ def parse(
     # is what resolves the department). Falls back to reusing carta_tag's
     # own (unstripped) text as the section-resolution input.
     has_section_column = "section" in cols
+    # A carta_account column resolves to gl by name — built once, keyed by
+    # normalized name, rather than re-scanning known_account_names per row.
+    name_to_gl = ({_norm_tag(n): gl for gl, n in known_account_names.items()}
+                  if known_account_names else {})
 
     records: list[dict] = []
+    unmatched_accounts: list[str] = []
     for r in range(header_row + 1, ws.max_row + 1):
-        gl = ws.cell(r, cols["gl"]).value
-        if gl is None:
-            continue
-        # Some rows have string GL cells (comma-separated, e.g. "4170, 4175")
-        gls = _parse_gl_codes(gl)
-        if not gls:
-            continue
+        gls: list[int] = []
+        account_name = ""
+        if "gl" in cols:
+            gl = ws.cell(r, cols["gl"]).value
+            if gl is None:
+                continue
+            # Some rows have string GL cells (comma-separated, e.g. "4170, 4175")
+            gls = _parse_gl_codes(gl)
+            if not gls:
+                continue
+        else:
+            account_name = _clean(ws.cell(r, cols["carta_account"]).value)
+            if not account_name:
+                continue
+            matched_gl = name_to_gl.get(_norm_tag(account_name))
+            if matched_gl is None:
+                unmatched_accounts.append(account_name)
+                continue
+            gls = [matched_gl]
         carta_tag = _clean(ws.cell(r, cols["carta_tag"]).value) if "carta_tag" in cols else ""
         record = {
             "gl":         gls[0],
             "gl_all":     gls if len(gls) > 1 else None,
-            "gl_name":    _clean(ws.cell(r, cols["gl_name"]).value) if "gl_name" in cols else "",
+            "gl_name":    (_clean(ws.cell(r, cols["gl_name"]).value) if "gl_name" in cols
+                           else account_name),
             "carta_tag":  carta_tag,
             "sub_account": (_clean(ws.cell(r, cols["sub_account"]).value)
                             if "sub_account" in cols else ""),
+            # The firm's own code for this line, when the sheet carries one
+            # alongside (or instead of) its own category wording — lets a
+            # budget line stated in the firm's own code, not Carta's,
+            # resolve to this record's gl (see build_manco_datadir.py).
+            "own_code":   _clean(ws.cell(r, cols["own_code"]).value) if "own_code" in cols else "",
+            "vendor":     _clean(ws.cell(r, cols["vendor"]).value) if "vendor" in cols else "",
             "section":    (_clean(ws.cell(r, cols["section"]).value) if has_section_column
                            else carta_tag),
             "category":   _clean(ws.cell(r, cols["category"]).value) if "category" in cols else "",
@@ -473,6 +591,12 @@ def parse(
         "records": records,
         "value_aliases": value_aliases,
         "unknown_tag_values": unknown,
+        # A carta_account row whose text matched no account in the firm's
+        # chart — surfaced rather than silently dropped, since a name typo
+        # or a renamed account looks identical to "not a mapping row" and
+        # the two need different fixes (see unmatched_accounts consumer in
+        # the skill's budget-workbook.md).
+        "unmatched_accounts": sorted(set(unmatched_accounts)),
         "workbook_meta": {
             "filename": wb_path.name,
             "sheet":    sheet_name,
@@ -571,6 +695,15 @@ def main() -> int:
             "doesn't have. Optional: a first cold run has none."
         ),
     )
+    parser.add_argument(
+        "--carta-accounts-from",
+        help=(
+            "Path to the firm's chart-of-accounts dump (accounts-all.txt). "
+            "Lets a mapping sheet key its Carta side by account name "
+            "instead of GL code — resolves a matched name back to gl, and "
+            "reports one that matches nothing in unmatched_accounts."
+        ),
+    )
     parser.add_argument("--out", required=False, help="Path to write coa-mapping.json. Not used with --suggest.")
     parser.add_argument(
         "--suggest", action="store_true",
@@ -617,6 +750,8 @@ def main() -> int:
     # caller that keeps them apart.
     _subs_from = args.carta_subs_from or args.carta_tags_from
     known_subs = carta_sub_accounts(_subs_from) if _subs_from else None
+    known_accounts = (carta_account_names(args.carta_accounts_from)
+                      if args.carta_accounts_from else None)
 
     workbook = Path(args.workbook).expanduser().resolve()
     if not workbook.exists():
@@ -673,6 +808,7 @@ def main() -> int:
         mapping = parse(str(workbook), args.sheet, dept_vocabulary=vocabulary,
                         known_tag_values=known_tags,
                         known_sub_accounts=known_subs,
+                        known_account_names=known_accounts,
                         header_row=args.header_row, columns=columns,
                         no_tag_axis=args.no_tag_axis)
     except Exception as e:
