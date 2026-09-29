@@ -23,7 +23,7 @@ that decides whether any of it applies.
 
 Run:
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/manco_paths.py" resolve "<FIRM_NAME>" "<MANCO_NAME>"
+<UV_BIN> run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/manco_paths.py" resolve "<FIRM_NAME>" "<MANCO_NAME>"
 ```
 
 The output JSON gives you `raw_dir`, `dashboard_dir`, `raw_age_days`,

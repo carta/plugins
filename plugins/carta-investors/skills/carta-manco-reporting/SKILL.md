@@ -31,18 +31,31 @@ allowed-tools:
   - Read
   - Write
   - AskUserQuestion
+  # Gate 0 prerequisite (firm-resolution.md): install uv when it's missing,
+  # then resolve which binary name to use for every uv run call below.
+  - Bash(command -v uv >/dev/null 2>&1 || [ -x "$HOME/.local/bin/uv" ] || curl -LsSf https://astral.sh/uv/install.sh | sh)
+  - Bash(powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex")
+  - Bash(command -v uv >/dev/null 2>&1 && echo uv || { [ -x "$HOME/.local/bin/uv" ] && echo '$HOME/.local/bin/uv'; })
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/manco_paths.py *)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/build_manco_datadir.py *)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/parse_budget_workbook.py *)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/inspect_workbook.py *)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/parse_coa_mapping.py *)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/save_query_result.py *)
+  # Same scripts via <UV_BIN> when uv isn't on PATH yet. Each Bash call is a
+  # fresh shell, so sourcing the installer's env script can't carry uv forward.
+  - Bash($HOME/.local/bin/uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/manco_paths.py *)
+  - Bash($HOME/.local/bin/uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/build_manco_datadir.py *)
+  - Bash($HOME/.local/bin/uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/parse_budget_workbook.py *)
+  - Bash($HOME/.local/bin/uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/inspect_workbook.py *)
+  - Bash($HOME/.local/bin/uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/parse_coa_mapping.py *)
+  - Bash($HOME/.local/bin/uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/save_query_result.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/serve.py *)
   - Bash(curl -sf -o /dev/null -w * http://127.0.0.1:*)
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.46.27</carta-plugin>
+<carta-plugin>carta-investors:6.47.1</carta-plugin>
 
 # ManCo Reporting Dashboard
 
@@ -109,7 +122,7 @@ and 6 run on every invocation regardless.
 
 | Step | Run it? | What it does | Detail |
 |---|---|---|---|
-| 0 | always | Say hello, run the surface check, capture the firm, probe the local cache, finish the greeting | [firm-resolution.md](references/firm-resolution.md) |
+| 0 | always | Say hello, install `uv` if it's missing, run the surface check, capture the firm, probe the local cache, finish the greeting | [firm-resolution.md](references/firm-resolution.md) |
 | 1 | **skipped** whenever 0.2 already knows the firm — a warm OR soft cache hit | Resolve the firm | [firm-lookup.md](references/firm-lookup.md) |
 | 1.5 | **skipped** whenever 0.2 already knows the firm — a warm OR soft cache hit (same condition as Step 1) | ManCo eligibility hard gate — confirms an active Fund Admin subscription and an active management company before proceeding | [firm-lookup.md](references/firm-lookup.md) |
 | 2 | **skipped** whenever 0.2 already knows the entity — a warm OR soft cache hit | Resolve the ManCo entity (GP entity as fallback) | [firm-lookup.md](references/firm-lookup.md) |

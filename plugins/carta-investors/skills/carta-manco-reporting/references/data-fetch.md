@@ -39,7 +39,7 @@ it alone:
 
 ```bash
 S="${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/save_query_result.py"
-uv run "$S" --from-session 'DISTINCT ACCOUNT_TYPE' "<raw_dir>/accounts-all.txt"
+<UV_BIN> run "$S" --from-session 'DISTINCT ACCOUNT_TYPE' "<raw_dir>/accounts-all.txt"
 ```
 
 **Skip Step 3's "Verify the firm context" preamble.** That `list_contexts()`
@@ -459,17 +459,17 @@ a couple of seconds regardless of how many stems came back:
 ```bash
 S="${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/save_query_result.py"
 R="<raw_dir>"
-uv run "$S" --from-session "FUND_UUID = '<MANCO_UUID>'" \
+<UV_BIN> run "$S" --from-session "FUND_UUID = '<MANCO_UUID>'" \
             --from-session 'ACCOUNT_TYPE >= 5000'        "$R/je-expense-page1.txt" &
-uv run "$S" --from-session 'ACCOUNT_TYPE >= 4000'        "$R/je-income.txt" &
-uv run "$S" --from-session "FUND_UUID != '<MANCO_UUID>'" "$R/fund-fees.txt" &
-uv run "$S" --from-session 'related_entity_id'           "$R/manco-fee-income.txt" &
-uv run "$S" --from-session 'DISTINCT ACCOUNT_TYPE'          "$R/accounts-all.txt" &  # only if Step 2.6 skipped it
-uv run "$S" --from-session 'AGGREGATE_FUND_METRICS'      "$R/manco-currency.txt" &
-uv run "$S" --from-session 'MANAGEMENT_FEE_SCHEDULES'    "$R/management-fee-schedules.txt" &
-uv run "$S" --from-session 'fa__get__cash-balance'       "$R/cash-balance.json" &
-uv run "$S" --from-session '<YEAR>-01-01'                "$R/budget-<YEAR>-01.json" &
-uv run "$S" --from-session 'fa__list__entities'          "$R/entities.json" &
+<UV_BIN> run "$S" --from-session 'ACCOUNT_TYPE >= 4000'        "$R/je-income.txt" &
+<UV_BIN> run "$S" --from-session "FUND_UUID != '<MANCO_UUID>'" "$R/fund-fees.txt" &
+<UV_BIN> run "$S" --from-session 'related_entity_id'           "$R/manco-fee-income.txt" &
+<UV_BIN> run "$S" --from-session 'DISTINCT ACCOUNT_TYPE'          "$R/accounts-all.txt" &  # only if Step 2.6 skipped it
+<UV_BIN> run "$S" --from-session 'AGGREGATE_FUND_METRICS'      "$R/manco-currency.txt" &
+<UV_BIN> run "$S" --from-session 'MANAGEMENT_FEE_SCHEDULES'    "$R/management-fee-schedules.txt" &
+<UV_BIN> run "$S" --from-session 'fa__get__cash-balance'       "$R/cash-balance.json" &
+<UV_BIN> run "$S" --from-session '<YEAR>-01-01'                "$R/budget-<YEAR>-01.json" &
+<UV_BIN> run "$S" --from-session 'fa__list__entities'          "$R/entities.json" &
 wait
 ```
 

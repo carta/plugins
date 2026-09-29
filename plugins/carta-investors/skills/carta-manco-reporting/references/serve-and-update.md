@@ -76,7 +76,7 @@ construction.
 Run the build script:
 
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/build_manco_datadir.py" \
+<UV_BIN> run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/build_manco_datadir.py" \
   --firm-name "<FIRM_NAME>" --firm-uuid "<FIRM_UUID>" --firm-carta-id <FIRM_CARTA_ID> \
   --manco-name "<MANCO_NAME>" --manco-uuid "<MANCO_UUID>" --manco-carta-id <MANCO_CARTA_ID> \
   --manco-entity-id <MANCO_ENTITY_ID> \

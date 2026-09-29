@@ -70,7 +70,7 @@ operator renamed or moved the file. The tabs travel with it, so look
 before declaring the budget lost.
 
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/inspect_workbook.py" \
+<UV_BIN> run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/inspect_workbook.py" \
   --find-in "<directory the ref's path pointed at>" \
   --require-sheets "<every sheet the ref names>"
 ```
@@ -176,7 +176,7 @@ one — a sheet name like `Budget vs Actuals (Dept View)` has to be typed
 exactly, and getting it wrong fails the parse:
 
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/inspect_workbook.py" \
+<UV_BIN> run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/inspect_workbook.py" \
   --workbook "<WORKBOOK_PATH>" \
   --accounts "<raw_dir>/accounts-all.txt"
 ```
@@ -354,7 +354,7 @@ Run once per entry in `<SHEETS>`. The first selection writes
 build script tells the primary from the rest.
 
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/parse_budget_workbook.py" \
+<UV_BIN> run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/parse_budget_workbook.py" \
   --workbook "<WORKBOOK_PATH>" \
   --sheet "<SHEET_NAME>" \
   --shape "<SHAPE_ADAPTER>" \
@@ -731,7 +731,7 @@ the case the mapping file exists to carry, which is why it's worth one
 question rather than an assumption.
 
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/parse_coa_mapping.py" \
+<UV_BIN> run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/parse_coa_mapping.py" \
   --workbook "<COA_MAPPING_PATH>" \
   --sheet "<COA_MAPPING_SHEET_NAME>" \
   --out "<dashboard_dir>/coa-mapping.json" \

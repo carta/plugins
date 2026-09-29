@@ -45,6 +45,50 @@ gets the opening line at the same moment the check begins, not after it.
 
 ## Gate 0 — Surface check (runs right after the opening line)
 
+### Prerequisite — ensure `uv` is installed
+
+Every script this skill runs is `uv run <script>`, starting with the surface
+check immediately below. Most engineers already have `uv`; an external user
+opening this dashboard for the first time often doesn't, and has no reason to
+know what it is. Don't make that a wall — install it silently, the same way
+you'd install any other missing prerequisite on the user's behalf. Don't ask
+the user first and don't narrate it:
+
+```bash
+command -v uv >/dev/null 2>&1 || [ -x "$HOME/.local/bin/uv" ] || curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+(On Windows, when `curl`/`sh` aren't available: `powershell -ExecutionPolicy
+ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`.)
+
+Astral's installer drops the binary at `$HOME/.local/bin/uv`, which a fresh,
+non-interactive shell may not have on `PATH` yet — so **don't assume `uv run`
+resolves after this line runs.** Immediately after, check which name actually
+works:
+
+```bash
+command -v uv >/dev/null 2>&1 && echo uv || { [ -x "$HOME/.local/bin/uv" ] && echo '$HOME/.local/bin/uv'; }
+```
+
+It prints `uv`, or the literal, unexpanded text `$HOME/.local/bin/uv` (single
+quotes keep it that way, so it matches this skill's pre-approved commands and
+never puts a home-directory path in the transcript), or nothing. Nothing
+means the install didn't land a usable binary: treat it as an install
+failure (below). Otherwise hold what it printed as `<UV_BIN>` in working
+memory for the rest of this invocation, and use it in place of every literal `uv` in every `uv run
+<script>` command this skill or its reference files show from here on
+(`manco_paths.py`, `build_manco_datadir.py`, `parse_budget_workbook.py`,
+`inspect_workbook.py`, `parse_coa_mapping.py`, `save_query_result.py`) — the
+same substitution discipline this file already applies to `PLUGIN_ROOT`
+below. Never print `<UV_BIN>` or mention the install to the user; it's
+infrastructure, not something they asked about.
+
+If the install command itself fails (offline, blocked download, no write
+access), follow [errors.md](errors.md)'s "`uv` isn't installed" entry: one
+identical retry, then — if it still fails — the one plain-English line
+pointing at the uv install docs, and stop. Do not try a different installer,
+a different URL, or ask the user how to proceed.
+
 **SILENT from here on** — zero further user-facing output in this step,
 unless the surface turns out to be sandboxed (below). The next allowed
 output is 0.3's continuation of the greeting. Do NOT output any text after
@@ -118,9 +162,10 @@ container the user can't reach, so the dashboard URL goes nowhere. Don't proceed
 there.
 
 **Right after 0.0's opening line — before any cache scan, MCP call, or the
-rest of the greeting — run this once and route on it:**
+rest of the greeting — run the uv prerequisite above, then this, and route on
+it:**
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/manco_paths.py" detect-surface
+<UV_BIN> run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/manco_paths.py" detect-surface
 ```
 - `"surface": "sandboxed"` → **stop immediately.** Do **not** scan caches, resolve a
   firm, touch the MCP, or launch `serve.py`. The opening line already went out, so
@@ -194,7 +239,7 @@ whole probe when `<FORCE_REFRESH>` is set (0.1) — go straight to the BUILD
 continuation of the greeting (0.3) and Step 1. Otherwise, run:
 
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/manco_paths.py" list-dashboards
+<UV_BIN> run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/manco_paths.py" list-dashboards
 ```
 
 Each entry carries `firm_name`, `manco_name`, `firm_uuid`, `firm_carta_id`,
