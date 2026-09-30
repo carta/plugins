@@ -43,7 +43,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.52.0</carta-plugin>
+<carta-plugin>carta-investors:6.52.1</carta-plugin>
 
 # Carta Home — Build / Redeploy / Open
 
@@ -357,6 +357,14 @@ Fund performance is the deliberate exception. It carries no firm in its title be
 page resolves the active firm when a viewer opens it, so one artifact serves everyone —
 adopting it is reuse, not a collision. Don't "correct" it into a per-firm match.
 
+**More than one match for the same title is a collision, not a choice.** It means some
+earlier run created a second artifact instead of redeploying over the first — most likely
+because that run's `url` was never passed through to the dashboard skill, or the artifact
+was published under a different session identity than this `scope: "mine"` listing sees.
+Do not silently pick the newest and move on: tell the user how many duplicates exist for
+that title and which URL you are about to redeploy over, so the stale ones can be cleaned
+up deliberately rather than accumulating further.
+
 A bare **Carta Home** with no firm suffix predates per-firm titling. Only adopt one whose
 favicon is **🏠** — that is this skill's page, so redeploy over it. A bare **Carta Home**
 carrying **📊** belongs to carta-cap-table's `carta-captable-home-build` and holds some
@@ -441,6 +449,17 @@ this returns**; Step 6 redeploys over it.
 
 One call either way. `action` defaults to `"publish"`, so it is omitted below; `url` is
 the only difference between a first publish and a redeploy.
+
+> **A redeploy over an existing URL may demand `force: true` — that is expected for this
+> artifact, not a sign something went wrong.** `build_artifact.py` inlines Chart.js and any
+> base64 image/font assets as single lines that can run past 100K characters each (CSP here
+> forbids fetching them from a CDN at runtime, so they have to ship inline). The publish
+> tool's own "read the live version before republishing" check requires reading the prior
+> HTML, and a single line that long exceeds the `Read` tool's per-call token cap even at
+> `limit: 1` — there is no way to satisfy that check for this skill's output. If a redeploy
+> is refused as unobserved or as unchanged content you already "should have" read, don't
+> hunt for a way to read the file in chunks: confirm with the user once, then pass
+> `force: true` and move on.
 
 ```
 Artifact({
