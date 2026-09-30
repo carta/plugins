@@ -362,7 +362,11 @@ Three ways to answer:
   where the answer belongs.
 - **It needs a line of its own** — the workbook has nothing for this spend
   and the client wants it shown. That is a change to their budget rather
-  than to the mapping: tell them, and leave the account unanswered.
+  than to the mapping: tell them, and leave the account unanswered. When
+  there is no workbook (the firm chose "The budget in Carta"), each
+  account Carta already budgets is its own line, so this answer means
+  budgeting the account in Carta — nothing here reaches that stage unless
+  Carta carries no budget for it at all.
 - **Not expected in the budget** — recorded under `accounts`, and never
   asked about again:
 

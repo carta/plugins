@@ -5022,7 +5022,14 @@ def build(args):
     # part of one that the scoped lines naming it do not cover. Asked over
     # every budget's lines at once — an account reported by one budget's
     # line is reported.
-    _all_budget_rows = [r for _b in excel_budgets for r in (_b.get("rows") or [])]
+    #
+    # No workbook means Carta's own per-account budget is the only budget
+    # there is, and it names accounts too (carta_variance_payload's rows,
+    # one per budgeted account, gl_codes == [account_type]) — without this
+    # fallback every account with activity reads as "no line names it",
+    # Payroll included, the moment the firm declines a workbook.
+    _all_budget_rows = ([r for _b in excel_budgets for r in (_b.get("rows") or [])]
+                        if excel_budgets else carta_variance_payload(budgets)["rows"])
     # Over the months the budgets cover, not the months the ledger runs to.
     # Widest window among them: an entry any budget could report is not
     # unreported. Charging out-of-period spend against a budget that stops
