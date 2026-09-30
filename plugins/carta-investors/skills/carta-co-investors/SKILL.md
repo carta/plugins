@@ -42,7 +42,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.51.2</carta-plugin>
+<carta-plugin>carta-investors:6.52.0</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 

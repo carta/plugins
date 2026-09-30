@@ -140,11 +140,6 @@ def build_groups(kpi, edits):
         if m is None or m.get("custom") or m.get("kind") or m.get("derivedFrom") or m.get("unit") not in UNIT_TYPE:
             failed.append(_fail(eid, "This metric can't be corrected in Carta from here."))
             continue
-        # Statement line items live outside the KPI collection store_kpis writes to;
-        # the server refuses their mnemonics ("Unknown standard KPI mnemonic").
-        if m.get("reportType") != "KPI":
-            failed.append(_fail(eid, "This is a financial-statement line item, not a Data Collection KPI — it can't be corrected from here."))
-            continue
         if e.get("freq") not in FREQUENCY_TYPE or not _DATE_RE.match(str(e.get("fromDate") or "")) \
                 or not _DATE_RE.match(str(e.get("period") or "")):
             failed.append(_fail(eid, "This cell has no single reported period behind it."))
@@ -275,9 +270,17 @@ def _list_accounts_first_turn(firm_uuid, firm_name):
     )
 
 
+_STALE_SERVICE_MARKER = "Unknown standard KPI mnemonic"
+_STALE_SERVICE_MESSAGE = ("This line item needs the updated financials service before it can be "
+                          "corrected — try again after the next deploy.")
+
+
 def _error_text(err, captured):
     # type: (Optional[str], Optional[str]) -> str
-    return ((err or captured or "Carta returned no result.").strip() or "Carta returned no result.")[:300]
+    text = ((err or captured or "Carta returned no result.").strip() or "Carta returned no result.")
+    if _STALE_SERVICE_MARKER in text:
+        return _STALE_SERVICE_MESSAGE
+    return text[:300]
 
 
 def _captured_error(captured):

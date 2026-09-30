@@ -7,13 +7,11 @@ import { pointsFor, quarterEndOf } from "./kpi.js";
 export const EDITABLE_UNITS = new Set(["Dollar", "Number", "Percentage", "Percent", "Ratio"]);
 export const EDIT_STATUSES = ["draft", "publishing", "published", "failed", "conflict"];
 
-/** A reported numeric Data Collection KPI. Flags/dates/prose, formulas and derived
- *  companions have no single reading in Carta to correct, and financial-statement
- *  line items (Balance sheet / P&L / Cash flow) live outside the KPI collection
- *  store_kpis writes to — the server refuses their mnemonics. */
+/** A reported numeric reading — a Data Collection KPI or a financial-statement line
+ *  item (Balance sheet / P&L / Cash flow), both of which store_kpis writes. Flags/dates/
+ *  prose, formulas and derived companions have no single reading in Carta to correct. */
 export function isEditableMetric(metric) {
   if (!metric || metric.kind || metric.custom || metric.derivedFrom) return false;
-  if (metric.reportType !== "KPI") return false;
   return EDITABLE_UNITS.has(metric.unit);
 }
 
