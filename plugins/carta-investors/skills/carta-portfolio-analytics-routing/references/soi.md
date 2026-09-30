@@ -54,7 +54,12 @@ With the firm list in hand:
 
 > **Run in parallel with Step 3.** Fund enumeration (this step) and MCP UUID discovery (Step 3) are fully independent — issue both tool batches concurrently in the same response, not sequentially. 
 
-Call `call_tool({"name": "fa__list__entities", "arguments": { entity_types: "fund,spv" }})`. The filter excludes entity types that can't hold investments so it is critical. Capture the full `[{uuid, name, currency, fund_family_id, fund_family_name}, ...]` list from the response — the `currency` field is the fund's reporting currency (e.g. `"USD"`, `"EUR"`) and is needed for correct amount formatting in the artifact. `fund_family_name` is non-null for funds that belong to a fund family (e.g. side-by-side vehicles of the same strategy) and null/absent for standalone funds — carry it through verbatim to Step 4a so the artifact can group the fund dropdown by family. This response does **not** include `vintage_date` — see Step 2c.
+Call `call_tool({"name": "fa__list__entities", "arguments": { entity_types: "fund,spv" }})`. The filter excludes entity types that can't hold investments so it is critical. Capture the full `[{uuid, name, currency, fund_family_id, fund_family_name, is_churned, service_stop_date}, ...]` list from the response — the `currency` field is the fund's reporting currency (e.g. `"USD"`, `"EUR"`) and is needed for correct amount formatting in the artifact. `fund_family_name` is non-null for funds that belong to a fund family (e.g. side-by-side vehicles of the same strategy) and null/absent for standalone funds — carry it through verbatim to Step 4a so the artifact can group the fund dropdown by family. This response does **not** include `vintage_date` — see Step 2c.
+
+**Drop churned funds before anything else.** The response lists every fund the firm has ever had, including ones Carta no longer services — a churned fund's figures stopped updating on its service stop date, so it would read as current when it isn't. Each entry carries `is_churned` and `service_stop_date`: drop the fund when `service_stop_date` is today or earlier, or when `is_churned` is `true` and `service_stop_date` is null. A stop date still in the future means Carta services the fund until then, so keep it even if `is_churned` is already `true`. Everything after this — the initial-fund pick below, the single-fund rule, Step 2c, the Step 4a funds file — works on the list with churned funds removed. If the user named a fund, match their name against the full list first, so you know whether they asked for a churned one. Two exceptions:
+
+- **The user named a churned fund.** Keep that one fund (only that one) and make it the initial selection — hiding a fund someone asked for by name reads as a bug. Record `named_churned = true` and its `service_stop_date` for Step 6.
+- **Every fund is churned.** Keep them all rather than render an empty picker, and record `all_churned = true` for Step 6.
 
 **Pick the initial fund** for the dropdown and capture two variables — `initial_fund_uuid` and `name_status` — that Step 6 will read by name.
 
@@ -275,6 +280,13 @@ Pick the branch from the `name_status` value captured in Step 2.
 **`name_status == "unnamed"`** — the user asked for the firm's SOIs without naming a specific fund:
 
 > The Schedule of Investments artifact for **<Firm Name>** is now loading in your Cowork sidebar with all **<N>** funds you have access to. Use the **Fund** dropdown in the header to switch between them.
+
+**Churned funds (Step 2)** — if one of these applies, add its sentence straight after the branch sentence. `<N>` in every branch counts the funds actually in the dropdown, after churned ones were dropped.
+
+- `named_churned` — *"Carta no longer services **<Fund Name>**, so its figures are as of **<service_stop_date>** and won't update."* Write the date out, e.g. June 30, 2023.
+- `all_churned` — *"Carta no longer services any of **<Firm Name>**'s funds, so these figures won't update."*
+
+If both apply, use the `named_churned` sentence only. Say nothing when churned funds were simply left out — the user didn't ask about them.
 
 After the branch sentence, append a 3–5 bullet summary of what the artifact contains (e.g. interactive holdings table, summary metrics, sortable columns, expand/collapse rows, filter by company name, fund switcher across all funds you have access to). Keep it brief — the customer can see the artifact themselves. The bullet summary is optional on re-invocation branches; if you've already shown it earlier in the conversation, skip it.
 
