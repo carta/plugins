@@ -163,7 +163,21 @@ const CCR_MAX_PAGES = 40;
 // release in progress first.
 const CCR_RELEASE_ACK_MS = 4000;
 
+// A release can outlast the connector's wait: carta-mcp holds it for up to ten
+// minutes. Until an answer lands, the queue is re-read this often, for this long.
+const CCR_RELEASE_POLL_MS = 15000;
+const CCR_RELEASE_WATCH_MS = 11 * 60 * 1000;
+
+const CCR_UNCONFIRMED_NOTE = "Carta hasn't confirmed this release. Check the call in Carta before trying again.";
+
 let _ccr = null;
+
+// Releases this page sent, by activity id. They outlive the panel: closing and
+// reopening it makes a new _ccr, and a late answer still has to land.
+const _ccrReleasing = {};          // sent, no verdict yet: id -> when it was sent
+const _ccrReleased = new Set();    // Carta released it
+const _ccrUnconfirmed = new Set(); // no verdict within the watch
+let _ccrWatching = false;
 
 // Held across opens so the seed card can name its fund before the panel is
 // opened a second time.
@@ -190,6 +204,8 @@ function ccrReset(target, title) {
     caretAt: null,
     sending: false,
     releasing: false,
+    // Why the last release did not go through, shown above Approve.
+    releaseNote: null,
     noteOpen: false,
     blockersOpen: false,
     payShowSensitive: { acct: false, routing: false },
@@ -751,17 +767,21 @@ async function ccrSubmitChanges() {
 }
 
 // A refusal names the health check that stopped the release. Long text is a stack
-// trace or a wall of detail, which a toast cannot carry.
+// trace or a wall of detail, which the footer's one line cannot carry.
 function ccrErrText(res) {
   const t = res && res.content && res.content[0] && res.content[0].text;
   return typeof t === "string" && t.length <= 240 ? t : "";
 }
 
+const ccrOpenOn = (activityId) => !!_ccr && !!_ccr.target && _ccr.target.activityId === activityId;
+
 function ccrApprove() {
   const snap = _ccr;
-  if (snap.releasing) return;
+  const id = snap.target.activityId;
+  if (snap.releasing || _ccrReleasing[id]) return;
   // Held in state rather than on the button, so a re-render cannot re-enable it mid-release.
   snap.releasing = true;
+  snap.releaseNote = null;
   ccrRender();
   trackWorkhub("click", "CartaWorkhub.CapitalCallReview.Release");
 
@@ -774,59 +794,119 @@ function ccrApprove() {
 
   const params = {
     fund_uuid: snap.target.fundUuid,
-    capital_activity_id: snap.target.activityId,
+    capital_activity_id: id,
   };
   // The consent is the approver's authorization, so it is passed only as
   // ticked, and only where there is one to record: a plain call's account
   // confirmation is a gate on this page, not a consent the backend keeps.
   if (snap.consent.call && snap.summary && snap.summary.uses_fbo_contributions) params.amm_consent = true;
+  _ccrReleasing[id] = Date.now();
+  _ccrUnconfirmed.delete(id);
   _mcp("mutate", { command: "fa:mutate:approve-capital-activity", params: params }).then(
-    (res) => ccrReleaseAnswered(snap, res, null),
-    (err) => ccrReleaseAnswered(snap, null, err),
+    (res) => ccrReleaseAnswered(id, res, null),
+    (err) => ccrReleaseAnswered(id, null, err),
   );
 
-  // Still on the confirm step means no reply yet: show the release as under way.
+  // No reply yet: show the release as under way, and move its card out of To do.
   setTimeout(() => {
-    if (_ccr !== snap || snap.phase !== "confirm") return;
-    snap.releasing = false;
-    snap.phase = "releasing";
-    ccrRender();
+    if (!_ccrReleasing[id]) return;
+    ccrShowReleasing(id);
     farFetchRequests();
+    ccrWatchReleases();
   }, CCR_RELEASE_ACK_MS);
 }
 
-// Runs whenever the reply lands — before the panel gave up waiting, or well after.
-function ccrReleaseAnswered(snap, res, err) {
-  if (_ccr !== snap) return;
-  snap.releasing = false;
+function ccrShowReleasing(activityId) {
+  if (!ccrOpenOn(activityId) || _ccr.phase !== "confirm") return;
+  _ccr.releasing = false;
+  _ccr.phase = "releasing";
+  ccrRender();
+}
 
+// Runs whenever the reply lands, for whichever panel is open by then.
+function ccrReleaseAnswered(activityId, res, err) {
   if (err) {
-    // No verdict reached us, so the release may still have run. Send the reviewer to
-    // Carta rather than inviting a second press.
-    console.error("[ccr] release did not confirm —", err);
-    snap.phase = "review";
-    // Not snap.error: that doubles as the body's message and would replace the call
-    // the reviewer now has to go and check.
-    snap.locked = true;
-    ccrRender();
-    showToast("Release did not confirm. Check the call in Carta before trying again.");
+    // No verdict reached us, but the release runs on Carta's clock, not the
+    // connector's, so it may yet land. The queue says when it does.
+    console.error("[ccr] release did not answer —", err);
+    ccrShowReleasing(activityId);
+    ccrWatchReleases();
     return;
   }
 
   if (res && res.isError) {
     // Release runs its blocking health checks first and sends nothing when one fails,
-    // so a refusal leaves the call as it was. Keep the panel usable.
+    // so a refusal leaves the call as it was. Keep the panel usable, and say why.
     console.error("[ccr] release refused —", res);
-    snap.phase = "review";
-    ccrRender();
-    showToast(ccrErrText(res) || "Carta did not release this call. Nothing was sent to investors.");
+    delete _ccrReleasing[activityId];
+    _ccrUnconfirmed.delete(activityId);
+    if (ccrOpenOn(activityId)) {
+      _ccr.releasing = false;
+      _ccr.locked = false;
+      _ccr.phase = "review";
+      _ccr.releaseNote = ccrErrText(res) || "Carta did not release this call. Nothing was sent to investors.";
+      ccrRender();
+    }
+    farFetchRequests();
     return;
   }
 
-  ccrForgetDocs(snap.target.activityId);
-  snap.phase = "released";
-  ccrRender();
+  ccrMarkReleased(activityId);
   farFetchRequests();
+}
+
+function ccrMarkReleased(activityId) {
+  delete _ccrReleasing[activityId];
+  _ccrUnconfirmed.delete(activityId);
+  _ccrReleased.add(activityId);
+  ccrForgetDocs(activityId);
+  if (!ccrOpenOn(activityId) || (_ccr.phase !== "confirm" && _ccr.phase !== "releasing")) return;
+  _ccr.releasing = false;
+  _ccr.phase = "released";
+  ccrRender();
+}
+
+// The release may still have run: journals posted, notices generated, investors
+// emailed. Send the reviewer to Carta rather than inviting a second press.
+function ccrLockUnconfirmed() {
+  _ccr.releasing = false;
+  _ccr.phase = "review";
+  _ccr.locked = true;
+  _ccr.releaseNote = CCR_UNCONFIRMED_NOTE;
+}
+
+function ccrWatchReleases() {
+  if (_ccrWatching) return;
+  _ccrWatching = true;
+  setTimeout(ccrPollReleases, CCR_RELEASE_POLL_MS);
+}
+
+// fa:list:workflow lists a review only while its task is open, and release closes
+// that task in the same transaction that posts the journal, so a sent release
+// missing from the list has landed.
+async function ccrPollReleases() {
+  const now = Date.now();
+  const expired = Object.keys(_ccrReleasing).filter((id) => now - _ccrReleasing[id] >= CCR_RELEASE_WATCH_MS);
+  expired.forEach((id) => {
+    delete _ccrReleasing[id];
+    _ccrUnconfirmed.add(id);
+    if (ccrOpenOn(id) && (_ccr.phase === "confirm" || _ccr.phase === "releasing")) {
+      ccrLockUnconfirmed();
+      ccrRender();
+    }
+  });
+
+  const ids = Object.keys(_ccrReleasing);
+  let landed = [];
+  if (ids.length) {
+    const rows = farResults(await _mcp("fetch", { command: "fa:list:workflow", params: {} }).catch(() => null));
+    if (rows) landed = ids.filter((id) => !rows.some((w) => ccrIsReviewTask(w) && String(w.object_id) === id));
+  }
+  landed.forEach(ccrMarkReleased);
+  if (landed.length || expired.length) farFetchRequests();
+
+  if (Object.keys(_ccrReleasing).length) setTimeout(ccrPollReleases, CCR_RELEASE_POLL_MS);
+  else _ccrWatching = false;
 }
 
 // ── Shared pieces ─────────────────────────────────────────────────────────
@@ -1385,8 +1465,8 @@ function ccrReleasingBody() {
     '<div class="ccr-done-body">' +
       escHtml("Carta is generating notices and posting journals for this capital activity.") +
     "</div>" +
-    '<div class="ccr-note">It\'ll show up under Completed when it\'s done. ' +
-    "Come back anytime to check.</div></div>";
+    '<div class="ccr-note">This updates when Carta finishes. You can close it: ' +
+    "the task waits under In progress until then.</div></div>";
 }
 
 function ccrDoneBody(released) {
@@ -1406,7 +1486,7 @@ function ccrDoneBody(released) {
         (dist ? " is due to investors" : " is due from investors") + (s.due_date ? " on " + escHtml(ccrDate(s.due_date)) : "") +
         (dist ? ". Your Carta team tracks the wires as they go out.</div>" : ". Your Carta team tracks payments as they arrive.</div>")
       : '<div class="ccr-sent-msg">' + escHtml(_ccr.sentMessage) + "</div>") +
-    '<div class="ccr-note">This task has moved to ' + (released ? "Completed" : "In progress") + ".</div></div>";
+    '<div class="ccr-note">' + (released ? "It's off your task list." : "This task has moved to In progress.") + "</div></div>";
 }
 
 // ── Change request ────────────────────────────────────────────────────────
@@ -1693,7 +1773,8 @@ function ccrFooter() {
   // A reason that locks the panel leads, so the one line shows what the reviewer must do first.
   const blockers = blocked ? [] : ccrBlockers(s).sort((x, y) => (y.locks ? 1 : 0) - (x.locks ? 1 : 0));
   const pending = !!ccrDraft(_ccr.target.activityId).trim();
-  const lines = blockers.map((b) => b.html || escHtml(b.text))
+  const lines = (_ccr.releaseNote ? [escHtml(_ccr.releaseNote)] : [])
+    .concat(blockers.map((b) => b.html || escHtml(b.text)))
     .concat(pending ? [escHtml("Send or cancel your request for changes to approve.")] : []);
   return '<div class="far-panel-footer ccr-foot">' +
     '<div class="ccr-foot-side"><button class="ccr-changes-btn" data-ccr-modal="changes"' + (ccrCanRequest() ? "" : " disabled") + ">" +
@@ -2155,6 +2236,10 @@ function ccrClose() {
 function openCapitalCallReview(target, title) {
   trackWorkhub("click", "CartaWorkhub.CapitalCallReview.Open");
   ccrReset(target, title);
+  const id = target.activityId;
+  if (_ccrReleasing[id]) _ccr.phase = "releasing";
+  else if (_ccrReleased.has(id)) _ccr.phase = "released";
+  else if (_ccrUnconfirmed.has(id)) ccrLockUnconfirmed();
   const overlay = farEnsureOverlay("ccr-overlay", "far-overlay");
   // The shared overlay closes on any backdrop click. With the change-request modal open
   // that would drop unsaved text, so the click goes through the modal's own close first.
@@ -2222,24 +2307,32 @@ function ccrIsReviewTask(w) {
     CCR_OPEN_TASK_STATUSES.includes(t.status));
 }
 
-// A build that names an activity gets one card for it, so the panel is
-// reachable without a live review task to open it from.
-function ccrWithSeedRow(rows) {
-  if (!CCR_TARGET.fundUuid || !CCR_TARGET.activityId) return rows;
-  if ((rows || []).some((r) => r.ccr && r.ccr.activityId === CCR_TARGET.activityId)) return rows;
-  return [{
-    id: "ccr-seed",
-    title: CCR_CARD_TITLE,
-    subtitle: _ccrFundName,
-    firm: null,
-    group: "todo",
-    // The GP owes the decision, so the card reads as waiting on them.
-    state: "pending-customer",
-    canceled: false,
-    needsTitle: false,
-    requested: null,
-    lastActivity: null,
-    webUrl: null,
-    ccr: { fundUuid: CCR_TARGET.fundUuid, activityId: CCR_TARGET.activityId },
-  }].concat(rows || []);
+// The queue's review cards as this page knows them. A released call leaves the
+// queue even when a list read before the release committed still carries it; one
+// still releasing is Carta's work, not the reviewer's. A build that names an
+// activity gets one card for it, so the panel is reachable without a live review
+// task to open it from.
+function ccrQueueRows(rows) {
+  const out = (rows || []).filter((r) => !(r.ccr && _ccrReleased.has(r.ccr.activityId)));
+  const seed = CCR_TARGET.activityId;
+  if (CCR_TARGET.fundUuid && seed && !_ccrReleased.has(seed) && !out.some((r) => r.ccr && r.ccr.activityId === seed)) {
+    out.unshift({
+      id: "ccr-seed",
+      title: CCR_CARD_TITLE,
+      subtitle: _ccrFundName,
+      firm: null,
+      group: "todo",
+      // The GP owes the decision, so the card reads as waiting on them.
+      state: "pending-customer",
+      canceled: false,
+      needsTitle: false,
+      requested: null,
+      lastActivity: null,
+      webUrl: null,
+      ccr: { fundUuid: CCR_TARGET.fundUuid, activityId: seed },
+    });
+  }
+  return out.map((r) => r.ccr && _ccrReleasing[r.ccr.activityId]
+    ? Object.assign({}, r, { group: "progress", state: "pending-carta" })
+    : r);
 }

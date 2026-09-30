@@ -648,12 +648,12 @@ async function farFetchRequests() {
       _farPartial = true;
       _farRows = await farFetchFromIds();
     }
-    _farRows = ccrWithSeedRow(_farRows);
+    _farRows = ccrQueueRows(_farRows);
     loaded = true;
   } catch (e) {
     console.error('[far] request list unavailable —', e);
     _farPartial = true;
-    _farRows = ccrWithSeedRow([]);
+    _farRows = ccrQueueRows([]);
   }
   renderFarSection();
   // Period cards come from a second read, so the queue paints first and they join it.

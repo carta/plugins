@@ -20,7 +20,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.49.0</carta-plugin>
+<carta-plugin>carta-investors:6.49.1</carta-plugin>
 
 # Carta Workhub — Build / Redeploy
 
@@ -181,9 +181,13 @@ not inside a fund-data dashboard.
   `capital_activity_id` / `object_id` the row carries. A row with neither opens the panel to a
   state that says so rather than to an empty review.
 
-  A release that fails ambiguously does **not** re-enable the button. `server_unavailable` and
-  `upstream_error` are not proof the release did not run, so the panel sends the reviewer to Carta
-  to check rather than inviting a second press.
+  A release is followed to its verdict, which can take minutes. With no reply after 4 seconds the
+  panel shows it in progress and its card moves to In progress. A connector that stops waiting is
+  not a failure: the panel re-reads `fa:list:workflow` every 15 seconds, and a card gone from it
+  has released, because release closes the review task in the same transaction. Reopening the card
+  meanwhile shows the release, not the review. With no verdict after 11 minutes the panel locks
+  both decisions and sends the reviewer to Carta rather than inviting a second press. A refusal
+  (a failing blocking health check) stays written above Approve.
 - **Financial reporting tracker** — one card per reporting period that needs the GP, opening the
   Financial Reporting Tracker for that period: the banner, the combined filter-and-sort menu,
   entity search, the period selector, and the six-column table with fund families **and any
