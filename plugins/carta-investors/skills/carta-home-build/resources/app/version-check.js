@@ -17,9 +17,11 @@ const BUILT_AT = "{{BUILT_AT}}";
 // A fresh build is already the newest the user can get. Matches carta-mcp's week-old
 // release pick, so after this window the banner names only a release a rebuild reaches.
 const QUIET_AFTER_BUILD_DAYS = 7;
-const UPDATE_PROMPT = "Rebuild my Carta Home artifact";
+// "Update", not "rebuild": a rebuild sounds like starting over, and the update carries the
+// user's own changes forward on its own (SKILL.md Step 2c).
+const UPDATE_PROMPT = "Update my Carta Home";
 const UPDATE_INSTRUCTION =
-  "To get the latest version, tell Claude to update the Carta Home artifact.";
+  "Your customizations come with you automatically. Tell Claude to update Carta Home, or say \"start fresh\" for a clean version.";
 const DISMISS_KEY = "cartaHome.dismissedUpdateVersion";
 
 // Parse "1.2.3" into [major, minor]. Patch is deliberately dropped: a patch ships a

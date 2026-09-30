@@ -40,6 +40,9 @@ passed to --dashboard-building carries the string "building" instead, so home ca
 before its dashboards exist and redeploy over itself once they do. A key absent from both
 leaves that card on its copyable prompt.
 
+The finished page carries a baseline of itself (see customizations.py), so a later rebuild
+can tell exactly what the user changed on the published copy.
+
 Usage:
   uv run scripts/build_artifact.py --mcp-server <connector-display-name> \
       --firm-name "<firm name>" --out <path>/carta-home-<slug>.html \
@@ -53,6 +56,11 @@ import sys
 from datetime import datetime, timezone
 from html import escape
 from pathlib import Path
+
+# The baseline stamp lives beside this script, which is not on the import path when the
+# build is loaded by file path (as the tests do) rather than run.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from customizations import stamp_baseline  # noqa: E402
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
 RES = SKILL_DIR / "resources"
@@ -227,6 +235,10 @@ def build(mcp_server, firm_name, dashboard_urls=None):
     out = out.replace("{{ARTIFACT_VERSION}}", version)
     if "{{ARTIFACT_VERSION}}" in out:
         sys.exit("ERROR: {{ARTIFACT_VERSION}} still present after substitution")
+
+    # Last, so the baseline records the page exactly as published. A later rebuild compares
+    # the live page against it to find what the user changed (SKILL.md Step 2c).
+    out = stamp_baseline(out, version)
 
     return out, build_id, version
 

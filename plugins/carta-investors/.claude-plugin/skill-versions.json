@@ -1,7 +1,7 @@
 {
   "carta-home-build": {
-    "version": "1.12.2",
-    "headline": "Dashboard cards build in parallel and no longer look abandoned if a build runs long — they say so instead of silently reverting to the copy-paste prompt."
+    "version": "1.13.0",
+    "headline": "Updating Carta Home now keeps the changes you've made automatically, and only asks when one clashes with the new version."
   },
   "carta-workhub-build": {
     "version": "1.8.36",
