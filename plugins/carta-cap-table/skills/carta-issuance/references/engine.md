@@ -104,6 +104,10 @@ The incidents behind these rules — including the ones that look redundant — 
 
 ## Phase 0 — Preflight
 
+**A request that states nothing to issue** has already had
+[the source question](../SKILL.md#ask-where-the-details-are), before this phase. If it hasn't,
+ask it before Step 1.
+
 Four steps, in order, **all before any user interaction and before gathering any input.** The
 surface is already selected ([SKILL.md](../SKILL.md#pick-the-surface)), and that selection is
 free. These steps are the only round trips this preflight may spend: one `ToolSearch`, one

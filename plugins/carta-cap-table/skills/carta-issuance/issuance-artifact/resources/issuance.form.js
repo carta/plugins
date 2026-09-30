@@ -24,6 +24,26 @@ const NONE = "__none__";
     and never sent, so the value Carta holds is the one it issues. */
 const AS_SAVED = "__as_saved__";
 const AS_SAVED_LABEL = "As saved in Carta";
+/** A term a fresh (never-saved) batch's own rows disagree on, with no batch-wide value
+    to show instead — distinct from AS_SAVED: nothing is "saved" here to defer to, so it
+    is shown as what it is and, like AS_SAVED, never sent as a row's own answer. */
+const MIXED = "__mixed__";
+const MIXED_LABEL = "Multiple";
+
+/** The term keys promoted to an always-visible table column, per security type. Every
+    other `over:1` field from spec() stays in the row's "More terms" panel (ovHtml). */
+const CORE_KEYS = {
+  option_grant: ["so_type", "exercise_price", "issue_date", "vesting_template", "vesting_start_date",
+    "document_set_id"],
+  certificate: ["prefix", "law_firm_price", "issue_date", "legend_id", "vesting_template",
+    "vesting_start_date"],
+  piu: ["prefix", "threshold_value_type", "threshold_value", "option_plan", "issue_date",
+    "document_set_id", "vesting_template", "vesting_start_date"],
+};
+const coreKeys = () => CORE_KEYS[S.type] || [];
+/** The DOM id a row draws this field's control under. A core key got its own column
+    (no `-ov-`); every other row-owned field is still the "More terms" panel's id. */
+const rowFieldId = (i, k) => `row-${i}-${coreKeys().includes(k) ? k : `ov-${k}`}`;
 
 /** What Confirm actually does, which differs by type: a grant or a unit goes out for
     signature, a certificate lands on the cap table. Whoever confirms is entitled to
@@ -60,7 +80,7 @@ const S = {
   pendingRows: [], links: {},
   stuck: "", untold: false, bootFailed: false, docPicked: false, removed: [], savedNote: "",
   sent: {}, lastPayload: {}, removedGone: 0, hydrated: false, touchedShared: new Set(),
-  rewriting: [], rowQ: "", rowFilter: "all",
+  rewriting: [], rowQ: "", rowFilter: "all", rowsView: "table", source: null, sharedOpen: null,
 };
 
 /* ---------- helpers ---------- */
@@ -170,12 +190,14 @@ function ingest(data) {
   const terms = S.prefill.terms;
   S.prefill = d.prefill || {};
   if (terms && !S.prefill.terms) S.prefill.terms = terms;
+  if (S.prefill.source && typeof S.prefill.source === "object") S.source = S.prefill.source;
   S.blockers = objs(d.blockers);
   S.narrowed = d._narrowed || null;
   if (d.prefill && d.prefill.thresholdNoun) S.thresholdNoun = d.prefill.thresholdNoun;
   S.ready = true;
   seedShared();
   seedRows();
+  detectMixedShared();
   render();
   // First meaningful paint: shell plus every term the seed already knew. Nothing
   // here waited on the transport.
@@ -271,6 +293,25 @@ function applySeedTerms(sh) {
   } else if (seedTerm("threshold_value") != null) {
     sh.threshold_value = String(seedTerm("threshold_value"));
   }
+}
+
+/** A stakeholder's own `terms` (the seed's per-person override, §5b), translated into
+    the row's internal keys — the same synchronous subset `build_artifact.py`'s
+    PERSON_TERM_KEYS validates, so it never depends on reference data still loading. */
+function rowTermOverrides(terms) {
+  const t = (k) => (terms && typeof terms === "object" && terms[k] != null && terms[k] !== "" ? terms[k] : null);
+  const out = {};
+  if (S.type === "option_grant") {
+    const so = t("grant_type") && soTypeOf(t("grant_type"));
+    if (so) out.so_type = so;
+    if (t("exercise_price") != null) out.exercise_price = String(t("exercise_price"));
+  } else if (S.type === "certificate" && t("price_per_share") != null) {
+    out.law_firm_price = String(t("price_per_share"));
+  } else if (S.type === "piu" && t("threshold_value") != null) {
+    out.threshold_value = String(t("threshold_value"));
+  }
+  if (iso(t("board_approval_date"))) out.board_approval_date = iso(t("board_approval_date"));
+  return out;
 }
 
 const termKey = (s) => String(s == null ? "" : s).toLowerCase().replace(/\bone\b/g, "1")
@@ -384,6 +425,7 @@ function seedRows() {
       quantity: r.quantity != null ? String(r.quantity) : "",
       kind: kind || "INDIVIDUAL",
       relationship: r.issueDateRelationship || r.issue_date_relationship || "",
+      ov: rowTermOverrides(r.terms),
     });
     // A resumed row's kind and exemption are Carta's until this page is told otherwise.
     row.resumed = (r.draft_pk ?? r.draftPk) != null;
@@ -398,12 +440,38 @@ function seedRows() {
 }
 
 function mkRow(o) {
+  const ov = o.ov || {};
+  // `seeded` is what the document said for this row. A value still equal to it is the
+  // document's answer, never shown as "different", whatever the batch holds.
   return {
     key: `r${S.seq++}`, stakeholderId: o.stakeholderId ?? null,
     name: o.name || "", email: o.email || "", quantity: o.quantity || "",
     kind: o.kind || "INDIVIDUAL", relationship: o.relationship || "",
-    isNew: !!o.isNew, open: false, query: o.name || "", ov: {}, touched: new Set(),
+    isNew: !!o.isNew, open: false, query: o.name || "", ov, seeded: Object.assign({}, ov),
+    touched: new Set(Object.keys(ov)),
   };
+}
+
+/** A row's own value that the user set by hand, against a batch value that exists. A
+    value the document supplied, or one under a shared field still at MIXED, is not. */
+function diverged(r, k) {
+  if (!(k in r.ov) || S.shared[k] === MIXED) return false;
+  const s = r.seeded || {};
+  return !(k in s && String(s[k]) === String(r.ov[k]));
+}
+
+/** A core term this fresh batch's own seeded rows disagree on, with no batch-wide value
+    to fall back to — set MIXED rather than silently picking a side (§5b). Only ever
+    runs on a fresh set: a resume already has AS_SAVED for exactly this "no one true
+    value yet" case, and that sentinel wins over MIXED where both could apply. */
+function detectMixedShared() {
+  if (!freshSet()) return;
+  for (const k of coreKeys()) {
+    if (S.shared[k] !== "" && S.shared[k] != null) continue;
+    const seen = S.rows.filter((r) => k in r.ov);
+    if (seen.length < 2) continue;
+    if (new Set(seen.map((r) => String(r.ov[k]))).size > 1) S.shared[k] = MIXED;
+  }
 }
 
 /* ---------- reference data ----------
@@ -732,7 +800,8 @@ function backfillRows() {
 
 /** A grant type only means anything inside its own jurisdiction. */
 function dropStaleSoType() {
-  if (S.type !== "option_grant" || !S.shared.so_type || S.shared.so_type === AS_SAVED) return;
+  if (S.type !== "option_grant" || !S.shared.so_type || S.shared.so_type === AS_SAVED
+    || S.shared.so_type === MIXED) return;
   const rg = region();
   if (!rg || !SO[rg].includes(S.shared.so_type)) S.shared.so_type = "";
 }
@@ -745,7 +814,8 @@ function dropUnofferedChoices() {
   if (S.termsLoading) return;
   for (const d of spec()) {
     const v = S.shared[d.k];
-    if (d.kind !== "sel" || !d.req || "val" in d || v === "" || v == null || v === AS_SAVED) continue;
+    if (d.kind !== "sel" || !d.req || "val" in d || v === "" || v == null || v === AS_SAVED
+      || v === MIXED) continue;
     if (!(d.opts || []).some((o) => String(o[0]) === String(v))) S.shared[d.k] = "";
   }
 }
@@ -1254,7 +1324,10 @@ function spec(board, row) {
     req: `a ${classNoun().toLowerCase()}` }, x));
 
   if (t === "option_grant") {
-    const zepo = sh.so_type === "ZEPO";
+    // A row's own grant type unlocks that type's conditional fields, mirroring the
+    // PIU branch's `eff()` below.
+    const rso = row && "so_type" in row.ov ? row.ov.so_type : sh.so_type;
+    const zepo = rso === "ZEPO";
     // The plan is the draft set's, not the row's — carta-web locks equity_plan_id
     // once the set exists — so this one term stays shared.
     // Carta fixes a set's plan when it creates it (cw_resources sends it only then, and
@@ -1293,17 +1366,17 @@ function spec(board, row) {
     F("document_set_id", "Document set", "sel", { opts: docOpts(), req: "a document set",
       over: 1, hint: docSetProblem(docSetOf(sh.document_set_id), sharedPlan()), hintCls: "warn" });
     if (!zepo) F("early_exercise", "Early exercise", "check", { over: 1 });
-    if (sh.so_type === "Unapproved") {
+    if (rso === "Unapproved") {
       F("employment_related", "Employment related", "sel", { over: 1,
         req: "an employment-related answer",
         opts: [["true", "Yes"], ["false", "No"]], hint: "Unapproved grants at a UK company need this." });
     }
     // Both optional, and both exist server-side only for their own option types.
-    if (HMRC_SO_TYPES.has(sh.so_type)) {
+    if (HMRC_SO_TYPES.has(rso)) {
       F("is_hmrc_notified", "HMRC has been notified", "check", { over: 1 });
       F("hmrc_notified", "Date HMRC was notified", "date", { over: 1 });
     }
-    if (ATO_SO_TYPES.has(sh.so_type)) {
+    if (ATO_SO_TYPES.has(rso)) {
       F("ato_notified", "ATO has been notified", "check", { over: 1 });
     }
   } else if (t === "certificate") {
@@ -1370,6 +1443,7 @@ function control(d, id, v, scope, ph, clr) {
   if (d.kind === "sel") {
     // Offered so the control can show it; choosing anything else replaces it.
     if (v === AS_SAVED) d = Object.assign({}, d, { opts: [[AS_SAVED, AS_SAVED_LABEL]].concat(d.opts || []) });
+    else if (v === MIXED) d = Object.assign({}, d, { opts: [[MIXED, MIXED_LABEL]].concat(d.opts || []) });
     const empty = S.termsLoading && !(d.opts || []).length;
     // `noPh` drops the blank option: a shared control whose default is a real choice,
     // or an override already holding the value it inherits.
@@ -1378,9 +1452,10 @@ function control(d, id, v, scope, ph, clr) {
   }
   // `max` on a date Carta refuses past today: the picker stops offering the day that
   // would come back rejected, instead of the form learning it from a round trip.
-  const kept = v === AS_SAVED;
+  const kept = v === AS_SAVED || v === MIXED;
   const input = txt(id, kept ? "" : v, { k: d.k, scope, num: d.kind === "num", ro: d.ro, dis: d.dis,
-    type: d.kind === "date" ? "date" : "text", ph: kept ? AS_SAVED_LABEL : ph || d.ph,
+    type: d.kind === "date" ? "date" : "text",
+    ph: v === MIXED ? MIXED_LABEL : v === AS_SAVED ? AS_SAVED_LABEL : ph || d.ph,
     max: d.noFuture ? latestDate() : "" });
   if (d.kind !== "date") return input;
   // A native date input has no way to empty it with the mouse.
@@ -1401,12 +1476,14 @@ function specHtml() {
   return spec().map((d) => {
     const id = `shared-${d.k}`;
     const v = specVal(d);
-    if (v === AS_SAVED && (d.kind === "check" || d.kind === "date")) d = Object.assign({}, d, { hint: AS_SAVED_LABEL });
+    const sentinel = v === AS_SAVED ? AS_SAVED_LABEL : v === MIXED ? MIXED_LABEL : "";
+    if (sentinel && (d.kind === "check" || d.kind === "date")) d = Object.assign({}, d, { hint: sentinel });
     // Every yes/no term is a dropdown, so "No" is an answer that can be seen.
     if (d.kind === "check") {
-      d = Object.assign({}, d, { kind: "sel", noPh: v !== AS_SAVED,
-        opts: v === AS_SAVED ? [[AS_SAVED, AS_SAVED_LABEL]].concat(YES_NO) : YES_NO });
-      return fld(id, d.label, control(d, id, v === AS_SAVED ? v : String(v === true || v === "true"), "shared"),
+      d = Object.assign({}, d, { kind: "sel", noPh: !sentinel,
+        opts: v === AS_SAVED ? [[AS_SAVED, AS_SAVED_LABEL]].concat(YES_NO)
+          : v === MIXED ? [[MIXED, MIXED_LABEL]].concat(YES_NO) : YES_NO });
+      return fld(id, d.label, control(d, id, sentinel ? v : String(v === true || v === "true"), "shared"),
         { hint: d.hint });
     }
     const g = d.kind === "num" ? grouped(v) : "";
@@ -1484,6 +1561,12 @@ function render() {
     if (h1) h1.textContent = done ? issuedTitle() : `Issue ${noun}`;
     el("shared-card").hidden = done || reviewing || stopped;
     el("rows-card").hidden = done || reviewing || stopped;
+    const stats = el("stats");
+    if (stats) { stats.hidden = done || reviewing || stopped; stats.innerHTML = stats.hidden ? "" : statsHtml(); }
+    const sub = el("shared-sub");
+    if (sub) sub.textContent = sharedSub();
+    const det = el("shared-details");
+    if (det) { S.sharedDrawn = sharedNeedsYou() || !!S.sharedOpen; det.open = S.sharedDrawn; }
     el("review-card").hidden = done || !reviewing || stopped;
     el("issued-card").hidden = !done;
     if (done) {
@@ -1506,11 +1589,12 @@ function render() {
     }
     const rh = el("review-heading");
     if (rh) rh.textContent = S.stuck ? "What was sent to Carta" : "Review before issuing";
-    // Nothing typed here can be saved, so nothing here takes typing.
+    // Nothing typed here can be saved, so nothing here takes typing. Switching the
+    // layout changes no answer, so it stays live.
     if (S.connErr) {
       document.querySelectorAll('[data-testid="shared-card"] input, [data-testid="shared-card"] select,'
         + ' [data-testid="rows-card"] input, [data-testid="rows-card"] select,'
-        + ' [data-testid="rows-card"] button').forEach((n) => { n.disabled = true; });
+        + ' [data-testid="rows-card"] button:not([data-act="view"])').forEach((n) => { n.disabled = true; });
     }
     renderFooter();
     renderSheet();
@@ -1680,7 +1764,7 @@ function relHtml(r, i) {
 function ovHtml(r, i) {
   const p = `row-${i}`, o = [];
   for (const d of rowSpec(r)) {
-    if (!d.over) continue;
+    if (!d.over || coreKeys().includes(d.k)) continue;
     const id = `${p}-ov-${d.k}`;
     const v = d.k in r.ov ? r.ov[d.k] : inheritedVal(d, r);
     const cv = v === AS_SAVED || v === "" ? v : String(v === true || v === "true");
@@ -1688,11 +1772,32 @@ function ovHtml(r, i) {
       ? sel(id, cv, v === AS_SAVED ? [[AS_SAVED, AS_SAVED_LABEL]].concat(YES_NO) : YES_NO,
         { k: d.k, scope: `ov-${i}`, placeholder: cv === "" ? "Select…" : false })
       : control(Object.assign({}, d, { noPh: d.noPh || (v !== "" && v != null) }), id, v, `ov-${i}`, "", d.k in r.ov);
-    const own = d.k in r.ov;
+    const own = diverged(r, d.k);
     o.push(fld(id, d.label, body, own ? { cls: "dif",
       after: `<button type="button" class="link reset" data-act="ov-reset" data-i="${i}" data-k="${d.k}" data-testid="${id}-reset">Use shared</button>` } : null));
   }
   return o.join("");
+}
+
+/** One core-column cell. A field the row's own spec doesn't carry (e.g. vesting start
+    on milestone vesting) renders a stable "not applicable" placeholder, never a
+    disabled input that would read as a hidden value. */
+function coreCellHtml(d, r, i) {
+  const p = `row-${i}`, id = `${p}-${d.k}`;
+  if (!rowSpec(r).some((x) => x.k === d.k)) {
+    return `<td class="core na" data-l="${esc(d.label)}" data-testid="${id}"><span class="muted" title="Not applicable to this row">—</span></td>`;
+  }
+  const v = d.k in r.ov ? r.ov[d.k] : inheritedVal(d, r);
+  const own = diverged(r, d.k);
+  const body = d.kind === "check"
+    ? sel(id, v === AS_SAVED || v === MIXED ? v : String(v === true || v === "true"),
+        v === AS_SAVED ? [[AS_SAVED, AS_SAVED_LABEL]].concat(YES_NO)
+          : v === MIXED ? [[MIXED, MIXED_LABEL]].concat(YES_NO) : YES_NO,
+        { k: d.k, scope: `ov-${i}`, placeholder: v === "" ? "Select…" : false })
+    : control(Object.assign({}, d, { noPh: d.noPh || (v !== "" && v != null) }), id, v, `ov-${i}`, "", own);
+  const reset = own ? `<button type="button" class="link reset" data-act="ov-reset" data-i="${i}" data-k="${d.k}"
+    data-testid="${id}-reset" aria-label="Use shared ${esc(d.label)}">↺</button>` : "";
+  return `<td class="core${own ? " dif" : ""}" data-l="${esc(d.label)}">${fld(id, d.label, body, { bare: 1, cls: own ? "dif" : "", after: reset })}</td>`;
 }
 
 /** Back to the batch's value. Touched, so a resumed row sends the shared value rather
@@ -1712,10 +1817,27 @@ function resetOv(r, keys) {
     the dates that answer carries, not the batch's. */
 const rowSpec = (r) => spec(S.type === "option_grant" && r && "board_mode" in r.ov ? r.ov.board_mode : "", r);
 
+/** The table's core columns: every CORE_KEYS field, plus any a row's own conditional
+    spec adds that the shared spec doesn't carry (mirrors reviewHtml()'s union, but
+    every core key always shows — never collapsed the way varying review columns are). */
+function coreDefs() {
+  const keys = coreKeys();
+  const defs = spec().filter((d) => keys.includes(d.k));
+  for (const r of S.rows) {
+    for (const d of rowSpec(r)) {
+      if (keys.includes(d.k) && !defs.some((x) => x.k === d.k)) defs.push(d);
+    }
+  }
+  return defs;
+}
+
 /** What a row shows for a term it has not overridden: the shared value, except a term
     the load could not read, which a row added to a resumed set does not inherit. */
 function inheritedVal(d, r) {
   const v = specVal(d);
+  // MIXED describes the batch, never one row: a row with no answer of its own is
+  // simply unset, not itself "mixed".
+  if (v === MIXED) return "";
   return v === AS_SAVED && !r.resumed ? "" : v;
 }
 /** One term's value as a reader sees it. A chosen yes/no is the string "false", which is
@@ -1805,6 +1927,7 @@ function rowTerm(r, k, rs, vals) {
   if (k === "grant_expiration_date" && vals.grant_expiration_date) return anyDateIso(vals.grant_expiration_date);
   if (k in r.ov && r.ov[k] !== "") return r.ov[k];
   const v = S.shared[k];
+  if (v === MIXED) return NOT_SET;
   return v === AS_SAVED && !r.resumed ? NOT_SET : v;
 }
 const cellDisp = (d, v) => (v === NOT_SET ? "Not set" : v === "" || v == null ? "—" : disp(d, v));
@@ -2164,7 +2287,7 @@ const rowRefused = (r) => Object.keys((S.srv.rows || {})[r.key] || {}).length
   || Object.keys((S.srv.fields || {})[r.key] || {}).length;
 const rowAttn = (r, i) => !!rowRefused(r) || Object.keys(S.errs).some((k) => k.startsWith(`row-${i}-`));
 const rowWho = (r) => ((r.isNew || r.stakeholderId != null ? r.name : r.query) || "").trim();
-const ovCount = (r) => Object.keys(r.ov).length;
+const ovCount = (r) => Object.keys(r.ov).filter((k) => diverged(r, k)).length;
 
 function rowShown(r, i) {
   if (S.rows.length <= ROW_TOOLS) return true;
@@ -2175,17 +2298,103 @@ function rowShown(r, i) {
   return true;
 }
 
-function rowsSummary() {
-  const n = S.rows.length;
-  const units = S.rows.filter((r) => !isPct(r));
-  const pcts = S.rows.filter(isPct);
+/* ---------- stats tiles ----------
+   The batch at a glance, read off the same row state a save sends — never a second
+   copy of it. */
+/** A row's answer for a term: its own, else the batch's. MIXED is no one's answer. */
+const effTerm = (r, k) => {
+  if (k in r.ov && r.ov[k] !== "") return r.ov[k];
+  const v = S.shared[k];
+  return v === MIXED || v == null ? "" : v;
+};
+/** Distinct values across rows, most common first, as [value, count]. */
+function tally(k) {
+  const n = new Map();
+  for (const r of S.rows) { const v = String(effTerm(r, k)); n.set(v, (n.get(v) || 0) + 1); }
+  return [...n.entries()].sort((a, b) => b[1] - a[1]);
+}
+function statTile(id, label, value, sub) {
+  return `<div class="stat" data-testid="stat-${id}"><div class="stat-l">${esc(label)}</div>
+    <div class="stat-v">${value}</div>${sub ? `<div class="stat-s">${sub}</div>` : ""}</div>`;
+}
+/** Only a link this page can prove is safe: an https URL, or this artifact's own asset. */
+const sourceHref = (u) => (typeof u === "string" && /^(https:\/\/|\/_blob\/)/.test(u) ? u : "");
+
+function statsHtml() {
+  const [one, many] = qtyNoun();
+  const units = S.rows.filter((r) => !isPct(r)), pcts = S.rows.filter(isPct);
   const total = units.reduce((t, r) => t + (Number(r.quantity) > 0 ? Number(r.quantity) : 0), 0);
   const pct = pcts.reduce((t, r) => pctSum(t, Number(r.quantity) > 0 ? Number(r.quantity) : 0), 0);
-  const [one, many] = qtyNoun();
-  return `<b>${n.toLocaleString()}</b> ${n === 1 ? "stakeholder" : "stakeholders"}`
-    + (units.length || !pcts.length ? ` · <b>${total.toLocaleString()}</b> ${total === 1 ? one : many}` : "")
-    + (pcts.length ? ` · <b>${esc(pctFmt(pct))}</b> ownership` : "");
+  const n = S.rows.length;
+  const qty = pcts.length && !units.length
+    ? statTile("quantity", "Total ownership", esc(pctFmt(pct)))
+    : statTile("quantity", `Total ${many}`, esc(total.toLocaleString()),
+      pcts.length ? `and ${esc(pctFmt(pct))} ownership` : "");
+
+  // What each holder is being given: the grant type, or the class a unit or share is in.
+  const typeKey = S.type === "option_grant" ? "so_type" : "prefix";
+  const typeName = S.type === "option_grant" ? "Grant type" : classNoun();
+  const td = spec().find((x) => x.k === typeKey) || { k: typeKey, kind: "sel", opts: [] };
+  const types = tally(typeKey);
+  const typeText = (v) => (v === "" ? "Not set" : disp(td, v));
+  const type = statTile("type", types.length > 1 ? `${typeName}s` : typeName,
+    esc(types.map(([v]) => typeText(v)).join(" · ")),
+    types.length > 1 ? esc(types.map(([v, c]) => `${c} ${typeText(v)}`).join(" · ")) : "");
+
+  // Board status: a grant can be pending; a certificate or unit only has a date.
+  const dates = tally("board_approval_date").map(([v]) => v).filter((v) => iso(v));
+  const dateText = dates.length === 1 ? esc(longDate(dates[0])) : dates.length > 1 ? "On several dates" : "";
+  let board;
+  if (S.type === "option_grant") {
+    const modes = tally("board_mode");
+    const approved = (modes.find(([v]) => v === "approved") || [0, 0])[1];
+    const pending = (modes.find(([v]) => v === "pending") || [0, 0])[1];
+    board = pending && !approved ? statTile("board", "Board status", "Pending approval")
+      : approved && !pending ? statTile("board", "Board status", "Approved", dateText)
+      : approved && pending ? statTile("board", "Board status", "Mixed", `${approved} approved · ${pending} pending`)
+      : statTile("board", "Board status", "Not set");
+  } else {
+    board = dates.length ? statTile("board", "Board status", "Approved", dateText)
+      : statTile("board", "Board status", "Not set");
+  }
+
+  const src = S.source && typeof S.source === "object" ? S.source : null;
+  const url = src && sourceHref(src.url);
+  const source = src && src.name
+    ? statTile("source", "Source", `<span class="stat-doc" title="${esc(src.name)}">${esc(src.name)}</span>`,
+      url ? `<a class="ext" href="${esc(url)}" target="_blank" rel="noopener" data-testid="stat-source-link">View document ↗</a>` : "")
+    : statTile("source", "Source", "Entered in this form");
+
+  return statTile("stakeholders", n === 1 ? "Stakeholder" : "Total stakeholders", esc(n.toLocaleString()))
+    + qty + type + board + source;
 }
+
+/** What the shared card is for, in one line under its heading. */
+function sharedSub() {
+  const from = S.source && S.source.name ? ", replacing what was originally in the uploaded document" : "";
+  return `Changes here apply to every ${unitNoun()[0]} in the table below${from}.`;
+}
+
+/* ---------- shared-terms accordion ----------
+   Closed by default: the tiles above the table already say what the batch is. It opens
+   itself when a shared term needs an answer, and stays however the user leaves it. */
+function sharedNeedsYou() {
+  if (Object.keys(S.errs || {}).some((k) => k.startsWith("shared-"))) return true;
+  if (arr((S.srv || {}).marks).some((m) => String(m).startsWith("shared-"))) return true;
+  if (S.termsLoading) return false;
+  return spec().some((d) => {
+    if (!d.req || d.dis) return false;
+    const v = specVal(d);
+    return v === "" || v == null;
+  });
+}
+// `toggle` does not bubble, so it is heard in the capture phase. It also fires for
+// render()'s own open, which is not the user's choice — only a flip away from it is.
+document.addEventListener("toggle", (ev) => {
+  const t = ev.target;
+  if (!t || !t.getAttribute || t.getAttribute("data-testid") !== "shared-details") return;
+  if (t.open !== S.sharedDrawn) { S.sharedOpen = t.open; S.sharedDrawn = t.open; }
+}, true);
 
 function rowsBar() {
   let tools = "";
@@ -2199,7 +2408,11 @@ function rowsBar() {
       <span class="chips" role="group" aria-label="Show">${chip("all", "All")}${diff ? chip("diff", "Different terms", diff) : ""}${
         attn ? chip("attn", "Needs attention", attn) : ""}</span>`;
   }
-  return `<div class="st-bar">${tools}<span class="summary" data-testid="rows-summary">${rowsSummary()}</span></div>`;
+  // The batch's totals live in the stats tiles; the bar carries the find tools and the view.
+  const view = (v, label) => `<button type="button" data-act="view" data-v="${v}" data-testid="rows-view-${v}"
+    aria-pressed="${S.rowsView === v}">${label}</button>`;
+  return `<div class="st-bar">${tools}<span class="seg" role="group" aria-label="View as">${
+    view("table", "Table")}${view("cards", "Cards")}</span></div>`;
 }
 
 function rowsHtml() {
@@ -2207,12 +2420,14 @@ function rowsHtml() {
   else if ((S.rowFilter === "diff" && !S.rows.some(ovCount))
     || (S.rowFilter === "attn" && !S.rows.some(rowAttn))) S.rowFilter = "all";
   const body = S.rows.map((r, i) => (rowShown(r, i) ? rowHtml(r, i) : "")).join("");
-  return `${rowsBar()}<table class="st" data-testid="rows-table">
-    <thead><tr><th class="ic"><span class="vh">Different terms</span></th><th>Stakeholder</th><th class="rel">Relationship</th>
-      <th class="n">${esc(qtyHead())}</th><th class="terms">Terms</th><th class="ic"><span class="vh">Remove</span></th></tr></thead>
-    <tbody>${body || `<tr><td colspan="6" class="empty">No stakeholders match.
+  const coreHead = coreDefs().map((d) => `<th class="core">${esc(d.label)}</th>`).join("");
+  const cols = 5 + coreDefs().length;
+  return `${rowsBar()}<div class="st-scroll"><table class="st${S.rowsView === "cards" ? " cards" : ""}" data-testid="rows-table">
+    <thead><tr><th class="who">Stakeholder</th><th class="rel">Relationship</th>
+      <th class="n">${esc(qtyHead())}</th>${coreHead}<th class="terms">More terms</th><th class="ic"><span class="vh">Remove</span></th></tr></thead>
+    <tbody>${body || `<tr><td colspan="${cols}" class="empty">No stakeholders match.
       <button type="button" class="link" data-act="filter" data-f="clear" data-testid="rows-filter-clear">Show everyone</button></td></tr>`}</tbody>
-  </table>`;
+  </table></div>`;
 }
 
 function whoHtml(r, i) {
@@ -2225,6 +2440,14 @@ function whoHtml(r, i) {
       ${fld(`${p}-kind`, "Stakeholder type",
         sel(`${p}-kind`, r.kind, KIND_OPTS, { k: "kind", scope: p, placeholder: false }), { req: true, bare: true })}</div>
       <button class="link" id="${p}-new-toggle" data-testid="${p}-new-toggle" data-act="existing" data-i="${i}" type="button">Pick an existing stakeholder</button>`;
+  }
+  // A matched name is Carta's own record, read-only — same id/hint the combo used,
+  // so a server error on this stakeholder still lands here.
+  if (r.stakeholderId != null) {
+    const body = `<div id="${p}-stakeholder" class="who-fixed" data-testid="${p}-stakeholder-name">
+      <b>${esc(r.name || "")}</b>
+    </div>`;
+    return fld(`${p}-stakeholder`, "Stakeholder", body, { bare: 1, hint: r.email || "" });
   }
   const combo = `<div class="combo"><input id="${p}-stakeholder" data-testid="${p}-stakeholder"
     data-k="query" data-scope="${p}" data-combo="${i}" type="text" autocomplete="off"
@@ -2240,20 +2463,23 @@ function rowHtml(r, i) {
   const p = `row-${i}`, n = ovCount(r);
   const who = esc(rowWho(r) || "this stakeholder");
   const ctl = r.open ? ` aria-controls="${p}-terms-row"` : "";
-  const terms = n
-    ? `<button type="button" class="pill" data-act="ov" data-i="${i}" data-testid="${p}-terms" aria-expanded="${!!r.open}"${ctl}>${n} different</button>`
-    : `<span class="muted" data-testid="${p}-terms">Shared terms</span>`;
+  const cols = 5 + coreDefs().length;
+  // Always a button: even a row with nothing overridden yet still needs a way in, to
+  // add a note or an early-exercise answer — this is the panel's only toggle.
+  const terms = `<button type="button" class="term-toggle${n ? " has" : ""}" id="${p}-override-toggle"
+    data-testid="${p}-override-toggle" data-act="ov" data-i="${i}" aria-expanded="${!!r.open}"${ctl}
+    aria-label="More terms for ${who}">${n ? `${n} different` : "More terms"}</button>`;
   const errs = rowErrHtml(r, p);
+  const coreCells = coreDefs().map((d) => coreCellHtml(d, r, i)).join("");
   return `<tr class="row${r.open ? " on" : ""}${rowRefused(r) ? " refused" : ""}" data-testid="${p}" data-row-key="${r.key}">
-    <td class="ic"><button class="exp${n ? " has" : ""}" id="${p}-override-toggle" data-testid="${p}-override-toggle" data-act="ov" data-i="${i}"
-      type="button" aria-expanded="${!!r.open}"${ctl} aria-label="Different terms for ${who}"></button></td>
     <td class="who">${whoHtml(r, i)}</td>
-    <td class="rel">${relHtml(r, i)}</td>
-    <td class="n">${qtyCell(r, p)}</td>
+    <td class="rel" data-l="Relationship">${relHtml(r, i)}</td>
+    <td class="n" data-l="${esc(qtyHead())}">${qtyCell(r, p)}</td>
+    ${coreCells}
     <td class="terms">${terms}</td>
     <td class="ic rm"><button class="x" id="${p}-remove" data-testid="${p}-remove" data-act="remove" data-i="${i}" type="button"
       aria-label="Remove ${who}" title="Remove">${TRASH}</button></td>
-  </tr>${errs ? `<tr class="row-err"><td></td><td colspan="5">${errs}</td></tr>` : ""}${r.open ? `<tr class="xp" id="${p}-terms-row"><td colspan="6">
+  </tr>${errs ? `<tr class="row-err"><td></td><td colspan="${cols - 1}">${errs}</td></tr>` : ""}${r.open ? `<tr class="xp" id="${p}-terms-row"><td colspan="${cols}">
     <div class="xp-h"><b>Different terms for ${who}</b>
       ${n ? `<button type="button" class="link" data-act="ov-reset-all" data-i="${i}" data-testid="${p}-reset-all">Use shared terms for all</button>` : ""}</div>
     <div class="grid" data-testid="${p}-overrides">${ovHtml(r, i)}</div></td></tr>` : ""}`;
@@ -2327,7 +2553,7 @@ function validate(write) {
   const need = (id, lab, ok, msg) => { if (!ok) { e[id] = msg || "Required"; missing.push(lab); } };
   for (const d of spec()) {
     const id = `shared-${d.k}`, v = specVal(d);
-    if (v === AS_SAVED) continue;
+    if (v === AS_SAVED || v === MIXED) continue;
     const blank = v === "" || v == null;
     if (d.req) need(id, d.req, !blank, d.reqMsg);
     if (blank) continue;
@@ -2343,18 +2569,24 @@ function validate(write) {
   for (const [id, msg] of docSetErrors()) {
     need(id, "a document set with every required document", false, msg);
     const row = /^row-(\d+)-/.exec(id);
-    // An override's error sits inside its panel, which a closed panel would hide.
-    if (write && row && S.rows[Number(row[1])]) S.rows[Number(row[1])].open = true;
+    // An overflow-panel error sits inside its panel, which a closed panel would hide.
+    // document_set_id is core wherever this fires, so today that panel never exists.
+    if (write && row && !coreKeys().includes("document_set_id") && S.rows[Number(row[1])]) {
+      S.rows[Number(row[1])].open = true;
+    }
   }
   if (!S.rows.length) missing.push("a stakeholder");
-  const inherited = spec().filter((d) => d.req && d.over && S.shared[d.k] === AS_SAVED);
+  // AS_SAVED (resumed, unread) or MIXED (fresh, disagreeing): a row with no answer
+  // of its own needs one.
+  const inherited = spec().filter((d) => d.req && d.over
+    && (S.shared[d.k] === AS_SAVED || S.shared[d.k] === MIXED));
   S.rows.forEach((r, i) => {
     const p = `row-${i}`;
     // A row added to a resumed set inherits nothing from terms the load could not read.
     if (!r.resumed) {
       for (const d of inherited.filter((x) => !(x.k in r.ov))) {
-        need(`${p}-ov-${d.k}`, d.req, false, newRowNeeds());
-        if (write) r.open = true;
+        need(rowFieldId(i, d.k), d.req, false, newRowNeeds());
+        if (write && !coreKeys().includes(d.k)) r.open = true;
       }
     }
     if (r.isNew) {
@@ -2365,9 +2597,9 @@ function validate(write) {
       need(`${p}-stakeholder`, "a stakeholder", r.stakeholderId != null, "Pick someone from the list");
     }
     if (S.type === "option_grant" && r.resumed && touchedFor(r).has("document_set_id")) {
-      need(r.touched.has("document_set_id") ? `${p}-ov-document_set_id` : "shared-document_set_id",
+      need(r.touched.has("document_set_id") ? rowFieldId(i, "document_set_id") : "shared-document_set_id",
         "a document set Carta already holds", false, SAVED_SET_LOCKED);
-      if (write && r.touched.has("document_set_id")) r.open = true;
+      if (write && r.touched.has("document_set_id") && !coreKeys().includes("document_set_id")) r.open = true;
     }
     const q = String(r.quantity == null ? "" : r.quantity).trim();
     if (isPct(r)) {
@@ -2407,7 +2639,7 @@ function docSetErrors() {
     if (!ownSet && !ownPlan) return;
     const set = docSetOf(ownSet ? r.ov.document_set_id : S.shared.document_set_id);
     const msg = docSetProblem(set, ownPlan ? r.ov.option_plan : sharedPlan());
-    if (msg) out.push([`row-${i}-ov-document_set_id`, msg]);
+    if (msg) out.push([rowFieldId(i, "document_set_id"), msg]);
   });
   return out;
 }
@@ -2417,7 +2649,7 @@ function docSetErrors() {
    left out rather than sent as 0, NaN or the string "undefined" — the server names a
    missing field, but reads a coerced one as the user's answer. */
 function put(o, k, v) {
-  if (v === "" || v == null || v === NONE || v === AS_SAVED) return;
+  if (v === "" || v == null || v === NONE || v === AS_SAVED || v === MIXED) return;
   if (typeof v === "number" && !Number.isFinite(v)) return;
   o[k] = v;
 }
@@ -2495,7 +2727,12 @@ async function dropStaleDocRows() {
     What a save sends is rowPayload(). */
 function rowValues(r) {
   const sh = S.shared;
-  const g = (k) => (k in r.ov && r.ov[k] !== "" ? r.ov[k] : sh[k]);
+  // A row with no answer of its own inherits blank, never the raw MIXED sentinel —
+  // that describes the batch, and must never reach a total or a payload as a string.
+  const g = (k) => {
+    if (k in r.ov && r.ov[k] !== "") return r.ov[k];
+    return sh[k] === MIXED ? "" : sh[k];
+  };
   // Whether this row answered a term itself, which is what makes a derived value
   // the row's own rather than the batch's.
   const own = (k) => k in r.ov && r.ov[k] !== "";
@@ -2728,7 +2965,7 @@ const KEEP_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
 /** The user's work and what Carta already holds of it. Reference data is fetched again. */
 const KEEP_FIELDS = ["stage", "corpId", "corpName", "shared", "seq", "drafts", "draftSetId",
   "draftSetName", "removed", "sent", "docPicked", "curFor", "hydrated", "rewriting",
-  "savedNote", "issued", "issuedRows", "pendingRows", "links", "stuck", "stuckTitle"];
+  "savedNote", "rowsView", "issued", "issuedRows", "pendingRows", "links", "stuck", "stuckTitle"];
 
 /** Null wherever the browser refuses storage — the page then just forgets on reload. */
 function storage() {
@@ -3536,9 +3773,10 @@ function rowSlot(r, field) {
   if (f === "issue_date_relationship") return named ? "relationship" : "";
   if (f === "stakeholder_kind") return named ? "kind" : "";
   const k = formKey(f);
-  // Only a term the override panel draws: an override the form no longer shows — a
-  // Rule 144 date left over from "a different date" — has no control to carry it.
-  return k in r.ov && rowSpec(r).some((d) => d.over && d.k === k) ? `ov-${k}` : "";
+  // Only a term a control draws for this row: an override the form doesn't show
+  // for it — a Rule 144 date left over from "a different date" — has none to carry it.
+  return k in r.ov && rowSpec(r).some((d) => d.over && d.k === k)
+    ? (coreKeys().includes(k) ? k : `ov-${k}`) : "";
 }
 
 /** The form's own key for a server field. An option grant's plan belongs to the set. */
@@ -3772,6 +4010,15 @@ function commit(ev) {
     if (k === "issue_date") {
       if (S.shared.rule_144_mode === "issue_date") S.shared.rule_144_date = val;
     }
+    // The batch's answer replaces what the document said for each row; a row's own
+    // hand edit stands, as does a resumed row's saved value.
+    if (val !== MIXED) {
+      for (const r of S.rows) {
+        const s = r.seeded || {};
+        if (r.resumed || !(k in s) || String(r.ov[k]) !== String(s[k])) continue;
+        delete r.ov[k]; delete s[k];
+      }
+    }
     dropOverridesMatchingShared();
   } else if (scope.startsWith("ov-")) {
     const r = S.rows[Number(scope.slice(3))];
@@ -3864,6 +4111,12 @@ function suggest(input, i) {
         ? "Still loading the stakeholder list…" : "Searching Carta…"}</li>`
     : `<li role="option" aria-selected="false" id="row-${i}-opt-new" data-new="1" data-i="${i}">No match. Create “${esc(typed)}” as a new stakeholder</li>`;
   box.hidden = false;
+  // `.sug` is fixed-position so table scroll can't clip it; guarded for the test
+  // harness's stubbed inputs, which carry no real layout box.
+  if (typeof input.getBoundingClientRect === "function") {
+    const b = input.getBoundingClientRect();
+    box.style.cssText = `position:fixed; left:${b.left}px; top:${b.bottom + 2}px; width:${b.width}px;`;
+  }
   input.setAttribute("aria-expanded", "true");
   input.removeAttribute("aria-activedescendant");
 }
@@ -3877,8 +4130,8 @@ document.addEventListener("input", (ev) => {
   const combo = ev.target.getAttribute && ev.target.getAttribute("data-combo");
   commit(ev);
   if (combo != null) { searchRoster(ev.target.value); suggest(ev.target, Number(combo)); }
-  const sum = el("rows-summary");
-  if (sum) sum.innerHTML = rowsSummary();
+  const stats = el("stats");
+  if (stats && !stats.hidden) stats.innerHTML = statsHtml();
   renderFooter();
 });
 // `rendering` also stops the re-entrant render: this event came from the render
@@ -3935,6 +4188,7 @@ document.addEventListener("click", (ev) => {
   if (b) {
     const act = b.getAttribute("data-act"); const i = Number(b.getAttribute("data-i"));
     // Filters change what is shown, not what is answered, so the painted errors stay.
+    if (act === "view") { S.rowsView = b.getAttribute("data-v") === "cards" ? "cards" : "table"; render(); return; }
     if (act === "filter") {
       const f = b.getAttribute("data-f");
       if (f === "clear") { S.rowQ = ""; S.rowFilter = "all"; } else S.rowFilter = f;
@@ -3943,10 +4197,10 @@ document.addEventListener("click", (ev) => {
     if (act === "ov-reset" || act === "ov-reset-all") {
       const r = S.rows[i];
       const keys = act === "ov-reset" ? [b.getAttribute("data-k")] : Object.keys(r.ov);
-      for (const k of keys) clearSrvField(`row-${i}-ov-${k}`, `ov-${i}`, k);
+      for (const k of keys) clearSrvField(rowFieldId(i, k), `ov-${i}`, k);
       resetOv(r, keys);
       S.savedNote = ""; S.errs = {}; render();
-      const back = act === "ov-reset" ? el(`row-${i}-ov-${keys[0]}`) : el(`row-${i}-override-toggle`);
+      const back = act === "ov-reset" ? el(rowFieldId(i, keys[0])) : el(`row-${i}-override-toggle`);
       if (back) back.focus();
       return;
     }
@@ -3956,12 +4210,6 @@ document.addEventListener("click", (ev) => {
     else if (act === "existing") { const r = S.rows[i]; r.isNew = false; r.query = r.name; r.touched.add("stakeholder"); }
     if (act !== "ov") S.savedNote = "";
     S.errs = {}; render(); return;
-  }
-  if (ev.target.closest && ev.target.closest('[data-testid="add-stakeholder"]')) {
-    S.rows.push(mkRow({})); S.errs = {}; S.savedNote = ""; S.rowQ = ""; S.rowFilter = "all"; render();
-    const box = el(`row-${S.rows.length - 1}-stakeholder`);
-    if (box) box.focus();
-    return;
   }
   if (ev.target.closest && ev.target.closest('[data-testid="save-draft"]')) { submit("draft"); return; }
   // Confirm & Issue opens the review; only the review's Issue hands over.
@@ -4034,6 +4282,12 @@ function closeSuggestions() {
     n.removeAttribute("aria-activedescendant");
   });
 }
+
+// `.sug` is `position: fixed`, so scrolling the table out from under it would leave
+// it floating over the wrong row. Capture phase: `scroll` does not bubble.
+document.addEventListener("scroll", (ev) => {
+  if (ev.target.classList && ev.target.classList.contains("st-scroll")) closeSuggestions();
+}, true);
 
 /** Up and Down walk the list, Enter picks, Escape closes it. */
 function comboKey(ev, input) {

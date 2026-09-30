@@ -9,7 +9,8 @@ Chat *is* the surface: prose, `AskUserQuestion`, printed markdown. Being here is
 run and needs nothing this session lacks — never report it as unavailable, and never say it is
 blocked on a tool, a CLI or a connection.
 
-**Interactive-wait budget: 2.** One batched collect (§1), one confirm (§3); the review (§2) is
+**Interactive-wait budget: 2**, plus [the source question](../SKILL.md#ask-where-the-details-are)
+when the request stated nothing to issue. One batched collect (§1), one confirm (§3); the review (§2) is
 printed markdown and does not block. **A single-recipient issuance that spends more than two
 blocking waits has a bug in it** — most often a question about a value that was computable
 (§4), or one question per field where one batch would have done.
@@ -21,6 +22,7 @@ reconstruct it from here.
 
 | Phase | Reads |
 |---|---|
+| **Before 0** The source question — only when the request states nothing to issue. It comes first: no Carta tool, no reference data before it | [SKILL.md § Ask where the details are](../SKILL.md#ask-where-the-details-are) |
 | **0** Preflight — tools, environment, corporation, account-level hard stops | [engine.md § Phase 0](engine.md#phase-0--preflight) |
 | **0.25** Import — only when the prompt points at a file | [issuance-import/SKILL.md](../issuance-import/SKILL.md) |
 | **0.5** Reference data, gates, **collect** | [engine.md § Phase 0.5](engine.md#phase-05--configure-the-issuance) · §1 · the type's field file |
@@ -38,7 +40,8 @@ Ask **once**, for everything still unknown after §4's defaults are applied. Sev
 go in **one** `AskUserQuestion` call — one wait, not one per field. Before a field goes in the
 batch, check it against §4; if it is there, it is already answered.
 
-**Never ask who the recipients are.** A prompt that named nobody is one recipient whose name
+**Never ask who the recipients are.** ([The source question](../SKILL.md#ask-where-the-details-are)
+asks where the details are, runs before this phase, and is not part of this batch.) A prompt that named nobody is one recipient whose name
 you ask for *inside* the batch, not a gating question ahead of it, and never a reason to invent
 a name or a quantity ([engine rule 5](engine.md#engine-hard-rules)).
 

@@ -81,7 +81,7 @@ SECURITY_TYPES = ("option_grant", "certificate", "piu")
 
 # Everything the seed may carry — the prompt's own knowns, per
 # skills/carta-issuance/references/artifact-surface.md. Not a server payload.
-SEED_KEYS = ("stakeholders", "quantity", "issue_date", "rows", "draft_set_id", "terms")
+SEED_KEYS = ("stakeholders", "quantity", "issue_date", "rows", "draft_set_id", "terms", "source")
 
 # What an award document or the prompt stated about the security itself. The page matches
 # the named ones (plan, class, vesting) against the company's own lists.
@@ -95,8 +95,13 @@ ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 # One person the prompt named. The page reads the name only from `name`, so the other
 # spellings a model reaches for are folded into it rather than opening nameless rows.
-PERSON_KEYS = ("name", "quantity", "email")
+PERSON_KEYS = ("name", "quantity", "email", "terms")
 NAME_ALIASES = ("stakeholder", "stakeholder_name", "full_name", "holder")
+
+# What a person's own `terms` may state — resolved synchronously, unlike the batch
+# `terms`' vesting/option_plan/share_class, which need reference data still loading.
+PERSON_TERM_KEYS = ("grant_type", "exercise_price", "price_per_share", "threshold_value",
+                    "board_approval_date")
 
 # The published artifact's name, and what SKILL.md matches on to find this company's
 # existing page. One page per company and type, so one title per pair.
@@ -201,9 +206,32 @@ def _fold_name(entry):
     return out
 
 
+def check_person_terms(terms):
+    """A person's own `terms` (§5b): the same date/number checks as check_terms(), over
+    the narrower PERSON_TERM_KEYS — no vesting/plan/class, which need reference data
+    still loading to fuzzy-match by name."""
+    if not isinstance(terms, dict):
+        sys.exit("ERROR: a seed stakeholder's 'terms' must be an object")
+    unknown = sorted(k for k in terms if k not in PERSON_TERM_KEYS)
+    if unknown:
+        sys.exit("ERROR: unknown term(s) on a seed stakeholder: {} — a person's 'terms' "
+                 "holds only {}".format(", ".join(unknown), ", ".join(PERSON_TERM_KEYS)))
+    if terms.get("board_approval_date") not in (None, "") and not ISO_DATE_RE.match(
+            str(terms["board_approval_date"])):
+        sys.exit("ERROR: a seed stakeholder's 'board_approval_date' must be a YYYY-MM-DD string")
+    for k in ("exercise_price", "price_per_share", "threshold_value"):
+        v = terms.get(k)
+        if v in (None, ""):
+            continue
+        try:
+            float(str(v).replace(",", "").lstrip("$"))
+        except ValueError:
+            sys.exit("ERROR: a seed stakeholder's '{}' must be a number".format(k))
+
+
 def _person(entry):
-    """A `stakeholders` entry as `{name, quantity?, email?}`: a bare name string, or an
-    object when people get different quantities."""
+    """A `stakeholders` entry as `{name, quantity?, email?, terms?}`: a bare name string,
+    or an object when people get different quantities or their own terms (§5b)."""
     if isinstance(entry, str):
         entry = {"name": entry}
     if not isinstance(entry, dict):
@@ -218,6 +246,9 @@ def _person(entry):
         sys.exit("ERROR: every seed 'stakeholders' entry needs a 'name'")
     if not isinstance(entry.get("quantity", ""), (str, int, float)):
         sys.exit("ERROR: seed 'stakeholders' quantity must be a number or a string")
+    if "terms" in entry:
+        check_person_terms(entry["terms"])
+        entry = dict(entry, terms=normalize_terms(entry["terms"]))
     return {k: entry[k] for k in PERSON_KEYS if entry.get(k) not in (None, "")}
 
 
@@ -282,6 +313,27 @@ def normalize_terms(terms):
     return out
 
 
+SOURCE_KEYS = ("name", "url")
+# The page links only to an https URL or this artifact's own uploaded asset.
+SOURCE_URL_RE = re.compile(r"^(https://|/_blob/)")
+
+
+def check_source(source):
+    """The document the terms came from: its file name, and where the page links to it."""
+    if not isinstance(source, dict):
+        sys.exit("ERROR: seed 'source' must be {\"name\": ..., \"url\": ...}")
+    unknown = sorted(k for k in source if k not in SOURCE_KEYS)
+    if unknown:
+        sys.exit("ERROR: unknown key(s) {} on seed 'source' — it holds only {}".format(
+            ", ".join(unknown), ", ".join(SOURCE_KEYS)))
+    if not isinstance(source.get("name"), str) or not source["name"].strip():
+        sys.exit("ERROR: seed 'source' needs a 'name'")
+    url = source.get("url")
+    if url not in (None, "") and not (isinstance(url, str) and SOURCE_URL_RE.match(url)):
+        sys.exit("ERROR: seed 'source' url must be an https URL or the artifact's own "
+                 "/_blob/ asset url")
+
+
 def check_seed_shape(seed):
     """The seed holds what the prompt supplied and nothing else.
 
@@ -302,6 +354,8 @@ def check_seed_shape(seed):
         sys.exit("ERROR: seed 'issue_date' must be a YYYY-MM-DD string")
     if "terms" in seed:
         check_terms(seed["terms"])
+    if "source" in seed:
+        check_source(seed["source"])
     # A draft_pk only means anything inside its own set. Without the set id the save
     # mints a second draft set of the same rows.
     pks = [r for r in (rows or []) if r.get("draft_pk") is not None]

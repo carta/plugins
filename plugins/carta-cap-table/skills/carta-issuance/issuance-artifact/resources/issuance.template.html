@@ -17,15 +17,21 @@
   <div data-testid="blockers"></div>
   <div data-testid="notices"></div>
 
-  <section class="card" data-testid="shared-card">
-    <h2 data-testid="shared-heading">Shared terms</h2>
-    <div class="grid" data-testid="shared-grid"></div>
+  <section class="card sand" data-testid="shared-card">
+    <details class="acc" data-testid="shared-details">
+      <summary>
+        <h2 data-testid="shared-heading">Shared terms</h2>
+        <p class="acc-sub" id="shared-sub" data-testid="shared-sub"></p>
+      </summary>
+      <div class="grid" data-testid="shared-grid"></div>
+    </details>
   </section>
 
-  <section class="card" data-testid="rows-card">
-    <h2>Stakeholders</h2>
+  <div class="stats" data-testid="stats"></div>
+
+  <section class="rows" data-testid="rows-card" aria-label="Stakeholders">
     <div data-testid="rows"></div>
-    <button class="add" id="add-stakeholder" data-testid="add-stakeholder" type="button">+ Add stakeholder</button>
+    <p class="add-hint" data-testid="add-hint">Need to add more stakeholders? Upload more documents or share their details in the chat.</p>
   </section>
 
   <section class="card" data-testid="review-card" hidden>

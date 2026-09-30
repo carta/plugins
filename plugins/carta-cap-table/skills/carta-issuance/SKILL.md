@@ -12,7 +12,8 @@ description: >-
   any specific security type above. Also USE WHEN the user points at a
   spreadsheet, CSV, Carta import template, or a grant/award document as the
   source of the issuance ("issue the grants in this file", "here's our import
-  template").
+  template"). Also USE WHEN asked for help issuing with nothing attached
+  ("help me issue options in Carta", "can I issue grant awards?").
 model: inherit
 allowed-tools:
   - AskUserQuestion
@@ -36,7 +37,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.90.33</carta-plugin>
+<carta-plugin>carta-cap-table:6.90.34</carta-plugin>
 
 # Issue Securities
 
@@ -67,7 +68,8 @@ no check, caveat, or status line. Build the page.
 
 **Your first tool call is the build's `Bash`, with no text before it** — unless the request
 names an environment your session can't confirm, the one case
-[below](#the-connected-carta-must-be-the-intended-carta) that calls `get_current_user` first.
+[below](#the-connected-carta-must-be-the-intended-carta) that calls `get_current_user` first,
+or [states nothing to issue](#ask-where-the-details-are).
 Two things read like a verdict and carry none:
 
 - **An `mcp__carta__authenticate`-shaped name** in your tool list or a "needs
@@ -109,6 +111,13 @@ ignore it. Its environment comes from your session — its `## claude.ai <name>`
    `environment`, or its `base_url` host when `environment` reads `unknown`. Never guess and
    never build on an unknown: the page resolves the company by name, so the same name in the
    wrong environment is a real company there.
+
+## Ask where the details are
+
+**A request that states nothing to issue** — no person, quantity or term, no file and no
+pointer to one (*"help me issue options in Carta"*, *"can I issue grant awards?"*) — starts
+here, on every surface: read [references/source-question.md](references/source-question.md)
+and ask its one question before anything else. Anything stated builds straight away.
 
 ## Pick the surface
 
@@ -213,8 +222,8 @@ uv run "$SKILL/issuance-artifact/scripts/build_artifact.py" \
   when you already hold a bare numeric id — from the fallback lookup, or from a resume.
 - `--seed` takes a **path**, never an inline blob. Omit it entirely when the prompt named
   nobody and no terms; the page then opens with one blank recipient row.
-- Seed keys: `stakeholders` (names verbatim), `quantity`, `issue_date`, `terms`, and `rows`
-  from the import sub-skill. An unknown key fails the build.
+- Seed keys: `stakeholders` (names verbatim), `quantity`, `issue_date`, `terms`, `source`,
+  and `rows` from the import sub-skill. An unknown key fails the build.
 - **`terms` carries every term the document or prompt states**, in its words; the page
   matches names to Carta's lists and asks only for what matches nothing:
   `{"option_plan": "<plan name>", "grant_type": "<ISO|NSO|…>", "exercise_price": "<price>", "board_approval_date": "<YYYY-MM-DD>", "vesting": {"text": "<the schedule's words>", "months": <total>, "cliff_months": <cliff>}, "term_years": <years>}`.
@@ -223,6 +232,12 @@ uv run "$SKILL/issuance-artifact/scripts/build_artifact.py" \
 - **Different quantities per person** go on each entry, never dropped:
   `{"stakeholders": [{"name": "Tagg Palmer", "quantity": 100}, {"name": "Emily Wilson", "quantity": 50}]}`.
   Top-level `quantity` covers everyone else. A percentage stays one: 2.75% is `"2.75"`.
+- **Different terms per person** go on that entry's own `terms`, only `grant_type`,
+  `exercise_price`, `price_per_share`, `threshold_value`, `board_approval_date`:
+  `{"name": "Emil Vaselvee", "quantity": 1250, "terms": {"grant_type": "ISO"}}`. Rows
+  that disagree with no batch value show `Multiple` on the shared field — expected.
+- **`source`** is `{"name": "<file name>", "url": "<link>"}` for the Source tile; omit it
+  when nothing was attached. `url` builds only as https or a `/_blob/` asset ([§ 3](#3-publish-it)).
 - **Resuming a saved draft set** adds `draft_set_id` — without it the page mints a *second*
   draft set of the same rows ([hard rule 3](#hard-rules)). The page reads the set's rows and
   terms back itself; seed `load_drafts` rows, each with its `draft_pk`, only as its fallback
@@ -272,6 +287,9 @@ connector was renamed: republish with step 3.
   object replaces the stored grant, so an omitted capability is revoked. Omit the field
   entirely to carry the grant forward — the cheaper redeploy.
 - Keep `tools` at that one: every Carta command goes through the `call_tool` proxy.
+- **An attached document gets a link:** add `assets: {}` to the first publish, then
+  `upload_asset` the file, rebuild with `source.url` set to the returned `url`, and
+  republish with `capabilities` omitted.
 
 **Read the publish result's warnings.** One matters: an unresolved connector name means
 the grant isn't wired and every card comes up empty — that sends this run to

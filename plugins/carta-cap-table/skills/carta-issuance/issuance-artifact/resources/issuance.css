@@ -12,6 +12,8 @@
       --ink-color-global-brand-gray-50: light-dark(#DEDFDF, #3B4040);
       --ink-color-global-brand-gray-30: light-dark(#EFF0F0, #2C3030);
       --ink-color-global-brand-gray-10: light-dark(#F7F8F8, #232626);
+      --ink-color-global-border-default: light-dark(#A7AAAA, #656B6B);
+      --ink-color-global-surface-brown-default: light-dark(#FBFAF9, #5A473F);
       --ink-color-global-brand-orange-60: light-dark(#C24D18, #FF922B);
       --ink-color-global-brand-red-60: light-dark(#B02525, #FF8A8A);
       --ink-font-global-family-base: Inter, system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
@@ -19,9 +21,10 @@
       --ink-spacing-global-vertical-xsmall: 8px;
       --ink-spacing-global-vertical-small: 12px;
       --ink-spacing-global-vertical-medium: 20px;
-      /* A row's own term wears the tint the review uses for a differing value. */
-      --issuance-dif-bg: color-mix(in srgb, var(--ink-color-global-brand-orange-60) 14%, transparent);
-      --issuance-dif-line: color-mix(in srgb, var(--ink-color-global-brand-orange-60) 45%, transparent);
+      /* A row's own term wears a warning tint, not orange/red — orange is reserved
+         for notification indicators, and this isn't an error. */
+      --issuance-dif-bg: light-dark(#FFFCED, #341C00);
+      --issuance-dif-line: light-dark(#F8D648, #B58A00);
       /* Utilization bar. The used share stays neutral so this issuance is what stands out. */
       --issuance-ut-used: light-dark(#7E8787, #5F6969);
       --issuance-ut-new: light-dark(#285DA3, #6391D6);
@@ -79,6 +82,38 @@
       padding: var(--ink-spacing-global-vertical-small);
       margin-top: var(--ink-spacing-global-vertical-medium);
     }
+    /* Ink's accent-1 tile: brown-10 fill, no border. */
+    .card.sand { background: var(--ink-color-global-surface-brown-default); border-color: transparent; }
+
+    /* Shared terms as an accordion: the caret leads the heading, the one-line purpose
+       sits under it, and both stay in view while it is closed. */
+    .acc > summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: 12px 1fr; column-gap: 8px; align-items: center; }
+    .acc > summary::-webkit-details-marker { display: none; }
+    .acc > summary h2 { margin: 0; }
+    .acc > summary::before {
+      content: ""; width: 12px; height: 12px; background-color: var(--ink-color-global-brand-gray-70);
+      -webkit-mask: var(--ink-glyph-caret) center / 12px no-repeat; mask: var(--ink-glyph-caret) center / 12px no-repeat;
+      transform: rotate(-90deg); transition: transform .15s ease;
+    }
+    .acc[open] > summary::before { transform: none; }
+    .acc-sub { grid-column: 2; margin: 2px 0 0; font-size: 12px; line-height: 16px; color: var(--ink-color-global-brand-gray-70); }
+    .acc[open] > .grid { margin-top: var(--ink-spacing-global-vertical-small); }
+    .acc > summary:focus-visible { outline: 2px solid var(--ink-color-global-brand-black); outline-offset: 2px; border-radius: 2px; }
+
+    /* Batch at a glance: Ink tiles — flat, bordered, label over value. */
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: var(--ink-spacing-global-vertical-small);
+      margin-top: var(--ink-spacing-global-vertical-medium); }
+    .stats:empty { display: none; }
+    .stat { min-width: 0; border: 1px solid var(--ink-color-global-brand-gray-30); border-radius: 0; padding: 14px 16px; }
+    .stat-l { font-size: 12px; color: var(--ink-color-global-brand-gray-70); }
+    .stat-v { margin-top: 4px; font-size: 20px; line-height: 28px; font-weight: 500; font-variant-numeric: tabular-nums;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .stat-s { margin-top: 2px; font-size: 12px; color: var(--ink-color-global-brand-gray-70); }
+    .stat-doc { font-size: 14px; line-height: 28px; }
+    .stat-s .ext { font-size: 12px; }
+
+    /* The stakeholder table sits on the page, not in a tile: it needs the room. */
+    .rows { margin-top: var(--ink-spacing-global-vertical-medium); }
 
     h2 {
       font-size: 13px;
@@ -182,26 +217,35 @@
     .vh { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
     .muted { color: var(--ink-color-global-brand-gray-70); font-size: 12px; }
 
-    /* Stakeholder table. No overflow container: it would clip the name suggestions. */
+    /* Stakeholder table. `.sug` repositions itself to `position: fixed` in JS
+       (suggest()), so this scroll container can't clip it. */
+    .st-scroll { overflow-x: auto; }
     .st-bar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-bottom: var(--ink-spacing-global-vertical-xsmall); }
     .st-bar .search { flex: 1 1 220px; width: auto; max-width: 320px; }
     .chips { display: inline-flex; flex-wrap: wrap; gap: 6px; }
     .chip { min-height: 28px; padding: 3px 10px; border-radius: 999px; font-size: 12px; background: var(--ink-color-global-brand-white); }
     .chip[aria-pressed="true"], .chip[aria-pressed="true"]:hover:not([disabled]) { background: var(--ink-color-global-brand-black); color: var(--ink-color-global-brand-white); border-color: var(--ink-color-global-brand-black); }
+    /* Table or cards: a two-button segmented switch at the bar's right edge. */
+    .seg { margin-left: auto; display: inline-flex; }
+    .seg button { min-height: 28px; padding: 3px 12px; font-size: 12px; background: var(--ink-color-global-brand-white); border-radius: 0; }
+    .seg button:first-child { border-radius: 6px 0 0 6px; }
+    .seg button:last-child { border-radius: 0 6px 6px 0; margin-left: -1px; }
+    .seg button[aria-pressed="true"], .seg button[aria-pressed="true"]:hover:not([disabled]) { background: var(--ink-color-global-brand-black); color: var(--ink-color-global-brand-white); border-color: var(--ink-color-global-brand-black); position: relative; }
     .chip .n { font-variant-numeric: tabular-nums; opacity: .75; }
-    .summary { margin-left: auto; font-size: 12px; color: var(--ink-color-global-brand-gray-70); font-variant-numeric: tabular-nums; }
-    .summary b { color: var(--ink-color-global-brand-black); font-weight: 600; }
-    .st { width: 100%; border-collapse: separate; border-spacing: 0; border: 1px solid var(--ink-color-global-brand-gray-50); border-radius: 8px; }
-    .st th { text-align: left; font-size: 11px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; color: var(--ink-color-global-brand-gray-70); padding: 8px 10px; background: var(--ink-color-global-brand-gray-10); border-bottom: 1px solid var(--ink-color-global-brand-gray-50); white-space: nowrap; }
-    .st th:first-child { border-top-left-radius: 7px; }
-    .st th:last-child { border-top-right-radius: 7px; }
-    .st td { padding: 8px 10px; border-bottom: 1px solid var(--ink-color-global-brand-gray-30); vertical-align: top; }
+    /* Fixed layout: every column keeps its declared width regardless of content, so
+       one long name doesn't reflow every other row's columns out from under it. */
+    /* Ink's table: no outer border or radius, a white header in sentence case over a
+       default-weight rule, subtle rules between rows. */
+    .st { width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0; border: 0; border-radius: 0; }
+    .st th { text-align: left; font-size: 14px; font-weight: 500; line-height: 24px; color: var(--ink-color-global-brand-black); padding: 10px 12px; background: var(--ink-color-global-brand-white); border-bottom: 1px solid var(--ink-color-global-border-default); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .st td { padding: 10px 12px; border-bottom: 1px solid var(--ink-color-global-brand-gray-50); vertical-align: top; overflow: hidden; }
     .st tbody tr:last-child td { border-bottom: 0; }
     .st .n { text-align: right; }
     .st .ic { width: 40px; padding-inline: 6px; text-align: center; }
-    .st td.ic { padding-top: 10px; }
-    .st .rel { width: 180px; }
-    .st td.n { width: 136px; }
+    .st .who { width: 200px; }
+    .st .rel { width: 160px; }
+    .st td.n { width: 116px; }
+    .st .core { width: 170px; min-width: 170px; }
     .st .terms { width: 120px; }
     .st td.terms { padding-top: 13px; }
     .st td.rel > .muted { display: inline-block; padding-top: 7px; }
@@ -211,18 +255,42 @@
     .st .err:focus { outline: none; }
     .st tr.xp > td { background: var(--ink-color-global-brand-gray-10); padding: 4px 12px 14px 50px; }
     .st .empty { padding: 18px; text-align: center; color: var(--ink-color-global-brand-gray-70); }
+    .st td.core.na { padding-top: 10px; }
+
+    /* Cards: the same rows and controls, one stakeholder per tile, each field under
+       its own label. The name heads the card; remove sits in its corner. */
+    .st.cards, .st.cards tbody { display: block; }
+    .st.cards thead { display: none; }
+    /* Each card is Ink's accent-1 tile, like the shared terms: brown-10, no border. */
+    .st.cards tr.row { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px 16px; position: relative;
+      background: var(--ink-color-global-surface-brown-default); padding: 16px; margin-top: 12px; }
+    .st.cards tr.row > td, .st.cards tr.row-err > td, .st.cards tr.xp > td { display: block; width: auto; min-width: 0; padding: 0; border: 0; overflow: visible; text-align: left; background: none; }
+    .st.cards td[data-l]::before { content: attr(data-l); display: block; font-size: 12px; line-height: 16px; color: var(--ink-color-global-brand-gray-70); margin-bottom: 4px; }
+    .st.cards td.who { grid-column: 1 / -1; padding-right: 40px; }
+    .st.cards td.rm { position: absolute; top: 12px; right: 12px; }
+    .st.cards td.terms { grid-column: 1 / -1; }
+    .st.cards td.rel > .muted { padding-top: 0; }
+    .st.cards tr.row-err, .st.cards tr.xp { display: block; background: var(--ink-color-global-surface-brown-default); padding: 0 16px 16px; }
+    .st.cards tr.row-err > td:first-child { display: none; }
+    .st.cards tr.row:has(+ tr.row-err, + tr.xp) { padding-bottom: 12px; }
+    .st.cards tr.refused { box-shadow: inset 3px 0 0 var(--ink-color-global-brand-red-60); }
+    .st.cards tr.refused > td:first-child { box-shadow: none; }
+
     .who .link { margin-top: 4px; }
     .who-new { display: grid; gap: 6px; grid-template-columns: minmax(0, 1fr); }
-    .exp { width: 28px; height: 28px; min-height: 0; padding: 0; display: inline-grid; place-items: center; background: none; border-color: transparent; }
-    .exp::before {
-      content: ""; width: 12px; height: 12px; background-color: var(--ink-color-global-brand-gray-90);
-      -webkit-mask: var(--ink-glyph-caret) center / 12px no-repeat; mask: var(--ink-glyph-caret) center / 12px no-repeat;
-      transform: rotate(-90deg); transition: transform .15s ease;
-    }
-    .exp[aria-expanded="true"]::before { transform: none; }
-    .exp.has, .exp.has:hover:not([disabled]) { border-color: var(--issuance-dif-line); background: var(--issuance-dif-bg); }
-    .pill { display: inline-flex; align-items: center; min-height: 0; padding: 2px 9px; border-radius: 999px; font-size: 12px; border: 1px solid var(--issuance-dif-line); background: var(--issuance-dif-bg); }
-    .pill:hover:not([disabled]) { background: var(--issuance-dif-bg); border-color: var(--ink-color-global-brand-orange-60); }
+    /* A matched name: Carta's own record, read-only — not a field this page edits. */
+    /* Name + email stack to the same 32px as the row's controls, so this cell never
+       sets the row height. */
+    .who-fixed { line-height: 18px; }
+    .who-fixed b { display: block; font-weight: 500; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .who-fixed + .hint { margin-top: 0; line-height: 14px; }
+    /* The row's one way into "More terms" — always a button, tinted only once it
+       actually holds a different answer. Named apart from the unrelated status
+       `.pill` (the "issued" screen's Draft/etc. chip) so the two never collide. */
+    .term-toggle { display: inline-flex; align-items: center; min-height: 0; padding: 2px 9px; border-radius: 999px; font-size: 12px; border: 1px solid var(--ink-color-global-brand-gray-50); background: var(--ink-color-global-brand-white); color: var(--ink-color-global-brand-gray-90); }
+    .term-toggle:hover:not([disabled]) { background: var(--ink-color-global-brand-gray-10); border-color: var(--ink-color-global-brand-gray-70); }
+    .term-toggle.has { border-color: var(--issuance-dif-line); background: var(--issuance-dif-bg); }
+    .term-toggle.has:hover:not([disabled]) { background: var(--issuance-dif-bg); }
     .xp-h { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; margin-bottom: var(--ink-spacing-global-vertical-small); font-size: 13px; }
     .xp-h b { font-weight: 600; }
     .xp-h .hint { margin: 0; }
@@ -231,8 +299,10 @@
     .f.dif input, .f.dif select { background: var(--issuance-dif-bg); border-color: var(--issuance-dif-line); }
     .f.dif .reset { position: absolute; top: 0; right: 0; margin: 0; padding: 0; font-size: 11px; line-height: 16px; }
     .combo { position: relative; }
+    /* `position: fixed`, not `absolute`: suggest() sets left/top/width inline from
+       getBoundingClientRect(), so the .st-scroll wrapper's overflow can't clip it. */
     .sug {
-      list-style: none; position: absolute; z-index: 5; inset-inline: 0; top: calc(100% + 2px);
+      list-style: none; position: fixed; z-index: 5;
       max-height: 210px; overflow-y: auto;
       background: var(--ink-color-global-brand-white);
       border: 1px solid var(--ink-color-global-brand-gray-50); border-radius: 6px;
@@ -275,12 +345,15 @@
     }
     .link:hover:not([disabled]) { background: none; color: var(--ink-color-global-brand-black); }
 
-    .add { margin-top: var(--ink-spacing-global-vertical-xsmall); }
+    .add-hint { margin: var(--ink-spacing-global-vertical-small) 0 0; font-size: 13px; color: var(--ink-color-global-brand-gray-70); }
 
     /* The primary action sits bottom-right; Back to edit anchors the left, and the reason
        line gets a row of its own under the buttons rather than splitting them. */
-    footer { margin-top: var(--ink-spacing-global-vertical-medium); display: flex; flex-wrap: wrap; gap: var(--ink-spacing-global-vertical-xsmall); align-items: center; justify-content: flex-end; }
+    footer { margin-top: var(--ink-spacing-global-vertical-medium); padding-top: var(--ink-spacing-global-vertical-small); border-top: 1px solid var(--ink-color-global-brand-gray-30); display: flex; flex-wrap: wrap; gap: var(--ink-spacing-global-vertical-xsmall); align-items: center; justify-content: flex-end; }
     footer #back-to-edit { margin-right: auto; }
+    /* Ink's secondary button: a white face beside the black primary. */
+    footer button:not(.primary) { background: var(--ink-color-global-brand-white); }
+    footer button:not(.primary):hover:not([disabled]) { background: var(--ink-color-global-brand-gray-10); }
     .primary {
       background: var(--ink-color-global-brand-black);
       color: var(--ink-color-global-brand-white);
@@ -473,23 +546,14 @@
     .sheet h3:focus, h1:focus, .note:focus { outline: none; }
     .fail-note { color: var(--ink-color-global-brand-red-60); }
 
-    /* Narrow: each stakeholder stacks into a block, and its fields name themselves. */
+    /* Narrow: same scrolling table as desktop (proven at this width already by
+       .rv-scroll's own review table) — just a tighter grip on cell padding, not a
+       second layout to keep in sync with the first. */
     @media (max-width: 720px) {
-      .st, .st tbody, .st tr, .st td { display: block; }
-      .st thead { display: none; }
-      .st tr.row { display: grid; grid-template-columns: 36px minmax(0, 1fr) minmax(0, 1fr) 40px; grid-template-areas: "exp who who rm" ". rel n n" ". terms terms terms"; column-gap: 8px; padding: 8px 6px; border-bottom: 1px solid var(--ink-color-global-brand-gray-30); }
-      .st td, .st td.ic, .st td.terms { border: 0; padding: 0; width: auto; text-align: left; }
-      .st td.ic { grid-area: exp; padding-top: 2px; }
-      .st td.who { grid-area: who; }
-      .st td.rm { grid-area: rm; padding-top: 0; }
-      .st td.rel { grid-area: rel; margin-top: 8px; width: auto; }
-      .st tr.row.on { background: var(--ink-color-global-brand-gray-10); }
-      .st tr.on > td { background: none; }
-      .st td.n { grid-area: n; margin-top: 8px; width: auto; }
-      .st td.terms { grid-area: terms; margin-top: 8px; }
-      .st td.rel label.vh, .st td.n label.vh { position: static !important; width: auto; height: auto; margin: 0 0 3px; overflow: visible; clip: auto; }
-      .st tr.xp > td { padding: 4px 12px 14px; }
-      .summary { margin-left: 0; flex-basis: 100%; }
+      .st th, .st td { padding: 6px 8px; }
+      .st .who { width: 160px; }
+      .st .rel { width: 130px; }
+      .st .core { width: 150px; min-width: 150px; }
     }
     @media (max-width: 560px) {
       h1 { font-size: 22px; }

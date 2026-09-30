@@ -27,12 +27,14 @@ function promptPrefill() {
   let rows = Array.isArray(SEED.rows) && SEED.rows.length
     ? SEED.rows
     : seedPeople().map((p) => ({ name: String(p.name), email: p.email || "",
-      quantity: p.quantity == null || p.quantity === "" ? qty : String(p.quantity) }));
+      quantity: p.quantity == null || p.quantity === "" ? qty : String(p.quantity),
+      terms: p.terms && typeof p.terms === "object" ? p.terms : undefined }));
   if (!rows.length && qty) rows = [{ quantity: qty }];
   const p = {};
   if (rows.length) p.rows = rows;
   if (SEED.issue_date) p.issueDate = SEED.issue_date;
   if (SEED.terms && typeof SEED.terms === "object") p.terms = SEED.terms;
+  if (SEED.source && typeof SEED.source === "object") p.source = SEED.source;
   return p;
 }
 
@@ -68,7 +70,8 @@ function reapplyEdits(base, edited) {
     const now = S.rows[i], from = base.rows[i];
     if (!now || !from) return;
     for (const k of ROW_EDITABLE) if (was[k] !== from[k]) now[k] = was[k];
-    if (Object.keys(was.ov).length) now.ov = was.ov;
+    // The document's own answers travel with the row's terms, or they read as edits.
+    if (Object.keys(was.ov).length) { now.ov = was.ov; now.seeded = was.seeded; }
   });
   for (let i = base.rows.length; i < edited.rows.length; i++) S.rows.push(edited.rows[i]);
 }
@@ -122,6 +125,9 @@ async function bootstrap(base, resume) {
   if (rowsEdited(base, edited)) S.rows = edited.rows;
   else keepSeededRows(base.rows, d);
   reapplyEdits(base, edited);
+  // ingest() re-seeded the shared terms from Carta's prefill, which never carries a
+  // per-person term, so a field the document left mixed has to be found again.
+  detectMixedShared();
   const fat = ingestSections(d);
   if (fat) settleTerms(); else render();
   return fat;
