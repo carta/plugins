@@ -1,15 +1,17 @@
 ---
 name: carta-home-build
 description: >
-  Builds or rebuilds the Carta Home live artifact — a Cowork dashboard home page that works
-  for any Carta firm. Summary cards for Schedule of Investments, Fund Performance, P&L,
-  Balance Sheet, LP Reporting, Portfolio Valuations, ManCo actuals and Form ADV, plus a
-  Skill Directory of copyable prompts. Auto-detects the active firm from the Carta MCP
+  Builds or rebuilds the Carta Home live artifact — a Cowork dashboard home page that
+  works for any Carta firm. Summary cards for Schedule of Investments, Fund Performance,
+  P&L, Balance Sheet, LP Reporting, Portfolio Valuations, ManCo actuals and Form ADV, plus
+  a Skill Directory of copyable prompts. Auto-detects the active firm from the Carta MCP
   context. Use whenever the user asks to "build the carta home artifact", "rebuild carta
-  home", "set up the carta home page", or "deploy carta home". Do NOT use it to build or
-  change one dashboard: a Schedule of Investments is carta-soi, a fund performance page is
-  carta-fund-performance. For a company's cap table use carta-cap-table's
-  carta-captable-home-build; for a CRM home use carta-crm's carta-crm-home-build.
+  home", "create my Carta Home", "set up Carta Home", "set up the carta home page", or
+  "deploy carta home" — and to open an existing one: "open Carta Home", "where's my Carta
+  Home", "open my home". Do NOT use it to build or change one dashboard: a
+  Schedule of Investments is carta-soi, a fund performance page is carta-fund-performance.
+  For a company's cap table use carta-cap-table's carta-captable-home-build; for a CRM
+  home use carta-crm's carta-crm-home-build.
 model: sonnet
 allowed-tools:
   # The only source for a connector's name
@@ -31,6 +33,8 @@ allowed-tools:
   # The dashboard fan-out (Step 5). A skill that isn't installed is skipped.
   - Skill
   - AskUserQuestion
+  # Draws the pin sketch in "Keeping Carta Home handy" where inline visuals are supported.
+  - mcp__*__show_widget
   - Bash(uv run *build_artifact.py *)
   - Bash(find ~ -name "build_artifact.py"*)
   - Bash(find /sessions -name "build_artifact.py"*)
@@ -39,9 +43,9 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.50.0</carta-plugin>
+<carta-plugin>carta-investors:6.50.1</carta-plugin>
 
-# Carta Home — Build / Redeploy
+# Carta Home — Build / Redeploy / Open
 
 Deploys the `carta-home` live artifact, published as **`Carta Home - <firm>`**. It is
 **assembled** from source parts in this skill's `resources/` directory (template + CSS +
@@ -359,6 +363,25 @@ carrying **📊** belongs to carta-cap-table's `carta-captable-home-build` and h
 company's cap table; leave it alone, publishing over it would replace that cap table with
 this firm's dashboard.
 
+### Step 2b: Open instead of rebuilding
+
+If the user asked to **open or find** Home ("open Carta Home", "where's my Carta Home",
+"open my home") — not to build, rebuild or deploy — and Step 2 found this firm's Home, do not
+rebuild. Send this as the whole reply, and ask no question:
+
+> Here's your Carta Home: <Carta Home link, titled with the artifact's name>
+>
+> Tip: click its title and choose **Pin** to keep it one click away. Or just say "Open
+> Carta Home" anytime.
+
+The user came to find Home, so the link is the answer; a question or pop-up here pulls
+their attention away from it before they've opened it. Don't suggest a newer version
+exists; the welcome card tells users when a rebuild is worth it, and "Rebuild Carta Home"
+still works if that's what they meant. If they then ask how to pin it, give "Keeping
+Carta Home handy" below.
+
+If Step 2 found no Home for this firm, say so and build it (Step 3 onward).
+
 ### Step 3: Build the self-contained artifact (no need to read any HTML)
 
 Run the build script — it assembles CSS + config + app into one file and substitutes the
@@ -536,6 +559,60 @@ accept, every card shows its no-connector state.
 ### Step 8: Confirm
 
 Give the user the artifact's URL, name the firm in its title, and tell them it is live.
+Then ask with `AskUserQuestion` (or as a plain-text list), passing each option's `label`
+and `description` exactly as below:
+
+- question: "Want to make Carta Home easy to find?"
+- label "Show me how" · description "Pin or bookmark it in a few seconds" → give
+  "Keeping Carta Home handy" below.
+- label "Not now" · description "Just say 'Open Carta Home' anytime" → reply with that
+  line.
+
+## Keeping Carta Home handy
+
+_Last verified: 2026-09-28._ Nothing can pin an artifact for the user, so show them where.
+If you have a `show_widget` tool, call it with the SVG below as `widget_code`, unchanged.
+If you don't, or it fails, skip the sketch silently — never tell the user it couldn't be
+drawn. Either way, send the text below as the whole reply, with nothing before or after it.
+
+```svg
+<svg viewBox="0 0 680 330" xmlns="http://www.w3.org/2000/svg" font-family="inherit">
+<style>.l{fill:var(--p);font-size:14px}.s{fill:var(--s);font-size:13px}.box{fill:none;stroke:var(--t);stroke-width:1.5}.bar{fill:var(--t);opacity:.3}</style>
+<rect x="20" y="20" width="640" height="260" rx="12" class="box"/>
+<rect x="36" y="34" width="250" height="30" rx="8" fill="var(--bg2)" stroke="var(--text-accent)" stroke-width="1.5"/>
+<text x="50" y="54" class="l">Carta Home - Your Firm  ⌄</text>
+<rect x="36" y="74" width="190" height="186" rx="10" fill="var(--bg2)" stroke="var(--t)"/>
+<rect x="50" y="90" width="120" height="7" rx="3" class="bar"/>
+<rect x="50" y="110" width="100" height="7" rx="3" class="bar"/>
+<rect x="50" y="130" width="130" height="7" rx="3" class="bar"/>
+<rect x="50" y="150" width="90" height="7" rx="3" class="bar"/>
+<rect x="44" y="168" width="174" height="30" rx="6" fill="none" stroke="var(--text-accent)" stroke-width="1.5"/>
+<text x="58" y="188" class="l">Pin</text>
+<rect x="50" y="212" width="110" height="7" rx="3" class="bar"/>
+<rect x="50" y="232" width="80" height="7" rx="3" class="bar"/>
+<rect x="250" y="80" width="390" height="180" rx="8" fill="var(--t)" opacity=".08"/>
+<text x="290" y="54" class="l">1. Click the Carta Home title at the top</text>
+<text x="290" y="186" class="l">2. Choose Pin</text>
+<line x1="286" y1="182" x2="222" y2="183" stroke="var(--t)" stroke-dasharray="3 3"/>
+<text x="290" y="208" class="s">Or: click ⋮ next to Carta Home in your sidebar → Pin</text>
+<text x="20" y="310" class="s">Rough sketch — can't find it? Type "Open Carta Home" in any chat.</text>
+</svg>
+```
+
+Text to send:
+
+> **Pin it**
+> With Carta Home open, click its title at the top and choose **Pin**.
+> Or click **⋮** next to Carta Home in your sidebar → **Pin**.
+>
+> **Bookmark it**
+> The link stays the same, even after a rebuild: <Carta Home url>
+>
+> **Tell Claude**
+> Type "Open Carta Home" in any chat.
+
+Keep the pin steps here; Step 2b's one-line tip must say the same thing. When the app's menus
+change, update the sketch and the text together and bump the date.
 
 ## If something fails
 
@@ -558,8 +635,8 @@ Give the user the artifact's URL, name the firm in its title, and tell them it i
 
 The artifact's SOI, P&L, and Fund Performance cards surface the same underlying data as
 `carta-explore-data` (ad-hoc DWH queries) and `carta-soi` (dedicated SOI artifact). Routing
-stays clean because this skill only triggers on explicit build/deploy/redeploy requests for
-the Carta Home dashboard as a whole, not on requests for one of those cards in isolation.
+stays clean because this skill only triggers on build/deploy/redeploy/open requests for the
+Carta Home dashboard as a whole, not on requests for one of those cards in isolation.
 
 ## Data sources (for reference)
 
