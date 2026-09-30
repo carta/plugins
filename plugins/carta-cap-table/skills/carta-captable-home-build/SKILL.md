@@ -3,8 +3,10 @@ name: carta-captable-home-build
 description: >
   Build or rebuild the Carta Home live artifact for one Carta cap-table company — a
   dashboard page published as "Carta Home - {company}". Use when the user asks to "build
-  cap table home", "rebuild cap table home", "deploy cap table home", or asks to build,
-  rebuild, deploy or set up Carta Home for a named company or corporation. For a fund firm's
+  cap table home", "rebuild cap table home", "deploy cap table home", "set up cap table
+  home", or asks to build, rebuild, deploy or set up Carta Home for a named company or
+  corporation — and to open an existing one: "open cap table home", "where's my cap table
+  home", or to open or find Carta Home for a named company. For a fund firm's
   Carta Home (SOI, fund performance, LP reporting), use carta-investors' carta-home-build
   instead; for a CRM home of pipeline, deals and contacts, use carta-crm's
   carta-crm-home-build.
@@ -27,12 +29,14 @@ allowed-tools:
   - Artifact
   # Step 0b picks between companies; Step 2 asks who an untitled legacy page belongs to.
   - AskUserQuestion
+  # Draws the pin sketch in "Keeping Carta Home handy" where inline visuals are supported.
+  - mcp__*__show_widget
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.90.34</carta-plugin>
+<carta-plugin>carta-cap-table:6.91.1</carta-plugin>
 
-# Carta Home (cap table) — Build / Redeploy
+# Carta Home (cap table) — Build / Redeploy / Open
 
 Deploys the `captable-home` live artifact, published as **`Carta Home - <company>`**. It is
 **assembled** from source parts in this skill's `resources/` directory (template + CSS +
@@ -307,6 +311,9 @@ or that sits under a parent org, is typed `fund` and still has a cap table.
 Carry forward the company's **name** and its **bare pk** — `id` with the
 `corporation_pk:` prefix stripped. The build rejects a still-prefixed id.
 
+**Asked to open or find Home, not build it?** Skip Step 1 and run Step 2 now, then
+Step 2b.
+
 ### Step 1: Build the self-contained artifact (no need to read any HTML)
 
 `<slug>` is the company name lowercased with non-alphanumerics collapsed to `-`, so two
@@ -338,6 +345,28 @@ dashboard with this cap table. A 📊 one was built for *some* company and the l
 say which, so do not assume it is this one: ask with `AskUserQuestion` whether to redeploy
 over it or publish a new page, and pass its `url` in Step 3 only if the user says it is this
 company's.
+
+### Step 2b: Open instead of rebuilding
+
+If the user asked to **open or find** Home ("open cap table home", "where's my cap table
+home", "open Carta Home for <Company>") — not to build, rebuild or deploy — and Step 2
+found this company's Home, do not rebuild. Send this as the whole reply, and ask no
+question:
+
+> Here's your Carta Home for <Company>: <Carta Home link, titled with the artifact's name>
+>
+> Tip: click its title and choose **Pin** to keep it one click away. Or just say "Open
+> cap table home" anytime.
+
+The user came to find Home, so the link is the answer; a question or pop-up here pulls
+their attention away from it before they've opened it. Don't suggest a newer version
+exists; the page's own update banner tells users when a rebuild is worth it, and "Rebuild
+cap table home" still works if that's what they meant. If they then ask how to pin it,
+give "Keeping Carta Home handy" below.
+
+A bare `Carta Home` 📊 page from Step 2 counts only if the user confirms it is this
+company's. If Step 2 found no Home for this company, say so and build it (Step 1, then
+Step 3 onward).
 
 ### Step 3: Publish the artifact
 
@@ -387,9 +416,64 @@ only place a viewer can catch a page pointed at the wrong environment before ope
 every card shows its no-connector state. If they want another company, say so plainly:
 run this skill again for that company and they get a second artifact.
 
+Then ask with `AskUserQuestion` (or as a plain-text list), passing each option's `label`
+and `description` exactly as below:
+
+- question: "Want to make Carta Home easy to find?"
+- label "Show me how" · description "Pin or bookmark it in a few seconds" → give
+  "Keeping Carta Home handy" below.
+- label "Not now" · description "Just say 'Open cap table home' anytime" → reply with
+  that line.
+
 If Step 2 left a bare `Carta Home` behind — the user said it wasn't this company's — say so
 too: it is an older page, and they can either rebuild for whichever company it holds or
 delete it from their artifact gallery.
+
+## Keeping Carta Home handy
+
+_Last verified: 2026-09-28._ Nothing can pin an artifact for the user, so show them where.
+If you have a `show_widget` tool, call it with the SVG below as `widget_code`, unchanged.
+If you don't, or it fails, skip the sketch silently — never tell the user it couldn't be
+drawn. Either way, send the text below as the whole reply, with nothing before or after it.
+
+```svg
+<svg viewBox="0 0 680 330" xmlns="http://www.w3.org/2000/svg" font-family="inherit">
+<style>.l{fill:var(--p);font-size:14px}.s{fill:var(--s);font-size:13px}.box{fill:none;stroke:var(--t);stroke-width:1.5}.bar{fill:var(--t);opacity:.3}</style>
+<rect x="20" y="20" width="640" height="260" rx="12" class="box"/>
+<rect x="36" y="34" width="250" height="30" rx="8" fill="var(--bg2)" stroke="var(--text-accent)" stroke-width="1.5"/>
+<text x="50" y="54" class="l">Carta Home - Your Company  ⌄</text>
+<rect x="36" y="74" width="190" height="186" rx="10" fill="var(--bg2)" stroke="var(--t)"/>
+<rect x="50" y="90" width="120" height="7" rx="3" class="bar"/>
+<rect x="50" y="110" width="100" height="7" rx="3" class="bar"/>
+<rect x="50" y="130" width="130" height="7" rx="3" class="bar"/>
+<rect x="50" y="150" width="90" height="7" rx="3" class="bar"/>
+<rect x="44" y="168" width="174" height="30" rx="6" fill="none" stroke="var(--text-accent)" stroke-width="1.5"/>
+<text x="58" y="188" class="l">Pin</text>
+<rect x="50" y="212" width="110" height="7" rx="3" class="bar"/>
+<rect x="50" y="232" width="80" height="7" rx="3" class="bar"/>
+<rect x="250" y="80" width="390" height="180" rx="8" fill="var(--t)" opacity=".08"/>
+<text x="290" y="54" class="l">1. Click the Carta Home title at the top</text>
+<text x="290" y="186" class="l">2. Choose Pin</text>
+<line x1="286" y1="182" x2="222" y2="183" stroke="var(--t)" stroke-dasharray="3 3"/>
+<text x="290" y="208" class="s">Or: click ⋮ next to Carta Home in your sidebar → Pin</text>
+<text x="20" y="310" class="s">Rough sketch — can't find it? Type "Open cap table home" in any chat.</text>
+</svg>
+```
+
+Text to send:
+
+> **Pin it**
+> With Carta Home open, click its title at the top and choose **Pin**.
+> Or click **⋮** next to Carta Home in your sidebar → **Pin**.
+>
+> **Bookmark it**
+> The link stays the same, even after a rebuild: <Carta Home url>
+>
+> **Tell Claude**
+> Type "Open cap table home" in any chat.
+
+Keep the pin steps here; Step 2b's one-line tip must say the same thing. When the app's menus
+change, update the sketch and the text together and bump the date.
 
 ## Data sources (for reference)
 
