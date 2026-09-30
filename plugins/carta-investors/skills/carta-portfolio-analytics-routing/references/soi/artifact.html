@@ -1,5 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
+<!-- This page exists twice, byte for byte: carta-soi/references/artifact.html and
+     carta-portfolio-analytics-routing/references/soi/artifact.html. carta-soi is
+     publish: false, so the published router carries its own copy. Edit both;
+     tests/carta-investors/test_router_mirror_parity.py fails if they differ. -->
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -14,35 +18,40 @@
     <style>
         :root {
             color-scheme: light dark;
-            --surface-bg: light-dark(#FFFFFF, rgb(18 18 18));
-            --surface-underlay: light-dark(#F1F1F1, #2D2D2D);
-            --surface-info-subtle: light-dark(#EAF0F8, #122948);
-            /* Sand (Ink's "brown" scale, steps 10/20/30/40) for the asset/underlying
-               row backgrounds specifically — not a site-wide swap of
-               --surface-underlay, which stays the cooler gray everywhere else
-               (hover states, shimmer, tile backgrounds, and now asset-row's own
-               hover too — every level's hover reads as the same neutral gray,
-               only the resting backgrounds carry the sand distinction). Light
-               mode only: a saturated brown reads as loud against this page's
-               otherwise near-monochrome dark theme, so dark mode falls back to
-               the same restrained neutral grays (gray-90/100) used elsewhere
-               on the page rather than a dark variant of the brown scale. */
-            --surface-sand: light-dark(#FBFAF9, #2D2D2D);
-            --surface-sand-deep: light-dark(#F8F8F7, #202020);
-            --text-default: light-dark(#1A1A1A, #EDEDED);
-            --text-subtle: light-dark(#656B6B, #A7AAAA);
-            --border-default: light-dark(#A7AAAA, #656B6B);
-            --border-subtle: light-dark(#DEDFDF, #2D2D2D);
-            --border-focus-default: light-dark(#285DA3, #8BABD6);
-            --border-focus-light: light-dark(#C0D1E9, #1A3E6D);
-            --negative-strong: light-dark(#E52431, #FAD9D7);
-            --positive-strong: light-dark(#2D9E90, #2D9E90);
-            --link-default: light-dark(#285DA3, #8BABD6);
-            --link-hover: light-dark(#1A3E6D, #4176BC);
-            /* Ink feedback-info-strong. Close to --link-default in light mode but a
-               different value in dark, so the Bubble can't just borrow the link color. */
-            --feedback-info-strong: light-dark(#285DA3, #2C67B5);
-            --surface-lightgray-hover: light-dark(#DEDFDF, #2D2D2D);
+            /* Ink tokens — values copied verbatim from theme-with-ink/tokens.css.
+               Inline only what this view uses. */
+            --ink-color-global-surface-background-default: light-dark(#FFFFFF, rgb(18 18 18));
+            --ink-color-global-surface-background-underlay: light-dark(#F1F1F1, #2D2D2D);
+            --ink-color-global-surface-lightgray-hover: light-dark(#DEDFDF, #2D2D2D);
+            --ink-color-global-surface-disabled: light-dark(#EDEDED, #394040);
+            --ink-color-global-feedback-info-subtle: light-dark(#EAF0F8, #122948);
+            --ink-color-global-feedback-info-strong: light-dark(#285DA3, #2C67B5);
+            --ink-color-global-feedback-positive-strong: light-dark(#2D9E90, #2D9E90);
+            --ink-color-global-feedback-negative-strong: light-dark(#E52431, #FAD9D7);
+            --ink-color-global-text-default: light-dark(#1A1A1A, #EDEDED);
+            --ink-color-global-text-subtle: light-dark(#656B6B, #A7AAAA);
+            --ink-color-global-text-disabled: light-dark(#CECFCF, #656B6B);
+            --ink-color-global-border-default: light-dark(#A7AAAA, #656B6B);
+            --ink-color-global-border-subtle: light-dark(#DEDFDF, #2D2D2D);
+            --ink-color-global-border-focus-default: light-dark(#285DA3, #8BABD6);
+            --ink-color-global-border-focus-light: light-dark(#C0D1E9, #1A3E6D);
+            --ink-color-global-link-default: light-dark(#285DA3, #8BABD6);
+            --ink-color-global-link-hover: light-dark(#1A3E6D, #4176BC);
+            --ink-button-background-color-primary-base-default: light-dark(#1A1A1A, #FFFFFF);
+            --ink-button-background-color-primary-base-hover: light-dark(#202020, #CECFCF);
+            --ink-button-font-color-primary-base: light-dark(#FFFFFF, #1A1A1A);
+            --ink-color-global-brand-white: #FFFFFF;
+            --ink-color-global-brand-gray-70: #9C9F9F;
+            --ink-color-global-brand-gray-90: #394040;
+            --ink-color-global-brand-gray-100: #202020;
+            --ink-color-global-brand-brown-10: #FBFAF9;
+            --ink-color-global-brand-brown-20: #F8F8F7;
+            /* Sand (Ink's brown-10/20) for asset/underlying row backgrounds only.
+               Light mode only: dark mode falls back to the page's neutral grays
+               (#2D2D2D is Ink's underlay dark arm; gray-100) rather than a dark
+               brown, which reads as loud on this near-monochrome dark theme. */
+            --soi-surface-sand: light-dark(var(--ink-color-global-brand-brown-10), #2D2D2D);
+            --soi-surface-sand-deep: light-dark(var(--ink-color-global-brand-brown-20), var(--ink-color-global-brand-gray-100));
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -50,14 +59,14 @@
         /* Fallback for any borderless focusable element (links, native buttons) —
            bordered controls get their own border-recolor + ring above instead. */
         :focus-visible {
-            outline: 2px solid var(--border-focus-default);
-            box-shadow: 0 0 0 4px var(--border-focus-light);
+            outline: 2px solid var(--ink-color-global-border-focus-default);
+            box-shadow: 0 0 0 4px var(--ink-color-global-border-focus-light);
         }
 
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: var(--surface-bg);
-            color: var(--text-default);
+            background: var(--ink-color-global-surface-background-default);
+            color: var(--ink-color-global-text-default);
             padding: 48px;
         }
 
@@ -76,13 +85,13 @@
             width: 64px;
             height: 32px;
             margin-bottom: 24px;
-            color: var(--text-default);
+            color: var(--ink-color-global-text-default);
         }
 
         .header-eyebrow {
             font-size: 13px;
             font-weight: 400;
-            color: var(--text-subtle);
+            color: var(--ink-color-global-text-subtle);
             letter-spacing: 0.02em;
             margin-bottom: 2px;
         }
@@ -92,7 +101,7 @@
             font-size: 28px;
             font-weight: 400;
             line-height: 48px;
-            color: var(--text-default);
+            color: var(--ink-color-global-text-default);
         }
 
         /* ── Shimmer loading state ── */
@@ -102,7 +111,7 @@
         }
 
         .shimmer-bone {
-            background: linear-gradient(90deg, var(--surface-underlay) 25%, var(--border-default) 50%, var(--surface-underlay) 75%);
+            background: linear-gradient(90deg, var(--ink-color-global-surface-background-underlay) 25%, var(--ink-color-global-border-default) 50%, var(--ink-color-global-surface-background-underlay) 75%);
             background-size: 800px 100%;
             animation: shimmer 1.5s infinite ease-in-out;
             border-radius: 4px;
@@ -110,8 +119,8 @@
 
         .shimmer-metrics {
             display: flex;
-            border-left: 4px solid var(--border-subtle);
-            background: var(--surface-underlay);
+            border-left: 4px solid var(--ink-color-global-border-subtle);
+            background: var(--ink-color-global-surface-background-underlay);
             padding: 14px 16px;
             margin-bottom: 24px;
             gap: 16px;
@@ -128,7 +137,7 @@
             display: flex;
             gap: 12px;
             padding: 10px 0;
-            border-bottom: 1px solid var(--border-subtle);
+            border-bottom: 1px solid var(--ink-color-global-border-subtle);
             margin-bottom: 4px;
         }
         .shimmer-th { height: 14px; flex: 1; }
@@ -138,7 +147,7 @@
             display: flex;
             gap: 12px;
             padding: 12px 0;
-            border-bottom: 1px solid var(--surface-underlay);
+            border-bottom: 1px solid var(--ink-color-global-surface-background-underlay);
         }
         .shimmer-td { height: 14px; flex: 1; }
         .shimmer-td:first-child { flex: 2; }
@@ -159,8 +168,8 @@
             grid-template-columns: repeat(2, minmax(0, 1fr));
             column-gap: 16px;
             row-gap: 12px;
-            border: 1px solid var(--border-subtle);
-            background: var(--surface-bg);
+            border: 1px solid var(--ink-color-global-border-subtle);
+            background: var(--ink-color-global-surface-background-default);
             padding: 14px 16px;
             margin-bottom: 24px;
         }
@@ -175,7 +184,7 @@
         /* 2x2: divider down the middle, divider between the two rows. */
         @media (min-width: 641px) and (max-width: 899px) {
             .metric-item {
-                border-right: 1px solid var(--border-subtle);
+                border-right: 1px solid var(--ink-color-global-border-subtle);
                 padding-right: 16px;
             }
             .metric-item:nth-child(2n) {
@@ -183,7 +192,7 @@
                 padding-right: 0;
             }
             .metric-item:nth-child(-n+2) {
-                border-bottom: 1px solid var(--border-subtle);
+                border-bottom: 1px solid var(--ink-color-global-border-subtle);
                 padding-bottom: 12px;
             }
         }
@@ -192,7 +201,7 @@
         @media (min-width: 900px) {
             .metrics-strip { grid-template-columns: repeat(4, minmax(0, 1fr)); }
             .metric-item {
-                border-right: 1px solid var(--border-subtle);
+                border-right: 1px solid var(--ink-color-global-border-subtle);
                 padding-right: 16px;
             }
             .metric-item:last-child {
@@ -205,7 +214,7 @@
         @media (max-width: 640px) {
             .metrics-strip { grid-template-columns: 1fr; }
             .metric-item {
-                border-bottom: 1px solid var(--border-subtle);
+                border-bottom: 1px solid var(--ink-color-global-border-subtle);
                 padding-bottom: 12px;
             }
             .metric-item:last-child {
@@ -216,7 +225,7 @@
 
         .metric-label {
             font-size: 13px;
-            color: var(--text-subtle);
+            color: var(--ink-color-global-text-subtle);
             margin-bottom: 4px;
             font-weight: 500;
             line-height: 20px;
@@ -229,7 +238,7 @@
             font-size: 20px;
             font-weight: 500;
             line-height: 28px;
-            color: var(--text-default);
+            color: var(--ink-color-global-text-default);
             font-variant-numeric: tabular-nums;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -257,8 +266,8 @@
             align-items: stretch;
             width: fit-content;
             max-width: 100%;
-            background-color: var(--surface-bg);
-            border: 1px solid var(--border-subtle);
+            background-color: var(--ink-color-global-surface-background-default);
+            border: 1px solid var(--ink-color-global-border-subtle);
         }
 
         /* Ink ghost button — transparent at rest, light gray on hover. Ink's own
@@ -272,7 +281,7 @@
             border: 1px solid transparent;
             border-radius: 4px;
             background: transparent;
-            color: var(--text-default);
+            color: var(--ink-color-global-text-default);
             font-family: inherit;
             font-size: 12px;
             font-weight: 500;
@@ -281,11 +290,11 @@
             appearance: none;
         }
 
-        .ink-btn--ghost:hover { background: var(--surface-lightgray-hover); }
+        .ink-btn--ghost:hover { background: var(--ink-color-global-surface-lightgray-hover); }
         .ink-btn--ghost:focus-visible {
             outline: 0;
-            border-color: var(--border-focus-default);
-            box-shadow: 0 0 0 4px var(--border-focus-light);
+            border-color: var(--ink-color-global-border-focus-default);
+            box-shadow: 0 0 0 4px var(--ink-color-global-border-focus-light);
         }
         .ink-btn--ghost[hidden] { display: none; }
 
@@ -298,7 +307,7 @@
         }
 
         .switcher-segment + .switcher-segment {
-            border-left: 1px solid var(--border-subtle);
+            border-left: 1px solid var(--ink-color-global-border-subtle);
         }
 
         /* Stacked, the segments are full-width rows: a left divider would double
@@ -313,7 +322,7 @@
             .switcher-row .ink-btn--ghost { margin-left: -12px; }
             .switcher-segment + .switcher-segment {
                 border-left: none;
-                border-top: 1px solid var(--border-subtle);
+                border-top: 1px solid var(--ink-color-global-border-subtle);
             }
             .fund-switcher-label { min-width: 48px; }
             .switcher-segment { position: relative; }
@@ -324,7 +333,7 @@
 
         .fund-switcher-label {
             font-size: 13px;
-            color: var(--text-subtle);
+            color: var(--ink-color-global-text-subtle);
             font-weight: 500;
             white-space: nowrap;
         }
@@ -350,13 +359,13 @@
             font-family: inherit;
             font-size: 13px;
             font-weight: 500;
-            color: var(--text-default);
+            color: var(--ink-color-global-text-default);
             cursor: pointer;
             text-align: left;
         }
 
         .combo-trigger:focus-visible {
-            outline: 2px solid var(--border-focus-default);
+            outline: 2px solid var(--ink-color-global-border-focus-default);
             outline-offset: 3px;
         }
 
@@ -386,10 +395,10 @@
             height: 18px;
             min-width: 18px;
             padding: 0 6px;
-            border: 1px solid var(--feedback-info-strong);
+            border: 1px solid var(--ink-color-global-feedback-info-strong);
             border-radius: 999px;
-            background: var(--surface-info-subtle);
-            color: var(--feedback-info-strong);
+            background: var(--ink-color-global-feedback-info-subtle);
+            color: var(--ink-color-global-feedback-info-strong);
             font-size: 12px;
             font-weight: 500;
             line-height: 1;
@@ -421,9 +430,9 @@
         .ink-chk > .ink-chk-box {
             width: 20px;
             height: 20px;
-            border: 1px solid var(--border-default);
+            border: 1px solid var(--ink-color-global-border-default);
             border-radius: 4px;
-            background: #FFFFFF;
+            background: var(--ink-color-global-brand-white);
             display: inline-flex;
             align-items: center;
             justify-content: center;
@@ -433,16 +442,16 @@
         .ink-chk > .ink-chk-box > svg {
             display: block;
             opacity: 0;
-            color: #394040;
+            color: var(--ink-color-global-brand-gray-90);
         }
 
-        .combo-option:hover .ink-chk > .ink-chk-box { border-color: light-dark(#394040, #9C9F9F); }
+        .combo-option:hover .ink-chk > .ink-chk-box { border-color: light-dark(var(--ink-color-global-brand-gray-90), var(--ink-color-global-brand-gray-70)); }
         .ink-chk.is-checked > .ink-chk-box > .ink-chk-check,
         .ink-chk.is-mixed > .ink-chk-box > .ink-chk-dash { opacity: 1; }
 
         .ink-chk > input:focus-visible + .ink-chk-box {
-            border-color: var(--border-focus-default);
-            box-shadow: 0 0 0 4px var(--border-focus-light);
+            border-color: var(--ink-color-global-border-focus-default);
+            box-shadow: 0 0 0 4px var(--ink-color-global-border-focus-light);
         }
 
         /* Ink's Dropdown.Trigger caret: 16px, inheriting the trigger's own color
@@ -467,8 +476,8 @@
             z-index: 50;
             min-width: 320px;
             max-width: 380px;
-            background: var(--surface-bg);
-            border: 1px solid var(--border-subtle);
+            background: var(--ink-color-global-surface-background-default);
+            border: 1px solid var(--ink-color-global-border-subtle);
             /* Ink Dropdown surface: radius-subtle + elevation shadow-medium. */
             border-radius: 4px;
             box-shadow: 0 4px 20px 0 rgb(0 0 0 / 0.1);
@@ -478,7 +487,7 @@
         /* Right-anchored when the trigger sits near the viewport edge. */
         .combo-panel.align-right { left: auto; right: 0; }
 
-        .combo-search-wrap { padding: 8px; border-bottom: 1px solid var(--border-subtle); }
+        .combo-search-wrap { padding: 8px; border-bottom: 1px solid var(--ink-color-global-border-subtle); }
 
         /* Ink Input: 40px tall, radius-subtle, and the interactive border weight —
            an input reads as clickable, a container border doesn't. */
@@ -489,16 +498,16 @@
             font-family: inherit;
             font-size: 14px;
             line-height: 1;
-            color: var(--text-default);
-            background: var(--surface-bg);
-            border: 1px solid var(--border-default);
+            color: var(--ink-color-global-text-default);
+            background: var(--ink-color-global-surface-background-default);
+            border: 1px solid var(--ink-color-global-border-default);
             border-radius: 4px;
             outline: none;
         }
 
         .combo-search:focus {
-            border-color: var(--border-focus-default);
-            box-shadow: 0 0 0 4px var(--border-focus-light);
+            border-color: var(--ink-color-global-border-focus-default);
+            box-shadow: 0 0 0 4px var(--ink-color-global-border-focus-light);
         }
 
         .combo-list {
@@ -521,7 +530,7 @@
             padding: 8px 12px;
             font-size: 14px;
             line-height: 24px;
-            color: var(--text-default);
+            color: var(--ink-color-global-text-default);
             cursor: pointer;
         }
 
@@ -529,7 +538,7 @@
         .combo-check {
             width: 14px;
             flex-shrink: 0;
-            color: var(--text-default);
+            color: var(--ink-color-global-text-default);
             visibility: hidden;
             display: flex;
             align-items: center;
@@ -545,7 +554,7 @@
         /* Pointer hover and keyboard focus share one highlight, so arrowing
            through the list reads the same as moving the mouse. */
         .combo-option:hover,
-        .combo-option.active { background: var(--surface-underlay); }
+        .combo-option.active { background: var(--ink-color-global-surface-background-underlay); }
 
         .combo-option-label {
             flex: 1;
@@ -561,7 +570,7 @@
         /* Firm-wide sits above the fund list rather than inside it, so it gets a
            rule under it — the one divider here that belongs to a component. */
         .combo-option.is-all {
-            border-bottom: 1px solid var(--border-subtle);
+            border-bottom: 1px solid var(--ink-color-global-border-subtle);
             margin-bottom: 2px;
             padding-bottom: 10px;
         }
@@ -569,7 +578,7 @@
 
         .combo-meta {
             font-size: 12px;
-            color: var(--text-subtle);
+            color: var(--ink-color-global-text-subtle);
             font-variant-numeric: tabular-nums;
             flex-shrink: 0;
         }
@@ -577,12 +586,12 @@
         .combo-empty, .combo-footer {
             padding: 10px 12px;
             font-size: 12px;
-            color: var(--text-subtle);
+            color: var(--ink-color-global-text-subtle);
         }
 
         /* Only multi-select panels get a footer, and it pairs Clear all with Apply. */
         .combo-footer {
-            border-top: 1px solid var(--border-subtle);
+            border-top: 1px solid var(--ink-color-global-border-subtle);
             text-transform: uppercase;
             letter-spacing: 0.06em;
             display: flex;
@@ -600,17 +609,17 @@
             font-weight: 500;
             letter-spacing: normal;
             text-transform: none;
-            color: var(--link-default);
+            color: var(--ink-color-global-link-default);
             cursor: pointer;
         }
 
-        .combo-clear-all:hover { color: var(--link-hover); text-decoration: underline; }
+        .combo-clear-all:hover { color: var(--ink-color-global-link-hover); text-decoration: underline; }
         .combo-clear-all:focus-visible {
-            outline: 2px solid var(--border-focus-default);
+            outline: 2px solid var(--ink-color-global-border-focus-default);
             outline-offset: 2px;
         }
         .combo-clear-all:disabled {
-            color: var(--text-subtle);
+            color: var(--ink-color-global-text-subtle);
             cursor: default;
             text-decoration: none;
             opacity: 0.6;
@@ -623,8 +632,8 @@
             padding: 0 12px;
             border: 1px solid transparent;
             border-radius: 4px;
-            background: light-dark(#1A1A1A, #FFFFFF);
-            color: light-dark(#FFFFFF, #1A1A1A);
+            background: var(--ink-button-background-color-primary-base-default);
+            color: var(--ink-button-font-color-primary-base);
             font-family: inherit;
             font-size: 12px;
             font-weight: 500;
@@ -635,15 +644,15 @@
             appearance: none;
         }
 
-        .ink-btn--primary:hover { background: light-dark(#202020, #CECFCF); }
+        .ink-btn--primary:hover { background: var(--ink-button-background-color-primary-base-hover); }
         .ink-btn--primary:focus-visible {
             outline: 0;
-            border-color: var(--border-focus-default);
-            box-shadow: 0 0 0 4px var(--border-focus-light);
+            border-color: var(--ink-color-global-border-focus-default);
+            box-shadow: 0 0 0 4px var(--ink-color-global-border-focus-light);
         }
         .ink-btn--primary:disabled {
-            background: light-dark(#EDEDED, #394040);
-            color: light-dark(#CECFCF, #656B6B);
+            background: var(--ink-color-global-surface-disabled);
+            color: var(--ink-color-global-text-disabled);
             cursor: not-allowed;
         }
 
@@ -683,7 +692,7 @@
         .search-icon {
             position: absolute;
             left: 10px;
-            color: var(--text-subtle);
+            color: var(--ink-color-global-text-subtle);
             pointer-events: none;
             display: flex;
             align-items: center;
@@ -691,20 +700,20 @@
 
         .search-input {
             padding: 6px 10px 6px 30px;
-            border: 1px solid var(--border-subtle);
+            border: 1px solid var(--ink-color-global-border-subtle);
             font-size: 13px;
             font-family: inherit;
             outline: none;
             width: 220px;
             line-height: 20px;
-            color: var(--text-default);
+            color: var(--ink-color-global-text-default);
             transition: border-color 0.15s;
         }
 
-        .search-input::placeholder { color: var(--text-subtle); }
+        .search-input::placeholder { color: var(--ink-color-global-text-subtle); }
         .search-input:focus {
-            border-color: var(--border-focus-default);
-            box-shadow: 0 0 0 4px var(--border-focus-light);
+            border-color: var(--ink-color-global-border-focus-default);
+            box-shadow: 0 0 0 4px var(--ink-color-global-border-focus-light);
         }
 
         /* ── Table ── */
@@ -728,7 +737,7 @@
             bottom: 0;
             width: 32px;
             pointer-events: none;
-            background: linear-gradient(to right, transparent, var(--surface-bg));
+            background: linear-gradient(to right, transparent, var(--ink-color-global-surface-background-default));
             opacity: 0;
             transition: opacity 0.15s;
         }
@@ -743,14 +752,14 @@
         }
 
         th {
-            background: var(--surface-bg);
+            background: var(--ink-color-global-surface-background-default);
             padding: 8px 12px;
             text-align: left;
             font-size: 13px;
             font-weight: 500;
             font-family: inherit;
-            color: var(--text-default);
-            border-bottom: 1px solid var(--text-default);
+            color: var(--ink-color-global-text-default);
+            border-bottom: 1px solid var(--ink-color-global-text-default);
             height: 40px;
             line-height: 20px;
             white-space: nowrap;
@@ -764,8 +773,8 @@
             transition: color 0.12s;
         }
 
-        th.sortable:hover { color: var(--text-subtle); }
-        th.sortable.dimmed { color: var(--text-subtle); }
+        th.sortable:hover { color: var(--ink-color-global-text-subtle); }
+        th.sortable.dimmed { color: var(--ink-color-global-text-subtle); }
 
         th.sortable .th-inner {
             display: inline-flex;
@@ -779,21 +788,21 @@
 
         .sort-indicator {
             display: inline-flex;
-            color: var(--border-default);
+            color: var(--ink-color-global-border-default);
             transition: color 0.12s;
         }
 
-        th.sortable.active .sort-indicator { color: var(--text-default); }
+        th.sortable.active .sort-indicator { color: var(--ink-color-global-text-default); }
 
         td {
             padding: 8px 12px;
             font-size: 13px;
-            color: var(--text-default);
+            color: var(--ink-color-global-text-default);
             line-height: 22px;
             height: 40px;
             vertical-align: middle;
             white-space: nowrap;
-            border-bottom: 1px solid var(--border-subtle);
+            border-bottom: 1px solid var(--ink-color-global-border-subtle);
         }
 
         tbody tr:last-child:not(.totals-row) td { border-bottom: none; }
@@ -804,7 +813,7 @@
             position: sticky;
             left: 0;
             z-index: 2;
-            background: var(--surface-bg);
+            background: var(--ink-color-global-surface-background-default);
             padding-left: 8px;
             /* Investment is the densest column — full company names, partnership
                interests, and an inline source tag all share it. Give it real
@@ -843,8 +852,7 @@
             user-select: none;
         }
 
-        tr.company-row:hover td,
-        tr.company-row:hover td:first-child { background: var(--surface-underlay); }
+        tr.company-row:hover td, tr.company-row:hover td:first-child { background: var(--ink-color-global-surface-background-underlay); }
 
         /* ── Asset rows ── */
         /* Two classes, not one: `.visible` flips display so the row occupies
@@ -855,16 +863,14 @@
         tr.asset-row.visible { display: table-row; }
         tr.asset-row.visible.shown { opacity: 1; }
 
-        tr.asset-row td,
-        tr.asset-row td:first-child { background: var(--surface-sand); }
+        tr.asset-row td, tr.asset-row td:first-child { background: var(--soi-surface-sand); }
 
         /* Each level's disclosure sits directly under its parent's label: one
            28px step (16px icon + 12px gap) per depth. An underlying row has no
            disclosure of its own, so its name takes that slot. */
         tr.asset-row td:first-child { padding-left: 36px; }
 
-        tr.asset-row:hover td,
-        tr.asset-row:hover td:first-child { background: var(--surface-underlay); }
+        tr.asset-row:hover td, tr.asset-row:hover td:first-child { background: var(--ink-color-global-surface-background-underlay); }
 
         /* ── Ink icons ── */
         .ink-icon {
@@ -882,13 +888,13 @@
             align-items: center;
             justify-content: center;
             width: 16px;
-            color: var(--border-default);
+            color: var(--ink-color-global-border-default);
             transition: color 0.15s;
             margin-right: 12px;
             flex-shrink: 0;
         }
 
-        tr.company-row:hover .expand-icon { color: var(--text-subtle); }
+        tr.company-row:hover .expand-icon { color: var(--ink-color-global-text-subtle); }
 
         .company-cell {
             display: flex;
@@ -897,7 +903,7 @@
 
         .company-name {
             font-weight: 600;
-            color: var(--text-default);
+            color: var(--ink-color-global-text-default);
         }
 
         /* ── Expand-all toggle (header) ── */
@@ -911,17 +917,17 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            color: var(--border-default);
+            color: var(--ink-color-global-border-default);
             cursor: pointer;
             transition: color 0.12s;
             flex-shrink: 0;
         }
 
-        .expand-all-toggle:hover { color: var(--text-default); }
+        .expand-all-toggle:hover { color: var(--ink-color-global-text-default); }
 
         /* ── Asset name ── */
         .asset-name {
-            color: var(--text-default);
+            color: var(--ink-color-global-text-default);
         }
 
         /* Name + its own secondary informational line (e.g. tranche count) —
@@ -934,7 +940,7 @@
 
         .tranche-note {
             font-size: 11px;
-            color: var(--text-subtle);
+            color: var(--ink-color-global-text-subtle);
             margin-top: 2px;
         }
 
@@ -952,8 +958,8 @@
             font-variant-numeric: tabular-nums;
         }
 
-        .gl-value.gain { color: var(--positive-strong); }
-        .gl-value.loss { color: var(--negative-strong); }
+        .gl-value.gain { color: var(--ink-color-global-feedback-positive-strong); }
+        .gl-value.loss { color: var(--ink-color-global-feedback-negative-strong); }
 
         .gl-arrow {
             font-size: 12px;
@@ -966,14 +972,14 @@
             border-bottom: none;
             font-weight: 500;
             height: 40px;
-            background: var(--surface-info-subtle);
+            background: var(--ink-color-global-feedback-info-subtle);
             vertical-align: middle;
         }
 
         .totals-row td:first-child {
             padding-left: 36px;
-            background: var(--surface-info-subtle);
-            color: var(--text-default);
+            background: var(--ink-color-global-feedback-info-subtle);
+            color: var(--ink-color-global-text-default);
             font-weight: 500;
         }
 
@@ -981,15 +987,15 @@
         .tooltip-trigger {
             text-decoration: underline;
             text-decoration-style: dotted;
-            text-decoration-color: var(--border-default);
+            text-decoration-color: var(--ink-color-global-border-default);
             text-underline-offset: 3px;
             cursor: default;
         }
 
         .tooltip-popup {
             position: fixed;
-            background: var(--text-default);
-            color: var(--surface-bg);
+            background: var(--ink-color-global-text-default);
+            color: var(--ink-color-global-surface-background-default);
             font-size: 12px;
             font-weight: 400;
             line-height: 18px;
@@ -1007,7 +1013,7 @@
             display: inline-flex;
             align-items: center;
             font-size: 14px;
-            color: var(--text-default);
+            color: var(--ink-color-global-text-default);
             cursor: default;
             margin-right: 5px;
             text-decoration: none !important;
@@ -1020,14 +1026,14 @@
         /* ── Currency tags (All Entities view) ── */
         .currency-tag {
             font-size: 11px;
-            color: var(--text-subtle);
+            color: var(--ink-color-global-text-subtle);
             margin-left: 4px;
         }
 
-        .mixed-badge { color: var(--text-subtle); }
+        .mixed-badge { color: var(--ink-color-global-text-subtle); }
 
-        .mixed-line { color: var(--text-default); }
-        .mixed-sep { color: var(--text-subtle); margin: 0 10px; }
+        .mixed-line { color: var(--ink-color-global-text-default); }
+        .mixed-sep { color: var(--ink-color-global-text-subtle); margin: 0 10px; }
 
         /* ── Empty / loading / error states ──
            One convention everywhere: neutral status is --text-subtle, errors are
@@ -1036,11 +1042,11 @@
         .empty-state {
             text-align: center;
             padding: 48px 16px;
-            color: var(--text-subtle);
+            color: var(--ink-color-global-text-subtle);
         }
 
         .empty-state.error {
-            color: var(--negative-strong);
+            color: var(--ink-color-global-feedback-negative-strong);
         }
 
         /* ── Underlying (look-through) rows — one level deeper than asset rows ──
@@ -1053,12 +1059,10 @@
         @media (prefers-reduced-motion: reduce) {
             tr.asset-row, tr.underlying-row { transition: none; }
         }
-        tr.underlying-row td,
-        tr.underlying-row td:first-child { background: var(--surface-sand-deep); }
+        tr.underlying-row td, tr.underlying-row td:first-child { background: var(--soi-surface-sand-deep); }
         tr.underlying-row td:first-child { padding-left: 64px; }
 
-        tr.underlying-row:hover td,
-        tr.underlying-row:hover td:first-child { background: var(--surface-underlay); }
+        tr.underlying-row:hover td, tr.underlying-row:hover td:first-child { background: var(--ink-color-global-surface-background-underlay); }
 
         /* A look-through company with more than one tranche/class renders as a
            clickable summary row (like a company row one level up) plus its
@@ -1067,10 +1071,10 @@
         tr.underlying-tranche-row td:first-child { padding-left: 88px; }
 
         .underlying-status {
-            color: var(--text-subtle);
+            color: var(--ink-color-global-text-subtle);
             text-align: left !important;
         }
-        .underlying-status.error { color: var(--negative-strong); }
+        .underlying-status.error { color: var(--ink-color-global-feedback-negative-strong); }
 
         /* An action, not part of the error — so it takes Ink's link color rather
            than inheriting the message's red. Matches Ink's <a> spec. */
@@ -1080,21 +1084,21 @@
             border: none;
             background: none;
             font: inherit;
-            color: var(--link-default);
+            color: var(--ink-color-global-link-default);
             text-decoration: underline;
             text-decoration-thickness: 1px;
             text-underline-offset: 2px;
             cursor: pointer;
         }
 
-        .retry-link:hover { color: var(--link-hover); }
+        .retry-link:hover { color: var(--ink-color-global-link-hover); }
 
         .retry-link:focus-visible {
-            outline: 2px solid var(--border-focus-default);
+            outline: 2px solid var(--ink-color-global-border-focus-default);
             outline-offset: 2px;
         }
 
-        .underlying-name { font-weight: 400; color: var(--text-default); }
+        .underlying-name { font-weight: 400; color: var(--ink-color-global-text-default); }
         /* Scaled-down Ink Tag (base/neutral variant: gray-10 bg, text-default,
            radius-subtle) — Ink's own spec is a fixed 28px tall, oversized for
            this table's 40px dense rows, so the box is shrunk while keeping the
@@ -1110,8 +1114,8 @@
             margin-left: 8px;
             font-size: 11px;
             border-radius: 4px;
-            background: var(--surface-underlay);
-            color: var(--text-default);
+            background: var(--ink-color-global-surface-background-underlay);
+            color: var(--ink-color-global-text-default);
         }
 
         .asset-name.expandable { cursor: pointer; }
@@ -1120,8 +1124,8 @@
         /* ── Global (cross-fund) search results panel ── */
         .global-search-panel {
             margin: -4px 0 12px 0;
-            border: 1px solid var(--border-subtle);
-            background: var(--surface-bg);
+            border: 1px solid var(--ink-color-global-border-subtle);
+            background: var(--ink-color-global-surface-background-default);
             max-height: 280px;
             overflow-y: auto;
         }
@@ -1129,18 +1133,18 @@
             padding: 8px 12px;
             font-size: 12px;
             font-weight: 500;
-            color: var(--text-subtle);
-            background: var(--surface-underlay);
-            border-bottom: 1px solid var(--border-subtle);
+            color: var(--ink-color-global-text-subtle);
+            background: var(--ink-color-global-surface-background-underlay);
+            border-bottom: 1px solid var(--ink-color-global-border-subtle);
             position: sticky;
             top: 0;
         }
         .global-search-status {
             padding: 12px;
             font-size: 13px;
-            color: var(--text-subtle);
+            color: var(--ink-color-global-text-subtle);
         }
-        .global-search-status.error { color: var(--negative-strong); }
+        .global-search-status.error { color: var(--ink-color-global-feedback-negative-strong); }
         .global-search-row {
             display: flex;
             align-items: center;
@@ -1148,15 +1152,15 @@
             gap: 12px;
             padding: 8px 12px;
             font-size: 13px;
-            border-bottom: 1px solid var(--border-subtle);
+            border-bottom: 1px solid var(--ink-color-global-border-subtle);
             cursor: pointer;
         }
         .global-search-row:last-child { border-bottom: none; }
-        .global-search-row:hover { background: var(--surface-underlay); }
+        .global-search-row:hover { background: var(--ink-color-global-surface-background-underlay); }
         .gsr-main { display: flex; flex-direction: column; flex: 1; min-width: 0; }
-        .gsr-company { font-weight: 500; color: var(--text-default); }
-        .gsr-via { font-size: 12px; color: var(--text-subtle); }
-        .gsr-fund { font-size: 12px; color: var(--text-subtle); white-space: nowrap; }
+        .gsr-company { font-weight: 500; color: var(--ink-color-global-text-default); }
+        .gsr-via { font-size: 12px; color: var(--ink-color-global-text-subtle); }
+        .gsr-fund { font-size: 12px; color: var(--ink-color-global-text-subtle); white-space: nowrap; }
         .gsr-value { font-variant-numeric: tabular-nums; font-weight: 500; white-space: nowrap; }
 
         .soi-update-banner {
@@ -1165,19 +1169,19 @@
             gap: 12px;
             margin-bottom: 16px;
             padding: 12px 14px;
-            border: 1px solid var(--border-subtle, #DEDFDF);
+            border: 1px solid var(--ink-color-global-border-subtle);
             border-radius: 4px;
-            background: var(--surface-nested, #F1F1F1);
+            background: var(--ink-color-global-surface-background-underlay);
         }
         .soi-update-banner__body { flex: 1; font-size: 13px; line-height: 1.5; }
         .soi-update-banner__title { font-weight: 600; margin: 0 0 2px; }
-        .soi-update-banner__message { margin: 0; color: var(--text-subtle, #656B6B); }
+        .soi-update-banner__message { margin: 0; color: var(--ink-color-global-text-subtle); }
         .soi-update-banner__dismiss {
             background: none;
             border: none;
             cursor: pointer;
             padding: 2px;
-            color: var(--text-subtle, #656B6B);
+            color: var(--ink-color-global-text-subtle);
             font-size: 15px;
             line-height: 1;
         }
@@ -1195,7 +1199,7 @@
         <div id="update-banner-slot"></div>
 
         <div id="loadingState">
-            <div id="loadingStatus" style="display: none; font-size: 13px; color: var(--text-subtle); margin-bottom: 12px;"></div>
+            <div id="loadingStatus" style="display: none; font-size: 13px; color: var(--ink-color-global-text-subtle); margin-bottom: 12px;"></div>
             <div class="shimmer-metrics">
                 <div class="shimmer-metric-item"><div class="shimmer-bone shimmer-metric-label"></div><div class="shimmer-bone shimmer-metric-value"></div></div>
                 <div class="shimmer-metric-item"><div class="shimmer-bone shimmer-metric-label"></div><div class="shimmer-bone shimmer-metric-value"></div></div>
@@ -1964,7 +1968,7 @@
         }
 
         function glCell(val, currency) {
-            if (val === 0) return `<span class="gl-value" style="color:var(--text-subtle)">${fmt(0, currency)}</span>`;
+            if (val === 0) return `<span class="gl-value" style="color:var(--ink-color-global-text-subtle)">${fmt(0, currency)}</span>`;
             const cls = val >= 0 ? 'gain' : 'loss';
             const arrow = val >= 0 ? '↑' : '↓';
             return `<span class="gl-value ${cls}"><span class="gl-arrow">${arrow}</span>${fmt(Math.abs(val), currency)}</span>`;
