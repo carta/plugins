@@ -85,13 +85,39 @@ function Working() {
 const REPLY_LINES = 3;
 const REPLY_LINE_HEIGHT = 1.5;
 
+// A turn that edited source ends in a reload, which would wipe its own "Done" before
+// the user sees it — so the finished turn is parked here and picked up once on mount.
+export const LAST_KEY = "ctc.ask.last";
+
+function parkTurn(page, submitted, reply) {
+  try {
+    sessionStorage.setItem(LAST_KEY, JSON.stringify({ page, submitted, reply }));
+  } catch {
+    // Private browsing and some webviews throw; losing the Done line is fine.
+  }
+}
+
+// One-shot, and only for the page that asked: a later manual refresh must not
+// resurrect an old reply, and another view's box must not show it.
+function takeParkedTurn(page) {
+  try {
+    const parked = JSON.parse(sessionStorage.getItem(LAST_KEY));
+    if (parked?.page !== page || typeof parked.reply !== "string" || !parked.reply) return null;
+    sessionStorage.removeItem(LAST_KEY);
+    return { submitted: typeof parked.submitted === "string" ? parked.submitted : "", reply: parked.reply };
+  } catch {
+    return null;
+  }
+}
+
 export default function AskBar({ token, page, placeholder = PLACEHOLDER }) {
+  const [parked] = useState(() => takeParkedTurn(page));
   const [prompt, setPrompt] = useState("");
   const [busy, setBusy] = useState(false);
-  const [reply, setReply] = useState("");
+  const [reply, setReply] = useState(parked?.reply ?? "");
   const [error, setError] = useState("");
-  const [submitted, setSubmitted] = useState("");
-  const [done, setDone] = useState(false);
+  const [submitted, setSubmitted] = useState(parked?.submitted ?? "");
+  const [done, setDone] = useState(Boolean(parked));
   // A previous turn still holds the session lock. Distinct from `busy`, which is
   // about THIS tab's request — the stuck turn may belong to a tab that is gone.
   const [stuck, setStuck] = useState(false);
@@ -179,6 +205,7 @@ export default function AskBar({ token, page, placeholder = PLACEHOLDER }) {
       const decoder = new TextDecoder();
       let buffer = "";
       let shouldReload = false;
+      let failed = false;
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -190,6 +217,7 @@ export default function AskBar({ token, page, placeholder = PLACEHOLDER }) {
           if (ev.type === "result") {
             if (ev.ctcReload) shouldReload = true;
             if (ev.is_error || ev.subtype === "error") {
+              failed = true;
               setError(ev.result || "Claude reported an error.");
             }
           }
@@ -204,7 +232,9 @@ export default function AskBar({ token, page, placeholder = PLACEHOLDER }) {
 
       if (shouldReload) {
         // Persist first: reload drops in-memory state. App.jsx restores the
-        // tab from sessionStorage on mount.
+        // tab from sessionStorage on mount, and this box restores its Done turn.
+        // A failed turn is not parked: it would come back reading "Done".
+        if (!failed) parkTurn(page, text, textRef.current);
         setReloading(true);
 
         // Delayed so the browser can paint the answer before navigating away.
