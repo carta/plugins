@@ -7,7 +7,31 @@ one level up.
 
 Source in `src/` is served **directly** at runtime — `scripts/serve.py` serves it at
 `/src/*` and `../webapp/sw.js` transpiles the JSX in-browser with Sucrase. There is no
-build step for source edits: edit a file in `src/`, refresh, done.
+build step for source edits: edit a file in `src/`, refresh, done — when `serve.py` is
+started as in [Develop](#develop). The skill itself serves each user's own copy instead
+(below), so rerunning the skill does not pick up an edit until the version is bumped.
+
+## Shipping an app/src change
+
+Each user's dashboard runs their own copy of `src/` (`<dashboard_dir>/src/`), which
+`../scripts/sync_src.py` seeds on first run and merges plugin changes into, keeping their
+edits. **It only looks for changes when `version:` in `../SKILL.md` goes up** — a change
+to `src/` without a bump never reaches an existing user, and nothing errors.
+
+In every PR that changes a file under `src/` (`__tests__/` excepted — tests are never
+synced):
+
+- **Bump `version:` in `../SKILL.md`.** It is independent of the plugin version the
+  changeset bumps; you need both.
+- **Patch** for a change users need not be asked about (a fix, a refactor) — it is
+  merged in silently. **Minor/major** for something new to show — users are asked which
+  `whats-new` entries to take, and can skip any of them.
+- **On a minor/major bump, replace `whats-new`** with one entry per thing a user would
+  choose to take or skip: a short `summary` (the option label) and the `files` it
+  touches, relative to `src/` (`views/DashboardView.jsx`, not `src/views/...`). Keep each
+  file in one entry. Changed files no entry claims are offered as "Other changes in this
+  update"; lists past 16 entries fold their tail into it.
+- **Patch bumps leave `whats-new` as it is** — it is only read on minor/major.
 
 **Instrument what you change.** A new or changed control, page, panel, drill or
 shown/hidden state ships with its analytics event and catalogue row, in the same change.

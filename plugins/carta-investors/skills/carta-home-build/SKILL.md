@@ -39,7 +39,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.49.1</carta-plugin>
+<carta-plugin>carta-investors:6.50.0</carta-plugin>
 
 # Carta Home — Build / Redeploy
 

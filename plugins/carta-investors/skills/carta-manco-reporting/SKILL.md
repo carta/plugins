@@ -4,6 +4,11 @@ description: >-
   Visual ManCo (management company) reporting dashboard/microapp — React SPA on Carta Fund Admin data. TRIGGER: any ManCo dashboard/microapp/report/financials ask under ANY verb (spin up, open, launch, build, create, run) — P&L drill-down, expenses, Budget vs Actuals, Management Fee Income by Fund, income-vs-expenses charts, journal-entry detail. DISAMBIGUATION: "build" means render this dashboard, not draft a budget, so a microapp/dashboard ask ALWAYS routes here, firm named or not; a generic ManCo ask naming a firm routes here; firm-absent with no visual surface → carta-manco. NOT FOR: budgets/actuals (→ carta-manco); consolidating statements (→ carta-consolidating-financial-reports); scaffolding a NEW microapp skill from scratch (a developer tool, not this dashboard).
 argument-hint: "<firm name — optional; if omitted, will ask> [--budget-workbook <path.xlsx>] [--coa-mapping <path.xlsx>]"
 version: 0.1.0
+# `version` gates delivery of app/src: each user runs their own copy, and a change
+# reaches it only when this number goes up. Bump it in every PR that changes a file
+# under app/src outside __tests__ — patch merges silently, minor/major asks the user
+# which `whats-new` entries to take. Rules: app/README.md → "Shipping an app/src change".
+whats-new: []
 model: inherit
 allowed-tools:
   # Carta MCP — three connector-name variants for the same server, pre-approved
@@ -51,11 +56,12 @@ allowed-tools:
   - Bash($HOME/.local/bin/uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/parse_coa_mapping.py *)
   - Bash($HOME/.local/bin/uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/save_query_result.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/serve.py *)
+  - Bash(uv run python3 ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/sync_src.py *)
   - Bash(curl -sf -o /dev/null -w * http://127.0.0.1:*)
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.49.1</carta-plugin>
+<carta-plugin>carta-investors:6.50.0</carta-plugin>
 
 # ManCo Reporting Dashboard
 
@@ -131,6 +137,7 @@ and 6 run on every invocation regardless.
 | 2.75 | always | Resolve the budget workbook (silent when a ref answers it) | [budget-ingest.md](references/budget-ingest.md) — routes to [budget-workbook.md](references/budget-workbook.md) only when a workbook needs resolving |
 | 3 | **only** when the cache is cold, or the user said "refresh" | Fetch journal entries from the warehouse | [data-fetch.md](references/data-fetch.md) |
 | 4 | always | Rebuild the datadir | [serve-and-update.md](references/serve-and-update.md) |
+| 4.8 | always | Sync the user's app source; merge on version change | [serve-and-update.md](references/serve-and-update.md) |
 | 5 | always | Reuse or launch the server, emit the URL | [serve-and-update.md](references/serve-and-update.md) |
 | 6 | on re-invocations | Offer to update the dashboard | [serve-and-update.md](references/serve-and-update.md) |
 

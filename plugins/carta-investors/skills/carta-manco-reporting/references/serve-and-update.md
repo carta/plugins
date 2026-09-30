@@ -93,6 +93,105 @@ isn't misattributed as production.
 If the script exits non-zero, read its stderr, surface the first line to the user in plain English, and stop.
 
 
+## Step 4.8 — Sync the user's app source
+
+**SILENT unless a minor or major update needs a decision.** No user-facing output in
+this step unless the prompt below fires.
+
+Run the sync check:
+
+```bash
+uv run python3 "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/sync_src.py" \
+  --skill-dir "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting" \
+  --data-dir "<dashboard_dir>" check
+```
+
+Parse the JSON output and act on `status`:
+
+### `new` — first run
+Call `init` to seed the user's copy, then proceed to Step 5 with `--src-dir <user_src_dir>`:
+```bash
+uv run python3 "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/sync_src.py" \
+  --skill-dir "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting" \
+  --data-dir "<dashboard_dir>" init
+```
+
+### `current` — up to date
+No action. Pass `--src-dir <user_src_dir>` to `serve.py` in Step 5 and continue.
+
+Before either path below writes anything, archive the user's current (pre-merge) src —
+this is the undo point Step 6 offers back later:
+```bash
+uv run python3 "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/sync_src.py" \
+  --skill-dir "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting" \
+  --data-dir "<dashboard_dir>" archive
+```
+
+### `patch_update` — silent merge
+A patch bump carries no user-visible change. Merge silently:
+
+1. For each file in `plugin_changed_files`:
+   - If it appears in `user_modified_files`: read `<snapshot_dir>/<file>` (base), `<user_src_dir>/<file>` (user's version), and `<plugin_src_dir>/<file>` (plugin's version). Write the intelligently merged result to `<user_src_dir>/<file>`.
+   - Otherwise: copy `<plugin_src_dir>/<file>` → `<user_src_dir>/<file>` directly.
+2. Run `finalize` to advance the snapshot and version stamp:
+   ```bash
+   uv run python3 "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/sync_src.py" \
+     --skill-dir "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting" \
+     --data-dir "<dashboard_dir>" finalize
+   ```
+3. Proceed to Step 5 with `--src-dir <user_src_dir>`. No user-facing message.
+
+### `needs_decision` — minor or major update, one or more new things
+
+`check`'s `modules` array is the option list — one entry per declared `whats-new` item,
+plus an auto "Other changes in this update" entry for anything not attributed to one (see
+[sync_src.py](../scripts/sync_src.py)'s `attribute_modules`, which caps the list at 16).
+
+`AskUserQuestion` takes at most 4 options per question, so never put the modules and the
+apply/skip choices in one question. Open with a single-select `AskUserQuestion`, listing
+every module's `summary` in the question text:
+
+> **New in the ManCo Dashboard:** `<summary 1>` · `<summary 2>` · … — your own edits to
+> any file are kept either way.
+
+- **Apply everything** *(recommended)* → every module.
+- **Choose individually** *(only when there are 2+ modules)* → ask once more, below.
+- **Skip everything** → no module.
+
+**Choose individually** is one `AskUserQuestion` call with `multiSelect: true`: the modules
+in order, split into consecutive questions of at most 4 options each (up to 4 questions),
+one option per module with its `summary` as the label. Every module left unticked is
+skipped — there are no apply/skip options in this call.
+
+The picked modules' `files` (flattened, deduped) are what gets applied.
+
+For that resulting file set (call it `<applied_files>`, comma-joined — possibly empty):
+1. For each file in it:
+   - If it appears in `user_modified_files`: 3-way merge using `<snapshot_dir>/<file>` as base, preserving the user's customizations while applying the plugin's changes. Write the result to `<user_src_dir>/<file>`.
+   - Otherwise: copy `<plugin_src_dir>/<file>` → `<user_src_dir>/<file>`.
+2. Run `finalize --files "<applied_files>"`:
+   ```bash
+   uv run python3 "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/sync_src.py" \
+     --skill-dir "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting" \
+     --data-dir "<dashboard_dir>" finalize --files "<applied_files>"
+   ```
+   `.version` advances regardless — the user has been asked about this version. **But
+   unlike the patch path, this only snapshots the files in `<applied_files>`.** A
+   module's file left out of that list keeps its pre-update snapshot entry, so it still
+   looks changed against `plugin_src` on the next version bump — that module is offered
+   again rather than silently written off. A file never gets copied into
+   `<user_src_dir>` unless its module was applied, so skipping a module leaves the
+   user's own version of its files untouched, same as before.
+3. Tell the user to reload the page — no server restart needed.
+
+**`--files ""` for "Skip everything"**: passing an empty string is exactly this —
+no file gets copied, and only `.version` advances. There's no separate "skip" verb.
+
+**Why serve.py does not need a restart after a merge**: `serve.py` reads source files
+per-request from `--src-dir`. The `user_src_dir` is `<dashboard_dir>/src/` — stable
+across runs for a given firm/ManCo. Writing merged files there is enough; a page reload
+picks them up from the already-running server.
+
 ## Step 5 — Launch the dashboard
 
 **First check that Steps 4.6 and 4.7 are done** ([budget-unresolved.md](budget-unresolved.md)).
@@ -145,8 +244,11 @@ it.
 ```bash
 LOG="<dashboard_dir>/serve.log"
 nohup python3 "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/serve.py" \
-  --data-dir "<dashboard_dir>" --detach > "$LOG" 2>&1 &
+  --data-dir "<dashboard_dir>" \
+  --src-dir "<user_src_dir>" --detach > "$LOG" 2>&1 &
 ```
+
+`<user_src_dir>` is the `user_src_dir` value from Step 4.8's `check` output.
 
 `--detach` forks and daemonizes the server so it outlives this launching
 process/session — the same flag `carta-fund-modeling`'s `serve.py` uses.
@@ -324,6 +426,16 @@ re-opening a dashboard they built last week usually wants to look at it,
 and only sometimes wants to update it. Making them answer questions before
 they can see it inverts that.
 
+Before asking, check for an undo point:
+```bash
+uv run python3 "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/sync_src.py" \
+  --skill-dir "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting" \
+  --data-dir "<dashboard_dir>" rollback --list
+```
+Add the **Undo the last dashboard update** option below only when `archives` is
+non-empty — an app-source update has to have actually happened (Step 4.8) for there to
+be anything to undo, so most invocations omit it.
+
 After the orientation line, ask a single `AskUserQuestion`:
 
 > **Anything to update?** The dashboard is live at the link above.
@@ -344,6 +456,17 @@ After the orientation line, ask a single `AskUserQuestion`:
   be the fee account instead") through the free-text option below; record
   the new answer in `budget-mapping.json` the same way Step 4.7 would and
   rebuild
+- **Undo the last dashboard update** *(only when an archive exists)* → restore the
+  most recent entry from `rollback --list` (newest-first; take `archives[0].id`):
+  ```bash
+  uv run python3 "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/sync_src.py" \
+    --skill-dir "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting" \
+    --data-dir "<dashboard_dir>" rollback --to "<archive_id>"
+  ```
+  Then say *"Reverted to the version before your last update — refresh the page to see
+  it."* and skip straight to the reload line below (no rebuild needed — rollback already
+  wrote `<user_src_dir>` and `.version` directly). This restores the app source only; it
+  never touches cached firm data or the budget/workbook refs.
 
 Anything else the operator types goes through `AskUserQuestion`'s free-text
 option — treat it as a request and route it to the matching step.
