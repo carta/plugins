@@ -113,6 +113,23 @@ custom_domain = true
 
 A hostname added outside wrangler still needs its `TENANTS` entry, or every firm is denied.
 
+## Client budget upload
+
+A firm's workbook budget reaches the hosted app as one JSON file, built locally by
+`scripts/export_budget_bundle.py`. The Worker never parses a workbook.
+
+- `POST /api/budget-upload` stores the bundle under `budget-bundle:<firm>` in KV, with no TTL.
+  It needs `Content-Type: application/json`, a body under 4 MB, and a signed-in user Carta
+  lets into the firm. It refuses a bundle whose `firm_uuid` is not that firm's, whose
+  `schema_version` differs from `BUDGET_BUNDLE_SCHEMA`, or that has no currency.
+- `GET` returns what is stored (or `null`). `DELETE` removes it.
+- `/api/snapshot` replaces `budget` and `varianceByCategory` with the bundle's and adds
+  `budgetUpload` (who, when, `as_of`). A bundle in a different currency than the snapshot is
+  left out and flagged `currency_mismatch`.
+
+Bump `BUDGET_BUNDLE_SCHEMA` in `server/worker.js` and `SCHEMA_VERSION` in the exporter together;
+`tests/carta-investors/test_export_budget_bundle.py` fails when they differ.
+
 ## Local development
 
 Copy `wrangler.toml` to `wrangler.dev.toml`, drop every `[[routes]]` block, set

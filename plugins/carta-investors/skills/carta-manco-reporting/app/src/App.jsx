@@ -4,6 +4,7 @@ import AppShell from "./shell/AppShell.jsx";
 import { parseRoute, navigate as navigateRoute, subscribeNav } from "./shell/route.js";
 import DashboardView from "./views/DashboardView.jsx";
 import BudgetActualsView from "./views/BudgetActualsView.jsx";
+import BudgetImport from "./shell/BudgetImport.jsx";
 import DrilldownDrawer from "./views/DrilldownDrawer.jsx";
 import useDrilldown from "./state/useDrilldown.js";
 import { setDisplayCurrency } from "./charts/chartTheme.js";
@@ -211,6 +212,7 @@ export default function App() {
     // this exact line, moved off the topbar entirely once "Powered by
     // Carta" was dropped from it and left it with nothing else to show.
     asOf: snapshot?.asOf,
+    footerAction: snapshot && <BudgetImport budgetUpload={snapshot.budgetUpload} onChanged={fetchData} />,
   };
 
   return (

@@ -123,7 +123,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.54.4</carta-plugin>
+<carta-plugin>carta-investors:6.54.5</carta-plugin>
 
 # ManCo Reporting Dashboard
 
@@ -202,6 +202,7 @@ and 6 run on every invocation regardless.
 | 4.8 | always | Sync the user's app source; merge on version change | [serve-and-update.md](references/serve-and-update.md) |
 | 5 | always | Reuse or launch the server, emit the URL | [serve-and-update.md](references/serve-and-update.md) |
 | 6 | on re-invocations | Offer to update the dashboard | [serve-and-update.md](references/serve-and-update.md) |
+| 7 | only when the operator asks for their budget in the hosted app | Export the workbook budget as a bundle to upload | [serve-and-update.md](references/serve-and-update.md) |
 
 **Read the reference file for a step before running it.** They carry the
 match rules, the exact commands, and the reasoning. This page is the

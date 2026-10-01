@@ -75,6 +75,8 @@ Every row spells the full id, prefix included.
 | `MancoReporting.App.AccountsUnavailable` | render | `/api/accounts` failed. Every drill-down is disabled for the session. |
 | `MancoReporting.App.BudgetVsActualsHidden` | render | The firm has no dimensional budget, so the Budget vs Actuals page is not offered. |
 | `MancoReporting.App.ToggleTheme` | click | Light/dark toggle, on either page. |
+| `MancoReporting.App.ImportBudget` | click | "Import budget" in the sidebar (hosted app only): opens the file picker for an exported budget bundle. |
+| `MancoReporting.App.RemoveBudget` | click | "Remove" beside an uploaded budget: restores Carta's stored budget. |
 
 ### Navigation
 

@@ -581,8 +581,9 @@ async function handleDataKey(req, env, key) {
   }
   if (firm && !await authorizedFirm(req, firm, sid, session, env)) return forbiddenFirm(firm);
   const kvKey = dataKey("data", sid, firm, key, env);
-  const raw = await env.SESSIONS.get(kvKey);
-  if (!raw) return Response.json({ error: "not_ready" });
+  const stored = await env.SESSIONS.get(kvKey);
+  if (!stored) return Response.json({ error: "not_ready" });
+  const raw = key === "snapshot" && firm ? await withUploadedBudget(stored, firm, env) : stored;
   const etag = `"${await sha256Base64url(raw)}"`;
   return new Response(req.method === "HEAD" ? null : raw, {
     headers: { "Content-Type": "application/json", ETag: etag, "Cache-Control": "no-store" },
@@ -604,6 +605,95 @@ async function handleReport(req, env, path) {
   const data = await env.SESSIONS.get(kvKey, "json");
   if (data) return Response.json(data);
   return Response.json({ error: "not_ready" });
+}
+
+// ── Client budget upload ──
+//
+// A budget built locally from the client's own workbook (export_budget_bundle.py),
+// uploaded as one JSON file. The Worker never parses a workbook: it checks the file
+// belongs to this firm, stores it without a TTL, and lays it over the snapshot it serves.
+
+// Not exported: the Workers runtime rejects any non-function export from the entry module.
+const BUDGET_BUNDLE_SCHEMA = 1;
+const MAX_BUNDLE_BYTES = 4 * 1024 * 1024;
+const bundleKey = (firm) => `budget-bundle:${firm}`;
+const isObj = (v) => v && typeof v === "object" && !Array.isArray(v);
+
+// Returns an error message, or null when the bundle may be stored for this firm.
+export function validateBudgetBundle(b, firmUuid) {
+  if (!isObj(b)) return "The file is not a budget bundle.";
+  if (b.schema_version !== BUDGET_BUNDLE_SCHEMA) return `Unsupported schema_version ${JSON.stringify(b.schema_version)}; expected ${BUDGET_BUNDLE_SCHEMA}.`;
+  if (String(b.firm_uuid || "").toLowerCase() !== String(firmUuid || "").toLowerCase()) return "This bundle was exported for a different firm.";
+  if (!/^[A-Z]{3}$/.test(String(b.currency || ""))) return "The bundle has no currency.";
+  if (typeof b.as_of !== "string" || !b.as_of) return "The bundle has no as_of date.";
+  const budgets = b.budget?.budgets;
+  if (!isObj(b.budget) || !Array.isArray(budgets) || !budgets.length) return "The bundle has no budgets.";
+  for (const x of budgets) {
+    if (!isObj(x) || typeof x.id !== "string" || !x.id || !Array.isArray(x.rows)) return "A budget in the bundle has no id or rows.";
+  }
+  if (b.varianceByCategory != null && !isObj(b.varianceByCategory)) return "varianceByCategory must be an object.";
+  return null;
+}
+
+const uploadMeta = (rec) => ({
+  uploadedAt: rec.uploadedAt, uploadedBy: rec.uploadedBy, exportedAt: rec.bundle.exported_at || null,
+  asOf: rec.bundle.as_of, currency: rec.bundle.currency, workbook: rec.bundle.workbook || null,
+});
+
+// Replaces the snapshot's budget with the uploaded one. A bundle in another currency than
+// the snapshot is left out: the two would sit side by side under one symbol.
+async function withUploadedBudget(raw, firm, env) {
+  const rec = await env.SESSIONS.get(bundleKey(firm), "json");
+  if (!rec?.bundle) return raw;
+  let snap;
+  try { snap = JSON.parse(raw); } catch { return raw; }
+  const meta = uploadMeta(rec);
+  if (snap.currency && snap.currency !== rec.bundle.currency) {
+    snap.budgetUpload = { ...meta, status: "currency_mismatch", snapshotCurrency: snap.currency };
+  } else {
+    snap.budget = rec.bundle.budget;
+    snap.varianceByCategory = rec.bundle.varianceByCategory ?? null;
+    snap.budgetUpload = { ...meta, status: "applied" };
+  }
+  return JSON.stringify(snap);
+}
+
+async function handleBudgetUpload(req, env) {
+  const [sid, session, authErr] = await requireAuth(req, env);
+  if (authErr) return authErr;
+  const slug = new URL(req.url).searchParams.get("firm") || await env.SESSIONS.get(`active-firm:${sid}`) || "";
+  const firm = await authorizedFirm(req, slug, sid, session, env);
+  if (!firm) return forbiddenFirm(slug);
+  const key = bundleKey(slug);
+
+  if (req.method === "GET") {
+    const rec = await env.SESSIONS.get(key, "json");
+    return Response.json(rec?.bundle ? uploadMeta(rec) : null);
+  }
+  if (req.method === "DELETE") {
+    await env.SESSIONS.delete(key);
+    return Response.json({ ok: true });
+  }
+  if (req.method !== "POST") return Response.json({ error: "method_not_allowed" }, { status: 405 });
+
+  // JSON content type makes a cross-site form post impossible without a CORS preflight.
+  if (!String(req.headers.get("Content-Type") || "").toLowerCase().startsWith("application/json")) {
+    return Response.json({ error: "bad_request", message: "Send the bundle as application/json." }, { status: 415 });
+  }
+  const text = await req.text();
+  if (text.length > MAX_BUNDLE_BYTES) {
+    return Response.json({ error: "too_large", message: "The bundle is over 4 MB." }, { status: 413 });
+  }
+  let bundle;
+  try { bundle = JSON.parse(text); } catch {
+    return Response.json({ error: "bad_request", message: "The file is not valid JSON." }, { status: 400 });
+  }
+  const problem = validateBudgetBundle(bundle, firm.firmUuid);
+  if (problem) return Response.json({ error: "invalid_bundle", message: problem }, { status: 422 });
+
+  const rec = { bundle, uploadedAt: new Date().toISOString(), uploadedBy: session.userName || null };
+  await env.SESSIONS.put(key, JSON.stringify(rec));
+  return Response.json({ ok: true, ...uploadMeta(rec) });
 }
 
 // ── DWH query helpers ──
@@ -1208,6 +1298,7 @@ export default {
       if (path === "/api/telemetry-context") return requireAuthThen(req, env, (_s, session) =>
         Response.json({ environment: "production", firmId: session.firmId || null, userId: null }));
       if (path.startsWith("/api/report/")) return handleReport(req, env, path);
+      if (path === "/api/budget-upload") return handleBudgetUpload(req, env);
       if (path === "/api/load-firm") return handleLoadFirm(req, env);
 
       // Page requests: gate behind auth

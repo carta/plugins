@@ -481,3 +481,27 @@ and leave an orphaned process on the old port.
 Say one line: *"Rebuilt — refresh the page to see it."* Then offer the
 same question again, so several changes can be made in one sitting, until
 the operator picks "Nothing".
+
+## Step 7 — Export the budget for the hosted app
+
+**Only when the operator asks** to put their workbook budget in the hosted app ("upload my
+budget to the hosted version", "export the budget"). The hosted app does not read a workbook.
+The operator uploads one JSON file with **Import budget** in the hosted app's sidebar.
+
+The dashboard must be built (Step 4) from a workbook budget. Then:
+
+```bash
+<UV_BIN> run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/export_budget_bundle.py" \
+  --dashboard-dir "<dashboard_dir>"
+```
+
+It prints `{"path": ..., "budgets": [...], "currency": ..., "as_of": ..., "unmapped_lines": N}`.
+Tell the operator the `path`, the `as_of` date, and to upload the file in the hosted app.
+
+- **Exit 2** means nothing safe to export; relay the stderr line as is. Do not edit the
+  snapshot or assume a currency to get past it.
+- **`unmapped_lines` above 0**: those budget lines show no actuals in the hosted app. Offer
+  the mapping question from Step 5.6 before exporting again.
+- The dashboard's variance chart is fixed at `as_of`. To refresh it, rebuild (Step 4),
+  export again, and upload again. The hosted app keeps one uploaded budget per firm.
+

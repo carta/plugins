@@ -35,7 +35,7 @@ function NavIcon({ name, active }) {
 // Left-side vertical nav: firm mark/name, nav items (optional NavIcon per
 // item), then an as-of line pinned to the bottom via a flex spacer — same
 // layout carta-fund-modeling uses for its own DataStatus.
-export default function Sidebar({ initials, firmName, route, items, onNavigate, asOf }) {
+export default function Sidebar({ initials, firmName, route, items, onNavigate, asOf, footerAction }) {
   return (
     <aside style={styles.wrap}>
       <div style={styles.brand}>
@@ -114,6 +114,7 @@ export default function Sidebar({ initials, firmName, route, items, onNavigate, 
       {/* One footer block so the wordmark and as-of line keep their own
           tight 5px gap regardless of the rail's own (near-zero) gap. */}
       <div style={styles.footer}>
+        {footerAction}
         <div style={styles.wordmark}>Carta Management Company Reporting</div>
         <div style={styles.dataStatus}>Data as of {formatAsOf(asOf)}</div>
       </div>
