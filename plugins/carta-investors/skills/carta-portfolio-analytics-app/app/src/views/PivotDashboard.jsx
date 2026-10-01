@@ -49,7 +49,42 @@ const GROUP_PAD_TOP = 18; // vs the normal 9px — breathing room above each com
 const LAST_FROZEN_DIVIDER = "inset -1px 0 0 var(--ink-color-global-border-default)";
 // Every period column is this exact width so the grid reads as a uniform ledger.
 // Prose answers are clipped to it (ellipsis + hover) rather than widening the column.
-const PERIOD_W = 120;
+const PERIOD_MIN_W = 110;
+const PERIOD_MAX_W = 240;
+// A column fills spare window width up to this; its content never needs more than PERIOD_MAX_W.
+const PERIOD_FILL_MAX_W = 280;
+// Horizontal chrome around a period value: 14px padding each side, the 4px gap + 11px
+// pencil, and 2px of slack for canvas-vs-layout rounding. The status dot lives in the
+// right padding, which is why the padding is counted in full.
+const CELL_CHROME_W = 14 + 14 + 4 + 11 + 2;
+const MARKER_W = 7; // a trailing * or ⁱ footnote marker plus its margin
+const CELL_FONT = `14px ${mono.fontFamily}`;
+let measureCtx;
+/** Fast approximate width in the cell font: canvas can't apply tabular-nums, so it runs
+ *  a few px narrow on figures; a char-count estimate where there's no canvas (tests). */
+function roughWidth(s) {
+  const str = s == null ? "" : String(s);
+  if (measureCtx === undefined) {
+    try { measureCtx = document.createElement("canvas").getContext("2d") || null; } catch (e) { measureCtx = null; }
+    if (measureCtx) measureCtx.font = CELL_FONT;
+  }
+  return measureCtx ? measureCtx.measureText(str).width : str.length * 7.5;
+}
+let measureEl;
+/** Exact rendered width, from a hidden element styled like a period cell. Layout-costly,
+ *  so it only confirms the few widest candidates roughWidth picks. */
+function exactWidth(s) {
+  if (typeof document === "undefined" || !document.body) return roughWidth(s);
+  if (!measureEl) {
+    measureEl = document.createElement("span");
+    Object.assign(measureEl.style, { ...mono, fontSize: "14px", position: "absolute", visibility: "hidden",
+      whiteSpace: "pre", left: "-9999px", top: "0" });
+    measureEl.setAttribute("aria-hidden", "true");
+    document.body.appendChild(measureEl);
+  }
+  measureEl.textContent = s == null ? "" : String(s);
+  return measureEl.getBoundingClientRect().width || roughWidth(s);
+}
 
 const isQuarterEnd = (d) => ["-03-", "-06-", "-09-", "-12-"].some((q) => String(d).includes(q));
 
@@ -384,21 +419,37 @@ export default function PivotDashboard({ data, dashboard }) {
     return n;
   }, [rows, companyById]);
 
-  // Full figures overflow the tight uniform PERIOD_W and collide; when they're on,
-  // widen every period column to fit the widest figure shown (~7.5px/mono char + pad).
-  const periodColW = useMemo(() => {
-    if (!fullFig) return PERIOD_W;
-    let maxLen = 8;
-    for (const r of rows) {
-      if (r.qual) continue; // prose is clipped to the column by design, not sized to it
-      for (const p of periods) {
+  // Each period column fits its widest shown value (numbers, flags, dates) plus the
+  // pencil and the status dot's padding slot, clamped to [PERIOD_MIN_W, PERIOD_MAX_W].
+  // Prose is clipped to its column by design, so it never drives a width.
+  // Web fonts can finish loading after the first render; re-measure once they have.
+  const [fontsReady, setFontsReady] = useState(() => typeof document === "undefined" || !document.fonts || document.fonts.status === "loaded");
+  useEffect(() => {
+    if (fontsReady || !document.fonts) return undefined;
+    let alive = true;
+    document.fonts.ready.then(() => { if (alive) setFontsReady(true); });
+    return () => { alive = false; };
+  }, [fontsReady]);
+  const periodColWs = useMemo(() => {
+    const out = {};
+    for (const p of periods) {
+      const cands = [];
+      for (const r of rows) {
+        if (r.qual) continue;
+        const v = r.byPeriod[p];
         const part = r.partsByP ? r.partsByP[p] : null;
-        const s = fmtFull(r.byPeriod[p], r.unit, part && part.s, part && part.cur);
-        if (s && s.length > maxLen) maxLen = s.length;
+        if (v == null && !(part && part.s != null)) continue;
+        const shown = fullFig ? fmtFull(v, r.unit, part && part.s, part && part.cur) : fmtVal(v, r.unit, part && part.s, part && part.cur);
+        const extra = part && (part.partial || quarterlyMonthlyGap(part)) ? MARKER_W : 0;
+        cands.push({ shown, extra, rough: roughWidth(shown) + extra });
       }
+      cands.sort((a, b) => b.rough - a.rough);
+      let widest = 0;
+      for (const c of cands.slice(0, 4)) widest = Math.max(widest, exactWidth(c.shown) + c.extra);
+      out[p] = Math.min(PERIOD_MAX_W, Math.max(PERIOD_MIN_W, Math.ceil(widest + CELL_CHROME_W)));
     }
-    return Math.min(260, Math.max(PERIOD_W, Math.round(maxLen * 7.5 + 40)));
-  }, [fullFig, rows, periods]);
+    return out;
+  }, [fullFig, rows, periods, fontsReady]);
 
   // ---- collapse / expand ----
   // Metric-row count per company — drives the "N metrics hidden" summary.
@@ -481,6 +532,23 @@ export default function PivotDashboard({ data, dashboard }) {
     ro.observe(appContent);
     wrapMaxWObsRef.current = ro;
   }, []);
+  // Spare width the window leaves beyond the columns' content widths, shared evenly
+  // across period columns (each capped at PERIOD_FILL_MAX_W) so the table fills a wide
+  // window instead of bunching up on the left. No spare room → no fill, and it scrolls.
+  const [periodFill, setPeriodFill] = useState(0);
+  useLayoutEffect(() => {
+    const wrap = wrapRef.current, table = tableRef.current;
+    if (!wrap || !table) return;
+    const ths = table.querySelectorAll("thead th[data-period]");
+    if (!ths.length) { setPeriodFill(0); return; }
+    let periodNow = 0;
+    for (const th of ths) periodNow += th.getBoundingClientRect().width;
+    const nonPeriod = table.getBoundingClientRect().width - periodNow;
+    const base = periods.reduce((sum, p) => sum + (periodColWs[p] || 0), 0);
+    const next = Math.max(0, Math.floor((wrap.clientWidth - nonPeriod - base) / ths.length));
+    setPeriodFill((prev) => (prev === next ? prev : next));
+  }, [wrapMaxW, periodColWs, periods, displayRows.length]);
+  const colW = (p) => Math.max(periodColWs[p], Math.min(PERIOD_FILL_MAX_W, periodColWs[p] + periodFill));
   // The company-name label had the same plain-sticky problem as the header
   // (wrapRef's local scroll intercepts it) — floats via the same technique.
   const activeCompany = useActiveCompanyBand(tableRef, ribbonH + headH, ribbonH);
@@ -641,7 +709,7 @@ export default function PivotDashboard({ data, dashboard }) {
         + "Qualitative KPIs (Yes/No, dates, text) show no trendline.",
       content: "Trend over time" },
     ...periods.map((p) => ({
-      key: p, frozen: false, width: periodColW, align: "right",
+      key: p, frozen: false, period: true, width: colW(p), align: "right",
       dataTip: futureSet.has(p) ? "Forecast period — values here are the companies' own estimates." : undefined,
       background: futureSet.has(p) ? FC_HEAD_BG : undefined, content: shortDate(p, qOnly),
     })),
@@ -940,16 +1008,21 @@ export default function PivotDashboard({ data, dashboard }) {
                         // clipped with an ellipsis (full text on hover) instead of widening it.
                         textAlign: "right",
                         whiteSpace: "nowrap",
-                        maxWidth: periodColW,
+                        maxWidth: colW(p),
                         borderBottom: `1px solid var(--ink-color-global-border-subtle)`,
                         // the forecast wash outranks conditional formatting: knowing a
                         // figure is an estimate matters more than where it sits on a heatmap
                         background: fc ? FC_BG : cf ? cf.bg : undefined,
                         fontStyle: fc ? "italic" : undefined,
                         color: fc ? "var(--ink-color-global-text-default)" : cf ? cf.fg : missing ? "var(--ink-color-global-border-default)" : "var(--ink-color-global-text-default)" }}>
-                        <div style={r.qual ? TRUNCATE : undefined}>
+                        <div style={r.qual ? QUAL_CELL : VALUE_CELL}>
                           {(() => {
                             const shown = missing ? "—" : (fullFig ? fmtFull(v, r.unit, part && part.s, part && part.cur) : fmtVal(v, r.unit, part && part.s, part && part.cur));
+                            // Footnote markers belong to the value, ahead of the pencil, so the
+                            // pencil stays on the column's right edge.
+                            const marker = partial ? <span style={{ color: NEG, fontWeight: 700, marginLeft: 3 }} >*</span>
+                              : gap ? <span style={{ color: MICRO, fontWeight: 700, marginLeft: 3 }} >ⁱ</span> : null;
+                            const shownMarked = marker ? <>{shown}{marker}</> : shown;
                             const co = companyById.get(r.companyId);
                             const m = metricOf(data, r.metricKey);
                             // A dash (or a staged addition's own overlay point) edits through
@@ -958,18 +1031,16 @@ export default function PivotDashboard({ data, dashboard }) {
                               : part && !part.added ? editTarget(co, m, part, qOnly)
                               : addTarget(co, m, p, qOnly, todayIso);
                             return target
-                              ? <EditableValue value={part ? part.v : null} unit={r.unit} display={shown}
+                              ? <EditableValue value={part ? (m.kind ? part.s : part.v) : null} unit={r.unit} kind={m.kind} display={shownMarked}
                                   ariaLabel={`${r.metricLabel} for ${r.companyName}, ${shortDate(p, qOnly)}`}
                                   onCommit={(val) => stage(target, val)} />
-                              : shown;
+                              : r.qual ? <span style={{ ...TRUNCATE, minWidth: 0 }}>{shown}</span> : shownMarked;
                           })()}
-                          {partial && <span style={{ color: NEG, fontWeight: 700, marginLeft: 3 }} >*</span>}
-                          {!partial && gap && <span style={{ color: MICRO, fontWeight: 700, marginLeft: 3 }} >ⁱ</span>}
                           {part && part.edit && DOT_LABEL[part.edit.status] && (
                             <button type="button" aria-label={DOT_LABEL[part.edit.status][0]} data-tip={DOT_LABEL[part.edit.status][1]}
                               onClick={(e) => { e.stopPropagation(); openCorrections(part.edit); }}
                               style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", verticalAlign: "middle",
-                                border: "none", padding: 0, background: DOT_COLOR[part.edit.status], marginLeft: 6, cursor: "pointer" }} />
+                                border: "none", padding: 0, background: DOT_COLOR[part.edit.status], cursor: "pointer", ...STATUS_DOT_POS }} />
                           )}
                         </div>
                         {growthMode && !missing && (
@@ -1728,6 +1799,14 @@ const FC_HEAD_BG = "linear-gradient(rgba(56,132,255,0.16), rgba(56,132,255,0.16)
 // Clip a long free-text answer to one line inside the value cell; the full text
 // stays available on hover via the cell's data-tip.
 const TRUNCATE = { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
+// Period cells are right-justified flex rows so every pencil sits on the same right edge:
+// an over-wide value (a date) overflows to the left instead of pushing its pencil out.
+const VALUE_CELL = { display: "flex", justifyContent: "flex-end", alignItems: "center", position: "relative" };
+// Prose also shrinks, so its long text is what gives way to the pencil.
+const QUAL_CELL = { ...VALUE_CELL, minWidth: 0 };
+// The status dot sits in the cell's right padding, out of the row's layout, so a pending
+// edit never shifts its pencil off the column's line.
+const STATUS_DOT_POS = { position: "absolute", right: -11, top: "50%", marginTop: -3.5 };
 
 const csv = (s) => (/[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
 
@@ -1833,7 +1912,7 @@ function renderPivotHeadRow(colDefs, colWidths) {
           // Divider where frozen columns end — box-shadow, not border-right (a
           // sticky cell's own border can fail to repaint once actually stuck).
           ...(c.lastFrozen ? { boxShadow: LAST_FROZEN_DIVIDER } : {}), ...w };
-        return <th key={c.key} data-tip={c.dataTip} style={style}>{c.content}</th>;
+        return <th key={c.key} data-tip={c.dataTip} data-period={c.period ? "" : undefined} style={style}>{c.content}</th>;
       })}
     </tr>
   );

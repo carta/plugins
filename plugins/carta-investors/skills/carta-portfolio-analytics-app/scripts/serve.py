@@ -221,8 +221,14 @@ def _start_publish_bg(run_id, edits):
 
 
 def _valid_edit(e):
-    return isinstance(e, dict) and all(k in e for k in _REQUIRED_EDIT_FIELDS) and isinstance(e.get("id"), str) \
-        and e["id"] and isinstance(e.get("value"), (int, float)) and not isinstance(e.get("value"), bool)
+    # value is a number, or a qualitative KPI's non-empty string; publish.build_groups
+    # checks it against the metric's unit.
+    if not (isinstance(e, dict) and all(k in e for k in _REQUIRED_EDIT_FIELDS) and isinstance(e.get("id"), str) and e["id"]):
+        return False
+    v = e.get("value")
+    if isinstance(v, str):
+        return bool(v.strip())
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
 
 
 _SINCE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")

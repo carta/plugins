@@ -38,6 +38,8 @@ const GRID = "var(--ink-color-global-border-subtle)";
 // firm's display currency is used (never assumed USD).
 export function fmtVal(v, unit, str, cur) {
   if (str != null && str !== "") return String(str);
+  // A qualitative correction's value (and its baseline) is the reported text itself.
+  if (typeof v === "string") return v === "" ? "—" : v;
   if (v == null || !Number.isFinite(v)) return "—";
   if (unit === "Percentage" || unit === "Percent") return withCommas((v * 100).toFixed(1)) + "%";
   if (unit === "Ratio") return (v < 0 ? "−" : "") + Math.abs(v).toFixed(2) + "×";

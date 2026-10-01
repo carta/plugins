@@ -36,7 +36,12 @@ refresh = _sibling("refresh")
 # Warehouse unit_type -> FinancialsV2 UnitType. Anything else is not correctable here.
 UNIT_TYPE = {"Dollar": "UNIT_TYPE_DOLLAR", "Number": "UNIT_TYPE_NUMBER",
              "Percentage": "UNIT_TYPE_PERCENTAGE", "Percent": "UNIT_TYPE_PERCENTAGE",
-             "Ratio": "UNIT_TYPE_RATIO"}
+             "Ratio": "UNIT_TYPE_RATIO", "Text": "UNIT_TYPE_TEXT",
+             "Boolean": "UNIT_TYPE_BOOLEAN", "Date": "UNIT_TYPE_DATE"}
+# Qualitative unit -> the kind the build derives for it. Their readings ride the Kpi
+# `value` oneof's string arm; a metric whose kind disagrees with its unit is not
+# correctable. Mirrors pendingEdits.QUAL_UNIT_KIND; keep the two identical.
+QUAL_UNIT_KIND = {"Boolean": "boolean", "Date": "date", "Text": "text"}
 # Build cadence letter -> FinancialsV2 FrequencyType.
 FREQUENCY_TYPE = {"M": "FREQUENCY_TYPE_MONTH", "Q": "FREQUENCY_TYPE_QUARTER",
                   "S": "FREQUENCY_TYPE_SEMI_ANNUAL", "A": "FREQUENCY_TYPE_ANNUAL"}
@@ -99,16 +104,20 @@ def _proto_date(iso):
 
 def _reading(metric, edit):
     # type: (dict, dict) -> dict
-    return {
+    reading = {
         "mnemonicName": metric.get("mnemonic") or "",
         "displayName": metric.get("label") or metric.get("key"),
         "unitType": UNIT_TYPE[metric["unit"]],
-        "numericValue": float(edit["value"]),
         "fromDate": _proto_date(edit["fromDate"]),
         "toDate": _proto_date(edit["period"]),
         "frequencyType": FREQUENCY_TYPE[edit["freq"]],
         "isForecast": False,
     }
+    if metric["unit"] in QUAL_UNIT_KIND:
+        reading["stringValue"] = str(edit["value"])
+    else:
+        reading["numericValue"] = float(edit["value"])
+    return reading
 
 
 def build_groups(kpi, edits):
@@ -137,20 +146,29 @@ def build_groups(kpi, edits):
                 failed.append(_fail(eid, "This dashboard predates company identity tracking. Refresh Operating KPIs, then publish again."))
             continue
         m = metrics.get(e.get("metricKey"))
-        if m is None or m.get("custom") or m.get("kind") or m.get("derivedFrom") or m.get("unit") not in UNIT_TYPE:
+        if m is None or m.get("custom") or m.get("derivedFrom") or m.get("unit") not in UNIT_TYPE \
+                or (m.get("kind") or None) != QUAL_UNIT_KIND.get(m["unit"]):
             failed.append(_fail(eid, "This metric can't be corrected in Carta from here."))
             continue
         if e.get("freq") not in FREQUENCY_TYPE or not _DATE_RE.match(str(e.get("fromDate") or "")) \
                 or not _DATE_RE.match(str(e.get("period") or "")):
             failed.append(_fail(eid, "This cell has no single reported period behind it."))
             continue
-        try:
-            value = float(e.get("value"))
-        except (TypeError, ValueError):
-            value = float("nan")
-        if not math.isfinite(value):
-            failed.append(_fail(eid, "The corrected value is not a number."))
-            continue
+        if m["unit"] in QUAL_UNIT_KIND:
+            value = e.get("value")
+            if not isinstance(value, str) or not value.strip():
+                failed.append(_fail(eid, "The corrected value is empty." if isinstance(value, str) or value is None
+                                    else "The corrected value is not text."))
+                continue
+            value = value.strip()
+        else:
+            try:
+                value = float(e.get("value"))
+            except (TypeError, ValueError):
+                value = float("nan")
+            if not math.isfinite(value):
+                failed.append(_fail(eid, "The corrected value is not a number."))
+                continue
         point = next((p for p in (co.get("series") or {}).get(m["key"], []) if p.get("d") == e.get("period")), None)
         # An addition has no cached point; its edit carries the currency the app
         # inferred from the company's neighboring readings (model inferCur).
