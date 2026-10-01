@@ -158,7 +158,7 @@ STEMS = {
             "FROM FUND_ADMIN.AGGREGATE_FUND_METRICS\n"
             "WHERE fund_uuid IN ({fund_uuids})\n"
             "QUALIFY ROW_NUMBER() OVER (PARTITION BY fund_uuid "
-            "ORDER BY month_end_date DESC, last_refreshed_at DESC)=1"
+            "ORDER BY month_end_date DESC)=1"
         ),
     },
     "accrued_carry": {
@@ -378,7 +378,7 @@ WIDE = {
         "SELECT * FROM FUND_ADMIN.AGGREGATE_FUND_METRICS\n"
         "WHERE fund_uuid IN ({fund_uuids})\n"
         "QUALIFY ROW_NUMBER() OVER (PARTITION BY fund_uuid "
-        "ORDER BY month_end_date DESC, last_refreshed_at DESC)=1"
+        "ORDER BY month_end_date DESC)=1"
     ),
     "cohort": (
         "SELECT * FROM FUND_ADMIN.TEMPORAL_FUND_COHORT_BENCHMARKS\n"

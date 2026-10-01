@@ -17,7 +17,7 @@ harness-persisted `{"result": "<ndjson>"}` string wrapper — and exits non-zero
 Saving any wrapper verbatim instead is what yields 0 usable rows downstream.
 
 Rules: **SELECT-only**, bound rows via the `limit` argument, never `INFORMATION_SCHEMA`. Dedup latest snapshot
-with `QUALIFY ROW_NUMBER() OVER (PARTITION BY fund_uuid ORDER BY month_end_date DESC, last_refreshed_at DESC)=1`.
+with `QUALIFY ROW_NUMBER() OVER (PARTITION BY fund_uuid ORDER BY month_end_date DESC)=1`.
 Show **names, not UUIDs**. Resolve fund currency from the data — never assume USD.
 
 **The SQL in the DWH sections below is mirrored verbatim in `scripts/stem_queries.py`** — that manifest is the
@@ -129,7 +129,7 @@ SELECT fund_name, fund_size, dry_powder, perc_capital_remaining,
        total_cost_of_investments, total_opx, total_mgmt_fees, fund_reporting_currency
 FROM FUND_ADMIN.AGGREGATE_FUND_METRICS
 WHERE fund_uuid = '<fund_uuid>'
-QUALIFY ROW_NUMBER() OVER (PARTITION BY fund_uuid ORDER BY month_end_date DESC, last_refreshed_at DESC)=1
+QUALIFY ROW_NUMBER() OVER (PARTITION BY fund_uuid ORDER BY month_end_date DESC)=1
 LIMIT 1
 ```
 → `capital.dryPowder`, `capital.fundSize`, `capital.totalMgmtFees`.
@@ -456,7 +456,7 @@ SELECT fund_uuid, dry_powder, total_mgmt_fees, total_opx,
        fund_reporting_currency, vintage_year, vintage_date, total_moic
 FROM FUND_ADMIN.AGGREGATE_FUND_METRICS
 WHERE fund_uuid IN ('<uuid1>', …)
-QUALIFY ROW_NUMBER() OVER (PARTITION BY fund_uuid ORDER BY month_end_date DESC, last_refreshed_at DESC)=1
+QUALIFY ROW_NUMBER() OVER (PARTITION BY fund_uuid ORDER BY month_end_date DESC)=1
 LIMIT 50
 ```
 → `snapshot.fundMetrics[fundId] = {mgmtFees, opex, dryPowder}` (+ `source.currency`, per-fund `vintage`).
