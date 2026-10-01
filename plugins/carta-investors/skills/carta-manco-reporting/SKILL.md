@@ -37,31 +37,93 @@ allowed-tools:
   - Write
   - AskUserQuestion
   # Gate 0 prerequisite (firm-resolution.md): install uv when it's missing,
-  # then resolve which binary name to use for every uv run call below.
-  - Bash(command -v uv >/dev/null 2>&1 || [ -x "$HOME/.local/bin/uv" ] || curl -LsSf https://astral.sh/uv/install.sh | sh)
+  # then resolve which binary name to use for every uv run call below. Each
+  # of these is a single simple command — no `||`/`&&`/`|`/`;` — because the
+  # permission matcher checks every simple command a compound line decomposes
+  # into independently; a rule written as the whole compound line never
+  # matches any of its pieces. See firm-resolution.md.
+  - Bash(uv --version)
+  - Bash($HOME/.local/bin/uv --version)
+  - Bash(curl -LsSf https://astral.sh/uv/install.sh -o /tmp/uv-install.sh)
+  - Bash(sh /tmp/uv-install.sh)
   - Bash(powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex")
-  - Bash(command -v uv >/dev/null 2>&1 && echo uv || { [ -x "$HOME/.local/bin/uv" ] && echo '$HOME/.local/bin/uv'; })
+  # Every uv-run script below is pre-approved in four shapes, so the pattern
+  # matches regardless of which of the two ways firm-resolution.md's Gate 0
+  # substitutes the script path: the literal `${CLAUDE_PLUGIN_ROOT}` token
+  # (normally expanded before the model ever sees it) or the absolute path
+  # the "Base directory for this skill:" fallback derives — and regardless
+  # of whether the command quotes that path, as every reference file does.
+  # The `*/carta-manco-reporting/scripts/...` shape is what actually saves a
+  # run whose `${CLAUDE_PLUGIN_ROOT}` didn't resolve: it matches the absolute
+  # fallback path by suffix instead of requiring an exact prefix.
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/manco_paths.py *)
+  - 'Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/manco_paths.py" *)'
+  - Bash(uv run */carta-manco-reporting/scripts/manco_paths.py *)
+  - 'Bash(uv run "*/carta-manco-reporting/scripts/manco_paths.py" *)'
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/build_manco_datadir.py *)
+  - 'Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/build_manco_datadir.py" *)'
+  - Bash(uv run */carta-manco-reporting/scripts/build_manco_datadir.py *)
+  - 'Bash(uv run "*/carta-manco-reporting/scripts/build_manco_datadir.py" *)'
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/parse_budget_workbook.py *)
+  - 'Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/parse_budget_workbook.py" *)'
+  - Bash(uv run */carta-manco-reporting/scripts/parse_budget_workbook.py *)
+  - 'Bash(uv run "*/carta-manco-reporting/scripts/parse_budget_workbook.py" *)'
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/inspect_workbook.py *)
+  - 'Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/inspect_workbook.py" *)'
+  - Bash(uv run */carta-manco-reporting/scripts/inspect_workbook.py *)
+  - 'Bash(uv run "*/carta-manco-reporting/scripts/inspect_workbook.py" *)'
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/parse_coa_mapping.py *)
+  - 'Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/parse_coa_mapping.py" *)'
+  - Bash(uv run */carta-manco-reporting/scripts/parse_coa_mapping.py *)
+  - 'Bash(uv run "*/carta-manco-reporting/scripts/parse_coa_mapping.py" *)'
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/save_query_result.py *)
-  # Same scripts via <UV_BIN> when uv isn't on PATH yet. Each Bash call is a
-  # fresh shell, so sourcing the installer's env script can't carry uv forward.
+  - 'Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/save_query_result.py" *)'
+  - Bash(uv run */carta-manco-reporting/scripts/save_query_result.py *)
+  - 'Bash(uv run "*/carta-manco-reporting/scripts/save_query_result.py" *)'
+  # Same scripts via <UV_BIN> == $HOME/.local/bin/uv when uv isn't on PATH
+  # yet. Each Bash call is a fresh shell, so sourcing the installer's env
+  # script can't carry uv forward.
   - Bash($HOME/.local/bin/uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/manco_paths.py *)
+  - 'Bash($HOME/.local/bin/uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/manco_paths.py" *)'
+  - Bash($HOME/.local/bin/uv run */carta-manco-reporting/scripts/manco_paths.py *)
+  - 'Bash($HOME/.local/bin/uv run "*/carta-manco-reporting/scripts/manco_paths.py" *)'
   - Bash($HOME/.local/bin/uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/build_manco_datadir.py *)
+  - 'Bash($HOME/.local/bin/uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/build_manco_datadir.py" *)'
+  - Bash($HOME/.local/bin/uv run */carta-manco-reporting/scripts/build_manco_datadir.py *)
+  - 'Bash($HOME/.local/bin/uv run "*/carta-manco-reporting/scripts/build_manco_datadir.py" *)'
   - Bash($HOME/.local/bin/uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/parse_budget_workbook.py *)
+  - 'Bash($HOME/.local/bin/uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/parse_budget_workbook.py" *)'
+  - Bash($HOME/.local/bin/uv run */carta-manco-reporting/scripts/parse_budget_workbook.py *)
+  - 'Bash($HOME/.local/bin/uv run "*/carta-manco-reporting/scripts/parse_budget_workbook.py" *)'
   - Bash($HOME/.local/bin/uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/inspect_workbook.py *)
+  - 'Bash($HOME/.local/bin/uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/inspect_workbook.py" *)'
+  - Bash($HOME/.local/bin/uv run */carta-manco-reporting/scripts/inspect_workbook.py *)
+  - 'Bash($HOME/.local/bin/uv run "*/carta-manco-reporting/scripts/inspect_workbook.py" *)'
   - Bash($HOME/.local/bin/uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/parse_coa_mapping.py *)
+  - 'Bash($HOME/.local/bin/uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/parse_coa_mapping.py" *)'
+  - Bash($HOME/.local/bin/uv run */carta-manco-reporting/scripts/parse_coa_mapping.py *)
+  - 'Bash($HOME/.local/bin/uv run "*/carta-manco-reporting/scripts/parse_coa_mapping.py" *)'
   - Bash($HOME/.local/bin/uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/save_query_result.py *)
+  - 'Bash($HOME/.local/bin/uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/save_query_result.py" *)'
+  - Bash($HOME/.local/bin/uv run */carta-manco-reporting/scripts/save_query_result.py *)
+  - 'Bash($HOME/.local/bin/uv run "*/carta-manco-reporting/scripts/save_query_result.py" *)'
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/serve.py *)
+  - 'Bash(python3 "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/serve.py" *)'
+  - Bash(python3 */carta-manco-reporting/scripts/serve.py *)
+  - 'Bash(python3 "*/carta-manco-reporting/scripts/serve.py" *)'
+  - Bash(nohup python3 ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/serve.py *)
+  - 'Bash(nohup python3 "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/serve.py" *)'
+  - Bash(nohup python3 */carta-manco-reporting/scripts/serve.py *)
+  - 'Bash(nohup python3 "*/carta-manco-reporting/scripts/serve.py" *)'
   - Bash(uv run python3 ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/sync_src.py *)
+  - 'Bash(uv run python3 "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/sync_src.py" *)'
+  - Bash(uv run python3 */carta-manco-reporting/scripts/sync_src.py *)
+  - 'Bash(uv run python3 "*/carta-manco-reporting/scripts/sync_src.py" *)'
   - Bash(curl -sf -o /dev/null -w * http://127.0.0.1:*)
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.54.1</carta-plugin>
+<carta-plugin>carta-investors:6.54.3</carta-plugin>
 
 # ManCo Reporting Dashboard
 
