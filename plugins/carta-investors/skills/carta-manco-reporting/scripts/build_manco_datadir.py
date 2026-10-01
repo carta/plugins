@@ -5144,14 +5144,15 @@ def build(args):
     vendor_spend = build_vendor_spend(all_rows, _vendor_map, _vendor_agg)
 
     # --- Currency -----
-    # None when manco-currency.txt is absent (e.g. an older raw dir fetched
-    # before Query D existed) — the app must render '—' in that case, never
-    # assume USD.
+    # Query D is empty for a ManCo not in AGGREGATE_FUND_METRICS. Cash then names
+    # the currency only when it holds exactly one; else None, never assumed USD.
     currency = read_currency(raw)
 
     # --- Cash -----
     # Reads the currency: it picks which per-currency total the dashboard shows.
     cash = read_cash_balance(raw, args.manco_entity_id, currency)
+    if currency is None:
+        currency = cash["currency"]
 
     # --- Assemble snapshot.json -----
     # Without a workbook the firm still has whatever budget it keeps in

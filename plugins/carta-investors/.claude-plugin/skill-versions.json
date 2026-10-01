@@ -1,6 +1,6 @@
 {
   "carta-home-build": {
-    "version": "1.13.0",
+    "version": "1.13.1",
     "headline": "Updating Carta Home now keeps the changes you've made automatically, and only asks when one clashes with the new version."
   },
   "carta-workhub-build": {

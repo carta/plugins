@@ -1095,8 +1095,9 @@ function escHtml(str) {
 // ── Dashboard launchers ──
 // A dashboard published during the build gets a link; one that was skipped falls back to
 // its prompt, which is the same copy affordance the skill directory uses.
-// The link navigates in place, so the artifact switcher and the browser's own back control
-// both lead back here — the dashboards need no back link of their own.
+// The link navigates in place, so history.back() returns here. The `#from=home` marker is
+// how a dashboard knows it was opened from here and shows its "Back to Home" button; a
+// dashboard opened any other way has no marker and shows no button.
 function renderDashboardLaunchers() {
   DASHBOARDS.forEach(d => {
     const footer = document.getElementById(d.footerId);
@@ -1113,7 +1114,7 @@ function renderDashboardLaunchers() {
             <span class="dash-building__eta">usually a few minutes</span></span>`;
       dashExpireBuilding(footer, target, promptHtml);
     } else if (url) {
-      footer.innerHTML = `<a class="run-btn" href="${escHtml(url)}"
+      footer.innerHTML = `<a class="run-btn" href="${escHtml(url)}#from=home"
             onclick="trackHome('click','CartaHome.Dashboard.Open.${escHtml(d.key)}')">${escHtml(d.label)} →</a>`;
     } else {
       footer.innerHTML = promptHtml;
