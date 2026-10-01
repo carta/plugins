@@ -21,7 +21,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.91.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.91.3</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -46,12 +46,14 @@ Call `list_accounts`. Filter to `corporation_pk:` accounts. Extract up to 20 num
 For each company, the relevant commands are:
 
 - `call_tool({"name": "cap_table__get__cap_table_by_share_class", "arguments": {"corporation_id": corporation_id}})` -- option pool data
-- `call_tool({"name": "cap_table__get__convertible_notes", "arguments": {"corporation_id": corporation_id}})` -- SAFE/note terms (summary includes median/min/max price_cap, avg_discount, by_type)
-- `call_tool({"name": "cap_table__get__financing_history", "arguments": {"corporation_id": corporation_id}})` -- round sizes (summary includes per-round cash_raised and latest_date)
+- `call_tool({"name": "cap_table__get__convertible_notes", "arguments": {"corporation_id": corporation_id}})` -- SAFE/note terms (summary includes min/max/average price_cap, avg_discount, by_type)
+- `call_tool({"name": "cap_table__list__financing_history", "arguments": {"corporation_id": corporation_id}})` -- round sizes (one row per share class with closing_date and cash_raised_by_currency)
 
-The gateway defaults to `detail=summary` for all three commands. The enriched summaries include all fields needed for portfolio benchmarks — no individual records required.
+> **Use `cap_table__list__financing_history` — never `cap_table__get__financing_history`.** The `get` tool is deprecated: the gateway rejects every call to it with *"This command is deprecated"* before reaching Carta, so calling it fails once per company.
 
-> **Parallel execution**: The `fetch` tool has `readOnlyHint=true`, so Claude Code executes parallel fetch calls concurrently. Issue ALL fetch calls for ALL companies in a single response — do NOT loop company-by-company. See Workflow Step 2.
+The convertible-notes call defaults to `detail=summary`, and the other two return aggregates — no individual records are needed.
+
+> **Parallel execution**: `call_tool` reads are read-only, so Claude Code runs parallel calls concurrently. Issue ALL calls for ALL companies in a single response — do NOT loop company-by-company. See Workflow Step 2.
 
 ## Key Fields
 
@@ -60,14 +62,16 @@ From cap table (option pool):
 - `totals.total_fully_diluted`: total fully diluted share count
 
 From convertible notes (summary):
-- `median_price_cap`, `min_price_cap`, `max_price_cap`: valuation cap statistics
+- `min_price_cap`, `max_price_cap`: lowest and highest valuation cap
+- `median_price_cap`: **despite its name, this is the average (mean) cap**, not the median. It averages every instrument the company holds, whatever its status. Call it the company's average cap.
 - `avg_discount`: average discount rate
-- `by_type`: count of SAFEs vs Convertible Notes
+- `by_type`: instrument counts keyed by type (`SAFE`, `Convertible Note`, `Convertible Equity`, `ASA`)
 - `total_dollar_amount`: total invested across all instruments
 
-From financing history (summary):
-- `by_round`: per-round `{count, cash_raised, latest_date}`
-- `total_cash_raised`: aggregate across all rounds
+From financing history (`share_class_financings[]`, one row per share class):
+- `name`: share class (the round)
+- `closing_date`: when the round closed
+- `cash_raised_by_currency`: `{currency: amount}` — `{}` for classes that raised no cash (e.g. common stock)
 
 ## Workflow
 
@@ -77,17 +81,17 @@ Call `list_accounts`. Filter to `corporation_pk:` accounts. Extract up to 20 num
 
 ### Step 2 — Collect Data for All Companies (parallel)
 
-Issue ALL fetch calls for ALL companies **in a single response** — do NOT loop company-by-company. Each fetch call is independent and will execute concurrently.
+Issue ALL calls for ALL companies **in a single response** — do NOT loop company-by-company. Each call is independent and will execute concurrently.
 
-For example, with 5 companies and all 3 data types, issue all 15 fetch calls at once:
+For example, with 5 companies and all 3 data types, issue all 15 calls at once:
 
 ```
 call_tool({"name": "cap_table__get__cap_table_by_share_class", "arguments": {"corporation_id": 1}})
 call_tool({"name": "cap_table__get__convertible_notes", "arguments": {"corporation_id": 1}})
-call_tool({"name": "cap_table__get__financing_history", "arguments": {"corporation_id": 1}})
+call_tool({"name": "cap_table__list__financing_history", "arguments": {"corporation_id": 1}})
 call_tool({"name": "cap_table__get__cap_table_by_share_class", "arguments": {"corporation_id": 2}})
 call_tool({"name": "cap_table__get__convertible_notes", "arguments": {"corporation_id": 2}})
-call_tool({"name": "cap_table__get__financing_history", "arguments": {"corporation_id": 2}})
+call_tool({"name": "cap_table__list__financing_history", "arguments": {"corporation_id": 2}})
 ... (all companies)
 ```
 
@@ -98,14 +102,15 @@ Then from the results:
 - From `totals.total_fully_diluted`: compute option pool % = option_pool_authorized / total_fully_diluted
 
 **SAFE / convertible note terms** (summary):
-- Use `median_price_cap`, `min_price_cap`, `max_price_cap` directly for SAFE cap benchmarks
+- Use each company's `median_price_cap` as its **average** cap, and `min_price_cap` / `max_price_cap` for the range
 - Use `avg_discount` for discount benchmarks
-- Use `by_type` to count SAFEs vs notes per company
+- Use `by_type` to count instruments by type per company
 
-**Financing history** (summary):
-- Use `by_round` to identify rounds and their `cash_raised`
-- Use `total_cash_raised` for aggregate amounts
-- Most recent round = round with latest `latest_date`
+**Financing history**:
+- Last priced round = the row with the latest `closing_date` whose `cash_raised_by_currency` is not empty
+- Its size = that row's `cash_raised_by_currency` amount. Benchmark round sizes within one currency only (the most common one across the portfolio), and name the companies left out because they raised in another currency — never add or compare amounts across currencies
+
+**If a call fails for one company** (403, access denied, or any other error): count that company as "no data" for that metric and carry on with the rest. Do not retry it, and do not look for another tool to fill the gap. List the skipped companies in the caveats.
 
 ### Step 3 — Compute Summary Statistics
 
@@ -115,7 +120,7 @@ For each metric, compute across companies that have data:
 
 Metrics:
 - Option pool % (fully diluted)
-- SAFE valuation cap
+- SAFE valuation cap — the portfolio median of each company's average cap
 - Last priced round size
 
 ### Step 4 — Present Results
@@ -153,9 +158,9 @@ Trigger the AI computation gate (see carta-interaction-reference §6.2) before o
 **SAFE Valuation Caps**
 | Metric | Value |
 |--------|-------|
-| Median | $8,000,000 |
+| Median of company average caps | $8,000,000 |
 | Range  | $3M – $25M |
-| SAFEs analyzed | 28 |
+| Companies with SAFEs or notes | 9 |
 
 **Last Priced Round Size**
 | Metric | Value |
@@ -167,6 +172,7 @@ Trigger the AI computation gate (see carta-interaction-reference §6.2) before o
 ## Caveats
 
 - Portfolio data reflects point-in-time API calls, not a single atomic snapshot
-- Companies with restricted permissions may have incomplete data
+- Companies with restricted permissions may have incomplete data — name the companies skipped for a failed call
+- SAFE caps are per-company averages across every convertible instrument, not per-SAFE medians
 - Rate limit: maximum 20 companies per invocation
 - This reflects your firm's portfolio, not Carta-wide market data — present results as "portfolio benchmarks" not "market data"
