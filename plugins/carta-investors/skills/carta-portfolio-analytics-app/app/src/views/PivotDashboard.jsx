@@ -11,7 +11,7 @@ import { fmtVal, fmtFull, shortDate, TrendSparkline, TREND_SPARK_W } from "../ui
 import { metricsFor, metricOptions, metricOf, pointNearMonthsBack, metricCadence,
   seriesPoints, forecastSeriesPoints, forecastPeriods, forecastMetricsFor,
   isQualitative, kindRank, quarterlyMonthlyGap } from "../model/kpi.js";
-import EditableValue from "../ui/EditableValue.jsx";
+import EditableValue, { CELL_INDICATORS } from "../ui/EditableValue.jsx";
 import { editTarget, addTarget, stageEdit, canEditCompany } from "../model/pendingEdits.js";
 import { currencyActive, DEFAULT_CURRENCY } from "../model/currency.js";
 import { useCanPublish } from "../state/usePublish.js";
@@ -53,10 +53,12 @@ const PERIOD_MIN_W = 110;
 const PERIOD_MAX_W = 240;
 // A column fills spare window width up to this; its content never needs more than PERIOD_MAX_W.
 const PERIOD_FILL_MAX_W = 280;
-// Horizontal chrome around a period value: 14px padding each side, the 4px gap + 11px
-// pencil, and 2px of slack for canvas-vs-layout rounding. The status dot lives in the
-// right padding, which is why the padding is counted in full.
-const CELL_CHROME_W = 14 + 14 + 4 + 11 + 2;
+// A period cell's right padding holds its indicators (4px gap, 7px status dot, 4px gap,
+// 11px pencil) plus 8px of separation from the next column; values sit flush against it.
+const PERIOD_PAD_R = 4 + 7 + 4 + 11 + 8;
+// Horizontal chrome around a period value: 14px left padding, the right padding above,
+// and 2px of slack for canvas-vs-layout rounding.
+const CELL_CHROME_W = 14 + PERIOD_PAD_R + 2;
 const MARKER_W = 7; // a trailing * or ⁱ footnote marker plus its margin
 const CELL_FONT = `14px ${mono.fontFamily}`;
 let measureCtx;
@@ -420,7 +422,7 @@ export default function PivotDashboard({ data, dashboard }) {
   }, [rows, companyById]);
 
   // Each period column fits its widest shown value (numbers, flags, dates) plus the
-  // pencil and the status dot's padding slot, clamped to [PERIOD_MIN_W, PERIOD_MAX_W].
+  // cell padding that holds the status dot and pencil, clamped to [PERIOD_MIN_W, PERIOD_MAX_W].
   // Prose is clipped to its column by design, so it never drives a width.
   // Web fonts can finish loading after the first render; re-measure once they have.
   const [fontsReady, setFontsReady] = useState(() => typeof document === "undefined" || !document.fonts || document.fonts.status === "loaded");
@@ -1002,7 +1004,7 @@ export default function PivotDashboard({ data, dashboard }) {
                     const baseTip = fcTip ? (tip ? `${fcTip}\n\n${tip}` : fcTip) : tip;
                     return (
                       <td key={p} data-tip={qualTip ? (baseTip ? `${qualTip}\n\n${baseTip}` : qualTip) : baseTip}
-                        style={{ padding: r.firstOfCompany ? `${GROUP_PAD_TOP}px 14px 9px` : "9px 14px", verticalAlign: "top",
+                        style={{ padding: r.firstOfCompany ? `${GROUP_PAD_TOP}px ${PERIOD_PAD_R}px 9px 14px` : `9px ${PERIOD_PAD_R}px 9px 14px`, verticalAlign: "top",
                         ...(r.firstOfCompany && { borderTop: groupDivider }),
                         // Prose and numbers share one uniform column: a long answer is
                         // clipped with an ellipsis (full text on hover) instead of widening it.
@@ -1018,11 +1020,17 @@ export default function PivotDashboard({ data, dashboard }) {
                         <div style={r.qual ? QUAL_CELL : VALUE_CELL}>
                           {(() => {
                             const shown = missing ? "—" : (fullFig ? fmtFull(v, r.unit, part && part.s, part && part.cur) : fmtVal(v, r.unit, part && part.s, part && part.cur));
-                            // Footnote markers belong to the value, ahead of the pencil, so the
-                            // pencil stays on the column's right edge.
+                            // Footnote markers belong to the value itself, so the status dot and
+                            // pencil float past them, not between the figure and its marker.
                             const marker = partial ? <span style={{ color: NEG, fontWeight: 700, marginLeft: 3 }} >*</span>
                               : gap ? <span style={{ color: MICRO, fontWeight: 700, marginLeft: 3 }} >ⁱ</span> : null;
                             const shownMarked = marker ? <>{shown}{marker}</> : shown;
+                            const dot = part && part.edit && DOT_LABEL[part.edit.status] ? (
+                              <button type="button" aria-label={DOT_LABEL[part.edit.status][0]} data-tip={DOT_LABEL[part.edit.status][1]}
+                                onClick={(e) => { e.stopPropagation(); openCorrections(part.edit); }}
+                                style={{ display: "block", width: 7, height: 7, borderRadius: "50%", flex: "none",
+                                  border: "none", padding: 0, background: DOT_COLOR[part.edit.status], cursor: "pointer" }} />
+                            ) : null;
                             const co = companyById.get(r.companyId);
                             const m = metricOf(data, r.metricKey);
                             // A dash (or a staged addition's own overlay point) edits through
@@ -1031,17 +1039,13 @@ export default function PivotDashboard({ data, dashboard }) {
                               : part && !part.added ? editTarget(co, m, part, qOnly)
                               : addTarget(co, m, p, qOnly, todayIso);
                             return target
-                              ? <EditableValue value={part ? (m.kind ? part.s : part.v) : null} unit={r.unit} kind={m.kind} display={shownMarked}
+                              ? <EditableValue value={part ? (m.kind ? part.s : part.v) : null} unit={r.unit} kind={m.kind} display={shownMarked} badge={dot}
                                   ariaLabel={`${r.metricLabel} for ${r.companyName}, ${shortDate(p, qOnly)}`}
                                   onCommit={(val) => stage(target, val)} />
-                              : r.qual ? <span style={{ ...TRUNCATE, minWidth: 0 }}>{shown}</span> : shownMarked;
+                              : <span style={{ position: "relative", display: "inline-flex", alignItems: "center", maxWidth: "100%", minWidth: 0 }}>
+                                  {r.qual ? <span style={{ ...TRUNCATE, minWidth: 0 }}>{shown}</span> : shownMarked}
+                                  {dot && <span style={CELL_INDICATORS}>{dot}</span>}</span>;
                           })()}
-                          {part && part.edit && DOT_LABEL[part.edit.status] && (
-                            <button type="button" aria-label={DOT_LABEL[part.edit.status][0]} data-tip={DOT_LABEL[part.edit.status][1]}
-                              onClick={(e) => { e.stopPropagation(); openCorrections(part.edit); }}
-                              style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", verticalAlign: "middle",
-                                border: "none", padding: 0, background: DOT_COLOR[part.edit.status], cursor: "pointer", ...STATUS_DOT_POS }} />
-                          )}
                         </div>
                         {growthMode && !missing && (
                           <div style={{ fontSize: 11, fontWeight: 500, marginTop: 1,
@@ -1799,14 +1803,12 @@ const FC_HEAD_BG = "linear-gradient(rgba(56,132,255,0.16), rgba(56,132,255,0.16)
 // Clip a long free-text answer to one line inside the value cell; the full text
 // stays available on hover via the cell's data-tip.
 const TRUNCATE = { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
-// Period cells are right-justified flex rows so every pencil sits on the same right edge:
-// an over-wide value (a date) overflows to the left instead of pushing its pencil out.
-const VALUE_CELL = { display: "flex", justifyContent: "flex-end", alignItems: "center", position: "relative" };
-// Prose also shrinks, so its long text is what gives way to the pencil.
+// Period cells are right-justified flex rows so values sit flush on the content edge: an
+// over-wide value (a date) overflows to the left instead of into the indicator padding.
+const VALUE_CELL = { display: "flex", justifyContent: "flex-end", alignItems: "center" };
+// Prose also shrinks, so a long answer ends in an ellipsis at the content edge.
 const QUAL_CELL = { ...VALUE_CELL, minWidth: 0 };
-// The status dot sits in the cell's right padding, out of the row's layout, so a pending
-// edit never shifts its pencil off the column's line.
-const STATUS_DOT_POS = { position: "absolute", right: -11, top: "50%", marginTop: -3.5 };
+
 
 const csv = (s) => (/[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
 
@@ -1911,7 +1913,8 @@ function renderPivotHeadRow(colDefs, colWidths) {
           ...(c.frozen ? { left: c.left, zIndex: 3 } : { zIndex: 2 }),
           // Divider where frozen columns end — box-shadow, not border-right (a
           // sticky cell's own border can fail to repaint once actually stuck).
-          ...(c.lastFrozen ? { boxShadow: LAST_FROZEN_DIVIDER } : {}), ...w };
+          ...(c.lastFrozen ? { boxShadow: LAST_FROZEN_DIVIDER } : {}),
+          ...(c.period ? { paddingRight: PERIOD_PAD_R } : {}), ...w };
         return <th key={c.key} data-tip={c.dataTip} data-period={c.period ? "" : undefined} style={style}>{c.content}</th>;
       })}
     </tr>

@@ -325,6 +325,13 @@ export const GLOBAL_CSS = `
   .statcell .go { opacity: 0; transition: opacity .1s ${EASE}; }
   .statcell:hover .go { opacity: .5; }
 
+  /* Inline-edit pencils appear on cell hover or keyboard focus. Opacity, not display,
+     so the pencil stays focusable for keyboard users; touch screens have no hover, so
+     there it is always shown. */
+  .cell-edit { opacity: 0; transition: opacity .1s ${EASE}; }
+  td:hover .cell-edit, .cell-edit:focus-visible { opacity: 1; }
+  @media (hover: none) { .cell-edit { opacity: 1; } }
+
   /* active slice — BLACK wash (active/selected state, not a link) */
   .sliceitem.active { background: var(--accent-soft); border: 1px solid transparent !important; box-shadow: none; color: ${ACCENT}; }
   .sliceitem.active:hover { background: var(--accent-soft); }

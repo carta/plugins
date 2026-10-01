@@ -8,7 +8,7 @@ import { toInputValue, fromInputValue, toQualInput, fromQualInput } from "../mod
  *  input ("text"), where `value` is the reported string. Enter or blur commits the
  *  parsed value (an invalid one is ignored and the editor closes), Escape cancels. The
  *  caller decides what a commit means — this component only edits text. */
-export default function EditableValue({ value, unit, kind, display, onCommit, ariaLabel }) {
+export default function EditableValue({ value, unit, kind, display, badge, onCommit, ariaLabel }) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState("");
   const [width, setWidth] = useState(110);
@@ -72,15 +72,23 @@ export default function EditableValue({ value, unit, kind, display, onCommit, ar
     );
   }
   return (
-    // Prose shrinks (with an ellipsis) and the pencil never does: in a clipped cell a long
-    // answer otherwise pushes the pencil past the cell edge. Short readings keep full width.
-    <span ref={spanRef} style={{ display: "inline-flex", alignItems: "center", gap: 4, justifyContent: "flex-end",
+    // The value sits flush on the cell's edge; the status badge and pencil float just past
+    // it (in the cell's right padding), so neither reserves space inside the value.
+    <span ref={spanRef} style={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "flex-end",
       ...(kind === "text" && { maxWidth: "100%", minWidth: 0 }) }}>
       {kind === "text" ? <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{display}</span> : display}
-      <button type="button" onClick={open} aria-label={`Edit ${ariaLabel}`} className="cell-edit"
-        style={{ flex: "none", background: "none", border: "none", padding: 0, cursor: "pointer", lineHeight: 0, color: "var(--ink-color-global-text-subtle)" }}>
-        <PencilIcon size={11} strokeWidth={1.6} />
-      </button>
+      <span style={CELL_INDICATORS}>
+        {badge}
+        <button type="button" onClick={open} aria-label={`Edit ${ariaLabel}`} className="cell-edit"
+          style={{ flex: "none", background: "none", border: "none", padding: 0, cursor: "pointer", lineHeight: 0, color: "var(--ink-color-global-text-subtle)" }}>
+          <PencilIcon size={11} strokeWidth={1.6} />
+        </button>
+      </span>
     </span>
   );
 }
+
+/** The status badge + pencil group, laid out to the right of the value it belongs to.
+ *  Exported so non-editable cells float their status badge the same way. */
+export const CELL_INDICATORS = { position: "absolute", left: "100%", top: "50%", transform: "translateY(-50%)",
+  marginLeft: 4, display: "inline-flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" };
