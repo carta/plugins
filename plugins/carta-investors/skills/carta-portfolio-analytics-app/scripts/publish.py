@@ -384,8 +384,15 @@ def run_publish(data_dir, edits, emit, claude_bin=None, model=None, on_session=N
                 prompt = refresh._first_turn_prompt(firm_uuid, STORE_TOOL, args)
             else:
                 prompt = refresh._single_call_prompt(call, STORE_TOOL, args)
-            ok, captured, err, matched = refresh._run_turn(session, prompt, capture_suffix="__call_tool",
-                                                           timeout=TURN_TIMEOUT)
+            try:
+                ok, captured, err, matched = refresh._run_turn(session, prompt, capture_suffix="__call_tool",
+                                                               timeout=TURN_TIMEOUT)
+            except refresh.ClaudeSessionError as e:
+                if call is None:
+                    raise
+                # Earlier groups may already be stored; fail only this one.
+                results.extend({"id": eid, "status": "failed", "error": str(e)} for eid in g["editIds"])
+                continue
             if call is None:
                 prefix = refresh.prefix_from_toolname(matched)
                 if not prefix:
@@ -398,6 +405,8 @@ def run_publish(data_dir, edits, emit, claude_bin=None, model=None, on_session=N
             else:
                 why = captured_err or _error_text(err, captured if not ok else None)
                 results.extend({"id": eid, "status": "failed", "error": why} for eid in g["editIds"])
+    except refresh.ClaudeSessionError as e:
+        raise PublishError(str(e), needs_human=True, detail=e.detail)
     finally:
         session.close()
         if on_session:

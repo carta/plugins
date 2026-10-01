@@ -84,9 +84,13 @@ _TRANSIENT_RE = re.compile(r"socket|connection (?:was )?(?:closed|reset)|ECONNRE
                            r"timed? ?out|\b50[234]\b|fetch failed|network", re.I)
 EVENT_LOG = "refresh.log"
 
-_PREFIXES_PROD = ("claude_ai_carta", "claude_ai_Carta", "carta", "carta_production")
+# Server names a Carta MCP can be registered under: claude.ai connectors, the names
+# carta-mcp-setup writes (carta_prod, carta_test, …), and its older hyphenated names.
+_PREFIXES_PROD = ("claude_ai_carta", "claude_ai_Carta", "carta", "carta_production",
+                  "carta_prod", "carta-prod")
 _PREFIXES_NONPROD = ("Carta_Sandbox", "claude_ai_Carta_Sandbox", "carta_sandbox",
-                     "carta_test", "carta_demo", "carta_preprod")
+                     "carta_test", "carta_demo", "carta_preprod",
+                     "carta-sandbox", "carta-test", "carta-demo", "carta-preprod")
 _TOOLNAME_RE = re.compile(r"^mcp__(.+)__[a-z_]+$")
 
 # save_query_result flags that verify a stem tiled completely on the single-fetch,
@@ -135,6 +139,20 @@ class RefreshError(Exception):
         super(RefreshError, self).__init__(message)
         self.needs_human = needs_human
         self.detail = detail  # raw technical error, shown behind a "details" toggle
+
+
+class ClaudeSessionError(Exception):
+    """The headless claude session failed before any tool ran (sign-in, quota, model),
+    so Carta was never reached. Not a RefreshError: the per-stem handlers that turn a
+    RefreshError into a warning must not swallow it — every later turn fails the same way."""
+
+    def __init__(self, text):
+        text = (text or "").strip()[:300] or "no error text"
+        super(ClaudeSessionError, self).__init__(
+            "Claude Code couldn't run, so Carta was never reached: %s. Run `claude -p \"hi\"` "
+            "in a terminal; if that fails too, sign in again with /login." % text.rstrip("."))
+        self.needs_human = True
+        self.detail = text
 
 
 def bootstrap_allowed_tools(prefer_nonprod=False):
@@ -238,6 +256,8 @@ def _run_turn(session, prompt, capture_suffix=None, on_step=None, timeout=TURN_T
                 elif capture_suffix:
                     captured = text
         elif t == "result":
+            if ev.get("is_error") and not pending:
+                raise ClaudeSessionError(ev.get("result"))
             return (not ev.get("is_error"), captured, err or other_err, matched)
     return (False, captured, err or other_err or "session ended without a result", matched)
 
@@ -573,7 +593,7 @@ def _save_pages(session, script_dir, raw_dir, call_box, stem, src, sql, target, 
         m = _TRUNC_SINGLE_RE.search((r.stdout or "") + (r.stderr or ""))
         if m:
             _paginate(session, script_dir, raw_dir, call_box, stem, int(m.group(1)), sql, target, emit)
-    except RefreshError:
+    except (RefreshError, ClaudeSessionError):
         _discard(target)
         raise
 

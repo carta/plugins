@@ -320,7 +320,7 @@ def _run_refresh_bg():
                            companyWarnings=result.get("companyWarnings", []),
                            selectedCount=result.get("selectedCount"),
                            filterSince=result.get("filterSince"))
-    except refresh.RefreshError as e:
+    except (refresh.RefreshError, refresh.ClaudeSessionError) as e:
         _set_refresh_state(status="error", progress=None, message=str(e),
                            detail=e.detail, needs_human=e.needs_human)
     except Exception as e:  # noqa: BLE001 — a bg thread must never crash silently
