@@ -175,14 +175,13 @@ export default function PivotDashboard({ data, dashboard }) {
   const [viewId, setViewId] = useState(null);       // null = unsaved / custom filters
   const [saving, setSaving] = useState(false);
   const [newName, setNewName] = useState("");
-  // Manual filter edits break the tie to the saved view — wrap the setters.
+  // Manual filter edits keep the saved view selected; `dirty` below flags the drift.
   const onMetrics = (s) => {
     setSelMetrics(s);
     // Empty `s` means every KPI shows — keep every key in scope here too,
     // or clearing the filter would wipe any custom row order.
     const keep = s.size > 0 ? s : new Set(metrics.map((m) => m.key));
     setMetricOrder((prev) => [...prev.filter((k) => keep.has(k)), ...defaultKeys([...keep].filter((k) => !prev.includes(k)))]);
-    setViewId(null);
   };
   // Drag-to-reorder: metricOrder holds exactly the selected keys in order,
   // so moving an index to a drop target is a plain splice.
@@ -196,16 +195,8 @@ export default function PivotDashboard({ data, dashboard }) {
       a.splice(from < to ? to - 1 : to, 0, item);
       return a;
     });
-    setViewId(null);
   };
-  const onPos = (s) => { setSelPos(s); setViewId(null); };
-  const onFund = (v) => { setFund(v); setViewId(null); };
-  const onCompanies = (s) => { setSelCompanies(s); setViewId(null); };
-  const onTags = (s) => { setSelTags(s); setViewId(null); };
-  const onSignals = (s) => { setSelSignals(s); setViewId(null); };
-  const onWindow = (v) => { trackClick("PortfolioAnalytics.Pivot.SetWindow"); setWindow(v); setViewId(null); };
-  const onQOnly = (v) => { setQOnly(v); setViewId(null); };
-  const onDateOrder = (v) => { setDateOrder(v); setViewId(null); };
+  const onWindow = (v) => { trackClick("PortfolioAnalytics.Pivot.SetWindow"); setWindow(v); };
   const applyView = (id) => {
     const v = views.find((x) => x.id === id);
     if (!v) {
@@ -253,6 +244,31 @@ export default function PivotDashboard({ data, dashboard }) {
     companyIds: allCompanyIds.length && allCompanyIds.every((id) => selCompanies.has(id)) ? [] : [...selCompanies],
     tags: [...selTags], window, qOnly, dateOrder,
   });
+  // A view is "dirty" once the live state drifts from its saved snapshot. Derived
+  // by comparison — not by tracking setter calls — so a Filters Apply with no real
+  // change stays clean, and a signal pick (never part of a view) can't dirty one.
+  // Effective values follow applyView's defaulting rules, so a legacy view with
+  // absent fields or the [] = "all" canonicalization compares clean.
+  const setEq = (a, b) => a.size === b.size && [...a].every((x) => b.has(x));
+  const dirty = useMemo(() => {
+    const v = views.find((x) => x.id === viewId);
+    if (!v) return false;
+    const effMetrics = new Set(v.metricKeys && v.metricKeys.length ? v.metricKeys : allMetricKeys);
+    const orderKeys = v.metricKeys && v.metricKeys.length ? v.metricKeys : metrics.map((m) => m.key);
+    const effOrder = v.metricOrder && v.metricOrder.length ? v.metricOrder.filter((k) => orderKeys.includes(k)) : defaultKeys(orderKeys);
+    return !(
+      setEq(effMetrics, selMetrics) &&
+      // row order is the feature — compare it order-sensitively
+      effOrder.length === metricOrder.length && effOrder.every((k, i) => k === metricOrder[i]) &&
+      setEq(new Set(v.posKeys || []), selPos) &&
+      (v.fund ?? "ALL") === fund &&
+      setEq(new Set(v.companyIds && v.companyIds.length ? v.companyIds : allCompanyIds), selCompanies) &&
+      setEq(new Set(v.tags || []), selTags) &&
+      (v.window ?? 8) === window &&
+      (v.qOnly !== false) === qOnly &&
+      (v.dateOrder === "asc" ? "asc" : "desc") === dateOrder
+    );
+  }, [views, viewId, selMetrics, metricOrder, selPos, fund, selCompanies, selTags, window, qOnly, dateOrder, allMetricKeys, allCompanyIds, metrics]);
   const saveView = () => {
     const nm = newName.trim(); if (!nm) return;
     const id = "v-" + Math.random().toString(36).slice(2, 8);
@@ -767,16 +783,16 @@ export default function PivotDashboard({ data, dashboard }) {
         <div style={{ position: "absolute", top: 0, bottom: 0, left: 0,
           width: wrapMaxW ?? "100%", background: "var(--ink-color-global-surface-background-default)" }} />
         <div style={{ position: "relative", display: "flex", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
-          <ViewControl views={views} viewId={viewId} onApply={applyView} onUpdate={updateView} onDelete={deleteView}
+          <ViewControl views={views} viewId={viewId} dirty={dirty} onApply={applyView} onUpdate={updateView} onDelete={deleteView}
             saving={saving} setSaving={setSaving} newName={newName} setNewName={setNewName} onSave={saveView} />
           <SearchInput placeholder="Search companies…" value={search} onChange={(e) => setSearch(e.target.value)} style={{ width: 200 }} />
-          <GlobalFilter tagGroups={tagGroups} tagCounts={tagCounts} selTags={selTags} onTags={onTags}
+          <GlobalFilter tagGroups={tagGroups} tagCounts={tagCounts} selTags={selTags} onTags={setSelTags}
             favOnly={favOnly} setFavOnly={setFavOnly} favTotal={favTotal} hasCartaTags={hasCartaTags(data)}
-            signalOptions={signalOptions} selSignals={selSignals} onSignals={onSignals}
-            fundOpts={fundOpts} fund={fund} onFund={onFund}
-            companyOpts={companyOpts} selCompanies={selCompanies} onCompanies={onCompanies}
+            signalOptions={signalOptions} selSignals={selSignals} onSignals={setSelSignals}
+            fundOpts={fundOpts} fund={fund} onFund={setFund}
+            companyOpts={companyOpts} selCompanies={selCompanies} onCompanies={setSelCompanies}
             metricOpts={metricOpts} selMetrics={selMetrics} onMetrics={onMetrics}
-            posOpts={posOpts} selPos={selPos} onPos={onPos} posAvailable={posAvailable} />
+            posOpts={posOpts} selPos={selPos} onPos={setSelPos} posAvailable={posAvailable} />
         </div>
         <div style={{ position: "relative", display: "flex", gap: 8, flexWrap: "wrap" }}>
           <Btn size="toolbar" onClick={() => setShowSettings(true)}>Configure{nonDefault ? ` (${nonDefault})` : ""}</Btn>
@@ -824,11 +840,11 @@ export default function PivotDashboard({ data, dashboard }) {
           )}
           <Segmented small options={[{ id: 4, label: "4" }, { id: 8, label: "8" }, { id: 12, label: "12" }, { id: "all", label: "All" }]} value={window} onChange={onWindow} />
           <span style={{ ...sans, fontSize: FS.small, color: MICRO, display: "inline-flex", alignItems: "center", gap: 7 }}>
-            Quarter-ends only <Toggle small checked={qOnly} onChange={onQOnly} labels={["On", "Off"]} />
+            Quarter-ends only <Toggle small checked={qOnly} onChange={setQOnly} labels={["On", "Off"]} />
           </span>
           <span data-tip="Order of the date columns. Newest first (default) puts the latest period in the leftmost column; oldest first reads left-to-right in time."
             style={{ ...sans, fontSize: FS.small, color: MICRO, display: "inline-flex", alignItems: "center", gap: 7, cursor: "help" }}>
-            Date order <Segmented small options={[{ id: "desc", label: "Newest first" }, { id: "asc", label: "Oldest first" }]} value={dateOrder} onChange={onDateOrder} />
+            Date order <Segmented small options={[{ id: "desc", label: "Newest first" }, { id: "asc", label: "Oldest first" }]} value={dateOrder} onChange={setDateOrder} />
           </span>
         </Section>
 
@@ -1115,8 +1131,11 @@ export default function PivotDashboard({ data, dashboard }) {
 /** Ribbon "View" control — a Dropdown-styled trigger reading "View: <name>"
  *  that opens a panel of saved-view radios + save/update/delete. A "view"
  *  captures the metric selection/order, fund, companies, tags, and timeline
- *  window — reapplying it restores that exact filter config. */
-function ViewControl({ views, viewId, onApply, onUpdate, onDelete, saving, setSaving, newName, setNewName, onSave }) {
+ *  window — reapplying it restores that exact filter config. Edits made while
+ *  a view is selected keep it selected and flag it dirty (•) until Update
+ *  saves them into the view or Revert re-applies the saved snapshot — so a
+ *  view can be created first and configured after. */
+function ViewControl({ views, viewId, dirty, onApply, onUpdate, onDelete, saving, setSaving, newName, setNewName, onSave }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const panelRef = useRef(null);
@@ -1130,7 +1149,9 @@ function ViewControl({ views, viewId, onApply, onUpdate, onDelete, saving, setSa
     <div ref={ref} style={{ position: "relative", display: "inline-block" }}>
       <button onClick={() => setOpen((o) => !o)} className={`dd-trigger${open ? " is-open" : ""}`}
         style={{ ...ddTriggerStyle({ minWidth: 170 }), cursor: "pointer" }}>
-        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>View: {label}</span>
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          View: {label}{dirty && <span title="Unsaved changes" style={{ fontWeight: 700 }}> •</span>}
+        </span>
         <ChevronDownIcon size={16} strokeWidth={1.5} style={{ flex: "none" }} />
       </button>
       {open && createPortal(
@@ -1142,11 +1163,17 @@ function ViewControl({ views, viewId, onApply, onUpdate, onDelete, saving, setSa
             <div style={{ ...sans, fontWeight: 600, fontSize: FS.bodyLg }}>Select from your Saved Views</div>
             {viewId && (
               <span style={{ display: "flex", gap: 8, flex: "none" }}>
+                {dirty && <Btn kind="link" style={{ fontSize: FS.small }} onClick={() => onApply(viewId)} title="Discard changes and restore the saved view">Revert</Btn>}
                 <Btn kind="link" style={{ fontSize: FS.small }} onClick={onUpdate} title="Overwrite this view with the current filters">Update</Btn>
                 <Btn kind="link" style={{ fontSize: FS.small, color: NEG }} onClick={onDelete}>Delete</Btn>
               </span>
             )}
           </div>
+          {viewId && dirty && (
+            <div style={{ ...sans, fontSize: FS.micro, color: MICRO, marginBottom: 8 }}>
+              Unsaved changes — Update saves them to this view, Revert discards them.
+            </div>
+          )}
           <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 10 }}>
             {/* onClick (not just onChange) — a radio already checked fires no change
                 event, so re-picking the current view/Default must still re-apply it
@@ -1173,7 +1200,8 @@ function ViewControl({ views, viewId, onApply, onUpdate, onDelete, saving, setSa
             <Btn onClick={() => setSaving(true)}>+ Add View</Btn>
           )}
           <div style={{ ...sans, fontSize: FS.micro, color: MICRO, marginTop: 8 }}>
-            Save your current KPI selection and order, fund, companies, tags, and timeline window as a view.
+            A view saves your KPI selection and order, fund, companies, tags, and timeline window.
+            Add a view first and configure after — edits flag it (•) until you Update or Revert.
           </div>
         </div>,
         document.body,
