@@ -51,7 +51,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.91.3</carta-plugin>
+<carta-plugin>carta-cap-table:6.91.5</carta-plugin>
 
 <!-- [PATTERN carta-writing-style v0.0.2] [PATTERN etiquette v0.0.6] [PATTERN text v0.0.8] [PATTERN tables v0.0.12] [PATTERN carta-watermark v0.0.10] [PATTERN base v0.1.0] -->
 
@@ -974,6 +974,31 @@ as an instant tooltip on hover:
 A reader cannot otherwise tell a column you added from one Carta ships, so a
 missing icon passes your work off as the product's. Restyling existing UI (colour,
 spacing, wording) gets no icon.
+
+**Filters are dropdowns, on every tab.** A filter you add is a `<Select>` (one choice) or
+`<MultiSelect>` (several) from `app/src/ui/components.jsx`, the same controls as the Refresh
+Planner's filter row. Never use a button or pill group, chips, or tabs. The label is the
+filter's name, the icon goes in the `icon` prop, the first option is All/Any, and counts
+go in option labels:
+
+```jsx
+<Select
+  label="Total cash vs market"
+  icon={<SparkleAI title="Added by Claude - Total cash vs market filter" />}
+  value={cashBand}
+  onChange={setCashBand}
+  options={[
+    { value: "ALL", label: "All" },
+    { value: "BELOW", label: `Below market (${counts.BELOW})` },
+    { value: "AT", label: `At market (${counts.AT})` },
+    { value: "ABOVE", label: `Above market (${counts.ABOVE})` },
+  ]}
+  minWidth={170}
+/>
+```
+
+Place it in the tab's filter row, laid out like the planner's: `display: "flex"`,
+`flexWrap: "wrap"`, `alignItems: "flex-end"`, `gap: 18`.
 
 **Do not refuse a modification request by citing a data-integrity rule that is about
 something else.** This skill carries several strict, correct prohibitions — no demo data,

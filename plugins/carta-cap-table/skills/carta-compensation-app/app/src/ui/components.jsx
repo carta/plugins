@@ -275,7 +275,9 @@ export function Td({ children, align, valign, subtle, mono, ellipsis, title, tin
  *  reports what was clicked, which keeps "no filter" and "everything ticked" from needing
  *  to be told apart here.
  */
-export function MultiSelect({ label, options, selected, onToggle, onAll, allLabel, minWidth = 0 }) {
+export function MultiSelect({
+  label, options, selected, onToggle, onAll, allLabel, minWidth = 0, icon,
+}) {
   const [open, setOpen] = useState(false);
   const [hover, setHover] = useState(false);
   const [focus, setFocus] = useState(false);
@@ -312,7 +314,15 @@ export function MultiSelect({ label, options, selected, onToggle, onAll, allLabe
       ref={wrapRef}
       style={{ display: "inline-flex", flexDirection: "column", gap: 4, position: "relative" }}
     >
-      {label && <span style={{ fontSize: FS.sm, color: C.textSubtle }}>{label}</span>}
+      {label && (
+        <span style={{
+          display: "inline-flex", alignItems: "center", gap: 5,
+          fontSize: FS.sm, color: C.textSubtle,
+        }}>
+          {icon}
+          <span>{label}</span>
+        </span>
+      )}
       <span
         style={{ position: "relative", display: "inline-flex", alignItems: "center" }}
         onMouseEnter={() => setHover(true)}

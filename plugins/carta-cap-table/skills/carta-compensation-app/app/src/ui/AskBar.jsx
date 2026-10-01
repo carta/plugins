@@ -52,6 +52,17 @@ export function eventText(ev) {
   return "";
 }
 
+// Text blocks between tool calls start with no leading space. Joined as-is, they
+// run sentences together ("…each row.Now update…"), so each new block gets one.
+export function appendEvent(acc, ev) {
+  const e = ev.type === "stream_event" ? ev.event : null;
+  if (e?.type === "content_block_start" && e.content_block?.type === "text"
+      && acc && !/\s$/.test(acc)) {
+    return acc + " ";
+  }
+  return acc + eventText(ev);
+}
+
 const PLACEHOLDER = "Ask Claude to change this console — e.g. add an interpolated P60 column";
 
 // The reply is transient — the durable output is the edit, which the page reloads to
@@ -213,7 +224,7 @@ export default function AskBar({ token, page, placeholder = PLACEHOLDER }) {
         const { events, rest } = parseSSE(buffer);
         buffer = rest;
         for (const ev of events) {
-          textRef.current += eventText(ev);
+          textRef.current = appendEvent(textRef.current, ev);
           if (ev.type === "result") {
             if (ev.ctcReload) shouldReload = true;
             if (ev.is_error || ev.subtype === "error") {

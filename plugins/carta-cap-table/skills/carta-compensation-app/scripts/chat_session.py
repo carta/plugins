@@ -99,6 +99,14 @@ CTC_APP_NOTE = (
     "title=\"Added by Claude - sorted by compa-ratio\". Restyling existing UI (colour, "
     "spacing, wording) gets no icon.\n"
     "\n"
+    "FILTERS ARE DROPDOWNS, on every tab. A filter you add is a <Select> (one choice) "
+    "or <MultiSelect> (several) from ui/components.jsx - the control the Refresh "
+    "Planner's filter row uses - never a button/pill group, chips or tabs. Set `label` "
+    "to the filter's name and pass icon={<SparkleAI title=\"Added by Claude - ...\"/>}; "
+    "the first option is All/Any, and counts go in option labels, e.g. "
+    "\"Below market (81)\". Put it in the tab's filter row, laid out like the "
+    "planner's: display flex, flexWrap wrap, alignItems flex-end, gap 18.\n"
+    "\n"
     "Three allowed paths for a value the user asks to display:\n"
     "1. The row already carries the field - render it. No marker needed. "
     "(e.g. `total_unvested_shares` on planner rows.)\n"
@@ -139,7 +147,8 @@ CTC_APP_NOTE = (
 
 _MARK_ADDITIONS = (
     " Any column, filter, sort or tag you add here renders with "
-    "<SparkleAI title=\"Added by Claude - ...\"/> from ui/components.jsx."
+    "<SparkleAI title=\"Added by Claude - ...\"/> from ui/components.jsx. A filter "
+    "is a <Select> or MultiSelect dropdown with that icon as its `icon` prop."
 )
 
 # Prepended to each turn's prompt so a new AskBar file/field lands here alongside
