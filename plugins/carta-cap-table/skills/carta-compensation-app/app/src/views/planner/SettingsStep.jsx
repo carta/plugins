@@ -401,11 +401,6 @@ export default function SettingsStep({
   // Shares by default: the report's own figure, and the only unit that needs
   // no corporation-level input.
   const [unit, setUnit] = useState(SHARES);
-  // Whether the policy panel is expanded. Held in React rather than left to
-  // <details>' own DOM state because the GRID needs it: a collapsed panel has to
-  // give its 430px column back to the grants table, and a column width cannot be
-  // expressed in CSS from a sibling's [open] attribute. The <details> is still the
-  // control — this mirrors it via onToggle, so keyboard and click both work.
   const [policyOpen, setPolicyOpen] = useState(true);
   const units = availableUnits(equityUnits);
   const ownershipAvailable = units.includes(OWNERSHIP);
@@ -548,413 +543,351 @@ export default function SettingsStep({
         )}
       </div>
 
-      {/* Policy and grants side by side, the way the cohort step pairs its table
-          with the cart. Editing a field and watching the column beside it move is
-          the point of this screen, and stacked the two were never on screen at the
-          same time. Stacks below the breakpoint — a fixed second column is the trap
-          that hid the cohort step's cart. */}
+      {/* Grants card with inline policy toggle. When the pill is clicked the
+          policy panel slides in beside the table so the user can tweak settings
+          and watch the grant column update live. When collapsed the panel
+          disappears entirely, giving the table full width — no empty gutter. */}
       <div style={{
-        display: "grid",
-        // Collapsed, the policy column shrinks to its own content instead of
-        // holding 430px open — `auto` is what hands the width to the table rather
-        // than leaving a tall empty gutter beside it. Folding only vertically left
-        // the column reserved, which is the thing that looked broken.
-        //
-        // The collapsed panel still occupies a column: it keeps its summary row,
-        // and that row carries the Show control and the override tag. Dropping to
-        // a single column would move the control under the table.
-        gridTemplateColumns: !wide
-          ? "minmax(0, 1fr)"
-          : policyOpen
-            ? "minmax(0, 430px) minmax(0, 1fr)"
-            : "auto minmax(0, 1fr)",
-        gap: 16,
-        alignItems: "start",
+        background: C.surface, border: `1px solid ${C.border}`, borderRadius: RADIUS, padding: 16,
       }}>
+        {/* Header row: title, policy pill, override badge, bulk reason */}
         <div style={{
-          background: C.surface, border: `1px solid ${C.border}`, borderRadius: RADIUS, padding: 16,
+          display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+          marginBottom: 8,
         }}>
-          {/* Collapsible, reusing step 1's fold: this panel is tall, and once the
-              policy is set the grants table beside it is what the user is actually
-              working in. Open by default — the settings drive every figure in that
-              table, so hiding them by default would hide the explanation. */}
-          <details
-            open={policyOpen}
-            onToggle={(e) => setPolicyOpen(e.currentTarget.open)}
-            className="ctc-fold"
+          <span style={{ fontSize: FS.sm, fontWeight: 600, color: C.textSubtle }}>
+            Grants ({shown.length})
+          </span>
+
+          <button
+            type="button"
+            onClick={() => setPolicyOpen((o) => !o)}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              padding: "4px 12px", fontSize: FS.sm, fontWeight: 500,
+              background: policyOpen ? "#E0E3E6" : C.surfaceUnderlay,
+              border: `1px solid ${policyOpen ? "#999" : C.borderDefault}`,
+              borderRadius: 99, cursor: "pointer", color: C.textSubtle,
+              fontFamily: "inherit",
+            }}
           >
-            {/* nowrap while collapsed: the summary is the whole width of the
-                column then, and letting the title wrap would make a narrow
-                two-line stub instead of one tidy row. */}
-            <summary style={{
-              display: "flex", alignItems: "center", gap: 10, cursor: "pointer",
-              flexWrap: policyOpen ? "wrap" : "nowrap",
-              whiteSpace: policyOpen ? undefined : "nowrap",
-              marginBottom: policyOpen ? 10 : 0,
+            <span style={{
+              display: "inline-flex",
+              transform: policyOpen ? "rotate(180deg)" : undefined,
+              transition: "transform 0.2s ease",
             }}>
-              {/* The shared card title, as an h2 — it names this panel, and a bold
-                  span reaches a screen reader as neither. */}
-              <h2 style={{ ...CARD_TITLE, color: C.text, margin: 0 }}>
-                Refresh grant policy
-              </h2>
-              {/* The override tag rides on the SUMMARY so it survives collapsing: a
-                  folded panel that does not say the policy has been overridden is
-                  how a local edit silently becomes the thing nobody notices. */}
-              {overridden && (
-                <Tag
-                  tone="notice"
-                  pill
-                  title={`Local to this console. Carta's policy for this corporation is unchanged: ${policySettings.targetPct}% every ${cadenceLabel(policySettings.cadenceMonths)}, ${policySettings.tenureMinMonths}-month tenure requirement, ${policySettings.rangeBelowPct}–${policySettings.rangeAbovePct}% range.`}
-                >
-                  Local override — not saved to Carta
-                </Tag>
-              )}
-              {/* A span, not a button: a <button> inside a <summary> swallows the
-                  click that would toggle it. aria-hidden because the summary
-                  announces its own open state, and both would be heard twice. */}
-              <span
-                aria-hidden="true"
-                style={{
-                  // Pinned right only while open, where the column is a fixed
-                  // 430px. Collapsed the column is sized to this row, so an auto
-                  // margin would have nothing to push against — it would widen the
-                  // stub to fill whatever the grid allowed.
-                  marginLeft: policyOpen ? "auto" : 4,
-                  display: "inline-flex", alignItems: "center",
-                  gap: 6, fontSize: FS.sm, color: C.textSubtle,
-                }}
-              >
-                <span className="ctc-fold-label" />
-                <span className="ctc-fold-chevron" style={{ display: "inline-flex" }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                    strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                    style={{ stroke: "currentColor" }}>
-                    <path d="M6 9l6 6 6-6" />
-                  </svg>
-                </span>
-              </span>
-            </summary>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                style={{ stroke: "currentColor" }}>
+                <path d="M6 9l6 6 6-6" />
+              </svg>
+            </span>
+            Refresh grant policy
+          </button>
 
-            {/* OUTSIDE the summary, deliberately: a <button> in there would eat the
-                toggle click (see the span above). It belongs with the fields it
-                resets anyway, so collapsing the panel takes it along. */}
-            {overridden && (
-              <div style={{ display: "flex", marginBottom: 10 }}>
-                <button
-                  type="button"
-                  onClick={() => onSettings({ ...policySettings })}
-                  style={{
-                    height: 32, padding: "0 12px", fontSize: FS.md, fontFamily: "inherit",
-                    color: C.textDefault, background: C.surfaceDefault,
-                    border: `1px solid ${C.borderDefault}`, borderRadius: RADIUS, cursor: "pointer",
-                  }}
-                >
-                  Reset to Carta policy
-                </button>
-              </div>
-            )}
+          {overridden && (
+            <Tag
+              tone="notice"
+              pill
+              title={`Local to this console. Carta's policy for this corporation is unchanged: ${policySettings.targetPct}% every ${cadenceLabel(policySettings.cadenceMonths)}, ${policySettings.tenureMinMonths}-month tenure requirement, ${policySettings.rangeBelowPct}–${policySettings.rangeAbovePct}% range.`}
+            >
+              Local override — not saved to Carta
+            </Tag>
+          )}
 
-          {!havePolicy ? (
+          <EquityUnitToggle unit={unit} onUnit={setUnit} equityUnits={equityUnits} />
+
+          <label style={{
+            marginLeft: "auto",
+            display: "inline-flex", alignItems: "center", gap: 7,
+            fontSize: FS.sm, color: C.textSubtle,
+          }}>
+            Set all reasons to
+            <select
+              value=""
+              onChange={(e) => { if (e.target.value) onAllReasons(e.target.value); }}
+              title="Applies one grant reason to every employee in this plan, replacing any set per row"
+              style={{
+                height: 32, padding: "0 6px", fontSize: FS.md, fontFamily: "inherit",
+                color: C.textDefault, background: C.surfaceDefault,
+                border: `1px solid ${C.borderDefault}`, borderRadius: RADIUS,
+              }}
+            >
+              <option value="">Choose…</option>
+              {GRANT_REASONS.map((r) => (
+                <option key={r.value} value={r.value}>{r.label}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        {/* Side-by-side grid: policy panel + table */}
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: !wide || !policyOpen
+            ? "minmax(0, 1fr)"
+            : "minmax(0, 380px) minmax(0, 1fr)",
+          gap: policyOpen && wide ? 16 : 0,
+          alignItems: "start",
+        }}>
+
+          {/* Policy side panel */}
+          {policyOpen && (
             <div style={{
-              padding: "10px 12px", borderRadius: RADIUS,
-              background: C.feedbackNoticeSubtle, border: `1px solid ${C.feedbackNotice}`,
-              fontSize: FS.sm, color: C.feedbackNotice, lineHeight: 1.55,
+              padding: 16,
+              background: C.surfaceUnderlay, borderRadius: RADIUS,
+              border: `1px solid ${C.border}`,
+              overflowY: "auto", maxHeight: 700,
+              marginBottom: !wide ? 12 : 0,
             }}>
-              <strong>Refresh grant policy could not be fetched.</strong> The corporation's
-              own policy isn't in this build — either the account has no CTC role on it,
-              or the fetch itself failed. So the settings below can't be applied. Say
-              "refresh" to rebuild; if it fails again, the backend is degraded and this
-              needs escalating rather than retrying.
-            </div>
-          ) : (
-            <>
-              {/* CTC's Plan Settings fields, in this planner's order and wording.
-                  The VALUES are the modal's own and are stored unchanged: the range
-                  stays "% below / % above" target, and both durations stay a single
-                  month count. Only the labels and the order differ. */}
-              <div style={{ display: "grid", gap: 18 }}>
-                <PolicyField
-                  label="Refresh Grant Target"
-                  help={<>
-                    Percentage of new hire benchmark used for Refresh Grants.<br />
-                    (E.g. If Rachel would receive 100 shares if joining as a new hire
-                    today, they would receive {settings.targetPct} as a refresh grant)
-                  </>}
-                  info="Default: 30%"
-                >
-                  <span style={{
-                    display: "inline-flex", alignItems: "baseline", gap: 8, flexWrap: "wrap",
-                  }}>
-                    <NumField
-                      value={settings.targetPct}
-                      onChange={(v) => onSettings({ ...settings, targetPct: v })}
-                      suffix="%"
-                      title="Percent of the employee's new-hire benchmark"
-                      label="Refresh grant target"
-                    />
-                    <span style={{ fontSize: FS.md, color: C.textSubtle }}>/ every</span>
-                    {/* An ECHO of the Frequency field below, not a second control.
-                        There is one stored cadence, and two live inputs over one
-                        value invite the reader to wonder which one wins. Greyed and
-                        read-only says "this is shown here, set there" — the target
-                        still needs the period beside it to mean anything. */}
+              <div style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                marginBottom: 14,
+              }}>
+                <h2 style={{ ...CARD_TITLE, color: C.text, margin: 0 }}>
+                  Refresh grant policy
+                </h2>
+                <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  {overridden && (
+                    <button
+                      type="button"
+                      onClick={() => onSettings({ ...policySettings })}
+                      style={{
+                        height: 32, padding: "0 12px", fontSize: FS.md, fontFamily: "inherit",
+                        color: C.textDefault, background: C.surfaceDefault,
+                        border: `1px solid ${C.borderDefault}`, borderRadius: RADIUS, cursor: "pointer",
+                      }}
+                    >
+                      Reset to Carta policy
+                    </button>
+                  )}
+                  <span
+                    onClick={() => setPolicyOpen(false)}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setPolicyOpen(false); } }}
+                    style={{
+                      cursor: "pointer", fontSize: FS.sm, color: C.textSubtle,
+                      display: "inline-flex", alignItems: "center", gap: 6,
+                    }}
+                    role="button"
+                    tabIndex={0}
+                  >
+                    Hide
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                      style={{ stroke: "currentColor" }}>
+                      <path d="M18 15l-6-6-6 6" />
+                    </svg>
+                  </span>
+                </span>
+              </div>
+
+              {!havePolicy ? (
+                <div style={{
+                  padding: "10px 12px", borderRadius: RADIUS,
+                  background: C.feedbackNoticeSubtle, border: `1px solid ${C.feedbackNotice}`,
+                  fontSize: FS.sm, color: C.feedbackNotice, lineHeight: 1.55,
+                }}>
+                  <strong>Refresh grant policy could not be fetched.</strong> The corporation's
+                  own policy isn't in this build — either the account has no CTC role on it,
+                  or the fetch itself failed. So the settings below can't be applied. Say
+                  "refresh" to rebuild; if it fails again, the backend is degraded and this
+                  needs escalating rather than retrying.
+                </div>
+              ) : (
+                <div style={{ display: "grid", gap: 18 }}>
+                  <PolicyField
+                    label="Refresh Grant Target"
+                    help={<>
+                      Percentage of new hire benchmark used for Refresh Grants.<br />
+                      (E.g. If Rachel would receive 100 shares if joining as a new hire
+                      today, they would receive {settings.targetPct} as a refresh grant)
+                    </>}
+                    info="Default: 30%"
+                  >
+                    <span style={{
+                      display: "inline-flex", alignItems: "baseline", gap: 8, flexWrap: "wrap",
+                    }}>
+                      <NumField
+                        value={settings.targetPct}
+                        onChange={(v) => onSettings({ ...settings, targetPct: v })}
+                        suffix="%"
+                        title="Percent of the employee's new-hire benchmark"
+                        label="Refresh grant target"
+                      />
+                      <span style={{ fontSize: FS.md, color: C.textSubtle }}>/ every</span>
+                      <YearsMonths
+                        total={settings.cadenceMonths}
+                        onChange={setCadence}
+                        title="Set by the Frequency field below — one cadence, shown here because a target means nothing without the period it repeats over"
+                        disabled
+                      />
+                    </span>
+                  </PolicyField>
+
+                  <PolicyField
+                    label="Suggested Grant Range"
+                    help="Preferred minimum and maximum refresh grant amounts based on Grant Target."
+                    info="Default: 10% above and below target"
+                  >
+                    <span style={{
+                      display: "inline-flex", alignItems: "baseline", gap: 8, flexWrap: "wrap",
+                    }}>
+                      <NumField
+                        value={settings.rangeBelowPct}
+                        onChange={(v) => onSettings({ ...settings, rangeBelowPct: v })}
+                        suffix="% below"
+                        title="How far under target a manager may flex"
+                        label="Suggested range, percent below target"
+                      />
+                      <span style={{ fontSize: FS.md, color: C.textSubtle }}>to</span>
+                      <NumField
+                        value={settings.rangeAbovePct}
+                        onChange={(v) => onSettings({ ...settings, rangeAbovePct: v })}
+                        suffix="% above"
+                        title="How far over target a manager may flex"
+                        label="Suggested range, percent above target"
+                      />
+                      <span style={{ fontSize: FS.md, color: C.textSubtle }}>based on Target</span>
+                    </span>
+                  </PolicyField>
+
+                  <PolicyField
+                    label="Frequency: How often can employees receive a tenure grant"
+                    help="If there is no time constraint, leave both as 0."
+                    info="Default: 1 year"
+                  >
                     <YearsMonths
                       total={settings.cadenceMonths}
                       onChange={setCadence}
-                      title="Set by the Frequency field below — one cadence, shown here because a target means nothing without the period it repeats over"
-                      disabled
+                      title="How often an employee may receive a refresh grant"
                     />
-                  </span>
-                </PolicyField>
+                  </PolicyField>
 
-                <PolicyField
-                  label="Suggested Grant Range"
-                  help="Preferred minimum and maximum refresh grant amounts based on Grant Target."
-                  info="Default: 10% above and below target"
-                >
-                  <span style={{
-                    display: "inline-flex", alignItems: "baseline", gap: 8, flexWrap: "wrap",
-                  }}>
-                    <NumField
-                      value={settings.rangeBelowPct}
-                      onChange={(v) => onSettings({ ...settings, rangeBelowPct: v })}
-                      suffix="% below"
-                      title="How far under target a manager may flex"
-                      label="Suggested range, percent below target"
+                  <PolicyField
+                    label="Eligibility: Tenure Requirement"
+                    help={<>
+                      Minimum time employee must work at company to be eligible.<br />
+                      If there is no time constraint, leave both as 0.
+                    </>}
+                    info="Default: 2 year"
+                  >
+                    <YearsMonths
+                      total={settings.tenureMinMonths}
+                      onChange={(v) => onSettings({ ...settings, tenureMinMonths: v })}
+                      title="Minimum time at the company to be eligible"
                     />
-                    <span style={{ fontSize: FS.md, color: C.textSubtle }}>to</span>
-                    <NumField
-                      value={settings.rangeAbovePct}
-                      onChange={(v) => onSettings({ ...settings, rangeAbovePct: v })}
-                      suffix="% above"
-                      title="How far over target a manager may flex"
-                      label="Suggested range, percent above target"
-                    />
-                    <span style={{ fontSize: FS.md, color: C.textSubtle }}>based on Target</span>
-                  </span>
-                </PolicyField>
-
-                <PolicyField
-                  label="Frequency: How often can employees receive a tenure grant"
-                  help="If there is no time constraint, leave both as 0."
-                  info="Default: 1 year"
-                >
-                  <YearsMonths
-                    total={settings.cadenceMonths}
-                    onChange={setCadence}
-                    title="How often an employee may receive a refresh grant"
-                  />
-                </PolicyField>
-
-                <PolicyField
-                  label="Eligibility: Tenure Requirement"
-                  help={<>
-                    Minimum time employee must work at company to be eligible.<br />
-                    If there is no time constraint, leave both as 0.
-                  </>}
-                  info="Default: 2 year"
-                >
-                  <YearsMonths
-                    total={settings.tenureMinMonths}
-                    onChange={(v) => onSettings({ ...settings, tenureMinMonths: v })}
-                    title="Minimum time at the company to be eligible"
-                  />
-                </PolicyField>
-              </div>
-            </>
-          )}
-          </details>
-        </div>
-
-        <div style={{
-          background: C.surface, border: `1px solid ${C.border}`, borderRadius: RADIUS, padding: 16,
-        }}>
-          <div style={{
-            display: "flex", justifyContent: "space-between", alignItems: "center",
-            gap: 16, marginBottom: 8,
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-              <span style={{ fontSize: FS.sm, fontWeight: 600, color: C.textSubtle }}>
-                Grants ({shown.length})
-              </span>
-              <EquityUnitToggle unit={unit} onUnit={setUnit} equityUnits={equityUnits} />
+                  </PolicyField>
+                </div>
+              )}
             </div>
-            {/* One reason across the whole plan. A select that snaps back to its
-                label rather than holding a value: it is an action on every row, not
-                a field describing one, and leaving it showing "Promotion" would
-                claim a uniformity the per-row cells below are free to break. */}
-            <label style={{
-              display: "inline-flex", alignItems: "center", gap: 7,
-              fontSize: FS.sm, color: C.textSubtle,
-            }}>
-              Set all reasons to
-              <select
-                value=""
-                onChange={(e) => { if (e.target.value) onAllReasons(e.target.value); }}
-                title="Applies one grant reason to every employee in this plan, replacing any set per row"
-                style={{
-                  height: 32, padding: "0 6px", fontSize: FS.md, fontFamily: "inherit",
-                  color: C.textDefault, background: C.surfaceDefault,
-                  border: `1px solid ${C.borderDefault}`, borderRadius: RADIUS,
-                }}
-              >
-                <option value="">Choose…</option>
-                {GRANT_REASONS.map((r) => (
-                  <option key={r.value} value={r.value}>{r.label}</option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <div style={{ overflowX: "auto" }}>
-            <TableAlign align="right">
-              {/* 1414, MEASURED — the sum of what every column actually needs, not
-                  a round number and not a guess.
+          )}
 
-                  `tableLayout: fixed` splits the width by the percentages below and
-                  CLIPS whatever does not fit, so a floor that is too small squeezes
-                  columns rather than scrolling the container. That is what went
-                  wrong at the old 940: the two new headers got 61px against the
-                  ~103px their text needs, and six headers were clipped at once —
-                  reported from QA as columns overwriting each other.
-
-                  Per column the need is its header text plus 20px of cell padding,
-                  or its widest body cell where that is wider (Name 164,
-                  Specialization 197, Suggested Range 167). Headers alone come to
-                  1002; with the body cells it is 1414.
-
-                  Specialization was ALREADY clipped before the new columns landed
-                  (112 needed, 70 given) — adding two columns to a table with no
-                  slack is what turned a latent squeeze into a visible one.
-
-                  The percentages are each column's share of that 1414, so at the
-                  floor every one gets what it needs and above it they grow
-                  proportionally. Change one and re-measure the rest. */}
-              <table style={{ width: "100%", minWidth: 1414, tableLayout: "fixed" }}>
-                <thead>
-                  <tr>
-                    <Th width="12%" align="left">Name</Th>
-                    <Th width="4%" align="left">Level</Th>
-                    <Th width="10%" align="left">Area</Th>
-                    <Th width="14%" align="left">Specialization</Th>
-                    <Th width="5%">Tenure</Th>
-                    {/* Before Benchmark, so the row reads context first and the
-                        policy chain (benchmark → range → grant) stays unbroken to
-                        the right. Carta's own NTM/TTM figures — see vestingNext12.
-
-                        Their headers are the longest text in the table (~103px), so
-                        they are sized from that rather than from the values. */}
-                    <Th width="9%">Next 12 Months</Th>
-                    <Th width="8%">Last 12 Months</Th>
-                    <Th width="7%">Benchmark</Th>
-                    {/* Range before Grant: the corridor is the recommendation and the
-                        grant is the decision, so reading left to right goes from what
-                        policy suggests, to what this plan does, to why.
-
-                        "Suggested Range" rather than "Range": the policy field above
-                        is already labelled Suggested Grant Range, and the two were
-                        naming the same number differently. */}
-                    <Th width="12%">Suggested Range</Th>
-                    <Th width="9%">Grant</Th>
-                    <Th width="8%" align="left">Grant reason</Th>
-                    {/* No header text: the column is one control per row,
-                        and "Remove" above a column of ✕ buttons labels the
-                        column rather than saying anything new. */}
-                    <Th width="2%" align="center"><span aria-hidden="true" /></Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {shown.map(({ row, eligible: ok, reason, shares: sh, modelled, overridden }) => {
-                    const months = monthsFor(row);
-                    const next12 = vestingNext12(row);
-                    const last12 = vestingLast12(row);
-                    // The corridor brackets the POLICY target, not the displayed
-                    // figure. Bracketing the displayed one would move the goalposts
-                    // with every edit, so nothing could ever read as out of range.
-                    const target = targetShares(row, settings.targetPct);
-                    const { min, max } = grantRange(
-                      target, settings.rangeBelowPct, settings.rangeAbovePct);
-                    const standing = rangeStanding(sh, row, settings);
-                    return (
-                      <tr key={row.external_id} style={ok ? undefined : { opacity: 0.55 }}>
-                        <Td align="left" ellipsis title={ok ? row.full_name : `Excluded — ${reason}`}>
-                          {row.full_name || row.external_id.slice(0, 8)}
+          {/* Table column */}
+          <div style={{ minWidth: 0 }}>
+            <div style={{ overflowX: "auto" }}>
+              <TableAlign align="right">
+                <table style={{ width: "100%", minWidth: 1414, tableLayout: "fixed" }}>
+                  <thead>
+                    <tr>
+                      <Th width="12%" align="left">Name</Th>
+                      <Th width="4%" align="left">Level</Th>
+                      <Th width="10%" align="left">Area</Th>
+                      <Th width="14%" align="left">Specialization</Th>
+                      <Th width="5%">Tenure</Th>
+                      <Th width="9%">Next 12 Months</Th>
+                      <Th width="8%">Last 12 Months</Th>
+                      <Th width="7%">Benchmark</Th>
+                      <Th width="12%">Suggested Range</Th>
+                      <Th width="9%">Grant</Th>
+                      <Th width="8%" align="left">Grant reason</Th>
+                      <Th width="2%" align="center"><span aria-hidden="true" /></Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {shown.map(({ row, eligible: ok, reason, shares: sh, modelled, overridden }) => {
+                      const months = monthsFor(row);
+                      const next12 = vestingNext12(row);
+                      const last12 = vestingLast12(row);
+                      const target = targetShares(row, settings.targetPct);
+                      const { min, max } = grantRange(
+                        target, settings.rangeBelowPct, settings.rangeAbovePct);
+                      const standing = rangeStanding(sh, row, settings);
+                      return (
+                        <tr key={row.external_id} style={ok ? undefined : { opacity: 0.55 }}>
+                          <Td align="left" ellipsis title={ok ? row.full_name : `Excluded — ${reason}`}>
+                            {row.full_name || row.external_id.slice(0, 8)}
+                          </Td>
+                          <Td align="left" subtle={!row.job_level}>{row.job_level || "—"}</Td>
+                        <Td align="left" ellipsis subtle={!row.job_area}
+                            title={row.job_area || "No job area recorded"}>
+                          {row.job_area || "—"}
                         </Td>
-                        <Td align="left" subtle={!row.job_level}>{row.job_level || "—"}</Td>
-                      <Td align="left" ellipsis subtle={!row.job_area}
-                          title={row.job_area || "No job area recorded"}>
-                        {row.job_area || "—"}
-                      </Td>
-                      {/* Sparse on real data — 4 of 134 rows on the corporation this
-                          was built against. An em dash says "not recorded", where a
-                          blank cell reads as "this role has no specialization". */}
-                      <Td align="left" ellipsis subtle={!row.job_focus}
-                          title={row.job_focus || "No specialization recorded for this role"}>
-                        {row.job_focus || "—"}
-                      </Td>
-                        <Td mono subtle={months == null}>
-                          {months == null ? "—" : `${months} mo`}
+                        <Td align="left" ellipsis subtle={!row.job_focus}
+                            title={row.job_focus || "No specialization recorded for this role"}>
+                          {row.job_focus || "—"}
                         </Td>
-                        {/* Through formatInUnit like every other equity figure in
-                            this table, so the %/$ toggle moves them too — a column
-                            of raw shares beside converted ones would misread. */}
-                        <Td mono subtle={next12 === null}
-                            title={next12 === null
-                              ? "Next-12-month vesting is not in this snapshot"
-                              : "Shares vesting over the next 12 months"}>
-                          {next12 === null
-                            ? "—" : formatInUnit(next12, unit, equityUnits, shares)}
-                        </Td>
-                        <Td mono subtle={last12 === null}
-                            title={last12 === null
-                              ? "Last-12-month vesting is not in this snapshot"
-                              : "Shares vested over the last 12 months"}>
-                          {last12 === null
-                            ? "—" : formatInUnit(last12, unit, equityUnits, shares)}
-                        </Td>
-                        <Td mono subtle={row.four_year_grant_benchmark_num_shares == null}
-                            title={row.four_year_grant_benchmark_num_shares == null
-                              ? "No equity benchmark for this role in this snapshot" : undefined}>
-                          {formatInUnit(
-                            row.four_year_grant_benchmark_num_shares, unit, equityUnits, shares)}
-                        </Td>
-                        <Td mono subtle={min == null}>
-                          {min == null
-                            ? "—"
-                            : `${formatInUnit(min, unit, equityUnits, shares)} – `
-                              + `${formatInUnit(max, unit, equityUnits, shares)}`}
-                        </Td>
-                        <GrantCell
-                          row={row}
-                          shares={sh}
-                          modelled={modelled}
-                          overridden={overridden}
-                          standing={standing}
-                          targetPct={settings.targetPct}
-                          onEdit={onOverride}
-                          unit={unit}
-                          equityUnits={equityUnits}
-                        />
-                        <ReasonCell
-                          externalId={row.external_id}
-                          name={row.full_name || row.external_id}
-                          reasons={reasons}
-                          onChange={onReason}
-                        />
-                        <RemoveCell
-                          name={row.full_name || row.external_id}
-                          onRemove={() => onRemove(row.external_id)}
-                        />
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </TableAlign>
-          </div>
-          <div style={{ fontSize: FS.xs, color: C.textFaint, marginTop: 10 }}>
-            At your corporation's policy the grant column is Carta's own figure, which
-            honours any per-employee override. Change the target and the column is
-            calculated here instead — the tooltip on each cell says which.
+                          <Td mono subtle={months == null}>
+                            {months == null ? "—" : `${months} mo`}
+                          </Td>
+                          <Td mono subtle={next12 === null}
+                              title={next12 === null
+                                ? "Next-12-month vesting is not in this snapshot"
+                                : "Shares vesting over the next 12 months"}>
+                            {next12 === null
+                              ? "—" : formatInUnit(next12, unit, equityUnits, shares)}
+                          </Td>
+                          <Td mono subtle={last12 === null}
+                              title={last12 === null
+                                ? "Last-12-month vesting is not in this snapshot"
+                                : "Shares vested over the last 12 months"}>
+                            {last12 === null
+                              ? "—" : formatInUnit(last12, unit, equityUnits, shares)}
+                          </Td>
+                          <Td mono subtle={row.four_year_grant_benchmark_num_shares == null}
+                              title={row.four_year_grant_benchmark_num_shares == null
+                                ? "No equity benchmark for this role in this snapshot" : undefined}>
+                            {formatInUnit(
+                              row.four_year_grant_benchmark_num_shares, unit, equityUnits, shares)}
+                          </Td>
+                          <Td mono subtle={min == null}>
+                            {min == null
+                              ? "—"
+                              : `${formatInUnit(min, unit, equityUnits, shares)} – `
+                                + `${formatInUnit(max, unit, equityUnits, shares)}`}
+                          </Td>
+                          <GrantCell
+                            row={row}
+                            shares={sh}
+                            modelled={modelled}
+                            overridden={overridden}
+                            standing={standing}
+                            targetPct={settings.targetPct}
+                            onEdit={onOverride}
+                            unit={unit}
+                            equityUnits={equityUnits}
+                          />
+                          <ReasonCell
+                            externalId={row.external_id}
+                            name={row.full_name || row.external_id}
+                            reasons={reasons}
+                            onChange={onReason}
+                          />
+                          <RemoveCell
+                            name={row.full_name || row.external_id}
+                            onRemove={() => onRemove(row.external_id)}
+                          />
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </TableAlign>
+            </div>
+            <div style={{ fontSize: FS.xs, color: C.textFaint, marginTop: 10 }}>
+              At your corporation's policy the grant column is Carta's own figure, which
+              honours any per-employee override. Change the target and the column is
+              calculated here instead — the tooltip on each cell says which.
+            </div>
           </div>
         </div>
       </div>

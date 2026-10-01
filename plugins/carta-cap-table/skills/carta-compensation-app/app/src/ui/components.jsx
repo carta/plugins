@@ -14,7 +14,8 @@
 // copy-pasted `padding: "5px 8px"` and no appearance reset, so they rendered ~30px tall
 // with OS chrome and did not match Ink's 40px fields sitting next to them.
 
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { C, FS, RADIUS, SANS, SHADOW } from "./theme.js";
 
 /** Ink's chevron-down. Static: this app's menus only ever open downward.
@@ -38,12 +39,13 @@ function ChevronDown({ size = 16 }) {
 
 /** Marks a value this console derived or edited, rather than one Carta returned. */
 export function SparkleAI({ size = 14, title }) {
-  const [hover, setHover] = useState(false);
+  const [anchor, setAnchor] = useState(null);
+  const hide = useCallback(() => setAnchor(null), []);
   return (
     <span
       style={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center", flex: "0 0 auto" }}
-      onMouseEnter={title ? () => setHover(true) : undefined}
-      onMouseLeave={title ? () => setHover(false) : undefined}
+      onMouseEnter={title ? (e) => setAnchor(e.currentTarget.getBoundingClientRect()) : undefined}
+      onMouseLeave={title ? hide : undefined}
     >
       <span style={{
         display: "inline-flex", alignItems: "center", justifyContent: "center",
@@ -59,18 +61,47 @@ export function SparkleAI({ size = 14, title }) {
           <circle cx="10" cy="8" r="5" />
         </svg>
       </span>
-      {hover && title && (
-        <span style={{
-          position: "absolute", bottom: "calc(100% + 6px)", left: "50%", transform: "translateX(-50%)",
-          background: C.surfaceDefault, color: C.textDefault, border: `1px solid ${C.borderDefault}`,
-          borderRadius: 6, padding: "4px 8px", fontSize: FS.xs, whiteSpace: "nowrap",
-          pointerEvents: "none", zIndex: 10,
-          boxShadow: "0 2px 8px rgba(0,0,0,.12)",
-        }}>
-          {title}
-        </span>
-      )}
+      {anchor && title && <Tooltip anchor={anchor} onHide={hide}>{title}</Tooltip>}
     </span>
+  );
+}
+
+const TIP_GAP = 6;
+const TIP_MARGIN = 8;
+
+/** Portalled to <body> so no `overflow` ancestor (a table cell, a scroll wrapper) can
+ *  clip it, and clamped to the viewport so an icon near an edge doesn't push it off.
+ */
+function Tooltip({ anchor, onHide, children }) {
+  const ref = useRef(null);
+  const [pos, setPos] = useState(null);
+
+  useLayoutEffect(() => {
+    const { width, height } = ref.current.getBoundingClientRect();
+    const centred = anchor.left + anchor.width / 2 - width / 2;
+    const left = Math.max(TIP_MARGIN, Math.min(centred, window.innerWidth - width - TIP_MARGIN));
+    const above = anchor.top - height - TIP_GAP;
+    setPos({ left, top: above >= TIP_MARGIN ? above : anchor.bottom + TIP_GAP });
+  }, [anchor]);
+
+  // Fixed position doesn't follow a scrolling container, so close instead of drifting.
+  useEffect(() => {
+    window.addEventListener("scroll", onHide, true);
+    return () => window.removeEventListener("scroll", onHide, true);
+  }, [onHide]);
+
+  return createPortal(
+    <span ref={ref} role="tooltip" style={{
+      position: "fixed", left: pos?.left ?? 0, top: pos?.top ?? 0,
+      visibility: pos ? "visible" : "hidden",
+      background: C.surfaceDefault, color: C.textDefault, border: `1px solid ${C.borderDefault}`,
+      borderRadius: 6, padding: "4px 8px", fontSize: FS.xs, whiteSpace: "nowrap",
+      pointerEvents: "none", zIndex: 1000,
+      boxShadow: "0 2px 8px rgba(0,0,0,.12)",
+    }}>
+      {children}
+    </span>,
+    document.body,
   );
 }
 
