@@ -20,7 +20,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.92.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.92.2</carta-plugin>
 
 # CTC Scorecard
 
@@ -35,7 +35,7 @@ This skill calls compensation-service's scorecard endpoints (the same endpoints 
 > | Field | Use in user-facing text | Never |
 > |---|---|---|
 > | Job area | `Engineering`, `Sales`, `Customer Success`, `Project Management`, `Human Resources` | `ENGINEER`, `SALES`, `CUSTOMER_SUCCESS`, `PROJECT_MANAGEMENT`, `HR` |
-> | Focus | `DevOps and Site Reliability`, `Account Executive`, `FP&A` | `devops and site reliability`, `account executive`, `fp&a` |
+> | Focus | `DevOps and Site Reliability`, `Account Executive`, `Financial Planning and Analysis` — the exact API focus value, the same in text and in the API call | `devops and site reliability`, `ACCOUNT_EXECUTIVE`, `fp&a` — wrong in text and in the API call |
 > | Level | `Entry`, `Mid 1`, `Senior 1`, `Staff 2`, `VP 1`, `C-Level`, `CEO`, `Unknown` | `ENTRY`, `MID1`, `SENIOR1`, `STAFF2`, `VP1`, `C_LEVEL`, `UNKNOWN` |
 > | Track | `IC`, `Manager`, `Executive`, `Unknown` | `ic`, `manager`, `executive`, `UNKNOWN` |
 > | Band | `Low`, `Mid`, `High` | `low`, `mid`, `high` |

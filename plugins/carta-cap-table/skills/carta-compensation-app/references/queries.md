@@ -157,8 +157,10 @@ product UI, not a stylistic choice.
 **Exactly one `*_bucket` param.** The three bucket enums are disjoint, so a code valid for one
 is invalid for the others; passing two either 400s or silently picks one.
 
-**Enums, not labels.** `job` is UPPER_SNAKE (`ENGINEER`); `focus` is lowercase free text
-(`backend`). Never combine them (`ENGINEER/BACKEND` → 400). There is **no**
+**Enums, not labels.** `job` is UPPER_SNAKE (`ENGINEER`); `focus` is the exact,
+case-sensitive CTC focus name (`Web Engineer`, `AI and Machine Learning`) from the
+rolematcher's taxonomy — a lowercased or invented value silently returns the job-area blend.
+Never combine them (`ENGINEER/Web Engineer` → 400). There is **no**
 `compensation:list:job_types` command — read valid values from
 `search_tools({"query": "compensation export benchmark"})`.
 

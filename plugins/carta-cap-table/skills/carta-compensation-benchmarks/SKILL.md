@@ -23,7 +23,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.92.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.92.2</carta-plugin>
 
 # Benchmark Query
 
@@ -36,11 +36,11 @@ Look up Carta Total Compensation (CTC) market salary and equity benchmarks for a
 > | Field | Use in user-facing text | Never |
 > |---|---|---|
 > | Job area | `Engineering`, `Sales`, `Customer Success`, `Project Management`, `Human Resources` | `ENGINEER`, `SALES`, `CUSTOMER_SUCCESS`, `PROJECT_MANAGEMENT`, `HR` |
-> | Focus | `DevOps and Site Reliability`, `Account Executive`, `FP&A` | `devops and site reliability`, `account executive`, `fp&a` |
+> | Focus | `DevOps and Site Reliability`, `Account Executive`, `Financial Planning and Analysis` — the exact API focus value, the same in text and in the API call | `devops and site reliability`, `ACCOUNT_EXECUTIVE`, `fp&a` — wrong in text and in the API call |
 > | Level | `Entry`, `Mid 1`, `Senior 1`, `Staff 2`, `VP 1`, `C-Level`, `CEO`, `Unknown` | `ENTRY`, `MID1`, `SENIOR1`, `STAFF2`, `VP1`, `C_LEVEL`, `UNKNOWN` |
 > | Track | `IC`, `Manager`, `Executive`, `Unknown` | `ic`, `manager`, `executive`, `UNKNOWN` |
 >
-> The UPPER_SNAKE_CASE enums are **only** for machine handoff — i.e. the `job`, `level`, `focus`, `is_leader` parameters you pass to `compensation:get:benchmark`. Inside the JSON payload for the API call, keep the enum form. Outside the API call, switch to Title Case before any value reaches the user. Even in narration like "Engineering maps to ENGINEER", drop the API enum — say *"Pulling Engineering benchmarks for corp 7"* instead.
+> The UPPER_SNAKE_CASE enums are **only** for machine handoff — i.e. the `job` and `level` parameters you pass to `compensation:get:benchmark`. `focus` is the exception: the API takes the exact focus name from the rolematcher's taxonomy, unchanged (see Step 4). Inside the JSON payload for the API call, keep the enum form. Outside the API call, switch to Title Case before any value reaches the user. Even in narration like "Engineering maps to ENGINEER", drop the API enum — say *"Pulling Engineering benchmarks for corp 7"* instead.
 >
 > See `carta-compensation-rolematcher` → "Display → API enum tables" for the full mapping.
 
@@ -462,6 +462,8 @@ Skill("carta-compensation-rolematcher")
 
 Pass the user's role description as input. Do not freelance the mapping — the rolematcher has the canonical job_area / focus / level / track logic and will return values that align with the CTC enums.
 
+If the user already named the job area and specialization (e.g. *"Engineering, AI and Machine Learning, Senior Staff"*), pass them to the rolematcher as stated — it keeps a stated pair rather than reclassifying it — and check its output still says that job area and focus before calling the API. An AI/ML engineering role is **Engineering / AI and Machine Learning** (`job: ENGINEER`, `focus: "AI and Machine Learning"`), not Data.
+
 **When to invoke:** anytime the user provides a job title or job description in the context of a benchmark/comp conversation, even if their phrasing sounds like something else. Treat all of these as rolematcher invocations:
 
 - *"What role is this?"* (explicit)
@@ -476,7 +478,7 @@ Pass the user's role description as input. Do not freelance the mapping — the 
 
 Capture the output:
 - `job_area` — **passed to the API as `job`, NOT as `job_area`** (see the rename note below). Must be one of: `ACCOUNTING`, `ADMIN`, `CEO`, `CORPORATE_AFFAIRS`, `CUSTOMER_SUCCESS`, `DATA`, `DESIGN`, `ENGINEER`, `FINANCE`, `HR`, `IT`, `LEGAL`, `MANUFACTURING`, `MARKETING`, `OPERATIONS`, `PRODUCT`, `PROJECT_MANAGEMENT`, `RESEARCH`, `SALES`, `STRATEGY`, `SUPPORT`, `OTHER`
-- `focus` (e.g. `"backend"`, `"devops and site reliability"`, `null`) — job-area-dependent; the rolematcher returns lowercase multi-word strings matching the taxonomy verbatim — pass them through as-is to the API
+- `focus` (e.g. `"AI and Machine Learning"`, `"DevOps and Site Reliability"`, `null`) — job-area-dependent. The API matches focus **exactly and case-sensitively**, and the rolematcher already returns it in the API's spelling — pass it through unchanged, never re-cased or reworded. When the rolematcher returns `None`, omit `focus` (see Step 4)
 - `level` — must be one of (low to high seniority): `ENTRY`, `MID1`, `MID2`, `SENIOR1`, `SENIOR2`, `STAFF1`, `STAFF2`, `PRINCIPAL`, `VP1`, `VP2`, `C_LEVEL`, `CEO`
 - `track` — the value returned by the rolematcher (`ic`, `manager`, `executive`, or `UNKNOWN`). Map to `is_leader`: `manager` or `executive` → `true`, `ic` → `false`. If `UNKNOWN`, stop and ask the user before calling the API — see Error Handling.
 
@@ -510,7 +512,7 @@ Capture three things from the response:
 
 > **CRITICAL — Valid enum values: read them, don't guess them. Two failure modes to avoid.**
 >
-> Every filter param on `compensation:get:benchmark` (`job`, `level`, `focus`, the three `*_bucket` params, `equity_quantity`) takes a fixed **UPPER_SNAKE_CASE enum value**. The API validates by exact enum name and returns **HTTP 400** for anything else. Two things burn retries:
+> Every filter param on `compensation:get:benchmark` except `focus` (`job`, `level`, the three `*_bucket` params, `equity_quantity`) takes a fixed **UPPER_SNAKE_CASE enum value**. The API validates by exact enum name and returns **HTTP 400** for anything else. Two things burn retries:
 >
 > **1. There is NO `compensation:list:*` command for these enums. Do not invent one.**
 > `compensation:list:job_types`, `list:jobs`, `list:peer_groups`, `list:post_money_buckets`, `list:capital_raised_buckets`, `list:headcount_buckets` — **none of these exist.** Calling them returns `Unknown command` and wastes a turn. The only `compensation:list:*` command is `compensation:list:benchmark_versions`. To see the valid filter values, **read the `compensation:get:benchmark` command help** — it enumerates every `job`, `level`, and bucket value:
@@ -529,6 +531,11 @@ Capture three things from the response:
 > - ❌ `capital_raised_bucket: "$250M-$500M"` (a label) or a fabricated name → HTTP 400. Pass a real `CapitalRaisedBuckets` name from the help.
 >
 > Bucketing across many job functions? Iterate over the valid `job` enum names from the help — do **not** loop over display labels.
+
+> **`focus` is an exact name, not an enum — and a near-miss fails silently.**
+> Pass the rolematcher's focus value character for character — its taxonomy lists the API's own focus names: `AI and Machine Learning`, `DevOps and Site Reliability`, `UX/Frontend`. The match is case-sensitive, and a value that does not match returns the **job-area blend with HTTP 200**, not a 400. `AI_AND_MACHINE_LEARNING`, `ai and machine learning` and `AI/ML` all come back as the blend.
+>
+> When the requested focus matches, each benchmark entry's bands are the focus-specific figures, its `focus` echoes your value, and the blend sits under `job_area_blend`. When the response carries `focus_warning`, nothing matched: present the numbers as the job-area blend, never as focus-specific. If the warning lists a focus value that clearly matches what the user meant, retry once with that exact value; otherwise tell the user this benchmark version has no data for that focus.
 
 ```
 call_tool({"name": "compensation__get__benchmark", "arguments": {

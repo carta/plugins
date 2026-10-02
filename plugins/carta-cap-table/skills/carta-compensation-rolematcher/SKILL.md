@@ -10,7 +10,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.92.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.92.2</carta-plugin>
 
 # CTC RoleMatcher
 
@@ -25,7 +25,7 @@ Map any job title or description to the Carta Total Compensation benchmark taxon
 
 ## Instructions
 
-You are a job classification expert. Map each input role to a standardized **job area**, **focus**, and **level** from the taxonomy below. Always explain your reasoning. Never guess or invent values outside the taxonomy — use `Unknown` when uncertain.
+You are a job classification expert. Map each input role to a standardized **job area**, **focus**, and **level** from the taxonomy below. Always explain your reasoning. Never guess or invent values outside the taxonomy — use `Unknown` for job area or level when uncertain, and `None` for focus when no listed focus fits.
 
 ### Input Modes
 
@@ -60,15 +60,13 @@ When processing a batch, classify each role using the same taxonomy and rules as
 
 ## Job Areas & Focus Taxonomy
 
+The focus values below are exactly the ones Carta Total Compensation benchmarks — compensation-lib's `JobType.focus_areas`, which compensation-service validates every stored benchmark row against. Use them verbatim, in this spelling and case, in both output and API calls. (compensation-lib also lists `Other` for most areas; it is not offered here — a role that fits no focus gets no focus.)
+
 ### ACCOUNTING
 
 Responsible for keeping, interpreting, and managing financial records. Ensures financial analysis and statements comply with regulations and GAAP. Plays a key role in resolving irregularities and building reports from financial statements and records.
 
-| Focus | Description |
-|-------|-------------|
-| general accounting | Core bookkeeping and financial record management. |
-| financial reporting | Prepares and reviews financial statements, ensuring accuracy and compliance. |
-| tax | Prepares tax returns and advises on tax strategy while following legal guidelines. |
+No focus values — benchmark this job area without a focus.
 
 ### ADMINISTRATIVE
 
@@ -76,13 +74,18 @@ Leverages organizational and internal management skills to support general admin
 
 | Focus | Description |
 |-------|-------------|
-| executive assistant | Manages the schedules and communications of key company executives. Prioritizes emails and phone calls, gathers documents for meetings, and coordinates travel. Serves as a point of contact between executives and employees. |
-| office management | Maintains office services by organizing operations and procedures. Reviews supply requisitions, communicates with department heads, and implements programs to enhance employee productivity. |
-| general administrative | Supports professionals with clerical and organizational tasks: file organizing, scheduling, assisting staff, and drafting correspondence. |
+| Administrative Assistant | Provides clerical support to a team or department — scheduling, correspondence, filing, and office logistics. |
+| Executive Assistant | Manages the schedules and communications of key company executives. Prioritizes emails and phone calls, gathers documents for meetings, and coordinates travel. Serves as a point of contact between executives and employees. |
+| Office Management | Maintains office services by organizing operations and procedures. Reviews supply requisitions, communicates with department heads, and implements programs to enhance employee productivity. |
 
 ### CEO
 
-Leads the entire company. Sets company-wide vision, culture, and top-level strategy. No focus — classify directly to the CEO job area.
+Leads the entire company. Sets company-wide vision, culture, and top-level strategy.
+
+| Focus | Description |
+|-------|-------------|
+| Founder | The CEO founded the company. |
+| Non-Founder | The CEO was hired or appointed rather than founding the company. |
 
 ### CORPORATE_AFFAIRS
 
@@ -90,8 +93,8 @@ Works with governments, regulatory agencies, and external stakeholders to repres
 
 | Focus | Description |
 |-------|-------------|
-| government relations | Interacts with local, state, and federal legislative bodies and agencies to represent and protect the organization's business interests. |
-| regulatory affairs | Obtains and maintains government approval for products (e.g. drugs, medical devices). Often employed by pharma, biotech, and medical device companies. |
+| Government Affairs | Interacts with local, state, and federal legislative bodies and agencies to represent and protect the organization's business interests. |
+| Regulatory Affairs | Obtains and maintains government approval for products (e.g. drugs, medical devices). Often employed by pharma, biotech, and medical device companies. |
 
 ### CUSTOMER_SUCCESS
 
@@ -99,11 +102,8 @@ Drives product adoption and value realization for customers. Provides ongoing su
 
 | Focus | Description |
 |-------|-------------|
-| customer success management | Develops positive customer experiences and fosters relationships that support brand loyalty. Offers insight on features and troubleshooting. |
-| technical account management | Serves as the technical point of contact for strategic accounts, bridging customer needs and internal engineering teams. |
-| renewals | Focused on contract renewal strategy, retention metrics, and at-risk account management. |
-| training | Develops and delivers training courses and programs for customers or employees. Determines training needs, implements programs, and reviews outcomes. |
-| general customer success | General customer success work not tied to a specific specialization. |
+| Customer Success | Develops positive customer experiences and fosters relationships that support brand loyalty. Offers insight on features and troubleshooting. |
+| Training | Develops and delivers training courses and programs for customers or employees. Determines training needs, implements programs, and reviews outcomes. |
 
 ### DATA
 
@@ -111,10 +111,9 @@ Enables data-driven decisions and products by sourcing accurate data, building s
 
 | Focus | Description |
 |-------|-------------|
-| data science | Utilizes analytical, statistical, and programming skills to collect, analyze, and interpret large data sets. Designs modeling processes and builds predictive algorithms. |
-| business intelligence and analytics | Produces finance and market intelligence reports. Manages data retrieval and analysis to highlight patterns and trends that influence business decisions. |
-| ai and machine learning | Designs algorithms that automate data analysis and make real-time predictions without human intervention. Builds self-running AI models. |
-| general data | General data work not tied to a specific specialization. |
+| AI and Machine Learning | Designs algorithms that automate data analysis and make real-time predictions without human intervention. Use only when the role is placed in Data — see the AI / machine learning rule. |
+| Business Intelligence and Analytics | Produces finance and market intelligence reports. Manages data retrieval and analysis to highlight patterns and trends that influence business decisions. |
+| Data Science | Utilizes analytical, statistical, and programming skills to collect, analyze, and interpret large data sets. Designs modeling processes and builds predictive algorithms. |
 
 ### DESIGN
 
@@ -122,13 +121,9 @@ Defines the experience of a product. Conducts user research, creates wireframes,
 
 | Focus | Description |
 |-------|-------------|
-| ux design | Creates interactive programs that enhance customer experience. Reviews user feedback, works with product and engineering teams, and performs usability tests. |
-| ui design | Focuses on the visual and interactive elements of digital products — layout, color, typography, and component design. |
-| product design | End-to-end design of digital products, combining UX and UI with a strong emphasis on user needs and business goals. |
-| art and graphic design | Creates visual text and imagery to communicate ideas. Develops layouts and designs for advertisements, brochures, corporate reports, and other materials. |
-| brand design | Defines and maintains a company's visual identity, including logo, color palette, typography, and brand guidelines. |
-| industrial design | Develops concepts for manufactured products (electronics, appliances, vehicles). Combines art, business, and engineering to create everyday objects. |
-| general design | General design work not tied to a specific specialization. |
+| Art and Graphic Design | Creates visual text and imagery to communicate ideas. Develops layouts and designs for advertisements, brochures, corporate reports, and other materials. |
+| Industrial Design | Develops concepts for manufactured products (electronics, appliances, vehicles). Combines art, business, and engineering to create everyday objects. |
+| UX Design | Creates interactive programs that enhance customer experience. Reviews user feedback, works with product and engineering teams, and performs usability tests. Includes product designers and UI designers. |
 
 ### ENGINEERING
 
@@ -136,23 +131,18 @@ Leverages math, programming, technology, and science to design and build softwar
 
 | Focus | Description |
 |-------|-------------|
-| backend | Develops server-side logic, databases, and APIs that power applications. |
-| frontend | Builds and maintains the client-side of applications — visual elements, user interaction, and interface behavior. |
-| ux/frontend | Builds digital products using UX principles alongside frontend engineering. Responsible for visual elements like menus, buttons, and overall page layout. |
-| full stack | Works across both frontend and backend layers of an application. |
-| mobile | Designs, develops, and implements software for smartphones and other mobile devices. |
-| data engineering | Transforms data into formats that can be easily analyzed. Develops, maintains, and tests data infrastructure. Works closely with data scientists to architect solutions. |
-| devops and site reliability | Works with developers and technical staff to oversee code releases and system reliability. Understands the software development lifecycle and automation tools. Ensures availability of critical platform services. |
-| infrastructure | Designs and manages the underlying systems — servers, networks, and cloud environments — that applications run on. |
-| security engineering | Designs and implements systems to protect applications and infrastructure from threats. Focuses on secure architecture and vulnerability management. |
-| quality assurance | Creates and executes tests to identify issues with software. Fixes bugs before launch and collaborates with developers on remediation. |
-| embedded systems | Develops software for hardware-embedded systems with real-time operating requirements. |
-| hardware | Develops, designs, and tests hardware components for computer and electrical systems. |
-| web engineer | Builds, designs, and maintains websites and software applications. Responsible for site performance and traffic capacity. |
-| electrical | Designs, develops, and tests electrical systems and components. Creates schematics, performs calculations, and ensures compliance with safety codes. |
-| mechanical | Designs, builds, and tests mechanical devices and systems. Creates CAD models, develops prototypes, and performs stress analyses. |
-| crypto and web3 | Develops programs for cryptocurrency payments and decentralized applications. Analyzes code artifacts and ensures application security. |
-| general engineering | General engineering work not tied to a specific specialization. |
+| AI and Machine Learning | Builds, trains, and ships machine learning and AI systems — models, ML infrastructure, LLM applications. ML Engineer, AI Engineer, MLOps, Applied Scientist. |
+| Crypto and Web3 | Develops programs for cryptocurrency payments and decentralized applications. Analyzes code artifacts and ensures application security. |
+| Data Engineering | Transforms data into formats that can be easily analyzed. Develops, maintains, and tests data infrastructure. Works closely with data scientists to architect solutions. |
+| DevOps and Site Reliability | Works with developers and technical staff to oversee code releases and system reliability. Understands the software development lifecycle and automation tools. Ensures availability of critical platform services. Includes SRE and operations engineers. |
+| Electrical Engineer | Designs, develops, and tests electrical systems and components. Creates schematics, performs calculations, and ensures compliance with safety codes. |
+| General - Software Engineer | Software engineer with no narrower specialization signal ("Software Engineer", "SWE", "Software Developer"). |
+| Hardware | Develops, designs, and tests hardware components for computer and electrical systems. Includes embedded and firmware engineers. |
+| Mechanical Engineer | Designs, builds, and tests mechanical devices and systems. Creates CAD models, develops prototypes, and performs stress analyses. |
+| Mobile | Designs, develops, and implements software for smartphones and other mobile devices. Includes iOS and Android engineers. |
+| Quality Assurance | Creates and executes tests to identify issues with software. Fixes bugs before launch and collaborates with developers on remediation. Includes QA, SDET and test engineers. |
+| UX/Frontend | Builds digital products using UX principles alongside frontend engineering. Responsible for visual elements like menus, buttons, and overall page layout. Includes frontend and UI engineers. |
+| Web Engineer | Builds, designs, and maintains websites and software applications. Responsible for site performance and traffic capacity. Includes backend and full-stack engineers. |
 
 ### FINANCE
 
@@ -160,11 +150,9 @@ Assesses financial records and creates forecasts to ensure growth. Finds creativ
 
 | Focus | Description |
 |-------|-------------|
-| fp&a | Tracks financial performance against plan, analyzes business performance and market conditions, and advises on financial strategy. |
-| corporate finance | Manages capital structure, financing decisions, and strategic financial planning at the enterprise level. |
-| treasury | Manages the company's liquidity, investments, and financial risk. Oversees cash flow and banking relationships. |
-| procurement | Oversees supplier relations, evaluates suppliers and services, negotiates contracts, and ensures purchases are cost-efficient and high quality. |
-| general finance | General finance work not tied to a specific specialization. |
+| Financial Planning and Analysis | Tracks financial performance against plan, analyzes business performance and market conditions, and advises on financial strategy. Includes FP&A and financial planners. |
+| Procurement | Oversees supplier relations, evaluates suppliers and services, negotiates contracts, and ensures purchases are cost-efficient and high quality. |
+| Tax | Prepares tax returns and advises on tax strategy while following legal guidelines. Tax roles classify here, not under Accounting. |
 
 ### HUMAN_RESOURCES
 
@@ -172,15 +160,14 @@ Builds and manages the employee lifecycle — hiring, benefit analysis, policy m
 
 | Focus | Description |
 |-------|-------------|
-| recruiting | Researches, develops, and implements recruiting and staffing strategies to attract qualified talent. Includes sourcing, screening, coordinating interviews, and facilitating offers. |
-| hr operations | Coordinates and implements HR business processes and procedures. Monitors HR projects and workflow. Addresses employee questions on compensation and labor regulations. |
-| hr generalist | Completes a variety of tasks to support HR department operations — hiring, administering pay and benefits, and enforcing company policies. |
-| compensation and benefits | Plans, develops, and implements compensation programs, policies, and pay structures. Administers benefits programs and executive compensation. |
-| total rewards | Designs, plans, and implements benefits, wellness, and compensation programs holistically to meet specific organizational goals. |
-| people operations | Manages HR systems, processes, and data to support the broader employee experience and operational efficiency of the People team. |
-| learning and development | Oversees training and growth programs for all employees. Designs and implements learning strategies, monitors success, and collaborates with managers on team development. |
-| diversity | Designs company policies that reinforce diversity and inclusion. Reviews practices, assesses alignment with diversity goals, and implements programs. |
-| general hr | General human resources work not tied to a specific specialization. |
+| Benefits | Administers health, retirement, and other benefits programs and vendor relationships. |
+| Compensation | Plans, develops, and implements compensation programs, policies, and pay structures, including executive compensation. Use for combined "Compensation & Benefits" roles. |
+| Diversity | Designs company policies that reinforce diversity and inclusion. Reviews practices, assesses alignment with diversity goals, and implements programs. |
+| HR Generalist | Completes a variety of tasks to support HR department operations — hiring, administering pay and benefits, and enforcing company policies. Includes HR business partners (HRBP). |
+| HR Operations | Coordinates and implements HR business processes and procedures. Monitors HR projects and workflow. Addresses employee questions on compensation and labor regulations. Includes people operations. |
+| Learning and Development | Oversees training and growth programs for all employees. Designs and implements learning strategies, monitors success, and collaborates with managers on team development. |
+| Recruiting | Researches, develops, and implements recruiting and staffing strategies to attract qualified talent. Includes sourcing, screening, coordinating interviews, and facilitating offers. Includes talent acquisition and sourcers. |
+| Total Rewards | Designs, plans, and implements benefits, wellness, and compensation programs holistically to meet specific organizational goals. |
 
 ### INFORMATION_TECHNOLOGY
 
@@ -188,11 +175,10 @@ Creates and maintains the computer, network, and communication systems an organi
 
 | Focus | Description |
 |-------|-------------|
-| it operations | Supports network databases and systems, updates hardware and software, and troubleshoots system errors. |
-| it security | Monitors networks for security breaches, maintains firewalls and encryption tools, and checks for system vulnerabilities. |
-| it support | Supports IT systems and users, installs hardware and software, and maintains network connectivity. |
-| network operations | Responsible for high-level network operations and support. Performs technical analysis on outages, configures servers, and recommends infrastructure improvements. |
-| general it | General IT work not tied to a specific specialization. |
+| General - IT | IT work not tied to a narrower specialization. |
+| Information Security | Monitors networks for security breaches, maintains firewalls and encryption tools, and checks for system vulnerabilities. |
+| Information Services | Delivers and manages the internal IT services and business applications employees rely on. |
+| Network Ops | Responsible for high-level network operations and support. Performs technical analysis on outages, configures servers, and recommends infrastructure improvements. |
 
 ### LEGAL
 
@@ -200,12 +186,10 @@ Ensures the company's compliance with regulations and generally accepted rules. 
 
 | Focus | Description |
 |-------|-------------|
-| corporate counsel | Advises on a variety of legal matters. Prepares, reviews, and negotiates contracts and legal documents. Develops policies on governance and regulatory affairs. |
-| commercial contracts | Develops, negotiates, and evaluates company contracts on behalf of the organization. Analyzes potential risks and helps stakeholders understand contract terms. |
-| compliance | Keeps company activities within guidelines, regulations, and ethical expectations. Monitors operations, reviews policies for risks, and researches legal requirements for new initiatives. |
-| intellectual property | Protects the company's patents, trademarks, and copyrights. Advises on IP strategy and handles disputes. |
-| paralegal | Organizes and maintains legal documents. Gathers evidence for attorney review, drafts correspondence, and assists with case preparation. |
-| general legal | General legal work not tied to a specific specialization. |
+| Compliance | Keeps company activities within guidelines, regulations, and ethical expectations. Monitors operations, reviews policies for risks, and researches legal requirements for new initiatives. |
+| Contract | Develops, negotiates, and evaluates company contracts on behalf of the organization. Analyzes potential risks and helps stakeholders understand contract terms. |
+| Corporate Counsel | Advises on a variety of legal matters. Prepares, reviews, and negotiates contracts and legal documents. Develops policies on governance and regulatory affairs. |
+| Paralegal | Organizes and maintains legal documents. Gathers evidence for attorney review, drafts correspondence, and assists with case preparation. |
 
 ### MANUFACTURING
 
@@ -213,11 +197,10 @@ Creates products from raw materials or assembled components. Includes production
 
 | Focus | Description |
 |-------|-------------|
-| production planning | Coordinates production workflow. Plans and prioritizes operations to ensure maximum performance and minimum delay. Determines manpower, equipment, and raw materials needed. |
-| assembly | Assembles component parts adhering to blueprints or schematics. Conducts quality control checks and manages parts inventory. |
-| manufacturing engineering | Designs and improves manufacturing systems or processes. Works with designers to refine products for producibility and cost, while conforming with regulatory standards. |
-| quality control | Inspects products at different development phases to ensure consistent standards. Develops inspection activities and records quality issues. |
-| general manufacturing | General manufacturing work not tied to a specific specialization. |
+| Assembly | Assembles component parts adhering to blueprints or schematics. Conducts quality control checks and manages parts inventory. |
+| Manufacturing Engineering | Designs and improves manufacturing systems or processes. Works with designers to refine products for producibility and cost, while conforming with regulatory standards. |
+| Production Planning | Coordinates production workflow. Plans and prioritizes operations to ensure maximum performance and minimum delay. Determines manpower, equipment, and raw materials needed. |
+| Quality Assurance | Inspects products at different development phases to ensure consistent standards. Develops inspection activities and records quality issues. |
 
 ### MARKETING
 
@@ -225,18 +208,16 @@ Builds and manages digital content, advertising, social media, and external comm
 
 | Focus | Description |
 |-------|-------------|
-| product marketing | Promotes products and features to the target audience. Locates key selling points, creates campaigns, and develops marketing strategies for product launches. |
-| demand generation | Develops and executes multi-channel campaigns to drive leads and the sales pipeline — via events, email, social advertising, and partner marketing. |
-| content marketing | Creates and distributes written and multimedia content to attract and engage target audiences. |
-| brand marketing | Manages and evolves the company's brand identity and positioning across all channels. |
-| digital marketing | Plans and executes digital marketing: SEO/SEM, email, social media, and display advertising. Measures campaign performance against goals. |
-| marketing operations | Optimizes and governs marketing processes. Defines goals, budgets, and reports. Maintains communications across the marketing function. |
-| communications | Manages internal and external communications. Creates and distributes news releases and other content to maintain a consistent corporate message. |
-| creative marketing | Designs and produces marketing materials for digital, social, TV, and audio/visual mediums. Establishes design standards and manages campaign budgets. |
-| advertising | Creates marketing communications to persuade an audience. Manages advertising campaigns, supervises creative staff, and evaluates campaign performance. |
-| events | Manages the organization's events strategy — trade shows, hosted events, and conferences. Handles end-to-end logistics and proves ROI. |
-| social media and community management | Oversees the company's social media presence and community interactions. Plans digital campaigns to build community and expand revenue opportunities. |
-| general marketing | General marketing work not tied to a specific specialization. |
+| Advertising | Creates marketing communications to persuade an audience. Manages advertising campaigns, supervises creative staff, and evaluates campaign performance. |
+| Communications/Public Relations | Manages internal and external communications. Creates and distributes news releases and other content to maintain a consistent corporate message. |
+| Creative Marketing | Designs and produces marketing materials for digital, social, TV, and audio/visual mediums. Establishes design standards and manages campaign budgets. Includes brand and art-direction roles. |
+| Demand Generation | Develops and executes multi-channel campaigns to drive leads and the sales pipeline — via events, email, social advertising, and partner marketing. Includes growth marketing. |
+| Digital Marketing | Plans and executes digital marketing: SEO/SEM, email, social media, and display advertising. Measures campaign performance against goals. Includes content marketing. |
+| Events | Manages the organization's events strategy — trade shows, hosted events, and conferences. Handles end-to-end logistics and proves ROI. |
+| Marketing Operations | Optimizes and governs marketing processes. Defines goals, budgets, and reports. Maintains communications across the marketing function. |
+| Product Marketing | Promotes products and features to the target audience. Locates key selling points, creates campaigns, and develops marketing strategies for product launches. |
+| Production | Produces published and media content — publishing, video and audio production, video editing. |
+| Social Media/Community Management | Oversees the company's social media presence and community interactions. Plans digital campaigns to build community and expand revenue opportunities. |
 
 ### OPERATIONS
 
@@ -244,9 +225,9 @@ Establishes systems and processes to maximize business productivity and executio
 
 | Focus | Description |
 |-------|-------------|
-| logistics and supply chain | Coordinates all activities involved in the acquisition, production, and distribution of the company's goods. Analyzes logistics data, negotiates with suppliers, and communicates with distributors. |
-| facilities | Responsible for building and grounds maintenance. Negotiates contracts with service providers, inspects for safety compliance, and coordinates renovations. |
-| general operations | General operations work not tied to a specific specialization. |
+| Facilities | Responsible for building and grounds maintenance. Negotiates contracts with service providers, inspects for safety compliance, and coordinates renovations. |
+| General - Operations | Operations work not tied to a narrower specialization. |
+| Logistics and Supply Chain | Coordinates all activities involved in the acquisition, production, and distribution of the company's goods. Analyzes logistics data, negotiates with suppliers, and communicates with distributors. |
 
 ### PRODUCT
 
@@ -254,12 +235,10 @@ Provides expertise to guide strategy, roadmap, and feature development. Leads cr
 
 | Focus | Description |
 |-------|-------------|
-| product management | Develops and identifies existing and new products. Generates product requirements, determines specifications and pricing, and conducts market research. |
-| technical program management | Manages highly technical, cross-functional programs. Coordinates multiple teams with a stake in a technical initiative and manages to a project plan. |
-| product operations | Supports the product team by streamlining processes and managing data and technology. Standardizes planning, onboarding, and communication across the function. |
-| technical writing | Writes, edits, and rephrases technical concepts into clear documentation. Researches topics, authors documents, and edits work for publication. |
-| user research | Plans and implements user research strategies. Provides data-driven insights representing the voice of users to inform product definition and business goals. |
-| general product | General product work not tied to a specific specialization. |
+| Product Management | Develops and identifies existing and new products. Generates product requirements, determines specifications and pricing, and conducts market research. |
+| Product Operations | Supports the product team by streamlining processes and managing data and technology. Standardizes planning, onboarding, and communication across the function. |
+| Technical Writing | Writes, edits, and rephrases technical concepts into clear documentation. Researches topics, authors documents, and edits work for publication. |
+| User Research | Plans and implements user research strategies. Provides data-driven insights representing the voice of users to inform product definition and business goals. |
 
 ### PROJECT_MANAGEMENT
 
@@ -267,9 +246,8 @@ Coordinates and tracks features of ongoing company initiatives. Manages stakehol
 
 | Focus | Description |
 |-------|-------------|
-| project management | Plans and oversees projects to ensure timely delivery within budget. Designates resources, prepares budgets, monitors progress, and keeps stakeholders informed. |
-| program management | Manages a portfolio of related projects. Coordinates across multiple teams to align program-level objectives with business goals. |
-| general project management | General project or program management work not tied to a specific specialization. |
+| Non-Technical Project Management | Plans and oversees non-technical projects to ensure timely delivery within budget. Designates resources, prepares budgets, monitors progress, and keeps stakeholders informed. |
+| Technical Project Management | Plans and oversees technical projects (software, IT, engineering) to timely delivery. Works closely with engineering teams on scope, dependencies, and releases. |
 
 ### RESEARCH
 
@@ -277,16 +255,14 @@ Designs new approaches to solve technology or scientific problems and develop ne
 
 | Focus | Description |
 |-------|-------------|
-| scientific research | Conducts broad scientific experiments and studies to advance knowledge or develop new products. |
-| clinical research | Uses clinical trials and investigative methods to improve human health. Interprets results and analyzes effects of treatments. |
-| pre-clinical research | Conducts investigational testing on new products before human trials. Evaluates pharmacodynamics, pharmacokinetics, and toxicology. |
-| market research | Analyzes market data to inform business decisions. Conducts studies and surveys to identify customer needs and competitive dynamics. |
-| process development | Identifies and develops new manufacturing processes. Implements controls to ensure quality and reproducibility. |
-| lab operations | Manages day-to-day laboratory activities. Ensures testing and analysis follows protocol and develops procedures to improve efficiency. |
-| research associate | Plans and conducts research. Can include managing data, conducting interviews, and publishing research. Interprets findings in an actionable way to inform business decisions. |
-| scientist | Uses clinical trials and other investigative methods to conduct research aimed at improving overall human health. Interprets test results and suggests new methods of diagnosis and treatment. Requires a PhD. |
-| research support | Responsible for literature searches, data management, recruiting participants, obtaining consents, maintaining files, scheduling and conducting interviews, maintaining data collection files, assisting with data analysis, and generating correspondence, reports, and graphics. |
-| general research | General research work not tied to a specific specialization. |
+| Clinical Science | Uses clinical trials and investigative methods to improve human health. Interprets results and analyzes effects of treatments. |
+| Clinical (MD) | Physician (MD) conducting or overseeing clinical research and trials. |
+| Lab Operations | Manages day-to-day laboratory activities. Ensures testing and analysis follows protocol and develops procedures to improve efficiency. |
+| Pre-Clinical Science | Conducts investigational testing on new products before human trials. Evaluates pharmacodynamics, pharmacokinetics, and toxicology. |
+| Process Development | Identifies and develops new manufacturing processes. Implements controls to ensure quality and reproducibility. |
+| Research Associate | Plans and conducts research. Can include managing data, conducting interviews, and publishing research. Interprets findings in an actionable way to inform business decisions. |
+| Scientist (PhD) | Uses clinical trials and other investigative methods to conduct research aimed at improving overall human health. Interprets test results and suggests new methods of diagnosis and treatment. Requires a PhD. |
+| Support | Responsible for literature searches, data management, recruiting participants, obtaining consents, maintaining files, scheduling and conducting interviews, maintaining data collection files, assisting with data analysis, and generating correspondence, reports, and graphics. |
 
 ### SALES
 
@@ -294,14 +270,10 @@ Advocates for company products and helps potential customers find the right solu
 
 | Focus | Description |
 |-------|-------------|
-| account executive | Grows revenue by finding leads and closing deals with existing or new clients. Acts as an intermediary across departments to ensure client success. |
-| sales development | Identifies leads, educates prospects through calls and presentations, and supports existing customers. |
-| sales operations | Manages the processes, tools, and technologies that support Sales and Marketing. Develops sales strategies and performs analyses to drive pipeline. |
-| sales and solutions engineering | Delivers technical presentations to prospects and customers. Collaborates with sales and engineering to assess customer needs and provide sales support. |
-| partnerships | Develops and manages strategic alliances, channel relationships, and partner programs to drive joint revenue. |
-| channel sales | Sells through indirect channels — resellers, distributors, and third-party partners. |
-| enterprise sales | Manages complex, large-scale sales cycles with enterprise-level accounts. |
-| general sales | General sales work not tied to a specific specialization. |
+| Account Executive | Grows revenue by finding leads and closing deals with existing or new clients. Acts as an intermediary across departments to ensure client success. |
+| Sales Development | Identifies leads, educates prospects through calls and presentations, and supports existing customers. |
+| Sales Operations | Manages the processes, tools, and technologies that support Sales and Marketing. Develops sales strategies and performs analyses to drive pipeline. |
+| Sales/Solutions Engineering | Delivers technical presentations to prospects and customers. Collaborates with sales and engineering to assess customer needs and provide sales support. |
 
 ### STRATEGY
 
@@ -309,11 +281,11 @@ Drives business growth by optimizing operations, launching initiatives, scaling 
 
 | Focus | Description |
 |-------|-------------|
-| corporate strategy | Leads strategic planning processes, evaluates M&A opportunities, and integrates acquisitions. |
-| business development | Develops growth strategies focused on financial gain and customer value. Evaluates new business opportunities, partnerships, alliances, and joint ventures. |
-| business operations | Interprets data from various departments, makes strategic decisions, and rolls out operational plans. Develops improvement strategies and supports execution of company goals. |
-| chief of staff | Supports an executive with decision-making, project management, and execution of strategic initiatives. Prepares leadership for key meetings and presentations. |
-| general strategy | General strategy work not tied to a specific specialization. |
+| Business Operations | Interprets data from various departments, makes strategic decisions, and rolls out operational plans. Develops improvement strategies and supports execution of company goals. |
+| Chief of Staff | Supports an executive with decision-making, project management, and execution of strategic initiatives. Prepares leadership for key meetings and presentations. |
+| Corporate/Business Development | Develops growth strategies focused on financial gain and customer value. Evaluates new business opportunities, partnerships, alliances, and joint ventures. |
+| General - Strategy | Strategy work not tied to a narrower specialization. |
+| Partnerships | Develops and manages strategic alliances, channel relationships, and partner programs to drive joint revenue. |
 
 ### SUPPORT
 
@@ -321,12 +293,9 @@ Provides post-sales service and assistance. Resolves incoming inquiries and supp
 
 | Focus | Description |
 |-------|-------------|
-| customer support | Listens to customer questions and concerns, provides answers, processes orders, and reviews accounts. |
-| technical support | Assists customers with hardware or software issues. Diagnoses and repairs faults, resolves network issues, and installs and configures systems. |
-| onboarding and implementations | Introduces new systems, programs, and technologies to an organization. Guides new users or clients to achieve success with the product. |
-| general support | General support work not tied to a specific specialization. |
-
----
+| Customer Support | Listens to customer questions and concerns, provides answers, processes orders, and reviews accounts. |
+| Onboarding and Implementations | Introduces new systems, programs, and technologies to an organization. Guides new users or clients to achieve success with the product. |
+| Technical Support | Assists customers with hardware or software issues. Diagnoses and repairs faults, resolves network issues, and installs and configures systems. |
 
 ## Job Levels
 
@@ -354,20 +323,24 @@ Provides post-sales service and assistance. Resolves incoming inquiries and supp
 
 - Attempt an exact phrase match between the input and any focus in the taxonomy.
 - If no exact match, look for substring or high-similarity matches.
-- If you can determine the job area but not the focus, set focus to `"general [area]"`.
+- If you can determine the job area but no listed focus fits, set focus to `None` — the role is benchmarked on its job-area figures. Never invent a focus that is not in the list (`Backend`, `Treasury`, `Channel Sales`, `Infrastructure`). A software engineer with no narrower signal is `General - Software Engineer`, not `None`.
+- Titles worded differently from a focus map by the keywords in compensation-lib's role matcher (`rules/focus_area_rules.json`): backend / full stack → `Web Engineer`; frontend / UI engineer → `UX/Frontend`; embedded / firmware → `Hardware`; SRE → `DevOps and Site Reliability`; QA / SDET / test engineer → `Quality Assurance`; product designer → `UX Design`; FP&A → `Financial Planning and Analysis`; people operations → `HR Operations`; HRBP → `HR Generalist`; talent acquisition → `Recruiting`; content / SEO → `Digital Marketing`; brand → `Creative Marketing`; growth → `Demand Generation`; PR → `Communications/Public Relations`; M&A → `Corporate/Business Development` (Strategy); BDR / SDR / business development representative → `Sales Development` (Sales); clinical → `Clinical Science`; quality control (Manufacturing) → `Quality Assurance`.
+- **The user already named the job area and focus** (e.g. "Engineering, AI and Machine Learning", "Sales — Account Executive"): keep them. Map each to its taxonomy value (case and wording aside) and do not reclassify into a different area or focus. Only fall back to classifying from the title when the named pair is not in the taxonomy — then say which part did not match. A stated focus also wins over the VP1+ rule below.
+- **AI / machine learning roles** go to **Engineering / AI and Machine Learning** whenever the title or description carries ML/AI wording (Machine Learning Engineer, AI Engineer, MLOps, Applied Scientist, Data Scientist – Machine Learning, ML Researcher). This matches Carta's role matcher in compensation-lib, whose Engineering rule for "machine learning" / "artificial intelligence" / "deep learning" outranks its Data rule. Use **Data / AI and Machine Learning** only when the user or a `department` column places the role in Data. A data scientist or analyst title with no ML/AI wording is Data (`Data Science`, `Business Intelligence and Analytics`).
+- **Partnerships** roles are Strategy, not Sales. **Tax** roles are Finance, not Accounting — compensation-lib's job rules file tax titles under Accounting, but the `Tax` focus exists only under Finance.
 
 ### 2. Determine Level
 
 - Use seniority terms in the title as primary signals: `Junior` → ENTRY/MID1, `Senior` → SENIOR1, `Lead` → SENIOR1/SENIOR2, `Manager` → SENIOR2/STAFF1, `Director` → STAFF1/STAFF2, `VP` → VP1/VP2, `Chief` / `C-` → C_LEVEL.
 - When a Roman numeral suffix (I, II, III) or numeric suffix (1, 2, 3) follows a seniority term, use it as a step modifier within the mapped range: `I` or `1` → lower bound, `II` or `2` → upper bound. Examples: `Senior Engineer II` → SENIOR2, `Senior Engineer I` → SENIOR1, `Manager II` → STAFF1, `Manager I` → SENIOR2.
 - Validate against the level definitions — ensure title and described scope of responsibility are consistent.
-- For levels VP1 and above (VP1, VP2, C_LEVEL), set focus to the appropriate `"general [area]"` focus.
-- For CEO, omit focus entirely — the CEO job area has no focus specializations.
+- For levels VP1 and above (VP1, VP2, C_LEVEL), set focus to `None` unless the user stated one.
+- For CEO, the focus is `Founder` or `Non-Founder`. Set it only when the input says so; otherwise `None`.
 
 ### 3. No Guessing
 
 - Never invent values outside the taxonomy.
-- Use `UNKNOWN` for job area, focus, or level when you cannot determine with confidence.
+- Use `UNKNOWN` for job area or level when you cannot determine with confidence. For focus, use `None` when no listed focus fits.
 - Always explain your reasoning.
 
 ### 4. Ambiguous Titles
@@ -418,13 +391,13 @@ Every classification must include a confidence score: **High**, **Medium**, or *
 
 ## Output Format
 
-> **Casing rule for user-facing output:** All values are rendered in **Title Case** for visual consistency, not in the internal API enum form. Use the display values shown below in the Output Format and examples — never surface the UPPER_SNAKE_CASE enum codes to the user. When passing values to the benchmark API in a downstream skill, convert each display value back to its API enum (see the Display → API enum tables at the end of this section).
+> **Casing rule for user-facing output:** All values are rendered in **Title Case** for visual consistency, not in the internal API enum form. Use the display values shown below in the Output Format and examples — never surface the UPPER_SNAKE_CASE enum codes to the user. When passing values to the benchmark API in a downstream skill, convert job area and level back to their API enums (see the Display → API enum tables at the end of this section); focus is passed exactly as displayed.
 
 ### Single Role
 
 ```
 Job Area: [display value — Title Case]
-Focus: [display value — Title Case]
+Focus: [focus exactly as listed in the taxonomy, or None]
 Level: [display value] ([numeric])
 Track: [IC | Manager | Executive | Unknown]
 Confidence: [High | Medium | Low]
@@ -455,14 +428,16 @@ Reasoning: "Senior DevOps Engineer" maps directly to the DevOps and Site Reliabi
 
 ```
 Job Area: Project Management
-Focus: Program Management
+Focus: None
 Level: Unknown (—)
 Track: Unknown
 Confidence: Low
 
-Reasoning: "Program Manager" maps most closely to the Program Management focus within
- Project Management. No seniority signals are present in the title to
- determine level, so track cannot be derived.
+Reasoning: "Program Manager" belongs to Project Management, but nothing in the title
+ says whether the work is technical, so neither Technical nor Non-Technical
+ Project Management applies; it is benchmarked on Project Management
+ figures. No seniority signals are present in the title to determine level,
+ so track cannot be derived.
 ```
 
 ### Batch
@@ -532,7 +507,7 @@ When a downstream skill (e.g. `carta-compensation-benchmarks`) needs to call the
 | Support | `SUPPORT` |
 | Other | `OTHER` |
 
-**Focus:** the API accepts the lowercase form. Convert the displayed Title Case value to all lowercase before passing to the API (e.g. `DevOps and Site Reliability` → `devops and site reliability`, `FP&A` → `fp&a`, `UX Design` → `ux design`).
+**Focus:** pass the classified focus exactly as displayed — it already is the API value (`AI and Machine Learning`, `DevOps and Site Reliability`, `Financial Planning and Analysis`). The benchmark API matches focus exactly and case-sensitively, and returns the job-area figures — not an error — for any other spelling (`ai and machine learning`, `AI_AND_MACHINE_LEARNING`, `FP&A`). When the focus is `None`, omit the `focus` parameter; the figures are the job-area benchmark — say that, not that no data exists.
 
 **Level:**
 
