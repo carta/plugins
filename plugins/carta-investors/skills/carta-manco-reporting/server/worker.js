@@ -752,10 +752,12 @@ export function entityRows(result) {
   return [];
 }
 
+// Returns the ManCo and this firm's listed entities: a fund's carta_id is what links its
+// journal entries into Carta (references/firm-lookup.md asks for the same two types).
 export async function resolveMancoEntity(firmUuid, accessToken, sid, env) {
   // Never unfiltered: a firm with many funds and SPVs exceeds the tool's 40,000-character
   // response cap and the whole call fails. entity_types is a comma-separated string.
-  const result = await mcpCallTool("fa__list__entities", { entity_types: "management_co" }, accessToken, sid, env);
+  const result = await mcpCallTool("fa__list__entities", { entity_types: "management_co,fund" }, accessToken, sid, env);
   if (result?.isError) {
     // Carta refused the call. Say why, rather than reporting the firm as having no ManCo.
     const reason = (result.content || []).map((b) => b.text || "").join(" ").trim().slice(0, 300);
@@ -782,7 +784,7 @@ export async function resolveMancoEntity(firmUuid, accessToken, sid, env) {
       textLength: text.length,
     }));
   }
-  return hit;
+  return { manco: hit, entities: listed };
 }
 
 function mancoFromRows(result) {
@@ -812,6 +814,25 @@ function mancoFromRows(result) {
 }
 
 // ── Load firm data (SSE) ──
+
+// The transport returns at most 1,000 rows per call whatever the SQL asks, so each query
+// is fetched a page at a time (references/data-fetch.md, "Pagination"). Past the page cap
+// it fails rather than report a partial ledger as the whole one.
+const QUERY_PAGE = 1000;
+const QUERY_MAX_PAGES = 5;
+
+export async function queryAllRows(sql, what, accessToken, sid, env) {
+  const rows = [];
+  for (let page = 0; page < QUERY_MAX_PAGES; page++) {
+    const result = await mcpCallTool("dwh__execute__query", {
+      sql: page ? `${sql} OFFSET ${page * QUERY_PAGE}` : sql, limit: QUERY_PAGE, format: "ndjson",
+    }, accessToken, sid, env);
+    const got = parseQueryRows(result);
+    rows.push(...got);
+    if (got.length < QUERY_PAGE) return rows;
+  }
+  throw new Error(`This firm has more than ${QUERY_PAGE * QUERY_MAX_PAGES} ${what} lines this period; the hosted dashboard cannot show them all.`);
+}
 
 // Column list matches references/data-fetch.md Query A exactly, so normalizeRow
 // and build_manco_datadir.py's norm_je_row read the same fields off the same names.
@@ -879,7 +900,7 @@ FROM JOURNAL_ENTRIES
 WHERE FIRM_ID = '${firmUuid}'
   AND FUND_UUID != '${mancoUuid}'
   AND YEAR(EFFECTIVE_DATE) BETWEEN ${year - 5} AND ${year}
-  AND MONTH(EFFECTIVE_DATE) <= ${maxMo}
+  AND (YEAR(EFFECTIVE_DATE) < ${year} OR MONTH(EFFECTIVE_DATE) <= ${maxMo})
   AND ACCOUNT_TYPE >= 5000
   AND (LOWER(ACCOUNT_NAME) LIKE '%management fee%' OR LOWER(ACCOUNT_NAME) LIKE '%mgmt fee%')
 ORDER BY yr DESC, EFFECTIVE_DATE, JOURNAL_ENTRY_LINE_ID
@@ -913,7 +934,7 @@ async function handleLoadFirm(req, env) {
 
       // Resolve ManCo entity
       await send({ step: "Finding ManCo entity" });
-      const mancoEntity = await resolveMancoEntity(meta.firmUuid, session.access_token, sid, env);
+      const { manco: mancoEntity, entities } = await resolveMancoEntity(meta.firmUuid, session.access_token, sid, env);
       const mancoUuid = mancoEntity?.fund_uuid || mancoEntity?.uuid || mancoEntity?.FUND_UUID || null;
       const mancoName = mancoEntity?.fund_name || mancoEntity?.name || mancoEntity?.FUND_NAME || meta.name;
       const mancoFundId = mancoEntity?.id || mancoEntity?.fund_id || null;
@@ -929,23 +950,22 @@ async function handleLoadFirm(req, env) {
       const maxMo = now.getMonth() + 1;
       const asOf = now.toISOString().slice(0, 10);
 
-      // Query expenses
+      // A failed page is logged and read as no rows, as a failed query was; only a firm
+      // past the page cap stops the load.
+      const fetchRows = (sql, what) => queryAllRows(sql, what, session.access_token, sid, env).catch(e => {
+        if (e.message.includes("cannot show them all")) throw e;
+        console.error(`${what} query error:`, e.message);
+        return [];
+      });
+
       await send({ step: "Querying ManCo expenses" });
-      const expenseResult = await mcpCallTool("dwh__execute__query", {
-        sql: EXPENSE_SQL(mancoUuid, year, maxMo), limit: 1000, format: "ndjson",
-      }, session.access_token, sid, env).catch(e => { console.error("Expense query error:", e.message); return null; });
+      const expenseRows = await fetchRows(EXPENSE_SQL(mancoUuid, year, maxMo), "expense");
 
-      // Query income
       await send({ step: "Querying ManCo income" });
-      const incomeResult = await mcpCallTool("dwh__execute__query", {
-        sql: INCOME_SQL(mancoUuid, year, maxMo), limit: 1000, format: "ndjson",
-      }, session.access_token, sid, env).catch(e => { console.error("Income query error:", e.message); return null; });
+      const incomeRows = await fetchRows(INCOME_SQL(mancoUuid, year, maxMo), "income");
 
-      // Query fund fees
       await send({ step: "Querying fund fee data" });
-      const fundFeeResult = await mcpCallTool("dwh__execute__query", {
-        sql: FUND_FEE_SQL(meta.firmUuid, mancoUuid, year, maxMo), limit: 1000, format: "ndjson",
-      }, session.access_token, sid, env).catch(e => { console.error("Fund fee query error:", e.message); return null; });
+      const fundFeeRows = await fetchRows(FUND_FEE_SQL(meta.firmUuid, mancoUuid, year, maxMo), "fund fee");
 
       // Query currency
       await send({ step: "Resolving currency" });
@@ -1010,9 +1030,6 @@ async function handleLoadFirm(req, env) {
       }
 
       await send({ step: "Building snapshot" });
-      const expenseRows = parseQueryRows(expenseResult);
-      const incomeRows = parseQueryRows(incomeResult);
-      const fundFeeRows = parseQueryRows(fundFeeResult);
       const currencyRows = parseQueryRows(currencyResult);
 
       // Null when the lookup found nothing. Naming a currency we did not read
@@ -1021,7 +1038,7 @@ async function handleLoadFirm(req, env) {
       const monthLabels = MONTH_LABELS.slice(0, maxMo);
 
       const { snapshot, accounts } = buildData({
-        meta, mancoName, mancoUuid, mancoFundId, asOf, year, maxMo,
+        meta, mancoName, mancoUuid, mancoFundId, mancoEntity, entities, asOf, year, maxMo,
         monthLabels, currency, expenseRows, incomeRows, fundFeeRows, cashData,
         budgetByAccount,
       });
@@ -1124,6 +1141,8 @@ export function parseTags(row) {
   if (!flat) return [];
   return flat.split(",").map(v => v.trim()).filter(Boolean).map(value => ({ category: "", value }));
 }
+
+const SPEND_BY_GL_TOP_N = 10;
 
 function buildBudget(budgetByAccount, maxMo, year) {
   if (!budgetByAccount || !Object.keys(budgetByAccount).length) return null;
@@ -1285,7 +1304,7 @@ export function buildCashBalance(cashData, mancoEntityId, currency) {
   return { balance: match.total_balance, currency, by_currency: byCurrency, accounts, stale_account_count: staleCount, unavailable_reason: null };
 }
 
-export function buildData({ meta, mancoName, mancoUuid, mancoFundId, asOf, year, maxMo, monthLabels, currency, expenseRows, incomeRows, fundFeeRows, cashData, budgetByAccount }) {
+export function buildData({ meta, mancoName, mancoUuid, mancoFundId, mancoEntity = null, entities = [], asOf, year, maxMo, monthLabels, currency, expenseRows, incomeRows, fundFeeRows, cashData, budgetByAccount }) {
   const expenses = expenseRows.map(normalizeRow);
   const income = incomeRows.map(normalizeRow);
   const allRows = [...expenses, ...income];
@@ -1334,37 +1353,43 @@ export function buildData({ meta, mancoName, mancoUuid, mancoFundId, asOf, year,
   const ytdIncome = round2(income.reduce((s, r) => s + r.amount, 0));
   const ytdExpense = round2(expenses.reduce((s, r) => s + r.amount, 0));
 
-  // Spend by GL (for drill-down links)
-  const spendByGL = {};
-  for (const r of expenses) {
-    if (!spendByGL[r.account]) spendByGL[r.account] = { ytd: 0 };
-    spendByGL[r.account].ytd += r.amount;
-  }
-  for (const k of Object.keys(spendByGL)) spendByGL[k].ytd = round2(spendByGL[k].ytd);
+  // Spend by GL: the top expense accounts by YTD spend, with the budget written against
+  // each, as build_manco_datadir.py's spend_by_gl.
+  const budget = buildBudget(budgetByAccount, maxMo, year);
+  const budgetPerAccount = budget?.budgets?.[0]?.per_account || {};
+  const spendByAccount = {};
+  for (const r of expenses) spendByAccount[r.account] = (spendByAccount[r.account] || 0) + r.amount;
+  const spendByGL = {
+    accounts: Object.entries(spendByAccount)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, SPEND_BY_GL_TOP_N)
+      .map(([name, actual]) => ({ name, actual: Math.round(actual), budget: Math.round(budgetPerAccount[name] || 0) })),
+  };
 
-  // Fee schedule (fund fees)
+  // Fee schedule: one bar per year, as build_manco_datadir.py has it. Closed years are
+  // full years; the current one is booked to date.
   const fees = fundFeeRows.map(normalizeFeeRow);
+  const feeYears = [...new Set(fees.map(r => r.yr).filter(Number.isFinite))].sort((a, b) => a - b);
   const fundTotals = {};
   const fundNames = {};
-  const fundMonthly = {};
+  const fundYearly = {};
   for (const r of fees) {
     if (!fundTotals[r.fundUuid]) {
       fundTotals[r.fundUuid] = 0;
       fundNames[r.fundUuid] = r.fund;
-      fundMonthly[r.fundUuid] = new Array(months).fill(0);
+      fundYearly[r.fundUuid] = new Array(feeYears.length).fill(0);
     }
     fundTotals[r.fundUuid] += r.amount;
-    if (r.yr === year && r.mo >= 1 && r.mo <= months) {
-      fundMonthly[r.fundUuid][r.mo - 1] += r.amount;
-    }
+    fundYearly[r.fundUuid][feeYears.indexOf(r.yr)] += r.amount;
   }
   const fundEntries = Object.entries(fundTotals)
     .sort((a, b) => b[1] - a[1])
     .map(([uuid, total]) => ({
       name: fundNames[uuid], uuid,
       ytdFees: round2(total),
-      data: (fundMonthly[uuid] || []).map(round2),
+      data: fundYearly[uuid].map(round2),
     }));
+  const feeLabels = feeYears.map(y => (y === year ? `${y} YTD` : String(y)));
 
   // Cash balance. Query D (currency, above) is empty for a ManCo not in
   // AGGREGATE_FUND_METRICS; cash then names the currency only when it holds
@@ -1379,13 +1404,22 @@ export function buildData({ meta, mancoName, mancoUuid, mancoFundId, asOf, year,
     ...income.map(r => toEntry(r, "income")),
   ];
 
-  const fundFeeEntries = fees.map(toFeeEntry);
+  const cartaIdByUuid = Object.fromEntries(
+    entities.filter((e) => e.uuid && e.carta_id).map((e) => [String(e.uuid).toLowerCase(), e.carta_id]));
+  const fundFeeEntries = fees.map((r) => ({
+    ...toFeeEntry(r),
+    // The fee chart names each fund by its own name; the drill-down matches on it.
+    display_fund: fundNames[r.fundUuid],
+    entity_carta_id: cartaIdByUuid[String(r.fundUuid || "").toLowerCase()] || null,
+  }));
 
   const snapshot = {
     firmName: meta.name,
+    entityLabel: mancoName,
+    // Journal links need Carta ids. mancoFundId is the entity id the cash call takes.
     cartaIds: {
-      firm: meta.firmId,
-      manco_fund: mancoFundId,
+      firm: mancoEntity?.firm_carta_id || meta.firmId,
+      manco_fund: mancoEntity?.carta_id || null,
     },
     asOf,
     currency,
@@ -1401,11 +1435,11 @@ export function buildData({ meta, mancoName, mancoUuid, mancoFundId, asOf, year,
     },
     spendByGL,
     feeSchedule: {
-      labels: monthLabels,
+      labels: feeLabels,
       funds: fundEntries,
     },
     cash,
-    budget: buildBudget(budgetByAccount, maxMo, year),
+    budget,
   };
 
   const accountsData = {
