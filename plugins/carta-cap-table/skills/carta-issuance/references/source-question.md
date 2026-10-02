@@ -47,5 +47,8 @@ straight away: a blank field on the form is the question
   instructions.
 - **A spreadsheet or CSV from either source** is saved to `$WORK`, then goes through
   [the import sub-skill](../issuance-import/SKILL.md), as an upload would.
-- **`source`** names the message's subject or the file's name. Its `url` is set only to an
-  https link the connector returned for that item ([§ 2](../SKILL.md#2-build-the-page)).
+- **`source`** names the message's subject or the file's name, with its `document_type`
+  ([§ 2](../SKILL.md#2-build-the-page)). A file saved to `$WORK` is uploaded as an asset
+  and its `url` set to that asset, so the page adds it to Company documents
+  ([§ 3](../SKILL.md#3-publish-it)). Otherwise `url` is set only to an https link the
+  connector returned for that item.

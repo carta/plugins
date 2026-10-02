@@ -313,15 +313,32 @@ def normalize_terms(terms):
     return out
 
 
-SOURCE_KEYS = ("name", "url")
+SOURCE_KEYS = ("name", "url", "document_type")
 # The page links only to an https URL or this artifact's own uploaded asset.
 SOURCE_URL_RE = re.compile(r"^(https://|/_blob/)")
 
+# The types a company's document library takes. The page adds each attached file under
+# its type, and Carta refuses any other. The issuance types show in Issuance documents.
+LIBRARY_DOCUMENT_TYPES = (
+    "Bylaw", "State qualification", "State filing", "Form D", "Disclosure", "Document",
+    "Stock Purchase Agreement", "Articles of Incorporation", "Operating Agreement",
+    "Convertible Note / SAFE", "Transfer", "Cap Table Spreadsheet", "Option Agreement",
+    "Equity Plan", "Board Consent", "Restricted Stock Award", "RSU Award Agreement",
+    "PIU Award Agreement", "Capital Interest", "Equity Agreement", "Warrant",
+)
+
 
 def check_source(source):
-    """The document the terms came from: its file name, and where the page links to it."""
+    """The files the terms came from: one object, or a list of them. Each names its file,
+    where the page links to it, and the library type the page adds it under."""
+    for entry in source if isinstance(source, list) else [source]:
+        check_source_entry(entry)
+
+
+def check_source_entry(source):
     if not isinstance(source, dict):
-        sys.exit("ERROR: seed 'source' must be {\"name\": ..., \"url\": ...}")
+        sys.exit("ERROR: seed 'source' must be {\"name\": ..., \"url\": ..., "
+                 "\"document_type\": ...} or a list of them")
     unknown = sorted(k for k in source if k not in SOURCE_KEYS)
     if unknown:
         sys.exit("ERROR: unknown key(s) {} on seed 'source' — it holds only {}".format(
@@ -332,6 +349,10 @@ def check_source(source):
     if url not in (None, "") and not (isinstance(url, str) and SOURCE_URL_RE.match(url)):
         sys.exit("ERROR: seed 'source' url must be an https URL or the artifact's own "
                  "/_blob/ asset url")
+    kind = source.get("document_type")
+    if kind not in (None, "") and kind not in LIBRARY_DOCUMENT_TYPES:
+        sys.exit("ERROR: seed 'source' document_type {!r} is not a library type — use one "
+                 "of {}".format(kind, ", ".join(LIBRARY_DOCUMENT_TYPES)))
 
 
 def check_seed_shape(seed):

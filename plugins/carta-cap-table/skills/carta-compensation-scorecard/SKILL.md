@@ -20,7 +20,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.91.7</carta-plugin>
+<carta-plugin>carta-cap-table:6.92.0</carta-plugin>
 
 # CTC Scorecard
 

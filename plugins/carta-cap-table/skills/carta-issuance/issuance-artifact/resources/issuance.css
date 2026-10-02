@@ -519,6 +519,7 @@
       margin-top: var(--ink-spacing-global-vertical-medium); }
     .sheet p { font-size: 13px; color: var(--ink-color-global-brand-gray-90); }
     .sheet p + p, .tot + p, .step + p { margin-top: var(--ink-spacing-global-vertical-small); }
+    .sheet p + .nx, .sheet .nx + p { margin-top: var(--ink-spacing-global-vertical-small); }
     .sheet ul { list-style: disc; padding-left: 18px; margin-top: var(--ink-spacing-global-vertical-xsmall); }
     .sheet li { font-size: 13px; color: var(--ink-color-global-brand-gray-90); }
 

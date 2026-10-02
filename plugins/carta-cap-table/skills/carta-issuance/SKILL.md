@@ -37,7 +37,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.91.7</carta-plugin>
+<carta-plugin>carta-cap-table:6.92.0</carta-plugin>
 
 # Issue Securities
 
@@ -236,8 +236,14 @@ uv run "$SKILL/issuance-artifact/scripts/build_artifact.py" \
   `exercise_price`, `price_per_share`, `threshold_value`, `board_approval_date`:
   `{"name": "Emil Vaselvee", "quantity": 1250, "terms": {"grant_type": "ISO"}}`. Rows
   that disagree with no batch value show `Multiple` on the shared field — expected.
-- **`source`** is `{"name": "<file name>", "url": "<link>"}` for the Source tile; omit it
-  when nothing was attached. `url` builds only as https or a `/_blob/` asset ([§ 3](#3-publish-it)).
+- **`source` lists every attached file the terms came from**, spreadsheets included:
+  `[{"name": "<file name>", "url": "<asset url>", "document_type": "<library type>"}]`.
+  Omit it when nothing was attached. Once Carta holds the draft or the issue, the page adds
+  each file to Company documents under `document_type`, the type the file is:
+  `Option Agreement`, `Board Consent`, `Equity Plan`, `Restricted Stock Award`,
+  `PIU Award Agreement`, `Equity Agreement`, `Warrant` — or `Document` when none fits. A
+  wrong type fails the build, which names them all. `url` builds only as https or a
+  `/_blob/` asset ([§ 3](#3-publish-it)), and only an asset is added.
 - **Resuming a saved draft set** adds `draft_set_id` — without it the page mints a *second*
   draft set of the same rows ([hard rule 3](#hard-rules)). The page reads the set's rows and
   terms back itself; seed `load_drafts` rows, each with its `draft_pk`, only as its fallback
@@ -287,9 +293,9 @@ connector was renamed: republish with step 3.
   object replaces the stored grant, so an omitted capability is revoked. Omit the field
   entirely to carry the grant forward — the cheaper redeploy.
 - Keep `tools` at that one: every Carta command goes through the `call_tool` proxy.
-- **An attached document gets a link:** add `assets: {}` to the first publish, then
-  `upload_asset` the file, rebuild with `source.url` set to the returned `url`, and
-  republish with `capabilities` omitted.
+- **Every attached file gets a link:** add `assets: {}` to the first publish, then
+  `upload_asset` each file, rebuild with each `source` entry's `url` set to its returned
+  `url`, and republish with `capabilities` omitted.
 
 **Read the publish result's warnings.** One matters: an unresolved connector name means
 the grant isn't wired and every card comes up empty — that sends this run to
@@ -355,7 +361,8 @@ Artifact({action: "read_db", url: "<the URL the publish returned>",
 ```
 
 Branch on `status`, never `summary`. `holders`, `totals` and `issue_date` are for the
-closing line:
+closing line. `documents` gives each attached file's `status`: name any that isn't
+`filed`, and tell the user to upload it in Company documents in Carta.
 
 | `status` | What it means | What you do |
 |---|---|---|

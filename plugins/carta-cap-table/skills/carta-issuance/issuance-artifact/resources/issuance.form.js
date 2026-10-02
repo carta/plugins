@@ -81,6 +81,7 @@ const S = {
   stuck: "", untold: false, bootFailed: false, docPicked: false, removed: [], savedNote: "",
   sent: {}, lastPayload: {}, removedGone: 0, hydrated: false, touchedShared: new Set(),
   rewriting: [], rowQ: "", rowFilter: "all", rowsView: "table", source: null, sharedOpen: null,
+  filed: {}, filing: false, lastHandoff: null,
 };
 
 /* ---------- helpers ---------- */
@@ -2270,6 +2271,8 @@ function issuedHtml() {
   const out = [];
   if (S.issued > 0) out.push(signedHtml());
   if (S.links.board) out.push(heldHtml());
+  const docs = docsHtml();
+  if (docs) out.push(`<div class="nx-g">${docs}</div>`);
   // The page is the only record when Claude was never told, so it says so here, where it
   // stays, rather than on a sheet the reader can dismiss.
   return `${out.join("")}${toldHtml({ told: !S.untold }, "")}`;
@@ -2358,11 +2361,14 @@ function statsHtml() {
       : statTile("board", "Board status", "Not set");
   }
 
-  const src = S.source && typeof S.source === "object" ? S.source : null;
+  const files = sources();
+  const src = files[0] || null;
   const url = src && sourceHref(src.url);
-  const source = src && src.name
-    ? statTile("source", "Source", `<span class="stat-doc" title="${esc(src.name)}">${esc(src.name)}</span>`,
-      url ? `<a class="ext" href="${esc(url)}" target="_blank" rel="noopener" data-testid="stat-source-link">View document ↗</a>` : "")
+  const more = files.length > 1 ? `and ${esc(plural(files.length - 1, "more file", "more files"))}` : "";
+  const link = url ? `<a class="ext" href="${esc(url)}" target="_blank" rel="noopener" data-testid="stat-source-link">View document ↗</a>` : "";
+  const source = src
+    ? statTile("source", files.length > 1 ? "Sources" : "Source",
+      `<span class="stat-doc" title="${esc(src.name)}">${esc(src.name)}</span>`, [more, link].filter(Boolean).join(" · "))
     : statTile("source", "Source", "Entered in this form");
 
   return statTile("stakeholders", n === 1 ? "Stakeholder" : "Total stakeholders", esc(n.toLocaleString()))
@@ -2371,7 +2377,7 @@ function statsHtml() {
 
 /** What the shared card is for, in one line under its heading. */
 function sharedSub() {
-  const from = S.source && S.source.name ? ", replacing what was originally in the uploaded document" : "";
+  const from = sources().length ? ", replacing what was originally in the uploaded document" : "";
   return `Changes here apply to every ${unitNoun()[0]} in the table below${from}.`;
 }
 
@@ -2965,7 +2971,8 @@ const KEEP_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
 /** The user's work and what Carta already holds of it. Reference data is fetched again. */
 const KEEP_FIELDS = ["stage", "corpId", "corpName", "shared", "seq", "drafts", "draftSetId",
   "draftSetName", "removed", "sent", "docPicked", "curFor", "hydrated", "rewriting",
-  "savedNote", "rowsView", "issued", "issuedRows", "pendingRows", "links", "stuck", "stuckTitle"];
+  "savedNote", "rowsView", "issued", "issuedRows", "pendingRows", "links", "stuck", "stuckTitle",
+  "filed"];
 
 /** Null wherever the browser refuses storage — the page then just forgets on reload. */
 function storage() {
@@ -3145,6 +3152,7 @@ function renderSheet() {
         + "this issue in Carta.</p>" : "")
       + (m.gone ? `<p class="fail-note" data-testid="draft-rows-gone">${esc(m.gone)}</p>` : "")
       + (m.stale ? `<p class="fail-note" data-testid="draft-rows-not-removed">${esc(m.stale)}</p>` : "")
+      + docsHtml()
       + toldHtml(m, "<p>Claude can pick it up from here, or you can come back to this page.</p>");
     close.hidden = false; close.textContent = "Done";
   } else {
@@ -3383,6 +3391,7 @@ async function saveDraft() {
   S.removedGone = 0;
   openSheet("saved", { count, unsaved, kept, stale: removedLine(), gone }); render();
   noteHandoff(S.sheet, await handoff("draft", { recipients: count }));
+  await fileDocuments();
 }
 
 /** Save, then check, then confirm, then issue — all inside the sheet, so the click
@@ -3509,6 +3518,7 @@ async function issueNow() {
     noteHandoff(null, await handoff("issued", { issued: issued.length,
       pending_board: board ? heldRows().length || null : 0, board_action: board ? board.action || null : null }));
     render();
+    await fileDocuments();
     return;
   }
   // Some rows have securities and some do not; re-issuing would duplicate the first.
@@ -3685,8 +3695,14 @@ async function putHandoff(db, doc, retry) {
     reader can dismiss the sheet — and on that sheet, if it is still the one on screen. */
 function noteHandoff(sheet, told) {
   // The document is one path, so a later hand-off that lands replaces what an earlier
-  // one could not say, and the page stops saying it too.
+  // one could not say, and the page and its sheet stop saying it too.
+  const cleared = told && S.untold;
   S.untold = !told;
+  if (cleared) {
+    if (S.sheet) S.sheet.told = true;
+    render();
+    return;
+  }
   renderFooter();
   if (told || !sheet || S.sheet !== sheet) return;
   sheet.told = false;
@@ -3697,6 +3713,7 @@ function noteHandoff(sheet, told) {
     does not land must not be reported as a write that did not land. Every caller reads
     the answer — an untold page is the only record of what it did. */
 async function handoff(status, extra) {
+  S.lastHandoff = { status, extra };
   try {
     // Inside the try: `totals()` re-serializes every row, so it can throw for the same
     // reasons a save can, and this runs after the write it is recording.
@@ -3718,11 +3735,123 @@ async function handoff(status, extra) {
       issue_date: iso(S.shared.issue_date) || null,
       summary: issueMessage(status),
       confirmed_at: new Date().toISOString(),
-    }, extra || {}), true);
+    }, fileable().length ? { documents: docSummary() } : {}, extra || {}), true);
   } catch (err) {
     console.error("issuance artifact: hand-off write failed", err);
     return false;
   }
+}
+
+/* ---------- company documents ----------
+   The files Claude read the terms from go to the company's document library, as a file
+   uploaded to Carta's own Drafts does. They go once Carta holds this issuance — a saved
+   draft or an issue — and never while a sheet is asking for a decision. */
+
+const LIBRARY_CALL = "cap_table__create__library_document";
+/** Each file travels inline, base64-encoded, so a larger one is left for Carta's own upload. */
+const DOC_MAX_BYTES = 10 * 1024 * 1024;
+
+/** Every file the seed named, whichever shape it came in. */
+const sources = () => (Array.isArray(S.source) ? S.source : S.source && typeof S.source === "object" ? [S.source] : [])
+  .filter((s) => s && typeof s.name === "string" && s.name.trim());
+/** The files this page can add: its own uploaded assets that name a library type. The page
+    cannot read any other link. */
+const fileable = () => sources().filter((s) => /^\/_blob\//.test(String(s.url || "")) && s.document_type);
+
+/** Where one file stands. "filing" outside a run is a page reloaded mid-call, whose
+    answer never came back. */
+function docState(s) {
+  const f = S.filed[s.url];
+  if (!f) return null;
+  return f.state === "filing" && !S.filing ? Object.assign({}, f, { state: "unknown" }) : f;
+}
+
+/** What the hand-off tells Claude about each file. */
+const docSummary = () => fileable().map((s) => {
+  const f = docState(s) || {};
+  return { name: s.name, document_type: f.type || s.document_type, status: f.state || "pending" };
+});
+
+async function base64Of(blob) {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
+/** One file to the library. Never retried: a write whose answer did not come back may
+    have landed, and a second one would add the file twice. */
+async function fileOne(s) {
+  const type = s.document_type;
+  let blob;
+  try {
+    const res = await fetch(s.url);
+    if (!res.ok) throw new Error(String(res.status));
+    blob = await res.blob();
+  } catch (err) {
+    console.warn("issuance artifact: could not read an attached file", err);
+    return { state: "unreadable", type };
+  }
+  if (blob.size > DOC_MAX_BYTES) return { state: "too_large", type };
+  try {
+    const res = payload(await one(LIBRARY_CALL, {
+      corporation_id: S.corpId, filename: s.name, file_content_base64: await base64Of(blob), document_type: type,
+    })) || {};
+    return { state: "filed", type: res.document_type || type };
+  } catch (err) {
+    if (isMissingCommand(err) && errText(err).includes("library_document")) return { state: "unavailable", type };
+    if (code(err) === "cancelled") return { state: "declined", type };
+    if (mayHaveWritten(err)) return { state: "unknown", type };
+    return { state: /\b403\b|permission/i.test(errText(err)) ? "forbidden" : "failed", type };
+  }
+}
+
+/** Add every attached file not tried yet, then tell Claude how each went. */
+async function fileDocuments() {
+  if (S.filing || S.corpId == null) return;
+  const todo = fileable().filter((s) => !S.filed[s.url]);
+  if (!todo.length) return;
+  S.filing = true;
+  for (const s of todo) {
+    S.filed[s.url] = { state: "filing", type: s.document_type };
+    showDocs();
+    S.filed[s.url] = await fileOne(s);
+    showDocs();
+  }
+  S.filing = false;
+  keepSoon();
+  showDocs();
+  if (S.lastHandoff && await handoff(S.lastHandoff.status, S.lastHandoff.extra)) noteHandoff(null, true);
+}
+
+function showDocs() {
+  if (S.sheet && S.sheet.phase === "saved") renderSheet();
+  else if (S.stage === "issued") render();
+}
+
+const DOC_LINES = {
+  filing: (n) => `Adding ${n}…`,
+  filed: (n, t) => `${n} is in Company documents, as ${t}.`,
+  unknown: (n) => `We could not confirm that ${n} was added. Look in Company documents before you upload it again.`,
+  forbidden: (n) => `You need permission to edit this company to add ${n}. Ask an admin to upload it in Company documents.`,
+  failed: (n) => `Carta did not add ${n}. Upload it in Company documents.`,
+  unreadable: (n) => `This page could not read ${n}. Upload it in Company documents.`,
+  too_large: (n) => `${n} is larger than ${DOC_MAX_BYTES / (1024 * 1024)} MB, so this page did not add it. Upload it in Company documents.`,
+  unavailable: (n) => `This Carta connection cannot add documents yet. Upload ${n} in Company documents.`,
+  declined: (n) => `You declined, so ${n} was not added. Upload it in Company documents.`,
+};
+
+/** One line per attached file, once the page has started adding them. */
+function docsHtml() {
+  const tried = fileable().map((s) => [s, docState(s)]).filter(([, f]) => f);
+  if (!tried.length) return "";
+  const states = tried.map(([, f]) => f.state);
+  const busy = states.includes("filing");
+  const done = states.every((x) => x === "filed");
+  const title = busy ? "Adding the attached files to Company documents"
+    : done ? "Attached files added to Company documents" : "Some attached files were not added to Company documents";
+  const lines = tried.map(([s, f]) => (DOC_LINES[f.state] || DOC_LINES.failed)(s.name, f.type));
+  return nextItem(done ? "ok" : "wait", "company-documents", title, lines);
 }
 
 const msgs = (v) => [].concat(v == null ? [] : v).filter((m) => typeof m === "string" && m);
