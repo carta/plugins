@@ -45,6 +45,7 @@ import json
 import os
 import re
 import secrets
+import shutil
 import socketserver
 import threading
 import time
@@ -67,6 +68,75 @@ IDLE_TIMEOUT_DEFAULT = 28800  # 8h backstop; should never fire during active use
 WATCHDOG_INTERVAL = 10
 SUSPEND_GAP_SLACK = 55
 _last_heartbeat = time.time()
+
+SRC_FINGERPRINT_FILE = ".ctc-src-fingerprint"
+SRC_BACKUPS_KEPT = 3
+
+
+def _tree_fingerprint(root):
+    # type: (Path) -> str
+    """SHA-256 over every file's relative path and bytes, ignoring our own stamp."""
+    h = hashlib.sha256()
+    for p in sorted(root.rglob("*")):
+        if not p.is_file() or p.name in (SRC_FINGERPRINT_FILE, ".DS_Store"):
+            continue
+        h.update(p.relative_to(root).as_posix().encode())
+        h.update(b"\0")
+        h.update(p.read_bytes())
+        h.update(b"\0")
+    return h.hexdigest()
+
+
+def _backup_working_src(copy):
+    # type: (Path) -> Path
+    backup = copy.with_name("%s.bak-%s" % (copy.name, time.strftime("%Y%m%d-%H%M%S")))
+    copy.rename(backup)
+    olds = sorted(copy.parent.glob(copy.name + ".bak-*"))
+    for old in olds[:-SRC_BACKUPS_KEPT]:
+        shutil.rmtree(str(old), ignore_errors=True)
+    return backup
+
+
+def _prepare_working_src(canonical, data_dir):
+    # type: (Path, Path) -> Path
+    """The source tree the ask box edits: a per-corp copy beside the data dir.
+
+    The installed plugin is not editable in place: under Claude Code it lives in
+    ~/.claude/, which headless `claude -p` may not write, and an update wipes edits
+    anyway. The copy refreshes when the plugin's source changes; one holding Claude's
+    edits is moved to a .bak-* first. Any failure falls back to the install.
+    """
+    copy = data_dir.parent / (data_dir.name + ".app-src")
+    if not canonical.is_dir():
+        return canonical
+    try:
+        want = _tree_fingerprint(canonical)
+        stamp = copy / SRC_FINGERPRINT_FILE
+        if copy.is_dir() and stamp.is_file():
+            base = stamp.read_text().strip()
+            if base == want:
+                return copy
+            if _tree_fingerprint(copy) != base:
+                print("[serve] app source updated; earlier edits kept in %s"
+                      % _backup_working_src(copy), flush=True)
+            else:
+                shutil.rmtree(str(copy))
+        elif copy.exists():
+            print("[serve] unrecognised %s moved to %s" % (copy, _backup_working_src(copy)),
+                  flush=True)
+        tmp = copy.with_name(copy.name + ".tmp")
+        if tmp.exists():
+            shutil.rmtree(str(tmp))
+        shutil.copytree(str(canonical), str(tmp))
+        (tmp / SRC_FINGERPRINT_FILE).write_text(want)
+        tmp.rename(copy)
+        return copy
+    except OSError as e:
+        print("[serve] could not prepare an editable copy of the app (%s); the ask box "
+              "will edit the installed plugin" % e, flush=True)
+        return canonical
+
+
 _hb_lock = threading.Lock()
 _scenarios_lock = threading.Lock()
 
@@ -613,7 +683,7 @@ def main():
 
     DATA_DIR = Path(args.data_dir).resolve()
     WEB_DIR = Path(args.web_dir).resolve()
-    SRC_DIR = Path(args.src_dir).resolve() if args.src_dir else (WEB_DIR.parent / "app" / "src")
+    canonical_src = WEB_DIR.parent / "app" / "src"
     CLAUDE_BIN = args.claude_bin
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -634,6 +704,10 @@ def main():
             _open_link_in_browser(url)
         return
 
+    # After the reuse check: refreshing the copy under a live daemon could swap files
+    # while its ask box is mid-edit.
+    SRC_DIR = (Path(args.src_dir).resolve() if args.src_dir
+               else _prepare_working_src(canonical_src, DATA_DIR))
     httpd = _bind(preferred_port)
     port = httpd.server_address[1]
     # Record the actual port even on fallback, so the reuse probe finds this daemon next launch.

@@ -51,7 +51,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.92.0</carta-plugin>
+<carta-plugin>carta-cap-table:6.92.1</carta-plugin>
 
 <!-- [PATTERN carta-writing-style v0.0.2] [PATTERN etiquette v0.0.6] [PATTERN text v0.0.8] [PATTERN tables v0.0.12] [PATTERN carta-watermark v0.0.10] [PATTERN base v0.1.0] -->
 
@@ -937,7 +937,14 @@ and token-gated, all reads/writes stay under the data dir, and the only write is
 scenario save. Data stays on the user's machine.
 
 ## Editing the app
-Source under `app/src/` is served directly; the service worker transpiles `.jsx` in-browser.
+`serve.py` serves and edits a per-corporation copy of the source, `<dashboard_dir>.app-src/`
+(the line `[serve] src-dir:` prints its path), not the plugin's own `app/src/`. Edit that
+copy: the installed plugin may be read-only to you (under Claude Code it sits in `~/.claude/`),
+and an update would wipe changes made there. Every `app/src/...` path below means the same
+file inside the copy. When the plugin's source changes, the next launch refreshes the copy
+and moves one holding earlier edits to `<dashboard_dir>.app-src.bak-<timestamp>/`.
+
+That copy is served directly; the service worker transpiles `.jsx` in-browser.
 **Do NOT run `npm run build` after editing source** — edit, refresh, done. `npm run build` only
 rebuilds `webapp/vendor/*` on a React/Sucrase bump. See `app/README.md`.
 
