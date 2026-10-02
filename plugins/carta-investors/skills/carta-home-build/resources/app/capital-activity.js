@@ -35,18 +35,44 @@ async function fetchCapitalActivity() {
     _capActivityData = [];
   }
   renderCapActivitySection();
+  loadDistributionProgress();
+}
+
+// Replaces a visible distribution card's backend counts with ones read from its
+// tracker rows (see distributionProgress), and caches the rows for the overlay.
+// Capital calls keep the backend counts, which already agree with their overlay.
+// A failed walk leaves the card on the backend counts rather than blanking it.
+// Repeats while it runs, because a paid-out distribution leaves the visible set
+// and lets an unloaded one in behind it.
+async function loadDistributionProgress() {
+  for (;;) {
+    const pending = visibleCapActivities().visible
+      .filter(r => r.activityType === 'distribution' && !r.progressLoaded);
+    if (pending.length === 0) return;
+    await Promise.all(pending.map(async r => {
+      const { rows, failed } = await partnerRowsFor(r.fundUuid, r.id, r.dueDate, false);
+      if (!failed) r.progress = distributionProgress(rows);
+      r.progressLoaded = true;
+    }));
+    renderCapActivitySection();
+  }
+}
+
+// The backend lists a distribution until every row is reconciled, so one whose
+// LPs have all been paid can still arrive here; Carta Home shows only pending
+// activity, so it is left out.
+function isPaidOutDistribution(activity) {
+  const p = activity.progress;
+  return activity.activityType === 'distribution' && p != null
+    && p.total > 0 && p.paid === p.total;
 }
 
 // ── Render the Capital activity section above Starred ──
 const _dismissedCapActivities = new Set();
 
-function renderCapActivitySection() {
-  const section   = document.getElementById('ca-section-v2');
-  const container = document.getElementById('ca-section-cards');
-  if (!section || !container) return;
-
+function visibleCapActivities() {
   const allActive = (_capActivityData ?? [])
-    .filter(r => !_dismissedCapActivities.has(r.id))
+    .filter(r => !_dismissedCapActivities.has(r.id) && !isPaidOutDistribution(r))
     .sort((a, b) => {
       // Sort: furthest-future due date first → nearest future → due today → 1d overdue → 5d overdue
       // i.e. descending by date: Dec 31 first, most overdue last
@@ -54,15 +80,23 @@ function renderCapActivitySection() {
       const dB = b.dueDate ? new Date(b.dueDate) : new Date(0);
       return dB - dA;
     });
-  const visible = allActive.slice(0, 6);
+  return { allActive, visible: allActive.slice(0, 6) };
+}
+
+function renderCapActivitySection() {
+  const section   = document.getElementById('ca-section-v2');
+  const container = document.getElementById('ca-section-cards');
+  if (!section || !container) return;
+
+  const { allActive, visible } = visibleCapActivities();
   section.style.display = visible.length > 0 ? '' : 'none';
   container.innerHTML = '';
 
   visible.forEach(r => {
     const isCall     = r.activityType === 'capital_call';
     const totalAmt   = r.totalAmount;
-    const paidCount  = r.paidInvestors;
-    const totalLPs   = r.investors;
+    const paidCount  = r.progress ? r.progress.paid : r.paidInvestors;
+    const totalLPs   = r.progress ? r.progress.total : r.investors;
     const unpaidCnt  = Math.max(0, totalLPs - paidCount);
     // Progress is investor count, the measure the platform models — and the one
     // the "N/M investors paid" line under it already reports.
@@ -135,6 +169,7 @@ function dismissCapCard(activityId) {
   trackHome("click", "CartaHome.CapActivity.Dismiss");
   _dismissedCapActivities.add(activityId);
   renderCapActivitySection();
+  loadDistributionProgress();
 }
 
 // ── Capital activity detail overlay ──
@@ -146,12 +181,29 @@ const _capDetailCache = {}; // activityId → fetched rows (in-memory cache)
 // Same measurement as CCR_PAGE_SIZE in carta-workhub-build/capital-call-review.js.
 const CA_ROWS_PAGE_SIZE = 25;
 const CA_ROWS_MAX_PAGES = 40; // 1000 rows; the overlay is not a paging surface
+const CA_ROWS_MAX = CA_ROWS_PAGE_SIZE * CA_ROWS_MAX_PAGES;
+
+// An activity's partner rows, shared by its card and its overlay. A failed walk
+// is not cached: the tracker is the overlay's only source, so holding onto its
+// empty result would keep the table blank all session.
+async function partnerRowsFor(fundUuid, activityId, dueDate, isCall) {
+  const cached = _capDetailCache[activityId];
+  if (cached) return { rows: cached, failed: false };
+  const res = await fetchPartnerRows(fundUuid, activityId, dueDate, isCall);
+  if (!res.failed) _capDetailCache[activityId] = res.rows;
+  return res;
+}
 
 // The transactional tracker, not the warehouse: it is current the moment a
 // reminder is sent or a payment lands, and it carries amount_pending /
 // amount_received per row so a partial payment splits correctly rather than
 // being inferred from payment_status.
-async function fetchPartnerRows(fundUuid, activityId, dueDate) {
+//
+// A row carries both sides of the activity. On a distribution the call-side
+// amounts read zero and `payment_status` is the row's reconciliation flag, not
+// whether the LP was paid: the payout lives in `net_distribution_amount` and
+// `distribution_payment_status`.
+async function fetchPartnerRows(fundUuid, activityId, dueDate, isCall) {
   if (!fundUuid || !activityId) return { rows: [], failed: true };
   const rows = [];
   let failed = false;
@@ -178,10 +230,7 @@ async function fetchPartnerRows(fundUuid, activityId, dueDate) {
         // The email preview keys off the interest's numeric id, not rowId.
         partnerId: r.partner?.id ?? null,
         partnerName: r.partner?.name || '—',
-        amount: parseFloat(r.net_contribution ?? 0),
-        amountPending: parseFloat(r.amount_pending ?? 0),
-        amountReceived: parseFloat(r.amount_received ?? 0),
-        paymentStatus: r.payment_status ?? 'unpaid',
+        ...trackerRowPayment(r, isCall),
         paidDate: r.paid_date,
         // No `?? false`: canRemind needs unset kept distinct from false.
         emailNoticeEnabled: r.email_notice_enabled,
@@ -202,6 +251,56 @@ async function fetchPartnerRows(fundUuid, activityId, dueDate) {
   rows.sort((a, b) =>
     a.paymentStatus.localeCompare(b.paymentStatus) || b.amount - a.amount);
   return { rows, failed };
+}
+
+// Payout states where the money has left; PAID_PENDING_RECON is sent but not yet
+// matched to the bank. Every other state (ON_HOLD, PENDING_AUTHORIZATION, FAILED…)
+// is still owed to the LP.
+const CA_DISTRIBUTION_PAID_STATUSES = new Set(['PAID', 'PAID_PENDING_RECON']);
+
+// The overlay's amount and payment fields, read from whichever side of the
+// tracker row the activity type fills in. A distribution has no partial payment,
+// so its row is wholly received or wholly pending. `statusLabel` carries the
+// payout state ("Pending authorization") that `paymentStatus` collapses.
+// `awaitingRecon` marks an LP who has been paid but whose row is not yet
+// reconciled — the backend's own investor count still reports them as unpaid.
+function trackerRowPayment(r, isCall) {
+  if (isCall) {
+    return {
+      amount: parseFloat(r.net_contribution ?? 0),
+      amountPending: parseFloat(r.amount_pending ?? 0),
+      amountReceived: parseFloat(r.amount_received ?? 0),
+      paymentStatus: r.payment_status ?? 'unpaid',
+      statusLabel: null,
+      awaitingRecon: false,
+    };
+  }
+  const amount = parseFloat(r.net_distribution_amount ?? 0);
+  const payout = r.distribution_payment_status ?? '';
+  const paid = CA_DISTRIBUTION_PAID_STATUSES.has(payout);
+  const words = payout.toLowerCase().replace(/_/g, ' ');
+  return {
+    amount,
+    amountPending: paid ? 0 : amount,
+    amountReceived: paid ? amount : 0,
+    paymentStatus: paid ? 'paid' : 'unpaid',
+    statusLabel: words ? words.charAt(0).toUpperCase() + words.slice(1) : null,
+    awaitingRecon: payout === 'PAID_PENDING_RECON',
+  };
+}
+
+// A distribution card's progress, counted from the same tracker rows the overlay
+// lists so the two agree. `completed_investors_count` cannot be used: it counts
+// reconciled rows, so an LP whose payout landed but was never reconciled reads
+// as "yet to receive". Null when the rows cannot vouch for the total — none came
+// back, or the walk reached the cap and an unpaid LP past it would vanish — so
+// the card keeps the backend counts.
+function distributionProgress(rows) {
+  if (rows.length === 0 || rows.length >= CA_ROWS_MAX) return null;
+  return {
+    total: rows.length,
+    paid: rows.filter(r => r.paymentStatus === 'paid').length,
+  };
 }
 
 // Days past the due date, floored at 0 — the tracker carries no days-late field.
@@ -330,15 +429,7 @@ async function openCapActivityDetail(activityId, fundName, typeLabel, dueDate, t
     </div>`;
   overlay.classList.add('ca-detail-visible');
 
-  // Fetch or use cache
-  let rows = _capDetailCache[activityId];
-  let failed = false;
-  if (!rows) {
-    // A failed call is not cached: the tracker is the overlay's only source, so
-    // holding onto its empty result would keep the table blank all session.
-    ({ rows, failed } = await fetchPartnerRows(fundUuid, activityId, dueDate));
-    if (!failed) _capDetailCache[activityId] = rows;
-  }
+  const { rows, failed } = await partnerRowsFor(fundUuid, activityId, dueDate, isCall);
 
   const body = document.getElementById('ca-detail-body');
   if (!body) return;
@@ -356,10 +447,12 @@ async function openCapActivityDetail(activityId, fundName, typeLabel, dueDate, t
   const totalReceived = rows.reduce((s, r) => s + r.amountReceived, 0);
   const totalPending  = rows.reduce((s, r) => s + r.amountPending, 0);
 
-  const statusBadge = (status) => {
-    if (status === 'paid')           return `<span class="ca-status ca-status-paid">Paid</span>`;
-    if (status === 'partially_paid') return `<span class="ca-status ca-status-partial">Partial</span>`;
-    return `<span class="ca-status ca-status-unpaid">Unpaid</span>`;
+  const statusBadge = (r) => {
+    if (r.awaitingRecon) return `<span class="ca-status ca-status-paid"
+      title="The payout went out, but the row has not been reconciled yet.">Paid · not reconciled</span>`;
+    if (r.paymentStatus === 'paid')           return `<span class="ca-status ca-status-paid">Paid</span>`;
+    if (r.paymentStatus === 'partially_paid') return `<span class="ca-status ca-status-partial">Partial</span>`;
+    return `<span class="ca-status ca-status-unpaid">${escHtml(r.statusLabel ?? 'Unpaid')}</span>`;
   };
 
   body.innerHTML = `
@@ -398,7 +491,7 @@ async function openCapActivityDetail(activityId, fundName, typeLabel, dueDate, t
             return `<tr class="ca-detail-row ca-row-${r.paymentStatus}">
               <td class="ca-td-name">${escHtml(r.partnerName)}</td>
               <td class="ca-td-amount">${fmtFull(r.amount)}</td>
-              <td class="ca-td-status">${statusBadge(r.paymentStatus)}</td>
+              <td class="ca-td-status">${statusBadge(r)}</td>
               <td class="ca-td-date">${dateCell}</td>
               ${remindCell}
               ${menuCell}

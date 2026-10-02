@@ -813,17 +813,22 @@ function mancoFromRows(result) {
 
 // ── Load firm data (SSE) ──
 
+// Column list matches references/data-fetch.md Query A exactly, so normalizeRow
+// and build_manco_datadir.py's norm_je_row read the same fields off the same names.
 const EXPENSE_SQL = (mancoUuid, year, maxMo) => `SELECT
   JOURNAL_ENTRY_LINE_ID AS id, JOURNAL_ENTRY_GLUUID AS gluuid,
   EFFECTIVE_DATE AS date, MONTH(EFFECTIVE_DATE) AS mo,
   ACCOUNT_NAME AS account, ACCOUNT_TYPE AS acct_type,
   COALESCE(SUB_ACCOUNT_NAME, '') AS sub,
+  COALESCE(SUB_ACCOUNT_TYPE, '') AS sub_code,
   AMOUNT AS amt,
   COALESCE(JOURNAL_ENTRY_DESCRIPTION, '') AS descr,
   COALESCE(VENDOR_NAME, '') AS vendor,
+  COALESCE(VENDOR_TYPE, '') AS vendor_type,
   COALESCE(PARTNER_NAME, '') AS partner,
   COALESCE(EVENT_TYPE, '') AS event_type,
-  COALESCE(REPORTING_TAGS, '') AS tags
+  COALESCE(REPORTING_TAGS, '') AS tags,
+  COALESCE(TO_VARCHAR(REPORTING_TAGS_JSON), '') AS tags_json
 FROM JOURNAL_ENTRIES
 WHERE FUND_UUID = '${mancoUuid}'
   AND YEAR(EFFECTIVE_DATE) = ${year}
@@ -832,17 +837,21 @@ WHERE FUND_UUID = '${mancoUuid}'
 ORDER BY EFFECTIVE_DATE, ACCOUNT_TYPE, JOURNAL_ENTRY_LINE_ID
 LIMIT 1000`;
 
+// Same SELECT as Query A (see EXPENSE_SQL) with the income sign and band.
 const INCOME_SQL = (mancoUuid, year, maxMo) => `SELECT
   JOURNAL_ENTRY_LINE_ID AS id, JOURNAL_ENTRY_GLUUID AS gluuid,
   EFFECTIVE_DATE AS date, MONTH(EFFECTIVE_DATE) AS mo,
   ACCOUNT_NAME AS account, ACCOUNT_TYPE AS acct_type,
   COALESCE(SUB_ACCOUNT_NAME, '') AS sub,
+  COALESCE(SUB_ACCOUNT_TYPE, '') AS sub_code,
   -AMOUNT AS amt,
   COALESCE(JOURNAL_ENTRY_DESCRIPTION, '') AS descr,
   COALESCE(VENDOR_NAME, '') AS vendor,
+  COALESCE(VENDOR_TYPE, '') AS vendor_type,
   COALESCE(PARTNER_NAME, '') AS partner,
   COALESCE(EVENT_TYPE, '') AS event_type,
-  COALESCE(REPORTING_TAGS, '') AS tags
+  COALESCE(REPORTING_TAGS, '') AS tags,
+  COALESCE(TO_VARCHAR(REPORTING_TAGS_JSON), '') AS tags_json
 FROM JOURNAL_ENTRIES
 WHERE FUND_UUID = '${mancoUuid}'
   AND YEAR(EFFECTIVE_DATE) = ${year}
@@ -856,9 +865,16 @@ const FUND_FEE_SQL = (firmUuid, mancoUuid, year, maxMo) => `SELECT
   FUND_NAME AS fund, FUND_UUID AS fund_uuid,
   EFFECTIVE_DATE AS date, YEAR(EFFECTIVE_DATE) AS yr, MONTH(EFFECTIVE_DATE) AS mo,
   ACCOUNT_NAME AS account, ACCOUNT_TYPE AS acct_type,
+  COALESCE(SUB_ACCOUNT_NAME, '') AS sub,
+  COALESCE(SUB_ACCOUNT_TYPE, '') AS sub_code,
   AMOUNT AS amt,
   COALESCE(JOURNAL_ENTRY_DESCRIPTION, '') AS descr,
-  COALESCE(VENDOR_NAME, '') AS vendor
+  COALESCE(VENDOR_NAME, '') AS vendor,
+  COALESCE(VENDOR_TYPE, '') AS vendor_type,
+  COALESCE(PARTNER_NAME, '') AS partner,
+  COALESCE(EVENT_TYPE, '') AS event_type,
+  COALESCE(REPORTING_TAGS, '') AS tags,
+  COALESCE(TO_VARCHAR(REPORTING_TAGS_JSON), '') AS tags_json
 FROM JOURNAL_ENTRIES
 WHERE FIRM_ID = '${firmUuid}'
   AND FUND_UUID != '${mancoUuid}'
@@ -937,11 +953,14 @@ async function handleLoadFirm(req, env) {
         sql: CURRENCY_SQL(mancoUuid), limit: 1, format: "ndjson",
       }, session.access_token, sid, env).catch(() => null);
 
-      // Cash balance
+      // Cash balance. firm_uuid, as_of_date and entity_ids are all required —
+      // an empty or partial call fails Pydantic validation (references/data-fetch.md).
       await send({ step: "Fetching cash balance" });
       let cashData = null;
       try {
-        cashData = await mcpCallTool("fa__get__cash-balance", {}, session.access_token, sid, env);
+        cashData = await mcpCallTool("fa__get__cash-balance", {
+          firm_uuid: meta.firmUuid, as_of_date: asOf, entity_ids: [mancoFundId],
+        }, session.access_token, sid, env);
       } catch (e) { console.error("Cash balance error:", e.message); }
 
       // fa__list__budgets takes one month per call. Twelve round trips in
@@ -1032,7 +1051,7 @@ async function handleLoadFirm(req, env) {
 
 // ── Data assembly (JS port of essential build_manco_datadir.py logic) ──
 
-function normalizeRow(r) {
+export function normalizeRow(r) {
   return {
     id: col(r, "ID") || col(r, "id"),
     gluuid: col(r, "GLUUID") || col(r, "gluuid") || "",
@@ -1041,16 +1060,19 @@ function normalizeRow(r) {
     account: col(r, "ACCOUNT") || col(r, "account") || "",
     acctType: num(col(r, "ACCT_TYPE") || col(r, "acct_type")),
     sub: col(r, "SUB") || col(r, "sub") || "",
+    subCode: col(r, "SUB_CODE") || col(r, "sub_code") || "",
     amount: num(col(r, "AMT") || col(r, "amt")),
     descr: col(r, "DESCR") || col(r, "descr") || "",
     vendor: col(r, "VENDOR") || col(r, "vendor") || "",
+    vendorType: col(r, "VENDOR_TYPE") || col(r, "vendor_type") || "",
     partner: col(r, "PARTNER") || col(r, "partner") || "",
     eventType: col(r, "EVENT_TYPE") || col(r, "event_type") || "",
     tags: col(r, "TAGS") || col(r, "tags") || "",
+    tagsJson: col(r, "TAGS_JSON") || col(r, "tags_json") || "",
   };
 }
 
-function normalizeFeeRow(r) {
+export function normalizeFeeRow(r) {
   return {
     id: col(r, "ID") || col(r, "id"),
     gluuid: col(r, "GLUUID") || col(r, "gluuid") || "",
@@ -1060,10 +1082,47 @@ function normalizeFeeRow(r) {
     yr: num(col(r, "YR") || col(r, "yr")),
     mo: num(col(r, "MO") || col(r, "mo")),
     account: col(r, "ACCOUNT") || col(r, "account") || "",
+    acctType: num(col(r, "ACCT_TYPE") || col(r, "acct_type")),
+    sub: col(r, "SUB") || col(r, "sub") || "",
+    subCode: col(r, "SUB_CODE") || col(r, "sub_code") || "",
     amount: num(col(r, "AMT") || col(r, "amt")),
     descr: col(r, "DESCR") || col(r, "descr") || "",
     vendor: col(r, "VENDOR") || col(r, "vendor") || "",
+    vendorType: col(r, "VENDOR_TYPE") || col(r, "vendor_type") || "",
+    partner: col(r, "PARTNER") || col(r, "partner") || "",
+    eventType: col(r, "EVENT_TYPE") || col(r, "event_type") || "",
+    tags: col(r, "TAGS") || col(r, "tags") || "",
+    tagsJson: col(r, "TAGS_JSON") || col(r, "tags_json") || "",
   };
+}
+
+// Port of build_manco_datadir.py's _parse_tags: prefers the structured
+// REPORTING_TAGS_JSON column, falls back to the flat comma-separated string.
+export function parseTags(row) {
+  const rawJson = String(row.tagsJson || "").trim();
+  if (rawJson && !["null", "{}", "[]"].includes(rawJson)) {
+    try {
+      const obj = JSON.parse(rawJson);
+      if (obj && typeof obj === "object" && !Array.isArray(obj)) {
+        const pairs = [];
+        for (const [cat, val] of Object.entries(obj)) {
+          if (val == null) continue;
+          if (Array.isArray(val)) {
+            for (const v of val) {
+              if (v != null && String(v).trim()) pairs.push({ category: String(cat), value: String(v) });
+            }
+          } else {
+            const s = String(val).trim();
+            if (s) pairs.push({ category: String(cat), value: s });
+          }
+        }
+        if (pairs.length) return pairs;
+      }
+    } catch { /* fall through to flat parsing */ }
+  }
+  const flat = String(row.tags || "").trim();
+  if (!flat) return [];
+  return flat.split(",").map(v => v.trim()).filter(Boolean).map(value => ({ category: "", value }));
 }
 
 function buildBudget(budgetByAccount, maxMo, year) {
@@ -1103,7 +1162,130 @@ function buildBudget(budgetByAccount, maxMo, year) {
   };
 }
 
-function buildData({ meta, mancoName, mancoUuid, mancoFundId, asOf, year, maxMo, monthLabels, currency, expenseRows, incomeRows, fundFeeRows, cashData, budgetByAccount }) {
+// One journal-entry line, in the shape build_manco_datadir.py's norm_je_row
+// writes to accounts.json entries — the app reads e.mo/e.sub/e.tags directly.
+function toEntry(r, kind) {
+  return {
+    id: r.id,
+    gluuid: r.gluuid || null,
+    date: r.date,
+    mo: r.mo,
+    account: r.account,
+    acct_type: r.acctType,
+    sub: r.sub || null,
+    sub_code: r.subCode || null,
+    amount: round2(r.amount),
+    vendor: r.vendor || null,
+    vendor_type: r.vendorType || null,
+    partner: r.partner || null,
+    description: r.descr,
+    event_type: r.eventType || null,
+    tags: parseTags(r),
+    kind,
+  };
+}
+
+// Fund-side management fee line, matching build_manco_datadir.py's
+// fund_fee_entries (`yr`/`mo`/`sub`, not `year`/`month`/`sub_account`).
+function toFeeEntry(r) {
+  return {
+    id: r.id,
+    gluuid: r.gluuid || null,
+    fund: r.fund,
+    fund_uuid: r.fundUuid,
+    date: r.date,
+    yr: r.yr,
+    mo: r.mo,
+    account: r.account,
+    acct_type: r.acctType,
+    sub: r.sub || null,
+    sub_code: r.subCode || null,
+    amount: round2(r.amount),
+    description: r.descr,
+    vendor: r.vendor || null,
+    vendor_type: r.vendorType || null,
+    partner: r.partner || null,
+    event_type: r.eventType || null,
+    tags: parseTags(r),
+  };
+}
+
+// The cash block when there is no balance to report. `balance` is null, never
+// 0 — the app renders null as "—", and data Carta doesn't have is not a ManCo
+// holding nothing.
+function cashUnavailable(reason, currency) {
+  return { balance: null, currency: currency ?? null, by_currency: [], accounts: [], stale_account_count: 0, unavailable_reason: reason };
+}
+
+function extractCashPayload(cashData) {
+  if (Array.isArray(cashData?.structuredContent?.entities)) return cashData.structuredContent;
+  for (const block of cashData?.content || []) {
+    if (block.type !== "text") continue;
+    try {
+      const parsed = JSON.parse(block.text);
+      if (Array.isArray(parsed?.entities)) return parsed;
+    } catch { /* try the next block */ }
+  }
+  return null;
+}
+
+// Port of build_manco_datadir.py's read_cash_balance: picks the ManCo entity
+// out of fa__get__cash-balance's response and shapes it the app expects.
+// Never sums across currencies (this repo's CLAUDE.md Currencies rule).
+export function buildCashBalance(cashData, mancoEntityId, currency) {
+  if (!cashData) return cashUnavailable("not-fetched", currency);
+  const data = extractCashPayload(cashData);
+  if (!data) return cashUnavailable("unreadable", currency);
+
+  const entities = data.entities || [];
+  let entity = entities.find(e => mancoEntityId != null && e.entity_id === mancoEntityId) || null;
+  // mancoEntityId is optional, and the fetch filters to the ManCo, so a
+  // response holding exactly one entity is unambiguous without it.
+  if (!entity && mancoEntityId == null && entities.length === 1) entity = entities[0];
+  if (!entity) return cashUnavailable("entity-not-in-response", currency);
+
+  const byCurrency = [];
+  for (const t of entity.totals_by_currency || []) {
+    const code = String(t.currency_code || "").trim().toUpperCase();
+    const amount = Number(t.total_balance);
+    if (code && Number.isFinite(amount)) byCurrency.push({ currency_code: code, total_balance: round2(amount) });
+  }
+
+  const accounts = [];
+  let staleCount = 0;
+  for (const a of entity.bank_accounts || []) {
+    const balance = Number(a.balance);
+    const isStale = !!a.is_stale;
+    if (isStale) staleCount++;
+    accounts.push({
+      bank_name: a.bank_name ?? null,
+      account_name: a.account_name ?? null,
+      balance: Number.isFinite(balance) ? round2(balance) : null,
+      currency_code: String(a.currency_code || "").trim().toUpperCase() || null,
+      is_manual: !!a.is_manual,
+      is_stale: isStale,
+      staleness_days: a.staleness_days ?? null,
+      as_of_date: a.as_of_date ?? null,
+    });
+  }
+
+  if (!byCurrency.length) return cashUnavailable("no-bank-accounts", currency);
+
+  // With no reporting currency to match against, a single-currency ManCo is
+  // unambiguous — its one total is the answer, and it names its own currency.
+  if (currency == null && byCurrency.length === 1) {
+    const only = byCurrency[0];
+    return { balance: only.total_balance, currency: only.currency_code, by_currency: byCurrency, accounts, stale_account_count: staleCount, unavailable_reason: null };
+  }
+
+  const match = byCurrency.find(t => t.currency_code === currency) || null;
+  if (!match) {
+    return { balance: null, currency, by_currency: byCurrency, accounts, stale_account_count: staleCount, unavailable_reason: "currency-mismatch" };
+  }
+  return { balance: match.total_balance, currency, by_currency: byCurrency, accounts, stale_account_count: staleCount, unavailable_reason: null };
+}
+
+export function buildData({ meta, mancoName, mancoUuid, mancoFundId, asOf, year, maxMo, monthLabels, currency, expenseRows, incomeRows, fundFeeRows, cashData, budgetByAccount }) {
   const expenses = expenseRows.map(normalizeRow);
   const income = incomeRows.map(normalizeRow);
   const allRows = [...expenses, ...income];
@@ -1184,53 +1366,20 @@ function buildData({ meta, mancoName, mancoUuid, mancoFundId, asOf, year, maxMo,
       data: (fundMonthly[uuid] || []).map(round2),
     }));
 
-  // Cash balance
-  let cash = null;
-  if (cashData?.content) {
-    for (const block of cashData.content) {
-      if (block.type !== "text") continue;
-      try {
-        const parsed = JSON.parse(block.text);
-        if (parsed?.entities || parsed?.balance || parsed?.cash_balance) {
-          cash = parsed;
-          break;
-        }
-      } catch { /* skip */ }
-    }
-  }
+  // Cash balance. Query D (currency, above) is empty for a ManCo not in
+  // AGGREGATE_FUND_METRICS; cash then names the currency only when it holds
+  // exactly one (never assumed USD — this repo's CLAUDE.md Currencies rule).
+  const cash = buildCashBalance(cashData, mancoFundId, currency);
+  if (currency == null) currency = cash.currency;
 
-  // Entries for drill-downs
-  const entries = allRows.map(r => ({
-    id: r.id,
-    gluuid: r.gluuid,
-    date: r.date,
-    month: r.mo,
-    account: r.account,
-    acct_type: r.acctType,
-    sub_account: r.sub,
-    amount: round2(r.amount),
-    description: r.descr,
-    vendor: r.vendor,
-    partner: r.partner,
-    event_type: r.eventType,
-    tags: r.tags,
-    gl_group: r.acctType >= 5000 ? "expense" : "income",
-    kind: r.acctType >= 5000 ? "expense" : "income",
-  }));
+  // Entries for drill-downs — same key set and types as norm_je_row in
+  // build_manco_datadir.py, so the app's e.mo/e.sub/e.tags reads work hosted too.
+  const entries = [
+    ...expenses.map(r => toEntry(r, "expense")),
+    ...income.map(r => toEntry(r, "income")),
+  ];
 
-  const fundFeeEntries = fees.map(r => ({
-    id: r.id,
-    gluuid: r.gluuid,
-    fund: r.fund,
-    fund_uuid: r.fundUuid,
-    date: r.date,
-    year: r.yr,
-    month: r.mo,
-    account: r.account,
-    amount: round2(r.amount),
-    description: r.descr,
-    vendor: r.vendor,
-  }));
+  const fundFeeEntries = fees.map(toFeeEntry);
 
   const snapshot = {
     firmName: meta.name,

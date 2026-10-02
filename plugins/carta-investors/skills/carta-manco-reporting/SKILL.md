@@ -123,7 +123,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.55.2</carta-plugin>
+<carta-plugin>carta-investors:6.55.7</carta-plugin>
 
 # ManCo Reporting Dashboard
 
@@ -317,6 +317,16 @@ the phrases above: it narrates the internal branch (no persisted ref found,
 so the 2.75a-i ask is next) instead of just asking
 [the question itself](references/budget-workbook.md#2.75a-i--ask-whether-theres-a-budget-workbook).
 Reaching a question is silent; asking it is the one visible act.
+
+**One exception: Step 4.7's mapping table is not narration, it is the
+question's own content, not a sentence leading up to it.**
+[budget-unresolved.md](references/budget-unresolved.md) requires printing
+**Current mapping** or **Needs your input** as chat text immediately
+before the `AskUserQuestion` call it belongs to — the question's wording
+("confirm the mappings above") refers to that table, so the table is part
+of asking the question, the same way the question's own prose is. Treating
+it as a step announcement and silencing it the way "Now Step 2" above gets
+silenced leaves the question pointing at a table the user never saw.
 
 **A failed command is troubleshot exactly as silently as a working one runs —
 everywhere in this skill, not only in the step that happened to fail.**
