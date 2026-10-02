@@ -16,7 +16,7 @@
 // than EventSource because the prompt has to go up as a POST body with the
 // X-Dash-Token header, and EventSource can do neither.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { C, FS, RADIUS } from "./theme.js";
 
 // Split an SSE buffer into complete `data:` payloads, returning any trailing
@@ -75,10 +75,10 @@ const PLACEHOLDER = "Ask Claude to change this console — e.g. add an interpola
  *  full stops. `prefers-reduced-motion` is honoured in GLOBAL_CSS, where the dots
  *  hold a mid-opacity instead of pulsing.
  */
-function Working() {
+function Working({ label = "Working" }) {
   return (
     <span role="status" aria-live="polite">
-      Working
+      {label}
       {[0, 1, 2].map((i) => (
         <span
           key={i}
@@ -108,43 +108,156 @@ function parkTurn(page, submitted, reply) {
   }
 }
 
-// One-shot, and only for the page that asked: a later manual refresh must not
-// resurrect an old reply, and another view's box must not show it.
-function takeParkedTurn(page) {
+// One-shot, so a later manual refresh can't resurrect an old reply.
+function takeParkedTurn() {
   try {
     const parked = JSON.parse(sessionStorage.getItem(LAST_KEY));
-    if (parked?.page !== page || typeof parked.reply !== "string" || !parked.reply) return null;
+    if (typeof parked?.reply !== "string" || !parked.reply) return null;
     sessionStorage.removeItem(LAST_KEY);
-    return { submitted: typeof parked.submitted === "string" ? parked.submitted : "", reply: parked.reply };
+    return {
+      page: parked.page,
+      submitted: typeof parked.submitted === "string" ? parked.submitted : "",
+      reply: parked.reply,
+    };
   } catch {
     return null;
   }
 }
 
+// The turn lives here, not in AskBar state: switching tabs unmounts the view's
+// AskBar while the request keeps streaming, and the box it remounts must show it.
+const IDLE = {
+  page: null, submitted: "", reply: "", done: false,
+  error: "", stuck: false, reloading: false, busy: false,
+};
+let turn = IDLE;
+let parkedAdopted = false;
+let streamText = "";
+let frame = 0;
+const listeners = new Set();
+
+function setTurn(patch) {
+  turn = { ...turn, ...patch };
+  listeners.forEach((l) => l());
+}
+const subscribe = (l) => { listeners.add(l); return () => listeners.delete(l); };
+const getTurn = () => turn;
+
+function adoptParkedTurn() {
+  if (parkedAdopted) return;
+  parkedAdopted = true;
+  const parked = takeParkedTurn();
+  if (parked) turn = { ...IDLE, ...parked, done: true };
+}
+
+export function __resetAskStore() {
+  cancelAnimationFrame(frame);
+  turn = IDLE;
+  parkedAdopted = false;
+  streamText = "";
+}
+
+// Per-token setState would re-render the console per token; flush once per frame.
+function flushStream() {
+  cancelAnimationFrame(frame);
+  frame = requestAnimationFrame(() => setTurn({ reply: streamText }));
+}
+
+async function stopTurn(token) {
+  // Interrupt rather than abort the fetch: the turn ends with a normal result
+  // frame, so the subprocess survives and the next prompt reuses its context.
+  try {
+    await fetch("/api/ask/interrupt", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Dash-Token": token },
+      body: JSON.stringify({ sessionId: "default" }),
+    });
+  } catch {
+    // Nothing to stop, or the turn already ended — not worth surfacing.
+  }
+}
+
+async function runTurn({ token, page, text }) {
+  streamText = "";
+  setTurn({ ...IDLE, page, submitted: text, busy: true });
+  try {
+    const res = await fetch("/api/ask", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Dash-Token": token },
+      body: JSON.stringify({ prompt: text, sessionId: "default", page }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      // A turn left holding the lock (e.g. a closed browser tab) makes every later
+      // prompt 409 until the server restarts, so offer a way out.
+      if (body.error === "turn_in_progress") setTurn({ stuck: true });
+      throw new Error(ERRORS[body.error] || `Request failed (${res.status})`);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let shouldReload = false;
+    let failed = false;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const { events, rest } = parseSSE(buffer);
+      buffer = rest;
+      for (const ev of events) {
+        streamText = appendEvent(streamText, ev);
+        if (ev.type === "result") {
+          if (ev.ctcReload) shouldReload = true;
+          if (ev.is_error || ev.subtype === "error") {
+            failed = true;
+            setTurn({ error: ev.result || "Claude reported an error." });
+          }
+        }
+      }
+      flushStream();
+    }
+    // Commit synchronously: reload below isn't deferred, so the frame flush can
+    // lose the race and never paint.
+    cancelAnimationFrame(frame);
+    setTurn({ reply: streamText, done: true });
+
+    if (shouldReload) {
+      // Reload drops memory, so park the turn for the store to re-adopt. A failed
+      // turn isn't parked: it would come back reading "Done".
+      if (!failed) parkTurn(page, text, streamText);
+      setTurn({ reloading: true });
+
+      // Delayed so the browser can paint the answer before navigating away.
+      setTimeout(() => window.location.reload(), 1400);
+    }
+  } catch (e) {
+    setTurn({ error: e.message || String(e) });
+  } finally {
+    setTurn({ busy: false });
+  }
+}
+
+const PAGE_LABEL = { "RefreshPlanner:SettingsStep": "Refresh Grant Planner" };
+const pageLabel = (p) => PAGE_LABEL[p] || p || "other";
+
 export default function AskBar({ token, page, placeholder = PLACEHOLDER }) {
-  const [parked] = useState(() => takeParkedTurn(page));
+  useState(adoptParkedTurn);
+  const t = useSyncExternalStore(subscribe, getTurn);
   const [prompt, setPrompt] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [reply, setReply] = useState(parked?.reply ?? "");
-  const [error, setError] = useState("");
-  const [submitted, setSubmitted] = useState(parked?.submitted ?? "");
-  const [done, setDone] = useState(Boolean(parked));
-  // A previous turn still holds the session lock. Distinct from `busy`, which is
-  // about THIS tab's request — the stuck turn may belong to a tab that is gone.
-  const [stuck, setStuck] = useState(false);
-  // Set by the server on the terminal frame when the turn edited app source. The
-  // reload is what makes the change visible (source is transpiled in-browser, so
-  // there is no HMR), and it is skipped otherwise — a question that changed
-  // nothing must not cost the user their tab and filters.
-  const [reloading, setReloading] = useState(false);
   const inputRef = useRef(null);
   const replyRef = useRef(null);
-  // Streaming setState on every token would re-render the whole console per token.
-  // Accumulate here and flush on a frame instead.
-  const textRef = useRef("");
-  const frameRef = useRef(0);
 
-  useEffect(() => () => cancelAnimationFrame(frameRef.current), []);
+  // There is one server session, so a turn from any page makes every box busy.
+  const busy = t.busy;
+  const mine = t.page === page;
+  const elsewhere = busy && !mine;
+
+  // Keep the newest line in view: the panel is capped at REPLY_LINES.
+  useEffect(() => {
+    const el = replyRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [t.reply]);
 
   // Cmd/Ctrl-K focuses the box from anywhere, so the feature is reachable without
   // taking a hand off the keyboard mid-analysis.
@@ -159,148 +272,61 @@ export default function AskBar({ token, page, placeholder = PLACEHOLDER }) {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  function flushText() {
-    cancelAnimationFrame(frameRef.current);
-    frameRef.current = requestAnimationFrame(() => {
-      setReply(textRef.current);
-      // Keep the newest line in view. The panel is capped at REPLY_LINES, so
-      // without this a streaming reply scrolls its own answer out of sight and
-      // the user watches three stale lines while the real one arrives below.
-      const el = replyRef.current;
-      if (el) el.scrollTop = el.scrollHeight;
-    });
-  }
-
-  async function stop() {
-    // Interrupt rather than abort the fetch: the turn ends with a normal result
-    // frame, so the subprocess survives and the next prompt reuses its context.
-    try {
-      await fetch("/api/ask/interrupt", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Dash-Token": token },
-        body: JSON.stringify({ sessionId: "default" }),
-      });
-    } catch {
-      // Nothing to stop, or the turn already ended — not worth surfacing.
-    }
-  }
-
-  async function send() {
+  function send() {
     const text = prompt.trim();
-    if (!text || busy) return;
-    setBusy(true);
-    setError("");
-    setStuck(false);
-    setReply("");
-    setDone(false);
-    textRef.current = "";
-    setSubmitted(text);
+    if (!text || getTurn().busy) return;
     setPrompt("");
-
-    try {
-      const res = await fetch("/api/ask", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Dash-Token": token },
-        body: JSON.stringify({ prompt: text, sessionId: "default", page }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        // A turn left holding the lock (a closed tab mid-stream, a client that
-        // vanished) would otherwise wedge the box permanently: every later prompt
-        // 409s and the only escape is restarting the server. Offer the way out.
-        if (body.error === "turn_in_progress") setStuck(true);
-        throw new Error(ERRORS[body.error] || `Request failed (${res.status})`);
-      }
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let shouldReload = false;
-      let failed = false;
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const { events, rest } = parseSSE(buffer);
-        buffer = rest;
-        for (const ev of events) {
-          textRef.current = appendEvent(textRef.current, ev);
-          if (ev.type === "result") {
-            if (ev.ctcReload) shouldReload = true;
-            if (ev.is_error || ev.subtype === "error") {
-              failed = true;
-              setError(ev.result || "Claude reported an error.");
-            }
-          }
-        }
-        flushText();
-      }
-      // Commit synchronously: reload below isn't deferred, so flushText's
-      // requestAnimationFrame can lose the race and never paint.
-      cancelAnimationFrame(frameRef.current);
-      setReply(textRef.current);
-      setDone(true);
-
-      if (shouldReload) {
-        // Persist first: reload drops in-memory state. App.jsx restores the
-        // tab from sessionStorage on mount, and this box restores its Done turn.
-        // A failed turn is not parked: it would come back reading "Done".
-        if (!failed) parkTurn(page, text, textRef.current);
-        setReloading(true);
-
-        // Delayed so the browser can paint the answer before navigating away.
-        setTimeout(() => window.location.reload(), 1400);
-      }
-    } catch (e) {
-      setError(e.message || String(e));
-    } finally {
-      setBusy(false);
-    }
+    runTurn({ token, page, text });
   }
 
-  const showPanel = busy || reply || error || stuck || submitted;
+  const stop = () => stopTurn(token);
+  const showPanel = elsewhere || (mine && (busy || t.reply || t.error || t.stuck || t.submitted));
 
   return (
     <div>
       {showPanel && (
         <div ref={replyRef} style={{
           marginBottom: 10, fontSize: FS.sm,
-          color: error ? C.feedbackNegative : C.textSubtle,
+          color: !elsewhere && t.error ? C.feedbackNegative : C.textSubtle,
           whiteSpace: "pre-wrap", lineHeight: REPLY_LINE_HEIGHT,
-          // Three lines, then scroll. Expressed in em rather than a pixel value so
-          // it stays three lines if the type scale moves. The box now sits inside a
-          // card next to other controls, and a reply that grew to eight lines
-          // pushed the card's own content around every time a turn ran.
+          // Three lines, then scroll, in em so it tracks the type scale. A panel
+          // that grows each turn would push the card's other controls around.
           maxHeight: `${REPLY_LINE_HEIGHT * REPLY_LINES}em`,
           overflowY: "auto",
         }}>
-          {submitted && (
-            <div style={{ marginBottom: 4, color: C.textQuiet }}>
-              You: {submitted}
-            </div>
+          {elsewhere ? (
+            <Working label={`Claude is still working on your ${pageLabel(t.page)} request`} />
+          ) : (
+            <>
+              {t.submitted && (
+                <div style={{ marginBottom: 4, color: C.textQuiet }}>
+                  You: {t.submitted}
+                </div>
+              )}
+              {t.error
+                ? `⚠️ ${t.error}`
+                : t.done && t.reply
+                  ? <><span style={{ color: C.feedbackPositive }}>✓ Done</span> — {t.reply}</>
+                  : (t.reply || <Working />)
+              }
+              {t.stuck && (
+                <button
+                  type="button"
+                  onClick={async () => { await stop(); setTurn({ stuck: false, error: "" }); }}
+                  style={{
+                    marginLeft: 8, padding: "1px 7px",
+                    fontSize: FS.sm, fontFamily: "inherit",
+                    color: C.textDefault, background: C.surfaceDefault,
+                    border: `1px solid ${C.borderDefault}`, borderRadius: RADIUS,
+                    cursor: "pointer",
+                  }}
+                >
+                  Stop it and retry
+                </button>
+              )}
+              {t.reloading && <div style={{ color: C.textQuiet }}>Reloading to show the change…</div>}
+            </>
           )}
-          {error
-            ? `⚠️ ${error}`
-            : done && reply
-              ? <><span style={{ color: C.feedbackPositive }}>✓ Done</span> — {reply}</>
-              : (reply || <Working />)
-          }
-          {stuck && (
-            <button
-              type="button"
-              onClick={async () => { await stop(); setStuck(false); setError(""); }}
-              style={{
-                marginLeft: 8, padding: "1px 7px",
-                fontSize: FS.sm, fontFamily: "inherit",
-                color: C.textDefault, background: C.surfaceDefault,
-                border: `1px solid ${C.borderDefault}`, borderRadius: RADIUS,
-                cursor: "pointer",
-              }}
-            >
-              Stop it and retry
-            </button>
-          )}
-          {reloading && <div style={{ color: C.textQuiet }}>Reloading to show the change…</div>}
         </div>
       )}
       <div style={{ display: "flex", gap: 8 }}>
