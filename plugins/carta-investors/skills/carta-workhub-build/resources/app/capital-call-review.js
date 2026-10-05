@@ -148,9 +148,7 @@ function ccrDemoEmail(row) {
 const CCR_WORKFLOW_TEMPLATE = "request-capital-activity";
 const CCR_REVIEW_TASK = "review-capital-activity";
 const CCR_CHANGES_TASK = "review-capital-activity-changes";
-
-// TaskStatus PENDING and ACTIVE. A resolved review is a decision already taken.
-const CCR_OPEN_TASK_STATUSES = [0, 1];
+const CCR_SUMMARY_COMMAND = "fa:get:capital-activity-review-summary";
 
 // The workflow row does not say whether the activity is a call or a
 // distribution, so the card stays neutral until the summary names it.
@@ -456,7 +454,7 @@ async function ccrLoad() {
     ccrLoadHealth(snap, params);
 
     const sRes = await _mcp("fetch", {
-      command: "fa:get:capital-activity-review-summary",
+      command: CCR_SUMMARY_COMMAND,
       params: params,
     });
     if (_ccr !== snap) return;
@@ -881,9 +879,20 @@ function ccrWatchReleases() {
   setTimeout(ccrPollReleases, CCR_RELEASE_POLL_MS);
 }
 
-// fa:list:workflow lists a review only while its task is open, and release closes
-// that task in the same transaction that posts the journal, so a sent release
-// missing from the list has landed.
+// fa:list:gp-workhub-active-task lists a review only while its task is open, and
+// release closes that task in the same transaction that posts the journal, so a
+// sent release missing from the list has landed.
+// A blocked review counts as pending Carta, so an id missing from the cheap
+// customer-only read is confirmed against the full list before it counts as landed.
+async function ccrLandedReleases(ids) {
+  const missing = async (params, among) => {
+    const rows = await farWalk(FAR_ACTIVE_TASKS_COMMAND, params).catch(() => null);
+    return rows ? among.filter((id) => !rows.some((t) => ccrIsReviewTask(t) && String(t.object_id) === id)) : [];
+  };
+  const unseen = await missing({ pending_actor: "customer" }, ids);
+  return unseen.length ? missing({}, unseen) : [];
+}
+
 async function ccrPollReleases() {
   const now = Date.now();
   const expired = Object.keys(_ccrReleasing).filter((id) => now - _ccrReleasing[id] >= CCR_RELEASE_WATCH_MS);
@@ -898,10 +907,7 @@ async function ccrPollReleases() {
 
   const ids = Object.keys(_ccrReleasing);
   let landed = [];
-  if (ids.length) {
-    const rows = farResults(await _mcp("fetch", { command: "fa:list:workflow", params: {} }).catch(() => null));
-    if (rows) landed = ids.filter((id) => !rows.some((w) => ccrIsReviewTask(w) && String(w.object_id) === id));
-  }
+  if (ids.length) landed = await ccrLandedReleases(ids);
   landed.forEach(ccrMarkReleased);
   if (landed.length || expired.length) farFetchRequests();
 
@@ -2258,31 +2264,13 @@ function openCapitalCallReview(target, title) {
 
 // object_id on this template is the activity's ShortUUID, which is what every
 // review command takes as capital_activity_id.
-function ccrTargetFor(w) {
-  if (!w) return null;
-  const fund = (w.fund && w.fund.uuid) ? w.fund : ((w.funds || []).find(f => f && f.uuid) || null);
-  const fundUuid = fund ? fund.uuid : null;
-  const activityId = w.object_id ?? null;
-  if (!fundUuid || !activityId) return null;
+function ccrTargetFor(t) {
+  if (!t || !t.fund_uuid || !t.object_id) return null;
   return {
-    fundUuid: String(fundUuid),
-    activityId: String(activityId),
-    webUrl: ccrReviewUrl(w.firm, fund, String(activityId)),
+    fundUuid: String(t.fund_uuid),
+    activityId: String(t.object_id),
+    webUrl: t._links?.web_url || null,
   };
-}
-
-// The web app's review page for the activity. The workflow list carries the
-// firm's and fund's Carta ids; the connector's name says which environment
-// they belong to, the same way the CLI resolves its base URL.
-function ccrReviewUrl(firm, fund, activityId) {
-  const firmId = firm && (firm.cw_firm_id ?? firm.carta_id ?? null);
-  const fundId = fund && (fund.cw_fund_id ?? fund.carta_id ?? null);
-  if (firmId === null || firmId === undefined || fundId === null || fundId === undefined) return null;
-  const server = typeof CARTA_MCP_SERVER === "string" ? CARTA_MCP_SERVER : "";
-  const host = /sandbox/i.test(server) ? "https://app.sandbox.carta.team" : "https://app.carta.com";
-  return host + "/investors/firm/" + encodeURIComponent(String(firmId)) + "/portfolio/fund/" +
-    encodeURIComponent(String(fundId)) + "/fund-capital-activity/?capitalActivityId=" +
-    encodeURIComponent(activityId);
 }
 
 function ccrOpenInCarta(label, cls) {
@@ -2292,19 +2280,23 @@ function ccrOpenInCarta(label, cls) {
     escHtml(label || "Open in Carta") + "</a>";
 }
 
-// The fund the call belongs to, for the card's second line.
-function ccrFundLabel(w) {
-  const named = (w.fund && w.fund.name) || ((w.funds || []).find(f => f && f.name) || {}).name;
-  return String(named ?? '').trim() || null;
+// The review commands sit behind CARTA_MCP_CAPITAL_ACTIVITY_REVIEW, and the task
+// list does not, so a viewer without the flag gets no review cards. discover
+// answers an exact name only when the viewer may call it.
+let _ccrReviewProbe = null;
+function ccrReviewAvailable() {
+  if (!_ccrReviewProbe) {
+    _ccrReviewProbe = _mcp("discover", { domain: CCR_SUMMARY_COMMAND })
+      .then((res) => Boolean(res && !res.isError))
+      .catch(() => false);
+  }
+  return _ccrReviewProbe;
 }
 
-// carta-mcp filters to these too. Re-checked here so a wider list, from an
-// older server or a future filter change, still cannot mis-route a card.
-function ccrIsReviewTask(w) {
-  if (!w || w.template !== CCR_WORKFLOW_TEMPLATE) return false;
-  return (w.tasks || []).some(t =>
-    t && (t.template === CCR_REVIEW_TASK || t.template === CCR_CHANGES_TASK) &&
-    CCR_OPEN_TASK_STATUSES.includes(t.status));
+// The active-task list holds only open tasks, so a review task is a decision the GP owes.
+function ccrIsReviewTask(t) {
+  return Boolean(t) && t.workflow_template === CCR_WORKFLOW_TEMPLATE &&
+    (t.task_template === CCR_REVIEW_TASK || t.task_template === CCR_CHANGES_TASK);
 }
 
 // The queue's review cards as this page knows them. A released call leaves the

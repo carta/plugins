@@ -20,7 +20,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.55.8</carta-plugin>
+<carta-plugin>carta-investors:6.56.1</carta-plugin>
 
 # Carta Workhub — Build / Redeploy
 
@@ -43,11 +43,7 @@ not inside a fund-data dashboard.
   Then a second **Review summary**
   step shows the draft verbatim before anything reaches `fa:create:fund-admin-message`. Send lives
   only on that second step; **Back to edit** returns the text rather than an empty box.
-- **Beta notice** — a standing banner under the page title says the artifact is in beta and
-  that the list only covers requests sent through Claude. The listing sources below cannot see
-  a request raised by email or phone, so the gap is stated rather than left for the reader to
-  discover. It is the only body copy above the composer: the title and subtitle already say
-  what the page is for.
+- **Beta badge** — on the page title. The subtitle is the only body copy above the composer.
 - **Open items** — review infers the request type from `detect` in
   `resources/carta-workhub.config.js` and checks each `requires` entry against the request, with
   label-only template lines stripped so a blank template reads as unspecified. Anything unmet is
@@ -81,13 +77,12 @@ not inside a fund-data dashboard.
 - **Request type** — `fa:create:fund-admin-message` has no type field and the backend stamps
   `request_type: 'other'`, so a sent request would lose its category. The type is carried two
   ways: as the message's **first line**, which is durable server-side and is the first thing the
-  team reads, and cached in `localStorage` against the workflow id. The row's own
-  `additional_info` carries the request as sent, so a title needs no thread read — only a row
-  with neither that nor a cached type falls back to reading its opening message (bounded to
-  `FAR_HYDRATE_MAX`).
+  team reads, and cached in `localStorage` against the workflow id. Otherwise the title is the
+  row's name, which fund-admin builds from the subject line or the message's first line; a row
+  still carrying a generic name (`FAR_GENERIC_TITLES`) reads its opening message instead
+  (bounded to `FAR_HYDRATE_MAX`).
 
-  **The backend wraps message bodies.** `content_text` and `thread_metadata.message_snippet`
-  both come back as `"        Additional Info:\n        <indented body>"`. That preamble is
+  **The backend wraps message bodies.** `content_text` comes back as `"        Additional Info:\n        <indented body>"`. That preamble is
   Carta's own formatting, so `farUnwrap` strips it and the indent everywhere text is read or
   shown — without it every title read as "Additional Info:" and the thread showed the wrapper
   to the customer.
@@ -96,18 +91,25 @@ not inside a fund-data dashboard.
   sort-by-status: the queue is grouped by status and rendered into fixed containers, so
   ordering rows by group before re-partitioning them by group is a no-op — the two modes
   produced byte-identical output. Cards in the same group that share a calendar day show the
-  time as well, or a re-sort looks like nothing happened. Cards carry no entity:
-  `fa:create:fund-admin-message` has no entity field, so `entity` is `null` on every row this
-  artifact creates, and the line was a placeholder on 100% of cards. Sorting by it went with it.
-  A real fix needs an `entity_uuid` on the create command — see `docs/plans/carta-workhub-entity-uuid.md`.
-  Card status reads
-  **Sent** / **Working** / **Ready for you** / **Done** — each an event the payload can prove.
-  There is deliberately no "received": nothing marks a read, so it would be a guess. Grouping reads `status` (an int; 2 and 3 are terminal and outrank
-  the pending actor) then `last_task.template`. Titles come from `request_type`, falling back
-  to `thread_metadata.message_snippet`.
+  time as well, or a re-sort looks like nothing happened. A card's second line is the row's
+  `entity_name`, omitted when blank — `fa:create:fund-admin-message` has no entity field (see
+  `docs/plans/carta-workhub-entity-uuid.md`). Card status reads **Working** /
+  **Ready for you** / **Done** / **Canceled**, each an event the payload can prove. There is
+  deliberately no "received": nothing marks a read, so it would be a guess.
 
-  **`fa:list:workflow` takes only `statuses` and rejects any other param** — the firm comes from
-  the session context. Its rows name no pending actor; that comes off `tasks[]`.
+  **Two cursor-paged lists feed the queue**, read in parallel at 40 rows a page so no reply
+  nears carta-mcp's 40k cap:
+  - `fa:list:gp-workhub-active-task` — open tasks, grouped by `pending_actor` (`customer` →
+    Tasks to complete, `carta` → In progress). Only `request-generic` and capital call review
+    tasks become cards, one per workflow; the customer's task wins. Review tasks need
+    `CARTA_MCP_CAPITAL_ACTIVITY_REVIEW`, which the list ignores, so they are dropped unless
+    `discover` answers for `fa:get:capital-activity-review-summary`. A failed page, or pages
+    left past 25, drops to the `localStorage` path rather than show a short list as complete.
+    A task's `created_at` is the current task's, so **Requested** comes from
+    `fa:list:firm-workflow` (`active`), read alongside.
+  - `fa:list:firm-workflow` (`request-generic`, `complete`/`canceled`) — Completed, newest 3
+    pages only, keeping what was read, and its count reads `120+` at that cap; it previews
+    5 rows. A failure leaves it empty. A request in both lists shows once, as open.
 - **Capital call review** — a `request-capital-activity` workflow carrying an open
   `review-capital-activity` (or `review-capital-activity-changes`) task opens the review panel
   instead of the thread. It is one page: a sidebar with the summary (the total, the notice and due
@@ -177,13 +179,13 @@ not inside a fund-data dashboard.
   kept in memory for the page's life, keyed by activity and investor, so returning to an
   investor costs nothing; a request for changes or a release clears that activity's renders.
 
-  **The activity link is read off the workflow row**, not guessed: `fund.uuid` plus whichever of
-  `capital_activity_id` / `object_id` the row carries. A row with neither opens the panel to a
-  state that says so rather than to an empty review.
+  **The activity link is read off the task row**: `fund_uuid` plus `object_id` (the activity's
+  ShortUUID); no fund, no panel. **Open in Carta** uses the task's `_links.web_url` until the
+  summary serves its own.
 
   A release is followed to its verdict, which can take minutes. With no reply after 4 seconds the
   panel shows it in progress and its card moves to In progress. A connector that stops waiting is
-  not a failure: the panel re-reads `fa:list:workflow` every 15 seconds, and a card gone from it
+  not a failure: the panel re-reads `fa:list:gp-workhub-active-task` every 15 seconds, and a card gone from it
   has released, because release closes the review task in the same transaction. Reopening the card
   meanwhile shows the release, not the review. With no verdict after 11 minutes the panel locks
   both decisions and sends the reviewer to Carta rather than inviting a second press. A refusal
@@ -201,7 +203,7 @@ not inside a fund-data dashboard.
   server-side now — so the panel and the page read identically. Every button carries the
   backend's absolute `href` and opens Carta in a new tab; nothing is written from here.
 
-  **The cards come from the tracker read, not from `fa:list:workflow`.** On load the queue reads
+  **The cards come from the tracker read, not from the queue's lists.** On load the queue reads
   the page's rolling window — the active quarter and the three before it, never earlier than
   Q3 2023 — one `fa:get:reporting-status` call per period, in parallel. A period whose
   `rollup.needs_action` is above zero gets a card in Tasks to complete titled
@@ -239,20 +241,19 @@ not inside a fund-data dashboard.
   `isStaff: false`. Known gap: a reply sent in an *earlier* session shows as Carta.
 - **Firm auto-detection** — `list_contexts` resolves the active firm, then `set_context` pins it.
   The firm name shows under the page title. `list_contexts` answers `firm_name: "Unknown"` for
-  some firms whose workflow rows carry the real name, so that literal is treated as no answer and
-  the queue's own `firm.name` wins. First real name set holds; a later blank cannot clear it.
+  some firms, so that literal is treated as no answer. First real name set holds; a later blank
+  cannot clear it.
 
-A card links out only when the workflow carries `workflow_cta_url`. `workflow_detail_url` is a
-`/staff/` route, so it is never used — a customer cannot open it.
+A card links out only when its row carries `_links.web_url` (set only when `url` is).
 
 ## Listing sources, in order
 
 1. `fa:list:fund-admin-message` — the customer-facing list. **Not built yet in carta-mcp.**
-2. `fa:list:workflow` with `template_type='request-generic'` — staff only.
+2. `fa:list:gp-workhub-active-task` plus `fa:list:firm-workflow` — see Queue.
 3. Workflow ids this artifact recorded in `localStorage`.
 
 Path 3 cannot see requests raised by email or phone, so the UI says so rather than implying
-the list is complete. Once path 1 lands, non-staff get a full list and the caveat disappears.
+the list is complete.
 
 ## MCP tools required inside the artifact
 

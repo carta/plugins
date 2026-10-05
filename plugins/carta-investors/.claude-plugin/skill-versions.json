@@ -4,7 +4,7 @@
     "headline": "Updating Carta Home now keeps the changes you've made automatically, and only asks when one clashes with the new version."
   },
   "carta-workhub-build": {
-    "version": "1.8.36",
+    "version": "1.8.37",
     "headline": "Workhub's capital activity review stays with a slow release until Carta finishes it, then takes the task off your list."
   }
 }

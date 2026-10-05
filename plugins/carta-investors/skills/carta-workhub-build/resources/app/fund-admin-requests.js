@@ -2,30 +2,18 @@
 // Depends on carta-workhub.app.js: _mcp, escHtml, showToast, trackWorkhub,
 // _mcpResultCandidates, _benchmarkFirmId.
 
-// Who the case waits on, from last_task.template. An unrecognised value shows
-// as in-progress rather than disappearing.
+// Group by the open task's pending_actor; an unknown value shows as in-progress.
 const FAR_GROUP_BY_PENDING = {
   'pending-customer': 'todo',
   'pending-carta': 'progress',
-  'new': 'progress',
 };
-
-// fa:list:workflow returns WorkflowStatus as an integer, not a string.
-const FAR_STATUS_COMPLETE = 2;
-const FAR_STATUS_CANCELED = 3;
-
-// TaskStatus PENDING and ACTIVE — the task statuses that still await someone.
-const FAR_OPEN_TASK_STATUSES = [0, 1];
 
 // Each label is an event the payload can prove. There is no "received" here:
 // nothing marks a read, so it would be a guess presented as a fact.
 const FAR_STATUS_LABEL = {
-  'new': 'Sent',
   'pending-carta': 'Working',
   'pending-customer': 'Ready',
 };
-// `canceled` rides on the row because it comes from the int status, not from
-// last_task.template — which keeps naming a pending actor after the case closes.
 function farStatusLabel(row) {
   if (row.group === 'done') return row.canceled ? 'Canceled' : 'Done';
   return FAR_STATUS_LABEL[row.state] ?? 'Working';
@@ -43,7 +31,10 @@ const FAR_PLANS_KEY = 'cartaWorkhub.plannedRequests';
 // request_type 'other'. So the type is carried two ways: as the message's first
 // line (durable, and the team reads it) and cached here to avoid refetching.
 const FAR_TYPES_KEY = 'cartaWorkhub.requestTypes';
-const FAR_GENERIC_TYPES = new Set(['', 'other', 'general', 'request-generic', 'request generic']);
+// fund-admin's fallback names for a request with no subject line or message.
+const FAR_GENERIC_TITLES = new Set([
+  '', 'request', 'new request', 'processing new request', 'review request', 'request completed',
+]);
 const FAR_HYDRATE_MAX = 8;   // bounded: a title is not worth a fetch storm
 
 // Storage throws on an opaque origin, which is what a data: URL artifact gets.
@@ -64,11 +55,18 @@ function farStorageOk() {
 }
 
 const FAR_PAGE_SIZE = 50;
+const FAR_LIST_PAGE_SIZE = 40;   // carta-mcp's page cap
+const FAR_LIST_MAX_PAGES = 25;   // bounds a cursor that never ends
+const FAR_DONE_MAX_PAGES = 3;    // Completed previews 5 rows; its full history is not worth the wait
+const FAR_REQUEST_TEMPLATE = 'request-generic';
+const FAR_ACTIVE_TASKS_COMMAND = 'fa:list:gp-workhub-active-task';
+const FAR_FINISHED_STATUSES = ['complete', 'canceled'];
 const FAR_DONE_PREVIEW = 5;   // completed rows shown before "+ N more"
 const FAR_TITLE_MAX = 72;     // chars of the opening message used as a title
 
 let _farRows = null;          // null = not fetched; [] = none; [...] = rows
 let _farPartial = false;      // true when rows came from the localStorage path
+let _farDoneCapped = false;   // Completed stopped at FAR_DONE_MAX_PAGES with more to read
 let _farDoneOpen = false;
 const _farThreadCache = {};   // workflow_id → normalized messages
 
@@ -83,6 +81,31 @@ function farResults(res) {
     if (Array.isArray(c)) return c;
   }
   return null;
+}
+
+function farPage(res) {
+  if (!res || res.isError) return null;
+  return _mcpResultCandidates(res).find(c => c && Array.isArray(c.results)) ?? null;
+}
+
+// Every row of a cursor-paged list, or null if a page fails or pages remain past
+// maxPages — a short list must not read as complete. `partialOk` keeps what was
+// read at the cap, marked `capped`, for a list that is only displayed.
+async function farWalk(command, params, { maxPages = FAR_LIST_MAX_PAGES, partialOk = false } = {}) {
+  const rows = [];
+  let after = null;
+  for (let page = 0; page < maxPages; page++) {
+    const res = await _mcp('fetch', {
+      command,
+      params: Object.assign({}, params, { size: FAR_LIST_PAGE_SIZE }, after ? { after } : {}),
+    });
+    const body = farPage(res);
+    if (!body) return null;
+    rows.push(...body.results);
+    if (!body.has_next || !body.next) return rows;
+    after = body.next;
+  }
+  return partialOk ? Object.assign(rows, { capped: true }) : null;
 }
 
 function farWorkflowId(res) {
@@ -333,90 +356,58 @@ function farNormalizeMessages(rows) {
     .sort((a, b) => farMs(a.at) - farMs(b.at));
 }
 
-// "Pending Carta" → "pending-carta". status_presentation is the display string;
-// last_task.template already carries the machine form, so it wins.
 function farPendingState(w) {
-  const fromTask = String(w.last_task?.template ?? '').toLowerCase();
-  if (fromTask) return fromTask;
-  const shown = String(w.status_presentation?.status ?? '').toLowerCase().replace(/\s+/g, '-');
-  if (shown) return shown;
-  return farPendingFromTasks(w);
+  const actor = String(w.pending_actor ?? '').toLowerCase();
+  return actor ? 'pending-' + actor : '';
 }
 
-// fa:list:workflow names no pending actor of its own — it carries the tasks and
-// each one says whose turn it is. The open task is the one that answers.
-function farPendingFromTasks(w) {
-  const open = (w.tasks || []).find(t => t && FAR_OPEN_TASK_STATUSES.includes(t.status));
-  if (!open) return '';
-  if (open.is_pending_customer) return 'pending-customer';
-  if (open.is_pending_carta) return 'pending-carta';
-  return '';
+function farWorkflowName(w) {
+  return farUnwrap(w.workflow_display_name ?? w.display_name);
 }
 
-// "investment wire" → "Investment wire". request_type names the job, so it beats
-// message_snippet, which is whichever message landed last.
+function farIsGenericTitle(name) {
+  return FAR_GENERIC_TITLES.has(String(name ?? '').trim().toLowerCase());
+}
+
+// The type this artifact sent wins over the row's name.
 function farRequestTitle(w) {
-  const remembered = farReadTypes()[String(w.id ?? w.workflow_id)];
+  const remembered = farReadTypes()[String(w.workflow_id)];
   if (remembered) return remembered;
-  const type = String(w.request_type ?? '').trim();
-  if (type && !FAR_GENERIC_TYPES.has(type.toLowerCase())) {
-    return type.charAt(0).toUpperCase() + type.slice(1);
-  }
-  const raw = farRawRequest(w);
-  if (raw) return farTitleFrom(raw);
-  // message_snippet is whichever message landed last, so it can be Carta's
-  // reply. Only used until farHydrateTitles reads the opening message.
-  const snippet = farUnwrap(w.thread_metadata?.message_snippet);
-  if (snippet) return farTitleFrom(snippet);
-  return 'Request to Carta';
+  const name = farWorkflowName(w);
+  return farIsGenericTitle(name) ? 'Request to Carta' : farTitleFrom(name);
 }
 
-// The request as sent. fa:list:workflow carries it on the row, so the title does
-// not depend on reading the thread back.
-function farRawRequest(w) {
-  return farUnwrap(w.additional_info ?? w.context_json?.additional_info);
-}
-
-// True when the row carries no type we can trust, so its title is a placeholder.
 function farNeedsTitle(w) {
-  if (farReadTypes()[String(w.id ?? w.workflow_id)]) return false;
-  if (farRawRequest(w)) return false;
-  const type = String(w.request_type ?? '').trim().toLowerCase();
-  return FAR_GENERIC_TYPES.has(type);
+  if (farReadTypes()[String(w.workflow_id)]) return false;
+  return farIsGenericTitle(farWorkflowName(w));
 }
 
+// An open task carries pending_actor; a finished workflow carries status.
 function farNormalizeWorkflow(w) {
-  const status = Number(w.status);
+  const closed = FAR_FINISHED_STATUSES.includes(w.status);
   // Set only when the pending task is the GP's review, so a card knows to open
   // the capital call panel rather than the thread.
   const ccr = ccrIsReviewTask(w) ? ccrTargetFor(w) : null;
   const pending = ccr ? 'pending-customer' : farPendingState(w);
-  const group = (status === FAR_STATUS_COMPLETE || status === FAR_STATUS_CANCELED)
-    ? 'done'
-    : (FAR_GROUP_BY_PENDING[pending] ?? 'progress');
   return {
-    id: w.id ?? w.workflow_id,
+    id: w.workflow_id,
     title: ccr ? CCR_CARD_TITLE : farRequestTitle(w),
-    subtitle: ccr ? ccrFundLabel(w) : null,
-    firm: w.firm?.name?.trim() || null,
-    group,
+    subtitle: String(w.entity_name ?? '').trim() || null,
+    group: closed ? 'done' : (FAR_GROUP_BY_PENDING[pending] ?? 'progress'),
     state: pending,
-    canceled: status === FAR_STATUS_CANCELED,
+    canceled: w.status === 'canceled',
     // A review card is already named, and its thread is the workflow's own
     // history rather than a request someone typed.
     needsTitle: ccr ? false : farNeedsTitle(w),
     requested: w.created_at ?? null,
-    lastActivity: w.last_activity_at ?? w.last_communication_at ?? w.created_at ?? null,
-    // Deliberately NOT workflow_detail_url — that is a /staff/ route, so linking
-    // a customer to it sends them somewhere they cannot open.
-    webUrl: w.workflow_cta_url ?? null,
+    lastActivity: w.last_activity_at ?? w.created_at ?? null,
+    webUrl: w._links?.web_url || null,
     ccr,
   };
 }
 
-// list_contexts answers "Unknown" for some firms even though the workflow rows
-// carry the real name, so the placeholder is treated as no answer rather than
-// printed at the customer. First real name wins; a later blank cannot clear it.
+// list_contexts answers "Unknown" for some firms; that is no answer. First real
+// name wins; a later blank cannot clear it.
 function farSetFirmName(name) {
   const clean = String(name ?? '').trim();
   if (!clean || clean.toLowerCase() === 'unknown') return;
@@ -622,8 +613,51 @@ async function farFetchFromIds() {
   return rows;
 }
 
-// Three sources, most complete first. fa:list:workflow is staff-only and
-// fa:list:fund-admin-message may not be deployed, so the id path is the floor.
+// Requests to Carta and capital call reviews; other dashboard tasks live elsewhere.
+function farIsQueueTask(t, reviews) {
+  return Boolean(t) && (t.workflow_template === FAR_REQUEST_TEMPLATE || (reviews && ccrIsReviewTask(t)));
+}
+
+// One card per workflow; the task waiting on the GP decides its group.
+function farOneTaskPerWorkflow(tasks) {
+  const waitsOnGp = (t) => farPendingState(t) === 'pending-customer';
+  const byWorkflow = new Map();
+  for (const t of tasks) {
+    const seen = byWorkflow.get(t.workflow_id);
+    if (!seen || (waitsOnGp(t) && !waitsOnGp(seen))) {
+      byWorkflow.set(t.workflow_id, t);
+    }
+  }
+  return [...byWorkflow.values()];
+}
+
+// Null when the open list fails; a failed finished list only empties Completed.
+// A task's created_at is when its current task opened, so the open workflows are
+// read too, for the date the request was filed.
+async function farFetchQueue() {
+  const [open, active, finished, reviews] = await Promise.all([
+    farWalk(FAR_ACTIVE_TASKS_COMMAND, {}),
+    farWalk('fa:list:firm-workflow', {
+      workflow_templates: [FAR_REQUEST_TEMPLATE, CCR_WORKFLOW_TEMPLATE],
+      statuses: ['active'],
+    }, { partialOk: true }),
+    farWalk('fa:list:firm-workflow', {
+      workflow_templates: [FAR_REQUEST_TEMPLATE],
+      statuses: FAR_FINISHED_STATUSES,
+    }, { maxPages: FAR_DONE_MAX_PAGES, partialOk: true }),
+    ccrReviewAvailable(),
+  ]);
+  if (!open) return null;
+  const filed = new Map((active ?? []).map(w => [w.workflow_id, w.created_at]));
+  const tasks = farOneTaskPerWorkflow(open.filter(t => farIsQueueTask(t, reviews)))
+    .map(t => Object.assign({}, t, { created_at: filed.get(t.workflow_id) ?? t.created_at }));
+  // A request that finished between the reads shows once, as open.
+  const openIds = new Set(tasks.map(t => t.workflow_id));
+  _farDoneCapped = Boolean(finished?.capped);
+  return tasks.concat((finished ?? []).filter(w => !openIds.has(w.workflow_id)));
+}
+
+// Three sources, most complete first; the id path is the floor.
 async function farFetchRequests() {
   let loaded = false;
   try {
@@ -633,17 +667,11 @@ async function farFetchRequests() {
     });
     let rows = farResults(scoped);
 
-    if (!rows && _benchmarkFirmId) {
-      // Takes only `statuses` and rejects every other param; the firm comes from
-      // the session context set at boot. Capital calls under review ride along.
-      const listed = await _mcp('fetch', { command: 'fa:list:workflow', params: {} });
-      rows = farResults(listed);
-    }
+    if (!rows && _benchmarkFirmId) rows = await farFetchQueue();
 
     if (rows) {
       _farPartial = false;
       _farRows = rows.map(farNormalizeWorkflow).filter(r => r.id != null);
-      farSetFirmName(_farRows.find(r => r.firm)?.firm);
     } else {
       _farPartial = true;
       _farRows = await farFetchFromIds();
@@ -843,7 +871,7 @@ function farCard(r, withTime) {
       <div class="far-card-title">${escHtml(r.title ?? 'Request to Carta')}</div>
       <span class="far-status-tag ${tagClass}">${escHtml(farStatusLabel(r))}</span>
     </div>
-    ${(() => { const e = r.subtitle ?? r.firm ?? null; const d = r.requested ? (dateLabel + ' ' + escHtml(withTime ? farStamp(r.requested) : farDate(r.requested))) : null; const parts = [e ? escHtml(e) : null, d].filter(Boolean); return parts.length ? `<div class="far-card-sub">${parts.join(' · ')}</div>` : ''; })()}
+    ${(() => { const e = r.subtitle; const d = r.requested ? (dateLabel + ' ' + escHtml(withTime ? farStamp(r.requested) : farDate(r.requested))) : null; const parts = [e ? escHtml(e) : null, d].filter(Boolean); return parts.length ? `<div class="far-card-sub">${parts.join(' · ')}</div>` : ''; })()}
     <div class="far-card-footer">
       <button class="far-card-view">${isTodo ? 'Review' : 'View'} &rarr;</button>
       ${r.footnote ? `<span class="far-card-age">${escHtml(r.footnote)}</span>` : ''}
@@ -885,8 +913,9 @@ function farRenderDone(rows) {
   const list = document.getElementById('far-cards-done');
   if (!wrap || !list) return;
   wrap.style.display = rows.length > 0 ? '' : 'none';
+  const more = _farDoneCapped ? '+' : '';
   const label = wrap.querySelector('.far-group-count');
-  if (label) label.textContent = String(rows.length);
+  if (label) label.textContent = rows.length + more;
 
   const toggle = document.getElementById('far-done-toggle');
   if (toggle) toggle.textContent = _farDoneOpen ? '▾' : '▸';
@@ -900,7 +929,7 @@ function farRenderDone(rows) {
       <span class="far-done-check">✓</span>
       <span class="far-done-title">${escHtml(r.title ?? 'Request to Carta')}</span>
       <span class="far-done-age">${escHtml(farAgo(r.lastActivity))}</span>
-    </div>`).join('') + (rest > 0 ? `<div class="far-done-more">+ ${rest} more</div>` : '');
+    </div>`).join('') + (rest > 0 ? `<div class="far-done-more">+ ${rest}${more} more</div>` : '');
   list.querySelectorAll('.far-done-row').forEach(el =>
     el.addEventListener('click', () => openFarThread(el.dataset.farId)));
 }
@@ -921,7 +950,7 @@ function farListRow(r) {
 
   const tr = document.createElement('tr');
   tr.className = 'far-list-row';
-  const entity = r.subtitle ?? r.firm ?? null;
+  const entity = r.subtitle;
   tr.innerHTML =
     `<td class="far-list-cell far-list-status"><span class="far-status-tag ${tagClass}">${escHtml(statusLabel)}</span></td>` +
     `<td class="far-list-cell far-list-title">${escHtml(r.title ?? 'Request to Carta')}</td>` +
