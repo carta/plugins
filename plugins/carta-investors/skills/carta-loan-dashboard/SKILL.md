@@ -13,17 +13,17 @@ model: inherit
 allowed-tools:
   - mcp__carta__call_tool
   - mcp__carta__welcome
+  - mcp__claude_ai_Carta__call_tool
+  - mcp__claude_ai_Carta__welcome
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
   # Step 2: find the firm the user names (list_contexts) and switch to it (set_context).
-  # Each entry is pinned to ONE exact Carta tool name; only the connector segment is a
-  # wildcard, because the host registers the Carta connector under different names
-  # (e.g. mcp__carta__… for a plugin server, mcp__claude_ai_Carta__… for a claude.ai
-  # connector). The lowercase and capitalised entries cover both spellings — they are
-  # not duplicates. These lines grant only list_contexts and set_context, and only on a
-  # server whose name contains "carta" — both are read-or-select-firm tools.
-  - mcp__*carta*__list_contexts
-  - mcp__*Carta*__list_contexts
-  - mcp__*carta*__set_context
-  - mcp__*Carta*__set_context
+  - mcp__carta__list_contexts
+  - mcp__claude_ai_Carta__list_contexts
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
+  - mcp__carta__set_context
+  - mcp__claude_ai_Carta__set_context
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   - Artifact
   - AskUserQuestion
   - read_skill
@@ -38,7 +38,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.56.2</carta-plugin>
+<carta-plugin>carta-investors:6.57.0</carta-plugin>
 
 [PATTERN carta-writing-style v0.0.2]
 [PATTERN etiquette v0.0.6]

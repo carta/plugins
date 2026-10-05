@@ -77,7 +77,7 @@ Each block is `{ values, colTypes, headerRows, merges }`; assemble all of them a
 - `values` — 2-D array: header row(s), data rows, Total. **Every row the same length**
   (the column count) — pad section-label rows with trailing `''` (a ragged array
   throws); span a label via `merges`, not a narrow write.
-- `colTypes[i]` — `currency|qty|pct|moic|text` per column; drives number format + width.
+- `colTypes[i]` — `currency|qty|qty2|pct|moic|text` per column; drives number format + width.
 - `headerRows` — `1` (allocations, breakpoints) or `2` (cap-table merged header).
 - `merges` — `[r0,c0,r1,c1]` rects (cap-table header spans; the B2 title bar); `[]` otherwise.
 
@@ -114,10 +114,10 @@ Each block is `{ values, colTypes, headerRows, merges }`; assemble all of them a
   - Percent / IRR cells: `0.00"%"` — the API returns these **already ×100**
     (e.g. `40.98` = 40.98%), so the `%` is a **literal** (quoted); do **not**
     use `0.00%`, which multiplies by 100 again.
-  - MOIC cells: `0.00"x"`. Quantity cells: `#,##0`.
+  - MOIC cells: `0.00"x"`. Quantity cells: `#,##0` (`qty2`: `#,##0.00`).
 - **Column widths — fixed by `colType`, points; never `autofitColumns()`**
   (computed/auto widths kept producing `####`) from a lookup map:
-  `{ currency:160, qty:95, pct:66, irr:66, moic:88, text:200 }[colType]` (currency
+  `{ currency:160, qty:95, qty2:110, pct:66, irr:66, moic:88, text:200 }[colType]` (currency
   over-provisioned for large breakpoint bounds like the "To" tiers; `moic` sized to
   fit the long "Return multiple" header, not just the value). **Width is per
   Excel column, not per block:** stacked tables (breakpoints + allocations) share
@@ -242,8 +242,8 @@ A 4-row text band in **column B**, rows 1–4 (row 5 blank):
 
   Same generic `write(block)` helper either way — the block differs only in `headerRows` / `merges`.
 - When you write the Cap Table block, **cache `cap_table_end_row = 6 + capTableBlock.values.length`** —
-  the convertibles block (below) and the on-request liquidation-preference augmentation position
-  themselves from this cached integer, never a sheet read.
+  the convertibles and phantom units blocks (below) and the on-request liquidation-preference
+  augmentation position themselves from this cached integer, never a sheet read.
 - **Convertibles (corp cap tables) — a default block beneath the cap-table block.** When the corp's
   `note_blocks` fetch (`cap-table.corp.md` §Convertibles) returns a **non-empty** `note_blocks`, build
   the block from `references/rendering.note_blocks.md` and stack it under the cap-table block on the
@@ -252,7 +252,17 @@ A 4-row text band in **column B**, rows 1–4 (row 5 blank):
   `cap_table_end_row + 2` (one blank row below); `colTypes` per that render doc's column list (Round
   `text`, the four money columns `currency`); number formats and widths come from the existing lookup
   maps. Provenance range: `CartaTab__Cap_Table_Convertibles`. Empty `note_blocks` → write nothing.
-  Corp-only — never coexists with the LLC liquidation-preference append.
+  Corp-only — never coexists with the LLC liquidation-preference append. When you write it, **cache
+  `convertibles_end_row = cap_table_end_row + 1 + convertiblesBlock.values.length`**.
+- **Phantom units (corp cap tables) — a default block beneath the convertibles block.** When the corp's
+  `phantom` fetch (`cap-table.corp.md` §Phantom units) returns a **non-empty** `rows`, build the block
+  from `references/rendering.phantom.md` and stack it on the **Cap Table** tab, **in the same first
+  `execute_office_js`**. Start at `convertibles_end_row + 2`, or `cap_table_end_row + 2` with no
+  convertibles block (one blank row below): the render doc's **caption** as a full-width label row
+  (padded + merged — a narrow row throws), then one block with its own sub-header row
+  (`headerRows: 1`, `merges: []`); `colTypes` per that render doc's column list (Phantom `text`, the
+  three quantity columns `qty2`); number formats and widths come from the existing lookup maps.
+  Provenance range: `CartaTab__Cap_Table_Phantom`. Empty `rows` → write nothing. Corp-only.
 - **The deeper holder view is chat-only, never written to the workbook by default** — it renders in
   chat; write it to the sheet only if the user explicitly asks. No light prompt in the sheet.
 

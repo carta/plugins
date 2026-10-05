@@ -32,6 +32,11 @@ allowed-tools:
   - mcp__claude_ai_Carta__set_context
   - mcp__claude_ai_Carta__list_contexts
   - mcp__claude_ai_Carta__discover
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__discover
   - Read
   - Write
   - AskUserQuestion
@@ -44,7 +49,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.56.2</carta-plugin>
+<carta-plugin>carta-investors:6.57.0</carta-plugin>
 
 <!-- Carta investor tooling. React app (in-browser JSX transpile) fed by Data Collection KPIs. -->
 

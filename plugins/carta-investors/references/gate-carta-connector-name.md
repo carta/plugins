@@ -66,7 +66,9 @@ Which call depends on the connector: the Carta gateway takes `welcome`; the CRM 
 none and reads `crm_call_tool({"name": "crm:get_current_user"})` instead. Don't hard-code
 `welcome` for a connector that doesn't expose it.
 
-Grant it prefix-agnostically — `mcp__*Carta*__welcome`.
+Grant it in `allowed-tools` once per production Carta MCP server name — `mcp__carta__welcome`,
+`mcp__claude_ai_Carta__welcome` and `mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome`.
+A server glob such as `mcp__*Carta*__welcome` never matches.
 
 > **Two namespaces, don't mix them.** You call tools by the prefixed name your tool list
 > shows (`mcp__<uuid>__<tool>`). The page calls them by connector name and bare verb

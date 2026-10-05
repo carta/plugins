@@ -19,10 +19,22 @@ allowed-tools:
   - mcp__claude_ai_carta__list_contexts
   - mcp__claude_ai_carta__set_context
   - mcp__claude_ai_carta__call_tool
+  - mcp__carta__welcome
+  - mcp__carta__list_contexts
+  - mcp__carta__set_context
+  - mcp__carta__call_tool
+  - mcp__claude_ai_Carta__welcome
+  - mcp__claude_ai_Carta__list_contexts
+  - mcp__claude_ai_Carta__set_context
+  - mcp__claude_ai_Carta__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.56.2</carta-plugin>
+<carta-plugin>carta-investors:6.57.0</carta-plugin>
 
 # Build Brand Board
 

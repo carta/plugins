@@ -32,6 +32,9 @@ allowed-tools:
   - mcp__carta_production__call_tool
   - mcp__carta_production__set_context
   - mcp__carta_production__list_contexts
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
   # Local helpers
   - Read
   - Write
@@ -123,7 +126,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.56.2</carta-plugin>
+<carta-plugin>carta-investors:6.57.0</carta-plugin>
 
 # ManCo Reporting Dashboard
 

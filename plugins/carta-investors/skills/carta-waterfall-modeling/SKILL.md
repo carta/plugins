@@ -15,12 +15,20 @@ allowed-tools:
   - mcp__carta__list_contexts
   - mcp__carta__set_context
   - mcp__carta__list_accounts
+  - mcp__claude_ai_Carta__call_tool
+  - mcp__claude_ai_Carta__list_contexts
+  - mcp__claude_ai_Carta__set_context
+  - mcp__claude_ai_Carta__list_accounts
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_accounts
   - execute_office_js
   - AskUserQuestion
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.56.2</carta-plugin>
+<carta-plugin>carta-investors:6.57.0</carta-plugin>
 
 # Waterfall Modeling
 
@@ -46,6 +54,7 @@ are added):
 | `cap_table:get:cap_table_by_stakeholder` | `references/rendering.cap_table_by_stakeholder.md` |
 | `cap_table:get:rights_and_preferences` | `references/rendering.rights_and_preferences.md` |
 | `cap_table:get:note_blocks` | `references/rendering.note_blocks.md` |
+| `cap_table:get:phantom` | `references/rendering.phantom.md` |
 | `cap_table:get:grant_vesting` | `references/rendering.corp_vesting_schedule.md` |
 | `cap_table:get:certificate_vesting` | `references/rendering.corp_vesting_schedule.md` |
 

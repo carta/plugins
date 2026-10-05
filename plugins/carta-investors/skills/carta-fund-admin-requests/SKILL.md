@@ -23,11 +23,16 @@ allowed-tools:
   - mcp__carta__get_current_user
   - mcp__carta__set_context
   - mcp__carta__list_contexts
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__get_current_user
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
   - AskUserQuestion
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.56.2</carta-plugin>
+<carta-plugin>carta-investors:6.57.0</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 

@@ -37,10 +37,30 @@ allowed-tools:
   - mcp__cowork__present_files
   - mcp__claude_ai_carta__skill_checkpoint
   - mcp__carta__skill_checkpoint
+  - mcp__carta__welcome
+  - mcp__carta__search_tools
+  - mcp__carta__call_tool
+  - mcp__carta__list_accounts
+  - mcp__carta__list_contexts
+  - mcp__carta__set_context
+  - mcp__claude_ai_Carta__welcome
+  - mcp__claude_ai_Carta__search_tools
+  - mcp__claude_ai_Carta__call_tool
+  - mcp__claude_ai_Carta__list_accounts
+  - mcp__claude_ai_Carta__list_contexts
+  - mcp__claude_ai_Carta__set_context
+  - mcp__claude_ai_Carta__skill_checkpoint
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__search_tools
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_accounts
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__skill_checkpoint
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.56.2</carta-plugin>
+<carta-plugin>carta-investors:6.57.0</carta-plugin>
 
 # AGM Deck Builder
 

@@ -24,14 +24,21 @@ One row per entry in `stakeholders[]`, in returned order (server sorts by fully-
 descending). `stakeholder_group_name` is a display name and is **not unique** — the same name may
 appear on multiple rows; render each row as-is, don't merge.
 
-**Paged + top-N** (this view is paginated; the share-class summary is not). Pass `page` +
-`page_size` (default 25) on each call. The response carries `count` (rows in this page) and
-`total` (stakeholders across all pages); `pages = ceil(total / page_size)`. Render the top rows
-of the current page and, when there are more, a trailing line:
-_`+ {total − shown} more ({total} total · page {page} of {pages})`_. **Never auto-fetch all
-pages** — this is an opt-in view; fetch the next page only on request (`page` + 1, same
-`page_size`). If a page ever returns `response too large`, halve `page_size` and re-fetch that
-page (mirrors the results loop); stop at `page_size: 1`.
+**Every page, before rendering** (this view is paginated; the share-class summary is not). Fetch
+page 1, then the remaining pages `2…ceil(total / page_size)` with the same other arguments.
+**Fetch pages concurrently, never one at a time.** Render only once every page is in hand.
+
+```
+for page in 2 .. ceil(total / page_size):
+  call cap_table__get__cap_table_by_stakeholder with page=page, page_size=page_size,
+       same other arguments
+  accumulate response.stakeholders
+```
+
+`page_size` starts at 25. The response carries `count` (rows in this page) and `total`
+(stakeholders across all pages). `response too large` → halve `page_size` and re-page from page 1,
+discarding partials; stop at `page_size: 1`. **Never drop data to fit** — shrinking `page_size` is
+the only answer; if `page_size: 1` still overflows, say the by-stakeholder view isn't available.
 
 ## Drill fields — individuals & securities (opt-in)
 
@@ -53,18 +60,19 @@ Without `include_securities`, rows carry only the group-level fields above (no `
 ## Discovery list (drill entry — chat only)
 
 When the user picks **Drill into a holder**, render this command as the holder list instead of the
-flat table: fetch page 1 with `include_securities: true` and print a **compact list grouped by
-`stakeholder_group_name`** — one line per group, `individuals[].stakeholder_name` comma-separated.
-Do **not** print securities here — but they back the drill (§Holder drill), so a holder already listed
-needs **no** second fetch. Respect paging (page 1, more on request per §Rows). Listing the
-names lets the user pick; only when the list is genuinely large (high `total` / many pages) ask which
-group first, then list that subset. Show a name's group beside it only when two individuals share a name.
+flat table: fetch page 1 with `include_securities: true` and read `total`. If the list is genuinely
+large (`total` > ~40), ask which group first (or "type a name"), fetch with that as `search`, and list
+that subset; if it matches nothing, say so in one line and list all of them. Otherwise fetch every
+remaining page (§Rows) and print a **compact list grouped by `stakeholder_group_name`** — all of them,
+one line per group, `individuals[].stakeholder_name` comma-separated. Do **not** print securities here —
+but they back the drill (§Holder drill), so a holder already listed needs **no** second fetch. Show a
+name's group beside it only when two individuals share a name.
 
 ## Holder drill (chat only — never written to Excel)
 
 Render the drilled holder as an **additional table** with two row markers, mirroring the LLC holder
-drill — built from that holder's `stakeholders[]` entry, whether it came from a scoped `search` or an
-already-fetched page (`references/cap-table.corp.md` §Holder drill governs when to fetch vs reuse):
+drill — built from that holder's `stakeholders[]` entry, whether it came from a scoped `search` or the
+already-fetched list (`references/cap-table.corp.md` §Holder drill governs when to fetch vs reuse):
 
 - **Holder row:** `↳ {stakeholder_group_name}` — fill **Outstanding** `outstanding_shares`, **FD**
   `fully_diluted_shares`, **Capital contributed** `cash_raised` from the group row; the per-security
@@ -92,5 +100,6 @@ response (no re-fetch):
 | remaining / unreturned invested capital for a holder | `stakeholders[].remaining_invested_capital` |
 | a security's share-class id | `individuals[].securities[].share_class_id` |
 | a security's certificate subtype | `individuals[].securities[].certificate_subtype` |
+| total capital contributed across holders | sum of `stakeholders[].cash_raised` over every page of a fetch without `search` (§Rows) — if the response in hand came from a `search`, fetch every page without it first |
 
 Format per `SKILL.md` §Formatting rules; null-dropped — never fabricate.

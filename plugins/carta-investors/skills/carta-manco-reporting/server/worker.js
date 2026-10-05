@@ -1228,6 +1228,68 @@ export function groupReimbursements(entries, reimbursedGluuids = new Set()) {
   }
 }
 
+// What a budget row can be broken out by: every source on the entry, so the reader picks.
+const ROW_DIMENSION_SOURCES = ["reporting_tag", "sub_account", "vendor", "account"];
+
+// Whether every sub-account sits under one GL account, so the account breakout can name
+// both and the sub-account stops being its own question. Ported from sub_accounts_nest.
+function subAccountsNest(entries) {
+  const seen = new Map();
+  for (const e of entries) {
+    if (!e.sub || !e.account) continue;
+    if (!seen.has(e.sub)) seen.set(e.sub, e.account);
+    else if (seen.get(e.sub) !== e.account) return false;
+  }
+  return seen.size > 0;
+}
+
+// The breakouts this firm's entries support, with their values, biggest first: the
+// Budget vs Actuals Filters menu offers one per entry. Ported from dimension_census.
+export function dimensionCensus(entries, sources = ROW_DIMENSION_SOURCES, valuesLimit = 25) {
+  const buckets = new Map();
+  const add = (key, dim, value, amt, kind) => {
+    if (!buckets.has(key)) buckets.set(key, { ...dim, entries: 0, amount: 0, vals: new Map() });
+    const b = buckets.get(key);
+    b.entries += 1;
+    b.amount += amt;
+    if (!b.vals.has(value)) b.vals.set(value, { amount: 0, expense: 0, income: 0 });
+    const v = b.vals.get(value);
+    v.amount += amt;
+    // A tag used on both sides of the P&L would read as twice the spend if added together.
+    if (kind === "expense" || kind === "income") v[kind] += amt;
+  };
+  for (const e of entries) {
+    const amt = Math.abs(Number(e.amount) || 0);
+    if (sources.includes("reporting_tag")) {
+      for (const t of e.tags || []) {
+        if (t.category && t.value) {
+          add(`reporting_tag:${t.category}`, { source: "reporting_tag", category: t.category, label: t.category }, t.value, amt, e.kind);
+        }
+      }
+    }
+    if (sources.includes("sub_account") && e.sub) add("sub_account", { source: "sub_account", label: "Sub-account" }, e.sub, amt, e.kind);
+    if (sources.includes("vendor") && e.vendor) add("vendor", { source: "vendor", label: "Vendor" }, e.vendor, amt, e.kind);
+    if (sources.includes("account") && e.account) add("account", { source: "account", label: "GL account" }, e.account, amt, e.kind);
+  }
+  const out = [...buckets.values()].map(({ vals, ...b }) => {
+    const sorted = [...vals.entries()].sort((x, y) => y[1].amount - x[1].amount);
+    return {
+      ...b, amount: pyRound(b.amount), value_count: sorted.length,
+      values: (valuesLimit == null ? sorted : sorted.slice(0, valuesLimit)).map(([value, a]) => ({
+        value, amount: pyRound(a.amount), expense: pyRound(a.expense), income: pyRound(a.income),
+      })),
+    };
+  });
+  if (sources.includes("sub_account") && sources.includes("account")) {
+    const nested = subAccountsNest(entries);
+    for (const b of out) {
+      if (b.source === "account") b.with_sub = nested;
+      else if (b.source === "sub_account") b.nested = nested;
+    }
+  }
+  return out.sort((x, y) => y.amount - x.amount);
+}
+
 // Expense spend by vendor, biggest first, as build_manco_datadir.py's build_vendor_spend.
 // The hosted app has no per-firm vendor config, so every vendor is the ledger's own.
 export function buildVendorSpend(entries) {
@@ -1938,6 +2000,10 @@ export function buildData({ meta, mancoName, mancoUuid, mancoFundId, mancoEntity
     monthly_categories: { labels: monthLabels, categories },
     entries,
     fund_fee_entries: fundFeeEntries,
+    // The Budget vs Actuals breakouts. rowDimension, the firm's own default breakout, is
+    // set from a local chart-of-accounts mapping the hosted app does not have.
+    rowDimensions: dimensionCensus(entries),
+    rowDimension: null,
     manco_fee_entries: mancoFeeEntries,
     fee_schedule_terms: feeTerms,
   };

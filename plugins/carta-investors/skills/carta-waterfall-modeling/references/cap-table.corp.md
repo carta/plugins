@@ -15,6 +15,7 @@ doc. The list grows as new corp readers ship.
 
 - `cap_table_by_share_class` — the share-class summary reader (this doc).
 - `cap_table:get:note_blocks` — round-grouped convertibles, auto-printed beneath the summary when the corp has notes (§Convertibles).
+- `cap_table:get:phantom` — phantom units, auto-printed beneath the summary when the corp has phantom units (§Phantom units).
 - `cap_table:get:rights_and_preferences` — the rights & preferences companion, rendered on request (§Rights & preferences).
 - `cap_table_by_stakeholder` — the by-stakeholder ownership view + single-holder drill (§Ownership by stakeholder, §Holder drill).
 - `cap_table:get:grant_vesting` / `cap_table:get:certificate_vesting` — a drilled security's vesting schedule, rendered on request after a holder drill (§Vesting schedule).
@@ -24,7 +25,8 @@ doc. The list grows as new corp readers ship.
 Keyed by `corporation_id` + `as_of_date` — equity value never enters it, so a batch of same-date
 runs (`SKILL.md` §Step 5) shares **one** cap table: fetch and show it once, then print only each
 scenario's results. A different `as_of_date` is its own fetch; a separately initiated run
-re-fetches. The convertibles fetch (§Convertibles) shares the same batch.
+re-fetches. The convertibles (§Convertibles) and phantom units (§Phantom units) fetches share the
+same batch.
 
 ## Fetch
 
@@ -61,6 +63,24 @@ If `note_blocks` is **non-empty**, render it beneath the share-class summary —
 [`references/rendering.note_blocks.md`](rendering.note_blocks.md). If empty (most corps have no
 notes), **print nothing and never mention it**, on either surface.
 
+## Phantom units (auto-printed when the corp has phantom units)
+
+Alongside the share-class summary and convertibles (same `corporation_id` + `as_of_date`, once per
+batch), fetch the phantom units:
+
+```
+call_tool({"name": "cap_table__get__phantom", "arguments": {
+  "corporation_id": "<root.issuer_id>",
+  "as_of_date":     "<WATERFALL_DATE, YYYY-MM-DD>"
+}})
+→ { rows[], total }
+```
+
+If `rows` is **non-empty**, render it beneath the convertibles (or the share-class summary when there
+are none) — in chat, and in `excel` as a block beneath them (§Excel) — per
+[`references/rendering.phantom.md`](rendering.phantom.md). If empty (most corps have no phantom
+units), **print nothing and never mention it**, on either surface.
+
 ## Excel
 
 **If `<SURFACE>` is `excel`:** the summary goes to the **"Cap Table"** tab — no inline table —
@@ -68,8 +88,9 @@ per the command's results doc §Excel — fetch & write order and
 [`references/excel-output.md`](excel-output.md) (one consolidated `execute_office_js`, Cap Table
 block before the Waterfall block). **When the corp has notes, the convertibles table is written under
 the Cap Table block on the Cap Table tab** (default write) — see `references/excel-output.md`
-§"Cap Table" tab. The by-stakeholder view, the vesting schedule, and rights & preferences are **not**
-written to the sheet.
+§"Cap Table" tab. **Phantom units follow the same rule, beneath the convertibles** (or the Cap Table
+block when there are none). The by-stakeholder view, the vesting schedule, and rights & preferences
+are **not** written to the sheet.
 
 ## Chat rendering
 
@@ -78,7 +99,8 @@ written to the sheet.
 
 > Here's the cap table for **{root display name}** as of **{WATERFALL_DATE}**:
 
-Render the summary per the share-class render doc, then the convertibles table (§Convertibles) if any.
+Render the summary per the share-class render doc, then the convertibles table (§Convertibles) and
+the phantom units table (§Phantom units), if any.
 After the tables, a **light prompt** via `AskUserQuestion` — default is to proceed to results:
 
 > "Explore the cap table, or show the allocation results?"
@@ -91,9 +113,9 @@ After the tables, a **light prompt** via `AskUserQuestion` — default is to pro
 On **"Show the allocation results"** → the results fetch (`SKILL.md` §Step 6). On **"Explore the cap
 table"** → the **Explore the cap table** sub-menu below, then repeat this prompt. On **"Cap table as
 of a different date"** → ask for the date, re-fetch with the same `corporation_id` and the new
-`as_of_date` (share-class + convertibles), render again, and repeat this prompt. This changes only the
-cap table, so also **suggest** in one line: _"Want me to re-run the waterfall as of that date too, with
-the same options?"_ — on yes, restart from Step 5 with the new date.
+`as_of_date` (share-class + convertibles + phantom units), render again, and repeat this prompt. This
+changes only the cap table, so also **suggest** in one line: _"Want me to re-run the waterfall as of
+that date too, with the same options?"_ — on yes, restart from Step 5 with the new date.
 
 ## Explore the cap table
 
@@ -128,8 +150,8 @@ call_tool({"name": "cap_table__get__cap_table_by_stakeholder", "arguments": {
 
 Render the flat table per
 [`references/rendering.cap_table_by_stakeholder.md`](rendering.cap_table_by_stakeholder.md) §Columns /
-§Rows (top-N, paged — see §Rows for the page-count + top-N + oversize rules). **Never auto-fetch all
-pages**; fetch page 1, then the next `page` only on request.
+§Rows — page 1 above, then every remaining page before rendering (see §Rows for the page loop +
+oversize rules).
 
 ## Holder drill (chat by default; never written to Excel)
 
@@ -139,8 +161,8 @@ table carries **no holder list**, so every holder view costs a `cap_table_by_sta
 **name**, never an id. **Keep fetches to a minimum:** every fetch below already carries securities, so
 render the drill straight from the response in hand — **never re-fetch a holder you've already pulled.**
 
-1. **Ask which holder** (no fetch) — free text: _"Which holder? Name one, or ask to see the full list."_
-   A name is the single-fetch path (step 2); the full list (step 3) is only for browsing.
+1. **Ask which holder** (no fetch) — free text: _"Which holder? Name one, or ask to see the list."_
+   A name is the single-fetch path (step 2); the list (step 3) is only for browsing.
 2. **Named a holder → fetch scoped to them** — one call, `search` + `include_securities`:
 
    ```
@@ -157,10 +179,11 @@ render the drill straight from the response in hand — **never re-fetch a holde
    ```
 
    Render the holder drill table (↳ / ↳↳) per the render doc §Holder drill **straight from this
-   response** — no second call. If `search` comes back **empty** or **ambiguous** (many matches), fall
-   back to the list (step 3).
-3. **Wants to browse, or search missed → fetch the discovery list** — one call, page 1 with securities;
-   render the **compact grouped names** per the render doc §Discovery list:
+   response** — no second call. If `search` comes back **ambiguous** (many matches), list its own
+   `stakeholders[]` per the render doc §Discovery list and drill the pick from that data — no second
+   call. If it comes back **empty**, say so in one line and fall back to the list (step 3).
+3. **Wants to browse, or search missed → fetch the discovery list** — page 1 with securities, then render
+   the **compact grouped names** per the render doc §Discovery list (which governs the large-list subset):
 
    ```
    call_tool({"name": "cap_table__get__cap_table_by_stakeholder", "arguments": {
@@ -174,9 +197,7 @@ render the drill straight from the response in hand — **never re-fetch a holde
    → { count, total, stakeholders[] }
    ```
 
-   Respect paging: page 1, more on request; if the list is genuinely large, ask which group first. When
-   the user picks a holder **already on a fetched page, render the drill from that data — do not
-   re-fetch**; page forward (or `search`) only for a holder not yet fetched.
+   When the user picks a holder from the list, **render the drill from that data — do not re-fetch.**
 4. **After the drill renders, gate the vesting offer** on each drilled security's type — dispatch by
    `(security_type, id)`: **Option** → `grant_vesting`; **Certificate / RSA / PIU** →
    `certificate_vesting`; **RSU** → no schedule via this drill.

@@ -18,18 +18,21 @@ allowed-tools:
   - list_connectors
   # Carta MCP — the connector check's observed call, the entitlement read, and the firm
   # resolution passed down to the dashboard skills.
-  # Prefix-agnostic so the grant holds whichever form the host registers.
-  - mcp__*carta*__welcome
-  - mcp__*Carta*__welcome
-  - mcp__*carta*__get_current_user
-  - mcp__*Carta*__get_current_user
+  - mcp__carta__welcome
+  - mcp__claude_ai_Carta__welcome
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
+  - mcp__carta__get_current_user
+  - mcp__claude_ai_Carta__get_current_user
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__get_current_user
   # Resolves the firm the published title names, and the firm handed to the
   # dashboard skills so the fan-out doesn't re-ask.
-  - mcp__*carta*__list_contexts
-  - mcp__*Carta*__list_contexts
+  - mcp__carta__list_contexts
+  - mcp__claude_ai_Carta__list_contexts
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
   # Step 1: switch to the firm the user means.
-  - mcp__*carta*__set_context
-  - mcp__*Carta*__set_context
+  - mcp__carta__set_context
+  - mcp__claude_ai_Carta__set_context
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   # The dashboard fan-out (Step 5). A skill that isn't installed is skipped.
   - Skill
   - AskUserQuestion
@@ -49,7 +52,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.56.2</carta-plugin>
+<carta-plugin>carta-investors:6.57.0</carta-plugin>
 
 # Carta Home — Build / Redeploy / Open
 
