@@ -27,6 +27,7 @@
 import { useEffect, useState } from "react";
 import { C, FS, RADIUS } from "../../ui/theme.js";
 import { Select, SparkleAI } from "../../ui/components.jsx";
+import { CHAT_UNAVAILABLE, UNAVAILABLE_CODE, useClaudeStatus } from "../../ui/claudeStatus.js";
 import { applyPredicate, describe, validate } from "../../model/predicate.js";
 
 const EXAMPLES = [
@@ -88,10 +89,13 @@ export default function FilterBox({
   // Injectable so tests can drive every branch without a subprocess. The default
   // is the real endpoint; a test passing its own has no network at all.
   askClaude = defaultAskClaude,
+  // Injectable for the same reason; the default asks the local server once.
+  chatStatus,
 }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState(null);
+  const unavailable = useClaudeStatus(undefined, chatStatus) === "unavailable";
 
   // A preview is a promise about a SPECIFIC cohort: "would remove 101, leaving
   // 33", counted against the rows as they were when Preview was clicked. Toggle a
@@ -106,7 +110,7 @@ export default function FilterBox({
 
   const submit = async (value) => {
     const phrase = (value ?? text).trim();
-    if (!phrase || busy) return;
+    if (!phrase || busy || unavailable) return;
     setBusy(true);
     setPreview(null);
     try {
@@ -116,7 +120,7 @@ export default function FilterBox({
       // A failed request is a refusal, not a silent no-op: the box has to say
       // something went wrong, or the user assumes the filter applied. The card
       // below already says nothing was filtered, so this says only what broke.
-      setPreview({ error: "Could not reach Claude." });
+      setPreview(UNAVAILABLE_PREVIEW);
     } finally {
       setBusy(false);
     }
@@ -141,7 +145,7 @@ export default function FilterBox({
           onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
           placeholder="Describe who to keep — e.g. engineering above IC5"
           aria-label="Describe a filter"
-          disabled={busy}
+          disabled={busy || unavailable}
           style={{
             flex: "1 1 260px", minWidth: 0, height: 32, padding: "0 10px",
             fontSize: FS.md, fontFamily: "inherit", color: C.textDefault,
@@ -149,13 +153,15 @@ export default function FilterBox({
             borderRadius: RADIUS,
           }}
         />
-        <Btn onClick={() => submit()} disabled={busy || !text.trim()}
+        <Btn onClick={() => submit()} disabled={busy || unavailable || !text.trim()}
              title={text.trim() ? "See what this filter would do" : "Describe a filter first"}>
           {busy ? "Reading…" : "Preview"}
         </Btn>
       </div>
 
-      {!preview && !busy && (
+      {unavailable && !preview && <ErrorCard preview={UNAVAILABLE_PREVIEW} />}
+
+      {!preview && !busy && !unavailable && (
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
           <span style={{ fontSize: FS.sm, color: C.textQuiet }}>Try:</span>
           {EXAMPLES.map((ex) => (
@@ -175,21 +181,7 @@ export default function FilterBox({
         </div>
       )}
 
-      {preview && preview.error && (
-        <div style={{
-          padding: "10px 12px", borderRadius: RADIUS,
-          background: C.feedbackNoticeSubtle, border: `1px solid ${C.feedbackNotice}`,
-          // Not feedbackNotice: that pairing is 3.09:1 on this ground, and a
-          // refusal nobody can read defeats the whole point of refusing.
-          fontSize: FS.sm, color: C.feedbackNoticeText, lineHeight: 1.55,
-        }}>
-          <div>{preview.error}</div>
-          <div style={{ marginTop: 6, color: C.textSubtle }}>
-            Nothing has been filtered. Try describing it another way, or use the
-            controls above.
-          </div>
-        </div>
-      )}
+      {preview && preview.error && <ErrorCard preview={preview} />}
 
       {preview && !preview.error && (
         <div style={{
@@ -292,6 +284,9 @@ export function toPreview(reply, phrase, rows, asOf) {
   if (!reply || typeof reply !== "object") {
     return { error: "Claude's reply could not be read." };
   }
+  // The server could not run Claude at all — distinct from a refusal, where
+  // Claude answered but could not express the phrase.
+  if (reply.error === UNAVAILABLE_CODE) return UNAVAILABLE_PREVIEW;
   if (reply.refusal) return { error: reply.refusal };
   if (!reply.predicate) {
     return { error: "Claude did not return a filter." };
@@ -313,6 +308,29 @@ export function toPreview(reply, phrase, rows, asOf) {
     kept: kept.length,
     removed: rows.length - kept.length,
   };
+}
+
+const UNAVAILABLE_PREVIEW = { error: CHAT_UNAVAILABLE, unavailable: true };
+
+/** Why nothing was filtered. "Try describing it another way" only fits a refusal:
+ *  when Claude can't run at all, rewording changes nothing. */
+function ErrorCard({ preview }) {
+  return (
+    <div style={{
+      padding: "10px 12px", borderRadius: RADIUS,
+      background: C.feedbackNoticeSubtle, border: `1px solid ${C.feedbackNotice}`,
+      // Not feedbackNotice: that pairing is 3.09:1 on this ground, and a
+      // refusal nobody can read defeats the whole point of refusing.
+      fontSize: FS.sm, color: C.feedbackNoticeText, lineHeight: 1.55,
+    }}>
+      <div>{preview.error}</div>
+      <div style={{ marginTop: 6, color: C.textSubtle }}>
+        {preview.unavailable
+          ? "Nothing has been filtered. Use the controls above instead."
+          : "Nothing has been filtered. Try describing it another way, or use the controls above."}
+      </div>
+    </div>
+  );
 }
 
 /** Ask the local server for a predicate. */

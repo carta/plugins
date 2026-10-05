@@ -56,12 +56,21 @@ from urllib.parse import urlparse, parse_qs
 import chat_session
 import desktop_handoff
 import predicate_session
+import preflight_claude
 
 DATA_DIR = None
 WEB_DIR = None
 SRC_DIR = None
 TOKEN = None
 CLAUDE_BIN = None
+
+# Whether the ask box and cohort filter can run. "checking" until the startup
+# probe finishes; the browser treats only "unavailable" as a reason to disable
+# them. Specific causes go to CHAT_LOG, never to the page.
+_CLAUDE_STATUS = {"state": "checking", "reason": None}
+_claude_lock = threading.Lock()
+CHAT_LOG = "chat-errors.log"
+CHAT_UNAVAILABLE = "claude_unavailable"
 IDLE_TIMEOUT_DEFAULT = 28800  # 8h backstop; should never fire during active use
 # Watchdog cadence, and the slack above it that distinguishes a real suspend
 # (laptop sleep) from ordinary scheduling jitter — a gap beyond the sum is sleep.
@@ -189,6 +198,76 @@ def _close_all_sessions():
             pass
 
 
+def _log_chat_problem(reason, detail=""):
+    """Record why a Claude feature failed. The page only ever shows one generic
+    message, so this file is where the actual cause can be found later. Never log
+    the user's prompt: it can name employees."""
+    line = "%s %s%s" % (time.strftime("%Y-%m-%dT%H:%M:%S"), reason,
+                        ": " + detail if detail else "")
+    print("[serve] claude chat problem — %s" % line, flush=True)
+    if DATA_DIR is None:
+        return
+    try:
+        with open(DATA_DIR / CHAT_LOG, "a", encoding="utf-8") as fh:
+            fh.write(line + "\n")
+    except OSError:
+        pass
+
+
+def _set_claude_state(state, reason):
+    with _claude_lock:
+        _CLAUDE_STATUS.update(state=state, reason=reason)
+
+
+def _claude_unavailable():
+    with _claude_lock:
+        return _CLAUDE_STATUS["state"] == "unavailable"
+
+
+def _refresh_claude_status():
+    """Re-find the claude binary and check its login. True when usable.
+
+    Runs at startup, again whenever a feature is asked for while marked
+    unavailable (the user may have installed or logged in since), and after a
+    failure that might mean they logged out.
+    """
+    global CLAUDE_BIN
+    result = preflight_claude.probe(CLAUDE_BIN)
+    ok = result["reason"] == preflight_claude.REASON_OK
+    with _claude_lock:
+        if result["bin"]:
+            CLAUDE_BIN = result["bin"]
+        _CLAUDE_STATUS.update(state="available" if ok else "unavailable",
+                              reason=result["reason"])
+    if not ok:
+        _log_chat_problem(result["reason"])
+    return ok
+
+
+def _refresh_claude_status_later():
+    threading.Thread(target=_refresh_claude_status, daemon=True).start()
+
+
+def _start_session(**kwargs):
+    """Start a ChatSession, or None if claude cannot be started.
+
+    Retries once after re-finding the binary: a long-lived server can outlive the
+    path it was given, because a Claude Code auto-update deletes old versions.
+    """
+    for attempt in (0, 1):
+        sess = chat_session.ChatSession(claude_bin=CLAUDE_BIN, **kwargs)
+        try:
+            sess.start()
+            return sess
+        except (OSError, ValueError) as exc:
+            if attempt == 0 and _refresh_claude_status():
+                continue
+            _log_chat_problem("start_failed", str(exc))
+            _set_claude_state("unavailable", "start_failed")
+            return None
+    return None
+
+
 def _watchdog(httpd, timeout):
     """Self-terminate after `timeout` seconds without API activity (0 = never)."""
     last_tick = time.time()
@@ -307,6 +386,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         _touch_heartbeat()
         if path == "/api/heartbeat":
             return self._send(200, {"ok": True})
+        if path == "/api/claude-status":
+            with _claude_lock:
+                state, reason = _CLAUDE_STATUS["state"], _CLAUDE_STATUS["reason"]
+            return self._send(200, {"available": state != "unavailable",
+                                    "state": state, "reason": reason})
         if path == "/api/scenarios":
             return self._get_scenarios()
         if path in _FILE_ROUTES:
@@ -374,21 +458,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
         sid = body.get("sessionId") or "default"
         page = body.get("page")
 
-        # Guarded get-or-create. A failed start() is evicted and reported as clean
-        # JSON *before* any SSE headers go out — a 500 after headers would corrupt
-        # the stream and the box would show a parse error instead of the reason.
+        # Known-broken setup: answer before spawning anything. Re-probe first, in
+        # case the user installed or logged in since the page loaded.
+        if _claude_unavailable() and not _refresh_claude_status():
+            return self._send(503, {"error": CHAT_UNAVAILABLE})
+
+        # Guarded get-or-create. A failed start() is reported as clean JSON
+        # *before* any SSE headers go out — a 500 after headers would corrupt the
+        # stream and the box would show a parse error instead of the message.
         with _SESSIONS_LOCK:
             entry = _CHAT_SESSIONS.get(sid)
             if entry is None:
-                sess = chat_session.ChatSession(
-                    cwd=str(SRC_DIR), add_dirs=[str(SRC_DIR), str(DATA_DIR)],
-                    claude_bin=CLAUDE_BIN)
-                try:
-                    sess.start()
-                except (OSError, ValueError):
-                    # Overwhelmingly: `claude` is not on PATH. Say which, because
-                    # "ask failed" sends people looking at the dashboard instead.
-                    return self._send(503, {"error": "claude_unavailable"})
+                sess = _start_session(cwd=str(SRC_DIR),
+                                      add_dirs=[str(SRC_DIR), str(DATA_DIR)])
+                if sess is None:
+                    return self._send(503, {"error": CHAT_UNAVAILABLE})
                 entry = {"session": sess, "lock": threading.Lock()}
                 _CHAT_SESSIONS[sid] = entry
 
@@ -397,6 +481,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._send(409, {"error": "turn_in_progress"})
         saw_result = False
         edited = False
+        client_gone = False
+        problem = "no_result"
         try:
             sess = entry["session"]
             self._sse_headers()
@@ -412,11 +498,30 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     if chat_session.is_turn_end(ev):
                         saw_result = True
                         ev = dict(ev, ctcReload=edited)
+                        if ev.get("is_error"):
+                            # e.g. "Not logged in". The page shows its generic
+                            # message; the cause is kept here, and the status is
+                            # re-checked so the next page load can say so up front.
+                            _log_chat_problem("turn_error", str(ev.get("result") or "")[:300])
+                            _refresh_claude_status_later()
                     self.wfile.write(("data: " + json.dumps(ev) + "\n\n").encode())
                     self.wfile.flush()
-            except Exception:
-                # Poisoned session, or a client that vanished mid-stream.
+            except (BrokenPipeError, ConnectionResetError):
+                client_gone = True
+            except Exception as exc:  # noqa: BLE001 — reported to the page below
+                # A poisoned session: the subprocess died before or during the turn.
                 saw_result = False
+                problem = "turn_failed: %s" % exc
+            if not saw_result and not client_gone:
+                # Crash, timeout, or EOF without a result frame. Without this the
+                # stream just ends and the box would wait on "Working…" forever.
+                _log_chat_problem(problem)
+                try:
+                    self.wfile.write(("data: " + json.dumps(
+                        {"type": "ctc_error", "error": CHAT_UNAVAILABLE}) + "\n\n").encode())
+                    self.wfile.flush()
+                except OSError:
+                    pass
         finally:
             entry["lock"].release()
             if not saw_result:
@@ -469,29 +574,46 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if not isinstance(vocabulary, dict):
             vocabulary = {}
 
-        session = chat_session.ChatSession(
+        # Every failure below is a 200 with {"error": CHAT_UNAVAILABLE}, not a 500:
+        # the browser's job on any failure is to say nothing was filtered, and it
+        # owns the wording. A refusal is different — Claude answered, but could
+        # not express the phrase — and keeps its own message.
+        if _claude_unavailable() and not _refresh_claude_status():
+            return self._send(200, {"error": CHAT_UNAVAILABLE})
+        session = _start_session(
             cwd=str(DATA_DIR),
             add_dirs=[],
-            claude_bin=CLAUDE_BIN,
             # An empty tool set, not the app-editing one.
             allowed_tools="",
             system_prompt=predicate_session.system_prompt(),
         )
+        if session is None:
+            return self._send(200, {"error": CHAT_UNAVAILABLE})
         try:
-            session.start()
             session.send(predicate_session.build_request(phrase, vocabulary))
             text = []
+            ended = failed = False
             for event in session.events(timeout=90):
                 chunk = chat_session.event_text(event)
                 if chunk:
                     text.append(chunk)
                 if chat_session.is_turn_end(event):
+                    ended = True
+                    failed = bool(event.get("is_error"))
                     break
+            if failed:
+                # e.g. "Not logged in" — its text arrives as an ordinary assistant
+                # message, so parsing it as a predicate would misreport the cause.
+                _log_chat_problem("filter_turn_error", str(event.get("result") or "")[:300])
+                _refresh_claude_status_later()
+                return self._send(200, {"error": CHAT_UNAVAILABLE})
+            if not ended:
+                _log_chat_problem("filter_no_result")
+                return self._send(200, {"error": CHAT_UNAVAILABLE})
             return self._send(200, predicate_session.parse_reply("".join(text)))
-        except Exception as exc:  # noqa: BLE001 — a refusal is the useful failure
-            # Not a 500: the browser's job on any failure is to say nothing was
-            # filtered, and a refusal says exactly that in the shape it expects.
-            return self._send(200, {"refusal": "Could not reach Claude (%s)." % exc})
+        except Exception as exc:  # noqa: BLE001 — reported to the page as unavailable
+            _log_chat_problem("filter_failed", str(exc))
+            return self._send(200, {"error": CHAT_UNAVAILABLE})
         finally:
             session.close()
 
@@ -677,7 +799,9 @@ def main():
     )
     ap.add_argument(
         "--claude-bin", default=None,
-        help="absolute path to the claude CLI binary for the ask box",
+        help="absolute path to the claude CLI binary for the ask box (default: found "
+             "the same way as preflight_claude.py, including the launching Claude "
+             "Code session's own binary)",
     )
     args = ap.parse_args()
 
@@ -741,6 +865,9 @@ def main():
     atexit.register(_close_all_sessions)
 
     threading.Thread(target=_watchdog, args=(httpd, idle_timeout), daemon=True).start()
+    # Also after the fork, for the same reason as the watchdog. In the background
+    # so the page loads at once; it reads "checking" until this lands.
+    _refresh_claude_status_later()
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

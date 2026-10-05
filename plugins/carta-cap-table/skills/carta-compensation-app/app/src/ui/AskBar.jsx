@@ -18,6 +18,7 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { C, FS, RADIUS } from "./theme.js";
+import { CHAT_UNAVAILABLE, UNAVAILABLE_CODE, useClaudeStatus } from "./claudeStatus.js";
 
 // Split an SSE buffer into complete `data:` payloads, returning any trailing
 // partial frame so the next chunk can finish it. A frame split across two network
@@ -191,7 +192,7 @@ async function runTurn({ token, page, text }) {
       // A turn left holding the lock (e.g. a closed browser tab) makes every later
       // prompt 409 until the server restarts, so offer a way out.
       if (body.error === "turn_in_progress") setTurn({ stuck: true });
-      throw new Error(ERRORS[body.error] || `Request failed (${res.status})`);
+      throw new Error(ERRORS[body.error] || CHAT_UNAVAILABLE);
     }
 
     const reader = res.body.getReader();
@@ -199,6 +200,7 @@ async function runTurn({ token, page, text }) {
     let buffer = "";
     let shouldReload = false;
     let failed = false;
+    let ended = false;
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -208,14 +210,29 @@ async function runTurn({ token, page, text }) {
       for (const ev of events) {
         streamText = appendEvent(streamText, ev);
         if (ev.type === "result") {
+          ended = true;
           if (ev.ctcReload) shouldReload = true;
+          // The CLI's own text ("Not logged in · Please run /login") names a
+          // terminal command a browser user can't act on; the cause is logged
+          // server-side instead.
           if (ev.is_error || ev.subtype === "error") {
             failed = true;
-            setTurn({ error: ev.result || "Claude reported an error." });
+            setTurn({ error: CHAT_UNAVAILABLE });
           }
+        }
+        if (ev.type === "ctc_error") {
+          ended = true;
+          failed = true;
+          setTurn({ error: CHAT_UNAVAILABLE });
         }
       }
       flushStream();
+    }
+    // A stream that stops without a result frame (the subprocess died, the server
+    // went away) would otherwise leave "Working…" on screen with nothing coming.
+    if (!ended) {
+      failed = true;
+      setTurn({ error: CHAT_UNAVAILABLE });
     }
     // Commit synchronously: reload below isn't deferred, so the frame flush can
     // lose the race and never paint.
@@ -232,7 +249,9 @@ async function runTurn({ token, page, text }) {
       setTimeout(() => window.location.reload(), 1400);
     }
   } catch (e) {
-    setTurn({ error: e.message || String(e) });
+    // Our own mapped messages pass through; anything else (a network failure,
+    // a server that is gone) gets the one message rather than a raw error.
+    setTurn({ error: KNOWN_MESSAGES.has(e.message) ? e.message : CHAT_UNAVAILABLE });
   } finally {
     setTurn({ busy: false });
   }
@@ -252,6 +271,8 @@ export default function AskBar({ token, page, placeholder = PLACEHOLDER }) {
   const busy = t.busy;
   const mine = t.page === page;
   const elsewhere = busy && !mine;
+  // Known up front that the CLI can't run here: say so before anyone types.
+  const unavailable = useClaudeStatus(token) === "unavailable" && !busy;
 
   // Keep the newest line in view: the panel is capped at REPLY_LINES.
   useEffect(() => {
@@ -274,7 +295,7 @@ export default function AskBar({ token, page, placeholder = PLACEHOLDER }) {
 
   function send() {
     const text = prompt.trim();
-    if (!text || getTurn().busy) return;
+    if (!text || getTurn().busy || unavailable) return;
     setPrompt("");
     runTurn({ token, page, text });
   }
@@ -284,6 +305,14 @@ export default function AskBar({ token, page, placeholder = PLACEHOLDER }) {
 
   return (
     <div>
+      {unavailable && !showPanel && (
+        <div role="status" style={{
+          marginBottom: 10, fontSize: FS.sm, color: C.feedbackNegative,
+          lineHeight: REPLY_LINE_HEIGHT,
+        }}>
+          ⚠️ {CHAT_UNAVAILABLE}
+        </div>
+      )}
       {showPanel && (
         <div ref={replyRef} style={{
           marginBottom: 10, fontSize: FS.sm,
@@ -334,7 +363,7 @@ export default function AskBar({ token, page, placeholder = PLACEHOLDER }) {
           ref={inputRef}
           type="text"
           value={prompt}
-          disabled={busy}
+          disabled={busy || unavailable}
           placeholder={placeholder}
           aria-label="Ask Claude to change this console"
           onChange={(e) => setPrompt(e.target.value)}
@@ -349,7 +378,7 @@ export default function AskBar({ token, page, placeholder = PLACEHOLDER }) {
         <button
           type="button"
           onClick={busy ? stop : send}
-          disabled={!busy && !prompt.trim()}
+          disabled={!busy && (unavailable || !prompt.trim())}
           style={{
             height: 40, padding: "0 15px",
             fontSize: FS.md, fontWeight: 500, fontFamily: "inherit",
@@ -369,9 +398,9 @@ export default function AskBar({ token, page, placeholder = PLACEHOLDER }) {
 
 // Server error codes → what the user should actually do about them.
 const ERRORS = {
-  claude_unavailable:
-    "Couldn't start Claude. Check that the `claude` CLI is installed, on your PATH, and logged in.",
+  [UNAVAILABLE_CODE]: CHAT_UNAVAILABLE,
   turn_in_progress: "Still working on the previous request.",
   empty_prompt: "Type a request first.",
   unauthorized: "Session expired — relaunch the dashboard from your Claude session.",
 };
+const KNOWN_MESSAGES = new Set(Object.values(ERRORS));

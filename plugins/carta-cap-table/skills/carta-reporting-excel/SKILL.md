@@ -8,6 +8,8 @@ description: >-
 model: sonnet
 allowed-tools:
   - mcp__carta__call_tool
+  - mcp__claude_ai_Carta__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
   - Bash(find * -name "report_processor.py"*)
   - Bash(find ~ -name "report_processor.py"*)
   - Bash(find * -name "excel_exporter.py"*)
@@ -16,7 +18,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.92.4</carta-plugin>
+<carta-plugin>carta-cap-table:6.92.5</carta-plugin>
 
 # Excel Export
 

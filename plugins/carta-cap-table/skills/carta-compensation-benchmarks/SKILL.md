@@ -12,6 +12,12 @@ allowed-tools:
   - mcp__carta__call_tool
   - mcp__carta__search_tools
   - mcp__carta__list_accounts
+  - mcp__claude_ai_Carta__call_tool
+  - mcp__claude_ai_Carta__search_tools
+  - mcp__claude_ai_Carta__list_accounts
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__search_tools
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_accounts
   - AskUserQuestion
   - Skill
   - Read
@@ -23,7 +29,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.92.4</carta-plugin>
+<carta-plugin>carta-cap-table:6.92.5</carta-plugin>
 
 # Benchmark Query
 

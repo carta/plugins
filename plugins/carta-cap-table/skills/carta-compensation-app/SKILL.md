@@ -34,6 +34,16 @@ allowed-tools:
   - mcp__carta-prod__fetch
   - mcp__carta-prod__search_tools
   - mcp__carta-prod__list_accounts
+  - mcp__claude_ai_Carta__welcome
+  - mcp__claude_ai_Carta__call_tool
+  - mcp__claude_ai_Carta__fetch
+  - mcp__claude_ai_Carta__search_tools
+  - mcp__claude_ai_Carta__list_accounts
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__fetch
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__search_tools
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_accounts
   - Read
   - Write
   - AskUserQuestion
@@ -51,7 +61,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.92.4</carta-plugin>
+<carta-plugin>carta-cap-table:6.92.5</carta-plugin>
 
 <!-- [PATTERN carta-writing-style v0.0.2] [PATTERN etiquette v0.0.6] [PATTERN text v0.0.8] [PATTERN tables v0.0.12] [PATTERN carta-watermark v0.0.10] [PATTERN base v0.1.0] -->
 
@@ -197,34 +207,47 @@ Cache age in words ("3 days old"), never as a raw `field=value`.
 
 ## Step 0.5 — Preflight: Claude CLI for the ask box
 
-The ask box spawns a `claude` subprocess. If the binary is not discoverable, the ask box
-returns an error after the dashboard is already open. Detect this early so the skill can
-resolve it before the user waits through the data-fetch cycle.
+The ask box and the planner's cohort filter spawn a `claude` subprocess, so they need the
+`claude` CLI installed and logged in — the Claude Code binary, from Anthropic. Detect it
+early so a missing CLI is resolved before the user waits through the data-fetch cycle.
 
 **This step is non-blocking.** The dashboard is fully functional without the CLI — only the
-ask box needs it. Never fail the skill over a missing CLI.
+two Claude features need it. Never fail the skill over a missing CLI.
 
 ```bash
 uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/preflight_claude.py" check
 ```
 
-- `claude_bin=<path>` → capture the path for Step 4. No output to user.
-- `claude_bin=none` → ask via `AskUserQuestion`:
-  > "The ask box in the dashboard needs the `claude` CLI, which wasn't found on your PATH.
-  > Want me to install it? (runs `npm install -g @anthropic-ai/claude-code`)"
-  - **Yes** → run `preflight_claude.py install`, then use the printed path. If it still
-    prints `claude_bin=none`, tell the user the install did not succeed and they can install
-    manually later — then continue.
-  - **No** → continue. The dashboard works; the ask box will show a message explaining it
-    needs the CLI.
+The search covers PATH, the usual install locations, and the binary of the Claude Code
+session running this skill (`CLAUDE_CODE_EXECPATH`). That last one means an IDE or desktop
+user with nothing on PATH is still found, so `claude_bin=none` should be rare.
+
+- `claude_bin=<path>` → capture the path for Step 4. No output to user, whatever
+  `claude_auth=` says. A user who is logged out sees the console's "not supported" message
+  in place of the two features; the dashboard itself is unaffected.
+- `claude_bin=none` → ask via `AskUserQuestion` before installing anything:
+  > "The chat in the dashboard needs the Claude Code CLI (`claude`), which isn't installed
+  > here. Want me to install it? (runs Anthropic's installer)"
+  - **Yes** → run `preflight_claude.py install`. It uses Anthropic's native installer and
+    falls back to npm. Then use the printed path. If it still prints `claude_bin=none`, say
+    the install didn't succeed and the chat won't be available — then continue.
+  - **No** → continue. The dashboard works; the two Claude features show the console's
+    "not supported" message.
 
 When Step 4 launches `serve.py`, pass the discovered path as `--claude-bin "<path>"` (only
-when a non-`none` path was found). This threads it to `ChatSession` without relying on PATH.
+when a non-`none` path was found). `serve.py` runs the same search itself when it is
+omitted, and finds the binary again if the given path disappears (a Claude Code
+auto-update deletes old versions), so the flag is a hint rather than a requirement.
+
+**What the user sees when it fails.** The browser gets one message for every failure —
+CLI missing, logged out, crashed mid-turn — and never a stuck "Working…" or a raw error. The
+specific cause is written to `chat-errors.log` in the dashboard dir. Read that file when a
+user reports the chat isn't working, rather than guessing.
 
 **Reused daemon caveat:** if `serve.py` detects an already-running daemon for this corp, it
-reuses it and exits — the new `--claude-bin` does not reach the running process. If the user
-just installed the CLI and the ask box was broken on the previous launch, tell them to close
-and relaunch the dashboard to pick up the new binary.
+reuses it and exits. That daemon re-checks the CLI whenever a Claude feature is used while
+marked unavailable, so a CLI installed or logged in since then is picked up without a
+relaunch.
 
 ## Step 1 — BUILD: identify the Carta MCP + resolve the corporation
 

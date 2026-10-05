@@ -16,12 +16,13 @@ allowed-tools:
   - Read
   # The only source for a connector's name
   - list_connectors
-  # Carta MCP — the connector check's two observed calls. Prefix-agnostic so the grant
-  # holds whichever form the host registers, and glob matching is case-sensitive.
-  - mcp__*carta*__welcome
-  - mcp__*Carta*__welcome
-  - mcp__*carta*__list_accounts
-  - mcp__*Carta*__list_accounts
+  # Carta MCP — the connector check's two observed calls.
+  - mcp__carta__welcome
+  - mcp__claude_ai_Carta__welcome
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
+  - mcp__carta__list_accounts
+  - mcp__claude_ai_Carta__list_accounts
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_accounts
   - Bash(uv run *build_artifact.py *)
   - Bash(find ~ -name "build_artifact.py"*)
   - Bash(find /sessions -name "build_artifact.py"*)
@@ -34,7 +35,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.92.4</carta-plugin>
+<carta-plugin>carta-cap-table:6.92.5</carta-plugin>
 
 # Carta Home (cap table) — Build / Redeploy / Open
 
