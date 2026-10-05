@@ -6,7 +6,8 @@
 Inlines the CSS + config + app JS into the template and substitutes the Carta MCP
 connector name, producing ONE self-contained HTML file the Artifact tool publishes
 by path. The model never has to read the large HTML: to change what the
-directory shows, edit resources/carta-home.config.js; to change logic, edit
+directory's categories, edit resources/carta-home.config.js; to change its skills, edit
+the plugin's .claude-plugin/skill-directory.json; to change logic, edit
 resources/carta-home.app.js; then re-run this.
 
 Source parts (all in the skill's resources/ dir):
@@ -24,7 +25,9 @@ whereas .claude-plugin/ is plugin-level metadata and is always published.
 
 The `{{CARTA_MCP_SERVER}}` placeholder (throughout the template + app) is replaced with
 the Carta connector's display name — what the artifact runtime's mcp capability
-addresses a connector by. `{{FIRM}}` is left intact — it is a RUNTIME
+addresses a connector by. The Skill Directory's skills come from the plugin's .claude-plugin/skill-directory.json
+(placeholder: {{SKILL_DIRECTORY_JSON}}), baked in as the first paint; the page asks
+carta-mcp for the published copy once it is idle. `{{FIRM}}` is left intact — it is a RUNTIME
 placeholder the artifact fills in from list_contexts.
 
 `{{PAGE_TITLE}}` is the one firm-specific thing baked in: it becomes the page's `<title>`,
@@ -83,6 +86,13 @@ VERSIONS_FILE = _first_existing(
     SKILL_DIR.parent.parent / ".claude-plugin" / "skill-versions.json",
     SKILL_DIR / ".claude-plugin" / "skill-versions.json",
 )
+# The Skill Directory's entries, keyed by skill. Baked in as the page's first paint and
+# fallback; the page asks carta-mcp for the published copy of the same file when idle.
+DIRECTORY_FILE = _first_existing(
+    SKILL_DIR.parent.parent / ".claude-plugin" / "skill-directory.json",
+    SKILL_DIR / ".claude-plugin" / "skill-directory.json",
+)
+SKILLS_ROOT = SKILL_DIR.parent
 # A built artifact can never update itself, so it carries its version with it and
 # compares against the published one at runtime. Strict major.minor.patch: the
 # comparison is semver, and the banner fires on major/minor only.
@@ -98,6 +108,7 @@ APP_JS_PARTS = [
     "app/capital-activity.js",
     "app/version-check.js",
     "app/live-content.js",
+    "app/skill-directory.js",
 ]
 
 MARKERS = {
@@ -160,6 +171,45 @@ def read_version():
     return version
 
 
+def read_skill_directory():
+    """Return the baked Skill Directory: a list of {skill, category, name, order, prompts},
+    plus `tag` and `requires` where an entry sets them.
+
+    Opt-outs (null) are dropped, and so is any skill this install does not carry: the
+    file is plugin-level and always published, but a skill without `publish: true` never
+    reaches a customer's install, and its prompts would route nowhere. Fails the build on
+    a missing or unreadable file, like the version registry.
+    """
+    if not DIRECTORY_FILE.exists():
+        sys.exit("ERROR: {} is missing".format(DIRECTORY_FILE))
+    try:
+        data = json.loads(DIRECTORY_FILE.read_text())
+    except ValueError as exc:
+        sys.exit("ERROR: {} is not valid JSON: {}".format(DIRECTORY_FILE.name, exc))
+    if not isinstance(data, dict):
+        sys.exit("ERROR: {} must be an object keyed by skill".format(DIRECTORY_FILE.name))
+    entries = []
+    for skill, entry in sorted(data.items()):
+        if entry is None or not (SKILLS_ROOT / skill / "SKILL.md").exists():
+            continue
+        baked = {
+            "skill": skill,
+            "category": entry["category"],
+            "name": entry["name"],
+            "order": entry.get("order", 0),
+            "prompts": entry["prompts"],
+        }
+        baked.update({k: entry[k] for k in ("tag", "requires") if k in entry})
+        entries.append(baked)
+    return entries
+
+
+def directory_json(entries):
+    """JSON for inlining into the page's one <script>: `<` is escaped so no prompt can
+    close the script tag early."""
+    return json.dumps(entries, ensure_ascii=False).replace("<", "\\u003c")
+
+
 BUILDING = "building"
 
 
@@ -193,7 +243,9 @@ def build(mcp_server, firm_name, dashboard_urls=None):
     parts = {name: (RES / name).read_text() for name in MARKERS}
     parts.update({name: (VENDOR_DIR / name).read_text() for name in VENDOR_MARKERS})
     parts.update({name: (RES / name).read_text() for name in APP_JS_PARTS})
-    build_id = compute_build_id(template, parts)
+    skill_directory = directory_json(read_skill_directory())
+    # The directory is content like any source part, so it moves the build id too.
+    build_id = compute_build_id(template, {**parts, DIRECTORY_FILE.name: skill_directory})
 
     out = template
     for filename, marker in {**MARKERS, **VENDOR_MARKERS}.items():
@@ -223,6 +275,10 @@ def build(mcp_server, firm_name, dashboard_urls=None):
     out = out.replace("{{DASHBOARD_URLS}}", json.dumps(dashboard_urls or {}, sort_keys=True))
     if "{{DASHBOARD_URLS}}" in out:
         sys.exit("ERROR: {{DASHBOARD_URLS}} still present after substitution")
+
+    out = out.replace("{{SKILL_DIRECTORY_JSON}}", skill_directory)
+    if "{{SKILL_DIRECTORY_JSON}}" in out:
+        sys.exit("ERROR: {{SKILL_DIRECTORY_JSON}} still present after substitution")
 
     out = out.replace("{{BUILD_ID}}", build_id)
 

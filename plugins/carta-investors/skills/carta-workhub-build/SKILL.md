@@ -20,7 +20,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.56.1</carta-plugin>
+<carta-plugin>carta-investors:6.56.2</carta-plugin>
 
 # Carta Workhub — Build / Redeploy
 
@@ -191,8 +191,9 @@ not inside a fund-data dashboard.
   both decisions and sends the reviewer to Carta rather than inviting a second press. A refusal
   (a failing blocking health check) stays written above Approve.
 - **Financial reporting tracker** — one card per reporting period that needs the GP, opening the
-  Financial Reporting Tracker for that period: the banner, the combined filter-and-sort menu,
-  entity search, the period selector, and the six-column table with fund families **and any
+  Financial Reporting Tracker for that period: the banner, the multi-select entity filter (a
+  fund family's box selects every member), the combined filter-and-sort menu, entity search,
+  the period selector, and the six-column table with fund families **and any
   entity holding two or more packages** as collapsible rows. A row with two or more packages
   beneath it reads a status ("Awaiting your review", "Ready to publish", or the ordinary cell
   text) instead of a button, tagged "N packages" under its name; each package is a child row of

@@ -49,7 +49,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.56.1</carta-plugin>
+<carta-plugin>carta-investors:6.56.2</carta-plugin>
 
 # Carta Home — Build / Redeploy / Open
 
@@ -91,6 +91,13 @@ own sidebar tile.
   total NAV as a proxy if that table is unavailable (adds a footnote when using the fallback).
 - **Skill Directory** — categorized index of carta-investors skills with copyable prompts.
   Prompts auto-substitute the active firm name. Every category shows to every role.
+  The skills come from the plugin's `.claude-plugin/skill-directory.json`, not the page:
+  the build bakes them in as the first paint, and once the browser is idle the page asks
+  carta-mcp (`plugin:list:skills`) for the published copy, so a skill that ships later
+  appears without a rebuild. A row tagged `"tag": "App"` is a micro app: it shows an
+  **App** pill and a line saying it launches in Claude Code, since the app is a local
+  React app that a Cowork chat cannot start. See `docs/skill-directory.md` for the entry
+  format; CI fails a published skill that has neither an entry nor an explicit `null`.
   **Entitlement-gated:** `fetchUserEnrichment()` calls `get_current_user`, logs the full
   payload to the debug console (visible to the LLM client), and reads two product flags:
   - **Fund forecasting** (a single skill inside Fund modeling) — needs `has_tactyc`
@@ -179,7 +186,9 @@ need the full file in context. Edit the small source file for what you're changi
 
 | File | What it holds | Edit it to… |
 |------|---------------|-------------|
-| `resources/carta-home.config.js` | `DIR_CATEGORIES` + per-category `requires`, `NEWS_TAG`; `DASHBOARDS` launcher registry | change which skills/categories show, their entitlement gate, which Contentful tag feeds Plugin news, or which cards launch a standalone dashboard |
+| `resources/carta-home.config.js` | `DIR_CATEGORIES` (id, name, tagline, optional `requires`), `NEWS_TAG`; `DASHBOARDS` launcher registry | change which categories show, a category's entitlement gate, which Contentful tag feeds Plugin news, or which cards launch a standalone dashboard |
+| `../../.claude-plugin/skill-directory.json` | the Skill Directory's entries, keyed by skill: `category` (a `DIR_CATEGORIES` id), `name`, `order`, `prompts`, optional `tag` (`"App"`) and `requires`; `null` opts a skill out | add or change a skill's row or example prompts — no rebuild needed once published |
+| `resources/app/skill-directory.js` | reads the published directory (`plugin:list:skills`) when idle, validates it, and re-renders over the baked list | change how the published list is merged or when it loads |
 | `resources/carta-home.app.js` | shared/core runtime logic (`_mcp`, format helpers, `fetchLiveData` bootstrap, SOI, Fund Performance, Skill Directory, tour) | change behavior / data fetching for anything not yet split into its own file below |
 | `resources/app/capital-activity.js` | Capital activity cards + detail overlay (fetch/render/dismiss) | change the capital call / distribution cards or their detail modal |
 | `resources/app/version-check.js` | update banner: reads the published version, compares, renders/dismisses | change the banner copy or when it appears |

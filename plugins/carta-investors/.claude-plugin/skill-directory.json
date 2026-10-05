@@ -1,0 +1,143 @@
+{
+  "carta-agm-deck-builder": {
+    "category": "lp-reporting",
+    "name": "AGM deck builder",
+    "order": 20,
+    "prompts": [
+      "Produce an annual general meeting deck to show our investors"
+    ]
+  },
+  "carta-brand-extraction": {
+    "category": "lp-reporting",
+    "name": "Brand board",
+    "order": 30,
+    "prompts": [
+      "Build a brand board for {{FIRM}} from our website"
+    ]
+  },
+  "carta-compliance-routing": {
+    "category": "compliance",
+    "name": "Form ADV",
+    "order": 10,
+    "prompts": [
+      "What is our regulatory AUM"
+    ]
+  },
+  "carta-consolidating-financial-reports": {
+    "category": "fund-accounting",
+    "name": "Consolidating financial reports",
+    "order": 10,
+    "prompts": [
+      "Show me my firm's balance sheet as of this month",
+      "Show me my firm's P&L as of this month"
+    ]
+  },
+  "carta-co-investors": {
+    "category": "portfolio",
+    "name": "Co-investor lookup",
+    "order": 30,
+    "prompts": [
+      "Who are other investors who have co-invested in my portfolio companies?"
+    ]
+  },
+  "carta-download-tearsheet": {
+    "category": "lp-reporting",
+    "name": "Tear sheet download",
+    "order": 10,
+    "prompts": [
+      "Use my firm's tear sheet template and generate tear sheets for this quarter"
+    ]
+  },
+  "carta-explore-data": {
+    "category": "portfolio",
+    "name": "Ask about your fund data",
+    "order": 40,
+    "prompts": [
+      "What is the NAV of each of my funds as of the latest quarter?"
+    ]
+  },
+  "carta-fund-admin-requests": {
+    "category": "fund-admin",
+    "name": "Fund admin requests",
+    "order": 10,
+    "prompts": [
+      "Ask my fund admin team to [describe the task]",
+      "What requests do I have open with Carta?"
+    ]
+  },
+  "carta-fund-forecasting": {
+    "category": "fund-modeling",
+    "name": "Fund forecasting",
+    "order": 10,
+    "requires": "tactyc",
+    "prompts": [
+      "What is my funds' TVPI projected at fund close?"
+    ]
+  },
+  "carta-fund-modeling": {
+    "category": "fund-modeling",
+    "name": "Fund modeling",
+    "order": 20,
+    "tag": "App",
+    "prompts": [
+      "Spin up the fund modeling app for {{FIRM}}"
+    ]
+  },
+  "carta-home-build": null,
+  "carta-loan-dashboard": null,
+  "carta-manco": {
+    "category": "manco",
+    "name": "Budgeting & actuals",
+    "order": 10,
+    "prompts": [
+      "Compare YTD actuals against the budget",
+      "Build what-if scenarios over our budget",
+      "Build a fund/ManCo budget in Excel from Carta prior-year actuals"
+    ]
+  },
+  "carta-manco-reporting": {
+    "category": "manco",
+    "name": "ManCo reporting dashboard",
+    "order": 20,
+    "tag": "App",
+    "prompts": [
+      "Spin up the ManCo dashboard for {{FIRM}}"
+    ]
+  },
+  "carta-portfolio-analytics-app": {
+    "category": "portfolio",
+    "name": "Portfolio analytics",
+    "order": 50,
+    "tag": "App",
+    "prompts": [
+      "Spin up the portfolio analytics app for {{FIRM}}"
+    ]
+  },
+  "carta-portfolio-analytics-routing": {
+    "category": "portfolio",
+    "name": "Schedule of investments & performance",
+    "order": 10,
+    "prompts": [
+      "Show me the schedule of investments for my firm",
+      "Show me the TVPI, DPI, MOIC and IRR for my funds",
+      "How do our funds compare to peer benchmarks?"
+    ]
+  },
+  "carta-spa-audit": {
+    "category": "portfolio",
+    "name": "SPA coverage audit",
+    "order": 60,
+    "prompts": [
+      "Which of our investments are missing an executed SPA?"
+    ]
+  },
+  "carta-waterfall-modeling": {
+    "category": "fund-modeling",
+    "name": "Exit waterfall",
+    "order": 30,
+    "prompts": [
+      "Who gets paid, and how much, if [portfolio company] exits at $[amount]?"
+    ]
+  },
+  "carta-workhub-build": null
+}

@@ -680,6 +680,14 @@
     .dir-skill-name { font-size: 13px; font-weight: 500; color: var(--ink-color-global-text-default); margin-bottom: 3px; }
     .dir-skill-prompt { display: flex; align-items: flex-start; gap: 5px; }
     .dir-skill-prompt-text { flex: 1; font-size: 12px; color: var(--ink-color-global-text-subtle); line-height: 1.45; }
+    .dir-skill-tag {
+      display: inline-block; vertical-align: 1px; margin-left: 4px; padding: 1px 8px;
+      font-size: 11px; font-weight: 500; line-height: 16px;
+      color: var(--ink-color-global-text-default);
+      background: var(--ink-color-global-feedback-info-subtle);
+      border: 1px solid var(--ink-color-global-border-subtle);
+      border-radius: var(--ink-radius-pill);
+    }
     .dir-skill-note { font-size: 12px; color: var(--ink-color-global-text-subtle); line-height: 1.45; }
     .dir-copy-btn {
       flex-shrink: 0; background: none; border: none; padding: 1px 2px; cursor: pointer;

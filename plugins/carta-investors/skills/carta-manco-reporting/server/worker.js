@@ -881,6 +881,8 @@ WHERE FUND_UUID = '${mancoUuid}'
 ORDER BY EFFECTIVE_DATE, ACCOUNT_TYPE, JOURNAL_ENTRY_LINE_ID
 LIMIT 1000`;
 
+// Query C exactly as references/data-fetch.md has it, closed years clipped to the as-of
+// month too: committed capital, ranking and projections are read off these rows, as locally.
 const FUND_FEE_SQL = (firmUuid, mancoUuid, year, maxMo) => `SELECT
   JOURNAL_ENTRY_LINE_ID AS id, JOURNAL_ENTRY_GLUUID AS gluuid,
   FUND_NAME AS fund, FUND_UUID AS fund_uuid,
@@ -900,10 +902,50 @@ FROM JOURNAL_ENTRIES
 WHERE FIRM_ID = '${firmUuid}'
   AND FUND_UUID != '${mancoUuid}'
   AND YEAR(EFFECTIVE_DATE) BETWEEN ${year - 5} AND ${year}
-  AND (YEAR(EFFECTIVE_DATE) < ${year} OR MONTH(EFFECTIVE_DATE) <= ${maxMo})
+  AND MONTH(EFFECTIVE_DATE) <= ${maxMo}
   AND ACCOUNT_TYPE >= 5000
   AND (LOWER(ACCOUNT_NAME) LIKE '%management fee%' OR LOWER(ACCOUNT_NAME) LIKE '%mgmt fee%')
 ORDER BY yr DESC, EFFECTIVE_DATE, JOURNAL_ENTRY_LINE_ID
+LIMIT 1000`;
+
+// Query A2 (references/data-fetch.md): entries settled through the reimbursement
+// payable, matched by the account's name since its number differs between firms.
+const REIMBURSEMENT_SQL = (mancoUuid, year, maxMo) => `SELECT DISTINCT JOURNAL_ENTRY_GLUUID AS gluuid
+FROM JOURNAL_ENTRIES
+WHERE FUND_UUID = '${mancoUuid}'
+  AND YEAR(EFFECTIVE_DATE) = ${year}
+  AND MONTH(EFFECTIVE_DATE) <= ${maxMo}
+  AND ACCOUNT_TYPE < 4000
+  AND ACCOUNT_NAME ILIKE '%reimburs%'
+ORDER BY gluuid
+LIMIT 1000`;
+
+// Query G: the ManCo's own fee income, the fee chart's source. Closed years whole;
+// RELATED_ENTITY_ID names the fund each line bills.
+const MANCO_FEE_SQL = (firmUuid, mancoUuid, year) => `SELECT JOURNAL_ENTRY_LINE_ID AS id, JOURNAL_ENTRY_GLUUID AS gluuid,
+  EFFECTIVE_DATE AS date, YEAR(EFFECTIVE_DATE) AS yr, MONTH(EFFECTIVE_DATE) AS mo,
+  ACCOUNT_NAME AS account, ACCOUNT_TYPE AS acct_type,
+  COALESCE(RELATED_ENTITY_ID, 0) AS related_entity_id,
+  -AMOUNT AS amt, COALESCE(EVENT_TYPE, '') AS event_type,
+  COALESCE(JOURNAL_ENTRY_DESCRIPTION, '') AS descr
+FROM JOURNAL_ENTRIES
+WHERE FIRM_ID = '${firmUuid}'
+  AND FUND_UUID = '${mancoUuid}'
+  AND YEAR(EFFECTIVE_DATE) BETWEEN ${year - 5} AND ${year}
+  AND ACCOUNT_TYPE >= 4000 AND ACCOUNT_TYPE < 5000
+  AND (LOWER(ACCOUNT_NAME) LIKE '%management fee%' OR LOWER(ACCOUNT_NAME) LIKE '%mgmt fee%')
+ORDER BY yr DESC, EFFECTIVE_DATE, JOURNAL_ENTRY_LINE_ID
+LIMIT 1000`;
+
+// Query F: contracted fee schedule terms. Missing in an environment the table has not
+// reached; that reads as no terms, as it does locally.
+const FEE_SCHEDULE_SQL = (firmUuid) => `SELECT fund_name AS fund, fund_id AS fund_uuid, period_name, fee_rate,
+  calculation_base, minimum_fee_amount, fixed_fee_amount, fee_currency,
+  frequency, waived, start_date, end_date,
+  period_order, uses_custom_calculation_base
+FROM FUND_ADMIN.MANAGEMENT_FEE_SCHEDULES
+WHERE firm_id = '${firmUuid}'
+ORDER BY fund_name, period_order, start_date
 LIMIT 1000`;
 
 const CURRENCY_SQL = (mancoUuid) => `SELECT fund_reporting_currency AS currency
@@ -961,11 +1003,20 @@ async function handleLoadFirm(req, env) {
       await send({ step: "Querying ManCo expenses" });
       const expenseRows = await fetchRows(EXPENSE_SQL(mancoUuid, year, maxMo), "expense");
 
+      await send({ step: "Finding reimbursements" });
+      const reimbursementRows = await fetchRows(REIMBURSEMENT_SQL(mancoUuid, year, maxMo), "reimbursement");
+
       await send({ step: "Querying ManCo income" });
       const incomeRows = await fetchRows(INCOME_SQL(mancoUuid, year, maxMo), "income");
 
       await send({ step: "Querying fund fee data" });
       const fundFeeRows = await fetchRows(FUND_FEE_SQL(meta.firmUuid, mancoUuid, year, maxMo), "fund fee");
+
+      await send({ step: "Querying ManCo fee income" });
+      const mancoFeeRows = await fetchRows(MANCO_FEE_SQL(meta.firmUuid, mancoUuid, year), "ManCo fee");
+
+      await send({ step: "Loading fee schedules" });
+      const feeTermRows = await fetchRows(FEE_SCHEDULE_SQL(meta.firmUuid), "fee schedule");
 
       // Query currency
       await send({ step: "Resolving currency" });
@@ -1039,8 +1090,8 @@ async function handleLoadFirm(req, env) {
 
       const { snapshot, accounts } = buildData({
         meta, mancoName, mancoUuid, mancoFundId, mancoEntity, entities, asOf, year, maxMo,
-        monthLabels, currency, expenseRows, incomeRows, fundFeeRows, cashData,
-        budgetByAccount,
+        monthLabels, currency, expenseRows, incomeRows, fundFeeRows, mancoFeeRows, feeTermRows, cashData,
+        budgetByAccount, reimbursementGluuids: reimbursementRows.map(r => col(r, "gluuid")).filter(Boolean),
       });
 
       await assertActiveFirm(meta.firmUuid, session, sid, env);
@@ -1110,6 +1161,7 @@ export function normalizeFeeRow(r) {
     eventType: col(r, "EVENT_TYPE") || col(r, "event_type") || "",
     tags: col(r, "TAGS") || col(r, "tags") || "",
     tagsJson: col(r, "TAGS_JSON") || col(r, "tags_json") || "",
+    relatedEntityId: num(col(r, "RELATED_ENTITY_ID") || col(r, "related_entity_id")),
   };
 }
 
@@ -1142,7 +1194,73 @@ export function parseTags(row) {
   return flat.split(",").map(v => v.trim()).filter(Boolean).map(value => ({ category: "", value }));
 }
 
+// Python's round(): an exact half goes to the even neighbour, where Math.round goes up.
+// The ports below round as build_manco_datadir.py does, so the two agree to the cent.
+export function pyRound(x, digits = 0) {
+  const scale = digits ? 10 ** digits : 1;
+  const scaled = x * scale;
+  // A double holds an exact half only for a dyadic fraction; any other value is not a tie.
+  const dyadic = Number.isInteger(x * 2 * (digits ? 2 ** digits : 1));
+  if (dyadic && Math.abs(scaled % 1) === 0.5) {
+    const floor = Math.floor(scaled);
+    return (floor % 2 === 0 ? floor : floor + 1) / scale;
+  }
+  return digits ? Number(x.toFixed(digits)) : Math.round(x);
+}
+
 const SPEND_BY_GL_TOP_N = 10;
+const VENDOR_TOP_N = 12;
+const REIMBURSEMENT_TYPE = "Reimbursement Individual";
+const REIMBURSEMENT_LABEL = "Employee reimbursements";
+
+// A reimbursement names who was repaid, not who was paid, so reimbursed staff are
+// grouped under one name: listing a person beside suppliers puts staff names on a chart
+// a client may see. The person stays on the entry as reimbursed_to. Ported from
+// build_manco_datadir.py's group_reimbursements.
+export function groupReimbursements(entries, reimbursedGluuids = new Set()) {
+  for (const e of entries) {
+    const flagged = e.vendor_type === REIMBURSEMENT_TYPE || reimbursedGluuids.has(e.gluuid);
+    const name = String(e.vendor || "").trim();
+    if (!flagged || !name || name === REIMBURSEMENT_LABEL) continue;
+    e.reimbursed_to = name;
+    e.vendor = REIMBURSEMENT_LABEL;
+    e.vendor_reimbursement = true;
+  }
+}
+
+// Expense spend by vendor, biggest first, as build_manco_datadir.py's build_vendor_spend.
+// The hosted app has no per-firm vendor config, so every vendor is the ledger's own.
+export function buildVendorSpend(entries) {
+  const byName = new Map();
+  let unattributed = 0;
+  for (const e of entries) {
+    if (e.kind !== "expense") continue;
+    // Signed, as every other chart sums it: a refund posts negative.
+    const amt = Number(e.amount) || 0;
+    if (!amt) continue;
+    const name = String(e.vendor || "").trim();
+    if (!name) { unattributed += amt; continue; }
+    const v = byName.get(name) || { vendor: name, amount: 0, count: 0, inferred_amount: 0 };
+    v.amount += amt;
+    v.count += 1;
+    byName.set(name, v);
+  }
+  const vendors = [...byName.values()].sort((a, b) => b.amount - a.amount);
+  const total = vendors.reduce((sum, v) => sum + v.amount, 0) + unattributed;
+  if (!total) return null;
+  // A vendor refunded more than it charged has no bar to draw; it stays in the totals.
+  const spending = vendors.filter((v) => v.amount > 0);
+  const rest = [...spending.slice(VENDOR_TOP_N), ...vendors.filter((v) => v.amount <= 0)];
+  return {
+    vendors: spending.slice(0, VENDOR_TOP_N).map((v) => ({ ...v, amount: pyRound(v.amount) })),
+    aggregated_count: 0,
+    other_amount: pyRound(rest.reduce((sum, v) => sum + v.amount, 0)),
+    other_count: rest.length,
+    unattributed_amount: pyRound(unattributed),
+    total_expense: pyRound(total),
+    inferred_total: 0,
+  };
+}
 
 function buildBudget(budgetByAccount, maxMo, year) {
   if (!budgetByAccount || !Object.keys(budgetByAccount).length) return null;
@@ -1304,7 +1422,404 @@ export function buildCashBalance(cashData, mancoEntityId, currency) {
   return { balance: match.total_balance, currency, by_currency: byCurrency, accounts, stale_account_count: staleCount, unavailable_reason: null };
 }
 
-export function buildData({ meta, mancoName, mancoUuid, mancoFundId, mancoEntity = null, entities = [], asOf, year, maxMo, monthLabels, currency, expenseRows, incomeRows, fundFeeRows, cashData, budgetByAccount }) {
+// ── Fee schedule (port of build_manco_datadir.py's fee chart) ──
+//
+// The chart reads the ManCo's own fee income (Query G), one bar per year, and fills
+// the in-progress year with what the fee schedule (Query F) still expects. Each
+// helper below is the Python function of the same name, kept step for step so the
+// hosted chart and the local one agree.
+
+const TOP_N_FUNDS = 8;
+// An unattributed entry this many times a quarter's scheduled fees is an onboarding
+// balance, not that quarter's income.
+const CONVERSION_MULTIPLE = 3;
+const QUARTER_LAST_DAY = { 1: 31, 2: 30, 3: 30, 4: 31 };
+// The ManCo's own receiving account fails both bars: every fund's fees land in it.
+const ACCOUNT_MIN_LINES = 5;
+const ACCOUNT_MIN_SHARE = 0.8;
+const FUND_SERIES_RX = /\b([IVXL]+|\d+)\b\s*(?:,|$|\s)/gi;
+const FUND_LEGAL_SUFFIX_RX = /,?\s*\(?(LLC|L\.L\.C\.|LP|L\.P\.|Ltd\.?|Inc\.?|Corp\.?)\)?\.?\s*$/i;
+const MEMO_ACCOUNT_RX = /(?:ACCOUNT\s+X*(\d{4,})|\*\*\s*(\d{4,}))/gi;
+
+const isoDate = (y, m, d) => `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+const quarterOf = (mo) => Math.floor((mo - 1) / 3) + 1;
+const escapeRx = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// The ways a journal memo might name this fund, most specific first: its name, the
+// house shorthand (initials plus series, "UVFIII"), or "Fund III".
+function memoFundPatterns(name) {
+  const bare = String(name || "").replace(FUND_LEGAL_SUFFIX_RX, "").replace(/^[ ,]+|[ ,]+$/g, "");
+  const words = bare.match(/[A-Za-z0-9]+/g) || [];
+  if (!words.length) return [];
+  const series = [...`${bare} `.matchAll(FUND_SERIES_RX)].pop()?.[1] || null;
+  const pats = [escapeRx(bare)];
+  if (series) {
+    const initials = words.filter((w) => w.toLowerCase() !== series.toLowerCase()).map((w) => w[0]).join("");
+    pats.push(escapeRx(`${initials}${series}`));
+    pats.push(`fund\\s+${escapeRx(series)}`);
+  }
+  return pats;
+}
+
+// Which fund a memo names, or null. Longest match wins, so "Fund III" never reads as "Fund I".
+export function inferFundFromMemo(descr, candidates) {
+  const text = ` ${descr || ""} `;
+  let best = null;
+  for (const [uuid, name] of candidates) {
+    for (const pat of memoFundPatterns(name)) {
+      const m = text.match(new RegExp(`(?<![A-Za-z0-9])${pat}(?![A-Za-z0-9])`, "i"));
+      if (m && (!best || m[0].length > best[2])) best = [uuid, name, m[0].length];
+    }
+  }
+  return best ? [best[0], best[1]] : null;
+}
+
+function memoBankAccounts(descr) {
+  return new Set([...String(descr || "").matchAll(MEMO_ACCOUNT_RX)].map((m) => (m[1] || m[2]).slice(-4)));
+}
+
+// Which fund each bank account belongs to, learned from lines that name their fund.
+function learnBankAccounts(rows, fundOf) {
+  const tally = new Map();
+  for (const row of rows) {
+    const uuid = fundOf(row);
+    if (!uuid) continue;
+    for (const acct of memoBankAccounts(row.descr)) {
+      if (!tally.has(acct)) tally.set(acct, new Map());
+      const funds = tally.get(acct);
+      funds.set(uuid, (funds.get(uuid) || 0) + 1);
+    }
+  }
+  const learned = new Map();
+  for (const [acct, funds] of tally) {
+    let top = null;
+    let total = 0;
+    for (const [uuid, n] of funds) {
+      total += n;
+      if (!top || n > top[1]) top = [uuid, n];
+    }
+    if (top[1] >= ACCOUNT_MIN_LINES && top[1] / total >= ACCOUNT_MIN_SHARE) learned.set(acct, top[0]);
+  }
+  return learned;
+}
+
+// fund_uuid -> its live fee periods, and the one in force on a date. A waived period,
+// or one on a basis this builder cannot compute, carries no rate it could apply.
+function fundSchedules(terms) {
+  const schedules = new Map();
+  for (const t of terms || []) {
+    if (t.fee_rate == null || t.uses_custom_calculation_base || t.waived) continue;
+    if (!schedules.has(t.fund_uuid)) schedules.set(t.fund_uuid, []);
+    schedules.get(t.fund_uuid).push({
+      start: t.start_date.slice(0, 10),
+      // An open-ended period is the one most likely in force now.
+      end: t.end_date ? t.end_date.slice(0, 10) : "9999-12-31",
+      rate: t.fee_rate, name: t.period_name, basis: t.calculation_base,
+    });
+  }
+  const periodOn = (uid, d) => (schedules.get(uid) || []).find((p) => p.start <= d && d <= p.end) || null;
+  return { schedules, periodOn };
+}
+
+// fund_uuid -> committed capital, back-solved from the fee the fund bills most often.
+function inferCommitted(entries, periodOn, fundUuids, ytdYear) {
+  const committed = new Map();
+  for (const uid of fundUuids) {
+    const byRate = new Map();
+    const own = entries.filter((e) => e.fund_uuid === uid && e.amount > 0)
+      .sort((a, b) => (a.yr - b.yr) || (a.mo - b.mo));
+    for (const e of own) {
+      const p = periodOn(uid, isoDate(e.yr, e.mo, 15));
+      if (p && p.rate > 0) {
+        if (!byRate.has(p.rate)) byRate.set(p.rate, []);
+        byRate.get(p.rate).push(pyRound(e.amount, 2));
+      }
+    }
+    const rateNow = periodOn(uid, isoDate(ytdYear, 7, 1))?.rate;
+    const rate = byRate.has(rateNow) ? rateNow : (byRate.keys().next().value ?? null);
+    if (!rate) continue;
+    const amounts = byRate.get(rate);
+    // Most frequent; on a tie, the one first seen latest (Python's max over (count, index)).
+    let modal = null;
+    let key = null;
+    for (const a of new Set(amounts)) {
+      const k = [amounts.filter((x) => x === a).length, amounts.indexOf(a)];
+      if (!key || k[0] > key[0] || (k[0] === key[0] && k[1] > key[1])) { modal = a; key = k; }
+    }
+    committed.set(uid, modal / (rate / 4));
+  }
+  return committed;
+}
+
+// What the schedule says one quarter is worth, or null where it does not cover it.
+function quarterEstimate(periodOn, uid, cap, yr, q) {
+  const p = periodOn(uid, isoDate(yr, 3 * q - 2, 1)) || periodOn(uid, isoDate(yr, 3 * q, QUARTER_LAST_DAY[q]));
+  if (!p || !p.rate) return null;
+  return [p, pyRound(cap * p.rate / 4, 2)];
+}
+
+const quarterDetail = (p, yr, q, amount) => ({
+  quarterLabel: `Q${q} ${yr}`,
+  periodName: p.name,
+  startDate: isoDate(yr, 3 * q - 2, 1),
+  endDate: isoDate(yr, 3 * q, QUARTER_LAST_DAY[q]),
+  feeRate: p.rate,
+  basis: p.basis,
+  amount,
+});
+
+// Split the ManCo's booked fee income across the funds it billed. The booked dollars
+// are always the amount; the schedule only decides whose they were.
+function allocateMancoFees(mancoEntries, terms, fundUuids, ytdYear, committedEntries, years) {
+  const { periodOn } = fundSchedules(terms);
+  const committed = inferCommitted(committedEntries, periodOn, fundUuids, ytdYear);
+  const byFundYear = new Map();   // `${uid}|${yr}` -> amount
+  const unlinked = new Map();     // `${yr}|${q}` -> amount
+  const bookedQuarters = new Set();
+  const unattributed = new Map(); // yr -> amount
+  const conversions = new Map();
+  const detail = new Map();       // `${uid}|${yr}` -> [quarter]
+  const add = (m, k, v) => m.set(k, (m.get(k) || 0) + v);
+  for (const e of mancoEntries) {
+    const q = quarterOf(e.mo);
+    if (e.fund_uuid) {
+      add(byFundYear, `${e.fund_uuid}|${e.yr}`, e.amount);
+      if (e.amount > 0) bookedQuarters.add(`${e.fund_uuid}|${e.yr}|${q}`);
+    } else {
+      add(unlinked, `${e.yr}|${q}`, e.amount);
+    }
+  }
+  for (const [k, amt] of unlinked) {
+    if (!amt) continue;
+    const [yr, q] = k.split("|").map(Number);
+    let scheduled = 0;
+    for (const uid of fundUuids) {
+      const cap = committed.get(uid);
+      const est = cap && quarterEstimate(periodOn, uid, cap, yr, q);
+      if (est) scheduled += est[1];
+    }
+    if (scheduled > 0 && amt > CONVERSION_MULTIPLE * scheduled) { add(conversions, yr, amt); continue; }
+    // Neither the line nor its memo says whose this was; spreading it by schedule would
+    // put a figure under a fund's name that nothing attributes to it.
+    add(unattributed, yr, amt);
+  }
+  // A year the ManCo booked nothing for: its books start later than the chart does.
+  const bookedYears = new Set(mancoEntries.filter((e) => e.amount).map((e) => e.yr).filter((y) => !conversions.has(y)));
+  for (const yr of years) {
+    if (bookedYears.has(yr) || yr >= ytdYear) continue;
+    for (const uid of fundUuids) {
+      const cap = committed.get(uid);
+      if (!cap) continue;
+      for (const q of [1, 2, 3, 4]) {
+        const est = quarterEstimate(periodOn, uid, cap, yr, q);
+        if (!est) continue;
+        const [p, amount] = est;
+        add(byFundYear, `${uid}|${yr}`, amount);
+        if (!detail.has(`${uid}|${yr}`)) detail.set(`${uid}|${yr}`, []);
+        detail.get(`${uid}|${yr}`).push(quarterDetail(p, yr, q, amount));
+      }
+    }
+  }
+  for (const quarters of detail.values()) quarters.sort((a, b) => (a.quarterLabel < b.quarterLabel ? -1 : 1));
+  return { byFundYear, bookedQuarters, unattributed, detail };
+}
+
+// What each fund's schedule still expects this year, by quarter: a quarter covered at a
+// live rate that nothing has posted for yet.
+function expectedRemainingThisYear(fundFeeEntries, terms, topFundUuids, displayName, ytdYear, bookedQuarters) {
+  if (!terms.length) return [];
+  const { periodOn } = fundSchedules(terms);
+  const committed = inferCommitted(fundFeeEntries, periodOn, topFundUuids, ytdYear);
+  const out = [];
+  for (const uid of topFundUuids) {
+    const cap = committed.get(uid);
+    const name = displayName.get(uid);
+    if (!cap || !name) continue;
+    // Any posting marks the quarter billed, so a part-booked quarter is not topped up.
+    const posted = new Set([...bookedQuarters].map((k) => k.split("|"))
+      .filter(([u, y]) => u === uid && Number(y) === ytdYear).map(([, , q]) => Number(q)));
+    const quarters = [];
+    for (const q of [1, 2, 3, 4]) {
+      if (posted.has(q)) continue;
+      const est = quarterEstimate(periodOn, uid, cap, ytdYear, q);
+      if (est) quarters.push(quarterDetail(est[0], ytdYear, q, est[1]));
+    }
+    if (quarters.length) {
+      out.push({
+        name, committedCapital: pyRound(cap),
+        amount: pyRound(quarters.reduce((s, x) => s + x.amount, 0), 2), quarters,
+      });
+    }
+  }
+  return out;
+}
+
+// Annual fees projected through each fund's schedule end, from committed capital
+// back-solved from the latest quarterly fee.
+function buildFeeProjections(fundFeeEntries, terms, topFundUuids, displayName, ytdYear) {
+  const schedules = new Map();
+  for (const t of terms) {
+    // A period with no end date has no year to project to.
+    if (t.fee_rate == null || t.uses_custom_calculation_base || t.waived || !t.end_date) continue;
+    if (!schedules.has(t.fund_uuid)) schedules.set(t.fund_uuid, []);
+    schedules.get(t.fund_uuid).push({ start: t.start_date.slice(0, 10), end: t.end_date.slice(0, 10), rate: t.fee_rate });
+  }
+  const rateOn = (uid, d) => (schedules.get(uid) || []).find((p) => p.start <= d && d <= p.end)?.rate ?? null;
+  const committed = new Map();
+  for (const uid of topFundUuids) {
+    const own = fundFeeEntries.filter((e) => e.fund_uuid === uid && e.amount > 0)
+      .sort((a, b) => (b.yr - a.yr) || (b.mo - a.mo));
+    for (const e of own) {
+      const r = rateOn(uid, isoDate(e.yr, e.mo, 15));
+      if (r && r > 0) { committed.set(uid, e.amount / (r / 4)); break; }
+    }
+  }
+  if (!committed.size) return { labels: [], funds: [] };
+  const lastYear = Math.max(...[...committed.keys()].flatMap((uid) => (schedules.get(uid) || []).map((p) => Number(p.end.slice(0, 4)))));
+  const futureYears = [];
+  for (let y = ytdYear + 1; y <= Math.max(lastYear, ytdYear); y++) futureYears.push(y);
+  const funds = [];
+  for (const uid of topFundUuids) {
+    const cap = committed.get(uid);
+    const name = displayName.get(uid);
+    if (!cap || !name) continue;
+    const data = futureYears.map((y) => { const r = rateOn(uid, isoDate(y, 7, 1)); return r ? pyRound(cap * r, 2) : null; });
+    if (data.some((v) => v != null)) funds.push({ name, data, committedCapital: pyRound(cap) });
+  }
+  return funds.length ? { labels: futureYears.map(String), funds } : { labels: [], funds: [] };
+}
+
+// Contracted schedule terms (Query F), typed as build_manco_datadir.py's read_fee_schedule_terms.
+export function normalizeFeeTerm(r) {
+  const c = (k) => { const v = col(r, k); return v == null ? null : String(v).trim() || null; };
+  const numOrNull = (k) => (c(k) ? Number(c(k)) : null);
+  return {
+    fund: c("fund") || "", fund_uuid: c("fund_uuid") || "", period_name: c("period_name"),
+    fee_rate: numOrNull("fee_rate"), calculation_base: c("calculation_base"),
+    minimum_fee_amount: numOrNull("minimum_fee_amount"), fixed_fee_amount: numOrNull("fixed_fee_amount"),
+    fee_currency: c("fee_currency"), frequency: c("frequency"),
+    waived: (c("waived") || "").toLowerCase() === "true",
+    start_date: c("start_date"), end_date: c("end_date"),
+    period_order: c("period_order") ? parseInt(c("period_order"), 10) : 0,
+    uses_custom_calculation_base: (c("uses_custom_calculation_base") || "").toLowerCase() === "true",
+  };
+}
+
+// The fee chart and the fee entries its drill-down reads, as build_manco_datadir.py
+// builds them. `fundFeeRows` and `mancoFeeRows` are normalized rows (normalizeFeeRow).
+export function buildFeeSchedule({ fundFeeRows, mancoFeeRows, terms, entities, mancoCartaId, ytdYear }) {
+  const roster = new Map(entities.filter((e) => e.id != null).map((e) => [Number(e.id), e]));
+  const candidates = entities.filter((e) => e.uuid && e.name).map((e) => [e.uuid, e.name]);
+  const rosterName = new Map(candidates);
+  // Case-blind: the ledger and the entity list need not case a UUID alike.
+  const cartaIdByUuid = new Map(entities.filter((e) => e.uuid).map((e) => [String(e.uuid).toLowerCase(), e.carta_id ?? null]));
+
+  const fundTotals = new Map();
+  const fundName = new Map();
+  const add = (m, k, v) => m.set(k, (m.get(k) || 0) + v);
+  for (const r of fundFeeRows) {
+    fundName.set(r.fundUuid, r.fund);
+    // Every year: a fund that has finished billing still owns the years it billed.
+    add(fundTotals, r.fundUuid, r.amount);
+  }
+
+  const keyedFund = (row) => roster.get(Number(row.relatedEntityId) || 0)?.uuid || null;
+  const namedFund = (row) => keyedFund(row) || inferFundFromMemo(row.descr, candidates)?.[0] || null;
+  // A fee wired from a fund's own account was that fund's fee.
+  const bankAccounts = learnBankAccounts(mancoFeeRows, namedFund);
+  const mancoFund = (row) => {
+    const keyed = keyedFund(row);
+    if (keyed) return [keyed, rosterName.get(keyed), false];
+    const hit = inferFundFromMemo(row.descr, candidates);
+    if (hit) return [hit[0], hit[1], true];
+    for (const acct of memoBankAccounts(row.descr)) {
+      const uuid = bankAccounts.get(acct);
+      if (uuid) return [uuid, rosterName.get(uuid), true];
+    }
+    return [null, null, false];
+  };
+  // A fund the ManCo bills need not appear on the fund side; rank it on what the ManCo booked.
+  for (const r of mancoFeeRows) {
+    const [uid, name] = mancoFund(r);
+    if (!uid) continue;
+    if (!fundName.has(uid)) fundName.set(uid, name || uid);
+    add(fundTotals, uid, r.amount);
+  }
+
+  const topFundUuids = [...fundTotals.entries()].sort((a, b) => b[1] - a[1]).slice(0, TOP_N_FUNDS).map(([u]) => u);
+  const displayName = new Map(topFundUuids.map((u) => [u, fundName.get(u) ?? u]));
+
+  const fundFeeEntries = fundFeeRows.map((r) => ({
+    ...toFeeEntry(r),
+    display_fund: displayName.get(r.fundUuid) || "Other funds",
+    // The entity this journal is booked on, never another one.
+    entity_carta_id: cartaIdByUuid.get(String(r.fundUuid).toLowerCase()) ?? null,
+  }));
+  const mancoFeeEntries = mancoFeeRows.map((r) => {
+    const [uid, name, inferred] = mancoFund(r);
+    return {
+      id: r.id, gluuid: r.gluuid, fund: uid ? (name || "") : "", fund_uuid: uid || "",
+      date: r.date, yr: r.yr, mo: r.mo, account: r.account, acct_type: r.acctType,
+      sub: null, amount: r.amount, description: r.descr, vendor: null, partner: null,
+      event_type: r.eventType || null, tags: [],
+      display_fund: uid ? (displayName.get(uid) || "Other funds") : "Unattributed",
+      // Read off the memo rather than named by the line; carried so the reader is told.
+      fund_inferred: inferred,
+      // Booked on the ManCo, whichever fund it bills.
+      entity_carta_id: mancoCartaId ?? null,
+    };
+  });
+
+  // Without ManCo fee lines, fall back to the fund side rather than a wholly estimated year.
+  const mancoAnchored = mancoFeeEntries.length > 0;
+  const seriesEntries = mancoAnchored ? mancoFeeEntries : fundFeeEntries;
+  const years = [...new Set([...fundFeeEntries, ...seriesEntries].map((e) => e.yr))].sort((a, b) => a - b);
+  const perYearByName = new Map();
+  const addYear = (name, yr, amt) => {
+    if (!perYearByName.has(name)) perYearByName.set(name, new Map());
+    add(perYearByName.get(name), yr, amt);
+  };
+  let bookedQuarters;
+  const scheduleBasis = {};
+  if (mancoAnchored) {
+    const alloc = allocateMancoFees(mancoFeeEntries, terms, topFundUuids, ytdYear, fundFeeEntries, years);
+    bookedQuarters = alloc.bookedQuarters;
+    for (const [k, quarters] of alloc.detail) {
+      const [uid, yr] = k.split("|");
+      const name = displayName.get(uid);
+      if (name) (scheduleBasis[name] ||= {})[yr] = quarters;
+    }
+    for (const [k, amt] of alloc.byFundYear) {
+      const [uid, yr] = k.split("|");
+      addYear(displayName.get(uid) || "Other funds", Number(yr), amt);
+    }
+    if ([...alloc.unattributed.values()].some(Boolean)) perYearByName.set("Unattributed", alloc.unattributed);
+  } else {
+    bookedQuarters = new Set(seriesEntries.filter((e) => e.fund_uuid && e.amount > 0)
+      .map((e) => `${e.fund_uuid}|${e.yr}|${quarterOf(e.mo)}`));
+    for (const e of seriesEntries) addYear(e.display_fund, e.yr, e.amount);
+  }
+
+  const funds = [];
+  for (const name of [...topFundUuids.map((u) => displayName.get(u)), "Other funds", "Unattributed"]) {
+    const perYear = perYearByName.get(name) || new Map();
+    const data = years.map((y) => pyRound(perYear.get(y) || 0, 2));
+    if (data.some(Boolean)) funds.push({ name, data });
+  }
+  const feeSchedule = { labels: years.map((y) => (y === ytdYear ? `${y} YTD` : String(y))), funds };
+  if (Object.keys(scheduleBasis).length) feeSchedule.scheduleBasis = scheduleBasis;
+  const projected = buildFeeProjections(fundFeeEntries, terms, topFundUuids, displayName, ytdYear);
+  if (projected.labels.length) {
+    feeSchedule.projectedLabels = projected.labels;
+    feeSchedule.projectedFunds = projected.funds;
+  }
+  // A quarter counts as billed when the ManCo booked it, which is what the chart reports.
+  const expected = expectedRemainingThisYear(fundFeeEntries, terms, topFundUuids, displayName, ytdYear, bookedQuarters);
+  if (expected.length) feeSchedule.expectedRemaining = expected;
+  return { feeSchedule, fundFeeEntries, mancoFeeEntries };
+}
+
+export function buildData({ meta, mancoName, mancoUuid, mancoFundId, mancoEntity = null, entities = [], asOf, year, maxMo, monthLabels, currency, expenseRows, incomeRows, fundFeeRows, mancoFeeRows = [], feeTermRows = [], cashData, budgetByAccount, reimbursementGluuids = [] }) {
   const expenses = expenseRows.map(normalizeRow);
   const income = incomeRows.map(normalizeRow);
   const allRows = [...expenses, ...income];
@@ -1363,33 +1878,16 @@ export function buildData({ meta, mancoName, mancoUuid, mancoFundId, mancoEntity
     accounts: Object.entries(spendByAccount)
       .sort((a, b) => b[1] - a[1])
       .slice(0, SPEND_BY_GL_TOP_N)
-      .map(([name, actual]) => ({ name, actual: Math.round(actual), budget: Math.round(budgetPerAccount[name] || 0) })),
+      .map(([name, actual]) => ({ name, actual: pyRound(actual), budget: pyRound(budgetPerAccount[name] || 0) })),
   };
 
-  // Fee schedule: one bar per year, as build_manco_datadir.py has it. Closed years are
-  // full years; the current one is booked to date.
-  const fees = fundFeeRows.map(normalizeFeeRow);
-  const feeYears = [...new Set(fees.map(r => r.yr).filter(Number.isFinite))].sort((a, b) => a - b);
-  const fundTotals = {};
-  const fundNames = {};
-  const fundYearly = {};
-  for (const r of fees) {
-    if (!fundTotals[r.fundUuid]) {
-      fundTotals[r.fundUuid] = 0;
-      fundNames[r.fundUuid] = r.fund;
-      fundYearly[r.fundUuid] = new Array(feeYears.length).fill(0);
-    }
-    fundTotals[r.fundUuid] += r.amount;
-    fundYearly[r.fundUuid][feeYears.indexOf(r.yr)] += r.amount;
-  }
-  const fundEntries = Object.entries(fundTotals)
-    .sort((a, b) => b[1] - a[1])
-    .map(([uuid, total]) => ({
-      name: fundNames[uuid], uuid,
-      ytdFees: round2(total),
-      data: fundYearly[uuid].map(round2),
-    }));
-  const feeLabels = feeYears.map(y => (y === year ? `${y} YTD` : String(y)));
+  // Fee schedule, and the fee entries its drill-down reads.
+  const feeTerms = feeTermRows.map(normalizeFeeTerm);
+  const { feeSchedule, fundFeeEntries, mancoFeeEntries } = buildFeeSchedule({
+    fundFeeRows: fundFeeRows.map(normalizeFeeRow),
+    mancoFeeRows: mancoFeeRows.map(normalizeFeeRow),
+    terms: feeTerms, entities, mancoCartaId: mancoEntity?.carta_id, ytdYear: year,
+  });
 
   // Cash balance. Query D (currency, above) is empty for a ManCo not in
   // AGGREGATE_FUND_METRICS; cash then names the currency only when it holds
@@ -1403,15 +1901,10 @@ export function buildData({ meta, mancoName, mancoUuid, mancoFundId, mancoEntity
     ...expenses.map(r => toEntry(r, "expense")),
     ...income.map(r => toEntry(r, "income")),
   ];
+  // On the entries, so the vendor chart and its drill-down name the same vendor.
+  groupReimbursements(entries, new Set(reimbursementGluuids));
+  const vendorSpend = buildVendorSpend(entries);
 
-  const cartaIdByUuid = Object.fromEntries(
-    entities.filter((e) => e.uuid && e.carta_id).map((e) => [String(e.uuid).toLowerCase(), e.carta_id]));
-  const fundFeeEntries = fees.map((r) => ({
-    ...toFeeEntry(r),
-    // The fee chart names each fund by its own name; the drill-down matches on it.
-    display_fund: fundNames[r.fundUuid],
-    entity_carta_id: cartaIdByUuid[String(r.fundUuid || "").toLowerCase()] || null,
-  }));
 
   const snapshot = {
     firmName: meta.name,
@@ -1434,10 +1927,8 @@ export function buildData({ meta, mancoName, mancoUuid, mancoFundId, mancoEntity
       expenses: mExpense.map(round2),
     },
     spendByGL,
-    feeSchedule: {
-      labels: feeLabels,
-      funds: fundEntries,
-    },
+    vendorSpend,
+    feeSchedule,
     cash,
     budget,
   };
@@ -1447,8 +1938,8 @@ export function buildData({ meta, mancoName, mancoUuid, mancoFundId, mancoEntity
     monthly_categories: { labels: monthLabels, categories },
     entries,
     fund_fee_entries: fundFeeEntries,
-    manco_fee_entries: [],
-    fee_schedule_terms: [],
+    manco_fee_entries: mancoFeeEntries,
+    fee_schedule_terms: feeTerms,
   };
 
   return { snapshot, accounts: accountsData };

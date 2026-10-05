@@ -320,9 +320,51 @@ function frtRowMatchesSearch(r, q) {
   return (r.children || []).some(c => frtRowMatchesSearch(c, q));
 }
 
+// A selected row, or a family nesting a selected member: a member stays under
+// its family row, so the family has to answer for it.
+function frtRowMatchesEntities(r, ids) {
+  return ids.includes(r.id) || (r.children || []).some(c => ids.includes(c.id));
+}
+
 function frtFilterRows(rows, st) {
   const q = String(st.search || "").trim().toLowerCase();
-  return rows.filter(r => (!st.statusFilter || frtNeedsAction(r)) && (!q || frtRowMatchesSearch(r, q)));
+  const ids = st.entityFilters || [];
+  return rows.filter(r => (!st.statusFilter || frtNeedsAction(r))
+    && (!q || frtRowMatchesSearch(r, q))
+    && (!ids.length || frtRowMatchesEntities(r, ids)));
+}
+
+// ── Entity filter ──────────────────────────────────────────────────────────
+
+const FRT_ALL_ENTITIES = "All entities";
+// A selection with no row this period: the entity may simply have nothing to report.
+const FRT_UNRESOLVED_ENTITY = "Entity: unresolved";
+const FRT_GROUPS = [["funds", "Funds & SPVs"], ["gp", "GP Entities & Management Companies"]];
+
+// The trigger reads "All entities" while loading, so a kept selection never
+// flashes as unresolved before the period's rows arrive.
+function frtEntityFilterLabel(rows, ids, loading) {
+  if (loading || !ids.length) return FRT_ALL_ENTITIES;
+  if (ids.length > 1) return `${ids.length} entities`;
+  const named = rows.flatMap(r => [r].concat(r.children || [])).find(r => r.id === ids[0]);
+  return named ? `Entity: ${named.name}` : FRT_UNRESOLVED_ENTITY;
+}
+
+function frtToggleEntities(ids, toggled, on) {
+  return on ? [...new Set(ids.concat(toggled))] : ids.filter(id => !toggled.includes(id));
+}
+
+// A family's own box reflects every member, even one the menu's search hides.
+function frtFamilyCheckState(row, ids) {
+  const picked = row.children.filter(c => ids.includes(c.id)).length;
+  return { checked: picked === row.children.length, indeterminate: picked > 0 && picked < row.children.length };
+}
+
+// Every expandable row open: what the table shows once a filter narrows it.
+function frtOpenAll(rows) {
+  const open = {};
+  rows.filter(frtIsExpandable).forEach(r => { open[r.id] = true; });
+  return open;
 }
 
 // ── Reading ────────────────────────────────────────────────────────────────
@@ -477,6 +519,8 @@ function frtReset(target, title) {
     error: null,
     search: "",
     statusFilter: null,
+    entityFilters: [],
+    entitySearch: "",
     sort: { key: "due_date", direction: "ascending" },
     openRows: {},
     menu: null,
@@ -498,8 +542,11 @@ async function frtLoad() {
   }
   if (_frt !== snap) return;
   snap.loading = false;
-  if (payload) snap.payload = payload;
-  else snap.error = "We could not load the tracker for this period. Try again, or pick another period.";
+  if (payload) {
+    snap.payload = payload;
+    // The selection survives a period change, and a narrowed table opens up.
+    if (snap.entityFilters.length) snap.openRows = frtOpenAll(frtBuildRows(payload));
+  } else snap.error = "We could not load the tracker for this period. Try again, or pick another period.";
   frtRender();
 }
 
@@ -586,7 +633,7 @@ function frtRenderTable() {
     ${frtHeader("soi_review", "SOI Review")}
     ${frtHeader("financial_report", "Financial Report")}
     <th class="frt-c-act"></th></tr></thead><tbody>`;
-  [["funds", "Funds & SPVs"], ["gp", "GP Entities & Management Companies"]].forEach(([g, title]) => {
+  FRT_GROUPS.forEach(([g, title]) => {
     const rows = shown.filter(r => r.group === g);
     if (!rows.length) return;
     html += `<tr class="frt-group"><td colspan="7">${escHtml(title)} (${rows.length})</td></tr>`;
@@ -604,13 +651,67 @@ function frtRenderTable() {
   return html + "</tbody></table></div>";
 }
 
+function frtEntityCheck(id, label, checked, attr, extra) {
+  return `<label class="frt-check${extra || ""}"><input type="checkbox" ${attr}="${escHtml(id)}"${checked ? " checked" : ""}><span>${escHtml(label)}</span></label>`;
+}
+
+// The menu's own search narrows the options, never the table.
+function frtRenderEntityOptions(rows) {
+  const ids = _frt.entityFilters;
+  const q = _frt.entitySearch.trim().toLowerCase();
+  const matches = name => !q || String(name).toLowerCase().includes(q);
+  let html = "";
+  FRT_GROUPS.forEach(([g, title]) => {
+    const visible = rows.filter(r => r.group === g && (matches(r.name) || r.children.some(c => matches(c.name))));
+    if (!visible.length) return;
+    html += `<div class="frt-check-head">${escHtml(title)}</div>`;
+    visible.forEach(r => {
+      if (!r.children.length) { html += frtEntityCheck(r.id, r.name, ids.includes(r.id), "data-frt-entity"); return; }
+      const fam = frtFamilyCheckState(r, ids);
+      html += frtEntityCheck(r.id, r.name, fam.checked, "data-frt-entity-family");
+      (matches(r.name) ? r.children : r.children.filter(c => matches(c.name))).forEach(c => {
+        html += frtEntityCheck(c.id, c.name, ids.includes(c.id), "data-frt-entity", " frt-check-member");
+      });
+    });
+  });
+  return html || '<div class="frt-check-head">No entities match your search.</div>';
+}
+
+function frtRenderEntityMenu() {
+  const rows = _frt.payload ? frtBuildRows(_frt.payload) : [];
+  const label = frtEntityFilterLabel(rows, _frt.entityFilters, _frt.loading);
+  const open = _frt.menu === "entity";
+  return `<div class="frt-menu${open ? " frt-menu-open" : ""}">
+    <button class="frt-btn frt-btn-md frt-entity-trigger" type="button" data-frt-menu="entity" aria-haspopup="true" aria-expanded="${open}">${escHtml(label)} <span class="frt-chev">▾</span></button>
+    <div class="frt-menu-list frt-entity-menu">
+      <input class="frt-entity-search" type="search" aria-label="Filter entities" placeholder="Filter entities" value="${escHtml(_frt.entitySearch)}" data-frt-entity-search>
+      <div class="frt-entity-scroll">
+        ${frtEntityCheck("all", FRT_ALL_ENTITIES, !_frt.entityFilters.length, "data-frt-entity-all")}
+        <div class="frt-menu-sep"></div>
+        ${frtRenderEntityOptions(rows)}
+      </div>
+    </div>
+  </div>`;
+}
+
+// The table opens every row once a filter narrows it, and folds back when cleared.
+function frtSetEntityFilters(ids) {
+  const wasScoped = _frt.entityFilters.length > 0;
+  _frt.entityFilters = ids;
+  if (wasScoped !== (ids.length > 0)) {
+    _frt.openRows = ids.length && _frt.payload ? frtOpenAll(frtBuildRows(_frt.payload)) : {};
+  }
+  frtRender();
+}
+
 function frtRenderToolbar() {
   const activeSort = FRT_SORTS.find(s => s.key === _frt.sort.key) || FRT_SORTS[0];
   const trigger = _frt.statusFilter ? "Needs action" : `Sort by ${activeSort.label}`;
-  const canReset = _frt.search || _frt.statusFilter || _frt.sort.key !== "due_date" || _frt.sort.direction !== "ascending";
+  const canReset = _frt.search || _frt.statusFilter || _frt.entityFilters.length || _frt.sort.key !== "due_date" || _frt.sort.direction !== "ascending";
   const periods = _frt.window.slice().reverse();
   return `<div class="frt-toolbar">
     <div class="frt-toolbar-left">
+      ${frtRenderEntityMenu()}
       <div class="frt-menu${_frt.menu === "sort" ? " frt-menu-open" : ""}">
         <button class="frt-btn frt-btn-md" type="button" data-frt-menu="sort" aria-haspopup="menu" aria-expanded="${_frt.menu === "sort"}">${escHtml(trigger)} <span class="frt-chev">▾</span></button>
         <div class="frt-menu-list" role="menu">
@@ -641,11 +742,21 @@ function frtRenderBody() {
   return frtRenderTable();
 }
 
+const FRT_SCROLLERS = [".frt-table-wrap", ".frt-entity-scroll"];
+
 function frtRender() {
   const overlay = document.getElementById("frt-overlay");
   if (!overlay || !_frt) return;
   const firm = _frt.payload ? _frt.payload.firm_name : "";
   const deep = _frt.payload ? frtDeepLink(_frt.payload, _frt.period) : null;
+  // Every interaction rebuilds the panel, so the table and the entity menu keep their
+  // scroll positions and the menu's search keeps focus.
+  const scrolls = FRT_SCROLLERS.map(sel => {
+    const el = overlay.querySelector(sel);
+    return el ? [el.scrollTop, el.scrollLeft] : null;
+  });
+  const prevSearch = overlay.querySelector("[data-frt-entity-search]");
+  const caret = prevSearch && document.activeElement === prevSearch ? prevSearch.selectionStart : null;
   overlay.innerHTML = `
     <div class="far-panel frt-panel" role="dialog" aria-label="Financial Reporting Tracker">
       <div class="far-panel-header frt-header">
@@ -667,6 +778,15 @@ function frtRender() {
       </div>
     </div>`;
   frtBind(overlay);
+  FRT_SCROLLERS.forEach((sel, i) => {
+    const el = overlay.querySelector(sel);
+    if (el && scrolls[i]) [el.scrollTop, el.scrollLeft] = scrolls[i];
+  });
+  const search = overlay.querySelector("[data-frt-entity-search]");
+  if (search && caret != null) {
+    search.focus();
+    try { search.setSelectionRange(caret, caret); } catch (e) { /* not a text input in every host */ }
+  }
 }
 
 function frtBind(root) {
@@ -713,8 +833,23 @@ function frtBind(root) {
   }));
   root.querySelectorAll("[data-frt-reset]").forEach(b => b.addEventListener("click", () => {
     _frt.search = ""; _frt.statusFilter = null; _frt.sort = { key: "due_date", direction: "ascending" };
-    frtRender();
+    _frt.entitySearch = "";
+    frtSetEntityFilters([]);
   }));
+  root.querySelectorAll("[data-frt-entity-all]").forEach(b => b.addEventListener("change", () => frtSetEntityFilters([])));
+  root.querySelectorAll("[data-frt-entity]").forEach(b => b.addEventListener("change", () =>
+    frtSetEntityFilters(frtToggleEntities(_frt.entityFilters, [b.dataset.frtEntity], b.checked))));
+  root.querySelectorAll("[data-frt-entity-family]").forEach(b => {
+    const row = frtBuildRows(_frt.payload).find(r => r.id === b.dataset.frtEntityFamily);
+    if (!row) return;
+    b.indeterminate = frtFamilyCheckState(row, _frt.entityFilters).indeterminate;
+    b.addEventListener("change", () =>
+      frtSetEntityFilters(frtToggleEntities(_frt.entityFilters, row.children.map(c => c.id), b.checked)));
+  });
+  const entitySearch = root.querySelector("[data-frt-entity-search]");
+  if (entitySearch) {
+    entitySearch.addEventListener("input", () => { _frt.entitySearch = entitySearch.value; frtRender(); });
+  }
   root.querySelectorAll("[data-frt-retry]").forEach(b => b.addEventListener("click", () => frtLoad()));
   const input = root.querySelector("[data-frt-search]");
   if (input) {

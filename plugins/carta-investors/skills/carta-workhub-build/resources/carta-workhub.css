@@ -1401,6 +1401,24 @@
 .frt-menu-item:hover { background: var(--ink-color-global-surface-background-underlay); }
 .frt-menu-on::after { content: "✓"; color: var(--ink-color-global-text-subtle); }
 .frt-menu-sep { border-top: 1px solid var(--ink-color-global-border-subtle); margin: 6px 0; }
+.frt-entity-menu { width: 320px; max-width: 90vw; }
+/* A long entity name wraps inside the trigger rather than pushing the toolbar apart. */
+.frt-entity-trigger { max-width: 280px; height: auto; min-height: 32px; padding-block: 6px; white-space: normal; text-align: left; line-height: 18px; }
+.frt-entity-search {
+  box-sizing: border-box; width: 100%; height: 32px; padding: 0 10px; margin-bottom: 6px;
+  font: inherit; font-size: 13px; color: var(--ink-color-global-text-default);
+  border: 1px solid var(--ink-color-global-border-default); border-radius: var(--ink-size-global-radius-subtle);
+  background: var(--ink-color-global-surface-background-default);
+}
+.frt-entity-scroll { max-height: min(360px, 50vh); overflow-y: auto; }
+.frt-check-head { padding: 8px 10px 4px; font-size: 12px; font-weight: 600; color: var(--ink-color-global-text-subtle); }
+.frt-check {
+  display: flex; align-items: flex-start; gap: 8px; padding: 6px 10px; border-radius: 4px;
+  font-size: 13px; line-height: 18px; color: var(--ink-color-global-text-default); cursor: pointer;
+}
+.frt-check:hover { background: var(--ink-color-global-surface-background-underlay); }
+.frt-check input { margin: 2px 0 0; flex: none; accent-color: var(--ink-button-background-color-primary-base-default); }
+.frt-check-member { padding-left: 42px; }
 .frt-table-wrap { overflow-x: auto; border-top: 1px solid var(--ink-color-global-border-subtle); }
 .frt-table { width: 100%; min-width: 960px; border-collapse: collapse; font-size: 13px; }
 .frt-table th {

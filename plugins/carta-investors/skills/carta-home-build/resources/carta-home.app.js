@@ -1327,6 +1327,12 @@ document.addEventListener('click', function(e) {
 // Fetch the signed-in user's Carta profile, log the FULL payload where the LLM client
 // can read it (Cowork surfaces artifact console output), and keep the product flags
 // that decide which Skill Directory categories are shown.
+// The Skill Directory as it stood at build time, from .claude-plugin/skill-directory.json
+// with opt-outs and skills absent from the install already dropped: a list of
+// {skill, category, name, order, prompts, tag?, requires?}. It is the first paint and the
+// fallback — app/skill-directory.js replaces _directorySkills with the published list.
+const BAKED_SKILL_DIRECTORY = {{SKILL_DIRECTORY_JSON}};
+let _directorySkills = BAKED_SKILL_DIRECTORY;
 let _userEntitlements = {};  // product flags (manco, tactyc); true/false/null-unknown
 let _enrichmentDone = false; // flips true once get_current_user resolves/fails/times out
 let _dirTabOpened = false;   // has the user opened the Skill directory tab this session
@@ -1462,15 +1468,50 @@ function switchTab(id) {
 }
 
 
+// Micro apps are local React apps, so they only launch in Claude Code — the copied prompt
+// does nothing in a Cowork chat.
+const APP_TAG = 'App';
+const APP_LAUNCH_NOTE = 'Launches in Claude Code — paste this prompt there.';
+
 function dirCopyPrompt(btn) {
   trackHome("click", "CartaHome.Directory.Copy");
   const text = btn.dataset.prompt || '';
+  const copiedLabel = btn.dataset.copiedLabel || 'Copied!';
   const feedback = () => {
-    btn.textContent = 'Copied!';
+    btn.textContent = copiedLabel;
     btn.classList.add('copied');
     setTimeout(() => { btn.innerHTML = '<svg width="11" height="11" viewBox="0 0 16 16" fill="none"><rect x="5" y="5" width="9" height="9" rx="1" stroke="currentColor" stroke-width="1.4"/><path d="M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>'; btn.classList.remove('copied'); }, 2000);
   };
   writeClipboard(text, feedback);
+}
+
+// Each category in DIR_CATEGORIES order, holding its entries sorted by `order`. An entry
+// naming no known category is dropped, and a category left empty is hidden.
+function directoryCategories(entries) {
+  return DIR_CATEGORIES.map(cat => ({
+    ...cat,
+    skills: entries
+      .filter(e => e.category === cat.id)
+      .sort((a, b) => (a.order || 0) - (b.order || 0) || a.name.localeCompare(b.name)),
+  })).filter(cat => cat.skills.length);
+}
+
+function renderDirectorySkill(s, firm) {
+  const isApp = s.tag === APP_TAG;
+  const prompts = s.prompts.map(p => {
+    const text = escHtml(p.replace(/\{\{FIRM\}\}/g, firm));
+    const copiedLabel = isApp ? 'Copied — open Claude Code' : 'Copied!';
+    return `<div class="dir-skill-prompt">
+              <span class="dir-skill-prompt-text">"${text}"</span>
+              <button class="dir-copy-btn" data-prompt="${text}" data-copied-label="${copiedLabel}" onclick="dirCopyPrompt(this)"><svg width="11" height="11" viewBox="0 0 16 16" fill="none"><rect x="5" y="5" width="9" height="9" rx="1" stroke="currentColor" stroke-width="1.4"/><path d="M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></button>
+            </div>`;
+  }).join('');
+  return `
+          <li class="dir-skill-item">
+            <div class="dir-skill-name">${escHtml(s.name)}${isApp ? ` <span class="dir-skill-tag">${APP_TAG}</span>` : ''}</div>
+            ${prompts}
+            ${isApp ? `<div class="dir-skill-note">${APP_LAUNCH_NOTE}</div>` : ''}
+          </li>`;
 }
 
 function renderDirectory() {
@@ -1488,34 +1529,18 @@ function renderDirectory() {
   // Gates categories and skills alike: drop either only on an explicit false, so an
   // unknown flag still shows it. A category left with no skills drops out too.
   const entitled = x => !x.requires || _userEntitlements[x.requires] !== false;
-  const cats = DIR_CATEGORIES
-    .filter(entitled)
-    .map(cat => Object.assign({}, cat, { skills: cat.skills.filter(entitled) }))
-    .filter(cat => cat.skills.length > 0);
+  const cats = directoryCategories(_directorySkills.filter(entitled))
+    .filter(entitled);
   grid.innerHTML = cats.map(cat => `
     <div class="dir-cat-card">
       <div class="dir-cat-header">
         <div>
-          <span class="dir-cat-name">${cat.name}</span>
+          <span class="dir-cat-name">${escHtml(cat.name)}</span>
         </div>
       </div>
-      <div class="dir-cat-tagline">${cat.tagline}</div>
+      <div class="dir-cat-tagline">${escHtml(cat.tagline)}</div>
       <ul class="dir-skill-list">
-        ${cat.skills.map(s => {
-          // A `note` skill is guidance, not something to paste into chat — render the
-          // text plain, with no quotes and no copy button.
-          const body = s.prompt
-            ? `<div class="dir-skill-prompt">
-              <span class="dir-skill-prompt-text">"${escHtml(s.prompt.replace(/\{\{FIRM\}\}/g, firm))}"</span>
-              <button class="dir-copy-btn" data-prompt="${escHtml(s.prompt.replace(/\{\{FIRM\}\}/g, firm))}" onclick="dirCopyPrompt(this)"><svg width="11" height="11" viewBox="0 0 16 16" fill="none"><rect x="5" y="5" width="9" height="9" rx="1" stroke="currentColor" stroke-width="1.4"/><path d="M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></button>
-            </div>`
-            : `<div class="dir-skill-note">${escHtml((s.note || '').replace(/\{\{FIRM\}\}/g, firm))}</div>`;
-          return `
-          <li class="dir-skill-item">
-            <div class="dir-skill-name">${escHtml(s.name)}</div>
-            ${body}
-          </li>`;
-        }).join('')}
+        ${cat.skills.map(s => renderDirectorySkill(s, firm)).join('')}
       </ul>
     </div>
   `).join('');
