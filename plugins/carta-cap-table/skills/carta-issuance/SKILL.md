@@ -37,7 +37,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.92.3</carta-plugin>
+<carta-plugin>carta-cap-table:6.92.4</carta-plugin>
 
 # Issue Securities
 
@@ -293,9 +293,9 @@ connector was renamed: republish with step 3.
   object replaces the stored grant, so an omitted capability is revoked. Omit the field
   entirely to carry the grant forward — the cheaper redeploy.
 - Keep `tools` at that one: every Carta command goes through the `call_tool` proxy.
-- **Every attached file gets a link:** add `assets: {}` to the first publish, then
-  `upload_asset` each file, rebuild with each `source` entry's `url` set to its returned
-  `url`, and republish with `capabilities` omitted.
+- **Every attached file goes up as an asset**, so the page can add it to Carta: add
+  `assets: {}` to the first publish, then `upload_asset` each file, rebuild with each
+  `source` entry's `url` set to its returned `url`, and republish with `capabilities` omitted.
 
 **Read the publish result's warnings.** One matters: an unresolved connector name means
 the grant isn't wired and every card comes up empty — that sends this run to

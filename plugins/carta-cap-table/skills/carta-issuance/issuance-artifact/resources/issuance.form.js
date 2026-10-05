@@ -2320,8 +2320,11 @@ function statTile(id, label, value, sub) {
   return `<div class="stat" data-testid="stat-${id}"><div class="stat-l">${esc(label)}</div>
     <div class="stat-v">${value}</div>${sub ? `<div class="stat-s">${sub}</div>` : ""}</div>`;
 }
-/** Only a link this page can prove is safe: an https URL, or this artifact's own asset. */
-const sourceHref = (u) => (typeof u === "string" && /^(https:\/\/|\/_blob\/)/.test(u) ? u : "");
+/** Only an https URL. This page's own assets open nowhere outside it: a host such as
+    Claude Desktop sends a link to the system browser, which cannot read them. */
+const sourceHref = (u) => (typeof u === "string" && /^https:\/\//.test(u) ? u : "");
+/** Where a person opens one attached file: Carta's copy once it is filed, else its own link. */
+const sourceLink = (s) => sourceHref((docState(s) || {}).href) || sourceHref(s.url);
 
 function statsHtml() {
   const [one, many] = qtyNoun();
@@ -2363,7 +2366,7 @@ function statsHtml() {
 
   const files = sources();
   const src = files[0] || null;
-  const url = src && sourceHref(src.url);
+  const url = src && sourceLink(src);
   const more = files.length > 1 ? `and ${esc(plural(files.length - 1, "more file", "more files"))}` : "";
   const link = url ? `<a class="ext" href="${esc(url)}" target="_blank" rel="noopener" data-testid="stat-source-link">View document ↗</a>` : "";
   const source = src
@@ -3797,7 +3800,8 @@ async function fileOne(s) {
     const res = payload(await one(LIBRARY_CALL, {
       corporation_id: S.corpId, filename: s.name, file_content_base64: await base64Of(blob), document_type: type,
     })) || {};
-    return { state: "filed", type: res.document_type || type };
+    return Object.assign({ state: "filed", type: res.document_type || type },
+      sourceHref(res.url) ? { href: res.url } : {});
   } catch (err) {
     if (isMissingCommand(err) && errText(err).includes("library_document")) return { state: "unavailable", type };
     if (code(err) === "cancelled") return { state: "declined", type };
@@ -3851,7 +3855,9 @@ function docsHtml() {
   const title = busy ? "Adding the attached files to Company documents"
     : done ? "Attached files added to Company documents" : "Some attached files were not added to Company documents";
   const lines = tried.map(([s, f]) => (DOC_LINES[f.state] || DOC_LINES.failed)(s.name, f.type));
-  return nextItem(done ? "ok" : "wait", "company-documents", title, lines);
+  const links = tried.filter(([, f]) => f.state === "filed" && sourceHref(f.href))
+    .map(([s, f], i) => extLink(f.href, `View ${s.name} in Carta`, `company-document-link-${i}`));
+  return nextItem(done ? "ok" : "wait", "company-documents", title, lines, links.join(" · "));
 }
 
 const msgs = (v) => [].concat(v == null ? [] : v).filter((m) => typeof m === "string" && m);
