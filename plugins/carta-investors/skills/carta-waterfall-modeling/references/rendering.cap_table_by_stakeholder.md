@@ -61,9 +61,10 @@ Without `include_securities`, rows carry only the group-level fields above (no `
 
 When the user picks **Drill into a holder**, render this command as the holder list instead of the
 flat table: fetch page 1 with `include_securities: true` and read `total`. If the list is genuinely
-large (`total` > ~40), ask which group first (or "type a name"), fetch with that as `search`, and list
-that subset; if it matches nothing, say so in one line and list all of them. Otherwise fetch every
-remaining page (§Rows) and print a **compact list grouped by `stakeholder_group_name`** — all of them,
+large (`total` > ~40), ask which group first (or "type a name"), fetch with that as `search`, page
+through every remaining page of that search (§Rows — `total` is per-search, not the unscoped total),
+and list that subset; if it matches nothing, say so in one line and list all of them. Otherwise fetch
+every remaining page (§Rows) and print a **compact list grouped by `stakeholder_group_name`** — all of them,
 one line per group, `individuals[].stakeholder_name` comma-separated. Do **not** print securities here —
 but they back the drill (§Holder drill), so a holder already listed needs **no** second fetch. Show a
 name's group beside it only when two individuals share a name.

@@ -179,9 +179,10 @@ render the drill straight from the response in hand — **never re-fetch a holde
    ```
 
    Render the holder drill table (↳ / ↳↳) per the render doc §Holder drill **straight from this
-   response** — no second call. If `search` comes back **ambiguous** (many matches), list its own
-   `stakeholders[]` per the render doc §Discovery list and drill the pick from that data — no second
-   call. If it comes back **empty**, say so in one line and fall back to the list (step 3).
+   response** — no second call. If `search` comes back **ambiguous** (many matches), page through every
+   remaining page of that search (render doc §Rows), list the result per the render doc §Discovery list,
+   and drill the pick from that data — no second call. If it comes back **empty**, say so in one line and
+   fall back to the list (step 3).
 3. **Wants to browse, or search missed → fetch the discovery list** — page 1 with securities, then render
    the **compact grouped names** per the render doc §Discovery list (which governs the large-list subset):
 
