@@ -17,18 +17,22 @@ allowed-tools:
   # The only source for a connector's name
   - list_connectors
   # Entitlement, and the organization the published title names.
-  - mcp__*carta*__welcome
-  - mcp__*Carta*__welcome
-  - mcp__*carta*__get_current_user
-  - mcp__*Carta*__get_current_user
-  # The page itself. Prefix-agnostic so the grant holds whichever form the host registers.
-  - mcp__*carta*__list_resources
-  - mcp__*Carta*__list_resources
+  - mcp__carta__welcome
+  - mcp__claude_ai_Carta__welcome
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
+  - mcp__carta__get_current_user
+  - mcp__claude_ai_Carta__get_current_user
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__get_current_user
+  # The page itself.
+  - mcp__carta__list_resources
+  - mcp__claude_ai_Carta__list_resources
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_resources
   - ListMcpResourcesTool
   - ReadMcpResourceTool
   # The manifest, for the viewBuildId the page is stamped with. Read-only by construction.
-  - mcp__*carta*__crm_read_tool
-  - mcp__*Carta*__crm_read_tool
+  - mcp__carta__crm_read_tool
+  - mcp__claude_ai_Carta__crm_read_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__crm_read_tool
   - Bash(uv run *build_artifact.py *)
   - Bash(find ~ -name "build_artifact.py"*)
   - Bash(find /sessions -name "build_artifact.py"*)
@@ -38,7 +42,7 @@ version: 1.0.0
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.14.4</carta-plugin>
+<carta-plugin>carta-crm:1.14.5</carta-plugin>
 
 # Carta CRM Home — publish
 

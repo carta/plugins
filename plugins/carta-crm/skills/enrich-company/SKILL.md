@@ -19,7 +19,7 @@ model: haiku
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.14.4</carta-plugin>
+<carta-plugin>carta-crm:1.14.5</carta-plugin>
 
 ## Overview
 

@@ -15,6 +15,8 @@ allowed-tools:
   # runtime and has no name to resolve. The call renders a connector card with a
   # Reconnect button per connector, which is a visible cost for nothing.
   - mcp__carta__crm_call_tool
+  - mcp__claude_ai_Carta__crm_call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__crm_call_tool
   # WebSearch has one use: the venue line in Step 4b, after the meeting is already
   # resolved. It never resolves a meeting, a company or a person. The CRM does that.
   - WebSearch
@@ -29,7 +31,7 @@ model: inherit
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.14.4</carta-plugin>
+<carta-plugin>carta-crm:1.14.5</carta-plugin>
 
 ## Overview
 

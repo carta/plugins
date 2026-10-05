@@ -11,6 +11,8 @@ allowed-tools:
   # The only source for a connector's name
   - list_connectors
   - mcp__carta__crm_call_tool
+  - mcp__claude_ai_Carta__crm_call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__crm_call_tool
   - Artifact
   # Prefix-agnostic: outside claude.ai web chat the mail connector's prefix is a session
   # UUID. Both cases, because glob matching is case-sensitive.
@@ -26,7 +28,7 @@ model: inherit
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.14.4</carta-plugin>
+<carta-plugin>carta-crm:1.14.5</carta-plugin>
 
 ## Overview
 

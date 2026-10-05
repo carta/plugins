@@ -16,19 +16,20 @@ description: >
   Carta Home use carta-investors' carta-home-build; for a company's cap table
   use carta-cap-table's carta-captable-home-build.
 allowed-tools:
-  # Prefix-agnostic so the grant holds whichever form the host registers. Cowork names the
-  # connector by uuid (mcp__2827383e-...), which the literal `mcp__carta__` form never matches.
-  - mcp__*carta*__crm_call_tool
-  - mcp__*Carta*__crm_call_tool
-  - mcp__*carta*__crm_view_tool
-  - mcp__*Carta*__crm_view_tool
+  # Carta MCP, under each production server name — Cowork names the connector by UUID.
+  - mcp__carta__crm_call_tool
+  - mcp__claude_ai_Carta__crm_call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__crm_call_tool
+  - mcp__carta__crm_view_tool
+  - mcp__claude_ai_Carta__crm_view_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__crm_view_tool
   - Skill
 version: 1.0.0
 model: inherit
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.14.4</carta-plugin>
+<carta-plugin>carta-crm:1.14.5</carta-plugin>
 
 # Carta CRM Home
 

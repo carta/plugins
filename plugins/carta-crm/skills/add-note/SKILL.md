@@ -7,12 +7,14 @@ description: >
   "add a comment", "comment on a deal", or "/add-note".
 allowed-tools:
   - mcp__carta__crm_call_tool
+  - mcp__claude_ai_Carta__crm_call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__crm_call_tool
 version: 1.0.0
 model: haiku
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.14.4</carta-plugin>
+<carta-plugin>carta-crm:1.14.5</carta-plugin>
 
 ## Overview
 
