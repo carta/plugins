@@ -101,6 +101,9 @@ response (no re-fetch):
 | remaining / unreturned invested capital for a holder | `stakeholders[].remaining_invested_capital` |
 | a security's share-class id | `individuals[].securities[].share_class_id` |
 | a security's certificate subtype | `individuals[].securities[].certificate_subtype` |
-| total capital contributed across holders | sum of `stakeholders[].cash_raised` over every page of a fetch without `search` (§Rows) — if the response in hand came from a `search`, fetch every page without it first |
+| total capital contributed across holders | sum of `stakeholders[].cash_raised` across all holders |
+
+The total row needs every holder from a fetch without `search` (§Rows); if the response in hand is
+`search`-scoped, re-fetch without it first.
 
 Format per `SKILL.md` §Formatting rules; null-dropped — never fabricate.
