@@ -352,6 +352,6 @@ The **Carta-standard** layout (empty / Carta's own tab):
   BLUF lead, and **no analytical wrap-up** (no "top of the stack", no MOIC/IRR
   commentary, no ranking — that prose is what makes the model skip the menu).
   Then **immediately call `AskUserQuestion`** for the Follow-up prompt per
-  [`references/follow-up.md`](references/follow-up.md) — its **excel** option set
+  [`references/follow-up.md`](follow-up.md) — its **excel** option set
   (already omits "Show breakpoints", since they're on the Waterfall tab). Never
   ask in prose.
