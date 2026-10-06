@@ -6,7 +6,7 @@ import { FS, serif, sans, mono, MICRO, NOTICE, NOTICE_TINT, EASE, GRAD_DARK } fr
 // portals to <body> too, so a lower popover paints behind the backdrop and is unclickable.
 export const Z = { stickyRibbon: 4, stickyClone: 10, modal: 1000, popover: 1100, tooltip: 9999 };
 
-const findScrollParent = (from) => {
+export const findScrollParent = (from) => {
   let el = from?.parentElement;
   while (el && el !== document.body) {
     const cs = getComputedStyle(el);

@@ -27,6 +27,7 @@ import { isFavorite, favoriteCount } from "../model/favorites.js";
 import { openCompany } from "../state/focus.js";
 import { withCommas } from "../ui/format.js";
 import { openCorrections } from "../ui/correctionEvents.js";
+import { groupRows, useRowWindow } from "../ui/rowWindow.js";
 
 const EMPTY_RULES = [];
 const NEG = "var(--ink-color-global-feedback-negative-strong)";
@@ -529,6 +530,10 @@ export default function PivotDashboard({ data, dashboard }) {
   const wrapRef = useRef(null);
   const tableRef = useRef(null);
   const clone = useStickyClone(wrapRef, tableRef, ribbonH);
+  // Only the company groups near the viewport mount; spacer rows stand in for the rest.
+  const tbodyRef = useRef(null);
+  const rowGroups = useMemo(() => groupRows(displayRows), [displayRows]);
+  const rowWin = useRowWindow({ groups: rowGroups, wrapRef, tbodyRef, resetKey: growthMode });
   // Only the table wrap breaks out of <main>'s 1320px cap (ribbon/title stay put).
   // Measured, not hardcoded, so it tracks #app-content regardless of layout state.
   const [wrapMaxW, setWrapMaxW] = useState(null);
@@ -569,7 +574,7 @@ export default function PivotDashboard({ data, dashboard }) {
   const colW = (p) => Math.max(periodColWs[p], Math.min(PERIOD_FILL_MAX_W, periodColWs[p] + periodFill));
   // The company-name label had the same plain-sticky problem as the header
   // (wrapRef's local scroll intercepts it) — floats via the same technique.
-  const activeCompany = useActiveCompanyBand(tableRef, ribbonH + headH, ribbonH);
+  const activeCompany = useActiveCompanyBand(tableRef, ribbonH + headH, ribbonH, `${rowWin.rowStart}:${rowWin.rowEnd}`);
 
   // min/max per metric across the visible cells — drives the color-scale gradient
   const metricStats = useMemo(() => {
@@ -883,8 +888,10 @@ export default function PivotDashboard({ data, dashboard }) {
             <thead ref={theadRef}>
               {renderPivotHeadRow(headColDefs)}
             </thead>
-            <tbody>
-              {displayRows.map((r, i) => {
+            <tbody ref={tbodyRef}>
+              {rowWin.padTop > 0 && <tr aria-hidden="true"><td colSpan={3 + (showPos ? 1 : 0) + periods.length} style={SPACER_CELL(rowWin.padTop)} /></tr>}
+              {displayRows.slice(rowWin.rowStart, rowWin.rowEnd).map((r, li) => {
+                const i = rowWin.rowStart + li;
                 // Color-scale range: "row" scope uses this company's own min/max
                 // (its trend); "portfolio" (default) uses the metric's full range.
                 const fmtRow = formats[r.metricKey];
@@ -896,7 +903,7 @@ export default function PivotDashboard({ data, dashboard }) {
                 // border-bottom already closes off the top of the table.
                 const groupDivider = r.firstOfCompany && i !== 0 ? GROUP_DIVIDER : undefined;
                 return (
-                <tr key={`${r.companyId}:${r.metricKey}`}>
+                <tr key={`${r.companyId}:${r.metricKey}`} data-company={r.companyId}>
                   {r.firstOfCompany && (
                     <td rowSpan={companySpans.get(r.companyId)}
                       // Collapsed is one row — skip the active-band float so the name
@@ -1076,6 +1083,7 @@ export default function PivotDashboard({ data, dashboard }) {
                 </tr>
                 );
               })}
+              {rowWin.padBottom > 0 && <tr aria-hidden="true"><td colSpan={3 + (showPos ? 1 : 0) + periods.length} style={SPACER_CELL(rowWin.padBottom)} /></tr>}
             </tbody>
           </table>
         </div>
@@ -1838,6 +1846,9 @@ const VALUE_CELL = { display: "flex", justifyContent: "flex-end", alignItems: "c
 const QUAL_CELL = { ...VALUE_CELL, minWidth: 0 };
 
 
+// Stand-in for the unmounted rows above/below the window; no padding or border so it is exactly `h` tall.
+const SPACER_CELL = (h) => ({ height: h, padding: 0, border: "none" });
+
 const csv = (s) => (/[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
 
 /** Move from the first to the last reported value across the periods shown, oldest
@@ -1878,7 +1889,7 @@ const stickyCell = {
  *  fixed clip box (boxRef) holding the label (innerRef); the hook places both directly
  *  in the scroll event, so the next company pushing this label out never trails the
  *  scroll by a frame the way state-driven geometry would. */
-function useActiveCompanyBand(tableRef, targetTop, ceiling) {
+export function useActiveCompanyBand(tableRef, targetTop, ceiling, mountedKey) {
   const [id, setId] = useState(null);
   const boxRef = useRef(null), innerRef = useRef(null);
   const shownRef = useRef(null); // company whose label the box has actually rendered
@@ -1907,6 +1918,8 @@ function useActiveCompanyBand(tableRef, targetTop, ceiling) {
   }, [tableRef, targetTop, ceiling]);
   // The clip box mounts one render after `id` changes — place it before that paint.
   useLayoutEffect(() => { shownRef.current = id; if (id) place(); }, [id, place]);
+  // Swapping which rows are mounted adds or removes anchors without any scroll or table resize.
+  useLayoutEffect(() => { setId(place()); }, [mountedKey, place]);
   useEffect(() => {
     const update = () => setId(place());
     update();
