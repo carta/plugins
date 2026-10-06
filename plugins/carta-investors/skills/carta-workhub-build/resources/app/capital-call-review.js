@@ -145,7 +145,7 @@ function ccrDemoEmail(row) {
 
 // The workflow template a capital call under review carries, and the two tasks
 // on it that mean the GP owes a decision.
-const CCR_WORKFLOW_TEMPLATE = "request-capital-activity";
+const CCR_WORKFLOW_TEMPLATE = TASK_TEMPLATE_CAPITAL_ACTIVITY;
 const CCR_REVIEW_TASK = "review-capital-activity";
 const CCR_CHANGES_TASK = "review-capital-activity-changes";
 const CCR_SUMMARY_COMMAND = "fa:get:capital-activity-review-summary";
@@ -2394,17 +2394,8 @@ function ccrOpenInCarta(label, cls) {
 }
 
 // The review commands sit behind CARTA_MCP_CAPITAL_ACTIVITY_REVIEW, and the task
-// list does not, so a viewer without the flag gets no review cards. discover
-// answers an exact name only when the viewer may call it.
-let _ccrReviewProbe = null;
-function ccrReviewAvailable() {
-  if (!_ccrReviewProbe) {
-    _ccrReviewProbe = _mcp("discover", { domain: CCR_SUMMARY_COMMAND })
-      .then((res) => Boolean(res && !res.isError))
-      .catch(() => false);
-  }
-  return _ccrReviewProbe;
-}
+// list does not, so a viewer without the flag gets no review cards.
+function ccrReviewAvailable() { return mcpCommandAvailable(CCR_SUMMARY_COMMAND); }
 
 // The active-task list holds only open tasks, so a review task is a decision the GP owes.
 function ccrIsReviewTask(t) {
@@ -2418,8 +2409,11 @@ function ccrIsReviewTask(t) {
 // activity gets one card for it, so the panel is reachable without a live review
 // task to open it from.
 function ccrQueueRows(rows) {
-  const out = (rows || []).filter((r) => !(r.ccr && _ccrReleased.has(r.ccr.activityId)));
   const seed = CCR_TARGET.activityId;
+  // Without the review flag the live review is a Carta-link card; the seed replaces it.
+  // Later rows for the activity stay.
+  const seeded = (r) => Boolean(CCR_TARGET.fundUuid && seed) && !r.ccr && r.group === "todo" && r.objectId === seed;
+  const out = (rows || []).filter((r) => !(r.ccr && _ccrReleased.has(r.ccr.activityId)) && !seeded(r));
   if (CCR_TARGET.fundUuid && seed && !_ccrReleased.has(seed) && !out.some((r) => r.ccr && r.ccr.activityId === seed)) {
     out.unshift({
       id: "ccr-seed",
@@ -2427,6 +2421,7 @@ function ccrQueueRows(rows) {
       subtitle: _ccrFundName,
       firm: null,
       group: "todo",
+      category: TASK_CATEGORY_CAPITAL,
       // The GP owes the decision, so the card reads as waiting on them.
       state: "pending-customer",
       canceled: false,

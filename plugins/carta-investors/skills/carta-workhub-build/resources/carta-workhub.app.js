@@ -48,6 +48,15 @@ async function _mcp(tool, args) {
   }
 }
 
+// discover answers an exact command name only when the viewer may call it, so this
+// gates a view whose reads sit behind a server-side flag the task list lacks.
+const _mcpCommandProbes = {};
+function mcpCommandAvailable(command) {
+  return _mcpCommandProbes[command] ??= _mcp("discover", { domain: command })
+    .then((res) => Boolean(res && !res.isError))
+    .catch(() => false);
+}
+
 // ── Snowplow UI-event tracking via @carta/mcp-ui-tracker (window.mcpUiTracker) ──
 if (window.mcpUiTracker) {
   window.mcpUiTracker.initTracker({

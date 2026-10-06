@@ -4,7 +4,7 @@
     "headline": "The Skill Directory now adds new skills and example prompts on its own, and marks micro apps with an App tag."
   },
   "carta-workhub-build": {
-    "version": "1.8.39",
-    "headline": "Workhub's capital activity review tells you when Carta refuses a request, and why."
+    "version": "1.9.0",
+    "headline": "Workhub shows every task your Carta team shares with you, in Drafts, Needs Action, With Carta and Completed tabs grouped by category."
   }
 }

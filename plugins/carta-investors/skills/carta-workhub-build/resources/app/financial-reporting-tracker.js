@@ -458,6 +458,7 @@ function frtCardFor(p, payload, seeded) {
     subtitle: summary || (seeded ? "Nothing needs your action" : null),
     firm: null,
     group: "todo",
+    category: TASK_CATEGORY_REPORTING,
     // The GP owes a step on at least one row.
     state: "pending-customer",
     canceled: false,
@@ -470,25 +471,41 @@ function frtCardFor(p, payload, seeded) {
   };
 }
 
-// A card exists for each period that owes the GP a step, plus the build seed.
-async function frtFetchPeriodRows(now) {
-  if (!_benchmarkFirmId) return [];
-  const periods = frtPeriodWindow(now);
+// Only a build seed gets a period card of its own: the queue's reporting work
+// arrives as tasks, and each package task opens the tracker for its period.
+async function frtFetchPeriodRows() {
   const seed = frtParsePeriodLabel(FRT_SEED_PERIOD);
-  if (seed && !periods.some(p => frtPeriodKey(p) === frtPeriodKey(seed))) periods.push(seed);
-  const payloads = await Promise.all(periods.map(p => frtFetchPeriod(p).catch(e => {
+  if (!_benchmarkFirmId || !seed) return [];
+  const payload = await frtFetchPeriod(seed).catch(e => {
     console.error("[frt] tracker read threw —", e);
     return null;
-  })));
-  const rows = [];
-  periods.forEach((p, i) => {
-    const payload = payloads[i];
-    const seeded = !!seed && frtPeriodKey(seed) === frtPeriodKey(p);
-    const owed = payload && payload.rollup && Number(payload.rollup.needs_action) > 0;
-    if (owed || seeded) rows.push(frtCardFor(p, payload, seeded));
   });
-  return rows;
+  return [frtCardFor(seed, payload, true)];
 }
+
+// A package task's title ends in its period, as fund-admin writes it: "Review
+// financials for Q2 2026", or a bare year ("Review financials for 2025") for the
+// year end, which the tracker reads as Q4. Other templates' titles name periods
+// loosely, so only the package template is read this way.
+const FRT_PACKAGE_TEMPLATE = TASK_TEMPLATE_PACKAGE;
+function frtPeriodOfTitle(title) {
+  const text = String(title || "").trim();
+  const q = /\bQ([1-4])\s+(\d{4})$/.exec(text);
+  if (q) return { period: `Q${q[1]}`, year: Number(q[2]) };
+  const y = /\bfor\s+(\d{4})$/.exec(text);
+  return y ? { period: "Q4", year: Number(y[1]) } : null;
+}
+
+// The tracker target for a package task: its period, labelled as the panel names it.
+function frtTargetFor(t) {
+  if (!t || t.workflow_template !== FRT_PACKAGE_TEMPLATE) return null;
+  const p = frtPeriodOfTitle(t.display_name) ?? frtPeriodOfTitle(t.workflow_display_name);
+  return p ? { period: p.period, year: p.year, label: frtPeriodLabel(p) } : null;
+}
+
+// The tracker read is gated server-side and the task list is not, so a viewer
+// the tracker refuses keeps package tasks as Carta links.
+function frtTrackerAvailable() { return mcpCommandAvailable(FRT_COMMAND); }
 
 // Newest period first; a card the queue already carries is not duplicated.
 function frtWithPeriodRows(rows, periodRows) {

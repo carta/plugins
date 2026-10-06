@@ -40,44 +40,24 @@
       <button class="far-btn-primary" id="far-compose-open" onclick="openFarCompose()"><span class="far-compose-icon" aria-hidden="true">&#9998;</span> Compose</button>
     </div>
 
-    <div class="far-sort-wrap" id="far-sort-wrap" style="display:none">
-      <label class="far-sort-label" for="far-sort">Sort by</label>
-      <select class="far-sort" id="far-sort" onchange="farSetSort(this.value)">
-        <option value="newest">Newest first</option>
-        <option value="oldest">Oldest first</option>
-      </select>
-      <button class="far-view-btn" id="far-view-btn" onclick="farToggleView()" aria-label="Switch to list view"></button>
+    <div class="far-toolbar">
+      <nav class="far-tabs" id="far-tabs" aria-label="Work status"></nav>
+      <div class="far-sort-wrap" id="far-sort-wrap">
+        <label class="far-sort-label" for="far-sort">Sort by</label>
+        <select class="far-sort" id="far-sort" onchange="farSetSort(this.value)">
+          <option value="newest">Newest first</option>
+          <option value="oldest">Oldest first</option>
+        </select>
+        <button class="far-view-btn" id="far-view-btn" onclick="farToggleView()" aria-label="Switch to list view"></button>
+      </div>
     </div>
 
-    <div id="far-list-view" style="display:none"></div>
-
-    <div class="far-group" id="far-group-planned" style="display:none">
-      <p class="far-group-label">Planned &middot; <span class="far-group-count">0</span><span
-          class="far-tip"><button type="button" class="far-tip-btn" id="far-plan-tip-btn"
-          aria-describedby="far-plan-tip" aria-label="How planned requests are stored">?</button><span
-          class="far-tip-body" id="far-plan-tip" role="tooltip"></span></span></p>
-      <div class="far-cards" id="far-cards-planned"></div>
-    </div>
-
-    <div class="far-group" id="far-group-todo" style="display:none">
-      <p class="far-group-label">Tasks to complete &middot; <span class="far-group-count">0</span></p>
-      <div class="far-cards" id="far-cards-todo"></div>
-    </div>
-
-    <div class="far-group" id="far-group-progress" style="display:none">
-      <p class="far-group-label">In progress &middot; <span class="far-group-count">0</span></p>
-      <div class="far-cards" id="far-cards-progress"></div>
-    </div>
-
-    <div class="far-group" id="far-group-done" style="display:none">
-      <p class="far-group-label far-group-label-toggle" onclick="toggleFarDone()">
-        <span id="far-done-toggle">&#9656;</span> Completed &middot; <span class="far-group-count">0</span>
-      </p>
-      <div class="far-done-list" id="far-cards-done" style="display:none"></div>
-    </div>
+    <p class="far-tab-desc" id="far-tab-desc"></p>
+    <div class="far-chips" id="far-chips" style="display:none"></div>
+    <div class="far-groups" id="far-groups"></div>
 
     <p class="far-empty" id="far-empty" style="display:none">
-      Nothing open right now. Use Compose to send your Carta team something.
+      Nothing here right now. Use Compose to send your Carta team something.
     </p>
 
     <p class="far-partial-note" id="far-partial-note" style="display:none">

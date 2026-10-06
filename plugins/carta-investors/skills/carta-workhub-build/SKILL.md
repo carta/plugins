@@ -2,9 +2,10 @@
 name: carta-workhub-build
 description: >
   Builds or rebuilds the Carta Workhub live artifact — a standalone Cowork view of the work
-  a firm has sent its Carta fund admin team. Shows a request composer over a queue grouped
-  into Tasks to complete (waiting on you), In progress (Carta is working), and a collapsed
-  Completed, with a thread view for each request. The artifact auto-detects the active firm
+  a firm shares with its Carta fund admin team. Shows a request composer over every GP task,
+  in tabs for Drafts, Needs Action (waiting on you), With Carta and Completed, grouped by
+  category — requests, capital calls, cash reconciliation, KYC and more — with a thread view
+  for each request and a link into Carta for the rest. The artifact auto-detects the active firm
   from the Carta MCP context — no hardcoded firm name needed. Use this skill whenever the
   user asks to "build the carta workhub artifact", "rebuild carta workhub", "set up carta
   workhub", "deploy carta workhub", "show my Carta workhub", "rebuild carta tasks",
@@ -20,7 +21,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.59.7</carta-plugin>
+<carta-plugin>carta-investors:6.60.0</carta-plugin>
 
 # Carta Workhub — Build / Redeploy
 
@@ -59,17 +60,16 @@ not inside a fund-data dashboard.
   requirement is now `Call type`, matching the four types Carta acts on: pro-rata, subsequent
   close, bring investors in-line, hybrid. Change a template line and its `requires` entry
   together, or the check drifts back into testing for the old wording.
-- **Plan** — **Save as plan** holds a drafted request without sending it. Plans show in their
-  own **Planned** group above the live queue, dashed and marked "Not sent", with **Review and
-  send** or **Discard**. Sending a plan runs the same confirm step, and the plan is dropped only
-  once the send succeeds. Carta has no unsent-draft state, so a plan lives in `localStorage`
-  and nowhere else, so a plan does not follow the user to another machine. Storage also throws on
-  an opaque origin (an artifact served from a `data:` URL), so a probe at first use decides which
-  of two truths every surface tells — saved on this computer, or kept for this session only. The
-  composer states the scope **before** Save as plan is pressed, and a tooltip on the Planned
-  heading carries the detail, so the caveat is available without giving it more page weight than
-  the work it describes. A durable, cross-device draft needs a server-side
-  command that does not exist yet: carta-mcp#1.
+- **Draft** — **Save as draft** holds a request without sending it. Drafts show in the
+  **Drafts** tab, dashed, with **Review and send** or **Discard**. Sending a draft runs the same
+  confirm step, and the draft is dropped only once the send succeeds. Carta has no unsent-draft
+  state, so a draft lives in `localStorage` and nowhere else, and does not follow the user to
+  another machine. Storage also throws on an opaque origin (an artifact served from a `data:`
+  URL), so a probe at first use decides which of two truths every surface tells — saved on this
+  computer, or kept for this session only. The composer states the scope **before** Save as
+  draft is pressed, and the Drafts tab's description repeats it where drafts are listed. A
+  durable, cross-device draft needs a server-side command that does not exist yet: carta-mcp#1.
+  (The code calls these plans: `FAR_PLANS_KEY`, `farSavePlan`.)
 - **Sent state** — a confirmation panel: "Your Carta team is on it", the notification promise, and
   a line telling the sender they can reply or add detail in the thread while work is underway.
   It deliberately does **not** show the workflow id — that is Carta's internal handle, and quoting
@@ -86,30 +86,54 @@ not inside a fund-data dashboard.
   Carta's own formatting, so `farUnwrap` strips it and the indent everywhere text is read or
   shown — without it every title read as "Additional Info:" and the thread showed the wrapper
   to the customer.
-- **Queue** — grouped **Tasks to complete** (waiting on the customer), **In progress**, and a
-  collapsed **Completed**, sorted **Newest** or **Oldest** first. There is deliberately no
-  sort-by-status: the queue is grouped by status and rendered into fixed containers, so
-  ordering rows by group before re-partitioning them by group is a no-op — the two modes
-  produced byte-identical output. Cards in the same group that share a calendar day show the
-  time as well, or a re-sort looks like nothing happened. A card's second line is the row's
-  `entity_name`, omitted when blank — `fa:create:fund-admin-message` has no entity field (see
-  `docs/plans/carta-workhub-entity-uuid.md`). Card status reads **Working** /
-  **Ready for you** / **Done** / **Canceled**, each an event the payload can prove. There is
-  deliberately no "received": nothing marks a read, so it would be a guess.
+- **Queue** — four tabs, each a row group: **Drafts** (`planned`), **Needs Action** (`todo`,
+  waiting on the customer), **With Carta** (`progress`) and **Completed** (`done`). The first
+  load opens on Needs Action, or on the next tab holding work when it is empty
+  (`FAR_TAB_OPEN_ORDER`); after that only the viewer changes tabs. Each tab carries a count
+  pill and a one-line description. Inside a tab, rows are grouped by category, in the order and with the icons `TASK_CATEGORIES` in
+  `resources/carta-workhub.config.js` gives; a row joins the category listing its
+  `workflow_template`, and a template no category lists lands in **Other**, so a new kind of
+  task still shows. A capital activity is a call or a distribution only by its name —
+  fund-admin titles the task "Review capital call for…" or "Authorize distribution of…" from
+  the activity type — so `named` on Distributions decides there. Filter chips under the
+  description (All, then each category present, with counts) narrow the tab to one category;
+  each tab keeps its own. A category previews 5 items, then **Show N more**.
+
+  Sorted **Newest** or **Oldest** first, by when the work started, or for Completed by when it
+  finished. There is deliberately no sort-by-status or category: the queue is partitioned by
+  both, so it would be a no-op. Cards in a category that share a calendar day show the time as
+  well, or a re-sort looks like nothing happened. The card/list toggle swaps the grid for one
+  row per item.
+
+  A card is the task's name (fund-admin's `display_name`; a request keeps its own title rules,
+  above), the row's `entity_name` (omitted when blank — `fa:create:fund-admin-message` has no
+  entity field, see `docs/plans/carta-workhub-entity-uuid.md`), and a date line: **As of**
+  in Needs Action, **Started** in With Carta, **Completed** or **Canceled** in Completed,
+  **Drafted** in Drafts. What it opens, in order: the capital call review panel, the
+  reporting tracker, the request's thread, else the row's `_links.web_url` in a new tab,
+  marked **Carta ↗** — an absolute http(s) link only. A task with none of these is shown but
+  opens nothing. No assignee shows: neither list carries one yet.
+
+  The page is light only, as the Workhub design is: `:root` sets `color-scheme: light`, so
+  every `light-dark()` token resolves to its light value.
 
   **Two cursor-paged lists feed the queue**, read in parallel at 40 rows a page so no reply
   nears carta-mcp's 40k cap:
-  - `fa:list:gp-workhub-active-task` — open tasks, grouped by `pending_actor` (`customer` →
-    Tasks to complete, `carta` → In progress). Only `request-generic` and capital call review
-    tasks become cards, one per workflow; the customer's task wins. Review tasks need
-    `CARTA_MCP_CAPITAL_ACTIVITY_REVIEW`, which the list ignores, so they are dropped unless
-    `discover` answers for `fa:get:capital-activity-review-summary`. A failed page, or pages
-    left past 25, drops to the `localStorage` path rather than show a short list as complete.
-    A task's `created_at` is the current task's, so **Requested** comes from
-    `fa:list:firm-workflow` (`active`), read alongside.
-  - `fa:list:firm-workflow` (`request-generic`, `complete`/`canceled`) — Completed, newest 3
-    pages only, keeping what was read, and its count reads `120+` at that cap; it previews
-    5 rows. A failure leaves it empty. A request in both lists shows once, as open.
+  - `fa:list:gp-workhub-active-task` — every open task, grouped by `pending_actor` (`customer`
+    → Needs Action, `carta` → With Carta), one card per workflow; the customer's task wins. A
+    capital call review opens its panel only when `discover` answers for
+    `fa:get:capital-activity-review-summary` — the panel's commands need
+    `CARTA_MCP_CAPITAL_ACTIVITY_REVIEW`, which the list ignores — and is otherwise a Capital
+    calls card linking to the review in Carta. A failed page, or pages left past 25, drops to
+    the `localStorage` path rather than show a short list as complete. A task's `created_at`
+    is the current task's, so the start date of a request or capital activity comes from
+    `fa:list:firm-workflow` (`active`, those two templates), read alongside; other tasks use
+    their own.
+  - `fa:list:firm-workflow` (every template, `complete`/`canceled`) — Completed, the last 90
+    days by `completed_date` (else `last_activity_at`), newest 3 pages only, keeping what was
+    read; its count reads `120+` at that cap, and a plain `0` when nothing read is recent. The
+    list is ordered by `created_at`, so it can miss old work finished recently. A failure
+    leaves it empty. A workflow in both lists shows once, as open.
 - **Capital call review** — a `request-capital-activity` workflow carrying an open
   `review-capital-activity` (or `review-capital-activity-changes`) task opens the review panel
   instead of the thread. It is one page: a sidebar with the summary (the total, the notice and due
@@ -127,7 +151,8 @@ not inside a fund-data dashboard.
 
   There is no build flag for this: the server decides which rows exist, so no review card
   means the environment does not serve them. `--ccr-fund-uuid` / `--ccr-activity-id` seed one
-  card for a demo, and its panel still reads through the same commands.
+  card for a demo, and its panel still reads through the same commands. The seed card replaces
+  that activity's live review card.
 
   **The summary's embedded rows are the table's first paint.** `rows.results` on the summary is
   the unfiltered first page; seeding from it means the table is populated the moment the summary
@@ -184,7 +209,7 @@ not inside a fund-data dashboard.
   summary serves its own.
 
   A release is followed to its verdict, which can take minutes. With no reply after 4 seconds the
-  panel shows it in progress and its card moves to In progress. A connector that stops waiting is
+  panel shows it in progress and its card moves to With Carta. A connector that stops waiting is
   not a failure: the panel re-reads `fa:list:gp-workhub-active-task` every 15 seconds, and a card gone from it
   has released, because release closes the review task in the same transaction. Reopening the card
   meanwhile shows the release, not the review. With no verdict after 11 minutes the panel locks
@@ -193,8 +218,8 @@ not inside a fund-data dashboard.
 
   A 400 or 403 from any review read or write — in an error envelope, a thrown error, or a reply
   carrying the error in its payload — raises a toast inside the panel until it is dismissed.
-- **Financial reporting tracker** — one card per reporting period that needs the GP, opening the
-  Financial Reporting Tracker for that period: the banner, the multi-select entity filter (a
+- **Financial reporting tracker** — a package task opens the Financial Reporting Tracker for its
+  period: the banner, the multi-select entity filter (a
   fund family's box selects every member), the combined filter-and-sort menu, entity search,
   the period selector, and the six-column table with fund families **and any
   entity holding two or more packages** as collapsible rows. A row with two or more packages
@@ -207,19 +232,18 @@ not inside a fund-data dashboard.
   server-side now — so the panel and the page read identically. Every button carries the
   backend's absolute `href` and opens Carta in a new tab; nothing is written from here.
 
-  **The cards come from the tracker read, not from the queue's lists.** On load the queue reads
-  the page's rolling window — the active quarter and the three before it, never earlier than
-  Q3 2023 — one `fa:get:reporting-status` call per period, in parallel. A period whose
-  `rollup.needs_action` is above zero gets a card in Tasks to complete titled
-  `Financial reporting — Q2 2026`, its second line counting the open items by column — packages
-  needing the GP counted directly, not rows, so a two-package entity awaiting review on both
-  reads "2 packages to review" — and its footer naming the soonest deadline. A period the server
-  refuses resolves to no card, so the flag being off, or a firm the viewer cannot read, silently
-  yields nothing rather than an error.
+  **The package tasks are the way in.** Every `publish-financial-package` task on the queue's
+  task list is a card under Financial reporting, and it opens the tracker for the period its
+  title ends in — fund-admin writes "Review financials for Q2 2026", or a bare year ("…for
+  2025") for the year end, which the tracker reads as Q4-YE. A title that ends some other way
+  ("Reviewing your 2024 financials", Carta's own step) opens the package in Carta.
+  `review-financial-extraction-*` tasks sit under Other.
 
   There is no build flag for this either: the read is gated server-side by
-  `CARTA_MCP_FINANCIAL_REPORTING_TRACKER`, so no card means the environment does not serve it.
-  `--frt-seed-period "Q2 2026"` forces one card for a demo; its panel still reads live.
+  `CARTA_MCP_FINANCIAL_REPORTING_TRACKER`, and the task list is not, so the queue asks
+  `discover` about `fa:get:reporting-status` once; a viewer it refuses keeps package tasks as
+  Carta links. `--frt-seed-period "Q2 2026"` forces one period card for a demo, read live, and
+  it is the only read the queue makes up front.
 
   **The panel is sized for its table** — `min(1120px, 96vw)` by `min(760px, 90vh)` —
   because six table columns need it; below about 900px the table scrolls inside the panel, never
@@ -421,7 +445,7 @@ Artifact({
 
 Give the user the artifact's URL.
 
-> Carta Workhub is live. Anything waiting on you shows at the top under **Tasks to complete**.
+> Carta Workhub is live. Anything waiting on you shows under **Needs Action**.
 
 The first open asks the viewer to consent to the Carta connector; until they accept, the
 queue shows its no-connector state.

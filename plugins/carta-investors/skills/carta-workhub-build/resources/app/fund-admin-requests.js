@@ -1,23 +1,12 @@
-// ── Fund Admin requests: composer bar + grouped queue + thread overlay ──
+// ── Carta Workhub queue: composer bar, tabbed task queue, request thread overlay ──
 // Depends on carta-workhub.app.js: _mcp, escHtml, showToast, trackWorkhub,
 // _mcpResultCandidates, _benchmarkFirmId.
 
-// Group by the open task's pending_actor; an unknown value shows as in-progress.
+// Group by the open task's pending_actor; an unknown value shows as with Carta.
 const FAR_GROUP_BY_PENDING = {
   'pending-customer': 'todo',
   'pending-carta': 'progress',
 };
-
-// Each label is an event the payload can prove. There is no "received" here:
-// nothing marks a read, so it would be a guess presented as a fact.
-const FAR_STATUS_LABEL = {
-  'pending-carta': 'Working',
-  'pending-customer': 'Ready',
-};
-function farStatusLabel(row) {
-  if (row.group === 'done') return row.canceled ? 'Canceled' : 'Done';
-  return FAR_STATUS_LABEL[row.state] ?? 'Working';
-}
 
 // Ids of requests this artifact created. Only read when no list command is
 // reachable — see farFetchRequests() for why that path is partial.
@@ -57,17 +46,18 @@ function farStorageOk() {
 const FAR_PAGE_SIZE = 50;
 const FAR_LIST_PAGE_SIZE = 40;   // carta-mcp's page cap
 const FAR_LIST_MAX_PAGES = 25;   // bounds a cursor that never ends
-const FAR_DONE_MAX_PAGES = 3;    // Completed previews 5 rows; its full history is not worth the wait
-const FAR_REQUEST_TEMPLATE = 'request-generic';
+const FAR_DONE_MAX_PAGES = 3;    // Completed is recent work; its full history is not worth the wait
+// How far back Completed reaches. The list comes newest-started first and stops
+// at FAR_DONE_MAX_PAGES, so old work finished recently can fall past the cap.
+const FAR_DONE_DAYS = 90;
+const FAR_REQUEST_TEMPLATE = TASK_TEMPLATE_REQUEST;
 const FAR_ACTIVE_TASKS_COMMAND = 'fa:list:gp-workhub-active-task';
 const FAR_FINISHED_STATUSES = ['complete', 'canceled'];
-const FAR_DONE_PREVIEW = 5;   // completed rows shown before "+ N more"
 const FAR_TITLE_MAX = 72;     // chars of the opening message used as a title
 
 let _farRows = null;          // null = not fetched; [] = none; [...] = rows
 let _farPartial = false;      // true when rows came from the localStorage path
 let _farDoneCapped = false;   // Completed stopped at FAR_DONE_MAX_PAGES with more to read
-let _farDoneOpen = false;
 const _farThreadCache = {};   // workflow_id → normalized messages
 
 // ── Result unwrapping ──
@@ -382,27 +372,52 @@ function farNeedsTitle(w) {
   return farIsGenericTitle(farWorkflowName(w));
 }
 
-// An open task carries pending_actor; a finished workflow carries status.
-function farNormalizeWorkflow(w) {
+// The TASK_CATEGORIES key for a task or workflow. Its name is consulted only
+// where a category says so: a capital activity's names the activity type.
+function farCategoryOf(w) {
+  const template = w.workflow_template ?? FAR_REQUEST_TEMPLATE;
+  const name = [w.display_name, w.workflow_display_name].filter(Boolean).join(' ');
+  const listed = TASK_CATEGORIES.filter(c => c.templates.includes(template));
+  const match = listed.find(c => c.named && c.named.test(name)) ?? listed.find(c => !c.named);
+  return match ? match.key : TASK_CATEGORY_OTHER;
+}
+
+// A task names the step it waits on; a finished workflow only has its own name.
+function farTaskTitle(w) {
+  return farUnwrap(w.display_name ?? w.workflow_display_name) || null;
+}
+
+// An open task carries pending_actor; a finished workflow carries status. The
+// request-only sources carry no template, so a row without one is a request.
+// `reviews` and `tracker` are whether this viewer may open the capital call review
+// panel and the reporting tracker.
+function farNormalizeWorkflow(w, reviews = true, tracker = true) {
   const closed = FAR_FINISHED_STATUSES.includes(w.status);
+  const isRequest = (w.workflow_template ?? FAR_REQUEST_TEMPLATE) === FAR_REQUEST_TEMPLATE;
   // Set only when the pending task is the GP's review, so a card knows to open
-  // the capital call panel rather than the thread.
-  const ccr = ccrIsReviewTask(w) ? ccrTargetFor(w) : null;
+  // the capital call panel rather than Carta.
+  const ccr = reviews && ccrIsReviewTask(w) ? ccrTargetFor(w) : null;
   const pending = ccr ? 'pending-customer' : farPendingState(w);
   return {
     id: w.workflow_id,
-    title: ccr ? CCR_CARD_TITLE : farRequestTitle(w),
+    title: isRequest ? farRequestTitle(w) : (farTaskTitle(w) ?? (ccr ? CCR_CARD_TITLE : 'Task from Carta')),
     subtitle: String(w.entity_name ?? '').trim() || null,
     group: closed ? 'done' : (FAR_GROUP_BY_PENDING[pending] ?? 'progress'),
+    category: farCategoryOf(w),
     state: pending,
     canceled: w.status === 'canceled',
-    // A review card is already named, and its thread is the workflow's own
-    // history rather than a request someone typed.
-    needsTitle: ccr ? false : farNeedsTitle(w),
+    // Only a request is a thread someone typed, so only its title can be improved
+    // from the opening message.
+    thread: isRequest,
+    needsTitle: isRequest && farNeedsTitle(w),
     requested: w.created_at ?? null,
+    completed: w.completed_date ?? null,
     lastActivity: w.last_activity_at ?? w.created_at ?? null,
-    webUrl: w._links?.web_url || null,
+    webUrl: farSafeHref(w._links?.web_url),
+    objectId: w.object_id ?? null,
     ccr,
+    // A package task opens the tracker for its period rather than Carta.
+    frt: tracker && !closed ? frtTargetFor(w) : null,
   };
 }
 
@@ -492,19 +507,19 @@ function farWritePlans(plans) {
   }
 }
 
-// Two sentences: where the plan lives, then what has not happened yet. Storage
-// is localStorage, so "this computer" is the normal case; the session wording is
-// the fallback for an origin that cannot store at all.
+// The Drafts tab's description: what a draft is, then where it lives. Storage is
+// localStorage, so "this computer" is the normal case; the session wording is the
+// fallback for an origin that cannot store at all.
 function farPlanTip() {
   return farStorageOk()
-    ? 'Planned work is saved on this computer. Nothing goes to Carta until you send.'
-    : 'Planned work is saved in this session only. Nothing goes to Carta until you send.';
+    ? 'Requests you haven’t sent yet. They are saved on this computer only — nothing goes to Carta until you send.'
+    : 'Requests you haven’t sent yet. They are saved in this session only — nothing goes to Carta until you send.';
 }
 
 function farPlanScopeNote() {
   return farStorageOk()
-    ? 'Save as plan keeps it on this computer only, until you send it.'
-    : 'Save as plan keeps it for this session only — this artifact cannot save it.';
+    ? 'Save as draft keeps it on this computer only, until you send it.'
+    : 'Save as draft keeps it for this session only — this artifact cannot save it.';
 }
 
 async function farSavePlan() {
@@ -539,14 +554,14 @@ async function farSavePlan() {
   _farPlanId = (at === -1 ? next[next.length - 1] : next[at]).planId;
   _farPicked.compose = [];
   closeFarCompose();
-  showToast(((at === -1 ? 'Saved as a plan' : 'Plan updated')
+  showToast(((at === -1 ? 'Saved as a draft' : 'Draft updated')
     + (farStorageOk() ? ' on this computer.' : ' for this session.')
     + ' Nothing has gone to Carta yet.')
     + (dropped === 0 ? '' : reason === 'big'
-      ? ` ${dropped === 1 ? 'Your file was' : 'Your files were'} too large to keep with a plan —`
+      ? ` ${dropped === 1 ? 'Your file was' : 'Your files were'} too large to keep with a draft —`
         + ' attach again when you send.'
       : ` There was no room to keep ${dropped === 1 ? 'your file' : 'your files'} —`
-        + ' discard an old plan, or attach again when you send.'));
+        + ' discard an old draft, or attach again when you send.'));
   renderFarSection();
 }
 
@@ -584,6 +599,7 @@ function farPlanRows() {
     planId: p.planId,
     title: farTitleFrom(p.message),
     group: 'planned',
+    category: TASK_CATEGORY_REQUEST,
     state: 'planned',
     requested: p.requested,
     lastActivity: p.requested,
@@ -604,18 +620,15 @@ async function farFetchFromIds() {
       id,
       title: farTitleFrom(msgs[0].text),
       group: last.isStaff ? 'todo' : 'progress',
+      category: TASK_CATEGORY_REQUEST,
       state: last.isStaff ? 'pending-customer' : 'pending-carta',
+      thread: true,
       requested: msgs[0].at,
       lastActivity: last.at,
       webUrl: null,
     });
   }
   return rows;
-}
-
-// Requests to Carta and capital call reviews; other dashboard tasks live elsewhere.
-function farIsQueueTask(t, reviews) {
-  return Boolean(t) && (t.workflow_template === FAR_REQUEST_TEMPLATE || (reviews && ccrIsReviewTask(t)));
 }
 
 // One card per workflow; the task waiting on the GP decides its group.
@@ -631,30 +644,34 @@ function farOneTaskPerWorkflow(tasks) {
   return [...byWorkflow.values()];
 }
 
+// Finished within FAR_DONE_DAYS; a workflow with no date to go on stays.
+function farRecentlyFinished(w, now = Date.now()) {
+  const at = farMs(w.completed_date ?? w.last_activity_at);
+  return !at || now - at <= FAR_DONE_DAYS * 86400000;
+}
+
 // Null when the open list fails; a failed finished list only empties Completed.
-// A task's created_at is when its current task opened, so the open workflows are
-// read too, for the date the request was filed.
+// A task's created_at is when its current task opened, so the open requests and
+// capital activities are read too, for the date each was filed.
 async function farFetchQueue() {
-  const [open, active, finished, reviews] = await Promise.all([
+  const [open, active, finished] = await Promise.all([
     farWalk(FAR_ACTIVE_TASKS_COMMAND, {}),
     farWalk('fa:list:firm-workflow', {
       workflow_templates: [FAR_REQUEST_TEMPLATE, CCR_WORKFLOW_TEMPLATE],
       statuses: ['active'],
     }, { partialOk: true }),
     farWalk('fa:list:firm-workflow', {
-      workflow_templates: [FAR_REQUEST_TEMPLATE],
       statuses: FAR_FINISHED_STATUSES,
     }, { maxPages: FAR_DONE_MAX_PAGES, partialOk: true }),
-    ccrReviewAvailable(),
   ]);
   if (!open) return null;
   const filed = new Map((active ?? []).map(w => [w.workflow_id, w.created_at]));
-  const tasks = farOneTaskPerWorkflow(open.filter(t => farIsQueueTask(t, reviews)))
+  const tasks = farOneTaskPerWorkflow(open)
     .map(t => Object.assign({}, t, { created_at: filed.get(t.workflow_id) ?? t.created_at }));
-  // A request that finished between the reads shows once, as open.
+  // A workflow that finished between the reads shows once, as open.
   const openIds = new Set(tasks.map(t => t.workflow_id));
   _farDoneCapped = Boolean(finished?.capped);
-  return tasks.concat((finished ?? []).filter(w => !openIds.has(w.workflow_id)));
+  return tasks.concat((finished ?? []).filter(w => !openIds.has(w.workflow_id) && farRecentlyFinished(w)));
 }
 
 // Three sources, most complete first; the id path is the floor.
@@ -666,12 +683,16 @@ async function farFetchRequests() {
       params: { page_size: FAR_PAGE_SIZE },
     });
     let rows = farResults(scoped);
+    let reviews = true;
+    let tracker = true;
 
-    if (!rows && _benchmarkFirmId) rows = await farFetchQueue();
+    if (!rows && _benchmarkFirmId) {
+      [rows, reviews, tracker] = await Promise.all([farFetchQueue(), ccrReviewAvailable(), frtTrackerAvailable()]);
+    }
 
     if (rows) {
       _farPartial = false;
-      _farRows = rows.map(farNormalizeWorkflow).filter(r => r.id != null);
+      _farRows = rows.map(w => farNormalizeWorkflow(w, reviews, tracker)).filter(r => r.id != null);
     } else {
       _farPartial = true;
       _farRows = await farFetchFromIds();
@@ -684,10 +705,11 @@ async function farFetchRequests() {
     _farRows = ccrQueueRows([]);
   }
   renderFarSection();
-  // Period cards come from a second read, so the queue paints first and they join it.
-  if (await frtAttachPeriodRows().catch(e => { console.error('[frt] tracker cards —', e); return false; })) {
-    renderFarSection();
-  }
+  // A seeded build's period card comes from a second read, so the queue paints first
+  // and it joins. The opening tab waits for it: it can be the only work on the GP.
+  await frtAttachPeriodRows().catch(e => { console.error('[frt] tracker cards —', e); return false; });
+  farPickFirstTab();
+  renderFarSection();
   // Hydration only improves titles, so it stays outside the try above — sharing
   // that catch let a cosmetic failure reset _farRows and blank a loaded queue.
   if (loaded) await farHydrateTitles().catch(e => console.error('[far] title hydration —', e));
@@ -758,17 +780,35 @@ function farRenderSent() {
   overlay.classList.add('far-overlay-visible');
 }
 
-// ── Sorting & view ──
+// ── Tabs, filters, sorting & view ──
 
-// The queue is grouped by status and rendered into fixed containers, so a sort by
-// status is a no-op — it reorders rows that are then re-partitioned by the same
-// key. Requested date is the only axis with anything to say, so the control is a
-// direction instead of a field.
+// Each tab is one of a row's groups. Its description says what the tab holds;
+// Drafts says where its rows are kept instead (farPlanTip).
+const FAR_TABS = [
+  { key: 'planned', label: 'Drafts', date: 'Drafted', pill: 'gray' },
+  { key: 'todo', label: 'Needs Action', date: 'As of', pill: 'orange',
+    description: 'Waiting on you. Review, approve or reply to move these forward.' },
+  { key: 'progress', label: 'With Carta', date: 'Started', pill: 'blue',
+    description: 'Carta is working on these. Nothing is needed from you until one moves to Needs Action.' },
+  { key: 'done', label: 'Completed', date: 'Completed', pill: 'gray',
+    description: 'Recently finished work.' },
+];
+const FAR_GROUP_PREVIEW = 5;   // items a category shows before "Show N more"
+
+// A sort by group or category is a no-op — the queue is partitioned by both — so
+// the date is the only axis, and the control is a direction instead of a field.
 let _farSort = 'newest';
 let _farView = 'board';
+let _farTab = 'todo';
+let _farTabChosen = false;    // set once the viewer picks a tab, or the first load picks one
+// Where the first load lands when Needs Action is empty: the next tab holding work.
+const FAR_TAB_OPEN_ORDER = ['todo', 'progress', 'planned', 'done'];
+const _farFilter = {};        // tab → category key, absent for All
+const _farMore = {};          // 'tab:category' → true once expanded
 
-const FAR_LIST_ICON = '<svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="2" cy="4" r="1.2"/><rect x="5" y="3" width="9" height="2" rx="1"/><circle cx="2" cy="8" r="1.2"/><rect x="5" y="7" width="9" height="2" rx="1"/><circle cx="2" cy="12" r="1.2"/><rect x="5" y="11" width="9" height="2" rx="1"/></svg>';
-const FAR_BOARD_ICON = '<svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>';
+const FAR_LIST_ICON = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M21 9H3"/><path d="M21 15H3"/></svg>';
+const FAR_BOARD_ICON = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>';
+const FAR_OUT_ICON = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10l6-6M5 4h5v5"/></svg>';
 
 function farSetSort(value) {
   _farSort = value;
@@ -782,42 +822,74 @@ function farToggleView() {
   renderFarSection();
 }
 
+// The first load opens on work rather than on an empty Needs Action; after
+// that the tab only changes when the viewer changes it.
+function farPickFirstTab() {
+  if (_farTabChosen || _farRows === null) return;
+  _farTabChosen = true;
+  const rows = _farRows.concat(farPlanRows());
+  if (rows.some(r => r.group === _farTab)) return;
+  _farTab = FAR_TAB_OPEN_ORDER.find(k => rows.some(r => r.group === k)) ?? _farTab;
+}
+
+function farSetTab(key) {
+  if (!FAR_TABS.some(t => t.key === key)) return;
+  _farTab = key;
+  _farTabChosen = true;
+  trackWorkhub('click', 'CartaWorkhub.FundAdminRequests.Tab');
+  renderFarSection();
+}
+
+function farSetFilter(category) {
+  if (category === 'all') delete _farFilter[_farTab];
+  else _farFilter[_farTab] = category;
+  trackWorkhub('click', 'CartaWorkhub.FundAdminRequests.Filter');
+  renderFarSection();
+}
+
+function farShowMore(category) {
+  _farMore[_farTab + ':' + category] = true;
+  trackWorkhub('click', 'CartaWorkhub.FundAdminRequests.ShowMore');
+  renderFarSection();
+}
+
+// The date a row is filed under: when it finished for Completed, else when it
+// started. Sorting and the card's date line read the same one.
+function farRowDate(r) {
+  return r.group === 'done' ? (r.completed ?? r.lastActivity ?? r.requested) : r.requested;
+}
+
 function farSorted(rows) {
   const dir = _farSort === 'oldest' ? -1 : 1;
-  return rows.slice().sort((a, b) =>
-    dir * (farMs(b.requested) - farMs(a.requested)));
+  return rows.slice().sort((a, b) => dir * (farMs(farRowDate(b)) - farMs(farRowDate(a))));
 }
 
 // ── Rendering ──
 
-function farAgo(ts) {
-  const d = farToDate(ts);
-  if (!d) return '';
-  const ms = Date.now() - d.getTime();
-  if (ms < 0) return '';
-  const mins = Math.floor(ms / 60000);
-  if (mins < 60) return `${Math.max(1, mins)}m`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h`;
-  return `${Math.floor(hrs / 24)}d`;
+function farCategory(key) {
+  return TASK_CATEGORIES.find(c => c.key === key) ?? TASK_CATEGORIES.find(c => c.key === TASK_CATEGORY_OTHER);
 }
 
-function farPlanCard(r) {
-  const card = document.createElement('div');
-  card.className = 'far-card far-card-planned';
-  card.innerHTML = `
-    <div class="far-card-head">
-      <div class="far-card-title">${escHtml(r.title ?? 'Planned request')}</div>
-      <span class="far-status-tag far-status-tag-planned">Not sent yet</span>
-    </div>
-    ${r.requested ? `<div class="far-card-sub">Drafted ${escHtml(farDate(r.requested))}</div>` : ''}
-    <div class="far-card-footer">
-      <button class="far-card-discard" data-far-plan="${escHtml(r.planId)}">Discard</button>
-      <button class="far-card-view" data-far-plan="${escHtml(r.planId)}">Review and send &rarr;</button>
-    </div>`;
-  card.querySelector('.far-card-view').addEventListener('click', () => farReviewPlan(r.planId));
-  card.querySelector('.far-card-discard').addEventListener('click', () => farDiscardPlan(r.planId));
-  return card;
+// A tab's rows by category, in TASK_CATEGORIES order, empty categories dropped.
+function farCategoryGroups(rows) {
+  return TASK_CATEGORIES
+    .map(c => ({ category: c, rows: rows.filter(r => farCategory(r.category).key === c.key) }))
+    .filter(g => g.rows.length > 0);
+}
+
+function farCategoryIcon(key, size) {
+  return `<svg class="far-cat-icon" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none"`
+    + ` stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"`
+    + ` aria-hidden="true">${farCategory(key).icon}</svg>`;
+}
+
+// What a card does when opened: the panels this page owns, else the row's page
+// in Carta. A row with neither is shown but opens nothing.
+function farOpenAction(r) {
+  if (r.ccr) return () => openCapitalCallReview(r.ccr, r.title);
+  if (r.frt) return () => openFinancialReportingTracker(r.frt, r.title);
+  if (r.thread) return () => openFarThread(r.id);
+  return null;
 }
 
 // Carta timestamps arrive without an offset and are UTC. `new Date` reads a
@@ -858,43 +930,6 @@ function farDate(ts) {
   return `${d.getDate()} ${month}${year}`;
 }
 
-function farCard(r, withTime) {
-  if (r.group === 'planned') return farPlanCard(r);
-  const isTodo = r.group === 'todo';
-  const isDone = r.group === 'done';
-  const card = document.createElement('div');
-  card.className = 'far-card' + (isTodo ? ' far-card-todo' : '');
-  const tagClass = isTodo ? 'far-status-tag-todo' : isDone ? 'far-status-tag-done' : 'far-status-tag-progress';
-  const dateLabel = isTodo ? 'As of' : 'Requested';
-  card.innerHTML = `
-    <div class="far-card-head">
-      <div class="far-card-title">${escHtml(r.title ?? 'Request to Carta')}</div>
-      <span class="far-status-tag ${tagClass}">${escHtml(farStatusLabel(r))}</span>
-    </div>
-    ${(() => { const e = r.subtitle; const d = r.requested ? (dateLabel + ' ' + escHtml(withTime ? farStamp(r.requested) : farDate(r.requested))) : null; const parts = [e ? escHtml(e) : null, d].filter(Boolean); return parts.length ? `<div class="far-card-sub">${parts.join(' · ')}</div>` : ''; })()}
-    <div class="far-card-footer">
-      <button class="far-card-view">${isTodo ? 'Review' : 'View'} &rarr;</button>
-      ${r.footnote ? `<span class="far-card-age">${escHtml(r.footnote)}</span>` : ''}
-    </div>`;
-  card.querySelector('.far-card-view').addEventListener('click', () =>
-    r.ccr ? openCapitalCallReview(r.ccr, r.title)
-      : r.frt ? openFinancialReportingTracker(r.frt, r.title)
-      : openFarThread(r.id));
-  return card;
-}
-
-function farRenderGroup(key, rows) {
-  const wrap = document.getElementById('far-group-' + key);
-  const cards = document.getElementById('far-cards-' + key);
-  if (!wrap || !cards) return;
-  wrap.style.display = rows.length > 0 ? '' : 'none';
-  const label = wrap.querySelector('.far-group-count');
-  if (label) label.textContent = String(rows.length);
-  cards.innerHTML = '';
-  const sameDay = farSameDayKeys(rows);
-  rows.forEach(r => cards.appendChild(farCard(r, sameDay.has(farDayKey(r.requested)))));
-}
-
 function farDayKey(ts) {
   const d = farToDate(ts);
   return d ? d.toDateString() : '';
@@ -904,99 +939,171 @@ function farDayKey(ts) {
 // like nothing happened. Those get the time as well.
 function farSameDayKeys(rows) {
   const counts = {};
-  rows.forEach(r => { const k = farDayKey(r.requested); if (k) counts[k] = (counts[k] ?? 0) + 1; });
+  rows.forEach(r => { const k = farDayKey(farRowDate(r)); if (k) counts[k] = (counts[k] ?? 0) + 1; });
   return new Set(Object.keys(counts).filter(k => counts[k] > 1));
 }
 
-function farRenderDone(rows) {
-  const wrap = document.getElementById('far-group-done');
-  const list = document.getElementById('far-cards-done');
-  if (!wrap || !list) return;
-  wrap.style.display = rows.length > 0 ? '' : 'none';
-  const more = _farDoneCapped ? '+' : '';
-  const label = wrap.querySelector('.far-group-count');
-  if (label) label.textContent = rows.length + more;
-
-  const toggle = document.getElementById('far-done-toggle');
-  if (toggle) toggle.textContent = _farDoneOpen ? '▾' : '▸';
-  list.style.display = _farDoneOpen ? '' : 'none';
-  if (!_farDoneOpen) return;
-
-  const shown = rows.slice(0, FAR_DONE_PREVIEW);
-  const rest = rows.length - shown.length;
-  list.innerHTML = shown.map(r => `
-    <div class="far-done-row" data-far-id="${escHtml(r.id)}">
-      <span class="far-done-check">✓</span>
-      <span class="far-done-title">${escHtml(r.title ?? 'Request to Carta')}</span>
-      <span class="far-done-age">${escHtml(farAgo(r.lastActivity))}</span>
-    </div>`).join('') + (rest > 0 ? `<div class="far-done-more">+ ${rest}${more} more</div>` : '');
-  list.querySelectorAll('.far-done-row').forEach(el =>
-    el.addEventListener('click', () => openFarThread(el.dataset.farId)));
+// "As of 4 Oct · Due 9 Oct": the tab's date word, then any footnote the row carries.
+function farDateLine(r, withTime) {
+  const ts = farRowDate(r);
+  const label = r.canceled ? 'Canceled' : (FAR_TABS.find(t => t.key === r.group) ?? FAR_TABS[2]).date;
+  const parts = [ts ? `${label} ${withTime ? farStamp(ts) : farDate(ts)}` : null, r.footnote].filter(Boolean);
+  return parts.join(' · ');
 }
 
-function toggleFarDone() {
-  trackWorkhub('click', 'CartaWorkhub.FundAdminRequests.ExpandCompleted');
-  _farDoneOpen = !_farDoneOpen;
-  renderFarSection();
+// A card opens its own panel (a button), Carta in a new tab (a link), or nothing.
+function farItemShell(r, cls) {
+  const open = farOpenAction(r);
+  if (open) {
+    const el = document.createElement('button');
+    el.type = 'button';
+    el.className = cls;
+    el.addEventListener('click', open);
+    return { el, external: false };
+  }
+  if (r.webUrl) {
+    const el = document.createElement('a');
+    el.className = cls;
+    el.href = r.webUrl;
+    el.target = '_blank';
+    el.rel = 'noopener noreferrer';
+    return { el, external: true };
+  }
+  const el = document.createElement('div');
+  el.className = cls + ' far-item-static';
+  return { el, external: false };
 }
 
-function farListRow(r) {
-  const isPlanned = r.group === 'planned';
-  const isTodo = r.group === 'todo';
-  const isDone = r.group === 'done';
-  const statusLabel = isPlanned ? 'Planned' : isTodo ? 'Tasks to complete' : isDone ? 'Completed' : 'In progress';
-  const tagClass = isPlanned ? 'far-status-tag-planned' : isTodo ? 'far-status-tag-todo' : isDone ? 'far-status-tag-done' : 'far-status-tag-progress';
-  const actionLabel = isPlanned ? 'Review and send' : isTodo ? 'Review' : 'View';
+const FAR_OUT_LABEL = `<span class="far-item-out">Carta ${FAR_OUT_ICON}</span>`;
 
-  const tr = document.createElement('tr');
-  tr.className = 'far-list-row';
-  const entity = r.subtitle;
-  tr.innerHTML =
-    `<td class="far-list-cell far-list-status"><span class="far-status-tag ${tagClass}">${escHtml(statusLabel)}</span></td>` +
-    `<td class="far-list-cell far-list-title">${escHtml(r.title ?? 'Request to Carta')}</td>` +
-    `<td class="far-list-cell far-list-entity">${entity ? escHtml(entity) : '<span class="far-list-empty">—</span>'}</td>` +
-    `<td class="far-list-cell far-list-date">${escHtml(r.requested ? farDate(r.requested) : '—')}</td>` +
-    `<td class="far-list-cell far-list-action"><button class="far-card-view">${escHtml(actionLabel)} →</button></td>` +
-    `<td class="far-list-cell far-list-overflow"><div class="far-overflow-wrap">` +
-    `<button class="far-overflow-btn" aria-label="More options">⋮</button>` +
-    `<div class="far-overflow-menu" hidden>${isPlanned ? `<button class="far-overflow-item far-card-discard">Discard</button>` : `<span class="far-overflow-empty">No actions</span>`}</div>` +
-    `</div></td>`;
+function farCard(r, withTime) {
+  if (r.group === 'planned') return farPlanCard(r);
+  const { el, external } = farItemShell(r, 'far-card');
+  el.innerHTML = `
+    <span class="far-card-head">
+      <span class="far-card-main">
+        <span class="far-card-title">${escHtml(r.title ?? 'Request to Carta')}</span>
+        ${r.subtitle ? `<span class="far-card-sub">${escHtml(r.subtitle)}</span>` : ''}
+      </span>
+      ${farCategoryIcon(r.category, 26)}
+    </span>
+    <span class="far-card-footer">
+      <span class="far-card-date">${escHtml(farDateLine(r, withTime))}</span>
+      ${external ? FAR_OUT_LABEL : ''}
+    </span>`;
+  return el;
+}
 
-  tr.querySelector('.far-card-view').addEventListener('click', () =>
-    isPlanned ? farReviewPlan(r.planId)
-      : r.ccr ? openCapitalCallReview(r.ccr, r.title) : openFarThread(r.id));
+// Draft actions shared by the card and list views.
+const FAR_PLAN_ACTIONS = '<span class="far-plan-actions">'
+  + '<button type="button" class="far-card-discard">Discard</button>'
+  + '<button type="button" class="far-card-view">Review and send</button></span>';
 
-  const btn = tr.querySelector('.far-overflow-btn');
-  const menu = tr.querySelector('.far-overflow-menu');
-  btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const wasHidden = menu.hidden;
-    document.querySelectorAll('.far-overflow-menu').forEach(m => { m.hidden = true; });
-    menu.hidden = !wasHidden;
+function farWirePlanActions(el, r) {
+  el.querySelector('.far-card-view').addEventListener('click', () => farReviewPlan(r.planId));
+  el.querySelector('.far-card-discard').addEventListener('click', () => farDiscardPlan(r.planId));
+}
+
+function farPlanCard(r) {
+  const card = document.createElement('div');
+  card.className = 'far-card far-card-planned';
+  card.innerHTML = `
+    <span class="far-card-head">
+      <span class="far-card-main">
+        <span class="far-card-title">${escHtml(r.title ?? 'Draft request')}</span>
+      </span>
+      ${farCategoryIcon(r.category, 26)}
+    </span>
+    <span class="far-card-footer">
+      <span class="far-card-date">${escHtml(farDateLine(r, false))}</span>
+      ${FAR_PLAN_ACTIONS}
+    </span>`;
+  farWirePlanActions(card, r);
+  return card;
+}
+
+function farListRow(r, withTime) {
+  const planned = r.group === 'planned';
+  const { el, external } = planned
+    ? { el: Object.assign(document.createElement('div'), { className: 'far-row far-row-planned' }), external: false }
+    : farItemShell(r, 'far-row');
+  const meta = [r.subtitle, farDateLine(r, withTime)].filter(Boolean).join(' · ');
+  el.innerHTML = `
+    ${farCategoryIcon(r.category, 20)}
+    <span class="far-row-title">${escHtml(r.title ?? 'Request to Carta')}</span>
+    <span class="far-row-meta">${escHtml(meta)}</span>
+    ${planned ? FAR_PLAN_ACTIONS : ''}
+    ${external ? FAR_OUT_LABEL : ''}`;
+  if (planned) farWirePlanActions(el, r);
+  return el;
+}
+
+function farRenderTabs(byTab) {
+  const nav = document.getElementById('far-tabs');
+  if (!nav) return;
+  nav.innerHTML = FAR_TABS.map(t => {
+    // Completed stops at a page cap, so its count is a floor. No + on an empty count.
+    const n = byTab[t.key].length;
+    const count = n + (t.key === 'done' && _farDoneCapped && n > 0 ? '+' : '');
+    const on = t.key === _farTab;
+    return `<button type="button" class="far-tab${on ? ' far-tab-active' : ''}" aria-pressed="${on}"`
+      + ` onclick="farSetTab('${t.key}')">${escHtml(t.label)}`
+      + `<span class="far-tab-count far-pill-${t.pill}" data-far-count="${t.key}">${count}</span></button>`;
+  }).join('');
+}
+
+function farRenderChips(groups, active, total) {
+  const chips = document.getElementById('far-chips');
+  if (!chips) return;
+  chips.style.display = total > 0 ? '' : 'none';
+  const chip = (key, name, count) => {
+    const on = key === active;
+    return `<button type="button" class="far-chip${on ? ' far-chip-active' : ''}" aria-pressed="${on}"`
+      + ` onclick="farSetFilter('${key}')" data-far-chip="${key}">${escHtml(name)}`
+      + `<span class="far-chip-count">${count}</span></button>`;
+  };
+  chips.innerHTML = chip('all', 'All', total)
+    + groups.map(g => chip(g.category.key, g.category.name, g.rows.length)).join('');
+}
+
+function farRenderGroups(groups, withLabels) {
+  const wrap = document.getElementById('far-groups');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  wrap.className = 'far-groups far-tab-' + _farTab;
+  const isList = _farView === 'list';
+  groups.forEach(g => {
+    const key = g.category.key;
+    const expanded = _farMore[_farTab + ':' + key];
+    const shown = expanded ? g.rows : g.rows.slice(0, FAR_GROUP_PREVIEW);
+    const hidden = g.rows.length - shown.length;
+    const section = document.createElement('div');
+    section.className = 'far-cat';
+    section.dataset.farCategory = key;
+    if (withLabels) {
+      const label = document.createElement('div');
+      label.className = 'far-cat-label';
+      label.textContent = g.category.name;
+      section.appendChild(label);
+    }
+    const items = document.createElement('div');
+    items.className = isList ? 'far-rows' : 'far-cards';
+    const sameDay = farSameDayKeys(shown);
+    shown.forEach(r => {
+      const withTime = sameDay.has(farDayKey(farRowDate(r)));
+      items.appendChild(isList ? farListRow(r, withTime) : farCard(r, withTime));
+    });
+    section.appendChild(items);
+    if (hidden > 0) {
+      const more = document.createElement('button');
+      more.type = 'button';
+      more.className = 'far-more';
+      more.textContent = `Show ${hidden} more`;
+      more.addEventListener('click', () => farShowMore(key));
+      section.appendChild(more);
+    }
+    wrap.appendChild(section);
   });
-
-  const discard = tr.querySelector('.far-overflow-item');
-  if (discard) discard.addEventListener('click', () => farDiscardPlan(r.planId));
-
-  return tr;
-}
-
-function farRenderList(rows) {
-  const listView = document.getElementById('far-list-view');
-  if (!listView) return;
-  listView.innerHTML = '';
-  if (!rows.length) return;
-  const table = document.createElement('table');
-  table.className = 'far-list-table';
-  table.innerHTML = '<thead><tr>' +
-    '<th class="far-list-th">Status</th><th class="far-list-th">Request</th>' +
-    '<th class="far-list-th">Entity</th><th class="far-list-th">Date</th>' +
-    '<th class="far-list-th"></th><th class="far-list-th"></th>' +
-    '</tr></thead>';
-  const tbody = document.createElement('tbody');
-  rows.forEach(r => tbody.appendChild(farListRow(r)));
-  table.appendChild(tbody);
-  listView.appendChild(table);
 }
 
 // The composer never hides — a section that vanishes takes the entry point with it.
@@ -1006,40 +1113,35 @@ function renderFarSection() {
   section.style.display = '';
 
   const rows = farSorted((_farRows ?? []).concat(farPlanRows()));
-  const isList = _farView === 'list';
+  const byTab = Object.fromEntries(FAR_TABS.map(t => [t.key, rows.filter(r => r.group === t.key)]));
+  const tab = FAR_TABS.find(t => t.key === _farTab);
+  const tabRows = byTab[tab.key];
+  const groups = farCategoryGroups(tabRows);
+  const active = groups.some(g => g.category.key === _farFilter[tab.key]) ? _farFilter[tab.key] : 'all';
 
-  const listView = document.getElementById('far-list-view');
-  const groups = ['planned', 'todo', 'progress', 'done'];
+  farRenderTabs(byTab);
+  farRenderChips(groups, active, tabRows.length);
+  farRenderGroups(active === 'all' ? groups : groups.filter(g => g.category.key === active), active === 'all');
 
-  if (isList) {
-    groups.forEach(k => { const g = document.getElementById('far-group-' + k); if (g) g.style.display = 'none'; });
-    if (listView) { listView.style.display = rows.length ? '' : 'none'; farRenderList(rows); }
-  } else {
-    if (listView) listView.style.display = 'none';
-    farRenderGroup('planned', rows.filter(r => r.group === 'planned'));
-    farRenderGroup('todo', rows.filter(r => r.group === 'todo'));
-    farRenderGroup('progress', rows.filter(r => r.group === 'progress'));
-    farRenderDone(rows.filter(r => r.group === 'done'));
-  }
+  const desc = document.getElementById('far-tab-desc');
+  if (desc) desc.textContent = tab.key === 'planned' ? farPlanTip() : tab.description;
 
-  const sortWrap = document.getElementById('far-sort-wrap');
-  if (sortWrap) sortWrap.style.display = rows.length > 1 ? '' : 'none';
+  const sort = document.getElementById('far-sort');
+  if (sort) sort.value = _farSort;
 
   const viewBtn = document.getElementById('far-view-btn');
   if (viewBtn) {
+    const isList = _farView === 'list';
     viewBtn.innerHTML = isList ? FAR_BOARD_ICON : FAR_LIST_ICON;
-    viewBtn.setAttribute('aria-label', isList ? 'Switch to board view' : 'Switch to list view');
-    viewBtn.title = isList ? 'Switch to board view' : 'Switch to list view';
+    viewBtn.setAttribute('aria-label', isList ? 'Switch to card view' : 'Switch to list view');
+    viewBtn.title = isList ? 'Switch to card view' : 'Switch to list view';
   }
 
   const note = document.getElementById('far-partial-note');
   if (note) note.style.display = _farPartial && rows.length > 0 ? '' : 'none';
 
   const empty = document.getElementById('far-empty');
-  if (empty) empty.style.display = rows.length === 0 ? '' : 'none';
-
-  const tip = document.getElementById('far-plan-tip');
-  if (tip) tip.textContent = farPlanTip();
+  if (empty) empty.style.display = tabRows.length === 0 ? '' : 'none';
 }
 
 
@@ -1106,7 +1208,7 @@ function openFarCompose(resume) {
       </div>
       <div class="far-panel-footer">
         <button class="far-btn-secondary" onclick="closeFarCompose()">Cancel</button>
-        <button class="far-btn-secondary" id="far-compose-plan" onclick="farSavePlan()">Save as plan</button>
+        <button class="far-btn-secondary" id="far-compose-plan" onclick="farSavePlan()">Save as draft</button>
         <button class="far-btn-primary" id="far-compose-review" onclick="reviewFarCompose()">Review request</button>
       </div>
       <p class="far-compose-caveat">${farPlanScopeNote()}</p>
@@ -1263,7 +1365,9 @@ async function submitFarCompose() {
       id,
       title: label ?? farTitleFrom(message),
       group: 'progress',
+      category: TASK_CATEGORY_REQUEST,
       state: 'pending-carta',
+      thread: true,
       canceled: false,
       // Without `requested` the card shows a blank date and sorts to the bottom.
       requested: now,
@@ -1670,10 +1774,6 @@ async function submitFarReply() {
     if (btn) { btn.disabled = false; btn.textContent = 'Send'; }
   }
 }
-
-document.addEventListener('click', () => {
-  document.querySelectorAll('.far-overflow-menu').forEach(m => { m.hidden = true; });
-});
 
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;

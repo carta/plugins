@@ -10,9 +10,12 @@
 
 
     :root {
-      color-scheme: light dark;
+      /* Light only, as the Workhub design is: every light-dark() pair below
+         resolves to its light value. */
+      color-scheme: light;
       --ink-color-global-text-default:               light-dark(#1A1A1A, #EDEDED);
       --ink-color-global-text-subtle:                light-dark(#656B6B, #A7AAAA);
+      --ink-color-global-text-very-subtle:           light-dark(#9C9F9F, #394040);
       --ink-color-global-surface-background-default: light-dark(#FFFFFF, rgb(18 18 18));
       /* Local, intentionally non-Ink: the elevated card surface used in dark mode.
          #2C3030 is not the value of any Ink surface token, so it carries a --carta-*
@@ -28,6 +31,7 @@
       --carta-surface-card-nested:                   light-dark(#F1F1F1, #394040);
       --ink-color-global-border-subtle:              light-dark(#DEDFDF, #2D2D2D);
       --ink-color-global-border-default:             light-dark(#A7AAAA, #656B6B);
+      --ink-color-global-border-hover:               light-dark(#656B6B, #9C9F9F);
       --ink-elevation-global-shadow-small:           0 4px 12px 0 rgb(0 0 0 / 0.08);
       --ink-elevation-global-shadow-medium:          0 4px 20px 0 rgb(0 0 0 / 0.1);
       --ink-elevation-global-shadow-large:           0 4px 20px 0 rgb(0 0 0 / 0.2);
@@ -76,6 +80,7 @@
       --ink-color-global-surface-background-overlay:  light-dark(rgb(0 0 0 / 0.8), rgb(80 80 80 / 0.8));
       /* Text / links / borders */
       --ink-color-global-link-default:               light-dark(#285DA3, #8BABD6);
+      --ink-color-global-link-hover:                 light-dark(#1A3E6D, #4176BC);
       --ink-color-global-border-active:              light-dark(#1A1A1A, #CECFCF);
       /* Focus. This artifact never links tokens.css, so Ink's focus pair has to
          be declared locally for the :focus-visible model below. */
@@ -119,7 +124,7 @@
 
 
     .container {
-      max-width: 1080px;
+      max-width: 1320px;
       margin: 0 auto;
       padding: 28px 32px 64px;
     }
@@ -152,11 +157,12 @@
     /* ── Page header ── */
     .page-title {
       font-family: var(--ink-font-global-family-prominent);
-      font-size: var(--ink-font-global-size-display-1);
+      font-size: 40px;
       font-weight: 400;
-      line-height: var(--ink-font-global-leading-display-1);
+      line-height: 1.1;
+      letter-spacing: -0.01em;
       color: var(--ink-color-global-text-default);
-      margin-bottom: 8px;
+      margin-bottom: 16px;
     }
 
     .page-subtitle {
@@ -208,19 +214,18 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 14px 16px;
-  margin-bottom: 20px;
-  background: light-dark(var(--ink-color-global-surface-background-default), var(--carta-surface-card-elevated));
-  border: 1px solid var(--ink-color-global-border-subtle);
-  box-shadow: var(--ink-elevation-global-shadow-small);
+  gap: 24px;
+  padding: 20px 24px;
+  background: var(--ink-color-global-surface-background-default);
+  border: 1px solid var(--ink-color-global-border-default);
+  border-radius: var(--ink-size-global-radius-subtle);
 }
 
 .far-compose-label {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--ink-color-global-text-default);
 }
@@ -228,141 +233,276 @@
 .far-compose-icon { color: inherit; }
 
 
-.far-group { margin-bottom: 20px; }
-
-.far-group-label {
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: .04em;
-  color: var(--ink-color-global-text-subtle);
-  margin-bottom: 10px;
+.far-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 28px;
 }
 
-.far-group-label-toggle { cursor: pointer; user-select: none; }
+.far-tabs { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+
+.far-tab,
+.far-chip,
+.far-sort,
+.far-view-btn {
+  font-family: inherit;
+  font-weight: 500;
+  color: var(--ink-color-global-text-default);
+  background: transparent;
+  border: 1px solid var(--ink-color-global-border-default);
+  cursor: pointer;
+  transition: border-color 80ms ease-out, background-color 80ms ease-out;
+}
+
+.far-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  padding: 0 15px;
+  border-radius: var(--ink-size-global-radius-subtle);
+  font-size: 14px;
+  line-height: 20px;
+  white-space: nowrap;
+}
+
+.far-tab:hover,
+.far-chip:hover,
+.far-sort:hover,
+.far-view-btn:hover { border-color: var(--ink-color-global-border-hover); }
+
+.far-tab-active,
+.far-chip-active {
+  background: var(--ink-color-global-brand-black);
+  border-color: var(--ink-color-global-brand-black);
+  color: var(--ink-color-global-brand-white);
+}
+
+.far-tab-active:hover,
+.far-chip-active:hover { border-color: var(--ink-color-global-brand-black); }
+
+.far-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: var(--ink-radius-pill);
+  font-size: 12px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.far-pill-gray { background: #DEDFDF; color: #202020; }
+/* The design's orange-60 behind white text is 2.6:1; dark text on it clears AA. */
+.far-pill-orange { background: #FF7D55; color: #1A1A1A; }
+.far-pill-blue { background: #C0D1E9; color: #122948; }
+
+.far-sort-wrap { display: flex; align-items: center; gap: 16px; }
+
+.far-sort-label { font-size: 14px; color: var(--ink-color-global-text-subtle); }
+
+.far-sort {
+  height: 40px;
+  padding: 0 36px 0 15px;
+  border-radius: var(--ink-size-global-radius-subtle);
+  font-size: 14px;
+  line-height: 20px;
+  appearance: none;
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%231A1A1A" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>');
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
+
+.far-view-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--ink-size-global-radius-subtle);
+}
+
+.far-tab-desc {
+  margin-top: 20px;
+  max-width: 760px;
+  font-size: 14px;
+  line-height: 24px;
+  color: var(--ink-color-global-text-subtle);
+}
+
+.far-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+
+.far-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  border-color: var(--ink-color-global-border-subtle);
+  border-radius: var(--ink-radius-pill);
+  font-size: 13px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.far-chip-count { color: var(--ink-color-global-text-subtle); font-variant-numeric: tabular-nums; }
+.far-chip-active .far-chip-count { color: inherit; opacity: 0.7; }
+
+/* Each tab tints its category icons, as the design does. */
+.far-groups { --far-accent: #9C9F9F; }
+.far-groups.far-tab-todo { --far-accent: #FF7D55; }
+.far-groups.far-tab-progress { --far-accent: #8BABD6; }
+
+.far-cat { margin-top: 28px; }
+
+.far-cat-label {
+  padding-bottom: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-color-global-text-subtle);
+}
+
+.far-cat-icon { flex: 0 0 auto; color: var(--far-accent); }
 
 .far-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 16px;
+  margin-top: 8px;
 }
 
+/* A card is a button, a link or a plain box; all three read the same. */
 .far-card {
-  background: light-dark(var(--ink-color-global-surface-background-default), var(--carta-surface-card-elevated));
-  border: 1px solid var(--ink-color-global-border-subtle);
-  padding: 16px 16px 12px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  min-height: 120px;
+  min-height: 148px;
+  padding: 20px;
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  color: inherit;
+  background: var(--ink-color-global-surface-background-default);
+  border: 1px solid var(--ink-color-global-border-subtle);
+  border-radius: var(--ink-size-global-radius-subtle);
   box-shadow: var(--ink-elevation-global-shadow-small);
-  transition: box-shadow .15s;
+  cursor: pointer;
+  transition: box-shadow 80ms ease-out, border-color 80ms ease-out;
 }
 
-.far-card:hover { box-shadow: var(--ink-elevation-global-shadow-medium); }
+.far-card:hover { box-shadow: var(--ink-elevation-global-shadow-medium); border-color: var(--ink-color-global-border-default); }
+.far-card.far-item-static,
+.far-card-planned { cursor: default; }
+.far-card-planned { border-style: dashed; }
 
-.far-card-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 8px;
-}
+.far-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.far-card-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
 
 .far-card-title {
-  font-size: 13px;
+  font-size: 15px;
+  line-height: 22px;
   font-weight: 600;
-  line-height: 1.35;
   color: var(--ink-color-global-text-default);
-  flex: 1;
-  min-width: 0;
+  text-wrap: pretty;
 }
 
 .far-card-sub {
-  font-size: 11px;
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 20px;
   color: var(--ink-color-global-text-subtle);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-
-.far-status-tag {
-  font-size: 11px;
-  font-weight: 500;
-  padding: 2px 8px;
-  border-radius: 10px;
-  white-space: nowrap;
-  flex-shrink: 0;
-  line-height: 18px;
-}
-
-.far-status-tag-planned {
-  background: var(--ink-color-global-surface-lightgray-default);
-  color: var(--ink-color-global-text-subtle);
-}
-
-.far-status-tag-todo {
-  background: light-dark(#EBF3FF, #162034);
-  color: var(--ink-color-global-link-default);
-}
-
-.far-status-tag-done {
-  background: var(--ink-color-global-feedback-positive-subtle);
-  color: var(--ink-color-global-feedback-positive-strong);
-}
-
-.far-status-tag-progress {
-  background: var(--ink-color-global-surface-lightgray-default);
-  color: var(--ink-color-global-text-subtle);
 }
 
 .far-card-footer {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
+  gap: 16px;
   margin-top: auto;
-  padding-top: 4px;
-}
-.far-card-footer > .far-card-view:only-child { margin-left: auto; }
-
-.far-card-view {
-  background: none; border: none; cursor: pointer;
-  padding: 0; font-family: inherit;
-  font-size: 12px; font-weight: 600;
-  color: var(--ink-color-global-link-default);
+  padding-top: 16px;
 }
 
-.far-card-age {
-  font-size: 11px;
-  color: var(--ink-color-global-text-subtle);
-  font-variant-numeric: tabular-nums;
-}
-
-
-.far-done-list { display: flex; flex-direction: column; }
-
-.far-done-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 2px;
-  cursor: pointer;
-  border-bottom: 1px solid var(--ink-color-global-border-subtle);
-  font-size: 12px;
-}
-
-.far-done-check { color: var(--ink-color-global-feedback-positive-strong); flex-shrink: 0; }
-
-.far-done-title {
-  flex: 1;
-  color: var(--ink-color-global-text-default);
+.far-card-date {
+  min-width: 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--ink-color-global-text-very-subtle);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
-.far-done-age {
+.far-item-out {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+  line-height: 20px;
   color: var(--ink-color-global-text-subtle);
-  font-variant-numeric: tabular-nums;
-  flex-shrink: 0;
 }
 
-.far-done-more { padding: 8px 2px; font-size: 12px; color: var(--ink-color-global-text-subtle); }
+.far-plan-actions { display: inline-flex; align-items: baseline; gap: 16px; flex: 0 0 auto; }
+
+.far-card-view,
+.far-card-discard {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.far-card-view { color: var(--ink-color-global-link-default); text-decoration: underline; text-underline-offset: 0.15em; }
+.far-card-view:hover { color: var(--ink-color-global-link-hover); }
+.far-card-discard { color: var(--ink-color-global-text-subtle); }
+.far-card-discard:hover { color: var(--ink-color-global-feedback-negative-strong); }
+
+.far-rows { display: flex; flex-direction: column; }
+
+.far-row {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 14px 4px;
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  color: inherit;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--ink-color-global-border-subtle);
+  cursor: pointer;
+}
+
+.far-row:hover { background: var(--ink-color-global-surface-lightgray-default); }
+.far-row.far-item-static,
+.far-row-planned { cursor: default; }
+
+.far-row-title,
+.far-row-meta { flex: 2 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.far-row-title { font-size: 14px; font-weight: 500; color: var(--ink-color-global-text-default); }
+.far-row-meta { font-size: 13px; color: var(--ink-color-global-text-subtle); }
+
+.far-more {
+  margin-top: 16px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--ink-color-global-link-default);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+  cursor: pointer;
+}
+
+.far-more:hover { color: var(--ink-color-global-link-hover); }
 
 
 .far-partial-note {
@@ -729,83 +869,6 @@
   border-color: var(--ink-color-global-border-default);
 }
 
-.far-sort-wrap {
-  display: flex; align-items: center; gap: 8px;
-  margin: 0 0 14px;
-}
-.far-sort-label { font-size: 12px; color: var(--ink-color-global-text-subtle); }
-.far-sort {
-  font: inherit; font-size: 12px;
-  padding: 4px 8px;
-  color: var(--ink-color-global-text-default);
-  background: var(--ink-color-global-surface-background-default);
-  border: 1px solid var(--ink-color-global-border-subtle);
-  border-radius: var(--ink-size-global-radius-subtle);
-}
-
-/* Dashed edge marks a card that exists only here — nothing has been sent. */
-.far-card-planned { border-style: dashed; }
-.far-dot-planned { background: var(--ink-color-global-text-subtle); }
-
-.far-card-discard {
-  font: inherit; font-size: 12px;
-  padding: 0; cursor: pointer;
-  background: none; border: 0;
-  color: var(--ink-color-global-text-subtle);
-}
-.far-card-discard:hover { color: var(--ink-color-global-feedback-negative-strong); }
-
-
-.far-card-muted { color: var(--ink-color-global-text-subtle); font-style: italic; }
-
-.far-view-btn {
-  margin-left: auto; display: flex; align-items: center;
-  background: none; border: 1px solid var(--ink-color-global-border-subtle);
-  border-radius: var(--ink-size-global-radius-subtle); cursor: pointer;
-  padding: 4px 7px; color: var(--ink-color-global-text-subtle); line-height: 1;
-}
-.far-view-btn:hover { color: var(--ink-color-global-text-default); background: var(--ink-color-global-surface-background-hover); }
-
-.far-list-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
-.far-list-th {
-  text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase;
-  letter-spacing: 0.05em; color: var(--ink-color-global-text-subtle);
-  padding: 6px 12px 6px 0; border-bottom: 1px solid var(--ink-color-global-border-subtle);
-}
-.far-list-row { border-bottom: 1px solid var(--ink-color-global-border-subtle); }
-.far-list-row:last-child { border-bottom: 0; }
-.far-list-row:hover { background: var(--ink-color-global-surface-background-hover); }
-.far-list-cell { padding: 11px 12px 11px 0; vertical-align: middle; font-size: 13px; }
-.far-list-status { white-space: nowrap; }
-.far-list-title { width: 100%; color: var(--ink-color-global-text-default); font-weight: 500; }
-.far-list-entity { color: var(--ink-color-global-text-subtle); font-size: 12px; min-width: 200px; }
-.far-list-empty { color: var(--ink-color-global-text-subtle); }
-.far-list-date { white-space: nowrap; color: var(--ink-color-global-text-subtle); font-size: 12px; min-width: 70px; }
-.far-list-action { white-space: nowrap; }
-.far-list-overflow { white-space: nowrap; padding-right: 0; }
-.far-overflow-wrap { position: relative; display: inline-block; }
-.far-overflow-btn {
-  background: none; border: none; cursor: pointer; padding: 2px 6px;
-  font-size: 18px; line-height: 1; color: var(--ink-color-global-text-subtle);
-  border-radius: var(--ink-size-global-radius-subtle);
-}
-.far-overflow-btn:hover { background: var(--ink-color-global-surface-background-hover); color: var(--ink-color-global-text-default); }
-.far-overflow-menu {
-  position: absolute; right: 0; top: calc(100% + 4px); z-index: 20;
-  background: var(--ink-color-global-surface-background-default);
-  border: 1px solid var(--ink-color-global-border-subtle);
-  border-radius: var(--ink-size-global-radius-subtle);
-  box-shadow: var(--ink-elevation-global-shadow-medium);
-  min-width: 120px; padding: 4px 0;
-}
-.far-overflow-item {
-  display: block; width: 100%; text-align: left; font: inherit; font-size: 13px;
-  padding: 7px 14px; background: none; border: none; cursor: pointer;
-  color: var(--ink-color-global-text-default);
-}
-.far-overflow-item:hover { background: var(--ink-color-global-surface-background-hover); }
-.far-overflow-empty { display: block; padding: 7px 14px; font-size: 12px; color: var(--ink-color-global-text-subtle); }
-
 .far-items { margin: 14px 0 0; }
 .far-items-title {
   font-size: 12px; font-weight: 600; margin: 0 0 8px;
@@ -839,50 +902,6 @@
   color: var(--ink-color-global-text-subtle);
   margin: 8px 0 0; padding: 0 20px 4px;
   text-align: right;
-}
-
-.far-tip { position: relative; display: inline-flex; margin-left: 6px; }
-
-.far-tip-btn {
-  font: inherit; font-size: 10px; line-height: 14px;
-  width: 14px; height: 14px; padding: 0; cursor: help;
-  display: flex; align-items: center; justify-content: center;
-  color: var(--ink-color-global-text-subtle);
-  background: var(--ink-color-global-surface-lightgray-default);
-  border: 1px solid var(--ink-color-global-border-subtle);
-  border-radius: 50%;
-}
-
-.far-tip-body {
-  position: absolute;
-  bottom: calc(100% + 6px);
-  /* Left-anchored, not centred: the icon sits near the page margin, and a
-     centred 260px bubble hangs off the left edge. */
-  left: 0;
-  z-index: 5;
-  width: max-content;
-  max-width: 260px;
-  padding: 8px 10px;
-  font-size: 11px;
-  font-weight: 400;
-  line-height: 16px;
-  text-transform: none;
-  letter-spacing: normal;
-  color: var(--ink-color-global-brand-white);
-  background: var(--ink-color-global-brand-black);
-  border-radius: var(--ink-size-global-radius-subtle);
-  /* Hidden from the a11y tree too, not just visually — aria-describedby reads it
-     on focus, so it must not be announced twice while closed. */
-  visibility: hidden;
-  opacity: 0;
-  transition: opacity 120ms ease;
-}
-
-/* Focus as well as hover: a help affordance nobody can tab to is not one. */
-.far-tip:hover .far-tip-body,
-.far-tip-btn:focus-visible + .far-tip-body {
-  visibility: visible;
-  opacity: 1;
 }
 
 
