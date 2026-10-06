@@ -52,7 +52,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.60.0</carta-plugin>
+<carta-plugin>carta-investors:6.60.2</carta-plugin>
 
 # Carta Home — Build / Redeploy / Open
 

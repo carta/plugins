@@ -16,7 +16,33 @@ const isQuarterEnd = (d) => ["-03-", "-06-", "-09-", "-12-"].some((q) => String(
  *  reporters alike. Lifted out of views/Coverage.jsx so the grid, the digest and
  *  the health table can never drift apart on what "reported" means. */
 export function coversQuarter(pts, qd) {
-  return pts.some((p) => { const m = monthsBetween(p.d, qd); return m >= 0 && m <= 2; });
+  const months = monthIndexes(pts);
+  const q = monthIndex(qd);
+  return months.has(q) || months.has(q - 1) || months.has(q - 2);
+}
+
+// "YYYY-MM-DD" -> absolute month number, parsed exactly as monthsBetween does so a
+// point is covered iff 0 <= monthsBetween(p.d, qd) <= 2. Malformed dates give NaN,
+// which stays out of the sets because Set treats NaN as equal to NaN.
+// The fixed-width "YYYY-MM[-DD]" case slices instead of splitting: it runs once per point.
+function monthIndex(d) {
+  const s = String(d);
+  if (s[4] === "-" && (s.length === 7 || s[7] === "-")) return +s.slice(0, 4) * 12 + +s.slice(5, 7);
+  const [y, m] = s.split("-").map(Number);
+  return y * 12 + m;
+}
+
+// Series arrays are replaced, never mutated in place, so each array's month set is
+// built once and reused by every quarter lookup.
+const monthSets = new WeakMap();
+function monthIndexes(pts) {
+  let set = monthSets.get(pts);
+  if (!set) {
+    set = new Set();
+    for (const p of pts) { const i = monthIndex(p.d); if (!Number.isNaN(i)) set.add(i); }
+    monthSets.set(pts, set);
+  }
+  return set;
 }
 
 /** Every quarter-end in the dataset, ascending. */
@@ -24,8 +50,19 @@ export function quartersOf(data) {
   return (data.dimensions?.periods || []).slice().sort().filter(isQuarterEnd);
 }
 
+// Per-dataset cache of coverageAt by quarter: the Overview and Reporting health ask
+// for the same quarters on every render, and the walk is companies x series x points.
+const coverageCache = new WeakMap();
+
 /** How many companies reported anything at all in a given quarter. */
 export function coverageAt(data, qd) {
+  let byQuarter = coverageCache.get(data);
+  if (!byQuarter) coverageCache.set(data, (byQuarter = new Map()));
+  if (!byQuarter.has(qd)) byQuarter.set(qd, countCovering(data, qd));
+  return byQuarter.get(qd);
+}
+
+function countCovering(data, qd) {
   let n = 0;
   for (const c of data.companies || []) {
     const series = c.series || {};
