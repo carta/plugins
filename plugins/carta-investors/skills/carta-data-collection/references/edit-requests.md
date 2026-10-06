@@ -45,6 +45,10 @@ call_tool({"name": "data_collection__get__request",
 Show what the request asks for now, as labels, before proposing a change. The company may already
 have started work against it.
 
+That includes the firm's own document types. `requested_documents` carries their integer ids, so
+name each one from `data_collection__list__document_types` rather than showing the id, and keep the
+ids — they are what A3 sends back.
+
 ### A3 — Change it
 
 ```
@@ -56,18 +60,29 @@ call_tool({"name": "data_collection__update__request",
 **This one merges.** A field left out is unchanged, so send only what the user is changing. It is
 the only data collection write that behaves this way.
 
-The requirements are the exception, and they replace as a whole:
+The requirements are the exception. They are three lists — `requested_files`, `requested_metrics`
+and `requested_documents` — and a list you send replaces that list whole:
 
 | To do this | Send |
 |---|---|
-| Leave the requirements alone | None of the three fields |
-| State them here | `use_company_config_template: false` with `requested_files` and `requested_metrics` |
-| Take each company's saved configuration | `use_company_config_template: true`, and neither list |
+| Leave the requirements alone | Neither `use_company_config_template` nor any list |
+| Change one or more lists | `use_company_config_template: false` with only the lists that change; the others keep what they ask for |
+| Take each company's saved configuration | `use_company_config_template: true`, and no list |
+
+`requested_documents` items are `{type, required}` with the integer id from A2. To add a document
+type, send the ones the request already asks for plus the new one — sending only the new one drops
+the rest.
 
 `due_date` must be in the future.
 
 **The window is sent and not answered.** A request the company has already responded to returns
 409. Report that plainly — the answer is in, so the request is no longer the thing to change.
+
+### A4 — Confirm what it asks for now
+
+The response is the request as it now stands. Compare its files, metrics and document types with
+what A2 showed and what the user asked to change. If anything the user did not change is missing —
+a document type especially — say so plainly rather than reporting success.
 
 ## B — Change or stop a schedule
 
