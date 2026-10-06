@@ -38,7 +38,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.92.5</carta-plugin>
+<carta-plugin>carta-cap-table:6.92.6</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -75,7 +75,9 @@ Use a keyword that captures the user's intent (e.g. "valuation", "grant", "safe"
 Review the returned tools. Each has:
 - `name`: the tool name to pass to `call_tool` (e.g. `cap_table__get__stakeholders`)
 - `description`: what it returns
-- `inputSchema`: the required and optional parameters
+- `read_only`: `true` if the tool only reads data
+
+Only the top results also have `inputSchema` (the required and optional parameters). If the tool you pick has no `inputSchema`, call `search_tools({"query": "<tool name>"})` with its exact name: that tool comes back first, with its `inputSchema`.
 
 ## Step 3 — Execute
 

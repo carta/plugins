@@ -10,7 +10,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.92.5</carta-plugin>
+<carta-plugin>carta-cap-table:6.92.6</carta-plugin>
 
 # CTC RoleMatcher
 
