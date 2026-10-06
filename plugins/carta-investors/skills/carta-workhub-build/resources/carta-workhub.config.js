@@ -120,6 +120,11 @@ const TASK_TEMPLATE_CAPITAL_ACTIVITY = 'request-capital-activity';
 const TASK_TEMPLATE_PACKAGE = 'publish-financial-package';
 // Capital calls and Distributions share these; the name decides between them.
 const TASK_TEMPLATES_CAPITAL_ACTIVITY = [TASK_TEMPLATE_CAPITAL_ACTIVITY, 'draft-request-capital-activity'];
+// Every tab, Completed included, shows only these workflows: the ones a Workhub
+// panel opens (request thread, capital call review, reporting tracker) rather than
+// sending the GP to Carta. One list for all tabs, so finished work never shows a
+// kind of task the open tabs leave out. Add a template here once a panel opens it.
+const TASK_TEMPLATES_WITH_TILES = [TASK_TEMPLATE_REQUEST, TASK_TEMPLATE_CAPITAL_ACTIVITY, TASK_TEMPLATE_PACKAGE];
 
 const TASK_CATEGORY_REQUEST = 'request';
 const TASK_CATEGORY_CAPITAL = 'capital';

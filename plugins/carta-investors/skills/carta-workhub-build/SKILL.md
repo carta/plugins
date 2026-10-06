@@ -2,10 +2,10 @@
 name: carta-workhub-build
 description: >
   Builds or rebuilds the Carta Workhub live artifact — a standalone Cowork view of the work
-  a firm shares with its Carta fund admin team. Shows a request composer over every GP task,
-  in tabs for Drafts, Needs Action (waiting on you), With Carta and Completed, grouped by
-  category — requests, capital calls, cash reconciliation, KYC and more — with a thread view
-  for each request and a link into Carta for the rest. The artifact auto-detects the active firm
+  a firm shares with its Carta fund admin team. Shows a request composer over the GP tasks it
+  has a panel for, in tabs for Drafts, Needs Action (waiting on you), With Carta and Completed,
+  grouped by category — requests, capital calls and distributions, financial reporting — with a
+  thread view for each request, the capital call review and the reporting tracker. The artifact auto-detects the active firm
   from the Carta MCP context — no hardcoded firm name needed. Use this skill whenever the
   user asks to "build the carta workhub artifact", "rebuild carta workhub", "set up carta
   workhub", "deploy carta workhub", "show my Carta workhub", "rebuild carta tasks",
@@ -21,7 +21,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.61.1</carta-plugin>
+<carta-plugin>carta-investors:6.61.2</carta-plugin>
 
 # Carta Workhub — Build / Redeploy
 
@@ -90,10 +90,16 @@ not inside a fund-data dashboard.
   waiting on the customer), **With Carta** (`progress`) and **Completed** (`done`). The first
   load opens on Needs Action, or on the next tab holding work when it is empty
   (`FAR_TAB_OPEN_ORDER`); after that only the viewer changes tabs. Each tab carries a count
-  pill and a one-line description. Inside a tab, rows are grouped by category, in the order and with the icons `TASK_CATEGORIES` in
+  pill and a one-line description. The queue holds only the workflows Workhub has a panel for,
+  listed in `TASK_TEMPLATES_WITH_TILES` in `resources/carta-workhub.config.js`: requests
+  (`request-generic`), capital activities (`request-capital-activity`) and financial packages
+  (`publish-financial-package`). Every other GP task would only link out to Carta, so it is left
+  out; add a template to that list once a panel opens its tasks. Completed reads the same list,
+  so finished work never shows a kind of task the open tabs leave out. Every task of a listed workflow
+  shows, including the ones no panel opens (a capital call With Carta or Completed), as a
+  Carta link. Inside a tab, rows are grouped by category, in the order and with the icons `TASK_CATEGORIES` in
   `resources/carta-workhub.config.js` gives; a row joins the category listing its
-  `workflow_template`, and a template no category lists lands in **Other**, so a new kind of
-  task still shows. A capital activity is a call or a distribution only by its name —
+  `workflow_template`, and a listed template no category lists lands in **Other**. A capital activity is a call or a distribution only by its name —
   fund-admin titles the task "Review capital call for…" or "Authorize distribution of…" from
   the activity type — so `named` on Distributions decides there. Filter chips under the
   description (All, then each category present, with counts) narrow the tab to one category;
@@ -119,7 +125,8 @@ not inside a fund-data dashboard.
 
   **Two cursor-paged lists feed the queue**, read in parallel at 40 rows a page so no reply
   nears carta-mcp's 40k cap:
-  - `fa:list:gp-workhub-active-task` — every open task, grouped by `pending_actor` (`customer`
+  - `fa:list:gp-workhub-active-task` — every open task, kept when its `workflow_template` is in
+    `TASK_TEMPLATES_WITH_TILES` (the command takes no template filter), grouped by `pending_actor` (`customer`
     → Needs Action, `carta` → With Carta), one card per workflow; the customer's task wins. A
     capital call review opens its panel only when `discover` answers for
     `fa:get:capital-activity-review-summary` — the panel's commands need
@@ -129,7 +136,7 @@ not inside a fund-data dashboard.
     is the current task's, so the start date of a request or capital activity comes from
     `fa:list:firm-workflow` (`active`, those two templates), read alongside; other tasks use
     their own.
-  - `fa:list:firm-workflow` (every template, `complete`/`canceled`) — Completed, the last 90
+  - `fa:list:firm-workflow` (`TASK_TEMPLATES_WITH_TILES`, `complete`/`canceled`) — Completed, the last 90
     days by `completed_date` (else `last_activity_at`), newest 3 pages only, keeping what was
     read; its count reads `120+` at that cap, and a plain `0` when nothing read is recent. The
     list is ordered by `created_at`, so it can miss old work finished recently. A failure

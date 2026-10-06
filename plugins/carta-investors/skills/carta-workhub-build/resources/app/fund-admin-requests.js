@@ -661,12 +661,14 @@ async function farFetchQueue() {
       statuses: ['active'],
     }, { partialOk: true }),
     farWalk('fa:list:firm-workflow', {
+      workflow_templates: TASK_TEMPLATES_WITH_TILES,
       statuses: FAR_FINISHED_STATUSES,
     }, { maxPages: FAR_DONE_MAX_PAGES, partialOk: true }),
   ]);
   if (!open) return null;
   const filed = new Map((active ?? []).map(w => [w.workflow_id, w.created_at]));
-  const tasks = farOneTaskPerWorkflow(open)
+  // The task list takes no template filter, so the rest are dropped here.
+  const tasks = farOneTaskPerWorkflow(open.filter(t => TASK_TEMPLATES_WITH_TILES.includes(t.workflow_template)))
     .map(t => Object.assign({}, t, { created_at: filed.get(t.workflow_id) ?? t.created_at }));
   // A workflow that finished between the reads shows once, as open.
   const openIds = new Set(tasks.map(t => t.workflow_id));
