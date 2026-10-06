@@ -38,7 +38,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.93.0</carta-plugin>
+<carta-plugin>carta-cap-table:6.93.1</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -77,7 +77,7 @@ Review the returned tools. Each has:
 - `description`: what it returns
 - `read_only`: `true` if the tool only reads data
 
-Only the top results also have `inputSchema` (the required and optional parameters). If the tool you pick has no `inputSchema`, call `search_tools({"query": "<tool name>"})` with its exact name: that tool comes back first, with its `inputSchema`.
+Only the top results also have `inputSchema` (the required and optional parameters). The others have `required_params` and `optional_params` (parameter names only), which are usually enough to call the tool. If you need a parameter's type or allowed values, call `search_tools({"query": "<tool name>"})` with its exact name: that tool comes back first, with its `inputSchema`.
 
 ## Step 3 — Execute
 
