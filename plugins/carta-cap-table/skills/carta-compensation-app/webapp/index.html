@@ -120,11 +120,15 @@
           if (!navigator.serviceWorker.controller) {
             // First visit: registered but not yet controlling. Wait for
             // controllerchange (fires after clients.claim()); reload after 3s as a
-            // backstop for browsers that mishandle the event.
+            // backstop for browsers that mishandle the event. The backstop checks
+            // first: the race doesn't cancel it, and an unconditional reload would
+            // restart an app the user is already using, dropping its requests.
             const claimed = new Promise((res) =>
               navigator.serviceWorker.addEventListener("controllerchange", res, { once: true })
             );
-            await Promise.race([claimed, sleep(3000).then(() => location.reload())]);
+            await Promise.race([claimed, sleep(3000).then(() => {
+              if (!navigator.serviceWorker.controller) location.reload();
+            })]);
           }
 
           await import("/src/main.jsx");

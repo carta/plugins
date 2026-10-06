@@ -45,40 +45,23 @@ always read — see save_benchmark_result.py's "columnar bulk-export reconstruct
 section for how a columnar page is reshaped back into that per-row contract. This
 builder's row-collection path is unchanged by the export.
 
-GEO SCALARS — KNOWN GAP, do not build around it. `_row()` below carries
-`geoSalaryScalar` / `geoEquityScalar` when the API returned them, but there is
-currently NO command that returns a bulk per-location scalar table: `geo_adjustment`
-(and its `salary_scalar`/`equity_scalar`) is hoisted PER RESPONSE, for the single
-`location` param that request passed (national/no-location fetches carry no
-scalars at all — see compensation:export:benchmarks' own help text). Building an
-offline location dropdown that recomputes geo-adjusted figures client-side would
-need a scalar keyed by location across ~400 locations, which would mean either a
-~400x fetch multiplier (one export sweep per location) or a new compensation-service
-endpoint that does not exist today. Do not paper over this with client-side
-interpolation or a hardcoded scalar table — surface the gap instead. If a location
-WAS fetched (the raw file's rows carry `geo_adjustment`), applying that one
-location's scalars client-side must still follow the order below.
+LOCATIONS — every figure is fetched, none is computed. The default sweep (the flat
+benchmark_*.json files) is the plan's default location, San Francisco, scalar 1.0.
+Each other location the Benchmarks tab offers is a full sweep of its own in
+geo_<slug>/, fetched with the same `location` value the CTC product sends (see
+ctc_locations.py), so the server has already applied that location's scalar, the
+threshold clamp, bands and rounding. `geo_adjustment` (label and scalars) is
+hoisted per response, for the one `location` that request passed.
 
-CLIENT-SIDE GEO -> BANDS -> ROUNDING ORDER (when a location's scalars are
-available). This is a correctness requirement, not a nice-to-have: the server
-applies the geo scalar to the UNROUNDED national base, THEN derives low/mid/high
-bands from the geo-adjusted mid, THEN rounds (equity at 4 decimal places, cash at
-a corp-configured precision). Any client-side recomputation MUST replicate that
-order:
-    1. geo-adjust: `national_base * salary_scalar` (or `* equity_scalar` for
-       equity), on the full-precision unrounded value.
-    2. derive bands from the geo-adjusted (not the national) mid.
-    3. round last — equity to 4 decimal places, cash to the corp's cash
-       precision (not hardcoded; comes from plan/payband config this builder
-       does not currently read).
-Reversing the order (rounding the national percentiles first, THEN multiplying by
-the scalar, e.g. by reusing the already-rounded percentiles this builder emits)
-will drift from the product UI, and the error compounds because bands derive from
-the geo-adjusted mid, not the national one. This builder does not currently
-implement step 1-3 itself: it has no location-keyed scalar table to drive it (see
-above), and the values it emits (`salary.p50` etc.) are the NATIONAL percentiles
-already at API precision — safe to display as-is, but NOT a valid input to
-re-derive a different location's bands from.
+The full list of supported locations comes from `compensation:get:benchmark_locations`
+(location_catalog.json, read by ctc_locations.catalog) and is emitted as
+`locationCatalog`. A location without a sweep here is fetched on demand by serve.py
+(location_fetch.py) when the user picks it, using location_fetch.json, which this
+builder writes. Never derive a location by multiplying another location's figures
+by a scalar: the server applies the scalar to the UNROUNDED national base, clamps
+it to the plan threshold, derives bands from the adjusted mid and only then
+rounds, so scaling the rounded figures this builder emits drifts from the
+product, and the bands drift further.
 """
 import argparse
 import json
@@ -86,6 +69,8 @@ import pathlib
 import re
 import sys
 import time
+
+import ctc_locations
 
 SCHEMA_VERSION = 1
 
@@ -228,12 +213,8 @@ def _row(entry):
         "ladder": entry.get("ladder"),
         "currency": currency,
         "geo": geo.get("label"),
-        # salary_scalar / equity_scalar are ONLY present when the fetch that
-        # produced this row passed a `location` param — geo is applied
-        # per-request, not per-row, and is null for a national (no-location)
-        # fetch. See build()'s docstring / SKILL.md for why there is currently
-        # no bulk per-location table to build an offline dropdown from; this
-        # just avoids discarding the scalar when a location WAS fetched.
+        # The scalars the server already applied to this row, for display only
+        # ("Pay adjustment 70%"). Never multiply them into a figure.
         "geoSalaryScalar": _num(geo.get("salary_scalar")),
         "geoEquityScalar": _num(geo.get("equity_scalar")),
         "salary": _pcts_flat(salary),
@@ -450,6 +431,20 @@ def build(rawdir, out, meta):
             for d in dims
         ]
 
+    # ---- locations (optional) ----
+    locations = _build_locations(rawdir, rows, bver.get("id"))
+    if locations:
+        benchmarks["locations"] = locations
+    catalog = ctc_locations.catalog(rawdir)
+    fetch_config = None
+    if catalog:
+        benchmarks["locationCatalog"] = catalog
+        benchmarks["defaultLocation"] = _default_location_param(plan, rows)
+        fetch_config = _location_fetch_config(meta, bver, peer, alternates)
+        # The page only needs to know a pick CAN be fetched; the arguments stay
+        # server-side, in location_fetch.json.
+        benchmarks["locationFetch"] = fetch_config is not None
+
     # Built before the snapshot so its counts can be recorded there — the snapshot is
     # what the UI reads to decide whether the Scorecard tab exists at all, and it is
     # written last as the marker of a complete build.
@@ -457,6 +452,8 @@ def build(rawdir, out, meta):
     planner = _build_planner(rawdir)
 
     counts = {"benchmarkRows": len(rows), "jobs": len(jobs_seen)}
+    if locations:
+        counts["locations"] = len(locations)
     if roster is not None:
         counts["rosterEmployees"] = roster["reconciliation"]["rosterTotal"]
     if planner is not None:
@@ -507,6 +504,8 @@ def build(rawdir, out, meta):
     if planner is not None:
         w("planner.json", planner)
 
+    if fetch_config is not None:
+        w("location_fetch.json", fetch_config)
     w("benchmarks.json", benchmarks)
     w("taxonomy.json", taxonomy)
     w("snapshot.json", snapshot)  # written last: its presence marks a complete build
@@ -640,6 +639,109 @@ def _peer_group_dirs(rawdir):
         if p.is_dir():
             out[p.name[len("peer_"):]] = p
     return out
+
+
+def _location_dirs(rawdir):
+    """[(path, location.json contents)] for each location fetched into geo_<slug>/."""
+    out = []
+    for p in sorted(pathlib.Path(rawdir).glob("geo_*")):
+        meta_path = p / "location.json"
+        if p.is_dir() and meta_path.exists():
+            try:
+                out.append((p, json.loads(meta_path.read_text(encoding="utf-8"))))
+            except (OSError, ValueError):
+                print("[build_datadir] WARNING: %s is unreadable — omitting that "
+                      "location." % meta_path)
+    return out
+
+
+def _location_entry(key, label, param, loc_rows, employees, default=False):
+    first = next((r for r in loc_rows if r.get("geo")), loc_rows[0] if loc_rows else {})
+    return {
+        "key": key,
+        # The server's own label for what it applied, e.g. "Tulsa, OK" or "GBR".
+        "label": first.get("geo") or label,
+        "location": param,
+        "international": ctc_locations.is_international(first.get("geo") or label or ""),
+        "salaryScalar": first.get("geoSalaryScalar"),
+        "equityScalar": first.get("geoEquityScalar"),
+        "currencies": sorted({r["currency"] for r in loc_rows if r.get("currency")}),
+        "employees": employees,
+        "default": default,
+    }
+
+
+def _default_location_param(plan, default_rows):
+    """The `location` value of the default sweep: the plan's default location.
+
+    The default sweep is fetched WITHOUT a location, so the server used the plan's
+    default_location. carta-mcp exposes it as geo_adjustment_config.default_location;
+    an older plan response lacks it, and the default sweep's own geo label is parsed
+    instead.
+    """
+    cfg = (plan.get("geo_adjustment_config") or {}).get("default_location") or {}
+    if cfg.get("location"):
+        return cfg["location"]
+    label = next((r["geo"] for r in default_rows if r.get("geo")), None)
+    return ctc_locations.location_param(label or "")
+
+
+def _location_fetch_config(meta, bver, peer, alternates):
+    """What serve.py needs to fetch a picked location, or None when it can't.
+
+    Needs the Carta MCP server the build used (meta.json `mcpServer`, recorded by
+    the skill), since the on-demand fetch goes through the same connection. Lists
+    every peer group the page can show, so a location can be fetched for an
+    alternate group too; the browser sends only a code, mapped back to its bucket
+    parameter here.
+    """
+    server = meta.get("mcpServer")
+    if not server or not meta.get("corporationId") or bver.get("id") is None:
+        return None
+    groups = {peer.get("code"): "%s_bucket" % peer.get("dimension")}
+    for code, g in (alternates or {}).items():
+        groups[code] = "%s_bucket" % g.get("dimension")
+    return {
+        "corporationId": meta.get("corporationId"),
+        "benchmarkVersionId": bver.get("id"),
+        "mcpServer": server,
+        "ownPeerGroup": peer.get("code"),
+        "peerGroups": groups,
+    }
+
+
+def _build_locations(rawdir, default_rows, plan_version_id):
+    """The Benchmarks tab's location list, or [] when only the default was fetched.
+
+    Each entry but the default carries its own `rows`. The default's rows are the
+    top-level `rows`, not repeated. A location whose sweep is incomplete, from
+    another release, or empty is omitted with a warning, never padded out: a
+    location in the list must have every job area the default has.
+    """
+    fetched = _location_dirs(rawdir)
+    if not fetched:
+        return []
+    employees = ctc_locations.roster_locations(rawdir)
+    default_label = next((r["geo"] for r in default_rows if r.get("geo")), None)
+    entries = [_location_entry(
+        "default", default_label, ctc_locations.location_param(default_label or ""),
+        default_rows, employees.get(default_label, 0), default=True)]
+    for dirpath, meta in fetched:
+        problem = (_export_sweep_incomplete(dirpath)
+                   or _export_version_mismatch(dirpath, plan_version_id))
+        loc_rows = _collect_rows(dirpath)[0] if not problem else []
+        if problem or not loc_rows:
+            print("[build_datadir] WARNING: location %s %s — omitting it from the "
+                  "dropdown." % (meta.get("label"), problem or "has no rows"))
+            continue
+        entry = _location_entry(dirpath.name[len("geo_"):], meta.get("label"),
+                                meta.get("location"), loc_rows,
+                                meta.get("employees", employees.get(meta.get("label"), 0)))
+        entry["rows"] = loc_rows
+        entries.append(entry)
+    if len(entries) == 1:
+        return []
+    return sorted(entries, key=lambda e: ctc_locations.order_key(e["label"] or ""))
 
 
 def _collect_rows(dirpath):

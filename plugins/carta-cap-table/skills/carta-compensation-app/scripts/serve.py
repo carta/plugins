@@ -8,6 +8,12 @@ the JSON the skill wrote to a data dir, plus an editable scenarios document
 (GET with ETag / PUT with If-Match).
 Python stdlib only — no third-party deps — so it runs for non-developers at runtime.
 
+Also fetches a Benchmarks location on demand: POST /api/location runs the one
+read-only export for a location the build didn't sweep, through headless `claude`
+sessions on the user's own Carta MCP connection (see location_fetch.py). The page
+names only a location from the build's catalog and a peer group the build
+offers; the command and every other argument are fixed server-side.
+
 Also hosts the ask box: POST /api/ask streams a `claude` subprocess's stream-json
 output back as SSE so the user can modify the console from inside it ("add an
 interpolated P60") without leaving for their Claude session. See chat_session.py —
@@ -26,9 +32,11 @@ Stable URL: the port and token are remembered in the corp's data dir (.port /
 .token) and reused on relaunch, so relaunching the same corp reopens the same
 http://127.0.0.1:<port>/?t=<token>. An explicit --port / PORT env still wins.
 
-The browser NEVER calls the Carta MCP — it only reads JSON the skill produced.
-This app is READ-ONLY with respect to Carta: the sole write path is the local
-scenarios save (PUT /api/scenarios), which never leaves this machine.
+The browser never calls the Carta MCP itself. It reads JSON the skill produced,
+and can ask this server for a location's benchmarks, which it fetches with one
+fixed read-only command. This app is READ-ONLY with respect to Carta: the sole
+write path is the local scenarios save (PUT /api/scenarios), which never leaves
+this machine.
 
 Ported from carta-fund-modeling/scripts/serve.py, minus its chat/SSE layer.
 
@@ -55,6 +63,7 @@ from urllib.parse import urlparse, parse_qs
 
 import chat_session
 import desktop_handoff
+import location_fetch
 import predicate_session
 import preflight_claude
 
@@ -155,6 +164,10 @@ _scenarios_lock = threading.Lock()
 # the turn it is trying to stop.
 _CHAT_SESSIONS = {}
 _SESSIONS_LOCK = threading.Lock()
+
+# One location sweep at a time: each is 4 `claude` sessions. A second request
+# waits, then usually finds the first one's result in the cache.
+_LOCATION_LOCK = threading.Lock()
 
 _CONTENT_TYPES = {
     ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
@@ -544,7 +557,65 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._handoff(u)
         if u.path == "/api/filter":
             return self._filter(u)
+        if u.path == "/api/location":
+            return self._location(u)
         return self._send(404, {"error": "not_found"})
+
+    def _location(self, u):
+        """One location's benchmarks: from the cache, or fetched from Carta now.
+
+        Every failure is a 200 with {"error": <reason>}, like /api/filter: the page
+        says the location couldn't be fetched and keeps showing what it had.
+        """
+        if not self._token_ok(parse_qs(u.query)):
+            return self._send(401, {"error": "unauthorized"})
+        _touch_heartbeat()
+        body = self._read_json_body()
+        if not isinstance(body, dict) or not isinstance(body.get("location"), str):
+            return self._send(400, {"error": "bad_json"})
+        try:
+            config = json.loads((DATA_DIR / "location_fetch.json").read_text("utf-8"))
+            bench = json.loads((DATA_DIR / "benchmarks.json").read_text("utf-8"))
+        except (OSError, ValueError):
+            return self._send(200, {"error": "not_supported"})
+
+        # Only what the build offered: a catalog location and a known peer group.
+        entry = next((c for c in bench.get("locationCatalog") or []
+                      if c.get("location") == body["location"]), None)
+        if entry is None:
+            return self._send(400, {"error": "unknown_location"})
+        own = config.get("ownPeerGroup")
+        peer = body.get("peerGroup") or own
+        bucket_param = (config.get("peerGroups") or {}).get(peer)
+        if not bucket_param:
+            return self._send(400, {"error": "unknown_peer_group"})
+        # A US location has nothing to convert; one cache entry serves both.
+        local = bool(body.get("localCurrency")) and bool(entry.get("international"))
+        key = location_fetch.cache_key(entry["location"], local)
+        if peer != own:
+            key += "--" + location_fetch.cache_key(peer, False)
+
+        hit = location_fetch.cached(DATA_DIR, key)
+        if hit is not None:
+            return self._send(200, hit)
+        if _claude_unavailable() and not _refresh_claude_status():
+            return self._send(200, {"error": CHAT_UNAVAILABLE})
+        with _LOCATION_LOCK:
+            hit = location_fetch.cached(DATA_DIR, key)
+            if hit is not None:
+                return self._send(200, hit)
+            fetch_config = dict(config, bucketParam=bucket_param, bucketCode=peer)
+            try:
+                result = location_fetch.fetch(DATA_DIR, CLAUDE_BIN, fetch_config, entry,
+                                              local, key=key)
+            except location_fetch.FetchError as exc:
+                if exc.reason == "start_failed":
+                    _refresh_claude_status_later()
+                return self._send(200, {"error": exc.reason})
+            except Exception as exc:  # noqa: BLE001 — reported to the page as a failure
+                location_fetch.log(DATA_DIR, "failed %s: %s" % (entry["location"], exc))
+                return self._send(200, {"error": "fetch_failed"})
+        return self._send(200, result)
 
     def _filter(self, u):
         """Ask Claude for a cohort predicate. Returns JSON, never a stream.

@@ -13,7 +13,7 @@ description: >
   So "what are our comp benchmarks" is a sibling even though it names them, while "open our
   comp benchmarks so I can filter them" is this skill. NOT for a single role lookup. READ-ONLY.
 argument-hint: "<corporation name or numeric corporation id — required>"
-version: 0.2.1
+version: 0.3.0
 model: inherit
 allowed-tools:
   - mcp__carta__welcome
@@ -54,6 +54,7 @@ allowed-tools:
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_report_insights.py *)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_equity_pool_utilization.py *)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_retention_plan.py *)
+  - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/ctc_locations.py *)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_corporation_info.py *)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/preflight_claude.py *)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/build_datadir.py *)
@@ -61,7 +62,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.92.6</carta-plugin>
+<carta-plugin>carta-cap-table:6.93.0</carta-plugin>
 
 <!-- [PATTERN carta-writing-style v0.0.2] [PATTERN etiquette v0.0.6] [PATTERN text v0.0.8] [PATTERN tables v0.0.12] [PATTERN carta-watermark v0.0.10] [PATTERN base v0.1.0] -->
 
@@ -207,12 +208,13 @@ Cache age in words ("3 days old"), never as a raw `field=value`.
 
 ## Step 0.5 — Preflight: Claude CLI for the ask box
 
-The ask box and the planner's cohort filter spawn a `claude` subprocess, so they need the
-`claude` CLI installed and logged in — the Claude Code binary, from Anthropic. Detect it
-early so a missing CLI is resolved before the user waits through the data-fetch cycle.
+The ask box, the planner's cohort filter and the Benchmarks location fetch (2d-v) spawn a
+`claude` subprocess, so they need the `claude` CLI installed and logged in — the Claude
+Code binary, from Anthropic. Detect it early so a missing CLI is resolved before the user
+waits through the data-fetch cycle.
 
-**This step is non-blocking.** The dashboard is fully functional without the CLI — only the
-two Claude features need it. Never fail the skill over a missing CLI.
+**This step is non-blocking.** The dashboard is fully functional without the CLI — only
+those three features need it. Never fail the skill over a missing CLI.
 
 ```bash
 uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/preflight_claude.py" check
@@ -746,6 +748,75 @@ If the roster sweep fails outright, **still build** — `build_datadir.py` omits
 Losing one tab is better than losing the Benchmarks dashboard too. Say which tab is missing
 and why.
 
+**2d-v. Locations — the Benchmarks tab's Location dropdown.**
+
+The CTC product's Benchmarks page offers every supported location and re-fetches when one
+is picked; the server applies that location's scalar, the plan threshold, bands and
+rounding. The console does the same: it lists every supported location, and fetches a
+picked one on demand (`scripts/location_fetch.py`) through the user's own Carta MCP, with
+the same `location` value the product sends. Every figure on screen is still the server's.
+
+**First, save the location list.** One call, with the id from the plan's
+`benchmark_version.geo_adjustment_version.id`:
+
+```
+call_tool({"name": "compensation__get__benchmark_locations",
+           "arguments": {"geo_adjustment_version_id": <geo_adjustment_version.id>}})
+```
+
+The result is ~65KB, so the harness persists it to a file; capture it per Case 1:
+
+```bash
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_benchmark_result.py" \
+  <printed_result_path> "<raw_dir>/location_catalog.json"
+```
+
+If the plan has no `geo_adjustment_version`, or the command is unknown (an older Carta
+MCP), skip this: the console then offers only the locations fetched below.
+
+**Then fetch where the employees are, ahead of time,** so the common picks open at once.
+Run this after the roster (2d), which is where that list comes from:
+
+```bash
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/ctc_locations.py" plan --raw "<raw_dir>"
+```
+
+It prints `default=<label>` (the location the main sweep already covers — San Francisco),
+then one line per location still to fetch:
+
+```
+location=Tulsa,OK,USA	dir=<raw_dir>/geo_tulsa-ok	employees=37	label=Tulsa, OK
+```
+
+and `to_fetch=N`. It also writes each `geo_<slug>/location.json`. Re-running it after a
+partial sweep lists only what is left.
+
+For each line, run a full 4-page sweep exactly like 2c — same `benchmark_version_id`,
+`equity_quantity: "FOUR_YEAR_GRANT"`, the plan's own `<dimension>_bucket`, `job_limit: 6`,
+paging until `next_job_offset` is null — adding **`"location": "<location>"` verbatim** from
+the line, and capturing every page into that line's `dir`:
+
+```bash
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_benchmark_result.py" \
+  --export-page <printed_result_path_or_.raw_file> "<dir>"
+```
+
+The capture contract, the parsed verification and the per-sweep ceiling (6 calls) are the
+same as for peer groups, and the sweeps can fan out across subagents the same way (2c-ter).
+
+- **Everything else is fetched when picked.** With the list saved and `mcpServer` in
+  `meta.json` (2e), the console fetches any other location, any alternate peer group's
+  figures for a location, and an international market's local-currency figures on demand,
+  in about 15-40 seconds. That needs the `claude` CLI (Step 0.5); without it the picker
+  says the fetch isn't supported in this setup.
+- **These ahead-of-time sweeps are USD, for the plan's own peer group.** An international
+  market opens in local currency, as in the product, which is a fetch on first pick.
+- **A location that won't complete is dropped, not padded.** Delete that `geo_<slug>/`
+  directory's pages (keep `location.json`) and say which location is missing; the builder
+  also omits any location whose sweep is incomplete or from another release.
+- **Never add a location that was not fetched**, and never derive one from another's
+  figures and a scalar — see "Changing the app" below.
+
 **2d-bis. Equity refresh report** — the Refresh planner tab.
 
 > **Run this when the caller asked for the planner.** Otherwise skip it: the tab is
@@ -872,8 +943,13 @@ uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_retenti
 **2e. Write `meta.json`** (next to `raw_dir`, per `ctc_paths.py`):
 
 ```json
-{"corporation": "<canonical name>", "corporationId": <int>, "cartaEnvironment": "production"}
+{"corporation": "<canonical name>", "corporationId": <int>, "cartaEnvironment": "production",
+ "mcpServer": "<SERVER>"}
 ```
+
+`mcpServer` is the server identifier from Step 1 (`carta`, `claude_ai_Carta`, …), copied
+verbatim. The console's on-demand location fetch calls `mcp__<mcpServer>__call_tool`, and
+nothing else; without it the Location picker offers only what the build fetched.
 
 <details>
 <summary><b>Staff preview — showing the hidden Refresh planner tab</b></summary>
@@ -1037,11 +1113,11 @@ complete. Every one of them is about *not inventing data that was never fetched*
 them says the UI cannot change, and reading them that way turns a narrow correctness rule
 into a blanket refusal.
 
-The one that gets over-applied is the geo-scalar block in `build_datadir.py`
-("do not paper over this with client-side interpolation or a hardcoded scalar table").
-Read it precisely: it is about **location** adjustment. There is no command returning a
-scalar table across the ~400 supported locations, so a location dropdown would have to
-invent scalars for locations nobody fetched. That is still true and still forbidden.
+The one that gets over-applied is the location rule in `build_datadir.py`. Read it
+precisely: the Location dropdown offers only locations whose benchmarks were **fetched**
+(2d-v), and a location's figures are never derived from another location's figures and a
+scalar. Adding a location the user asks for means fetching it, not computing it. The
+scalars in `benchmarks.json` are display labels ("Pay adjustment 70%"), never inputs.
 
 **Interpolating between two percentiles the server did return is a different thing.** The
 console holds P25, P50, P75 and P90 as real fetched values (`salary.p50` is a plain
@@ -1101,8 +1177,8 @@ Two things that stay off-limits, because they are about invented data rather tha
   geo-adjustment order, and the drift reads as data rather than a bug. See the header of
   `app/src/views/Scorecard.jsx`.
 
-If a request genuinely cannot be satisfied without inventing data — a location dropdown
-being the live example — say which data is missing and what would have to exist to make it
+If a request genuinely cannot be satisfied without inventing data — a location nobody
+fetched being the live example — say which data is missing and what would have to exist to make it
 possible, rather than declining without a reason.
 
 ## Common failure modes

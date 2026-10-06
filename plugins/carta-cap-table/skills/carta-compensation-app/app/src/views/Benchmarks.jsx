@@ -1,11 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { C, FS, RADIUS, SANS } from "../ui/theme.js";
 import ExportButton from "../ui/ExportButton.jsx";
 import { MultiSelect, Select, SparkleAI, Tag, Th, Td } from "../ui/components.jsx";
 import AskBar from "../ui/AskBar.jsx";
+import LocationPicker from "../ui/LocationPicker.jsx";
 import { compareRows, jobLabel, levelLabel, trackOf, TRACK_LABELS, PERCENTILES } from "../model/taxonomy.js";
 import { money, equityValue, EQUITY_REPS } from "../model/format.js";
 import { csvFilename, downloadCsv, toCsv } from "../model/csv.js";
+import {
+  adjustmentChips, catalogOptions, displayName, fetchKey, locationOptions,
+} from "../model/locations.js";
+import { UNAVAILABLE_CODE } from "../ui/claudeStatus.js";
 
 // PCTS keys come from the registry — adding a percentile is a one-line change there.
 const PCTS = PERCENTILES.map((p) => p.key);
@@ -89,6 +94,94 @@ function MetricTable({ rows, currency, equityRep }) {
   );
 }
 
+/** Ask the local server for one location's benchmarks. It answers from its cache,
+ *  or fetches them from Carta (scripts/location_fetch.py). Resolves to the location
+ *  entry, or {error}; never throws. */
+async function requestLocation(token, body) {
+  try {
+    const res = await fetch(`/api/location${window.location.search}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(token ? { "X-Dash-Token": token } : {}) },
+      body: JSON.stringify(body),
+    });
+    const out = await res.json().catch(() => null);
+    return out && (out.error || out.rows) ? out : { error: "fetch_failed" };
+  } catch {
+    return { error: "fetch_failed" };
+  }
+}
+
+/** Build-time sweeps as picker options, for a build without the catalog. */
+function sweepOptions(locations) {
+  return locationOptions(locations).map((o) => {
+    const loc = locations.find((l) => l.key === o.value);
+    return { ...o, value: loc?.location || o.value, name: displayName(loc) };
+  });
+}
+
+/** Where the grid would be while a location is fetched, or after it failed. */
+function LocationStatus({ name, reason, onRetry, onBack }) {
+  const box = {
+    border: `1px solid ${C.border}`, borderRadius: RADIUS, background: C.surface,
+    padding: "18px 16px", fontSize: FS.md, color: C.textSubtle,
+  };
+  if (!reason) {
+    return (
+      <div role="status" style={box}>
+        Fetching benchmarks for <span style={{ color: C.text, fontWeight: 600 }}>{name}</span> from
+        Carta. This takes about half a minute.
+      </div>
+    );
+  }
+  const btn = {
+    font: `500 ${FS.sm}px/1 ${SANS}`, padding: "8px 12px", borderRadius: RADIUS,
+    border: `1px solid ${C.border}`, background: C.surface, color: C.text, cursor: "pointer",
+  };
+  return (
+    <div role="alert" style={box}>
+      <div style={{ marginBottom: 12 }}>
+        {reason === UNAVAILABLE_CODE
+          ? "An error occurred. Fetching other locations isn't supported in this setup for now."
+          : <>Couldn't fetch benchmarks for <span style={{ color: C.text, fontWeight: 600 }}>{name}</span> from Carta.</>}
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        {reason !== UNAVAILABLE_CODE && (
+          <button type="button" style={btn} onClick={onRetry}>Try again</button>
+        )}
+        <button type="button" style={btn} onClick={onBack}>Back to the default location</button>
+      </div>
+    </div>
+  );
+}
+
+/** "Location: Tulsa, OK  [Pay adjustment 70%]", as the product shows it above the
+ *  figures. Without the on-demand fetch an international market's figures are USD
+ *  only, and the line says so; with it, the Currency control says it. */
+function LocationLine({ location, onOwnGroup, canFetch }) {
+  return (
+    <div style={{
+      display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap",
+      fontSize: FS.md, color: C.textSubtle, marginBottom: 14,
+    }}>
+      <span>Location: <span style={{ color: C.text, fontWeight: 600 }}>{displayName(location)}</span></span>
+      {adjustmentChips(location).map((c) => (
+        <Tag key={c.text} tone="info" title={c.title}>{c.text}</Tag>
+      ))}
+      {!canFetch && location.international
+        && (location.currencies || []).every((c) => c === "USD") && (
+        <span style={{ color: C.textFaint }}>
+          Shown in USD — local currency isn't available in this console yet.
+        </span>
+      )}
+      {!canFetch && !onOwnGroup && (
+        <span style={{ color: C.textFaint }}>
+          Other peer groups show the default location.
+        </span>
+      )}
+    </div>
+  );
+}
+
 export default function Benchmarks({ data, onPeerGroupChange, token }) {
   // A SET of job codes, empty meaning "all". Empty-as-all rather than seeding the set
   // with every code: the two states look identical on screen but behave differently the
@@ -141,6 +234,68 @@ export default function Benchmarks({ data, onPeerGroupChange, token }) {
     setPeer((ownHere || buckets[0] || {}).code || "");
   };
 
+  // Location. `locationCatalog` lists every location the plan supports; one the
+  // build didn't sweep is fetched from Carta when picked (requestLocation), for
+  // whichever peer group is showing. A build without the catalog or the fetch
+  // offers only its own sweeps, which exist for the plan's peer group in USD, so
+  // another peer group holds at the default and the line says why.
+  const locations = useMemo(() => data?.locations || [], [data]);
+  const catalog = data?.locationCatalog || null;
+  const canFetch = !!data?.locationFetch;
+  const ownPeer = data?.peerGroup?.code;
+  const defaultParam = data?.defaultLocation
+    || locations.find((l) => l.default)?.location || null;
+  const options = useMemo(() => (catalog?.length
+    ? catalogOptions(catalog, defaultParam)
+    : sweepOptions(locations)), [catalog, locations, defaultParam]);
+  const [locParam, setLocParam] = useState(defaultParam);
+  // The product converts an international market to its local currency by default.
+  const [localCurrency, setLocalCurrency] = useState(true);
+  const [fetched, setFetched] = useState({});
+  const [failed, setFailed] = useState({});
+  const inflight = useRef(new Set());
+
+  const onOwnGroup = !peer || peer === ownPeer;
+  const wantParam = canFetch || onOwnGroup ? locParam : defaultParam;
+  const isDefault = !wantParam || wantParam === defaultParam;
+  const option = options.find((o) => o.value === wantParam);
+  const wantLocal = canFetch && !!option?.international && localCurrency;
+  const key = fetchKey(wantParam, wantLocal, peer || ownPeer, ownPeer);
+  const defaultEntry = useMemo(() => {
+    const own = locations.find((l) => l.default);
+    if (own) return own;
+    const r = (data?.rows || []).find((x) => x.geo) || {};
+    return {
+      label: r.geo, default: true, international: false,
+      salaryScalar: r.geoSalaryScalar, equityScalar: r.geoEquityScalar,
+      catalogLabel: options.find((o) => o.value === defaultParam)?.name,
+    };
+  }, [locations, data, options, defaultParam]);
+  const prebuilt = onOwnGroup && !wantLocal
+    ? locations.find((l) => !l.default && l.location === wantParam) : null;
+  const location = isDefault ? defaultEntry : (prebuilt || fetched[key] || null);
+  const failure = !isDefault && !location ? failed[key] : null;
+  const loading = !isDefault && !location && canFetch && !failure;
+
+  useEffect(() => {
+    if (!loading || inflight.current.has(key)) return;
+    inflight.current.add(key);
+    // Stored by key even if the user has moved on, so coming back is instant.
+    requestLocation(token, {
+      location: wantParam, localCurrency: wantLocal, peerGroup: peer || ownPeer,
+    }).then((res) => {
+      inflight.current.delete(key);
+      if (res.error) setFailed((f) => ({ ...f, [key]: res.error }));
+      else setFetched((f) => ({ ...f, [key]: res }));
+    });
+  }, [loading, key, token, wantParam, wantLocal, peer, ownPeer]);
+
+  const retry = () => setFailed((f) => {
+    const next = { ...f };
+    delete next[key];
+    return next;
+  });
+
   // The active group's rows AND citation move together. Showing one group's figures
   // under another's attribution would mis-cite the data, which is the one part of this
   // feature that is a correctness issue rather than a convenience.
@@ -150,12 +305,14 @@ export default function Benchmarks({ data, onPeerGroupChange, token }) {
       rows: data?.rows || [], attribution: data?.attribution,
       label: own?.label, dimension: own?.dimension,
     };
-    if (!peer || peer === own?.code) return fallback;
-    const g = (data?.alternatePeerGroups || {})[peer];
-    return g
+    const g = peer && peer !== own?.code ? (data?.alternatePeerGroups || {})[peer] : null;
+    const group = g
       ? { rows: g.rows || [], attribution: g.attribution, label: g.label, dimension: g.dimension }
       : fallback;
-  }, [data, peer]);
+    // A non-default location shows only its own fetched rows, never the default's
+    // while it loads: the grid would be labelled with a location it doesn't show.
+    return isDefault ? group : { ...group, rows: location?.rows || [] };
+  }, [data, peer, location, isDefault]);
 
   // Hand the whole active group up, so the footer citation AND the header's peer-group
   // pill both describe what is on screen. Passing only the attribution sentence left the
@@ -251,10 +408,12 @@ export default function Benchmarks({ data, onPeerGroupChange, token }) {
     // The DIMENSION goes in too, not just the bucket: "$1M-$10M" exists in both the
     // post-money and capital-raised scales, so a bucket label alone is ambiguous once
     // cross-dimension comparison is possible.
+    // The location goes in too when it isn't the default, for the same reason.
     const dimLabel = (dimensions.find((g) => g.dimension === (active.dimension || dim)) || {}).label;
+    const where = location && !location.default ? `-${displayName(location)}` : "";
     const kind = active.label
-      ? `benchmarks-${dimLabel ? dimLabel + "-" : ""}${active.label}`
-      : "benchmarks";
+      ? `benchmarks-${dimLabel ? dimLabel + "-" : ""}${active.label}${where}`
+      : `benchmarks${where}`;
     downloadCsv(csvFilename(data?.source?.corporation, kind), toCsv([header, ...body]));
   };
 
@@ -283,7 +442,7 @@ export default function Benchmarks({ data, onPeerGroupChange, token }) {
     return seen.length ? seen : (data?.currencies || []);
   }, [visible, data]);
 
-  if (!rows.length) {
+  if (!rows.length && isDefault) {
     return (
       <div style={{ padding: 24, color: C.textSubtle, fontSize: FS.md }}>
         No benchmark data in this snapshot.
@@ -328,6 +487,31 @@ export default function Benchmarks({ data, onPeerGroupChange, token }) {
           />
         )}
 
+        {options.length > 1 && (
+          <LocationPicker
+            value={wantParam || ""}
+            onChange={setLocParam}
+            options={options}
+            disabled={!canFetch && !onOwnGroup}
+            hint={canFetch || onOwnGroup
+              ? "Figures are the server's, with that location's adjustment applied"
+              : "Locations are fetched for your plan's peer group only — switch back to it to change location"}
+          />
+        )}
+
+        {canFetch && option?.international && (
+          <Select
+            label="Currency"
+            value={localCurrency ? "local" : "usd"}
+            onChange={(v) => setLocalCurrency(v === "local")}
+            minWidth={170}
+            options={[
+              { value: "local", label: `Local${option.currency ? ` (${option.currency})` : ""}` },
+              { value: "usd", label: "USD" },
+            ]}
+          />
+        )}
+
         <MultiSelect
           label="Job areas"
           allLabel={`All (${jobs.length})`}
@@ -346,9 +530,13 @@ export default function Benchmarks({ data, onPeerGroupChange, token }) {
           options={EQUITY_REPS.map((r) => ({ value: r.value, label: r.label }))}
         />
 
+        {/* Empty, not removed, while a location loads: it holds Export at the right,
+            and "0 rows · USD" would describe figures that aren't there yet. */}
         <span style={{ fontSize: FS.xs, color: C.textFaint, marginLeft: "auto" }}>
-          {visible.length} row{visible.length === 1 ? "" : "s"}
-          {visibleCurrencies.length ? ` · ${visibleCurrencies.join(" / ")}` : ""}
+          {!(loading || failure) && <>
+            {visible.length} row{visible.length === 1 ? "" : "s"}
+            {visibleCurrencies.length ? ` · ${visibleCurrencies.join(" / ")}` : ""}
+          </>}
         </span>
 
         <ExportButton
@@ -364,6 +552,10 @@ export default function Benchmarks({ data, onPeerGroupChange, token }) {
         />
       </div>
 
+      {location && options.length > 1 && (
+        <LocationLine location={location} onOwnGroup={onOwnGroup} canFetch={canFetch} />
+      )}
+
       {/* Sits with this tab's controls rather than in a bar of its own: it acts on
           what is below it, so a request here reads as "change this view". */}
       <div style={{ marginBottom: 18 }}>
@@ -373,6 +565,15 @@ export default function Benchmarks({ data, onPeerGroupChange, token }) {
           placeholder="Ask Claude to change this page — e.g. add an interpolated P60 column"
         />
       </div>
+
+      {(loading || failure) && (
+        <LocationStatus
+          name={option?.name || wantParam}
+          reason={failure}
+          onRetry={retry}
+          onBack={() => setLocParam(defaultParam)}
+        />
+      )}
 
       {/* Grid */}
       {groups.map((g) => (

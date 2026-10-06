@@ -24,7 +24,7 @@ import { C, FS, RADIUS, SANS, SHADOW } from "./theme.js";
  *  Safari < 15.4 silently ignores a var() reference in a presentation attribute and
  *  falls back to `none`, rendering nothing.
  */
-function ChevronDown({ size = 16 }) {
+export function ChevronDown({ size = 16 }) {
   return (
     <svg
       width={size} height={size} viewBox="0 0 24 24" fill="none"
@@ -113,8 +113,20 @@ function Tooltip({ anchor, onHide, children }) {
  *  for a visual detail nobody asked for. The FIELD is what was wrong, so the field is
  *  what this fixes: 40px, appearance:none, and our own chevron.
  */
+/** Consecutive options sharing a `group` become one <optgroup>; ungrouped ones
+ *  render bare, so existing callers are unchanged. */
+export function optionGroups(options) {
+  const out = [];
+  for (const o of options) {
+    const last = out[out.length - 1];
+    if (last && last.group === (o.group || null)) last.options.push(o);
+    else out.push({ group: o.group || null, options: [o] });
+  }
+  return out;
+}
+
 export function Select({
-  label, value, onChange, options, hint, minWidth = 0, maxWidth, icon,
+  label, value, onChange, options, hint, minWidth = 0, maxWidth, icon, disabled,
 }) {
   const [hover, setHover] = useState(false);
   const [focus, setFocus] = useState(false);
@@ -149,6 +161,7 @@ export function Select({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           title={hint}
+          disabled={disabled}
           onFocus={() => setFocus(true)}
           onBlur={() => setFocus(false)}
           style={{
@@ -164,8 +177,8 @@ export function Select({
             maxWidth,
             textOverflow: maxWidth ? "ellipsis" : undefined,
             font: `400 ${FS.md}px/1 ${SANS}`,
-            color: C.textDefault,
-            background: C.surfaceDefault,
+            color: disabled ? C.textQuiet : C.textDefault,
+            background: disabled ? C.surfaceUnderlay : C.surfaceDefault,
             border: `1px solid ${focus ? C.linkDefault : hover ? C.borderHover : C.borderDefault}`,
             borderRadius: RADIUS,
             // The OS chrome is what made these look foreign next to Ink's fields.
@@ -174,12 +187,20 @@ export function Select({
             // Ink's two-part focus: recolor the border AND add a 4px pale-blue ring.
             boxShadow: focus ? `0 0 0 4px ${C.focusRing}` : "none",
             outline: "none",
-            cursor: "pointer",
+            cursor: disabled ? "not-allowed" : "pointer",
           }}
         >
-          {options.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
+          {optionGroups(options).map((g) => (g.group
+            ? (
+              <optgroup key={g.group} label={g.group}>
+                {g.options.map((o) => (
+                  <option key={o.value} value={o.value} disabled={o.disabled}>{o.label}</option>
+                ))}
+              </optgroup>
+            )
+            : g.options.map((o) => (
+              <option key={o.value} value={o.value} disabled={o.disabled}>{o.label}</option>
+            ))))}
         </select>
         {/* Overlaid, not a sibling: keeps the control one hit target, and pointer-events
             none lets the click fall through to the select underneath. */}

@@ -95,10 +95,18 @@ def _looks_like_payload(val):
             k in val[0] for k in ("job", "level", "salary_benchmarks"))
     if isinstance(val, dict):
         return (any(k in val for k in _PAYLOAD_KEYS)
+                or _looks_like_location_list(val)
                 or _looks_like_export_page(val)
                 or _looks_like_scorecard_export_page(val)
                 or _looks_like_roster_page(val))
     return False
+
+
+def _looks_like_location_list(val):
+    """compensation:get:benchmark_locations: {"count", "locations": [{label, location, …}]}."""
+    locs = val.get("locations")
+    return (isinstance(locs, list) and "count" in val
+            and (not locs or (isinstance(locs[0], dict) and "location" in locs[0])))
 
 
 def _looks_like_export_page(val):

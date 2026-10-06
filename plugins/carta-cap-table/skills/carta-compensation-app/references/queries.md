@@ -164,22 +164,24 @@ Never combine them (`ENGINEER/Web Engineer` → 400). There is **no**
 `compensation:list:job_types` command — read valid values from
 `search_tools({"query": "compensation export benchmark"})`.
 
-**Location note — no bulk per-location scalar table.** `geo_adjustment` (with `salary_scalar` /
-`equity_scalar`) is hoisted per **response**, for whichever single `location` param that call
-passed — omitting `location` fetches the national baseline with no scalars at all. There is
-currently no command that returns a scalar table across the ~400 supported locations, so an
-offline location dropdown that recomputes geo-adjusted figures client-side is **not buildable
-today** without either a ~400x fetch multiplier (one export sweep per location) or a new
-compensation-service endpoint. Do not invent one — fetch once without `location` for the
-national matrix this dashboard displays, and if a single location's scalars are ever fetched,
-apply them in the order below.
+**Locations — one sweep per location, never a computed one.** `location` takes one value per
+call, in the product's format: `"City,ST,USA"` for a US metro, `"City,ST,CAN"` for a Canadian
+one, `",,<ISO3>"` for a country. `ctc_locations.py` builds it from a geo label exactly as the
+product does. `geo_adjustment` (label, `salary_scalar`, `equity_scalar`) is hoisted per
+**response** for that one location; a call without `location` returns the default location,
+San Francisco, at scalar 1.0. Verified on corp 7: `"Tulsa,OK,USA"` returns "Tulsa, OK" at 0.70,
+`",,GBR"` returns "GBR" at 0.80 salary / 0.85 equity, in USD. Add
+`"convert_to_local_currency": true` for an international market's local currency, as the
+product's toggle does (`",,GBR"` then returns GBP).
 
-**Client-side geo → bands → rounding order (when a location's scalars ARE available).** The
-server applies the geo scalar to the **unrounded** national base, **then** derives low/mid/high
-bands from the geo-adjusted mid, **then** rounds (equity to 4 decimal places, cash to the corp's
-configured precision). Multiplying already-rounded, already-banded national percentiles by a
-scalar drifts from the product UI, and the error compounds because the bands derive from the
-geo-adjusted mid, not the national one. There is no shortcut ordering.
+`compensation:get:benchmark_locations` (`geo_adjustment_version_id` from the plan's
+`benchmark_version.geo_adjustment_version.id`) lists every supported location: 444 locally,
+397 US and 47 international. Each entry's `location` is the value to pass here verbatim
+(SKILL.md 2d-v).
+Never derive a location by multiplying another location's figures by its scalar: the server
+applies the scalar to the **unrounded** base, clamps it to the plan threshold, derives bands
+from the adjusted mid and only then rounds, so scaling rounded figures drifts from the product
+and the bands drift further.
 
 ## §4 — Build
 

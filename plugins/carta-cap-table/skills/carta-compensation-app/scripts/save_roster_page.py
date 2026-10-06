@@ -231,6 +231,10 @@ def _roster_row(entry):
         "leader": role.get("leader"),
         "focus": role.get("focus") or None,
         "location": fields.get("location"),
+        # {label, salary_scalar, equity_scalar}: the geo adjustment the server
+        # applied to this employee's benchmark. The label is what the Benchmarks
+        # tab's location list is built from (ctc_locations.py).
+        "geo": benchmark.get("geo_adjustment"),
         # {start_date, end_date}, both ISO or null. The refresh planner reads
         # start_date for its tenure gate ("been here N months") and end_date to
         # tell an active employee from a departed one.
