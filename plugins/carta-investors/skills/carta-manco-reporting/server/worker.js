@@ -583,7 +583,11 @@ async function handleDataKey(req, env, key) {
   const kvKey = dataKey("data", sid, firm, key, env);
   const stored = await env.SESSIONS.get(kvKey);
   if (!stored) return Response.json({ error: "not_ready" });
-  const raw = key === "snapshot" && firm ? await withUploadedBudget(stored, firm, env) : stored;
+  let raw = stored;
+  if (firm) {
+    if (key === "snapshot") raw = await withUploadedBudget(stored, firm, env);
+    else if (key === "accounts") raw = await withUploadedDimension(stored, firm, env);
+  }
   const etag = `"${await sha256Base64url(raw)}"`;
   return new Response(req.method === "HEAD" ? null : raw, {
     headers: { "Content-Type": "application/json", ETag: etag, "Cache-Control": "no-store" },
@@ -614,7 +618,11 @@ async function handleReport(req, env, path) {
 // belongs to this firm, stores it without a TTL, and lays it over the snapshot it serves.
 
 // Not exported: the Workers runtime rejects any non-function export from the entry module.
-const BUDGET_BUNDLE_SCHEMA = 1;
+// The exporter writes BUDGET_BUNDLE_SCHEMA; BUDGET_BUNDLE_SCHEMAS is every version this
+// Worker accepts. Schema 1 differs from 2 only by lacking the three optional dimension
+// fields (see applyDimension), so a bundle from an older plugin install is still valid.
+const BUDGET_BUNDLE_SCHEMA = 2;
+const BUDGET_BUNDLE_SCHEMAS = [1, BUDGET_BUNDLE_SCHEMA];
 const MAX_BUNDLE_BYTES = 4 * 1024 * 1024;
 const bundleKey = (firm) => `budget-bundle:${firm}`;
 const isObj = (v) => v && typeof v === "object" && !Array.isArray(v);
@@ -622,7 +630,7 @@ const isObj = (v) => v && typeof v === "object" && !Array.isArray(v);
 // Returns an error message, or null when the bundle may be stored for this firm.
 export function validateBudgetBundle(b, firmUuid) {
   if (!isObj(b)) return "The file is not a budget bundle.";
-  if (b.schema_version !== BUDGET_BUNDLE_SCHEMA) return `Unsupported schema_version ${JSON.stringify(b.schema_version)}; expected ${BUDGET_BUNDLE_SCHEMA}.`;
+  if (!BUDGET_BUNDLE_SCHEMAS.includes(b.schema_version)) return `Unsupported schema_version ${JSON.stringify(b.schema_version)}; expected one of ${BUDGET_BUNDLE_SCHEMAS.join(", ")}.`;
   if (String(b.firm_uuid || "").toLowerCase() !== String(firmUuid || "").toLowerCase()) return "This bundle was exported for a different firm.";
   if (!/^[A-Z]{3}$/.test(String(b.currency || ""))) return "The bundle has no currency.";
   if (typeof b.as_of !== "string" || !b.as_of) return "The bundle has no as_of date.";
@@ -632,6 +640,9 @@ export function validateBudgetBundle(b, firmUuid) {
     if (!isObj(x) || typeof x.id !== "string" || !x.id || !Array.isArray(x.rows)) return "A budget in the bundle has no id or rows.";
   }
   if (b.varianceByCategory != null && !isObj(b.varianceByCategory)) return "varianceByCategory must be an object.";
+  if (b.tagCategory != null && typeof b.tagCategory !== "string") return "tagCategory must be a string.";
+  if (b.dimension != null && !isObj(b.dimension)) return "dimension must be an object.";
+  if (b.tagValuesAvailable != null && typeof b.tagValuesAvailable !== "boolean") return "tagValuesAvailable must be a boolean.";
   return null;
 }
 
@@ -653,9 +664,34 @@ async function withUploadedBudget(raw, firm, env) {
   } else {
     snap.budget = rec.bundle.budget;
     snap.varianceByCategory = rec.bundle.varianceByCategory ?? null;
+    applyDimension(snap, rec.bundle);
     snap.budgetUpload = { ...meta, status: "applied" };
   }
   return JSON.stringify(snap);
+}
+
+// Which field on a journal entry carries this firm's tag/sub-account/vendor breakout —
+// resolved locally at export time, since the Worker has no chart-of-accounts mapping of
+// its own to resolve it from. Layered onto whatever reads the bundle back, since
+// dimensionOf()/dimensionValuesAvailable() (app/src/ui/dimension.js) read these fields
+// off both the snapshot and the accounts data.
+function applyDimension(data, bundle) {
+  if (bundle.tagCategory != null) data.tagCategory = bundle.tagCategory;
+  if (bundle.dimension != null) data.dimension = bundle.dimension;
+  if (bundle.tagValuesAvailable != null) data.tagValuesAvailable = bundle.tagValuesAvailable;
+}
+
+// The /api/accounts route never goes through withUploadedBudget (that route has no
+// budget/varianceByCategory of its own to replace) but still needs the uploaded
+// bundle's dimension fields: dimensionValuesAvailable() reads accountsData only, with
+// no snapshot fallback.
+async function withUploadedDimension(raw, firm, env) {
+  const rec = await env.SESSIONS.get(bundleKey(firm), "json");
+  if (!rec?.bundle) return raw;
+  let data;
+  try { data = JSON.parse(raw); } catch { return raw; }
+  applyDimension(data, rec.bundle);
+  return JSON.stringify(data);
 }
 
 async function handleBudgetUpload(req, env) {

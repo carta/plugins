@@ -12,7 +12,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 class NothingToExport(Exception):
@@ -77,6 +77,12 @@ def build_bundle(snapshot, accounts, exported_at=None):
         "workbook": workbook,
         "budget": budget,
         "varianceByCategory": snapshot.get("varianceByCategory"),
+        # Which field on a journal entry carries this firm's tag/sub-account/vendor
+        # breakout, read from the local chart-of-accounts resolution — the hosted
+        # Worker has no coa-mapping of its own to resolve this itself.
+        "tagCategory": accounts.get("tagCategory"),
+        "dimension": accounts.get("dimension"),
+        "tagValuesAvailable": accounts.get("tagValuesAvailable"),
     }
 
 
