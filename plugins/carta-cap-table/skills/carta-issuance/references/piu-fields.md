@@ -185,17 +185,16 @@ server-side rule is that a vesting start date with no schedule fails. Warn on ne
 Offered **only** when the resolved unit class carries a truthy
 `has_corresponding_interest`. The skill never reads a feature flag; it reads this field.
 
-**An absent key means UNKNOWN, not "no".** `ShareClassView` gates the serializer field on
-the `CORRESPONDING_INTEREST_ADMIN_ISSUANCE` flag, evaluated per corporation, and pops it
-when the flag is off — so *"this class has no link"* and *"this read could not see links
-at all"* arrive as the same missing key. The read cannot tell them apart, and neither can
-you. Absence must never raise, and must never be reported as fact.
+**An absent key means UNKNOWN, not "no".** A trimmed or partial share-class read drops
+the field, so *"this class has no link"* and *"this read could not see links at all"*
+arrive as the same missing key. The read cannot tell them apart, and neither can you.
+Absence must never raise, and must never be reported as fact.
 
 | What you see | What it means | What to say |
 |---|---|---|
 | `true` | The class carries the link | Offer the row |
 | `false` | The class has no link | No row; say so only if asked |
-| **key absent** | **Unknown — flag off, or a trimmed/partial read** | **Never assert "no link is configured"** |
+| **key absent** | **Unknown — a trimmed/partial read** | **Never assert "no link is configured"** |
 
 **Never state a configuration fact you inferred from an absent key.** Saying *"Carta shows
 no corresponding-interest link for this unit class"* on the strength of a missing field is
