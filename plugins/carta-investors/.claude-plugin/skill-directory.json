@@ -40,6 +40,15 @@
       "Who are other investors who have co-invested in my portfolio companies?"
     ]
   },
+  "carta-data-collection": {
+    "category": "portfolio",
+    "name": "Portfolio data collection",
+    "order": 70,
+    "prompts": [
+      "Set up data collection for {{FIRM}}'s portfolio companies",
+      "Which portfolio companies have not sent their numbers this quarter?"
+    ]
+  },
   "carta-download-tearsheet": {
     "category": "lp-reporting",
     "name": "Tear sheet download",

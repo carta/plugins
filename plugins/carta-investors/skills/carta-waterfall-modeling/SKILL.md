@@ -28,7 +28,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.57.5</carta-plugin>
+<carta-plugin>carta-investors:6.57.6</carta-plugin>
 
 # Waterfall Modeling
 
