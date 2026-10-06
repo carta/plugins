@@ -20,7 +20,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.59.3</carta-plugin>
+<carta-plugin>carta-investors:6.59.4</carta-plugin>
 
 # Carta Workhub — Build / Redeploy
 
@@ -190,6 +190,9 @@ not inside a fund-data dashboard.
   meanwhile shows the release, not the review. With no verdict after 11 minutes the panel locks
   both decisions and sends the reviewer to Carta rather than inviting a second press. A refusal
   (a failing blocking health check) stays written above Approve.
+
+  A 400 or 403 from any review read or write — in an error envelope, a thrown error, or a reply
+  carrying the error in its payload — raises a toast inside the panel until it is dismissed.
 - **Financial reporting tracker** — one card per reporting period that needs the GP, opening the
   Financial Reporting Tracker for that period: the banner, the multi-select entity filter (a
   fund family's box selects every member), the combined filter-and-sort menu, entity search,

@@ -225,6 +225,8 @@ function ccrReset(target, title) {
     pdfLoading: false,
     sentMessage: "",
     error: null,
+    // A refusal from Carta, { title, text }, shown as a toast until dismissed.
+    alert: null,
     // Set once a release fails ambiguously; never cleared for this panel.
     locked: false,
     // The fresh health-check run, requested alongside the summary.
@@ -294,6 +296,9 @@ const ccrRowLabel = (r) =>
   (r.interest && (r.interest.partner_interest_group_name || r.interest.name)) || "Unnamed interest";
 
 const ccrIsDistribution = (s) => !!s && s.activity_type === "distribution";
+
+// Until the summary answers, the panel cannot tell a call from a distribution.
+const ccrEvent = (s) => (!s ? "capital activity" : ccrIsDistribution(s) ? "distribution" : "capital call");
 
 function ccrPanelTitle(s) {
   if (!s) return _ccr.title;
@@ -372,7 +377,7 @@ function ccrBlockers(s) {
     });
   }
   const h = ccrHealth();
-  const event = ccrIsDistribution(s) ? "distribution" : "capital call";
+  const event = ccrEvent(s);
   // The check roster is staff detail the web app hides from GPs, so no check is named;
   // Carta clears a failure once the reviewer sends the activity back.
   if (h.verdict === "blocking") {
@@ -421,6 +426,101 @@ function ccrPayload(res, has) {
   return null;
 }
 
+// ── Refusals ──────────────────────────────────────────────────────────────
+// Carta says no as an error envelope, a thrown error, or a reply with the error in its payload.
+
+const CCR_STATUS_WORDS = [
+  [403, /\b403\b|\bforbidden\b|\bpermission\b|\bnot (?:authori[sz]ed|allowed|permitted)\b/i],
+  [400, /\b400\b|\bbad request\b/i],
+];
+
+// null on success, else { status: 400 | 403 | null, text }. text is Carta's reason
+// only when short: longer is a stack trace, which one toast line cannot carry.
+function ccrFailure(res, err) {
+  const texts = [];
+  const codes = [];
+  let failed = !!err;
+  const noteCode = (o) => {
+    if (!o || typeof o !== "object") return;
+    [o.status, o.status_code, o.statusCode, o.http_status].forEach((v) => {
+      if (/^[1-5]\d\d$/.test(String(v))) codes.push(Number(v));
+    });
+  };
+  if (err) { texts.push(err.message); noteCode(err); noteCode(err.result); }
+  if (res && res.isError) {
+    failed = true;
+    (res.content || []).forEach((c) => { if (c && c.type === "text") texts.push(c.text); });
+  }
+  if (res) {
+    _mcpResultCandidates(res).forEach((c) => {
+      if (!c || typeof c !== "object") return;
+      noteCode(c);
+      if (!c.error) return;
+      failed = true;
+      if (typeof c.error === "string") texts.push(c.error);
+      else { texts.push(c.error.message || c.error.detail); noteCode(c.error); }
+    });
+  }
+  if (codes.some((n) => n >= 400)) failed = true;
+  if (!failed) return null;
+  const said = texts.filter((t) => typeof t === "string" && t.trim());
+  const status = [400, 403].find((n) => codes.includes(n)) ||
+    (CCR_STATUS_WORDS.find(([, re]) => said.some((t) => re.test(t))) || [null])[0];
+  // The status is already in the toast's title, so the reason starts at Carta's own words.
+  const text = (said.find((t) => t.length <= 240) || "")
+    .replace(/^(?:error:\s*)?(?:request failed with status|http|status(?: code)?)\s*\d{3}\s*[:\-–]\s*/i, "");
+  return { status: status, text: text };
+}
+
+// Carries what ccrFailure read through a throw, so a catch can still tell a 403 from a timeout.
+function ccrThrowIfFailed(res, fallback) {
+  const f = ccrFailure(res);
+  if (f) throw Object.assign(new Error(f.text || fallback), { failure: f });
+}
+const ccrFailureOf = (err) => (err && err.failure) || ccrFailure(null, err);
+
+// The toast for a 400 or a 403; null for any other failure, which keeps its own handling.
+// doing completes "You don't have permission to …"; unchanged says what the refusal left as it was.
+function ccrAlertFor(failure, doing, unchanged) {
+  if (!failure) return null;
+  const tail = unchanged ? " " + unchanged : "";
+  if (failure.status === 403) {
+    return {
+      title: "You don't have permission to " + doing,
+      text: "Your Carta account can't do this for this fund. Ask a firm admin for access." + tail,
+    };
+  }
+  if (failure.status === 400) {
+    return {
+      title: "Carta couldn't " + doing,
+      text: (failure.text || "Carta rejected the request.") + tail,
+    };
+  }
+  return null;
+}
+
+// Shown on the panel that asked. A panel closed or swapped since falls back to the
+// page toast, so a refusal that lands late is still said once.
+function ccrAlert(snap, alert) {
+  if (!alert) return;
+  const overlay = document.getElementById("ccr-overlay");
+  if (!snap || _ccr !== snap || !overlay || !overlay.classList.contains("far-overlay-visible")) {
+    showToast(alert.title + ".");
+    return;
+  }
+  snap.alert = alert;
+  ccrRender();
+}
+
+function ccrAlertHtml() {
+  const a = _ccr.alert;
+  if (!a) return "";
+  return '<div class="ccr-alert" role="alert">' +
+    '<div class="ccr-alert-copy"><span class="ccr-alert-title">' + escHtml(a.title) + "</span>" +
+      '<span class="ccr-alert-text">' + escHtml(a.text) + "</span></div>" +
+    '<button class="ccr-alert-close" data-ccr-alert-close aria-label="Dismiss">✕</button></div>';
+}
+
 async function ccrLoad() {
   // Own this load. Reopening swaps _ccr, and a read still in flight would
   // otherwise write one call's investors under another call's header.
@@ -458,7 +558,7 @@ async function ccrLoad() {
       params: params,
     });
     if (_ccr !== snap) return;
-    if (sRes.isError) throw new Error(sRes.content?.[0]?.text ?? "review summary failed");
+    ccrThrowIfFailed(sRes, "review summary failed");
 
     const summary = ccrPayload(sRes, (c) =>
       "bucket_totals" in c || "interests_count" in c || "total_due_to_fund" in c);
@@ -488,7 +588,12 @@ async function ccrLoad() {
         params: Object.assign({ page: page, page_size: CCR_PAGE_SIZE }, params),
       });
       if (_ccr !== snap) return;
-      if (rRes.isError) break;
+      const refused = ccrFailure(rRes);
+      if (refused) {
+        ccrAlert(snap, ccrAlertFor(refused, "view every investor on this " + ccrEvent(snap.summary),
+          "The table lists only the investors Carta returned."));
+        break;
+      }
       const pageData = ccrPayload(rRes, (c) => Array.isArray(c.results));
       if (!pageData) break;
       walked = walked.concat(pageData.results);
@@ -502,8 +607,10 @@ async function ccrLoad() {
   } catch (err) {
     if (_ccr !== snap) return;
     console.error("[ccr] review read failed —", err);
+    const alert = ccrAlertFor(ccrFailureOf(err), "view this " + ccrEvent(snap.summary));
     snap.loading = false;
-    snap.error = err && err.message ? err.message : "read failed";
+    snap.error = alert ? alert.title + "." : err && err.message ? err.message : "read failed";
+    snap.alert = alert;
     ccrRender();
   }
 }
@@ -586,7 +693,7 @@ async function ccrLoadHealth(snap, params) {
       params: Object.assign({ include_passing: true }, params),
     });
     if (_ccr !== snap) return;
-    if (res.isError) throw new Error(res.content?.[0]?.text ?? "health checks failed");
+    ccrThrowIfFailed(res, "health checks failed");
     const page = ccrPayload(res, (c) => Array.isArray(c.results));
     if (!page) throw new Error("Carta answered, but not with health checks");
     snap.health = { loading: false, error: null, checks: page.results };
@@ -594,6 +701,9 @@ async function ccrLoadHealth(snap, params) {
     if (_ccr !== snap) return;
     console.error("[ccr] health checks failed —", err);
     snap.health = { loading: false, error: err && err.message ? err.message : "health checks failed", checks: [] };
+    // Set, not raised: the render below draws it, and a summary refusal may already hold the toast.
+    snap.alert = snap.alert || ccrAlertFor(ccrFailureOf(err), "run health checks on this " + ccrEvent(snap.summary),
+      "Release stays held until they run.");
   }
   ccrRender();
 }
@@ -752,23 +862,17 @@ async function ccrSubmitChanges() {
       },
     });
     if (_ccr !== snap) return;
-    if (res.isError) throw new Error(res.content?.[0]?.text ?? "request failed");
+    ccrThrowIfFailed(res, "request failed");
     ccrForgetDocs(snap.target.activityId);
     done();
   } catch (err) {
     console.error("[ccr] request-changes failed —", err);
     if (_ccr !== snap) return;
     snap.sending = false;
-    ccrRender();
-    showToast("Could not send that to your Carta team. Nothing changed, and your text is still here.");
+    const kept = "Nothing was sent, and your text is still here.";
+    ccrAlert(snap, ccrAlertFor(ccrFailureOf(err), "request changes on this " + ccrEvent(snap.summary), kept) ||
+      { title: "Couldn't send that to your Carta team", text: kept });
   }
-}
-
-// A refusal names the health check that stopped the release. Long text is a stack
-// trace or a wall of detail, which the footer's one line cannot carry.
-function ccrErrText(res) {
-  const t = res && res.content && res.content[0] && res.content[0].text;
-  return typeof t === "string" && t.length <= 240 ? t : "";
 }
 
 const ccrOpenOn = (activityId) => !!_ccr && !!_ccr.target && _ccr.target.activityId === activityId;
@@ -823,7 +927,9 @@ function ccrShowReleasing(activityId) {
 
 // Runs whenever the reply lands, for whichever panel is open by then.
 function ccrReleaseAnswered(activityId, res, err) {
-  if (err) {
+  const failure = ccrFailure(res, err);
+  // A thrown 400 or 403 is Carta's verdict; any other throw is the connector giving up.
+  if (err && !failure.status) {
     // No verdict reached us, but the release runs on Carta's clock, not the
     // connector's, so it may yet land. The queue says when it does.
     console.error("[ccr] release did not answer —", err);
@@ -832,19 +938,24 @@ function ccrReleaseAnswered(activityId, res, err) {
     return;
   }
 
-  if (res && res.isError) {
+  if (failure) {
     // Release runs its blocking health checks first and sends nothing when one fails,
     // so a refusal leaves the call as it was. Keep the panel usable, and say why.
-    console.error("[ccr] release refused —", res);
+    console.error("[ccr] release refused —", res || err);
     delete _ccrReleasing[activityId];
     _ccrUnconfirmed.delete(activityId);
-    if (ccrOpenOn(activityId)) {
-      _ccr.releasing = false;
-      _ccr.locked = false;
-      _ccr.phase = "review";
-      _ccr.releaseNote = ccrErrText(res) || "Carta did not release this call. Nothing was sent to investors.";
+    const snap = ccrOpenOn(activityId) ? _ccr : null;
+    const unchanged = "Nothing was sent to investors.";
+    const alert = ccrAlertFor(failure, "release this " + ccrEvent(snap && snap.summary), unchanged);
+    if (snap) {
+      snap.releasing = false;
+      snap.locked = false;
+      snap.phase = "review";
+      snap.releaseNote = failure.status === 403 ? alert.title + ". " + unchanged
+        : failure.text || "Carta did not release this call. " + unchanged;
       ccrRender();
     }
+    ccrAlert(snap, alert);
     farFetchRequests();
     return;
   }
@@ -1893,6 +2004,7 @@ function ccrRender() {
       '<div class="far-panel-body ccr-body' + (reviewing ? " ccr-body-split" : "") + '">' + body + "</div>" +
       ccrFooter() +
       (reviewing && _ccr.modal === "changes" ? ccrChangesModal() : "") +
+      ccrAlertHtml() +
     "</div>";
 
   Object.keys(keep).forEach((sel) => {
@@ -1956,6 +2068,7 @@ function ccrBind(root) {
   const on = (sel, ev, fn) => root.querySelectorAll(sel).forEach((el) => el.addEventListener(ev, (e) => fn(el, e)));
 
   on("[data-ccr-close]", "click", () => ccrClose());
+  on("[data-ccr-alert-close]", "click", () => { _ccr.alert = null; ccrRender(); });
   on("[data-ccr-phase]", "click", (el) => {
     const phase = el.getAttribute("data-ccr-phase");
     if (phase === "confirm") trackWorkhub("click", "CartaWorkhub.CapitalCallReview.OpenRelease");
