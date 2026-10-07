@@ -29,7 +29,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.94.0</carta-plugin>
+<carta-plugin>carta-cap-table:6.94.1</carta-plugin>
 
 # Benchmark Query
 
@@ -455,10 +455,10 @@ Extract the numeric `corporation_pk` (the integer after `corporation_pk:`) for a
 call_tool({"name": "compensation__get__subscription_status", "arguments": {"corporation_id": <corporation_pk>}})
 ```
 
-Three outcomes:
-- `is_subscribed: true` → **only now** proceed to Step 3a and ask for the role.
-- `is_subscribed: false` → stop and send the subscription message (see **Subscription gating**). Do not call `plans/` or `benchmark/` — they return empty data anyway and waste a round-trip. Do not invoke the rolematcher — don't make the user level a role we can't benchmark.
-- **403** → the caller lacks a CTC role on this corp. Stop and send the no-access message (see **Access gating**). Do not retry or re-authenticate.
+It returns `{corporation_id, has_ctc_access, is_subscribed}`. Three outcomes:
+- `has_ctc_access: true`, `is_subscribed: true` → **only now** proceed to Step 3a and ask for the role.
+- `has_ctc_access: true`, `is_subscribed: false` → stop and send the subscription message (see **Subscription gating**). Do not call `plans/` or `benchmark/` — they return empty data anyway and waste a round-trip. Do not invoke the rolematcher — don't make the user level a role we can't benchmark.
+- `has_ctc_access: false` → the caller lacks a CTC role on this corp. Stop and send the no-access message (see **Access gating**). `is_subscribed` is `null` here — the corp's subscription state is withheld, so don't infer it. Do not retry or re-authenticate.
 
 ### Step 3a — Map role to CTC taxonomy
 
@@ -757,11 +757,12 @@ If the user asks about the current benchmark version or wants to query against a
 
 Compensation-service's `plans/` and `benchmark/` endpoints return 200 even for corporations that don't have an active CTC subscription — the response just has empty/null ratings. **You cannot infer subscription status from those calls.** That's why `subscription_status` exists.
 
-Once you have resolved the corporation (Step 1), call `compensation:get:subscription_status` as **Step 2 — before any `plans/` or `benchmark/` call, and before asking the user for a role** (see Step 2 above). It returns `{corporation_id, is_subscribed}`. "First" here means first among the *compensation* calls, not before corp resolution — you still need a `corporation_pk` from Step 1 to make this call.
+Once you have resolved the corporation (Step 1), call `compensation:get:subscription_status` as **Step 2 — before any `plans/` or `benchmark/` call, and before asking the user for a role** (see Step 2 above). It returns `{corporation_id, has_ctc_access, is_subscribed}`. "First" here means first among the *compensation* calls, not before corp resolution — you still need a `corporation_pk` from Step 1 to make this call.
 
 **Single-corp query:**
 1. `call_tool({"name": "compensation__get__subscription_status", "arguments": {"corporation_id": <id>}})`
-2. If `is_subscribed` is `false`:
+2. If `has_ctc_access` is `false` → follow **Access gating** below and STOP.
+3. If `has_ctc_access` is `true` and `is_subscribed` is `false`:
    - Determine whether the user has cap table access: `call_tool({"name": "context_tools__get__profile", "arguments": {}})` and check whether `corporations[]` is non-empty. Treat a **non-empty** list as "has cap table access" — the endpoint already excludes `NO_ACCESS` roles, so presence is the signal. Do **not** match on the `role` label: those strings are raw and unnormalized (`'Admin'` and `'Administrator'` both occur), so an allowlist would misclassify real admins. Do **not** test whether *this specific corp* is in the list — the list is capped server-side, so a large-portfolio admin can be a false negative.
    - If `corporations[]` is **non-empty**, tell the user:
      > *"That's a Carta Total Compensation (CTC) question — CTC runs on Carta's private market salary and equity data. The data can be segmented by level, function, stage, and geography, directly in Claude. It's not active for your company yet. Reach out to your account team or [request a demo](https://carta.com/demo/total-comp/?&utm_medium=product&utm_source=carta-web&utm_campaign=ctc-plugin-inq-amer-q2-26) to unlock it.*
@@ -773,11 +774,11 @@ Once you have resolved the corporation (Step 1), call `compensation:get:subscrip
    - **STOP.** Do not call `plans/`, `benchmark/`, `benchmark_versions`, or any other compensation endpoint for this corp.
    - Do not generate a CSV/JSON file for this corp. No "framework" file. No "structure-only" file. Nothing.
    - Do not "try the benchmark to see if it works anyway". The answer is no.
-3. If `is_subscribed` is `true` → proceed with the benchmark workflow.
+4. If `has_ctc_access` is `true` and `is_subscribed` is `true` → proceed with the benchmark workflow.
 
 **Multi-corp / bulk query:**
 0. If any corp turns out to be unsubscribed, call `context_tools__get__profile` **once** for the whole batch and reuse the result. The cap-table-access branch is per-**user**, not per-corp — never re-fetch it inside the loop.
-1. Call `compensation:get:subscription_status` for each corp up front. Partition them into `subscribed` and `unsubscribed` lists.
+1. Call `compensation:get:subscription_status` for each corp up front. Partition them into `subscribed` (`is_subscribed: true`), `unsubscribed` (`has_ctc_access: true`, `is_subscribed: false`), and `no_access` (`has_ctc_access: false`) lists. Handle `no_access` per **Access gating**.
 2. Run benchmark queries (`plans/`, `benchmark/`) **only** for corps in the `subscribed` list. Never query the API for corps in `unsubscribed`.
 3. In the chat reply, list unsubscribed corps separately: *"The following corporations don't have an active CTC subscription and were excluded: [Corp A], [Corp B]."*
 4. In any generated file (CSV/JSON), unsubscribed corps must not appear as data rows. Optionally include a separate "Excluded (no CTC subscription)" section for transparency. Never invent zeros or blanks for them.
@@ -795,34 +796,34 @@ A `compensation:*` read can fail for two unrelated reasons that must NOT be conf
 - **No subscription** — the corporation doesn't have Carta Total Compensation. Remediation: a sales/demo conversation.
 - **No access** — the corporation HAS CTC, but the **current user** doesn't hold a CTC role on it (Company Viewer, Compensation Manager, Company Editor, Company Admin). A user can be a stakeholder, board member, or cap-table admin without any CTC role. Remediation: an internal role grant — NOT a sales conversation.
 
-> **You distinguish these — the MCP layer does not.** The carta MCP gateway is a thin, domain-agnostic adapter: when a compensation command hits a 403 it surfaces the raw error, it does NOT probe subscription state or compose a friendly message. The authoritative signal for the distinction is `compensation:get:subscription_status`: when it succeeds it returns `{corporation_id, is_subscribed}` — `false` is no-subscription, `true` means a later `plan`/`benchmark` 403 is no-access. When it *itself* returns a 403, that 403 is the signal: the caller lacks a CTC role, so it's no-access. Step 2 already calls it up front — use its result (or its 403) to classify, per the table below.
+> **You distinguish these — the MCP layer does not compose the message.** The authoritative signal is `compensation:get:subscription_status`, which answers both questions without erroring: `{corporation_id, has_ctc_access, is_subscribed}`. `has_ctc_access: false` is no-access; `has_ctc_access: true` with `is_subscribed: false` is no-subscription. When a compensation command hits a 403 the gateway surfaces the raw error and does not compose a friendly message. Step 2 already calls `subscription_status` up front — use its result to classify, per the table below.
 
 **How to classify a failure:**
 
 | What you observe | Meaning | What to do |
 |---|---|---|
-| `subscription_status` → `is_subscribed: false` | No subscription | Follow **Subscription gating** — send the demo-link message, STOP. Do not call `plans/` or `benchmark/`. |
+| `subscription_status` → `has_ctc_access: false` | No access (you lack a CTC role on this corp; its subscription state is withheld) | Send the no-access message below, STOP. `is_subscribed` is `null` — treat it as unknown, not as "no subscription". |
+| `subscription_status` → `has_ctc_access: true`, `is_subscribed: false` | No subscription | Follow **Subscription gating** — send the demo-link message, STOP. Do not call `plans/` or `benchmark/`. |
 | `subscription_status` → `is_subscribed: true`, but a later `plan`/`benchmark` read returns **403** | No access (corp has CTC, you lack a role) | Send the no-access message below, STOP. Do NOT show a demo link — the corp already has CTC. |
-| `subscription_status` itself returns **403** | No access (the 403 means you lack a CTC role on this corp) | Send the no-access message below, STOP. Treat a 403 on the status probe as no-access, not as "couldn't determine subscription". |
 
 **The no-access message (surface this verbatim):**
 
 > *"Your account doesn't have a CTC role for this corporation, contact a company admin for access"*
 
-This wording is deliberately neutral on subscription state: it's correct for both no-access rows above, including the `subscription_status`-403 case where the corp's subscription status is unknown (a 403 only establishes the caller lacks a CTC role, not that the corp has CTC). Do not assert that the corporation has Carta Total Compensation.
+This wording is deliberately neutral on subscription state: it's correct for both no-access rows above, including `has_ctc_access: false`, where the corp's subscription status is withheld. Do not assert that the corporation has Carta Total Compensation.
 
 > **HARD STOP RULE:** Both outcomes are FINAL. Do NOT re-authenticate, retry, or "try a different command to see if it works" — re-authentication issues a fresh token for the **same user** and does not grant a role they don't have. Do NOT generate a CSV/JSON file for that corp. No partial output.
 
-**Multi-corp / bulk query:** call `subscription_status` for each corp up front; for corps that come back `is_subscribed: true`, a subsequent benchmark 403 means no-access. Partition and surface the two failure classes separately:
+**Multi-corp / bulk query:** call `subscription_status` for each corp up front. Corps with `has_ctc_access: false` are no-access; for corps that come back `is_subscribed: true`, a subsequent benchmark 403 also means no-access. Partition and surface the two failure classes separately:
 - *"The following corporations don't have an active CTC subscription and were excluded: [Corp A]."*
 - *"Your account doesn't have a CTC role for the following corporations, contact a company admin for access: [Corp B]."*
 
 ### Anti-patterns to avoid
 
 - ❌ Treating the failure as a transient auth issue and asking the user to re-login. Re-authentication issues a fresh token for the **same user** — it does not grant a role they don't have.
-- ❌ Expecting the gateway to hand you a finished, user-ready message. It returns a raw sanitized 403 — YOU classify it using the `subscription_status` result and compose the message.
-- ❌ Showing a CTC product demo link for the access-denied case. The user needs an internal role grant, not a sales conversation — and on a `subscription_status` 403 you don't even know the corp lacks CTC, so a demo link would be a guess.
-- ❌ Treating a 403 on `subscription_status` as "subscription unknown, try the benchmark anyway". A 403 there means no-access — stop and send the no-access message.
+- ❌ Expecting the gateway to hand you a finished, user-ready message. YOU classify the outcome using the `subscription_status` result and compose the message.
+- ❌ Showing a CTC product demo link for the access-denied case. The user needs an internal role grant, not a sales conversation — and with `has_ctc_access: false` you don't even know the corp lacks CTC, so a demo link would be a guess.
+- ❌ Treating `has_ctc_access: false` (with `is_subscribed: null`) as "subscription unknown, try the benchmark anyway". It means no-access — stop and send the no-access message.
 
 ## Error Handling
 
@@ -831,8 +832,8 @@ This wording is deliberately neutral on subscription state: it's correct for bot
 | Rolematcher returns `UNKNOWN` for `job_area` | Role description too vague or not in CTC taxonomy | "Could you clarify the role? For example: job area (Engineering, Sales), seniority level, and whether it's an IC or manager track." |
 | Rolematcher returns `UNKNOWN` for `track` | Level is also UNKNOWN — no seniority signals present | "Is this an individual contributor (IC), manager, or executive role? This determines which benchmark track to use." |
 | Benchmark response has no data for role/level (subscribed corp) | Data coverage gap — no snapshot for that exact slice | "No benchmark data is available for [role] at [level] in this benchmark version. Want to try a different level or focus?" |
-| `compensation:get:subscription_status` returns `is_subscribed: false` | Corp doesn't have an active CTC subscription | See **Subscription gating** — stop and send the subscription message. |
-| `compensation:get:subscription_status` returns **403**, OR `is_subscribed: true` but a `plan`/`benchmark` read returns **403** | The current user lacks a CTC role on this corp | See **Access gating** — send the no-access message, stop. No demo link; do NOT re-authenticate (won't grant a missing role). |
+| `compensation:get:subscription_status` returns `has_ctc_access: true`, `is_subscribed: false` | Corp doesn't have an active CTC subscription | See **Subscription gating** — stop and send the subscription message. |
+| `compensation:get:subscription_status` returns `has_ctc_access: false`, OR `is_subscribed: true` but a `plan`/`benchmark` read returns **403** | The current user lacks a CTC role on this corp | See **Access gating** — send the no-access message, stop. No demo link; do NOT re-authenticate (won't grant a missing role). |
 
 ## What next?
 

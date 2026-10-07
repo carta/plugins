@@ -60,7 +60,7 @@ _CONTAINER_KEYS = ("content", "result", "results", "rows", "data")
 
 # Keys that identify a real compensation payload once unwrapped.
 _PAYLOAD_KEYS = ("benchmarks", "peer_group", "benchmark_version", "is_subscribed",
-                 "job", "level", "versions")
+                 "has_ctc_access", "job", "level", "versions")
 
 # Markers unique to the columnar bulk-export envelope (compensation:export:benchmarks).
 # Kept separate from _PAYLOAD_KEYS: "benchmark_version" alone is ambiguous (a plan

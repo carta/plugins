@@ -26,7 +26,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.94.0</carta-plugin>
+<carta-plugin>carta-cap-table:6.94.1</carta-plugin>
 
 # CTC Scorecard
 
@@ -171,7 +171,10 @@ call_tool({"name": "compensation__get__subscription_status",
            "arguments": {"corporation_id": <corporation_pk>}})
 ```
 
-If `is_subscribed` is False, stop here and surface the subscription message (see **Subscription gating** below). Do not call any scorecard endpoint — they will return empty data and waste a round-trip.
+It returns `{corporation_id, has_ctc_access, is_subscribed}`:
+- `has_ctc_access: false` → the caller holds no CTC role on this corp. Stop and send the no-access message (see **Subscription gating** below). `is_subscribed` is `null` here, so don't infer the corp's subscription state.
+- `has_ctc_access: true`, `is_subscribed: false` → stop and surface the subscription message (see **Subscription gating** below). Do not call any scorecard endpoint — they will return empty data and waste a round-trip.
+- `has_ctc_access: true`, `is_subscribed: true` → continue.
 
 ### Step 3 — Decide which lens to query
 
@@ -543,7 +546,11 @@ This is the same citation contract as carta-compensation-benchmarks — keep it 
 
 ## Subscription gating
 
-If `compensation:get:subscription_status` returns `is_subscribed: false`, OR a scorecard call returns HTTP 403, OR `compensation:get:plan` returns 403, stop and reply with one of the two messages below.
+If `compensation:get:subscription_status` returns `has_ctc_access: false`, OR a scorecard call returns HTTP 403, OR `compensation:get:plan` returns 403, the caller lacks a CTC role on this corp. Stop and reply with the no-access message, verbatim — no demo link, since the user needs a role grant, not a sales conversation:
+
+> *"Your account doesn't have a CTC role for this corporation, contact a company admin for access"*
+
+If `compensation:get:subscription_status` returns `has_ctc_access: true` and `is_subscribed: false`, stop and reply with one of the two subscription messages below.
 
 Choose between them by whether the user has cap table access: `call_tool({"name": "context_tools__get__profile", "arguments": {}})` and check whether `corporations[]` is non-empty. Treat a **non-empty** list as "has cap table access" — the endpoint already excludes `NO_ACCESS` roles, so presence is the signal. Do **not** match on the `role` label: those strings are raw and unnormalized (`'Admin'` and `'Administrator'` both occur), so an allowlist would misclassify real admins. Do **not** test whether *this specific corp* is in the list — the list is capped server-side, so a large-portfolio admin can be a false negative.
 

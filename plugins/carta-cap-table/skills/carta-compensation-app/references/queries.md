@@ -21,8 +21,9 @@ call_tool({"name": "compensation__get__subscription_status",
            "arguments": {"corporation_id": <corporation_pk>}})
 ```
 
-`is_subscribed: false` → stop, surface the subscription message, fetch nothing.
-`403` → the caller has no CTC role on this corp; stop.
+Returns `{corporation_id, has_ctc_access, is_subscribed}`.
+`has_ctc_access: false` → the caller has no CTC role on this corp (`is_subscribed` is `null`); stop.
+`has_ctc_access: true`, `is_subscribed: false` → stop, surface the subscription message, fetch nothing.
 
 A corp with no subscription has no benchmark data, so every later call is wasted.
 

@@ -62,7 +62,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.94.0</carta-plugin>
+<carta-plugin>carta-cap-table:6.94.1</carta-plugin>
 
 <!-- [PATTERN carta-writing-style v0.0.2] [PATTERN etiquette v0.0.6] [PATTERN text v0.0.8] [PATTERN tables v0.0.12] [PATTERN carta-watermark v0.0.10] [PATTERN base v0.1.0] -->
 
@@ -387,9 +387,11 @@ call_tool({"name": "compensation__get__subscription_status",
            "arguments": {"corporation_id": <corporation_pk>}})
 ```
 
-- `is_subscribed: true` → continue.
-- `is_subscribed: false` → stop, surface the subscription message, fetch nothing.
-- `403` → the caller has no CTC role on this corp. Stop; do not retry.
+It returns `{corporation_id, has_ctc_access, is_subscribed}`.
+
+- `has_ctc_access: true`, `is_subscribed: true` → continue.
+- `has_ctc_access: true`, `is_subscribed: false` → stop, surface the subscription message, fetch nothing.
+- `has_ctc_access: false` → the caller has no CTC role on this corp (`is_subscribed` is `null`). Stop; do not retry.
 
 A corp with no subscription has no benchmark data, so every later call would be wasted.
 
