@@ -106,7 +106,8 @@ const TASK_PRESETS = [
   ] },
 ];
 
-// The queue's categories, in display order. A task joins the one listing its
+// The queue's categories, in display order: Requests, Capital calls and
+// Distributions lead, the rest follow. A task joins the one listing its
 // workflow_template; a capital activity is a call or a distribution only by its
 // name, which fund-admin builds from the activity type, so `named` decides there.
 // A template listed nowhere lands in Other. `icon` is the inner markup of a
@@ -138,6 +139,9 @@ const TASK_CATEGORIES = [
   { key: TASK_CATEGORY_CAPITAL, name: 'Capital calls',
     templates: [...TASK_TEMPLATES_CAPITAL_ACTIVITY, 'request-capital-call'],
     icon: '<path d="M12 18H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5"/><path d="m16 19 3 3 3-3"/><path d="M18 12h.01"/><path d="M19 16v6"/><path d="M6 12h.01"/><circle cx="12" cy="12" r="2"/>' },
+  { key: 'distribution', name: 'Distributions',
+    templates: TASK_TEMPLATES_CAPITAL_ACTIVITY, named: /distribution/i,
+    icon: '<path d="M12 18H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5"/><path d="M18 12h.01"/><path d="M19 22v-6"/><path d="m22 19-3-3-3 3"/><path d="M6 12h.01"/><circle cx="12" cy="12" r="2"/>' },
   { key: 'cash', name: 'Cash reconciliation',
     templates: ['cash-reconciliation'],
     icon: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>' },
@@ -147,9 +151,6 @@ const TASK_CATEGORIES = [
   { key: 'expense', name: 'Expense payments',
     templates: ['prepare-and-pay-expense', 'draft-prepare-and-pay-expense', 'expense-accrual'],
     icon: '<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17.5v-11"/>' },
-  { key: 'distribution', name: 'Distributions',
-    templates: TASK_TEMPLATES_CAPITAL_ACTIVITY, named: /distribution/i,
-    icon: '<path d="M12 18H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5"/><path d="M18 12h.01"/><path d="M19 22v-6"/><path d="m22 19-3-3-3 3"/><path d="M6 12h.01"/><circle cx="12" cy="12" r="2"/>' },
   { key: 'intercompany', name: 'Intercompany payment',
     templates: ['settle-intercompany-balances', 'request-related-party-transfer', 'draft-request-related-party-transfer'],
     icon: '<path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/>' },
