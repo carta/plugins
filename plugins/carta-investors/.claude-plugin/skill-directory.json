@@ -140,6 +140,15 @@
       "How do our funds compare to peer benchmarks?"
     ]
   },
+  "carta-portfolio-valuations": {
+    "category": "portfolio",
+    "name": "Portfolio valuations",
+    "order": 20,
+    "prompts": [
+      "Work on {{FIRM}}'s portfolio valuations for this quarter",
+      "Which of {{FIRM}}'s portfolio companies need new valuations?"
+    ]
+  },
   "carta-spa-audit": {
     "category": "portfolio",
     "name": "SPA coverage audit",

@@ -39,7 +39,7 @@ function combinations(arr, maxSize) {
  * }}
  * `m` is the uniform exit MOIC (on invested cost) every company in the combo must
  * reach for the FUND to hit `targetMoic`; `neededValue = m × cost`. Solutions are
- * sorted by `m` ascending. Realized / defunct / archived holdings are held flat
+ * sorted by `m` ascending. Realized / defunct / archived / written-off (0x) holdings are held flat
  * (their value still counts toward the fund total) and never appear as movers.
  * Config (`candidateIds`, `maxSet`) only steers the mover search — never the fund
  * totals or `alreadyThere`.
@@ -59,7 +59,9 @@ export function returnTheFundSolutions(slice, fundId, targetMoic, opts = {}) {
     if (cost <= 0) continue;
     investedCost += cost;
     grossValue += value;
-    if (!c.realized && !c.defunct) {
+    // A written-off holding (current MOIC 0x) is a dead position, not a candidate
+    // to re-rate: its cost and (zero) value still count toward the fund totals.
+    if (!c.realized && !c.defunct && value > 0) {
       eligible.push({ id: c.id, name: c.name, cost, value, curMoic: value / cost });
     }
   }
