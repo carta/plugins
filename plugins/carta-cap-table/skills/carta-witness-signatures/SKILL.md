@@ -28,7 +28,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.93.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.93.3</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -99,7 +99,7 @@ call_tool({"name": "cap_table__list__witness_signatures_for_portfolio", "argumen
 
 Optional filters: `request_type`, `status`, `issuer_id` (narrow to one company), `page`, `page_size`.
 
-> **Spousal consent in portfolio view**: the portfolio list returns witness requests only, unless you narrow it to a single company with `issuer_id`. Spousal-consent requests appear only for a single company that has the feature turned on. If a user asks about spousal consent across a whole portfolio, narrow to one company at a time.
+> **Spousal consent in portfolio view**: the portfolio list returns witness and spousal-consent requests together. `request_type` has no effect on this list; read `request_type` on each row to tell them apart. Use `issuer_id` to narrow to one company.
 
 > **Default status filter**: when you don't pass `status`, the results show the requests that usually need attention — those awaiting signature and those that have expired. To see requests still awaiting details or already signed, pass `status` explicitly (e.g. `"status": ["SIGNED"]`).
 
