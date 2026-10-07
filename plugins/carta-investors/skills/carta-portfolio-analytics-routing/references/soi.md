@@ -288,9 +288,20 @@ Pick the branch from the `name_status` value captured in Step 2.
 
 If both apply, use the `named_churned` sentence only. Say nothing when churned funds were simply left out — the user didn't ask about them.
 
-After the branch sentence, append a 3–5 bullet summary of what the artifact contains (e.g. interactive holdings table, summary metrics, sortable columns, expand/collapse rows, filter by company name, fund switcher across all funds you have access to). Keep it brief — the customer can see the artifact themselves. The bullet summary is optional on re-invocation branches; if you've already shown it earlier in the conversation, skip it.
+After the branch sentence, append a 3–5 bullet summary of what the artifact contains (e.g. interactive holdings table, Deal IRR columns — proceeds, total value, multiple and IRR — summary metrics, sortable columns, expand/collapse rows, filter by company name, fund switcher across all funds you have access to). Keep it brief — the customer can see the artifact themselves. The bullet summary is optional on re-invocation branches; if you've already shown it earlier in the conversation, skip it.
 
 See **User-facing output** at the top of this skill for the broader narration rules.
+
+## Deal IRR columns
+
+The table ends with the columns of the app's Deal IRR view (a fund's Investments → Deal IRR tab). The artifact fetches and computes them itself, so nothing changes at build time. Know these when a user asks:
+
+- **Column order follows the app's Deal IRR view** for the money columns — cost, proceeds, fair market value, total value, gain/loss, multiple, IRR — with each SOI column beside its Deal IRR counterpart (Cost basis | Total cost, Unrealized G/L | Total G/L); Last updated and the per-share columns come last.
+- **Total cost, Proceeds, Total value, Total G/L** come from `FUND_ADMIN.AGGREGATE_INVESTMENTS` (`_HISTORY` for a past as-of date) and sum to the company and totals rows. Total cost is everything invested, including cost already realized; the **Cost basis** column is only the cost still held. Total value is proceeds + **Fair market value**. Total G/L is Total value − Total cost; **Unrealized G/L** stays unrealized only. (Cost basis, Fair market value and Unrealized G/L are the SOI's own columns, labelled to set them apart from the Deal IRR ones.)
+- **Multiple** is Total value ÷ Total cost at every level. The summary cards use the same definitions, so the **MOIC** card equals the totals-row Multiple.
+- **Gross IRR** (labelled as in the app) is gross deal IRR per fund × company from `FUND_ADMIN.TEMPORAL_DEAL_IRR`, which holds completed quarter-ends only. **Current** shows the latest quarter-end (named in the IRR header tooltip), so it can differ slightly from the app's live figure; a past as-of shows exactly that quarter-end. IRR is per company and fund, never per share class, so share-class rows never show it. A company one fund holds shows IRR on its company row. A company several funds hold leaves its row blank and, when expanded, shows one sub-row per fund — that fund's subtotals, multiple and IRR — with the fund's share-class rows beneath it. Look-through rows and the totals row leave it blank.
+- **Interest isn't shown.** The warehouse holds capitalized interest only, while the app's Interest also counts interest accrued since the last capitalization, so the two wouldn't match.
+- **Exited positions are hidden by default.** The **Show exited companies** button above the table (it then reads **Hide exited companies**) brings them back, tagged *Exited*, and the cards and totals follow it. The app's Deal IRR view includes them, so point a user at that button when a realized company seems missing.
 
 ## Caveats
 

@@ -736,6 +736,16 @@
         }
 
         .search-input::placeholder { color: var(--ink-color-global-text-subtle); }
+
+        /* Show/hide exited: a ghost button carrying Ink's preview / hide icon. */
+        .ink-btn--ghost.exited-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 14px;
+            line-height: 20px;
+        }
+        .exited-toggle svg { flex: 0 0 auto; }
         .search-input:focus {
             border-color: var(--ink-color-global-border-focus-default);
             box-shadow: 0 0 0 4px var(--ink-color-global-border-focus-light);
@@ -897,6 +907,11 @@
 
         tr.asset-row:hover td, tr.asset-row:hover td:first-child { background: var(--ink-color-global-surface-background-underlay); }
 
+        /* A fund sub-row sits at asset depth under a company several funds hold;
+           that fund's asset rows (and their look-through rows) go one step deeper. */
+        .fund-row-name { font-weight: 500; }
+        tr.fund-asset-row td:first-child { padding-left: 64px; }
+
         /* ── Ink icons ── */
         .ink-icon {
             display: inline-flex;
@@ -1057,6 +1072,13 @@
 
         .mixed-badge { color: var(--ink-color-global-text-subtle); }
 
+        /* Marks a fully realized position, shown only while "Show exited" is on. */
+        .exited-tag {
+            font-size: 11px;
+            color: var(--ink-color-global-text-subtle);
+            margin-left: 6px;
+        }
+
         .mixed-line { color: var(--ink-color-global-text-default); }
         .mixed-sep { color: var(--ink-color-global-text-subtle); margin: 0 10px; }
 
@@ -1094,6 +1116,8 @@
            per-class tranche rows, indented one step further. */
         tr.underlying-company-row { cursor: pointer; }
         tr.underlying-tranche-row td:first-child { padding-left: 88px; }
+        tr.underlying-row.in-fund td:first-child { padding-left: 92px; }
+        tr.underlying-tranche-row.in-fund td:first-child { padding-left: 116px; }
 
         .underlying-status {
             color: var(--ink-color-global-text-subtle);
@@ -1255,6 +1279,7 @@
                     <span class="search-icon" id="searchIcon"></span>
                     <input type="text" class="search-input" id="searchInput" placeholder="Filter by company...">
                 </div>
+                <span id="exitedToggleMount"></span>
             </div>
 
             <div class="global-search-panel" id="globalSearchPanel" style="display:none;"></div>
@@ -1298,70 +1323,107 @@
         const SET_CONTEXT_TOOL = 'set_context';
         const WELCOME_TOOL = 'welcome';
 
-        // SOI query — actively held positions only, ordered for stable pagination.
-        // The dwh__execute__query response has a payload size limit (large funds were
-        // getting silently truncated mid-result), so we page through with OFFSET and
-        // accumulate.
-        //
-        // ORDER BY note: OFFSET pagination requires a deterministic sort. issuer_name +
-        // asset_name *should* be unique per row in AGGREGATE_INVESTMENTS, but if a fund
-        // holds multiple tranches in the same issuer + asset_class, ties could shuffle
-        // rows across page boundaries. If that bites, add a stable tiebreaker (e.g.
-        // an investment uuid) to the ORDER BY.
+        // SOI query — every position, exited ones flagged so the "Show exited" toggle
+        // can hide them client-side. The dwh__execute__query response has a payload
+        // size limit (large funds were getting silently truncated mid-result), so we
+        // page through with OFFSET and accumulate. OFFSET pagination needs a
+        // deterministic sort: issuer + asset name alone ties when a fund holds two
+        // tranches of the same class, so FUND_INVESTMENT_KEY (unique per fund)
+        // breaks the tie.
         const PAGE_SIZE = 200;
         const MAX_PAGES = 50;  // hard cap (10K rows) to prevent runaway loops
 
-        // asOfDate is a 'YYYY-MM-DD' quarter-end string, or null/undefined for the
-        // live/current position. Live reads AGGREGATE_INVESTMENTS (is_active_investment
-        // scoped); a historical as-of reads the point-in-time AGGREGATE_INVESTMENTS_HISTORY
-        // table instead, per the standard "state effective over [effective_date,
-        // next_effective_date)" pattern. That table has no investment_date,
-        // remaining_value_per_share, or base-currency columns, so those come back NULL
-        // for historical snapshots (acquisition date blank; per-share values recomputed
-        // client-side in transformData; FX badge simply doesn't appear).
-        function buildSoiSql(fundUuid, offset, limit, asOfDate) {
+        // Columns the live and point-in-time tables share. TOTAL_COST, TOTAL_PROCEEDS,
+        // TOTAL_VALUE and RESIDUAL_GAIN_LOSS are the app's Deal IRR figures: total cost
+        // is everything invested (TOTAL_COST_BASIS is only what's still held), total
+        // value is proceeds + remaining value, and residual G/L is total value − total
+        // cost. GENERAL_LEDGER_ISSUER_ID joins each position to its deal IRR.
+        const SOI_SHARED_COLUMNS = `
+                FUND_UUID                  AS fund_uuid,
+                ISSUER_NAME                AS issuer_name,
+                GENERAL_LEDGER_ISSUER_ID   AS issuer_id,
+                ASSET_NAME                 AS asset_name,
+                ASSET_CLASS_TYPE           AS asset_class_type,
+                COUNT_REMAINING_SHARES     AS count_remaining_shares,
+                TOTAL_COST_BASIS           AS cost_basis,
+                REMAINING_VALUE            AS fmv,
+                TOTAL_UNREALIZED_GAIN_LOSS AS unrealized_gain_loss,
+                TOTAL_COST                 AS total_cost,
+                TOTAL_PROCEEDS             AS proceeds,
+                TOTAL_VALUE                AS total_value,
+                RESIDUAL_GAIN_LOSS         AS total_gain_loss`;
+
+        // fundFilter is a ready-escaped FUND_UUID predicate (see buildSoiSql /
+        // buildSoiSqlAllFunds). asOfDate is a 'YYYY-MM-DD' quarter-end string, or
+        // null/undefined for the live/current position. Live reads
+        // AGGREGATE_INVESTMENTS; a historical as-of reads the point-in-time
+        // AGGREGATE_INVESTMENTS_HISTORY table instead, per the standard "state
+        // effective over [effective_date, next_effective_date)" pattern. That table
+        // has no investment_date, remaining_value_per_share, base-currency or
+        // IS_ACTIVE_INVESTMENT columns: the first three come back NULL (acquisition
+        // date blank; per-share values recomputed client-side in transformData; FX
+        // badge simply doesn't appear), and a position counts as exited once nothing
+        // of it is still held — the same rows IS_ACTIVE_INVESTMENT = FALSE marks live.
+        function buildSoiQuery(fundFilter, offset, limit, asOfDate) {
             if (!asOfDate) {
-                return `SELECT
-                    ISSUER_NAME                        AS issuer_name,
-                    ASSET_NAME                         AS asset_name,
-                    ASSET_CLASS_TYPE                   AS asset_class_type,
+                return `SELECT${SOI_SHARED_COLUMNS},
                     INVESTMENT_DATE                    AS acquisition_date,
-                    COUNT_REMAINING_SHARES             AS count_remaining_shares,
-                    TOTAL_COST_BASIS                   AS cost_basis,
-                    REMAINING_VALUE                    AS fmv,
-                    TOTAL_UNREALIZED_GAIN_LOSS         AS unrealized_gain_loss,
                     REMAINING_VALUE_PER_SHARE          AS remaining_value_per_share,
                     LATEST_FMV_EFFECTIVE_DATE          AS latest_fmv_effective_date,
                     BASE_CURRENCY_CODE                 AS base_currency_code,
                     BASE_CURRENCY_COST                 AS base_currency_cost,
                     BASE_CURRENCY_REMAINING_VALUE      AS base_currency_remaining_value,
-                    BASE_CURRENCY_UNREALIZED_GAIN_LOSS AS base_currency_unrealized_gain_loss
+                    BASE_CURRENCY_UNREALIZED_GAIN_LOSS AS base_currency_unrealized_gain_loss,
+                    COALESCE(NOT IS_ACTIVE_INVESTMENT, FALSE) AS is_exited
                 FROM FUND_ADMIN.AGGREGATE_INVESTMENTS
-                WHERE FUND_UUID = '${fundUuid}'
-                  AND IS_ACTIVE_INVESTMENT = TRUE
-                ORDER BY issuer_name, asset_name
+                WHERE ${fundFilter}
+                ORDER BY issuer_name, asset_name, fund_uuid, FUND_INVESTMENT_KEY
                 LIMIT ${limit} OFFSET ${offset}`;
             }
-            return `SELECT
-                ISSUER_NAME                AS issuer_name,
-                ASSET_NAME                 AS asset_name,
-                ASSET_CLASS_TYPE           AS asset_class_type,
+            const asOf = escSqlLiteral(asOfDate);
+            return `SELECT${SOI_SHARED_COLUMNS},
                 NULL                       AS acquisition_date,
-                COUNT_REMAINING_SHARES     AS count_remaining_shares,
-                TOTAL_COST_BASIS           AS cost_basis,
-                REMAINING_VALUE            AS fmv,
-                TOTAL_UNREALIZED_GAIN_LOSS AS unrealized_gain_loss,
                 NULL                       AS remaining_value_per_share,
                 effective_date             AS latest_fmv_effective_date,
                 NULL                       AS base_currency_code,
                 NULL                       AS base_currency_cost,
                 NULL                       AS base_currency_remaining_value,
-                NULL                       AS base_currency_unrealized_gain_loss
+                NULL                       AS base_currency_unrealized_gain_loss,
+                COALESCE(TOTAL_COST_BASIS = 0 AND REMAINING_VALUE = 0, FALSE) AS is_exited
             FROM FUND_ADMIN.AGGREGATE_INVESTMENTS_HISTORY
-            WHERE FUND_UUID = '${fundUuid}'
-              AND effective_date <= '${asOfDate}'
-              AND (next_effective_date IS NULL OR next_effective_date > '${asOfDate}')
-            ORDER BY issuer_name, asset_name
+            WHERE ${fundFilter}
+              AND effective_date <= '${asOf}'
+              AND (next_effective_date IS NULL OR next_effective_date > '${asOf}')
+            ORDER BY issuer_name, asset_name, fund_uuid, FUND_INVESTMENT_KEY
+            LIMIT ${limit} OFFSET ${offset}`;
+        }
+
+        function buildSoiSql(fundUuid, offset, limit, asOfDate) {
+            return buildSoiQuery(`FUND_UUID = '${escSqlLiteral(fundUuid)}'`, offset, limit, asOfDate);
+        }
+
+        // Deal IRR — gross IRR per fund × company (issuer), from the app's own
+        // quarter-end calculation. The table holds completed quarter-ends only, so
+        // "Current" shows the latest one and a past as-of shows exactly that quarter.
+        // Partitioning by issuer alone would let one fund's IRR overwrite another's
+        // when two funds hold the same company.
+        function buildDealIrrSql(fundUuids, offset, limit, asOfDate) {
+            const uuidList = fundUuids.map(u => `'${escSqlLiteral(u)}'`).join(', ');
+            const dateFilter = asOfDate
+                ? ` AND PERFORMANCE_QUARTER_END_DATE = '${escSqlLiteral(asOfDate)}'`
+                : '';
+            return `SELECT
+                FUND_UUID                    AS fund_uuid,
+                ISSUER_ID                    AS issuer_id,
+                PERFORMANCE_QUARTER_END_DATE AS quarter_end_date,
+                DEAL_IRR                     AS deal_irr
+            FROM FUND_ADMIN.TEMPORAL_DEAL_IRR
+            WHERE FUND_UUID IN (${uuidList})${dateFilter}
+            QUALIFY ROW_NUMBER() OVER (
+                PARTITION BY FUND_UUID, ISSUER_ID
+                ORDER BY PERFORMANCE_QUARTER_END_DATE DESC
+            ) = 1
+            ORDER BY fund_uuid, issuer_id
             LIMIT ${limit} OFFSET ${offset}`;
         }
 
@@ -1478,59 +1540,14 @@
             LIMIT ${limit}`;
         }
 
-        // All-Entities rollup — same shape as buildSoiSql plus FUND_UUID so the
-        // transform can tag each row back to its originating fund (name + reporting
-        // currency), since a firm's funds aren't guaranteed to share one currency.
-        // Uses an explicit IN-list of the firm's own fund UUIDs (already known from
-        // FUNDS) rather than a FIRM_UUID column, so it needs no schema assumption
-        // beyond what buildSoiSql already relies on.
+        // Pooled rollup (All Entities, a family, or a multi-fund pick). FUND_UUID in
+        // each row lets the transform tag it back to its originating fund (name +
+        // reporting currency), since a firm's funds aren't guaranteed to share one
+        // currency. Uses an explicit IN-list of the firm's own fund UUIDs (already
+        // known from FUNDS) rather than a FIRM_UUID column.
         function buildSoiSqlAllFunds(fundUuids, offset, limit, asOfDate) {
             const uuidList = fundUuids.map(u => `'${escSqlLiteral(u)}'`).join(', ');
-            if (!asOfDate) {
-                return `SELECT
-                    FUND_UUID                          AS fund_uuid,
-                    ISSUER_NAME                        AS issuer_name,
-                    ASSET_NAME                          AS asset_name,
-                    ASSET_CLASS_TYPE                   AS asset_class_type,
-                    INVESTMENT_DATE                    AS acquisition_date,
-                    COUNT_REMAINING_SHARES             AS count_remaining_shares,
-                    TOTAL_COST_BASIS                   AS cost_basis,
-                    REMAINING_VALUE                    AS fmv,
-                    TOTAL_UNREALIZED_GAIN_LOSS         AS unrealized_gain_loss,
-                    REMAINING_VALUE_PER_SHARE          AS remaining_value_per_share,
-                    LATEST_FMV_EFFECTIVE_DATE          AS latest_fmv_effective_date,
-                    BASE_CURRENCY_CODE                 AS base_currency_code,
-                    BASE_CURRENCY_COST                 AS base_currency_cost,
-                    BASE_CURRENCY_REMAINING_VALUE      AS base_currency_remaining_value,
-                    BASE_CURRENCY_UNREALIZED_GAIN_LOSS AS base_currency_unrealized_gain_loss
-                FROM FUND_ADMIN.AGGREGATE_INVESTMENTS
-                WHERE FUND_UUID IN (${uuidList})
-                  AND IS_ACTIVE_INVESTMENT = TRUE
-                ORDER BY issuer_name, asset_name
-                LIMIT ${limit} OFFSET ${offset}`;
-            }
-            return `SELECT
-                FUND_UUID                  AS fund_uuid,
-                ISSUER_NAME                AS issuer_name,
-                ASSET_NAME                 AS asset_name,
-                ASSET_CLASS_TYPE           AS asset_class_type,
-                NULL                       AS acquisition_date,
-                COUNT_REMAINING_SHARES     AS count_remaining_shares,
-                TOTAL_COST_BASIS           AS cost_basis,
-                REMAINING_VALUE            AS fmv,
-                TOTAL_UNREALIZED_GAIN_LOSS AS unrealized_gain_loss,
-                NULL                       AS remaining_value_per_share,
-                effective_date             AS latest_fmv_effective_date,
-                NULL                       AS base_currency_code,
-                NULL                       AS base_currency_cost,
-                NULL                       AS base_currency_remaining_value,
-                NULL                       AS base_currency_unrealized_gain_loss
-            FROM FUND_ADMIN.AGGREGATE_INVESTMENTS_HISTORY
-            WHERE FUND_UUID IN (${uuidList})
-              AND effective_date <= '${asOfDate}'
-              AND (next_effective_date IS NULL OR next_effective_date > '${asOfDate}')
-            ORDER BY issuer_name, asset_name
-            LIMIT ${limit} OFFSET ${offset}`;
+            return buildSoiQuery(`FUND_UUID IN (${uuidList})`, offset, limit, asOfDate);
         }
 
         // === Markdown-table parser ===
@@ -1609,6 +1626,13 @@
         //   count_remaining_shares   → asset.shares
         //   remaining_value_per_share → asset.vps
         //   cost_basis / shares      → asset.cps (computed; null when shares == 0)
+        //   total_cost               → company.totalCost / asset.totalCost
+        //   proceeds                 → company.proceeds / asset.proceeds
+        //   total_value              → company.totalValue / asset.totalValue
+        //   total_gain_loss          → company.totalGl / asset.totalGl
+        //   total_value / total_cost → company.moic / asset.moic (see multipleOf)
+        //   deal IRR (separate query) → asset.irr; company.irr only when one fund holds it
+        //   is_exited                → asset.exited (hidden unless "Show exited" is on)
         // fundMetaByUuid is only passed in All-Entities mode ({uuid: {name, currency}}).
         // It lets us tag every row with which fund it came from and in what currency —
         // a firm's funds are not guaranteed to share a reporting currency, so summing
@@ -1624,6 +1648,17 @@
         // exact same underlying look-through position — confusing, and it would
         // trigger the drill-down fetch redundantly. Non-FUND_INVESTMENT assets (direct
         // equity positions) pass through untouched.
+        // Money fields that sum from asset to company to the totals row. Multiple and
+        // IRR are ratios, so they never sum — multiple is recomputed from the summed
+        // total value and total cost at every level.
+        const AMOUNT_FIELDS = ['cost', 'value', 'gl', 'totalCost', 'proceeds', 'totalValue', 'totalGl'];
+
+        // The Deal IRR multiple: total value ÷ total cost. null (shown "—") when
+        // nothing was invested, rather than a division by zero.
+        function multipleOf(totalValue, totalCost) {
+            return totalCost > 0 ? totalValue / totalCost : null;
+        }
+
         function mergeFundInvestmentAssets(assets) {
             const fundInvestments = assets.filter(a => a.isFundInvestment);
             if (fundInvestments.length <= 1) return assets;
@@ -1647,34 +1682,35 @@
                     date: '',
                     lastDate: '',
                     shares: 0,
-                    cost: 0,
-                    value: 0,
-                    gl: 0,
                     currency: tranches[0].currency,
                     fundName: tranches[0].fundName,
                     fundUuid: tranches[0].fundUuid,
+                    issuerId: tranches[0].issuerId,
+                    irr: tranches[0].irr,
+                    exited: tranches.every(a => a.exited),
                     assetClassType: 'FUND_INVESTMENT',
                     isFundInvestment: true,
                     tranches: tranches.length,
                     fxCode: null, fxCost: undefined, fxValue: undefined, fxGl: undefined,
                 };
+                AMOUNT_FIELDS.forEach(f => { merged[f] = 0; });
                 tranches.forEach(a => {
                     merged.shares += a.shares || 0;
-                    merged.cost += a.cost || 0;
-                    merged.value += a.value || 0;
-                    merged.gl += a.gl || 0;
+                    AMOUNT_FIELDS.forEach(f => { merged[f] += a[f] || 0; });
                     if (a.date && (!merged.date || parseDate(a.date) < parseDate(merged.date))) merged.date = a.date;
                     if (a.lastDate && (!merged.lastDate || parseDate(a.lastDate) > parseDate(merged.lastDate))) merged.lastDate = a.lastDate;
                 });
                 merged.cps = merged.shares > 0 ? merged.cost / merged.shares : null;
                 merged.vps = merged.shares > 0 ? merged.value / merged.shares : null;
+                merged.moic = multipleOf(merged.totalValue, merged.totalCost);
                 return merged;
             });
 
             return [...others, ...mergedRows];
         }
 
-        function transformData(investments, fundMetaByUuid, singleFundUuid) {
+        // irrByKey maps `${fund_uuid}::${issuer_id}` → deal IRR (a decimal, 0.29 = 29%).
+        function transformData(investments, fundMetaByUuid, singleFundUuid, irrByKey) {
             const byCompany = {};
 
             investments.forEach(inv => {
@@ -1686,29 +1722,18 @@
                 const companyName = inv.issuer_name == null ? 'Unknown' : String(inv.issuer_name);
                 const fundMeta = fundMetaByUuid && inv.fund_uuid != null ? fundMetaByUuid[inv.fund_uuid] : null;
                 const rowCurrency = fundMeta ? fundMeta.currency : currentCurrency;
+                const fundUuid = inv.fund_uuid != null ? inv.fund_uuid : singleFundUuid;
+                const irr = irrByKey ? irrByKey.get(`${fundUuid}::${inv.issuer_id}`) : undefined;
 
                 if (!byCompany[companyName]) {
-                    byCompany[companyName] = {
-                        name: companyName,
-                        cost: 0,
-                        value: 0,
-                        gl: 0,
-                        date: '',
-                        lastDate: '',
-                        assets: [],
-                        currencies: new Set(),
-                        fundNames: new Set(),
-                    };
+                    byCompany[companyName] = { name: companyName, assets: [] };
                 }
                 const company = byCompany[companyName];
-                company.cost  += inv.cost_basis || 0;
-                company.value += inv.fmv || 0;
-                company.gl    += inv.unrealized_gain_loss || 0;
-                company.currencies.add(rowCurrency);
-                if (fundMeta) company.fundNames.add(fundMeta.name);
 
                 const shares = inv.count_remaining_shares || 0;
                 const cost = inv.cost_basis || 0;
+                const totalCost = inv.total_cost || 0;
+                const totalValue = inv.total_value || 0;
                 company.assets.push({
                     name: inv.asset_name == null ? 'Unknown Asset' : String(inv.asset_name),
                     date: formatDateShort(inv.acquisition_date),
@@ -1716,6 +1741,14 @@
                     cost: cost,
                     value: inv.fmv || 0,
                     gl: inv.unrealized_gain_loss || 0,
+                    totalCost: totalCost,
+                    proceeds: inv.proceeds || 0,
+                    totalValue: totalValue,
+                    totalGl: inv.total_gain_loss || 0,
+                    moic: multipleOf(totalValue, totalCost),
+                    irr: irr == null ? null : irr,
+                    issuerId: inv.issuer_id == null ? null : inv.issuer_id,
+                    exited: String(inv.is_exited).toLowerCase() === 'true',
                     cps: shares > 0 ? cost / shares : null,
                     // Historical (as-of) rows don't carry remaining_value_per_share —
                     // fall back to a client-computed value/shares so per-share figures
@@ -1728,7 +1761,7 @@
                     // (fund-of-funds) fund's UUID, used to scope the
                     // UNDERLYING_INVESTMENTS query for this row's "Partnership
                     // Interest" / FUND_INVESTMENT asset.
-                    fundUuid: inv.fund_uuid != null ? inv.fund_uuid : singleFundUuid,
+                    fundUuid: fundUuid,
                     assetClassType: inv.asset_class_type || null,
                     isFundInvestment: inv.asset_class_type === 'FUND_INVESTMENT',
                     // Base currency fields — present when the asset was purchased in a different
@@ -1740,31 +1773,82 @@
                 });
             });
 
-            // Roll asset-level dates up to the company. company.date is the earliest
-            // acquisition date across assets (semantic "when did we first invest?").
-            // company.lastDate is the most recent valuation date. Without these, the
-            // 'date'/'lastDate' sorts fall back to whichever asset hits assets[0] /
-            // gets processed last in iteration order — which is alphabetical by
-            // asset_name from the SQL, not chronological.
-            Object.values(byCompany).forEach(c => {
-                const dates = c.assets.map(a => a.date).filter(Boolean);
-                const lastDates = c.assets.map(a => a.lastDate).filter(Boolean);
-                if (dates.length) {
-                    c.date = dates.reduce((min, d) => parseDate(d) < parseDate(min) ? d : min);
-                }
-                if (lastDates.length) {
-                    c.lastDate = lastDates.reduce((max, d) => parseDate(d) > parseDate(max) ? d : max);
-                }
-                c.mixedCurrency = c.currencies.size > 1;
-                // Combine multiple FUND_INVESTMENT tranches into the same underlying
-                // partnership (e.g. an initial commitment plus later capital calls
-                // recorded as separate asset rows on different dates) into one
-                // "Partnership Interest" line — they're the same look-through position
-                // and should get one drill-down, not one per tranche.
-                c.assets = mergeFundInvestmentAssets(c.assets);
-            });
+            // Combine multiple FUND_INVESTMENT tranches into the same underlying
+            // partnership (e.g. an initial commitment plus later capital calls
+            // recorded as separate asset rows on different dates) into one
+            // "Partnership Interest" line — they're the same look-through position
+            // and should get one drill-down, not one per tranche.
+            return Object.values(byCompany)
+                .map(c => rollUpCompany(c.name, mergeFundInvestmentAssets(c.assets)))
+                .sort((a, b) => a.name.localeCompare(b.name));
+        }
 
-            return Object.values(byCompany).sort((a, b) => a.name.localeCompare(b.name));
+        // Builds a company row from its asset rows — the one place company-level
+        // figures come from, so hiding exited assets (companiesInView) re-derives
+        // every sum, date and IRR from exactly the rows still on screen.
+        function rollUpCompany(name, assets) {
+            const company = { name, assets, ...rollUpPositions(assets) };
+            company.currencies = new Set(assets.map(a => a.currency));
+            company.fundNames = new Set(assets.map(a => a.fundName).filter(Boolean));
+            company.mixedCurrency = company.currencies.size > 1;
+            // A company several funds hold gets one sub-row per fund (see render), each
+            // with that fund's subtotals and IRR; its own row has no single IRR.
+            const byFund = new Map();
+            assets.forEach(a => {
+                if (!byFund.has(a.fundUuid)) byFund.set(a.fundUuid, []);
+                byFund.get(a.fundUuid).push(a);
+            });
+            company.funds = byFund.size > 1
+                ? Array.from(byFund.values())
+                    .map(fundAssets => ({
+                        fundUuid: fundAssets[0].fundUuid,
+                        fundName: fundAssets[0].fundName,
+                        currency: fundAssets[0].currency,
+                        assets: fundAssets,
+                        ...rollUpPositions(fundAssets),
+                    }))
+                    .sort((a, b) => String(a.fundName).localeCompare(String(b.fundName)))
+                : null;
+            return company;
+        }
+
+        // Sums, multiple, IRR and dates for a set of positions — a company's, or one
+        // fund's slice of a company.
+        function rollUpPositions(assets) {
+            const out = { date: '', lastDate: '' };
+            AMOUNT_FIELDS.forEach(f => { out[f] = assets.reduce((s, a) => s + (a[f] || 0), 0); });
+            out.moic = multipleOf(out.totalValue, out.totalCost);
+            out.exited = assets.length > 0 && assets.every(a => a.exited);
+            // Deal IRR exists per fund × company, never per share class, so it
+            // belongs to a set of positions only when they all share one fund and
+            // issuer — otherwise there is no single IRR to show.
+            const irrKeys = new Set(assets.map(a => `${a.fundUuid}::${a.issuerId}`));
+            out.irr = irrKeys.size === 1 && assets[0].irr != null ? assets[0].irr : null;
+            // date is the earliest acquisition date (semantic "when did we first
+            // invest?"); lastDate is the most recent valuation date. Without these,
+            // the 'date'/'lastDate' sorts fall back to whichever asset comes first —
+            // alphabetical by asset_name from the SQL, not chronological.
+            const dates = assets.map(a => a.date).filter(Boolean);
+            const lastDates = assets.map(a => a.lastDate).filter(Boolean);
+            if (dates.length) {
+                out.date = dates.reduce((min, d) => parseDate(d) < parseDate(min) ? d : min);
+            }
+            if (lastDates.length) {
+                out.lastDate = lastDates.reduce((max, d) => parseDate(d) > parseDate(max) ? d : max);
+            }
+            return out;
+        }
+
+        // The rows on screen: every loaded company, or — while "Show exited" is off —
+        // only positions still held, with each company re-rolled from what's left.
+        // A company whose positions have all been exited drops out entirely.
+        function companiesInView(loaded) {
+            if (showExited) return loaded;
+            return loaded
+                .map(c => c.assets.some(a => a.exited)
+                    ? rollUpCompany(c.name, c.assets.filter(a => !a.exited))
+                    : c)
+                .filter(c => c.assets.length > 0);
         }
 
         // Parse ISO YYYY-MM-DD as a local date string (no Date object → no timezone shift).
@@ -1801,7 +1885,17 @@
 
         // ── State ──
 
+        // loadedCompanies is everything the warehouse returned for this view, exited
+        // positions included; companies is what's on screen (see companiesInView).
+        // Expansion state is keyed by position in companies, so anything that
+        // changes it also resets expansion.
+        let loadedCompanies = [];
         let companies = [];
+        let showExited = false;
+        // Quarter-end the IRR column reflects, and whether its query failed — both
+        // feed the IRR header tooltip.
+        let irrAsOfDate = null;
+        let irrUnavailable = false;
         let currentCurrency = null;
         let filterText = '';
         let sortCol = null;
@@ -1819,7 +1913,7 @@
         let currentFundUuid = INITIAL_FUND_UUID;
         // 'YYYY-MM-DD' quarter-end string, or null for the live/current position.
         let currentAsOfDate = null;
-        const fundCache = new Map();  // `${fundUuid}::${asOfDate||'current'}` → companies[]
+        const fundCache = new Map();  // `${fundUuid}::${asOfDate||'current'}` → { companies, irrAsOfDate }
 
         // ── Look-through drill-down state ──
         // Underlying-holdings cache, keyed by `${fundUuid}::${parentIssuerName}`.
@@ -1947,17 +2041,67 @@
         // incompatible currencies together.
         let viewMixedCurrency = false;
 
+        // The money columns run in the app's Deal IRR order — cost, proceeds, fair
+        // market value, total value, gain/loss, multiple, IRR — with each SOI column
+        // beside its Deal IRR counterpart; the per-position detail follows. This
+        // array is the only place the order lives: every row builds its cells with
+        // rowCells. Tooltips (\n breaks the line — the popup doesn't wrap) say how
+        // each differs from its neighbour; a function tooltip is re-read on every
+        // header render.
         const BASE_COLUMNS = [
-            { key: 'name',     label: 'Investment',          num: false, expandToggle: true },
-            { key: 'date',     label: 'Investment date',     num: true  },
-            { key: 'shares',   label: 'Shares / Principal',  num: true  },
-            { key: 'cost',     label: 'Cost',                num: true  },
-            { key: 'value',    label: 'Value',               num: true  },
-            { key: 'lastDate', label: 'Last updated',        num: true  },
-            { key: 'gl',       label: 'Gain / Loss',         num: true  },
-            { key: 'cps',      label: 'Cost per share',      num: true  },
-            { key: 'vps',      label: 'Value per share',     num: true  },
+            { key: 'name',       label: 'Investment',          num: false, expandToggle: true },
+            { key: 'date',       label: 'Investment date',     num: true  },
+            { key: 'shares',     label: 'Shares / Principal',  num: true  },
+            { key: 'cost',       label: 'Cost basis',          num: true  },
+            { key: 'totalCost',  label: 'Total cost',          num: true,
+              tooltip: 'Everything invested, including cost already realized.\nCost basis counts only the cost still held.' },
+            { key: 'proceeds',   label: 'Proceeds',            num: true,
+              tooltip: 'Cash received from sales and other realizations' },
+            { key: 'value',      label: 'Fair market value',   num: true,
+              tooltip: 'Fair market value of holdings still held' },
+            { key: 'totalValue', label: 'Total value',         num: true,
+              tooltip: 'Proceeds + Fair market value (still held)' },
+            { key: 'gl',         label: 'Unrealized G/L',      num: true  },
+            { key: 'totalGl',    label: 'Total G/L',           num: true,
+              tooltip: 'Realized + unrealized: Total value − Total cost.\nUnrealized G/L counts unrealized only.' },
+            { key: 'moic',       label: 'Multiple',            num: true,
+              tooltip: 'Total value ÷ Total cost' },
+            { key: 'irr',        label: 'Gross IRR',           num: true,
+              tooltip: () => irrHeaderTooltip() },
+            { key: 'lastDate',   label: 'Last updated',        num: true  },
+            { key: 'cps',        label: 'Cost per share',      num: true  },
+            { key: 'vps',        label: 'Value per share',     num: true  },
         ];
+
+        function irrHeaderTooltip() {
+            if (irrUnavailable) return "Deal IRR couldn't be loaded, so this column is blank.";
+            const asOf = !irrAsOfDate
+                ? 'No deal IRR has been calculated for this quarter-end yet.'
+                : currentAsOfDate
+                    ? `Gross deal IRR as of ${formatDateShort(irrAsOfDate)}.`
+                    : `Gross deal IRR as of ${formatDateShort(irrAsOfDate)}, the latest quarter-end calculated.`;
+            const placement = 'IRR is per company and fund, never per share class. It sits on\n'
+                + 'the company row when one fund holds the company, and on each\n'
+                + 'fund\'s row beneath a company that several funds hold.';
+            return `${asOf}\n${placement}`;
+        }
+
+        // An asset (share-class) row never shows IRR: repeating the company's or
+        // fund's figure on each class would read as a per-class IRR.
+        function irrAssetCell(nestedInFund) {
+            const tip = nestedInFund
+                ? 'IRR is calculated per fund, not per share class.'
+                : 'IRR is calculated per company, not per share class.';
+            return `<td class="number tooltip-trigger" data-tooltip="${tip}"></td>`;
+        }
+
+        // A fund's IRR on its sub-row under a multi-fund company, naming the fund
+        // since that's whose position it measures.
+        function irrFundCell(f) {
+            if (f.irr == null) return '<td class="number">—</td>';
+            const tip = `Gross IRR for ${f.fundName || 'this fund'}'s position in this company`;
+            return `<td class="number"><span class="tooltip-trigger" data-tooltip="${escHtml(tip)}">${fmtPct(f.irr)}</span></td>`;
+        }
 
         const HELD_BY_COLUMN = { key: 'heldBy', label: 'Held By', num: false, sortable: false };
 
@@ -1969,6 +2113,13 @@
             return [BASE_COLUMNS[0], HELD_BY_COLUMN, ...BASE_COLUMNS.slice(1)];
         }
 
+        // A row's cells in column order. `cells` maps a column key to that cell's
+        // <td>; a column it leaves out gets `empty`. Rows say what goes in each
+        // column, never where, so reordering BASE_COLUMNS reorders every row.
+        function rowCells(cells, empty = '<td></td>') {
+            return getColumns().map(col => cells[col.key] ?? empty).join('');
+        }
+
         // ── Formatters ──
 
         function fmt(val, currency) {
@@ -1978,6 +2129,15 @@
         function fmtDec(val, currency) {
             if (val == null) return '—';
             return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency || currentCurrency, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
+        }
+
+        function fmtMultiple(val) {
+            return val == null ? '—' : `${val.toFixed(2)}x`;
+        }
+
+        // Deal IRR arrives as a decimal (0.2938 = 29.38%).
+        function fmtPct(val) {
+            return val == null ? '—' : `${(val * 100).toFixed(2)}%`;
         }
 
         function fmtShares(val) {
@@ -1992,6 +2152,8 @@
             if (val == null) return '—';
             return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
         }
+
+        const EXITED_TAG = '<span class="exited-tag tooltip-trigger" data-tooltip="Fully realized — nothing of this position is still held">Exited</span>';
 
         function glCell(val, currency) {
             if (val === 0) return `<span class="gl-value" style="color:var(--ink-color-global-text-subtle)">${fmt(0, currency)}</span>`;
@@ -2033,13 +2195,12 @@
             return new Date(Number(m[3]), MONTH_ABBRS.indexOf(m[1]), Number(m[2])).getTime();
         }
 
+        // Feeds both the totals row and the KPI cards, so the two can't disagree.
         function computeTotals(rows) {
-            return rows.reduce((t, c) => ({
-                cost: t.cost + c.cost,
-                value: t.value + c.value,
-                gl: t.gl + c.gl,
-                assets: t.assets + c.assets.length,
-            }), { cost: 0, value: 0, gl: 0, assets: 0 });
+            const totals = { assets: rows.reduce((n, c) => n + c.assets.length, 0) };
+            AMOUNT_FIELDS.forEach(f => { totals[f] = rows.reduce((s, c) => s + c[f], 0); });
+            totals.moic = multipleOf(totals.totalValue, totals.totalCost);
+            return totals;
         }
 
         // ── Sorting ──
@@ -2056,8 +2217,12 @@
                     va = parseDate(a[sortCol]);
                     vb = parseDate(b[sortCol]);
                 } else {
-                    va = a[sortCol] || 0;
-                    vb = b[sortCol] || 0;
+                    va = a[sortCol];
+                    vb = b[sortCol];
+                    // A blank Multiple or IRR is "no figure", not zero — keep those
+                    // rows at the bottom in both directions instead of between the
+                    // negative and positive ones.
+                    if (va == null || vb == null) return (va == null) - (vb == null);
                 }
                 return sortDir === 'asc' ? va - vb : vb - va;
             });
@@ -2093,8 +2258,12 @@
             let html = '<tr>';
 
             getColumns().forEach(col => {
+                const tip = typeof col.tooltip === 'function' ? col.tooltip() : col.tooltip;
+                const label = tip
+                    ? `<span class="tooltip-trigger" data-tooltip="${escHtml(tip)}">${col.label}</span>`
+                    : col.label;
                 if (col.sortable === false) {
-                    html += `<th><div class="th-inner">${col.label}</div></th>`;
+                    html += `<th><div class="th-inner">${label}</div></th>`;
                     return;
                 }
 
@@ -2105,9 +2274,9 @@
 
                 if (col.expandToggle) {
                     const expandIcon = allExpanded ? 'collapse-all' : 'expand-all';
-                    html += `<th class="${cls.join(' ')}" onclick="setSort('${col.key}')"><div class="th-inner"><span class="th-expand"><span class="expand-all-toggle" id="expandAllToggle" onclick="event.stopPropagation(); toggleAll()">${inkIcon(expandIcon, 16)}</span></span>${col.label}<span class="sort-indicator">${sortIndicator(col.key)}</span></div></th>`;
+                    html += `<th class="${cls.join(' ')}" onclick="setSort('${col.key}')"><div class="th-inner"><span class="th-expand"><span class="expand-all-toggle" id="expandAllToggle" onclick="event.stopPropagation(); toggleAll()">${inkIcon(expandIcon, 16)}</span></span>${label}<span class="sort-indicator">${sortIndicator(col.key)}</span></div></th>`;
                 } else {
-                    html += `<th class="${cls.join(' ')}" onclick="setSort('${col.key}')"><div class="th-inner">${col.label}<span class="sort-indicator">${sortIndicator(col.key)}</span></div></th>`;
+                    html += `<th class="${cls.join(' ')}" onclick="setSort('${col.key}')"><div class="th-inner">${label}<span class="sort-indicator">${sortIndicator(col.key)}</span></div></th>`;
                 }
             });
 
@@ -2115,9 +2284,10 @@
             thead.innerHTML = html;
         }
 
+        // The cards use the Deal IRR definitions, so they read the same as the Total
+        // cost / Total value / Total G/L / Multiple figures in the totals row.
         function renderMetrics() {
             const t = computeTotals(companies);
-            const moic = t.cost > 0 ? (t.value / t.cost).toFixed(2) : '—';
 
             if (viewMixedCurrency) {
                 // Funds in this firm report in more than one currency — a single summed
@@ -2126,7 +2296,7 @@
                 // figure that would be equally misleading.
                 const costByCurrency = {};
                 companies.forEach(c => c.assets.forEach(a => {
-                    if (a.currency) costByCurrency[a.currency] = (costByCurrency[a.currency] || 0) + a.cost;
+                    if (a.currency) costByCurrency[a.currency] = (costByCurrency[a.currency] || 0) + a.totalCost;
                 }));
                 // A middot separator, never '+': these are separate per-currency
                 // figures, and an arithmetic operator would imply they sum.
@@ -2136,7 +2306,7 @@
                 document.getElementById('metricsContainer').innerHTML = `
                     <div class="metrics-strip">
                         <div class="metric-item" style="grid-column: 1 / -1; border-right: none; padding-right: 0; border-bottom: none; padding-bottom: 0;">
-                            <div class="metric-label"><span class="tooltip-trigger" data-tooltip="This firm's funds report in more than one currency, so cost/value/gain-loss aren't summed into one figure.">Total cost by currency</span></div>
+                            <div class="metric-label"><span class="tooltip-trigger" data-tooltip="Everything invested, per reporting currency.&#10;This firm's funds report in more than one currency,&#10;so cost/value/gain-loss aren't summed into one figure.">Total cost by currency</span></div>
                             <div class="metric-value mixed-badge">${breakdown || '—'}</div>
                         </div>
                     </div>
@@ -2147,20 +2317,20 @@
             document.getElementById('metricsContainer').innerHTML = `
                 <div class="metrics-strip">
                     <div class="metric-item">
-                        <div class="metric-label">Total cost</div>
-                        <div class="metric-value">${fmt(t.cost)}</div>
+                        <div class="metric-label"><span class="tooltip-trigger" data-tooltip="Everything invested, including cost already realized">Total cost</span></div>
+                        <div class="metric-value">${fmt(t.totalCost)}</div>
                     </div>
                     <div class="metric-item">
-                        <div class="metric-label">Total value</div>
-                        <div class="metric-value">${fmt(t.value)}</div>
+                        <div class="metric-label"><span class="tooltip-trigger" data-tooltip="Proceeds received + fair market value still held">Total value</span></div>
+                        <div class="metric-value">${fmt(t.totalValue)}</div>
                     </div>
                     <div class="metric-item">
-                        <div class="metric-label">Gain / Loss</div>
-                        <div class="metric-value">${glCell(t.gl)}</div>
+                        <div class="metric-label"><span class="tooltip-trigger" data-tooltip="Realized + unrealized: Total value − Total cost">Total G/L</span></div>
+                        <div class="metric-value">${glCell(t.totalGl)}</div>
                     </div>
                     <div class="metric-item">
-                        <div class="metric-label"><span class="tooltip-trigger" data-tooltip="Multiple on Invested Capital">MOIC</span></div>
-                        <div class="metric-value">${moic === '—' ? moic : moic + 'x'}</div>
+                        <div class="metric-label"><span class="tooltip-trigger" data-tooltip="Multiple on Invested Capital: Total value ÷ Total cost">MOIC</span></div>
+                        <div class="metric-value">${fmtMultiple(t.moic)}</div>
                     </div>
                 </div>
             `;
@@ -2193,46 +2363,84 @@
                 const companyCost  = c.mixedCurrency ? mixedBadge : fmt(c.cost, singleCur);
                 const companyValue = c.mixedCurrency ? mixedBadge : fmt(c.value, singleCur);
                 const companyGl    = c.mixedCurrency ? mixedBadge : glCell(c.gl, singleCur);
+                const companyTotalCost  = c.mixedCurrency ? mixedBadge : fmt(c.totalCost, singleCur);
+                const companyProceeds   = c.mixedCurrency ? mixedBadge : fmt(c.proceeds, singleCur);
+                const companyTotalValue = c.mixedCurrency ? mixedBadge : fmt(c.totalValue, singleCur);
+                const companyTotalGl    = c.mixedCurrency ? mixedBadge : glCell(c.totalGl, singleCur);
+                const companyMoic       = c.mixedCurrency ? mixedBadge : fmtMultiple(c.moic);
+                const companyExitedTag  = c.exited ? EXITED_TAG : '';
 
                 // "Held By" mirrors the cap-table Investments table: a collapsed
                 // multi-fund company shows "N funds" (with the names on hover);
-                // a company held by a single fund just names it.
-                const heldByCell = isPooledUuid(currentFundUuid)
-                    ? (() => {
-                        const names = c.fundNames ? [...c.fundNames] : [];
-                        if (names.length > 1) {
-                            return `<td><span class="tooltip-trigger" data-tooltip="${escHtml(names.join('\n'))}">${names.length} funds</span></td>`;
-                        }
-                        return `<td>${escHtml(names[0] || '—')}</td>`;
-                    })()
-                    : '';
+                // a company held by a single fund just names it. (rowCells only
+                // places it when the Held By column is showing.)
+                const fundNames = c.fundNames ? [...c.fundNames] : [];
+                const heldByCell = fundNames.length > 1
+                    ? `<td><span class="tooltip-trigger" data-tooltip="${escHtml(fundNames.join('\n'))}">${fundNames.length} funds</span></td>`
+                    : `<td>${escHtml(fundNames[0] || '—')}</td>`;
 
                 const cr = document.createElement('tr');
                 cr.className = 'company-row';
                 cr.onclick = () => toggle(i);
-                cr.innerHTML = `
-                    <td><div class="company-cell"><span class="expand-icon" id="icon-${i}">${inkIcon(allExpanded ? 'down' : 'forward', 10)}</span><span class="company-name">${escHtml(c.name)}</span></div></td>
-                    ${heldByCell}
-                    <td></td>
-                    <td></td>
-                    <td class="number">${companyCost}</td>
-                    <td class="number">${companyValue}</td>
-                    <td class="number">${escHtml(c.lastDate)}</td>
-                    <td class="number">${companyGl}</td>
-                    <td></td>
-                    <td></td>
-                `;
+                cr.innerHTML = rowCells({
+                    name: `<td><div class="company-cell"><span class="expand-icon" id="icon-${i}">${inkIcon(allExpanded ? 'down' : 'forward', 10)}</span><span class="company-name">${escHtml(c.name)}</span>${companyExitedTag}</div></td>`,
+                    heldBy: heldByCell,
+                    cost: `<td class="number">${companyCost}</td>`,
+                    totalCost: `<td class="number">${companyTotalCost}</td>`,
+                    proceeds: `<td class="number">${companyProceeds}</td>`,
+                    value: `<td class="number">${companyValue}</td>`,
+                    totalValue: `<td class="number">${companyTotalValue}</td>`,
+                    gl: `<td class="number">${companyGl}</td>`,
+                    totalGl: `<td class="number">${companyTotalGl}</td>`,
+                    moic: `<td class="number">${companyMoic}</td>`,
+                    irr: `<td class="number">${c.funds ? '' : fmtPct(c.irr)}</td>`,
+                    lastDate: `<td class="number">${escHtml(c.lastDate)}</td>`,
+                });
                 tbody.appendChild(cr);
 
-                c.assets.forEach((a, ai) => {
+                const rowsShown = allExpanded || expandedCompanies.has(i);
+                // In a pooled view each row carries its own fund's currency, which may
+                // differ from another row's — so amounts take it explicitly.
+                const tagFor = cur => isPooledUuid(currentFundUuid) && cur
+                    ? `<span class="currency-tag">${escHtml(cur)}</span>`
+                    : '';
+
+                // One sub-row per fund under a company several funds hold: that fund's
+                // subtotals, multiple and IRR. It shares the company's asset-group
+                // class, so it opens and closes with the company like an asset row.
+                const renderFundRow = f => {
+                    const fr = document.createElement('tr');
+                    fr.className = `asset-row fund-row asset-group-${i}`;
+                    if (rowsShown) fr.classList.add('visible', 'shown');
+                    const tag = tagFor(f.currency);
+                    fr.innerHTML = rowCells({
+                        name: `<td><span class="fund-row-name">${escHtml(f.fundName || '—')}</span>${f.exited ? EXITED_TAG : ''}</td>`,
+                        cost: `<td class="number">${fmt(f.cost, f.currency)}${tag}</td>`,
+                        totalCost: `<td class="number">${fmt(f.totalCost, f.currency)}${tag}</td>`,
+                        proceeds: `<td class="number">${fmt(f.proceeds, f.currency)}${tag}</td>`,
+                        value: `<td class="number">${fmt(f.value, f.currency)}${tag}</td>`,
+                        totalValue: `<td class="number">${fmt(f.totalValue, f.currency)}${tag}</td>`,
+                        gl: `<td class="number">${glCell(f.gl, f.currency)}${tag}</td>`,
+                        totalGl: `<td class="number">${glCell(f.totalGl, f.currency)}${tag}</td>`,
+                        moic: `<td class="number">${fmtMultiple(f.moic)}</td>`,
+                        irr: irrFundCell(f),
+                        lastDate: `<td class="number">${escHtml(f.lastDate)}</td>`,
+                    });
+                    tbody.appendChild(fr);
+                };
+
+                // ai is the asset's index in c.assets — the key toggleUnderlying and
+                // defaultExpandedUnderlying use — whatever order the rows draw in.
+                const renderAsset = (a, ai, nestedInFund) => {
                     const underlyingKey = `${i}-${ai}`;
                     const isExpandable = !!a.isFundInvestment;
                     const isExpanded = isExpandable && expandedUnderlying.has(underlyingKey);
 
                     const ar = document.createElement('tr');
                     ar.className = `asset-row asset-group-${i}`;
-                    if (allExpanded || expandedCompanies.has(i)) ar.classList.add('visible', 'shown');
+                    if (rowsShown) ar.classList.add('visible', 'shown');
                     if (isExpandable) ar.classList.add('fund-investment-row');
+                    if (nestedInFund) ar.classList.add('fund-asset-row');
 
                     // Build fx icon markup for a given base-currency amount and column label.
                     // The tooltip uses &#10; (newline entity) so the browser parses it as \n,
@@ -2243,15 +2451,7 @@
                         return `<span class="fx-icon tooltip-trigger" data-tooltip="${tip}">⇄</span>`;
                     };
 
-                    // In a pooled view (All Entities or a fund family) each asset carries
-                    // its own fund's currency (a.currency), which may differ from another
-                    // row's — pass it explicitly rather than relying on currentCurrency.
-                    const currencyTag = isPooledUuid(currentFundUuid) && a.currency
-                        ? `<span class="currency-tag">${escHtml(a.currency)}</span>`
-                        : '';
-                    const assetHeldByCell = isPooledUuid(currentFundUuid)
-                        ? `<td>${escHtml(a.fundName || '—')}</td>`
-                        : '';
+                    const currencyTag = tagFor(a.currency);
 
                     // FUND_INVESTMENT rows (a fund-of-funds LP interest, e.g. "Partnership
                     // Interest") get their own expand chevron so a user can drill from the
@@ -2264,24 +2464,39 @@
                         ? `<span class="expand-icon underlying-toggle" id="underlying-icon-${underlyingKey}" onclick="event.stopPropagation(); toggleUnderlying('${underlyingKey}', '${escJs(a.fundUuid)}', '${escJs(c.name)}')">${inkIcon(isExpanded ? 'down' : 'forward', 9)}</span><span class="asset-name-stack"><span class="asset-name expandable" onclick="event.stopPropagation(); toggleUnderlying('${underlyingKey}', '${escJs(a.fundUuid)}', '${escJs(c.name)}')">${escHtml(a.name)}</span>${trancheTag}</span>`
                         : `<span class="asset-name">${escHtml(a.name)}</span>`;
 
-                    ar.innerHTML = `
-                        <td>${nameCell}</td>
-                        ${assetHeldByCell}
-                        <td class="number">${escHtml(a.date)}</td>
-                        <td class="number">${fmtShares(a.shares)}</td>
-                        <td class="number">${fxIcon(a.fxCost, 'Original purchase')}${fmt(a.cost, a.currency)}${currencyTag}</td>
-                        <td class="number">${fxIcon(a.fxValue, 'Base currency value')}${fmt(a.value, a.currency)}${currencyTag}</td>
-                        <td class="number">${escHtml(a.lastDate)}</td>
-                        <td class="number">${fxIcon(a.fxGl, 'Base currency unrealized G/L')}${glCell(a.gl, a.currency)}${currencyTag}</td>
-                        <td class="number">${fmtDec(a.cps, a.currency)}</td>
-                        <td class="number">${fmtDec(a.vps, a.currency)}</td>
-                    `;
+                    ar.innerHTML = rowCells({
+                        name: `<td>${nameCell}${a.exited ? EXITED_TAG : ''}</td>`,
+                        heldBy: `<td>${escHtml(a.fundName || '—')}</td>`,
+                        date: `<td class="number">${escHtml(a.date)}</td>`,
+                        shares: `<td class="number">${fmtShares(a.shares)}</td>`,
+                        cost: `<td class="number">${fxIcon(a.fxCost, 'Original purchase')}${fmt(a.cost, a.currency)}${currencyTag}</td>`,
+                        totalCost: `<td class="number">${fmt(a.totalCost, a.currency)}${currencyTag}</td>`,
+                        proceeds: `<td class="number">${fmt(a.proceeds, a.currency)}${currencyTag}</td>`,
+                        value: `<td class="number">${fxIcon(a.fxValue, 'Base currency value')}${fmt(a.value, a.currency)}${currencyTag}</td>`,
+                        totalValue: `<td class="number">${fmt(a.totalValue, a.currency)}${currencyTag}</td>`,
+                        gl: `<td class="number">${fxIcon(a.fxGl, 'Base currency unrealized G/L')}${glCell(a.gl, a.currency)}${currencyTag}</td>`,
+                        totalGl: `<td class="number">${glCell(a.totalGl, a.currency)}${currencyTag}</td>`,
+                        moic: `<td class="number">${fmtMultiple(a.moic)}</td>`,
+                        irr: irrAssetCell(nestedInFund),
+                        lastDate: `<td class="number">${escHtml(a.lastDate)}</td>`,
+                        cps: `<td class="number">${fmtDec(a.cps, a.currency)}</td>`,
+                        vps: `<td class="number">${fmtDec(a.vps, a.currency)}</td>`,
+                    });
                     tbody.appendChild(ar);
 
                     if (isExpandable) {
-                        tbody.appendChild(renderUnderlyingRows(underlyingKey, i, a, c.name, isExpanded));
+                        tbody.appendChild(renderUnderlyingRows(underlyingKey, i, a, c.name, isExpanded, nestedInFund));
                     }
-                });
+                };
+
+                if (c.funds) {
+                    c.funds.forEach(f => {
+                        renderFundRow(f);
+                        f.assets.forEach(a => renderAsset(a, c.assets.indexOf(a), true));
+                    });
+                } else {
+                    c.assets.forEach((a, ai) => renderAsset(a, ai, false));
+                }
             });
 
             if (!filterText) {
@@ -2289,21 +2504,24 @@
                 const totalCost  = viewMixedCurrency ? '<span class="mixed-badge">Mixed</span>' : fmt(t.cost);
                 const totalValue = viewMixedCurrency ? '<span class="mixed-badge">Mixed</span>' : fmt(t.value);
                 const totalGl    = viewMixedCurrency ? '<span class="mixed-badge">Mixed</span>' : glCell(t.gl);
-                const heldByTotalsCell = isPooledUuid(currentFundUuid) ? '<td></td>' : '';
+                const totalTotalCost  = viewMixedCurrency ? '<span class="mixed-badge">Mixed</span>' : fmt(t.totalCost);
+                const totalProceeds   = viewMixedCurrency ? '<span class="mixed-badge">Mixed</span>' : fmt(t.proceeds);
+                const totalTotalValue = viewMixedCurrency ? '<span class="mixed-badge">Mixed</span>' : fmt(t.totalValue);
+                const totalTotalGl    = viewMixedCurrency ? '<span class="mixed-badge">Mixed</span>' : glCell(t.totalGl);
+                const totalMoic       = viewMixedCurrency ? '<span class="mixed-badge">Mixed</span>' : fmtMultiple(t.moic);
                 const tr = document.createElement('tr');
                 tr.className = 'totals-row';
-                tr.innerHTML = `
-                    <td>${data.length} companies, ${t.assets} positions</td>
-                    ${heldByTotalsCell}
-                    <td></td>
-                    <td></td>
-                    <td class="number">${totalCost}</td>
-                    <td class="number">${totalValue}</td>
-                    <td></td>
-                    <td class="number">${totalGl}</td>
-                    <td></td>
-                    <td></td>
-                `;
+                tr.innerHTML = rowCells({
+                    name: `<td>${data.length} companies, ${t.assets} positions</td>`,
+                    cost: `<td class="number">${totalCost}</td>`,
+                    totalCost: `<td class="number">${totalTotalCost}</td>`,
+                    proceeds: `<td class="number">${totalProceeds}</td>`,
+                    value: `<td class="number">${totalValue}</td>`,
+                    totalValue: `<td class="number">${totalTotalValue}</td>`,
+                    gl: `<td class="number">${totalGl}</td>`,
+                    totalGl: `<td class="number">${totalTotalGl}</td>`,
+                    moic: `<td class="number">${totalMoic}</td>`,
+                });
                 tbody.appendChild(tr);
             }
 
@@ -2378,21 +2596,29 @@
         // append it directly to tbody alongside the flat company/asset rows — no
         // nested <table>, so sticky-first-column and sort/filter logic don't need to
         // know this level exists.
-        function renderUnderlyingRows(key, companyIdx, asset, parentIssuerName, isExpanded) {
+        // Look-through rows fill only the SOI columns and show "—" in the rest. Deal
+        // IRR is calculated for the firm's own fund positions, not for the companies
+        // an underlying fund holds, so the Deal IRR columns (total cost, proceeds,
+        // total value, total G/L, multiple, IRR) stay "—" here — the app's Deal IRR
+        // page lists only the fund-level row.
+        const LOOK_THROUGH_EMPTY_CELL = '<td class="number">—</td>';
+
+        // nestedInFund: the parent asset sits under a fund sub-row, so these rows
+        // indent one step further.
+        function renderUnderlyingRows(key, companyIdx, asset, parentIssuerName, isExpanded, nestedInFund) {
             const frag = document.createDocumentFragment();
             if (!isExpanded) return frag;
 
             const colCount = getColumns().length;
             const cacheKey = `${asset.fundUuid}::${parentIssuerName}::${currentAsOfDate || 'current'}`;
             const cached = underlyingCache.get(cacheKey);
-            const showHeldBy = isPooledUuid(currentFundUuid);
 
             // underlying rows carry the same `asset-group-${companyIdx}` class as the
             // asset row above them, so toggle()/toggleAll() (which operate on that
             // class, oblivious to nesting level) hide/show them together with the
             // rest of the company's rows — a collapsed company row shouldn't leave
             // its look-through rows visible underneath it.
-            const groupClass = `asset-group-${companyIdx}`;
+            const groupClass = `asset-group-${companyIdx}${nestedInFund ? ' in-fund' : ''}`;
             const visibleClass = (allExpanded || expandedCompanies.has(companyIdx)) ? ' visible shown' : '';
 
             // `extra` carries trailing markup (the retry control); the message
@@ -2453,19 +2679,16 @@
                 const shares = u.count_remaining_shares || 0;
                 const cost = u.cost_basis || 0;
                 const cps = shares > 0 ? cost / shares : null;
-                const heldByCell = showHeldBy ? '<td>—</td>' : '';
-                tr.innerHTML = `
-                    <td><span class="underlying-name tooltip-trigger" data-tooltip="${escHtml(pctTip)}">${escHtml(u.underlying_issuer_name)}</span>${classTag}</td>
-                    ${heldByCell}
-                    <td class="number">—</td>
-                    <td class="number">${fmtShares(u.count_remaining_shares)}</td>
-                    <td class="number">${fmt(cost, u.currency_code)}</td>
-                    <td class="number">${fmt(u.fmv || 0, u.currency_code)}</td>
-                    <td class="number">—</td>
-                    <td class="number">${glCell(u.unrealized_gain_loss || 0, u.currency_code)}</td>
-                    <td class="number">${fmtDec(cps, u.currency_code)}</td>
-                    <td class="number">${fmtDec(u.remaining_value_per_share, u.currency_code)}</td>
-                `;
+                tr.innerHTML = rowCells({
+                    name: `<td><span class="underlying-name tooltip-trigger" data-tooltip="${escHtml(pctTip)}">${escHtml(u.underlying_issuer_name)}</span>${classTag}</td>`,
+                    heldBy: '<td>—</td>',
+                    shares: `<td class="number">${fmtShares(u.count_remaining_shares)}</td>`,
+                    cost: `<td class="number">${fmt(cost, u.currency_code)}</td>`,
+                    value: `<td class="number">${fmt(u.fmv || 0, u.currency_code)}</td>`,
+                    gl: `<td class="number">${glCell(u.unrealized_gain_loss || 0, u.currency_code)}</td>`,
+                    cps: `<td class="number">${fmtDec(cps, u.currency_code)}</td>`,
+                    vps: `<td class="number">${fmtDec(u.remaining_value_per_share, u.currency_code)}</td>`,
+                }, LOOK_THROUGH_EMPTY_CELL);
                 return tr;
             };
 
@@ -2491,22 +2714,16 @@
                 const pctTip = pct != null
                     ? `${STATE.firm_name}'s look-through share of ${g.rows[0].underlying_fund_name || parentIssuerName}: ${pct.toFixed(2)}%`
                     : 'Ownership share unavailable — figures shown unprorated';
-                const heldByCell = showHeldBy ? '<td>—</td>' : '';
                 const summaryTr = document.createElement('tr');
                 summaryTr.className = `underlying-row underlying-group-${key} ${groupClass}${visibleClass} underlying-company-row`;
                 summaryTr.onclick = () => toggleUnderlyingGroup(groupKey);
-                summaryTr.innerHTML = `
-                    <td><span class="expand-icon underlying-toggle">${inkIcon(isGroupExpanded ? 'down' : 'forward', 9)}</span><span class="underlying-name tooltip-trigger" data-tooltip="${escHtml(pctTip)}">${escHtml(g.name)}</span><span class="tranche-note">(${g.rows.length} positions)</span></td>
-                    ${heldByCell}
-                    <td class="number">—</td>
-                    <td class="number">—</td>
-                    <td class="number">${fmt(cost, currency)}</td>
-                    <td class="number">${fmt(fmv, currency)}</td>
-                    <td class="number">—</td>
-                    <td class="number">${glCell(gl, currency)}</td>
-                    <td class="number">—</td>
-                    <td class="number">—</td>
-                `;
+                summaryTr.innerHTML = rowCells({
+                    name: `<td><span class="expand-icon underlying-toggle">${inkIcon(isGroupExpanded ? 'down' : 'forward', 9)}</span><span class="underlying-name tooltip-trigger" data-tooltip="${escHtml(pctTip)}">${escHtml(g.name)}</span><span class="tranche-note">(${g.rows.length} positions)</span></td>`,
+                    heldBy: '<td>—</td>',
+                    cost: `<td class="number">${fmt(cost, currency)}</td>`,
+                    value: `<td class="number">${fmt(fmv, currency)}</td>`,
+                    gl: `<td class="number">${glCell(gl, currency)}</td>`,
+                }, LOOK_THROUGH_EMPTY_CELL);
                 frag.appendChild(summaryTr);
 
                 if (isGroupExpanded) {
@@ -2842,11 +3059,12 @@
         // True when anything the Reset button would undo is actually set. A control
         // that's permanently visible but can't do anything is just toolbar noise, so
         // it stays hidden at the default view.
-        // Only the two things that actually narrow what's on screen. As of is a
-        // period, not a filter, and sort is a reordering — both are deliberate,
-        // visible choices, so the control neither advertises nor undoes them.
+        // Only the things that change which rows are on screen: the fund pick, the
+        // company filter and "Show exited". As of is a period, not a filter, and sort
+        // is a reordering — both are deliberate, visible choices, so the control
+        // neither advertises nor undoes them.
         function viewIsFiltered() {
-            return currentFundUuid !== ALL_ENTITIES_VALUE || filterText !== '';
+            return currentFundUuid !== ALL_ENTITIES_VALUE || filterText !== '' || showExited;
         }
 
         function syncResetFiltersVisibility() {
@@ -2858,12 +3076,13 @@
         }
 
         // Puts the whole toolbar back to how the artifact opens: firm-wide funds,
-        // current period, no company filter, default sort. Expansions and the
-        // cross-fund search go with it — loadFund clears those anyway, and leaving
-        // them behind would contradict "reset".
+        // current period, no company filter, exited positions hidden, default sort.
+        // Expansions and the cross-fund search go with it — loadFund clears those
+        // anyway, and leaving them behind would contradict "reset".
         function resetFilters() {
             const fundNarrowed = currentFundUuid !== ALL_ENTITIES_VALUE;
             filterText = '';
+            showExited = false;
             const input = document.getElementById('searchInput');
             if (input) input.value = '';
             // One box drives both the company filter and the cross-fund search, so
@@ -2879,8 +3098,50 @@
                 // index, and those indices mean nothing once the data source changes.
                 switchFund(ALL_ENTITIES_VALUE);
             } else {
-                render();
+                showCompaniesInView();
             }
+        }
+
+        // Ink's `preview` and `hide` icons, as the Lucide `eye` / `eye-off` glyphs Ink
+        // maps them to — inlined, since the artifact sandbox blocks the Lucide CDN.
+        const EYE_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>';
+        const EYE_OFF_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>';
+
+        // The button is built into #exitedToggleMount once (both the page shell and
+        // ensureContentSkeleton carry the mount) and afterwards only its contents
+        // change, so a keyboard user's focus survives pressing it. The label names
+        // what pressing it does next.
+        function syncExitedToggle() {
+            const mount = document.getElementById('exitedToggleMount');
+            if (!mount) return;
+            if (!document.getElementById('showExitedToggle')) {
+                mount.innerHTML = '<button type="button" class="ink-btn--ghost exited-toggle" id="showExitedToggle"></button>';
+            }
+            document.getElementById('showExitedToggle').innerHTML = showExited
+                ? `${EYE_OFF_SVG}<span>Hide exited companies</span>`
+                : `${EYE_SVG}<span>Show exited companies</span>`;
+        }
+
+        function setShowExited(on) {
+            if (on === showExited) return;
+            showExited = on;
+            showCompaniesInView();
+        }
+
+        // Derives the on-screen rows from loadedCompanies and draws them. Expansion
+        // state is keyed by row position, which changes whenever exited rows come or
+        // go, so it starts over each time.
+        function showCompaniesInView() {
+            companies = companiesInView(loadedCompanies);
+            expandedCompanies = new Set();
+            expandedUnderlyingGroups = new Set();
+            expandedUnderlying = defaultExpandedUnderlying(companies);
+            syncExitedToggle();
+            syncResetFiltersVisibility();
+            if (companies.length === 0) { renderEmptyFund(); return; }
+            renderMetrics();
+            render();
+            showContent();
         }
 
         // Idempotent rebuild of contentArea's child structure. Called from every render
@@ -2900,6 +3161,7 @@
                         <span class="search-icon" id="searchIcon"></span>
                         <input type="text" class="search-input" id="searchInput" placeholder="Filter by company...">
                     </div>
+                    <span id="exitedToggleMount"></span>
                 </div>
                 <div class="table-scroll-wrap">
                     <div class="table-scroll">
@@ -2946,7 +3208,10 @@
             document.getElementById('metricsContainer').innerHTML = '';
             document.getElementById('tableHead').innerHTML = '';
             const tbody = document.getElementById('tableBody');
-            tbody.innerHTML = `<tr><td colspan="${getColumns().length}" class="empty-state">This fund has no active investments.</td></tr>`;
+            const message = loadedCompanies.length > 0 && !showExited
+                ? 'Every position here has been exited. Choose Show exited companies to see them.'
+                : 'This fund has no active investments.';
+            tbody.innerHTML = `<tr><td colspan="${getColumns().length}" class="empty-state">${message}</td></tr>`;
             showContent();
         }
 
@@ -3593,12 +3858,11 @@
             // Cache hit → render immediately (underlying holdings were already
             // prefetched and cached the first time this fund/as-of pair was loaded).
             if (fundCache.has(cacheKey)) {
-                companies = fundCache.get(cacheKey);
-                expandedUnderlying = defaultExpandedUnderlying(companies);
-                if (companies.length === 0) { renderEmptyFund(); return; }
-                renderMetrics();
-                render();
-                showContent();
+                const cached = fundCache.get(cacheKey);
+                loadedCompanies = cached.companies;
+                irrAsOfDate = cached.irrAsOfDate;
+                irrUnavailable = false;
+                showCompaniesInView();
                 return;
             }
 
@@ -3613,15 +3877,17 @@
             try {
                 let transformed;
                 const scopeFundUuids = isPooled ? pooled.map(f => f.uuid) : [fundUuid];
+                const investments = await fetchAllPages((offset, limit) => isPooled
+                    ? buildSoiSqlAllFunds(scopeFundUuids, offset, limit, currentAsOfDate)
+                    : buildSoiSql(fundUuid, offset, limit, currentAsOfDate));
+                setLoadingStatus('Loading deal IRR…');
+                const irr = await fetchDealIrr(scopeFundUuids, currentAsOfDate);
                 if (isPooled) {
                     const fundMetaByUuid = {};
                     pooled.forEach(f => { fundMetaByUuid[f.uuid] = { name: f.name, currency: f.currency }; });
-                    const investments = await fetchAllPages((offset, limit) =>
-                        buildSoiSqlAllFunds(scopeFundUuids, offset, limit, currentAsOfDate));
-                    transformed = transformData(investments, fundMetaByUuid);
+                    transformed = transformData(investments, fundMetaByUuid, null, irr.byKey);
                 } else {
-                    const investments = await fetchAllPages((offset, limit) => buildSoiSql(fundUuid, offset, limit, currentAsOfDate));
-                    transformed = transformData(investments, null, fundUuid);
+                    transformed = transformData(investments, null, fundUuid, irr.byKey);
                 }
 
                 // Automatically calculate look-through holdings for every
@@ -3630,16 +3896,40 @@
                 setLoadingStatus('Calculating underlying (look-through) holdings…');
                 await prefetchUnderlyingHoldings(transformed, scopeFundUuids, currentAsOfDate);
 
-                fundCache.set(cacheKey, transformed);
-                companies = transformed;
-                expandedUnderlying = defaultExpandedUnderlying(companies);
-                if (companies.length === 0) { renderEmptyFund(); return; }
-                renderMetrics();
-                render();
-                showContent();
+                // A failed IRR query isn't cached, so coming back to this view
+                // retries it instead of keeping the blank column.
+                if (!irr.failed) fundCache.set(cacheKey, { companies: transformed, irrAsOfDate: irr.asOfDate });
+                loadedCompanies = transformed;
+                irrAsOfDate = irr.asOfDate;
+                irrUnavailable = irr.failed;
+                showCompaniesInView();
             } catch (error) {
                 console.error('SOI: fund load failed', error);
                 showError(error && error.userFacing ? error.message : "Couldn't load this fund's investments.", () => loadFund(fundUuid));
+            }
+        }
+
+        // Deal IRR for every fund × company in scope. Runs after the SOI query rather
+        // than alongside it so the two never race through the welcome-retry path. A
+        // failure blanks the IRR column (the header tooltip says why) instead of
+        // failing the whole dashboard. asOfDate is the quarter-end the figures
+        // reflect: the requested one, or for "Current" the latest one returned.
+        async function fetchDealIrr(fundUuids, asOfDate) {
+            try {
+                const rows = await fetchAllPages((offset, limit) =>
+                    buildDealIrrSql(fundUuids, offset, limit, asOfDate));
+                const byKey = new Map();
+                let latest = null;
+                rows.forEach(r => {
+                    if (r.deal_irr == null) return;
+                    byKey.set(`${r.fund_uuid}::${r.issuer_id}`, Number(r.deal_irr));
+                    const quarterEnd = r.quarter_end_date == null ? null : String(r.quarter_end_date);
+                    if (quarterEnd && (!latest || quarterEnd > latest)) latest = quarterEnd;
+                });
+                return { byKey, asOfDate: latest, failed: false };
+            } catch (err) {
+                console.warn('SOI: deal IRR load failed', err);
+                return { byKey: new Map(), asOfDate: null, failed: true };
             }
         }
 
@@ -3791,6 +4081,13 @@
         document.addEventListener('input', e => {
             if (e.target && e.target.id === 'searchInput') {
                 filterCompanies(e.target.value);
+            }
+        });
+
+        // Delegated for the same reason: the toolbar is rebuilt with the skeleton.
+        document.addEventListener('click', e => {
+            if (e.target && e.target.closest && e.target.closest('#showExitedToggle')) {
+                setShowExited(!showExited);
             }
         });
 
