@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<!-- surface: shared (Cowork + Code Desktop) — styled by the host design system -->
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Portfolio Valuations — Bulk Runner</title>
+<style>
+  /* Bigger, easier-to-click checkboxes (default UA checkboxes are ~13px). */
+  .rb-check {
+    width: 18px; height: 18px; cursor: pointer;
+    accent-color: var(--color-text-link, #285DA3);
+    margin: 0; vertical-align: middle;
+  }
+  /* Reveal the tooltip only when the "?" itself is hovered or focused — not the
+     whole button. :has() lets a sibling ".rb-help" hover reveal the tooltip. */
+  .rb-tip-wrap:has(.rb-help:hover) .rb-tip,
+  .rb-tip-wrap:has(.rb-help:focus) .rb-tip { opacity: 1 !important; visibility: visible !important; }
+  /* Subtle emphasis on the "?" when hovered. */
+  .rb-help:hover, .rb-help:focus { border-color: #fff; outline: none; }
+  /* Caret pointing down at the inline "?" (which sits near the button's right). */
+  .rb-tip::after {
+    content: ""; position: absolute; top: 100%; right: 26px;
+    border: 5px solid transparent; border-top-color: var(--color-text-primary);
+  }
+</style>
+</head>
+<body>
+<h2 class="sr-only">Adjust by company — review each valuation, then create</h2>
+
+<div style="max-width:960px">
+  <div style="font-size:20px;font-weight:600;color:var(--color-text-primary);margin-bottom:4px">Adjust by company</div>
+  <div style="font-size:13px;color:var(--color-text-secondary);margin-bottom:20px;line-height:1.5">Review the method and company value for each, then create drafts in Carta.</div>
+
+  <div style="margin-bottom:16px">
+    <label style="font-size:13px;font-weight:500;color:var(--color-text-primary);display:block;margin-bottom:6px">Valuation date</label>
+    <input type="date" id="vdate" />
+  </div>
+
+  <table style="width:100%;border-collapse:collapse;font-size:14px;table-layout:fixed">
+    <thead>
+      <tr style="border-bottom:0.5px solid var(--color-border-tertiary)">
+        <th style="width:48px;padding:8px;text-align:center">
+          <input type="checkbox" id="selall-cb" class="rb-check" onclick="toggleAll()" aria-label="Select or unselect all companies"/>
+        </th>
+        <th style="width:32%;padding:8px;text-align:left;font-weight:500;font-size:12px;color:var(--color-text-secondary)">Company</th>
+        <th style="padding:8px;text-align:left;font-weight:500;font-size:12px;color:var(--color-text-secondary)">Method</th>
+      </tr>
+    </thead>
+    <tbody id="co-body"></tbody>
+  </table>
+
+  <!-- Primary action, bottom-right below the list — where the user finishes
+       reviewing. The draft/SOI reassurance lives in a tooltip on the button
+       (revealed on hover/focus), phrased as what the button DOES ("Creates…")
+       so there's no future/present-tense ambiguity. -->
+  <div style="display:flex;align-items:center;justify-content:flex-end;margin-top:20px">
+    <!-- Primary button with an inline "?" after the label. The tooltip is
+         triggered by the "?" ONLY (not the whole button); clicking the button
+         still creates. -->
+    <span class="rb-tip-wrap" style="position:relative;display:inline-flex">
+      <button onclick="run()" id="run-btn"
+        style="background:#1A1A1A;color:#FFFFFF;font-family:inherit;font-size:14px;font-weight:600;border:none;border-radius:var(--border-radius-md);padding:10px 20px;cursor:pointer;display:inline-flex;align-items:center;gap:8px"><span id="run-label">Create draft valuations</span><span class="rb-help" role="button" tabindex="0" aria-label="What does this do?" aria-describedby="run-tip" onclick="event.stopPropagation()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();}" style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;border:1px solid rgba(255,255,255,.55);font-size:10px;font-weight:600;line-height:1;flex-shrink:0;cursor:help">?</span></button>
+      <span id="run-tip" role="tooltip" class="rb-tip"
+        style="position:absolute;bottom:calc(100% + 8px);right:0;width:280px;background:var(--color-text-primary);color:#FFFFFF;font-size:12px;line-height:1.55;font-weight:400;padding:10px 12px;border-radius:var(--border-radius-md);box-shadow:0 4px 12px rgba(0,0,0,.16);opacity:0;visibility:hidden;transition:opacity .12s ease;pointer-events:none;z-index:30;text-align:left">Your valuations save as drafts in Carta. They won’t be finalized or added to your SOI until you’re ready.</span>
+    </span>
+  </div>
+</div>
+
+<div id="copy-panel" style="display:none;margin-top:1rem;padding:1rem;background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md)">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+    <span id="copy-panel-hint" style="font-size:13px;font-weight:500;color:var(--color-text-primary)">Copy and paste this into chat to start the run:</span>
+    <button onclick="copyPrompt()">Copy</button>
+  </div>
+  <textarea id="prompt-text" readonly style="width:100%;min-height:80px;font-size:12px;font-family:monospace;padding:8px;border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);background:var(--color-background-primary);color:var(--color-text-primary);resize:vertical"></textarea>
+  <div id="copy-ok" style="display:none;font-size:12px;color:var(--color-text-success);margin-top:4px">Copied</div>
+</div>
+
+<script>
+const METHODS = ["Backsolve","Post-Money","GPC","M&A","Custom Value","Previous period"];
+const NEEDS_VAL = m => m === "Post-Money" || m === "Custom Value";
+const TODAY = new Date().toISOString().slice(0,10);
+
+const __DATA__ = "__INJECTED_DATA__";
+
+let cos = [], S = [];
+
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));}
+
+// Group a raw digit string with commas for display, e.g. "215000000" → "215,000,000".
+function fmtGroups(v){
+  const digits=String(v==null?"":v).replace(/[^0-9]/g,"");
+  return digits ? Number(digits).toLocaleString("en-US") : "";
+}
+
+// Value-field input handler: strip commas to a raw number stored in S, then
+// re-render the field with grouping. Caret is moved to the end (the field is
+// right-aligned and numeric, so end-of-field is the natural edit point).
+function onValueInput(i,el){
+  const raw=el.value.replace(/[^0-9]/g,"");
+  S[i].value=raw;
+  el.value=fmtGroups(raw);
+  const end=el.value.length;
+  try{ el.setSelectionRange(end,end); }catch(e){}
+  syncCount();
+}
+
+const APPROACH_MAP={copy_from_previous:"Previous period",gpc:"GPC",backsolve:"Backsolve",post_money:"Post-Money",ma:"M&A",other_indication_of_value:"Custom Value"};
+
+// Render a previous-valuation's approaches (e.g. [{kind:"gpc",weight:"1.0"}])
+// as a label. Weights are noise on a single approach (always 100%), so they
+// only render for an actual blend of 2+ approaches — e.g. "GPC 50% DCF 50%"
+// vs. plain "GPC".
+function fmtApproaches(approaches){
+  if(!Array.isArray(approaches)||!approaches.length) return "";
+  const showWeight=approaches.length>1;
+  return approaches.map(a=>{
+    const label=APPROACH_MAP[a.kind]||a.kind;
+    return showWeight?`${label} ${Math.round(Number(a.weight)*100)}%`:label;
+  }).join(" ");
+}
+
+function init(){
+  const data = __DATA__;
+  if(!data||!Array.isArray(data.eligible)||!data.eligible.length){
+    document.getElementById("co-body").innerHTML='<tr><td colspan="3" style="padding:2rem;text-align:center;color:var(--color-text-secondary)">No companies to value.</td></tr>';
+    return;
+  }
+  cos = data.eligible.map(c=>({
+    name:c.name,
+    hasPrevious:!!c.hasPrevious,
+    // Label-only: what the previous valuation actually used, shown next to
+    // "Previous period" so the user isn't copying forward blind.
+    previousMethod:fmtApproaches(c.previousApproaches)
+  }));
+  const vdateEl = document.getElementById("vdate");
+  vdateEl.value = TODAY;
+  vdateEl.max = TODAY;
+  S = data.eligible.map(c=>{
+    let method=APPROACH_MAP[c.approach]||"GPC";
+    if(method==="Previous period"&&!c.hasPrevious) method="GPC";
+    return {sel:true,method,value:(c.value!=null?String(c.value):"")};
+  });
+  render();
+}
+
+function render(){
+  document.getElementById("co-body").innerHTML = cos.map((c,i)=>{
+    const s=S[i];
+    const opts=METHODS.map(m=>{
+      const disabled=m==="Previous period"&&!c.hasPrevious;
+      // "Previous period" leads with the actual prior method(s), e.g.
+      // "GPC (Same as previous period)" or "GPC 50% DCF 50% (Same as
+      // previous period)" for a blend — the option's value stays the
+      // canonical method string so S[i].method / NEEDS_VAL comparisons are untouched.
+      const label=m==="Previous period"
+        ?(c.previousMethod?`${c.previousMethod} (Same as previous period)`:"Same as previous period")
+        :m;
+      return `<option value="${esc(m)}"${s.method===m?" selected":""}${disabled?" disabled":""}>${esc(label)}</option>`;
+    }).join("");
+    // $-prefixed value input (no placeholder), revealed under the method
+    // dropdown only for Post-Money / Custom Value. The $ is an
+    // absolutely-positioned affordance on the left; the input pads left so
+    // its right-aligned digits never collide with it. A text input (not
+    // number) so digits can carry comma group separators (financial
+    // standard); onValueInput strips the commas back to a raw number in S
+    // and re-renders the grouped display.
+    const valInput=NEEDS_VAL(s.method)
+      ?`<div style="position:relative;display:inline-block;width:100%;max-width:260px;vertical-align:middle;margin-top:6px">
+          <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--color-text-secondary);pointer-events:none">$</span>
+          <input type="text" inputmode="numeric" value="${esc(fmtGroups(s.value))}" oninput="onValueInput(${i},this)" style="width:100%;text-align:right;padding-left:22px"/>
+        </div>`
+      :"";
+    return `<tr style="border-bottom:0.5px solid var(--color-border-tertiary);opacity:${s.sel?1:.4}">
+      <td style="padding:8px;text-align:center"><input type="checkbox" class="rb-check" ${s.sel?"checked":""} onchange="S[${i}].sel=this.checked;render()"/></td>
+      <td style="padding:8px;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(c.name)}">${esc(c.name)}</td>
+      <td style="padding:8px"><select onchange="S[${i}].method=this.value;S[${i}].value='';render()" style="width:100%">${opts}</select>${valInput}</td>
+    </tr>`;
+  }).join("");
+  syncCount();
+}
+
+function syncCount(){
+  const n=S.filter(s=>s.sel).length;
+  const btn=document.getElementById("run-btn");
+  btn.disabled=n===0;
+  btn.style.opacity=n===0?"0.4":"1";
+  btn.style.cursor=n===0?"not-allowed":"pointer";
+  // Set only the label span so the inline "?" affordance is preserved.
+  document.getElementById("run-label").textContent=`Create ${n} draft valuation${n===1?"":"s"}`;
+  // Header select-all checkbox: checked when all selected, indeterminate when
+  // some, unchecked when none — the standard tri-state select-all pattern.
+  const cb=document.getElementById("selall-cb");
+  if(cb){
+    cb.checked=n>0&&n===cos.length;
+    cb.indeterminate=n>0&&n<cos.length;
+  }
+}
+
+// Header checkbox: if everything is selected, clear all; otherwise select all
+// (covers both the "none" and "some" starting states).
+function toggleAll(){
+  const allSel=S.length>0&&S.every(s=>s.sel);
+  S.forEach(s=>s.sel=!allSel);
+  render();
+}
+
+let lastPrompt="";
+
+function run(){
+  const date=document.getElementById("vdate").value||TODAY;
+  const lines=cos.map((c,i)=>S[i].sel
+    ?`- ${c.name} (method: ${S[i].method}, date: ${date}${NEEDS_VAL(S[i].method)&&S[i].value?", value: $"+Number(S[i].value).toLocaleString():""})`
+    :null).filter(Boolean).join("\n");
+  lastPrompt=`Bulk-create valuations for the following companies:\n${lines}`;
+  let sent=false;
+  if(typeof sendPrompt==="function"){
+    try{sendPrompt(lastPrompt);sent=true;}catch(e){sent=false;}
+  }
+  // Always surface the copy-to-chat fallback too: sendPrompt can exist as a
+  // function but silently no-op on some hosts, so success can't be assumed.
+  document.getElementById("copy-panel").style.display="block";
+  document.getElementById("prompt-text").value=lastPrompt;
+  document.getElementById("copy-panel-hint").textContent=sent
+    ?"Sent to chat. If nothing appeared there, copy and paste this instead:"
+    :"Copy and paste this into chat to start the run:";
+}
+
+function copyPrompt(){
+  const ta=document.getElementById("prompt-text");
+  ta.select();
+  try{navigator.clipboard.writeText(ta.value).catch(()=>document.execCommand("copy"));}
+  catch(e){document.execCommand("copy");}
+  const ok=document.getElementById("copy-ok");
+  ok.style.display="block";
+  setTimeout(()=>ok.style.display="none",2000);
+}
+
+init();
+</script>
+</body>
+</html>

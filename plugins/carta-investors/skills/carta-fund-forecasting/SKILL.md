@@ -22,7 +22,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.63.0</carta-plugin>
+<carta-plugin>carta-investors:6.64.0</carta-plugin>
 
 # Fund Forecasting
 

@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Portfolio Valuations</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap">
+<link rel="stylesheet" href="/shared.css"/>
+</head>
+<body>
+
+<svg class="carta-logo" role="img" aria-label="Carta" fill="none" viewBox="0 0 64 32" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0.64" y="0.64" width="62.72" height="30.72" stroke="currentColor" stroke-width="1.28"/>
+  <path d="M8.4 16.62C8.4 13.42 11.1 11.53 13.53 11.53C15.27 11.53 16.9 12.19 17.76 13.69L16.14 14.63C15.86 14.21 15.48 13.86 15.03 13.62C14.58 13.39 14.08 13.26 13.57 13.27C12.14 13.27 10.44 14.38 10.44 16.59C10.44 18.8 12.06 19.93 13.7 19.93C14.84 19.93 15.79 19.3 16.35 18.32L18.01 19.08C17.07 20.78 15.39 21.68 13.44 21.68C10.98 21.67 8.4 19.79 8.4 16.62L8.4 16.62ZM23.94 21.68C25.29 21.68 26.56 21.08 27.22 20.22V21.4H29.23V11.78H27.22V12.97C26.6 12.1 25.29 11.53 23.94 11.53C20.98 11.53 18.92 13.68 18.92 16.6C18.92 19.52 21 21.68 23.94 21.68V21.68ZM24.13 13.36C25.99 13.36 27.26 14.74 27.26 16.6C27.26 18.47 25.99 19.85 24.13 19.85C22.28 19.85 20.96 18.45 20.96 16.57C20.96 14.68 22.28 13.36 24.13 13.36V13.36ZM40.01 13.69H37.93V11.77H40.03V9.26H42.1V11.77H44.2V13.69H42.1V21.4H40.01V13.69ZM49.96 21.68C51.32 21.68 52.59 21.08 53.25 20.22V21.4H55.26V11.78H53.25V12.97C52.62 12.1 51.32 11.53 49.96 11.53C47.01 11.53 44.94 13.68 44.94 16.6C44.94 19.52 47.03 21.68 49.96 21.68V21.68ZM50.16 13.36C52.01 13.36 53.29 14.74 53.29 16.6C53.29 18.47 52.01 19.85 50.16 19.85C48.31 19.85 46.99 18.45 46.99 16.57C46.99 14.68 48.3 13.36 50.16 13.36V13.36ZM33.77 21.39H31.69V11.77H33.6V13.56C34.07 12.5 34.78 11.8 35.94 11.75C36.18 11.74 36.41 11.75 36.65 11.77L36.62 13.7C34.96 13.7 33.77 14.59 33.77 17.07V21.4H33.77L33.77 21.39Z" fill="currentColor"/>
+</svg>
+
+<h1>Portfolio valuations</h1>
+
+<!-- Readiness card: the dashboard's opening summary and primary action.
+     Answers "what do I have, and what can I act on?" in one surface — a
+     portfolio headline, a proportional bar showing how the portfolio splits
+     across the three readiness states, then one row per state carrying its
+     own action. "Ready to value" leads and owns the single loud CTA; the two
+     blocked states follow with quieter treatment so the primary action stays
+     unambiguous. Rendered by renderPrepCard. -->
+<div id="prep-card" class="prep-card-section" style="display:none">
+  <div id="prep-card-body" class="prep-card"></div>
+</div>
+
+<!-- Recent company events — full-width band below the prep card so the feed
+     never stretches a column out of balance, no matter the event count. -->
+<div id="summary-card" style="display:none" class="summary-card events-band">
+  <div class="summary-card-title">Recent company events</div>
+  <div id="summary-card-body" class="summary-card-body"></div>
+</div>
+
+<div id="dash-draft-section" style="display:none" class="collapsible-section">
+  <button class="group-label-btn" onclick="toggleSection('dash-draft-section')" aria-expanded="true">
+    <span class="group-label-text">Draft valuation</span>
+    <span class="group-label-count" id="dash-draft-count"></span>
+    <svg class="chevron" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </button>
+  <div class="collapsible-body">
+    <table class="tbl">
+      <thead><tr>
+        <th class="dc-name">Company</th>
+        <th class="dc-date">Latest val. date</th>
+        <th class="dc-st">Status</th>
+        <th class="dc-app">Method</th>
+        <th class="dc-ev">Company value</th>
+        <th class="dc-hv">Holdings value</th>
+      </tr></thead>
+      <tbody id="dash-body-draft"></tbody>
+    </table>
+  </div>
+</div>
+
+<div id="dash-final-section" style="display:none" class="collapsible-section">
+  <button class="group-label-btn" onclick="toggleSection('dash-final-section')" aria-expanded="true">
+    <span class="group-label-text">Final valuation</span>
+    <span class="group-label-count" id="dash-final-count"></span>
+    <svg class="chevron" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </button>
+  <div class="collapsible-body">
+    <table class="tbl">
+      <thead><tr>
+        <th class="dc-name">Company</th>
+        <th class="dc-date">Latest val. date</th>
+        <th class="dc-st">Status</th>
+        <th class="dc-app">Method</th>
+        <th class="dc-ev">Company value</th>
+        <th class="dc-hv">Holdings value</th>
+      </tr></thead>
+      <tbody id="dash-body-final"></tbody>
+    </table>
+  </div>
+</div>
+
+<div id="dash-noval-section" style="display:none" class="collapsible-section">
+  <button class="group-label-btn" onclick="toggleSection('dash-noval-section')" aria-expanded="true">
+    <span class="group-label-text">No valuation</span>
+    <span class="group-label-count" id="dash-noval-count"></span>
+    <svg class="chevron" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </button>
+  <div class="collapsible-body">
+    <table class="tbl tbl-noval">
+      <thead><tr><th>Company</th></tr></thead>
+      <tbody id="dash-body-noval"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- "Cap table access required" and "Proforma cap table required" are surfaced
+     as readiness-card rows (see renderPrepCard), each with its own link out to
+     Carta. Companies in neither bucket are still reachable by asking Claude to
+     list them. -->
+
+<!-- Copy-to-chat fallback for prep-card CTAs. Shown only when the host doesn't
+     inject sendPrompt (so the button is never dead on any surface). Mirrors the
+     runner widget's proven cross-surface pattern. -->
+<div id="ask-panel" class="ask-panel" style="display:none">
+  <div class="ask-panel-row">
+    <span class="ask-panel-hint">Copy this and paste it into the chat:</span>
+    <button type="button" class="ask-panel-copy" onclick="copyAsk()">Copy</button>
+    <button type="button" class="ask-panel-close" aria-label="Dismiss" onclick="closeAsk()">×</button>
+  </div>
+  <textarea id="ask-panel-text" class="ask-panel-text" readonly></textarea>
+  <div id="ask-panel-ok" class="ask-panel-ok" style="display:none">Copied</div>
+</div>
+
+<script>
+const __DATA__ = "__INJECTED_DATA__";
+
+let cos = [];
+
+/* — Helpers — */
+/* Escape a string for safe placement inside a double-quoted HTML attribute.
+   Needed anywhere a URL or other free-form value is interpolated into an
+   attribute (e.g. the "Request access" button's data-url below) — a raw
+   `&`/`"`/`<` breaks the attribute mid-parse rather than erroring loudly, so
+   the failure mode is a silently-broken click handler, not a parse error. */
+function escAttr(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+}
+
+function fmtM(v) {
+  if (v == null || v === "" || Number(v) === 0) return "—";
+  const n = Number(v); if (isNaN(n)) return "—";
+  if (n >= 1e9) return "$" + (n/1e9).toFixed(2) + "B";
+  if (n >= 1e6) return "$" + (n/1e6).toFixed(1) + "M";
+  if (n >= 1e3) return "$" + (n/1e3).toFixed(0) + "K";
+  return "$" + Math.round(n).toLocaleString();
+}
+
+/* Reformat an ISO date string (YYYY-MM-DD) to MM/DD/YYYY. */
+function fmtDate(s) {
+  if (!s) return "—";
+  const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[2]}/${m[3]}/${m[1]}` : s;
+}
+
+/* Stamp today's date onto the investments-dashboard link as it's clicked.
+   Local date parts, not toISOString(), which converts to UTC and lands on
+   tomorrow for anyone east of Greenwich in the evening. Returns true so the
+   anchor's normal new-tab navigation proceeds. */
+function datedInvestmentsHref(a) {
+  const d = new Date();
+  const iso = d.getFullYear() + "-" +
+    String(d.getMonth() + 1).padStart(2, "0") + "-" +
+    String(d.getDate()).padStart(2, "0");
+  const url = new URL(a.href, window.location.href);
+  url.searchParams.set("date", iso);
+  url.searchParams.set("group", "ungrouped");
+  a.href = url.toString();
+  return true;
+}
+
+/* Send a prompt back into the Claude session, where possible.
+   `sendPrompt` is a host-injected global ONLY for pages rendered via the
+   `show_widget` MCP tool (the Runner widget / Plan card use this) — it
+   pre-fills the chat composer (the user presses Enter to send — no surface
+   auto-submits). This dashboard is instead rendered via the `Artifact` tool
+   (Cowork) or served by the local preview server (Code), and neither of
+   those hosts injects `sendPrompt`: the Artifact runtime contract exposes
+   only `artifact`/`downloads`/`mcp`/`self` capabilities via `claude.use()`,
+   with no chat-composer access at all. So on Cowork this call is always a
+   no-op and the copy-to-chat panel below is not a fallback — it's the only
+   path that ever fires there. Kept here (rather than removed) only in case a
+   future host injects it; never assume it exists.
+
+   `trigger` is the clicked element (the "Get started" button). When present, the
+   fallback appears as a popover anchored directly beneath that button — right
+   where the user's attention already is — rather than stranded at the bottom of
+   a long dashboard. The popover is positioned inside the button's nearest
+   positioned ancestor (the run card, made position:relative), so it tracks the
+   button without any scroll math. */
+function ask(prompt, trigger) {
+  if (typeof sendPrompt === "function") { sendPrompt(prompt); return; }
+  const panel = document.getElementById("ask-panel");
+  document.getElementById("ask-panel-text").value = prompt;
+  document.getElementById("ask-panel-ok").style.display = "none";
+  const anchor = trigger && trigger.closest(".prep-card");
+  if (anchor && trigger) {
+    // Popover placement: move the panel into the card and pin it just below the
+    // button. The button may sit at the right edge (run-head), so clamp left so
+    // the popover never overflows the card, and point the caret at the button.
+    anchor.appendChild(panel);
+    panel.classList.add("ask-panel--popover");
+    // Make it visible BEFORE measuring — a display:none panel reports
+    // offsetWidth 0, which would break the clamp math below.
+    panel.style.left = "0px";
+    panel.style.display = "block";
+    const pad = 16;
+    const w = panel.offsetWidth;
+    // Prefer aligning the popover's left edge under the button; if that would
+    // overflow the card's right edge, shift it left so it stays fully inside.
+    const maxLeft = Math.max(pad, anchor.clientWidth - w - pad);
+    const left = Math.min(trigger.offsetLeft, maxLeft);
+    panel.style.top  = (trigger.offsetTop + trigger.offsetHeight + 8) + "px";
+    panel.style.left = left + "px";
+    // Caret points at the button's center, relative to the popover's left edge
+    // (clamped to stay on the popover).
+    const caretCenter = trigger.offsetLeft + trigger.offsetWidth / 2 - left;
+    const caret = Math.min(Math.max(12, caretCenter - 6), w - 24);
+    panel.style.setProperty("--caret-left", caret + "px");
+  } else {
+    panel.classList.remove("ask-panel--popover");
+    panel.style.top = "";
+    panel.style.left = "";
+    panel.style.display = "block";
+  }
+}
+
+function copyAsk() {
+  const ta = document.getElementById("ask-panel-text");
+  ta.select();
+  try { navigator.clipboard.writeText(ta.value).catch(() => document.execCommand("copy")); }
+  catch (e) { document.execCommand("copy"); }
+  const ok = document.getElementById("ask-panel-ok");
+  ok.style.display = "block";
+  setTimeout(() => { ok.style.display = "none"; }, 2000);
+}
+
+function closeAsk() {
+  document.getElementById("ask-panel").style.display = "none";
+}
+
+/* Launch the bulk runner. On Code the dashboard is served by the local
+   preview server, which has no sendPrompt but DOES have the POST /run
+   channel (a background poll hands the request to Claude, who opens the
+   runner widget) — that's the path that actually fires there. On Cowork the
+   dashboard is an Artifact-published page, which has no /run server AND no
+   sendPrompt (the Artifact runtime never injects it — see the note on
+   `ask()` above), so the fetch below always fails there and every click
+   falls through to the copy panel; that's expected, not a broken fallback. */
+const BULK_PROMPT = "Open the bulk runner for all the companies my firm can value.";
+function startBulk(trigger) {
+  // Code preview pane — signal via the local server, same channel the runner
+  // uses. A 2xx means a poll will deliver it to Claude.
+  fetch("/run", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ intent: "open_runner", prompt: BULK_PROMPT }),
+  }).then(r => {
+    if (!r.ok) throw new Error("run endpoint not ok");
+  }).catch(() => {
+    // No local server to answer (Cowork, or Code with the server down) —
+    // try sendPrompt in case some future host injects it, else copy panel
+    // (placed inline under the Start button, not stranded at the bottom).
+    ask(BULK_PROMPT, trigger);
+  });
+}
+
+/* Readiness card — portfolio headline, a proportional bar, then one row per
+   readiness state carrying its own action. Leading with the total makes the
+   counts below read as parts of a stated whole. */
+function renderPrepCard(eligibleCount, noAccessCount, requestAccessUrl, ineligibleCount, investmentsUrl, companyCount) {
+  eligibleCount = eligibleCount || 0;
+  noAccessCount = noAccessCount || 0;
+  ineligibleCount = ineligibleCount || 0;
+
+  const card = document.getElementById("prep-card");
+  const body = document.getElementById("prep-card-body");
+  const bucketed = eligibleCount + noAccessCount + ineligibleCount;
+  // Headline counts the whole portfolio, which is not always the sum of the
+  // three states — a valuation in some other status belongs to none of them.
+  // The bar still weights by the bucketed counts, so it stays a true
+  // part-to-whole of what the three states describe.
+  const total = companyCount != null ? companyCount : bucketed;
+
+  // Nothing in the portfolio at all — nothing truthful to summarise.
+  if (!total && !bucketed) {
+    body.innerHTML = `<div class="prep-headline">No companies yet</div>
+      <div class="prep-empty">Once a company is in your portfolio it shows up here with what it needs before you can value it.</div>`;
+    card.style.display = "block";
+    return;
+  }
+
+  const co = n => n === 1 ? "company" : "companies";
+
+  // Each state's explanation, written once and used in both places: the row
+  // beneath the bar, and the hover tooltip.
+  const readyDesc = eligibleCount === 1
+    ? "Value this company, or come back when there are more to batch."
+    : `Value all ${eligibleCount} companies in bulk, or pick a subset.`;
+  const waitingDesc = `Send a bulk request. You can value ${noAccessCount === 1 ? "it" : "them"} once they approve.`;
+  const noneDesc = `Create pro-forma cap ${ineligibleCount === 1 ? "table" : "tables"}, then come back to value ${ineligibleCount === 1 ? "it" : "them"}.`;
+
+  // Segments flex-weight by true count, so the bar is an honest part-to-whole.
+  // Unlabelled: the rows below name every state and carry the same colour, so
+  // the bar only has to show proportion. aria-hidden for the same reason —
+  // voicing it would read every number twice. The tooltip carries the count,
+  // the label and the same explanation the row gives.
+  const seg = (n, cls, label, desc) => n
+    ? `<div class="prep-bar-seg prep-bar-seg--${cls}" style="flex-grow:${n}"
+         data-count="${n}" data-label="${label}" data-desc="${escAttr(desc)}"></div>`
+    : "";
+  const bar = `<div class="prep-bar-wrap">
+      <div class="prep-bar" aria-hidden="true">
+        ${seg(eligibleCount, "ready", "ready to value", readyDesc)}
+        ${seg(noAccessCount, "waiting", "need cap table access", waitingDesc)}
+        ${seg(ineligibleCount, "none", "with no cap table on Carta", noneDesc)}
+      </div>
+      <div class="prep-tip" id="prep-tip" role="presentation" hidden>
+        <div class="prep-tip-head">
+          <span class="prep-tip-sw" id="prep-tip-sw"></span>
+          <span class="prep-tip-val" id="prep-tip-val"></span>
+          <span class="prep-tip-label" id="prep-tip-label"></span>
+        </div>
+        <div class="prep-tip-desc" id="prep-tip-desc"></div>
+      </div>
+    </div>`;
+
+  // One row per state: colour dot, count + plain-language explanation, action.
+  // `action` is trusted markup built below, never user data.
+  const row = (n, cls, title, desc, action) => n
+    ? `<div class="prep-row">
+        <span class="prep-dot prep-dot--${cls}" aria-hidden="true"></span>
+        <div class="prep-row-text">
+          <div class="prep-row-title">${title}</div>
+          <div class="prep-row-desc">${desc}</div>
+        </div>
+        ${action || ""}
+      </div>`
+    : "";
+
+  // The one loud CTA. "Get started" — not "Run" — because it opens the runner
+  // to review and select; the user confirms the run there.
+  const readyRow = row(eligibleCount, "ready",
+    `${eligibleCount} ready to value`,
+    readyDesc,
+    `<button type="button" class="run-btn" onclick="startBulk(this)">Get started</button>`);
+
+  // Both blocked rows leave the app, so both use a real <a target="_blank">
+  // rather than button + window.open(), which popup blockers silently swallow
+  // even on a genuine click. Each renders buttonless when its URL is missing,
+  // rather than showing a dead control.
+  const extLink = (url, label, onclick) => url
+    ? `<a class="prep-secondary-btn" href="${escAttr(url)}" target="_blank" rel="noopener noreferrer"${onclick ? ` onclick="${onclick}"` : ""}>${label}<span class="ext-arrow" aria-hidden="true">↗</span><span class="sr-only"> (opens in a new tab)</span></a>`
+    : "";
+
+  const waitingRow = row(noAccessCount, "waiting",
+    `${noAccessCount} ${noAccessCount === 1 ? "needs" : "need"} cap table access`,
+    waitingDesc,
+    extLink(requestAccessUrl, "Manage cap table access"));
+
+  // A pro-forma cap table is built in Carta, outside this skill, so this opens
+  // the firm's investments dashboard. `date` is stamped at click time rather
+  // than baked in — the panel can sit open past midnight, which would otherwise
+  // send the user to yesterday.
+  const noneRow = row(ineligibleCount, "none",
+    `${ineligibleCount} with no cap table on Carta`,
+    noneDesc,
+    extLink(investmentsUrl, "Manage investments", "datedInvestmentsHref(this)"));
+
+  body.innerHTML = `<div class="prep-head">
+      <div class="prep-headline">${total} ${co(total)}</div>
+      ${bar}
+    </div>
+    <div class="prep-rows">${readyRow}${waitingRow}${noneRow}</div>`;
+  card.style.display = "block";
+  wireBarTooltip();
+}
+
+/* Hover tooltip for the bar. One delegated listener on the track rather than
+   per-segment handlers, so a segment only 3px wide is still covered. Position
+   is clamped to the track so a tooltip near either end isn't clipped by the
+   card's edge. */
+function wireBarTooltip() {
+  const wrap = document.querySelector(".prep-bar-wrap");
+  const bar = wrap && wrap.querySelector(".prep-bar");
+  const tip = document.getElementById("prep-tip");
+  if (!wrap || !bar || !tip) return;
+
+  const sw = document.getElementById("prep-tip-sw");
+  const val = document.getElementById("prep-tip-val");
+  const label = document.getElementById("prep-tip-label");
+  const desc = document.getElementById("prep-tip-desc");
+
+  bar.addEventListener("pointermove", e => {
+    const seg = e.target.closest(".prep-bar-seg");
+    if (!seg) { tip.hidden = true; return; }
+    val.textContent = seg.dataset.count;
+    label.textContent = seg.dataset.label;
+    desc.textContent = seg.dataset.desc || "";
+    sw.style.background = getComputedStyle(seg).backgroundColor;
+    tip.hidden = false;
+    // Centre on the cursor, then clamp so neither edge escapes the track.
+    // Measured after unhiding — a hidden element reports offsetWidth 0, which
+    // would collapse the clamp to the raw cursor position.
+    const wrapBox = wrap.getBoundingClientRect();
+    const x = e.clientX - wrapBox.left;
+    const half = tip.offsetWidth / 2;
+    // A tooltip wider than the track can't satisfy both edges; pin it centred.
+    tip.style.left = (half * 2 > wrapBox.width)
+      ? wrapBox.width / 2 + "px"
+      : Math.max(half, Math.min(x, wrapBox.width - half)) + "px";
+  });
+  bar.addEventListener("pointerleave", () => { tip.hidden = true; });
+}
+
+/* Status shows as a mini dot + label (not a filled pill) so it reads as quiet
+   table state and doesn't compete with the colored activity tags. */
+function badge(s) {
+  s = (s||"").toLowerCase();
+  if (s==="draft") return '<span class="status status--draft"><span class="status-dot"></span>Draft</span>';
+  if (s==="final") return '<span class="status status--final"><span class="status-dot"></span>Final</span>';
+  return '<span class="status status--none"><span class="status-dot"></span>—</span>';
+}
+
+function approachLabel(raw) {
+  const map = {
+    other_indication_of_value: "Custom Value",
+    gpc: "GPC",
+    dcf: "DCF",
+    ma: "M&A",
+    backsolve: "Backsolve",
+    post_money: "Post-Money",
+  };
+  if (!raw) return "—";
+  // `latestValuation.approaches` is an array of weighted approach objects,
+  // e.g. [{kind:"gpc",weight:"1.0"}] or a blend with 2+ entries. Weights are
+  // noise on a single approach (always 100%), so they only render for an
+  // actual blend. Each part is nowrap so a blend breaks BETWEEN approaches
+  // ("GPC 50%" / "M&A 50%") and never mid-pair — but stays on one line
+  // whenever the column is wide enough to hold it.
+  if (Array.isArray(raw)) {
+    const showWeight = raw.length > 1;
+    return raw.map(a => {
+      const label = map[a.kind] || a.kind;
+      const text = showWeight ? `${label} ${Math.round(Number(a.weight) * 100)}%` : label;
+      return `<span class="method-part">${text}</span>`;
+    }).join(" ");
+  }
+  return map[raw] || raw;
+}
+
+/* — Init — */
+function init() {
+  applyData(__DATA__);
+}
+
+/* Classify a raw MCP portfolio_dashboard response (single page object or array
+   of page objects) into the {eligible, summary, ineligibleCount, noAccessCount,
+   kpis} shape the rest of the template expects. */
+function classifyResponse(raw) {
+  let companies = [];
+  let requestAccessUrl = null;
+  let investmentsUrl = null;
+  if (Array.isArray(raw)) {
+    raw.forEach(function(page) {
+      companies = companies.concat(page.companies || []);
+      if (page.requestAccessUrl) requestAccessUrl = page.requestAccessUrl;
+      if (page.investmentsUrl) investmentsUrl = page.investmentsUrl;
+    });
+  } else {
+    companies = (raw && raw.companies) || [];
+    requestAccessUrl = (raw && raw.requestAccessUrl) || null;
+    investmentsUrl = (raw && raw.investmentsUrl) || null;
+  }
+
+  const eligible = [];
+  const summary = {draft: 0, current: 0, noValuation: 0};
+  let ineligibleCount = 0, noAccessCount = 0;
+  let kpiCompany = 0, kpiHoldings = 0;
+  // Every company the API returned. Tracked separately from the three buckets
+  // because a valuation whose status is neither DRAFT nor FINAL falls through
+  // them — the portfolio total must still count it.
+  const companyCount = companies.length;
+
+  companies.forEach(function(c) {
+    if (!c.hasCorpCapTable && !c.isLlc) { ineligibleCount++; return; }
+    if (c.hasCorpCapTable && !c.hasCorpCapTableAccess) { noAccessCount++; return; }
+
+    const lv = c.latestValuation;
+    let bucket;
+    if (!lv) {
+      bucket = "noValuation";
+    } else {
+      const st = (lv.status || "").toUpperCase();
+      if (st === "DRAFT") bucket = "draft";
+      else if (st === "FINAL") bucket = "current";
+      else return;
+    }
+    summary[bucket] = (summary[bucket] || 0) + 1;
+
+    const cv = lv ? (parseFloat(lv.companyValue) || 0) : 0;
+    const hv = lv ? (parseFloat(lv.holdingsValue) || 0) : 0;
+    if (bucket === "current") { kpiCompany += cv; kpiHoldings += hv; }
+
+    const entry = {name: c.name, bucket};
+    if (bucket === "noValuation") {
+      entry.corporationId = c.corporationId || c.llcIssuerId;
+    } else {
+      entry.latestValuationDate = (lv && lv.date) ? lv.date : "";
+      entry.status = lv && lv.status
+        ? lv.status.charAt(0).toUpperCase() + lv.status.slice(1).toLowerCase()
+        : "";
+      entry.approach = (lv && lv.approaches) ? lv.approaches : null;
+      if (bucket !== "draft") { entry.companyValue = cv; entry.holdingsValue = hv; }
+    }
+    if (c.newFinancingRound)  entry.newFinancingRound  = c.newFinancingRound;
+    if (c.newTenderOffer)     entry.newTenderOffer     = c.newTenderOffer;
+    if (c.newShareTransfer)   entry.newShareTransfer   = c.newShareTransfer;
+    eligible.push(entry);
+  });
+
+  return {eligible, summary, ineligibleCount, noAccessCount, requestAccessUrl,
+          investmentsUrl, companyCount,
+          kpis: {companyValue: kpiCompany, holdingsValue: kpiHoldings}};
+}
+
+function applyData(data) {
+  // Accept raw MCP response (has companies array or is array of pages)
+  if (data && (Array.isArray(data) || data.companies != null)) {
+    data = classifyResponse(data);
+  }
+  if (!data || !Array.isArray(data.eligible)) {
+    document.body.innerHTML = '<div class="empty-state">No data available. Re-open the skill to refresh.</div>';
+    return;
+  }
+
+  const eligible = data.eligible;
+
+  cos = eligible.map(c => ({
+    n:         c.name,
+    st:        (c.status || "none").toLowerCase(),
+    pDate:     c.latestValuationDate || null,
+    pApp:      c.approach || null,
+    pEV:       c.companyValue  ? Number(c.companyValue)  : null,
+    pH:        c.holdingsValue ? Number(c.holdingsValue) : null,
+    hp:        !!c.latestValuationDate,
+    bucket:    c.bucket,
+    financing:     c.newFinancingRound        || null,
+    tenderOffer:   c.newTenderOffer           || null,
+    shareTransfer: c.newShareTransfer         || null,
+  }));
+
+  // eligible = every company the firm can value (has cap-table access / LLC).
+  // Total-holdings hero removed — a large NAV figure sitting above "70 companies
+  // aren't on Carta" read as a false total and eroded trust (Zoom feedback).
+  // noAccessCount and ineligibleCount both get their own prep-card secondary
+  // row (Request access / pro-forma cap table text) instead of a dedicated
+  // section further down the page.
+  renderPrepCard(eligible.length, data.noAccessCount, data.requestAccessUrl, data.ineligibleCount, data.investmentsUrl, data.companyCount);
+
+  renderDashboard();
+  renderSummaryCard();
+  // The prep card and events band are full-width siblings that manage their own
+  // visibility — no shared header grid to toggle.
+}
+
+/* — Dashboard render — */
+function renderDashboard() {
+  const drafts = cos.filter(c => c.bucket === "draft")
+    .sort((a,b) => (b.pDate||"").localeCompare(a.pDate||""));
+  const finals = cos.filter(c => c.bucket === "current")
+    .sort((a,b) => (b.pDate||"").localeCompare(a.pDate||""));
+  const noVals = cos.filter(c => c.bucket === "noValuation")
+    .sort((a,b) => a.n.localeCompare(b.n));
+
+  function valuedRow(c) {
+    return `<tr>
+      <td class="dc-name ell co-name" title="${c.n}">${c.n}</td>
+      <td class="dc-date">${fmtDate(c.pDate)}</td>
+      <td class="dc-st">${badge(c.st)}</td>
+      <td class="dc-app">${approachLabel(c.pApp)}</td>
+      <td class="dc-ev ink-num">${fmtM(c.pEV)}</td>
+      <td class="dc-hv ink-num">${fmtM(c.pH)}</td>
+    </tr>`;
+  }
+
+  const draftSection = document.getElementById("dash-draft-section");
+  if (drafts.length) {
+    document.getElementById("dash-body-draft").innerHTML = drafts.map(valuedRow).join("");
+    document.getElementById("dash-draft-count").textContent = drafts.length;
+    draftSection.style.display = "block";
+  } else {
+    draftSection.style.display = "none";
+  }
+
+  const finalSection = document.getElementById("dash-final-section");
+  if (finals.length) {
+    document.getElementById("dash-body-final").innerHTML = finals.map(valuedRow).join("");
+    document.getElementById("dash-final-count").textContent = finals.length;
+    finalSection.style.display = "block";
+  } else {
+    finalSection.style.display = "none";
+  }
+
+  const novalSection = document.getElementById("dash-noval-section");
+  if (noVals.length) {
+    document.getElementById("dash-body-noval").innerHTML = noVals.map(c =>
+      `<tr><td class="ell co-name" title="${c.n}">${c.n}</td></tr>`
+    ).join("");
+    document.getElementById("dash-noval-count").textContent = noVals.length;
+    novalSection.style.display = "block";
+  } else {
+    novalSection.style.display = "none";
+  }
+}
+
+/* — Recent company events — */
+/* One dense row per event. The type pill leads as the primary signal, then the
+   company name, the date, and a single most-relevant figure trailing right —
+   values only, no label column, so 40+ events stay compact and scannable. */
+function eventRow(name, type, label, date, detail, hidden) {
+  return `<tr class="event-row${hidden ? " event-row--hidden" : ""}">
+    <td class="ev-type"><span class="ink-tag ink-tag--${type}">${label}</span></td>
+    <td class="ev-co ell" title="${name}">${name}</td>
+    <td class="ev-date">${fmtDate(date)}</td>
+    <td class="ev-detail ink-num">${detail || "—"}</td>
+  </tr>`;
+}
+
+/* Feed is capped so it never buries the valuation tables; overflow rows live in
+   the DOM (hidden) and reveal on "View all". */
+const ACTIVITY_VISIBLE = 8;
+
+/* Two-way toggle. Unhiding rows alone is not enough: .event-scroll caps the list
+   at ~8 rows, so revealed rows would land below the fold of a box that showed no
+   scrollbar a moment earlier — the click reads as a dead link. Lift the cap with
+   .is-expanded so the card actually grows, and keep the button so the state
+   change stays visible and reversible. */
+function toggleActivity(btn) {
+  const body = document.getElementById("summary-card-body");
+  if (!body) return;
+  const scroll = body.querySelector(".event-scroll");
+  const expanded = btn.getAttribute("aria-expanded") === "true";
+
+  body.querySelectorAll(".event-row").forEach((el, i) =>
+    el.classList.toggle("event-row--hidden", expanded && i >= ACTIVITY_VISIBLE)
+  );
+  if (scroll) scroll.classList.toggle("is-expanded", !expanded);
+  btn.setAttribute("aria-expanded", String(!expanded));
+  btn.textContent = expanded
+    ? `View all ${btn.dataset.total} events`
+    : "Show fewer events";
+}
+
+function renderSummaryCard() {
+  const card = document.getElementById("summary-card");
+  card.style.display = "block";  // always shown — empty state lives inside
+
+  // Merge all events into one list keyed by date so "Recent" is truthful:
+  // newest first, across financing / tender / transfer alike. Each event keeps
+  // its single most-telling figure for the trailing detail column.
+  const events = [];
+  cos.forEach(c => {
+    if (c.financing) {
+      const r = c.financing;
+      const detail = r.cashRaised != null ? `${fmtM(r.cashRaised)} raised`
+                   : r.postMoney  != null ? `${fmtM(r.postMoney)} post`
+                   : r.shareClassName || "";
+      events.push({ date: r.closingDate || "",
+        cells: { name: c.n, type: "financing", label: "Financing", detail } });
+    }
+    if (c.tenderOffer) {
+      const s = c.tenderOffer;
+      const detail = s.price != null ? `${s.price}${s.currencyCode ? " " + s.currencyCode : ""}/sh` : "";
+      events.push({ date: s.date || "",
+        cells: { name: c.n, type: "tender", label: "Tender offer", detail } });
+    }
+    if (c.shareTransfer) {
+      const t = c.shareTransfer;
+      const detail = t.pricePerShare != null ? `${Number(t.pricePerShare).toFixed(2)}/sh`
+                   : t.quantity != null ? `${Number(t.quantity).toLocaleString()} sh` : "";
+      events.push({ date: t.date || "",
+        cells: { name: c.n, type: "transfer", label: "Share transfer", detail } });
+    }
+  });
+
+  const body = document.getElementById("summary-card-body");
+
+  if (!events.length) {
+    body.innerHTML = `<div class="event-empty-card">
+      <div class="event-empty-title">No recent company events</div>
+      <div class="event-empty-text">We'll show events here when a portfolio company raises a financing round, runs a tender offer, or records a share transfer — the kinds of changes that often call for a fresh valuation.</div>
+    </div>`;
+    return;
+  }
+
+  events.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+
+  const rows = events.map((e, i) =>
+    eventRow(e.cells.name, e.cells.type, e.cells.label, e.date, e.cells.detail, i >= ACTIVITY_VISIBLE)
+  ).join("");
+  const hiddenCount = Math.max(0, events.length - ACTIVITY_VISIBLE);
+  const more = hiddenCount
+    ? `<button type="button" class="event-more" aria-expanded="false" data-total="${events.length}" onclick="toggleActivity(this)">View all ${events.length} events</button>`
+    : "";
+
+  body.innerHTML = `<div class="event-scroll"><table class="tbl event-tbl"><tbody>${rows}</tbody></table></div>${more}`;
+}
+
+/* — Collapsible sections — */
+function toggleSection(id) {
+  const section = document.getElementById(id);
+  const body = section.querySelector(".collapsible-body");
+  const btn = section.querySelector(".group-label-btn");
+  const expanded = btn.getAttribute("aria-expanded") === "true";
+  btn.setAttribute("aria-expanded", String(!expanded));
+  body.style.display = expanded ? "none" : "block";
+}
+
+init();
+</script>
+</body>
+</html>

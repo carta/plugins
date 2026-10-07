@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<!-- surface: shared (Cowork + Code Desktop) — styled by the host design system.
+     Deliberately host-styled (host --color-* vars, no Ink font fetch) so it
+     renders instantly. Shown BEFORE the full runner list: summarizes the
+     auto-suggested bulk-create plan; the user bulk-creates in one click, or
+     opens the full runner list to customize. Same __INJECTED_DATA__ payload as
+     the runner list widget (runner.html) — grouped by suggested method. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Portfolio Valuations — Bulk-create plan</title>
+</head>
+<body>
+<h2 class="sr-only">Review bulk-create plan</h2>
+
+<div style="max-width:640px">
+  <div style="font-size:20px;font-weight:600;color:var(--color-text-primary);margin-bottom:4px">
+    Review bulk-create plan
+  </div>
+  <!-- Intro text is set in render() so it stays accurate when NO company has
+       recent activity (it then drops the "recent activity" clause rather than
+       asserting activity that didn't happen). -->
+  <div id="plan-intro" style="font-size:13px;color:var(--color-text-secondary);margin-bottom:20px;line-height:1.5"></div>
+
+  <div style="margin-bottom:8px">
+    <label for="pdate" style="font-size:13px;font-weight:500;color:var(--color-text-primary);display:block;margin-bottom:6px">Valuation date</label>
+    <input type="date" id="pdate" onchange="syncPrompt()"/>
+  </div>
+
+  <!-- The rule set: how each company's most recent activity picks its method.
+       Framed as the reasoning behind the recommendations. The two-column header
+       ("Recent activity" / "Recommended method") carries the mapping, so no
+       per-row arrows are needed. -->
+  <div style="margin:20px 0 8px;font-size:12px;font-weight:600;color:var(--color-text-secondary)">How we picked each method</div>
+  <div style="border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);overflow:hidden;margin-bottom:20px">
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead>
+        <tr style="border-bottom:0.5px solid var(--color-border-tertiary);background:var(--color-background-secondary)">
+          <th style="padding:8px 12px;text-align:left;font-weight:500;font-size:11px;color:var(--color-text-secondary);width:44%">Recent activity</th>
+          <th style="padding:8px 12px;text-align:left;font-weight:500;font-size:11px;color:var(--color-text-secondary)">Recommended method</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-bottom:0.5px solid var(--color-border-tertiary)"><td style="padding:8px 12px;color:var(--color-text-primary);font-weight:500">New financing round</td><td style="padding:8px 12px;color:var(--color-text-secondary)">Post-Money</td></tr>
+        <tr style="border-bottom:0.5px solid var(--color-border-tertiary)"><td style="padding:8px 12px;color:var(--color-text-primary);font-weight:500">Share transfer</td><td style="padding:8px 12px;color:var(--color-text-secondary)">Backsolve</td></tr>
+        <tr style="border-bottom:0.5px solid var(--color-border-tertiary)"><td style="padding:8px 12px;color:var(--color-text-primary);font-weight:500">Tender offer</td><td style="padding:8px 12px;color:var(--color-text-secondary)">Backsolve</td></tr>
+        <tr><td style="padding:8px 12px;color:var(--color-text-primary);font-weight:500">No recent activity</td><td style="padding:8px 12px;color:var(--color-text-secondary)">Same as the previous valuation, or GPC if it's the first</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- "This run" per-method breakdown removed (Zoom feedback): the full,
+       per-company list is one click away via Review & customize, so the plan
+       card stays a compact "here's the rule set + a date" summary. -->
+
+  <!-- Take a stance (Zoom feedback): the black "Create draft valuations" button
+       is the PRIMARY action, "Adjust by company" the quieter secondary. Buttons
+       are right-aligned with the primary far-right (standard LTR footer order:
+       [secondary] [primary]). -->
+  <div style="display:flex;gap:12px;align-items:center;justify-content:flex-end">
+    <button onclick="customize()" id="customize-btn"
+      style="background:none;color:var(--color-text-primary);font-family:inherit;font-size:14px;font-weight:500;border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-md);padding:10px 18px;cursor:pointer">Adjust by company</button>
+    <button onclick="bulkCreateAll()" id="create-btn"
+      style="background:#1A1A1A;color:#FFFFFF;font-family:inherit;font-size:14px;font-weight:600;border:none;border-radius:var(--border-radius-md);padding:10px 20px;cursor:pointer">Create draft valuations</button>
+  </div>
+
+  <div id="copy-panel" style="display:none;margin-top:1rem;padding:1rem;background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <span id="copy-panel-hint" style="font-size:13px;font-weight:500;color:var(--color-text-primary)">Copy and paste this into chat:</span>
+      <button onclick="copyPrompt()">Copy</button>
+    </div>
+    <textarea id="prompt-text" readonly style="width:100%;min-height:80px;font-size:12px;font-family:monospace;padding:8px;border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);background:var(--color-background-primary);color:var(--color-text-primary);resize:vertical"></textarea>
+    <div id="copy-ok" style="display:none;font-size:12px;color:var(--color-text-success);margin-top:4px">Copied</div>
+  </div>
+</div>
+
+<script>
+const TODAY = new Date().toISOString().slice(0,10);
+
+// Same classified payload the runner list widget receives — each eligible entry
+// carries {name, approach, hasPrevious, value?}. We group by the SUGGESTED
+// approach, matching the runner's own defaulting so the two widgets never
+// disagree.
+const __DATA__ = "__INJECTED_DATA__";
+
+// Method display labels — used to resolve each company's suggested method for
+// the bulk-create prompt (the per-method breakdown that once needed a fixed
+// display order was removed, so METHOD_ORDER is no longer needed).
+const APPROACH_MAP={copy_from_previous:"Previous period",gpc:"GPC",backsolve:"Backsolve",post_money:"Post-Money",ma:"M&A",other_indication_of_value:"Custom Value"};
+
+let cos = [];
+
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));}
+
+// Resolve each company's suggested method label — mirrors runner.html init():
+// map the recommended approach, and downgrade "Previous period" to GPC
+// when there's no prior valuation to copy.
+function methodFor(c){
+  let m = APPROACH_MAP[c.approach] || "GPC";
+  if(m === "Previous period" && !c.hasPrevious) m = "GPC";
+  return m;
+}
+
+function init(){
+  const data = __DATA__;
+  const createBtn = document.getElementById("create-btn");
+  if(!data || !Array.isArray(data.eligible) || !data.eligible.length){
+    createBtn.textContent = "Create draft valuations";
+    createBtn.disabled = true;
+    document.getElementById("customize-btn").disabled = true;
+    return;
+  }
+  cos = data.eligible.map(c=>({name:c.name,method:methodFor(c)}));
+  const dEl = document.getElementById("pdate");
+  dEl.value = TODAY; dEl.max = TODAY;
+  render();
+}
+
+function render(){
+  const n = cos.length;
+
+  // Intro adapts to the data so it's never wrong: name "recent activity" only
+  // when at least one company's method was actually driven by an event
+  // (Post-Money / Backsolve). When none had activity, the recommendation rests
+  // solely on prior valuations, so we say that instead.
+  const hasActivity = cos.some(c => c.method === "Post-Money" || c.method === "Backsolve");
+  document.getElementById("plan-intro").textContent = hasActivity
+    ? "We've recommended a valuation method for each company based on its recent activity and prior valuations."
+    : "We've recommended a valuation method for each company based on its prior valuations.";
+
+  // Primary button carries the count AND says "draft" (Zoom feedback): the word
+  // "draft" on the commit button reassures the user this doesn't finalize/commit
+  // anything — e.g. "Create 8 draft valuations".
+  document.getElementById("create-btn").textContent =
+    `Create ${n} draft valuation${n===1?"":"s"}`;
+  syncPrompt();
+}
+
+// Build the same bulk-create prompt the runner list emits, for ALL companies
+// with their suggested methods. Kept in the runner's exact shape so the skill's
+// existing prompt parsing handles it unchanged.
+function buildPrompt(){
+  const date = document.getElementById("pdate").value || TODAY;
+  const lines = cos.map(c => `- ${c.name} (method: ${c.method}, date: ${date})`).join("\n");
+  return `Bulk-create valuations for the following companies:\n${lines}`;
+}
+
+let lastPrompt = "";
+function syncPrompt(){ lastPrompt = buildPrompt(); if(document.getElementById("copy-panel").style.display==="block") document.getElementById("prompt-text").value = lastPrompt; }
+
+function bulkCreateAll(){
+  lastPrompt = buildPrompt();
+  let sent = false;
+  if(typeof sendPrompt === "function"){
+    try{ sendPrompt(lastPrompt); sent = true; }catch(e){ sent = false; }
+  }
+  // Always surface the copy fallback: sendPrompt may exist but silently no-op.
+  showCopyPanel(sent
+    ? "Sent to chat. If nothing appeared there, copy and paste this instead:"
+    : "Copy and paste this into chat to start the run:");
+}
+
+// Ask the skill to open the full runner list so the user can change methods and
+// values. Carry the chosen date so the list doesn't re-ask it.
+function customize(){
+  const date = document.getElementById("pdate").value || TODAY;
+  const msg = `Open the bulk runner so I can customize the methods and values (valuation date: ${date}).`;
+  let sent = false;
+  if(typeof sendPrompt === "function"){
+    try{ sendPrompt(msg); sent = true; }catch(e){ sent = false; }
+  }
+  lastPrompt = msg;
+  showCopyPanel(sent
+    ? "Sent to chat. If nothing appeared there, copy and paste this instead:"
+    : "Copy and paste this into chat:");
+}
+
+function showCopyPanel(hint){
+  document.getElementById("copy-panel").style.display = "block";
+  document.getElementById("prompt-text").value = lastPrompt;
+  document.getElementById("copy-panel-hint").textContent = hint;
+}
+
+function copyPrompt(){
+  const ta = document.getElementById("prompt-text");
+  ta.select();
+  try{ navigator.clipboard.writeText(ta.value).catch(()=>document.execCommand("copy")); }
+  catch(e){ document.execCommand("copy"); }
+  const ok = document.getElementById("copy-ok");
+  ok.style.display = "block";
+  setTimeout(()=>ok.style.display="none",2000);
+}
+
+init();
+</script>
+</body>
+</html>

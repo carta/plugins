@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<!-- surface: shared (Cowork + Code Desktop). Styled with the host design system's tokens, matching runner.html. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Portfolio Valuations: Bulk Run Results</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+<style>
+  /* Inter, as in dashboard.html; falls back to the system font if it can't load. */
+  body { font-family: "Inter", system-ui, -apple-system, sans-serif; }
+  .br-wrap { max-width: 960px; }
+  .br-title { font-size: 20px; font-weight: 600; color: var(--color-text-primary); margin: 0 0 20px; }
+  .br-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .br-table thead tr, .br-table tbody tr { border-bottom: 0.5px solid var(--color-border-tertiary); }
+  .br-table th { padding: 8px; text-align: left; font-weight: 500; font-size: 12px; color: var(--color-text-secondary); }
+  .br-table td { padding: 8px; color: var(--color-text-primary); vertical-align: middle; }
+  .br-table .br-num { text-align: right; white-space: nowrap; }
+  .br-empty { padding: 2rem; text-align: center; color: var(--color-text-secondary); }
+  .br-table td.br-error { color: var(--color-text-danger, var(--color-text-secondary)); }
+  .br-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: #FFFFFF; color: #1A1A1A; font-family: inherit; font-size: 13px; font-weight: 400;
+    border: 1px solid #D9D9D9; border-radius: var(--border-radius-md); padding: 6px 12px; cursor: pointer; white-space: nowrap;
+  }
+  .br-btn:hover { background: #F5F5F5; }
+  .br-co { position: relative; color: inherit; text-decoration: none; }
+  /* Holds the name's last word and the icon together, so a wrapped name never strands the icon. */
+  .br-nowrap { white-space: nowrap; }
+  /* Muted so it reads as a hint beside the name; darkens with the name on hover. */
+  .br-co .br-icon { margin-left: 4px; vertical-align: -2px; color: var(--color-text-secondary); opacity: .6; transition: opacity .12s ease; }
+  .br-co:hover .br-icon { opacity: 1; }
+  /* Tooltip styled like the runner's: dark chip with a caret, shown on hover or keyboard focus. */
+  .br-tip {
+    position: absolute; bottom: calc(100% + 6px); left: 0; white-space: nowrap;
+    background: var(--color-text-primary); color: var(--color-background-primary, #FFFFFF);
+    font-size: 12px; line-height: 1.4; padding: 4px 8px; border-radius: var(--border-radius-md);
+    box-shadow: 0 4px 12px rgba(0,0,0,.16); opacity: 0; visibility: hidden;
+    transition: opacity .12s ease; pointer-events: none; z-index: 30;
+  }
+  .br-tip::after {
+    content: ""; position: absolute; top: 100%; left: 12px;
+    border: 5px solid transparent; border-top-color: var(--color-text-primary);
+  }
+  .br-co:hover .br-co-name { text-decoration: underline; }
+  .br-co:hover .br-tip, .br-co:focus-visible .br-tip { opacity: 1; visibility: visible; }
+  .br-icon { width: 14px; height: 14px; flex-shrink: 0; }
+  .br-copy {
+    margin-top: 1rem; padding: 1rem; background: var(--color-background-secondary);
+    border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-md);
+  }
+  .br-copy-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .br-copy-hint { font-size: 13px; font-weight: 500; color: var(--color-text-primary); }
+  .br-copy textarea {
+    width: 100%; min-height: 60px; font-size: 12px; font-family: monospace; padding: 8px;
+    border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-md);
+    background: var(--color-background-primary); color: var(--color-text-primary); resize: vertical; box-sizing: border-box;
+  }
+  .br-copy-ok { font-size: 12px; color: var(--color-text-success); margin-top: 4px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="br-wrap">
+<h2 class="br-title">Bulk run results</h2>
+
+<table class="br-table">
+  <thead>
+    <tr>
+      <th>Company</th>
+      <th class="br-num">Company value</th>
+      <th class="br-num">Holdings value</th>
+      <th>Method</th>
+      <th>Required inputs missing</th>
+      <th>Next step</th>
+    </tr>
+  </thead>
+  <tbody id="br-body"></tbody>
+</table>
+
+<div id="copy-panel" class="br-copy" hidden>
+  <div class="br-copy-head">
+    <span id="copy-panel-hint" class="br-copy-hint">Copy and paste this into chat:</span>
+    <button onclick="copyPrompt()">Copy</button>
+  </div>
+  <textarea id="prompt-text" readonly></textarea>
+  <div id="copy-ok" class="br-copy-ok" hidden>Copied</div>
+</div>
+</div>
+
+<script>
+const __DATA__ = "__INJECTED_DATA__";
+
+const EMPTY = "-";
+/* Methods whose value step is something the user sets rather than calculates.
+   Backsolve's value comes from the transaction price, which the bulk run can't set. */
+const VALUE_STEPS = {
+  "Custom value": { label:"Set custom value", task:"set the custom value" },
+  "Post-money":   { label:"Set post-money value", task:"set the post-money value" },
+  "Backsolve":    { label:"Set transaction price", task:"set the transaction price" },
+};
+const SENT_MS = 3500;
+
+let rows = [];
+let sentIndex = -1;
+let sentTimer = null;
+
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));}
+
+/* Currency comes from each row's own data. A row with no currency code gets a
+   plain grouped number: no symbol is better than a wrong one. Zero or negative
+   means the value isn't set up yet on a fresh draft, so it shows a dash. */
+function fmtMoney(amount, currency){
+  if(amount==null||amount==="") return EMPTY;
+  const n = Number(amount);
+  if(!isFinite(n)||n<=0) return EMPTY;
+  if(currency){
+    try{
+      return new Intl.NumberFormat("en-US",{style:"currency",currency,maximumFractionDigits:0}).format(n);
+    }catch(e){ /* unknown code: fall through to code-suffixed number */ }
+    return n.toLocaleString("en-US",{maximumFractionDigits:0})+" "+currency;
+  }
+  return n.toLocaleString("en-US",{maximumFractionDigits:0});
+}
+
+/* [{label:"GPC",weight:0.5},...] -> "GPC 50% / Backsolve 50%". A single
+   approach is always 100%, so it shows the label alone. */
+function fmtMethodology(list){
+  if(!Array.isArray(list)||!list.length) return EMPTY;
+  if(list.length===1) return list[0].label;
+  return list.map(m=>`${m.label} ${Math.round(Number(m.weight)*100)}%`).join(" / ");
+}
+
+function fmtMissing(list){
+  if(!Array.isArray(list)||!list.length) return "None";
+  return esc(list.join(", "));
+}
+
+/* The one thing this valuation needs next, in the order the dive-in flow works
+   through it: inputs, then the method's value, then allocation, then review.
+   `task` is appended to the dive-in prompt so the chat starts on that step. */
+function nextStep(r){
+  if(r.status==="existing_final") return { label:"View", task:null };
+  const missing = Array.isArray(r.missing) ? r.missing : [];
+  if(missing.length){
+    const names = missing.map(m=>m.toLowerCase());
+    return { label:"Add "+names.join(" & "), task:"add "+names.join(" and ") };
+  }
+  if(!(Number(r.ev)>0)){
+    const m = Array.isArray(r.methodology) ? r.methodology : [];
+    if(m.length!==1) return { label:"Calculate values", task:"calculate the values" };
+    return VALUE_STEPS[m[0].label] || { label:"Calculate "+m[0].label, task:"calculate "+m[0].label };
+  }
+  if(r.allocate==="failed") return { label:"Retry allocation", task:"retry the allocation" };
+  if(r.allocate!=="run") return { label:"Run allocation", task:"run the allocation" };
+  return { label:"Review & finalize", task:"review it before finalizing" };
+}
+
+function promptFor(r){
+  const step = nextStep(r);
+  /* "the X valuation" rather than "X's valuation": names ending in s read badly with a possessive. */
+  const base = `Dive into the ${r.name} valuation`;
+  return step.task ? `${base} and ${step.task}` : base;
+}
+
+/* The widget host opens links through openLink(); a bare target="_blank"
+   anchor is swallowed by the sandboxed iframe. The href stays so the link
+   still reads as a link and can be copied. */
+/* External-link glyph (Lucide "external-link"), drawn with the text color. */
+const LINK_ICON = '<svg class="br-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>';
+
+function companyLink(url, name){
+  if(!url) return esc(name);
+  const cut = String(name).lastIndexOf(" ") + 1;
+  const head = esc(String(name).slice(0, cut)), last = esc(String(name).slice(cut));
+  return `<a class="br-co" href="${esc(url)}" target="_blank" rel="noopener noreferrer" aria-label="View ${esc(name)} in Carta" onclick="return openCarta(event,this.href)"><span class="br-co-name">${head}<span class="br-nowrap">${last}${LINK_ICON}</span></span><span class="br-tip" aria-hidden="true">View in Carta</span></a>`;
+}
+
+function openCarta(ev, url){
+  ev.preventDefault();
+  ev.stopPropagation();
+  if(typeof openLink==="function"){
+    try{ openLink(url); return false; }catch(e){ /* fall through */ }
+  }
+  window.open(url, "_blank", "noopener");
+  return false;
+}
+
+function init(){
+  const data = __DATA__;
+  rows = (data && Array.isArray(data.rows)) ? data.rows : [];
+  render();
+}
+
+function render(){
+  const body = document.getElementById("br-body");
+  if(!rows.length){
+    body.innerHTML = '<tr><td colspan="6" class="br-empty">No valuations in this run.</td></tr>';
+    return;
+  }
+  body.innerHTML = rows.map((r,i)=>{
+    if(r.status==="error"){
+      return `<tr>
+        <td>${esc(r.name)}</td>
+        <td colspan="4" class="br-error">${esc(r.error||"Couldn't create this valuation.")}</td>
+        <td>${r.fixUrl ? `<button class="br-btn" onclick="return openCarta(event,'${esc(r.fixUrl)}')">Fix in Carta${LINK_ICON}</button>` : ""}</td>
+      </tr>`;
+    }
+    const step = nextStep(r);
+    const label = i===sentIndex ? "Added to chat · press Enter ↵" : `${esc(step.label)}&nbsp;↓`;
+    return `<tr>
+      <td>${companyLink(r.url, r.name)}</td>
+      <td class="br-num">${esc(fmtMoney(r.ev, r.currency))}</td>
+      <td class="br-num">${esc(fmtMoney(r.holdings, r.currency))}</td>
+      <td>${esc(fmtMethodology(r.methodology))}</td>
+      <td>${esc(fmtMissing(r.missing))}</td>
+      <td><button class="br-btn" onclick="diveIn(${i})" aria-label="${esc(step.label)} for ${esc(r.name)}">${label}</button></td>
+    </tr>`;
+  }).join("");
+}
+
+function diveIn(i){
+  const r = rows[i];
+  if(!r || r.status==="error") return;
+  const prompt = promptFor(r);
+  let sent = false;
+  if(typeof sendPrompt==="function"){
+    try{ sendPrompt(prompt); sent = true; }catch(e){ sent = false; }
+  }
+  /* sendPrompt only fills the composer (and can silently no-op on some hosts),
+     so the button says to press Enter and the copy panel is always there. */
+  sentIndex = sent ? i : -1;
+  clearTimeout(sentTimer);
+  if(sent) sentTimer = setTimeout(()=>{ sentIndex = -1; render(); }, SENT_MS);
+  render();
+  document.getElementById("copy-panel").hidden = false;
+  document.getElementById("prompt-text").value = prompt;
+  document.getElementById("copy-panel-hint").textContent = sent
+    ? "Nothing in the chat box? Copy and paste this instead:"
+    : "Copy and paste this into chat:";
+}
+
+function copyPrompt(){
+  const ta = document.getElementById("prompt-text");
+  ta.select();
+  try{ navigator.clipboard.writeText(ta.value).catch(()=>document.execCommand("copy")); }
+  catch(e){ document.execCommand("copy"); }
+  const ok = document.getElementById("copy-ok");
+  ok.hidden = false;
+  setTimeout(()=>ok.hidden = true, 2000);
+}
+
+init();
+</script>
+</body>
+</html>
