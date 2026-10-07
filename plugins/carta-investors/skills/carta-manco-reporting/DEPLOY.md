@@ -1,8 +1,11 @@
 # Deploying ManCo Reporting to Cloudflare
 
-**Not yet deployed.** No Worker of this name exists in the microapps account, and no
-hostnames are attached. The steps below are what a first deployment takes; the tenant
-model matches carta-fund-modeling and carta-portfolio-analytics-app, which do run.
+**Merging to `main` does not deploy this Worker.** Nothing in this repo's CI redeploys it —
+`npx wrangler deploy` (below) is the only thing that does, and it is run by hand. A PR that
+changes `server/worker.js` or bumps `BUDGET_BUNDLE_SCHEMA`/`ACCEPTED_BUDGET_BUNDLE_SCHEMAS`
+is not live until someone with Cloudflare access runs that command — until then, the hosted
+Worker keeps serving whatever it was last deployed with, however old. Treat "redeploy the
+Worker" as part of landing such a PR, not a follow-up.
 
 ## Prerequisites
 
@@ -121,14 +124,17 @@ A firm's workbook budget reaches the hosted app as one JSON file, built locally 
 - `POST /api/budget-upload` stores the bundle under `budget-bundle:<firm>` in KV, with no TTL.
   It needs `Content-Type: application/json`, a body under 4 MB, and a signed-in user Carta
   lets into the firm. It refuses a bundle whose `firm_uuid` is not that firm's, whose
-  `schema_version` differs from `BUDGET_BUNDLE_SCHEMA`, or that has no currency.
+  `schema_version` is not in `ACCEPTED_BUDGET_BUNDLE_SCHEMAS`, or that has no currency.
 - `GET` returns what is stored (or `null`). `DELETE` removes it.
 - `/api/snapshot` replaces `budget` and `varianceByCategory` with the bundle's and adds
   `budgetUpload` (who, when, `as_of`). A bundle in a different currency than the snapshot is
   left out and flagged `currency_mismatch`.
 
-Bump `BUDGET_BUNDLE_SCHEMA` in `server/worker.js` and `SCHEMA_VERSION` in the exporter together;
-`tests/carta-investors/test_export_budget_bundle.py` fails when they differ.
+`SCHEMA_VERSION` in the exporter must always be in `server/worker.js`'s
+`ACCEPTED_BUDGET_BUNDLE_SCHEMAS`, or an export can't be uploaded. Bumping
+`BUDGET_BUNDLE_SCHEMA` means the exporter's own current output changes shape; add the old
+value to `ACCEPTED_BUDGET_BUNDLE_SCHEMAS` alongside it so bundles exported by an
+not-yet-updated plugin install still upload.
 
 ## Local development
 
@@ -166,3 +172,9 @@ or Carta refused `set_context` for that firm (the signed-in user is not staff an
 
 **OAuth redirect loop**: The Worker uses dynamic client registration with `mcp.app.carta.com`.
 Make sure the Worker URL matches the registered redirect URI (`https://<worker-url>/auth/callback`).
+
+**"Unsupported schema_version N; expected ..." on upload**: The exporter (whatever plugin
+version the user has installed) produced a bundle the *deployed* Worker doesn't recognize.
+This is a deploy-lag symptom, not a code bug — check whether the Worker was redeployed after
+the PR that last touched `BUDGET_BUNDLE_SCHEMA`/`ACCEPTED_BUDGET_BUNDLE_SCHEMAS` merged. Redeploy
+with `npx wrangler deploy` (above); there is no other fix.

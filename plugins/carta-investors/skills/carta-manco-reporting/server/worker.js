@@ -618,11 +618,10 @@ async function handleReport(req, env, path) {
 // belongs to this firm, stores it without a TTL, and lays it over the snapshot it serves.
 
 // Not exported: the Workers runtime rejects any non-function export from the entry module.
-// The exporter writes BUDGET_BUNDLE_SCHEMA; BUDGET_BUNDLE_SCHEMAS is every version this
-// Worker accepts. Schema 1 differs from 2 only by lacking the three optional dimension
-// fields (see applyDimension), so a bundle from an older plugin install is still valid.
-const BUDGET_BUNDLE_SCHEMA = 2;
-const BUDGET_BUNDLE_SCHEMAS = [1, BUDGET_BUNDLE_SCHEMA];
+const BUDGET_BUNDLE_SCHEMA = 1;
+// Some released plugin versions label this same bundle shape schema_version 2; keep
+// accepting it so those installs' uploads don't 422 until they update the plugin.
+const ACCEPTED_BUDGET_BUNDLE_SCHEMAS = [BUDGET_BUNDLE_SCHEMA, 2];
 const MAX_BUNDLE_BYTES = 4 * 1024 * 1024;
 const bundleKey = (firm) => `budget-bundle:${firm}`;
 const isObj = (v) => v && typeof v === "object" && !Array.isArray(v);
@@ -630,7 +629,7 @@ const isObj = (v) => v && typeof v === "object" && !Array.isArray(v);
 // Returns an error message, or null when the bundle may be stored for this firm.
 export function validateBudgetBundle(b, firmUuid) {
   if (!isObj(b)) return "The file is not a budget bundle.";
-  if (!BUDGET_BUNDLE_SCHEMAS.includes(b.schema_version)) return `Unsupported schema_version ${JSON.stringify(b.schema_version)}; expected one of ${BUDGET_BUNDLE_SCHEMAS.join(", ")}.`;
+  if (!ACCEPTED_BUDGET_BUNDLE_SCHEMAS.includes(b.schema_version)) return `Unsupported schema_version ${JSON.stringify(b.schema_version)}; expected ${BUDGET_BUNDLE_SCHEMA}.`;
   if (String(b.firm_uuid || "").toLowerCase() !== String(firmUuid || "").toLowerCase()) return "This bundle was exported for a different firm.";
   if (!/^[A-Z]{3}$/.test(String(b.currency || ""))) return "The bundle has no currency.";
   if (typeof b.as_of !== "string" || !b.as_of) return "The bundle has no as_of date.";

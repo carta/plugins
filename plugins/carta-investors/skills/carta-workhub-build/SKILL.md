@@ -21,7 +21,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.61.3</carta-plugin>
+<carta-plugin>carta-investors:6.61.6</carta-plugin>
 
 # Carta Workhub — Build / Redeploy
 
