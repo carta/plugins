@@ -7,7 +7,7 @@ description: >
   Use instead: carta-explore-data for read-only fund/investment/valuation data —
   this skill MODELS exit waterfalls/allocations (who gets paid on exit), it does
   not pull existing data.
-version: 0.2.3
+version: 0.3.0
 model: sonnet
 user-invocable: true
 allowed-tools:
@@ -25,10 +25,18 @@ allowed-tools:
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_accounts
   - execute_office_js
   - AskUserQuestion
+  # The Carta app address for the page's Open in Carta link.
+  - mcp__carta__get_current_user
+  - mcp__claude_ai_Carta__get_current_user
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__get_current_user
+  - Bash(uv run *build_artifact.py *)
+  # Only when the skill's base directory is unknown
+  - Bash(find /mnt/skills /sessions *)
+  - Artifact
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.65.2</carta-plugin>
+<carta-plugin>carta-investors:6.66.0</carta-plugin>
 
 # Waterfall Modeling
 
@@ -63,7 +71,7 @@ If the user wants a different format, honor it, but read the spec first.
 **Read references on demand, and only what applies.** Each reference file is pulled in
 by the step that names it — never read a file a step hasn't pointed you to. A results run
 reads only its own `results.<noun>.md` + `rendering.<noun>.md`, never another command's;
-the cap-table detail docs, `inputs.md`, `follow-up.md`, and `excel-output.md` are each
+the cap-table detail docs, `inputs.md`, `follow-up.md`, `excel-output.md`, and `artifact-output.md` are each
 read only when their step calls for it.
 
 The flow is:
@@ -89,7 +97,8 @@ open (Claude for Excel), `<SURFACE>` is `excel`; otherwise `chat`. `excel` is
 never a false positive — in `chat` there is no workbook to write to.
 
 - `chat` (default) — render everything inline, exactly as Steps 6a.5 and 6
-  describe. No change.
+  describe. When the `Artifact` tool is in your tool list, the allocations tables go to a
+  results page instead ([`references/artifact-output.md`](references/artifact-output.md)).
 - `excel` — after the company is resolved (Step 2) and **before** fetching
   options (Step 3), announce the workbook **exactly once** — never repeat it
   later in the run — naturally, in one line: _"I'm working in your open workbook
@@ -250,6 +259,7 @@ and pass as the `name` field to `call_tool`; never rewrite or shorten it**):
   fetched by the root issuer + as-of date — **not** coupled to the run. Step 6a.5 dispatches
   on its noun to the matching renderer; an unrecognized noun or `null`/absent → skip the
   cap-table step.
+- `currency` — **optional**; ISO 4217 code (e.g. `"GBP"`) the results are in. Absent → USD.
 - `save_command` — **optional**; updates the firm's holding values from the run's results
   (offered in the Step 6 follow-up menu). May be `null` or absent — when so, omit the
   update option from the follow-up menu.
@@ -277,7 +287,7 @@ and pass as the `name` field to `call_tool`; never rewrite or shorten it**):
   Root display name = `root.name` when set, else the picked company name.
 
 Cache `run_command`, `get_command`, `cap_table_command` (if present),
-`save_command` (if present), `is_multi_entity`, `root` (if present), and the
+`save_command` (if present), `currency` (if present), `is_multi_entity`, `root` (if present), and the
 catalog for the rest of the flow. **Do not re-call `get:options` mid-flow.**
 
 **Announce the multi-entity structure before collecting inputs.** When
@@ -355,6 +365,11 @@ Different dates → each date is its own cap table (fetched once).
 
 ## Step 6 — Fetch and render results
 
+**`chat` with the `Artifact` tool in your tool list** → run the fetch loop as below, but publish
+the allocations as a results page instead of rendering the tables: **read
+[`references/artifact-output.md`](references/artifact-output.md) when you reach the allocations
+render**.
+
 Dispatch by the `get_command` noun: read that command's results doc and execute its
 fetch loop, BLUF, allocations render, and follow-up cuts. **Read ONLY that doc and the
 `rendering.<same noun>.md` it points to — never another command's results or rendering
@@ -419,7 +434,7 @@ results doc.)
 ### Follow-up prompt
 
 After rendering the holder table (or, in `excel`, after writing the **Waterfall**
-tab), present the follow-up menu and run the chosen action per
+tab; or, in the chat results-page path, after the link), present the follow-up menu and run the chosen action per
 [`references/follow-up.md`](references/follow-up.md) — the **surface-specific
 menu** (you **must** call `AskUserQuestion` with every option for the surface,
 never in prose, never collapsed) and — **only when Step 3 returned `save_command`**
@@ -441,3 +456,5 @@ At-a-glance recap; each rule is stated in full where it applies above.
 - **Don't auto-retry** — 404 / 403 / 501 stop; 504 / 502 prompt first.
 - **Don't branch on engine name** — dispatch via `run_command` / `get_command`.
 - **Don't run more than one scenario** unasked; batch multi-value-at-one-date runs.
+- **Don't print the allocations tables** when a results page was published — follow-up cuts still
+  render inline.

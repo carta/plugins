@@ -126,8 +126,8 @@ responses don't carry them).
 
 Then ask **one** consolidated `AskUserQuestion` — options "Update holding values"
 / "Cancel" (Cancel returns to the follow-up menu). Question text (only the
-`{where}` clause varies by surface — `chat` → "the results above"; `excel` → "the
-**Waterfall** tab"):
+`{where}` clause varies by surface — `chat` → "the results above"; `chat` with a results page →
+"the results page"; `excel` → "the **Waterfall** tab"):
 
 > Update your firm's holding values for **{company}** from this waterfall run?
 > This writes the proceeds shown in {where} into the Carta database. To overwrite
