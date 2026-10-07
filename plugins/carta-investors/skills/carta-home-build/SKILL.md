@@ -52,7 +52,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.66.0</carta-plugin>
+<carta-plugin>carta-investors:6.66.1</carta-plugin>
 
 # Carta Home — Build / Redeploy / Open
 
@@ -118,7 +118,7 @@ own sidebar tile.
   listing each LP partner's amount, status, and date — paid date once paid, days late while
   outstanding. On a capital call, unpaid partners get **Send Reminder** (**Resend**, over the
   last-reminded date, once one has gone out), which previews and then sends the email via
-  `fa:send:capital-call-reminder`. Rows with `email_notice_enabled: false` show a muted
+  `fa:mutate:send-capital-call-reminder`. Rows with `email_notice_enabled: false` show a muted
   **Email disabled** and no menu — the backend drops those sends silently. **Remind investors**
   in the summary row batches the same send: a selection table of the remindable investors (all
   checked to start), then a preview with a picker over each one's own email. One entry per
@@ -179,7 +179,7 @@ rejects with `not_in_manifest`:
 - `mutate` — the legacy write dispatcher, granted as a fallback; nothing in `resources/`
   calls it
 - `call_tool` — the gateway dispatcher, carrying both the Capital Activity reminder sends
-  (`fa__send__capital-call-reminder`) and the Plugin news live-content cards
+  (`fa__mutate__send-capital-call-reminder`) and the Plugin news live-content cards
 
 ## Source layout — the artifact is BUILT, not hand-edited
 

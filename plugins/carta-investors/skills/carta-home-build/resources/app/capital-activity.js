@@ -478,7 +478,7 @@ async function openCapActivityDetail(activityId, fundName, typeLabel, dueDate, t
             const dateCell = r.daysLate > 0 && r.paymentStatus !== 'paid'
               ? `<span class="ca-late">${r.daysLate}d late</span>`
               : (r.paidDate ? r.paidDate.slice(0, 10) : '—');
-            // Remind is only meaningful for capital calls (fa:send:capital-call-reminder)
+            // Remind is only meaningful for capital calls (fa:mutate:send-capital-call-reminder)
             // and only for partners who haven't paid yet.
             const remindCell = !isCall ? '' : (r.paymentStatus !== 'unpaid'
               ? '<td class="ca-td-remind"></td>'
@@ -648,7 +648,7 @@ async function submitRemindConfirm() {
   try {
     // Colons become `__` in the generated tool name; the hyphens stay.
     const res = await _mcp("call_tool", {
-      name: "fa__send__capital-call-reminder",
+      name: "fa__mutate__send-capital-call-reminder",
       arguments: {
         fund_uuid: fundUuid,
         capital_activity_id: activityId,
@@ -955,7 +955,7 @@ async function submitBulkRemind() {
     // force_send is not on this tool, so a non-staff caller's batch becomes a
     // staff review request rather than an immediate send.
     const res = await _mcp("call_tool", {
-      name: "fa__send__capital-call-reminder",
+      name: "fa__mutate__send-capital-call-reminder",
       arguments: {
         fund_uuid: sel[0].fundUuid,
         capital_activity_id: activityId,
