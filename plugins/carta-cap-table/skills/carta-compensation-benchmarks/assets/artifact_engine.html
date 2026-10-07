@@ -339,6 +339,29 @@ td.remove-col { padding: 10px 8px 10px 4px; width: 30px; }
 .job-tooltip-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-color-global-text-very-subtle); margin-bottom: 4px; }
 .job-tooltip-titles{ font-size: 12px; color: var(--ink-color-global-text-default); line-height: 20px; }
 
+/* ── Location picker (fixed-position, escapes the table's overflow) ──────── */
+.geo-trigger {
+  max-width: 240px; overflow: hidden; text-overflow: ellipsis; text-align: left;
+}
+#geoPicker {
+  display: none;
+  position: fixed;
+  z-index: 9100;
+  width: 360px; max-height: 360px; overflow-y: auto;
+  background: var(--ink-color-global-surface-background-default);
+  border: 1px solid var(--ink-color-global-border-subtle);
+  border-radius: var(--ink-size-global-radius-subtle);
+  box-shadow: var(--ink-elevation-global-shadow-small);
+}
+#geoPicker.open { display: block; }
+.geo-group {
+  padding: 8px 12px 4px; font-size: 12px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .04em; color: var(--ink-color-global-text-subtle);
+}
+.geo-option { padding: 6px 12px; font-size: 14px; line-height: 20px; cursor: pointer; }
+.geo-option.is-active { background: var(--ink-color-global-surface-lightgray-hover); }
+.geo-option.is-selected { font-weight: 600; }
+
 /* ── Footer ──────────────────────────────────────────────────────────────── */
 .results-footer {
   display: flex; align-items: center; justify-content: space-between;
@@ -437,6 +460,7 @@ td.remove-col { padding: 10px 8px 10px 4px; width: 30px; }
 </div><!-- /.page -->
 
 <div id="jobTooltipGlobal" aria-hidden="true"></div>
+<div id="geoPicker"></div>
 
 <div id="exportToast" class="export-toast" role="status" aria-live="polite" hidden>
   <strong>Copied to clipboard</strong>
@@ -513,14 +537,18 @@ function reconcileTrack(ladder, level, fallback) {
   }
   return fallback;
 }
-// value = the city,state,country string the benchmark API expects
-// (matches the CTC frontend's locationToAPIString: "City,ST,USA").
-// "Any" omits the param; "National" / "Remote - USA" use the US national
-// average (",,US"). Labels are unchanged — only the underlying values map
-// to the API's accepted format.
-const GEO_OPTIONS = [
+// Locations come from compensation:get:benchmark_locations (loadLocations), the
+// list the CTC Benchmarks page offers. Each entry's `location` is sent to the API
+// verbatim. This list is only the fallback for when that call can't run (an older
+// Carta MCP, or no connector): a few US metros, plus the national average, which
+// the API selects by the exact value "US National Average".
+const NATIONAL = 'US National Average';
+const GROUP_US = 'US metros';
+const GROUP_INTL = 'International markets';
+const SEARCH_LIMIT = 15;
+const FALLBACK_GEO_OPTIONS = [
   {value:'',                     label:'Any'},
-  {value:',,US',                 label:'National'},
+  {value:NATIONAL,               label:'National'},
   {value:'San Francisco,CA,USA', label:'San Francisco Bay Area'},
   {value:'New York,NY,USA',      label:'New York City'},
   {value:'Boston,MA,USA',        label:'Boston'},
@@ -529,8 +557,39 @@ const GEO_OPTIONS = [
   {value:'Chicago,IL,USA',       label:'Chicago'},
   {value:'Austin,TX,USA',        label:'Austin'},
   {value:'Denver,CO,USA',        label:'Denver'},
-  {value:',,US',                 label:'Remote - USA'},
 ];
+// Older payloads sent ",,US" for National. The API applies no geo adjustment for
+// it, so a row seeded with it shows unadjusted figures: the same as no location.
+const LEGACY_NO_LOCATION = new Set([',,US', ',,USA']);
+
+// The supported-locations response, as picker options: US metros, then
+// international markets, each by name.
+function catalogOptions(locations) {
+  const seen = new Set();
+  const out = [];
+  for (const l of locations || []) {
+    if (!l || !l.location || seen.has(l.location)) continue;
+    seen.add(l.location);
+    const international = l.country !== 'USA' && l.country !== 'US';
+    out.push({ value: l.location, label: l.label || l.location,
+               group: international ? GROUP_INTL : GROUP_US, international,
+               currency: l.currency_code || null });
+  }
+  const byGroup = g => out.filter(o => o.group === g).sort((a, b) => a.label.localeCompare(b.label));
+  return [...byGroup(GROUP_US), ...byGroup(GROUP_INTL)];
+}
+
+// Options matching `query`: names starting with it first, then names containing
+// it, at most `limit`, kept in their groups. An empty query returns every option.
+function searchGeo(options, query, limit = SEARCH_LIMIT) {
+  const q = (query || '').trim().toLowerCase();
+  if (!q) return options;
+  const name = o => o.label.toLowerCase();
+  const starts = options.filter(o => name(o).startsWith(q));
+  const contains = options.filter(o => !name(o).startsWith(q) && name(o).includes(q));
+  const picked = [...starts, ...contains].slice(0, limit);
+  return [...picked.filter(o => o.group !== GROUP_INTL), ...picked.filter(o => o.group === GROUP_INTL)];
+}
 
 const jobFmt = j => j.replace(/_/g,' ').split(' ').map(w => w.charAt(0).toUpperCase()+w.slice(1).toLowerCase()).join(' ');
 
@@ -580,37 +639,41 @@ let _benchmarkVersionId = null;
 // _peerGroupCode is the matching bucket enum (e.g. 'ONE_HUNDRED_MILLION').
 let _peerGroupDimension = null;
 let _peerGroupCode = null;
+// The location list for the selected company. FALLBACK_GEO_OPTIONS until
+// loadLocations replaces it; _defaultLocation is the plan's default, which is
+// what the API applies to a row sent without a location.
+let _geoOptions = FALLBACK_GEO_OPTIONS;
+let _geoFromCatalog = false;
+let _defaultLocation = null;
+let _locationsLoadedFor = null;
+// International markets in local currency by default, as the CTC Benchmarks page.
+let _localCurrency = true;
 
-/* ── Geo options (merged with any geo from loaded data) ──────────────────── */
-function buildGeoOptions(extraGeos) {
-  const known = new Set(GEO_OPTIONS.map(o => o.value));
-  const extras = (extraGeos || []).filter(g => g && !known.has(g));
-  return [...GEO_OPTIONS, ...extras.map(g => ({value: g, label: g}))];
+/* ── Geo options ─────────────────────────────────────────────────────────── */
+function geoOption(value) { return _geoOptions.find(o => o.value === value) || null; }
+function isIntlLocation(value) { return !!(value && geoOption(value)?.international); }
+
+// What a row's location cell reads. A row without a location gets the plan's
+// default from the API, so it reads as that location once the list is loaded.
+function geoLabel(row) {
+  const value = row.location || (_geoFromCatalog ? _defaultLocation : '') || '';
+  const o = geoOption(value);
+  if (o) return o.label + (_geoFromCatalog && value === _defaultLocation ? ' — default' : '');
+  return row.geo || value || 'Any';
 }
 
-// Resolve a pre-seed row to a valid GEO_OPTIONS *value* ("City,ST,USA" or '').
-// The dropdown <select> matches r.location === o.value, so location MUST be a
-// known value (never the MSA display label — that fails to match AND 400s on
-// the next row edit). Priority:
-//   1. r.location, when present and already a known GEO_OPTIONS value.
-//   2. r.geo (the geo_adjustment.label display string, e.g.
-//      "San Francisco-Oakland-Fremont, CA") reverse-mapped to a value by
-//      matching the city prefix of the option's label.
-//   3. '' (Any) — safe fallback for anything we can't resolve.
+// A pre-seed row's location: the API value the skill fetched it with, else the
+// MSA display label (r.geo) reverse-mapped to a fallback metro, else '' (none).
+// Never the display label itself: it is not a valid API value and 400s.
 function resolveSeedLocation(r) {
-  const known = new Set(GEO_OPTIONS.map(o => o.value));
-  if (r.location && known.has(r.location)) return r.location;
-  // Reverse-map the MSA display label (e.g. "New York-Newark-Jersey City, NY-NJ-PA",
-  // "San Francisco-Oakland-Fremont, CA") to an option value by comparing the
-  // primary city token. The label's leading city is everything before the first
-  // '-' or ','; match it against the option value's own city (the part before
-  // the first comma in "City,ST,USA").
+  if (LEGACY_NO_LOCATION.has(r.location)) return '';
+  if (r.location) return r.location;
   const label = (r.geo || '').trim().toLowerCase();
   if (label) {
-    const labelCity = label.split(/[-,]/)[0].trim();   // "new york", "san francisco"
-    for (const o of GEO_OPTIONS) {
-      if (!o.value) continue;                           // skip "Any" / "National"
-      const optCity = o.value.split(',')[0].trim().toLowerCase();  // "new york", "san francisco"
+    const labelCity = label.split(/[-,]/)[0].trim();
+    for (const o of FALLBACK_GEO_OPTIONS) {
+      if (!o.value || o.value === NATIONAL) continue;
+      const optCity = o.value.split(',')[0].trim().toLowerCase();
       if (labelCity === optCity) return o.value;
     }
   }
@@ -634,12 +697,8 @@ function resolveSeedLocation(r) {
       id: rowIdCounter++,
       job:      r.job      || 'ENGINEER',
       level:    r.level    || 'SENIOR1',
-      // location must be a GEO_OPTIONS value ("City,ST,USA") or '' (Any).
-      // resolveSeedLocation prefers an explicit r.location API value, else
-      // reverse-maps the r.geo MSA display label to a known value, else ''.
-      // This keeps location a valid value (never the raw display label, which
-      // would 400 on the next row edit) while still pre-seeding the dropdown.
-      // r.geo is retained separately below for the display-only geo line.
+      // An API location value or '' (none), never the display label: see
+      // resolveSeedLocation. r.geo is kept below for the display-only geo line.
       location: resolveSeedLocation(r),
       // Map the API ladder ('IC' | 'LEADER') + level to the 3-track UI model
       // (IC / Manager / Executive). Default to IC when the seed lacks a ladder.
@@ -718,7 +777,34 @@ async function callMcp(tool, args) {
 }
 
 /* ── Boot: load accessible companies ─────────────────────────────────────── */
-mcpNamespace().then(mcp => { if (mcp) loadAllCompanies(); });
+mcpNamespace().then(mcp => {
+  if (!mcp) return;
+  loadAllCompanies();
+  if (selectedCompany) loadLocations(selectedCompany);
+});
+
+/* ── Location list ───────────────────────────────────────────────────────── */
+// The company's plan names its geo adjustment version; that version's supported
+// locations are the list. Any failure keeps the fallback list: the panel still
+// works, with fewer locations.
+async function loadLocations(company) {
+  if (!company || _locationsLoadedFor === company.id || !(await mcpAvailable())) return;
+  _locationsLoadedFor = company.id;
+  try {
+    const plan = unwrap(await callMcp('fetch', {command: 'compensation:get:plan',
+                                               params: {corporation_id: company.id}}));
+    const geoVersionId = plan?.benchmark_version?.geo_adjustment_version?.id;
+    if (geoVersionId == null) return;
+    const list = unwrap(await callMcp('fetch', {command: 'compensation:get:benchmark_locations',
+                                               params: {geo_adjustment_version_id: geoVersionId}}));
+    const options = catalogOptions(list?.locations);
+    if (!options.length || selectedCompany?.id !== company.id) return;
+    _geoOptions = options;
+    _geoFromCatalog = true;
+    _defaultLocation = plan?.geo_adjustment_config?.default_location?.location || null;
+    renderTable();
+  } catch (_) { /* keep the fallback list */ }
+}
 
 /* ── Company loading ─────────────────────────────────────────────────────── */
 async function loadAllCompanies() {
@@ -846,6 +932,11 @@ function selectCompany(company, skipReset) {
     _peerGroupDimension = null;
     _peerGroupCode = null;
     _benchmarkVersionId = null;
+    _geoOptions = FALLBACK_GEO_OPTIONS;
+    _geoFromCatalog = false;
+    _defaultLocation = null;
+    _locationsLoadedFor = null;
+    loadLocations(company);
     rows = [];
     renderTable();
     document.getElementById('exportExcelBtn').disabled = true;
@@ -865,6 +956,7 @@ async function fetchRowData(row) {
     params[`${_peerGroupDimension}_bucket`] = _peerGroupCode;
   }
   if (row.location) params.location = row.location;
+  if (_localCurrency && isIntlLocation(row.location)) params.convert_to_local_currency = true;
   if (isLeader) params.is_leader = true;
   try {
     const res     = await callMcp('fetch', {command:'compensation:get:benchmark', params});
@@ -960,13 +1052,8 @@ function renderTable() {
     return;
   }
 
-  // Use only the fixed GEO_OPTIONS (whose values are valid "City,ST,USA"
-  // API strings). Do NOT merge in row geos — those are MSA *display* labels
-  // (e.g. "San Francisco-Oakland-Fremont, CA") which the benchmark API
-  // rejects with a 400 if sent as a location param.
-  const geoOpts   = GEO_OPTIONS;
-
   const ok      = rows.filter(r => !r.error);
+  const anyIntl = rows.some(r => isIntlLocation(r.location));
   const version = ok[0]?.version;
 
   let html = `
@@ -975,7 +1062,11 @@ function renderTable() {
         <div class="results-title">Benchmark Results</div>
         <div class="results-meta">${ok.length} result${ok.length!==1?'s':''}${version?' · Benchmark '+esc(version):''}</div>
       </div>
-      <div>
+      <div style="display:flex;gap:8px">
+        ${anyIntl ? `<div class="eq-toggle" aria-label="Currency">
+          <button onclick="setLocalCurrency(true)"  ${_localCurrency?'class="active"':''}>Local currency</button>
+          <button onclick="setLocalCurrency(false)" ${!_localCurrency?'class="active"':''}>USD</button>
+        </div>` : ''}
         <div class="eq-toggle">
           <button onclick="setEquityRep('notional')" id="eq-notional" ${equityRep==='notional'?'class="active"':''}>Notional $</button>
           <button onclick="setEquityRep('shares')"   id="eq-shares"   ${equityRep==='shares'?'class="active"':''}>Shares</button>
@@ -1022,7 +1113,7 @@ function renderTable() {
     // each with its own level set and display labels.
     const lvlOptions   = (LEVELS_BY_TRACK[r.track] || []).map(([v,lbl]) => `<option value="${v}" ${r.level===v?'selected':''}>${esc(lbl)}</option>`).join('');
     const trackOptions = TRACKS.map(t => `<option value="${t}" ${r.track===t?'selected':''}>${esc(TRACK_LABELS[t])}</option>`).join('');
-    const geoOptions   = geoOpts.map(o => `<option value="${esc(o.value)}" ${r.location===o.value?'selected':''}>${esc(o.label)}</option>`).join('');
+    const geoCell      = `<button type="button" class="cell-select geo-trigger" aria-haspopup="listbox" title="${esc(geoLabel(r))}" onclick="openGeoPicker(${r.id}, this)">${esc(geoLabel(r))}</button>`;
 
     if (r.error) {
       html += `
@@ -1031,7 +1122,7 @@ function renderTable() {
             <select class="cell-select" onchange="onRowChange(${r.id},'job',this.value)">${jobOptions}</select>
           </td>
           <td><select class="cell-select" onchange="onRowChange(${r.id},'level',this.value)">${lvlOptions}</select></td>
-          <td><select class="cell-select" onchange="onRowChange(${r.id},'location',this.value)">${geoOptions}</select></td>
+          <td>${geoCell}</td>
           <td><select class="cell-select" onchange="onRowChange(${r.id},'track',this.value)">${trackOptions}</select></td>
           <td colspan="12" style="color:var(--ink-color-global-feedback-negative-strong);font-size:13px">${esc(r.error)}</td>
           <td class="remove-col"><button class="btn-remove-row" onclick="removeRow(${r.id})" title="Remove row">×</button></td>
@@ -1045,7 +1136,7 @@ function renderTable() {
             <select class="cell-select" onchange="onRowChange(${r.id},'job',this.value)">${jobOptions}</select>
           </td>
           <td><select class="cell-select" onchange="onRowChange(${r.id},'level',this.value)">${lvlOptions}</select></td>
-          <td><select class="cell-select" onchange="onRowChange(${r.id},'location',this.value)">${geoOptions}</select></td>
+          <td>${geoCell}</td>
           <td><select class="cell-select" onchange="onRowChange(${r.id},'track',this.value)">${trackOptions}</select></td>
           <td class="td-right">${fmtS(r.salary?.p25)}</td><td class="td-right">${fmtS(r.salary?.p50)}</td>
           <td class="td-right">${fmtS(r.salary?.p75)}</td><td class="td-right">${fmtS(r.salary?.p90)}</td>
@@ -1073,6 +1164,104 @@ function setEquityRep(rep) {
   equityRep = rep;
   renderTable();
 }
+
+// Only international rows change: a US location has nothing to convert.
+async function setLocalCurrency(on) {
+  if (_localCurrency === on) return;
+  _localCurrency = on;
+  const intl = rows.filter(r => isIntlLocation(r.location));
+  await Promise.all(intl.map(r => onRowChange(r.id, 'location', r.location)));
+}
+
+/* ── Location picker ─────────────────────────────────────────────────────── */
+// One shared popover, positioned under the clicked cell, like the job tooltip:
+// the table re-renders from strings, and a fixed element escapes its overflow.
+const geoPicker = document.getElementById('geoPicker');
+let _geoRowId = null;
+let _geoActive = 0;
+
+function openGeoPicker(rowId, anchor) {
+  const row = rows.find(r => r.id === rowId);
+  if (!row) return;
+  _geoRowId = rowId;
+  const current = row.location || (_geoFromCatalog ? _defaultLocation : '') || '';
+  _geoActive = Math.max(0, _geoOptions.findIndex(o => o.value === current));
+  geoPicker.innerHTML = '<input class="dropdown-search" placeholder="Search locations…" autocomplete="off" aria-label="Search locations"><div class="geo-list" role="listbox" aria-label="Location"></div>';
+  const input = geoPicker.querySelector('input');
+  input.addEventListener('input', () => { _geoActive = 0; renderGeoList(); });
+  input.addEventListener('keydown', onGeoKey);
+  // Opens upward when there is no room below, anchored by its bottom edge so a
+  // list that shrinks as you type stays against the cell.
+  const rect = anchor.getBoundingClientRect();
+  geoPicker.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - 368)) + 'px';
+  const up = rect.bottom + 364 > window.innerHeight && rect.top > 368;
+  geoPicker.style.top = up ? 'auto' : (rect.bottom + 4) + 'px';
+  geoPicker.style.bottom = up ? (window.innerHeight - rect.top + 4) + 'px' : 'auto';
+  geoPicker.classList.add('open');
+  renderGeoList();
+  input.focus();
+}
+
+function closeGeoPicker() {
+  geoPicker.classList.remove('open');
+  geoPicker.innerHTML = '';
+  _geoRowId = null;
+}
+
+function geoResults() {
+  const input = geoPicker.querySelector('input');
+  return searchGeo(_geoOptions, input ? input.value : '');
+}
+
+function renderGeoList() {
+  const list = geoPicker.querySelector('.geo-list');
+  if (!list) return;
+  const results = geoResults();
+  const row = rows.find(r => r.id === _geoRowId);
+  const current = row?.location || (_geoFromCatalog ? _defaultLocation : '') || '';
+  if (!results.length) {
+    const q = geoPicker.querySelector('input').value.trim();
+    list.innerHTML = `<div class="dd-msg">No location matches “${esc(q)}”.</div>`;
+    return;
+  }
+  let html = '';
+  results.forEach((o, i) => {
+    if (o.group && (i === 0 || results[i - 1].group !== o.group)) {
+      html += `<div class="geo-group">${esc(o.group)}</div>`;
+    }
+    const cls = ['geo-option', i === _geoActive ? 'is-active' : '', o.value === current ? 'is-selected' : '']
+      .filter(Boolean).join(' ');
+    const label = o.label + (_geoFromCatalog && o.value === _defaultLocation ? ' — default' : '');
+    html += `<div class="${cls}" role="option" data-index="${i}" aria-selected="${o.value === current}">${esc(label)}</div>`;
+  });
+  list.innerHTML = html;
+  list.querySelector('.is-active')?.scrollIntoView?.({block: 'nearest'});
+}
+
+function chooseGeo(option) {
+  const rowId = _geoRowId;
+  closeGeoPicker();
+  const row = rows.find(r => r.id === rowId);
+  if (row && option && option.value !== row.location) onRowChange(rowId, 'location', option.value);
+}
+
+function onGeoKey(e) {
+  const results = geoResults();
+  if (e.key === 'ArrowDown') { e.preventDefault(); _geoActive = Math.min(results.length - 1, _geoActive + 1); renderGeoList(); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); _geoActive = Math.max(0, _geoActive - 1); renderGeoList(); }
+  else if (e.key === 'Enter') { e.preventDefault(); chooseGeo(results[_geoActive]); }
+  else if (e.key === 'Escape') { closeGeoPicker(); }
+}
+
+geoPicker.addEventListener('mousedown', e => {
+  const opt = e.target.closest('.geo-option');
+  if (!opt) return;
+  e.preventDefault();
+  chooseGeo(geoResults()[Number(opt.dataset.index)]);
+});
+document.addEventListener('mousedown', e => {
+  if (_geoRowId != null && !geoPicker.contains(e.target) && !e.target.closest('.geo-trigger')) closeGeoPicker();
+});
 
 /* ── Export ──────────────────────────────────────────────────────────────── */
 document.getElementById('exportExcelBtn').addEventListener('click', exportExcel);

@@ -6,7 +6,7 @@ description: >
   Do NOT use for job classification or role mapping — use carta-compensation-rolematcher for that.
   Do NOT use for "how is OUR company positioned vs market", "who at our company is below market", or "our internal pay bands vs benchmarks" — those are roster-level positioning, use carta-compensation-scorecard.
   Do NOT use for fund performance benchmarks (use carta-performance-benchmarks) or portfolio structural metrics like SAFE terms and option pool sizes (use carta-market-benchmarks).
-version: 1.0.0
+version: 1.1.0
 model: sonnet
 allowed-tools:
   - mcp__carta__call_tool
@@ -29,7 +29,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.93.3</carta-plugin>
+<carta-plugin>carta-cap-table:6.94.0</carta-plugin>
 
 # Benchmark Query
 
@@ -217,6 +217,8 @@ Serialize the fetched benchmark results into this shape:
 }
 ```
 
+> **The panel's location picker lists every supported location.** At runtime it calls `compensation:get:plan` and `compensation:get:benchmark_locations` for the selected company through its `fetch` grant, and fetches international markets in local currency by default (a Local currency / USD toggle appears once a row is international). Pre-seed international rows with the same `convert_to_local_currency: true` fetch, so the seed matches the toggle.
+
 > **`benchmark_version_id` is REQUIRED in the payload** (the numeric `benchmark_version.id` from `compensation:get:plan` / the benchmark response — NOT the `"v21.0"` display string). The artifact's interactive controls (changing level, location, adding a row) re-fetch via `compensation:get:benchmark` and must pin the same benchmark version the pre-seed used; omitting it causes those re-fetches to fail. The top-level `version` string is display-only.
 
 > **`peer_group` is REQUIRED in the payload** — the same `{dimension, code, label}` you captured from `compensation:get:plan` in Step 3b. The artifact's interactive re-fetches pass `<dimension>_bucket: <code>` on every call so the panel's numbers match the corp's plan-configured peer group (and the CTC product UI). Omitting it makes those re-fetches fall back to a default comparable set whose values diverge from the FE — the exact mismatch users report. `code` is the bucket enum (e.g. `ONE_HUNDRED_MILLION`), NOT the `label` display string.
@@ -251,7 +253,7 @@ Field mapping from the `compensation:get:benchmark` response:
 - `equity.p*.fdpct` ← `equity_benchmarks.percentiles.p*.as_fd_percentage`
 - `ladder` ← `benchmarks[i].ladder` (`"IC"` or `"LEADER"`). The artifact derives the row's track from this + the level: `IC` → IC track; `LEADER` with level rank ≤8 → Manager track; `LEADER` with level rank ≥9 (VP1+) → Executive track. This is what makes the displayed track and per-track level name (e.g. VP1 shows as "Distinguished" on IC but "Vice President" on Executive) match the CTC product UI — pass `ladder` through verbatim.
 - `currency` ← `salary_benchmarks.currency_code` (fall back to `tcc_benchmarks.currency_code`; surface `null` if neither is present — do NOT default to `"USD"`)
-- `location` ← the **API location string** you passed as the `location` param to `compensation:get:benchmark` (the `"City,ST,USA"` form, e.g. `"San Francisco,CA,USA"`; `",,US"` for national). This is what pre-seeds the artifact's per-row location dropdown — it must be the API value, NOT the display label. Omit or set `null` when you queried without a location (the dropdown then seeds to "Any").
+- `location` ← the **API location value** you passed as the `location` param to `compensation:get:benchmark` (from the supported-locations list, e.g. `"San Francisco,CA,USA"`, `"US National Average"`, `",,GBR"` — see "Locations" in Step 4). This is what pre-seeds the artifact's per-row location picker — it must be the API value, NOT the display label. Omit or set `null` when you queried without a location (the picker then shows the plan's default location). The panel loads the full location list itself, so do not put the list in the payload.
 - `geo` ← `geo_adjustment.label` (the MSA *display* label, e.g. `"San Francisco-Oakland-Hayward, CA"`). Display-only — drives the read-only "Location:" line, NOT the dropdown selection. Keep it distinct from `location`: the label is not a valid API value and must never be sent back as the `location` param.
 - `version` ← `benchmark_version.version_major` and `version_minor` concatenated as `"v<major>.<minor>"`
 - `error` ← `null` for successful rows; populate with a short string when a per-job/level fetch failed so the table can render an explicit error cell instead of fabricating zeros
@@ -509,8 +511,10 @@ If the user provides only a job title, that is sufficient minimum input for the 
 call_tool({"name": "compensation__get__plan", "arguments": {"corporation_id": <corporation_pk>}})
 ```
 
-Capture three things from the response:
+Capture these from the response:
 - `benchmark_version.id` — use as `benchmark_version_id` in the next step.
+- `benchmark_version.geo_adjustment_version.id` — the id that lists this plan's supported locations (see "Locations" in Step 4). Absent on an older Carta MCP; then use the fallback in that section.
+- `geo_adjustment_config.default_location.location` — the location the API applies when a call passes none, and the one the CTC Benchmarks page opens on.
 - `peer_group` — `{code, label, dimension, notional_available}`. The `label` (e.g. `"$50M-$100M"`) is required for the data-source footnote. The `dimension` — one of `post_money` / `capital_raised` / `headcount` — selects BOTH the data-source attribution phrase (see "Required attribution") AND which bucket param to pass in Step 4. Many corps default to `capital_raised`, NOT `post_money` — do not assume. The `notional_available` boolean tells you the equity column order (see Step 5).
 - If `peer_group.dimension` is missing or not one of those three values, follow Step 4a (STOP).
 
@@ -551,7 +555,8 @@ call_tool({"name": "compensation__get__benchmark", "arguments": {
   "focus": <focus>,                         # omit if null
   "is_leader": <true if track == "manager" or track == "executive" else false>,
   "benchmark_version_id": <benchmark_version.id>,
-  "location": <location string>,            # optional, for geo adjustment
+  "location": <location value>,             # optional — from compensation:get:benchmark_locations, verbatim (see "Locations" below)
+  "convert_to_local_currency": true,        # only with an international location — see "Locations" below
 
   # --- The corp's plan-default peer group. Include EXACTLY ONE bucket
   #     param. Do NOT include two or three. Pick the key by string-mapping
@@ -632,6 +637,25 @@ User-phrasing → override mapping:
 Do NOT "fix" `post_money_bucket: "TEN_MILLION"` to `post_money_bucket: "TEN_TO_TWENTY_FIVE_MILLION"` thinking it's a typo. The post-money enum has no `_TO_` form — passing `TEN_TO_TWENTY_FIVE_MILLION` returns HTTP 400.
 
 Reference for the full enum sets is in `compensation:get:benchmark`'s help (run `search_tools({"query": "compensation get benchmark"})` to verify a specific value). There is no `compensation:list:*` command for bucket enums — read them from the command help.
+
+#### Locations
+
+Omit `location` and the API applies the plan's default location (`geo_adjustment_config.default_location`). When the user names a place — a city, a country, "national", "remote" — pass that place's **`location` value from the supported-locations list, verbatim**. Never build the string yourself: the API matches the server's own city name (Charlotte-Concord-Gastonia is `"Charlotte,NC,USA"`), and a value it doesn't recognise comes back unadjusted rather than as an error.
+
+1. List the supported locations once per conversation, with the id from Step 3b:
+   ```
+   call_tool({"name": "compensation__get__benchmark_locations",
+              "arguments": {"geo_adjustment_version_id": <benchmark_version.geo_adjustment_version.id>}})
+   ```
+   The result is ~444 entries (~65KB), so the client usually saves it to a file. Find the place in it with the lookup script instead of reading the file:
+   ```bash
+   uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-benchmarks/scripts/find_location.py <saved_result_file> "<place>"
+   ```
+   It prints `location=…  label=…  international=…  currency=…` per match. One match → use it. Several (e.g. "Portland" in Oregon and Maine) → ask with `AskUserQuestion`, using the labels verbatim. None → say that location isn't in CTC's list and offer the closest matches, or the national average.
+2. **The US national average is `"US National Average"`** — for "national", "remote", "anywhere in the US". It returns the national adjustment. Never send `",,US"`: the API applies no adjustment for it, so the figures come back at the top-market rate, about 25% above the national average.
+3. **International markets** (`international=true`): also pass `"convert_to_local_currency": true`, so the figures are in the local currency, as the CTC Benchmarks page shows them. Leave it out only when the user asks for USD. Report the currency with the figures.
+
+If Step 3b found no `geo_adjustment_version`, or the command is unknown (an older Carta MCP), use `"US National Average"` for national and `"City,ST,USA"` for a US metro, from the user's own words. Say the location list isn't available, so a metro may not match the product's figures exactly.
 
 ### Step 4a — Unknown / missing `peer_group.dimension` (STOP)
 
