@@ -791,6 +791,28 @@
   padding: 12px 0 0;
 }
 
+/* Shown from first paint: a firm with many tasks takes seconds to page through. */
+.far-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--ink-color-global-text-subtle);
+  padding: 32px 0;
+}
+.far-spinner {
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--ink-color-global-border-subtle);
+  border-top-color: var(--ink-color-global-text-subtle);
+  animation: far-spin 800ms linear infinite;
+}
+@keyframes far-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .far-spinner { animation: none; }
+}
+
 /* Read-back of the draft on the confirm step. Pre-wrap so the sender sees the
    line breaks exactly as the fund admin team will. */
 .far-review {

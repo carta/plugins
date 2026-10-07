@@ -824,6 +824,18 @@ function farToggleView() {
   renderFarSection();
 }
 
+function farRenderViewButton() {
+  const viewBtn = document.getElementById('far-view-btn');
+  if (!viewBtn) return;
+  const isList = _farView === 'list';
+  viewBtn.innerHTML = isList ? FAR_BOARD_ICON : FAR_LIST_ICON;
+  viewBtn.setAttribute('aria-label', isList ? 'Switch to card view' : 'Switch to list view');
+  viewBtn.title = isList ? 'Switch to card view' : 'Switch to list view';
+}
+
+// The toolbar is on screen while the queue loads, so the toggle draws its icon now.
+farRenderViewButton();
+
 // The first load opens on work rather than on an empty Needs Action; after
 // that the tab only changes when the viewer changes it.
 function farPickFirstTab() {
@@ -1131,19 +1143,18 @@ function renderFarSection() {
   const sort = document.getElementById('far-sort');
   if (sort) sort.value = _farSort;
 
-  const viewBtn = document.getElementById('far-view-btn');
-  if (viewBtn) {
-    const isList = _farView === 'list';
-    viewBtn.innerHTML = isList ? FAR_BOARD_ICON : FAR_LIST_ICON;
-    viewBtn.setAttribute('aria-label', isList ? 'Switch to card view' : 'Switch to list view');
-    viewBtn.title = isList ? 'Switch to card view' : 'Switch to list view';
-  }
+  farRenderViewButton();
 
   const note = document.getElementById('far-partial-note');
   if (note) note.style.display = _farPartial && rows.length > 0 ? '' : 'none';
 
+  // Until the first fetch lands, an empty tab means "not read yet", not "nothing here".
+  // Drafts live in this artifact, so that tab is never waiting on Carta.
+  const loading = _farRows === null && tab.key !== 'planned';
+  const loader = document.getElementById('far-loading');
+  if (loader) loader.style.display = loading ? '' : 'none';
   const empty = document.getElementById('far-empty');
-  if (empty) empty.style.display = tabRows.length === 0 ? '' : 'none';
+  if (empty) empty.style.display = !loading && tabRows.length === 0 ? '' : 'none';
 }
 
 

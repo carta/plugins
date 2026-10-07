@@ -118,6 +118,10 @@ let _benchmarkFirmId = null;
 function farShowSection(msg) {
   const s = document.getElementById('far-section');
   if (s) s.style.display = '';
+  // Boot failed before the queue was read: settle it as empty so no later render
+  // brings the loader back.
+  if (_farRows === null) _farRows = [];
+  renderFarSection();
   if (msg) showToast(msg);
 }
 
