@@ -12,10 +12,6 @@ const S = {
 };
 
 function currentKey() { return S.nodeId; }
-function isRootNode(nodeId) {
-  const n = S.nodes.find(function (x) { return x.node_id === nodeId; });
-  return !!(n && n.is_root);
-}
 
 // The baked entities arrive root first. Names fall back to "Entity N" by position.
 function loadEntities(entities) {
@@ -72,10 +68,9 @@ function visibleGroups(d) {
   return { rows: n ? rows.filter(function (r) { return sel[groupKey(r.g)]; }) : rows, filtered: n > 0, count: n };
 }
 
-// The Total row's proceeds: the root is the equity value the run used; any other entity
-// is the sum of the proceeds that reached it.
+// The Total row's proceeds: what this entity distributed. Not the equity value, which
+// excludes cash/debt adjustments.
 function totalProceeds(d) {
-  if (isRootNode(S.nodeId)) return CFG.equity_value;
   let sum = 0;
   d.allocations.forEach(function (g) {
     const p = num(g.allocated_proceeds && g.allocated_proceeds.proceeds);

@@ -53,7 +53,7 @@ every page response):
 | Column            | Source                                  |
 | ----------------- | --------------------------------------- |
 | Group / Interest  | `"Total"`                               |
-| Proceeds          | **root**: the EQUITY_VALUE you ran with. **Sub-entity**: the sum of `allocated_proceeds.proceeds` over that node's rows — the proceeds that flowed down to this entity, **not** the exit value. |
+| Proceeds          | Sum of `allocated_proceeds.proceeds` over that node's rows — what the entity actually distributed. Never the EQUITY_VALUE you ran with: cash/debt adjustments change it. |
 | % of Proceeds     | `100.00%` (of this entity's own total)  |
 | Invested Capital  | `grand_totals.total_invested_capital`   |
 | Participating Qty | `grand_totals.participating_units`      |
