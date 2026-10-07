@@ -28,7 +28,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.65.0</carta-plugin>
+<carta-plugin>carta-investors:6.65.2</carta-plugin>
 
 # Waterfall Modeling
 
@@ -236,7 +236,8 @@ call_tool({"name": "waterfall_modeling__get__options", "arguments": {
   "owner_kind":  "FIRM",
   "owner_id":    "<org_pk from Step 1>",
   "target_kind": "<locked from Step 2>",
-  "target_id":   "<locked from Step 2>"
+  "target_id":   "<locked from Step 2>",
+  "include_advanced": true   /* `chat` only — omit in `excel` */
 }})
 ```
 
@@ -257,12 +258,15 @@ and pass as the `name` field to `call_tool`; never rewrite or shorten it**):
   - `label` — short human-readable name (e.g. "Equity value"). Show this
     to the user.
   - `description` — longer human explanation. Show this as helper text.
-  - `input_type` — one of `DECIMAL | INTEGER | ISO_DATE | ENUM | STRING`.
+  - `input_type` — one of `DECIMAL | INTEGER | ISO_DATE | ENUM | STRING | NESTED_LIST`.
     Drives how Step 4 collects and formats the value.
   - `required` — boolean. If `true`, you must collect a value.
   - `default` — present for non-required inputs; pre-fill.
   - `choices` — present only when `input_type == "ENUM"`. Each entry has
     `label` (show) and `value` (send).
+  - `row_fields` / `rows` — present only when `input_type == "NESTED_LIST"`.
+    `row_fields` are the inputs set per row, shaped like the entries above. Each
+    row has `id` (send), `label` and `facts` (show), and `defaults` (pre-fill).
 - `is_multi_entity` — boolean. Rely on this to detect a multi-entity ownership
   structure; it's `true` whether the user picked the root or a non-root sub-entity.
 - `root` — `{issuer_id, issuer_kind, name}`. The resolved top-level entity the
@@ -294,9 +298,9 @@ Walk `available_inputs` by each entry's `input_type` / `required` (don't hardcod
 names); collect **required inputs first, then optional**. **Read
 [`references/inputs.md`](references/inputs.md) when you reach this step** — it holds the
 collection order & method, the per-`input_type` formatting table
-(DECIMAL/INTEGER/ISO_DATE/ENUM/STRING), the ENUM label/value rules, and the
-**`EQUITY_VALUE`** special case (ask in plain prose, **never** `AskUserQuestion`; never
-suggest a value). Build the `options` dict (each entry's `option` field → collected/mapped
+(DECIMAL/INTEGER/ISO_DATE/ENUM/STRING/NESTED_LIST), the ENUM label/value rules, the
+**`NESTED_LIST`** row inputs, and the **`EQUITY_VALUE`** special case (ask in plain
+prose, **never** `AskUserQuestion`; never suggest a value). Build the `options` dict (each entry's `option` field → collected/mapped
 value), then go to Step 5.
 
 ## Step 5 — Dispatch the run
@@ -304,7 +308,8 @@ value), then go to Step 5.
 **Pre-run review.** Before dispatching, echo the resolved inputs back once
 and confirm via `AskUserQuestion` ("Run it" vs "Change a value"): the
 company name, `EQUITY_VALUE` as formatted currency, `WATERFALL_DATE` as
-ISO, and any non-default optionals by their `choices[].label`. If the user
+ISO, any non-default optionals by their `choices[].label`, and each chosen
+`NESTED_LIST` row by its `label` with its values. If the user
 changes a value, re-collect just that input (Step 4) and re-confirm.
 
 On confirm, dispatch via the `run_command` from Step 3:
@@ -332,6 +337,8 @@ first `get_command` call in Step 6 is what waits on completion.
 **Error handling** (this step):
 
 - `400 invalid_target_id` → stop and surface the message.
+- `400 invalid_performance_conditions` / `400 invalid_adjustments` → surface `message` verbatim,
+  re-collect that input (Step 4), and re-confirm.
 - `502 waterfall_dispatch_failed` → "Couldn't kick off the waterfall — the request was rejected.
   Want me to try again?" Retry uses the same body.
 - Shared: `403`, `404 target_not_found`, `501 waterfall_route_not_supported`, `502 target_lookup_failed` — see §Error handling.
