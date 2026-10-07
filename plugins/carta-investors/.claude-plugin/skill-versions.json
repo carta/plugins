@@ -1,7 +1,7 @@
 {
   "carta-home-build": {
-    "version": "1.14.0",
-    "headline": "The Skill Directory now adds new skills and example prompts on its own, and marks micro apps with an App tag."
+    "version": "1.15.0",
+    "headline": "Capital call and distribution details load their investor list again, instead of showing \"Partner rows failed to load\"."
   },
   "carta-workhub-build": {
     "version": "1.9.1",

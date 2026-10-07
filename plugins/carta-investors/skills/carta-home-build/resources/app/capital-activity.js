@@ -175,13 +175,12 @@ function dismissCapCard(activityId) {
 // ── Capital activity detail overlay ──
 const _capDetailCache = {}; // activityId → fetched rows (in-memory cache)
 
-// Sized against carta-mcp's 40k response budget, not the command's own page-size
-// ceiling, which is far higher: a row runs ~750 chars, so anything past ~50
-// overflows the transport and the call is rejected before any data comes back.
-// Same measurement as CCR_PAGE_SIZE in carta-workhub-build/capital-call-review.js.
-const CA_ROWS_PAGE_SIZE = 25;
-const CA_ROWS_MAX_PAGES = 40; // 1000 rows; the overlay is not a paging surface
-const CA_ROWS_MAX = CA_ROWS_PAGE_SIZE * CA_ROWS_MAX_PAGES;
+// The walk sends no page_size, so carta-mcp serves its default page, which it sizes
+// to fit its 40k response budget. A built artifact is frozen, while the command's
+// page_size maximum moves with that budget: any size named here is rejected on
+// page 1, for every activity, the day the maximum drops below it.
+// The overlay is not a paging surface, so the walk stops at this many rows.
+const CA_ROWS_MAX = 1000;
 
 // An activity's partner rows, shared by its card and its overlay. A failed walk
 // is not cached: the tracker is the overlay's only source, so holding onto its
@@ -208,14 +207,13 @@ async function fetchPartnerRows(fundUuid, activityId, dueDate, isCall) {
   const rows = [];
   let failed = false;
   try {
-    for (let page = 1; page <= CA_ROWS_MAX_PAGES; page++) {
+    for (let page = 1; rows.length < CA_ROWS_MAX; page++) {
       const res = await _mcp("fetch", {
         command: "fa:list:capital-activity-partner",
         params: {
           fund_uuid: fundUuid,
           capital_activity_id: activityId,
           page,
-          page_size: CA_ROWS_PAGE_SIZE,
         }
       });
       if (res.isError) {
