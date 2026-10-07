@@ -912,6 +912,48 @@
         .fund-row-name { font-weight: 500; }
         tr.fund-asset-row td:first-child { padding-left: 64px; }
 
+        /* ── View tabs (Holdings | Investment Cash Flows) ── */
+        .view-tabs {
+            display: flex;
+            gap: 24px;
+            border-bottom: 1px solid var(--ink-color-global-border-subtle);
+            margin-bottom: 12px;
+        }
+
+        .view-tab {
+            appearance: none;
+            background: none;
+            border: 0;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -1px;
+            padding: 8px 0;
+            font-family: inherit;
+            font-size: 14px;
+            font-weight: 500;
+            line-height: 20px;
+            color: var(--ink-color-global-text-subtle);
+            cursor: pointer;
+        }
+
+        .view-tab:hover { color: var(--ink-color-global-text-default); }
+        .view-tab[aria-selected="true"] {
+            color: var(--ink-color-global-text-default);
+            border-bottom-color: var(--ink-color-global-text-default);
+        }
+        .view-tab:focus-visible {
+            outline: 0;
+            box-shadow: 0 0 0 4px var(--ink-color-global-border-focus-light);
+        }
+
+        .view-panel[hidden] { display: none; }
+
+        .cf-note {
+            margin-bottom: 12px;
+            font-size: 13px;
+            color: var(--ink-color-global-text-subtle);
+        }
+        .cf-note[hidden] { display: none; }
+
         /* ── Ink icons ── */
         .ink-icon {
             display: inline-flex;
@@ -1274,6 +1316,9 @@
 
             <div id="metricsContainer"></div>
 
+            <!-- Filled by ensureViewPanelsMounted() — see ensureContentSkeleton. -->
+            <div id="viewTabsMount"></div>
+
             <div class="toolbar" id="toolbar">
                 <div class="search-wrapper">
                     <span class="search-icon" id="searchIcon"></span>
@@ -1284,7 +1329,7 @@
 
             <div class="global-search-panel" id="globalSearchPanel" style="display:none;"></div>
 
-            <div class="table-scroll-wrap">
+            <div class="table-scroll-wrap view-panel" id="holdingsPanel">
                 <div class="table-scroll">
                     <table>
                         <thead id="tableHead"></thead>
@@ -1292,6 +1337,8 @@
                     </table>
                 </div>
             </div>
+
+            <div class="view-panel" id="cashFlowPanel" hidden></div>
         </div>
     </div>
 
@@ -1424,6 +1471,50 @@
                 ORDER BY PERFORMANCE_QUARTER_END_DATE DESC
             ) = 1
             ORDER BY fund_uuid, issuer_id
+            LIMIT ${limit} OFFSET ${offset}`;
+        }
+
+        // Investment Cash Flows — the dated flows behind the app's Deal IRR, rebuilt
+        // from journal lines (the app builds them from asset records, which this
+        // connector can't read). Amounts are negated so money invested is negative
+        // and money returned positive, as in the app's export. Accounts:
+        //   1100 Investment · 1104 Investment distribution · 1111 Capitalized interest
+        //   4100 Portfolio interest income · 4150 Portfolio dividend income
+        //   4300 Realized gain/loss · 4301 Write-offs
+        // On a realization each of those legs is its own Proceeds line (return of
+        // cost, gain, interest), which is why the app lists proceeds in pairs. Any
+        // other event's 1100/4300 lines are Investment lines; that includes
+        // conversions and MANUAL_NON_DEAL_IRR entries, which the app shows too.
+        const CASH_FLOW_REALIZATION_EVENTS = "'OTHER_REALIZATION', 'INVESTMENT_SALE', 'ESCROW_CHANGE'";
+
+        function buildCashFlowSql(fundUuids, offset, limit, asOfDate) {
+            const uuidList = fundUuids.map(u => `'${escSqlLiteral(u)}'`).join(', ');
+            const dateCap = asOfDate ? `'${escSqlLiteral(asOfDate)}'` : 'CURRENT_DATE()';
+            return `SELECT fund_uuid, issuer_id, issuer_name, asset_name, flow_date, amount, flow_kind
+            FROM (
+                SELECT
+                    FUND_UUID             AS fund_uuid,
+                    ISSUER_ID             AS issuer_id,
+                    ISSUER_NAME           AS issuer_name,
+                    ASSET_NAME            AS asset_name,
+                    EFFECTIVE_DATE        AS flow_date,
+                    -AMOUNT               AS amount,
+                    JOURNAL_ENTRY_LINE_ID AS line_id,
+                    CASE
+                        WHEN EVENT_TYPE IN (${CASH_FLOW_REALIZATION_EVENTS})
+                            THEN IFF(ACCOUNT_TYPE IN (1100, 1104, 4100, 4150, 4300, 4301), 'Proceeds', NULL)
+                        WHEN ACCOUNT_TYPE IN (1100, 4300) THEN 'Investment'
+                        WHEN ACCOUNT_TYPE = 1111 THEN 'Capitalized interest'
+                    END                   AS flow_kind
+                FROM FUND_ADMIN.JOURNAL_ENTRIES
+                WHERE FUND_UUID IN (${uuidList})
+                  AND ISSUER_ID <> ''
+                  AND ISSUER_NAME <> 'PLACEHOLDER'
+                  AND AMOUNT <> 0
+                  AND EFFECTIVE_DATE <= ${dateCap}
+            )
+            WHERE flow_kind IS NOT NULL
+            ORDER BY fund_uuid, issuer_id, flow_date, line_id
             LIMIT ${limit} OFFSET ${offset}`;
         }
 
@@ -1851,6 +1942,93 @@
                 .filter(c => c.assets.length > 0);
         }
 
+        // Groups cash-flow rows by company, then by fund — one slice per fund ×
+        // company, each ending with a Terminal value line. Terminal value is the
+        // Holdings tab's fair market value for the same positions (loaded from the
+        // same view), so the two tabs can't disagree. A slice is exited when every
+        // position behind it is, or when Holdings has no position for it at all.
+        // fundMetaByUuid maps fund uuid → { name, currency } for every fund in scope.
+        function transformCashFlows(rows, loaded, fundMetaByUuid, terminalDate) {
+            const slices = new Map();
+            const sliceFor = (fundUuid, issuerId, name) => {
+                const key = `${fundUuid}::${issuerId}`;
+                if (!slices.has(key)) {
+                    const meta = fundMetaByUuid[fundUuid] || {};
+                    slices.set(key, {
+                        company: name, fundUuid, fundName: meta.name || null,
+                        currency: meta.currency || currentCurrency,
+                        flows: [], terminalValue: 0, exited: true,
+                    });
+                }
+                return slices.get(key);
+            };
+            loaded.forEach(c => c.assets.forEach(a => {
+                const s = sliceFor(a.fundUuid, a.issuerId, c.name);
+                s.terminalValue += Number(a.value) || 0;
+                if (!a.exited) s.exited = false;
+            }));
+            rows.forEach(r => {
+                const amount = Number(r.amount) || 0;
+                const asset = r.asset_name == null ? 'Unknown asset' : String(r.asset_name);
+                const s = sliceFor(r.fund_uuid, r.issuer_id, r.issuer_name == null ? 'Unknown' : String(r.issuer_name));
+                const date = String(r.flow_date);
+                // A capitalized-interest leg is the app's pair of offsetting lines:
+                // interest earned, then reinvested.
+                if (r.flow_kind === 'Capitalized interest') {
+                    s.flows.push({ account: `Capitalized interest - ${asset}`, date, amount });
+                    s.flows.push({ account: `Interest income - ${asset}`, date, amount: -amount });
+                } else {
+                    s.flows.push({ account: `${r.flow_kind} - ${asset}`, date, amount });
+                }
+            });
+
+            const byCompany = new Map();
+            slices.forEach(s => {
+                s.flows.sort((a, b) => a.date.localeCompare(b.date)
+                    || a.account.localeCompare(b.account)
+                    || a.amount - b.amount);
+                s.flows.push({ account: 'Terminal value', date: terminalDate, amount: s.terminalValue, terminal: true });
+                s.net = s.flows.reduce((sum, f) => sum + f.amount, 0);
+                if (!byCompany.has(s.company)) byCompany.set(s.company, []);
+                byCompany.get(s.company).push(s);
+            });
+            return Array.from(byCompany, ([name, companySlices]) => rollUpCashFlowCompany(name, companySlices))
+                .sort((a, b) => a.name.localeCompare(b.name));
+        }
+
+        // A company's group from its fund slices — re-run when Show exited drops
+        // slices, so net and flow counts always match the rows on screen.
+        function rollUpCashFlowCompany(name, slices) {
+            const ordered = [...slices].sort((a, b) => String(a.fundName).localeCompare(String(b.fundName)));
+            const currencies = new Set(ordered.map(s => s.currency));
+            return {
+                name,
+                slices: ordered,
+                currencies,
+                mixedCurrency: currencies.size > 1,
+                net: ordered.reduce((sum, s) => sum + s.net, 0),
+                flowCount: ordered.reduce((n, s) => n + s.flows.length, 0),
+                exited: ordered.every(s => s.exited),
+            };
+        }
+
+        function cashFlowCompaniesInView(all) {
+            if (showExited) return all;
+            return all
+                .map(c => c.slices.some(s => s.exited)
+                    ? rollUpCashFlowCompany(c.name, c.slices.filter(s => !s.exited))
+                    : c)
+                .filter(c => c.slices.length > 0);
+        }
+
+        // Today as YYYY-MM-DD in local time — the date a "Current" terminal value
+        // is struck at.
+        function todayIso() {
+            const d = new Date();
+            const pad = n => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        }
+
         // Parse ISO YYYY-MM-DD as a local date string (no Date object → no timezone shift).
         const MONTH_ABBRS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                              'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -1914,6 +2092,26 @@
         // 'YYYY-MM-DD' quarter-end string, or null for the live/current position.
         let currentAsOfDate = null;
         const fundCache = new Map();  // `${fundUuid}::${asOfDate||'current'}` → { companies, irrAsOfDate }
+
+        // ── Investment Cash Flows tab state ──
+        // The tab lives in page state, never the URL hash: Carta Home's #from=home
+        // marker and its history.back() return must keep working.
+        const HOLDINGS_TAB = 'holdings';
+        const CASH_FLOWS_TAB = 'cashFlows';
+        let activeTab = HOLDINGS_TAB;
+        // Raw cash-flow rows per view, same key as fundCache: { rows, truncated }.
+        // Fetched the first time the tab opens for that view; a failed load isn't
+        // cached, so reopening retries.
+        const cashFlowCache = new Map();
+        let cashFlowLoadingKey = null;
+        // The view loadedCompanies belongs to. Terminal values and company names
+        // come from it, so the tab renders only while it matches the view on screen
+        // (a failed fund load leaves the previous view's holdings behind).
+        let holdingsViewKey = null;
+        // Expanded company groups by name (names are unique per view), and the
+        // names the last render drew, which expand-all opens.
+        let cfExpanded = new Set();
+        let cfRenderedNames = [];
 
         // ── Look-through drill-down state ──
         // Underlying-holdings cache, keyed by `${fundUuid}::${parentIssuerName}`.
@@ -2551,7 +2749,7 @@
         }
 
         function toggle(i) {
-            const rows = document.querySelectorAll(`.asset-group-${i}`);
+            const rows = document.querySelectorAll(`#tableBody .asset-group-${i}`);
             const expanding = !rows[0]?.classList.contains('visible');
             rows.forEach(r => setRowVisible(r, expanding));
             if (expanding) expandedCompanies.add(i); else expandedCompanies.delete(i);
@@ -2560,7 +2758,7 @@
 
             // Sync allExpanded to actual state so the header icon doesn't lie
             // when the user expand-alls then collapses one (or vice-versa).
-            const allRows = document.querySelectorAll('.asset-row');
+            const allRows = document.querySelectorAll('#tableBody .asset-row');
             allExpanded = allRows.length > 0 && Array.from(allRows).every(r => r.classList.contains('visible'));
             const t = document.getElementById('expandAllToggle');
             if (t) t.innerHTML = inkIcon(allExpanded ? 'collapse-all' : 'expand-all', 16);
@@ -2569,14 +2767,14 @@
         function toggleAll() {
             allExpanded = !allExpanded;
             if (allExpanded) {
-                document.querySelectorAll('.company-row').forEach((_, i) => expandedCompanies.add(i));
+                document.querySelectorAll('#tableBody .company-row').forEach((_, i) => expandedCompanies.add(i));
             } else {
                 expandedCompanies.clear();
             }
-            document.querySelectorAll('.asset-row, .underlying-row').forEach(r => setRowVisible(r, allExpanded));
+            document.querySelectorAll('#tableBody .asset-row, #tableBody .underlying-row').forEach(r => setRowVisible(r, allExpanded));
             // Exclude .underlying-toggle — a FUND_INVESTMENT row's own drill-down
             // expand/collapse is independent of the company-row expand-all state.
-            document.querySelectorAll('.expand-icon:not(.underlying-toggle)').forEach(ic => {
+            document.querySelectorAll('#tableBody .expand-icon:not(.underlying-toggle)').forEach(ic => {
                 ic.innerHTML = inkIcon(allExpanded ? 'down' : 'forward', 10);
             });
             const t = document.getElementById('expandAllToggle');
@@ -2586,6 +2784,7 @@
         function filterCompanies(val) {
             filterText = val;
             render();
+            if (activeTab === CASH_FLOWS_TAB && cashFlowCache.has(viewCacheKey())) renderCashFlows();
             scheduleGlobalSearch(val);
         }
 
@@ -2839,7 +3038,7 @@
             const panel = document.getElementById('globalSearchPanel');
             if (!panel) return;
 
-            if (!globalSearchTerm || globalSearchTerm.length < 2) {
+            if (activeTab !== HOLDINGS_TAB || !globalSearchTerm || globalSearchTerm.length < 2) {
                 panel.style.display = 'none';
                 panel.innerHTML = '';
                 return;
@@ -2906,11 +3105,262 @@
             }
 
             requestAnimationFrame(() => {
-                const groupRows = document.querySelectorAll(`.asset-group-${idx}`);
-                const companyRows = document.querySelectorAll('tr.company-row');
+                const groupRows = document.querySelectorAll(`#tableBody .asset-group-${idx}`);
+                const companyRows = document.querySelectorAll('#tableBody tr.company-row');
                 const target = groupRows[0] || companyRows[idx];
                 if (target && target.scrollIntoView) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
             });
+        }
+
+        // ── View tabs and the Investment Cash Flows panel ──
+
+        // Both page skeletons carry empty #viewTabsMount / #cashFlowPanel mounts;
+        // this is the one place their contents are built.
+        function ensureViewPanelsMounted() {
+            const tabsMount = document.getElementById('viewTabsMount');
+            if (tabsMount && !document.getElementById('viewTabs')) {
+                tabsMount.innerHTML = `
+                    <div class="view-tabs" id="viewTabs" role="tablist">
+                        <button type="button" class="view-tab" role="tab" id="viewTabHoldings" data-view-tab="${HOLDINGS_TAB}" aria-controls="holdingsPanel">Holdings</button>
+                        <button type="button" class="view-tab" role="tab" id="viewTabCashFlows" data-view-tab="${CASH_FLOWS_TAB}" aria-controls="cashFlowPanel">Investment Cash Flows</button>
+                    </div>`;
+            }
+            const panel = document.getElementById('cashFlowPanel');
+            if (panel && !document.getElementById('cfTableBody')) {
+                panel.innerHTML = `
+                    <div class="cf-note" id="cfNote" hidden></div>
+                    <div class="table-scroll-wrap">
+                        <div class="table-scroll">
+                            <table>
+                                <thead id="cfTableHead"></thead>
+                                <tbody id="cfTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>`;
+            }
+            syncViewTabs();
+        }
+
+        function syncViewTabs() {
+            [[HOLDINGS_TAB, 'viewTabHoldings', 'holdingsPanel'], [CASH_FLOWS_TAB, 'viewTabCashFlows', 'cashFlowPanel']]
+                .forEach(([tab, tabId, panelId]) => {
+                    const selected = activeTab === tab;
+                    const btn = document.getElementById(tabId);
+                    if (btn) btn.setAttribute('aria-selected', String(selected));
+                    const panel = document.getElementById(panelId);
+                    if (panel) panel.hidden = !selected;
+                });
+        }
+
+        function setActiveTab(tab) {
+            if (tab === activeTab) return;
+            activeTab = tab;
+            syncViewTabs();
+            // The cross-fund look-through search belongs to Holdings.
+            renderGlobalSearchPanel();
+            if (activeTab === CASH_FLOWS_TAB) showCashFlows();
+            else updateScrollAffordances();
+        }
+
+        function viewCacheKey() {
+            return `${currentFundUuid}::${currentAsOfDate || 'current'}`;
+        }
+
+        function viewFundMeta() {
+            const scope = isPooledUuid(currentFundUuid) ? pooledFunds(currentFundUuid) : FUNDS.filter(f => f.uuid === currentFundUuid);
+            const meta = {};
+            scope.forEach(f => { meta[f.uuid] = { name: f.name, currency: f.currency }; });
+            return meta;
+        }
+
+        // Shows the tab for the current view, fetching its rows on first open.
+        function showCashFlows() {
+            const key = viewCacheKey();
+            if (holdingsViewKey !== key) {
+                renderCashFlowMessage("Couldn't load this fund's investments.", () => loadFund(currentFundUuid), true);
+                return;
+            }
+            if (cashFlowCache.has(key)) { renderCashFlows(); return; }
+            if (cashFlowLoadingKey !== key) loadCashFlows(key);
+        }
+
+        async function loadCashFlows(key) {
+            cashFlowLoadingKey = key;
+            renderCashFlowMessage('Loading cash flows…');
+            const fundUuids = Object.keys(viewFundMeta());
+            const asOfDate = currentAsOfDate;
+            try {
+                const result = await fetchPages((offset, limit) => buildCashFlowSql(fundUuids, offset, limit, asOfDate));
+                cashFlowCache.set(key, result);
+            } catch (err) {
+                console.warn('SOI: cash flow load failed', err);
+                if (cashFlowLoadingKey === key) cashFlowLoadingKey = null;
+                if (activeTab === CASH_FLOWS_TAB && viewCacheKey() === key) {
+                    renderCashFlowMessage("Couldn't load cash flows.", () => loadCashFlows(key), true);
+                }
+                return;
+            }
+            if (cashFlowLoadingKey === key) cashFlowLoadingKey = null;
+            // The user may have moved to another fund, date or tab meanwhile.
+            if (activeTab === CASH_FLOWS_TAB && viewCacheKey() === key && holdingsViewKey === key) renderCashFlows();
+        }
+
+        const CF_COLUMNS = () => isPooledUuid(currentFundUuid)
+            ? ['Company / Account', 'Fund', 'Date', 'Amount']
+            : ['Company / Account', 'Date', 'Amount'];
+
+        function cfAllExpanded() {
+            return cfRenderedNames.length > 0 && cfRenderedNames.every(n => cfExpanded.has(n));
+        }
+
+        // The expand-all toggle appears only over drawn company groups: while the tab
+        // shows a loading, error or empty message there is nothing for it to open.
+        function renderCashFlowHead() {
+            const icon = cfAllExpanded() ? 'collapse-all' : 'expand-all';
+            const cols = CF_COLUMNS();
+            const cells = cols.map((label, i) => {
+                if (i === 0) {
+                    return cfRenderedNames.length > 0
+                        ? `<th><div class="th-inner"><span class="th-expand"><span class="expand-all-toggle" id="cfExpandAllToggle" onclick="cfToggleAll()">${inkIcon(icon, 16)}</span></span>${label}</div></th>`
+                        : `<th><div class="th-inner">${label}</div></th>`;
+                }
+                if (label === 'Amount') {
+                    return '<th class="number"><span class="tooltip-trigger" data-tooltip="Money invested is negative; proceeds and terminal value are positive.\nA group\'s amount is its net cash flow: its Total G/L, except where\ninterest was capitalized or cost was set in another currency.">Amount</span></th>';
+                }
+                return `<th${label === 'Date' ? ' class="number"' : ''}>${label}</th>`;
+            });
+            document.getElementById('cfTableHead').innerHTML = `<tr>${cells.join('')}</tr>`;
+        }
+
+        // A status or error line in place of the table body; onRetry adds Try again.
+        function renderCashFlowMessage(msg, onRetry, isError) {
+            cfRenderedNames = [];
+            renderCashFlowHead();
+            document.getElementById('cfNote').hidden = true;
+            const tbody = document.getElementById('cfTableBody');
+            tbody.innerHTML = '';
+            const tr = document.createElement('tr');
+            const td = document.createElement('td');
+            td.colSpan = CF_COLUMNS().length;
+            td.className = isError ? 'empty-state error' : 'empty-state';
+            td.textContent = msg;
+            if (onRetry) {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'retry-link';
+                btn.textContent = 'Try again';
+                btn.addEventListener('click', onRetry);
+                td.append(' ', btn);
+            }
+            tr.appendChild(td);
+            tbody.appendChild(tr);
+        }
+
+        // Draws the loaded rows for the current view. Without them, or without this
+        // view's holdings, showCashFlows decides what to show instead: it starts the
+        // load, leaves one in flight alone, or shows the holdings error.
+        function renderCashFlows() {
+            const key = viewCacheKey();
+            const cached = cashFlowCache.get(key);
+            if (!cached || holdingsViewKey !== key) { showCashFlows(); return; }
+            const pooled = isPooledUuid(currentFundUuid);
+            const all = transformCashFlows(cached.rows, loadedCompanies, viewFundMeta(), currentAsOfDate || todayIso());
+            const inView = cashFlowCompaniesInView(all);
+            const q = filterText.toLowerCase();
+            const data = q ? inView.filter(c => c.name.toLowerCase().includes(q)) : inView;
+            cfRenderedNames = data.map(c => c.name);
+
+            const note = document.getElementById('cfNote');
+            note.hidden = !cached.truncated;
+            note.textContent = cached.truncated
+                ? `Showing the first ${cached.rows.length.toLocaleString('en-US')} cash flows — results were truncated, so totals are incomplete.`
+                : '';
+
+            renderCashFlowHead();
+            const tbody = document.getElementById('cfTableBody');
+            tbody.innerHTML = '';
+            if (data.length === 0) {
+                const message = q
+                    ? 'No companies match your filter.'
+                    : (all.length > 0 && !showExited ? 'Every position here has been exited. Choose Show exited companies to see their cash flows.' : 'No cash flows for this view.');
+                tbody.innerHTML = `<tr><td colspan="${CF_COLUMNS().length}" class="empty-state">${message}</td></tr>`;
+                updateScrollAffordances();
+                return;
+            }
+
+            const mixedBadge = '<span class="mixed-badge tooltip-trigger" data-tooltip="Held in more than one currency — see rows below">Mixed</span>';
+            const tagFor = cur => pooled && cur ? `<span class="currency-tag">${escHtml(cur)}</span>` : '';
+            const amountCell = (val, cur) => `<td class="number">${fmtDec(val, cur)}${tagFor(cur)}</td>`;
+            const addRow = (cls, html, onclick) => {
+                const tr = document.createElement('tr');
+                tr.className = cls;
+                if (onclick) tr.onclick = onclick;
+                tr.innerHTML = html;
+                tbody.appendChild(tr);
+            };
+
+            data.forEach((c, i) => {
+                const open = cfExpanded.has(c.name);
+                const fundNames = c.slices.map(s => s.fundName).filter(Boolean);
+                const fundCell = pooled
+                    ? (fundNames.length > 1
+                        ? `<td><span class="tooltip-trigger" data-tooltip="${escHtml(fundNames.join('\n'))}">${fundNames.length} funds</span></td>`
+                        : `<td>${escHtml(fundNames[0] || '—')}</td>`)
+                    : '';
+                const net = c.mixedCurrency ? `<td class="number">${mixedBadge}</td>` : amountCell(c.net, [...c.currencies][0]);
+                addRow('company-row cf-company-row', `
+                    <td><div class="company-cell"><span class="expand-icon" id="cf-icon-${i}">${inkIcon(open ? 'down' : 'forward', 10)}</span><span class="company-name">${escHtml(c.name)}</span>${c.exited ? EXITED_TAG : ''}</div></td>
+                    ${fundCell}
+                    <td></td>
+                    ${net}`, () => cfToggle(i, c.name));
+
+                const rowCls = extra => `asset-row cf-group-${i}${extra}${open ? ' visible shown' : ''}`;
+                const multiFund = c.slices.length > 1;
+                c.slices.forEach(s => {
+                    if (multiFund) {
+                        addRow(rowCls(' fund-row'), `
+                            <td><span class="fund-row-name">${escHtml(s.fundName || '—')}</span>${s.exited ? EXITED_TAG : ''}</td>
+                            ${pooled ? '<td></td>' : ''}
+                            <td></td>
+                            ${amountCell(s.net, s.currency)}`);
+                    }
+                    s.flows.forEach(f => {
+                        addRow(rowCls(multiFund ? ' fund-asset-row' : ''), `
+                            <td><span class="asset-name">${escHtml(f.account)}</span></td>
+                            ${pooled ? `<td>${escHtml(s.fundName || '—')}</td>` : ''}
+                            <td class="number">${escHtml(formatDateShort(f.date))}</td>
+                            ${amountCell(f.amount, s.currency)}`);
+                    });
+                });
+            });
+
+            if (!q) {
+                const flows = data.reduce((n, c) => n + c.flowCount, 0);
+                const total = viewMixedCurrency
+                    ? '<td class="number"><span class="mixed-badge">Mixed</span></td>'
+                    : `<td class="number">${fmtDec(data.reduce((sum, c) => sum + c.net, 0))}</td>`;
+                addRow('totals-row', `
+                    <td>${data.length} companies, ${flows} cash flows</td>
+                    ${pooled ? '<td></td>' : ''}
+                    <td></td>
+                    ${total}`);
+            }
+            updateScrollAffordances();
+        }
+
+        function cfToggle(i, name) {
+            const expanding = !cfExpanded.has(name);
+            if (expanding) cfExpanded.add(name); else cfExpanded.delete(name);
+            document.querySelectorAll(`#cfTableBody .cf-group-${i}`).forEach(r => setRowVisible(r, expanding));
+            const icon = document.getElementById(`cf-icon-${i}`);
+            if (icon) icon.innerHTML = inkIcon(expanding ? 'down' : 'forward', 10);
+            const all = document.getElementById('cfExpandAllToggle');
+            if (all) all.innerHTML = inkIcon(cfAllExpanded() ? 'collapse-all' : 'expand-all', 16);
+        }
+
+        function cfToggleAll() {
+            if (cfRenderedNames.length > 0) cfExpanded = cfAllExpanded() ? new Set() : new Set(cfRenderedNames);
+            renderCashFlows();
         }
 
         // ── Loading / error / empty-fund states ──
@@ -3132,16 +3582,21 @@
         // state is keyed by row position, which changes whenever exited rows come or
         // go, so it starts over each time.
         function showCompaniesInView() {
+            holdingsViewKey = viewCacheKey();
             companies = companiesInView(loadedCompanies);
             expandedCompanies = new Set();
             expandedUnderlyingGroups = new Set();
             expandedUnderlying = defaultExpandedUnderlying(companies);
             syncExitedToggle();
             syncResetFiltersVisibility();
-            if (companies.length === 0) { renderEmptyFund(); return; }
-            renderMetrics();
-            render();
-            showContent();
+            if (companies.length === 0) {
+                renderEmptyFund();
+            } else {
+                renderMetrics();
+                render();
+                showContent();
+            }
+            if (activeTab === CASH_FLOWS_TAB) showCashFlows();
         }
 
         // Idempotent rebuild of contentArea's child structure. Called from every render
@@ -3156,6 +3611,7 @@
             area.innerHTML = `
                 <div id="switcherMount"></div>
                 <div id="metricsContainer"></div>
+                <div id="viewTabsMount"></div>
                 <div class="toolbar" id="toolbar">
                     <div class="search-wrapper">
                         <span class="search-icon" id="searchIcon"></span>
@@ -3163,7 +3619,7 @@
                     </div>
                     <span id="exitedToggleMount"></span>
                 </div>
-                <div class="table-scroll-wrap">
+                <div class="table-scroll-wrap view-panel" id="holdingsPanel">
                     <div class="table-scroll">
                         <table>
                             <thead id="tableHead"></thead>
@@ -3171,8 +3627,10 @@
                         </table>
                     </div>
                 </div>
+                <div class="view-panel" id="cashFlowPanel" hidden></div>
             `;
             document.getElementById('searchIcon').innerHTML = inkIcon('search', 14);
+            ensureViewPanelsMounted();
             populateFundSelect();
         }
 
@@ -3200,6 +3658,9 @@
             }
             tr.appendChild(td);
             tbody.appendChild(tr);
+            // Without this view's holdings the cash-flow tab has nothing to show
+            // either, so it carries the same message.
+            if (activeTab === CASH_FLOWS_TAB) renderCashFlowMessage(msg, onRetry, true);
             showContent();
         }
 
@@ -3219,8 +3680,8 @@
 
         // Page through the warehouse query until we hit a short page (or the safety cap).
         // Stops as soon as a page returns fewer rows than PAGE_SIZE, which signals we've
-        // read the last batch.
-        async function fetchAllPages(buildSql) {
+        // read the last batch. truncated is true when the cap cut the result short.
+        async function fetchPages(buildSql) {
             const allRows = [];
             for (let page = 0; page < MAX_PAGES; page++) {
                 const result = await callMcpWithWelcomeRetry(CALL_TOOL, {
@@ -3233,10 +3694,14 @@
                 // Parser unwraps the response envelope and throws on error envelopes.
                 const pageRows = parseDwhQueryResult(result);
                 allRows.push(...pageRows);
-                if (pageRows.length < PAGE_SIZE) return allRows;
+                if (pageRows.length < PAGE_SIZE) return { rows: allRows, truncated: false };
             }
             console.warn(`SOI fetch hit MAX_PAGES (${MAX_PAGES}); results may be truncated at ${MAX_PAGES * PAGE_SIZE} rows.`);
-            return allRows;
+            return { rows: allRows, truncated: true };
+        }
+
+        async function fetchAllPages(buildSql) {
+            return (await fetchPages(buildSql)).rows;
         }
 
         // Sort key for vintage-descending order. Funds with no vintage_date sort
@@ -3799,6 +4264,7 @@
             expandedUnderlying = new Set();
             expandedCompanies = new Set();
             expandedUnderlyingGroups = new Set();
+            cfExpanded = new Set();
             clearTimeout(globalSearchDebounce);
             globalSearchTerm = '';
             globalSearchResults = null;
@@ -3994,6 +4460,7 @@
             expandedUnderlying = new Set();
             expandedCompanies = new Set();
             expandedUnderlyingGroups = new Set();
+            cfExpanded = new Set();
             clearTimeout(globalSearchDebounce);
             globalSearchTerm = '';
             globalSearchResults = null;
@@ -4045,13 +4512,14 @@
         // ── Init ──
 
         document.getElementById('searchIcon').innerHTML = inkIcon('search', 14);
+        ensureViewPanelsMounted();
 
         // Shared by the scroll listener, render(), and the resize listener below —
         // whichever last changed either the scroll position or the table's content
         // width needs to re-decide whether the sticky-column shadow and the
         // right-edge "more to scroll" fade should show.
         function updateScrollAffordances(scroller) {
-            if (!scroller) scroller = document.querySelector('.table-scroll');
+            if (!scroller) scroller = document.querySelector(activeTab === CASH_FLOWS_TAB ? '#cashFlowPanel .table-scroll' : '#holdingsPanel .table-scroll');
             if (!scroller) return;
             scroller.classList.toggle('scrolled', scroller.scrollLeft > 0);
             const wrap = scroller.closest('.table-scroll-wrap');
@@ -4082,6 +4550,12 @@
             if (e.target && e.target.id === 'searchInput') {
                 filterCompanies(e.target.value);
             }
+        });
+
+        // Delegated for the same reason: the tab strip is rebuilt with the skeleton.
+        document.addEventListener('click', e => {
+            const tab = e.target && e.target.closest && e.target.closest('[data-view-tab]');
+            if (tab) setActiveTab(tab.dataset.viewTab);
         });
 
         // Delegated for the same reason: the toolbar is rebuilt with the skeleton.

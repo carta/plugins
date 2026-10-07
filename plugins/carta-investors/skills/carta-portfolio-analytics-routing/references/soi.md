@@ -288,7 +288,7 @@ Pick the branch from the `name_status` value captured in Step 2.
 
 If both apply, use the `named_churned` sentence only. Say nothing when churned funds were simply left out — the user didn't ask about them.
 
-After the branch sentence, append a 3–5 bullet summary of what the artifact contains (e.g. interactive holdings table, Deal IRR columns — proceeds, total value, multiple and IRR — summary metrics, sortable columns, expand/collapse rows, filter by company name, fund switcher across all funds you have access to). Keep it brief — the customer can see the artifact themselves. The bullet summary is optional on re-invocation branches; if you've already shown it earlier in the conversation, skip it.
+After the branch sentence, append a 3–5 bullet summary of what the artifact contains (e.g. interactive holdings table, Deal IRR columns — proceeds, total value, multiple and IRR — an Investment Cash Flows tab, summary metrics, sortable columns, expand/collapse rows, filter by company name, fund switcher across all funds you have access to). Keep it brief — the customer can see the artifact themselves. The bullet summary is optional on re-invocation branches; if you've already shown it earlier in the conversation, skip it.
 
 See **User-facing output** at the top of this skill for the broader narration rules.
 
@@ -302,6 +302,16 @@ The table ends with the columns of the app's Deal IRR view (a fund's Investments
 - **Gross IRR** (labelled as in the app) is gross deal IRR per fund × company from `FUND_ADMIN.TEMPORAL_DEAL_IRR`, which holds completed quarter-ends only. **Current** shows the latest quarter-end (named in the IRR header tooltip), so it can differ slightly from the app's live figure; a past as-of shows exactly that quarter-end. IRR is per company and fund, never per share class, so share-class rows never show it. A company one fund holds shows IRR on its company row. A company several funds hold leaves its row blank and, when expanded, shows one sub-row per fund — that fund's subtotals, multiple and IRR — with the fund's share-class rows beneath it. Look-through rows and the totals row leave it blank.
 - **Interest isn't shown.** The warehouse holds capitalized interest only, while the app's Interest also counts interest accrued since the last capitalization, so the two wouldn't match.
 - **Exited positions are hidden by default.** The **Show exited companies** button above the table (it then reads **Hide exited companies**) brings them back, tagged *Exited*, and the cards and totals follow it. The app's Deal IRR view includes them, so point a user at that button when a realized company seems missing.
+
+## Investment Cash Flows tab
+
+A tab strip above the table switches between **Holdings** (the default) and **Investment Cash Flows**, the second sheet of the app's Deal IRR export: one line per dated cash flow — Company / Account, Fund (multi-fund views only), Date, Amount. The artifact fetches it itself the first time the tab opens. Know these when a user asks:
+
+- **Lines.** Money invested is negative; proceeds and terminal value are positive. Each fund × company ends with a **Terminal value** line: the Holdings tab's Fair market value for the same positions, dated at the as-of date (today for Current). A realization lists each leg separately (return of cost, then gain), so proceeds often come in pairs, as in the app. A note converting with capitalized interest adds a *Capitalized interest* line and an offsetting *Interest income* line.
+- **Groups.** Rows group by company, and by fund within a company several funds hold. A group's amount is its net cash flow, which equals the company's Total G/L on the Holdings tab except where interest was capitalized (Total cost counts that interest; the flows show it as an offsetting pair) or cost was set in another currency. The app's own export differs from its Gain/Loss in the same places. The fund, As of and company search controls and the Show / Hide exited companies button apply to both tabs; exited companies keep their flows and end in a $0 terminal value.
+- **Source.** Flows are rebuilt from `FUND_ADMIN.JOURNAL_ENTRIES`, because the asset records the app uses aren't in the connector's tables. Amounts and dates match the app; the account wording uses the holding's name (e.g. *Investment - Limited partnership interest*) where the app names its share class (*Investment - Membership Interest*), and company names follow the Holdings tab.
+- **Large firms.** Results stop at 10,000 lines; past that the tab says the list was truncated. A failed load shows an error with Try again on the tab only.
+- **No export.** The tab has no Export to Excel; point a user at the app's Deal IRR Export for a spreadsheet.
 
 ## Caveats
 
