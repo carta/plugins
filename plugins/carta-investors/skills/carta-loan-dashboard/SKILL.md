@@ -38,7 +38,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.64.2</carta-plugin>
+<carta-plugin>carta-investors:6.65.0</carta-plugin>
 
 [PATTERN carta-writing-style v0.0.2]
 [PATTERN etiquette v0.0.6]
@@ -266,6 +266,14 @@ PIK are columns on `ADVANCE` (`PRINCIPAL_REPAID`, `INTEREST_REPAID`, `PIK_REPAID
 `PIK_COMPOUNDED`) — sum those per loan rather than adding up paid obligations, which
 re-derives the same figure and misses any repayment with no scheduled obligation row. Fees
 have no repaid column, so they remain a `PAYMENT_OBLIGATION` sum filtered to `TYPE = 'Fee'`.
+
+**The balance on a date is the one panel figure that does not come from the warehouse.** Principal, compounded PIK and pro-rated accrued PIK up to a date — plus accrued interest, default interest, fees and late fees, and their total — are derived by the Loan Operations engine from the loan's terms and payments, and no table records them. The panel's **Balance as of** picker (default today, kept across loans) reads them through `call_tool` as `loan_operations__get__loan_balance` with `{loan_nanoid, as_of_date}`, once per loan and date. Every figure is net of cash actually received by that date, so a matured loan nobody repaid still shows its principal — this is the position's carrying balance, not the payoff calculator's quote, which adds a prepayment premium and assumes the schedule is paid on time. So the panel carries no prepayment premium at all. Accrued interest is cash interest earned through the date and not yet received, so an earlier period left unpaid counts too.
+
+- A structure's balance renders in **that structure's currency**, as the command reports it. The no-structures fallback adds up only the structures in the currency on screen.
+- Fees scoped to the loan rather than a structure are reported beside the total, never in it — no structure owns them.
+- **A lender picker** beside the date shows one lender's share instead of the whole balance, and is kept across loans like the date. Its lenders come from the balance itself (`lenders[]` under each structure and under `loanFees`): the warehouse tables this skill reads name no loan's lenders, and the balance lists exactly the ones the viewer may see — every lender for the loan's lending firm, only its own firm's for a co-lender. A lender with no share of a structure is shown as holding none, never as the whole balance.
+- A staff viewer's Loan Operations session has no firm until one is pinned, and the command answers "No lending firm is selected". The artifact then pins the loan's own lending-firm slug with `loan_operations__mutate__acting_firm` **once** and reads again; a second refusal is shown, not retried. That is why the company join runs even when deep links are off, and why `LOAN_NANO_ID` is selected whenever the column resolves.
+- The grant needs no new tool: both commands run through `call_tool`.
 
 **The loan name opens a side panel.** The name is the control — a button styled as a link, per the house rule that entity names are the anchor and never a separate "Open" column — and it carries `aria-controls` and `aria-expanded`. Clicking anywhere else on the row opens the same panel.
 

@@ -753,6 +753,8 @@
       text-align: right;
     }
 
+    .drawer dl .balance-total { font-weight: 600; }
+
     .drawer-table { border: 1px solid var(--ink-color-global-border-subtle); }
 
     .drawer-table th,
@@ -902,6 +904,14 @@
       <label for="panel-scope-select">Showing</label>
       <select id="panel-scope-select"></select>
     </div>
+    <div class="panel-scope" id="panel-asof">
+      <label for="panel-asof-date">Balance as of</label>
+      <input type="date" id="panel-asof-date">
+      <!-- Filled from the balance itself: the warehouse tables this page reads name no
+           loan's lenders, and the balance lists exactly the ones this viewer may see. -->
+      <label for="panel-balance-lender" hidden>Lender</label>
+      <select id="panel-balance-lender" hidden></select>
+    </div>
     <div class="panel-body drawer" id="panel-body"></div>
   </aside>
 
@@ -1004,10 +1014,10 @@
       ? CONFIG.lo_base_url.replace(/\/$/, '')
       : null;
 
-    // One gate for both the query and the render, so a link is never built from a column
-    // the config did not ask for, and the join is skipped when links are off.
-    const CAN_LINK = Boolean(LO_BASE_URL && COMPANIES && COL.loan_nano_id && COL.slug &&
-                             COL.lending_firm_id);
+    // A link is never built from a column the config did not ask for. The slug join runs
+    // without links too, because a staff viewer's balance read needs the slug.
+    const HAS_SLUG = Boolean(COMPANIES && COL.slug && COL.lending_firm_id);
+    const CAN_LINK = Boolean(LO_BASE_URL && COL.loan_nano_id && HAS_SLUG);
 
     // One aggregate row per currency. Nothing here is ever summed across currencies.
     let byCurrency = [];
@@ -1045,6 +1055,13 @@
     const nextDueByStructure = new Map();
     const drawsByStructure = new Map();
     let openTab = 0;              // index into the loan's structures
+    // The date the panel's balance is taken at. Kept across loans, so a reader pricing a
+    // book at one date does not re-pick it for every position.
+    let balanceDate = localToday();
+    // The lender whose share the balance shows; '' is the whole balance. Kept across loans
+    // for the same reason as the date, since one fund often holds a piece of many loans.
+    let balanceLender = '';
+    const balances = new Map();   // loan_id|date -> { state, data, message }
     let detailState = 'idle';    // idle | loading | ready | failed
 
     // ── Ink icons (OshFont glyphs, Y-flipped for standalone SVG) ──
@@ -1114,6 +1131,14 @@
       return numberFormat({
         style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 3,
       }).format(n);
+    }
+
+    // The reader's own calendar day as YYYY-MM-DD, built by hand: the ISO string is the
+    // UTC day, already tomorrow on a US evening, and locale formats vary by engine.
+    function localToday() {
+      const d = new Date();
+      const pad = n => String(n).padStart(2, '0');
+      return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
     }
 
     // Warehouse dates arrive as YYYY-MM-DD strings; parse as UTC so the day never
@@ -1231,6 +1256,11 @@
       return await callCartaTool(CALL_TOOL, args);
     }
 
+    // Every Carta command this page runs goes through call_tool in this envelope.
+    function command(name, args) {
+      return { name: name, arguments: args, _instrumentation_v2: INSTRUMENTATION_V2 };
+    }
+
     function unwrap(result) {
       if (typeof result === 'string') return result;
       if (!result || typeof result !== 'object') throw new Error('unexpected response shape');
@@ -1334,11 +1364,7 @@
       const args = { sql: sql, format: 'markdown' };
       if (opts && opts.limit !== undefined) args.limit = opts.limit;
       if (opts && opts.offset !== undefined) args.offset = opts.offset;
-      const text = unwrap(await callMcp({
-        name: 'dwh__execute__query',
-        arguments: args,
-        _instrumentation_v2: { skills: ['carta-investors:carta-loan-dashboard'] },
-      }));
+      const text = unwrap(await callMcp(command('dwh__execute__query', args)));
       const parsed = parseTable(text);
       return { rows: parsed.rows, skipped: parsed.skipped, total: totalRows(text) };
     }
@@ -1402,9 +1428,11 @@
       // would send those rows to another firm's org. COMPANY holds MANY rows per
       // LENDING_FIRM_ID (one per associated company), so IS_LENDING_FIRM
       // below is what keeps this join from multiplying the portfolio.
-      const linkCols = CAN_LINK
-        ? `, l.${COL.loan_nano_id} AS loan_nano_id, c.${COL.slug} AS company_slug` : '';
-      const linkJoin = CAN_LINK
+      // The nanoid is also how the balance is read, so it is fetched whether or not links
+      // are on; the slug is what a staff viewer pins Loan Operations to.
+      const linkCols = (COL.loan_nano_id ? `, l.${COL.loan_nano_id} AS loan_nano_id` : '') +
+                       (HAS_SLUG ? `, c.${COL.slug} AS company_slug` : '');
+      const linkJoin = HAS_SLUG
         ? `\n              LEFT JOIN ${COMPANIES} c ON c.${COL.lending_firm_id} = l.${COL.lending_firm_id}` +
           (COL.is_lending_firm ? ` AND c.${COL.is_lending_firm} = TRUE` : '')
         : '';
@@ -1434,8 +1462,7 @@
     function loanUrl(l) {
       if (!CAN_LINK) return null;
       const nano = safeId(l.loan_nano_id);
-      const slug = typeof l.company_slug === 'string' && /^[A-Za-z0-9-]{1,100}$/.test(l.company_slug)
-        ? l.company_slug : null;
+      const slug = safeSlug(l.company_slug);
       if (!nano || !slug) return null;
       return `${LO_BASE_URL}/org/${slug}/loans/${nano}/overview`;
     }
@@ -1475,6 +1502,10 @@
     // warehouse value out of the next statement.
     function safeId(id) {
       return typeof id === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(id) ? id : null;
+    }
+
+    function safeSlug(slug) {
+      return typeof slug === 'string' && /^[A-Za-z0-9-]{1,100}$/.test(slug) ? slug : null;
     }
 
     function safeCurrency(code) {
@@ -1629,7 +1660,7 @@
     // EXCLUDING compounded PIK, and STRUCTURE.OUTSTANDING_PRINCIPAL includes it. On a
     // revolver that has PIK'd, this understates undrawn by the compounded amount. There
     // is no PIK-excluded outstanding column on STRUCTURE to fix it with.
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localToday();
 
     // Shares structureCommitted's floor with utilization, so the two can never contradict
     // each other on the same row — an add-on that reads as fully drawn must not also report
@@ -1981,6 +2012,165 @@
       return `${basis} ${day(t.as_of)}`;
     }
 
+    // The balance on a date is derived by the Loan Operations engine from the loan's terms
+    // and payments; the warehouse stores no dated balance, so this is the one figure in the
+    // panel that does not come from SQL.
+    const BALANCE_COMMAND = 'loan_operations__get__loan_balance';
+    const ACTING_FIRM_COMMAND = 'loan_operations__mutate__acting_firm';
+    // A staff session reads Loan Operations as the firm it pinned, and a new one has none.
+    const NO_ACTING_FIRM = /No lending firm is selected/;
+    const BALANCE_ROWS = [
+      ['Principal', 'principal'],
+      ['Compounded PIK', 'compoundedPIK'],
+      ['Accrued PIK', 'accruedPIK'],
+      ['Accrued interest', 'accruedInterest'],
+      ['Default interest', 'accruedDefaultInterest'],
+      ['Fees', 'accruedFees'],
+      ['Late fees', 'accruedLateFees'],
+    ];
+
+    function balanceKey(loan) {
+      return String(loan.loan_id || '') + '|' + balanceDate;
+    }
+
+    function firstText(result) {
+      return (result && result.content && result.content[0] && result.content[0].text) || '';
+    }
+
+    function balancePayload(result) {
+      const structured = result && result.structuredContent;
+      if (structured && Array.isArray(structured.structures)) return structured;
+      const text = unwrap(result);
+      let parsed = null;
+      try { parsed = JSON.parse(text); } catch (_) {}
+      if (parsed && Array.isArray(parsed.structures)) return parsed;
+      // A refusal comes back as a line of prose rather than a payload; it is the message
+      // to show. Anything longer is a response of some other kind, and printing it would
+      // pour raw data into the drawer.
+      const refusal = typeof text === 'string' ? text.trim() : '';
+      throw new Error(refusal && refusal.length <= 300 && !/[\r\n]/.test(refusal)
+        ? refusal
+        : 'the balance came back in a shape this dashboard does not read');
+    }
+
+    async function readBalance(nano, date) {
+      return withRetry(() => callMcp(command(BALANCE_COMMAND, {
+        loan_nanoid: nano, as_of_date: date,
+      })), 'Loading balance');
+    }
+
+    // Lets the reader's own gesture (opening a loan, picking a date) retry a failed read.
+    // Never called from a render: loadBalance re-renders when it fails, so that would loop.
+    function forgetFailedBalance() {
+      const loan = openLoan();
+      if (!loan) return;
+      const key = balanceKey(loan);
+      const entry = balances.get(key);
+      if (entry && entry.state === 'failed') balances.delete(key);
+    }
+
+    // Pins the acting firm at most once per read: a second refusal means the pin did not
+    // take, and asking again would only repeat it.
+    async function loadBalance(loan) {
+      const key = balanceKey(loan);
+      if (balances.has(key)) return;
+      const nano = safeId(loan.loan_nano_id);
+      if (!nano) {
+        balances.set(key, { state: 'failed', message: 'this loan has no Loan Operations id to read it by' });
+        return;
+      }
+      const date = balanceDate;
+      balances.set(key, { state: 'loading' });
+      try {
+        let result = await readBalance(nano, date);
+        const slug = safeSlug(loan.company_slug);
+        if (NO_ACTING_FIRM.test(firstText(result)) && slug) {
+          unwrap(await callMcp(command(ACTING_FIRM_COMMAND, { firm: slug })));
+          result = await readBalance(nano, date);
+        }
+        balances.set(key, { state: 'ready', data: balancePayload(result) });
+      } catch (err) {
+        balances.set(key, { state: 'failed', message: (err && err.message) || String(err) });
+      }
+      renderView();
+    }
+
+    // Structures on one loan can carry different currencies, and the roll-up only ever
+    // adds figures in the currency on screen.
+    function sumBalances(list) {
+      const out = {};
+      BALANCE_ROWS.concat([['Total', 'total']]).forEach(([, k]) => {
+        out[k] = Math.round(list.reduce((t, b) => t + Number(b[k] || 0), 0) * 100) / 100;
+      });
+      return out;
+    }
+
+    // Every lender the balance lists, across its structures and its loan-scoped fees. A
+    // co-lender's balance lists only its own firm's lenders.
+    function balanceLenders(data) {
+      const seen = new Map();
+      data.structures.concat(data.loanFees ? [data.loanFees] : [])
+        .flatMap(b => b.lenders || [])
+        .forEach(l => { if (!seen.has(String(l.id))) seen.set(String(l.id), String(l.name || 'Lender')); });
+      return Array.from(seen, ([id, name]) => ({ id: id, name: name }));
+    }
+
+    // The lenders the open loan's balance lists, and which of them the remembered choice
+    // picks. A lender this loan does not list falls back to all lenders.
+    function balanceLenderChoice(loan) {
+      const entry = balances.get(balanceKey(loan));
+      const lenders = entry && entry.state === 'ready' ? balanceLenders(entry.data) : [];
+      return { entry: entry, lenders: lenders, chosen: lenders.find(l => l.id === balanceLender) || null };
+    }
+
+    // One lender's share of a balance, or the whole balance when no lender is chosen. A
+    // lender with no share of it has none to show — never the whole balance in its place.
+    function shareOf(balance, lenderId) {
+      if (!balance || !lenderId) return balance;
+      return (balance.lenders || []).find(l => String(l.id) === lenderId) || null;
+    }
+
+    function balanceHtml(loan, structureId, cc) {
+      const { entry, chosen } = balanceLenderChoice(loan);
+      const lenderId = chosen ? chosen.id : '';
+      const heading = `<h3>Balance as of ${esc(day(balanceDate))}${chosen ? ' · ' + esc(chosen.name) : ''}</h3>`;
+      if (!entry || entry.state === 'loading') {
+        return `<section>${heading}<p class="status">Loading balance…</p></section>`;
+      }
+      if (entry.state === 'failed') {
+        return `<section>${heading}<p class="status">Balance unavailable: ${esc(entry.message)}</p></section>`;
+      }
+      const data = entry.data;
+      let balance = null;
+      let code = cc;
+      if (structureId) {
+        const structure = data.structures.find(s => String(s.id) === structureId) || null;
+        balance = shareOf(structure, lenderId);
+        code = structure ? structure.currency : cc;
+      } else {
+        const shares = data.structures.filter(s => s.currency === cc)
+          .map(s => shareOf(s, lenderId)).filter(Boolean);
+        balance = shares.length ? sumBalances(shares) : null;
+      }
+      if (!balance) {
+        const what = structureId ? 'structure' : 'loan';
+        return `<section>${heading}<p class="status">${chosen
+          ? `${esc(chosen.name)} holds no share of this ${what}.`
+          : `No balance recorded for this ${what}.`}</p></section>`;
+      }
+      const rows = BALANCE_ROWS.map(([label, k]) =>
+        `<dt>${esc(label)}</dt><dd>${moneyExact(Number(balance[k]), code)}</dd>`).join('');
+      const total = `<dt class="balance-total">Total</dt>` +
+        `<dd class="balance-total"><strong>${moneyExact(Number(balance.total), code)}</strong></dd>`;
+      // Loan-scoped fees belong to no structure, so they sit beside the total, never in it.
+      const loanFees = shareOf(data.loanFees, lenderId);
+      const fees = loanFees
+        ? `<p class="drawer-inline">Loan-level fees ${moneyExact(Number(loanFees.total), data.loanFees.currency)}` +
+          ' · not attributed to a structure, not in the total</p>'
+        : '';
+      return `<section>${heading}<dl>${rows}${total}</dl>${fees}</section>`;
+    }
+
     // A summary band, then the detail. The four figures at the top are what a reader
     // opens the panel for — how much is out, how much is left, what it costs, what falls
     // due — so they carry the weight and everything below reads as reference. Six
@@ -2052,6 +2242,7 @@
 
       return summary + `
         <div class="drawer-grid">
+          ${scope.balance || ''}
           <section>
             <h3>Key terms</h3>
             ${termRows ? dl(termRows) : '<p class="status">No interest terms recorded.</p>'}
@@ -2091,14 +2282,19 @@
       const scopes = tabsFor(loan);
       // No structures resolved — the table is not configured for them, or the query
       // failed. Fall back to the loan roll-up rather than render an empty panel.
-      if (!scopes.length) return { options: null, body: panelHtml(loanScope(loan), cc) };
+      if (!scopes.length) {
+        return { options: null,
+                 body: panelHtml({ ...loanScope(loan), balance: balanceHtml(loan, null, cc) }, cc) };
+      }
       const active = Math.min(openTab, scopes.length - 1);
       // One structure is not a choice, and its own heading names it.
       const options = scopes.length > 1
         ? scopes.map((s, i) =>
             `<option value="${i}"${i === active ? ' selected' : ''}>${esc(s.label)}</option>`).join('')
         : null;
-      return { options: options, body: panelHtml(structureScope(scopes[active].structure), cc) };
+      const structure = scopes[active].structure;
+      const balance = balanceHtml(loan, structure.structure_id ? String(structure.structure_id) : null, cc);
+      return { options: options, body: panelHtml({ ...structureScope(structure), balance: balance }, cc) };
     }
 
     // The loan the panel is describing, found by id so it survives a re-sort. Looked up
@@ -2112,6 +2308,7 @@
     function showPanel(loanId) {
       const same = openLoanId === loanId;
       openLoanId = loanId;
+      forgetFailedBalance();
       // Switching loans starts on the Loan tab; re-opening the same one keeps its place.
       if (!same) openTab = 0;
       // Focus deliberately stays where the reader put it. Pulling it into the panel is
@@ -2157,6 +2354,23 @@
       return safeId(value) || '\\0';
     }
 
+    // Offered only once the balance has arrived, since the balance is what names them.
+    function renderBalanceLenderPicker(loan) {
+      const picker = document.getElementById('panel-balance-lender');
+      const label = document.querySelector('label[for="panel-balance-lender"]');
+      if (!picker || !label) return;
+      const { lenders, chosen } = balanceLenderChoice(loan);
+      picker.hidden = label.hidden = lenders.length === 0;
+      if (!lenders.length) return;
+      const selected = chosen ? chosen.id : '';
+      const hadFocus = document.activeElement === picker;
+      picker.innerHTML = [`<option value=""${selected ? '' : ' selected'}>All lenders</option>`]
+        .concat(lenders.map(l =>
+          `<option value="${esc(l.id)}"${l.id === selected ? ' selected' : ''}>${esc(l.name)}</option>`))
+        .join('');
+      if (hadFocus && picker.focus) picker.focus();
+    }
+
     function renderPanel(cc) {
       const panel = document.getElementById('loan-panel');
       const body = document.getElementById('panel-body');
@@ -2178,6 +2392,10 @@
       document.getElementById('panel-link').innerHTML = url
         ? `<a class="loan-link" href="${esc(url)}" target="_blank" rel="noopener noreferrer">View in Carta</a>`
         : '';
+      const asOf = document.getElementById('panel-asof-date');
+      if (asOf && asOf.value !== balanceDate) asOf.value = balanceDate;
+      if (!balances.has(balanceKey(loan))) loadBalance(loan);
+      renderBalanceLenderPicker(loan);
       // Detail arrives after the panel may already be open, so the body re-renders. Keep
       // the scroll position or the reader is thrown back to the top when structures land.
       const parts = panelParts(loan, cc);
@@ -2750,6 +2968,16 @@
         });
         document.getElementById('panel-scope-select').addEventListener('change', ev => {
           openTab = parseInt(ev.target.value, 10) || 0;
+          renderView();
+        });
+        document.getElementById('panel-asof-date').addEventListener('change', ev => {
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(ev.target.value)) return;
+          balanceDate = ev.target.value;
+          forgetFailedBalance();
+          renderView();
+        });
+        document.getElementById('panel-balance-lender').addEventListener('change', ev => {
+          balanceLender = String(ev.target.value || '');
           renderView();
         });
         document.getElementById('panel-close').addEventListener('click', closePanel);

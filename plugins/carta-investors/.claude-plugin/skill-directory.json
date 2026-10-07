@@ -113,14 +113,6 @@
       "Spin up the ManCo dashboard for {{FIRM}}"
     ]
   },
-  "carta-portfolio-valuations": {
-    "category": "portfolio",
-    "name": "Portfolio valuations",
-    "order": 20,
-    "prompts": [
-      "Run the valuations for {{FIRM}}'s portfolio companies this quarter"
-    ]
-  },
   "carta-portfolio-analytics-app": {
     "category": "portfolio",
     "name": "Portfolio analytics",
