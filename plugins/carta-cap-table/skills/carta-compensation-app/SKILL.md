@@ -49,6 +49,7 @@ allowed-tools:
   - AskUserQuestion
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/ctc_paths.py *)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_benchmark_result.py *)
+  - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/capture_export.py *)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_roster_page.py *)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_equity_refresh_page.py *)
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_report_insights.py *)
@@ -62,7 +63,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.94.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.95.1</carta-plugin>
 
 <!-- [PATTERN carta-writing-style v0.0.2] [PATTERN etiquette v0.0.6] [PATTERN text v0.0.8] [PATTERN tables v0.0.12] [PATTERN carta-watermark v0.0.10] [PATTERN base v0.1.0] -->
 
@@ -206,15 +207,17 @@ No corporation in the invocation → `ctc_paths.py list-dashboards` to offer res
 **Run this silently.** The user's first line should be the greeting, not narration of the steps.
 Cache age in words ("3 days old"), never as a raw `field=value`.
 
-## Step 0.5 — Preflight: Claude CLI for the ask box
+## Step 0.5 — Preflight: Claude CLI (required to build)
 
-The ask box, the planner's cohort filter and the Benchmarks location fetch (2d-v) spawn a
-`claude` subprocess, so they need the `claude` CLI installed and logged in — the Claude
-Code binary, from Anthropic. Detect it early so a missing CLI is resolved before the user
-waits through the data-fetch cycle.
+A build fetches every benchmark page and the employee list through a headless `claude`
+session (`capture_export.py`, see the capture contract in Step 2), and the ask box, the
+planner's cohort filter and the Benchmarks location fetch (2d-v) spawn one too. All of
+them need the `claude` CLI installed and logged in — the Claude Code binary, from
+Anthropic. Detect it early so a missing CLI is resolved before the user waits.
 
-**This step is non-blocking.** The dashboard is fully functional without the CLI — only
-those three features need it. Never fail the skill over a missing CLI.
+**A build needs it; a warm-cache launch does not.** On a cache hit the dashboard is fully
+functional without the CLI — only the three console features need it, so never fail a
+cache launch over a missing CLI. A build without it cannot capture data, so it stops.
 
 ```bash
 uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/preflight_claude.py" check
@@ -228,13 +231,14 @@ user with nothing on PATH is still found, so `claude_bin=none` should be rare.
   `claude_auth=` says. A user who is logged out sees the console's "not supported" message
   in place of the two features; the dashboard itself is unaffected.
 - `claude_bin=none` → ask via `AskUserQuestion` before installing anything:
-  > "The chat in the dashboard needs the Claude Code CLI (`claude`), which isn't installed
-  > here. Want me to install it? (runs Anthropic's installer)"
+  > "Fetching your data and the chat in the dashboard need the Claude Code CLI (`claude`),
+  > which isn't installed here. Want me to install it? (runs Anthropic's installer)"
   - **Yes** → run `preflight_claude.py install`. It uses Anthropic's native installer and
     falls back to npm. Then use the printed path. If it still prints `claude_bin=none`, say
-    the install didn't succeed and the chat won't be available — then continue.
-  - **No** → continue. The dashboard works; the two Claude features show the console's
-    "not supported" message.
+    the install didn't succeed and treat it as **No**.
+  - **No** → on a cache hit, continue: the dashboard works and the Claude features show the
+    console's "not supported" message. On a build, stop and say the build needs the CLI to
+    fetch data — any cached dashboard for this corp still opens.
 
 When Step 4 launches `serve.py`, pass the discovered path as `--claude-bin "<path>"` (only
 when a non-`none` path was found). `serve.py` runs the same search itself when it is
@@ -316,69 +320,71 @@ Follow `references/queries.md` for the exact arguments.
 
 > ### The capture contract — read this before the first call
 >
-> **Never re-type, summarise, or hand-transcribe an MCP result into a file.** A benchmark response
-> is ~15k tokens of decimal strings (or numbers, for the export); retyping one is slow and a
-> single wrong digit silently corrupts a salary figure that then looks authoritative in the
-> dashboard. Every response reaches disk through `save_benchmark_result.py`, one of three ways:
+> **Never re-type, summarise, or hand-transcribe an MCP result into a file — and that includes
+> reproducing it with the Write tool, a heredoc or a Python literal.** Writing a result back out
+> means generating every character of it again. A benchmark page is ~15k tokens of figures, and a
+> single wrong digit silently corrupts a salary that then looks authoritative in the dashboard.
 >
-> **Case 1 — the harness persisted the result to a file** (the common case for `plan` /
-> `subscription_status`). The tool result says something like *"Output has been saved to …"*.
-> **Read that path from the message and pass it straight through** — the payload never has to
-> pass through your reply:
+> **Why the harness can't save it for you.** Claude Code only saves a tool result to a file when
+> it is very large (the ~65KB location list in 2d-v is). An export page is ~17-25k characters, so
+> it arrives inline in this conversation, and from there the only way onto disk is to write it
+> back out — which is the retyping this contract forbids.
+>
+> **So every benchmark page and the employee list are fetched by `capture_export.py`, never by
+> calling `call_tool` yourself.** It runs each call in a headless `claude -p` session on the same
+> Carta MCP server, checks the arguments the session actually sent, and takes the raw tool result
+> off that session's event stream straight to disk. The payload never enters this conversation.
+> It is the same path the console's on-demand location fetch uses (`location_fetch.py`).
+>
+> **`sweep`** — one whole `compensation:export:benchmarks` sweep (2c, 2c-bis, 2d-v):
 > ```bash
-> uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_benchmark_result.py" \
->   <printed_result_path> "<raw_dir>/plan.json"
+> uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/capture_export.py" sweep \
+>   --server "<SERVER>" --claude-bin "<claude_bin>" --dest "<dir>" \
+>   --args '{"corporation_id": <id>, "benchmark_version_id": <id>, "equity_quantity": "FOUR_YEAR_GRANT", "<dimension>_bucket": "<CODE>"}'
 > ```
-> Don't reconstruct the path — the location is client-dependent. Don't hunt for a sibling
-> `*-blob-*.json`; the helper unwraps the envelope itself.
+> It pages from `job_offset: 0` with `job_limit: 6` until `next_job_offset` is null, retries a
+> failed page once, stops at 6 calls, and fans each page out into `benchmark_<JOB>.json` plus
+> `export_pages.json` exactly as `save_benchmark_result.py --export-page` does. It also checks
+> every page came back on the pinned `benchmark_version_id`. Leave `job_limit` and `job_offset`
+> out of `--args`; it owns paging and refuses them. Its last line is `sweep COMPLETE — 22 job
+> areas across 4 page(s)`, or it exits 1 with `FAILED — <reason>` after removing that sweep's
+> files, so a failed sweep never leaves a half-captured group behind.
 >
-> **Case 2 — a small INLINE result** (`subscription_status`, or any small probe). **Write** the
-> tool result **verbatim** to a `.raw` file with the Write tool — copy, don't paraphrase or
-> reformat — then pass that file:
+> **`call`** — one read-only `compensation__get__*` / `compensation__export__*` result written
+> to a file, which you then pass to the matching `save_*` script as its source path:
 > ```bash
-> Write <raw_dir>/<name>.raw          ← the raw tool result, unedited
-> uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_benchmark_result.py" "<raw_dir>/<name>.raw" "<raw_dir>/<name>.json"
-> ```
->
-> **Case 2b — an inline result too large to retype comfortably.** Both capture scripts accept
-> `-` as the source and read the payload from **stdin**, which is the right route whenever the
-> harness did NOT persist the result to a file and the payload is big (a full export page is
-> ~25k tokens). Pipe it rather than hand-copying it into a heredoc:
-> ```bash
-> pbpaste | uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_benchmark_result.py" - "<raw_dir>/<name>.json"
-> ```
-> `-` composes with `--export-page` and with `save_roster_page.py` too — verified, and it
-> produces byte-identical output to the file path.
->
-> **Or write the result to a `.raw` file with the Write tool**, then pass that path. The Write
-> tool reproduces content exactly, so this is a legal capture route and NOT the hand-copying the
-> contract forbids — the distinction is mechanical reproduction versus retyping. Do NOT use a
-> shell heredoc for this: quoting mangles payloads and it invites transcription. **Verify every
-> page after capture** — `--export-page` prints the row and job-area counts it captured, and they
-> must match what the response reported (`row_count`, `jobs_covered`). A mismatch means the
-> payload did not survive; re-capture rather than building on it.
->
-> **If none of these routes is available, stop and say so** rather than retyping a benchmark
-> payload by hand: that is the one thing this contract exists to prevent, and a truncated or
-> mistyped page is worse than no dashboard.
->
-> **Case 3 — a `compensation:export:benchmarks` page** (this is how every benchmark row is now
-> fetched — see Step 2c). Same source rules as Case 1/2/2b (persisted path, verbatim `.raw` file,
-> or `-` for stdin),
-> but pass `--export-page` and give it `<raw_dir>` itself as the destination, not one `.json`
-> file — a page covers up to 6 job areas at the recommended `job_limit`, so it fans out into that many
-> `benchmark_<JOB>.json` files in one call:
-> ```bash
-> uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_benchmark_result.py" \
->   --export-page <printed_result_path_or_.raw_file> "<raw_dir>"
+> uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/capture_export.py" call \
+>   --server "<SERVER>" --claude-bin "<claude_bin>" \
+>   --tool compensation__get__plan --args '{"corporation_id": <id>}' --out "<raw_dir>/plan.raw"
+> uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_benchmark_result.py" "<raw_dir>/plan.raw" "<raw_dir>/plan.json"
 > ```
 >
-> Every case the helper does the unwrapping (bare JSON, content blocks, base64 `resource.blob`,
-> string-valued `result`, or the columnar export envelope) and **exits 2 rather than write
-> something the builder would misread**.
+> `<SERVER>` is the identifier from Step 1; `<claude_bin>` is the path from Step 0.5. Exit 2
+> means the arguments were wrong — fix them, never retry unchanged. Exit 1 means the fetch failed.
 >
-> **If you find yourself about to type benchmark numbers into a heredoc or a Python literal, stop
-> — you are in the failure mode this contract exists to prevent.** Use Case 1, 2, or 3.
+> **`FAILED — server_unavailable: <SERVER> is not connected in a headless session; reachable:
+> <a>, <b>`** means the headless session names the same Carta MCP differently. A claude.ai
+> connector and a locally configured server with the same URL are deduplicated, and the copy
+> kept can differ between this session and a headless one (verified: "claude.ai Carta (Test)"
+> here, `carta-test` headless, both `mcp.test.carta.rocks`). **Ask via `AskUserQuestion`** which
+> of the reachable servers is the same Carta environment as `<SERVER>` — never pick one
+> yourself, since a different environment means a different company's data. Use the answer as
+> `--server` for every capture in this build, and as `mcpServer` in `meta.json` (2e). If none
+> is, stop the build.
+>
+> **Two narrow cases need no capture_export call:**
+> - **The harness already saved the result to a file** — the tool result says *"Output has
+>   been saved to …"* or carries `<persisted-output>`, as the location list in 2d-v does. Pass
+>   that path straight to the save script. Don't reconstruct the path; it is client-dependent.
+> - **A result of a few fields you only read** — `subscription_status`, or the version gate's
+>   `get:plan` on a cache hit. Read the values; nothing is written.
+>
+> **If `capture_export.py` cannot run** — no `claude` CLI, or its first call fails for a reason
+> that is not a Carta error — **stop the build and say so.** Do not fall back to calling
+> `call_tool` and writing the result out yourself: a mistyped page is worse than no dashboard.
+>
+> **If you find yourself about to write benchmark numbers or employee rows into a file by any
+> means, stop — you are in the failure mode this contract exists to prevent.**
 
 **2a. Subscription gate (REQUIRED — do this before anything else).**
 
@@ -395,12 +401,18 @@ It returns `{corporation_id, has_ctc_access, is_subscribed}`.
 
 A corp with no subscription has no benchmark data, so every later call would be wasted.
 
-**2b. Plan.** Write the raw response to a temp file, then normalize:
+**2b. Plan.** Capture it with `capture_export.py call`, then normalize:
 
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_benchmark_result.py" \
-  <result_path> "<raw_dir>/plan.json"
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/capture_export.py" call \
+  --server "<SERVER>" --claude-bin "<claude_bin>" \
+  --tool compensation__get__plan --args '{"corporation_id": <corporation_pk>}' \
+  --out "<raw_dir>/plan.raw"
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_benchmark_result.py" "<raw_dir>/plan.raw" "<raw_dir>/plan.json"
 ```
+
+This is also the check that capture works here at all. If it exits 1 on anything other than a
+Carta error, stop the build per the capture contract.
 
 Capture from it: `benchmark_version.id` (pins 2c) and `peer_group.{code,label,dimension}`. If
 `dimension` is missing or is not one of `post_money` / `capital_raised` / `headcount`, **stop** —
@@ -424,37 +436,32 @@ one-call-per-job-area sweep.
 > hits the row cap. Verified against a live MCP — the timeout error itself recommends
 > `job_limit: 6`, and 6 completes comfortably (observed 55 and 102 rows per page).
 
-Call it with `equity_quantity: "FOUR_YEAR_GRANT"`, `benchmark_version_id`, exactly one
-`<dimension>_bucket` param, `job_offset`, and `job_limit: 6`.
+`capture_export.py sweep` sends `equity_quantity: "FOUR_YEAR_GRANT"`, `benchmark_version_id` and
+exactly one `<dimension>_bucket` param from `--args`, and adds `job_offset` and `job_limit: 6`
+itself.
 
-> **PAGING IS THE DEFAULT, not an opt-in.** A response that omits `jobs`/`job_limit` is the FIRST
-> PAGE — not the whole matrix. There is no way to get all 22 areas in one call.
->
-> **Keep calling with `job_offset` = the previous response's `next_job_offset` until that field
-> comes back `null`.** `total_job_areas` tells you how many exist overall (22), so you can tell a
-> stalled sweep from a finished one without counting job names yourself. Treating one response as
-> the complete cube would silently publish 6 of 22 job areas as if it were everything — this is
-> the exact failure mode the paging discipline below exists to prevent.
+> **PAGING IS THE DEFAULT, not an opt-in.** One response is one page of at most 6 job areas,
+> never the whole matrix, and there is no way to get all 22 areas in one call. The sweep keeps
+> calling with `job_offset` = the previous response's `next_job_offset` until that field comes
+> back `null`, so it cannot mistake 6 of 22 job areas for everything.
 
-Capture **every page** the moment it arrives, via the export-specific mode:
+Capture the corp's own group into the raw dir itself:
 
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_benchmark_result.py" \
-  --export-page <printed_result_path_or_.raw_file> "<raw_dir>"
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/capture_export.py" sweep \
+  --server "<SERVER>" --claude-bin "<claude_bin>" --dest "<raw_dir>" \
+  --args '{"corporation_id": <id>, "benchmark_version_id": <id>, "equity_quantity": "FOUR_YEAR_GRANT", "<dimension>_bucket": "<plan peer_group.code>"}'
 ```
 
-This is a **third capture path**, in addition to the two in the contract above — pass it the same
-kind of source (a harness-persisted result path, or a verbatim `.raw` file you Wrote first), but
-give it `<raw_dir>` itself as the destination, not a single `.json` file. It fans one page out into
-one `benchmark_<JOB>.json` per job area the page covered (matching the per-job-area files the old
-sweep produced, so `build_datadir.py` is unchanged), and appends the page's paging metadata to
-`<raw_dir>/export_pages.json`. It prints whether the sweep is COMPLETE or INCOMPLETE after every
-page — **read that line**; it is the authoritative answer to "am I done paging."
+It writes one `benchmark_<JOB>.json` per job area (matching the per-job-area files the old sweep
+produced, so `build_datadir.py` is unchanged) and the paging metadata in
+`<raw_dir>/export_pages.json`. **Read its last line** — `sweep COMPLETE` is the authoritative
+answer to "is this group captured".
 
-> **Never echo benchmark figures into the conversation** — they belong in the data dir. Report
-> progress as "N of 22 job areas covered so far" between pages, not row counts or numbers.
+> **Never echo benchmark figures into the conversation** — they belong in the data dir. The
+> script prints job-area and row counts only; report progress the same way.
 
-**Check coverage between pages** the same way as before:
+**Then check coverage:**
 
 ```bash
 uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/build_datadir.py" \
@@ -463,30 +470,25 @@ uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/build_datadi
 
 Same four lines as before (`captured` / `empty` / `CORRUPT` / `plan.json`), plus a fifth when the
 raw dir was fetched via the export: `EXPORT SWEEP: <warning>` if the last page's `next_job_offset`
-was still non-null — i.e. paging stopped before `total_job_areas` was covered. `build_datadir.py`
-**refuses to build** in that state even if every `benchmark_<JOB>.json` file happens to exist, so a
-build can never publish a sweep that was cut short mid-page.
+was still non-null. `build_datadir.py` **refuses to build** in that state even if every
+`benchmark_<JOB>.json` file happens to exist, so a build can never publish a sweep that was cut
+short mid-page.
 
-**Mid-sweep a non-zero exit is expected** — after page 1 of 2, most areas are legitimately still
-`MISSING`. Only the **final** check needs to come back clean (exit 0). Do not treat a non-zero exit
-between pages as a failure and re-fetch what you already have.
+**When the sweep fails** (`FAILED — <reason>`, exit 1): it has already retried the failing page
+once and removed the partial files.
 
-**When a page-level call fails** (403, 5xx, timeout, malformed response):
+1. **Run the sweep once more** if the reason looks transient (timeout, 5xx).
+2. **Never fall back to per-job-area `compensation:get:benchmark` calls, or to calling the export
+   yourself, to route around a failing sweep.** If the export is failing, the fix is its
+   arguments (wrong `benchmark_version_id`, bad bucket param, auth), not a different endpoint or
+   a different capture route.
+3. **If it fails twice**, stop before building and surface the reason — a page that won't
+   succeed after retries means something systemic. A timeout on a `job_limit: 6` page is NOT a
+   reason to ask for a bigger page; if 6 areas time out, a larger page certainly will.
 
-1. **Retry that page once**, same arguments (same `job_offset`). Transient 5xx and timeouts
-   usually clear.
-2. **Never fall back to per-job-area `compensation:get:benchmark` calls to route around a failing
-   export call.** That is the ~22-call pattern this command exists to replace — if the export is
-   failing, the fix is the export call's arguments (wrong `benchmark_version_id`, bad bucket
-   param, auth), not a different endpoint.
-3. **If a page fails twice**, stop before building and surface the error — with only 4 calls in
-   a full sweep, a page that won't succeed after a retry means something systemic, not bad luck on
-   one of 22 job areas. A timeout on a `job_limit: 6` page is NOT a reason to retry with a bigger
-   limit; if 6 areas time out, a larger page certainly will.
-
-A hard ceiling regardless of outcome: **at most 8 export calls per build** for the corp's OWN
-group (4 pages plus retries). Alternates in 2c-bis carry their own ceiling. If you're about to
-exceed either, stop and report — you're in a retry loop.
+A hard ceiling regardless of outcome: **at most 2 sweeps for the corp's OWN group** (each stops
+itself at 6 calls). Alternates in 2c-bis carry their own ceiling. If you're about to exceed
+either, stop and report — you're in a retry loop.
 
 **2c-bis. The other buckets in the corp's dimension — this is what turns on the peer-group
 dropdowns.**
@@ -532,12 +534,13 @@ Both are legitimate; only one is the default.
 > same role). That is why each group carries its own dimension and citation, and why the CSV
 > filename includes the dimension. Never describe a group by its bucket label alone.
 
-Capture each bucket into its OWN subdirectory — `--export-page` takes the destination, so point
-it at `peer_<CODE>/` instead of the raw dir:
+Capture each bucket into its OWN subdirectory — point `--dest` at `peer_<CODE>/` instead of
+the raw dir, with that dimension's bucket param in `--args`:
 
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_benchmark_result.py" \
-  --export-page <printed_result_path_or_.raw_file> "<raw_dir>/peer_<CODE>"
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/capture_export.py" sweep \
+  --server "<SERVER>" --claude-bin "<claude_bin>" --dest "<raw_dir>/peer_<CODE>" \
+  --args '{"corporation_id": <id>, "benchmark_version_id": <id>, "equity_quantity": "FOUR_YEAR_GRANT", "<dimension>_bucket": "<CODE>"}'
 ```
 
 Use the bucket code **exactly** as spelled above: `build_datadir.py` reads the code back out of
@@ -565,9 +568,9 @@ dimensions (8 post-money, 4 headcount, 6 capital raised), each a full 4-page swe
 alternates × 4 = 68 extra calls**, against the ~9 for the corp's own group.
 
 Sequentially that is minutes of wall clock, which is what the old "ask first" default was
-protecting against. **Fan the sweep out across subagents instead** (see below) and those 68
-calls cost roughly one bucket's wall clock, because buckets are independent. Parallelism, not a
-smaller scope, is the answer to the cost.
+protecting against. **Run the sweeps in parallel instead** (2c-ter) and those 68 calls cost a
+few buckets' wall clock, because buckets are independent. Parallelism, not a smaller scope, is
+the answer to the cost.
 
 | Scope | Calls | What the pickers show |
 |---|---|---|
@@ -583,95 +586,37 @@ The per-dimension figures differ — post-money has 7 alternates (~28 calls), ca
 A verified reference point: on corp 7 the full 18-bucket sweep completed with every page
 returning 200, so 68 is a measured figure rather than a guess.
 
-Ceiling for this step: **at most 6 export calls per bucket** (4 pages plus two retries), and
-**stop the whole step after 3 consecutive buckets fail**. A systemic failure — wrong
+Ceiling for this step: **one sweep per bucket** (the script stops itself at 6 export calls:
+4 pages plus two retries), and **stop the whole step after 3 consecutive buckets fail**. A systemic failure — wrong
 `benchmark_version_id`, auth, a bad bucket param — will fail on every bucket, and grinding
 through 17 of them wastes ~100 calls to learn what the second one already told you.
 
 **A failed alternate is not a failed build.** Alternates are additive: the corp's own group is
 already captured and the dashboard is complete without them. If a bucket's sweep won't finish,
-delete its partial `peer_<CODE>/` directory and move on — `build_datadir.py` already drops an
+delete its `peer_<CODE>/` directory (the script has already emptied it) and move on — `build_datadir.py` already drops an
 alternate with no rows and warns rather than publishing a group that renders as a blank grid,
 but removing the directory keeps the warning list honest about what you actually attempted.
 Report which buckets are in the switcher and which you dropped.
 
-**2c-ter. Fan the alternates out across subagents.**
+**2c-ter. Run the alternates in parallel.**
 
-**Do the alternates in parallel, one subagent per bucket.** Buckets are independent — each is a
-self-contained 4-page sweep writing to its own `peer_<CODE>/` directory, with no shared state
-and no ordering between them. Sweeping them in one context is the slowest possible arrangement
-and, on a client where MCP results arrive inline rather than as a file path, also the most
-fragile: every page's payload has to pass through the orchestrator twice (once arriving, once
-being written), and each of those hand-reproduced pages is an opportunity to corrupt a salary
-figure. Delegating puts the payloads in the subagent's context instead, so the orchestrator
-never handles them.
+**Issue the alternates' `capture_export.py sweep` commands as parallel Bash calls** — several in
+one message, about 6 at a time, until all 17 have run. Buckets are independent: each sweep
+writes only its own `peer_<CODE>/` directory, and each runs its own headless sessions.
 
-**Split one bucket per agent, 17 agents.** The harness caps concurrency (~10 at once) and
-queues the rest, so this lands in about two waves and the wall clock is a couple of buckets
-deep rather than 17. If the MCP starts rate-limiting, fall back to ~6 agents of ~3 buckets
-each — do NOT respond to rate limiting by narrowing the scope.
+**Do not delegate the sweeps to subagents.** `capture_export.py` keeps payloads out of every
+conversation, so a subagent adds cost and a place for a brief to drift without making capture
+any safer.
 
-**Do the version gate ONCE, in the orchestrator, before spawning anything.** Resolve the
-corporation, run Step 2a/2b, and hand every agent the already-pinned `benchmark_version_id`.
-Seventeen agents each calling `get:plan` is 17 wasted calls, and worse, a release published
-mid-sweep could leave different buckets pinned to different versions — figures that silently
-disagree across the picker.
+**Do the version gate ONCE, before starting any sweep.** Resolve the corporation, run Step
+2a/2b, and pass the same pinned `benchmark_version_id` to every sweep. The script refuses a page
+from any other release, so a release published mid-sweep fails that bucket rather than leaving
+buckets that silently disagree across the picker.
 
-Each agent's brief needs, at minimum:
-
-- Its bucket code(s), and **the matching bucket param for that dimension** — `post_money_bucket`
-  / `headcount_bucket` / `capital_raised_bucket`, exactly one per call.
-- The pinned `benchmark_version_id`, `corporation_id`, and `equity_quantity: "FOUR_YEAR_GRANT"`.
-- The absolute raw-dir path, and the destination `<raw_dir>/peer_<CODE>` — the code spelled
-  **exactly** as in the table above, since the builder reads the dimension and label back out of
-  the directory name.
-- The paging discipline: `job_limit: 6`, page until `next_job_offset` is null.
-- **The capture contract, in full.** The agent must write the tool result verbatim and pass it
-  to `save_benchmark_result.py --export-page`; it must never retype or summarise a payload.
-- **A verification step, done by PARSING — not by eye.** The script prints the job areas and row
-  count it captured; the agent parses the response's own `jobs_covered` and `row_count` and
-  compares them programmatically, then re-captures on any mismatch rather than proceeding. Say
-  this explicitly in the brief: an agent told only to "confirm the counts match" will skim two
-  numbers that look alike, and a single transposed digit inside a 100-row page changes neither
-  the row count nor the job list. Structural comparison is what catches a payload that arrived
-  intact but was written back wrong — the one failure the capture contract exists to prevent, and
-  one that a real sweep has already produced and caught this way.
-- The per-bucket ceiling (6 calls) and the instruction to delete a partial `peer_<CODE>/` and
-  report it rather than leaving it half-swept.
-- **Never echo benchmark figures in its report** — the same rule that applies here. Agents
-  report bucket codes, page counts and row counts only.
-
-**Sanity-check the figures themselves once the sweep lands.** Counts and job lists prove a page
-arrived; they say nothing about whether its numbers survived being written back out. One cheap
-pass over the captured rows catches what counting cannot:
-
-```bash
-uv run - <<'PY'
-import json, glob, os
-bad = 0; rows = 0
-for f in glob.glob(os.path.expanduser("<raw_dir>/peer_*/benchmark_*.json")):
-    for r in json.load(open(f)).get("benchmarks") or []:
-        rows += 1
-        p = (r.get("salary_benchmarks") or {}).get("percentiles") or {}
-        v = [float(p[k]) for k in ("p25", "p50", "p75", "p90") if p.get(k) is not None]
-        # Percentiles are ordered by construction, and a salary outside this range
-        # is not a number the API returns -- either signals a mangled write.
-        if v != sorted(v) or any(x < 1000 or x > 50_000_000 for x in v):
-            bad += 1
-print("rows", rows, "anomalies", bad)
-PY
-```
-
-A transposed digit usually breaks the ordering or leaves the plausible range, so this turns a
-silent corruption into a visible one for the cost of a second. It is a smoke test, not a proof —
-a wrong digit that happens to preserve both properties still slips through, which is why the
-per-page parsed comparison above remains the primary defence.
-
-**Verify the fan-out centrally when the agents return.** Do not trust the reports alone — read
-each bucket's `peer_<CODE>/export_pages.json` and confirm `sweep_complete: true`. A retried page
-can appear twice in a manifest's `pages` list; that is harmless, because a re-capture overwrites
-the same per-job-area files rather than appending, but a manifest whose `sweep_complete` is
-false means that bucket really is short and must be re-run or dropped.
+**Verify centrally when the sweeps return.** Read each command's last line, then run
+`build_datadir.py --raw "<raw_dir>" --check` once: every bucket in the switcher must have a
+`peer_<CODE>/export_pages.json` with `sweep_complete: true`. Drop any bucket whose sweep printed
+`FAILED` and say which ones are missing.
 
 **2d. Employee list — one bulk export (feeds the Scorecard tab).**
 
@@ -685,13 +630,16 @@ benchmarked employee in ONE columnar response — no `page`, no `page_size`, not
 through. Capture it with the export flag:
 
 ```bash
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/capture_export.py" call \
+  --server "<SERVER>" --claude-bin "<claude_bin>" \
+  --tool compensation__export__scorecard --args '{"corporation_id": <id>}' \
+  --out "<raw_dir>/roster_export.raw"
 uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_roster_page.py" \
-  --export-scorecard <printed_result_path_or_.raw_file> "<raw_dir>"
+  --export-scorecard "<raw_dir>/roster_export.raw" "<raw_dir>"
 ```
 
-Same source rules as the capture contract above (harness-persisted path, or a verbatim `.raw`
-file you Wrote first), and the same destination convention as `--export-page`: pass `<raw_dir>`
-itself, not a single `.json`. The script writes `<raw_dir>/roster_pages.json` in the same schema
+The capture contract applies in full: the employee list is names and salaries, so it is never
+written out by hand. Pass `<raw_dir>` itself as the destination, not a single `.json`. The script writes `<raw_dir>/roster_pages.json` in the same schema
 the paged path produces, so `build_datadir.py` does not care which route was used.
 
 > **Read the script's last line — it is the authoritative answer to "am I done."** It prints
@@ -720,12 +668,18 @@ Three things that will bite otherwise:
 <details>
 <summary><b>Fallback — the paged sweep</b> (only when the export is unavailable or refuses)</summary>
 
-Call `compensation:get:employee-scorecard` with **`page_size: 10`**, then page with
-`page: 2, 3, …`. Capture **every page the moment it arrives** (no `--export-scorecard` flag):
+Fetch `compensation:get:employee-scorecard` with **`page_size: 10`**, then page with
+`page: 2, 3, …`. Capture **every page** through `capture_export.py call`, then save it (no
+`--export-scorecard` flag):
 
 ```bash
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/capture_export.py" call \
+  --server "<SERVER>" --claude-bin "<claude_bin>" \
+  --tool compensation__get__employee-scorecard \
+  --args '{"corporation_id": <id>, "page": <n>, "page_size": 10}' \
+  --out "<raw_dir>/roster_page_<n>.raw"
 uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_roster_page.py" \
-  <printed_result_path_or_.raw_file> "<raw_dir>"
+  "<raw_dir>/roster_page_<n>.raw" "<raw_dir>"
 ```
 
 > **Why 10 and not 30.** A `page_size` of 30 is REJECTED — the response exceeds the 80,000-char
@@ -766,12 +720,16 @@ call_tool({"name": "compensation__get__benchmark_locations",
            "arguments": {"geo_adjustment_version_id": <geo_adjustment_version.id>}})
 ```
 
-The result is ~65KB, so the harness persists it to a file; capture it per Case 1:
+The result is ~65KB, so the harness saves it to a file. Pass the printed path straight
+through:
 
 ```bash
 uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_benchmark_result.py" \
   <printed_result_path> "<raw_dir>/location_catalog.json"
 ```
+
+If it arrives inline instead, fetch it with `capture_export.py call` (`--tool
+compensation__get__benchmark_locations`) and pass the `--out` file — never write it out yourself.
 
 If the plan has no `geo_adjustment_version`, or the command is unknown (an older Carta
 MCP), skip this: the console then offers only the locations fetched below.
@@ -793,18 +751,18 @@ location=Tulsa,OK,USA	dir=<raw_dir>/geo_tulsa-ok	employees=37	label=Tulsa, OK
 and `to_fetch=N`. It also writes each `geo_<slug>/location.json`. Re-running it after a
 partial sweep lists only what is left.
 
-For each line, run a full 4-page sweep exactly like 2c — same `benchmark_version_id`,
-`equity_quantity: "FOUR_YEAR_GRANT"`, the plan's own `<dimension>_bucket`, `job_limit: 6`,
-paging until `next_job_offset` is null — adding **`"location": "<location>"` verbatim** from
-the line, and capturing every page into that line's `dir`:
+For each line, run a sweep exactly like 2c — same `benchmark_version_id`,
+`equity_quantity: "FOUR_YEAR_GRANT"` and the plan's own `<dimension>_bucket` — adding
+**`"location": "<location>"` verbatim** from the line, into that line's `dir`:
 
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_benchmark_result.py" \
-  --export-page <printed_result_path_or_.raw_file> "<dir>"
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/capture_export.py" sweep \
+  --server "<SERVER>" --claude-bin "<claude_bin>" --dest "<dir>" \
+  --args '{"corporation_id": <id>, "benchmark_version_id": <id>, "equity_quantity": "FOUR_YEAR_GRANT", "<dimension>_bucket": "<plan peer_group.code>", "location": "<location>"}'
 ```
 
-The capture contract, the parsed verification and the per-sweep ceiling (6 calls) are the
-same as for peer groups, and the sweeps can fan out across subagents the same way (2c-ter).
+The sweep keeps that dir's `location.json`. The ceiling is the same as for peer groups (one
+sweep per location), and the sweeps run in parallel the same way (2c-ter).
 
 - **Everything else is fetched when picked.** With the list saved and `mcpServer` in
   `meta.json` (2e), the console fetches any other location, any alternate peer group's
@@ -949,9 +907,12 @@ uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_retenti
  "mcpServer": "<SERVER>"}
 ```
 
-`mcpServer` is the server identifier from Step 1 (`carta`, `claude_ai_Carta`, …), copied
-verbatim. The console's on-demand location fetch calls `mcp__<mcpServer>__call_tool`, and
-nothing else; without it the Location picker offers only what the build fetched.
+`mcpServer` is the `--server` value the build's `capture_export.py` calls succeeded with —
+the identifier from Step 1 (`carta`, `claude_ai_Carta`, …) copied verbatim, unless a
+`server_unavailable` answer replaced it. The console's fetches are headless sessions too, so
+they need the headless name. The console's on-demand location fetch calls
+`mcp__<mcpServer>__call_tool`, and nothing else; without it the Location picker offers only
+what the build fetched.
 
 <details>
 <summary><b>Staff preview — showing the hidden Refresh planner tab</b></summary>
@@ -1192,9 +1153,10 @@ does not need to hear about it.
 | Symptom | Cause | Tell user |
 |---|---|---|
 | `exceeded 10000ms time limit` or `"Too many job areas"` on `compensation:export:benchmarks` | Too many areas in one call — usually `job_limit` omitted. The limit that bites first is a **10s server timeout**, not the ~300-row cap. Use `job_limit: 6` and page with `job_offset`; an explicit `job_limit` above 12 is a 400, not clamped. | "The request was too large. Retrying in smaller batches…" |
-| An export page 403s / 5xxs | Transient. Retry that page once, same `job_offset`. **Never** fall back to per-job-area `compensation:get:benchmark` calls to route around it — fix the export call's arguments instead. | — (retry silently; only speak up if the retry also fails) |
-| An export page fails twice | Systemic, not bad luck: one call covers up to 12 of 22 job areas, so a page that won't succeed after a retry means a wrong `benchmark_version_id`, bad bucket param, or auth. Stop before building. | "The benchmark fetch failed twice on the same page, so I stopped rather than build a partial dashboard. [the error]" |
-| `build_datadir.py` reports `EXPORT SWEEP: ... stopped early` or refuses to build | Paging didn't reach `next_job_offset: null`. Fetch the remaining page(s) — check `<raw_dir>/export_pages.json` for `last_next_job_offset`. | — (fetch the rest, then build; mention only if pages cannot be completed) |
+| `capture_export.py sweep` prints `FAILED` once | Usually transient — the script already retried the failing page once. Run the sweep once more. **Never** fall back to per-job-area `compensation:get:benchmark` calls, or to calling the export yourself — fix the arguments instead. | — (retry silently; only speak up if the retry also fails) |
+| A sweep fails twice | Systemic, not bad luck: a wrong `benchmark_version_id`, bad bucket param, or auth. Stop before building (for an alternate, drop that bucket). | "The benchmark fetch failed twice, so I stopped rather than build a partial dashboard. [the reason]" |
+| `build_datadir.py` reports `EXPORT SWEEP: ... stopped early` or refuses to build | Paging didn't reach `next_job_offset: null` in that directory. Re-run its `capture_export.py sweep`, which replaces the partial sweep. | — (re-run, then build; mention only if it cannot be completed) |
+| `capture_export: FAILED — no claude CLI found`, or the first `capture_export.py` call fails on something other than a Carta error | The build cannot capture data without a headless `claude` session. Do NOT fall back to calling `call_tool` and writing the result out yourself — that is the retyping the capture contract forbids. | "Building needs the Claude Code CLI to fetch your data safely, and it isn't working here: [reason]. Any cached dashboard still opens." |
 | `"Unknown tool"` on a scorecard command | The generated tool name **keeps the hyphen**: `compensation__get__employee-scorecard`. Only colons become `__`, so `..._scorecard` (underscore) is not a real tool. `call_tool` works with the correct name — verified against a live MCP. (`fetch` is not registered in current builds, so it is not the fallback either.) | — (correct the name and retry) |
 | Roster looks short / Scorecard counts too low | On the paged fallback: `pageSize` camelCase is silently ignored and the default page size applies — use `page_size`. Also check you did not pass `score=`, which filters on the nullable overall band and drops unscored employees. | "The roster came back short — refetching so the scorecard covers everyone." |
 | `compensation:export:scorecard` returns 400 "at most 200 fit" | The corporation is larger than one export response. Use the paged fallback in Step 2d — do NOT narrow with `job_filters`, which silently under-reports who is below market. | — (page through it; the user gets the complete roster either way) |

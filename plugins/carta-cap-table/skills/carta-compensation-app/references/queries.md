@@ -47,11 +47,12 @@ Save the whole response to `<rawdir>/plan.json`. The builder reads:
 
 ## §2b — Capturing results
 
-**Never hand-copy an MCP response into a raw file.** Every response goes through the normalizer:
+**Never hand-copy an MCP response into a raw file, including with the Write tool.** Fetch it with
+`capture_export.py` (see the capture contract in SKILL.md Step 2) and pass the file it writes, or
+the path the harness saved a large result to, through the normalizer:
 
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_benchmark_result.py" <result_path> "<raw_dir>/<name>.json"
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_benchmark_result.py" - "<raw_dir>/<name>.json"   # or pipe via stdin
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_benchmark_result.py" <captured_or_saved_path> "<raw_dir>/<name>.json"
 ```
 
 It unwraps whatever shape the transport used — a bare payload, an MCP content-block list, a
@@ -133,10 +134,9 @@ overall. Treating one response as the complete cube would silently publish 6 of 
 if it were everything. An explicit `job_limit` above 12 is a **400 error**, not silently clamped —
 so a truncated sweep can never look complete by accident.
 
-Capture each page per the capture contract in SKILL.md (Case 3) — pass the persisted result path
-(or a verbatim-written `.raw` file) to `save_benchmark_result.py --export-page`, which fans the
-page out into one `<rawdir>/benchmark_<JOB>.json` per job area it covered. **Do not hand-copy
-response bodies into that file yourself.**
+Capture a whole sweep with `capture_export.py sweep` per the capture contract in SKILL.md — it
+pages for you and fans each page out into one `<rawdir>/benchmark_<JOB>.json` per job area it
+covered. **Never call the export yourself and write the response out.**
 
 **Batching rules — these are load-bearing:**
 
@@ -148,8 +148,8 @@ response bodies into that file yourself.**
 | Explicit `job_limit` above 12 | ❌ 400 error, not clamped. |
 | Omitting `job_limit` entirely | ❌ asks for every remaining area; ~17s against a 10s server timeout, so the call fails and returns nothing. |
 
-A full matrix is **4 export calls** (22 areas ÷ 6 per page). Capture each page to disk (via
-`--export-page`) the moment it arrives — see SKILL.md Step 2c.
+A full matrix is **4 export calls** (22 areas ÷ 6 per page), all made by one
+`capture_export.py sweep` — see SKILL.md Step 2c.
 
 **`equity_quantity` must be `FOUR_YEAR_GRANT`.** The MCP default is `NTM_VESTING`, which
 returns roughly a quarter of the value HR users expect — a hard tie-out failure against the

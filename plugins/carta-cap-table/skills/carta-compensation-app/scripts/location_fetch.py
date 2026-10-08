@@ -102,15 +102,15 @@ def export_args(config, location, local_currency, job_offset):
     return args
 
 
-def page_prompt(server, args):
-    # type: (str, dict) -> str
+def page_prompt(server, args, tool=EXPORT_TOOL):
+    # type: (str, dict, str) -> str
     inst = json.dumps(_INSTRUMENTATION)
     return (
         "Do these two tool calls in order, then reply DONE:\n"
         "1. mcp__%s__welcome {\"_instrumentation_v2\": %s}\n"
         "2. mcp__%s__call_tool {\"name\": \"%s\", \"arguments\": %s, "
         "\"_instrumentation_v2\": %s}"
-        % (server, inst, server, EXPORT_TOOL, json.dumps(args), inst)
+        % (server, inst, server, tool, json.dumps(args), inst)
     )
 
 
@@ -166,8 +166,27 @@ def _unpersist(text):
         return fh.read()
 
 
-def read_export_result(events, server, args):
-    # type: (object, str, dict) -> str
+def _tool_prefix(name):
+    # type: (str) -> str
+    return re.sub(r"_+", "_", re.sub(r"[^A-Za-z0-9_-]", "_", name or "")).strip("_")
+
+
+def check_server(init, server):
+    # type: (dict, str) -> None
+    tools = init.get("tools") or []
+    if "mcp__%s__call_tool" % server in tools:
+        return
+    for s in init.get("mcp_servers") or []:
+        if _tool_prefix(s.get("name")) == server and s.get("status") == "pending":
+            return
+    reachable = sorted({t[len("mcp__"):-len("__call_tool")] for t in tools
+                        if t.startswith("mcp__") and t.endswith("__call_tool")})
+    raise FetchError("server_unavailable", "%s is not connected in a headless session; "
+                     "reachable: %s" % (server, ", ".join(reachable) or "none"))
+
+
+def read_export_result(events, server, args, tool=EXPORT_TOOL):
+    # type: (object, str, dict, str) -> str
     """The raw text of the export call's tool result, from a stream of events.
 
     Raises FetchError when the session called the export with anything other than
@@ -178,12 +197,14 @@ def read_export_result(events, server, args):
     export_ids = set()
     for ev in events:
         t = ev.get("type")
-        if t == "assistant":
+        if t == "system" and ev.get("subtype") == "init":
+            check_server(ev, server)
+        elif t == "assistant":
             for b in ev.get("message", {}).get("content", []) or []:
                 if b.get("type") != "tool_use" or b.get("name") != call_name:
                     continue
                 sent = b.get("input") or {}
-                if sent.get("name") != EXPORT_TOOL or sent.get("arguments") != args:
+                if sent.get("name") != tool or sent.get("arguments") != args:
                     raise FetchError("wrong_arguments", json.dumps(sent)[:300])
                 export_ids.add(b.get("id"))
         elif t == "user":
@@ -223,8 +244,8 @@ def _stop(proc):
             proc.kill()
 
 
-def run_page(claude_bin, server, args, cwd, timeout=PAGE_TIMEOUT):
-    # type: (str, str, dict, str, int) -> str
+def run_page(claude_bin, server, args, cwd, timeout=PAGE_TIMEOUT, tool=EXPORT_TOOL):
+    # type: (str, str, dict, str, int, str) -> str
     """One export page through one headless session. Returns the raw result text."""
     try:
         proc = subprocess.Popen(
@@ -237,9 +258,9 @@ def run_page(claude_bin, server, args, cwd, timeout=PAGE_TIMEOUT):
     timer = threading.Timer(timeout, _stop, args=(proc,))
     timer.start()
     try:
-        proc.stdin.write(page_prompt(server, args))
+        proc.stdin.write(page_prompt(server, args, tool))
         proc.stdin.close()
-        return read_export_result(_events(proc, time.time() + timeout), server, args)
+        return read_export_result(_events(proc, time.time() + timeout), server, args, tool)
     finally:
         timer.cancel()
         _stop(proc)
