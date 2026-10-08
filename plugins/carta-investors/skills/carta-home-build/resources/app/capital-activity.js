@@ -600,18 +600,9 @@ async function renderPreviewRemindConfirm() {
     </div>`;
   overlay.classList.add('ca-confirm-visible');
 
-  const key = `${activityId}:${partnerId}`;
-  let view = _emailPreviewCache[key];
-  let error = null;
-  if (!view) {
-    try {
-      view = await fetchEmailPreview(fundUuid, activityId, partnerId);
-      _emailPreviewCache[key] = view;
-    } catch (e) {
-      console.error('[remind preview error]', e);
-      error = e;
-    }
-  }
+  // One await, right before the stale check, so nothing async sits between it and the render.
+  const { view, error, logoDataUri } = await loadEmailPreview(fundUuid, activityId, partnerId);
+  if (error) console.error('[remind preview error]', error);
   const body = document.getElementById('ca-remind-preview-body');
   // Dismissed, or a different row was opened, while the preview was in flight.
   if (!body || _pendingRemind?.partnerId !== partnerId) return;
@@ -622,7 +613,7 @@ async function renderPreviewRemindConfirm() {
     body.innerHTML = '<div class="loading-row" style="padding:16px 0;">Preview failed to load. You can still send the reminder.</div>';
     return;
   }
-  renderEmailPreview(body, view);
+  renderEmailPreview(body, view, logoDataUri);
 }
 
 // Both flows share the overlay, so a backdrop click has to clear either one.
@@ -913,18 +904,8 @@ async function renderBulkPreviewFor(key) {
   }
   slot.innerHTML = `<div class="loading-row" style="padding:20px 0;">Loading preview for ${escHtml(g.name)}…</div>`;
 
-  const cacheKey = `${activityId}:${g.partnerId}`;
-  let view = _emailPreviewCache[cacheKey];
-  let error = null;
-  if (!view) {
-    try {
-      view = await fetchEmailPreview(g.fundUuid, activityId, g.partnerId);
-      _emailPreviewCache[cacheKey] = view;
-    } catch (e) {
-      console.error('[bulk remind preview error]', e);
-      error = e;
-    }
-  }
+  const { view, error, logoDataUri } = await loadEmailPreview(g.fundUuid, activityId, g.partnerId);
+  if (error) console.error('[bulk remind preview error]', error);
   // Dismissed, or another investor was picked, while the preview was in flight.
   if (_pendingBulk?.previewKey !== key) return;
   const body = document.getElementById('ca-bulk-preview-body');
@@ -935,7 +916,7 @@ async function renderBulkPreviewFor(key) {
     body.innerHTML = '<div class="loading-row" style="padding:16px 0;">Preview failed to load. You can still send the reminders.</div>';
     return;
   }
-  renderEmailPreview(body, view);
+  renderEmailPreview(body, view, logoDataUri);
 }
 
 async function submitBulkRemind() {
@@ -1125,6 +1106,20 @@ async function fetchEmailPreview(fundUuid, activityId, partnerId) {
   return JSON.parse(res.content?.[0]?.text ?? '{}');
 }
 
+// Starts the logo fetch alongside the preview fetch and resolves both together. A failed
+// preview comes back as `error` (not thrown) so each caller keeps its own error UI.
+async function loadEmailPreview(fundUuid, activityId, partnerId) {
+  const key = `${activityId}:${partnerId}`;
+  const logoPending = fetchFirmLogoDataUri();
+  let view = _emailPreviewCache[key];
+  let error = null;
+  if (!view) {
+    try { view = _emailPreviewCache[key] = await fetchEmailPreview(fundUuid, activityId, partnerId); }
+    catch (e) { error = e; }
+  }
+  return { view, error, logoDataUri: await logoPending };
+}
+
 async function openEmailPreview(fundUuid, activityId, partnerId, partnerName) {
   trackHome("click", "CartaHome.CapActivity.PreviewEmail");
   let overlay = document.getElementById('ca-preview-overlay');
@@ -1151,18 +1146,8 @@ async function openEmailPreview(fundUuid, activityId, partnerId, partnerName) {
   overlay.classList.add('ca-preview-visible');
 
   const reqId = ++_previewRequestId;
-  const key = `${activityId}:${partnerId}`;
-  let view = _emailPreviewCache[key];
-  let error = null;
-  if (!view) {
-    try {
-      view = await fetchEmailPreview(fundUuid, activityId, partnerId);
-      _emailPreviewCache[key] = view;
-    } catch (e) {
-      console.error('[email preview error]', e);
-      error = e;
-    }
-  }
+  const { view, error, logoDataUri } = await loadEmailPreview(fundUuid, activityId, partnerId);
+  if (error) console.error('[email preview error]', error);
   // Closed, or a second row's preview was opened, while this one was in flight.
   if (reqId !== _previewRequestId) return;
   const body = document.getElementById('ca-preview-body');
@@ -1172,10 +1157,49 @@ async function openEmailPreview(fundUuid, activityId, partnerId, partnerName) {
     body.innerHTML = '<div class="loading-row" style="padding:16px 0;">Preview failed to load. Close and try again.</div>';
     return;
   }
-  renderEmailPreview(body, view);
+  renderEmailPreview(body, view, logoDataUri);
 }
 
-function renderEmailPreview(body, view) {
+// The firm's own logo as a data: URI, or null. Cached for the session because every
+// reminder in the firm carries the same logo.
+let _firmLogoPromise = null;
+function fetchFirmLogoDataUri() {
+  if (!_benchmarkFirmId) return Promise.resolve(null);
+  if (!_firmLogoPromise) {
+    _firmLogoPromise = _mcp("fetch", {
+      command: "fa:get:firm_logo",
+      params: { firm_uuid: _benchmarkFirmId },
+    }).then(res => {
+      if (res.isError) return null;
+      return JSON.parse(res.content?.[0]?.text ?? '{}').data_uri ?? null;
+    }).catch(e => {
+      console.error('[firm logo error]', e);
+      return null;
+    });
+  }
+  return _firmLogoPromise;
+}
+
+// The sandbox CSP is img-src 'self' data:, so an email image served from a URL shows
+// as a broken icon. The firm's co-branding logo (alt="Logo" in fund-admin's email base
+// template) is swapped for its data: URI; any other URL image is dropped and counted
+// so the preview can say the sent email carries more than it shows.
+function inlineEmailImages(html, logoDataUri) {
+  let unresolved = 0;
+  const out = String(html).replace(/<img\b[^>]*>/gi, tag => {
+    const src = /\bsrc\s*=\s*"([^"]*)"/i.exec(tag)?.[1] ?? '';
+    if (/^data:/i.test(src)) return tag;
+    if (logoDataUri && /\balt\s*=\s*"Logo"/i.test(tag)) {
+      return tag.replace(/\bsrc\s*=\s*"[^"]*"/i, `src="${logoDataUri}"`);
+    }
+    unresolved++;
+    return '';
+  });
+  return { html: out, unresolved };
+}
+
+function renderEmailPreview(body, view, logoDataUri) {
+  const { html, unresolved } = inlineEmailImages(view.body ?? '', logoDataUri);
   const recipients = view.recipients ?? [];
   const label = (d) => d.name ? `${d.name} <${d.email}>` : d.email;
   const line = (heading, list) => list.length === 0 ? '' :
@@ -1189,9 +1213,12 @@ function renderEmailPreview(body, view) {
       ${line('Cc:', recipients.filter(d => d.addr_type === 'CC'))}
       <div class="ca-preview-field"><span class="ca-preview-field-lbl">Subject:</span>${escHtml(view.subject ?? '')}</div>
     </div>
-    <iframe class="ca-preview-frame" sandbox="" title="Email preview" srcdoc="${escHtml(view.body ?? '')}"></iframe>
-    ${(view.body ?? '').includes('[/LINK_CARTA]')
+    <iframe class="ca-preview-frame" sandbox="" title="Email preview" srcdoc="${escHtml(html)}"></iframe>
+    ${html.includes('[/LINK_CARTA]')
       ? '<div class="ca-preview-note">The [/LINK_CARTA] placeholder is a preview artifact — the sent email carries a real link.</div>'
+      : ''}
+    ${unresolved > 0
+      ? '<div class="ca-preview-note">Some images in the sent email can\'t be shown in this preview.</div>'
       : ''}`;
 }
 
