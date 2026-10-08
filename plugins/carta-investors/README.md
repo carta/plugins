@@ -44,6 +44,7 @@ After installing, restart Claude Code and run `/mcp` to complete OAuth authentic
 | `carta-partner-rollforward` | Partner rollforward as a live Cowork artifact, firm-wide by default and filterable by fund or fund family — the in-app Partner Rollforward across funds, a month-by-month partners' capital walk with carried interest accrued broken out, a one-LP capital account statement by allocation bucket for audit confirmations, and a commitment / funded / unfunded rollforward for capital calls. Invoke with "partner rollforward" or "partners' capital rollforward". |
 | `carta-manco-reporting` | Interactive management-company reporting dashboard — a local React app over live ManCo financials with P&L drill-down, Budget vs Actuals, management fee income by fund, expense breakdowns, and journal-entry detail. Invoke with a firm name, e.g. "ManCo reporting for Demo Capital". |
 | `deal-group-wf-health` | Read-only dashboard of waterfall health across a firm's deal groups (pass any firm/org id) — model assignment (stranded/none), ownership-link defects, orphaned models, and whether recent runs reached every entity. Internal-only. |
+| `carta-entity-map` | Redact a deal group's entity map in Carta's view by chatting — group, rename or hide entities, hide ownership %, add a title and footer — then export the PDF from the view. Internal-only. |
 
 ### Budgeting (Excel)
 
