@@ -12,14 +12,17 @@ when_to_use: >-
   waterfall or payout scenario skill.
 allowed-tools:
   - mcp__carta__call_tool
+  - mcp__carta__read_tool
   - mcp__carta__list_contexts
   - mcp__carta__set_context
   - mcp__carta__list_accounts
   - mcp__claude_ai_Carta__call_tool
+  - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__list_contexts
   - mcp__claude_ai_Carta__set_context
   - mcp__claude_ai_Carta__list_accounts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_accounts
@@ -27,7 +30,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.95.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.95.3</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -52,9 +55,9 @@ You need:
 
 > The gateway defaults to `detail=summary` for list commands. This skill needs individual records, so `"detail": "full"` is passed explicitly.
 
-- `call_tool({"name": "cap_table__get__convertible_notes", "arguments": {"corporation_id": corporation_id, "detail": "full"}})` — SAFEs + convertible notes
-- `call_tool({"name": "cap_table__get__cap_table_by_share_class", "arguments": {"corporation_id": corporation_id}})` — current fully diluted count
-- `call_tool({"name": "cap_table__get__409a_valuations", "arguments": {"corporation_id": corporation_id}})` — current FMV (for reference)
+- `read_tool({"name": "cap_table__get__convertible_notes", "arguments": {"corporation_id": corporation_id, "detail": "full"}})` — SAFEs + convertible notes
+- `read_tool({"name": "cap_table__get__cap_table_by_share_class", "arguments": {"corporation_id": corporation_id}})` — current fully diluted count
+- `read_tool({"name": "cap_table__get__409a_valuations", "arguments": {"corporation_id": corporation_id}})` — current FMV (for reference)
 
 ## Key Fields
 
@@ -75,9 +78,9 @@ From convertible instruments:
 Fetch all three data sources **in a single turn** (parallel tool calls) — do NOT fetch them sequentially:
 
 ```
-call_tool({"name": "cap_table__get__convertible_notes", "arguments": {"corporation_id": corporation_id, "detail": "full"}})
-call_tool({"name": "cap_table__get__cap_table_by_share_class", "arguments": {"corporation_id": corporation_id}})
-call_tool({"name": "cap_table__get__409a_valuations", "arguments": {"corporation_id": corporation_id}})
+read_tool({"name": "cap_table__get__convertible_notes", "arguments": {"corporation_id": corporation_id, "detail": "full"}})
+read_tool({"name": "cap_table__get__cap_table_by_share_class", "arguments": {"corporation_id": corporation_id}})
+read_tool({"name": "cap_table__get__409a_valuations", "arguments": {"corporation_id": corporation_id}})
 ```
 
 - Convertible notes: SAFEs + notes (filter to `status_explanation: "Outstanding"`)

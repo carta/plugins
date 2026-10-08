@@ -8,8 +8,11 @@ description: >-
 model: sonnet
 allowed-tools:
   - mcp__carta__call_tool
+  - mcp__carta__read_tool
   - mcp__claude_ai_Carta__call_tool
+  - mcp__claude_ai_Carta__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - Bash(find * -name "report_processor.py"*)
   - Bash(find ~ -name "report_processor.py"*)
   - Bash(find * -name "excel_exporter.py"*)
@@ -18,13 +21,13 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.95.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.95.3</carta-plugin>
 
 # Excel Export
 
 **Context expected from the calling skill (must be in session before this skill is invoked):**
 - `user_report_pk` — needed to check for the cached report file and to fetch a fresh download URL if the file is absent
-- `corporation_id` — needed for `call_tool({"name": "reporting__get__download_url", ...})`
+- `corporation_id` — needed for `read_tool({"name": "reporting__get__download_url", ...})`
 - Column config — either parsed from the artifact prompt bar payload (Claude Desktop) or confirmed during the Customization Checkpoint in `carta-reporting-markdown` (Claude Code)
 - Corporation legal name, `as_of_date`, user full name — used as `--title`, `--as-of-date`, `--generated-by` args to `excel_exporter.py`
 
@@ -69,7 +72,7 @@ Use the column list confirmed during the Customization Checkpoint (resolved in `
 
 Check if `/tmp/carta_report_<user_report_pk>.json` is available (use `user_report_pk` from this session):
 - **File ready** → pass it as `"local_file"` to `report_processor.py`.
-- **Not ready** → call `call_tool({"name": "reporting__get__download_url", "arguments": { user_report_pk, corporation_id }})` to get a fresh presigned URL and pass it as `"download_url"` instead.
+- **Not ready** → call `read_tool({"name": "reporting__get__download_url", "arguments": { user_report_pk, corporation_id }})` to get a fresh presigned URL and pass it as `"download_url"` instead.
 
 **Always pipe through `report_processor.py` → `excel_exporter.py`, regardless of data size or complexity.** Never write Excel files directly with openpyxl or any other library — the scripts handle Carta branding (logo, header, fonts, number formats) that will be missing from any ad-hoc implementation. This applies even when the dataset is small (e.g. 3 rows) or when sheets need to be combined.
 

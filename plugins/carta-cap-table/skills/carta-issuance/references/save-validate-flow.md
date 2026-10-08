@@ -53,9 +53,11 @@ The user asked to save and stop, rather than to review and issue.
 1. Build the `drafts` array (same construction as above).
 2. Thread `draft_set_id` + `draft_pk`s from your tracked state ([hard rule
    3](../SKILL.md#hard-rules)).
-3. Call `save_drafts`, then, with the `draft_set_id` it returns (or already had):
+3. Call `save_drafts`, then, with the `draft_set_id` it returns (or already had), call
+   `validate_drafts`. It only checks the draft set and saves nothing. carta-mcp marks it
+   read-only (`search_tools` returns `read_only: true`), so it goes through `read_tool`:
    ```
-   mcp__carta__call_tool({"name": "cap_table__mutate__validate_drafts", "arguments": {
+   mcp__carta__read_tool({"name": "cap_table__mutate__validate_drafts", "arguments": {
      "corporation_id": <id>, "security_type": "<certificate|option_grant|piu>",
      "draft_set_id": <id>}})
    ```

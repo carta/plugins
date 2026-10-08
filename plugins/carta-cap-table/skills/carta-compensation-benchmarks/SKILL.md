@@ -10,12 +10,15 @@ version: 1.1.0
 model: sonnet
 allowed-tools:
   - mcp__carta__call_tool
+  - mcp__carta__read_tool
   - mcp__carta__search_tools
   - mcp__carta__list_accounts
   - mcp__claude_ai_Carta__call_tool
+  - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__search_tools
   - mcp__claude_ai_Carta__list_accounts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__search_tools
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_accounts
   - AskUserQuestion
@@ -29,7 +32,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.95.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.95.3</carta-plugin>
 
 # Benchmark Query
 
@@ -50,9 +53,9 @@ Look up Carta Total Compensation (CTC) market salary and equity benchmarks for a
 >
 > See `carta-compensation-rolematcher` → "Display → API enum tables" for the full mapping.
 
-> **Use MCP, not CLI.** Every API call in this skill goes through the carta MCP server's `mcp__carta__call_tool` tool, with `compensation:*` commands. Do NOT shell out to the `carta` CLI (`carta compensation ...`, `carta web ...`, etc.) — that bypasses the formatters, the 403 handler, and the attribution requirement. The Bash tool is allowed only for writing CSV/JSON files locally, never for calling Carta APIs.
+> **Use MCP, not CLI.** Every API call in this skill goes through the carta MCP server's `mcp__carta__read_tool` tool, with `compensation:*` commands. Do NOT shell out to the `carta` CLI (`carta compensation ...`, `carta web ...`, etc.) — that bypasses the formatters, the 403 handler, and the attribution requirement. The Bash tool is allowed only for writing CSV/JSON files locally, never for calling Carta APIs.
 >
-> Examples below use shorthand `call_tool({"name": "compensation__get__plan", "arguments": {...}})` — read this as `mcp__carta__call_tool({"name": "compensation__get__plan", "arguments": {...}})`.
+> Examples below use shorthand `read_tool({"name": "compensation__get__plan", "arguments": {...}})` — read this as `mcp__carta__read_tool({"name": "compensation__get__plan", "arguments": {...}})`.
 
 > **CRITICAL — Show only PERCENTILE columns (p25/p50/p75/p90) for all three rating types.**
 >
@@ -427,7 +430,7 @@ Do **not** show the user a raw JSON dump of accounts. Do **not** attempt any com
 
 If Paths 2/3/4 returned **zero** `corporation_pk:` entries, the user may have no cap table access at all — a Fund Admin user whose access is fund accounting only. Confirm before doing anything else:
 
-1. `call_tool({"name": "context_tools__get__profile", "arguments": {}})` — returns `corporations[]`, the corporations the user holds a cap-table role on (it excludes `NO_ACCESS` roles, and returns `[]` for a user with no corporation roles).
+1. `read_tool({"name": "context_tools__get__profile", "arguments": {}})` — returns `corporations[]`, the corporations the user holds a cap-table role on (it excludes `NO_ACCESS` roles, and returns `[]` for a user with no corporation roles).
 2. If `corporations[]` is **empty** → the user has no cap table. Send the **no-cap-table CTC message** from *Subscription gating* below (the "your firm" variant) and **STOP**. Do **not** ask them to name a corporation — they don't have one. Do **not** call any compensation endpoint.
 3. If `corporations[]` is **non-empty** → the user does have cap tables; the name search just missed. Do **not** send an upsell. Ask them to confirm the exact company name or numeric corp ID (same handling as a Path 2 miss) and re-resolve.
 
@@ -452,7 +455,7 @@ Extract the numeric `corporation_pk` (the integer after `corporation_pk:`) for a
 > The role question is a **separate turn** that happens *after* a confirmed `is_subscribed: true`.
 
 ```
-call_tool({"name": "compensation__get__subscription_status", "arguments": {"corporation_id": <corporation_pk>}})
+read_tool({"name": "compensation__get__subscription_status", "arguments": {"corporation_id": <corporation_pk>}})
 ```
 
 It returns `{corporation_id, has_ctc_access, is_subscribed}`. Three outcomes:
@@ -508,7 +511,7 @@ If the user provides only a job title, that is sufficient minimum input for the 
 ### Step 3b — Fetch the corporation's active benchmark version + peer group
 
 ```
-call_tool({"name": "compensation__get__plan", "arguments": {"corporation_id": <corporation_pk>}})
+read_tool({"name": "compensation__get__plan", "arguments": {"corporation_id": <corporation_pk>}})
 ```
 
 Capture these from the response:
@@ -535,7 +538,7 @@ Capture these from the response:
 > The API wants `MARKETING`, not `"Marketing"`; `CUSTOMER_SUCCESS`, not `"Customer Success"` or `"Customer Support"`; `SENIOR1`, not `"Senior 1"`. For buckets, pass the enum name (`TWENTY_FIVE_MILLION`), not the dollar label (`"$25M-$50M"`). The Title-Case forms are for **user-facing text only** (see the casing rule at the top of this file) — they are never valid API values. If you only have a free-text role, that's what the `carta-compensation-rolematcher` in Step 3a is for; it returns canonical enum names. Do not hand-translate a display label into a guessed enum.
 >
 > **Anti-patterns (all observed in real failures):**
-> - ❌ `call_tool({"name": "compensation__list__job_types"})` → `Unknown tool`. Read `search_tools({"query": "compensation get benchmark"})` instead.
+> - ❌ `read_tool({"name": "compensation__list__job_types"})` → `Unknown tool`. Read `search_tools({"query": "compensation get benchmark"})` instead.
 > - ❌ `job: "Marketing"` / `job: "Engineering"` / `job: "Customer Support"` → HTTP 400. Use `MARKETING` / `ENGINEER` / `CUSTOMER_SUCCESS`.
 > - ❌ `job: "PRODUCT_MANAGER"` → HTTP 400 (invented). The value is `PRODUCT`. When unsure, read the help — don't guess a plausible-looking name.
 > - ❌ `capital_raised_bucket: "$250M-$500M"` (a label) or a fabricated name → HTTP 400. Pass a real `CapitalRaisedBuckets` name from the help.
@@ -548,7 +551,7 @@ Capture these from the response:
 > When the requested focus matches, each benchmark entry's bands are the focus-specific figures, its `focus` echoes your value, and the blend sits under `job_area_blend`. When the response carries `focus_warning`, nothing matched: present the numbers as the job-area blend, never as focus-specific. If the warning lists a focus value that clearly matches what the user meant, retry once with that exact value; otherwise tell the user this benchmark version has no data for that focus.
 
 ```
-call_tool({"name": "compensation__get__benchmark", "arguments": {
+read_tool({"name": "compensation__get__benchmark", "arguments": {
   "corporation_id": <corporation_pk>,
   "job": <job_area>,                        # omit to get ALL job areas
   "level": <level>,                         # omit to get ALL levels for the job
@@ -609,7 +612,7 @@ call_tool({"name": "compensation__get__benchmark", "arguments": {
 So a Meetly-corp call that normally has `post_money_bucket: "ONE_HUNDRED_MILLION"` (plan default), when the user asks for "show me the $1M-$10M raised peer group instead", becomes:
 
 ```
-call_tool({"name": "compensation__get__benchmark", "arguments": {
+read_tool({"name": "compensation__get__benchmark", "arguments": {
   "corporation_id": 7, "job": "ENGINEER", "level": "ENTRY",
   # post_money_bucket DROPPED — replaced by capital_raised_bucket below
   "capital_raised_bucket": "ONE_TO_TEN_MILLION",
@@ -644,7 +647,7 @@ Omit `location` and the API applies the plan's default location (`geo_adjustment
 
 1. List the supported locations once per conversation, with the id from Step 3b:
    ```
-   call_tool({"name": "compensation__get__benchmark_locations",
+   read_tool({"name": "compensation__get__benchmark_locations",
               "arguments": {"geo_adjustment_version_id": <benchmark_version.geo_adjustment_version.id>}})
    ```
    The result is ~444 entries (~65KB), so the client usually saves it to a file. Find the place in it with the lookup script instead of reading the file:
@@ -760,10 +763,10 @@ Compensation-service's `plans/` and `benchmark/` endpoints return 200 even for c
 Once you have resolved the corporation (Step 1), call `compensation:get:subscription_status` as **Step 2 — before any `plans/` or `benchmark/` call, and before asking the user for a role** (see Step 2 above). It returns `{corporation_id, has_ctc_access, is_subscribed}`. "First" here means first among the *compensation* calls, not before corp resolution — you still need a `corporation_pk` from Step 1 to make this call.
 
 **Single-corp query:**
-1. `call_tool({"name": "compensation__get__subscription_status", "arguments": {"corporation_id": <id>}})`
+1. `read_tool({"name": "compensation__get__subscription_status", "arguments": {"corporation_id": <id>}})`
 2. If `has_ctc_access` is `false` → follow **Access gating** below and STOP.
 3. If `has_ctc_access` is `true` and `is_subscribed` is `false`:
-   - Determine whether the user has cap table access: `call_tool({"name": "context_tools__get__profile", "arguments": {}})` and check whether `corporations[]` is non-empty. Treat a **non-empty** list as "has cap table access" — the endpoint already excludes `NO_ACCESS` roles, so presence is the signal. Do **not** match on the `role` label: those strings are raw and unnormalized (`'Admin'` and `'Administrator'` both occur), so an allowlist would misclassify real admins. Do **not** test whether *this specific corp* is in the list — the list is capped server-side, so a large-portfolio admin can be a false negative.
+   - Determine whether the user has cap table access: `read_tool({"name": "context_tools__get__profile", "arguments": {}})` and check whether `corporations[]` is non-empty. Treat a **non-empty** list as "has cap table access" — the endpoint already excludes `NO_ACCESS` roles, so presence is the signal. Do **not** match on the `role` label: those strings are raw and unnormalized (`'Admin'` and `'Administrator'` both occur), so an allowlist would misclassify real admins. Do **not** test whether *this specific corp* is in the list — the list is capped server-side, so a large-portfolio admin can be a false negative.
    - If `corporations[]` is **non-empty**, tell the user:
      > *"That's a Carta Total Compensation (CTC) question — CTC runs on Carta's private market salary and equity data. The data can be segmented by level, function, stage, and geography, directly in Claude. It's not active for your company yet. Reach out to your account team or [request a demo](https://carta.com/demo/total-comp/?&utm_medium=product&utm_source=carta-web&utm_campaign=ctc-plugin-inq-amer-q2-26) to unlock it.*
      >

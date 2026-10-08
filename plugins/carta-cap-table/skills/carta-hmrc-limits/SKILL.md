@@ -4,14 +4,17 @@ description: >-
   Report a UK company's HMRC EMI/CSOP limit usage. Use when asked how much EMI allowance is left, whether the company is near the £6m EMI limit, who is close to or over their £250k individual limit, CSOP headroom, or whether a planned grant fits.
 allowed-tools:
   - mcp__carta__call_tool
+  - mcp__carta__read_tool
   - mcp__carta__list_contexts
   - mcp__carta__set_context
   - mcp__carta__list_accounts
   - mcp__claude_ai_Carta__call_tool
+  - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__list_contexts
   - mcp__claude_ai_Carta__set_context
   - mcp__claude_ai_Carta__list_accounts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_accounts
@@ -19,7 +22,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.95.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.95.3</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -49,14 +52,14 @@ You need the `corporation_id`. Get it from `list_accounts` if you do not have it
 Company-level allowance:
 
 ```
-call_tool({"name": "uk_compliance__get__hmrc_limits",
+read_tool({"name": "uk_compliance__get__hmrc_limits",
            "arguments": {"corporation_id": corporation_id}})
 ```
 
 Per-holder breakdown:
 
 ```
-call_tool({"name": "uk_compliance__list__hmrc_stakeholder_limits",
+read_tool({"name": "uk_compliance__list__hmrc_stakeholder_limits",
            "arguments": {"corporation_id": corporation_id}})
 ```
 

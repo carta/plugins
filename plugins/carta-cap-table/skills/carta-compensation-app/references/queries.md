@@ -17,7 +17,7 @@ Only ever act on a `corporation_pk` that appears verbatim in a `list_accounts` r
 ## §1 — Subscription gate (REQUIRED, before anything else)
 
 ```
-call_tool({"name": "compensation__get__subscription_status",
+read_tool({"name": "compensation__get__subscription_status",
            "arguments": {"corporation_id": <corporation_pk>}})
 ```
 
@@ -30,7 +30,7 @@ A corp with no subscription has no benchmark data, so every later call is wasted
 ## §2 — Plan (REQUIRED — peer group + benchmark version)
 
 ```
-call_tool({"name": "compensation__get__plan",
+read_tool({"name": "compensation__get__plan",
            "arguments": {"corporation_id": <corporation_pk>}})
 ```
 
@@ -88,7 +88,7 @@ job areas' full matrices (every level, both ladders) in one response, replacing 
 one-call-per-job-area sweep:
 
 ```
-call_tool({"name": "compensation__export__benchmarks", "arguments": {
+read_tool({"name": "compensation__export__benchmarks", "arguments": {
   "corporation_id": <corporation_pk>,
   # "jobs" OMITTED on the first call — sweeps every area, a page at a time.
   # To page explicitly: "jobs": ["ENGINEER", "SALES", ...] (repeated keys on the wire),
@@ -236,7 +236,7 @@ renders as `—`.
 ## Future stems (not yet fetched)
 
 The Scorecard / Reports / Plan Modeling tabs will need `compensation:get:employee-scorecard`
-(note: invoked via `fetch` with `params`, **not** `call_tool`) and, where commands don't exist
+(note: invoked via `read_tool` as `compensation__get__employee-scorecard`, **not** via `fetch`) and, where commands don't exist
 yet, new `compensation:get:*` endpoints for paybands and report data.
 
 **Prefer `compensation:export:scorecard`** for the whole employee list: one columnar response

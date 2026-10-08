@@ -117,7 +117,7 @@ doubles as the account-level hard stop and as Phase 0.5's reference-data fetch.
 ### Step 1 — Load every tool in ONE ToolSearch call
 
 ```
-ToolSearch: "select:mcp__carta__call_tool,mcp__carta__search_tools,mcp__carta__welcome,mcp__carta__list_accounts,mcp__carta__get_current_user"
+ToolSearch: "select:mcp__carta__read_tool,mcp__carta__call_tool,mcp__carta__search_tools,mcp__carta__welcome,mcp__carta__list_accounts,mcp__carta__get_current_user"
 ```
 
 `mcp__carta__` is the placeholder prefix ([Step 2](#step-2--command-names-and-base_url)) — when
@@ -127,26 +127,26 @@ wrong prefix, not a disconnected server — re-check the session's tool list and
 `select:` with the prefix it actually carries.
 
 **This call is the only place this skill concludes anything about the connection.** Only when
-no tool ending in `call_tool` / `list_accounts` / `welcome` exists, under any prefix, is Carta
+no tool ending in `read_tool` / `call_tool` / `list_accounts` / `welcome` exists, under any prefix, is Carta
 genuinely gone: say so and stop. Everything else that looks like an answer is not one
 ([SKILL.md § Do not diagnose the Carta connection](../SKILL.md#do-not-diagnose-the-carta-connection)).
 
-One call, five tools, the complete set for the run. **`call_tool` is loaded here, up front**, so
-Phase 2 never has to load it after the user confirms — that would be serial latency at the worst
+One call, six tools, the complete set for the run. **`read_tool` and `call_tool` are loaded here, up front**, so
+Phase 2 never has to load them after the user confirms — that would be serial latency at the worst
 possible moment.
 
 **Don't call `search_tools` in the hot path.** Every command name is hardcoded in
-[Step 2](#step-2--command-names-and-base_url), and `call_tool` reaches all of them directly;
+[Step 2](#step-2--command-names-and-base_url), and `read_tool` / `call_tool` reach all of them directly;
 looking up a name you already know is a pure round trip. `search_tools` is for a command that
 table doesn't name.
 
 ### Step 2 — Command names and `BASE_URL`
 
-Reads and writes both go through **one** tool, `call_tool`. It takes `name` and `arguments` —
+Reads go through `read_tool` and writes through `call_tool`. Both take `name` and `arguments` —
 and the name carries **double underscores** where this skill's prose uses colons:
 
 ```
-mcp__carta__call_tool({"name": "cap_table__get__issuance_init",    "arguments": {…}})
+mcp__carta__read_tool({"name": "cap_table__get__issuance_init",    "arguments": {…}})
 mcp__carta__call_tool({"name": "cap_table__mutate__save_drafts",   "arguments": {…}})
 ```
 
@@ -189,7 +189,7 @@ file. The real prefix is environment-dependent (`mcp__claude_ai_Carta__call_tool
 UUID-suffixed connector forms all occur). Resolve it from the session's tool list and substitute
 it everywhere; only the prefix varies — tool and command names never do. The one exception:
 SKILL.md's frontmatter `allowed-tools` entries are literal grant patterns — never substitute
-there. `call_tool` is the only surface: the `fetch`/`mutate` gateway pair sits behind a flag
+there. `read_tool` and `call_tool` are the only surface: the `fetch`/`mutate` gateway pair sits behind a flag
 that defaults off, so `mcp__carta__fetch` comes back *"No such tool available"*
 ([incidents.md § Round-trips](incidents.md#round-trips-that-bought-nothing)). And **never call
 `set_context`** — every command takes `corporation_id` as a direct param.
@@ -207,7 +207,7 @@ The hard stop is
 and it binds here too:
 `corporation_id` is not unique across environments, so aiming at the wrong one reads one
 company's cap table and later issues real securities onto it. The connected environment is
-the one behind the `call_tool` you loaded in Step 1 — a readable prefix names it
+the one behind the `read_tool` and `call_tool` you loaded in Step 1 — a readable prefix names it
 (`…_Carta_Demo__` → demo, a `-test` or sandbox suffix likewise, unsuffixed → production), and
 `get_current_user`'s `environment` settles it, including behind a UUID prefix (its `base_url`
 host when `environment` reads `unknown`). A connector offering only `authenticate` is not
@@ -318,7 +318,7 @@ the collect itself; this section owns what has to be true before it runs.
 **One call, and it is the same call Step 4 already made:**
 
 ```
-mcp__carta__call_tool({"name": "cap_table__get__issuance_init", "arguments": {
+mcp__carta__read_tool({"name": "cap_table__get__issuance_init", "arguments": {
   "corporation_id": <corporation_id>, "security_type": "<option_grant|certificate|piu>",
   "stakeholder_names": ["<each person the prompt named>"],
   "include_bootstrap": true, "issue_date": "<YYYY-MM-DD>"}})
@@ -816,8 +816,11 @@ is complete.
 
 ## Validate without issuing
 
+`validate_drafts` only checks the draft set and saves nothing. carta-mcp marks it read-only
+(`search_tools` returns `read_only: true`), so it goes through `read_tool`.
+
 ```
-mcp__carta__call_tool({"name": "cap_table__mutate__validate_drafts", "arguments": {
+mcp__carta__read_tool({"name": "cap_table__mutate__validate_drafts", "arguments": {
   "corporation_id": <corporation_id>, "security_type": "<certificate|option_grant|piu>",
   "draft_set_id": <draft_set_id>}})
 ```

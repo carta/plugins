@@ -14,14 +14,17 @@ when_to_use: >-
   companies, prefer a portfolio-alerts skill.
 allowed-tools:
   - mcp__carta__call_tool
+  - mcp__carta__read_tool
   - mcp__carta__list_contexts
   - mcp__carta__set_context
   - mcp__carta__list_accounts
   - mcp__claude_ai_Carta__call_tool
+  - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__list_contexts
   - mcp__claude_ai_Carta__set_context
   - mcp__claude_ai_Carta__list_accounts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_accounts
@@ -29,7 +32,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.95.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.95.3</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -53,15 +56,15 @@ Call `list_accounts`. Filter to `corporation_pk:` accounts. Extract up to 20 num
 
 For each company, the relevant commands are:
 
-- `call_tool({"name": "cap_table__get__cap_table_by_share_class", "arguments": {"corporation_id": corporation_id}})` -- option pool data
-- `call_tool({"name": "cap_table__get__convertible_notes", "arguments": {"corporation_id": corporation_id}})` -- SAFE/note terms (summary includes min/max/average price_cap, avg_discount, by_type)
-- `call_tool({"name": "cap_table__list__financing_history", "arguments": {"corporation_id": corporation_id}})` -- round sizes (one row per share class with closing_date and cash_raised_by_currency)
+- `read_tool({"name": "cap_table__get__cap_table_by_share_class", "arguments": {"corporation_id": corporation_id}})` -- option pool data
+- `read_tool({"name": "cap_table__get__convertible_notes", "arguments": {"corporation_id": corporation_id}})` -- SAFE/note terms (summary includes min/max/average price_cap, avg_discount, by_type)
+- `read_tool({"name": "cap_table__list__financing_history", "arguments": {"corporation_id": corporation_id}})` -- round sizes (one row per share class with closing_date and cash_raised_by_currency)
 
 > **Use `cap_table__list__financing_history` — never `cap_table__get__financing_history`.** The `get` tool is deprecated: the gateway rejects every call to it with *"This command is deprecated"* before reaching Carta, so calling it fails once per company.
 
 The convertible-notes call defaults to `detail=summary`, and the other two return aggregates — no individual records are needed.
 
-> **Parallel execution**: `call_tool` reads are read-only, so Claude Code runs parallel calls concurrently. Issue ALL calls for ALL companies in a single response — do NOT loop company-by-company. See Workflow Step 2.
+> **Parallel execution**: `read_tool` is read-only, so Claude Code runs parallel calls concurrently. Issue ALL calls for ALL companies in a single response — do NOT loop company-by-company. See Workflow Step 2.
 
 ## Key Fields
 
@@ -94,12 +97,12 @@ Issue ALL calls for ALL companies **in a single response** — do NOT loop compa
 For example, with 5 companies and all 3 data types, issue all 15 calls at once:
 
 ```
-call_tool({"name": "cap_table__get__cap_table_by_share_class", "arguments": {"corporation_id": 1}})
-call_tool({"name": "cap_table__get__convertible_notes", "arguments": {"corporation_id": 1}})
-call_tool({"name": "cap_table__list__financing_history", "arguments": {"corporation_id": 1}})
-call_tool({"name": "cap_table__get__cap_table_by_share_class", "arguments": {"corporation_id": 2}})
-call_tool({"name": "cap_table__get__convertible_notes", "arguments": {"corporation_id": 2}})
-call_tool({"name": "cap_table__list__financing_history", "arguments": {"corporation_id": 2}})
+read_tool({"name": "cap_table__get__cap_table_by_share_class", "arguments": {"corporation_id": 1}})
+read_tool({"name": "cap_table__get__convertible_notes", "arguments": {"corporation_id": 1}})
+read_tool({"name": "cap_table__list__financing_history", "arguments": {"corporation_id": 1}})
+read_tool({"name": "cap_table__get__cap_table_by_share_class", "arguments": {"corporation_id": 2}})
+read_tool({"name": "cap_table__get__convertible_notes", "arguments": {"corporation_id": 2}})
+read_tool({"name": "cap_table__list__financing_history", "arguments": {"corporation_id": 2}})
 ... (all companies)
 ```
 

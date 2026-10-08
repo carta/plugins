@@ -13,14 +13,17 @@ when_to_use: >-
 model: inherit
 allowed-tools:
   - mcp__carta__call_tool
+  - mcp__carta__read_tool
   - mcp__carta__list_contexts
   - mcp__carta__set_context
   - mcp__carta__list_accounts
   - mcp__claude_ai_Carta__call_tool
+  - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__list_contexts
   - mcp__claude_ai_Carta__set_context
   - mcp__claude_ai_Carta__list_accounts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_accounts
@@ -28,7 +31,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.95.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.95.3</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -78,7 +81,7 @@ Pick the command that matches the scope of the question.
 **One company** — every request for a single company:
 
 ```
-call_tool({"name": "cap_table__list__witness_signatures_for_corporation", "arguments": {"corporation_id": corporation_id}})
+read_tool({"name": "cap_table__list__witness_signatures_for_corporation", "arguments": {"corporation_id": corporation_id}})
 ```
 
 Optional filters: `request_type` (`WITNESS` or `SPOUSAL_CONSENT`), `status` (a list of `PENDING`, `FILLED`, `SIGNED`, `EXPIRED`), `page`, `page_size`.
@@ -86,7 +89,7 @@ Optional filters: `request_type` (`WITNESS` or `SPOUSAL_CONSENT`), `status` (a l
 **One award** — every request on a single award you've already identified:
 
 ```
-call_tool({"name": "cap_table__get__witness_signatures_for_security", "arguments": {"corporation_id": corporation_id, "security_type": "OPTION_GRANT", "security_id": security_id}})
+read_tool({"name": "cap_table__get__witness_signatures_for_security", "arguments": {"corporation_id": corporation_id, "security_type": "OPTION_GRANT", "security_id": security_id}})
 ```
 
 `security_type` is one of `OPTION_GRANT`, `RSA`, `PIU`.
@@ -94,7 +97,7 @@ call_tool({"name": "cap_table__get__witness_signatures_for_security", "arguments
 **A portfolio** — requests across every company in a portfolio:
 
 ```
-call_tool({"name": "cap_table__list__witness_signatures_for_portfolio", "arguments": {"portfolio_id": portfolio_id}})
+read_tool({"name": "cap_table__list__witness_signatures_for_portfolio", "arguments": {"portfolio_id": portfolio_id}})
 ```
 
 Optional filters: `request_type`, `status`, `issuer_id` (narrow to one company), `page`, `page_size`.

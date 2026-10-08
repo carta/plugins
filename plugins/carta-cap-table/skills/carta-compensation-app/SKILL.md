@@ -18,8 +18,9 @@ model: inherit
 allowed-tools:
   - mcp__carta__welcome
   - mcp__carta__call_tool
+  - mcp__carta__read_tool
   # `fetch` is for MCP *command*-style names (context_tools:get:profile). It is NOT
-  # needed for the scorecard commands: call_tool works with the generated tool name,
+  # needed for the scorecard commands: read_tool works with the generated tool name,
   # which keeps the hyphen — compensation__get__employee-scorecard. Only colons
   # become `__`. Verified against a live MCP; see the failure-modes table.
   - mcp__carta__fetch
@@ -31,16 +32,19 @@ allowed-tools:
   # granting a staff test connector up front would let a customer session reach it.
   - mcp__carta-prod__welcome
   - mcp__carta-prod__call_tool
+  - mcp__carta-prod__read_tool
   - mcp__carta-prod__fetch
   - mcp__carta-prod__search_tools
   - mcp__carta-prod__list_accounts
   - mcp__claude_ai_Carta__welcome
   - mcp__claude_ai_Carta__call_tool
+  - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__fetch
   - mcp__claude_ai_Carta__search_tools
   - mcp__claude_ai_Carta__list_accounts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__fetch
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__search_tools
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_accounts
@@ -63,7 +67,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.95.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.95.3</carta-plugin>
 
 <!-- [PATTERN carta-writing-style v0.0.2] [PATTERN etiquette v0.0.6] [PATTERN text v0.0.8] [PATTERN tables v0.0.12] [PATTERN carta-watermark v0.0.10] [PATTERN base v0.1.0] -->
 
@@ -140,7 +144,7 @@ inconvenience: someone sets salaries from these numbers.
 So on a cache hit, make **one** cheap call before launching (Step 1's MCP identification applies):
 
 ```
-call_tool({"name": "compensation__get__plan",
+read_tool({"name": "compensation__get__plan",
            "arguments": {"corporation_id": <corporation_pk>}})
 ```
 
@@ -289,7 +293,7 @@ connector we haven't named than a staff test session. Carry this into Step 2e's 
    someone to confirm something they have no choice about).
 4. **Zero `corporation_pk:` entries** → the caller may have no cap table at all. Check with
    `fetch({command: "context_tools:get:profile", params: {}})` — it is a command, not a flat
-   tool, so `call_tool` returns "Unknown tool". If its `corporations[]` is empty, say CTC needs a
+   tool, so `read_tool` returns "Unknown tool". If its `corporations[]` is empty, say CTC needs a
    cap table and stop. Do **not** ask them to name a corporation they don't have.
 
 > **HARD RULE — only ever act on a name and `corporation_pk` returned verbatim by
@@ -331,7 +335,7 @@ Follow `references/queries.md` for the exact arguments.
 > back out — which is the retyping this contract forbids.
 >
 > **So every benchmark page and the employee list are fetched by `capture_export.py`, never by
-> calling `call_tool` yourself.** It runs each call in a headless `claude -p` session on the same
+> calling `read_tool` yourself.** It runs each call in a headless `claude -p` session on the same
 > Carta MCP server, checks the arguments the session actually sent, and takes the raw tool result
 > off that session's event stream straight to disk. The payload never enters this conversation.
 > It is the same path the console's on-demand location fetch uses (`location_fetch.py`).
@@ -381,7 +385,7 @@ Follow `references/queries.md` for the exact arguments.
 >
 > **If `capture_export.py` cannot run** — no `claude` CLI, or its first call fails for a reason
 > that is not a Carta error — **stop the build and say so.** Do not fall back to calling
-> `call_tool` and writing the result out yourself: a mistyped page is worse than no dashboard.
+> `read_tool` and writing the result out yourself: a mistyped page is worse than no dashboard.
 >
 > **If you find yourself about to write benchmark numbers or employee rows into a file by any
 > means, stop — you are in the failure mode this contract exists to prevent.**
@@ -389,7 +393,7 @@ Follow `references/queries.md` for the exact arguments.
 **2a. Subscription gate (REQUIRED — do this before anything else).**
 
 ```
-call_tool({"name": "compensation__get__subscription_status",
+read_tool({"name": "compensation__get__subscription_status",
            "arguments": {"corporation_id": <corporation_pk>}})
 ```
 
@@ -716,7 +720,7 @@ the same `location` value the product sends. Every figure on screen is still the
 `benchmark_version.geo_adjustment_version.id`:
 
 ```
-call_tool({"name": "compensation__get__benchmark_locations",
+read_tool({"name": "compensation__get__benchmark_locations",
            "arguments": {"geo_adjustment_version_id": <geo_adjustment_version.id>}})
 ```
 
@@ -826,7 +830,7 @@ microapp ties out against the product to the share.
 Fetch via the MCP:
 
 ```
-call_tool({"name": "cap_table__get__equity_pool_utilization",
+read_tool({"name": "cap_table__get__equity_pool_utilization",
            "arguments": {"corporation_id": <corporation_pk>}})
 ```
 
@@ -875,7 +879,7 @@ to a "policy could not be fetched" banner and disables its controls.
 Run this whenever 2d-bis ran (i.e. the caller asked for the planner). Skip otherwise.
 
 ```
-call_tool({"name": "compensation__get__retention-plan",
+read_tool({"name": "compensation__get__retention-plan",
            "arguments": {"corporation_id": <corporation_pk>}})
 ```
 
@@ -1156,8 +1160,8 @@ does not need to hear about it.
 | `capture_export.py sweep` prints `FAILED` once | Usually transient — the script already retried the failing page once. Run the sweep once more. **Never** fall back to per-job-area `compensation:get:benchmark` calls, or to calling the export yourself — fix the arguments instead. | — (retry silently; only speak up if the retry also fails) |
 | A sweep fails twice | Systemic, not bad luck: a wrong `benchmark_version_id`, bad bucket param, or auth. Stop before building (for an alternate, drop that bucket). | "The benchmark fetch failed twice, so I stopped rather than build a partial dashboard. [the reason]" |
 | `build_datadir.py` reports `EXPORT SWEEP: ... stopped early` or refuses to build | Paging didn't reach `next_job_offset: null` in that directory. Re-run its `capture_export.py sweep`, which replaces the partial sweep. | — (re-run, then build; mention only if it cannot be completed) |
-| `capture_export: FAILED — no claude CLI found`, or the first `capture_export.py` call fails on something other than a Carta error | The build cannot capture data without a headless `claude` session. Do NOT fall back to calling `call_tool` and writing the result out yourself — that is the retyping the capture contract forbids. | "Building needs the Claude Code CLI to fetch your data safely, and it isn't working here: [reason]. Any cached dashboard still opens." |
-| `"Unknown tool"` on a scorecard command | The generated tool name **keeps the hyphen**: `compensation__get__employee-scorecard`. Only colons become `__`, so `..._scorecard` (underscore) is not a real tool. `call_tool` works with the correct name — verified against a live MCP. (`fetch` is not registered in current builds, so it is not the fallback either.) | — (correct the name and retry) |
+| `capture_export: FAILED — no claude CLI found`, or the first `capture_export.py` call fails on something other than a Carta error | The build cannot capture data without a headless `claude` session. Do NOT fall back to calling `read_tool` and writing the result out yourself — that is the retyping the capture contract forbids. | "Building needs the Claude Code CLI to fetch your data safely, and it isn't working here: [reason]. Any cached dashboard still opens." |
+| `"Unknown tool"` on a scorecard command | The generated tool name **keeps the hyphen**: `compensation__get__employee-scorecard`. Only colons become `__`, so `..._scorecard` (underscore) is not a real tool. `read_tool` works with the correct name — verified against a live MCP. (`fetch` is not registered in current builds, so it is not the fallback either.) | — (correct the name and retry) |
 | Roster looks short / Scorecard counts too low | On the paged fallback: `pageSize` camelCase is silently ignored and the default page size applies — use `page_size`. Also check you did not pass `score=`, which filters on the nullable overall band and drops unscored employees. | "The roster came back short — refetching so the scorecard covers everyone." |
 | `compensation:export:scorecard` returns 400 "at most 200 fit" | The corporation is larger than one export response. Use the paged fallback in Step 2d — do NOT narrow with `job_filters`, which silently under-reports who is below market. | — (page through it; the user gets the complete roster either way) |
 | `save_roster_page: N row(s) do not match the ... header` | The export's columns and rows disagree, so the payload is not what the decoder expects. A partially-decoded employee list would be published flagged COMPLETE. Re-fetch; if it repeats, the export's column set changed and the script needs updating. | "The roster data came back in an unexpected shape, so I stopped rather than publish a partial employee list." |

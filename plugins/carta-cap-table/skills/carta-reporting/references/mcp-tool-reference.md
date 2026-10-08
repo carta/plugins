@@ -4,7 +4,7 @@ Lazy-loaded reference for `carta-reporting`. `cat` this file on demand when reso
 required params (Step 3) or filter IDs — it is not part of the always-loaded SKILL.md.
 
 ```
-# All commands invoked via call_tool
+# Reads go through read_tool; reporting__create__report changes data, so it goes through call_tool
 
 call_tool({"name": "reporting__create__report", "arguments": { corporation_id, report_type, as_of_date, report_name, export_format: "json" }})
   → { user_report_pk }
@@ -74,24 +74,24 @@ call_tool({"name": "reporting__create__report", "arguments": { corporation_id, r
   #     show_events_ledger_sheet     — true | false (REQUIRED)
 
 # Filter ID lookup commands:
-call_tool({"name": "cap_table__get__stakeholders", "arguments": { corporation_id }})
+read_tool({"name": "cap_table__get__stakeholders", "arguments": { corporation_id }})
   → { count: N, by_type: { employee: N, investor: N, ... } }
   # Summary mode (no search param) — returns total stakeholder count and breakdown by type.
   # Use count to infer company size for status message branching (Step 4).
 
-call_tool({"name": "cap_table__get__stakeholders", "arguments": { corporation_id, search: "<name>" }})
+read_tool({"name": "cap_table__get__stakeholders", "arguments": { corporation_id, search: "<name>" }})
   → { results: [{ id, full_name, email, event_relationship }] }
   # Search mode — resolves a stakeholder name to its numeric id for use in stakeholder_ids.
   # search matches full_name and email. Available to all users.
 
-call_tool({"name": "cap_table__get__certificate_share_classes", "arguments": { corporation_id }})
+read_tool({"name": "cap_table__get__certificate_share_classes", "arguments": { corporation_id }})
   → { results: [{ id, name, prefix }] }
   # Returns available share classes (Common, Series A, etc.) with their numeric id.
   # Not staff-only: admits staff, company editors, HR admins, and in-scope share-class-scoped
   # admins. A read-only company viewer IS rejected (403) — fall back to AskUserQuestion.
   # For a scoped admin the result is already narrowed to their share classes.
 
-call_tool({"name": "cap_table__get__option_plans", "arguments": { corporation_id }})
+read_tool({"name": "cap_table__get__option_plans", "arguments": { corporation_id }})
   → { results: [{ id, name, common_share_class_id, size, available_quantity, is_expired }] }
   # Returns equity plans with their numeric id and linked share class id.
   # Not staff-only: same admission as certificate_share_classes above, and likewise pre-narrowed
@@ -105,31 +105,31 @@ call_tool({"name": "cap_table__get__option_plans", "arguments": { corporation_id
 # share-class-scoped admin a security outside the scope is simply absent, so the lookup reports the
 # label as not found — identical to a typo. Do not retry it, do not widen the search, and do not
 # call it an error: say the security is not in the part of the cap table this account can see.
-call_tool({"name": "cap_table__get__certificate", "arguments": { corporation_id, label: "<label>" }})
+read_tool({"name": "cap_table__get__certificate", "arguments": { corporation_id, label: "<label>" }})
   → { id, label, ... }   # CERTIFICATE:<id>
 
-call_tool({"name": "cap_table__get__option_grant", "arguments": { corporation_id, label: "<label>" }})
+read_tool({"name": "cap_table__get__option_grant", "arguments": { corporation_id, label: "<label>" }})
   → { id, label, ... }   # OPTION:<id>
 
-call_tool({"name": "cap_table__get__rsu", "arguments": { corporation_id, label: "<label>" }})
+read_tool({"name": "cap_table__get__rsu", "arguments": { corporation_id, label: "<label>" }})
   → { id, label, ... }   # RSU:<id>
 
-call_tool({"name": "cap_table__get__rsa", "arguments": { corporation_id, label: "<label>" }})
+read_tool({"name": "cap_table__get__rsa", "arguments": { corporation_id, label: "<label>" }})
   → { id, label, ... }   # RSA:<id>
 
-call_tool({"name": "cap_table__get__piu", "arguments": { corporation_id, label: "<label>" }})
+read_tool({"name": "cap_table__get__piu", "arguments": { corporation_id, label: "<label>" }})
   → { id, label, ... }   # PIU:<id>
 
-call_tool({"name": "cap_table__get__warrant", "arguments": { corporation_id, label: "<label>" }})
+read_tool({"name": "cap_table__get__warrant", "arguments": { corporation_id, label: "<label>" }})
   → { id, label, ... }   # WARRANT:<id>
 
-call_tool({"name": "cap_table__list__sars", "arguments": { corporation_id, search: "<label>", detail: "minimal" }})
+read_tool({"name": "cap_table__list__sars", "arguments": { corporation_id, search: "<label>", detail: "minimal" }})
   → { results: [{ id, label, ... }] }   # SAR:<id>
 
-call_tool({"name": "cap_table__list__cbus", "arguments": { corporation_id, search: "<label>", detail: "minimal" }})
+read_tool({"name": "cap_table__list__cbus", "arguments": { corporation_id, search: "<label>", detail: "minimal" }})
   → { results: [{ id, label, ... }] }   # CBU:<id>
 
-call_tool({"name": "cap_table__get__limited_admin_scope", "arguments": { corporation_id }})
+read_tool({"name": "cap_table__get__limited_admin_scope", "arguments": { corporation_id }})
   → { corporation_id, is_limited_admin,
       share_classes: [{ id, name, prefix }] | null, option_plan_ids: [...] | null }
   # Whether this caller's cap-table access is narrowed to specific share classes.
@@ -137,7 +137,7 @@ call_tool({"name": "cap_table__get__limited_admin_scope", "arguments": { corpora
   # other. A 403/404 or a missing command means "treat as unrestricted": every other cap_table
   # command already scopes itself server-side, so this only affects how the result is described.
 
-call_tool({"name": "reporting__search__report_types", "arguments": { corporation_id, query, json_export_supported: true }})
+read_tool({"name": "reporting__search__report_types", "arguments": { corporation_id, query, json_export_supported: true }})
   → {
       reports: [{report_type, name, similarity, answers_question, params_schema}],
       questions: [{question, similarity, answers, hide_from_ui}]
@@ -146,10 +146,10 @@ call_tool({"name": "reporting__search__report_types", "arguments": { corporation
   # shorter list. A report type absent from it is unavailable, not mis-ranked: never fall back to a
   # hardcoded list and never retry it.
 
-call_tool({"name": "reporting__get__report_status", "arguments": { user_report_pk }})
+read_tool({"name": "reporting__get__report_status", "arguments": { user_report_pk }})
   → { status }   # status: "pending" | "complete" | "error" | "not_found"
                  # corporation_id not required — endpoint is user-scoped
 
-call_tool({"name": "reporting__get__download_url", "arguments": { user_report_pk, corporation_id }})
+read_tool({"name": "reporting__get__download_url", "arguments": { user_report_pk, corporation_id }})
   → { download_url }   # S3 presigned URL — pass to report_processor.py, not WebFetch
 ```

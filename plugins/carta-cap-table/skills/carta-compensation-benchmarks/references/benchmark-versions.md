@@ -13,7 +13,7 @@ The active version is returned by `compensation:get:plan` as `benchmark_version`
 ## Listing all available versions
 
 ```
-call_tool({"name": "compensation__list__benchmark_versions", "arguments": {}})
+read_tool({"name": "compensation__list__benchmark_versions", "arguments": {}})
 ```
 
 ## Presenting versions to the user

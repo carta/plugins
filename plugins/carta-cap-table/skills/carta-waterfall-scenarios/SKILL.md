@@ -13,14 +13,17 @@ when_to_use: >-
   dollar payouts, prefer a rights/seniority skill.
 allowed-tools:
   - mcp__carta__call_tool
+  - mcp__carta__read_tool
   - mcp__carta__list_contexts
   - mcp__carta__set_context
   - mcp__carta__list_accounts
   - mcp__claude_ai_Carta__call_tool
+  - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__list_contexts
   - mcp__claude_ai_Carta__set_context
   - mcp__claude_ai_Carta__list_accounts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_accounts
@@ -28,7 +31,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.95.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.95.3</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -43,7 +46,7 @@ You need the `corporation_id`. Get it from `list_accounts` if you don't have it.
 ## Data Retrieval
 
 ```
-call_tool({"name": "cap_table__get__waterfall_scenarios", "arguments": {"corporation_id": corporation_id}})
+read_tool({"name": "cap_table__get__waterfall_scenarios", "arguments": {"corporation_id": corporation_id}})
 ```
 
 One call returns every saved (non-draft) scenario. This is the only waterfall tool this skill uses — do not call `fetch`, `waterfall_modeling__*`, or any other tool to fill in what this one leaves out. Those serve investor-firm valuations, not a company's saved scenarios.
@@ -156,7 +159,7 @@ Each bar width = (value_of_holdings / max value_of_holdings) * 40. Show return m
 | Situation | What to do |
 |---|---|
 | 403 / access denied | Exit modeling isn't enabled for this company (a product entitlement, not a problem with the user's permissions). Say: *"Exit modeling isn't enabled for this company in Carta, so there are no saved waterfall scenarios to show."* Do not retry, and do not try other tools. |
-| *"Unknown tool"* | Use the exact name `cap_table__get__waterfall_scenarios` through `call_tool` and retry once. Do not guess name variations. |
+| *"Unknown tool"* | Use the exact name `cap_table__get__waterfall_scenarios` through `read_tool` and retry once. Do not guess name variations. |
 | Network/transport error | One retry. If it fails again, tell the user Carta couldn't be reached and to try again shortly. |
 
 ## Custom Exit Values

@@ -16,12 +16,15 @@ allowed-tools:
   - ToolSearch
   - mcp_registry_suggest_connectors
   - mcp__carta__call_tool
+  - mcp__carta__read_tool
   - mcp__carta__search_tools
   - mcp__carta__list_accounts
   - mcp__claude_ai_Carta__call_tool
+  - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__search_tools
   - mcp__claude_ai_Carta__list_accounts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__search_tools
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_accounts
   - Artifact
@@ -39,7 +42,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.95.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.95.3</carta-plugin>
 
 # Custom Reports
 
@@ -159,11 +162,11 @@ Store the results as `_report_processor_path` and `_engine_html_path`. Every lat
 
    Call with `detail: "minimal"` and `page_size: 1` to check for CBU existence without fetching all records:
    ```
-   call_tool({"name": "cap_table__list__cbus", "arguments": { corporation_id, detail: "minimal", page_size: 1 }})
+   read_tool({"name": "cap_table__list__cbus", "arguments": { corporation_id, detail: "minimal", page_size: 1 }})
    ```
    The `detail: "minimal"` response shape is `{ results: [...] }`. If `results` is empty or the call fails (403/404), set `_phantom_label_<corporation_id>` to `null` — the corporation has no CBUs.
 
-   If `results` is non-empty, call `call_tool({"name": "cap_table__get__option_plans", "arguments": { corporation_id }})`. If this call fails for any reason (403, 404, network error, or unexpected response shape), set `_phantom_label_<corporation_id>` to `"Phantom Equity"` and continue — do not surface the error to the user. On success, look for any plan whose name suggests a phantom equity instrument (e.g. contains "Phantom", "PIU", "CBU", or similar). Use that plan's `name` field as `_phantom_label_<corporation_id>` if it differs from generic values like "Cash Bonus Units Plan". If no distinctive name is found, set `_phantom_label_<corporation_id>` to `"Phantom Equity"` as the fallback.
+   If `results` is non-empty, call `read_tool({"name": "cap_table__get__option_plans", "arguments": { corporation_id }})`. If this call fails for any reason (403, 404, network error, or unexpected response shape), set `_phantom_label_<corporation_id>` to `"Phantom Equity"` and continue — do not surface the error to the user. On success, look for any plan whose name suggests a phantom equity instrument (e.g. contains "Phantom", "PIU", "CBU", or similar). Use that plan's `name` field as `_phantom_label_<corporation_id>` if it differs from generic values like "Cash Bonus Units Plan". If no distinctive name is found, set `_phantom_label_<corporation_id>` to `"Phantom Equity"` as the fallback.
 
    Key per-corporation using `_phantom_label_<corporation_id>` (e.g. `_phantom_label_12345`) so multi-corporation flows each have their own label without collision.
 
@@ -172,7 +175,7 @@ Store the results as `_report_processor_path` and `_engine_html_path`. Every lat
 1b. **Detect share-class-scoped access (silent)** — run once per resolved `corporation_id`, on the main thread:
 
    ```
-   call_tool({"name": "cap_table__get__limited_admin_scope", "arguments": { corporation_id }})
+   read_tool({"name": "cap_table__get__limited_admin_scope", "arguments": { corporation_id }})
    ```
 
    Store the response as `_scope_<corporation_id>`. Some company admins hold a share-class-scoped role: everything they read is already filtered to the share classes granted to them, so the data is safe either way — this call exists only so the report is *described* correctly.
@@ -186,7 +189,7 @@ Store the results as `_report_processor_path` and `_engine_html_path`. Every lat
 
    **When `is_limited_admin` is true, drop `intermediate_cap` and `transactions_ledger` from any `reports` value you send** to `cap_table_summary_report` — see the reference file. Sending them yields a workbook with the sheet missing rather than an error.
 
-2. **Find the right report type** — call `call_tool({"name": "reporting__search__report_types", "arguments": { corporation_id, query, json_export_supported: true }})` with a natural-language description of the data the user needs (e.g. `"option grants > 50% vested with exercise prices"`). Use `reports` from the response, ranked by `similarity`. If results are empty, rephrase the query with broader terms and try again.
+2. **Find the right report type** — call `read_tool({"name": "reporting__search__report_types", "arguments": { corporation_id, query, json_export_supported: true }})` with a natural-language description of the data the user needs (e.g. `"option grants > 50% vested with exercise prices"`). Use `reports` from the response, ranked by `similarity`. If results are empty, rephrase the query with broader terms and try again.
 
    **Supported report types** (support `export_format: "json"`):
    `canceled_and_returned_report`, `cap_table_summary_report`, `common_securities_report`,
@@ -226,7 +229,7 @@ Store the results as `_report_processor_path` and `_engine_html_path`. Every lat
 
    **Infer company size from the stakeholder count.** After resolving `corporation_id` in Step 1, call:
    ```
-   call_tool({"name": "cap_table__get__stakeholders", "arguments": { corporation_id }})
+   read_tool({"name": "cap_table__get__stakeholders", "arguments": { corporation_id }})
    ```
    The default (summary) response shape is `{ count: N, by_type: {...} }`. Use `count` as the size signal. If a stakeholder call without a `search` filter was already made this session, reuse the cached `count` rather than calling again.
 
@@ -257,12 +260,12 @@ Store the results as `_report_processor_path` and `_engine_html_path`. Every lat
    output_path:    /tmp/carta_report_<pk>.json
 
    Steps:
-   1. Poll `call_tool({"name": "reporting__get__report_status", "arguments": { user_report_pk: <pk> }})` every 5 s, up to
+   1. Poll `read_tool({"name": "reporting__get__report_status", "arguments": { user_report_pk: <pk> }})` every 5 s, up to
       20 attempts.
       - Status "complete" → proceed to step 2.
       - Status "error" or "failed" → write {"error":"report failed"} to output_path and stop.
       - 20 attempts without complete → write {"error":"timeout"} to output_path and stop.
-   2. Call `call_tool({"name": "reporting__get__download_url", "arguments": { user_report_pk: <pk>, corporation_id: <corp_id> }})`
+   2. Call `read_tool({"name": "reporting__get__download_url", "arguments": { user_report_pk: <pk>, corporation_id: <corp_id> }})`
       → presigned URL.
    3. Run: curl -fsSL "<presigned_url>" -o <output_path>
    ```
@@ -277,12 +280,12 @@ Store the results as `_report_processor_path` and `_engine_html_path`. Every lat
    output_path:            /tmp/carta_preview_<pk_preview>.json
 
    Steps:
-   1. Poll `call_tool({"name": "reporting__get__report_status", "arguments": { user_report_pk: <pk_preview> }})` every 5 s,
+   1. Poll `read_tool({"name": "reporting__get__report_status", "arguments": { user_report_pk: <pk_preview> }})` every 5 s,
       up to 10 attempts.
       - Status "complete" → proceed to step 2.
       - Status "error" or "failed" → write {"error":"preview failed"} to output_path and stop.
       - 10 attempts without complete → write {"error":"preview timeout"} to output_path and stop.
-   2. Call `call_tool({"name": "reporting__get__download_url", "arguments": { user_report_pk: <pk_preview>, corporation_id: <corp_id> }})`
+   2. Call `read_tool({"name": "reporting__get__download_url", "arguments": { user_report_pk: <pk_preview>, corporation_id: <corp_id> }})`
       → presigned URL. If this call fails, write {"error":"download_url failed"} to output_path and stop.
    3. Run: curl -fsSL "<presigned_url>" -o <output_path>
    ```

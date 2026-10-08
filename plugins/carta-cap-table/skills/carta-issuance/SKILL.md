@@ -30,16 +30,19 @@ allowed-tools:
   # No `Bash(find *)`: the surface comes from the tool list, not the disk.
   # `mcp__carta__*` is literal here; in prose it stands for the session prefix.
   - mcp__carta__call_tool
+  - mcp__carta__read_tool
   - mcp__carta__search_tools
   - mcp__carta__list_accounts
   - mcp__carta__welcome
   - mcp__carta__get_current_user
   - mcp__claude_ai_Carta__call_tool
+  - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__search_tools
   - mcp__claude_ai_Carta__list_accounts
   - mcp__claude_ai_Carta__welcome
   - mcp__claude_ai_Carta__get_current_user
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__search_tools
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_accounts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
@@ -47,7 +50,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.95.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.95.3</carta-plugin>
 
 # Issue Securities
 
@@ -106,7 +109,7 @@ securities onto the wrong company. When the request implies an environment that 
 the connected one — a host, a Carta link, "sandbox", "demo", "production" — **hard stop and
 ask.** Being the only connected server isn't the same as being the right one.
 
-**The connected Carta is the connector whose tools you have** — `call_tool`, `welcome` and
+**The connected Carta is the connector whose tools you have** — `read_tool`, `call_tool`, `welcome` and
 `list_accounts` under one prefix. A connector offering only `authenticate` isn't connected;
 ignore it. Its environment comes from your session — its `## claude.ai <name>` heading, its
 `Default connector name` line, or a readable prefix (`mcp__claude_ai_Carta_Demo__…` → demo) —
@@ -194,7 +197,7 @@ not the roster, field manifest, or HTML. **You run one script and publish it.**
   [the hard stop above](#the-connected-carta-must-be-the-intended-carta) binds here.
 - **Don't resolve the company before the build.** Pass the user's name to `--company-name`;
   the page resolves it.
-- **Deferred `call_tool`: `ToolSearch` it in the same message as the `Bash`.** Unloaded,
+- **Deferred `read_tool`: `ToolSearch` it in the same message as the `Bash`.** Unloaded,
   it's refused for a missing top-level `_instrumentation_v2`.
 - **A spreadsheet or CSV goes through [the import sub-skill](issuance-import/SKILL.md)
   first;** its `rows` become the seed's. **An attached document is already in context:**
@@ -329,7 +332,7 @@ state and says what to do.
 
 #### Check the company beside the publish
 
-Parallel with the `Artifact` call (skip it with `--corporation-id`): `call_tool`
+Parallel with the `Artifact` call (skip it with `--corporation-id`): `read_tool`
 `cap_table:get:resolve_company` `{"name": "<--company-name>"}`.
 
 - `resolved` / `unavailable` → nothing. **No rebuild** — the page already resolves the name.

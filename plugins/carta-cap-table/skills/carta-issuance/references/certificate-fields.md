@@ -11,7 +11,7 @@ helpers](engine.md#shared-resolution-helpers).
 
 Use the `certificate_share_classes` section from the Phase 0.5 `issuance_init` payload — no
 separate call (fall back to
-`mcp__carta__call_tool({"name": "cap_table__get__certificate_share_classes", "arguments": {"corporation_id": <id>}})`
+`mcp__carta__read_tool({"name": "cap_table__get__certificate_share_classes", "arguments": {"corporation_id": <id>}})`
 only if init named it in `errors`).
 
 Each result has `id`, `name`, `prefix`, `authorized`, `outstanding`, `available`

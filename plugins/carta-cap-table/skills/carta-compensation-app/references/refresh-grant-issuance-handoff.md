@@ -27,7 +27,7 @@ independent places. Any Step 6 design has to survive all three.
    JSON the skill produced. This app is READ-ONLY with respect to Carta: the sole
    write path is the local scenarios save (PUT /api/scenarios), which never leaves
    this machine."
-2. **`SKILL.md` frontmatter** — `allowed-tools` grants `call_tool`, `fetch`,
+2. **`SKILL.md` frontmatter** — `allowed-tools` grants `read_tool`, `call_tool`, `fetch`,
    `search_tools`, `list_accounts`. There is no `mutate`. The skill is
    `publish: true` and its description says READ-ONLY to customers.
 3. **`chat_session.py:25`** — the ask box subprocess runs with

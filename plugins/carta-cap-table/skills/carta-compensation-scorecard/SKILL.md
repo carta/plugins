@@ -12,12 +12,15 @@ version: 0.1.0
 model: sonnet
 allowed-tools:
   - mcp__carta__call_tool
+  - mcp__carta__read_tool
   - mcp__carta__search_tools
   - mcp__carta__list_accounts
   - mcp__claude_ai_Carta__call_tool
+  - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__search_tools
   - mcp__claude_ai_Carta__list_accounts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__search_tools
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_accounts
   - AskUserQuestion
@@ -26,7 +29,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.95.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.95.3</carta-plugin>
 
 # CTC Scorecard
 
@@ -62,9 +65,9 @@ This skill calls compensation-service's scorecard endpoints (the same endpoints 
 
 > **Use MCP, not CLI.** Every API call in this skill goes through the carta MCP. Do not shell out to the `carta` CLI — that bypasses the formatters, the 403 handler, and the attribution requirement.
 >
-> **⚠️ Every compensation command goes through `call_tool` — copy the tool names exactly.**
+> **⚠️ Every compensation command goes through `read_tool` — copy the tool names exactly.**
 >
-> Examples below use the shorthand `call_tool({...})` — read it as `mcp__carta__call_tool({"name": ..., "arguments": {...}})`. Do **not** use `fetch` or `discover`: both are deprecated and usually not registered, so they fail with *"No such tool available"*.
+> Examples below use the shorthand `read_tool({...})` — read it as `mcp__carta__read_tool({"name": ..., "arguments": {...}})`. Do **not** use `fetch` or `discover`: both are deprecated and usually not registered, so they fail with *"No such tool available"*.
 >
 > The tool name is the command name with **colons turned into `__`. Hyphens and underscores inside a segment stay as they are.** The names are irregular, so never guess one:
 >
@@ -156,7 +159,7 @@ Do **not** show the user a raw JSON dump of accounts. Do **not** attempt any com
 
 If Paths 2/3/4 returned **zero** `corporation_pk:` entries, the user may have no cap table access at all — a Fund Admin user whose access is fund accounting only. Confirm before doing anything else:
 
-1. `call_tool({"name": "context_tools__get__profile", "arguments": {}})` — returns `corporations[]`, the corporations the user holds a cap-table role on (it excludes `NO_ACCESS` roles, and returns `[]` for a user with no corporation roles).
+1. `read_tool({"name": "context_tools__get__profile", "arguments": {}})` — returns `corporations[]`, the corporations the user holds a cap-table role on (it excludes `NO_ACCESS` roles, and returns `[]` for a user with no corporation roles).
 2. If `corporations[]` is **empty** → the user has no cap table. Send the **no-cap-table CTC message** from *Subscription gating* below (the "your firm" variant) and **STOP**. Do **not** ask them to name a corporation — they don't have one. Do **not** call any compensation endpoint.
 3. If `corporations[]` is **non-empty** → the user does have cap tables; the name search just missed. Do **not** send an upsell. Ask them to confirm the exact company name or numeric corp ID and re-resolve.
 
@@ -167,7 +170,7 @@ Extract the numeric `corporation_pk` (the integer after `corporation_pk:`) for a
 ### Step 2 — Verify CTC subscription (REQUIRED)
 
 ```
-call_tool({"name": "compensation__get__subscription_status",
+read_tool({"name": "compensation__get__subscription_status",
            "arguments": {"corporation_id": <corporation_pk>}})
 ```
 
@@ -195,7 +198,7 @@ Both lenses read from the employee endpoint; the difference is whether you prese
 First fetch the active plan (for the data citation footer), then pick a derivation path based on what the user actually asked for:
 
 ```
-call_tool({"name": "compensation__get__plan",
+read_tool({"name": "compensation__get__plan",
            "arguments": {"corporation_id": <corporation_pk>}})
 ```
 
@@ -208,11 +211,11 @@ Capture `plan.id` and `benchmark_version` metadata (for the citation later).
 For *"how are we positioned"*, *"what's the band distribution"*, *"are we paying market"* — where the user wants **counts, not a per-person table** — get the overall-band counts directly with three filtered calls. Read only `total_results` from each (you don't need the rows):
 
 ```
-call_tool({"name": "compensation__get__employee-scorecard",
+read_tool({"name": "compensation__get__employee-scorecard",
            "arguments": {"corporation_id": <corporation_pk>, "score": "LOW",  "page_size": 1}})   → total_results = Low count
-call_tool({"name": "compensation__get__employee-scorecard",
+read_tool({"name": "compensation__get__employee-scorecard",
            "arguments": {"corporation_id": <corporation_pk>, "score": "MID",  "page_size": 1}})   → total_results = Mid count
-call_tool({"name": "compensation__get__employee-scorecard",
+read_tool({"name": "compensation__get__employee-scorecard",
            "arguments": {"corporation_id": <corporation_pk>, "score": "HIGH", "page_size": 1}})   → total_results = High count
 ```
 
@@ -230,7 +233,7 @@ This path is cheap (4 calls, no paging) and exact for the overall band. Continue
 For *"give me the salary / equity / total-cash breakdown"*, or whenever you also need the per-person rows, sweep the roster at the safe page size and count each metric's own band:
 
 ```
-call_tool({"name": "compensation__get__employee-scorecard",
+read_tool({"name": "compensation__get__employee-scorecard",
            "arguments": {"corporation_id": <corporation_pk>, "page_size": 10, "page": 1}})
 # fetch successive pages 2,3,… until you have collected total_results unique rows
 ```
@@ -260,7 +263,7 @@ You are **reading** the band the API already returns per row — never recompute
 > **When to use `corporation-scorecard` instead.** Only when the user is comparing a **draft / in-flight plan** against the active plan ("how would our positioning change under the new plan?"). It requires the **draft** plan's `plan_id` (a non-active plan), never the active plan's id:
 >
 > ```
-> call_tool({"name": "compensation__get__corporation-scorecard",
+> read_tool({"name": "compensation__get__corporation-scorecard",
 >            "arguments": {"corporation_id": <corporation_pk>,
 >                          "plan_id":        <DRAFT_plan.id>}})
 > ```
@@ -270,7 +273,7 @@ You are **reading** the band the API already returns per row — never recompute
 ### Step 4b — Per-employee scorecard
 
 ```
-call_tool({"name": "compensation__get__employee-scorecard",
+read_tool({"name": "compensation__get__employee-scorecard",
            "arguments": {"corporation_id": <corporation_pk>,
                          "page_size": 10}})
 ```
@@ -329,7 +332,7 @@ There is **no single-employee scorecard endpoint** — an individual's compa-rat
 - Otherwise pass `name` (substring match against full / first / last name — may return more than one person).
 
 ```
-call_tool({"name": "compensation__get__employee-scorecard",
+read_tool({"name": "compensation__get__employee-scorecard",
            "arguments": {"corporation_id": <corporation_pk>,
                          "name": "Ada Lovelace"}})
 ```
@@ -344,7 +347,7 @@ Then:
 Also fetch the active plan once (for the citation footer):
 
 ```
-call_tool({"name": "compensation__get__plan",
+read_tool({"name": "compensation__get__plan",
            "arguments": {"corporation_id": <corporation_pk>}})
 ```
 
@@ -552,7 +555,7 @@ If `compensation:get:subscription_status` returns `has_ctc_access: false`, OR a 
 
 If `compensation:get:subscription_status` returns `has_ctc_access: true` and `is_subscribed: false`, stop and reply with one of the two subscription messages below.
 
-Choose between them by whether the user has cap table access: `call_tool({"name": "context_tools__get__profile", "arguments": {}})` and check whether `corporations[]` is non-empty. Treat a **non-empty** list as "has cap table access" — the endpoint already excludes `NO_ACCESS` roles, so presence is the signal. Do **not** match on the `role` label: those strings are raw and unnormalized (`'Admin'` and `'Administrator'` both occur), so an allowlist would misclassify real admins. Do **not** test whether *this specific corp* is in the list — the list is capped server-side, so a large-portfolio admin can be a false negative.
+Choose between them by whether the user has cap table access: `read_tool({"name": "context_tools__get__profile", "arguments": {}})` and check whether `corporations[]` is non-empty. Treat a **non-empty** list as "has cap table access" — the endpoint already excludes `NO_ACCESS` roles, so presence is the signal. Do **not** match on the `role` label: those strings are raw and unnormalized (`'Admin'` and `'Administrator'` both occur), so an allowlist would misclassify real admins. Do **not** test whether *this specific corp* is in the list — the list is capped server-side, so a large-portfolio admin can be a false negative.
 
 This call runs only on this failure path, after the gate has already decided to stop — it costs nothing on the happy path. If it errors or returns an unreadable response, use the **"your firm"** variant (it promises nothing you can't deliver) and do not retry.
 
@@ -576,7 +579,7 @@ Do not retry. Do not surface the raw HTTP status, stack trace, or error body. Do
 | `corporation-scorecard` errors with *"Cannot compare active plan to itself"* | You passed the **active** plan id to a comparison-only endpoint. Expected — don't surface it to the user. Fall back to the employee-derived rollup (Step 4a, Path 1). Only use `corporation-scorecard` with a **draft** plan id. |
 | Scorecard regeneration is in flight (response carries `task_status.state: PENDING` / `RUNNING`) | Surface the partial data if present, append: *"The scorecard is currently regenerating in the background. Numbers may shift in the next few minutes."* |
 | Unknown band value (anything other than LOW / MID / HIGH) | Render verbatim in chat; don't substitute. The API enum may have grown. |
-| *"Unknown tool"* or *"No such tool available"* on a compensation call | The tool name is wrong. Scorecard tool names keep their hyphen: `compensation__get__employee-scorecard`, not `…employee_scorecard`. Use the exact name from the tool-name table at the top of this skill, through `call_tool`, and retry once. Do not switch to `fetch` / `discover`, and do not guess name variations. |
+| *"Unknown tool"* or *"No such tool available"* on a compensation call | The tool name is wrong. Scorecard tool names keep their hyphen: `compensation__get__employee-scorecard`, not `…employee_scorecard`. Use the exact name from the tool-name table at the top of this skill, through `read_tool`, and retry once. Do not switch to `fetch` / `discover`, and do not guess name variations. |
 | Network/transport error | One retry. If it fails again, surface: *"Couldn't reach compensation-service. Try again in a moment — if this keeps happening, contact Carta support."* |
 | Response too large (*"response too large (limit 40000 chars)"*) | Drop `page_size` to ~10 and page through. Never estimate a distribution from a partial sweep — complete it or tell the user it couldn't be completed. |
 

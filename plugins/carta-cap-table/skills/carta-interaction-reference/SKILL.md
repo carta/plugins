@@ -12,19 +12,22 @@ description: >-
   carta-reporting), not instead of it.
 allowed-tools:
   - mcp__carta__call_tool
+  - mcp__carta__read_tool
   - mcp__carta__list_contexts
   - mcp__carta__set_context
   - mcp__claude_ai_Carta__call_tool
+  - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__list_contexts
   - mcp__claude_ai_Carta__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   - AskUserQuestion
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.95.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.95.3</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -285,7 +288,7 @@ Agents in extended conversations must manage context across turns without burden
 
 When fetching cap table data, prefer efficient retrieval patterns:
 
-- **Top-N / "largest" / "biggest" queries**: Use `ordering` with `page_size` and `detail=minimal` instead of fetching all records and sorting client-side. Example: `call_tool({"name": "cap_table__list__rsus", "arguments": {"corporation_id": id, "ordering": "-quantity", "detail": "minimal", "page_size": "20"}})` returns the top 20 RSU holders in one call. Available on:
+- **Top-N / "largest" / "biggest" queries**: Use `ordering` with `page_size` and `detail=minimal` instead of fetching all records and sorting client-side. Example: `read_tool({"name": "cap_table__list__rsus", "arguments": {"corporation_id": id, "ordering": "-quantity", "detail": "minimal", "page_size": "20"}})` returns the top 20 RSU holders in one call. Available on:
   - `cap_table__list__grants`, `cap_table__list__rsus`, `cap_table__list__sars`, `cap_table__list__cbus`, `cap_table__list__convertible_notes`, `cap_table__list__financing_history` — use the `list__` verb
   - `cap_table__get__stakeholders` — use `get__`, not `list__`;
 - **Ordering fields vary by command** — use `search_tools({"query": "<command name>"})` to inspect its `inputSchema` for available fields. Common fields: `quantity`, `remaining_shares`, `issue_date`, `stakeholder_name`.

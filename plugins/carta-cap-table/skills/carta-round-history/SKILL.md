@@ -14,14 +14,17 @@ when_to_use: >-
   stakeholder list skill.
 allowed-tools:
   - mcp__carta__call_tool
+  - mcp__carta__read_tool
   - mcp__carta__list_contexts
   - mcp__carta__set_context
   - mcp__carta__list_accounts
   - mcp__claude_ai_Carta__call_tool
+  - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__list_contexts
   - mcp__claude_ai_Carta__set_context
   - mcp__claude_ai_Carta__list_accounts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_accounts
@@ -29,7 +32,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.95.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.95.3</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -55,7 +58,7 @@ You need the `corporation_id`. Get it from `list_accounts` if you don't have it.
 > **Use `cap_table__list__financing_history` — never `cap_table__get__financing_history`.** The `get` tool is deprecated: the gateway rejects every call to it with *"This command is deprecated. Use 'cap_table:list:financing_history' instead."* before reaching Carta, so calling it only wastes a turn.
 
 ```
-call_tool({"name": "cap_table__list__financing_history", "arguments": {"corporation_id": corporation_id}})
+read_tool({"name": "cap_table__list__financing_history", "arguments": {"corporation_id": corporation_id}})
 ```
 
 This tool takes only `corporation_id` — there is no `detail`, `ordering`, or paging argument. It returns every share class in one call, already aggregated and sorted by `closing_date`, with the same totals as the in-app "Financing History" tab.
@@ -108,7 +111,7 @@ Call `cap_table__list__financing_history` once. It answers overview, per-round c
 `cap_table__list__financing_history` has no investor names. For *"who invested in the Series A?"* or *"list investors by round"*, read the share certificates and keep the ones whose `share_class_name` matches the round's `name`:
 
 ```
-call_tool({"name": "cap_table__list__certificates", "arguments": {"corporation_id": corporation_id, "ordering": "-quantity", "page_size": 25, "page": 1}})
+read_tool({"name": "cap_table__list__certificates", "arguments": {"corporation_id": corporation_id, "ordering": "-quantity", "page_size": 25, "page": 1}})
 ```
 
 - Each row carries `name` (holder), `quantity`, `share_class_name`, `issue_date`, and `status_explanation`. Group matching rows by holder and sum `quantity`.

@@ -19,16 +19,19 @@ when_to_use: >-
   skill and a specialist, pick the specialist.
 allowed-tools:
   - mcp__carta__call_tool
+  - mcp__carta__read_tool
   - mcp__carta__list_contexts
   - mcp__carta__set_context
   - mcp__carta__list_accounts
   - mcp__carta__search_tools
   - mcp__claude_ai_Carta__call_tool
+  - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__list_contexts
   - mcp__claude_ai_Carta__set_context
   - mcp__claude_ai_Carta__list_accounts
   - mcp__claude_ai_Carta__search_tools
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_accounts
@@ -38,7 +41,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.95.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.95.3</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -73,16 +76,17 @@ Use a keyword that captures the user's intent (e.g. "valuation", "grant", "safe"
 ## Step 2 — Pick the Best Match
 
 Review the returned tools. Each has:
-- `name`: the tool name to pass to `call_tool` (e.g. `cap_table__get__stakeholders`)
+- `name`: the tool name to pass to `read_tool` or `call_tool` (e.g. `cap_table__get__stakeholders`)
 - `description`: what it returns
-- `read_only`: `true` if the tool only reads data
+- `read_only`: `true` if the tool only reads data — run it with `read_tool`; otherwise use `call_tool`
 
 Only the top results also have `inputSchema` (the required and optional parameters). The others have `required_params` and `optional_params` (parameter names only), which are usually enough to call the tool. If you need a parameter's type or allowed values, call `search_tools({"query": "<tool name>"})` with its exact name: that tool comes back first, with its `inputSchema`.
 
 ## Step 3 — Execute
 
 ```
-call_tool({"name": "<tool_name>", "arguments": { ...params }})
+read_tool({"name": "<tool_name>", "arguments": { ...params }})   // read_only: true
+call_tool({"name": "<tool_name>", "summary": "<one sentence for the approval dialog>", "arguments": { ...params }})   // read_only: false
 ```
 
 You still need `corporation_id` for most commands — get it from `list_accounts` if you don't have it.
