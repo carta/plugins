@@ -588,16 +588,24 @@ the latest actuals for the metrics the dashboard renders:
 ```sql
 SELECT legal_name, name, mnemonic, report_type, float_value, unit_type, currency, period_end
 FROM FUND_ADMIN.COMPANY_FINANCIALS
-WHERE is_latest = TRUE AND instance_type = 'Actual' AND float_value IS NOT NULL
+WHERE instance_type = 'Actual'
   AND (UPPER(TRIM(mnemonic)) IN ('FS_REVENUE', 'FS_ARR_END', 'ARR', 'FS_EBITDA', 'FS_GROSS_PROFIT',
                                  'FS_COGS', 'FS_NET_INCOME', 'FS_CASH_AND_CASH_EQUIVALENTS', 'FS_HEADCOUNT')
        OR LOWER(TRIM(name)) = 'revenue'
        OR LOWER(name) LIKE '%recurring revenue%')
   AND LOWER(COALESCE(name, '')) NOT LIKE '%deferred%'
   AND LOWER(COALESCE(name, '')) NOT LIKE '%forecast%'
+QUALIFY ROW_NUMBER() OVER (
+    PARTITION BY firm_id, COALESCE(corporation_id, llc_entity_id, general_ledger_issuer_id),
+                 period_end, mnemonic, frequency, report_type, instance_type
+    ORDER BY DATE(as_of_date) DESC, instance_id DESC
+) = 1 AND float_value IS NOT NULL
 ORDER BY legal_name, mnemonic, name, period_end, report_type
 LIMIT 10000
 ```
+The `QUALIFY` keeps the latest submission per data point (newest `as_of_date`, then `instance_id`).
+`float_value IS NOT NULL` sits in the `QUALIFY`, after the ranking, so a blank latest submission drops the
+point instead of surfacing an older value.
 The `WHERE` mirrors `build_datadir.py`'s `METRIC_DEFS` matcher exactly (the same mnemonics, the same
 `revenue` / `recurring revenue` name fallbacks, the same deferred/forecast exclusion) — the builder discards
 every other row, so fetching them only burns DWH pages. `COMPANY_FINANCIALS` is one row per company × metric ×

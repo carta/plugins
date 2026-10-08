@@ -29,11 +29,22 @@ Each row is a single metric data point for a portfolio company at a given period
 | `unit_type` | `Dollar`, `Percentage`, `Ratio`, `Number` |
 | `currency` | Currency of the metric (e.g. `USD`) |
 | `instance_type` | `Actual` or `Estimate` |
-| `is_latest` | `TRUE` for the most recent data point per metric per period |
 | `source_type` | Data source: `Direct Import`, `Xero`, `Excel Import`, `Codat Import` |
 | `agg_method` | Aggregation method: `Sum`, `Average`, `Max`, `Min` |
 | `corporation_id` | Carta corporation UUID (NULL for LLCs) |
 | `entity_type` | `CORP` for corporations, `LLC` for LLCs |
+
+### Latest submission per data point
+
+A company can resubmit the same metric for the same period, so the table can hold several rows per data point. To keep only the latest, add this `QUALIFY` (newest `as_of_date`, then highest `instance_id`):
+
+```sql
+QUALIFY ROW_NUMBER() OVER (
+    PARTITION BY firm_id, COALESCE(corporation_id, llc_entity_id, general_ledger_issuer_id),
+                 period_end, mnemonic, frequency, report_type, instance_type
+    ORDER BY DATE(as_of_date) DESC, instance_id DESC
+) = 1
+```
 
 > **Tip**: Run the discovery query below first to see which metrics are available for a given company.
 
@@ -43,7 +54,6 @@ Each row is a single metric data point for a portfolio company at a given period
 SELECT DISTINCT name, mnemonic, report_type, unit_type, frequency
 FROM FUND_ADMIN.COMPANY_FINANCIALS
 WHERE LOWER(legal_name) ILIKE '%{company_name}%'
-  AND is_latest = TRUE
 ORDER BY report_type, name
 LIMIT 100
 ```
@@ -63,8 +73,12 @@ SELECT
     instance_type
 FROM FUND_ADMIN.COMPANY_FINANCIALS
 WHERE LOWER(legal_name) ILIKE '%{company_name}%'
-  AND is_latest = TRUE
   AND instance_type = 'Actual'
+QUALIFY ROW_NUMBER() OVER (
+    PARTITION BY firm_id, COALESCE(corporation_id, llc_entity_id, general_ledger_issuer_id),
+                 period_end, mnemonic, frequency, report_type, instance_type
+    ORDER BY DATE(as_of_date) DESC, instance_id DESC
+) = 1
 ORDER BY period_end DESC, report_type, name
 LIMIT 100
 ```
@@ -83,7 +97,11 @@ SELECT
 FROM FUND_ADMIN.COMPANY_FINANCIALS
 WHERE LOWER(legal_name) ILIKE '%{company_name}%'
   AND LOWER(name) ILIKE '%revenue%'
-  AND is_latest = TRUE
+QUALIFY ROW_NUMBER() OVER (
+    PARTITION BY firm_id, COALESCE(corporation_id, llc_entity_id, general_ledger_issuer_id),
+                 period_end, mnemonic, frequency, report_type, instance_type
+    ORDER BY DATE(as_of_date) DESC, instance_id DESC
+) = 1
 ORDER BY period_end DESC
 LIMIT 50
 ```
@@ -91,6 +109,17 @@ LIMIT 50
 ## Query 3 — Top Companies by a Metric (e.g. Revenue)
 
 ```sql
+WITH latest AS (
+    SELECT *
+    FROM FUND_ADMIN.COMPANY_FINANCIALS
+    WHERE LOWER(name) ILIKE '%{metric_name}%'
+      AND instance_type = 'Actual'
+    QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY firm_id, COALESCE(corporation_id, llc_entity_id, general_ledger_issuer_id),
+                     period_end, mnemonic, frequency, report_type, instance_type
+        ORDER BY DATE(as_of_date) DESC, instance_id DESC
+    ) = 1
+)
 SELECT
     legal_name,
     firm_name,
@@ -98,11 +127,8 @@ SELECT
     float_value     AS metric_value,
     unit_type,
     currency
-FROM FUND_ADMIN.COMPANY_FINANCIALS
-WHERE LOWER(name) ILIKE '%{metric_name}%'
-  AND is_latest = TRUE
-  AND instance_type = 'Actual'
-  AND float_value IS NOT NULL
+FROM latest
+WHERE float_value IS NOT NULL
 QUALIFY ROW_NUMBER() OVER (
     PARTITION BY legal_name
     ORDER BY float_value DESC

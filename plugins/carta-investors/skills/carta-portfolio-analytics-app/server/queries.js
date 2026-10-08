@@ -19,11 +19,11 @@ QUALIFY ROW_NUMBER() OVER (
 ORDER BY legal_name, COALESCE(mnemonic, name), COALESCE(frequency, ''), period_end`,
 
   forecasts: `SELECT legal_name, name, mnemonic, unit_type, currency,
-       as_of_date, period_end, float_value, is_latest, instance_id
+       as_of_date, period_end, float_value, instance_id
 FROM FUND_ADMIN.COMPANY_FINANCIALS
 WHERE instance_type = 'Estimate' AND float_value IS NOT NULL
 ORDER BY legal_name, name, mnemonic, period_end, as_of_date,
-         unit_type, currency, float_value, is_latest, instance_id`,
+         unit_type, currency, float_value, instance_id`,
 
   holdings: `SELECT issuer_name, fund_uuid, asset_name, asset_class_type, count_remaining_shares,
        remaining_value, remaining_value_per_share, latest_fmv_effective_date,

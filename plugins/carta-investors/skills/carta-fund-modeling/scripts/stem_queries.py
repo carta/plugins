@@ -375,19 +375,25 @@ STEMS = {
     },
     # financials: row-scoped to the set_context firm, one row per company x metric x
     # period. The WHERE mirrors build_datadir's METRIC_DEFS (the builder drops every
-    # other row); the ORDER BY keeps offset paging stable.
+    # other row); the QUALIFY keeps the latest submission per data point; the ORDER BY
+    # keeps offset paging stable.
     "financials": {
         "id_param": None, "wave": 1, "limit": 10000, "format": "ndjson",
         "sql": (
             "SELECT legal_name, name, mnemonic, report_type, float_value, unit_type, currency, period_end\n"
             "FROM FUND_ADMIN.COMPANY_FINANCIALS\n"
-            "WHERE is_latest = TRUE AND instance_type = 'Actual' AND float_value IS NOT NULL\n"
+            "WHERE instance_type = 'Actual'\n"
             "  AND (UPPER(TRIM(mnemonic)) IN ('FS_REVENUE', 'FS_ARR_END', 'ARR', 'FS_EBITDA', 'FS_GROSS_PROFIT',\n"
             "                                 'FS_COGS', 'FS_NET_INCOME', 'FS_CASH_AND_CASH_EQUIVALENTS', 'FS_HEADCOUNT')\n"
             "       OR LOWER(TRIM(name)) = 'revenue'\n"
             "       OR LOWER(name) LIKE '%recurring revenue%')\n"
             "  AND LOWER(COALESCE(name, '')) NOT LIKE '%deferred%'\n"
             "  AND LOWER(COALESCE(name, '')) NOT LIKE '%forecast%'\n"
+            "QUALIFY ROW_NUMBER() OVER (\n"
+            "    PARTITION BY firm_id, COALESCE(corporation_id, llc_entity_id, general_ledger_issuer_id),\n"
+            "                 period_end, mnemonic, frequency, report_type, instance_type\n"
+            "    ORDER BY DATE(as_of_date) DESC, instance_id DESC\n"
+            ") = 1 AND float_value IS NOT NULL\n"
             "ORDER BY legal_name, mnemonic, name, period_end, report_type"
         ),
     },

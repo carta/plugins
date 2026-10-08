@@ -119,9 +119,13 @@ SELECT
   AS_OF_DATE
 FROM FUND_ADMIN.COMPANY_FINANCIALS
 WHERE CORPORATION_ID = '<targetId>'
-  AND IS_LATEST = TRUE
   AND REPORT_TYPE IN ('Profit and Loss', 'KPI')
   AND FREQUENCY IN ('ANN', 'QTR')
+QUALIFY ROW_NUMBER() OVER (
+    PARTITION BY FIRM_ID, CORPORATION_ID, PERIOD_END, MNEMONIC,
+                 FREQUENCY, REPORT_TYPE, INSTANCE_TYPE
+    ORDER BY DATE(AS_OF_DATE) DESC, INSTANCE_ID DESC
+) = 1
 ORDER BY PERIOD_END DESC, NAME
 LIMIT 100
 ```
@@ -135,9 +139,9 @@ Pass with `limit: 100`.
   `CORPORATION_ID`. If the query returns zero rows but you suspect the
   ID is right, do not fall back to a different ID — the data simply
   isn't there. Proceed to the zero-data outcome below.
-- `IS_LATEST = TRUE` — exclude superseded data points. The same metric
-  for the same period can be reported multiple times; we only want the
-  most recent.
+- `QUALIFY ROW_NUMBER() ... = 1` — exclude superseded data points. The
+  same metric for the same period can be reported multiple times; keep
+  the one with the newest `AS_OF_DATE`, then the highest `INSTANCE_ID`.
 - `REPORT_TYPE IN ('Profit and Loss', 'KPI')` — valuations primarily
   use P&L (revenue, EBITDA, net income) and KPIs. Cash flow and
   balance sheet are out of scope for the default render. If the user

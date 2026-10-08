@@ -101,8 +101,8 @@ period_end`), so a September filing "as of 2026-06-30" would slip under any date
    quarterly-cumulative figure (`frequency='QTR'`) on the same quarter-end
    `period_end`. The builder needs `frequency` so a quarter is never built by
    summing a cumulative figure on top of its own component months.
-2. **Ignore `is_latest`; the latest *submission* is `MAX(as_of_date)`.** `is_latest`
-   is unreliable — it can be `true` on a stale row. It is not selected.
+2. **The latest *submission* is `MAX(as_of_date)`, never `is_latest`.** `is_latest`
+   is deprecated and can be `true` on a stale row. It is not selected.
 3. **Drop forward-dated submissions.** A row can be stamped "as of" a date that has
    not happened yet (a restatement artifact); `as_of_date <= CURRENT_DATE` removes
    it so it cannot win the period.
@@ -144,10 +144,10 @@ logged. A forecast is rewritten over time, so the same `(company, mnemonic,
 period_end)` has several rows at different `as_of_date`s. Keep **every** vintage —
 the builder takes `MAX(as_of_date)` per period as the latest-logged estimate AND
 retains all vintages for the "how a forecast changed over time" view. Do **not**
-filter `is_latest` (the builder computes latest itself).
+dedupe in SQL (the builder computes latest itself).
 ```sql
 SELECT legal_name, name, mnemonic, unit_type, currency,
-       as_of_date, period_end, float_value, is_latest, instance_id,
+       as_of_date, period_end, float_value, instance_id,
        general_ledger_issuer_id, corporation_id, llc_entity_id, firm_id
 FROM FUND_ADMIN.COMPANY_FINANCIALS
 WHERE instance_type = 'Estimate' AND float_value IS NOT NULL
@@ -156,7 +156,7 @@ WHERE instance_type = 'Estimate' AND float_value IS NOT NULL
   -- recent forecast about an old quarter is exactly what the accuracy backtest needs):
   -- AND period_end >= '<since>'
 ORDER BY legal_name, name, mnemonic, period_end, as_of_date,
-         unit_type, currency, float_value, is_latest, instance_id
+         unit_type, currency, float_value, instance_id
 ```
 `general_ledger_issuer_id`, `corporation_id` and `llc_entity_id` resolve exactly as they
 do for actuals (see the paragraph under the §1 query above), so a forecast lands on the

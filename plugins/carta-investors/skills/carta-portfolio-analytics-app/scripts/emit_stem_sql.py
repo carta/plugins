@@ -130,7 +130,7 @@ _FINANCIALS_SINCE_PLACEHOLDER = (
 
 _FORECASTS_TEMPLATE = (
     "SELECT legal_name, name, mnemonic, unit_type, currency,\n"
-    "       as_of_date, period_end, float_value, is_latest, instance_id,\n"
+    "       as_of_date, period_end, float_value, instance_id,\n"
     "       general_ledger_issuer_id, corporation_id, llc_entity_id{firm_col}\n"  # identity keys for company_key()
     "FROM FUND_ADMIN.COMPANY_FINANCIALS\n"
     "WHERE instance_type = 'Estimate' AND float_value IS NOT NULL\n"
@@ -139,7 +139,7 @@ _FORECASTS_TEMPLATE = (
     "{company_clause}"
     "{after_clause}"
     "ORDER BY legal_name, name, mnemonic, period_end, as_of_date,\n"
-    "         unit_type, currency, float_value, is_latest, instance_id"
+    "         unit_type, currency, float_value, instance_id"
 )
 _FORECASTS_SINCE_PLACEHOLDER = (
     "  -- Same optional window, applied to the TARGET period (never to as_of_date — a\n"
