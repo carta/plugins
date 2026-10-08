@@ -68,8 +68,7 @@ function visibleGroups(d) {
   return { rows: n ? rows.filter(function (r) { return sel[groupKey(r.g)]; }) : rows, filtered: n > 0, count: n };
 }
 
-// The Total row's proceeds: what this entity distributed. Not the equity value, which
-// excludes cash/debt adjustments.
+// The Total row's proceeds: the sum of the proceeds that reached this entity.
 function totalProceeds(d) {
   let sum = 0;
   d.allocations.forEach(function (g) {

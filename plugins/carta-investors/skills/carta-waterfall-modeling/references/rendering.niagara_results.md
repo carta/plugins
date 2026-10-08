@@ -53,7 +53,7 @@ every page response):
 | Column            | Source                                  |
 | ----------------- | --------------------------------------- |
 | Group / Interest  | `"Total"`                               |
-| Proceeds          | Sum of `allocated_proceeds.proceeds` over that node's rows — what the entity actually distributed. Never the EQUITY_VALUE you ran with: cash/debt adjustments change it. |
+| Proceeds          | The sum of `allocated_proceeds.proceeds` over that node's rows, **not** the EQUITY_VALUE you ran with. |
 | % of Proceeds     | `100.00%` (of this entity's own total)  |
 | Invested Capital  | `grand_totals.total_invested_capital`   |
 | Participating Qty | `grand_totals.participating_units`      |
