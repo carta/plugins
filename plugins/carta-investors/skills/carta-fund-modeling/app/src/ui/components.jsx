@@ -78,8 +78,7 @@ export const StopIcon = ({ size = 11, style }) => (
   </svg>
 );
 
-// Ink's real Modal width tiers (carta-frontend-platform: libs/ink/ink-containers/
-// library/Modal/Modal.tsx MODAL_MAX_WIDTH) — a 1280px/11-gutter grid, 68px per
+// Ink's real Modal width tiers — a 1280px/11-gutter grid, 68px per
 // column + 32px gutters: mini = 4 cols, small = 6, medium = 8 (Ink's own default
 // for the classic, non-`enableNewStyles` Modal this app's chrome matches), large = 10.
 // `large` is the biggest NAMED tier Ink's real Modal ships (its `width` prop docs
@@ -89,8 +88,7 @@ export const StopIcon = ({ size = 11, style }) => (
 export const MODAL_WIDTH = { mini: 432, small: 632, medium: 832, large: 1032, xlarge: 1232 };
 
 /** Generic content modal, matching Ink's real Modal/Dialog/Modal.Header recipe
- *  (carta-frontend-platform: libs/ink/ink-containers/library/Modal, ink-foundations'
- *  Dialog, and ink-tokens' Modal/tokens.ts) rather than this app's older hand-rolled
+ *  (Ink's Modal, Dialog and Modal tokens) rather than this app's older hand-rolled
  *  ConfirmDialog/ScenarioDialog chrome — backdrop is Ink's real
  *  `surface-background-overlay` token (no blur; Ink's own Dialog has none), the card
  *  is Ink's exact container recipe (8px radius, shadow-large, 24/32/32/32 desktop
@@ -163,9 +161,9 @@ export const Eyebrow = ({ children, color = "var(--ink-color-global-text-subtle)
 
 /** Real top-of-page title — one per view (Firm Overview, Companies, GP Economics,
  *  etc.), matching Ink's actual `heading-1` convention: confirmed against Ink's
- *  live `Page.Header`/`Heading variant="heading-1"` component, real fund-admin's
- *  frontend (128 page-level uses of `heading-1`, vs. `heading-2` reserved for
- *  in-page sub-sections), and this marketplace's own `carta-home-build` welcome
+ *  `Page.Header`/`Heading variant="heading-1"` component, Carta's own app
+ *  (`heading-1` for page titles, `heading-2` reserved for in-page sub-sections),
+ *  and this marketplace's own `carta-home-build` welcome
  *  artifact's `.page-title` (SangBleu, 28px/48px, weight 400). Renders the real
  *  `serif` stack (theme.js) — SangBleu Versailles, falling back to Georgia since
  *  this app never loads the webfont — not the tight-tracked-sans `tightSans`
@@ -193,8 +191,8 @@ export const H1 = ({ children, right, actions, id }) => (
  *  (in-page section header with a `right`/`actions` slot, e.g. "GP returns"
  *  inside the GP Economics page) render this exact style; they differ only in
  *  layout, not typography, so a correction to one spec updates both. `H2` is
- *  ONE LEVEL BELOW the real page title — see `H1` above — matching real
- *  fund-admin's own heading-2 usage for in-page/sub-flow headings rather than
+ *  ONE LEVEL BELOW the real page title — see `H1` above — matching Carta's
+ *  own app, which uses heading-2 for in-page/sub-flow headings rather than
  *  top-of-route titles. */
 const HEADING2_STYLE = { ...sans, fontSize: FS.h2, lineHeight: "36px", fontWeight: 500, color: "var(--ink-color-global-text-default)" };
 
@@ -445,16 +443,18 @@ export function Segmented({ options, value, onChange, small, disabled, locked })
       {options.map((o) => {
         const opt = typeof o === "string" ? { id: o, label: o } : o;
         const on = value === opt.id;
+        const off = disabled || opt.disabled;
         return (
           <button
             key={opt.id}
             type="button"
+            data-testid={opt.testId}
             className={`seg-btn${on ? " is-selected" : ""}`}
-            onClick={() => { if (!disabled) onChange(opt.id); }}
-            disabled={disabled}
+            onClick={() => { if (!off) onChange(opt.id); }}
+            disabled={off}
             aria-pressed={on}
-            title={muted ? "Locked — duplicate into a scenario to edit" : undefined}
-            style={{ ...sans, cursor: locked ? "not-allowed" : disabled ? "default" : "pointer" }}
+            title={muted ? "Locked — duplicate into a scenario to edit" : opt.title}
+            style={{ ...sans, cursor: locked || opt.disabled ? "not-allowed" : disabled ? "default" : "pointer", opacity: opt.disabled && !disabled ? 0.5 : undefined }}
           >
             {opt.label}
           </button>
@@ -470,29 +470,8 @@ export function Segmented({ options, value, onChange, small, disabled, locked })
  *  so 18 long fund names render cleanly and theme in dark mode. */
 export const ALL_FUNDS = "ALL";
 
-/** The fund display name embeds an ALL-CAPS slug prefix for dense tables
- *  ("KRAKATOA-VENTURES-FUND-IV-L-P (Krakatoa Ventures Fund IV, 2021)"). The
- *  picker only needs the readable, already-title-cased part — strip the slug
- *  and surface "Krakatoa Ventures Fund IV (2021)". Falls back to the raw label
- *  (e.g. "All Funds") when there's no parenthetical. */
-export function fundLabel(s) {
-  if (!s) return s;
-  const m = s.match(/\(([^)]+)\)\s*$/);
-  if (!m) return s;
-  const inner = m[1];
-  const i = inner.lastIndexOf(", ");
-  if (i === -1) return inner;
-  const name = inner.slice(0, i), vintage = inner.slice(i + 2);
-  return /^\d{4}$/.test(vintage) ? `${name} (${vintage})` : name;
-}
-
-/** fundLabel() with the trailing "(vintage)" stripped too — for views that
- *  already show vintage in its own column/line (Overview's Vintage column,
- *  CohortStanding's "2022 · 41 funds in cohort" line) and would otherwise
- *  show it twice. */
-export function fundNameOnly(s) {
-  return fundLabel(s)?.replace(/\s*\(\d{4}\)$/, "");
-}
+import { fundLabel, fundNameOnly } from "./format.js";
+export { fundLabel, fundNameOnly };
 
 /** A single row inside a dropdown/menu popover — Ink's Dropdown.Button /
  *  Dropdown.Checkbox recipe (single-select: 14px/20px Inter, 8px/12px padding;
@@ -636,7 +615,7 @@ export function FundPicker({ funds, value, onChange, allLabel = "All Funds", inc
 /** Ink's real 22×22 checkbox glyph for Dropdown.Checkbox rows: a white box
  *  that never fills, border-default border, 4px radius; checked/indeterminate
  *  draw a glyph on top. Ink's real `NewCheckbox` React component isn't
- *  importable here (micro-apps can't pull in `@carta/ink`), so this
+ *  importable here (micro-apps can't pull in Ink's component library), so this
  *  reproduces its visual spec directly. */
 function MultiCheckbox({ checked, indeterminate }) {
   return (
@@ -887,6 +866,64 @@ const BADGE_TONE = {
   muted:    { fg: MICRO, border: "var(--ink-color-global-border-subtle)", bg: "var(--ink-color-global-surface-lightgray-default)" },
 };
 
+// Ink dark hover tooltip. Pass `trigger` + `portal` when the trigger sits inside an
+// overflow-clipped ancestor such as a table row, which would cut an in-flow tooltip off.
+export function InfoTip({ label, children, width = 300, trigger, portal = false, placement = "bottom" }) {
+  const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false); // stays true after first show so opacity can transition back to 0 on hide
+  const [pos, setPos] = useState(null);
+  const triggerRef = useRef(null);
+  const show = () => {
+    setMounted(true);
+    setOpen(true);
+    if (portal) {
+      const r = triggerRef.current?.getBoundingClientRect();
+      if (r) {
+        const w = Math.min(width, window.innerWidth - 24);
+        const top = placement === "top" ? r.top - 8 : r.bottom + 8;
+        setPos({ left: Math.max(w / 2 + 12, Math.min(r.left + r.width / 2, window.innerWidth - w / 2 - 12)), top, width: w });
+      }
+    }
+  };
+  const hide = () => setOpen(false);
+
+  const triggerEl = trigger ?? (
+    <button type="button" aria-label={label} style={{ display: "flex", background: "none", border: "none", padding: 0, cursor: "default", color: "var(--ink-color-global-feedback-info-strong)" }}>
+      <HelpCircleIcon size={16} strokeWidth={1.6} />
+    </button>
+  );
+
+  const caret = (
+    <span style={{ position: "absolute", left: "50%", transform: "translateX(-50%)",
+      ...(placement === "top"
+        ? { top: "100%", borderLeft: "6px solid transparent", borderRight: "6px solid transparent", borderTop: "6px solid var(--ink-color-global-brand-black)" }
+        : { bottom: "100%", borderLeft: "6px solid transparent", borderRight: "6px solid transparent", borderBottom: "6px solid var(--ink-color-global-brand-black)" }) }} />
+  );
+
+  // Line height and corner radius are Ink's Tooltip values, not the body-text defaults.
+  const tooltipBody = (
+    <div role="tooltip"
+      style={{ ...sans, background: "var(--ink-color-global-brand-black)", color: "var(--ink-color-global-brand-white)",
+        fontSize: FS.body, lineHeight: "16px", padding: "10px 14px", borderRadius: "var(--ink-size-global-radius-subtle)",
+        boxShadow: "var(--shadow-hover)", zIndex: portal ? 200 : 60, textAlign: "left",
+        opacity: open ? 1 : 0, transition: "opacity 0.1s", pointerEvents: "none",
+        ...(portal
+          ? { position: "fixed", left: pos?.left, top: pos?.top, width: pos?.width, transform: `translate(-50%, ${placement === "top" ? "-100%" : "0"})` }
+          : { position: "absolute", [placement === "top" ? "bottom" : "top"]: "calc(100% + 8px)", left: "50%", transform: "translateX(-50%)", width }) }}>
+      {children}
+      {caret}
+    </div>
+  );
+
+  return (
+    <span ref={triggerRef} style={{ position: portal ? undefined : "relative", display: "inline-flex", alignItems: "center" }}
+      onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide}>
+      {triggerEl}
+      {mounted && (portal ? (pos && createPortal(tooltipBody, document.body)) : tooltipBody)}
+    </span>
+  );
+}
+
 /** Small semantic pill — the single source for the app's status/annotation tags
  *  (SPV, PROJ, RESERVE-LIGHT, EXITED, MANAGING, "scenario mark", activity lanes,
  *  etc.), built as Ink's real Tag component at `size="mini"`: 20px height,
@@ -945,9 +982,8 @@ export function Bubble({ children, variant = "positive", style }) {
 }
 
 /** Ink's real Avatar — "Shows thumbnails for people and company logos."
- *  Mirrors carta-frontend-platform's libs/ink/ink-foundations/library/Avatar
- *  (Avatar.tsx + styles.ts) exactly, not just visually: the load-bearing detail
- *  is that `variant="company"` is NOT a circular crop — it's a fixed
+ *  Mirrors Ink's Avatar exactly, not just visually: in particular,
+ *  `variant="company"` is NOT a circular crop — it's a fixed
  *  80px-wide, border-radius:0 rectangle sized to the real company-logo artwork's
  *  native aspect ratio (Ink's own default company glyph is an 80x38 viewBox).
  *  Cropping a company logo into a circle (this app's first attempt) looks wrong
@@ -1198,6 +1234,23 @@ export const TextInput = forwardRef(({ style, className, ...props }, ref) => (
   />
 ));
 
+/** A multi-line text field in the `TextInput` style that grows with its text, up to `maxRows`. */
+export function TextArea({ value, onChange, minRows = 4, maxRows = 24, style, ...props }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const line = parseFloat(getComputedStyle(el).lineHeight) || 20;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(Math.max(el.scrollHeight, line * minRows + 16), line * maxRows + 16)}px`;
+  }, [value, minRows, maxRows]);
+  return (
+    <textarea ref={ref} className="ink-input" value={value} onChange={onChange} rows={minRows}
+      style={{ ...sans, fontSize: 14, lineHeight: "20px", padding: "8px 10px", width: "100%", boxSizing: "border-box", resize: "vertical",
+        background: "var(--ink-color-global-surface-background-default)", color: "var(--ink-color-global-text-default)", ...style }} {...props} />
+  );
+}
+
 /** Search field — `TextInput` with a leading magnifying-glass icon, matching
  *  Ink's own GlobalFilter search field (same 36px input, icon inset at 10px,
  *  text padded to clear it) rather than a bare placeholder with no icon. Native
@@ -1236,9 +1289,8 @@ export function SearchInput({ placeholder, value, onChange, style, ...props }) {
 }
 
 // Ink's real Vignette/EmptyState components aren't importable here (micro-apps
-// can't pull in @carta/ink) — this reproduces the two illustrations this app
-// actually uses ("setup", "pending") from Ink's own SVG source (ink-foundations
-// Vignette/components/{Setup,Pending}Md.tsx), at the "md" (80px) size IconWithText
+// can't pull in Ink's component library) — this reproduces the two illustrations this app
+// actually uses ("setup", "pending") from Ink's own SVG source, at the "md" (80px) size IconWithText
 // maps EmptyState's "block" type to. Only those two — add more paths here if a
 // future empty state needs a different vignette. Colors follow Ink's own
 // light/dark token split (vignette.json5 / vignette.dark.json5): fill and stroke

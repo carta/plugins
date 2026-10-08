@@ -17,6 +17,7 @@ import GpEconomics from "./views/returns/GpEconomics.jsx";
 import Reserves from "./views/Reserves.jsx";
 import CohortStanding from "./views/CohortStanding.jsx";
 import Report from "./views/Report.jsx";
+import FundConstruction from "./views/construction/FundConstruction.jsx";
 import ScenarioDialog from "./ui/ScenarioDialog.jsx";
 import ConfirmDialog from "./ui/ConfirmDialog.jsx";
 import { warn, WarnToast, BASELINE_LOCKED_MSG } from "./ui/warn.jsx";
@@ -40,8 +41,11 @@ const TABS = [
   ["power-law", "Power Law", "M4 20h16", "M4 20C10 20 13 5 20 4"],
   ["cohort", "Benchmarks", "M5 19a9 9 0 1114 0", "M12 19l5-6"],
   ["export", "Export", "M7 3h7l4 4v13a1 1 0 01-1 1H7a1 1 0 01-1-1V4a1 1 0 011-1z", "M14 3v4h4"],
+  ["construction", "Fund Construction", "M4 21V9l8-5 8 5v12", "M9 21v-6h6v6"],
 ];
 const TAB_IDS = TABS.map(([id]) => id);
+// Plans a new fund rather than viewing the portfolio, so no scenario applies to it.
+const NEW_FUND_TAB = "construction";
 const DEFAULT_TAB = "overview";
 
 // PascalCase view names for analytics IDs (FundModeling.<ViewName>.*) — keyed
@@ -54,6 +58,7 @@ const TAB_VIEW_NAMES = {
   "gp-economics": "GpEconomics",
   reserves: "Reserves",
   cohort: "CohortStanding",
+  construction: "FundConstruction",
   export: "Export",
 };
 
@@ -200,6 +205,10 @@ export default function App({ firm, onChooseFirm }) {
   // (never hardcoded USD); drives fmt$/fmtM/fmtB across the app.
   setDisplayCurrency(snapshot?.source?.currency);
   const [tab, setTab] = useTabRoute(firm);
+  const lastPortfolioTab = useRef(DEFAULT_TAB);
+  useEffect(() => {
+    if (tab !== NEW_FUND_TAB) lastPortfolioTab.current = tab;
+  }, [tab]);
   // Nav-click tracking is separate from setTab itself — setTab is also called
   // from drill-downs (openFund/openFundSection) and the per-fund-tab auto-select,
   // which aren't user nav clicks.
@@ -403,6 +412,11 @@ export default function App({ firm, onChooseFirm }) {
   );
 
   // ── full sidebar — firm header, tab nav (icon + label), scenarios, data status ──
+  const scenariosOff = tab === NEW_FUND_TAB;
+  const pickSlice = (id) => {
+    selectSlice(id);
+    if (scenariosOff) setTab(lastPortfolioTab.current);
+  };
   const sidebar = (
     <aside style={{ width: 232, flex: "none", background: "var(--ink-color-global-surface-background-default)", borderRight: `1px solid var(--ink-color-global-border-subtle)`,
       display: "flex", flexDirection: "column", gap: 1, padding: "14px 10px 10px",
@@ -413,7 +427,7 @@ export default function App({ firm, onChooseFirm }) {
           <H3 as="div" style={{ lineHeight: 1.2, wordBreak: "break-word" }}>{snapshot.branding?.firmName ?? snapshot.source.firm}</H3>
         </div>
       </div>
-      {TABS.map(([id, label, icon, extra]) => (
+      {TABS.filter(([id]) => id !== NEW_FUND_TAB).map(([id, label, icon, extra]) => (
         <NavItem key={id} id={id} label={label} icon={icon} extra={extra} active={tab === id} onClick={() => selectTab(id)} />
       ))}
       <div style={{ height: 1, background: "var(--ink-color-global-border-subtle)", margin: "9px 8px" }} />
@@ -424,7 +438,7 @@ export default function App({ firm, onChooseFirm }) {
             color: "var(--ink-button-background-color-primary-base-default)", cursor: "pointer", display: "grid", placeItems: "center", fontSize: FS.bodyLg, fontWeight: 600, lineHeight: 1, padding: 0 }}>+</button>
       </div>
       {doc.slices.filter((s) => !isShared(s)).map((s) => (
-        <ScenarioItem key={s.id} slice={s} active={s.id === slice.id} onClick={() => selectSlice(s.id)} />
+        <ScenarioItem key={s.id} slice={s} active={!scenariosOff && s.id === slice.id} onClick={() => pickSlice(s.id)} />
       ))}
       <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "12px 8px 4px" }}>
         <Eyebrow color={MICRO}>Shared</Eyebrow>
@@ -439,11 +453,18 @@ export default function App({ firm, onChooseFirm }) {
       </div>
       {doc.slices.some((s) => isShared(s) && !isHidden(s))
         ? doc.slices.filter((s) => isShared(s) && !isHidden(s)).map((s) => (
-            <ScenarioItem key={s.id} slice={s} active={s.id === slice.id} onClick={() => selectSlice(s.id)} />
+            <ScenarioItem key={s.id} slice={s} active={!scenariosOff && s.id === slice.id} onClick={() => pickSlice(s.id)} />
           ))
         : <div style={{ ...sans, fontSize: FS.micro, color: "var(--ink-color-global-text-subtle)", padding: "2px 12px 4px" }}>None yet — load to check.</div>}
       <span style={{ flex: 1, minHeight: 10 }} />
-      <div style={{ height: 1, background: "var(--ink-color-global-border-subtle)", margin: "6px 8px 0" }} />
+      <div style={{ height: 1, background: "var(--ink-color-global-border-subtle)", margin: "6px 8px 9px" }} />
+      <div style={{ padding: "0 8px 4px" }}>
+        <Eyebrow color={MICRO}>New fund</Eyebrow>
+      </div>
+      {TABS.filter(([id]) => id === NEW_FUND_TAB).map(([id, label, icon, extra]) => (
+        <NavItem key={id} id={id} label={label} icon={icon} extra={extra} active={tab === id} onClick={() => selectTab(id)} />
+      ))}
+      <div style={{ height: 1, background: "var(--ink-color-global-border-subtle)", margin: "9px 8px 0" }} />
       <div style={{ padding: "9px 9px 0" }}>
         <span style={{ ...tightSans, fontSize: FS.body, fontWeight: 700, color: "var(--ink-color-global-text-default)", letterSpacing: "-0.01em" }}>Carta Fund Modeling</span>
       </div>
@@ -455,8 +476,10 @@ export default function App({ firm, onChooseFirm }) {
   const topBar = (
     <div data-testid="app-topbar" style={{ position: "sticky", top: 0, zIndex: 20, background: "var(--ink-color-global-surface-background-default)", borderBottom: `1px solid var(--ink-color-global-border-subtle)` }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 24px", flexWrap: "wrap" }}>
-        <span style={{ ...sans, fontSize: FS.body, color: "var(--ink-color-global-text-subtle)" }}>Scenario: <strong style={{ color: "var(--ink-color-global-text-default)", fontWeight: 700 }}>{slice.name}</strong></span>
-        {sliceTools}
+        {!scenariosOff && <>
+          <span style={{ ...sans, fontSize: FS.body, color: "var(--ink-color-global-text-subtle)" }}>Scenario: <strong style={{ color: "var(--ink-color-global-text-default)", fontWeight: 700 }}>{slice.name}</strong></span>
+          {sliceTools}
+        </>}
         <span style={{ flex: 1 }} />
         <UpdateDataButton />
         {themeToggle}
@@ -488,18 +511,21 @@ export default function App({ firm, onChooseFirm }) {
         ))}
       </div>
       <div style={{ display: "flex", gap: 6, overflowX: "auto", alignItems: "center" }}>
-        {doc.slices.filter((s) => !isHidden(s)).map((s) => (
-          <button key={s.id} onClick={() => selectSlice(s.id)}
-            style={{ ...sans, fontSize: FS.bodyLg, fontWeight: s.id === slice.id ? 600 : 500, padding: "6px 13px", borderRadius: 4,
-              border: `1px solid ${s.id === slice.id ? "var(--ink-color-global-text-default)" : "var(--ink-color-global-border-subtle)"}`, cursor: "pointer", whiteSpace: "nowrap",
-              background: s.id === slice.id ? "var(--ink-color-global-text-default)" : "var(--ink-color-global-surface-background-default)", color: s.id === slice.id ? "var(--ink-color-global-surface-background-default)" : "var(--ink-color-global-text-subtle)",
-              display: "inline-flex", alignItems: "center", gap: 6 }}>
-            {s.locked
-              ? <LockIcon size={11} strokeWidth={2} />
-              : s.color && <span style={{ width: 8, height: 8, borderRadius: "50%", background: s.color, flex: "none" }} />}
-            {s.name}
-          </button>
-        ))}
+        {doc.slices.filter((s) => !isHidden(s)).map((s) => {
+          const on = !scenariosOff && s.id === slice.id;
+          return (
+            <button key={s.id} onClick={() => pickSlice(s.id)}
+              style={{ ...sans, fontSize: FS.bodyLg, fontWeight: on ? 600 : 500, padding: "6px 13px", borderRadius: 4,
+                border: `1px solid ${on ? "var(--ink-color-global-text-default)" : "var(--ink-color-global-border-subtle)"}`, cursor: "pointer", whiteSpace: "nowrap",
+                background: on ? "var(--ink-color-global-text-default)" : "var(--ink-color-global-surface-background-default)", color: on ? "var(--ink-color-global-surface-background-default)" : "var(--ink-color-global-text-subtle)",
+                display: "inline-flex", alignItems: "center", gap: 6 }}>
+              {s.locked
+                ? <LockIcon size={11} strokeWidth={2} />
+                : s.color && <span style={{ width: 8, height: 8, borderRadius: "50%", background: s.color, flex: "none" }} />}
+              {s.name}
+            </button>
+          );
+        })}
         <button onClick={onNewSlice} data-testid="new-slice"
           style={{ ...sans, fontSize: FS.bodyLg, fontWeight: 600, padding: "6px 13px", borderRadius: 4, border: `1px dashed var(--ink-color-global-border-subtle)`,
             background: "transparent", color: "var(--ink-button-background-color-primary-base-default)", cursor: "pointer", whiteSpace: "nowrap" }}>
@@ -511,7 +537,7 @@ export default function App({ firm, onChooseFirm }) {
           ⤓ Load shared
         </button>
       </div>
-      {!locked && (
+      {!locked && !scenariosOff && (
         <div style={{ display: "flex", gap: 6, overflowX: "auto", alignItems: "center" }}>
           <ShareControls slice={slice} snapshot={snapshot} userId={userId} busy={share.running}
             onPublish={onPublish} onFork={onFork} onRemove={onRemove} onDelete={onDeleteShared} />
@@ -566,6 +592,7 @@ export default function App({ firm, onChooseFirm }) {
                 return <GpEconomics {...returnsProps} />;
               })()}
               {tab === "cohort" && <CohortStanding snapshot={snapshot} fundStates={fundStates} portfolio={slice} />}
+              {tab === "construction" && <FundConstruction snapshot={snapshot} firm={firm} companies={baseSlice?.companies} />}
               {tab === "export" && <Report doc={doc} snapshot={snapshot} baseSlice={baseSlice} />}
             </div>
           </main>

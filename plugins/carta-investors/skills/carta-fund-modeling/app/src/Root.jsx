@@ -13,7 +13,7 @@ import { parseRoute, navigate, subscribeNav } from "./route.js";
 export default function Root() {
   // The URL path is the source of truth for the selected firm.
   const firm = useSyncExternalStore(subscribeNav, () => parseRoute().firm, () => null);
-  const [extras, setExtras] = useState(null); // { slug, pacing, ownership, lpBase } for `firm`
+  const [extras, setExtras] = useState(null); // { slug, pacing, ownership, lpBase, gpBase, feeHistory, expenseHistory, opsBenchmarks } for `firm`
   const [error, setError] = useState(null);
   const [loadingStep, setLoadingStep] = useState(null); // SSE step from /api/load-firm
 
@@ -118,17 +118,15 @@ export default function Root() {
       }
 
       // Now load extras (snapshot is ready)
-      const ownership = fetch(`/api/report/company-ownership.json${q}`)
-        .then((r) => r.json()).then((d) => (d && !d.error ? d : {})).catch(() => ({}));
-      const lpBase = fetch(`/api/report/lp-base.json${q}`)
-        .then((r) => r.json()).then((d) => (d && !d.error ? d : null)).catch(() => null);
-      const gpBase = fetch(`/api/report/gp-base.json${q}`)
-        .then((r) => r.json()).then((d) => (d && !d.error ? d : null)).catch(() => null);
-      const [pacing, own, lp, gp] = await Promise.all([
+      // A report the build didn't write comes back as an error body, not a 404.
+      const report = (name, missing = null) => fetch(`/api/report/${name}.json${q}`)
+        .then((r) => r.json()).then((d) => (d && !d.error ? d : missing)).catch(() => missing);
+      const [pacing, own, lp, gp, fees, expenses, ops] = await Promise.all([
         fetch(`/api/pacing${q}`).then((r) => r.json()),
-        ownership, lpBase, gpBase,
+        report("company-ownership", {}), report("lp-base"), report("gp-base"),
+        report("fee-history"), report("expense-history"), report("ops-benchmarks"),
       ]);
-      if (live) setExtras({ slug: firm, pacing, ownership: own, lpBase: lp, gpBase: gp });
+      if (live) setExtras({ slug: firm, pacing, ownership: own, lpBase: lp, gpBase: gp, feeHistory: fees, expenseHistory: expenses, opsBenchmarks: ops });
     }
 
     loadExtras().catch((e) => { if (live) setError(String(e)); });

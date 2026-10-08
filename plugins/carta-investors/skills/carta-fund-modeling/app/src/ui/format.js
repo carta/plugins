@@ -28,6 +28,36 @@ export function setDisplayCurrency(code) {
 }
 export const displayCurrency = () => CURRENCY_CODE;
 
+export const CURRENCIES = Object.keys(SYMBOLS);
+
+const symbolFor = (code) => (!code ? "" : SYMBOLS[String(code).toUpperCase()] || String(code).toUpperCase() + " ");
+
+/** The *In formatters take an explicit currency instead of the firm display currency. */
+export const fmtMIn = (n, code) => {
+  if (n == null || !Number.isFinite(n)) return "—";
+  const sym = symbolFor(code);
+  const m = Math.abs(n) / 1e6;
+  const b = m / 1000;
+  return (n < 0 ? "−" : "") + sym + (m >= 999.95 ? b.toFixed(b < 10 ? 2 : 1) + "B" : m.toFixed(1) + "M");
+};
+
+/** A check size without hiding its steps: "$675K", "$1.25M". */
+export const fmtCheckIn = (n, code) => {
+  if (n == null || !Number.isFinite(n)) return "—";
+  const sym = symbolFor(code);
+  const a = Math.abs(n);
+  // Decide K vs M on the rounded thousands, so 999,600 reads "1M", not "1000K".
+  const k = Math.round(a / 1e3);
+  const body = k < 1000 ? `${k}K` : `${(a / 1e6).toFixed(2).replace(/\.?0+$/, "")}M`;
+  return (n < 0 ? "−" : "") + sym + body;
+};
+
+export const fmtFullIn = (n, code) =>
+  n == null || !Number.isFinite(n) ? "—" : (n < 0 ? "−" : "") + symbolFor(code) + Math.abs(Math.round(n)).toLocaleString("en-US");
+
+export const fmtAmountIn = (n, code, decimals = 2) =>
+  n == null || !Number.isFinite(n) ? "—" : (n < 0 ? "−" : "") + symbolFor(code) + Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+
 export const fmt$ = (n) =>
   n == null || !Number.isFinite(n)
     ? "—"
@@ -70,4 +100,42 @@ export const fmtAsOf = (iso) => {
   if (!iso) return "—";
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso));
   return m ? `${m[2]}-${m[3]}-${m[1]}` : String(iso);
+};
+
+/** The fund display name embeds an ALL-CAPS slug prefix for dense tables
+ *  ("KRAKATOA-VENTURES-FUND-IV-L-P (Krakatoa Ventures Fund IV, 2021)"). The
+ *  picker only needs the readable, already-title-cased part — strip the slug
+ *  and surface "Krakatoa Ventures Fund IV (2021)". Falls back to the raw label
+ *  (e.g. "All Funds") when there's no parenthetical. */
+export function fundLabel(s) {
+  if (!s) return s;
+  const m = s.match(/\(([^)]+)\)\s*$/);
+  if (!m) return s;
+  const inner = m[1];
+  const i = inner.lastIndexOf(", ");
+  if (i === -1) return inner;
+  const name = inner.slice(0, i), vintage = inner.slice(i + 2);
+  return /^\d{4}$/.test(vintage) ? `${name} (${vintage})` : name;
+}
+
+/** fundLabel() with the trailing "(vintage)" stripped too — for views that
+ *  already show vintage in its own column/line (Overview's Vintage column,
+ *  CohortStanding's "2022 · 41 funds in cohort" line) and would otherwise
+ *  show it twice. */
+export function fundNameOnly(s) {
+  return fundLabel(s)?.replace(/\s*\(\d{4}\)$/, "");
+}
+
+/** A "YYYY-MM" month as "Jan 2027"; `empty` when there's no month. */
+export const fmtYm = (ym, empty = "—") => {
+  if (!ym) return empty;
+  const [y, m] = ym.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
+};
+
+export const fmtYears = (n) => `${n} ${n === 1 ? "year" : "years"}`;
+
+export const fmtCount = (n) => {
+  if (n == null || !Number.isFinite(n)) return "—";
+  return n >= 10 || Math.abs(n - Math.round(n)) < 0.05 ? Math.round(n).toLocaleString("en-US") : n.toFixed(1);
 };

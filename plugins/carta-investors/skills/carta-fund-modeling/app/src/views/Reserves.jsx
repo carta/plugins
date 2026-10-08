@@ -95,7 +95,7 @@ const SEG = {
 const RECYCLING_C = "var(--ink-color-global-data-viz-brown-3)";
 
 // Micro column-label, sentence case — matches Ink's table-header spec
-// (theme-with-ink/brand.md: uppercase is reserved for eyebrows, not column heads).
+// (uppercase is reserved for eyebrows, not column heads).
 const COL_HEAD = { ...sans, fontSize: FS.micro, fontWeight: 600, color: MICRO, whiteSpace: "nowrap" };
 
 /** Stacked capital-allocation bar for one fund (segments sum across committed).

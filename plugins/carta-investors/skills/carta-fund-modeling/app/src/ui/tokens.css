@@ -151,9 +151,7 @@
   --ink-spacing-global-horizontal-large:   24px;
   --ink-spacing-global-horizontal-xlarge:  32px;
 
-  /* === Typography (re-synced from theme-with-ink/tokens.css — the pinned Ink
-     snapshot theme.js's FS scale is documented as aligning to; this block had
-     been dropped from this app's local snapshot at some point) === */
+  /* === Typography (Ink's type scale, which theme.js's FS scale aligns to) === */
   --ink-font-global-size-small-1:            12px;
   --ink-font-global-size-small-2:            12px;
   --ink-font-global-size-heading-3:         16px;
@@ -192,7 +190,7 @@
   --ink-button-background-color-danger-base-hover:      #A82020;
   --ink-button-font-color-danger-base:                  #FFFFFF;
 
-  /* === Avatar (component tokens — synced from ink-tokens/library/tokens/components/Avatar).
+  /* === Avatar (Ink's Avatar component tokens).
      Ink's own initials-primary/secondary/tertiary enum is intentionally not included here —
      this app colors initials avatars from its own categorical data-viz palette instead
      (see PALETTE in Overview.jsx), passed directly as Avatar's `initialsColor` prop. === */

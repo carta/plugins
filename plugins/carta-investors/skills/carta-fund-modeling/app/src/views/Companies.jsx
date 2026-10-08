@@ -12,7 +12,7 @@ const roundLabel = (r) => {
   if (/^[a-z]\d?$/i.test(s)) return "Series " + s.toUpperCase();
   return s.charAt(0).toUpperCase() + s.slice(1);
 };
-import { H1, Btn, Toggle, Num, ChevronDownIcon, HelpCircleIcon, FundPicker, Dropdown, Badge, Eyebrow, MenuItem, useDismissable, ALL_FUNDS, MethodNote, SourceNote, fundLabel, POPOVER_SHADOW, GlobalFilter, SearchInput, DeltaCaret, Modal, EmptyState, Slider } from "../ui/components.jsx";
+import { H1, Btn, Toggle, Num, ChevronDownIcon, InfoTip, FundPicker, Dropdown, Badge, Eyebrow, MenuItem, useDismissable, ALL_FUNDS, MethodNote, SourceNote, fundLabel, POPOVER_SHADOW, GlobalFilter, SearchInput, DeltaCaret, Modal, EmptyState, Slider } from "../ui/components.jsx";
 import { useTableSort, SortIcon, useStickyHeader, TableScroll, TableHead } from "../ui/table.jsx";
 import RepriceControl from "../ui/RepriceControl.jsx";
 import ConfirmDialog from "../ui/ConfirmDialog.jsx";
@@ -547,73 +547,6 @@ const PlainLabel = ({ children, style }) => (
   <div style={{ ...sans, fontSize: FS.body, fontWeight: 400, color: "var(--ink-color-global-text-subtle)", marginBottom: 8, ...style }}>{children}</div>
 );
 
-// Ink dark hover tooltip — reusable for any trigger element. Defaults match the
-// Reserves toolbar's "Partial" usage (own HelpCircleIcon button, in-flow, opens
-// downward); pass `trigger` + `portal` for triggers that live inside an
-// overflow-clipped ancestor, e.g. a table row (see HoverPopover above for why
-// table-row popovers need portaling to escape the Companies table's overflow clip).
-function InfoTip({ label, children, width = 300, trigger, portal = false, placement = "bottom" }) {
-  const [open, setOpen] = useState(false);
-  const [mounted, setMounted] = useState(false); // stays true after first show so opacity can transition back to 0 on hide
-  const [pos, setPos] = useState(null);
-  const triggerRef = useRef(null);
-  const show = () => {
-    setMounted(true);
-    setOpen(true);
-    if (portal) {
-      const r = triggerRef.current?.getBoundingClientRect();
-      if (r) {
-        const w = Math.min(width, window.innerWidth - 24);
-        const top = placement === "top" ? r.top - 8 : r.bottom + 8;
-        setPos({ left: Math.max(w / 2 + 12, Math.min(r.left + r.width / 2, window.innerWidth - w / 2 - 12)), top, width: w });
-      }
-    }
-  };
-  const hide = () => setOpen(false);
-
-  const triggerEl = trigger ?? (
-    <button type="button" aria-label={label} style={{ display: "flex", background: "none", border: "none", padding: 0, cursor: "default", color: "var(--ink-color-global-feedback-info-strong)" }}>
-      <HelpCircleIcon size={16} strokeWidth={1.6} />
-    </button>
-  );
-
-  const caret = (
-    <span style={{ position: "absolute", left: "50%", transform: "translateX(-50%)",
-      ...(placement === "top"
-        ? { top: "100%", borderLeft: "6px solid transparent", borderRight: "6px solid transparent", borderTop: "6px solid var(--ink-color-global-brand-black)" }
-        : { bottom: "100%", borderLeft: "6px solid transparent", borderRight: "6px solid transparent", borderBottom: "6px solid var(--ink-color-global-brand-black)" }) }} />
-  );
-
-  // Ink's canonical recipe fades the tooltip in/out (transition: opacity 0.1s) rather than
-  // mount/unmount — stay mounted once shown (see `mounted`) so hide() can animate to opacity 0
-  // instead of disappearing instantly. The global prefers-reduced-motion reset (see EASE usage
-  // elsewhere in this file) neutralizes this transition automatically for users who need it.
-  // Font size/leading and radius match theme-with-ink's canonical Tooltip recipe
-  // (components.md: 12px/16px, radius-subtle) — that skill is the styling target for this
-  // app, not the live @carta/ink package's own token values.
-  const tooltipBody = (
-    <div role="tooltip"
-      style={{ ...sans, background: "var(--ink-color-global-brand-black)", color: "var(--ink-color-global-brand-white)",
-        fontSize: FS.body, lineHeight: "16px", padding: "10px 14px", borderRadius: "var(--ink-size-global-radius-subtle)",
-        boxShadow: "var(--shadow-hover)", zIndex: portal ? 200 : 60, textAlign: "left",
-        opacity: open ? 1 : 0, transition: "opacity 0.1s", pointerEvents: "none",
-        ...(portal
-          ? { position: "fixed", left: pos?.left, top: pos?.top, width: pos?.width, transform: `translate(-50%, ${placement === "top" ? "-100%" : "0"})` }
-          : { position: "absolute", [placement === "top" ? "bottom" : "top"]: "calc(100% + 8px)", left: "50%", transform: "translateX(-50%)", width }) }}>
-      {children}
-      {caret}
-    </div>
-  );
-
-  return (
-    <span ref={triggerRef} style={{ position: portal ? undefined : "relative", display: "inline-flex", alignItems: "center" }}
-      onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide}>
-      {triggerEl}
-      {mounted && (portal ? (pos && createPortal(tooltipBody, document.body)) : tooltipBody)}
-    </span>
-  );
-}
-
 // Circular badge shell for a small Ink icon glyph — shared by the row-level InfoTip
 // triggers below (financials/cap-table). Circle fill + icon color follow Bubble's
 // info tone; `path`/`fillRule`/`clipRule` are the one thing each glyph varies.
@@ -1071,8 +1004,7 @@ function CompanyRow({ company, updateCompany, refDate, staleDays, assumptions, p
               {/* Tabs switch what renders below, in place, rather than opening a
                   separate stacked modal — same shell, same size, just a different
                   peer view of this company. Ink's standard underline Tab recipe
-                  (theme-with-ink components.md "## Tab" — see the .ink-tabs/
-                  .ink-tab rules in theme.js's GLOBAL_CSS), not a bespoke style. */}
+                  (the .ink-tabs/.ink-tab rules in theme.js's GLOBAL_CSS), not a bespoke style. */}
               <nav className="ink-tabs" role="tablist" style={{ marginBottom: 16 }}>
                 {[
                   { id: null, label: "Scenario inputs" },

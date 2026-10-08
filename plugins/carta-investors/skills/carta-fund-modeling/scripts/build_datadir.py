@@ -430,6 +430,25 @@ def load_logos(rawdir):
     return out
 
 
+def investment_history(comp_map, fund_ids):
+    # type: (dict, dict) -> dict
+    """Each fund's checks, one row per security: {fundId: [{id, name, checks: [{date, cost, asset, cls}]}]}.
+    Fund Construction benchmarks initial checks, follow-ons and pacing from it."""
+    out = collections.defaultdict(list)
+    for cid, entry in comp_map.items():
+        name = entry["names"].most_common(1)[0][0]
+        by_fund = collections.defaultdict(list)
+        for row in entry["rows"]:
+            if row["cost"] > 0 and row["date"] and row["u"] in fund_ids:
+                by_fund[fund_ids[row["u"]]].append({
+                    "date": row["date"][:10], "cost": round(row["cost"], 2),
+                    "asset": row["asset"], "cls": row.get("cls"),
+                })
+        for fund_id, checks in by_fund.items():
+            out[fund_id].append({"id": cid, "name": name, "checks": sorted(checks, key=lambda c: c["date"])})
+    return dict(out)
+
+
 def build(rawdir, out, meta):
     nav = meta.get("navAsOf") or ""
     nav_d = parse_d(nav)
@@ -870,6 +889,7 @@ def build(rawdir, out, meta):
         entry["names"][issuer] += 1
         entry["rows"].append({
             "u": u, "asset": col(r, "asset_name", "asset_class_type") or "Investment",
+            "cls": col(r, "asset_class_type") or None,
             "cost": cost, "fmv": fmv, "proceeds": proceeds,
             # count_remaining_shares: the fund's holding in this security/class — the
             # join key to the company's cap-table stack for the liquidation waterfall.
@@ -1118,7 +1138,7 @@ def build(rawdir, out, meta):
         a = lp_agg.setdefault(name, {"name": name, "region": region_bucket(col(r, "partner_country")),
                                      "commitment": 0.0, "contributed": 0.0, "distributed": 0.0,
                                      "nav": 0.0, "funds": set(), "partnerClasses": set(),
-                                     "partnerClassesByFund": {}})
+                                     "partnerClassesByFund": {}, "commitmentByFund": collections.defaultdict(float)})
         a["commitment"] += num(col(r, "commitment"))
         a["contributed"] += num(col(r, "contributed"))
         a["distributed"] += num(col(r, "distributed"))
@@ -1126,6 +1146,8 @@ def build(rawdir, out, meta):
         fund_uuid = col(r, "fund_uuid")
         if fund_uuid:
             a["funds"].add(fund_uuid)
+            if SLUG.get(fund_uuid):
+                a["commitmentByFund"][SLUG[fund_uuid]] += num(col(r, "commitment"))
         pc = col(r, "partner_class_name")
         if pc:
             a["partnerClasses"].add(pc)
@@ -1146,7 +1168,8 @@ def build(rawdir, out, meta):
                         "distributed": round(x["distributed"], 2), "nav": round(x["nav"], 2),
                         "dpi": round(x["distributed"] / contributed, 4) if contributed > 0 else None,
                         "funds": len(x["funds"]), "partnerClass": partner_class,
-                        "partnerClassByFund": classes_by_fund if classes_by_fund else None})
+                        "partnerClassByFund": classes_by_fund if classes_by_fund else None,
+                        "commitmentByFund": {k: round(v, 2) for k, v in x["commitmentByFund"].items() if v > 0} or None})
     byregion = collections.defaultdict(lambda: {"commitment": 0.0, "count": 0})
     for x in lps_all:
         b = byregion[x["region"]]
@@ -1155,7 +1178,21 @@ def build(rawdir, out, meta):
     by_region = sorted([{"region": k, "commitment": round(v["commitment"], 2),
                          "pct": round(v["commitment"] / total_commit, 6), "count": v["count"]}
                         for k, v in byregion.items()], key=lambda r: r["commitment"], reverse=True)
-    lp_base = {"asOf": nav, "totalCommitment": round(total_commit, 2),
+    # Over every LP, not just the listed 200, so a new fund can copy one fund's LP mix at its exact shares.
+    by_fund_lp = collections.defaultdict(lambda: {"commitment": 0.0, "count": 0})
+    for x in lps_all:
+        for k, v in x["commitmentByFund"].items():
+            if v > 0:
+                by_fund_lp[k]["commitment"] += v
+                by_fund_lp[k]["count"] += 1
+    fund_by_slug = {f["id"]: f for f in funds.values()}
+    # Each fund's commitments are in its own currency, so a reader never adds two funds' amounts together.
+    lp_funds = sorted([{"id": k, "name": fund_by_slug[k]["name"], "vintage": fund_by_slug[k].get("vintage"),
+                        "commitment": round(v["commitment"], 2), "count": v["count"],
+                        "currency": fmetrics.get(fund_by_slug[k]["uuid"], {}).get("currency")}
+                       for k, v in by_fund_lp.items() if k in fund_by_slug],
+                      key=lambda f: (-(f["vintage"] or 0), -f["count"], f["name"]))
+    lp_base = {"asOf": nav, "totalCommitment": round(total_commit, 2), "funds": lp_funds,
                "totalContributed": round(sum(x["contributed"] for x in lps_all), 2),
                "totalDistributed": round(sum(x["distributed"] for x in lps_all), 2),
                "totalNav": round(sum(x["nav"] for x in lps_all), 2),
@@ -1368,10 +1405,21 @@ def build(rawdir, out, meta):
     w("pacing.json", pacing)
     if lp_base:
         w("lp-base.json", lp_base)
+    def w_optional(name, obj):
+        # The build writes into the live dir, so an earlier build's file would otherwise be served as current.
+        if obj:
+            w(name, obj)
+        elif os.path.exists(os.path.join(out, name)):
+            os.remove(os.path.join(out, name))
+
+    w_optional("fee-history.json", build_fee_history(parse_table(find(rawdir, "fee_schedules")), SLUG, nav))
+    w_optional("expense-history.json", build_expense_history(parse_table(find(rawdir, "expense_ledger")), SLUG, nav))
+    w_optional("ops-benchmarks.json", build_ops_benchmarks(parse_table(find(rawdir, "ops_benchmarks")), nav))
     if gp_base:
         w("gp-base.json", gp_base)
     if ownership:
         w("company-ownership.json", ownership)
+    w_optional("investment-history.json", investment_history(comp_map, SLUG))
 
     return {"funds": len(snap_funds), "companies": len(companies),
             "fundsWithoutNav": [f["name"] for f in funds.values() if not f["hasNav"]],
@@ -1387,6 +1435,95 @@ def build(rawdir, out, meta):
             "accruedAsOf": accrued_asof}
 
 
+# ---------- fee history + market ranges (optional; feed Fund Construction) ----------
+def build_fee_history(rows, slug_of, as_of):
+    """Each fund's management-fee periods, keyed by snapshot fund id (`end` None = open-ended). None with no rows."""
+    by_fund = collections.OrderedDict()
+    for r in rows:
+        fid = slug_of.get(col(r, "fund_uuid"))
+        if not fid:
+            continue
+        waived = col(r, "waived").lower() in ("true", "1", "t", "yes")
+        by_fund.setdefault(fid, []).append({
+            "order": int(num(col(r, "period_order"))) if col(r, "period_order") else len(by_fund.get(fid, [])),
+            "name": col(r, "period_name") or None,
+            "start": col(r, "start_date")[:10] or None,
+            "end": col(r, "end_date")[:10] or None,
+            "rate": 0.0 if waived else numn(col(r, "fee_rate")),
+            "base": col(r, "calculation_base") or None,
+            "frequency": col(r, "frequency") or None,
+            "waived": waived,
+            "minFee": numn(col(r, "minimum_fee_amount")),
+            "fixedFee": numn(col(r, "fixed_fee_amount")),
+            "currency": col(r, "fee_currency") or None,
+        })
+    for periods in by_fund.values():
+        periods.sort(key=lambda p: (p["order"], p["start"] or ""))
+    return {"asOf": as_of, "funds": by_fund} if by_fund else None
+
+
+def build_expense_history(rows, slug_of, as_of):
+    """What each fund booked to its expense accounts, by account and calendar year, keyed by snapshot
+    fund id: { fundId: [{ name, byYear: { "2024": 58310.0 } }] }, biggest account first. None with no rows."""
+    by_fund = collections.OrderedDict()
+    for r in rows:
+        fid = slug_of.get(col(r, "fund_uuid"))
+        name = col(r, "account_name")
+        year = col(r, "year")
+        amount = numn(col(r, "amount"))
+        if not fid or not name or not year or amount is None:
+            continue
+        accounts = by_fund.setdefault(fid, collections.OrderedDict())
+        accounts.setdefault(name, {})[str(int(num(year)))] = round(accounts.get(name, {}).get(str(int(num(year))), 0.0) + amount, 2)
+    out = collections.OrderedDict()
+    for fid, accounts in by_fund.items():
+        rows_ = [{"name": n, "byYear": y} for n, y in accounts.items()]
+        rows_.sort(key=lambda a: -sum(a["byYear"].values()))
+        out[fid] = rows_
+    return {"asOf": as_of, "funds": out} if out else None
+
+
+def _band(r, prefix, points, n_col=None):
+    out = {}
+    for p in points:
+        v = numn(col(r, "%s_%dth" % (prefix, p)))
+        if v is not None:
+            out["p%d" % p] = v
+    if not out:
+        return None
+    n = numn(col(r, n_col)) if n_col else None
+    if n is not None:
+        out["n"] = int(n)
+    return out
+
+
+def build_ops_benchmarks(rows, as_of):
+    """Market ranges by fund size and vintage: lifetime-to-date fees and expenses as a share of
+    fund size (fees, opex) or of contributions (legal, software, payroll). Aggregate cohort
+    percentiles only. Returns None with no usable cohort."""
+    cohorts = []
+    for r in rows:
+        vintage = col(r, "vintage_year")
+        bucket = col(r, "fund_aum_bucket")
+        if not vintage or not bucket:
+            continue
+        fees = _band(r, "net_perc_mgmt_fees_to_fundsize", (10, 25, 50, 75, 90), "ct_companies_mgmt_fees")
+        if not fees:
+            continue
+        c = {"vintage": int(num(vintage)), "bucket": bucket, "mgmtFees": fees}
+        for key, prefix, points, n_col in (
+                ("opex", "net_perc_opex_to_fundsize", (10, 25, 50, 75, 90), "ct_companies_opex"),
+                ("legal", "net_perc_cost_legal_fees_to_contributions", (25, 50, 75), None),
+                ("tech", "net_perc_cost_tech_to_contributions", (25, 50, 75), None),
+                ("payroll", "net_perc_payroll_to_contributions", (25, 50, 75), None)):
+            b = _band(r, prefix, points, n_col)
+            if b:
+                c[key] = b
+        cohorts.append(c)
+    cohorts.sort(key=lambda c: (c["bucket"], c["vintage"]))
+    return {"asOf": as_of, "cohorts": cohorts} if cohorts else None
+
+
 # ---------- fail-loud data-contract check ----------
 # Each entry: (stem, requiredness, [load-bearing columns the builder reads]).
 # `requiredness` is three-valued and encodes how missing data gates the build:
@@ -1395,8 +1532,8 @@ def build(rawdir, out, meta):
 #   "file"  — the fetch must be *attempted*: the <stem>.ndjson file MUST exist, but
 #             may be empty. A MISSING file means the LLM never ran the query (a
 #             non-deterministic skip) and hard-fails the build; a present-but-empty
-#             file is legitimate ("Carta publishes none" / access-denied) and
-#             degrades gracefully. This makes the deterministic builder — not the
+#             file is legitimate ("Carta publishes none" / access-denied) and the
+#             build goes on with that feature empty. This makes the deterministic builder — not the
 #             LLM's memory — enforce that every DWH stem was fetched.
 #   False   — genuinely optional (external deps: other-skill/on-demand).
 # When a stem file exists but its rows lack a load-bearing column, the derived
@@ -1434,6 +1571,10 @@ STEM_CONTRACT = [
     # has none (a missing/empty file must NOT gate the build); when absent, carry falls
     # back to the flat carryRate default and pref/catch-up disable.
     ("waterfall",     False,  ["fund_id", "carry_rate"]),
+    # Optional: they only feed Fund Construction's past-fund and market-range helpers, hidden without them.
+    ("fee_schedules", False,  ["fund_uuid", "fee_rate", "calculation_base"]),
+    ("expense_ledger", False, ["fund_uuid", "account_name", "year", "amount"]),
+    ("ops_benchmarks", False, ["vintage_year", "fund_aum_bucket", "net_perc_mgmt_fees_to_fundsize_50th"]),
     ("financing",     "file", ["corporation_id", "post_money_valuation"]),
     ("ownership",     "file", ["corporation_id", "percentage"]),
     ("fund_metrics",  "file", ["fund_uuid", "fund_reporting_currency"]),

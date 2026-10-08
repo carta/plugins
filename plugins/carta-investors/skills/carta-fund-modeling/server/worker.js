@@ -576,6 +576,42 @@ async function handlePortfolio(req, env) {
   }
   return new Response("Method not allowed", { status: 405 });
 }
+// Fund Construction plans — their own KV key, so a portfolio rebuild never drops them.
+const EMPTY_CONSTRUCTION = JSON.stringify({ version: 1, plans: [], activePlanId: null }); // must match EMPTY_CONSTRUCTION in scripts/serve.py
+async function handleConstruction(req, env) {
+  const [sid, session, authErr] = await requireAuth(req, env);
+  if (authErr) return authErr;
+  const url = new URL(req.url);
+  const firm = url.searchParams.get("firm") || "";
+  if (firm && !await authorizedFirm(req, firm, sid, session, env)) return forbiddenFirm(firm);
+  const kvKey = dataKey("construction", sid, firm, "", env);
+  if (req.method === "GET" || req.method === "HEAD") {
+    const raw = (await env.SESSIONS.get(kvKey)) || EMPTY_CONSTRUCTION;
+    const etag = `"${await sha256Base64url(raw)}"`;
+    return new Response(req.method === "HEAD" ? null : raw, {
+      headers: { "Content-Type": "application/json", ETag: etag, "Cache-Control": "no-store" }
+    });
+  }
+  if (req.method === "PUT") {
+    const body = await req.text();
+    let parsed;
+    try {
+      parsed = JSON.parse(body);
+    } catch {
+      return Response.json({ error: "bad_json" }, { status: 400 });
+    }
+    if (!parsed || !Array.isArray(parsed.plans)) return Response.json({ error: "bad_shape" }, { status: 400 });
+    const ifMatch = req.headers.get("If-Match");
+    const current = await env.SESSIONS.get(kvKey);
+    // Plans can't be rebuilt from Carta data, so a save that never read them can't replace them.
+    if (current && (!ifMatch || ifMatch.trim().replace(/^W\//, "") !== `"${await sha256Base64url(current)}"`)) {
+      return Response.json({ error: "conflict" }, { status: 409 });
+    }
+    await env.SESSIONS.put(kvKey, body, { expirationTtl: SESSION_TTL });
+    return Response.json({ ok: true }, { headers: { ETag: `"${await sha256Base64url(body)}"` } });
+  }
+  return new Response("Method not allowed", { status: 405 });
+}
 async function handleMcpCall(req, env) {
   if (req.method !== "POST") return new Response("POST only", { status: 405 });
   const [sid, session, authErr] = await requireAuth(req, env);
@@ -855,6 +891,7 @@ export default {
       if (path === "/api/configure-firm" && env.AUTH_MODE === "token") return handleConfigureFirm(req, env);
       if (path === "/api/snapshot") return handleDataKey(req, env, "snapshot");
       if (path === "/api/portfolio") return handlePortfolio(req, env);
+      if (path === "/api/construction") return handleConstruction(req, env);
       if (path === "/api/pacing") return handleDataKey(req, env, "pacing");
       if (path === "/api/heartbeat") return requireAuthThen(req, env, () => Response.json({ ok: true }));
       if (path === "/api/telemetry-context") return requireAuthThen(req, env, (_s, session) => Response.json({ environment: "production", firmId: session.firmId || null, userId: null }));

@@ -59,8 +59,7 @@ export const TAPE_THUMB = 14;
 
 // Inter is now loaded as a real webfont from the rsms.me CDN (see the <link> in
 // index.html) — this mirrors Ink's REAL, actually-shipped stack, not a generic "system
-// font stack" pattern (confirmed in real fund-admin: `@carta/ink/dist/ink.css`'s `body`
-// rule is literally `font-family: "Inter var", "Open Sans", "Helvetica Neue", helvetica,
+// font stack" pattern (Ink's own stylesheet sets `body` to `font-family: "Inter var", "Open Sans", "Helvetica Neue", helvetica,
 // arial, sans-serif`). This app doesn't load Ink's synthetic `"Inter Fallback"` face, so
 // that name is dropped; `Inter` stays first (now backed by the CDN link, not just an
 // opportunistic locally-installed match), then Ink's own real fallback chain verbatim.
@@ -82,7 +81,7 @@ export const serif = { fontFamily: "\"SangBleu Versailles\", Georgia, serif" };
 export const tightSans = { fontFamily: SANS, letterSpacing: "-0.02em" };
 // NOT a monospace typeface — same SANS/Inter family as `sans`, just with
 // tabular-nums figures for column/value alignment. Named after Ink's real
-// `.ink-num` recipe (theme-with-ink/tokens.css), which this mirrors — never
+// `.ink-num` recipe, which this mirrors — never
 // switch to an actual monospace font for numeric alignment.
 export const inkNum = { fontFamily: SANS, fontVariantNumeric: "tabular-nums", letterSpacing: "0" };
 
@@ -122,12 +121,11 @@ export const FS = {
 };
 
 // Single source of truth for eyebrow (uppercase small-caps label) letter-spacing.
-// Was three ad-hoc values (0.09/0.05/0.04em) across ~7 call sites, none of which
-// landed inside Ink's documented eyebrow spec (theme-with-ink/brand.md: 0.06-0.08em).
+// One value inside Ink's eyebrow range (0.06-0.08em), shared by every eyebrow label.
 export const EYEBROW_TRACKING = "0.07em";
 
-// Ink's real Small 1 / Small 2 — both 12px/20px leading (theme-with-ink/tokens.css
-// `--ink-font-global-{size,leading}-small-{1,2}`); the only difference is weight
+// Ink's real Small 1 / Small 2 — both 12px/20px leading
+// (`--ink-font-global-{size,leading}-small-{1,2}`); the only difference is weight
 // (small-1: 500, small-2: 400). `FS.body` already holds this pixel value (the
 // FS-scale comment above documents it as "= Ink small-1") but with no fixed
 // weight of its own — these give it a properly-weighted, nameable style object
@@ -405,15 +403,13 @@ export const GLOBAL_CSS = `
   th[aria-sort="ascending"] .ink-sort-icon__asc { fill: ${INK}; }
   th[aria-sort="descending"] .ink-sort-icon__desc { fill: ${INK}; }
 
-  /* Ink's standard underline Tab recipe (theme-with-ink components.md "## Tab") —
+  /* Ink's standard underline Tab recipe —
      the active indicator is a 3px bottom border on the item itself, never a
      separate pill/element. disabled tabs get the muted-text/no-hover treatment
      inline styles apply on top of these rules (see Companies.jsx usage). */
-  /* Matches theme-with-ink's HorizontalNav resource (components-horizontalnav.html)
-     exactly — the "## Tab" recipe in components.md is a looser generic approximation
-     (8px-padded 3px border-bottom, 24px leading) that reads with a visibly bigger
-     gap between the label and its underline than the real product. HorizontalNav's
-     own measured spec: 44px-tall items with the label vertically centered, a 2px
+  /* Matches Ink's HorizontalNav, not the looser generic Tab recipe (8px-padded 3px
+     border-bottom, 24px leading), which leaves a visibly bigger gap between the label
+     and its underline than the real product. HorizontalNav's own measured spec: 44px-tall items with the label vertically centered, a 2px
      underline pinned to the bottom edge via ::after (not part of the box's own
      padding/border), 14px/20px type, weight 400 → 500 on the active item. */
   .ink-tabs { display: flex; align-items: center; gap: 24px; height: 44px; border-bottom: 1px solid var(--ink-color-global-border-subtle); }
@@ -422,7 +418,7 @@ export const GLOBAL_CSS = `
   .ink-tab.is-active { color: ${INK}; font-weight: 500; }
   .ink-tab.is-active::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--ink-color-global-border-active); }
 
-  /* Ink's real NewCheckbox recipe (theme-with-ink resources/components-checkbox.html) —
+  /* Ink's real NewCheckbox recipe —
      20px square, 4px radius, box stays WHITE in both themes (only the border/glyph
      recolor), Gray-90 check glyph, 8px gap to the label, 14px/20px type. Focus and
      hover key off the real (visually-hidden) <input>'s own pseudo-classes via the

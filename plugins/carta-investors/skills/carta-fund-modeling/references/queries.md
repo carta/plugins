@@ -62,6 +62,7 @@ scenario; the booked history comes from dated LP flows and NAV marks (§5 `snaps
 | `portfolio…assumptions.{carryRate,feeLoads,followOnRatios,...}` | §6 `PROFIT_ALLOCATION_WATERFALL_CONFIG` (carry/pref/catch-up), else defaults; per-fund reserve knobs default to `{}` |
 | `pacing.json` | §3 `AGGREGATE_INVESTMENTS.investment_date` (first check per company, by quarter) |
 | `company-ownership.json` | §4 `FUND_CORPORATION_OWNERSHIP` |
+| `investment-history.json` | §3 `AGGREGATE_INVESTMENTS` (`investment_date`, `total_cost`, `asset_name`, `asset_class_type` per fund × company) → Fund Construction's fund benchmark |
 | `lp-base.json` | §9 `PARTNER_DATA` (LPs aggregated firm-wide → LP Returns tab all-partners table) |
 | `gp-base.json` | §7b `ALLOCATIONS` GP-entity carry (`gp_carry`, per-partner carry shares) → GP Economics partner-level carry; optionally enriched with §9 `PARTNER_DATA` GP-side commitment |
 | `portfolio…companies[].dealIrr` | §10 `TEMPORAL_DEAL_IRR` (latest quarter per company; sanitized) |
@@ -523,6 +524,59 @@ WHERE corporation_uuid IN (SELECT DISTINCT CORPORATION_ID FROM FUND_ADMIN.FUND_C
 cap-table customers appear here (695 of 1,149 on a reference 15-fund firm). Optional / non-gating: a firm whose
 portcos aren't Carta cap-table customers has no rows — write an empty file (`fm_paths.py touch-empty`) to record
 the attempt, exactly like the other optional stems.
+
+## 17. Fee schedules (optional) → `MANAGEMENT_FEE_SCHEDULES` → `fee-history.json`
+Each fund's management-fee periods, so Fund Construction can start a new fund from a past fund's terms.
+`fee_rate` is the annual rate on `calculation_base`; a waived period is written with a 0 rate. Optional: a
+missing or empty `fee_schedules.ndjson` still builds, and the "start from a past fund" helper stays hidden.
+```sql
+SELECT fund_id AS fund_uuid, period_name, period_order, start_date, end_date,
+       fee_rate, calculation_base, frequency, waived,
+       minimum_fee_amount, fixed_fee_amount, fee_currency
+FROM FUND_ADMIN.MANAGEMENT_FEE_SCHEDULES
+WHERE fund_id IN ({fund_uuids})
+ORDER BY fund_id, period_order
+```
+→ `fee-history.json` `{ asOf, funds: { <fundId>: [{ order, name, start, end, rate, base, frequency, waived, minFee, fixedFee, currency }] } }`.
+
+## 18. Market ranges for fees and expenses (optional) → `FUND_OPS_BENCHMARKS_V2` → `ops-benchmarks.json`
+One row per cohort (vintage year x fund-size bucket): aggregate percentiles of lifetime-to-date management fees and
+operating expenses as a share of fund size, and of legal, software and payroll costs as a share of contributions.
+No fund or firm names. Cohorts too small to rank have NULL percentiles and are dropped. Optional, like §17.
+```sql
+SELECT DISTINCT vintage_year, fund_aum_bucket,
+       NET_PERC_MGMT_FEES_TO_FUNDSIZE_10TH, NET_PERC_MGMT_FEES_TO_FUNDSIZE_25TH,
+       NET_PERC_MGMT_FEES_TO_FUNDSIZE_50TH, NET_PERC_MGMT_FEES_TO_FUNDSIZE_75TH,
+       NET_PERC_MGMT_FEES_TO_FUNDSIZE_90TH, CT_COMPANIES_MGMT_FEES,
+       NET_PERC_OPEX_TO_FUNDSIZE_10TH, NET_PERC_OPEX_TO_FUNDSIZE_25TH,
+       NET_PERC_OPEX_TO_FUNDSIZE_50TH, NET_PERC_OPEX_TO_FUNDSIZE_75TH,
+       NET_PERC_OPEX_TO_FUNDSIZE_90TH, CT_COMPANIES_OPEX,
+       NET_PERC_COST_LEGAL_FEES_TO_CONTRIBUTIONS_25TH, NET_PERC_COST_LEGAL_FEES_TO_CONTRIBUTIONS_50TH,
+       NET_PERC_COST_LEGAL_FEES_TO_CONTRIBUTIONS_75TH,
+       NET_PERC_COST_TECH_TO_CONTRIBUTIONS_25TH, NET_PERC_COST_TECH_TO_CONTRIBUTIONS_50TH,
+       NET_PERC_COST_TECH_TO_CONTRIBUTIONS_75TH,
+       NET_PERC_PAYROLL_TO_CONTRIBUTIONS_25TH, NET_PERC_PAYROLL_TO_CONTRIBUTIONS_50TH,
+       NET_PERC_PAYROLL_TO_CONTRIBUTIONS_75TH
+FROM FUND_ADMIN.FUND_OPS_BENCHMARKS_V2
+WHERE entity_type_name = 'Fund' AND NET_PERC_MGMT_FEES_TO_FUNDSIZE_50TH IS NOT NULL
+```
+→ `ops-benchmarks.json` `{ asOf, cohorts: [{ vintage, bucket, mgmtFees: {p10..p90, n}, opex, legal, tech, payroll }] }`.
+
+## 19. Expense history (optional) → general-ledger expense accounts → `expense-history.json`
+What each fund actually booked to its expense accounts, by account and calendar year, so Fund Construction can start a
+new fund's expenses from the client's own spend (audit, administration, legal, tax, one-time launch costs).
+Management fees are left out (they come from §17). Account types 6000 to 6999 are the expense accounts. `AMOUNT` can
+be in the entry's own currency, so the fund's base-currency amount is used where it is set. Optional, like §17.
+```sql
+SELECT fund_uuid, account_name, YEAR(effective_date) AS year,
+       SUM(COALESCE(base_currency_amount, amount)) AS amount
+FROM FUND_ADMIN.JOURNAL_ENTRIES
+WHERE fund_uuid IN ({fund_uuids}) AND account_type BETWEEN 6000 AND 6999
+  AND account_name NOT ILIKE '%management fee%'
+GROUP BY fund_uuid, account_name, YEAR(effective_date)
+ORDER BY fund_uuid, account_name, year
+```
+→ `expense-history.json` `{ asOf, funds: { <fundId>: [{ name, byYear: { "<year>": amount } }] } }`, biggest account first.
 
 ## 14. Portfolio-company financials (attempt-required) → `COMPANY_FINANCIALS`
 Carta **Data Collection** financials (revenue / ARR / KPIs reported *by the portfolio company*) come from the

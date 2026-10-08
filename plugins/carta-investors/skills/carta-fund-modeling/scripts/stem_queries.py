@@ -199,6 +199,51 @@ STEMS = {
             "ORDER BY performance_quarter_start_date DESC) <= 8"
         ),
     },
+    "fee_schedules": {
+        "id_param": "fund_uuids", "wave": 1, "limit": 2000, "format": "ndjson",
+        "sql": (
+            "SELECT fund_id AS fund_uuid, period_name, period_order, start_date, end_date,\n"
+            "       fee_rate, calculation_base, frequency, waived,\n"
+            "       minimum_fee_amount, fixed_fee_amount, fee_currency\n"
+            "FROM FUND_ADMIN.MANAGEMENT_FEE_SCHEDULES\n"
+            "WHERE fund_id IN ({fund_uuids})\n"
+            "ORDER BY fund_id, period_order"
+        ),
+    },
+    "expense_ledger": {
+        # Management fees come from the fee schedule, so they're excluded; AMOUNT can be in the entry's currency.
+        "id_param": "fund_uuids", "wave": 1, "limit": 5000, "format": "ndjson",
+        "sql": (
+            "SELECT fund_uuid, account_name, YEAR(effective_date) AS year,\n"
+            "       SUM(COALESCE(base_currency_amount, amount)) AS amount\n"
+            "FROM FUND_ADMIN.JOURNAL_ENTRIES\n"
+            "WHERE fund_uuid IN ({fund_uuids}) AND account_type BETWEEN 6000 AND 6999\n"
+            "  AND account_name NOT ILIKE '%management fee%'\n"
+            "GROUP BY fund_uuid, account_name, YEAR(effective_date)\n"
+            "ORDER BY fund_uuid, account_name, year"
+        ),
+    },
+    "ops_benchmarks": {
+        # Aggregate cohort percentiles only (no fund or firm names); cohorts too small to rank are NULL.
+        "id_param": None, "wave": 1, "limit": 2000, "format": "ndjson",
+        "sql": (
+            "SELECT DISTINCT vintage_year, fund_aum_bucket,\n"
+            "       NET_PERC_MGMT_FEES_TO_FUNDSIZE_10TH, NET_PERC_MGMT_FEES_TO_FUNDSIZE_25TH,\n"
+            "       NET_PERC_MGMT_FEES_TO_FUNDSIZE_50TH, NET_PERC_MGMT_FEES_TO_FUNDSIZE_75TH,\n"
+            "       NET_PERC_MGMT_FEES_TO_FUNDSIZE_90TH, CT_COMPANIES_MGMT_FEES,\n"
+            "       NET_PERC_OPEX_TO_FUNDSIZE_10TH, NET_PERC_OPEX_TO_FUNDSIZE_25TH,\n"
+            "       NET_PERC_OPEX_TO_FUNDSIZE_50TH, NET_PERC_OPEX_TO_FUNDSIZE_75TH,\n"
+            "       NET_PERC_OPEX_TO_FUNDSIZE_90TH, CT_COMPANIES_OPEX,\n"
+            "       NET_PERC_COST_LEGAL_FEES_TO_CONTRIBUTIONS_25TH, NET_PERC_COST_LEGAL_FEES_TO_CONTRIBUTIONS_50TH,\n"
+            "       NET_PERC_COST_LEGAL_FEES_TO_CONTRIBUTIONS_75TH,\n"
+            "       NET_PERC_COST_TECH_TO_CONTRIBUTIONS_25TH, NET_PERC_COST_TECH_TO_CONTRIBUTIONS_50TH,\n"
+            "       NET_PERC_COST_TECH_TO_CONTRIBUTIONS_75TH,\n"
+            "       NET_PERC_PAYROLL_TO_CONTRIBUTIONS_25TH, NET_PERC_PAYROLL_TO_CONTRIBUTIONS_50TH,\n"
+            "       NET_PERC_PAYROLL_TO_CONTRIBUTIONS_75TH\n"
+            "FROM FUND_ADMIN.FUND_OPS_BENCHMARKS_V2\n"
+            "WHERE entity_type_name = 'Fund' AND NET_PERC_MGMT_FEES_TO_FUNDSIZE_50TH IS NOT NULL"
+        ),
+    },
     "partners": {
         "id_param": "fund_uuids", "wave": 1, "limit": 5000, "format": "ndjson",
         "sql": (

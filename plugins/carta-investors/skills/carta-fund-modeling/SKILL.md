@@ -2,15 +2,16 @@
 name: carta-fund-modeling
 description: >
   Spin up an interactive local web console for FIRM-LEVEL scenario modeling over Carta Fund Admin data — a
-  React app to reprice portfolio companies and model exits ACROSS MULTIPLE COMPANIES, with five tabs:
-  Overview (fund-family rollup, investment pacing, concentration), Companies (per-company repricing + LP
-  make-whole waterfall + carry banking, plus a plan of dated partial sales, each at its own price —
-  secondary proceeds off the table before the exit), Exit & IRR (exit scenarios, XIRR, GP & LP returns, plus a per-fund
-  DPI/RVPI/TVPI glidepath in the LP Returns view), Reserves (per-fund dry-powder planning), and Cohort
-  Standing (peer-cohort + S&P-equivalent benchmarking). Scenarios persist locally. Invoke with a firm name,
-  e.g. "fund modeling for Demo Capital" or "model portfolio scenarios for a firm". Fund Admin only. NOT
-  Tactyc/Fund Forecasting — use carta-fund-forecasting for Tactyc funds. NOT for single-exit waterfalls on
-  one company. NOT read-only fund data queries — use carta-explore-data.
+  React app to reprice portfolio companies and model exits ACROSS MULTIPLE COMPANIES. Tabs: Overview
+  (fund-family rollup, pacing, concentration), Companies (per-company repricing, LP make-whole
+  waterfall, carry banking, dated partial sales), Exit & IRR (exit scenarios, XIRR, GP &
+  LP returns, per-fund DPI/RVPI/TVPI glidepath), Reserves (dry-powder planning), Cohort Standing
+  (peer-cohort + S&P-equivalent benchmarking), and Fund Construction (beta: model a NEW fund step by step —
+  sectors, allocations, fees, recycling, waterfall, LPs — into projected TVPI/DPI/IRR). Scenarios and plans
+  persist locally. Invoke with a firm name, e.g. "fund modeling for Demo Capital" or "model portfolio
+  scenarios for a firm". Fund Admin only. NOT for reading existing Tactyc/Fund Forecasting funds — use
+  carta-fund-forecasting. NOT for single-exit waterfalls on one company. NOT read-only fund data queries —
+  use carta-explore-data.
 argument-hint: "<firm name or Carta firm URL — required>"
 version: 1.0.0
 model: inherit
@@ -46,7 +47,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.66.2</carta-plugin>
+<carta-plugin>carta-investors:6.67.0</carta-plugin>
 
 [PATTERN carta-writing-style v0.0.2]
 [PATTERN etiquette v0.0.6]
@@ -232,10 +233,8 @@ warm-cache launch skips this step entirely — no MCP.
 **Classify the environment from `<SERVER>`'s name.** A name containing `test`/`sandbox`/`demo`/`preprod`/
 `preproduction` (case-insensitive) → `cartaEnvironment = "nonprod"`. Everything else — `carta`,
 `carta_production`, any other name, or an opaque UUID (some connectors expose one instead of a name, per
-`carta-home-build/SKILL.md`'s Step 0) — → `"production"`. This is a customer-facing plugin, so the common
-case by volume is real production usage; an unrecognized identifier is far more likely to be a production
-connector we haven't named yet than a staff test session, and staff noise is filterable downstream (the
-server already knows `is_staff` per request). Carry `cartaEnvironment` to Step 3's `meta.json`.
+`carta-home-build/SKILL.md`'s Step 0) — → `"production"`. Most use is production, so an unrecognized
+identifier counts as production. Carry `cartaEnvironment` to Step 3's `meta.json`.
 
 **Resolve the firm via `list_contexts`.** Call `list_contexts {firm_name: "<typed firm name>"}` — **always pass
 the typed name; never call it bare** (bare can return an already-active firm instead of the one asked for).
@@ -563,7 +562,7 @@ uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-modeling/scripts/build_datadir.p
   --raw "<raw_dir>" --out "<dashboard_dir>" --meta "<raw_dir>/meta.json"
 ```
 It writes `firms.json`, `snapshot.json`, `portfolio.json`, `pacing.json`, and — when the inputs exist —
-`company-ownership.json` + `lp-base.json`, in the exact shapes `src/model/*` consume. It also embeds a
+`company-ownership.json` + `lp-base.json` + `investment-history.json`, in the exact shapes `src/model/*` consume. It also embeds a
 `logoDataUri` on any company matched against `<raw_dir>/logos/` (Step 2b) — omitted entirely when that
 company has no logo, in which case the app falls back to its initials avatar. In particular it emits
 **`snapshot.source` as an object** (`{firm,firmId,firmUuid,navAsOf,marksAsOf,marksPulledAt,currency,mixedCurrency,cartaEnvironment}`); the app
@@ -601,7 +600,7 @@ they can paste the URL into the address bar. `webapp/` is the committed prebuilt
 verbatim — no Node or build needed at runtime.
 
 After giving the URL, add one short post-launch line (not a menu):
-"A few things to try: check the Baseline scenario on the Overview tab · click Edit on any company to reprice it · run a scenario to see LP/GP returns · export a scenario as a PDF for LP review · publish a scenario to share it with your firm · say 'refresh' to pull fresh Carta data."
+"A few things to try: check the Baseline scenario on the Overview tab · click Edit on any company to reprice it · run a scenario to see LP/GP returns · export a scenario as a PDF for LP review · publish a scenario to share it with your firm · plan your next fund on the Fund Construction tab · say 'refresh' to pull fresh Carta data."
 
 ## Scenario sharing
 Firm admins can publish/pull scenarios across the firm — **built into the app** (a SHARED sidebar section plus

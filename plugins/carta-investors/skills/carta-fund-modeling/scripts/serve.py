@@ -67,6 +67,10 @@ SUSPEND_GAP_SLACK = 55
 _last_heartbeat = time.time()
 _hb_lock = threading.Lock()
 _portfolio_lock = threading.Lock()
+# Plans live in their own file because a refresh rebuilds portfolio.json from scratch.
+_construction_lock = threading.Lock()
+CONSTRUCTION_FILE = "construction.json"
+EMPTY_CONSTRUCTION = {"version": 1, "plans": [], "activePlanId": None}  # must match EMPTY_CONSTRUCTION in server/worker.js
 # Single-flight guard for a background refresh (409 if one is already running). Held for
 # the whole run but does NOT gate edits — the fetch writes only raw files, so the app
 # stays usable throughout.
@@ -356,6 +360,14 @@ def _etag(b):
     return '"' + hashlib.md5(b).hexdigest() + '"'
 
 
+def _if_match_stale(if_match, current_bytes):
+    """A proxy can weaken the ETag to W/"..." with the same hash, so the prefix is ignored, as in worker.js."""
+    tag = if_match.strip()
+    if tag.startswith("W/"):
+        tag = tag[2:]
+    return tag != _etag(current_bytes)
+
+
 class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
@@ -473,6 +485,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(200, dict(_share_state))
         if path == "/api/portfolio":
             return self._get_portfolio()
+        if path == "/api/construction":
+            return self._get_construction()
         if path in _FILE_ROUTES:
             return self._data_json(_FILE_ROUTES[path])
         # generic report files (e.g. company-ownership.json): serve any safe
@@ -494,6 +508,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if not self._token_ok(qs):
             return self._send(401, {"error": "unauthorized"})
         _touch_heartbeat()
+        if u.path == "/api/construction":
+            return self._put_construction()
         if u.path != "/api/portfolio":
             return self._send(404, {"error": "not_found"})
         # Only blocked for the build+swap seconds, not the whole fetch. A save that lands
@@ -511,10 +527,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         with _portfolio_lock:
             p = DATA_DIR / "portfolio.json"
             if_match = self.headers.get("If-Match")
-            if if_match and p.exists():
-                current = _etag(p.read_bytes())
-                if if_match.strip() != current:
-                    return self._send(409, {"error": "conflict"})
+            if if_match and p.exists() and _if_match_stale(if_match, p.read_bytes()):
+                return self._send(409, {"error": "conflict"})
             tmp = p.with_suffix(".json.tmp")
             tmp.write_bytes(raw)
             os.replace(tmp, p)
@@ -527,6 +541,36 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._send(200, {"error": "not_ready"})
         data = p.read_bytes()
         return self._send_file(p, extra={"ETag": _etag(data)})
+
+    # ---- Fund Construction plans ----
+    def _get_construction(self):
+        p = DATA_DIR / CONSTRUCTION_FILE
+        if not p.exists():
+            raw = json.dumps(EMPTY_CONSTRUCTION).encode("utf-8")
+            return self._send(200, EMPTY_CONSTRUCTION, extra={"ETag": _etag(raw)})
+        return self._send_file(p, extra={"ETag": _etag(p.read_bytes())})
+
+    def _put_construction(self):
+        length = int(self.headers.get("Content-Length", 0) or 0)
+        if length > 2 * 1024 * 1024:
+            return self._send(413, {"error": "payload_too_large"})
+        raw = self.rfile.read(length) if length else b"{}"
+        try:
+            body = json.loads(raw.decode("utf-8"))
+        except ValueError:
+            return self._send(400, {"error": "bad_json"})
+        if not isinstance(body, dict) or not isinstance(body.get("plans"), list):
+            return self._send(400, {"error": "bad_shape"})
+        with _construction_lock:
+            p = DATA_DIR / CONSTRUCTION_FILE
+            if_match = self.headers.get("If-Match")
+            # Plans can't be rebuilt from Carta data, so a save that never read them can't replace them.
+            if p.exists() and (not if_match or _if_match_stale(if_match, p.read_bytes())):
+                return self._send(409, {"error": "conflict"})
+            tmp = p.with_suffix(".json.tmp")
+            tmp.write_bytes(raw)
+            os.replace(tmp, p)
+            return self._send(200, {"ok": True}, extra={"ETag": _etag(raw)})
 
     # ---- SSE (chat) ----
     def _sse_headers(self):

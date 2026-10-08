@@ -1,0 +1,145 @@
+// Amounts are in USD; each set covers one sector, region and period.
+
+const M = 1e6;
+
+export const VALUATION_BENCHMARKS = [
+  {
+    id: "carta-us-all-2021q2-2026q2",
+    source: "Carta valuation benchmarks",
+    sector: "All Sectors",
+    region: "All of USA",
+    period: "Q2 2021 – Q2 2026",
+    currency: "USD",
+    rounds: {
+      Seed: { roundSize: 3.7 * M, preMoney: 14.0 * M, postMoney: 18.1 * M, dilution: 0.206 },
+      "Series A": { roundSize: 12.0 * M, preMoney: 43.6 * M, postMoney: 57.0 * M, dilution: 0.207 },
+      "Series B": { roundSize: 25.0 * M, preMoney: 116.6 * M, postMoney: 145.2 * M, dilution: 0.169 },
+      "Series C": { roundSize: 45.0 * M, preMoney: 269.2 * M, postMoney: 318.8 * M, dilution: 0.133 },
+      "Series D+": { roundSize: 65.0 * M, preMoney: 677.6 * M, postMoney: 753.1 * M, dilution: 0.095 },
+    },
+  },
+  {
+    id: "carta-us-saas-2021q2-2026q2",
+    source: "Carta valuation benchmarks",
+    sector: "SaaS",
+    region: "All of USA",
+    period: "Q2 2021 – Q2 2026",
+    currency: "USD",
+    rounds: {
+      Seed: { roundSize: 3.8 * M, preMoney: 14.8 * M, postMoney: 19.0 * M, dilution: 0.203 },
+      "Series A": { roundSize: 12.3 * M, preMoney: 48.4 * M, postMoney: 61.1 * M, dilution: 0.200 },
+      "Series B": { roundSize: 29.0 * M, preMoney: 140.0 * M, postMoney: 172.9 * M, dilution: 0.158 },
+      "Series C": { roundSize: 50.0 * M, preMoney: 335.0 * M, postMoney: 398.0 * M, dilution: 0.113 },
+      "Series D+": { roundSize: 100.0 * M, preMoney: 1010.1 * M, postMoney: 1144.5 * M, dilution: 0.083 },
+    },
+  },
+  {
+    id: "carta-us-fintech-2021q2-2026q2",
+    source: "Carta valuation benchmarks",
+    sector: "Fintech",
+    region: "All of USA",
+    period: "Q2 2021 – Q2 2026",
+    currency: "USD",
+    rounds: {
+      Seed: { roundSize: 4.0 * M, preMoney: 16.0 * M, postMoney: 20.0 * M, dilution: 0.204 },
+      "Series A": { roundSize: 12.0 * M, preMoney: 53.0 * M, postMoney: 65.0 * M, dilution: 0.192 },
+      "Series B": { roundSize: 29.0 * M, preMoney: 173.8 * M, postMoney: 202.6 * M, dilution: 0.137 },
+      "Series C": { roundSize: 52.0 * M, preMoney: 455.2 * M, postMoney: 508.0 * M, dilution: 0.112 },
+      "Series D+": { roundSize: 91.0 * M, preMoney: 1086.0 * M, postMoney: 1187.5 * M, dilution: 0.080 },
+    },
+  },
+  {
+    id: "carta-us-biotech-2021q2-2026q2",
+    source: "Carta valuation benchmarks",
+    sector: "Biotech",
+    region: "All of USA",
+    period: "Q2 2021 – Q2 2026",
+    currency: "USD",
+    rounds: {
+      Seed: { roundSize: 4.5 * M, preMoney: 12.7 * M, postMoney: 18.2 * M, dilution: 0.258 },
+      "Series A": { roundSize: 17.9 * M, preMoney: 35.5 * M, postMoney: 60.7 * M, dilution: 0.313 },
+      "Series B": { roundSize: 30.3 * M, preMoney: 93.8 * M, postMoney: 135.4 * M, dilution: 0.244 },
+      "Series C": { roundSize: 44.0 * M, preMoney: 155.4 * M, postMoney: 212.4 * M, dilution: 0.187 },
+      "Series D+": { roundSize: 41.0 * M, preMoney: 273.8 * M, postMoney: 321.9 * M, dilution: 0.146 },
+    },
+  },
+  {
+    id: "carta-us-medical-devices-2021q2-2026q2",
+    source: "Carta valuation benchmarks",
+    sector: "Medical Devices",
+    region: "All of USA",
+    period: "Q2 2021 – Q2 2026",
+    currency: "USD",
+    rounds: {
+      Seed: { roundSize: 2.5 * M, preMoney: 9.6 * M, postMoney: 12.5 * M, dilution: 0.203 },
+      "Series A": { roundSize: 7.2 * M, preMoney: 22.0 * M, postMoney: 30.0 * M, dilution: 0.260 },
+      "Series B": { roundSize: 12.9 * M, preMoney: 48.6 * M, postMoney: 63.6 * M, dilution: 0.225 },
+      "Series C": { roundSize: 23.5 * M, preMoney: 76.8 * M, postMoney: 95.4 * M, dilution: 0.211 },
+      "Series D+": { roundSize: 35.8 * M, preMoney: 161.3 * M, postMoney: 200.9 * M, dilution: 0.186 },
+    },
+  },
+  {
+    id: "carta-us-healthtech-2021q2-2026q2",
+    source: "Carta valuation benchmarks",
+    sector: "Healthtech",
+    region: "All of USA",
+    period: "Q2 2021 – Q2 2026",
+    currency: "USD",
+    rounds: {
+      Seed: { roundSize: 3.5 * M, preMoney: 13.0 * M, postMoney: 16.5 * M, dilution: 0.210 },
+      "Series A": { roundSize: 11.2 * M, preMoney: 40.0 * M, postMoney: 51.2 * M, dilution: 0.222 },
+      "Series B": { roundSize: 22.9 * M, preMoney: 92.4 * M, postMoney: 120.0 * M, dilution: 0.189 },
+      "Series C": { roundSize: 44.5 * M, preMoney: 210.0 * M, postMoney: 260.0 * M, dilution: 0.148 },
+      "Series D+": { roundSize: 46.6 * M, preMoney: 551.5 * M, postMoney: 627.4 * M, dilution: 0.094 },
+    },
+  },
+  {
+    id: "carta-us-hardware-2021q2-2026q2",
+    source: "Carta valuation benchmarks",
+    sector: "Hardware",
+    region: "All of USA",
+    period: "Q2 2021 – Q2 2026",
+    currency: "USD",
+    rounds: {
+      Seed: { roundSize: 4.5 * M, preMoney: 15.5 * M, postMoney: 21.1 * M, dilution: 0.211 },
+      "Series A": { roundSize: 14.9 * M, preMoney: 50.0 * M, postMoney: 65.1 * M, dilution: 0.207 },
+      "Series B": { roundSize: 29.9 * M, preMoney: 140.1 * M, postMoney: 170.4 * M, dilution: 0.176 },
+      "Series C": { roundSize: 53.1 * M, preMoney: 306.9 * M, postMoney: 365.2 * M, dilution: 0.147 },
+      "Series D+": { roundSize: 87.7 * M, preMoney: 809.2 * M, postMoney: 910.6 * M, dilution: 0.107 },
+    },
+  },
+  {
+    id: "carta-us-consumer-2021q2-2026q2",
+    source: "Carta valuation benchmarks",
+    sector: "Consumer",
+    region: "All of USA",
+    period: "Q2 2021 – Q2 2026",
+    currency: "USD",
+    rounds: {
+      Seed: { roundSize: 3.0 * M, preMoney: 12.0 * M, postMoney: 15.5 * M, dilution: 0.200 },
+      "Series A": { roundSize: 8.4 * M, preMoney: 35.7 * M, postMoney: 46.0 * M, dilution: 0.192 },
+      "Series B": { roundSize: 16.1 * M, preMoney: 91.5 * M, postMoney: 108.5 * M, dilution: 0.160 },
+      "Series C": { roundSize: 30.1 * M, preMoney: 213.6 * M, postMoney: 248.6 * M, dilution: 0.115 },
+      "Series D+": { roundSize: 29.1 * M, preMoney: 326.9 * M, postMoney: 379.0 * M, dilution: 0.084 },
+    },
+  },
+  {
+    id: "carta-us-energy-2021q2-2026q2",
+    source: "Carta valuation benchmarks",
+    sector: "Energy",
+    region: "All of USA",
+    period: "Q2 2021 – Q2 2026",
+    currency: "USD",
+    rounds: {
+      Seed: { roundSize: 4.3 * M, preMoney: 12.9 * M, postMoney: 17.8 * M, dilution: 0.236 },
+      "Series A": { roundSize: 15.0 * M, preMoney: 45.0 * M, postMoney: 62.4 * M, dilution: 0.250 },
+      "Series B": { roundSize: 35.6 * M, preMoney: 114.8 * M, postMoney: 152.8 * M, dilution: 0.211 },
+      "Series C": { roundSize: 56.8 * M, preMoney: 268.9 * M, postMoney: 350.0 * M, dilution: 0.203 },
+      "Series D+": { roundSize: 106.6 * M, preMoney: 776.9 * M, postMoney: 998.2 * M, dilution: 0.125 },
+    },
+  },
+];
+
+export const benchmarkLabel = (b) => `${b.region} · ${b.sector} · ${b.period}`;
+
+export const findValuationBenchmark = (id) => VALUATION_BENCHMARKS.find((b) => b.id === id) ?? null;

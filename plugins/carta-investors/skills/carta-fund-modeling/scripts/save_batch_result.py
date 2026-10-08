@@ -22,7 +22,7 @@ Exit codes: 0 the batch split into exactly one slice per stem · 2 could not (ba
 or the response envelope didn't yield ``len(stems)`` ordered results — fall back to
 per-stem single ``dwh__execute__query`` calls, which are unaffected).
 
-**Envelope (per carta-mcp dwh:execute:queries).** The command returns a JSON array, one
+**Envelope (per the Carta MCP ``dwh:execute:queries`` command).** The command returns a JSON array, one
 element per query, positionally matched and carrying its own ``index``: a success element
 is ``{index, total_rows, result}`` (``result`` is the formatted ndjson body, same as a
 single ``dwh:execute:query``) and a failed one is ``{index, error}``. ``split_aggregate``
