@@ -52,7 +52,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.67.6</carta-plugin>
+<carta-plugin>carta-investors:6.67.7</carta-plugin>
 
 # Carta Home — Build / Redeploy / Open
 
@@ -305,6 +305,14 @@ Run both checks before building, and stay quiet about them when they pass:
 Both sit in the **plugin's** `references/` directory — `${CLAUDE_PLUGIN_ROOT}/references/`,
 alongside the other plugin-wide references. They are *not* under this skill's own
 `references/`. Read them by that exact path; don't search for them.
+
+**If those files can't be read, you are in claude.ai chat.** Chat mounts only this skill's
+folder, not the plugin's `references/`, so the checks can't run and the build script's
+vendor assets are missing too. Don't search the filesystem for them. Stop before any build
+work and tell the user:
+
+> Carta Home can't be built in claude.ai chat. Open Claude Code or Cowork and ask me
+> again.
 
 This is a live artifact: the rendered HTML calls Carta at runtime through `claude.use("mcp")`, so it needs both.
 

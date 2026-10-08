@@ -4,8 +4,8 @@
 """Assemble the self-contained carta-workhub Cowork artifact from its source parts.
 
 Inlines the CSS + config + app JS into the template and substitutes the Carta MCP
-server id, producing ONE self-contained HTML file ready for create_artifact /
-update_artifact. The model never has to read the large HTML: to change the composer
+server id, producing ONE self-contained HTML file ready for the Artifact tool's
+publish action. The model never has to read the large HTML: to change the composer
 tiles, edit resources/carta-workhub.config.js; to change logic, edit the app JS under
 resources/; then re-run this.
 
