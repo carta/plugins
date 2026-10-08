@@ -35,7 +35,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.95.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.95.2</carta-plugin>
 
 # Carta Home (cap table) — Build / Redeploy / Open
 
@@ -481,7 +481,7 @@ change, update the sketch and the text together and bump the date.
 | Card | Backing command |
 |------|------------------|
 | Cap table dashboard (tile, stacked bar and table) | `cap_table_chart` — one call, held in `_capTableChartData`, feeding all three plus the FD summary's share counts |
-| Round history dashboard | `cap_table:list:financing_history` — one row per share class, already aggregated and date-sorted, carrying `closing_date`, `original_issue_price`, `shares_issued`, `post_money`, and `cash_raised_by_currency`. **Not `cap_table:get:financing_history`:** that command is deprecated *with* a replacement, and the gateway raises `ToolError` on any such command, so calling it renders nothing but the card's error state |
+| Round history dashboard | `cap_table:list:financing_history` — one row per share class, already aggregated and date-sorted, carrying `closing_date`, `original_issue_price`, `shares_issued`, `post_money`, and `cash_raised_by_currency`. |
 | What to try next | `get_current_user` — `recommendations`, filtered to entries that are not `is_skill_gap` and carry a `recommended_prompt` |
 | Update banner | `plugin:get:version` via `fetch`, with `plugin` + `skill` params |
 | Skill Directory | baked from `.claude-plugin/skill-directory.json` at build time, then `plugin:list:skills` via `fetch` with `plugin` — entries at the plugin's stable tag, only for published skills. `skills: null` or an unusable list keeps the baked one |
@@ -494,8 +494,6 @@ change, update the sketch and the text together and bump the date.
 | The company itself | none at runtime — baked in at build time. The **skill** resolves it once with `list_accounts` in Step 0 (see there) |
 
 `cap_table:get:cap_table_summary` does not exist ("Unknown command") — never reference it.
-`cap_table:get:financing_history` exists but is deprecated with a replacement, which the
-gateway turns into a hard error — use `cap_table:list:financing_history`.
 
 ## Notes
 
