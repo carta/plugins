@@ -29,7 +29,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.67.5</carta-plugin>
+<carta-plugin>carta-investors:6.67.6</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -73,7 +73,7 @@ The user must have the Carta MCP server connected. If this is the first query in
 
 > **Named-entity queries do NOT need `list_contexts`.** `list_contexts` only enumerates the Carta client **firms** the user has admin access to — never call it to search for a person, LP, or portfolio-company name. Once firm context is already set and the user names an entity that isn't the active firm (e.g. "Armstrong Capital Partners' capital activity inception to date"), that name is almost always an **LP/investor within the current firm**, not a request to switch firms — proceed straight to Step 1 (`dwh__execute__question`) with the question scoped to that name. Only call `list_contexts` again if the user explicitly asks to switch to a different firm.
 
-> **Tool priority (firm context):** `fa:*` MCP commands → `dwh__execute__question` → semantic-layer SQL (Steps 2–4) → raw `dwh__execute__query`. Never call `cap_table:*` or `cap_table_chart` in firm context — those require a direct tenant role unavailable to investor-portal portcos; use the DWH queries in `cap-table.md` instead.
+> **Tool priority (firm context):** `fa:*` MCP commands → `dwh__execute__question` → semantic-layer SQL (Steps 2–4) → raw `dwh__execute__query`. Whatever path answers, the firm's custom schemas (Step 1b) can enrich the result. Never call `cap_table:*` or `cap_table_chart` in firm context — those require a direct tenant role unavailable to investor-portal portcos; use the DWH queries in `cap-table.md` instead.
 
 ## Step 0 — Fetch portfolio companies (MANDATORY GATE)
 
@@ -107,6 +107,32 @@ call_tool({"name": "dwh__execute__question", "arguments": {"question": "<user's 
 - The tool indicates it cannot interpret the question or lacks the required data
 
 Do NOT retry `execute:question` with a rephrased question — fall through immediately.
+
+## Step 1b — Check the firm's custom schemas
+
+`dwh__execute__question` covers Carta's standard schemas (`FUND_ADMIN`, `LOAN_OPS`, `LPPA`). Many firms also load their own data into the warehouse — portfolio monitoring, CRM, deal-flow or accounting integrations — in **custom schemas** only that firm has. That data can enrich a Step 1 answer, or answer a question the standard schemas cannot.
+
+Once per session, after Step 1, discover them (reuse the result for later questions):
+
+```
+call_tool({"name": "dwh__list__tables", "arguments": {}})
+```
+
+Omit `schema`. When the firm has custom schemas, the output opens with a `Custom schemas (N): <SCHEMA_A>, <SCHEMA_B> — this firm's own data` line; with a `schema` argument, the listing's `Schema type:` line reads `custom` or `standard`. No `Custom schemas` line means there is no custom data — skip the rest of this step.
+
+Use a custom schema when:
+- **Step 1 answered, and a custom table holds related columns** the user would want alongside it (e.g. KPIs, CRM fields or notes per portfolio company) — add them to the answer.
+- **Step 1 fell through, and the question is about data outside the Step 2 domains** — look for it in the custom tables before loading a semantic layer.
+- **The user asks about their own or integration data** by source name or by a table listed under a custom schema.
+
+How:
+1. `dwh__get__table_schema` with the custom `schema` to confirm every column, as in Step 4.
+2. `dwh__execute__query` with the table fully qualified as `<CUSTOM_SCHEMA>.<TABLE>`.
+3. Join to Carta data only on a key both schemas show (a company name, UUID or other ID confirmed in the live schemas) — never guess one. With no clean key, present the two results side by side.
+
+When presenting, name the custom schema each added column or row came from. Never replace a Carta value with a custom one: show both and flag any difference.
+
+Custom schemas add to `execute:question`; they never replace it — for data questions, always run Step 1 first. A question about which custom or integration data exists is structural: skip Step 1 and go straight to `dwh__list__tables`.
 
 ## Step 2 — Identify the Query Domain
 
@@ -159,7 +185,7 @@ The file contains the SQL query, column reference, and presentation rules for th
 
 > **MANDATORY pre-query checklist — run for every query, no exceptions:**
 >
-> 1. **Determine the schema** from the domain routing table in Step 2: if the table is listed with an explicit schema prefix (e.g. `LOAN_OPS.LOAN`), use that schema. Otherwise `FUND_ADMIN` is the default and most common schema.
+> 1. **Determine the schema** from the domain routing table in Step 2: if the table is listed with an explicit schema prefix (e.g. `LOAN_OPS.LOAN`), use that schema. When the data lives in one of the firm's custom schemas (Step 1b), use that schema. Otherwise `FUND_ADMIN` is the default and most common schema.
 > 2. **Verify the table exists**: `call_tool({"name": "dwh__list__tables", "arguments": {"schema": "<SCHEMA>"}})` — use the schema from step 2. If the target table does not appear in the result, it does not exist — check the wrong→right table name reference in `## SQL Compilation Safety Rules` before continuing. Do **not** query a table that is not listed.
 > 3. **Verify column names**: `call_tool({"name": "dwh__get__table_schema", "arguments": {"table_name": "<TABLE>", "schema": "<SCHEMA>"}})` — use the schema from step 2. Confirm every column you plan to SELECT or filter on appears in the schema with its **exact** name. Check the wrong→right column name reference in `## SQL Compilation Safety Rules` if a column is missing.
 >
@@ -191,7 +217,7 @@ Use the MCP commands in sequence, substituting `<SCHEMA>` with the schema determ
 
 ## SQL Compilation Safety Rules
 
-- **Always schema-qualify tables**: `FUND_ADMIN.TABLE_NAME` (or `LOAN_OPS.TABLE_NAME` for loans). A bare name defaults to `PUBLIC` where no customer tables exist.
+- **Always schema-qualify tables**: `FUND_ADMIN.TABLE_NAME` (or `LOAN_OPS.TABLE_NAME` for loans, `<CUSTOM_SCHEMA>.TABLE_NAME` for the firm's custom data). A bare name defaults to `PUBLIC` where no customer tables exist.
 - **Only query schemas visible in `dwh__list__tables`**: never query a schema that does not appear in that tool's output — unrecognized schemas are either internal-only or non-existent and will always fail.
 - **`dwh__execute__query` does NOT accept a `schema` argument** — the schema is encoded directly in the SQL as `SCHEMA.TABLE_NAME`. Never pass `"schema"` inside the `arguments` dict.
 - **`set_context` takes `firm_id` as a UUID string** — pass the UUID value returned by `list_contexts`, not a bare integer.
