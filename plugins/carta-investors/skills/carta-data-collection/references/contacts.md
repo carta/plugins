@@ -67,7 +67,7 @@ message was meant to carry. Do not send anything — the message asks for the fo
 There is no separate contact read; contacts come back on the roster.
 
 ```
-call_tool({"name": "data_collection__list__companies",
+read_tool({"name": "data_collection__list__companies",
            "arguments": {"organization_pk": "<org_pk>", "include_contacts": true,
                          "search": "<name fragment>"}})
 ```

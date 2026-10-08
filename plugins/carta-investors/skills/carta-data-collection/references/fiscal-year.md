@@ -21,7 +21,7 @@ differs.
 The company roster already carries it, so a read costs no extra call and no extra permission:
 
 ```
-call_tool({"name": "data_collection__list__companies",
+read_tool({"name": "data_collection__list__companies",
            "arguments": {"organization_pk": "<org_pk>"}})
 ```
 
@@ -33,7 +33,7 @@ field, and "which ones differ?" is those rows by name.
 For one company, the financials-API read also works (subject to the permission note above):
 
 ```
-call_tool({"name": "data_collection__get__fiscal_year",
+read_tool({"name": "data_collection__get__fiscal_year",
            "arguments": {"organization_pk": "<org_pk>", "entity_type": "<type>",
                          "entity_pk": "<id>"}})
 ```

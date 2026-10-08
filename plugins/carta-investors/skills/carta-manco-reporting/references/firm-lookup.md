@@ -15,7 +15,7 @@ each already holds the firm and the entity from a previous build, and a
 soft hit differs only in that its DATA needs refreshing.
 
 Identify the Carta MCP server by prefix — scan the tools connected in this
-session for any `mcp__<SERVER>__list_contexts` (equivalently, `call_tool` /
+session for any `mcp__<SERVER>__list_contexts` (equivalently, `read_tool` /
 `set_context` under the same prefix). Most sessions surface one of
 `claude_ai_Carta`, `carta_production`, or `carta`, but treat those three as
 examples, not the whole set — a connector can be namespaced under any name,
@@ -44,17 +44,17 @@ disruptive (e.g. no interactive turn is available to wait on). Once resolved —
 answer or by default — use that prefix as `<SERVER>` for every tool call in this step
 and after.
 
-**Meta-tools are never routed through `call_tool`.** `list_contexts`, `set_context`,
+**Meta-tools are never routed through `read_tool` or `call_tool`.** `list_contexts`, `set_context`,
 `search_tools`, `discover`, `get_current_user`, and `welcome` are each their own
 top-level tool under `<SERVER>` — call them directly, e.g. `mcp__<SERVER>__list_contexts(...)`.
-Never pass one of their names into `call_tool(name="list_contexts", ...)` or
-`call_tool(name="search_tools", ...)` — the proxy's registry only holds Fund
+Never pass one of their names into `read_tool(name="list_contexts", ...)` or
+`read_tool(name="search_tools", ...)` — the proxies' registry only holds Fund
 Admin/DWH domain commands (`fa__...`, `dwh__execute__query`), so a meta-tool name
 sent through it comes back `Unknown tool`, and `search_tools` sent through it comes
 back refusing the call outright ("synthetic search tool and cannot be called via the
-call_tool proxy"). If a **direct** call to one of these meta-tools itself comes back
+read_tool proxy"). If a **direct** call to one of these meta-tools itself comes back
 `Unknown tool`, the fix is to re-check `<SERVER>` above — not to retry the same name
-through `call_tool`.
+through `read_tool` or `call_tool`.
 
 **Classify `<CARTA_ENVIRONMENT>` from `<SERVER>`'s name** — served to the
 dashboard's Snowplow tracker so nonprod usage isn't misattributed as
@@ -67,7 +67,7 @@ to Step 4's build command.
 
 ### Instrumentation — every Carta MCP call in this step carries `_instrumentation_v2`
 
-Pass it on **every** `list_contexts`, `set_context`, and `call_tool` call:
+Pass it on **every** `list_contexts`, `set_context`, `read_tool` and `call_tool` call:
 
 ```
 _instrumentation_v2={...}
@@ -141,7 +141,7 @@ so eligibility was already confirmed on that earlier BUILD-path run.
 Call the eligibility pre-check, silently, right after Step 1's `set_context`:
 
 ```
-mcp__<SERVER>__call_tool(name="fa__get__manco_eligibility", arguments={}, _instrumentation_v2={"skills": ["carta-investors:carta-manco-reporting"]})
+mcp__<SERVER>__read_tool(name="fa__get__manco_eligibility", arguments={}, _instrumentation_v2={"skills": ["carta-investors:carta-manco-reporting"]})
 ```
 
 This returns `{available, has_active_manco, has_fund_admin, fa_product_codes}` — a fast, cached pre-check against the firm `set_context` just activated.
@@ -193,7 +193,7 @@ the entity question, when one is actually needed, is the only visible output.
 Reached in the same cases as Step 1 (a MISS, or `<FORCE_REFRESH>`) — never
 on a WARM HIT or a soft hit, both of which already know the entity.
 
-Call `mcp__<SERVER>__call_tool(name="fa__list__entities", arguments={"entity_types": "management_co,fund"}, _instrumentation_v2={"skills": ["carta-investors:carta-manco-reporting"]})`.
+Call `mcp__<SERVER>__read_tool(name="fa__list__entities", arguments={"entity_types": "management_co,fund"}, _instrumentation_v2={"skills": ["carta-investors:carta-manco-reporting"]})`.
 `entity_types` takes a comma-separated string, not a list — see `carta-soi`'s and
 `carta-portfolio-analytics-routing`'s `fa__list__entities` calls for the same convention.
 

@@ -30,7 +30,7 @@ quietly: there is no draft state. A create-only send stamps the request `request
 One paginated read; the list returns sent requests alone, with all three requirement lists:
 
 ```
-call_tool({"name": "data_collection__list__requests",
+read_tool({"name": "data_collection__list__requests",
            "arguments": {"organization_pk": "<org_pk>",
                           "look_back_date": "<previous period start>",
                           "page_size": 30, "page": 1}})

@@ -24,15 +24,19 @@ allowed-tools:
   # DWH/budget fetching runs directly in this skill's own context — never
   # dispatch a subagent for MCP work; see data-fetch.md for why.
   - mcp__carta__call_tool
+  - mcp__carta__read_tool
   - mcp__carta__set_context
   - mcp__carta__list_contexts
   - mcp__claude_ai_Carta__call_tool
+  - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__set_context
   - mcp__claude_ai_Carta__list_contexts
   - mcp__carta_production__call_tool
+  - mcp__carta_production__read_tool
   - mcp__carta_production__set_context
   - mcp__carta_production__list_contexts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
   # Local helpers
@@ -126,7 +130,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.68.4</carta-plugin>
+<carta-plugin>carta-investors:6.68.6</carta-plugin>
 
 # ManCo Reporting Dashboard
 
@@ -214,7 +218,7 @@ sequence, not the instructions.
 ### Parallel dispatch — Step 2.75b and Step 3
 
 When the cache is cold (Step 3 will run) and a workbook is being parsed
-(Step 2.75b will run), issue Step 3's `call_tool` block and Step 2.75b's
+(Step 2.75b will run), issue Step 3's `read_tool` block and Step 2.75b's
 `parse_budget_workbook.py` Bash calls in the **same tool-use message**. The
 two are independent once Step 2.75a has confirmed the workbook and sheets.
 

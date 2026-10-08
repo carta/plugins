@@ -12,14 +12,17 @@ model: sonnet
 user-invocable: true
 allowed-tools:
   - mcp__carta__call_tool
+  - mcp__carta__read_tool
   - mcp__carta__list_contexts
   - mcp__carta__set_context
   - mcp__carta__list_accounts
   - mcp__claude_ai_Carta__call_tool
+  - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__list_contexts
   - mcp__claude_ai_Carta__set_context
   - mcp__claude_ai_Carta__list_accounts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_accounts
@@ -36,7 +39,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.68.4</carta-plugin>
+<carta-plugin>carta-investors:6.68.6</carta-plugin>
 
 # Waterfall Modeling
 
@@ -118,14 +121,16 @@ layouts in [`references/excel-output.md`](references/excel-output.md)).
 Everything up to rendering — context, options, input collection, the run — is
 identical on both surfaces. Only the **output** of Steps 6a.5 and 6 forks.
 
-## Dispatching commands — call `call_tool` directly, never search
+## Dispatching commands — call `read_tool` / `call_tool` directly, never search
 
-Every command below is dispatched through `call_tool`. It loads **lazily** — it
-won't appear in your tool list, but it exists. **Invoke it directly by its exact
+Every command below that only reads — the options contract, `run_command`, `get_command`
+and `cap_table_command` — is dispatched through `read_tool`; `save_command` changes the
+firm's holdings, so it goes through `call_tool`. Both load **lazily** — they
+won't appear in your tool list, but they exist. **Invoke it directly by its exact
 name; do NOT search for it first** (no generic/BM25 tool search — that's the
 thrash to avoid). Derive `<SERVER>` from any visible Carta tool (e.g.
 `mcp__carta_sandbox__welcome` → `carta_sandbox`), then call:
-`mcp__<SERVER>__call_tool({"name": "<command with ':' → '__'>", "arguments": {…}})`.
+`mcp__<SERVER>__read_tool({"name": "<command with ':' → '__'>", "arguments": {…}})`.
 If you genuinely must search, use the connector's own `mcp__<SERVER>__search_tools`,
 never the generic BM25 search.
 
@@ -199,7 +204,7 @@ NOT the integer the portfolio commands expect.
 List the firm's waterfall targets:
 
 ```
-call_tool({"name": "waterfall_modeling__list__firm_waterfall_candidates", "arguments": {
+read_tool({"name": "waterfall_modeling__list__firm_waterfall_candidates", "arguments": {
   "owner_kind": "FIRM",
   "owner_id":   "<org_pk integer from Step 1>"
 }})
@@ -241,7 +246,7 @@ Always call this before the run — never hardcode option names or command
 strings:
 
 ```
-call_tool({"name": "waterfall_modeling__get__options", "arguments": {
+read_tool({"name": "waterfall_modeling__get__options", "arguments": {
   "owner_kind":  "FIRM",
   "owner_id":    "<org_pk from Step 1>",
   "target_kind": "<locked from Step 2>",
@@ -251,7 +256,7 @@ call_tool({"name": "waterfall_modeling__get__options", "arguments": {
 ```
 
 Response fields (**every `*_command` is an exact MCP command string — convert `:` to `__`
-and pass as the `name` field to `call_tool`; never rewrite or shorten it**):
+and pass as the `name` field to `read_tool` (`call_tool` for `save_command`); never rewrite or shorten it**):
 
 - `run_command` — the command to dispatch the run in Step 5.
 - `get_command` — the command to fetch results in Step 6.
@@ -325,7 +330,7 @@ changes a value, re-collect just that input (Step 4) and re-confirm.
 On confirm, dispatch via the `run_command` from Step 3:
 
 ```
-call_tool({"name": "<run_command with all ':' replaced by '__'>", "arguments": {
+read_tool({"name": "<run_command with all ':' replaced by '__'>", "arguments": {
   "owner_kind":  "FIRM",
   "owner_id":    "<org_pk from Step 1>",
   "target_kind": "<locked from Step 2>",

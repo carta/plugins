@@ -36,7 +36,7 @@ Edit under Commentary in the header: {link}"*
 ## Step 2: List documents
 
 ```
-call_tool({"name": "portfolio_valuations__get__documents", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})
+read_tool({"name": "portfolio_valuations__get__documents", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})
 ```
 
 Returns metadata only per document: `id`, `filename`, `contentType`,
@@ -52,7 +52,7 @@ Downloading is **two calls**: list first (Step 2) to find the
 document:
 
 ```
-call_tool({"name": "portfolio_valuations__get__document_download_url", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>, "document_id": <document_id>}})
+read_tool({"name": "portfolio_valuations__get__document_download_url", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>, "document_id": <document_id>}})
 ```
 
 Returns `{url, filename, contentType}`. `url` is a signed link that needs

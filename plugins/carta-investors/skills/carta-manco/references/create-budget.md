@@ -224,7 +224,7 @@ One or two sentences confirming what got written, with a clickable link to the r
 
 ## Hard rules (create-budget specific)
 
-- **DWH queries:** `call_tool({"name": "dwh__execute__query", ...})` — filter by `FUND_NAME = '<entity>'`. Use `AMOUNT` (not the base-currency variant). Sign-flip revenue: `CASE WHEN LEFT(ACCOUNT_TYPE,1) = '4' THEN -AMOUNT ELSE AMOUNT END`. Preserve reversals as-is.
+- **DWH queries:** `read_tool({"name": "dwh__execute__query", ...})` — filter by `FUND_NAME = '<entity>'`. Use `AMOUNT` (not the base-currency variant). Sign-flip revenue: `CASE WHEN LEFT(ACCOUNT_TYPE,1) = '4' THEN -AMOUNT ELSE AMOUNT END`. Preserve reversals as-is.
 - **Budget values are hardcoded numbers.** Subtotals, Total Income, Total Expenses, NOI use `=SUM(...)` formulas.
 - **Low-confidence rows are flagged with cell comments only** — no fill, font color, border, or italic.
 - **Both tabs MUST carry a `CartaLogo` shape before Gate 7 summary runs.** Use the bundled assets in this skill's `assets/` — never link to another plugin's assets.

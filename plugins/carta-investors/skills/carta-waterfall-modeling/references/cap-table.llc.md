@@ -34,7 +34,7 @@ allocations table** — never render results first unless the user asked to skip
 reader is **independent** of the run — it fetches by issuer + date, not by execution graph:
 
 ```
-call_tool({"name": "<cap_table_command with all ':' replaced by '__'>", "arguments": {
+read_tool({"name": "<cap_table_command with all ':' replaced by '__'>", "arguments": {
   "issuerId": "<root.issuer_id from Step 3>",
   "asOfDate": "<WATERFALL_DATE from Step 4, as a FULL ISO timestamp, e.g. 2025-06-15T00:00:00Z>"
 }})
@@ -154,7 +154,7 @@ them compactly and take a **free-text** name matched against `holderRows[].inter
 chat. Read `references/rendering.llc_interest_vesting_schedule.md` first, then:
 
 ```
-call_tool({"name": "portfolio_valuations__get__llc_interest_vesting_schedule", "arguments": {
+read_tool({"name": "portfolio_valuations__get__llc_interest_vesting_schedule", "arguments": {
   "interest_id": "<interestId from the drilled holderRows[].interests[]>"
   // optional "asOfDate": "<YYYY-MM-DD>" for a historical snapshot; omit for today
 }})
@@ -182,7 +182,7 @@ per-interest-type configuration and render it as a companion beside the cap tabl
 the user asks. Read `references/rendering.llc_liquidation_preferences.md` first, then:
 
 ```
-call_tool({"name": "portfolio_valuations__get__llc_liquidation_preferences", "arguments": {
+read_tool({"name": "portfolio_valuations__get__llc_liquidation_preferences", "arguments": {
   "interest_issuer_id": "<root.issuer_id from Step 3>"
   // optional "asOf": "<YYYY-MM-DD>" for a historical snapshot; omit for today
 }})

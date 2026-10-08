@@ -7,13 +7,13 @@ enabling the approach in `references/dive-in/set-approaches.md` — that
 file turns Backsolve **on**; this one walks the analyst through its
 inputs.
 
-> **Tool-surface note:** every command on this page goes through
-> `call_tool` — `get:backsolve` and `compute:backsolve` on the read side,
-> and `mutate:backsolve` on the write side, including the nested
+> **Tool-surface note:** `get:backsolve` goes through `read_tool`;
+> `compute:backsolve` and `mutate:backsolve` change data, so they go
+> through `call_tool`, including the nested
 > `captableModifications` object.
 >
 > **Decimal values must be passed as strings, not floats.** The
-> generated `call_tool` schema for every field on this command accepts
+> generated schema for every field on this command accepts
 > only `str | int | dict | list` — there is no float type in the union.
 > Confirmed live: passing `assetVolatilityManualEntry: 0.15` (a JSON
 > float) fails validation ("Input should be a valid string" /
@@ -77,7 +77,7 @@ at any point once Backsolve is enabled, not just right after Step 3.
 compute one from the other.** Call `get:volatility_comps` twice:
 
 ```json
-call_tool({
+read_tool({
   "name": "portfolio_valuations__get__volatility_comps",
   "arguments": {
     "ownerId": <ownerId>,
@@ -89,7 +89,7 @@ call_tool({
 ```
 
 ```json
-call_tool({
+read_tool({
   "name": "portfolio_valuations__get__volatility_comps",
   "arguments": {
     "ownerId": <ownerId>,
@@ -174,7 +174,7 @@ You need a selected candidate with Backsolve ready to configure:
 - `targetId` — for the deep link.
 - The company name and candidate name — for messaging.
 - **Backsolve must be enabled in approaches**
-  (`call_tool({"name": "portfolio_valuations__get__approaches", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`.`backsolve.is_used` is `true`).
+  (`read_tool({"name": "portfolio_valuations__get__approaches", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`.`backsolve.is_used` is `true`).
 
 These should be in conversation context from the orchestrator. If
 Backsolve is not enabled, read `references/dive-in/set-approaches.md`
@@ -198,7 +198,7 @@ tell the user the result.
 Call:
 
 ```json
-call_tool({
+read_tool({
   "name": "portfolio_valuations__get__backsolve",
   "arguments": {
     "ownerId": <ownerId>,
@@ -219,7 +219,7 @@ share class on the company's cap table — not just the ones priced on
 or before `backsolveDate`:
 
 ```json
-call_tool({
+read_tool({
   "name": "cap_table__get__certificate_share_classes",
   "arguments": {
     "corporation_id": <targetId>
@@ -238,7 +238,7 @@ event type, not just issuance — a share class can see later activity
 (a transfer, conversion, exercise) with no new certificate issued:
 
 ```json
-call_tool({
+read_tool({
   "name": "dwh__execute__query",
   "arguments": {
     "sql": "SELECT SPLIT_PART(SECURITY_LABEL, '-', 1) AS share_class_prefix, MIN(CASE WHEN EVENT_TYPE = 'Certificate issuance' THEN EVENT_DATE END) AS initial_issue_date, MAX(EVENT_DATE) AS last_activity_date FROM FUND_ADMIN.PORTFOLIO_EVENTS WHERE CORPORATION_NAME ILIKE '<company name>' AND SECURITY_LABEL IS NOT NULL GROUP BY share_class_prefix ORDER BY share_class_prefix",
@@ -842,7 +842,7 @@ If the user says yes to checking/filling in financials, read
 Do not render a table in this case. Stop and let the user decide next
 steps (e.g. fix the underlying input and retry).
 
-**If it succeeds**, re-fetch `call_tool({"name":
+**If it succeeds**, re-fetch `read_tool({"name":
 "portfolio_valuations__get__backsolve", "arguments": {"ownerId":
 <ownerId>, "project_id": <project_id>, "candidate_id":
 <candidate_id>}})` to pick up the headline equity value fields
@@ -900,7 +900,7 @@ Backsolve value.
 Call:
 
 ```json
-call_tool({
+read_tool({
   "name": "portfolio_valuations__get__equity_adjustment",
   "arguments": {
     "ownerId": <ownerId>,

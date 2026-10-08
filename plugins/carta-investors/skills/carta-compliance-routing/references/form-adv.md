@@ -48,7 +48,7 @@ You MUST complete every step on every invocation. Step 3 is not optional — the
 
 ### Step 2 — Run the queries (silently)
 
-Read `${CLAUDE_PLUGIN_ROOT}/skills/carta-compliance-routing/references/form-adv/queries.md` for the SQL. Execute all three queries in order via `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "..."}})`:
+Read `${CLAUDE_PLUGIN_ROOT}/skills/carta-compliance-routing/references/form-adv/queries.md` for the SQL. Execute all three queries in order via `read_tool({"name": "dwh__execute__query", "arguments": {"sql": "..."}})`:
 
 1. **Query 1** — per-fund AUM, fund detail, capital activity, point-in-time portfolio composition.
 2. **Query 2** — per-fund investor demographics (point-in-time membership and NAV from `PARTNER_MONTHLY_NAV_CALCULATIONS`, mutually-exclusive entity-type buckets).

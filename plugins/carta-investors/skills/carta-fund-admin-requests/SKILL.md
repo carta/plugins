@@ -7,23 +7,27 @@ version: 1.0.0
 allowed-tools:
   # Production
   - mcp__claude_ai_Carta__call_tool
+  - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__welcome
   - mcp__claude_ai_Carta__get_current_user
   - mcp__claude_ai_Carta__set_context
   - mcp__claude_ai_Carta__list_contexts
   # Carta-installer naming (lowercase)
   - mcp__carta_production__call_tool
+  - mcp__carta_production__read_tool
   - mcp__carta_production__welcome
   - mcp__carta_production__get_current_user
   - mcp__carta_production__set_context
   - mcp__carta_production__list_contexts
   # Local / legacy fallback
   - mcp__carta__call_tool
+  - mcp__carta__read_tool
   - mcp__carta__welcome
   - mcp__carta__get_current_user
   - mcp__carta__set_context
   - mcp__carta__list_contexts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__get_current_user
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
@@ -32,7 +36,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.68.4</carta-plugin>
+<carta-plugin>carta-investors:6.68.6</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -49,9 +53,9 @@ Names are verbatim. `<SERVER>` is whichever Carta MCP server this session has.
 | Intent | Call |
 |---|---|
 | Send a new request | `call_tool({"name": "fa__create__fund-admin-message", "arguments": {"message": "<message>"}})` |
-| Read a request + Carta's replies | `call_tool({"name": "fa__list__workflow-message", "arguments": {"workflow_id": <workflow_id>}})` |
+| Read a request + Carta's replies | `read_tool({"name": "fa__list__workflow-message", "arguments": {"workflow_id": <workflow_id>}})` |
 | Reply on an existing request | `call_tool({"name": "fa__create__workflow-message", "arguments": {"workflow_id": <workflow_id>, "message": "<message>"}})` |
-| List a firm's requests (**staff only**) | `call_tool({"name": "fa__list__workflow", "arguments": {"firm_uuid": "<firm_uuid>", "template_type": "request-generic", "page_size": 50}})` |
+| List a firm's requests (**staff only**) | `read_tool({"name": "fa__list__workflow", "arguments": {"firm_uuid": "<firm_uuid>", "template_type": "request-generic", "page_size": 50}})` |
 
 `fa__create__fund-admin-message` takes **no** `firm_uuid` — the request is always
 about the session's active firm. It returns `{"workflow_id": <id>}`, the case number.

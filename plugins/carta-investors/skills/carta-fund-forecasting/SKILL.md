@@ -6,12 +6,16 @@ model: sonnet
 allowed-tools:
   # Carta MCP — production server entry names (registers as `carta`; `carta-prod` is the explicit prod variant)
   - mcp__carta__call_tool
+  - mcp__carta__read_tool
   - mcp__carta__search_tools
   - mcp__carta-prod__call_tool
+  - mcp__carta-prod__read_tool
   - mcp__carta-prod__search_tools
   - mcp__claude_ai_Carta__call_tool
+  - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__search_tools
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__search_tools
   - Read
   - Write
@@ -22,7 +26,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.68.4</carta-plugin>
+<carta-plugin>carta-investors:6.68.6</carta-plugin>
 
 # Fund Forecasting
 
@@ -78,18 +82,18 @@ Extract the **server identifier** — the middle segment between the first and l
 **If multiple found:** ask the user which one to use via `AskUserQuestion`.
 
 Build these tool name strings and use them throughout the rest of this skill:
-- `CALL_TOOL` = `mcp__<SERVER>__call_tool`
+- `READ_TOOL` = `mcp__<SERVER>__read_tool`
 - `DISCOVER_TOOL` = `mcp__<SERVER>__discover`
 
 ## Transport
 
 All data comes from the Carta MCP server's gateway tools:
-- `<CALL_TOOL>({"name": "d__v__n", "arguments": {...}})` — run a command.
+- `<READ_TOOL>({"name": "d__v__n", "arguments": {...}})` — run a command.
 - `<DISCOVER_TOOL>()` — list commands with live parameter help.
 
-Command names in the table below use `:` as a separator (e.g. `fund_forecasting:list:funds`). When calling `<CALL_TOOL>`, convert `:` to `__` and pass the result as the `name` field (e.g. `fund_forecasting__list__funds`). Do not rewrite or shorten the name.
+Command names in the table below use `:` as a separator (e.g. `fund_forecasting:list:funds`). When calling `<READ_TOOL>`, convert `:` to `__` and pass the result as the `name` field (e.g. `fund_forecasting__list__funds`). Do not rewrite or shorten the name.
 
-Commands are gated behind a Fund Forecasting feature flag; if the `call_tool` call returns not-found/forbidden, the user is likely not enabled — explain it as an access/enablement gap and do not retry blindly.
+Commands are gated behind a Fund Forecasting feature flag; if the `read_tool` call returns not-found/forbidden, the user is likely not enabled — explain it as an access/enablement gap and do not retry blindly.
 
 ## Commands
 
@@ -329,8 +333,8 @@ Here's a legend to map response keys to their human readable label values.
 
 ## Workflow
 
-1. **Resolve the fund.** No `fund_id` given → use `search` to narrow by name in a single call: `call_tool({"name": "fund_forecasting__list__funds", "arguments": {search: "<distinctive words>"}})` (e.g. `search=la garita`, not `search=la garita 2` — omit numbers and match the correct entry from the returned candidates by number or other context). If no name hint is available, fetch the first page with `call_tool({"name": "fund_forecasting__list__funds", "arguments": {}})` — the response includes `total` and `has_more` so you can tell the user how many funds exist and paginate with `page`/`page_size` if needed. If multiple entries match the search, disambiguate with `AskUserQuestion`. Never ask for an id upfront.
-2. **Resolve an investment name** within a fund → `call_tool({"name": "fund_forecasting__list__investments", "arguments": { fund_id, period: 0, includeIntegrationStatus: false }})`, match each row's `name` → `investmentId` (any `period` works — name↔id mapping is period-independent). Once `investmentId` values are known, read several at once with `list:investments` and `investment_ids` rather than one `get:investment` per company — every call computes the whole fund.
+1. **Resolve the fund.** No `fund_id` given → use `search` to narrow by name in a single call: `read_tool({"name": "fund_forecasting__list__funds", "arguments": {search: "<distinctive words>"}})` (e.g. `search=la garita`, not `search=la garita 2` — omit numbers and match the correct entry from the returned candidates by number or other context). If no name hint is available, fetch the first page with `read_tool({"name": "fund_forecasting__list__funds", "arguments": {}})` — the response includes `total` and `has_more` so you can tell the user how many funds exist and paginate with `page`/`page_size` if needed. If multiple entries match the search, disambiguate with `AskUserQuestion`. Never ask for an id upfront.
+2. **Resolve an investment name** within a fund → `read_tool({"name": "fund_forecasting__list__investments", "arguments": { fund_id, period: 0, includeIntegrationStatus: false }})`, match each row's `name` → `investmentId` (any `period` works — name↔id mapping is period-independent). Once `investmentId` values are known, read several at once with `list:investments` and `investment_ids` rather than one `get:investment` per company — every call computes the whole fund.
 3. **Trim long time-series.** On `fund_details`, always pass `startPeriod`/`endPeriod` for long-lived funds (last-12-months on a 10-year fund ≈ 90% smaller). Keep `mode=current` (the default); for planned-vs-actual prefer the `fund_summary` `.construction`/`.current` slots — reserve `mode=both` for a narrowly-windowed query where you need the split per period (it doubles the payload).
 4. **Cache every read:** run `ff-cache.sh lookup` before each command call; after a miss, stage-and-store the response (`stage-path` → `Write` → `store-staged`; see Caching protocol).
 
@@ -338,7 +342,7 @@ Here's a legend to map response keys to their human readable label values.
 
 These commands sit behind a hard MCP response-size limit and expose only the shapes the backend actually computes. When a question runs into either boundary, fail honestly — never paper over it.
 
-- **Never fabricate around the size limit.** If a `call_tool` call returns *"response too large"*, do **not** reconstruct the numbers from memory, from a partial earlier read, or by guessing. Narrow the request instead — `startPeriod`/`endPeriod`, a coarser `accum` (e.g. `annually`), `mode=current`, a single `period`, `detail=summary`, or leaving `lpBreakdown` off — and retry. If it still won't fit, tell the user the slice is too large to retrieve here and point them to the Tactyc UI. The error text is **command-specific and names the levers that work** — follow it. `page` and `page_size` work on `fund_forecasting:list:funds` and `fund_forecasting:list:investments`; `investment_ids` is a further narrowing lever on `fund_forecasting:list:investments`. `search` works on `fund_forecasting:list:funds` only. None of `page`, `page_size`, `search` work on `fund_forecasting:get:*` commands. The generic `cap_table` `raw` param does nothing on any `fund_forecasting:*` command. Never loop trying unsupported params.
+- **Never fabricate around the size limit.** If a `read_tool` call returns *"response too large"*, do **not** reconstruct the numbers from memory, from a partial earlier read, or by guessing. Narrow the request instead — `startPeriod`/`endPeriod`, a coarser `accum` (e.g. `annually`), `mode=current`, a single `period`, `detail=summary`, or leaving `lpBreakdown` off — and retry. If it still won't fit, tell the user the slice is too large to retrieve here and point them to the Tactyc UI. The error text is **command-specific and names the levers that work** — follow it. `page` and `page_size` work on `fund_forecasting:list:funds` and `fund_forecasting:list:investments`; `investment_ids` is a further narrowing lever on `fund_forecasting:list:investments`. `search` works on `fund_forecasting:list:funds` only. None of `page`, `page_size`, `search` work on `fund_forecasting:get:*` commands. The generic `cap_table` `raw` param does nothing on any `fund_forecasting:*` command. Never loop trying unsupported params.
 - **Read each metric from the row's own field — and at the right period.** `list:investments` defaults to the **current period** (the latest; e.g. period 23 for a ~2-year-old fund), which is what a "current MOIC" question means. There, marked-up Active investments carry a real `moic` you read **verbatim** — e.g. `{name: "Coinectra", status: "Active", moic: 3.94, fmv: 2465278, currentOrRealizedIrr: 1.63}`, `{name: "Voltavo", moic: 3.19}` — while flat holdings read `moic: 1.0`. Those are genuine data, not fabrication. **Do NOT pass `period: 0` for a current-state question:** period 0 is fund *inception*, where every holding is still at cost (`moic: 1.0`) or not-yet-invested (`status: "Planned"`, `moic: 0`) — that snapshot is for name↔id mapping (Workflow step 2) only, and reporting it as "current MOIC" understates reality. Read `moic` straight from the row rather than recomputing `fmv ÷ investedToDate`, and never invent a value a row doesn't contain. To rank by *upside* rather than current value, use the row's **`moicAtExit`** and label it *projected exit MOIC*, not *current*.
 - **Don't synthesize series the API doesn't expose.** `fund_summary` scalars (IRR, TVPI, DPI, NAV, MOIC, …) are point-in-time values, not monthly series. Do **not** call `fund_summary` once per period (`endPeriod=0,1,2,…`) to assemble a month-by-month IRR/TVPI curve — that constructed series is a hallucination. Genuine time-series come from `fund_details` (`view=period` or `cumulative`); if the metric isn't available as a series there, say it isn't tracked over time rather than building one. **The same applies to deployment pace / planned-vs-actual:** answer from the `fund_summary` `.construction` (planned) vs `.current` (forecast) scalars — do **not** invent a per-period or year-by-year deployment curve. If the user genuinely needs the per-period flows, pull them from a windowed `fund_details` (`view=period`, Called-Capital / Investments sections) and report only what you retrieved.
 - **"Current" means the `.period` (as-of-today) slot.** When a user asks for the *current* Net IRR / TVPI / NAV, read the `.period` slot — **not** `.current`, which is the forecast at fund close. Mislabeling the at-close projection as "current" is the most common slot error. Always state which slot you used (see Presentation).
@@ -349,7 +353,7 @@ Responses can be large. Cache every read to disk and reuse it within its freshne
 
 - Derive `<env>` from the server identifier resolved in Step 0: `carta` or `carta-prod` → `prod`, `carta-test` → `test`, `carta-local` → `local`, `carta-sandbox` → `sandbox`, `carta-preprod` → `preprod`, `carta-demo` → `demo`.
 
-`<params-json>` is the compact JSON of the exact params you pass to `call_tool` (the `"arguments"` object) (e.g. `'{"startPeriod":0}'`, or `'{}'` for none). For `list:funds` (no fund id) use `_` as `<fund_id>`. TTLs (24h for `list:funds`, 60m otherwise) are handled by the helper.
+`<params-json>` is the compact JSON of the exact params you pass to `read_tool` (the `"arguments"` object) (e.g. `'{"startPeriod":0}'`, or `'{}'` for none). For `list:funds` (no fund id) use `_` as `<fund_id>`. TTLs (24h for `list:funds`, 60m otherwise) are handled by the helper.
 
 **1. Before every command call, check the cache:**
 
@@ -364,7 +368,7 @@ ${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-forecasting/scripts/ff-cache.sh lookup <
   e.g. *"as of 2026-06-02 14:03 UTC (cached)"*.
 - **Miss or stale:** stdout is the literal `CACHE_MISS` (it can't collide with cached data, which is always a JSON object/array) — go to step 2. This is expected; it does not mean anything went wrong.
 
-**2. On a miss, call the command (call_tool) then stage-and-store.** Call `call_tool`, then persist via the staging path. Never inline the response into a shell command (fund/investment names may contain quotes or shell metacharacters), and never reuse one temp file across fetches — overwriting a file you haven't re-read trips Claude Code's *"file has not been read yet"* guard. The `stage-path` → `Write` → `store-staged` flow sidesteps both:
+**2. On a miss, call the command (read_tool) then stage-and-store.** Call `read_tool`, then persist via the staging path. Never inline the response into a shell command (fund/investment names may contain quotes or shell metacharacters), and never reuse one temp file across fetches — overwriting a file you haven't re-read trips Claude Code's *"file has not been read yet"* guard. The `stage-path` → `Write` → `store-staged` flow sidesteps both:
 
 ```bash
 # a. get a fresh, unique staging path (also clears any stale stage, so the Write target never pre-exists)
@@ -392,7 +396,7 @@ If the user says **"refresh" / "latest" / "live"**, skip step 1 and go straight 
 
 | Symptom | Cause | Tell the user |
 |---|---|---|
-| `call_tool` returns not-found or forbidden | Fund Forecasting feature flag not enabled for this account | "Your account doesn't appear to have Fund Forecasting access. Contact your Carta account team to enable it." |
+| `read_tool` returns not-found or forbidden | Fund Forecasting feature flag not enabled for this account | "Your account doesn't appear to have Fund Forecasting access. Contact your Carta account team to enable it." |
 | Response too large / size-limit overflow | Payload exceeds the MCP size cap | For `list:investments`: narrow with `investment_ids` to the specific companies needed, or retry with a smaller `page_size` — summary ≈ 15, summary with `qualitative=true` ≈ 8, `detail=full` 1–2. For other commands, narrow with `startPeriod`/`endPeriod` or a coarser `accum`. If it still won't fit: "This data slice is too large to retrieve here — open it directly in [Fund Forecasting](https://fund-forecasting.app.carta.com)." |
 | `CACHE_MISS` on `ff-cache.sh lookup` | Normal first-call path — not an error | Proceed to fetch and store; say nothing to the user. |
 | Investment has `errors[]` | Blocking data problem in the fund model inputs | Name the company and the plain-English message(s). Clarify these are model-input issues, not MCP errors, and that they're corrected in Fund Forecasting (provide the deep link). |

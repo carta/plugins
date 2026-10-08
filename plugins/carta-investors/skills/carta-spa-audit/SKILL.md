@@ -13,21 +13,25 @@ allowed-tools:
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
   # Carta MCP — registration prefix varies by host (Claude Code / Claude.ai / Cowork / public)
   - mcp__carta__call_tool
+  - mcp__carta__read_tool
   - mcp__carta__list_contexts
   - mcp__carta__list_accounts
   - mcp__carta__set_context
   - mcp__carta__skill_checkpoint
   - mcp__claude_ai_carta__call_tool
+  - mcp__claude_ai_carta__read_tool
   - mcp__claude_ai_carta__list_contexts
   - mcp__claude_ai_carta__list_accounts
   - mcp__claude_ai_carta__set_context
   - mcp__claude_ai_carta__skill_checkpoint
   - mcp__claude_ai_Carta__call_tool
+  - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__list_contexts
   - mcp__claude_ai_Carta__list_accounts
   - mcp__claude_ai_Carta__set_context
   - mcp__claude_ai_Carta__skill_checkpoint
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_accounts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
@@ -48,7 +52,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.68.4</carta-plugin>
+<carta-plugin>carta-investors:6.68.6</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -408,7 +412,7 @@ Reads the unified SPA source (see below), groups by issuer name to deduplicate m
 Replace `<firm_id>` with the firm id from Step 1.
 
 ```
-call_tool({"name": "dwh__execute__query", "arguments": {
+read_tool({"name": "dwh__execute__query", "arguments": {
   "sql": "WITH spa_issuers AS (SELECT ISSUER_NAME, EXECUTED_BY_ISSUER FROM (SELECT CASE WHEN TYPEOF(RAW_JSON:company:name) = 'OBJECT' AND RAW_JSON:company:name:value::STRING IS NOT NULL THEN RAW_JSON:company:name:value::STRING WHEN TYPEOF(RAW_JSON:company:name) = 'VARCHAR' THEN RAW_JSON:company:name::STRING ELSE ATTRIBUTES:name::STRING END AS ISSUER_NAME, CASE WHEN TYPEOF(RAW_JSON:company:executed_by_issuer) = 'OBJECT' AND TRY_TO_BOOLEAN(RAW_JSON:company:executed_by_issuer:value::VARCHAR) IS NOT NULL THEN TRY_TO_BOOLEAN(RAW_JSON:company:executed_by_issuer:value::VARCHAR) WHEN TYPEOF(RAW_JSON:company:executed_by_issuer) = 'BOOLEAN' THEN TRY_TO_BOOLEAN(RAW_JSON:company:executed_by_issuer::VARCHAR) ELSE ATTRIBUTES:executed_by_issuer::BOOLEAN END AS EXECUTED_BY_ISSUER FROM FUND_ADMIN.DOCUMENT_AI_RECORD WHERE FIRM_ID = '<firm_id>' AND DOCUMENT_TYPE = 'stock_purchase_agreement' AND RECORD_TYPE = 'company') WHERE ISSUER_NAME IS NOT NULL), norm_spa AS (SELECT ISSUER_NAME AS spa_name, TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(ISSUER_NAME), ' *[(][^)]*[)].*$', '')), ' +(D/?B/?A|F/?K/?A|AKA) +.*$', '')), '([ ,]+(INCORPORATED|INC|LLC|LTD|LIMITED|CORPORATION|CORP|L[.]P[.]|LLP|LP|PBC|PLC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]?)+ *$', '')), '[,.]', '')) AS name_norm, MAX(CASE WHEN EXECUTED_BY_ISSUER = TRUE THEN 1 ELSE 0 END) AS has_executed_spa FROM spa_issuers GROUP BY ISSUER_NAME), norm_investments_base AS (SELECT ISSUER_NAME, MAX(CASE WHEN ASSET_CLASS_TYPE = 'PREFERRED_EQUITY' THEN 1 ELSE 0 END) AS has_preferred, MAX(CASE WHEN ASSET_CLASS_TYPE = 'COMMON_EQUITY' THEN 1 ELSE 0 END) AS has_common, MIN(INVESTMENT_DATE) AS first_invested, SUM(CASE WHEN IS_FOREIGN_CURRENCY_INVESTMENT THEN BASE_CURRENCY_TOTAL_COST ELSE TOTAL_COST END) AS total_cost_basis, COUNT(DISTINCT CASE WHEN IS_FOREIGN_CURRENCY_INVESTMENT THEN BASE_CURRENCY_CODE ELSE CURRENCY_CODE END) AS currency_count, MAX(CASE WHEN IS_FOREIGN_CURRENCY_INVESTMENT THEN BASE_CURRENCY_CODE ELSE CURRENCY_CODE END) AS currency_code, TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(ISSUER_NAME), ' *[(][^)]*[)].*$', '')), ' +(D/?B/?A|F/?K/?A|AKA) +.*$', '')), '([ ,]+(INCORPORATED|INC|LLC|LTD|LIMITED|CORPORATION|CORP|L[.]P[.]|LLP|LP|PBC|PLC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]?)+ *$', '')), '[,.]', '')) AS name_norm, COALESCE(REGEXP_SUBSTR(ISSUER_NAME, '[(] *(D[.]?/?B[.]?/?A[.]?|F[.]?/?K[.]?/?A[.]?|N[.]?/?K[.]?/?A[.]?|A[.]?K[.]?A[.]?|FORMERLY( +KNOWN +AS)?)[ :]+([^)]+)[)]', 1, 1, 'ie', 3), REGEXP_SUBSTR(ISSUER_NAME, '[(]([^)]+)[)]', 1, 1, 'e', 1)) AS alias_raw FROM FUND_ADMIN.AGGREGATE_INVESTMENTS WHERE FIRM_ID = '<firm_id>' GROUP BY ISSUER_NAME), norm_investments AS (SELECT ISSUER_NAME, has_preferred, has_common, first_invested, total_cost_basis, currency_count, currency_code, name_norm, 0 AS is_alias FROM norm_investments_base UNION ALL SELECT ISSUER_NAME, has_preferred, has_common, first_invested, total_cost_basis, currency_count, currency_code, TRIM(REGEXP_REPLACE(TRIM(REGEXP_REPLACE(UPPER(alias_raw), '([ ,]+(INCORPORATED|INC|LLC|LTD|LIMITED|CORPORATION|CORP|L[.]P[.]|LLP|LP|PBC|PLC|CO[.]?|HOLDINGS|TECHNOLOGIES|TECHNOLOGY)[.]?)+ *$', '')), '[,.]', '')) AS name_norm, 1 AS is_alias FROM norm_investments_base WHERE alias_raw IS NOT NULL AND TRIM(alias_raw) <> ''), fuzzy_matched AS (SELECT i.ISSUER_NAME, i.has_preferred, i.has_common, i.first_invested, i.total_cost_basis, i.currency_count, i.currency_code, s.spa_name, s.has_executed_spa, ROW_NUMBER() OVER (PARTITION BY i.ISSUER_NAME ORDER BY JAROWINKLER_SIMILARITY(i.name_norm, s.name_norm) DESC NULLS LAST, s.has_executed_spa DESC, i.is_alias, s.spa_name) AS rn FROM norm_investments i LEFT JOIN norm_spa s ON JAROWINKLER_SIMILARITY(i.name_norm, s.name_norm) >= 90), best AS (SELECT * FROM fuzzy_matched WHERE rn = 1), labeled AS (SELECT CASE WHEN has_preferred = 0 AND has_common = 0 THEN 4 WHEN spa_name IS NULL THEN 1 WHEN has_executed_spa = 0 THEN 2 ELSE 3 END AS sort_key, CASE WHEN has_preferred = 0 AND has_common = 0 THEN '4. No SPA needed' WHEN spa_name IS NULL THEN '1. Missing SPA' WHEN has_executed_spa = 0 THEN '2. SPA not executed' ELSE '3. Executed SPA' END AS spa_bucket, ISSUER_NAME AS company, spa_name, first_invested, total_cost_basis, currency_count, currency_code FROM best) SELECT spa_bucket, company, spa_name, first_invested, total_cost_basis, currency_count, currency_code FROM labeled ORDER BY sort_key, total_cost_basis DESC NULLS LAST, company",
   "limit": 500
 }})
@@ -417,16 +421,16 @@ call_tool({"name": "dwh__execute__query", "arguments": {
 ### Coverage queries (run in parallel with the main query)
 
 ```
-call_tool({"name": "dwh__execute__query", "arguments": {
+read_tool({"name": "dwh__execute__query", "arguments": {
   "sql": "SELECT COUNT(DISTINCT ISSUER_NAME) AS spa_companies FROM (SELECT CASE WHEN TYPEOF(RAW_JSON:company:name) = 'OBJECT' AND RAW_JSON:company:name:value::STRING IS NOT NULL THEN RAW_JSON:company:name:value::STRING WHEN TYPEOF(RAW_JSON:company:name) = 'VARCHAR' THEN RAW_JSON:company:name::STRING ELSE ATTRIBUTES:name::STRING END AS ISSUER_NAME FROM FUND_ADMIN.DOCUMENT_AI_RECORD WHERE FIRM_ID = '<firm_id>' AND DOCUMENT_TYPE = 'stock_purchase_agreement' AND RECORD_TYPE = 'company') WHERE ISSUER_NAME IS NOT NULL"
 }})
 
-call_tool({"name": "dwh__execute__query", "arguments": {
+read_tool({"name": "dwh__execute__query", "arguments": {
   "sql": "SELECT COUNT(DISTINCT ISSUER_NAME) AS total_companies FROM FUND_ADMIN.AGGREGATE_INVESTMENTS WHERE FIRM_ID = '<firm_id>'"
 }})
 ```
 
-If any query fails with a table-not-found error, call `call_tool({"name": "dwh__list__tables", "arguments": {}})` to confirm available table names, then retry.
+If any query fails with a table-not-found error, call `read_tool({"name": "dwh__list__tables", "arguments": {}})` to confirm available table names, then retry.
 
 **Bucket definitions:**
 - **1. Missing SPA** — holds equity (preferred or common) but no SPA document found in Carta
@@ -570,7 +574,7 @@ If the user hasn't named a company, ask: "Which company would you like to review
 Run this query, replacing `<company_name>` with their input:
 
 ```
-call_tool({"name": "dwh__execute__query", "arguments": {
+read_tool({"name": "dwh__execute__query", "arguments": {
   "sql": "WITH gen_rec AS (SELECT DOCUMENT_ID, RECORD_TYPE, ATTRIBUTES, RAW_JSON, CREATED_AT FROM FUND_ADMIN.DOCUMENT_AI_RECORD WHERE FIRM_ID = '<firm_id>' AND DOCUMENT_TYPE = 'stock_purchase_agreement'), spa_docs AS (SELECT DOCUMENT_ID, ISSUER_NAME, EXECUTED_BY_ISSUER, CLOSING_DATE, CURRENCY_CODE, UPLOAD_DATE FROM (SELECT c.DOCUMENT_ID, CASE WHEN TYPEOF(c.RAW_JSON:company:name) = 'OBJECT' AND c.RAW_JSON:company:name:value::STRING IS NOT NULL THEN c.RAW_JSON:company:name:value::STRING WHEN TYPEOF(c.RAW_JSON:company:name) = 'VARCHAR' THEN c.RAW_JSON:company:name::STRING ELSE c.ATTRIBUTES:name::STRING END AS ISSUER_NAME, CASE WHEN TYPEOF(c.RAW_JSON:company:executed_by_issuer) = 'OBJECT' AND TRY_TO_BOOLEAN(c.RAW_JSON:company:executed_by_issuer:value::VARCHAR) IS NOT NULL THEN TRY_TO_BOOLEAN(c.RAW_JSON:company:executed_by_issuer:value::VARCHAR) WHEN TYPEOF(c.RAW_JSON:company:executed_by_issuer) = 'BOOLEAN' THEN TRY_TO_BOOLEAN(c.RAW_JSON:company:executed_by_issuer::VARCHAR) ELSE c.ATTRIBUTES:executed_by_issuer::BOOLEAN END AS EXECUTED_BY_ISSUER, TRY_TO_DATE(e.ATTRIBUTES:closing_dates[0]::STRING) AS CLOSING_DATE, IFF(REGEXP_LIKE(e.ATTRIBUTES:currency_code::STRING, '^[A-Z]{3}$'), e.ATTRIBUTES:currency_code::STRING, NULL) AS CURRENCY_CODE, c.CREATED_AT::DATE AS UPLOAD_DATE FROM gen_rec c LEFT JOIN gen_rec e ON e.DOCUMENT_ID = c.DOCUMENT_ID AND e.RECORD_TYPE = 'stock_purchase' WHERE c.RECORD_TYPE = 'company') WHERE ISSUER_NAME IS NOT NULL), gen_purch AS (SELECT DOCUMENT_ID, ATTRIBUTES:name::STRING AS PURCHASER_NAME, ATTRIBUTES:entity_type::STRING AS ENTITY_TYPE, ATTRIBUTES:share_class_name::STRING AS SHARE_CLASS_NAME, ATTRIBUTES:shares_purchased_by_cash::NUMBER AS SHARES_PURCHASED, ATTRIBUTES:price_per_share::NUMBER AS PRICE_PER_SHARE, ATTRIBUTES:total_amount_paid::NUMBER AS TOTAL_AMOUNT_PAID FROM gen_rec WHERE RECORD_TYPE = 'investor') SELECT DENSE_RANK() OVER (ORDER BY sd.DOCUMENT_ID) AS spa_num, sd.UPLOAD_DATE AS upload_date, sd.ISSUER_NAME, gp.PURCHASER_NAME, gp.SHARE_CLASS_NAME, gp.SHARES_PURCHASED, gp.PRICE_PER_SHARE, gp.TOTAL_AMOUNT_PAID, sd.CURRENCY_CODE, sd.CLOSING_DATE AS transaction_date, CASE WHEN sd.EXECUTED_BY_ISSUER = TRUE THEN 'Yes' ELSE 'No' END AS executed FROM spa_docs sd LEFT JOIN gen_purch gp ON gp.DOCUMENT_ID = sd.DOCUMENT_ID AND (gp.ENTITY_TYPE IS NULL OR (gp.ENTITY_TYPE NOT ILIKE '%notice%' AND gp.ENTITY_TYPE NOT ILIKE '%law firm%')) WHERE UPPER(sd.ISSUER_NAME) LIKE UPPER('%<company_name>%') ORDER BY sd.DOCUMENT_ID, gp.PURCHASER_NAME",
   "limit": 100
 }})

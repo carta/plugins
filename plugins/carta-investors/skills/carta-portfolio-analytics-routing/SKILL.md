@@ -20,18 +20,22 @@ allowed-tools:
   - mcp__claude_ai_Carta__welcome
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
   - mcp__carta__call_tool
+  - mcp__carta__read_tool
   - mcp__carta__search_tools
   - mcp__carta__set_context
   - mcp__carta__list_contexts
   # The soi mirror picks its server at runtime and can land on either prefix.
   - mcp__claude_ai_carta__call_tool
+  - mcp__claude_ai_carta__read_tool
   - mcp__claude_ai_carta__set_context
   - mcp__claude_ai_carta__list_contexts
   - mcp__claude_ai_Carta__call_tool
+  - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__search_tools
   - mcp__claude_ai_Carta__set_context
   - mcp__claude_ai_Carta__list_contexts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__search_tools
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
@@ -61,7 +65,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.68.4</carta-plugin>
+<carta-plugin>carta-investors:6.68.6</carta-plugin>
 
 # carta-portfolio-analytics-routing — Portfolio Analytics Router (mirror)
 
@@ -196,7 +200,7 @@ If the Carta MCP server is not connected (`noMcp` environment), skip this step a
 Otherwise:
 
 1. Call `welcome` to establish session identity (skip if already called this session).
-2. Run **exactly one** proxy probe: `call_tool({"name": "fa__list__entities", "arguments": {}})`. You get exactly one attempt at this probe — do not retry it, do not vary the call, and do not substitute a different tool to route around a failure.
+2. Run **exactly one** proxy probe: `read_tool({"name": "fa__list__entities", "arguments": {}})`. You get exactly one attempt at this probe — do not retry it, do not vary the call, and do not substitute a different tool to route around a failure.
 
 Branch on the result:
 

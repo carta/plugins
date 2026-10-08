@@ -12,10 +12,13 @@ version: 1.0.0
 model: inherit
 allowed-tools:
   - mcp__carta__call_tool
+  - mcp__carta__read_tool
   - mcp__carta__welcome
   - mcp__claude_ai_Carta__call_tool
+  - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__welcome
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
   # Step 2: find the firm the user names (list_contexts) and switch to it (set_context).
   - mcp__carta__list_contexts
@@ -38,7 +41,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.68.4</carta-plugin>
+<carta-plugin>carta-investors:6.68.6</carta-plugin>
 
 [PATTERN carta-writing-style v0.0.2]
 [PATTERN etiquette v0.0.6]
@@ -88,7 +91,7 @@ set_context({"firm_id": "<firm_uuid>"})
 
 This also changes the user's active firm in Carta, which is why it only happens when the firm is not already active. Carry the firm's name into Step 5's `firm_name` and its UUID into `firm_context_id`. The artifact re-pins the context itself on every load, because the viewer's connector opens on whatever firm they last used, not on yours — that UUID comes from `list_contexts` and is **not** the `LENDING_FIRM_ID` on the warehouse rows, so never derive one from the other.
 
-Every Carta tool call in this skill carries `_instrumentation` — it records the invocation for telemetry. Include it on `welcome` and on every `call_tool` below.
+Every Carta tool call in this skill carries `_instrumentation` — it records the invocation for telemetry. Include it on `welcome` and on every `read_tool` call below.
 
 ### 3. Resolve the schema (optimistic — probe only on failure)
 The loan schema is known and stable. Resolving it with an upfront `dwh__list__tables` + `SELECT * FROM … LIMIT 1` probe on **every** run is avoidable latency (measured: ~21s probe + ~34s retry on a column-name mismatch = ~55s, ~31% of wall time). **Bind the placeholders to the confirmed schema below and query it directly (Step 4). Do NOT probe up front. Fall back to discovery only when a query actually errors.**
@@ -131,7 +134,7 @@ firm's rows.
 `<loan_id>` is the paging tiebreaker: the artifact fetches the whole portfolio with `offset`, which needs a total order or rows shuffle across page boundaries. If it does not resolve, the artifact falls back to `<loan_name>`.
 
 **Fallback — trigger ONLY on a query error (warehouse layers diverge; the synonyms exist only to recover, never to pre-empt):**
-- *Loan table not found* (the Step-4 query errors that `LOAN_OPS.LOAN` is unknown): call `call_tool({"name": "dwh__list__tables", "arguments": {}, "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-loan-dashboard"]}})`, set `<loan_table>` to the datashare loan view (`LOAN` or ends `_LOAN`, e.g. `LOAN_OPS.LOANOPS_DATASHARE_LOAN`); re-run. If that returns no loan view at all, tell the user loan data isn't available in this context and stop (error table: *Loan table not found*).
+- *Loan table not found* (the Step-4 query errors that `LOAN_OPS.LOAN` is unknown): call `read_tool({"name": "dwh__list__tables", "arguments": {}, "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-loan-dashboard"]}})`, set `<loan_table>` to the datashare loan view (`LOAN` or ends `_LOAN`, e.g. `LOAN_OPS.LOANOPS_DATASHARE_LOAN`); re-run. If that returns no loan view at all, tell the user loan data isn't available in this context and stop (error table: *Loan table not found*).
 - *Unknown column* (a layer names a money column differently): probe `SELECT * FROM <loan_table> LIMIT 1` (format markdown) and resolve — `<committed>` → first present of `TOTAL_COMMITMENT`, `TOTAL_COMMITTED_AMOUNT`; `<drawn>` → first present of `TOTAL_DRAWN_AMOUNT`, `TOTAL_DRAWN`; re-run. If a concept still has no matching column, drop its tile/column rather than erroring (error table: *Unknown column, no fallback match*).
 
 **Error table — what to tell the user.** The steps point here by row name, so the wording each failure uses lives in one place:
@@ -152,7 +155,7 @@ Step-3 names resolve (this is the error that triggers Step 3's fallback), and it
 before an artifact exists to show them.
 
 ```text
-call_tool({"name": "dwh__execute__query",
+read_tool({"name": "dwh__execute__query",
            "arguments": {"sql": "<SQL>", "format": "markdown"},
            "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-loan-dashboard"]}})
 ```

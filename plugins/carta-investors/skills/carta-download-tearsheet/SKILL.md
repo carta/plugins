@@ -7,19 +7,22 @@ version: 1.2.2
 model: haiku
 allowed-tools:
   - mcp__carta__call_tool
+  - mcp__carta__read_tool
   - mcp__carta__list_contexts
   - mcp__carta__set_context
   - mcp__claude_ai_Carta__call_tool
+  - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__list_contexts
   - mcp__claude_ai_Carta__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   - AskUserQuestion
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.68.4</carta-plugin>
+<carta-plugin>carta-investors:6.68.6</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -58,11 +61,11 @@ to the appropriate workflow based on the selection:
 
 | MCP Command | Purpose |
 |-------------|---------|
-| `call_tool({"name": "fa__list__tearsheet_templates", "arguments": {}})` | List available PDF templates for the firm |
-| `call_tool({"name": "fa__list__portfolio_companies", "arguments": {}})` | List all portfolio companies with their fund groupings |
+| `read_tool({"name": "fa__list__tearsheet_templates", "arguments": {}})` | List available PDF templates for the firm |
+| `read_tool({"name": "fa__list__portfolio_companies", "arguments": {}})` | List all portfolio companies with their fund groupings |
 | `call_tool({"name": "fa__mutate__download_all_tearsheets", "arguments": {...}})` | Start an async job for all portcos (fast path) |
 | `call_tool({"name": "fa__mutate__start_tearsheet_download", "arguments": {...}})` | Start an async bulk job for a specific portco subset |
-| `call_tool({"name": "fa__get__tearsheet_download_status", "arguments": {}})` | Poll for async job completion; returns `"pending"` or a download URL |
+| `read_tool({"name": "fa__get__tearsheet_download_status", "arguments": {}})` | Poll for async job completion; returns `"pending"` or a download URL |
 
 ## Gate 0: Firm Context
 
@@ -81,7 +84,7 @@ You do not need to ask the user for a firm UUID — the MCP session tracks the a
 Call:
 
 ```
-call_tool({"name": "fa__list__tearsheet_templates", "arguments": {}})
+read_tool({"name": "fa__list__tearsheet_templates", "arguments": {}})
 ```
 
 **If the user mentioned a document name** (e.g. "Investment Summary", "Fund Summary",
@@ -119,7 +122,7 @@ Store as `TEMPLATE_UUID` (the template `id`) and `TEMPLATE_NAME`.
 Call:
 
 ```
-call_tool({"name": "fa__list__portfolio_companies", "arguments": {}})
+read_tool({"name": "fa__list__portfolio_companies", "arguments": {}})
 ```
 
 The command returns an array of portfolio companies. Each item includes `name`,
@@ -180,7 +183,7 @@ call_tool({"name": "fa__mutate__download_all_tearsheets", "arguments": {
 
 Tell the user the job has started and polling will begin.
 
-**Poll for completion** — call `call_tool({"name": "fa__get__tearsheet_download_status", "arguments": {}})` every 30 seconds, up to
+**Poll for completion** — call `read_tool({"name": "fa__get__tearsheet_download_status", "arguments": {}})` every 30 seconds, up to
 10 attempts (5 minutes total):
 
 - Response is `"pending"` → print progress ("Still processing... (attempt N/10)") and wait.
@@ -242,7 +245,7 @@ call_tool({"name": "fa__mutate__start_tearsheet_download", "arguments": {
 
 Tell the user the job has started and polling will begin.
 
-**Poll for completion** — call `call_tool({"name": "fa__get__tearsheet_download_status", "arguments": {}})` every 15 seconds, up to
+**Poll for completion** — call `read_tool({"name": "fa__get__tearsheet_download_status", "arguments": {}})` every 15 seconds, up to
 20 attempts (5 minutes total):
 
 - Response is `"pending"` → print progress ("Still processing... (attempt N/20)") and wait.

@@ -31,6 +31,7 @@ allowed-tools:
   - mcp__claude_ai_carta__welcome
   - mcp__claude_ai_carta__search_tools
   - mcp__claude_ai_carta__call_tool
+  - mcp__claude_ai_carta__read_tool
   - mcp__claude_ai_carta__list_accounts
   - mcp__claude_ai_carta__list_contexts
   - mcp__claude_ai_carta__set_context
@@ -40,12 +41,14 @@ allowed-tools:
   - mcp__carta__welcome
   - mcp__carta__search_tools
   - mcp__carta__call_tool
+  - mcp__carta__read_tool
   - mcp__carta__list_accounts
   - mcp__carta__list_contexts
   - mcp__carta__set_context
   - mcp__claude_ai_Carta__welcome
   - mcp__claude_ai_Carta__search_tools
   - mcp__claude_ai_Carta__call_tool
+  - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__list_accounts
   - mcp__claude_ai_Carta__list_contexts
   - mcp__claude_ai_Carta__set_context
@@ -53,6 +56,7 @@ allowed-tools:
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__search_tools
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_accounts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
@@ -60,7 +64,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.68.4</carta-plugin>
+<carta-plugin>carta-investors:6.68.6</carta-plugin>
 
 # AGM Deck Builder
 
@@ -434,7 +438,7 @@ No additional rendering step is needed. The `.html` file is the final deliverabl
 
 3. **🚨 CRITICAL — Post-generation audit.** After every deck build, output the following three sections verbatim. This is non-negotiable and must appear even if all slides were included:
 
-   Before rendering these tables, call `call_tool({"name": "fa__list__saved_queries", "arguments": {}})` and build a lookup map: for each entry whose `collection` or `subcollection_name` matches `"AGM Deck"`, record `name → _links.web_url`. Skip this prefetch silently if the Carta MCP was not connected. Do NOT construct, guess, or fabricate URLs.
+   Before rendering these tables, call `read_tool({"name": "fa__list__saved_queries", "arguments": {}})` and build a lookup map: for each entry whose `collection` or `subcollection_name` matches `"AGM Deck"`, record `name → _links.web_url`. Skip this prefetch silently if the Carta MCP was not connected. Do NOT construct, guess, or fabricate URLs.
 
    **Slides included** (list each slide by number and title):
    | # | Slide | Data source |

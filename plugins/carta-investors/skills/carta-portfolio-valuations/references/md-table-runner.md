@@ -10,10 +10,10 @@ valuations in **Draft** status only (no finalize step).
 
 ## Step 1: Fetch and normalise data
 
-If `call_tool({"name": "portfolio_valuations__list__portfolio_dashboard", "arguments": {"organizationId": "<org_pk>", "page_size": 100, "raw": false}})` data is already in context from the current
+If `read_tool({"name": "portfolio_valuations__list__portfolio_dashboard", "arguments": {"organizationId": "<org_pk>", "page_size": 100, "raw": false}})` data is already in context from the current
 session, re-use it — do not re-fetch.
 
-Otherwise call `call_tool({"name": "portfolio_valuations__list__portfolio_dashboard", "arguments": {"organizationId": "<org_pk>", "page_size": 100, "raw": false}})` (all
+Otherwise call `read_tool({"name": "portfolio_valuations__list__portfolio_dashboard", "arguments": {"organizationId": "<org_pk>", "page_size": 100, "raw": false}})` (all
 pages, always `page_size: 100`) and merge the `companies` arrays.
 
 ## Step 2: Classify into buckets
@@ -257,7 +257,7 @@ workflowId}`). Tell the user:
 
 ### Step 8.2: Poll for completion
 
-Call `call_tool({"name": "portfolio_valuations__get__bulk_status", "arguments": {"workflowId": "<workflowId>"}})`
+Call `read_tool({"name": "portfolio_valuations__get__bulk_status", "arguments": {"workflowId": "<workflowId>"}})`
 every **10 seconds** until complete:
 
 ```json

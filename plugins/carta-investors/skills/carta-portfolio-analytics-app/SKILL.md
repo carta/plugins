@@ -19,21 +19,25 @@ model: inherit
 allowed-tools:
   - mcp__carta__welcome
   - mcp__carta__call_tool
+  - mcp__carta__read_tool
   - mcp__carta__set_context
   - mcp__carta__list_contexts
   - mcp__carta__discover
   - mcp__carta_production__welcome
   - mcp__carta_production__call_tool
+  - mcp__carta_production__read_tool
   - mcp__carta_production__set_context
   - mcp__carta_production__list_contexts
   - mcp__carta_production__discover
   - mcp__claude_ai_Carta__welcome
   - mcp__claude_ai_Carta__call_tool
+  - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__set_context
   - mcp__claude_ai_Carta__list_contexts
   - mcp__claude_ai_Carta__discover
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__discover
@@ -49,7 +53,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.68.4</carta-plugin>
+<carta-plugin>carta-investors:6.68.6</carta-plugin>
 
 <!-- Carta investor tooling. React app (in-browser JSX transpile) fed by Data Collection KPIs. -->
 
@@ -115,7 +119,7 @@ goes through live MCP auth (the natural re-check).
 
 ## Step 1 — BUILD: identify the Carta MCP + resolve the firm
 Reached only on a build/refresh. Scan for a connected `mcp__<SERVER>__*` Carta
-server; use its prefix for `list_contexts`/`set_context`/`call_tool`. None
+server; use its prefix for `list_contexts`/`set_context`/`read_tool`/`call_tool`. None
 connected → stop: "No Carta MCP is connected. Building needs one — connect the
 carta-investors plugin's MCP. Cached dashboards still open without it."
 
@@ -251,7 +255,7 @@ All 10 stems (`funds`, `financials`, `forecasts`, `holdings`, `fdshares`, `deal_
 
 2. **Issue it as ONE call:**
    ```
-   call_tool({"name":"dwh__execute__queries","arguments":{"queries": <batch.queries>,
+   read_tool({"name":"dwh__execute__queries","arguments":{"queries": <batch.queries>,
      "limit": 10000, "format": "ndjson", "response_mode": "inline"}})
    ```
    Pass `limit`/`format`/`response_mode` explicitly — the tool defaults to
@@ -296,7 +300,7 @@ All 10 stems (`funds`, `financials`, `forecasts`, `holdings`, `fdshares`, `deal_
      sql <stem> --firm-uuid "<firm_uuid>" ${SINCE:+--since "$SINCE"}
    ```
    ```
-   call_tool({"name":"dwh__execute__query","arguments":{"sql": <that SQL>, "limit": 10000,
+   read_tool({"name":"dwh__execute__query","arguments":{"sql": <that SQL>, "limit": 10000,
      "offset": <next_offset>, "format": "ndjson", "response_mode": "inline"}})
    ```
    ```bash
@@ -319,7 +323,7 @@ All 10 stems (`funds`, `financials`, `forecasts`, `holdings`, `fdshares`, `deal_
      sql financials --firm-uuid "<firm_uuid>" ${SINCE:+--since "$SINCE"}
    ```
    ```
-   call_tool({"name":"dwh__execute__query","arguments":{"sql": <that SQL>, "limit": 10000,
+   read_tool({"name":"dwh__execute__query","arguments":{"sql": <that SQL>, "limit": 10000,
      "offset": 0, "format": "ndjson", "response_mode": "inline"}})
    ```
    ```bash
@@ -360,7 +364,7 @@ tool` / `NotFoundError` on an older MCP), the ndjson call is rejected client-sid
 `save_batch_result.py` can't split the response (exit 2 — re-run with `--dump-shape` to
 inspect the envelope), fetch the 5 light batch stems singly too, the same way step 5 already
 fetches `financials`/`forecasts`: `emit_stem_sql.py sql <stem>` →
-`call_tool({"name":"dwh__execute__query", "arguments": {"sql": <that SQL>, "limit": 10000,
+`read_tool({"name":"dwh__execute__query", "arguments": {"sql": <that SQL>, "limit": 10000,
 "format": "ndjson", "response_mode": "inline"}})` → `save_query_result.py <result_path>
 "<raw_dir>/<stem>.ndjson"`. Same pagination rules and the same 0-rows-is-fine-for-`financials`
 guidance apply.

@@ -12,7 +12,7 @@ available to the next request that asks for it, and every request already sent s
 ## Step 1 — Read the vocabulary first
 
 ```
-call_tool({"name": "data_collection__list__metrics",
+read_tool({"name": "data_collection__list__metrics",
            "arguments": {"organization_pk": "<org_pk>"}})
 ```
 

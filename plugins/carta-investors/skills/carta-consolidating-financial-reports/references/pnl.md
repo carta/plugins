@@ -176,7 +176,7 @@ Skip only if `<ENTITY_SCOPE>` is already in context.
 A consolidating P&L spans a set of entities and the user picks the set. Ask.
 
 ```
-call_tool({"name": "fa__list__entities", "arguments": {}, "_instrumentation_v2": {...}})
+read_tool({"name": "fa__list__entities", "arguments": {}, "_instrumentation_v2": {...}})
 ```
 
 Classify each returned entity — prefer the API's own `type`, and fall back to
@@ -334,7 +334,7 @@ alone would drop it from the report.
 
 Queries > 50 rows: request `format: "ndjson"`, bucket into a blob. Don't paste large results — triggers `context_snip`. Use `"markdown"` only for ≤50-row previews.
 
-Run via `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "..."}, "_instrumentation_v2": {...}})`.
+Run via `read_tool({"name": "dwh__execute__query", "arguments": {"sql": "..."}, "_instrumentation_v2": {...}})`.
 
 SELECT-only.
 

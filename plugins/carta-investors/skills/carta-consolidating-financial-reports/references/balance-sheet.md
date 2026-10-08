@@ -122,17 +122,17 @@ Scan the tools available in the conversation for any matching `mcp__*__welcome`.
    the firm. If multiple matches, present them via `AskUserQuestion` and
    confirm.
 2. `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation_v2={...})` to scope the session. Do not use `call_tool` for `set_context` — call the granular tool directly with `_instrumentation` as shown.
-3. `call_tool({"name": "fa__list__entities", "arguments": {}, "_instrumentation_v2": {...}})` to enumerate **every** entity under
+3. `read_tool({"name": "fa__list__entities", "arguments": {}, "_instrumentation_v2": {...}})` to enumerate **every** entity under
    the firm.
 
 Prefer the granular tool when the server exposes it — one fewer hop, sidesteps `fetch`'s param-shape quirks:
 
 | Granular tool | Generic equivalent |
 |---|---|
-| `mcp__<SERVER>__list_contexts(firm_name="<entity>")` | `call_tool({"name": "contexts__list", "arguments": {"firm_name": "<entity>"}})` |
+| `mcp__<SERVER>__list_contexts(firm_name="<entity>")` | `read_tool({"name": "contexts__list", "arguments": {"firm_name": "<entity>"}})` |
 | `mcp__<SERVER>__set_context(firm_id="<uuid>")` | `call_tool({"name": "set_context", "arguments": {"firm_id": "<uuid>"}})` |
 
-For DWH queries (`dwh:execute:query`, `dwh:list:tables`, `dwh:get:table_schema`) there is **no granular equivalent** — always go through `call_tool({"name": "…", "arguments": {…}})`.
+For DWH queries (`dwh:execute:query`, `dwh:list:tables`, `dwh:get:table_schema`) there is **no granular equivalent** — always go through `read_tool({"name": "…", "arguments": {…}})`.
 
 Each entity returned from step 3 (`fa:list:entities`) has the display name, `entity_id`, and a type field (`entity_type_string` — e.g. `Fund`, `GP Entity`, `Management Co`, `SPV`, `Holding`, `Elimination Entity`, depending on the firm's structure). Cache the full list — Gate 2 reads from it.
 
@@ -265,7 +265,7 @@ Supported `format` values for `dwh:execute:query`:
 - `ndjson` — best for large results processed by code/agent.
 - `csv` is NOT supported. Do not try it.
 
-Run via `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "..."}, "_instrumentation_v2": {...}})`.
+Run via `read_tool({"name": "dwh__execute__query", "arguments": {"sql": "..."}, "_instrumentation_v2": {...}})`.
 SELECT-only.
 
 **Period-only variant** (`EFFECTIVE_DATE BETWEEN <month_start> AND
@@ -283,7 +283,7 @@ The number format in `references/balance-sheet/formatting.md` is built from `<fu
 resolve it here, do **not** assume USD:
 
 1. Probe the journal-entries table for a currency column:
-   `call_tool({"name": "dwh__get__table_schema", "arguments": {"table_name": "<journal_entries_table>"}, "_instrumentation_v2": {...}})`.
+   `read_tool({"name": "dwh__get__table_schema", "arguments": {"table_name": "<journal_entries_table>"}, "_instrumentation_v2": {...}})`.
    If it exposes a currency column (e.g. `CURRENCY`, `REPORTING_CURRENCY`,
    `FUND_CURRENCY`), add `SELECT DISTINCT <currency_col>` scoped to
    `<entity_scope>` and read the value(s).

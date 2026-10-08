@@ -107,7 +107,7 @@ Store `<DESTINATION>` for Gates 5–7.
 
 **Call `read_skill(file_path="references/entity-picker.md")` before proceeding.** Do not reconstruct the picker logic from memory. Summary of the rule:
 
-1. Call `call_tool({"name": "fa__list__entities", "arguments": {}, "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-manco", "<CAPABILITY>"]}})` against the active firm.
+1. Call `read_tool({"name": "fa__list__entities", "arguments": {}, "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-manco", "<CAPABILITY>"]}})` against the active firm.
 2. Identify ManCo(s) by name suffix / type field — anything matching `(LLC|Management|Mgmt|ManCo|Capital, LLC)` AND with no `Fund` / `Partners` / `SPV` qualifier.
 3. Build the picker so the ManCo is the **first** option (with `← recommended`), then other entities below it, then a final option "None of these — let me type the name".
 4. Confirm with `AskUserQuestion`.
@@ -150,12 +150,12 @@ Store `<BUDGET_YEAR>`, `<START_DATE>` (`<YEAR>-<MM>-01`), `<END_DATE>` (last day
 
 **Call `read_skill(file_path="references/fetch-budget-data.md")` before issuing any MCP calls.** Do not reconstruct the fetch contract from memory. Summary:
 
-- Issue **one `call_tool({"name": "fa__list__budgets", ...})` call per month** for every month in the requested window. For a full-year pull this is exactly twelve calls — issue all twelve in one parallel batch. Do **not** try a single annual or quarterly window first.
+- Issue **one `read_tool({"name": "fa__list__budgets", ...})` call per month** for every month in the requested window. For a full-year pull this is exactly twelve calls — issue all twelve in one parallel batch. Do **not** try a single annual or quarterly window first.
 
 **Verbatim call template — do not omit `fund_uuid`:**
 
 ```
-call_tool({"name": "fa__list__budgets", "arguments": {
+read_tool({"name": "fa__list__budgets", "arguments": {
   "fund_uuid":  "<ENTITY_UUID>",
   "start_date": "<YYYY-MM-01>",
   "end_date":   "<YYYY-MM-{28|29|30|31}>",

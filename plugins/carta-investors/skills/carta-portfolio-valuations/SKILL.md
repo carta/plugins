@@ -21,8 +21,11 @@ allowed-tools:
   - mcp__claude_ai_Carta__search_tools
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__search_tools
   - mcp__carta__call_tool
+  - mcp__carta__read_tool
   - mcp__claude_ai_Carta__call_tool
+  - mcp__claude_ai_Carta__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__carta__list_accounts
   - mcp__claude_ai_Carta__list_accounts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_accounts
@@ -60,7 +63,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.68.4</carta-plugin>
+<carta-plugin>carta-investors:6.68.6</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -147,7 +150,7 @@ never be treated as an access or health signal.
 ### The probe
 
 ```
-call_tool({"name": "portfolio_valuations__search__tickers",
+read_tool({"name": "portfolio_valuations__search__tickers",
            "arguments": {"query": "aapl"}})
 ```
 
@@ -225,7 +228,7 @@ This checklist is the orchestrator's goal — every routing decision on
 dive-in and the entire bulk flow are organized around it.
 
 1. **Cap table data is present** — **`CORPORATION` only.**
-   `call_tool({"name": "portfolio_valuations__get__cap_table_summary", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
+   `read_tool({"name": "portfolio_valuations__get__cap_table_summary", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
    returns share-class data (non-empty). A c-corp candidate stores its own
    cap-table snapshot, so "is it present?" is a real property of the
    candidate — an empty snapshot blocks allocation.
@@ -238,20 +241,20 @@ dive-in and the entire bulk flow are organized around it.
      which surfaces through item 5 (see below), not here.
 2. **Financials are filled in** — **only when the selected methodology
    requires Financials** (see **Required inputs by methodology** below).
-   Filled in means `call_tool({"name": "portfolio_valuations__get__financials", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
+   Filled in means `read_tool({"name": "portfolio_valuations__get__financials", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
    returns at least one period with revenue/EBITDA populated, OR the user
    has populated financials via the DWH path / manual entry. When no
    selected methodology requires Financials, item 2 is N/A. Never mark it
    ⏳ missing then.
 3. **Required approach inputs are in place.** Derive the selected
    methodology from
-   `call_tool({"name": "portfolio_valuations__get__approaches", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`:
+   `read_tool({"name": "portfolio_valuations__get__approaches", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`:
    every approach with `isUsed: true`. Then:
    - **Comparables**, when the mapping below requires them: filled in
-     means `call_tool({"name": "portfolio_valuations__get__comparables", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
+     means `read_tool({"name": "portfolio_valuations__get__comparables", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
      returns at least one comp with `isGpc: true`.
    - **GPC enabled** also needs
-     `call_tool({"name": "portfolio_valuations__get__gpc_multiples", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
+     `read_tool({"name": "portfolio_valuations__get__gpc_multiples", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
      to return a non-empty multiples set.
    - **Custom Value enabled** (`otherIndicationOfValue.isUsed: true`) also
      needs `get:custom_value.company_value` to be non-zero.
@@ -260,10 +263,10 @@ dive-in and the entire bulk flow are organized around it.
      `get:approaches` → `approachValues.{key}.value` > 0. This is what the
      Step 2.5c checklist shows as each **Calculate {method}** / **Set … value**
      item.
-4. **Company value is positive** — `call_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`.`companyValue.amount` returns a
+4. **Company value is positive** — `read_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`.`companyValue.amount` returns a
    positive number. Zero or negative (e.g. a GPC draft with no comps, left
    with only its debt adjustment) is not done.
-5. **Holdings value is positive** — `call_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`.`valueOfHoldings.amount`
+5. **Holdings value is positive** — `read_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`.`valueOfHoldings.amount`
    returns a positive number. The field is `valueOfHoldings`, not
    `holdingsValue`. The dashboard's `latestValuation.holdingsValue` is a
    different response.
@@ -327,8 +330,8 @@ one pass (`create:bulk`). Failures are isolated per-company.
 
 On **dive into one**:
 - **When entering a candidate**, silently call
-  `call_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` and
-  `call_tool({"name": "portfolio_valuations__get__approaches", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
+  `read_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` and
+  `read_tool({"name": "portfolio_valuations__get__approaches", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
   to establish where the candidate is on the checklist.
 - **While the user is working on the valuation**, end every response with
   the **valuation summary checklist** (Step 2.5c), re-fetched each time.
@@ -363,8 +366,8 @@ On **dive into one**:
 
 If the API state changes underneath you, trust the API. Re-derive the
 checklist from a fresh
-`call_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` /
-`call_tool({"name": "portfolio_valuations__get__approaches", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
+`read_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` /
+`read_tool({"name": "portfolio_valuations__get__approaches", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
 call before deciding what's done.
 
 ## UX Rules
@@ -481,8 +484,10 @@ volatility number:**
 
 ## Tool surface
 
-**Every** command in this skill — reads and writes alike — is called via
-`call_tool({"name": "...", "arguments": {...}})`. There is no exception,
+**Every** read-only command in this skill (`read_only: true` in `search_tools`) is called via
+`read_tool({"name": "...", "arguments": {...}})`, and every command that changes data —
+including the `compute:*` commands, which carta-mcp marks as changing data — via `call_tool` with the same
+shape. There is no exception,
 and the raw `mutate(command=..., params={...})` gateway is not needed
 anywhere in this skill.
 
@@ -590,7 +595,7 @@ fund-level holdings split.
 | Ambiguous | Short & inscrutable → treat as bare entry (**Welcome**). Clear scope but unclear specifics → the *dashboard-or-company fork* (below), not a direct jump to the runner. |
 
 Resolve company-name matches against
-`call_tool({"name": "portfolio_valuations__list__portfolio_dashboard", "arguments": {"organizationId": "<org_pk>", "page_size": 100, "raw": false}})`
+`read_tool({"name": "portfolio_valuations__list__portfolio_dashboard", "arguments": {"organizationId": "<org_pk>", "page_size": 100, "raw": false}})`
 only after Step 1 (firm selection) — the `org_pk` is needed.
 
 **Dashboard-or-company fork (generic entry).** When the request is
@@ -721,7 +726,7 @@ instead.
 ### Step F2: Check valuation status — gate on FINAL
 
 For the resolved company(ies), check `latestValuation.status` (from the
-dashboard data, or from `call_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
+dashboard data, or from `read_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
 if you're mid dive-in and don't already have it in context):
 
 - **Status is `FINAL`** → proceed to **Step F3** with that company +
@@ -730,7 +735,7 @@ if you're mid dive-in and don't already have it in context):
   run the query. Tell the user plainly, e.g.:
   > Fund holdings can only be viewed for a **finalized** valuation — this one is still a draft.
   Then list that company's finalized valuations (via
-  `call_tool({"name": "portfolio_valuations__list__projects", "arguments": {"ownerId": "<org_pk>", "ownerKind": "FIRM", "targetId": "<corporation_id>", "targetKind": "CORPORATION"}})`,
+  `read_tool({"name": "portfolio_valuations__list__projects", "arguments": {"ownerId": "<org_pk>", "ownerKind": "FIRM", "targetId": "<corporation_id>", "targetKind": "CORPORATION"}})`,
   filtering candidates where `status == "FINAL"`) and ask which one they'd
   like to see:
   > Here are the finalized valuations for **{company}** — which would you like to see fund holdings for?
@@ -760,7 +765,7 @@ resolved a specific company and date.
 
 **Confirm the schema before hand-writing SQL** — don't assume the
 column list below is exhaustive or unchanged. Call
-`call_tool({"name": "dwh__get__table_schema", "arguments": {"table_name": "FUND_HOLDINGS_VALUE", "schema": "FUND_ADMIN"}})`
+`read_tool({"name": "dwh__get__table_schema", "arguments": {"table_name": "FUND_HOLDINGS_VALUE", "schema": "FUND_ADMIN"}})`
 (or `dwh__list__tables` first if you're unsure the table still lives in
 `FUND_ADMIN`) to confirm the live column set, especially if the user's
 ask references a column not listed here.
@@ -800,7 +805,7 @@ Adapt the `WHERE` (and `SELECT`/`ORDER BY`) to the actual ask — e.g.
 `VALUATION_DATE BETWEEN` range for a date-range ask. The company+date
 shape above is a default, not a constraint.
 
-Call via `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "<query>", "limit": 200}})`.
+Call via `read_tool({"name": "dwh__execute__query", "arguments": {"sql": "<query>", "limit": 200}})`.
 For open-ended fund-holdings questions where you're unsure how to shape
 the SQL, `dwh__execute__question` (plain-English) is an acceptable
 fallback — it resolves schema and SQL itself.
@@ -895,7 +900,7 @@ URL now; see that file.)
 
 **Speculative dashboard fetch (cold-start acceleration):** If `org_pk`
 is already cached from earlier in this session, fire
-`call_tool({"name": "portfolio_valuations__list__portfolio_dashboard", "arguments": {"organizationId": "<org_pk>", "page_size": 100, "raw": false}})`
+`read_tool({"name": "portfolio_valuations__list__portfolio_dashboard", "arguments": {"organizationId": "<org_pk>", "page_size": 100, "raw": false}})`
 with the cached `organizationId` and `page_size: 100` **immediately, in parallel with `list_contexts`** —
 do not wait for firm confirmation first. Hold the result as
 `speculative_dashboard`. After `list_contexts` confirms the active firm
@@ -922,7 +927,7 @@ ready by the time the user answers the display format question in Step
 2.2b — no extra round-trip at render time.
 
 1. Call `list_contexts` to check for an active firm and get the firm name.
-   (If `org_pk` is cached, `list_contexts` + `call_tool({"name": "portfolio_valuations__list__portfolio_dashboard", ...})` +
+   (If `org_pk` is cached, `list_contexts` + `read_tool({"name": "portfolio_valuations__list__portfolio_dashboard", ...})` +
    `search_tools` all fire together — see above.)
 2. If `org_pk` is **not** cached, fire **all of the following** **in parallel**
    once `list_contexts` returns:
@@ -1114,7 +1119,7 @@ Wait for the reply, then store it as `dashboard_render_pref` (`"artifact"`
 for the interactive dashboard, `"markdown"` for the inline view).
 
 **If "Interactive dashboard"**: Fire **both** of the following **in parallel**:
-- `call_tool({"name": "portfolio_valuations__list__portfolio_dashboard", "arguments": {"organizationId": "<org_pk>", "page_size": 100, "raw": false}})` fetch (Step 3.2 data load)
+- `read_tool({"name": "portfolio_valuations__list__portfolio_dashboard", "arguments": {"organizationId": "<org_pk>", "page_size": 100, "raw": false}})` fetch (Step 3.2 data load)
 - Pre-load the artifact tool schemas via `ToolSearch`:
   - **`artifact`**: nothing to pre-load — `Artifact` is a loaded tool.
   - **`preview-server`**: pre-load the tool names for
@@ -1264,7 +1269,7 @@ it myself." Show the recap, then answer what the user asks.
 
 Resolve the candidate context (`project_id`, `candidate_id`,
 `valuation_id`; if the company has multiple projects, list them via
-`call_tool({"name": "portfolio_valuations__list__projects", "arguments": {"ownerId": "<org_pk>", "ownerKind": "FIRM", "targetId": "<corporation_id>", "targetKind": "CORPORATION"}})`
+`read_tool({"name": "portfolio_valuations__list__projects", "arguments": {"ownerId": "<org_pk>", "ownerKind": "FIRM", "targetId": "<corporation_id>", "targetKind": "CORPORATION"}})`
 and ask which one — match a row the user
 already named without re-asking).
 
@@ -1310,9 +1315,9 @@ live read that needs no candidate. Only genuinely candidate-scoped flows
 creating a valuation first — offer `create-val.md` for those.
 
 Then silently call
-`call_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`,
-`call_tool({"name": "portfolio_valuations__get__approaches", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`, and
-`call_tool({"name": "portfolio_valuations__get__financials", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
+`read_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`,
+`read_tool({"name": "portfolio_valuations__get__approaches", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`, and
+`read_tool({"name": "portfolio_valuations__get__financials", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
 (needed for the **Financials** recap line below — `get:valuation`/`get:approaches`
 alone don't carry period data), and render a short recap so the user sees
 where the valuation stands before doing anything:
@@ -1587,9 +1592,9 @@ already set in this session:
 
 Carta's MCP API uses different parameter names and casing across
 endpoints. **Do not pattern-match or guess.** Specifically, when calling
-`call_tool`, the `name` value and `arguments` keys below are fixed:
+`read_tool` or `call_tool`, the `name` value and `arguments` keys below are fixed:
 
-| `call_tool` name | Required `arguments` |
+| `name` | Required `arguments` |
 |---|---|
 | `portfolio_valuations__list__portfolio_dashboard` | `organizationId` (NOT `organizationPk`), `page_size: 100` (always — never omit), `raw: false` (always — never omit). The formatted response strips null fields and is what downstream scripts expect. Only switch to `raw: true` when the user explicitly asks for the raw API response. |
 | `portfolio_valuations__list__projects` | `ownerId`, `ownerKind: "FIRM"`, `targetId`, `targetKind: "CORPORATION"` (camelCase) |
@@ -1604,7 +1609,7 @@ spans multiple pages, fetch the remaining pages normally using the cursor
 from `speculative_dashboard`. If `speculative_dashboard` is absent or was
 discarded (firm changed or error), fetch all pages fresh:
 
-1. Call `call_tool({"name": "portfolio_valuations__list__portfolio_dashboard", "arguments": {"organizationId": "<org_pk>", "page_size": 100, "raw": false}})`
+1. Call `read_tool({"name": "portfolio_valuations__list__portfolio_dashboard", "arguments": {"organizationId": "<org_pk>", "page_size": 100, "raw": false}})`
    to get the first page. Use `page_size: 100` unless the user has explicitly
    requested a different value — never omit it.
 2. While `companies.length < totalCompanies`, call again with a `cursor`

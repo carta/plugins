@@ -43,7 +43,7 @@ normally collect. Say which period you resolved and let them correct it.
 ## Step 2 — List the companies
 
 ```
-call_tool({"name": "data_collection__list__companies",
+read_tool({"name": "data_collection__list__companies",
            "arguments": {"organization_pk": "<org_pk>", "page_size": 200}})
 ```
 
@@ -63,7 +63,7 @@ visible. The steps below are for the text path, where you are building the send 
 so do not pull the whole portfolio and sort it out afterwards:
 
 ```
-call_tool({"name": "data_collection__list__companies",
+read_tool({"name": "data_collection__list__companies",
            "arguments": {"organization_pk": "<org_pk>", "page_size": 200,
                          "fund_ids": [497]}})
 ```
@@ -86,7 +86,7 @@ own investments, and the roster filters by those labels. **Never guess a tag.** 
 both the categories and the values, so read its vocabulary first:
 
 ```
-call_tool({"name": "data_collection__list__companies",
+read_tool({"name": "data_collection__list__companies",
            "arguments": {"organization_pk": "<org_pk>", "page_size": 200,
                          "include_tags": true}})
 ```
@@ -96,7 +96,7 @@ firm's own — commonly Industry, Geography, Lead Partner and Deal Source. Match
 against the names you actually see, then filter:
 
 ```
-call_tool({"name": "data_collection__list__companies",
+read_tool({"name": "data_collection__list__companies",
            "arguments": {"organization_pk": "<org_pk>", "page_size": 200,
                          "tags": ["Fintech"]}})
 ```
@@ -121,7 +121,7 @@ If `has_more` is true the firm holds more than 200 companies: fetch the rest wit
 ## Step 3 — Check what already exists
 
 ```
-call_tool({"name": "data_collection__list__requests",
+read_tool({"name": "data_collection__list__requests",
            "arguments": {"organization_pk": "<org_pk>",
                          "look_back_date": "<period start, YYYY-MM-DD>",
                          "page_size": 200}})
@@ -172,7 +172,7 @@ saved configurations, they can request metrics too, and a request for files alon
 they meant. Read the firm's vocabulary first:
 
 ```
-call_tool({"name": "data_collection__list__metrics",
+read_tool({"name": "data_collection__list__metrics",
            "arguments": {"organization_pk": "<org_pk>"}})
 ```
 

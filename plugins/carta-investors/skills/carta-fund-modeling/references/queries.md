@@ -1,8 +1,8 @@
 # Fund Admin data sourcing — commands & SQL
 
 All data is **Fund Admin** via the connected Carta MCP. **Never** use `fund_forecasting:*`.
-Read commands run through the MCP gateway: `call_tool({"name": "<domain>__<verb>__<noun>", "arguments": {...}})`.
-DWH queries: `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "...", "limit": 5000}})`.
+Read commands run through the MCP gateway: `read_tool({"name": "<domain>__<verb>__<noun>", "arguments": {...}})`.
+DWH queries: `read_tool({"name": "dwh__execute__query", "arguments": {"sql": "...", "limit": 5000}})`.
 `dwh__execute__query` accepts **only** `sql` (+ optional `limit`, `offset`, `format`) — there is **no
 `schema` argument** (passing one errors). Fully-qualify every table as `FUND_ADMIN.<TABLE>` in the SQL.
 **Do NOT write `LIMIT`/`OFFSET` inside the SQL** — pass them as the `limit`/`offset` arguments (the `LIMIT N`

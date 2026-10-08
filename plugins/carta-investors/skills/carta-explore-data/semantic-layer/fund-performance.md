@@ -61,7 +61,7 @@ in this session, or when the query does not name a specific fund (handled by Gat
 **Gate 1 — Look up the fund in Fund Forecasting**
 
 ```
-call_tool({"name": "fund_forecasting__list__funds", "arguments": {"search": "<distinctive word(s) from fund name>"}})
+read_tool({"name": "fund_forecasting__list__funds", "arguments": {"search": "<distinctive word(s) from fund name>"}})
 ```
 
 Tips: use only distinctive words — omit "Fund", "Capital", fund numbers. For "La Garita Fund II",
@@ -92,7 +92,7 @@ Do not run any DWH query. The explore-data skill's work is done.
 
 Based on the user's answer: redirect to `carta-fund-forecasting` OR continue with DWH queries.
 
-**Limit:** one `call_tool` call maximum — do not call `list:funds` without `search=`, and do
+**Limit:** one `read_tool` call maximum — do not call `list:funds` without `search=`, and do
 not pre-fetch fund details. Once routed in a session, do not re-run this check for follow-up
 questions about the same fund.
 

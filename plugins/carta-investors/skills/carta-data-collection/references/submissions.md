@@ -25,7 +25,7 @@ Say the period back in the header as a label ("Q2 2026"), never as the wire date
 ## Step 1 — Read the tracker
 
 ```
-call_tool({"name": "data_collection__list__submissions",
+read_tool({"name": "data_collection__list__submissions",
            "arguments": {"organization_pk": "<org_pk>",
                           "look_back_date": "2026-04-01",
                           "look_back_date_to": "2026-04-01"}})
@@ -128,7 +128,7 @@ When a "missing" reads wrong to the user, or they want the documents themselves,
 arrived for that company and period:
 
 ```
-call_tool({"name": "data_collection__list__files",
+read_tool({"name": "data_collection__list__files",
            "arguments": {"organization_pk": "<org_pk>",
                           "entity_id": "<entity_id>", "entity_type": "<entity_type>",
                           "look_back_date": "2026-04-01"}})

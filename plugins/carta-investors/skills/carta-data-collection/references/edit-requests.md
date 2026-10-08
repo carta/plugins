@@ -24,7 +24,7 @@ twice.
 ### A1 — Find it
 
 ```
-call_tool({"name": "data_collection__list__requests",
+read_tool({"name": "data_collection__list__requests",
            "arguments": {"organization_pk": "<org_pk>", "page_size": 200}})
 ```
 
@@ -38,7 +38,7 @@ Keep the `id`. Never print it — say the company and the period.
 ### A2 — Read it
 
 ```
-call_tool({"name": "data_collection__get__request",
+read_tool({"name": "data_collection__get__request",
            "arguments": {"organization_pk": "<org_pk>", "request_id": "<id>"}})
 ```
 
@@ -89,7 +89,7 @@ a document type especially — say so plainly rather than reporting success.
 ### B1 — Find it
 
 ```
-call_tool({"name": "data_collection__list__schedules",
+read_tool({"name": "data_collection__list__schedules",
            "arguments": {"organization_pk": "<org_pk>"}})
 ```
 
@@ -99,7 +99,7 @@ already stopped — say so rather than looking further.
 ### B2 — Read it, always
 
 ```
-call_tool({"name": "data_collection__get__schedule",
+read_tool({"name": "data_collection__get__schedule",
            "arguments": {"organization_pk": "<org_pk>", "schedule_id": "<id>"}})
 ```
 

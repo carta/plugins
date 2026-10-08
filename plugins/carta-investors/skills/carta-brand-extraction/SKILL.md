@@ -19,22 +19,26 @@ allowed-tools:
   - mcp__claude_ai_carta__list_contexts
   - mcp__claude_ai_carta__set_context
   - mcp__claude_ai_carta__call_tool
+  - mcp__claude_ai_carta__read_tool
   - mcp__carta__welcome
   - mcp__carta__list_contexts
   - mcp__carta__set_context
   - mcp__carta__call_tool
+  - mcp__carta__read_tool
   - mcp__claude_ai_Carta__welcome
   - mcp__claude_ai_Carta__list_contexts
   - mcp__claude_ai_Carta__set_context
   - mcp__claude_ai_Carta__call_tool
+  - mcp__claude_ai_Carta__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.68.4</carta-plugin>
+<carta-plugin>carta-investors:6.68.6</carta-plugin>
 
 # Build Brand Board
 
@@ -97,7 +101,7 @@ If Carta MCP is not connected (tool not found or auth error), skip Phase 0 entir
 #### 0b. Fetch saved brand board
 
 ```
-mcp__claude_ai_carta__call_tool({"name": "fa__get__brand_board"})
+mcp__claude_ai_carta__read_tool({"name": "fa__get__brand_board"})
 ```
 
 - **HTTP 200 / success**: A saved brand board exists. Use the `brand_board` field from the response as `brand_data`. Set `brand_board_source = "saved_mcp"`. Tell the user:

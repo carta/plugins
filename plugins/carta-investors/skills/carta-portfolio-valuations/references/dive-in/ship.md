@@ -22,7 +22,7 @@ prerequisite messaging are fine — auditors expect them.
 
 You need a selected candidate:
 - `project_id`, `candidate_id` — for the finalize call.
-- `ownerId` — for the prerequisite `call_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` check in Step 1.
+- `ownerId` — for the prerequisite `read_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` check in Step 1.
 - `targetId` — for the deep link.
 - The company name, valuation date, and candidate name — for messaging.
 
@@ -39,7 +39,7 @@ before continuing — do not narrate the calls in chat.
 Call:
 
 ```json
-call_tool({
+read_tool({
   "name": "portfolio_valuations__get__valuation",
   "arguments": {
     "ownerId": <ownerId>,
@@ -151,7 +151,7 @@ If the call fails:
 - **Transient error** (network/timeout/5xx): retry once. If it fails
   again, surface the manual fallback below.
 - **Stale IDs** (404 or "not found"): the candidate may have been
-  renamed or the project re-keyed. Re-fetch via `call_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` once
+  renamed or the project re-keyed. Re-fetch via `read_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` once
   to confirm IDs are still valid, then retry the mutate. If it fails
   again, surface the manual fallback.
 - **Any other error**: surface the manual fallback.

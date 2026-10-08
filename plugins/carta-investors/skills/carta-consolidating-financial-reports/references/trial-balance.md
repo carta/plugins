@@ -79,7 +79,7 @@ Scan the tools available in the conversation for any matching `mcp__*__welcome`.
 
 1. `mcp__<SERVER>__list_contexts(firm_name="<FIRM>", _instrumentation_v2={...})`. Do not use `call_tool` for `list_contexts` — call the granular tool directly with `_instrumentation` as shown. Multiple matches → `AskUserQuestion` to disambiguate.
 2. `mcp__<SERVER>__set_context(firm_id=<FIRM_UUID>, _instrumentation_v2={...})`. Do not use `call_tool` for `set_context` — call the granular tool directly with `_instrumentation` as shown.
-3. `call_tool({"name": "fa__list__entities", "arguments": {}, "_instrumentation_v2": {...}})` → entity list with `name` and `uuid`. Cache the full list.
+3. `read_tool({"name": "fa__list__entities", "arguments": {}, "_instrumentation_v2": {...}})` → entity list with `name` and `uuid`. Cache the full list.
 
 **Done when:** `<FIRM_NAME>`, `<FIRM_UUID>`, and the full entity list are locked.
 
@@ -140,7 +140,7 @@ Skip this gate only if `<RUNTIME>` and `<TARGET_FILE>` are already in context
 
 **CRITICAL — amount-column trap.** `FUND_ADMIN.JOURNAL_ENTRIES` has two amount columns. `BASE_CURRENCY_AMOUNT` is sparsely populated (typically < 10% of rows); the other ~90%+ only have `AMOUNT`. **Always use `COALESCE(BASE_CURRENCY_AMOUNT, AMOUNT)`** — filtering on `BASE_CURRENCY_AMOUNT` alone silently drops most journal entries and makes most entities appear empty.
 
-Run via `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "...", "format": "ndjson"}, "_instrumentation_v2": {...}})`. SELECT-only.
+Run via `read_tool({"name": "dwh__execute__query", "arguments": {"sql": "...", "format": "ndjson"}, "_instrumentation_v2": {...}})`. SELECT-only.
 
 ```sql
 WITH bounds AS (

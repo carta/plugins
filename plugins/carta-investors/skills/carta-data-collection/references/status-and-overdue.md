@@ -9,7 +9,7 @@ Steps 1 and 2.
 ## Step 1 — Read the requests
 
 ```
-call_tool({"name": "data_collection__list__requests",
+read_tool({"name": "data_collection__list__requests",
            "arguments": {"organization_pk": "<org_pk>",
                          "include_requirements": false,
                          "page_size": 200}})
@@ -38,7 +38,7 @@ else that identifies the company, and Step 3 reports by name. The names come fro
 the same read every other route in this skill uses — matched on `entity_id`:
 
 ```
-call_tool({"name": "data_collection__list__companies",
+read_tool({"name": "data_collection__list__companies",
            "arguments": {"organization_pk": "<org_pk>", "page_size": 200}})
 ```
 
@@ -194,7 +194,7 @@ Never print a request id, an `entity_id` or an `organization_pk`.
 For one request in full, including what it asked for:
 
 ```
-call_tool({"name": "data_collection__get__request",
+read_tool({"name": "data_collection__get__request",
            "arguments": {"organization_pk": "<org_pk>", "request_id": "<id>"}})
 ```
 

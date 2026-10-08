@@ -17,7 +17,7 @@ Complete all four steps in order before any website extraction. Jumping to `anal
 1. `mcp__claude_ai_carta__welcome()` → if it fails, MCP is not connected → try CLI fallback, then extract
 2. `mcp__claude_ai_carta__list_contexts()` → find the target firm, note its UUID
 3. `mcp__claude_ai_carta__set_context(firm_id="<firm_uuid>")`
-4. `mcp__claude_ai_carta__call_tool({"name": "fa__get__brand_board"})` → check for saved brand board
+4. `mcp__claude_ai_carta__read_tool({"name": "fa__get__brand_board"})` → check for saved brand board
 
 **If step 4 returns brand data**: use the `brand_board` value as `brand_data`. Tell the user:
 > *"Found a saved brand board for this firm — reusing the previously extracted brand identity. If you'd like to re-extract from the website instead, let me know."*

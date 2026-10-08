@@ -26,7 +26,7 @@ user cannot undo, so Step 4 confirms before it happens.
 size the unfiltered response is large enough to be refused outright:
 
 ```
-call_tool({"name": "data_collection__get__requirements",
+read_tool({"name": "data_collection__get__requirements",
            "arguments": {"organization_pk": "<org_pk>",
                          "entity_ids": ["4242", "3ba0c7d2-0000"]}})
 ```

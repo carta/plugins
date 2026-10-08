@@ -62,11 +62,11 @@ different item shape here: each item carries `ownerId`, `ownerKind`,
 one** of `methodology` or `copyFromPrevious: true` — there is no
 `candidateName` field on a `create:bulk` item.
 
-After calling `call_tool({"name": "portfolio_valuations__create__bulk", "arguments": {"items": [...]}})`, you **must** poll `call_tool({"name": "portfolio_valuations__get__bulk_status", "arguments": {"workflowId": <workflowId>}})`
+After calling `call_tool({"name": "portfolio_valuations__create__bulk", "arguments": {"items": [...]}})`, you **must** poll `read_tool({"name": "portfolio_valuations__get__bulk_status", "arguments": {"workflowId": <workflowId>}})`
 before proceeding — never skip this step.
 
 1. Capture `workflowId` from the `call_tool({"name": "portfolio_valuations__create__bulk", "arguments": {"items": [...]}})` response.
-2. Call `call_tool({"name": "portfolio_valuations__get__bulk_status", "arguments": { "workflowId": <workflowId> }})`
+2. Call `read_tool({"name": "portfolio_valuations__get__bulk_status", "arguments": { "workflowId": <workflowId> }})`
    every 8 seconds.
 3. Repeat until the top-level `status` is `"completed"` or `"failed"`. Do not
    proceed to Step 3 until one of these terminal states is reached.
@@ -97,7 +97,7 @@ These flow into every subsequent step.
 
 ## Step 4: Fetch corporation profile from DWH (silent)
 
-Call `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "<query below>"}})` directly. Substitute `<corporationId>`
+Call `read_tool({"name": "dwh__execute__query", "arguments": {"sql": "<query below>"}})` directly. Substitute `<corporationId>`
 (the `targetId` from the orchestrator context).
 
 ```sql

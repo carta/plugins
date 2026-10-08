@@ -22,7 +22,7 @@ all rows, in one batch**. Pass the row's `projectId` / `candidateId` as
 `project_id` / `candidate_id`:
 
 ```
-call_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})
+read_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})
 ```
 
 That one response carries everything the row needs except the inputs check:
@@ -43,9 +43,9 @@ Once the valuations are back, work out each row's required inputs from
 what those inputs need, again in one parallel batch:
 
 - **Financials required** →
-  `call_tool({"name": "portfolio_valuations__get__financials", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
+  `read_tool({"name": "portfolio_valuations__get__financials", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
 - **Comparables required** →
-  `call_tool({"name": "portfolio_valuations__get__comparables", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
+  `read_tool({"name": "portfolio_valuations__get__comparables", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
 
 Don't fetch an input that no selected methodology requires. A Custom Value or
 Post-money row needs nothing beyond `get:valuation`.

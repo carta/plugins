@@ -32,7 +32,7 @@ DLOM field names, HTTP status codes, mutate payload shapes, approach IDs — is
 output to the user.
 
 **Do NOT say to the user:**
-- "Pre-flighting `call_tool({"name": "portfolio_valuations__get__approaches", "arguments": {...}})`…" / "Calling `call_tool({"name": "portfolio_valuations__mutate__approaches", "arguments": {...}})`…"
+- "Pre-flighting `read_tool({"name": "portfolio_valuations__get__approaches", "arguments": {...}})`…" / "Calling `call_tool({"name": "portfolio_valuations__mutate__approaches", "arguments": {...}})`…"
 - "`approach_level_dlom_manual_entry: 0`" / "DLOM fields present"
 - "no 404, no 500" / "payload accepted"
 - Approach IDs (e.g. "GPC id 1114"), project/candidate numeric IDs in prose
@@ -70,9 +70,9 @@ the deep link rather than guessing.
 Two hard requirements have caused real failures in the past. They are
 **non-negotiable** and must be followed every time you write approaches.
 
-### Requirement 1 — Always pre-flight with `call_tool({"name": "portfolio_valuations__get__approaches", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
+### Requirement 1 — Always pre-flight with `read_tool({"name": "portfolio_valuations__get__approaches", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
 
-You **must** call `call_tool({"name": "portfolio_valuations__get__approaches", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` **before**
+You **must** call `read_tool({"name": "portfolio_valuations__get__approaches", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` **before**
 calling `call_tool({"name": "portfolio_valuations__mutate__approaches", "arguments": {...}})`. This call:
 
 1. Lazy-initializes the valuation scenario on the server (this is the step that
@@ -179,12 +179,12 @@ No data fetching needed before this question.
 
 ---
 
-## Step 2: Pre-flight `call_tool({"name": "portfolio_valuations__get__approaches", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` (REQUIRED — initializes the scenario)
+## Step 2: Pre-flight `read_tool({"name": "portfolio_valuations__get__approaches", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` (REQUIRED — initializes the scenario)
 
 **Do this silently.** Do not announce the call, do not narrate it in chat. The
 user should not know this step exists.
 
-Call `call_tool({"name": "portfolio_valuations__get__approaches", "arguments": {...}})` with params:
+Call `read_tool({"name": "portfolio_valuations__get__approaches", "arguments": {...}})` with params:
 
 ```json
 {
@@ -204,7 +204,7 @@ Capture the returned approach IDs in context.
 
 If this call returns 404, retry it **once** after a short pause. If it 404s
 again, the candidate genuinely doesn't exist — verify `project_id` and
-`candidate_id` are correct (re-fetch from `call_tool({"name": "portfolio_valuations__list__projects", "arguments": {"ownerId": "<ownerId>", "ownerKind": "FIRM", "targetId": "<targetId>", "targetKind": "CORPORATION"}})` if needed) before
+`candidate_id` are correct (re-fetch from `read_tool({"name": "portfolio_valuations__list__projects", "arguments": {"ownerId": "<ownerId>", "ownerKind": "FIRM", "targetId": "<targetId>", "targetKind": "CORPORATION"}})` if needed) before
 proceeding.
 
 ---
@@ -332,7 +332,7 @@ both DLOM fields per Requirement 2, regardless of blend.
 ### Error handling (internal — do not surface raw codes to the user)
 
 - **404 on mutate**: Step 2 should have prevented this. If it still happens,
-  re-run Step 2 (the pre-flight `call_tool({"name": "portfolio_valuations__get__approaches", "arguments": {...}})`) once and retry the mutate.
+  re-run Step 2 (the pre-flight `read_tool({"name": "portfolio_valuations__get__approaches", "arguments": {...}})`) once and retry the mutate.
   Do NOT tell the user about the 404 or the retry — just do it.
 - **500 on mutate**: nearly always a missing DLOM field. Re-check that BOTH
   `approach_level_dlom_manual_entry: 0` and `approach_level_dlom_source: null`
@@ -356,7 +356,7 @@ error-handling section above.
 
 ## Step 4: Success messaging + handoff
 
-State the outcome in plain language. Do not mention `call_tool({"name": "portfolio_valuations__get__approaches", "arguments": {...}})`,
+State the outcome in plain language. Do not mention `read_tool({"name": "portfolio_valuations__get__approaches", "arguments": {...}})`,
 `call_tool({"name": "portfolio_valuations__mutate__approaches", "arguments": {...}})`, HTTP codes, field names, or IDs. End each success
 message with the deep link on its own line so the user has an easy escape
 hatch without it competing with the follow-up question.

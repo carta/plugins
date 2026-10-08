@@ -49,9 +49,9 @@ orchestrator and ask the user to pick a valuation row first.
 Get-comps contributes to **End Goal item 3 (Required approach inputs)**
 when the selected methodology requires Comparables: GPC, DCF or Backsolve
 (see **Required inputs by methodology** in SKILL.md). Specifically, comps
-tagged `isGpc: true` must be saved on the candidate. Once `call_tool({"name": "portfolio_valuations__get__comparables", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` returns
+tagged `isGpc: true` must be saved on the candidate. Once `read_tool({"name": "portfolio_valuations__get__comparables", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` returns
 at least one such row, Comparables is filled in. For GPC, that is the comps
-half of its input requirement. (The other half — `call_tool({"name": "portfolio_valuations__get__gpc_multiples", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` non-empty — is handled by
+half of its input requirement. (The other half — `read_tool({"name": "portfolio_valuations__get__gpc_multiples", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` non-empty — is handled by
 `references/dive-in/gpc-analysis.md`.)
 
 If GPC is **not** enabled in approaches, this reference still works —
@@ -128,7 +128,7 @@ Call, using the resolved entry's **`enum_name`** (ALL_CAPS) — not
 `api_value`:
 
 ```json
-call_tool({
+read_tool({
   "name": "portfolio_valuations__get__industry_comparables",
   "arguments": {
     "ownerId": <ownerId>,
@@ -182,14 +182,14 @@ Then ask:
 standard scenario ID (`standardScenario.id` from `get:valuation`, e.g.
 `gpc.id` from `get:approaches` also works since both expose the same
 scenario ID). If it's not already in context, fetch
-`call_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
+`read_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
 and use its `standardScenario.id` field. Omitting `scenarioId` fails the
 call outright.
 
 For the picked tickers, call:
 
 ```json
-call_tool({
+read_tool({
   "name": "portfolio_valuations__get__reference_comparables",
   "arguments": {
     "tickers": ["SNOW", "DDOG", "..."],
@@ -229,7 +229,7 @@ directly. Otherwise:
 Call:
 
 ```json
-call_tool({
+read_tool({
   "name": "portfolio_valuations__search__tickers",
   "arguments": {
     "query": "<user input>"
@@ -262,7 +262,7 @@ If the user picks none, re-prompt with Step 2B.1.
 ### Step 2B.4: Pull reference data
 
 Same as Step 2A.4 — including the `scenarioId` requirement. Call
-`call_tool({"name": "portfolio_valuations__get__reference_comparables", "arguments": {"tickers": ["<picked tickers>"], "scenarioId": <standardScenario.id>}})`
+`read_tool({"name": "portfolio_valuations__get__reference_comparables", "arguments": {"tickers": ["<picked tickers>"], "scenarioId": <standardScenario.id>}})`
 for the picked tickers, capture metadata for the save.
 
 ### Step 2B.5: Save
@@ -285,7 +285,7 @@ Triggered by Step 1 option 3, or when the user says "show me my comps",
 Call:
 
 ```json
-call_tool({
+read_tool({
   "name": "portfolio_valuations__get__comparables",
   "arguments": {
     "ownerId": <ownerId>,
@@ -335,8 +335,9 @@ at Step 4; the save will merge the new picks with the existing set.
 
 ## Step 4: Save the comp set
 
-> **Tool-surface note:** `mutate:comparables` goes through `call_tool`,
-> like every `get`/`search` command elsewhere in this file. `comparables`
+> **Tool-surface note:** `mutate:comparables` changes data, so it goes
+> through `call_tool`; the `get`/`search` commands elsewhere in this file
+> go through `read_tool`. `comparables`
 > is a required argument — omitting it is refused by argument validation
 > before any request is sent, so always pass the full list you want the
 > candidate to end up with.
@@ -373,7 +374,7 @@ additions; to remove comps, omit them.
 
 When merging adds with existing (Step 2C scenario or after Step 2A/2B
 landing on a candidate that already has comps), first call
-`call_tool({"name": "portfolio_valuations__get__comparables", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` to get the current list, filter to `is_gpc: true`,
+`read_tool({"name": "portfolio_valuations__get__comparables", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` to get the current list, filter to `is_gpc: true`,
 union with the new additions (deduping by ticker), and pass the union.
 
 **Always set `is_gpc: true`** on entries written by this reference.
@@ -399,7 +400,7 @@ the enum form in chat.
 
 ### Error handling
 
-- **404 on mutate**: re-fetch `call_tool({"name": "portfolio_valuations__get__comparables", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` to verify the candidate
+- **404 on mutate**: re-fetch `read_tool({"name": "portfolio_valuations__get__comparables", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` to verify the candidate
   exists and the IDs are right; retry once. Do not surface the 404.
 - **500 on mutate**: check `comparable_industry` first — it must be
   the `enum_name` (e.g. `"GENERAL_SAAS"`), never the display label. If
@@ -423,7 +424,7 @@ End each success message with the deep link on its own line.
 
 The next move depends on whether GPC is enabled and what mode we're in:
 
-1. **Walk-through mode AND GPC is enabled** (`call_tool({"name": "portfolio_valuations__get__approaches", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`.`gpc.is_used`
+1. **Walk-through mode AND GPC is enabled** (`read_tool({"name": "portfolio_valuations__get__approaches", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`.`gpc.is_used`
    is `true`): chain to **`references/dive-in/gpc-analysis.md`** (load
    inline and follow). Ask:
    > "Comps are saved. GPC analysis is the natural next step — want to

@@ -35,7 +35,7 @@ If any are missing, ask the user to pick a valuation row from Step 3
 ## Step 1: Read the current commentary
 
 ```
-call_tool({"name": "portfolio_valuations__get__commentary", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})
+read_tool({"name": "portfolio_valuations__get__commentary", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})
 ```
 
 Present the result as Carta data — quote it verbatim and cite the

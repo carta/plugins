@@ -75,7 +75,7 @@ interchangeable.
 Metrics are configured per firm. There is no fixed list, so read the firm's own vocabulary:
 
 ```
-call_tool({"name": "data_collection__list__metrics",
+read_tool({"name": "data_collection__list__metrics",
            "arguments": {"organization_pk": "<org_pk>"}})
 ```
 

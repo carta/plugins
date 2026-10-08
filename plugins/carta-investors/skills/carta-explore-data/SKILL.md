@@ -16,12 +16,15 @@ description: >
 model: inherit
 allowed-tools:
   - mcp__carta__call_tool
+  - mcp__carta__read_tool
   - mcp__carta__list_contexts
   - mcp__carta__set_context
   - mcp__claude_ai_Carta__call_tool
+  - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__list_contexts
   - mcp__claude_ai_Carta__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   - Read(${CLAUDE_PLUGIN_ROOT}/skills/carta-explore-data/semantic-layer/*)
@@ -29,7 +32,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.68.4</carta-plugin>
+<carta-plugin>carta-investors:6.68.6</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -80,7 +83,7 @@ The user must have the Carta MCP server connected. If this is the first query in
 **After setting context**, always fetch the list of portfolio companies the user has access to:
 
 ```
-call_tool({"name": "fa__list__portfolio_companies", "arguments": {}})
+read_tool({"name": "fa__list__portfolio_companies", "arguments": {}})
 ```
 
 Required even for specific-company queries — establishes accessible companies and resolves `corporation_id` values needed for cap table queries.
@@ -95,7 +98,7 @@ Required even for specific-company queries — establishes accessible companies 
 Before loading any semantic layer, call the plain-English query interface with the user's question verbatim (or lightly rephrased for clarity):
 
 ```
-call_tool({"name": "dwh__execute__question", "arguments": {"question": "<user's question>"}})
+read_tool({"name": "dwh__execute__question", "arguments": {"question": "<user's question>"}})
 ```
 
 **If the call succeeds and returns meaningful rows** → format and present the results using the General Presentation Rules below. Stop here — do not continue to Steps 2–4.
@@ -115,7 +118,7 @@ Do NOT retry `execute:question` with a rephrased question — fall through immed
 Once per session, after Step 1, discover them (reuse the result for later questions):
 
 ```
-call_tool({"name": "dwh__list__tables", "arguments": {}})
+read_tool({"name": "dwh__list__tables", "arguments": {}})
 ```
 
 Omit `schema`. When the firm has custom schemas, the output opens with a `Custom schemas (N): <SCHEMA_A>, <SCHEMA_B> — this firm's own data` line; with a `schema` argument, the listing's `Schema type:` line reads `custom` or `standard`. No `Custom schemas` line means there is no custom data — skip the rest of this step.
@@ -140,8 +143,8 @@ Use this table to pick the right context file before running any query:
 
 | User is asking about                                                                                                                                                                                       | Context file to read                              | Primary table / tool                                                      |
 |------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------|---------------------------------------------------------------------------|
-| **Available investments or list of portfolio companies**                                                                                                                                                   | —                                                 | `call_tool({"name": "fa__list__portfolio_companies", "arguments": {}})` (already run in Step 0)        |
-| **Portfolio company logos** (individual URLs or a bulk zip download)                                                                                                                                       | —                                                 | `call_tool({"name": "fa__list__portco_logos", "arguments": {}})` (or `fa__get__portco_logo_zip` for a bulk zip) |
+| **Available investments or list of portfolio companies**                                                                                                                                                   | —                                                 | `read_tool({"name": "fa__list__portfolio_companies", "arguments": {}})` (already run in Step 0)        |
+| **Portfolio company logos** (individual URLs or a bulk zip download)                                                                                                                                       | —                                                 | `read_tool({"name": "fa__list__portco_logos", "arguments": {}})` (or `fa__get__portco_logo_zip` for a bulk zip) |
 | Current NAV, TVPI, DPI, MOIC, cumulative LP contributions/distributions                                                                                                                                    | `nav.md`                                          | `MONTHLY_NAV_CALCULATIONS`                                                |
 | Fund performance — IRR, DPI, TVPI, dry powder, expense breakdown                                                                                                                                           | `fund-performance.md`                             | `AGGREGATE_FUND_METRICS` (latest), `TEMPORAL_FUND_COHORT_BENCHMARKS` (as of a past date/quarter-end) |
 | Cash flows in a period (contributions, distributions, fees, expenses)                                                                                                                                      | `cash-flows.md`                                   | `JOURNAL_ENTRIES` grouped by `event_type`                                 |
@@ -179,15 +182,15 @@ The file contains the SQL query, column reference, and presentation rules for th
 >    ```
 >    If multiple matches are found, use `AskUserQuestion` to confirm which one before continuing.
 
-* IMPORTANT: if a specific semantic layer was not found, check for Saved Questions by running `call_tool({"name": "fa__list__saved_queries", "arguments": {}})` to get a list of existing questions and descriptions saved on the Data Warehouse. Use `call_tool({"name": "fa__get__saved_query", "arguments": {"name": "<query_name>"}})` to retrieve the SQL of a matching saved query, where `<query_name>` is the `name` field returned by `fa__list__saved_queries`.
+* IMPORTANT: if a specific semantic layer was not found, check for Saved Questions by running `read_tool({"name": "fa__list__saved_queries", "arguments": {}})` to get a list of existing questions and descriptions saved on the Data Warehouse. Use `read_tool({"name": "fa__get__saved_query", "arguments": {"name": "<query_name>"}})` to retrieve the SQL of a matching saved query, where `<query_name>` is the `name` field returned by `fa__list__saved_queries`.
 
 ## Step 4 — Execute the Query
 
 > **MANDATORY pre-query checklist — run for every query, no exceptions:**
 >
 > 1. **Determine the schema** from the domain routing table in Step 2: if the table is listed with an explicit schema prefix (e.g. `LOAN_OPS.LOAN`), use that schema. When the data lives in one of the firm's custom schemas (Step 1b), use that schema. Otherwise `FUND_ADMIN` is the default and most common schema.
-> 2. **Verify the table exists**: `call_tool({"name": "dwh__list__tables", "arguments": {"schema": "<SCHEMA>"}})` — use the schema from step 2. If the target table does not appear in the result, it does not exist — check the wrong→right table name reference in `## SQL Compilation Safety Rules` before continuing. Do **not** query a table that is not listed.
-> 3. **Verify column names**: `call_tool({"name": "dwh__get__table_schema", "arguments": {"table_name": "<TABLE>", "schema": "<SCHEMA>"}})` — use the schema from step 2. Confirm every column you plan to SELECT or filter on appears in the schema with its **exact** name. Check the wrong→right column name reference in `## SQL Compilation Safety Rules` if a column is missing.
+> 2. **Verify the table exists**: `read_tool({"name": "dwh__list__tables", "arguments": {"schema": "<SCHEMA>"}})` — use the schema from step 2. If the target table does not appear in the result, it does not exist — check the wrong→right table name reference in `## SQL Compilation Safety Rules` before continuing. Do **not** query a table that is not listed.
+> 3. **Verify column names**: `read_tool({"name": "dwh__get__table_schema", "arguments": {"table_name": "<TABLE>", "schema": "<SCHEMA>"}})` — use the schema from step 2. Confirm every column you plan to SELECT or filter on appears in the schema with its **exact** name. Check the wrong→right column name reference in `## SQL Compilation Safety Rules` if a column is missing.
 >
 > **Then resolve any remaining uncertainty:**
 >
@@ -198,9 +201,9 @@ The file contains the SQL query, column reference, and presentation rules for th
 
 Use the MCP commands in sequence, substituting `<SCHEMA>` with the schema determined in the checklist above:
 
-1. **Browse tables:** `call_tool({"name": "dwh__list__tables", "arguments": {"schema": "<SCHEMA>"}})`
-2. **Inspect schema:** `call_tool({"name": "dwh__get__table_schema", "arguments": {"table_name": "<TABLE>", "schema": "<SCHEMA>"}})`
-3. **Run the query:** `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "..."}})`
+1. **Browse tables:** `read_tool({"name": "dwh__list__tables", "arguments": {"schema": "<SCHEMA>"}})`
+2. **Inspect schema:** `read_tool({"name": "dwh__get__table_schema", "arguments": {"table_name": "<TABLE>", "schema": "<SCHEMA>"}})`
+3. **Run the query:** `read_tool({"name": "dwh__execute__query", "arguments": {"sql": "..."}})`
 
 **Output format:** Present results as a markdown table. Use fund or company names as row headers — never raw UUIDs. Currency values use `$X,XXX` format with commas; percentages use `X.XX%`. Bold totals and summary rows.
 
@@ -208,8 +211,8 @@ Use the MCP commands in sequence, substituting `<SCHEMA>` with the schema determ
 
 - **Always include LIMIT** — default `LIMIT 200`; use 50–500 for aggregations
 - **Only SELECT** — no INSERT, UPDATE, DELETE, or DDL
-- **Single SELECT only — no UNION / UNION ALL, no SHOW commands** — the tool enforces one SELECT at a time; `SHOW TABLES LIKE '%...'` and other `SHOW *` commands also return `Only a single SELECT statement is allowed`. Use `call_tool({"name": "dwh__list__tables", ...})` for table discovery and run separate `call_tool` calls when you need counts from multiple tables.
-- **Do not query `INFORMATION_SCHEMA`** — it is not supported in this data warehouse and returns a hard `ValueError: Querying INFORMATION_SCHEMA is not allowed`. Use `call_tool({"name": "dwh__list__tables", ...})` to list tables and `call_tool({"name": "dwh__get__table_schema", ...})` to inspect columns. These MCP tools are the only valid schema-discovery path.
+- **Single SELECT only — no UNION / UNION ALL, no SHOW commands** — the tool enforces one SELECT at a time; `SHOW TABLES LIKE '%...'` and other `SHOW *` commands also return `Only a single SELECT statement is allowed`. Use `read_tool({"name": "dwh__list__tables", ...})` for table discovery and run separate `read_tool` calls when you need counts from multiple tables.
+- **Do not query `INFORMATION_SCHEMA`** — it is not supported in this data warehouse and returns a hard `ValueError: Querying INFORMATION_SCHEMA is not allowed`. Use `read_tool({"name": "dwh__list__tables", ...})` to list tables and `read_tool({"name": "dwh__get__table_schema", ...})` to inspect columns. These MCP tools are the only valid schema-discovery path.
 - **`LATERAL` (including `LATERAL FLATTEN`) is not permitted** — returns `ValueError: Lateral is not permitted in query execution`. To access keys in a VARIANT/ARRAY column, use explicit JSON path notation (e.g. `col:key::STRING`) rather than `LATERAL FLATTEN`.
 - **Date fields** — `effective_date` for `JOURNAL_ENTRIES`; `month_end_date` for `MONTHLY_NAV_CALCULATIONS`; `investment_date` for `AGGREGATE_INVESTMENTS`
 - **Deduplication** — for `MONTHLY_NAV_CALCULATIONS` and `AGGREGATE_FUND_METRICS`, use `QUALIFY ROW_NUMBER() OVER (PARTITION BY fund_uuid ORDER BY last_refreshed_at DESC) = 1`
@@ -231,7 +234,7 @@ Use the MCP commands in sequence, substituting `<SCHEMA>` with the schema determ
 | `FUND_METRICS` / `FUND_PERFORMANCE_SUMMARY` / `FUND_PERFORMANCE_METRICS` / `FUND_PERFORMANCE` | `AGGREGATE_FUND_METRICS` |
 | `CAPITAL_CALLS` / `FUND_CAPITAL_CALLS` | `CAPITAL_ACTIVITIES` |
 | `INVESTMENTS` (bare) | `AGGREGATE_INVESTMENTS` |
-| `PORTFOLIO_COMPANIES` | `call_tool({"name": "fa__list__portfolio_companies"})` — not a queryable table |
+| `PORTFOLIO_COMPANIES` | `read_tool({"name": "fa__list__portfolio_companies"})` — not a queryable table |
 | `FINANCIAL_STATEMENTS` / `FINANCIALS` / `PROFIT_AND_LOSS` / `KPIS` / `PORTFOLIO_KPIS` | `COMPANY_FINANCIALS` (KPIs) or `JOURNAL_ENTRIES` (P&L) |
 | `INVESTORS_PARTNER` | `PARTNER_DATA` |
 | `FUNDADMIN_DATASHARE_*` (with full dbt prefix) | Use short name: e.g. `MONTHLY_NAV_CALCULATIONS` |
@@ -254,14 +257,14 @@ Use the MCP commands in sequence, substituting `<SCHEMA>` with the schema determ
 
 ## DWH Tool Invocations — Exact Forms Required
 
-Use `call_tool` with these exact double-underscore names. Any other form (colon syntax, single underscores, direct tool invocations) returns `NotFoundError: Unknown tool`.
+Use `read_tool` with these exact double-underscore names. Any other form (colon syntax, single underscores, direct tool invocations) returns `NotFoundError: Unknown tool`.
 
 | Task | Exact invocation |
 |---|---|
-| Run SQL | `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "SELECT ..."}})` |
-| Natural-language question | `call_tool({"name": "dwh__execute__question", "arguments": {"question": "..."}})` |
-| List tables in a schema | `call_tool({"name": "dwh__list__tables", "arguments": {"schema": "FUND_ADMIN"}})` |
-| Get a table's columns | `call_tool({"name": "dwh__get__table_schema", "arguments": {"table_name": "TABLE_NAME", "schema": "FUND_ADMIN"}})` |
+| Run SQL | `read_tool({"name": "dwh__execute__query", "arguments": {"sql": "SELECT ..."}})` |
+| Natural-language question | `read_tool({"name": "dwh__execute__question", "arguments": {"question": "..."}})` |
+| List tables in a schema | `read_tool({"name": "dwh__list__tables", "arguments": {"schema": "FUND_ADMIN"}})` |
+| Get a table's columns | `read_tool({"name": "dwh__get__table_schema", "arguments": {"table_name": "TABLE_NAME", "schema": "FUND_ADMIN"}})` |
 
 - `dwh__execute__query` key is `sql` (not `query`).
 - `dwh__execute__question` keys: `question` (required). Do not pass `sql`, `fund_uuid`, `firm_uuid`, `format`, or any other key.

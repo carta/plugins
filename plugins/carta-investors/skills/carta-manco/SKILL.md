@@ -7,23 +7,27 @@ version: 1.0.0
 allowed-tools:
   # Production
   - mcp__claude_ai_Carta__call_tool
+  - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__fetch
   - mcp__claude_ai_Carta__welcome
   - mcp__claude_ai_Carta__set_context
   - mcp__claude_ai_Carta__list_contexts
   # Carta-installer naming (lowercase)
   - mcp__carta_production__call_tool
+  - mcp__carta_production__read_tool
   - mcp__carta_production__fetch
   - mcp__carta_production__welcome
   - mcp__carta_production__set_context
   - mcp__carta_production__list_contexts
   # Local / legacy fallback
   - mcp__carta__call_tool
+  - mcp__carta__read_tool
   - mcp__carta__fetch
   - mcp__carta__welcome
   - mcp__carta__set_context
   - mcp__carta__list_contexts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__fetch
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
@@ -38,7 +42,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.68.4</carta-plugin>
+<carta-plugin>carta-investors:6.68.6</carta-plugin>
 
 [PATTERN carta-writing-style v0.0.2]
 [PATTERN etiquette v0.0.6]
@@ -150,7 +154,7 @@ Everywhere else in the routing and gate sequence, the reply is the tool call. Co
 - Progress announcements — "Now I have the Carta MCP tools", "Proceeding with Gate 0", "Now checking…", "Now calling…".
 - Server or prefix details — "Server prefix is `<X>`", "Found server `<X>`".
 - Summaries of a tool result — "Context set to…", "Eligibility check complete…".
-- Tool inventories — "Only `<X>` surfaced", "this server lacks `list_contexts`". `list_contexts` and `call_tool` load lazily and are often absent from the visible tool list; that is expected and they still work, so there is nothing here worth reporting.
+- Tool inventories — "Only `<X>` surfaced", "this server lacks `list_contexts`". `list_contexts`, `read_tool` and `call_tool` load lazily and are often absent from the visible tool list; that is expected and they still work, so there is nothing here worth reporting.
 - A description of a step in place of the step. When a step calls for text, that text *is* the reply: a sentence about the welcome screen leaves the reader without the screen.
 - Internal tool errors — `context_snip` failures, compression notes, and similar plumbing.
 
@@ -321,7 +325,7 @@ Scan the tools available in the conversation for any matching `mcp__*__welcome`.
 
 If no firm was named, defer to the capability's own parameter gate.
 
-**Never BM25-search for Carta MCP tools at any point in this skill.** Derive `<SERVER>` from the server name as shown in step 2. After that, the five suffixes `welcome`, `set_context`, `list_contexts`, `call_tool`, `fetch` are exhaustive for every Carta MCP server regardless of environment. Call `mcp__<SERVER>__<suffix>` directly — these tools exist on every Carta server; you do not need to verify their existence before calling them. Do not run `tool_search_tool_bm25` under any circumstances — not to discover the prefix, not to find `fetch`, not for anything.
+**Never BM25-search for Carta MCP tools at any point in this skill.** Derive `<SERVER>` from the server name as shown in step 2. After that, the six suffixes `welcome`, `set_context`, `list_contexts`, `read_tool`, `call_tool`, `fetch` are exhaustive for every Carta MCP server regardless of environment. Call `mcp__<SERVER>__<suffix>` directly — these tools exist on every Carta server; you do not need to verify their existence before calling them. Do not run `tool_search_tool_bm25` under any circumstances — not to discover the prefix, not to find `fetch`, not for anything.
 
 ---
 

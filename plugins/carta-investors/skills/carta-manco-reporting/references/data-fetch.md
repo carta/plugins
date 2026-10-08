@@ -34,7 +34,7 @@ there is nothing left to verify by reading `<raw_dir>` yourself. A warm cache
 already holds it from a previous run, and a chart of accounts is not
 something a firm rewrites between two invocations on the same afternoon.
 
-Issue Query E's `call_tool` itself exactly as written under Step 3, then save
+Issue Query E's `read_tool` call itself exactly as written under Step 3, then save
 it alone:
 
 ```bash
@@ -85,13 +85,13 @@ different months and building two different dashboards for one firm, with
 no error in between.
 
 **Parallel with Step 2.75b.** When the cache is cold (this step runs) and a workbook
-is being parsed (Step 2.75b will run), issue this step's `call_tool` block and Step
+is being parsed (Step 2.75b will run), issue this step's `read_tool` block and Step
 2.75b's `parse_budget_workbook.py` Bash calls in the **same tool-use message** — the
 two are independent once Step 2.75a has confirmed the workbook and sheets.
 
 ### Instrumentation — every Carta MCP call in this step carries `_instrumentation_v2`
 
-Pass it on **every** `list_contexts`, `set_context`, and `call_tool` call:
+Pass it on **every** `list_contexts`, `set_context`, `read_tool` and `call_tool` call:
 
 ```
 _instrumentation_v2={...}
@@ -140,10 +140,10 @@ Skip the budget calls below when Step 2.75 ended with a workbook in play, even i
 **Issue every call in a SINGLE tool-use message.** Splitting into multiple messages
 turns a ~4s parallel fanout into 20+ seconds of sequential waiting.
 
-Run Queries A–D via `mcp__<SERVER>__call_tool` with `name="dwh__execute__query"`,
+Run Queries A–D via `mcp__<SERVER>__read_tool` with `name="dwh__execute__query"`,
 `arguments={"sql": "...", "format": "markdown"}`, and
 `_instrumentation_v2={...}`. Run
-cash balance and budget calls via `mcp__<SERVER>__call_tool` as shown below — each
+cash balance and budget calls via `mcp__<SERVER>__read_tool` as shown below — each
 also carries `_instrumentation_v2`. All go in **one assistant message** as parallel
 tool calls.
 
@@ -404,7 +404,7 @@ failure doesn't block Queries A–F or the budget calls, so it is easy to miss u
 checked for explicitly once responses are back.
 
 ```
-mcp__<SERVER>__call_tool(name="fa__get__cash-balance", arguments={
+mcp__<SERVER>__read_tool(name="fa__get__cash-balance", arguments={
   "firm_uuid":  "<FIRM_UUID>",
   "as_of_date": "<AS_OF>",
   "entity_ids": [<MANCO_ENTITY_ID>]
@@ -426,7 +426,7 @@ refresh asks only for `<MAX_MO>` through 12. That is `needs_fetch`'s job — iss
 what it names, nothing more.
 
 ```
-mcp__<SERVER>__call_tool(name="fa__list__budgets", arguments={
+mcp__<SERVER>__read_tool(name="fa__list__budgets", arguments={
   "fund_uuid":  "<MANCO_UUID>",
   "start_date": "<YEAR>-<M zero-padded>-01",
   "end_date":   "<YEAR>-<M zero-padded>-<last day of month>"
@@ -448,7 +448,7 @@ that silently changes a firm's numbers, and it is never necessary.
 `entities.json` — the roster Step 4 reads each fund's own `carta_id` from
 for the fee-chart drill-down link (Query C carries no such column). If that
 call has scrolled out of the session log (a long Step 2.75 gap, or a
-compaction), re-issue `mcp__<SERVER>__call_tool(name="fa__list__entities", arguments={"entity_types": "management_co,fund"}, _instrumentation_v2={"skills": ["carta-investors:carta-manco-reporting"]})` fresh right before this save —
+compaction), re-issue `mcp__<SERVER>__read_tool(name="fa__list__entities", arguments={"entity_types": "management_co,fund"}, _instrumentation_v2={"skills": ["carta-investors:carta-manco-reporting"]})` fresh right before this save —
 it's a cheap, idempotent call, unlike Queries A–F. Keep the same `entity_types`
 filter Step 2 used (see [firm-lookup.md](firm-lookup.md)) — refetching unfiltered
 risks the same `ToolError: response too large` Step 2's filter exists to avoid.

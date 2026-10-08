@@ -25,12 +25,12 @@ Detect from the user's phrasing before fetching any data:
 Call both in parallel:
 
 ```json
-call_tool({
+read_tool({
   "name": "portfolio_valuations__get__backsolve",
   "arguments": { "ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id> }
 })
 
-call_tool({
+read_tool({
   "name": "portfolio_valuations__get__equity_adjustment",
   "arguments": { "ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id> }
 })

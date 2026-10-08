@@ -125,7 +125,7 @@ holding's `target.kind` (from context — see Prerequisites):
 Call:
 
 ```json
-call_tool({
+read_tool({
   "name": "portfolio_valuations__get__cap_table_summary",
   "arguments": {
     "ownerId": <ownerId>,
@@ -199,7 +199,7 @@ toward the holder detail.
 Call:
 
 ```json
-call_tool({
+read_tool({
   "name": "portfolio_valuations__get__cap_table",
   "arguments": {
     "ownerId": <ownerId>,
@@ -245,7 +245,7 @@ this section holds in all of those cases.
 Call (silently — do not narrate). The minimal call is just the issuer:
 
 ```json
-call_tool({
+read_tool({
   "name": "portfolio_valuations__get__llc_cap_table_summary",
   "arguments": {
     "issuerId": <issuerId>
@@ -381,7 +381,7 @@ holding has no valuation yet.
 **On the c-corp path only**, cap-table-review contributes to **End Goal
 item 1: Cap table data is present**. The contribution is automatic and
 API-derived — once
-`call_tool({"name": "portfolio_valuations__get__cap_table_summary", "arguments": {...}})`
+`read_tool({"name": "portfolio_valuations__get__cap_table_summary", "arguments": {...}})`
 returns a non-empty response, item 1 is satisfied. The user does not need
 to confirm. If it returns empty, item 1 stays unsatisfied and the
 orchestrator's walk-through keeps surfacing this step until the cap table

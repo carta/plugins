@@ -198,7 +198,7 @@ If invalid for any reason, ask again in prose.
 This date is applied to every company in the bulk request. Date conflicts
 (a valuation already exists for a company on `runValuationDate`) are
 handled by the API — any conflicts will appear as failures or skips in
-the `call_tool({"name": "portfolio_valuations__get__bulk_status", "arguments": {"workflowId": "<workflowId>"}})` response. Surface them in the Step 7 results.
+the `read_tool({"name": "portfolio_valuations__get__bulk_status", "arguments": {"workflowId": "<workflowId>"}})` response. Surface them in the Step 7 results.
 
 ---
 
@@ -338,11 +338,11 @@ Tell the user:
 
 ### Step 6.2: Poll for completion
 
-Call `call_tool({"name": "portfolio_valuations__get__bulk_status", "arguments": {"workflowId": "<workflowId>"}})` every
+Call `read_tool({"name": "portfolio_valuations__get__bulk_status", "arguments": {"workflowId": "<workflowId>"}})` every
 **10 seconds** until the response indicates the run is complete.
 
 ```json
-call_tool({
+read_tool({
   "name": "portfolio_valuations__get__bulk_status",
   "arguments": { "workflowId": "<workflowId>" }
 })
@@ -411,7 +411,7 @@ print('TIMEOUT')
 " &
 ```
 
-Alternatively, run `call_tool({"name": "portfolio_valuations__get__bulk_status", "arguments": {"workflowId": "<workflowId>"}})` directly in a loop — call it,
+Alternatively, run `read_tool({"name": "portfolio_valuations__get__bulk_status", "arguments": {"workflowId": "<workflowId>"}})` directly in a loop — call it,
 check the status field, and if not yet complete wait 10 seconds and
 call again. Repeat until:
 

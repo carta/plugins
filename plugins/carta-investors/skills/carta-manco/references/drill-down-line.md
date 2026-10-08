@@ -44,7 +44,7 @@ ORDER BY EFFECTIVE_DATE DESC, AMOUNT DESC;
 Send it through the MCP with the exact parameter shape:
 
 ```
-call_tool({"name": "dwh__execute__query", "arguments": {
+read_tool({"name": "dwh__execute__query", "arguments": {
   "sql":    "<SQL above>",
   "format": "ndjson",
   "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-manco", "<CAPABILITY>"]}

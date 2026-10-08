@@ -52,7 +52,7 @@ set first, every time; Step 3 then decides whether the name the user
 gave short-circuits the picker.
 
 Call
-`call_tool({"name": "portfolio_valuations__get__configuration", "arguments": {"valuation_id": <valuation_id>}})`:
+`read_tool({"name": "portfolio_valuations__get__configuration", "arguments": {"valuation_id": <valuation_id>}})`:
 
 ```json
 { "valuation_id": <valuation_id> }
@@ -172,7 +172,7 @@ You need a selected candidate with an enterprise value to allocate:
   never the project/candidate pair.
 - `targetId` — for the deep link.
 - The company name and candidate name — for messaging.
-- **Positive company value** (`call_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`.`companyValue.amount` > 0). The
+- **Positive company value** (`read_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`.`companyValue.amount` > 0). The
   allocation distributes this value; with zero, there's nothing to
   distribute.
 
@@ -184,7 +184,7 @@ producing the EV) and stop.
 ## Goal-checklist contribution
 
 Allocation contributes to **End Goal item 5 (Holdings value is
-positive)**. Once `call_tool({"name": "portfolio_valuations__compute__allocation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` succeeds and `call_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
+positive)**. Once `call_tool({"name": "portfolio_valuations__compute__allocation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` succeeds and `read_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
 returns a positive `valueOfHoldings.amount`, item 5 is satisfied.
 
 The Niagara path contributes to item 5 the same way — a `SUCCESS` poll
@@ -199,7 +199,7 @@ in some configurations. Re-derive the checklist after running.
 
 **Do this silently** unless a prerequisite fails.
 
-Call `call_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`:
+Call `read_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`:
 
 ```json
 {
@@ -235,12 +235,12 @@ Allocation distributes the company value across share classes using
 the cap table; if the cap table or financials are missing/stale, the
 result is wrong silently. Run two silent checks:
 
-1. `call_tool({"name": "portfolio_valuations__get__cap_table_summary", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` — does the
+1. `read_tool({"name": "portfolio_valuations__get__cap_table_summary", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` — does the
    summary contain share classes (any non-zero outstanding)? Keep the
    `id` and `securityType` of every `COMMON_SHARE_CLASS` /
    `PREFERRED_SHARE_CLASS` entry from `captableData` in context — only
    needed if the user configures per-class DLOM in Step 5.4.
-2. `call_tool({"name": "portfolio_valuations__get__financials", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` — do any periods have
+2. `read_tool({"name": "portfolio_valuations__get__financials", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` — do any periods have
    revenue or EBITDA populated?
 
 **If both look healthy** (cap table has share classes AND at least
@@ -261,13 +261,13 @@ one is thin (don't say "cap table looks thin" if the cap table is
 fine and only financials are missing). This is a soft check — the
 user can always skip.
 
-## Step 2: Pre-flight `call_tool({"name": "portfolio_valuations__get__allocation", "arguments": {...}})` (REQUIRED)
+## Step 2: Pre-flight `read_tool({"name": "portfolio_valuations__get__allocation", "arguments": {...}})` (REQUIRED)
 
 **Do this silently.** This pre-flight returns the current methodology
 and DLOM configuration on the candidate, plus per-share-class IDs
 needed for any per-class DLOM overrides.
 
-Call `call_tool({"name": "portfolio_valuations__get__allocation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`:
+Call `read_tool({"name": "portfolio_valuations__get__allocation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`:
 
 ```json
 {
@@ -528,7 +528,7 @@ the `debtOption` mapping alone, since re-deriving actual debt needs the
 server's own calculation.)*
 
 **If Linear regression** — call
-`call_tool({"name": "portfolio_valuations__get__volatility_comps", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
+`read_tool({"name": "portfolio_valuations__get__volatility_comps", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
 first to confirm real numbers exist (needs both comps AND LTM
 financials on the candidate; either missing → empty result):
 
@@ -614,7 +614,7 @@ rule).
 
 If `dlomTimeToExitManualEntry` and `dlomVolatilityManualEntry` are not
 set (for CSE/Waterfall, or if not already in context), fetch
-`call_tool({"name": "portfolio_valuations__get__approaches", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
+`read_tool({"name": "portfolio_valuations__get__approaches", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
 silently and read the DLOM-specific fields:
 - `dlomVolatilityQuartiles` — the full comp-derived distribution
   (minimum through maximum, mean, median) computed for DLOM.
@@ -715,7 +715,7 @@ everything else, including `holdings`.
 
 ### Error handling
 
-- **404 on mutate**: re-run pre-flight (`call_tool({"name": "portfolio_valuations__get__allocation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`), retry once.
+- **404 on mutate**: re-run pre-flight (`read_tool({"name": "portfolio_valuations__get__allocation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`), retry once.
 - **500 on mutate**: usually a malformed numeric or wrong methodology
   string. Re-validate the payload (numerics are floats; methodology
   is one of the three exact strings; volatility values are decimals
@@ -758,7 +758,7 @@ allocation result.
 
 Refresh the top-level valuation to get the new holdings value:
 
-Call `call_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` with:
+Call `read_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` with:
 ```json
 { "ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id> }
 ```
@@ -791,8 +791,8 @@ The next move depends on End Goal state and mode.
 
 ### Walk-through mode
 
-Silently re-derive the End Goal checklist (`call_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`,
-`call_tool({"name": "portfolio_valuations__get__approaches", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`). With holdings value now positive, the next
+Silently re-derive the End Goal checklist (`read_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`,
+`read_tool({"name": "portfolio_valuations__get__approaches", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`). With holdings value now positive, the next
 unfinished item is most likely **item 6 (Status FINAL)** — but
 audit notes are most useful right now, while the rationale is fresh.
 Offer both. Ask inline as plain text:
@@ -941,7 +941,7 @@ Say "keep the current volatility", never "leave it blank".
 
 Read the current values first — this is the source for "current" in the
 form. Call
-`call_tool({"name": "portfolio_valuations__get__allocation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
+`read_tool({"name": "portfolio_valuations__get__allocation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
 and capture `weightedTimeToExit`, `equityVolatilityManualEntry`,
 `assetVolatilityManualEntry`, `volatilitySelectionMethod`, and
 `debtOption`.
@@ -1067,9 +1067,9 @@ Poll with the **same `groupingMethod`** collected in Step N1/N2 — the
 parameter is required on the poll and 400s without it.
 
 **Niagara Waterfall** —
-`call_tool({"name": "portfolio_valuations__get__niagara_waterfall", "arguments": {...}})`.
+`read_tool({"name": "portfolio_valuations__get__niagara_waterfall", "arguments": {...}})`.
 **Niagara OPM** —
-`call_tool({"name": "portfolio_valuations__get__niagara_opm", "arguments": {...}})`.
+`read_tool({"name": "portfolio_valuations__get__niagara_opm", "arguments": {...}})`.
 Both take:
 
 ```json
@@ -1117,7 +1117,7 @@ way.
 First refresh the candidate's holdings value — the poll payload carries
 the allocation, not the firm's holdings:
 
-`call_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
+`read_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
 
 Then render the per-group table and a top-line summary, mirroring
 Step 8.

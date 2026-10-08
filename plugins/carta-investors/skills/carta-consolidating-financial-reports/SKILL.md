@@ -9,29 +9,34 @@ allowed-tools:
   - refresh_mcp_connectors
   # Production
   - mcp__claude_ai_Carta__call_tool
+  - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__fetch
   - mcp__claude_ai_Carta__welcome
   - mcp__claude_ai_Carta__set_context
   - mcp__claude_ai_Carta__list_contexts
   # Carta-installer naming (lowercase)
   - mcp__carta_production__call_tool
+  - mcp__carta_production__read_tool
   - mcp__carta_production__fetch
   - mcp__carta_production__welcome
   - mcp__carta_production__set_context
   - mcp__carta_production__list_contexts
   # Sandbox
   - mcp__carta_sandbox__call_tool
+  - mcp__carta_sandbox__read_tool
   - mcp__carta_sandbox__fetch
   - mcp__carta_sandbox__welcome
   - mcp__carta_sandbox__set_context
   - mcp__carta_sandbox__list_contexts
   # Local / legacy fallback
   - mcp__carta__call_tool
+  - mcp__carta__read_tool
   - mcp__carta__fetch
   - mcp__carta__welcome
   - mcp__carta__set_context
   - mcp__carta__list_contexts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__fetch
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
@@ -49,7 +54,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.68.4</carta-plugin>
+<carta-plugin>carta-investors:6.68.6</carta-plugin>
 
 [PATTERN carta-writing-style v0.0.2]
 [PATTERN etiquette v0.0.6]
@@ -172,7 +177,7 @@ re-implement or pre-run its logic here.
 
 **The Carta connector asks for its `welcome` tool as your first action on
 connecting; that directive starts at Gate 0.** It governs the order of Carta
-*tool calls* — `welcome` before `set_context`, `list_contexts`, `call_tool`, or
+*tool calls* — `welcome` before `set_context`, `list_contexts`, `read_tool`, `call_tool`, or
 `fetch` — and the welcome screen is text, not a tool call. Emit the screen, then
 call `welcome` at Gate 0. If the handshake already fired, the screen is still
 owed: a connection banner is not the welcome screen, and no tool emits the
@@ -195,7 +200,7 @@ Everywhere else in the routing and gate sequence, the reply is the tool call. Co
 - Progress announcements — "Now I have the Carta MCP tools", "Proceeding with Gate 0", "Now checking…", "Now calling…".
 - Server or prefix details — "Server prefix is `<X>`", "Found server `<X>`".
 - Summaries of a tool result — "Context set to…".
-- Tool inventories — "Only `<X>` surfaced", "this server lacks `list_contexts`". `list_contexts` and `call_tool` load lazily and are often absent from the visible tool list; that is expected and they still work, so there is nothing here worth reporting.
+- Tool inventories — "Only `<X>` surfaced", "this server lacks `list_contexts`". `list_contexts`, `read_tool` and `call_tool` load lazily and are often absent from the visible tool list; that is expected and they still work, so there is nothing here worth reporting.
 - MCP tool or command names in user-facing text, including inside an error message or a request for help. Describe what you need in plain English ("I can't reach your Carta connector") and name only the connector the user sees in their settings.
 - A description of a step in place of the step. When a step calls for text, that text *is* the reply: a sentence about the welcome screen leaves the reader without the screen. Third-person narration ("The user asked for…", "no specific report was named"), narrated deliberation ("Let me check the args"), and announced intent ("I need to show the welcome menu") are all this same failure.
 - Internal tool errors — `context_snip` failures, compression notes, and similar plumbing.
@@ -344,12 +349,12 @@ last `__`. Examples: `mcp__carta__welcome` → `carta`,
 
 ### The five Carta tools load lazily — a short tool list is not a missing tool
 
-Derive `<SERVER>` from the server name as shown above. After that, the five
-suffixes `welcome`, `set_context`, `list_contexts`, `call_tool`, `fetch` are
+Derive `<SERVER>` from the server name as shown above. After that, the six
+suffixes `welcome`, `set_context`, `list_contexts`, `read_tool`, `call_tool`, `fetch` are
 exhaustive for every Carta MCP server regardless of environment. Call
 `mcp__<SERVER>__<suffix>` directly.
 
-**`list_contexts` and `call_tool` load lazily. They will often NOT appear in
+**`list_contexts`, `read_tool` and `call_tool` load lazily. They will often NOT appear in
 your tool list, and that is expected — they still exist and still work.** Only
 `welcome`, `set_context`, and `fetch` are reliably visible up front; a server
 may also expose extras like `get_current_user` or `mutate` that this skill does
@@ -358,8 +363,8 @@ unavailable, and never tell the user a Carta tool "doesn't exist" or that the
 connector is missing a capability. Just call it.
 
 **Never search for these tools.** Do not run `tool_search_tool_bm25` under any
-circumstances — not to discover the prefix, not to find `list_contexts` or
-`call_tool`, not for anything. A BM25 search returns only the eagerly-loaded
+circumstances — not to discover the prefix, not to find `list_contexts`,
+`read_tool` or `call_tool`, not for anything. A BM25 search returns only the eagerly-loaded
 subset, so it will appear to prove the lazy tools are missing when they are not.
 That false negative is the trap: it leads to abandoning the run and telling the
 user to re-authenticate a working connector. If you genuinely must search, use
@@ -370,7 +375,7 @@ the end of this skill — do not infer from a tool listing.
 
 ### Instrumentation — every Carta MCP call carries `_instrumentation_v2`
 
-Pass it on **every** `welcome`, `set_context`, `list_contexts`, `call_tool`, and
+Pass it on **every** `welcome`, `set_context`, `list_contexts`, `read_tool`, `call_tool`, and
 `fetch` call, exactly as written in the examples below:
 
 ```
@@ -646,7 +651,7 @@ Out-of-scope topics are handled proactively by the STOP rows in the Router Gate
 | Query times out | Tell the user it's slow and offer to retry — never auto-retry. |
 | Auth / permission error from the MCP | Ask the user to reconnect Carta in Settings → Connectors. |
 | Connector connected, tool calls fail (`McpAuthError` / "tool not available") | Prefix mismatch — NOT an auth issue. Re-run `refresh_mcp_connectors` and probe the matching prefix's `welcome`. Never tell the user to re-auth without verifying the prefix mismatch first. |
-| `list_contexts` or `call_tool` is not in your visible tool list | **Not a failure — they load lazily.** Call the tool anyway. Do not search for it, do not report a connector gap, and do not ask the user to re-authenticate a connector that just answered `welcome`. |
+| `list_contexts`, `read_tool` or `call_tool` is not in your visible tool list | **Not a failure — they load lazily.** Call the tool anyway. Do not search for it, do not report a connector gap, and do not ask the user to re-authenticate a connector that just answered `welcome`. |
 | A Carta MCP call is rejected for missing instrumentation | Re-send the same call with `_instrumentation_v2` as specified in Gate 0. Do not surface this to the user — it is an internal contract, and the retry is silent. |
 
 ---

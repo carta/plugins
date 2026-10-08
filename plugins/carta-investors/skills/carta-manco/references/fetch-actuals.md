@@ -97,7 +97,7 @@ Use the user's prompt as a *hint* for which option to highlight — never as aut
 **Silent probe — no user-facing output.** Detect JSON vs flat tag path:
 
 ```
-call_tool({"name": "dwh__execute__query", "arguments": {
+read_tool({"name": "dwh__execute__query", "arguments": {
   "sql": "SELECT
             COUNT_IF(REPORTING_TAGS_JSON IS NOT NULL) AS json_rows,
             COUNT_IF(REPORTING_TAGS IS NOT NULL)      AS flat_rows
@@ -122,7 +122,7 @@ Probe 3 — cardinality per category (see `tag-view.md` §"Cardinality guard" fo
 **Skip unless the user chose Layout F at Gate 2.**
 
 ```
-call_tool({"name": "dwh__execute__query", "arguments": {
+read_tool({"name": "dwh__execute__query", "arguments": {
   "sql": "SELECT
             COUNT_IF(VENDOR_NAME IS NOT NULL) AS tagged_rows,
             COUNT_IF(VENDOR_NAME IS NULL)     AS untagged_rows,
@@ -158,7 +158,7 @@ call_tool({"name": "dwh__execute__query", "arguments": {
 **Skip unless the user chose Layout I at Gate 2.**
 
 ```
-call_tool({"name": "dwh__execute__query", "arguments": {
+read_tool({"name": "dwh__execute__query", "arguments": {
   "sql": "SELECT
             COUNT_IF(SUB_ACCOUNT_NAME IS NOT NULL) AS tagged_rows,
             COUNT_IF(SUB_ACCOUNT_NAME IS NULL)     AS untagged_rows,

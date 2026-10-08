@@ -17,18 +17,21 @@ model: inherit
 allowed-tools:
   - mcp__carta__search_tools
   - mcp__carta__call_tool
+  - mcp__carta__read_tool
   - mcp__carta__list_accounts
   - mcp__carta__list_contexts
   - mcp__carta__set_context
   - mcp__carta__view_remote
   - mcp__claude_ai_Carta__search_tools
   - mcp__claude_ai_Carta__call_tool
+  - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__list_accounts
   - mcp__claude_ai_Carta__list_contexts
   - mcp__claude_ai_Carta__set_context
   - mcp__claude_ai_Carta__view_remote
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__search_tools
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_accounts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
@@ -38,7 +41,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.68.4</carta-plugin>
+<carta-plugin>carta-investors:6.68.6</carta-plugin>
 
 # Data collection
 
@@ -135,7 +138,7 @@ Skip this if Step 1 already fetched them while resolving between candidates — 
 rather than calling again.
 
 ```
-call_tool({"name": "data_collection__get__firm_settings",
+read_tool({"name": "data_collection__get__firm_settings",
            "arguments": {"organization_pk": "<org_pk>"}})
 ```
 

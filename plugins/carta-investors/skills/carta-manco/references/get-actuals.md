@@ -25,8 +25,8 @@ ORDER BY 1, 3;
 ## Tool call shape — exact parameter names
 
 ```
-call_tool({"name": "dwh__execute__query", "arguments": {"sql": "<SQL>", "format": "ndjson"}, "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-manco", "<CAPABILITY>"]}})
-call_tool({"name": "dwh__get__table_schema", "arguments": {"table_name": "<journal_entries_table>"}, "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-manco", "<CAPABILITY>"]}})
+read_tool({"name": "dwh__execute__query", "arguments": {"sql": "<SQL>", "format": "ndjson"}, "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-manco", "<CAPABILITY>"]}})
+read_tool({"name": "dwh__get__table_schema", "arguments": {"table_name": "<journal_entries_table>"}, "_instrumentation": {"plugin": "carta-investors", "skills": ["carta-manco", "<CAPABILITY>"]}})
 ```
 
 - Query parameter is `sql`, NOT `query`.

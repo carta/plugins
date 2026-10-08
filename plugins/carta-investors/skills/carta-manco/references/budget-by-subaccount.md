@@ -26,7 +26,7 @@ scoped to P&L this time (`TRY_TO_NUMBER(ACCOUNT_TYPE) >= 4000`) since you can't 
 accounts:
 
 ```
-call_tool({"name": "dwh__execute__query", "arguments": {
+read_tool({"name": "dwh__execute__query", "arguments": {
   "sql": "SELECT
             COUNT_IF(SUB_ACCOUNT_NAME IS NOT NULL) AS tagged_rows,
             COUNT(DISTINCT CASE WHEN SUB_ACCOUNT_NAME IS NOT NULL THEN ACCOUNT_TYPE END) AS accounts_with_subaccounts

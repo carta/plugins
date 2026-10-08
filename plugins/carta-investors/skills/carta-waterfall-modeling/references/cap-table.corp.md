@@ -34,7 +34,7 @@ Show the cap table for the root issuer **as of the waterfall date, before any al
 Independent of the run — fetched by corporation + date:
 
 ```
-call_tool({"name": "<cap_table_command with all ':' replaced by '__'>", "arguments": {
+read_tool({"name": "<cap_table_command with all ':' replaced by '__'>", "arguments": {
   "corporation_id": "<root.issuer_id from Step 3>",
   "as_of_date":     "<WATERFALL_DATE from Step 4, as YYYY-MM-DD>"
 }})
@@ -51,7 +51,7 @@ Alongside the share-class summary (same `corporation_id` + `as_of_date`, once pe
 round-grouped convertibles:
 
 ```
-call_tool({"name": "cap_table__get__note_blocks", "arguments": {
+read_tool({"name": "cap_table__get__note_blocks", "arguments": {
   "corporation_id": "<root.issuer_id>",
   "as_of_date":     "<WATERFALL_DATE, YYYY-MM-DD>"
 }})
@@ -69,7 +69,7 @@ Alongside the share-class summary and convertibles (same `corporation_id` + `as_
 batch), fetch the phantom units:
 
 ```
-call_tool({"name": "cap_table__get__phantom", "arguments": {
+read_tool({"name": "cap_table__get__phantom", "arguments": {
   "corporation_id": "<root.issuer_id>",
   "as_of_date":     "<WATERFALL_DATE, YYYY-MM-DD>"
 }})
@@ -138,7 +138,7 @@ cap table** sub-menu — render the full by-stakeholder ownership breakdown. **N
 written to Excel**. Same `corporation_id` + `as_of_date`, paginated:
 
 ```
-call_tool({"name": "cap_table__get__cap_table_by_stakeholder", "arguments": {
+read_tool({"name": "cap_table__get__cap_table_by_stakeholder", "arguments": {
   "corporation_id": "<root.issuer_id>",
   "as_of_date":     "<WATERFALL_DATE, YYYY-MM-DD>",
   "detail":         "full",
@@ -166,7 +166,7 @@ render the drill straight from the response in hand — **never re-fetch a holde
 2. **Named a holder → fetch scoped to them** — one call, `search` + `include_securities`:
 
    ```
-   call_tool({"name": "cap_table__get__cap_table_by_stakeholder", "arguments": {
+   read_tool({"name": "cap_table__get__cap_table_by_stakeholder", "arguments": {
      "corporation_id":     "<root.issuer_id>",
      "as_of_date":         "<WATERFALL_DATE, YYYY-MM-DD>",
      "search":             "<holder name>",
@@ -187,7 +187,7 @@ render the drill straight from the response in hand — **never re-fetch a holde
    the **compact grouped names** per the render doc §Discovery list (which governs the large-list subset):
 
    ```
-   call_tool({"name": "cap_table__get__cap_table_by_stakeholder", "arguments": {
+   read_tool({"name": "cap_table__get__cap_table_by_stakeholder", "arguments": {
      "corporation_id":     "<root.issuer_id>",
      "as_of_date":         "<WATERFALL_DATE, YYYY-MM-DD>",
      "detail":             "full",
@@ -223,14 +223,14 @@ picker; **more than 4** → list them compactly and take a **free-text** name ma
 
 ```
 // Option
-call_tool({"name": "cap_table__get__grant_vesting", "arguments": {
+read_tool({"name": "cap_table__get__grant_vesting", "arguments": {
   "corporation_id": "<root.issuer_id>",
   "grant_id":       "<securities[].id for an Option>"
 }})
 ```
 ```
 // Certificate / RSA / PIU
-call_tool({"name": "cap_table__get__certificate_vesting", "arguments": {
+read_tool({"name": "cap_table__get__certificate_vesting", "arguments": {
   "corporation_id": "<root.issuer_id>",
   "certificate_id": "<securities[].id for a Certificate / RSA / PIU>"
 }})
@@ -251,7 +251,7 @@ Never render it unless the user asks. Read
 [`references/rendering.rights_and_preferences.md`](rendering.rights_and_preferences.md) first, then:
 
 ```
-call_tool({"name": "cap_table__get__rights_and_preferences", "arguments": {
+read_tool({"name": "cap_table__get__rights_and_preferences", "arguments": {
   "corporation_id": "<root.issuer_id from Step 3>"
 }})
 → { count, by_type, classes[] }

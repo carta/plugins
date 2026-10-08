@@ -50,12 +50,12 @@ ask the user to pick a valuation row from Step 3 first.
 
 | Call | Purpose |
 |---|---|
-| `call_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` | Top-level company value, holdings value, status |
-| `call_tool({"name": "portfolio_valuations__get__approaches", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` | Which approaches are enabled, with weights |
-| `call_tool({"name": "portfolio_valuations__get__gpc", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` | `weighting_rationale`, `multiple_rationale` (only if GPC is enabled) |
-| `call_tool({"name": "portfolio_valuations__get__gpc_comp_statistics", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` | Quartile stats for GPC comp set (only if GPC is enabled) |
-| `call_tool({"name": "portfolio_valuations__get__custom_value", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` | `description_of_valuation_methodology`, company value, method (only if Custom Value is enabled) |
-| `call_tool({"name": "portfolio_valuations__get__financials", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` | Periods used in the valuation (most recent revenue, EBITDA) |
+| `read_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` | Top-level company value, holdings value, status |
+| `read_tool({"name": "portfolio_valuations__get__approaches", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` | Which approaches are enabled, with weights |
+| `read_tool({"name": "portfolio_valuations__get__gpc", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` | `weighting_rationale`, `multiple_rationale` (only if GPC is enabled) |
+| `read_tool({"name": "portfolio_valuations__get__gpc_comp_statistics", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` | Quartile stats for GPC comp set (only if GPC is enabled) |
+| `read_tool({"name": "portfolio_valuations__get__custom_value", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` | `description_of_valuation_methodology`, company value, method (only if Custom Value is enabled) |
+| `read_tool({"name": "portfolio_valuations__get__financials", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` | Periods used in the valuation (most recent revenue, EBITDA) |
 
 If any of these calls fail, do not abort — degrade gracefully. The memo
 section sourced from a failed call becomes a `[Could not retrieve —

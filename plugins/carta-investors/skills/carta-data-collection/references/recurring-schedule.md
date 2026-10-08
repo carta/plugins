@@ -65,7 +65,7 @@ open nothing — summarize, confirm, and jump to the call.
 ### Companies
 
 ```
-call_tool({"name": "data_collection__list__companies",
+read_tool({"name": "data_collection__list__companies",
            "arguments": {"organization_pk": "<org_pk>", "page_size": 200}})
 ```
 
@@ -79,7 +79,7 @@ companies" — is the same call with `tags` or `tag_ids`, after reading the firm
 ### Nothing duplicated
 
 ```
-call_tool({"name": "data_collection__list__schedules",
+read_tool({"name": "data_collection__list__schedules",
            "arguments": {"organization_pk": "<org_pk>"}})
 ```
 

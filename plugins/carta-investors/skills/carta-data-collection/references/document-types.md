@@ -30,7 +30,7 @@ every future period, and the user may not have meant that.
 ## Step 1 — Read what the firm already has
 
 ```
-call_tool({"name": "data_collection__list__document_types",
+read_tool({"name": "data_collection__list__document_types",
            "arguments": {"organization_pk": "<org_pk>"}})
 ```
 

@@ -18,21 +18,25 @@ model: inherit
 allowed-tools:
   - mcp__carta__welcome
   - mcp__carta__call_tool
+  - mcp__carta__read_tool
   - mcp__carta__set_context
   - mcp__carta__list_contexts
   - mcp__carta__search_tools
   - mcp__claude_ai_Carta__welcome
   - mcp__claude_ai_Carta__call_tool
+  - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__set_context
   - mcp__claude_ai_Carta__list_contexts
   - mcp__claude_ai_Carta__search_tools
   - mcp__carta_production__welcome
   - mcp__carta_production__call_tool
+  - mcp__carta_production__read_tool
   - mcp__carta_production__set_context
   - mcp__carta_production__list_contexts
   - mcp__carta_production__search_tools
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__search_tools
@@ -47,7 +51,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.68.4</carta-plugin>
+<carta-plugin>carta-investors:6.68.6</carta-plugin>
 
 [PATTERN carta-writing-style v0.0.2]
 [PATTERN etiquette v0.0.6]
@@ -346,7 +350,7 @@ For **each batch**, two mechanical moves:
 
 1. Issue the whole batch in one call:
    ```
-   call_tool({"name":"dwh__execute__queries","arguments":{"queries": <batch.queries>, "limit": 10000, "format": "ndjson"}})
+   read_tool({"name":"dwh__execute__queries","arguments":{"queries": <batch.queries>, "limit": 10000, "format": "ndjson"}})
    ```
    Pass `limit:10000` and `format:"ndjson"` **explicitly** — the command defaults to `limit:1000` / `format:markdown`,
    both wrong for us. The queries run in parallel server-side and return a **positional JSON array**, one element
@@ -384,7 +388,7 @@ For **each batch**, two mechanical moves:
 
 **Fallback — per-stem serial fetch.** If `dwh__execute__queries` is unavailable (`Unknown tool` / `NotFoundError`
 on an older MCP) or `save_batch_result.py` can't split the envelope, fall back to fetching each stem singly:
-`emit_stem_sql.py --stem <name>` → `call_tool({"name":"dwh__execute__query","arguments": <that {sql,limit,format}>})`
+`emit_stem_sql.py --stem <name>` → `read_tool({"name":"dwh__execute__query","arguments": <that {sql,limit,format}>})`
 → `save_query_result.py <result_path> "<raw_dir>/<stem>.ndjson"`. Same pagination and contract rules apply. This
 is the pre-batch path; it is correct but slower (one serial round-trip per stem).
 
@@ -509,13 +513,13 @@ console: do **not** fetch tearsheets, schedule of investments, or cash-flow stat
 
 This is **not** a DWH stem and has no fetch gate — a firm with no logos, or a portco-logo call that errors,
 degrades silently to the initials avatar every company already falls back to. It needs no `fund_uuid`/
-`corporation_id` IN-list (the tool is firm-scoped) and no DWH output, so issue its `call_tool` in the **same
+`corporation_id` IN-list (the tool is firm-scoped) and no DWH output, so issue its `read_tool` in the **same
 message** as Wave 1's `dwh__execute__queries` batches rather than waiting for Wave 1 to finish first — the two
 have no ordering dependency, and serializing them only adds wall-clock time to every build:
 
 1. Call the bulk list tool for the firm:
    ```
-   call_tool({"name": "fa__list__portco_logos", "arguments": {"firm_uuid": "<firm_uuid from Step 1>"}})
+   read_tool({"name": "fa__list__portco_logos", "arguments": {"firm_uuid": "<firm_uuid from Step 1>"}})
    ```
    Each row carries **both** `corporation_id` (integer) and `corporation_uuid` — `fetch_logos.py` keys its
    output filenames on `corporation_uuid`, since that's what `build_datadir.py`'s `load_logos()` matches

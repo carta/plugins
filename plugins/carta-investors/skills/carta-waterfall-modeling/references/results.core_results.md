@@ -44,7 +44,7 @@ polls the engine on this first call, waiting out the compute. Breakpoints ride
 this page; later pages page the allocations **lean**.
 
 ```
-call_tool({"name": "<get_command with all ':' replaced by '__'>", "arguments": {
+read_tool({"name": "<get_command with all ':' replaced by '__'>", "arguments": {
   "owner_kind":   "FIRM",
   "owner_id":     "<org_pk from Step 1>",
   "target_kind":  "<locked from Step 2>",

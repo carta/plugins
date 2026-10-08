@@ -48,7 +48,7 @@ Query the `FUND_ADMIN.TEMPORAL_FUND_COHORT_BENCHMARKS` table which contains fund
 
 ### SQL Query
 
-Execute this query with `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "..."}})`, substituting the user's fund name and optional filters:
+Execute this query with `read_tool({"name": "dwh__execute__query", "arguments": {"sql": "..."}})`, substituting the user's fund name and optional filters:
 
 ```sql
 SELECT

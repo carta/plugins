@@ -33,11 +33,11 @@ You need a selected candidate with GPC ready to analyze:
 - `ownerId`, `project_id`, `candidate_id` — for the API calls.
 - `targetId` — for the deep link.
 - The company name and candidate name — for messaging.
-- **GPC must be enabled in approaches** (`call_tool({"name": "portfolio_valuations__get__approaches", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`.`gpc.is_used` is
+- **GPC must be enabled in approaches** (`read_tool({"name": "portfolio_valuations__get__approaches", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`.`gpc.is_used` is
   `true`).
 - **At least one comp must be saved with `is_gpc: true`**
-  (`call_tool({"name": "portfolio_valuations__get__comparables", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` returns at least one such row).
-- **Financials must be entered on the candidate** (`call_tool({"name": "portfolio_valuations__get__financials", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
+  (`read_tool({"name": "portfolio_valuations__get__comparables", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` returns at least one such row).
+- **Financials must be entered on the candidate** (`read_tool({"name": "portfolio_valuations__get__financials", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
   returns at least one period with non-zero revenue or EBITDA).
 
 These should be in conversation context from the orchestrator. If GPC
@@ -51,7 +51,7 @@ attempt the GPC analysis without all three prerequisites.
 
 Gpc-analysis contributes to **End Goal item 3 (Required approach
 inputs)** when GPC is enabled. Specifically: GPC requires
-`call_tool({"name": "portfolio_valuations__get__gpc_multiples", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` to return a non-empty multiples set. Once a
+`read_tool({"name": "portfolio_valuations__get__gpc_multiples", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` to return a non-empty multiples set. Once a
 `call_tool({"name": "portfolio_valuations__mutate__gpc_multiples_selection", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>, "multiples": [...]}})` succeeds, this half of GPC's input requirement is
 met. (The other half — comps with `is_gpc: true` — is handled by
 `references/dive-in/comps.md`.)
@@ -65,7 +65,7 @@ value is non-zero)**, since saving GPC multiples flows through to a
 Before doing anything, verify GPC is enabled and comps exist. **Do this
 silently** unless a prerequisite fails.
 
-Call `call_tool({"name": "portfolio_valuations__get__approaches", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`:
+Call `read_tool({"name": "portfolio_valuations__get__approaches", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`:
 - If `gpc.is_used` is not `true`, surface plain language and ask inline:
   > "GPC isn't enabled on **{candidate name}** yet. Want to enable it
   > and configure?"
@@ -74,7 +74,7 @@ Call `call_tool({"name": "portfolio_valuations__get__approaches", "arguments": {
   > 2. **Cancel** — return to the orchestrator's routing.
   Wait for the reply, then route accordingly.
 
-Call `call_tool({"name": "portfolio_valuations__get__comparables", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`:
+Call `read_tool({"name": "portfolio_valuations__get__comparables", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`:
 - Filter to `is_gpc: true` rows. If zero, surface and ask inline:
   > "No GPC comps are saved on **{candidate name}** yet. Want to add
   > some?"
@@ -82,13 +82,13 @@ Call `call_tool({"name": "portfolio_valuations__get__comparables", "arguments": 
   > 2. **Cancel** — return to the orchestrator's routing.
   Wait for the reply, then route accordingly.
 
-Call `call_tool({"name": "portfolio_valuations__get__financials", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` (this reads the revenue,
+Call `read_tool({"name": "portfolio_valuations__get__financials", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` (this reads the revenue,
 EBITDA, and other financial inputs **entered directly in the valuation
 scenario** — not pulled from a data warehouse or external source):
 - Check that at least one period has a non-zero revenue or EBITDA value.
 - If `periods` is empty or all periods have zero revenue and EBITDA, try
   `call_tool({"name": "portfolio_valuations__get__financials_refresh", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` once to pull the
-  latest inputs from source records. Then re-call `call_tool({"name": "portfolio_valuations__get__financials", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`.
+  latest inputs from source records. Then re-call `read_tool({"name": "portfolio_valuations__get__financials", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`.
   **Do this silently** — do not tell the user about the retry.
 - If still empty after the refresh attempt, surface and stop:
   > "**{candidate name}** doesn't have any financials entered yet.
@@ -157,7 +157,7 @@ Triggered by Step 2 option 1 or 4.
 
 ### Step 3A.1: Show current configuration
 
-Call `call_tool({"name": "portfolio_valuations__get__gpc", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` and render the current state in plain language:
+Call `read_tool({"name": "portfolio_valuations__get__gpc", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` and render the current state in plain language:
 
 > "Current GPC methodology on **{candidate name}**:
 > - Regression: {regressionSelection or 'not set'}
@@ -223,7 +223,7 @@ Then proceed per Step 2 mode:
 
 ### Error handling for `call_tool({"name": "portfolio_valuations__mutate__gpc", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
 
-- **404**: re-fetch `call_tool({"name": "portfolio_valuations__get__gpc", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` to verify the candidate is initialized,
+- **404**: re-fetch `read_tool({"name": "portfolio_valuations__get__gpc", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` to verify the candidate is initialized,
   retry once. Do not surface the 404.
 - **500**: usually a malformed field. Retry once. Do not surface.
 - **Persistent failure**: surface the plain-language fallback:
@@ -233,7 +233,7 @@ Then proceed per Step 2 mode:
 
 Triggered by Step 2 option 2 or 4.
 
-### Step 3B.1: Pre-flight `call_tool({"name": "portfolio_valuations__get__gpc_multiples", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` (REQUIRED)
+### Step 3B.1: Pre-flight `read_tool({"name": "portfolio_valuations__get__gpc_multiples", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` (REQUIRED)
 
 **Do this silently.** This pre-flight is required for two reasons:
 - It returns the quartile statistics the percentile choices in Step 3B.2
@@ -243,7 +243,7 @@ Triggered by Step 2 option 2 or 4.
 
 **It does not give you the ids the write needs.** The `id` on every
 `multiples` entry in Step 3B.4 is the `multiple.id` from
-`call_tool({"name": "portfolio_valuations__get__gpc_multiples_selection", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`,
+`read_tool({"name": "portfolio_valuations__get__gpc_multiples_selection", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`,
 which returns `allGpcMultiplesFinancialsMap` — one entry per period,
 each holding a `multiple` object and a `financial` object with
 **different** ids. Take `multiple.id`, never `financial.id`, and never a
@@ -252,7 +252,7 @@ comparable id. Call that command too before writing.
 Call:
 
 ```json
-call_tool({
+read_tool({
   "name": "portfolio_valuations__get__gpc_multiples",
   "arguments": {
     "ownerId": <ownerId>,
@@ -289,7 +289,7 @@ surface a fallback:
 Call:
 
 ```json
-call_tool({
+read_tool({
   "name": "portfolio_valuations__get__gpc_multiples_selection",
   "arguments": {
     "ownerId": <ownerId>,
@@ -399,7 +399,7 @@ Once valid, proceed to Step 3B.4 to save.
 Call:
 
 ```json
-call_tool({
+read_tool({
   "name": "portfolio_valuations__get__gpc_comp_statistics",
   "arguments": {
     "ownerId": <ownerId>,
@@ -427,7 +427,7 @@ Apply the following judgment rules in order:
 3. **Pick the multiple percentile and resolve the numeric value.**
    Default to **median** as a neutral, outlier-resistant choice. If
    the comp set is small (≤ 5 comps), consider mean instead. Look up
-   the actual statistic value from `call_tool({"name": "portfolio_valuations__get__gpc_comp_statistics", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` (e.g.
+   the actual statistic value from `read_tool({"name": "portfolio_valuations__get__gpc_comp_statistics", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})` (e.g.
    the median revenue multiple is `8.45`). Capture that float — the
    API expects an explicit numeric entry, not a percentile label.
 
@@ -463,7 +463,7 @@ Then explain the rationale in plain language, covering three things:
    comps by name that most influenced the chosen percentile (e.g. the
    companies closest to the median, or notable outliers that were excluded
    or pulled the mean). Reference their tickers and individual contribution
-   where it's clear from the comp set. If the comps list from `call_tool({"name": "portfolio_valuations__get__comparables", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
+   where it's clear from the comp set. If the comps list from `read_tool({"name": "portfolio_valuations__get__comparables", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
    is in context, use it; if not, describe the selection in general terms
    ("the mid-range comps in the set").
 
@@ -618,7 +618,7 @@ The same rule applies to EBITDA when it's in scope: total
 
 When applying "set percentile across all comps" (Step 3B.3 option 1),
 look up the actual statistic value (e.g. median revenue multiple =
-`8.45`) from `call_tool({"name": "portfolio_valuations__get__gpc_comp_statistics", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`, write it as a float into
+`8.45`) from `read_tool({"name": "portfolio_valuations__get__gpc_comp_statistics", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`, write it as a float into
 `revenueMultipleManualEntry` or `ebitdaMultipleManualEntry`, and set
 the corresponding percentileSelection to `null`.
 
@@ -643,7 +643,7 @@ Then per Step 2 mode:
 
 - **Missing required argument `multiples`**: rejected before the request
   is sent. Build the list and retry — never send it as `null`.
-- **404**: re-run the pre-flights (`call_tool({"name": "portfolio_valuations__get__gpc_multiples", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
+- **404**: re-run the pre-flights (`read_tool({"name": "portfolio_valuations__get__gpc_multiples", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`
   and `get:gpc_multiples_selection`), retry once.
 - **500**: usually a missing `id` on an entry, an `id` taken from
   `financial` instead of `multiple`, or a non-numeric weight.
@@ -661,7 +661,7 @@ Triggered by Step 2 option 3 or 4.
 Call:
 
 ```json
-call_tool({
+read_tool({
   "name": "portfolio_valuations__get__gpc_comp_statistics",
   "arguments": {
     "ownerId": <ownerId>,
@@ -720,7 +720,7 @@ End each success message with the deep link on its own line.
 The next move depends on End Goal state and mode:
 
 1. **Walk-through mode**: silently re-derive the End Goal checklist
-   (`call_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`, `call_tool({"name": "portfolio_valuations__get__approaches", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`). The next unfinished item is
+   (`read_tool({"name": "portfolio_valuations__get__valuation", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`, `read_tool({"name": "portfolio_valuations__get__approaches", "arguments": {"ownerId": <ownerId>, "project_id": <project_id>, "candidate_id": <candidate_id>}})`). The next unfinished item is
    most likely **item 5 (allocation)** — running the allocation
    populates holdings value. Suggest:
    > "GPC analysis is in. Allocation is the natural next step — want

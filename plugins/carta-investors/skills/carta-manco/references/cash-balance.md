@@ -19,7 +19,7 @@ user. Only fall through to the full picker if the match is ambiguous or
 the workbook has no resolvable entity name.
 
 ```
-call_tool({"name": "fa__get__cash-balance", "arguments": {
+read_tool({"name": "fa__get__cash-balance", "arguments": {
   "firm_uuid":   "<FIRM_UUID>",
   "entity_ids":  [<ENTITY_ID>],
   "as_of_date":  "<YYYY-MM-DD>"

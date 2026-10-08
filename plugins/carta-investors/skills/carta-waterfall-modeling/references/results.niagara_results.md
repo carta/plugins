@@ -52,7 +52,7 @@ and returns `nodes_summary` — the graph-wide table of contents — which
 decides what to fetch next.
 
 ```
-call_tool({"name": "<get_command with all ':' replaced by '__'>", "arguments": {
+read_tool({"name": "<get_command with all ':' replaced by '__'>", "arguments": {
   "owner_kind":   "FIRM",
   "owner_id":     "<org_pk from Step 1>",
   "target_kind":  "<locked from Step 2>",
@@ -199,7 +199,7 @@ Lazy — only fetch when the user picks "Show only my firm's holdings".
 Cache the result so repeat selections don't refetch.
 
 ```
-call_tool({"name": "waterfall_modeling__list__firm_holders", "arguments": {
+read_tool({"name": "waterfall_modeling__list__firm_holders", "arguments": {
   "owner_kind":      "FIRM",
   "owner_id":        <locked from Step 1>,
   "target_kind":     "<locked from Step 2>",

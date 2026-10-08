@@ -53,7 +53,7 @@ flow first.
 **Do this silently.** Call:
 
 ```json
-call_tool({
+read_tool({
   "name": "portfolio_valuations__get__financials",
   "arguments": {
     "ownerId": <ownerId>,
@@ -99,7 +99,7 @@ query itself is identical either way:
 
 Query the firm's system-of-record directly:
 
-Call `call_tool({"name": "dwh__execute__query", "arguments": {"sql": "<query below>", "limit": 100}})` directly.
+Call `read_tool({"name": "dwh__execute__query", "arguments": {"sql": "<query below>", "limit": 100}})` directly.
 Substitute `<targetId>` with the portfolio company's `corporationId`
 from context. Cap rows at 100 — that's plenty for an annual P&L over
 several years, and it keeps the response bounded.

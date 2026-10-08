@@ -1,7 +1,7 @@
 # KPI data sourcing — SQL & capture
 
 All data is **Fund Admin** via the connected Carta MCP. DWH queries run through
-the gateway: `call_tool({"name":"dwh__execute__query","arguments":{"sql":"...","limit":N}})`.
+the gateway: `read_tool({"name":"dwh__execute__query","arguments":{"sql":"...","limit":N}})`.
 `dwh__execute__query` accepts only `sql` (+ optional `limit`, `offset`, `format`)
 — **no `schema` argument**. Fully-qualify every table as `FUND_ADMIN.<TABLE>`.
 Do **not** put `LIMIT`/`OFFSET` in the SQL — pass them as arguments. SELECT-only.
