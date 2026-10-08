@@ -120,14 +120,18 @@ const TASK_TEMPLATE_REQUEST = 'request-generic';
 const TASK_TEMPLATE_CAPITAL_ACTIVITY = 'request-capital-activity';
 const TASK_TEMPLATE_PACKAGE = 'publish-financial-package';
 const TASK_TEMPLATE_EXPENSE = 'prepare-and-pay-expense';
+const TASK_TEMPLATE_MANAGEMENT_FEES = 'review-management-fees';
 // Capital calls and Distributions share these; the name decides between them.
 const TASK_TEMPLATES_CAPITAL_ACTIVITY = [TASK_TEMPLATE_CAPITAL_ACTIVITY, 'draft-request-capital-activity'];
 // Every tab, Completed included, shows only these workflows: the ones a Workhub
 // panel opens (request thread, capital call review, reporting tracker), plus expense
-// payments, which link out to Carta. One list for all tabs, so finished work never
-// shows a kind of task the open tabs leave out. Any other template stays out until a
-// panel opens it.
-const TASK_TEMPLATES_WITH_TILES = [TASK_TEMPLATE_REQUEST, TASK_TEMPLATE_CAPITAL_ACTIVITY, TASK_TEMPLATE_PACKAGE, TASK_TEMPLATE_EXPENSE];
+// payments and management fee reviews, which link out to Carta. One list for all
+// tabs, so finished work never shows a kind of task the open tabs leave out. Any
+// other template stays out until a panel opens it.
+const TASK_TEMPLATES_WITH_TILES = [
+  TASK_TEMPLATE_REQUEST, TASK_TEMPLATE_CAPITAL_ACTIVITY, TASK_TEMPLATE_PACKAGE,
+  TASK_TEMPLATE_EXPENSE, TASK_TEMPLATE_MANAGEMENT_FEES,
+];
 
 const TASK_CATEGORY_REQUEST = 'request';
 const TASK_CATEGORY_CAPITAL = 'capital';
@@ -148,7 +152,7 @@ const TASK_CATEGORIES = [
     templates: ['cash-reconciliation'],
     icon: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>' },
   { key: 'fees', name: 'Management fees',
-    templates: ['review-management-fees', 'draft-review-management-fees'],
+    templates: [TASK_TEMPLATE_MANAGEMENT_FEES, 'draft-review-management-fees'],
     icon: '<path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/>' },
   { key: 'expense', name: 'Expense payments',
     templates: [TASK_TEMPLATE_EXPENSE, 'draft-prepare-and-pay-expense', 'expense-accrual'],
