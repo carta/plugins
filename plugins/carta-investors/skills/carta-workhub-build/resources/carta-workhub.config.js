@@ -119,13 +119,15 @@ const TASK_REQUEST_ICON = '<path d="M10.1 2.18a9.93 9.93 0 0 1 3.8 0"/><path d="
 const TASK_TEMPLATE_REQUEST = 'request-generic';
 const TASK_TEMPLATE_CAPITAL_ACTIVITY = 'request-capital-activity';
 const TASK_TEMPLATE_PACKAGE = 'publish-financial-package';
+const TASK_TEMPLATE_EXPENSE = 'prepare-and-pay-expense';
 // Capital calls and Distributions share these; the name decides between them.
 const TASK_TEMPLATES_CAPITAL_ACTIVITY = [TASK_TEMPLATE_CAPITAL_ACTIVITY, 'draft-request-capital-activity'];
 // Every tab, Completed included, shows only these workflows: the ones a Workhub
-// panel opens (request thread, capital call review, reporting tracker) rather than
-// sending the GP to Carta. One list for all tabs, so finished work never shows a
-// kind of task the open tabs leave out. Add a template here once a panel opens it.
-const TASK_TEMPLATES_WITH_TILES = [TASK_TEMPLATE_REQUEST, TASK_TEMPLATE_CAPITAL_ACTIVITY, TASK_TEMPLATE_PACKAGE];
+// panel opens (request thread, capital call review, reporting tracker), plus expense
+// payments, which link out to Carta. One list for all tabs, so finished work never
+// shows a kind of task the open tabs leave out. Any other template stays out until a
+// panel opens it.
+const TASK_TEMPLATES_WITH_TILES = [TASK_TEMPLATE_REQUEST, TASK_TEMPLATE_CAPITAL_ACTIVITY, TASK_TEMPLATE_PACKAGE, TASK_TEMPLATE_EXPENSE];
 
 const TASK_CATEGORY_REQUEST = 'request';
 const TASK_CATEGORY_CAPITAL = 'capital';
@@ -149,7 +151,7 @@ const TASK_CATEGORIES = [
     templates: ['review-management-fees', 'draft-review-management-fees'],
     icon: '<path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/>' },
   { key: 'expense', name: 'Expense payments',
-    templates: ['prepare-and-pay-expense', 'draft-prepare-and-pay-expense', 'expense-accrual'],
+    templates: [TASK_TEMPLATE_EXPENSE, 'draft-prepare-and-pay-expense', 'expense-accrual'],
     icon: '<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17.5v-11"/>' },
   { key: 'intercompany', name: 'Intercompany payment',
     templates: ['settle-intercompany-balances', 'request-related-party-transfer', 'draft-request-related-party-transfer'],

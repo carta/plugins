@@ -21,7 +21,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.67.1</carta-plugin>
+<carta-plugin>carta-investors:6.67.2</carta-plugin>
 
 # Carta Workhub — Build / Redeploy
 
@@ -90,11 +90,12 @@ not inside a fund-data dashboard.
   waiting on the customer), **With Carta** (`progress`) and **Completed** (`done`). The first
   load opens on Needs Action, or on the next tab holding work when it is empty
   (`FAR_TAB_OPEN_ORDER`); after that only the viewer changes tabs. Each tab carries a count
-  pill and a one-line description. The queue holds only the workflows Workhub has a panel for,
-  listed in `TASK_TEMPLATES_WITH_TILES` in `resources/carta-workhub.config.js`: requests
-  (`request-generic`), capital activities (`request-capital-activity`) and financial packages
-  (`publish-financial-package`). Every other GP task would only link out to Carta, so it is left
-  out; add a template to that list once a panel opens its tasks. Completed reads the same list,
+  pill and a one-line description. The queue holds the workflows Workhub has a panel for, plus expense
+  payments, listed in `TASK_TEMPLATES_WITH_TILES` in `resources/carta-workhub.config.js`: requests
+  (`request-generic`), capital activities (`request-capital-activity`), financial packages
+  (`publish-financial-package`) and expense payments (`prepare-and-pay-expense`, which no panel
+  opens, so each is a Carta link under Expense payments). Every other GP task would only link
+  out to Carta, so it is left out; add a template to that list once a panel opens its tasks. Completed reads the same list,
   so finished work never shows a kind of task the open tabs leave out. Every task of a listed workflow
   shows, including the ones no panel opens (a capital call With Carta or Completed), as a
   Carta link. Inside a tab, rows are grouped by category, in the order and with the icons `TASK_CATEGORIES` in
