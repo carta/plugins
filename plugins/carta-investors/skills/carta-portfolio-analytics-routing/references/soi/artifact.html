@@ -2320,8 +2320,10 @@
 
         // ── Formatters ──
 
+        // Amounts carry the currency's own minor units (cents for USD, none for
+        // JPY), as the app shows them.
         function fmt(val, currency) {
-            return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency || currentCurrency, minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(val);
+            return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency || currentCurrency }).format(val);
         }
 
         function fmtDec(val, currency) {
@@ -3290,7 +3292,7 @@
 
             const mixedBadge = '<span class="mixed-badge tooltip-trigger" data-tooltip="Held in more than one currency — see rows below">Mixed</span>';
             const tagFor = cur => pooled && cur ? `<span class="currency-tag">${escHtml(cur)}</span>` : '';
-            const amountCell = (val, cur) => `<td class="number">${fmtDec(val, cur)}${tagFor(cur)}</td>`;
+            const amountCell = (val, cur) => `<td class="number">${fmt(val, cur)}${tagFor(cur)}</td>`;
             const addRow = (cls, html, onclick) => {
                 const tr = document.createElement('tr');
                 tr.className = cls;
@@ -3338,7 +3340,7 @@
                 const flows = data.reduce((n, c) => n + c.flowCount, 0);
                 const total = viewMixedCurrency
                     ? '<td class="number"><span class="mixed-badge">Mixed</span></td>'
-                    : `<td class="number">${fmtDec(data.reduce((sum, c) => sum + c.net, 0))}</td>`;
+                    : `<td class="number">${fmt(data.reduce((sum, c) => sum + c.net, 0))}</td>`;
                 addRow('totals-row', `
                     <td>${data.length} companies, ${flows} cash flows</td>
                     ${pooled ? '<td></td>' : ''}
