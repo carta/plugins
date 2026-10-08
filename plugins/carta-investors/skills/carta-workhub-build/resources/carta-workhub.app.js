@@ -86,6 +86,34 @@ function showToast(msg) {
 
 function tryParse(str) { try { return JSON.parse(str); } catch { return null; } }
 
+// An artifact cannot post into a chat, and an MCP App renders only when Claude calls its
+// tool there. So the Workhub opens a new Claude Desktop chat with the prompt prefilled, for
+// the GP to send. It also tries to put the prompt on the clipboard, in case the link handler
+// does not fire. The copy is best-effort (a sandboxed frame or non-secure context can block
+// it), so the toast says the prompt is on the clipboard only when the copy worked.
+const CLAUDE_NEW_CHAT_URL = "claude://claude.ai/new?q=";
+function openClaudeChat(prompt) {
+  // Started inside the click's user gesture, which some hosts require. writeText can also
+  // throw synchronously, so that counts as a failed copy too.
+  let copy;
+  try { copy = navigator.clipboard?.writeText ? navigator.clipboard.writeText(prompt) : Promise.reject(); }
+  catch { copy = Promise.reject(); }
+  const copied = Promise.resolve(copy).then(() => true, () => false);
+  // A hidden link opened as a new window, so the protocol handler fires without the
+  // artifact's own frame navigating to the claude:// URL, which blanks it.
+  const a = document.createElement("a");
+  a.href = CLAUDE_NEW_CHAT_URL + encodeURIComponent(prompt);
+  a.target = "_blank";
+  a.rel = "noopener";
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  return copied.then(ok => showToast(ok
+    ? "Opening a new Claude chat. Send the prompt there; it is on your clipboard too."
+    : "Opening a new Claude chat. Send the prompt there."));
+}
+
 // A tool result carries its payload in different shapes per host and server
 // version, so collect every plausible one and let the caller pick.
 function _mcpResultCandidates(res) {

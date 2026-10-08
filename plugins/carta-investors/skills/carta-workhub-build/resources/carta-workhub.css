@@ -1440,6 +1440,9 @@
 .frt-btn-primary:hover { background: var(--ink-button-background-color-primary-base-hover); }
 .frt-btn-link { border: 0; background: none; color: var(--ink-color-global-link-default); padding: 0 4px; }
 .frt-btn[disabled] { opacity: .45; cursor: default; }
+/* A cell whose task opens an app in a new chat, with its Carta link kept beside it. */
+.frt-app-cell { display: inline-flex; align-items: center; gap: 6px; }
+.frt-carta-link { font-size: 12px; font-weight: 600; color: var(--ink-color-global-link-default); text-decoration: none; }
 .frt-chev { font-size: 10px; color: var(--ink-color-global-text-subtle); margin-left: 4px; }
 .frt-search {
   display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; min-width: 240px;

@@ -1,5 +1,6 @@
 // Financial Reporting Tracker: one card per reporting period that needs the GP.
-// Depends on carta-workhub.app.js (_mcp, escHtml, trackWorkhub) and fund-admin-requests.js (overlay, queue).
+// Depends on carta-workhub.app.js (_mcp, escHtml, trackWorkhub, mcpCommandAvailable, openClaudeChat)
+// and fund-admin-requests.js (overlay, queue).
 
 // A build can name one period so the panel is reachable for a demo. Empty is normal;
 // an unsubstituted {{...}} means this source is read outside a build.
@@ -182,6 +183,74 @@ function frtLeafColumns(financialReport, packages, rowId) {
   return { fr: cols.cell, action: cols.action, trailing: cols.trailingNote, tag: null, packageChildren: [] };
 }
 
+// ── Task MCP Apps ──────────────────────────────────────────────────────────
+//
+// carta-mcp names the tracker columns whose tasks open in an MCP App for this viewer, and
+// which entity field fills each of the app's params. The read is gated server-side, so a
+// viewer it refuses gets none, and every cell keeps its Carta link.
+
+const FRT_TASK_APPS_COMMAND = "fa:list:workhub-task-app";
+// Row cell -> the tracker column it shows.
+const FRT_CELL_COLUMNS = { cash: "cash_reconciliation", soi: "soi_review", fr: "financial_report" };
+
+function frtTaskAppsByColumn(res) {
+  if (!res || res.isError) return {};
+  for (const c of _mcpResultCandidates(res)) {
+    if (c && Array.isArray(c.apps)) {
+      return Object.fromEntries(c.apps.filter(a => a && a.column && a.view).map(a => [a.column, a]));
+    }
+  }
+  return {};
+}
+
+let _frtTaskApps = null;   // read once per page: the viewer's flags do not change while it is open
+function frtTaskApps() {
+  return _frtTaskApps ??= mcpCommandAvailable(FRT_TASK_APPS_COMMAND)
+    .then(ok => (ok ? _mcp("fetch", { command: FRT_TASK_APPS_COMMAND, params: {} }) : null))
+    .then(frtTaskAppsByColumn)
+    .catch(() => ({}));
+}
+
+function frtColumnLabel(column) {
+  return (FRT_SORTS.find(s => s.key === column) || {}).label || FRT_CARD_TITLE;
+}
+
+// Only a needs-action button opens an app, and only when the entity carries every field
+// the app's params come from; anything else stays as it is.
+function frtWithApp(cell, column, app, row, source) {
+  if (!app || !cell || cell.kind !== "action") return cell;
+  const params = {};
+  for (const [param, field] of Object.entries(app.params || {})) {
+    if (source[field] == null) return cell;
+    params[param] = String(source[field]);
+  }
+  return Object.assign({}, cell, { app: { view: app.view, params, label: frtColumnLabel(column), entity: row.name } });
+}
+
+// Gives each cell its column's app, reading params off the row's own entity. A family row
+// has no entity of its own, so it opens none; a package row reads its entity's fields.
+function frtAttachApps(rows, payload, apps) {
+  if (!apps || !Object.keys(apps).length) return rows;
+  const entities = new Map((payload.entities || []).map(e => [String(e.entity_id), e]));
+  const visit = (row, source) => {
+    Object.entries(FRT_CELL_COLUMNS).forEach(([key, column]) => {
+      row[key] = frtWithApp(row[key], column, apps[column], row, source);
+    });
+    (row.packages || []).forEach(p => visit(p, source));
+    (row.children || []).forEach(c => visit(c, entities.get(c.id) || {}));
+  };
+  rows.forEach(r => visit(r, entities.get(r.id) || {}));
+  return rows;
+}
+
+// What the new chat is prefilled with. It names the tool, view and params verbatim so
+// Claude opens the app rather than answering in prose; the firm lets Claude switch to it
+// if the chat's Carta context differs.
+function frtAppPrompt(app, firm) {
+  const where = firm ? ` (${firm})` : "";
+  return `Open the Carta ${app.label} app for ${app.entity}${where}: call view_remote with name "${app.view}" and params ${JSON.stringify(app.params)}.`;
+}
+
 function frtIsExpandable(row) {
   return !!row.isFamily || (row.packages && row.packages.length > 0);
 }
@@ -284,7 +353,8 @@ const FRT_SORTS = [
 ];
 const frtNatCmp = (a, b) => String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: "base" });
 function frtRowState(row, key) {
-  const c = { cash_reconciliation: row.cash, soi_review: row.soi, financial_report: row.fr }[key];
+  const cellKey = Object.keys(FRT_CELL_COLUMNS).find(k => FRT_CELL_COLUMNS[k] === key);
+  const c = cellKey && row[cellKey];
   return c ? c.state : "not_applicable";
 }
 
@@ -532,6 +602,7 @@ function frtReset(target, title) {
     title: title || FRT_CARD_TITLE,
     window: frtPeriodWindow(),
     payload: null,
+    apps: {},
     loading: true,
     error: null,
     search: "",
@@ -552,13 +623,15 @@ async function frtLoad() {
   snap.loading = true; snap.error = null; snap.payload = null;
   frtRender();
   let payload = null;
+  let apps = {};
   try {
-    payload = await frtFetchPeriod(snap.period);
+    [payload, apps] = await Promise.all([frtFetchPeriod(snap.period), frtTaskApps()]);
   } catch (e) {
     console.error("[frt] tracker read threw —", e);
   }
   if (_frt !== snap) return;
   snap.loading = false;
+  snap.apps = apps || {};
   if (payload) {
     snap.payload = payload;
     // The selection survives a period change, and a narrowed table opens up.
@@ -590,7 +663,14 @@ function frtRenderCell(c) {
   const suffix = c.suffix ? ` <span class="frt-suffix">${escHtml(c.suffix)}</span>` : "";
   if (c.kind === "action") {
     const inner = c.isPrimary ? escHtml(c.text) : `<span class="frt-dot frt-dot-${c.variant}"></span>${escHtml(c.text)}`;
-    return frtLink(c.href, `frt-btn${c.isPrimary ? " frt-btn-primary" : ""}`, inner);
+    const cls = `frt-btn${c.isPrimary ? " frt-btn-primary" : ""}`;
+    if (c.app) {
+      // The app opens in a new chat; Carta stays one click away beside it.
+      const btn = `<button class="${cls}" type="button" data-frt-app="${escHtml(JSON.stringify(c.app))}" title="Open in a new Claude chat">${inner}</button>`;
+      const carta = `<a class="frt-carta-link" href="${escHtml(c.href)}" target="_blank" rel="noopener" title="Open in Carta" aria-label="Open in Carta" data-frt-action>↗</a>`;
+      return `<span class="frt-app-cell">${btn}${carta}</span>`;
+    }
+    return frtLink(c.href, cls, inner);
   }
   const textCls = c.state === "with_carta" ? "frt-cell-text frt-gray" : "frt-cell-text";
   return `<span class="frt-cell"><span class="frt-dot frt-dot-${c.variant}"></span><span class="${textCls}">${escHtml(c.text)}${suffix}</span></span>`;
@@ -637,7 +717,7 @@ function frtHeader(key, label) {
 }
 
 function frtRenderTable() {
-  const all = frtBuildRows(_frt.payload);
+  const all = frtAttachApps(frtBuildRows(_frt.payload), _frt.payload, _frt.apps);
   const shown = frtSortRows(frtFilterRows(all, _frt), _frt.sort);
   if (!shown.length) return '<div class="frt-empty">No entities match your filters.</div>';
   const expandable = shown.filter(frtIsExpandable);
@@ -812,6 +892,12 @@ function frtBind(root) {
     trackWorkhub("click", "CartaWorkhub.FinancialReportingTracker.OpenInCarta")));
   root.querySelectorAll("[data-frt-action]").forEach(a => a.addEventListener("click", () =>
     trackWorkhub("click", "CartaWorkhub.FinancialReportingTracker.Action")));
+  root.querySelectorAll("[data-frt-app]").forEach(b => b.addEventListener("click", () => {
+    const app = tryParse(b.dataset.frtApp);
+    if (!app) return;
+    trackWorkhub("click", "CartaWorkhub.FinancialReportingTracker.OpenAppInChat");
+    openClaudeChat(frtAppPrompt(app, _frt.payload && _frt.payload.firm_name));
+  }));
   root.querySelectorAll("[data-frt-menu]").forEach(b => b.addEventListener("click", e => {
     e.stopPropagation();
     _frt.menu = _frt.menu === b.dataset.frtMenu ? null : b.dataset.frtMenu;

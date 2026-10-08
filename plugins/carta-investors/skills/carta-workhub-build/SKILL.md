@@ -21,7 +21,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.67.3</carta-plugin>
+<carta-plugin>carta-investors:6.67.4</carta-plugin>
 
 # Carta Workhub — Build / Redeploy
 
@@ -238,7 +238,8 @@ not inside a fund-data dashboard.
   deeper when it holds two or more. Every label, dot and package name is produced straight from
   `fa:get:reporting-status` — `display_label` and the family's own rollup read are both computed
   server-side now — so the panel and the page read identically. Every button carries the
-  backend's absolute `href` and opens Carta in a new tab; nothing is written from here.
+  backend's absolute `href` and opens Carta in a new tab, unless its task has an MCP App (below);
+  nothing is written from here.
 
   **The package tasks are the way in.** Every `publish-financial-package` task on the queue's
   task list is a card under Financial reporting, and it opens the tracker for the period its
@@ -259,6 +260,23 @@ not inside a fund-data dashboard.
   would exceed carta-mcp's 40k reply cap and the period would read as failed; a firm with many
   multi-package entities hits it sooner, since every package adds its own share of the reply.
   That is accepted for now.
+
+  **Task MCP Apps open in a new chat.** A needs-action tracker button whose task has a Carta MCP
+  App (today, cash reconciliation, on the entity's own fund) opens a **new Claude Desktop chat**
+  instead of Carta, prefilled with a prompt that names the app, the entity, the firm and the
+  exact `view_remote` call; the GP sends it and Claude renders the app there. An artifact cannot
+  post into a chat or render an app itself, so the app never runs inside the Workhub.
+  `openClaudeChat` in `carta-workhub.app.js` opens `claude://claude.ai/new?q=<prompt>` and also
+  tries to put the prompt on the clipboard, for when the link handler does not fire; the toast
+  says whether the copy worked. A small ↗ beside
+  the button keeps the cell's Carta link.
+
+  carta-mcp decides which cells: the tracker asks `discover` about `fa:list:workhub-task-app`
+  once, and only when that answers reads, through `fetch`, the tracker columns with an app, each
+  with its view and the entity field that fills each view param. The read is gated server-side,
+  and each entry by its view's own gate, so a viewer it refuses keeps every Carta link. A new app
+  is one entry in carta-mcp's registry, not a change here, and needs nothing new in the publish
+  grant: `view_remote` is called by Claude in the chat, never by the artifact.
 - **Thread view** — the full conversation from `fa:list:workflow-message`, with a reply box
   writing to `fa:create:workflow-message`. Carta's internal agent output is never surfaced.
 
@@ -331,7 +349,7 @@ codes (`needs_reauth`, `server_not_connected`) are page-level, not per-section.
 | `resources/app/fund-admin-requests.js` | composer, queue, thread overlay — the whole feature |
 | `resources/app/capital-call-review.js` | the capital call review panel |
 | `resources/app/financial-reporting-tracker.js` | the Financial Reporting Tracker cards and panel |
-| `resources/carta-workhub.app.js` | shared helpers (`_mcp`, `escHtml`, `showToast`, `trackWorkhub`) plus firm resolution and boot |
+| `resources/carta-workhub.app.js` | shared helpers (`_mcp`, `escHtml`, `showToast`, `trackWorkhub`, `openClaudeChat`) plus firm resolution and boot |
 | `resources/app/version-check.js` | update banner: reads the published version, compares, renders |
 | `resources/carta-workhub.config.js` | `TASK_PRESETS` — the composer's preset tiles |
 | `resources/carta-workhub.css` | styles (Ink tokens) |
