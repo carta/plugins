@@ -36,7 +36,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.68.3</carta-plugin>
+<carta-plugin>carta-investors:6.68.4</carta-plugin>
 
 # Waterfall Modeling
 
@@ -246,7 +246,7 @@ call_tool({"name": "waterfall_modeling__get__options", "arguments": {
   "owner_id":    "<org_pk from Step 1>",
   "target_kind": "<locked from Step 2>",
   "target_id":   "<locked from Step 2>",
-  "include_advanced": true   /* `chat` only — omit in `excel` */
+  "include_advanced": true
 }})
 ```
 
