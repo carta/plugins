@@ -66,10 +66,14 @@ export function subscribeFocus(cb) {
 // One-shot "open the Portfolio tab already on a given mode" intent. The Portfolio
 // tab's Quadrant/Signals/Benchmarks mode is local state, not in the URL, so a
 // drill-in from elsewhere stashes the desired mode here and navigates; Portfolio
-// reads-and-clears it on mount. Used by Company page's "build a rule" link.
+// reads-and-clears it on mount, or on PORTFOLIO_MODE_EVENT when it's already
+// mounted from an earlier visit. Used by Company page's "build a rule" link.
+export const PORTFOLIO_MODE_EVENT = "cpa:portfolio-mode";
 let pendingPortfolioMode = null;
 export function openPortfolio(mode) {
   pendingPortfolioMode = mode || null;
+  // Before navigating, so the mode switch and the tab switch paint together.
+  window.dispatchEvent(new Event(PORTFOLIO_MODE_EVENT));
   const firm = parseRoute().firm;
   if (firm) navigate({ firm, tab: "portfolio" });
 }

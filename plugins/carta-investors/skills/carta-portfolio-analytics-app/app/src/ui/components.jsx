@@ -82,7 +82,10 @@ export function useStickyClone(wrapRef, tableRef, offset = 0) {
  *  dismiss-on-outside-click behavior every dropdown/menu popover in the app
  *  needs. Accepts multiple refs so a popover portaled to document.body
  *  (outside its trigger's own DOM subtree) can pass both its trigger ref and
- *  its portaled panel ref instead of hand-rolling the same listener pair inline. */
+ *  its portaled panel ref instead of hand-rolling the same listener pair inline.
+ *  Also closes on TAB_LEAVE_EVENT. */
+/** Fired by App when the active tab changes; every open dismissable closes on it. */
+export const TAB_LEAVE_EVENT = "cpa:tab-leave";
 export function useDismissable(open, setOpen, refs, opts = {}) {
   useEffect(() => {
     if (!open) return;
@@ -93,9 +96,16 @@ export function useDismissable(open, setOpen, refs, opts = {}) {
       || (opts.insideSelector && t.closest && t.closest(opts.insideSelector));
     const onDoc = (e) => { if (!inside(e.target)) setOpen(false); };
     const onEsc = (e) => { if (e.key === "Escape") setOpen(false); };
+    // Hidden tabs stay mounted, but a popover portaled to <body> would stay on screen.
+    const onLeave = () => setOpen(false);
     document.addEventListener("mousedown", onDoc);
     document.addEventListener("keydown", onEsc);
-    return () => { document.removeEventListener("mousedown", onDoc); document.removeEventListener("keydown", onEsc); };
+    window.addEventListener(TAB_LEAVE_EVENT, onLeave);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onEsc);
+      window.removeEventListener(TAB_LEAVE_EVENT, onLeave);
+    };
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps -- setOpen/refs are stable
 }
 

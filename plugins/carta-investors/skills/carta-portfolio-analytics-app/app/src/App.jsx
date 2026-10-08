@@ -1,11 +1,11 @@
-import { useState, useEffect, useRef, useMemo, useSyncExternalStore } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useMemo, useSyncExternalStore, memo } from "react";
 import { FS, serif, sans, GLOBAL_CSS, MICRO } from "./ui/theme.js";
-import { Mark, SunIcon, MoonIcon, useDismissable, Eyebrow, TooltipLayer, Dropdown, TextInput } from "./ui/components.jsx";
+import { Mark, SunIcon, MoonIcon, useDismissable, Eyebrow, TooltipLayer, Dropdown, TextInput, TAB_LEAVE_EVENT } from "./ui/components.jsx";
 import UpdateDataButton from "./ui/UpdateDataButton.jsx";
 import PublishEditsButton from "./ui/PublishEditsButton.jsx";
 import { ConflictsButton } from "./ui/ConflictsPanel.jsx";
 import { capTableCompanies } from "./model/captable.js";
-import { getFocus, openPortfolio } from "./state/focus.js";
+import { getFocus, openPortfolio, PORTFOLIO_MODE_EVENT } from "./state/focus.js";
 import { setDisplayCurrency, fmtAsOf, fmtRelative, oldestDatasetFetch } from "./ui/format.js";
 import { parseRoute, navigate, subscribeNav } from "./route.js";
 import useKpi from "./state/useKpi.js";
@@ -308,8 +308,33 @@ export default function App({ firm }) {
   useEffect(() => { trackRender(`PortfolioAnalytics.${TAB_LABEL[tab]}.View`); }, [tab]);
   const narrow = useNarrow();
   const contentRef = useRef(null);
-  // #app-content persists across tabs, so its scroll offset must be reset here.
-  useEffect(() => { contentRef.current?.scrollTo(0, 0); }, [tab]);
+  // A visited tab stays mounted (hidden when inactive), so its filters, sort and modes
+  // survive a round trip. Set during render so the new tab mounts in the same pass.
+  const [visited, setVisited] = useState(() => new Set([tab]));
+  if (!visited.has(tab)) setVisited(new Set(visited).add(tab));
+  // All tabs share #app-content, so each tab's scroll offset is kept here.
+  // The Company page keeps one offset per company: a different company opens at the top.
+  const routeCompany = useSyncExternalStore(subscribeNav, () => parseRoute().sub[0] || "", () => "");
+  const scrollKey = tab === "company" ? `company:${routeCompany}` : tab;
+  const scrollByKey = useRef({});
+  const shownKey = useRef(scrollKey);
+  // Save the old offset in render, while the DOM still shows the old page. Scroll
+  // events skip and merge updates, and after commit the offset is already clamped.
+  if (shownKey.current !== scrollKey) {
+    if (contentRef.current) scrollByKey.current[shownKey.current] = contentRef.current.scrollTop;
+    shownKey.current = scrollKey;
+  }
+  useLayoutEffect(() => {
+    contentRef.current?.scrollTo(0, scrollByKey.current[scrollKey] || 0);
+  }, [scrollKey]);
+  // Popovers portal to <body>, outside the hidden tab, so close them before the next tab paints.
+  useLayoutEffect(() => { window.dispatchEvent(new Event(TAB_LEAVE_EVENT)); }, [tab]);
+  // A drill-in to an Insights mode opens a different view, so it starts at the top.
+  useEffect(() => {
+    const forget = () => { delete scrollByKey.current.portfolio; };
+    window.addEventListener(PORTFOLIO_MODE_EVENT, forget);
+    return () => window.removeEventListener(PORTFOLIO_MODE_EVENT, forget);
+  }, []);
 
   useEffect(() => { if (!parseRoute().tab) navigate({ firm, tab: DEFAULT_TAB }, { replace: true }); }, [firm]);
 
@@ -463,14 +488,10 @@ export default function App({ firm }) {
             {/* The page's section rhythm lives here, not in each view: every view's
                 top-level <section> is a flex item, so 36px between sections is
                 guaranteed and no view needs a margin of its own. */}
-            <div key={tab} className="pagein" style={{ display: "flex", flexDirection: "column", gap: 36 }}>
-              {tab === "overview" && <Overview data={data} dashboard={dashboard} />}
-              {tab === "dashboard" && <PivotDashboard data={data} dashboard={dashboard} />}
-              {tab === "review" && <Coverage data={data} dashboard={dashboard} />}
-              {tab === "company" && <CompanyPage data={data} dashboard={dashboard} />}
-              {tab === "portfolio" && <Portfolio data={data} dashboard={dashboard} />}
-              {tab === "formulas" && <Formulas data={rawData} dashboard={dashboard} />}
-            </div>
+            {TAB_IDS.filter((id) => visited.has(id)).map((id) => (
+              <TabPane key={id} active={id === tab} View={TAB_VIEWS[id]}
+                data={id === "formulas" ? rawData : data} dashboard={dashboard} />
+            ))}
           </main>
         </div>
       </div>
@@ -478,6 +499,24 @@ export default function App({ firm }) {
     </div>
   );
 }
+
+// Formulas is handed rawData instead of data (see the render above).
+const TAB_VIEWS = { overview: Overview, dashboard: PivotDashboard, review: Coverage,
+  company: CompanyPage, portfolio: Portfolio, formulas: Formulas };
+
+/** One tab's page: hidden, not unmounted, when inactive. `pagein` replays each time
+ *  it reappears. */
+function TabPane({ active, View, data, dashboard }) {
+  return (
+    <div className="pagein" data-testid="tab-pane" style={{ display: active ? "flex" : "none", flexDirection: "column", gap: 36 }}>
+      <TabView active={active} View={View} data={data} dashboard={dashboard} />
+    </div>
+  );
+}
+
+// Skips the view's render while hidden, and on reappearing if its inputs didn't change.
+const TabView = memo(({ View, data, dashboard }) => <View data={data} dashboard={dashboard} />,
+  (prev, next) => !next.active || (prev.data === next.data && prev.dashboard === next.dashboard));
 
 function Center({ children }) {
   return (

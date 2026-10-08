@@ -5,7 +5,7 @@
 // Doc shape: see EMPTY below. `widgets` is kept so files saved by older builds
 // still load. A missing/unwritten file (server returns {error:"not_ready"} with no
 // ETag) starts from EMPTY, saved on the first edit.
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const EMPTY = { version: 1, widgets: [], customMetrics: [], notes: {}, rules: [], views: [], cellFormats: {},
   // ids of DEFAULT_FORMULAS already offered — keeps a deleted default deleted
@@ -79,5 +79,6 @@ export default function useDashboard(firm) {
     });
   }, [persist]);
 
-  return { doc, update };
+  // Stable identity until the doc changes, so App can skip re-rendering a tab whose inputs are unchanged.
+  return useMemo(() => ({ doc, update }), [doc, update]);
 }

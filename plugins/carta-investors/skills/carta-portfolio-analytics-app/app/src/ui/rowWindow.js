@@ -95,7 +95,8 @@ export function useRowWindow({ groups, wrapRef, tbodyRef, resetKey }) {
 
   const place = useCallback(() => {
     const tbody = tbodyRef.current, wrap = wrapRef.current;
-    if (!tbody || !wrap) return;
+    // No client rects = its tab is hidden; keep the window it had for when it returns.
+    if (!tbody || !wrap || !tbody.getClientRects().length) return;
     const sp = findScrollParent(wrap);
     const viewH = sp ? sp.clientHeight : window.innerHeight;
     if (!viewH) return;

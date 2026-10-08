@@ -1,7 +1,7 @@
 // Portfolio — 30-second triage across the whole book.
 //   quadrant  growth × value bubble chart (size = a third metric)
 //   signals   rule-based watchlist (missed forecast, low runway, declining)
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FS, sans, mono, MICRO } from "../ui/theme.js";
 import { H2, Dropdown, Segmented, Badge, Btn, TextInput, MultiSelect, Eyebrow } from "../ui/components.jsx";
 import { QuadrantScatter, fmtVal } from "../ui/charts.jsx";
@@ -10,7 +10,7 @@ import { metricOf, latest, growth, qoqChange, metricOptions,
 import { allTags, tagId, companyMatchesTags } from "../model/tags.js";
 import { portfolioSignals } from "../model/signals.js";
 import { MEASURES, OPS, TONES, measureOf, opOf, ruleCondition, customPortfolioSignals, newRuleId } from "../model/rules.js";
-import { openCompany, takePendingPortfolioMode } from "../state/focus.js";
+import { openCompany, takePendingPortfolioMode, PORTFOLIO_MODE_EVENT } from "../state/focus.js";
 import Benchmarks from "./Benchmarks.jsx";
 import { trackClick } from "../analytics.js";
 import { withCommas } from "../ui/format.js";
@@ -41,6 +41,11 @@ const NONE_SIZE = "__NONE__";
 
 export default function Portfolio({ data, dashboard }) {
   const [mode, setMode] = useState(() => takePendingPortfolioMode() || "quadrant");
+  useEffect(() => {
+    const take = () => { const m = takePendingPortfolioMode(); if (m) setMode(m); };
+    window.addEventListener(PORTFOLIO_MODE_EVENT, take);
+    return () => window.removeEventListener(PORTFOLIO_MODE_EVENT, take);
+  }, []);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 36 }}>
       {/* Title + mode switcher, kept tight against the mode's own intro prose —
