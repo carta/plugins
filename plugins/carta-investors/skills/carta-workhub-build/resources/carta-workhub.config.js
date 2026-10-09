@@ -121,16 +121,18 @@ const TASK_TEMPLATE_CAPITAL_ACTIVITY = 'request-capital-activity';
 const TASK_TEMPLATE_PACKAGE = 'publish-financial-package';
 const TASK_TEMPLATE_EXPENSE = 'prepare-and-pay-expense';
 const TASK_TEMPLATE_MANAGEMENT_FEES = 'review-management-fees';
+const TASK_TEMPLATE_CASH_RECONCILIATION = 'cash-reconciliation';
 // Capital calls and Distributions share these; the name decides between them.
 const TASK_TEMPLATES_CAPITAL_ACTIVITY = [TASK_TEMPLATE_CAPITAL_ACTIVITY, 'draft-request-capital-activity'];
 // Every tab, Completed included, shows only these workflows: the ones a Workhub
 // panel opens (request thread, capital call review, reporting tracker), plus expense
-// payments and management fee reviews, which link out to Carta. One list for all
+// payments, management fee reviews and cash reconciliation, which open an MCP App or
+// link out to Carta. One list for all
 // tabs, so finished work never shows a kind of task the open tabs leave out. Any
 // other template stays out until a panel opens it.
 const TASK_TEMPLATES_WITH_TILES = [
   TASK_TEMPLATE_REQUEST, TASK_TEMPLATE_CAPITAL_ACTIVITY, TASK_TEMPLATE_PACKAGE,
-  TASK_TEMPLATE_EXPENSE, TASK_TEMPLATE_MANAGEMENT_FEES,
+  TASK_TEMPLATE_EXPENSE, TASK_TEMPLATE_MANAGEMENT_FEES, TASK_TEMPLATE_CASH_RECONCILIATION,
 ];
 
 // Needs-action tasks that open an MCP App in a new chat instead of Carta. `params` maps
@@ -141,6 +143,10 @@ const TASK_APPS = [
     label: 'management fee review', params: { fund_uuid: 'fund_uuid', review_id: 'object_id' } },
   { template: TASK_TEMPLATE_EXPENSE, view: 'fa:view:expense_payment_review',
     label: 'expense payment review', params: { expense_id: 'object_id' } },
+  // One workflow per bank transaction. The view takes the fund alone, so the app opens on
+  // the clicked task's fund rather than on every fund's transactions.
+  { template: TASK_TEMPLATE_CASH_RECONCILIATION, view: 'fa:view:gp_cash_reconciliation',
+    label: 'cash reconciliation', params: { fund_uuid: 'fund_uuid' } },
 ];
 
 const TASK_CATEGORY_REQUEST = 'request';
@@ -159,7 +165,7 @@ const TASK_CATEGORIES = [
     templates: TASK_TEMPLATES_CAPITAL_ACTIVITY, named: /distribution/i,
     icon: '<path d="M12 18H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5"/><path d="M18 12h.01"/><path d="M19 22v-6"/><path d="m22 19-3-3-3 3"/><path d="M6 12h.01"/><circle cx="12" cy="12" r="2"/>' },
   { key: 'cash', name: 'Cash reconciliation',
-    templates: ['cash-reconciliation'],
+    templates: [TASK_TEMPLATE_CASH_RECONCILIATION],
     icon: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>' },
   { key: 'fees', name: 'Management fees',
     templates: [TASK_TEMPLATE_MANAGEMENT_FEES, 'draft-review-management-fees'],
