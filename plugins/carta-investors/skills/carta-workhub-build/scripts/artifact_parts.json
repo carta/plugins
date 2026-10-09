@@ -1,0 +1,26 @@
+{
+  "template": "carta-workhub.template.html",
+  "markers": {
+    "carta-workhub.css": "__CARTA_WORKHUB_CSS__",
+    "carta-workhub.tracker.js": "__CARTA_WORKHUB_TRACKER_JS__",
+    "carta-workhub.config.js": "__CARTA_WORKHUB_CONFIG_JS__"
+  },
+  "app_js_marker": "__CARTA_WORKHUB_APP_JS__",
+  "app_js_parts": [
+    "carta-workhub.app.js",
+    "app/fund-admin-requests.js",
+    "app/capital-call-review.js",
+    "app/financial-reporting-tracker.js",
+    "app/version-check.js"
+  ],
+  "pdfjs_marker": "__PDFJS_VENDOR_JS__",
+  "pdfjs_parts": ["vendor/pdf.worker.min.js", "vendor/pdf.min.js"],
+  "placeholders": [
+    "{{CARTA_MCP_SERVER}}",
+    "{{CCR_FUND_UUID}}",
+    "{{CCR_ACTIVITY_ID}}",
+    "{{FRT_SEED_PERIOD}}",
+    "{{BUILD_ID}}",
+    "{{ARTIFACT_VERSION}}"
+  ]
+}

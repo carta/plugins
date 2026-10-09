@@ -1,0 +1,18 @@
+{
+  "fa:list:gp-workhub-active-task": "active-firm",
+  "fa:list:firm-workflow": "active-firm",
+  "fa:list:fund-admin-message": "active-firm",
+  "fa:list:workhub-task-app": "active-firm",
+  "fa:create:fund-admin-message": "active-firm",
+  "fa:create:document-content": "active-firm",
+  "fa:get:reporting-status": "firm-param",
+  "fa:list:workflow-message": "by-id",
+  "fa:create:workflow-message": "by-id",
+  "fa:get:capital-activity-review-summary": "by-id",
+  "fa:list:capital-activity-review-row": "by-id",
+  "fa:get:capital-activity-health-check": "by-id",
+  "fa:get:capital-activity-partner-email-preview": "by-id",
+  "fa:get:capital-activity-notice-pdf-preview": "by-id",
+  "fa:mutate:request-capital-activity-changes": "by-id",
+  "fa:mutate:approve-capital-activity": "by-id"
+}

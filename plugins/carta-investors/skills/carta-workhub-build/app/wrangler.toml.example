@@ -1,0 +1,35 @@
+# For a local run from app/: copy to wrangler.dev.toml (gitignored), drop [[routes]], and
+# run `npx wrangler dev --config wrangler.dev.toml`. DEPLOY.md has the rest.
+#
+# The deployed config is generated from the microapps repo's config/workhub.toml and
+# copied to the SKILL directory, one level up — so there `main` is "app/server/worker.js"
+# and the assets directory is "./resources".
+
+name = "workhub"
+compatibility_date = "2024-12-01"
+main = "server/worker.js"
+workers_dev = false
+
+# The Worker reads the artifact's own sources from here and assembles the page itself.
+# run_worker_first and not_found_handling = "none" keep the raw files unserved;
+# html_handling = "none" stops the template being redirected to a pretty URL.
+[assets]
+directory = "../resources"
+binding = "ASSETS"
+run_worker_first = true
+html_handling = "none"
+not_found_handling = "none"
+
+# One namespace per app, never shared between apps.
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = "YOUR_KV_NAMESPACE_ID"
+
+# Maps each URL label to the firm UUID it may act on. An unmapped label is a 404.
+[vars]
+TENANTS = '{"<label>":"<firm_uuid>"}'
+
+# One route per customer; custom_domain provisions DNS and TLS per hostname.
+[[routes]]
+pattern = "workhub.<label>.carta.cloud"
+custom_domain = true

@@ -21,7 +21,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.68.7</carta-plugin>
+<carta-plugin>carta-investors:6.68.8</carta-plugin>
 
 # Carta Workhub — Build / Redeploy
 
@@ -356,7 +356,13 @@ codes (`needs_reauth`, `server_not_connected`) are page-level, not per-section.
 | `resources/carta-workhub.template.html` | HTML skeleton + injection markers |
 | `resources/carta-workhub.tracker.js` | inlined `@carta/mcp-ui-tracker` browser bundle |
 | `resources/vendor/` | pdf.js, vendored — pinned to the last UMD release for a reason its README gives |
+| `scripts/artifact_parts.json` | the part order and template markers, shared by `build_artifact.py` and the hosted Worker |
+| `app/` | the hosted micro-app: a Cloudflare Worker serving these same `resources/` at `workhub.<label>.carta.cloud` — see `app/DEPLOY.md` |
 | `../../.claude-plugin/skill-versions.json` | this skill's `version` + release `headline` |
+
+The hosted micro-app runs `resources/` unchanged, so every change here ships to both surfaces.
+It reaches Carta only through the commands in `app/server/commands.json`; a new command needs
+an entry there, which `tests/js/carta-workhub-hosted-drift.test.js` enforces.
 
 `carta-workhub.app.js` duplicates a handful of helpers from `carta-home.app.js` on purpose:
 the two artifacts ship independently, so neither may import from the other. Keep them
