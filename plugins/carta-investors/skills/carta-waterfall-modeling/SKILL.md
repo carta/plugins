@@ -32,16 +32,16 @@ allowed-tools:
   - mcp__carta__get_current_user
   - mcp__claude_ai_Carta__get_current_user
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__get_current_user
-  - Bash(uv run *build_artifact.py *)
-  # Only when the skill's base directory is unknown
-  - Bash(find /mnt/skills /sessions *)
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-waterfall-modeling/scripts/build_artifact.py" *)
   - Artifact
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.69.3</carta-plugin>
+<carta-plugin>carta-investors:6.70.0</carta-plugin>
 
 # Waterfall Modeling
+
+**Plugin root in reference files.** Reference files write the plugin root as a `CLAUDE_PLUGIN_ROOT` variable in braces. Bash does not set that variable, so never run it as written: replace it with the literal plugin root `${CLAUDE_PLUGIN_ROOT}`, keep every quote, and keep the command on one line.
 
 Run a waterfall against a portfolio company and present the distribution.
 v1 is firm-context only. After the results, the user can optionally update their

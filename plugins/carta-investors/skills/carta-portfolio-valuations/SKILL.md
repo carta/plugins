@@ -51,7 +51,10 @@ allowed-tools:
   - mcp__Claude_Browser__javascript_tool
   - ToolSearch
   - Skill
-  - Bash(uv run *)
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-valuations/scripts/build_artifact.py" *)
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-valuations/scripts/backsolve_calculator.py" *)
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-valuations/scripts/wait_for_run_request.py" *)
+  - Bash(sleep *)
   - Bash(mkdir *)
   - Bash(cat *)
   - Bash(printf *)
@@ -63,11 +66,13 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.69.3</carta-plugin>
+<carta-plugin>carta-investors:6.70.0</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
 # Portfolio Valuations Skill
+
+**Plugin root in reference files.** Reference files write the plugin root as a `CLAUDE_PLUGIN_ROOT` variable in braces. Bash does not set that variable, so never run it as written: replace it with the literal plugin root `${CLAUDE_PLUGIN_ROOT}`, keep every quote, and keep the command on one line.
 
 Entry point for the portfolio valuations workflow. The skill is focused
 on the **bulk** experience:

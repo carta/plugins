@@ -17,12 +17,12 @@ Source parts (all in the skill's resources/ dir):
 The run's values are JSON-encoded into the page, never pasted into HTML or JS by hand, and
 `<`, `>` and `&` are escaped so a name that contains `</script>` cannot end the script.
 
-Usage (the skill's path): every run value as one JSON object on stdin, through a quoted
-heredoc, so no API-sourced text (a name with an apostrophe, a `$`, a backtick) is ever
+Usage (the skill's path): every run value as one JSON object in a file the Write tool
+creates, so no API-sourced text (a name with an apostrophe, a `$`, a backtick) is ever
 parsed by the shell:
-  uv run scripts/build_artifact.py --config - --out <path>.html <<'WF_CONFIG_EOF'
-  {"owner_kind": "FIRM", ..., "entities": [...]}
-  WF_CONFIG_EOF
+  uv run scripts/build_artifact.py --config <path>.json --out <path>.html
+
+`--config -` reads the same object from stdin instead.
 
 Or, field by field (tests and local use):
   uv run scripts/build_artifact.py \
@@ -261,7 +261,7 @@ def build(cfg, demo=False):
 
 def _parser():
     ap = argparse.ArgumentParser(description="Assemble the waterfall results page for one run.")
-    ap.add_argument("--config", help="'-' to read every run value as one JSON object from stdin")
+    ap.add_argument("--config", help="path to a JSON file holding every run value as one object, or '-' for stdin")
     ap.add_argument("--owner-kind")
     ap.add_argument("--owner-id")
     ap.add_argument("--target-kind")
@@ -296,10 +296,14 @@ def main(argv=None):
     }
     try:
         if args.config is not None:
-            if args.config != "-":
-                raise ConfigError("--config only accepts '-' (read the JSON object from stdin)")
             try:
-                loaded = json.loads(sys.stdin.read())
+                if args.config == "-":
+                    loaded = json.loads(sys.stdin.read())
+                else:
+                    with open(args.config, encoding="utf-8") as fh:
+                        loaded = json.load(fh)
+            except OSError as exc:
+                raise ConfigError("--config file could not be read: {}".format(exc))
             except ValueError as exc:
                 raise ConfigError("--config is not valid JSON: {}".format(exc))
             if not isinstance(loaded, dict):

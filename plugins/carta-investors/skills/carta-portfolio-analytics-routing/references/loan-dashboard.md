@@ -79,25 +79,20 @@ Derive: `inactive_loans = total_loans − active_loans`; `undrawn_capacity = tot
 ### 7. Render the artifact (deterministic — via `render_artifact.py`)
 The step-6 data object is small; the artifact template is ~12 KB. To keep the template **out of your context and out of your output** (re-emitting it — or hand-writing the escape in a heredoc — is the dominant render cost and a frequent failure), a bundled script reads the template itself and performs the escape + substitution. **You write only the small data file and run the script — never load or emit the template, and never hand-author the escaping.**
 
-**7a. Locate the workspace and the script** (one Bash block; `${CLAUDE_PLUGIN_ROOT}` is NOT substituted in Cowork, so probe both runtimes):
+**7a. Locate the workspace** (one Bash block; it prints the directory — use that literal path as `<WORKDIR>` below, since shell variables do not survive between Bash calls):
 ```bash
 if [ -d "$HOME/mnt/outputs" ] && [ -w "$HOME/mnt/outputs" ]; then WORKDIR="$HOME/mnt/outputs/carta-loan-dashboard"
 elif command -v carta >/dev/null 2>&1; then WORKDIR="$(carta workspace cache carta-loan-dashboard | jq -r .)"
 else WORKDIR="${TMPDIR:-/tmp}/carta-loan-dashboard"; fi
-mkdir -p "$WORKDIR"
-if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -d "$CLAUDE_PLUGIN_ROOT/skills/carta-loan-dashboard" ]; then
-  SKILL_DIR="$CLAUDE_PLUGIN_ROOT/skills/carta-loan-dashboard"
-else
-  SKILL_DIR="$(find "$HOME/mnt/.remote-plugins" -maxdepth 3 -type d -name carta-loan-dashboard 2>/dev/null | head -1)"
-fi
+mkdir -p "$WORKDIR" && echo "$WORKDIR"
 ```
-If `uv`/Bash is unavailable or `$SKILL_DIR/../../scripts/render_artifact.py` does not resolve (a hosted surface that blocks subprocess), use the **inline fallback (7e)**.
+The renderer is `${CLAUDE_PLUGIN_ROOT}/scripts/render_artifact.py` — the plugin's own `scripts/`, not this skill's. Bash reaches that path on every surface, Cowork included; do not search for it. If `uv`/Bash is unavailable (a hosted surface that blocks subprocess), use the **inline fallback (7e)**.
 
-**7b. Write the data.** `Write` the step-6 data object as compact JSON to `$WORKDIR/loan-data.json`. (You are writing a small data file — never the template.)
+**7b. Write the data.** `Write` the step-6 data object as compact JSON to `<WORKDIR>/loan-data.json`. (You are writing a small data file — never the template.)
 
-**7c. Render.**
+**7c. Render.** Run this exactly, with `<WORKDIR>` replaced by the literal path from 7a. `allowed-tools` matches the command text, so keep the quotes and the script path as written:
 ```bash
-uv run "$SKILL_DIR/../../scripts/render_artifact.py" --workdir "$WORKDIR" --template "$SKILL_DIR/references/artifact_template.html" --out loan-dashboard.html
+uv run "${CLAUDE_PLUGIN_ROOT}/scripts/render_artifact.py" --workdir "<WORKDIR>" --template "${CLAUDE_PLUGIN_ROOT}/skills/carta-loan-dashboard/references/artifact_template.html" --out loan-dashboard.html
 ```
 The shared renderer reads the template you point it at, applies the XSS-safe `\uXXXX` escaping, substitutes the single placeholder, writes the finished HTML, and prints its absolute path to stdout. Branch on the exit code — do not re-derive the result:
 

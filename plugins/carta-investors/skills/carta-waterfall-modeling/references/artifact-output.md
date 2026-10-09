@@ -9,11 +9,10 @@ write nothing between tool calls.
 
 Once per run, after the results doc's fetch loop holds every entity's pages. `<slug>` is the
 company name lowercased with non-alphanumerics collapsed to `-`. Pass every value as **one JSON
-object through the quoted heredoc**, exactly in this shape — never as `--flag` arguments:
+object in a file** — never as `--flag` arguments. First `Write` the object to
+`<outputs-directory>/waterfall-<slug>-<execution_id>.json`, exactly in this shape:
 
 ```
-uv run "<SKILL_DIR>/scripts/build_artifact.py" --config - \
-  --out <outputs-directory>/waterfall-<slug>-<execution_id>.html <<'WF_CONFIG_EOF'
 {
   "owner_kind": "FIRM",
   "owner_id": "<org_pk from Step 1>",
@@ -33,10 +32,16 @@ uv run "<SKILL_DIR>/scripts/build_artifact.py" --config - \
     {"display_name": "<name>", "is_root": true, "allocations": [ … ], "breakpoints": [ … ], "grand_totals": { … }}
   ]
 }
-WF_CONFIG_EOF
 ```
 
-- Escape a `"` or `\` inside a value as `\"` / `\\`.
+Then build, on one line, exactly as written. `allowed-tools` matches the command text, so a
+shell variable, a different path, or a line break makes the call ask for approval:
+
+```
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-waterfall-modeling/scripts/build_artifact.py" --config "<outputs-directory>/waterfall-<slug>-<execution_id>.json" --out "<outputs-directory>/waterfall-<slug>-<execution_id>.html"
+```
+
+- Escape a `"` or `\` inside a value as `\"` / `\\` (it is JSON).
 - `currency` — leave the key out when Step 3 returned none.
 - `base_url` — the `base_url` field of `get_current_user`; reuse it if the session already called
   it, else call it once. Never type a host. If `get_current_user` fails, leave the key out.
@@ -48,10 +53,9 @@ WF_CONFIG_EOF
   `breakpoints` the cached array, or `null` when unavailable this run; `grand_totals` verbatim.
   `core_results` → one entity: `display_name` the company name, `is_root: true`.
 
-> **Path — do NOT rely on `${CLAUDE_PLUGIN_ROOT}` in bash.** In Desktop that env var is empty.
-> Use the **base directory reported for this skill when it loaded** as `<SKILL_DIR>` — the folder
-> holding `SKILL.md` and `scripts/build_artifact.py`. If you don't have it, find the script once
-> and take the folder two levels up:
+> **Path.** Bash reaches the `${CLAUDE_PLUGIN_ROOT}` path above on Claude Code and Cowork; do
+> not search for it first. Only if `uv run` reports that the file does not exist, find the
+> script once (this call asks for approval) and run it from the path it prints:
 > ```
 > find /mnt/skills /sessions "$HOME" -type f -path '*carta-waterfall-modeling/scripts/build_artifact.py' 2>/dev/null
 > ```

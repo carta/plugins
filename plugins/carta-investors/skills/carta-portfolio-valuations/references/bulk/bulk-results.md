@@ -153,10 +153,7 @@ Build and show it:
 
 ```bash
 mkdir -p .claude/preview
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-valuations/scripts/build_artifact.py" \
-  --template cowork-bulk-results --pre-classified \
-  < <(printf '%s' '{"rows":[…]}') \
-  > .claude/preview/bulk-results-artifact.html
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-valuations/scripts/build_artifact.py" --template cowork-bulk-results --pre-classified < <(printf '%s' '{"rows":[…]}') > .claude/preview/bulk-results-artifact.html
 ```
 
 If `mcp__visualize__read_me` output isn't in context yet this session, call

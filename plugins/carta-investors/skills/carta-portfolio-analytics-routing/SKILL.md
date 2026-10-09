@@ -46,8 +46,9 @@ allowed-tools:
   # Dispatches the co-investors route. A dispatched skill runs under its own
   # frontmatter, so carta-co-investors' tools are deliberately NOT repeated here.
   - Skill
-  - Bash(uv run /sessions/*)
-  - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/*)
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-analytics-routing/references/soi/scripts/render-artifact.py" *)
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-soi/scripts/render-artifact.py" *)
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/scripts/render_artifact.py" *)
   - Bash(pwd)
   - Bash(carta workspace cache *)
   - Bash(jq *)
@@ -65,9 +66,11 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.69.3</carta-plugin>
+<carta-plugin>carta-investors:6.70.0</carta-plugin>
 
 # carta-portfolio-analytics-routing — Portfolio Analytics Router (mirror)
+
+**Plugin root in reference files.** Reference files write the plugin root as a `CLAUDE_PLUGIN_ROOT` variable in braces. Bash does not set that variable, so never run it as written: replace it with the literal plugin root `${CLAUDE_PLUGIN_ROOT}`, keep every quote, and keep the command on one line.
 
 Routes to the Portfolio Analytics App, Schedule of Investments, Co-Investor
 Lookup, or Performance Benchmarks. SOI and Benchmarks execute inline from a
@@ -288,7 +291,7 @@ specialist, and keeping it honest costs either a declarable codemod
 (`tests/carta-investors/mirror_sync.py`) or a human merge. Dispatch has nothing
 to drift and nothing to re-mirror. It also keeps this router's `allowed-tools`
 minimal: a dispatched skill brings its own tools, so `carta-co-investors`'
-`Bash(uv run *)`, `Bash(tee *)`, `skill_checkpoint`, and
+render-script `Bash(uv run …)` grant, `Bash(tee *)`, `skill_checkpoint`, and
 `carta-portfolio-analytics-app`'s script/serve Bash grants are deliberately
 **not** duplicated here.
 

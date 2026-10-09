@@ -18,6 +18,8 @@ CARTA_ID_RE = re.compile(r"^[0-9]{1,19}$")
 # The page concatenates this into an href, so a quote or javascript: scheme would
 # land inside the link. Require a plain https origin.
 BASE_URL_RE = re.compile(r"^https://[A-Za-z0-9.\-]+(:[0-9]{1,5})?$")
+# A published Claude artifact, as the Artifact tool returns it. Lands in an href too.
+CLAUDE_ARTIFACT_URL_RE = re.compile(r"^https://claude\.ai/(?:code/)?artifact/[A-Za-z0-9-]+$")
 
 
 def js_safe_json(obj) -> str:

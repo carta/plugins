@@ -17,7 +17,11 @@ cutting tokens and latency.
 
 Usage:
     uv run render-artifact.py <output> <artifact_id> \\
-        <mcp_server> <firm_uuid> <firm_name> <funds_file> <initial_fund_uuid>
+        <mcp_server> <firm_uuid> <firm_name> <funds_file> <initial_fund_uuid> \\
+        [--home-url <carta_home_url>]
+
+--home-url is the Carta Home artifact that built this page; it becomes the
+"Back to Home" link. Without it the link stays hidden.
 
 The template is resolved relative to this file, so callers only locate the script.
 
@@ -61,6 +65,7 @@ sys.path.insert(0, str(_LIB))
 
 from live_artifact_render import (  # noqa: E402
     ARTIFACT_ID_RE,
+    CLAUDE_ARTIFACT_URL_RE,
     MCP_SERVER_RE,
     UUID_RE,
     check_path_under_cwd,
@@ -111,6 +116,7 @@ PLACEHOLDERS = (
     "{{CARTA_MCP_SERVER}}",
     "{{FIRM_NAME}}",
     "{{FIRM_UUID}}",
+    "{{HOME_URL}}",
 )
 
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -187,16 +193,26 @@ def load_funds(funds_file: Path) -> "list | None":
 
 
 def main() -> int:
-    if len(sys.argv) != 8:
+    args = sys.argv[1:]
+    home_url = ""
+    if len(args) == 9 and args[7] == "--home-url":
+        home_url = args.pop()
+        args.pop()
+    if len(args) != 7:
         print(
             "usage: render-artifact.py <output> <artifact_id> "
-            "<mcp_server> <firm_uuid> <firm_name> <funds_file> <initial_fund_uuid>",
+            "<mcp_server> <firm_uuid> <firm_name> <funds_file> <initial_fund_uuid> "
+            "[--home-url <carta_home_url>]",
             file=sys.stderr,
         )
         return 2
 
     (output, artifact_id, mcp_server,
-     firm_uuid, firm_name, funds_file, initial_fund_uuid) = sys.argv[1:]
+     firm_uuid, firm_name, funds_file, initial_fund_uuid) = args
+
+    if home_url and not CLAUDE_ARTIFACT_URL_RE.match(home_url):
+        print(f"error: --home-url is not a claude.ai artifact URL: {home_url!r}", file=sys.stderr)
+        return 1
 
     if not UUID_RE.match(firm_uuid):
         print(f"error: firm_uuid is not a valid UUID: {firm_uuid!r}", file=sys.stderr)
@@ -274,6 +290,8 @@ def main() -> int:
         "funds": funds,
     }
 
+    # First, so a firm or fund name that spells a placeholder is never substituted.
+    content = content.replace("{{HOME_URL}}", home_url)
     content = content.replace("{{FUNDS_JSON}}", js_safe_json(state_obj))
     content = content.replace("{{INITIAL_FUND_UUID}}", initial_fund_uuid)
     content = content.replace("{{CARTA_MCP_SERVER}}", mcp_server)

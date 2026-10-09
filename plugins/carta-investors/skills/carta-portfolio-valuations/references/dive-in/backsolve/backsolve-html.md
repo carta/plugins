@@ -50,15 +50,10 @@ COMPANY_SLUG="${COMPANY_NAME// /_}"
 OUTPUT_PATH="/tmp/backsolve_${COMPANY_SLUG}.html"
 
 # Without equity adjustment data:
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-valuations/scripts/backsolve_calculator.py" \
-  --html "$OUTPUT_PATH" \
-  --input "$BACKSOLVE_JSON"
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-valuations/scripts/backsolve_calculator.py" --html "$OUTPUT_PATH" --input "$BACKSOLVE_JSON"
 
 # With equity adjustment data (pre-fills the Equity Adjustment section):
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-valuations/scripts/backsolve_calculator.py" \
-  --html "$OUTPUT_PATH" \
-  --input "$BACKSOLVE_JSON" \
-  --equity-adjustment-input "$ADJ_JSON"
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-valuations/scripts/backsolve_calculator.py" --html "$OUTPUT_PATH" --input "$BACKSOLVE_JSON" --equity-adjustment-input "$ADJ_JSON"
 
 echo "Saved to: $OUTPUT_PATH"
 ```

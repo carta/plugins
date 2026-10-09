@@ -21,12 +21,12 @@ allowed-tools:
   - Write
   - Bash(mkdir:*)
   - Bash(jq:*)
-  - Bash(*ff-cache.sh*)
+  - Bash(bash "${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-forecasting/scripts/ff-cache.sh" *)
   - AskUserQuestion
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.69.3</carta-plugin>
+<carta-plugin>carta-investors:6.70.0</carta-plugin>
 
 # Fund Forecasting
 
@@ -349,7 +349,7 @@ These commands sit behind a hard MCP response-size limit and expose only the sha
 
 ## Caching protocol
 
-Responses can be large. Cache every read to disk and reuse it within its freshness window so follow-up questions read the file instead of re-fetching. Use the bundled helper `${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-forecasting/scripts/ff-cache.sh` — if `${CLAUDE_PLUGIN_ROOT}` is unset (e.g. the skill is running outside an installed plugin), invoke the script by its absolute path under the skill's `scripts/` directory.
+Responses can be large. Cache every read to disk and reuse it within its freshness window so follow-up questions read the file instead of re-fetching. Use the bundled helper `${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-forecasting/scripts/ff-cache.sh`. Run it as `bash "<path>"` exactly as the commands below show: the plugin mount in Cowork has no execute bit, and `allowed-tools` matches the command text. If `${CLAUDE_PLUGIN_ROOT}` is unset (e.g. the skill is running outside an installed plugin), invoke the script by its absolute path under the skill's `scripts/` directory.
 
 - Derive `<env>` from the server identifier resolved in Step 0: `carta` or `carta-prod` → `prod`, `carta-test` → `test`, `carta-local` → `local`, `carta-sandbox` → `sandbox`, `carta-preprod` → `preprod`, `carta-demo` → `demo`.
 
@@ -358,12 +358,12 @@ Responses can be large. Cache every read to disk and reuse it within its freshne
 **1. Before every command call, check the cache:**
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-forecasting/scripts/ff-cache.sh lookup <env> <command> <fund_id> '<params-json>'
+bash "${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-forecasting/scripts/ff-cache.sh" lookup <env> <command> <fund_id> '<params-json>'
 ```
 `lookup` **always exits 0** (a cache miss is the normal first-call path, not an error) and signals hit vs. miss on **stdout**:
 - **Fresh hit:** stdout is the cached response JSON — use it. Read only the slice you need from large payloads with `jq`. State the as-of time from `meta`:
   ```bash
-  ${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-forecasting/scripts/ff-cache.sh meta <env> <command> <fund_id> '<params-json>' | jq -r '.fetched_at'
+  bash "${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-forecasting/scripts/ff-cache.sh" meta <env> <command> <fund_id> '<params-json>' | jq -r '.fetched_at'
   ```
   e.g. *"as of 2026-06-02 14:03 UTC (cached)"*.
 - **Miss or stale:** stdout is the literal `CACHE_MISS` (it can't collide with cached data, which is always a JSON object/array) — go to step 2. This is expected; it does not mean anything went wrong.
@@ -371,11 +371,12 @@ ${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-forecasting/scripts/ff-cache.sh lookup <
 **2. On a miss, call the command (read_tool) then stage-and-store.** Call `read_tool`, then persist via the staging path. Never inline the response into a shell command (fund/investment names may contain quotes or shell metacharacters), and never reuse one temp file across fetches — overwriting a file you haven't re-read trips Claude Code's *"file has not been read yet"* guard. The `stage-path` → `Write` → `store-staged` flow sidesteps both:
 
 ```bash
-# a. get a fresh, unique staging path (also clears any stale stage, so the Write target never pre-exists)
-STAGE=$(${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-forecasting/scripts/ff-cache.sh stage-path <env> <command> <fund_id> '<params-json>')
-# b. Write the RAW fetch response to that exact $STAGE path with the Write tool
+# a. get a fresh, unique staging path (also clears any stale stage, so the Write target never pre-exists);
+#    it prints the path — use that literal path as <STAGE> in step b
+bash "${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-forecasting/scripts/ff-cache.sh" stage-path <env> <command> <fund_id> '<params-json>'
+# b. Write the RAW fetch response to that exact <STAGE> path with the Write tool
 # c. ingest it (this also removes the stage):
-${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-forecasting/scripts/ff-cache.sh store-staged <env> <command> <fund_id> '<params-json>'
+bash "${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-forecasting/scripts/ff-cache.sh" store-staged <env> <command> <fund_id> '<params-json>'
 ```
 
 (Legacy `store` reading from stdin redirection — `store <env> <command> <fund_id> '<params-json>' < file` — still works, but `stage-path`→Write→`store-staged` is the supported flow: it avoids shell-quoting issues and the overwrite guard entirely.)

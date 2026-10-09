@@ -39,9 +39,7 @@ allowed-tools:
   # Cowork
   - Artifact
   # Local execution
-  - Bash(uv run /sessions/*)
-  - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/*)
-  - Bash(find /sessions *)
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-spa-audit/scripts/render-artifact.py" *)
   - Bash(pwd)
   - Read
   - Write
@@ -52,7 +50,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.69.3</carta-plugin>
+<carta-plugin>carta-investors:6.70.0</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -253,25 +251,12 @@ Store the `name` the connector gate resolves as `<CARTA_MCP_SERVER>`. Step A2 pa
 
 Locate the script:
 
-```bash
-find /sessions "$HOME/mnt" -type f -path '*/carta-spa-audit/scripts/render-artifact.py' 2>/dev/null | head -1
-```
+The script is `${CLAUDE_PLUGIN_ROOT}/skills/carta-spa-audit/scripts/render-artifact.py`. Bash reaches that path on every surface, Cowork included, so do not search for it.
 
-If it prints nothing, use `${CLAUDE_PLUGIN_ROOT}/skills/carta-spa-audit/scripts/render-artifact.py`.
-
-Keep the `find` scoped to those two roots — the remote plugin mounts, the only place bash can reach this script, since it cannot reach the path `${CLAUDE_PLUGIN_ROOT}` expands to there. Locally neither exists, the `find` is empty, and the plugin-root path is the correct one. Do not broaden to `$HOME` or `/`: it takes tens of seconds and can resolve a stale cached copy.
-
-Render, substituting the path found above **literally**. `allowed-tools` matches the command text, so a shell variable in place of the path fails the allowlist and the call has to be approved by hand each time:
+Render. Run it on one line, exactly as written below. `allowed-tools` matches the command text, so a shell variable, a different path, or a line break fails the allowlist and the call has to be approved by hand each time:
 
 ```bash
-uv run "<SCRIPT_PATH>" \
-    "<CWD>/<firm-slug>-spa-audit.html" \
-    "<firm-slug>-spa-audit" \
-    "<CARTA_MCP_SERVER>" \
-    "<firm_id>" \
-    "<firm_name>" \
-    "<org_pk>" \
-    "<base_url>"
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-spa-audit/scripts/render-artifact.py" "<CWD>/<firm-slug>-spa-audit.html" "<firm-slug>-spa-audit" "<CARTA_MCP_SERVER>" "<firm_id>" "<firm_name>" "<org_pk>" "<base_url>"
 ```
 
 Positional arguments:

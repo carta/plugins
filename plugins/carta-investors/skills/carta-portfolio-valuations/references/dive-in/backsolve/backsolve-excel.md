@@ -172,15 +172,10 @@ COMPANY_SLUG="${COMPANY_NAME// /_}"
 OUTPUT_PATH="/tmp/backsolve_${COMPANY_SLUG}.xlsx"
 
 # Without equity adjustment:
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-valuations/scripts/backsolve_calculator.py" \
-  --excel "$OUTPUT_PATH" \
-  --input "$BACKSOLVE_JSON"
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-valuations/scripts/backsolve_calculator.py" --excel "$OUTPUT_PATH" --input "$BACKSOLVE_JSON"
 
 # With equity adjustment:
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-valuations/scripts/backsolve_calculator.py" \
-  --excel "$OUTPUT_PATH" \
-  --input "$BACKSOLVE_JSON" \
-  --equity-adjustment-input "$ADJ_JSON"
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-valuations/scripts/backsolve_calculator.py" --excel "$OUTPUT_PATH" --input "$BACKSOLVE_JSON" --equity-adjustment-input "$ADJ_JSON"
 ```
 
 ### Step 3 — Tell the user

@@ -12,8 +12,7 @@ allowed-tools:
   - Read
   - Write
   - Edit
-  - Bash(uv run *)
-  - Bash(python3 *)
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-brand-extraction/scripts/analyze_website.py" *)
   - WebFetch
   - mcp__claude_ai_carta__welcome
   - mcp__claude_ai_carta__list_contexts
@@ -38,7 +37,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.69.3</carta-plugin>
+<carta-plugin>carta-investors:6.70.0</carta-plugin>
 
 # Build Brand Board
 
@@ -141,7 +140,7 @@ mcp__claude_ai_carta__read_tool({"name": "fa__get__brand_board"})
 Run the analysis script:
 
 ```bash
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-brand-extraction/scripts/analyze_website.py <url>
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-brand-extraction/scripts/analyze_website.py" <url>
 ```
 
 This returns a JSON report with raw extraction data. **Save the output** — you will reference it throughout composition.

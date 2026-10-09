@@ -21,8 +21,7 @@ allowed-tools:
   - Bash(grep *)
   - Bash(echo *)
   - Bash(ls *)
-  - Bash(uv run *)
-  - Bash(python3 *)
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-agm-deck-builder/scripts/compile_deck.py" *)
   - Bash(carta scope set write *)
   - Bash(carta scope clear *)
   - Bash(carta fa *)
@@ -64,7 +63,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.69.3</carta-plugin>
+<carta-plugin>carta-investors:6.70.0</carta-plugin>
 
 # AGM Deck Builder
 
@@ -337,9 +336,7 @@ echo "Logo: $OUTPUT_DIR/assets/$LOGO_FILENAME"
 
 **Priority 2 — `firm_logo_url` from Agent A (downloads + removes background):**
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-agm-deck-builder/scripts/compile_deck.py" process-logo \
-  --url "<firm_logo_url from Agent A result>" \
-  --output "$OUTPUT_DIR/assets/firm-logo.png"
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-agm-deck-builder/scripts/compile_deck.py" process-logo --url "<firm_logo_url from Agent A result>" --output "$OUTPUT_DIR/assets/firm-logo.png"
 LOGO_FILENAME="firm-logo.png"
 ```
 
@@ -360,15 +357,7 @@ This is a **two-pass process**. The `compile_deck.py` script handles 190 tokens 
 **Pass 1 — Run the compiler (deterministic substitution):**
 
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-agm-deck-builder/scripts/compile_deck.py" compile \
-  --queries-dir /tmp/agm-queries \
-  --template "${CLAUDE_PLUGIN_ROOT}/skills/carta-agm-deck-builder/references/template.html" \
-  --brand-slug "<firm-slug>" \
-  --firm-name "<Firm Name>" \
-  --period-label "<Full Year 2025>" \
-  --as-of-date <YYYY-MM-DD> \
-  --output "$OUTPUT_DIR/<firm-slug>-agm-<year>.html" \
-  --creative-prompt "$OUTPUT_DIR/creative-tokens.md"
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-agm-deck-builder/scripts/compile_deck.py" compile --queries-dir /tmp/agm-queries --template "${CLAUDE_PLUGIN_ROOT}/skills/carta-agm-deck-builder/references/template.html" --brand-slug "<firm-slug>" --firm-name "<Firm Name>" --period-label "<Full Year 2025>" --as-of-date <YYYY-MM-DD> --output "$OUTPUT_DIR/<firm-slug>-agm-<year>.html" --creative-prompt "$OUTPUT_DIR/creative-tokens.md"
 ```
 
 **Pass 2 — Fill the creative tokens:**
@@ -386,10 +375,7 @@ Read `creative-tokens.md` (it is very short — one line per field with data con
 
 Then apply:
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-agm-deck-builder/scripts/compile_deck.py" apply \
-  --partial  "$OUTPUT_DIR/<firm-slug>-agm-<year>.html" \
-  --creative-values "$OUTPUT_DIR/creative-values.json" \
-  --output   "$OUTPUT_DIR/<firm-slug>-agm-<year>.html"
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-agm-deck-builder/scripts/compile_deck.py" apply --partial  "$OUTPUT_DIR/<firm-slug>-agm-<year>.html" --creative-values "$OUTPUT_DIR/creative-values.json" --output   "$OUTPUT_DIR/<firm-slug>-agm-<year>.html"
 ```
 
 **Verify:**

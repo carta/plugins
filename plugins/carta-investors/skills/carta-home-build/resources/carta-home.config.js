@@ -27,8 +27,8 @@ const DASHBOARDS = [
     label: 'Open fund performance dashboard',
     footerId: 'perf-card-footer',
     prompt: 'Show me the TVPI, DPI, MOIC and IRR for my funds',
-    // No published owner yet: the router's benchmarks route answers in chat rather than
-    // publishing an artifact, so outside an internal install this card keeps its prompt.
+    // The only builder: the router's benchmarks route answers in chat rather than
+    // publishing an artifact.
     buildSkill: ['carta-fund-performance'],
   },
 ];

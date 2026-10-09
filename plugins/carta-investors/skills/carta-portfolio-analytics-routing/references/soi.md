@@ -157,42 +157,16 @@ The dropdown (and each family's members) sorts by `vintage_date` descending — 
 
 **4b.** Locate the script:
 
-```bash
-find /sessions "$HOME/mnt" -type f -path '*/carta-portfolio-analytics-routing/references/soi/scripts/render-artifact.py' 2>/dev/null | head -1
-```
+The script is `${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-analytics-routing/references/soi/scripts/render-artifact.py`. Bash reaches that path on every surface, Cowork included, so do not search for it.
 
-**An empty result is the expected case in Cowork, not an error** — bash cannot reach the
-plugin mount there. When it prints nothing, go straight to the copy fallback at the end of
-this step; do not spend a `uv run` on
-`${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-analytics-routing/references/soi/scripts/render-artifact.py`
-first, because that path is exactly what bash can't see. Use that path directly only where
-the plugin lives on the local filesystem (a repo checkout), where the `find` roots don't
-exist and the plugin root does.
-
-**4c.** Render, substituting the path from 4b **literally**. `allowed-tools`
-matches the command text, so a shell variable in place of the path fails the
-allowlist and the call has to be approved by hand each time:
+**4c.** Render. Run it on one line, exactly as written below. `allowed-tools` matches the command text, so a shell variable, a different path, or a line break fails the allowlist and the call has to be approved by hand each time:
 
 ```bash
-uv run "<SCRIPT_PATH>" \
-    "<CWD>/<firm-slug>-fund-soi-collection.html" \
-    "<firm-slug>-fund-soi-collection" \
-    "<CARTA_MCP_SERVER>" \
-    "<FIRM_UUID>" \
-    "<FIRM_NAME>" \
-    "<CWD>/<firm-slug>-funds.json" \
-    "<INITIAL_FUND_UUID>"
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-analytics-routing/references/soi/scripts/render-artifact.py" "<CWD>/<firm-slug>-fund-soi-collection.html" "<firm-slug>-fund-soi-collection" "<CARTA_MCP_SERVER>" "<FIRM_UUID>" "<FIRM_NAME>" "<CWD>/<firm-slug>-funds.json" "<INITIAL_FUND_UUID>"
 ```
 
-Keep the `find` scoped to those two roots — the remote plugin mounts, the only
-place bash can reach this script, since it cannot reach the path
-`${CLAUDE_PLUGIN_ROOT}` expands to there. Locally neither exists, the `find` is
-empty, and the plugin-root path is the correct one. Do not broaden to `$HOME` or
-`/`: it takes tens of seconds and can resolve a stale cached copy.
-
-**The copy fallback.** Use it when the `find` came back empty on a host where the plugin
-root isn't a local path, or when `uv run` fails because the script file does not exist (not
-on a validation error). Bash cannot reach the plugin mount, but `Read` can: copy both files
+**The copy fallback.** Use it when `uv run` fails because the script file does not exist (not
+on a validation error). Bash could not reach the plugin mount, but `Read` can: copy both files
 into `<CWD>/soi-render/` as `scripts/render-artifact.py` and `references/artifact.html`, run
 that copy, and report that the fallback fired so the mount path gets fixed. One attempt — if
 it fails too, stop rather than hand-writing the HTML.
@@ -206,6 +180,8 @@ Positional arguments:
 5. **Firm name** — the human-readable firm name from Step 1.
 6. **Funds file path** — the absolute path to the JSON file you wrote in 4a. Must also be under CWD.
 7. **Initial fund UUID** — the `initial_fund_uuid` chosen in Step 2. Must be one of the uuids in the funds file; the script refuses if it isn't.
+
+When Carta Home is building this page, it gives you its own URL. Add `--home-url "<carta_home_url>"` to the end of the same command line, so the page's "Back to Home" link points there. Without it the link stays hidden.
 
 On success, the script prints one stdout line: the absolute output path. The script exits non-zero on any validation failure (bad UUID, unusable connector name, output or funds file outside CWD, empty funds list, malformed fund entries, initial_fund_uuid not present in the list, template missing, missing placeholders). If it fails, surface the error and abort.
 

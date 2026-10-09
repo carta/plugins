@@ -38,21 +38,18 @@ allowed-tools:
   - AskUserQuestion
   # Draws the pin sketch in "Keeping Carta Home handy" where inline visuals are supported.
   - mcp__*__show_widget
-  - Bash(uv run *build_artifact.py *)
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-home-build/scripts/build_artifact.py" *)
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-home-build/scripts/customizations.py" *)
   # Step 2c: what the user changed on the published page, before a rebuild replaces it.
-  - Bash(uv run *customizations.py *)
   # Step 2c saves the live page; Step 6 carries the user's changes into the new build and
   # an undo edits the republished page.
   - Write
   - Edit
-  - Bash(find ~ -name "build_artifact.py"*)
-  - Bash(find /sessions -name "build_artifact.py"*)
-  - Bash(dirname *)
   - Artifact
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.69.3</carta-plugin>
+<carta-plugin>carta-investors:6.70.0</carta-plugin>
 
 # Carta Home — Build / Redeploy / Open
 
@@ -438,7 +435,7 @@ is the user's backup and what "undo" restores from, so keep it for the whole run
 **2. Find what changed.**
 
 ```
-uv run "<SKILL_DIR>/scripts/customizations.py" diff <outputs-directory>/carta-home-<slug>.live.html
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-home-build/scripts/customizations.py" diff <outputs-directory>/carta-home-<slug>.live.html
 ```
 
 Every build stamps a baseline of itself into the page, so the script lines the live page
@@ -489,26 +486,22 @@ through to Steps 3–6.
 Run the build script — it assembles CSS + config + app into one file and substitutes the
 server id. The script lives in **this skill's own `scripts/` directory**.
 
-> **Path — do NOT rely on `${CLAUDE_PLUGIN_ROOT}` in bash.** In the Cowork sandbox that env
-> var is empty, so `uv run "${CLAUDE_PLUGIN_ROOT}/…"` resolves to a broken path. Use the
-> **base directory reported for this skill when it loaded** (it ends in
-> `/skills/carta-home-build`) as `<SKILL_DIR>`. If you don't have it, resolve it once with a
-> scoped `find` (NOT `find /`):
-> ```
-> SKILL_DIR="$(dirname "$(dirname "$(find /sessions "$HOME" -type f -path '*/carta-home-build/scripts/build_artifact.py' 2>/dev/null | head -1)")")"
-> ```
+Bash reaches `${CLAUDE_PLUGIN_ROOT}/skills/carta-home-build` on Claude Code and Cowork; do not search
+for it first. Run each command on one line, exactly as written: `allowed-tools` matches the
+command text, so a shell variable, a different path, or a line break makes the call ask for
+approval. Only if `uv run` reports that the file does not exist, find the script once (this
+call asks for approval) and run it from the path it prints:
+
+```
+find /sessions "$HOME" -type f -path '*/carta-home-build/scripts/build_artifact.py' 2>/dev/null
+```
 
 `<slug>` is the firm name lowercased with non-alphanumerics collapsed to `-`, so two firms
 never write over each other's file. The bundle itself is firm-agnostic — the slug only
 keeps the paths apart.
 
 ```
-uv run "<SKILL_DIR>/scripts/build_artifact.py" \
-  --mcp-server "<CARTA_MCP_SERVER>" \
-  --firm-name "<firm name from Step 1>" \
-  --dashboard-building soi \
-  --dashboard-building perf \
-  --out <outputs-directory>/carta-home-<slug>.html
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-home-build/scripts/build_artifact.py" --mcp-server "<CARTA_MCP_SERVER>" --firm-name "<firm name from Step 1>" --dashboard-building soi --dashboard-building perf --out <outputs-directory>/carta-home-<slug>.html
 ```
 
 `--firm-name` is stamped into the page's `<title>` as `Carta Home - <Firm>`, which is what
@@ -532,10 +525,6 @@ skill where to redeploy; it never stands in for building.
 **Omit both flags for an entry with no `buildSkill`** — do not pass an empty value or a
 guessed URL. An omitted key leaves that card on its copyable prompt, which is the intended
 fallback.
-
-`<SKILL_DIR>` is this skill's base directory — e.g. in Cowork
-`/sessions/<name>/mnt/.remote-plugins/plugin_<id>/skills/carta-home-build`, in Claude Code
-`${CLAUDE_PLUGIN_ROOT}/skills/carta-home-build`.
 
 ### Step 4: Publish the home artifact
 
@@ -636,18 +625,22 @@ because it leaves that dashboard's URL uncaptured and Step 6 redeploys without i
 A router candidate serves several dashboards, so it needs the entry's `prompt` to know
 which one to build. Lead with that sentence, then the same context every candidate gets.
 
-Tell each one the firm is already settled, and hand it its existing URL from Step 2 —
-e.g. for the `soi` entry:
+Tell each one the firm is already settled, hand it its existing URL from Step 2, and hand
+it the home URL — the one Step 4 returned, or Step 2's when Step 4 was skipped. The
+dashboard stamps that URL into its "Back to Home" link; without it the link stays hidden.
+E.g. for the `soi` entry:
 
 > <the entry's `prompt`>
 >
 > Publish the SOI artifact for firm **<firm name>** (`<firm_uuid>`), already resolved —
 > do not call `list_contexts` and do not ask me to pick a firm. Load every fund in the firm
 > and pick the initial fund yourself. Redeploy to `<url from Step 2>` if given, so the link
-> stays stable. Return only the published artifact URL.
+> stays stable. Carta Home is at `<home url>`: pass it to the render script as
+> `--home-url`. Return only the published artifact URL.
 
 `carta-fund-performance` resolves its own firm at runtime and needs no context passed —
-it still takes the existing URL so its link stays stable. It is the `perf` entry's only
+it still takes the existing URL so its link stays stable, and the home URL for its
+`--home-url`. It is the `perf` entry's only
 candidate: the router's benchmarks route answers in chat rather than publishing an
 artifact, so an install without it leaves that card on its prompt.
 
@@ -666,7 +659,7 @@ still explains itself.
 **Carry the user's changes over** when Step 2c found any, before publishing. Get the plan:
 
 ```
-uv run "<SKILL_DIR>/scripts/customizations.py" plan <outputs-directory>/carta-home-<slug>.live.html <outputs-directory>/carta-home-<slug>.html
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-home-build/scripts/customizations.py" plan <outputs-directory>/carta-home-<slug>.live.html <outputs-directory>/carta-home-<slug>.html
 ```
 
 It lists the same changes as Step 2c, each with `conflict`: `true` when Carta changed or
@@ -681,7 +674,7 @@ removed the same part of the page in this version.
   alone. Only you can spot this one; the script can't.
 
 For a page that is mostly theirs (Step 2c), turn it around: publish the saved live file,
-bringing in each of Carta's changes from `uv run "<SKILL_DIR>/scripts/customizations.py"
+bringing in each of Carta's changes from `uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-home-build/scripts/customizations.py"
 diff <live file> --release <this build>`, and ask only where one of them lands on something
 the user changed.
 

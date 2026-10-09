@@ -12,16 +12,12 @@ description: >
   "show my Carta task board", or "pin my Carta requests".
 model: sonnet
 allowed-tools:
-  - Bash(uv run *build_artifact.py *)
-  # Matches the locate command in Step 1 verbatim — a reworded find prompts.
-  - Bash(SKILL_DIR=*find /sessions "$HOME" -type f -path *build_artifact.py*)
-  - Bash(find /sessions "$HOME" -type f -path *build_artifact.py*)
-  - Bash(dirname *)
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-workhub-build/scripts/build_artifact.py" *)
   - Artifact
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.69.3</carta-plugin>
+<carta-plugin>carta-investors:6.70.0</carta-plugin>
 
 # Carta Workhub — Build / Redeploy
 
@@ -429,21 +425,22 @@ so quote the value everywhere it is passed.
 ### Step 1: Build
 
 ```bash
-uv run "<SKILL_DIR>/scripts/build_artifact.py" --mcp-server "<CARTA_MCP_SERVER>" --out "<CWD>/carta-workhub.html"
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-workhub-build/scripts/build_artifact.py" --mcp-server "<CARTA_MCP_SERVER>" --out "<CWD>/carta-workhub.html"
 ```
 
 Add `--ccr-fund-uuid <fund_uuid> --ccr-activity-id <capital_activity_id>` to seed one capital call
 review card, or `--frt-seed-period "Q2 2026"` to seed one Financial Reporting Tracker card. Both
 are for testing a panel before the queue would show its card; a normal build omits them.
 
-Locate `<SKILL_DIR>` first. This exact form is what `allowed-tools` permits, so a
-reworded one prompts for permission:
+Bash reaches `${CLAUDE_PLUGIN_ROOT}/skills/carta-workhub-build` on Claude Code and Cowork; do not search
+for it first. Run each command on one line, exactly as written: `allowed-tools` matches the
+command text, so a shell variable, a different path, or a line break makes the call ask for
+approval. Only if `uv run` reports that the file does not exist, find the script once (this
+call asks for approval) and run it from the path it prints:
 
-```bash
-SKILL_DIR="$(dirname "$(dirname "$(find /sessions "$HOME" -type f -path '*/carta-workhub-build/scripts/build_artifact.py' 2>/dev/null | head -1)")")"
 ```
-
-Fall back to `${CLAUDE_PLUGIN_ROOT}/skills/carta-workhub-build` when that comes back empty.
+find /sessions "$HOME" -type f -path '*/carta-workhub-build/scripts/build_artifact.py' 2>/dev/null
+```
 
 The script prints the output path, version, and build id. It exits non-zero on any unresolved
 marker or a missing registry entry.

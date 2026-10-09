@@ -162,16 +162,15 @@ Launch as a **background** Bash command (`run_in_background: true`) so
 the user can still type in chat while it waits:
 
 ```bash
-rm -f .claude/preview/run-request.json && uv run python -c "
-import time, pathlib, sys
-p = pathlib.Path('.claude/preview/run-request.json')
-for _ in range(1800):
-    if p.exists():
-        print(p.read_text()); sys.exit(0)
-    time.sleep(1)
-print('TIMEOUT')
-"
+rm -f .claude/preview/run-request.json
 ```
+
+```bash
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-valuations/scripts/wait_for_run_request.py"
+```
+
+Run the two as separate Bash calls, the second in the background. It prints the
+request JSON when it arrives, or `TIMEOUT` after 30 minutes.
 
 When the background command completes with a JSON payload, **delete
 `.claude/preview/run-request.json`** (so the next click is fresh), then branch

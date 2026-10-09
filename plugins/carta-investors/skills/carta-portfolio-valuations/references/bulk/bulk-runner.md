@@ -395,24 +395,8 @@ read_tool({
   bulk status doesn't say so. Only `get:valuation`'s `candidateStatus:
   "FINAL"` shows it (see Step 6.3's guard and `bulk-results.md`).
 
-Poll using a background Bash loop:
-
-```bash
-uv run python -c "
-import time, sys
-# Signal file written by the skill when bulk is done
-import pathlib
-p = pathlib.Path('.claude/preview/bulk-status.json')
-for _ in range(360):   # 60-minute hard cap
-    time.sleep(10)
-    print('POLL', flush=True)
-    sys.exit(0)         # exit after each tick so the skill re-calls portfolio_valuations:get:bulk_status
-print('TIMEOUT')
-" &
-```
-
-Alternatively, run `read_tool({"name": "portfolio_valuations__get__bulk_status", "arguments": {"workflowId": "<workflowId>"}})` directly in a loop — call it,
-check the status field, and if not yet complete wait 10 seconds and
+Poll by running `read_tool({"name": "portfolio_valuations__get__bulk_status", "arguments": {"workflowId": "<workflowId>"}})` directly in a loop — call it,
+check the status field, and if not yet complete run `sleep 10` and
 call again. Repeat until:
 
 - **Complete** — the response contains final results for all companies.

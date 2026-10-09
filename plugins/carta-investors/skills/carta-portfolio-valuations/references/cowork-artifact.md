@@ -36,12 +36,7 @@ the resolved **app** host, not the bare API host) so the script can build the
 prep card's "Request access" link:
 
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-valuations/scripts/build_artifact.py" \
-  --template cowork-dashboard \
-  --firm-id "<org_pk>" \
-  --base-url "<BASE_URL>" \
-  < .claude/preview/dashboard-data.json \
-  > .claude/preview/dashboard-artifact.html
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-valuations/scripts/build_artifact.py" --template cowork-dashboard --firm-id "<org_pk>" --base-url "<BASE_URL>" < .claude/preview/dashboard-data.json > .claude/preview/dashboard-artifact.html
 ```
 
 Do **not** manually construct the data payload or do template substitution
@@ -130,10 +125,7 @@ Write the payload into the template's `"__INJECTED_DATA__"` token via the build
 script and save to `.claude/preview/runner-plan-artifact.html`:
 
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-valuations/scripts/build_artifact.py" \
-  --template cowork-runner-plan --pre-classified \
-  < <(printf '%s' '{"eligible":[…]}') \
-  > .claude/preview/runner-plan-artifact.html
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-valuations/scripts/build_artifact.py" --template cowork-runner-plan --pre-classified < <(printf '%s' '{"eligible":[…]}') > .claude/preview/runner-plan-artifact.html
 ```
 
 (Any means of feeding the `{"eligible":[…]}` JSON on stdin works — a heredoc or a
@@ -324,12 +316,7 @@ overwrite `.claude/preview/dashboard-data.json` with the response via Bash hered
 then re-run:
 
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-valuations/scripts/build_artifact.py" \
-  --template cowork-dashboard \
-  --firm-id "<org_pk>" \
-  --base-url "<BASE_URL>" \
-  < .claude/preview/dashboard-data.json \
-  > .claude/preview/dashboard-artifact.html
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-valuations/scripts/build_artifact.py" --template cowork-dashboard --firm-id "<org_pk>" --base-url "<BASE_URL>" < .claude/preview/dashboard-data.json > .claude/preview/dashboard-artifact.html
 ```
 
 `dashboard-data.json` holds the raw API response, so this takes no

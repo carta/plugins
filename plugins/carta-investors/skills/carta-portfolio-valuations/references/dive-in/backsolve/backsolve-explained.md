@@ -304,9 +304,7 @@ Do not re-read this reference for the follow-up. Use the data already in context
 ## Verify mode (useful when checking a result)
 
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-valuations/scripts/backsolve_calculator.py" \
-  --verify \
-  --input "$BACKSOLVE_JSON"
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-valuations/scripts/backsolve_calculator.py" --verify --input "$BACKSOLVE_JSON"
 ```
 
 This re-runs the scipy `brentq` goal-seek and reports whether the solved equity

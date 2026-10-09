@@ -35,13 +35,12 @@ allowed-tools:
   - Bash(carta workspace cache *)
   - Bash(command -v *)
   - Bash(jq *)
-  - Bash(uv run *)
-  - Bash(find *)
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/scripts/render_artifact.py" *)
   - Bash(mkdir -p *)
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.69.3</carta-plugin>
+<carta-plugin>carta-investors:6.70.0</carta-plugin>
 
 [PATTERN carta-writing-style v0.0.2]
 [PATTERN etiquette v0.0.6]
@@ -315,25 +314,20 @@ builds its SQL from them, so it needs no discovery of its own. It knows its own 
 ### 6. Render the artifact (deterministic — via `render_artifact.py`)
 The step-5 config is small; the artifact template is ~20 KB. To keep the template **out of your context and out of your output** (re-emitting it — or hand-writing the escape in a heredoc — is the dominant render cost and a frequent failure), a bundled script reads the template itself and performs the escape + substitution. **You write only the small config file and run the script — never load or emit the template, and never hand-author the escaping.**
 
-**6a. Locate the workspace and the script** (one Bash block; `${CLAUDE_PLUGIN_ROOT}` is NOT substituted in Cowork, so probe both runtimes):
+**6a. Locate the workspace** (one Bash block; it prints the directory — use that literal path as `<WORKDIR>` below, since shell variables do not survive between Bash calls):
 ```bash
 if [ -d "$HOME/mnt/outputs" ] && [ -w "$HOME/mnt/outputs" ]; then WORKDIR="$HOME/mnt/outputs/carta-loan-dashboard"
 elif command -v carta >/dev/null 2>&1; then WORKDIR="$(carta workspace cache carta-loan-dashboard | jq -r .)"
 else WORKDIR="${TMPDIR:-/tmp}/carta-loan-dashboard"; fi
-mkdir -p "$WORKDIR"
-if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -d "$CLAUDE_PLUGIN_ROOT/skills/carta-loan-dashboard" ]; then
-  SKILL_DIR="$CLAUDE_PLUGIN_ROOT/skills/carta-loan-dashboard"
-else
-  SKILL_DIR="$(find "$HOME/mnt/.remote-plugins" -maxdepth 3 -type d -name carta-loan-dashboard 2>/dev/null | head -1)"
-fi
+mkdir -p "$WORKDIR" && echo "$WORKDIR"
 ```
-If `uv`/Bash is unavailable or `$SKILL_DIR/../../scripts/render_artifact.py` does not resolve (a hosted surface that blocks subprocess), use the **inline fallback (6e)**.
+The renderer is `${CLAUDE_PLUGIN_ROOT}/scripts/render_artifact.py` — the plugin's own `scripts/`, not this skill's. Bash reaches that path on every surface, Cowork included; do not search for it. If `uv`/Bash is unavailable (a hosted surface that blocks subprocess), use the **inline fallback (6e)**.
 
-**6b. Write the config.** `Write` the step-5 config as compact JSON to `$WORKDIR/loan-data.json`. (You are writing a small config file — never the template.)
+**6b. Write the config.** `Write` the step-5 config as compact JSON to `<WORKDIR>/loan-data.json`. (You are writing a small config file — never the template.)
 
-**6c. Render.**
+**6c. Render.** Run this exactly, with `<WORKDIR>` replaced by the literal path from 6a. `allowed-tools` matches the command text, so keep the quotes and the script path as written:
 ```bash
-uv run "$SKILL_DIR/../../scripts/render_artifact.py" --workdir "$WORKDIR" --template "$SKILL_DIR/references/artifact_template.html" --out loan-dashboard.html
+uv run "${CLAUDE_PLUGIN_ROOT}/scripts/render_artifact.py" --workdir "<WORKDIR>" --template "${CLAUDE_PLUGIN_ROOT}/skills/carta-loan-dashboard/references/artifact_template.html" --out loan-dashboard.html
 ```
 The shared renderer reads the template you point it at, applies the XSS-safe `\uXXXX` escaping, substitutes the single placeholder, writes the finished HTML, and prints its absolute path to stdout. Branch on the exit code — do not re-derive the result:
 
@@ -344,7 +338,7 @@ The shared renderer reads the template you point it at, applies the XSS-safe `\u
 | 4 | bundled template not found | use the inline fallback (6e) |
 | 14 | template token count is not exactly 1 (drift) | stop; tell the user the bundled template has drifted out of sync and needs a fix from the skill's maintainer; offer to escalate or file a feature request rather than retrying |
 
-If the RC=1 retry also fails, stop — tell the user the config write to `$WORKDIR/loan-data.json` isn't succeeding, and offer to escalate or file a feature request rather than retrying further.
+If the RC=1 retry also fails, stop — tell the user the config write to `<WORKDIR>/loan-data.json` isn't succeeding, and offer to escalate or file a feature request rather than retrying further.
 
 **6d. Publish the artifact.** `Artifact({action: "list", scope: "mine"})`; if a **Loan Portfolio Dashboard** artifact is already published, keep its `url` and tell the user you're refreshing the existing dashboard in place (not creating a new one) before you publish over it. That is the title the template's own `<title>` sets, and the tag always wins over the `title` parameter — so the list shows that name, and looking for anything else silently matches nothing and publishes a duplicate every run. Then publish the path the script printed — one call either way, `url` being the only difference:
 
