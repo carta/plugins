@@ -2094,8 +2094,8 @@
         const fundCache = new Map();  // `${fundUuid}::${asOfDate||'current'}` → { companies, irrAsOfDate }
 
         // ── Investment Cash Flows tab state ──
-        // The tab lives in page state, never the URL hash: Carta Home's #from=home
-        // marker and its history.back() return must keep working.
+        // The tab lives in page state, never the URL hash: Carta Home's history.back()
+        // return must keep working.
         const HOLDINGS_TAB = 'holdings';
         const CASH_FLOWS_TAB = 'cashFlows';
         let activeTab = HOLDINGS_TAB;
@@ -4661,12 +4661,12 @@
 
         setTimeout(soiCheckForUpdate, 0);
 
-        // ── Back to Home: Carta Home links here with #from=home. A page opened any other
-        // way has no marker, so the button stays hidden. Home's link navigates in place, so
-        // history.back() returns to it.
+        // ── Back to Home: Home's link navigates in place, so history.back() returns to it.
+        // No URL marker says where we came from (Claude Desktop opens a link with a #fragment
+        // in the browser, not in the app), so show the button whenever there is history.
         (function () {
             const btn = document.getElementById("back-to-home");
-            if (!btn || new URLSearchParams(location.hash.slice(1)).get("from") !== "home") return;
+            if (!btn || history.length <= 1) return;
             btn.hidden = false;
             btn.addEventListener("click", () => history.back());
         })();

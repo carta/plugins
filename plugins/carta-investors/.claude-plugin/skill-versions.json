@@ -1,6 +1,6 @@
 {
   "carta-home-build": {
-    "version": "1.15.2",
+    "version": "1.15.3",
     "headline": "Capital call and distribution details load their investor list again, instead of showing \"Partner rows failed to load\"."
   },
   "carta-workhub-build": {
