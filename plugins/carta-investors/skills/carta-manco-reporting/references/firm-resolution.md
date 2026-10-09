@@ -50,13 +50,14 @@ gets the opening line at the same moment the check begins, not after it.
 Every script this skill runs is `uv run <script>`, starting with the surface
 check immediately below. Most engineers already have `uv`; an external user
 opening this dashboard for the first time often doesn't, and has no reason to
-know what it is. Don't make that a wall — install it silently, the same way
-you'd install any other missing prerequisite on the user's behalf. Don't ask
-the user first and don't narrate it.
+know what it is. Installing software on someone's machine is their call, so
+when `uv` is missing, ask once in plain words before installing — never
+install it without a yes.
 
 Each command below is a single simple command — no `||`, `&&`, `|`, `;`, or
-`{ }` — and is its own separately pre-approved `allowed-tools` entry. A
-compound line bundling several of these with shell operators is **not**
+`{ }`. The two `--version` checks are pre-approved `allowed-tools` entries;
+the install commands are not, so Claude Code also shows its own permission
+prompt for them after the user says yes below. A compound line bundling several of these with shell operators is **not**
 equivalent and must never be substituted in its place: the permission
 matcher checks every simple command a compound line decomposes into
 independently, so a rule written for the whole compound line doesn't
@@ -77,7 +78,39 @@ $HOME/.local/bin/uv --version
 Succeeds → `<UV_BIN>` is the literal, unexpanded text `$HOME/.local/bin/uv`
 (so it matches this skill's pre-approved commands and never puts a
 home-directory path in the transcript). Fails too → `uv` isn't installed
-yet; install it with these two commands, each run on its own:
+yet. Ask before installing it — one `AskUserQuestion` call with exactly
+this input. The question goes inside a `questions` array; `question`,
+`header` and `options` are never top-level fields:
+
+```json
+{
+  "questions": [
+    {
+      "question": "This dashboard needs uv, a small free tool that runs its Python scripts. It isn't installed yet. Install it now? It goes in ~/.local/bin and doesn't need admin rights.",
+      "header": "Install uv",
+      "multiSelect": false,
+      "options": [
+        {"label": "Install uv", "description": "Download and install uv from astral.sh, then continue."},
+        {"label": "Not now", "description": "Stop here. You can install uv yourself and run this again."}
+      ]
+    }
+  ]
+}
+```
+
+This is the only question Gate 0 asks, and it comes only when both
+`--version` checks fail — never when `uv` is already present. **Ask it at
+most once per run.** The answer is final: never re-ask it, rephrase it, or
+ask a follow-up ("Are you sure?", "Try another installer?"), whatever you
+read afterward.
+
+**"Not now" (or any answer other than "Install uv")** → reply with this one
+line and stop — no further tool calls, no `Read` of errors.md, no second
+question. Don't install, don't retry, don't suggest another installer:
+
+> No problem. When you're ready, install uv from https://docs.astral.sh/uv/getting-started/installation/ and ask for the dashboard again.
+
+**"Install uv"** → install it with these two commands, each run on its own:
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh -o /tmp/uv-install.sh
@@ -103,14 +136,14 @@ this invocation, and use it in place of every literal `uv` in every `uv run
 (`manco_paths.py`, `build_manco_datadir.py`, `parse_budget_workbook.py`,
 `inspect_workbook.py`, `parse_coa_mapping.py`, `save_query_result.py`) — the
 same substitution discipline this file already applies to `PLUGIN_ROOT`
-below. Never print `<UV_BIN>` or mention the install to the user; it's
-infrastructure, not something they asked about.
+below. Never print `<UV_BIN>`; it's infrastructure, not something they asked
+about. Past the approval question above, don't narrate the install either.
 
 If the install commands themselves fail (offline, blocked download, no write
 access), follow [errors.md](errors.md)'s "`uv` isn't installed" entry: one
 identical retry of the same two commands, then — if it still fails — the one
 plain-English line pointing at the uv install docs, and stop. Do not try a
-different installer, a different URL, or ask the user how to proceed.
+different installer, a different URL, or ask the user again how to proceed.
 
 **SILENT from here on** — zero further user-facing output in this step,
 unless the surface turns out to be sandboxed (below). The next allowed

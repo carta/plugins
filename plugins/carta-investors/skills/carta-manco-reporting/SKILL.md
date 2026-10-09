@@ -43,17 +43,14 @@ allowed-tools:
   - Read
   - Write
   - AskUserQuestion
-  # Gate 0 prerequisite (firm-resolution.md): install uv when it's missing,
-  # then resolve which binary name to use for every uv run call below. Each
-  # of these is a single simple command — no `||`/`&&`/`|`/`;` — because the
-  # permission matcher checks every simple command a compound line decomposes
-  # into independently; a rule written as the whole compound line never
-  # matches any of its pieces. See firm-resolution.md.
+  # Gate 0 prerequisite (firm-resolution.md): resolve which binary name to
+  # use for every uv run call below. Each is a single simple command — no
+  # `||`/`&&`/`|`/`;` — because the permission matcher checks every simple
+  # command a compound line decomposes into independently; a rule written as
+  # the whole compound line never matches any of its pieces. The uv install
+  # commands are left off on purpose, so Claude Code asks before installing.
   - Bash(uv --version)
   - Bash($HOME/.local/bin/uv --version)
-  - Bash(curl -LsSf https://astral.sh/uv/install.sh -o /tmp/uv-install.sh)
-  - Bash(sh /tmp/uv-install.sh)
-  - Bash(powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex")
   # Every uv-run script below is pre-approved in four shapes, so the pattern
   # matches regardless of which of the two ways firm-resolution.md's Gate 0
   # substitutes the script path: the literal `${CLAUDE_PLUGIN_ROOT}` token
@@ -130,7 +127,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.68.8</carta-plugin>
+<carta-plugin>carta-investors:6.68.9</carta-plugin>
 
 # ManCo Reporting Dashboard
 
