@@ -5,6 +5,11 @@ set -eu
 
 cd -- "$(dirname -- "$0")"
 
+# Same lookup as verify-checksums.sh: bin/ beside this script in the repo,
+# ../bin in a published plugin (script in hooks/src/, binaries in hooks/bin/).
+bin_dir=bin
+[ -d "$bin_dir" ] || [ ! -d ../bin ] || bin_dir=../bin
+
 want_go_version=$(cat .go-version)
 have_go_version=$(go version 2>/dev/null | awk '{print $3}' | sed 's/^go//')
 if [ "$have_go_version" != "$want_go_version" ]; then
@@ -52,31 +57,31 @@ checksum() {
 
 if [ "${1:-}" = "--check" ]; then
     # Two independent claims. First: the committed binaries really are the ones
-    # bin/SHA256SUMS describes — without this, a stale binary under a correct
+    # $bin_dir/SHA256SUMS describes — without this, a stale binary under a correct
     # manifest passes. Second (below): source still reproduces that manifest.
     if sh ./verify-checksums.sh; then
-        echo "build.sh --check: OK — committed bin/ matches bin/SHA256SUMS" >&2
+        echo "build.sh --check: OK — committed $bin_dir/ matches $bin_dir/SHA256SUMS" >&2
     else
-        echo "build.sh --check: FAIL — committed bin/ does not match bin/SHA256SUMS" >&2
+        echo "build.sh --check: FAIL — committed $bin_dir/ does not match $bin_dir/SHA256SUMS" >&2
         echo "build.sh --check: run ./build.sh and commit the regenerated bin/" >&2
         exit 1
     fi
 
     tmp=$(mktemp -d)
     trap 'rm -rf "$tmp"' EXIT INT TERM
-    echo "build.sh --check: rebuilding into $tmp (bin/ left untouched)" >&2
+    echo "build.sh --check: rebuilding into $tmp ($bin_dir/ left untouched)" >&2
     build_targets "$tmp"
     checksum "$tmp"
-    if diff -u bin/SHA256SUMS "$tmp/SHA256SUMS" >&2; then
-        echo "build.sh --check: OK — rebuild is byte-identical to bin/SHA256SUMS"
+    if diff -u "$bin_dir/SHA256SUMS" "$tmp/SHA256SUMS" >&2; then
+        echo "build.sh --check: OK — rebuild is byte-identical to $bin_dir/SHA256SUMS"
         exit 0
     else
-        echo "build.sh --check: FAIL — rebuild differs from committed bin/SHA256SUMS (see diff above)" >&2
+        echo "build.sh --check: FAIL — rebuild differs from committed $bin_dir/SHA256SUMS (see diff above)" >&2
         exit 1
     fi
 fi
 
-out=bin
+out=$bin_dir
 mkdir -p "$out"
 rm -f "$out"/hooks-* "$out"/SHA256SUMS
 build_targets "$out"

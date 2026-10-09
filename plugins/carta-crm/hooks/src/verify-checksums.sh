@@ -7,7 +7,13 @@ set -eu
 
 cd -- "$(dirname -- "$0")"
 
-sums=bin/SHA256SUMS
+# bin/ sits beside this script in the repo (tools/hooks/bin/) and one level up
+# in a published plugin, where this script ships in hooks/src/ and the
+# binaries in hooks/bin/.
+bin_dir=bin
+[ -d "$bin_dir" ] || bin_dir=../bin
+
+sums=$bin_dir/SHA256SUMS
 if [ ! -f "$sums" ]; then
     echo "verify-checksums.sh: FAIL — $sums is missing (run ./build.sh)" >&2
     exit 1
@@ -28,10 +34,10 @@ trap 'rm -rf "$tmp"' EXIT INT TERM
 # manifest miss by one byte.
 tr -d '\r' < "$sums" > "$tmp/SHA256SUMS"
 
-if (cd bin && check_sums "$tmp/SHA256SUMS"); then
-    echo "verify-checksums.sh: OK — bin/ matches bin/SHA256SUMS"
+if (cd "$bin_dir" && check_sums "$tmp/SHA256SUMS"); then
+    echo "verify-checksums.sh: OK — $bin_dir/ matches $sums"
 else
-    echo "verify-checksums.sh: FAIL — bin/ does not match bin/SHA256SUMS" >&2
+    echo "verify-checksums.sh: FAIL — $bin_dir/ does not match $sums" >&2
     echo "verify-checksums.sh: rebuild with ./build.sh and commit the regenerated bin/" >&2
     exit 1
 fi
