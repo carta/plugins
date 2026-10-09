@@ -95,9 +95,9 @@ function niagaraChildRow(a) {
     td('label', esc(a.interest_label)) +
     td('proceeds', esc(fmtCurrency(ap.proceeds)), 'num') +
     td('pct', esc(fmtPercent(ap.percentage_of_total)), 'num') +
+    td('moic', noOwnMultiple ? '<span class="wf-dash" title="' + esc(NO_IC_TIP) + '" tabindex="0">—</span>' : esc(fmtMoic(a.moic)), 'num') +
     td('invested', esc(fmtCurrency(a.invested_capital)), 'num') +
     td('units', esc(fmtQty(ap.units)), 'num') +
-    td('moic', noOwnMultiple ? '<span class="wf-dash" title="' + esc(NO_IC_TIP) + '" tabindex="0">—</span>' : esc(fmtMoic(a.moic)), 'num') +
     td('irr', esc(fmtPercent(a.irr_percentage)), 'num') +
     '</tr>';
 }
@@ -114,9 +114,9 @@ function niagaraGroupBody(g, i, open) {
     td('label', '') +
     td('proceeds', esc(fmtCurrency(ap.proceeds)), 'num') +
     td('pct', esc(fmtPercent(ap.percentage_of_total)), 'num') +
+    td('moic', esc(fmtMoic(g.moic)), 'num') +
     td('invested', esc(fmtCurrency(g.total_invested_capital)), 'num') +
     td('units', esc(fmtQty(ap.units)), 'num') +
-    td('moic', esc(fmtMoic(g.moic)), 'num') +
     td('irr', esc(irr), 'num') +
     '</tr>';
   return '<tbody class="wf-group' + (open ? ' is-open' : '') + '">' + head + (open ? interests.map(niagaraChildRow).join('') : '') + '</tbody>';
@@ -134,8 +134,8 @@ function renderNiagaraProceeds(d) {
       '<span class="wf-caret' + (allOpen ? ' is-open' : '') + '" aria-hidden="true"></span>' + (allOpen ? 'Collapse all' : 'Expand all') + '</button>'
     : '';
   const head = '<thead><tr><th class="wf-tw-cell">' + expandAll + '</th><th></th><th></th>' +
-    '<th class="num">Proceeds</th><th class="num">% of Proceeds</th><th class="num">Invested Capital</th>' +
-    '<th class="num">Participating Quantity</th><th class="num">MOIC</th><th class="num">IRR</th></tr></thead>';
+    '<th class="num">Proceeds</th><th class="num">% of Proceeds</th><th class="num">MOIC</th>' +
+    '<th class="num">Invested Capital</th><th class="num">Participating Quantity</th><th class="num">IRR</th></tr></thead>';
   const bodies = v.rows.map(function (r) { return niagaraGroupBody(r.g, r.i, isOpen(r.i)); }).join('');
   // A filtered table is a partial one, so it carries no Total.
   const gt = d.grand_totals || {};
@@ -143,9 +143,10 @@ function renderNiagaraProceeds(d) {
     '<td colspan="2" data-col="name">Total</td>' +
     td('proceeds', esc(fmtCurrency(totalProceeds(d))), 'num') +
     td('pct', '100.00%', 'num') +
+    td('moic', '', 'num') +
     td('invested', esc(fmtCurrency(gt.total_invested_capital)), 'num') +
     td('units', esc(fmtQty(gt.participating_units)), 'num') +
-    td('moic', '', 'num') + td('irr', '', 'num') + '</tr></tfoot>';
+    td('irr', '', 'num') + '</tr></tfoot>';
   return tableWrap('<table class="wf-table">' + head + bodies + foot + '</table>');
 }
 
