@@ -9,7 +9,7 @@ const READ_VERBS = new Set(["get", "list"]);
 
 const sameFirm = (a, b) => typeof a === "string" && a.toLowerCase() === b;
 
-// Carta MCP serves each gateway command as its own tool: fa:list:x is fa__list__x.
+// Carta MCP serves each gateway command as its own tool: fa:list:firm-workflow is fa__list__firm-workflow.
 export const commandTool = (command) => command.replaceAll(":", "__");
 
 // The tracker stamps the interface the artifact declares; hosted traffic is a micro-app.

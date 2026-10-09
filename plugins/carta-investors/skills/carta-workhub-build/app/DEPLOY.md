@@ -17,7 +17,7 @@ runbook. This file covers only what is specific to Workhub.
 - **`POST /api/tool` is the only route to Carta.** It refuses every tool and command
   outside its allowlist (`server/commands.json`, plus `list_contexts`, `set_context`,
   `welcome`, `discover`, `get_current_user` and `track_ui_event`). Before forwarding a
-  `fetch`/`mutate`, it translates it into Carta's own tool name (`fa:list:x` → `fa__list__x`).
+  `fetch`/`mutate`, it translates it into Carta's own tool name (`fa:list:firm-workflow` → `fa__list__firm-workflow`).
 - **Tenancy.**
   - `list_contexts` answers with the hostname's firm only, and `set_context` to any
     other firm is refused, as is a `firm_uuid` naming another firm.
