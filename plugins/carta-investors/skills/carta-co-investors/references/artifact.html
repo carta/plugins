@@ -961,7 +961,12 @@
           entry.name = betterCased(entry.name, canonical);
         }
         if (!entry.rawNames.includes(purchaser)) entry.rawNames.push(purchaser);
-        for (const c of coerceArray(row.COMPANIES)) entry.companies.add(c);
+        // Trimmed like buildCompanyRounds' and buildCompanyStatus' keys: a
+        // portfolio name stored with stray whitespace otherwise misses both maps.
+        for (const c of coerceArray(row.COMPANIES)) {
+          const company = c.trim();
+          if (company) entry.companies.add(company);
+        }
       }
 
       const all = [...byCanonical.values()].map(entry => {
@@ -1190,6 +1195,12 @@
       return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/'/g, '&#39;').replace(/"/g, '&quot;');
     }
 
+    // The browser decodes an attribute's entities before running it as script,
+    // so a quote needs a JS escape underneath escAttr's HTML one.
+    function jsString(s) {
+      return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    }
+
     function entityTagClass(entityType) {
       const t = (entityType || '').toLowerCase();
       if (t.indexOf('accelerator') !== -1 || t.indexOf('corporate') !== -1) return 'tag tag-blue';
@@ -1232,7 +1243,7 @@
       // A company with no round data has nothing to show in the drawer —
       // render it inert rather than as a button that opens nothing.
       if (DATA.companyRounds && DATA.companyRounds[c]) {
-        return '<button class="company-link" onclick="openDrawer(\'' + escAttr(c) + '\')">' + esc(c) + '</button>';
+        return '<button class="company-link" onclick="openDrawer(\'' + escAttr(jsString(c)) + '\')">' + esc(c) + '</button>';
       }
       return '<span class="company-link" style="cursor:default;opacity:0.5;pointer-events:none">' + esc(c) + '</span>';
     }
