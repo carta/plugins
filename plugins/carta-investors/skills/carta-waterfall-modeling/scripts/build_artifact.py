@@ -9,6 +9,8 @@ review showed, and each entity's results as the skill's fetch loop returned them
 Source parts (all in the skill's resources/ dir):
   waterfall-results.template.html — page skeleton + injection markers
   waterfall-results.css           — styles        (marker: /* __WF_CSS__ */)
+  fonts/SangBleuVersailles-...    — page-title serif, inlined as a data: URI at the
+                                    CSS's __WF_SANGBLEU_WOFF2__ slot
   app/core.js, views.js, main.js  — page logic, concatenated in that order
                                     (marker: /* __WF_APP_JS__ */)
   app/demo-data.js                — canned data, prepended only with --demo
@@ -41,18 +43,21 @@ Prints the output path. Exits non-zero, writing nothing, when any value is inval
 state with `?demo=` (single, multi, core).
 """
 import argparse
+import base64
 import json
 import re
 import sys
 from decimal import Decimal, InvalidOperation
 from html import escape
 from pathlib import Path
+from urllib.parse import urlparse
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
 RES = SKILL_DIR / "resources"
 
 TEMPLATE = "waterfall-results.template.html"
 CSS = "waterfall-results.css"
+SANGBLEU_FONT = "fonts/SangBleuVersailles-Regular-WebS.woff2"
 APP_JS_PARTS = ["app/core.js", "app/views.js", "app/main.js"]
 DEMO_JS_PART = "app/demo-data.js"
 
@@ -217,7 +222,9 @@ def config_json(cfg):
 
 
 EXTERNAL_SCRIPT_RE = re.compile(r"<script\b[^>]*\bsrc\s*=", re.IGNORECASE)
-EXTERNAL_LINK_RE = re.compile(r"<link\b[^>]*\bhref\s*=\s*[\"']?\s*(?:https?:)?//", re.IGNORECASE)
+# The one external load the page makes: Inter from Google Fonts, which the artifact CSP allows.
+FONT_HOSTS = ("fonts.googleapis.com", "fonts.gstatic.com")
+EXTERNAL_LINK_RE = re.compile(r"<link\b[^>]*\bhref\s*=\s*[\"']?\s*((?:https?:)?//[^\"'\s>]*)", re.IGNORECASE)
 EXTERNAL_IMG_RE = re.compile(r"<(?:img|source|iframe)\b[^>]*\bsrc\s*=\s*[\"']?\s*(?:https?:)?//", re.IGNORECASE)
 CSS_IMPORT_RE = re.compile(r"@import|url\(\s*[\"']?\s*(?:https?:)?//", re.IGNORECASE)
 LEFTOVER_RE = re.compile(r"__WF_[A-Z_]+__|\{\{[A-Z_]+\}\}")
@@ -227,7 +234,8 @@ def build(cfg, demo=False):
     """Return the assembled HTML for a validated-or-raw config. Raises ConfigError."""
     cfg = validate(cfg)
     template = (RES / TEMPLATE).read_text(encoding="utf-8")
-    css = (RES / CSS).read_text(encoding="utf-8")
+    font = base64.b64encode((RES / SANGBLEU_FONT).read_bytes()).decode("ascii")
+    css = (RES / CSS).read_text(encoding="utf-8").replace("__WF_SANGBLEU_WOFF2__", "data:font/woff2;base64," + font)
     app_js = "\n\n".join((RES / name).read_text(encoding="utf-8") for name in APP_JS_PARTS)
     demo_js = (RES / DEMO_JS_PART).read_text(encoding="utf-8") if demo else ""
 
@@ -247,10 +255,14 @@ def build(cfg, demo=False):
     values = {"{{PAGE_TITLE}}": page_title(cfg), "{{CONFIG_JSON}}": config_json(cfg)}
     out = re.sub(r"\{\{PAGE_TITLE\}\}|\{\{CONFIG_JSON\}\}", lambda m: values[m.group(0)], out)
 
-    for rx, what in ((EXTERNAL_SCRIPT_RE, "<script src=>"), (EXTERNAL_LINK_RE, "an external <link href>"),
-                     (EXTERNAL_IMG_RE, "an external image or frame"), (CSS_IMPORT_RE, "a CSS @import or external url()")):
+    for rx, what in ((EXTERNAL_SCRIPT_RE, "<script src=>"), (EXTERNAL_IMG_RE, "an external image or frame"),
+                     (CSS_IMPORT_RE, "a CSS @import or external url()")):
         if rx.search(out):
             raise ConfigError("the page would load {}; the runtime blocks it".format(what))
+    for href in EXTERNAL_LINK_RE.findall(out):
+        url = urlparse(href)
+        if url.scheme != "https" or url.hostname not in FONT_HOSTS:
+            raise ConfigError("the page would load an external <link href> ({}); the runtime blocks it".format(href))
 
     if demo:
         # Local review only: the skeleton the Artifact tool would otherwise add.

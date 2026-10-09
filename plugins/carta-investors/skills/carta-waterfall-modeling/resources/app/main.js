@@ -39,9 +39,7 @@ function onClick(ev) {
   if (popOpen && !t.closest('.wf-filter')) { S.filterOpen = false; render(); }
   const actionEl = t.closest('[data-action]');
   const action = actionEl && actionEl.getAttribute('data-action');
-  if (action === 'view') {
-    S.view = actionEl.getAttribute('data-view'); S.filterOpen = false; render();
-  } else if (action === 'expand-all') { toggleAll(); render();
+  if (action === 'expand-all') { toggleAll(); render();
   } else if (action === 'filter-toggle') { S.filterOpen = !S.filterOpen; S.filterSearch = ''; render();
   } else if (action === 'filter-reset') { S.filters = {}; S.filterSearch = ''; render();
   } else {
