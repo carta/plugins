@@ -122,22 +122,25 @@ const TASK_TEMPLATE_PACKAGE = 'publish-financial-package';
 const TASK_TEMPLATE_EXPENSE = 'prepare-and-pay-expense';
 const TASK_TEMPLATE_MANAGEMENT_FEES = 'review-management-fees';
 const TASK_TEMPLATE_CASH_RECONCILIATION = 'cash-reconciliation';
+const TASK_TEMPLATE_SOI_REVIEW = 'review-soi-v2';
 // Capital calls and Distributions share these; the name decides between them.
 const TASK_TEMPLATES_CAPITAL_ACTIVITY = [TASK_TEMPLATE_CAPITAL_ACTIVITY, 'draft-request-capital-activity'];
 // Every tab, Completed included, shows only these workflows: the ones a Workhub
 // panel opens (request thread, capital call review, reporting tracker), plus expense
-// payments, management fee reviews and cash reconciliation, which open an MCP App or
-// link out to Carta. One list for all
+// payments, management fee reviews, cash reconciliation and SOI reviews, which open an
+// MCP App or link out to Carta. One list for all
 // tabs, so finished work never shows a kind of task the open tabs leave out. Any
 // other template stays out until a panel opens it.
 const TASK_TEMPLATES_WITH_TILES = [
   TASK_TEMPLATE_REQUEST, TASK_TEMPLATE_CAPITAL_ACTIVITY, TASK_TEMPLATE_PACKAGE,
   TASK_TEMPLATE_EXPENSE, TASK_TEMPLATE_MANAGEMENT_FEES, TASK_TEMPLATE_CASH_RECONCILIATION,
+  TASK_TEMPLATE_SOI_REVIEW,
 ];
 
 // Needs-action tasks that open an MCP App in a new chat instead of Carta. `params` maps
 // each view param to the task row field that fills it: a management fee review's
-// object_id is the review, an expense workflow's is the expense.
+// object_id is the review, an expense workflow's is the expense. `requires` names a command
+// the app's own reads need, for a view whose flag does not cover them.
 const TASK_APPS = [
   { template: TASK_TEMPLATE_MANAGEMENT_FEES, view: 'fa:view:gp_management_fee_review',
     label: 'management fee review', params: { fund_uuid: 'fund_uuid', review_id: 'object_id' } },
@@ -147,6 +150,10 @@ const TASK_APPS = [
   // the clicked task's fund rather than on every fund's transactions.
   { template: TASK_TEMPLATE_CASH_RECONCILIATION, view: 'fa:view:gp_cash_reconciliation',
     label: 'cash reconciliation', params: { fund_uuid: 'fund_uuid' } },
+  // Update Investments opens a fund's open SOI review from the fund alone. Its boot data and
+  // commands sit behind a second flag, which fa:list:firm-asset-group shares.
+  { template: TASK_TEMPLATE_SOI_REVIEW, view: 'fa:view:update_investments',
+    label: 'SOI review', params: { fund_uuid: 'fund_uuid' }, requires: 'fa:list:firm-asset-group' },
 ];
 
 const TASK_CATEGORY_REQUEST = 'request';
@@ -183,7 +190,7 @@ const TASK_CATEGORIES = [
     templates: [TASK_TEMPLATE_PACKAGE],
     icon: '<path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="m9 15 2 2 4-4"/>' },
   { key: 'soi', name: 'SOI review',
-    templates: ['review-soi-v2', 'draft-review-soi-v2'],
+    templates: [TASK_TEMPLATE_SOI_REVIEW, 'draft-review-soi-v2'],
     icon: '<path d="M16 5H3"/><path d="M16 12H3"/><path d="M16 19H3"/><path d="M21 5h.01"/><path d="M21 12h.01"/><path d="M21 19h.01"/>' },
   // Other borrows Requests' icon, as the design does.
   { key: TASK_CATEGORY_OTHER, name: 'Other', templates: [],

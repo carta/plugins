@@ -17,7 +17,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.70.0</carta-plugin>
+<carta-plugin>carta-investors:6.70.1</carta-plugin>
 
 # Carta Workhub — Build / Redeploy
 
@@ -87,12 +87,12 @@ not inside a fund-data dashboard.
   load opens on Needs Action, or on the next tab holding work when it is empty
   (`FAR_TAB_OPEN_ORDER`); after that only the viewer changes tabs. Each tab carries a count
   pill and a one-line description. The queue holds the workflows Workhub has a panel for, plus expense
-  payments and management fee reviews, listed in `TASK_TEMPLATES_WITH_TILES` in
+  payments, management fee reviews, cash reconciliation and SOI reviews, listed in `TASK_TEMPLATES_WITH_TILES` in
   `resources/carta-workhub.config.js`: requests (`request-generic`), capital activities (`request-capital-activity`), financial packages
   (`publish-financial-package`), expense payments (`prepare-and-pay-expense`), management fee
-  reviews (`review-management-fees`) and cash reconciliation (`cash-reconciliation`, one workflow per bank
-  transaction). No panel opens the last three, so each is a Carta link under
-  Expense payments, Management fees or Cash reconciliation, unless its needs-action task opens an MCP App (see Task MCP Apps). Every other GP task would only link out to Carta, so it is left out; add a template to that list once a panel opens its tasks. Completed reads the same list,
+  reviews (`review-management-fees`), cash reconciliation (`cash-reconciliation`, one workflow per bank
+  transaction) and SOI reviews (`review-soi-v2`). No panel opens the last four, so each is a Carta link under
+  Expense payments, Management fees, Cash reconciliation or SOI review, unless its needs-action task opens an MCP App (see Task MCP Apps). Every other GP task would only link out to Carta, so it is left out; add a template to that list once a panel opens its tasks. Completed reads the same list,
   so finished work never shows a kind of task the open tabs leave out. Every task of a listed workflow
   shows, including the ones no panel opens (a capital call With Carta or Completed), as a
   Carta link. Inside a tab, rows are grouped by category, in the order and with the icons `TASK_CATEGORIES` in
@@ -282,7 +282,13 @@ not inside a fund-data dashboard.
   by `object_id`) opens a new chat instead of Carta. So does a cash reconciliation task
   (`cash-reconciliation`, `fa:view:gp_cash_reconciliation`), which passes only the task's
   `fund_uuid`: the view lists a fund's transactions, so the app opens filtered to the fund
-  that was clicked rather than on every fund. `TASK_APPS` in
+  that was clicked rather than on every fund. An SOI review (`review-soi-v2`,
+  `fa:view:update_investments`) passes only `fund_uuid` too: the view opens the fund's open
+  review, its period and task from that. Its boot data and commands sit behind a flag the
+  view's own does not cover, so its `TASK_APPS` entry names `requires:
+  'fa:list:firm-asset-group'`, which `farTaskAppViews` checks with `mcpCommandAvailable`; a
+  viewer without it keeps the Carta link rather than opening a chat that answers "not
+  enabled". `TASK_APPS` in
   `resources/carta-workhub.config.js` lists them, each with the task row field that fills each view
   param, and `farTaskAppFor` builds the prompt target with the tracker's `frtAppPrompt`. The task
   list is not gated by the views' flags, so `mcpViewAvailable` asks

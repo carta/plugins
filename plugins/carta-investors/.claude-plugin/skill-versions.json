@@ -4,7 +4,7 @@
     "headline": "Capital call and distribution details load their investor list again, instead of showing \"Partner rows failed to load\"."
   },
   "carta-workhub-build": {
-    "version": "1.9.9",
+    "version": "1.9.10",
     "headline": "Workhub shows every task your Carta team shares with you, in Drafts, Needs Action, With Carta and Completed tabs grouped by category."
   }
 }

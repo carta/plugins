@@ -434,11 +434,12 @@ function farTaskAppFor(w, appViews) {
   return { view: app.view, params, label: app.label, entity: w.entity_name };
 }
 
-// The task list is not gated by an app's flag, so ask which views this viewer may open.
+// The task list is not gated by an app's flag, so ask which views this viewer may open,
+// and for an app that names one, whether it may also call the command its reads need.
 async function farTaskAppViews() {
-  const views = TASK_APPS.map(a => a.view);
-  const open = await Promise.all(views.map(mcpViewAvailable));
-  return new Set(views.filter((_, i) => open[i]));
+  const open = await Promise.all(TASK_APPS.map(async a =>
+    (await mcpViewAvailable(a.view)) && (!a.requires || (await mcpCommandAvailable(a.requires)))));
+  return new Set(TASK_APPS.filter((_, i) => open[i]).map(a => a.view));
 }
 
 let _farFirmName = null;   // names the firm in a prompt that opens an MCP App chat

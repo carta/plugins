@@ -6,6 +6,7 @@
   "fa:create:fund-admin-message": "active-firm",
   "fa:create:document-content": "active-firm",
   "fa:get:reporting-status": "firm-param",
+  "fa:list:firm-asset-group": "firm-param",
   "fa:list:workflow-message": "by-id",
   "fa:create:workflow-message": "by-id",
   "fa:get:capital-activity-review-summary": "by-id",
