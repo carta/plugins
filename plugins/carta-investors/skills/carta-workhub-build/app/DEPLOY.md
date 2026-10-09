@@ -23,7 +23,8 @@ runbook. This file covers only what is specific to Workhub.
     other firm is refused, as is a `firm_uuid` naming another firm.
   - Before every write, and before each list that follows the active firm, the Worker
     switches Carta back to the hostname's firm. Carta keeps one active firm per user,
-    so another tab can move it.
+    so another tab can move it. A list reuses a switch from the last 10 seconds, or waits
+    for one under way, so a page's burst of reads costs one `set_context`.
   - Reads scoped by id (`workflow_id`, `fund_uuid`) rely on Carta's own access checks.
 - **Sign-in** is OAuth 2.1 with PKCE against `mcp.app.carta.com`. Sessions sit in the
   `SESSIONS` KV namespace encrypted with `SESSION_KEY` (AES-GCM, base64 of 32 bytes).

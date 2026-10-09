@@ -86,10 +86,44 @@ export async function tenantFirm(tenant, sid, session, env) {
   return firm;
 }
 
+// A read trusts a switch this recent, so a page's burst of list reads costs one set_context
+// (seconds each) instead of one per page. Another tab that moves the firm inside the window
+// can still slip a read past; writes always switch.
+export const PIN_FRESH_MS = 10_000;
+export const PIN_WAIT_MS = 10_000;
+const PIN_POLL_MS = 100;
+// Per isolate, keyed by session and firm: { at } once confirmed, { pendingSince } while
+// switching. Waiters poll rather than share the pending promise, which the Workers runtime
+// does not settle across requests. A cancelled request never clears its marker, so one
+// older than PIN_WAIT_MS counts as abandoned.
+const pins = new Map();
+const pinKey = (tenant, sid) => `${sid}:${tenant.firmUuid}`;
+
 // Carta keeps the active firm per user, so another tab or app signed in as the same user
 // can move it. Switch back to the hostname's firm before anything that acts on "the active
 // firm". True when Carta confirmed the switch.
 export async function pinTenant(tenant, sid, session, env) {
-  const result = await mcpCallTool("set_context", { firm_id: tenant.firmUuid }, session.access_token, sid, env);
-  return !result?.isError && !!contextSet(result);
+  const key = pinKey(tenant, sid);
+  pins.set(key, { pendingSince: Date.now() });
+  try {
+    const result = await mcpCallTool("set_context", { firm_id: tenant.firmUuid }, session.access_token, sid, env);
+    const ok = !result?.isError && !!contextSet(result);
+    if (ok) pins.set(key, { at: Date.now() });
+    else pins.delete(key);
+    return ok;
+  } catch (e) {
+    pins.delete(key);
+    throw e;
+  }
+}
+
+// pinTenant for a read: reuses a fresh switch, or waits for one already under way.
+export async function pinTenantForRead(tenant, sid, session, env) {
+  const key = pinKey(tenant, sid);
+  for (;;) {
+    const pin = pins.get(key);
+    if (pin?.at && Date.now() - pin.at < PIN_FRESH_MS) return true;
+    if (!pin?.pendingSince || Date.now() - pin.pendingSince > PIN_WAIT_MS) return pinTenant(tenant, sid, session, env);
+    await new Promise((r) => setTimeout(r, PIN_POLL_MS));
+  }
 }

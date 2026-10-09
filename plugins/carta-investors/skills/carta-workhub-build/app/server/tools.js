@@ -2,7 +2,7 @@
 // closed allowlist and against the hostname's firm before it leaves the Worker.
 import COMMANDS from "./commands.json";
 import { mcpCallTool, requireAuth, TokenExpired, unauthorized } from "./auth.js";
-import { pinTenant, tenantFirm } from "./tenancy.js";
+import { pinTenant, pinTenantForRead, tenantFirm } from "./tenancy.js";
 
 const PASS_THROUGH = new Set(["welcome", "discover", "get_current_user"]);
 const READ_VERBS = new Set(["get", "list"]);
@@ -29,8 +29,8 @@ function firmsAnswer(firm) {
 //   { refuse }                     — not allowed here
 //   { answer }                     — answered by the Worker itself
 //   { name, arguments, pin }       — the Carta tool to call; pin = switch Carta back to the
-//                                    hostname's firm first, for anything that acts on the
-//                                    active firm and for every write
+//                                    hostname's firm first: "write" every time, "read" for a
+//                                    list that follows the active firm, else false
 export function routeTool(tool, args, firm) {
   const { _instrumentation_v2, ...rest } = args && typeof args === "object" ? args : {};
   const stamp = _instrumentation_v2 ? { _instrumentation_v2 } : {};
@@ -53,7 +53,8 @@ export function routeTool(tool, args, firm) {
         return { refuse: "This Workhub belongs to another firm." };
       }
       const writes = tool === "mutate" || !READ_VERBS.has(command.split(":")[1]);
-      return { name: commandTool(command), arguments: { ...params, ...stamp }, pin: writes || scope === "active-firm" };
+      const pin = writes ? "write" : scope === "active-firm" ? "read" : false;
+      return { name: commandTool(command), arguments: { ...params, ...stamp }, pin };
     }
     default:
       return PASS_THROUGH.has(tool) ? { name: tool, arguments: args || {}, pin: false } : { refuse: `${tool} is not available in the hosted Workhub.` };
@@ -90,7 +91,8 @@ export async function handleTool(req, env, tenant) {
     const route = routeTool(body?.tool, body?.args, firm);
     if (route.refuse) return refusal(route.refuse);
     if (route.answer) return Response.json(route.answer);
-    if (route.pin && !(await pinTenant(tenant, sid, session, env))) {
+    const switchFirm = route.pin === "read" ? pinTenantForRead : pinTenant;
+    if (route.pin && !(await switchFirm(tenant, sid, session, env))) {
       return refusal("Carta could not switch to this firm. Nothing was sent.");
     }
     // A tool that ran and failed answers 200 with isError; the bridge tells it apart from

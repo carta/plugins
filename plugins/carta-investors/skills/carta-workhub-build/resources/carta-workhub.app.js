@@ -174,8 +174,11 @@ async function bootCartaWorkhub() {
     const firmId = active && active.firm_id != null ? String(active.firm_id) : null;
     if (!firmId) throw new Error("no firm in context");
 
-    // The server needs an active firm even when the id is passed explicitly.
-    try { await _mcp("set_context", { firm_id: firmId }); } catch (e) { /* best effort */ }
+    // The server needs an active firm even when the id is passed explicitly. Setting
+    // one takes seconds, so a firm Carta already has active is left as it is.
+    if (!active.is_active) {
+      try { await _mcp("set_context", { firm_id: firmId }); } catch (e) { /* best effort */ }
+    }
     _benchmarkFirmId = firmId;
 
     farSetFirmName(active.firm_name);

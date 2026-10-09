@@ -21,7 +21,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.68.12</carta-plugin>
+<carta-plugin>carta-investors:6.68.14</carta-plugin>
 
 # Carta Workhub — Build / Redeploy
 
@@ -125,7 +125,8 @@ not inside a fund-data dashboard.
   every `light-dark()` token resolves to its light value.
 
   **Two cursor-paged lists feed the queue**, read in parallel at 40 rows a page so no reply
-  nears carta-mcp's 40k cap:
+  nears carta-mcp's 40k cap. On first load Needs Action also has its own read
+  (`pending_actor: customer`), so it paints first; the other tabs count `…` until the lists land:
   - `fa:list:gp-workhub-active-task` — every open task, kept when its `workflow_template` is in
     `TASK_TEMPLATES_WITH_TILES` (the command takes no template filter), grouped by `pending_actor` (`customer`
     → Needs Action, `carta` → With Carta), one card per workflow; the customer's task wins. A
@@ -293,7 +294,8 @@ not inside a fund-data dashboard.
   "Carta", and matching `author.id` to the signed-in user would label Carta's reply "You".
   Index 0 is the request that opened the thread; a reply sent in this session is appended with
   `isStaff: false`. Known gap: a reply sent in an *earlier* session shows as Carta.
-- **Firm auto-detection** — `list_contexts` resolves the active firm, then `set_context` pins it.
+- **Firm auto-detection** — `list_contexts` resolves the active firm; `set_context` pins it only
+  when Carta has another firm active.
   The firm name shows under the page title. `list_contexts` answers `firm_name: "Unknown"` for
   some firms, so that literal is treated as no answer. First real name set holds; a later blank
   cannot clear it.
@@ -305,6 +307,8 @@ A card links out only when its row carries `_links.web_url` (set only when `url`
 1. `fa:list:fund-admin-message` — the customer-facing list. **Not built yet in carta-mcp.**
 2. `fa:list:gp-workhub-active-task` plus `fa:list:firm-workflow` — see Queue.
 3. Workflow ids this artifact recorded in `localStorage`.
+
+1 and 2 are read together, so 1 answering nothing costs no extra wait.
 
 Path 3 cannot see requests raised by email or phone, so the UI says so rather than implying
 the list is complete.

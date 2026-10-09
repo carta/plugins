@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import worker from "../server/worker.js";
 import { routeTool } from "../server/tools.js";
-import { tenantFirmKey } from "../server/tenancy.js";
+import { PIN_FRESH_MS, PIN_WAIT_MS, tenantFirmKey } from "../server/tenancy.js";
 import { ACME, GLOBEX, mockMcp, text, tokenEnv, toolRequest } from "./helpers.js";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -44,11 +44,11 @@ describe("routeTool", () => {
   });
 
   it.each([
-    ["a list that follows the active firm", "fetch", "fa:list:gp-workhub-active-task"],
-    ["a new request, which carries no firm", "mutate", "fa:create:fund-admin-message"],
-    ["a write scoped by id", "mutate", "fa:mutate:approve-capital-activity"],
-  ])("switches Carta to the hostname's firm first for %s", (_case, tool, command) => {
-    expect(routeTool(tool, { command, params: {} }, FIRM).pin).toBe(true);
+    ["a list that follows the active firm", "fetch", "fa:list:gp-workhub-active-task", "read"],
+    ["a new request, which carries no firm", "mutate", "fa:create:fund-admin-message", "write"],
+    ["a write scoped by id", "mutate", "fa:mutate:approve-capital-activity", "write"],
+  ])("switches Carta to the hostname's firm first for %s", (_case, tool, command, pin) => {
+    expect(routeTool(tool, { command, params: {} }, FIRM).pin).toBe(pin);
   });
 
   it.each([
@@ -137,6 +137,82 @@ describe("POST /api/tool", () => {
     mockMcp();
     fetch.mockImplementationOnce(async () => new Response("", { status: 503 }));
     expect((await call("get_current_user", {})).status).toBe(502);
+  });
+
+  describe("switching Carta to the hostname's firm", () => {
+    // Switches are remembered per session and firm, so each case takes a firm of its own.
+    let firmSeq = 0;
+    async function firmEnv() {
+      const firmUuid = `33333333-3333-3333-3333-${String(++firmSeq).padStart(12, "0")}`;
+      const env = tokenEnv({ LOCAL_FIRM_UUID: firmUuid });
+      // A warm access-check cache, so every set_context left is a switch.
+      await env.SESSIONS.put(tenantFirmKey("local", firmUuid), JSON.stringify({ firmUuid, name: "Acme Capital" }));
+      const read = () => worker.fetch(toolRequest("fetch", { command: "fa:list:gp-workhub-active-task", params: {} }), env);
+      const write = () => worker.fetch(toolRequest("mutate", { command: "fa:create:fund-admin-message", params: { message: "hi" } }), env);
+      return { firmUuid, read, write };
+    }
+    const switches = (calls) => calls.filter((c) => c.tool === "set_context").length;
+
+    afterEach(() => vi.useRealTimers());
+
+    it("switches once for a burst of reads that arrive together", async () => {
+      const { firmUuid, read } = await firmEnv();
+      const calls = mockMcp({ held: { [firmUuid]: "Acme Capital" } });
+      await Promise.all([read(), read(), read()]);
+      expect(switches(calls)).toBe(1);
+      expect(calls.filter((c) => c.tool === "fa__list__gp-workhub-active-task")).toHaveLength(3);
+    });
+
+    it("switches again for a read once the last switch is no longer fresh", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      const { firmUuid, read } = await firmEnv();
+      const calls = mockMcp({ held: { [firmUuid]: "Acme Capital" } });
+      await read();
+      vi.advanceTimersByTime(PIN_FRESH_MS - 1);
+      await read();
+      expect(switches(calls)).toBe(1);
+      vi.advanceTimersByTime(1);
+      await read();
+      expect(switches(calls)).toBe(2);
+    });
+
+    it("switches again once a switch under way is old enough to count as abandoned", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      const { firmUuid, read } = await firmEnv();
+      const calls = mockMcp({ held: { [firmUuid]: "Acme Capital" } });
+      const answer = fetch.getMockImplementation();
+      let setContextAttempts = 0;
+      // The first switch never answers, as when its request is cancelled mid-call.
+      fetch.mockImplementation((url, init) =>
+        JSON.parse(init.body).params.name === "set_context" && setContextAttempts++ === 0
+          ? (calls.push({ tool: "set_context" }), new Promise(() => {}))
+          : answer(url, init));
+      read();
+      await vi.waitFor(() => expect(setContextAttempts).toBe(1));
+      vi.advanceTimersByTime(PIN_WAIT_MS + 1);
+      expect((await read()).status).toBe(200);
+      expect(setContextAttempts).toBe(2);
+      expect(calls.filter((c) => c.tool === "fa__list__gp-workhub-active-task")).toHaveLength(1);
+    });
+
+    it("switches before every write, however recent the last switch", async () => {
+      const { firmUuid, read, write } = await firmEnv();
+      const calls = mockMcp({ held: { [firmUuid]: "Acme Capital" } });
+      await read();
+      await write();
+      expect(calls.map((c) => c.tool)).toEqual([
+        "set_context", "fa__list__gp-workhub-active-task", "set_context", "fa__create__fund-admin-message",
+      ]);
+    });
+
+    it("tries the switch again on the next read after one Carta refused", async () => {
+      const { read } = await firmEnv();
+      const calls = mockMcp({ held: {} });
+      expect((await (await read()).json()).isError).toBe(true);
+      expect((await (await read()).json()).isError).toBe(true);
+      expect(switches(calls)).toBe(2);
+      expect(calls.map((c) => c.tool)).not.toContain("fa__list__gp-workhub-active-task");
+    });
   });
 
   it("answers 401 without a session", async () => {

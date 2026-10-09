@@ -56,6 +56,7 @@ const FAR_FINISHED_STATUSES = ['complete', 'canceled'];
 const FAR_TITLE_MAX = 72;     // chars of the opening message used as a title
 
 let _farRows = null;          // null = not fetched; [] = none; [...] = rows
+let _farEarlyTodo = null;     // Needs Action from its own read, shown until _farRows lands
 let _farPartial = false;      // true when rows came from the localStorage path
 let _farDoneCapped = false;   // Completed stopped at FAR_DONE_MAX_PAGES with more to read
 const _farThreadCache = {};   // workflow_id → normalized messages
@@ -650,6 +651,25 @@ function farRecentlyFinished(w, now = Date.now()) {
   return !at || now - at <= FAR_DONE_DAYS * 86400000;
 }
 
+// The task list takes no template filter, so the rest are dropped here.
+function farQueueTasks(open) {
+  return farOneTaskPerWorkflow(open.filter(t => TASK_TEMPLATES_WITH_TILES.includes(t.workflow_template)));
+}
+
+// Needs Action is one short read, so it paints while the longer lists are still out.
+async function farPaintNeedsAction() {
+  const [open, reviews, tracker] = await Promise.all([
+    farWalk(FAR_ACTIVE_TASKS_COMMAND, { pending_actor: 'customer' }),
+    ccrReviewAvailable(),
+    frtTrackerAvailable(),
+  ]);
+  if (!open || _farRows !== null) return;
+  _farEarlyTodo = ccrQueueRows(farQueueTasks(open).map(w => farNormalizeWorkflow(w, reviews, tracker)))
+    .filter(r => r.group === 'todo');
+  farPickFirstTab();
+  renderFarSection();
+}
+
 // Null when the open list fails; a failed finished list only empties Completed.
 // A task's created_at is when its current task opened, so the open requests and
 // capital activities are read too, for the date each was filed.
@@ -667,8 +687,7 @@ async function farFetchQueue() {
   ]);
   if (!open) return null;
   const filed = new Map((active ?? []).map(w => [w.workflow_id, w.created_at]));
-  // The task list takes no template filter, so the rest are dropped here.
-  const tasks = farOneTaskPerWorkflow(open.filter(t => TASK_TEMPLATES_WITH_TILES.includes(t.workflow_template)))
+  const tasks = farQueueTasks(open)
     .map(t => Object.assign({}, t, { created_at: filed.get(t.workflow_id) ?? t.created_at }));
   // A workflow that finished between the reads shows once, as open.
   const openIds = new Set(tasks.map(t => t.workflow_id));
@@ -676,21 +695,28 @@ async function farFetchQueue() {
   return tasks.concat((finished ?? []).filter(w => !openIds.has(w.workflow_id) && farRecentlyFinished(w)));
 }
 
-// Three sources, most complete first; the id path is the floor.
+// Three sources, most complete first; the id path is the floor. The first two are
+// read together, so a source that answers nothing never delays the next.
 async function farFetchRequests() {
   let loaded = false;
   try {
-    const scoped = await _mcp('fetch', {
+    const scoped = _mcp('fetch', {
       command: 'fa:list:fund-admin-message',
       params: { page_size: FAR_PAGE_SIZE },
-    });
-    let rows = farResults(scoped);
+    }).then(farResults, () => null);
+    const queue = _benchmarkFirmId
+      ? Promise.all([farFetchQueue(), ccrReviewAvailable(), frtTrackerAvailable()])
+      : null;
+    // Unread when the scoped list answers; this keeps its failure from going unhandled.
+    queue?.catch(() => {});
+    if (queue && _farRows === null) {
+      farPaintNeedsAction().catch(e => console.error('[far] Needs Action read —', e));
+    }
+    let rows = await scoped;
     let reviews = true;
     let tracker = true;
 
-    if (!rows && _benchmarkFirmId) {
-      [rows, reviews, tracker] = await Promise.all([farFetchQueue(), ccrReviewAvailable(), frtTrackerAvailable()]);
-    }
+    if (!rows && queue) [rows, reviews, tracker] = await queue;
 
     if (rows) {
       _farPartial = false;
@@ -839,7 +865,12 @@ farRenderViewButton();
 // The first load opens on work rather than on an empty Needs Action; after
 // that the tab only changes when the viewer changes it.
 function farPickFirstTab() {
-  if (_farTabChosen || _farRows === null) return;
+  if (_farTabChosen) return;
+  // Before the full queue lands only Needs Action is known, and only work there decides.
+  if (_farRows === null) {
+    if (_farTab === 'todo' && _farEarlyTodo?.length) _farTabChosen = true;
+    return;
+  }
   _farTabChosen = true;
   const rows = _farRows.concat(farPlanRows());
   if (rows.some(r => r.group === _farTab)) return;
@@ -1058,7 +1089,8 @@ function farRenderTabs(byTab) {
   nav.innerHTML = FAR_TABS.map(t => {
     // Completed stops at a page cap, so its count is a floor. No + on an empty count.
     const n = byTab[t.key].length;
-    const count = n + (t.key === 'done' && _farDoneCapped && n > 0 ? '+' : '');
+    const count = farTabLoading(t.key) ? '…'
+      : n + (t.key === 'done' && _farDoneCapped && n > 0 ? '+' : '');
     const on = t.key === _farTab;
     return `<button type="button" class="far-tab${on ? ' far-tab-active' : ''}" aria-pressed="${on}"`
       + ` onclick="farSetTab('${t.key}')">${escHtml(t.label)}`
@@ -1120,13 +1152,25 @@ function farRenderGroups(groups, withLabels) {
   });
 }
 
+// The queue on screen: Needs Action alone until the full read lands.
+function farShownRows() {
+  return _farRows ?? _farEarlyTodo ?? [];
+}
+
+// Until the first fetch lands, an empty tab means "not read yet", not "nothing here".
+// Drafts live in this artifact, so that tab is never waiting on Carta.
+function farTabLoading(key) {
+  if (_farRows !== null || key === 'planned') return false;
+  return !(key === 'todo' && _farEarlyTodo !== null);
+}
+
 // The composer never hides — a section that vanishes takes the entry point with it.
 function renderFarSection() {
   const section = document.getElementById('far-section');
   if (!section) return;
   section.style.display = '';
 
-  const rows = farSorted((_farRows ?? []).concat(farPlanRows()));
+  const rows = farSorted(farShownRows().concat(farPlanRows()));
   const byTab = Object.fromEntries(FAR_TABS.map(t => [t.key, rows.filter(r => r.group === t.key)]));
   const tab = FAR_TABS.find(t => t.key === _farTab);
   const tabRows = byTab[tab.key];
@@ -1148,9 +1192,7 @@ function renderFarSection() {
   const note = document.getElementById('far-partial-note');
   if (note) note.style.display = _farPartial && rows.length > 0 ? '' : 'none';
 
-  // Until the first fetch lands, an empty tab means "not read yet", not "nothing here".
-  // Drafts live in this artifact, so that tab is never waiting on Carta.
-  const loading = _farRows === null && tab.key !== 'planned';
+  const loading = farTabLoading(tab.key);
   const loader = document.getElementById('far-loading');
   if (loader) loader.style.display = loading ? '' : 'none';
   const empty = document.getElementById('far-empty');
@@ -1404,7 +1446,7 @@ let _farOpenThreadId = null;
 async function openFarThread(workflowId) {
   trackWorkhub('click', 'CartaWorkhub.FundAdminRequests.OpenThread');
   _farOpenThreadId = workflowId;
-  const row = (_farRows ?? []).find(r => String(r.id) === String(workflowId));
+  const row = farShownRows().find(r => String(r.id) === String(workflowId));
   const overlay = farEnsureOverlay('far-thread-overlay', 'far-overlay');
   overlay.innerHTML = `
     <div class="far-panel far-panel-thread">
@@ -1770,7 +1812,7 @@ async function submitFarReply() {
       authorId: _farViewerId, at: new Date().toISOString(), attachments: sentFiles,
     });
     _farThreadCache[workflowId] = msgs;
-    const row = (_farRows ?? []).find(r => String(r.id) === String(workflowId));
+    const row = farShownRows().find(r => String(r.id) === String(workflowId));
     if (row) { row.group = 'progress'; row.state = 'pending-carta'; row.lastActivity = new Date().toISOString(); }
 
     if (box) box.value = '';
