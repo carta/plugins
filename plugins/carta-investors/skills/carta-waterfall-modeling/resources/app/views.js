@@ -239,6 +239,5 @@ function renderApp() {
   const d = S.data[currentKey()];
   return renderHeader() +
     '<section class="wf-results" aria-label="Waterfall results">' + renderResultsTitle() + renderBelt(d) + '</section>' +
-    '<section class="wf-body" id="wf-body">' + renderBody() + '</section>' +
-    '<footer class="wf-foot">Results for the ' + esc(CFG.waterfall_date) + ' run.</footer>';
+    '<section class="wf-body" id="wf-body">' + renderBody() + '</section>';
 }

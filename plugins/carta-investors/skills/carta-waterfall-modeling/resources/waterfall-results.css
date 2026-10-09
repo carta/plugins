@@ -72,11 +72,13 @@ body {
 .wf-input dt { font-size: 12px; line-height: 16px; color: var(--ink-color-global-text-subtle); }
 .wf-input dd { margin: 4px 0 0; font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
 
-.wf-results { margin-top: 40px; }
-.wf-results-title { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 0 0 16px; }
+/* The results title and the holder filter share one row: title left, filter right. */
+.wf-results { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 16px; margin: 40px 0 16px; }
+.wf-results-title { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 0; }
 .wf-results-title h2 { margin: 0; }
 .wf-results-title h2, h2.wf-results-title { font-size: 18px; line-height: 24px; font-weight: 600; }
-.wf-belt { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; margin-bottom: 16px; }
+/* Right-aligned even when it wraps to its own line, so the popover's right-edge anchor stays on the page. */
+.wf-belt { display: flex; align-items: center; margin-inline-start: auto; }
 
 .wf-select, .wf-btn, .wf-search {
   height: 40px; padding: 0 12px; font: inherit; line-height: 1;
@@ -96,7 +98,7 @@ body {
 
 .wf-filter { position: relative; }
 .wf-pop {
-  position: absolute; z-index: 5; top: calc(100% + 6px); inset-inline-start: 0;
+  position: absolute; z-index: 5; top: calc(100% + 6px); inset-inline-end: 0;
   width: min(300px, calc(100vw - 64px)); background: var(--ink-color-global-surface-background-default);
   border: 1px solid var(--ink-color-global-border-subtle); border-radius: var(--ink-size-global-radius-flat); padding: 12px;
   box-shadow: var(--ink-elevation-global-shadow-medium);
@@ -143,10 +145,12 @@ body {
 .wf-empty { margin: 32px 0; color: var(--ink-color-global-text-subtle); }
 @media (prefers-reduced-motion: reduce) { .wf-caret { transition: none; } }
 
-.wf-foot { margin-top: 24px; font-size: 12px; color: var(--ink-color-global-text-subtle); }
-
 @media (max-width: 520px) {
   .wf { padding-inline: 16px; padding-block: 16px 32px; }
   .wf-head h1 { font-size: 24px; line-height: 36px; }
   .wf-inputs { gap: 8px 24px; }
+  /* Too narrow for one row: the filter goes under the title, so its menu opens from its left edge. */
+  .wf-results { flex-direction: column; align-items: flex-start; }
+  .wf-belt { margin-inline-start: 0; }
+  .wf-pop { inset-inline-start: 0; inset-inline-end: auto; }
 }
