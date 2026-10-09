@@ -32,7 +32,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.95.3</carta-plugin>
+<carta-plugin>carta-cap-table:6.95.5</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -59,8 +59,6 @@ For each company, the relevant commands are:
 - `read_tool({"name": "cap_table__get__cap_table_by_share_class", "arguments": {"corporation_id": corporation_id}})` -- option pool data
 - `read_tool({"name": "cap_table__get__convertible_notes", "arguments": {"corporation_id": corporation_id}})` -- SAFE/note terms (summary includes min/max/average price_cap, avg_discount, by_type)
 - `read_tool({"name": "cap_table__list__financing_history", "arguments": {"corporation_id": corporation_id}})` -- round sizes (one row per share class with closing_date and cash_raised_by_currency)
-
-> **Use `cap_table__list__financing_history` — never `cap_table__get__financing_history`.** The `get` tool is deprecated: the gateway rejects every call to it with *"This command is deprecated"* before reaching Carta, so calling it fails once per company.
 
 The convertible-notes call defaults to `detail=summary`, and the other two return aggregates — no individual records are needed.
 

@@ -32,7 +32,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.95.3</carta-plugin>
+<carta-plugin>carta-cap-table:6.95.5</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -54,8 +54,6 @@ Fetch the company's financing history, one row per share class, and present it a
 You need the `corporation_id`. Get it from `list_accounts` if you don't have it.
 
 ## Data Retrieval
-
-> **Use `cap_table__list__financing_history` — never `cap_table__get__financing_history`.** The `get` tool is deprecated: the gateway rejects every call to it with *"This command is deprecated. Use 'cap_table:list:financing_history' instead."* before reaching Carta, so calling it only wastes a turn.
 
 ```
 read_tool({"name": "cap_table__list__financing_history", "arguments": {"corporation_id": corporation_id}})
@@ -160,7 +158,6 @@ Format large numbers as $XM or $XK for readability.
 
 | Situation | What to do |
 |---|---|
-| *"This command is deprecated"* | You called `cap_table__get__financing_history`. Call `cap_table__list__financing_history` instead, once. Do not retry the deprecated tool. |
 | `share_class_financings` is empty | Say the company has no financing history recorded in Carta. Do not call other tools looking for rounds. |
 | 403 / access denied | Say the user's role can't see this company's financing history. Do not retry. |
 
