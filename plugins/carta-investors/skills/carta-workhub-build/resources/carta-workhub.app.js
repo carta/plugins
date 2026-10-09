@@ -152,14 +152,15 @@ function extractContextsPayload(res) {
 let _benchmarkFirmId = null;
 
 // The section carries the composer, so show it even when the queue fails to load.
+// `msg` is the reason every queue tab shows.
 function farShowSection(msg) {
   const s = document.getElementById('far-section');
   if (s) s.style.display = '';
   // Boot failed before the queue was read: settle it as empty so no later render
   // brings the loader back.
   if (_farRows === null) _farRows = [];
+  if (msg) _farTabErrors = Object.fromEntries(FAR_QUEUE_TABS.map(key => [key, msg]));
   renderFarSection();
-  if (msg) showToast(msg);
 }
 
 async function bootCartaWorkhub() {
@@ -195,7 +196,7 @@ async function bootCartaWorkhub() {
     await farFetchRequests();
   } catch (e) {
     console.error('[carta-workhub boot]', e);
-    farShowSection('Could not load your requests. Reopen the artifact to retry.');
+    farShowSection('Could not read your firm from Carta.');
   }
 }
 

@@ -41,7 +41,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.70.7</carta-plugin>
+<carta-plugin>carta-investors:6.70.8</carta-plugin>
 
 # Data collection
 

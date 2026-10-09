@@ -791,6 +791,36 @@
   padding: 12px 0 0;
 }
 
+/* A tab whose read failed: what Carta said, with Retry. */
+.far-load-error {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 4px 0 12px;
+  padding: 12px 14px;
+  background: var(--ink-color-global-feedback-negative-subtle);
+  border: 1px solid var(--ink-color-global-feedback-negative-strong);
+  border-radius: var(--ink-size-global-radius-subtle);
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--ink-color-global-text-default);
+}
+.far-load-error-body { min-width: 0; }
+.far-load-error-head { margin: 0; font-weight: 600; color: var(--ink-color-global-feedback-negative-strong); }
+.far-load-error-detail { margin: 2px 0 0; overflow-wrap: anywhere; }
+.far-load-error-list { margin: 2px 0 0; padding-left: 18px; overflow-wrap: anywhere; }
+.far-load-error-list b { font-weight: 600; }
+.far-load-error-compact { align-items: center; padding: 6px 8px 6px 14px; }
+.far-load-error .far-load-error-retry {
+  flex: none;
+  padding: 6px 14px;
+  border: 1px solid var(--ink-color-global-border-active);
+  border-radius: var(--ink-size-global-radius-default);
+  color: var(--ink-color-global-text-default);
+  background: var(--ink-color-global-surface-background-default);
+}
+
 /* Shown from first paint: a firm with many tasks takes seconds to page through. */
 .far-loading {
   display: flex;

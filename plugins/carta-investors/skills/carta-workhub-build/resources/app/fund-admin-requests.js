@@ -52,13 +52,20 @@ const FAR_DONE_MAX_PAGES = 3;    // Completed is recent work; its full history i
 const FAR_DONE_DAYS = 90;
 const FAR_REQUEST_TEMPLATE = TASK_TEMPLATE_REQUEST;
 const FAR_ACTIVE_TASKS_COMMAND = 'fa:list:gp-workhub-active-task';
+// The tabs Carta fills, each from its own read.
+const FAR_QUEUE_TABS = ['todo', 'progress', 'done'];
+// Connector codes _mcp rethrows: the whole page is cut off, not one read.
+const FAR_PAGE_LEVEL_CODES = ['needs_reauth', 'server_not_connected'];
+const FAR_LOAD_DETAIL_MAX = 200;   // chars of a failed read's own message
 const FAR_FINISHED_STATUSES = ['complete', 'canceled'];
 const FAR_TITLE_MAX = 72;     // chars of the opening message used as a title
 
 let _farRows = null;          // null = not fetched; [] = none; [...] = rows
-let _farEarlyTodo = null;     // Needs Action from its own read, shown until _farRows lands
+let _farEarly = null;         // { parts, rows } of the first load's reads, shown until _farRows lands
 let _farPartial = false;      // true when rows came from the localStorage path
 let _farDoneCapped = false;   // Completed stopped at FAR_DONE_MAX_PAGES with more to read
+let _farTabErrors = {};       // tab key → what Carta said when that tab's read failed
+let _farRetrying = false;     // a retry is out, so the failed tabs show their loader
 const _farThreadCache = {};   // workflow_id → normalized messages
 
 // ── Result unwrapping ──
@@ -79,24 +86,42 @@ function farPage(res) {
   return _mcpResultCandidates(res).find(c => c && Array.isArray(c.results)) ?? null;
 }
 
+// What a failed read said, for the load-error banner.
+function farErrorText(res) {
+  const text = (res?.content ?? []).filter(c => c?.type === 'text').map(c => c.text).join(' ').trim();
+  return text || 'Carta sent no answer.';
+}
+
 // Every row of a cursor-paged list, or null if a page fails or pages remain past
 // maxPages — a short list must not read as complete. `partialOk` keeps what was
-// read at the cap, marked `capped`, for a list that is only displayed.
-async function farWalk(command, params, { maxPages = FAR_LIST_MAX_PAGES, partialOk = false } = {}) {
+// read at the cap, marked `capped`, for a list that is only displayed. `onFail`
+// hears why a walk came back short, a thrown call included.
+async function farWalk(command, params, { maxPages = FAR_LIST_MAX_PAGES, partialOk = false, onFail = () => {} } = {}) {
   const rows = [];
   let after = null;
   for (let page = 0; page < maxPages; page++) {
-    const res = await _mcp('fetch', {
-      command,
-      params: Object.assign({}, params, { size: FAR_LIST_PAGE_SIZE }, after ? { after } : {}),
-    });
+    let res;
+    try {
+      res = await _mcp('fetch', {
+        command,
+        params: Object.assign({}, params, { size: FAR_LIST_PAGE_SIZE }, after ? { after } : {}),
+      });
+    } catch (e) {
+      onFail(e?.message || String(e));
+      throw e;
+    }
     const body = farPage(res);
-    if (!body) return null;
+    if (!body) {
+      onFail(farErrorText(res));
+      return null;
+    }
     rows.push(...body.results);
     if (!body.has_next || !body.next) return rows;
     after = body.next;
   }
-  return partialOk ? Object.assign(rows, { capped: true }) : null;
+  if (partialOk) return Object.assign(rows, { capped: true });
+  onFail(`The list ran past ${maxPages} pages.`);
+  return null;
 }
 
 function farWorkflowId(res) {
@@ -679,71 +704,119 @@ function farQueueTasks(open) {
   return farOneTaskPerWorkflow(open.filter(t => TASK_TEMPLATES_WITH_TILES.includes(t.workflow_template)));
 }
 
-// Needs Action is one short read, so it paints while the longer lists are still out.
-async function farPaintNeedsAction() {
-  const [open, reviews, appViews] = await Promise.all([
-    farWalk(FAR_ACTIVE_TASKS_COMMAND, { pending_actor: 'customer' }),
-    ccrReviewAvailable(),
-    farTaskAppViews(),
-  ]);
-  if (!open || _farRows !== null) return;
-  _farEarlyTodo = ccrQueueRows(farQueueTasks(open).map(w => farNormalizeWorkflow(w, reviews, appViews)))
-    .filter(r => r.group === 'todo');
-  farPickFirstTab();
-  renderFarSection();
-}
-
-// Null when the open list fails; a failed finished list only empties Completed.
-// A task's created_at is when its current task opened, so the open requests and
-// capital activities are read too, for the date each was filed.
-async function farFetchQueue() {
-  const [open, active, finished] = await Promise.all([
-    farWalk(FAR_ACTIVE_TASKS_COMMAND, {}),
-    farWalk('fa:list:firm-workflow', {
-      workflow_templates: [FAR_REQUEST_TEMPLATE, CCR_WORKFLOW_TEMPLATE],
-      statuses: ['active'],
-    }, { partialOk: true }),
-    farWalk('fa:list:firm-workflow', {
+// One tab's read: Needs Action and With Carta are the task list's two pending_actor halves,
+// Completed the finished workflows. Null on failure; `onFail` hears why.
+function farReadTab(key, onFail) {
+  const read = key === 'done'
+    ? farWalk('fa:list:firm-workflow', {
       workflow_templates: TASK_TEMPLATES_WITH_TILES,
       statuses: FAR_FINISHED_STATUSES,
-    }, { maxPages: FAR_DONE_MAX_PAGES, partialOk: true }),
-  ]);
-  if (!open) return null;
-  const filed = new Map((active ?? []).map(w => [w.workflow_id, w.created_at]));
-  const tasks = farQueueTasks(open)
+    }, { maxPages: FAR_DONE_MAX_PAGES, partialOk: true, onFail })
+    : farWalk(FAR_ACTIVE_TASKS_COMMAND, { pending_actor: key === 'todo' ? 'customer' : 'carta' }, { onFail });
+  return read.catch(e => {
+    if (FAR_PAGE_LEVEL_CODES.includes(e?.code)) throw e;
+    return null;
+  });
+}
+
+// Every read the queue needs, started together. A task's created_at is when its current
+// task opened, so the filed dates are read too; they only date cards, so a failure there is
+// not reported.
+function farQueueReads(onFail) {
+  return {
+    todo: farReadTab('todo', d => onFail('todo', d)),
+    progress: farReadTab('progress', d => onFail('progress', d)),
+    filed: farWalk('fa:list:firm-workflow', {
+      workflow_templates: [FAR_REQUEST_TEMPLATE, CCR_WORKFLOW_TEMPLATE],
+      statuses: ['active'],
+    }, { partialOk: true }).catch(() => null),
+    done: farReadTab('done', d => onFail('done', d)),
+  };
+}
+
+// The queue from whichever reads have landed; an absent or failed part adds nothing.
+function farComposeQueue(parts) {
+  const filed = new Map((parts.filed ?? []).map(w => [w.workflow_id, w.created_at]));
+  const tasks = farQueueTasks((parts.todo ?? []).concat(parts.progress ?? []))
     .map(t => Object.assign({}, t, { created_at: filed.get(t.workflow_id) ?? t.created_at }));
   // A workflow that finished between the reads shows once, as open.
   const openIds = new Set(tasks.map(t => t.workflow_id));
-  _farDoneCapped = Boolean(finished?.capped);
-  return tasks.concat((finished ?? []).filter(w => !openIds.has(w.workflow_id) && farRecentlyFinished(w)));
+  return tasks.concat((parts.done ?? []).filter(w => !openIds.has(w.workflow_id) && farRecentlyFinished(w)));
+}
+
+// Whether a tab's own reads have landed. With Carta needs Needs Action's too, so a
+// workflow also waiting on the GP never shows there first; Completed needs both, so one
+// still open is not shown as finished.
+function farTabRead(parts, key) {
+  const open = Boolean(parts.todo) && Boolean(parts.progress);
+  return key === 'todo' ? Boolean(parts.todo) : key === 'progress' ? open : key === 'done' ? open && Boolean(parts.done) : true;
+}
+
+// The queue from every read that answered. `failures` gets each failed tab's reason;
+// `onPart` hears each read as it lands.
+async function farFetchQueue(onPart, failures = {}) {
+  const reads = farQueueReads((key, detail) => { failures[key] = detail; });
+  const parts = {};
+  await Promise.all(Object.entries(reads).map(([key, read]) => read.then(rows => {
+    parts[key] = rows;
+    onPart?.(Object.assign({}, parts));
+  })));
+  // A workflow waiting on both sides belongs in Needs Action, so With Carta fails with it.
+  if (!parts.todo && parts.progress) {
+    parts.progress = null;
+    failures.progress ??= failures.todo;
+  }
+  _farDoneCapped = Boolean(parts.done?.capped);
+  return farComposeQueue(parts);
+}
+
+// The first load paints each tab as its reads land, until the whole queue replaces it.
+function farPaintParts(parts, reviews, appViews) {
+  if (_farRows !== null) return;
+  const rows = ccrQueueRows(farComposeQueue(parts).map(w => farNormalizeWorkflow(w, reviews, appViews)))
+    .filter(r => farTabRead(parts, r.group));
+  _farEarly = { parts, rows };
+  farPickFirstTab();
+  renderFarSection();
 }
 
 // Three sources, most complete first; the id path is the floor. The first two are
 // read together, so a source that answers nothing never delays the next.
 async function farFetchRequests() {
   let loaded = false;
+  // Local, so a read still out from an earlier load cannot report into this one.
+  const failures = {};
+  // The queue's failures matter only when the queue is what renders.
+  let fromScoped = false;
   try {
     const scoped = _mcp('fetch', {
       command: 'fa:list:fund-admin-message',
       params: { page_size: FAR_PAGE_SIZE },
     }).then(farResults, () => null);
-    const queue = _benchmarkFirmId
-      ? Promise.all([farFetchQueue(), ccrReviewAvailable(), farTaskAppViews()])
+    const flags = Promise.all([ccrReviewAvailable(), farTaskAppViews()]);
+    const onPart = _farRows === null
+      ? (parts) => flags.then(([reviews, appViews]) => farPaintParts(parts, reviews, appViews))
+        .catch(e => console.error('[far] early paint —', e))
       : null;
+    const queue = _benchmarkFirmId ? Promise.all([farFetchQueue(onPart, failures), flags]) : null;
     // Unread when the scoped list answers; this keeps its failure from going unhandled.
     queue?.catch(() => {});
-    if (queue && _farRows === null) {
-      farPaintNeedsAction().catch(e => console.error('[far] Needs Action read —', e));
-    }
     let rows = await scoped;
+    fromScoped = Boolean(rows);
     let reviews = true;
     let appViews = new Set();
 
-    if (!rows && queue) [rows, reviews, appViews] = await queue;
+    if (!rows && queue) [rows, [reviews, appViews]] = await queue;
 
     if (rows) {
       _farPartial = false;
       _farRows = rows.map(w => farNormalizeWorkflow(w, reviews, appViews)).filter(r => r.id != null);
+      // With the whole task list failed, the requests filed from here still show.
+      if (!fromScoped && failures.todo && failures.progress) {
+        const shown = new Set(_farRows.map(r => String(r.id)));
+        _farRows = _farRows.concat((await farFetchFromIds()).filter(r => !shown.has(String(r.id))));
+        _farPartial = true;
+      }
     } else {
       _farPartial = true;
       _farRows = await farFetchFromIds();
@@ -752,9 +825,13 @@ async function farFetchRequests() {
     loaded = true;
   } catch (e) {
     console.error('[far] request list unavailable —', e);
+    const cutOff = FAR_PAGE_LEVEL_CODES.includes(e?.code);
+    const detail = cutOff ? 'Carta needs to be reconnected. Reconnect it, then press Retry.' : e?.message || String(e);
+    FAR_QUEUE_TABS.forEach(key => { if (cutOff || !(key in failures)) failures[key] = detail; });
     _farPartial = true;
     _farRows = ccrQueueRows([]);
   }
+  _farTabErrors = fromScoped ? {} : Object.assign({}, failures);
   renderFarSection();
   // A seeded build's period card comes from a second read, so the queue paints first
   // and it joins. The opening tab waits for it: it can be the only work on the GP.
@@ -891,7 +968,7 @@ function farPickFirstTab() {
   if (_farTabChosen) return;
   // Before the full queue lands only Needs Action is known, and only work there decides.
   if (_farRows === null) {
-    if (_farTab === 'todo' && _farEarlyTodo?.length) _farTabChosen = true;
+    if (_farTab === 'todo' && _farEarly?.rows.some(r => r.group === 'todo')) _farTabChosen = true;
     return;
   }
   _farTabChosen = true;
@@ -1124,6 +1201,7 @@ function farRenderTabs(byTab) {
     // Completed stops at a page cap, so its count is a floor. No + on an empty count.
     const n = byTab[t.key].length;
     const count = farTabLoading(t.key) ? '…'
+      : farTabFailed(t.key) && n === 0 ? '–'
       : n + (t.key === 'done' && _farDoneCapped && n > 0 ? '+' : '');
     const on = t.key === _farTab;
     return `<button type="button" class="far-tab${on ? ' far-tab-active' : ''}" aria-pressed="${on}"`
@@ -1186,16 +1264,87 @@ function farRenderGroups(groups, withLabels) {
   });
 }
 
-// The queue on screen: Needs Action alone until the full read lands.
+// The queue on screen: the tabs read so far, until the whole queue lands.
 function farShownRows() {
-  return _farRows ?? _farEarlyTodo ?? [];
+  return _farRows ?? _farEarly?.rows ?? [];
 }
 
 // Until the first fetch lands, an empty tab means "not read yet", not "nothing here".
 // Drafts live in this artifact, so that tab is never waiting on Carta.
 function farTabLoading(key) {
-  if (_farRows !== null || key === 'planned') return false;
-  return !(key === 'todo' && _farEarlyTodo !== null);
+  if (key === 'planned') return false;
+  if (_farRows !== null) return _farRetrying && farTabFailed(key);
+  return !(_farEarly && farTabRead(_farEarly.parts, key));
+}
+
+// A tab whose read failed is not empty, only unknown.
+function farTabFailed(key) {
+  return key in _farTabErrors;
+}
+
+function farTabLabel(key) {
+  return FAR_TABS.find(t => t.key === key).label;
+}
+
+// "A", "A and B", "A, B and C".
+function farJoinNames(names) {
+  return names.length < 3 ? names.join(' and ') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
+// What Carta said when a tab's read failed, cut to fit the banner.
+function farTabErrorText(key) {
+  const detail = String(_farTabErrors[key] ?? '').trim();
+  return detail.length > FAR_LOAD_DETAIL_MAX ? detail.slice(0, FAR_LOAD_DETAIL_MAX - 1) + '…' : detail;
+}
+
+// A failed open tab shows its reason and names the other failed tabs; a tab that loaded
+// gets one line naming them. All failed: one message on every tab, Drafts included.
+function farRenderLoadError(key) {
+  const banner = document.getElementById('far-load-error');
+  if (!banner) return;
+  const failed = FAR_QUEUE_TABS.filter(k => farTabFailed(k) && !farTabLoading(k));
+  const all = failed.length === FAR_QUEUE_TABS.length;
+  const full = all || failed.includes(key);
+  const retry = '<button type="button" class="far-btn-secondary far-load-error-retry" onclick="farRetryLoad()">Retry</button>';
+  banner.style.display = failed.length ? '' : 'none';
+  banner.classList[full ? 'remove' : 'add']('far-load-error-compact');
+  if (!failed.length) {
+    banner.innerHTML = '';
+  } else if (all) {
+    // A failed boot gives every tab one reason; say it once.
+    const reasons = [...new Set(failed.map(farTabErrorText))];
+    const detail = reasons.length === 1
+      ? `<p class="far-load-error-detail">${escHtml(reasons[0])}</p>`
+      : `<ul class="far-load-error-list">${failed.map(k =>
+        `<li><b>${escHtml(farTabLabel(k))}:</b> ${escHtml(farTabErrorText(k))}</li>`).join('')}</ul>`;
+    banner.innerHTML = `
+    <div class="far-load-error-body">
+      <p class="far-load-error-head">Couldn't load your work from Carta.</p>
+      ${detail}
+    </div>${retry}`;
+  } else if (full) {
+    const others = failed.filter(k => k !== key).map(farTabLabel);
+    banner.innerHTML = `
+    <div class="far-load-error-body">
+      <p class="far-load-error-head">Couldn't load ${escHtml(farTabLabel(key))} from Carta.</p>
+      <p class="far-load-error-detail">${escHtml(farTabErrorText(key))}</p>
+      ${others.length ? `<p class="far-load-error-detail">${escHtml(farJoinNames(others))} couldn't load either.</p>` : ''}
+    </div>${retry}`;
+  } else {
+    banner.innerHTML = `<p class="far-load-error-head">${escHtml(farJoinNames(failed.map(farTabLabel)))} couldn't load.</p>${retry}`;
+  }
+}
+
+// Reads the queue again while the loaded tabs keep their cards; with no firm yet, reboots.
+function farRetryLoad() {
+  trackWorkhub('click', 'CartaWorkhub.Queue.RetryLoad');
+  _farRetrying = true;
+  renderFarSection();
+  const load = _benchmarkFirmId ? farFetchRequests() : bootCartaWorkhub();
+  load.catch(e => console.error('[far] retry —', e)).finally(() => {
+    _farRetrying = false;
+    renderFarSection();
+  });
 }
 
 // The composer never hides — a section that vanishes takes the entry point with it.
@@ -1230,7 +1379,9 @@ function renderFarSection() {
   const loader = document.getElementById('far-loading');
   if (loader) loader.style.display = loading ? '' : 'none';
   const empty = document.getElementById('far-empty');
-  if (empty) empty.style.display = !loading && tabRows.length === 0 ? '' : 'none';
+  if (empty) empty.style.display = !loading && tabRows.length === 0 && !farTabFailed(tab.key) ? '' : 'none';
+
+  farRenderLoadError(tab.key);
 }
 
 

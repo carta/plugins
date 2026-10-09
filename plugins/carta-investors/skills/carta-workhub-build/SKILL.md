@@ -17,7 +17,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.70.7</carta-plugin>
+<carta-plugin>carta-investors:6.70.8</carta-plugin>
 
 # Carta Workhub — Build / Redeploy
 
@@ -122,9 +122,11 @@ not inside a fund-data dashboard.
   every `light-dark()` token resolves to its light value.
 
   **Two cursor-paged lists feed the queue**, read in parallel at 40 rows a page so no reply
-  nears carta-mcp's 40k cap. On first load Needs Action also has its own read
-  (`pending_actor: customer`), so it paints first; the other tabs count `…` until the lists land:
-  - `fa:list:gp-workhub-active-task` — every open task, kept when its `workflow_template` is in
+  nears carta-mcp's 40k cap. On first load each tab paints once its reads land and counts `…`
+  until then: Needs Action after its half of the task list, With Carta after both halves,
+  Completed after both halves and its own list:
+  - `fa:list:gp-workhub-active-task` — read as two halves, `pending_actor: customer` and
+    `carta`. Every open task is kept when its `workflow_template` is in
     `TASK_TEMPLATES_WITH_TILES` (the command takes no template filter), grouped by `pending_actor` (`customer`
     → Needs Action, `carta` → With Carta), one card per workflow; the customer's task wins. A
     capital call review opens its panel only when `discover` answers for
@@ -358,6 +360,11 @@ replies "Carta".
 thread readers degrade one section while the rest of the page renders, so `_mcp` maps the
 `tool_error` code back to an `isError` envelope and rethrows everything else — connector
 codes (`needs_reauth`, `server_not_connected`) are page-level, not per-section.
+
+Each tab Carta fills has its own read, so one failing never empties another. A failed tab
+counts "–" and shows what Carta said, with Retry; the tabs that loaded keep their cards.
+With Carta fails with Needs Action, which it is sorted against. A connector code fails
+every tab. If the whole task list fails, the requests filed from this page still show.
 
 ## Source layout — the artifact is BUILT, not hand-edited
 

@@ -37,6 +37,8 @@ function loadPage(env = tokenEnv()) {
     farSetFirmName: (name) => firmNames.push(name),
     farFetchRequests: async () => {},
     _farRows: null,
+    _farTabErrors: {},
+    FAR_QUEUE_TABS: ["todo", "progress", "done"],
     renderFarSection: () => {},
     fetch: (path, init) => worker.fetch(new Request(`http://localhost${path}`, {
       ...init, headers: { ...init.headers, Origin: "http://localhost" },

@@ -34,7 +34,7 @@ export const loginPage = () =>
   );
 
 // set_context refused the hostname's firm for this user. The Workhub page itself would
-// only say "Could not load your requests", which sends the user to retry what cannot work.
+// only show its load-error banner with Retry, which sends the user to retry what cannot work.
 export const noAccessPage = () =>
   card(
     "No access",
