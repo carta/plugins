@@ -5,6 +5,13 @@
 Every hook except `warn-empty-query.js` dispatches to the shared Go hooks
 binary in `tools/hooks/` via `dispatch.sh`.
 
+## Binary source
+
+The published plugin ships the compiled binaries in `hooks/bin/` and their Go
+source in `hooks/src/`. `hooks/bin/SOURCE.md` explains how to check the
+binaries against `hooks/bin/SHA256SUMS` (`sh hooks/src/verify-checksums.sh`)
+and how to rebuild them from source and compare (`sh hooks/src/build.sh --check`).
+
  **Windows:** `dispatch.sh` is a POSIX shell script, so hooks won't fire unless Bash or Git Bash is installed.
 
 | Event | Matcher | Command | Purpose |
