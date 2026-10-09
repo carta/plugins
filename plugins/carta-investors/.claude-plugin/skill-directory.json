@@ -157,5 +157,14 @@
       "Who gets paid, and how much, if [portfolio company] exits at $[amount]?"
     ]
   },
-  "carta-workhub-build": null
+  "carta-workhub-build": null,
+  "carta-upload-firm-document": {
+    "category": "fund-admin",
+    "name": "Upload a firm document",
+    "order": 20,
+    "prompts": [
+      "Upload [file path] to {{FIRM}}'s Documents page as an NDA",
+      "Add this side letter to our firm documents in Carta"
+    ]
+  }
 }
