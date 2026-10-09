@@ -7,6 +7,7 @@
   },
   "app_js_marker": "__CARTA_WORKHUB_APP_JS__",
   "app_js_parts": [
+    "app/load-timing.js",
     "carta-workhub.app.js",
     "app/fund-admin-requests.js",
     "app/capital-call-review.js",

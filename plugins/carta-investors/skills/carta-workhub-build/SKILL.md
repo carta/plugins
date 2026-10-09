@@ -17,7 +17,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.70.8</carta-plugin>
+<carta-plugin>carta-investors:6.70.10</carta-plugin>
 
 # Carta Workhub — Build / Redeploy
 
@@ -377,6 +377,7 @@ every tab. If the whole task list fails, the requests filed from this page still
 | `resources/app/financial-reporting-tracker.js` | the Financial Reporting Tracker cards and panel |
 | `resources/carta-workhub.app.js` | shared helpers (`_mcp`, `escHtml`, `showToast`, `trackWorkhub`, `openClaudeChat`) plus firm resolution and boot |
 | `resources/app/version-check.js` | update banner: reads the published version, compares, renders |
+| `resources/app/load-timing.js` | per-load record of each Carta call and boot milestone; first in the part order |
 | `resources/carta-workhub.config.js` | `TASK_PRESETS` — the composer's preset tiles |
 | `resources/carta-workhub.css` | styles (Ink tokens) |
 | `resources/carta-workhub.template.html` | HTML skeleton + injection markers |
@@ -524,6 +525,10 @@ queue shows its no-connector state.
   display name differs from the one Step 0 resolved, republish with the right name.
 - **Publishing with a `url` is refused** — that artifact was shared with the user rather
   than owned by them. Drop `url` and publish fresh.
+- **The page loads slowly** — open the load timing panel with Alt+Shift+T (or `#timing` on
+  the URL). It lists the last ten loads: each milestone, and each Carta call's send time,
+  duration and wall-clock start. **Copy** gives the JSON to match against carta-mcp's
+  `POST /mcp` access log.
 
 ## Known gap
 

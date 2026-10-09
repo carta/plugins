@@ -49,6 +49,7 @@ function loadPage(env = tokenEnv()) {
   for (const code of [
     BRIDGE_JS,
     readFileSync(RESOURCES + "carta-workhub.tracker.js", "utf8"),
+    readFileSync(RESOURCES + "app/load-timing.js", "utf8"),
     readFileSync(RESOURCES + "carta-workhub.app.js", "utf8").replace("{{CARTA_MCP_SERVER}}", "Carta"),
   ]) vm.runInContext(code, page);
   return { page, firmNames };

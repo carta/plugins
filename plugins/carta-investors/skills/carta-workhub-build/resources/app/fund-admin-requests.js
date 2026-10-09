@@ -778,6 +778,7 @@ function farPaintParts(parts, reviews, appViews) {
   _farEarly = { parts, rows };
   farPickFirstTab();
   renderFarSection();
+  whTimingMark(`painted ${FAR_QUEUE_TABS.filter(key => farTabRead(parts, key)).join(', ') || 'no tab'}`);
 }
 
 // Three sources, most complete first; the id path is the floor. The first two are
@@ -833,6 +834,7 @@ async function farFetchRequests() {
   }
   _farTabErrors = fromScoped ? {} : Object.assign({}, failures);
   renderFarSection();
+  whTimingMark("queue painted");
   // A seeded build's period card comes from a second read, so the queue paints first
   // and it joins. The opening tab waits for it: it can be the only work on the GP.
   await frtAttachPeriodRows().catch(e => { console.error('[frt] tracker cards —', e); return false; });

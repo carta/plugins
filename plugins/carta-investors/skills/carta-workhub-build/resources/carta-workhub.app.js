@@ -34,13 +34,17 @@ _mcpNamespace();  // start resolving at load so the sync render paths see a sett
 async function _mcp(tool, args) {
   const mcp = await _mcpNamespace();
   if (!mcp) throw new Error("Carta connector unavailable in this view");
+  const finish = whTimingStart(tool, args);
   try {
-    return await mcp.callTool(
+    const res = await mcp.callTool(
       CARTA_MCP_SERVER,
       tool,
       Object.assign({}, args, { _instrumentation_v2: { skills: ['carta-investors:carta-workhub-build'], from_ui: true } })
     );
+    finish(res);
+    return res;
   } catch (err) {
+    finish(null, err);
     // A failed tool belongs to the caller that asked, so return an envelope. Connector
     // codes (needs_reauth, server_not_connected) rethrow — those are page-level.
     if (err?.code === "tool_error") return { isError: true, code: err.code, result: err.result, content: [{ type: "text", text: err.message ?? "tool error" }] };
@@ -164,6 +168,7 @@ function farShowSection(msg) {
 }
 
 async function bootCartaWorkhub() {
+  whTimingMark("boot");
   if (!(await mcpAvailable())) {
     farShowSection('Carta is not connected in this view.');
     return;
@@ -183,12 +188,14 @@ async function bootCartaWorkhub() {
     const active = payload ? (payload.firms.find(f => f && f.is_active) ?? payload.firms[0]) : null;
     const firmId = active && active.firm_id != null ? String(active.firm_id) : null;
     if (!firmId) throw new Error("no firm in context");
+    whTimingMark(active.is_active ? "firm already active" : "firm not active, setting context");
 
     // The server needs an active firm even when the id is passed explicitly. Setting
     // one takes seconds, so a firm Carta already has active is left as it is.
     if (!active.is_active) {
       try { await _mcp("set_context", { firm_id: firmId }); } catch (e) { /* best effort */ }
     }
+    whTimingMark("context ready");
     _benchmarkFirmId = firmId;
 
     farSetFirmName(active.firm_name);
