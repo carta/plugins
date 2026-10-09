@@ -160,21 +160,22 @@ function renderCoreProceeds(d) {
   if (!v.rows.length) return emptyState(v.filtered);
   const gt = d.grand_totals || {};
   const dash = '—';
-  const head = '<thead><tr><th>Stakeholder</th><th>Securities</th><th class="num">Outstanding shares</th><th class="num">Cost</th>' +
-    '<th class="num">Projected payout</th><th class="num">Return multiple</th><th class="num">IRR</th></tr></thead>';
+  const head = '<thead><tr><th>Stakeholder</th><th>Securities</th><th class="num">Projected payout</th>' +
+    '<th class="num">Return multiple</th><th class="num">Cost</th><th class="num">Outstanding shares</th><th class="num">IRR</th></tr></thead>';
   const rows = v.rows.map(function (r) {
     const g = r.g;
     const secs = (Array.isArray(g.participating_securities) ? g.participating_securities : [])
       .map(function (s) { return s && typeof s === 'object' ? s.name : s; }).filter(Boolean).join(', ');
     return '<tr>' + td('name', esc(g.organization_name)) + td('securities', secs ? esc(secs) : dash) +
-      td('outstanding', esc(fmtQty(g.outstanding_shares)), 'num') + td('cost', esc(fmtCurrency(g.cost_of_holdings)), 'num') +
       td('proceeds', esc(fmtCurrency(g.value_of_holdings)), 'num') +
       td('moic', num(g.return_multiple) === null ? dash : esc(fmtMoic(g.return_multiple)), 'num') +
+      td('cost', esc(fmtCurrency(g.cost_of_holdings)), 'num') + td('outstanding', esc(fmtQty(g.outstanding_shares)), 'num') +
       td('irr', num(g.irr) === null ? dash : esc(fmtPercent(g.irr)), 'num') + '</tr>';
   }).join('');
   const foot = v.filtered ? '' : '<tfoot><tr class="wf-total">' + td('name', 'Total') + td('securities', '') +
-    td('outstanding', esc(fmtQty(gt.outstanding_shares)), 'num') + td('cost', esc(fmtCurrency(gt.cost_of_holdings)), 'num') +
-    td('proceeds', esc(fmtCurrency(gt.value_of_holdings)), 'num') + td('moic', '', 'num') + td('irr', '', 'num') + '</tr></tfoot>';
+    td('proceeds', esc(fmtCurrency(gt.value_of_holdings)), 'num') + td('moic', '', 'num') +
+    td('cost', esc(fmtCurrency(gt.cost_of_holdings)), 'num') + td('outstanding', esc(fmtQty(gt.outstanding_shares)), 'num') +
+    td('irr', '', 'num') + '</tr></tfoot>';
   return tableWrap('<table class="wf-table wf-flat">' + head + '<tbody>' + rows + '</tbody>' + foot + '</table>');
 }
 

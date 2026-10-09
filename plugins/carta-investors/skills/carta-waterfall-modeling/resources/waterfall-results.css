@@ -47,7 +47,7 @@ body {
   color: var(--text);
   font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
-.wf { max-width: 1180px; margin: 0 auto; padding-block: 28px 40px; padding-inline: 20px; }
+.wf { padding-block: 28px 40px; padding-inline: 20px; }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 .wf-head h1 { margin: 0 0 6px; font-size: 22px; font-weight: 650; letter-spacing: -0.01em; }
