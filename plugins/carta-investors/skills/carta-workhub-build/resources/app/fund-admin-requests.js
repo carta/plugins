@@ -390,9 +390,9 @@ function farTaskTitle(w) {
 
 // An open task carries pending_actor; a finished workflow carries status. The
 // request-only sources carry no template, so a row without one is a request.
-// `reviews` and `tracker` are whether this viewer may open the capital call review
-// panel and the reporting tracker; `appViews` are the MCP App views they may open.
-function farNormalizeWorkflow(w, reviews = true, tracker = true, appViews = new Set()) {
+// `reviews` is whether this viewer may open the capital call review panel; `appViews`
+// are the MCP App views they may open.
+function farNormalizeWorkflow(w, reviews = true, appViews = new Set()) {
   const closed = FAR_FINISHED_STATUSES.includes(w.status);
   const isRequest = (w.workflow_template ?? FAR_REQUEST_TEMPLATE) === FAR_REQUEST_TEMPLATE;
   // Set only when the pending task is the GP's review, so a card knows to open
@@ -417,8 +417,8 @@ function farNormalizeWorkflow(w, reviews = true, tracker = true, appViews = new 
     webUrl: farSafeHref(w._links?.web_url),
     objectId: w.object_id ?? null,
     ccr,
-    // A package task opens the tracker for its period rather than Carta.
-    frt: tracker && !closed ? frtTargetFor(w) : null,
+    // A package task always opens the tracker for its period, never Carta.
+    frt: frtTargetFor(w),
     // A task waiting on the GP that has an MCP App opens it in a new chat.
     app: pending === 'pending-customer' && !closed ? farTaskAppFor(w, appViews) : null,
   };
@@ -681,14 +681,13 @@ function farQueueTasks(open) {
 
 // Needs Action is one short read, so it paints while the longer lists are still out.
 async function farPaintNeedsAction() {
-  const [open, reviews, tracker, appViews] = await Promise.all([
+  const [open, reviews, appViews] = await Promise.all([
     farWalk(FAR_ACTIVE_TASKS_COMMAND, { pending_actor: 'customer' }),
     ccrReviewAvailable(),
-    frtTrackerAvailable(),
     farTaskAppViews(),
   ]);
   if (!open || _farRows !== null) return;
-  _farEarlyTodo = ccrQueueRows(farQueueTasks(open).map(w => farNormalizeWorkflow(w, reviews, tracker, appViews)))
+  _farEarlyTodo = ccrQueueRows(farQueueTasks(open).map(w => farNormalizeWorkflow(w, reviews, appViews)))
     .filter(r => r.group === 'todo');
   farPickFirstTab();
   renderFarSection();
@@ -729,7 +728,7 @@ async function farFetchRequests() {
       params: { page_size: FAR_PAGE_SIZE },
     }).then(farResults, () => null);
     const queue = _benchmarkFirmId
-      ? Promise.all([farFetchQueue(), ccrReviewAvailable(), frtTrackerAvailable(), farTaskAppViews()])
+      ? Promise.all([farFetchQueue(), ccrReviewAvailable(), farTaskAppViews()])
       : null;
     // Unread when the scoped list answers; this keeps its failure from going unhandled.
     queue?.catch(() => {});
@@ -738,14 +737,13 @@ async function farFetchRequests() {
     }
     let rows = await scoped;
     let reviews = true;
-    let tracker = true;
     let appViews = new Set();
 
-    if (!rows && queue) [rows, reviews, tracker, appViews] = await queue;
+    if (!rows && queue) [rows, reviews, appViews] = await queue;
 
     if (rows) {
       _farPartial = false;
-      _farRows = rows.map(w => farNormalizeWorkflow(w, reviews, tracker, appViews)).filter(r => r.id != null);
+      _farRows = rows.map(w => farNormalizeWorkflow(w, reviews, appViews)).filter(r => r.id != null);
     } else {
       _farPartial = true;
       _farRows = await farFetchFromIds();

@@ -574,16 +574,14 @@ function frtPeriodOfTitle(title) {
   return y ? { period: "Q4", year: Number(y[1]) } : null;
 }
 
-// The tracker target for a package task: its period, labelled as the panel names it.
+// The tracker target for a package task: its period, labelled as the panel names it. A title
+// that names no period opens the current one, so a package task always opens the tracker.
 function frtTargetFor(t) {
   if (!t || t.workflow_template !== FRT_PACKAGE_TEMPLATE) return null;
-  const p = frtPeriodOfTitle(t.display_name) ?? frtPeriodOfTitle(t.workflow_display_name);
-  return p ? { period: p.period, year: p.year, label: frtPeriodLabel(p) } : null;
+  const p = frtPeriodOfTitle(t.display_name) ?? frtPeriodOfTitle(t.workflow_display_name)
+    ?? frtActivePeriod(new Date());
+  return { period: p.period, year: p.year, label: frtPeriodLabel(p) };
 }
-
-// The tracker read is gated server-side and the task list is not, so a viewer
-// the tracker refuses keeps package tasks as Carta links.
-function frtTrackerAvailable() { return mcpCommandAvailable(FRT_COMMAND); }
 
 // Newest period first; a card the queue already carries is not duplicated.
 function frtWithPeriodRows(rows, periodRows) {

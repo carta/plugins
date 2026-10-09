@@ -40,7 +40,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.70.4</carta-plugin>
+<carta-plugin>carta-investors:6.70.5</carta-plugin>
 
 [PATTERN carta-writing-style v0.0.2]
 [PATTERN etiquette v0.0.6]

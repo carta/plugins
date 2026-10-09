@@ -17,7 +17,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.70.4</carta-plugin>
+<carta-plugin>carta-investors:6.70.5</carta-plugin>
 
 # Carta Workhub — Build / Redeploy
 
@@ -240,17 +240,16 @@ not inside a fund-data dashboard.
   nothing is written from here.
 
   **The package tasks are the way in.** Every `publish-financial-package` task on the queue's
-  task list is a card under Financial reporting, and it opens the tracker for the period its
-  title ends in — fund-admin writes "Review financials for Q2 2026", or a bare year ("…for
-  2025") for the year end, which the tracker reads as Q4-YE. A title that ends some other way
-  ("Reviewing your 2024 financials", Carta's own step) opens the package in Carta.
-  `review-financial-extraction-*` tasks sit under Other.
+  task list, open or finished, is a card under Financial reporting, and it always opens the
+  tracker, never Carta. The period is the one its title ends in — fund-admin writes "Review
+  financials for Q2 2026", or a bare year ("…for 2025") for the year end, which the tracker
+  reads as Q4-YE. A title that ends some other way ("Reviewing your 2024 financials", Carta's
+  own step) opens the current period. `review-financial-extraction-*` tasks sit under Other.
 
   There is no build flag for this either: the read is gated server-side by
-  `CARTA_MCP_FINANCIAL_REPORTING_TRACKER`, and the task list is not, so the queue asks
-  `discover` about `fa:get:reporting-status` once; a viewer it refuses keeps package tasks as
-  Carta links. `--frt-seed-period "Q2 2026"` forces one period card for a demo, read live, and
-  it is the only read the queue makes up front.
+  `CARTA_MCP_FINANCIAL_REPORTING_TRACKER`. The card does not probe it, so a viewer it refuses
+  sees the panel's own error rather than a Carta link. `--frt-seed-period "Q2 2026"` forces one
+  period card for a demo, read live, and it is the only read the queue makes up front.
 
   **The panel is sized for its table** — `min(1120px, 96vw)` by `min(760px, 90vh)` —
   because six table columns need it; below about 900px the table scrolls inside the panel, never
