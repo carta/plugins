@@ -133,6 +133,16 @@ const TASK_TEMPLATES_WITH_TILES = [
   TASK_TEMPLATE_EXPENSE, TASK_TEMPLATE_MANAGEMENT_FEES,
 ];
 
+// Needs-action tasks that open an MCP App in a new chat instead of Carta. `params` maps
+// each view param to the task row field that fills it: a management fee review's
+// object_id is the review, an expense workflow's is the expense.
+const TASK_APPS = [
+  { template: TASK_TEMPLATE_MANAGEMENT_FEES, view: 'fa:view:gp_management_fee_review',
+    label: 'management fee review', params: { fund_uuid: 'fund_uuid', review_id: 'object_id' } },
+  { template: TASK_TEMPLATE_EXPENSE, view: 'fa:view:expense_payment_review',
+    label: 'expense payment review', params: { expense_id: 'object_id' } },
+];
+
 const TASK_CATEGORY_REQUEST = 'request';
 const TASK_CATEGORY_CAPITAL = 'capital';
 const TASK_CATEGORY_REPORTING = 'reporting';

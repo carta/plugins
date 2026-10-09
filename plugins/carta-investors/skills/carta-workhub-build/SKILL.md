@@ -21,7 +21,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.68.14</carta-plugin>
+<carta-plugin>carta-investors:6.69.1</carta-plugin>
 
 # Carta Workhub — Build / Redeploy
 
@@ -95,7 +95,7 @@ not inside a fund-data dashboard.
   `resources/carta-workhub.config.js`: requests (`request-generic`), capital activities (`request-capital-activity`), financial packages
   (`publish-financial-package`), expense payments (`prepare-and-pay-expense`) and management fee
   reviews (`review-management-fees`). No panel opens the last two, so each is a Carta link under
-  Expense payments or Management fees. Every other GP task would only link out to Carta, so it is left out; add a template to that list once a panel opens its tasks. Completed reads the same list,
+  Expense payments or Management fees, unless its needs-action task opens an MCP App (see Task MCP Apps). Every other GP task would only link out to Carta, so it is left out; add a template to that list once a panel opens its tasks. Completed reads the same list,
   so finished work never shows a kind of task the open tabs leave out. Every task of a listed workflow
   shows, including the ones no panel opens (a capital call With Carta or Completed), as a
   Carta link. Inside a tab, rows are grouped by category, in the order and with the icons `TASK_CATEGORIES` in
@@ -278,6 +278,16 @@ not inside a fund-data dashboard.
   and each entry by its view's own gate, so a viewer it refuses keeps every Carta link. A new app
   is one entry in carta-mcp's registry, not a change here, and needs nothing new in the publish
   grant: `view_remote` is called by Claude in the chat, never by the artifact.
+
+  **Queue cards open apps the same way.** A needs-action management fee review
+  (`review-management-fees`, `fa:view:gp_management_fee_review` by `fund_uuid` and the task's
+  `object_id`) or expense approval (`prepare-and-pay-expense`, `fa:view:expense_payment_review`
+  by `object_id`) opens a new chat instead of Carta. `TASK_APPS` in
+  `resources/carta-workhub.config.js` lists them, each with the task row field that fills each view
+  param, and `farTaskAppFor` builds the prompt target with the tracker's `frtAppPrompt`. The task
+  list is not gated by the views' flags, so `mcpViewAvailable` asks
+  `discover(scope="view")` per view, and a viewer it refuses keeps the card's Carta link. A card
+  with the app has no Carta link of its own, and is marked **Claude ↗**.
 - **Thread view** — the full conversation from `fa:list:workflow-message`, with a reply box
   writing to `fa:create:workflow-message`. Carta's internal agent output is never surfaced.
 

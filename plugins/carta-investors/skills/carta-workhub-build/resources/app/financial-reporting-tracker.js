@@ -215,15 +215,23 @@ function frtColumnLabel(column) {
   return (FRT_SORTS.find(s => s.key === column) || {}).label || FRT_CARD_TITLE;
 }
 
+// Each view param filled from the field `paramMap` names on `source`; null when the source
+// lacks one, since the view cannot be addressed without it.
+function appParamsFrom(paramMap, source) {
+  const params = {};
+  for (const [param, field] of Object.entries(paramMap || {})) {
+    if (source[field] == null) return null;
+    params[param] = String(source[field]);
+  }
+  return params;
+}
+
 // Only a needs-action button opens an app, and only when the entity carries every field
 // the app's params come from; anything else stays as it is.
 function frtWithApp(cell, column, app, row, source) {
   if (!app || !cell || cell.kind !== "action") return cell;
-  const params = {};
-  for (const [param, field] of Object.entries(app.params || {})) {
-    if (source[field] == null) return cell;
-    params[param] = String(source[field]);
-  }
+  const params = appParamsFrom(app.params, source);
+  if (!params) return cell;
   return Object.assign({}, cell, { app: { view: app.view, params, label: frtColumnLabel(column), entity: row.name } });
 }
 

@@ -391,8 +391,8 @@ function farTaskTitle(w) {
 // An open task carries pending_actor; a finished workflow carries status. The
 // request-only sources carry no template, so a row without one is a request.
 // `reviews` and `tracker` are whether this viewer may open the capital call review
-// panel and the reporting tracker.
-function farNormalizeWorkflow(w, reviews = true, tracker = true) {
+// panel and the reporting tracker; `appViews` are the MCP App views they may open.
+function farNormalizeWorkflow(w, reviews = true, tracker = true, appViews = new Set()) {
   const closed = FAR_FINISHED_STATUSES.includes(w.status);
   const isRequest = (w.workflow_template ?? FAR_REQUEST_TEMPLATE) === FAR_REQUEST_TEMPLATE;
   // Set only when the pending task is the GP's review, so a card knows to open
@@ -419,14 +419,36 @@ function farNormalizeWorkflow(w, reviews = true, tracker = true) {
     ccr,
     // A package task opens the tracker for its period rather than Carta.
     frt: tracker && !closed ? frtTargetFor(w) : null,
+    // A task waiting on the GP that has an MCP App opens it in a new chat.
+    app: pending === 'pending-customer' && !closed ? farTaskAppFor(w, appViews) : null,
   };
 }
+
+// The MCP App a task opens, with the params its row fills, or null when its template has
+// no app, this viewer may not open the view, or the row lacks a field a param needs.
+function farTaskAppFor(w, appViews) {
+  const app = TASK_APPS.find(a => a.template === w.workflow_template && appViews.has(a.view));
+  if (!app) return null;
+  const params = appParamsFrom(app.params, w);
+  if (!params) return null;
+  return { view: app.view, params, label: app.label, entity: w.entity_name };
+}
+
+// The task list is not gated by an app's flag, so ask which views this viewer may open.
+async function farTaskAppViews() {
+  const views = TASK_APPS.map(a => a.view);
+  const open = await Promise.all(views.map(mcpViewAvailable));
+  return new Set(views.filter((_, i) => open[i]));
+}
+
+let _farFirmName = null;   // names the firm in a prompt that opens an MCP App chat
 
 // list_contexts answers "Unknown" for some firms; that is no answer. First real
 // name wins; a later blank cannot clear it.
 function farSetFirmName(name) {
   const clean = String(name ?? '').trim();
   if (!clean || clean.toLowerCase() === 'unknown') return;
+  _farFirmName ??= clean;
   const sub = document.getElementById('far-firm');
   if (sub) sub.textContent = clean;
 }
@@ -658,13 +680,14 @@ function farQueueTasks(open) {
 
 // Needs Action is one short read, so it paints while the longer lists are still out.
 async function farPaintNeedsAction() {
-  const [open, reviews, tracker] = await Promise.all([
+  const [open, reviews, tracker, appViews] = await Promise.all([
     farWalk(FAR_ACTIVE_TASKS_COMMAND, { pending_actor: 'customer' }),
     ccrReviewAvailable(),
     frtTrackerAvailable(),
+    farTaskAppViews(),
   ]);
   if (!open || _farRows !== null) return;
-  _farEarlyTodo = ccrQueueRows(farQueueTasks(open).map(w => farNormalizeWorkflow(w, reviews, tracker)))
+  _farEarlyTodo = ccrQueueRows(farQueueTasks(open).map(w => farNormalizeWorkflow(w, reviews, tracker, appViews)))
     .filter(r => r.group === 'todo');
   farPickFirstTab();
   renderFarSection();
@@ -705,7 +728,7 @@ async function farFetchRequests() {
       params: { page_size: FAR_PAGE_SIZE },
     }).then(farResults, () => null);
     const queue = _benchmarkFirmId
-      ? Promise.all([farFetchQueue(), ccrReviewAvailable(), frtTrackerAvailable()])
+      ? Promise.all([farFetchQueue(), ccrReviewAvailable(), frtTrackerAvailable(), farTaskAppViews()])
       : null;
     // Unread when the scoped list answers; this keeps its failure from going unhandled.
     queue?.catch(() => {});
@@ -715,12 +738,13 @@ async function farFetchRequests() {
     let rows = await scoped;
     let reviews = true;
     let tracker = true;
+    let appViews = new Set();
 
-    if (!rows && queue) [rows, reviews, tracker] = await queue;
+    if (!rows && queue) [rows, reviews, tracker, appViews] = await queue;
 
     if (rows) {
       _farPartial = false;
-      _farRows = rows.map(w => farNormalizeWorkflow(w, reviews, tracker)).filter(r => r.id != null);
+      _farRows = rows.map(w => farNormalizeWorkflow(w, reviews, tracker, appViews)).filter(r => r.id != null);
     } else {
       _farPartial = true;
       _farRows = await farFetchFromIds();
@@ -928,9 +952,16 @@ function farCategoryIcon(key, size) {
     + ` aria-hidden="true">${farCategory(key).icon}</svg>`;
 }
 
+// The app itself cannot run in the page, so the GP sends a prefilled prompt in a new chat.
+function farOpenTaskApp(app) {
+  trackWorkhub('click', 'CartaWorkhub.Queue.OpenAppInChat');
+  openClaudeChat(frtAppPrompt(app, _farFirmName));
+}
+
 // What a card does when opened: the panels this page owns, else the row's page
 // in Carta. A row with neither is shown but opens nothing.
 function farOpenAction(r) {
+  if (r.app) return () => farOpenTaskApp(r.app);
   if (r.ccr) return () => openCapitalCallReview(r.ccr, r.title);
   if (r.frt) return () => openFinancialReportingTracker(r.frt, r.title);
   if (r.thread) return () => openFarThread(r.id);
@@ -1019,7 +1050,11 @@ function farItemShell(r, cls) {
   return { el, external: false };
 }
 
-const FAR_OUT_LABEL = `<span class="far-item-out">Carta ${FAR_OUT_ICON}</span>`;
+// Marks a card that leaves the page: Carta in a new tab, or a new Claude chat.
+function farOutLabel(r, external) {
+  const name = r.app ? 'Claude' : (external ? 'Carta' : null);
+  return name ? `<span class="far-item-out">${name} ${FAR_OUT_ICON}</span>` : '';
+}
 
 function farCard(r, withTime) {
   if (r.group === 'planned') return farPlanCard(r);
@@ -1034,7 +1069,7 @@ function farCard(r, withTime) {
     </span>
     <span class="far-card-footer">
       <span class="far-card-date">${escHtml(farDateLine(r, withTime))}</span>
-      ${external ? FAR_OUT_LABEL : ''}
+      ${farOutLabel(r, external)}
     </span>`;
   return el;
 }
@@ -1078,7 +1113,7 @@ function farListRow(r, withTime) {
     <span class="far-row-title">${escHtml(r.title ?? 'Request to Carta')}</span>
     <span class="far-row-meta">${escHtml(meta)}</span>
     ${planned ? FAR_PLAN_ACTIONS : ''}
-    ${external ? FAR_OUT_LABEL : ''}`;
+    ${farOutLabel(r, external)}`;
   if (planned) farWirePlanActions(el, r);
   return el;
 }

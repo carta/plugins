@@ -57,6 +57,15 @@ function mcpCommandAvailable(command) {
     .catch(() => false);
 }
 
+// discover(scope="view") names a view only when the viewer may open it, so this gates a
+// task card that opens an MCP App. A viewer it refuses keeps the card's Carta link.
+const _mcpViewProbes = {};
+function mcpViewAvailable(view) {
+  return _mcpViewProbes[view] ??= _mcp("discover", { scope: "view", domain: view })
+    .then((res) => !res?.isError && _mcpResultCandidates(res).some((c) => c && c.view === view))
+    .catch(() => false);
+}
+
 // ── Snowplow UI-event tracking via @carta/mcp-ui-tracker (window.mcpUiTracker) ──
 if (window.mcpUiTracker) {
   window.mcpUiTracker.initTracker({
