@@ -46,13 +46,13 @@ func CaptureActiveSkill(stdin []byte) ([]byte, error) {
 
 	ident, ok := plugin.Resolve()
 	if !ok {
-		return hookio.PreToolUseAllow(), nil
+		return hookio.PreToolUseOK(), nil
 	}
 
 	prefix := ident.Name + ":"
 	skillFull := evt.ToolInput.Skill
 	if !strings.HasPrefix(skillFull, prefix) {
-		return hookio.PreToolUseAllow(), nil
+		return hookio.PreToolUseOK(), nil
 	}
 	skillName := strings.TrimPrefix(skillFull, prefix)
 
@@ -60,7 +60,7 @@ func CaptureActiveSkill(stdin []byte) ([]byte, error) {
 		_ = recordSkillInvocation(ident.Name, evt.SessionID, skillName)
 	}
 
-	return hookio.PreToolUseAllow(), nil
+	return hookio.PreToolUseOK(), nil
 }
 
 var slashCommandRe = regexp.MustCompile(`^/([A-Za-z0-9_-]+(?::[A-Za-z0-9_-]+)?)(?:\s|$)`)

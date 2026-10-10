@@ -33,7 +33,7 @@ func TestDispatch_PreToolUseFailOpenOnError(t *testing.T) {
 		return nil, errBoom
 	}, registry.PreToolUse, strings.NewReader("{}"), &stderr)
 
-	want := `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow"}}`
+	want := `{"hookSpecificOutput":{"hookEventName":"PreToolUse"}}`
 	if string(out) != want {
 		t.Errorf("output = %s, want %s", out, want)
 	}
@@ -68,7 +68,7 @@ func TestDispatch_PanicRecoveredFailsOpen(t *testing.T) {
 		panic("boom")
 	}, registry.PreToolUse, strings.NewReader("{}"), &stderr)
 
-	want := `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow"}}`
+	want := `{"hookSpecificOutput":{"hookEventName":"PreToolUse"}}`
 	if string(out) != want {
 		t.Errorf("output = %s, want %s", out, want)
 	}

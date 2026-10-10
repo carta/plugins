@@ -44,11 +44,16 @@ func parsePreToolUseUpdatedInput(t *testing.T, out []byte) map[string]json.RawMe
 	t.Helper()
 	var resp struct {
 		HookSpecificOutput struct {
-			UpdatedInput json.RawMessage `json:"updatedInput"`
+			UpdatedInput       json.RawMessage `json:"updatedInput"`
+			PermissionDecision *string         `json:"permissionDecision"`
 		} `json:"hookSpecificOutput"`
 	}
 	if err := json.Unmarshal(out, &resp); err != nil {
 		t.Fatalf("unmarshal output: %v", err)
+	}
+	// A decision here would approve every Carta MCP call without asking the user.
+	if resp.HookSpecificOutput.PermissionDecision != nil {
+		t.Fatalf("permissionDecision = %q, want absent", *resp.HookSpecificOutput.PermissionDecision)
 	}
 	var updated map[string]json.RawMessage
 	if err := json.Unmarshal(resp.HookSpecificOutput.UpdatedInput, &updated); err != nil {
@@ -502,7 +507,7 @@ func TestInjectInstrumentation_PluginRootUnsetFailsOpenNoWrites(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	want := `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow"}}`
+	want := `{"hookSpecificOutput":{"hookEventName":"PreToolUse"}}`
 	if string(out) != want {
 		t.Errorf("output = %s, want %s", out, want)
 	}

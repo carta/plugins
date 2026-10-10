@@ -69,8 +69,9 @@ from overwriting the other plugins' records.
 
 ## Fail-open rule
 
-A hook never blocks a tool call. Every internal error returns the same allow
-or OK shape a successful run would return.
+A hook never blocks a tool call and never approves one. PreToolUse hooks return
+no `permissionDecision`, so Claude Code's normal permission flow decides. Every
+internal error returns the same shape a successful run would return.
 
 ## Add a handler
 
