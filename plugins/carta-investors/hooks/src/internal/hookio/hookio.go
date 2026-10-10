@@ -13,11 +13,10 @@ import (
 	"com.carta.claude_plugins.hooks/registry"
 )
 
-// PreToolUseAllow is the non-blocking "allow, no updatedInput" shape used by
-// PreToolUse hooks both on success (when there's nothing to inject/track) and
-// as the fail-open shape on error.
-func PreToolUseAllow() []byte {
-	return []byte(`{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow"}}`)
+// PreToolUseOK is the PreToolUse shape for success and fail-open. It carries no
+// permissionDecision, so Claude Code's normal permission flow decides the call.
+func PreToolUseOK() []byte {
+	return []byte(`{"hookSpecificOutput":{"hookEventName":"PreToolUse"}}`)
 }
 
 type preToolUseOutput struct {
@@ -26,18 +25,16 @@ type preToolUseOutput struct {
 
 type preToolUseHookOutput struct {
 	HookEventName      string          `json:"hookEventName"`
-	PermissionDecision string          `json:"permissionDecision"`
 	UpdatedInput       json.RawMessage `json:"updatedInput,omitempty"`
 }
 
-// PreToolUseWithUpdatedInput is the PreToolUse allow shape carrying a hook's
-// modified tool_input.
+// PreToolUseWithUpdatedInput carries a hook's modified tool_input with no
+// permissionDecision; Claude Code applies the input and still asks as usual.
 func PreToolUseWithUpdatedInput(updatedInput json.RawMessage) ([]byte, error) {
 	return json.Marshal(preToolUseOutput{
 		HookSpecificOutput: preToolUseHookOutput{
-			HookEventName:      "PreToolUse",
-			PermissionDecision: "allow",
-			UpdatedInput:       updatedInput,
+			HookEventName: "PreToolUse",
+			UpdatedInput:  updatedInput,
 		},
 	})
 }
@@ -143,7 +140,7 @@ func PostModelSwitchOK() []byte {
 func FailOpen(event registry.Event) []byte {
 	switch event {
 	case registry.PreToolUse:
-		return PreToolUseAllow()
+		return PreToolUseOK()
 	case registry.SessionStart:
 		return SessionStartOK()
 	case registry.UserPromptSubmit:

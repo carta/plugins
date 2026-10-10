@@ -59,7 +59,7 @@ func InjectInstrumentation(stdin []byte) ([]byte, error) {
 	if !ok {
 		// Identity can't be resolved: fail open, and critically, perform no
 		// filesystem writes (we return before touching disk at all).
-		return hookio.PreToolUseAllow(), nil
+		return hookio.PreToolUseOK(), nil
 	}
 
 	shortName := hookio.ShortToolName(evt.ToolName)
