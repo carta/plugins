@@ -34,7 +34,9 @@ allowed-tools:
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
   - AskUserQuestion
   - read_skill
-  - Skill
+  - Skill(carta-investors:carta-manco-reporting)
+  - Skill(carta-investors:carta-consolidating-financial-reports)
+  - Skill(fa-manco:carta-consolidating-cash-flow)
   - Read
   - Write
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/scripts/read_workbook.py *)
@@ -42,7 +44,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.70.10</carta-plugin>
+<carta-plugin>carta-investors:6.70.11</carta-plugin>
 
 [PATTERN carta-writing-style v0.0.2]
 [PATTERN etiquette v0.0.6]

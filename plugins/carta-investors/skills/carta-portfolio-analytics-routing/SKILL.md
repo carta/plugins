@@ -45,7 +45,8 @@ allowed-tools:
   - Artifact
   # Dispatches the co-investors route. A dispatched skill runs under its own
   # frontmatter, so carta-co-investors' tools are deliberately NOT repeated here.
-  - Skill
+  - Skill(carta-investors:carta-portfolio-analytics-app)
+  - Skill(carta-investors:carta-co-investors)
   - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-analytics-routing/references/soi/scripts/render-artifact.py" *)
   - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-soi/scripts/render-artifact.py" *)
   - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/scripts/render_artifact.py" *)
@@ -66,7 +67,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.70.10</carta-plugin>
+<carta-plugin>carta-investors:6.70.11</carta-plugin>
 
 # carta-portfolio-analytics-routing — Portfolio Analytics Router (mirror)
 

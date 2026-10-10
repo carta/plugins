@@ -34,7 +34,9 @@ allowed-tools:
   - mcp__claude_ai_Carta__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   # The dashboard fan-out (Step 5). A skill that isn't installed is skipped.
-  - Skill
+  - Skill(carta-investors:carta-soi)
+  - Skill(carta-investors:carta-portfolio-analytics-routing)
+  - Skill(carta-investors:carta-fund-performance)
   - AskUserQuestion
   # Draws the pin sketch in "Keeping Carta Home handy" where inline visuals are supported.
   - mcp__*__show_widget
@@ -49,7 +51,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.70.10</carta-plugin>
+<carta-plugin>carta-investors:6.70.11</carta-plugin>
 
 # Carta Home — Build / Redeploy / Open
 

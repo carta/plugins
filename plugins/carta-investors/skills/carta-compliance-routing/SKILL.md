@@ -40,7 +40,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.70.10</carta-plugin>
+<carta-plugin>carta-investors:6.70.11</carta-plugin>
 
 # carta-compliance-routing — Compliance Router
 
