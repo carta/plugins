@@ -52,8 +52,8 @@ func TestDispatchShim_FailOpenShapes(t *testing.T) {
 	}{
 		{"capture-model", `{"hookSpecificOutput":{"hookEventName":"SessionStart"}}`},
 		{"inject-context", `{"hookSpecificOutput":{"hookEventName":"SessionStart"}}`},
-		{"capture-active-skill", `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow"}}`},
-		{"inject-instrumentation", `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow"}}`},
+		{"capture-active-skill", `{"hookSpecificOutput":{"hookEventName":"PreToolUse"}}`},
+		{"inject-instrumentation", `{"hookSpecificOutput":{"hookEventName":"PreToolUse"}}`},
 		{"prune-session-data", `{"hookSpecificOutput":{"hookEventName":"SessionStart"}}`},
 		{"cache-commands", `{"hookSpecificOutput":{"hookEventName":"PostToolUse"}}`},
 		{"track-corporation", `{"hookSpecificOutput":{"hookEventName":"PostToolUse"}}`},

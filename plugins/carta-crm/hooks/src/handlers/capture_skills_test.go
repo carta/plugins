@@ -8,7 +8,7 @@ import (
 	"com.carta.claude_plugins.hooks/internal/session"
 )
 
-const preToolUseAllowJSON = `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow"}}`
+const preToolUseOKJSON = `{"hookSpecificOutput":{"hookEventName":"PreToolUse"}}`
 
 func TestCaptureActiveSkill_RecordsOwnSkill(t *testing.T) {
 	isolateEnv(t)
@@ -19,8 +19,8 @@ func TestCaptureActiveSkill_RecordsOwnSkill(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(out) != preToolUseAllowJSON {
-		t.Errorf("output = %s, want %s", out, preToolUseAllowJSON)
+	if string(out) != preToolUseOKJSON {
+		t.Errorf("output = %s, want %s", out, preToolUseOKJSON)
 	}
 
 	skills := session.ReadSkills("carta-crm", "s1")
@@ -39,8 +39,8 @@ func TestCaptureActiveSkill_IgnoresForeignPluginSkill(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(out) != preToolUseAllowJSON {
-		t.Errorf("output = %s, want %s", out, preToolUseAllowJSON)
+	if string(out) != preToolUseOKJSON {
+		t.Errorf("output = %s, want %s", out, preToolUseOKJSON)
 	}
 
 	skills := session.ReadSkills("carta-crm", "s1")
@@ -83,8 +83,8 @@ func TestCaptureActiveSkill_PluginRootUnsetFailsOpenNoWrites(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(out) != preToolUseAllowJSON {
-		t.Errorf("output = %s, want %s", out, preToolUseAllowJSON)
+	if string(out) != preToolUseOKJSON {
+		t.Errorf("output = %s, want %s", out, preToolUseOKJSON)
 	}
 
 	if entries, _ := os.ReadDir(filepath.Join(stateBase, "sessions")); len(entries) != 0 {

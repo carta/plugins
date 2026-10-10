@@ -24,11 +24,11 @@
 # --plugin-dir users and clone installs resolve a binary instead of silently
 # failing open with every hook disabled.
 #
-# Fail-open is PER SUBCOMMAND, not a blanket PreToolUse allow: an event with
+# Fail-open is PER SUBCOMMAND: an event with
 # no allow/deny concept (SessionStart, UserPromptSubmit) must not emit a
 # PreToolUse-shaped payload, and vice versa. The shapes below match the Go
 # binary's own generic fail-open in tools/hooks/internal/hookio (see
-# hookio.PreToolUseAllow / hookio.SessionStartOK / hookio.UserPromptSubmitOK),
+# hookio.PreToolUseOK / hookio.SessionStartOK / hookio.UserPromptSubmitOK),
 # so a missing/non-executable binary behaves identically to a handler error.
 set -eu
 
@@ -114,8 +114,8 @@ case "$subcommand" in
         exit 0
         ;;
     capture-active-skill | inject-instrumentation)
-        # PreToolUse: must explicitly allow, or Claude Code blocks the tool call.
-        printf '%s' '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow"}}'
+        # PreToolUse: no permissionDecision, so Claude Code's normal permission flow decides.
+        printf '%s' '{"hookSpecificOutput":{"hookEventName":"PreToolUse"}}'
         exit 0
         ;;
     cache-commands | track-corporation)
