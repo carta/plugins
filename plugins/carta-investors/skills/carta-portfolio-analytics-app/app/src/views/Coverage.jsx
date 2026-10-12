@@ -269,7 +269,7 @@ function Completeness({ data }) {
     ...(allFunds.length > 0 ? [{ key: "fund", label: "Fund", value: fund, onChange: setFund, resetValue: "ALL",
       count: (v) => (v !== "ALL" ? 1 : 0),
       chipLabel: (v) => `Fund: ${fundOpts.find((o) => o.id === v)?.label || v}`,
-      render: (v, setV) => <FilterRadioList name="coverage-fund" options={fundOpts} value={v} onChange={setV} /> }] : []),
+      render: (v, setV) => <FilterRadioList name="coverage-fund" options={fundOpts} value={v} onChange={setV} searchPlaceholder="Search funds" pinFirst /> }] : []),
     { key: "metrics", label: "KPIs", value: selMetrics, onChange: setSelMetrics, resetValue: defaultMetrics,
       count: (v) => v.size, pinned: true,
       chipLabel: (v) => `KPIs: ${v.size}`,

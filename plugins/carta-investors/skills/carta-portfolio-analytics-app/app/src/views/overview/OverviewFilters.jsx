@@ -2,7 +2,7 @@
 // is generated from the column catalog. Companies is the one non-column dimension and is session-only.
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { FS, sans, MICRO } from "../../ui/theme.js";
-import { Btn, SearchInput, MarqueeLabel, ddTriggerStyle, ChevronDownIcon, ChevronRightIcon, useDismissable, Z, POPOVER_SHADOW } from "../../ui/components.jsx";
+import { Btn, SearchInput, MarqueeLabel, ddTriggerStyle, ChevronDownIcon, ChevronRightIcon, useDismissable, useFocusOnOpen, filterByLabel, SEARCH_MIN, Z, POPOVER_SHADOW } from "../../ui/components.jsx";
 import { columnCatalog, columnValueType, readColumns, setColumnVisible } from "../../model/overviewColumns.js";
 import { trackClick } from "../../analytics.js";
 import { readFilters, setFilter, removeFilter, clearFilters, filterPredicate, filterLabel, filterFor, specKey, isEmptyCond } from "../../model/overviewFilters.js";
@@ -95,6 +95,8 @@ export function GlobalFilter({ data, dashboard, catalog, filterApi, companyOpts,
   const [paneSearch, setPaneSearch] = useState("");
   const [activePane, setActivePane] = useState(COLUMNS);   // COLUMNS | COMPANIES | "kind:key"
   const [openGroup, setOpenGroup] = useState(null);           // which catalog group is expanded
+  const [groupSearch, setGroupSearch] = useState("");          // narrows the expanded group's fields
+  const groupSearchRef = useFocusOnOpen(open && openGroup);
   const [draftCompanies, setDraftCompanies] = useState(selCompanies);
   const [draftFilters, setDraftFilters] = useState(filters);  // full working copy of doc.filters
   const ref = useRef(null), panelRef = useRef(null);
@@ -113,7 +115,7 @@ export function GlobalFilter({ data, dashboard, catalog, filterApi, companyOpts,
   // Re-seed drafts from the committed state whenever the panel closes.
   useEffect(() => {
     if (open) return;
-    setDraftCompanies(selCompanies); setDraftFilters(filters); setPaneSearch("");
+    setDraftCompanies(selCompanies); setDraftFilters(filters); setPaneSearch(""); setGroupSearch("");
   }, [open, selCompanies, filters]);
 
   const byKey = useMemo(() => new Map(catalog.flatMap((g) => g.options.map((o) => [specKey(o), o]))), [catalog]);
@@ -220,15 +222,26 @@ export function GlobalFilter({ data, dashboard, catalog, filterApi, companyOpts,
             {catalog.map((g) => {
               const expanded = openGroup === g.group;
               const n = g.options.reduce((s, o) => s + draftCount(o), 0);
+              const searchable = expanded && g.options.length > SEARCH_MIN;
+              const fields = searchable ? filterByLabel(g.options, groupSearch) : g.options;
               return (
                 <div key={g.group}>
-                  <button onClick={() => setOpenGroup(expanded ? null : g.group)} style={navBtn(false)} aria-expanded={expanded}>
+                  <button onClick={() => { setOpenGroup(expanded ? null : g.group); setGroupSearch(""); }} style={navBtn(false)} aria-expanded={expanded}>
                     <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                       {expanded ? <ChevronDownIcon size={12} /> : <ChevronRightIcon size={12} />}{g.group}
                     </span>
                     {n > 0 && <span style={bubble}>{n}</span>}
                   </button>
-                  {expanded && g.options.map((o) => {
+                  {searchable && (
+                    <div style={{ padding: "4px 12px 6px 34px" }}>
+                      <SearchInput ref={groupSearchRef} placeholder={`Search ${g.group.toLowerCase()}`} aria-label={`Search ${g.group}`}
+                        value={groupSearch} onChange={(e) => setGroupSearch(e.target.value)} style={{ width: "100%" }} />
+                    </div>
+                  )}
+                  {searchable && fields.length === 0 && (
+                    <div style={{ ...sans, fontSize: FS.small, color: MICRO, padding: "4px 16px 8px 34px" }}>No matches</div>
+                  )}
+                  {expanded && fields.map((o) => {
                     const k = specKey(o);
                     return (
                       <button key={k} onClick={() => { setActivePane(k); setPaneSearch(""); }} style={{ ...navBtn(activePane === k), paddingLeft: 34, height: 32 }}>
@@ -261,7 +274,7 @@ export function GlobalFilter({ data, dashboard, catalog, filterApi, companyOpts,
               ) : (
                 <>
                   <h3 style={{ ...sans, fontSize: 14, fontWeight: 500, color: "var(--ink-color-global-text-default)", margin: "0 0 14px" }}>Filter by companies</h3>
-                  {companyOpts.length > 6 && (
+                  {companyOpts.length > SEARCH_MIN && (
                     <SearchInput placeholder="Search companies" value={paneSearch} onChange={(e) => setPaneSearch(e.target.value)} style={{ width: "100%" }} />
                   )}
                   {companyGroups.length > 0 && (

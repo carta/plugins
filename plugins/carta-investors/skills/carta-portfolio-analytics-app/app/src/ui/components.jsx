@@ -295,6 +295,19 @@ export const filterByLabel = (options, q) => {
   return options.filter((o) => o.label.toLowerCase().includes(needle));
 };
 
+/** A list longer than this gets a search box — a handful of options scan faster
+ *  than they'd search. The one threshold every searchable list in the app reads. */
+export const SEARCH_MIN = 6;
+
+/** Put the cursor in a popover's search box once the popover is actually on
+ *  screen (`ready`) — a portaled panel renders hidden until it's positioned,
+ *  and a hidden input can't take focus. */
+export function useFocusOnOpen(ready) {
+  const ref = useRef(null);
+  useEffect(() => { if (ready) ref.current?.focus({ preventScroll: true }); }, [ready]);
+  return ref;
+}
+
 /** Compact multi-select popover (checkbox list + search + all/clear). Generic —
  *  used by the Dashboard pivot and the Coverage tab. `selected` is a Set (or any
  *  iterable), `options` = [{id,label}], `onChange` gets a new Set. `quickPicks`
@@ -326,6 +339,8 @@ export function MultiSelect({ label, options, selected, onChange, minWidth = 200
     window.addEventListener("resize", place);
     return () => { window.removeEventListener("scroll", place, true); window.removeEventListener("resize", place); };
   }, [open]);
+  useEffect(() => { if (!open) setQ(""); }, [open]);
+  const searchRef = useFocusOnOpen(open && !!pos);
   const sel = selected instanceof Set ? selected : new Set(selected);
   const shown = filterByLabel(options, q);
   // `emptyLabel` lets a filter whose empty set means "no filter" say "All companies"
@@ -347,7 +362,7 @@ export function MultiSelect({ label, options, selected, onChange, minWidth = 200
           visibility: pos ? "visible" : "hidden", maxHeight: 360, overflowY: "auto",
           background: "var(--ink-color-global-surface-background-default)", border: `1px solid var(--ink-color-global-border-subtle)`, borderRadius: 6,
           boxShadow: "var(--shadow-hover)", zIndex: Z.popover, padding: 8 }}>
-          <SearchInput placeholder={`Search ${label.toLowerCase()}…`} value={q} onChange={(e) => setQ(e.target.value)} style={{ width: "100%", marginBottom: 6 }} />
+          <SearchInput ref={searchRef} placeholder={`Search ${label.toLowerCase()}…`} value={q} onChange={(e) => setQ(e.target.value)} style={{ width: "100%", marginBottom: 6 }} />
           {/* "Select all" reads as a suggestion chip like any quick pick; Clear
               stays link-styled text, but sits inline in the same row. */}
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, padding: "0 2px 8px" }}>
@@ -630,6 +645,8 @@ export const ddTriggerStyle = (extra) => ({
 export const POPOVER_SHADOW = "0 8px 24px rgba(20,24,24,.12), 0 2px 6px rgba(20,24,24,.08)";
 
 /** Ink's Dropdown compound component (Trigger + Box + Button), single-select.
+ *  A list longer than SEARCH_MIN gets a search box on its own; `searchable`
+ *  forces it on (`true`) or off (`false`) regardless of length.
  *  Generic: knows nothing
  *  about funds. `options` is `[{id, label, separatorBefore?}]`; a
  *  `separatorBefore: true` option gets a hairline divider above it (e.g. an
@@ -686,10 +703,12 @@ export function Dropdown({ options, value, onChange, minWidth = 260, maxWidth = 
 
   const current = value != null ? options.find((o) => o.id === value) : undefined;
   const label = current ? current.label : (nullLabel ?? options[0]?.label);
-  const shown = searchable ? filterByLabel(options, q) : options;
+  const hasSearch = searchable ?? (options.length > SEARCH_MIN && options.every((o) => typeof o.label === "string"));
+  const shown = hasSearch ? filterByLabel(options, q) : options;
   // Search state belongs to this one open/close cycle, not across it — a
   // stale filter from a prior open would otherwise hide the current value.
   useEffect(() => { if (!open) setQ(""); }, [open]);
+  const searchRef = useFocusOnOpen(open && hasSearch && (!portal || !!pos));
 
   const placement = portal
     ? { position: "fixed", top: pos?.top ?? 0, left: pos?.left ?? 0, minWidth: pos?.width ?? minWidth, visibility: pos ? "visible" : "hidden" }
@@ -698,22 +717,24 @@ export function Dropdown({ options, value, onChange, minWidth = 260, maxWidth = 
     <div ref={panelRef} className="popin" role="listbox" style={{ ...placement,
       maxHeight: 340, overflowY: "auto", background: "var(--ink-color-global-surface-background-default)", border: `1px solid var(--ink-color-global-border-subtle)`, borderRadius: 6,
       boxShadow: POPOVER_SHADOW, zIndex: Z.popover, padding: "4px 0", transformOrigin: "top left" }}>
-      {searchable && (
+      {hasSearch && (
         <div style={{ padding: "0 8px 6px" }}>
-          <SearchInput placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: "100%" }} />
+          <SearchInput ref={searchRef} placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: "100%" }} />
         </div>
       )}
       {shown.map((o) => {
         const on = o.id === value;
+        // Group dividers only make sense over the whole list, not a search's matches.
+        const sep = o.separatorBefore && !q;
         return (
           <MenuItem key={o.id} onClick={() => { onChange(o.id); setOpen(false); }} selected={on} checkmark
-            style={{ borderTop: o.separatorBefore ? `1px solid var(--ink-color-global-border-subtle)` : "none",
-              marginTop: o.separatorBefore ? 4 : 0, paddingTop: o.separatorBefore ? 10 : 8 }}>
+            style={{ borderTop: sep ? `1px solid var(--ink-color-global-border-subtle)` : "none",
+              marginTop: sep ? 4 : 0, paddingTop: sep ? 10 : 8 }}>
             {o.label}
           </MenuItem>
         );
       })}
-      {searchable && shown.length === 0 && (
+      {hasSearch && shown.length === 0 && (
         <div style={{ ...sans, fontSize: FS.small, color: MICRO, padding: "8px 12px" }}>No matches</div>
       )}
     </div>
@@ -898,7 +919,7 @@ export function Checkbox({ checked, onChange, style, ...rest }) {
  *  `[{id, label, sub?}]`; `selected`: a Set; `onChange(nextSet)`. Shows an
  *  inline search box once options exceed `searchMin` (a handful of options
  *  scan faster than they'd search). */
-export function FilterCheckboxList({ options, selected, onChange, searchMin = 8, searchPlaceholder = "Search" }) {
+export function FilterCheckboxList({ options, selected, onChange, searchMin = SEARCH_MIN, searchPlaceholder = "Search" }) {
   const [q, setQ] = useState("");
   const shown = filterByLabel(options, q);
   const toggle = (id) => { const n = new Set(selected); n.has(id) ? n.delete(id) : n.add(id); onChange(n); };
@@ -933,11 +954,19 @@ export function FilterCheckboxList({ options, selected, onChange, searchMin = 8,
 }
 
 /** Radio-list pane content for a FilterMenu section — options `[{id, label}]`,
- *  single-select like a native radio group. */
-export function FilterRadioList({ name, options, value, onChange }) {
+ *  single-select like a native radio group. Searchable past `searchMin`, the
+ *  same as FilterCheckboxList. `pinFirst` keeps the first option (an "All ___"
+ *  reset) above the matches, so a search never hides the way back out. */
+export function FilterRadioList({ name, options, value, onChange, searchMin = SEARCH_MIN, searchPlaceholder = "Search", pinFirst }) {
+  const [q, setQ] = useState("");
+  const shown = pinFirst && q && options.length ? [options[0], ...filterByLabel(options.slice(1), q)] : filterByLabel(options, q);
   return (
+    <>
+    {options.length > searchMin && (
+      <SearchInput placeholder={searchPlaceholder} value={q} onChange={(e) => setQ(e.target.value)} style={{ width: "100%", marginBottom: 10 }} />
+    )}
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      {options.map((o) => (
+      {shown.map((o) => (
         <label key={o.id} style={{ ...sans, display: "flex", alignItems: "flex-start", gap: 10,
           fontSize: 14, lineHeight: "20px", color: "var(--ink-color-global-text-default)", cursor: "pointer" }}>
           <input type="radio" name={name} checked={value === o.id} onChange={() => onChange(o.id)}
@@ -946,7 +975,9 @@ export function FilterRadioList({ name, options, value, onChange }) {
           <span style={{ flex: "1 1 auto" }}>{o.label}</span>
         </label>
       ))}
+      {shown.length === (pinFirst && q ? 1 : 0) && <p style={{ ...sans, fontSize: FS.bodyLg, color: MICRO, margin: 0 }}>No matches.</p>}
     </div>
+    </>
   );
 }
 
@@ -1479,7 +1510,7 @@ export const TextInput = forwardRef(({ style, className, ...props }, ref) => (
  *  `type="search"` still supplies the browser's own clear-x affordance; only
  *  its default magnifying-glass-less chrome and 12px padding were non-canonical
  *  before. Accepts layout props (flex, minWidth, etc.) via `style`. */
-export function SearchInput({ placeholder, value, onChange, style, ...props }) {
+export const SearchInput = forwardRef(function SearchInput({ placeholder, value, onChange, style, ...props }, ref) {
   // `-webkit-appearance:none` (needed so our own border-radius renders instead of
   // the browser's native rounded search pill — see theme.js .ink-input) also drops
   // the native clear-x as an unfixable side effect, so this renders its own instead
@@ -1491,6 +1522,7 @@ export function SearchInput({ placeholder, value, onChange, style, ...props }) {
         style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)",
           color: "var(--ink-color-global-text-subtle)", pointerEvents: "none" }} />
       <TextInput
+        ref={ref}
         type="search"
         placeholder={placeholder}
         value={value}
@@ -1508,7 +1540,7 @@ export function SearchInput({ placeholder, value, onChange, style, ...props }) {
       )}
     </div>
   );
-}
+});
 
 /** The canonical `.ledger` table shell — one place for the `width:100%`/
  *  `borderCollapse:collapse` boilerplate every view repeats inline. `sheet`/

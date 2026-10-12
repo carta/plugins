@@ -6,7 +6,7 @@ import { createPortal } from "react-dom";
 import { FS, sans, mono, MICRO } from "../ui/theme.js";
 import { trackClick } from "../analytics.js";
 import { H2, Dropdown, Segmented, Toggle, SearchInput, TextInput, Btn, Badge, Modal, Eyebrow, StickyRibbon,
-  ddTriggerStyle, ChevronDownIcon, CollapseAllIcon, ExpandAllIcon, DeltaText, useDismissable, useStickyClone, usePortalAnchor, Z, POPOVER_SHADOW } from "../ui/components.jsx";
+  ddTriggerStyle, ChevronDownIcon, CollapseAllIcon, ExpandAllIcon, DeltaText, useDismissable, useStickyClone, usePortalAnchor, filterByLabel, SEARCH_MIN, Z, POPOVER_SHADOW } from "../ui/components.jsx";
 import { fmtVal, fmtFull, shortDate, TrendSparkline, TREND_SPARK_W } from "../ui/charts.jsx";
 import { metricsFor, metricOptions, metricOf, pointNearMonthsBack, metricCadence,
   seriesPoints, forecastSeriesPoints, forecastPeriods, forecastMetricsFor,
@@ -1418,9 +1418,12 @@ function GlobalFilter({ tagGroups, tagCounts, selTags, onTags, favOnly, setFavOn
     }
     return [...byGroup];
   }, [activePane, companyOpts, paneSearch]);
-  // A handful of options scan faster than they'd search — skip the search box.
-  const SEARCH_MIN = 6;
+  // "All funds" (entry 0) stays pinned above the matches — it's the way back out.
+  const filteredFundOpts = activePane === "__fund"
+    ? [fundOpts[0], ...filterByLabel(fundOpts.slice(1), paneSearch)].filter(Boolean)
+    : [];
   const showPaneSearch = activeGroup ? activeGroup.values.length > SEARCH_MIN
+    : activePane === "__fund" ? fundOpts.length > SEARCH_MIN
     : activePane === "__signals" ? signalOptions.length > SEARCH_MIN
     : activePane === "__companies" ? companyOpts.length > SEARCH_MIN
     : activePane === "__kpis" ? metricOpts.length > SEARCH_MIN
@@ -1518,8 +1521,12 @@ function GlobalFilter({ tagGroups, tagCounts, selTags, onTags, favOnly, setFavOn
                       <h3 style={{ ...sans, fontSize: 14, fontWeight: 500, color: "var(--ink-color-global-text-default)", margin: "0 0 14px" }}>
                         Filter by fund
                       </h3>
+                      {showPaneSearch && (
+                        <SearchInput placeholder="Search funds" value={paneSearch}
+                          onChange={(e) => setPaneSearch(e.target.value)} style={{ width: "100%", marginBottom: 12 }} />
+                      )}
                       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                        {fundOpts.map((o) => (
+                        {filteredFundOpts.map((o) => (
                           <label key={o.id} style={{ ...sans, display: "flex", alignItems: "center", gap: 10,
                             fontSize: 14, color: "var(--ink-color-global-text-default)", cursor: "pointer" }}>
                             <input type="radio" name="gf-fund" checked={draftFund === o.id} onChange={() => setDraftFund(o.id)}
@@ -1527,6 +1534,9 @@ function GlobalFilter({ tagGroups, tagCounts, selTags, onTags, favOnly, setFavOn
                             {o.label}
                           </label>
                         ))}
+                        {paneSearch && filteredFundOpts.length <= 1 && (
+                          <p style={{ ...sans, fontSize: FS.bodyLg, color: MICRO, margin: 0 }}>No funds match "{paneSearch}".</p>
+                        )}
                       </div>
                     </>
                   ) : activePane === "__companies" ? (

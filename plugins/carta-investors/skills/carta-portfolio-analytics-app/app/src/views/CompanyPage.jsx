@@ -12,7 +12,7 @@ import { createPortal } from "react-dom";
 import { FS, sans, serif, mono, MICRO } from "../ui/theme.js";
 import { withCommas } from "../ui/format.js";
 import { H2, Dropdown, Segmented, TabBar, MultiSelect, KVTableRow, Badge, Btn, RollupNote, Toggle, Modal, PencilIcon, Z,
-  useStickyClone, StatusLine, useDismissable, MenuItem, SearchInput, POPOVER_SHADOW, filterByLabel, ChevronDownIcon, SectionHeader } from "../ui/components.jsx";
+  useStickyClone, StatusLine, useDismissable, useFocusOnOpen, MenuItem, SearchInput, POPOVER_SHADOW, filterByLabel, ChevronDownIcon, SectionHeader } from "../ui/components.jsx";
 import Chart, { fmtVal, fmtFull, shortDate, TrendSparkline, TREND_SPARK_W, InkKpiChart } from "../ui/charts.jsx";
 import {
   companyOf, metricOf, metricOptions, latest, pointsFor, metricsFor,
@@ -105,6 +105,7 @@ function CompanySwitcher({ options, value, onChange }) {
   const panelRef = useRef(null);
   useDismissable(open, setOpen, [ref, panelRef]);
   useEffect(() => { if (!open) setQ(""); }, [open]);
+  const searchRef = useFocusOnOpen(open);
   const current = options.find((o) => o.id === value);
   const shown = filterByLabel(options, q);
 
@@ -126,7 +127,7 @@ function CompanySwitcher({ options, value, onChange }) {
           border: `1px solid var(--ink-color-global-border-subtle)`, borderRadius: 6, boxShadow: POPOVER_SHADOW,
           zIndex: Z.popover, padding: "4px 0", transformOrigin: "top left" }}>
           <div style={{ padding: "0 8px 6px" }}>
-            <SearchInput placeholder="Search companies…" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: "100%" }} />
+            <SearchInput ref={searchRef} placeholder="Search companies…" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: "100%" }} />
           </div>
           {shown.map((o) => (
             <MenuItem key={o.id} onClick={() => { onChange(o.id); setOpen(false); }} selected={o.id === value} checkmark>

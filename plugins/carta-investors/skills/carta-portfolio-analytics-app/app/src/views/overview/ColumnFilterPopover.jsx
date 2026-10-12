@@ -3,13 +3,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { FS, sans, MICRO } from "../../ui/theme.js";
-import { Btn, SearchInput, TextInput, Dropdown, MarqueeLabel, useDismissable, POPOVER_SHADOW, Z } from "../../ui/components.jsx";
+import { Btn, SearchInput, TextInput, Dropdown, MarqueeLabel, useDismissable, SEARCH_MIN, POPOVER_SHADOW, Z } from "../../ui/components.jsx";
 import { columnValueType, columnUnit, columnLabel, columnCategoryOptions, columnCategories } from "../../model/overviewColumns.js";
 import { buildOverviewRow } from "../../model/overviewRow.js";
 import { FILTER_OPS } from "../../model/overviewFilters.js";
 
 export const PANEL_WIDTH = 300;
-const SEARCH_MIN = 6; // a handful of options scan faster than they'd search
 
 const h3 = { ...sans, fontSize: 14, fontWeight: 500, color: "var(--ink-color-global-text-default)", margin: "0 0 12px" };
 const row = { ...sans, display: "flex", alignItems: "center", gap: 10, fontSize: 14, color: "var(--ink-color-global-text-default)", cursor: "pointer" };
