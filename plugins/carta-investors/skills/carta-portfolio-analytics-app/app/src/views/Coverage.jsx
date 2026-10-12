@@ -13,10 +13,16 @@ import { createPortal } from "react-dom";
 import { FS, sans, mono, MICRO, NOTICE } from "../ui/theme.js";
 import { withCommas } from "../ui/format.js";
 import { trackClick } from "../analytics.js";
-import { H2, Dropdown, StatBar, Btn, Checkbox, Glossary, StickyRibbon, HintIcon,
+import { H2, Dropdown, StatBar, Btn, Checkbox, Glossary, StickyRibbon, HintIcon, SearchInput,
   ChevronDownIcon, CollapseAllIcon, ExpandAllIcon, WarningTriangleIcon, useStickyClone, Z,
   FilterMenu, FilterCheckboxList, FilterRadioList,
   MenuItem, POPOVER_SHADOW, useDismissable, usePortalAnchor } from "../ui/components.jsx";
+import ViewControl from "../ui/ViewControl.jsx";
+import { useSavedViews } from "../state/useSavedViews.js";
+import { allTags, tagId, tagsFor, companyMatchesTags } from "../model/tags.js";
+import { STATUS_CAT } from "../model/status.js";
+import { isFavorite, favoriteCount } from "../model/favorites.js";
+import { signalHitsByCompany, BUILTIN_SIGNALS } from "../model/signals.js";
 import { Heatmap } from "../ui/charts.jsx";
 import { metricOptions, metricOf, pointsFor, cartaFirmUrl } from "../model/kpi.js";
 import {
@@ -72,7 +78,7 @@ export default function Coverage({ data, dashboard }) {
     // H2 carries no margin of its own, so the gap here supplies the space under it.
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <H2>Reporting health</H2>
-      <Completeness data={data} />
+      <Completeness data={data} dashboard={dashboard} />
     </div>
   );
 }
@@ -126,18 +132,50 @@ export function defaultCompletenessMetrics(metricOpts, max = 6) {
   return new Set(picked.slice(0, max));
 }
 
-function Completeness({ data }) {
+const VIEW_HINT = "A view saves your grouping, fund, companies, tags, KPIs, periods, reporting status and gap filters.";
+const sortedIds = (set) => [...set].map(String).sort();
+
+/** The saved-view form of the config: Sets become sorted arrays. Favorites,
+ *  signals and the search box stay out of views, as on Company KPIs. */
+const encodeView = (c) => ({ groupBy: c.groupBy, fund: c.fund, metricKeys: sortedIds(c.metrics), companyIds: sortedIds(c.companies),
+  tags: sortedIds(c.tags), statuses: sortedIds(c.statuses), gapsOnly: c.gapsOnly, window: c.win, includeFiling: c.includeFiling });
+
+function Completeness({ data, dashboard }) {
   const metrics = data.metrics || [];
   const metricOpts = useMemo(() => metricOptions(metrics), [metrics]);
   const defaultMetrics = useMemo(() => defaultCompletenessMetrics(metricOpts), [metricOpts]);
-  const [selMetrics, setSelMetrics] = useState(defaultMetrics);
-  const [fund, setFund] = useState("ALL");
-  const [win, setWin] = useState(8);
-  const [groupBy, setGroupBy] = useState("company");
-  const [gapsOnly, setGapsOnly] = useState(false);
-  const [selStatuses, setSelStatuses] = useState(() => new Set()); // health-bucket filter; empty = all
-  // Trailing quarters that have not settled yet. Hidden by default, one toggle to include.
-  const [includeFiling, setIncludeFiling] = useState(false);
+  // Everything a saved view captures lives in one object, so applying a view is one setCfg.
+  const defaults = useMemo(() => ({
+    groupBy: "company", fund: "ALL", metrics: defaultMetrics,
+    companies: new Set(),   // company ids; empty = all
+    tags: new Set(),        // tagId()s; empty = no tag filter
+    statuses: new Set(),    // health buckets; empty = all
+    gapsOnly: false, win: 8,
+    // Trailing quarters that have not settled yet. Hidden by default, one toggle to include.
+    includeFiling: false,
+  }), [defaultMetrics]);
+  const [cfg, setCfg] = useState(defaults);
+  const decodeView = (v) => ({
+    groupBy: v.groupBy === "metric" ? "metric" : "company", fund: v.fund ?? "ALL",
+    metrics: v.metricKeys ? new Set(v.metricKeys) : defaultMetrics,
+    companies: new Set(v.companyIds || []), tags: new Set(v.tags || []), statuses: new Set(v.statuses || []),
+    gapsOnly: !!v.gapsOnly, win: v.window ?? 8, includeFiling: !!v.includeFiling,
+  });
+  const savedViews = useSavedViews({ dashboard, docKey: "reportingViews", cfg, setCfg, defaults, encode: encodeView, decode: decodeView });
+  // Functional updates: FilterMenu's Apply calls several setters back to back.
+  const setter = (key) => (v) => setCfg((c) => ({ ...c, [key]: v }));
+  const { groupBy, fund, metrics: selMetrics, companies: selCompanies, tags: selTags, statuses: selStatuses, gapsOnly, win, includeFiling } = cfg;
+  const setGroupBy = setter("groupBy"), setFund = setter("fund"), setSelMetrics = setter("metrics"), setSelCompanies = setter("companies"),
+    setSelStatuses = setter("statuses"), setGapsOnly = setter("gapsOnly"), setWin = setter("win"), setIncludeFiling = setter("includeFiling");
+  // Not part of a view — as on Company KPIs, these narrow the page for this visit only.
+  const [favOnly, setFavOnly] = useState(false);
+  const [selSignals, setSelSignals] = useState(() => new Set()); // signal ids; empty = no signal filter
+  const [search, setSearch] = useState("");
+
+  const dashDoc = dashboard?.doc;
+  const rules = dashDoc?.rules;
+  const hitsByCompany = useMemo(() => signalHitsByCompany(data, rules), [data, rules]);
+  const tagGroups = useMemo(() => allTags(data), [data]);
 
   // Sticky ribbon, per PivotDashboard: height offsets ByCompany's clone header.
   const ribbonObsRef = useRef(null);
@@ -166,8 +204,16 @@ function Completeness({ data }) {
   const cols = periods.slice().reverse(); // newest-first for the grid columns
 
   const selKeys = metricOpts.filter((o) => selMetrics.has(o.id)).map((o) => o.id);
-  const companies = useMemo(() => (data.companies || [])
-    .filter((c) => fund === "ALL" || (c.funds || []).includes(fund)), [data, fund]);
+  const companies = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return (data.companies || [])
+      .filter((c) => fund === "ALL" || (c.funds || []).includes(fund))
+      .filter((c) => selCompanies.size === 0 || selCompanies.has(c.id))
+      .filter((c) => companyMatchesTags(c, selTags))
+      .filter((c) => !favOnly || isFavorite(dashDoc, c.id))
+      .filter((c) => selSignals.size === 0 || (hitsByCompany[c.id] || []).some((h) => selSignals.has(h.ruleId)))
+      .filter((c) => !q || c.name.toLowerCase().includes(q));
+  }, [data, fund, selCompanies, selTags, favOnly, dashDoc, selSignals, hitsByCompany, search]);
 
   // Indexed by companyId+metric so a KPI row can flag itself; one issue can
   // implicate more than one metric (a balance-sheet mismatch touches three).
@@ -264,6 +310,42 @@ function Completeness({ data }) {
   const statusOpts = ["overdue", "never", "late23", "late1", "ontime"].filter((b) => buckets[b])
     .map((b) => ({ id: b, label: BUCKET_LABEL[b], sub: buckets[b] }));
 
+  // Companies grouped by fund (dimensions order), alphabetical within each fund —
+  // listed once, under the first fund, so ids stay unique.
+  const companyOpts = useMemo(() => {
+    const fundOrder = new Map(allFunds.map((f, i) => [f, i]));
+    const firstFundOf = (c) => (c.funds || []).slice().sort((a, b) => (fundOrder.get(a) ?? Infinity) - (fundOrder.get(b) ?? Infinity))[0];
+    return (data.companies || [])
+      .map((c) => ({ id: c.id, label: c.name, group: firstFundOf(c) || "No fund" }))
+      .sort((a, b) => ((fundOrder.get(a.group) ?? Infinity) - (fundOrder.get(b.group) ?? Infinity)) || a.label.localeCompare(b.label));
+  }, [data, allFunds]);
+  const tagCounts = useMemo(() => {
+    const m = new Map();
+    for (const c of data.companies || []) for (const t of tagsFor(c)) { const id = tagId(t.cat, t.value); m.set(id, (m.get(id) || 0) + 1); }
+    return m;
+  }, [data]);
+  // Built-in signals always list; a custom rule lists once a company trips it.
+  const signalOpts = useMemo(() => {
+    const counts = new Map(), labels = new Map();
+    for (const b of BUILTIN_SIGNALS) { counts.set(`builtin:${b.id}`, 0); labels.set(`builtin:${b.id}`, b.tag); }
+    for (const hits of Object.values(hitsByCompany)) for (const h of hits) { counts.set(h.ruleId, (counts.get(h.ruleId) || 0) + 1); labels.set(h.ruleId, h.tag); }
+    return [...counts.keys()].map((id) => ({ id, label: labels.get(id), sub: counts.get(id) }));
+  }, [hitsByCompany]);
+  const hasFavorites = favoriteCount(dashDoc) > 0 || favOnly;
+  // One section per tag category. Each edits only its own category's ids in the
+  // shared tag set, so Apply can run every section's onChange in turn.
+  const tagSection = (g) => {
+    const opts = g.values.map((x) => ({ id: tagId(g.cat, x), label: x, sub: tagCounts.get(tagId(g.cat, x)) || 0 }));
+    const ids = new Set(opts.map((o) => o.id));
+    return { key: `tag:${g.cat}`, label: g.cat, value: new Set([...selTags].filter((id) => ids.has(id))), resetValue: new Set(),
+      onChange: (v) => setCfg((c) => ({ ...c, tags: new Set([...[...c.tags].filter((id) => !ids.has(id)), ...v]) })),
+      count: (v) => v.size,
+      chipLabel: (v) => (v.size === 1 ? `${g.cat}: ${opts.find((o) => v.has(o.id))?.label}` : `${g.cat} (${v.size})`),
+      render: (v, setV) => <FilterCheckboxList options={opts} selected={v} onChange={setV} searchPlaceholder={`Search ${g.cat.toLowerCase()}`} /> };
+  };
+  const statusTagGroup = tagGroups.find((g) => g.cat === STATUS_CAT);
+  const otherTagGroups = tagGroups.filter((g) => g.cat !== STATUS_CAT);
+
   const PERIOD_OPTS = [{ id: 4, label: "4 quarters" }, { id: 8, label: "8 quarters" }, { id: 12, label: "12 quarters" }, { id: "all", label: "All quarters" }];
   const filterSections = [
     ...(allFunds.length > 0 ? [{ key: "fund", label: "Fund", value: fund, onChange: setFund, resetValue: "ALL",
@@ -274,6 +356,10 @@ function Completeness({ data }) {
       count: (v) => v.size, pinned: true,
       chipLabel: (v) => `KPIs: ${v.size}`,
       render: (v, setV) => <FilterCheckboxList options={metricOpts} selected={v} onChange={setV} searchPlaceholder="Search KPIs" /> },
+    { key: "companies", label: "Companies", value: selCompanies, onChange: setSelCompanies, resetValue: new Set(),
+      count: (v) => v.size,
+      chipLabel: (v) => `Companies (${v.size})`,
+      render: (v, setV) => <FilterCheckboxList options={companyOpts} selected={v} onChange={setV} searchPlaceholder="Search companies" /> },
     { key: "periods", label: "Periods", value: win, onChange: setWin, resetValue: 8,
       count: (v) => (v !== 8 ? 1 : 0),
       chipLabel: (v) => `Periods: ${v === "all" ? "All" : v}`,
@@ -300,15 +386,29 @@ function Completeness({ data }) {
           Include in-progress quarter
         </label>
       ) }] : []),
+    ...(statusTagGroup ? [tagSection(statusTagGroup)] : []),
+    ...(hasFavorites ? [{ key: "favorites", label: "Favorites", value: favOnly, onChange: setFavOnly, resetValue: false,
+      count: (v) => (v ? 1 : 0),
+      chipLabel: () => "Favorites only",
+      render: (v, setV) => <FilterRadioList name="coverage-favorites" value={v} onChange={setV} options={[
+        { id: true, label: "Only show favorite companies" },
+        { id: false, label: "Show all companies" },
+      ]} /> }] : []),
+    { key: "signals", label: "Signals", value: selSignals, onChange: setSelSignals, resetValue: new Set(),
+      count: (v) => v.size,
+      chipLabel: (v) => (v.size === 1 ? `Signal: ${signalOpts.find((o) => v.has(o.id))?.label}` : `Signals (${v.size})`),
+      render: (v, setV) => <FilterCheckboxList options={signalOpts} selected={v} onChange={setV} searchPlaceholder="Search signals" /> },
+    ...otherTagGroups.map(tagSection),
   ];
   // Derived from `filterSections`; FilterMenu itself decides whether a
   // pinned chip's × shows, by comparing `value` against `resetValue`.
   const filterChips = filterSections
     .filter((s) => s.pinned || s.count(s.value) > 0)
     .map((s) => ({ key: s.key, label: s.chipLabel(s.value), pinned: s.pinned, onClear: () => s.onChange(s.resetValue) }));
+  // Keeps Group by and the selected view (now flagged •), like Company KPIs' Reset.
   const resetAllFilters = () => {
-    setFund("ALL"); setSelMetrics(defaultMetrics); setWin(8);
-    setSelStatuses(new Set()); setGapsOnly(false); setIncludeFiling(false);
+    setCfg((c) => ({ ...defaults, groupBy: c.groupBy }));
+    setFavOnly(false); setSelSignals(new Set());
   };
 
   const exportGaps = () => {
@@ -346,6 +446,8 @@ function Completeness({ data }) {
       ]} />
 
       <StickyRibbon ref={ribbonRef}>
+        {dashboard && <ViewControl {...savedViews} radioName="reporting-view" hint={VIEW_HINT} />}
+        <SearchInput placeholder="Search companies…" value={search} onChange={(e) => setSearch(e.target.value)} style={{ width: 200 }} />
         <Dropdown options={GROUP_OPTS} value={groupBy} onChange={(g) => { trackClick("PortfolioAnalytics.Coverage.SetGroupBy"); setGroupBy(g); }} triggerLabel="Group by" minWidth={150} portal />
         <FilterMenu sections={filterSections} chips={filterChips} onResetAll={resetAllFilters} portal />
         <ExportMenu onExportChase={exportChase} onExportGaps={exportGaps} onExportIssues={exportIssues} />

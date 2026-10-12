@@ -780,6 +780,7 @@ const valuesEqual = (a, b) => {
  *  render(draftValue, setDraftValue), resetValue?}]`. `chips`: `[{key, label,
  *  onClear, pinned?}]` — a `pinned` chip always shows, but its × only once
  *  `value` differs from `resetValue`. `onResetAll` needs no Apply. */
+const FILTER_PANEL_W = 510;
 export function FilterMenu({ sections, chips = [], onResetAll, triggerLabel = "Filters", portal }) {
   const [open, setOpen] = useState(false);
   const [activeKey, setActiveKey] = useState(sections[0]?.key);
@@ -789,7 +790,8 @@ export function FilterMenu({ sections, chips = [], onResetAll, triggerLabel = "F
   useDismissable(open, setOpen, [ref, panelRef]);
   // Same `portal` escape hatch as Dropdown — see usePortalAnchor's doc comment.
   const anchorRect = usePortalAnchor(open && !!portal, ref);
-  const pos = anchorRect && { top: anchorRect.bottom + 4, left: anchorRect.left };
+  // Slide left rather than spill past the viewport's right edge.
+  const pos = anchorRect && { top: anchorRect.bottom + 4, left: Math.max(8, Math.min(anchorRect.left, window.innerWidth - FILTER_PANEL_W - 8)) };
   const sectionsByKey = useMemo(() => new Map(sections.map((s) => [s.key, s])), [sections]);
   // Re-seed the draft on open; while open, merge in any newly-appeared
   // section key so a changed `sections` list never leaves one missing.
@@ -839,7 +841,7 @@ export function FilterMenu({ sections, chips = [], onResetAll, triggerLabel = "F
     : { position: "absolute", top: "calc(100% + 4px)", left: 0 };
   const panel = open && (
         <div ref={panelRef} className="popin" style={{ ...placement,
-          width: 510, height: 380, background: "var(--ink-color-global-surface-background-default)",
+          width: FILTER_PANEL_W, height: 380, background: "var(--ink-color-global-surface-background-default)",
           border: `1px solid var(--ink-color-global-border-subtle)`, borderRadius: 8, boxShadow: POPOVER_SHADOW,
           zIndex: Z.popover, display: "flex", overflow: "hidden", ...(portal ? sans : null) }}>
           <nav style={{ width: 200, background: GF_WARM_SURFACE, borderRight: `1px solid var(--ink-color-global-border-subtle)`,
@@ -916,7 +918,7 @@ export function Checkbox({ checked, onChange, style, ...rest }) {
 }
 
 /** Checkbox-list pane content for a FilterMenu section. `options`:
- *  `[{id, label, sub?}]`; `selected`: a Set; `onChange(nextSet)`. Shows an
+ *  `[{id, label, sub?, group?}]` (a `group` change draws a heading); `selected`: a Set; `onChange(nextSet)`. Shows an
  *  inline search box once options exceed `searchMin` (a handful of options
  *  scan faster than they'd search). */
 export function FilterCheckboxList({ options, selected, onChange, searchMin = SEARCH_MIN, searchPlaceholder = "Search" }) {
@@ -939,13 +941,16 @@ export function FilterCheckboxList({ options, selected, onChange, searchMin = SE
         </div>
       )}
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {shown.map((o) => (
-          <label key={o.id} style={{ ...sans, display: "flex", alignItems: "flex-start", gap: 10,
-            fontSize: 14, lineHeight: "20px", color: "var(--ink-color-global-text-default)", cursor: "pointer" }}>
-            <Checkbox checked={selected.has(o.id)} onChange={() => toggle(o.id)} style={{ marginTop: 2 }} />
-            <span style={{ flex: "1 1 auto" }}>{o.label}</span>
-            {o.sub != null && <span style={{ color: "var(--ink-color-global-text-subtle)", fontSize: 12 }}>{o.sub}</span>}
-          </label>
+        {shown.map((o, i) => (
+          <Fragment key={o.id}>
+            {o.group && o.group !== shown[i - 1]?.group && <Eyebrow style={{ marginTop: i ? 6 : 0 }}>{o.group}</Eyebrow>}
+            <label style={{ ...sans, display: "flex", alignItems: "flex-start", gap: 10,
+              fontSize: 14, lineHeight: "20px", color: "var(--ink-color-global-text-default)", cursor: "pointer" }}>
+              <Checkbox checked={selected.has(o.id)} onChange={() => toggle(o.id)} style={{ marginTop: 2 }} />
+              <span style={{ flex: "1 1 auto" }}>{o.label}</span>
+              {o.sub != null && <span style={{ color: "var(--ink-color-global-text-subtle)", fontSize: 12 }}>{o.sub}</span>}
+            </label>
+          </Fragment>
         ))}
         {shown.length === 0 && <p style={{ ...sans, fontSize: FS.bodyLg, color: MICRO, margin: 0 }}>No matches.</p>}
       </div>
