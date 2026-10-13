@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Adviser Tracker</title>
 <style>
-:root{--bg:#f7f6f3;--card:#fff;--line:#e7e5e0;--grid:#eeece7;--ink:#1b1b1a;--muted:#8a8780;--green:#3f9a5b;--yellow:#d9a92c;--red:#cf4b45;--c-old:#9ca3af;--c-mid:#476ba3;--c-cur:#bf6a48;--serif:Georgia,"Times New Roman",serif;--sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+:root{--bg:#f7f6f3;--card:#fff;--line:#e7e5e0;--grid:#eeece7;--ink:#1b1b1a;--muted:#8a8780;--green:#3f9a5b;--yellow:#d9a92c;--red:#cf4b45;--c-old:#9ca3af;--c-mid:#476ba3;--c-cur:#bf6a48;--serif:Georgia,"Times New Roman",serif;--sans:"Avenir Next",Avenir,"Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 var(--sans)}
 .page{max-width:1400px;margin:0 auto;padding:24px}
@@ -16,49 +16,91 @@ body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 var(--sans)}
 .tile.sm{width:28px;height:28px;border-radius:7px}
 .tile.blank{border:1px solid var(--line);background:#fff}
 .notice{background:#fff7e0;border:1px solid #ecd9a0;border-radius:8px;padding:8px 12px;margin-bottom:16px;font-size:13px}
+.insight{margin:0 0 16px;padding:10px 14px;background:#fff;border:1px solid var(--line);border-left:3px solid var(--c-cur);border-radius:8px;font-size:15px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px 24px;margin-bottom:20px}
 .card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
 h2{font:400 22px/1.2 var(--serif);margin:0 0 8px}
-.sub{color:var(--muted);font-size:13px;margin:0 0 18px;max-width:1100px}
+.sub{color:var(--muted);font-size:13px;margin:0 0 10px;max-width:1100px}
+.how{margin:0 0 16px;max-width:1100px;font-size:13px}
+.how summary{display:inline-block;cursor:pointer;color:#2b3350;list-style:none;border:1px solid #cfd3e0;background:#f1f3f9;border-radius:6px;padding:4px 12px;font-weight:600}
+.how summary:hover{background:#e7ebf5}
+.how summary::-webkit-details-marker{display:none}
+.how summary::before{content:"\25B8\00a0"}
+.how[open] summary::before{content:"\25BE\00a0"}
+.how p{margin:6px 0 0;color:#55534e}
 .toggle{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex:none}
 .toggle button{border:0;background:#fff;color:var(--muted);font:inherit;padding:6px 14px;cursor:pointer}
 .toggle button[aria-pressed="true"]{background:#000;color:#fff}
+button:focus-visible,summary:focus-visible{outline:2px solid var(--c-mid);outline-offset:2px}
 .empty{color:var(--muted);padding:24px 0;margin:0}
 table{width:100%;border-collapse:collapse}
 th{font-weight:400;color:var(--muted);text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
-td{padding:10px;border-bottom:1px solid var(--line);vertical-align:middle;position:relative}
+td{padding:10px;border-bottom:1px solid var(--line);vertical-align:middle;position:relative;transition:background-color .15s}
 tr:last-child td{border-bottom:0}
+tr[data-d]{cursor:pointer}
+tr.sel td{background:#f3efe7}
 .num{text-align:right;font-variant-numeric:tabular-nums}
 th.num{text-align:right}
 td.idx{color:var(--muted);width:36px}
 td.total{font-weight:600}
-tr.tier td{background:#faf9f6;color:var(--muted);font-size:12px;letter-spacing:.06em;text-transform:uppercase;padding:6px 10px}
-.bank{display:flex;align-items:center;gap:10px;outline:0}
-.bank .n{font-weight:500}
+td.part{color:var(--muted);font-style:italic}
+th small{font-size:11px;font-style:italic}
+td.chg{animation:flash .8s ease-out}
+tr.tier td{background:#faf9f6;color:var(--muted);font-size:12px;letter-spacing:.06em;text-transform:uppercase;padding:6px 10px;cursor:default}
+.bank{display:flex;align-items:center;gap:10px;border:0;background:none;padding:0;font:inherit;color:inherit;text-align:left;cursor:pointer}
+.bank .n{display:block;font-weight:500}
+.bank .grey{display:block}
 .grey{color:var(--muted);font-size:13px}
 .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;vertical-align:baseline}
 .strong{background:var(--green)}.moderate{background:var(--yellow)}.weak{background:var(--red)}
-td.hov{outline:0}
-.pop{display:none;position:absolute;left:10px;top:100%;z-index:10;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);padding:12px 14px;min-width:260px;font-size:13px;white-space:normal}
-td.hov:hover>.pop,td.hov:focus-within>.pop,td.hov:focus>.pop{display:block}
-.pop table{width:auto}
-.pop th,.pop td{padding:4px 8px;border-bottom:1px solid var(--grid);font-size:12px;white-space:nowrap}
+.pop{display:none;z-index:10;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);padding:12px 14px;min-width:260px;font-size:13px;white-space:normal}
 .pop .row{margin:0 0 4px}
-.legend{display:flex;gap:18px;margin-top:8px;color:var(--muted);font-size:13px}
+.tip{position:fixed;left:0;top:0;min-width:0;max-width:320px;pointer-events:none;z-index:50}
+.tip.show{display:block}
+.tip .row:last-child{margin-bottom:0}
+.legend{display:flex;flex-wrap:wrap;align-items:center;gap:6px 18px;margin-top:4px;color:var(--muted);font-size:13px;min-height:24px}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px}
+.scale{margin-left:auto;font-size:12px}
+.note{margin:10px 0 0}
+.legend i.partial-swatch{background:var(--c-mid);opacity:.55;border:1px dashed var(--c-mid)}
+.lg{border:0;background:none;font:inherit;color:inherit;padding:2px 4px;border-radius:4px;cursor:pointer}
+.lg[aria-pressed="false"]{opacity:.45;text-decoration:line-through}
+.lg.clear{color:#2b3350;text-decoration:underline}
 svg{display:block;width:100%;height:auto;font-family:var(--sans)}
 svg text{fill:var(--muted);font-size:12px}
-svg .val{fill:#7b7870;font-size:11px}
+svg .val{fill:#7b7870;font-size:11px;pointer-events:none}
+.bar{cursor:pointer;transition:filter .15s}
+.bar:hover{filter:brightness(1.1)}
+.bar.part{opacity:.55;stroke:var(--c-mid);stroke-dasharray:3 2}
+.bar:focus{outline:0}
+.bar:focus-visible{stroke:#000;stroke-width:2;stroke-dasharray:none}
+.bar.zero{fill:transparent}
+.grp{transition:opacity .2s}
+.tier-card[hidden]{display:none}
+.has-sel .grp{opacity:.22}
+.has-sel .grp.on{opacity:1}
+.grp.on .lbl{font-weight:600;fill:var(--ink)}
+#overlay rect{pointer-events:none;animation:grow .35s ease-out both}
+.bar,#overlay rect{transform-box:fill-box;transform-origin:50% 100%}
+.enter .bar{animation:grow .6s cubic-bezier(.2,.7,.2,1) both;animation-delay:calc(var(--d,0) * 1ms)}
+.enter .val{animation:fade .4s ease-out .45s both}
+@keyframes grow{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+@keyframes flash{from{background:#fbeede}to{background:transparent}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none !important;transition:none !important}}
 </style>
 </head>
 <body>
 <div class="page">
  <div class="brand" id="brand"></div>
  <div id="notice"></div>
+ <p class="insight" id="insight" hidden></p>
  <section class="card" id="card-table"></section>
- <section class="card" id="card-years"></section>
+ <section class="card tier-card" id="card-years-1"></section>
+ <section class="card tier-card" id="card-years-2"></section>
  <section class="card" id="card-months"></section>
 </div>
+<div id="tip" class="pop tip" role="tooltip"></div>
 <script type="application/json" id="tracker-data">
 {
  "tenant": {
@@ -4323,7 +4365,25 @@ svg .val{fill:#7b7870;font-size:11px}
   var data = JSON.parse(document.getElementById('tracker-data').textContent);
   var COLORS = ['var(--c-old)', 'var(--c-mid)', 'var(--c-cur)'];
   var STRENGTH = { strong: 'Strong', moderate: 'Moderate', weak: 'Weak' };
-  var selectedYear = data.window.to;
+  var MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  var REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var cy = data.window.to, cm = +data.asOf.slice(5, 7);
+  // The asOf month is partial unless asOf is its last day. Year-over-year comparisons use complete months only.
+  var doneM = +data.asOf.slice(8, 10) >= new Date(Date.UTC(cy, cm, 0)).getUTCDate() ? cm : cm - 1;
+  var partialM = cm - doneM;
+  // The quarter of asOf is partial unless its last month is complete.
+  var partialQ = partialM === 0 && cm % 3 === 0 ? -1 : Math.floor((cm - 1) / 3);
+  // bank is a domain; a pinned bank stays until cleared, a previewed one follows the pointer or focus.
+  var state = { year: cy, hidden: {}, bank: null, pinned: false };
+  // Final quarter and total values of the table as drawn, keyed "domain|column".
+  var shown = {};
+  var monthGeo = null;
+
+  // Deals created in the selected year grade the column: the first band whose minimum is met wins.
+  var VOLUME_BANDS = [{ min: 6, key: 'strong' }, { min: 3, key: 'moderate' }, { min: 0, key: 'weak' }];
+  // Growth is only quoted for banks with at least this many deals in the earlier period.
+  var MIN_BASE = 5;
+  var CHOICES = 'A deal counts for a bank when the deal’s bank field (for example Mandate) names it, in the month the deal was created.';
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -4332,9 +4392,13 @@ svg .val{fill:#7b7870;font-size:11px}
   }
   function el(id) { return document.getElementById(id); }
   function utc(iso) { return new Date(iso.length === 10 ? iso + 'T00:00:00Z' : iso); }
+  // MM/DD/YY from the UTC date of an ISO string.
   function fmtDate(iso) {
-    return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeZone: 'UTC' }).format(utc(iso));
+    var p = iso.slice(0, 10).split('-');
+    return p[1] + '/' + p[2] + '/' + p[0].slice(2);
   }
+  function deals(n) { return n + (n === 1 ? ' deal' : ' deals'); }
+  function signed(n) { return n > 0 ? '+' + n : n < 0 ? '-' + (-n) : '0'; }
 
   // Years newest first, from window.to down to window.from.
   function yearsOf(d) {
@@ -4355,9 +4419,14 @@ svg .val{fill:#7b7870;font-size:11px}
     });
     return q;
   }
-  function byYear(row, year) {
-    return byQuarter(row, year).reduce(function (a, b) { return a + b; }, 0);
+  // Deals of one year from January up to month `last`.
+  function sumMonths(row, year, last) {
+    return row.dealsByMonth.reduce(function (a, e) {
+      return e.month.slice(0, 4) === String(year) && +e.month.slice(5, 7) <= last ? a + e.count : a;
+    }, 0);
   }
+  // The current year runs only to the asOf month.
+  function toDate(row, year) { return sumMonths(row, year, year === cy ? cm : 12); }
   // Months from January of window.from up to the asOf month.
   function drawnMonths(d) {
     var out = [], last = d.asOf.slice(0, 7);
@@ -4372,6 +4441,9 @@ svg .val{fill:#7b7870;font-size:11px}
   function tierOf(row) {
     return (data.tiers['1'] || []).indexOf(row.adviser.domain) >= 0 ? 1 : 2;
   }
+  function rowOf(domain) {
+    return data.rows.filter(function (r) { return r.adviser.domain === domain; })[0];
+  }
   // The image when a data URI exists, else an empty bordered tile of the same size.
   function logoTile(logo, cls) {
     var c = 'tile ' + (cls || '');
@@ -4380,14 +4452,8 @@ svg .val{fill:#7b7870;font-size:11px}
     }
     return '<span class="' + c + ' blank"></span>';
   }
-  function money(f) {
-    if (f.currency == null) return new Intl.NumberFormat().format(f.amount) + ' (currency not recorded)';
-    return new Intl.NumberFormat(undefined, { style: 'currency', currency: f.currency, maximumFractionDigits: 0 }).format(f.amount);
-  }
-  // One amount per currency, never summed.
-  function formatFees(row) {
-    if (row.fees && row.fees.length) return row.fees.map(money).join(' · ');
-    return row.feeUnavailableReason || 'No fees recorded';
+  function volumeStrength(n) {
+    return VOLUME_BANDS.filter(function (b) { return n >= b.min; })[0].key;
   }
   function dot(strength) { return '<span class="dot ' + esc(strength) + '"></span>'; }
   function niceMax(v) {
@@ -4404,20 +4470,86 @@ svg .val{fill:#7b7870;font-size:11px}
     }
     return s;
   }
-  function legend(items) {
-    return '<div class="legend">' + items.map(function (i) {
-      return '<span><i style="background:' + i[1] + '"></i>' + esc(i[0]) + '</span>';
-    }).join('') + '</div>';
-  }
-  function head(title, sub, extra) {
-    return '<div class="card-head"><div><h2>' + esc(title) + '</h2><p class="sub">' + esc(sub) + '</p></div>' + (extra || '') + '</div>';
+  function head(title, sub, how, extra) {
+    return '<div class="card-head"><div><h2>' + esc(title) + '</h2><p class="sub">' + esc(sub) + '</p>' +
+      '<details class="how"><summary>How to read this</summary><p>' + esc(how) + '</p></details></div>' + (extra || '') + '</div>';
   }
   function emptyLine() {
     return '<p class="empty">No adviser data to show yet.</p>';
   }
   function asOfText() { return fmtDate(data.asOf); }
   function source() {
-    return 'Carta CRM, ' + data.tenant.name + ' tenant, as of ' + asOfText() + '. ' + data.window.to + ' runs to ' + asOfText() + '.';
+    return 'Carta CRM, ' + data.tenant.name + ', as of ' + asOfText() + '. ' + cy + ' runs to ' + asOfText() + '.';
+  }
+
+  // Tooltip text. One source for the hover panel and the aria-label of a bar.
+  function change(cur, prev) {
+    return prev ? signed(cur - prev) + ' (' + signed(Math.round((cur - prev) / prev * 100)) + '%)' : 'no deals before, so no change to show';
+  }
+  // Year over year compares whole years, or for the current year its complete months only.
+  function yearTip(row, y) {
+    var n = toDate(row, y), lines = [];
+    if (y === cy) lines.push('YTD to ' + asOfText() + (partialM ? ', the last month is partial' : ''));
+    if (y > data.window.from) {
+      var last = y === cy ? doneM : 12, prev = sumMonths(row, y - 1, last);
+      if (!last) {
+        lines.push('No complete month yet to compare');
+      } else {
+        var span = last === 12 ? 'full year' : last === 1 ? 'Jan' : 'Jan to ' + MON[last - 1];
+        lines.push('Compared on ' + span + ': ' + sumMonths(row, y, last) + ' vs ' + prev + ' in ' + (y - 1) + ', ' + change(sumMonths(row, y, last), prev));
+      }
+    }
+    return { title: row.adviser.name + ', ' + y + ': ' + deals(n) + ' created', lines: lines };
+  }
+  function isPartial(k) { return partialM > 0 && k === data.asOf.slice(0, 7); }
+  function monthTip(k) {
+    var total = 0, list = [], lines = [];
+    data.rows.forEach(function (r) {
+      var n = byMonth(r)[k] || 0;
+      total += n;
+      if (n) list.push([r.adviser.name, n]);
+    });
+    list.sort(function (a, b) { return b[1] - a[1]; });
+    if (isPartial(k)) lines.push('Partial month, to ' + asOfText());
+    list.slice(0, 3).forEach(function (e) { lines.push(e[0] + ': ' + e[1]); });
+    if (state.bank) {
+      var sel = rowOf(state.bank);
+      lines.push('Highlighted, ' + sel.adviser.name + ': ' + (byMonth(sel)[k] || 0));
+    }
+    return {
+      title: MON[+k.slice(5, 7) - 1] + ' ' + k.slice(0, 4) + ': ' + deals(total) + ' created across the ' + data.rows.length + ' banks shown',
+      lines: lines
+    };
+  }
+  function tipOf(d) {
+    return d.kind === 'y' ? yearTip(data.rows[+d.i], +d.y) : monthTip(d.m);
+  }
+  function labelOf(d) {
+    var t = tipOf(d);
+    return [t.title].concat(t.lines).join('. ');
+  }
+  // A bar with no deals keeps a transparent hit area so it still takes hover and focus.
+  function barTag(d, attrs, x, y, w, h, fill, delay) {
+    var zero = h <= 0;
+    return '<rect class="bar' + (zero ? ' zero' : '') + (d.kind === 'm' && isPartial(d.m) ? ' part' : '') + '" tabindex="0" role="img" aria-label="' +
+      esc(labelOf(d)) + '" data-kind="' + d.kind + '" ' + attrs + ' x="' + x + '" y="' + (zero ? y - 14 : y) + '" width="' + w + '" height="' + (zero ? 14 : h) +
+      '" style="' + (zero ? '' : 'fill:' + fill + ';') + '--d:' + delay + '"/>';
+  }
+
+  function headline() {
+    var top = null, topN = 0, grow = null;
+    data.rows.forEach(function (r) {
+      var n = toDate(r, cy), cur = sumMonths(r, cy, doneM), prev = sumMonths(r, cy - 1, doneM);
+      if (n > topN) { top = r; topN = n; }
+      // Complete months only. Small bases would swing too far on one deal.
+      if (cy > data.window.from && prev >= MIN_BASE && (!grow || (cur - prev) / prev > grow.pct)) grow = { r: r, pct: (cur - prev) / prev };
+    });
+    var parts = [];
+    if (top) parts.push(top.adviser.name + ' brought the most deals in ' + cy + ' (' + topN + ')');
+    if (grow && grow.pct > 0) {
+      parts.push(grow.r.adviser.name + ' grew fastest year over year (+' + Math.round(grow.pct * 100) + '%, Jan to ' + MON[doneM - 1] + ' ' + cy + ' against ' + (cy - 1) + ', among banks with ' + MIN_BASE + ' or more deals then)');
+    }
+    return parts.join('; ');
   }
 
   function renderHeader() {
@@ -4426,29 +4558,48 @@ svg .val{fill:#7b7870;font-size:11px}
   function renderNotice() {
     el('notice').innerHTML = data.notice ? '<div class="notice">' + esc(data.notice) + '</div>' : '';
   }
+  function renderInsight() {
+    var text = headline();
+    el('insight').hidden = !text;
+    el('insight').textContent = text;
+  }
 
   function bankCell(r) {
     var a = r.adviser;
-    return '<td class="hov" tabindex="0"><div class="bank">' + logoTile(a.logo, 'sm') +
-      '<div><div class="n">' + esc(a.name) + '</div><div class="grey">' + esc(a.domain) + '</div></div></div>' +
-      '<div class="pop"><p class="row"><b>Fees</b> ' + esc(formatFees(r)) + '</p>' +
-      '<p class="row"><b>Notes</b> ' + esc(r.notesCount) + '</p></div></td>';
+    return '<td><button type="button" class="bank" aria-pressed="false">' + logoTile(a.logo, 'sm') +
+      '<span><span class="n">' + esc(a.name) + '</span><span class="grey">' + esc(a.domain) + '</span></span></button></td>';
   }
-  function matrixPanel(rel) {
-    if (!rel.matrix || !rel.matrix.length) return '<div class="pop"><span class="grey">No interactions recorded</span></div>';
-    return '<div class="pop"><table><tr><th>Teammate</th><th>Contact</th><th class="num">Interactions</th><th>Last</th><th></th></tr>' +
-      rel.matrix.map(function (m) {
-        return '<tr><td>' + esc(m.teammate.name) + '</td><td>' + esc(m.contact.name) + '</td><td class="num">' +
-          esc(m.interactions) + '</td><td>' + esc(fmtDate(m.lastInteraction)) + '</td><td>' + dot(m.strength) + '</td></tr>';
-      }).join('') + '</table></div>';
+  function numCell(domain, col, v, cls) {
+    return '<td class="num ' + cls + (isPartialCol(col) ? ' part" title="Partial, to ' + asOfText() : '') + '" data-k="' + esc(domain) + '|' + col + '" data-v="' + v + '">' + v + '</td>';
   }
+  // Only the quarter of asOf in the current year is partial.
+  function isPartialCol(col) { return state.year === cy && col === partialQ; }
   function dataRow(r, i, year) {
-    var q = byQuarter(r, year), rel = r.relationship, tc = rel.topContact;
-    return '<tr><td class="idx">' + i + '</td>' + bankCell(r) +
-      q.map(function (n) { return '<td class="num">' + n + '</td>'; }).join('') +
-      '<td class="num total">' + byYear(r, year) + '</td>' +
-      '<td class="hov" tabindex="0">' + dot(rel.strength) + esc(STRENGTH[rel.strength] || rel.strength) + matrixPanel(rel) + '</td>' +
+    var q = byQuarter(r, year), rel = r.relationship, tc = rel.topContact, d = r.adviser.domain;
+    var total = q.reduce(function (a, b) { return a + b; }, 0), band = volumeStrength(total);
+    return '<tr data-d="' + esc(d) + '"><td class="idx">' + i + '</td>' + bankCell(r) +
+      q.map(function (n, c) { return numCell(d, c, n, ''); }).join('') +
+      numCell(d, 4, total, 'total') +
+      '<td>' + dot(band) + esc(STRENGTH[band]) + '</td>' +
       '<td>' + (tc ? '<div>' + esc(tc.name) + '</div><div class="grey">' + esc(tc.interactions) + ' interactions</div>' : '<span class="grey">No contact</span>') + '</td></tr>';
+  }
+  // Quarter and total cells count from the value shown before to the new one.
+  function animateCells(card, from) {
+    if (REDUCED) return;
+    var items = [];
+    card.querySelectorAll('td[data-k]').forEach(function (c) {
+      var f = from[c.dataset.k], v = +c.dataset.v;
+      if (f != null && f !== v) { items.push([c, f, v]); c.textContent = f; c.classList.add('chg'); }
+    });
+    if (!items.length) return;
+    var t0 = null;
+    function step(t) {
+      if (t0 == null) t0 = t;
+      var p = Math.min(1, (t - t0) / 400), e = 1 - Math.pow(1 - p, 3);
+      items.forEach(function (i) { i[0].textContent = Math.round(i[1] + (i[2] - i[1]) * e); });
+      if (p < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
   }
   function renderTable(year) {
     var toggle = '<div class="toggle" role="group" aria-label="Year">' + yearsOf(data).map(function (y) {
@@ -4456,90 +4607,263 @@ svg .val{fill:#7b7870;font-size:11px}
     }).join('') + '</div>';
     var sub = 'Deals created per quarter of the selected year, per bank. ' + source() +
       ' Top contact is the person with the most emails and meetings with anyone on our team.';
+    var how = CHOICES + ' The current quarter is partial and shows only the days so far. ' +
+      'Relationship strength is the deal volume of the selected year: Strong is ' + VOLUME_BANDS[0].min + ' or more deals, Moderate is ' + VOLUME_BANDS[1].min + ' to ' + (VOLUME_BANDS[0].min - 1) + ', Weak is fewer. ' +
+      'Tier 1 and Tier 2 are Claude’s judgement from the deals a bank brings and its relationship strength. ' +
+      'Click a bank to follow it through both charts. Click it again or press Escape to clear.';
     var body;
     if (!data.rows.length) {
       body = emptyLine();
     } else {
       var n = 0;
-      body = '<table><thead><tr><th>#</th><th>Investment bank</th><th class="num">Q1</th><th class="num">Q2</th><th class="num">Q3</th><th class="num">Q4</th>' +
-        '<th class="num">Year total</th><th>Relationship strength</th><th>Top contact</th></tr></thead><tbody>';
+      var cols = [0, 1, 2, 3].map(function (c) {
+        return '<th class="num">Q' + (c + 1) + (isPartialCol(c) ? ' <small>partial</small>' : '') + '</th>';
+      }).join('');
+      body = '<table><thead><tr><th>#</th><th>Investment bank</th>' + cols +
+        '<th class="num">Year total' + (state.year === cy ? ' <small>YTD</small>' : '') + '</th><th>Relationship strength</th><th>Top contact</th></tr></thead><tbody>';
       [1, 2].forEach(function (t) {
-        var rs = data.rows.filter(function (r) { return tierOf(r) === t; });
+        var rs = rankTier(data.rows.filter(function (r) { return tierOf(r) === t; }), year);
         if (!rs.length) return;
         body += '<tr class="tier"><td colspan="9">Tier ' + t + '</td></tr>';
         rs.forEach(function (r) { body += dataRow(r, ++n, year); });
       });
       body += '</tbody></table>';
+      if (partialQ >= 0 && year === cy) body += '<p class="grey note">Q' + (partialQ + 1) + ' is partial: it runs to ' + asOfText() + '.</p>';
     }
-    var card = el('card-table');
-    card.innerHTML = head(data.title, sub, toggle) + body;
+    var card = el('card-table'), from = shown;
+    card.innerHTML = head(data.title, sub, how, toggle) + body;
+    shown = {};
+    card.querySelectorAll('td[data-k]').forEach(function (c) { shown[c.dataset.k] = +c.dataset.v; });
     card.querySelectorAll('[data-year]').forEach(function (b) {
-      b.addEventListener('click', function () { selectedYear = +b.getAttribute('data-year'); renderTable(selectedYear); });
+      b.addEventListener('click', function () { state.year = +b.getAttribute('data-year'); renderTable(state.year); paint(); });
     });
+    animateCells(card, from);
   }
 
-  // Two lines under each group when they fit, else one rotated line.
+  // At most two centred lines that fit the group width. A line that still does not fit ends in an ellipsis.
   function bankLabel(name, cx, y, gw) {
-    if (gw < 70) {
-      return '<text x="' + cx + '" y="' + y + '" text-anchor="end" transform="rotate(-35 ' + cx + ' ' + y + ')">' + esc(name) + '</text>';
-    }
-    var words = name.split(' '), half = Math.ceil(words.length / 2);
-    return '<text text-anchor="middle"><tspan x="' + cx + '" y="' + y + '">' + esc(words.slice(0, half).join(' ')) +
-      '</tspan><tspan x="' + cx + '" y="' + (y + 15) + '">' + esc(words.slice(half).join(' ')) + '</tspan></text>';
-  }
-  function renderYearChart() {
-    var ys = yearsOf(data).slice().reverse(), cur = ys[ys.length - 1];
-    var sub = 'Deals created per bank, year over year. ' + source();
-    var html = head('Deals by bank, year over year', sub);
-    if (!data.rows.length) { el('card-years').innerHTML = html + emptyLine(); return; }
-    var W = 1100, H = 380, L = 90, R = 10, T = 16, B = 100, n = data.rows.length;
-    var max = 0;
-    data.rows.forEach(function (r) { ys.forEach(function (y) { max = Math.max(max, byYear(r, y)); }); });
-    max = niceMax(max);
-    var gw = (W - L - R) / n, bw = Math.min(18, gw * 0.8 / ys.length), svg = gridlines(T, H - B, L, W - R, max);
-    data.rows.forEach(function (r, i) {
-      var x0 = L + gw * i + (gw - bw * ys.length) / 2;
-      ys.forEach(function (y, k) {
-        var v = byYear(r, y), h = (H - B - T) * v / max, x = x0 + bw * k;
-        svg += '<rect x="' + x + '" y="' + (H - B - h) + '" width="' + (bw - 1) + '" height="' + h + '" style="fill:' + COLORS[k + COLORS.length - ys.length] + '"/>' +
-          (v ? '<text class="val" x="' + (x + (bw - 1) / 2) + '" y="' + (H - B - h - 4) + '" text-anchor="middle">' + v + '</text>' : '');
-      });
-      var cx = L + gw * i + gw / 2;
-      svg += bankLabel(r.adviser.name, cx, H - B + 16, gw);
+    var max = Math.max(6, Math.floor((gw - 6) / 5.6)), lines = [''];
+    name.split(' ').forEach(function (w) {
+      var cur = lines[lines.length - 1];
+      if (cur && (cur + ' ' + w).length > max && lines.length < 2) lines.push(w);
+      else lines[lines.length - 1] = cur ? cur + ' ' + w : w;
     });
-    var items = ys.map(function (y, k) { return [y === cur ? y + ' (YTD)' : String(y), COLORS[k + COLORS.length - ys.length]]; });
-    el('card-years').innerHTML = html + '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Deals by bank, year over year">' + svg + '</svg>' + legend(items);
+    return '<text class="lbl" text-anchor="middle">' + lines.map(function (l, k) {
+      return '<tspan x="' + cx + '" y="' + (y + k * 15) + '">' + esc(l.length > max ? l.slice(0, max - 1) + '…' : l) + '</tspan>';
+    }).join('') + '</text>';
+  }
+  // The newest year takes the last colour.
+  function colorOf(y) {
+    return COLORS[Math.max(0, y - data.window.from + COLORS.length - yearsOf(data).length)];
+  }
+  // Each tier card fills its width with its own scale, shown on its axis.
+  function yearScaleMax(rows) {
+    var max = 0;
+    rows.forEach(function (r) { yearsOf(data).forEach(function (y) { max = Math.max(max, toDate(r, y)); }); });
+    // A multiple of four so the four axis steps are whole numbers.
+    return Math.max(4, Math.ceil(max / 4) * 4);
+  }
+  // Highest deals in `year` first, then highest across all years.
+  function rankTier(rows, year) {
+    function total(r) { return yearsOf(data).reduce(function (a, y) { return a + toDate(r, y); }, 0); }
+    return rows.slice().sort(function (a, b) { return toDate(b, year) - toDate(a, year) || total(b) - total(a); });
+  }
+  function renderTierChart(t) {
+    var card = el('card-years-' + t);
+    var rows = rankTier(data.rows.filter(function (r) { return tierOf(r) === t; }), cy);
+    card.hidden = !rows.length && !(t === 1 && !data.rows.length);
+    var all = yearsOf(data).slice().reverse();
+    var ys = all.filter(function (y) { return !state.hidden[y]; });
+    var sub = 'Deals created per bank in Tier ' + t + ', year over year. ' + source();
+    var how = CHOICES + ' Each group is one bank and each bar is one year. ' + cy + ' runs to ' + asOfText() + ', so its bar is year to date. ' +
+      'Each tier card has its own scale, so compare bars within a card. Hover or focus a bar for the change against the same complete months a year earlier. Click a year in the legend to hide it.';
+    var html = head('Tier ' + t + ': deals by bank, year over year', sub, how);
+    if (!data.rows.length) { card.innerHTML = html + emptyLine(); return; }
+    if (card.hidden) return;
+    var W = 1100, L = 44, R = 10, T = 20, PH = 300, B = 46, n = rows.length, max = yearScaleMax(rows);
+    var gw = (W - L - R) / n, bw = gw * 0.84 / ys.length, base = T + PH, H = base + B;
+    var svg = gridlines(T, base, L, W - R, max);
+    rows.forEach(function (r, k) {
+      var i = data.rows.indexOf(r), x0 = L + gw * k + (gw - bw * ys.length) / 2, g = '';
+      ys.forEach(function (y, j) {
+        var v = toDate(r, y), h = PH * v / max, x = x0 + bw * j;
+        g += barTag({ kind: 'y', i: i, y: y }, 'data-i="' + i + '" data-y="' + y + '"', x, base - h, bw - 1.5, h, colorOf(y), k * 40) +
+          (v ? '<text class="val" x="' + (x + (bw - 1.5) / 2) + '" y="' + (base - h - 4) + '" text-anchor="middle">' + v + '</text>' : '');
+      });
+      g += bankLabel(r.adviser.name, L + gw * k + gw / 2, base + 18, gw);
+      svg += '<g class="grp" data-d="' + esc(r.adviser.domain) + '">' + g + '</g>';
+    });
+    var legend = '<div class="legend">' + all.map(function (y) {
+      return '<button type="button" class="lg" data-leg="' + y + '" aria-pressed="' + !state.hidden[y] + '"><i style="background:' + colorOf(y) + '"></i>' +
+        (y === cy ? y + ' (YTD)' : y) + '</button>';
+    }).join('') + '<span class="scale">Scale 0 to ' + max + ', set for this card</span></div>';
+    card.innerHTML = html + '<svg viewBox="0 0 ' + W + ' ' + H + '" role="group" aria-label="Tier ' + t + ': deals by bank, year over year">' + svg + '</svg>' + legend;
+  }
+  function renderYearCharts(enter) {
+    [1, 2].forEach(renderTierChart);
+    if (enter) document.querySelectorAll('.tier-card svg').forEach(function (v) { v.classList.add('enter'); });
+  }
+  function toggleYear(y, cardId) {
+    var visible = yearsOf(data).filter(function (v) { return !state.hidden[v]; });
+    if (!state.hidden[y] && visible.length === 1) return;
+    state.hidden[y] = !state.hidden[y];
+    renderYearCharts(false);
+    paint();
+    el(cardId).querySelector('[data-leg="' + y + '"]').focus();
   }
 
-  function renderMonthChart() {
+  function renderMonthChart(enter) {
     var months = drawnMonths(data);
     var sub = 'Total deals created per month across all banks. ' + source();
-    var html = head('Deals created per month, last ' + (data.window.to - data.window.from + 1) + ' years', sub);
-    if (!data.rows.length) { el('card-months').innerHTML = html + emptyLine(); return; }
+    var how = CHOICES + ' Each bar is all deals in that month across the banks shown. The last bar is a partial month, drawn lighter. Hover or focus a bar to see the top three banks that month. ' +
+      'Click a bank in the table to lay its own months over the bars.';
+    var html = head('Deals created per month, last ' + (data.window.to - data.window.from + 1) + ' years', sub, how);
+    if (!data.rows.length) { el('card-months').innerHTML = html + emptyLine(); monthGeo = null; return; }
     var maps = data.rows.map(byMonth);
     var totals = months.map(function (k) { return maps.reduce(function (a, m) { return a + (m[k] || 0); }, 0); });
     var W = 1100, H = 320, L = 40, R = 10, T = 16, B = 36, max = niceMax(Math.max.apply(null, totals));
     var gw = (W - L - R) / months.length, bw = gw * 0.7, svg = gridlines(T, H - B, L, W - R, max);
-    var mon = new Intl.DateTimeFormat(undefined, { month: 'short', timeZone: 'UTC' });
+    monthGeo = { months: months, L: L, gw: gw, bw: bw, base: H - B, ph: H - B - T, max: max };
     months.forEach(function (k, i) {
-      var h = (H - B - T) * totals[i] / max, x = L + gw * i + (gw - bw) / 2;
-      svg += '<rect x="' + x + '" y="' + (H - B - h) + '" width="' + bw + '" height="' + h + '" style="fill:' + COLORS[1] + '"/>' +
+      var h = monthGeo.ph * totals[i] / max, x = L + gw * i + (gw - bw) / 2;
+      svg += barTag({ kind: 'm', m: k }, 'data-m="' + k + '"', x, H - B - h, bw, h, COLORS[1], i * 12) +
         (totals[i] ? '<text class="val" x="' + (x + bw / 2) + '" y="' + (H - B - h - 4) + '" text-anchor="middle">' + totals[i] + '</text>' : '');
       if ((+k.slice(5, 7) - 1) % 3 === 0) {
-        svg += '<text x="' + (x + bw / 2) + '" y="' + (H - B + 18) + '" text-anchor="middle">' +
-          esc(mon.format(new Date(k + '-01T00:00:00Z')) + " '" + k.slice(2, 4)) + '</text>';
+        svg += '<text x="' + (x + bw / 2) + '" y="' + (H - B + 18) + '" text-anchor="middle">' + MON[+k.slice(5, 7) - 1] + " '" + k.slice(2, 4) + '</text>';
       }
     });
-    el('card-months').innerHTML = html + '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Deals created per month">' + svg + '</svg>' +
-      legend([['Total, all ' + data.rows.length + ' banks', COLORS[1]]]);
+    el('card-months').innerHTML = html + '<svg class="' + (enter ? 'enter' : '') + '" viewBox="0 0 ' + W + ' ' + H +
+      '" role="group" aria-label="Deals created per month">' + svg + '<g id="overlay"></g></svg><div class="legend" id="month-legend"></div>';
+  }
+
+  // Highlight changes only toggle classes and rebuild the overlay, so no chart is redrawn.
+  function paint() {
+    var d = state.bank, sel = d ? rowOf(d) : null;
+    document.querySelectorAll('tr[data-d]').forEach(function (tr) {
+      tr.classList.toggle('sel', tr.dataset.d === d);
+      tr.querySelector('.bank').setAttribute('aria-pressed', String(state.pinned && tr.dataset.d === d));
+    });
+    document.querySelectorAll('.tier-card svg').forEach(function (svg) {
+      svg.classList.toggle('has-sel', !!sel);
+      svg.querySelectorAll('.grp').forEach(function (g) { g.classList.toggle('on', g.dataset.d === d); });
+    });
+    if (!monthGeo) return;
+    var g = monthGeo, over = '';
+    if (sel) {
+      var m = byMonth(sel);
+      g.months.forEach(function (k, i) {
+        var n = m[k] || 0;
+        if (!n) return;
+        var h = g.ph * n / g.max;
+        over += '<rect x="' + (g.L + g.gw * i + (g.gw - g.bw) / 2 + g.bw * 0.2) + '" y="' + (g.base - h) + '" width="' + (g.bw * 0.6) + '" height="' + h + '" style="fill:' + COLORS[2] + '"/>';
+      });
+    }
+    el('overlay').innerHTML = over;
+    el('month-legend').innerHTML = '<span><i style="background:' + COLORS[1] + '"></i>Total, all ' + data.rows.length + ' banks</span>' +
+      (partialM ? '<span><i class="partial-swatch"></i>Partial month, to ' + asOfText() + '</span>' : '') +
+      (sel ? '<span><i style="background:' + COLORS[2] + '"></i>' + esc(sel.adviser.name) + '</span><button type="button" class="lg clear" data-clear>Clear</button>' : '');
+    el('card-months').querySelectorAll('.bar').forEach(function (b) { b.setAttribute('aria-label', labelOf(b.dataset)); });
+  }
+  var unpreview = null;
+  function preview(domain) {
+    clearTimeout(unpreview);
+    if (state.pinned || state.bank === domain) return;
+    state.bank = domain;
+    paint();
+  }
+  // Clearing waits briefly, so moving to a sibling bar of the same bank does not repaint the highlight.
+  function previewSoon() {
+    clearTimeout(unpreview);
+    unpreview = setTimeout(function () { preview(null); }, 80);
+  }
+  function pin(domain) {
+    var same = state.pinned && state.bank === domain;
+    state.pinned = !same;
+    state.bank = same ? null : domain;
+    paint();
+  }
+  function clear() {
+    state.pinned = false;
+    state.bank = null;
+    paint();
+  }
+
+  var tip = el('tip');
+  function showTip(bar) {
+    var t = tipOf(bar.dataset);
+    tip.innerHTML = '<p class="row"><b>' + esc(t.title) + '</b></p>' + t.lines.map(function (l) { return '<p class="row">' + esc(l) + '</p>'; }).join('');
+    tip.classList.add('show');
+    var r = bar.getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight;
+    var top = r.top - h - 8;
+    if (top < 8) top = Math.min(r.bottom + 8, window.innerHeight - h - 8);
+    tip.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, r.left + r.width / 2 - w / 2)) + 'px';
+    tip.style.top = top + 'px';
+  }
+  function hideTip() { tip.classList.remove('show'); }
+  function closest(node, sel) { return node && node.closest ? node.closest(sel) : null; }
+  function barBank(bar) { return bar.dataset.kind === 'y' ? data.rows[+bar.dataset.i].adviser.domain : null; }
+  var HOVERABLE = '.bar, tr[data-d]';
+
+  function bind() {
+    var page = document.querySelector('.page');
+    page.addEventListener('mouseover', function (e) {
+      var t = closest(e.target, HOVERABLE);
+      if (!t) return;
+      if (t.classList.contains('bar')) {
+        showTip(t);
+        if (barBank(t)) preview(barBank(t));
+      } else {
+        preview(t.dataset.d);
+      }
+    });
+    page.addEventListener('mouseout', function (e) {
+      var from = closest(e.target, HOVERABLE);
+      if (!from || from === closest(e.relatedTarget, HOVERABLE)) return;
+      if (from.classList.contains('bar')) hideTip();
+      previewSoon();
+    });
+    page.addEventListener('focusin', function (e) {
+      var b = closest(e.target, '.bar');
+      if (!b) return;
+      showTip(b);
+      if (barBank(b)) preview(barBank(b));
+    });
+    page.addEventListener('focusout', function (e) {
+      if (!closest(e.target, '.bar')) return;
+      hideTip();
+      previewSoon();
+    });
+    page.addEventListener('click', function (e) {
+      var t = e.target, leg = closest(t, '[data-leg]'), b = closest(t, '.bar'), tr = closest(t, 'tr[data-d]');
+      if (leg) toggleYear(+leg.dataset.leg, closest(leg, '.card').id);
+      else if (closest(t, '[data-clear]')) clear();
+      else if (b && barBank(b)) pin(barBank(b));
+      else if (tr) pin(tr.dataset.d);
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') { hideTip(); clear(); return; }
+      var b = closest(e.target, '.bar');
+      if (!b) return;
+      if ((e.key === 'Enter' || e.key === ' ') && barBank(b)) {
+        e.preventDefault();
+        pin(barBank(b));
+      } else if (/^Arrow(Right|Left|Down|Up)$/.test(e.key)) {
+        var bars = [].slice.call(b.closest('svg').querySelectorAll('.bar'));
+        var next = bars[bars.indexOf(b) + (/Right|Down/.test(e.key) ? 1 : -1)];
+        if (next) { e.preventDefault(); next.focus(); }
+      }
+    });
   }
 
   function render() {
     renderHeader();
     renderNotice();
-    renderTable(selectedYear);
-    renderYearChart();
-    renderMonthChart();
+    renderInsight();
+    renderTable(state.year);
+    renderYearCharts(true);
+    renderMonthChart(true);
+    bind();
+    paint();
   }
   render();
 })();
