@@ -59,6 +59,8 @@ allowed-tools:
   - 'Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/parse_coa_mapping.py" *)'
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/save_query_result.py *)
   - 'Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/save_query_result.py" *)'
+  - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/record_mapping.py *)
+  - 'Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/record_mapping.py" *)'
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/serve.py *)
   - 'Bash(python3 "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/serve.py" *)'
   - Bash(nohup python3 ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/serve.py *)
@@ -68,7 +70,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.71.14</carta-plugin>
+<carta-plugin>carta-investors:6.71.15</carta-plugin>
 
 # ManCo Reporting Dashboard
 
