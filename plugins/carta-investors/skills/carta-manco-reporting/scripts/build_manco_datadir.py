@@ -1096,31 +1096,74 @@ def read_entity_roster(raw_dir):
 
 
 # A fund's series suffix, which is the whole of what tells two funds of one
-# family apart: "Fund III" from "Fund II", "IV" from "I".
-_FUND_SERIES_RX = re.compile(r"\b([IVXL]+|\d+)\b\s*(?:,|$|\s)", re.IGNORECASE)
+# family apart: "Fund III" from "Fund II", "IV" from "I". A sibling line
+# tacks text straight onto the series with no space — a parallel vehicle
+# ("VII-A") or a side pocket named in words ("VII - Entrepreneurs Fund") —
+# so the terminator accepts a bare "-" as well as a comma, space or the
+# end of the name.
+_FUND_SERIES_RX = re.compile(r"\b([IVXL]+|\d+)\b\s*(?:,|$|\s|-)", re.IGNORECASE)
+
+
+def _fund_series_info(name):
+    """The legal-suffix-free name, its series, and any text tacked after it.
+
+    All three come from one parse so the shorthand pattern below and the
+    tie-break in `infer_fund_from_memo` always agree on what counts as a
+    "sibling suffix": text left over after the series itself, once
+    trailing legal boilerplate (", L.P.") is gone. "Fund VII" leaves
+    nothing; "Fund VII-A" leaves "-A"; "Fund VII - Entrepreneurs Fund"
+    leaves "- Entrepreneurs Fund".
+    """
+    bare = _FUND_LEGAL_SUFFIX_RX.sub("", name or "").strip(" ,")
+    m = list(_FUND_SERIES_RX.finditer(bare + " "))
+    if not m:
+        return bare, None, ""
+    last = m[-1]
+    return bare, last.group(1), bare[last.end(1):].strip()
+
+
+def _flex_suffix_pattern(raw_tail):
+    """`raw_tail` as a regex, tolerant of the spacing around its own "-".
+
+    "-A" and " - A" and "-  A" all name the same sibling, so the hyphen
+    matches with slack on either side while every other character stays
+    literal.
+    """
+    parts = re.split(r"(\s*-\s*|\s+)", raw_tail)
+    out = []
+    for p in parts:
+        if not p:
+            continue
+        elif p.strip() == "-":
+            out.append(r"\s*-\s*")
+        elif p.isspace():
+            out.append(r"\s+")
+        else:
+            out.append(re.escape(p))
+    return "".join(out)
 
 
 def _memo_fund_patterns(name):
     """The ways a journal memo might name this fund, most specific first.
 
     A memo rarely repeats a fund's legal name. It writes the series ("Fund
-    III"), or the house shorthand ("UVFIII") — initials of the name's own
-    words with the series appended. Both are derived from the roster name,
-    so no firm's vocabulary is hardcoded.
+    III"), the house shorthand ("UVFIII") — initials of the name's own
+    words with the series appended — or, for a sibling line, the series
+    plus its own suffix ("Fund VII-A"). All three are derived from the
+    roster name, so no firm's vocabulary is hardcoded.
     """
-    bare = _FUND_LEGAL_SUFFIX_RX.sub("", name or "").strip(" ,")
+    bare, series, raw_tail = _fund_series_info(name)
     words = [w for w in re.findall(r"[A-Za-z0-9]+", bare)]
     if not words:
         return []
-    series = None
-    m = list(_FUND_SERIES_RX.finditer(bare + " "))
-    if m:
-        series = m[-1].group(1)
     pats = [re.escape(bare)]
     if series:
         initials = "".join(w[0] for w in words if w.lower() != series.lower())
         pats.append(re.escape(f"{initials}{series}"))
         pats.append(r"fund\s+" + re.escape(series))
+        if raw_tail:
+            sep = "" if raw_tail.startswith("-") else r"\s+"
+            pats.append(r"fund\s+" + re.escape(series) + sep + _flex_suffix_pattern(raw_tail))
     return pats
 
 
@@ -1129,16 +1172,38 @@ def infer_fund_from_memo(descr, candidates):
 
     `candidates` is [(uuid, name)]. Longest match wins, so "Fund III"
     never resolves as "Fund I": a shorter series is only accepted when no
-    longer one matches the same text.
+    longer one matches the same text. A bare series ("Fund VII") matches
+    every sibling in that family equally, since none of them write a
+    suffix the memo didn't — among those equal-length ties, the fund
+    whose own name carries no sibling suffix wins, since the memo names
+    only what a suffix-free fund is. A tie left standing after that (no
+    suffix-free fund, or more than one) is not guessed at: no fund is
+    named, and the line surfaces as a question instead.
     """
     text = f" {(descr or '')} "
-    best = None
+    best_len = 0
+    tied = []
     for uuid, name in candidates:
+        _, _, raw_tail = _fund_series_info(name)
+        matched_len = 0
         for pat in _memo_fund_patterns(name):
             m = re.search(rf"(?<![A-Za-z0-9]){pat}(?![A-Za-z0-9])", text, re.IGNORECASE)
-            if m and (best is None or len(m.group(0)) > best[2]):
-                best = (uuid, name, len(m.group(0)))
-    return (best[0], best[1]) if best else None
+            if m and len(m.group(0)) > matched_len:
+                matched_len = len(m.group(0))
+        if matched_len == 0:
+            continue
+        if matched_len > best_len:
+            best_len = matched_len
+            tied = [(uuid, name, bool(raw_tail))]
+        elif matched_len == best_len:
+            tied.append((uuid, name, bool(raw_tail)))
+    if len(tied) == 1:
+        return tied[0][0], tied[0][1]
+    if len(tied) > 1:
+        no_suffix = [t for t in tied if not t[2]]
+        if len(no_suffix) == 1:
+            return no_suffix[0][0], no_suffix[0][1]
+    return None
 
 
 # Only digits behind ACCOUNT or a "**" mask. A bare number is a document id
@@ -2158,6 +2223,55 @@ def read_budget_mapping(dashboard_dir):
         return (json.loads(path.read_text()).get("rows") or {})
     except Exception:
         return {}
+
+
+def read_fund_attribution(dashboard_dir):
+    """Operator overrides for which fund a fee line's memo names.
+
+    Shares `budget-mapping.json` with `read_budget_mapping`, under its own
+    top-level key so the two never collide:
+
+        {"fund_attribution": {"by_id":   {"<gluuid or id>": "<fund_uuid>"},
+                               "by_memo": {"<memo text, exact>": "<fund_uuid>"}}}
+
+    `infer_fund_from_memo` reads a memo; it does not read an operator's
+    mind. A tie it can't break, or a memo it can't parse at all, is
+    answered here instead of by hand-editing the raw fetch — that hand
+    edit is invisible on the next rebuild, this is not. `by_id` forces one
+    journal entry; `by_memo` forces every entry carrying that exact
+    description, which is how one wording shared by many lines (a
+    migrated year, a lump transfer) is fixed in a single answer.
+    """
+    path = Path(dashboard_dir) / "budget-mapping.json"
+    if not path.exists():
+        return {"by_id": {}, "by_memo": {}}
+    try:
+        fa = json.loads(path.read_text()).get("fund_attribution") or {}
+    except Exception:
+        return {"by_id": {}, "by_memo": {}}
+    return {"by_id": fa.get("by_id") or {}, "by_memo": fa.get("by_memo") or {}}
+
+
+def resolve_fund_attribution(row, candidates, overrides):
+    """Which fund a fee line names: an operator's override first, else its
+    memo.
+
+    The single place `_named_fund` and `_manco_fund` both call, so the
+    override and the memo tie-break never drift into two answers for the
+    same line.
+    """
+    by_id = (overrides or {}).get("by_id") or {}
+    by_memo = (overrides or {}).get("by_memo") or {}
+    names = dict(candidates)
+    key = row.get("gluuid") or row.get("id")
+    if key is not None and str(key) in by_id:
+        uuid = by_id[str(key)]
+        return uuid, names.get(uuid)
+    descr = row.get("descr")
+    if descr and descr in by_memo:
+        uuid = by_memo[descr]
+        return uuid, names.get(uuid)
+    return infer_fund_from_memo(descr, candidates)
 
 
 def row_address(row):
@@ -4535,6 +4649,8 @@ def build(args):
     _memo_candidates = [(v["uuid"], v["name"]) for v in roster.values()
                         if v.get("uuid") and v.get("name")]
     roster_name_by_uuid = dict(_memo_candidates)
+    # An operator's answer for a line the memo ties or can't name at all.
+    _fund_overrides = read_fund_attribution(dashboard)
 
     def _keyed_fund(row):
         """The fund a ManCo fee line names outright, through its key."""
@@ -4547,7 +4663,8 @@ def build(args):
     def _named_fund(row):
         """The fund a line names by key or in words, before any account."""
         return _keyed_fund(row) or (
-            infer_fund_from_memo(row.get("descr"), _memo_candidates) or (None,))[0]
+            resolve_fund_attribution(row, _memo_candidates, _fund_overrides)
+            or (None,))[0]
 
     # Learned from the lines that name a fund, then read back onto those that
     # do not: a fee wired from a fund's own account was that fund's fee.
@@ -4558,7 +4675,7 @@ def build(args):
         uuid = _keyed_fund(row)
         if uuid:
             return uuid, roster_name_by_uuid.get(uuid), False
-        hit = infer_fund_from_memo(row.get("descr"), _memo_candidates)
+        hit = resolve_fund_attribution(row, _memo_candidates, _fund_overrides)
         if hit:
             return hit[0], hit[1], True
         for acct in memo_bank_accounts(row.get("descr")):
