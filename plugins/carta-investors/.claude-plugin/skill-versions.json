@@ -1,7 +1,7 @@
 {
   "carta-home-build": {
-    "version": "1.15.4",
-    "headline": "Capital call and distribution details load their investor list again, instead of showing \"Partner rows failed to load\"."
+    "version": "1.15.5",
+    "headline": "The capital activity popup fits long payout statuses such as \"Pending authorization\" in the Status column."
   },
   "carta-workhub-build": {
     "version": "1.9.14",

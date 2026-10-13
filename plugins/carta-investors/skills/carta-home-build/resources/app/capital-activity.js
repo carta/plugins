@@ -399,6 +399,17 @@ function rowMenuCellInner(r, activityId) {
       onclick="toggleCaRowMenu(this)">&#8943;</button>`;
 }
 
+// A payout label the column cannot fit is ellipsized (see `.ca-status`), so the
+// pill carries the whole label as its tooltip.
+function caStatusBadge(r) {
+  if (r.awaitingRecon) return `<span class="ca-status ca-status-paid"
+    title="The payout went out, but the row has not been reconciled yet.">Paid · not reconciled</span>`;
+  if (r.paymentStatus === 'paid')           return `<span class="ca-status ca-status-paid">Paid</span>`;
+  if (r.paymentStatus === 'partially_paid') return `<span class="ca-status ca-status-partial">Partial</span>`;
+  const label = escHtml(r.statusLabel ?? 'Unpaid');
+  return `<span class="ca-status ca-status-unpaid" title="${label}">${label}</span>`;
+}
+
 async function openCapActivityDetail(activityId, fundName, typeLabel, dueDate, totalAmt = 0, fundUuid = '') {
   trackHome("click", "CartaHome.CapActivity.ViewDetail");
   // Build or reuse overlay
@@ -445,14 +456,6 @@ async function openCapActivityDetail(activityId, fundName, typeLabel, dueDate, t
   const totalReceived = rows.reduce((s, r) => s + r.amountReceived, 0);
   const totalPending  = rows.reduce((s, r) => s + r.amountPending, 0);
 
-  const statusBadge = (r) => {
-    if (r.awaitingRecon) return `<span class="ca-status ca-status-paid"
-      title="The payout went out, but the row has not been reconciled yet.">Paid · not reconciled</span>`;
-    if (r.paymentStatus === 'paid')           return `<span class="ca-status ca-status-paid">Paid</span>`;
-    if (r.paymentStatus === 'partially_paid') return `<span class="ca-status ca-status-partial">Partial</span>`;
-    return `<span class="ca-status ca-status-unpaid">${escHtml(r.statusLabel ?? 'Unpaid')}</span>`;
-  };
-
   body.innerHTML = `
     <div class="ca-detail-summary">
       <div class="ca-detail-stat"><span class="ca-detail-stat-val">${fmtFull(totalOwed)}</span><span class="ca-detail-stat-lbl">Net Amount</span></div>
@@ -461,7 +464,7 @@ async function openCapActivityDetail(activityId, fundName, typeLabel, dueDate, t
       ${isCall ? `<span class="ca-notify-slot" id="ca-notify-slot">${bulkRemindCta(activityId, rows)}</span>` : ''}
     </div>
     <div class="ca-detail-table-wrap">
-      <table class="ca-detail-table">
+      <table class="ca-detail-table${isCall ? '' : ' ca-detail-table-dist'}">
         <thead>
           <tr>
             <th class="ca-th-name">Partner</th>
@@ -489,7 +492,7 @@ async function openCapActivityDetail(activityId, fundName, typeLabel, dueDate, t
             return `<tr class="ca-detail-row ca-row-${r.paymentStatus}">
               <td class="ca-td-name">${escHtml(r.partnerName)}</td>
               <td class="ca-td-amount">${fmtFull(r.amount)}</td>
-              <td class="ca-td-status">${statusBadge(r)}</td>
+              <td class="ca-td-status">${caStatusBadge(r)}</td>
               <td class="ca-td-date">${dateCell}</td>
               ${remindCell}
               ${menuCell}

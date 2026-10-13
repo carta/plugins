@@ -715,7 +715,7 @@
       border: 1px solid var(--ink-color-global-border-subtle);
       border-radius: var(--ink-size-global-radius-default);
       box-shadow: var(--ink-elevation-global-shadow-large);
-      width: min(560px, 92vw); max-height: 80vh;
+      width: min(640px, 92vw); max-height: 80vh;
       display: flex; flex-direction: column; overflow: hidden;
     }
     .ca-detail-header {
@@ -778,6 +778,11 @@
     .ca-th-date    { width: 15%; }
     .ca-th-remind  { width: 18%; }
     .ca-th-actions { width: 7%; }
+    /* A distribution has no remind or menu column, so Status takes the room a
+       payout label such as "Pending authorization" needs. */
+    .ca-detail-table-dist .ca-th-amount { width: 19%; }
+    .ca-detail-table-dist .ca-th-status { width: 30%; }
+    .ca-detail-table-dist .ca-th-date   { width: 13%; }
     /* The selection table's two extra columns. */
     .ca-th-check    { width: 6%; }
     .ca-th-reminded { width: 18%; }
@@ -797,6 +802,9 @@
     .ca-status {
       font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
       padding: 2px 6px; border-radius: var(--ink-size-global-radius-subtle); line-height: 1.4; display: inline-block;
+      /* On a panel too narrow for the label, ellipsize inside the cell rather
+         than paint over the Date column. */
+      max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle;
     }
     .ca-status-unpaid  { background: var(--ink-color-global-feedback-negative-subtle); color: var(--ca-unpaid); }
     .ca-status-partial { background: var(--ink-color-global-feedback-warning-subtle); color: var(--ca-partial); }
