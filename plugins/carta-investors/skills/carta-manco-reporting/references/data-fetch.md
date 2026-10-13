@@ -463,7 +463,8 @@ S="${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/save_query_result.
 R="<raw_dir>"
 <UV_BIN> run "$S" --from-session "FUND_UUID = '<MANCO_UUID>'" \
             --from-session 'ACCOUNT_TYPE >= 5000'        "$R/je-expense-page1.txt" &
-<UV_BIN> run "$S" --from-session 'ACCOUNT_TYPE >= 4000'        "$R/je-income.txt" &
+<UV_BIN> run "$S" --from-session 'ACCOUNT_TYPE >= 4000' \
+            --from-session 'ORDER BY EFFECTIVE_DATE, ACCOUNT_TYPE, JOURNAL_ENTRY_LINE_ID' "$R/je-income.txt" &
 <UV_BIN> run "$S" --from-session "FUND_UUID != '<MANCO_UUID>'" "$R/fund-fees.txt" &
 <UV_BIN> run "$S" --from-session 'related_entity_id'           "$R/manco-fee-income.txt" &
 <UV_BIN> run "$S" --from-session 'DISTINCT ACCOUNT_TYPE'          "$R/accounts-all.txt" &  # only if Step 2.6 skipped it
@@ -484,7 +485,13 @@ recent match wins. One needle is rarely enough: `ACCOUNT_TYPE >= 5000` reads
 like Query A but names Query C as well, and `FUND_UUID = '<MANCO_UUID>'`
 names Query A and Query B — either one alone writes another query's rows
 into the file, and the dashboard renders them without complaint. Query A
-therefore takes both. The script warns when more than one call matched;
+therefore takes both. `ACCOUNT_TYPE >= 4000` alone has the same gap against
+Query G: both filter on `ACCOUNT_TYPE >= 4000 AND ACCOUNT_TYPE < 5000`, so
+whichever of the two answered last is written to je-income.txt. Query B
+shares Query A's `ORDER BY EFFECTIVE_DATE, ACCOUNT_TYPE,
+JOURNAL_ENTRY_LINE_ID` and Query G orders `yr DESC, EFFECTIVE_DATE, …`
+instead, so the `>= 4000` filter plus that ORDER BY names Query B only.
+Neither string is enough alone. The script warns when more than one call matched;
 treat that warning as a failed save and re-run with another needle. For a
 pagination page, add its offset: `--from-session 'OFFSET 1000'`.
 
