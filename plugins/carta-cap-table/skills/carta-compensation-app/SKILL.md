@@ -67,7 +67,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.96.3</carta-plugin>
+<carta-plugin>carta-cap-table:6.96.5</carta-plugin>
 
 <!-- [PATTERN carta-writing-style v0.0.2] [PATTERN etiquette v0.0.6] [PATTERN text v0.0.8] [PATTERN tables v0.0.12] [PATTERN carta-watermark v0.0.10] [PATTERN base v0.1.0] -->
 
@@ -277,7 +277,7 @@ last `__`. Examples: `mcp__carta__welcome` → `carta`; `mcp__carta-prod__welcom
 - **Exactly one:** call `mcp__<SERVER>__welcome` to verify. This is `<SERVER>`.
 - **Multiple:** ask via `AskUserQuestion`. Default to `carta` (production) if present.
 
-**Don't call any other `mcp__<SERVER>__*` tool before `welcome`** — every other command is gated.
+**Don't call any other `mcp__<SERVER>__*` tool before `welcome`** — the server instructions require `welcome` as the first call.
 
 **Classify the environment from `<SERVER>`'s name.** A name containing `test`/`sandbox`/`demo`/
 `preprod`/`preproduction` (case-insensitive) → `cartaEnvironment = "nonprod"`. Everything else —

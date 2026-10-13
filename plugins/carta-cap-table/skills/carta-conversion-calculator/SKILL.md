@@ -30,7 +30,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.96.3</carta-plugin>
+<carta-plugin>carta-cap-table:6.96.5</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 
@@ -83,7 +83,11 @@ read_tool({"name": "cap_table__get__cap_table_by_share_class", "arguments": {"co
 read_tool({"name": "cap_table__get__409a_valuations", "arguments": {"corporation_id": corporation_id}})
 ```
 
-- Convertible notes: SAFEs + notes (filter to `status_explanation: "Outstanding"`)
+- Convertible notes: SAFEs + notes (filter to `status_explanation: "Outstanding"`). The response holds one page of rows. While `has_next` is `true`, call again with the `page` and `page_size` from `next`, and add the `instruments` of each page:
+  ```
+  read_tool({"name": "cap_table__get__convertible_notes", "arguments": {"corporation_id": corporation_id, "detail": "full", "page": <next.page>, "page_size": <next.page_size>}})
+  ```
+  `count`, `active_count`, `total_invested`, `by_status` and `by_type` cover only one page. Calculate totals from the rows of all pages.
 - Cap table by share class: get current fully diluted share count from `totals.total_fully_diluted`
 - 409A valuations: current FMV for context
 
