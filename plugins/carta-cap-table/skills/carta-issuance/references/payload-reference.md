@@ -38,7 +38,7 @@ Contents: [Common fields](#common-fields-all-flows) ·
 | Field | Required | Type / format | Notes |
 |---|---|---|---|
 | `prefix` | always | string (1–10 chars) | Share-class prefix. **NOT `share_class` / `shareClass` / `share_class_id`** |
-| `quantity` | always | positive number | Read the class's `quantity_semantics` — see [PBO quantity](#pbo-quantity) |
+| `quantity` | always, except on an `INVESTED_CAPITAL` class | positive number | Read the class's `quantity_semantics` — see [PBO quantity](#pbo-quantity) |
 | `law_firm_price` | paid issuances | decimal | Up to 50 decimal places. `0` allowed for LLC corporations (rejected with *"Value must be greater than 0"* for non-LLC corps) |
 | `legend_id` | US issuers | int | **Never send `legend` body** |
 | `exemption` | US issuers | enum | Default `Section 4(a)(2)` |
@@ -65,8 +65,11 @@ ownership (PBO) issuance.
 | `quantity_semantics` | `quantity` |
 |---|---|
 | `PERCENT` | Percentage points, 0 to 100, at most 12 decimal places. `2.75` is 2.75%. `0` is valid. Never convert it to a share count |
-| `INVESTED_CAPITAL` | Optional. Invested capital sets the ownership, so omit it unless the user gives one |
+| `INVESTED_CAPITAL` | Never sent — omit the key, even when the user gives one. Invested capital sets the ownership and carta-web stores the quantity as null; a stored one reads as a unit count |
 | `UNIT`, or no key | A positive count of shares or units, as before |
+
+Each row reads its own class, so one draft set can mix `UNIT` and `PERCENT` rows. Option
+grants have no share class and are always `UNIT`.
 
 On a `PERCENT` or `INVESTED_CAPITAL` class, `authorized` and `available` do not limit the
 issuance. Do not add percentages to unit counts.
@@ -104,7 +107,7 @@ issuance. Do not add percentages to unit counts.
 | Field | Required | Type / format | Notes |
 |---|---|---|---|
 | `prefix` | always | string (1–10 chars) | The **unit class** prefix. **NOT `share_class` / `share_class_id`** |
-| `quantity` | always | positive number | Read the class's `quantity_semantics` — see [PBO quantity](#pbo-quantity) |
+| `quantity` | always, except on an `INVESTED_CAPITAL` class | positive number | Read the class's `quantity_semantics` — see [PBO quantity](#pbo-quantity) |
 | `threshold_value` | always | decimal ≥ 0, ≤ 12 dp | The value the unit shares above. **Never defaulted** — a `0` is valid and must survive |
 | `threshold_value_type` | always | enum | `Unit` or `Overall` only — see [Picklists](#picklists) |
 | `exemption` | always | enum | Unconditionally required, unlike a certificate's. Default `Section 4(a)(2)` |

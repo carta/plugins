@@ -216,5 +216,5 @@ Every link above builds on `BASE_URL` — the `base_url` from `get_current_user`
 test session links into the environment it actually wrote to. `security_type` in a Drafts-UI
 path is the literal mutate value (`certificate`, `option_grant` or `piu`).
 
-To **correct** an issued certificate, grant or unit afterward, that's
-`carta-modify-issuables`.
+To **correct** an issued certificate or grant afterward, that's
+`carta-modify-issuables`. It does not handle PIUs — send those to the Carta app.

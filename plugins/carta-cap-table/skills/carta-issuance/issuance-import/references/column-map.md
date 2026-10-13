@@ -31,7 +31,7 @@ Synonyms beyond those two are the obvious hand-rolled variants (`Grantee`,
 | Email · Email Address · Stakeholder Email · Work Email | `email` |
 | Relationship · Relationship To Company · Issue Date Relationship | `relationship` |
 | Holder Type · Stakeholder Type · Entity Type · Individual Or Non Individual | `stakeholder_kind` |
-| Quantity · Shares · Number Of Shares · Share Quantity · Options · Number Of Options · Units · Amount | `quantity` |
+| Quantity · Shares · Number Of Shares · Share Quantity · Options · Number Of Options · Units · Amount | `quantity` — an `Amount` header against a class resolved to `INVESTED_CAPITAL` produces an import note instead of a silent mapping; that class computes ownership from invested capital, not a unit count |
 | Notes · Note · Comment · Comments | `notes` |
 | Board Approval Date · Board Approved · Board Approval · Board Consent Date | `board_approval_date` |
 | Vesting Schedule · Vesting · Vesting Template | `vesting_template_id` *(resolved)* |

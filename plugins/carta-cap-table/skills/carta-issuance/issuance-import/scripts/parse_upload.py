@@ -362,6 +362,17 @@ def map_headers(header_row: Sequence[Any]) -> Tuple[Dict[int, str], List[str]]:
     return mapping, unmapped
 
 
+def _quantity_header_is_amount(header_row: Sequence[Any], mapping: Dict[int, str]) -> bool:
+    """True when the column mapped to `quantity` was literally headed "Amount"
+    — the header a user reaches for when a column holds invested capital
+    rather than a unit count (column-map.md)."""
+    for i, field in mapping.items():
+        if field == "quantity":
+            label = header_row[i] if i < len(header_row) else None
+            return _norm(label) == "amount"
+    return False
+
+
 # ── Value coercion ──
 
 def _text(value: Any) -> str:
@@ -872,6 +883,7 @@ def parse_file(path: Path, sheet: Optional[str] = None) -> Parsed:
         )
 
     target, header_idx, mapping, unmapped, security_type = candidates[0]
+    quantity_is_amount = _quantity_header_is_amount(target.rows[header_idx], mapping)
     rows: List[Dict[str, Any]] = []
     skipped: List[Dict[str, Any]] = []
     plan_names: List[str] = []
@@ -889,6 +901,12 @@ def parse_file(path: Path, sheet: Optional[str] = None) -> Parsed:
             })
             continue
         row = build_row(record, security_type)
+        # Staged like the other pre-resolution names: resolve() checks it against
+        # the row's share class and turns it into a note, or drops it unused.
+        if security_type in ("certificate", "piu") and quantity_is_amount:
+            raw_qty = _text(_cell(record, "quantity"))
+            if raw_qty:
+                row["_quantity_from_amount"] = raw_qty
         if not any(_text(v) for k, v in row.items() if k != "import_notes"):
             skipped.append({"row": line, "name": "",
                             "reason": "No usable values in this row."})
@@ -1028,6 +1046,16 @@ def resolve(parsed: Parsed, reference: Dict[str, Any]) -> Parsed:
                       "the {} {!r} is expired — pick another".format(label, raw))
                 continue
             _resolved(row, field, str(value))
+            if staged == "_share_class_prefix":
+                amount_raw = row.pop("_quantity_from_amount", None)
+                if amount_raw and record.get("quantity_semantics") == "INVESTED_CAPITAL":
+                    _note(row, "quantity", amount_raw,
+                          "this class computes ownership from invested capital — the "
+                          "sheet's \"Amount\" column isn't used as a quantity here")
+
+        # Still set when the class match above failed or was never staged —
+        # drop it rather than leak an internal key into the output.
+        row.pop("_quantity_from_amount", None)
 
         name = row.get("name")
         if name:
@@ -1180,6 +1208,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                     if raw:
                         _note(row, staged[1:], raw,
                               "couldn't check this {} against the company — pick one".format(label))
+                row.pop("_quantity_from_amount", None)
 
         knowns_path = _write(args.out_dir, "_import_knowns.json", build_import_knowns(parsed))
         report_path = _write(args.out_dir, "_import_report.json", build_report(parsed))

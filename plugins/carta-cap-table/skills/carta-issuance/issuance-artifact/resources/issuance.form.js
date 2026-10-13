@@ -934,7 +934,8 @@ function classSemantics(prefix) {
 const rowPrefix = (r) => ("prefix" in r.ov && r.ov.prefix !== "" ? r.ov.prefix : S.shared.prefix);
 /** The quantity is percentage points, 0 to 100: 2.75 is 2.75%. */
 const isPct = (r) => classSemantics(rowPrefix(r)) === "PERCENT";
-/** Invested capital sets the ownership, so the quantity is optional. */
+/** Invested capital sets the ownership, so the row carries no quantity: carta-web stores
+    it as null, and a stored one would read as a unit count. */
 const isCapital = (r) => classSemantics(rowPrefix(r)) === "INVESTED_CAPITAL";
 /** The decimal places carta-web keeps on a percentage. */
 const PCT_DP = 12;
@@ -1899,8 +1900,9 @@ const qtyHead = () => (S.rows.length && S.rows.every(isPct) ? "Ownership %" : RE
 /** "Total" alone when one currency covers the batch, which is the usual case. */
 const totalLabel = (cur, n) => (S.type === "piu" ? (S.rows.length && S.rows.every(isPct) ? "Total ownership" : "Total units")
   : n > 1 ? `Total — ${cur}` : "Total");
-/** Units and percentages never add up to one figure, so each shows on its own. */
-const totalQtyText = (t) => [t.unitRows || !t.pctRows ? t.qty.toLocaleString() : "",
+/** Units and percentages never add up to one figure, so each shows on its own.
+    Percentage rows are kept out of t.qty, so units alone would read 0. */
+const totalQtyText = (t, units = (n) => n.toLocaleString()) => [t.unitRows || !t.pctRows ? units(t.qty) : "",
   t.pctRows ? pctFmt(t.pct) : ""].filter(Boolean).join(" · ");
 /** One row's quantity as a reader sees it. */
 const rowQtyText = (r, q) => (q === "" || q == null || !Number.isFinite(Number(q)) ? "—"
@@ -2496,11 +2498,15 @@ function rowHtml(r, i) {
 
 function qtyCell(r, p) {
   const pct = isPct(r), capital = isCapital(r);
-  const blank = String(r.quantity == null ? "" : r.quantity).trim() === "";
-  const hint = pct ? pctEcho(r.quantity) : capital && blank ? "Optional" : grouped(r.quantity);
+  if (capital) {
+    return fld(`${p}-quantity`, "Quantity",
+      txt(`${p}-quantity`, "", { k: "quantity", scope: p, num: true, dis: true, ph: "—" }),
+      { bare: true, hint: "Set by invested capital", hintCls: "echo" });
+  }
+  const hint = pct ? pctEcho(r.quantity) : grouped(r.quantity);
   return fld(`${p}-quantity`, pct ? "Ownership %" : "Quantity",
     txt(`${p}-quantity`, r.quantity, { k: "quantity", scope: p, num: true, ph: pct ? "%" : "" }),
-    { req: !capital, bare: true, hint, hintCls: "echo" });
+    { req: true, bare: true, hint, hintCls: "echo" });
 }
 
 /** Carta's refusals of this row that no field of the row can carry. */
@@ -2616,7 +2622,7 @@ function validate(write) {
       const dp = (q.split(".")[1] || "").length;
       need(`${p}-quantity`, "an ownership percentage", inRange && dp <= PCT_DP,
         q === "" ? "Enter a percentage" : !inRange ? "Must be between 0 and 100" : `At most ${PCT_DP} decimal places`);
-    } else if (!(isCapital(r) && q === "")) {
+    } else if (!isCapital(r)) {
       need(`${p}-quantity`, "a quantity", q !== "" && Number(q) > 0,
         q === "" ? "Enter a quantity" : "Must be greater than 0");
     }
@@ -2754,7 +2760,7 @@ function rowValues(r) {
   put(d, "name", r.name.trim());
   put(d, "email", r.email.trim());
   put(d, "issue_date_relationship", r.relationship);
-  put(d, "quantity", num(r.quantity));
+  if (!isCapital(r)) put(d, "quantity", num(r.quantity));
   // A grant awaiting board approval has no issue date yet, and the server
   // rejects the row outright if one is sent. Per row: one batch can mix the two.
   const pending = S.type === "option_grant" && g("board_mode") === "pending";
@@ -2911,6 +2917,8 @@ function resumedPayload(r, d) {
     }
   }
   if (out.stakeholder_id == null && knownUnlinked(r)) out.should_validate_duplicate_stakeholder = true;
+  // A draft saved before its class carried invested capital can still hold a quantity.
+  if (isCapital(r) && r.stored && !blankish(r.stored.quantity)) out.quantity = null;
   return out;
 }
 
@@ -3099,10 +3107,10 @@ function issueVerb() {
   return `Issue ${plural(S.rows.length, sing, many)}`;
 }
 
-/** 130,000 options. */
+/** 130,000 options, or 0.13% when the rows are ownership percentages. */
 function totalLine(t) {
   const [one, many] = qtyNoun();
-  return plural(t.qty, one, many);
+  return totalQtyText(t, (n) => plural(n, one, many));
 }
 
 function sheetSummary() {
