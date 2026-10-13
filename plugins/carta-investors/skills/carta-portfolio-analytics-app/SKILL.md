@@ -53,7 +53,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.71.10</carta-plugin>
+<carta-plugin>carta-investors:6.71.12</carta-plugin>
 
 <!-- Carta investor tooling. React app (in-browser JSX transpile) fed by Data Collection KPIs. -->
 
@@ -400,7 +400,7 @@ uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-analytics-app/scripts/serve
   --web-dir "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-analytics-app/webapp" \
   --src-dir "${CLAUDE_PLUGIN_ROOT}/skills/carta-portfolio-analytics-app/app/src" --detach
 ```
-**Only when the session already carries `pk`** from `get_current_user` (a connected Carta MCP has it from bootstrap), append `--user-id <pk>` to the `serve.py` command so telemetry names a real user. Never call the MCP to get it, and never substitute the email or a placeholder.
+Append `--user-id <pk>` to the `serve.py` command so telemetry names a real user. Take `pk` from the `get_current_user` result already in the session (a connected Carta MCP has it from bootstrap); if it isn't there and a Carta MCP is connected, call `get_current_user` once to get it. Without a Carta MCP, omit the flag. Never substitute the email or a placeholder.
 
 Run with **Bash run_in_background**; read the printed `http://127.0.0.1:<port>/?t=<token>`
 (also in `<dashboard_dir>/.port` + `.token`) and give the user that URL.
