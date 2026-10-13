@@ -37,8 +37,7 @@ table{width:100%;border-collapse:collapse}
 th{font-weight:400;color:var(--muted);text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
 td{padding:10px;border-bottom:1px solid var(--line);vertical-align:middle;position:relative;transition:background-color .15s}
 tr:last-child td{border-bottom:0}
-tr[data-d]{cursor:pointer}
-tr.sel td{background:#f3efe7}
+tr[data-d]:hover td{background:#f3efe7}
 .num{text-align:right;font-variant-numeric:tabular-nums}
 th.num{text-align:right}
 td.idx{color:var(--muted);width:36px}
@@ -47,7 +46,7 @@ td.part{color:var(--muted);font-style:italic}
 th small{font-size:11px;font-style:italic}
 td.chg{animation:flash .8s ease-out}
 tr.tier td{background:#faf9f6;color:var(--muted);font-size:12px;letter-spacing:.06em;text-transform:uppercase;padding:6px 10px;cursor:default}
-.bank{display:flex;align-items:center;gap:10px;border:0;background:none;padding:0;font:inherit;color:inherit;text-align:left;cursor:pointer}
+.bank{display:flex;align-items:center;gap:10px;text-align:left}
 .bank .n{display:block;font-weight:500}
 .bank .grey{display:block}
 .grey{color:var(--muted);font-size:13px}
@@ -65,11 +64,10 @@ tr.tier td{background:#faf9f6;color:var(--muted);font-size:12px;letter-spacing:.
 .legend i.partial-swatch{background:var(--c-mid);opacity:.55;border:1px dashed var(--c-mid)}
 .lg{border:0;background:none;font:inherit;color:inherit;padding:2px 4px;border-radius:4px;cursor:pointer}
 .lg[aria-pressed="false"]{opacity:.45;text-decoration:line-through}
-.lg.clear{color:#2b3350;text-decoration:underline}
 svg{display:block;width:100%;height:auto;font-family:var(--sans)}
 svg text{fill:var(--muted);font-size:12px}
 svg .val{fill:#7b7870;font-size:11px;pointer-events:none}
-.bar{cursor:pointer;transition:filter .15s}
+.bar{transition:filter .15s}
 .bar:hover{filter:brightness(1.1)}
 .bar.part{opacity:.55;stroke:var(--c-mid);stroke-dasharray:3 2}
 .bar:focus{outline:0}
@@ -77,11 +75,10 @@ svg .val{fill:#7b7870;font-size:11px;pointer-events:none}
 .bar.zero{fill:transparent}
 .grp{transition:opacity .2s}
 .tier-card[hidden]{display:none}
-.has-sel .grp{opacity:.22}
-.has-sel .grp.on{opacity:1}
-.grp.on .lbl{font-weight:600;fill:var(--ink)}
-#overlay rect{pointer-events:none;animation:grow .35s ease-out both}
-.bar,#overlay rect{transform-box:fill-box;transform-origin:50% 100%}
+/* A mouse click focuses a bar too, so only keyboard focus (:focus-visible) counts, and a click never leaves a highlight behind. */
+svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visible)){opacity:.22}
+.grp:hover .lbl,.grp:has(.bar:focus-visible) .lbl{font-weight:600;fill:var(--ink)}
+.bar{transform-box:fill-box;transform-origin:50% 100%}
 .enter .bar{animation:grow .6s cubic-bezier(.2,.7,.2,1) both;animation-delay:calc(var(--d,0) * 1ms)}
 .enter .val{animation:fade .4s ease-out .45s both}
 @keyframes grow{from{transform:scaleY(0)}to{transform:scaleY(1)}}
@@ -4373,11 +4370,9 @@ svg .val{fill:#7b7870;font-size:11px;pointer-events:none}
   var partialM = cm - doneM;
   // The quarter of asOf is partial unless its last month is complete.
   var partialQ = partialM === 0 && cm % 3 === 0 ? -1 : Math.floor((cm - 1) / 3);
-  // bank is a domain; a pinned bank stays until cleared, a previewed one follows the pointer or focus.
-  var state = { year: cy, hidden: {}, bank: null, pinned: false };
+  var state = { year: cy, hidden: {} };
   // Final quarter and total values of the table as drawn, keyed "domain|column".
   var shown = {};
-  var monthGeo = null;
 
   // Deals created in the selected year grade the column: the first band whose minimum is met wins.
   var VOLUME_BANDS = [{ min: 6, key: 'strong' }, { min: 3, key: 'moderate' }, { min: 0, key: 'weak' }];
@@ -4512,10 +4507,6 @@ svg .val{fill:#7b7870;font-size:11px;pointer-events:none}
     list.sort(function (a, b) { return b[1] - a[1]; });
     if (isPartial(k)) lines.push('Partial month, to ' + asOfText());
     list.slice(0, 3).forEach(function (e) { lines.push(e[0] + ': ' + e[1]); });
-    if (state.bank) {
-      var sel = rowOf(state.bank);
-      lines.push('Highlighted, ' + sel.adviser.name + ': ' + (byMonth(sel)[k] || 0));
-    }
     return {
       title: MON[+k.slice(5, 7) - 1] + ' ' + k.slice(0, 4) + ': ' + deals(total) + ' created across the ' + data.rows.length + ' banks shown',
       lines: lines
@@ -4566,8 +4557,8 @@ svg .val{fill:#7b7870;font-size:11px;pointer-events:none}
 
   function bankCell(r) {
     var a = r.adviser;
-    return '<td><button type="button" class="bank" aria-pressed="false">' + logoTile(a.logo, 'sm') +
-      '<span><span class="n">' + esc(a.name) + '</span><span class="grey">' + esc(a.domain) + '</span></span></button></td>';
+    return '<td><div class="bank">' + logoTile(a.logo, 'sm') +
+      '<span><span class="n">' + esc(a.name) + '</span><span class="grey">' + esc(a.domain) + '</span></span></div></td>';
   }
   function numCell(domain, col, v, cls) {
     return '<td class="num ' + cls + (isPartialCol(col) ? ' part" title="Partial, to ' + asOfText() : '') + '" data-k="' + esc(domain) + '|' + col + '" data-v="' + v + '">' + v + '</td>';
@@ -4610,7 +4601,7 @@ svg .val{fill:#7b7870;font-size:11px;pointer-events:none}
     var how = CHOICES + ' The current quarter is partial and shows only the days so far. ' +
       'Relationship strength is the deal volume of the selected year: Strong is ' + VOLUME_BANDS[0].min + ' or more deals, Moderate is ' + VOLUME_BANDS[1].min + ' to ' + (VOLUME_BANDS[0].min - 1) + ', Weak is fewer. ' +
       'Tier 1 and Tier 2 are Claude’s judgement from the deals a bank brings and its relationship strength. ' +
-      'Click a bank to follow it through both charts. Click it again or press Escape to clear.';
+      'Hover a row to highlight it.';
     var body;
     if (!data.rows.length) {
       body = emptyLine();
@@ -4635,7 +4626,7 @@ svg .val{fill:#7b7870;font-size:11px;pointer-events:none}
     shown = {};
     card.querySelectorAll('td[data-k]').forEach(function (c) { shown[c.dataset.k] = +c.dataset.v; });
     card.querySelectorAll('[data-year]').forEach(function (b) {
-      b.addEventListener('click', function () { state.year = +b.getAttribute('data-year'); renderTable(state.year); paint(); });
+      b.addEventListener('click', function () { state.year = +b.getAttribute('data-year'); renderTable(state.year); });
     });
     animateCells(card, from);
   }
@@ -4708,24 +4699,21 @@ svg .val{fill:#7b7870;font-size:11px;pointer-events:none}
     if (!state.hidden[y] && visible.length === 1) return;
     state.hidden[y] = !state.hidden[y];
     renderYearCharts(false);
-    paint();
     el(cardId).querySelector('[data-leg="' + y + '"]').focus();
   }
 
   function renderMonthChart(enter) {
     var months = drawnMonths(data);
     var sub = 'Total deals created per month across all banks. ' + source();
-    var how = CHOICES + ' Each bar is all deals in that month across the banks shown. The last bar is a partial month, drawn lighter. Hover or focus a bar to see the top three banks that month. ' +
-      'Click a bank in the table to lay its own months over the bars.';
+    var how = CHOICES + ' Each bar is all deals in that month across the banks shown. The last bar is a partial month, drawn lighter. Hover or focus a bar to see the top three banks that month.';
     var html = head('Deals created per month, last ' + (data.window.to - data.window.from + 1) + ' years', sub, how);
-    if (!data.rows.length) { el('card-months').innerHTML = html + emptyLine(); monthGeo = null; return; }
+    if (!data.rows.length) { el('card-months').innerHTML = html + emptyLine(); return; }
     var maps = data.rows.map(byMonth);
     var totals = months.map(function (k) { return maps.reduce(function (a, m) { return a + (m[k] || 0); }, 0); });
     var W = 1100, H = 320, L = 40, R = 10, T = 16, B = 36, max = niceMax(Math.max.apply(null, totals));
     var gw = (W - L - R) / months.length, bw = gw * 0.7, svg = gridlines(T, H - B, L, W - R, max);
-    monthGeo = { months: months, L: L, gw: gw, bw: bw, base: H - B, ph: H - B - T, max: max };
     months.forEach(function (k, i) {
-      var h = monthGeo.ph * totals[i] / max, x = L + gw * i + (gw - bw) / 2;
+      var h = (H - B - T) * totals[i] / max, x = L + gw * i + (gw - bw) / 2;
       svg += barTag({ kind: 'm', m: k }, 'data-m="' + k + '"', x, H - B - h, bw, h, COLORS[1], i * 12) +
         (totals[i] ? '<text class="val" x="' + (x + bw / 2) + '" y="' + (H - B - h - 4) + '" text-anchor="middle">' + totals[i] + '</text>' : '');
       if ((+k.slice(5, 7) - 1) % 3 === 0) {
@@ -4733,59 +4721,10 @@ svg .val{fill:#7b7870;font-size:11px;pointer-events:none}
       }
     });
     el('card-months').innerHTML = html + '<svg class="' + (enter ? 'enter' : '') + '" viewBox="0 0 ' + W + ' ' + H +
-      '" role="group" aria-label="Deals created per month">' + svg + '<g id="overlay"></g></svg><div class="legend" id="month-legend"></div>';
-  }
-
-  // Highlight changes only toggle classes and rebuild the overlay, so no chart is redrawn.
-  function paint() {
-    var d = state.bank, sel = d ? rowOf(d) : null;
-    document.querySelectorAll('tr[data-d]').forEach(function (tr) {
-      tr.classList.toggle('sel', tr.dataset.d === d);
-      tr.querySelector('.bank').setAttribute('aria-pressed', String(state.pinned && tr.dataset.d === d));
-    });
-    document.querySelectorAll('.tier-card svg').forEach(function (svg) {
-      svg.classList.toggle('has-sel', !!sel);
-      svg.querySelectorAll('.grp').forEach(function (g) { g.classList.toggle('on', g.dataset.d === d); });
-    });
-    if (!monthGeo) return;
-    var g = monthGeo, over = '';
-    if (sel) {
-      var m = byMonth(sel);
-      g.months.forEach(function (k, i) {
-        var n = m[k] || 0;
-        if (!n) return;
-        var h = g.ph * n / g.max;
-        over += '<rect x="' + (g.L + g.gw * i + (g.gw - g.bw) / 2 + g.bw * 0.2) + '" y="' + (g.base - h) + '" width="' + (g.bw * 0.6) + '" height="' + h + '" style="fill:' + COLORS[2] + '"/>';
-      });
-    }
-    el('overlay').innerHTML = over;
+      '" role="group" aria-label="Deals created per month">' + svg + '</svg><div class="legend" id="month-legend"></div>';
     el('month-legend').innerHTML = '<span><i style="background:' + COLORS[1] + '"></i>Total, all ' + data.rows.length + ' banks</span>' +
-      (partialM ? '<span><i class="partial-swatch"></i>Partial month, to ' + asOfText() + '</span>' : '') +
-      (sel ? '<span><i style="background:' + COLORS[2] + '"></i>' + esc(sel.adviser.name) + '</span><button type="button" class="lg clear" data-clear>Clear</button>' : '');
+      (partialM ? '<span><i class="partial-swatch"></i>Partial month, to ' + asOfText() + '</span>' : '');
     el('card-months').querySelectorAll('.bar').forEach(function (b) { b.setAttribute('aria-label', labelOf(b.dataset)); });
-  }
-  var unpreview = null;
-  function preview(domain) {
-    clearTimeout(unpreview);
-    if (state.pinned || state.bank === domain) return;
-    state.bank = domain;
-    paint();
-  }
-  // Clearing waits briefly, so moving to a sibling bar of the same bank does not repaint the highlight.
-  function previewSoon() {
-    clearTimeout(unpreview);
-    unpreview = setTimeout(function () { preview(null); }, 80);
-  }
-  function pin(domain) {
-    var same = state.pinned && state.bank === domain;
-    state.pinned = !same;
-    state.bank = same ? null : domain;
-    paint();
-  }
-  function clear() {
-    state.pinned = false;
-    state.bank = null;
-    paint();
   }
 
   var tip = el('tip');
@@ -4801,53 +4740,34 @@ svg .val{fill:#7b7870;font-size:11px;pointer-events:none}
   }
   function hideTip() { tip.classList.remove('show'); }
   function closest(node, sel) { return node && node.closest ? node.closest(sel) : null; }
-  function barBank(bar) { return bar.dataset.kind === 'y' ? data.rows[+bar.dataset.i].adviser.domain : null; }
-  var HOVERABLE = '.bar, tr[data-d]';
 
   function bind() {
     var page = document.querySelector('.page');
     page.addEventListener('mouseover', function (e) {
-      var t = closest(e.target, HOVERABLE);
-      if (!t) return;
-      if (t.classList.contains('bar')) {
-        showTip(t);
-        if (barBank(t)) preview(barBank(t));
-      } else {
-        preview(t.dataset.d);
-      }
+      var bar = closest(e.target, '.bar');
+      if (bar) showTip(bar);
     });
     page.addEventListener('mouseout', function (e) {
-      var from = closest(e.target, HOVERABLE);
-      if (!from || from === closest(e.relatedTarget, HOVERABLE)) return;
-      if (from.classList.contains('bar')) hideTip();
-      previewSoon();
+      var from = closest(e.target, '.bar');
+      if (from && from !== closest(e.relatedTarget, '.bar')) hideTip();
     });
+    // Only keyboard focus shows the panel. A mouse click also focuses a bar and must not pin the panel.
     page.addEventListener('focusin', function (e) {
-      var b = closest(e.target, '.bar');
-      if (!b) return;
-      showTip(b);
-      if (barBank(b)) preview(barBank(b));
+      var bar = closest(e.target, '.bar');
+      if (bar && bar.matches(':focus-visible')) showTip(bar);
     });
     page.addEventListener('focusout', function (e) {
-      if (!closest(e.target, '.bar')) return;
-      hideTip();
-      previewSoon();
+      if (closest(e.target, '.bar')) hideTip();
     });
     page.addEventListener('click', function (e) {
-      var t = e.target, leg = closest(t, '[data-leg]'), b = closest(t, '.bar'), tr = closest(t, 'tr[data-d]');
+      var leg = closest(e.target, '[data-leg]');
       if (leg) toggleYear(+leg.dataset.leg, closest(leg, '.card').id);
-      else if (closest(t, '[data-clear]')) clear();
-      else if (b && barBank(b)) pin(barBank(b));
-      else if (tr) pin(tr.dataset.d);
     });
     document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape') { hideTip(); clear(); return; }
+      if (e.key === 'Escape') { hideTip(); return; }
       var b = closest(e.target, '.bar');
       if (!b) return;
-      if ((e.key === 'Enter' || e.key === ' ') && barBank(b)) {
-        e.preventDefault();
-        pin(barBank(b));
-      } else if (/^Arrow(Right|Left|Down|Up)$/.test(e.key)) {
+      if (/^Arrow(Right|Left|Down|Up)$/.test(e.key)) {
         var bars = [].slice.call(b.closest('svg').querySelectorAll('.bar'));
         var next = bars[bars.indexOf(b) + (/Right|Down/.test(e.key) ? 1 : -1)];
         if (next) { e.preventDefault(); next.focus(); }
@@ -4863,7 +4783,6 @@ svg .val{fill:#7b7870;font-size:11px;pointer-events:none}
     renderYearCharts(true);
     renderMonthChart(true);
     bind();
-    paint();
   }
   render();
 })();
