@@ -21,6 +21,17 @@
                 ]
             }
         ],
+        "PostModelSwitch": [
+            {
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/dispatch.sh\" capture-model-switch",
+                        "timeout": 8
+                    }
+                ]
+            }
+        ],
         "PreToolUse": [
             {
                 "matcher": "Skill",
