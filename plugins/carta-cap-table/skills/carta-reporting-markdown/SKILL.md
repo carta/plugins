@@ -9,29 +9,33 @@ description: >-
 model: sonnet
 allowed-tools:
   - AskUserQuestion
-  - Bash(find * -name "report_processor.py"*)
-  - Bash(find ~ -name "report_processor.py"*)
-  - Bash(UV_PYTHON_DOWNLOADS=never uv run*)
+  - Bash(UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_processor.py" *)
   - Skill(carta-cap-table:carta-reporting-excel)
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.96.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.96.2</carta-plugin>
 
 # Transform Configuration
 
-Called from `carta-reporting` step 4d (Claude Code / MARKDOWN path). Use values resolved earlier in this session: data file path, `corporation_id`, `user_report_pk`, and `_report_processor_path` (the script path the parent skill resolved once — reuse it instead of re-running `find`).
+Called from `carta-reporting` step 4d (Claude Code / MARKDOWN path). Use values resolved earlier in this session: data file path, `corporation_id`, `user_report_pk`. The script lives at `${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_processor.py`; never search for it. Run it only in the one-line form below, as its own command: a heredoc, a pipe or a chained command needs approval every time.
 
 ## Schema Preview
 
-Run `report_processor.py` on the data file with no transforms to extract column names and types. Reuse the cached `_report_processor_path`; only fall back to `find` if it is empty:
+Run `report_processor.py` on the data file with no transforms to extract column names and types:
 
-```bash
-UV_PYTHON_DOWNLOADS=never uv run "${_report_processor_path:-$(find ~ -name "report_processor.py" -path "*/carta-reporting/scripts/*" 2>/dev/null | head -1)}" <<'EOF'
+Write `carta-reporting/config.json` (in the working directory) with:
+
+```json
 {
   "local_file": "<preview or full report file path>"
 }
-EOF
+```
+
+Then run this as its own command, on one line:
+
+```bash
+UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_processor.py" --config "carta-reporting/config.json"
 ```
 
 Lead with a brief result summary (e.g. "Here's your Securities Ledger report — loading full data in the background."), then present the column inventory.
@@ -229,8 +233,9 @@ After the Customization Checkpoint, check if `/tmp/carta_report_<user_report_pk>
 
 Run the script with `"preview": 5`:
 
-```bash
-UV_PYTHON_DOWNLOADS=never uv run "${_report_processor_path:-$(find ~ -name "report_processor.py" -path "*/carta-reporting/scripts/*" 2>/dev/null | head -1)}" <<'EOF'
+Write `carta-reporting/config.json` (in the working directory) with:
+
+```json
 {
   "local_file": "<path>",
   "columns": [...],
@@ -238,7 +243,12 @@ UV_PYTHON_DOWNLOADS=never uv run "${_report_processor_path:-$(find ~ -name "repo
   "sort": [...],
   "preview": 5
 }
-EOF
+```
+
+Then run this as its own command, on one line:
+
+```bash
+UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_processor.py" --config "carta-reporting/config.json"
 ```
 
 Show first 5 rows of each processed sheet as a markdown table. Above each table write: `N of M rows matched · K columns`.

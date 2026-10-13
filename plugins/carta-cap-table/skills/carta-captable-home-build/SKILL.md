@@ -23,10 +23,7 @@ allowed-tools:
   - mcp__carta__list_accounts
   - mcp__claude_ai_Carta__list_accounts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_accounts
-  - Bash(uv run *build_artifact.py *)
-  - Bash(find ~ -name "build_artifact.py"*)
-  - Bash(find /sessions -name "build_artifact.py"*)
-  - Bash(dirname *)
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-captable-home-build/scripts/build_artifact.py" *)
   - Artifact
   # Step 0b picks between companies; Step 2 asks who an untitled legacy page belongs to.
   - AskUserQuestion
@@ -35,7 +32,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.96.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.96.2</carta-plugin>
 
 # Carta Home (cap table) — Build / Redeploy / Open
 
@@ -283,15 +280,6 @@ call in Step 0 and Step 0b through **that connector's own prefix**, and pass **t
 name as `--mcp-server` in Step 1 and as `server` in Step 3. Never resolve the company
 through one prefix and publish against another name.
 
-> **Path — do NOT rely on `${CLAUDE_PLUGIN_ROOT}` in bash.** In the Cowork sandbox that env
-> var is empty, so `uv run "${CLAUDE_PLUGIN_ROOT}/…"` resolves to a broken path. Use the
-> **base directory reported for this skill when it loaded** (it ends in
-> `/skills/carta-captable-home-build`) as `<SKILL_DIR>`. If you don't have it, resolve it
-> once with a scoped `find` (NOT `find /`):
-> ```
-> SKILL_DIR="$(dirname "$(dirname "$(find /sessions "$HOME" -type f -path '*/carta-captable-home-build/scripts/build_artifact.py' 2>/dev/null | head -1)")")"
-> ```
-
 ### Step 0b: Resolve which company this build is for
 
 The page carries one company, so settle it before building. Reuse the **same
@@ -320,12 +308,13 @@ Step 2b.
 `<slug>` is the company name lowercased with non-alphanumerics collapsed to `-`, so two
 companies never write over each other's file.
 
+Run this as its own command on one line, with the script path exactly as written and every
+argument quoted. Don't chain anything before or after it (no `mkdir … &&`): a chained command
+needs approval. Do not search for the script; Bash reaches this path on every surface, Cowork
+included:
+
 ```
-uv run "<SKILL_DIR>/scripts/build_artifact.py" \
-  --mcp-server "<CARTA_MCP_SERVER>" \
-  --corporation-id "<bare corporation pk from Step 0b>" \
-  --company-name "<company name from Step 0b>" \
-  --out <outputs-directory>/captable-home-<slug>.html
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-captable-home-build/scripts/build_artifact.py" --mcp-server "<CARTA_MCP_SERVER>" --corporation-id "<bare corporation pk from Step 0b>" --company-name "<company name from Step 0b>" --out "<outputs-directory>/captable-home-<slug>.html"
 ```
 
 ### Step 2: Find an already-published Carta Home for this company

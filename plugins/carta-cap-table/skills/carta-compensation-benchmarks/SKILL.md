@@ -22,17 +22,16 @@ allowed-tools:
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__search_tools
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_accounts
   - AskUserQuestion
-  - Skill
+  - Skill(carta-cap-table:carta-compensation-rolematcher)
   - Read
   - Write
-  - Bash(mkdir *)
-  - Bash(ls *)
-  - Bash(uv run *)
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-benchmarks/scripts/export_benchmarks.py" *)
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-benchmarks/scripts/find_location.py" *)
   - Artifact
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.96.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.96.2</carta-plugin>
 
 # Benchmark Query
 
@@ -182,12 +181,10 @@ Write /tmp/benchmarks_export.json  ← the JSON array
 ```
 
 **Step 3 — Run the export script**:
+Run it as its own command on one line, path exactly as written and every argument quoted.
+Add `--notional-first` at the end when `peer_group.notional_available` is true:
 ```bash
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-benchmarks/scripts/export_benchmarks.py \
-  --data @/tmp/benchmarks_export.json \
-  --output <output_path>.xlsx \
-  --attribution "<full attribution string>" \
-  [--notional-first]   # required when peer_group.notional_available is true
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-benchmarks/scripts/export_benchmarks.py" --data "@/tmp/benchmarks_export.json" --output "<output_path>.xlsx" --attribution "<full attribution string>"
 ```
 
 The script handles all branding automatically — do not modify its output styling. The attribution string must also appear in the chat reply per the attribution rules above.
@@ -652,7 +649,7 @@ Omit `location` and the API applies the plan's default location (`geo_adjustment
    ```
    The result is ~444 entries (~65KB), so the client usually saves it to a file. Find the place in it with the lookup script instead of reading the file:
    ```bash
-   uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-benchmarks/scripts/find_location.py <saved_result_file> "<place>"
+   uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-benchmarks/scripts/find_location.py" "<saved_result_file>" "<place>"
    ```
    It prints `location=…  label=…  international=…  currency=…` per match. One match → use it. Several (e.g. "Portland" in Oregon and Maine) → ask with `AskUserQuestion`, using the labels verbatim. None → say that location isn't in CTC's list and offer the closest matches, or the national average.
 2. **The US national average is `"US National Average"`** — for "national", "remote", "anywhere in the US". It returns the national adjustment. Never send `",,US"`: the API applies no adjustment for it, so the figures come back at the top-market rate, about 25% above the national average.

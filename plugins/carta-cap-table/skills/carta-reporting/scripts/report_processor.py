@@ -6,9 +6,9 @@
 report_processor.py — download, filter, transform, and preview cap table report JSON.
 
 Usage:
-    uv run report_processor.py <<'EOF'
-    { "download_url": "...", "preview": 5 }
-    EOF
+    uv run report_processor.py --config <config.json> [--out <result.json>]
+
+<config.json> holds the config below. The result goes to stdout, or to --out when given.
 
 Config JSON fields:
   download_url    str              S3 presigned URL
@@ -74,6 +74,7 @@ Output JSON:
   are re-showable in the artifact's Columns panel, and are never dropped.
 """
 
+import argparse
 import json
 import re
 import sys
@@ -595,7 +596,12 @@ def apply_label_overrides(columns, rows, label_overrides):
 
 
 def main():
-    config = json.load(sys.stdin)
+    parser = argparse.ArgumentParser(description="Download, filter and transform a Carta report")
+    parser.add_argument("--config", required=True, help="Path to the JSON config file")
+    parser.add_argument("--out", help="Write the result JSON here instead of stdout")
+    args = parser.parse_args()
+    with open(args.config) as f:
+        config = json.load(f)
 
     download_url    = config.get("download_url")
     local_file      = config.get("local_file")
@@ -804,7 +810,12 @@ def main():
                                   "merged_from": sources,
                                   **({"schema_warnings": schema_warnings} if schema_warnings else {})}
 
-    json.dump({"data": result, "stats": stats}, sys.stdout, indent=2, default=str)
+    if args.out:
+        with open(args.out, "w") as f:
+            json.dump({"data": result, "stats": stats}, f, indent=2, default=str)
+        print(args.out)
+    else:
+        json.dump({"data": result, "stats": stats}, sys.stdout, indent=2, default=str)
 
 
 if __name__ == "__main__":

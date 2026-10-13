@@ -24,12 +24,11 @@ allowed-tools:
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__search_tools
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_accounts
   - AskUserQuestion
-  - Skill
   - Read
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.96.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.96.2</carta-plugin>
 
 # CTC Scorecard
 

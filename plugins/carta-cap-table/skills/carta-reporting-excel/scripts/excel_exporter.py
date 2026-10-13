@@ -5,17 +5,10 @@
 """
 excel_exporter.py — write a Carta-branded .xlsx from report_processor.py output.
 
-Usage (pipe from report_processor.py):
-    uv run report_processor.py <<'EOF' | \\
-        uv run excel_exporter.py \\
-            --title "Securities Ledger Report" \\
-            --as-of-date 2024-01-15 \\
-            --generated-by "Jane Doe" \\
-            --output /tmp/securities_ledger.xlsx
-    {"download_url": "...", "columns": [...]}
-    EOF
+Usage (after report_processor.py --out <result.json>):
+    uv run excel_exporter.py --input <result.json> --title "Securities Ledger Report" --as-of-date 2024-01-15 --generated-by "Jane Doe" --output /tmp/securities_ledger.xlsx
 
-Reads processed report JSON from stdin (output of report_processor.py):
+Reads report_processor.py's result JSON from --input:
     {
       "data":  {sheet_name: {"columns": [...], "rows": [...]}},
       "stats": {sheet_name: {...}}
@@ -26,7 +19,6 @@ Prints the output file path on success.
 
 import argparse
 import json
-import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -274,9 +266,11 @@ def main():
     parser.add_argument("--as-of-date",   required=True,  help="As-of date in YYYY-MM-DD format (output renders as MMM D, YYYY per Carta standard)")
     parser.add_argument("--generated-by", required=True,  help="User name for the subtitle line")
     parser.add_argument("--output",       required=True,  help="Output .xlsx file path")
+    parser.add_argument("--input",        required=True,  help="report_processor.py result JSON (its --out file)")
     args = parser.parse_args()
 
-    payload = json.load(sys.stdin)
+    with open(args.input) as f:
+        payload = json.load(f)
     data    = payload.get("data", payload)  # accept both full payload and bare data dict
 
     wb = Workbook()

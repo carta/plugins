@@ -30,19 +30,14 @@ allowed-tools:
   - Artifact
   - Agent
   - AskUserQuestion
-  - Bash(cat ${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/staff/*)
-  - Bash(cat ${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/references/*)
-  - Bash(find * -name "artifact_engine.html"*)
-  - Bash(find ~ -name "report_processor.py"*)
-  - Bash(find ~ -name "artifact_engine.html"*)
-  - Bash(cat "$_engine_html_path"*)
+  - Read
   - Skill(carta-cap-table:carta-reporting-markdown)
-  - Bash(UV_PYTHON_DOWNLOADS=never uv run*)
+  - Bash(UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_processor.py" *)
   - Skill(carta-cap-table:carta-reporting-excel)
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.96.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.96.2</carta-plugin>
 
 # Custom Reports
 
@@ -96,22 +91,18 @@ Pull data directly from Carta and turn it into a customized report — filtered,
 > - **Reporting isn't enabled:** The skill will let you know and stop — reach out to your Carta admin.
 > - **Preview takes too long:** The skill automatically switches to the full report once it's ready.
 
-**Staff overrides:** Before starting, silently run (use this skill's declared base directory — do not use `${CLAUDE_PLUGIN_ROOT}` in bash, it resolves to the wrong plugin at runtime):
-```bash
-cat <skill_base_dir>/staff/overrides.md 2>/dev/null || true
-```
+**Staff overrides:** Before starting, silently `Read` `${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/staff/overrides.md`. If it doesn't exist, carry on without saying anything.
 If the file exists, its instructions override the defaults in this skill for any section it covers. If absent, proceed with the defaults below.
 
 **Tool discovery (ALL environments — run before any other step):** Call `ToolSearch` with query `"list_accounts"` and `max_results: 10`. Cache the full result set in memory as `_tool_results`. Do not call `ToolSearch` again anywhere in this workflow — all subsequent gates read from this cached result.
 
-**Resolve script/asset paths ONCE (run before any other step, in the same turn as tool discovery):** the `report_processor.py` script and `artifact_engine.html` engine can live in varying install locations, but their paths do not change within a session. Resolve both a single time and cache them in memory — do NOT re-run `find` at each later use:
+**Script and engine paths:** they are fixed — never search for them.
+- `report_processor.py`: `${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_processor.py`
+- Engine HTML: `${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/assets/artifact_engine.html`
 
-```bash
-find ~ -name "report_processor.py" -path "*/carta-reporting/scripts/*" 2>/dev/null | head -1
-find ~ -name "artifact_engine.html" -path "*/carta-reporting/assets/*" 2>/dev/null | head -1
-```
+Run the script only in the one-line form shown below, as its own command: write its config with `Write` first, then pass `--config`. A heredoc, a pipe or a chained command needs approval every time.
 
-Store the results as `_report_processor_path` and `_engine_html_path`. Every later step that needs these (schema preview, engine read, `report_processor.py` runs, and the markdown/Excel sub-skills) MUST reuse the cached value instead of re-running `find`. If a cached path is empty, re-run that single `find` once at the point of use as a fallback. This removes 2–4 home-directory `find` scans per report request.
+> **Plugin root in reference files.** Reference files write the plugin root as a `CLAUDE_PLUGIN_ROOT` variable in braces. Bash does not set that variable, so never run it as written: replace it with the literal plugin root `${CLAUDE_PLUGIN_ROOT}`, keep every quote, and keep the command on one line.
 
 0. **Connect Carta (Claude Desktop only — skip entirely in Claude Code)**
 
@@ -290,13 +281,9 @@ Store the results as `_report_processor_path` and `_engine_html_path`. Every lat
    3. Run: curl -fsSL "<presigned_url>" -o <output_path>
    ```
 
-   **4d. Main thread — wait for data, then build the artifact** — runs immediately after dispatching 4b and 4c. Read the engine HTML from the cached `_engine_html_path` (resolved once in the tool-discovery step). Use `cat "$_engine_html_path"`; only if that path is empty, resolve it once with `find`:
+   **4d. Main thread — wait for data, then build the artifact** — runs immediately after dispatching 4b and 4c. `Read` the engine HTML at `${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/assets/artifact_engine.html`.
 
-   ```bash
-   cat "$_engine_html_path" 2>/dev/null || find ~ -name "artifact_engine.html" -path "*/carta-reporting/assets/*" 2>/dev/null | head -1 | xargs -I{} cat {}
-   ```
-
-   If this returns empty, continue — do **not** fall back to the xlsx skill or generate Excel directly.
+   If that read fails, continue — do **not** fall back to the xlsx skill or generate Excel directly.
 
    Check for `/tmp/carta_preview_<pk_preview>.json` every 5 s (up to 12 attempts = 60 s):
    - **Preview succeeded** (file present, no `"error"` key) → use the preview file as the data source.
@@ -326,14 +313,20 @@ Store the results as `_report_processor_path` and `_engine_html_path`. Every lat
 
    **Building the artifact (ARTIFACT mode only)**
 
-   Run `report_processor.py` on each data file with no transforms to get schema data. Use the cached `_report_processor_path` (resolved once in the tool-discovery step); only fall back to `find` if it is empty:
+   Run `report_processor.py` on each data file with no transforms to get schema data:
 
-   ```bash
-   UV_PYTHON_DOWNLOADS=never uv run "${_report_processor_path:-$(find ~ -name "report_processor.py" -path "*/carta-reporting/scripts/*" 2>/dev/null | head -1)}" <<'EOF'
+   Write `carta-reporting/config.json` (in the working directory) with:
+
+   ```json
    {
      "local_file": "<data file path>"
    }
-   EOF
+   ```
+
+   Then run this as its own command, on one line:
+
+   ```bash
+   UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_processor.py" --config "carta-reporting/config.json"
    ```
 
    Check `stats` before proceeding:
@@ -466,14 +459,10 @@ Store the results as `_report_processor_path` and `_engine_html_path`. Every lat
 The full call signatures, filter-param support matrix, and **required-params-by-report-type**
 table live in `references/mcp-tool-reference.md` (kept out of the always-loaded skill to
 reduce context). Read it on demand — only when you need to look up a required param, a filter
-param, or an ID-lookup command — using this skill's declared base directory (do not use
-`${CLAUDE_PLUGIN_ROOT}` in bash):
+param, or an ID-lookup command. `Read` it at
+`${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/references/mcp-tool-reference.md`; do not search for it.
 
-```bash
-cat <skill_base_dir>/references/mcp-tool-reference.md
-```
-
-Cache the contents in memory the first time you read it; do not re-`cat` it within a session.
+Keep the contents in memory the first time you read it; do not read it again within a session.
 
 ---
 
@@ -501,11 +490,12 @@ Cache the contents in memory the first time you read it; do not re-`cat` it with
 
 All post-processing (filter, column selection, sort, formulas, aggregations, preview) runs through this script. Called by `carta-reporting`, `carta-reporting-markdown`, and `carta-reporting-excel`. Never apply these transforms in Claude's memory.
 
-> **Path resolution:** the examples below show `$(find ~ -name "report_processor.py" …)` for self-containment, but in the live workflow use the cached `_report_processor_path` resolved once in the tool-discovery step — `UV_PYTHON_DOWNLOADS=never uv run "${_report_processor_path:-$(find ~ -name "report_processor.py" -path "*/carta-reporting/scripts/*" 2>/dev/null | head -1)}"`. Only re-run `find` when the cached path is empty.
+Each example is the config file's content. Write it to `carta-reporting/config.json`, then run the one-line command shown with the first example.
 
 Single sheet (global transforms):
-```bash
-UV_PYTHON_DOWNLOADS=never uv run "${_report_processor_path:-$(find ~ -name "report_processor.py" -path "*/carta-reporting/scripts/*" 2>/dev/null | head -1)}" <<'EOF'
+Write `carta-reporting/config.json` (in the working directory) with:
+
+```json
 {
   "local_file":      "<path to downloaded report JSON>",
   "sheets":          ["Securities Ledger"],
@@ -517,7 +507,12 @@ UV_PYTHON_DOWNLOADS=never uv run "${_report_processor_path:-$(find ~ -name "repo
   "label_overrides": {"CBU": "Phantom Units"},
   "preview":         5
 }
-EOF
+```
+
+Then run this as its own command, on one line:
+
+```bash
+UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_processor.py" --config "carta-reporting/config.json"
 ```
 
 **Filter ops** — a filter's `op` must be exactly one of:
@@ -541,8 +536,9 @@ presenting a filtered report, the same way you check `missing_columns`.
 `label_overrides` — optional dict mapping raw string cell values to display names. Applied to all string-typed columns across every sheet. Use to replace Carta's internal security type codes with the corporation's configured equity language names (e.g. `{"CBU": "Phantom Units"}`). Matching is exact and case-sensitive.
 
 Multi-sheet with per-sheet config:
-```bash
-UV_PYTHON_DOWNLOADS=never uv run "${_report_processor_path:-$(find ~ -name "report_processor.py" -path "*/carta-reporting/scripts/*" 2>/dev/null | head -1)}" <<'EOF'
+Write `carta-reporting/config.json` (in the working directory) with:
+
+```json
 {
   "local_file": "<path>",
   "sheets": {
@@ -552,12 +548,18 @@ UV_PYTHON_DOWNLOADS=never uv run "${_report_processor_path:-$(find ~ -name "repo
                          "filters": [{"column": "Vest Date", "op": ">", "value": "2024-01-01"}]}
   }
 }
-EOF
+```
+
+Then run this as its own command, on one line:
+
+```bash
+UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_processor.py" --config "carta-reporting/config.json"
 ```
 
 Sheet merge — sources must share the same column schema; merged tab replaces source tabs:
-```bash
-UV_PYTHON_DOWNLOADS=never uv run "${_report_processor_path:-$(find ~ -name "report_processor.py" -path "*/carta-reporting/scripts/*" 2>/dev/null | head -1)}" <<'EOF'
+Write `carta-reporting/config.json` (in the working directory) with:
+
+```json
 {
   "local_file": "<path>",
   "sheets": {
@@ -568,7 +570,12 @@ UV_PYTHON_DOWNLOADS=never uv run "${_report_processor_path:-$(find ~ -name "repo
     "Pending Exercise": ["Warrants", "Equity Incentive Plan 2023"]
   }
 }
-EOF
+```
+
+Then run this as its own command, on one line:
+
+```bash
+UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_processor.py" --config "carta-reporting/config.json"
 ```
 
 All fields except the file source are optional — omit or set to `null` to skip that transform. Per-sheet values override any global transforms at the top level.

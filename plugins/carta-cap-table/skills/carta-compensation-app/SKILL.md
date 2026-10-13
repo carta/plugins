@@ -51,23 +51,23 @@ allowed-tools:
   - Read
   - Write
   - AskUserQuestion
-  - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/ctc_paths.py *)
-  - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_benchmark_result.py *)
-  - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/capture_export.py *)
-  - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_roster_page.py *)
-  - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_equity_refresh_page.py *)
-  - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_report_insights.py *)
-  - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_equity_pool_utilization.py *)
-  - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_retention_plan.py *)
-  - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/ctc_locations.py *)
-  - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_corporation_info.py *)
-  - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/preflight_claude.py *)
-  - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/build_datadir.py *)
-  - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/serve.py *)
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/ctc_paths.py" *)
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_benchmark_result.py" *)
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/capture_export.py" *)
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_roster_page.py" *)
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_equity_refresh_page.py" *)
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_report_insights.py" *)
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_equity_pool_utilization.py" *)
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_retention_plan.py" *)
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/ctc_locations.py" *)
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_corporation_info.py" *)
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/preflight_claude.py" *)
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/build_datadir.py" *)
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/serve.py" *)
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.96.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.96.2</carta-plugin>
 
 <!-- [PATTERN carta-writing-style v0.0.2] [PATTERN etiquette v0.0.6] [PATTERN text v0.0.8] [PATTERN tables v0.0.12] [PATTERN carta-watermark v0.0.10] [PATTERN base v0.1.0] -->
 
@@ -81,6 +81,8 @@ JSON + the app source.
 **Read-only.** The `compensation:*` MCP namespace exposes no write commands. This console
 displays CTC data and (in later tabs) models scenarios locally. Plan activation, payband edits,
 employee edits, offer letters, HRIS resync and every other mutation stay in the CTC product.
+
+> **Plugin root in reference files.** Reference files write the plugin root as a `CLAUDE_PLUGIN_ROOT` variable in braces. Bash does not set that variable, so never run it as written: replace it with the literal plugin root `${CLAUDE_PLUGIN_ROOT}`, keep every quote, and keep the command on one line.
 
 ## No demo data — real corporation required
 **Never** fabricate, synthesize, or fall back to demo data, and never launch against an empty or
@@ -342,9 +344,7 @@ Follow `references/queries.md` for the exact arguments.
 >
 > **`sweep`** — one whole `compensation:export:benchmarks` sweep (2c, 2c-bis, 2d-v):
 > ```bash
-> uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/capture_export.py" sweep \
->   --server "<SERVER>" --claude-bin "<claude_bin>" --dest "<dir>" \
->   --args '{"corporation_id": <id>, "benchmark_version_id": <id>, "equity_quantity": "FOUR_YEAR_GRANT", "<dimension>_bucket": "<CODE>"}'
+> uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/capture_export.py" sweep --server "<SERVER>" --claude-bin "<claude_bin>" --dest "<dir>" --args '{"corporation_id": <id>, "benchmark_version_id": <id>, "equity_quantity": "FOUR_YEAR_GRANT", "<dimension>_bucket": "<CODE>"}'
 > ```
 > It pages from `job_offset: 0` with `job_limit: 6` until `next_job_offset` is null, retries a
 > failed page once, stops at 6 calls, and fans each page out into `benchmark_<JOB>.json` plus
@@ -357,9 +357,7 @@ Follow `references/queries.md` for the exact arguments.
 > **`call`** — one read-only `compensation__get__*` / `compensation__export__*` result written
 > to a file, which you then pass to the matching `save_*` script as its source path:
 > ```bash
-> uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/capture_export.py" call \
->   --server "<SERVER>" --claude-bin "<claude_bin>" \
->   --tool compensation__get__plan --args '{"corporation_id": <id>}' --out "<raw_dir>/plan.raw"
+> uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/capture_export.py" call --server "<SERVER>" --claude-bin "<claude_bin>" --tool compensation__get__plan --args '{"corporation_id": <id>}' --out "<raw_dir>/plan.raw"
 > uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_benchmark_result.py" "<raw_dir>/plan.raw" "<raw_dir>/plan.json"
 > ```
 >
@@ -408,10 +406,7 @@ A corp with no subscription has no benchmark data, so every later call would be 
 **2b. Plan.** Capture it with `capture_export.py call`, then normalize:
 
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/capture_export.py" call \
-  --server "<SERVER>" --claude-bin "<claude_bin>" \
-  --tool compensation__get__plan --args '{"corporation_id": <corporation_pk>}' \
-  --out "<raw_dir>/plan.raw"
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/capture_export.py" call --server "<SERVER>" --claude-bin "<claude_bin>" --tool compensation__get__plan --args '{"corporation_id": <corporation_pk>}' --out "<raw_dir>/plan.raw"
 uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_benchmark_result.py" "<raw_dir>/plan.raw" "<raw_dir>/plan.json"
 ```
 
@@ -452,9 +447,7 @@ itself.
 Capture the corp's own group into the raw dir itself:
 
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/capture_export.py" sweep \
-  --server "<SERVER>" --claude-bin "<claude_bin>" --dest "<raw_dir>" \
-  --args '{"corporation_id": <id>, "benchmark_version_id": <id>, "equity_quantity": "FOUR_YEAR_GRANT", "<dimension>_bucket": "<plan peer_group.code>"}'
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/capture_export.py" sweep --server "<SERVER>" --claude-bin "<claude_bin>" --dest "<raw_dir>" --args '{"corporation_id": <id>, "benchmark_version_id": <id>, "equity_quantity": "FOUR_YEAR_GRANT", "<dimension>_bucket": "<plan peer_group.code>"}'
 ```
 
 It writes one `benchmark_<JOB>.json` per job area (matching the per-job-area files the old sweep
@@ -468,8 +461,7 @@ answer to "is this group captured".
 **Then check coverage:**
 
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/build_datadir.py" \
-  --raw "<raw_dir>" --check
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/build_datadir.py" --raw "<raw_dir>" --check
 ```
 
 Same four lines as before (`captured` / `empty` / `CORRUPT` / `plan.json`), plus a fifth when the
@@ -542,9 +534,7 @@ Capture each bucket into its OWN subdirectory — point `--dest` at `peer_<CODE>
 the raw dir, with that dimension's bucket param in `--args`:
 
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/capture_export.py" sweep \
-  --server "<SERVER>" --claude-bin "<claude_bin>" --dest "<raw_dir>/peer_<CODE>" \
-  --args '{"corporation_id": <id>, "benchmark_version_id": <id>, "equity_quantity": "FOUR_YEAR_GRANT", "<dimension>_bucket": "<CODE>"}'
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/capture_export.py" sweep --server "<SERVER>" --claude-bin "<claude_bin>" --dest "<raw_dir>/peer_<CODE>" --args '{"corporation_id": <id>, "benchmark_version_id": <id>, "equity_quantity": "FOUR_YEAR_GRANT", "<dimension>_bucket": "<CODE>"}'
 ```
 
 Use the bucket code **exactly** as spelled above: `build_datadir.py` reads the code back out of
@@ -634,12 +624,8 @@ benchmarked employee in ONE columnar response — no `page`, no `page_size`, not
 through. Capture it with the export flag:
 
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/capture_export.py" call \
-  --server "<SERVER>" --claude-bin "<claude_bin>" \
-  --tool compensation__export__scorecard --args '{"corporation_id": <id>}' \
-  --out "<raw_dir>/roster_export.raw"
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_roster_page.py" \
-  --export-scorecard "<raw_dir>/roster_export.raw" "<raw_dir>"
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/capture_export.py" call --server "<SERVER>" --claude-bin "<claude_bin>" --tool compensation__export__scorecard --args '{"corporation_id": <id>}' --out "<raw_dir>/roster_export.raw"
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_roster_page.py" --export-scorecard "<raw_dir>/roster_export.raw" "<raw_dir>"
 ```
 
 The capture contract applies in full: the employee list is names and salaries, so it is never
@@ -677,13 +663,8 @@ Fetch `compensation:get:employee-scorecard` with **`page_size: 10`**, then page 
 `--export-scorecard` flag):
 
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/capture_export.py" call \
-  --server "<SERVER>" --claude-bin "<claude_bin>" \
-  --tool compensation__get__employee-scorecard \
-  --args '{"corporation_id": <id>, "page": <n>, "page_size": 10}' \
-  --out "<raw_dir>/roster_page_<n>.raw"
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_roster_page.py" \
-  "<raw_dir>/roster_page_<n>.raw" "<raw_dir>"
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/capture_export.py" call --server "<SERVER>" --claude-bin "<claude_bin>" --tool compensation__get__employee-scorecard --args '{"corporation_id": <id>, "page": <n>, "page_size": 10}' --out "<raw_dir>/roster_page_<n>.raw"
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_roster_page.py" "<raw_dir>/roster_page_<n>.raw" "<raw_dir>"
 ```
 
 > **Why 10 and not 30.** A `page_size` of 30 is REJECTED — the response exceeds the 80,000-char
@@ -728,8 +709,7 @@ The result is ~65KB, so the harness saves it to a file. Pass the printed path st
 through:
 
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_benchmark_result.py" \
-  <printed_result_path> "<raw_dir>/location_catalog.json"
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_benchmark_result.py" <printed_result_path> "<raw_dir>/location_catalog.json"
 ```
 
 If it arrives inline instead, fetch it with `capture_export.py call` (`--tool
@@ -760,9 +740,7 @@ For each line, run a sweep exactly like 2c — same `benchmark_version_id`,
 **`"location": "<location>"` verbatim** from the line, into that line's `dir`:
 
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/capture_export.py" sweep \
-  --server "<SERVER>" --claude-bin "<claude_bin>" --dest "<dir>" \
-  --args '{"corporation_id": <id>, "benchmark_version_id": <id>, "equity_quantity": "FOUR_YEAR_GRANT", "<dimension>_bucket": "<plan peer_group.code>", "location": "<location>"}'
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/capture_export.py" sweep --server "<SERVER>" --claude-bin "<claude_bin>" --dest "<dir>" --args '{"corporation_id": <id>, "benchmark_version_id": <id>, "equity_quantity": "FOUR_YEAR_GRANT", "<dimension>_bucket": "<plan peer_group.code>", "location": "<location>"}'
 ```
 
 The sweep keeps that dir's `location.json`. The ceiling is the same as for peer groups (one
@@ -798,8 +776,7 @@ other arguments: no paging, no filters, one response carrying every benchmarked
 employee. Then:
 
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_equity_refresh_page.py" \
-  "<result path>" "<raw_dir>"
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_equity_refresh_page.py" "<result path>" "<raw_dir>"
 ```
 
 Three things that will bite:
@@ -838,8 +815,7 @@ Then always hand the result to the capture script — the script owns the
 null-vs-zero decision:
 
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_equity_pool_utilization.py" \
-  "<result path>" "<raw_dir>"
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_equity_pool_utilization.py" "<result path>" "<raw_dir>"
 ```
 
 Skip the whole step only when the MCP call itself failed (no result path to
@@ -859,8 +835,7 @@ dropdown. The last two need a fully diluted share count and a per-share value th
 the refresh report does not carry.
 
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_corporation_info.py" \
-  "<result path>" "<raw_dir>"
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_corporation_info.py" "<result path>" "<raw_dir>"
 ```
 
 The source is the corporation info endpoint. **The price is not a choice** — it is
@@ -886,8 +861,7 @@ read_tool({"name": "compensation__get__retention-plan",
 Then hand the result to the capture script:
 
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_retention_plan.py" \
-  "<result path>" "<raw_dir>"
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_retention_plan.py" "<result path>" "<raw_dir>"
 ```
 
 - **The endpoint is never empty.** On a corporation that has never opened CTC's
@@ -952,8 +926,7 @@ customers, and so a teammate QAing it does not have to patch source.
 ## Step 3b — Build
 
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/build_datadir.py" \
-  --raw "<raw_dir>" --out "<dashboard_dir>" --meta "<meta.json>"
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/build_datadir.py" --raw "<raw_dir>" --out "<dashboard_dir>" --meta "<meta.json>"
 ```
 
 Refuses to build on an unknown peer-group dimension or zero benchmark rows — that is deliberate,
@@ -962,8 +935,7 @@ not a bug to work around. Fix the fetch and re-run.
 ## Step 4 — Launch
 
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/serve.py" \
-  --data-dir "<dashboard_dir>" --detach --claude-bin "<claude_bin>"
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/serve.py" --data-dir "<dashboard_dir>" --detach --claude-bin "<claude_bin>"
 ```
 
 Include `--claude-bin` only when Step 0.5 found a path (not `none`). Omit it otherwise — the

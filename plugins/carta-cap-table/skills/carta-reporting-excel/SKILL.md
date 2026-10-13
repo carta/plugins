@@ -13,15 +13,12 @@ allowed-tools:
   - mcp__claude_ai_Carta__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
-  - Bash(find * -name "report_processor.py"*)
-  - Bash(find ~ -name "report_processor.py"*)
-  - Bash(find * -name "excel_exporter.py"*)
-  - Bash(find ~ -name "excel_exporter.py"*)
-  - Bash(UV_PYTHON_DOWNLOADS=never uv run*)
+  - Bash(UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_processor.py" *)
+  - Bash(UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting-excel/scripts/excel_exporter.py" *)
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.96.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.96.2</carta-plugin>
 
 # Excel Export
 
@@ -74,19 +71,15 @@ Check if `/tmp/carta_report_<user_report_pk>.json` is available (use `user_repor
 - **File ready** → pass it as `"local_file"` to `report_processor.py`.
 - **Not ready** → call `read_tool({"name": "reporting__get__download_url", "arguments": { user_report_pk, corporation_id }})` to get a fresh presigned URL and pass it as `"download_url"` instead.
 
-**Always pipe through `report_processor.py` → `excel_exporter.py`, regardless of data size or complexity.** Never write Excel files directly with openpyxl or any other library — the scripts handle Carta branding (logo, header, fonts, number formats) that will be missing from any ad-hoc implementation. This applies even when the dataset is small (e.g. 3 rows) or when sheets need to be combined.
+**Always run `report_processor.py` then `excel_exporter.py`, regardless of data size or complexity.** Never write Excel files directly with openpyxl or any other library — the scripts handle Carta branding (logo, header, fonts, number formats) that will be missing from any ad-hoc implementation. This applies even when the dataset is small (e.g. 3 rows) or when sheets need to be combined.
 
 For combining sheets into one tab, use `merge_sheets` in the `report_processor.py` call.
 
-Pass all sheets in one run using the `sheets` dict. Pipe into `excel_exporter.py`. Reuse the cached `_report_processor_path` if the parent session resolved it (it may be unset on the fresh `Generate Carta Excel —` prompt-bar path — the `find` fallback handles that):
+Pass all sheets in one run using the `sheets` dict. Two commands, each run on its own, on one line: a heredoc, a pipe or a chained command needs approval every time. Never search for the scripts.
 
-```bash
-UV_PYTHON_DOWNLOADS=never uv run "${_report_processor_path:-$(find ~ -name "report_processor.py" -path "*/carta-reporting/scripts/*" 2>/dev/null | head -1)}" <<'EOF' | \
-    UV_PYTHON_DOWNLOADS=never uv run "$(find ~ -name "excel_exporter.py" -path "*/carta-reporting-excel/scripts/*" 2>/dev/null | head -1)" \
-        --title "Securities Ledger Report" \
-        --as-of-date 2024-01-15 \
-        --generated-by "Jane Doe" \
-        --output ./{report-slug}.xlsx
+1. `Write` `carta-reporting/config.json` (in the working directory) with the config:
+
+```json
 {
   "local_file": "<path or use download_url if file not ready>",
   "sheets": {
@@ -96,10 +89,21 @@ UV_PYTHON_DOWNLOADS=never uv run "${_report_processor_path:-$(find ~ -name "repo
                          "sort": [{"column": "Vest Date", "direction": "asc"}]}
   }
 }
-EOF
 ```
 
-The script prints the absolute output path on success. Present it as a clickable link: `computer://<absolute-path>` (e.g. `computer:///Users/jane/meetly-equity-grants.xlsx`). Tell the user their file is ready to open, then offer next steps:
+2. Process it into `carta-reporting/result.json`:
+
+```bash
+UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_processor.py" --config "carta-reporting/config.json" --out "carta-reporting/result.json"
+```
+
+3. Export the workbook:
+
+```bash
+UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting-excel/scripts/excel_exporter.py" --input "carta-reporting/result.json" --title "Securities Ledger Report" --as-of-date "2024-01-15" --generated-by "Jane Doe" --output "./{report-slug}.xlsx"
+```
+
+`excel_exporter.py` prints the absolute output path on success. Present it as a clickable link: `computer://<absolute-path>` (e.g. `computer:///Users/jane/meetly-equity-grants.xlsx`). Tell the user their file is ready to open, then offer next steps:
 
 - **Run another report** — for a different company or report type
 - **Customize this export** — adjust filters, columns, or formulas
