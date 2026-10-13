@@ -3,10 +3,16 @@
 manco-reporting local server (React app shell + live source + JSON data dir).
 
 Serves three things: the app shell and vendored runtime from --web-dir (webapp/),
-the canonical React source from --src-dir (app/src) at /src/*, transpiled in the
-browser by webapp/sw.js, and whatever JSON the owning skill wrote to a data dir.
+a React source tree from --src-dir at /src/*, transpiled in the browser by
+webapp/sw.js, and whatever JSON the owning skill wrote to a data dir.
 Python stdlib only — no third-party deps — so it runs for non-developers at
 runtime with no install step.
+
+--src-dir always defaults to this firm's own per-firm copy, <data-dir>/src —
+never the plugin's own app/src. app/src is the shared template every firm's
+copy is seeded from; it is never served and never edited directly, so an edit
+made against one firm's dashboard can't be lost on the next plugin update or
+leak into another firm's dashboard. See `_default_src_dir`.
 
 Security:
   - binds 127.0.0.1 only
@@ -22,7 +28,7 @@ The browser NEVER calls Carta MCP directly — it only reads JSON the owning ski
 already wrote to the data dir.
 
 Usage:
-  python3 serve.py --data-dir <dir> [--web-dir <webapp>] [--src-dir <app/src>]
+  python3 serve.py --data-dir <dir> [--web-dir <webapp>] [--src-dir <per-firm src>]
                    [--port N] [--no-open]
 
 Customizing for your microapp:
@@ -52,6 +58,7 @@ from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
 import manco_paths
+import sync_src
 
 DATA_DIR = None
 WEB_DIR = None
@@ -244,8 +251,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             # the shell under WEB_DIR (index.html, sw.js, vendor/, fonts/).
             #
             # Serving source rather than a compiled bundle is deliberate: it is what
-            # makes an edit to app/src visible on a refresh, with no build step that
-            # could be forgotten and leave the page correct-looking but stale.
+            # makes an edit to SRC_DIR (this firm's own copy) visible on a refresh,
+            # with no build step that could be forgotten and leave the page
+            # correct-looking but stale.
             if path.startswith("/src/"):
                 base, rel = SRC_DIR, path[len("/src"):]
             else:
@@ -334,6 +342,29 @@ def _maybe_open_browser(url, no_open):
         pass
 
 
+def _default_src_dir(data_dir, web_dir):
+    """The single source of truth for --src-dir when the caller omits it.
+
+    The per-firm copy, <data_dir>/src, is always what gets served and edited —
+    this plugin's own app/src is the shared template every firm's copy is
+    seeded from, never the tree a session serves or patches. When the per-firm
+    copy doesn't exist yet (e.g. a launch that skipped Step 4.8's sync_src
+    init), it is seeded here via sync_src.init so the dashboard still renders
+    with the same snapshot/version stamp a normal init would leave — not a
+    bare copy that `sync_src check` can't attribute on the next sync — but the
+    copy returned, and every subsequent read or write, is always the per-firm
+    one.
+    """
+    user_src = sync_src.user_src_dir(data_dir)
+    if not user_src.exists():
+        skill_dir = web_dir.parent
+        if (skill_dir / "app" / "src").exists():
+            sync_src.init(skill_dir, data_dir)  # writes src, .plugin-src-snapshot and .version
+        else:
+            user_src.mkdir(parents=True, exist_ok=True)
+    return user_src
+
+
 def _bind(preferred_port):
     try:
         return _Server(("127.0.0.1", preferred_port), Handler), False
@@ -352,7 +383,8 @@ def main():
     ap.add_argument(
         "--src-dir",
         default=None,
-        help="canonical source tree served at /src/* (default: <web-dir>/../app/src)",
+        help="source tree served at /src/* (default: <data-dir>/src, this firm's own "
+        "copy — never the plugin's app/src; see _default_src_dir)",
     )
     ap.add_argument("--port", type=int, default=int(os.environ.get("PORT", "0")))
     ap.add_argument("--no-open", action="store_true")
@@ -377,8 +409,8 @@ def main():
 
     DATA_DIR = Path(args.data_dir).resolve()
     WEB_DIR = Path(args.web_dir).resolve()
-    SRC_DIR = Path(args.src_dir).resolve() if args.src_dir else (WEB_DIR.parent / "app" / "src")
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+    SRC_DIR = Path(args.src_dir).resolve() if args.src_dir else _default_src_dir(DATA_DIR, WEB_DIR)
     # Before the reuse probe: a relaunch onto a live daemon must still refresh the id it serves.
     _write_user_id(DATA_DIR, args.user_id)
 

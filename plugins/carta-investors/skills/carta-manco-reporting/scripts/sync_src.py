@@ -240,9 +240,15 @@ def attribute_modules(declared_modules, plugin_changed_files):
     return result
 
 
-def cmd_init(args):
-    skill_dir = pathlib.Path(args.skill_dir).resolve()
-    data_dir = pathlib.Path(args.data_dir).resolve()
+def init(skill_dir, data_dir):
+    """Seed a brand-new per-firm copy from the plugin's app/src, stamping the
+    snapshot and version files that `check` needs to tell plugin changes from
+    operator edits on the next sync. Shared by `cmd_init` and serve.py's
+    `_default_src_dir` so there is exactly one place that creates a per-firm
+    copy — never a bare copytree that skips the stamp.
+    """
+    skill_dir = pathlib.Path(skill_dir).resolve()
+    data_dir = pathlib.Path(data_dir).resolve()
     plugin_src = skill_dir / "app" / "src"
     plugin_version, _ = read_plugin_metadata(skill_dir)
 
@@ -253,6 +259,11 @@ def cmd_init(args):
     ver_file.parent.mkdir(parents=True, exist_ok=True)
     ver_file.write_text(plugin_version)
 
+    return plugin_version, user_src
+
+
+def cmd_init(args):
+    plugin_version, user_src = init(args.skill_dir, args.data_dir)
     print(json.dumps({"ok": True, "version": plugin_version, "user_src_dir": str(user_src)}, indent=2))
 
 

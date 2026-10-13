@@ -68,7 +68,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.71.13</carta-plugin>
+<carta-plugin>carta-investors:6.71.14</carta-plugin>
 
 # ManCo Reporting Dashboard
 
@@ -160,7 +160,7 @@ When the cache is cold (Step 3 will run) and a workbook is being parsed
 `parse_budget_workbook.py` Bash calls in the **same tool-use message**. The
 two are independent once Step 2.75a has confirmed the workbook and sheets.
 
-### The three that get skipped
+### The four that get skipped
 
 Every one of these has been dropped in real runs, and each produces a
 dashboard that comes up looking correct while being wrong:
@@ -180,6 +180,16 @@ dashboard that comes up looking correct while being wrong:
    run. On any invocation that did not ask the Step 2.75 questions, offer
    to refresh the data, swap the workbook, or change which tabs feed the
    page.
+4. **Step 4.8's `sync_src` runs before Step 5 launches.** Skipping it does
+   not stop the dashboard from coming up — `serve.py` still has a per-firm
+   source tree to serve, because it creates or reuses `<dashboard_dir>/src`
+   by default. What skipping it loses is the version stamp and merge that
+   keep that copy current with the plugin. **Never edit `raw/*` (this
+   firm's fetched ledger data) or the plugin's own `app/src` (shared by
+   every firm using this plugin) to make a UI change stick** — the only
+   place a user-requested tweak belongs is `<dashboard_dir>/src`, the
+   per-firm copy from Step 4.8's `check`/`init` output, passed to Step 5b's
+   `--src-dir`. See [serve-and-update.md](references/serve-and-update.md).
 
 ## Execution discipline
 
@@ -290,6 +300,12 @@ one plain-English line about what's actually wrong (see
 before that.
 
 ## Changing the app
+
+This section is about a plugin change that lands in `app/src` itself — the shared
+source every firm's copy is seeded from, shipped through this skill's own PR process.
+It does not apply to a live dashboard session: a session never edits `app/src` or
+`raw/*` directly (see "The four that get skipped," #4) — an operator-requested tweak
+always goes to `<dashboard_dir>/src`.
 
 Any change to `app/src` that adds or changes something a user can see or do must add or
 update its analytics event **in the same change**. That covers a control, a page, a panel,

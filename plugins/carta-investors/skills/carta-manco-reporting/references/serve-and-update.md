@@ -15,8 +15,23 @@ not run a build after changing app source; there is nothing to rebuild.
 
 - `--web-dir` → `webapp/` — the shell: `index.html`, `sw.js`, the vendored
   runtime under `vendor/`, and `fonts/`.
-- `--src-dir` → `app/src` — the canonical source, served verbatim at
-  `/src/*`.
+- `--src-dir` → this firm's own per-firm copy of the source, `<user_src_dir>`
+  (`<dashboard_dir>/src`), served verbatim at `/src/*`.
+
+**Every edit goes to `<dashboard_dir>/src` — never to `app/src` or `raw/*`.**
+`app/src` is the plugin's own shared source, installed once and read by every
+firm using this plugin; `raw/*` is this firm's fetched ledger data. Patching
+either one edits something this session doesn't own: an `app/src` edit is
+lost on the next plugin update and leaks into every other firm's dashboard
+until then, and a `raw/*` edit silently diverges the cache from what was
+actually fetched. The one place a UI tweak belongs is `<user_src_dir>`,
+Step 5b's `--src-dir` — the per-firm copy `serve.py` already defaults to
+even when `--src-dir` is omitted (see `_default_src_dir` in `scripts/serve.py`).
+
+**After any edit under `<user_src_dir>`, reload the page to verify it** —
+`serve.py` reads source per request with no build step, so a refresh is the
+whole feedback loop. An edit isn't confirmed until it has been seen rendered
+after a reload; counting braces or re-reading the diff is not verification.
 
 `webapp/sw.js` is a module service worker that intercepts every same-origin
 `.jsx` request and transpiles it with Sucrase in the browser, caching on a
