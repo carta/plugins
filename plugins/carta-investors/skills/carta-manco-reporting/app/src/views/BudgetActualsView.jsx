@@ -4,7 +4,7 @@ import { H1, NoteIcon } from "../ui/components.jsx";
 import BudgetActualsAccounts, { hasMonthlyDetail } from "./BudgetActualsAccounts.jsx";
 import { glNameMap, glTooltip } from "../ui/glNames.js";
 import { dimensionOf, dimensionValue, dimensionValuesAvailable,
-         dimensionLabel, dimensionLabelPlural, noValueLabel } from "../ui/dimension.js";
+         dimensionLabel, dimensionLabelPlural, noValueLabel, rowTagScope } from "../ui/dimension.js";
 import { LEDGER_LABEL, LEDGER_NUM, LEDGER_ROW, LEDGER_TOTAL, LEDGER_SECTION } from "../ui/ledger.js";
 import { TableScroll, LEDGER_BASE, TOTAL_ROW_BG, GroupedTableHead, useStickyHeader, StickyClone } from "../ui/table.jsx";
 import { Capped } from "../shell/AppShell.jsx";
@@ -876,8 +876,14 @@ export function computeActualsByTagValue(entries, byTagValue, period, tagValuesA
   //
   // Precompute reverse index tag_value → [workbook_dept, ...] so we walk
   // entries once instead of scanning every dept's carta_tags per entry.
+  // Grouped by which dimension actually resolves a column's own tag values —
+  // a column's own reporting-tag scope first, else the shared dimension —
+  // so a column naming its own scope isn't read against the wrong field
+  // just because the workbook-wide dimension is unresolved or different.
+  // Every column shares one axis today, so this is one group in practice;
+  // the grouping keeps that true if a column ever carries its own scope.
   const out = {};
-  const tagToDepts = new Map(); // carta tag → [workbook_dept, ...]
+  const groups = new Map(); // "source:category" → { scope, tagToDepts }
   const firmTotalDepts = []; // depts with carta_tags: [] (Firm Total)
   for (const col of byTagValue) {
     out[col.tag_value] = {};
@@ -886,11 +892,15 @@ export function computeActualsByTagValue(entries, byTagValue, period, tagValuesA
     // every dept as Firm-Total-shaped instead (firm-wide fallback).
     if (tags.length === 0 || !tagValuesAvailable) {
       firmTotalDepts.push(col.tag_value);
-    } else {
-      for (const t of tags) {
-        if (!tagToDepts.has(t)) tagToDepts.set(t, []);
-        tagToDepts.get(t).push(col.tag_value);
-      }
+      continue;
+    }
+    const scope = rowTagScope(col, dimension, tagValuesAvailable);
+    const groupKey = scope ? `${scope.source || "reporting_tag"}:${scope.category || ""}` : "";
+    if (!groups.has(groupKey)) groups.set(groupKey, { scope, tagToDepts: new Map() });
+    const { tagToDepts } = groups.get(groupKey);
+    for (const t of tags) {
+      if (!tagToDepts.has(t)) tagToDepts.set(t, []);
+      tagToDepts.get(t).push(col.tag_value);
     }
   }
   for (const e of entries) {
@@ -901,15 +911,17 @@ export function computeActualsByTagValue(entries, byTagValue, period, tagValuesA
     for (const dept of firmTotalDepts) {
       out[dept][t] = (out[dept][t] || 0) + (e.amount || 0);
     }
-    // Value-matching columns: read the entry's value for this firm's
-    // dimension and hit every column whose carta_tags include it.
-    const v = dimensionValue(e, dimension);
-    const deptTag = v != null ? { value: v } : null;
-    if (!deptTag) continue;
-    const depts = tagToDepts.get(deptTag.value);
-    if (!depts) continue;
-    for (const dept of depts) {
-      out[dept][t] = (out[dept][t] || 0) + (e.amount || 0);
+    // Value-matching columns: read the entry's value for each group's own
+    // resolved dimension and hit every column in that group whose
+    // carta_tags include it.
+    for (const { scope, tagToDepts } of groups.values()) {
+      const v = dimensionValue(e, scope);
+      if (v == null) continue;
+      const depts = tagToDepts.get(v);
+      if (!depts) continue;
+      for (const dept of depts) {
+        out[dept][t] = (out[dept][t] || 0) + (e.amount || 0);
+      }
     }
   }
   return out;

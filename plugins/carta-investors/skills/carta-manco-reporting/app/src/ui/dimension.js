@@ -82,6 +82,31 @@ function inlineCase(label) {
   return label.charAt(0).toLowerCase() + label.slice(1);
 }
 
+// Which dimension a row's own reporting-tag value should be read off an
+// entry with: the row's own reporting-tag scope first — the mapping step's
+// own answer for that one line or column, carrying its own category — else
+// the shared dimension the workbook resolved at ingest. A dimension the
+// workbook never resolved (null) must never zero out, or un-filter, a row
+// that carries its own scope: that scope is the row's own answer and
+// doesn't depend on the shared axis existing at all.
+//
+// Returns a dimension descriptor ({source, category}, usually also the
+// matched `value` when it came from the row's own scope) for `dimensionValue`
+// to read an entry with — not the set of values a row's figure accepts,
+// which callers derive from their own tag_value/carta_tags plus the
+// firm's aliases.
+//
+// Mirrors the Python build's own precedence (build_manco_datadir.py's
+// `scoped_total`, which prefers a line's own `scopes` over the configured
+// dimension) so the outline and the variance chart agree on which rows are
+// department-wide and which are narrower than that.
+export function rowTagScope(row, dimension, tagValuesAvailable) {
+  if (!tagValuesAvailable) return null;
+  const own = (row?.scopes || []).find(sc => sc.source === "reporting_tag");
+  if (own) return own;
+  return dimension || null;
+}
+
 // Whether any entry carries a value for this dimension. False means scoped
 // rows must report firm-wide — scoping against a field the firm never
 // populates shows every column as $0, which reads as spend that never

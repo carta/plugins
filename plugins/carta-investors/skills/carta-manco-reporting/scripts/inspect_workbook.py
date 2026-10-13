@@ -61,20 +61,37 @@ import argparse
 import calendar
 import json
 import re
+import sys
 from datetime import date
 from pathlib import Path
 
 from openpyxl import load_workbook
 
-# Quarter labels in either digit order ("Q1 2026", "1Q25", "1Q25P" for
-# "Plan"), 2- or 4-digit year.
-_QUARTER_RX = re.compile(
-    r"^(?:Q[1-4]|[1-4]Q)[\s\-_/]*(?:\d{2}|20\d{2})[A-Za-z]*$", re.IGNORECASE
-)
+# shapes/quarter_label.py is the single source for what reads as a quarter
+# label, shared with shapes/pnl_outline.py so the detector never settles a
+# sheet on headers the parser can't read.
+# Adjust sys.path so `shapes` resolves as a sibling package regardless of
+# the caller's cwd, the same way parse_budget_workbook.py does for adapters.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from shapes.quarter_label import match_quarter_label  # noqa: E402
+
 # A year-total column, however the workbook titles it.
 _TOTAL_RX = re.compile(r"^(?:TOTAL\s+20\d{2}|20\d{2}\s+YTD)$", re.IGNORECASE)
 _SUBHEADERS = {"actual", "budget", "budget variance", "% of budget"}
 _SCAN_ROWS = 12
+
+# Tab names that state what a sheet is, independent of how big it is. A
+# workbook's "BvA" tab is routinely smaller than a stray detail or archive
+# tab sitting beside it — row count alone would rank the detail tab first
+# and leave the real budget tab for the operator to type in by hand.
+_TAB_NAME_SIGNAL_RX = re.compile(
+    r"\bbva\b|\bb\s*v\s*a\b|\bbudget\b|\bbudget\s*vs\s*actual", re.IGNORECASE
+)
+
+
+def _tab_name_signal(name: str) -> bool:
+    """Whether a sheet's own name states it's a budget/BvA tab."""
+    return bool(_TAB_NAME_SIGNAL_RX.search(name or ""))
 # Carta account_type codes are 4 digits, 1xxx-8xxx. A bare 3-5 digit run
 # also matches invoice numbers, fee bps, and phone extensions.
 _ACCOUNT_TYPE_RX = re.compile(r"\b[1-8]\d{3}\b")
@@ -213,7 +230,7 @@ def _tag_super_header_columns(ws, subheader_row: int) -> int:
             s = v.strip()
             if not s or s.lower() in _SUBHEADERS:
                 continue
-            if _QUARTER_RX.match(s) or _TOTAL_RX.match(s) or _MONTH_RX.match(s):
+            if match_quarter_label(s) or _TOTAL_RX.match(s) or _MONTH_RX.match(s):
                 continue
             if s.replace(",", "").replace(".", "").isdigit():
                 continue
@@ -270,7 +287,7 @@ def _classify_budget_shape(ws) -> tuple[str | None, str | None]:
                     subheader_hits += 1
                     if first_subheader_row is None:
                         first_subheader_row = r
-                if _QUARTER_RX.match(v.strip()):
+                if match_quarter_label(v.strip()):
                     quarters += 1
                 elif _TOTAL_RX.match(v.strip()):
                     total_period = True
@@ -713,8 +730,11 @@ def _detect_content_mapping(ws, account_names: dict, tag_values: set,
                 cols_by_role[role] = col
 
         carta_role = next((r for r in ("carta_gl", "carta_account") if r in cols_by_role), None)
-        own_role = next((r for r in ("own_code", "own_category", "tag", "sub_account", "vendor")
-                          if r in cols_by_role), None)
+        own_order = ("own_code", "own_category", "tag", "sub_account", "vendor")
+        if carta_role != "carta_gl":
+            # A short-whole-number column is too weak to pair with a name-only Carta match.
+            own_order = own_order[1:]
+        own_role = next((r for r in own_order if r in cols_by_role), None)
         if carta_role and own_role and len(cols_by_role) >= 2:
             kind = f"{_CARTA_ROLES[carta_role]} to {_OWN_ROLES[own_role]}"
             return cols_by_role, kind
@@ -847,9 +867,12 @@ def main() -> int:
             "row_axis":     _row_axis(ws, account_names),
         })
 
-    # Sheets that look like budgets first, then by size — the budget tab is
-    # rarely the last one in a financial-statements workbook.
-    sheets.sort(key=lambda s: (s["hidden"], s["likely_shape"] is None, -s["rows"]))
+    # Sheets that look like budgets first, then ones whose own name says
+    # so ("BvA", "Budget"), then by size — the real budget tab is routinely
+    # smaller than a detail or archive tab sitting beside it, so size alone
+    # is not enough to rank it first.
+    sheets.sort(key=lambda s: (s["hidden"], s["likely_shape"] is None,
+                                not _tab_name_signal(s["name"]), -s["rows"]))
     print(json.dumps({"filename": path.name, "path": str(path), "sheets": sheets}, indent=2))
     return 0
 

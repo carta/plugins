@@ -164,7 +164,7 @@
     "name": "Upload a firm document",
     "order": 20,
     "prompts": [
-      "Upload [file path] to {{FIRM}}'s Documents page as an NDA",
+      "Upload [file path] to {{FIRM}}'s Documents page",
       "Add this side letter to our firm documents in Carta"
     ]
   }

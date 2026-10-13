@@ -83,6 +83,7 @@ from pathlib import Path
 
 from openpyxl import load_workbook
 
+from .quarter_label import match_quarter_label
 from .vocab import tag_value_for_section, match_section
 
 # Standard P&L section vocabulary. These are accounting terms, not any one
@@ -97,7 +98,6 @@ _SECTION_INCOME = "Income"
 _SECTION_OPEX = "Operating Expenses"
 
 _HEADER_SCAN_ROWS = 12          # how far down to look for the period header
-_QUARTER_RX = re.compile(r"^Q([1-4])\s+(20\d{2})$", re.IGNORECASE)
 _TOTAL_PERIOD_RX = re.compile(r"^TOTAL\s+(20\d{2})$", re.IGNORECASE)
 _COMMENT_HEADERS = {"comments", "comment", "notes", "note"}
 
@@ -113,10 +113,24 @@ _MONTH_RX = re.compile(
     re.IGNORECASE,
 )
 _YEARLESS = object()  # by_year_m bucket for month headers stating no year
-# A qualifier of "budget" marks the planning columns; actual/forecast
-# columns for prior periods often sit in the same header block.
-_BUDGET_QUALIFIER = "budget"
-_QUALIFIER_TOKENS = ("budget", "actual", "forecast")
+# Precedence order for resolving a column when more than one qualifier is
+# present in range: an exact "budget" match anywhere wins over a synonym at
+# any distance, so a repeating [Actual, Budget, Forecast] block per quarter
+# never has "Forecast" shadow the real "Budget" column just because it's
+# nearer the label. Single source of truth: `_BUDGET_QUALIFIERS` below is
+# derived from this tuple so a new synonym only needs to be added once.
+_BUDGET_QUALIFIER_PRECEDENCE = ("budget", "proposal", "plan", "projection", "forecast")
+# A qualifier of "budget" — or one of its synonyms, since firms name their
+# planning column whatever they call the planning exercise itself — marks
+# the planning columns; "actual" columns for prior periods often sit in the
+# same header block.
+_BUDGET_QUALIFIERS = frozenset(_BUDGET_QUALIFIER_PRECEDENCE)
+_ACTUAL_QUALIFIER = "actual"
+# A quarter label's own trailing suffix letter(s) that mark it as actuals
+# (e.g. "1Q25A"), distinct from `_ACTUAL_QUALIFIER` which is a full word in
+# a separate qualifier row rather than a letter tacked onto the label itself.
+_ACTUAL_SUFFIX_TOKENS = frozenset({"a", "act"})
+_QUALIFIER_TOKENS = frozenset({_ACTUAL_QUALIFIER}) | _BUDGET_QUALIFIERS
 # The qualifier row isn't always directly above the label row (a real
 # client file puts a date row in between), so a window finds it either way.
 _QUALIFIER_ROW_WINDOW = 3
@@ -329,22 +343,43 @@ def _find_qualifier_row(ws, header_row, last_col, last_row):
 
 
 def _resolve_budget_col(ws, qualifier_row, label_col, last_col):
-    """The column nearest `label_col` whose qualifier reads Budget.
+    """The column nearest `label_col` whose qualifier reads as one of the
+    budget qualifiers (Budget, Proposal, Plan, Projection, Forecast).
+
+    The label's own column is checked FIRST, for ANY budget qualifier —
+    not synonym-restricted — before any neighbor is considered. Otherwise a
+    neighboring exact "budget" match can outrank the label's own column:
+    for Q1-Q4 2025 (qualified "Budget") immediately followed by Q1-Q4 2026
+    (qualified "Proposal"), every 2026 quarter label sits on its own
+    Proposal column, but a 2025 Budget column is within the search radius
+    of all four 2026 labels — so without this own-column check, all four
+    2026 quarters would resolve to that same 2025 Budget column instead of
+    their own Proposal column.
+
+    Only once the label's own column is ruled out does the search fall
+    back to neighbors, where an exact "budget" match anywhere within the
+    search radius wins over a synonym at any distance — otherwise a
+    repeating [Actual, Budget, Forecast] block per quarter can have the
+    search land on a neighboring quarter's Forecast column (checked at a
+    shorter distance) before it ever reaches this quarter's own Budget
+    column.
 
     Returns None when there is no qualifier row to consult at all (a
-    budget-only sheet, nothing to disambiguate from) or when no Budget
-    column turns up within the search radius — the caller decides what
-    each of those means.
+    budget-only sheet, nothing to disambiguate from) or when no
+    budget-qualified column turns up within the search radius — the caller
+    decides what each of those means.
     """
     if qualifier_row is None:
         return None
-    for dist in range(_BUDGET_COL_SEARCH_RADIUS + 1):
-        cols = (label_col,) if dist == 0 else (label_col - dist, label_col + dist)
-        for col in cols:
-            if col < 1 or col > last_col:
-                continue
-            if _normalize_qualifier(ws.cell(qualifier_row, col).value) == _BUDGET_QUALIFIER:
-                return col
+    if _normalize_qualifier(ws.cell(qualifier_row, label_col).value) in _BUDGET_QUALIFIERS:
+        return label_col
+    for wanted in _BUDGET_QUALIFIER_PRECEDENCE:
+        for dist in range(1, _BUDGET_COL_SEARCH_RADIUS + 1):
+            for col in (label_col - dist, label_col + dist):
+                if col < 1 or col > last_col:
+                    continue
+                if _normalize_qualifier(ws.cell(qualifier_row, col).value) == wanted:
+                    return col
     return None
 
 
@@ -372,14 +407,62 @@ def _bare_year_or_ordinal(v):
     return ("yearn", int(m.group(1))) if m else None
 
 
-def _strictly_increasing_cols(pairs):
-    """True when, read left to right by column, the values strictly
-    increase — the mark of a real period axis rather than coincidental
-    numbers (an account code, a dollar amount) that happen to look like one.
+def _resolve_period_axis(pairs, qualifier_row, ws):
+    """The (col, year) pairs that make up a real bare-year or fund-life-band
+    period axis, collapsing a repeated value to one column per year first.
+
+    A firm's header can restate the same year once per qualifier column
+    ("2026" over Actual, over Proposal, over Projection) rather than once
+    per calendar year. Read left to right by column, distinct years must
+    still strictly increase — the mark of a real period axis rather than
+    coincidental numbers (an account code, a dollar amount) that happen to
+    look like one — but a repeat is only resolvable when a qualifier row
+    says which of the repeated columns is the budget one; that column wins
+    over an actuals column with the same year. Returns None when this
+    isn't a real period axis at all.
     """
-    ordered = sorted(pairs, key=lambda t: t[0])
-    values = [n for _, n in ordered]
-    return len(values) >= 2 and all(a < b for a, b in zip(values, values[1:]))
+    by_year: dict = {}
+    for col, year in pairs:
+        by_year.setdefault(year, []).append(col)
+
+    resolved = []
+    any_repeat = False
+    for year, cols in by_year.items():
+        if len(cols) == 1:
+            resolved.append((cols[0], year))
+            continue
+        any_repeat = True
+        if qualifier_row is None:
+            return None
+        # An exact "budget" match among the repeated columns wins over a
+        # synonym (Proposal/Plan/Projection/Forecast) regardless of column
+        # order — otherwise a leftmost-match scan can land on a Forecast
+        # column that sits before the real Budget column in the same
+        # repeat, e.g. [Actual, Forecast, Budget], or even a repeat with no
+        # Actual column at all, e.g. [Forecast, Budget].
+        budget_col = None
+        for wanted in _BUDGET_QUALIFIER_PRECEDENCE:
+            budget_col = next(
+                (c for c in cols
+                 if _normalize_qualifier(ws.cell(qualifier_row, c).value) == wanted),
+                None,
+            )
+            if budget_col is not None:
+                break
+        if budget_col is None:
+            return None
+        resolved.append((budget_col, year))
+
+    resolved.sort(key=lambda t: t[0])
+    values = [n for _, n in resolved]
+    if len(values) >= 2 and all(a < b for a, b in zip(values, values[1:])):
+        return resolved
+    # A single year is only a real axis when it came from a resolved
+    # repeat — a qualifier row backed it as a deliberate budget column,
+    # not a lone number that merely happens to look like a year.
+    if len(values) == 1 and any_repeat:
+        return resolved
+    return None
 
 
 def parse(workbook_path, sheet_name, mapping_records=None,
@@ -700,17 +783,50 @@ def _resolve_year(full_years, want_year, sheet_label, granularity):
     )
 
 
+# How many consecutive empty columns end the sheet's real, contiguous used
+# block. A workbook can carry one stray far-right cell — a pasted note, a
+# leftover test value — with nothing else near it; without a bound, that
+# single cell makes openpyxl's own ws.max_column report thousands of
+# columns, and every scan below would walk all of them for nothing.
+_MAX_COL_GAP = 50
+
+
+def _used_col_bound(ws, max_row, max_col, scan_rows):
+    """The last column of the sheet's real, contiguous used block, scanning
+    a handful of rows from the top rather than trusting `ws.max_column`
+    whole — one isolated cell far to the right must not widen the header
+    scan (or any other column loop) out to where it sits.
+    """
+    probe_rows = list(range(1, min(max_row, scan_rows + 20) + 1))
+    last_used = 0
+    gap = 0
+    for c in range(1, max_col + 1):
+        if any(ws.cell(r, c).value is not None for r in probe_rows):
+            last_used = c
+            gap = 0
+        else:
+            gap += 1
+            if gap > _MAX_COL_GAP and last_used:
+                break
+    return last_used or max_col
+
+
 def _detect_layout(ws, want_year=None, sheet_label="this sheet") -> dict:
     """Locate the budget columns, the comment column, and the period.
 
     Scans the top of the sheet for a row carrying period labels: quarterly,
     monthly, bare fiscal years, or fund-life bands. A nearby qualifier row
-    ("Budget"/"Actual"/"Forecast") resolves each period to its own Budget
-    sub-column, wherever the label itself happens to sit.
+    ("Budget"/"Proposal"/"Plan"/"Projection"/"Forecast" vs. "Actual")
+    resolves each period to its own budget sub-column, wherever the label
+    itself happens to sit.
     """
     # Captured once: openpyxl grows max_row/max_column on any out-of-range
     # read, so the qualifier search below must not chase a moving target.
-    max_row, max_col = ws.max_row, ws.max_column
+    # max_col is bounded to the sheet's contiguous used block, not the raw
+    # ws.max_column, so one stray far-right cell can't widen every scan
+    # below out to where it sits.
+    max_row = ws.max_row
+    max_col = _used_col_bound(ws, max_row, ws.max_column, _HEADER_SCAN_ROWS)
     for r in range(1, min(_HEADER_SCAN_ROWS, max_row) + 1):
         by_year_q: dict[int, dict[int, int]] = {}
         by_year_m: dict = {}
@@ -734,13 +850,13 @@ def _detect_layout(ws, want_year=None, sheet_label="this sheet") -> dict:
                     and comment_col is None:
                 comment_col = c
                 continue
-            mq = _QUARTER_RX.match(label) if isinstance(label, str) else None
+            mq = match_quarter_label(label) if isinstance(label, str) else None
             mt = _TOTAL_PERIOD_RX.match(label) if isinstance(label, str) else None
             mm = None if (mq or mt) else _month_index(label)
             if not (mq or mt or mm):
                 continue
             label_year = (
-                int(mq.group(2)) if mq else
+                mq[1] if mq else
                 int(mt.group(1)) if mt else
                 mm[1]
             )
@@ -750,9 +866,9 @@ def _detect_layout(ws, want_year=None, sheet_label="this sheet") -> dict:
             )
             period_col = _resolve_budget_col(ws, qualifier_row, c, max_col)
             if period_col is None:
-                # A non-Budget qualifier with no Budget sibling is safe to
+                # A non-budget qualifier with no budget sibling is safe to
                 # drop unless it's the year being read — then it's ambiguous.
-                if own_qualifier and own_qualifier != _BUDGET_QUALIFIER:
+                if own_qualifier and own_qualifier not in _BUDGET_QUALIFIERS:
                     if want_year is not None and label_year in (None, want_year):
                         raise ValueError(
                             f"{sheet_label}: the {label!r} column's own "
@@ -765,7 +881,16 @@ def _detect_layout(ws, want_year=None, sheet_label="this sheet") -> dict:
                 period_col = c
 
             if mq:
-                by_year_q.setdefault(label_year, {}).setdefault(int(mq.group(1)), period_col)
+                suffix = (mq[2] or "").strip().lower()
+                if qualifier_row is None and suffix in _ACTUAL_SUFFIX_TOKENS:
+                    # No separate qualifier row to arbitrate, and the label
+                    # states its own actuals suffix (e.g. "1Q25A") — never
+                    # the budget axis. Leaving this column out lets an
+                    # explicitly non-actuals sibling (e.g. "1Q25P") win the
+                    # (year, quarter) slot below instead of whichever of the
+                    # two happened to be read first.
+                    continue
+                by_year_q.setdefault(label_year, {}).setdefault(mq[0], period_col)
             elif mt:
                 totals.setdefault(label_year, period_col)
             else:
@@ -782,6 +907,7 @@ def _detect_layout(ws, want_year=None, sheet_label="this sheet") -> dict:
         base = {
             "comment_col":    comment_col,
             "label_col":      _label_col(ws, r),
+            "max_col":        max_col,
         }
         base["first_data_row"] = _first_data_row(ws, r, base["label_col"])
 
@@ -808,17 +934,19 @@ def _detect_layout(ws, want_year=None, sheet_label="this sheet") -> dict:
                     "total_col": totals.get(want_year),
                     "period_cols": [by_year_m[_YEARLESS][m] for m in range(12)]}
 
-        if _strictly_increasing_cols(year_cols):
-            years = sorted(n for _, n in year_cols)
+        resolved_years = _resolve_period_axis(year_cols, qualifier_row, ws)
+        if resolved_years:
+            years = sorted(n for _, n in resolved_years)
             year = _resolve_year(years, want_year, sheet_label, "annual")
-            col = next(c for c, n in year_cols if n == year)
+            col = next(c for c, n in resolved_years if n == year)
             return {**base, "granularity": "annual", "period_year": year,
                     "total_col": None, "period_cols": [col]}
 
-        if _strictly_increasing_cols(yearn_cols):
-            bands = sorted(n for _, n in yearn_cols)
+        resolved_bands = _resolve_period_axis(yearn_cols, qualifier_row, ws)
+        if resolved_bands:
+            bands = sorted(n for _, n in resolved_bands)
             band = _resolve_year(bands, want_year, sheet_label, "fund-life")
-            col = next(c for c, n in yearn_cols if n == band)
+            col = next(c for c, n in resolved_bands if n == band)
             return {**base, "granularity": "annual", "period_year": band,
                     "total_col": None, "period_cols": [col]}
 
@@ -899,8 +1027,9 @@ def _row_states_figures(ws, row_ix, layout):
     cols = layout.get("period_cols") or []
     if not cols:
         return False
+    last_col = layout.get("max_col") or ws.max_column
     seen = 0
-    for c in range(min(cols), ws.max_column + 1):
+    for c in range(min(cols), last_col + 1):
         v = ws.cell(row_ix, c).value
         if isinstance(v, (int, float)) and not isinstance(v, bool):
             seen += 1

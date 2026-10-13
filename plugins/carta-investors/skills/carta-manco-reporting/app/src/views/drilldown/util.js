@@ -1,5 +1,5 @@
 // Helpers for filtering the entries[] fixture by the current drill-down selection.
-import { dimensionValue, noValueLabel } from "../../ui/dimension.js";
+import { dimensionValue, noValueLabel, rowTagScope } from "../../ui/dimension.js";
 
 
 // A real fund name can carry regex metacharacters ("Fund II (Onshore), L.P.") —
@@ -258,6 +258,13 @@ export function filterEntries(entries, sel, topCategoryNames = []) {
     if (typeSet.size === 0) return [];
     const months = QUARTER_MONTHS[sel.quarter] || null;   // null = Total, all months
     const tagSet = sel.cartaTags ? new Set(sel.cartaTags) : null;
+    // The same precedence computeLineActuals uses: this line's own
+    // reporting-tag scope first, else the shared dimension the selection
+    // carries. Read straight from `sel` — the drill payload already carries
+    // the row's own `scopes` and `tag_value` — so a cell's own scope still
+    // wins even if the click that opened it only passed the workbook-wide
+    // dimension along.
+    const tagDimension = tagSet ? rowTagScope(sel, sel.dimension, true) : null;
     // A line scoped to a sub-account (or a vendor) reports that slice of
     // its accounts. Showing the account's whole spend behind it invites
     // the reader to reconcile against a figure that was never the row's.
@@ -269,7 +276,7 @@ export function filterEntries(entries, sel, topCategoryNames = []) {
       if (scopes.length
           && !scopes.every(sc => dimensionValue(e, sc) === sc.value)) return false;
       if (tagSet) {
-        const v = dimensionValue(e, sel.dimension);
+        const v = dimensionValue(e, tagDimension);
         if (v == null || !tagSet.has(v)) return false;
       } else if (claims.length
                  && claims.some(c => dimensionValue(e, c) === c.value)) {

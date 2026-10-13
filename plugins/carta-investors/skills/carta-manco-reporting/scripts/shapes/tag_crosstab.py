@@ -532,14 +532,22 @@ def _anchor_spans(anchors: list[tuple[int, str]], max_column: int) -> list[tuple
     return [(cols[i], cols[i + 1]) for i in range(len(anchors))]
 
 
-def _spans_have_budget(ws, row: int, spans: list[tuple[int, int]]) -> bool:
-    """Whether any span carries a literal 'Budget' cell in `row`."""
+def _spans_budget_match_count(ws, row: int, spans: list[tuple[int, int]]) -> int:
+    """How many of `spans` carry a literal 'Budget' cell in `row`.
+
+    The scoring signal `_locate_header_rows` ranks candidates by: a stray
+    notes row that happens to have two anchors and one coincidental
+    'Budget' cell nearby scores lower than the real header, where every
+    department's span carries its own 'Budget' column.
+    """
+    count = 0
     for start, end in spans:
         for c in range(start, end):
             v = ws.cell(row, c).value
             if isinstance(v, str) and v.strip().lower() == "budget":
-                return True
-    return False
+                count += 1
+                break
+    return count
 
 
 def _locate_header_rows(ws) -> tuple[int, int] | None:
@@ -553,7 +561,16 @@ def _locate_header_rows(ws) -> tuple[int, int] | None:
     because two real workbooks carry that row one line higher than others.
     A lone anchor is skipped: its "span" is the whole row width, which
     would match a 'Budget' cell anywhere below it regardless of layout.
+
+    Every (dept_row, subheader_row) pair in the scan window that matches
+    at all is scored by how many of its spans actually carry 'Budget'
+    (ties broken by how many anchors the dept row has), and the
+    best-scoring pair wins — not the first one found. A stray notes row
+    earlier in the sheet that coincidentally has two anchors and a single
+    'Budget' cell nearby would otherwise hijack the real header further
+    down, which has a 'Budget' column in every department's span.
     """
+    best = None  # ((matched_spans, anchor_count), dept_row, subheader_row)
     max_dept_row = min(ws.max_row, _HEADER_SCAN_ROWS)
     for dept_row in range(1, max_dept_row + 1):
         anchors = _collect_anchors(ws, dept_row)
@@ -564,9 +581,15 @@ def _locate_header_rows(ws) -> tuple[int, int] | None:
             subheader_row = dept_row + offset
             if subheader_row > ws.max_row:
                 break
-            if _spans_have_budget(ws, subheader_row, spans):
-                return dept_row, subheader_row
-    return None
+            matched = _spans_budget_match_count(ws, subheader_row, spans)
+            if not matched:
+                continue
+            score = (matched, len(anchors))
+            if best is None or score > best[0]:
+                best = (score, dept_row, subheader_row)
+    if best is None:
+        return None
+    return best[1], best[2]
 
 
 def _find_dept_blocks(ws, dept_row: int = _DEPT_ROW,

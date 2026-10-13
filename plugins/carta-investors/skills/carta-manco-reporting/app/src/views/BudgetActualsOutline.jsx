@@ -3,7 +3,7 @@ import { sans, inkNum, INK, PAPER, LINE, BORDER_DEFAULT, FAINT, MICRO, SHADE, BL
 import { Bubble, CollapseCaret, NoteIcon } from "../ui/components.jsx";
 import { TableScroll, LEDGER_BASE, TOTAL_ROW_BG, useStickyHeader, StickyClone, GroupedTableHead } from "../ui/table.jsx";
 import { glNameMap, glTooltip, subCodeMap, subOfChildLabel } from "../ui/glNames.js";
-import { dimensionValue, dimensionValuesAvailable, noValueLabel } from "../ui/dimension.js";
+import { dimensionValue, dimensionValuesAvailable, noValueLabel, rowTagScope } from "../ui/dimension.js";
 import { LEDGER_LABEL, LEDGER_NUM, LEDGER_ROW, LEDGER_TOTAL, LEDGER_SUMMARY } from "../ui/ledger.js";
 import { fmtCurrencyWhole } from "../charts/chartTheme.js";
 import { varianceColor, rowPolarity, fmtVarianceWhole } from "../ui/variance.js";
@@ -719,12 +719,16 @@ function OutlineRow({ row, actualsByKey, aggregates, valueAliases, tagValuesAvai
   // Only real lines open: an aggregate has no single set of entries behind
   // it, and a fund-matched fee line resolves from fund-side JEs, which this
   // breakout does not read.
-  const tagFilter = (row.tag_value && tagValuesAvailable)
+  // The row's own reporting-tag scope first, else the shared dimension —
+  // the same precedence computeLineActuals uses, so a click's drawer
+  // reports the same slice the cell above it summed.
+  const rowScope = rowTagScope(row, dimension, tagValuesAvailable);
+  const tagFilter = (row.tag_value && rowScope)
     ? new Set(valueAliases[row.tag_value] || [row.tag_value]) : null;
   const children = (breakout && kind === "line" && !row.fund_match && !unmapped && !voided
                     && opensAnything(row, breakout))
     ? breakoutBuckets(entries, row, breakout, {
-        tagFilter, dimension, bucketOf: mo => MONTH_TO_Q[mo],
+        tagFilter, dimension: rowScope || dimension, bucketOf: mo => MONTH_TO_Q[mo],
         bucketKeys: QUARTERS.map(q => q.key),
         excludeClaims: row.excluded_claims,
       })
@@ -799,7 +803,7 @@ function OutlineRow({ row, actualsByKey, aggregates, valueAliases, tagValuesAvai
         // have nothing to resolve.
         const isAgg = kind === "subtotal" || kind === "total" || kind === "summary";
         const members = isAgg && onDrillTotal && rowByKey
-          ? totalMembers(row, rowByKey, valueAliases, tagValuesAvailable) : [];
+          ? totalMembers(row, rowByKey, valueAliases, tagValuesAvailable, dimension) : [];
         const canDrillTotal = members.length > 0 && actualV !== 0;
         const canDrill = !!onDrill && kind === "line" && !unmapped && !shared
                          && (actualV !== 0 || !!row.comment);
@@ -824,7 +828,7 @@ function OutlineRow({ row, actualsByKey, aggregates, valueAliases, tagValuesAvai
               glCodes:    row.gl_codes || [],
               scopes:     row.scopes || null,
               excludedClaims: row.excluded_claims || null,
-              cartaTags:  (row.tag_value && tagValuesAvailable)
+              cartaTags:  (row.tag_value && rowScope)
                           ? (valueAliases[row.tag_value] || [row.tag_value]) : null,
               fundMatch:  row.fund_match || null,
               // Answered to the funds' ledger: the drawer reads there too,
@@ -879,7 +883,7 @@ function OutlineRow({ row, actualsByKey, aggregates, valueAliases, tagValuesAvai
       <OutlineChildRow
         key={`${row.key}-${c.label}`} child={c} indent={indent + 26}
         row={row} breakout={breakout} periodYear={periodYear} dimension={dimension}
-        cartaTags={(row.tag_value && tagValuesAvailable)
+        cartaTags={(row.tag_value && rowScope)
                    ? (valueAliases[row.tag_value] || [row.tag_value]) : null}
         onDrill={onDrill} hoverCell={hoverCell} heldCell={heldCell}
         onHoverCell={onHoverCell}
@@ -1098,8 +1102,11 @@ export function computeLineActuals(rows, accountsData, valueAliases, periodYear,
       // Values another line reports are not this line's to report too.
       const claims = row.excluded_claims || [];
       // Dept-scoped expense lines filter by the Carta Department tag;
-      // income/summary lines are firm-wide.
-      const tags = (row.tag_value && tagValuesAvailable)
+      // income/summary lines are firm-wide. The row's own reporting-tag
+      // scope wins over the workbook-wide dimension — a dimension the
+      // workbook never resolved must not un-filter a row that names its own.
+      const scope = rowTagScope(row, dimension, tagValuesAvailable);
+      const tags = (row.tag_value && scope)
         ? new Set(valueAliases[row.tag_value] || [row.tag_value]) : null;
       // A line can be scoped by more than one thing at once — one
       // department's rent for one office. It means the intersection.
@@ -1112,7 +1119,7 @@ export function computeLineActuals(rows, accountsData, valueAliases, periodYear,
         if (extra.length
             && !extra.every(sc => dimensionValue(e, sc) === sc.value)) continue;
         if (tags) {
-          const v = dimensionValue(e, dimension);
+          const v = dimensionValue(e, scope);
           if (v == null || !tags.has(v)) continue;
         } else if (claims.length && claims.some(c => dimensionValue(e, c) === c.value)) {
           elsewhere[q] += amt;
@@ -1197,7 +1204,8 @@ const isTotalKind = (k) => k === "total" || k === "subtotal" || k === "summary";
  *  the lines it was widened to cover — so the drawer holds exactly what
  *  the figure holds. A line with nothing behind it contributes nothing.
  */
-export function totalMembers(row, rowByKey, valueAliases = {}, tagValuesAvailable = true) {
+export function totalMembers(row, rowByKey, valueAliases = {}, tagValuesAvailable = true,
+                             dimension = null) {
   // The same set the row's own figure summed (see computeAggregates): the
   // lines it was widened to cover, or its formula's own, whichever is
   // wider. Taking covered_lines whenever it exists opened a section total
@@ -1214,11 +1222,15 @@ export function totalMembers(row, rowByKey, valueAliases = {}, tagValuesAvailabl
     // A per-fund line resolves against the fund-side dataset by fund name,
     // so it belongs in the total whether or not it also names an account.
     if (!glCodes.length && !r.fund_match) continue;
+    // Its own reporting-tag scope first, else the shared dimension — the
+    // same precedence computeLineActuals uses, so a total's drill members
+    // report the same slice the figure above them summed.
+    const scope = rowTagScope(r, dimension, tagValuesAvailable);
     out.push({
       glCodes,
       scopes: r.scopes || null,
       excludedClaims: r.excluded_claims || null,
-      cartaTags: (r.tag_value && tagValuesAvailable)
+      cartaTags: (r.tag_value && scope)
         ? (valueAliases[r.tag_value] || [r.tag_value]) : null,
       fundMatch: r.fund_match || null,
       tag_value: r.tag_value || null,
