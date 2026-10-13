@@ -19,7 +19,7 @@ model: inherit
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.16.4</carta-plugin>
+<carta-plugin>carta-crm:1.16.5</carta-plugin>
 
 # Adviser Tracker
 
@@ -68,21 +68,19 @@ pass it with `--notice`. When a check call fails, skip that check. Do not retry 
 
 ## Step 3: Split the tiers
 
-Use judgement on deals made and relationship strength. Tier 1 is the banks that bring deals
-steadily and that our team knows well: strong or moderate relationships with a solid year total.
-Tier 2 is the rest. Pass each Tier 1 bank by its exact `domain` with `--tier1`. When no bank
-qualifies, pass no `--tier1`, and every bank goes to Tier 2.
+The script splits the tiers by a fixed rule: Tier 1 is the top half of the banks by deals
+created over the three years, Tier 2 is the rest. Do not choose, change or override the tiers.
 
 ## Step 4: Build the page
 
 ```
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/adviser-tracker/scripts/build_tracker.py" --result <file> --tier1 "<bank domain>" --tier1 "<bank domain>" --notice "<line from Step 2, omitted when the checks agree>" --out <outputs-directory>/adviser-tracker-<slug>.html
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/adviser-tracker/scripts/build_tracker.py" --result <file> --notice "<line from Step 2, omitted when the checks agree>" --out <outputs-directory>/adviser-tracker-<slug>.html
 ```
 
 `<slug>` is the organization lowercased with non-alphanumerics collapsed to `-`.
 
 The script exits with a typed code when the input is wrong (`result_not_json`, `result_empty`,
-`result_invalid`, `row_invalid`, `not_configured`, `tier_unknown`, `no_result`,
+`result_invalid`, `row_invalid`, `not_configured`, `no_result`,
 `template_invalid`). Tell the user the tracker could not be built and stop. Do not repair the
 data by hand.
 

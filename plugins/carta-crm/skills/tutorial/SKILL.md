@@ -26,7 +26,7 @@ model: haiku
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.16.4</carta-plugin>
+<carta-plugin>carta-crm:1.16.5</carta-plugin>
 
 # Carta CRM Tutorial
 

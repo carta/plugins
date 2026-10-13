@@ -154,7 +154,27 @@ def clean_row(row: object, index: int) -> dict:
     }
 
 
-def build_data(payload: object, tier1: list[str], as_of: dt.date, notice: str | None) -> dict:
+def split_tiers(rows: list[dict], last_year: int) -> dict:
+    """Tier 1 is the top half of the banks, rounded up, by deals created over the whole window.
+
+    Ties go to the bank with more deals in `last_year`, then to the earlier name. The result does not depend
+    on the order of `rows`, and it does not change with the year the page shows.
+    """
+    def rank(row: dict) -> tuple:
+        months = row["dealsByMonth"]
+        return (
+            -sum(m["count"] for m in months),
+            -sum(m["count"] for m in months if m["month"].startswith(str(last_year))),
+            row["adviser"]["name"].casefold(),
+            row["adviser"]["domain"],
+        )
+
+    ranked = [r["adviser"]["domain"] for r in sorted(rows, key=rank)]
+    cut = (len(ranked) + 1) // 2
+    return {"1": ranked[:cut], "2": ranked[cut:]}
+
+
+def build_data(payload: object, as_of: dt.date, notice: str | None) -> dict:
     """The tool output plus `asOf`, `notice` and `tiers`, the shape the skeleton reads."""
     if not isinstance(payload, dict) or not isinstance(payload.get("rows"), list):
         raise fail("result_invalid", "the result has no `rows` list")
@@ -162,10 +182,6 @@ def build_data(payload: object, tier1: list[str], as_of: dt.date, notice: str | 
     if not (isinstance(window, dict) and all(isinstance(window.get(k), int) for k in ("from", "to")) and window["from"] <= window["to"]):
         raise fail("result_invalid", "`window` must carry integer `from` and `to`")
     rows = [clean_row(r, i) for i, r in enumerate(payload["rows"])]
-    domains = [r["adviser"]["domain"] for r in rows]
-    unknown = [d for d in tier1 if d not in domains]
-    if unknown:
-        raise fail("tier_unknown", f"no row has the domain {', '.join(unknown)}")
     tenant = payload.get("tenant") if isinstance(payload.get("tenant"), dict) else {}
     title = payload["title"] if isinstance(payload.get("title"), str) and payload["title"] else "M&A Adviser Tracker"
     return {
@@ -174,7 +190,7 @@ def build_data(payload: object, tier1: list[str], as_of: dt.date, notice: str | 
         "window": {"from": window["from"], "to": window["to"]},
         "asOf": as_of.isoformat(),
         "notice": notice,
-        "tiers": {"1": [d for d in domains if d in tier1], "2": [d for d in domains if d not in tier1]},
+        "tiers": split_tiers(rows, window["to"]),
         "rows": rows,
     }
 
@@ -197,7 +213,6 @@ def render(data: dict) -> str:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--result", type=Path, help="the saved `get_adviser_tracker` result")
-    parser.add_argument("--tier1", action="append", default=[], metavar="DOMAIN", help="the domain of an adviser to put in Tier 1; repeatable. The others go to Tier 2")
     parser.add_argument("--notice", help="one line shown above the table, such as a check that disagreed")
     parser.add_argument("--as-of", type=dt.date.fromisoformat, default=dt.date.today(), help="the date the data is as of (default today)")
     parser.add_argument("--out", type=Path, required=True)
@@ -205,7 +220,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if not args.result:
         raise fail("no_result", "pass --result")
-    data = build_data(parse_result(args.result.read_text(encoding="utf-8")), args.tier1, args.as_of, args.notice)
+    data = build_data(parse_result(args.result.read_text(encoding="utf-8")), args.as_of, args.notice)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(render(data), encoding="utf-8")
     print(f"wrote {args.out}")

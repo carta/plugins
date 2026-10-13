@@ -4423,6 +4423,10 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
       return e.month.slice(0, 4) === String(year) && +e.month.slice(5, 7) <= last ? a + e.count : a;
     }, 0);
   }
+  // The table's Year total: every deal of the year in the data, which the data holds only up to asOf.
+  function yearTotal(row, year) {
+    return byQuarter(row, year).reduce(function (a, b) { return a + b; }, 0);
+  }
   // The current year runs only to the asOf month.
   function toDate(row, year) { return sumMonths(row, year, year === cy ? cm : 12); }
   // Months from January of window.from up to the asOf month.
@@ -4485,6 +4489,7 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
   function change(cur, prev) {
     return prev ? signed(cur - prev) + ' (' + signed(Math.round((cur - prev) / prev * 100)) + '%)' : 'no deals before, so no change to show';
   }
+  function monthSpan(last) { return last === 12 ? 'full year' : last === 1 ? 'Jan' : 'Jan to ' + MON[last - 1]; }
   // Year over year compares whole years, or for the current year its complete months only.
   function yearTip(row, y) {
     var n = toDate(row, y), lines = [];
@@ -4494,8 +4499,7 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
       if (!last) {
         lines.push('No complete month yet to compare');
       } else {
-        var span = last === 12 ? 'full year' : last === 1 ? 'Jan' : 'Jan to ' + MON[last - 1];
-        lines.push('Compared on ' + span + ': ' + sumMonths(row, y, last) + ' vs ' + prev + ' in ' + (y - 1) + ', ' + change(sumMonths(row, y, last), prev));
+        lines.push('Compared on ' + monthSpan(last) + ': ' + sumMonths(row, y, last) + ' vs ' + prev + ' in ' + (y - 1) + ', ' + change(sumMonths(row, y, last), prev));
       }
     }
     return { title: row.adviser.name + ', ' + y + ': ' + deals(n) + ' created', lines: lines };
@@ -4531,20 +4535,62 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
       '" style="' + (zero ? '' : 'fill:' + fill + ';') + '--d:' + delay + '"/>';
   }
 
-  function headline() {
-    var top = null, topN = 0, grow = null;
-    data.rows.forEach(function (r) {
-      var n = toDate(r, cy), cur = sumMonths(r, cy, doneM), prev = sumMonths(r, cy - 1, doneM);
-      if (n > topN) { top = r; topN = n; }
-      // Complete months only. Small bases would swing too far on one deal.
-      if (cy > data.window.from && prev >= MIN_BASE && (!grow || (cur - prev) / prev > grow.pct)) grow = { r: r, pct: (cur - prev) / prev };
-    });
-    var parts = [];
-    if (top) parts.push(top.adviser.name + ' brought the most deals in ' + cy + ' (' + topN + ')');
-    if (grow && grow.pct > 0) {
-      parts.push(grow.r.adviser.name + ' grew fastest year over year (+' + Math.round(grow.pct * 100) + '%, Jan to ' + MON[doneM - 1] + ' ' + cy + ' against ' + (cy - 1) + ', among banks with ' + MIN_BASE + ' or more deals then)');
+  // Headline rules. A line is shown only when all of these hold:
+  // 1. It states a fact the page recomputes from the data on screen, with its basis in the same line.
+  // 2. Its deal counts are the table's Year total of the selected year (yearTotal), never another count.
+  // 3. It says what was counted, never why: no causal wording, and no ranking by a quality the data
+  //    does not measure ("best", "fastest").
+  // 4. Growth compares complete months of both periods only, needs at least MIN_BASE deals in the
+  //    earlier period, and names the base and both periods.
+  // 5. A tie names every tied bank.
+  // 6. When no claim passes (no deals, no complete months, no banks), the result is '' and the
+  //    headline stays hidden. A weak line is never shown instead.
+  function headline(year) {
+    var parts = [], most = mostDeals(year), growth = growthLeaders(year);
+    if (most) {
+      parts.push('Most deals created in ' + year + (year === cy ? ' so far (to ' + asOfText() + ')' : '') + ': ' +
+        listNames(most.names) + (most.names.length > 1 ? ' tied (' + most.n + ' each)' : ' (' + most.n + ')'));
+    }
+    if (growth) {
+      parts.push('Highest percentage increase in deals created, ' + growth.now + ' against ' + growth.before +
+        ', among banks with ' + MIN_BASE + ' or more deals in the earlier period: ' + growth.leaders.map(function (g) {
+          return g.name + ' (' + g.cur + ' against ' + g.prev + ')';
+        }).join(' and ') + (growth.leaders.length > 1 ? ' tied at ' : ' ') + '+' + growth.pct + '%');
     }
     return parts.join('; ');
+  }
+  function periodText(last, year) { return last === 12 ? String(year) : monthSpan(last) + ' ' + year; }
+  function listNames(names) {
+    return names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1] : names[0];
+  }
+  // The banks with the highest Year total of `year`, or null when no bank has a deal.
+  function mostDeals(year) {
+    var n = 0, names = [];
+    data.rows.forEach(function (r) {
+      var t = yearTotal(r, year);
+      if (t > n) { n = t; names = []; }
+      if (t === n && n > 0) names.push(r.adviser.name);
+    });
+    return n ? { n: n, names: names } : null;
+  }
+  // The banks with the highest rise over the same complete months a year earlier, among those with a
+  // large enough earlier base. Null when there is no earlier year, no complete month or no rise.
+  function growthLeaders(year) {
+    var last = year === cy ? doneM : 12, best = null, leaders = [];
+    if (year <= data.window.from || !last) return null;
+    data.rows.forEach(function (r) {
+      var cur = sumMonths(r, year, last), prev = sumMonths(r, year - 1, last);
+      if (prev < MIN_BASE || cur <= prev) return;
+      // Compare cur / prev exactly, without rounding.
+      var cmp = best ? cur * best.prev - best.cur * prev : 1;
+      if (cmp > 0) { best = { cur: cur, prev: prev }; leaders = []; }
+      if (cmp >= 0) leaders.push({ name: r.adviser.name, cur: cur, prev: prev });
+    });
+    if (!best) return null;
+    return {
+      leaders: leaders, pct: Math.round((best.cur - best.prev) / best.prev * 100),
+      now: periodText(last, year), before: periodText(last, year - 1)
+    };
   }
 
   function renderHeader() {
@@ -4554,7 +4600,7 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
     el('notice').innerHTML = data.notice ? '<div class="notice">' + esc(data.notice) + '</div>' : '';
   }
   function renderInsight() {
-    var text = headline();
+    var text = headline(state.year);
     el('insight').hidden = !text;
     el('insight').textContent = text;
   }
@@ -4571,7 +4617,7 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
   function isPartialCol(col) { return state.year === cy && col === partialQ; }
   function dataRow(r, i, year) {
     var q = byQuarter(r, year), rel = r.relationship, tc = rel.topContact, d = r.adviser.domain;
-    var total = q.reduce(function (a, b) { return a + b; }, 0), band = volumeStrength(total);
+    var total = yearTotal(r, year), band = volumeStrength(total);
     return '<tr data-d="' + esc(d) + '"><td class="idx">' + i + '</td>' + bankCell(r) +
       q.map(function (n, c) { return numCell(d, c, n, ''); }).join('') +
       numCell(d, 4, total, 'total') +
@@ -4596,6 +4642,11 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
     }
     requestAnimationFrame(step);
   }
+  // Tier 1 is the top half of the banks by deals over the whole window, so the tiers do not follow the year.
+  function tierRule() {
+    return 'Tier 1 is the top half of the banks by deals created over the ' + (data.window.to - data.window.from + 1) +
+      ' years, ties broken by deals in ' + data.window.to + ' and then by name: ' + data.tiers['1'].length + ' of ' + data.rows.length + '. Tier 2 is the rest.';
+  }
   function renderTable(year) {
     var toggle = '<div class="toggle" role="group" aria-label="Year">' + yearsOf(data).map(function (y) {
       return '<button type="button" data-year="' + y + '" aria-pressed="' + (y === year) + '">' + y + '</button>';
@@ -4604,7 +4655,7 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
       ' Top contact is the person with the most emails and meetings with anyone on our team.';
     var how = CHOICES + ' The current quarter is partial and shows only the days so far. ' +
       'Relationship strength is the deal volume of the selected year: Strong is ' + VOLUME_BANDS[0].min + ' or more deals, Moderate is ' + VOLUME_BANDS[1].min + ' to ' + (VOLUME_BANDS[0].min - 1) + ', Weak is fewer. ' +
-      'Tier 1 and Tier 2 are Claude’s judgement from the deals a bank brings and its relationship strength. ' +
+      (data.rows.length ? tierRule() + ' ' : '') +
       'Hover a row to highlight it.';
     var body;
     if (!data.rows.length) {
@@ -4630,7 +4681,7 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
     shown = {};
     card.querySelectorAll('td[data-k]').forEach(function (c) { shown[c.dataset.k] = +c.dataset.v; });
     card.querySelectorAll('[data-year]').forEach(function (b) {
-      b.addEventListener('click', function () { state.year = +b.getAttribute('data-year'); renderTable(state.year); });
+      b.addEventListener('click', function () { state.year = +b.getAttribute('data-year'); renderTable(state.year); renderInsight(); });
     });
     animateCells(card, from);
   }
