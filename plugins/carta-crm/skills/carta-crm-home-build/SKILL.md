@@ -33,16 +33,13 @@ allowed-tools:
   - mcp__carta__crm_read_tool
   - mcp__claude_ai_Carta__crm_read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__crm_read_tool
-  - Bash(uv run *build_artifact.py *)
-  - Bash(find ~ -name "build_artifact.py"*)
-  - Bash(find /sessions -name "build_artifact.py"*)
-  - Bash(dirname *)
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-crm-home-build/scripts/build_artifact.py" *)
   - Artifact
 version: 1.0.0
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.15.0</carta-plugin>
+<carta-plugin>carta-crm:1.15.2</carta-plugin>
 
 # Carta CRM Home — publish
 
@@ -142,23 +139,13 @@ nothing in this skill needs the page in your context.
 
 ## Step 2: Stamp the page
 
-The script lives in **this skill's own `scripts/` directory**.
-
-> **Path — do NOT rely on `${CLAUDE_PLUGIN_ROOT}` in bash.** In the Cowork sandbox that env
-> var is empty, so `uv run "${CLAUDE_PLUGIN_ROOT}/…"` resolves to a broken path. Use the base
-> directory reported for this skill when it loaded (it ends in `/skills/carta-crm-home-build`)
-> as `<SKILL_DIR>`. If you do not have it, resolve it once with a scoped `find` (NOT `find /`):
-> ```
-> SKILL_DIR="$(dirname "$(dirname "$(find /sessions "$HOME" -type f -path '*/carta-crm-home-build/scripts/build_artifact.py' 2>/dev/null | head -1)")")"
-> ```
+Run this as its own command on one line, with the script path exactly as written and every
+argument quoted. Don't chain anything before or after it (no `mkdir … &&`): the script creates
+the output folder itself if needed, and a chained command needs approval. Do not search for the
+script; Bash reaches this path on every surface, Cowork included:
 
 ```
-uv run "<SKILL_DIR>/scripts/build_artifact.py" \
-  --resource "<path from Step 1>" \
-  --connector "<connector display name>" \
-  --organization "<organization from Step 0>" \
-  --build-id "<viewBuildId from Step 1>" \
-  --out <outputs-directory>/crm-home-<slug>.html
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-crm-home-build/scripts/build_artifact.py" --resource "<path from Step 1>" --connector "<connector display name>" --organization "<organization from Step 0>" --build-id "<viewBuildId from Step 1>" --out "<outputs-directory>/crm-home-<slug>.html"
 ```
 
 `<slug>` is the organization lowercased with non-alphanumerics collapsed to `-`, so two

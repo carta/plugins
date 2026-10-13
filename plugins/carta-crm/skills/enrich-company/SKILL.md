@@ -12,14 +12,13 @@ user-invocable: false
 allowed-tools:
   - WebFetch
   - WebSearch
-  - Bash(curl *)
   - AskUserQuestion
 version: 1.0.0
 model: haiku
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.15.0</carta-plugin>
+<carta-plugin>carta-crm:1.15.2</carta-plugin>
 
 ## Overview
 

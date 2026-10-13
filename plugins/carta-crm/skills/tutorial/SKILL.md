@@ -17,7 +17,7 @@ allowed-tools:
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__crm_call_tool
   # The walkthrough ends by invoking the `home` skill. Without this the call is
   # unavailable and the closing step fails without saying so.
-  - Skill
+  - Skill(carta-crm:home)
   - Bash(mkdir -p ~/.claude/plugins/cache/carta-development-tools/carta-crm)
   - Bash(touch ~/.claude/plugins/cache/carta-development-tools/carta-crm/.tutorial-seen)
 args: []
@@ -26,7 +26,7 @@ model: haiku
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.15.0</carta-plugin>
+<carta-plugin>carta-crm:1.15.2</carta-plugin>
 
 # Carta CRM Tutorial
 

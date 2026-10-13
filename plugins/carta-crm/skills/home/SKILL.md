@@ -23,13 +23,14 @@ allowed-tools:
   - mcp__carta__crm_view_tool
   - mcp__claude_ai_Carta__crm_view_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__crm_view_tool
-  - Skill
+  - Skill(carta-crm:tutorial)
+  - Skill(carta-crm:carta-crm-home-build)
 version: 1.0.0
 model: inherit
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.15.0</carta-plugin>
+<carta-plugin>carta-crm:1.15.2</carta-plugin>
 
 # Carta CRM Home
 
