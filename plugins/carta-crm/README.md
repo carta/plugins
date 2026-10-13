@@ -73,6 +73,7 @@ Claude will collect any missing required information, call the right MCP tools, 
 | Skill | Trigger phrases |
 |-------|----------------|
 | `deal-flow-analytics` | "deal flow analytics", "analyze our deal flow", "who introduced most of our deals", "breakdown of deals by sector", "deal flow by geography" |
+| `adviser-tracker` | "adviser tracker", "advisor tracker", "M&A adviser tracker", "show our advisers", "who are our top banks" |
 
 ### Meeting prep
 | Skill | Trigger phrases |

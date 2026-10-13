@@ -1,0 +1,4548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Adviser Tracker</title>
+<style>
+:root{--bg:#f7f6f3;--card:#fff;--line:#e7e5e0;--grid:#eeece7;--ink:#1b1b1a;--muted:#8a8780;--green:#3f9a5b;--yellow:#d9a92c;--red:#cf4b45;--c-old:#9ca3af;--c-mid:#476ba3;--c-cur:#bf6a48;--serif:Georgia,"Times New Roman",serif;--sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 var(--sans)}
+.page{max-width:1400px;margin:0 auto;padding:24px}
+.brand{display:flex;align-items:center;gap:12px;margin-bottom:20px}
+.brand .name{font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:#2b3350}
+.tile{width:40px;height:40px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;overflow:hidden;flex:none}
+.tile img{width:100%;height:100%;display:block}
+.tile.sm{width:28px;height:28px;border-radius:7px}
+.tile.blank{border:1px solid var(--line);background:#fff}
+.notice{background:#fff7e0;border:1px solid #ecd9a0;border-radius:8px;padding:8px 12px;margin-bottom:16px;font-size:13px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px 24px;margin-bottom:20px}
+.card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+h2{font:400 22px/1.2 var(--serif);margin:0 0 8px}
+.sub{color:var(--muted);font-size:13px;margin:0 0 18px;max-width:1100px}
+.toggle{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex:none}
+.toggle button{border:0;background:#fff;color:var(--muted);font:inherit;padding:6px 14px;cursor:pointer}
+.toggle button[aria-pressed="true"]{background:#000;color:#fff}
+.empty{color:var(--muted);padding:24px 0;margin:0}
+table{width:100%;border-collapse:collapse}
+th{font-weight:400;color:var(--muted);text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:10px;border-bottom:1px solid var(--line);vertical-align:middle;position:relative}
+tr:last-child td{border-bottom:0}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+th.num{text-align:right}
+td.idx{color:var(--muted);width:36px}
+td.total{font-weight:600}
+tr.tier td{background:#faf9f6;color:var(--muted);font-size:12px;letter-spacing:.06em;text-transform:uppercase;padding:6px 10px}
+.bank{display:flex;align-items:center;gap:10px;outline:0}
+.bank .n{font-weight:500}
+.grey{color:var(--muted);font-size:13px}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;vertical-align:baseline}
+.strong{background:var(--green)}.moderate{background:var(--yellow)}.weak{background:var(--red)}
+td.hov{outline:0}
+.pop{display:none;position:absolute;left:10px;top:100%;z-index:10;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);padding:12px 14px;min-width:260px;font-size:13px;white-space:normal}
+td.hov:hover>.pop,td.hov:focus-within>.pop,td.hov:focus>.pop{display:block}
+.pop table{width:auto}
+.pop th,.pop td{padding:4px 8px;border-bottom:1px solid var(--grid);font-size:12px;white-space:nowrap}
+.pop .row{margin:0 0 4px}
+.legend{display:flex;gap:18px;margin-top:8px;color:var(--muted);font-size:13px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px}
+svg{display:block;width:100%;height:auto;font-family:var(--sans)}
+svg text{fill:var(--muted);font-size:12px}
+svg .val{fill:#7b7870;font-size:11px}
+</style>
+</head>
+<body>
+<div class="page">
+ <div class="brand" id="brand"></div>
+ <div id="notice"></div>
+ <section class="card" id="card-table"></section>
+ <section class="card" id="card-years"></section>
+ <section class="card" id="card-months"></section>
+</div>
+<script type="application/json" id="tracker-data">
+{
+ "tenant": {
+  "name": "Harbourline Capital",
+  "logo": {
+   "dataUri": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI5NiIgaGVpZ2h0PSI5NiI+PHJlY3Qgd2lkdGg9Ijk2IiBoZWlnaHQ9Ijk2IiByeD0iMTYiIGZpbGw9IiMxZjJhNDQiLz48cGF0aCBkPSJNMjAgNjIgTDQ4IDI2IEw3NiA2MiBaIiBmaWxsPSJub25lIiBzdHJva2U9IiNmZmYiIHN0cm9rZS13aWR0aD0iNSIvPjwvc3ZnPg==",
+   "initials": "HC",
+   "color": "#1f2a44"
+  }
+ },
+ "title": "M&A Adviser Tracker",
+ "window": {
+  "from": 2024,
+  "to": 2026
+ },
+ "asOf": "2026-10-13",
+ "notice": null,
+ "tiers": {
+  "1": [
+   "hl.com",
+   "rothschildandco.com",
+   "clearwatercf.com",
+   "lincolninternational.com",
+   "alantra.com",
+   "dcadvisory.com",
+   "williamblair.com",
+   "rwbaird.com"
+  ],
+  "2": [
+   "arrowpointadvisory.com",
+   "investec.com",
+   "evercore.com",
+   "lazard.com",
+   "jefferies.com",
+   "moelis.com"
+  ]
+ },
+ "rows": [
+  {
+   "adviser": {
+    "companyId": "c001",
+    "name": "Houlihan Lokey",
+    "domain": "hl.com",
+    "logo": {
+     "dataUri": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTIiIGZpbGw9IiMzZDZmYjUiLz48dGV4dCB4PSIzMiIgeT0iNDEiIGZvbnQtZmFtaWx5PSJHZW9yZ2lhLHNlcmlmIiBmb250LXNpemU9IjI2IiBmaWxsPSIjZmZmIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5ITDwvdGV4dD48L3N2Zz4=",
+     "initials": "HL",
+     "color": "#3d6fb5"
+    }
+   },
+   "dealsByMonth": [
+    {
+     "month": "2024-01",
+     "count": 1
+    },
+    {
+     "month": "2024-02",
+     "count": 1
+    },
+    {
+     "month": "2024-03",
+     "count": 2
+    },
+    {
+     "month": "2024-04",
+     "count": 2
+    },
+    {
+     "month": "2024-05",
+     "count": 2
+    },
+    {
+     "month": "2024-06",
+     "count": 1
+    },
+    {
+     "month": "2024-07",
+     "count": 1
+    },
+    {
+     "month": "2024-08",
+     "count": 2
+    },
+    {
+     "month": "2024-09",
+     "count": 2
+    },
+    {
+     "month": "2024-10",
+     "count": 1
+    },
+    {
+     "month": "2024-11",
+     "count": 2
+    },
+    {
+     "month": "2024-12",
+     "count": 0
+    },
+    {
+     "month": "2025-01",
+     "count": 2
+    },
+    {
+     "month": "2025-02",
+     "count": 1
+    },
+    {
+     "month": "2025-03",
+     "count": 1
+    },
+    {
+     "month": "2025-04",
+     "count": 1
+    },
+    {
+     "month": "2025-05",
+     "count": 2
+    },
+    {
+     "month": "2025-06",
+     "count": 3
+    },
+    {
+     "month": "2025-07",
+     "count": 2
+    },
+    {
+     "month": "2025-08",
+     "count": 1
+    },
+    {
+     "month": "2025-09",
+     "count": 2
+    },
+    {
+     "month": "2025-10",
+     "count": 2
+    },
+    {
+     "month": "2025-11",
+     "count": 1
+    },
+    {
+     "month": "2025-12",
+     "count": 2
+    },
+    {
+     "month": "2026-01",
+     "count": 1
+    },
+    {
+     "month": "2026-02",
+     "count": 2
+    },
+    {
+     "month": "2026-03",
+     "count": 1
+    },
+    {
+     "month": "2026-04",
+     "count": 0
+    },
+    {
+     "month": "2026-05",
+     "count": 1
+    },
+    {
+     "month": "2026-06",
+     "count": 1
+    },
+    {
+     "month": "2026-07",
+     "count": 1
+    },
+    {
+     "month": "2026-08",
+     "count": 1
+    },
+    {
+     "month": "2026-09",
+     "count": 1
+    },
+    {
+     "month": "2026-10",
+     "count": 2
+    },
+    {
+     "month": "2026-11",
+     "count": 0
+    },
+    {
+     "month": "2026-12",
+     "count": 0
+    }
+   ],
+   "relationship": {
+    "strength": "strong",
+    "topContact": {
+     "name": "Oliver Clarke",
+     "interactions": 862
+    },
+    "matrix": [
+     {
+      "teammate": {
+       "name": "Tom Whitaker",
+       "email": "tom@harbourline.example"
+      },
+      "contact": {
+       "name": "Oliver Clarke",
+       "email": "oliver@hl.com"
+      },
+      "interactions": 689,
+      "lastInteraction": "2026-02-25T10:00:00Z",
+      "strength": "weak"
+     },
+     {
+      "teammate": {
+       "name": "Amelia Hart",
+       "email": "amelia@harbourline.example"
+      },
+      "contact": {
+       "name": "Neil Price",
+       "email": "neil@hl.com"
+      },
+      "interactions": 173,
+      "lastInteraction": "2026-06-05T10:00:00Z",
+      "strength": "moderate"
+     }
+    ]
+   },
+   "fees": [
+    {
+     "currency": "GBP",
+     "amount": 1900000
+    }
+   ],
+   "feeUnavailableReason": null,
+   "notesCount": 12
+  },
+  {
+   "adviser": {
+    "companyId": "c002",
+    "name": "Rothschild & Co",
+    "domain": "rothschildandco.com",
+    "logo": {
+     "dataUri": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTIiIGZpbGw9IiM4YTVjYjUiLz48dGV4dCB4PSIzMiIgeT0iNDEiIGZvbnQtZmFtaWx5PSJHZW9yZ2lhLHNlcmlmIiBmb250LXNpemU9IjI2IiBmaWxsPSIjZmZmIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5SQzwvdGV4dD48L3N2Zz4=",
+     "initials": "RC",
+     "color": "#8a5cb5"
+    }
+   },
+   "dealsByMonth": [
+    {
+     "month": "2024-01",
+     "count": 0
+    },
+    {
+     "month": "2024-02",
+     "count": 3
+    },
+    {
+     "month": "2024-03",
+     "count": 2
+    },
+    {
+     "month": "2024-04",
+     "count": 2
+    },
+    {
+     "month": "2024-05",
+     "count": 1
+    },
+    {
+     "month": "2024-06",
+     "count": 0
+    },
+    {
+     "month": "2024-07",
+     "count": 3
+    },
+    {
+     "month": "2024-08",
+     "count": 3
+    },
+    {
+     "month": "2024-09",
+     "count": 3
+    },
+    {
+     "month": "2024-10",
+     "count": 3
+    },
+    {
+     "month": "2024-11",
+     "count": 0
+    },
+    {
+     "month": "2024-12",
+     "count": 2
+    },
+    {
+     "month": "2025-01",
+     "count": 0
+    },
+    {
+     "month": "2025-02",
+     "count": 2
+    },
+    {
+     "month": "2025-03",
+     "count": 2
+    },
+    {
+     "month": "2025-04",
+     "count": 1
+    },
+    {
+     "month": "2025-05",
+     "count": 1
+    },
+    {
+     "month": "2025-06",
+     "count": 1
+    },
+    {
+     "month": "2025-07",
+     "count": 2
+    },
+    {
+     "month": "2025-08",
+     "count": 2
+    },
+    {
+     "month": "2025-09",
+     "count": 1
+    },
+    {
+     "month": "2025-10",
+     "count": 0
+    },
+    {
+     "month": "2025-11",
+     "count": 0
+    },
+    {
+     "month": "2025-12",
+     "count": 0
+    },
+    {
+     "month": "2026-01",
+     "count": 2
+    },
+    {
+     "month": "2026-02",
+     "count": 0
+    },
+    {
+     "month": "2026-03",
+     "count": 2
+    },
+    {
+     "month": "2026-04",
+     "count": 0
+    },
+    {
+     "month": "2026-05",
+     "count": 1
+    },
+    {
+     "month": "2026-06",
+     "count": 3
+    },
+    {
+     "month": "2026-07",
+     "count": 2
+    },
+    {
+     "month": "2026-08",
+     "count": 0
+    },
+    {
+     "month": "2026-09",
+     "count": 1
+    },
+    {
+     "month": "2026-10",
+     "count": 2
+    },
+    {
+     "month": "2026-11",
+     "count": 0
+    },
+    {
+     "month": "2026-12",
+     "count": 0
+    }
+   ],
+   "relationship": {
+    "strength": "moderate",
+    "topContact": {
+     "name": "Anna Doyle",
+     "interactions": 2160
+    },
+    "matrix": [
+     {
+      "teammate": {
+       "name": "Jonas Meyer",
+       "email": "jonas@harbourline.example"
+      },
+      "contact": {
+       "name": "Anna Doyle",
+       "email": "anna@rothschildandco.com"
+      },
+      "interactions": 896,
+      "lastInteraction": "2026-09-13T10:00:00Z",
+      "strength": "moderate"
+     },
+     {
+      "teammate": {
+       "name": "Priya Nair",
+       "email": "priya@harbourline.example"
+      },
+      "contact": {
+       "name": "Helen Bennett",
+       "email": "helen@rothschildandco.com"
+      },
+      "interactions": 712,
+      "lastInteraction": "2026-09-20T10:00:00Z",
+      "strength": "weak"
+     },
+     {
+      "teammate": {
+       "name": "Tom Whitaker",
+       "email": "tom@harbourline.example"
+      },
+      "contact": {
+       "name": "Stan Ruskov",
+       "email": "stan@rothschildandco.com"
+      },
+      "interactions": 552,
+      "lastInteraction": "2026-06-20T10:00:00Z",
+      "strength": "weak"
+     }
+    ]
+   },
+   "fees": [
+    {
+     "currency": "EUR",
+     "amount": 900000
+    },
+    {
+     "currency": "GBP",
+     "amount": 450000
+    }
+   ],
+   "feeUnavailableReason": null,
+   "notesCount": 6
+  },
+  {
+   "adviser": {
+    "companyId": "c003",
+    "name": "Clearwater",
+    "domain": "clearwatercf.com",
+    "logo": {
+     "dataUri": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTIiIGZpbGw9IiMyZjhmODMiLz48dGV4dCB4PSIzMiIgeT0iNDEiIGZvbnQtZmFtaWx5PSJHZW9yZ2lhLHNlcmlmIiBmb250LXNpemU9IjI2IiBmaWxsPSIjZmZmIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5DPC90ZXh0Pjwvc3ZnPg==",
+     "initials": "C",
+     "color": "#2f8f83"
+    }
+   },
+   "dealsByMonth": [
+    {
+     "month": "2024-01",
+     "count": 3
+    },
+    {
+     "month": "2024-02",
+     "count": 1
+    },
+    {
+     "month": "2024-03",
+     "count": 1
+    },
+    {
+     "month": "2024-04",
+     "count": 1
+    },
+    {
+     "month": "2024-05",
+     "count": 1
+    },
+    {
+     "month": "2024-06",
+     "count": 2
+    },
+    {
+     "month": "2024-07",
+     "count": 1
+    },
+    {
+     "month": "2024-08",
+     "count": 0
+    },
+    {
+     "month": "2024-09",
+     "count": 1
+    },
+    {
+     "month": "2024-10",
+     "count": 0
+    },
+    {
+     "month": "2024-11",
+     "count": 1
+    },
+    {
+     "month": "2024-12",
+     "count": 1
+    },
+    {
+     "month": "2025-01",
+     "count": 2
+    },
+    {
+     "month": "2025-02",
+     "count": 2
+    },
+    {
+     "month": "2025-03",
+     "count": 0
+    },
+    {
+     "month": "2025-04",
+     "count": 2
+    },
+    {
+     "month": "2025-05",
+     "count": 1
+    },
+    {
+     "month": "2025-06",
+     "count": 1
+    },
+    {
+     "month": "2025-07",
+     "count": 0
+    },
+    {
+     "month": "2025-08",
+     "count": 3
+    },
+    {
+     "month": "2025-09",
+     "count": 1
+    },
+    {
+     "month": "2025-10",
+     "count": 2
+    },
+    {
+     "month": "2025-11",
+     "count": 3
+    },
+    {
+     "month": "2025-12",
+     "count": 1
+    },
+    {
+     "month": "2026-01",
+     "count": 0
+    },
+    {
+     "month": "2026-02",
+     "count": 3
+    },
+    {
+     "month": "2026-03",
+     "count": 0
+    },
+    {
+     "month": "2026-04",
+     "count": 0
+    },
+    {
+     "month": "2026-05",
+     "count": 1
+    },
+    {
+     "month": "2026-06",
+     "count": 0
+    },
+    {
+     "month": "2026-07",
+     "count": 1
+    },
+    {
+     "month": "2026-08",
+     "count": 2
+    },
+    {
+     "month": "2026-09",
+     "count": 1
+    },
+    {
+     "month": "2026-10",
+     "count": 1
+    },
+    {
+     "month": "2026-11",
+     "count": 0
+    },
+    {
+     "month": "2026-12",
+     "count": 0
+    }
+   ],
+   "relationship": {
+    "strength": "weak",
+    "topContact": {
+     "name": "Charlotte Astleford",
+     "interactions": 2536
+    },
+    "matrix": [
+     {
+      "teammate": {
+       "name": "Priya Nair",
+       "email": "priya@harbourline.example"
+      },
+      "contact": {
+       "name": "Charlotte Astleford",
+       "email": "charlotte@clearwatercf.com"
+      },
+      "interactions": 830,
+      "lastInteraction": "2026-04-27T10:00:00Z",
+      "strength": "moderate"
+     },
+     {
+      "teammate": {
+       "name": "Amelia Hart",
+       "email": "amelia@harbourline.example"
+      },
+      "contact": {
+       "name": "Anna Clarke",
+       "email": "anna@clearwatercf.com"
+      },
+      "interactions": 814,
+      "lastInteraction": "2026-05-16T10:00:00Z",
+      "strength": "moderate"
+     },
+     {
+      "teammate": {
+       "name": "Jonas Meyer",
+       "email": "jonas@harbourline.example"
+      },
+      "contact": {
+       "name": "Marcus Bennett",
+       "email": "marcus@clearwatercf.com"
+      },
+      "interactions": 535,
+      "lastInteraction": "2026-08-12T10:00:00Z",
+      "strength": "weak"
+     },
+     {
+      "teammate": {
+       "name": "Tom Whitaker",
+       "email": "tom@harbourline.example"
+      },
+      "contact": {
+       "name": "Marcus Marsh",
+       "email": "marcus@clearwatercf.com"
+      },
+      "interactions": 357,
+      "lastInteraction": "2026-08-26T10:00:00Z",
+      "strength": "weak"
+     }
+    ]
+   },
+   "fees": [
+    {
+     "currency": "GBP",
+     "amount": 1200000
+    }
+   ],
+   "feeUnavailableReason": null,
+   "notesCount": 5
+  },
+  {
+   "adviser": {
+    "companyId": "c004",
+    "name": "Lincoln International",
+    "domain": "lincolninternational.com",
+    "logo": {
+     "dataUri": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTIiIGZpbGw9IiNiNTY1M2QiLz48dGV4dCB4PSIzMiIgeT0iNDEiIGZvbnQtZmFtaWx5PSJHZW9yZ2lhLHNlcmlmIiBmb250LXNpemU9IjI2IiBmaWxsPSIjZmZmIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5MSTwvdGV4dD48L3N2Zz4=",
+     "initials": "LI",
+     "color": "#b5653d"
+    }
+   },
+   "dealsByMonth": [
+    {
+     "month": "2024-01",
+     "count": 1
+    },
+    {
+     "month": "2024-02",
+     "count": 1
+    },
+    {
+     "month": "2024-03",
+     "count": 2
+    },
+    {
+     "month": "2024-04",
+     "count": 2
+    },
+    {
+     "month": "2024-05",
+     "count": 0
+    },
+    {
+     "month": "2024-06",
+     "count": 3
+    },
+    {
+     "month": "2024-07",
+     "count": 3
+    },
+    {
+     "month": "2024-08",
+     "count": 3
+    },
+    {
+     "month": "2024-09",
+     "count": 2
+    },
+    {
+     "month": "2024-10",
+     "count": 0
+    },
+    {
+     "month": "2024-11",
+     "count": 0
+    },
+    {
+     "month": "2024-12",
+     "count": 1
+    },
+    {
+     "month": "2025-01",
+     "count": 3
+    },
+    {
+     "month": "2025-02",
+     "count": 3
+    },
+    {
+     "month": "2025-03",
+     "count": 2
+    },
+    {
+     "month": "2025-04",
+     "count": 0
+    },
+    {
+     "month": "2025-05",
+     "count": 1
+    },
+    {
+     "month": "2025-06",
+     "count": 1
+    },
+    {
+     "month": "2025-07",
+     "count": 2
+    },
+    {
+     "month": "2025-08",
+     "count": 0
+    },
+    {
+     "month": "2025-09",
+     "count": 0
+    },
+    {
+     "month": "2025-10",
+     "count": 2
+    },
+    {
+     "month": "2025-11",
+     "count": 0
+    },
+    {
+     "month": "2025-12",
+     "count": 0
+    },
+    {
+     "month": "2026-01",
+     "count": 2
+    },
+    {
+     "month": "2026-02",
+     "count": 1
+    },
+    {
+     "month": "2026-03",
+     "count": 3
+    },
+    {
+     "month": "2026-04",
+     "count": 2
+    },
+    {
+     "month": "2026-05",
+     "count": 0
+    },
+    {
+     "month": "2026-06",
+     "count": 1
+    },
+    {
+     "month": "2026-07",
+     "count": 0
+    },
+    {
+     "month": "2026-08",
+     "count": 1
+    },
+    {
+     "month": "2026-09",
+     "count": 2
+    },
+    {
+     "month": "2026-10",
+     "count": 2
+    },
+    {
+     "month": "2026-11",
+     "count": 0
+    },
+    {
+     "month": "2026-12",
+     "count": 0
+    }
+   ],
+   "relationship": {
+    "strength": "moderate",
+    "topContact": {
+     "name": "Marcus Clarke",
+     "interactions": 1100
+    },
+    "matrix": [
+     {
+      "teammate": {
+       "name": "Amelia Hart",
+       "email": "amelia@harbourline.example"
+      },
+      "contact": {
+       "name": "Marcus Clarke",
+       "email": "marcus@lincolninternational.com"
+      },
+      "interactions": 762,
+      "lastInteraction": "2026-06-15T10:00:00Z",
+      "strength": "weak"
+     },
+     {
+      "teammate": {
+       "name": "Jonas Meyer",
+       "email": "jonas@harbourline.example"
+      },
+      "contact": {
+       "name": "Richard Parsons",
+       "email": "richard@lincolninternational.com"
+      },
+      "interactions": 338,
+      "lastInteraction": "2026-05-18T10:00:00Z",
+      "strength": "moderate"
+     }
+    ]
+   },
+   "fees": [],
+   "feeUnavailableReason": "Fee data is not shared with this organisation",
+   "notesCount": 13
+  },
+  {
+   "adviser": {
+    "companyId": "c005",
+    "name": "Alantra",
+    "domain": "alantra.com",
+    "logo": {
+     "dataUri": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTIiIGZpbGw9IiM2YjdmMmYiLz48dGV4dCB4PSIzMiIgeT0iNDEiIGZvbnQtZmFtaWx5PSJHZW9yZ2lhLHNlcmlmIiBmb250LXNpemU9IjI2IiBmaWxsPSIjZmZmIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5BPC90ZXh0Pjwvc3ZnPg==",
+     "initials": "A",
+     "color": "#6b7f2f"
+    }
+   },
+   "dealsByMonth": [
+    {
+     "month": "2024-01",
+     "count": 0
+    },
+    {
+     "month": "2024-02",
+     "count": 2
+    },
+    {
+     "month": "2024-03",
+     "count": 1
+    },
+    {
+     "month": "2024-04",
+     "count": 1
+    },
+    {
+     "month": "2024-05",
+     "count": 0
+    },
+    {
+     "month": "2024-06",
+     "count": 0
+    },
+    {
+     "month": "2024-07",
+     "count": 1
+    },
+    {
+     "month": "2024-08",
+     "count": 2
+    },
+    {
+     "month": "2024-09",
+     "count": 0
+    },
+    {
+     "month": "2024-10",
+     "count": 1
+    },
+    {
+     "month": "2024-11",
+     "count": 2
+    },
+    {
+     "month": "2024-12",
+     "count": 2
+    },
+    {
+     "month": "2025-01",
+     "count": 0
+    },
+    {
+     "month": "2025-02",
+     "count": 2
+    },
+    {
+     "month": "2025-03",
+     "count": 1
+    },
+    {
+     "month": "2025-04",
+     "count": 1
+    },
+    {
+     "month": "2025-05",
+     "count": 2
+    },
+    {
+     "month": "2025-06",
+     "count": 1
+    },
+    {
+     "month": "2025-07",
+     "count": 2
+    },
+    {
+     "month": "2025-08",
+     "count": 0
+    },
+    {
+     "month": "2025-09",
+     "count": 1
+    },
+    {
+     "month": "2025-10",
+     "count": 0
+    },
+    {
+     "month": "2025-11",
+     "count": 2
+    },
+    {
+     "month": "2025-12",
+     "count": 0
+    },
+    {
+     "month": "2026-01",
+     "count": 1
+    },
+    {
+     "month": "2026-02",
+     "count": 0
+    },
+    {
+     "month": "2026-03",
+     "count": 0
+    },
+    {
+     "month": "2026-04",
+     "count": 0
+    },
+    {
+     "month": "2026-05",
+     "count": 2
+    },
+    {
+     "month": "2026-06",
+     "count": 0
+    },
+    {
+     "month": "2026-07",
+     "count": 2
+    },
+    {
+     "month": "2026-08",
+     "count": 1
+    },
+    {
+     "month": "2026-09",
+     "count": 1
+    },
+    {
+     "month": "2026-10",
+     "count": 1
+    },
+    {
+     "month": "2026-11",
+     "count": 0
+    },
+    {
+     "month": "2026-12",
+     "count": 0
+    }
+   ],
+   "relationship": {
+    "strength": "weak",
+    "topContact": {
+     "name": "Helen Clarke",
+     "interactions": 1507
+    },
+    "matrix": [
+     {
+      "teammate": {
+       "name": "Tom Whitaker",
+       "email": "tom@harbourline.example"
+      },
+      "contact": {
+       "name": "Helen Clarke",
+       "email": "helen@alantra.com"
+      },
+      "interactions": 800,
+      "lastInteraction": "2026-03-23T10:00:00Z",
+      "strength": "weak"
+     },
+     {
+      "teammate": {
+       "name": "Amelia Hart",
+       "email": "amelia@harbourline.example"
+      },
+      "contact": {
+       "name": "Ben Mason",
+       "email": "ben@alantra.com"
+      },
+      "interactions": 443,
+      "lastInteraction": "2026-02-07T10:00:00Z",
+      "strength": "weak"
+     },
+     {
+      "teammate": {
+       "name": "Priya Nair",
+       "email": "priya@harbourline.example"
+      },
+      "contact": {
+       "name": "Helen Bennett",
+       "email": "helen@alantra.com"
+      },
+      "interactions": 264,
+      "lastInteraction": "2026-03-15T10:00:00Z",
+      "strength": "strong"
+     }
+    ]
+   },
+   "fees": [
+    {
+     "currency": "GBP",
+     "amount": 400000
+    }
+   ],
+   "feeUnavailableReason": null,
+   "notesCount": 6
+  },
+  {
+   "adviser": {
+    "companyId": "c006",
+    "name": "DC Advisory",
+    "domain": "dcadvisory.com",
+    "logo": {
+     "dataUri": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTIiIGZpbGw9IiNiNTNkNmIiLz48dGV4dCB4PSIzMiIgeT0iNDEiIGZvbnQtZmFtaWx5PSJHZW9yZ2lhLHNlcmlmIiBmb250LXNpemU9IjI2IiBmaWxsPSIjZmZmIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5EQTwvdGV4dD48L3N2Zz4=",
+     "initials": "DA",
+     "color": "#b53d6b"
+    }
+   },
+   "dealsByMonth": [
+    {
+     "month": "2024-01",
+     "count": 0
+    },
+    {
+     "month": "2024-02",
+     "count": 3
+    },
+    {
+     "month": "2024-03",
+     "count": 0
+    },
+    {
+     "month": "2024-04",
+     "count": 2
+    },
+    {
+     "month": "2024-05",
+     "count": 0
+    },
+    {
+     "month": "2024-06",
+     "count": 2
+    },
+    {
+     "month": "2024-07",
+     "count": 1
+    },
+    {
+     "month": "2024-08",
+     "count": 1
+    },
+    {
+     "month": "2024-09",
+     "count": 2
+    },
+    {
+     "month": "2024-10",
+     "count": 3
+    },
+    {
+     "month": "2024-11",
+     "count": 1
+    },
+    {
+     "month": "2024-12",
+     "count": 1
+    },
+    {
+     "month": "2025-01",
+     "count": 1
+    },
+    {
+     "month": "2025-02",
+     "count": 1
+    },
+    {
+     "month": "2025-03",
+     "count": 0
+    },
+    {
+     "month": "2025-04",
+     "count": 1
+    },
+    {
+     "month": "2025-05",
+     "count": 1
+    },
+    {
+     "month": "2025-06",
+     "count": 1
+    },
+    {
+     "month": "2025-07",
+     "count": 0
+    },
+    {
+     "month": "2025-08",
+     "count": 0
+    },
+    {
+     "month": "2025-09",
+     "count": 0
+    },
+    {
+     "month": "2025-10",
+     "count": 0
+    },
+    {
+     "month": "2025-11",
+     "count": 2
+    },
+    {
+     "month": "2025-12",
+     "count": 0
+    },
+    {
+     "month": "2026-01",
+     "count": 3
+    },
+    {
+     "month": "2026-02",
+     "count": 1
+    },
+    {
+     "month": "2026-03",
+     "count": 3
+    },
+    {
+     "month": "2026-04",
+     "count": 1
+    },
+    {
+     "month": "2026-05",
+     "count": 1
+    },
+    {
+     "month": "2026-06",
+     "count": 0
+    },
+    {
+     "month": "2026-07",
+     "count": 0
+    },
+    {
+     "month": "2026-08",
+     "count": 1
+    },
+    {
+     "month": "2026-09",
+     "count": 1
+    },
+    {
+     "month": "2026-10",
+     "count": 1
+    },
+    {
+     "month": "2026-11",
+     "count": 0
+    },
+    {
+     "month": "2026-12",
+     "count": 0
+    }
+   ],
+   "relationship": {
+    "strength": "strong",
+    "topContact": {
+     "name": "Helen Marsh",
+     "interactions": 2087
+    },
+    "matrix": [
+     {
+      "teammate": {
+       "name": "Amelia Hart",
+       "email": "amelia@harbourline.example"
+      },
+      "contact": {
+       "name": "Helen Marsh",
+       "email": "helen@dcadvisory.com"
+      },
+      "interactions": 782,
+      "lastInteraction": "2026-04-10T10:00:00Z",
+      "strength": "moderate"
+     },
+     {
+      "teammate": {
+       "name": "Tom Whitaker",
+       "email": "tom@harbourline.example"
+      },
+      "contact": {
+       "name": "Richard Darlington",
+       "email": "richard@dcadvisory.com"
+      },
+      "interactions": 571,
+      "lastInteraction": "2026-07-09T10:00:00Z",
+      "strength": "weak"
+     },
+     {
+      "teammate": {
+       "name": "Priya Nair",
+       "email": "priya@harbourline.example"
+      },
+      "contact": {
+       "name": "Marcus Clarke",
+       "email": "marcus@dcadvisory.com"
+      },
+      "interactions": 544,
+      "lastInteraction": "2026-04-04T10:00:00Z",
+      "strength": "strong"
+     },
+     {
+      "teammate": {
+       "name": "Jonas Meyer",
+       "email": "jonas@harbourline.example"
+      },
+      "contact": {
+       "name": "Helen Clarke",
+       "email": "helen@dcadvisory.com"
+      },
+      "interactions": 190,
+      "lastInteraction": "2026-04-10T10:00:00Z",
+      "strength": "weak"
+     }
+    ]
+   },
+   "fees": [
+    {
+     "currency": null,
+     "amount": 120000
+    }
+   ],
+   "feeUnavailableReason": null,
+   "notesCount": 10
+  },
+  {
+   "adviser": {
+    "companyId": "c007",
+    "name": "William Blair",
+    "domain": "williamblair.com",
+    "logo": {
+     "dataUri": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTIiIGZpbGw9IiMzZDZmYjUiLz48dGV4dCB4PSIzMiIgeT0iNDEiIGZvbnQtZmFtaWx5PSJHZW9yZ2lhLHNlcmlmIiBmb250LXNpemU9IjI2IiBmaWxsPSIjZmZmIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5XQjwvdGV4dD48L3N2Zz4=",
+     "initials": "WB",
+     "color": "#3d6fb5"
+    }
+   },
+   "dealsByMonth": [
+    {
+     "month": "2024-01",
+     "count": 1
+    },
+    {
+     "month": "2024-02",
+     "count": 0
+    },
+    {
+     "month": "2024-03",
+     "count": 0
+    },
+    {
+     "month": "2024-04",
+     "count": 1
+    },
+    {
+     "month": "2024-05",
+     "count": 0
+    },
+    {
+     "month": "2024-06",
+     "count": 0
+    },
+    {
+     "month": "2024-07",
+     "count": 2
+    },
+    {
+     "month": "2024-08",
+     "count": 2
+    },
+    {
+     "month": "2024-09",
+     "count": 3
+    },
+    {
+     "month": "2024-10",
+     "count": 2
+    },
+    {
+     "month": "2024-11",
+     "count": 0
+    },
+    {
+     "month": "2024-12",
+     "count": 0
+    },
+    {
+     "month": "2025-01",
+     "count": 0
+    },
+    {
+     "month": "2025-02",
+     "count": 1
+    },
+    {
+     "month": "2025-03",
+     "count": 0
+    },
+    {
+     "month": "2025-04",
+     "count": 3
+    },
+    {
+     "month": "2025-05",
+     "count": 0
+    },
+    {
+     "month": "2025-06",
+     "count": 1
+    },
+    {
+     "month": "2025-07",
+     "count": 0
+    },
+    {
+     "month": "2025-08",
+     "count": 0
+    },
+    {
+     "month": "2025-09",
+     "count": 3
+    },
+    {
+     "month": "2025-10",
+     "count": 0
+    },
+    {
+     "month": "2025-11",
+     "count": 1
+    },
+    {
+     "month": "2025-12",
+     "count": 3
+    },
+    {
+     "month": "2026-01",
+     "count": 0
+    },
+    {
+     "month": "2026-02",
+     "count": 0
+    },
+    {
+     "month": "2026-03",
+     "count": 0
+    },
+    {
+     "month": "2026-04",
+     "count": 1
+    },
+    {
+     "month": "2026-05",
+     "count": 0
+    },
+    {
+     "month": "2026-06",
+     "count": 1
+    },
+    {
+     "month": "2026-07",
+     "count": 2
+    },
+    {
+     "month": "2026-08",
+     "count": 1
+    },
+    {
+     "month": "2026-09",
+     "count": 0
+    },
+    {
+     "month": "2026-10",
+     "count": 0
+    },
+    {
+     "month": "2026-11",
+     "count": 0
+    },
+    {
+     "month": "2026-12",
+     "count": 0
+    }
+   ],
+   "relationship": {
+    "strength": "moderate",
+    "topContact": {
+     "name": "Patrick Irwin",
+     "interactions": 935
+    },
+    "matrix": [
+     {
+      "teammate": {
+       "name": "Priya Nair",
+       "email": "priya@harbourline.example"
+      },
+      "contact": {
+       "name": "Patrick Irwin",
+       "email": "patrick@williamblair.com"
+      },
+      "interactions": 565,
+      "lastInteraction": "2026-06-08T10:00:00Z",
+      "strength": "strong"
+     },
+     {
+      "teammate": {
+       "name": "Jonas Meyer",
+       "email": "jonas@harbourline.example"
+      },
+      "contact": {
+       "name": "Helen Bennett",
+       "email": "helen@williamblair.com"
+      },
+      "interactions": 370,
+      "lastInteraction": "2026-03-01T10:00:00Z",
+      "strength": "moderate"
+     }
+    ]
+   },
+   "fees": [
+    {
+     "currency": "GBP",
+     "amount": 1300000
+    }
+   ],
+   "feeUnavailableReason": null,
+   "notesCount": 1
+  },
+  {
+   "adviser": {
+    "companyId": "c008",
+    "name": "Baird",
+    "domain": "rwbaird.com",
+    "logo": {
+     "dataUri": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTIiIGZpbGw9IiM4YTVjYjUiLz48dGV4dCB4PSIzMiIgeT0iNDEiIGZvbnQtZmFtaWx5PSJHZW9yZ2lhLHNlcmlmIiBmb250LXNpemU9IjI2IiBmaWxsPSIjZmZmIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5CPC90ZXh0Pjwvc3ZnPg==",
+     "initials": "B",
+     "color": "#8a5cb5"
+    }
+   },
+   "dealsByMonth": [
+    {
+     "month": "2024-01",
+     "count": 2
+    },
+    {
+     "month": "2024-02",
+     "count": 0
+    },
+    {
+     "month": "2024-03",
+     "count": 1
+    },
+    {
+     "month": "2024-04",
+     "count": 1
+    },
+    {
+     "month": "2024-05",
+     "count": 2
+    },
+    {
+     "month": "2024-06",
+     "count": 1
+    },
+    {
+     "month": "2024-07",
+     "count": 3
+    },
+    {
+     "month": "2024-08",
+     "count": 2
+    },
+    {
+     "month": "2024-09",
+     "count": 0
+    },
+    {
+     "month": "2024-10",
+     "count": 0
+    },
+    {
+     "month": "2024-11",
+     "count": 3
+    },
+    {
+     "month": "2024-12",
+     "count": 0
+    },
+    {
+     "month": "2025-01",
+     "count": 0
+    },
+    {
+     "month": "2025-02",
+     "count": 0
+    },
+    {
+     "month": "2025-03",
+     "count": 0
+    },
+    {
+     "month": "2025-04",
+     "count": 1
+    },
+    {
+     "month": "2025-05",
+     "count": 0
+    },
+    {
+     "month": "2025-06",
+     "count": 0
+    },
+    {
+     "month": "2025-07",
+     "count": 3
+    },
+    {
+     "month": "2025-08",
+     "count": 0
+    },
+    {
+     "month": "2025-09",
+     "count": 0
+    },
+    {
+     "month": "2025-10",
+     "count": 0
+    },
+    {
+     "month": "2025-11",
+     "count": 0
+    },
+    {
+     "month": "2025-12",
+     "count": 2
+    },
+    {
+     "month": "2026-01",
+     "count": 0
+    },
+    {
+     "month": "2026-02",
+     "count": 0
+    },
+    {
+     "month": "2026-03",
+     "count": 0
+    },
+    {
+     "month": "2026-04",
+     "count": 3
+    },
+    {
+     "month": "2026-05",
+     "count": 0
+    },
+    {
+     "month": "2026-06",
+     "count": 0
+    },
+    {
+     "month": "2026-07",
+     "count": 0
+    },
+    {
+     "month": "2026-08",
+     "count": 0
+    },
+    {
+     "month": "2026-09",
+     "count": 1
+    },
+    {
+     "month": "2026-10",
+     "count": 3
+    },
+    {
+     "month": "2026-11",
+     "count": 0
+    },
+    {
+     "month": "2026-12",
+     "count": 0
+    }
+   ],
+   "relationship": {
+    "strength": "weak",
+    "topContact": {
+     "name": "Sofia Clarke",
+     "interactions": 1296
+    },
+    "matrix": [
+     {
+      "teammate": {
+       "name": "Amelia Hart",
+       "email": "amelia@harbourline.example"
+      },
+      "contact": {
+       "name": "Sofia Clarke",
+       "email": "sofia@rwbaird.com"
+      },
+      "interactions": 647,
+      "lastInteraction": "2026-01-21T10:00:00Z",
+      "strength": "weak"
+     },
+     {
+      "teammate": {
+       "name": "Jonas Meyer",
+       "email": "jonas@harbourline.example"
+      },
+      "contact": {
+       "name": "Giles Corner",
+       "email": "giles@rwbaird.com"
+      },
+      "interactions": 374,
+      "lastInteraction": "2026-02-13T10:00:00Z",
+      "strength": "moderate"
+     },
+     {
+      "teammate": {
+       "name": "Tom Whitaker",
+       "email": "tom@harbourline.example"
+      },
+      "contact": {
+       "name": "Marcus Doyle",
+       "email": "marcus@rwbaird.com"
+      },
+      "interactions": 275,
+      "lastInteraction": "2026-01-15T10:00:00Z",
+      "strength": "strong"
+     }
+    ]
+   },
+   "fees": [
+    {
+     "currency": "GBP",
+     "amount": 1700000
+    }
+   ],
+   "feeUnavailableReason": null,
+   "notesCount": 14
+  },
+  {
+   "adviser": {
+    "companyId": "c009",
+    "name": "Arrowpoint Advisory",
+    "domain": "arrowpointadvisory.com",
+    "logo": {
+     "dataUri": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTIiIGZpbGw9IiMyZjhmODMiLz48dGV4dCB4PSIzMiIgeT0iNDEiIGZvbnQtZmFtaWx5PSJHZW9yZ2lhLHNlcmlmIiBmb250LXNpemU9IjI2IiBmaWxsPSIjZmZmIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5BQTwvdGV4dD48L3N2Zz4=",
+     "initials": "AA",
+     "color": "#2f8f83"
+    }
+   },
+   "dealsByMonth": [
+    {
+     "month": "2024-01",
+     "count": 0
+    },
+    {
+     "month": "2024-02",
+     "count": 0
+    },
+    {
+     "month": "2024-03",
+     "count": 3
+    },
+    {
+     "month": "2024-04",
+     "count": 0
+    },
+    {
+     "month": "2024-05",
+     "count": 0
+    },
+    {
+     "month": "2024-06",
+     "count": 0
+    },
+    {
+     "month": "2024-07",
+     "count": 1
+    },
+    {
+     "month": "2024-08",
+     "count": 3
+    },
+    {
+     "month": "2024-09",
+     "count": 0
+    },
+    {
+     "month": "2024-10",
+     "count": 0
+    },
+    {
+     "month": "2024-11",
+     "count": 2
+    },
+    {
+     "month": "2024-12",
+     "count": 0
+    },
+    {
+     "month": "2025-01",
+     "count": 1
+    },
+    {
+     "month": "2025-02",
+     "count": 0
+    },
+    {
+     "month": "2025-03",
+     "count": 0
+    },
+    {
+     "month": "2025-04",
+     "count": 1
+    },
+    {
+     "month": "2025-05",
+     "count": 3
+    },
+    {
+     "month": "2025-06",
+     "count": 0
+    },
+    {
+     "month": "2025-07",
+     "count": 2
+    },
+    {
+     "month": "2025-08",
+     "count": 2
+    },
+    {
+     "month": "2025-09",
+     "count": 1
+    },
+    {
+     "month": "2025-10",
+     "count": 0
+    },
+    {
+     "month": "2025-11",
+     "count": 1
+    },
+    {
+     "month": "2025-12",
+     "count": 0
+    },
+    {
+     "month": "2026-01",
+     "count": 2
+    },
+    {
+     "month": "2026-02",
+     "count": 2
+    },
+    {
+     "month": "2026-03",
+     "count": 0
+    },
+    {
+     "month": "2026-04",
+     "count": 2
+    },
+    {
+     "month": "2026-05",
+     "count": 1
+    },
+    {
+     "month": "2026-06",
+     "count": 0
+    },
+    {
+     "month": "2026-07",
+     "count": 2
+    },
+    {
+     "month": "2026-08",
+     "count": 2
+    },
+    {
+     "month": "2026-09",
+     "count": 0
+    },
+    {
+     "month": "2026-10",
+     "count": 1
+    },
+    {
+     "month": "2026-11",
+     "count": 0
+    },
+    {
+     "month": "2026-12",
+     "count": 0
+    }
+   ],
+   "relationship": {
+    "strength": "moderate",
+    "topContact": {
+     "name": "Marcus Marsh",
+     "interactions": 1909
+    },
+    "matrix": [
+     {
+      "teammate": {
+       "name": "Priya Nair",
+       "email": "priya@harbourline.example"
+      },
+      "contact": {
+       "name": "Marcus Marsh",
+       "email": "marcus@arrowpointadvisory.com"
+      },
+      "interactions": 844,
+      "lastInteraction": "2026-09-09T10:00:00Z",
+      "strength": "strong"
+     },
+     {
+      "teammate": {
+       "name": "Jonas Meyer",
+       "email": "jonas@harbourline.example"
+      },
+      "contact": {
+       "name": "Helen Bennett",
+       "email": "helen@arrowpointadvisory.com"
+      },
+      "interactions": 514,
+      "lastInteraction": "2026-08-13T10:00:00Z",
+      "strength": "strong"
+     },
+     {
+      "teammate": {
+       "name": "Amelia Hart",
+       "email": "amelia@harbourline.example"
+      },
+      "contact": {
+       "name": "Ian Guilfoyle",
+       "email": "ian@arrowpointadvisory.com"
+      },
+      "interactions": 401,
+      "lastInteraction": "2026-04-07T10:00:00Z",
+      "strength": "strong"
+     },
+     {
+      "teammate": {
+       "name": "Tom Whitaker",
+       "email": "tom@harbourline.example"
+      },
+      "contact": {
+       "name": "Sofia Clarke",
+       "email": "sofia@arrowpointadvisory.com"
+      },
+      "interactions": 150,
+      "lastInteraction": "2026-09-09T10:00:00Z",
+      "strength": "moderate"
+     }
+    ]
+   },
+   "fees": [
+    {
+     "currency": "GBP",
+     "amount": 600000
+    }
+   ],
+   "feeUnavailableReason": null,
+   "notesCount": 0
+  },
+  {
+   "adviser": {
+    "companyId": "c010",
+    "name": "Investec",
+    "domain": "investec.com",
+    "logo": {
+     "dataUri": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTIiIGZpbGw9IiNiNTY1M2QiLz48dGV4dCB4PSIzMiIgeT0iNDEiIGZvbnQtZmFtaWx5PSJHZW9yZ2lhLHNlcmlmIiBmb250LXNpemU9IjI2IiBmaWxsPSIjZmZmIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5JPC90ZXh0Pjwvc3ZnPg==",
+     "initials": "I",
+     "color": "#b5653d"
+    }
+   },
+   "dealsByMonth": [
+    {
+     "month": "2024-01",
+     "count": 0
+    },
+    {
+     "month": "2024-02",
+     "count": 0
+    },
+    {
+     "month": "2024-03",
+     "count": 3
+    },
+    {
+     "month": "2024-04",
+     "count": 1
+    },
+    {
+     "month": "2024-05",
+     "count": 1
+    },
+    {
+     "month": "2024-06",
+     "count": 0
+    },
+    {
+     "month": "2024-07",
+     "count": 1
+    },
+    {
+     "month": "2024-08",
+     "count": 0
+    },
+    {
+     "month": "2024-09",
+     "count": 1
+    },
+    {
+     "month": "2024-10",
+     "count": 0
+    },
+    {
+     "month": "2024-11",
+     "count": 0
+    },
+    {
+     "month": "2024-12",
+     "count": 1
+    },
+    {
+     "month": "2025-01",
+     "count": 2
+    },
+    {
+     "month": "2025-02",
+     "count": 0
+    },
+    {
+     "month": "2025-03",
+     "count": 0
+    },
+    {
+     "month": "2025-04",
+     "count": 2
+    },
+    {
+     "month": "2025-05",
+     "count": 0
+    },
+    {
+     "month": "2025-06",
+     "count": 0
+    },
+    {
+     "month": "2025-07",
+     "count": 1
+    },
+    {
+     "month": "2025-08",
+     "count": 0
+    },
+    {
+     "month": "2025-09",
+     "count": 1
+    },
+    {
+     "month": "2025-10",
+     "count": 1
+    },
+    {
+     "month": "2025-11",
+     "count": 0
+    },
+    {
+     "month": "2025-12",
+     "count": 1
+    },
+    {
+     "month": "2026-01",
+     "count": 0
+    },
+    {
+     "month": "2026-02",
+     "count": 0
+    },
+    {
+     "month": "2026-03",
+     "count": 3
+    },
+    {
+     "month": "2026-04",
+     "count": 2
+    },
+    {
+     "month": "2026-05",
+     "count": 0
+    },
+    {
+     "month": "2026-06",
+     "count": 0
+    },
+    {
+     "month": "2026-07",
+     "count": 3
+    },
+    {
+     "month": "2026-08",
+     "count": 2
+    },
+    {
+     "month": "2026-09",
+     "count": 0
+    },
+    {
+     "month": "2026-10",
+     "count": 0
+    },
+    {
+     "month": "2026-11",
+     "count": 0
+    },
+    {
+     "month": "2026-12",
+     "count": 0
+    }
+   ],
+   "relationship": {
+    "strength": "weak",
+    "topContact": {
+     "name": "Marcus Bennett",
+     "interactions": 786
+    },
+    "matrix": [
+     {
+      "teammate": {
+       "name": "Priya Nair",
+       "email": "priya@harbourline.example"
+      },
+      "contact": {
+       "name": "Marcus Bennett",
+       "email": "marcus@investec.com"
+      },
+      "interactions": 488,
+      "lastInteraction": "2026-07-11T10:00:00Z",
+      "strength": "moderate"
+     },
+     {
+      "teammate": {
+       "name": "Tom Whitaker",
+       "email": "tom@harbourline.example"
+      },
+      "contact": {
+       "name": "Scott Williams",
+       "email": "scott@investec.com"
+      },
+      "interactions": 298,
+      "lastInteraction": "2026-08-02T10:00:00Z",
+      "strength": "weak"
+     }
+    ]
+   },
+   "fees": [],
+   "feeUnavailableReason": null,
+   "notesCount": 4
+  },
+  {
+   "adviser": {
+    "companyId": "c011",
+    "name": "Evercore",
+    "domain": "evercore.com",
+    "logo": {
+     "dataUri": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTIiIGZpbGw9IiM2YjdmMmYiLz48dGV4dCB4PSIzMiIgeT0iNDEiIGZvbnQtZmFtaWx5PSJHZW9yZ2lhLHNlcmlmIiBmb250LXNpemU9IjI2IiBmaWxsPSIjZmZmIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5FPC90ZXh0Pjwvc3ZnPg==",
+     "initials": "E",
+     "color": "#6b7f2f"
+    }
+   },
+   "dealsByMonth": [
+    {
+     "month": "2024-01",
+     "count": 0
+    },
+    {
+     "month": "2024-02",
+     "count": 0
+    },
+    {
+     "month": "2024-03",
+     "count": 3
+    },
+    {
+     "month": "2024-04",
+     "count": 2
+    },
+    {
+     "month": "2024-05",
+     "count": 0
+    },
+    {
+     "month": "2024-06",
+     "count": 0
+    },
+    {
+     "month": "2024-07",
+     "count": 1
+    },
+    {
+     "month": "2024-08",
+     "count": 2
+    },
+    {
+     "month": "2024-09",
+     "count": 0
+    },
+    {
+     "month": "2024-10",
+     "count": 0
+    },
+    {
+     "month": "2024-11",
+     "count": 1
+    },
+    {
+     "month": "2024-12",
+     "count": 0
+    },
+    {
+     "month": "2025-01",
+     "count": 0
+    },
+    {
+     "month": "2025-02",
+     "count": 1
+    },
+    {
+     "month": "2025-03",
+     "count": 1
+    },
+    {
+     "month": "2025-04",
+     "count": 1
+    },
+    {
+     "month": "2025-05",
+     "count": 1
+    },
+    {
+     "month": "2025-06",
+     "count": 2
+    },
+    {
+     "month": "2025-07",
+     "count": 1
+    },
+    {
+     "month": "2025-08",
+     "count": 0
+    },
+    {
+     "month": "2025-09",
+     "count": 0
+    },
+    {
+     "month": "2025-10",
+     "count": 0
+    },
+    {
+     "month": "2025-11",
+     "count": 0
+    },
+    {
+     "month": "2025-12",
+     "count": 1
+    },
+    {
+     "month": "2026-01",
+     "count": 0
+    },
+    {
+     "month": "2026-02",
+     "count": 0
+    },
+    {
+     "month": "2026-03",
+     "count": 0
+    },
+    {
+     "month": "2026-04",
+     "count": 3
+    },
+    {
+     "month": "2026-05",
+     "count": 0
+    },
+    {
+     "month": "2026-06",
+     "count": 0
+    },
+    {
+     "month": "2026-07",
+     "count": 0
+    },
+    {
+     "month": "2026-08",
+     "count": 1
+    },
+    {
+     "month": "2026-09",
+     "count": 0
+    },
+    {
+     "month": "2026-10",
+     "count": 3
+    },
+    {
+     "month": "2026-11",
+     "count": 0
+    },
+    {
+     "month": "2026-12",
+     "count": 0
+    }
+   ],
+   "relationship": {
+    "strength": "strong",
+    "topContact": {
+     "name": "Neil Price",
+     "interactions": 1306
+    },
+    "matrix": [
+     {
+      "teammate": {
+       "name": "Priya Nair",
+       "email": "priya@harbourline.example"
+      },
+      "contact": {
+       "name": "Neil Price",
+       "email": "neil@evercore.com"
+      },
+      "interactions": 461,
+      "lastInteraction": "2026-07-10T10:00:00Z",
+      "strength": "strong"
+     },
+     {
+      "teammate": {
+       "name": "Jonas Meyer",
+       "email": "jonas@harbourline.example"
+      },
+      "contact": {
+       "name": "Marcus Clarke",
+       "email": "marcus@evercore.com"
+      },
+      "interactions": 440,
+      "lastInteraction": "2026-08-19T10:00:00Z",
+      "strength": "moderate"
+     },
+     {
+      "teammate": {
+       "name": "Amelia Hart",
+       "email": "amelia@harbourline.example"
+      },
+      "contact": {
+       "name": "Anna Clarke",
+       "email": "anna@evercore.com"
+      },
+      "interactions": 405,
+      "lastInteraction": "2026-09-28T10:00:00Z",
+      "strength": "moderate"
+     }
+    ]
+   },
+   "fees": [
+    {
+     "currency": "GBP",
+     "amount": 1500000
+    }
+   ],
+   "feeUnavailableReason": null,
+   "notesCount": 3
+  },
+  {
+   "adviser": {
+    "companyId": "c012",
+    "name": "Lazard",
+    "domain": "lazard.com",
+    "logo": {
+     "dataUri": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTIiIGZpbGw9IiNiNTNkNmIiLz48dGV4dCB4PSIzMiIgeT0iNDEiIGZvbnQtZmFtaWx5PSJHZW9yZ2lhLHNlcmlmIiBmb250LXNpemU9IjI2IiBmaWxsPSIjZmZmIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5MPC90ZXh0Pjwvc3ZnPg==",
+     "initials": "L",
+     "color": "#b53d6b"
+    }
+   },
+   "dealsByMonth": [
+    {
+     "month": "2024-01",
+     "count": 0
+    },
+    {
+     "month": "2024-02",
+     "count": 1
+    },
+    {
+     "month": "2024-03",
+     "count": 0
+    },
+    {
+     "month": "2024-04",
+     "count": 0
+    },
+    {
+     "month": "2024-05",
+     "count": 0
+    },
+    {
+     "month": "2024-06",
+     "count": 0
+    },
+    {
+     "month": "2024-07",
+     "count": 0
+    },
+    {
+     "month": "2024-08",
+     "count": 0
+    },
+    {
+     "month": "2024-09",
+     "count": 0
+    },
+    {
+     "month": "2024-10",
+     "count": 0
+    },
+    {
+     "month": "2024-11",
+     "count": 1
+    },
+    {
+     "month": "2024-12",
+     "count": 1
+    },
+    {
+     "month": "2025-01",
+     "count": 0
+    },
+    {
+     "month": "2025-02",
+     "count": 1
+    },
+    {
+     "month": "2025-03",
+     "count": 0
+    },
+    {
+     "month": "2025-04",
+     "count": 0
+    },
+    {
+     "month": "2025-05",
+     "count": 0
+    },
+    {
+     "month": "2025-06",
+     "count": 0
+    },
+    {
+     "month": "2025-07",
+     "count": 1
+    },
+    {
+     "month": "2025-08",
+     "count": 0
+    },
+    {
+     "month": "2025-09",
+     "count": 0
+    },
+    {
+     "month": "2025-10",
+     "count": 0
+    },
+    {
+     "month": "2025-11",
+     "count": 2
+    },
+    {
+     "month": "2025-12",
+     "count": 2
+    },
+    {
+     "month": "2026-01",
+     "count": 2
+    },
+    {
+     "month": "2026-02",
+     "count": 1
+    },
+    {
+     "month": "2026-03",
+     "count": 0
+    },
+    {
+     "month": "2026-04",
+     "count": 0
+    },
+    {
+     "month": "2026-05",
+     "count": 0
+    },
+    {
+     "month": "2026-06",
+     "count": 1
+    },
+    {
+     "month": "2026-07",
+     "count": 2
+    },
+    {
+     "month": "2026-08",
+     "count": 0
+    },
+    {
+     "month": "2026-09",
+     "count": 1
+    },
+    {
+     "month": "2026-10",
+     "count": 3
+    },
+    {
+     "month": "2026-11",
+     "count": 0
+    },
+    {
+     "month": "2026-12",
+     "count": 0
+    }
+   ],
+   "relationship": {
+    "strength": "moderate",
+    "topContact": {
+     "name": "Stan Ruskov",
+     "interactions": 1501
+    },
+    "matrix": [
+     {
+      "teammate": {
+       "name": "Jonas Meyer",
+       "email": "jonas@harbourline.example"
+      },
+      "contact": {
+       "name": "Stan Ruskov",
+       "email": "stan@lazard.com"
+      },
+      "interactions": 667,
+      "lastInteraction": "2026-07-03T10:00:00Z",
+      "strength": "moderate"
+     },
+     {
+      "teammate": {
+       "name": "Amelia Hart",
+       "email": "amelia@harbourline.example"
+      },
+      "contact": {
+       "name": "Marcus Doyle",
+       "email": "marcus@lazard.com"
+      },
+      "interactions": 384,
+      "lastInteraction": "2026-04-16T10:00:00Z",
+      "strength": "strong"
+     },
+     {
+      "teammate": {
+       "name": "Tom Whitaker",
+       "email": "tom@harbourline.example"
+      },
+      "contact": {
+       "name": "Helen Doyle",
+       "email": "helen@lazard.com"
+      },
+      "interactions": 376,
+      "lastInteraction": "2026-07-07T10:00:00Z",
+      "strength": "strong"
+     },
+     {
+      "teammate": {
+       "name": "Priya Nair",
+       "email": "priya@harbourline.example"
+      },
+      "contact": {
+       "name": "Helen Marsh",
+       "email": "helen@lazard.com"
+      },
+      "interactions": 74,
+      "lastInteraction": "2026-04-16T10:00:00Z",
+      "strength": "strong"
+     }
+    ]
+   },
+   "fees": [
+    {
+     "currency": "GBP",
+     "amount": 1050000
+    }
+   ],
+   "feeUnavailableReason": null,
+   "notesCount": 12
+  },
+  {
+   "adviser": {
+    "companyId": "c013",
+    "name": "Jefferies",
+    "domain": "jefferies.com",
+    "logo": {
+     "dataUri": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTIiIGZpbGw9IiMzZDZmYjUiLz48dGV4dCB4PSIzMiIgeT0iNDEiIGZvbnQtZmFtaWx5PSJHZW9yZ2lhLHNlcmlmIiBmb250LXNpemU9IjI2IiBmaWxsPSIjZmZmIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5KPC90ZXh0Pjwvc3ZnPg==",
+     "initials": "J",
+     "color": "#3d6fb5"
+    }
+   },
+   "dealsByMonth": [
+    {
+     "month": "2024-01",
+     "count": 0
+    },
+    {
+     "month": "2024-02",
+     "count": 1
+    },
+    {
+     "month": "2024-03",
+     "count": 1
+    },
+    {
+     "month": "2024-04",
+     "count": 2
+    },
+    {
+     "month": "2024-05",
+     "count": 0
+    },
+    {
+     "month": "2024-06",
+     "count": 1
+    },
+    {
+     "month": "2024-07",
+     "count": 0
+    },
+    {
+     "month": "2024-08",
+     "count": 0
+    },
+    {
+     "month": "2024-09",
+     "count": 2
+    },
+    {
+     "month": "2024-10",
+     "count": 2
+    },
+    {
+     "month": "2024-11",
+     "count": 1
+    },
+    {
+     "month": "2024-12",
+     "count": 0
+    },
+    {
+     "month": "2025-01",
+     "count": 1
+    },
+    {
+     "month": "2025-02",
+     "count": 0
+    },
+    {
+     "month": "2025-03",
+     "count": 2
+    },
+    {
+     "month": "2025-04",
+     "count": 0
+    },
+    {
+     "month": "2025-05",
+     "count": 0
+    },
+    {
+     "month": "2025-06",
+     "count": 0
+    },
+    {
+     "month": "2025-07",
+     "count": 0
+    },
+    {
+     "month": "2025-08",
+     "count": 0
+    },
+    {
+     "month": "2025-09",
+     "count": 0
+    },
+    {
+     "month": "2025-10",
+     "count": 2
+    },
+    {
+     "month": "2025-11",
+     "count": 0
+    },
+    {
+     "month": "2025-12",
+     "count": 3
+    },
+    {
+     "month": "2026-01",
+     "count": 0
+    },
+    {
+     "month": "2026-02",
+     "count": 0
+    },
+    {
+     "month": "2026-03",
+     "count": 0
+    },
+    {
+     "month": "2026-04",
+     "count": 0
+    },
+    {
+     "month": "2026-05",
+     "count": 1
+    },
+    {
+     "month": "2026-06",
+     "count": 1
+    },
+    {
+     "month": "2026-07",
+     "count": 0
+    },
+    {
+     "month": "2026-08",
+     "count": 0
+    },
+    {
+     "month": "2026-09",
+     "count": 0
+    },
+    {
+     "month": "2026-10",
+     "count": 0
+    },
+    {
+     "month": "2026-11",
+     "count": 0
+    },
+    {
+     "month": "2026-12",
+     "count": 0
+    }
+   ],
+   "relationship": {
+    "strength": "weak",
+    "topContact": {
+     "name": "Charlotte Astleford",
+     "interactions": 449
+    },
+    "matrix": [
+     {
+      "teammate": {
+       "name": "Amelia Hart",
+       "email": "amelia@harbourline.example"
+      },
+      "contact": {
+       "name": "Charlotte Astleford",
+       "email": "charlotte@jefferies.com"
+      },
+      "interactions": 394,
+      "lastInteraction": "2026-06-25T10:00:00Z",
+      "strength": "moderate"
+     },
+     {
+      "teammate": {
+       "name": "Tom Whitaker",
+       "email": "tom@harbourline.example"
+      },
+      "contact": {
+       "name": "Oliver Clarke",
+       "email": "oliver@jefferies.com"
+      },
+      "interactions": 55,
+      "lastInteraction": "2026-08-07T10:00:00Z",
+      "strength": "moderate"
+     }
+    ]
+   },
+   "fees": [
+    {
+     "currency": "GBP",
+     "amount": 1800000
+    }
+   ],
+   "feeUnavailableReason": null,
+   "notesCount": 14
+  },
+  {
+   "adviser": {
+    "companyId": "c014",
+    "name": "Moelis",
+    "domain": "moelis.com",
+    "logo": {
+     "dataUri": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTIiIGZpbGw9IiM4YTVjYjUiLz48dGV4dCB4PSIzMiIgeT0iNDEiIGZvbnQtZmFtaWx5PSJHZW9yZ2lhLHNlcmlmIiBmb250LXNpemU9IjI2IiBmaWxsPSIjZmZmIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5NPC90ZXh0Pjwvc3ZnPg==",
+     "initials": "M",
+     "color": "#8a5cb5"
+    }
+   },
+   "dealsByMonth": [
+    {
+     "month": "2024-01",
+     "count": 0
+    },
+    {
+     "month": "2024-02",
+     "count": 0
+    },
+    {
+     "month": "2024-03",
+     "count": 0
+    },
+    {
+     "month": "2024-04",
+     "count": 0
+    },
+    {
+     "month": "2024-05",
+     "count": 0
+    },
+    {
+     "month": "2024-06",
+     "count": 3
+    },
+    {
+     "month": "2024-07",
+     "count": 0
+    },
+    {
+     "month": "2024-08",
+     "count": 1
+    },
+    {
+     "month": "2024-09",
+     "count": 0
+    },
+    {
+     "month": "2024-10",
+     "count": 0
+    },
+    {
+     "month": "2024-11",
+     "count": 1
+    },
+    {
+     "month": "2024-12",
+     "count": 0
+    },
+    {
+     "month": "2025-01",
+     "count": 0
+    },
+    {
+     "month": "2025-02",
+     "count": 0
+    },
+    {
+     "month": "2025-03",
+     "count": 0
+    },
+    {
+     "month": "2025-04",
+     "count": 0
+    },
+    {
+     "month": "2025-05",
+     "count": 0
+    },
+    {
+     "month": "2025-06",
+     "count": 3
+    },
+    {
+     "month": "2025-07",
+     "count": 0
+    },
+    {
+     "month": "2025-08",
+     "count": 0
+    },
+    {
+     "month": "2025-09",
+     "count": 0
+    },
+    {
+     "month": "2025-10",
+     "count": 0
+    },
+    {
+     "month": "2025-11",
+     "count": 0
+    },
+    {
+     "month": "2025-12",
+     "count": 0
+    },
+    {
+     "month": "2026-01",
+     "count": 0
+    },
+    {
+     "month": "2026-02",
+     "count": 1
+    },
+    {
+     "month": "2026-03",
+     "count": 3
+    },
+    {
+     "month": "2026-04",
+     "count": 0
+    },
+    {
+     "month": "2026-05",
+     "count": 0
+    },
+    {
+     "month": "2026-06",
+     "count": 0
+    },
+    {
+     "month": "2026-07",
+     "count": 2
+    },
+    {
+     "month": "2026-08",
+     "count": 0
+    },
+    {
+     "month": "2026-09",
+     "count": 2
+    },
+    {
+     "month": "2026-10",
+     "count": 3
+    },
+    {
+     "month": "2026-11",
+     "count": 0
+    },
+    {
+     "month": "2026-12",
+     "count": 0
+    }
+   ],
+   "relationship": {
+    "strength": "moderate",
+    "topContact": null,
+    "matrix": []
+   },
+   "fees": [
+    {
+     "currency": "GBP",
+     "amount": 850000
+    }
+   ],
+   "feeUnavailableReason": null,
+   "notesCount": 6
+  },
+  {
+   "adviser": {
+    "companyId": "c015",
+    "name": "Greenhill",
+    "domain": "greenhill.com",
+    "logo": {
+     "dataUri": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTIiIGZpbGw9IiMyZjhmODMiLz48dGV4dCB4PSIzMiIgeT0iNDEiIGZvbnQtZmFtaWx5PSJHZW9yZ2lhLHNlcmlmIiBmb250LXNpemU9IjI2IiBmaWxsPSIjZmZmIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5HPC90ZXh0Pjwvc3ZnPg==",
+     "initials": "G",
+     "color": "#2f8f83"
+    }
+   },
+   "dealsByMonth": [
+    {
+     "month": "2024-01",
+     "count": 1
+    },
+    {
+     "month": "2024-02",
+     "count": 0
+    },
+    {
+     "month": "2024-03",
+     "count": 0
+    },
+    {
+     "month": "2024-04",
+     "count": 2
+    },
+    {
+     "month": "2024-05",
+     "count": 0
+    },
+    {
+     "month": "2024-06",
+     "count": 0
+    },
+    {
+     "month": "2024-07",
+     "count": 0
+    },
+    {
+     "month": "2024-08",
+     "count": 1
+    },
+    {
+     "month": "2024-09",
+     "count": 0
+    },
+    {
+     "month": "2024-10",
+     "count": 0
+    },
+    {
+     "month": "2024-11",
+     "count": 0
+    },
+    {
+     "month": "2024-12",
+     "count": 1
+    },
+    {
+     "month": "2025-01",
+     "count": 0
+    },
+    {
+     "month": "2025-02",
+     "count": 0
+    },
+    {
+     "month": "2025-03",
+     "count": 0
+    },
+    {
+     "month": "2025-04",
+     "count": 0
+    },
+    {
+     "month": "2025-05",
+     "count": 0
+    },
+    {
+     "month": "2025-06",
+     "count": 0
+    },
+    {
+     "month": "2025-07",
+     "count": 1
+    },
+    {
+     "month": "2025-08",
+     "count": 0
+    },
+    {
+     "month": "2025-09",
+     "count": 0
+    },
+    {
+     "month": "2025-10",
+     "count": 0
+    },
+    {
+     "month": "2025-11",
+     "count": 0
+    },
+    {
+     "month": "2025-12",
+     "count": 1
+    },
+    {
+     "month": "2026-01",
+     "count": 1
+    },
+    {
+     "month": "2026-02",
+     "count": 2
+    },
+    {
+     "month": "2026-03",
+     "count": 1
+    },
+    {
+     "month": "2026-04",
+     "count": 0
+    },
+    {
+     "month": "2026-05",
+     "count": 0
+    },
+    {
+     "month": "2026-06",
+     "count": 0
+    },
+    {
+     "month": "2026-07",
+     "count": 0
+    },
+    {
+     "month": "2026-08",
+     "count": 0
+    },
+    {
+     "month": "2026-09",
+     "count": 0
+    },
+    {
+     "month": "2026-10",
+     "count": 0
+    },
+    {
+     "month": "2026-11",
+     "count": 0
+    },
+    {
+     "month": "2026-12",
+     "count": 0
+    }
+   ],
+   "relationship": {
+    "strength": "weak",
+    "topContact": {
+     "name": "Helen Marsh",
+     "interactions": 1665
+    },
+    "matrix": [
+     {
+      "teammate": {
+       "name": "Tom Whitaker",
+       "email": "tom@harbourline.example"
+      },
+      "contact": {
+       "name": "Helen Marsh",
+       "email": "helen@greenhill.com"
+      },
+      "interactions": 891,
+      "lastInteraction": "2026-03-15T10:00:00Z",
+      "strength": "weak"
+     },
+     {
+      "teammate": {
+       "name": "Amelia Hart",
+       "email": "amelia@harbourline.example"
+      },
+      "contact": {
+       "name": "Anna Bennett",
+       "email": "anna@greenhill.com"
+      },
+      "interactions": 619,
+      "lastInteraction": "2026-10-07T10:00:00Z",
+      "strength": "strong"
+     },
+     {
+      "teammate": {
+       "name": "Priya Nair",
+       "email": "priya@harbourline.example"
+      },
+      "contact": {
+       "name": "Ben Mason",
+       "email": "ben@greenhill.com"
+      },
+      "interactions": 109,
+      "lastInteraction": "2026-01-16T10:00:00Z",
+      "strength": "strong"
+     },
+     {
+      "teammate": {
+       "name": "Jonas Meyer",
+       "email": "jonas@harbourline.example"
+      },
+      "contact": {
+       "name": "Oliver Frost",
+       "email": "oliver@greenhill.com"
+      },
+      "interactions": 46,
+      "lastInteraction": "2026-05-08T10:00:00Z",
+      "strength": "strong"
+     }
+    ]
+   },
+   "fees": [
+    {
+     "currency": "GBP",
+     "amount": 900000
+    }
+   ],
+   "feeUnavailableReason": null,
+   "notesCount": 12
+  },
+  {
+   "adviser": {
+    "companyId": "c016",
+    "name": "Harris Williams",
+    "domain": "harriswilliams.com",
+    "logo": {
+     "dataUri": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTIiIGZpbGw9IiNiNTY1M2QiLz48dGV4dCB4PSIzMiIgeT0iNDEiIGZvbnQtZmFtaWx5PSJHZW9yZ2lhLHNlcmlmIiBmb250LXNpemU9IjI2IiBmaWxsPSIjZmZmIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5IVzwvdGV4dD48L3N2Zz4=",
+     "initials": "HW",
+     "color": "#b5653d"
+    }
+   },
+   "dealsByMonth": [
+    {
+     "month": "2024-01",
+     "count": 0
+    },
+    {
+     "month": "2024-02",
+     "count": 0
+    },
+    {
+     "month": "2024-03",
+     "count": 2
+    },
+    {
+     "month": "2024-04",
+     "count": 0
+    },
+    {
+     "month": "2024-05",
+     "count": 0
+    },
+    {
+     "month": "2024-06",
+     "count": 1
+    },
+    {
+     "month": "2024-07",
+     "count": 1
+    },
+    {
+     "month": "2024-08",
+     "count": 0
+    },
+    {
+     "month": "2024-09",
+     "count": 3
+    },
+    {
+     "month": "2024-10",
+     "count": 0
+    },
+    {
+     "month": "2024-11",
+     "count": 0
+    },
+    {
+     "month": "2024-12",
+     "count": 1
+    },
+    {
+     "month": "2025-01",
+     "count": 0
+    },
+    {
+     "month": "2025-02",
+     "count": 0
+    },
+    {
+     "month": "2025-03",
+     "count": 0
+    },
+    {
+     "month": "2025-04",
+     "count": 1
+    },
+    {
+     "month": "2025-05",
+     "count": 0
+    },
+    {
+     "month": "2025-06",
+     "count": 0
+    },
+    {
+     "month": "2025-07",
+     "count": 1
+    },
+    {
+     "month": "2025-08",
+     "count": 0
+    },
+    {
+     "month": "2025-09",
+     "count": 0
+    },
+    {
+     "month": "2025-10",
+     "count": 2
+    },
+    {
+     "month": "2025-11",
+     "count": 1
+    },
+    {
+     "month": "2025-12",
+     "count": 0
+    },
+    {
+     "month": "2026-01",
+     "count": 0
+    },
+    {
+     "month": "2026-02",
+     "count": 0
+    },
+    {
+     "month": "2026-03",
+     "count": 0
+    },
+    {
+     "month": "2026-04",
+     "count": 0
+    },
+    {
+     "month": "2026-05",
+     "count": 3
+    },
+    {
+     "month": "2026-06",
+     "count": 0
+    },
+    {
+     "month": "2026-07",
+     "count": 0
+    },
+    {
+     "month": "2026-08",
+     "count": 0
+    },
+    {
+     "month": "2026-09",
+     "count": 0
+    },
+    {
+     "month": "2026-10",
+     "count": 0
+    },
+    {
+     "month": "2026-11",
+     "count": 0
+    },
+    {
+     "month": "2026-12",
+     "count": 0
+    }
+   ],
+   "relationship": {
+    "strength": "strong",
+    "topContact": {
+     "name": "Richard Darlington",
+     "interactions": 388
+    },
+    "matrix": [
+     {
+      "teammate": {
+       "name": "Jonas Meyer",
+       "email": "jonas@harbourline.example"
+      },
+      "contact": {
+       "name": "Richard Darlington",
+       "email": "richard@harriswilliams.com"
+      },
+      "interactions": 377,
+      "lastInteraction": "2026-04-13T10:00:00Z",
+      "strength": "weak"
+     },
+     {
+      "teammate": {
+       "name": "Amelia Hart",
+       "email": "amelia@harbourline.example"
+      },
+      "contact": {
+       "name": "Oliver Bennett",
+       "email": "oliver@harriswilliams.com"
+      },
+      "interactions": 11,
+      "lastInteraction": "2026-07-06T10:00:00Z",
+      "strength": "moderate"
+     }
+    ]
+   },
+   "fees": [
+    {
+     "currency": "GBP",
+     "amount": 450000
+    }
+   ],
+   "feeUnavailableReason": null,
+   "notesCount": 13
+  },
+  {
+   "adviser": {
+    "companyId": "c017",
+    "name": "Oakley Capital Advisory",
+    "domain": "oakleyadvisory.example",
+    "logo": {
+     "dataUri": null,
+     "initials": "OC",
+     "color": "#6b7f2f"
+    }
+   },
+   "dealsByMonth": [
+    {
+     "month": "2024-01",
+     "count": 2
+    },
+    {
+     "month": "2024-02",
+     "count": 0
+    },
+    {
+     "month": "2024-03",
+     "count": 0
+    },
+    {
+     "month": "2024-04",
+     "count": 0
+    },
+    {
+     "month": "2024-05",
+     "count": 2
+    },
+    {
+     "month": "2024-06",
+     "count": 2
+    },
+    {
+     "month": "2024-07",
+     "count": 2
+    },
+    {
+     "month": "2024-08",
+     "count": 0
+    },
+    {
+     "month": "2024-09",
+     "count": 0
+    },
+    {
+     "month": "2024-10",
+     "count": 0
+    },
+    {
+     "month": "2024-11",
+     "count": 0
+    },
+    {
+     "month": "2024-12",
+     "count": 0
+    },
+    {
+     "month": "2025-01",
+     "count": 0
+    },
+    {
+     "month": "2025-02",
+     "count": 2
+    },
+    {
+     "month": "2025-03",
+     "count": 0
+    },
+    {
+     "month": "2025-04",
+     "count": 0
+    },
+    {
+     "month": "2025-05",
+     "count": 0
+    },
+    {
+     "month": "2025-06",
+     "count": 0
+    },
+    {
+     "month": "2025-07",
+     "count": 1
+    },
+    {
+     "month": "2025-08",
+     "count": 0
+    },
+    {
+     "month": "2025-09",
+     "count": 0
+    },
+    {
+     "month": "2025-10",
+     "count": 3
+    },
+    {
+     "month": "2025-11",
+     "count": 0
+    },
+    {
+     "month": "2025-12",
+     "count": 0
+    },
+    {
+     "month": "2026-01",
+     "count": 0
+    },
+    {
+     "month": "2026-02",
+     "count": 0
+    },
+    {
+     "month": "2026-03",
+     "count": 0
+    },
+    {
+     "month": "2026-04",
+     "count": 0
+    },
+    {
+     "month": "2026-05",
+     "count": 0
+    },
+    {
+     "month": "2026-06",
+     "count": 0
+    },
+    {
+     "month": "2026-07",
+     "count": 0
+    },
+    {
+     "month": "2026-08",
+     "count": 0
+    },
+    {
+     "month": "2026-09",
+     "count": 0
+    },
+    {
+     "month": "2026-10",
+     "count": 0
+    },
+    {
+     "month": "2026-11",
+     "count": 0
+    },
+    {
+     "month": "2026-12",
+     "count": 0
+    }
+   ],
+   "relationship": {
+    "strength": "moderate",
+    "topContact": {
+     "name": "Anna Marsh",
+     "interactions": 1439
+    },
+    "matrix": [
+     {
+      "teammate": {
+       "name": "Priya Nair",
+       "email": "priya@harbourline.example"
+      },
+      "contact": {
+       "name": "Anna Marsh",
+       "email": "anna@oakleyadvisory.example"
+      },
+      "interactions": 867,
+      "lastInteraction": "2026-01-22T10:00:00Z",
+      "strength": "moderate"
+     },
+     {
+      "teammate": {
+       "name": "Amelia Hart",
+       "email": "amelia@harbourline.example"
+      },
+      "contact": {
+       "name": "Patrick Irwin",
+       "email": "patrick@oakleyadvisory.example"
+      },
+      "interactions": 414,
+      "lastInteraction": "2026-09-06T10:00:00Z",
+      "strength": "moderate"
+     },
+     {
+      "teammate": {
+       "name": "Tom Whitaker",
+       "email": "tom@harbourline.example"
+      },
+      "contact": {
+       "name": "Helen Clarke",
+       "email": "helen@oakleyadvisory.example"
+      },
+      "interactions": 158,
+      "lastInteraction": "2026-04-24T10:00:00Z",
+      "strength": "strong"
+     }
+    ]
+   },
+   "fees": [
+    {
+     "currency": "GBP",
+     "amount": 450000
+    }
+   ],
+   "feeUnavailableReason": null,
+   "notesCount": 6
+  },
+  {
+   "adviser": {
+    "companyId": "c018",
+    "name": "Stonebridge Partners",
+    "domain": "stonebridgepartners.example",
+    "logo": {
+     "dataUri": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTIiIGZpbGw9IiNiNTNkNmIiLz48dGV4dCB4PSIzMiIgeT0iNDEiIGZvbnQtZmFtaWx5PSJHZW9yZ2lhLHNlcmlmIiBmb250LXNpemU9IjI2IiBmaWxsPSIjZmZmIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5TUDwvdGV4dD48L3N2Zz4=",
+     "initials": "SP",
+     "color": "#b53d6b"
+    }
+   },
+   "dealsByMonth": [
+    {
+     "month": "2024-01",
+     "count": 0
+    },
+    {
+     "month": "2024-02",
+     "count": 0
+    },
+    {
+     "month": "2024-03",
+     "count": 0
+    },
+    {
+     "month": "2024-04",
+     "count": 0
+    },
+    {
+     "month": "2024-05",
+     "count": 0
+    },
+    {
+     "month": "2024-06",
+     "count": 0
+    },
+    {
+     "month": "2024-07",
+     "count": 0
+    },
+    {
+     "month": "2024-08",
+     "count": 0
+    },
+    {
+     "month": "2024-09",
+     "count": 0
+    },
+    {
+     "month": "2024-10",
+     "count": 0
+    },
+    {
+     "month": "2024-11",
+     "count": 2
+    },
+    {
+     "month": "2024-12",
+     "count": 0
+    },
+    {
+     "month": "2025-01",
+     "count": 0
+    },
+    {
+     "month": "2025-02",
+     "count": 0
+    },
+    {
+     "month": "2025-03",
+     "count": 0
+    },
+    {
+     "month": "2025-04",
+     "count": 0
+    },
+    {
+     "month": "2025-05",
+     "count": 0
+    },
+    {
+     "month": "2025-06",
+     "count": 0
+    },
+    {
+     "month": "2025-07",
+     "count": 0
+    },
+    {
+     "month": "2025-08",
+     "count": 1
+    },
+    {
+     "month": "2025-09",
+     "count": 0
+    },
+    {
+     "month": "2025-10",
+     "count": 2
+    },
+    {
+     "month": "2025-11",
+     "count": 0
+    },
+    {
+     "month": "2025-12",
+     "count": 0
+    },
+    {
+     "month": "2026-01",
+     "count": 1
+    },
+    {
+     "month": "2026-02",
+     "count": 3
+    },
+    {
+     "month": "2026-03",
+     "count": 0
+    },
+    {
+     "month": "2026-04",
+     "count": 0
+    },
+    {
+     "month": "2026-05",
+     "count": 2
+    },
+    {
+     "month": "2026-06",
+     "count": 0
+    },
+    {
+     "month": "2026-07",
+     "count": 0
+    },
+    {
+     "month": "2026-08",
+     "count": 0
+    },
+    {
+     "month": "2026-09",
+     "count": 1
+    },
+    {
+     "month": "2026-10",
+     "count": 0
+    },
+    {
+     "month": "2026-11",
+     "count": 0
+    },
+    {
+     "month": "2026-12",
+     "count": 0
+    }
+   ],
+   "relationship": {
+    "strength": "weak",
+    "topContact": {
+     "name": "Marcus Clarke",
+     "interactions": 3080
+    },
+    "matrix": [
+     {
+      "teammate": {
+       "name": "Jonas Meyer",
+       "email": "jonas@harbourline.example"
+      },
+      "contact": {
+       "name": "Marcus Clarke",
+       "email": "marcus@stonebridgepartners.example"
+      },
+      "interactions": 858,
+      "lastInteraction": "2026-06-20T10:00:00Z",
+      "strength": "moderate"
+     },
+     {
+      "teammate": {
+       "name": "Priya Nair",
+       "email": "priya@harbourline.example"
+      },
+      "contact": {
+       "name": "Oliver Frost",
+       "email": "oliver@stonebridgepartners.example"
+      },
+      "interactions": 835,
+      "lastInteraction": "2026-03-22T10:00:00Z",
+      "strength": "weak"
+     },
+     {
+      "teammate": {
+       "name": "Tom Whitaker",
+       "email": "tom@harbourline.example"
+      },
+      "contact": {
+       "name": "Giles Corner",
+       "email": "giles@stonebridgepartners.example"
+      },
+      "interactions": 754,
+      "lastInteraction": "2026-02-07T10:00:00Z",
+      "strength": "strong"
+     },
+     {
+      "teammate": {
+       "name": "Amelia Hart",
+       "email": "amelia@harbourline.example"
+      },
+      "contact": {
+       "name": "Marcus Frost",
+       "email": "marcus@stonebridgepartners.example"
+      },
+      "interactions": 633,
+      "lastInteraction": "2026-05-27T10:00:00Z",
+      "strength": "moderate"
+     }
+    ]
+   },
+   "fees": [
+    {
+     "currency": "GBP",
+     "amount": 550000
+    }
+   ],
+   "feeUnavailableReason": null,
+   "notesCount": 4
+  },
+  {
+   "adviser": {
+    "companyId": "c019",
+    "name": "Kestrel Corporate Finance",
+    "domain": "kestrelcf.example",
+    "logo": {
+     "dataUri": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTIiIGZpbGw9IiMzZDZmYjUiLz48dGV4dCB4PSIzMiIgeT0iNDEiIGZvbnQtZmFtaWx5PSJHZW9yZ2lhLHNlcmlmIiBmb250LXNpemU9IjI2IiBmaWxsPSIjZmZmIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5LQzwvdGV4dD48L3N2Zz4=",
+     "initials": "KC",
+     "color": "#3d6fb5"
+    }
+   },
+   "dealsByMonth": [
+    {
+     "month": "2024-01",
+     "count": 0
+    },
+    {
+     "month": "2024-02",
+     "count": 0
+    },
+    {
+     "month": "2024-03",
+     "count": 0
+    },
+    {
+     "month": "2024-04",
+     "count": 0
+    },
+    {
+     "month": "2024-05",
+     "count": 0
+    },
+    {
+     "month": "2024-06",
+     "count": 0
+    },
+    {
+     "month": "2024-07",
+     "count": 1
+    },
+    {
+     "month": "2024-08",
+     "count": 0
+    },
+    {
+     "month": "2024-09",
+     "count": 0
+    },
+    {
+     "month": "2024-10",
+     "count": 0
+    },
+    {
+     "month": "2024-11",
+     "count": 0
+    },
+    {
+     "month": "2024-12",
+     "count": 0
+    },
+    {
+     "month": "2025-01",
+     "count": 0
+    },
+    {
+     "month": "2025-02",
+     "count": 0
+    },
+    {
+     "month": "2025-03",
+     "count": 0
+    },
+    {
+     "month": "2025-04",
+     "count": 1
+    },
+    {
+     "month": "2025-05",
+     "count": 0
+    },
+    {
+     "month": "2025-06",
+     "count": 0
+    },
+    {
+     "month": "2025-07",
+     "count": 0
+    },
+    {
+     "month": "2025-08",
+     "count": 0
+    },
+    {
+     "month": "2025-09",
+     "count": 0
+    },
+    {
+     "month": "2025-10",
+     "count": 0
+    },
+    {
+     "month": "2025-11",
+     "count": 0
+    },
+    {
+     "month": "2025-12",
+     "count": 0
+    },
+    {
+     "month": "2026-01",
+     "count": 0
+    },
+    {
+     "month": "2026-02",
+     "count": 0
+    },
+    {
+     "month": "2026-03",
+     "count": 0
+    },
+    {
+     "month": "2026-04",
+     "count": 0
+    },
+    {
+     "month": "2026-05",
+     "count": 0
+    },
+    {
+     "month": "2026-06",
+     "count": 0
+    },
+    {
+     "month": "2026-07",
+     "count": 0
+    },
+    {
+     "month": "2026-08",
+     "count": 0
+    },
+    {
+     "month": "2026-09",
+     "count": 0
+    },
+    {
+     "month": "2026-10",
+     "count": 0
+    },
+    {
+     "month": "2026-11",
+     "count": 0
+    },
+    {
+     "month": "2026-12",
+     "count": 0
+    }
+   ],
+   "relationship": {
+    "strength": "moderate",
+    "topContact": {
+     "name": "Sofia Frost",
+     "interactions": 1063
+    },
+    "matrix": [
+     {
+      "teammate": {
+       "name": "Jonas Meyer",
+       "email": "jonas@harbourline.example"
+      },
+      "contact": {
+       "name": "Sofia Frost",
+       "email": "sofia@kestrelcf.example"
+      },
+      "interactions": 755,
+      "lastInteraction": "2026-01-24T10:00:00Z",
+      "strength": "strong"
+     },
+     {
+      "teammate": {
+       "name": "Priya Nair",
+       "email": "priya@harbourline.example"
+      },
+      "contact": {
+       "name": "Ian Guilfoyle",
+       "email": "ian@kestrelcf.example"
+      },
+      "interactions": 308,
+      "lastInteraction": "2026-09-09T10:00:00Z",
+      "strength": "moderate"
+     }
+    ]
+   },
+   "fees": [
+    {
+     "currency": "GBP",
+     "amount": 800000
+    }
+   ],
+   "feeUnavailableReason": null,
+   "notesCount": 2
+  },
+  {
+   "adviser": {
+    "companyId": "c020",
+    "name": "Northgate Advisers",
+    "domain": "northgateadvisers.example",
+    "logo": {
+     "dataUri": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTIiIGZpbGw9IiM4YTVjYjUiLz48dGV4dCB4PSIzMiIgeT0iNDEiIGZvbnQtZmFtaWx5PSJHZW9yZ2lhLHNlcmlmIiBmb250LXNpemU9IjI2IiBmaWxsPSIjZmZmIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5OQTwvdGV4dD48L3N2Zz4=",
+     "initials": "NA",
+     "color": "#8a5cb5"
+    }
+   },
+   "dealsByMonth": [
+    {
+     "month": "2024-01",
+     "count": 0
+    },
+    {
+     "month": "2024-02",
+     "count": 0
+    },
+    {
+     "month": "2024-03",
+     "count": 0
+    },
+    {
+     "month": "2024-04",
+     "count": 0
+    },
+    {
+     "month": "2024-05",
+     "count": 2
+    },
+    {
+     "month": "2024-06",
+     "count": 0
+    },
+    {
+     "month": "2024-07",
+     "count": 0
+    },
+    {
+     "month": "2024-08",
+     "count": 1
+    },
+    {
+     "month": "2024-09",
+     "count": 0
+    },
+    {
+     "month": "2024-10",
+     "count": 0
+    },
+    {
+     "month": "2024-11",
+     "count": 0
+    },
+    {
+     "month": "2024-12",
+     "count": 0
+    },
+    {
+     "month": "2025-01",
+     "count": 0
+    },
+    {
+     "month": "2025-02",
+     "count": 0
+    },
+    {
+     "month": "2025-03",
+     "count": 0
+    },
+    {
+     "month": "2025-04",
+     "count": 0
+    },
+    {
+     "month": "2025-05",
+     "count": 0
+    },
+    {
+     "month": "2025-06",
+     "count": 0
+    },
+    {
+     "month": "2025-07",
+     "count": 1
+    },
+    {
+     "month": "2025-08",
+     "count": 0
+    },
+    {
+     "month": "2025-09",
+     "count": 0
+    },
+    {
+     "month": "2025-10",
+     "count": 0
+    },
+    {
+     "month": "2025-11",
+     "count": 0
+    },
+    {
+     "month": "2025-12",
+     "count": 0
+    },
+    {
+     "month": "2026-01",
+     "count": 0
+    },
+    {
+     "month": "2026-02",
+     "count": 0
+    },
+    {
+     "month": "2026-03",
+     "count": 0
+    },
+    {
+     "month": "2026-04",
+     "count": 0
+    },
+    {
+     "month": "2026-05",
+     "count": 0
+    },
+    {
+     "month": "2026-06",
+     "count": 0
+    },
+    {
+     "month": "2026-07",
+     "count": 0
+    },
+    {
+     "month": "2026-08",
+     "count": 0
+    },
+    {
+     "month": "2026-09",
+     "count": 0
+    },
+    {
+     "month": "2026-10",
+     "count": 0
+    },
+    {
+     "month": "2026-11",
+     "count": 0
+    },
+    {
+     "month": "2026-12",
+     "count": 0
+    }
+   ],
+   "relationship": {
+    "strength": "weak",
+    "topContact": {
+     "name": "Anna Clarke",
+     "interactions": 1122
+    },
+    "matrix": [
+     {
+      "teammate": {
+       "name": "Amelia Hart",
+       "email": "amelia@harbourline.example"
+      },
+      "contact": {
+       "name": "Anna Clarke",
+       "email": "anna@northgateadvisers.example"
+      },
+      "interactions": 549,
+      "lastInteraction": "2026-01-13T10:00:00Z",
+      "strength": "strong"
+     },
+     {
+      "teammate": {
+       "name": "Jonas Meyer",
+       "email": "jonas@harbourline.example"
+      },
+      "contact": {
+       "name": "Scott Williams",
+       "email": "scott@northgateadvisers.example"
+      },
+      "interactions": 509,
+      "lastInteraction": "2026-04-06T10:00:00Z",
+      "strength": "strong"
+     },
+     {
+      "teammate": {
+       "name": "Tom Whitaker",
+       "email": "tom@harbourline.example"
+      },
+      "contact": {
+       "name": "Marcus Bennett",
+       "email": "marcus@northgateadvisers.example"
+      },
+      "interactions": 64,
+      "lastInteraction": "2026-02-01T10:00:00Z",
+      "strength": "weak"
+     }
+    ]
+   },
+   "fees": [
+    {
+     "currency": "GBP",
+     "amount": 1850000
+    }
+   ],
+   "feeUnavailableReason": null,
+   "notesCount": 10
+  }
+ ]
+}
+</script>
+<script>
+(function () {
+  var data = JSON.parse(document.getElementById('tracker-data').textContent);
+  var COLORS = ['var(--c-old)', 'var(--c-mid)', 'var(--c-cur)'];
+  var STRENGTH = { strong: 'Strong', moderate: 'Moderate', weak: 'Weak' };
+  var selectedYear = data.window.to;
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function el(id) { return document.getElementById(id); }
+  function utc(iso) { return new Date(iso.length === 10 ? iso + 'T00:00:00Z' : iso); }
+  function fmtDate(iso) {
+    return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeZone: 'UTC' }).format(utc(iso));
+  }
+
+  // Years newest first, from window.to down to window.from.
+  function yearsOf(d) {
+    var ys = [];
+    for (var y = d.window.to; y >= d.window.from; y--) ys.push(y);
+    return ys;
+  }
+  // Every count below derives from dealsByMonth only.
+  function byMonth(row) {
+    var m = {};
+    row.dealsByMonth.forEach(function (e) { m[e.month] = e.count; });
+    return m;
+  }
+  function byQuarter(row, year) {
+    var q = [0, 0, 0, 0];
+    row.dealsByMonth.forEach(function (e) {
+      if (e.month.slice(0, 4) === String(year)) q[Math.floor((+e.month.slice(5, 7) - 1) / 3)] += e.count;
+    });
+    return q;
+  }
+  function byYear(row, year) {
+    return byQuarter(row, year).reduce(function (a, b) { return a + b; }, 0);
+  }
+  // Months from January of window.from up to the asOf month.
+  function drawnMonths(d) {
+    var out = [], last = d.asOf.slice(0, 7);
+    for (var y = d.window.from; y <= d.window.to; y++) {
+      for (var m = 1; m <= 12; m++) {
+        var k = y + '-' + (m < 10 ? '0' : '') + m;
+        if (k <= last) out.push(k);
+      }
+    }
+    return out;
+  }
+  function tierOf(row) {
+    return (data.tiers['1'] || []).indexOf(row.adviser.domain) >= 0 ? 1 : 2;
+  }
+  // The image when a data URI exists, else an empty bordered tile of the same size.
+  function logoTile(logo, cls) {
+    var c = 'tile ' + (cls || '');
+    if (logo && logo.dataUri && logo.dataUri.indexOf('data:image/') === 0) {
+      return '<span class="' + c + '"><img alt="" src="' + esc(logo.dataUri) + '"></span>';
+    }
+    return '<span class="' + c + ' blank"></span>';
+  }
+  function money(f) {
+    if (f.currency == null) return new Intl.NumberFormat().format(f.amount) + ' (currency not recorded)';
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency: f.currency, maximumFractionDigits: 0 }).format(f.amount);
+  }
+  // One amount per currency, never summed.
+  function formatFees(row) {
+    if (row.fees && row.fees.length) return row.fees.map(money).join(' · ');
+    return row.feeUnavailableReason || 'No fees recorded';
+  }
+  function dot(strength) { return '<span class="dot ' + esc(strength) + '"></span>'; }
+  function niceMax(v) {
+    var steps = [4, 8, 12, 20, 40, 60, 80, 100, 200, 400, 800, 1000];
+    for (var i = 0; i < steps.length; i++) if (v <= steps[i]) return steps[i];
+    return Math.ceil(v / 100) * 100;
+  }
+  function gridlines(top, bottom, left, right, max) {
+    var s = '', n = 4;
+    for (var i = 0; i <= n; i++) {
+      var y = bottom - (bottom - top) * i / n;
+      s += '<line x1="' + left + '" x2="' + right + '" y1="' + y + '" y2="' + y + '" style="stroke:var(--grid)"/>' +
+        '<text x="' + (left - 8) + '" y="' + (y + 4) + '" text-anchor="end">' + Math.round(max * i / n) + '</text>';
+    }
+    return s;
+  }
+  function legend(items) {
+    return '<div class="legend">' + items.map(function (i) {
+      return '<span><i style="background:' + i[1] + '"></i>' + esc(i[0]) + '</span>';
+    }).join('') + '</div>';
+  }
+  function head(title, sub, extra) {
+    return '<div class="card-head"><div><h2>' + esc(title) + '</h2><p class="sub">' + esc(sub) + '</p></div>' + (extra || '') + '</div>';
+  }
+  function emptyLine() {
+    return '<p class="empty">No adviser data to show yet.</p>';
+  }
+  function asOfText() { return fmtDate(data.asOf); }
+  function source() {
+    return 'Carta CRM, ' + data.tenant.name + ' tenant, as of ' + asOfText() + '. ' + data.window.to + ' runs to ' + asOfText() + '.';
+  }
+
+  function renderHeader() {
+    el('brand').innerHTML = logoTile(data.tenant.logo) + '<span class="name">' + esc(data.tenant.name) + '</span>';
+  }
+  function renderNotice() {
+    el('notice').innerHTML = data.notice ? '<div class="notice">' + esc(data.notice) + '</div>' : '';
+  }
+
+  function bankCell(r) {
+    var a = r.adviser;
+    return '<td class="hov" tabindex="0"><div class="bank">' + logoTile(a.logo, 'sm') +
+      '<div><div class="n">' + esc(a.name) + '</div><div class="grey">' + esc(a.domain) + '</div></div></div>' +
+      '<div class="pop"><p class="row"><b>Fees</b> ' + esc(formatFees(r)) + '</p>' +
+      '<p class="row"><b>Notes</b> ' + esc(r.notesCount) + '</p></div></td>';
+  }
+  function matrixPanel(rel) {
+    if (!rel.matrix || !rel.matrix.length) return '<div class="pop"><span class="grey">No interactions recorded</span></div>';
+    return '<div class="pop"><table><tr><th>Teammate</th><th>Contact</th><th class="num">Interactions</th><th>Last</th><th></th></tr>' +
+      rel.matrix.map(function (m) {
+        return '<tr><td>' + esc(m.teammate.name) + '</td><td>' + esc(m.contact.name) + '</td><td class="num">' +
+          esc(m.interactions) + '</td><td>' + esc(fmtDate(m.lastInteraction)) + '</td><td>' + dot(m.strength) + '</td></tr>';
+      }).join('') + '</table></div>';
+  }
+  function dataRow(r, i, year) {
+    var q = byQuarter(r, year), rel = r.relationship, tc = rel.topContact;
+    return '<tr><td class="idx">' + i + '</td>' + bankCell(r) +
+      q.map(function (n) { return '<td class="num">' + n + '</td>'; }).join('') +
+      '<td class="num total">' + byYear(r, year) + '</td>' +
+      '<td class="hov" tabindex="0">' + dot(rel.strength) + esc(STRENGTH[rel.strength] || rel.strength) + matrixPanel(rel) + '</td>' +
+      '<td>' + (tc ? '<div>' + esc(tc.name) + '</div><div class="grey">' + esc(tc.interactions) + ' interactions</div>' : '<span class="grey">No contact</span>') + '</td></tr>';
+  }
+  function renderTable(year) {
+    var toggle = '<div class="toggle" role="group" aria-label="Year">' + yearsOf(data).map(function (y) {
+      return '<button type="button" data-year="' + y + '" aria-pressed="' + (y === year) + '">' + y + '</button>';
+    }).join('') + '</div>';
+    var sub = 'Deals created per quarter of the selected year, per bank. ' + source() +
+      ' Top contact is the person with the most emails and meetings with anyone on our team.';
+    var body;
+    if (!data.rows.length) {
+      body = emptyLine();
+    } else {
+      var n = 0;
+      body = '<table><thead><tr><th>#</th><th>Investment bank</th><th class="num">Q1</th><th class="num">Q2</th><th class="num">Q3</th><th class="num">Q4</th>' +
+        '<th class="num">Year total</th><th>Relationship strength</th><th>Top contact</th></tr></thead><tbody>';
+      [1, 2].forEach(function (t) {
+        var rs = data.rows.filter(function (r) { return tierOf(r) === t; });
+        if (!rs.length) return;
+        body += '<tr class="tier"><td colspan="9">Tier ' + t + '</td></tr>';
+        rs.forEach(function (r) { body += dataRow(r, ++n, year); });
+      });
+      body += '</tbody></table>';
+    }
+    var card = el('card-table');
+    card.innerHTML = head(data.title, sub, toggle) + body;
+    card.querySelectorAll('[data-year]').forEach(function (b) {
+      b.addEventListener('click', function () { selectedYear = +b.getAttribute('data-year'); renderTable(selectedYear); });
+    });
+  }
+
+  // Two lines under each group when they fit, else one rotated line.
+  function bankLabel(name, cx, y, gw) {
+    if (gw < 70) {
+      return '<text x="' + cx + '" y="' + y + '" text-anchor="end" transform="rotate(-35 ' + cx + ' ' + y + ')">' + esc(name) + '</text>';
+    }
+    var words = name.split(' '), half = Math.ceil(words.length / 2);
+    return '<text text-anchor="middle"><tspan x="' + cx + '" y="' + y + '">' + esc(words.slice(0, half).join(' ')) +
+      '</tspan><tspan x="' + cx + '" y="' + (y + 15) + '">' + esc(words.slice(half).join(' ')) + '</tspan></text>';
+  }
+  function renderYearChart() {
+    var ys = yearsOf(data).slice().reverse(), cur = ys[ys.length - 1];
+    var sub = 'Deals created per bank, year over year. ' + source();
+    var html = head('Deals by bank, year over year', sub);
+    if (!data.rows.length) { el('card-years').innerHTML = html + emptyLine(); return; }
+    var W = 1100, H = 380, L = 90, R = 10, T = 16, B = 100, n = data.rows.length;
+    var max = 0;
+    data.rows.forEach(function (r) { ys.forEach(function (y) { max = Math.max(max, byYear(r, y)); }); });
+    max = niceMax(max);
+    var gw = (W - L - R) / n, bw = Math.min(18, gw * 0.8 / ys.length), svg = gridlines(T, H - B, L, W - R, max);
+    data.rows.forEach(function (r, i) {
+      var x0 = L + gw * i + (gw - bw * ys.length) / 2;
+      ys.forEach(function (y, k) {
+        var v = byYear(r, y), h = (H - B - T) * v / max, x = x0 + bw * k;
+        svg += '<rect x="' + x + '" y="' + (H - B - h) + '" width="' + (bw - 1) + '" height="' + h + '" style="fill:' + COLORS[k + COLORS.length - ys.length] + '"/>' +
+          (v ? '<text class="val" x="' + (x + (bw - 1) / 2) + '" y="' + (H - B - h - 4) + '" text-anchor="middle">' + v + '</text>' : '');
+      });
+      var cx = L + gw * i + gw / 2;
+      svg += bankLabel(r.adviser.name, cx, H - B + 16, gw);
+    });
+    var items = ys.map(function (y, k) { return [y === cur ? y + ' (YTD)' : String(y), COLORS[k + COLORS.length - ys.length]]; });
+    el('card-years').innerHTML = html + '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Deals by bank, year over year">' + svg + '</svg>' + legend(items);
+  }
+
+  function renderMonthChart() {
+    var months = drawnMonths(data);
+    var sub = 'Total deals created per month across all banks. ' + source();
+    var html = head('Deals created per month, last ' + (data.window.to - data.window.from + 1) + ' years', sub);
+    if (!data.rows.length) { el('card-months').innerHTML = html + emptyLine(); return; }
+    var maps = data.rows.map(byMonth);
+    var totals = months.map(function (k) { return maps.reduce(function (a, m) { return a + (m[k] || 0); }, 0); });
+    var W = 1100, H = 320, L = 40, R = 10, T = 16, B = 36, max = niceMax(Math.max.apply(null, totals));
+    var gw = (W - L - R) / months.length, bw = gw * 0.7, svg = gridlines(T, H - B, L, W - R, max);
+    var mon = new Intl.DateTimeFormat(undefined, { month: 'short', timeZone: 'UTC' });
+    months.forEach(function (k, i) {
+      var h = (H - B - T) * totals[i] / max, x = L + gw * i + (gw - bw) / 2;
+      svg += '<rect x="' + x + '" y="' + (H - B - h) + '" width="' + bw + '" height="' + h + '" style="fill:' + COLORS[1] + '"/>' +
+        (totals[i] ? '<text class="val" x="' + (x + bw / 2) + '" y="' + (H - B - h - 4) + '" text-anchor="middle">' + totals[i] + '</text>' : '');
+      if ((+k.slice(5, 7) - 1) % 3 === 0) {
+        svg += '<text x="' + (x + bw / 2) + '" y="' + (H - B + 18) + '" text-anchor="middle">' +
+          esc(mon.format(new Date(k + '-01T00:00:00Z')) + " '" + k.slice(2, 4)) + '</text>';
+      }
+    });
+    el('card-months').innerHTML = html + '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Deals created per month">' + svg + '</svg>' +
+      legend([['Total, all ' + data.rows.length + ' banks', COLORS[1]]]);
+  }
+
+  function render() {
+    renderHeader();
+    renderNotice();
+    renderTable(selectedYear);
+    renderYearChart();
+    renderMonthChart();
+  }
+  render();
+})();
+</script>
+</body>
+</html>
