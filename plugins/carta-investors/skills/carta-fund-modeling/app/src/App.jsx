@@ -3,7 +3,7 @@ import usePortfolio from "./state/usePortfolio.js";
 import { computeFundStates, firmRollup, firmBaseRollup } from "./model/funds.js";
 import { effectiveExitHorizons } from "./model/reprice.js";
 import { FS, tightSans, sans, GLOBAL_CSS, GRAD_DARK, MICRO, SMALL_1 } from "./ui/theme.js";
-import { Btn, LockIcon, Mark, SunIcon, MoonIcon, ChatIcon, ALL_FUNDS, Num, StatBar, Eyebrow, Heading2, H3, DeltaCaret } from "./ui/components.jsx";
+import { Btn, LockIcon, CartaLogo, SunIcon, MoonIcon, ChatIcon, ALL_FUNDS, Num, StatBar, Eyebrow, Heading2, H3, DeltaCaret } from "./ui/components.jsx";
 import { fmtAsOf, fmtM, fmtX, setDisplayCurrency } from "./ui/format.js";
 import UpdateDataButton from "./ui/UpdateDataButton.jsx";
 import useShare from "./state/useShare.js";
@@ -26,8 +26,8 @@ import { fmContext } from "./pinpoint/fmContext.js";
 import { postToOuter, onFromOuter } from "./bridge-client.js";
 import { trackClick, trackRender } from "./analytics.js";
 
-const I = ({ d, extra }) => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flex: "none" }}>
+const I = ({ d, extra, color, size = 16, strokeWidth = 1.8 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={{ flex: "none", color }}>
     <path d={d} />{extra && <path d={extra} />}
   </svg>
 );
@@ -137,18 +137,20 @@ function MetricBar({ firm, firmBase, firmLpDelta, firmGpCarry, narrow }) {
   );
 }
 
+// Full-bleed rows matching Ink's SideNav (.sn__item padding 10px 14px). Weight and
+// the active background/stripe come from .navitem in theme.js.
+const navItemStyle = { ...sans, display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left",
+  fontSize: FS.value, lineHeight: "20px", padding: "10px 14px", border: "none",
+  cursor: "pointer", color: "var(--ink-color-global-text-default)" };
+
 function NavItem({ id, label, icon, extra, active, onClick }) {
   return (
-    <button
-      onClick={onClick}
-      data-testid={`tab-${id}`}
-      className={`navitem${active ? " active" : ""}`}
-      style={{ ...sans, display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left",
-        fontSize: FS.bodyLg, fontWeight: active ? 600 : 500, padding: "6.5px 12px", border: "1px solid transparent",
-        borderRadius: 4, cursor: "pointer", background: active ? "var(--accent-soft)" : "transparent",
-        color: active ? "var(--ink-button-background-color-primary-base-default)" : "var(--ink-color-global-text-subtle)" }}
-    >
-      <I d={icon} extra={extra} />
+    <button onClick={onClick} data-testid={`tab-${id}`} className={`navitem${active ? " active" : ""}`} style={navItemStyle}>
+      {/* The active row's orange icon tile lives in CSS (.navitem.active .navitem-icon);
+          the glyph colour goes through I's color prop, since I sets it inline. */}
+      <span className="navitem-icon">
+        <I d={icon} extra={extra} size={20} strokeWidth={1.6} color={active ? "var(--ink-color-global-brand-black)" : "var(--ink-color-global-text-subtle)"} />
+      </span>
       {label}
     </button>
   );
@@ -321,7 +323,7 @@ export default function App({ firm, onChooseFirm }) {
     return (
       <div style={{ ...sans, minHeight: "100vh", background: "var(--ink-color-global-surface-background-default)", color: "var(--ink-color-global-text-subtle)", display: "grid", placeItems: "center" }}>
         <div style={{ textAlign: "center" }}>
-          <Mark size={56} style={{ margin: "0 auto", opacity: 0.9 }} />
+          <CartaLogo size={40} style={{ margin: "0 auto", opacity: 0.9 }} />
           <div style={{ marginTop: 12, fontSize: FS.bodyLg }}>Loading fund data…</div>
         </div>
       </div>
@@ -418,18 +420,23 @@ export default function App({ firm, onChooseFirm }) {
     if (scenariosOff) setTab(lastPortfolioTab.current);
   };
   const sidebar = (
-    <aside style={{ width: 232, flex: "none", background: "var(--ink-color-global-surface-background-default)", borderRight: `1px solid var(--ink-color-global-border-subtle)`,
+    <aside style={{ width: 240, flex: "none", background: "var(--ink-color-global-surface-background-default)", borderRight: `1px solid var(--ink-color-global-border-subtle)`,
       display: "flex", flexDirection: "column", gap: 1, padding: "14px 10px 10px",
       position: "sticky", top: 0, height: "100vh", overflowY: "auto" }}>
-      <div style={{ padding: "0 8px 12px", display: "flex", alignItems: "flex-start", gap: 10 }}>
-        <Mark branding={snapshot.branding} size={28} style={{ flex: "none", marginTop: 1 }} />
+      {/* Logo's left edge lines up with the nav icons (row inset 14px, minus the
+          aside's 10px). Nudged up 5px — (20px line − 30px logo) / 2 — so a one-line
+          firm name centres on the logo and a second line hangs below it. */}
+      <div style={{ padding: "4px 4px 16px", display: "flex", alignItems: "flex-start", gap: 12 }}>
+        <CartaLogo size={30} style={{ flex: "none", transform: "translateY(-5px)" }} />
         <div style={{ minWidth: 0 }}>
-          <H3 as="div" style={{ lineHeight: 1.2, wordBreak: "break-word" }}>{snapshot.branding?.firmName ?? snapshot.source.firm}</H3>
+          <div style={{ ...sans, fontSize: 14, fontWeight: 600, lineHeight: "20px", letterSpacing: "-0.01em", color: "var(--ink-color-global-text-default)", wordBreak: "break-word" }}>{snapshot.branding?.firmName ?? snapshot.source.firm}</div>
         </div>
       </div>
-      {TABS.filter(([id]) => id !== NEW_FUND_TAB).map(([id, label, icon, extra]) => (
-        <NavItem key={id} id={id} label={label} icon={icon} extra={extra} active={tab === id} onClick={() => selectTab(id)} />
-      ))}
+      <div style={{ margin: "0 -10px", display: "flex", flexDirection: "column" }}>
+        {TABS.filter(([id]) => id !== NEW_FUND_TAB).map(([id, label, icon, extra]) => (
+          <NavItem key={id} id={id} label={label} icon={icon} extra={extra} active={tab === id} onClick={() => selectTab(id)} />
+        ))}
+      </div>
       <div style={{ height: 1, background: "var(--ink-color-global-border-subtle)", margin: "9px 8px" }} />
       <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "0 8px 4px" }}>
         <Eyebrow color={MICRO}>Scenarios</Eyebrow>
@@ -461,9 +468,11 @@ export default function App({ firm, onChooseFirm }) {
       <div style={{ padding: "0 8px 4px" }}>
         <Eyebrow color={MICRO}>New fund</Eyebrow>
       </div>
-      {TABS.filter(([id]) => id === NEW_FUND_TAB).map(([id, label, icon, extra]) => (
-        <NavItem key={id} id={id} label={label} icon={icon} extra={extra} active={tab === id} onClick={() => selectTab(id)} />
-      ))}
+      <div style={{ margin: "0 -10px", display: "flex", flexDirection: "column" }}>
+        {TABS.filter(([id]) => id === NEW_FUND_TAB).map(([id, label, icon, extra]) => (
+          <NavItem key={id} id={id} label={label} icon={icon} extra={extra} active={tab === id} onClick={() => selectTab(id)} />
+        ))}
+      </div>
       <div style={{ height: 1, background: "var(--ink-color-global-border-subtle)", margin: "9px 8px 0" }} />
       <div style={{ padding: "9px 9px 0" }}>
         <span style={{ ...tightSans, fontSize: FS.body, fontWeight: 700, color: "var(--ink-color-global-text-default)", letterSpacing: "-0.01em" }}>Carta Fund Modeling</span>
@@ -492,7 +501,7 @@ export default function App({ firm, onChooseFirm }) {
   const narrowHeader = (
     <div style={{ borderBottom: `1px solid var(--ink-color-global-border-subtle)`, background: "var(--ink-color-global-surface-background-default)", padding: "12px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <Mark branding={snapshot.branding} size={24} />
+        <CartaLogo size={24} />
         <H3>{snapshot.branding?.firmName ?? snapshot.source.firm}</H3>
         <span style={{ flex: 1 }} />
         <span style={{ fontSize: FS.micro, color: "var(--ink-color-global-text-subtle)" }}>{statusLine}</span>

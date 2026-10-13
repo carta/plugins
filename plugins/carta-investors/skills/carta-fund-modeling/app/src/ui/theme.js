@@ -42,6 +42,7 @@ export const NOTICE_TINT = "var(--ink-color-global-brand-yellow-20)"; // subtle 
 const BLUE           = "var(--ink-color-global-link-default)";
 const FAINT          = "var(--ink-color-global-text-subtle)";
 const SHADE          = "var(--ink-color-global-surface-lightgray-default)";
+const STRIPE         = "var(--ink-color-global-highlight-strong)";
 export const SIDEBAR_PANEL_BG = "var(--sidebar-panel-bg)"; // Companies-tab Performance sidebar (special exception — no Ink match)
 const ACCENT         = "var(--ink-button-background-color-primary-base-default)";
 export const MICRO          = "var(--micro-text)"; // local override — Ink text-very-subtle dark (#394040) is near-invisible
@@ -303,10 +304,17 @@ export const GLOBAL_CSS = `
   .railitem.active { background: var(--accent-soft); color: ${ACCENT}; }
   .railitem.active::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 2px; background: ${ACCENT}; }
 
-  /* ── side-nav (also the narrow header) ── active = accent-soft wash + black text ── */
-  .navitem { position: relative; border-radius: 0; }
+  /* ── side-nav ── real Ink SideNav treatment: full-bleed rows (no border-radius —
+     .sn__item has none), active = page background + a 3px orange left stripe + bold
+     label, per theme-with-ink/resources/components-sidenav.html's .sn__item.is-active. ── */
+  .navitem { position: relative; border-radius: 0; background: transparent; transition: background-color .05s linear; }
   .navitem:hover { background: ${SHADE}; }
-  .navitem.active { background: var(--accent-soft); border: 1px solid transparent !important; box-shadow: none; color: ${ACCENT}; }
+  .navitem.active { background: var(--ink-color-global-surface-background-default); box-shadow: inset 3px 0 0 0 ${STRIPE}; font-weight: 600; }
+  .navitem.active:hover { background: ${SHADE}; }
+  /* Active row's icon sits on its own orange tile (dark glyph — I's color prop
+     handles the glyph itself; this only draws the tile). */
+  .navitem-icon { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 3px; flex: none; }
+  .navitem.active .navitem-icon { width: 22px; height: 22px; border-radius: 0; background: ${STRIPE}; }
   .addslice:hover { background: ${SHADE} !important; }
 
   .statcell { transition: background .1s ${EASE}; border-radius: 0; }

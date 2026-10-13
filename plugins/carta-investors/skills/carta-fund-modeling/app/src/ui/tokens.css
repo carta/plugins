@@ -91,6 +91,10 @@
   --ink-color-global-feedback-neutral-subtle:  light-dark(#F1F1F1, #202020);
   --ink-color-global-feedback-neutral-strong:  light-dark(#1A1A1A, #9C9F9F);
 
+  /* === Highlight === */
+  --ink-color-global-highlight-subtle: light-dark(#FFF7F5, #1A1A1A);
+  --ink-color-global-highlight-strong: light-dark(#FF7D55, #FFC4B2);
+
   /* === Surfaces === */
   --ink-color-global-surface-background-default:  light-dark(#FFFFFF, rgb(18 18 18));
   --ink-color-global-surface-background-underlay: light-dark(#F1F1F1, #2D2D2D);
