@@ -18,17 +18,21 @@ body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 var(--sans)}
 .notice{background:#fff7e0;border:1px solid #ecd9a0;border-radius:8px;padding:8px 12px;margin-bottom:16px;font-size:13px}
 .insight{margin:0 0 16px;padding:10px 14px;background:#fff;border:1px solid var(--line);border-left:3px solid var(--c-cur);border-radius:8px;font-size:15px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px 24px;margin-bottom:20px}
-.card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+.card-head{display:flex;justify-content:space-between;align-items:baseline;gap:16px}
 h2{font:400 22px/1.2 var(--serif);margin:0 0 8px}
-.sub{color:var(--muted);font-size:13px;margin:0 0 10px;max-width:1100px}
-.how{margin:0 0 16px;max-width:1100px;font-size:13px}
-.how summary{display:inline-block;cursor:pointer;color:#2b3350;list-style:none;border:1px solid #cfd3e0;background:#f1f3f9;border-radius:6px;padding:4px 12px;font-weight:600}
+#card-table h2{font-size:26px;margin-bottom:16px}
+.sub{color:var(--muted);font-size:14px;margin:0 0 10px}
+.how{margin:0 0 16px;font-size:13px}
+.how summary{display:block;width:fit-content;cursor:pointer;color:#2b3350;list-style:none;border:1px solid #cfd3e0;background:#f1f3f9;border-radius:6px;padding:4px 12px;font-weight:600}
 .how summary:hover{background:#e7ebf5}
 .how summary::-webkit-details-marker{display:none}
 .how summary::before{content:"\25B8\00a0"}
 .how[open] summary::before{content:"\25BE\00a0"}
-.how p{margin:6px 0 0;color:#55534e}
+.how[open] summary{border-bottom:0;border-radius:6px 6px 0 0;margin-bottom:-1px;position:relative;z-index:1}
+.how p{margin:8px 0 0;padding:10px 12px;color:#2b3350;background:#f1f3f9;border:1px solid #cfd3e0;border-radius:6px}
+.how[open] p{margin:0;border-top-left-radius:0}
 .toggle{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex:none}
+.toggle button+button{border-left:1px solid var(--line)}
 .toggle button{border:0;background:#fff;color:var(--muted);font:inherit;padding:6px 14px;cursor:pointer}
 .toggle button[aria-pressed="true"]{background:#000;color:#fff}
 button:focus-visible,summary:focus-visible{outline:2px solid var(--c-mid);outline-offset:2px}
@@ -39,10 +43,9 @@ td{padding:10px;border-bottom:1px solid var(--line);vertical-align:middle;positi
 tr:last-child td{border-bottom:0}
 tr[data-d]:hover td{background:#f3efe7}
 .num{text-align:right;font-variant-numeric:tabular-nums}
-th.num{text-align:right}
+.total{padding-right:40px}
 td.idx{color:var(--muted);width:36px}
 td.total{font-weight:600}
-td.part{color:var(--muted);font-style:italic}
 th small{font-size:11px;font-style:italic}
 td.chg{animation:flash .8s ease-out}
 tr.tier td{background:#faf9f6;color:var(--muted);font-size:12px;letter-spacing:.06em;text-transform:uppercase;padding:6px 10px;cursor:default}
@@ -4466,8 +4469,9 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
     return s;
   }
   function head(title, sub, how, extra) {
-    return '<div class="card-head"><div><h2>' + esc(title) + '</h2><p class="sub">' + esc(sub) + '</p>' +
-      '<details class="how"><summary>How to read this</summary><p>' + esc(how) + '</p></details></div>' + (extra || '') + '</div>';
+    return '<div class="card-head"><h2>' + esc(title) + '</h2>' + (extra || '') + '</div>' +
+      '<p class="sub">' + esc(sub) + '</p>' +
+      '<details class="how"><summary>How to read this</summary><p>' + esc(how) + '</p></details>';
   }
   function emptyLine() {
     return '<p class="empty">No adviser data to show yet.</p>';
@@ -4561,7 +4565,7 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
       '<span><span class="n">' + esc(a.name) + '</span><span class="grey">' + esc(a.domain) + '</span></span></div></td>';
   }
   function numCell(domain, col, v, cls) {
-    return '<td class="num ' + cls + (isPartialCol(col) ? ' part" title="Partial, to ' + asOfText() : '') + '" data-k="' + esc(domain) + '|' + col + '" data-v="' + v + '">' + v + '</td>';
+    return '<td class="num ' + cls + '" data-k="' + esc(domain) + '|' + col + '" data-v="' + v + '">' + v + '</td>';
   }
   // Only the quarter of asOf in the current year is partial.
   function isPartialCol(col) { return state.year === cy && col === partialQ; }
@@ -4608,10 +4612,10 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
     } else {
       var n = 0;
       var cols = [0, 1, 2, 3].map(function (c) {
-        return '<th class="num">Q' + (c + 1) + (isPartialCol(c) ? ' <small>partial</small>' : '') + '</th>';
+        return '<th class="num">Q' + (c + 1) + (isPartialCol(c) ? '*' : '') + '</th>';
       }).join('');
       body = '<table><thead><tr><th>#</th><th>Investment bank</th>' + cols +
-        '<th class="num">Year total' + (state.year === cy ? ' <small>YTD</small>' : '') + '</th><th>Relationship strength</th><th>Top contact</th></tr></thead><tbody>';
+        '<th class="num total">Year total' + (state.year === cy ? ' <small>YTD</small>' : '') + '</th><th>Relationship strength</th><th>Top contact</th></tr></thead><tbody>';
       [1, 2].forEach(function (t) {
         var rs = rankTier(data.rows.filter(function (r) { return tierOf(r) === t; }), year);
         if (!rs.length) return;
@@ -4619,7 +4623,7 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
         rs.forEach(function (r) { body += dataRow(r, ++n, year); });
       });
       body += '</tbody></table>';
-      if (partialQ >= 0 && year === cy) body += '<p class="grey note">Q' + (partialQ + 1) + ' is partial: it runs to ' + asOfText() + '.</p>';
+      if (partialQ >= 0 && year === cy) body += '<p class="grey note">* Quarter to date, to ' + asOfText() + '</p>';
     }
     var card = el('card-table'), from = shown;
     card.innerHTML = head(data.title, sub, how, toggle) + body;

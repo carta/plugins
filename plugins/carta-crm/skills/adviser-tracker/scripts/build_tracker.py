@@ -167,7 +167,7 @@ def build_data(payload: object, tier1: list[str], as_of: dt.date, notice: str | 
     if unknown:
         raise fail("tier_unknown", f"no row has the domain {', '.join(unknown)}")
     tenant = payload.get("tenant") if isinstance(payload.get("tenant"), dict) else {}
-    title = payload["title"] if isinstance(payload.get("title"), str) and payload["title"] else "Adviser Tracker"
+    title = payload["title"] if isinstance(payload.get("title"), str) and payload["title"] else "M&A Adviser Tracker"
     return {
         "tenant": {"name": tenant["name"] if isinstance(tenant.get("name"), str) else "", "logo": clean_logo(tenant.get("logo"))},
         "title": title,
