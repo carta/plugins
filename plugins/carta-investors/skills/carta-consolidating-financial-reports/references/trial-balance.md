@@ -69,7 +69,7 @@ Scan the tools available in the conversation for any matching `mcp__*__welcome`.
 **If none found:** tell the user no Carta MCP is connected and stop.
 **If exactly one found:** call `mcp__<SERVER>__welcome(_instrumentation_v2={...})` to verify. This is `<SERVER>`.
 **If multiple found:** ask the user which to use via `AskUserQuestion`. Default to `carta` (production) if present.
-**Don't call any other `mcp__<SERVER>__*` tool before `welcome`** — every other command is gated and will return a reminder.
+**Don't call any other `mcp__<SERVER>__*` tool before `welcome`** — the server instructions require `welcome` as the first call.
 
 **DWH param-name traps:** `dwh:execute:query` takes `sql:` not `query:`. `format` accepts `"ndjson"` / `"markdown"`, not `"csv"`.
 

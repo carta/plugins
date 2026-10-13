@@ -40,7 +40,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.72.1</carta-plugin>
+<carta-plugin>carta-investors:6.72.4</carta-plugin>
 
 [PATTERN carta-writing-style v0.0.2]
 [PATTERN etiquette v0.0.6]
@@ -65,7 +65,7 @@ Scan the tools available in the conversation (system-reminder blocks) for `mcp__
 Keep that connector's **display name** as `<CARTA_MCP_SERVER>`. That single string is all the artifact needs: the runtime addresses a connector by display name and the tool names are bare verbs (`call_tool`, `welcome`), so nothing has to be derived or kept in sync. Never substitute a UUID or an `mcp__…__` tool name — the runtime rejects both.
 
 ### 2. Call welcome to verify the connection
-Call `mcp__<SERVER>__welcome(_instrumentation={"plugin": "carta-investors", "skills": ["carta-loan-dashboard"]})` — every run, including a refresh of an existing dashboard. It verifies the Carta session is live and resolves identity/firm context; every other Carta command is gated behind it and returns a reminder instead of data. If it fails, tell the user what `welcome` returned, that the dashboard cannot resolve firm/identity context without it, and to retry once their Carta session is confirmed live — then stop (error table: *`welcome` fails*). Read the resolved firm context from the result.
+Call `mcp__<SERVER>__welcome(_instrumentation={"plugin": "carta-investors", "skills": ["carta-loan-dashboard"]})` — every run, including a refresh of an existing dashboard. It verifies the Carta session is live and resolves identity/firm context; the server instructions require it before any other Carta command. If it fails, tell the user what `welcome` returned, that the dashboard cannot resolve firm/identity context without it, and to retry once their Carta session is confirmed live — then stop (error table: *`welcome` fails*). Read the resolved firm context from the result.
 
 Read the environment from the result too (`env_line`, e.g. "Connected to Carta `production`") and bind `<lo_base_url>` from it — production `https://loan-operations.app.carta.com`, sandbox `https://loan-operations.sandbox.carta.team`. Never hardcode one: a production URL handed to a sandbox viewer looks like a working link and opens someone else's environment. Any other environment, or one that does not resolve: omit `lo_base_url` — the artifact then renders names unlinked rather than guessing a host.
 

@@ -51,7 +51,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.72.1</carta-plugin>
+<carta-plugin>carta-investors:6.72.4</carta-plugin>
 
 [PATTERN carta-writing-style v0.0.2]
 [PATTERN etiquette v0.0.6]
@@ -231,7 +231,7 @@ warm-cache launch skips this step entirely — no MCP.
 > plugin provides it). Your cached dashboards still open without it."
 **If exactly one found:** call `mcp__<SERVER>__welcome` to verify. This is `<SERVER>`.
 **If multiple found:** ask the user which to use via `AskUserQuestion`. Default to `carta` (production) if present.
-**Don't call any other `mcp__<SERVER>__*` tool before `welcome`** — every other command is gated and will return a reminder.
+**Don't call any other `mcp__<SERVER>__*` tool before `welcome`** — the server instructions require `welcome` as the first call.
 **Fund Admin only — never `fund_forecasting:*`.**
 
 **Classify the environment from `<SERVER>`'s name.** A name containing `test`/`sandbox`/`demo`/`preprod`/

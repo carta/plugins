@@ -54,7 +54,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.72.1</carta-plugin>
+<carta-plugin>carta-investors:6.72.4</carta-plugin>
 
 [PATTERN carta-writing-style v0.0.2]
 [PATTERN etiquette v0.0.6]
@@ -345,7 +345,7 @@ last `__`. Examples: `mcp__carta__welcome` → `carta`,
 **If none found:** tell the user no Carta MCP is connected and stop.
 **If exactly one found:** call `mcp__<SERVER>__welcome(_instrumentation_v2={...})` to verify. This is `<SERVER>`.
 **If multiple found:** ask which to use via `AskUserQuestion`. Default to `carta` (production) if present.
-**Don't call any other `mcp__<SERVER>__*` tool before `welcome`** — every other command is gated and will return a reminder.
+**Don't call any other `mcp__<SERVER>__*` tool before `welcome`** — the server instructions require `welcome` as the first call.
 
 ### The five Carta tools load lazily — a short tool list is not a missing tool
 
