@@ -70,7 +70,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.71.15</carta-plugin>
+<carta-plugin>carta-investors:6.71.16</carta-plugin>
 
 # ManCo Reporting Dashboard
 
@@ -222,7 +222,11 @@ datadir build runs silently. Speak only at:
 - Step 4.6 ([budget-unresolved.md](references/budget-unresolved.md)) — a
   mapping-file ask, but only when `nativeMapping.needsMappingFile` is
   true: the native mapping above covered under half the budget's lines.
-  Silent otherwise
+  Silent otherwise. **Hard gate: this ask fires only after Step 4 has
+  actually run and returned `nativeMapping`** — never before Step 4, and
+  never from a guess at whether the native mapping will fall short. There
+  is nothing to evaluate `needsMappingFile` against until Step 4 has built
+  the datadir.
 - Step 4.7 ([budget-unresolved.md](references/budget-unresolved.md)) — the
   mapping table, whenever the build left budget lines with
   no Carta account to resolve against. Confirm the confident rows first,
@@ -250,6 +254,18 @@ where working through the ambiguity yourself feels like progress and is
 actually the thing this skill exists to not do. If you notice you are
 about to fetch, build, or write based on something no `AskUserQuestion`
 has actually confirmed, stop and ask first.
+
+**Hard gate: never use `AskUserQuestion` to request a file.** This is the
+one kind of ask in this skill that is never a tool call — not the budget
+workbook, not a mapping workbook, not any other file. `AskUserQuestion`'s
+options are a picker, not a drop target: a file dragged into the chat
+becomes a path the model reads, but a file cannot be dragged onto an
+`AskUserQuestion` option, so the one user holding the file in hand would
+have to type its full path by hand into a free-text field built for
+short answers. Collect a file by asking in the chat as prose — see
+[budget-workbook.md](references/budget-workbook.md)'s "Asking for a
+file" — and wait for the reply the same way any other turn waits for a
+tool result.
 
 Do not paste raw command output, MCP JSON, SQL result headers, or step
 labels. The user sees the greeting, any prompt that genuinely needs an
@@ -321,6 +337,23 @@ no event.
 
 See [errors.md](references/errors.md) for failure handling and the list of
 things deliberately not built yet.
+
+**Hard gate: on a build crash, quote the exact error and stop.** When
+`build_manco_datadir.py` fails on its data — not an environment failure;
+those follow [errors.md](references/errors.md)'s silent retry-once contract,
+and a budget-parse refusal follows
+[budget-workbook.md](references/budget-workbook.md)'s re-run guidance —
+read its stderr, quote the first line to the user verbatim, and stop there.
+The one exception: when the error names a `je-*.txt`/`fund-fees.txt` that
+Step 3 never saved or cut short, re-run Step 3 for that file (see
+[errors.md](references/errors.md)). Nothing else is retried or patched.
+Do not patch the script, the data it read, or its output to get the build
+to pass. Do not re-run it with different flags to route around the
+failure. Do not hand-edit `budget-mapping.json`, a fetched raw file, or
+anything under `app/src` to make the crash go away. A crash is the build
+telling you its inputs or its own code don't support what's being asked;
+working around it in place hides that from the person who needs to know,
+and ships a result nobody can tell is wrong.
 
 ## Safety
 
