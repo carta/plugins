@@ -66,7 +66,11 @@ def parse_total_rows(text):
 
 
 def parse_pipe_table(text):
-    """Parse a Carta MCP pipe-table (markdown format). Returns list[dict]."""
+    """Parse a Carta MCP pipe-table (markdown format). Returns list[dict].
+
+    A cell holding a raw line break splits one logical row across physical
+    lines; a line is folded into the open row when the merged cell count
+    does not exceed the header count. Short rows ending in `|` are padded."""
     lines = [ln for ln in text.splitlines() if ln.strip()]
     if not lines:
         return []
@@ -76,13 +80,50 @@ def parse_pipe_table(text):
     if di < len(lines) and re.fullmatch(r"[\s\-|]+", lines[di]):
         di += 1
     rows = []
-    for line in lines[di:]:
-        stripped = line.rstrip().rstrip("|").rstrip()
-        cells = [c.strip() for c in stripped.split(" | ")]
+    pending = None  # cells accumulated so far for the row in progress
+
+    def _close(cells):
+        cells = list(cells)
         while len(cells) < len(headers):
             cells.append("")
-        cells = cells[:len(headers)]
-        rows.append(dict(zip(headers, cells)))
+        rows.append(dict(zip(headers, cells[:len(headers)])))
+
+    for line in lines[di:]:
+        explicit_short_row = line.rstrip().endswith("|")
+        stripped = line.rstrip().rstrip("|").rstrip()
+        cells = [c.strip() for c in stripped.split(" | ")]
+        if pending is None and rows and len(headers) > 1 and len(cells) == 1 and not explicit_short_row:
+            # A lone one-cell line with no row in progress is the tail of a
+            # newline-split description that lands in the LAST column — the
+            # row holding it was already closed (it had a full cell count,
+            # just with a truncated description). Fold it onto that row's
+            # last column instead of letting it seed a new stray row.
+            rows[-1][headers[-1]] += " " + cells[0]
+            continue
+        if pending is not None:
+            # Only fold this line into the row in progress if the result
+            # wouldn't blow past the header count — that's the signal that
+            # this line is the rest of a newline-split cell, not an
+            # unrelated full row that merely looked short on its own.
+            merged_len = len(pending) - 1 + len(cells)
+            if merged_len <= len(headers):
+                pending[-1] = pending[-1] + " " + cells[0]
+                pending.extend(cells[1:])
+            else:
+                _close(pending)
+                pending = cells
+        else:
+            pending = cells
+        if len(pending) >= len(headers):
+            rows.append(dict(zip(headers, pending[:len(headers)])))
+            pending = None
+        elif explicit_short_row:
+            _close(pending)
+            pending = None
+        # else: short of a full row with no trailing-pipe marker — hold it
+        # open and merge the next physical line into it.
+    if pending is not None:
+        _close(pending)
     return rows
 
 

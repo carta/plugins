@@ -238,11 +238,16 @@ export function breakoutRows(entries, row, dimension, period) {
  *  `tagFilter` is the parent line's own scope: a line reported against one
  *  tag value must break out only the spend inside it, or the children
  *  overshoot the row they sit under.
+ *
+ *  `excludeEntries` is the entries a more specific sibling line won in a
+ *  tie-break: this row's own actual already excludes them, so its breakout
+ *  must too, or the children overshoot the row's own (reduced) total.
  */
 export function breakoutBuckets(entries, row, breakout, opts = {}) {
   const { tagFilter = null, dimension = null, bucketOf, bucketKeys = [],
-          excludeClaims = null } = opts;
+          excludeClaims = null, excludeEntries = null } = opts;
   const claims = excludeClaims || [];
+  const excludedSet = excludeEntries?.length ? new Set(excludeEntries) : null;
   // The row's non-tag scopes; tagFilter covers the tag. Without them a line
   // for one office opens into every office, past the figure above it.
   const narrow = (row?.scopes || []).filter(sc => (sc.source || "reporting_tag") !== "reporting_tag");
@@ -258,6 +263,7 @@ export function breakoutBuckets(entries, row, breakout, opts = {}) {
   const byValue = new Map();
   for (const e of entries || []) {
     if (!codes.has(e.acct_type)) continue;
+    if (excludedSet?.has(e)) continue;
     if (narrow.length && !narrow.every(sc => dimensionValue(e, sc) === sc.value)) continue;
     if (tagFilter) {
       const v = dimensionValue(e, dimension);

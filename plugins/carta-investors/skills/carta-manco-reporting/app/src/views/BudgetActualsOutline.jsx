@@ -129,6 +129,9 @@ export default function BudgetActualsOutline({ budget, accountsData, periodYear,
   // Which line now carries a row's actual, when it shares an account +
   // scope with another and lost the tie — see computeLineActuals.
   const sharedWithByKey = lineActuals.sharedWith || {};
+  // Entries each line lost to a more specific line in the tie-break, so the
+  // drill panel can drop the same ones the row's own figure already does.
+  const excludedEntriesByKey = lineActuals.excludedEntries || {};
 
   // Aggregate rows resolve from constituents; net income is derived from
   // the outline's own totals.
@@ -360,6 +363,8 @@ export default function BudgetActualsOutline({ budget, accountsData, periodYear,
                 widened={widenedTotals.has(rowAggKey(row))}
                 elsewhere={row.key ? elsewhereByKey[row.key] : undefined}
                 sharedWithLabel={row.key ? sharedWithByKey[row.key] : undefined}
+                excludedEntries={row.key ? excludedEntriesByKey[row.key] : undefined}
+                excludedEntriesByKey={excludedEntriesByKey}
                 open={row.key
                   ? (flipped.has(row.key) ? !opensByDefault : opensByDefault)
                   : false}
@@ -547,6 +552,7 @@ function OutlineRow({ row, actualsByKey, aggregates, valueAliases, tagValuesAvai
                      closingRow, alignIndent, glNames, subCodes,
                      breakout, entries, dimension, open, onToggleLine, elsewhere,
                      widened, onDrillTotal, rowByKey, sharedWithLabel,
+                     excludedEntries, excludedEntriesByKey,
                      hoverCell, heldCell, onHoverCell }) {
   const kind = row.row_kind;
 
@@ -731,6 +737,7 @@ function OutlineRow({ row, actualsByKey, aggregates, valueAliases, tagValuesAvai
         tagFilter, dimension: rowScope || dimension, bucketOf: mo => MONTH_TO_Q[mo],
         bucketKeys: QUARTERS.map(q => q.key),
         excludeClaims: row.excluded_claims,
+        excludeEntries: excludedEntries,
       })
     : [];
   const expandable = !!onToggleLine && worthBreakingOut(children);
@@ -803,7 +810,8 @@ function OutlineRow({ row, actualsByKey, aggregates, valueAliases, tagValuesAvai
         // have nothing to resolve.
         const isAgg = kind === "subtotal" || kind === "total" || kind === "summary";
         const members = isAgg && onDrillTotal && rowByKey
-          ? totalMembers(row, rowByKey, valueAliases, tagValuesAvailable, dimension) : [];
+          ? totalMembers(row, rowByKey, valueAliases, tagValuesAvailable, dimension,
+                         excludedEntriesByKey) : [];
         const canDrillTotal = members.length > 0 && actualV !== 0;
         const canDrill = !!onDrill && kind === "line" && !unmapped && !shared
                          && (actualV !== 0 || !!row.comment);
@@ -828,6 +836,7 @@ function OutlineRow({ row, actualsByKey, aggregates, valueAliases, tagValuesAvai
               glCodes:    row.gl_codes || [],
               scopes:     row.scopes || null,
               excludedClaims: row.excluded_claims || null,
+              excludedEntries: excludedEntries || null,
               cartaTags:  (row.tag_value && rowScope)
                           ? (valueAliases[row.tag_value] || [row.tag_value]) : null,
               fundMatch:  row.fund_match || null,
@@ -1151,6 +1160,11 @@ export function computeLineActuals(rows, accountsData, valueAliases, periodYear,
   }
   const lostBucketByRow = new Map();  // loser's row.key -> quarters lost
   const lostToWinner = new Map();     // loser's row.key -> Map(winner label -> amount)
+  // Entries a row's own filter still matches but which a more specific row
+  // claimed instead, keyed by the losing row's key. A drill panel re-running
+  // that same filter has to drop these, or it lists money the cell's own
+  // figure no longer includes.
+  const excludedEntries = {};
   for (const claimants of claimsByEntry.values()) {
     if (claimants.length < 2) continue;
     const ranked = [...claimants].sort((a, b) => {
@@ -1170,6 +1184,8 @@ export function computeLineActuals(rows, accountsData, valueAliases, periodYear,
       if (!lostToWinner.has(loser.row.key)) lostToWinner.set(loser.row.key, new Map());
       const byWinner = lostToWinner.get(loser.row.key);
       byWinner.set(winner.row.label, (byWinner.get(winner.row.label) || 0) + loser.amt);
+      if (!excludedEntries[loser.row.key]) excludedEntries[loser.row.key] = [];
+      excludedEntries[loser.row.key].push(loser.entry);
     }
   }
   // A row left at zero renders "—" (OutlineRow's `shared`), not a note. One
@@ -1185,7 +1201,7 @@ export function computeLineActuals(rows, accountsData, valueAliases, periodYear,
     else elsewhereOut[loserKey] = lost;
   }
 
-  return { actuals: out, elsewhere: elsewhereOut, sharedWith };
+  return { actuals: out, elsewhere: elsewhereOut, sharedWith, excludedEntries };
 }
 
 const isHeaderKind = (k) => String(k || "").endsWith("header");
@@ -1205,7 +1221,7 @@ const isTotalKind = (k) => k === "total" || k === "subtotal" || k === "summary";
  *  the figure holds. A line with nothing behind it contributes nothing.
  */
 export function totalMembers(row, rowByKey, valueAliases = {}, tagValuesAvailable = true,
-                             dimension = null) {
+                             dimension = null, excludedEntriesByKey = {}) {
   // The same set the row's own figure summed (see computeAggregates): the
   // lines it was widened to cover, or its formula's own, whichever is
   // wider. Taking covered_lines whenever it exists opened a section total
@@ -1234,6 +1250,11 @@ export function totalMembers(row, rowByKey, valueAliases = {}, tagValuesAvailabl
         ? (valueAliases[r.tag_value] || [r.tag_value]) : null,
       fundMatch: r.fund_match || null,
       tag_value: r.tag_value || null,
+      // Entries this line lost to a more specific line in the tie-break —
+      // carried along so a total's drawer, which recurses into each
+      // member's own filter, drops them the same way the line's own cell
+      // does.
+      excludedEntries: excludedEntriesByKey[k] || null,
     });
   }
   return out;

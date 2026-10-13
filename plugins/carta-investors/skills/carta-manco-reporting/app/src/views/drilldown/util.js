@@ -270,9 +270,18 @@ export function filterEntries(entries, sel, topCategoryNames = []) {
     // the reader to reconcile against a figure that was never the row's.
     const scopes = (sel.scopes || []).filter(sc => sc.source !== "reporting_tag");
     const claims = sel.excludedClaims || [];
+    // Entries this line lost to a more specific line in the tie-break: the
+    // row's own figure no longer counts them, so the drawer can't either.
+    // Identified by the entry itself, not by its id: a firm's ledger can
+    // carry the same journal-line id on two different lines, which a key
+    // built from the id would silently collapse into one, and an entry with
+    // no id at all would never match an id-keyed set.
+    const excluded = sel.excludedEntries && sel.excludedEntries.length
+      ? new Set(sel.excludedEntries) : null;
     return entries.filter(e => {
       if (!typeSet.has(e.acct_type)) return false;
       if (months && !months.has(e.mo)) return false;
+      if (excluded && excluded.has(e)) return false;
       if (scopes.length
           && !scopes.every(sc => dimensionValue(e, sc) === sc.value)) return false;
       if (tagSet) {
