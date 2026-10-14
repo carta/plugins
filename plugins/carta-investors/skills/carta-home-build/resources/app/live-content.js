@@ -270,3 +270,58 @@ function renderLiveContent(cards) {
 }
 
 fetchLiveContent();
+
+// "What's new" prompts: pluginPrompt entries in the prompts space (In-App Upsells,
+// selected with `space`; delivery tokens are space-scoped so the server keys off that
+// name) for skills that recently went live. The DAG carta_skill_prompts_contentful
+// fills `goLiveDate` from SKILL_STATUS_HISTORY.GO_LIVE_DATE.
+//
+// Returns [{text, plugin, goLiveDate}] where goLiveDate is the raw field value; the
+// recency window, plugin access and de-dupe against the Recommended row are applied
+// by selectWhatsNew() in carta-home.app.js, which has the user's profile. Always
+// returns an array: an empty one hides the row, which is a normal outcome (no bridge,
+// command absent on this env, key unprovisioned, nothing new) and must never throw
+// into the render path.
+//
+// No server-side plugin filter: the `fields` param takes one equality filter, and the
+// row needs both "Investors Plugin" and "Cap Table Plugin" entries for users who have
+// access to each. Newest go-live first so the CDA's `limit` (applied after ordering)
+// keeps the freshest entries; selectWhatsNew re-sorts, so a null-ordering surprise on
+// entries without a goLiveDate costs nothing but a few wasted slots in FETCH.
+async function _listWhatsNewPrompts() {
+  const CONTENT_TYPE = "pluginPrompt";
+  const SPACE = "prompts";
+  const FETCH = 50;
+  const ORDER = "-fields.goLiveDate";
+  try {
+    // No bridge probe here: _mcp() resolves the connector itself and throws when it
+    // is unavailable, which the catch below turns into the hidden-row fallback.
+    const obj = _unwrap(await _mcp("call_tool", {
+      name: "marketing__list__content",
+      arguments: {
+        content_type: CONTENT_TYPE,
+        space: SPACE,
+        order: ORDER,
+        limit: String(FETCH),
+      },
+    }));
+    // FastMCP wraps a tool's return as {result: "<json string>"}, and _unwrap hands
+    // back whatever `result` held — so this is a JSON string on the wire even though
+    // a structured_content response gives an object. Parse the string form.
+    const payload = typeof obj === "string" ? JSON.parse(obj) : obj;
+    const items = Array.isArray(payload?.items) ? payload.items : [];
+    return items
+      .map((it) => {
+        const f = it?.fields || {};
+        const text = typeof f.prompt === "string" ? f.prompt.trim() : "";
+        const plugin = typeof f.plugin === "string" ? f.plugin.trim() : "";
+        // The CDA omits empty optional fields, so goLiveDate may be absent entirely.
+        const goLiveDate = typeof f.goLiveDate === "string" ? f.goLiveDate.trim() : "";
+        return text ? { text, plugin, goLiveDate } : null;
+      })
+      .filter(Boolean);
+  } catch (err) {
+    console.error("[live-content] what's new prompts fetch failed — hiding the row", err);
+    return [];
+  }
+}

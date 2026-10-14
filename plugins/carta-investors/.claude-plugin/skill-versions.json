@@ -1,7 +1,7 @@
 {
   "carta-home-build": {
-    "version": "1.15.7",
-    "headline": "Skill Directory micro apps show a Microapp pill that explains what a microapp is on hover."
+    "version": "1.15.8",
+    "headline": "New \"What's new\" row under What to try next: copyable prompts for skills launched in the last 60 days."
   },
   "carta-workhub-build": {
     "version": "1.9.15",

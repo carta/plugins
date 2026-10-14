@@ -108,6 +108,7 @@
     <div class="cap-grid" id="cap-grid-dynamic" style="display:none"></div>
 
     <!-- Static fallback — shown when recommendations are unavailable -->
+    <!-- These four prompts must match CAP_STATIC_PAD in carta-home.app.js (a test compares them). -->
     <div class="cap-grid" id="cap-grid-static">
       <div class="cap-card cap-card-blue" onclick="this.querySelector('.cap-card-icon').click()">
         <div class="cap-card-text">Use my firm's tear sheet template and generate tear sheets for this quarter</div>
@@ -129,39 +130,11 @@
   </section>
 
   <!-- ── What's new ── -->
-  <!-- Hidden until the cards are wired to real data; drop `hidden` to show it. -->
+  <!-- Contentful pluginPrompt entries for skills that went live recently; filled and
+       un-hidden by renderWhatsNew() in app.js, stays hidden when none qualify. -->
   <section id="whats-new-section" style="margin-bottom: 32px;" hidden>
     <p class="section-label">What's new</p>
-    <div class="whats-new-grid">
-
-      <div class="wn-card">
-        <div class="wn-card-header">
-          <span class="wn-tag">New</span>
-        </div>
-        <div class="wn-card-title">Consolidated P&amp;L</div>
-        <div class="wn-card-body">Generate a firm-wide income statement across all entities — with budget vs. actual variance and executive summary tab — in one command.</div>
-        <span class="wn-copy-btn" onclick="(function(el){var t='Generate a consolidated P&L for our firm for this month';if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).then(function(){el.textContent='✓ Copied';setTimeout(function(){el.textContent='Copy prompt'},2000)})}else{var ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);el.textContent='✓ Copied';setTimeout(function(){el.textContent='Copy prompt'},2000)}})(this)">Copy prompt</span>
-      </div>
-
-      <div class="wn-card">
-        <div class="wn-card-header">
-          <span class="wn-tag">New</span>
-        </div>
-        <div class="wn-card-title">AGM Deck Builder</div>
-        <div class="wn-card-body">Auto-generate a branded annual meeting deck from your live fund data — NAV, TVPI, portfolio highlights, LP base — with your firm's colors and logo.</div>
-        <span class="wn-copy-btn" onclick="(function(el){var t='Build an AGM deck for our firm';if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).then(function(){el.textContent='✓ Copied';setTimeout(function(){el.textContent='Copy prompt'},2000)})}else{var ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);el.textContent='✓ Copied';setTimeout(function(){el.textContent='Copy prompt'},2000)}})(this)">Copy prompt</span>
-      </div>
-
-      <div class="wn-card">
-        <div class="wn-card-header">
-          <span class="wn-tag">Updated</span>
-        </div>
-        <div class="wn-card-title">Portfolio Valuations</div>
-        <div class="wn-card-body">Run valuations across your entire portfolio in one pass — auto-select comparables, compute GPC multiples, and push results back to Carta.</div>
-        <span class="wn-copy-btn" onclick="(function(el){var t='Work on my portfolio valuations today';if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).then(function(){el.textContent='✓ Copied';setTimeout(function(){el.textContent='Copy prompt'},2000)})}else{var ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);el.textContent='✓ Copied';setTimeout(function(){el.textContent='Copy prompt'},2000)}})(this)">Copy prompt</span>
-      </div>
-
-    </div>
+    <div class="cap-grid" id="cap-grid-whats-new"></div>
   </section>
 
 

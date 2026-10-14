@@ -1233,76 +1233,156 @@ function copyPrompt(btn) {
   writeClipboard(text, feedback);
 }
 
+// Keep in sync with the static fallback cards (#cap-grid-static) in carta-home.template.html;
+// a test compares them.
+// Static prompts used to pad "What to try next" when the user has fewer than 4
+// personalized recs, and the prompts behind the markup's static fallback cards.
+// `topics` drive de-duplication: a pad is skipped when a personalized prompt
+// already covers the same subject, so we never show two cards about one thing.
+const CAP_STATIC_PAD = [
+  {
+    text: "Use my firm's tear sheet template and generate tear sheets for this quarter",
+    topics: ["tear sheet", "tearsheet"],
+  },
+  {
+    text: "Show me my firm's balance sheet as of this month",
+    topics: ["balance sheet"],
+  },
+  {
+    text: "What is our regulatory AUM",
+    topics: ["regulatory aum", "aum", "assets under management"],
+  },
+  {
+    text: "Compare YTD actuals against the budget",
+    topics: ["budget", "actuals"],
+  },
+];
+
+const CAP_CARD_COLORS = ["cap-card-blue", "cap-card-teal", "cap-card-amber", "cap-card-violet"];
+const CAP_COPY_SVG = '<svg width="11" height="11" viewBox="0 0 16 16" fill="none" style="margin-right:5px;vertical-align:middle;"><rect x="5" y="5" width="9" height="9" rx="1" stroke="currentColor" stroke-width="1.4"/><path d="M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>Copy this prompt';
+
+// One "Copy this prompt" card; shared by "What to try next" and "What's new".
+function capCardHtml(prompt, i, trackId = "CartaHome.Capabilities.CopyPrompt") {
+  const escaped = prompt.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  return `<div class="cap-card ${CAP_CARD_COLORS[i % CAP_CARD_COLORS.length]}" onclick="this.querySelector('.cap-card-icon').click()">
+      <div class="cap-card-text">${escaped}</div>
+      <button class="cap-card-icon" data-prompt="${escaped}" data-track="${trackId}" onclick="event.stopPropagation(); capCopy(this)">${CAP_COPY_SVG}</button>
+    </div>`;
+}
+
+// "What to try next": the first 4 non-gap personalized cards,
+// open slots padded from CAP_STATIC_PAD. Returns the prompts now on screen so the
+// "What's new" row below never repeats one; when the markup's static fallback stays
+// up (no personalized recs), those four static prompts are what shows.
 function renderCapabilities(recs) {
   const dynamic = document.getElementById("cap-grid-dynamic");
   const fallback = document.getElementById("cap-grid-static");
-  if (!dynamic) return;
+  const staticShown = CAP_STATIC_PAD.map(p => p.text);
+  if (!dynamic) return staticShown;
 
-  const live = Array.isArray(recs) ? recs.filter(r => !r.is_skill_gap && r.recommended_prompt) : [];
-  if (!live.length) {
+  const liveAll = Array.isArray(recs) ? recs.filter(r => !r.is_skill_gap && r.recommended_prompt) : [];
+  if (!liveAll.length) {
     // No personalized recs — keep static fallback visible (default state)
-    return;
+    return staticShown;
   }
 
-  const colors = ["cap-card-blue", "cap-card-teal", "cap-card-amber", "cap-card-violet"];
-  const copySvg = '<svg width="11" height="11" viewBox="0 0 16 16" fill="none" style="margin-right:5px;vertical-align:middle;"><rect x="5" y="5" width="9" height="9" rx="1" stroke="currentColor" stroke-width="1.4"/><path d="M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>Copy this prompt';
+  const live = liveAll.slice(0, 4);
 
-  // Static prompts used to pad when user has fewer than 4 personalized recs.
-  // `topics` drive de-duplication: a pad is skipped when a personalized prompt
-  // already covers the same subject, so we never show two cards about one thing.
-  const staticPad = [
-    {
-      text: "Use my firm's tear sheet template and generate tear sheets for this quarter",
-      topics: ["tear sheet", "tearsheet"],
-    },
-    {
-      text: "Show me my firm's balance sheet as of this month",
-      topics: ["balance sheet"],
-    },
-    {
-      text: "What is our regulatory AUM",
-      topics: ["regulatory aum", "aum", "assets under management"],
-    },
-    {
-      text: "Compare YTD actuals against the budget",
-      topics: ["budget", "actuals"],
-    },
-  ];
-
-  const prompts = live.slice(0, 4).map(r => r.recommended_prompt);
-  const haystack = prompts.join(" ").toLowerCase();
-  const covered = pad => pad.topics.some(t => haystack.includes(t));
+  const prompts = live.map(r => r.recommended_prompt);
 
   // Pad to 4, preferring prompts on subjects the personalized set doesn't cover.
   // Each duplicate filtered here is a rec already occupying a card, so the
   // preferred pass alone fills the grid in every case except one prompt matching
   // two pads. The second pass backfills from what was skipped so the grid is
   // always 4 cards.
-  for (const pad of staticPad) {
+  const haystack = prompts.join(" ").toLowerCase();
+  const covered = pad => pad.topics.some(t => haystack.includes(t));
+  for (const pad of CAP_STATIC_PAD) {
     if (prompts.length >= 4) break;
     if (!covered(pad) && !prompts.includes(pad.text)) prompts.push(pad.text);
   }
-  for (const pad of staticPad) {
+  for (const pad of CAP_STATIC_PAD) {
     if (prompts.length >= 4) break;
     if (!prompts.includes(pad.text)) prompts.push(pad.text);
   }
 
-  dynamic.innerHTML = prompts.map((prompt, i) => {
-    const escaped = prompt.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
-    return `<div class="cap-card ${colors[i % colors.length]}" onclick="this.querySelector('.cap-card-icon').click()">
-      <div class="cap-card-text">${escaped}</div>
-      <button class="cap-card-icon" data-prompt="${escaped}" onclick="event.stopPropagation(); capCopy(this)">${copySvg}</button>
-    </div>`;
-  }).join("");
-
+  dynamic.innerHTML = prompts.map((p, i) => capCardHtml(p, i)).join("");
   dynamic.style.display = "";
   if (fallback) fallback.style.display = "none";
+  return prompts;
+}
+
+// ── "What's new": Contentful prompts for skills that recently went live ──
+// A prompt qualifies when its goLiveDate is within the last WHATS_NEW_WINDOW_DAYS
+// (and not in the future). 60 days is about two release cycles: long enough that a
+// skill launched just before a user's vacation is still new when they return, short
+// enough that the row turns over instead of becoming a second skill directory.
+// Raise it if the row is often empty, lower it if launches are frequent.
+const WHATS_NEW_WINDOW_DAYS = 60;
+const WHATS_NEW_MAX = 4;
+
+// Which plugin labels (pluginPrompt.plugin) the user may see. Mirrors carta-mcp's
+// product_visibility RULES — the same gate that decides which tools a user is shown:
+//   "Investors Plugin" -> any fund-admin-family flag is true
+//                         (has_fund_admin, has_investment_firm, has_tactyc, has_active_manco)
+//   "Cap Table Plugin" -> has_cap_table is true
+// Strict by design: a flag that is false, null (unknown) or missing denies, unlike
+// the Skill Directory's "unknown shows" rule, because a "new skill" card for a
+// product the user cannot use is a dead end, while a missing card costs nothing.
+// An unrecognised plugin label is denied for the same reason.
+function whatsNewPluginAccess(profile) {
+  const p = profile || {};
+  const anyTrue = keys => keys.some(k => readProductFlag(p, k) === true);
+  return {
+    "investors plugin": anyTrue(["has_fund_admin", "has_investment_firm", "has_tactyc", "has_active_manco"]),
+    "cap table plugin": anyTrue(["has_cap_table"]),
+  };
+}
+
+// Pure selection: window -> access -> not already
+// shown above -> newest first -> cap. No padding: with nothing qualifying the row hides.
+//   items:   [{text, plugin, goLiveDate}] from _listWhatsNewPrompts
+//   access:  whatsNewPluginAccess() result
+//   exclude: prompts already on screen in "What to try next"
+function selectWhatsNew(items, access, exclude, now = Date.now()) {
+  const norm = t => String(t || "").trim().toLowerCase().replace(/\s+/g, " ");
+  const windowStart = now - WHATS_NEW_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+  const seen = new Set((Array.isArray(exclude) ? exclude : []).map(norm));
+  const out = [];
+  const dated = (Array.isArray(items) ? items : [])
+    .map(it => ({ it, ts: Date.parse(it && it.goLiveDate) }))
+    .filter(x => x.it && x.it.text && Number.isFinite(x.ts) && x.ts >= windowStart && x.ts <= now)
+    .filter(x => !!(access || {})[norm(x.it.plugin)])
+    .sort((a, b) => b.ts - a.ts);
+  for (const { it } of dated) {
+    if (out.length >= WHATS_NEW_MAX) break;
+    const key = norm(it.text);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(it.text);
+  }
+  return out;
+}
+
+function renderWhatsNew(items, access, shownAbove) {
+  const section = document.getElementById("whats-new-section");
+  const grid = document.getElementById("cap-grid-whats-new");
+  if (!section || !grid) return;
+  const prompts = selectWhatsNew(items, access, shownAbove);
+  if (!prompts.length) {
+    section.hidden = true;
+    return;
+  }
+  grid.innerHTML = prompts.map((p, i) => capCardHtml(p, i, "CartaHome.WhatsNew.CopyPrompt")).join("");
+  section.hidden = false;
 }
 
 function capCopy(btn) {
-  trackHome("click", "CartaHome.Capabilities.CopyPrompt");
+  // Each row tags its cards (capCardHtml's trackId) so What's new copies are counted apart
+  // from What to try next; the template's static fallback cards carry no tag.
+  trackHome("click", btn.dataset.track || "CartaHome.Capabilities.CopyPrompt");
   const text = btn.dataset.prompt || '';
-  const copySvg = '<svg width="11" height="11" viewBox="0 0 16 16" fill="none" style="margin-right:5px;vertical-align:middle;"><rect x="5" y="5" width="9" height="9" rx="1" stroke="currentColor" stroke-width="1.4"/><path d="M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>Copy this prompt';
+  const copySvg = CAP_COPY_SVG;
   const feedback = () => {
     btn.textContent = '✓ Copied';
     btn.classList.add('copied');
@@ -1391,9 +1471,16 @@ async function fetchUserEnrichment() {
   // No poll needed: claude.use("mcp") settles on its own once the view knows.
   if (!(await mcpAvailable())) { markEnrichmentDone(); return; }
   try {
+    // Start the "What's new" fetch now but don't wait on it: "What to try next" and the
+    // Skill Directory entitlements depend only on get_current_user. The row below starts
+    // hidden, so filling it later causes no reflow above it.
+    const whatsNewP = _listWhatsNewPrompts();
     const res = await _mcp("get_current_user", {});
     console.log("[carta-home][debug] get_current_user full payload:\n" + JSON.stringify(res, null, 2));
-    if (res && res.isError) return;
+    if (res && res.isError) {
+      // No profile means no plugin access to check, so "What's new" stays hidden.
+      return;
+    }
 
     // The result comes back in one of several shapes: the profile object directly,
     // an MCP envelope with content[].text holding the profile JSON string, or a
@@ -1408,7 +1495,10 @@ async function fetchUserEnrichment() {
     };
     console.log("[carta-home][debug] resolved entitlements:", JSON.stringify(_userEntitlements));
 
-    renderCapabilities(profile.recommendations);
+    const shownAbove = renderCapabilities(profile.recommendations);
+    whatsNewP
+      .then(items => renderWhatsNew(items, whatsNewPluginAccess(profile), shownAbove))
+      .catch(err => console.error("[carta-home] what's new render failed — row stays hidden", err));
   } catch (e) {
     console.error("[carta-home][debug] get_current_user error:", e);
   } finally {
