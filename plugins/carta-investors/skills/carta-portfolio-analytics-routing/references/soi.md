@@ -68,21 +68,13 @@ Call `read_tool({"name": "fa__list__entities", "arguments": { entity_types: "fun
 | User named a fund, **one** match | the matched fund's uuid | `named_and_found` | — |
 | User named a fund, **multiple** matches | the user-chosen uuid (via `AskUserQuestion`) | `named_and_found` | — |
 | User named a fund, **no** match | `__all_entities__` | `named_but_missing` | `named_term` = the term the user used |
-| User did not name a fund, firm has **< 40** funds | the first fund or fund family in the vintage-sorted order from Step 2c | `unnamed` | — |
-| User did not name a fund, firm has **≥ 40** funds | `__all_entities__` | `unnamed` | — |
+| User did not name a fund | `__all_entities__` | `unnamed` | — |
 
 `__all_entities__` opens the artifact on the pooled firm-wide view — every fund at
-once, with a Held By column naming which fund holds each position. Most firms want
-the whole portfolio first and narrow from there, so an unasked-for single fund is
-the wrong opening shot for a firm small enough to actually see its whole book at once.
-Above the 40-fund line, though, "whole book" stops being readable as one table —
-default those firms to their most recent fund (or fund family) instead, and let
-them pool up manually when they want to. Pass the sentinel through verbatim when
-it applies; the render script accepts it in place of a fund UUID.
-
-The fund-count check needs Step 2's full fund list, so it can't run until Step 2
-(and, for the vintage-sorted pick, Step 2c) has returned — this is a one-time count
-of `fa__list__entities` results, not a live threshold.
+once, with a Held By column naming which fund holds each position. Defaulting to the
+whole portfolio lets the user see all positions immediately and narrow to a fund from
+there, rather than starting on an arbitrarily-chosen fund. Pass the sentinel through
+verbatim; the render script accepts it in place of a fund UUID.
 
 **A single-fund firm can't pool.** The artifact only offers the firm-wide option
 when there is more than one fund, and the render script rejects the sentinel below

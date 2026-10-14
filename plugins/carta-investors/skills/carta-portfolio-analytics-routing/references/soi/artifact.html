@@ -500,8 +500,12 @@
             top: calc(100% + 6px);
             left: 0;
             z-index: 50;
+            /* Grows with the longest fund name up to 560px; names past that are
+               middle-truncated by fitComboLabels, which keeps the distinguishing
+               suffix (", LP", "-A") visible. */
+            width: max-content;
             min-width: 320px;
-            max-width: 380px;
+            max-width: min(560px, calc(100vw - 32px));
             background: var(--ink-color-global-surface-background-default);
             border: 1px solid var(--ink-color-global-border-subtle);
             /* Ink Dropdown surface: radius-subtle + elevation shadow-medium. */
@@ -586,12 +590,13 @@
             flex: 1;
             min-width: 0;
             overflow: hidden;
-            text-overflow: ellipsis;
             white-space: nowrap;
         }
 
         .combo-option.is-family > .combo-option-label { font-weight: 600; }
-        .combo-option.is-member > .combo-option-label { padding-left: 16px; }
+        /* Indent the whole member row, checkbox included, so members read as
+           belonging to the family row above rather than as a ragged label column. */
+        .combo-option.is-member { padding-left: 40px; }
 
         /* Firm-wide sits above the fund list rather than inside it, so it gets a
            rule under it — the one divider here that belongs to a component. */
@@ -693,6 +698,7 @@
             .combo-panel.align-right {
                 left: 0;
                 right: 0;
+                width: auto;
                 min-width: 0;
                 max-width: none;
             }
@@ -3769,7 +3775,7 @@
         // what the table below is showing, and staged edits aren't showing anything
         // until Apply.
         function comboSummaryMarkup(state) {
-            const label = v => `<span class="combo-trigger-value">${escHtml(v)}</span>`;
+            const label = v => `<span class="combo-trigger-value" title="${escHtml(v)}">${escHtml(v)}</span>`;
             if (!state.value || state.value === ALL_ENTITIES_VALUE) return label(ALL_ENTITIES_LABEL);
             // A family rollup names the family — it's one choice, not N funds, so a
             // count would be describing something the user didn't pick one by one.
@@ -3885,7 +3891,10 @@
         function comboVisibleItems(state) {
             const q = state.query.trim().toLowerCase();
             if (!q) return state.items;
-            const matches = i => (i.label + ' ' + (i.meta || '')).toLowerCase().includes(q);
+            // A family's meta is the fixed "Fund family · N funds" badge, so it stays
+            // out of the match: a query like "family" or "3" would otherwise hit every
+            // family and, through matchedGroups, every member fund.
+            const matches = i => (i.label + ' ' + (i.isFamily ? '' : (i.meta || ''))).toLowerCase().includes(q);
             const matchedGroups = new Set(state.items.filter(i => i.isFamily && matches(i)).map(i => i.label));
             return state.items.filter(i =>
                 matches(i) ||
@@ -3915,7 +3924,7 @@
                                 aria-selected="${state.multi ? comboItemSelectState(state, item) === 'checked' : item.value === state.value}"
                                 data-value="${escHtml(item.value)}">
                         ${control}
-                        <span class="combo-option-label">${escHtml(item.label)}</span>
+                        <span class="combo-option-label" data-full="${escHtml(item.label)}">${escHtml(item.label)}</span>
                         ${item.meta ? `<span class="combo-meta">${escHtml(item.meta)}</span>` : ''}
                     </li>`;
                 }).join('');
@@ -3962,12 +3971,45 @@
                     });
                 }
             }
+            fitComboLabels(list);
+            // The panel's width follows its rows, so check the right edge only now
+            // that they're drawn, and again whenever a search changes them.
+            const panel = document.getElementById(state.mountId + '-panel');
+            if (panel && !panel.hidden) alignComboPanel(panel);
             const active = list.querySelector('.combo-option.active');
             if (active) {
                 active.scrollIntoView({ block: 'nearest' });
                 const input = document.getElementById(state.mountId + '-search');
                 if (input) input.setAttribute('aria-activedescendant', active.id);
             }
+        }
+
+        // Fund names in one firm usually share a long prefix and differ at the end
+        // ("... Fund II, LP" vs "... Fund II-A, LP"), so an end ellipsis hides the
+        // one part that tells them apart. Cut from the middle instead, and put the
+        // full name in the hover tooltip. Runs after the panel has sized itself, so
+        // only names wider than the 560px cap are touched.
+        function fitComboLabels(list) {
+            list.querySelectorAll('.combo-option-label').forEach(el => {
+                const full = el.dataset.full || '';
+                el.textContent = full;
+                el.removeAttribute('title');
+                if (el.scrollWidth <= el.clientWidth) return;
+                el.title = full;
+                let lo = 0;
+                let hi = full.length;
+                while (lo < hi) {
+                    const keep = Math.ceil((lo + hi) / 2);
+                    el.textContent = middleTruncate(full, keep);
+                    if (el.scrollWidth <= el.clientWidth) lo = keep; else hi = keep - 1;
+                }
+                el.textContent = middleTruncate(full, lo);
+            });
+        }
+
+        function middleTruncate(text, keep) {
+            const head = Math.ceil(keep / 2);
+            return text.slice(0, head).trimEnd() + '…' + text.slice(text.length - (keep - head)).trimStart();
         }
 
         function openCombo(mountId) {
@@ -3985,7 +4027,6 @@
             const trigger = document.getElementById(mountId + '-trigger');
             panel.hidden = false;
             trigger.setAttribute('aria-expanded', 'true');
-            alignComboPanel(panel);
             renderComboList(state);
             const search = document.getElementById(mountId + '-search');
             if (search) { search.value = ''; search.focus(); } else { document.getElementById(mountId + '-list').focus(); }
@@ -4081,6 +4122,9 @@
 
         // Flips the panel when it would otherwise run past the right edge.
         function alignComboPanel(panel) {
+            // Measure from the left-anchored position, or a panel already flipped
+            // right would always look like it fits and flip back.
+            panel.classList.remove('align-right');
             const rect = panel.getBoundingClientRect();
             panel.classList.toggle('align-right', rect.right > window.innerWidth - 8);
         }
@@ -4174,7 +4218,10 @@
                     if (entry.members.length > 1) {
                         // The family name is itself a selectable rollup option, not a
                         // header — choosing it pools every member fund.
-                        items.push({ value: FAMILY_PREFIX + entry.name, label: entry.name, isFamily: true });
+                        items.push({
+                            value: FAMILY_PREFIX + entry.name, label: entry.name, isFamily: true,
+                            meta: `Fund family · ${entry.members.length} funds`,
+                        });
                         entry.members.forEach(f => items.push({
                             value: f.uuid, label: f.name, meta: fundMeta(f), groupName: entry.name,
                         }));
