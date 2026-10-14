@@ -17,7 +17,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.72.13</carta-plugin>
+<carta-plugin>carta-investors:6.72.14</carta-plugin>
 
 # Carta Workhub — Build / Redeploy
 
@@ -272,7 +272,10 @@ not inside a fund-data dashboard.
 
   carta-mcp decides which cells: the tracker asks `discover` about `fa:list:workhub-task-app`
   once, and only when that answers reads, through `fetch`, the tracker columns with an app, each
-  with its view and the entity field that fills each view param. The read is gated server-side,
+  with its view and the entity field that fills each view param. A row that is one package
+  (under an entity or a family, or a family's one combined package) fills them from the entry's `package_params` instead, so the
+  Financial Report button of a package opens that package even when its fund has several
+  waiting; an entry without them gives package rows no app. The read is gated server-side,
   and each entry by its view's own gate, so a viewer it refuses keeps every Carta link. A new app
   is one entry in carta-mcp's registry, not a change here, and needs nothing new in the publish
   grant: `view_remote` is called by Claude in the chat, never by the artifact.

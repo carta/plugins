@@ -162,7 +162,7 @@ const FRT_FUND_TYPES = ["FUND", "SPV", "SYNDICATE_SPV"];
 function frtPackageChild(pkg, rowId) {
   const cols = frtMapFinancialReportColumns(pkg.financial_report || {});
   return {
-    id: `${rowId}:${pkg.package_id}`, name: pkg.display_label,
+    id: `${rowId}:${pkg.package_id}`, pkg, name: pkg.display_label,
     due: null, note: null, cash: FRT_EMPTY_CELL, soi: FRT_EMPTY_CELL,
     fr: cols.cell, action: cols.action, trailing: cols.trailingNote,
     isPackage: true, isFamilyPackage: !!pkg.is_family_package, packages: [], children: [],
@@ -227,16 +227,23 @@ function appParamsFrom(paramMap, source) {
 }
 
 // Only a needs-action button opens an app, and only when the entity carries every field
-// the app's params come from; anything else stays as it is.
+// the app's params come from; anything else stays as it is. A package row names its own
+// package through the app's package_params, so it opens that package even when its fund
+// has several; an app without them gives package rows none. A row carries `pkg` when it
+// stands for exactly one package: a package row, or a family row over its one own package.
 function frtWithApp(cell, column, app, row, source) {
   if (!app || !cell || cell.kind !== "action") return cell;
-  const params = appParamsFrom(app.params, source);
+  const hasPackageParams = Object.keys(app.package_params || {}).length > 0;
+  const params = row.pkg
+    ? hasPackageParams && appParamsFrom(app.package_params, row.pkg)
+    : appParamsFrom(app.params, source);
   if (!params) return cell;
   return Object.assign({}, cell, { app: { view: app.view, params, label: frtColumnLabel(column), entity: row.name } });
 }
 
 // Gives each cell its column's app, reading params off the row's own entity. A family row
-// has no entity of its own, so it opens none; a package row reads its entity's fields.
+// has no entity of its own, so it opens only its one own package; a package row, under an
+// entity or a family, reads its own package.
 function frtAttachApps(rows, payload, apps) {
   if (!apps || !Object.keys(apps).length) return rows;
   const entities = new Map((payload.entities || []).map(e => [String(e.entity_id), e]));
@@ -316,7 +323,7 @@ function frtFamilyRow(f, members, period) {
   const ownPackages = f.packages || [];
   const total = ownPackages.length + members.reduce((n, m) => n + (m.packages || []).length, 0);
   const rowId = `family-${f.family_id}`;
-  let fr, action, trailing, tag = null, packageChildren = [];
+  let fr, action, trailing, tag = null, packageChildren = [], pkg = null;
   if (total >= 2) {
     fr = frtMapFinancialReportRollup(f.financial_report || {});
     action = null; trailing = null; tag = `${total} packages`;
@@ -324,6 +331,8 @@ function frtFamilyRow(f, members, period) {
   } else {
     const cols = frtMapFinancialReportColumns(f.financial_report || {});
     fr = cols.cell; action = cols.action; trailing = cols.trailingNote;
+    // The one combined package, when it is the family's own and not a member's.
+    if (ownPackages.length === 1) pkg = ownPackages[0];
   }
   return {
     id: rowId, name: f.family_name,
@@ -332,7 +341,7 @@ function frtFamilyRow(f, members, period) {
     due: f.due_date, note: frtDeadlineNote(f.due_date_days, f.due_date_source, period),
     // Cash reconciliation and the SOI exist per member fund only.
     cash: FRT_EMPTY_CELL, soi: FRT_EMPTY_CELL,
-    fr, action, trailing, tag,
+    fr, action, trailing, tag, pkg,
     packages: packageChildren, children: members.map(m => frtMemberRow(m, period)),
     searchLabels: frtSearchLabels(ownPackages),
   };

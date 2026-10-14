@@ -4,7 +4,7 @@
     "headline": "The capital activity popup fits long payout statuses such as \"Pending authorization\" in the Status column."
   },
   "carta-workhub-build": {
-    "version": "1.9.14",
+    "version": "1.9.15",
     "headline": "Workhub shows every task your Carta team shares with you, in Drafts, Needs Action, With Carta and Completed tabs grouped by category."
   }
 }
