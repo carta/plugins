@@ -11,7 +11,6 @@ export default function HoverTip({ text, children, style }) {
   const [pos, setPos] = useState(null);
   const ref = useRef(null);
   const tipRef = useRef(null);
-  if (!text) return children;
 
   const show = () => {
     const r = ref.current?.getBoundingClientRect();
@@ -29,6 +28,9 @@ export default function HoverTip({ text, children, style }) {
     if (clamped !== pos.left) setPos((p) => p && { ...p, left: clamped });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, pos?.anchor]);
+
+  // After every hook: a trigger whose text comes and goes keeps one hook order.
+  if (!text) return children;
 
   return (
     <span ref={ref} style={style} onMouseEnter={show} onMouseLeave={() => setOpen(false)}>

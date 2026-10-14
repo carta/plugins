@@ -4,11 +4,12 @@ import { exportElementAsHtml } from "./exportHtml.js";
 import { Btn } from "./components.jsx";
 import { trackClick } from "../analytics.js";
 
-// Renders via the shared Btn (kind="ghost"), not a hand-rolled button.
-export default function ExportButton({ targetId, entityName, pageLabel, asOf, filenameBase, events }) {
-  const [state, setState] = useState("idle"); // idle | busy | done | error
+// One HTML export of the element `targetId`, with its click and outcome tracked.
+// state: idle | busy | done | error — done and error fall back to idle after a moment.
+export function useHtmlExport({ targetId, entityName, pageLabel, asOf, filenameBase, events }) {
+  const [state, setState] = useState("idle");
 
-  const onClick = async () => {
+  const run = async () => {
     if (events) trackClick(events.click);
     const el = document.getElementById(targetId);
     if (!el) {
@@ -30,6 +31,12 @@ export default function ExportButton({ targetId, entityName, pageLabel, asOf, fi
     }
   };
 
+  return { state, run };
+}
+
+// Renders via the shared Btn (kind="ghost"), not a hand-rolled button.
+export default function ExportButton(props) {
+  const { state, run } = useHtmlExport(props);
   const label = state === "busy" ? "Exporting…"
               : state === "done" ? "Downloaded"
               : state === "error" ? "Export failed"
@@ -37,7 +44,7 @@ export default function ExportButton({ targetId, entityName, pageLabel, asOf, fi
   const Icon = state === "done" ? Check : state === "error" ? TriangleAlert : Download;
 
   return (
-    <Btn kind="ghost" onClick={onClick} disabled={state === "busy"} aria-label={label}>
+    <Btn kind="ghost" onClick={run} disabled={state === "busy"} aria-label={label}>
       <Icon size={16} strokeWidth={2} />
       {label}
     </Btn>

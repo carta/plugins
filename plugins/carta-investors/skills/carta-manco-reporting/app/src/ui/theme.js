@@ -253,6 +253,11 @@ export const GLOBAL_CSS = `
   @keyframes pagein { from { opacity: 0; } to { opacity: 1; } }
   .pagein { animation: pagein .12s ${EASE_OUT} backwards; }
   @keyframes popin { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
+  @keyframes skeleton { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .skeleton { background: ${SHADE}; border-radius: 3px; animation: skeleton 1.2s ease-in-out infinite; }
+  .spinner { animation: spin .8s linear infinite; }
+  @media (prefers-reduced-motion: reduce) { .skeleton, .spinner { animation: none; } }
   .popin { animation: popin .1s ${EASE_OUT}; transform-origin: top left; }
 
   .actrow { transition: background .1s ${EASE}; }

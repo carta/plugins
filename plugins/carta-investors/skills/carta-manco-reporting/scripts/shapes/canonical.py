@@ -58,8 +58,13 @@ def _node_facts_from_row(row, period_year):
     return [], {}
 
 
-def to_canonical(resolved_budget, period_year=None):
-    """Lift a resolved budget dict (must carry `rows`) into the canonical model."""
+def to_canonical(resolved_budget, period_year=None, *, mapped_gl_first=False):
+    """Lift a resolved budget dict (must carry `rows`) into the canonical model.
+
+    `mapped_gl_first` takes each line's gl_codes (the mapping's answer, which can
+    name several accounts) over the accounts its adapter stated. Sharing wants
+    that (see share_payload); the views keep the stated accounts.
+    """
     rows = resolved_budget.get("rows") or []
     if not rows:
         return None
@@ -78,8 +83,12 @@ def to_canonical(resolved_budget, period_year=None):
         gl = row.get("account_type_all") or (
             [row["account_type"]] if row.get("account_type") is not None else []
         )
+        if mapped_gl_first:
+            gl = list(row.get("gl_codes") or []) or gl
         node = {
-            "key": row.get("key") or f"r{i}",
+            # A row the adapter didn't number (headers, some summaries) gets "~<index>":
+            # adapter keys never start with "~", so the two can't collide.
+            "key": row.get("key") or f"~{i}",
             "kind": row.get("row_kind") or "line",
             "label": row.get("label"),
             "depth": row.get("depth") or 0,
@@ -87,14 +96,26 @@ def to_canonical(resolved_budget, period_year=None):
             "gl_codes": gl,
             "facts": facts,
         }
+        # A crosstab comments per department; every other layout comments per
+        # line, keyed "" for the whole line.
+        line_comment = row.get("comment")
+        if not comments and isinstance(line_comment, str) and line_comment.strip():
+            comments = {"": line_comment.strip()}
         if comments:
             node["comments"] = comments
         section = row.get("section")
         if section:
             node["section"] = section
-        constituents = row.get("constituents") or (row.get("calculated") or {}).get("constituents")
+        calculated = row.get("calculated") or {}
+        constituents = row.get("constituents") or calculated.get("constituents")
         if constituents:
             node["constituents"] = list(constituents)
+        # How a derived row is recomputed after an edit: net income is income
+        # minus expense, and a formula row can't be rebuilt by summing.
+        if row.get("derived"):
+            node["derived"] = row["derived"]
+        elif calculated.get("kind") == "expression":
+            node["derived"] = "expression"
         nodes.append(node)
 
     return {"schema_version": SCHEMA_VERSION, "dimensions": dims, "nodes": nodes}
@@ -144,6 +165,17 @@ def _is_income(gl_codes):
     return bool(gl_codes) and all(str(g)[:1] == "4" for g in gl_codes)
 
 
+def _month_index(period):
+    if period and len(period) >= 7:
+        try:
+            month = int(period[5:7])
+        except ValueError:
+            return None
+        if 1 <= month <= 12:
+            return month - 1
+    return None
+
+
 def project_to_account_rows(canonical, as_of_month=12):
     """Leaf lines, scope summed away, shaped like BudgetActualsAccounts.jsx expects.
 
@@ -160,13 +192,8 @@ def project_to_account_rows(canonical, as_of_month=12):
         flat = 0.0
         has_period = False
         for f in n["facts"]:
-            m = None
-            if f["period"] and len(f["period"]) >= 7:
-                try:
-                    m = int(f["period"][5:7]) - 1
-                except ValueError:
-                    m = None
-            if m is not None and 0 <= m < 12:
+            m = _month_index(f["period"])
+            if m is not None:
                 monthly[m] += f["amount"]
                 has_period = True
             else:
@@ -267,3 +294,177 @@ def project_to_tag_crosstab(canonical):
     ]
     by_tag_value.sort(key=lambda x: ("total" in x["tag_value"].lower(), -x["expenses_ytd"]))
     return rows, by_tag_value
+
+
+_ADAPTER_FOR_VIEW = {
+    BY_LINE_ITEM: "pnl-outline",
+    BY_ACCOUNT: "monthly-crosstab",
+    BY_TAG_CROSSTAB: "tag-crosstab",
+}
+
+
+def _source_key(node):
+    """The adapter's own key, or None for a row the adapter didn't number (see to_canonical)."""
+    key = node.get("key")
+    return None if not key or key.startswith("~") else key
+
+
+def _gl_fields(node):
+    gl = list(node.get("gl_codes") or [])
+    out = {"gl_codes": gl}
+    if gl:
+        out["account_type"] = gl[0]
+    if len(gl) > 1:
+        out["account_type_all"] = gl
+    return out
+
+
+def _outline_row(node):
+    """One parsed-budget row for an outline or monthly budget."""
+    monthly = [0.0] * 12
+    whole_window = 0.0
+    has_period = False
+    tag_value = None
+    for fact in node["facts"]:
+        index = _month_index(fact.get("period"))
+        if index is None:
+            whole_window += fact["amount"]
+        else:
+            monthly[index] += fact["amount"]
+            has_period = True
+        if fact.get("scope") and tag_value is None:
+            tag_value = fact["scope"].get("value")
+    row = {
+        "row_kind": node["kind"],
+        "label": node.get("label"),
+        "depth": node.get("depth") or 0,
+        "annual": round(sum(monthly) + whole_window, 2),
+        # A header carries no amounts, as the adapters emit it.
+        "monthly": [round(v, 2) for v in monthly] if has_period else [],
+    }
+    key = _source_key(node)
+    if key:
+        row["key"] = key
+    if node.get("section"):
+        row["section"] = node["section"]
+    comment = (node.get("comments") or {}).get("")
+    row["comment"] = comment
+    if node.get("constituents"):
+        row["constituents"] = list(node["constituents"])
+    if node.get("derived") == "net_income":
+        row["derived"] = "net_income"
+    if tag_value:
+        row["tag_value"] = tag_value
+    row.update(_gl_fields(node))
+    return row
+
+
+def _crosstab_row(node):
+    """One parsed-budget row for a tag-crosstab: scope values become columns."""
+    comments = node.get("comments") or {}
+    by_column = {}
+    for fact in node["facts"]:
+        scope = (fact.get("scope") or {}).get("value")
+        if scope is None:
+            continue
+        entry = by_column.setdefault(scope, {"budget": 0.0})
+        entry["budget"] = round(entry["budget"] + fact["amount"], 2)
+    for scope, text in comments.items():
+        if scope:
+            by_column.setdefault(scope, {"budget": None})["comment"] = text
+    row = {
+        "row_kind": node["kind"],
+        "label": node.get("label"),
+        "depth": node.get("depth") or 0,
+        "by_column": by_column,
+        "comment": comments.get(""),
+    }
+    key = _source_key(node)
+    if key:
+        row["key"] = key
+    if node.get("section"):
+        row["section"] = node["section"]
+    # A formula row's operators don't survive the canonical model, so only a plain
+    # sum keeps its breakdown — an expression shown as a sum would state the
+    # opposite of what the workbook computes.
+    if node.get("constituents") and node.get("derived") != "expression":
+        row["calculated"] = {"kind": "sum", "constituents": list(node["constituents"])}
+    row.update(_gl_fields(node))
+    return row
+
+
+def budget_from_canonical(payload, *, report_id, name):
+    """A shared report's payload, back in the parsed-budget shape build_manco_datadir reads.
+
+    `payload` is the share envelope: {period_year, period_granularity, currency,
+    native_view_kind, period_kind?, value_aliases?, budget: {dimensions, nodes}}.
+    The result renders like any imported budget; `read_only` marks it as a report
+    someone else shared, so nothing asks mapping questions about it.
+    """
+    body = payload["budget"]
+    native = payload["native_view_kind"]
+    nodes = sorted(body["nodes"], key=lambda n: n.get("order", 0))
+    crosstab = native == BY_TAG_CROSSTAB
+    rows = [(_crosstab_row if crosstab else _outline_row)(n) for n in nodes]
+    budget = {
+        "id": report_id,
+        "label": name,
+        "period_year": payload["period_year"],
+        "period_kind": payload.get("period_kind") or "annual",
+        "period_granularity": payload.get("period_granularity"),
+        "source": "shared-report",
+        "workbook_meta": {"shape_adapter": _ADAPTER_FOR_VIEW.get(native, "pnl-outline")},
+        "dimensions": list(body.get("dimensions") or []) if crosstab else [],
+        "view_kinds": [native],
+        "rows": rows,
+        "read_only": True,
+    }
+    if crosstab:
+        scopes = []
+        for node in nodes:
+            for fact in node["facts"]:
+                value = (fact.get("scope") or {}).get("value")
+                if value is not None and value not in scopes:
+                    scopes.append(value)
+        budget["tag_values"] = scopes
+    if payload.get("value_aliases"):
+        budget["value_aliases"] = payload["value_aliases"]
+    return budget
+
+
+def _native_view_kind(canonical):
+    """The view a budget with no recorded view_kinds is read back as.
+
+    budget_from_canonical's crosstab path keeps only scoped, whole-window facts.
+    A department-scoped outline also names a dimension, but its facts are monthly
+    and some lines are unscoped, so only a budget whose every fact is scoped and
+    whole-window is read back as a crosstab.
+    """
+    facts = [f for n in canonical["nodes"] for f in n["facts"]]
+    crosstab = bool(canonical["dimensions"]) and bool(facts) and all(
+        f.get("scope") and f.get("period") is None for f in facts
+    )
+    return BY_TAG_CROSSTAB if crosstab else BY_LINE_ITEM
+
+
+def share_payload(budget, currency):
+    """The payload a report is shared with: the canonical body in its envelope.
+
+    `budget` is a resolved budget entry (after mapping); each node's gl_codes are
+    the mapping's answers, so a recipient sees the sharer's mapped accounts.
+    `currency` is the ManCo's own; sharing needs one.
+    """
+    canonical = to_canonical(budget, mapped_gl_first=True)
+    if canonical is None:
+        return None
+    payload = {
+        "period_year": budget.get("period_year"),
+        "period_granularity": budget.get("period_granularity"),
+        "period_kind": budget.get("period_kind") or "annual",
+        "currency": currency,
+        "native_view_kind": (budget.get("view_kinds") or [_native_view_kind(canonical)])[0],
+        "budget": {"dimensions": canonical["dimensions"], "nodes": canonical["nodes"]},
+    }
+    if budget.get("value_aliases"):
+        payload["value_aliases"] = budget["value_aliases"]
+    return payload

@@ -9,6 +9,7 @@ import DrilldownDrawer from "./views/DrilldownDrawer.jsx";
 import useDrilldown from "./state/useDrilldown.js";
 import { setDisplayCurrency } from "./charts/chartTheme.js";
 import { assignCategoricalColors, assignExpenseCategoryColors } from "./ui/categoricalColors.js";
+import { displayFirmName } from "./ui/firmName.js";
 import { trackClick, trackRender } from "./analytics.js";
 
 // This server only ever hosts one firm — the URL's firm segment is cosmetic,
@@ -318,12 +319,7 @@ function topCategoryNamesFor(accountsData) {
 // square instead of stretching into a rectangle for a 4+-word firm name.
 function firmInitials(firmName) {
   if (!firmName) return "";
-  const cleaned = firmName.replace(/,?\s+(LLC|LP|L\.P\.|L\.L\.C\.|Inc\.?|Ltd\.?|Corp\.?)$/i, "");
+  const cleaned = displayFirmName(firmName);
   const tokens = cleaned.split(/[\s-]+/).filter(Boolean);
   return tokens.slice(0, 3).map(t => t.charAt(0)).join("");
-}
-
-function displayFirmName(firmName) {
-  if (!firmName) return "";
-  return firmName.replace(/,?\s+(LLC|LP|L\.P\.|L\.L\.C\.|Inc\.?|Ltd\.?|Corp\.?)$/i, "");
 }
