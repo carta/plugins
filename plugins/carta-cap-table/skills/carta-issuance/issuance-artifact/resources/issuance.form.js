@@ -221,7 +221,7 @@ function seedShared() {
     sh.option_plan_id = p.optionPlanId ? String(p.optionPlanId) : "";
     sh.jurisdiction = p.jurisdiction && SO[p.jurisdiction] ? p.jurisdiction : "";
     sh.so_type = p.soType || "";
-    sh.exercise_price = p.exercisePrice != null ? String(p.exercisePrice) : "";
+    sh.exercise_price = p.exercisePrice != null ? tidyPrice(p.exercisePrice) : "";
     sh.document_set_id = p.documentSetId ? String(p.documentSetId) : "";
     // A fresh form derives it in grantExpiry(); the server's copy caps it at the plan's end.
     sh.grant_expiration_date = freshSet() ? "" : iso(p.grantExpirationDate) || "";
@@ -286,7 +286,7 @@ function applySeedTerms(sh) {
   if (iso(seedTerm("vesting_start_date"))) sh.vesting_start_date = iso(seedTerm("vesting_start_date"));
   if (S.type === "option_grant") {
     if (seedTerm("grant_type")) sh.so_type = soTypeOf(seedTerm("grant_type")) || sh.so_type;
-    if (seedTerm("exercise_price") != null) sh.exercise_price = String(seedTerm("exercise_price"));
+    if (seedTerm("exercise_price") != null) sh.exercise_price = tidyPrice(seedTerm("exercise_price"));
     if (iso(seedTerm("grant_expiration_date"))) sh.grant_expiration_date = iso(seedTerm("grant_expiration_date"));
     if (seedTerm("early_exercise") != null) sh.early_exercise = yes(seedTerm("early_exercise"));
   } else if (S.type === "certificate") {
@@ -305,7 +305,7 @@ function rowTermOverrides(terms) {
   if (S.type === "option_grant") {
     const so = t("grant_type") && soTypeOf(t("grant_type"));
     if (so) out.so_type = so;
-    if (t("exercise_price") != null) out.exercise_price = String(t("exercise_price"));
+    if (t("exercise_price") != null) out.exercise_price = tidyPrice(t("exercise_price"));
   } else if (S.type === "certificate" && t("price_per_share") != null) {
     out.law_firm_price = String(t("price_per_share"));
   } else if (S.type === "piu" && t("threshold_value") != null) {
@@ -777,7 +777,7 @@ function fillDefaults(sh) {
   if (S.type !== "option_grant" && !sh.prefix && S.classes.length === 1) sh.prefix = S.classes[0].prefix || "";
   if (S.type === "option_grant" && !sh.exercise_price) {
     const v = fmv();
-    if (v.price != null) sh.exercise_price = String(v.price);
+    if (v.price != null) sh.exercise_price = tidyPrice(v.price);
   }
   // Only fill a blank here. The field is editable now, and a roster search keeps
   // calling this — recomputing would overwrite what the user just typed. `commit`
@@ -847,6 +847,14 @@ const selectablePlans = () => S.plans.filter((p) =>
 function latestPlanId() {
   const ids = selectablePlans().map((p) => Number(p.id)).filter(Number.isFinite);
   return ids.length ? String(Math.max(...ids)) : "";
+}
+/** Carta stores prices to 12 places, so a valuation arrives as "0.500000000000". Drop the
+    trailing zeros but keep two places; the text is never rounded, so a sub-cent strike survives. */
+function tidyPrice(v) {
+  const s = String(v).trim();
+  if (!/^\d+(\.\d*)?$/.test(s)) return s;
+  const [int, frac = ""] = s.split(".");
+  return `${int}.${frac.replace(/0+$/, "").padEnd(2, "0")}`;
 }
 /** The live valuation rows to price from. `active` is already filtered server-side, so
     it is never re-derived from dates. A 409A row carries no share class, so it is tagged
@@ -4052,7 +4060,7 @@ function storedTerms(x) {
     Object.assign(out, {
       board_mode: nba === true ? "pending" : nba === false ? "approved"
         : out.board_approval_date && out.board_approval_date !== AS_SAVED ? "approved" : AS_SAVED,
-      so_type: from("so_type", txtv), exercise_price: from("exercise_price", txtv),
+      so_type: from("so_type", txtv), exercise_price: from("exercise_price", (v) => (v == null ? "" : tidyPrice(v))),
       grant_expiration_date: from("grant_expiration_date", date),
       early_exercise: from("early_exercise", bool), is_hmrc_notified: from("is_hmrc_notified", bool),
       hmrc_notified: from("hmrc_notified", (v) => (v ? String(v).slice(0, 10) : "")),
