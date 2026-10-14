@@ -26,22 +26,32 @@ import { fmContext } from "./pinpoint/fmContext.js";
 import { postToOuter, onFromOuter } from "./bridge-client.js";
 import { trackClick, trackRender } from "./analytics.js";
 
-const I = ({ d, extra, color, size = 16, strokeWidth = 1.8 }) => (
+const I = ({ paths, color, size = 16, strokeWidth = 1.8 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={{ flex: "none", color }}>
-    <path d={d} />{extra && <path d={extra} />}
+    {paths.map((d) => <path key={d} d={d} />)}
   </svg>
 );
-// Ink-style line icons — a fresh, distinct set. Each is [icon, extra?].
+// Ink icons, drawn with the Lucide glyph Ink's kit maps each one to (Ink name → Lucide name
+// in the comment). Each entry is [id, label, paths].
 const TABS = [
-  ["overview", "Firm Overview", "M4 18a8 8 0 0116 0", "M12 18l5-5"],
-  ["companies", "Companies", "M12 3l9 5-9 5-9-5z", "M3 13l9 5 9-5"],
-  ["lp-returns", "LP Returns", "M3 16l5-5 4 4 8-8", "M16 7h4v4"],
-  ["gp-economics", "GP Economics", "M4 7h16", "M9 7v13M15 7v13"],
-  ["reserves", "Reserves", "M4 7h13v10H4z", "M17 10h3v4h-3"],
-  ["power-law", "Power Law", "M4 20h16", "M4 20C10 20 13 5 20 4"],
-  ["cohort", "Benchmarks", "M5 19a9 9 0 1114 0", "M12 19l5-6"],
-  ["export", "Export", "M7 3h7l4 4v13a1 1 0 01-1 1H7a1 1 0 01-1-1V4a1 1 0 011-1z", "M14 3v4h4"],
-  ["construction", "Fund Construction", "M4 21V9l8-5 8 5v12", "M9 21v-6h6v6"],
+  // quickaction → zap
+  ["overview", "Firm Overview", ["M15.914 4a1.5 1.5 0 00-2.474-1.561l-9 9A1.5 1.5 0 005.5 14h4.002a.5.5 0 01.471.666L8.086 20a1.5 1.5 0 002.475 1.56l9-9A1.5 1.5 0 0018.5 10h-3.997a.5.5 0 01-.472-.667z"]],
+  // corporation → building-2
+  ["companies", "Companies", ["M10 12h4", "M10 8h4", "M14 21v-3a2 2 0 0 0-4 0v3", "M6 10H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2", "M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16"]],
+  // invest → trending-up
+  ["lp-returns", "LP Returns", ["M16 7h6v6", "m22 7-8.5 8.5-5-5L2 17"]],
+  // capitalization → chart-pie
+  ["gp-economics", "GP Economics", ["M21 12c.552 0 1.005-.449.95-.998a10 10 0 0 0-8.953-8.951c-.55-.055-.998.398-.998.95v8a1 1 0 0 0 1 1z", "M21.21 15.89A10 10 0 1 1 8 2.83"]],
+  // bank → landmark
+  ["reserves", "Reserves", ["M10 18v-7", "M11.119 2.205a2 2 0 0 1 1.762 0l7.84 3.846A.5.5 0 0 1 20.5 7h-17a.5.5 0 0 1-.22-.949z", "M14 18v-7", "M18 18v-7", "M3 22h18", "M6 18v-7"]],
+  // spaceship → rocket
+  ["power-law", "Power Law", ["M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5", "M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09", "M9 12a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.4 22.4 0 0 1-4 2z", "M9 12H4s.55-3.03 2-4c1.62-1.08 5 .05 5 .05"]],
+  // trophy → trophy
+  ["cohort", "Benchmarks", ["M10 14.66V17a1 1 0 0 1-1 1 2 2 0 0 0-2 2v2", "M14 14.66V17a1 1 0 0 0 1 1 2 2 0 0 1 2 2v2", "M17.916 10H19.5A2.5 2.5 0 0 0 22 7.5V5a1 1 0 0 0-1-1h-3", "M4 22h16", "M6 9a6 6 0 0 0 12 0V3a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1z", "M6.084 10H4.5A2.5 2.5 0 0 1 2 7.5V5a1 1 0 0 1 1-1h3"]],
+  // download → download
+  ["export", "Export", ["M12 15V3", "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "m7 10 5 5 5-5"]],
+  // plant → sprout
+  ["construction", "Fund Construction", ["M14 9.536V7a4 4 0 0 1 4-4h1.5a.5.5 0 0 1 .5.5V5a4 4 0 0 1-4 4 4 4 0 0 0-4 4c0 2 1 3 1 5a5 5 0 0 1-1 3", "M4 9a5 5 0 0 1 8 4 5 5 0 0 1-8-4", "M5 21h14"]],
 ];
 const TAB_IDS = TABS.map(([id]) => id);
 // Plans a new fund rather than viewing the portfolio, so no scenario applies to it.
@@ -137,19 +147,19 @@ function MetricBar({ firm, firmBase, firmLpDelta, firmGpCarry, narrow }) {
   );
 }
 
-// Full-bleed rows matching Ink's SideNav (.sn__item padding 10px 14px). Weight and
-// the active background/stripe come from .navitem in theme.js.
+// Full-bleed rows matching Ink's SideNav item (8px/20px padding, 24px line, 40px tall).
+// Weight and the active background/stripe come from .navitem in theme.js.
 const navItemStyle = { ...sans, display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left",
-  fontSize: FS.value, lineHeight: "20px", padding: "10px 14px", border: "none",
+  fontSize: FS.value, lineHeight: "24px", padding: "8px 20px", border: "none",
   cursor: "pointer", color: "var(--ink-color-global-text-default)" };
 
-function NavItem({ id, label, icon, extra, active, onClick }) {
+function NavItem({ id, label, icon, active, onClick }) {
   return (
     <button onClick={onClick} data-testid={`tab-${id}`} className={`navitem${active ? " active" : ""}`} style={navItemStyle}>
       {/* The active row's orange icon tile lives in CSS (.navitem.active .navitem-icon);
           the glyph colour goes through I's color prop, since I sets it inline. */}
       <span className="navitem-icon">
-        <I d={icon} extra={extra} size={20} strokeWidth={1.6} color={active ? "var(--ink-color-global-brand-black)" : "var(--ink-color-global-text-subtle)"} />
+        <I paths={icon} size={16} strokeWidth={1.6} color={active ? "var(--ink-color-global-brand-black)" : "var(--ink-color-global-text-default)"} />
       </span>
       {label}
     </button>
@@ -423,18 +433,18 @@ export default function App({ firm, onChooseFirm }) {
     <aside style={{ width: 240, flex: "none", background: "var(--ink-color-global-surface-background-default)", borderRight: `1px solid var(--ink-color-global-border-subtle)`,
       display: "flex", flexDirection: "column", gap: 1, padding: "14px 10px 10px",
       position: "sticky", top: 0, height: "100vh", overflowY: "auto" }}>
-      {/* Logo's left edge lines up with the nav icons (row inset 14px, minus the
+      {/* Logo's left edge lines up with the nav icon tiles (row inset 20px, minus the
           aside's 10px). Nudged up 5px — (20px line − 30px logo) / 2 — so a one-line
           firm name centres on the logo and a second line hangs below it. */}
-      <div style={{ padding: "4px 4px 16px", display: "flex", alignItems: "flex-start", gap: 12 }}>
+      <div style={{ padding: "4px 10px 16px", display: "flex", alignItems: "flex-start", gap: 12 }}>
         <CartaLogo size={30} style={{ flex: "none", transform: "translateY(-5px)" }} />
         <div style={{ minWidth: 0 }}>
           <div style={{ ...sans, fontSize: 14, fontWeight: 600, lineHeight: "20px", letterSpacing: "-0.01em", color: "var(--ink-color-global-text-default)", wordBreak: "break-word" }}>{snapshot.branding?.firmName ?? snapshot.source.firm}</div>
         </div>
       </div>
       <div style={{ margin: "0 -10px", display: "flex", flexDirection: "column" }}>
-        {TABS.filter(([id]) => id !== NEW_FUND_TAB).map(([id, label, icon, extra]) => (
-          <NavItem key={id} id={id} label={label} icon={icon} extra={extra} active={tab === id} onClick={() => selectTab(id)} />
+        {TABS.filter(([id]) => id !== NEW_FUND_TAB).map(([id, label, icon]) => (
+          <NavItem key={id} id={id} label={label} icon={icon} active={tab === id} onClick={() => selectTab(id)} />
         ))}
       </div>
       <div style={{ height: 1, background: "var(--ink-color-global-border-subtle)", margin: "9px 8px" }} />
@@ -469,8 +479,8 @@ export default function App({ firm, onChooseFirm }) {
         <Eyebrow color={MICRO}>New fund</Eyebrow>
       </div>
       <div style={{ margin: "0 -10px", display: "flex", flexDirection: "column" }}>
-        {TABS.filter(([id]) => id === NEW_FUND_TAB).map(([id, label, icon, extra]) => (
-          <NavItem key={id} id={id} label={label} icon={icon} extra={extra} active={tab === id} onClick={() => selectTab(id)} />
+        {TABS.filter(([id]) => id === NEW_FUND_TAB).map(([id, label, icon]) => (
+          <NavItem key={id} id={id} label={label} icon={icon} active={tab === id} onClick={() => selectTab(id)} />
         ))}
       </div>
       <div style={{ height: 1, background: "var(--ink-color-global-border-subtle)", margin: "9px 8px 0" }} />

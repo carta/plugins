@@ -309,12 +309,13 @@ export const GLOBAL_CSS = `
      label, per theme-with-ink/resources/components-sidenav.html's .sn__item.is-active. ── */
   .navitem { position: relative; border-radius: 0; background: transparent; transition: background-color .05s linear; }
   .navitem:hover { background: ${SHADE}; }
-  .navitem.active { background: var(--ink-color-global-surface-background-default); box-shadow: inset 3px 0 0 0 ${STRIPE}; font-weight: 600; }
+  .navitem.active { background: var(--ink-color-global-surface-background-default); box-shadow: inset 3px 0 0 0 ${STRIPE}; font-weight: 500; }
   .navitem.active:hover { background: ${SHADE}; }
-  /* Active row's icon sits on its own orange tile (dark glyph — I's color prop
-     handles the glyph itself; this only draws the tile). */
-  .navitem-icon { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 3px; flex: none; }
-  .navitem.active .navitem-icon { width: 22px; height: 22px; border-radius: 0; background: ${STRIPE}; }
+  /* Ink SideNav icon: a 16px glyph in a 22px tile (3px padding). The active row's tile
+     turns orange (dark glyph — I's color prop handles the glyph; this only draws the
+     tile). Corners stay square, unlike Ink's 2px radius. */
+  .navitem-icon { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; flex: none; }
+  .navitem.active .navitem-icon { background: ${STRIPE}; }
   .addslice:hover { background: ${SHADE} !important; }
 
   .statcell { transition: background .1s ${EASE}; border-radius: 0; }
