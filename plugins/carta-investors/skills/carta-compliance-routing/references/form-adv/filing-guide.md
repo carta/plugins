@@ -68,7 +68,7 @@ Use actual query result values — no placeholders. *Lowercase all JSON keys* �
 
 ```bash
 TMPDIR=$(uv run python -c "import tempfile; print(tempfile.gettempdir())")
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-form-adv/scripts/generate_form_adv_artifact.py \
+uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compliance-routing/scripts/generate_form_adv_artifact.py \
   --data "${TMPDIR}/form_adv_data.json" \
   --title "<FirmName> — Form ADV <Year>" \
   --out "${TMPDIR}/FormADV_<FirmName>_<Year>.html"
@@ -80,7 +80,7 @@ Run immediately after Step 2 (reuses the same JSON data file):
 
 ```bash
 TMPDIR=$(uv run python -c "import tempfile; print(tempfile.gettempdir())")
-uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-form-adv/scripts/form_adv_excel_generator.py \
+uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compliance-routing/scripts/form_adv_excel_generator.py \
   --data "${TMPDIR}/form_adv_data.json" \
   --title "<FirmName> — Form ADV <Year>" \
   --out "${TMPDIR}/FormADV_<FirmName>_<Year>.xlsx"
@@ -89,38 +89,7 @@ uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-form-adv/scripts/form_adv_excel_genera
 Tell the user the file path, substituting the resolved `$TMPDIR` value from the shell command above (e.g. `/tmp/FormADV_…` on macOS/Linux, `C:\Users\…\AppData\Local\Temp\FormADV_…` on Windows):
 > *"Your Form ADV Excel filing reference has been saved to `<resolved-tmpdir>/FormADV_<FirmName>_<Year>.xlsx`. Open it in Excel or Google Sheets. Blue cells are pre-filled from Carta — orange cells must be entered manually in IARD. The **Manual Fields** sheet lists every field requiring manual entry, organized by ADV item."*
 
-### Step 4 — Open in preview panel (Claude Desktop)
+### Step 4 — Surface the HTML file
 
-1. **Read** `.claude/launch.json` if it exists (parse it, keep existing configs). If absent, start with `{"version":"0.0.1","configurations":[]}`.
-
-2. **Upsert** this configuration (add or replace any entry whose `name` starts with `carta-form-adv-`):
-
-```json
-{
-  "name": "carta-form-adv-<firm_slug>",
-  "runtimeExecutable": "uv",
-  "runtimeArgs": [
-    "run", "python",
-    "${CLAUDE_PLUGIN_ROOT}/skills/carta-form-adv/scripts/preview_server.py"
-  ],
-  "autoPort": true
-}
-```
-
-3. **Write** the merged config back to `.claude/launch.json`.
-
-4. Call `preview_start` — Claude Desktop spawns the server and opens the panel.
-
-5. Call `preview_list` — find the entry whose name matches `carta-form-adv-<firm_slug>`. Extract `port` and `serverId`.
-
-6. Call `preview_eval` with `serverId` and:
-```javascript
-window.location.href = 'http://localhost:<port>/FormADV_<FirmName>_<Year>.html';
-```
-
-Tell the user:
-
-> *"Your Form ADV interactive filing guide is open in the preview panel. It has three tabs: Firm Overview (Items 5.D, 5.F, 5.H), Per-Fund Detail (Schedule D §7.B.(1) for each fund, expandable), and an IARD Checklist. Blue badges are pre-filled from Carta — orange badges need to be entered manually in IARD. Use your browser's Print → Save as PDF if you need a static copy for your records."*
-
-**Fallback (non-Desktop):** If `preview_start` is unavailable, tell the user the file path to open in their browser, substituting the resolved `$TMPDIR` value:
-> *"Your filing guide has been saved to `<resolved-tmpdir>/FormADV_<FirmName>_<Year>.html`. Open this file in your browser to view it. Use File → Print → Save as PDF to export."*
+Tell the user the file path, substituting the resolved `$TMPDIR` value:
+> *"Your filing guide has been saved to `<resolved-tmpdir>/FormADV_<FirmName>_<Year>.html`. Open this file in your browser to view it. It has three tabs: Firm Overview (Items 5.D, 5.F, 5.H), Per-Fund Detail (Schedule D §7.B.(1) for each fund, expandable), and an IARD Checklist. Blue badges are pre-filled from Carta — orange badges need to be entered manually in IARD. Use File → Print → Save as PDF to export."*

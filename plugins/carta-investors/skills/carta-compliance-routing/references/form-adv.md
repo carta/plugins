@@ -63,7 +63,7 @@ Read `${CLAUDE_PLUGIN_ROOT}/skills/carta-compliance-routing/references/form-adv/
 1. Build `form_adv_data.json` with the actual query result values (no placeholders).
 2. Run `generate_form_adv_artifact.py` → HTML artifact.
 3. Run `form_adv_excel_generator.py` → Excel filing reference.
-4. Open the HTML in Claude Desktop's preview panel via `preview_start` / `preview_list` / `preview_eval`. If preview is unavailable, surface the file path as a fallback.
+4. Surface the HTML file path so the user can open it in a browser.
 
 If any sub-step fails, see **Error Handling** — do not silently skip.
 
@@ -73,7 +73,7 @@ Send a brief plain-text message. Substitute the resolved values:
 
 > Pulled your Form ADV Part 1A data for **{reporting_date}** across **{N} funds**. Two artifacts generated:
 >
-> - **Interactive filing guide** — open in the preview panel _(or:_ saved to `<resolved-tmpdir>/FormADV_<FirmName>_<Year>.html`)
+> - **Interactive filing guide** — saved to `<resolved-tmpdir>/FormADV_<FirmName>_<Year>.html`; open in a browser
 > - **Excel filing reference** — `<resolved-tmpdir>/FormADV_<FirmName>_<Year>.xlsx`
 >
 > Blue = Carta-filled. Orange = manual IARD entry. The Manual Fields sheet (Excel) and IARD Checklist tab (HTML) list every field needing manual entry.
@@ -104,7 +104,6 @@ Then close with the Escalation Contract reminder and Response Closing.
 | Fund count mismatch | Excluded entity type (e.g., GP entity) | "I found [N] Fund/SPV entities. If you expected [M], some funds may be a different entity type — check with your Carta admin." |
 | HTML artifact script fails | Missing `uv`, malformed JSON, or unwritable output path | "I couldn't generate the interactive filing guide. Try again, or open an issue if it persists. The Excel file may still be available — check the path below." |
 | Excel generator fails | Missing `uv`/`openpyxl`, malformed JSON, or unwritable path | "I couldn't generate the Excel filing reference. The HTML guide may still be available. Try again or contact support." |
-| Preview panel won't open | `preview_start` unavailable, port conflict, or `launch.json` write failed | "The preview panel didn't open. The HTML file is at the path above — open it in your browser. Use File → Print → Save as PDF for export." |
 
 ---
 

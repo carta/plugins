@@ -27,12 +27,8 @@ allowed-tools:
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
-  - mcp__Claude_Preview__preview_start
-  - mcp__Claude_Preview__preview_list
-  - mcp__Claude_Preview__preview_eval
-  - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-form-adv/scripts/generate_form_adv_artifact.py *)
-  - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-form-adv/scripts/form_adv_excel_generator.py *)
-  - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-form-adv/scripts/preview_server.py *)
+  - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compliance-routing/scripts/generate_form_adv_artifact.py *)
+  - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-compliance-routing/scripts/form_adv_excel_generator.py *)
   - Bash(uv run python -c "import tempfile; print(tempfile.gettempdir())")
   - Write
   - Read
@@ -40,7 +36,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.73.3</carta-plugin>
+<carta-plugin>carta-investors:6.73.4</carta-plugin>
 
 # carta-compliance-routing — Compliance Router
 
