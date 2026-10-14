@@ -1,7 +1,7 @@
 {
   "carta-home-build": {
-    "version": "1.15.6",
-    "headline": "Payment statuses in the capital activity popup match the Carta web app's labels and colours."
+    "version": "1.15.7",
+    "headline": "Skill Directory micro apps show a Microapp pill that explains what a microapp is on hover."
   },
   "carta-workhub-build": {
     "version": "1.9.15",

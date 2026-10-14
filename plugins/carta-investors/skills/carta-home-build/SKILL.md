@@ -51,7 +51,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.73.4</carta-plugin>
+<carta-plugin>carta-investors:6.73.6</carta-plugin>
 
 # Carta Home — Build / Redeploy / Open
 
@@ -96,8 +96,8 @@ own sidebar tile.
   The skills come from the plugin's `.claude-plugin/skill-directory.json`, not the page:
   the build bakes them in as the first paint, and once the browser is idle the page asks
   carta-mcp (`plugin:list:skills`) for the published copy, so a skill that ships later
-  appears without a rebuild. A row tagged `"tag": "App"` is a micro app: it shows an
-  **App** pill and a line saying it launches in Claude Code, since the app is a local
+  appears without a rebuild. A row tagged `"tag": "App"` is a micro app: it shows a
+  **Microapp** pill (its hover tooltip says what a microapp is) and a line saying it launches in Claude Code, since the app is a local
   React app that a Cowork chat cannot start. See `docs/skill-directory.md` for the entry
   format; CI fails a published skill that has neither an entry nor an explicit `null`.
   **Entitlement-gated:** `fetchUserEnrichment()` calls `get_current_user`, logs the full

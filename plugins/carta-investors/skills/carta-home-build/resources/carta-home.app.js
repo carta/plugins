@@ -1469,8 +1469,11 @@ function switchTab(id) {
 
 
 // Micro apps are local React apps, so they only launch in Claude Code — the copied prompt
-// does nothing in a Cowork chat.
+// does nothing in a Cowork chat. APP_TAG is the `tag` value in skill-directory.json, which
+// pages already deployed match too; APP_TAG_LABEL is only what the pill reads.
 const APP_TAG = 'App';
+const APP_TAG_LABEL = 'Microapp';
+const APP_TAG_TIP = 'Microapps are interactive apps built for a specific job and loaded with your Carta data. Build one with a Carta-provided skill in Claude Code, then customize it with Claude to fit how you work.';
 const APP_LAUNCH_NOTE = 'Launches in Claude Code — paste this prompt there.';
 
 function dirCopyPrompt(btn) {
@@ -1506,9 +1509,13 @@ function renderDirectorySkill(s, firm) {
               <button class="dir-copy-btn" data-prompt="${text}" data-copied-label="${copiedLabel}" onclick="dirCopyPrompt(this)"><svg width="11" height="11" viewBox="0 0 16 16" fill="none"><rect x="5" y="5" width="9" height="9" rx="1" stroke="currentColor" stroke-width="1.4"/><path d="M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></button>
             </div>`;
   }).join('');
+  const tipId = `dir-tip-${escHtml(s.skill)}`;
+  const tag = isApp
+    ? ` <span class="dir-skill-tag" tabindex="0" aria-describedby="${tipId}">${APP_TAG_LABEL}<span class="dir-skill-tip" role="tooltip" id="${tipId}">${APP_TAG_TIP}</span></span>`
+    : '';
   return `
           <li class="dir-skill-item">
-            <div class="dir-skill-name">${escHtml(s.name)}${isApp ? ` <span class="dir-skill-tag">${APP_TAG}</span>` : ''}</div>
+            <div class="dir-skill-name">${escHtml(s.name)}${tag}</div>
             ${prompts}
             ${isApp ? `<div class="dir-skill-note">${APP_LAUNCH_NOTE}</div>` : ''}
           </li>`;
