@@ -19,7 +19,7 @@ model: inherit
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.16.7</carta-plugin>
+<carta-plugin>carta-crm:1.16.8</carta-plugin>
 
 # Adviser Tracker
 
@@ -49,25 +49,81 @@ Read `${CLAUDE_PLUGIN_ROOT}/references/gate-has-artifact-tool.md` (the plugin's 
 ## Step 1: Fetch the advisers
 
 1. Call `crm:get_deal_fields`.
-2. Pick the company or company-list field whose label mentions Mandate or bank, for example
-   "Mandate (bank)".
-3. Call the tracker with that field's id as `dealFieldId`:
+2. Pick the bank field by a fixed rule. Look only at company and company-list fields. Take the
+   first level that has a match:
+   1. the label mentions Mandate or bank, for example "Mandate (bank)";
+   2. the label mentions adviser, advisor, sell-side, sell side or M&A.
+
+   When several fields match at the same level, take the one with the shortest label, then the
+   first in field order. Never pick an introducer field.
+3. Plan the run with that field's id as `dealFieldId`. The answer holds `runId` and `shards`:
+
+```
+crm_call_tool({ "name": "crm:get_adviser_tracker_plan", "arguments": { "limit": 20, "dealFieldId": "<id of that field>" } })
+```
+
+4. Fan out. In ONE turn, as parallel tool calls in one message, call
+   `crm:get_adviser_tracker_relationships` once for every number in `shards` and
+   `crm:get_adviser_tracker_details` once. All of them go out together, never across turns.
+   Send the shard calls in any order. A plan has 10 to 20 shards, often more than banks. Never
+   assume one shard per bank. Calling a shard again redoes that shard.
+
+```
+crm_call_tool({ "name": "crm:get_adviser_tracker_relationships", "arguments": { "runId": "<runId>", "shard": <a number from shards> } })
+crm_call_tool({ "name": "crm:get_adviser_tracker_details", "arguments": { "runId": "<runId>" } })
+```
+
+   An error from a `crm:get_adviser_tracker_relationships` call or a
+   `crm:get_adviser_tracker_details` call, here or in the retry below, does not stop the run
+   unless its code is listed below. Go on to the result call below. It decides.
+
+5. Collect the result. It has the shape the build script reads:
+
+```
+crm_call_tool({ "name": "crm:get_adviser_tracker_result", "arguments": { "runId": "<runId>" } })
+```
+
+Each error carries a message prefix and a structured code. Handle these, from whichever call
+returns them:
+
+- **Incomplete.** Code `ADVISER_TRACKER_RUN_INCOMPLETE`, message prefix
+  `adviser-tracker-run-incomplete:`, details `{ missingShards: number[], missingDetails: boolean }`.
+  Call again only the parts the details name: the shard calls for `missingShards`, and the
+  details call when `missingDetails` is true. Send them in one turn, one time. Then call the
+  result again. When it is still incomplete, stop with the plain error below. Build nothing from
+  a partial result.
+- **Run not found.** Code `ADVISER_TRACKER_RUN_NOT_FOUND`. The run is unknown or expired. A run
+  part lives 15 minutes. Plan a new run with `crm:get_adviser_tracker_plan`, one time per skill
+  run. Then fan out and collect again. A second `ADVISER_TRACKER_RUN_NOT_FOUND` stops with the
+  plain error below.
+- **Unknown shard.** Code `ADVISER_TRACKER_UNKNOWN_SHARD`. Stop with the plain error below. Never
+  retry.
+- **Cache unavailable.** Code `ADVISER_TRACKER_CACHE_UNAVAILABLE`. The run store did not keep a
+  write. Make the single call below instead.
+
+The retry budgets are one incomplete retry and one new-plan retry per skill run. There are no
+other retries.
+
+When `crm:get_adviser_tracker_plan` is an unknown tool, this environment has no split tools. Make
+one call instead, and use its answer as the result:
 
 ```
 crm_call_tool({ "name": "crm:get_adviser_tracker", "arguments": { "limit": 20, "dealFieldId": "<id of that field>" } })
 ```
 
-When no field qualifies, leave `dealFieldId` out. Step 4 then carries one plain line in its
-notice: deals are counted from every company field.
+Step 4 carries one plain line in its notice that names the field used. When no field
+qualifies, leave `dealFieldId` out and say so in that line: deals are counted from every
+company field.
 
 Save the result to a file in the outputs directory with `Write`. When the host already returns
 a saved path, use that path.
 
-- **Not configured.** An unknown-tool error, or an error whose text starts
-  `adviser-tracker-not-configured:`. Build and publish nothing. Tell the user adviser tracking
-  is not turned on for the organization, and stop.
-- **Any other error.** Stop. Tell the user the adviser tracker could not be loaded right now.
-  One attempt per call, no retries, and never fill a gap from `search_deals`,
+- **Not configured.** An error whose text starts `adviser-tracker-not-configured:`, or an
+  unknown-tool error on the single call. Build and publish nothing. Tell the user adviser
+  tracking is not turned on for the organization, and stop.
+- **Any other error.** Except for a `crm:get_adviser_tracker_relationships` or
+  `crm:get_adviser_tracker_details` call, stop. Tell the user the adviser
+  tracker could not be loaded right now. Never fill a gap from `search_deals`,
   `search_companies` or any other tool.
 
 ## Step 2: Check the top bank
@@ -89,7 +145,7 @@ created over the three years, Tier 2 is the rest. Do not choose, change or overr
 ## Step 4: Build the page
 
 ```
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/adviser-tracker/scripts/build_tracker.py" --result <file> --notice "<the Step 1 field line and the Step 2 disagreement line, joined into one line; omitted when neither applies>" --out <outputs-directory>/adviser-tracker-<slug>.html
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/adviser-tracker/scripts/build_tracker.py" --result <file> --notice "<the Step 1 field line, plus the Step 2 disagreement line when there is one, joined into one line>" --out <outputs-directory>/adviser-tracker-<slug>.html
 ```
 
 `<slug>` is the organization lowercased with non-alphanumerics collapsed to `-`.

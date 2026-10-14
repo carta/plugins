@@ -3,7 +3,7 @@
 # requires-python = ">=3.10"
 # dependencies = []
 # ///
-"""Build the Adviser Tracker page from a saved `get_adviser_tracker` result, ready to publish."""
+"""Build the Adviser Tracker page from a saved adviser tracker result, ready to publish."""
 from __future__ import annotations
 
 import argparse
@@ -212,7 +212,7 @@ def render(data: dict) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--result", type=Path, help="the saved `get_adviser_tracker` result")
+    parser.add_argument("--result", type=Path, help="the saved adviser tracker result")
     parser.add_argument("--notice", help="one line shown above the table, such as a check that disagreed")
     parser.add_argument("--as-of", type=dt.date.fromisoformat, default=dt.date.today(), help="the date the data is as of (default today)")
     parser.add_argument("--out", type=Path, required=True)
