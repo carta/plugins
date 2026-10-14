@@ -110,10 +110,11 @@ Apply `SKILL.md` §Formatting rules.
 subheader, in the same root-first order. If the user targeted one entity
 by name (see `references/follow-up.md`), render only that entity's breakpoints.
 
-## Breakpoint drill table (chat only, on request)
+## Breakpoint drill table (chat only — printed with Show breakpoints)
 
-One table per drilled breakpoint, under a `#### {breakpoint.name}` subheader (beneath the entity's
-`### {entity name}` subheader when multi-entity). Sort `allocations` by
+One table per drilled breakpoint, under a `#### {breakpoint.name}` subheader, printed right after
+that entity's breakpoints table (beneath the entity's `### {entity name}` subheader when
+multi-entity). Sort `allocations` by
 `.allocated_proceeds.proceeds` descending.
 
 | Column            | Source                                                   |

@@ -37,7 +37,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.73.9</carta-plugin>
+<carta-plugin>carta-investors:6.73.10</carta-plugin>
 
 # Waterfall Modeling
 
@@ -270,8 +270,8 @@ and pass as the `name` field to `read_tool` (`call_tool` for `save_command`); ne
   (offered in the Step 6 follow-up menu). May be `null` or absent — when so, omit the
   update option from the follow-up menu.
 - `breakpoint_allocations_command` — **optional**; fetches one breakpoint's allocations
-  (offered after `Show breakpoints` in the Step 6 follow-up cuts). May be `null` or absent —
-  when so, don't offer it.
+  (`Show breakpoints` prints each breakpoint's holders with it). May be `null` or absent —
+  when so, `Show breakpoints` prints the breakpoint totals only.
 - `available_inputs[]` — one entry per input the run accepts. Each entry:
   - `option` — the **body key** to send in Step 5 (e.g. `"EQUITY_VALUE"`).
   - `label` — short human-readable name (e.g. "Equity value"). Show this

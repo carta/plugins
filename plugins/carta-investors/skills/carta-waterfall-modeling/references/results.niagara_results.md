@@ -182,7 +182,7 @@ cut handlers it dispatches to.
 - `"Show only my firm's holdings"` → fetch firm holders, filter the
   cached allocations per-node, and re-render. See "Firm-holders filter" below.
 
-- `"Show breakpoints"` → no fetch needed. `breakpoints` is cached per node from its
+- `"Show breakpoints"` → `breakpoints` is cached per node from its
   bootstrap (Step 6a/6b); the lean allocation pages return none. Render per
   `rendering.niagara_results.md` §Breakpoints table. **Multi-entity**: one
   breakpoints table per entity, in the same root-first order as the allocations
@@ -191,22 +191,28 @@ cut handlers it dispatches to.
   case-insensitively (substring match is fine for fuzzy disambiguation). If the
   match is ambiguous, ask via `AskUserQuestion` with the candidate entities. If
   unmatched, list the entities and ask again. **Single-entity**: render the one
-  breakpoints table without a subheader. In both cases, then offer the **Breakpoint drill**
-  below.
+  breakpoints table without a subheader. In both cases, then print **every** rendered
+  breakpoint's holders right after its entity's breakpoints table, per the **Breakpoint drill**
+  below — don't offer it first.
 
-## Breakpoint drill (on request — after Show breakpoints)
+## Breakpoint drill (with Show breakpoints, or on a direct ask)
 
-**Gate on `breakpoint_allocations_command`** (cached from Step 3). Absent or `null` → skip, back to
-the menu. Otherwise offer it via `AskUserQuestion` (`Show holders by breakpoint` · `Back to menu`).
-If the user asks for a breakpoint's holders directly, skip the offer and go straight to the pick.
+**Gate on `breakpoint_allocations_command`** (cached from Step 3). Absent or `null` → render the
+breakpoints table only and return to the menu.
 
-**Pick the breakpoint.** Multi-entity → pick the entity first (matched as in `"Show breakpoints"`
-above). Present that entity's cached `breakpoints[].name` as `AskUserQuestion` options **plus "All
-breakpoints"** (loops the call over every breakpoint, in declared order). One breakpoint → skip the
-picker. **More than 3** (names + "All breakpoints" would exceed 4 options) → list them compactly and
-take a **free-text** name matched against `breakpoints[].name`, or "all" for every breakpoint. On
-selection, fetch and render it in chat. Read `rendering.niagara_results.md` §Breakpoint drill table
-first, then:
+**Which breakpoints.**
+- **From `"Show breakpoints"`** → every breakpoint of every entity whose breakpoints table was just
+  rendered, in declared order. No picker. Before fetching, say one line, e.g. _"Fetching the
+  holders in each breakpoint…"_. **More than 20 breakpoints** across those entities → ask first via
+  `AskUserQuestion` (`All breakpoints` · `Pick one breakpoint` · `Back to menu`), since each
+  breakpoint is at least one call.
+- **Direct ask for one breakpoint's holders** (e.g. _"who gets paid in the second breakpoint?"_) →
+  match it against `breakpoints[].name` or its position (multi-entity: match the entity first, as in
+  `"Show breakpoints"` above). Ambiguous → list the candidates and take a **free-text** pick.
+  Fetch only that breakpoint.
+
+**Fetch concurrently** — one call per breakpoint (plus extra pages), never one at a time. Read
+`rendering.niagara_results.md` §Breakpoint drill table first, then:
 
 ```
 call_tool({"name": "<breakpoint_allocations_command with all ':' replaced by '__'>", "arguments": {
