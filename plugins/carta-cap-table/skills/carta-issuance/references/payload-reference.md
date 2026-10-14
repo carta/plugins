@@ -21,7 +21,7 @@ Contents: [Common fields](#common-fields-all-flows) ·
 |---|---|---|---|
 | `name` | always | string ≤ 256 | Full legal name |
 | `email` | always | valid email | |
-| `stakeholder_kind` | always | enum (uppercase) | `INDIVIDUAL` or `NON-INDIVIDUAL` — **case matters** |
+| `stakeholder_kind` | always | enum (uppercase) | `INDIVIDUAL` or `ORGANIZATION` — **case matters**. Never `NON-INDIVIDUAL`: the save drops it without an error and stores `INDIVIDUAL` |
 | `issue_date_relationship` | always | enum | See [Picklists](#picklists) |
 | `issue_date` | always, except a pending-board option grant | `YYYY-MM-DD` or `MM/DD/YYYY` | **Omit the key entirely when `needs_board_approval` is `true`.** `DraftOptionsIssueDateFieldValidator` rejects it: *"Issue date is not applicable for grants that are not board approved."* A grant takes its issue date from the board's approval, so there is none to send yet |
 | `board_approval_date` | certs: always. Grants: when `needs_board_approval = false`. **PIU: optional** | `YYYY-MM-DD` or `MM/DD/YYYY` | Usually ≤ `issue_date`. Grants: omit entirely when pending — server rejects empty string. **PIU has no ordering rule against `issue_date` and no pending state** — omit the key to issue with no date on record. |
@@ -142,7 +142,8 @@ Server-resolved, UI-only, or vestigial. Sending these raises `Unknown draft fiel
 
 ## Picklists
 
-**`stakeholder_kind`** (uppercase): `INDIVIDUAL` · `NON-INDIVIDUAL`.
+**`stakeholder_kind`** (uppercase): `INDIVIDUAL` · `ORGANIZATION`. `NON-INDIVIDUAL` is the bulk stakeholder
+import's label, not a draft value: the save drops it and stores `INDIVIDUAL`.
 
 **`issue_date_relationship`** (exact strings):
 

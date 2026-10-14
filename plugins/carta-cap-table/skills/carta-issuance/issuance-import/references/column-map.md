@@ -155,10 +155,10 @@ International Employee · Ex-International Employee · Investor · Officer · Ot
 `FAIR_MARKET_VALUE` / `OTHER` belong to a different carta-web surface.
 
 **`stakeholder_kind`** — `INDIVIDUAL` from *individual, person, natural person*;
-`NON-INDIVIDUAL` from *non individual, entity, organization, organisation,
-company, corporation, trust, llc*. Note the **hyphen**: it matches
-`lib/issuance_fields.py`'s `STAKEHOLDER_KIND_CHOICES`, not the Django enum's
-`ORGANIZATION`.
+`ORGANIZATION` from *non individual, entity, organization, organisation,
+company, corporation, trust, llc*. It matches `lib/issuance_fields.py`'s
+`STAKEHOLDER_KIND_CHOICES`. Never `NON-INDIVIDUAL`: that is the bulk stakeholder
+import's label, and the draft save drops it and stores `INDIVIDUAL`.
 
 **`option_type`** — ISO · NSO · INTL · EMI · CSOP · Unapproved ·
 Startup Concessions · Non-Concessional · ZEPO

@@ -473,7 +473,7 @@ def coerce_stakeholder_kind(value: Any) -> Optional[str]:
         return "INDIVIDUAL"
     if key in {"non individual", "nonindividual", "entity", "organization",
                "organisation", "company", "corporation", "trust", "llc"}:
-        return "NON-INDIVIDUAL"
+        return "ORGANIZATION"
     return None
 
 

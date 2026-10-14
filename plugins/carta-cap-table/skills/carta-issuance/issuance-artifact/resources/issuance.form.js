@@ -2294,7 +2294,11 @@ const ROW_TOOLS = 10;
 const TRASH = '<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.4" '
   + 'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 4.5h11M6.5 4.5V3a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v1.5'
   + 'M4 4.5l.7 8.6a1 1 0 0 0 1 .9h4.6a1 1 0 0 0 1-.9l.7-8.6M6.8 7v4.5M9.2 7v4.5"/></svg>';
-const KIND_OPTS = [["INDIVIDUAL", "Individual"], ["NON-INDIVIDUAL", "Entity"]];
+const KIND_OPTS = [["INDIVIDUAL", "Individual"], ["ORGANIZATION", "Entity"]];
+/** The draft save keeps only INDIVIDUAL / ORGANIZATION and stores anything else as
+    INDIVIDUAL, so the bulk-import spelling NON-INDIVIDUAL, wherever a row picked it
+    up (a prefill, a sheet), goes out as ORGANIZATION. */
+const wireKind = (k) => (k === "NON-INDIVIDUAL" ? "ORGANIZATION" : k);
 
 const rowRefused = (r) => Object.keys((S.srv.rows || {})[r.key] || {}).length
   || Object.keys((S.srv.fields || {})[r.key] || {}).length;
@@ -2764,7 +2768,7 @@ function rowValues(r) {
   // `temp_id` is the wire name for r.key: the server echoes it beside draft_pk.
   const d = { temp_id: r.key };
   // A resumed row whose kind the load did not carry keeps the one Carta stored.
-  if (!r.kindUnknown) d.stakeholder_kind = r.kind;
+  if (!r.kindUnknown) d.stakeholder_kind = wireKind(r.kind);
   put(d, "name", r.name.trim());
   put(d, "email", r.email.trim());
   put(d, "issue_date_relationship", r.relationship);

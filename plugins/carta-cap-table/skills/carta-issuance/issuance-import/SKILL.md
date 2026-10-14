@@ -11,7 +11,7 @@ allowed-tools: []
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.96.9</carta-plugin>
+<carta-plugin>carta-cap-table:6.96.10</carta-plugin>
 
 # issuance-import
 
@@ -216,8 +216,9 @@ Deterministic end to end.
   merge. A batch is one security type (carta-issuance hard rule 1).
 - **Values** — dates to `YYYY-MM-DD`; numbers stripped of thousands separators,
   currency symbols and parenthesised negatives; `Individual` / `Non Individual`
-  to `INDIVIDUAL` / `NON-INDIVIDUAL` (**hyphen** — matches
-  `lib/issuance_fields.py`'s `STAKEHOLDER_KIND_CHOICES`, not the Django enum);
+  to `INDIVIDUAL` / `ORGANIZATION` (matches `lib/issuance_fields.py`'s
+  `STAKEHOLDER_KIND_CHOICES`; never `NON-INDIVIDUAL`, which the draft save stores
+  as `INDIVIDUAL`);
   relationship, option type and grant reason matched exactly against
   [payload-reference.md § Picklists](../references/payload-reference.md#picklists).
 - **Out-of-scope rows skipped, not coerced.** An importer sheet can carry RSUs,

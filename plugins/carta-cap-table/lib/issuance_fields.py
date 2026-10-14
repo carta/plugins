@@ -46,9 +46,10 @@ ATO_SO_TYPES = {"Startup Concessions", "Non-Concessional", "ZEPO"}
 # but "No" is a valid answer.
 EMPLOYMENT_RELATED_SO_TYPES = {"Unapproved"}
 
-# The MCP `stakeholder_kind` contract (payload-reference.md) —
-# INDIVIDUAL/NON-INDIVIDUAL, not the raw Django enum's ORGANIZATION.
-STAKEHOLDER_KIND_CHOICES = [("INDIVIDUAL", "Individual"), ("NON-INDIVIDUAL", "Non-individual")]
+# The MCP `stakeholder_kind` contract (payload-reference.md): the draft column's own
+# INDIVIDUAL/ORGANIZATION. The save drops any other value without an error and stores
+# INDIVIDUAL, so an entity sent as NON-INDIVIDUAL is issued as a person.
+STAKEHOLDER_KIND_CHOICES = [("INDIVIDUAL", "Individual"), ("ORGANIZATION", "Non-individual")]
 
 # `rule_144_difference_reason` picklist (payload-reference.md). Required whenever
 # the Rule 144 date differs from the issue date.
