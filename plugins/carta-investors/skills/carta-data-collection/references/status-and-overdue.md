@@ -177,9 +177,9 @@ Filing it under Complete tells a user everything is fine about the one row where
 firm that believes a company reported when it did not is worse off than one told plainly.
 
 **Do not call it final either.** A closed period can be reopened, which lets the company submit
-after the fact — so this is a recoverable outcome, not a dead end. Reopening is not built into this
-skill, and `references/edit-requests.md` does not write status. Say that it can be reopened in
-Carta and that you cannot do it here; do not offer to.
+after the fact — so this is a recoverable outcome, not a dead end. Reopening is
+`references/reopen-request.md`, and it is offered below the report like the other next steps; it
+is not `references/edit-requests.md`, which does not write status.
 
 Dates as `Mmm DD, YYYY`. Follow the tables with the counts — not sent, outstanding, needing review,
 complete, and closed without data — because that is the sentence the user repeats to someone else.
@@ -213,11 +213,12 @@ the options the report earned:
 | Anything is past due | Follow up on the past-due ones | Step 4 |
 | Anything is `requested` and not yet due | Chase the not-yet-due ones too | Step 4 |
 | Anything is in Not sent yet | Send requests | `references/send-request.md` |
+| Anything is in Closed without data | Reopen it so the company can still submit | `references/reopen-request.md` |
 | Always | Review what has come in | `references/deep-link.md`, sent requests |
 
-**Four is the ceiling and this list is exactly four**, so every option has to be one the report
+**Five is the ceiling and this list is exactly five**, so every option has to be one the report
 earned. Drop the ones with no rows behind them rather than offering an action against an empty set,
-and never add a fifth.
+and never add a sixth.
 
 **Every count in an option is the count that action will actually email.** Only `requested` and
 `overdue` can be chased at all, so an option offering to follow up on six when four are reachable is
@@ -272,8 +273,10 @@ Step 4.
 
 ## Step 4 — Chase
 
-Only for `requested` and `overdue`. Those are the two statuses a firm may still act on; anything
-else means the company has already responded or Carta is mid-way through the answer.
+Only for `requested` and `overdue`. Those are the two statuses a firm may still chase; anything
+else means the company has already responded or Carta is mid-way through the answer. A request the
+company answered, or one that closed with nothing, is reopened instead —
+`references/reopen-request.md`.
 
 **The Outstanding table is wider than what can be chased.** It also holds `collecting` and
 `processing`, where the company has already sent something. "Chase the outstanding ones" therefore

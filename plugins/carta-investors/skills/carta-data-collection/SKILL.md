@@ -9,9 +9,10 @@ description: >
   requirements ("always ask Meetly for a board deck"), changes to either ("push back the due date",
   "stop the recurring requests"), the fiscal year ("why does Q1 cover the wrong months"), status
   ("who has not sent their numbers", "who is overdue", "what came in"), reminders ("follow up on
-  those"), metrics of the firm's own ("start collecting monthly active users"), and document
-  types of the firm's own ("ask them for an insurance certificate"), and contacts — who is asked
-  for the data and who is copied ("add Dana to these ten companies", "take Rey off all of them").
+  those"), reopening an answered request ("let Meetly resubmit"), metrics of the firm's own
+  ("collect monthly active users"), document types of the firm's own ("ask for an insurance
+  certificate"), and contacts — who is asked for the data and who is copied ("add Dana to these
+  companies").
 user-invocable: true
 model: inherit
 allowed-tools:
@@ -41,7 +42,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.72.18</carta-plugin>
+<carta-plugin>carta-investors:6.73.0</carta-plugin>
 
 # Data collection
 
@@ -188,6 +189,7 @@ opens with — take it from there rather than from however the user happened to 
 | Know what each company sent for a period and what is missing — "which documents came in", "who has not sent their board deck", a document submission tracker | `references/submissions.md` |
 | See the files a company uploaded — names, dates, download | `references/submissions.md`, Step 4 alone |
 | Chase the companies that have not answered | `references/status-and-overdue.md`, from Step 1 |
+| Reopen a request a company already answered, or one that closed with nothing submitted, so it can submit again — "let them resubmit", "reopen the portal" | `references/reopen-request.md` |
 | Collect a number Carta does not offer | `references/custom-metrics.md` |
 | Ask for a document Carta has no type for | `references/document-types.md` |
 | Know who is contacted about a company | `references/contacts.md`, Step 1 alone |

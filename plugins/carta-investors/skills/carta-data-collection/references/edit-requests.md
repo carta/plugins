@@ -76,7 +76,8 @@ the rest.
 `due_date` must be in the future.
 
 **The window is sent and not answered.** A request the company has already responded to returns
-409. Report that plainly — the answer is in, so the request is no longer the thing to change.
+409. Report that plainly — the answer is in, so the request is no longer the thing to change. If
+the user wants the company to submit again, that is `references/reopen-request.md`.
 
 ### A4 — Confirm what it asks for now
 
