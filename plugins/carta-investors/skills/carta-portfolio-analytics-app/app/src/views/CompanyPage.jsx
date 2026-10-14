@@ -332,20 +332,21 @@ function ReturnsBlock({ data, company }) {
   );
 }
 
-/** The cap table when there is one, then Holdings whenever the firm has positions
- *  or a per-fund ownership split to show. */
+/** The cap table when there is one, with Holdings — whenever the firm has positions
+ *  or a per-fund ownership split to show — placed inside it, just above the
+ *  liquidation stack. With no cap table, Holdings stands alone. */
 function CapTablePanel({ data, company }) {
   const src = holdingsSource(data);
   const showHoldings = soiLines(company).length > 0 || ownershipFunds(company).length > 0;
+  const holdings = showHoldings && (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <SectionHeader>Holdings</SectionHeader>
+      <Holdings data={data} company={company} src={src} />
+    </div>
+  );
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: SECTION_GAP }}>
-      {hasCapTable(company) && <CapTable company={company} />}
-      {showHoldings && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <SectionHeader>Holdings</SectionHeader>
-          <Holdings data={data} company={company} src={src} />
-        </div>
-      )}
+      {hasCapTable(company) ? <CapTable company={company} holdings={holdings} /> : holdings}
     </div>
   );
 }

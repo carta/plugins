@@ -545,6 +545,17 @@ export const GLOBAL_CSS = `
   .bench-bars { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
   @media (max-width: 860px) { .bench-bars { grid-template-columns: 1fr; gap: 18px; } }
 
+  /* Summary cap table, shaded the way Carta's Summary Cap Table export is: a tinted
+     header, bold group headings, a light band on each subtotal and a darker band
+     on the grand total. */
+  table.ledger.captable-summary thead tr { background: var(--total-row-bg); }
+  table.ledger.captable-summary tr.cap-group td { font-weight: 600; padding-top: 18px; }
+  table.ledger.captable-summary tr.cap-subtotal { background: var(--ink-color-global-surface-lightgray-default); }
+  table.ledger.captable-summary tr.cap-subtotal td:first-child { font-weight: 500; }
+  table.ledger.captable-summary tr.cap-grand-total { background: var(--ink-color-global-surface-lightgray-active); border-top: 1px solid ${BORDER_DEFAULT}; }
+  table.ledger.captable-summary tr.cap-grand-total td { font-weight: 600; }
+  table.ledger.captable-summary td.cap-indent { padding-left: 28px; }
+
   /* Elements only meant for the printed tearsheet (e.g. its title block) are
      hidden on screen and revealed under @media print. */
   .print-only { display: none; }
@@ -588,5 +599,40 @@ export const GLOBAL_CSS = `
     table.ledger tbody tr:hover { background: transparent; }
     /* Keep a section's card from splitting across a page break. */
     .card, [id^="card-"] { break-inside: avoid; }
+    /* …except the cap table, which runs several pages: held whole it jumps to a
+       fresh page and strands its heading on a blank one. Its blocks break instead. */
+    #card-captable { break-inside: auto; }
+    .print-block { break-inside: avoid; }
+    .keep-with-next { break-after: avoid; }
+
+    /* (?) help icons are hover tooltips — nothing to read on paper. */
+    .hint-icon { display: none !important; }
+    /* The cap table's six holdings tiles share one row; at screen size they crowd a
+       page's width, so shrink the whole row to fit. */
+    .holdings-banner { zoom: 0.78; }
+
+    /* Wide tables print whole: an overflow:auto wrapper clips at the page edge (and
+       prints its scrollbar), so un-clip it and let the table shrink to the page —
+       smaller type, tighter gutters, headers that wrap. Each row stays on one page
+       and the header repeats on the next. */
+    .print-scroll { overflow: visible !important; }
+    table.ledger.print-fit { width: 100% !important; }
+    table.ledger.print-fit thead { display: table-header-group; }
+    table.ledger.print-fit tr { break-inside: avoid; }
+    table.ledger.print-fit th, table.ledger.print-fit td {
+      white-space: normal !important;
+      font-size: 10.5px !important;
+      line-height: 15px !important;
+      padding: 6px 5px !important;
+      position: static !important;
+    }
+    /* Dates would otherwise break at their hyphens ("2025-" / "02-11"). */
+    table.ledger.print-fit td.keep-line { white-space: nowrap !important; }
+    table.ledger.print-fit th:first-child, table.ledger.print-fit td:first-child { padding-left: 8px !important; }
+    table.ledger.print-fit th:last-child, table.ledger.print-fit td:last-child { padding-right: 8px !important; }
+    table.ledger.captable-summary tr.cap-group td { padding-top: 12px !important; }
+    table.ledger.captable-summary td.cap-indent { padding-left: 18px !important; }
+    /* Print backgrounds so the header and total bands survive "background graphics off" defaults. */
+    table.ledger.captable-summary, table.ledger.print-fit tr.totrow { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   }
 `;

@@ -201,7 +201,7 @@ export const HelpCircleIcon = ({ size = 14, strokeWidth = 1.8, style }) => (
  *  warning triangle); `label` overrides the button's aria-label when it should
  *  differ from the tooltip text itself (e.g. an issue count instead of the hint). */
 export const HintIcon = ({ hint, label, icon: Icon = HelpCircleIcon, color = "var(--ink-color-global-feedback-info-strong)", iconSize = 16, strokeWidth = 1.6, linkHref, linkText, linkSuffix, style }) => (
-  <button type="button" aria-label={label ?? hint} data-tip={hint}
+  <button type="button" className="hint-icon" aria-label={label ?? hint} data-tip={hint}
     data-tip-link-href={linkHref} data-tip-link-text={linkText} data-tip-link-suffix={linkSuffix}
     style={{ display: "inline-flex", background: "none", border: "none", padding: 0, cursor: "default",
       color, ...style }}>

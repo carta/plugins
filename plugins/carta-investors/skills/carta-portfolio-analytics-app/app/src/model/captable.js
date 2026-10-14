@@ -75,6 +75,87 @@ export function groupedClasses(company) {
   return out;
 }
 
+// Sum of a field across rows; null when no row records it, so a subtotal never
+// shows a confident 0 for a figure Carta doesn't hold.
+function sumOrNull(rows, key) {
+  let s = null;
+  for (const r of rows) { const v = num(r[key]); if (v != null) s = (s || 0) + v; }
+  return s;
+}
+
+const subtotal = (label, rows) => ({
+  label,
+  authorized: sumOrNull(rows, "authorized"),
+  outstanding: sumOrNull(rows, "outstanding"),
+  fd: sumOrNull(rows, "fd"),
+  fdPct: sumOrNull(rows, "fdPct"),
+  preference: sumOrNull(rows, "preference"),
+});
+
+// Carta's summary lists classes in the order they were first issued (Seed, A, B…).
+const byIssue = (a, b) => {
+  const da = a.firstIssue || "", db = b.firstIssue || "";
+  if (da !== db) return !da ? 1 : !db ? -1 : da.localeCompare(db);
+  return String(a.name).localeCompare(String(b.name), "en", { numeric: true });
+};
+
+/**
+ * The cap table laid out the way Carta's Summary Cap Table export reads: common
+ * classes, preferred classes and warrants — each with its own total — then one
+ * block per equity plan, then the grand total. Each class carries its liquidation
+ * preference (preferenceOf), so the preferred total is the stack ahead of common.
+ *
+ * Convertibles are left out: until they convert they hold no shares and no
+ * preference, so every figure in their row would be blank.
+ *
+ * A plan's fully-diluted count is its options outstanding plus the shares still
+ * available, so the two plan lines split that count (and its ownership) in two.
+ */
+export function summarySections(company) {
+  const ct = capTableOf(company);
+  if (!ct) return { sections: [], plans: [], total: null };
+  const of = (pred) => ct.classes.filter(pred).sort(byIssue)
+    .map((c) => ({ ...c, preference: preferenceOf(c) }));
+  const groups = [
+    { id: "common", label: "Common stock classes", total: "Total common stock", rows: of(isCommon) },
+    { id: "preferred", label: "Preferred stock classes", total: "Total preferred stock", rows: of(isPreferred) },
+    { id: "other", label: "Other share classes", total: "Total other share classes",
+      rows: of((c) => c.type === "share_class" && !isCommon(c) && !isPreferred(c)) },
+    { id: "warrants", label: "Warrants", total: "Total warrants", rows: of((c) => c.type === "warrant_block") },
+  ];
+  const sections = groups.filter((g) => g.rows.length)
+    .map((g) => ({ id: g.id, label: g.label, rows: g.rows, total: subtotal(g.total, g.rows) }));
+
+  const plans = of((c) => c.type === "option_plan").map((p) => {
+    const fd = num(p.fd), avail = num(p.available), pct = num(p.fdPct);
+    const issued = fd != null && avail != null ? fd - avail : null;
+    const share = (part) => (part != null && fd && pct != null ? pct * (part / fd) : null);
+    return {
+      id: p.id, name: p.name, planSize: num(p.planSize),
+      lines: avail == null
+        // No availability recorded: one line carrying the plan's whole count.
+        ? [{ label: "Options and RSUs issued and outstanding", fd, fdPct: pct }]
+        : [
+          { label: "Options and RSUs issued and outstanding", fd: issued, fdPct: share(issued) },
+          { label: "Shares available for issuance under the plan", fd: avail, fdPct: share(avail) },
+        ],
+    };
+  });
+
+  const all = of(() => true);
+  return {
+    sections,
+    plans,
+    total: {
+      label: "Totals",
+      outstanding: sumOrNull(all.filter((c) => c.type === "share_class"), "outstanding"),
+      fd: sumOrNull(all, "fd"),
+      fdPct: sumOrNull(all, "fdPct"),
+      preference: sumOrNull(all, "preference"),
+    },
+  };
+}
+
 /** Company totals. `fdPct` is reported per class; summing it is the reconciliation. */
 export function capTotals(company) {
   const ct = capTableOf(company);
@@ -159,19 +240,31 @@ export function totalPreference(company) {
 export function overhang(company) {
   const pref = totalPreference(company);
   if (pref == null || pref <= 0) return null;
-  const mark = num(company.valuation && company.valuation.impliedValuation);
-  const post = num(company.lastRound && company.lastRound.postMoney);
-  const base = mark != null ? mark : post;
-  if (base == null || base <= 0) return { pref, base: null, basis: null, coverage: null, residual: null };
+  const now = companyValue(company);
+  if (!now) return { pref, base: null, basis: null, coverage: null, residual: null };
   return {
     pref,
-    base,
+    base: now.value,
+    basis: now.basis,
+    basisDate: now.date,
+    coverage: now.value / pref,
+    residual: now.value - pref,   // what would be left for common, before conversion
+  };
+}
+
+/** What the company is worth today: the fund's mark (implied valuation) when there
+ *  is one, else the last round's post-money. { value, basis, date } or null. */
+export function companyValue(company) {
+  const mark = num(company && company.valuation && company.valuation.impliedValuation);
+  const post = num(company && company.lastRound && company.lastRound.postMoney);
+  const value = mark != null ? mark : post;
+  if (value == null || value <= 0) return null;
+  return {
+    value,
     basis: mark != null ? "implied valuation" : "last round post-money",
-    basisDate: mark != null
+    date: mark != null
       ? (company.valuation && company.valuation.ppsAsOf) || null
       : (company.lastRound && company.lastRound.date) || null,
-    coverage: base / pref,
-    residual: base - pref,   // what would be left for common, before conversion
   };
 }
 
@@ -299,6 +392,25 @@ export function ppsAsOf(company, asOf = null) {
   let out = null;
   for (const m of marks) { if (m.d <= asOf) out = m; else break; }
   return out;
+}
+
+/**
+ * The company exit value at which the firm gets its money back (a 1× return):
+ * the cost still to recover — cost less proceeds already received — divided by
+ * the firm's fully-diluted ownership.
+ *
+ * Common stock equivalent (as-converted): every share is treated alike, so
+ * liquidation preferences, which pay preferred holders first, are ignored. Where
+ * the firm holds preferred the real break-even is usually lower. Returns { value: 0, recovered: true } once
+ * proceeds already cover cost, and null without cost or ownership.
+ */
+export function breakEvenValuation(company) {
+  const tot = soiTotals(company);
+  const own = num(company && company.ownership && company.ownership.pct);
+  if (!tot || !(tot.cost > 0) || own == null || own <= 0) return null;
+  const toRecover = tot.cost - tot.proceeds;
+  if (toRecover <= 0) return { value: 0, recovered: true };
+  return { value: toRecover / own, recovered: false };
 }
 
 /** SOI totals — cost, value and proceeds across the company's assets. */

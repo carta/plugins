@@ -1,12 +1,12 @@
 // Cap table panels: the company's capital structure with its recorded rights, and the
 // firm's holdings in it (fund-admin Schedule of Investments with per-fund ownership).
 import { FS, sans, mono, MICRO } from "../ui/theme.js";
-import { withCommas } from "../ui/format.js";
+import { withCommas, currencySymbol } from "../ui/format.js";
 import { StatBar, Badge, SectionHeader, HintIcon } from "../ui/components.jsx";
 import { fmtVal } from "../ui/charts.jsx";
 import {
   groupedClasses, capTotals, preferenceStack, totalPreference,
-  overhang, isPreferred,
+  overhang, isPreferred, summarySections, breakEvenValuation, companyValue,
   soiLines, soiTotals, fundOwnership, ownershipFunds,
 } from "../model/captable.js";
 
@@ -16,6 +16,16 @@ const NEG = "var(--ink-color-global-feedback-negative-strong)";
 const qty = (v) => (v == null || !Number.isFinite(v) ? "—" : Math.round(v).toLocaleString("en-US"));
 const pct = (v) => (v == null || !Number.isFinite(v) ? "—" : withCommas((v * 100).toFixed(2)) + "%");
 const money = (v) => (v == null || !Number.isFinite(v) ? "—" : fmtVal(v, "Dollar"));
+// Carta records cash raised in USD (SUMMARY_CAP_TABLE's cash_raised:USD), whatever
+// the firm's own currency — so it is labelled and formatted as USD, in full.
+const usd = (v) => (v == null || !Number.isFinite(v) ? "—" : fmtVal(v, "Dollar", null, "USD"));
+// Blank rather than "—" in the summary grid: an empty cell is how Carta's export
+// shows a figure that doesn't apply to the row.
+const qtyOrBlank = (v) => (v == null || !Number.isFinite(v) ? "" : qty(v));
+const pctOrBlank = (v) => (v == null || !Number.isFinite(v) ? "" : pct(v));
+// Full amount in the firm's display currency — the same basis as the liquidation stack.
+const moneyFullOrBlank = (v) => (v == null || !Number.isFinite(v) ? ""
+  : (v < 0 ? "−" : "") + currencySymbol() + Math.round(Math.abs(v)).toLocaleString("en-US"));
 // SOI asset class enum ("PREFERRED_EQUITY") -> display label ("Preferred equity").
 const assetClassLabel = (v) => v ? v.toLowerCase().split("_").map((w, i) => i === 0 ? w[0].toUpperCase() + w.slice(1) : w).join(" ") : "—";
 // Per-line MOIC — same formula as soiTotals' aggregate: (value + proceeds) / cost.
@@ -47,47 +57,168 @@ const tdR = { ...td, textAlign: "right", ...mono };
 
 /* ---------- 1. the cap table: structure, rights & preferences, liquidation stack ---------- */
 
-/** The banner's stats: the four structure figures, then — when the company has
- *  preferred classes and a value to compare them to — the four preference figures. */
-function bannerStats(t, over) {
-  const stats = [
-    { label: "Fully diluted", value: qty(t.fd), sub: `${t.classes} security classes` },
-    { label: "Outstanding", value: qty(t.outstanding) },
-    { label: "Authorized", value: qty(t.authorized) },
-    { label: "Cash raised", value: money(t.cashRaised), sub: "across all classes" },
-  ];
-  if (over && over.base != null) {
+const HINT_BREAK_EVEN = "Common stock equivalent: the company sale price at which the firm gets back what it put in (1×) if every share — preferred included — is treated as converted to common. Cost not yet returned ÷ the firm's fully-diluted ownership. Liquidation preferences are left out; they pay preferred holders first, so where the firm holds preferred its real break-even is usually lower.";
+
+/** The break-even tile. Green when today's company value clears it, red when it
+ *  doesn't; the comparison itself sits in the hint so the tile stays one figure. */
+function breakEvenStat(company) {
+  const label = "Break-even";
+  const be = breakEvenValuation(company);
+  if (!be) return { label, value: "—", hint: `${HINT_BREAK_EVEN} Needs cost and ownership on file.` };
+  if (be.recovered) return { label, value: "Reached", color: POS, hint: `${HINT_BREAK_EVEN} Proceeds already cover cost.` };
+  const now = companyValue(company);
+  return {
+    label, value: money(be.value),
+    hint: now ? `${HINT_BREAK_EVEN} Today: ${money(now.value)} (${now.basis}).` : HINT_BREAK_EVEN,
+    color: now ? (now.value >= be.value ? POS : NEG) : undefined,
+  };
+}
+
+/** The banner: the firm's position in the company — its ownership, then the
+ *  Schedule-of-Investments totals when it has fund-admin holdings. One figure per
+ *  tile, detail in the hints. Empty when the firm holds nothing recorded here. */
+function holdingsStats(company) {
+  const own = company.ownership || {};
+  const funds = ownershipFunds(company);
+  const tot = soiTotals(company);
+  const stats = [];
+  if (own.pct != null) {
+    stats.push({ label: "Ownership", value: pct(own.pct),
+      hint: `The firm's fully-diluted ownership${funds.length > 1 ? `, summed across its ${funds.length} funds` : ""}.` });
+  }
+  if (tot) {
     stats.push(
-      { label: "Preference stack", value: money(over.pref) },
-      { label: `Company value (${over.basis})`, value: money(over.base),
-        sub: over.basisDate ? `as of ${over.basisDate}` : "" },
-      { label: "Covers the stack", value: over.coverage == null ? "—" : over.coverage.toFixed(2) + "×",
-        color: over.coverage >= 1 ? POS : NEG,
-        hint: "Company value ÷ preference stack. Below 1.0× means a sale at today's value wouldn't cover what preferred holders are owed, and common would get nothing." },
-      { label: "Left for common", value: money(over.residual), color: over.residual >= 0 ? POS : NEG,
-        sub: over.residual >= 0 ? "before conversion" : "common under water" },
+      { label: "Cost", value: money(tot.cost) },
+      { label: "Value", value: money(tot.value) },
+      { label: "Unrealized", value: money(tot.unrealized), color: tot.unrealized >= 0 ? POS : NEG },
+      breakEvenStat(company),
+      { label: "Multiple", value: tot.moic == null ? "—" : tot.moic.toFixed(2) + "×", hint: "(Value + proceeds) ÷ cost." },
     );
   }
   return stats;
+}
+
+/** One line under the liquidation stack: how the company's value compares to it. */
+function StackCoverage({ over }) {
+  if (!over) return null;
+  const note = { ...sans, fontSize: FS.small, color: MICRO, lineHeight: 1.5 };
+  if (over.base == null) {
+    return <div style={note}>No mark or last-round post-money recorded, so the preference stack can't be compared to a company value.</div>;
+  }
+  const covered = over.coverage >= 1;
+  return (
+    <div style={note}>
+      Company value ({over.basis}{over.basisDate ? `, as of ${over.basisDate}` : ""}) of {money(over.base)} covers the stack{" "}
+      <strong style={{ color: covered ? POS : NEG }}>{over.coverage.toFixed(2)}×</strong>, leaving{" "}
+      <strong style={{ color: over.residual >= 0 ? POS : NEG }}>{money(over.residual)}</strong>{" "}
+      {over.residual >= 0 ? "for common before conversion" : "— common is under water"}.
+    </div>
+  );
 }
 
 /** Preference a preferred class is owed: shares × OIP × multiple; null without an OIP. */
 const classPreference = (c) => (c.outstanding != null && c.oip != null
   ? c.outstanding * c.oip * (c.multiplier == null ? 1 : c.multiplier) : null);
 
-/** Share classes: structure columns for every class, rights columns filled for preferred. */
-function ShareClassTable({ rows }) {
+/** "(converting at 1 to 1.0526)" — Carta's own suffix for a class that doesn't convert 1:1. */
+const conversionNote = (c) => {
+  const cr = c.conversionRatio;
+  if (c.type !== "share_class" || cr == null || !Number.isFinite(cr) || Math.abs(cr - 1) < 1e-9) return null;
+  return `converting at 1 to ${Number(cr.toFixed(6))}`;
+};
+
+// Names stay on one line on screen, as in Carta's export; the print rules let them wrap to fit the page.
+const tdLabel = td;
+// Two-line figure headers, as in the export ("Shares issued / and outstanding"), keep the grid narrow.
+const thWrap = { ...thR, whiteSpace: "normal", verticalAlign: "bottom", width: "13%" };
+
+/** One subtotal or total line of the summary grid. */
+function SummaryTotalRow({ t, grand }) {
   return (
-    <table className="ledger sheet" style={{ width: "100%", ...sans }}>
+    <tr className={grand ? "cap-grand-total no-row-hover" : "cap-subtotal no-row-hover"}>
+      <td style={tdLabel}>{t.label}</td>
+      <td style={tdR}>{qtyOrBlank(t.authorized)}</td>
+      <td style={tdR}>{qtyOrBlank(t.outstanding)}</td>
+      <td style={tdR}>{qtyOrBlank(t.fd)}</td>
+      <td style={tdR}>{pctOrBlank(t.fdPct)}</td>
+      <td style={tdR}>{moneyFullOrBlank(t.preference)}</td>
+    </tr>
+  );
+}
+
+/** The cap table in the layout of Carta's Summary Cap Table export. */
+function SummaryCapTable({ company }) {
+  const { sections, plans, total } = summarySections(company);
+  const groupRow = (key, label, authorized) => (
+    <tr key={key} className="cap-group no-row-hover">
+      <td style={tdLabel}>{label}</td>
+      <td style={tdR}>{qtyOrBlank(authorized)}</td>
+      <td style={tdR} colSpan={4} />
+    </tr>
+  );
+  return (
+    <table className="ledger sheet captable-summary print-fit" style={{ width: "100%", ...sans }}>
       <thead>
         <tr>
           <th style={th}>Security class</th>
-          <th style={th}>Type</th>
+          <th style={thWrap}>Shares authorized</th>
+          <th style={thWrap}>Issued and outstanding</th>
+          <th style={thWrap}><ThHint hint={HINT_FD} right>Fully diluted shares</ThHint></th>
+          <th style={thWrap}><ThHint hint={HINT_FD_PCT} right>Fully diluted ownership</ThHint></th>
+          <th style={thWrap}><ThHint hint={HINT_PREFERENCE} right>Liquidation preference</ThHint></th>
+        </tr>
+      </thead>
+      <tbody>
+        {sections.map((s) => [
+          groupRow(`${s.id}-h`, s.label),
+          ...s.rows.map((c) => {
+            const note = conversionNote(c);
+            return (
+              <tr key={c.id}>
+                <td className="cap-indent" style={tdLabel}>
+                  {c.name}
+                  {note && <span style={{ color: MICRO, fontSize: FS.small }}> ({note})</span>}
+                </td>
+                <td style={tdR}>{qtyOrBlank(c.authorized)}</td>
+                <td style={tdR}>{qtyOrBlank(c.outstanding)}</td>
+                <td style={tdR}>{qtyOrBlank(c.fd)}</td>
+                <td style={tdR}>{pctOrBlank(c.fdPct)}</td>
+                {/* A preferred class without an original issue price has no computable preference: "—", not blank. */}
+                <td style={tdR} data-tip={isPreferred(c) && c.preference == null ? "Needs outstanding shares and an original issue price." : undefined}>
+                  {isPreferred(c) && c.preference == null ? "—" : moneyFullOrBlank(c.preference)}
+                </td>
+              </tr>
+            );
+          }),
+          <SummaryTotalRow key={`${s.id}-t`} t={s.total} />,
+        ])}
+        {plans.map((p) => [
+          groupRow(`${p.id}-h`, p.name, p.planSize),
+          ...p.lines.map((l, i) => (
+            <tr key={`${p.id}-${i}`} className="cap-subtotal no-row-hover">
+              <td className="cap-indent" style={tdLabel}>{l.label}</td>
+              <td style={tdR} colSpan={2} />
+              <td style={tdR}>{qtyOrBlank(l.fd)}</td>
+              <td style={tdR}>{pctOrBlank(l.fdPct)}</td>
+              <td style={tdR} />
+            </tr>
+          )),
+        ])}
+        {total && <SummaryTotalRow t={total} grand />}
+      </tbody>
+    </table>
+  );
+}
+
+/** Rights and preferences of the preferred classes, most senior first. */
+function PreferredRightsTable({ rows }) {
+  return (
+    <table className="ledger sheet print-fit" style={{ width: "100%", ...sans }}>
+      <thead>
+        <tr>
+          <th style={th}>Security class</th>
           <th style={thR}><ThHint hint={HINT_SENIORITY} right>Rank</ThHint></th>
-          <th style={thR}>Outstanding</th>
-          <th style={thR}><ThHint hint={HINT_FD} right>Fully diluted</ThHint></th>
-          <th style={thR}><ThHint hint={HINT_FD_PCT} right>FD %</ThHint></th>
-          <th style={thR}><ThHint hint={HINT_OIP} right>OIP</ThHint></th>
+          <th style={thR}><ThHint hint={HINT_OIP} right>Original issue price</ThHint></th>
           <th style={thR}>Multiple</th>
           <th style={th}><ThHint hint={HINT_PARTICIPATING}>Participating</ThHint></th>
           <th style={th}><ThHint hint={HINT_DIVIDEND}>Dividend</ThHint></th>
@@ -96,29 +227,23 @@ function ShareClassTable({ rows }) {
       </thead>
       <tbody>
         {rows.map((c) => {
-          const pref = isPreferred(c);
-          const owed = pref ? classPreference(c) : null;
+          const owed = classPreference(c);
           return (
             <tr key={c.id}>
-              <td style={td}>{c.name}</td>
-              <td style={td}>{c.kind || "—"}</td>
-              <td style={tdR}>{pref && c.seniority != null ? c.seniority : "—"}</td>
-              <td style={tdR}>{qty(c.outstanding)}</td>
-              <td style={tdR}>{qty(c.fd)}</td>
-              <td style={{ ...tdR, fontWeight: 600 }}>{pct(c.fdPct)}</td>
-              {/* Common and other non-preferred classes carry no preference terms: blank, not "—". */}
-              <td style={tdR}>{pref ? (c.oip == null ? "—" : fmtVal(c.oip, "Dollar")) : ""}</td>
-              <td style={tdR}>{pref ? (c.multiplier == null ? "1×" : c.multiplier.toFixed(2).replace(/\.00$/, "") + "×") : ""}</td>
+              <td style={tdLabel}>{c.name}</td>
+              <td style={tdR}>{c.seniority != null ? c.seniority : "—"}</td>
+              <td style={tdR}>{c.oip == null ? "—" : fmtVal(c.oip, "Dollar")}</td>
+              <td style={tdR}>{c.multiplier == null ? "1×" : c.multiplier.toFixed(2).replace(/\.00$/, "") + "×"}</td>
               <td style={td}>
-                {!pref ? "" : c.participating === true
+                {c.participating === true
                   ? `Yes${c.preferenceCap != null ? ` · ${c.preferenceCap}× cap` : ""}`
                   : c.participating === false
                     ? "No"
                     : <span data-tip="Not recorded — this is not the same as non-participating." style={{ cursor: "help" }}>—</span>}
               </td>
-              <td style={td}>{pref ? (c.dividendCoupon ? `${c.dividendCoupon}% ${c.dividendType || ""}`.trim() : "—") : ""}</td>
-              <td style={tdR} data-tip={pref && owed == null ? "Needs outstanding shares and an original issue price." : undefined}>
-                {pref ? money(owed) : ""}
+              <td style={td}>{c.dividendCoupon ? `${c.dividendCoupon}% ${c.dividendType || ""}`.trim() : "—"}</td>
+              <td style={tdR} data-tip={owed == null ? "Needs outstanding shares and an original issue price." : undefined}>
+                {money(owed)}
               </td>
             </tr>
           );
@@ -128,49 +253,12 @@ function ShareClassTable({ rows }) {
   );
 }
 
-/** Option plans, warrants and other non-share equity: structure columns only. */
-function EquityGroupTable({ group }) {
+function LiquidationStack({ tiers, total, over }) {
   return (
-    <table className="ledger sheet" style={{ width: "100%", ...sans }}>
-      <thead>
-        <tr>
-          <th style={th}>Security class</th>
-          <th style={th}>Type</th>
-          <th style={thR}>Outstanding</th>
-          <th style={thR}><ThHint hint={HINT_FD} right>Fully diluted</ThHint></th>
-          <th style={thR}><ThHint hint={HINT_FD_PCT} right>FD %</ThHint></th>
-        </tr>
-      </thead>
-      <tbody>
-        {group.rows.map((c) => (
-          <tr key={c.id}>
-            <td style={td}>{c.name}</td>
-            <td style={td}>{c.kind || "—"}</td>
-            <td style={tdR}>{qty(c.outstanding)}</td>
-            <td style={tdR}>{qty(c.fd)}</td>
-            <td style={{ ...tdR, fontWeight: 600 }}>{pct(c.fdPct)}</td>
-          </tr>
-        ))}
-        {group.id === "option_plan" && group.rows.some((r) => r.available != null) && (
-          <tr>
-            <td colSpan={5} style={{ ...td, color: MICRO, fontSize: FS.small, fontStyle: "italic" }}>
-              Unallocated pool:{" "}
-              {qty(group.rows.reduce((s, r) => s + (r.available || 0), 0))} shares still available to grant
-              — already inside the fully-diluted count.
-            </td>
-          </tr>
-        )}
-      </tbody>
-    </table>
-  );
-}
-
-function LiquidationStack({ tiers, total }) {
-  return (
-    <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+    <section className="print-block" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <SectionHeader>Liquidation stack — paid in this order</SectionHeader>
-      <div style={{ overflow: "auto" }}>
-        <table className="ledger sheet" style={{ width: "100%", ...sans }}>
+      <div className="print-scroll" style={{ overflow: "auto" }}>
+        <table className="ledger sheet print-fit" style={{ width: "100%", ...sans }}>
           <thead>
             <tr>
               <th style={th}><ThHint hint={HINT_SENIORITY}>Rank</ThHint></th>
@@ -201,73 +289,77 @@ function LiquidationStack({ tiers, total }) {
           </tbody>
         </table>
       </div>
+      <StackCoverage over={over} />
     </section>
   );
 }
 
-export function CapTable({ company }) {
+export function CapTable({ company, holdings = null }) {
   const groups = groupedClasses(company);
   const t = capTotals(company);
   // Callers gate on hasCapTable; the panel still must not throw on t.fd if used directly.
   if (!t) return null;
   const shares = groups.find((g) => g.id === "share_class");
-  // Convertibles carry no fully-diluted quantity until they convert, so they get
-  // their own block instead of a row of zeroes in the ownership table.
-  const otherEquity = groups.filter((g) => g.id !== "share_class" && g.id !== "note_block");
   const notes = groups.find((g) => g.id === "note_block");
-  const hasPreferred = !!(shares && shares.rows.some(isPreferred));
+  const preferred = shares ? shares.rows.filter(isPreferred) : [];
+  const hasPreferred = preferred.length > 0;
   const over = hasPreferred ? overhang(company) : null;
+  const stats = holdingsStats(company);
 
   return (
-    // Each block — banner, one table with its heading, the stack, the notes — is its own section.
+    // Each block — banner, the summary grid, each detail table with its heading, the stack — is its own section.
     <div style={{ display: "flex", flexDirection: "column", gap: SECTION_GAP }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {/* Four tiles per row: structure figures on the first, preference figures on the second. */}
-        <StatBar style={{ marginTop: 14 }} stats={bannerStats(t, over)} gap="22px 0" itemStyle={{ flex: "1 1 22%", minWidth: "22%" }} />
-        <div style={{ ...sans, fontSize: FS.small, color: MICRO, display: "flex", gap: 16, flexWrap: "wrap" }}>
-          {t.asOf && <span>Cap table as of {t.asOf}</span>}
-          {hasPreferred && over && over.base == null && (
-            <span>No mark or last-round post-money recorded, so the preference stack can't be compared to a company value.</span>
-          )}
-        </div>
-      </div>
-
-      {shares && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <SectionHeader>{shares.label}</SectionHeader>
-          <div style={{ overflow: "auto" }}><ShareClassTable rows={shares.rows} /></div>
+      {stats.length > 0 && (
+        // StatBar's card around its bare row: content-sized tiles spread space-between give equal
+        // insets at both ends and equal gaps; equal one-line labels keep the figures level.
+        <div className="card stat-bar print-block holdings-banner" style={{ marginTop: 14, padding: "18px 28px" }}>
+          <StatBar bare stats={stats} gap="22px 16px" labelLines={1}
+            style={{ justifyContent: "space-between" }} itemStyle={{ flex: "none", minWidth: 0, padding: 0 }} />
         </div>
       )}
 
-      {otherEquity.map((g) => (
-        <div key={g.id} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <SectionHeader>{g.label}</SectionHeader>
-          <div style={{ overflow: "auto" }}><EquityGroupTable group={g} /></div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: stats.length ? 0 : 14 }}>
+        <div className="keep-with-next" style={{ display: "flex", alignItems: "baseline", gap: 16, flexWrap: "wrap" }}>
+          <SectionHeader>Summary cap table</SectionHeader>
+          <span style={{ ...sans, fontSize: FS.small, color: MICRO }}>
+            {t.asOf ? `As of ${t.asOf} · ` : ""}{t.classes} security classes
+          </span>
         </div>
-      ))}
+        <div className="print-scroll" style={{ overflow: "auto" }}><SummaryCapTable company={company} /></div>
+      </div>
+
+      {hasPreferred && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div className="keep-with-next"><SectionHeader>Preferred rights &amp; preferences</SectionHeader></div>
+          <div className="print-scroll" style={{ overflow: "auto" }}>
+            <PreferredRightsTable rows={[...preferred].sort((a, b) =>
+              (a.seniority == null ? 99 : a.seniority) - (b.seniority == null ? 99 : b.seniority))} />
+          </div>
+        </div>
+      )}
 
       {notes && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <SectionHeader>{notes.label}</SectionHeader>
-          <div style={{ overflow: "auto" }}>
-            <table className="ledger sheet" style={{ width: "100%", ...sans }}>
+        <div className="print-block" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <SectionHeader>Convertible terms</SectionHeader>
+          <div className="print-scroll" style={{ overflow: "auto" }}>
+            <table className="ledger sheet print-fit" style={{ width: "100%", ...sans }}>
               <thead>
                 <tr>
                   <th style={th}>Instrument</th>
                   <th style={th}>Type</th>
-                  <th style={thR}>Principal</th>
-                  <th style={thR}>Interest</th>
-                  <th style={thR}>Cash raised</th>
+                  <th style={thR}>Principal (USD)</th>
+                  <th style={thR}>Interest (USD)</th>
+                  <th style={thR}>Cash raised (USD)</th>
                 </tr>
               </thead>
               <tbody>
                 {notes.rows.map((c) => (
                   <tr key={c.id}>
-                    <td style={{ ...td, fontWeight: 600 }}>{c.name}</td>
+                    <td style={{ ...tdLabel, fontWeight: 600 }}>{c.name}</td>
                     <td style={{ ...td, color: MICRO, fontSize: FS.small }}>{c.kind || "—"}</td>
-                    <td style={tdR}>{money(c.principal)}</td>
-                    <td style={tdR}>{money(c.interest)}</td>
-                    <td style={tdR}>{money(c.cashRaised)}</td>
+                    <td style={tdR}>{usd(c.principal)}</td>
+                    <td style={tdR}>{usd(c.interest)}</td>
+                    <td style={tdR}>{usd(c.cashRaised)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -280,7 +372,10 @@ export function CapTable({ company }) {
         </div>
       )}
 
-      {hasPreferred && <LiquidationStack tiers={preferenceStack(company)} total={totalPreference(company)} />}
+      {/* Holdings (passed in by the Company page) sit just above the liquidation stack. */}
+      {holdings}
+
+      {hasPreferred && <LiquidationStack tiers={preferenceStack(company)} total={totalPreference(company)} over={over} />}
 
       {/* The reconciliation line and the methodology note read as one note. */}
       <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -314,8 +409,8 @@ export function Holdings({ data, company, src }) {
       <div style={{ display: "flex", flexDirection: "column", gap: 36 }}>
         {/* The SOI table and its closed-position footnote are one group. */}
         <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <div style={{ overflow: "auto" }}>
-          <table className="ledger sheet" style={{ width: "100%", ...sans }}>
+        <div className="print-scroll" style={{ overflow: "auto" }}>
+          <table className="ledger sheet print-fit" style={{ width: "100%", ...sans }}>
             <thead>
               <tr>
                 <th className="frozen-col" style={{ ...th, position: "sticky", left: 0, zIndex: 2 }}>Fund</th>
@@ -343,7 +438,7 @@ export function Holdings({ data, company, src }) {
                   <td style={tdR}>{money(l.value)}</td>
                   <td style={{ ...tdR, color: l.unrealized == null ? undefined : l.unrealized >= 0 ? POS : NEG }}>{money(l.unrealized)}</td>
                   <td style={tdR}>{money(l.proceeds)}</td>
-                  <td style={tdR}>{l.investmentDate || "—"}</td>
+                  <td className="keep-line" style={tdR}>{l.investmentDate || "—"}</td>
                   <td style={tdR}>{lineMoic(l) == null ? "—" : lineMoic(l).toFixed(2) + "×"}</td>
                 </tr>
               ))}
@@ -382,8 +477,8 @@ export function Holdings({ data, company, src }) {
   const funds = ownershipFunds(company);
   if (funds.length) {
     return (
-      <div style={{ overflow: "auto" }}>
-        <table className="ledger sheet" style={{ width: "100%", ...sans }}>
+      <div className="print-scroll" style={{ overflow: "auto" }}>
+        <table className="ledger sheet print-fit" style={{ width: "100%", ...sans }}>
           <thead>
             <tr>
               <th style={th}>Fund</th>
@@ -396,13 +491,13 @@ export function Holdings({ data, company, src }) {
               <tr key={f.fund}>
                 <td style={td}>{f.fund}</td>
                 <td style={tdR}>{pct(f.pct)}</td>
-                <td style={tdR}>{f.asOf || "—"}</td>
+                <td className="keep-line" style={tdR}>{f.asOf || "—"}</td>
               </tr>
             ))}
             <tr className="totrow">
               <td style={td}>Total (all funds)</td>
               <td style={tdR}>{pct(own.pct)}</td>
-              <td style={tdR}>{own.asOf || "—"}</td>
+              <td className="keep-line" style={tdR}>{own.asOf || "—"}</td>
             </tr>
           </tbody>
         </table>
