@@ -61,6 +61,11 @@ def _shared_uuid(report: dict) -> Optional[str]:
     return (report.get("shared") or {}).get("uuid")
 
 
+def payload_fingerprint(payload: Dict[str, Any]) -> str:
+    """A hash of a share payload, independent of key order."""
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
 def _slug(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", str(text).lower()).strip("-") or "report"
 
@@ -349,11 +354,30 @@ class ReportStore:
                     dismissed.append(uuid)
             doc["reports"] = [r for r in doc["reports"] if r["id"] != report_id]
 
-    def record_shared(self, report_id: str, shared: Dict[str, Any]) -> Dict[str, Any]:
-        """Stamp the share link after a publish or an update; the report is clean again."""
+    def record_shared(self, report_id: str, shared: Dict[str, Any], payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Stamp the share link after a publish or an update, with a fingerprint of the
+        payload that was sent; the report is clean again."""
         with self.transaction() as doc:
             report = self.find(doc, report_id)
-            report["shared"] = dict(shared, dirty=False)
+            report["shared"] = dict(shared, dirty=False, payload_fingerprint=payload_fingerprint(payload))
+            return self.metadata(report)
+
+    def mark_if_payload_moved(self, report_id: str, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Mark your shared report changed when the payload it would be shared with now
+        differs from the one last sent: a workbook re-import or a newly answered
+        mapping question moves its figures without anyone touching the report.
+        Returns the report's metadata, or None when it isn't one you shared."""
+        with self.transaction() as doc:
+            try:
+                report = self.find(doc, report_id)
+            except ReportEditError:
+                return None
+            shared = report.get("shared") or {}
+            if not shared.get("is_owner"):
+                return None
+            sent = shared.get("payload_fingerprint")
+            if sent and sent != payload_fingerprint(payload):
+                shared["dirty"] = True
             return self.metadata(report)
 
     def clear_shared(self, report_id: str, *, expected_etag: Optional[str] = None) -> Dict[str, Any]:

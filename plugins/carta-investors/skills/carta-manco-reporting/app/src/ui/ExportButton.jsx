@@ -4,6 +4,14 @@ import { exportElementAsHtml } from "./exportHtml.js";
 import { Btn } from "./components.jsx";
 import { trackClick } from "../analytics.js";
 
+// What an export in progress or just finished says, and its icon. Idle has none:
+// each control words its own resting state.
+export const EXPORT_STATUS = {
+  busy: { label: "Exporting…", Icon: Download },
+  done: { label: "Downloaded", Icon: Check },
+  error: { label: "Export failed", Icon: TriangleAlert },
+};
+
 // One HTML export of the element `targetId`, with its click and outcome tracked.
 // state: idle | busy | done | error — done and error fall back to idle after a moment.
 export function useHtmlExport({ targetId, entityName, pageLabel, asOf, filenameBase, events }) {
@@ -37,11 +45,7 @@ export function useHtmlExport({ targetId, entityName, pageLabel, asOf, filenameB
 // Renders via the shared Btn (kind="ghost"), not a hand-rolled button.
 export default function ExportButton(props) {
   const { state, run } = useHtmlExport(props);
-  const label = state === "busy" ? "Exporting…"
-              : state === "done" ? "Downloaded"
-              : state === "error" ? "Export failed"
-              : "Export";
-  const Icon = state === "done" ? Check : state === "error" ? TriangleAlert : Download;
+  const { label, Icon } = EXPORT_STATUS[state] || { label: "Export", Icon: Download };
 
   return (
     <Btn kind="ghost" onClick={run} disabled={state === "busy"} aria-label={label}>

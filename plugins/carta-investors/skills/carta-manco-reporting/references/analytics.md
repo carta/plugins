@@ -148,6 +148,31 @@ Every row spells the full id, prefix included.
 | `MancoReporting.BudgetVsActuals.OutlineToggleLine` | click | Outline layout: a line's breakout expanded or collapsed. |
 | `MancoReporting.BudgetVsActuals.CrosstabExpandRow` | click | Crosstab layout: a row's breakout expanded or collapsed. |
 
+### Budget reports and sharing
+
+| Id | Action | Fires when |
+|---|---|---|
+| `MancoReporting.ReportMenu.Duplicate` | click | Report menu (⋯) → Duplicate. |
+| `MancoReporting.ReportMenu.Rename` | click | Rename dialog → Save. |
+| `MancoReporting.ReportMenu.Hide` | click | Report menu → Hide. |
+| `MancoReporting.ReportMenu.Delete` | click | "Delete this copy" / "Remove from my reports" confirmed. |
+| `MancoReporting.ReportNotice.Duplicate` | click | "Duplicate" on a report shared with you. |
+| `MancoReporting.ReportNotice.ShareUpdate` | click | The cloud-upload icon (tooltip "Share update") beside "Changes not shared yet" — pushes the changes to the same people without opening the Share dialog. |
+| `MancoReporting.ShareDialog.View` | render | The Share panel opened, for a new or an already shared report. |
+| `MancoReporting.ShareDialog.Share` | click | Share, Update or Save changes in the Share dialog. |
+| `MancoReporting.ShareDialog.Overwrite` | click | "Overwrite with my version" after the shared copy changed on Carta. |
+| `MancoReporting.ShareDialog.AddPerson` | click | A person added from the list of people who can see the entity. |
+| `MancoReporting.ShareDialog.RemovePerson` | click | A person's access removed (takes effect on save). |
+| `MancoReporting.ShareDialog.RefreshPeople` | click | "Refresh" under the people list: asks Carta again instead of using the list saved within the last day. |
+| `MancoReporting.ShareDialog.StopSharing` | click | "Stop sharing for everyone" confirmed. |
+| `MancoReporting.ShareDialog.ShareAsNew` | click | "Share as new" after the shared copy was deleted. |
+| `MancoReporting.ShareDialog.KeepPrivate` | click | "Keep private" after the shared copy was deleted. |
+| `MancoReporting.ShareDialog.ShareTab` | click | The Share tab of the Share panel. |
+| `MancoReporting.ShareDialog.ExportTab` | click | The Export tab of the Share panel (the HTML download itself is `BudgetVsActuals.ExportHtml`). |
+| `MancoReporting.ShareDialog.GeneralAccessPeople` | click | General access set to "Only people you add". |
+| `MancoReporting.ShareDialog.GeneralAccessEveryone` | click | General access set to everyone at the firm who can view the entity's accounting. |
+| `MancoReporting.ShareStatus.CopyPrompt` | click | Copy on the Claude prompt a failed shared-reports load suggests. |
+
 ### Drill-down drawer
 
 | Id | Action | Fires when |

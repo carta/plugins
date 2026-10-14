@@ -5450,6 +5450,8 @@ def build(args):
     # a stated source, never a guess.
     # A payload that can't be built is skipped, never a failed build: the
     # dashboard matters more than one report's share, which says it isn't ready.
+    # A report you shared is marked changed once its payload moves away from the
+    # one you sent, so the app offers to share the update.
     _report_currency = currency or manco_entity_currency(raw, args.manco_uuid)
     for _b in _own_budgets:
         # Last build's payload goes first, so one that can't be rebuilt reads as not
@@ -5459,6 +5461,7 @@ def build(args):
             _payload = canonical_budget.share_payload(_b, _report_currency)
             if _payload is not None:
                 _reports.write_share_payload(_b["id"], _payload)
+                _b["report"] = _reports.mark_if_payload_moved(_b["id"], _payload) or _b.get("report")
         except Exception as e:
             print(f"[build] share payload for {_b.get('id')!r} skipped: {e}", file=sys.stderr)
 
