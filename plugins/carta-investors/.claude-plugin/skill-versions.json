@@ -1,7 +1,7 @@
 {
   "carta-home-build": {
-    "version": "1.15.5",
-    "headline": "The capital activity popup fits long payout statuses such as \"Pending authorization\" in the Status column."
+    "version": "1.15.6",
+    "headline": "Payment statuses in the capital activity popup match the Carta web app's labels and colours."
   },
   "carta-workhub-build": {
     "version": "1.9.15",

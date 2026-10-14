@@ -251,40 +251,71 @@ async function fetchPartnerRows(fundUuid, activityId, dueDate, isCall) {
   return { rows, failed };
 }
 
-// Payout states where the money has left; PAID_PENDING_RECON is sent but not yet
-// matched to the bank. Every other state (ON_HOLD, PENDING_AUTHORIZATION, FAILED…)
-// is still owed to the LP.
-const CA_DISTRIBUTION_PAID_STATUSES = new Set(['PAID', 'PAID_PENDING_RECON']);
+// Each payout state's pill: its label, the tone (`.ca-status-<tone>`) that
+// colours it, and a tooltip where the label needs explaining. Labels follow the
+// Carta web app's payment summary, except that only a reconciled payout reads
+// "Settled" — one still awaiting reconciliation is money moving, like the
+// in-progress states. `paid` marks the states where the money has left; every
+// other state (ON_HOLD, PENDING_AUTHORIZATION, FAILED…) is still owed to the LP.
+const CA_PAYOUT_STATUSES = {
+  ON_HOLD:                      { label: 'On hold',                      tone: 'neutral' },
+  BLOCKED:                      { label: 'Rolled over',                  tone: 'neutral' },
+  PENDING_AUTHORIZATION:        { label: 'Pending authorization',        tone: 'pending' },
+  PENDING_REAUTHORIZATION:      { label: 'Pending reauthorization',      tone: 'pending' },
+  PENDING_BANK_PORTAL_APPROVAL: { label: 'Pending bank portal approval', tone: 'pending' },
+  WIRE_SETUP_IN_PROGRESS:       { label: 'Wire setup in progress',       tone: 'progress' },
+  IN_PROGRESS:                  { label: 'Payment in progress',          tone: 'progress' },
+  // Sent but not yet matched to the bank; the backend's own investor count
+  // still reports this LP as unpaid.
+  PAID_PENDING_RECON:           { label: 'Paid · not reconciled',        tone: 'progress', paid: true,
+    title: 'The payout went out, but the row has not been reconciled yet.' },
+  PAID:                         { label: 'Settled',                      tone: 'settled',  paid: true },
+  FAILED:                       { label: 'Failed',                       tone: 'failed' },
+};
+
+// A capital call's pill, coloured on the same scale as a payout's.
+const CA_CALL_STATUSES = {
+  paid:           { label: 'Paid',    tone: 'settled' },
+  partially_paid: { label: 'Partial', tone: 'pending' },
+  unpaid:         { label: 'Unpaid',  tone: 'neutral' },
+};
 
 // The overlay's amount and payment fields, read from whichever side of the
 // tracker row the activity type fills in. A distribution has no partial payment,
-// so its row is wholly received or wholly pending. `statusLabel` carries the
-// payout state ("Pending authorization") that `paymentStatus` collapses.
-// `awaitingRecon` marks an LP who has been paid but whose row is not yet
-// reconciled — the backend's own investor count still reports them as unpaid.
+// so its row is wholly received or wholly pending. `status` is the row's pill,
+// which for a distribution keeps the payout state ("Pending authorization")
+// that `paymentStatus` collapses.
 function trackerRowPayment(r, isCall) {
   if (isCall) {
+    const paymentStatus = r.payment_status ?? 'unpaid';
     return {
       amount: parseFloat(r.net_contribution ?? 0),
       amountPending: parseFloat(r.amount_pending ?? 0),
       amountReceived: parseFloat(r.amount_received ?? 0),
-      paymentStatus: r.payment_status ?? 'unpaid',
-      statusLabel: null,
-      awaitingRecon: false,
+      paymentStatus,
+      status: CA_CALL_STATUSES[paymentStatus] ?? CA_CALL_STATUSES.unpaid,
     };
   }
   const amount = parseFloat(r.net_distribution_amount ?? 0);
   const payout = r.distribution_payment_status ?? '';
-  const paid = CA_DISTRIBUTION_PAID_STATUSES.has(payout);
-  const words = payout.toLowerCase().replace(/_/g, ' ');
+  const status = payoutStatus(payout);
+  const paid = status.paid === true;
   return {
     amount,
     amountPending: paid ? 0 : amount,
     amountReceived: paid ? amount : 0,
     paymentStatus: paid ? 'paid' : 'unpaid',
-    statusLabel: words ? words.charAt(0).toUpperCase() + words.slice(1) : null,
-    awaitingRecon: payout === 'PAID_PENDING_RECON',
+    status,
   };
+}
+
+// A payout state the table does not know yet still shows, worded from its
+// enum value, in the neutral tone; a row with no payout state reads Unpaid.
+function payoutStatus(payout) {
+  if (CA_PAYOUT_STATUSES[payout]) return CA_PAYOUT_STATUSES[payout];
+  if (!payout) return CA_CALL_STATUSES.unpaid;
+  const words = payout.toLowerCase().replace(/_/g, ' ');
+  return { label: words.charAt(0).toUpperCase() + words.slice(1), tone: 'neutral' };
 }
 
 // A distribution card's progress, counted from the same tracker rows the overlay
@@ -399,15 +430,11 @@ function rowMenuCellInner(r, activityId) {
       onclick="toggleCaRowMenu(this)">&#8943;</button>`;
 }
 
-// A payout label the column cannot fit is ellipsized (see `.ca-status`), so the
-// pill carries the whole label as its tooltip.
+// A label the column cannot fit is ellipsized (see `.ca-status`), so the pill
+// carries the whole label as its tooltip.
 function caStatusBadge(r) {
-  if (r.awaitingRecon) return `<span class="ca-status ca-status-paid"
-    title="The payout went out, but the row has not been reconciled yet.">Paid · not reconciled</span>`;
-  if (r.paymentStatus === 'paid')           return `<span class="ca-status ca-status-paid">Paid</span>`;
-  if (r.paymentStatus === 'partially_paid') return `<span class="ca-status ca-status-partial">Partial</span>`;
-  const label = escHtml(r.statusLabel ?? 'Unpaid');
-  return `<span class="ca-status ca-status-unpaid" title="${label}">${label}</span>`;
+  const { label, tone, title = label } = r.status;
+  return `<span class="ca-status ca-status-${escHtml(tone)}" title="${escHtml(title)}">${escHtml(label)}</span>`;
 }
 
 async function openCapActivityDetail(activityId, fundName, typeLabel, dueDate, totalAmt = 0, fundUuid = '') {
@@ -732,7 +759,7 @@ function bulkSelectRow(g, cells) {
       <td class="ca-td-name" title="${escHtml(g.name)}">${escHtml(g.name)}${
         g.blocked ? '<div class="ca-remind-sub">Email disabled</div>' : ''}</td>
       <td class="ca-td-amount">${fmtFull(g.amount)}</td>
-      <td class="ca-td-status"><span class="ca-status ca-status-unpaid">Unpaid</span></td>
+      <td class="ca-td-status">${caStatusBadge({ status: CA_CALL_STATUSES.unpaid })}</td>
       <td class="ca-td-date">${g.daysLate > 0 ? `<span class="ca-late">${g.daysLate}d late</span>` : '—'}</td>
       <td class="ca-td-reminded">${g.lastReminded ? (fmtRemindedOn(g.lastReminded) ?? '—') : '—'}</td>
     </tr>`;

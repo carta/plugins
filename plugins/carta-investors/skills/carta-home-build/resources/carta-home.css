@@ -65,6 +65,7 @@
       --ink-color-global-feedback-negative-strong:   light-dark(#A82020, #EF7171);
       --ink-color-global-feedback-negative-subtle:   light-dark(#FFEEEF, #401018);
       --ink-color-global-feedback-warning-subtle:    light-dark(#FFFCED, #341C00);
+      --ink-color-global-feedback-neutral-subtle:    light-dark(#F1F1F1, #202020);
       /* Surfaces */
       --ink-color-global-surface-background-underlay: light-dark(#F1F1F1, #2D2D2D);
       --ink-color-global-surface-lightgray-default:  light-dark(#F1F1F1, #202020);
@@ -700,7 +701,6 @@
     /* ── Capital activity pinned card ── */
     :root {
       --ca-unpaid: var(--ink-color-global-feedback-negative-strong);
-      --ca-partial: var(--carta-warning-text);
       --ca-paid: var(--ink-color-global-feedback-positive-strong);
       --ca-warn: var(--carta-warning-text);
     }
@@ -799,16 +799,26 @@
     .ca-td-date { color: var(--ink-color-global-text-subtle); white-space: nowrap; }
     .ca-td-reminded { color: var(--ink-color-global-text-subtle); white-space: nowrap; font-variant-numeric: tabular-nums; }
     .ca-th-check input, .ca-td-check input { cursor: pointer; margin: 0; vertical-align: middle; }
+    /* Ink Bubble geometry: 18px tall, 12px medium (500) text, fully rounded.
+       Borderless, as the Carta web app draws its payment statuses; the
+       transparent border keeps Bubble's box size. inline-block rather than
+       Bubble's inline-flex so the label can still ellipsize. */
     .ca-status {
-      font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
-      padding: 2px 6px; border-radius: var(--ink-size-global-radius-subtle); line-height: 1.4; display: inline-block;
+      font-size: 12px; font-weight: 500; letter-spacing: .01em;
+      height: 18px; line-height: 16px; padding: 0 8px; box-sizing: border-box;
+      border: 1px solid transparent; border-radius: var(--ink-radius-pill); display: inline-block;
       /* On a panel too narrow for the label, ellipsize inside the cell rather
          than paint over the Date column. */
       max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle;
     }
-    .ca-status-unpaid  { background: var(--ink-color-global-feedback-negative-subtle); color: var(--ca-unpaid); }
-    .ca-status-partial { background: var(--ink-color-global-feedback-warning-subtle); color: var(--ca-partial); }
-    .ca-status-paid    { background: var(--ink-color-global-feedback-positive-subtle); color: var(--ca-paid); }
+    /* One tone per payment stage, as the Carta web app colours its statuses:
+       held or not paying out (neutral), awaiting approval (pending), money
+       moving (progress), paid and reconciled (settled), failed. */
+    .ca-status-neutral  { background: var(--ink-color-global-feedback-neutral-subtle); color: var(--ink-color-global-text-subtle); }
+    .ca-status-pending  { background: var(--ink-color-global-feedback-warning-subtle); color: var(--carta-warning-text); }
+    .ca-status-progress { background: var(--ink-color-global-feedback-positive-subtle); color: var(--ink-color-global-feedback-positive-strong); }
+    .ca-status-settled  { background: var(--ink-color-global-text-default); color: var(--ink-color-global-surface-background-default); }
+    .ca-status-failed   { background: var(--ink-color-global-feedback-negative-subtle); color: var(--ink-color-global-feedback-negative-strong); }
     .ca-late { color: var(--ca-unpaid); font-weight: 500; }
     .ca-td-remind { white-space: nowrap; }
     .ca-remind-btn {
