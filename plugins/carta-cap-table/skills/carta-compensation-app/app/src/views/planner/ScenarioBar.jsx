@@ -53,15 +53,19 @@ function Btn({ onClick, children, title, primary, disabled }) {
   );
 }
 
-/** When this draft was last written, as a wall-clock time.
+/** When this draft was last edited, as a wall-clock time.
+ *
+ *  Keyed on `updatedAt`, which only edits move — a rename deliberately does not —
+ *  so a draft with none reads "No edits yet" whether or not it is on disk. The
+ *  starter draft is listed before the first save, and a rename writes it unedited.
  *
  *  Absolute rather than relative: "did it save before I switched?" is a question
  *  about a moment, and a relative label would need a ticking timer to stay true.
  */
 function savedLabel(updatedAt) {
-  if (!updatedAt) return "Not saved yet";
+  if (!updatedAt) return "No edits yet";
   const d = new Date(updatedAt);
-  if (Number.isNaN(d.getTime())) return "Not saved yet";
+  if (Number.isNaN(d.getTime())) return "No edits yet";
   return `Saved ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
 }
 
@@ -169,7 +173,7 @@ export default function ScenarioBar({
             ) : (
               <span
                 style={{ fontSize: FS.xs, color: C.textQuiet }}
-                title={active.updatedAt || "This draft has not been saved yet"}
+                title={active.updatedAt || "This draft has no edits yet"}
               >
                 {saving ? "Saving…" : savedLabel(active.updatedAt)}
               </span>

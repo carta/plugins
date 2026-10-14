@@ -344,6 +344,17 @@ export function scenariosOf(doc) {
   return doc.scenarios || [];
 }
 
+/** The scenarios the switcher lists for a document as read from the server.
+ *
+ *  With nothing saved yet (`null`, the server's not_ready), this is the starter
+ *  draft `emptyDoc` would write, so the switcher is there before the first edit
+ *  and the draft can be renamed or duplicated with an empty cart. A future-schema
+ *  or foreign document is not null and still lists nothing.
+ */
+export function displayScenarios(doc, corporationId) {
+  return doc === null ? emptyDoc(corporationId).scenarios : scenariosOf(doc);
+}
+
 /** The id of the active scenario. */
 export function activeIdOf(doc) {
   return (doc && doc.activeScenarioId) || "default";
@@ -563,7 +574,7 @@ export function useScenario(corporationId) {
         docRef.current = doc;
         etagRef.current = etag;
         setFutureDoc(isFutureDoc(doc));
-        setScenarios(scenariosOf(doc));
+        setScenarios(displayScenarios(doc, corporationId));
         setActiveId(activeIdOf(doc));
         setSaved(cartFromDoc(doc, corporationId));
         setSavedOverrides(overridesFromDoc(doc, corporationId));
@@ -682,7 +693,7 @@ export function useScenario(corporationId) {
       pendingRef.current = null;
       conflictRef.current = false;
       setFutureDoc(isFutureDoc(doc));
-      setScenarios(scenariosOf(doc));
+      setScenarios(displayScenarios(doc, corporationId));
       setActiveId(activeIdOf(doc));
       setSaved(cartFromDoc(doc, corporationId));
       setSavedOverrides(overridesFromDoc(doc, corporationId));
@@ -733,6 +744,17 @@ export function useScenario(corporationId) {
     }
   }, [corporationId, futureDoc]);
 
+  /** The document the lifecycle actions build from.
+   *
+   *  Before the first save nothing is on disk, but the switcher already lists the
+   *  starter draft (see `displayScenarios`), so every action starts from the same
+   *  `emptyDoc` that draft came from.
+   */
+  const currentDoc = useCallback(
+    () => docRef.current || emptyDoc(corporationId),
+    [corporationId],
+  );
+
   /** Switch drafts, flushing whatever is queued for the one being left.
    *
    *  The flush is the whole point. A queued write belongs to the OUTGOING scenario,
@@ -745,26 +767,30 @@ export function useScenario(corporationId) {
   const switchScenario = useCallback(async (id) => {
     if (id === activeIdOf(docRef.current)) return true;
     if (!(await flush())) return false;
-    return commit(docWithActiveScenario(docRef.current, id));
-  }, [flush, commit]);
+    return commit(docWithActiveScenario(currentDoc(), id));
+  }, [flush, commit, currentDoc]);
 
   const createScenario = useCallback(async (name) => {
     if (!(await flush())) return false;
-    return commit(docWithNewScenario(docRef.current, corporationId, name));
-  }, [flush, commit, corporationId]);
+    return commit(docWithNewScenario(currentDoc(), corporationId, name));
+  }, [flush, commit, currentDoc, corporationId]);
 
   const duplicateScenario = useCallback(async (sourceId) => {
     // Flush first for the same reason as a switch: the copy is taken from the
     // DOCUMENT, so an unsaved edit would be missing from it.
     if (!(await flush())) return false;
+    const doc = currentDoc();
     return commit(docWithDuplicatedScenario(
-      docRef.current, corporationId, sourceId || activeIdOf(docRef.current)));
-  }, [flush, commit, corporationId]);
+      doc, corporationId, sourceId || activeIdOf(doc)));
+  }, [flush, commit, currentDoc, corporationId]);
 
-  const renameScenario = useCallback(
-    (id, name) => commit(docWithRenamedScenario(docRef.current, id, name)),
-    [commit],
-  );
+  const renameScenario = useCallback(async (id, name) => {
+    // Flush first: the rename commits the whole document, so a queued edit would
+    // be missing from it. Before the first save it would also go out as a second
+    // unconditional create racing the queued one.
+    if (!(await flush())) return false;
+    return commit(docWithRenamedScenario(currentDoc(), id, name));
+  }, [flush, commit, currentDoc]);
 
   const deleteScenario = useCallback(async (id) => {
     // Anything queued belongs to a scenario that may be the one being deleted, so
@@ -772,8 +798,8 @@ export function useScenario(corporationId) {
     clearTimeout(timerRef.current);
     pendingRef.current = null;
     setSaving(false);
-    return commit(docWithoutScenario(docRef.current, id));
-  }, [commit]);
+    return commit(docWithoutScenario(currentDoc(), id));
+  }, [commit, currentDoc]);
 
   return {
     saved, savedOverrides, savedReasons, savedSettings, savedFilters,
