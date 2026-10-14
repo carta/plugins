@@ -1457,6 +1457,38 @@ export function Badge({ children, tone = "neutral", variant, title, style }) {
   );
 }
 
+// Ink's Banner surface flips to brand-black in dark mode rather than a dark blue
+// tint; the message text is gray-90 / gray-60. Both per theme-with-ink's banner recipe.
+const BANNER_INFO_BG = "light-dark(var(--ink-color-global-brand-blue-10), var(--ink-color-global-brand-black))";
+const BANNER_MSG = "light-dark(var(--ink-color-global-brand-gray-90), var(--ink-color-global-brand-gray-60))";
+export const bannerLink = { color: "var(--ink-color-global-link-default)", textDecoration: "underline", fontWeight: 500 };
+
+/** Ink's Banner, message-only info variant: flat full-width surface, no border,
+ *  zero radius, 16px padding, a filled round "i" chip, body-3 text. Pass
+ *  `onDismiss` to show the close control; style links inside with `bannerLink`. */
+export function Banner({ children, onDismiss, className, style, ...rest }) {
+  return (
+    <div role="status" className={className} {...rest}
+      style={{ ...sans, display: "flex", alignItems: "center", gap: 12, padding: 16, border: 0, borderRadius: 0,
+        background: BANNER_INFO_BG, ...style }}>
+      <span aria-hidden="true" style={{ flex: "none", width: 20, height: 20, borderRadius: 999, display: "inline-flex",
+        alignItems: "center", justifyContent: "center", color: "#fff", background: "var(--ink-color-global-feedback-info-strong)" }}>
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+          <circle cx="7" cy="3.4" r="0.9" /><rect x="6.15" y="5.6" width="1.7" height="6.1" rx="0.4" />
+        </svg>
+      </span>
+      <div style={{ flex: 1, minWidth: 0, fontSize: 14, lineHeight: "24px", fontWeight: 400, color: BANNER_MSG }}>{children}</div>
+      {onDismiss && (
+        <button type="button" onClick={onDismiss} aria-label="Dismiss"
+          style={{ flex: "none", width: 20, height: 20, background: "transparent", border: 0, padding: 0, cursor: "pointer",
+            color: "var(--ink-color-global-text-subtle)", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+          <CloseIcon size={16} strokeWidth={1.6} />
+        </button>
+      )}
+    </div>
+  );
+}
+
 /** One-line label that never wraps: at rest the overflow is an ellipsis; while
  *  hovered the text glides left just far enough to read the end, then snaps back
  *  on mouse-out. `speed` is px/s. Only scrolls when the text actually overflows.

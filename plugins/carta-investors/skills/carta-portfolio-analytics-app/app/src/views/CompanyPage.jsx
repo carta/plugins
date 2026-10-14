@@ -12,7 +12,7 @@ import { createPortal } from "react-dom";
 import { FS, sans, serif, mono, MICRO } from "../ui/theme.js";
 import { withCommas } from "../ui/format.js";
 import { H2, Dropdown, Segmented, TabBar, MultiSelect, KVTableRow, Badge, Btn, RollupNote, Toggle, Modal, PencilIcon, Z,
-  useStickyClone, StatusLine, useDismissable, useFocusOnOpen, MenuItem, SearchInput, POPOVER_SHADOW, filterByLabel, ChevronDownIcon, SectionHeader } from "../ui/components.jsx";
+  useStickyClone, StatusLine, useDismissable, useFocusOnOpen, MenuItem, SearchInput, POPOVER_SHADOW, filterByLabel, ChevronDownIcon, SectionHeader, Banner, bannerLink } from "../ui/components.jsx";
 import Chart, { fmtVal, fmtFull, shortDate, TrendSparkline, TREND_SPARK_W, InkKpiChart } from "../ui/charts.jsx";
 import {
   companyOf, metricOf, metricOptions, latest, pointsFor, metricsFor,
@@ -200,6 +200,7 @@ export default function CompanyPage({ data, dashboard }) {
           block) so the outer gap: 36 reads as space AFTER the header, not stacked
           36px gaps between every header row on top of each row's own margin. */}
       <section style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <McpHelpBanner />
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           {/* position:relative so the star can hang in the left margin (below) without
               taking up flex space — the name's own left edge then lines up with every
@@ -252,6 +253,21 @@ export default function CompanyPage({ data, dashboard }) {
       ))}
       {renderCard("notes")}
     </div>
+  );
+}
+
+export const HELP_EMAIL = "plugins@carta.com";
+
+/** Points users at the plugins team for help building tearsheets with Claude.
+ *  Always shown on screen, with no close control; kept off the printed
+ *  tearsheet, which may be shared with LPs. */
+function McpHelpBanner() {
+  return (
+    <Banner className="no-print" data-testid="mcp-help-banner">
+      Have questions, or want help creating automated tearsheets with Claude using Carta's MCP? Reach out to{" "}
+      <a href={`mailto:${HELP_EMAIL}`} style={bannerLink}
+        onClick={() => trackClick("PortfolioAnalytics.Company.HelpEmailClick")}>{HELP_EMAIL}</a>.
+    </Banner>
   );
 }
 
