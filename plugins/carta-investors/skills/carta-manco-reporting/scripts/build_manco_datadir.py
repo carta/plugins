@@ -43,6 +43,7 @@ from datetime import date as _date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import manco_paths
 from shapes import canonical as canonical_budget
 from shapes import formula_infer
 
@@ -1912,8 +1913,7 @@ def _read_monthly_crosstab_budget(data, path, as_of_month):
             "label": f"Jan–{_MONTH_ABBR[mo - 1]} {data.get('period_year') or ''}".strip(),
         },
         "rows": rows,
-        "id": (data.get("id")
-               or (path.stem.replace("budget-", "", 1) if path.stem.startswith("budget-") else "primary")),
+        "id": data.get("id") or manco_paths.default_budget_id(path),
         "label": data.get("label") or (data.get("workbook_meta") or {}).get("sheet") or "Budget",
     }
 
@@ -2023,8 +2023,7 @@ def _read_outline_budget(data, path, period_kind, as_of_month, coa_value_aliases
         # values it filters JEs by. Crosstab budgets get the equivalent
         # per-entry as by_tag_value[].carta_tags.
         "value_aliases":     coa_value_aliases or {},
-        "id":               (path.stem.replace("budget-", "", 1)
-                             if path.stem.startswith("budget-") else "primary"),
+        "id":               manco_paths.default_budget_id(path),
         "label":            (data.get("label")
                              or (data.get("workbook_meta") or {}).get("sheet")
                              or "Budget"),
@@ -4570,8 +4569,7 @@ def read_excel_budget(dashboard_dir, as_of_month, budget_file=None):
         # Stable id + label for multi-budget selection. id defaults to the
         # filename stem (e.g. "budget-base-case-2026" → "base-case-2026");
         # label falls back to sheet name.
-        "id":               (data.get("id")
-                             or (p.stem.replace("budget-", "", 1) if p.stem.startswith("budget-") else "primary")),
+        "id":               data.get("id") or manco_paths.default_budget_id(p),
         "label":            (data.get("label") or (data.get("workbook_meta") or {}).get("sheet") or "Budget"),
     }
 

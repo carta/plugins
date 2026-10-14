@@ -62,6 +62,14 @@ def budget_file(year, month):
     return "budget-{}-{:02d}.json".format(year, month)
 
 
+def default_budget_id(path):
+    """A parsed budget file's id when the file records none: "budget-base-case-2026.json"
+    is "base-case-2026", and "budget.json", the first workbook budget, is "primary".
+    Mapping answers are keyed by this id, so the build and the report store share it."""
+    stem = pathlib.Path(path).stem
+    return stem.replace("budget-", "", 1) if stem.startswith("budget-") else "primary"
+
+
 def slugify(name):
     if not name:
         return ""
