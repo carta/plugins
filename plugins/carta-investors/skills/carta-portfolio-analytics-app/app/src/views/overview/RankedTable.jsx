@@ -141,7 +141,7 @@ function colAlign(col) {
   return col.kind === "builtin" && RIGHT_ALIGN_BUILTIN.has(col.key) ? "right" : "left";
 }
 
-const chip = { display: "inline-flex", alignItems: "center", height: 20, padding: "0 8px", fontSize: 11, borderRadius: 4,
+const chip = { display: "inline-flex", alignItems: "center", height: 20, padding: "0 8px", fontSize: FS.micro, borderRadius: 4,
   border: "1px solid var(--ink-color-global-border-subtle)", background: "var(--ink-color-global-surface-lightgray-default)", whiteSpace: "nowrap" };
 const chipRow = { display: "inline-flex", gap: 4, flexWrap: "wrap" };
 

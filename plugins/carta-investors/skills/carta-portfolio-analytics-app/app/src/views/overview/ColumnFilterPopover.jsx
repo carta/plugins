@@ -10,8 +10,8 @@ import { FILTER_OPS } from "../../model/overviewFilters.js";
 
 export const PANEL_WIDTH = 300;
 
-const h3 = { ...sans, fontSize: 14, fontWeight: 500, color: "var(--ink-color-global-text-default)", margin: "0 0 12px" };
-const row = { ...sans, display: "flex", alignItems: "center", gap: 10, fontSize: 14, color: "var(--ink-color-global-text-default)", cursor: "pointer" };
+const h3 = { ...sans, fontSize: FS.value, fontWeight: 500, color: "var(--ink-color-global-text-default)", margin: "0 0 12px" };
+const row = { ...sans, display: "flex", alignItems: "center", gap: 10, fontSize: FS.value, color: "var(--ink-color-global-text-default)", cursor: "pointer" };
 const box = { width: 16, height: 16, margin: 0, accentColor: "var(--ink-color-global-border-active)", cursor: "pointer" };
 const hint = { ...sans, fontSize: FS.small, color: MICRO };
 
@@ -56,7 +56,7 @@ export function ColumnFilterBody({ spec, data, ctx, draft, onDraft, otherCompani
             <label key={o.value} style={row}>
               <input type="checkbox" aria-label={o.label} checked={any.includes(o.value)} onChange={() => toggle(o.value)} style={box} />
               <MarqueeLabel hoverParent style={{ flex: 1 }}>{o.label}</MarqueeLabel>
-              <span style={{ color: "var(--ink-color-global-text-subtle)", fontSize: 12 }}>{counts.get(o.value) || 0}</span>
+              <span style={{ color: "var(--ink-color-global-text-subtle)", fontSize: FS.small }}>{counts.get(o.value) || 0}</span>
             </label>
           ))}
         </div>

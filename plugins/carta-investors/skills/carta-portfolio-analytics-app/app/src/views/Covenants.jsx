@@ -3,7 +3,7 @@
 // it trips. See model/covenant.js for why the default basis is LTM.
 import { useMemo, useState } from "react";
 import { FS, sans, mono, MICRO } from "../ui/theme.js";
-import { Dropdown, Segmented, TextInput, Btn, Badge, StatBar, Glossary, MultiSelect, HintIcon } from "../ui/components.jsx";
+import { Dropdown, Segmented, TextInput, Btn, Badge, StatBar, Glossary, MultiSelect, HintIcon, SectionHeader } from "../ui/components.jsx";
 import Chart, { fmtVal } from "../ui/charts.jsx";
 import { compile, resolveRefs } from "../model/formula.js";
 import { metricOf, metricOptions, numericMetrics } from "../model/kpi.js";
@@ -124,11 +124,9 @@ export default function Covenants({ data, dashboard }) {
               hint: "Comfortably within the threshold at the latest tested quarter." },
           ]} />
 
-          {/* The eyebrow label belongs to the table under it — one tight group. */}
+          {/* The headline belongs to the table under it — one tight group. */}
           <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <div style={{ ...sans, fontSize: FS.small, fontWeight: 600, color: MICRO, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-            Tightest headroom across the book
-          </div>
+          <SectionHeader>Tightest headroom across the book</SectionHeader>
           {tight.length === 0 ? (
             <div className="card" style={{ padding: 20, textAlign: "center", color: MICRO, ...sans }}>
               Nothing breaching or on watch — every tested company is comfortably inside its thresholds.

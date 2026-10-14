@@ -381,7 +381,7 @@ function Completeness({ data, dashboard }) {
       count: (v) => (v ? 1 : 0),
       chipLabel: () => "In-progress",
       render: (v, setV) => (
-        <label style={{ ...sans, display: "flex", alignItems: "flex-start", gap: 10, fontSize: 14, lineHeight: "20px", color: "var(--ink-color-global-text-default)", cursor: "pointer" }}>
+        <label style={{ ...sans, display: "flex", alignItems: "flex-start", gap: 10, fontSize: FS.value, lineHeight: "20px", color: "var(--ink-color-global-text-default)", cursor: "pointer" }}>
           <Checkbox checked={v} onChange={(e) => setV(e.target.checked)} style={{ marginTop: 2 }} />
           Include in-progress quarter
         </label>

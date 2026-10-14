@@ -6,7 +6,8 @@ import { createPortal } from "react-dom";
 import { FS, sans, mono, MICRO } from "../ui/theme.js";
 import { trackClick } from "../analytics.js";
 import { H2, Dropdown, Segmented, Toggle, SearchInput, TextInput, Btn, Badge, Modal, Eyebrow, StickyRibbon,
-  ddTriggerStyle, ChevronDownIcon, CollapseAllIcon, ExpandAllIcon, DeltaText, useDismissable, useStickyClone, usePortalAnchor, filterByLabel, SEARCH_MIN, Z, POPOVER_SHADOW } from "../ui/components.jsx";
+  ddTriggerStyle, ChevronDownIcon, CollapseAllIcon, ExpandAllIcon, DeltaText, useDismissable, useStickyClone, usePortalAnchor, filterByLabel, SEARCH_MIN, Z, POPOVER_SHADOW,
+  GF_WARM_SURFACE, GF_NAV_ACTIVE_BG, GF_TAG_BORDER, GF_TAG_BG, GF_BUBBLE_BG } from "../ui/components.jsx";
 import { fmtVal, fmtFull, shortDate, TrendSparkline, TREND_SPARK_W } from "../ui/charts.jsx";
 import { metricsFor, metricOptions, metricOf, pointNearMonthsBack, metricCadence,
   seriesPoints, forecastSeriesPoints, forecastPeriods, forecastMetricsFor,
@@ -21,7 +22,7 @@ import { availablePositionMetrics, positionMetricOptions, positionMetricOf } fro
 import { cellFormat, formatSummary, isGrowthBasis, isRowScope, statsOf, SCALES, RULE_COLORS } from "../model/cellFormat.js";
 import { allTags, tagId, tagsFor, companyMatchesTags, hasCartaTags } from "../model/tags.js";
 import { STATUS_CAT } from "../model/status.js";
-import { CompanyTags } from "../ui/tags.jsx";
+import { CompanyTags, CHIP, WRAP } from "../ui/tags.jsx";
 import ViewControl from "../ui/ViewControl.jsx";
 import { FavoriteStar } from "../ui/favorites.jsx";
 import { isFavorite, favoriteCount } from "../model/favorites.js";
@@ -766,7 +767,7 @@ export default function PivotDashboard({ data, dashboard }) {
       {hitsByCompany[companyId] && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginTop: 5, marginLeft: NAME_INSET }}>
           {hitsByCompany[companyId].map((s) => (
-            <Badge key={s.ruleId} tone={s.tone} title={s.detail} style={{ height: "auto", padding: "1px 6px", fontSize: 10, lineHeight: "16px", whiteSpace: "normal", overflowWrap: "anywhere", maxWidth: 220, textAlign: "left" }}>{s.tag}</Badge>
+            <Badge key={s.ruleId} tone={s.tone} title={s.detail} style={{ ...CHIP, ...WRAP }}>{s.tag}</Badge>
           ))}
         </div>
       )}
@@ -887,7 +888,7 @@ export default function PivotDashboard({ data, dashboard }) {
           {/* width: max-content only — the table takes exactly its columns'
               required widths and never stretches to fill the wrapper; wrapRef's
               overflowX:auto scrolls it when that exceeds the visible width. */}
-          <table ref={tableRef} className="pivot-table" style={{ borderCollapse: "separate", borderSpacing: 0, ...mono, fontSize: 14, width: "max-content" }}>
+          <table ref={tableRef} className="pivot-table" style={{ borderCollapse: "separate", borderSpacing: 0, ...mono, fontSize: FS.value, width: "max-content" }}>
             <thead ref={theadRef}>
               {renderPivotHeadRow(headColDefs)}
             </thead>
@@ -1074,7 +1075,7 @@ export default function PivotDashboard({ data, dashboard }) {
                           })()}
                         </div>
                         {growthMode && !missing && (
-                          <div style={{ fontSize: 11, fontWeight: 500, marginTop: 1,
+                          <div style={{ fontSize: FS.micro, fontWeight: 500, marginTop: 1,
                             color: cf ? cf.fg : g == null ? MICRO : g >= 0 ? POS : NEG }}>
                             {g == null ? "N/A" : (g >= 0 ? "+" : "−") + withCommas(Math.abs(g * 100).toFixed(0)) + "%"}
                           </div>
@@ -1095,7 +1096,7 @@ export default function PivotDashboard({ data, dashboard }) {
           font (sans) — see useStickyClone's doc for the rest of the mechanism. */}
       {clone && createPortal(
         <div ref={clone.scrollRef} style={{ ...sans, position: "fixed", top: clone.top, left: clone.left, width: clone.width, overflow: "hidden", zIndex: Z.stickyClone }}>
-          <table className="pivot-table" style={{ borderCollapse: "separate", borderSpacing: 0, ...mono, fontSize: 14, tableLayout: "fixed",
+          <table className="pivot-table" style={{ borderCollapse: "separate", borderSpacing: 0, ...mono, fontSize: FS.value, tableLayout: "fixed",
             width: clone.cols.reduce((sum, w) => sum + w, 0) }}>
             <thead>{renderPivotHeadRow(headColDefs, clone.cols)}</thead>
           </table>
@@ -1108,7 +1109,7 @@ export default function PivotDashboard({ data, dashboard }) {
         <div ref={activeCompany.boxRef} style={{ position: "fixed", top: ribbonH + headH, overflow: "hidden", zIndex: Z.popover }}>
           {/* fontSize is explicit — portaled outside <table>'s own fontSize:14,
               so it would otherwise fall back to the browser default. */}
-          <div ref={activeCompany.innerRef} style={{ ...sans, fontSize: 14, position: "absolute", left: 0, right: 0,
+          <div ref={activeCompany.innerRef} style={{ ...sans, fontSize: FS.value, position: "absolute", left: 0, right: 0,
             padding: `${GROUP_PAD_TOP}px 14px 9px`, fontWeight: 600, color: "var(--ink-color-global-text-default)",
             background: "var(--ink-color-global-surface-background-default)", whiteSpace: "normal" }}>
             {renderCompanyLabel(activeCompany.id)}
@@ -1124,8 +1125,7 @@ export default function PivotDashboard({ data, dashboard }) {
           = the companies' <strong>own forward estimates</strong> for periods after{" "}
           {data.source?.asOf || "the data date"} — they extend the timeline and never replace a reported actual</>}
         {selPos.size > 0 && <> · rows tagged{" "}
-          <span style={{ ...sans, fontSize: 10, fontWeight: 700, border: `1px solid var(--ink-color-global-border-subtle)`,
-            background: "var(--ink-color-global-surface-lightgray-default)", padding: "1px 5px", borderRadius: 3 }}>POS</span>{" "}
+          <Badge tone="neutral">POS</Badge>{" "}
           are <strong>point-in-time position facts</strong> — your ownership, returns and marks. They have no period
           history, so they read in the <strong>Current</strong> column rather than the timeline; hover for the as-of date</>}
         {qOnly && <> · monthly reporters rolled up to quarters — income-statement &amp; cash-flow
@@ -1138,14 +1138,6 @@ export default function PivotDashboard({ data, dashboard }) {
     </section>
   );
 }
-
-// Local composed tokens the app's tokens.css doesn't carry — same light-dark()
-// convention, values copied from theme-with-ink's own components-globalfilter.html.
-const GF_WARM_SURFACE = "light-dark(#FBFAF9, #2D2D2D)"; // side-nav background
-const GF_NAV_ACTIVE_BG = "light-dark(#E9EAEA, #394040)"; // gray-30 / gray-90
-const GF_TAG_BORDER = "light-dark(#285DA3, #2C67B5)"; // blue-70 / blue-60
-const GF_TAG_BG = "light-dark(#EAF0F8, transparent)"; // blue-10
-const GF_BUBBLE_BG = "light-dark(#EAF0F8, rgb(18 18 18))";
 
 /** Ribbon "Filters" control — one nav pane per tag category, plus Favorites.
  *  Ported pixel-for-pixel from theme-with-ink's resources/components-globalfilter.html. */
@@ -1302,7 +1294,7 @@ function GlobalFilter({ tagGroups, tagCounts, selTags, onTags, favOnly, setFavOn
 
   const tagChip = ({ key, label, clear }) => (
     <span key={key} style={{ display: "inline-flex", alignItems: "center", height: 28, padding: "0 4px 0 8px",
-      fontSize: 12, lineHeight: 1, whiteSpace: "nowrap", borderRadius: 4, boxSizing: "border-box",
+      fontSize: FS.small, lineHeight: 1, whiteSpace: "nowrap", borderRadius: 4, boxSizing: "border-box",
       border: `1px solid ${GF_TAG_BORDER}`, background: GF_TAG_BG, color: GF_TAG_BORDER, ...sans }}>
       {label}
       <button onClick={clear} aria-label={`Clear ${label} filter`}
@@ -1361,14 +1353,14 @@ function GlobalFilter({ tagGroups, tagCounts, selTags, onTags, favOnly, setFavOn
                 {navItems.map(({ key, label, count: c }) => (
                   <button key={key} onClick={() => { setActivePane(key); setPaneSearch(""); }}
                     style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%",
-                      height: 36, padding: "0 16px", gap: 10, fontSize: 14, lineHeight: "20px", fontWeight: activePane === key ? 500 : 400,
+                      height: 36, padding: "0 16px", gap: 10, fontSize: FS.value, lineHeight: "20px", fontWeight: activePane === key ? 500 : 400,
                       color: "var(--ink-color-global-text-default)", cursor: "pointer", border: "none", textAlign: "left",
                       background: activePane === key ? GF_NAV_ACTIVE_BG : "transparent", ...sans }}
                     onMouseEnter={(e) => { if (activePane !== key) e.currentTarget.style.background = "var(--ink-color-global-surface-lightgray-default)"; }}
                     onMouseLeave={(e) => { if (activePane !== key) e.currentTarget.style.background = "transparent"; }}>
                     <span>{label}</span>
                     {c > 0 && (
-                      <span style={{ display: "inline-flex", alignItems: "center", height: 18, padding: "0 8px", fontSize: 12,
+                      <span style={{ display: "inline-flex", alignItems: "center", height: 18, padding: "0 8px", fontSize: FS.small,
                         fontWeight: 500, letterSpacing: "0.01em", borderRadius: 999, whiteSpace: "nowrap", boxSizing: "border-box",
                         border: `1px solid var(--ink-color-global-feedback-info-strong)`, background: GF_BUBBLE_BG,
                         color: "var(--ink-color-global-feedback-info-strong)", ...sans }}>{c}</span>
@@ -1380,7 +1372,7 @@ function GlobalFilter({ tagGroups, tagCounts, selTags, onTags, favOnly, setFavOn
                 <div style={{ flex: 1, padding: "20px 24px", overflowY: "auto" }}>
                   {activeItem?.group ? (
                     <>
-                      <h3 style={{ ...sans, fontSize: 14, fontWeight: 500, color: "var(--ink-color-global-text-default)", margin: "0 0 14px" }}>
+                      <h3 style={{ ...sans, fontSize: FS.value, fontWeight: 500, color: "var(--ink-color-global-text-default)", margin: "0 0 14px" }}>
                         Filter by {activeItem.label.toLowerCase()}
                       </h3>
                       {activeGroup.values.length === 0 ? (
@@ -1400,11 +1392,11 @@ function GlobalFilter({ tagGroups, tagCounts, selTags, onTags, favOnly, setFavOn
                               const id = tagId(activeGroup.cat, v);
                               return (
                                 <label key={id} style={{ ...sans, display: "flex", alignItems: "center", gap: 10,
-                                  fontSize: 14, color: "var(--ink-color-global-text-default)", cursor: "pointer" }}>
+                                  fontSize: FS.value, color: "var(--ink-color-global-text-default)", cursor: "pointer" }}>
                                   <input type="checkbox" checked={draftTags.has(id)} onChange={() => toggleDraftTag(id)}
                                     style={{ width: 16, height: 16, margin: 0, accentColor: "var(--ink-color-global-border-active)", cursor: "pointer" }} />
                                   {v}
-                                  <span style={{ marginLeft: "auto", color: "var(--ink-color-global-text-subtle)", fontSize: 12 }}>
+                                  <span style={{ marginLeft: "auto", color: "var(--ink-color-global-text-subtle)", fontSize: FS.small }}>
                                     {tagCounts.get(id) || 0}
                                   </span>
                                 </label>
@@ -1416,7 +1408,7 @@ function GlobalFilter({ tagGroups, tagCounts, selTags, onTags, favOnly, setFavOn
                     </>
                   ) : activePane === "__signals" ? (
                     <>
-                      <h3 style={{ ...sans, fontSize: 14, fontWeight: 500, color: "var(--ink-color-global-text-default)", margin: "0 0 14px" }}>
+                      <h3 style={{ ...sans, fontSize: FS.value, fontWeight: 500, color: "var(--ink-color-global-text-default)", margin: "0 0 14px" }}>
                         Filter by signals
                       </h3>
                       {showPaneSearch && (
@@ -1426,11 +1418,11 @@ function GlobalFilter({ tagGroups, tagCounts, selTags, onTags, favOnly, setFavOn
                       <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: showPaneSearch ? 12 : 0 }}>
                         {filteredSignals.map((s) => (
                           <label key={s.id} style={{ ...sans, display: "flex", alignItems: "center", gap: 10,
-                            fontSize: 14, color: "var(--ink-color-global-text-default)", cursor: "pointer" }}>
+                            fontSize: FS.value, color: "var(--ink-color-global-text-default)", cursor: "pointer" }}>
                             <input type="checkbox" checked={draftSignals.has(s.id)} onChange={() => toggleDraftSignal(s.id)}
                               style={{ width: 16, height: 16, margin: 0, accentColor: "var(--ink-color-global-border-active)", cursor: "pointer" }} />
                             {s.label}
-                            <span style={{ marginLeft: "auto", color: "var(--ink-color-global-text-subtle)", fontSize: 12 }}>
+                            <span style={{ marginLeft: "auto", color: "var(--ink-color-global-text-subtle)", fontSize: FS.small }}>
                               {s.count}
                             </span>
                           </label>
@@ -1439,7 +1431,7 @@ function GlobalFilter({ tagGroups, tagCounts, selTags, onTags, favOnly, setFavOn
                     </>
                   ) : activePane === "__fund" ? (
                     <>
-                      <h3 style={{ ...sans, fontSize: 14, fontWeight: 500, color: "var(--ink-color-global-text-default)", margin: "0 0 14px" }}>
+                      <h3 style={{ ...sans, fontSize: FS.value, fontWeight: 500, color: "var(--ink-color-global-text-default)", margin: "0 0 14px" }}>
                         Filter by fund
                       </h3>
                       {showPaneSearch && (
@@ -1449,7 +1441,7 @@ function GlobalFilter({ tagGroups, tagCounts, selTags, onTags, favOnly, setFavOn
                       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                         {filteredFundOpts.map((o) => (
                           <label key={o.id} style={{ ...sans, display: "flex", alignItems: "center", gap: 10,
-                            fontSize: 14, color: "var(--ink-color-global-text-default)", cursor: "pointer" }}>
+                            fontSize: FS.value, color: "var(--ink-color-global-text-default)", cursor: "pointer" }}>
                             <input type="radio" name="gf-fund" checked={draftFund === o.id} onChange={() => setDraftFund(o.id)}
                               style={{ width: 16, height: 16, margin: 0, accentColor: "var(--ink-color-global-border-active)", cursor: "pointer" }} />
                             {o.label}
@@ -1462,7 +1454,7 @@ function GlobalFilter({ tagGroups, tagCounts, selTags, onTags, favOnly, setFavOn
                     </>
                   ) : activePane === "__companies" ? (
                     <>
-                      <h3 style={{ ...sans, fontSize: 14, fontWeight: 500, color: "var(--ink-color-global-text-default)", margin: "0 0 14px" }}>
+                      <h3 style={{ ...sans, fontSize: FS.value, fontWeight: 500, color: "var(--ink-color-global-text-default)", margin: "0 0 14px" }}>
                         Filter by companies
                       </h3>
                       {showPaneSearch && (
@@ -1491,11 +1483,11 @@ function GlobalFilter({ tagGroups, tagCounts, selTags, onTags, favOnly, setFavOn
                       )}
                       {companyGroups.map(([group, opts]) => (
                         <div key={group} style={{ marginTop: 16 }}>
-                          <div style={{ ...sans, fontSize: FS.micro, fontWeight: 600, color: MICRO, textTransform: "uppercase", margin: "0 0 8px" }}>{group}</div>
+                          <Eyebrow style={{ margin: "0 0 8px" }}>{group}</Eyebrow>
                           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                             {opts.map((o) => (
                               <label key={o.id} style={{ ...sans, display: "flex", alignItems: "center", gap: 10,
-                                fontSize: 14, color: "var(--ink-color-global-text-default)", cursor: "pointer" }}>
+                                fontSize: FS.value, color: "var(--ink-color-global-text-default)", cursor: "pointer" }}>
                                 <input type="checkbox" checked={draftCompanies.has(o.id)} onChange={() => toggleDraftCompany(o.id)}
                                   style={{ width: 16, height: 16, margin: 0, accentColor: "var(--ink-color-global-border-active)", cursor: "pointer" }} />
                                 {o.label}
@@ -1507,7 +1499,7 @@ function GlobalFilter({ tagGroups, tagCounts, selTags, onTags, favOnly, setFavOn
                     </>
                   ) : activePane === "__kpis" ? (
                     <>
-                      <h3 style={{ ...sans, fontSize: 14, fontWeight: 500, color: "var(--ink-color-global-text-default)", margin: "0 0 14px" }}>
+                      <h3 style={{ ...sans, fontSize: FS.value, fontWeight: 500, color: "var(--ink-color-global-text-default)", margin: "0 0 14px" }}>
                         Filter by KPIs
                       </h3>
                       {showPaneSearch && (
@@ -1535,7 +1527,7 @@ function GlobalFilter({ tagGroups, tagCounts, selTags, onTags, favOnly, setFavOn
                       <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: showPaneSearch ? 12 : 0 }}>
                         {filteredMetricOpts.map((o) => (
                           <label key={o.id} style={{ ...sans, display: "flex", alignItems: "center", gap: 10,
-                            fontSize: 14, color: "var(--ink-color-global-text-default)", cursor: "pointer" }}>
+                            fontSize: FS.value, color: "var(--ink-color-global-text-default)", cursor: "pointer" }}>
                             <input type="checkbox" checked={draftMetrics.has(o.id)} onChange={() => toggleDraftMetric(o.id)}
                               style={{ width: 16, height: 16, margin: 0, accentColor: "var(--ink-color-global-border-active)", cursor: "pointer" }} />
                             {o.label}
@@ -1545,7 +1537,7 @@ function GlobalFilter({ tagGroups, tagCounts, selTags, onTags, favOnly, setFavOn
                     </>
                   ) : activePane === "__posmetrics" ? (
                     <>
-                      <h3 style={{ ...sans, fontSize: 14, fontWeight: 500, color: "var(--ink-color-global-text-default)", margin: "0 0 14px" }}>
+                      <h3 style={{ ...sans, fontSize: FS.value, fontWeight: 500, color: "var(--ink-color-global-text-default)", margin: "0 0 14px" }}>
                         Position KPIs
                       </h3>
                       <p style={{ ...sans, fontSize: FS.small, color: MICRO, margin: "0 0 14px" }}>
@@ -1562,7 +1554,7 @@ function GlobalFilter({ tagGroups, tagCounts, selTags, onTags, favOnly, setFavOn
                       <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: showPaneSearch ? 12 : 0 }}>
                         {filteredPosOpts.map((o) => (
                           <label key={o.id} style={{ ...sans, display: "flex", alignItems: "center", gap: 10,
-                            fontSize: 14, color: "var(--ink-color-global-text-default)", cursor: "pointer" }}>
+                            fontSize: FS.value, color: "var(--ink-color-global-text-default)", cursor: "pointer" }}>
                             <input type="checkbox" checked={draftPos.has(o.id)} onChange={() => toggleDraftPos(o.id)}
                               style={{ width: 16, height: 16, margin: 0, accentColor: "var(--ink-color-global-border-active)", cursor: "pointer" }} />
                             {o.label}
@@ -1572,10 +1564,10 @@ function GlobalFilter({ tagGroups, tagCounts, selTags, onTags, favOnly, setFavOn
                     </>
                   ) : (
                     <>
-                      <h3 style={{ ...sans, fontSize: 14, fontWeight: 500, color: "var(--ink-color-global-text-default)", margin: "0 0 14px" }}>
+                      <h3 style={{ ...sans, fontSize: FS.value, fontWeight: 500, color: "var(--ink-color-global-text-default)", margin: "0 0 14px" }}>
                         Filter by favorites
                       </h3>
-                      <label style={{ ...sans, display: "flex", alignItems: "center", gap: 10, fontSize: 14,
+                      <label style={{ ...sans, display: "flex", alignItems: "center", gap: 10, fontSize: FS.value,
                         color: "var(--ink-color-global-text-default)", cursor: "pointer" }}>
                         <input type="checkbox" checked={draftFav} onChange={(e) => setDraftFav(e.target.checked)}
                           style={{ width: 16, height: 16, margin: 0, accentColor: "var(--ink-color-global-border-active)", cursor: "pointer" }} />
@@ -1609,7 +1601,7 @@ function GlobalFilter({ tagGroups, tagCounts, selTags, onTags, favOnly, setFavOn
       {favOnly && tagChip({ key: "__favorites", label: "Favorites only", clear: () => setFavOnly(false) })}
       {(catTags.length > 0 || favOnly) && (
         <button onClick={resetAll} style={{ height: 28, padding: "0 8px", border: "none", borderRadius: 4,
-          background: "transparent", color: "var(--ink-color-global-text-default)", fontSize: 12, fontWeight: 500,
+          background: "transparent", color: "var(--ink-color-global-text-default)", fontSize: FS.small, fontWeight: 500,
           cursor: "pointer", ...sans }}>Reset</button>
       )}
 
@@ -1760,11 +1752,11 @@ function FormatPanel({ metrics, formats, onSave, onRemove }) {
 // Forecast tint — a light blue wash marking a cell as a company's own estimate
 // rather than something reported. Alpha over the surface so it reads the same in
 // light and dark mode, and pale enough that the figure stays legible.
-const FC_BG = "rgba(56,132,255,0.10)";
+const FC_BG = "color-mix(in srgb, var(--ink-color-global-brand-blue-50) 12%, transparent)";
 // The header version must be OPAQUE: it's sticky, so a translucent fill let the
 // rows scrolling underneath show through it. Layering the wash over the header's
 // own surface colour keeps the theme token AND blocks what's behind.
-const FC_HEAD_BG = "linear-gradient(rgba(56,132,255,0.16), rgba(56,132,255,0.16)), "
+const FC_HEAD_BG = "linear-gradient(color-mix(in srgb, var(--ink-color-global-brand-blue-50) 18%, transparent), color-mix(in srgb, var(--ink-color-global-brand-blue-50) 18%, transparent)), "
   + "var(--ink-color-global-surface-background-default)";
 
 // Clip a long free-text answer to one line inside the value cell; the full text
@@ -1803,7 +1795,7 @@ const stickyHead = {
   // Opaque page background (not grey) — needed only because this header is sticky
   // over scrolling content; matches .sticky-clone's own backing in theme.js.
   position: "sticky", top: 0, background: "var(--ink-color-global-surface-background-default)",
-  padding: "9px 14px", fontWeight: 500, color: "var(--ink-color-global-text-default)", fontSize: 14,
+  padding: "9px 14px", fontWeight: 500, color: "var(--ink-color-global-text-default)", fontSize: FS.value,
   borderBottom: `1px solid var(--ink-color-global-border-default)`,
   fontFamily: "inherit",
 };

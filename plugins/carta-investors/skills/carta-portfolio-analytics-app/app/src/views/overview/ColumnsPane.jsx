@@ -6,7 +6,7 @@ import { readColumns, removeColumn, moveColumn, updateColumn, ensureColumns, col
 import { navigate, parseRoute } from "../../route.js";
 import { trackClick } from "../../analytics.js";
 
-const heading = { ...sans, fontSize: 14, fontWeight: 500, color: "var(--ink-color-global-text-default)", margin: 0 };
+const heading = { ...sans, fontSize: FS.value, fontWeight: 500, color: "var(--ink-color-global-text-default)", margin: 0 };
 const rowLbl = { ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-default)" };
 const note = { ...sans, fontSize: FS.small, color: MICRO, lineHeight: 1.5 };
 

@@ -2,7 +2,8 @@
 // is generated from the column catalog. Companies is the one non-column dimension and is session-only.
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { FS, sans, MICRO } from "../../ui/theme.js";
-import { Btn, SearchInput, MarqueeLabel, ddTriggerStyle, ChevronDownIcon, ChevronRightIcon, useDismissable, useFocusOnOpen, filterByLabel, SEARCH_MIN, Z, POPOVER_SHADOW } from "../../ui/components.jsx";
+import { Btn, Eyebrow, SearchInput, MarqueeLabel, ddTriggerStyle, ChevronDownIcon, ChevronRightIcon, useDismissable, useFocusOnOpen, filterByLabel, SEARCH_MIN, Z, POPOVER_SHADOW,
+  GF_WARM_SURFACE, GF_NAV_ACTIVE_BG, GF_TAG_BORDER, GF_TAG_BG, GF_BUBBLE_BG } from "../../ui/components.jsx";
 import { columnCatalog, columnValueType, readColumns, setColumnVisible } from "../../model/overviewColumns.js";
 import { trackClick } from "../../analytics.js";
 import { readFilters, setFilter, removeFilter, clearFilters, filterPredicate, filterLabel, filterFor, specKey, isEmptyCond } from "../../model/overviewFilters.js";
@@ -63,26 +64,19 @@ export function useOverviewFilter(data, dashboard) {
   return { filterCompanies, filterApi, filterProps };
 }
 
-// Local composed tokens the app's tokens.css doesn't carry — same light-dark()
-// convention, values copied from theme-with-ink's own components-globalfilter.html.
-const GF_WARM_SURFACE = "light-dark(#FBFAF9, #2D2D2D)";
-const GF_NAV_ACTIVE_BG = "light-dark(#E9EAEA, #394040)";
-const GF_TAG_BORDER = "light-dark(#285DA3, #2C67B5)";
-const GF_TAG_BG = "light-dark(#EAF0F8, transparent)";
-const GF_BUBBLE_BG = "light-dark(#EAF0F8, rgb(18 18 18))";
 const GF_PANEL_WIDTH = 600;
 const COLUMNS = "__columns";
 const COMPANIES = "__companies";
 
 const navBtn = (active) => ({ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%",
-  height: 36, padding: "0 16px", gap: 10, fontSize: 14, lineHeight: "20px", fontWeight: active ? 500 : 400,
+  height: 36, padding: "0 16px", gap: 10, fontSize: FS.value, lineHeight: "20px", fontWeight: active ? 500 : 400,
   color: "var(--ink-color-global-text-default)", cursor: "pointer", border: "none", textAlign: "left",
   background: active ? GF_NAV_ACTIVE_BG : "transparent", ...sans });
-const bubble = { display: "inline-flex", alignItems: "center", height: 18, padding: "0 8px", fontSize: 12,
+const bubble = { display: "inline-flex", alignItems: "center", height: 18, padding: "0 8px", fontSize: FS.small,
   fontWeight: 500, letterSpacing: "0.01em", borderRadius: 999, whiteSpace: "nowrap", boxSizing: "border-box",
   border: `1px solid var(--ink-color-global-feedback-info-strong)`, background: GF_BUBBLE_BG,
   color: "var(--ink-color-global-feedback-info-strong)", ...sans };
-const checkRow = { ...sans, display: "flex", alignItems: "center", gap: 10, fontSize: 14, color: "var(--ink-color-global-text-default)", cursor: "pointer" };
+const checkRow = { ...sans, display: "flex", alignItems: "center", gap: 10, fontSize: FS.value, color: "var(--ink-color-global-text-default)", cursor: "pointer" };
 const checkBox = { width: 16, height: 16, margin: 0, accentColor: "var(--ink-color-global-border-active)", cursor: "pointer" };
 
 /** Ribbon "Filters & columns" control. Left nav: Columns (the table's stack, edited
@@ -171,7 +165,7 @@ export function GlobalFilter({ data, dashboard, catalog, filterApi, companyOpts,
   const tagChip = ({ key, label, clear, hidden }) => (
     <span key={key} title={hidden ? `${label} — not shown as a column` : undefined}
       style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 8px 6px 10px",
-        fontSize: 13, whiteSpace: "nowrap", borderRadius: 4, boxSizing: "border-box",
+        fontSize: FS.bodyLg, whiteSpace: "nowrap", borderRadius: 4, boxSizing: "border-box",
         border: `1px dashed var(--ink-color-global-border-focus-default)`,
         background: "var(--ink-color-global-feedback-info-subtle)",
         color: "var(--ink-color-global-link-default)", ...sans }}>
@@ -198,7 +192,7 @@ export function GlobalFilter({ data, dashboard, catalog, filterApi, companyOpts,
       {chips.map(tagChip)}
       {chips.length > 0 && (
         <button onClick={filterApi.resetAll} style={{ height: 28, padding: "0 4px", border: "none",
-          background: "transparent", color: "var(--ink-color-global-link-default)", fontSize: 13,
+          background: "transparent", color: "var(--ink-color-global-link-default)", fontSize: FS.bodyLg,
           cursor: "pointer", textDecoration: "none", ...sans }}>Reset</button>
       )}
 
@@ -273,7 +267,7 @@ export function GlobalFilter({ data, dashboard, catalog, filterApi, companyOpts,
                   })()} />
               ) : (
                 <>
-                  <h3 style={{ ...sans, fontSize: 14, fontWeight: 500, color: "var(--ink-color-global-text-default)", margin: "0 0 14px" }}>Filter by companies</h3>
+                  <h3 style={{ ...sans, fontSize: FS.value, fontWeight: 500, color: "var(--ink-color-global-text-default)", margin: "0 0 14px" }}>Filter by companies</h3>
                   {companyOpts.length > SEARCH_MIN && (
                     <SearchInput placeholder="Search companies" value={paneSearch} onChange={(e) => setPaneSearch(e.target.value)} style={{ width: "100%" }} />
                   )}
@@ -297,7 +291,7 @@ export function GlobalFilter({ data, dashboard, catalog, filterApi, companyOpts,
                   )}
                   {companyGroups.map(([group, opts]) => (
                     <div key={group} style={{ marginTop: 16 }}>
-                      <div style={{ ...sans, fontSize: FS.micro, fontWeight: 700, color: MICRO, textTransform: "uppercase", margin: "0 0 8px" }}>{group}</div>
+                      <Eyebrow style={{ margin: "0 0 8px" }}>{group}</Eyebrow>
                       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                         {opts.map((o) => (
                           <label key={o.id} style={checkRow}>

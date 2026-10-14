@@ -1,7 +1,7 @@
 // Host tab: enriches the data with custom formula metrics, then renders the
 // flat, click-to-sort ranked table.
 import { useMemo } from "react";
-import { sans } from "../ui/theme.js";
+import { FS, sans } from "../ui/theme.js";
 import { withCustomMetrics } from "../model/derived.js";
 import { injectFormulaInputs } from "../model/overviewColumns.js";
 import RankedTable from "./overview/RankedTable.jsx";
@@ -33,7 +33,7 @@ export default function Overview({ data: rawData, dashboard }) {
       <WhatChanged data={rawData} dashboard={dashboard} />
 
       <section style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        <h2 style={{ ...sans, margin: 0, fontSize: 20, lineHeight: "28px", fontWeight: 600, letterSpacing: "-0.01em", color: "var(--ink-color-global-text-default)" }}>Portfolio</h2>
+        <h2 style={{ ...sans, margin: 0, fontSize: FS.h2, lineHeight: "28px", fontWeight: 600, letterSpacing: "-0.01em", color: "var(--ink-color-global-text-default)" }}>Portfolio</h2>
 
         {/* Stays up when the filter matches nothing — hiding it there strands the
             user with an empty table and no way to clear what emptied it. */}

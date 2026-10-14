@@ -23,7 +23,7 @@ const triggerBase = { ...sans, display: "inline-flex", alignItems: "center", gap
 const triggerStyle = (inSidebar) => (inSidebar
   // Same chip geometry as the other sidebar actions (UpdateDataButton); only the
   // red tint marks it out.
-  ? { ...triggerBase, width: "100%", textAlign: "left", height: 40, padding: "0 12px", fontSize: 13, gap: 8 }
+  ? { ...triggerBase, width: "100%", textAlign: "left", height: 40, padding: "0 12px", fontSize: FS.bodyLg, gap: 8 }
   : { ...triggerBase, height: 40, padding: "0 11px" });
 
 const groupHeaderRow = { display: "flex", alignItems: "center", gap: 6, padding: "8px 2px 6px", fontSize: FS.small, fontWeight: 600, color: "var(--ink-color-global-text-default)" };

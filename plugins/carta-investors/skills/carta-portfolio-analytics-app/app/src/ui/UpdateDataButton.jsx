@@ -14,7 +14,7 @@ const iconBtn = {
 // Sidebar-action chrome mirrors App.jsx: a full-width labeled chip whose popover opens upward.
 const sidebarActionStyle = {
   ...sans, display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left",
-  fontSize: 13, fontWeight: 400, height: 40, padding: "0 12px", border: "1px solid var(--ink-color-global-border-subtle)",
+  fontSize: FS.bodyLg, fontWeight: 400, height: 40, padding: "0 12px", border: "1px solid var(--ink-color-global-border-subtle)",
   borderRadius: 4, cursor: "pointer", background: "var(--ink-color-global-surface-background-default)",
   color: "var(--ink-color-global-text-default)",
 };

@@ -14,7 +14,7 @@ const iconBtn = { display: "inline-flex", alignItems: "center", justifyContent: 
 // Same chip geometry as UpdateDataButton's sidebar trigger — the stacked sidebar
 // actions must read as one family; keep the two styles identical.
 const sidebarActionStyle = { ...sans, display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left",
-  fontSize: 13, fontWeight: 500, height: 40, padding: "0 12px", border: "1px solid var(--ink-color-global-border-subtle)",
+  fontSize: FS.bodyLg, fontWeight: 500, height: 40, padding: "0 12px", border: "1px solid var(--ink-color-global-border-subtle)",
   borderRadius: 4, cursor: "pointer", background: "var(--ink-color-global-surface-background-default)", color: "var(--ink-color-global-text-default)" };
 const popoverWrapStyle = (inSidebar) => ({ position: "relative", lineHeight: inSidebar ? "normal" : 0, display: inSidebar ? "block" : "inline-block" });
 const popoverAnchor = (inSidebar) => (inSidebar ? { left: 0, bottom: "calc(100% + 8px)" } : { right: 0, top: "calc(100% + 8px)" });
@@ -35,7 +35,7 @@ function EditRow({ e, data, onDiscard }) {
         <Badge tone={TONE[e.status] || "neutral"}>{LABEL[e.status] || e.status}</Badge>
         {e.status !== "publishing" && (
           <button type="button" onClick={() => onDiscard(e.id)} aria-label={`Discard correction to ${m.label}`}
-            style={{ border: "none", background: "none", cursor: "pointer", color: "var(--ink-color-global-text-subtle)", fontSize: 16, lineHeight: 1, padding: "0 2px" }}>×</button>
+            style={{ border: "none", background: "none", cursor: "pointer", color: "var(--ink-color-global-text-subtle)", fontSize: FS.h3, lineHeight: 1, padding: "0 2px" }}>×</button>
         )}
       </div>
       <div style={{ ...subtle, marginTop: 2 }}>

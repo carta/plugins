@@ -276,7 +276,7 @@ function Signals({ data, dashboard }) {
                   </td>
                   <td style={{ padding: "10px 14px", whiteSpace: "nowrap" }}>
                     <Badge tone={s.tone}>{s.tag}</Badge>
-                    {s.custom && <Badge tone="muted" variant="text" style={{ marginLeft: 6 }}>custom</Badge>}
+                    {s.custom && <Badge tone="muted" variant="text" style={{ marginLeft: 6 }}>Custom</Badge>}
                   </td>
                   <td style={{ padding: "10px 14px", color: "var(--ink-color-global-text-subtle)", fontSize: FS.small }}>{s.detail}</td>
                 </tr>
@@ -338,7 +338,7 @@ function RulesEditor({ data, dashboard, rules, useBuiltin }) {
           opacity: useBuiltin ? 1 : 0.5 }}>
           <Badge tone="warning">Revenue declining</Badge>
           <span style={{ ...mono, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)" }}>Revenue QoQ growth &lt; 0% for 2 consecutive quarters</span>
-          <Badge tone="muted" variant="text">built-in</Badge>
+          <Badge tone="muted" variant="text">Built-in</Badge>
           <span style={{ flex: 1 }} />
           <Btn kind="link" style={{ fontSize: FS.small }} onClick={() => setBuiltin(!useBuiltin)}>{useBuiltin ? "Disable" : "Enable"}</Btn>
         </div>

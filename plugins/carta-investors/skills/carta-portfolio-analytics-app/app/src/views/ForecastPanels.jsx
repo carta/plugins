@@ -197,9 +197,9 @@ export function Revisions({ data, company, metricKey }) {
             <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", fontSize: FS.small }}>
               <thead>
                 <tr>
-                  <th style={{ ...stick, zIndex: 3, top: 0, background: "var(--ink-color-global-surface-background-default)", padding: "9px 14px", fontSize: 14, color: "var(--ink-color-global-text-default)", fontWeight: 500, borderBottom: `1px solid var(--ink-color-global-border-default)` }}>Reporting period</th>
+                  <th style={{ ...stick, zIndex: 3, top: 0, background: "var(--ink-color-global-surface-background-default)", padding: "9px 14px", fontSize: FS.value, color: "var(--ink-color-global-text-default)", fontWeight: 500, borderBottom: `1px solid var(--ink-color-global-border-default)` }}>Reporting period</th>
                   {periods.map((p) => (
-                    <th key={p} style={{ ...sans, position: "sticky", top: 0, zIndex: 2, background: "var(--ink-color-global-surface-background-default)", padding: "9px 14px", textAlign: "right", fontSize: 14, color: "var(--ink-color-global-text-default)", fontWeight: 500, borderBottom: `1px solid var(--ink-color-global-border-default)`, whiteSpace: "nowrap" }}>{fmtPeriod(p)}</th>
+                    <th key={p} style={{ ...sans, position: "sticky", top: 0, zIndex: 2, background: "var(--ink-color-global-surface-background-default)", padding: "9px 14px", textAlign: "right", fontSize: FS.value, color: "var(--ink-color-global-text-default)", fontWeight: 500, borderBottom: `1px solid var(--ink-color-global-border-default)`, whiteSpace: "nowrap" }}>{fmtPeriod(p)}</th>
                   ))}
                 </tr>
               </thead>

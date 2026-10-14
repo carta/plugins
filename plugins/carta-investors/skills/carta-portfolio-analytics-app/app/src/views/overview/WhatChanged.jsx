@@ -13,7 +13,7 @@ import { openCompany } from "../../state/focus.js";
 const QT = { "03": "Q1", "06": "Q2", "09": "Q3", "12": "Q4" };
 export const qLabel = (p) => `${QT[String(p).slice(5, 7)] || String(p).slice(5, 7)} '${String(p).slice(2, 4)}`;
 
-const nameBtn = { ...sans, border: "none", background: "transparent", padding: 0, cursor: "pointer", fontWeight: 400, fontSize: 14, color: "var(--ink-color-global-link-default)", textAlign: "left" };
+const nameBtn = { ...sans, border: "none", background: "transparent", padding: 0, cursor: "pointer", fontWeight: 400, fontSize: FS.value, color: "var(--ink-color-global-link-default)", textAlign: "left" };
 const GAP_FG = "var(--ink-color-global-feedback-negative-strong)";
 const OK_FG = "var(--ink-color-global-feedback-positive-strong)";
 
@@ -30,8 +30,8 @@ const CARD_BORDER = "1px solid var(--ink-color-global-border-subtle)";
 // alignSelf start so a short card in the 2-up grid keeps its natural height
 // instead of stretching to match the tallest row neighbour.
 const CARD_STYLE = { border: CARD_BORDER, borderRadius: 4, background: "var(--ink-color-global-surface-background-default)", overflow: "hidden", alignSelf: "start" };
-const CARD_HEADER_BASE = { ...sans, fontSize: 14, fontWeight: 600, color: "var(--ink-color-global-text-default)", padding: "14px 16px", borderBottom: CARD_BORDER };
-const CARD_NOTE_STYLE = { ...sans, fontSize: 12, color: "var(--ink-color-global-text-subtle)", lineHeight: "18px", fontWeight: 400, marginTop: 2 };
+const CARD_HEADER_BASE = { ...sans, fontSize: FS.value, fontWeight: 600, color: "var(--ink-color-global-text-default)", padding: "14px 16px", borderBottom: CARD_BORDER };
+const CARD_NOTE_STYLE = { ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", lineHeight: "18px", fontWeight: 400, marginTop: 2 };
 
 const HelpIcon = ({ hint }) => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"
@@ -47,7 +47,7 @@ function StatGrid({ stats, style }) {
       {stats.map((s, i) => (
         <div key={i} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
           <div style={{ ...sans, display: "flex", alignItems: "flex-start", gap: 6,
-            color: "var(--ink-color-global-text-subtle)", fontSize: 13, minHeight: 40, lineHeight: "20px", paddingRight: 12 }}>
+            color: "var(--ink-color-global-text-subtle)", fontSize: FS.bodyLg, minHeight: 40, lineHeight: "20px", paddingRight: 12 }}>
             <span>{s.label}</span>
             {s.hint && <HelpIcon hint={s.hint} />}
           </div>
@@ -56,7 +56,7 @@ function StatGrid({ stats, style }) {
               fontVariantNumeric: "tabular-nums", lineHeight: "38px", color: "var(--ink-color-global-text-default)" }}>
               {s.value ?? "—"}
             </div>
-            {s.sub && <div style={{ ...sans, fontSize: 13, color: "var(--ink-color-global-text-subtle)", fontVariantNumeric: "tabular-nums" }}>{s.sub}</div>}
+            {s.sub && <div style={{ ...sans, fontSize: FS.bodyLg, color: "var(--ink-color-global-text-subtle)", fontVariantNumeric: "tabular-nums" }}>{s.sub}</div>}
           </div>
         </div>
       ))}
@@ -125,8 +125,8 @@ export default function WhatChanged({ data, dashboard }) {
   return (
     <section style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 900 }}>
-        <h2 style={{ ...sans, margin: 0, fontSize: 20, lineHeight: "28px", fontWeight: 600, letterSpacing: "-0.01em", color: "var(--ink-color-global-text-default)" }}>Overview</h2>
-        <p style={{ ...sans, fontSize: 13, color: "var(--ink-color-global-text-subtle)", lineHeight: "20px", margin: 0 }}>
+        <h2 style={{ ...sans, margin: 0, fontSize: FS.h2, lineHeight: "28px", fontWeight: 600, letterSpacing: "-0.01em", color: "var(--ink-color-global-text-default)" }}>Overview</h2>
+        <p style={{ ...sans, fontSize: FS.bodyLg, color: "var(--ink-color-global-text-subtle)", lineHeight: "20px", margin: 0 }}>
           What moved, who stopped reporting, and who just started. Defaults to{" "}
           <strong style={{ color: "var(--ink-color-global-text-default)", fontWeight: 600 }}>{qLabel(sq.quarter)}</strong> — the most recent quarter whose reporting has settled — compared against
           the quarter before it.
@@ -139,7 +139,7 @@ export default function WhatChanged({ data, dashboard }) {
         <Segmented options={[{ id: "abs", label: "By size" }, { id: "pct", label: "By %" }]} value={rankBy} onChange={setRankBy} />
         <button onClick={() => setGlossOpen(true)}
           style={{ ...sans, marginLeft: "auto", border: "none", background: "transparent", padding: 0, cursor: "pointer",
-            fontSize: 13, color: "var(--ink-color-global-link-default)", textDecoration: "underline", textUnderlineOffset: "2px" }}>
+            fontSize: FS.bodyLg, color: "var(--ink-color-global-link-default)", textDecoration: "underline", textUnderlineOffset: "2px" }}>
           What these numbers mean
         </button>
       </div>
@@ -217,7 +217,7 @@ const toggleBtn = (onClick, label) => (
   <button onClick={onClick}
     style={{ ...sans, display: "block", width: "100%", border: "none", borderTop: CARD_BORDER,
       background: "transparent", cursor: "pointer", padding: "12px 16px", textAlign: "left",
-      fontSize: 13, color: "var(--ink-color-global-link-default)" }}>
+      fontSize: FS.bodyLg, color: "var(--ink-color-global-link-default)" }}>
     {label}
   </button>
 );
@@ -238,10 +238,10 @@ function MoverCard({ title, rows, unit, rankBy, pct, tone }) {
               alignItems: "center", gap: 12, borderBottom: CARD_BORDER, padding: "12px 16px" }}>
               <div><button onClick={() => openCompany(r.id)} style={nameBtn}>{r.name}</button></div>
               <div data-tip={`${fmtVal(r.prev, unit, undefined, r.curCode)} → ${fmtVal(r.cur, unit, undefined, r.curCode)}`}
-                style={{ textAlign: "right", ...mono, fontSize: 14, fontWeight: 600, color: tone, whiteSpace: "nowrap", paddingRight: 8 }}>
+                style={{ textAlign: "right", ...mono, fontSize: FS.value, fontWeight: 600, color: tone, whiteSpace: "nowrap", paddingRight: 8 }}>
                 {rankBy === "pct" ? pct(r.pct) : (r.abs >= 0 ? "+" : "−") + fmtVal(Math.abs(r.abs), unit, undefined, r.curCode)}
               </div>
-              <div style={{ textAlign: "right", ...mono, fontSize: 12, color: "var(--ink-color-global-text-subtle)", whiteSpace: "nowrap" }}>
+              <div style={{ textAlign: "right", ...mono, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", whiteSpace: "nowrap" }}>
                 {rankBy === "pct" ? (r.abs >= 0 ? "+" : "−") + fmtVal(Math.abs(r.abs), unit, undefined, r.curCode) : pct(r.pct)}
               </div>
             </HoverRow>
@@ -272,7 +272,7 @@ function ListCard({ title, rows, empty, note }) {
             <HoverRow key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center",
               gap: 12, borderBottom: CARD_BORDER, padding: "12px 16px" }}>
               <button onClick={() => openCompany(r.id)} style={nameBtn}>{r.name}</button>
-              <div style={{ ...mono, fontSize: 12, color: "var(--ink-color-global-text-subtle)", whiteSpace: "nowrap" }}>{r.right}</div>
+              <div style={{ ...mono, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", whiteSpace: "nowrap" }}>{r.right}</div>
             </HoverRow>
           ))}
           {!expanded && hidden > 0 && toggleBtn(() => setExpanded(true), `Show ${hidden} more`)}

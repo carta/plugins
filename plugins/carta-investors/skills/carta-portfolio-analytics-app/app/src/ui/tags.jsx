@@ -8,11 +8,11 @@ import { Badge } from "./components.jsx";
 import { tagsFor, tagId } from "../model/tags.js";
 import { STATUS_CAT, toneForStatus } from "../model/status.js";
 
-const CHIP = { height: "auto", padding: "1px 6px", fontSize: 10, lineHeight: "16px" };
+export const CHIP = { height: "auto", padding: "1px 6px", fontSize: 10, lineHeight: "16px" };
 
 // A long custom tag has no spaces, so Badge's default nowrap grows it sideways
 // into the next column. Wrap and cap width; overflowWrap:anywhere breaks the string.
-const WRAP = { whiteSpace: "normal", overflowWrap: "anywhere", height: "auto", maxWidth: 220, textAlign: "left" };
+export const WRAP = { whiteSpace: "normal", overflowWrap: "anywhere", height: "auto", maxWidth: 220, textAlign: "left" };
 
 /** Status is colour-coded by outcome; every other Carta category keeps the
  *  single "info" blue, so colour stays meaningful rather than decorative. */

@@ -210,7 +210,7 @@ export const HintIcon = ({ hint, label, icon: Icon = HelpCircleIcon, color = "va
 );
 
 export const Eyebrow = ({ children, color = "var(--ink-color-global-text-subtle)", style }) => (
-  <div style={{ ...sans, fontSize: FS.micro, letterSpacing: "0.09em", textTransform: "uppercase", color, fontWeight: 600, ...style }}>
+  <div style={{ ...sans, fontSize: FS.micro, letterSpacing: "0.06em", textTransform: "uppercase", color, fontWeight: 600, ...style }}>
     {children}
   </div>
 );
@@ -240,7 +240,7 @@ export const Heading2 = ({ children, style }) => (
 // on top of it and desync one page from the next.
 export const H2 = ({ children, right, actions, id }) => (
   <div id={id} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap", scrollMarginTop: 20 }}>
-    <h2 style={{ ...sans, fontSize: 20, lineHeight: "28px", fontWeight: 600, letterSpacing: "-0.01em", margin: 0, color: "var(--ink-color-global-text-default)" }}>{children}</h2>
+    <h2 style={{ ...sans, fontSize: FS.h2, lineHeight: "28px", fontWeight: 600, letterSpacing: "-0.01em", margin: 0, color: "var(--ink-color-global-text-default)" }}>{children}</h2>
     <span style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
       {right && <span style={{ ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)" }}>{right}</span>}
       {actions}
@@ -474,7 +474,7 @@ export function Toggle({ checked, onChange, labels = ["On", "Off"], disabled, sm
  *  object, so a new ribbon control can't quietly drift on height/padding/font the
  *  way the Filters/Reset buttons once did (they were hand-tuned per call site
  *  before landing here — height and font-size got copied, padding didn't). */
-const TOOLBAR_CONTROL_STYLE = { height: 40, padding: "0 12px", fontSize: 14, lineHeight: "20px" };
+const TOOLBAR_CONTROL_STYLE = { height: 40, padding: "0 12px", fontSize: FS.value, lineHeight: "20px" };
 export const Btn = forwardRef(({ children, onClick, kind = "ghost", size = "small", style, disabled, title, className, ...rest }, ref) => {
   const isLink = kind === "link";
   // `title`/`className` are destructured out (not left in `rest`) so a caller
@@ -608,7 +608,7 @@ export function MenuItem({ children, onClick, selected, tint = selected, checkma
     <button role={role} aria-selected={role === "option" ? selected : undefined} onClick={onClick} className="menu-item"
       style={{ ...sans, display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", whiteSpace: "nowrap",
         padding: dense ? "6px 12px" : "8px 12px", minHeight: dense ? undefined : 36, border: "none", borderRadius: 4, cursor: "pointer",
-        boxSizing: "border-box", fontSize: 14, lineHeight: dense ? "24px" : "20px", fontWeight: 400,
+        boxSizing: "border-box", fontSize: FS.value, lineHeight: dense ? "24px" : "20px", fontWeight: 400,
         color: "var(--ink-color-global-text-default)",
         background: tint ? "var(--ink-color-global-surface-lightgray-hover)" : "transparent",
         ...style }}>
@@ -665,7 +665,7 @@ export const POPOVER_SHADOW = "0 8px 24px rgba(20,24,24,.12), 0 2px 6px rgba(20,
 // title down to match it (see theme-with-ink/charts.md's title-row note), so a
 // chart-header trigger uses this shorter chrome instead — same border/radius
 // recipe as ddTriggerStyle, just sized to the row it actually shares.
-const COMPACT_TRIGGER_STYLE = { height: 24, padding: "0 8px", fontSize: 12, lineHeight: "16px" };
+const COMPACT_TRIGGER_STYLE = { height: 24, padding: "0 8px", fontSize: FS.small, lineHeight: "16px" };
 
 /** Shared by every `portal` popover (Dropdown, FilterMenu, PivotDashboard's
  *  GlobalFilter): tracks an anchor's on-screen rect so a body-portaled panel
@@ -822,7 +822,7 @@ export function FilterMenu({ sections, chips = [], onResetAll, triggerLabel = "F
     return (
       <span key={key} style={{ display: "inline-flex", alignItems: "center", height: 28,
         padding: clearable ? "0 4px 0 8px" : "0 8px",
-        fontSize: 12, lineHeight: 1, whiteSpace: "nowrap", borderRadius: 4, boxSizing: "border-box",
+        fontSize: FS.small, lineHeight: 1, whiteSpace: "nowrap", borderRadius: 4, boxSizing: "border-box",
         border: `1px solid ${GF_TAG_BORDER}`, background: GF_TAG_BG, color: GF_TAG_BORDER, ...sans }}>
         {label}
         {clearable && (
@@ -849,14 +849,14 @@ export function FilterMenu({ sections, chips = [], onResetAll, triggerLabel = "F
             {sections.map(({ key, label, count }) => (
               <button key={key} onClick={() => setActiveKey(key)}
                 style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%",
-                  height: 36, padding: "0 16px", gap: 10, fontSize: 14, lineHeight: "20px", fontWeight: activeKey === key ? 500 : 400,
+                  height: 36, padding: "0 16px", gap: 10, fontSize: FS.value, lineHeight: "20px", fontWeight: activeKey === key ? 500 : 400,
                   color: "var(--ink-color-global-text-default)", cursor: "pointer", border: "none", textAlign: "left",
                   background: activeKey === key ? GF_NAV_ACTIVE_BG : "transparent", ...sans }}
                 onMouseEnter={(e) => { if (activeKey !== key) e.currentTarget.style.background = "var(--ink-color-global-surface-lightgray-default)"; }}
                 onMouseLeave={(e) => { if (activeKey !== key) e.currentTarget.style.background = "transparent"; }}>
                 <span>{label}</span>
                 {count(draft[key]) > 0 && (
-                  <span style={{ display: "inline-flex", alignItems: "center", height: 18, padding: "0 8px", fontSize: 12,
+                  <span style={{ display: "inline-flex", alignItems: "center", height: 18, padding: "0 8px", fontSize: FS.small,
                     fontWeight: 500, letterSpacing: "0.01em", borderRadius: 999, whiteSpace: "nowrap", boxSizing: "border-box",
                     border: `1px solid var(--ink-color-global-feedback-info-strong)`, background: GF_BUBBLE_BG,
                     color: "var(--ink-color-global-feedback-info-strong)", ...sans }}>{count(draft[key])}</span>
@@ -868,7 +868,7 @@ export function FilterMenu({ sections, chips = [], onResetAll, triggerLabel = "F
             <div style={{ flex: 1, padding: "20px 24px", overflowY: "auto" }}>
               {active && (
                 <>
-                  <h3 style={{ ...sans, fontSize: 14, fontWeight: 500, color: "var(--ink-color-global-text-default)", margin: "0 0 14px" }}>
+                  <h3 style={{ ...sans, fontSize: FS.value, fontWeight: 500, color: "var(--ink-color-global-text-default)", margin: "0 0 14px" }}>
                     {active.label}
                   </h3>
                   {active.render(draft[active.key], (v) => setDraftFor(active.key, v))}
@@ -897,7 +897,7 @@ export function FilterMenu({ sections, chips = [], onResetAll, triggerLabel = "F
         // Distinct label from the in-panel footer's "Reset" (which only
         // clears the open draft) — this one clears every applied filter now.
         <button onClick={onResetAll} style={{ height: 28, padding: "0 8px", border: "none", borderRadius: 4,
-          background: "transparent", color: "var(--ink-color-global-text-default)", fontSize: 12, fontWeight: 500,
+          background: "transparent", color: "var(--ink-color-global-text-default)", fontSize: FS.small, fontWeight: 500,
           cursor: "pointer", ...sans }}>Reset all</button>
       )}
 
@@ -945,10 +945,10 @@ export function FilterCheckboxList({ options, selected, onChange, searchMin = SE
           <Fragment key={o.id}>
             {o.group && o.group !== shown[i - 1]?.group && <Eyebrow style={{ marginTop: i ? 6 : 0 }}>{o.group}</Eyebrow>}
             <label style={{ ...sans, display: "flex", alignItems: "flex-start", gap: 10,
-              fontSize: 14, lineHeight: "20px", color: "var(--ink-color-global-text-default)", cursor: "pointer" }}>
+              fontSize: FS.value, lineHeight: "20px", color: "var(--ink-color-global-text-default)", cursor: "pointer" }}>
               <Checkbox checked={selected.has(o.id)} onChange={() => toggle(o.id)} style={{ marginTop: 2 }} />
               <span style={{ flex: "1 1 auto" }}>{o.label}</span>
-              {o.sub != null && <span style={{ color: "var(--ink-color-global-text-subtle)", fontSize: 12 }}>{o.sub}</span>}
+              {o.sub != null && <span style={{ color: "var(--ink-color-global-text-subtle)", fontSize: FS.small }}>{o.sub}</span>}
             </label>
           </Fragment>
         ))}
@@ -973,7 +973,7 @@ export function FilterRadioList({ name, options, value, onChange, searchMin = SE
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       {shown.map((o) => (
         <label key={o.id} style={{ ...sans, display: "flex", alignItems: "flex-start", gap: 10,
-          fontSize: 14, lineHeight: "20px", color: "var(--ink-color-global-text-default)", cursor: "pointer" }}>
+          fontSize: FS.value, lineHeight: "20px", color: "var(--ink-color-global-text-default)", cursor: "pointer" }}>
           <input type="radio" name={name} checked={value === o.id} onChange={() => onChange(o.id)}
             style={{ width: 16, height: 16, flex: "0 0 16px", margin: 0, marginTop: 2,
               accentColor: "var(--ink-color-global-border-active)", cursor: "pointer" }} />
@@ -1131,7 +1131,7 @@ export function TooltipLayer() {
             maxWidth: 340, padding: "6px 8px", borderRadius: "var(--ink-size-global-radius-subtle)",
             background: "var(--ink-color-global-surface-darkgray-default)", color: "var(--ink-color-global-brand-white)",
             boxShadow: "var(--ink-elevation-global-shadow-medium)",
-            ...sans, fontSize: 12, fontWeight: 400, lineHeight: 1.5,
+            ...sans, fontSize: FS.small, fontWeight: 400, lineHeight: 1.5,
             whiteSpace: "pre-wrap", textAlign: "left",
           }}>
           {tip.text}
@@ -1183,7 +1183,7 @@ export function Modal({ open, onClose, title, subtitle, children, width = 760, m
           </div>
           <button onClick={onClose} aria-label="Close settings"
             style={{ border: "none", background: "transparent", cursor: "pointer", padding: 4, lineHeight: 1,
-              fontSize: 20, color: "var(--ink-color-global-text-subtle)" }}>×</button>
+              fontSize: FS.h2, color: "var(--ink-color-global-text-subtle)" }}>×</button>
         </div>
         <div style={{ padding: 20, overflowY: "auto", flex: 1 }}>{children}</div>
       </div>
@@ -1444,13 +1444,13 @@ export function Badge({ children, tone = "neutral", variant, title, style }) {
   if (variant === "text")
     return (
       <span data-tip={title} style={{ ...sans, display: "inline-flex", alignItems: "center", fontSize: FS.micro,
-        fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", whiteSpace: "nowrap", color: t.fg, ...style }}>
+        fontWeight: 500, whiteSpace: "nowrap", color: t.fg, ...style }}>
         {children}
       </span>
     );
   return (
     <span data-tip={title} style={{ ...sans, display: "inline-flex", alignItems: "center", height: 20, padding: "0 8px",
-      fontSize: 11, fontWeight: 500, lineHeight: "20px", letterSpacing: 0, whiteSpace: "nowrap", boxSizing: "border-box",
+      fontSize: FS.micro, fontWeight: 500, lineHeight: "20px", letterSpacing: 0, whiteSpace: "nowrap", boxSizing: "border-box",
       borderRadius: 4, color: t.fg, background: t.bg, border: `1px solid ${t.border}`, ...style }}>
       {children}
     </span>
@@ -1541,7 +1541,7 @@ export const SearchInput = forwardRef(function SearchInput({ placeholder, value,
             display: "inline-flex", alignItems: "center", justifyContent: "center",
             width: 16, height: 16, padding: 0, border: "none", borderRadius: 2,
             background: "transparent", color: "var(--ink-color-global-text-subtle)",
-            cursor: "pointer", fontSize: 14, lineHeight: 1 }}>×</button>
+            cursor: "pointer", fontSize: FS.value, lineHeight: 1 }}>×</button>
       )}
     </div>
   );

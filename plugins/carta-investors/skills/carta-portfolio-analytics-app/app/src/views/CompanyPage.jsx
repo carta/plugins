@@ -296,7 +296,10 @@ function ReturnsBlock({ data, company }) {
             + `summed across every fund that holds it.`,
           ...(byFund.length > 1 ? {
             sub: <Btn kind="link" onClick={() => setOwnOpen((o) => !o)}>
-              {ownOpen ? "Hide funds ▲" : `${byFund.length} funds ▾`}
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                {ownOpen ? "Hide funds" : `${byFund.length} funds`}
+                <ChevronDownIcon size={14} style={{ transform: ownOpen ? "rotate(180deg)" : undefined }} />
+              </span>
             </Btn>,
           } : byFund.length === 1 ? { sub: byFund[0].fund } : {}),
         }] : []),
@@ -569,7 +572,7 @@ const rankCell = (r, tip) => (r ? <span data-tip={tip} style={{ cursor: "help" }
 
 /** The label cell every KPI row shares: metric name, a custom marker, cadence hint. */
 function kpiRowLabel(company, m, k) {
-  const badge = m.custom ? <Badge tone="muted" variant="text" style={{ marginLeft: 4 }}>custom</Badge> : null;
+  const badge = m.custom ? <Badge tone="muted" variant="text" style={{ marginLeft: 4 }}>Custom</Badge> : null;
   return { key: k, label: <>{m.label}{badge}</>, hint: `Reported ${cadenceLabel(metricCadence(company, k)).toLowerCase()}` };
 }
 
@@ -734,7 +737,7 @@ function RiskBlock({ data, company, dashboard }) {
             {signals.map((s, i) => (
               <div key={i} style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
                 <Badge tone={s.tone} style={{ height: "auto", whiteSpace: "normal", overflowWrap: "anywhere", maxWidth: 260, textAlign: "left", flexShrink: 0 }}>{s.tag}</Badge>
-                {s.custom && <Badge tone="muted" variant="text">custom</Badge>}
+                {s.custom && <Badge tone="muted" variant="text">Custom</Badge>}
                 <span style={{ ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)" }}>{s.detail}</span>
               </div>
             ))}
@@ -869,7 +872,7 @@ function KpiTable({ data, company, quarterly, metrics }) {
                 <td className="frozen-col" style={{ ...tdStyle, position: "sticky", left: 0, zIndex: 1, ...sans,
                   textAlign: "left" }}>
                   {r.m.label}
-                  {r.m.custom && <Badge tone="muted" variant="text" style={{ marginLeft: 4 }}>custom</Badge>}
+                  {r.m.custom && <Badge tone="muted" variant="text" style={{ marginLeft: 4 }}>Custom</Badge>}
                 </td>
                 <td style={{ ...tdStyle, textAlign: "left" }}>
                   {!isQualitative(r.m) && <TrendSparkline points={periods.map((p) => ({ d: p, v: r.byP.get(p)?.v }))} dir={trendDir(periods, r.byP)} />}
@@ -939,7 +942,7 @@ function KpiCharts({ data, company, quarterly, forceOpen }) {
           {metrics.map((m) => (
             <div key={m.key} className="card chart-card" style={{ padding: 14 }}>
               <InkKpiChart id={m.key} title={sentenceCase(m.label)} company={company.name}
-                badge={m.custom && <Badge tone="muted" variant="text" style={{ marginLeft: 4 }}>custom</Badge>}
+                badge={m.custom && <Badge tone="muted" variant="text" style={{ marginLeft: 4 }}>Custom</Badge>}
                 unit={m.unit} quarterly={quarterly} height={150}
                 points={seriesPoints(company, m.key, m, quarterly).map((p) => ({ d: p.d, v: p.v, cur: p.cur, partial: p.partial }))} />
             </div>

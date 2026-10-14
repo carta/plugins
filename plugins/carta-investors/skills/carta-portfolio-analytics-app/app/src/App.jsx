@@ -101,7 +101,7 @@ const popoverWrapStyle = (inSidebar) => ({ position: "relative", lineHeight: inS
 // Bordered chips (not plain list rows) so the sidebar actions read as buttons,
 // distinct from the NavItem tabs above them.
 const sidebarActionStyle = { ...sans, display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left",
-  fontSize: 13, fontWeight: 400, padding: "0 12px", height: 40, border: "1px solid var(--ink-color-global-border-subtle)",
+  fontSize: FS.bodyLg, fontWeight: 400, padding: "0 12px", height: 40, border: "1px solid var(--ink-color-global-border-subtle)",
   borderRadius: 4, cursor: "pointer", background: "var(--ink-color-global-surface-background-default)",
   color: "var(--ink-color-global-text-default)" };
 
@@ -201,7 +201,7 @@ function DataStatusLine({ source }) {
   useNow();
   const oldestFetch = oldestDatasetFetch(source?.datasets);
   return (
-    <div style={{ ...sans, fontSize: 12, lineHeight: "17px", color: "var(--ink-color-global-text-subtle)" }}>
+    <div style={{ ...sans, fontSize: FS.small, lineHeight: "17px", color: "var(--ink-color-global-text-subtle)" }}>
       {oldestFetch
         ? `Data fetched ${fmtRelative(oldestFetch)} from Carta Fund Admin & Data Collection`
         : `Data as of ${fmtAsOf(source?.asOf)} from Carta Data Collection`}
@@ -415,7 +415,7 @@ export default function App({ firm }) {
         <div style={{ padding: "4px 14px", display: "flex", alignItems: "flex-start", gap: 12 }}>
           <Mark branding={data.branding} size={30} style={{ flex: "none", transform: "translateY(-5px)" }} />
           <div style={{ minWidth: 0 }}>
-            <div style={{ ...sans, fontSize: 14, fontWeight: 600, lineHeight: "20px", letterSpacing: "-0.01em", color: "var(--ink-color-global-text-default)", wordBreak: "break-word" }}>{resolvedFirmName}</div>
+            <div style={{ ...sans, fontSize: FS.value, fontWeight: 600, lineHeight: "20px", letterSpacing: "-0.01em", color: "var(--ink-color-global-text-default)", wordBreak: "break-word" }}>{resolvedFirmName}</div>
           </div>
         </div>
         {/* Only the nav list scrolls, so sidebar action popovers below aren't
@@ -439,7 +439,7 @@ export default function App({ firm }) {
           </div>
         )}
         <div style={{ padding: "4px 12px 0", display: "flex", flexDirection: "column", gap: 4 }}>
-          <div style={{ ...sans, fontSize: 13, fontWeight: 600, color: "var(--ink-color-global-text-default)" }}>Portfolio Analytics</div>
+          <div style={{ ...sans, fontSize: FS.bodyLg, fontWeight: 600, color: "var(--ink-color-global-text-default)" }}>Portfolio Analytics</div>
           <DataStatusLine source={data.source} />
         </div>
         <UpdateDataButton variant="sidebar" datasets={data.source?.datasets} builtAt={data.source?.builtAt} companies={refreshCompanies} />
@@ -447,8 +447,8 @@ export default function App({ firm }) {
         {themeToggleSidebar}
         {userName && (
           <div style={{ padding: "8px 12px 0", borderTop: "1px solid var(--ink-color-global-border-subtle)", marginTop: 4, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-            <span style={{ ...sans, fontSize: 12, fontWeight: 500, color: "var(--ink-color-global-text-subtle)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{userName}</span>
-            <a href="/auth/logout" style={{ ...sans, fontSize: 12, fontWeight: 500, color: "var(--ink-color-global-text-subtle)", textDecoration: "none", whiteSpace: "nowrap", flex: "none" }}>Sign out</a>
+            <span style={{ ...sans, fontSize: FS.small, fontWeight: 500, color: "var(--ink-color-global-text-subtle)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{userName}</span>
+            <a href="/auth/logout" style={{ ...sans, fontSize: FS.small, fontWeight: 500, color: "var(--ink-color-global-text-subtle)", textDecoration: "none", whiteSpace: "nowrap", flex: "none" }}>Sign out</a>
           </div>
         )}
       </div>
