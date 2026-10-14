@@ -109,3 +109,25 @@ Apply `SKILL.md` §Formatting rules.
 **Multi-entity**: render one table per node, under a `### {entity name}`
 subheader, in the same root-first order. If the user targeted one entity
 by name (see `references/follow-up.md`), render only that entity's breakpoints.
+
+## Breakpoint drill table (chat only, on request)
+
+One table per drilled breakpoint, under a `#### {breakpoint.name}` subheader (beneath the entity's
+`### {entity name}` subheader when multi-entity). Sort `allocations` by
+`.allocated_proceeds.proceeds` descending.
+
+| Column            | Source                                                   |
+| ----------------- | -------------------------------------------------------- |
+| Group             | `allocations[i].group_name`                              |
+| Proceeds          | `allocations[i].allocated_proceeds.proceeds`             |
+| % of Proceeds     | `allocations[i].allocated_proceeds.percentage_of_total`  |
+| Participating Qty | `allocations[i].allocated_proceeds.units`                |
+| Proceeds per unit | `allocations[i].allocated_proceeds.proceeds_per_unit`    |
+
+**Total row** — final row, bolded: `"Total"`, `breakpoint.proceeds_in_tier`, `100.00%`,
+`breakpoint.participating_units`, `breakpoint.proceeds_per_unit`.
+
+`colType`: `Group` text; `% of Proceeds` pct; `Participating Qty` qty; `Proceeds` and `Proceeds per
+unit` currency.
+
+Apply `SKILL.md` §Formatting rules.

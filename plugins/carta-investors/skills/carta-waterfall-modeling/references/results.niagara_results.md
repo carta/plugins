@@ -191,7 +191,47 @@ cut handlers it dispatches to.
   case-insensitively (substring match is fine for fuzzy disambiguation). If the
   match is ambiguous, ask via `AskUserQuestion` with the candidate entities. If
   unmatched, list the entities and ask again. **Single-entity**: render the one
-  breakpoints table without a subheader.
+  breakpoints table without a subheader. In both cases, then offer the **Breakpoint drill**
+  below.
+
+## Breakpoint drill (on request — after Show breakpoints)
+
+**Gate on `breakpoint_allocations_command`** (cached from Step 3). Absent or `null` → skip, back to
+the menu. Otherwise offer it via `AskUserQuestion` (`Show holders by breakpoint` · `Back to menu`).
+If the user asks for a breakpoint's holders directly, skip the offer and go straight to the pick.
+
+**Pick the breakpoint.** Multi-entity → pick the entity first (matched as in `"Show breakpoints"`
+above). Present that entity's cached `breakpoints[].name` as `AskUserQuestion` options **plus "All
+breakpoints"** (loops the call over every breakpoint, in declared order). One breakpoint → skip the
+picker. **More than 3** (names + "All breakpoints" would exceed 4 options) → list them compactly and
+take a **free-text** name matched against `breakpoints[].name`, or "all" for every breakpoint. On
+selection, fetch and render it in chat. Read `rendering.niagara_results.md` §Breakpoint drill table
+first, then:
+
+```
+call_tool({"name": "<breakpoint_allocations_command with all ':' replaced by '__'>", "arguments": {
+  "owner_kind":       "FIRM",
+  "owner_id":         "<org_pk from Step 1>",
+  "target_kind":      "<locked from Step 2>",
+  "target_id":        "<locked from Step 2>",
+  "execution_id":     "<locked from Step 5>",
+  "breakpoint_index": <the breakpoint's 0-based position in that entity's breakpoints[]>,
+  "grouping":         "<active grouping>",
+  "node_id":          "<the entity's node_id>",
+  "page":             1,
+  "page_size":        <page_size from Step 6a (25 small / 10 large)>
+}})
+→ response: { grouping, page, page_size, total_pages, total_count,
+             breakpoint, allocations, node_id, nodes_summary }
+```
+
+- `<active grouping>` — whichever grouping is currently active (`BY_HOLDER`, or `BY_TYPE` after
+  `"Group results by security type"`).
+- Page `1 … total_pages` and accumulate `allocations` per breakpoint.
+- Return to the menu after.
+
+Errors: same as the Step 6b per-call handling (`response too large` → halve `page_size`);
+`400 invalid_request` → surface the message and return to the menu.
 
 ## Firm-holders filter (only on request)
 

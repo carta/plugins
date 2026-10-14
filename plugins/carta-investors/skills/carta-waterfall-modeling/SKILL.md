@@ -37,7 +37,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.73.0</carta-plugin>
+<carta-plugin>carta-investors:6.73.1</carta-plugin>
 
 # Waterfall Modeling
 
@@ -57,6 +57,7 @@ are added):
 | Command | Rendering doc |
 | --- | --- |
 | `waterfall_modeling:get:niagara_results` | `references/rendering.niagara_results.md` |
+| `waterfall_modeling:get:niagara_breakpoint_allocations` | `references/rendering.niagara_results.md` |
 | `waterfall_modeling:get:core_results` | `references/rendering.core_results.md` |
 | `portfolio_valuations:get:llc_cap_table_summary` | `references/rendering.llc_cap_table_summary.md` |
 | `portfolio_valuations:get:llc_liquidation_preferences` | `references/rendering.llc_liquidation_preferences.md` |
@@ -268,6 +269,9 @@ and pass as the `name` field to `read_tool` (`call_tool` for `save_command`); ne
 - `save_command` — **optional**; updates the firm's holding values from the run's results
   (offered in the Step 6 follow-up menu). May be `null` or absent — when so, omit the
   update option from the follow-up menu.
+- `breakpoint_allocations_command` — **optional**; fetches one breakpoint's allocations
+  (offered after `Show breakpoints` in the Step 6 follow-up cuts). May be `null` or absent —
+  when so, don't offer it.
 - `available_inputs[]` — one entry per input the run accepts. Each entry:
   - `option` — the **body key** to send in Step 5 (e.g. `"EQUITY_VALUE"`).
   - `label` — short human-readable name (e.g. "Equity value"). Show this
@@ -292,8 +296,8 @@ and pass as the `name` field to `read_tool` (`call_tool` for `save_command`); ne
   Root display name = `root.name` when set, else the picked company name.
 
 Cache `run_command`, `get_command`, `cap_table_command` (if present),
-`save_command` (if present), `currency` (if present), `is_multi_entity`, `root` (if present), and the
-catalog for the rest of the flow. **Do not re-call `get:options` mid-flow.**
+`save_command` (if present), `breakpoint_allocations_command` (if present), `currency` (if present),
+`is_multi_entity`, `root` (if present), and the catalog for the rest of the flow. **Do not re-call `get:options` mid-flow.**
 
 **Announce the multi-entity structure before collecting inputs.** When
 `is_multi_entity` is `true`, print one sentence before Step 4 — e.g. _"This is a
