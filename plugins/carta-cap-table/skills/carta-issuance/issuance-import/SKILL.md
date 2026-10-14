@@ -11,7 +11,7 @@ allowed-tools: []
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.96.7</carta-plugin>
+<carta-plugin>carta-cap-table:6.96.8</carta-plugin>
 
 # issuance-import
 
@@ -48,11 +48,7 @@ saves and validates, Phase 2 still reviews, Phase 3 is still the only mutate.
 ## Usage
 
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-issuance/issuance-import/scripts/parse_upload.py" \
-  --file "<path>" \
-  [--sheet "<sheet name>"] \
-  [--reference "$WORK/_reference.json"] \
-  --out-dir "$WORK"
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-issuance/issuance-import/scripts/parse_upload.py" --file "<path>" [--sheet "<sheet name>"] [--reference "<scratchpad>/_reference.json"] --out-dir "<scratchpad>"
 ```
 
 - `--sheet` — only needed when the workbook has more than one importable sheet
@@ -84,7 +80,7 @@ whole ingest and hands back the rows the surface seeds from. These are its steps
 
 ### Step 0 — Confirm you can actually run the parser
 
-The parser is a local script, so this phase needs `Bash(uv run *)`. **Check your own tool
+The parser is a local script, so this phase needs `Bash`. **Check your own tool
 surface for Bash before promising an import** — no host guarantees it.
 
 No Bash → **do not hand-read the file.** Reading a workbook by eye is the failure this whole
@@ -109,8 +105,7 @@ plausible matches → `AskUserQuestion` which one (allowed by engine rule 5's fi
 ### Step 2 — Parse, before spending any round trip
 
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-issuance/issuance-import/scripts/parse_upload.py" \
-  --file "<path>" --out-dir "$WORK"
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-issuance/issuance-import/scripts/parse_upload.py" --file "<path>" --out-dir "<scratchpad>"
 ```
 
 This first run is deliberately **without** `--reference`: it costs nothing, and its output tells
@@ -148,8 +143,7 @@ gate says to stop — the parsed rows cost nothing and the file is still there a
 ### Step 4 — Re-run the parser with that payload
 
 ```bash
-uv run "…/parse_upload.py" --file "<path>" [--sheet "<name>"] \
-  --reference "$WORK/_reference.json" --out-dir "$WORK"
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-issuance/issuance-import/scripts/parse_upload.py" --file "<path>" [--sheet "<name>"] --reference "<scratchpad>/_reference.json" --out-dir "<scratchpad>"
 ```
 
 `--reference` is the `issuance_init` payload you just wrote to a file. The

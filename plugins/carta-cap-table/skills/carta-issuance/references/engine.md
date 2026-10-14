@@ -290,7 +290,7 @@ add a path around any gate: Phase 1 still resolves, Phase 1.5 still saves and va
 still reviews, Phase 3 is still the only mutate.
 
 Supported: `.xlsx` `.xlsm` `.csv` `.tsv` (deterministic) and `.pdf` `.docx` (text extraction).
-Parsing is a local script, so the phase needs `Bash(uv run *)`.
+Parsing is a local script, so the phase needs `Bash`.
 
 **[../issuance-import/SKILL.md](../issuance-import/SKILL.md) owns this phase end to end**: the
 Bash check and what to say when there is none, locating the file, both parser runs, merging the
@@ -771,12 +771,10 @@ rows arrive in ISO, so all three `CharField`s need converting — Phases 0.5 and
 them.
 
 **Let the serializer enforce all three** rather than doing it by hand, and pass what it returns
-as `drafts` verbatim. `$WORK` is your scratchpad directory:
+as `drafts` verbatim, with your scratchpad directory written out in full:
 
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-issuance/scripts/serialize_drafts.py" \
-  --security-type <option_grant|certificate|piu> \
-  --rows "$WORK/_rows.json" --out "$WORK/_drafts.json"
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-issuance/scripts/serialize_drafts.py" --security-type <option_grant|certificate|piu> --rows "<scratchpad>/_rows.json" --out "<scratchpad>/_drafts.json"
 ```
 
 Exit 2 with the row and field named means a date couldn't be read — fix it and re-run rather

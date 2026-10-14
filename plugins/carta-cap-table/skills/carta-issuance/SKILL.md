@@ -17,16 +17,14 @@ description: >-
 model: inherit
 allowed-tools:
   - AskUserQuestion
-  - Skill
   - ToolSearch
   - Read
   - Write
   - Artifact
-  - Bash(uv run *)
-  - Bash(mkdir *)
-  - Bash(cat *)
-  - Bash(test *)
-  - Bash(ls *)
+  # Exact plugin scripts only; anything else (e.g. `ls -t ~/Downloads`) asks the user.
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-issuance/issuance-artifact/scripts/build_artifact.py" *)
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-issuance/issuance-import/scripts/parse_upload.py" *)
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-issuance/scripts/serialize_drafts.py" *)
   # No `Bash(find *)`: the surface comes from the tool list, not the disk.
   # `mcp__carta__*` is literal here; in prose it stands for the session prefix.
   - mcp__carta__call_tool
@@ -50,7 +48,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.96.7</carta-plugin>
+<carta-plugin>carta-cap-table:6.96.8</carta-plugin>
 
 # Issue Securities
 
@@ -209,27 +207,19 @@ the field manifest** — the page fetches what it needs, so yours is a wasted ro
 
 ### 2. Build the page
 
-One `Bash` call: `mkdir`, seed heredoc and build together, no `Write`. The seed is optional
-and small: only what the *prompt* supplied, so the page can prefill it.
+`Write` the seed, then one `Bash` that builds. The seed is optional and small: only what
+the *prompt* supplied, so the page can prefill it. `<scratchpad>/_seed.json`:
 
-**Set `SKILL` to the absolute path
-[§ Where everything else lives](#where-everything-else-lives) resolves for you — paste it.**
-The plugin-root variable isn't exported into the Bash tool's shell, so a command that still
-carries it unresolved fails on a path starting `/skills/` — nothing else in the command is
-wrong when that happens.
+```json
+{"stakeholders": ["Tagg Palmer"], "quantity": "100"}
+```
+
+Run the build **on one line, script path exactly as shown**: that path is pre-approved, so
+a variable, `cd` or `\` break makes the user approve it. A path starting `/skills/` means
+an unresolved root: use [§ Where everything else lives](#where-everything-else-lives)'s.
 
 ```bash
-SKILL=<paste the resolved absolute path>
-WORK=<your scratchpad dir>
-mkdir -p "$WORK"
-cat > "$WORK/_seed.json" <<'JSON'
-{"stakeholders": ["Tagg Palmer"], "quantity": "100"}
-JSON
-uv run "$SKILL/issuance-artifact/scripts/build_artifact.py" \
-  --company-name "IMIM" \
-  --security-type option_grant \
-  --seed "$WORK/_seed.json" \
-  --out "$WORK/issuance-imim-option_grant.html"
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-issuance/issuance-artifact/scripts/build_artifact.py" --company-name "IMIM" --security-type option_grant --seed "<scratchpad>/_seed.json" --out "<scratchpad>/issuance-imim-option_grant.html"
 ```
 
 - **No `--corporation-id`.** The page resolves the name. Add `--corporation-id <n>` only
@@ -477,6 +467,7 @@ Every rule here comes from a real run that went wrong ([incidents.md](references
 Every path below starts `${CLAUDE_PLUGIN_ROOT}/skills/carta-issuance/` — that variable
 anchors at the **plugin** root, so the skill segment belongs in the path. **Don't search**
 for them: on several hosts `Glob`/`find` can't reach the plugin mount and return empty.
+In their `uv run` commands, swap the root variable for the path above; keep one line.
 
 - `references/chat-surface.md` — the last-resort path: its phases, and what it reads.
 - `references/issue-and-close.md` — the mutate's response branches and the closing lines.
