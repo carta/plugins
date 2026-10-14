@@ -27,6 +27,14 @@ function _interest(holderId, holder, type, label, proceeds, ic, units, irr) {
   };
 }
 
+// One holder's share of one breakpoint, shaped like a breakpoint-allocations row.
+function _bpHolder(name, proceeds, pct, units) {
+  return {
+    group_id: 'bp-' + name, group_name: name,
+    allocated_proceeds: { proceeds: proceeds.toFixed(2), percentage_of_total: pct.toFixed(4), units: String(units), proceeds_per_unit: (proceeds / units).toFixed(6) },
+  };
+}
+
 // Deliberately not in proceeds order: the page must show rows as the API returns them.
 const DEMO_NODES = {
   root: {
@@ -41,8 +49,16 @@ const DEMO_NODES = {
       _interest('other-holders', 'Other holders', 'Class A Units', 'A-3', 362500.5, 250000, 250000, 11.1),
     ],
     breakpoints: [
-      { name: 'Return of capital', from: '0.00', to: '5875000.00', proceeds_in_tier: '5875000.00', remaining_proceeds: '4125000.00', participating_units: '5870000', proceeds_per_unit: '1.0009' },
-      { name: 'Preferred return (8%)', from: '5875000.00', to: '7000000.00', proceeds_in_tier: '1125000.00', remaining_proceeds: '3000000.00', participating_units: '2500000', proceeds_per_unit: '0.4500' },
+      { name: 'Return of capital', from: '0.00', to: '5875000.00', proceeds_in_tier: '5875000.00', remaining_proceeds: '4125000.00', participating_units: '5870000', proceeds_per_unit: '1.0009',
+        allocations: [
+          _bpHolder('Alder Family Trust', 1600000, 27.2340, 1400000),
+          _bpHolder('Blue Ridge Capital', 2500000, 42.5532, 2500000),
+          _bpHolder('Maple Fund II LP', 1500000, 25.5319, 1500000),
+          _bpHolder('Other holders', 275000, 4.6809, 470000),
+        ] },
+      { name: 'Preferred return (8%)', from: '5875000.00', to: '7000000.00', proceeds_in_tier: '1125000.00', remaining_proceeds: '3000000.00', participating_units: '2500000', proceeds_per_unit: '0.4500',
+        allocations: [_bpHolder('Blue Ridge Capital', 1125000, 100, 2500000)] },
+      // No holders fetched for this tier: it shows without an arrow.
       { name: 'Common participation', from: '7000000.00', to: null, proceeds_in_tier: '3000000.00', remaining_proceeds: '0.00', participating_units: '6070000', proceeds_per_unit: '0.4942' },
     ],
   },

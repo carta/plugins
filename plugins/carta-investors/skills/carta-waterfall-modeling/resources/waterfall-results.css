@@ -142,6 +142,15 @@ body {
 }
 .is-open .wf-caret, .wf-caret.is-open, [aria-expanded="true"] > .wf-caret { transform: rotate(45deg); }
 
+.wf-tabs { display: flex; gap: 24px; margin: 0 0 16px; border-bottom: 1px solid var(--ink-color-global-border-subtle); }
+.wf-tab {
+  appearance: none; border: 0; background: transparent; font: inherit; font-weight: 500; cursor: pointer;
+  padding: 8px 0; margin-bottom: -1px; color: var(--ink-color-global-text-subtle); border-bottom: 2px solid transparent;
+}
+.wf-tab:hover { color: var(--ink-color-global-text-default); }
+.wf-tab[aria-selected="true"] { color: var(--ink-color-global-text-default); border-bottom-color: var(--ink-color-global-border-active); }
+.wf-group-row.wf-static { cursor: default; }
+
 .wf-empty { margin: 32px 0; color: var(--ink-color-global-text-subtle); }
 @media (prefers-reduced-motion: reduce) { .wf-caret { transition: none; } }
 

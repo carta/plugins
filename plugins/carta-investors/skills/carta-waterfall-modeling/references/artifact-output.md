@@ -5,9 +5,27 @@ tool is in your tool list. The run flow lives in `SKILL.md`; the fetch loop in t
 results doc. This file covers only the build, the publish and the reply. One new page per run;
 write nothing between tool calls.
 
+## Breakpoint holders (before the build)
+
+The page's **Breakpoints** tab lets the user expand each breakpoint to see the holders paid in it.
+The page can't fetch, so the holders are fetched now and baked in. **Only when Step 3 cached
+`breakpoint_allocations_command`** — absent or `null` (every core run), skip this section; the tab
+shows the breakpoint totals with no arrows.
+
+- Count the breakpoints across every entity's cached `breakpoints`. **More than 20** → skip this
+  section for the run; the tab shows totals only. Say nothing about it.
+- Otherwise, once the fetch loop is done, fetch **every** breakpoint of every entity
+  **concurrently** — the call in the results doc's §Breakpoint drill, with `grouping: "BY_HOLDER"`,
+  that entity's `node_id`, and pages `1 … total_pages`. Don't narrate the calls.
+- Set `breakpoints[i].allocations` on that entity's cached tier to the accumulated rows, verbatim,
+  in page order. A breakpoint whose call fails keeps no `allocations` key (it shows without an
+  arrow); don't retry, don't stop the build.
+- Keep the rows cached: a later `"Show breakpoints"` reuses them instead of re-fetching.
+
 ## Build
 
-Once per run, after the results doc's fetch loop holds every entity's pages. `<slug>` is the
+Once per run, after the results doc's fetch loop holds every entity's pages (and, when fetched,
+the breakpoint holders above). `<slug>` is the
 company name lowercased with non-alphanumerics collapsed to `-`. Pass every value as **one JSON
 object in a file** — never as `--flag` arguments. First `Write` the object to
 `<outputs-directory>/waterfall-<slug>-<execution_id>.json`, exactly in this shape:
@@ -50,7 +68,8 @@ uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-waterfall-modeling/scripts/build_arti
   nothing the review did not show.
 - `entities` — the results doc's `per_entity`, in `ordered` order (root first, `is_root: true` on
   it only). `allocations` is every accumulated `BY_HOLDER` row, verbatim, in page order;
-  `breakpoints` the cached array, or `null` when unavailable this run; `grand_totals` verbatim.
+  `breakpoints` the cached array (each tier with its `allocations` when fetched above), or `null`
+  when unavailable this run; `grand_totals` verbatim.
   `core_results` → one entity: `display_name` the company name, `is_root: true`.
 
 > **Path.** Bash reaches the `${CLAUDE_PLUGIN_ROOT}` path above on Claude Code and Cowork; do

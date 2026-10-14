@@ -40,11 +40,15 @@ function onClick(ev) {
   const actionEl = t.closest('[data-action]');
   const action = actionEl && actionEl.getAttribute('data-action');
   if (action === 'expand-all') { toggleAll(); render();
+  } else if (action === 'bp-expand-all') { toggleAllBps(); render();
+  } else if (action === 'view') { S.view = actionEl.getAttribute('data-view'); S.filterOpen = false; render();
   } else if (action === 'filter-toggle') { S.filterOpen = !S.filterOpen; S.filterSearch = ''; render();
   } else if (action === 'filter-reset') { S.filters = {}; S.filterSearch = ''; render();
   } else {
+    const bpRow = t.closest('[data-bi]');
     const row = t.closest('[data-gi]');
-    if (row && !t.closest('.wf-child')) { toggleGroup(Number(row.getAttribute('data-gi'))); render(); }
+    if (bpRow && !t.closest('.wf-child')) { toggleBp(Number(bpRow.getAttribute('data-bi'))); render();
+    } else if (row && !t.closest('.wf-child')) { toggleGroup(Number(row.getAttribute('data-gi'))); render(); }
   }
 }
 

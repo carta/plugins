@@ -176,6 +176,11 @@ def entities(value):
         _need(e["breakpoints"] is None or (isinstance(e["breakpoints"], list)
                                            and all(isinstance(b, dict) for b in e["breakpoints"])),
               "--entities[{}].breakpoints must be a list of tiers or null".format(i))
+        for j, bp in enumerate(e["breakpoints"] or []):
+            # A tier's holders, when the skill fetched them: absent, or a list of rows.
+            _need("allocations" not in bp or (isinstance(bp["allocations"], list)
+                                              and all(isinstance(r, dict) for r in bp["allocations"])),
+                  "--entities[{}].breakpoints[{}].allocations must be a list of rows".format(i, j))
         _need(e["grand_totals"] is None or isinstance(e["grand_totals"], dict),
               "--entities[{}].grand_totals must be an object or null".format(i))
         clean.append({k: e[k] for k in ENTITY_KEYS})

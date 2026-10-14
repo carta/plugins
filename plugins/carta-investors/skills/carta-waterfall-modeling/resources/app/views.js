@@ -2,11 +2,13 @@
 const S = {
   nodes: [],                 // [{node_id, label, is_root}] root first; one entry for a core run
   nodeId: null,
-  data: {},                  // nodeId -> {allocations, grand_totals}
+  data: {},                  // nodeId -> {allocations, grand_totals, breakpoints}
+  view: 'proceeds',          // 'proceeds' | 'breakpoints'; kept when the entity changes
   filters: {},               // {groupKey: true}; kept when the entity changes
   filterOpen: false,
   filterSearch: '',
   expanded: {},              // `${nodeId}|${groupIndex}` -> true
+  bpExpanded: {},            // `${nodeId}|${breakpointIndex}` -> true
 };
 
 function currentKey() { return S.nodeId; }
@@ -18,10 +20,20 @@ function loadEntities(entities) {
   (Array.isArray(entities) ? entities : []).forEach(function (e, i) {
     const id = String(i);
     S.nodes.push({ node_id: id, is_root: !!e.is_root, label: e.display_name ? e.display_name : 'Entity ' + (i + 1) });
-    S.data[id] = { allocations: Array.isArray(e.allocations) ? e.allocations : [], grand_totals: e.grand_totals || null };
+    S.data[id] = {
+      allocations: Array.isArray(e.allocations) ? e.allocations : [],
+      grand_totals: e.grand_totals || null,
+      breakpoints: Array.isArray(e.breakpoints) ? e.breakpoints : null,
+    };
   });
   S.nodeId = S.nodes.length ? S.nodes[0].node_id : null;
 }
+
+// The Breakpoints tab shows when any entity carries breakpoints; otherwise the page is proceeds alone.
+function hasBreakpoints() {
+  return S.nodes.some(function (n) { const d = S.data[n.node_id]; return d && d.breakpoints && d.breakpoints.length; });
+}
+function currentView() { return S.view === 'breakpoints' && hasBreakpoints() ? 'breakpoints' : 'proceeds'; }
 
 // ── Filtering and totals ──
 
@@ -176,6 +188,108 @@ function renderCoreProceeds(d) {
   return tableWrap('<table class="wf-table wf-flat">' + head + '<tbody>' + rows + '</tbody>' + foot + '</table>');
 }
 
+// ── Breakpoints tab ──
+
+// A breakpoint's holders, when the skill fetched them; null when it did not.
+function bpHolders(bp) {
+  if (!Array.isArray(bp.allocations)) return null;
+  // Largest share of the breakpoint first, as in chat.
+  return bp.allocations.slice().sort(function (a, b) {
+    const pa = num(a.allocated_proceeds && a.allocated_proceeds.proceeds);
+    const pb = num(b.allocated_proceeds && b.allocated_proceeds.proceeds);
+    return (pb === null ? -Infinity : pb) - (pa === null ? -Infinity : pa);
+  });
+}
+function isBpOpen(i) { return !!S.bpExpanded[currentKey() + '|' + i]; }
+function toggleBp(i) {
+  const k = currentKey() + '|' + i;
+  if (S.bpExpanded[k]) delete S.bpExpanded[k]; else S.bpExpanded[k] = true;
+}
+function expandableBps(d) {
+  return (d && d.breakpoints ? d.breakpoints : []).map(function (bp, i) { return { bp: bp, i: i }; })
+    .filter(function (r) { return bpHolders(r.bp) !== null; });
+}
+function toggleAllBps() {
+  const rows = expandableBps(S.data[currentKey()]);
+  const allOpen = rows.every(function (r) { return isBpOpen(r.i); });
+  rows.forEach(function (r) {
+    const k = currentKey() + '|' + r.i;
+    if (allOpen) delete S.bpExpanded[k]; else S.bpExpanded[k] = true;
+  });
+}
+
+function bpHolderRow(a) {
+  const ap = a.allocated_proceeds || {};
+  return '<tr class="wf-child">' +
+    '<td></td>' +
+    td('name', esc(a.group_name)) +
+    td('from', '') + td('to', '') +
+    td('proceeds', esc(fmtCurrency(ap.proceeds)), 'num') +
+    td('pct', esc(fmtPercent(ap.percentage_of_total)), 'num') +
+    td('units', esc(fmtQty(ap.units)), 'num') +
+    td('ppu', esc(fmtCurrency(ap.proceeds_per_unit)), 'num') +
+    '</tr>';
+}
+
+function niagaraBpBody(bp, i) {
+  const holders = bpHolders(bp);
+  const open = holders !== null && isBpOpen(i);
+  const caret = holders === null ? '' :
+    '<button type="button" class="wf-tw" aria-expanded="' + (open ? 'true' : 'false') + '" aria-label="' +
+    (open ? 'Collapse' : 'Expand') + ' ' + esc(bp.name) + '"><span class="wf-caret" aria-hidden="true"></span></button>';
+  const head = '<tr class="wf-group-row' + (holders === null ? ' wf-static' : '') + '"' + (holders === null ? '' : ' data-bi="' + i + '"') + '>' +
+    '<td class="wf-tw-cell">' + caret + '</td>' +
+    td('name', esc(bp.name)) +
+    td('from', esc(fmtCurrency(bp.from)), 'num') +
+    td('to', esc(fmtCurrency(bp.to)), 'num') +
+    td('proceeds', esc(fmtCurrency(bp.proceeds_in_tier)), 'num') +
+    td('pct', '', 'num') +
+    td('units', esc(fmtQty(bp.participating_units)), 'num') +
+    td('ppu', esc(fmtCurrency(bp.proceeds_per_unit)), 'num') +
+    '</tr>';
+  const kids = open ? (holders.length ? holders.map(bpHolderRow).join('')
+    : '<tr class="wf-child"><td></td><td colspan="7" data-col="name">No holders take part in this breakpoint</td></tr>') : '';
+  return '<tbody class="wf-group' + (open ? ' is-open' : '') + '">' + head + kids + '</tbody>';
+}
+
+function renderNiagaraBreakpoints(d) {
+  const bps = d && d.breakpoints;
+  if (!bps || !bps.length) return '<p class="wf-empty">No breakpoints for this entity</p>';
+  const rows = expandableBps(d);
+  const allOpen = rows.length > 0 && rows.every(function (r) { return isBpOpen(r.i); });
+  const expandAll = rows.length > 1
+    ? '<button type="button" class="wf-expand-all" data-action="bp-expand-all" aria-pressed="' + (allOpen ? 'true' : 'false') + '">' +
+      '<span class="wf-caret' + (allOpen ? ' is-open' : '') + '" aria-hidden="true"></span>' + (allOpen ? 'Collapse all' : 'Expand all') + '</button>'
+    : '';
+  const head = '<thead><tr><th class="wf-tw-cell">' + expandAll + '</th><th>Breakpoint</th>' +
+    '<th class="num">From</th><th class="num">To</th><th class="num">Proceeds</th><th class="num">% of Breakpoint</th>' +
+    '<th class="num">Participating Quantity</th><th class="num">Proceeds per unit</th></tr></thead>';
+  return tableWrap('<table class="wf-table wf-bp">' + head + bps.map(niagaraBpBody).join('') + '</table>');
+}
+
+function renderCoreBreakpoints(d) {
+  const bps = d && d.breakpoints;
+  if (!bps || !bps.length) return '<p class="wf-empty">No breakpoints for this entity</p>';
+  const head = '<thead><tr><th>Breakpoint</th><th class="num">From</th><th class="num">To</th>' +
+    '<th class="num">Delta</th><th class="num">Value in tier</th></tr></thead>';
+  const rows = bps.map(function (bp) {
+    return '<tr>' + td('name', esc(bp.description)) + td('from', esc(fmtCurrency(bp.from_value)), 'num') +
+      td('to', esc(fmtCurrency(bp.to_value)), 'num') + td('delta', esc(fmtCurrency(bp.delta)), 'num') +
+      td('value', esc(fmtCurrency(bp.value_in_tier)), 'num') + '</tr>';
+  }).join('');
+  return tableWrap('<table class="wf-table wf-flat">' + head + '<tbody>' + rows + '</tbody></table>');
+}
+
+function renderTabs() {
+  if (!hasBreakpoints()) return '';
+  const v = currentView();
+  const tab = function (id, label) {
+    return '<button type="button" class="wf-tab" role="tab" data-action="view" data-view="' + id + '" aria-selected="' +
+      (v === id ? 'true' : 'false') + '">' + label + '</button>';
+  };
+  return '<div class="wf-tabs" role="tablist" aria-label="Results view">' + tab('proceeds', 'Proceeds') + tab('breakpoints', 'Breakpoints') + '</div>';
+}
+
 // ── Page chrome ──
 // The Carta mark from theme-with-ink/assets/carta-logo.svg; it paints in currentColor.
 const CARTA_LOGO = '<svg class="wf-logo" role="img" aria-label="Carta" fill="none" viewBox="0 0 64 32" xmlns="http://www.w3.org/2000/svg"><rect x="0.64" y="0.64" width="62.72" height="30.72" stroke="currentColor" stroke-width="1.28"/><path d="M8.4 16.62C8.4 13.42 11.1 11.53 13.53 11.53C15.27 11.53 16.9 12.19 17.76 13.69L16.14 14.63C15.86 14.21 15.48 13.86 15.03 13.62C14.58 13.39 14.08 13.26 13.57 13.27C12.14 13.27 10.44 14.38 10.44 16.59C10.44 18.8 12.06 19.93 13.7 19.93C14.84 19.93 15.79 19.3 16.35 18.32L18.01 19.08C17.07 20.78 15.39 21.68 13.44 21.68C10.98 21.67 8.4 19.79 8.4 16.62L8.4 16.62ZM23.94 21.68C25.29 21.68 26.56 21.08 27.22 20.22V21.4H29.23V11.78H27.22V12.97C26.6 12.1 25.29 11.53 23.94 11.53C20.98 11.53 18.92 13.68 18.92 16.6C18.92 19.52 21 21.68 23.94 21.68V21.68ZM24.13 13.36C25.99 13.36 27.26 14.74 27.26 16.6C27.26 18.47 25.99 19.85 24.13 19.85C22.28 19.85 20.96 18.45 20.96 16.57C20.96 14.68 22.28 13.36 24.13 13.36V13.36ZM40.01 13.69H37.93V11.77H40.03V9.26H42.1V11.77H44.2V13.69H42.1V21.4H40.01V13.69ZM49.96 21.68C51.32 21.68 52.59 21.08 53.25 20.22V21.4H55.26V11.78H53.25V12.97C52.62 12.1 51.32 11.53 49.96 11.53C47.01 11.53 44.94 13.68 44.94 16.6C44.94 19.52 47.03 21.68 49.96 21.68V21.68ZM50.16 13.36C52.01 13.36 53.29 14.74 53.29 16.6C53.29 18.47 52.01 19.85 50.16 19.85C48.31 19.85 46.99 18.45 46.99 16.57C46.99 14.68 48.3 13.36 50.16 13.36V13.36ZM33.77 21.39H31.69V11.77H33.6V13.56C34.07 12.5 34.78 11.8 35.94 11.75C36.18 11.74 36.41 11.75 36.65 11.77L36.62 13.7C34.96 13.7 33.77 14.59 33.77 17.07V21.4H33.77L33.77 21.39Z" fill="currentColor"/></svg>';
@@ -232,12 +346,16 @@ function renderResultsTitle() {
 
 function renderBody() {
   const d = S.data[currentKey()];
+  if (currentView() === 'breakpoints') return IS_CORE ? renderCoreBreakpoints(d) : renderNiagaraBreakpoints(d);
   return IS_CORE ? renderCoreProceeds(d) : renderNiagaraProceeds(d);
 }
 
 function renderApp() {
   const d = S.data[currentKey()];
+  // The holder filter narrows the proceeds table only.
+  const belt = currentView() === 'proceeds' ? renderBelt(d) : '';
   return renderHeader() +
-    '<section class="wf-results" aria-label="Waterfall results">' + renderResultsTitle() + renderBelt(d) + '</section>' +
+    '<section class="wf-results" aria-label="Waterfall results">' + renderResultsTitle() + belt + '</section>' +
+    renderTabs() +
     '<section class="wf-body" id="wf-body">' + renderBody() + '</section>';
 }
