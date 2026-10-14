@@ -53,7 +53,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.72.15</carta-plugin>
+<carta-plugin>carta-investors:6.72.17</carta-plugin>
 
 <!-- Carta investor tooling. React app (in-browser JSX transpile) fed by Data Collection KPIs. -->
 

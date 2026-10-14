@@ -30,6 +30,7 @@ from report_payload import MAX_NAME_LENGTH, PayloadError, check_name
 
 REPORTS_FILE = "reports.json"
 INPUTS_DIR = ".reports"
+_INPUT_NAME = "budget-%s.json"
 STORE_VERSION = 1
 
 TRACKING = "tracking"
@@ -222,27 +223,42 @@ class ReportStore:
     def build_inputs(self, source_files: List[Path]) -> List[Tuple[Path, Dict[str, Any]]]:
         """Sync reports with the workbook files, then write each visible report as a
         budget-*.json the build reads. Returns (path, report metadata) in build order."""
+        # The inputs are rewritten under the lock too: duplicate reads them (via
+        # last_inputs) to tell which mapping answers are ambiguous.
         with self.transaction() as doc:
             self.sync(doc, source_files)
             ordered = self._ordered(doc, source_files)
-        self.inputs_dir.mkdir(parents=True, exist_ok=True)
-        for stale in self.inputs_dir.glob("budget-*.json"):
-            stale.unlink()
+            self.inputs_dir.mkdir(parents=True, exist_ok=True)
+            for stale in self.inputs_dir.glob(_INPUT_NAME % "*"):
+                stale.unlink()
+            out = []
+            for report in ordered:
+                if report.get("hidden"):
+                    continue
+                try:
+                    data = self._source_budget(report)
+                except (OSError, ValueError, KeyError, TypeError):
+                    continue
+                data["id"] = report["id"]
+                data["label"] = report["name"]
+                meta = self.metadata(report)
+                data["read_only"] = meta["read_only"]
+                path = self.inputs_dir / (_INPUT_NAME % report["id"])
+                path.write_text(json.dumps(data))
+                out.append((path, meta))
+        return out
+
+    def last_inputs(self) -> List[Dict[str, Any]]:
+        """The budgets the last build_inputs wrote; none before a first build.
+        Takes no lock: duplicate calls it while already holding it."""
         out = []
-        for report in ordered:
-            if report.get("hidden"):
-                continue
+        for path in sorted(self.inputs_dir.glob(_INPUT_NAME % "*")):
             try:
-                data = self._source_budget(report)
-            except (OSError, ValueError, KeyError, TypeError):
+                data = json.loads(path.read_text())
+            except (OSError, ValueError):
                 continue
-            data["id"] = report["id"]
-            data["label"] = report["name"]
-            meta = self.metadata(report)
-            data["read_only"] = meta["read_only"]
-            path = self.inputs_dir / ("budget-%s.json" % report["id"])
-            path.write_text(json.dumps(data))
-            out.append((path, meta))
+            if isinstance(data, dict):
+                out.append(data)
         return out
 
     @staticmethod
@@ -414,6 +430,12 @@ class ReportStore:
         tmp = path.with_suffix(".tmp")
         tmp.write_text(json.dumps(payload))
         os.replace(str(tmp), str(path))
+
+    def discard_share_payload(self, report_id: str) -> None:
+        try:
+            self.share_payload_path(report_id).unlink()
+        except FileNotFoundError:
+            pass
 
     def read_share_payload(self, report_id: str) -> Dict[str, Any]:
         try:

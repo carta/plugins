@@ -44,6 +44,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import manco_paths
+import report_store
 from shapes import canonical as canonical_budget
 from shapes import formula_infer
 
@@ -1109,25 +1110,31 @@ def read_manco_fee_income(raw_dir):
     return parse_pipe_table(f.read_text())
 
 
+def _load_entity_list(raw_dir):
+    """The entity roster (entities.json, from fa:list:entities) as entity dicts.
+
+    The file is a bare list or {"entities": [...]}. A missing or unreadable
+    file, any other shape, and any entry that is not a dict read as nothing.
+    """
+    try:
+        data = json.loads((Path(raw_dir) / "entities.json").read_text())
+    except (OSError, ValueError):
+        return []
+    if isinstance(data, dict):
+        data = data.get("entities")
+    if not isinstance(data, list):
+        return []
+    return [e for e in data if isinstance(e, dict)]
+
+
 def read_entity_roster(raw_dir):
     """Entity `id` -> uuid and name, from fa:list:entities.
 
     A fee income line names the fund it bills through RELATED_ENTITY_ID,
     which is this `id`. Without the roster the line has no fund.
     """
-    f = raw_dir / "entities.json"
-    if not f.exists():
-        return {}
-    try:
-        data = json.loads(f.read_text())
-    except Exception:
-        return {}
-    if isinstance(data, dict):
-        data = data.get("entities") or []
     out = {}
-    for e in data:
-        if not isinstance(e, dict):
-            continue
+    for e in _load_entity_list(raw_dir):
         try:
             eid = int(e["id"])
         except (KeyError, TypeError, ValueError):
@@ -1782,6 +1789,51 @@ def read_all_accounts(raw_dir):
     return out
 
 
+def manco_entity_currency(raw_dir, manco_uuid):
+    """The ManCo entity's own currency from the entity roster (entities.json), or None."""
+    for entity in _load_entity_list(raw_dir):
+        if str(entity.get("uuid")) == str(manco_uuid):
+            code = entity.get("currency")
+            return code if isinstance(code, str) and len(code) == 3 else None
+    return None
+
+
+BUILD_ARGS_FILE = ".build-args.json"
+
+
+def record_build_args(dashboard_dir, argv):
+    """The arguments this build ran with, so the app server can rebuild after a
+    change made in the app exactly the way the skill last built."""
+    try:
+        (Path(dashboard_dir) / BUILD_ARGS_FILE).write_text(json.dumps({"argv": list(argv)}))
+    except OSError:
+        pass
+
+
+def build_argv(args):
+    """The canonical CLI argv for this build, derived from parsed `args`.
+    Any call site (a test, an in-process rebuild) may have a different
+    sys.argv, so argv must come from the args object, not the process state."""
+    argv = [
+        "--firm-name", str(args.firm_name),
+        "--firm-uuid", str(args.firm_uuid),
+        "--firm-carta-id", str(args.firm_carta_id),
+        "--manco-name", str(args.manco_name),
+        "--manco-uuid", str(args.manco_uuid),
+        "--manco-carta-id", str(args.manco_carta_id),
+        "--raw-dir", str(args.raw_dir),
+        "--dashboard-dir", str(args.dashboard_dir),
+        "--as-of", str(args.as_of),
+    ]
+    if getattr(args, "manco_entity_id", None) is not None:
+        argv += ["--manco-entity-id", str(args.manco_entity_id)]
+    if getattr(args, "as_of_year", None) is not None:
+        argv += ["--as-of-year", str(args.as_of_year)]
+    if getattr(args, "carta_environment", None):
+        argv += ["--carta-environment", str(args.carta_environment)]
+    return argv
+
+
 def read_currency(raw_dir):
     """Read the ManCo's reporting currency from manco-currency.txt (a
     single-row pipe-table sourced from AGGREGATE_FUND_METRICS — see Query D
@@ -2265,6 +2317,43 @@ def read_budget_mapping(dashboard_dir):
         return {}
 
 
+def copy_budget_mapping(dashboard_dir, rows, src_id, dst_id):
+    """Record the mapping answers for a budget's rows under a copy's id too.
+
+    Both copies get every answer re-recorded under their own budget-prefixed
+    address: once two budgets share a bare address ("r17"), a decision keyed by
+    it alone is ambiguous and applies to neither (see apply_budget_mapping).
+
+    Each row gets exactly the decision the last build applied to it. The
+    ambiguous bare addresses are worked out here, from the report inputs of
+    your own visible budgets that build read, so no caller can leave them out
+    and turn a bare answer the build ignored into a prefixed one.
+    Returns the number of answers recorded.
+    """
+    mapping = read_budget_mapping(dashboard_dir)
+    if not mapping:
+        return 0
+    ambiguous = ambiguous_bare_addrs(_last_build_own_budgets(dashboard_dir))
+    src_rows = [dict(r) for r in rows]
+    dst_rows = [dict(r) for r in rows]
+    assign_row_addresses(src_rows, budget_id=src_id)
+    assign_row_addresses(dst_rows, budget_id=dst_id)
+    answers = {}
+    for src, dst in zip(src_rows, dst_rows):
+        decision = _recorded_decision(mapping, src, ambiguous)
+        # An empty decision still counts: it is what kept a bare answer off
+        # the source row, and the copy must not pick that answer up later.
+        if decision is not None:
+            answers[src["addr"]] = decision
+            answers[dst["addr"]] = decision
+    return record_budget_mapping(dashboard_dir, answers) if answers else 0
+
+
+def _last_build_own_budgets(dashboard_dir):
+    """The budgets of your own the last build read; none before a first build."""
+    return [b for b in report_store.ReportStore(dashboard_dir).last_inputs() if not b.get("read_only")]
+
+
 def read_fund_attribution(dashboard_dir):
     """Operator overrides for which fund a fee line's memo names.
 
@@ -2346,6 +2435,34 @@ def assign_row_addresses(rows, budget_id=None):
         row["bare_addr"] = bare
         row["addr"] = f"{budget_id}::{bare}" if budget_id else bare
     return rows
+
+
+def ambiguous_bare_addrs(own_budgets):
+    """Bare addresses ("r17") more than one of your own budgets has.
+
+    A decision recorded under one before addresses were budget-prefixed
+    can't be told which budget it was for, so it applies to neither (see
+    apply_budget_mapping). Gives each budget's rows their bare addresses.
+    """
+    budgets_by_addr = defaultdict(set)
+    for budget in own_budgets:
+        assign_row_addresses(budget.get("rows") or [])
+        for row in budget.get("rows") or []:
+            budgets_by_addr[row["bare_addr"]].add(budget.get("id") or "primary")
+    return {a for a, ids in budgets_by_addr.items() if len(ids) > 1}
+
+
+def _recorded_decision(mapping, row, ambiguous_bare_addrs):
+    """The recorded decision that applies to an addressed row, or None.
+
+    The budget-prefixed address first; the bare address or key only when
+    nothing is recorded under it and no other budget of yours shares that
+    bare address.
+    """
+    decision = mapping.get(row["addr"])
+    if decision is None and row["bare_addr"] not in (ambiguous_bare_addrs or ()):
+        decision = mapping.get(row["bare_addr"]) or mapping.get(row.get("key"))
+    return decision
 
 
 def record_budget_mapping(dashboard_dir, answers):
@@ -2467,13 +2584,9 @@ def apply_budget_mapping(rows, mapping, budget_id=None, ambiguous_bare_addrs=Non
     assign_row_addresses(rows, budget_id=budget_id)
     if not mapping:
         return rows
-    ambiguous = ambiguous_bare_addrs or set()
     out = []
     for row in rows:
-        decision = mapping.get(row["addr"])
-        if decision is None and row["bare_addr"] not in ambiguous:
-            decision = mapping.get(row["bare_addr"]) or mapping.get(row.get("key"))
-        decision = decision or {}
+        decision = _recorded_decision(mapping, row, ambiguous_bare_addrs) or {}
         status = decision.get("status")
         if status == REMOVED:
             continue
@@ -4319,7 +4432,9 @@ def read_excel_budget(dashboard_dir, as_of_month, budget_file=None):
         shape_adapter = (data.get("workbook_meta") or {}).get("shape_adapter")
         if shape_adapter == "monthly-crosstab":
             return _read_monthly_crosstab_budget(data, p, as_of_month)
-        return _read_outline_budget(data, p, period_kind, as_of_month, coa_value_aliases)
+        # A shared report carries the tag aliases it was built with.
+        return _read_outline_budget(data, p, period_kind, as_of_month,
+                                    data.get("value_aliases") or coa_value_aliases)
 
     # Backfill GL codes the workbook's own Budget-vs-Actuals tab left off a
     # rollup line but its COA mapping tab states for that line by name (see
@@ -4580,6 +4695,7 @@ def build(args):
     raw       = Path(args.raw_dir)
     dashboard = Path(args.dashboard_dir)
     dashboard.mkdir(parents=True, exist_ok=True)
+    record_build_args(dashboard, build_argv(args))
 
     check_fetch_completeness(raw)
     expense_rows = read_expense_pages(raw)
@@ -4914,28 +5030,35 @@ def build(args):
     # income/expenses/net scalars); ALL of them are emitted into
     # snapshot.budgets for the BvA page's sub-nav switcher. When none
     # exist, fall back to Carta's fa:list:budgets payload.
-    excel_files = find_excel_budget_files(dashboard)
-    excel_budgets = [b for b in
-                     (read_excel_budget(dashboard, as_of_month, budget_file=f) for f in excel_files)
-                     if b is not None]
+    # Every budget reaches the build as a report (report_store.py): a workbook
+    # budget, read from its file on every build, a duplicate holding its own
+    # copy, or a report someone else shared. excel_files stays aligned with
+    # excel_budgets — the variance pass below re-reads each file beside its
+    # parsed budget.
+    _reports = report_store.ReportStore(dashboard)
+    excel_files, excel_budgets = [], []
+    for _f, _meta in _reports.build_inputs(find_excel_budget_files(dashboard)):
+        _parsed = read_excel_budget(dashboard, as_of_month, budget_file=_f)
+        if _parsed is None:
+            continue
+        _parsed["report"] = _meta
+        _parsed["read_only"] = _meta["read_only"]
+        excel_files.append(_f)
+        excel_budgets.append(_parsed)
+    # A report shared with you arrives with its GL codes already resolved; the
+    # local mapping file answers questions about your own budgets, not theirs.
+    _own_budgets = [_b for _b in excel_budgets if not _b.get("read_only")]
+    for _b in excel_budgets:
+        if _b.get("read_only"):
+            assign_row_addresses(_b.get("rows") or [], budget_id=_b.get("id"))
     # Recorded decisions first: a client's explicit answer outranks any
     # automatic match, and backfill_fund_match_from_roster skips a row that
     # already has one.
-    #
-    # A bare address ("r17") that appears in more than one of this firm's
-    # budgets is ambiguous — a decision recorded under it before addresses
-    # were budget-prefixed can't be told which budget it was for, so it is
-    # not applied to either (see apply_budget_mapping).
-    _bare_addr_budgets = defaultdict(set)
-    for _b in excel_budgets:
-        assign_row_addresses(_b.get("rows") or [])
-        for _r in (_b.get("rows") or []):
-            _bare_addr_budgets[_r["bare_addr"]].add(_b.get("id") or "primary")
-    _ambiguous_bare_addrs = {a for a, ids in _bare_addr_budgets.items() if len(ids) > 1}
+    _ambiguous_bare_addrs = ambiguous_bare_addrs(_own_budgets)
 
     _row_mapping = read_budget_mapping(dashboard)
     _fee_offset_asks = []
-    for _b in excel_budgets:
+    for _b in _own_budgets:
         _b["rows"] = apply_budget_mapping(_b.get("rows") or [], _row_mapping,
                                           budget_id=_b.get("id"),
                                           ambiguous_bare_addrs=_ambiguous_bare_addrs)
@@ -5114,8 +5237,10 @@ def build(args):
 
     # After every other resolution pass, so a bucket line's formula reads
     # its referenced rows' most complete GL identity, not their parse-time one.
+    # _own_budgets only: a shared-in row's formula referred to its creator's
+    # own workbook, which this recipient's dashboard_dir doesn't carry.
     resolve_formula_gl_evidence(
-        excel_budgets, known_gl_codes=_carta_account_names.keys(),
+        _own_budgets, known_gl_codes=_carta_account_names.keys(),
         account_names=_carta_account_names, dashboard_dir=dashboard)
 
     # A crosstab row's mapped/resolved gl_codes only reaches the UI through
@@ -5133,7 +5258,7 @@ def build(args):
     # budget_id/budget_label: two budgets' rows can share a bare address
     # ("r17") and even a label, so an entry can't say which budget it's
     # from without this — see assign_row_addresses.
-    for _b in excel_budgets:
+    for _b in _own_budgets:
         _unresolved.extend(
             {**entry, "budget_id": _b.get("id"), "budget_label": _b.get("label")}
             for entry in unresolved_budget_rows(
@@ -5146,7 +5271,7 @@ def build(args):
         f, t, n = e.get("fund"), e.get("acct_type"), e.get("account")
         if f and t is not None and n:
             _fund_accounts.setdefault(f, {}).setdefault(t, n)
-    for _b in excel_budgets:
+    for _b in _own_budgets:
         _unresolved.extend(
             {**entry, "budget_id": _b.get("id"), "budget_label": _b.get("label")}
             for entry in funds_reported_twice(_b.get("rows") or [], _fund_accounts)
@@ -5154,7 +5279,7 @@ def build(args):
     # One numbered table over every budget, in workbook order, with the
     # fee halves the money already settles pre-filled.
     _mapping_table = []
-    for _b in excel_budgets:
+    for _b in _own_budgets:
         _qt = fund_quarter_totals(fund_fee_entries, _b.get("period_year"))
         _proposals = {}
         for _r in _b.get("rows") or []:
@@ -5169,11 +5294,14 @@ def build(args):
     # whole, and asked, so nobody finds out months later that a heading was
     # taken to mean something the client never said.
     _inferences = []
-    for _b in excel_budgets:
+    for _b in _own_budgets:
         _inferences.extend(unconfirmed_inferences(_b.get("rows") or [],
                                                   _inference_decisions))
     _mapping_table.extend(inference_rows(_inferences))
-    _native_mapping = native_mapping_coverage(excel_budgets, _mapping_table)
+    # _own_budgets only: a shared-in budget's rows arrive already resolved by
+    # its creator, so counting them here would read as native-mapping coverage
+    # this firm's own workbook doesn't actually have.
+    _native_mapping = native_mapping_coverage(_own_budgets, _mapping_table)
     # Spend the report cannot show at all: an account no line names, or the
     # part of one that the scoped lines naming it do not cover. Asked over
     # every budget's lines at once — an account reported by one budget's
@@ -5183,9 +5311,11 @@ def build(args):
     # there is, and it names accounts too (carta_variance_payload's rows,
     # one per budgeted account, gl_codes == [account_type]) — without this
     # fallback every account with activity reads as "no line names it",
-    # Payroll included, the moment the firm declines a workbook.
-    _all_budget_rows = ([r for _b in excel_budgets for r in (_b.get("rows") or [])]
-                        if excel_budgets else carta_variance_payload(budgets)["rows"])
+    # Payroll included, the moment the firm declines a workbook. Scoped to
+    # _own_budgets like the passes above: a shared-in report's rows already
+    # went through its creator's own gap analysis, not this viewer's.
+    _all_budget_rows = ([r for _b in _own_budgets for r in (_b.get("rows") or [])]
+                        if _own_budgets else carta_variance_payload(budgets)["rows"])
     # Over the months the budgets cover, not the months the ledger runs to.
     # Widest window among them: an entry any budget could report is not
     # unreported. Charging out-of-period spend against a budget that stops
@@ -5213,7 +5343,7 @@ def build(args):
 
     _gaps = {
         "unresolved": len(_unresolved),
-        "budget_only": sum(1 for _b in excel_budgets
+        "budget_only": sum(1 for _b in _own_budgets
                            for r in (_b.get("rows") or []) if r.get("void")),
         "widened": _widened,
         "unclaimed": len(_unclaimed),
@@ -5278,7 +5408,9 @@ def build(args):
                                                variance_coa_records)
             raw_budget = variance_payload(raw_budget, parsed)
             built = build_variance_categories(raw_budget, accounts, ft, as_of_month,
-                                             entries=all_rows, value_aliases=variance_aliases,
+                                             entries=all_rows,
+                                             value_aliases=(parsed.get("value_aliases") or {})
+                                             if parsed.get("read_only") else variance_aliases,
                                              dimension=dimension,
                                              coa_types=set(_coa_all) or None)
             if not built:
@@ -5309,6 +5441,26 @@ def build(args):
     cash = read_cash_balance(raw, args.manco_entity_id, currency)
     if currency is None:
         currency = cash["currency"]
+
+    # --- Report share payloads -----
+    # What each of your reports would be shared as, written beside its build
+    # input so the app server can publish without rebuilding. Reuses the same
+    # currency the dashboard itself landed on above (query, then cash); the
+    # ManCo entity's own stands in only when both of those came back empty —
+    # a stated source, never a guess.
+    # A payload that can't be built is skipped, never a failed build: the
+    # dashboard matters more than one report's share, which says it isn't ready.
+    _report_currency = currency or manco_entity_currency(raw, args.manco_uuid)
+    for _b in _own_budgets:
+        # Last build's payload goes first, so one that can't be rebuilt reads as not
+        # ready instead of sharing stale rows.
+        _reports.discard_share_payload(_b["id"])
+        try:
+            _payload = canonical_budget.share_payload(_b, _report_currency)
+            if _payload is not None:
+                _reports.write_share_payload(_b["id"], _payload)
+        except Exception as e:
+            print(f"[build] share payload for {_b.get('id')!r} skipped: {e}", file=sys.stderr)
 
     # --- Assemble snapshot.json -----
     # Without a workbook the firm still has whatever budget it keeps in
@@ -5384,6 +5536,8 @@ def build(args):
             "budgets":       [{
                 "id":            b.get("id") or "primary",
                 "label":         b.get("label") or "Budget",
+                # Report state for the app: editable, shared, read-only (see report_store.py).
+                "report":        b.get("report"),
                 "source":        b.get("source"),
                 "income":        {"annual": b["income_annual"],   "ytd": b["income_ytd"]},
                 "expenses":      {"annual": b["expenses_annual"], "ytd": b["expenses_ytd"]},

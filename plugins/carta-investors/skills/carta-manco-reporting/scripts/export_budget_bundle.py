@@ -45,12 +45,26 @@ def _unmapped_lines(budgets):
 
 def build_bundle(snapshot, accounts, exported_at=None):
     budget = snapshot.get("budget") or {}
-    budgets = [b for b in (budget.get("budgets") or []) if b.get("rows")]
-    if budget.get("source") != "excel-workbook" or not budgets:
+    raw_budgets = [b for b in (budget.get("budgets") or []) if b.get("rows")]
+    if budget.get("source") != "excel-workbook" or not raw_budgets:
         raise NothingToExport(
             "This dashboard has no workbook budget (source is %r). "
             "Parse a budget tab and rebuild before exporting." % budget.get("source")
         )
+    # Reports shared with you stay out of the hosted bundle: `report` carries
+    # recipient names and emails that have no business in Worker KV, and the
+    # hosted app has no way to show "read-only, not yours" for a budget anyway.
+    budgets = [
+        {k: v for k, v in b.items() if k != "report"}
+        for b in raw_budgets
+        if not (b.get("report") or {}).get("read_only")
+    ]
+    if not budgets:
+        raise NothingToExport(
+            "Every budget on this dashboard was shared with you, not your own — "
+            "nothing of yours to export."
+        )
+    budget = dict(budget, budgets=budgets)
     # The bundle is stored and shown next to the firm's live numbers; a guessed
     # currency would put one firm's budget under another's symbol.
     currency = (snapshot.get("currency") or "").strip().upper()

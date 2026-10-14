@@ -37,6 +37,9 @@ export default function useKpi(firm) {
         const reader = res.body.getReader();
         const dec = new TextDecoder();
         let buf = "";
+        // Cloudflare kills a Worker over its CPU limit mid-stream: the body just
+        // ends, with no `complete` or `error` frame.
+        let finished = false;
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
@@ -50,14 +53,20 @@ export default function useKpi(firm) {
             if (msg.type === "step") {
               setStep({ label: msg.label, index: msg.index, total: msg.total });
             } else if (msg.type === "complete") {
+              finished = true;
               setStep(null);
               setData(msg.data);
               setTrackingFirm(msg.data?.source?.firmId);
             } else if (msg.type === "error") {
+              finished = true;
               setStep(null);
               setError(msg.error || msg.message || "unknown");
             }
           }
+        }
+        if (live && !finished) {
+          setStep(null);
+          setError("stream_ended");
         }
       } catch (e) {
         if (live) setError(String(e));
