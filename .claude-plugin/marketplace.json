@@ -10,7 +10,7 @@
     {
       "name": "carta-cap-table",
       "source": "./plugins/carta-cap-table",
-      "description": "Carta Cap Table plugin — skills and hooks for querying cap tables, grants, SAFEs, 409A valuations, waterfall scenarios, and more",
+      "description": "Carta Cap Table plugin — skills and hooks for querying cap tables, grants, SAFEs, 409A valuations, financing rounds, and more",
       "category": "productivity"
     },
     {

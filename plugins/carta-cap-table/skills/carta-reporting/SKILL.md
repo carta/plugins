@@ -6,7 +6,7 @@ description: >-
   schedules, stakeholders, securities, SAFEs, convertible notes, round history, preferred
   holders, liquidation seniority, and rights & preferences. Also handles any request
   starting with "Generate Carta Excel —" (the artifact prompt bar payload).
-  Defers to specialized skills for: waterfall exits, SAFE/note conversion math,
+  Defers to specialized skills for: SAFE/note conversion math,
   voting rights, issuance, modifying issuables, per-stakeholder vesting detail
   (use carta-grant-vesting for "How much has [name] vested?"), round history lookup
   (use carta-round-history for "What was our Series B round?"), and SAFE/convertible
@@ -37,7 +37,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.96.14</carta-plugin>
+<carta-plugin>carta-cap-table:6.96.15</carta-plugin>
 
 # Custom Reports
 

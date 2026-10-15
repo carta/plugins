@@ -34,8 +34,8 @@ const CAP_PROMPTS = [
     topics: ['financing', 'round history', 'raised'],
   },
   {
-    text: 'What would each holder walk away with if {{COMPANY}} sold for $250M?',
-    topics: ['waterfall', 'exit', 'sold', 'acquisition'],
+    text: 'How would the outstanding SAFEs and notes at {{COMPANY}} convert in a new priced round?',
+    topics: ['conversion', 'convert', 'priced round', 'safe', 'note'],
   },
 ];
 

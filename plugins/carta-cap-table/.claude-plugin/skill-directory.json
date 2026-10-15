@@ -146,16 +146,6 @@
       "Here's our voting rights report — what's the smallest coalition that passes the protective provision?"
     ]
   },
-  "carta-waterfall-scenarios": {
-    "category": "governance",
-    "name": "Exit waterfall",
-    "order": 60,
-    "prompts": [
-      "What would each holder walk away with if {{COMPANY}} sold for $250M?",
-      "At what sale price do common holders start seeing proceeds?",
-      "What is the return multiple for our Series A investors at a $500M exit?"
-    ]
-  },
   "carta-witness-signatures": {
     "category": "equity",
     "name": "Signature status",
