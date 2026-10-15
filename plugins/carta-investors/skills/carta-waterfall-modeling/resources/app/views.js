@@ -2,7 +2,7 @@
 const S = {
   nodes: [],                 // [{node_id, label, is_root}] root first; one entry for a core run
   nodeId: null,
-  data: {},                  // nodeId -> {allocations, grand_totals, breakpoints}
+  data: {},                  // nodeId -> {allocations, proceeds, grand_totals, breakpoints}
   view: 'proceeds',          // 'proceeds' | 'breakpoints'; kept when the entity changes
   filters: {},               // {groupKey: true}; kept when the entity changes
   filterOpen: false,
@@ -22,6 +22,7 @@ function loadEntities(entities) {
     S.nodes.push({ node_id: id, is_root: !!e.is_root, label: e.display_name ? e.display_name : 'Entity ' + (i + 1) });
     S.data[id] = {
       allocations: Array.isArray(e.allocations) ? e.allocations : [],
+      proceeds: e.proceeds || null,
       grand_totals: e.grand_totals || null,
       breakpoints: Array.isArray(e.breakpoints) ? e.breakpoints : null,
     };
@@ -74,16 +75,6 @@ function visibleGroups(d) {
   const n = Object.keys(sel).length;
   const rows = d.allocations.map(function (g, i) { return { g: g, i: i }; });
   return { rows: n ? rows.filter(function (r) { return sel[groupKey(r.g)]; }) : rows, filtered: n > 0, count: n };
-}
-
-// The Total row's proceeds: the sum of the proceeds that reached this entity.
-function totalProceeds(d) {
-  let sum = 0;
-  d.allocations.forEach(function (g) {
-    const p = num(g.allocated_proceeds && g.allocated_proceeds.proceeds);
-    if (p !== null) sum += p;
-  });
-  return sum;
 }
 
 // ── Table pieces ──
@@ -149,7 +140,7 @@ function renderNiagaraProceeds(d) {
   const gt = d.grand_totals || {};
   const foot = v.filtered ? '' : '<tfoot><tr class="wf-total"><td></td>' +
     '<td colspan="2" data-col="name">Total</td>' +
-    td('proceeds', esc(fmtCurrency(totalProceeds(d))), 'num') +
+    td('proceeds', esc(fmtCurrency(d.proceeds)), 'num') +
     td('pct', '100.00%', 'num') +
     td('moic', '', 'num') +
     td('invested', esc(fmtCurrency(gt.total_invested_capital)), 'num') +

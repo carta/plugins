@@ -9,7 +9,7 @@ IRR) is in `SKILL.md` **§Formatting rules**; Excel cell formatting + metadata b
 
 Render one table per entity in `ordered` (`results.niagara_results.md` §Step 6b). Multi-entity adds
 a `### {display name}` subheader above each table; single-entity omits the
-subheader. Each entity's Total row uses **that entity's own** `grand_totals` —
+subheader. Each entity's Total row uses **that entity's own** `proceeds` and `grand_totals` —
 there is no graph-wide Total across entities (proceeds at the root flow down
 through the chain).
 
@@ -47,13 +47,13 @@ and `interest_allocations[j].interest_label`. Prefix with `↳ ` or indent.
 | MOIC              | `interest_allocations[j].moic` (render `—` if `null`)            |
 | IRR               | `interest_allocations[j].irr_percentage` (render `—` if `null`)  |
 
-**Total row** — final row, bolded. Pull from `grand_totals` (present on
-every page response):
+**Total row** — final row, bolded. Pull Proceeds from the top-level `proceeds` and the rest from
+`grand_totals` (both present on every page response):
 
 | Column            | Source                                  |
 | ----------------- | --------------------------------------- |
 | Group / Interest  | `"Total"`                               |
-| Proceeds          | The sum of `allocated_proceeds.proceeds` over that node's rows, **not** the EQUITY_VALUE you ran with. |
+| Proceeds          | top-level `proceeds` (**not** the EQUITY_VALUE you ran with, nor a sum of the rows; render `—` if `null`) |
 | % of Proceeds     | `100.00%` (of this entity's own total)  |
 | Invested Capital  | `grand_totals.total_invested_capital`   |
 | Participating Qty | `grand_totals.participating_units`      |

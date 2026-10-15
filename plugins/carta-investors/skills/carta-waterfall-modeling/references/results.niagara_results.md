@@ -64,7 +64,7 @@ read_tool({"name": "<get_command with all ':' replaced by '__'>", "arguments": {
   "include_allocations": false
 }})
 → response: { grouping, page, page_size, total_pages, total_count,
-             allocations: [], breakpoints, grand_totals,
+             allocations: [], breakpoints, proceeds, grand_totals,
              node_id: "<root node_id>", nodes_summary: [...] }
 ```
 
@@ -73,7 +73,7 @@ The results call always sends `owner_kind`, `owner_id`, `target_kind`,
 `BY_TYPE` — never send another value.
 
 This is a **breakpoints-only bootstrap** (`include_allocations: false`) — it returns
-`breakpoints`, `total_count`, `grand_totals`, and `nodes_summary` with no
+`breakpoints`, `total_count`, `proceeds`, `grand_totals`, and `nodes_summary` with no
 `allocations` (Step 6b's lean loop owns those). **Cache** its `breakpoints` for the
 node+execution — static per node, so they ride on this mandatory compute-waiting
 call with no separate fetch. Plan the Step 6b loop off `total_count`, not
@@ -102,7 +102,7 @@ non-roots' lean pages (once their `total_count` is known). Accumulate by `node_i
 regardless of arrival order; render/write order still follows `ordered`.
 
 ```
-per_entity = {}  // node_id -> { display_name, is_root, allocations, breakpoints, grand_totals }
+per_entity = {}  // node_id -> { display_name, is_root, allocations, breakpoints, proceeds, grand_totals }
 
 for entity in ordered:
   if entity is root:
@@ -110,7 +110,7 @@ for entity in ordered:
   else:
     bootstrap = call get_command with page=1, include_breakpoints=true,
                 include_allocations=false, node_id=entity.node_id
-  cache bootstrap.breakpoints + bootstrap.grand_totals + bootstrap.total_count
+  cache bootstrap.breakpoints + bootstrap.proceeds + bootstrap.grand_totals + bootstrap.total_count
 
   // lean pages own every allocation; breakpoints already cached; plan off total_count.
   // page_size from Step 6a (25 small / 10 large); no `raw`.
@@ -141,7 +141,7 @@ exactly once — same shape.
   only, no omitting sub-rows/holders/tiers; shrinking `page_size` is the only answer.
 - `response too large` on the **breakpoints-only bootstrap** (too many tiers) → skip breakpoints:
   run the lean loop from page 1 as usual (`include_breakpoints: false`) — its first page still
-  carries `total_count`, `grand_totals`, and `nodes_summary` — and tell the user breakpoints are
+  carries `total_count`, `proceeds`, `grand_totals`, and `nodes_summary` — and tell the user breakpoints are
   unavailable this run.
 - Shared: `403`, `404 target_not_found`, `502 target_lookup_failed` — see `SKILL.md` §Error handling.
 

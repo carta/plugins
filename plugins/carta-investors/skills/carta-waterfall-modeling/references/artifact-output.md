@@ -47,7 +47,7 @@ object in a file** — never as `--flag` arguments. First `Write` the object to
   "currency": "<currency from Step 3>",
   "base_url": "<base_url from get_current_user>",
   "entities": [
-    {"display_name": "<name>", "is_root": true, "allocations": [ … ], "breakpoints": [ … ], "grand_totals": { … }}
+    {"display_name": "<name>", "is_root": true, "allocations": [ … ], "breakpoints": [ … ], "proceeds": "<decimal>", "grand_totals": { … }}
   ]
 }
 ```
@@ -69,8 +69,8 @@ uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-waterfall-modeling/scripts/build_arti
 - `entities` — the results doc's `per_entity`, in `ordered` order (root first, `is_root: true` on
   it only). `allocations` is every accumulated `BY_HOLDER` row, verbatim, in page order;
   `breakpoints` the cached array (each tier with its `allocations` when fetched above), or `null`
-  when unavailable this run; `grand_totals` verbatim.
-  `core_results` → one entity: `display_name` the company name, `is_root: true`.
+  when unavailable this run; `proceeds` and `grand_totals` verbatim.
+  `core_results` → one entity: `display_name` the company name, `is_root: true`, `proceeds: null`.
 
 > **Path.** Bash reaches the `${CLAUDE_PLUGIN_ROOT}` path above on Claude Code and Cowork; do
 > not search for it first. Only if `uv run` reports that the file does not exist, find the

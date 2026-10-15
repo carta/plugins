@@ -75,7 +75,7 @@ MAX_NAME = 200
 MAX_INPUTS = 20
 MAX_INPUT_TEXT = 200
 MAX_ENTITIES = 50
-ENTITY_KEYS = {"display_name", "is_root", "allocations", "breakpoints", "grand_totals"}
+ENTITY_KEYS = {"display_name", "is_root", "allocations", "breakpoints", "proceeds", "grand_totals"}
 
 DEMO_VALUES = {
     "owner_kind": "FIRM", "owner_id": "1001",
@@ -86,7 +86,7 @@ DEMO_VALUES = {
     "inputs": [{"label": "Equity value", "display_value": "10,000,000.00"}],
     "equity_value": "10000000.00", "waterfall_date": "2026-06-30",
     "entities": [{"display_name": "Northwind Holdings LLC", "is_root": True, "allocations": [],
-                  "breakpoints": None, "grand_totals": None}],
+                  "breakpoints": None, "proceeds": None, "grand_totals": None}],
 }
 
 
@@ -181,6 +181,8 @@ def entities(value):
             _need("allocations" not in bp or (isinstance(bp["allocations"], list)
                                               and all(isinstance(r, dict) for r in bp["allocations"])),
                   "--entities[{}].breakpoints[{}].allocations must be a list of rows".format(i, j))
+        _need(e["proceeds"] is None or (isinstance(e["proceeds"], str) and DECIMAL_RE.match(e["proceeds"])),
+              "--entities[{}].proceeds must be a raw decimal string or null".format(i))
         _need(e["grand_totals"] is None or isinstance(e["grand_totals"], dict),
               "--entities[{}].grand_totals must be an object or null".format(i))
         clean.append({k: e[k] for k in ENTITY_KEYS})

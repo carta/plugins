@@ -121,6 +121,7 @@ function _niagaraEntity(key, isRoot) {
     display_name: node.name, is_root: isRoot,
     allocations: _niagaraGroups(node.interests, 'BY_HOLDER'),
     breakpoints: node.breakpoints,
+    proceeds: _sumBy(node.interests, function (i) { return Number(i.allocated_proceeds.proceeds); }).toFixed(2),
     grand_totals: {
       total_invested_capital: _sumBy(node.interests, function (i) { return Number(i.invested_capital); }).toFixed(2),
       participating_units: String(_sumBy(node.interests, function (i) { return Number(i.allocated_proceeds.units); })),
@@ -146,7 +147,7 @@ function _coreEntity() {
   const rows = DEMO_CORE.holders;
   const sum = function (f) { return _sumBy(rows, function (r) { return Number(r[f]) || 0; }); };
   return {
-    display_name: null, is_root: true, allocations: rows, breakpoints: DEMO_CORE.breakpoints,
+    display_name: null, is_root: true, allocations: rows, breakpoints: DEMO_CORE.breakpoints, proceeds: null,
     grand_totals: { outstanding_shares: String(sum('outstanding_shares')), cost_of_holdings: sum('cost_of_holdings').toFixed(2), value_of_holdings: sum('value_of_holdings').toFixed(2) },
   };
 }
