@@ -1,0 +1,1146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>__LP_DOCS_TITLE__</title>
+<style>
+@font-face {
+  font-family: "SangBleuVersailles";
+  src: local("SangBleu Versailles"), local("SangBleuVersailles-Regular");
+  font-weight: normal;
+  font-style: normal;
+}
+:root { color-scheme: light; }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: "Inter var", Inter, -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 14px;
+  color: #1A1A1A;
+  background: #FFFFFF;
+  padding: 24px;
+  line-height: 1.5;
+}
+
+/* ── Loading overlay ── */
+#loading-screen, #error-screen {
+  position: fixed; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  background: #FFFFFF; z-index: 100; gap: 12px;
+}
+#error-screen { display: none; }
+#loading-label { font-size: 13px; color: #656B6B; margin-top: 4px; }
+#error-msg { font-size: 13px; color: #E52431; max-width: 360px; text-align: center; }
+.spinner {
+  display: inline-block;
+  width: 32px; height: 32px;
+  border: 2px solid #DEDFDF;
+  border-top-color: #285DA3;
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+.loading-spinner {
+  display: inline-block;
+  width: 20px; height: 20px;
+  border: 2px solid #DEDFDF;
+  border-top-color: #285DA3;
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+  vertical-align: middle;
+  margin-right: 8px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Header ── */
+.header { margin-bottom: 20px; }
+.header-title-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 3px; }
+.header-title-row h1 { font-size: 20px; font-weight: 500; color: #1A1A1A; font-family: "SangBleuVersailles", serif; }
+.header p  { font-size: 13px; color: #656B6B; }
+.header-logo { height: 28px; width: auto; flex-shrink: 0; }
+
+/* ── Filter / sort bar ── */
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 10px;
+  row-gap: 15px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+/* ── Filter panel ── */
+.fp-wrap { position: relative; }
+.fp-btn {
+  padding: 6px 28px 6px 10px;
+  border: 1px solid #A7AAAA;
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: inherit;
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23656B6B' d='M6 8L1 3h10z'/%3E%3C/svg%3E") no-repeat right 10px center;
+  color: #1A1A1A;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.fp-btn:hover { border-color: #656B6B; }
+.fp-btn.active { border-color: #1A1A1A; font-weight: 500; }
+.fp-panel {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  background: #fff;
+  border: 1px solid #DEDFDF;
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.10);
+  z-index: 200;
+  min-width: 380px;
+  flex-direction: row;
+}
+.fp-panel.open { display: flex; }
+.fp-nav {
+  width: 130px;
+  border-right: 1px solid #DEDFDF;
+  padding: 6px 0;
+  flex-shrink: 0;
+}
+.fp-nav button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-family: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #1A1A1A;
+  white-space: nowrap;
+}
+.fp-nav button:hover { background: #F5F6F6; }
+.fp-nav button.fp-active { background: #F5F6F6; font-weight: 500; }
+.fp-nav button.fp-has-sel { color: #285DA3; }
+.fp-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 10px 0 6px;
+}
+.fp-search {
+  margin: 0 12px 8px;
+  padding: 5px 10px;
+  border: 1px solid #A7AAAA;
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+}
+.fp-search:focus { border-color: #285DA3; box-shadow: 0 0 0 3px rgba(40,93,163,.15); }
+.fp-desel {
+  margin: 0 12px 6px;
+  font-size: 12px;
+  color: #285DA3;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+  font-family: inherit;
+}
+.fp-desel:hover { text-decoration: underline; }
+.fp-list {
+  overflow-y: auto;
+  max-height: 220px;
+  padding: 0 0 6px;
+}
+.fp-list label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 5px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  line-height: 1.4;
+}
+.fp-list label:hover { background: #F5F6F6; }
+.fp-list input[type=checkbox] { margin-top: 2px; flex-shrink: 0; accent-color: #285DA3; }
+.sbtn {
+  padding: 6px 12px;
+  border: 1px solid #A7AAAA;
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: inherit;
+  background: #fff;
+  color: #1A1A1A;
+  cursor: pointer;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.sbtn:hover  { border-color: #656B6B; }
+.sbtn.active { background: #1A1A1A; color: #fff; border-color: #1A1A1A; }
+
+/* ── Group by ── */
+.gb-wrap { position: relative; }
+.gb-btn {
+  padding: 6px 30px 6px 10px;
+  border: 1px solid #A7AAAA;
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: inherit;
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23656B6B' d='M6 8L1 3h10z'/%3E%3C/svg%3E") no-repeat right 10px center;
+  color: #1A1A1A;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.gb-btn.active { border-color: #1A1A1A; }
+.gb-btn:hover  { border-color: #656B6B; }
+.gb-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  background: #fff;
+  border: 1px solid #DEDFDF;
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0,0,0,.10);
+  min-width: 140px;
+  z-index: 100;
+}
+.gb-menu.open { display: block; }
+.gb-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-family: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #1A1A1A;
+}
+.gb-menu button:hover  { background: #F5F6F6; }
+.gb-menu button.chosen { font-weight: 500; }
+.gb-divider { height: 1px; background: #DEDFDF; margin: 4px 0; }
+tr.group-header td {
+  background: #F5F6F6;
+  font-size: 12px;
+  font-weight: 500;
+  color: #656B6B;
+  padding: 6px 14px;
+  border-bottom: 1px solid #DEDFDF;
+  border-top: 1px solid #DEDFDF;
+}
+tr.group-header:first-child td { border-top: none; }
+
+/* ── Table ── */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; min-width: 955px; table-layout: fixed; }
+
+th {
+  text-align: left;
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #656B6B;
+  border-bottom: 1.5px solid #A7AAAA;
+  background: #fff;
+  white-space: nowrap;
+}
+th[data-col] { cursor: pointer; }
+th[data-col]:hover { color: #1A1A1A; }
+th.sort-active { color: #1A1A1A; }
+th .sort-arrow { margin-left: 4px; opacity: 0.4; }
+th.sort-active .sort-arrow { opacity: 1; }
+td {
+  padding: 10px 14px;
+  font-size: 13px;
+  border-bottom: 1px solid #DEDFDF;
+  vertical-align: middle;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: #E9EAEA; }
+
+/* ── Type badges ── */
+.badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.b-dist  { background: #EBF7F6; color: #2D9E90; }
+.b-cap   { background: #FFFCED; color: #C88600; }
+.b-tax   { background: #EAF0F8; color: #285DA3; }
+.b-legal { background: #F1F1F1; color: #5F5E5A; }
+.b-fin   { background: #F1EFE8; color: #7A6F60; }
+
+/* ── Document link ── */
+.doc-link { color: #1A1A1A; text-decoration: underline; text-underline-offset: 2px; }
+.doc-link:hover { color: #656B6B; }
+/* Source files open a Carta page, not a file, so they read as a portal link */
+.portal-link { color: #285DA3; text-decoration: none; }
+.portal-link:hover { text-decoration: underline; }
+.portal-hint { font-size: 11px; color: #656B6B; margin-left: 6px; }
+.locked { color: #656B6B; }
+
+/* ── Alerts ── */
+#alerts { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+#alerts:empty { display: none; }
+.alert {
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 13px;
+  border: 1px solid #DEDFDF;
+  background: #F5F6F6;
+  color: #1A1A1A;
+}
+.alert-warn  { background: #FFFCED; border-color: #F0D88A; }
+.alert-error { background: #FDECEE; border-color: #F3B7BC; }
+.alert a { color: #285DA3; }
+
+/* ── Pagination ── */
+.pg { display: flex; gap: 6px; align-items: center; margin-top: 14px; flex-wrap: wrap; }
+.pb {
+  padding: 5px 12px;
+  border: 1px solid #A7AAAA;
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: inherit;
+  background: #fff;
+  color: #1A1A1A;
+  cursor: pointer;
+}
+.pb:disabled { opacity: .38; cursor: default; }
+.pb.active   { background: #1A1A1A; color: #fff; border-color: #1A1A1A; }
+.pg-info     { font-size: 13px; color: #656B6B; }
+
+/* ── Empty state ── */
+.empty { text-align: center; padding: 48px 0; color: #656B6B; font-size: 14px; }
+
+/* ── Active filter tags ── */
+.filter-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px 4px 10px;
+  background: #EBF1FB;
+  border: 1px solid #C0D1E9;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #285DA3;
+  white-space: nowrap;
+}
+.filter-tag button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #285DA3;
+  font-size: 13px;
+  padding: 0;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+}
+.filter-tag button:hover { color: #1A3E6D; }
+.fp-reset {
+  background: none;
+  border: none;
+  font-size: 13px;
+  font-family: inherit;
+  color: #656B6B;
+  cursor: pointer;
+  padding: 0;
+}
+.fp-reset:hover { color: #1A1A1A; text-decoration: underline; }
+
+/* ── Footer ── */
+.footer {
+  margin-top: 20px;
+  padding-top: 12px;
+  border-top: 1px solid #DEDFDF;
+  font-size: 12px;
+  color: #A7AAAA;
+}
+</style>
+</head>
+<body>
+
+<div id="loading-screen">
+  <div class="spinner"></div>
+  <div id="loading-label">Connecting to Carta…</div>
+</div>
+<div id="error-screen">
+  <div style="font-size:28px">⚠️</div>
+  <div id="error-msg">Unable to load documents.</div>
+  <button style="margin-top:8px;height:36px;padding:0 14px;background:#1A1A1A;color:#fff;border:none;border-radius:4px;font-family:inherit;font-size:13px;font-weight:500;cursor:pointer" onclick="fetchDocuments()">Retry</button>
+</div>
+
+<div id="dashboard" style="display:none">
+
+<!-- Header -->
+<div class="header">
+  <div class="header-title-row">
+    <h1 id="page-title"></h1>
+    <svg class="header-logo" viewBox="0 0 528 264" xmlns="http://www.w3.org/2000/svg">
+      <path fill="#1a1a1a" d="M0,0v264h528V0H0ZM517.44,253.44H10.56V10.56h506.88v242.88ZM69.26,137.15c0-26.47,22.34-42,42.39-42,14.35,0,27.74,5.38,34.9,17.78l-13.4,7.77c-2.31-3.49-5.47-6.35-9.17-8.3-3.71-1.96-7.85-2.98-12.05-2.95-11.79,0-25.81,9.2-25.81,27.42s13.41,27.58,26.93,27.58c9.4,0,17.21-5.24,21.84-13.33l13.7,6.33c-7.76,13.95-21.62,21.38-37.72,21.38-20.25-.02-41.6-15.58-41.6-41.69h0ZM197.5,178.83c11.14,0,21.66-4.91,27.09-12.05v9.81h16.55v-79.39h-16.55v9.83c-5.16-7.2-15.93-11.89-27.09-11.89-24.38,0-41.44,17.75-41.44,41.84s17.21,41.84,41.44,41.84ZM199.09,110.21c15.3,0,25.8,11.41,25.8,26.78s-10.51,26.78-25.8,26.78-26.14-11.57-26.14-27.1,10.84-26.47,26.14-26.47ZM330.1,112.96h-17.18v-15.85h17.34v-20.69h17.05v20.69h17.33v15.85h-17.33v63.61h-17.21v-63.61ZM412.2,178.83c11.16,0,21.68-4.91,27.11-12.05v9.81h16.58v-79.39h-16.58v9.83c-5.16-7.2-15.93-11.89-27.11-11.89-24.36,0-41.42,17.75-41.42,41.84s17.2,41.84,41.42,41.84ZM413.81,110.21c15.28,0,25.81,11.41,25.81,26.78s-10.53,26.78-25.81,26.78-26.14-11.57-26.14-27.1,10.84-26.47,26.14-26.47ZM278.62,176.49h-17.21v-79.39h15.77v14.78c3.9-8.78,9.77-14.5,19.3-14.98,1.97-.03,3.93,0,5.89.21l-.26,15.89c-13.69,0-23.47,7.34-23.47,27.79v35.72h-.01Z"/>
+    </svg>
+  </div>
+  <p id="subtitle"></p>
+</div>
+
+<div id="alerts" role="status"></div>
+
+<!-- Filter + sort bar -->
+<div class="bar">
+  <div class="gb-wrap">
+    <button class="gb-btn" id="gb-btn" onclick="toggleGbMenu()">Group by</button>
+    <div class="gb-menu" id="gb-menu">
+      <button onclick="setGroupBy('fund')">Fund</button>
+      <button onclick="setGroupBy('type')">Type</button>
+      <button onclick="setGroupBy('portfolio')">Portfolio</button>
+      <div class="gb-divider"></div>
+      <button onclick="setGroupBy(null)">None</button>
+    </div>
+  </div>
+  <div class="fp-wrap">
+    <button class="fp-btn" id="fp-btn" onclick="toggleFpPanel()">Filters</button>
+    <div class="fp-panel" id="fp-panel">
+      <div class="fp-nav" id="fp-nav">
+        <button class="fp-active" data-cat="type"      onclick="switchCat('type')">Document type</button>
+        <button                   data-cat="fund"      onclick="switchCat('fund')">Fund</button>
+        <button                   data-cat="year"      onclick="switchCat('year')">Year</button>
+        <button                   data-cat="portfolio" onclick="switchCat('portfolio')">Portfolio</button>
+      </div>
+      <div class="fp-body">
+        <input class="fp-search" id="fp-search" type="text" placeholder="Search" oninput="renderChecks()">
+        <button class="fp-desel" onclick="deselAll()">Deselect all</button>
+        <div class="fp-list" id="fp-list"></div>
+      </div>
+    </div>
+  </div>
+  <div id="fp-tags" style="display:contents"></div>
+</div>
+
+<!-- Table -->
+<div class="table-wrap">
+  <table>
+    <colgroup>
+      <col style="width:220px">
+      <col style="min-width:200px">
+      <col style="width:120px">
+      <col style="width:25%">
+      <col style="width:15%">
+    </colgroup>
+    <thead id="thead">
+      <tr>
+        <th>Type</th>
+        <th data-col="name">Document</th>
+        <th data-col="date">Date</th>
+        <th>Fund</th>
+        <th>Firm</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</div>
+<div id="empty-state" class="empty" style="display:none">No documents match the current filters.</div>
+<div class="pg" id="pagination"></div>
+
+<!-- Footer -->
+<div class="footer" id="footer"></div>
+
+</div><!-- end #dashboard -->
+
+<script type="application/json" id="lp-docs-config">__LP_DOCS_CONFIG__</script>
+<script>
+// ── Configuration (filled in by render_artifact.py) ─────────────────────────
+// The artifact runtime addresses a connector by display name, never a UUID or an
+// mcp__…__ tool name, so the tool names here are bare verbs.
+var CONFIG = JSON.parse(document.getElementById('lp-docs-config').textContent);
+var CARTA_MCP_SERVER = CONFIG.server;
+var WELCOME_TOOL = 'welcome';
+var CALL_TOOL    = 'call_tool';
+// Every UI-issued tool call stamps this one constant. The host cannot tell a
+// UI-issued call from a model-issued one, so this is the only record of origin.
+var INSTRUMENTATION_V2 = { skills: ['carta-investors:carta-lp-documents'], from_ui: true };
+// No user id: the authenticated Carta session identifies the LP, so every
+// document fetch below returns this LP's own documents.
+
+// A runaway cursor would otherwise page forever; 50 pages covers several thousand documents.
+var MAX_PAGES = 50;
+var ENDPOINTS = [
+  { cmd: 'lp:list:flpd_documents',        label: 'fund documents' },
+  { cmd: 'lp:list:closing_documents',     label: 'closing documents' },
+  { cmd: 'lp:list:other_documents',       label: 'other documents' },
+  { cmd: 'lp:list:source_file_documents', label: 'shared files' }
+];
+var ALERT_COPY = {
+  auth:      'Your Carta session has expired. Reconnect Carta, then reopen this page.',
+  forbidden: "You don't have access to these documents in Carta.",
+  connector: "This view can't reach Carta. Reopen it from a chat where Carta is connected.",
+  timeout:   'Carta took too long to respond. Try again in a few minutes.',
+  generic:   "Couldn't load your documents from Carta. Try again in a few minutes."
+};
+
+// ── Data ────────────────────────────────────────────────────────────────────
+var DOCS = [];
+var WARNINGS = [];   // de-duplicated `warnings` text from the list responses
+var NOTICES = [];    // partial-load messages: a failed endpoint, a stopped backfill
+var pageAlert = null; // 'auth' | 'forbidden' — stops the whole load
+var isLoading = true;
+// Each load takes the next number; a load that finds a newer one stops touching state.
+var loadGen = 0;
+
+// ── State ───────────────────────────────────────────────────────────────────
+let activeSort = 'date';
+const SEL = { type: new Set(), fund: new Set(), year: new Set(), portfolio: new Set() };
+let fpCat = 'type';
+let sortDir = 'desc';
+let page = 1;
+const PER_PAGE = 15;
+let groupBy = null;
+
+function debugLog(msg) { console.debug('[lp-docs] ' + msg); }
+
+// ── Failures ────────────────────────────────────────────────────────────────
+
+function loadError(kind, message) {
+  var e = new Error(message);
+  e.kind = kind;
+  return e;
+}
+
+function failureKind(text) {
+  if (/\b401\b|expired|unauthori[sz]ed|\b400\b[^]*\b(session|token)\b|\b(session|token)\b[^]*\b400\b/i.test(text)) return 'auth';
+  if (/\b403\b|forbidden|ha(s|sn't|s not) been granted/i.test(text)) return 'forbidden';
+  if (/time(d)?\s*out/i.test(text)) return 'timeout';
+  return 'generic';
+}
+
+// carta-mcp reports a failure as JSON {code, message, fix, …}; the code, never the
+// wording, says what happened. Hosts that don't send it fall back to failureKind.
+var CODE_KIND = {
+  unauthenticated: 'auth',
+  scope_required:  'forbidden',
+  role_required:   'forbidden',
+  out_of_scope:    'forbidden',
+  throttled:       'timeout'
+};
+
+function errorCode(text) {
+  var i = String(text).indexOf('{');
+  if (i === -1) return null;
+  try {
+    var body = JSON.parse(String(text).slice(i));
+    return body && typeof body.code === 'string' && typeof body.message === 'string' ? body.code : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function kindOf(text) {
+  var code = errorCode(text);
+  return code ? (CODE_KIND[code] || 'generic') : failureKind(text);
+}
+
+function asLoadError(e) {
+  if (e && e.kind) return e;
+  var msg = (e && e.message) ? e.message : String(e);
+  return loadError(e && e.code === 'needs_reauth' ? 'auth' : kindOf(msg), msg);
+}
+
+function resultText(raw) {
+  if (typeof raw === 'string') return raw;
+  if (raw && Array.isArray(raw.content) && raw.content[0] && typeof raw.content[0].text === 'string') return raw.content[0].text;
+  if (raw && typeof raw.result === 'string') return raw.result;
+  return null;
+}
+
+// A failure is a result flagged isError, or — from a host that drops the flag — text
+// starting with "Error" or a top-level {code, message} object. A successful list is
+// never read as one, so a document named "403 …" or "unauthenticated" is just a document.
+function failureFromResult(raw) {
+  var text = resultText(raw);
+  if (text == null) return raw && raw.isError ? loadError('generic', 'tool error') : null;
+  var t = text.trim();
+  var isFailure = (raw && raw.isError) || /^Error/.test(t) || (t.charAt(0) === '{' && errorCode(t) !== null);
+  return isFailure ? loadError(kindOf(t), t) : null;
+}
+
+// ── MCP call helpers ────────────────────────────────────────────────────────
+
+function extractPayload(raw) {
+  if (raw == null) throw new Error('Empty MCP response');
+  if (typeof raw === 'object' && !Array.isArray(raw)) {
+    if (raw.payload !== undefined && raw.payload !== null) {
+      return extractPayload(raw.payload);
+    }
+    if (Array.isArray(raw.content) && raw.content.length > 0 && raw.content[0].text) {
+      return extractPayload(raw.content[0].text);
+    }
+    if (typeof raw.result === 'string') {
+      return extractPayload(raw.result);
+    }
+    if (raw.result && typeof raw.result === 'object') {
+      return extractPayload(raw.result);
+    }
+    if (raw.data && typeof raw.data === 'object') {
+      return extractPayload(raw.data);
+    }
+    return raw;
+  }
+  if (typeof raw === 'string') {
+    const i = raw.indexOf('{');
+    if (i === -1) throw new Error('No JSON in response: ' + raw.slice(0, 120));
+    return JSON.parse(raw.slice(i));
+  }
+  throw new Error('Unrecognised response: ' + String(raw).slice(0, 80));
+}
+
+// Applied once, to the final payload of a list command — a stray object without
+// `results` must fail loudly rather than render as an empty document list.
+function requireListPayload(payload) {
+  if (!payload || !Array.isArray(payload.results)) {
+    throw loadError('generic', 'list response has no results array');
+  }
+  return payload;
+}
+
+function withTimeout(promise, ms, label) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error((label || 'request') + ' timed out after ' + ms + 'ms')), ms);
+    promise.then(v => { clearTimeout(timer); resolve(v); }, e => { clearTimeout(timer); reject(e); });
+  });
+}
+
+var _mcpNsPromise = null;
+// null means this view cannot run mcp — not granted, not served, or failed to load.
+// Polls up to 5 attempts, 4 × 500 ms gaps (2 s max) to handle window.claude not yet
+// ready on first render. A miss is not cached, so Retry looks again.
+function mcpNamespace() {
+  if (!_mcpNsPromise) {
+    _mcpNsPromise = (async () => {
+      for (let i = 0; i < 5; i++) {
+        try {
+          const mcp = await Promise.resolve(window.claude && window.claude.use ? window.claude.use('mcp') : null);
+          if (mcp) return mcp;
+        } catch (_) {}
+        if (i < 4) await new Promise(r => setTimeout(r, 500));
+      }
+      _mcpNsPromise = null;
+      return null;
+    })();
+  }
+  return _mcpNsPromise;
+}
+
+async function callTool(name, args) {
+  const mcp = await mcpNamespace();
+  if (!mcp) throw loadError('connector', 'No live Carta connector in this view');
+  let res;
+  try {
+    res = await withTimeout(mcp.callTool(CARTA_MCP_SERVER, name, args || {}), 60000, name);
+  } catch (e) {
+    throw asLoadError(e);
+  }
+  const failure = failureFromResult(res);
+  if (failure) throw failure;
+  return res;
+}
+
+async function callToolWithRetry(name, args) {
+  const max = 3;
+  for (let i = 0; ; i++) {
+    try {
+      return await callTool(name, args);
+    } catch (e) {
+      debugLog(name + ' attempt ' + (i + 1) + '/' + max + ' failed: ' + e.kind);
+      if (e.kind !== 'timeout' || i === max - 1) throw e;
+      await new Promise(function(r) { setTimeout(r, 1000 * (i + 1) * (i + 1)); });
+    }
+  }
+}
+
+async function listPage(command, params) {
+  const res = await callToolWithRetry(CALL_TOOL, {
+    name: command.replace(/:/g, '__'),
+    arguments: params || {},
+    _instrumentation_v2: INSTRUMENTATION_V2
+  });
+  return requireListPayload(extractPayload(res));
+}
+
+// ── Normalize a document from any endpoint into a unified shape ─────────────
+
+// The API sends MM/DD/YYYY today; ISO is accepted too. Display is locale-formatted.
+function isoDate(raw) {
+  var s = String(raw || '');
+  var iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if (iso) return iso[1] + '-' + iso[2] + '-' + iso[3];
+  var us = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s);
+  if (us) return us[3] + '-' + us[1].padStart(2, '0') + '-' + us[2].padStart(2, '0');
+  return '';
+}
+
+function normalizeDoc(d) {
+  return {
+    id:        d.id || '',
+    name:      d.document_name || '',
+    type:      d.document_type || '',
+    fund:      d.investment_name || '',
+    firm:      d.firm_name || '',
+    portfolio: d.portfolio_name || '',
+    date:      isoDate(d.document_date),
+    url:       d.download_url || '',
+    isSourceFile: d.source === 'source_file',
+    // Only an explicit false locks a row: a backend that does not send the field
+    // has no e-delivery terms to enforce.
+    locked:    d.delivery_terms_accepted === false,
+    acceptUrl: d.accept_url || ''
+  };
+}
+
+function warningText(w) {
+  if (typeof w === 'string') return w;
+  return (w && (w.message || w.detail)) || '';
+}
+
+function addPage(result) {
+  result.results.forEach(d => DOCS.push(normalizeDoc(d)));
+  (result.warnings || []).forEach(w => {
+    var text = warningText(w);
+    if (text && WARNINGS.indexOf(text) === -1) WARNINGS.push(text);
+  });
+}
+
+function addNotice(text) {
+  if (NOTICES.indexOf(text) === -1) NOTICES.push(text);
+}
+
+// ── Loading overlay helpers ─────────────────────────────────────────────────
+
+function showLoading(msg) {
+  document.getElementById('loading-screen').style.display = 'flex';
+  const lbl = document.getElementById('loading-label');
+  if (lbl && msg) lbl.textContent = msg;
+}
+function hideLoading() {
+  document.getElementById('loading-screen').style.display = 'none';
+}
+function showError(msg) {
+  hideLoading();
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('error-screen').style.display = 'flex';
+  document.getElementById('error-msg').textContent = msg;
+}
+
+// ── Fetch documents from all 4 Carta endpoints (first pages, then background backfill) ──
+
+function nextJob(ep, result) {
+  if (result.next_cursor) return { ep: ep, cursor: result.next_cursor };
+  if (result.total_pages && (result.page || 1) < result.total_pages) {
+    return { ep: ep, page: (result.page || 1) + 1, totalPages: result.total_pages };
+  }
+  return null;
+}
+
+function stopForAlert(kind) {
+  pageAlert = kind;
+  isLoading = false;
+  render();
+}
+
+async function fetchDocuments() {
+  const runId = ++loadGen;
+  DOCS = [];
+  WARNINGS = [];
+  NOTICES = [];
+  pageAlert = null;
+  isLoading = true;
+  document.getElementById('error-screen').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'none';
+  showLoading('Connecting to Carta…');
+
+  try {
+    await callToolWithRetry(WELCOME_TOOL, { _instrumentation_v2: INSTRUMENTATION_V2 });
+  } catch (e) {
+    if (runId !== loadGen) return;
+    showError(ALERT_COPY[asLoadError(e).kind] || ALERT_COPY.generic);
+    return;
+  }
+  if (runId !== loadGen) return;
+  document.getElementById('dashboard').style.display = '';
+  hideLoading();
+  render();
+
+  const queue = [];
+  let failed = 0;
+  for (const ep of ENDPOINTS) {
+    let result;
+    try {
+      result = await listPage(ep.cmd, {});
+    } catch (e) {
+      if (runId !== loadGen) return;
+      const err = asLoadError(e);
+      debugLog(ep.cmd + ' failed: ' + err.kind);
+      if (err.kind === 'auth' || err.kind === 'forbidden') { stopForAlert(err.kind); return; }
+      failed++;
+      addNotice("Couldn't load " + ep.label + '. Results may be incomplete.');
+      render();
+      continue;
+    }
+    if (runId !== loadGen) return;
+    addPage(result);
+    const job = nextJob(ep, result);
+    if (job) queue.push(job);
+    render();
+  }
+
+  if (failed === ENDPOINTS.length) { showError(ALERT_COPY.generic); return; }
+  isLoading = false;
+  render();
+  if (queue.length) await backfill(runId, queue);
+}
+
+async function backfill(runId, queue) {
+  for (const job of queue) {
+    const seen = new Set();
+    let pages = 1;
+    while (job.cursor !== undefined ? !!job.cursor : job.page <= job.totalPages) {
+      if (pages >= MAX_PAGES || (job.cursor && seen.has(job.cursor))) {
+        addNotice('Stopped loading ' + job.ep.label + ' early. Results may be incomplete.');
+        break;
+      }
+      const params = {};
+      if (job.cursor) { seen.add(job.cursor); params.cursor = job.cursor; }
+      else params.page = job.page;
+      let result;
+      try {
+        result = await listPage(job.ep.cmd, params);
+      } catch (e) {
+        if (runId !== loadGen) return;
+        const err = asLoadError(e);
+        if (err.kind === 'auth' || err.kind === 'forbidden') { stopForAlert(err.kind); return; }
+        addNotice('Some ' + job.ep.label + " didn't finish loading. Results may be incomplete.");
+        break;
+      }
+      if (runId !== loadGen) return;
+      addPage(result);
+      pages++;
+      if (job.cursor !== undefined) job.cursor = result.next_cursor || null;
+      else job.page++;
+      render();
+    }
+  }
+  if (runId !== loadGen) return;
+  render();
+}
+
+// ── Escape helpers ──────────────────────────────────────────────────────────
+var ESC_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+// Safe in text and in quoted attributes alike.
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ESC_MAP[c]);
+}
+// Every href goes through here: https only, escaped for the attribute it lands in.
+function hrefAttr(url) {
+  if (!url) return '';
+  try { return new URL(url).protocol === 'https:' ? esc(url) : ''; }
+  catch (e) { return ''; }
+}
+function externalLink(href, cls, inner) {
+  return '<a class="' + cls + '" href="' + href + '" target="_blank" rel="noopener noreferrer">' + inner + '</a>';
+}
+
+// ── Group by menu ──────────────────────────────────────────────────────────
+
+function toggleGbMenu() {
+  document.getElementById('gb-menu').classList.toggle('open');
+}
+function setGroupBy(val) {
+  groupBy = val;
+  const btn = document.getElementById('gb-btn');
+  const labels = { fund: 'Fund', type: 'Type', portfolio: 'Portfolio' };
+  btn.textContent = val ? 'Group by: ' + labels[val] : 'Group by';
+  btn.classList.toggle('active', !!val);
+  document.querySelectorAll('#gb-menu button').forEach(b => {
+    b.classList.toggle('chosen', b.textContent.toLowerCase().trim() === (val || 'none'));
+  });
+  document.getElementById('gb-menu').classList.remove('open');
+  page = 1;
+  render();
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('.gb-wrap')) document.getElementById('gb-menu').classList.remove('open');
+});
+
+// ── Date formatter ──────────────────────────────────────────────────────────
+var DATE_FMT = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' });
+function fmtDate(iso) {
+  if (!iso) return '—';
+  var p = iso.split('-');
+  return DATE_FMT.format(new Date(+p[0], +p[1] - 1, +p[2]));
+}
+
+// ── Filter panel functions ───────────────────────────────────────────────────
+function catValues(cat) {
+  if (cat === 'year') return [...new Set(DOCS.map(d => (d.date || '').slice(0, 4)).filter(Boolean))].sort().reverse();
+  return [...new Set(DOCS.map(d => d[cat]).filter(Boolean))].sort();
+}
+
+function switchCat(cat) {
+  fpCat = cat;
+  document.getElementById('fp-search').value = '';
+  document.querySelectorAll('.fp-nav button').forEach(b => b.classList.toggle('fp-active', b.dataset.cat === cat));
+  renderChecks();
+}
+
+function renderChecks() {
+  const q = (document.getElementById('fp-search').value || '').toLowerCase();
+  const vals = catValues(fpCat).filter(v => !q || v.toLowerCase().includes(q));
+  document.getElementById('fp-list').innerHTML = vals.map(v =>
+    '<label><input type="checkbox" value="' + esc(v) + '" ' + (SEL[fpCat].has(v) ? 'checked' : '') + ' onchange="toggleCheck(\'' + fpCat + '\', this.value, this.checked)"> ' + esc(v) + '</label>'
+  ).join('');
+}
+
+function toggleCheck(cat, val, checked) {
+  checked ? SEL[cat].add(val) : SEL[cat].delete(val);
+  updateFpBtn();
+  document.querySelectorAll('.fp-nav button').forEach(b => {
+    if (b.dataset.cat === cat) b.classList.toggle('fp-has-sel', SEL[cat].size > 0);
+  });
+  page = 1;
+  render();
+}
+
+function deselAll() {
+  SEL[fpCat].clear();
+  document.querySelectorAll('.fp-nav button').forEach(b => {
+    if (b.dataset.cat === fpCat) b.classList.remove('fp-has-sel');
+  });
+  renderChecks();
+  updateFpBtn();
+  page = 1;
+  render();
+}
+
+const CAT_DISPLAY = { type: 'Document type', fund: 'Fund', year: 'Year', portfolio: 'Portfolio' };
+
+function updateFpBtn() {
+  const total = Object.values(SEL).reduce((n, s) => n + s.size, 0);
+  const btn = document.getElementById('fp-btn');
+  btn.textContent = total ? 'Filters (' + total + ')' : 'Filters';
+  btn.classList.toggle('active', total > 0);
+
+  const tagsEl = document.getElementById('fp-tags');
+  let html = '';
+  for (const [cat, set] of Object.entries(SEL)) {
+    if (!set.size) continue;
+    const label = set.size === 1 ? esc([...set][0]) : esc(CAT_DISPLAY[cat]) + ' (' + set.size + ')';
+    html += '<span class="filter-tag">' + label + '<button onclick="clearCat(\'' + cat + '\')" title="Remove">✕</button></span>';
+  }
+  if (total) html += '<button class="fp-reset" onclick="resetAll()">Reset</button>';
+  tagsEl.innerHTML = html;
+}
+
+function clearCat(cat) {
+  SEL[cat].clear();
+  document.querySelectorAll('.fp-nav button').forEach(b => {
+    if (b.dataset.cat === cat) b.classList.remove('fp-has-sel');
+  });
+  if (fpCat === cat) renderChecks();
+  updateFpBtn();
+  page = 1;
+  render();
+}
+
+function resetAll() {
+  Object.keys(SEL).forEach(cat => { SEL[cat].clear(); });
+  document.querySelectorAll('.fp-nav button').forEach(b => b.classList.remove('fp-has-sel'));
+  renderChecks();
+  updateFpBtn();
+  page = 1;
+  render();
+}
+
+function toggleFpPanel() {
+  const panel = document.getElementById('fp-panel');
+  const opening = !panel.classList.contains('open');
+  panel.classList.toggle('open');
+  if (opening) { fpCat = 'type'; switchCat('type'); }
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.fp-wrap')) document.getElementById('fp-panel').classList.remove('open');
+});
+
+// ── Filter + sort the full dataset ──────────────────────────────────────────
+function getFiltered() {
+  let docs = [...DOCS];
+  if (SEL.type.size)      docs = docs.filter(d => SEL.type.has(d.type));
+  if (SEL.fund.size)      docs = docs.filter(d => SEL.fund.has(d.fund));
+  if (SEL.year.size)      docs = docs.filter(d => SEL.year.has((d.date || '').slice(0, 4)));
+  if (SEL.portfolio.size) docs = docs.filter(d => SEL.portfolio.has(d.portfolio));
+  const dir = sortDir === 'asc' ? 1 : -1;
+  docs.sort((a, b) => {
+    if (groupBy && groupBy !== activeSort) {
+      const ga = a[groupBy] || '', gb2 = b[groupBy] || '';
+      const gc = ga.localeCompare(gb2);
+      if (gc !== 0) return gc;
+    }
+    let av = a[activeSort] || '', bv = b[activeSort] || '';
+    if (activeSort === 'date') return (av < bv ? -1 : av > bv ? 1 : 0) * dir;
+    return av.localeCompare(bv) * dir;
+  });
+  return docs;
+}
+
+// ── Alerts ──────────────────────────────────────────────────────────────────
+
+// Built from every loaded document, not the filtered view, so a locked fund's
+// prompt stays visible whatever filter or grouping hides its rows.
+function lockedFunds() {
+  const byFund = new Map();
+  DOCS.forEach(d => {
+    if (!d.locked) return;
+    const key = d.fund || '—';
+    if (!byFund.has(key)) byFund.set(key, '');
+    if (!byFund.get(key) && hrefAttr(d.acceptUrl)) byFund.set(key, d.acceptUrl);
+  });
+  return [...byFund.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+}
+
+function renderAlerts() {
+  let html = '';
+  if (pageAlert) html += '<div class="alert alert-error">' + esc(ALERT_COPY[pageAlert]) + '</div>';
+  lockedFunds().forEach(([fund, acceptUrl]) => {
+    const href = hrefAttr(acceptUrl);
+    const action = href
+      ? externalLink(href, 'accept-link', 'Accept electronic delivery in Carta ↗')
+      : 'Accept the terms in the Carta LP portal.';
+    html += '<div class="alert alert-warn e-delivery">🔒 <strong>' + esc(fund) + '</strong> — Accept electronic delivery to view these documents. ' + action + '</div>';
+  });
+  NOTICES.forEach(n => { html += '<div class="alert alert-warn">' + esc(n) + '</div>'; });
+  WARNINGS.forEach(w => { html += '<div class="alert">' + esc(w) + '</div>'; });
+  document.getElementById('alerts').innerHTML = html;
+}
+
+// ── Document cell ───────────────────────────────────────────────────────────
+function docCell(d) {
+  const name = esc(d.name || '—');
+  if (d.locked) return '<span class="locked" title="Accept electronic delivery to view">🔒 ' + name + '</span>';
+  const href = hrefAttr(d.url);
+  if (!href) return name;
+  if (d.isSourceFile) return externalLink(href, 'portal-link', name + '<span class="portal-hint">View in Carta ↗</span>');
+  return externalLink(href, 'doc-link', name);
+}
+
+function portfolioLabel() {
+  const names = [...new Set(DOCS.map(d => d.portfolio).filter(Boolean))];
+  if (names.length === 0) return '';
+  return names.length === 1 ? names[0] : names.length + ' portfolios';
+}
+
+// ── Main render ──────────────────────────────────────────────────────────────
+function render() {
+  const all   = getFiltered();
+  const total = all.length;
+  const countText = total === DOCS.length ? total + ' documents' : total + ' of ' + DOCS.length + ' documents';
+  document.getElementById('subtitle').textContent =
+    [countText, portfolioLabel(), 'sourced from Carta'].filter(Boolean).join(' · ');
+  const pageCount = Math.max(1, Math.ceil(total / PER_PAGE));
+  if (page > pageCount) page = pageCount;
+  const slice = all.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+
+  updateFpBtn();
+  renderAlerts();
+
+  document.querySelectorAll('#thead th').forEach(th => {
+    const col = th.dataset.col;
+    if (!col) return;
+    const arrow = col === activeSort ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ' ↕';
+    th.classList.toggle('sort-active', col === activeSort);
+    th.innerHTML = th.textContent.replace(/ [↑↓↕]$/, '') + '<span class="sort-arrow">' + arrow + '</span>';
+  });
+
+  const tbody = document.getElementById('tbody');
+  const empty = document.getElementById('empty-state');
+  if (!total) {
+    tbody.innerHTML = '';
+    if (isLoading) {
+      empty.innerHTML = '<span class="loading-spinner"></span> Loading documents…';
+    } else if (pageAlert) {
+      empty.textContent = '';
+    } else {
+      empty.textContent = DOCS.length === 0
+        ? 'No documents found.'
+        : 'No documents match the current filters.';
+    }
+    empty.style.display = empty.textContent || isLoading ? '' : 'none';
+  } else {
+    empty.style.display = 'none';
+    let rows = '';
+    let lastGroup = null;
+    slice.forEach(d => {
+      if (groupBy) {
+        const gval = d[groupBy] || '—';
+        if (gval !== lastGroup) {
+          rows += '<tr class="group-header"><td colspan="5">' + esc(gval) + '</td></tr>';
+          lastGroup = gval;
+        }
+      }
+      const tip = 'Type: ' + (d.type || '—') + '\nDocument: ' + (d.name || '—') + '\nDate: ' + fmtDate(d.date) + '\nFund: ' + (d.fund || '—') + '\nFirm: ' + (d.firm || '—') + '\nPortfolio: ' + (d.portfolio || '—');
+      rows += '<tr title="' + esc(tip) + '">' +
+        '<td style="white-space:nowrap">' + esc(d.type || '—') + '</td>' +
+        '<td>' + docCell(d) + '</td>' +
+        '<td style="white-space:nowrap;color:#656B6B">' + fmtDate(d.date) + '</td>' +
+        '<td>' + esc(d.fund || '—') + '</td>' +
+        '<td style="color:#656B6B">' + esc(d.firm || '—') + '</td>' +
+        '</tr>';
+    });
+    tbody.innerHTML = rows;
+  }
+
+  const pgBar = document.getElementById('pagination');
+  if (pageCount <= 1) { pgBar.innerHTML = ''; return; }
+
+  let btns = '<button class="pb" onclick="goPage(' + (page - 1) + ')" ' + (page === 1 ? 'disabled' : '') + '>← Prev</button>';
+  for (let p2 = 1; p2 <= pageCount; p2++) {
+    if (pageCount > 7 && Math.abs(p2 - page) > 2 && p2 !== 1 && p2 !== pageCount) {
+      if (p2 === 2 || p2 === pageCount - 1) btns += '<span class="pg-info">…</span>';
+      continue;
+    }
+    btns += '<button class="pb' + (p2 === page ? ' active' : '') + '" onclick="goPage(' + p2 + ')">' + p2 + '</button>';
+  }
+  btns += '<button class="pb" onclick="goPage(' + (page + 1) + ')" ' + (page === pageCount ? 'disabled' : '') + '>Next →</button>';
+  btns += '<span class="pg-info">Page ' + page + ' of ' + pageCount + '</span>';
+  pgBar.innerHTML = btns;
+}
+
+function goPage(n) { page = n; render(); }
+
+function setSort(s) {
+  if (activeSort === s) { sortDir = sortDir === 'asc' ? 'desc' : 'asc'; }
+  else { activeSort = s; sortDir = s === 'date' ? 'desc' : 'asc'; }
+  page = 1;
+  render();
+}
+
+document.getElementById('thead').addEventListener('click', e => {
+  const th = e.target.closest('th');
+  if (th && th.dataset.col) setSort(th.dataset.col);
+});
+
+// ── Initialize ──────────────────────────────────────────────────────────────
+document.title = CONFIG.title;
+document.getElementById('page-title').textContent = CONFIG.title;
+document.getElementById('footer').textContent = 'Sourced from Carta · Generated ' + fmtDate(isoDate(CONFIG.generated));
+fetchDocuments();
+</script>
+
+</body>
+</html>

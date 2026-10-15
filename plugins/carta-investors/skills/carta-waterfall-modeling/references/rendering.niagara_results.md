@@ -53,7 +53,7 @@ and `interest_allocations[j].interest_label`. Prefix with `↳ ` or indent.
 | Column            | Source                                  |
 | ----------------- | --------------------------------------- |
 | Group / Interest  | `"Total"`                               |
-| Proceeds          | top-level `proceeds` (**not** the EQUITY_VALUE you ran with, nor a sum of the rows; render `—` if `null`) |
+| Proceeds          | top-level `proceeds` (render `—` if `null`) |
 | % of Proceeds     | `100.00%` (of this entity's own total)  |
 | Invested Capital  | `grand_totals.total_invested_capital`   |
 | Participating Qty | `grand_totals.participating_units`      |
