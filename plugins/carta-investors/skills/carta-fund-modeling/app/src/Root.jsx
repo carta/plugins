@@ -43,18 +43,15 @@ export default function Root() {
     return () => { live = false; };
   }, [firm, choose, fetchFirms]);
 
-  // Self-heal a stale/mismatched URL: the server is single-firm-per-launch and
-  // ignores the `firm` query param entirely (serve.py always serves its own
-  // data dir), so the URL's firm slug can drift from what this server actually
-  // serves — e.g. a tab left over from browsing a different firm. Confirm the
-  // slug against /api/firms (the registry for *this* server) and correct the
-  // URL rather than silently rendering the real firm's data under the wrong name.
+  // Self-heal a stale URL for a single-firm server: when /api/firms lists exactly one
+  // firm and the URL names another, correct the URL. With several firms the user may
+  // open any of them, so the URL is left alone.
   useEffect(() => {
     if (!firm) return;
     let live = true;
     fetchFirms().then((list) => {
       if (!live) return;
-      const real = Array.isArray(list) && list[0]?.slug;
+      const real = Array.isArray(list) && list.length === 1 && list[0]?.slug;
       if (real && real !== firm) {
         localStorage.setItem("firm", real);
         navigate({ firm: real, tab: parseRoute().tab }, { replace: true });
