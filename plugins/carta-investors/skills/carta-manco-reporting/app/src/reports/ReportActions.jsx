@@ -7,8 +7,13 @@ import Modal from "./Modal.jsx";
 import ShareDialog from "./ShareDialog.jsx";
 import HoverTip from "../ui/HoverTip.jsx";
 import { MoreIcon, ShareIcon, UnsharedDot } from "./icons.jsx";
+import { ownShare } from "./reportState.js";
 
 const UNSHARED_TIP = "Changes not shared yet. Open Share to update.";
+
+// Whether a report gets the Share panel, which also holds Export: yours, or one shared
+// with you (the panel then says why you can't share it).
+export const hasSharePanel = (report) => !!(report?.editable || report?.read_only);
 
 // The Budget vs Actuals header's report controls: Share, which also holds Export, and a menu
 // for renaming, duplicating, hiding and deleting.
@@ -33,11 +38,10 @@ export default function ReportActions({ report, reportsApi, firmName, entityName
   }, [menu]);
 
   if (!report) return null;
-  const shared = report.shared || null;
-  const owner = !!shared?.is_owner;
-  const dirty = owner && shared?.dirty;
+  const own = ownShare(report);
+  const dirty = !!own?.dirty;
   // A report you are sharing can't go until you stop sharing it.
-  const canDelete = !owner && (report.origin === "copy" || report.origin === "shared");
+  const canDelete = !own && (report.origin === "copy" || report.origin === "shared");
 
   const act = (fn) => async (...args) => {
     setMenu(false);
@@ -63,7 +67,7 @@ export default function ReportActions({ report, reportsApi, firmName, entityName
   return (
     <>
       {/* On a report shared with you the panel still opens: it says why you can't share, and holds Export. */}
-      {(report.editable || report.read_only) && (
+      {hasSharePanel(report) && (
         <div ref={shareRef} style={{ position: "relative" }}>
           {/* The label stays Share: the dot and its tooltip say there are changes to send. */}
           <HoverTip text={dirty && open !== "share" ? UNSHARED_TIP : null}>
@@ -141,7 +145,7 @@ function RenameDialog({ report, reportsApi, onClose, onShareDone }) {
         onChange={e => setName(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && trimmed) save(); }}
         style={S.input}
       />
-      {report.shared?.is_owner && <p style={S.hint}>The shared copy keeps its old name until you share an update.</p>}
+      {ownShare(report) && <p style={S.hint}>The shared copy keeps its old name until you share an update.</p>}
       {error && <p role="alert" style={S.error}>{error}</p>}
     </Modal>
   );

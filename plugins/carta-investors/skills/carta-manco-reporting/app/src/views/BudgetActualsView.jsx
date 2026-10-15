@@ -17,8 +17,12 @@ import { FiltersMenu, FilterRibbon, SimplePeriodPicker, S as periodControlsStyle
 import { MONTH_NAME, trueAsOfMonth, formatPeriodLabel } from "./budgetPeriods.js";
 import { rowBreakouts, defaultBreakout, worthBreakingOut, UNLABELLED } from "./accountBreakout.js";
 import ExportButton from "../ui/ExportButton.jsx";
+import ReportActions, { hasSharePanel } from "../reports/ReportActions.jsx";
+import { reportFor } from "../shell/reportNav.js";
+import ReportNotice from "../reports/ReportNotice.jsx";
 import ThemeToggleButton from "../ui/ThemeToggleButton.jsx";
 import { slugify } from "../ui/exportHtml.js";
+import { displayFirmName } from "../ui/firmName.js";
 import { trackClick, trackRender } from "../analytics.js";
 
 const BVA_EXPORT_ID = "manco-export-budget-vs-actuals";
@@ -75,7 +79,7 @@ export function ownsPeriodControl(viewKind, budget) {
   return viewKind === "by-account" && hasMonthlyDetail(budget);
 }
 
-export default function BudgetActualsView({ snapshot, accountsData, drilldown, budgetId, dark, onToggleTheme }) {
+export default function BudgetActualsView({ snapshot, accountsData, drilldown, budgetId, dark, onToggleTheme, reportsApi, onOpenReport, onShareDone }) {
   // The build writes the dimension beside the entries it scopes, in
   // accounts.json. Snapshot is the fallback for a cache written earlier.
   const dimension = dimensionOf(accountsData) || dimensionOf(snapshot);
@@ -87,6 +91,7 @@ export default function BudgetActualsView({ snapshot, accountsData, drilldown, b
   const budgetsList = Array.isArray(snapshot?.budget?.budgets) ? snapshot.budget.budgets : [];
   const selected = budgetsList.find(b => b.id === budgetId) || budgetsList[0];
   const budget = selected || snapshot?.budget;
+  const report = reportFor(budget, reportsApi);
   const byTagValue = budget?.by_tag_value || [];
   const viewKinds = budget?.view_kinds || ["by-tag-crosstab"];
   const [showAll, setShowAll] = useState(false);
@@ -222,6 +227,16 @@ export default function BudgetActualsView({ snapshot, accountsData, drilldown, b
                    : isOutline ? "Budget by line item"
                    : isTagCrosstab ? `Budget by ${columnLabel.toLowerCase()}`
                    : "Budget — unsupported view";
+  const exportProps = {
+    targetId: BVA_EXPORT_ID,
+    entityName: snapshot?.firmName || "ManCo",
+    pageLabel: `Budget vs Actuals — ${headingText}`,
+    asOf: snapshot?.asOf,
+    filenameBase: `${slugify(snapshot?.firmName) || "manco"}-budget-vs-actuals`,
+    events: { click: "MancoReporting.BudgetVsActuals.ExportHtml",
+              succeeded: "MancoReporting.BudgetVsActuals.ExportHtmlSucceeded",
+              failed: "MancoReporting.BudgetVsActuals.ExportHtmlFailed" },
+  };
 
   return (
     <div id={BVA_EXPORT_ID}>
@@ -233,20 +248,27 @@ export default function BudgetActualsView({ snapshot, accountsData, drilldown, b
         actions={
           <div data-export-exclude style={{ display: "flex", gap: 8 }}>
             {onToggleTheme && <ThemeToggleButton dark={dark} onToggle={onToggleTheme} />}
-            <ExportButton
-              targetId={BVA_EXPORT_ID}
-              entityName={snapshot?.firmName || "ManCo"}
-              pageLabel={`Budget vs Actuals — ${headingText}`}
-              asOf={snapshot?.asOf}
-              filenameBase={`${slugify(snapshot?.firmName) || "manco"}-budget-vs-actuals`}
-              events={{ click: "MancoReporting.BudgetVsActuals.ExportHtml",
-                       succeeded: "MancoReporting.BudgetVsActuals.ExportHtmlSucceeded",
-                       failed: "MancoReporting.BudgetVsActuals.ExportHtmlFailed" }}
-            />
+            {reportsApi?.available && report && (
+              <ReportActions
+                report={report}
+                reportsApi={reportsApi}
+                firmName={displayFirmName(snapshot?.firmName)}
+                exportProps={exportProps}
+                onOpenReport={onOpenReport}
+                onShareDone={onShareDone}
+              />
+            )}
+            {/* A report carries Export inside its Share panel. */}
+            {!(reportsApi?.available && hasSharePanel(report)) && <ExportButton {...exportProps} />}
           </div>
         }
       >{titleText}</H1>
       <Capped>
+      {reportsApi?.available && report && (
+        <div data-export-exclude>
+          <ReportNotice report={report} asOf={snapshot?.asOf} firmName={displayFirmName(snapshot?.firmName)} reportsApi={reportsApi} onOpenReport={onOpenReport} onShareDone={onShareDone} />
+        </div>
+      )}
       <div style={styles.metaRow}>
         {!isTagCrosstab && !isOutline && !ownsPeriodControl(viewKind, budget) && (
           <span style={styles.metaChip}>

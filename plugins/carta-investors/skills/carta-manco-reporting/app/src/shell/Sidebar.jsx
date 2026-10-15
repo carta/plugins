@@ -1,6 +1,7 @@
 import { Zap, BarChart3 } from "lucide-react";
 import { sans, INK, PAPER, LINE, FAINT, MICRO, SHADE, FS, SIDENAV_STRIPE } from "../ui/theme.js";
 import { trackClick } from "../analytics.js";
+import { DownloadIcon, EyeIcon, UnsharedDot, UsersIcon } from "../reports/icons.jsx";
 
 // A child slug is a workbook-derived budget id, so it can never become an event id.
 const NAV_EVENTS = {
@@ -35,7 +36,7 @@ function NavIcon({ name, active }) {
 // Left-side vertical nav: firm mark/name, nav items (optional NavIcon per
 // item), then an as-of line pinned to the bottom via a flex spacer — same
 // layout carta-fund-modeling uses for its own DataStatus.
-export default function Sidebar({ initials, firmName, route, items, onNavigate, asOf, footerAction }) {
+export default function Sidebar({ initials, firmName, route, items, onNavigate, asOf, footerAction, shared }) {
   return (
     <aside style={styles.wrap}>
       <div style={styles.brand}>
@@ -98,15 +99,31 @@ export default function Sidebar({ initials, firmName, route, items, onNavigate, 
                       ...styles.navChild,
                       ...(childActive ? styles.navChildActive : styles.navChildRest),
                     }}
-                    title={child.label}
+                    title={child.unshared ? `${child.label} · changes not shared yet`
+                      : child.shared ? `${child.label} · shared` : child.label}
                   >
-                    {child.label}
+                    {child.shared ? (
+                      <span style={styles.childRow}>
+                        <span style={styles.childLabel}>{child.label}</span>
+                        <UnsharedDot show={child.unshared} style={styles.childIcon}>
+                          <UsersIcon size={14} />
+                        </UnsharedDot>
+                      </span>
+                    ) : child.label}
                   </button>
                 );
               })}
+              {shared && shared.parentSlug === item.slug && (
+                <SharedGroup {...shared} route={route} onNavigate={onNavigate} />
+              )}
             </div>
           );
         })}
+        {/* Its parent item is gone when no budget is visible; the group still has to
+            offer loading and unhiding, or nothing could bring a budget back. */}
+        {shared && !items.some(i => i.slug === shared.parentSlug) && (
+          <SharedGroup {...shared} route={route} onNavigate={onNavigate} />
+        )}
       </nav>
 
       <span style={{ flex: 1, minHeight: 10 }} />
@@ -119,6 +136,50 @@ export default function Sidebar({ initials, firmName, route, items, onNavigate, 
         <div style={styles.dataStatus}>Data as of {formatAsOf(asOf)}</div>
       </div>
     </aside>
+  );
+}
+
+// Reports teammates shared, inside the Budget vs Actuals group they belong
+// to: an Ink SideNav SectionLabel, the reports as ordinary group items, then
+// the load action as a row of its own so it reads as navigation, not a stray
+// icon.
+function SharedGroup({ items, parentSlug, busy, onPull, hiddenCount, unhiding, onShowHidden, route, onNavigate }) {
+  const loadLabel = busy ? "Loading…"
+                  : items.length ? "Check for new shared reports" : "Load shared reports";
+  return (
+    <div role="group" aria-labelledby="nav-shared-label">
+      <div id="nav-shared-label" style={styles.sharedLabel}>Shared with you</div>
+      {items.map(item => {
+        const itemRoute = `${parentSlug}/${item.slug}`;
+        const active = itemRoute === route;
+        return (
+          <button
+            key={item.slug} type="button" title={item.label}
+            onClick={() => { trackClick("MancoReporting.Nav.SharedReport"); onNavigate(itemRoute); }}
+            className="navitem"
+            style={{ ...styles.navChild, ...(active ? styles.navChildActive : styles.navChildRest) }}
+          >
+            {item.label}
+          </button>
+        );
+      })}
+      <button
+        type="button" onClick={onPull} disabled={busy} aria-label={loadLabel}
+        className="navitem" style={{ ...styles.navChild, ...styles.navChildRest, ...styles.actionRow }}
+      >
+        <DownloadIcon size={14} />
+        <span style={styles.actionText}>{loadLabel}</span>
+      </button>
+      {hiddenCount > 0 && (
+        <button
+          type="button" onClick={onShowHidden} disabled={unhiding}
+          className="navitem" style={{ ...styles.navChild, ...styles.navChildRest, ...styles.actionRow }}
+        >
+          <EyeIcon size={14} />
+          <span style={styles.actionText}>{unhiding ? "Showing…" : `Show ${hiddenCount} hidden`}</span>
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -250,6 +311,18 @@ const styles = {
     color: INK, fontWeight: 600, borderLeft: 0,
     boxShadow: `inset 3px 0 0 0 ${SIDENAV_STRIPE}`, paddingLeft: 20,
   },
+  // Ink SideNav's SectionLabel type (600 10px/16px, uppercase, .08em, subtle),
+  // set on the group's connector line so the section stays inside the group.
+  sharedLabel: {
+    ...sans, fontSize: FS.micro, lineHeight: "16px", fontWeight: 600, letterSpacing: "0.08em",
+    textTransform: "uppercase", color: FAINT,
+    marginLeft: 25, borderLeft: `1px solid ${LINE}`, padding: "16px 16px 4px 19px",
+  },
+  childRow: { display: "flex", alignItems: "center", gap: 8, minWidth: 0 },
+  childLabel: { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" },
+  childIcon: { color: FAINT, marginLeft: "auto" },
+  actionRow: { display: "flex", alignItems: "center", gap: 8, color: FAINT, fontSize: FS.body },
+  actionText: { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" },
   // Bottom-of-rail data provenance — a single quiet caption line, same
   // weight/placement as carta-fund-modeling's own DataStatus.
   // Product wordmark over the data line, matching carta-fund-modeling's

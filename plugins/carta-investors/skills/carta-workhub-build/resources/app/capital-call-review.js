@@ -146,8 +146,8 @@ function ccrDemoEmail(row) {
 // The workflow template a capital call under review carries, and the two tasks
 // on it that mean the GP owes a decision.
 const CCR_WORKFLOW_TEMPLATE = TASK_TEMPLATE_CAPITAL_ACTIVITY;
-const CCR_REVIEW_TASK = TASK_CAPITAL_ACTIVITY_REVIEW;
-const CCR_CHANGES_TASK = TASK_CAPITAL_ACTIVITY_CHANGES;
+const CCR_REVIEW_TASK = "review-capital-activity";
+const CCR_CHANGES_TASK = "review-capital-activity-changes";
 const CCR_SUMMARY_COMMAND = "fa:get:capital-activity-review-summary";
 
 // The workflow row does not say whether the activity is a call or a

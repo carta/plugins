@@ -4,6 +4,7 @@ import HoverTip from "../ui/HoverTip.jsx";
 import { trackClick } from "../analytics.js";
 import { AlertIcon, CloudUploadIcon, UsersIcon } from "./icons.jsx";
 import { UPDATED, shareOutcome } from "./shareOutcome.js";
+import { ownShare } from "./reportState.js";
 import { duplicateReport } from "../state/useReports.js";
 
 export function fmtDate(iso) {
@@ -85,27 +86,28 @@ export default function ReportNotice({ report, asOf, firmName, reportsApi, onOpe
   };
 
   const items = [];
-  if (shared?.is_owner) {
-    const people = peopleOf(shared);
-    const hidden = (shared.shared_with || []).length - people.length;
-    const tip = shared.shared_with_everyone || !(shared.shared_with || []).length ? null : (
+  const own = ownShare(report);
+  if (own) {
+    const people = peopleOf(own);
+    const hidden = (own.shared_with || []).length - people.length;
+    const tip = own.shared_with_everyone || !(own.shared_with || []).length ? null : (
       <span style={S.tipList}>
         {people.map(p => <span key={p.user_id}>{p.name ? `${p.name} · ${p.email}` : p.email}</span>)}
         {hidden > 0 && <span>{hidden} more {hidden === 1 ? "person" : "people"}</span>}
       </span>
     );
-    const when = fmtDate(shared.updated_at);
+    const when = fmtDate(own.updated_at);
     items.push(
       <span key="owner" style={S.item}>
         <UsersIcon size={14} />
         <HoverTip text={tip}>
           <span style={tip ? S.hoverable : null}>
-            Shared with {audienceText(shared, firmName)}
+            Shared with {audienceText(own, firmName)}
           </span>
         </HoverTip>
         {when && <span>· {when}</span>}
-        {shared.dirty && <span style={S.pending}>· Changes not shared yet</span>}
-        {shared.dirty && (
+        {own.dirty && <span style={S.pending}>· Changes not shared yet</span>}
+        {own.dirty && (
           <HoverTip text={updating ? "Sharing…" : "Share update"} style={S.iconTip}>
             <button type="button" onClick={shareUpdate} disabled={updating} aria-label="Share update"
               style={{ ...S.iconButton, ...(updating ? S.iconButtonBusy : null) }}>

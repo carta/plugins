@@ -7,6 +7,7 @@ import { trackClick, trackRender } from "../analytics.js";
 import { CodeIcon, DownloadIcon, LockIcon, ShareIcon, UserIcon, UsersIcon, XIcon } from "./icons.jsx";
 import { fmtDate, sharerName } from "./ReportNotice.jsx";
 import { UPDATED, shareOutcome } from "./shareOutcome.js";
+import { ownShare } from "./reportState.js";
 import { actSaved } from "../state/useReports.js";
 
 // The report's Share | Export panel, anchored under the header button. Wording is agreed
@@ -63,7 +64,7 @@ function sameSet(a, b) {
 }
 
 export default function ShareDialog({ report, reportsApi, firmName, entityName, exportProps, anchorRef, onClose, onDone, onBusyChange }) {
-  const link = report.shared?.is_owner ? report.shared : null;
+  const link = ownShare(report);
   // A new share starts limited to the people added; broadening it to the firm is a choice.
   const initialMode = link?.shared_with_everyone ? "everyone" : "people";
   const initialPicked = useMemo(() => new Set(link?.shared_with || []), [link]);

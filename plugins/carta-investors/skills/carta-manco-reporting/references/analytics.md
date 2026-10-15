@@ -85,6 +85,9 @@ Every row spells the full id, prefix included.
 | `MancoReporting.Nav.Dashboard` | click | Sidebar → Dashboard. |
 | `MancoReporting.Nav.BudgetVsActuals` | click | Sidebar → Budget vs Actuals. |
 | `MancoReporting.Nav.BudgetVsActualsBudget` | click | Sidebar → one budget under Budget vs Actuals. The budget id stays out of the event. |
+| `MancoReporting.Nav.SharedReport` | click | Sidebar → a report someone shared with you, under "Shared with you". The report id stays out of the event. |
+| `MancoReporting.Nav.LoadSharedReports` | click | Sidebar → "Load shared reports" (or "Check for new shared reports"). |
+| `MancoReporting.Nav.ShowHiddenReports` | click | Sidebar → "Show N hidden" under "Shared with you". |
 
 ### Dashboard
 

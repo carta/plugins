@@ -7,6 +7,9 @@ import BudgetActualsView from "./views/BudgetActualsView.jsx";
 import BudgetImport from "./shell/BudgetImport.jsx";
 import DrilldownDrawer from "./views/DrilldownDrawer.jsx";
 import useDrilldown from "./state/useDrilldown.js";
+import useReports from "./state/useReports.js";
+import { budgetNavChildren } from "./shell/reportNav.js";
+import ShareStatus, { pulledMessage } from "./reports/ShareStatus.jsx";
 import { setDisplayCurrency } from "./charts/chartTheme.js";
 import { assignCategoricalColors, assignExpenseCategoryColors } from "./ui/categoricalColors.js";
 import { displayFirmName } from "./ui/firmName.js";
@@ -71,7 +74,10 @@ export default function App() {
 
   const [loadStatus, setLoadStatus] = useState(null);
 
-  const fetchData = useCallback(() => {
+  // Parallel fetch snapshot + accounts (accounts is optional; drill-downs
+  // just don't render if it's absent). Returns its promise so a report change
+  // (which the server has already rebuilt both into) can await the refetch.
+  const fetchData = useCallback(() => Promise.all([
     fetch("/api/snapshot")
       .then(r => r.json())
       .then(data => {
@@ -86,7 +92,7 @@ export default function App() {
         setSnapshot(data);
         setError(null);
       })
-      .catch(e => { reportSnapshotError(String(e)); setError(String(e)); });
+      .catch(e => { reportSnapshotError(String(e)); setError(String(e)); }),
 
     fetch("/api/accounts")
       .then(r => r.json())
@@ -95,8 +101,37 @@ export default function App() {
         if (data?.monthly_categories?.categories) assignExpenseCategoryColors(data.monthly_categories.categories);
         setAccountsData(data);
       })
-      .catch(() => trackRender("MancoReporting.App.AccountsUnavailable"));
-  }, []);
+      .catch(() => trackRender("MancoReporting.App.AccountsUnavailable")),
+  ]), []);
+  const reportsApi = useReports({ onChanged: fetchData });
+  const hiddenReports = reportsApi.reports.filter(r => r.hidden);
+  const [shareNotice, setShareNotice] = useState(null); // see ShareStatus
+  // One run at a time: each unhide moves the listing's version, so a second run would send a stale one.
+  const [unhiding, setUnhiding] = useState(false);
+
+  const loadShared = async () => {
+    trackClick("MancoReporting.Nav.LoadSharedReports");
+    setShareNotice({ status: "running", op: "pull" });
+    try {
+      const result = await reportsApi.runShareOp("pull");
+      setShareNotice({ status: "done", op: "pull", message: pulledMessage(result) });
+    } catch (e) {
+      setShareNotice({ status: "error", op: "pull", message: e.message });
+    }
+  };
+  const unhideAll = async () => {
+    trackClick("MancoReporting.Nav.ShowHiddenReports");
+    setUnhiding(true);
+    try {
+      for (const r of hiddenReports) {
+        await reportsApi.act(r.id, "hide", { hidden: false });
+      }
+    } catch (e) {
+      setShareNotice({ status: "error", op: "hide", message: e.message });
+    } finally {
+      setUnhiding(false);
+    }
+  };
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -170,7 +205,7 @@ export default function App() {
                               && Array.isArray(b.rows) && b.rows.length > 0))
                       : [];
   const hasDimensionalBudget = budgetsList.length > 0;
-  const budgetChildren = budgetsList.map(b => ({ slug: b.id, label: b.label || b.id }));
+  const { own: budgetChildren, sharedWithYou: sharedChildren } = budgetNavChildren(budgetsList, reportsApi);
   // `icon` is a lookup key into Sidebar.jsx's ICONS map (Lucide glyphs, per
   // Ink's brand.md's Ink-icon stand-in mapping).
   const navItems = [
@@ -187,7 +222,7 @@ export default function App() {
   const activeParent = validParents.has(routeParent) ? routeParent : "dashboard";
   // Default budget = the first available when BvA is active but no child specified.
   const activeBudgetId = routeChild
-                       || (activeParent === "budget-vs-actuals" && budgetChildren[0]?.slug);
+                       || (activeParent === "budget-vs-actuals" && (budgetChildren[0] || sharedChildren[0])?.slug);
   const activeRoute = activeBudgetId ? `${activeParent}/${activeBudgetId}` : activeParent;
 
   // Waits for the snapshot: until it lands, Budget vs Actuals is filtered out of
@@ -214,6 +249,15 @@ export default function App() {
     // Carta" was dropped from it and left it with nothing else to show.
     asOf: snapshot?.asOf,
     footerAction: snapshot && <BudgetImport budgetUpload={snapshot.budgetUpload} onChanged={fetchData} />,
+    shared: snapshot && reportsApi.available ? {
+      items: sharedChildren,
+      parentSlug: "budget-vs-actuals",
+      busy: shareNotice?.status === "running",
+      onPull: loadShared,
+      hiddenCount: hiddenReports.length,
+      unhiding,
+      onShowHidden: unhideAll,
+    } : null,
   };
 
   return (
@@ -248,9 +292,19 @@ export default function App() {
             budgetId={activeBudgetId}
             dark={dark}
             onToggleTheme={toggleTheme}
+            reportsApi={reportsApi}
+            onOpenReport={(id) => navigate(id ? `budget-vs-actuals/${id}` : "budget-vs-actuals")}
+            onShareDone={(message) => setShareNotice({ status: "done", op: "share", message })}
           />
         )}
       </AppShell>
+
+      <ShareStatus
+        notice={shareNotice}
+        progress={reportsApi.shareJob?.progress}
+        firmName={displayFirmName(snapshot?.firmName)}
+        onDismiss={() => setShareNotice(null)}
+      />
 
       <DrilldownDrawer
         selection={drilldown.selection}
