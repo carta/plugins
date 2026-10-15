@@ -30,7 +30,8 @@ there is no service-window split.
 
 `{security label} — total {total_shares}: vested {vested_shares} / unvested {unvested_shares}`
 
-`{security label}` is the drilled security's `label` (from the holder drill `securities[].label`).
+`{security label}` is the drilled security's `label` (from the holder drill `securities[].label` or
+`phantom_securities[].label`).
 **Append the security's economics when present**, each clause ` · `-separated; omit any clause whose
 field is null:
 

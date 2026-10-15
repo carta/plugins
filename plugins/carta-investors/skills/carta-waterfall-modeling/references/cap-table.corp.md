@@ -139,11 +139,12 @@ written to Excel**. Same `corporation_id` + `as_of_date`, paginated:
 
 ```
 read_tool({"name": "cap_table__get__cap_table_by_stakeholder", "arguments": {
-  "corporation_id": "<root.issuer_id>",
-  "as_of_date":     "<WATERFALL_DATE, YYYY-MM-DD>",
-  "detail":         "full",
-  "page":           1,
-  "page_size":      25
+  "corporation_id":       "<root.issuer_id>",
+  "as_of_date":           "<WATERFALL_DATE, YYYY-MM-DD>",
+  "detail":               "full",
+  "include_non_dilutive": true,
+  "page":                 1,
+  "page_size":            25
 }})
 → { count, total, stakeholders[] }
 ```
@@ -167,13 +168,14 @@ render the drill straight from the response in hand — **never re-fetch a holde
 
    ```
    read_tool({"name": "cap_table__get__cap_table_by_stakeholder", "arguments": {
-     "corporation_id":     "<root.issuer_id>",
-     "as_of_date":         "<WATERFALL_DATE, YYYY-MM-DD>",
-     "search":             "<holder name>",
-     "detail":             "full",
-     "include_securities": true,
-     "page":               1,
-     "page_size":          25
+     "corporation_id":       "<root.issuer_id>",
+     "as_of_date":           "<WATERFALL_DATE, YYYY-MM-DD>",
+     "search":               "<holder name>",
+     "detail":               "full",
+     "include_securities":   true,
+     "include_non_dilutive": true,
+     "page":                 1,
+     "page_size":            25
    }})
    → { count, total, stakeholders[] }
    ```
@@ -188,19 +190,20 @@ render the drill straight from the response in hand — **never re-fetch a holde
 
    ```
    read_tool({"name": "cap_table__get__cap_table_by_stakeholder", "arguments": {
-     "corporation_id":     "<root.issuer_id>",
-     "as_of_date":         "<WATERFALL_DATE, YYYY-MM-DD>",
-     "detail":             "full",
-     "include_securities": true,
-     "page":               1,
-     "page_size":          25
+     "corporation_id":       "<root.issuer_id>",
+     "as_of_date":           "<WATERFALL_DATE, YYYY-MM-DD>",
+     "detail":               "full",
+     "include_securities":   true,
+     "include_non_dilutive": true,
+     "page":                 1,
+     "page_size":            25
    }})
    → { count, total, stakeholders[] }
    ```
 
    When the user picks a holder from the list, **render the drill from that data — do not re-fetch.**
 4. **After the drill renders, gate the vesting offer** on each drilled security's type — dispatch by
-   `(security_type, id)`: **Option** → `grant_vesting`; **Certificate / RSA / PIU** →
+   `(security_type, id)`: **Option / Phantom** → `grant_vesting`; **Certificate / RSA / PIU** →
    `certificate_vesting`; **RSU** → no schedule via this drill.
    - **Any drilled security has a schedule** → **offer the vesting schedule** via `AskUserQuestion`
      (`Show vesting schedule` · `Back to menu`) — see **§Vesting schedule** below.
@@ -222,10 +225,10 @@ picker; **more than 4** → list them compactly and take a **free-text** name ma
 [`references/rendering.corp_vesting_schedule.md`](rendering.corp_vesting_schedule.md) first, then fetch:
 
 ```
-// Option
+// Option / Phantom
 read_tool({"name": "cap_table__get__grant_vesting", "arguments": {
   "corporation_id": "<root.issuer_id>",
-  "grant_id":       "<securities[].id for an Option>"
+  "grant_id":       "<securities[].id for an Option, phantom_securities[].id for a Phantom>"
 }})
 ```
 ```
@@ -236,9 +239,10 @@ read_tool({"name": "cap_table__get__certificate_vesting", "arguments": {
 }})
 ```
 
-- The `id` is the **drilled security's** `securities[].id` — ids are unique only within a type, so the
-  `(security_type, id)` pair picks the command.
-- The caption's security label comes from that same drilled security (`securities[].label`).
+- The `id` is the **drilled security's** `securities[].id` (`phantom_securities[].id` for a Phantom) — ids
+  are unique only within a type, so the `(security_type, id)` pair picks the command.
+- The caption's security label comes from that same drilled security (`securities[].label`, or
+  `phantom_securities[].label`).
 - Render the tranche table + caption per the render doc, in chat. Return to the menu after.
 
 Errors: `403` / `404` / any → one line that the vesting schedule isn't available; never block results.

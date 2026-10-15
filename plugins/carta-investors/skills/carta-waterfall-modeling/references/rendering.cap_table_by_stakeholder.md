@@ -5,7 +5,11 @@ Column/row spec for `cap_table:get:cap_table_by_stakeholder` (`detail=full`). Nu
 
 **Render straight through.** Flat, one row per stakeholder, pre-summed. Ownership fields arrive as
 fractions (0–1): multiply by 100 before appending `%`. Quantities → integers with thousands
-separators. Money → currency. Null/absent → `—`.
+separators; phantom quantities → two decimals. Money → currency. Null/absent → `—`.
+
+## Caption (one line above each table — only when phantom units are present)
+
+`Non-dilutive — not included in outstanding, fully diluted, or ownership %.`
 
 ## Columns
 
@@ -17,6 +21,10 @@ separators. Money → currency. Null/absent → `—`.
 | Fully diluted | `fully_diluted_shares` | qty |
 | Fully diluted ownership | `fully_diluted_ownership` | pct |
 | Capital contributed | `cash_raised` | currency |
+| Phantom (outstanding) | `phantom_summary.outstanding` | qty2 |
+
+Phantom (outstanding) only when any row carries `phantom_summary`; `—` on rows without it. A holder of
+only phantom units shows `0` / `0.00%` in the other columns, as returned.
 
 ## Rows
 
@@ -50,12 +58,17 @@ drill):
 stakeholders[]: { stakeholder_group_name, outstanding_shares, outstanding_ownership,
                   fully_diluted_shares, fully_diluted_ownership, cash_raised,
                   remaining_invested_capital,
+                  phantom_summary: { issued, issued_not_canceled, outstanding },
                   individuals: [ { stakeholder_id, stakeholder_name,
                       securities: [ { id, security_type, certificate_subtype,
-                                      share_class_id, label, share_class_name, quantity } ] } ] }
+                                      share_class_id, label, share_class_name, quantity } ],
+                      phantom_summary: { issued, issued_not_canceled, outstanding },
+                      phantom_securities: [ same shape as securities[] ] } ] }
 ```
 
 Without `include_securities`, rows carry only the group-level fields above (no `individuals`).
+`phantom_summary` / `phantom_securities` come with `include_non_dilutive: true`, only on holders with
+phantom units.
 
 ## Discovery list (drill entry — chat only)
 
@@ -81,6 +94,8 @@ already-fetched list (`references/cap-table.corp.md` §Holder drill governs when
 - **Security row**, one per security across the row's `individuals[].securities[]`: `↳↳ {label}` —
   **Type** derived from `security_type` (+ `certificate_subtype`), **Share class** `share_class_name`,
   **Quantity** `quantity`; the aggregate columns blank.
+- **Phantom row**, one per entry in `individuals[].phantom_securities[]`, after the security rows: same
+  as a security row, with **Type** `Phantom`.
 
 Columns (markdown): `Holder / security | Type | Share class | Quantity | Outstanding | FD | Capital contributed`.
 
@@ -102,6 +117,7 @@ response (no re-fetch):
 | a security's share-class id | `individuals[].securities[].share_class_id` |
 | a security's certificate subtype | `individuals[].securities[].certificate_subtype` |
 | total capital contributed across holders | sum of `stakeholders[].cash_raised` across all holders |
+| a holder's phantom units issued / issued (not canceled) | `stakeholders[].phantom_summary.issued`, `.issued_not_canceled` |
 
 The total row needs every holder from a fetch without `search` (§Rows); if the response in hand is
 `search`-scoped, re-fetch without it first.
