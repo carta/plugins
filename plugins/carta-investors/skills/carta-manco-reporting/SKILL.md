@@ -92,7 +92,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.76.6</carta-plugin>
+<carta-plugin>carta-investors:6.76.7</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -207,10 +207,14 @@ dashboard that comes up looking correct while being wrong:
    to refresh the data, swap the workbook, or change which tabs feed the
    page.
 4. **Step 4.8's `sync_src` runs before Step 5 launches.** Skipping it does
-   not stop the dashboard from coming up — `serve.py` still has a per-firm
-   source tree to serve, because it creates or reuses `<dashboard_dir>/src`
-   by default. What skipping it loses is the version stamp and merge that
-   keep that copy current with the plugin. **Never edit `raw/*` (this
+   not stop the dashboard from coming up as long as `<dashboard_dir>/src`
+   already exists — `serve.py` reuses that per-firm source tree by default.
+   On a firm's first run, with no `<dashboard_dir>/src` yet, `sync_src`
+   failing (see `references/serve-and-update.md` Step 4.8) does stop the
+   dashboard, because `serve.py` would need `sync_src init` to create that
+   tree and that hits the same failure. What skipping a successful sync
+   loses is the version stamp and merge that keep that copy current with
+   the plugin. **Never edit `raw/*` (this
    firm's fetched ledger data) or the plugin's own `app/src` (shared by
    every firm using this plugin) to make a UI change stick** — the only
    place a user-requested tweak belongs is `<dashboard_dir>/src`, the

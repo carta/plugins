@@ -110,8 +110,9 @@ If the script exits non-zero, read its stderr, surface the first line to the use
 
 ## Step 4.8 — Sync the user's app source
 
-**SILENT unless a minor or major update needs a decision.** No user-facing output in
-this step unless the prompt below fires.
+**SILENT unless a minor or major update needs a decision, or `check` fails** (one line
+saying app updates were skipped, or, on a first run with no per-firm copy, the error's
+first line before stopping). No other user-facing output in this step.
 
 Run the sync check:
 
@@ -120,6 +121,17 @@ uv run python3 "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/sync_
   --skill-dir "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting" \
   --data-dir "<dashboard_dir>" check
 ```
+
+If `check` exits non-zero (a malformed SKILL.md, for instance), do not ask the user what to
+do, and never edit SKILL.md to work around it.
+
+- **If `<dashboard_dir>/src` already exists**, proceed straight to Step 5 without
+  `--src-dir`: `serve.py`'s `_default_src_dir` serves that existing per-firm copy, so the
+  dashboard still comes up. Tell the user in one line that app updates were skipped this run.
+- **Otherwise** there is no per-firm copy to fall back to — `_default_src_dir` would call
+  `init`, which runs the same parse and fails the same way. Follow this file's rule for a
+  failing script, above: read stderr, surface the first line to the user in plain English,
+  and stop.
 
 Parse the JSON output and act on `status`:
 

@@ -17,6 +17,28 @@ MODULE_SUMMARY_RE = re.compile(r"^\s*-\s*summary:\s*(.+)$")
 FILES_KEY_RE = re.compile(r"^\s*files:\s*$")
 FILE_ENTRY_RE = re.compile(r"^\s*-\s*(\S.+)$")
 
+
+def _yaml_scalar(raw):
+    """Extract a YAML frontmatter scalar's value.
+
+    An installed SKILL.md can be rewritten upstream of this script (plugin
+    intake, an editor's YAML formatter) into any valid-YAML spelling of a
+    `version:` or `whats-new` `summary:` value: `'0.1.0'`, `"0.1.0"`,
+    `0.1.0  # note`, and so on. Shared by both readers below so there is one
+    rule: a quoted value is exactly the text between its matching quotes,
+    with anything after the closing quote (a trailing comment included)
+    dropped; an unquoted value is cut only at a `#` preceded by whitespace,
+    since `#` inside unquoted text (a summary like "Fix #12 layout") is not
+    a comment marker.
+    """
+    v = raw.strip()
+    if v[:1] in ("'", '"'):
+        end = v.find(v[0], 1)
+        if end != -1:
+            return v[1:end].strip()
+    return re.split(r"\s#", v, maxsplit=1)[0].strip()
+
+
 ARCHIVE_KEEP = 5
 # AskUserQuestion takes at most 4 questions of 4 options each, which bounds how many
 # modules Step 4.8's "Choose individually" prompt can list (serve-and-update.md).
@@ -74,7 +96,7 @@ def read_plugin_metadata(skill_dir):
             continue
 
         if line.startswith("version:"):
-            v = line.split(":", 1)[1].strip()
+            v = _yaml_scalar(line.split(":", 1)[1])
             if SEMVER_RE.match(v):
                 version = v
             in_whats_new = False
@@ -96,7 +118,7 @@ def read_plugin_metadata(skill_dir):
 
         module_match = MODULE_SUMMARY_RE.match(line)
         if module_match:
-            summary = module_match.group(1).strip().strip('"').strip("'")
+            summary = _yaml_scalar(module_match.group(1))
             current_module = {"summary": summary, "files": []}
             modules.append(current_module)
             in_files = False
