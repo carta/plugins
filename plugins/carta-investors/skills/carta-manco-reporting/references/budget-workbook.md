@@ -393,6 +393,20 @@ That applies to a sheet the adapter could not read. A sheet it read and
 then **refused** is a different thing, and carrying on is the wrong
 answer — see 2.75b-iii.
 
+**Totals readout.** For a `pnl-outline` sheet whose formulas the parser
+could read, it also prints an indented readout to stderr — every root
+total down through what it sums, with a ✓/✗ against the *signed* sum of
+its own children. A child the total's own formula subtracts prints with a
+leading `-`, whether that child is a leaf line or another total with its
+own children underneath. Skim it before moving on: a dept total sitting
+under the wrong grand total, or a ✗, is visible here in the first minute
+rather than surfacing later as a dashboard number nobody can explain. A
+total with **no mark at all** (its amount printed as `—`, or printed as a
+number but still unmarked) means either its own stated amount isn't a
+number the parser could read, or its formula also adds a constant or a
+cross-sheet value alongside the rows shown — nothing here failed to tie,
+it simply can't be checked this way.
+
 #### 2.75b-i — The window actuals are summed over
 
 Every budget is compared against Carta spend over exactly one window, and

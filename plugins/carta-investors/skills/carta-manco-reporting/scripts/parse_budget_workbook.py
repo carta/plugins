@@ -142,6 +142,12 @@ def _require_period_start(budget, sheet, label):
 _TIE_OUT_REL_TOL = 0.05
 _TIE_OUT_ABS_TOL = 50.0
 
+
+def _tie_tolerance(stated: float, computed: float) -> float:
+    """How far `computed` may drift from `stated` and still count as a tie."""
+    return max(_TIE_OUT_ABS_TOL, _TIE_OUT_REL_TOL * max(abs(stated), abs(computed)))
+
+
 # Off by a multiple, or against a sum of the opposite sign: the
 # constituents are the wrong rows, not the client's arithmetic.
 _TIE_OUT_GROSS_RATIO = 2.0
@@ -339,16 +345,10 @@ def _tie_out_check(rows: list) -> dict:
 
         for dim, stated in stated_map.items():
             computed = computed_map.get(dim, 0.0)
-            tolerance = max(
-                _TIE_OUT_ABS_TOL,
-                _TIE_OUT_REL_TOL * max(abs(stated), abs(computed)),
-            )
+            tolerance = _tie_tolerance(stated, computed)
             if abs(stated - computed) > tolerance and dim in covered_map:
                 covered = covered_map[dim]
-                cov_tol = max(
-                    _TIE_OUT_ABS_TOL,
-                    _TIE_OUT_REL_TOL * max(abs(stated), abs(covered)),
-                )
+                cov_tol = _tie_tolerance(stated, covered)
                 if abs(stated - covered) <= cov_tol:
                     computed, tolerance = covered, cov_tol
             comparisons.append({
@@ -466,6 +466,68 @@ def _coverage_check(rows: list, workbook_path, sheet_name: str) -> dict:
         "ratio": round(ratio, 4),
         "message": message,
     }
+
+
+def _totals_readout(rows: list) -> str:
+    """An indented summary of every root total down through its own
+    `children` — what it sums, the amount, and a ✓/✗ against the signed
+    sum of its direct children (`child_signs`) — built from the
+    `children`/`child_signs`/`children_complete` fields the pnl-outline
+    adapter's formula tree produces. Every child line, leaf or another
+    total, carries the `-` its parent's formula gives it when subtracted.
+    No mark at all on a total whose own `annual` isn't a number, or whose
+    `children_complete` is false — its formula also adds a constant or a
+    cross-sheet value alongside `children` — since neither can be checked
+    against the signed sum of `children`. Empty when no row carries
+    `children`: a sheet with no live formulas, or a non-outline shape.
+    """
+    by_id = {}
+    for r in rows:
+        if r.get("key"):
+            by_id[r["key"]] = r
+        if r.get("total_key"):
+            by_id[r["total_key"]] = r
+    rows_with_children = [r for r in rows if r.get("children")]
+    if not rows_with_children:
+        return ""
+    child_ids = {c for r in rows_with_children for c in r["children"]}
+    roots = [r for r in rows_with_children if r["total_key"] not in child_ids]
+
+    lines = []
+
+    def tie_mark(stated, computed):
+        if not isinstance(stated, (int, float)):
+            return ""
+        if abs(stated - computed) <= _tie_tolerance(stated, computed):
+            return " ✓"
+        return f" ✗ (children sum to {computed:,.2f})"
+
+    def render(row, depth, prefix=""):
+        children = [by_id[c] for c in row.get("children", []) if c in by_id]
+        signs = row.get("child_signs") or [1] * len(children)
+        stated = row.get("annual")
+        computed = sum(
+            sign * float(c.get("annual") or 0.0) for sign, c in zip(signs, children)
+        )
+        amount = f"{stated:,.2f}" if isinstance(stated, (int, float)) else "—"
+        # A formula with a constant or a cross-sheet term alongside its
+        # row references (`children_complete` false) can never tie against
+        # `children` alone, so no mark beats a false ✗ — same reasoning as
+        # a non-numeric `stated` (no cached value to compare against).
+        mark = tie_mark(stated, computed) if row.get("children_complete", True) else ""
+        lines.append(f"{'  ' * depth}{prefix}{row.get('label')}: {amount}{mark}")
+        for sign, c in zip(signs, children):
+            child_prefix = "" if sign > 0 else "-"
+            if c.get("children"):
+                render(c, depth + 1, child_prefix)
+            else:
+                lines.append(
+                    f"{'  ' * (depth + 1)}{child_prefix}{c.get('label')}: {float(c.get('annual') or 0.0):,.2f}"
+                )
+
+    for r in roots:
+        render(r, 0)
+    return "\n".join(lines)
 
 
 def _validate_budget(budget: dict, workbook_path, sheet_name: str) -> dict:
@@ -691,6 +753,10 @@ def main() -> int:
         detail = f"{len(rows_out)} accounts (no department axis)"
     else:
         detail = f"{len(rows_out)} outline rows ({lines} line items)"
+    if args.shape == "pnl-outline":
+        readout = _totals_readout(rows_out)
+        if readout:
+            print(f"totals readout:\n{readout}", file=sys.stderr)
     print(
         f"parsed {detail}; period_year={budget.get('period_year')}; wrote {out}",
         file=sys.stderr,
