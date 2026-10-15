@@ -44,7 +44,9 @@ function farStorageOk() {
 }
 
 const FAR_PAGE_SIZE = 50;
-const FAR_LIST_PAGE_SIZE = 40;   // carta-mcp's page cap
+// Under carta-mcp's cap of 40 so a page of its widest rows, each carrying its
+// task_display_group, stays inside the 40k-character reply budget (~1,100 a row).
+const FAR_LIST_PAGE_SIZE = 35;
 const FAR_LIST_MAX_PAGES = 25;   // bounds a cursor that never ends
 const FAR_DONE_MAX_PAGES = 3;    // Completed is recent work; its full history is not worth the wait
 // How far back Completed reaches. The list comes newest-started first and stops
@@ -407,14 +409,14 @@ function farNeedsTitle(w) {
   return farIsGenericTitle(farWorkflowName(w));
 }
 
-// The TASK_CATEGORIES key for a task or workflow. Its name is consulted only
-// where a category says so: a capital activity's names the activity type.
-function farCategoryOf(w) {
-  const template = w.workflow_template ?? FAR_REQUEST_TEMPLATE;
-  const name = [w.display_name, w.workflow_display_name].filter(Boolean).join(' ');
-  const listed = TASK_CATEGORIES.filter(c => c.templates.includes(template));
-  const match = listed.find(c => c.named && c.named.test(name)) ?? listed.find(c => !c.named);
-  return match ? match.key : TASK_CATEGORY_OTHER;
+// The group fund-admin filed a task or workflow under. A row without a usable one
+// (a backend that predates the field, or a malformed value) shows under Other. The id
+// is written into the filter chips' onclick, so only a slug is accepted.
+function farDisplayGroupOf(w) {
+  const g = w.task_display_group;
+  const valid = typeof g?.id === 'string' && /^[a-z0-9][a-z0-9-]*$/.test(g.id)
+    && typeof g.name === 'string' && g.name.trim() !== '' && Number.isFinite(g.order);
+  return valid ? { id: g.id, name: g.name.trim(), order: g.order } : TASK_GROUP_OTHER;
 }
 
 // A task names the step it waits on; a finished workflow only has its own name.
@@ -438,7 +440,7 @@ function farNormalizeWorkflow(w, reviews = true, appViews = new Set()) {
     title: isRequest ? farRequestTitle(w) : (farTaskTitle(w) ?? (ccr ? CCR_CARD_TITLE : 'Task from Carta')),
     subtitle: String(w.entity_name ?? '').trim() || null,
     group: closed ? 'done' : (FAR_GROUP_BY_PENDING[pending] ?? 'progress'),
-    category: farCategoryOf(w),
+    displayGroup: farDisplayGroupOf(w),
     state: pending,
     canceled: w.status === 'canceled',
     // Only a request is a thread someone typed, so only its title can be improved
@@ -657,7 +659,7 @@ function farPlanRows() {
     planId: p.planId,
     title: farTitleFrom(p.message),
     group: 'planned',
-    category: TASK_CATEGORY_REQUEST,
+    displayGroup: TASK_GROUP_OTHER,
     state: 'planned',
     requested: p.requested,
     lastActivity: p.requested,
@@ -678,7 +680,7 @@ async function farFetchFromIds() {
       id,
       title: farTitleFrom(msgs[0].text),
       group: last.isStaff ? 'todo' : 'progress',
-      category: TASK_CATEGORY_REQUEST,
+      displayGroup: TASK_GROUP_OTHER,
       state: last.isStaff ? 'pending-customer' : 'pending-carta',
       thread: true,
       requested: msgs[0].at,
@@ -951,9 +953,9 @@ const FAR_TABS = [
   { key: 'done', label: 'Completed', date: 'Completed', pill: 'gray',
     description: 'Recently finished work.' },
 ];
-const FAR_GROUP_PREVIEW = 5;   // items a category shows before "Show N more"
+const FAR_GROUP_PREVIEW = 5;   // items a display group shows before "Show N more"
 
-// A sort by group or category is a no-op — the queue is partitioned by both — so
+// A sort by tab or display group is a no-op — the queue is partitioned by both — so
 // the date is the only axis, and the control is a direction instead of a field.
 let _farSort = 'newest';
 let _farView = 'board';
@@ -961,8 +963,8 @@ let _farTab = 'todo';
 let _farTabChosen = false;    // set once the viewer picks a tab, or the first load picks one
 // Where the first load lands when Needs Action is empty: the next tab holding work.
 const FAR_TAB_OPEN_ORDER = ['todo', 'progress', 'planned', 'done'];
-const _farFilter = {};        // tab → category key, absent for All
-const _farMore = {};          // 'tab:category' → true once expanded
+const _farFilter = {};        // tab → display group id, absent for All
+const _farMore = {};          // 'tab:display group id' → true once expanded
 
 const FAR_LIST_ICON = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M21 9H3"/><path d="M21 15H3"/></svg>';
 const FAR_BOARD_ICON = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>';
@@ -1015,15 +1017,15 @@ function farSetTab(key) {
   renderFarSection();
 }
 
-function farSetFilter(category) {
-  if (category === 'all') delete _farFilter[_farTab];
-  else _farFilter[_farTab] = category;
+function farSetFilter(groupId) {
+  if (groupId === 'all') delete _farFilter[_farTab];
+  else _farFilter[_farTab] = groupId;
   trackWorkhub('click', 'CartaWorkhub.FundAdminRequests.Filter');
   renderFarSection();
 }
 
-function farShowMore(category) {
-  _farMore[_farTab + ':' + category] = true;
+function farShowMore(groupId) {
+  _farMore[_farTab + ':' + groupId] = true;
   trackWorkhub('click', 'CartaWorkhub.FundAdminRequests.ShowMore');
   renderFarSection();
 }
@@ -1041,21 +1043,40 @@ function farSorted(rows) {
 
 // ── Rendering ──
 
-function farCategory(key) {
-  return TASK_CATEGORIES.find(c => c.key === key) ?? TASK_CATEGORIES.find(c => c.key === TASK_CATEGORY_OTHER);
+// The display groups the rows name, by id. A group from the payload wins over one the
+// queue filed its own row under, so a draft or a seed card shows fund-admin's name and
+// order whenever any payload row carries its group.
+function farDisplayGroupCatalog(rows) {
+  const catalog = new Map();
+  for (const { displayGroup: g } of rows) {
+    const known = catalog.get(g.id);
+    if (!known || (known.order === undefined && g.order !== undefined)) catalog.set(g.id, g);
+  }
+  return catalog;
 }
 
-// A tab's rows by category, in TASK_CATEGORIES order, empty categories dropped.
-function farCategoryGroups(rows) {
-  return TASK_CATEGORIES
-    .map(c => ({ category: c, rows: rows.filter(r => farCategory(r.category).key === c.key) }))
-    .filter(g => g.rows.length > 0);
+// A tab's rows by display group, in fund-admin's order. A group no payload row names
+// has no order and follows the rest; Other is always last.
+function farDisplayGroupSections(rows, catalog) {
+  const rank = (g) => [g.id === TASK_GROUP_OTHER.id ? 1 : 0, g.order ?? Infinity];
+  const byId = new Map();
+  for (const r of rows) {
+    const id = r.displayGroup.id;
+    if (!byId.has(id)) byId.set(id, { displayGroup: catalog.get(id) ?? r.displayGroup, rows: [] });
+    byId.get(id).rows.push(r);
+  }
+  return [...byId.values()].sort((a, b) => {
+    const [ao, an] = rank(a.displayGroup);
+    const [bo, bn] = rank(b.displayGroup);
+    return ao - bo || an - bn || a.displayGroup.name.localeCompare(b.displayGroup.name);
+  });
 }
 
-function farCategoryIcon(key, size) {
+function farDisplayGroupIcon(id, size) {
+  const icon = Object.hasOwn(TASK_GROUP_ICONS, id) ? TASK_GROUP_ICONS[id] : TASK_GROUP_DEFAULT_ICON;
   return `<svg class="far-cat-icon" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none"`
     + ` stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"`
-    + ` aria-hidden="true">${farCategory(key).icon}</svg>`;
+    + ` aria-hidden="true">${icon}</svg>`;
 }
 
 // The app itself cannot run in the page, so the GP sends a prefilled prompt in a new chat.
@@ -1171,7 +1192,7 @@ function farCard(r, withTime) {
         <span class="far-card-title">${escHtml(r.title ?? 'Request to Carta')}</span>
         ${r.subtitle ? `<span class="far-card-sub">${escHtml(r.subtitle)}</span>` : ''}
       </span>
-      ${farCategoryIcon(r.category, 26)}
+      ${farDisplayGroupIcon(r.displayGroup.id, 26)}
     </span>
     <span class="far-card-footer">
       <span class="far-card-date">${escHtml(farDateLine(r, withTime))}</span>
@@ -1198,7 +1219,7 @@ function farPlanCard(r) {
       <span class="far-card-main">
         <span class="far-card-title">${escHtml(r.title ?? 'Draft request')}</span>
       </span>
-      ${farCategoryIcon(r.category, 26)}
+      ${farDisplayGroupIcon(r.displayGroup.id, 26)}
     </span>
     <span class="far-card-footer">
       <span class="far-card-date">${escHtml(farDateLine(r, false))}</span>
@@ -1215,7 +1236,7 @@ function farListRow(r, withTime) {
     : farItemShell(r, 'far-row');
   const meta = [r.subtitle, farDateLine(r, withTime)].filter(Boolean).join(' · ');
   el.innerHTML = `
-    ${farCategoryIcon(r.category, 20)}
+    ${farDisplayGroupIcon(r.displayGroup.id, 20)}
     <span class="far-row-title">${escHtml(r.title ?? 'Request to Carta')}</span>
     <span class="far-row-meta">${escHtml(meta)}</span>
     ${planned ? FAR_PLAN_ACTIONS : ''}
@@ -1251,7 +1272,7 @@ function farRenderChips(groups, active, total) {
       + `<span class="far-chip-count">${count}</span></button>`;
   };
   chips.innerHTML = chip('all', 'All', total)
-    + groups.map(g => chip(g.category.key, g.category.name, g.rows.length)).join('');
+    + groups.map(g => chip(g.displayGroup.id, g.displayGroup.name, g.rows.length)).join('');
 }
 
 function farRenderGroups(groups, withLabels) {
@@ -1261,17 +1282,17 @@ function farRenderGroups(groups, withLabels) {
   wrap.className = 'far-groups far-tab-' + _farTab;
   const isList = _farView === 'list';
   groups.forEach(g => {
-    const key = g.category.key;
+    const key = g.displayGroup.id;
     const expanded = _farMore[_farTab + ':' + key];
     const shown = expanded ? g.rows : g.rows.slice(0, FAR_GROUP_PREVIEW);
     const hidden = g.rows.length - shown.length;
     const section = document.createElement('div');
     section.className = 'far-cat';
-    section.dataset.farCategory = key;
+    section.dataset.farDisplayGroup = key;
     if (withLabels) {
       const label = document.createElement('div');
       label.className = 'far-cat-label';
-      label.textContent = g.category.name;
+      label.textContent = g.displayGroup.name;
       section.appendChild(label);
     }
     const items = document.createElement('div');
@@ -1440,12 +1461,12 @@ function renderFarSection() {
   const byTab = Object.fromEntries(FAR_TABS.map(t => [t.key, rows.filter(r => r.group === t.key)]));
   const tab = FAR_TABS.find(t => t.key === _farTab);
   const tabRows = byTab[tab.key];
-  const groups = farCategoryGroups(tabRows);
-  const active = groups.some(g => g.category.key === _farFilter[tab.key]) ? _farFilter[tab.key] : 'all';
+  const groups = farDisplayGroupSections(tabRows, farDisplayGroupCatalog(rows));
+  const active = groups.some(g => g.displayGroup.id === _farFilter[tab.key]) ? _farFilter[tab.key] : 'all';
 
   farRenderTabs(byTab);
   farRenderChips(groups, active, tabRows.length);
-  farRenderGroups(active === 'all' ? groups : groups.filter(g => g.category.key === active), active === 'all');
+  farRenderGroups(active === 'all' ? groups : groups.filter(g => g.displayGroup.id === active), active === 'all');
 
   const desc = document.getElementById('far-tab-desc');
   if (desc) desc.textContent = tab.key === 'planned' ? farPlanTip() : tab.description;
@@ -1689,7 +1710,7 @@ async function submitFarCompose() {
       id,
       title: label ?? farTitleFrom(message),
       group: 'progress',
-      category: TASK_CATEGORY_REQUEST,
+      displayGroup: TASK_GROUP_OTHER,
       state: 'pending-carta',
       thread: true,
       canceled: false,

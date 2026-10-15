@@ -2421,7 +2421,7 @@ function ccrQueueRows(rows) {
       subtitle: _ccrFundName,
       firm: null,
       group: "todo",
-      category: TASK_CATEGORY_CAPITAL,
+      displayGroup: TASK_GROUP_CAPITAL_CALLS,
       // The GP owes the decision, so the card reads as waiting on them.
       state: "pending-customer",
       canceled: false,

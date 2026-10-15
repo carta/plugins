@@ -4,7 +4,7 @@ description: >
   Builds or rebuilds the Carta Workhub live artifact — a standalone Cowork view of the work
   a firm shares with its Carta fund admin team. Shows a request composer over the GP tasks it
   has a panel for, in tabs for Drafts, Needs Action (waiting on you), With Carta and Completed,
-  grouped by category — requests, capital calls and distributions, financial reporting — with a
+  grouped as on the Firm Dash — capital calls, distributions, financial reporting and more — with a
   thread view for each request, the capital call review and the reporting tracker. The artifact auto-detects the active firm
   from the Carta MCP context — no hardcoded firm name needed. Use this skill whenever the
   user asks to "build the carta workhub artifact", "rebuild carta workhub", "set up carta
@@ -17,7 +17,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.76.7</carta-plugin>
+<carta-plugin>carta-investors:6.77.0</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -97,17 +97,25 @@ not inside a fund-data dashboard.
   Expense payments, Management fees, Cash reconciliation or SOI review, unless its needs-action task opens an MCP App (see Task MCP Apps). Every other GP task would only link out to Carta, so it is left out; add a template to that list once a panel opens its tasks. Completed reads the same list,
   so finished work never shows a kind of task the open tabs leave out. Every task of a listed workflow
   shows, including the ones no panel opens (a capital call With Carta or Completed), as a
-  Carta link. Inside a tab, rows are grouped by category, in the order and with the icons `TASK_CATEGORIES` in
-  `resources/carta-workhub.config.js` gives; a row joins the category listing its
-  `workflow_template`, and a listed template no category lists lands in **Other**. A capital activity is a call or a distribution only by its name —
-  fund-admin titles the task "Review capital call for…" or "Authorize distribution of…" from
-  the activity type — so `named` on Distributions decides there. Filter chips under the
-  description (All, then each category present, with counts) narrow the tab to one category;
-  each tab keeps its own. A category previews 5 items, then **Show N more**.
+  Carta link. Inside a tab, rows are grouped by the `task_display_group` (`{id, name, order}`)
+  fund-admin sends on every task and finished workflow, the same group the Firm Dash shows: the
+  group's name and order come from the payload, and the Workhub keeps no template-to-group table.
+  fund-admin decides it — a Contact Carta request by its category, a capital activity as a call or
+  a distribution by its activity type, anything else by its template. A row without a usable group
+  (a backend that predates the field, or a malformed one) lands in **Other**, which is always last.
+  `TASK_GROUP_ICONS` in `resources/carta-workhub.config.js` holds only the icons, keyed by group
+  id; any other id gets `TASK_GROUP_DEFAULT_ICON`. Rows the queue builds before fund-admin has sent
+  them — drafts, request ids restored from storage, a just-sent request, and the capital call
+  review and reporting tracker seed cards — carry a group id (`TASK_GROUP_OTHER`,
+  `TASK_GROUP_CAPITAL_CALLS`, `TASK_GROUP_FINANCIAL_REPORTING`) and take its name and order from
+  any payload row with the same id, in any tab; until one exists they follow the payload's
+  groups under their own names. Filter chips under the
+  description (All, then each group present, with counts) narrow the tab to one group;
+  each tab keeps its own. A group previews 5 items, then **Show N more**.
 
   Sorted **Newest** or **Oldest** first, by when the work started, or for Completed by when it
-  finished. There is deliberately no sort-by-status or category: the queue is partitioned by
-  both, so it would be a no-op. Cards in a category that share a calendar day show the time as
+  finished. There is deliberately no sort-by-status or group: the queue is partitioned by
+  both, so it would be a no-op. Cards in a group that share a calendar day show the time as
   well, or a re-sort looks like nothing happened. The card/list toggle swaps the grid for one
   row per item.
 
@@ -123,8 +131,8 @@ not inside a fund-data dashboard.
   The page is light only, as the Workhub design is: `:root` sets `color-scheme: light`, so
   every `light-dark()` token resolves to its light value.
 
-  **Two cursor-paged lists feed the queue**, read in parallel at 40 rows a page so no reply
-  nears carta-mcp's 40k cap. On first load each tab paints once its reads land and counts `…`
+  **Two cursor-paged lists feed the queue**, read in parallel at 35 rows a page, under carta-mcp's
+  cap of 40, so a page of its widest rows with their `task_display_group` stays inside the 40k reply budget. On first load each tab paints once its reads land and counts `…`
   until then: Needs Action after its half of the task list, With Carta after both halves,
   Completed after both halves and its own list:
   - `fa:list:gp-workhub-active-task` — read as two halves, `pending_actor: customer` and
@@ -141,7 +149,7 @@ not inside a fund-data dashboard.
     their own.
   - `fa:list:firm-workflow` (`TASK_TEMPLATES_WITH_TILES`, `complete`/`canceled`) — Completed, the last 90
     days by `completed_date` (else `last_activity_at`), newest 3 pages only, keeping what was
-    read; its count reads `120+` at that cap, and a plain `0` when nothing read is recent. The
+    read; at that cap its count shows a `+` (a floor), and a plain `0` when nothing read is recent. The
     list is ordered by `created_at`, so it can miss old work finished recently. A failure
     leaves it empty. A workflow in both lists shows once, as open.
 - **Capital call review** — a `request-capital-activity` workflow carrying an open

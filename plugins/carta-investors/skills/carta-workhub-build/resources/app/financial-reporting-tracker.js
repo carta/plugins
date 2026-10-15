@@ -545,7 +545,7 @@ function frtCardFor(p, payload, seeded) {
     subtitle: summary || (seeded ? "Nothing needs your action" : null),
     firm: null,
     group: "todo",
-    category: TASK_CATEGORY_REPORTING,
+    displayGroup: TASK_GROUP_FINANCIAL_REPORTING,
     // The GP owes a step on at least one row.
     state: "pending-customer",
     canceled: false,
