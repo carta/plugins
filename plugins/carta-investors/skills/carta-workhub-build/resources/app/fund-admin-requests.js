@@ -431,10 +431,12 @@ function farTaskTitle(w) {
 function farNormalizeWorkflow(w, reviews = true, appViews = new Set()) {
   const closed = FAR_FINISHED_STATUSES.includes(w.status);
   const isRequest = (w.workflow_template ?? FAR_REQUEST_TEMPLATE) === FAR_REQUEST_TEMPLATE;
-  // Set only when the pending task is the GP's review, so a card knows to open
-  // the capital call panel rather than Carta.
-  const ccr = reviews && ccrIsReviewTask(w) ? ccrTargetFor(w) : null;
-  const pending = ccr ? 'pending-customer' : farPendingState(w);
+  // A review task opens the MCP App when this viewer has it, else the capital call
+  // panel, else Carta. Either way it is the GP's turn: the active-task list holds
+  // only decisions the GP owes.
+  const reviewApp = ccrIsReviewTask(w) ? farTaskAppFor(w, appViews) : null;
+  const ccr = !reviewApp && reviews && ccrIsReviewTask(w) ? ccrTargetFor(w) : null;
+  const pending = ccr || reviewApp ? 'pending-customer' : farPendingState(w);
   return {
     id: w.workflow_id,
     title: isRequest ? farRequestTitle(w) : (farTaskTitle(w) ?? (ccr ? CCR_CARD_TITLE : 'Task from Carta')),
@@ -456,14 +458,15 @@ function farNormalizeWorkflow(w, reviews = true, appViews = new Set()) {
     // A package task always opens the tracker for its period, never Carta.
     frt: frtTargetFor(w),
     // A task waiting on the GP that has an MCP App opens it in a new chat.
-    app: pending === 'pending-customer' && !closed ? farTaskAppFor(w, appViews) : null,
+    app: pending === 'pending-customer' && !closed ? (reviewApp ?? farTaskAppFor(w, appViews)) : null,
   };
 }
 
-// The MCP App a task opens, with the params its row fills, or null when its template has
-// no app, this viewer may not open the view, or the row lacks a field a param needs.
+// The MCP App a task opens, with the params its row fills, or null when its template (and
+// task step, for an app limited to some) has no app, this viewer may not open the view, or the row lacks a field a param needs.
 function farTaskAppFor(w, appViews) {
-  const app = TASK_APPS.find(a => a.template === w.workflow_template && appViews.has(a.view));
+  const app = TASK_APPS.find(a => a.template === w.workflow_template && appViews.has(a.view)
+    && (!a.tasks || a.tasks.includes(w.task_template)));
   if (!app) return null;
   const params = appParamsFrom(app.params, w);
   if (!params) return null;

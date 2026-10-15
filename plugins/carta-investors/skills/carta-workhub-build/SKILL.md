@@ -17,7 +17,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.80.0</carta-plugin>
+<carta-plugin>carta-investors:6.80.1</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -302,7 +302,11 @@ not inside a fund-data dashboard.
   view's own does not cover, so its `TASK_APPS` entry names `requires:
   'fa:list:firm-asset-group'`, which `farTaskAppViews` checks with `mcpCommandAvailable`; a
   viewer without it keeps the Carta link rather than opening a chat that answers "not
-  enabled". `TASK_APPS` in
+  enabled". A capital activity review (`request-capital-activity`, only its `review-capital-activity`
+  and `review-capital-activity-changes` steps, `fa:view:capital_activity_review`) passes `fund_uuid`
+  and the task's `object_id` as `capital_activity_id`, and needs `fa:get:capital-activity-review-summary`
+  too. Where the viewer has the app it replaces the in-page review panel, which stays as the fallback
+  for a viewer without it. `TASK_APPS` in
   `resources/carta-workhub.config.js` lists them, each with the task row field that fills each view
   param, and `farTaskAppFor` builds the prompt target with the tracker's `frtAppPrompt`. The task
   list is not gated by the views' flags, so `mcpViewAvailable` asks

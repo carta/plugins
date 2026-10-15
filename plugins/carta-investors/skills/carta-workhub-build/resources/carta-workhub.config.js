@@ -114,6 +114,9 @@ const TASK_TEMPLATE_EXPENSE = 'prepare-and-pay-expense';
 const TASK_TEMPLATE_MANAGEMENT_FEES = 'review-management-fees';
 const TASK_TEMPLATE_CASH_RECONCILIATION = 'cash-reconciliation';
 const TASK_TEMPLATE_SOI_REVIEW = 'review-soi-v2';
+// The tasks that wait on the GP's decision on a drafted capital call or distribution.
+const TASK_CAPITAL_ACTIVITY_REVIEW = 'review-capital-activity';
+const TASK_CAPITAL_ACTIVITY_CHANGES = 'review-capital-activity-changes';
 // Every tab, Completed included, shows only these workflows: the ones a Workhub
 // panel opens (request thread, capital call review, reporting tracker), plus expense
 // payments, management fee reviews, cash reconciliation and SOI reviews, which open an
@@ -128,9 +131,16 @@ const TASK_TEMPLATES_WITH_TILES = [
 
 // Needs-action tasks that open an MCP App in a new chat instead of Carta. `params` maps
 // each view param to the task row field that fills it: a management fee review's
-// object_id is the review, an expense workflow's is the expense. `requires` names a command
-// the app's own reads need, for a view whose flag does not cover them.
+// object_id is the review, an expense workflow's is the expense. `tasks` limits an entry to
+// the workflow's named task steps, for a template whose other steps are Carta's own work.
+// `requires` names a command the app's own reads need, for a view whose flag does not
+// cover them.
 const TASK_APPS = [
+  // The GP's review of a drafted capital call or distribution. object_id is the activity.
+  { template: TASK_TEMPLATE_CAPITAL_ACTIVITY, view: 'fa:view:capital_activity_review',
+    label: 'capital activity review', params: { fund_uuid: 'fund_uuid', capital_activity_id: 'object_id' },
+    tasks: [TASK_CAPITAL_ACTIVITY_REVIEW, TASK_CAPITAL_ACTIVITY_CHANGES],
+    requires: 'fa:get:capital-activity-review-summary' },
   { template: TASK_TEMPLATE_MANAGEMENT_FEES, view: 'fa:view:gp_management_fee_review',
     label: 'management fee review', params: { fund_uuid: 'fund_uuid', review_id: 'object_id' } },
   { template: TASK_TEMPLATE_EXPENSE, view: 'fa:view:expense_payment_review',
