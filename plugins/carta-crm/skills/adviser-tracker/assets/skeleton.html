@@ -11,6 +11,9 @@ body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 var(--sans)}
 .page{max-width:1400px;margin:0 auto;padding:24px}
 .brand{display:flex;align-items:center;gap:12px;margin-bottom:20px}
 .brand .name{font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:#2b3350}
+.brand .toggle{margin-left:auto}
+.brand .toggle-label{margin-left:auto;font-size:12px;color:var(--muted)}
+.brand .toggle-label+.toggle{margin-left:0}
 .tile{width:40px;height:40px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;overflow:hidden;flex:none}
 .tile img{width:100%;height:100%;display:block}
 .tile.sm{width:28px;height:28px;border-radius:7px}
@@ -4362,7 +4365,10 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
 </script>
 <script>
 (function () {
-  var data = JSON.parse(document.getElementById('tracker-data').textContent);
+  var all = JSON.parse(document.getElementById('tracker-data').textContent);
+  // Each view is the same shape as the whole payload. The first view is the default.
+  var views = Array.isArray(all.views) && all.views.length ? all.views : null;
+  var data = views ? views[0] : all;
   var COLORS = ['var(--c-old)', 'var(--c-mid)', 'var(--c-cur)'];
   var STRENGTH = { strong: 'Strong', moderate: 'Moderate', weak: 'Weak' };
   var MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -4373,7 +4379,7 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
   var partialM = cm - doneM;
   // The quarter of asOf is partial unless its last month is complete.
   var partialQ = partialM === 0 && cm % 3 === 0 ? -1 : Math.floor((cm - 1) / 3);
-  var state = { year: cy, hidden: {} };
+  var state = { year: cy, hidden: {}, view: views ? views[0].key : null };
   // Final quarter and total values of the table as drawn, keyed "domain|column".
   var shown = {};
 
@@ -4382,6 +4388,8 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
   // Growth is only quoted for banks with at least this many deals in the earlier period.
   var MIN_BASE = 5;
   var CHOICES = 'A deal counts for a bank when the deal’s bank field (for example Mandate) names it, in the month the deal was created.';
+  var PEOPLE_CHOICES = 'A deal counts for a bank when an introducer or adviser on the deal works at the bank today, in the month the deal was created.';
+  function choices() { return state.view === 'dealPeople' ? PEOPLE_CHOICES : CHOICES; }
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -4594,7 +4602,22 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
   }
 
   function renderHeader() {
-    el('brand').innerHTML = logoTile(data.tenant.logo) + '<span class="name">' + esc(data.tenant.name) + '</span>';
+    var switcher = !views ? '' : '<span class="toggle-label" id="view-label">View</span><div class="toggle" role="group" aria-labelledby="view-label">' + views.map(function (v) {
+      return '<button type="button" data-view="' + esc(v.key) + '" aria-pressed="' + (v.key === state.view) + '">' + esc(v.label) + '</button>';
+    }).join('') + '</div>';
+    el('brand').innerHTML = logoTile(data.tenant.logo) + '<span class="name">' + esc(data.tenant.name) + '</span>' + switcher;
+  }
+  function setView(key) {
+    var next = views && views.filter(function (v) { return v.key === key; })[0];
+    if (!next || key === state.view) return;
+    data = next;
+    state.view = key;
+    renderHeader();
+    renderInsight();
+    renderTable(state.year);
+    renderYearCharts(false);
+    renderMonthChart(false);
+    el('brand').querySelector('[data-view="' + key + '"]').focus();
   }
   function renderNotice() {
     el('notice').innerHTML = data.notice ? '<div class="notice">' + esc(data.notice) + '</div>' : '';
@@ -4653,7 +4676,7 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
     }).join('') + '</div>';
     var sub = 'Deals created per quarter of the selected year, per bank. ' + source() +
       ' Top contact is the person with the most emails and meetings with anyone on our team.';
-    var how = CHOICES + ' The current quarter is partial and shows only the days so far. ' +
+    var how = choices() + ' The current quarter is partial and shows only the days so far. ' +
       'Relationship strength is the deal volume of the selected year: Strong is ' + VOLUME_BANDS[0].min + ' or more deals, Moderate is ' + VOLUME_BANDS[1].min + ' to ' + (VOLUME_BANDS[0].min - 1) + ', Weak is fewer. ' +
       (data.rows.length ? tierRule() + ' ' : '') +
       'Hover a row to highlight it.';
@@ -4721,7 +4744,7 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
     var all = yearsOf(data).slice().reverse();
     var ys = all.filter(function (y) { return !state.hidden[y]; });
     var sub = 'Deals created per bank in Tier ' + t + ', year over year. ' + source();
-    var how = CHOICES + ' Each group is one bank and each bar is one year. ' + cy + ' runs to ' + asOfText() + ', so its bar is year to date. ' +
+    var how = choices() + ' Each group is one bank and each bar is one year. ' + cy + ' runs to ' + asOfText() + ', so its bar is year to date. ' +
       'Each tier card has its own scale, so compare bars within a card. Hover or focus a bar for the change against the same complete months a year earlier. Click a year in the legend to hide it.';
     var html = head('Tier ' + t + ': deals by bank, year over year', sub, how);
     if (!data.rows.length) { card.innerHTML = html + emptyLine(); return; }
@@ -4760,7 +4783,7 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
   function renderMonthChart(enter) {
     var months = drawnMonths(data);
     var sub = 'Total deals created per month across all banks. ' + source();
-    var how = CHOICES + ' Each bar is all deals in that month across the banks shown. The last bar is a partial month, drawn lighter. Hover or focus a bar to see the top three banks that month.';
+    var how = choices() + ' Each bar is all deals in that month across the banks shown. The last bar is a partial month, drawn lighter. Hover or focus a bar to see the top three banks that month.';
     var html = head('Deals created per month, last ' + (data.window.to - data.window.from + 1) + ' years', sub, how);
     if (!data.rows.length) { el('card-months').innerHTML = html + emptyLine(); return; }
     var maps = data.rows.map(byMonth);
@@ -4815,6 +4838,8 @@ svg:has(.grp:hover,.bar:focus-visible) .grp:not(:hover):not(:has(.bar:focus-visi
       if (closest(e.target, '.bar')) hideTip();
     });
     page.addEventListener('click', function (e) {
+      var view = closest(e.target, '[data-view]');
+      if (view) { setView(view.dataset.view); return; }
       var leg = closest(e.target, '[data-leg]');
       if (leg) toggleYear(+leg.dataset.leg, closest(leg, '.card').id);
     });

@@ -19,7 +19,7 @@ model: inherit
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.16.8</carta-plugin>
+<carta-plugin>carta-crm:1.16.9</carta-plugin>
 
 # Adviser Tracker
 
@@ -36,7 +36,9 @@ tracker". Never describe a search or a retry. Fees are never added across curren
 
 ## The page
 
-One artifact holds three cards: the tracker table (year toggle, Q1 to Q4, year total,
+One artifact holds three cards, and a View toggle (By mandate, By introducer & adviser) that
+switches all three together. By mandate is the default. The toggle is absent when the people
+view is missing. The cards: the tracker table (year toggle, Q1 to Q4, year total,
 relationship strength, top contact, by tier), deals by bank year over year, and deals created
 per month for the last three years. Fees show per currency. They are never converted and never
 summed across currencies. A bank with no logo gets an empty bordered tile, never initials.
@@ -64,7 +66,8 @@ crm_call_tool({ "name": "crm:get_adviser_tracker_plan", "arguments": { "limit": 
 
 4. Fan out. In ONE turn, as parallel tool calls in one message, call
    `crm:get_adviser_tracker_relationships` once for every number in `shards` and
-   `crm:get_adviser_tracker_details` once. All of them go out together, never across turns.
+   `crm:get_adviser_tracker_details` once. In the same message, also make the people call below.
+   All of them go out together, never across turns.
    Send the shard calls in any order. A plan has 10 to 20 shards, often more than banks. Never
    assume one shard per bank. Calling a shard again redoes that shard.
 
@@ -72,6 +75,18 @@ crm_call_tool({ "name": "crm:get_adviser_tracker_plan", "arguments": { "limit": 
 crm_call_tool({ "name": "crm:get_adviser_tracker_relationships", "arguments": { "runId": "<runId>", "shard": <a number from shards> } })
 crm_call_tool({ "name": "crm:get_adviser_tracker_details", "arguments": { "runId": "<runId>" } })
 ```
+
+```
+crm_call_tool({ "name": "crm:get_adviser_tracker", "arguments": { "limit": 20, "linkBy": "dealPeople" } })
+```
+
+   The people call counts a deal for a bank when an introducer or adviser on the deal works at
+   the bank today. It takes no `dealFieldId`. Its answer has the same shape as the result and
+   echoes `linkBy`. It is a second view of the page. Save it to its own file, as for the result
+   below. When it errors, or the tool rejects `linkBy` (an older environment), publish the
+   Mandate view alone and add one plain line to the notice in Step 4 that the introducer and
+   adviser view is not shown. This never stops the run, is never retried, and no other tool
+   fills it in.
 
    An error from a `crm:get_adviser_tracker_relationships` call or a
    `crm:get_adviser_tracker_details` call, here or in the retry below, does not stop the run
@@ -85,6 +100,10 @@ crm_call_tool({ "name": "crm:get_adviser_tracker_result", "arguments": { "runId"
 
 Each error carries a message prefix and a structured code. Handle these, from whichever call
 returns them:
+
+These rules are for the Mandate calls only. The people call is sent once per skill run, never
+again on a new plan or the single-call fallback, and its errors are handled only as in item 4
+above.
 
 - **Incomplete.** Code `ADVISER_TRACKER_RUN_INCOMPLETE`, message prefix
   `adviser-tracker-run-incomplete:`, details `{ missingShards: number[], missingDetails: boolean }`.
@@ -105,18 +124,20 @@ The retry budgets are one incomplete retry and one new-plan retry per skill run.
 other retries.
 
 When `crm:get_adviser_tracker_plan` is an unknown tool, this environment has no split tools. Make
-one call instead, and use its answer as the result:
+one call instead, and use its answer as the result. Send the people call with it, in the same
+message:
 
 ```
 crm_call_tool({ "name": "crm:get_adviser_tracker", "arguments": { "limit": 20, "dealFieldId": "<id of that field>" } })
+crm_call_tool({ "name": "crm:get_adviser_tracker", "arguments": { "limit": 20, "linkBy": "dealPeople" } })
 ```
 
 Step 4 carries one plain line in its notice that names the field used. When no field
 qualifies, leave `dealFieldId` out and say so in that line: deals are counted from every
 company field.
 
-Save the result to a file in the outputs directory with `Write`. When the host already returns
-a saved path, use that path.
+Save the result, and the people answer when it succeeded, each to its own file in the outputs
+directory with `Write`. When the host already returns a saved path, use that path.
 
 - **Not configured.** An error whose text starts `adviser-tracker-not-configured:`, or an
   unknown-tool error on the single call. Build and publish nothing. Tell the user adviser
@@ -128,8 +149,8 @@ a saved path, use that path.
 
 ## Step 2: Check the top bank
 
-Take the bank with the most deals in the current year: the sum of its `dealsByMonth` counts for
-that year. Check it with one call each:
+The check stays on the Mandate view. Take the bank with the most deals in the current year: the
+sum of its `dealsByMonth` counts for that year. Check it with one call each:
 
 - its deals created this year, with `crm:aggregate_deals` or `crm:search_deals`;
 - its fees, with `crm:get_fees_by_deal`.
@@ -145,8 +166,12 @@ created over the three years, Tier 2 is the rest. Do not choose, change or overr
 ## Step 4: Build the page
 
 ```
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/adviser-tracker/scripts/build_tracker.py" --result <file> --notice "<the Step 1 field line, plus the Step 2 disagreement line when there is one, joined into one line>" --out <outputs-directory>/adviser-tracker-<slug>.html
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/adviser-tracker/scripts/build_tracker.py" --result <file> --people-result <people file> --notice "<the Step 1 field line, plus the Step 2 disagreement line when there is one, joined into one line>" --out <outputs-directory>/adviser-tracker-<slug>.html
 ```
+
+Leave out `--people-result` when the people call failed. The page then has no view toggle. When
+the script drops a people file it cannot use, it adds its own line to the notice and builds the
+Mandate view. The notice also carries the plain line from Step 1 when the people call failed.
 
 `<slug>` is the organization lowercased with non-alphanumerics collapsed to `-`.
 

@@ -200,6 +200,38 @@ def json_for_script(data: dict) -> str:
     return json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c").replace("\u2028", "\\u2028").replace("\u2029", "\\u2029")
 
 
+MANDATE_VIEW = ("mandate", "By mandate")
+PEOPLE_VIEW = ("dealPeople", "By introducer & adviser")
+PEOPLE_DROPPED = "The introducer and adviser view is not shown."
+
+
+def drop_people_view(data: dict, detail: str) -> dict:
+    """`data` with the fixed notice line. The detail goes to stderr for the agent, not into the page."""
+    print(f"people view dropped: {detail}", file=sys.stderr)
+    return add_notice(data, PEOPLE_DROPPED)
+
+
+def with_people_view(data: dict, people_raw: str, as_of: dt.date) -> dict:
+    """`data` plus a `views` list when the people result is sound, else `data` with a notice line.
+
+    A people result that fails the same checks as the main result, has no rows, or does not share the
+    main window is dropped. The Mandate page is still built.
+    """
+    try:
+        people = build_data(parse_result(people_raw), as_of, data["notice"])
+    except SystemExit as exc:
+        return drop_people_view(data, str(exc))
+    if not people["rows"]:
+        return drop_people_view(data, "it has no banks")
+    if people["window"] != data["window"]:
+        return drop_people_view(data, "its years differ")
+    return {**data, "views": [{"key": key, "label": label, **view} for (key, label), view in zip((MANDATE_VIEW, PEOPLE_VIEW), (data, people))]}
+
+
+def add_notice(data: dict, line: str) -> dict:
+    return {**data, "notice": f"{data['notice']} {line}" if data["notice"] else line}
+
+
 def render(data: dict) -> str:
     skeleton = SKELETON.read_text(encoding="utf-8")
     if len(_DATA_TAG.findall(skeleton)) != 1 or TITLE_SLOT not in skeleton:
@@ -213,6 +245,7 @@ def render(data: dict) -> str:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--result", type=Path, help="the saved adviser tracker result")
+    parser.add_argument("--people-result", type=Path, help="the saved result of the introducer and adviser call, for a second view")
     parser.add_argument("--notice", help="one line shown above the table, such as a check that disagreed")
     parser.add_argument("--as-of", type=dt.date.fromisoformat, default=dt.date.today(), help="the date the data is as of (default today)")
     parser.add_argument("--out", type=Path, required=True)
@@ -221,6 +254,13 @@ def main(argv: list[str] | None = None) -> int:
     if not args.result:
         raise fail("no_result", "pass --result")
     data = build_data(parse_result(args.result.read_text(encoding="utf-8")), args.as_of, args.notice)
+    if args.people_result:
+        try:
+            people_raw = args.people_result.read_text(encoding="utf-8")
+        except OSError as exc:
+            data = drop_people_view(data, str(exc.strerror))
+        else:
+            data = with_people_view(data, people_raw, args.as_of)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(render(data), encoding="utf-8")
     print(f"wrote {args.out}")
