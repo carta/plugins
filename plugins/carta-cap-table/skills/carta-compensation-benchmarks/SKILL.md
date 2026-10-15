@@ -31,7 +31,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.96.12</carta-plugin>
+<carta-plugin>carta-cap-table:6.96.13</carta-plugin>
 
 # Benchmark Query
 

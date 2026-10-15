@@ -4,11 +4,12 @@
 # ///
 """Fetch a Carta MCP compensation result straight to disk, never through a model.
 
-An export page is ~17-25k characters, under the size at which Claude Code saves a
-tool result to a file, so in the building session it arrives inline and the only
-way onto disk would be a model writing it back out. This runs each call in a
-headless `claude -p` session instead (location_fetch.run_page) and takes the raw
-tool result off its event stream.
+This is the capture route for an MCP with no `response_mode: "blob"`. An export
+page is ~17-25k characters, under the size at which Claude Code saves a tool
+result to a file, so without blob delivery it arrives inline in the building
+session and the only way onto disk would be a model writing it back out. This
+runs each call in a headless `claude -p` session instead (location_fetch.run_page)
+and takes the raw tool result off its event stream.
 
 Usage:
     uv run capture_export.py sweep --server <SERVER> --args '<json>' --dest <dir>
@@ -39,7 +40,10 @@ import save_benchmark_result
 
 BUCKET_PARAMS = ("post_money_bucket", "headcount_bucket", "capital_raised_bucket")
 REQUIRED_SWEEP_ARGS = ("corporation_id", "benchmark_version_id", "equity_quantity")
-SWEEP_CALL_CEILING = 6
+SWEEP_PAGES = len(range(0, location_fetch.TOTAL_JOB_AREAS, location_fetch.JOB_LIMIT))
+# The sweep's own pages plus two retries to spend anywhere in it, the per-sweep
+# ceiling SKILL.md states for every route.
+SWEEP_CALL_CEILING = SWEEP_PAGES + 2
 ATTEMPTS_PER_PAGE = 2
 READ_ONLY_PREFIXES = ("compensation__get__", "compensation__export__")
 NOT_RETRIED = ("server_unavailable", "wrong_arguments")

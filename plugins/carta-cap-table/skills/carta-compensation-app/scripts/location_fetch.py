@@ -22,8 +22,8 @@ Only one command is ever issued, compensation:export:benchmarks, and it is
 read-only. The browser picks a location value from the catalog the build saved;
 it cannot choose a command or any other argument.
 
-A location is the same 4-page export sweep as the default (22 job areas, 6 per
-page), run as 4 sessions in parallel, and validated the same way the builder
+A location is the same 2-page export sweep as the default (22 job areas, 12 per
+page), run as 2 sessions in parallel, and validated the same way the builder
 validates a build-time sweep: every job area covered, one benchmark release, the
 plan's release. A partial sweep is an error, never a partial dropdown entry.
 
@@ -43,7 +43,10 @@ import build_datadir
 import save_benchmark_result
 
 EXPORT_TOOL = "compensation__export__benchmarks"
-JOB_LIMIT = 6
+# The server's own maximum areas per response (MAX_JOB_AREAS_PER_REQUEST), so a
+# 22-area sweep is two pages, fetched in parallel. The page size is bounded by
+# that cap rather than by the command's 60s deadline.
+JOB_LIMIT = 12
 TOTAL_JOB_AREAS = 22
 PAGE_TIMEOUT = 150
 MODEL = "sonnet"
