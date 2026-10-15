@@ -4,6 +4,7 @@ import { buildFaq } from "./faq.js";
 import { storyline } from "./summary.js";
 import { whatItTakes } from "./light.js";
 import { positionCurrencies } from "./riskMarket.js";
+import { ownFundHeldAs } from "../funds.js";
 
 /** In reading order. `faq` lists the answers a draft is built from; `autofill` is "draft", "facts" (figures beside the user's text) or "none". */
 export const WRITEUP_SECTIONS = [
@@ -99,14 +100,11 @@ export function trackRecord(snapshot) {
     .sort((a, b) => (b.vintage ?? 0) - (a.vintage ?? 0) || b.committed - a.committed);
 }
 
-const squash = (s) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
-
 /** Best companies by multiple at Carta's booked marks, skipping the firm's own fund entities and companies held in mixed currencies. */
 export function topCompanies(companies, snapshot, { max = 5 } = {}) {
   const funds = Object.fromEntries((snapshot?.funds ?? []).map((f) => [f.id, f]));
-  const own = new Set((snapshot?.funds ?? []).flatMap((f) => [squash(fundNameOnly(f.name)), squash(f.id)]));
   return (companies ?? [])
-    .filter((c) => !c.archived && !own.has(squash(c.name)))
+    .filter((c) => !c.archived && !ownFundHeldAs(snapshot?.funds ?? [], c))
     .map((c) => {
       const pos = c.positions ?? [];
       const ccys = positionCurrencies(pos, snapshot);

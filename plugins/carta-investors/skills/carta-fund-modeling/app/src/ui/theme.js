@@ -163,6 +163,23 @@ export const GLOBAL_CSS = `
     --tag-yellow-fg:   light-dark(var(--ink-color-global-brand-yellow-80), var(--ink-color-global-brand-yellow-20));
     --tag-yellow-bg:   light-dark(var(--ink-color-global-brand-yellow-20), var(--ink-color-global-brand-yellow-100));
     --stripe-repriced: light-dark(var(--ink-color-global-brand-yellow-50), var(--ink-color-global-brand-yellow-70));
+    /* Data-viz rungs Ink leaves untokenized (it tokenizes level 3 only): the
+       Companies map's fund fills and its on-fill change colors. Brand aliases
+       where Ink has the color; turquoise, brown and lime levels 1-2 are hex. */
+    --local-data-viz-blue-1:      var(--ink-color-global-brand-blue-40);
+    --local-data-viz-blue-2:      var(--ink-color-global-brand-blue-60);
+    --local-data-viz-yellow-1:    var(--ink-color-global-brand-yellow-40);
+    --local-data-viz-yellow-2:    var(--ink-color-global-brand-yellow-50);
+    --local-data-viz-turquoise-1: #ABE8E8;
+    --local-data-viz-turquoise-2: #68D7D9;
+    --local-data-viz-brown-1:     #E0D6D2;
+    --local-data-viz-brown-2:     #C9B8B1;
+    --local-data-viz-lime-1:      #DDFB74;
+    --local-data-viz-lime-2:      #C9EC56;
+    --local-data-viz-positive-1:  var(--ink-color-global-brand-green-40);
+    --local-data-viz-positive-4:  var(--ink-color-global-brand-green-90);
+    --local-data-viz-negative-1:  var(--ink-color-global-brand-red-50);
+    --local-data-viz-negative-4:  var(--ink-color-global-brand-red-90);
     --row-selected:    light-dark(rgba(40,93,163,.07), rgba(139,171,214,.12));
     --total-row-bg:    var(--ink-color-global-feedback-info-subtle);
     --hue-up:          light-dark(var(--ink-color-global-brand-green-70), rgba(91,192,179,.85));
@@ -262,6 +279,10 @@ export const GLOBAL_CSS = `
   .numin:hover:not(:focus):not(:disabled) { border-color: ${FAINT} !important; }
   .numin:focus { border-color: ${BLUE} !important; box-shadow: var(--focus-ring); outline: none; }
   .numin:focus-visible, button:focus-visible, select:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: 4px; }
+  /* Companies map boxes are clipped to their layout rect, so their ring is inset,
+     in the box's text colour: chosen per fill to read on it (a fixed blue would
+     vanish on the map's blue fills) */
+  .map-tile:focus-visible { box-shadow: inset 0 0 0 2px currentColor; border-radius: 0; }
   input[type=search].numin { -webkit-appearance: none; appearance: none; }
 
   /* Ink's real Input/TextInput field: 36px height, 4px radius, 10px L/R padding,

@@ -6,6 +6,7 @@ import { upliftByFund, fundReprice, waterfallCfgFor, positionReprice, BOOKED_CAR
          secondaryEvents, hasSecondaryPlan, retainedFraction } from "./reprice.js";
 import { splitProfit } from "./waterfall.js";
 import { cohortPercentile } from "./benchmarks.js";
+import { fundNameOnly } from "../ui/format.js";
 
 /** Fund ids in display order, derived from the snapshot (no hardcoded list). */
 export const fundIdsOf = (snapshot) => (snapshot?.funds ?? []).map((f) => f.id);
@@ -295,3 +296,23 @@ export function firmBaseRollup(fundStates) {
     tvpi: lpPaidIn > 0 ? (lpNav + lpDistributed) / lpPaidIn : 0,
   };
 }
+
+// A legal name reduced to what identifies it: lowercase letters and digits, with
+// a trailing entity suffix (LP, LLC, Ltd, Inc) dropped.
+const legalNameKey = (s) => (s || "").toLowerCase()
+  .replace(/[,.]?\s+(l\.?\s?p\.?|llc|ltd|limited|inc)\.?$/, "")
+  .replace(/[^a-z0-9]+/g, "");
+
+/** The firm's own fund a holding really is — a family or feeder fund investing
+ *  through a parallel fund or a HoldCo — or null for an operating company.
+ *  Fund Admin links the two records only by legal name, so names are compared
+ *  without punctuation or entity suffix, against both the fund's bare name and
+ *  its id (its full legal name). */
+export function ownFundHeldAs(funds, company) {
+  const key = legalNameKey(company.name);
+  if (!key) return null;
+  return funds.find((f) => key === legalNameKey(fundNameOnly(f.name)) || key === legalNameKey(f.id.replace(/-/g, " "))) ?? null;
+}
+
+/** A fund's reporting currency, by id from `funds`; null when unknown. */
+export const fundCurrency = (funds, fundId) => funds.find((f) => f.id === fundId)?.currency ?? null;

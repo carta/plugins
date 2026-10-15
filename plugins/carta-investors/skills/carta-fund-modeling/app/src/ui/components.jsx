@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, forwardRef } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, forwardRef } from "react";
 import { createPortal } from "react-dom";
 import { FS, SANS, serif, tightSans, sans, inkNum, MICRO, NOTICE, NOTICE_TINT, EASE, GRAD_DARK, EYEBROW_TRACKING } from "./theme.js";
 
@@ -580,7 +580,23 @@ export const POPOVER_SHADOW = "0 8px 24px rgba(20,24,24,.12), 0 2px 6px rgba(20,
 export function Dropdown({ options, value, onChange, minWidth = 260, maxWidth = 460, testId, triggerLabel, nullLabel, locked }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
+  const listRef = useRef(null);
   useDismissable(open, setOpen, ref);
+  // The menu opens rightward from the trigger's left edge. When that would run
+  // past the right edge of whatever clips it (the scrolling page column, else
+  // the window) and opening leftward from the trigger's right edge fits inside
+  // it, it opens leftward instead. A menu that fits neither way keeps the
+  // rightward default, whose overflow can still be scrolled to. Measured before paint.
+  const [opensLeft, setOpensLeft] = useState(false);
+  useLayoutEffect(() => {
+    if (!open || !listRef.current) { setOpensLeft(false); return; }
+    let clip = { left: 0, right: window.innerWidth };
+    for (let el = ref.current?.parentElement; el && el !== document.body; el = el.parentElement) {
+      if (["auto", "scroll", "hidden", "clip"].includes(getComputedStyle(el).overflowX)) { clip = el.getBoundingClientRect(); break; }
+    }
+    const menu = listRef.current.getBoundingClientRect();
+    setOpensLeft(menu.right > clip.right && ref.current.getBoundingClientRect().right - menu.width >= clip.left);
+  }, [open]);
 
   const current = value != null ? options.find((o) => o.id === value) : undefined;
   const label = current ? current.label : (nullLabel ?? options[0]?.label);
@@ -595,9 +611,9 @@ export function Dropdown({ options, value, onChange, minWidth = 260, maxWidth = 
         <ChevronDownIcon size={16} strokeWidth={1.5} style={{ flex: "none" }} />
       </button>
       {open && (
-        <div className="popin" role="listbox" style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, minWidth: "100%",
+        <div ref={listRef} className="popin" role="listbox" style={{ position: "absolute", top: "calc(100% + 4px)", ...(opensLeft ? { right: 0 } : { left: 0 }), minWidth: "100%",
           maxHeight: 340, overflowY: "auto", background: "var(--ink-color-global-surface-background-default)", border: `1px solid var(--ink-color-global-border-subtle)`, borderRadius: 6,
-          boxShadow: POPOVER_SHADOW, zIndex: 50, padding: "4px 0", transformOrigin: "top left" }}>
+          boxShadow: POPOVER_SHADOW, zIndex: 50, padding: "4px 0", transformOrigin: opensLeft ? "top right" : "top left" }}>
           {options.map((o) => {
             const on = o.id === value;
             return (
@@ -886,11 +902,19 @@ const BADGE_TONE = {
 
 // Ink dark hover tooltip. Pass `trigger` + `portal` when the trigger sits inside an
 // overflow-clipped ancestor such as a table row, which would cut an in-flow tooltip off.
-export function InfoTip({ label, children, width = 300, trigger, portal = false, placement = "bottom" }) {
+// A portal tooltip points at the trigger's edge, or at its centre with
+// `anchor="center"` (for a large trigger, whose edge can sit far away or off screen).
+// Near a window edge the bubble slides to stay on screen while its caret stays on
+// the point it marks, and it flips to the other side when there's no room above
+// (or below) that point.
+// `style` adds to the wrapper, e.g. to position it absolutely around its trigger.
+export function InfoTip({ label, children, width = 300, trigger, portal = false, placement = "bottom", anchor = "edge", style }) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false); // stays true after first show so opacity can transition back to 0 on hide
   const [pos, setPos] = useState(null);
+  const [flipped, setFlipped] = useState(false); // portal only: no room on `placement`'s side
   const triggerRef = useRef(null);
+  const tipRef = useRef(null);
   const show = () => {
     setMounted(true);
     setOpen(true);
@@ -898,12 +922,28 @@ export function InfoTip({ label, children, width = 300, trigger, portal = false,
       const r = triggerRef.current?.getBoundingClientRect();
       if (r) {
         const w = Math.min(width, window.innerWidth - 24);
-        const top = placement === "top" ? r.top - 8 : r.bottom + 8;
-        setPos({ left: Math.max(w / 2 + 12, Math.min(r.left + r.width / 2, window.innerWidth - w / 2 - 12)), top, width: w });
+        const x = r.left + r.width / 2; // the point the caret marks
+        const left = Math.max(w / 2 + 12, Math.min(x, window.innerWidth - w / 2 - 12));
+        // the y each side points at: above the trigger, and below it
+        const ys = anchor === "center"
+          ? { top: r.top + r.height / 2 - 8, bottom: r.top + r.height / 2 + 8 }
+          : { top: r.top - 8, bottom: r.bottom + 8 };
+        // caret offset from the bubble's middle, kept clear of its rounded corners
+        const caretX = Math.max(-(w / 2 - 14), Math.min(x - left, w / 2 - 14));
+        setFlipped(false);
+        setPos({ left, ys, width: w, caretX });
       }
     }
   };
   const hide = () => setOpen(false);
+  // the side the bubble opens on: `placement`, unless measuring showed it runs
+  // off the window there
+  const side = flipped ? (placement === "top" ? "bottom" : "top") : placement;
+  useLayoutEffect(() => {
+    if (!portal || !pos || flipped || !tipRef.current) return;
+    const t = tipRef.current.getBoundingClientRect();
+    if (placement === "top" ? t.top < 8 : t.bottom > window.innerHeight - 8) setFlipped(true);
+  }, [portal, pos, flipped, placement]);
 
   const triggerEl = trigger ?? (
     <button type="button" aria-label={label} style={{ display: "flex", background: "none", border: "none", padding: 0, cursor: "default", color: "var(--ink-color-global-feedback-info-strong)" }}>
@@ -912,21 +952,21 @@ export function InfoTip({ label, children, width = 300, trigger, portal = false,
   );
 
   const caret = (
-    <span style={{ position: "absolute", left: "50%", transform: "translateX(-50%)",
-      ...(placement === "top"
+    <span style={{ position: "absolute", left: portal && pos ? `calc(50% + ${pos.caretX}px)` : "50%", transform: "translateX(-50%)",
+      ...(side === "top"
         ? { top: "100%", borderLeft: "6px solid transparent", borderRight: "6px solid transparent", borderTop: "6px solid var(--ink-color-global-brand-black)" }
         : { bottom: "100%", borderLeft: "6px solid transparent", borderRight: "6px solid transparent", borderBottom: "6px solid var(--ink-color-global-brand-black)" }) }} />
   );
 
   // Line height and corner radius are Ink's Tooltip values, not the body-text defaults.
   const tooltipBody = (
-    <div role="tooltip"
+    <div role="tooltip" ref={tipRef}
       style={{ ...sans, background: "var(--ink-color-global-brand-black)", color: "var(--ink-color-global-brand-white)",
         fontSize: FS.body, lineHeight: "16px", padding: "10px 14px", borderRadius: "var(--ink-size-global-radius-subtle)",
         boxShadow: "var(--shadow-hover)", zIndex: portal ? 200 : 60, textAlign: "left",
         opacity: open ? 1 : 0, transition: "opacity 0.1s", pointerEvents: "none",
         ...(portal
-          ? { position: "fixed", left: pos?.left, top: pos?.top, width: pos?.width, transform: `translate(-50%, ${placement === "top" ? "-100%" : "0"})` }
+          ? { position: "fixed", left: pos?.left, top: pos?.ys[side], width: pos?.width, transform: `translate(-50%, ${side === "top" ? "-100%" : "0"})` }
           : { position: "absolute", [placement === "top" ? "bottom" : "top"]: "calc(100% + 8px)", left: "50%", transform: "translateX(-50%)", width }) }}>
       {children}
       {caret}
@@ -934,7 +974,7 @@ export function InfoTip({ label, children, width = 300, trigger, portal = false,
   );
 
   return (
-    <span ref={triggerRef} style={{ position: portal ? undefined : "relative", display: "inline-flex", alignItems: "center" }}
+    <span ref={triggerRef} style={{ position: portal ? undefined : "relative", display: "inline-flex", alignItems: "center", ...style }}
       onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide}>
       {triggerEl}
       {mounted && (portal ? (pos && createPortal(tooltipBody, document.body)) : tooltipBody)}

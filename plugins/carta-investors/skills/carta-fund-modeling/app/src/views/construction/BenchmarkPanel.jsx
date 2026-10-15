@@ -4,6 +4,7 @@ import { Btn, Badge, Checkbox, Dropdown } from "../../ui/components.jsx";
 import { fmtFullIn, fmtPct } from "../../ui/format.js";
 import ConfirmDialog from "../../ui/ConfirmDialog.jsx";
 import { latestFund } from "../../model/construction/plan.js";
+import { fundCurrency } from "../../model/funds.js";
 import { fundBenchmark, combineFunds, parallelFunds, applyBenchmark, usableEntries } from "../../model/construction/benchmark.js";
 import { trackClick } from "../../analytics.js";
 import { fmtYm, cellNum, sourceLabel } from "./fields.jsx";
@@ -37,8 +38,7 @@ export default function BenchmarkPanel({ plan, update, snapshot, firm, defaultOp
   const chosen = funds.find((f) => f.id === fundId) ?? latestFund({ funds }) ?? funds[0];
   const parallels = useMemo(() => {
     if (!history || !chosen) return [];
-    const currencyOf = (id) => funds.find((f) => f.id === id)?.currency ?? null;
-    return parallelFunds(history, chosen.id, currencyOf);
+    return parallelFunds(history, chosen.id, (id) => fundCurrency(funds, id));
   }, [history, chosen, funds]);
   const bench = useMemo(() => {
     if (!history || !chosen) return null;

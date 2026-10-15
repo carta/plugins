@@ -1,4 +1,4 @@
-import { useState, useRef, Fragment } from "react";
+import { useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import { tightSans, sans, inkNum, FS, MICRO, NOTICE, SMALL_1, SMALL_2 } from "../ui/theme.js";
 import { fmt$, fmtM, fmtB, fmtX, fmtPct, fmtAsOf, fmtOwn } from "../ui/format.js";
@@ -21,13 +21,14 @@ import { repricePosition, positionReprice, carryRateFor, companyRepriceState, ex
   secondarySales, secondaryEvents, retainedFraction, saleRepriceConfig, repricesByValuation } from "../model/reprice.js";
 import { fundExitProceeds, fundProceedsCurve, normClass } from "../model/liqpref.js";
 import { scenarioDealIrr } from "../model/dealIrr.js";
-import { isStaleMark, daysBetween, fundIdsOf } from "../model/funds.js";
+import { isStaleMark, daysBetween, fundIdsOf, ownFundHeldAs, fundCurrency } from "../model/funds.js";
 import { zeroOutFund, resetFundToCarta, zeroOutAll, resetAllToCarta, companiesInFund, crossFundCompanies, applyReserveDilution } from "../model/slices.js";
 import { FULL_RESERVE_DILUTION, companyBaseReserve } from "../model/reserves.js";
 import { useFirmData } from "../state/FirmData.jsx";
 import { companyOwnership } from "../model/ownership.js";
 import { trackClick } from "../analytics.js";
 import { ReturnsPreviewContent } from "../ui/PerformanceSidebarV2.jsx";
+import CompanyMap from "./CompanyMap.jsx";
 
 // A position's "Mark date": prefer the last revaluation (fmvDate), fall back to
 // the investment date (markDate) when it was never remarked.
@@ -727,15 +728,35 @@ function MetricTrend({ financials }) {
 // Position-level aggregates + the current (slider-driven) fair value for one
 // company. The single home for the `curFv` formula (live + repriceable → the
 // marks move it, otherwise the Carta base) and the cartaFv/cost/proceeds
-// reducers, so dealIrrOf and CompanyRow read identical values and can't drift.
-// `repriceState` is the companyRepriceState() result (needs uplift + canReprice).
-function companyFvState(company, { uplift, canReprice }) {
+// reducers, so dealIrrOf, CompanyRow and the map read identical values and
+// can't drift. `curFv` is the sum of `stakes`, its per-fund split: each fund's
+// current value and its change vs the Carta mark.
+// `repriceState` is the companyRepriceState() result (needs canReprice).
+function companyFvState(company, { canReprice }) {
   const live = company.includeInNav && !company.archived;
   const totalFv = company.positions.reduce((s, p) => s + (p.cartaFv || 0), 0);
   const totalCost = company.positions.reduce((s, p) => s + (p.cost || 0), 0);
   const totalProceeds = company.positions.reduce((s, p) => s + (p.proceeds || 0), 0);
-  const curFv = live && canReprice ? totalFv + uplift : totalFv; // uplift already vs Carta
-  return { live, totalFv, totalCost, totalProceeds, curFv };
+  const byFund = new Map();
+  for (const p of company.positions) {
+    const uplift = live && canReprice ? positionReprice(company, p, { live }).uplift : 0; // uplift already vs Carta
+    const stake = byFund.get(p.fundId) || { fundId: p.fundId, value: 0, delta: 0 };
+    stake.value += (p.cartaFv || 0) + uplift;
+    stake.delta += uplift;
+    byFund.set(p.fundId, stake);
+  }
+  const stakes = [...byFund.values()];
+  const curFv = stakes.reduce((s, st) => s + st.value, 0);
+  return { live, totalFv, totalCost, totalProceeds, curFv, stakes };
+}
+
+// A company on the map: companyFvState's per-fund stakes (its boxes) and their
+// sum `curFv` (the value its table row shows). `delta` is null when the stake
+// isn't repriced. A realized company has no current value, so no stakes to draw.
+function companyFundValues(company, updateCompany) {
+  if (company.realized) return { stakes: [], curFv: 0 };
+  const { stakes, curFv } = companyFvState(company, companyRepriceState(company, updateCompany));
+  return { stakes: stakes.map((st) => ({ ...st, delta: Math.abs(st.delta) > 0.5 ? st.delta : null })), curFv };
 }
 
 // A company's scenario Deal IRR — Carta's reported IRR shifted by the reprice's
@@ -765,7 +786,126 @@ function companySecondaryLegs(company, navAsOf) {
   return Object.entries(byDate).map(([date, amount]) => ({ date, amount }));
 }
 
-function CompanyRow({ company, updateCompany, refDate, staleDays, assumptions, portfolio, snapshot, readOnly, onOpenCompany, reload, flush, expanded, onToggle, ownership, onHoverChange, onDragStart, onDragEnd, fundStates, firmAgg, firmLpDelta, firmGpCarry, sliceName, fundScope, onOpenFundSection }) {
+function CompanyRow({ company, updateCompany, assumptions, snapshot, onToggle, ownership, onHoverChange }) {
+  const { uplift, canReprice } = companyRepriceState(company, updateCompany);
+  // FV aggregates + curFv from the shared helper so this row and dealIrrOf agree
+  const { live, totalFv, totalCost, totalProceeds, curFv } = companyFvState(company, { canReprice });
+  // Firm fully-diluted ownership + the forward "dilution guard" (ownership after
+  // the company's modeled future dilution). ownInfo.pct is null when Carta has no
+  // ownership on file (unconverted SAFEs / PERCENTAGE=0).
+  const ownInfo = companyOwnership(company, ownership);
+  const ownDiluted = ownInfo.pct != null && (company.futureDilution ?? 0) > 0;
+  const repriced = canReprice && !company.archived && Math.abs(uplift) > 0.5;
+  const markDate = company.positions.reduce((m, p) => { const d = positionMarkDate(p); return d > m ? d : m; }, "");
+
+  const soldPct = 1 - retainedFraction(company);
+  const status = company.realized
+    ? <StatusChip variant="fb-info">Exited · realized</StatusChip>
+    : company.defunct
+    ? <StatusChip variant="flex-gray-light">Out of business</StatusChip>
+    : soldPct > 0 && live
+    ? <StatusChip variant="fb-info">{`Partly sold · ${fmtPct(soldPct, 0)}`}</StatusChip>
+    : repriced
+    ? <StatusChip variant="flex-yellow-light">Repriced</StatusChip>
+    : company.exited && live
+    ? <StatusChip variant="fb-info">Exited · in DPI</StatusChip>
+    : <span style={{ ...inkNum, color: "var(--ink-color-global-text-subtle)" }}>—</span>;
+
+  // ── unified FV / MOIC: the CURRENT (slider-driven) values, with the change
+  //    vs the Carta mark shown as a green/red increment when the slider's moved.
+  //    curFv / totalFv / totalCost come from companyFvState above.
+  const cartaMoic = totalCost > 0 && totalFv > 0 ? totalFv / totalCost : null;
+  const curMoic = company.realized
+    ? (totalCost > 0 && totalProceeds > 0 ? totalProceeds / totalCost : null)
+    : (totalCost > 0 && curFv > 0 ? curFv / totalCost : null);
+  const moicDelta = (!company.realized && repriced && cartaMoic != null && curMoic != null) ? curMoic - cartaMoic : null;
+
+  // ── Deal IRR: Carta's reported deal IRR, anchored, then shifted by the reprice's
+  //    modeled effect at the fund's assumed exit horizon (gross of fund fees/carry).
+  //    Ties out to Carta at rest; moves WITH MOIC when repriced (both are the same
+  //    fact for a fixed hold), so a moving MOIC never sits beside a frozen IRR.
+  const dealIrr = dealIrrOf(company, assumptions, snapshot, updateCompany);
+  const irrDelta = (!company.realized && repriced && company.dealIrr != null && dealIrr != null)
+    ? dealIrr - company.dealIrr : null;
+
+  // repriced rows get a left-edge stripe (Ink NewTable.Stripe pattern) instead
+  // of a full-row tint. Clicking the row opens the company's detail in a
+  // modal (CompanyModal, rendered by Companies) rather than expanding inline.
+  return (
+    <tr onClick={onToggle} data-testid={`co-row-${company.slug}`}
+      data-datum-id={company.id} data-datum-type="company" data-datum-label={company.name}
+      onMouseEnter={() => onHoverChange?.(company.id)} onMouseLeave={() => onHoverChange?.(null)}
+      style={{ cursor: "pointer", opacity: company.defunct ? 0.6 : 1 }}>
+      <td style={{ position: "relative", paddingLeft: 10 }}>
+        {repriced && (
+          <span aria-hidden title="Repriced" style={{ position: "absolute", left: 0, top: 0, bottom: -1, width: 4, background: "var(--stripe-repriced)" }} />
+        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+          <span title={`${companyFundIds(company).join(" · ")} · ${company.positions.length} pos`}
+            style={{ ...sans, fontSize: FS.value, fontWeight: 400, color: "var(--ink-color-global-text-default)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 200 }}>
+            {company.name}
+          </span>
+          {company.financials?.series?.length > 0 && (
+            <InfoTip portal placement="top" trigger={
+              <IconBadge label="Has reported financials" fillRule="evenodd" clipRule="evenodd"
+                path="M11.8 2.65q1.13.1 2.07.52 1.26.59 2.03 1.62t.88 2.4v.42h-1.66l-.03-.21-.02-.15a3 3 0 0 0-.62-1.62 3.4 3.4 0 0 0-1.4-1.06 5 5 0 0 0-1.25-.3v5.9l.47.1q2.5.55 3.65 1.6l.27.25-.04.02q.9 1.02.9 2.63 0 1.38-.75 2.44-.75 1.04-2.09 1.6-1.08.46-2.42.53v1.68h-1.55v-1.7a8 8 0 0 1-2.18-.5 5 5 0 0 1-1.94-1.35l-.2-.26A4.6 4.6 0 0 1 5 14.78v-.41h1.65l.03.2.02.15v.01q.11.93.67 1.6.57.69 1.54 1.08l.18.06q.54.18 1.16.24v-6.2l-.18-.04a7.5 7.5 0 0 1-3.5-1.58 3.7 3.7 0 0 1-1.15-2.83v-.02q0-1.3.74-2.31a5 5 0 0 1 2-1.57 7 7 0 0 1 2.1-.51V.97h1.54zm.01 15.1q.91-.06 1.61-.33l.23-.1a3 3 0 0 0 1.2-.95q.51-.67.51-1.56v-.01q0-1.15-.77-1.8a6.5 6.5 0 0 0-2.75-1.15h-.03zM10.27 4.26q-.75.08-1.33.3-.86.38-1.34 1v.01q-.47.6-.47 1.46 0 1.09.77 1.75.74.64 2.37 1.05z" />
+            }>
+              Financials available through Carta Data Collection
+            </InfoTip>
+          )}
+          {company.capTable?.available && (
+            <InfoTip portal placement="top" trigger={
+              <IconBadge label={company.capTable.hasPrefTerms ? "Detailed cap table with liquidation preferences" : "Detailed cap table available"}
+                fillRule="evenodd" clipRule="evenodd"
+                path="M13.8 2a.7.7 0 0 0-1-.7l-10.4 2c-.4 0-.6.3-.6.7v16c0 .4.3.8.7.8H20c.4 0 .8-.4.8-.8v-9.7c0-.4-.3-.7-.7-.8l-6.4-.8V2Zm0 8.2v9h5.4V11l-5.4-.7Zm-1.6-7.3-9 1.7v14.7h2V12h1.5v7.3h2V7h1.6v12.3h2V2.9Z" />
+            }>
+              {company.capTable.hasPrefTerms
+                ? "Cap table and liquidation preferences available"
+                : "Cap table available"}
+            </InfoTip>
+          )}
+        </div>
+      </td>
+      <td style={numTd}>{fmtM(totalCost)}</td>
+      <td style={numTd}>
+        <StackedValue up={uplift}
+          delta={!company.realized && repriced ? fmtM(Math.abs(uplift)) : null}>
+          {company.realized ? "—" : fmtM(curFv)}
+        </StackedValue>
+      </td>
+      <td style={numTd}>{markDate ? fmtAsOf(markDate) : "—"}</td>
+      <td style={numTd}>
+        <StackedValue up={moicDelta ?? 0}
+          delta={moicDelta != null && Math.abs(moicDelta) >= 0.05 ? fmtX(Math.abs(moicDelta), 1) : null}>
+          {curMoic == null ? "—" : fmtX(curMoic, 1)}
+        </StackedValue>
+      </td>
+      <td style={{ ...numTd, color: dealIrr == null ? "var(--ink-color-global-text-subtle)" : dealIrr >= 0 ? "var(--ink-color-global-feedback-positive-strong)" : "var(--ink-color-global-feedback-negative-strong)" }}
+        title="Carta's reported deal IRR, shifted by the modeled reprice at the fund's assumed exit horizon (gross of fund fees/carry).">
+        <StackedValue up={irrDelta ?? 0}
+          delta={irrDelta != null && Math.abs(irrDelta) >= 0.001 ? fmtPct(Math.abs(irrDelta)) : null}>
+          {dealIrr == null ? "—" : fmtPct(dealIrr)}
+        </StackedValue>
+      </td>
+      <td style={numTd}
+        title={ownInfo.pct == null
+          ? "No Carta ownership on file (e.g. unconverted SAFE, or ownership not yet recorded)."
+          : ownDiluted
+          ? `Firm fully-diluted ownership; ${fmtOwn(ownInfo.postDilution)} after ${fmtPct(company.futureDilution)} expected future dilution.`
+          : "Firm fully-diluted ownership (Carta cap-table records)."}>
+        <StackedValue up={ownDiluted ? -1 : 0}
+          delta={ownDiluted ? fmtOwn(ownInfo.postDilution) : null}>
+          {ownInfo.pct == null ? "—" : fmtOwn(ownInfo.pct)}
+        </StackedValue>
+      </td>
+      <td style={{ textAlign: "left", width: STATUS_COL_W }}>{status}</td>
+    </tr>
+  );
+}
+
+// A company's detail window — opened from its table row or its box on the map,
+// so both views show the same tabs, sliders and Returns preview.
+function CompanyModal({ company, onClose, updateCompany, refDate, staleDays, assumptions, portfolio, snapshot, readOnly, onOpenCompany, ownership, onDragStart, onDragEnd, fundStates, firmAgg, firmLpDelta, firmGpCarry, sliceName, fundScope, onOpenFundSection }) {
   // which detail sub-modal is open — 'positions' | 'captable' | 'financials' |
   // 'partialsales' | null (null = the Scenario-inputs tab, the default)
   const [openModal, setOpenModal] = useState(null);
@@ -781,7 +921,7 @@ function CompanyRow({ company, updateCompany, refDate, staleDays, assumptions, p
   const [draggingSlider, setDraggingSlider] = useState(null);
   const { cfg, dilutionCfg, uplift, canReprice } = companyRepriceState(company, updateCompany);
   // FV aggregates + curFv from the shared helper so this row and dealIrrOf agree
-  const { live, totalFv, totalCost, totalProceeds, curFv } = companyFvState(company, { uplift, canReprice });
+  const { live, totalFv, totalCost, totalProceeds, curFv } = companyFvState(company, { canReprice });
   // Reserve earmarked for THIS company (matches the sidebar total's per-company
   // term): pro-rata follow-on to defend the stake ≈ (dilution defended) × its
   // marked FV pre-dilution, where dilution defended = 30% baseline − its dilution.
@@ -813,7 +953,6 @@ function CompanyRow({ company, updateCompany, refDate, staleDays, assumptions, p
   // ownership on file (unconverted SAFEs / PERCENTAGE=0).
   const ownInfo = companyOwnership(company, ownership);
   const ownDiluted = ownInfo.pct != null && (company.futureDilution ?? 0) > 0;
-  const repriced = canReprice && !company.archived && Math.abs(uplift) > 0.5;
 
   // ── Accordion summary strip: FV / LP NAV / Carry, each a current (scenario)
   //    value + its change vs the Carta mark (same StatBar the firm-level
@@ -870,391 +1009,284 @@ function CompanyRow({ company, updateCompany, refDate, staleDays, assumptions, p
   // gates the Financials button — same "usable reported-metric series" check the
   // trend chart itself applies inside the modal
   const hasFinancials = (company.financials?.series || []).some((sr) => sr.points && sr.points.length);
-  const markDate = company.positions.reduce((m, p) => { const d = positionMarkDate(p); return d > m ? d : m; }, "");
-
-  const soldPct = 1 - retainedFraction(company);
-  const status = company.realized
-    ? <StatusChip variant="fb-info">Exited · realized</StatusChip>
-    : company.defunct
-    ? <StatusChip variant="flex-gray-light">Out of business</StatusChip>
-    : soldPct > 0 && live
-    ? <StatusChip variant="fb-info">{`Partly sold · ${fmtPct(soldPct, 0)}`}</StatusChip>
-    : repriced
-    ? <StatusChip variant="flex-yellow-light">Repriced</StatusChip>
-    : company.exited && live
-    ? <StatusChip variant="fb-info">Exited · in DPI</StatusChip>
-    : <span style={{ ...inkNum, color: "var(--ink-color-global-text-subtle)" }}>—</span>;
-
-  // ── unified FV / MOIC: the CURRENT (slider-driven) values, with the change
-  //    vs the Carta mark shown as a green/red increment when the slider's moved.
-  //    curFv / totalFv / totalCost come from companyFvState above.
-  const cartaMoic = totalCost > 0 && totalFv > 0 ? totalFv / totalCost : null;
-  const curMoic = company.realized
-    ? (totalCost > 0 && totalProceeds > 0 ? totalProceeds / totalCost : null)
-    : (totalCost > 0 && curFv > 0 ? curFv / totalCost : null);
-  const moicDelta = (!company.realized && repriced && cartaMoic != null && curMoic != null) ? curMoic - cartaMoic : null;
-
-  // ── Deal IRR: Carta's reported deal IRR, anchored, then shifted by the reprice's
-  //    modeled effect at the fund's assumed exit horizon (gross of fund fees/carry).
-  //    Ties out to Carta at rest; moves WITH MOIC when repriced (both are the same
-  //    fact for a fixed hold), so a moving MOIC never sits beside a frozen IRR.
-  const dealIrr = dealIrrOf(company, assumptions, snapshot, updateCompany);
-  const irrDelta = (!company.realized && repriced && company.dealIrr != null && dealIrr != null)
-    ? dealIrr - company.dealIrr : null;
 
   return (
-    <Fragment>
-      {/* repriced rows get a left-edge stripe (Ink NewTable.Stripe pattern) instead
-          of a full-row tint. Clicking the row opens the company's detail in a
-          modal (see `expanded &&` further down) rather than expanding inline. */}
-      <tr onClick={onToggle} data-testid={`co-row-${company.slug}`}
-        data-datum-id={company.id} data-datum-type="company" data-datum-label={company.name}
-        onMouseEnter={() => onHoverChange?.(company.id)} onMouseLeave={() => onHoverChange?.(null)}
-        style={{ cursor: "pointer", opacity: company.defunct ? 0.6 : 1 }}>
-        <td style={{ position: "relative", paddingLeft: 10 }}>
-          {repriced && (
-            <span aria-hidden title="Repriced" style={{ position: "absolute", left: 0, top: 0, bottom: -1, width: 4, background: "var(--stripe-repriced)" }} />
-          )}
-          <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-            <span title={`${companyFundIds(company).join(" · ")} · ${company.positions.length} pos`}
-              style={{ ...sans, fontSize: FS.value, fontWeight: 400, color: "var(--ink-color-global-text-default)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 200 }}>
-              {company.name}
-            </span>
-            {company.financials?.series?.length > 0 && (
-              <InfoTip portal placement="top" trigger={
-                <IconBadge label="Has reported financials" fillRule="evenodd" clipRule="evenodd"
-                  path="M11.8 2.65q1.13.1 2.07.52 1.26.59 2.03 1.62t.88 2.4v.42h-1.66l-.03-.21-.02-.15a3 3 0 0 0-.62-1.62 3.4 3.4 0 0 0-1.4-1.06 5 5 0 0 0-1.25-.3v5.9l.47.1q2.5.55 3.65 1.6l.27.25-.04.02q.9 1.02.9 2.63 0 1.38-.75 2.44-.75 1.04-2.09 1.6-1.08.46-2.42.53v1.68h-1.55v-1.7a8 8 0 0 1-2.18-.5 5 5 0 0 1-1.94-1.35l-.2-.26A4.6 4.6 0 0 1 5 14.78v-.41h1.65l.03.2.02.15v.01q.11.93.67 1.6.57.69 1.54 1.08l.18.06q.54.18 1.16.24v-6.2l-.18-.04a7.5 7.5 0 0 1-3.5-1.58 3.7 3.7 0 0 1-1.15-2.83v-.02q0-1.3.74-2.31a5 5 0 0 1 2-1.57 7 7 0 0 1 2.1-.51V.97h1.54zm.01 15.1q.91-.06 1.61-.33l.23-.1a3 3 0 0 0 1.2-.95q.51-.67.51-1.56v-.01q0-1.15-.77-1.8a6.5 6.5 0 0 0-2.75-1.15h-.03zM10.27 4.26q-.75.08-1.33.3-.86.38-1.34 1v.01q-.47.6-.47 1.46 0 1.09.77 1.75.74.64 2.37 1.05z" />
-              }>
-                Financials available through Carta Data Collection
-              </InfoTip>
-            )}
-            {company.capTable?.available && (
-              <InfoTip portal placement="top" trigger={
-                <IconBadge label={company.capTable.hasPrefTerms ? "Detailed cap table with liquidation preferences" : "Detailed cap table available"}
-                  fillRule="evenodd" clipRule="evenodd"
-                  path="M13.8 2a.7.7 0 0 0-1-.7l-10.4 2c-.4 0-.6.3-.6.7v16c0 .4.3.8.7.8H20c.4 0 .8-.4.8-.8v-9.7c0-.4-.3-.7-.7-.8l-6.4-.8V2Zm0 8.2v9h5.4V11l-5.4-.7Zm-1.6-7.3-9 1.7v14.7h2V12h1.5v7.3h2V7h1.6v12.3h2V2.9Z" />
-              }>
-                {company.capTable.hasPrefTerms
-                  ? "Cap table and liquidation preferences available"
-                  : "Cap table available"}
-              </InfoTip>
+    <Modal title={company.name} subtitle={sliceName && `Scenario: ${sliceName}`} width="xlarge"
+      onClose={onClose}>
+      <div style={{ display: "flex", gap: 28 }}>
+      <div style={{ flex: "1 1 auto", minWidth: 0 }}>
+          {/* headline: last-round context + details link (the FV/LP NAV/Carry/
+              ownership figures live in the sidebar's Company impact section) */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 14, flexWrap: "wrap", marginBottom: 12 }}>
+            <div style={{ flex: "1 1 420px" }}>
+              {/* last-round context lives in the Cap table tab (cap-table data belongs
+                  there, not in the modal headline) */}
+              {(company.realized || company.defunct) && (
+                <div style={{ ...sans, fontSize: FS.body, color: "var(--ink-color-global-text-subtle)" }}>
+                  {company.realized && <>Crystallized exit · counts in DPI, not modeled · proceeds {fmtM(totalProceeds)} · {totalCost > 0 && totalProceeds > 0 ? fmtX(totalProceeds / totalCost, 1) : "—"} realized</>}
+                  {company.defunct && <>Out of business · held at Carta marks</>}
+                </div>
+              )}
+            </div>
+            {onOpenCompany && company.corpUuid && (
+              <Btn kind="link" onClick={(e) => { e.stopPropagation(); trackClick("FundModeling.Companies.OpenDetailsClick"); onOpenCompany(company.corpUuid); }} title="Open company page">
+                Details ↗
+              </Btn>
             )}
           </div>
-        </td>
-        <td style={numTd}>{fmtM(totalCost)}</td>
-        <td style={numTd}>
-          <StackedValue up={uplift}
-            delta={!company.realized && repriced ? fmtM(Math.abs(uplift)) : null}>
-            {company.realized ? "—" : fmtM(curFv)}
-          </StackedValue>
-        </td>
-        <td style={numTd}>{markDate ? fmtAsOf(markDate) : "—"}</td>
-        <td style={numTd}>
-          <StackedValue up={moicDelta ?? 0}
-            delta={moicDelta != null && Math.abs(moicDelta) >= 0.05 ? fmtX(Math.abs(moicDelta), 1) : null}>
-            {curMoic == null ? "—" : fmtX(curMoic, 1)}
-          </StackedValue>
-        </td>
-        <td style={{ ...numTd, color: dealIrr == null ? "var(--ink-color-global-text-subtle)" : dealIrr >= 0 ? "var(--ink-color-global-feedback-positive-strong)" : "var(--ink-color-global-feedback-negative-strong)" }}
-          title="Carta's reported deal IRR, shifted by the modeled reprice at the fund's assumed exit horizon (gross of fund fees/carry).">
-          <StackedValue up={irrDelta ?? 0}
-            delta={irrDelta != null && Math.abs(irrDelta) >= 0.001 ? fmtPct(Math.abs(irrDelta)) : null}>
-            {dealIrr == null ? "—" : fmtPct(dealIrr)}
-          </StackedValue>
-        </td>
-        <td style={numTd}
-          title={ownInfo.pct == null
-            ? "No Carta ownership on file (e.g. unconverted SAFE, or ownership not yet recorded)."
-            : ownDiluted
-            ? `Firm fully-diluted ownership; ${fmtOwn(ownInfo.postDilution)} after ${fmtPct(company.futureDilution)} expected future dilution.`
-            : "Firm fully-diluted ownership (Carta cap-table records)."}>
-          <StackedValue up={ownDiluted ? -1 : 0}
-            delta={ownDiluted ? fmtOwn(ownInfo.postDilution) : null}>
-            {ownInfo.pct == null ? "—" : fmtOwn(ownInfo.pct)}
-          </StackedValue>
-        </td>
-        <td style={{ textAlign: "left", width: STATUS_COL_W }}>{status}</td>
-      </tr>
 
-      {expanded && (
-        <Modal title={company.name} subtitle={sliceName && `Scenario: ${sliceName}`} width="xlarge"
-          onClose={() => { setOpenModal(null); onToggle(); }}>
-          <div style={{ display: "flex", gap: 28 }}>
-          <div style={{ flex: "1 1 auto", minWidth: 0 }}>
-              {/* headline: last-round context + details link (the FV/LP NAV/Carry/
-                  ownership figures live in the sidebar's Company impact section) */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 14, flexWrap: "wrap", marginBottom: 12 }}>
-                <div style={{ flex: "1 1 420px" }}>
-                  {/* last-round context lives in the Cap table tab (cap-table data belongs
-                      there, not in the modal headline) */}
-                  {(company.realized || company.defunct) && (
-                    <div style={{ ...sans, fontSize: FS.body, color: "var(--ink-color-global-text-subtle)" }}>
-                      {company.realized && <>Crystallized exit · counts in DPI, not modeled · proceeds {fmtM(totalProceeds)} · {totalCost > 0 && totalProceeds > 0 ? fmtX(totalProceeds / totalCost, 1) : "—"} realized</>}
-                      {company.defunct && <>Out of business · held at Carta marks</>}
-                    </div>
-                  )}
-                </div>
-                {onOpenCompany && company.corpUuid && (
-                  <Btn kind="link" onClick={(e) => { e.stopPropagation(); trackClick("FundModeling.Companies.OpenDetailsClick"); onOpenCompany(company.corpUuid); }} title="Open company page">
-                    Details ↗
-                  </Btn>
-                )}
-              </div>
+          {/* Tabs switch what renders below, in place, rather than opening a
+              separate stacked modal — same shell, same size, just a different
+              peer view of this company. Ink's standard underline Tab recipe
+              (the .ink-tabs/.ink-tab rules in theme.js's GLOBAL_CSS), not a bespoke style. */}
+          <nav className="ink-tabs" role="tablist" style={{ marginBottom: 16 }}>
+            {[
+              { id: null, label: "Scenario inputs" },
+              { id: "positions", label: "Positions" },
+              { id: "captable", label: "Cap table" },
+              { id: "financials", label: "Financials" },
+              // Last: an advanced case. Users hunting for the exit reach for
+              // Realize on Scenario inputs, not a plan of secondaries.
+              { id: "partialsales", label: "Partial sales" },
+            ].map((t) => {
+              const active = openModal === t.id;
+              return (
+                <button key={t.label} type="button" role="tab" aria-selected={active}
+                  className={`ink-tab${active ? " is-active" : ""}`}
+                  onClick={(e) => { e.stopPropagation(); setOpenModal(t.id); }}>
+                  {t.label}
+                </button>
+              );
+            })}
+          </nav>
 
-              {/* Tabs switch what renders below, in place, rather than opening a
-                  separate stacked modal — same shell, same size, just a different
-                  peer view of this company. Ink's standard underline Tab recipe
-                  (the .ink-tabs/.ink-tab rules in theme.js's GLOBAL_CSS), not a bespoke style. */}
-              <nav className="ink-tabs" role="tablist" style={{ marginBottom: 16 }}>
-                {[
-                  { id: null, label: "Scenario inputs" },
-                  { id: "positions", label: "Positions" },
-                  { id: "captable", label: "Cap table" },
-                  { id: "financials", label: "Financials" },
-                  // Last: an advanced case. Users hunting for the exit reach for
-                  // Realize on Scenario inputs, not a plan of secondaries.
-                  { id: "partialsales", label: "Partial sales" },
-                ].map((t) => {
-                  const active = openModal === t.id;
-                  return (
-                    <button key={t.label} type="button" role="tab" aria-selected={active}
-                      className={`ink-tab${active ? " is-active" : ""}`}
-                      onClick={(e) => { e.stopPropagation(); setOpenModal(t.id); }}>
-                      {t.label}
-                    </button>
-                  );
-                })}
-              </nav>
+          {openModal === "captable" && (
+            companyHasCapTable(company)
+              ? <CapTableDetail company={company} />
+              : <EmptyState type="page" icon="setup" text="No detailed cap table on file for this company." />
+          )}
+          {openModal === "financials" && (
+            hasFinancials
+              ? <MetricTrend financials={company.financials} />
+              : <EmptyState type="page" icon="pending" text="No reported financials on file for this company (Carta Data Collection)." />
+          )}
+          {openModal === "positions" && (
+            <TableScroll><PositionsTable company={company} refDate={refDate} staleDays={staleDays} /></TableScroll>
+          )}
+          {openModal === "partialsales" && (
+            <PartialSalesTab company={company} navAsOf={snapshot?.source?.navAsOf} locked={readOnly}
+              updateCompany={updateCompany}
+              defaultExitQ={Math.max(0, Math.min(EXIT_Q_MAX,
+                quartersBetween(snapshot?.source?.navAsOf, exitHorizonFor(assumptions, snapshot, company.fundId))))}
+              onDragStart={onDragStart} onDragEnd={onDragEnd} />
+          )}
 
-              {openModal === "captable" && (
-                companyHasCapTable(company)
-                  ? <CapTableDetail company={company} />
-                  : <EmptyState type="page" icon="setup" text="No detailed cap table on file for this company." />
-              )}
-              {openModal === "financials" && (
-                hasFinancials
-                  ? <MetricTrend financials={company.financials} />
-                  : <EmptyState type="page" icon="pending" text="No reported financials on file for this company (Carta Data Collection)." />
-              )}
-              {openModal === "positions" && (
-                <TableScroll><PositionsTable company={company} refDate={refDate} staleDays={staleDays} /></TableScroll>
-              )}
-              {openModal === "partialsales" && (
-                <PartialSalesTab company={company} navAsOf={snapshot?.source?.navAsOf} locked={readOnly}
-                  updateCompany={updateCompany}
-                  defaultExitQ={Math.max(0, Math.min(EXIT_Q_MAX,
-                    quartersBetween(snapshot?.source?.navAsOf, exitHorizonFor(assumptions, snapshot, company.fundId))))}
-                  onDragStart={onDragStart} onDragEnd={onDragEnd} />
-              )}
-
-              {/* ── Scenario controls: valuation, dilution, realize ── */}
-              {!openModal && cfg && (
-                <div>
-                  <div>
-                    {/* Realize + its Exit-timing dropdown float top-right, OUT of normal
-                        flow (position: absolute) — a flex sibling column would shrink the
-                        slider's own width to "remaining space" (it no longer reaches the
-                        full content width, unlike the Dilution slider below), and would
-                        still grow the shared row's height when the dropdown appears,
-                        pushing the value down. Absolute positioning avoids both: the label
-                        + RepriceControl block below renders at full width, undisturbed. */}
-                    <div style={{ position: "relative", marginBottom: 24 }}>
-                      <div style={{ position: "absolute", top: 0, right: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                          <Toggle small checked={!!company.exited}
-                            onChange={(val) => {
-                              trackClick("FundModeling.Companies.ToggleRealize");
-                              updateCompany(company.id, { exited: val, includeInNav: true });
-                            }}
-                            labels={Array(2).fill(`Realize at ${cfg.fmtVal(cfg.value)} ${companyIsWaterfall(company) || hasBasis ? "valuation" : "MOIC"}`)}
-                            locked={readOnly} textColor="var(--ink-color-global-text-default)"
-                            title="Crystallize this holding's marked value into LP distributions (DPI) — runs the make-whole waterfall; LP NAV drops by the realized amount." />
-                          <InfoTip label="What does Realize mean?" width={320}>
-                            <div>Realize crystallizes this holding's marked value into LP distributions (DPI) — runs the make-whole waterfall; LP NAV drops by the realized amount.</div>
-                            {companyHasCapTable(company) && !company.realized && !company.defunct && (
-                              <div style={{ marginTop: 6 }}>Independent of <strong>Waterfall</strong>, which values the stake through the preference stack at the slider valuation instead of the flat mark.</div>
-                            )}
-                          </InfoTip>
-                        </div>
-                        {/* Realize is a toggle, not a checkbox — reads as "flip this on to
-                            crystallize" like the other mark-adjacent switches (e.g. Waterfall).
-                            Its label names the actual lever being pulled (MOIC vs. dollar
-                            valuation) rather than the generic "this mark" — GPs/CFOs talk
-                            about an exit in terms of company valuation, not MOIC (a per-fund
-                            derived return, not the deal itself), so waterfall/hasBasis's $
-                            slider reads "valuation" and the plain multiple slider reads "MOIC". */}
-                        {company.exited && !company.realized && (
-                          <ExitTimingSection company={company}
-                            navAsOf={snapshot?.source?.navAsOf} locked={readOnly} updateCompany={updateCompany}
-                            defaultExitQ={Math.max(0, Math.min(EXIT_Q_MAX,
-                              quartersBetween(snapshot?.source?.navAsOf, exitHorizonFor(assumptions, snapshot, company.fundId))))}
-                            onDragStart={onDragStart} onDragEnd={onDragEnd} />
-                        )}
-                      </div>
-                      {/* MOIC and Company valuation (liquidation waterfall) share one label
-                          row — a caret dropdown swaps between them instead of a separate
-                          toggle switch below. hasBasis companies (a $-basis mark on file)
-                          keep the old plain label; that's a different, data-driven slider
-                          mode this control doesn't apply to. The dropdown itself doesn't
-                          render at all (falls back to the plain label below) when there's no
-                          priced round or OIP on file — switching to Company valuation would
-                          otherwise seed a $0 reference exit, and a control with nothing
-                          reachable behind it reads better absent than shown-but-greyed-out. */}
-                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-                        {!hasBasis && companyHasCapTable(company) && !company.realized && !company.defunct && companyReferenceExit(company) > 0 ? (
-                          <ValuationModeChange company={company} updateCompany={updateCompany}
-                            locked={readOnly}
-                            label={companyIsWaterfall(company) ? "Company valuation" : "MOIC"}
-                            infoTip={companyIsWaterfall(company) && (
-                              <InfoTip label="What does Company valuation mean?" width={320}>
-                                Values the fund's stake through the preference stack (see Cap table) at the slider valuation — floors the downside, converges to ownership × value. Independent of Realize. A transparent pragmatic estimate from the cap table's terms — not Carta's official waterfall engine.
-                              </InfoTip>
-                            )} />
-                        ) : (
-                          <PlainLabel style={{ marginBottom: 0 }}>
-                            {hasBasis ? (companyIsWaterfall(company) ? "Company valuation (liquidation waterfall)" : "Company valuation")
-                              : (companyIsWaterfall(company) ? "Company valuation" : "MOIC")}
-                          </PlainLabel>
-                        )}
-                      </div>
-                      <RepriceControl {...cfg} uplift={uplift} locked={readOnly} hidePresets showTick resetLabel="Carta mark"
-                        trackId="FundModeling.Reprice.SetValue"
-                        onReset={() => {
-                          trackClick("FundModeling.Companies.ResetRepriceClick");
-                          updateCompany(company.id, (c) => {
-                            // Resets the MARK back to Carta — not Realize (one of the mark chips
-                            // itself, so it must behave like any other mark change: never flips
-                            // Realize off), and not the valuation MODE either — flipping the mode
-                            // on reset would silently switch a company back to MOIC from Company
-                            // valuation mode when "Carta mark" is clicked. In dollar mode (waterfall
-                            // or hasBasis) reset valuationB to
-                            // cfg.resetValue — the same reference exit / cartaRef repriceConfig
-                            // already computed for THIS mode — instead of the MOIC-mode-only
-                            // `defaultValuationB`. Preserve `exited`, and keep includeInNav/
-                            // exitTimingQ consistent with whatever that stays.
-                            const inDollarMode = companyIsWaterfall(c) || hasBasis;
-                            return {
-                              valuationB: inDollarMode ? (cfg.resetValue ?? null) : (c.defaultValuationB ?? null),
-                              markMultiple: 1,
-                              includeInNav: !!c.exited, exitTimingQ: c.exited ? c.exitTimingQ : 0,
-                              futureDilution: 0,
-                            };
-                          });
+          {/* ── Scenario controls: valuation, dilution, realize ── */}
+          {!openModal && cfg && (
+            <div>
+              <div>
+                {/* Realize + its Exit-timing dropdown float top-right, OUT of normal
+                    flow (position: absolute) — a flex sibling column would shrink the
+                    slider's own width to "remaining space" (it no longer reaches the
+                    full content width, unlike the Dilution slider below), and would
+                    still grow the shared row's height when the dropdown appears,
+                    pushing the value down. Absolute positioning avoids both: the label
+                    + RepriceControl block below renders at full width, undisturbed. */}
+                <div style={{ position: "relative", marginBottom: 24 }}>
+                  <div style={{ position: "absolute", top: 0, right: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <Toggle small checked={!!company.exited}
+                        onChange={(val) => {
+                          trackClick("FundModeling.Companies.ToggleRealize");
+                          updateCompany(company.id, { exited: val, includeInNav: true });
                         }}
-                        onDragStart={onDragStart} onDragEnd={onDragEnd} onDraggingChange={(d) => setDraggingSlider(d ? "mark" : null)} />
+                        labels={Array(2).fill(`Realize at ${cfg.fmtVal(cfg.value)} ${companyIsWaterfall(company) || hasBasis ? "valuation" : "MOIC"}`)}
+                        locked={readOnly} textColor="var(--ink-color-global-text-default)"
+                        title="Crystallize this holding's marked value into LP distributions (DPI) — runs the make-whole waterfall; LP NAV drops by the realized amount." />
+                      <InfoTip label="What does Realize mean?" width={320}>
+                        <div>Realize crystallizes this holding's marked value into LP distributions (DPI) — runs the make-whole waterfall; LP NAV drops by the realized amount.</div>
+                        {companyHasCapTable(company) && !company.realized && !company.defunct && (
+                          <div style={{ marginTop: 6 }}>Independent of <strong>Waterfall</strong>, which values the stake through the preference stack at the slider valuation instead of the flat mark.</div>
+                        )}
+                      </InfoTip>
                     </div>
-                    {/* Waterfall toggle + curve run below the full-width slider */}
-                    {hasBasis && companyHasCapTable(company) && !company.realized && !company.defunct && (() => {
-                      const hasReferenceExit = companyReferenceExit(company) > 0;
-                      return (
-                        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 10 }}>
-                          <Toggle small checked={!!company.waterfallMode} disabled={!hasReferenceExit}
-                            onChange={(val) => {
-                              trackClick("FundModeling.Companies.ToggleWaterfall");
-                              updateCompany(company.id, val ? waterfallSeed : { waterfallMode: false });
-                            }}
-                            labels={["Liquidation waterfall applied", "Incorporate liquidation waterfall"]} locked={readOnly}
-                            title={hasReferenceExit
-                              ? "Values the fund's stake through the preference stack at the slider valuation — floors the downside, converges to ownership × value. Independent of Realize."
-                              : "No priced round or OIP data available for Company valuation mode"} />
-                          <InfoTip label="What does the liquidation waterfall toggle do?" width={320}>
+                    {/* Realize is a toggle, not a checkbox — reads as "flip this on to
+                        crystallize" like the other mark-adjacent switches (e.g. Waterfall).
+                        Its label names the actual lever being pulled (MOIC vs. dollar
+                        valuation) rather than the generic "this mark" — GPs/CFOs talk
+                        about an exit in terms of company valuation, not MOIC (a per-fund
+                        derived return, not the deal itself), so waterfall/hasBasis's $
+                        slider reads "valuation" and the plain multiple slider reads "MOIC". */}
+                    {company.exited && !company.realized && (
+                      <ExitTimingSection company={company}
+                        navAsOf={snapshot?.source?.navAsOf} locked={readOnly} updateCompany={updateCompany}
+                        defaultExitQ={Math.max(0, Math.min(EXIT_Q_MAX,
+                          quartersBetween(snapshot?.source?.navAsOf, exitHorizonFor(assumptions, snapshot, company.fundId))))}
+                        onDragStart={onDragStart} onDragEnd={onDragEnd} />
+                    )}
+                  </div>
+                  {/* MOIC and Company valuation (liquidation waterfall) share one label
+                      row — a caret dropdown swaps between them instead of a separate
+                      toggle switch below. hasBasis companies (a $-basis mark on file)
+                      keep the old plain label; that's a different, data-driven slider
+                      mode this control doesn't apply to. The dropdown itself doesn't
+                      render at all (falls back to the plain label below) when there's no
+                      priced round or OIP on file — switching to Company valuation would
+                      otherwise seed a $0 reference exit, and a control with nothing
+                      reachable behind it reads better absent than shown-but-greyed-out. */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                    {!hasBasis && companyHasCapTable(company) && !company.realized && !company.defunct && companyReferenceExit(company) > 0 ? (
+                      <ValuationModeChange company={company} updateCompany={updateCompany}
+                        locked={readOnly}
+                        label={companyIsWaterfall(company) ? "Company valuation" : "MOIC"}
+                        infoTip={companyIsWaterfall(company) && (
+                          <InfoTip label="What does Company valuation mean?" width={320}>
                             Values the fund's stake through the preference stack (see Cap table) at the slider valuation — floors the downside, converges to ownership × value. Independent of Realize. A transparent pragmatic estimate from the cap table's terms — not Carta's official waterfall engine.
                           </InfoTip>
-                        </div>
-                      );
-                    })()}
-                    {companyIsWaterfall(company) && (
-                      <div style={{ marginTop: 10 }}>
-                        <WaterfallCurve company={company} />
+                        )} />
+                    ) : (
+                      <PlainLabel style={{ marginBottom: 0 }}>
+                        {hasBasis ? (companyIsWaterfall(company) ? "Company valuation (liquidation waterfall)" : "Company valuation")
+                          : (companyIsWaterfall(company) ? "Company valuation" : "MOIC")}
+                      </PlainLabel>
+                    )}
+                  </div>
+                  <RepriceControl {...cfg} uplift={uplift} locked={readOnly} hidePresets showTick resetLabel="Carta mark"
+                    trackId="FundModeling.Reprice.SetValue"
+                    onReset={() => {
+                      trackClick("FundModeling.Companies.ResetRepriceClick");
+                      updateCompany(company.id, (c) => {
+                        // Resets the MARK back to Carta — not Realize (one of the mark chips
+                        // itself, so it must behave like any other mark change: never flips
+                        // Realize off), and not the valuation MODE either — flipping the mode
+                        // on reset would silently switch a company back to MOIC from Company
+                        // valuation mode when "Carta mark" is clicked. In dollar mode (waterfall
+                        // or hasBasis) reset valuationB to
+                        // cfg.resetValue — the same reference exit / cartaRef repriceConfig
+                        // already computed for THIS mode — instead of the MOIC-mode-only
+                        // `defaultValuationB`. Preserve `exited`, and keep includeInNav/
+                        // exitTimingQ consistent with whatever that stays.
+                        const inDollarMode = companyIsWaterfall(c) || hasBasis;
+                        return {
+                          valuationB: inDollarMode ? (cfg.resetValue ?? null) : (c.defaultValuationB ?? null),
+                          markMultiple: 1,
+                          includeInNav: !!c.exited, exitTimingQ: c.exited ? c.exitTimingQ : 0,
+                          futureDilution: 0,
+                        };
+                      });
+                    }}
+                    onDragStart={onDragStart} onDragEnd={onDragEnd} onDraggingChange={(d) => setDraggingSlider(d ? "mark" : null)} />
+                </div>
+                {/* Waterfall toggle + curve run below the full-width slider */}
+                {hasBasis && companyHasCapTable(company) && !company.realized && !company.defunct && (() => {
+                  const hasReferenceExit = companyReferenceExit(company) > 0;
+                  return (
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 10 }}>
+                      <Toggle small checked={!!company.waterfallMode} disabled={!hasReferenceExit}
+                        onChange={(val) => {
+                          trackClick("FundModeling.Companies.ToggleWaterfall");
+                          updateCompany(company.id, val ? waterfallSeed : { waterfallMode: false });
+                        }}
+                        labels={["Liquidation waterfall applied", "Incorporate liquidation waterfall"]} locked={readOnly}
+                        title={hasReferenceExit
+                          ? "Values the fund's stake through the preference stack at the slider valuation — floors the downside, converges to ownership × value. Independent of Realize."
+                          : "No priced round or OIP data available for Company valuation mode"} />
+                      <InfoTip label="What does the liquidation waterfall toggle do?" width={320}>
+                        Values the fund's stake through the preference stack (see Cap table) at the slider valuation — floors the downside, converges to ownership × value. Independent of Realize. A transparent pragmatic estimate from the cap table's terms — not Carta's official waterfall engine.
+                      </InfoTip>
+                    </div>
+                  );
+                })()}
+                {companyIsWaterfall(company) && (
+                  <div style={{ marginTop: 10 }}>
+                    <WaterfallCurve company={company} />
+                  </div>
+                )}
+              </div>
+              {dilutionCfg && (
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <PlainLabel style={{ marginBottom: 0 }}>Expected future dilution</PlainLabel>
+                    <InfoTip label="What does expected future dilution mean?" width={300}>
+                      Haircuts this company's value to the fund by the % you expect future rounds to dilute the stake — lowers TVPI and DPI.
+                    </InfoTip>
+                  </div>
+                  <div style={{ marginTop: 8 }}>
+                    <RepriceControl {...dilutionCfg} locked={readOnly} hidePresets hideTick
+                      trackId="FundModeling.Companies.SetFutureDilution"
+                      onDragStart={onDragStart} onDragEnd={onDragEnd} onDraggingChange={(d) => setDraggingSlider(d ? "dilution" : null)} />
+                  </div>
+                  {/* Reserve-earmarked readout now sits below the (full-width) slider
+                      instead of beside it — no more trailing column to share. */}
+                  <div style={{ marginTop: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <div style={{ ...sans, fontSize: FS.value, color: "var(--ink-color-global-text-subtle)" }}>
+                        <strong style={{ ...inkNum, fontSize: FS.value, color: "var(--ink-color-global-text-default)" }}>{fmtM(companyReserve)}</strong> reserve earmarked
+                      </div>
+                      <InfoTip label="What does reserve earmarked mean?" width={320}>
+                        {fmtPct(dilutionDefended)} of dilution defended × {fmtM(markFvGross)} marked FV
+                      </InfoTip>
+                    </div>
+                    {ownInfo.pct != null && (
+                      <div style={{ ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", marginTop: 4 }}>
+                        Ownership <strong style={{ ...inkNum, color: "var(--ink-color-global-text-default)" }}>{fmtOwn(ownInfo.pct)}</strong>
+                        {" → "}
+                        <strong style={{ ...inkNum, color: ownDiluted ? "var(--ink-color-global-feedback-negative-strong)" : "var(--ink-color-global-text-default)" }}>{fmtOwn(ownInfo.postDilution)}</strong>
+                        {ownDiluted ? ` after ${fmtPct(company.futureDilution)} expected dilution` : " — no dilution modeled"}
                       </div>
                     )}
                   </div>
-                  {dilutionCfg && (
-                    <div style={{ marginBottom: 14 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <PlainLabel style={{ marginBottom: 0 }}>Expected future dilution</PlainLabel>
-                        <InfoTip label="What does expected future dilution mean?" width={300}>
-                          Haircuts this company's value to the fund by the % you expect future rounds to dilute the stake — lowers TVPI and DPI.
-                        </InfoTip>
-                      </div>
-                      <div style={{ marginTop: 8 }}>
-                        <RepriceControl {...dilutionCfg} locked={readOnly} hidePresets hideTick
-                          trackId="FundModeling.Companies.SetFutureDilution"
-                          onDragStart={onDragStart} onDragEnd={onDragEnd} onDraggingChange={(d) => setDraggingSlider(d ? "dilution" : null)} />
-                      </div>
-                      {/* Reserve-earmarked readout now sits below the (full-width) slider
-                          instead of beside it — no more trailing column to share. */}
-                      <div style={{ marginTop: 8 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                          <div style={{ ...sans, fontSize: FS.value, color: "var(--ink-color-global-text-subtle)" }}>
-                            <strong style={{ ...inkNum, fontSize: FS.value, color: "var(--ink-color-global-text-default)" }}>{fmtM(companyReserve)}</strong> reserve earmarked
-                          </div>
-                          <InfoTip label="What does reserve earmarked mean?" width={320}>
-                            {fmtPct(dilutionDefended)} of dilution defended × {fmtM(markFvGross)} marked FV
-                          </InfoTip>
-                        </div>
-                        {ownInfo.pct != null && (
-                          <div style={{ ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", marginTop: 4 }}>
-                            Ownership <strong style={{ ...inkNum, color: "var(--ink-color-global-text-default)" }}>{fmtOwn(ownInfo.pct)}</strong>
-                            {" → "}
-                            <strong style={{ ...inkNum, color: ownDiluted ? "var(--ink-color-global-feedback-negative-strong)" : "var(--ink-color-global-text-default)" }}>{fmtOwn(ownInfo.postDilution)}</strong>
-                            {ownDiluted ? ` after ${fmtPct(company.futureDilution)} expected dilution` : " — no dilution modeled"}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                  {/* Partial sales live on their own tab: the cluster above is
-                      already full, and a plan is a list, not one more knob. The
-                      chips keep the plan visible without it. */}
-                  {!company.realized && !company.defunct && (() => {
-                    const sales = secondarySales(company);
-                    const open = () => {
-                      trackClick("FundModeling.Companies.ExitPlanOpen");
-                      setOpenModal("partialsales");
-                    };
-                    if (!sales.length) {
-                      return (
-                        <div style={{ marginTop: 4 }}>
-                          <Btn kind="link" onClick={open}
-                            title="Model selling part of this stake before the exit">
-                            Plan partial sales
-                          </Btn>
-                        </div>
-                      );
-                    }
-                    return (
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
-                        <span style={{ ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)" }}>
-                          Partial sales
-                        </span>
-                        {planChips(company, snapshot?.source?.navAsOf,
-                          (id) => {
-                            trackClick("FundModeling.Companies.ExitPlanRemoveSale");
-                            updateCompany(company.id, { secondaries: sales.filter((s) => s.id !== id) });
-                          }, readOnly)}
-                        <Btn kind="link" onClick={open}>Edit plan</Btn>
-                      </div>
-                    );
-                  })()}
                 </div>
               )}
-
-              {!openModal && company.notes && <p style={{ ...sans, fontSize: FS.body, color: "var(--ink-color-global-text-subtle)", lineHeight: 1.6, marginTop: 4 }}>{company.notes}</p>}
-          </div>
-          {fundStates && firmAgg && (
-            <div style={{ flex: "0 0 300px" }}>
-              <ReturnsPreviewContent fundStates={fundStates} firmAgg={firmAgg} firmLpDelta={firmLpDelta} firmGpCarry={firmGpCarry}
-                fundScope={fundScope} snapshot={snapshot} portfolio={portfolio}
-                onOpenFundSection={onOpenFundSection} activeFundIds={companyFundIds(company)}
-                companyImpact={companyImpactRows} draggingSlider={draggingSlider}
-                distributionsAffected={!!company.exited && !company.realized} />
+              {/* Partial sales live on their own tab: the cluster above is
+                  already full, and a plan is a list, not one more knob. The
+                  chips keep the plan visible without it. */}
+              {!company.realized && !company.defunct && (() => {
+                const sales = secondarySales(company);
+                const open = () => {
+                  trackClick("FundModeling.Companies.ExitPlanOpen");
+                  setOpenModal("partialsales");
+                };
+                if (!sales.length) {
+                  return (
+                    <div style={{ marginTop: 4 }}>
+                      <Btn kind="link" onClick={open}
+                        title="Model selling part of this stake before the exit">
+                        Plan partial sales
+                      </Btn>
+                    </div>
+                  );
+                }
+                return (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
+                    <span style={{ ...sans, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)" }}>
+                      Partial sales
+                    </span>
+                    {planChips(company, snapshot?.source?.navAsOf,
+                      (id) => {
+                        trackClick("FundModeling.Companies.ExitPlanRemoveSale");
+                        updateCompany(company.id, { secondaries: sales.filter((s) => s.id !== id) });
+                      }, readOnly)}
+                    <Btn kind="link" onClick={open}>Edit plan</Btn>
+                  </div>
+                );
+              })()}
             </div>
           )}
-          </div>
-        </Modal>
+
+          {!openModal && company.notes && <p style={{ ...sans, fontSize: FS.body, color: "var(--ink-color-global-text-subtle)", lineHeight: 1.6, marginTop: 4 }}>{company.notes}</p>}
+      </div>
+      {fundStates && firmAgg && (
+        <div style={{ flex: "0 0 300px" }}>
+          <ReturnsPreviewContent fundStates={fundStates} firmAgg={firmAgg} firmLpDelta={firmLpDelta} firmGpCarry={firmGpCarry}
+            fundScope={fundScope} snapshot={snapshot} portfolio={portfolio}
+            onOpenFundSection={onOpenFundSection} activeFundIds={companyFundIds(company)}
+            companyImpact={companyImpactRows} draggingSlider={draggingSlider}
+            distributionsAffected={!!company.exited && !company.realized} />
+        </div>
       )}
-    </Fragment>
+      </div>
+    </Modal>
   );
 }
 
@@ -1395,8 +1427,9 @@ export default function Companies({ portfolio, snapshot, exitHorizonOverrides, u
   const [hoverId, setHoverId] = useState(null); // which row the pointer is over
   const [sortBy, setSortBy] = useState("value");
   const [sortDir, setSortDir] = useState("desc");
+  const [view, setView] = useState("list"); // "list" (the table) | "map" (the treemap)
   const tableRef = useRef(null);
-  const sticky = useStickyHeader(tableRef);
+  const sticky = useStickyHeader(tableRef, view === "list");
   // While a reprice slider is being dragged, freeze the row order so the table
   // doesn't jump. The frozen order is an array of company IDs in the last-committed
   // sort; we re-sort once when the pointer is released.
@@ -1561,6 +1594,25 @@ export default function Companies({ portfolio, snapshot, exitHorizonOverrides, u
   };
   const onSliderDragEnd = () => {}; // order stays frozen until the user clicks a column header
 
+  // a table row or a map box opens the company's detail modal (null closes it)
+  const openCompany = (id) => {
+    if (id) trackClick("FundModeling.Companies.ExpandCompany");
+    setExpandedId(id);
+  };
+  const expandedCompany = expandedId && portfolio.companies.find((c) => c.id === expandedId);
+
+  // ── Map: a company's boxes are its in-scope stakes. The map draws operating
+  //    companies only: a holding in one of the firm's own funds never gets a box,
+  //    since its value is the companies that fund holds.
+  const mapStakesOf = (c) => companyFundValues(c, updateCompany).stakes.filter((st) => fundFilter === "all" || st.fundId === fundFilter);
+  // A company's value across every fund holding it, for the map's tooltip — only
+  // when more than one fund holds it, and never summed across currencies.
+  const mapTotalOf = (c) => {
+    const { stakes, curFv } = companyFundValues(c, updateCompany);
+    if (stakes.length < 2 || new Set(stakes.map((st) => fundCurrency(snapshot.funds, st.fundId))).size > 1) return null;
+    return curFv;
+  };
+
   // the Reset menu's zero-out/reset actions — scoped to the selected fund, or
   // firm-wide across every non-archived company when "All Funds" is selected.
   const onZeroOut = () => {
@@ -1605,12 +1657,20 @@ export default function Companies({ portfolio, snapshot, exitHorizonOverrides, u
       <MethodNote>
         Every portfolio company at this scenario's marks. Click a row to open its tape, positions and fund impact.
       </MethodNote>
-      {/* filter ribbon: search · reserve strategy · exit horizon · global filter · reset */}
+      {/* filter ribbon: search · view · reserve strategy · exit horizon · global filter · reset */}
       <div style={{ display: "flex", gap: 16, marginTop: 8, marginBottom: 24, flexWrap: "wrap", alignItems: "center" }}>
         <SearchInput
           placeholder="Search companies…" value={query}
           onChange={(e) => setQuery(e.target.value)} aria-label="Search companies"
           style={{ minWidth: 150, flex: "1 1 150px", maxWidth: 263 }}
+        />
+        <Dropdown
+          triggerLabel="View"
+          options={[{ id: "list", label: "List" }, { id: "map", label: "Map" }]}
+          value={view}
+          onChange={(v) => { trackClick(v === "map" ? "FundModeling.Companies.ViewMap" : "FundModeling.Companies.ViewList"); setView(v); }}
+          testId="companies-view"
+          minWidth={120} /* fits "View: List" and "View: Map" so the trigger doesn't jump */
         />
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
           <Dropdown
@@ -1656,6 +1716,7 @@ export default function Companies({ portfolio, snapshot, exitHorizonOverrides, u
           overflow-y:hidden keeps useStickyHeader's ancestor walk unaffected.
           tableRef stays on the <table> itself — .closest("table") resolves the
           same regardless of which element the ref points at. */}
+      {view === "list" && (
       <TableScroll>
         <table className="ledger" ref={tableRef}>
           <thead>
@@ -1664,16 +1725,9 @@ export default function Companies({ portfolio, snapshot, exitHorizonOverrides, u
           <tbody>
             {companies.map((c) => (
               <CompanyRow key={c.id} company={c} ownership={ownership}
-                updateCompany={updateCompany} refDate={refDate} staleDays={staleDays}
-                assumptions={portfolio.assumptions} portfolio={portfolio} snapshot={snapshot} readOnly={readOnly} onOpenCompany={onOpenCompany} reload={reload} flush={flush}
-                expanded={expandedId === c.id} onToggle={() => {
-                  const next = expandedId === c.id ? null : c.id;
-                  if (next) trackClick("FundModeling.Companies.ExpandCompany");
-                  setExpandedId(next);
-                }}
-                onHoverChange={setHoverId} onDragStart={onSliderDragStart} onDragEnd={onSliderDragEnd}
-                fundStates={fundStates} firmAgg={firmAgg} firmLpDelta={firmLpDelta} firmGpCarry={firmGpCarry}
-                sliceName={sliceName} fundScope={fundScope} onOpenFundSection={onOpenFundSection} />
+                updateCompany={updateCompany} assumptions={portfolio.assumptions} snapshot={snapshot}
+                onToggle={() => openCompany(expandedId === c.id ? null : c.id)}
+                onHoverChange={setHoverId} />
             ))}
             {companies.length === 0 && (
               <tr><td colSpan={8} style={{ ...sans, color: "var(--ink-color-global-text-subtle)", padding: "16px 12px" }}>No companies match.</td></tr>
@@ -1681,6 +1735,15 @@ export default function Companies({ portfolio, snapshot, exitHorizonOverrides, u
           </tbody>
         </table>
       </TableScroll>
+      )}
+      {view === "map" && (fundFilter === "all" && snapshot.source?.mixedCurrency ? (
+        <div style={{ ...sans, fontSize: FS.body, color: "var(--ink-color-global-text-subtle)", padding: "16px 12px" }}>
+          These funds report in more than one currency, so their values can't be compared by size. Pick one fund above to see its map.
+        </div>
+      ) : (
+        <CompanyMap funds={snapshot.funds} onOpen={openCompany}
+          entries={companies.filter((c) => !ownFundHeldAs(snapshot.funds, c)).map((c) => ({ company: c, funds: mapStakesOf(c), total: mapTotalOf(c) }))} />
+      ))}
       {/* the app's font-family is set inline on the root app div, not via a global
           body/html rule — since this clone is portaled to document.body (outside
           that div), it needs its own `sans` or it falls back to the browser's
@@ -1689,7 +1752,7 @@ export default function Companies({ portfolio, snapshot, exitHorizonOverrides, u
           keeps the clone's columns aligned with the real body scrolling underneath
           it once Companies' table scrolls in place; see useStickyHeader's hEl/
           scrollLeft tracking in ui/table.jsx. */}
-      {createPortal(
+      {view === "list" && createPortal(
         <div className="sticky-clone-slot" style={{ top: sticky.top, left: sticky.left, width: sticky.width, display: sticky.floating ? "block" : "none" }}>
           <table className="ledger sticky-clone" style={{ ...sans, width: sticky.colWidths?.reduce((a, w) => a + w, 0), transform: `translateX(${-(sticky.scrollLeft || 0)}px)` }}>
             <thead>
@@ -1705,6 +1768,15 @@ export default function Companies({ portfolio, snapshot, exitHorizonOverrides, u
         Deal IRR is Carta's reported deal IRR at rest, shifted by the reprice's modeled effect at the fund's assumed exit horizon (set above, or on LP Returns) — gross of fund fees/carry, an estimate.
         Companies flagged with the cap-table badge carry Carta share-class records (SUMMARY_CAP_TABLE); expand one to see the liquidation-preference stack and, when enabled, incorporate the liquidation-preference waterfall into the fund's value — a transparent pragmatic estimate, not Carta's official waterfall engine.
       </SourceNote>
+
+      {expandedCompany && (
+        <CompanyModal key={expandedCompany.id} company={expandedCompany} onClose={() => setExpandedId(null)} ownership={ownership}
+          updateCompany={updateCompany} refDate={refDate} staleDays={staleDays}
+          assumptions={portfolio.assumptions} portfolio={portfolio} snapshot={snapshot} readOnly={readOnly} onOpenCompany={onOpenCompany}
+          onDragStart={onSliderDragStart} onDragEnd={onSliderDragEnd}
+          fundStates={fundStates} firmAgg={firmAgg} firmLpDelta={firmLpDelta} firmGpCarry={firmGpCarry}
+          sliceName={sliceName} fundScope={fundScope} onOpenFundSection={onOpenFundSection} />
+      )}
 
       {confirm && <ConfirmDialog {...confirm} onCancel={() => setConfirm(null)} />}
     </div>

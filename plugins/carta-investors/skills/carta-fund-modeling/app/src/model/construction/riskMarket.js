@@ -1,5 +1,6 @@
 import { lightPortfolio, topOutcome, tierName } from "./light.js";
 import { performanceCohorts } from "./faqMarket.js";
+import { fundCurrency } from "../funds.js";
 
 /** P(X = k) for X ~ Binomial(n, p), by the recurrence on k so no factorials are needed. */
 export function binomialPmf(n, p) {
@@ -57,8 +58,7 @@ export const RECORD_BUCKETS = [
 const bucketOf = (m) => RECORD_BUCKETS.find((b) => m < b.max)?.id ?? "top";
 
 export function positionCurrencies(positions, snapshot) {
-  const ccyOf = Object.fromEntries((snapshot?.funds ?? []).map((f) => [f.id, f.currency ?? null]));
-  return new Set((positions ?? []).map((p) => ccyOf[p.fundId] ?? null));
+  return new Set((positions ?? []).map((p) => fundCurrency(snapshot?.funds ?? [], p.fundId)));
 }
 
 /** The firm's companies by multiple so far: current value plus proceeds, over cost. */
