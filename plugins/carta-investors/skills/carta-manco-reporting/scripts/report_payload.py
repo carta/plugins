@@ -255,6 +255,39 @@ def check_source(source: Any) -> None:
         _text(source["client_version"], "source.client_version", MAX_SOURCE_VERSION_LENGTH)
 
 
+def compact(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """The compact wire form the Carta connector expands back to this exact payload.
+
+    A share travels through a model's tool call, where every character is
+    generated output, so each node's facts become 12 monthly amounts (``m``)
+    when they are unscoped months of ``period_year``, or ``[period, amount,
+    scope?]`` rows (``f``) otherwise; an empty ``gl_codes`` is left out.
+    """
+    year = payload.get("period_year")
+    prefix = "%s-" % year
+    nodes = []
+    for node in (payload.get("budget") or {}).get("nodes") or []:
+        out = {k: v for k, v in node.items() if k != "facts" and not (k == "gl_codes" and v == [])}
+        facts = node.get("facts") or []
+        periods = [f.get("period") for f in facts]
+        monthly = (
+            isinstance(year, int) and facts and len(set(periods)) == len(periods)
+            and all(f.get("scope") is None and isinstance(f.get("period"), str)
+                    and len(f["period"]) == 7 and f["period"].startswith(prefix)
+                    and f["period"][5:7].isdigit() and 1 <= int(f["period"][5:7]) <= 12 for f in facts)
+        )
+        if monthly:
+            months: List[Any] = [None] * 12
+            for f in facts:
+                months[int(f["period"][5:7]) - 1] = f["amount"]
+            out["m"] = months
+        elif facts:
+            out["f"] = [[f["period"], f["amount"]] + ([f["scope"]] if f.get("scope") is not None else [])
+                        for f in facts]
+        nodes.append(out)
+    return dict(payload, budget=dict(payload.get("budget") or {}, nodes=nodes))
+
+
 def _is_finite_number(value: Any) -> bool:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return False

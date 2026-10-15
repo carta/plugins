@@ -265,6 +265,10 @@ nohup python3 "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/serve.
 
 `<user_src_dir>` is the `user_src_dir` value from Step 4.8's `check` output.
 
+To test report sharing with one particular connector (a test connector, say), add
+`--share-mcp-server <connector_name>` so shares use only that one — see
+[report-sharing.md](report-sharing.md).
+
 `--detach` forks and daemonizes the server so it outlives this launching
 process/session — the same flag `carta-fund-modeling`'s `serve.py` uses.
 Cleanup is now the idle timeout (`--idle-timeout`, 24h default), not the
@@ -519,4 +523,8 @@ Tell the operator the `path`, the `as_of` date, and to upload the file in the ho
   the mapping question from Step 5.6 before exporting again.
 - The dashboard's variance chart is fixed at `as_of`. To refresh it, rebuild (Step 4),
   export again, and upload again. The hosted app keeps one uploaded budget per firm.
+- Every budget you own exports. A report someone **shared with you** never does — the
+  hosted app has no owner for it to check and the recipient list has no business reaching
+  Worker KV. If every budget on the dashboard is one shared with you, the export refuses
+  with nothing safe to export.
 

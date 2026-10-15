@@ -3,12 +3,32 @@ name: carta-manco-reporting
 description: >-
   Visual ManCo (management company) reporting dashboard/microapp — React SPA on Carta Fund Admin data. TRIGGER: any ManCo dashboard/microapp/report/financials ask under ANY verb (spin up, open, launch, build, create, run) — P&L drill-down, expenses, Budget vs Actuals, Management Fee Income by Fund, income-vs-expenses charts, journal-entry detail. DISAMBIGUATION: "build" means render this dashboard, not draft a budget, so a microapp/dashboard ask ALWAYS routes here, firm named or not; a generic ManCo ask naming a firm routes here; firm-absent with no visual surface → carta-manco. NOT FOR: budgets/actuals (→ carta-manco); consolidating statements (→ carta-consolidating-financial-reports); scaffolding a NEW microapp skill from scratch (a developer tool, not this dashboard).
 argument-hint: "<firm name — optional; if omitted, will ask> [--budget-workbook <path.xlsx>] [--coa-mapping <path.xlsx>]"
-version: 0.1.0
+version: 0.2.0
 # `version` gates delivery of app/src: each user runs their own copy, and a change
 # reaches it only when this number goes up. Bump it in every PR that changes a file
 # under app/src outside __tests__ — patch merges silently, minor/major asks the user
 # which `whats-new` entries to take. Rules: app/README.md → "Shipping an app/src change".
-whats-new: []
+whats-new:
+  - summary: "Share Budget vs Actuals reports"
+    files:
+      - App.jsx
+      - shell/Sidebar.jsx
+      - shell/reportNav.js
+      - shell/BudgetImport.jsx
+      - shell/budgetUpload.js
+      - views/BudgetActualsView.jsx
+      - state/useReports.js
+      - reports/Modal.jsx
+      - reports/ReportActions.jsx
+      - reports/ReportNotice.jsx
+      - reports/ShareDialog.jsx
+      - reports/ShareStatus.jsx
+      - reports/icons.jsx
+      - reports/shareOutcome.js
+      - ui/HoverTip.jsx
+      - ui/ExportButton.jsx
+      - ui/theme.js
+      - ui/firmName.js
 model: inherit
 allowed-tools:
   # Carta MCP — three connector-name variants for the same server, pre-approved
@@ -61,6 +81,8 @@ allowed-tools:
   - 'Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/save_query_result.py" *)'
   - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/record_mapping.py *)
   - 'Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/record_mapping.py" *)'
+  - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/import_shared_reports.py *)
+  - 'Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/import_shared_reports.py" *)'
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/serve.py *)
   - 'Bash(python3 "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/serve.py" *)'
   - Bash(nohup python3 ${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/serve.py *)
@@ -70,7 +92,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.74.7</carta-plugin>
+<carta-plugin>carta-investors:6.75.0</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -334,6 +356,17 @@ a drill entry point, or a state that shows or hides content. Follow
 data), keep one event per user act, and add or update its row in the event catalogue.
 A change with no user-visible behaviour, such as a refactor, a data fix or styling, needs
 no event.
+
+## Budget reports and sharing
+
+People duplicate, hide and share budgets from the Budget vs Actuals page itself. Each
+workbook budget is a report that keeps following its workbook, and a shared one is marked
+changed when a re-import or a mapping answer moves its figures. When someone asks to share
+a budget, point them at the controls beside **Export**; don't edit `reports.json` by hand.
+Read [report-sharing.md](references/report-sharing.md) (this skill's own `references/`)
+when a share fails or someone asks how sharing works. When someone asks to **load the
+reports shared with them** (the app suggests that prompt when its own load can't reach
+Carta), follow that file's "Loading shared reports from chat" steps.
 
 ## Errors and deferred work
 

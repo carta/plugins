@@ -58,12 +58,36 @@ from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
 import manco_paths
+import report_store
+import share_bridge
+import share_ops
 import sync_src
 
 DATA_DIR = None
 WEB_DIR = None
 SRC_DIR = None
 TOKEN = None
+SHARE_MCP_SERVER = None  # --share-mcp-server / MANCO_SHARE_MCP_SERVER: the one Carta connector sharing may use
+# Budget reports and sharing (/api/reports*) answer unless MANCO_REPORT_SHARING=0.
+# Off, those routes 404 and the app shows no report controls.
+REPORT_SHARING_ENV = "MANCO_REPORT_SHARING"
+REPORT_SHARING = True
+MAX_BODY_BYTES = 1024 * 1024
+REBUILD_TIMEOUT = 600
+
+# One rebuild at a time: a change rewrites reports.json, then the build turns it
+# into snapshot.json. Share operations run one at a time in the background; the
+# app polls /api/reports/share-status?job=<id> for the outcome of the one it
+# started. Finished jobs are kept a while, so a caller whose job was followed by
+# another (a second tab, a share queued behind a people lookup) still gets its own.
+_rebuild_lock = threading.Lock()
+_share_lock = threading.Lock()
+_share_state_lock = threading.Lock()
+_share_state = {"status": "idle"}
+_finished_share_jobs = {}  # job id -> its final state, oldest first
+FINISHED_SHARE_JOBS_KEPT = 20
+_bridge = None
+_bridge_lock = threading.Lock()
 IDLE_TIMEOUT_DEFAULT = 86400  # 24h backstop; should never fire during active use
 WATCHDOG_INTERVAL = 10
 SUSPEND_GAP_SLACK = 55
@@ -155,7 +179,8 @@ def _read_firm_id(data_dir):
 
 def _read_carta_environment(data_dir):
     """This firm's cached snapshot.cartaEnvironment ("production" or
-    "nonprod"), served to the tracker. Defaults to "production" on any
+    "nonprod"), served to the tracker and deciding which Carta connectors
+    report sharing may use. Defaults to "production" on any
     read/parse failure or a pre-upgrade cache built before this field
     existed — an unclassified build is far more likely real production
     usage than a staff test session."""
@@ -193,6 +218,128 @@ def _write_user_id(data_dir, raw):
         pass
 
 
+def _rebuild():
+    """Re-run the build the way the skill last ran it → (ok, message), one at a time."""
+    import build_manco_datadir  # only needed for writes; keeps a read-only launch light
+    with _rebuild_lock:
+        return build_manco_datadir.rebuild(DATA_DIR, timeout=REBUILD_TIMEOUT)
+
+
+def _reports_listing():
+    store = report_store.ReportStore(DATA_DIR)
+    doc = store.load()
+    return {
+        "reports": [dict(report_store.ReportStore.metadata(r), hidden=bool(r.get("hidden")))
+                    for r in doc["reports"]],
+        "share_target": share_bridge.describe_target(_read_carta_environment(DATA_DIR), SHARE_MCP_SERVER),
+    }, store.etag()
+
+
+def _get_bridge():
+    global _bridge
+    with _bridge_lock:
+        if _bridge is None:
+            _bridge = share_bridge.Bridge(str(DATA_DIR), _read_carta_environment(DATA_DIR), override=SHARE_MCP_SERVER)
+        return _bridge
+
+
+def _set_share_state(**fields):
+    with _share_state_lock:
+        _share_state.update(fields)
+
+
+def _finish_share_state(**fields):
+    """Record a job's outcome, and keep it under its id once the next job replaces it."""
+    with _share_state_lock:
+        _share_state.update(fields)
+        _finished_share_jobs[_share_state["job"]] = dict(_share_state)
+        while len(_finished_share_jobs) > FINISHED_SHARE_JOBS_KEPT:
+            del _finished_share_jobs[next(iter(_finished_share_jobs))]
+
+
+def _share_job_state(job):
+    """The state of one job, running or finished; None if it is unknown or long gone."""
+    with _share_state_lock:
+        if _share_state.get("job") == job:
+            return dict(_share_state)
+        finished = _finished_share_jobs.get(job)
+        return dict(finished) if finished else None
+
+
+SHARE_OPS = ("users", "share", "publish-as-new", "delete", "pull")
+
+
+def _run_share_op(op, params):
+    """Background: one share operation, then a rebuild when it changed the reports."""
+    def emit(message):
+        _set_share_state(progress=message)
+    try:
+        bridge = _get_bridge()
+        store = report_store.ReportStore(DATA_DIR)
+        if op == "users":
+            result = {"status": "ok", **share_ops.shareable_users(bridge, DATA_DIR, emit,
+                                                                 refresh=bool(params.get("refresh")))}
+        elif op == "share":
+            result = share_ops.share(bridge, store, DATA_DIR, params["report_id"],
+                                     params.get("shared_with"), emit, force=bool(params.get("force")),
+                                     people=params.get("people"))
+        elif op == "publish-as-new":
+            result = share_ops.publish_as_new(bridge, store, DATA_DIR, params["report_id"],
+                                              params.get("shared_with"), emit, people=params.get("people"))
+        elif op == "delete":
+            result = share_ops.delete(bridge, store, DATA_DIR, params["report_id"], emit)
+        else:
+            result = share_ops.pull(bridge, store, DATA_DIR, emit)
+        if op != "users" and result.get("status") == "ok":
+            emit("Updating the dashboard…")
+            ok, message = _rebuild()
+            result["rebuilt"] = ok
+            if not ok:
+                result["rebuild_error"] = message
+        _finish_share_state(status="done", result=result, error=None)
+    except share_bridge.ShareError as e:
+        if e.raw:
+            print("[serve] share %s failed: %s" % (op, e.raw[:500]), file=sys.stderr, flush=True)
+        _finish_share_state(status="error", error={"code": e.code, "message": str(e)})
+    except report_store.ReportEditError as e:
+        _finish_share_state(status="error", error={"code": e.code, "message": str(e)})
+    except Exception as e:  # never leave the app polling a job that died silently
+        print("[serve] share %s crashed: %r" % (op, e), file=sys.stderr, flush=True)
+        _finish_share_state(status="error", error={
+            "code": "failed", "message": "Couldn't finish — try again, or run it from Claude."})
+    finally:
+        _share_lock.release()
+
+
+def _start_share_op(op, params):
+    """Start one share op in the background and return its job id. None if one is
+    already running; raises (with the lock released and the job recorded as an error)
+    if the thread can't start."""
+    if not _share_lock.acquire(blocking=False):
+        return None
+    job = secrets.token_hex(8)
+    try:
+        with _share_state_lock:
+            _share_state.clear()
+            _share_state.update({"job": job, "status": "running", "op": op,
+                                 "report_id": params.get("report_id"),
+                                 "progress": "Checking your Carta connection…", "started_at": time.time()})
+        threading.Thread(target=_run_share_op, args=(op, params), daemon=True).start()
+    except Exception:
+        _finish_share_state(status="error", error={
+            "code": "failed", "message": "Couldn't start that — try again, or run it from Claude."})
+        _share_lock.release()
+        raise
+    return job
+
+
+_REPORT_ACTION_RE = re.compile(r"^/api/reports/([A-Za-z0-9_.-]{1,160})/(rename|duplicate|hide|unlink|remove)$")
+
+
+def report_sharing_enabled(environ):
+    return environ.get(REPORT_SHARING_ENV, "1") != "0"
+
+
 class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
@@ -201,7 +348,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         supplied = self.headers.get("X-Dash-Token") or (qs.get("t", [None])[0])
         return supplied == TOKEN
 
-    def _send(self, code, body, ctype="application/json; charset=utf-8"):
+    def _send(self, code, body, ctype="application/json; charset=utf-8", extra=None):
         if isinstance(body, (dict, list)):
             body = json.dumps(body).encode("utf-8")
         elif isinstance(body, str):
@@ -211,6 +358,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
+        for name, value in (extra or {}).items():
+            self.send_header(name, value)
         self.end_headers()
         if self.command != "HEAD":
             self.wfile.write(body)
@@ -282,6 +431,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "environment": _read_carta_environment(DATA_DIR),
                 "userId": _read_user_id(DATA_DIR),
             })
+        if path == "/api/reports" and REPORT_SHARING:
+            listing, etag = _reports_listing()
+            return self._send(200, listing, extra={"ETag": etag})
+        if path == "/api/reports/share-status" and REPORT_SHARING:
+            job = (qs.get("job") or [None])[0]
+            if job is None:
+                with _share_state_lock:
+                    return self._send(200, dict(_share_state))
+            state = _share_job_state(job)
+            if state is None:
+                return self._send(404, {"error": "unknown_job"})
+            return self._send(200, state)
         if path in _FILE_ROUTES:
             return self._data_json(_FILE_ROUTES[path])
         # generic path-safe route: serves any safe <name>.json the skill wrote to the
@@ -295,6 +456,86 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def do_HEAD(self):
         self.do_GET()
+
+    def _read_json_body(self):
+        """Parsed JSON object body → (body, error status or None)."""
+        length = int(self.headers.get("Content-Length", 0) or 0)
+        if length > MAX_BODY_BYTES:
+            return None, 413
+        try:
+            body = json.loads(self.rfile.read(length) or b"{}")
+        except ValueError:
+            return None, 400
+        return (body, None) if isinstance(body, dict) else (None, 400)
+
+    def do_POST(self):
+        u = urlparse(self.path)
+        if not self._token_ok(parse_qs(u.query)):
+            return self._send(401, {"error": "unauthorized"})
+        _touch_heartbeat()
+        if not REPORT_SHARING:
+            return self._send(404, {"error": "not_found"})
+        body, bad = self._read_json_body()
+        if bad:
+            return self._send(bad, {"error": "payload_too_large" if bad == 413 else "bad_json"})
+        if u.path == "/api/reports/share-op":
+            return self._share_op(body)
+        m = _REPORT_ACTION_RE.match(u.path)
+        if not m:
+            return self._send(404, {"error": "not_found"})
+        return self._report_action(m.group(1), m.group(2), body)
+
+    def _share_op(self, body):
+        op = body.get("op")
+        if op not in SHARE_OPS:
+            return self._send(400, {"error": "unknown_op"})
+        if op in ("share", "publish-as-new", "delete") and not isinstance(body.get("report_id"), str):
+            return self._send(400, {"error": "report_id_required"})
+        shared_with = body.get("shared_with")
+        if shared_with is not None and not (isinstance(shared_with, list) and all(
+                isinstance(v, int) and not isinstance(v, bool) for v in shared_with)):
+            return self._send(400, {"error": "bad_recipients"})
+        people = body.get("people")
+        if people is not None and not (isinstance(people, list) and len(people) <= 500
+                                       and all(isinstance(p, dict) for p in people)):
+            return self._send(400, {"error": "bad_people"})
+        try:
+            job = _start_share_op(op, body)
+        except Exception as e:
+            print("[serve] share %s couldn't start: %r" % (op, e), file=sys.stderr, flush=True)
+            return self._send(500, {"error": "share_start_failed"})
+        if job is None:
+            return self._send(409, {"error": "share_in_progress"})
+        return self._send(202, {"status": "started", "job": job})
+
+    def _report_action(self, report_id, action, body):
+        """One change to a local report, then a rebuild so the app shows it."""
+        import build_manco_datadir  # only needed for writes; keeps a read-only launch light
+        store = report_store.ReportStore(DATA_DIR)
+        expected = self.headers.get("If-Match")
+        try:
+            if action == "rename":
+                result = store.rename(report_id, body.get("name"), expected_etag=expected)
+            elif action == "duplicate":
+                result = store.duplicate(
+                    report_id,
+                    copy_mapping=lambda rows, src, dst: build_manco_datadir.copy_budget_mapping(
+                        DATA_DIR, rows, src, dst),
+                    expected_etag=expected)
+            elif action == "hide":
+                result = store.set_hidden(report_id, bool(body.get("hidden", True)), expected_etag=expected)
+            elif action == "unlink":
+                result = store.clear_shared(report_id, expected_etag=expected)
+            else:
+                store.remove(report_id, expected_etag=expected)
+                result = {"id": report_id, "removed": True}
+        except report_store.ReportEditError as e:
+            status = {"conflict": 409, "not_found": 404, "read_only": 403, "busy": 409}.get(e.code, 400)
+            return self._send(status, {"error": e.code, "message": str(e)})
+        ok, message = _rebuild()
+        listing, etag = _reports_listing()
+        return self._send(200, {"report": result, "rebuilt": ok, "message": message,
+                                "reports": listing["reports"]}, extra={"ETag": etag})
 
 
 class _Server(socketserver.ThreadingMixIn, http.server.HTTPServer):
@@ -376,7 +617,7 @@ def _bind(preferred_port):
 
 
 def main():
-    global DATA_DIR, WEB_DIR, SRC_DIR, TOKEN
+    global DATA_DIR, WEB_DIR, SRC_DIR, TOKEN, SHARE_MCP_SERVER, REPORT_SHARING
     ap = argparse.ArgumentParser()
     ap.add_argument("--data-dir", required=True)
     ap.add_argument("--web-dir", default=str(Path(__file__).resolve().parent.parent / "webapp"))
@@ -388,6 +629,12 @@ def main():
     )
     ap.add_argument("--port", type=int, default=int(os.environ.get("PORT", "0")))
     ap.add_argument("--no-open", action="store_true")
+    ap.add_argument(
+        "--share-mcp-server",
+        default=None,
+        help="the one Carta MCP server name report sharing may use (e.g. a test connector); "
+        "default: the connectors for the dashboard's own Carta environment",
+    )
     # Not type=int: a malformed id must degrade to "no user", not fail the launch.
     ap.add_argument(
         "--user-id",
@@ -406,6 +653,8 @@ def main():
         help="seconds of API inactivity before the server self-terminates (0 = never)",
     )
     args = ap.parse_args()
+    SHARE_MCP_SERVER = args.share_mcp_server or os.environ.get(share_bridge.SERVER_ENV)
+    REPORT_SHARING = report_sharing_enabled(os.environ)
 
     DATA_DIR = Path(args.data_dir).resolve()
     WEB_DIR = Path(args.web_dir).resolve()
@@ -453,6 +702,10 @@ def main():
     if args.detach:
         _detach_or_warn()
 
+    if REPORT_SHARING:
+        targets = share_bridge.candidate_servers(_read_carta_environment(DATA_DIR), SHARE_MCP_SERVER)
+        print("[serve] report sharing uses Carta connector(s): %s%s" % (
+            ", ".join(targets), " (pinned)" if SHARE_MCP_SERVER else ""), flush=True)
     threading.Thread(target=_watchdog, args=(httpd, idle_timeout), daemon=True).start()
     try:
         httpd.serve_forever()

@@ -37,6 +37,7 @@ import argparse
 import glob
 import json
 import re
+import subprocess
 import sys
 from collections import Counter, defaultdict
 from datetime import date as _date
@@ -1808,6 +1809,26 @@ def record_build_args(dashboard_dir, argv):
         (Path(dashboard_dir) / BUILD_ARGS_FILE).write_text(json.dumps({"argv": list(argv)}))
     except OSError:
         pass
+
+
+def rebuild(dashboard_dir, timeout=None):
+    """Re-run this build exactly the way it last ran (.build-args.json) → (ok, message).
+    The dashboard server calls it after a change made in the app, and the pull from chat
+    after loading shared reports."""
+    try:
+        argv = json.loads((Path(dashboard_dir) / BUILD_ARGS_FILE).read_text())["argv"]
+    except (OSError, ValueError, KeyError):
+        return False, "relaunch this dashboard from Claude once so it can rebuild after a change"
+    script = Path(__file__).resolve()
+    try:
+        done = subprocess.run([sys.executable, str(script)] + [str(a) for a in argv],
+                              cwd=str(script.parent), capture_output=True, text=True, timeout=timeout)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return False, "the rebuild didn't finish: %s" % e
+    if done.returncode != 0:
+        tail = (done.stderr or "").strip().splitlines()[-1:] or ["unknown error"]
+        return False, "the rebuild failed: %s" % tail[0][:300]
+    return True, "rebuilt"
 
 
 def build_argv(args):

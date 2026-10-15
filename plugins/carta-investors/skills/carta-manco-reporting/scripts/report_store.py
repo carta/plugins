@@ -23,7 +23,7 @@ import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple
 
 import manco_paths
 from report_payload import MAX_NAME_LENGTH, PayloadError, check_name
@@ -55,10 +55,6 @@ def _now() -> str:
 
 def _is_workbook(report: dict) -> bool:
     return (report.get("origin") or {}).get("kind") == "workbook"
-
-
-def _shared_uuid(report: dict) -> Optional[str]:
-    return (report.get("shared") or {}).get("uuid")
 
 
 def payload_fingerprint(payload: Dict[str, Any]) -> str:
@@ -165,6 +161,16 @@ class ReportStore:
             if report["id"] == report_id:
                 return report
         raise ReportEditError("that report no longer exists", "not_found")
+
+    @staticmethod
+    def dismissed_uuids(doc: Dict[str, Any]) -> Set[str]:
+        """Uuids of reports shared with you that you removed here: pulls leave them out."""
+        return set(doc.get("dismissed_uuids") or [])
+
+    @staticmethod
+    def shared_uuid(report: Dict[str, Any]) -> Optional[str]:
+        """The Carta uuid a report is shared under, or None if it isn't shared."""
+        return (report.get("shared") or {}).get("uuid")
 
     @staticmethod
     def _unique_id(doc: Dict[str, Any], base: str) -> str:
@@ -347,7 +353,7 @@ class ReportStore:
             report = self.find(doc, report_id)
             if _is_workbook(report):
                 raise ReportEditError("a workbook report can be hidden, not deleted", "invalid")
-            uuid = _shared_uuid(report)
+            uuid = self.shared_uuid(report)
             if report.get("state") == SHARED_IN and uuid:
                 dismissed = doc.setdefault("dismissed_uuids", [])
                 if uuid not in dismissed:
@@ -402,8 +408,8 @@ class ReportStore:
         """
         counts = {"added": 0, "updated": 0, "removed": 0, "kept_local": 0}
         with self.transaction() as doc:
-            by_uuid = {_shared_uuid(r): r for r in doc["reports"] if _shared_uuid(r)}
-            dismissed = set(doc.get("dismissed_uuids") or [])
+            by_uuid = {self.shared_uuid(r): r for r in doc["reports"] if self.shared_uuid(r)}
+            dismissed = self.dismissed_uuids(doc)
             for item in pulled:
                 existing = by_uuid.get(item["uuid"])
                 if existing is not None:
@@ -437,7 +443,7 @@ class ReportStore:
             if upstream_uuids is not None:
                 keep = []
                 for r in doc["reports"]:
-                    uuid = _shared_uuid(r)
+                    uuid = self.shared_uuid(r)
                     if r.get("state") == SHARED_IN and uuid and uuid not in upstream_uuids:
                         counts["removed"] += 1
                         continue
