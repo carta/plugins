@@ -37,6 +37,6 @@ Mark the current version with **bold** and a ← indicator.
 
 ## Using a different version
 
-If the user selects a version, pass that version's `id` as `benchmark_version_id` to `compensation:get:benchmark` in Step 4.
+If the user selects a version, call `compensation:get:filter_options` with that version's `id` as `benchmark_version_id` first (Step 2b), then pass the same `id` as `benchmark_version_id` to `compensation:get:benchmark` in Step 4, using values from that version's options.
 
 If only one version is available, confirm it without a table.

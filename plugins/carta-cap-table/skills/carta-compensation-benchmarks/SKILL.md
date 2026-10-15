@@ -31,7 +31,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.96.10</carta-plugin>
+<carta-plugin>carta-cap-table:6.96.12</carta-plugin>
 
 # Benchmark Query
 
@@ -43,12 +43,12 @@ Look up Carta Total Compensation (CTC) market salary and equity benchmarks for a
 >
 > | Field | Use in user-facing text | Never |
 > |---|---|---|
-> | Job area | `Engineering`, `Sales`, `Customer Success`, `Project Management`, `Human Resources` | `ENGINEER`, `SALES`, `CUSTOMER_SUCCESS`, `PROJECT_MANAGEMENT`, `HR` |
-> | Focus | `DevOps and Site Reliability`, `Account Executive`, `Financial Planning and Analysis` — the exact API focus value, the same in text and in the API call | `devops and site reliability`, `ACCOUNT_EXECUTIVE`, `fp&a` — wrong in text and in the API call |
-> | Level | `Entry`, `Mid 1`, `Senior 1`, `Staff 2`, `VP 1`, `C-Level`, `CEO`, `Unknown` | `ENTRY`, `MID1`, `SENIOR1`, `STAFF2`, `VP1`, `C_LEVEL`, `UNKNOWN` |
+> | Job area | the `label` of that job in Step 2b's `params.job` | the `value` (`ENGINEER`, `CUSTOMER_SUCCESS`) |
+> | Focus | the exact API focus value, the same in text and in the API call | a re-cased or reworded focus, `ACCOUNT_EXECUTIVE` — wrong in text and in the API call |
+> | Level | Title Case, as the rolematcher writes it (`Mid 1`, `Senior 1`, `VP 1`), with the `ic_label` (IC track) or `manager_label` (Manager and Executive tracks) from Step 2b's `params.level` when you cite the level code | the `value` (`MID1`, `C_LEVEL`) |
 > | Track | `IC`, `Manager`, `Executive`, `Unknown` | `ic`, `manager`, `executive`, `UNKNOWN` |
 >
-> The UPPER_SNAKE_CASE enums are **only** for machine handoff — i.e. the `job` and `level` parameters you pass to `compensation:get:benchmark`. `focus` is the exception: the API takes the exact focus name from the rolematcher's taxonomy, unchanged (see Step 4). Inside the JSON payload for the API call, keep the enum form. Outside the API call, switch to Title Case before any value reaches the user. Even in narration like "Engineering maps to ENGINEER", drop the API enum — say *"Pulling Engineering benchmarks for corp 7"* instead.
+> The UPPER_SNAKE_CASE values are **only** for machine handoff — i.e. the `job` and `level` parameters you pass to `compensation:get:benchmark`. `focus` is the exception: the API takes the exact focus name from the rolematcher's taxonomy, unchanged (see Step 4). Inside the JSON payload for the API call, keep the `value`. Outside the API call, switch to the display name before anything reaches the user. Even in narration like "Engineering maps to ENGINEER", drop the `value` — say *"Pulling Engineering benchmarks for corp 7"* instead.
 >
 > See `carta-compensation-rolematcher` → "Display → API enum tables" for the full mapping.
 
@@ -213,9 +213,12 @@ Serialize the fetched benchmark results into this shape:
   "version": "v3.1",
   "benchmark_version_id": 51,
   "peer_group": { "dimension": "post_money", "code": "ONE_HUNDRED_MILLION", "label": "$100M-$250M" },
+  "filter_options": { "benchmark_version": { "id": 51, "version": "v3.1" }, "params": { /* Step 2b's params, verbatim */ } },
   "fetchedAt": "2026-05-27T10:00:00Z"
 }
 ```
+
+> **`filter_options` is REQUIRED in the payload** — Step 2b's response with `coverage` left out (the panel does not read it). The panel builds its job list, each job's levels, the level order and Manager/Executive split, the job names and the four-year-grant `equity_quantity` from it, so its dropdowns and re-fetches send the same values this skill does. Pass the response for the same `benchmark_version_id` as the rows.
 
 > **The panel's location picker lists every supported location.** At runtime it calls `compensation:get:plan` and `compensation:get:benchmark_locations` for the selected company through its `fetch` grant, and fetches international markets in local currency by default (a Local currency / USD toggle appears once a row is international). Pre-seed international rows with the same `convert_to_local_currency: true` fetch, so the seed matches the toggle.
 
@@ -251,7 +254,7 @@ Field mapping from the `compensation:get:benchmark` response:
 - `equity.p*.notional` ← `equity_benchmarks.percentiles.p*.as_notional_value`
 - `equity.p*.shares` ← `equity_benchmarks.percentiles.p*.as_shares`
 - `equity.p*.fdpct` ← `equity_benchmarks.percentiles.p*.as_fd_percentage`
-- `ladder` ← `benchmarks[i].ladder` (`"IC"` or `"LEADER"`). The artifact derives the row's track from this + the level: `IC` → IC track; `LEADER` with level rank ≤8 → Manager track; `LEADER` with level rank ≥9 (VP1+) → Executive track. This is what makes the displayed track and per-track level name (e.g. VP1 shows as "Distinguished" on IC but "Vice President" on Executive) match the CTC product UI — pass `ladder` through verbatim.
+- `ladder` ← `benchmarks[i].ladder` (`"IC"` or `"LEADER"`). The artifact derives the row's track from this + the level: `IC` → IC track; `LEADER` with a level whose `executive` flag in Step 2b's `params.level` is `false` → Manager track; `LEADER` with an `executive: true` level → Executive track. This is what makes the displayed track and per-track level name (e.g. VP1 shows as "Distinguished" on IC but "Vice President" on Executive) match the CTC product UI — pass `ladder` through verbatim.
 - `currency` ← `salary_benchmarks.currency_code` (fall back to `tcc_benchmarks.currency_code`; surface `null` if neither is present — do NOT default to `"USD"`)
 - `location` ← the **API location value** you passed as the `location` param to `compensation:get:benchmark` (from the supported-locations list, e.g. `"San Francisco,CA,USA"`, `"US National Average"`, `",,GBR"` — see "Locations" in Step 4). This is what pre-seeds the artifact's per-row location picker — it must be the API value, NOT the display label. Omit or set `null` when you queried without a location (the picker then shows the plan's default location). The panel loads the full location list itself, so do not put the list in the payload.
 - `geo` ← `geo_adjustment.label` (the MSA *display* label, e.g. `"San Francisco-Oakland-Hayward, CA"`). Display-only — drives the read-only "Location:" line, NOT the dropdown selection. Keep it distinct from `location`: the label is not a valid API value and must never be sent back as the `location` param.
@@ -460,6 +463,25 @@ It returns `{corporation_id, has_ctc_access, is_subscribed}`. Three outcomes:
 - `has_ctc_access: true`, `is_subscribed: false` → stop and send the subscription message (see **Subscription gating**). Do not call `plans/` or `benchmark/` — they return empty data anyway and waste a round-trip. Do not invoke the rolematcher — don't make the user level a role we can't benchmark.
 - `has_ctc_access: false` → the caller lacks a CTC role on this corp. Stop and send the no-access message (see **Access gating**). `is_subscribed` is `null` here — the corp's subscription state is withheld, so don't infer it. Do not retry or re-authenticate.
 
+### Step 2b — Load the filter options (REQUIRED — HARD GATE)
+
+> **Call this once, right after `is_subscribed: true`, before any other compensation command that takes a filter.** It returns the exact values `compensation:get:benchmark` accepts, read from compensation-service. This skill does not list them, so there is nothing else to read them from.
+
+```
+read_tool({"name": "compensation__get__filter_options", "arguments": {"corporation_id": <corporation_pk>}})
+```
+
+Keep the response for the rest of the conversation. It returns:
+- `params` — per filter param (`job`, `level`, `post_money_bucket`, `capital_raised_bucket`, `headcount_bucket`, `equity_quantity`, `equity_competitiveness_percentile`, `salary_competitiveness_percentile`, `industry`), the values it accepts. `job`, `level`, `industry` and the three bucket params are lists of entries with a `value` to send and a `label` to show. Each `job` entry lists the `levels` (values) it supports. Each `level` entry carries its `rank` (low to high, for ordering only), its role code on each track (`ic_label` such as `IC 4`, and `manager_label` such as `MGR 4`, `null` below the manager levels), and `executive`, which is `true` for the executive levels. `equity_quantity` is `{default, values}`: the backend `default`, and every `values` entry the API accepts. The percentile params are plain numbers.
+- `coverage` — a list with one entry per job area (`job`) in the corp's benchmark version: its `industries`, its `focuses` (each `{focus, industry}`, `industry` being `null` when the focus is not industry-specific), and the salary and equity percentiles it has.
+- `benchmark_version` — the version these options describe: the corp's active plan version.
+
+Rules — every benchmark call in this skill follows them:
+1. **Every filter value you send is a `value` copied verbatim from this response.** Never type one from memory, from an example in this file, or from a display label.
+2. **Map the user's wording to a value through the names**: job `label`; for a level, the Title Case of its `value` (`Senior 1` ↔ `SENIOR1`, `C-Level` ↔ `C_LEVEL`), or its `ic_label` / `manager_label` when the user gives a role code (`IC 4`, `MGR 4`); bucket `label`. If the wording matches no entry, ask with `AskUserQuestion` offering those names — do not pick the nearest-looking value.
+3. **A different benchmark version needs its own options**: when you query a version other than the plan's (see *Version Override*), call this again with `"benchmark_version_id": <that id>`.
+4. **If this call fails, stop.** HTTP 403 → follow *Access gating*. HTTP 404 → the corp has no active CTC plan; say so. `Unknown tool` → the connected Carta MCP is too old for this skill; tell the user and stop. In every case, do NOT fall back to typed values and do NOT call `compensation:get:benchmark`.
+
 ### Step 3a — Map role to CTC taxonomy
 
 **Invoke the `carta-compensation-rolematcher` skill** to classify free-text job titles, descriptions, or pasted job postings into the CTC taxonomy. Use the Skill tool, not Read:
@@ -485,9 +507,9 @@ If the user already named the job area and specialization (e.g. *"Engineering, A
 **If the user's question is ambiguous** between "classify this for benchmark" vs "help me write the JD copy" vs "give me career advice", invoke the rolematcher first to get the classification, then use the result to answer their actual question. Do not skip the rolematcher and freelance — the user is in a comp/benchmark conversation.
 
 Capture the output:
-- `job_area` — **passed to the API as `job`, NOT as `job_area`** (see the rename note below). Must be one of: `ACCOUNTING`, `ADMIN`, `CEO`, `CORPORATE_AFFAIRS`, `CUSTOMER_SUCCESS`, `DATA`, `DESIGN`, `ENGINEER`, `FINANCE`, `HR`, `IT`, `LEGAL`, `MANUFACTURING`, `MARKETING`, `OPERATIONS`, `PRODUCT`, `PROJECT_MANAGEMENT`, `RESEARCH`, `SALES`, `STRATEGY`, `SUPPORT`, `OTHER`
-- `focus` (e.g. `"AI and Machine Learning"`, `"DevOps and Site Reliability"`, `null`) — job-area-dependent. The API matches focus **exactly and case-sensitively**, and the rolematcher already returns it in the API's spelling — pass it through unchanged, never re-cased or reworded. When the rolematcher returns `None`, omit `focus` (see Step 4)
-- `level` — must be one of (low to high seniority): `ENTRY`, `MID1`, `MID2`, `SENIOR1`, `SENIOR2`, `STAFF1`, `STAFF2`, `PRINCIPAL`, `VP1`, `VP2`, `C_LEVEL`, `CEO`
+- `job_area` — **passed to the API as `job`, NOT as `job_area`** (see the rename note below). Must be a `params.job[].value` from Step 2b.
+- `focus` (e.g. `"AI and Machine Learning"`, `"DevOps and Site Reliability"`, `null`) — job-area-dependent. The API matches focus **exactly and case-sensitively**, and the rolematcher already returns it in the API's spelling — pass it through unchanged, never re-cased or reworded. When the rolematcher returns `None`, omit `focus`. Otherwise check it against Step 2b's `coverage` before calling (see Step 4)
+- `level` — must be one of the `levels` that job lists in Step 2b's `params.job`. When it is not, offer only that job's `levels`.
 - `track` — the value returned by the rolematcher (`ic`, `manager`, `executive`, or `UNKNOWN`). Map to `is_leader`: `manager` or `executive` → `true`, `ic` → `false`. If `UNKNOWN`, stop and ask the user before calling the API — see Error Handling.
 
 > **Rename the field on handoff: `job_area` → `job`.** The rolematcher's output label and the CTC product both say *"job area"*, but the parameter on `compensation:get:benchmark` is `job`. Passing `job_area` returns HTTP 400 — there is no `job_area` parameter on any compensation endpoint.
@@ -497,7 +519,7 @@ Capture the output:
 >
 > `focus` and `level` keep their names; only `job_area` is renamed.
 
-If the rolematcher returns a value not in these enums (e.g. `LEAD1`, `PRODUCT_MANAGER`), map it to the closest valid value before calling the API. If unsure, read the valid enum list from `search_tools({"query": "compensation get benchmark"})` — do NOT guess a plausible-looking name or invent a `compensation:list:*` command to look it up. Ask the user if still ambiguous.
+If the rolematcher returns a job or level that Step 2b does not list for that job, map it through the names in Step 2b, rule 2 (job `label`; level Title Case or role code) to a listed `value`. If nothing matches, ask the user — do NOT guess a plausible-looking name or invent a `compensation:list:*` command to look it up.
 
 If the user provides only a job title, that is sufficient minimum input for the rolematcher.
 
@@ -520,32 +542,28 @@ Capture these from the response:
 
 ### Step 4 — Fetch the benchmark
 
-> **CRITICAL — Valid enum values: read them, don't guess them. Two failure modes to avoid.**
+> **CRITICAL — every filter value comes from Step 2b. Two failure modes to avoid.**
 >
-> Every filter param on `compensation:get:benchmark` except `focus` (`job`, `level`, the three `*_bucket` params, `equity_quantity`) takes a fixed **UPPER_SNAKE_CASE enum value**. The API validates by exact enum name and returns **HTTP 400** for anything else. Two things burn retries:
+> Every filter param on `compensation:get:benchmark` except `focus` (`job`, `level`, the three `*_bucket` params, `equity_quantity`, the competitiveness percentiles, `industry`) accepts only the values in Step 2b's `params`. The API returns **HTTP 400** for anything else.
 >
-> **1. There is NO `compensation:list:*` command for these enums. Do not invent one.**
-> `compensation:list:job_types`, `list:jobs`, `list:peer_groups`, `list:post_money_buckets`, `list:capital_raised_buckets`, `list:headcount_buckets` — **none of these exist.** Calling them returns `Unknown command` and wastes a turn. The only `compensation:list:*` command is `compensation:list:benchmark_versions`. To see the valid filter values, **read the `compensation:get:benchmark` command help** — it enumerates every `job`, `level`, and bucket value:
-> ```
-> search_tools({"query": "compensation get benchmark"})
-> ```
-> Read the enum lists from that help; never self-discover via a guessed `list:` command.
+> **1. There is NO `compensation:list:*` command for these values. Do not invent one.**
+> `compensation:list:job_types`, `list:jobs`, `list:peer_groups`, `list:post_money_buckets`, `list:capital_raised_buckets`, `list:headcount_buckets` — **none of these exist.** The only source is `compensation:get:filter_options` (Step 2b).
 >
-> **2. Pass the enum NAME, not the human display label.**
-> The API wants `MARKETING`, not `"Marketing"`; `CUSTOMER_SUCCESS`, not `"Customer Success"` or `"Customer Support"`; `SENIOR1`, not `"Senior 1"`. For buckets, pass the enum name (`TWENTY_FIVE_MILLION`), not the dollar label (`"$25M-$50M"`). The Title-Case forms are for **user-facing text only** (see the casing rule at the top of this file) — they are never valid API values. If you only have a free-text role, that's what the `carta-compensation-rolematcher` in Step 3a is for; it returns canonical enum names. Do not hand-translate a display label into a guessed enum.
+> **2. Send the `value`, never the `label`.**
+> Labels are for **user-facing text only** (see the casing rule at the top of this file). If you only have a free-text role, that's what the `carta-compensation-rolematcher` in Step 3a is for; check its output against Step 2b before calling.
 >
-> **Anti-patterns (all observed in real failures):**
-> - ❌ `read_tool({"name": "compensation__list__job_types"})` → `Unknown tool`. Read `search_tools({"query": "compensation get benchmark"})` instead.
-> - ❌ `job: "Marketing"` / `job: "Engineering"` / `job: "Customer Support"` → HTTP 400. Use `MARKETING` / `ENGINEER` / `CUSTOMER_SUCCESS`.
-> - ❌ `job: "PRODUCT_MANAGER"` → HTTP 400 (invented). The value is `PRODUCT`. When unsure, read the help — don't guess a plausible-looking name.
-> - ❌ `capital_raised_bucket: "$250M-$500M"` (a label) or a fabricated name → HTTP 400. Pass a real `CapitalRaisedBuckets` name from the help.
+> **On HTTP 400**, compare every filter value you sent with Step 2b's `params` and resend the listed `value`. Retry at most once; if it 400s again, stop and report the error.
 >
-> Bucketing across many job functions? Iterate over the valid `job` enum names from the help — do **not** loop over display labels.
+> Bucketing across many job functions? Iterate over Step 2b's `params.job[].value` — do **not** loop over display labels.
 
 > **`focus` is an exact name, not an enum — and a near-miss fails silently.**
-> Pass the rolematcher's focus value character for character — its taxonomy lists the API's own focus names: `AI and Machine Learning`, `DevOps and Site Reliability`, `UX/Frontend`. The match is case-sensitive, and a value that does not match returns the **job-area blend with HTTP 200**, not a 400. `AI_AND_MACHINE_LEARNING`, `ai and machine learning` and `AI/ML` all come back as the blend.
+> A `focus` the version does not carry returns the **job-area blend with HTTP 200**, not a 400, so a wrong one looks like a good answer. `AI_AND_MACHINE_LEARNING`, `ai and machine learning` and `AI/ML` all come back as the blend. Choose the focus **before** calling:
 >
-> When the requested focus matches, each benchmark entry's bands are the focus-specific figures, its `focus` echoes your value, and the blend sits under `job_area_blend`. When the response carries `focus_warning`, nothing matched: present the numbers as the job-area blend, never as focus-specific. If the warning lists a focus value that clearly matches what the user meant, retry once with that exact value; otherwise tell the user this benchmark version has no data for that focus.
+> 1. Take the `coverage` entry whose `job` is the job you are sending, and read its `focuses`.
+> 2. Keep the focuses whose `industry` is `null` or equals the `industry` you send (`all` when you send none).
+> 3. Send the rolematcher's focus only if it appears in that list, character for character (the match is case-sensitive). If it does not, but one listed focus clearly is what the user meant, send that exact one. Otherwise omit `focus` and tell the user this benchmark version has no data for that focus, or ask which listed focus they want, with the focuses verbatim.
+>
+> When the requested focus matches, each benchmark entry's bands are the focus-specific figures, its `focus` echoes your value, and the blend sits under `job_area_blend`. `focus_warning` in a response is the fallback signal: nothing matched, so present the numbers as the job-area blend, never as focus-specific. If the warning lists a focus value that clearly matches what the user meant, retry once with that exact value.
 
 ```
 read_tool({"name": "compensation__get__benchmark", "arguments": {
@@ -586,57 +604,29 @@ read_tool({"name": "compensation__get__benchmark", "arguments": {
   #     "capital_raised_bucket": "ONE_HUNDRED_MILLION"   ← 400 Bad Request
   #     (also wrong: passing both — only one bucket param per call)
 
-  "equity_quantity": "FOUR_YEAR_GRANT"      # REQUIRED — match the CTC product UI default
+  "equity_quantity": <the four-year-grant value in Step 2b's params.equity_quantity.values>   # REQUIRED — match the CTC product UI default
 }})
 ```
 
-> **`equity_quantity` defaults to `NTM_VESTING` on the MCP side, but the CTC product UI defaults to `FOUR_YEAR_GRANT`.** Always pass `FOUR_YEAR_GRANT` explicitly so the skill's numbers tie out against the in-product UI. If you omit it, you'll return ~25% of the value HR users expect — that's a hard tie-out failure, not a stylistic preference. Applies to every benchmark call: single role, bulk CSV, live artifact panel, Excel export.
-
-> **`equity_quantity` (`EquityQuantity`) has exactly TWO valid values. There are no others.**
->
-> | Value | Meaning |
-> |---|---|
-> | `FOUR_YEAR_GRANT` | Total value of the full four-year grant. **Use this** — matches the CTC product UI. |
-> | `NTM_VESTING` | Value vesting over the next twelve months (≈25% of the four-year grant). |
->
-> ❌ `ONE_YEAR_GRANT` → HTTP 400. **This is the most common invented value** — do not use it, not even to express "one year of vesting". The concept you want is `NTM_VESTING`.
-> ❌ `ANNUAL`, `ONE_YEAR`, `TWO_YEAR_GRANT`, `THREE_YEAR_GRANT`, `NTM`, `NEXT_TWELVE_MONTHS`, `REFRESH_GRANT` → all HTTP 400. None exist.
->
-> Why `ONE_YEAR_GRANT` looks plausible but is wrong: compensation-service's *internal* field for this concept is named `one_year_grant_benchmark` (its source comment notes it "used to be known as `ntm_vesting_benchmark`"). That internal name is **not** the API enum and never reaches the wire. If the user asks for "one year of equity" or "annual equity value", map it to `NTM_VESTING`.
+> **Always pass the four-year-grant `equity_quantity` explicitly.** When `equity_quantity` is omitted, the backend default applies (Step 2b's `params.equity_quantity.default`: next-12-months vesting), which is ~25% of the four-year grant the CTC product UI shows. That's a hard tie-out failure, not a stylistic preference. Applies to every benchmark call: single role, bulk CSV, live artifact panel, Excel export. If the user asks for "one year of equity" or "annual equity value", send the next-12-months value instead. Both values are in `params.equity_quantity.values`; send only those.
 
 **Peer-group override (user-driven sensitivity analysis).** When the user explicitly asks to see a different peer group than the corp's plan default (*"show me $10M-$25M benchmarks instead"* or *"what would this look like for a 100-500 person company"*), **DROP the plan-default bucket param entirely and replace it with the override**. Do not include both — the API's behavior when more than one bucket is non-null is undefined and may change.
 
-So a Meetly-corp call that normally has `post_money_bucket: "ONE_HUNDRED_MILLION"` (plan default), when the user asks for "show me the $1M-$10M raised peer group instead", becomes:
+Pick the override from Step 2b:
+1. Choose the dimension from the user's wording: a valuation → `post_money_bucket`, money raised → `capital_raised_bucket`, a company size → `headcount_bucket`.
+2. Find the entry in that param's list (`params.post_money_bucket`, `params.capital_raised_bucket`, `params.headcount_bucket`) whose `label` matches the range the user named, and send its `value`. The lists hold only the buckets this benchmark version supports.
+3. If no label matches, ask with `AskUserQuestion`, offering that dimension's labels verbatim.
 
 ```
 read_tool({"name": "compensation__get__benchmark", "arguments": {
-  "corporation_id": 7, "job": "ENGINEER", "level": "ENTRY",
-  # post_money_bucket DROPPED — replaced by capital_raised_bucket below
-  "capital_raised_bucket": "ONE_TO_TEN_MILLION",
-  "equity_quantity": "FOUR_YEAR_GRANT",
+  "corporation_id": <corporation_pk>, "job": <job value>, "level": <level value>,
+  "<override dimension>_bucket": <that bucket's value from Step 2b>,
+  "equity_quantity": <four-year-grant value>,
   ...
 }})
 ```
 
-User-phrasing → override mapping:
-
-| User says | Bucket param key | Bucket value (note: each dimension's enum uses different naming) |
-|---|---|---|
-| *"$10M-$25M valuation"* | `post_money_bucket` | `TEN_MILLION` (post-money enum uses single-lower-bound names) |
-| *"$25M-$50M valuation"* | `post_money_bucket` | `TWENTY_FIVE_MILLION` |
-| *"$1M-$10M raised"* | `capital_raised_bucket` | `ONE_TO_TEN_MILLION` (capital-raised enum uses range names) |
-| *"$10M-$25M raised"* | `capital_raised_bucket` | `TEN_TO_TWENTY_FIVE_MILLION` |
-| *"100-500 employees"* | `headcount_bucket` | `HUNDRED_TO_FIVE_HUNDRED` |
-| *"25-100 employees"* | `headcount_bucket` | `TWENTY_FIVE_TO_HUNDRED` |
-
-**Important: the naming asymmetry between the three enums is intentional, not a typo.**
-
-- `PostMoneyBuckets` names a bucket by its **lower bound only**: `TEN_MILLION` IS the `$10M-$25M` band.
-- `CapitalRaisedBuckets` and `HeadcountBuckets` name a bucket by its **explicit range**: `TEN_TO_TWENTY_FIVE_MILLION` is the `$10M-$25M` band.
-
-Do NOT "fix" `post_money_bucket: "TEN_MILLION"` to `post_money_bucket: "TEN_TO_TWENTY_FIVE_MILLION"` thinking it's a typo. The post-money enum has no `_TO_` form — passing `TEN_TO_TWENTY_FIVE_MILLION` returns HTTP 400.
-
-Reference for the full enum sets is in `compensation:get:benchmark`'s help (run `search_tools({"query": "compensation get benchmark"})` to verify a specific value). There is no `compensation:list:*` command for bucket enums — read them from the command help.
+Never derive a bucket value from another dimension's naming: the three bucket params use different value names for the same range, so a value valid for one is a 400 on the other two.
 
 #### Locations
 
@@ -671,9 +661,9 @@ If the dimension is one of the three known values, continue to Step 4 above.
 
 ### Step 4 — bulk-fetch nuances
 
-**Single-job bulk:** omit `level` to get every level for one job in one call (~17 rows, fits well under the gateway response budget).
+**Single-job bulk:** omit `level` to get every level for one job in one call (one row per level in that job's `levels`, fits well under the gateway response budget).
 
-**Multi-job bulk (CSV across all functions):** issue **one fetch per job area** in parallel — do **not** omit both `job` and `level`. The unfiltered query returns ~22 jobs × ~17 levels in a single payload that exceeds the 40K-char gateway budget and will be rejected with `"response too large"`. Iterating per-job stays inside the budget and parallelizes cleanly.
+**Multi-job bulk (CSV across all functions):** issue **one fetch per job area** (each `params.job[].value` from Step 2b) in parallel — do **not** omit both `job` and `level`. The unfiltered query returns every job at every level in a single payload that exceeds the 40K-char gateway budget and will be rejected with `"response too large"`. Iterating per-job stays inside the budget and parallelizes cleanly.
 
 ### Step 5 — Present results
 
@@ -749,7 +739,7 @@ If a `benchmarks` array entry has empty `salary_benchmarks`, empty `equity_bench
 
 ## Version Override
 
-If the user asks about the current benchmark version or wants to query against a different version, follow the workflow in `${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-benchmarks/references/benchmark-versions.md`.
+If the user asks about the current benchmark version or wants to query against a different version, follow the workflow in `${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-benchmarks/references/benchmark-versions.md`. A different version needs its own filter options: re-run Step 2b with that version's `benchmark_version_id`.
 
 ## Subscription gating (REQUIRED before any benchmark query)
 
@@ -831,7 +821,7 @@ This wording is deliberately neutral on subscription state: it's correct for bot
 |---|---|---|
 | Rolematcher returns `UNKNOWN` for `job_area` | Role description too vague or not in CTC taxonomy | "Could you clarify the role? For example: job area (Engineering, Sales), seniority level, and whether it's an IC or manager track." |
 | Rolematcher returns `UNKNOWN` for `track` | Level is also UNKNOWN — no seniority signals present | "Is this an individual contributor (IC), manager, or executive role? This determines which benchmark track to use." |
-| Benchmark response has no data for role/level (subscribed corp) | Data coverage gap — no snapshot for that exact slice | "No benchmark data is available for [role] at [level] in this benchmark version. Want to try a different level or focus?" |
+| Benchmark response has no data for role/level (subscribed corp) | Data coverage gap — no snapshot for that exact slice | Look at Step 2b first: the job's `levels` and its `coverage` entry's `focuses` (for the industry in use) are what exists. Ask with `AskUserQuestion`, offering only those levels and focuses by label: "No benchmark data is available for [role] at [level] in this benchmark version. Which of these would you like instead?" |
 | `compensation:get:subscription_status` returns `has_ctc_access: true`, `is_subscribed: false` | Corp doesn't have an active CTC subscription | See **Subscription gating** — stop and send the subscription message. |
 | `compensation:get:subscription_status` returns `has_ctc_access: false`, OR `is_subscribed: true` but a `plan`/`benchmark` read returns **403** | The current user lacks a CTC role on this corp | See **Access gating** — send the no-access message, stop. No demo link; do NOT re-authenticate (won't grant a missing role). |
 

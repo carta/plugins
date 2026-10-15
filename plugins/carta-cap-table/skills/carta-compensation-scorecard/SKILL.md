@@ -28,7 +28,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.96.10</carta-plugin>
+<carta-plugin>carta-cap-table:6.96.12</carta-plugin>
 
 # CTC Scorecard
 
@@ -42,25 +42,23 @@ This skill calls compensation-service's scorecard endpoints (the same endpoints 
 >
 > | Field | Use in user-facing text | Never |
 > |---|---|---|
-> | Job area | `Engineering`, `Sales`, `Customer Success`, `Project Management`, `Human Resources` | `ENGINEER`, `SALES`, `CUSTOMER_SUCCESS`, `PROJECT_MANAGEMENT`, `HR` |
+> | Job area | the job's `label` from `compensation:get:filter_options` | the job's `value` |
 > | Focus | `DevOps and Site Reliability`, `Account Executive`, `Financial Planning and Analysis` — the exact API focus value, the same in text and in the API call | `devops and site reliability`, `ACCOUNT_EXECUTIVE`, `fp&a` — wrong in text and in the API call |
-> | Level | `Entry`, `Mid 1`, `Senior 1`, `Staff 2`, `VP 1`, `C-Level`, `CEO`, `Unknown` | `ENTRY`, `MID1`, `SENIOR1`, `STAFF2`, `VP1`, `C_LEVEL`, `UNKNOWN` |
+> | Level | Title Case of the level's `value` (`Mid 1`, `Senior 1`, `VP 1`, `C-Level`) | the level's `value` from `compensation:get:filter_options` |
 > | Track | `IC`, `Manager`, `Executive`, `Unknown` | `ic`, `manager`, `executive`, `UNKNOWN` |
 > | Band | `Low`, `Mid`, `High` | `low`, `mid`, `high` |
 >
-> The UPPER_SNAKE_CASE enums are **only** for machine handoff to MCP commands (the `job_filters`, `leader` parameters). Switch to Title Case before any value reaches the user.
+> The `value` forms (UPPER_SNAKE_CASE) are **only** for machine handoff to MCP commands (the `job_filters` parameter). Switch to the labels before any value reaches the user. The `leader` parameter is a boolean.
 >
-> **Band enum — the API uses `LOW` / `MID` / `HIGH`, NOT `BELOW_MARKET` / `AT_MARKET` / `ABOVE_MARKET`.** This is the single source of truth:
+> **Bands — a response `score` is `LOW`, `MID` or `HIGH`.** A band says where an employee's compa-ratio sits against the market range for their role: `LOW` is below the range, `MID` is within it, `HIGH` is above it. It is not a percentile, so a percentile-specific ask ("below P50", "above P75") is not a band ask — see *Percentile asks* in Step 4b.
 >
-> | API value (filter + response) | Display | Maps to user phrasing |
+> | Response value | Display | Maps to user phrasing |
 > |---|---|---|
-> | `LOW` | `Low` | "below market", "below P50" |
+> | `LOW` | `Low` | "below market" |
 > | `MID` | `Mid` | "at market" |
-> | `HIGH` | `High` | "above market", "above P50" |
+> | `HIGH` | `High` | "above market" |
 >
-> Pass `LOW` / `MID` / `HIGH` (not `BELOW_MARKET`) as the `score` filter value, and parse `LOW` / `MID` / `HIGH` from response `score` fields. **Display the actual band value (`Low` / `Mid` / `High`) in tables** — do not relabel it to "Below market". When the user *asked* for a band by market phrasing (e.g. "show me below-market employees"), echo their phrasing in the surrounding prose AND map it to the real enum, e.g. *"Here are your below-market (Low) employees:"* — but the per-row Band column still shows `Low`.
->
-> See `carta-compensation-rolematcher` → "Display → API enum tables" for the full mapping.
+> Parse `LOW` / `MID` / `HIGH` from response `score` fields. The values to *send* as the `score` filter come from `params.score[].value` in Step 2b. **Display the actual band (`Low` / `Mid` / `High`) in tables** — do not relabel it to "Below market". When the user *asked* for a band by market phrasing (e.g. "show me below-market employees"), echo their phrasing in the surrounding prose AND map it through `params.score`, e.g. *"Here are your below-market (Low) employees:"* — but the per-row Band column still shows `Low`.
 
 > **Use MCP, not CLI.** Every API call in this skill goes through the carta MCP. Do not shell out to the `carta` CLI — that bypasses the formatters, the 403 handler, and the attribution requirement.
 >
@@ -73,6 +71,7 @@ This skill calls compensation-service's scorecard endpoints (the same endpoints 
 > | Command | Tool name (pass as `name`) | ✗ Not a real tool |
 > |---|---|---|
 > | `compensation:get:subscription_status` | `compensation__get__subscription_status` | — |
+> | `compensation:get:filter_options` | `compensation__get__filter_options` | — |
 > | `compensation:get:plan` | `compensation__get__plan` | — |
 > | `compensation:get:employee-scorecard` | `compensation__get__employee-scorecard` (**hyphen**) | `compensation__get__employee_scorecard` → *"Unknown tool"* |
 > | `compensation:get:corporation-scorecard` | `compensation__get__corporation-scorecard` (**hyphen**) | `compensation__get__corporation_scorecard` → *"Unknown tool"* |
@@ -98,7 +97,7 @@ The corp-level band distribution is derived from the employee endpoint (matching
 
 ### Per-employee scorecard (use `compensation:get:employee-scorecard`)
 
-- *"Show me which employees are below P50"*
+- *"Show me which employees are below P50"* (a percentile ask — see *Percentile asks* in Step 4b)
 - *"Who's below market?"*
 - *"Show me the roster scorecard"*
 - *"Which engineers are below market?"* (job-filtered roster)
@@ -178,6 +177,26 @@ It returns `{corporation_id, has_ctc_access, is_subscribed}`:
 - `has_ctc_access: true`, `is_subscribed: false` → stop and surface the subscription message (see **Subscription gating** below). Do not call any scorecard endpoint — they will return empty data and waste a round-trip.
 - `has_ctc_access: true`, `is_subscribed: true` → continue.
 
+### Step 2b — Load the filter options (REQUIRED — HARD GATE)
+
+> **Call this once, right after `is_subscribed: true`, before any scorecard call that takes a filter.** It returns the exact values `compensation:get:employee-scorecard` accepts, read from compensation-service. This skill does not list them, so there is nothing else to read them from.
+
+```
+read_tool({"name": "compensation__get__filter_options",
+           "arguments": {"corporation_id": <corporation_pk>}})
+```
+
+Keep the response for the rest of the conversation. It returns:
+- `params` — per filter param (`job`, `level`, `score`, `sort_field`), the values it accepts. `job` and `level` entries carry a `value` to send and the names to show. Each `job` lists the `levels` it supports; each `level` carries its `rank` (low to high, for ordering only), its role codes (`ic_label` such as `IC 4`, `manager_label` such as `MGR 4`) and an `executive` flag. `score` entries carry a `value` and a `label`; `sort_field` is a list of accepted values.
+- `coverage` — per job area in the corp's benchmark version, the industries it has data for and its focuses.
+- `benchmark_version` — the version these options describe: the corp's active plan version.
+
+Rules — every scorecard call in this skill follows them:
+1. **Every filter value you send is a `value` copied verbatim from this response.** Never type one from memory, from an example in this file, or from a display label.
+2. **Map the user's wording to a value through the names**: job `label`; for a level, the Title Case of its `value` (`Senior 1` ↔ `SENIOR1`, `C-Level` ↔ `C_LEVEL`), or its `ic_label` / `manager_label` when the user gives a role code (`IC 4`, `MGR 4`); score `label`. If the wording matches no entry, ask with `AskUserQuestion` offering those names — do not pick the nearest-looking value.
+3. **A different benchmark version needs its own options**: when you query a version other than the active plan's (the draft-plan comparison in Step 4a), call this again with `"benchmark_version_id": <that id>`.
+4. **If this call fails, stop.** HTTP 403 → follow *Subscription gating*. HTTP 404 → the corp has no active CTC plan; say so. `Unknown tool` → the connected Carta MCP is too old for this skill; tell the user and stop. In every case, do NOT fall back to typed values and do NOT call a scorecard command with a filter.
+
 ### Step 3 — Decide which lens to query
 
 Pick exactly one based on the user's intent:
@@ -207,15 +226,15 @@ Capture `plan.id` and `benchmark_version` metadata (for the citation later).
 
 #### Path 1 — Counts only (the user wants the distribution / positioning)
 
-For *"how are we positioned"*, *"what's the band distribution"*, *"are we paying market"* — where the user wants **counts, not a per-person table** — get the overall-band counts directly with three filtered calls. Read only `total_results` from each (you don't need the rows):
+For *"how are we positioned"*, *"what's the band distribution"*, *"are we paying market"* — where the user wants **counts, not a per-person table** — get the overall-band counts directly with three filtered calls, one per entry in Step 2b's `params.score`. Read only `total_results` from each (you don't need the rows):
 
 ```
 read_tool({"name": "compensation__get__employee-scorecard",
-           "arguments": {"corporation_id": <corporation_pk>, "score": "LOW",  "page_size": 1}})   → total_results = Low count
+           "arguments": {"corporation_id": <corporation_pk>, "score": <the LOW value>,  "page_size": 1}})   → total_results = Low count
 read_tool({"name": "compensation__get__employee-scorecard",
-           "arguments": {"corporation_id": <corporation_pk>, "score": "MID",  "page_size": 1}})   → total_results = Mid count
+           "arguments": {"corporation_id": <corporation_pk>, "score": <the MID value>,  "page_size": 1}})   → total_results = Mid count
 read_tool({"name": "compensation__get__employee-scorecard",
-           "arguments": {"corporation_id": <corporation_pk>, "score": "HIGH", "page_size": 1}})   → total_results = High count
+           "arguments": {"corporation_id": <corporation_pk>, "score": <the HIGH value>, "page_size": 1}})   → total_results = High count
 ```
 
 Plus one unfiltered call (`page_size: 1`) to read the roster `total_results`, for reconciliation.
@@ -255,7 +274,7 @@ You are **reading** the band the API already returns per row — never recompute
 > A single page that errors (oversize / transport) counts as one attempt against the cap — retry that page at most **once**, then if it still fails, STOP and surface the failure with the partial count collected so far; do not keep hammering it.
 
 **Optional filters (either path)** — pass through verbatim if the user specified them:
-- `job_filters`: narrow by job area and/or level — a list of comma-delimited strings `"JobArea,Level,LimitingLevel"` (e.g. `["ENGINEER"]`, `["ENGINEER,SENIOR1"]`). See the `job_filters` format box in Step 4b for the exact encoding — it's the #1 thing agents get wrong.
+- `job_filters`: narrow by job area and/or level — a list of comma-delimited strings `"JobArea,Level,LimitingLevel"`, built from Step 2b's values. See the `job_filters` format box in Step 4b for the exact encoding — it's the #1 thing agents get wrong.
 - `leader`: `true` for managers/executives only, `false` for ICs only
 - There is **no** `location` or top-level `level` filter (level only via `job_filters`). For location, filter the fetched rows client-side and say so.
 
@@ -266,6 +285,8 @@ You are **reading** the band the API already returns per row — never recompute
 >            "arguments": {"corporation_id": <corporation_pk>,
 >                          "plan_id":        <DRAFT_plan.id>}})
 > ```
+>
+> The draft plan can sit on a different benchmark version, so first call `compensation__get__filter_options` again with `"benchmark_version_id": <the draft plan's benchmark_version_id>` (Step 2b, rule 3); the comparison call itself takes no filters.
 >
 > It returns `{active_plan_counts_per_band, current_plan_counts_per_band}` for the side-by-side comparison in Step 5a. If you only have the active plan (no draft is being modeled), this endpoint is the wrong tool — use the employee-derived rollup above. If you pass the active id and get *"Cannot compare active plan to itself"*, do not surface that error — fall back to Path 1.
 
@@ -279,36 +300,40 @@ read_tool({"name": "compensation__get__employee-scorecard",
 
 > The param is `page_size` (snake_case) — camelCase `pageSize` is silently dropped by the tool layer, leaving you on the default page size. And keep `page_size` small (~10): the endpoint returns *"response too large"* at `page_size` ≥ ~25 on larger rosters.
 
-Optional filters (pass through verbatim — translate user phrasing to enums):
+Optional filters (pass through verbatim — translate user phrasing to the values in Step 2b):
 
 | User phrasing | Param | Value |
 |---|---|---|
-| "below market" (overall) | `score` | `LOW` |
-| "at market" (overall) | `score` | `MID` |
-| "above market" (overall) | `score` | `HIGH` |
-| "engineers", "engineering team" | `job_filters` | `["ENGINEER"]` |
-| "senior 1 engineers" (job + level) | `job_filters` | `["ENGINEER,SENIOR1"]` |
-| "everyone at senior 1" (level only) | `job_filters` | `[",SENIOR1,"]` |
+| "below market" (overall) | `score` | the `params.score` entry for the Low band |
+| "at market" (overall) | `score` | the `params.score` entry for the Mid band |
+| "above market" (overall) | `score` | the `params.score` entry for the High band |
+| a job area ("engineers", "the sales team") | `job_filters` | `["<job value>"]` |
+| a job area at one level | `job_filters` | `["<job value>,<level value>"]` |
+| one level across every job | `job_filters` | `[",<level value>,"]` |
 | "managers", "leaders", "people managers" | `leader` | `true` |
 | "ICs", "individual contributors" | `leader` | `false` |
 | a specific person by name ("show me Ada Lovelace's scorecard") | `name` | `"Ada Lovelace"` |
 | a specific person by employee UUID | `employee_id` | `<uuid>` |
 
-Use Title Case in narration even when passing the raw enum to the API. Example: *"Pulling the Engineering roster scorecard for Acme — filtering to Below market employees."*
+Use the labels in narration even when passing the raw value to the API. Example: *"Pulling the Engineering roster scorecard for Acme — filtering to Below market employees."*
 
 > **`job_filters` format — read this; it's the #1 thing agents get wrong.** Each element is a **comma-delimited STRING** `"JobArea,Level,LimitingLevel"`, NOT an object and NOT colon-delimited. The whole param is a **list of such strings**.
 >
 > | Intent | Pass | ✗ Do not pass |
 > |---|---|---|
-> | Engineers (any level) | `["ENGINEER"]` | ❌ `[{"job":"ENGINEER"}]` ❌ `"ENGINEER"` (bare, unwrapped) |
-> | Engineers at exactly Senior 1 | `["ENGINEER,SENIOR1"]` | ❌ `["ENGINEER:SENIOR1"]` ❌ `[{"job":...,"level":...}]` |
-> | Anyone at exactly Senior 1 | `[",SENIOR1,"]` | — |
-> | Anyone at level ≤ VP 2 (3rd slot = limiting level) | `[",,VP2"]` | — |
-> | Multiple job areas | `["ENGINEER", "SALES"]` | — |
+> | A job area (any level) | `["<job value>"]` | ❌ `[{"job":"<job value>"}]` ❌ `"<job value>"` (bare, unwrapped) |
+> | A job area at exactly one level | `["<job value>,<level value>"]` | ❌ `["<job value>:<level value>"]` ❌ `[{"job":...,"level":...}]` |
+> | Anyone at exactly one level | `[",<level value>,"]` | — |
+> | Anyone at or below a level (3rd slot = limiting level) | `[",,<level value>"]` | — |
+> | Multiple job areas | `["<job value>", "<other job value>"]` | — |
 >
-> The 2nd CSV slot is exact level; the 3rd is a "≤ this level" cap. `JobArea` is a `JobType` enum (`ENGINEER`, `SALES`, …); `Level`/`LimitingLevel` are `LevelCode` enums (`ENTRY`, `MID1`, `SENIOR1`, … `C_LEVEL`, `CEO`). Passing an object or `job:level` with a colon returns HTTP 400 *"… is not a valid selection for type JobType"*.
+> The 2nd CSV slot is the exact level; the 3rd is a "≤ this level" cap. `<job value>` is a `params.job[].value`; `<level value>` is a `params.level[].value` that appears in that job's `levels`. Passing an object or `job:level` with a colon returns HTTP 400.
 >
-> **Use the enum NAME, and don't guess it.** Pass `ENGINEER`, not `"Engineering"`; `CUSTOMER_SUCCESS`, not `"Customer Success"`/`"Customer Support"`; `SENIOR1`, not `"Senior 1"` — the Title-Case forms are user-facing only and 400 as API values. If you're unsure of a valid `JobType`/`LevelCode` name, read the full list from `search_tools({"query": "compensation get benchmark"})` (its help enumerates every job area and level). **There is no `compensation:list:job_types` / `list:jobs` / `list:levels` command — do not invent one; it returns `Unknown tool`.**
+> **Mapping a level the user named.** Match their wording to the Title Case of a level's `value` (`Senior 1` ↔ `SENIOR1`), or to its `ic_label` / `manager_label` when they give a role code (`IC 4`, `MGR 4`). For "up to VP 2" or "below Staff", take the `rank` of the named level and use the cap slot, or list the levels of that job with a lower `rank`. Use `executive` to recognise executive levels — never a hardcoded rank cutoff. If the named level is not in the chosen job's `levels`, tell the user that job has no such level and ask.
+>
+> **Send the `value`, never the label** (`"Engineering"`, `"Senior 1"` are display names and 400 as API values). **There is no `compensation:list:job_types` / `list:jobs` / `list:levels` command — do not invent one; it returns `Unknown tool`.** The only source of filter values is `compensation:get:filter_options` (Step 2b).
+>
+> **On HTTP 400** (its fix text points to `compensation:get:filter_options`): compare every value you sent with Step 2b's `params` and resend the listed `value`. Retry at most once; if it 400s again, stop and report the error.
 >
 > **There is NO top-level `level` filter and NO `location` filter on this endpoint** — `level` is only reachable through the `job_filters` CSV (above), and a top-level `level` param is silently ignored. Location cannot be filtered server-side at all. If the user asks to filter by location (e.g. "show me below-market employees in Austin"), fetch the roster and filter client-side on `location.home_location` / `location.work_location`, and tell the user you filtered locally.
 
@@ -321,7 +346,9 @@ Use Title Case in narration even when passing the raw enum to the API. Example: 
 >
 > **To answer a metric-specific band question:** do **not** pass the `score` filter. Sweep the roster using the **capped procedure in Step 4a → Path 2** (page at `page_size` ≈ 10, dedupe by `ids.external_id`, **hard cap of 25 page fetches**, then STOP and offer to narrow), and read the relevant per-metric band client-side — `salary_rating.score` for salary, `ntm_equity_rating.score` for equity, `total_cash_rating.score` for total cash. You are *reading a field that is already in each response* — you are **not** recomputing the ratio. The compa-ratio and band are returned by the API; never recompute them from salary ÷ target.
 
-**Sorting a list.** When the user asks for an *ordered* roster ("worst compa-ratios first", "sort by name"), pass `sort_field` (e.g. `SCORE`, `NAME`, `LEVEL`, `EQUITY_COMPARATIO`) plus `reverse_sort` (`true`/`false`). Sorting orders a list the user wants to see — it is never a substitute for filtering to a specific person (see Single-employee lookup).
+**Percentile asks.** A band is not a percentile: `Low` means below the market range, not below P50. When the user asks for a specific percentile ("below P50", "above P75"), do not map it to a band filter. Sweep the roster per Step 4a → Path 2 and read each row's `percentile` from the rating they asked about (`salary_rating.percentile`, `total_cash_rating.percentile`, `ntm_equity_rating.percentile`), then keep the rows on the requested side of that percentile and say you filtered locally. If they only said "below market", use the band.
+
+**Sorting a list.** When the user asks for an *ordered* roster ("worst compa-ratios first", "sort by name"), pass `sort_field` plus `reverse_sort` (`true`/`false`). `sort_field` is a value from Step 2b's `params.sort_field`; if none fits the ask, sort the collected rows locally instead. Sorting orders a list the user wants to see — it is never a substitute for filtering to a specific person (see Single-employee lookup).
 
 #### Single-employee lookup
 
@@ -463,7 +490,7 @@ Response shape per employee:
 >
 > Each rating has its own `score` (band), `compa_ratio`, and `percentile`. **`benchmark.score` (overall) is NOT the same as `salary_rating.score`** — an employee can be `salary_rating.score: HIGH` while `benchmark.score` is `null` or a different band. Never treat one as a proxy for the other. Always tell the user *which* source a number came from (e.g. "Market Salary ratio" vs "Payband Salary ratio" vs "overall score").
 
-**Classification.** Read the saved classification from `title.role.{level, job, focus, leader}`, and the human-readable title from `title.official_title`. Render the level/job in Title Case per the casing rule (e.g. `MID2` → `Mid 2`, `ENGINEER` → `Engineering`).
+**Classification.** Read the saved classification from `title.role.{level, job, focus, leader}`, and the human-readable title from `title.official_title`. Render the job with its `label` from Step 2b, and the level in Title Case per the casing rule (`MID2` → `Mid 2`). Never show the raw `value`.
 
 **Table format** — six columns, per Carta UX rules:
 
@@ -577,7 +604,9 @@ Do not retry. Do not surface the raw HTTP status, stack trace, or error body. Do
 | `compensation:get:plan` returns no active plan | *"No active CTC plan for this corporation. The scorecard needs an active plan to compute against — ask the corp's CTC admin to activate one in the product UI."* |
 | `corporation-scorecard` errors with *"Cannot compare active plan to itself"* | You passed the **active** plan id to a comparison-only endpoint. Expected — don't surface it to the user. Fall back to the employee-derived rollup (Step 4a, Path 1). Only use `corporation-scorecard` with a **draft** plan id. |
 | Scorecard regeneration is in flight (response carries `task_status.state: PENDING` / `RUNNING`) | Surface the partial data if present, append: *"The scorecard is currently regenerating in the background. Numbers may shift in the next few minutes."* |
-| Unknown band value (anything other than LOW / MID / HIGH) | Render verbatim in chat; don't substitute. The API enum may have grown. |
+| Unknown band value (not in `params.score`) | Render verbatim in chat; don't substitute. The set of bands may have grown. |
+| HTTP 400 on a `job_filters`, `score` or `sort_field` value | Compare the values you sent with Step 2b's `params`, resend the listed `value` once, then stop and report. Do not guess a variation. |
+| `compensation:get:filter_options` fails | Stop (Step 2b, rule 4): 403 → no-access message, 404 → no active CTC plan, `Unknown tool` → the connected Carta MCP is too old. Do not fall back to typed values. |
 | *"Unknown tool"* or *"No such tool available"* on a compensation call | The tool name is wrong. Scorecard tool names keep their hyphen: `compensation__get__employee-scorecard`, not `…employee_scorecard`. Use the exact name from the tool-name table at the top of this skill, through `read_tool`, and retry once. Do not switch to `fetch` / `discover`, and do not guess name variations. |
 | Network/transport error | One retry. If it fails again, surface: *"Couldn't reach compensation-service. Try again in a moment — if this keeps happening, contact Carta support."* |
 | Response too large (*"response too large (limit 40000 chars)"*) | Drop `page_size` to ~10 and page through. Never estimate a distribution from a partial sweep — complete it or tell the user it couldn't be completed. |

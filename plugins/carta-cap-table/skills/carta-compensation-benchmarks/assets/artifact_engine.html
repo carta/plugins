@@ -474,7 +474,7 @@ td.remove-col { padding: 10px 8px 10px 4px; width: 30px; }
    doing so would clobber the LLM's real data with an empty value. */
 
 /* ── Constants ───────────────────────────────────────────────────────────── */
-const JOBS = ['ACCOUNTING','ADMIN','CEO','CORPORATE_AFFAIRS','CUSTOMER_SUCCESS',
+const FALLBACK_JOBS = ['ACCOUNTING','ADMIN','CEO','CORPORATE_AFFAIRS','CUSTOMER_SUCCESS',
               'DATA','DESIGN','ENGINEER','FINANCE','HR','IT','LEGAL','MANUFACTURING',
               'MARKETING','OPERATIONS','PRODUCT','PROJECT_MANAGEMENT','RESEARCH',
               'SALES','STRATEGY','SUPPORT','OTHER'];
@@ -493,7 +493,7 @@ const TRACK_LABELS = { IC:'IC', MANAGER:'Manager', EXECUTIVE:'Executive' };
 
 // Per-track: ordered level enums + display label. Labels are verbatim from the
 // FE constants (label + parenthetical description where the FE shows one).
-const LEVELS_BY_TRACK = {
+const FALLBACK_LEVELS_BY_TRACK = {
   IC: [
     ['ENTRY','Entry'], ['MID1','Mid 1 (Developing)'], ['MID2','Mid 2 (Proficient)'],
     ['SENIOR1','Senior 1 (Skilled)'], ['SENIOR2','Senior 2 (Advanced)'],
@@ -511,8 +511,74 @@ const LEVELS_BY_TRACK = {
 };
 // Numeric rank per level enum (FE levelNumberMap) — used to split LEADER into
 // Manager vs Executive when reconciling the track from an API response.
-const LEVEL_RANK = { ENTRY:1, MID1:2, MID2:3, SENIOR1:4, SENIOR2:5, STAFF1:6,
+const FALLBACK_LEVEL_RANK = { ENTRY:1, MID1:2, MID2:3, SENIOR1:4, SENIOR2:5, STAFF1:6,
                      STAFF2:7, PRINCIPAL:8, VP1:9, VP2:10, C_LEVEL:11, CEO:12 };
+
+const FOUR_YEAR_GRANT = 'FOUR_YEAR_GRANT';
+let JOBS = FALLBACK_JOBS;
+let LEVELS_BY_TRACK = FALLBACK_LEVELS_BY_TRACK;
+let LEVEL_RANK = FALLBACK_LEVEL_RANK;
+let LEVEL_EXECUTIVE = null;
+let JOB_LABELS = {};
+let JOB_LEVELS = null;
+let EQUITY_QUANTITY = FOUR_YEAR_GRANT;
+let _filterOptionsLoadedFor = null;
+
+function resetFilterOptions() {
+  JOBS = FALLBACK_JOBS;
+  LEVELS_BY_TRACK = FALLBACK_LEVELS_BY_TRACK;
+  LEVEL_RANK = FALLBACK_LEVEL_RANK;
+  LEVEL_EXECUTIVE = null;
+  JOB_LABELS = {};
+  JOB_LEVELS = null;
+  EQUITY_QUANTITY = FOUR_YEAR_GRANT;
+}
+
+function applyFilterOptions(options) {
+  const params = options && options.params;
+  const jobs = params && Array.isArray(params.job) ? params.job.filter(j => j && j.value) : [];
+  const levels = params && Array.isArray(params.level) ? params.level.filter(l => l && l.value) : [];
+  if (!jobs.length || !levels.length) return false;
+  const known = (track, value) =>
+    (FALLBACK_LEVELS_BY_TRACK[track].find(([v]) => v === value) || [])[1];
+  const ordered = levels.slice().sort((a, b) => a.rank - b.rank);
+  const entries = (track, keep, labelOf) => ordered.filter(keep)
+    .map(l => [l.value, known(track, l.value) || labelOf(l) || l.value]);
+  JOBS = jobs.map(j => j.value);
+  JOB_LABELS = {};
+  JOB_LEVELS = {};
+  for (const j of jobs) {
+    if (j.label) JOB_LABELS[j.value] = j.label;
+    if (Array.isArray(j.levels)) JOB_LEVELS[j.value] = j.levels;
+  }
+  LEVEL_RANK = {};
+  LEVEL_EXECUTIVE = {};
+  for (const l of levels) {
+    LEVEL_RANK[l.value] = l.rank;
+    LEVEL_EXECUTIVE[l.value] = !!l.executive;
+  }
+  LEVELS_BY_TRACK = {
+    IC: entries('IC', l => l.ic_label, l => l.ic_label),
+    MANAGER: entries('MANAGER', l => l.manager_label && !l.executive, l => l.manager_label),
+    EXECUTIVE: entries('EXECUTIVE', l => l.manager_label && l.executive, l => l.manager_label),
+  };
+  const quantities = (params.equity_quantity && params.equity_quantity.values) || [];
+  EQUITY_QUANTITY = quantities.find(q => q === FOUR_YEAR_GRANT)
+    || quantities.find(q => /FOUR_YEAR/.test(q)) || FOUR_YEAR_GRANT;
+  return true;
+}
+
+function levelsForJob(job, track) {
+  const onTrack = (LEVELS_BY_TRACK[track] || []).map(([v]) => v);
+  const supported = JOB_LEVELS && JOB_LEVELS[job];
+  return supported && supported.length ? onTrack.filter(v => supported.includes(v)) : onTrack;
+}
+
+function nearestLevel(level, valid) {
+  const rank = LEVEL_RANK[level] || 0;
+  return valid.reduce((best, lv) =>
+    Math.abs((LEVEL_RANK[lv]||0) - rank) < Math.abs((LEVEL_RANK[best]||0) - rank) ? lv : best, valid[0]);
+}
 
 // Display label for a (level, track) pair — falls back across tracks then to
 // the raw enum so a stale level never renders blank.
@@ -525,15 +591,14 @@ function lvlFmt(level, track) {
   }
   return level;
 }
-// Levels valid for a track (enum list).
-const levelsForTrack = track => (LEVELS_BY_TRACK[track] || []).map(([v]) => v);
 // track → is_leader for the benchmark API.
 const trackIsLeader = track => track === 'MANAGER' || track === 'EXECUTIVE';
 // Reconcile the displayed track from the API's ladder + the level's rank.
 function reconcileTrack(ladder, level, fallback) {
   if (ladder === 'IC') return 'IC';
   if (ladder === 'LEADER' || ladder === 'MGR') {
-    return (LEVEL_RANK[level] || 0) >= 9 ? 'EXECUTIVE' : 'MANAGER';
+    const executive = LEVEL_EXECUTIVE ? LEVEL_EXECUTIVE[level] : (LEVEL_RANK[level] || 0) >= 9;
+    return executive ? 'EXECUTIVE' : 'MANAGER';
   }
   return fallback;
 }
@@ -591,7 +656,7 @@ function searchGeo(options, query, limit = SEARCH_LIMIT) {
   return [...picked.filter(o => o.group !== GROUP_INTL), ...picked.filter(o => o.group === GROUP_INTL)];
 }
 
-const jobFmt = j => j.replace(/_/g,' ').split(' ').map(w => w.charAt(0).toUpperCase()+w.slice(1).toLowerCase()).join(' ');
+const jobFmt = j => JOB_LABELS[j] || j.replace(/_/g,' ').split(' ').map(w => w.charAt(0).toUpperCase()+w.slice(1).toLowerCase()).join(' ');
 
 const JOB_META = {
   ACCOUNTING:          { desc: 'Financial reporting, bookkeeping, tax, and audit', titles: ['Accountant', 'Senior Accountant', 'Controller', 'CFO'] },
@@ -680,6 +745,12 @@ function resolveSeedLocation(r) {
   return '';
 }
 
+const defaultJob = () => JOBS.includes('ENGINEER') ? 'ENGINEER' : JOBS[0];
+function defaultLevel(job, track) {
+  const valid = levelsForJob(job, track);
+  return valid.includes('SENIOR1') ? 'SENIOR1' : valid[0] || 'SENIOR1';
+}
+
 /* ── Boot: pre-seeded payload ────────────────────────────────────────────── */
 (function applyPreload() {
   const p = window._BENCHMARK_PAYLOAD;
@@ -691,18 +762,19 @@ function resolveSeedLocation(r) {
     _peerGroupDimension = p.peer_group.dimension;
     _peerGroupCode = p.peer_group.code;
   }
+  if (p.filter_options && applyFilterOptions(p.filter_options)) _filterOptionsLoadedFor = p.company.id;
   selectCompany(p.company, true);
   if (p.results && p.results.length) {
     rows = p.results.map(r => ({
       id: rowIdCounter++,
-      job:      r.job      || 'ENGINEER',
-      level:    r.level    || 'SENIOR1',
+      job:      r.job      || defaultJob(),
+      level:    r.level    || defaultLevel(r.job || defaultJob(), 'IC'),
       // An API location value or '' (none), never the display label: see
       // resolveSeedLocation. r.geo is kept below for the display-only geo line.
       location: resolveSeedLocation(r),
       // Map the API ladder ('IC' | 'LEADER') + level to the 3-track UI model
       // (IC / Manager / Executive). Default to IC when the seed lacks a ladder.
-      track:    reconcileTrack(r.ladder, r.level || 'SENIOR1', 'IC'),
+      track:    reconcileTrack(r.ladder, r.level || defaultLevel(r.job || defaultJob(), 'IC'), 'IC'),
       salary:   r.salary   || {p25:null,p50:null,p75:null,p90:null},
       tcc:      r.tcc      || {p25:null,p50:null,p75:null,p90:null},
       equity:   r.equity   || {p25:{},p50:{},p75:{},p90:{}},
@@ -780,8 +852,23 @@ async function callMcp(tool, args) {
 mcpNamespace().then(mcp => {
   if (!mcp) return;
   loadAllCompanies();
-  if (selectedCompany) loadLocations(selectedCompany);
+  if (selectedCompany) {
+    loadLocations(selectedCompany);
+    loadFilterOptions(selectedCompany);
+  }
 });
+
+async function loadFilterOptions(company) {
+  if (!company || _filterOptionsLoadedFor === company.id || !(await mcpAvailable())) return;
+  _filterOptionsLoadedFor = company.id;
+  try {
+    const params = {corporation_id: company.id};
+    if (_benchmarkVersionId != null) params.benchmark_version_id = _benchmarkVersionId;
+    const options = unwrap(await callMcp('fetch', {command: 'compensation:get:filter_options', params}));
+    if (selectedCompany?.id !== company.id || !applyFilterOptions(options)) return;
+    renderTable();
+  } catch (_) { /* keep the fallback lists */ }
+}
 
 /* ── Location list ───────────────────────────────────────────────────────── */
 // The company's plan names its geo adjustment version; that version's supported
@@ -936,7 +1023,10 @@ function selectCompany(company, skipReset) {
     _geoFromCatalog = false;
     _defaultLocation = null;
     _locationsLoadedFor = null;
+    _filterOptionsLoadedFor = null;
+    resetFilterOptions();
     loadLocations(company);
+    loadFilterOptions(company);
     rows = [];
     renderTable();
     document.getElementById('exportExcelBtn').disabled = true;
@@ -947,7 +1037,7 @@ function selectCompany(company, skipReset) {
 async function fetchRowData(row) {
   if (!selectedCompany || !(await mcpAvailable())) return row;
   const isLeader = trackIsLeader(row.track);
-  const params = { corporation_id: selectedCompany.id, job: row.job, level: row.level, equity_quantity: 'FOUR_YEAR_GRANT' };
+  const params = { corporation_id: selectedCompany.id, job: row.job, level: row.level, equity_quantity: EQUITY_QUANTITY };
   if (_benchmarkVersionId != null) params.benchmark_version_id = _benchmarkVersionId;
   // Pin the corp's plan peer group so values tie out with the CTC product UI.
   // Without it the API falls back to a default comparable set and the numbers
@@ -991,14 +1081,14 @@ async function onRowChange(rowId, field, value) {
   // (VP1) → switch to Manager → snap to "Senior Director" (PRINCIPAL, the
   // highest Manager level).
   if (field === 'track') {
-    const valid = levelsForTrack(value);
+    const valid = levelsForJob(rows[idx].job, value);
     const curLevel = rows[idx].level;
-    if (!valid.includes(curLevel)) {
-      const curRank = LEVEL_RANK[curLevel] || 0;
-      patch.level = valid.reduce((best, lv) =>
-        Math.abs((LEVEL_RANK[lv]||0) - curRank) < Math.abs((LEVEL_RANK[best]||0) - curRank) ? lv : best,
-        valid[0]);
-    }
+    if (valid.length && !valid.includes(curLevel)) patch.level = nearestLevel(curLevel, valid);
+  }
+  if (field === 'job') {
+    const valid = levelsForJob(value, rows[idx].track);
+    const curLevel = rows[idx].level;
+    if (valid.length && !valid.includes(curLevel)) patch.level = nearestLevel(curLevel, valid);
   }
   rows[idx] = {...rows[idx], ...patch};
   renderTable();
@@ -1022,7 +1112,7 @@ function removeRow(rowId) {
 async function addRow() {
   const newRow = {
     id: rowIdCounter++,
-    job: 'ENGINEER', level: 'SENIOR1', location: '', track: 'IC',
+    job: defaultJob(), level: defaultLevel(defaultJob(), 'IC'), location: '', track: 'IC',
     salary: {p25:null,p50:null,p75:null,p90:null},
     tcc:    {p25:null,p50:null,p75:null,p90:null},
     equity: {p25:{},p50:{},p75:{},p90:{}},
@@ -1111,7 +1201,7 @@ function renderTable() {
     const jobOptions   = JOBS.map(j   => `<option value="${j}"   ${r.job===j  ?'selected':''}>${esc(jobFmt(j))}</option>`).join('');
     // Level options are scoped to the row's track (IC / Manager / Executive),
     // each with its own level set and display labels.
-    const lvlOptions   = (LEVELS_BY_TRACK[r.track] || []).map(([v,lbl]) => `<option value="${v}" ${r.level===v?'selected':''}>${esc(lbl)}</option>`).join('');
+    const lvlOptions   = (LEVELS_BY_TRACK[r.track] || []).filter(([v]) => levelsForJob(r.job, r.track).includes(v)).map(([v,lbl]) => `<option value="${v}" ${r.level===v?'selected':''}>${esc(lbl)}</option>`).join('');
     const trackOptions = TRACKS.map(t => `<option value="${t}" ${r.track===t?'selected':''}>${esc(TRACK_LABELS[t])}</option>`).join('');
     const geoCell      = `<button type="button" class="cell-select geo-trigger" aria-haspopup="listbox" title="${esc(geoLabel(r))}" onclick="openGeoPicker(${r.id}, this)">${esc(geoLabel(r))}</button>`;
 
