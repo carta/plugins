@@ -265,9 +265,11 @@ nohup python3 "${CLAUDE_PLUGIN_ROOT}/skills/carta-manco-reporting/scripts/serve.
 
 `<user_src_dir>` is the `user_src_dir` value from Step 4.8's `check` output.
 
-To test report sharing with one particular connector (a test connector, say), add
+To test report sharing with one particular connector (a test connector, say), start the
+server with `MANCO_REPORT_SHARING=1` in its environment and add
 `--share-mcp-server <connector_name>` so shares use only that one — see
-[report-sharing.md](report-sharing.md).
+[report-sharing.md](report-sharing.md). Sharing is off without the variable, and Claude
+Code asks before running a launch with that prefix.
 
 `--detach` forks and daemonizes the server so it outlives this launching
 process/session — the same flag `carta-fund-modeling`'s `serve.py` uses.

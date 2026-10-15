@@ -68,10 +68,10 @@ WEB_DIR = None
 SRC_DIR = None
 TOKEN = None
 SHARE_MCP_SERVER = None  # --share-mcp-server / MANCO_SHARE_MCP_SERVER: the one Carta connector sharing may use
-# Budget reports and sharing (/api/reports*) answer unless MANCO_REPORT_SHARING=0.
+# Budget reports and sharing (/api/reports*) answer only when MANCO_REPORT_SHARING=1.
 # Off, those routes 404 and the app shows no report controls.
 REPORT_SHARING_ENV = "MANCO_REPORT_SHARING"
-REPORT_SHARING = True
+REPORT_SHARING = False
 MAX_BODY_BYTES = 1024 * 1024
 REBUILD_TIMEOUT = 600
 
@@ -337,7 +337,7 @@ _REPORT_ACTION_RE = re.compile(r"^/api/reports/([A-Za-z0-9_.-]{1,160})/(rename|d
 
 
 def report_sharing_enabled(environ):
-    return environ.get(REPORT_SHARING_ENV, "1") != "0"
+    return environ.get(REPORT_SHARING_ENV) == "1"
 
 
 class Handler(http.server.BaseHTTPRequestHandler):

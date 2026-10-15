@@ -92,7 +92,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.75.0</carta-plugin>
+<carta-plugin>carta-investors:6.75.1</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -359,10 +359,16 @@ no event.
 
 ## Budget reports and sharing
 
-People duplicate, hide and share budgets from the Budget vs Actuals page itself. Each
-workbook budget is a report that keeps following its workbook, and a shared one is marked
-changed when a re-import or a mapping answer moves its figures. When someone asks to share
-a budget, point them at the controls beside **Export**; don't edit `reports.json` by hand.
+Budget reports and sharing are on only when the dashboard server runs with
+`MANCO_REPORT_SHARING=1` (its startup banner then names the Carta connectors sharing uses).
+Without it the page shows no report controls, so don't offer to share, duplicate or hide a
+budget, or to load reports shared with someone.
+
+When it is on, people duplicate, hide and share budgets from the Budget vs Actuals page
+itself. Each workbook budget is a report that keeps following its workbook, and a shared
+one is marked changed when a re-import or a mapping answer moves its figures. When someone
+asks to share a budget, point them at the controls beside **Export**; don't edit
+`reports.json` by hand.
 Read [report-sharing.md](references/report-sharing.md) (this skill's own `references/`)
 when a share fails or someone asks how sharing works. When someone asks to **load the
 reports shared with them** (the app suggests that prompt when its own load can't reach
