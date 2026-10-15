@@ -602,7 +602,43 @@ HvkPz+rKZ6Wq+ELmAQAAAA==") format("woff2");
 .far-pill-orange { background: #FF7D55; color: #1A1A1A; }
 .far-pill-blue { background: #C0D1E9; color: #122948; }
 
-.far-sort-wrap { display: flex; align-items: center; gap: 16px; }
+.far-sort-wrap { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; }
+
+.far-desc-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin-top: 20px;
+}
+.far-desc-row .far-tab-desc { margin-top: 0; flex: 1 1 360px; }
+
+.far-refresh { display: flex; align-items: center; gap: 4px; min-height: 24px; }
+.far-refresh-status {
+  font-size: 14px;
+  line-height: 24px;
+  color: var(--ink-color-global-text-subtle);
+}
+.far-refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: var(--ink-size-global-radius-subtle);
+  background: transparent;
+  color: var(--ink-color-global-text-subtle);
+  cursor: pointer;
+}
+.far-refresh-btn:hover { color: var(--ink-color-global-text-default); }
+.far-refresh-btn:disabled { cursor: default; }
+.far-refresh-btn:disabled .far-refresh-icon { animation: far-spin 800ms linear infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .far-refresh-btn:disabled .far-refresh-icon { animation: none; }
+}
 
 .far-sort-label { font-size: 14px; color: var(--ink-color-global-text-subtle); }
 

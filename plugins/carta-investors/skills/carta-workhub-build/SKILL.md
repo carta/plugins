@@ -17,7 +17,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.74.4</carta-plugin>
+<carta-plugin>carta-investors:6.74.5</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -370,6 +370,13 @@ Each tab Carta fills has its own read, so one failing never empties another. A f
 counts "–" and shows what Carta said, with Retry; the tabs that loaded keep their cards.
 With Carta fails with Needs Action, which it is sorted against. A connector code fails
 every tab. If the whole task list fails, the requests filed from this page still show.
+
+**Refresh.** Work is finished in a chat or in Carta, and nothing can push that to the page,
+so it re-reads (`farRefresh`) when the viewer returns to it (`visibilitychange`/`focus`, at
+most once per `FAR_REFRESH_MIN_AGE_MS`) or presses the refresh icon beside the tab description. It says
+"Refreshing…" while the icon spins, for at least `FAR_REFRESH_MIN_SHOWN_MS`, then "Updated <time>".
+The cards stay on screen throughout, and a read that fails in any part keeps them and says
+"Couldn't refresh. Showing <time>." (`farFetchRequests({ keepOnFailure: true })`).
 
 ## Source layout — the artifact is BUILT, not hand-edited
 

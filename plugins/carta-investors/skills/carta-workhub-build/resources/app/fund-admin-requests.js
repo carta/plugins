@@ -66,6 +66,15 @@ let _farPartial = false;      // true when rows came from the localStorage path
 let _farDoneCapped = false;   // Completed stopped at FAR_DONE_MAX_PAGES with more to read
 let _farTabErrors = {};       // tab key → what Carta said when that tab's read failed
 let _farRetrying = false;     // a retry is out, so the failed tabs show their loader
+let _farLoadedAt = null;      // when the queue last read without a failure
+let _farRefreshing = false;   // a re-read is out while the last good cards stay on screen
+let _farRefreshFailed = false;
+let _farRefreshTriedAt = 0;
+// Work finishes in a chat elsewhere, so the page re-reads when the viewer comes back to it.
+// A read pages through the whole queue, so a return within this window does not repeat one.
+const FAR_REFRESH_MIN_AGE_MS = 30000;
+// A quick read would flash by unseen; the status stays up this long so a refresh is noticed.
+const FAR_REFRESH_MIN_SHOWN_MS = 700;
 const _farThreadCache = {};   // workflow_id → normalized messages
 
 // ── Result unwrapping ──
@@ -783,7 +792,12 @@ function farPaintParts(parts, reviews, appViews) {
 
 // Three sources, most complete first; the id path is the floor. The first two are
 // read together, so a source that answers nothing never delays the next.
-async function farFetchRequests() {
+// With `keepOnFailure`, a read that fails in any part leaves the queue on screen as it was
+// and resolves false, so a background refresh never blanks cards the viewer is looking at.
+async function farFetchRequests({ keepOnFailure = false } = {}) {
+  const prev = keepOnFailure
+    ? { rows: _farRows, partial: _farPartial, capped: _farDoneCapped, errors: _farTabErrors }
+    : null;
   let loaded = false;
   // Local, so a read still out from an earlier load cannot report into this one.
   const failures = {};
@@ -832,6 +846,19 @@ async function farFetchRequests() {
     _farPartial = true;
     _farRows = ccrQueueRows([]);
   }
+  const failed = !loaded || (!fromScoped && Object.keys(failures).length > 0);
+  if (prev && failed) {
+    _farRows = prev.rows;
+    _farPartial = prev.partial;
+    _farDoneCapped = prev.capped;
+    _farTabErrors = prev.errors;
+    renderFarSection();
+    return false;
+  }
+  if (!failed) {
+    _farLoadedAt = new Date();
+    _farRefreshTriedAt = Date.now();
+  }
   _farTabErrors = fromScoped ? {} : Object.assign({}, failures);
   renderFarSection();
   whTimingMark("queue painted");
@@ -843,6 +870,7 @@ async function farFetchRequests() {
   // Hydration only improves titles, so it stays outside the try above — sharing
   // that catch let a cosmetic failure reset _farRows and blank a loaded queue.
   if (loaded) await farHydrateTitles().catch(e => console.error('[far] title hydration —', e));
+  return true;
 }
 
 // A row created on another device has no cached type and a generic request_type,
@@ -1349,6 +1377,59 @@ function farRetryLoad() {
   });
 }
 
+// What the refresh status says. Time is the last good read, so a failed refresh still
+// tells the viewer how old the cards are.
+function farRefreshLabel(refreshing, failed, at) {
+  if (refreshing) return 'Refreshing…';
+  const time = at ? at.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
+  if (failed) return time ? `Couldn't refresh. Showing ${time}.` : "Couldn't refresh.";
+  return time ? `Updated ${time}` : '';
+}
+
+function farRenderRefresh() {
+  const box = document.getElementById('far-refresh');
+  if (!box) return;
+  // Before the first read lands, the loader says it; the Retry banner covers a failed one.
+  box.style.display = _farRows === null || !_benchmarkFirmId ? 'none' : '';
+  const status = document.getElementById('far-refresh-status');
+  const label = farRefreshLabel(_farRefreshing, _farRefreshFailed, _farLoadedAt);
+  if (status) status.textContent = label;
+  const btn = document.getElementById('far-refresh-btn');
+  if (btn) btn.disabled = _farRefreshing;
+}
+
+// Re-reads the queue in the background. The cards on screen stay until the new read lands in
+// full; a failed read keeps them and says so.
+async function farRefresh() {
+  if (_farRefreshing || _farRetrying || _farRows === null || !_benchmarkFirmId) return;
+  _farRefreshing = true;
+  _farRefreshTriedAt = Date.now();
+  farRenderRefresh();
+  const shown = new Promise(resolve => setTimeout(resolve, FAR_REFRESH_MIN_SHOWN_MS));
+  try {
+    _farRefreshFailed = !(await farFetchRequests({ keepOnFailure: true }));
+  } catch (e) {
+    console.error('[far] refresh —', e);
+    _farRefreshFailed = true;
+  }
+  await shown;
+  _farRefreshing = false;
+  renderFarSection();
+}
+
+function farRefreshClick() {
+  trackWorkhub('click', 'CartaWorkhub.Queue.Refresh');
+  farRefresh();
+}
+
+// Work done in a chat elsewhere shows up when the viewer comes back to this page.
+function farRefreshOnReturn() {
+  if (document.hidden || Date.now() - _farRefreshTriedAt < FAR_REFRESH_MIN_AGE_MS) return;
+  farRefresh();
+}
+document.addEventListener('visibilitychange', farRefreshOnReturn);
+window.addEventListener('focus', farRefreshOnReturn);
+
 // The composer never hides — a section that vanishes takes the entry point with it.
 function renderFarSection() {
   const section = document.getElementById('far-section');
@@ -1384,6 +1465,7 @@ function renderFarSection() {
   if (empty) empty.style.display = !loading && tabRows.length === 0 && !farTabFailed(tab.key) ? '' : 'none';
 
   farRenderLoadError(tab.key);
+  farRenderRefresh();
 }
 
 
