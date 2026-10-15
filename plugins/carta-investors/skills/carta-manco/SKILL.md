@@ -44,7 +44,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.76.0</carta-plugin>
+<carta-plugin>carta-investors:6.76.1</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -207,10 +207,10 @@ for this skill entirely — redirect and stop; do not proceed to Gate 0.
 | Message signals | Action |
 |---|---|
 | "microapp", "dashboard", "app", "visual report" paired with ManCo / management company — at any verb, "build" included | **Stop.** The user wants the visual ManCo surface, not a budget workbook. Hand off immediately: `Skill("carta-investors:carta-manco-reporting")`. Do not show the capability menu and do not ask which capability they meant — a microapp/dashboard ask is unambiguous. (Exception: "loan dashboard" matches the loans row below instead.) |
-| "loan dashboard", "loan portfolio", "draw balance", "loan overview" | **Stop.** Loans are a separate domain. Tell the user: "Loans live in a separate skill — try `carta-investors:carta-loan-dashboard` or `carta-investors:carta-loan-overview` directly." |
+| "loan dashboard", "loan portfolio", "draw balance", "loan overview" | **Stop.** Loans are a separate domain. Tell the user: "Loans live in a separate skill — try `carta-investors:carta-loan-dashboard` directly." |
 | "Fund Forecasting", "Tactyc", "forecasting metrics" | **Stop.** Fund Forecasting is a separate domain from Fund Admin ManCo budgeting. Tell the user: "Fund Forecasting / Tactyc metrics are handled by a different skill — try `carta-investors:carta-fund-forecasting`." |
 | "single-fund financials", "this fund's financials", "portfolio valuations", "fund marks", "portfolio company valuation" | **Stop.** Single-fund and portfolio-level financials/valuations are out of scope for ManCo budgeting. Tell the user: "That's single-fund/portfolio territory, not the ManCo — try Carta's portfolio valuations tools." |
-| "LP reporting", "LP documents", "K-1", "capital call notice", "distribution notice", "AGM deck", "tear sheet" | **Stop.** LP reporting is a separate domain. Tell the user: "LP documents and reporting live in a separate skill set — try `carta-investors:carta-lp-reporting-routing`." |
+| "LP reporting", "LP documents", "K-1", "capital call notice", "distribution notice", "AGM deck", "tear sheet" | **Stop.** LP reporting is a separate domain. Tell the user: "Tear sheets and AGM decks have their own skills — try `carta-investors:carta-download-tearsheet` or `carta-investors:carta-agm-deck-builder`. For an investor's own K-1s and notices, say 'show me my LP documents'. Documents your fund sent to its LPs are managed in Carta directly." |
 | "cap table", "equity grants", "409A", "option pool" | **Stop.** Cap table administration is out of scope for ManCo budgeting. Tell the user: "Cap table and equity administration live in Carta's cap table tools, not here." |
 
 If none of the rows above match, continue below to determine the capability.

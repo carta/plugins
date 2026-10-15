@@ -2,7 +2,7 @@
 name: carta-download-tearsheet
 description: >
   Download tear sheets for your portfolio companies and funds on Carta.
-  For tear sheet requests, use carta-lp-reporting-routing instead.
+  For tear sheet requests, use carta-lp-reporting-routing instead when it is installed.
 version: 1.2.2
 model: haiku
 allowed-tools:
@@ -22,7 +22,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.76.0</carta-plugin>
+<carta-plugin>carta-investors:6.76.1</carta-plugin>
 
 <!-- Part of the official Carta AI Agent Plugin -->
 

@@ -36,7 +36,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.76.0</carta-plugin>
+<carta-plugin>carta-investors:6.76.1</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -117,9 +117,10 @@ If you genuinely cannot determine the intent, call `AskUserQuestion`:
 
 | Topic | Suggestion |
 |---|---|
-| LP reporting, LP quarterly reports | `/carta-lp-reporting-routing` or `/carta-soi` |
+| LP quarterly reports, schedule of investments | `/carta-portfolio-analytics-routing` |
+| Tear sheets, AGM decks | `carta-investors:carta-download-tearsheet`, `carta-investors:carta-agm-deck-builder` |
 | Fund financials, NAV, trial balance | Consolidating financials skills |
-| Performance benchmarks, IRR, TVPI, peer percentile | `/carta-performance-benchmarks` |
+| Performance benchmarks, IRR, TVPI, peer percentile | `/carta-portfolio-analytics-routing` |
 | Co-investor analysis | `carta-co-investors` |
 | Wants Carta's Fund Admin team to *do* something | `carta-fund-admin-requests` |
 
@@ -176,8 +177,8 @@ Do not summarize what the target skill will do. Do not add any other output befo
 | User asks about something that isn't Form ADV filing data | Use Step 2 `AskUserQuestion` to clarify — offer Form ADV filing data or "Something else" |
 | User asks about 409A valuations | Out of scope — separate cap table valuation product, see STOP rows |
 | User asks about cap table ownership | Out of scope — see STOP rows |
-| User asks about LP reporting or fund financials | Out of scope — suggest `/carta-lp-reporting-routing` or the consolidating financials skills |
-| User asks about fund performance, IRR, or TVPI benchmarks | Out of scope — suggest `/carta-performance-benchmarks` |
+| User asks about LP reporting or fund financials | Out of scope — suggest `/carta-portfolio-analytics-routing` or the consolidating financials skills |
+| User asks about fund performance, IRR, or TVPI benchmarks | Out of scope — suggest `/carta-portfolio-analytics-routing` |
 | User asks to view all SPA documents, DI page, purchaser breakdowns | Not yet GA externally — see **Future routes** below |
 | User asks about SPA coverage, missing/unexecuted SPAs | Not yet GA externally — see **Future routes** below |
 
