@@ -881,7 +881,7 @@ function CompanyRow({ company, updateCompany, assumptions, snapshot, onToggle, o
         </StackedValue>
       </td>
       <td style={{ ...numTd, color: dealIrr == null ? "var(--ink-color-global-text-subtle)" : dealIrr >= 0 ? "var(--ink-color-global-feedback-positive-strong)" : "var(--ink-color-global-feedback-negative-strong)" }}
-        title="Carta's reported deal IRR, shifted by the modeled reprice at the fund's assumed exit horizon (gross of fund fees/carry).">
+        title={COLUMN_HELP.irr}>
         <StackedValue up={irrDelta ?? 0}
           delta={irrDelta != null && Math.abs(irrDelta) >= 0.001 ? fmtPct(Math.abs(irrDelta)) : null}>
           {dealIrr == null ? "—" : fmtPct(dealIrr)}
@@ -1378,20 +1378,38 @@ const SORT_DEFAULT_DIR = { value: "desc", invested: "desc", az: "asc", mark: "de
 function SortableTh({ id, label, align = "right", sortBy, sortDir, onSort, style, hidden, help }) {
   const active = sortBy === id;
   const ariaSort = active ? (sortDir === "asc" ? "ascending" : "descending") : "none";
+  // A column with `help` explains itself in a tooltip on hover/focus of the
+  // header — no help icon and no underline.
+  const button = (
+    // tabIndex/aria-hidden when `hidden`: the real (non-clone) header stays scrolled
+    // off-screen but in the DOM while its floating clone is showing — without this,
+    // the off-screen buttons would still be reachable by Tab and announced by
+    // screen readers as an invisible, confusing duplicate of the clone's controls.
+    <button type="button" className="ink-sort-btn" onClick={() => onSort(id)} aria-label={`Sort by ${label}`}
+      tabIndex={hidden ? -1 : 0} aria-hidden={hidden || undefined}>
+      {/* right-aligned (numeric) columns lead with the icon, mirroring the right-aligned data below */}
+      {align === "right" ? <><SortIcon />{label}</> : <>{label}<SortIcon /></>}
+    </button>
+  );
   return (
-    <th style={{ textAlign: align, ...style }} aria-sort={ariaSort} title={help}>
-      {/* tabIndex/aria-hidden when `hidden`: the real (non-clone) header stays scrolled
-          off-screen but in the DOM while its floating clone is showing — without this,
-          the off-screen buttons would still be reachable by Tab and announced by
-          screen readers as an invisible, confusing duplicate of the clone's controls. */}
-      <button type="button" className="ink-sort-btn" onClick={() => onSort(id)} aria-label={`Sort by ${label}`}
-        tabIndex={hidden ? -1 : 0} aria-hidden={hidden || undefined}>
-        {/* right-aligned (numeric) columns lead with the icon, mirroring the right-aligned data below */}
-        {align === "right" ? <><SortIcon />{label}</> : <>{label}<SortIcon /></>}
-      </button>
+    <th style={{ textAlign: align, ...style }} aria-sort={ariaSort}>
+      {/* portal: the tooltip escapes the table's scroll clip and the floating clone */}
+      {help ? <InfoTip portal width={320} trigger={button}>{help}</InfoTip> : button}
     </th>
   );
 }
+
+// What each column means, shown on hover of the header. FV's source depends on
+// the scenario: the locked baseline shows Carta's marks, any other scenario its
+// own repricing.
+const COLUMN_HELP = {
+  value: {
+    base: "Fair value for all holdings across your entire portfolio, pulled from Carta.",
+    scenario: "Fair value for all holdings across your entire portfolio, pulled from your scenario repricing.",
+  },
+  stale: "Date of the latest valuation mark held in Carta",
+  irr: "Estimated deal IRR for your scenario at the investment's assumed exit timing. Gross of fund fees and carry.",
+};
 
 // The header row, factored out so the exact same markup renders both in the
 // table's own <thead> and in the floating clone below — no duplicated JSX to
@@ -1400,7 +1418,7 @@ function SortableTh({ id, label, align = "right", sortBy, sortDir, onSort, style
 // beneath it (the clone table has no body rows of its own to size against).
 // `hidden` is only ever passed to the REAL (in-flow) instance, and only while
 // its floating clone is standing in for it — see SortableTh above.
-function CompaniesHeaderRow({ sortBy, sortDir, onSort, colWidths, hidden }) {
+function CompaniesHeaderRow({ sortBy, sortDir, onSort, colWidths, hidden, locked }) {
   const w = (i) => (colWidths ? { width: colWidths[i] } : undefined);
   return (
     <tr>
@@ -1408,10 +1426,10 @@ function CompaniesHeaderRow({ sortBy, sortDir, onSort, colWidths, hidden }) {
           up with the name text, not the repriced-stripe at the cell edge */}
       <SortableTh id="az" label="Company" align="left" sortBy={sortBy} sortDir={sortDir} onSort={onSort} style={{ paddingLeft: 10, ...w(0) }} hidden={hidden} />
       <SortableTh id="invested" label="Invested" sortBy={sortBy} sortDir={sortDir} onSort={onSort} style={w(1)} hidden={hidden} />
-      <SortableTh id="value" label="FV" sortBy={sortBy} sortDir={sortDir} onSort={onSort} style={w(2)} hidden={hidden} />
-      <SortableTh id="stale" label="Valuation date" help="Date of the latest valuation mark held in Carta" sortBy={sortBy} sortDir={sortDir} onSort={onSort} style={w(3)} hidden={hidden} />
+      <SortableTh id="value" label="FV" help={locked ? COLUMN_HELP.value.base : COLUMN_HELP.value.scenario} sortBy={sortBy} sortDir={sortDir} onSort={onSort} style={w(2)} hidden={hidden} />
+      <SortableTh id="stale" label="Valuation date" help={COLUMN_HELP.stale} sortBy={sortBy} sortDir={sortDir} onSort={onSort} style={w(3)} hidden={hidden} />
       <SortableTh id="mark" label="MOIC" sortBy={sortBy} sortDir={sortDir} onSort={onSort} style={w(4)} hidden={hidden} />
-      <SortableTh id="irr" label="Deal IRR" sortBy={sortBy} sortDir={sortDir} onSort={onSort} style={w(5)} hidden={hidden} />
+      <SortableTh id="irr" label="Deal IRR" help={COLUMN_HELP.irr} sortBy={sortBy} sortDir={sortDir} onSort={onSort} style={w(5)} hidden={hidden} />
       <SortableTh id="own" label="Own %" sortBy={sortBy} sortDir={sortDir} onSort={onSort} style={w(6)} hidden={hidden} />
       <th style={{ ...sans, textAlign: "left", width: colWidths ? colWidths[7] : STATUS_COL_W }}>Status</th>
     </tr>
@@ -1720,7 +1738,7 @@ export default function Companies({ portfolio, snapshot, exitHorizonOverrides, u
       <TableScroll>
         <table className="ledger" ref={tableRef}>
           <thead>
-            <CompaniesHeaderRow sortBy={sortBy} sortDir={sortDir} onSort={onSortClick} hidden={sticky.floating} />
+            <CompaniesHeaderRow sortBy={sortBy} sortDir={sortDir} onSort={onSortClick} hidden={sticky.floating} locked={readOnly} />
           </thead>
           <tbody>
             {companies.map((c) => (
@@ -1756,18 +1774,12 @@ export default function Companies({ portfolio, snapshot, exitHorizonOverrides, u
         <div className="sticky-clone-slot" style={{ top: sticky.top, left: sticky.left, width: sticky.width, display: sticky.floating ? "block" : "none" }}>
           <table className="ledger sticky-clone" style={{ ...sans, width: sticky.colWidths?.reduce((a, w) => a + w, 0), transform: `translateX(${-(sticky.scrollLeft || 0)}px)` }}>
             <thead>
-              <CompaniesHeaderRow sortBy={sortBy} sortDir={sortDir} onSort={onSortClick} colWidths={sticky.colWidths} />
+              <CompaniesHeaderRow sortBy={sortBy} sortDir={sortDir} onSort={onSortClick} colWidths={sticky.colWidths} locked={readOnly} />
             </thead>
           </table>
         </div>,
         document.body
       )}
-
-      <SourceNote>
-        Source: Carta Fund Admin holdings (AGGREGATE_INVESTMENTS). FMV is the latest Carta mark; reprices are scenario inputs.
-        Deal IRR is Carta's reported deal IRR at rest, shifted by the reprice's modeled effect at the fund's assumed exit horizon (set above, or on LP Returns) — gross of fund fees/carry, an estimate.
-        Companies flagged with the cap-table badge carry Carta share-class records (SUMMARY_CAP_TABLE); expand one to see the liquidation-preference stack and, when enabled, incorporate the liquidation-preference waterfall into the fund's value — a transparent pragmatic estimate, not Carta's official waterfall engine.
-      </SourceNote>
 
       {expandedCompany && (
         <CompanyModal key={expandedCompany.id} company={expandedCompany} onClose={() => setExpandedId(null)} ownership={ownership}
