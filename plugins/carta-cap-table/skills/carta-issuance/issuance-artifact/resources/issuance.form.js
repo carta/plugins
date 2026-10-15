@@ -221,7 +221,7 @@ function seedShared() {
     sh.option_plan_id = p.optionPlanId ? String(p.optionPlanId) : "";
     sh.jurisdiction = p.jurisdiction && SO[p.jurisdiction] ? p.jurisdiction : "";
     sh.so_type = p.soType || "";
-    sh.exercise_price = p.exercisePrice != null ? tidyPrice(p.exercisePrice) : "";
+    sh.exercise_price = tidyStored(p.exercisePrice);
     sh.document_set_id = p.documentSetId ? String(p.documentSetId) : "";
     // A fresh form derives it in grantExpiry(); the server's copy caps it at the plan's end.
     sh.grant_expiration_date = freshSet() ? "" : iso(p.grantExpirationDate) || "";
@@ -234,7 +234,7 @@ function seedShared() {
     sh.employment_related = "";
   } else if (S.type === "certificate") {
     sh.prefix = p.shareClassPrefix || "";
-    sh.law_firm_price = p.pricePerShare != null ? String(p.pricePerShare) : "";
+    sh.law_firm_price = tidyStored(p.pricePerShare);
     sh.board_approval_date = iso(p.boardApprovalDate) || issue;
     sh.legend_id = p.legendId ? String(p.legendId) : "";
     sh.rule_144_mode = "issue_date";
@@ -243,7 +243,7 @@ function seedShared() {
     sh.dividend_accrual_start_date = issue;
   } else {
     sh.prefix = p.shareClassPrefix || "";
-    sh.threshold_value = p.thresholdValue != null ? String(p.thresholdValue) : "";
+    sh.threshold_value = tidyStored(p.thresholdValue);
     sh.threshold_value_type = p.thresholdValueType || "";
     sh.option_plan = p.optionPlanId ? String(p.optionPlanId) : "";
     sh.board_approval_date = iso(p.boardApprovalDate) || "";
@@ -290,9 +290,9 @@ function applySeedTerms(sh) {
     if (iso(seedTerm("grant_expiration_date"))) sh.grant_expiration_date = iso(seedTerm("grant_expiration_date"));
     if (seedTerm("early_exercise") != null) sh.early_exercise = yes(seedTerm("early_exercise"));
   } else if (S.type === "certificate") {
-    if (seedTerm("price_per_share") != null) sh.law_firm_price = String(seedTerm("price_per_share"));
+    if (seedTerm("price_per_share") != null) sh.law_firm_price = tidyPrice(seedTerm("price_per_share"));
   } else if (seedTerm("threshold_value") != null) {
-    sh.threshold_value = String(seedTerm("threshold_value"));
+    sh.threshold_value = tidyPrice(seedTerm("threshold_value"));
   }
 }
 
@@ -307,9 +307,9 @@ function rowTermOverrides(terms) {
     if (so) out.so_type = so;
     if (t("exercise_price") != null) out.exercise_price = tidyPrice(t("exercise_price"));
   } else if (S.type === "certificate" && t("price_per_share") != null) {
-    out.law_firm_price = String(t("price_per_share"));
+    out.law_firm_price = tidyPrice(t("price_per_share"));
   } else if (S.type === "piu" && t("threshold_value") != null) {
-    out.threshold_value = String(t("threshold_value"));
+    out.threshold_value = tidyPrice(t("threshold_value"));
   }
   if (iso(t("board_approval_date"))) out.board_approval_date = iso(t("board_approval_date"));
   return out;
@@ -447,7 +447,7 @@ function mkRow(o) {
   return {
     key: `r${S.seq++}`, stakeholderId: o.stakeholderId ?? null,
     name: o.name || "", email: o.email || "", quantity: o.quantity || "",
-    kind: o.kind || "INDIVIDUAL", relationship: o.relationship || "",
+    kind: wireKind(o.kind) || "INDIVIDUAL", relationship: o.relationship || "",
     isNew: !!o.isNew, open: false, query: o.name || "", ov, seeded: Object.assign({}, ov),
     touched: new Set(Object.keys(ov)),
   };
@@ -856,6 +856,8 @@ function tidyPrice(v) {
   const [int, frac = ""] = s.split(".");
   return `${int}.${frac.replace(/0+$/, "").padEnd(2, "0")}`;
 }
+/** A Carta price as the form shows it; a null reads as blank. */
+const tidyStored = (v) => (v == null ? "" : tidyPrice(v));
 /** The live valuation rows to price from. `active` is already filtered server-side, so
     it is never re-derived from dates. A 409A row carries no share class, so it is tagged
     COMMON — an option is the only thing a 409A prices. */
@@ -2296,8 +2298,9 @@ const TRASH = '<svg viewBox="0 0 16 16" width="15" height="15" fill="none" strok
   + 'M4 4.5l.7 8.6a1 1 0 0 0 1 .9h4.6a1 1 0 0 0 1-.9l.7-8.6M6.8 7v4.5M9.2 7v4.5"/></svg>';
 const KIND_OPTS = [["INDIVIDUAL", "Individual"], ["ORGANIZATION", "Entity"]];
 /** The draft save keeps only INDIVIDUAL / ORGANIZATION and stores anything else as
-    INDIVIDUAL, so the bulk-import spelling NON-INDIVIDUAL, wherever a row picked it
-    up (a prefill, a sheet), goes out as ORGANIZATION. */
+    INDIVIDUAL. A row takes the bulk-import spelling NON-INDIVIDUAL (a prefill, a sheet,
+    a stored draft) as ORGANIZATION when it is made, so the Stakeholder type select shows
+    Entity and the save sends the same value; rowValues applies it again as a backstop. */
 const wireKind = (k) => (k === "NON-INDIVIDUAL" ? "ORGANIZATION" : k);
 
 const rowRefused = (r) => Object.keys((S.srv.rows || {})[r.key] || {}).length
@@ -4046,14 +4049,14 @@ function storedTerms(x) {
   if (S.type === "certificate") {
     const r144 = from("rule_144_date", date);
     const legend = objs(S.legends).find((l) => (l.text || l.body || "") === (x.legend || ""));
-    Object.assign(out, { prefix: from("prefix", txtv), law_firm_price: from("law_firm_price", txtv),
+    Object.assign(out, { prefix: from("prefix", txtv), law_firm_price: from("law_firm_price", tidyStored),
       legend_id: !("legend" in x) ? AS_SAVED : !x.legend ? "" : legend ? String(legend.id) : AS_SAVED,
       // A blank stored date is neither "same as issue" nor a date of its own.
       rule_144_mode: !r144 || r144 === AS_SAVED ? AS_SAVED : r144 === out.issue_date ? "issue_date" : "other",
       rule_144_date: r144 || AS_SAVED, rule_144_reason: from("rule_144_difference_reason", txtv),
       dividend_accrual_start_date: from("dividend_accrual_start_date", date) });
   } else if (S.type === "piu") {
-    Object.assign(out, { prefix: from("prefix", txtv), threshold_value: from("threshold_value", txtv),
+    Object.assign(out, { prefix: from("prefix", txtv), threshold_value: from("threshold_value", tidyStored),
       threshold_value_type: from("threshold_value_type", txtv), option_plan: from("option_plan", txtv),
       document_set_id: from("document_set_id", txtv),
       corresponding_interest: from("corresponding_interest", bool) });
@@ -4064,7 +4067,7 @@ function storedTerms(x) {
     Object.assign(out, {
       board_mode: nba === true ? "pending" : nba === false ? "approved"
         : out.board_approval_date && out.board_approval_date !== AS_SAVED ? "approved" : AS_SAVED,
-      so_type: from("so_type", txtv), exercise_price: from("exercise_price", (v) => (v == null ? "" : tidyPrice(v))),
+      so_type: from("so_type", txtv), exercise_price: from("exercise_price", tidyStored),
       grant_expiration_date: from("grant_expiration_date", date),
       early_exercise: from("early_exercise", bool), is_hmrc_notified: from("is_hmrc_notified", bool),
       hmrc_notified: from("hmrc_notified", (v) => (v ? String(v).slice(0, 10) : "")),

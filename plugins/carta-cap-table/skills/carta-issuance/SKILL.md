@@ -48,7 +48,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.96.15</carta-plugin>
+<carta-plugin>carta-cap-table:6.96.16</carta-plugin>
 
 # Issue Securities
 
