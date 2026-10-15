@@ -13,7 +13,7 @@ formatting is `SKILL.md` §Formatting rules.
   has_performance_condition, cliff_summary, vesting_start_date,
   exercise_price,            // grant_vesting (options) — strike; null on certificates
   base_value,                // grant_vesting (CBU / phantom) — strike analog; null otherwise
-  threshold_value, threshold_value_type,   // certificate_vesting (PIU hurdle); null otherwise
+  threshold_value, threshold_value_type,   // hurdle (CBU / phantom / SAR / PIU); null otherwise
   // invested-capital / preferred-return (certificate_vesting only; null otherwise):
   unreturned_invested_capital, initial_invested_capital, returned_invested_capital,
   unpaid_preferred_return, paid_preferred_return, preferred_return_accrued_all_time,
@@ -35,8 +35,10 @@ there is no service-window split.
 **Append the security's economics when present**, each clause ` · `-separated; omit any clause whose
 field is null:
 
-- **strike** — `· strike {exercise_price}` (options); for CBU / phantom use `· strike {base_value}`
-- **threshold** — `· threshold {threshold_value}` (PIU)
+- **strike** — `· strike {exercise_price}` (options); for CBU / phantom use `· strike {base_value}`, only
+  when there's no threshold clause
+- **threshold** — `· threshold {threshold_value} ({threshold_value_type})`, only when `threshold_value` is
+  above 0; no bracket when `threshold_value_type` is null
 - **invested capital** — `· unreturned capital {unreturned_invested_capital}`
 - **preferred return** — `· pref accrued {unpaid_preferred_return} / paid {paid_preferred_return}`
 
