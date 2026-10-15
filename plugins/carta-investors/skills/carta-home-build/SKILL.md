@@ -51,7 +51,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.80.1</carta-plugin>
+<carta-plugin>carta-investors:6.83.0</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -422,68 +422,44 @@ If Step 2 found no Home for this firm, say so and build it (Step 3 onward).
 Users customize Carta Home and its dashboards by asking Claude to edit the published pages
 — the Customize prompts on the SOI and Fund Performance cards invite exactly that. A
 rebuild publishes fresh pages over the same URLs, so without this step it silently throws
-those changes away. **Keeping them is the default:** the update carries every change into
-the new version without asking, and asks only where the new version and a change collide
-(Step 6). Run this step whenever Step 2 found this firm's Home or either dashboard; skip it
-on a first build.
+those changes away. **Keeping them is the default,** on Home and on every dashboard: the
+update carries each change into the new version without asking, asks only where the new
+version and a change collide, and ends with one summary of what was kept (Step 8). Run
+this step whenever Step 2 found this firm's Home or either dashboard; skip it on a first
+build.
+
+Follow `${CLAUDE_PLUGIN_ROOT}/references/keep-customizations.md` — the plugin's
+`references/`, not this skill's; read it by that exact path, don't search for it. The
+script for every page is this skill's own
+`${CLAUDE_PLUGIN_ROOT}/skills/carta-home-build/scripts/customizations.py`: every stamped page
+reads the same way.
 
 **Start fresh on request.** When the user asked for a clean page — "start fresh", "reset
-Carta Home", "without my changes" — skip the rest of this step: nothing is carried over.
-Still save the live page (below), so their old one can come back.
+Carta Home", "without my changes" — carry nothing over on Home or the dashboards, and tell
+each dashboard skill so in Step 5. Still save every live page, so the old ones can come back.
 
-**1. Save the live page.** Read it and save it next to the build output, at
-`<outputs-directory>/carta-home-<slug>.live.html` — if `Artifact({action: "read", url})`
-hands back a file, use that; otherwise write the HTML it returns to that path. This copy
-is the user's backup and what "undo" restores from, so keep it for the whole run.
+**Now, for each page Step 2 found, save it and check whether it has changes** (the
+reference's step 2, then `diff` — the full `plan` waits until the new build exists):
 
-**2. Find what changed.**
-
-```
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-home-build/scripts/customizations.py" diff <outputs-directory>/carta-home-<slug>.live.html
-```
-
-Every build stamps a baseline of itself into the page, so the script lines the live page
-up against the page as it was built and prints JSON with a `status`:
-
-| `status` | Meaning | What to do |
+| Page | Live file | Where its changes are carried over |
 |---|---|---|
-| `unmodified` | the page is exactly as built | nothing to carry over |
-| `customized` | `hunks` holds each change: the live `line` it starts at, the lines `added`, and how many were `removed` | describe each change (below); Step 6 carries them over |
-| `no_baseline` | built before pages carried a baseline | run it again with `--against` (below) |
+| Carta Home | `<outputs-directory>/carta-home-<slug>.live.html` | Step 6, by this skill |
+| Schedule of Investments | `<CWD>/<firm-slug>-fund-soi-collection.live.html` | Step 5, by the dashboard's own skill |
+| Fund Performance | `<CWD>/fund-performance.live.html` | Step 5, by the dashboard's own skill |
 
-For `no_baseline`, build the new page first (Step 3's command with `--out
-<outputs-directory>/carta-home-<slug>.reference.html`), then rerun the script with
-`--against <that file>`. The hunks now mix the user's changes with everything Carta
-changed since `version`. Keep only what reads as the user's — a column, a filter, a color
-rule, a card or a chart Carta's source does not have. These are your best reading of their
-changes, so the summary says so (Step 8).
+A dashboard's live file is the one its own skill names, so the skill finds the page already
+saved: `<CWD>` is the session's current directory, and `<firm-slug>` follows the
+Slugification rules in `${CLAUDE_PLUGIN_ROOT}/skills/carta-soi/SKILL.md` ("Acme Capital
+Partners, L.P." → `acme-capital-partners-lp`), which differ from this skill's `<slug>`.
 
-Describe each change in one plain line a fund CFO recognises, named by where it shows —
-"SOI card: rows tinted by gain/loss", not a line number or a function name. Read the live
-file around a hunk's `line` when the added lines alone don't say what it does. Several
-hunks that make one change are one line. These lines are what the summary lists.
+```
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-home-build/scripts/customizations.py" diff "<live file>"
+```
 
-**A page that is mostly the user's own flips the direction.** When `summary.changed_share`
-is 0.3 or more, carrying their changes onto the new build means rebuilding most of their
-page by hand. Step 6 brings Carta's changes into their page instead — still without asking.
-
-**3. Dashboards.** The SOI and Fund Performance dashboards are published by their own
-skills and carry no baseline, so their changes can't be found — and Step 5 republishes them
-from scratch. That is a real choice only the user can make, so when Step 2 found either
-dashboard, ask one `AskUserQuestion` — question "Update your Schedule of Investments and
-Fund Performance dashboards too?":
-
-- label "Update them (Recommended)" · description "Get the latest versions. Any changes
-  you made to them are replaced."
-- label "Keep them as they are" · description "Carta Home links to your current
-  dashboards, changes and all."
-
-**Keep them as they are** — the found dashboards are **kept**: Step 3 passes their Step 2
-URLs as `--dashboard-url` instead of `--dashboard-building`, and Step 5 skips them. A kept
-dashboard still raises its own update banner when its skill ships a new version.
-
-Home itself asks nothing here. Carry its change list, and which dashboards are kept,
-through to Steps 3–6.
+Nothing is asked here. Note whether Home reads `customized` or `no_baseline`: Steps 4, 6
+and 8 depend on it. Note which dashboards read `customized` or `no_baseline` too: Step 5
+builds those one at a time, because each may stop to ask about a conflict. If the script
+can't be run at all, follow the reference's one up-front question for each page.
 
 ### Step 3: Build the self-contained artifact (no need to read any HTML)
 
@@ -519,12 +495,14 @@ page this run is about to replace. Step 6 runs the same command again with the U
 returns, and the cards become launchers.
 
 **An existing URL is not a reason to skip Step 5.** Every entry with a `buildSkill` is
-rebuilt on every run unless the user chose to keep it in Step 2c, so the dashboards carry the current version of their skill rather
-than whatever shipped whenever they were last published. Step 2's URL tells the dashboard
+rebuilt on every run, so the dashboards carry the current version of their skill rather
+than whatever shipped whenever they were last published — with the user's own changes
+carried over by the dashboard's skill. Step 2's URL tells the dashboard
 skill where to redeploy; it never stands in for building.
 
-**A dashboard Step 2c kept is the exception:** pass its Step 2 URL as `--dashboard-url
-<key>=<url>` now, since nothing will replace that page.
+**A dashboard the user chose to keep as it is is the exception** (only possible when the
+script could not run, Step 2c): pass its Step 2 URL as `--dashboard-url <key>=<url>` now,
+since nothing will replace that page.
 
 **Omit both flags for an entry with no `buildSkill`** — do not pass an empty value or a
 guessed URL. An omitted key leaves that card on its copyable prompt, which is the intended
@@ -537,11 +515,11 @@ on whichever dashboard was built last — a published artifact surfaces itself, 
 way home is the landing surface is for it to be the first one published. **Keep the URL
 this returns**; Step 6 redeploys over it.
 
-**Skip this publish when Step 2c found changes to carry over.** This build does not carry
-the user's changes yet, so publishing it would take them off their page for the length of
-the fan-out. Their current page stays up, changes intact, and Step 6 publishes the merged
-one over it. Go straight to Step 5. The same holds when every dashboard was kept: there
-is nothing to fill in behind home, so Step 6 is the only publish.
+**Skip this publish when Step 2c read Home as `customized` or `no_baseline`.** This build
+does not carry the user's changes yet, so publishing it would take them off their page for
+the length of the fan-out. Their current page stays up, changes intact, and Step 6 publishes the merged
+one over it. Go straight to Step 5. The same holds when every dashboard was kept as it is:
+there is nothing to fill in behind home, so Step 6 is the only publish.
 
 One call either way. `action` defaults to `"publish"`, so it is omitted below; `url` is
 the only difference between a first publish and a redeploy.
@@ -604,18 +582,21 @@ Artifact({
 
 ### Step 5: Publish the dashboard artifacts
 
-**This step always runs** for every dashboard the user did not keep in Step 2c. Home is
+**This step always runs** for every dashboard not kept as it is in Step 2c. Home is
 live by now with its cards marked as building, and this is what fills them in. Skipping it because a card already points somewhere leaves the
 starter pack unbuilt and every dashboard on whatever version it was last published from.
 
 For each `DASHBOARDS` entry in `resources/carta-home.config.js` that has a `buildSkill`
-and that Step 2c did not keep, work down its candidates in order and invoke the **first one that resolves**, keeping the
+and that was not kept as it is, work down its candidates in order and invoke the **first one that resolves**, keeping the
 artifact URL it returns, keyed by the entry's `key`. A candidate that is not installed is
 not a failure — move to the next one. Once a candidate returns a URL, stop; do not invoke
 the rest, or the same dashboard is published twice.
 
 **Invoke every entry's first candidate in parallel — one message, multiple `Skill` calls —
-never one entry after another.** The `soi` and `perf` entries build independently, so
+never one entry after another** — except a dashboard Step 2c found `customized` or
+`no_baseline`. Its skill carries the user's changes over and may stop to ask about a
+conflict, so run those one at a time, after the parallel batch, where their questions
+can't interleave. The `soi` and `perf` entries build independently, so
 running them one after the other only adds wall-clock time for no benefit, and pushes
 real-world builds closer to (or past) the client-side timeout that reverts a card's
 "Preparing" state (`DASH_BUILDING_TIMEOUT_MS` in `carta-home.config.js`). Building both at
@@ -642,6 +623,16 @@ E.g. for the `soi` entry:
 > stays stable. Carta Home is at `<home url>`: pass it to the render script as
 > `--home-url`. Return only the published artifact URL.
 
+Every dashboard prompt also carries how to treat the user's changes, since the dashboard's
+skill carries them over itself:
+
+> The user's current page is saved at `<the dashboard's live file from Step 2c>`. Keep
+> their changes, as keep-customizations.md describes, and return the published URL with the
+> summary lines of what you kept rather than printing them.
+
+or, when the user asked to start fresh: "The user asked to start fresh: carry none of their
+changes over."
+
 `carta-fund-performance` resolves its own firm at runtime and needs no context passed —
 it still takes the existing URL so its link stays stable, and the home URL for its
 `--home-url`. It is the `perf` entry's only
@@ -660,46 +651,16 @@ dashboard Step 5 published, and dropping `--dashboard-building` for those keys. 
 `--dashboard-building` only for an entry that was meant to build and did not, so its card
 still explains itself.
 
-**Carry the user's changes over** when Step 2c found any, before publishing. Get the plan:
-
-```
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-home-build/scripts/customizations.py" plan <outputs-directory>/carta-home-<slug>.live.html <outputs-directory>/carta-home-<slug>.html
-```
-
-It lists the same changes as Step 2c, each with `conflict`: `true` when Carta changed or
-removed the same part of the page in this version.
-
-- **No conflict** — apply the change to this build's output file without asking, working
-  from what it does rather than pasting old lines in: the code around it may have moved.
-- **`conflict: true`** — the part of the page it changed is different now. Ask about this
-  change alone.
-- **Now built in** — while applying any change, if this version already does what it did
-  (a column the user added that Carta now ships, say), that is a conflict too: ask about it
-  alone. Only you can spot this one; the script can't.
-
-For a page that is mostly theirs (Step 2c), turn it around: publish the saved live file,
-bringing in each of Carta's changes from `uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-home-build/scripts/customizations.py"
-diff <live file> --release <this build>`, and ask only where one of them lands on something
-the user changed.
-
-Ask about each conflict with `AskUserQuestion`, one question per change, naming it and what
-changed in Carta Home:
-
-- changed or removed — label "Adapt it (Recommended)" · description "Rework your change to
-  fit the new version", or label "Drop it" · description "Use the new version here"
-- now built in — label "Use the built-in one (Recommended)" · description "Carta Home now
-  does this; your version is dropped", or label "Keep mine" · description "Keep your version
-  instead"
-
-Up to four conflicts go in one call. More than four is one question first: label "Adapt
-them all", "Use the new version for all" or "Go through them". A change the user did not
-touch in conflict never becomes a question.
-
-Nothing else is asked: publish when the conflicts are settled.
+**Carry the user's changes over** when Step 2c read Home as `customized` or `no_baseline`,
+before publishing: follow keep-customizations.md steps 3–5 with this build as the new build
+and page "Carta Home".
+Keep the summary lines it produces for Step 8.
 
 Then run Step 4's `Artifact` call again with `url` set to the home URL — the one Step 4
-returned, or Step 2's when Step 4 was skipped — so this redeploys in place instead of
-claiming a second page. A redeploy reaches viewers who
+returned, or Step 2's when Step 4 was skipped — and `file_path` set to the file
+keep-customizations left you: this build with the user's changes carried in, or, for a
+page that is mostly theirs, the `.rebased.html` file `rebase` wrote. That way this
+redeploys in place instead of claiming a second page. A redeploy reaches viewers who
 already have home open, so the cards change from building to links under them — no reload.
 
 **If a dashboard was skipped, redeploy anyway.** The card falls back to its prompt, which
@@ -716,21 +677,19 @@ accept, every card shows its no-connector state.
 ### Step 8: Confirm
 
 Give the user the artifact's URL, name the firm in its title, and tell them it is live.
-When Step 2c carried changes over, follow with the summary — the user was not asked about
-them, so this is how they find out and how they undo one:
+When Step 2c read Home or a dashboard as `customized` or `no_baseline`, follow with one
+summary for the whole update — keep-customizations.md step 6, with Home's lines and the
+lines each dashboard skill returned, grouped by page:
 
-> Kept your <N> changes: <plain line>, <plain line>, <plain line>.
-> Want to undo any of them, or start fresh? Your previous page is saved.
+> Kept your changes:
+> - Carta Home: <plain line>, <plain line>
+> - Schedule of Investments: <plain line>
+>
+> Want to undo any of them, or start fresh? Your previous pages are saved.
 
-Past five changes, name the areas with a count ("Kept your 14 changes: 9 on the SOI card,
-5 on the header"). Add a line for each conflict and how it was settled ("Days held column:
-Carta Home now has one built in, so yours was dropped"). For a `no_baseline` page, say
-"These look like your changes" instead of "Kept your changes". After start fresh, say
-nothing was carried over and where the previous page is saved.
+Undo and start fresh work as the reference describes; for a dashboard, hand the request to
+its skill with the page's URL.
 
-**Undo.** If they then ask to undo a change, remove it from the published page (edit the
-built file, republish with the same call and `url`). "Start fresh" republishes the plain
-build. "Put my old page back" republishes the saved `.live.html`.
 Then ask with `AskUserQuestion` (or as a plain-text list), passing each option's `label`
 and `description` exactly as below:
 
@@ -844,6 +803,7 @@ Carta Home dashboard as a whole, not on requests for one of those cards in isola
   source-layout table above — includes `resources/app/*.js` for features already split out),
   then re-run `build_artifact.py`. Never hand-edit the assembled HTML — except in Step 6,
   which carries one user's own changes into their own build.
-- `build_artifact.py` stamps each page with a baseline of itself (`scripts/customizations.py`),
-  so Step 2c can list exactly what the user changed on the published copy. Changes the
+- `build_artifact.py` stamps each page with a baseline of itself
+  (`lib/live_artifact_render/customizations.py`, run through `scripts/customizations.py`), so
+  Step 2c can list exactly what the user changed on the published copy. Changes the
   user made are recorded nowhere else: the live page is the record.

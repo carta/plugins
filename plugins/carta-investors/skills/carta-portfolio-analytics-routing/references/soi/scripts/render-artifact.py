@@ -8,8 +8,9 @@ full fund list embedded for the dropdown.
 
 Every invocation rebuilds the artifact from scratch. The skill enumerates the
 firm's funds via fa:list:entities, writes them to a JSON file, and calls this
-script with the file path. There is no prior-state recovery, no merge, and no
-state persisted outside the rendered HTML.
+script with the file path. There is no prior-state recovery and no state
+persisted outside the rendered HTML. The page carries a baseline of itself, so
+the skill can find what a user changed on the published copy before replacing it.
 
 Doing the substitution in a script (rather than asking the LLM to Read → modify
 → Write the ~30KB template) keeps byte-level work off the model token path,
@@ -71,6 +72,7 @@ from live_artifact_render import (  # noqa: E402
     check_path_under_cwd,
     js_safe_json,
 )
+from live_artifact_render.customizations import stamp_baseline  # noqa: E402
 
 # Two ship locations with different template offsets; probing both keeps the
 # carta-soi and carta-portfolio-analytics-routing copies byte-identical.
@@ -297,7 +299,11 @@ def main() -> int:
     content = content.replace("{{CARTA_MCP_SERVER}}", mcp_server)
     content = content.replace("{{FIRM_NAME}}", html.escape(firm_name))
     content = content.replace("{{FIRM_UUID}}", firm_uuid)
-    content = content.replace("{{ARTIFACT_VERSION}}", read_version())
+    version = read_version()
+    content = content.replace("{{ARTIFACT_VERSION}}", version)
+    # Last, so the baseline records the page exactly as published: a later rebuild compares
+    # the live page against it to find what the user changed (references/keep-customizations.md).
+    content = stamp_baseline(content, version or None)
 
     out_path.write_text(content, encoding="utf-8")
     print(out_path)

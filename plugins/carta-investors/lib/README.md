@@ -7,6 +7,7 @@ Plumbing that more than one skill needs. Import it instead of writing your own.
 | Module | Use it for |
 |---|---|
 | `live_artifact_render` | `js_safe_json`, `check_path_under_cwd`, and the input-shape regexes `UUID_RE`, `MCP_SERVER_RE`, `ARTIFACT_ID_RE`, `CARTA_ID_RE`, `BASE_URL_RE`. |
+| `live_artifact_render.customizations` | `stamp_baseline` for a render script's last step; `diff`, `release_changes` and `plan` to find what a user changed on a published page and where it collides with a new build; `rebase` and `unwrap` to write a saved live page back out for republishing. Skills run it through a `scripts/customizations.py` wrapper; `references/keep-customizations.md` is the procedure. |
 
 ## How to import it
 

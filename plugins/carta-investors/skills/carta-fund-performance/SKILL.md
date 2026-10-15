@@ -18,11 +18,20 @@ model: inherit
 allowed-tools:
   - Read
   - Artifact
+  # Step 1: render the page (stamps the Carta Home link in).
   - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-performance/scripts/render-artifact.py" *)
+  # Step 2, before republishing over an existing page: find the user's changes and carry
+  # them over (references/keep-customizations.md).
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-performance/scripts/customizations.py" *)
+  # Save the live page, and carry the user's changes into the rendered page in place.
+  - Write
+  - Edit
+  # Ask about a change that collides with the new version — only then.
+  - AskUserQuestion
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.80.1</carta-plugin>
+<carta-plugin>carta-investors:6.83.0</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -81,6 +90,26 @@ Artifact(
 To update a dashboard published earlier, pass `url="<existing artifact URL>"` so the
 link stays the same. Without it a second artifact is created.
 
+**Before republishing over an existing page, keep the user's changes.** Users
+customize this dashboard by asking Claude to edit it, and republishing a fresh render would
+replace those edits unless they are carried over — without asking, except about a change
+that collides with the new version. Follow `${CLAUDE_PLUGIN_ROOT}/references/keep-customizations.md` (the
+plugin's `references/`, not this skill's; read it by that exact path, don't search for it)
+with:
+
+- page "your Fund Performance dashboard"
+- live file `<CWD>/fund-performance.live.html`
+- script `${CLAUDE_PLUGIN_ROOT}/skills/carta-fund-performance/scripts/customizations.py`
+- new build: the file Step 1 rendered — pass its path straight to `plan`
+
+When `plan` reads `unmodified`, publish the rendered file as above. When there are changes
+to carry over, carry them into the rendered file itself and publish it with the same call.
+It is written by the script: change it in place with `Edit`, never `Read` + `Write` — the
+page has lines far longer than `Read` returns. When the reference has you keep the user's
+own page instead, publish the `.rebased.html` file `rebase` writes, with the same call.
+When you respond (Step 3), end with the reference's summary of what was kept — or, when
+Carta Home asked for it, return those lines with the URL instead of printing them.
+
 ## Step 3 — Respond
 
 Say in one sentence that the dashboard is ready, and that clicking a fund opens its
@@ -103,7 +132,16 @@ carta-fund-performance/
   references/
     artifact.html     ← self-contained page: inline Chart.js, CSS and JS
   scripts/
+    customizations.py  ← finds what a user changed on their published page
     render-artifact.py ← stamps the Carta Home link into the page
+```
+
+`artifact.html` carries a baseline of itself on its last line, so a later republish can
+tell what the user changed. After editing the page, restamp it from the repo root —
+`test_fund_performance_baseline.py` fails until you do:
+
+```
+uv run plugins/carta-investors/skills/carta-fund-performance/scripts/customizations.py stamp plugins/carta-investors/skills/carta-fund-performance/references/artifact.html
 ```
 
 The CSP in the artifact runtime allows no external script, style or connect host, so

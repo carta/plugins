@@ -43,7 +43,7 @@ passed to --dashboard-building carries the string "building" instead, so home ca
 before its dashboards exist and redeploy over itself once they do. A key absent from both
 leaves that card on its copyable prompt.
 
-The finished page carries a baseline of itself (see customizations.py), so a later rebuild
+The finished page carries a baseline of itself (lib/live_artifact_render/customizations.py), so a later rebuild
 can tell exactly what the user changed on the published copy.
 
 Usage:
@@ -60,10 +60,10 @@ from datetime import datetime, timezone
 from html import escape
 from pathlib import Path
 
-# The baseline stamp lives beside this script, which is not on the import path when the
-# build is loaded by file path (as the tests do) rather than run.
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from customizations import stamp_baseline  # noqa: E402
+_LIB = next(p for p in Path(__file__).resolve().parents if (p / "lib" / "live_artifact_render").is_dir()) / "lib"
+sys.path.insert(0, str(_LIB))
+
+from live_artifact_render.customizations import stamp_baseline  # noqa: E402
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
 RES = SKILL_DIR / "resources"

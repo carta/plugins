@@ -127,7 +127,7 @@ grant. It is one string; there is nothing to derive and nothing to keep in sync.
 
 ### Step 4 — Write the funds file, then render the template
 
-> **You must NEVER write the artifact HTML manually.** Every render goes through `render-artifact.py`. Manual edits — `Read` + `Edit` / `Write` against the rendered HTML or the template — bypass the placeholder substitution and validation logic. If the script fails, surface the error and stop. Do not fall back to manual edits.
+> **You must NEVER write the artifact HTML manually.** Every render goes through `render-artifact.py`. Manual edits — `Read` + `Edit` / `Write` against the rendered HTML or the template — bypass the placeholder substitution and validation logic. If the script fails, surface the error and stop. Do not fall back to manual edits. The one exception comes after a successful render: Step 5 edits the rendered file to carry the user's own changes over, as `keep-customizations.md` describes.
 
 Three sub-steps:
 
@@ -199,11 +199,28 @@ First find an existing one:
 Artifact({action: "list", scope: "mine"})
 ```
 
-If a **<Firm Name> — Schedule of Investments** artifact is already published, keep its `url`. Then publish — one call either way, `url` being the only difference:
+If a **<Firm Name> — Schedule of Investments** artifact is already published, keep its `url`.
+
+**Before republishing over an existing page, keep the user's changes.** Users
+customize their Schedule of Investments by asking Claude to edit it, and this publish would
+replace those edits unless they are carried over — without asking, except about a change
+that collides with the new version. Follow `${CLAUDE_PLUGIN_ROOT}/references/keep-customizations.md` (the
+plugin's `references/`, not this skill's; read it by that exact path, don't search for it)
+with page "your Schedule of Investments", live file
+`<CWD>/<firm-slug>-fund-soi-collection.live.html`, script `customizations.py` — Step 4b's
+render script path with `render-artifact.py` changed to `customizations.py`, nothing else
+— and new build the file Step 4 rendered. Then
+publish the file it leaves you: the rendered file with the user's changes carried over, or
+their own page with Carta's changes brought in — the `.rebased.html` file `rebase` writes,
+not the live file. On a first publish, skip this.
+When you confirm (Step 6), end with the reference's summary of what was kept — or, when
+Carta Home asked for it, return those lines with the URL instead of printing them.
+
+Then publish — one call either way, `url` being the only difference:
 
 ```
 Artifact({
-  file_path: "<absolute path printed by the render script>",
+  file_path: "<absolute path printed by the render script, or the file keep-customizations left you>",
   url: "<url from the list — omit entirely on a first publish>",
   description: "<Firm Name> — fund Schedule of Investments",
   favicon: "📈",
