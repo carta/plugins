@@ -67,7 +67,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.96.13</carta-plugin>
+<carta-plugin>carta-cap-table:6.96.14</carta-plugin>
 
 <!-- [PATTERN carta-writing-style v0.0.2] [PATTERN etiquette v0.0.6] [PATTERN text v0.0.8] [PATTERN tables v0.0.12] [PATTERN carta-watermark v0.0.10] [PATTERN base v0.1.0] -->
 
@@ -176,12 +176,12 @@ Compare its `benchmark_version.id` against the printed `snapshot_benchmark_versi
 percentiles are *wrong*, while a cache from an older skill is *correct but possibly incomplete*.
 The figures still tie out; what may be missing is a capability — a tab, a peer-group dimension —
 that this version could add. Wrong data justifies spending the user's calls without asking;
-missing features do not, especially now that a default rebuild is a ~41-call sweep.
+missing features do not, especially now that a default rebuild is a sweep of every bucket in all three dimensions.
 
 **Say what changed in terms of the dashboard, not the version string.** "Built with skill 0.1.0,
 now on 0.2.0" tells the user nothing they can act on. Name the consequence: *"This dashboard was
 built before peer-group switching existed, so it has no dimension or bucket pickers. Rebuilding
-adds them — about 41 calls, a few minutes."* If you cannot say what a rebuild would add, say that
+adds them — a few minutes of calls."* If you cannot say what a rebuild would add, say that
 plainly rather than inventing a benefit.
 
 **Version equality is the signal — do not second-guess it.** This skill's `version:` is bumped
@@ -420,9 +420,9 @@ Follow `references/queries.md` for the exact arguments.
 > `save_benchmark_result.py --export-page` does. It also checks every page came back on the
 > pinned `benchmark_version_id`. Leave `job_limit` and `job_offset` out of `--args`; it owns
 > paging and refuses them. Leave `response_mode` out too — this route is for an MCP that
-> rejects it, so passing it fails every page. Its last line is `sweep COMPLETE — 22 job areas across 2 page(s)`, or
-> it exits 1 with `FAILED — <reason>` after removing that sweep's files, so a failed sweep never
-> leaves a half-captured group behind.
+> rejects it, so passing it fails every page. Its last line is `sweep COMPLETE — <N> job areas
+> across <P> page(s)`, or it exits 1 with `FAILED — <reason>` after removing that sweep's files,
+> so a failed sweep never leaves a half-captured group behind.
 >
 > **`call`** — one read-only `compensation__get__*` / `compensation__export__*` result written
 > to a file, which you then pass to the matching `save_*` script as its source path:
@@ -516,15 +516,36 @@ Capture from it: `benchmark_version.id` (pins 2c) and `peer_group.{code,label,di
 `dimension` is missing or is not one of `post_money` / `capital_raised` / `headcount`, **stop** —
 guessing produces numbers that don't match the product UI.
 
+**2b-bis. Filter options.** Right after the plan, capture the filter values for the plan's
+benchmark version the same way:
+
+```bash
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/capture_export.py" call --server "<SERVER>" --claude-bin "<claude_bin>" --tool compensation__get__filter_options --args '{"corporation_id": <corporation_pk>, "benchmark_version_id": <plan benchmark_version.id>}' --out "<raw_dir>/filter_options.raw"
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_benchmark_result.py" "<raw_dir>/filter_options.raw" "<raw_dir>/filter_options.json"
+```
+
+**Stop if `filter_options.json`'s `benchmark_version.id` is not the plan's** — its lists would
+describe another release. Everything this skill sends as a filter comes from it, sent verbatim:
+the job areas (`params.job[].value`), the peer-group buckets (`params.post_money_bucket`,
+`params.headcount_bucket`, `params.capital_raised_bucket`, only the buckets this version
+supports) and `params.equity_quantity.values`. `build_datadir.py` reads it for the taxonomy, the
+sweep's coverage and the bucket labels. A version-gate re-fetch (Step 0) repeats 2b and 2b-bis
+together, so the file always matches the plan. Field details are in `references/queries.md` §2a.
+
+> **`equity_quantity` is pinned to `FOUR_YEAR_GRANT`** (one of `params.equity_quantity.values`) to
+> tie out with the product UI. `params.equity_quantity.default` is the backend default
+> (next-12-months vesting), not this pin.
+
 **2c. Benchmarks — paged bulk export, not one call per job area.**
 
-There are **22 job areas** (listed in `references/queries.md` §3), but the fetch is now
+The job areas are `params.job` from 2b-bis, but the fetch is now
 `compensation:export:benchmarks` — a bulk **columnar** export that returns several job areas'
 full matrices (every level, both the IC and LEADER ladders) in one response, replacing the old
 one-call-per-job-area sweep.
 
 **Take the server's full page: omit `job_limit`, starting at `job_offset: 0`.** It defaults to
-12, its own per-response cap, so a full sweep is **2 pages** (22 areas).
+12, its own per-response cap, so a full sweep is one page per 12 job areas (`params.job` count ÷
+12, rounded up).
 
 > **The page size is bounded by the server's cap, not by time.** An explicit `job_limit` above
 > 12 is a 400 rather than being clamped, so there is no bigger page to ask for. Under
@@ -538,21 +559,21 @@ Call it with `equity_quantity: "FOUR_YEAR_GRANT"`, `benchmark_version_id`, exact
 `job_offset` and the page size itself.
 
 > **PAGING IS THE DEFAULT, not an opt-in.** A response that omits `jobs`/`job_limit` is the FIRST
-> PAGE — not the whole matrix. There is no way to get all 22 areas in one call.
+> PAGE — not the whole matrix. There is no way to get every job area in one call.
 >
 > **On the blob route, keep calling with `job_offset` = the previous response's `next_job_offset`
 > until that field comes back `null`.** The page size is the server's, so the page count is not
-> something to assume. `total_job_areas` tells you how many exist overall (22), so you can tell a
+> something to assume. `total_job_areas` tells you how many exist overall, so you can tell a
 > stalled sweep from a finished one without counting job names yourself. Treating one response as
-> the complete cube would silently publish 12 of 22 job areas as if it were everything — this is
-> the exact failure mode the paging discipline below exists to prevent. `capture_export.py sweep`
+> the complete cube would silently publish one page of 12 job areas as if it were everything — this
+> is the exact failure mode the paging discipline below exists to prevent. `capture_export.py sweep`
 > applies the same discipline on its own behalf.
 >
 > **On the inline route the page size is yours (`job_limit: 6`), so the offsets are fixed at 0, 6,
-> 12, 18** and the four pages are fetched in parallel rather than one behind the next. Nothing
-> there follows a cursor, so completeness is proved from the captured pages instead: save them in
-> ascending offset order and confirm `export_pages.json` reports `sweep_complete: true` with the
-> union of every page's `jobs_covered` + `jobs_empty` equal to `total_job_areas`.
+> 12, … up to `total_job_areas`** and those pages are fetched in parallel rather than one behind the
+> next. Nothing there follows a cursor, so completeness is proved from the captured pages instead:
+> save them in ascending offset order and confirm `export_pages.json` reports `sweep_complete: true`
+> with the union of every page's `jobs_covered` + `jobs_empty` equal to `total_job_areas`.
 
 Capture the corp's own group into the raw dir itself:
 
@@ -647,13 +668,15 @@ discipline the route in play calls for (2c-ter spells each one out: `"response_m
 with `job_limit` omitted and page-until-`next_job_offset`-is-null on the blob route; the same
 `--args` **without `response_mode`** on the `capture_export.py` route, where the script owns
 paging; `job_limit: 6` at the fixed offsets on the inline route). The only thing that changes
-is the `<dimension>_bucket` value. The codes, in order, per dimension:
+is the `<dimension>_bucket` value. Build the list from `filter_options.json` (2b-bis), in the
+order it gives them (low → high), and send each `value` verbatim. It lists only the buckets this
+benchmark version supports, so sweep those and nothing else:
 
-| Dimension | Bucket codes (low → high) |
+| Dimension | Bucket codes |
 |---|---|
-| `post_money` | `ONE_MILLION`, `TEN_MILLION`, `TWENTY_FIVE_MILLION`, `FIFTY_MILLION`, `ONE_HUNDRED_MILLION`, `TWO_HUNDRED_FIFTY_MILLION`, `FIVE_HUNDRED_MILLION`, `ONE_BILLION` |
-| `headcount` | `ONE_TO_TWENTY_FIVE`, `TWENTY_FIVE_TO_HUNDRED`, `HUNDRED_TO_FIVE_HUNDRED`, `GREATER_THAN_FIVE_HUNDRED` |
-| `capital_raised` | `ONE_TO_TEN_MILLION`, `TEN_TO_TWENTY_FIVE_MILLION`, `TWENTY_FIVE_TO_FIFTY_MILLION`, `FIFTY_TO_ONE_HUNDRED_MILLION`, `ONE_HUNDRED_TO_TWO_HUNDRED_MILLION`, `GREATER_THAN_TWO_HUNDRED_MILLION` |
+| `post_money` | `params.post_money_bucket[].value` |
+| `headcount` | `params.headcount_bucket[].value` |
+| `capital_raised` | `params.capital_raised_bucket[].value` |
 
 **Sweep all three dimensions, not just the plan's.** The app has a dimension picker as well as
 a bucket picker, and it offers whatever dimensions the data dir contains — so fetching only the
@@ -691,7 +714,7 @@ uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/save_benchma
 uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/capture_export.py" sweep --server "<SERVER>" --claude-bin "<claude_bin>" --dest "<raw_dir>/peer_<CODE>" --args '{"corporation_id": <id>, "benchmark_version_id": <id>, "equity_quantity": "FOUR_YEAR_GRANT", "<dimension>_bucket": "<CODE>"}'
 ```
 
-Use the bucket code **exactly** as spelled above: `build_datadir.py` reads the code back out of
+Use the bucket `value` **exactly** as `filter_options.json` spells it: `build_datadir.py` reads the code back out of
 the directory name to look up that group's label and dimension, so `peer_one_million` or
 `peer_ONE-MILLION` lands as an unlabelled group in the switcher.
 
@@ -711,38 +734,37 @@ raw dir, and fetching it twice would put the same group in the dropdown twice.
 > quick"). Then say which scope you used and which pickers it leaves empty, so the absence is a
 > stated choice rather than a silent gap.
 
-**Cost, and why it is no longer a reason to ask.** There are 18 buckets across the three
-dimensions (8 post-money, 4 headcount, 6 capital raised), each a full 2-page sweep: **17
-alternates × 2 = 34 extra calls**, against the ~7 for the corp's own group.
+**Cost, and why it is no longer a reason to ask.** Count the buckets across the three
+`params.*_bucket` lists, each a full sweep of `P` pages (`P` = `params.job` count ÷ 12, rounded up,
+on the blob route; ÷ 6 on the inline fallback): **(buckets − 1) alternates × P extra calls**,
+against about `P` plus a few for the corp's own group.
 
 Sequentially that is minutes of wall clock, which is the cost "ask first" was protecting
-against. **Run the sweeps in parallel instead** (2c-ter) and those 34 calls cost roughly one
+against. **Run the sweeps in parallel instead** (2c-ter) and those calls cost roughly one
 bucket's wall clock, because buckets are independent. Parallelism, not a smaller scope, is the
 answer to the cost.
 
 | Scope | Calls | What the pickers show |
 |---|---|---|
-| **All three dimensions (DEFAULT)** | ~34 (17 alternates × 2 pages) | Both pickers fully populated |
-| Own dimension, all buckets | ~6–14 (3–7 alternates × 2) | Bucket picker works; dimension picker hides |
-| Adjacent buckets only | ~4 (2 alternates × 2) | Three buckets in one dimension |
+| **All three dimensions (DEFAULT)** | (buckets − 1) × P | Both pickers fully populated |
+| Own dimension, all buckets | (own dimension's buckets − 1) × P | Bucket picker works; dimension picker hides |
+| Adjacent buckets only | 2 × P | Three buckets in one dimension |
 | Own bucket only | 0 extra | Neither picker appears |
 
-The per-dimension figures differ — post-money has 7 alternates (~14 calls), capital raised 5
-(~10), headcount 3 (~6) — so quote the number for the dimension actually in play rather than
-34 for all three.
+The per-dimension counts differ — quote the number for the dimension actually in play rather
+than the total for all three.
 
-A verified reference point: on corp 7 the full 18-bucket sweep completed with every page
-returning 200, so the scope is known to finish rather than being a guess.
+A verified reference point: on corp 7 the full sweep across all three dimensions completed with
+every page returning 200, so the scope is known to finish rather than being a guess.
 
-Ceiling for this step: **at most `pages + 2` export calls per bucket** — the sweep's pages plus
-two retries to spend anywhere in it, so **4 calls** for the 2-page blob sweep and **6** for the
-4-page inline fallback, and **one sweep per bucket** on the no-blob route, where
-`capture_export.py` holds itself to that same budget — and **stop the whole step after 3
-consecutive buckets fail**. A systemic failure — wrong `benchmark_version_id`, auth, a bad bucket
-param — will fail on every bucket, and grinding through 17 of them wastes ~70 calls (17 × the
-4-call blob ceiling) to learn what the second one already told you. It is a budget for the
-bucket's whole sweep, however that sweep was split: the inline route's four page subagents share
-those 6 calls, they do not each get 6.
+Ceiling for this step: **at most `P + 2` export calls per bucket** — the sweep's pages plus
+two retries to spend anywhere in it, on the blob route and the inline fallback alike, and **one
+sweep per bucket** on the no-blob route, where `capture_export.py` holds itself to that same
+budget — and **stop the whole step after 3 consecutive buckets fail**. A systemic failure — wrong
+`benchmark_version_id`, auth, a bad bucket param — will fail on every bucket, and grinding
+through every alternate wastes (buckets − 1) × (P + 2) calls to learn what the second one already
+told you. It is a budget for the bucket's whole sweep, however that sweep was split: the inline
+route's page subagents share those `P + 2` calls, they do not each get them.
 
 **A failed alternate is not a failed build.** Alternates are additive: the corp's own group is
 already captured and the dashboard is complete without them. If a bucket's sweep won't finish,
@@ -1489,7 +1511,7 @@ does not need to hear about it.
 | `build_datadir.py` refuses: "the roster sweep is INCOMPLETE" | Paging stopped before `total_results` was reached. Check `<raw_dir>/roster_pages.json` for `distinct_employees` vs `total_results` and fetch the remaining pages. Never work around this — a partial roster under-reports how many employees are below market. | "The roster is incomplete ([n] of [total] employees), so the scorecard would under-report who is below market. Fetching the rest." |
 | Scorecard tab absent on a fresh build | `snapshot.json` says `hasRoster: false`. The roster sweep failed or was skipped; re-run with "refresh". A warm cache re-fetches nothing (Step 0's one call is the version gate), so the tab cannot appear until the next build. | "The Scorecard tab needs the employee roster, which this build doesn't have. Want me to rebuild with a refresh?" |
 | Numbers don't match the CTC product UI | Almost always `equity_quantity` (must be `FOUR_YEAR_GRANT`) or a missing/incorrect `*_bucket` param. | "Those figures were fetched with the wrong equity basis or peer group. Rebuilding so they match the product UI." |
-| `HTTP 400` on `job`/`focus` | Passing a display label (`"Engineering"`) or a combined value (`ENGINEER/Web Engineer`). Two separate params; `job` UPPER_SNAKE, `focus` the exact case-sensitive CTC focus name (`Web Engineer`). | — (fix the params and retry) |
+| `HTTP 400` on `job`/`focus` or a bucket | A value that is not in `filter_options.json`: a display label (`"Engineering"`), a combined value (`ENGINEER/Web Engineer`) or a bucket the version does not support. Send `params.job[].value` and, for `focus`, a focus name from `coverage[job].focuses`, verbatim and as two separate params. Compare what was sent with `filter_options.json`, resend the listed value once, then stop and report. | — (fix the params and retry once) |
 | Builder exits "peer_group.dimension is …" | `plan.json` is missing or from a different corp. Re-fetch Step 2. | — (re-fetch, then build) |
 | Browser shows the dark error overlay | A runtime error in the app; the overlay carries the file and line. | "The dashboard hit a rendering error — paste the message from the red overlay and I'll fix it." |
 | Blank page, no overlay | Service worker didn't claim. The shell reloads itself after 3s as a backstop. | "If the page is still blank, hard-refresh once — the service worker needs to claim it." |

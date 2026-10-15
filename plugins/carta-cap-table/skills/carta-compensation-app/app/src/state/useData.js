@@ -5,7 +5,7 @@
 // offline-capable, and free of per-interaction API round trips.
 
 import { useEffect, useState } from "react";
-import { PERCENTILES } from "../model/taxonomy.js";
+import { PERCENTILES, applyTaxonomy } from "../model/taxonomy.js";
 import { fillDerivedPercentiles, assertProvenance } from "../model/format.js";
 
 // Fill derived percentiles + validate provenance on every benchmarks payload,
@@ -76,13 +76,15 @@ export function useDashboardData() {
     let cancelled = false;
     (async () => {
       try {
-        const [snapshot, benchmarks, roster, planner] = await Promise.all([
+        const [snapshot, benchmarks, roster, planner, taxonomy] = await Promise.all([
           apiGet("/api/snapshot"),
           apiGet("/api/benchmarks"),
           apiGetOptional("/api/roster"),
           apiGetOptional("/api/planner"),
+          apiGetOptional("/api/taxonomy"),
         ]);
         if (cancelled) return;
+        applyTaxonomy(taxonomy);
         setState({
           loading: false, error: null, snapshot,
           benchmarks: hydrateBenchmarks(benchmarks), roster, planner,

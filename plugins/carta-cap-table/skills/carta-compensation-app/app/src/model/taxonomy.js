@@ -28,9 +28,6 @@ export function percentileById(key) { return _byKey[key] || null; }
 
 // CTC taxonomy: ladder/track reconciliation, level ordering, and display casing.
 //
-// Pure — no React, no fetch. Everything here is derived from data the build step
-// snapshotted into taxonomy.json, EXCEPT the display-label maps, which encode
-// Carta's product vocabulary and have no API equivalent to read from.
 //
 // Casing contract (see the CTC skills): UPPER_SNAKE_CASE is for machine handoff
 // only. Anything a user reads is Title Case. These helpers are the single place
@@ -46,6 +43,7 @@ export const LEVEL_RANK = {
 
 // The rank at/above which a LEADER row is an Executive rather than a Manager.
 const EXEC_MIN_RANK = LEVEL_RANK.VP1;
+let executiveLevels = null;
 
 // Per-track level display names. The same level code reads differently by track —
 // VP1 is "Distinguished" for an IC but "Vice President" for an executive — which is
@@ -67,7 +65,7 @@ const LEVEL_LABELS = {
   },
 };
 
-const JOB_LABELS = {
+let JOB_LABELS = {
   ACCOUNTING: "Accounting", ADMIN: "Admin", CEO: "CEO",
   CORPORATE_AFFAIRS: "Corporate Affairs", CUSTOMER_SUCCESS: "Customer Success",
   DATA: "Data", DESIGN: "Design", ENGINEER: "Engineering", FINANCE: "Finance",
@@ -76,6 +74,31 @@ const JOB_LABELS = {
   PROJECT_MANAGEMENT: "Project Management", RESEARCH: "Research", SALES: "Sales",
   STRATEGY: "Strategy", SUPPORT: "Support", OTHER: "Other",
 };
+
+const DEFAULTS = {
+  rank: { ...LEVEL_RANK },
+  jobLabels: { ...JOB_LABELS },
+};
+
+export function applyTaxonomy(tax) {
+  for (const k of Object.keys(LEVEL_RANK)) delete LEVEL_RANK[k];
+  Object.assign(LEVEL_RANK, DEFAULTS.rank);
+  JOB_LABELS = { ...DEFAULTS.jobLabels };
+  executiveLevels = null;
+  if (!tax || tax.source !== "filter_options") return;
+  const levels = (tax.levels || []).filter((l) => l && l.value && Number.isFinite(l.rank));
+  if (levels.length) {
+    for (const k of Object.keys(LEVEL_RANK)) delete LEVEL_RANK[k];
+    executiveLevels = new Set();
+    for (const l of levels) {
+      LEVEL_RANK[l.value] = l.rank;
+      if (l.executive) executiveLevels.add(l.value);
+    }
+  }
+  for (const j of tax.jobs || []) {
+    if (j && j.value && j.label) JOB_LABELS[j.value] = j.label;
+  }
+}
 
 export const TRACK_LABELS = { IC: "IC", MANAGER: "Manager", EXECUTIVE: "Executive" };
 
@@ -95,7 +118,10 @@ export function jobLabel(job) {
  */
 export function trackOf(ladder, level) {
   if (ladder === "LEADER") {
-    return (LEVEL_RANK[level] || 0) >= EXEC_MIN_RANK ? "EXECUTIVE" : "MANAGER";
+    const exec = executiveLevels
+      ? executiveLevels.has(level)
+      : (LEVEL_RANK[level] || 0) >= EXEC_MIN_RANK;
+    return exec ? "EXECUTIVE" : "MANAGER";
   }
   return "IC";
 }

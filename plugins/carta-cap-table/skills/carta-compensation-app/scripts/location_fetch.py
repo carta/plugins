@@ -354,7 +354,7 @@ def fetch(data_dir, claude_bin, config, catalog_entry, local_currency, key=None,
         shutil.rmtree(str(work))
     work.mkdir(parents=True)
 
-    offsets = list(range(0, TOTAL_JOB_AREAS, JOB_LIMIT))
+    offsets = list(range(0, config.get("jobCount") or TOTAL_JOB_AREAS, JOB_LIMIT))
     texts = {}  # type: Dict[int, str]
     errors = []  # type: List[FetchError]
 
@@ -375,7 +375,18 @@ def fetch(data_dir, claude_bin, config, catalog_entry, local_currency, key=None,
     try:
         if errors:
             raise errors[0]
-        pages = [_parse_page(texts[o], work) for o in offsets]
+        by_offset = {o: _parse_page(texts[o], work) for o in offsets}
+        while True:
+            more = {pg.get("next_job_offset") for pg in by_offset.values()}
+            more.discard(None)
+            more -= set(by_offset)
+            if not more:
+                break
+            o = min(more)
+            text = run(claude_bin, config["mcpServer"],
+                       export_args(config, location, local_currency, o), str(work))
+            by_offset[o] = _parse_page(text, work)
+        pages = [by_offset[o] for o in sorted(by_offset)]
         _check_sweep(pages, config.get("benchmarkVersionId"))
         rows = build_datadir._collect_rows(work)[0]
         if not rows:

@@ -111,6 +111,69 @@ ALL_JOB_AREAS = [
 ]
 
 
+def _filter_options(rawdir, plan_version_id):
+    p = rawdir / "filter_options.json"
+    if not p.exists():
+        return None
+    fo = _read_json(p)
+    if not isinstance(fo, dict) or not isinstance(fo.get("params"), dict):
+        return None
+    got = (fo.get("benchmark_version") or {}).get("id")
+    if plan_version_id is not None and got is not None and got != plan_version_id:
+        sys.exit("[build_datadir] filter_options.json is for benchmark version id %s but "
+                 "plan.json pins id %s — re-fetch compensation:get:filter_options with the "
+                 "plan's benchmark_version_id" % (got, plan_version_id))
+    return fo
+
+
+def _params(fo, key):
+    v = ((fo or {}).get("params") or {}).get(key)
+    return v if isinstance(v, list) else []
+
+
+def _job_areas(fo):
+    jobs = [j["value"] for j in _params(fo, "job") if isinstance(j, dict) and j.get("value")]
+    return jobs or list(ALL_JOB_AREAS)
+
+
+def _expected_jobs(fo):
+    cov = [c["job"] for c in ((fo or {}).get("coverage") or [])
+           if isinstance(c, dict) and c.get("job") and c.get("industries") != []]
+    return cov or _job_areas(fo)
+
+
+_BUCKET_PARAMS = (("post_money", "post_money_bucket"), ("headcount", "headcount_bucket"),
+                  ("capital_raised", "capital_raised_bucket"))
+
+
+def _peer_labels(fo):
+    out = {}
+    for dim, key in _BUCKET_PARAMS:
+        for b in _params(fo, key):
+            if isinstance(b, dict) and b.get("value"):
+                out[b["value"]] = (dim, b.get("label") or b["value"])
+    return out or _PEER_LABELS
+
+
+def _taxonomy_from_filter_options(fo, levels_by_ladder):
+    params = fo["params"]
+    return {
+        "schemaVersion": SCHEMA_VERSION,
+        "source": "filter_options",
+        "jobs": [{"value": j["value"], "label": j.get("label"), "levels": j.get("levels") or []}
+                 for j in _params(fo, "job") if isinstance(j, dict) and j.get("value")],
+        "levels": [{"value": l["value"], "rank": l.get("rank"),
+                    "icLabel": l.get("ic_label"), "managerLabel": l.get("manager_label"),
+                    "executive": bool(l.get("executive"))}
+                   for l in _params(fo, "level") if isinstance(l, dict) and l.get("value")],
+        "postMoneyBuckets": _params(fo, "post_money_bucket"),
+        "headcountBuckets": _params(fo, "headcount_bucket"),
+        "capitalRaisedBuckets": _params(fo, "capital_raised_bucket"),
+        "coverage": fo.get("coverage") or [],
+        "levelsByLadder": levels_by_ladder,
+    }
+
+
 def _num(x):
     """Coerce an API numeric (often a decimal STRING like "158000.00") to float.
 
@@ -260,6 +323,9 @@ def build(rawdir, out, meta):
     if version_mismatch:
         sys.exit("[build_datadir] refusing to build — %s." % version_mismatch)
 
+    fo = _filter_options(rawdir, bver.get("id"))
+    peer_labels = _peer_labels(fo)
+
     # Create the output dir only AFTER every refusal gate above has passed, so a
     # refused build leaves no empty dashboard dir behind for the next run (or a
     # `--check`) to trip over. Matches the sweep gate's exit-before-touching-disk
@@ -319,23 +385,21 @@ def build(rawdir, out, meta):
                  "build an empty dashboard." % rawdir)
 
     # ---- taxonomy snapshot ----
-    # There is NO compensation:list:job_types command (verified: the skills
-    # explicitly warn it returns "Unknown tool"), so the taxonomy cannot be
-    # enumerated from the API. Snapshotting what the benchmark responses actually
-    # returned keeps the UI's dropdowns in sync with real data instead of a
-    # hand-maintained browser-side constant that silently drifts.
     levels_by_ladder = {}
     for r in rows:
         levels_by_ladder.setdefault(r["ladder"] or "IC", [])
         if r["level"] not in levels_by_ladder[r["ladder"] or "IC"]:
             levels_by_ladder[r["ladder"] or "IC"].append(r["level"])
 
-    taxonomy = {
-        "schemaVersion": SCHEMA_VERSION,
-        "jobs": sorted(jobs_seen),
-        "levelsByLadder": levels_by_ladder,
-        "source": "observed",  # derived from returned rows, not an API enum listing
-    }
+    if fo is not None:
+        taxonomy = _taxonomy_from_filter_options(fo, levels_by_ladder)
+    else:
+        taxonomy = {
+            "schemaVersion": SCHEMA_VERSION,
+            "jobs": sorted(jobs_seen),
+            "levelsByLadder": levels_by_ladder,
+            "source": "observed",  # derived from returned rows, not an API enum listing
+        }
 
     currencies = sorted({r["currency"] for r in rows if r["currency"]})
     benchmarks = {
@@ -377,7 +441,7 @@ def build(rawdir, out, meta):
     # would show $50M-$100M above $1M-$10M.
     alternates = {}
     found = _peer_group_dirs(rawdir)
-    ordered = [c for c in _PEER_LABELS if c in found] + [c for c in found if c not in _PEER_LABELS]
+    ordered = [c for c in peer_labels if c in found] + [c for c in found if c not in peer_labels]
     for code in ordered:
         dirpath = found[code]
         alt_rows, _alt_jobs, _alt_empty, _alt_stems = _collect_rows(dirpath)
@@ -391,7 +455,7 @@ def build(rawdir, out, meta):
         # Each bucket carries its OWN dimension, not the plan's. A headcount bucket
         # describes a different peer SET than a post-money one, so citing it with the
         # plan's phrase ("post money valuations between >500") would be nonsense.
-        alt_dim, label = _PEER_LABELS.get(code, (dimension, code))
+        alt_dim, label = peer_labels.get(code, (dimension, code))
         alternates[code] = {
             "code": code,
             "label": label,
@@ -415,10 +479,10 @@ def build(rawdir, out, meta):
         # list of 18 would make those look like the same kind of act.
         own_code = peer.get("code")
         by_dim = {}
-        for code in list(_PEER_LABELS) + [c for c in alternates if c not in _PEER_LABELS]:
+        for code in list(peer_labels) + [c for c in alternates if c not in peer_labels]:
             if code not in alternates and code != own_code:
                 continue
-            dim = (_PEER_LABELS.get(code) or (dimension, code))[0]
+            dim = (peer_labels.get(code) or (dimension, code))[0]
             by_dim.setdefault(dim, [])
             if code not in by_dim[dim]:
                 by_dim[dim].append(code)
@@ -440,7 +504,8 @@ def build(rawdir, out, meta):
     if catalog:
         benchmarks["locationCatalog"] = catalog
         benchmarks["defaultLocation"] = _default_location_param(plan, rows)
-        fetch_config = _location_fetch_config(meta, bver, peer, alternates)
+        fetch_config = _location_fetch_config(
+            meta, bver, peer, alternates, len(_job_areas(fo)) if fo is not None else None)
         # The page only needs to know a pick CAN be fetched; the arguments stay
         # server-side, in location_fetch.json.
         benchmarks["locationFetch"] = fetch_config is not None
@@ -539,13 +604,14 @@ def build(rawdir, out, meta):
     # A partial sweep builds fine — but say so. A dashboard showing 4 of 22 job
     # areas looks complete to someone who doesn't know what's missing, and that
     # is a worse failure than refusing to build.
-    absent = [j for j in ALL_JOB_AREAS if j not in stems_fetched]
+    expected = _expected_jobs(fo)
+    absent = [j for j in expected if j not in stems_fetched]
     if absent:
         summary["partial_sweep"] = {"missing_count": len(absent), "missing": absent}
     print("[build_datadir] " + json.dumps(summary))
     if absent:
         print("[build_datadir] WARNING: %d of %d job areas were never fetched — this dashboard is "
-              "PARTIAL. Missing: %s" % (len(absent), len(ALL_JOB_AREAS), " ".join(absent)))
+              "PARTIAL. Missing: %s" % (len(absent), len(expected), " ".join(absent)))
 
     # A regenerating scorecard is the difference between "this employee has no equity"
     # and "the scorecard we were served predates their equity" — indistinguishable in the
@@ -686,7 +752,7 @@ def _default_location_param(plan, default_rows):
     return ctc_locations.location_param(label or "")
 
 
-def _location_fetch_config(meta, bver, peer, alternates):
+def _location_fetch_config(meta, bver, peer, alternates, job_count=None):
     """What serve.py needs to fetch a picked location, or None when it can't.
 
     Needs the Carta MCP server the build used (meta.json `mcpServer`, recorded by
@@ -701,13 +767,16 @@ def _location_fetch_config(meta, bver, peer, alternates):
     groups = {peer.get("code"): "%s_bucket" % peer.get("dimension")}
     for code, g in (alternates or {}).items():
         groups[code] = "%s_bucket" % g.get("dimension")
-    return {
+    config = {
         "corporationId": meta.get("corporationId"),
         "benchmarkVersionId": bver.get("id"),
         "mcpServer": server,
         "ownPeerGroup": peer.get("code"),
         "peerGroups": groups,
     }
+    if job_count:
+        config["jobCount"] = job_count
+    return config
 
 
 def _build_locations(rawdir, default_rows, plan_version_id):
@@ -1157,8 +1226,11 @@ def cmd_check(rawdir):
     for the whole picture.
     """
     rawdir = pathlib.Path(rawdir)
+    fo = _filter_options(rawdir, None)
+    job_areas = _job_areas(fo)
+    expected = _expected_jobs(fo)
     have, empty, corrupt = [], [], []
-    for job in ALL_JOB_AREAS:
+    for job in job_areas:
         p = rawdir / ("benchmark_%s.json" % job)
         if not p.exists():
             continue
@@ -1180,8 +1252,12 @@ def cmd_check(rawdir):
             empty.append(job)
         else:
             corrupt.append(job)
-    missing = [j for j in ALL_JOB_AREAS if j not in have and j not in empty and j not in corrupt]
-    print("captured : %d/%d  %s" % (len(have), len(ALL_JOB_AREAS), " ".join(have) or "-"))
+    missing = [j for j in expected if j not in have and j not in empty and j not in corrupt]
+    print("captured : %d/%d  %s" % (len(have), len(expected), " ".join(have) or "-"))
+    no_data = [j for j in job_areas if j not in expected and j not in have
+               and j not in empty and j not in corrupt]
+    if no_data:
+        print("no data expected: %d  %s" % (len(no_data), " ".join(no_data)))
     if empty:
         print("empty    : %d  %s" % (len(empty), " ".join(empty)))
     if corrupt:

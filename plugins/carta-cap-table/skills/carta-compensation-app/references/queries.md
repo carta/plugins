@@ -45,6 +45,36 @@ Save the whole response to `<rawdir>/plan.json`. The builder reads:
 > Many corps are `capital_raised` or `headcount`. Hardcoding "post money" produces a wrong
 > citation and numbers that don't tie out with the product UI.
 
+## §2a — Filter options (REQUIRED, right after the plan)
+
+```
+read_tool({"name": "compensation__get__filter_options",
+           "arguments": {"corporation_id": <corporation_pk>,
+                         "benchmark_version_id": <plan benchmark_version.id>}})
+```
+
+Save the whole response to `<rawdir>/filter_options.json` (capture it as in §2b). It is the one
+source for every filter value the later calls send and every label the dashboard shows:
+
+- `params.job[].{value, label, levels}` — the job areas the API accepts and the levels each supports.
+- `params.level[].{value, rank, ic_label, manager_label, executive}` — `rank` orders levels
+  low to high (compare it, never display it); `ic_label` / `manager_label` are role codes such as
+  `IC 4` / `MGR 4`, not product names; `executive: true` marks the executive levels.
+- `params.{post_money,headcount,capital_raised}_bucket[].{value, label}` — only the buckets this
+  version supports, low to high.
+- `params.equity_quantity.{default, values}`, `params.industry`, `params.score` and the percentile lists.
+- `coverage[]` — a LIST keyed by `job`: its `industries`, its `focuses` (`{focus, industry}`)
+  and the percentiles it has data for. A job in `params.job` with no `coverage` entry has no
+  benchmark data for this version.
+
+Stop if `benchmark_version.id` is not the plan's `benchmark_version.id`: the lists describe another
+release. Call it again with `benchmark_version_id` whenever you query a different version.
+
+Send `value` fields verbatim. Map the user's wording to a job `value` through its `label`, and to a level `value` through
+the role codes; when nothing matches, ask the user with the labels as written. A rejected value
+comes back as HTTP 400 pointing at this command: compare what was sent with this payload, resend
+the listed value once, then stop and report.
+
 ## §2b — Capturing results
 
 **Never hand-copy an MCP response into a raw file.** On the bulk exports that take it —
@@ -77,15 +107,8 @@ The exit-2 refusal matters: writing a transport wrapper verbatim would give the 
 
 ## §3 — Benchmarks (paged bulk export)
 
-**Job area enums** (~22 — there is no `compensation:list:job_types` command, so this list comes
-from the `export:benchmarks` / `get:benchmark` command help; re-read it via
-`search_tools({"query": "compensation export benchmark"})` if a call 400s on an unknown value):
-
-```
-ACCOUNTING, ADMIN, CEO, CORPORATE_AFFAIRS, CUSTOMER_SUCCESS, DATA, DESIGN,
-ENGINEER, FINANCE, HR, IT, LEGAL, MANUFACTURING, MARKETING, OPERATIONS,
-PRODUCT, PROJECT_MANAGEMENT, RESEARCH, SALES, STRATEGY, SUPPORT, OTHER
-```
+**Job areas** are `params.job` from §2a. The sweep covers every one of them; their count is the
+`total_job_areas` each page reports.
 
 Fetch them via `compensation:export:benchmarks` — a bulk **columnar** export that returns several
 job areas' full matrices (every level, both ladders) in one response, replacing the old
@@ -130,11 +153,11 @@ strings `get:benchmark` returns (`"96000.00"` → `96000`) — formatting is the
 of one call, since geo applies per-request) rather than repeated per row.
 
 **PAGING IS THE DEFAULT — this is the one rule that matters most.** A call that omits `jobs` and
-`job_limit` returns the **first page**, not the whole matrix — there are 22 job areas and the
+`job_limit` returns the **first page**, not the whole matrix — there are `total_job_areas` job areas and the
 server caps one response at 12 of them. **Omit `job_limit`** so you get that full page; the full
-matrix is then 2 pages. Keep calling with `job_offset` = the previous response's
+matrix is then `total_job_areas` ÷ 12 pages, rounded up. Keep calling with `job_offset` = the previous response's
 `next_job_offset` until that field comes back `null`; `total_job_areas` says how many areas exist
-overall. Treating one response as the complete cube would silently publish 12 of 22 job areas as
+overall. Treating one response as the complete cube would silently publish 12 job areas as
 if it were everything. An explicit `job_limit` above 12 is a **400 error**, not silently clamped —
 so a truncated sweep can never look complete by accident.
 
@@ -154,31 +177,30 @@ writes the same files. **Never call the export yourself and write the response o
 
 | Approach | Result |
 |---|---|
-| `compensation:export:benchmarks` with `job_limit` omitted and `"response_mode": "blob"`, following `next_job_offset` to `null` | ✅ 2 calls for the full 22-area matrix. **Use this.** |
-| One call per job area via `compensation:get:benchmark` | ❌ ~22 calls — this is the pattern the export command exists to replace; do not fall back to it, even to route around a failing export call. |
-| One call per (job, level) row | ❌ ~374 calls. This is what the Cowork artifact does per row. |
+| `compensation:export:benchmarks` with `job_limit` omitted and `"response_mode": "blob"`, following `next_job_offset` to `null` | ✅ one call per 12 job areas for the full matrix. **Use this.** |
+| One call per job area via `compensation:get:benchmark` | ❌ one call per job area — this is the pattern the export command exists to replace; do not fall back to it, even to route around a failing export call. |
+| One call per (job, level) row | ❌ one call per row, hundreds in all. This is what the Cowork artifact does per row. |
 | Explicit `job_limit` above 12 | ❌ 400 error, not clamped. |
 | `capture_export.py sweep`, no `response_mode` | ⚠ the headless-session route for an MCP that rejects `response_mode` — the script makes every call and writes the pages itself, so no payload passes through a conversation. Needs the `claude` CLI. |
 | `job_limit: 6` with no `response_mode` | ⚠ the inline fallback when there is no `claude` CLI either — 4 pages at the fixed offsets 0, 6, 12, 18, run in parallel with one subagent per page, each reproduced into its own `.raw` file, and the figure check in SKILL.md Step 2f is mandatory before the build. See SKILL.md's capture contract. |
 
-A full matrix is **2 export calls** on the blob route (22 areas, 12 per page), **4** on the
+A full matrix is **one export call per 12 job areas** on the blob route, **one per 6** on the
 inline fallback. Every call ceiling in SKILL.md is stated as a function of that page count.
 Capture each page to disk (via `--export-page`) the moment it arrives, or let one
 `capture_export.py sweep` make all of a sweep's calls — see SKILL.md Step 2c.
 
-**`equity_quantity` must be `FOUR_YEAR_GRANT`.** The MCP default is `NTM_VESTING`, which
-returns roughly a quarter of the value HR users expect — a hard tie-out failure against the
+**`equity_quantity` is pinned to `FOUR_YEAR_GRANT`.** It is one of `params.equity_quantity.values`.
+`params.equity_quantity.default` is the backend default (next-12-months vesting), not this
+pin: it returns roughly a quarter of the value HR users expect, a hard tie-out failure against the
 product UI, not a stylistic choice.
 
 **Exactly one `*_bucket` param.** The three bucket enums are disjoint, so a code valid for one
 is invalid for the others; passing two either 400s or silently picks one.
 
-**Enums, not labels.** `job` is UPPER_SNAKE (`ENGINEER`); `focus` is the exact,
-case-sensitive CTC focus name (`Web Engineer`, `AI and Machine Learning`) from the
-rolematcher's taxonomy — a lowercased or invented value silently returns the job-area blend.
-Never combine them (`ENGINEER/Web Engineer` → 400). There is **no**
-`compensation:list:job_types` command — read valid values from
-`search_tools({"query": "compensation export benchmark"})`.
+**Enums, not labels.** `job` is a `params.job[].value` (UPPER_SNAKE, `ENGINEER`); `focus` is a
+focus name from `coverage[job].focuses` (`Web Engineer`, `AI and Machine Learning`), used
+verbatim and case-sensitive — a lowercased or invented value silently returns the job-area blend.
+Never combine them (`ENGINEER/Web Engineer` → 400). Valid values come from §2a.
 
 **Locations — one sweep per location, never a computed one.** `location` takes one value per
 call, in the product's format: `"City,ST,USA"` for a US metro, `"City,ST,CAN"` for a Canadian
@@ -207,7 +229,7 @@ uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-compensation-app/scripts/build_datadi
 
 `meta.json` = `{"corporation": "<name>", "corporationId": <int>}`.
 
-Outputs `benchmarks.json`, `taxonomy.json`, `snapshot.json`. The builder refuses to write on a
+Outputs `benchmarks.json`, `taxonomy.json` (from `filter_options.json`), `snapshot.json`. The builder refuses to write on a
 bad peer-group dimension or zero benchmark rows rather than publish an empty dashboard.
 
 ## §5 — Launch
