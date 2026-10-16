@@ -13,6 +13,7 @@ import BudgetSourceLine from "./BudgetSourceLine.jsx";
 import BudgetPeriodControls from "./BudgetPeriodControls.jsx";
 import { noValueLabel } from "../ui/dimension.js";
 import { rowBreakouts, defaultBreakout, breakoutByColumns, worthBreakingOut, opensAnything } from "./accountBreakout.js";
+import { accountSections, actualByGlByMonth, accountLabel, ACCOUNT_LABEL_MIN_WIDTH } from "./accountSections.js";
 import {
   DEFAULT_FILTERS, cellFor, detectPreset, monthsInRange, normalizeRange,
   periodColumns, rangeOfPeriod, rangePresets, subColumns, sumCells, trueAsOfMonth, ytdColumn,
@@ -22,11 +23,6 @@ import {
   restoreFilters, restoreRange, toPrefs, writePrefs,
 } from "./budgetPrefs.js";
 import { trackClick } from "../analytics.js";
-
-// Narrower than the other two budget tables' shared LABEL_MIN_WIDTH (320):
-// GL account names here run short ("Audit fees", "Management fee income"),
-// so the full-width column was mostly blank space.
-export const ACCOUNT_LABEL_MIN_WIDTH = 220;
 
 // The three sub-columns every budget table in this app shows. No source
 // marks: both columns are Carta's, unlike the workbook views.
@@ -50,18 +46,6 @@ export function hasMonthlyDetail(budget) {
   });
 }
 
-/** Actuals per GL account per month, as a Map<gl, number[12]>. */
-export function actualByGlByMonth(entries) {
-  const out = new Map();
-  for (const e of entries || []) {
-    const gl = e.acct_type;
-    if (gl == null || typeof e.mo !== "number") continue;
-    if (e.mo < 1 || e.mo > 12) continue;
-    if (!out.has(gl)) out.set(gl, new Array(12).fill(0));
-    out.get(gl)[e.mo - 1] += e.amount || 0;
-  }
-  return out;
-}
 
 /** The calendar year the budget covers. */
 export function budgetYear(budget, asOf) {
@@ -164,21 +148,13 @@ export default function BudgetActualsAccounts({ budget, entries, drilldown, acco
     for (const [gl, actual] of actualByGl) {
       if (named.has(gl) || !actual) continue;
       rows.push({
-        label: nameByGl.get(gl) || `GL ${gl}`,
+        label: accountLabel(gl, nameByGl),
         account_type: gl, gl_codes: [gl],
         budget_ytd: 0, budgeted: 0, actual, variance: actual, unbudgeted: true,
       });
     }
-    const income = rows.filter(r => String(r.account_type ?? "")[0] === "4");
-    const expense = rows.filter(r => String(r.account_type ?? "")[0] !== "4");
-    // GL code ascending, the order an income statement is read in. The
-    // variance ranking lives in the insights strip below the table.
-    const byCode = (a, b) =>
-      (a.account_type ?? 0) - (b.account_type ?? 0) || a.label.localeCompare(b.label);
-    return [
-      { title: "Income", polarity: "income", rows: income.sort(byCode) },
-      { title: "Operating Expenses", polarity: "expense", rows: expense.sort(byCode) },
-    ].filter(s => s.rows.length);
+    // The variance ranking lives in the insights strip below the table.
+    return accountSections(rows);
   }, [budget, actualByGl, nameByGl, windowMonths, monthly]);
 
   // Rows budgeted to zero are skipped: every $1 of unbudgeted spend would

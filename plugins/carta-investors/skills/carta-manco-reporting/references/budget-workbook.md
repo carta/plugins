@@ -131,8 +131,9 @@ Options:
   The dashboard renders a per-account Budget vs Actuals from Carta's own
   budget.
 - **Neither / skip for now** → same `{"declined": true}`. Carta's budget
-  is used if the firm has one; if not, the dashboard is actuals-only and
-  the Budget vs Actuals page does not appear.
+  is used if the firm has one; if not, the dashboard is actuals-only, the
+  Budget vs Actuals page does not appear, and Monthly Actuals (GL account
+  rows, no budget columns) takes its place in the nav.
 
 Record the answer either way: without it every future invocation re-asks,
 and a firm that keeps its budget in Carta would be prompted forever.

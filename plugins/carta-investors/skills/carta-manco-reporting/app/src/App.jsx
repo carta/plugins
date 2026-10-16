@@ -4,11 +4,13 @@ import AppShell from "./shell/AppShell.jsx";
 import { parseRoute, navigate as navigateRoute, subscribeNav } from "./shell/route.js";
 import DashboardView from "./views/DashboardView.jsx";
 import BudgetActualsView from "./views/BudgetActualsView.jsx";
+import MonthlyActualsView from "./views/MonthlyActualsView.jsx";
 import BudgetImport from "./shell/BudgetImport.jsx";
 import DrilldownDrawer from "./views/DrilldownDrawer.jsx";
 import useDrilldown from "./state/useDrilldown.js";
 import useReports from "./state/useReports.js";
 import { budgetNavChildren } from "./shell/reportNav.js";
+import { hasBudget, renderableBudgets } from "./shell/budgetPresence.js";
 import ShareStatus, { pulledMessage } from "./reports/ShareStatus.jsx";
 import { setDisplayCurrency } from "./charts/chartTheme.js";
 import { assignCategoricalColors, assignExpenseCategoryColors } from "./ui/categoricalColors.js";
@@ -38,7 +40,7 @@ function usePathRoute(firmSlug) {
 
 // Slug -> the name its events carry. A Budget-vs-Actuals child slug is a
 // workbook-derived budget id, so it never reaches an id.
-const VIEW_NAMES = { "dashboard": "Dashboard", "budget-vs-actuals": "BudgetVsActuals" };
+const VIEW_NAMES = { "dashboard": "Dashboard", "budget-vs-actuals": "BudgetVsActuals", "monthly-actuals": "MonthlyActuals" };
 
 function slugify(name) {
   return String(name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
@@ -193,26 +195,23 @@ export default function App() {
   // omitted from the sidebar. Budget-vs-Actuals renders a sub-nav item
   // per Excel-sourced budget (snapshot.budget.budgets[]), so a firm with
   // several budgets (a YTD dept crosstab plus an annual outline, say)
-  // sees them all. The parent BvA nav slug hides itself when no
-  // dimensional budget exists at all.
-  // Renderable when it has a dept crosstab, an outline, or — for a
-  // Carta-sourced budget, which has no dimension — per-account rows.
-  const budgetsList = Array.isArray(snapshot?.budget?.budgets)
-                      ? snapshot.budget.budgets.filter(b =>
-                          (Array.isArray(b.by_tag_value) && b.by_tag_value.length > 0)
-                          || (((b.view_kinds || []).includes("by-line-item")
-                               || (b.view_kinds || []).includes("by-account"))
-                              && Array.isArray(b.rows) && b.rows.length > 0))
-                      : [];
-  const hasDimensionalBudget = budgetsList.length > 0;
+  // sees them all. The parent BvA nav slug hides itself when this firm
+  // has no budget at all.
+  const budgetsList = renderableBudgets(snapshot);
+  const firmHasBudget = hasBudget(snapshot);
   const { own: budgetChildren, sharedWithYou: sharedChildren } = budgetNavChildren(budgetsList, reportsApi);
   // `icon` is a lookup key into Sidebar.jsx's ICONS map (Lucide glyphs, per
   // Ink's brand.md's Ink-icon stand-in mapping).
   const navItems = [
     { slug: "dashboard",         label: "Dashboard",         icon: "quickaction" },
     { slug: "budget-vs-actuals", label: "Budget vs Actuals", icon: "company",
-      hidden:   () => !hasDimensionalBudget,
+      hidden:   () => !firmHasBudget,
       children: budgetChildren },
+    // Actuals by GL account, no budget columns — stands in for Budget vs
+    // Actuals only while this firm has nothing budgeted, in Carta or a
+    // workbook. The two never show together.
+    { slug: "monthly-actuals",   label: "Monthly Actuals",   icon: "ledger",
+      hidden:   () => firmHasBudget },
   ].filter(item => !item.hidden || !item.hidden(snapshot));
 
   // The tab segment reads "budget-vs-actuals" or "budget-vs-actuals/<id>" —
@@ -231,11 +230,11 @@ export default function App() {
     if (snapshot) trackRender(`MancoReporting.${VIEW_NAMES[activeParent]}.View`);
   }, [snapshot, activeParent]);
 
-  // Waits for the snapshot, so it means "this firm has no dimensional budget" rather
+  // Waits for the snapshot, so it means "this firm has no budget" rather
   // than "the snapshot has not arrived yet".
   useEffect(() => {
-    if (snapshot && !hasDimensionalBudget) trackRender("MancoReporting.App.BudgetVsActualsHidden");
-  }, [snapshot, hasDimensionalBudget]);
+    if (snapshot && !firmHasBudget) trackRender("MancoReporting.App.BudgetVsActualsHidden");
+  }, [snapshot, firmHasBudget]);
 
   const sidebarProps = {
     initials: firmInitials(snapshot?.firmName),
@@ -295,6 +294,13 @@ export default function App() {
             reportsApi={reportsApi}
             onOpenReport={(id) => navigate(id ? `budget-vs-actuals/${id}` : "budget-vs-actuals")}
             onShareDone={(message) => setShareNotice({ status: "done", op: "share", message })}
+          />
+        )}
+        {snapshot && activeParent === "monthly-actuals" && (
+          <MonthlyActualsView
+            snapshot={snapshot}
+            accountsData={accountsData}
+            drilldown={accountsData ? drilldown : null}
           />
         )}
       </AppShell>

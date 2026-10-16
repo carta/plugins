@@ -1,4 +1,4 @@
-import { Zap, BarChart3 } from "lucide-react";
+import { Zap, BarChart3, Table } from "lucide-react";
 import { sans, INK, PAPER, LINE, FAINT, MICRO, SHADE, FS, SIDENAV_STRIPE } from "../ui/theme.js";
 import { trackClick } from "../analytics.js";
 import { DownloadIcon, EyeIcon, UnsharedDot, UsersIcon } from "../reports/icons.jsx";
@@ -7,6 +7,7 @@ import { DownloadIcon, EyeIcon, UnsharedDot, UsersIcon } from "../reports/icons.
 const NAV_EVENTS = {
   "dashboard": "MancoReporting.Nav.Dashboard",
   "budget-vs-actuals": "MancoReporting.Nav.BudgetVsActuals",
+  "monthly-actuals": "MancoReporting.Nav.MonthlyActuals",
 };
 
 // Silent on an unmapped slug rather than folding it into another page's count.
@@ -19,6 +20,7 @@ function trackNav(slug) {
 const ICONS = {
   quickaction: Zap,       // Dashboard
   company: BarChart3,     // Budget vs Actuals
+  ledger: Table,          // Monthly Actuals
 };
 
 // SideNav icon "tile": 20x20, orange fill + dark glyph when active — see

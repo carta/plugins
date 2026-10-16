@@ -28,7 +28,7 @@ const DRILL_NAMES = {
 // carries. Read off the selection's `from` (or a department drill's existing
 // `origin`); an unmapped or absent entry point leaves the plain kind id.
 const DRILL_SOURCES = {
-  "account": { "dashboard": "Dashboard", "budget-vs-actuals": "BudgetVsActuals" },
+  "account": { "dashboard": "Dashboard", "budget-vs-actuals": "BudgetVsActuals", "monthly-actuals": "MonthlyActuals" },
   "department-account": { "department-cell": "BudgetVsActuals", "budget-category": "DashboardVariance" },
   "date-range-category": { "chart": "Chart", "breakdown": "Breakdown" },
 };

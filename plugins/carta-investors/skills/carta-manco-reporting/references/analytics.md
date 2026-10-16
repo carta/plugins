@@ -73,7 +73,7 @@ Every row spells the full id, prefix included.
 | `MancoReporting.App.DataNotReady` | render | `/api/snapshot` answered `not_ready`: the skill has not written the snapshot yet. |
 | `MancoReporting.App.SnapshotError` | render | The snapshot failed or returned any other error. |
 | `MancoReporting.App.AccountsUnavailable` | render | `/api/accounts` failed. Every drill-down is disabled for the session. |
-| `MancoReporting.App.BudgetVsActualsHidden` | render | The firm has no dimensional budget, so the Budget vs Actuals page is not offered. |
+| `MancoReporting.App.BudgetVsActualsHidden` | render | The firm has no budget loaded, so Budget vs Actuals is not offered — Monthly Actuals is offered in its place. |
 | `MancoReporting.App.ToggleTheme` | click | Light/dark toggle, on either page. |
 | `MancoReporting.App.ImportBudget` | click | "Import budget" in the sidebar (hosted app only): opens the file picker for an exported budget bundle. |
 | `MancoReporting.App.RemoveBudget` | click | "Remove" beside an uploaded budget: restores Carta's stored budget. |
@@ -84,6 +84,7 @@ Every row spells the full id, prefix included.
 |---|---|---|
 | `MancoReporting.Nav.Dashboard` | click | Sidebar → Dashboard. |
 | `MancoReporting.Nav.BudgetVsActuals` | click | Sidebar → Budget vs Actuals. |
+| `MancoReporting.Nav.MonthlyActuals` | click | Sidebar → Monthly Actuals. Shown only while this firm has no budget. |
 | `MancoReporting.Nav.BudgetVsActualsBudget` | click | Sidebar → one budget under Budget vs Actuals. The budget id stays out of the event. |
 | `MancoReporting.Nav.SharedReport` | click | Sidebar → a report someone shared with you, under "Shared with you". The report id stays out of the event. |
 | `MancoReporting.Nav.LoadSharedReports` | click | Sidebar → "Load shared reports" (or "Check for new shared reports"). |
@@ -207,8 +208,10 @@ this table with the map.
 |---|---|---|
 | `MancoReporting.Dashboard.View` | render | Dashboard route became active. |
 | `MancoReporting.BudgetVsActuals.View` | render | Budget vs Actuals route became active. |
+| `MancoReporting.MonthlyActuals.View` | render | Monthly Actuals route became active. |
 | `MancoReporting.Drilldown.Open.Account.Dashboard` | render | Account drill from the Dashboard's spend-by-GL chart. |
 | `MancoReporting.Drilldown.Open.Account.BudgetVsActuals` | render | Account drill from a Budget vs Actuals by-account row or cell. |
+| `MancoReporting.Drilldown.Open.Account.MonthlyActuals` | render | Account drill from a Monthly Actuals row or cell. |
 | `MancoReporting.Drilldown.Open.DepartmentAccount.BudgetVsActuals` | render | Crosstab (department × account) cell drill. |
 | `MancoReporting.Drilldown.Open.DepartmentAccount.DashboardVariance` | render | Dashboard variance-chart bar drill. |
 | `MancoReporting.Drilldown.Open.DateRangeCategory.Chart` | render | Monthly-expenses chart bar drill (that month). |
