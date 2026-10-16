@@ -1,21 +1,49 @@
-// Landing page: pick a firm, then load its console. Reads the firm registry
-// (/api/firms) written by scripts/ingest-firm.mjs. Firm-agnostic — every card
-// is data-driven from the registry, so adding a firm needs no code change.
+// Landing page: pick a firm, then load its console. Lists the caller's firms (/api/firms).
+// Carta staff start with only their active firm, so they get a search box (name, firm UUID or
+// Carta ID, /api/firms?q=) and are never auto-opened into a firm. Anyone else never sees search:
+// one firm opens directly, several show as cards. Who is staff comes from /api/me; until that
+// is known (or if it fails) there is no search and no auto-open. Firm-agnostic — every card
+// is data-driven, so adding a firm needs no code change.
 import { useEffect, useState } from "react";
 import { FS, tightSans, sans, inkNum, GLOBAL_CSS } from "./ui/theme.js";
 import { Mark, H3 } from "./ui/components.jsx";
 
+const SEARCH_DELAY_MS = 300;
+
+const getJson = (url) =>
+  fetch(url).then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status === 401 ? "Not authorized" : `HTTP ${r.status}`))));
+
 export default function FundChooser({ onPick }) {
+  const [isStaff, setIsStaff] = useState(undefined); // undefined: loading; null: unknown
   const [firms, setFirms] = useState(null);
   const [error, setError] = useState(null);
+  const [query, setQuery] = useState("");
+  const q = isStaff ? query.trim() : "";
 
   useEffect(() => {
-    fetch("/api/firms")
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status === 401 ? "Not authorized" : `HTTP ${r.status}`))))
-      .then(setFirms)
-      .catch((e) => setError(String(e)));
+    getJson("/api/me").then((me) => setIsStaff(typeof me?.isStaff === "boolean" ? me.isStaff : null)).catch(() => setIsStaff(null));
   }, []);
 
+  // Wait for who the caller is. Staff: an empty search lists their active firm, otherwise search
+  // after a pause in typing. Everyone else: their firms.
+  useEffect(() => {
+    if (isStaff === undefined) return;
+    let live = true;
+    const timer = setTimeout(() => {
+      getJson(q ? `/api/firms?q=${encodeURIComponent(q)}` : "/api/firms")
+        .then((list) => {
+          if (!live) return;
+          const found = Array.isArray(list) ? list : [];
+          setFirms(found);
+          setError(null);
+          if (isStaff === false && found.length === 1 && found[0]?.slug) onPick(found[0].slug);
+        })
+        .catch((e) => { if (live) setError(String(e)); });
+    }, q ? SEARCH_DELAY_MS : 0);
+    return () => { live = false; clearTimeout(timer); };
+  }, [q, isStaff, onPick]);
+
+  const shown = firms || [];
   return (
     <div style={{ ...sans, minHeight: "100vh", background: "var(--ink-color-global-surface-background-default)", color: "var(--ink-color-global-text-default)", display: "flex", justifyContent: "center" }}>
       <style>{GLOBAL_CSS}</style>
@@ -26,12 +54,20 @@ export default function FundChooser({ onPick }) {
           Pick a firm to open its funds, companies, and scenarios — built on Carta Fund Admin data.
         </div>
 
+        {isStaff === true && <input type="search" data-testid="firm-search" value={query} onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search by firm name, firm UUID, or Carta ID" aria-label="Search firms" autoFocus
+          style={{ ...sans, fontSize: FS.bodyLg, width: "100%", boxSizing: "border-box", padding: "12px 14px", marginBottom: 24,
+            color: "var(--ink-color-global-text-default)", background: "var(--ink-color-global-surface-background-default)",
+            border: "1px solid var(--ink-color-global-border-subtle)", borderRadius: 0 }} />}
+
         {error && <div style={{ ...sans, fontSize: FS.bodyLg, color: "var(--ink-color-global-feedback-negative-strong)" }}>Couldn’t load firms: {error}</div>}
         {!firms && !error && <div style={{ ...sans, fontSize: FS.bodyLg, color: "var(--ink-color-global-text-subtle)" }}>Loading firms…</div>}
-        {firms && firms.length === 0 && <div style={{ ...sans, fontSize: FS.bodyLg, color: "var(--ink-color-global-text-subtle)" }}>No firms installed yet.</div>}
+        {firms && firms.length === 0 && <div data-testid="no-firms" style={{ ...sans, fontSize: FS.bodyLg, color: "var(--ink-color-global-text-subtle)" }}>
+          {q ? "No firms matched your search." : isStaff ? "No firms to show. Search by firm name, firm UUID, or Carta ID." : "No firms to show."}
+        </div>}
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 14 }}>
-          {(firms || []).map((f) => (
+          {shown.map((f) => (
             <button key={f.slug} data-testid={`firm-${f.slug}`} onClick={() => onPick(f.slug)}
               className="firm-card"
               style={{ textAlign: "left", cursor: "pointer", background: "var(--ink-color-global-surface-background-default)", border: `1px solid var(--ink-color-global-border-subtle)`,
@@ -41,7 +77,7 @@ export default function FundChooser({ onPick }) {
               <div>
                 <H3 as="div" style={{ lineHeight: 1.2 }}>{f.name}</H3>
                 <div style={{ ...inkNum, fontSize: FS.small, color: "var(--ink-color-global-text-subtle)", marginTop: 6 }}>
-                  {f.funds} fund{f.funds === 1 ? "" : "s"} · NAV {f.navAsOf}
+                  {f.funds} fund{f.funds === 1 ? "" : "s"}{f.navAsOf ? ` · NAV ${f.navAsOf}` : ""}
                 </div>
               </div>
               <span style={{ ...sans, fontSize: FS.body, fontWeight: 600, color: "var(--ink-button-background-color-primary-base-default)", marginTop: 2 }}>Open workspace →</span>

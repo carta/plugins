@@ -24,41 +24,14 @@ export default function Root() {
     navigate({ firm: slug, tab: slug ? "overview" : null }, { replace: true });
   }, []);
 
-  // This server's firm registry — single-server-scoped, so exactly one entry
-  // once a firm is launched. Shared by the auto-select and self-heal effects
-  // below; resolves to null on any fetch/parse failure.
-  const fetchFirms = useCallback(() => fetch("/api/firms").then((r) => r.json()).catch(() => null), []);
-
-  // No firm in the URL: restore the last-used firm from storage, else auto-select
-  // when exactly one firm exists (the skill launches one firm per session — skip
-  // the chooser in that case).
+  // No firm in the URL: reopen the last-used firm from storage, else show the chooser.
+  // A firm is never picked for the user from /api/firms: for Carta staff that list holds
+  // only their active context, so auto-selecting it would open the same firm every time.
   useEffect(() => {
     if (firm) return;
     const stored = localStorage.getItem("firm");
-    if (stored) { navigate({ firm: stored, tab: "overview" }, { replace: true }); return; }
-    let live = true;
-    fetchFirms().then((list) => {
-      if (live && Array.isArray(list) && list.length === 1 && list[0]?.slug) choose(list[0].slug);
-    });
-    return () => { live = false; };
-  }, [firm, choose, fetchFirms]);
-
-  // Self-heal a stale URL for a single-firm server: when /api/firms lists exactly one
-  // firm and the URL names another, correct the URL. With several firms the user may
-  // open any of them, so the URL is left alone.
-  useEffect(() => {
-    if (!firm) return;
-    let live = true;
-    fetchFirms().then((list) => {
-      if (!live) return;
-      const real = Array.isArray(list) && list.length === 1 && list[0]?.slug;
-      if (real && real !== firm) {
-        localStorage.setItem("firm", real);
-        navigate({ firm: real, tab: parseRoute().tab }, { replace: true });
-      }
-    });
-    return () => { live = false; };
-  }, [firm, fetchFirms]);
+    if (stored) navigate({ firm: stored, tab: "overview" }, { replace: true });
+  }, [firm]);
 
   // Load the firm's extras whenever the firm changes. If snapshot data isn't
   // ready yet (fresh OAuth session), trigger /api/load-firm to fetch from MCP.
