@@ -19,7 +19,7 @@ model: inherit
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.16.11</carta-plugin>
+<carta-plugin>carta-crm:1.16.12</carta-plugin>
 
 # Adviser Tracker
 
@@ -167,6 +167,8 @@ created over the three years, Tier 2 is the rest. Do not choose, change or overr
 ```
 uv run "${CLAUDE_PLUGIN_ROOT}/skills/adviser-tracker/scripts/build_tracker.py" --result <file> --people-result <people file> --notice "<the Step 1 field line, plus the Step 2 disagreement line when there is one, joined into one line>" --out <outputs-directory>/adviser-tracker-<slug>.html
 ```
+
+The notice belongs to the Mandate view. The script gives the introducer and adviser view its own fixed line that says banks are counted from the introducers and advisers on each deal.
 
 Leave out `--people-result` when the people run failed. The page then has no view toggle. When
 the script drops a people file it cannot use, it adds its own line to the notice and builds the

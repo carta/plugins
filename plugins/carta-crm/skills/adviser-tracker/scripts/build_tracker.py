@@ -202,6 +202,7 @@ def json_for_script(data: dict) -> str:
 
 MANDATE_VIEW = ("mandate", "By mandate")
 PEOPLE_VIEW = ("dealPeople", "By introducer & adviser")
+PEOPLE_NOTICE = "Banks are counted from the introducers and advisers on each deal. A deal counts for the bank where one of them works today."
 PEOPLE_DROPPED = "The introducer and adviser view is not shown."
 
 
@@ -218,7 +219,7 @@ def with_people_view(data: dict, people_raw: str, as_of: dt.date) -> dict:
     main window is dropped. The Mandate page is still built.
     """
     try:
-        people = build_data(parse_result(people_raw), as_of, data["notice"])
+        people = build_data(parse_result(people_raw), as_of, PEOPLE_NOTICE)
     except SystemExit as exc:
         return drop_people_view(data, str(exc))
     if not people["rows"]:
