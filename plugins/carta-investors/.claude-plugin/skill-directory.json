@@ -58,9 +58,9 @@
     ]
   },
   "carta-explore-data": {
-    "category": "portfolio",
+    "category": "fund-accounting",
     "name": "Ask about your fund data",
-    "order": 40,
+    "order": 20,
     "prompts": [
       "What is the NAV of each of my funds as of the latest quarter?"
     ]
@@ -153,9 +153,9 @@
     ]
   },
   "carta-waterfall-modeling": {
-    "category": "fund-modeling",
-    "name": "Exit waterfall",
-    "order": 30,
+    "category": "portfolio",
+    "name": "Waterfall modeling",
+    "order": 80,
     "prompts": [
       "Who gets paid, and how much, if [portfolio company] exits at $[amount]?"
     ]

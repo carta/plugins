@@ -77,7 +77,7 @@ const DIR_CATEGORIES = [
   {
     id: 'fund-accounting',
     name: 'Fund accounting',
-    tagline: 'Claude for Excel: build consolidated P&L, trial balance, and balance sheets.',
+    tagline: 'Ask about fund data like NAV, and build consolidated P&L, trial balance, and balance sheets in Excel.',
   },
   {
     id: 'fund-modeling',
