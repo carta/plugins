@@ -12,6 +12,7 @@ allowed-tools:
   - mcp__claude_ai_Carta__welcome
   - mcp__claude_ai_Carta__set_context
   - mcp__claude_ai_Carta__list_contexts
+  - mcp__claude_ai_Carta__search_tools
   # Carta-installer naming (lowercase)
   - mcp__carta_production__call_tool
   - mcp__carta_production__read_tool
@@ -19,6 +20,7 @@ allowed-tools:
   - mcp__carta_production__welcome
   - mcp__carta_production__set_context
   - mcp__carta_production__list_contexts
+  - mcp__carta_production__search_tools
   # Local / legacy fallback
   - mcp__carta__call_tool
   - mcp__carta__read_tool
@@ -26,12 +28,14 @@ allowed-tools:
   - mcp__carta__welcome
   - mcp__carta__set_context
   - mcp__carta__list_contexts
+  - mcp__carta__search_tools
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__fetch
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__search_tools
   - AskUserQuestion
   - read_skill
   - Skill(carta-investors:carta-manco-reporting)
@@ -44,7 +48,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.86.1</carta-plugin>
+<carta-plugin>carta-investors:6.86.2</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -329,7 +333,7 @@ Scan the tools available in the conversation for any matching `mcp__*__welcome`.
 
 If no firm was named, defer to the capability's own parameter gate.
 
-**Never BM25-search for Carta MCP tools at any point in this skill.** Derive `<SERVER>` from the server name as shown in step 2. After that, the six suffixes `welcome`, `set_context`, `list_contexts`, `read_tool`, `call_tool`, `fetch` are exhaustive for every Carta MCP server regardless of environment. Call `mcp__<SERVER>__<suffix>` directly — these tools exist on every Carta server; you do not need to verify their existence before calling them. Do not run `tool_search_tool_bm25` under any circumstances — not to discover the prefix, not to find `fetch`, not for anything.
+**Never BM25-search for Carta MCP tools at any point in this skill, with one stated exception below.** Derive `<SERVER>` from the server name as shown in step 2. After that, the seven suffixes `welcome`, `set_context`, `list_contexts`, `read_tool`, `call_tool`, `fetch`, and `search_tools` are exhaustive for every Carta MCP server regardless of environment. Call `mcp__<SERVER>__<suffix>` directly — these tools exist on every Carta server; you do not need to verify their existence before calling them. Do not run `tool_search_tool_bm25` under any circumstances to discover the prefix, to find `fetch`, or for anything else — the one sanctioned exception is calling `mcp__<SERVER>__search_tools("report a bug feedback")` once per session, exactly as [references/report-feedback.md](references/report-feedback.md)'s availability check requires before filing `fa:create:feedback`. That one call is the only reason this skill ever searches for a Carta tool.
 
 ---
 
@@ -354,13 +358,16 @@ mcp__<SERVER>__fetch(command="fa:get:manco_eligibility", _instrumentation={"plug
 
 This returns `{available, has_active_manco, has_fund_admin, fa_product_codes}` — a fast, cached pre-check; it replaces listing entities and inferring a ManCo from an `entity_types` filter.
 
-| `available` | `has_fund_admin` | `has_active_manco` | Action |
-|---|---|---|---|
-| `false` | — | — | Enrichment not yet synced or a transient DWH outage — **not** a denial. Surface the **Try again** message below and STOP. |
-| `true` | `false` | — | Surface the **No Fund Admin** message below and STOP. |
-| `true` | `true` | `false` | Set `<HAS_MANCO> = false`. Surface the **No ManCo** message below and STOP. |
-| `true` | `true` | `true` | Set `<HAS_MANCO> = true`. Proceed to Dispatch below. |
-| Call errors / times out | | | Do NOT auto-retry. Surface the generic connection error from the shared Error-handling table and STOP. |
+See [references/report-feedback.md](references/report-feedback.md) for the `fa:create:feedback`
+contract — the **File?** column below decides whether a given row also goes to Carta's team.
+
+| `available` | `has_fund_admin` | `has_active_manco` | Action | File? |
+|---|---|---|---|---|
+| `false` | — | — | Enrichment not yet synced or a transient DWH outage — **not** a denial. Surface the **Try again** message below and STOP. | Don't file — a transient sync/outage state the message itself says isn't a denial, not a skill defect. |
+| `true` | `false` | — | Surface the **No Fund Admin** message below and STOP. | Don't file — a subscription/product state, not a skill defect. |
+| `true` | `true` | `false` | Set `<HAS_MANCO> = false`. Surface the **No ManCo** message below and STOP. | Don't file — same: a product state, not a skill defect. |
+| `true` | `true` | `true` | Set `<HAS_MANCO> = true`. Proceed to Dispatch below. | N/A — not a failure. |
+| Call errors / times out | | | Do NOT retry, and do not offer to — this gate allows one probe per session (see Hard-gate discipline below). For a 403/"not authorized"/break-the-glass reply or a connector failure, surface that Error handling row's message; otherwise tell the user in plain English you couldn't check their account just now and to ask again in a new session. Then STOP. | File a timeout or validation/internal error the first time — this gate never retries, so there is no repeat to wait for. Don't file a 403/break-the-glass denial or a connector failure (same reasons as their Error handling rows). |
 
 ### Hard-gate discipline (non-negotiable)
 
@@ -415,11 +422,15 @@ reporting, cap tables) are handled proactively by the STOP rows in the Router
 Gate above — they never reach this table. This table covers issues that only
 surface mid-flow, once a capability is already running.
 
-| Situation | Response |
-|---|---|
-| User wants pacing AND to build the budget first | Route to `create-budget` first; `budget-analysis` follows once the budget exists. |
-| `fetch-budget` returns no budget rows | ManCo was already confirmed in Gate 0.75, so this means no budget is loaded into Carta for that year yet. Offer to build one with `create-budget`. |
-| `fetch-actuals` / `budget-analysis` returns zero actuals rows | ManCo confirmed in Gate 0.75 — so no activity posted for that period. Suggest a different date range. |
+See [references/report-feedback.md](references/report-feedback.md) for the `fa:create:feedback`
+contract this skill files against — the **File?** column below decides whether a given row
+also goes to Carta's team, per that contract.
+
+| Situation | Response | File? |
+|---|---|---|
+| User wants pacing AND to build the budget first | Route to `create-budget` first; `budget-analysis` follows once the budget exists. | Don't file — routing, not a failure. |
+| `fetch-budget` returns no budget rows | ManCo was already confirmed in Gate 0.75, so this means no budget is loaded into Carta for that year yet. Offer to build one with `create-budget`. | Don't file — an expected gap in this firm's data, not a skill defect. |
+| `fetch-actuals` / `budget-analysis` returns zero actuals rows | ManCo confirmed in Gate 0.75 — so no activity posted for that period. Suggest a different date range. | Don't file — same reasoning: an expected gap, not a defect. |
 
 ---
 
@@ -440,13 +451,24 @@ surface mid-flow, once a capability is already running.
 
 ## Error handling (shared)
 
-| Symptom | What to tell the user |
-|---|---|
-| No Carta MCP server found | "I can't see your Carta connector. Open **Settings → Connectors** in Claude, enable Carta, then ask me again." |
-| `contexts:list` returns no firm | Echo the name and ask for correct spelling. Don't silently near-match. |
-| Query times out | Tell the user it's slow and offer to retry — never auto-retry. |
-| Auth / permission error from the MCP | Ask the user to reconnect Carta in Settings → Connectors. |
-| Connector connected, tool calls fail (`McpAuthError` / "tool not available") | Prefix mismatch — NOT an auth issue. Re-run `refresh_mcp_connectors`, probe the matching prefix's `welcome`. Never tell the user to re-auth without verifying the prefix mismatch first. |
+| Symptom | What to tell the user | File? |
+|---|---|---|
+| No Carta MCP server found | "I can't see your Carta connector. Open **Settings → Connectors** in Claude, enable Carta, then ask me again." | Don't file — the user's own connection, not a skill defect. |
+| `contexts:list` returns no firm | Echo the name and ask for correct spelling. Don't silently near-match. | Don't file — an input the user corrects in the same turn. |
+| Query times out | Tell the user it's slow and offer to retry — never auto-retry. | Don't file on the first timeout (it may just be slow). If the user asks you to retry and it times out again, file — a query that reliably times out is developer-actionable. |
+| Auth / permission error from the MCP connection itself (an expired or revoked connector token, an OAuth error — not a 403 from an in-session tool call, which is the row below) | Ask the user to reconnect Carta in Settings → Connectors. | Don't file — a connector-level auth failure, not a skill defect. |
+| Connector connected, tool calls fail (`McpAuthError` / "tool not available") | Prefix mismatch — NOT an auth issue. Re-run `refresh_mcp_connectors`, probe the matching prefix's `welcome`. Never tell the user to re-auth without verifying the prefix mismatch first. | Don't file — even if no connected prefix's tools work after probing, filing cannot reach Carta either with no working connector; surface the connection problem to the user instead. |
+| A Carta tool (`fa:*`, `dwh:*`) returns a validation or internal error outside the rows above — a bad-argument rejection, an unexpected 5xx, a malformed response | Surface the failure per "Never auto-retry a failed query" above; let the user decide whether to retry. | File — developer-fixable, unlike a local connection problem. Put the exact tool name, arguments, and error message in `context`/`flowSummary`. |
+| A Carta tool returns 403/"not authorized" or a break-the-glass requirement | Surface it in plain English and stop. | Don't file — an access decision about the user or firm, not a skill defect a developer could fix. |
+
+---
+
+## Reporting issues
+
+Before this skill's first failure, read [references/report-feedback.md](references/report-feedback.md)
+(when and how to file `fa:create:feedback`). This skill has no separate `errors.md`: Gate
+0.75's eligibility table above, and the "If Something Goes Wrong" and "Error handling
+(shared)" tables below, mark which specific failures in this skill file, and which don't.
 
 ---
 
