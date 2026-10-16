@@ -36,11 +36,13 @@ def fail(code: str, message: str) -> "SystemExit":
 
 
 def parse_result(raw: str) -> dict:
-    """The tool payload, from plain JSON or the MCP result envelope."""
+    """The tool payload, from plain JSON, the MCP result envelope or the saved `{"result": "<json>"}` file."""
     try:
         value = json.loads(raw)
     except json.JSONDecodeError as exc:
         raise fail("result_not_json", str(exc))
+    if isinstance(value, dict) and isinstance(value.get("result"), str):
+        return parse_result(value["result"])
     if isinstance(value, dict) and isinstance(value.get("structuredContent"), dict):
         return value["structuredContent"]
     if isinstance(value, dict) and isinstance(value.get("content"), list):

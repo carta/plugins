@@ -9,6 +9,9 @@ description: >
   banks", or "/adviser-tracker". For one adviser's record use search-companies.
 allowed-tools:
   - mcp__carta__crm_call_tool
+  - mcp__carta__crm_read_tool
+  - mcp__claude_ai_Carta__crm_read_tool
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__crm_read_tool
   - mcp__claude_ai_Carta__crm_call_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__crm_call_tool
   - Artifact
@@ -19,13 +22,13 @@ model: inherit
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.16.12</carta-plugin>
+<carta-plugin>carta-crm:1.16.13</carta-plugin>
 
 # Adviser Tracker
 
 The question this skill answers: **"Can you help me find the top twenty advisers in this
 tenant?"** It publishes the answer as **`<Title> - <Organization>`** (both come from the tool
-result), favicon **🤝**. The page is a static snapshot. All three years are in it, so its year
+result), icon **handshake**. The page is a static snapshot. All three years are in it, so its year
 toggle needs no call.
 
 ## Voice
@@ -88,11 +91,15 @@ crm_call_tool({ "name": "crm:get_adviser_tracker_details", "arguments": { "runId
    `crm:get_adviser_tracker_details` call, here or in the retry below, does not stop the run
    unless its text is listed below. Go on to the result call below. It decides.
 
-5. Collect the results. In ONE message, call the result once for each run. Each answer has the
-   shape the build script reads:
+5. Collect the results. In ONE message, call the result once for each run. The answer is about
+   200 KB, because it carries the logos. Every call whose answer becomes `--result` or `--people-result` goes through
+   `crm_read_tool` when it is in the session: these two calls and the single calls below. It
+   saves a large answer to a file and returns the path. `crm_call_tool` cuts a large answer and
+   returns no path, so use it only when there is no `crm_read_tool`. Pass the saved file to the
+   build script as it is. Each answer has the shape the build script reads:
 
 ```
-crm_call_tool({ "name": "crm:get_adviser_tracker_result", "arguments": { "runId": "<runId>" } })
+crm_read_tool({ "name": "crm:get_adviser_tracker_result", "arguments": { "runId": "<runId>" } })
 ```
 
 An error comes back as the plain text of the tool answer, not as JSON. Find it by the text it
@@ -127,16 +134,17 @@ two single calls instead, in one message, and use their answers as the results. 
 follows the people rules above:
 
 ```
-crm_call_tool({ "name": "crm:get_adviser_tracker", "arguments": { "limit": 20, "dealFieldId": "<id of that field>" } })
-crm_call_tool({ "name": "crm:get_adviser_tracker", "arguments": { "limit": 20, "linkBy": "dealPeople" } })
+crm_read_tool({ "name": "crm:get_adviser_tracker", "arguments": { "limit": 20, "dealFieldId": "<id of that field>" } })
+crm_read_tool({ "name": "crm:get_adviser_tracker", "arguments": { "limit": 20, "linkBy": "dealPeople" } })
 ```
 
 Step 4 carries one plain line in its notice that names the field used. When no field
 qualifies, leave `dealFieldId` out and say so in that line: deals are counted from every
 company field.
 
-Save the Mandate result, and the people result when it succeeded, each to its own file in the
-outputs directory with `Write`. When the host already returns a saved path, use that path.
+Use the saved path when the answer returns one, for the Mandate result and for the people result
+when it succeeded. When an answer comes back without a saved path, write it to its own file in the
+outputs directory with `Write`.
 
 - **Not configured.** An error whose text starts `adviser-tracker-not-configured:`, or an
   unknown-tool error on the single call. Build and publish nothing. Tell the user adviser
@@ -149,13 +157,20 @@ outputs directory with `Write`. When the host already returns a saved path, use 
 ## Step 2: Check the top bank
 
 The check stays on the Mandate view. Take the bank with the most deals in the current year: the
-sum of its `dealsByMonth` counts for that year. Check it with one call each:
+sum of its `dealsByMonth` counts for that year. Check it with the calls below, once each. Do not retry any of them. When a call fails, skip its check:
 
-- its deals created this year, with `crm:aggregate_deals` or `crm:search_deals`;
-- its fees, with `crm:get_fees_by_deal`.
+- its deals created this year, with `crm:aggregate_deals`. Call `crm:get_deal_fields` first if its
+  answer is not in the conversation. Pass `group_by` as the bank field id in an array. Pass
+  `filters` with two items: the bank field `eq` the bank name, and the deal created-date field
+  `between` the first day of the year and today. Leave `metric` out: every group already carries
+  a `count`;
+- its fees, only when that count is 25 or fewer. Call `crm:search_deals` once with the same two
+  filters and that count as `limit`. Then call `crm:get_fees_by_deal` once for each returned deal, with its
+  `deal_id`, all in one message. Add the fee totals per currency. When any call in this sequence
+  fails, skip the whole fees check.
 
 When a number disagrees with the tracker, write one plain line that says what the CRM shows. Step 4
-carries it in the notice. When a check call fails, skip that check. Do not retry it.
+carries it in the notice.
 
 ## Step 3: Split the tiers
 
@@ -184,7 +199,7 @@ data by hand.
 ## Step 5: Publish
 
 ```
-Artifact({action: "list", scope: "mine"})
+Artifact({action: "list", scope: "mine", limit: 50})
 ```
 
 Find the artifact titled exactly `<Title> - <Organization>` and keep its `url`. An artifact for
@@ -196,12 +211,12 @@ Artifact({
   file_path: "<outputs-directory>/adviser-tracker-<slug>.html",
   url: "<url from the list, omitted on a first publish>",
   description: "Top advisers by deals created, relationship strength and top contact, by tier.",
-  favicon: "🤝",
+  icon: "handshake",
   label: "Rebuilt from the CRM"
 })
 ```
 
-Pass no `capabilities`: the page is static and reads nothing when opened. Omit `favicon` on a
+Pass no `capabilities`: the page is static and reads nothing when opened. Omit `icon` on a
 redeploy.
 
 ## Step 6: Reply
