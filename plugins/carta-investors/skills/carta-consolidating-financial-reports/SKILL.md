@@ -14,6 +14,7 @@ allowed-tools:
   - mcp__claude_ai_Carta__welcome
   - mcp__claude_ai_Carta__set_context
   - mcp__claude_ai_Carta__list_contexts
+  - mcp__claude_ai_Carta__search_tools
   # Carta-installer naming (lowercase)
   - mcp__carta_production__call_tool
   - mcp__carta_production__read_tool
@@ -21,6 +22,7 @@ allowed-tools:
   - mcp__carta_production__welcome
   - mcp__carta_production__set_context
   - mcp__carta_production__list_contexts
+  - mcp__carta_production__search_tools
   # Sandbox
   - mcp__carta_sandbox__call_tool
   - mcp__carta_sandbox__read_tool
@@ -28,6 +30,7 @@ allowed-tools:
   - mcp__carta_sandbox__welcome
   - mcp__carta_sandbox__set_context
   - mcp__carta_sandbox__list_contexts
+  - mcp__carta_sandbox__search_tools
   # Local / legacy fallback
   - mcp__carta__call_tool
   - mcp__carta__read_tool
@@ -35,12 +38,14 @@ allowed-tools:
   - mcp__carta__welcome
   - mcp__carta__set_context
   - mcp__carta__list_contexts
+  - mcp__carta__search_tools
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__fetch
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__welcome
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__search_tools
   - AskUserQuestion
   - read_skill
   - Read
@@ -54,7 +59,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.86.5</carta-plugin>
+<carta-plugin>carta-investors:6.86.6</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -351,9 +356,9 @@ last `__`. Examples: `mcp__carta__welcome` → `carta`,
 
 ### The five Carta tools load lazily — a short tool list is not a missing tool
 
-Derive `<SERVER>` from the server name as shown above. After that, the six
-suffixes `welcome`, `set_context`, `list_contexts`, `read_tool`, `call_tool`, `fetch` are
-exhaustive for every Carta MCP server regardless of environment. Call
+Derive `<SERVER>` from the server name as shown above. After that, the seven
+suffixes `welcome`, `set_context`, `list_contexts`, `read_tool`, `call_tool`, `fetch`, and
+`search_tools` are exhaustive for every Carta MCP server regardless of environment. Call
 `mcp__<SERVER>__<suffix>` directly.
 
 **`list_contexts`, `read_tool` and `call_tool` load lazily. They will often NOT appear in
@@ -371,14 +376,17 @@ subset, so it will appear to prove the lazy tools are missing when they are not.
 That false negative is the trap: it leads to abandoning the run and telling the
 user to re-authenticate a working connector. If you genuinely must search, use
 the connector's own `mcp__<SERVER>__search_tools`, never the generic search.
+[references/report-feedback.md](references/report-feedback.md)'s availability
+check is the one place this skill calls `search_tools` on its own initiative —
+once per session, to confirm `fa:create:feedback` before filing it.
 
 If a call to one of the five genuinely errors, handle it from the error table at
 the end of this skill — do not infer from a tool listing.
 
 ### Instrumentation — every Carta MCP call carries `_instrumentation_v2`
 
-Pass it on **every** `welcome`, `set_context`, `list_contexts`, `read_tool`, `call_tool`, and
-`fetch` call, exactly as written in the examples below:
+Pass it on **every** `welcome`, `set_context`, `list_contexts`, `read_tool`, `call_tool`,
+`fetch`, and `search_tools` call, exactly as written in the examples below:
 
 ```
 _instrumentation_v2={...}
@@ -643,18 +651,32 @@ skill's directory.
 Out-of-scope topics are handled proactively by the STOP rows in the Router Gate
 — they never reach this table. This table covers issues that surface mid-flow.
 
-| Situation | Response |
-|---|---|
-| No Carta MCP server found | "I can't see your Carta connector. Open **Settings → Connectors** in Claude, enable Carta, then ask me again." |
-| `list_contexts` returns no firm | Echo the name back and ask for the correct spelling. Don't silently near-match. |
-| Firm resolves but has only one entity | Say so plainly, and offer to run the single-entity report via `carta-investors:carta-explore-data` instead. A consolidating report over one entity is just that entity's statement. |
-| The user asks for two (but not all three) reports at once | Build the first, then offer the second from the post-run menu. Do not run both in one pass. |
-| The user asks for all three reports | Route to `<REPORT> = all` — see "Build" above. Builds all three in one pass instead of offering them one at a time. |
-| Query times out | Tell the user it's slow and offer to retry — never auto-retry. |
-| Auth / permission error from the MCP | Ask the user to reconnect Carta in Settings → Connectors. |
-| Connector connected, tool calls fail (`McpAuthError` / "tool not available") | Prefix mismatch — NOT an auth issue. Re-run `refresh_mcp_connectors` and probe the matching prefix's `welcome`. Never tell the user to re-auth without verifying the prefix mismatch first. |
-| `list_contexts`, `read_tool` or `call_tool` is not in your visible tool list | **Not a failure — they load lazily.** Call the tool anyway. Do not search for it, do not report a connector gap, and do not ask the user to re-authenticate a connector that just answered `welcome`. |
-| A Carta MCP call is rejected for missing instrumentation | Re-send the same call with `_instrumentation_v2` as specified in Gate 0. Do not surface this to the user — it is an internal contract, and the retry is silent. |
+See [references/report-feedback.md](references/report-feedback.md) for the
+`fa:create:feedback` contract — the **File?** column below decides whether a
+given row also goes to Carta's team, per that contract.
+
+| Situation | Response | File? |
+|---|---|---|
+| No Carta MCP server found | "I can't see your Carta connector. Open **Settings → Connectors** in Claude, enable Carta, then ask me again." | Don't file — the user's own connection, not a skill defect. |
+| `list_contexts` returns no firm | Echo the name back and ask for the correct spelling. Don't silently near-match. | Don't file — an input the user corrects in the same turn. |
+| Firm resolves but has only one entity | Say so plainly, and offer to run the single-entity report via `carta-investors:carta-explore-data` instead. A consolidating report over one entity is just that entity's statement. | Don't file — routing advice, not a failure. |
+| The user asks for two (but not all three) reports at once | Build the first, then offer the second from the post-run menu. Do not run both in one pass. | Don't file — routing, not a failure. |
+| The user asks for all three reports | Route to `<REPORT> = all` — see "Build" above. Builds all three in one pass instead of offering them one at a time. | Don't file — routing, not a failure. |
+| Query times out | Tell the user it's slow and offer to retry — never auto-retry. | Don't file on the first timeout (it may just be slow). If the user asks you to retry and it times out again, file — a query that reliably times out is developer-actionable. |
+| Auth / permission error from the MCP connection itself (an expired or revoked connector token, an OAuth error — not a 403 from an in-session tool call, which is the row below) | Ask the user to reconnect Carta in Settings → Connectors. | Don't file — a connector-level auth failure, not a skill defect. |
+| Connector connected, tool calls fail (`McpAuthError` / "tool not available") | Prefix mismatch — NOT an auth issue. Re-run `refresh_mcp_connectors` and probe the matching prefix's `welcome`. Never tell the user to re-auth without verifying the prefix mismatch first. | Don't file — even if no connected prefix's tools work after probing, filing cannot reach Carta either with no working connector; surface the connection problem to the user instead. |
+| `list_contexts`, `read_tool` or `call_tool` is not in your visible tool list | **Not a failure — they load lazily.** Call the tool anyway. Do not search for it, do not report a connector gap, and do not ask the user to re-authenticate a connector that just answered `welcome`. | N/A — not a failure; see "The five Carta tools load lazily" above. |
+| A Carta MCP call is rejected for missing instrumentation | Re-send the same call with `_instrumentation_v2` as specified in Gate 0. Do not surface this to the user — it is an internal contract, and the retry is silent. | N/A — resolved silently by the retry described; not a failure a developer needs to hear about. |
+| A Carta tool (`fa:*`, `dwh:*`) returns a validation or internal error outside the rows above — a bad-argument rejection, an unexpected 5xx, a malformed response | Surface the failure; let the user decide whether to retry. | File — developer-fixable, unlike a local connection problem. Put the exact tool name, arguments, and error message in `context`/`flowSummary`. |
+| A Carta tool returns 403/"not authorized" or a break-the-glass requirement | Surface it in plain English and stop. | Don't file — an access decision about the user or firm, not a skill defect a developer could fix. |
+
+---
+
+## Reporting issues
+
+Before this skill's first failure, read [references/report-feedback.md](references/report-feedback.md)
+(when and how to file `fa:create:feedback`). This skill has no separate `errors.md`: the
+table above marks which specific failures in this skill file, and which don't.
 
 ---
 
