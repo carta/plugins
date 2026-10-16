@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import datetime as dt
 import html
 import json
@@ -58,9 +59,26 @@ def parse_result(raw: str) -> dict:
     return value
 
 
+# The page (assets/skeleton.html `.tile`) draws a logo at 100% of a square tile with a border-radius of
+# 25% of its side and overflow:hidden. The image sits inset in a square SVG, contained, so any aspect
+# ratio fits. Corners clear the clip while _TILE_INSET / _TILE_UNITS >= (1 - 1/sqrt(2)) * radius / side
+# (0.073 at 25%). The source image appears once in the SVG, because the page embeds the SVG as text.
+_TILE_UNITS = 64
+_TILE_INSET = 6
+
+
+def fit_to_tile(data_uri: str) -> str:
+    size = _TILE_UNITS - 2 * _TILE_INSET
+    svg = (
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {_TILE_UNITS} {_TILE_UNITS}">'
+        f'<image href="{data_uri}" x="{_TILE_INSET}" y="{_TILE_INSET}" width="{size}" height="{size}" preserveAspectRatio="xMidYMid meet"/></svg>'
+    )
+    return "data:image/svg+xml;base64," + base64.b64encode(svg.encode("ascii")).decode("ascii")
+
+
 def clean_logo(raw: object) -> dict:
     uri = raw.get("dataUri") if isinstance(raw, dict) else None
-    return {"dataUri": uri if isinstance(uri, str) and _DATA_URI.match(uri) else None}
+    return {"dataUri": fit_to_tile(uri) if isinstance(uri, str) and _DATA_URI.match(uri) else None}
 
 
 def _count(value: object, where: str) -> int:

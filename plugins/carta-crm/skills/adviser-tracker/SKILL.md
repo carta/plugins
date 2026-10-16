@@ -22,7 +22,7 @@ model: inherit
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.16.13</carta-plugin>
+<carta-plugin>carta-crm:1.16.14</carta-plugin>
 
 # Adviser Tracker
 
@@ -91,8 +91,8 @@ crm_call_tool({ "name": "crm:get_adviser_tracker_details", "arguments": { "runId
    `crm:get_adviser_tracker_details` call, here or in the retry below, does not stop the run
    unless its text is listed below. Go on to the result call below. It decides.
 
-5. Collect the results. In ONE message, call the result once for each run. The answer is about
-   200 KB, because it carries the logos. Every call whose answer becomes `--result` or `--people-result` goes through
+5. Collect the results. In ONE message, call the result once for each run. The answer carries the logos,
+   so it can be large. Every call whose answer becomes `--result` or `--people-result` goes through
    `crm_read_tool` when it is in the session: these two calls and the single calls below. It
    saves a large answer to a file and returns the path. `crm_call_tool` cuts a large answer and
    returns no path, so use it only when there is no `crm_read_tool`. Pass the saved file to the
