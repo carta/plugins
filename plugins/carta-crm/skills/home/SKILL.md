@@ -30,7 +30,7 @@ model: inherit
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.16.9</carta-plugin>
+<carta-plugin>carta-crm:1.16.10</carta-plugin>
 
 # Carta CRM Home
 
