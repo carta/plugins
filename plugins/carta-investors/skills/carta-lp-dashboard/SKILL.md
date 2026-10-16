@@ -28,7 +28,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.85.7</carta-plugin>
+<carta-plugin>carta-investors:6.85.8</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -76,7 +76,7 @@ needs_human: true
 ```
 
 If the call fails, read the error's `code`:
-- `invalid_argument` with `field: "user_id"` — a Carta staff login, which looks up an LP by name. Skip this check and continue to Step 2.
+- `invalid_argument` with `field: "user_id"`, or a plain-text error whose body names `user_id` (for example `400 … {"user_id": "Staff users must specify a user_id."}`) — a Carta staff login, which looks up an LP by name. Skip this check and continue to Step 2.
 - `unauthenticated` — their Carta session has ended: ask them to reconnect Carta, then stop with `NEEDS_HUMAN: the Carta session has ended` and `needs_human: true`.
 - Anything else, including a plain-text reply that the command is not enabled — LP tools aren't turned on for this login yet. Say so and stop with `NEEDS_HUMAN: LP tools are not enabled for this Carta login` and `needs_human: true`.
 
@@ -98,7 +98,7 @@ mcp__<SERVER>__read_tool({"name": "lp_portfolio__lookup__portfolio", "arguments"
 
 Handle the result:
 - **`result: "match"`** — take `candidates[0].portfolio_id` and `candidates[0].partner_name`, and go to Step 3.
-- **`result: "ambiguous"`** — if exactly one candidate's `partner_name` is the name the user gave, take it. Otherwise show them all and ask the user to pick — candidates that share a name differ only by `fund_count`, so never choose between them yourself:
+- **`result: "ambiguous"`** — if the user gave a name and exactly one candidate's `partner_name` is that name, take it. Otherwise — including every no-name lookup — show them all and ask the user to pick. Never take the first one: candidates that share a name differ only by `fund_count`, so never choose between them yourself:
   ```
   Which portfolio?
     1. <partner_name> (<fund_count> funds)

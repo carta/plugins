@@ -41,7 +41,7 @@ trigger-phrases:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.85.7</carta-plugin>
+<carta-plugin>carta-investors:6.85.8</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -407,38 +407,36 @@ Then offer the zip (Step 5).
 
 **4a. Checks.** Read `${CLAUDE_PLUGIN_ROOT}/references/gate-has-artifact-tool.md` (the plugin's `references/`, not this skill's; don't search for it) and follow it.
 
-**4b. Portfolios.** Call `mcp__<SERVER>__read_tool({"name": "lp__list__portfolios", "arguments": {}})` and `Write` its JSON payload to `<CWD>/lp-documents-portfolios.json` (`<CWD>` from `pwd`). The page title comes from it: one portfolio names the page after it, several give "N portfolios", none gives a plain "LP Documents". Never guess a person's name.
-
-**4c. Render.** Run this on one line, with the script path exactly as written: `allowed-tools` pre-approves that exact command, so a shell variable or a `cd` in front of it makes the user approve it by hand.
+**4b. Render.** `<CWD>` is the output of `pwd`. Run this on one line, with the script path exactly as written: `allowed-tools` pre-approves that exact command, so a shell variable or a `cd` in front of it makes the user approve it by hand.
 
 ```bash
-uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-lp-documents/scripts/render_artifact.py" --mcp-server "<CARTA_MCP_SERVER>" --portfolios "<CWD>/lp-documents-portfolios.json" --out "<CWD>/lp-documents.html"
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-lp-documents/scripts/render_artifact.py" --mcp-server "<CARTA_MCP_SERVER>" --out "<CWD>/lp-documents.html"
 ```
 
-It prints `{"out": "<path>", "title": "<title>"}`. It exits non-zero on an unusable connector name, an unreadable portfolios file or an output path outside the working directory — surface the error and stop; do not edit the HTML by hand.
+It prints `{"out": "<path>", "title": "LP Documents"}`. The title is always `LP Documents`; the page names the portfolio, or counts them, from the documents it loads. It exits non-zero on an unusable connector name or an output path outside the working directory — surface the error and stop; do not edit the HTML by hand.
 
-**4d. Fallback — one attempt, only when `uv` is missing or the script file does not exist** (never after a validation error):
+**4c. Fallback — one attempt, only when `uv` is missing or the script file does not exist** (never after a validation error):
 1. `Read` the template at `${CLAUDE_PLUGIN_ROOT}/skills/carta-lp-documents/references/lp-docs-artifact-template.html` — this skill's own `references/`. Read it by that exact path; don't search for it.
 2. Check `<CARTA_MCP_SERVER>` holds no quote, angle bracket, backslash or newline. If it does, stop.
-3. Replace `__LP_DOCS_CONFIG__` with `{"server": "<CARTA_MCP_SERVER>", "title": "LP Documents", "generated": "<today, YYYY-MM-DD>"}` and `__LP_DOCS_TITLE__` with `LP Documents`. Keep that fixed title — never type a portfolio name into the file by hand; the page shows the portfolio itself.
-4. `Write` the result to `<CWD>/lp-documents.html`, use the title `LP Documents`, and tell the user the fallback ran so the mount path gets fixed.
+3. Replace `__LP_DOCS_CONFIG__` with `{"server": "<CARTA_MCP_SERVER>", "title": "LP Documents", "generated": "<today, YYYY-MM-DD>"}` and `__LP_DOCS_TITLE__` with `LP Documents`.
+4. `Write` the result to `<CWD>/lp-documents.html`, and tell the user the fallback ran so the mount path gets fixed.
 
-**4e. Publish.** Look for an existing page with `Artifact({action: "list", scope: "mine"})`; if one with the same title is published, keep its `url`. Then — one call either way, `url` being the only difference:
+**4d. Publish.** Look for an existing **LP Documents** page with `Artifact({action: "list", scope: "mine"})`; if one with the same title is published, keep its `url`. Then — one call either way, `url` being the only difference:
 
 ```
 Artifact({
-  file_path: "<out from 4c, or the fallback file>",
+  file_path: "<out from 4b, or the fallback file>",
   url: "<url from the list — omit entirely on a first publish>",
-  title: "<title from 4c, or LP Documents>",
+  title: "LP Documents",
   description: "LP document browser — filters, sorts, and opens fund documents from Carta.",
-  favicon: "📄",
+  icon: "list",
   capabilities: {
     mcp: { servers: [{ server: "<CARTA_MCP_SERVER>", tools: ["call_tool", "welcome"] }] }
   }
 })
 ```
 
-The title must match the page's own `<title>`, which always wins in the gallery — a different one makes the lookup miss and publishes a duplicate. Both tools must be in the grant, or every fetch rejects with `not_in_manifest`. Restate the whole `capabilities` object every time: a non-empty object replaces the stored grant.
+The title is fixed so a returning LP always finds and updates the same page, whatever their portfolios — and it must match the page's own `<title>`, which always wins in the gallery. Both tools must be in the grant, or every fetch rejects with `not_in_manifest`. Restate the whole `capabilities` object every time: a non-empty object replaces the stored grant.
 
 The page loads fresh documents from Carta every time it is opened, shows locked funds with their "Accept electronic delivery" prompt under every filter, and reports partial loads in a banner. Give the user its URL, then offer the zip (Step 5).
 
@@ -451,7 +449,7 @@ The page loads fresh documents from Carta every time it is opened, shows locked 
 Run `pwd`. **Desktop / CLI** means you have Bash and the working directory is not under `/sessions`. Anything else — the web app (no Bash), or a Cowork sandbox (`/sessions/…`) — is **web**.
 
 **Web:** do not start a zip. Send the LP to the Carta LP portal, which bulk-downloads documents itself. Build the link per portfolio as `<origin>/investors/individual/<portfolio_id>/portfolio/get_received_documents/`, where:
-- `<portfolio_id>` comes from `lp__list__portfolios`;
+- `<portfolio_id>` is each id in `lp_portfolio_ids` from Step 0.5;
 - `<origin>` is the scheme and host of any `download_url` you fetched, **only if** it is `https://` and the host is exactly `carta.com` or ends in `.carta.com`.
 
 If no such origin exists, say "open your documents in the Carta LP portal" with no link.
@@ -476,6 +474,8 @@ Default format — **flat, no folder**: `{quarter} {year} {fund_name} {doc_name_
 | Financial statement | `{quarter} {year} {fund_name} Financial Statement.pdf` |
 | K-1 (annual, no quarter) | `{tax_year} {fund_name} K-1.pdf` |
 | Other | `{quarter} {year} {fund_name} {document_name}.pdf` |
+
+**When names repeat.** One quarter can hold several documents of the same type, and a zip keeps only one file per name. After naming every document, find the names that appear more than once and add the document's date before `.pdf`, as `YYYY-MM-DD`: `Q4 2024 Harborview Growth Fund II Capital Call Notice 2024-11-15.pdf`. If documents still share a name because the dates are equal too, add ` (2)`, ` (3)` … after the date, in the order the documents were listed: `… 2024-11-15 (2).pdf`. A name that was unique to begin with stays as it is. Apply the same rule to a naming scheme the LP asked for, within each folder.
 
 ### 5.3 Build `items`
 

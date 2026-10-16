@@ -47,18 +47,22 @@ allowed-tools:
   - mcp__carta__read_tool
   - mcp__carta__set_context
   - mcp__carta__list_contexts
+  - mcp__carta__search_tools
   - mcp__claude_ai_Carta__call_tool
   - mcp__claude_ai_Carta__read_tool
   - mcp__claude_ai_Carta__set_context
   - mcp__claude_ai_Carta__list_contexts
+  - mcp__claude_ai_Carta__search_tools
   - mcp__carta_production__call_tool
   - mcp__carta_production__read_tool
   - mcp__carta_production__set_context
   - mcp__carta_production__list_contexts
+  - mcp__carta_production__search_tools
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__call_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__read_tool
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__set_context
   - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__list_contexts
+  - mcp__2827383e-1775-4df3-b6ff-04d5392f6d18__search_tools
   # Local helpers
   - Read
   - Write
@@ -92,7 +96,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.85.7</carta-plugin>
+<carta-plugin>carta-investors:6.85.8</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -399,6 +403,13 @@ anything under `app/src` to make the crash go away. A crash is the build
 telling you its inputs or its own code don't support what's being asked;
 working around it in place hides that from the person who needs to know,
 and ships a result nobody can tell is wrong.
+
+## Reporting issues
+
+Before this skill's first failure, read
+[references/report-feedback.md](references/report-feedback.md) (when and how to file
+`fa:create:feedback`) and [references/errors.md](references/errors.md) (which specific
+failures in this skill file, and which don't).
 
 ## Safety
 
