@@ -37,7 +37,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.85.10</carta-plugin>
+<carta-plugin>carta-investors:6.85.11</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -421,6 +421,7 @@ the results fetch.
 
 ### Formatting rules (shared by every rendered table + the BLUF totals)
 
+- `NESTED_LIST` row facts (Step 4): `*_quantity` and `*_value` follow [`references/inputs.md`](references/inputs.md) §`NESTED_LIST` (keeps fractions, sub-cent digits and Step 3's currency); every other table uses the rules below.
 - Currency (tables): `$X,XXX.XX` — two decimals, thousands separator.
 - Currency (Excel cells): see [`references/excel-output.md`](references/excel-output.md) (USD-locked accounting format).
 - Currency (BLUF only): compact, two decimals — `$1.00B` (≥1B),

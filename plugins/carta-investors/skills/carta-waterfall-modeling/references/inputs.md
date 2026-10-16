@@ -96,10 +96,15 @@ suggestions — period.
 
 Render `rows` as a numbered table — `#`, the row `label`, then one column per `facts` key
 (Title Case; `*_percentage` facts are fractions — show them ×100 as `X.XX%`, so `"1"` →
-`100.00%`). Never show row `id`s, a fact whose key ends in `_id`, or a fact column where any row's
-value is an underscore-joined UPPER_SNAKE_CASE code (e.g. `NOT_RECOGNIZED`, `PER_UNIT_THRESHOLD`) —
-these are raw values, not for the user; short all-caps labels such as an interest-type prefix
-(`PSU`) stay. Then ask in plain
+`100.00%`; a fact whose key ends in `_quantity` is a unit count — show it with thousands
+separators, dropping zero decimals but keeping real fractions and the sign, so `"781707.0"` →
+`781,707`, `"12.5"` → `12.5`, `"-50"` → `-50`; a fact whose key ends in `_value` is money — show
+it as currency in Step 3's `currency` (`$` when absent), with thousands separators and at least
+two decimals, keeping any more the value has, so `"1.25"` → `$1.25`, `"0.0045"` → `$0.0045`,
+`"1000"` → `$1,000.00`, or `£1.25` for GBP). Never show row `id`s, a fact whose key ends in
+`_id`, or a fact column where any row's value is an underscore-joined UPPER_SNAKE_CASE code (e.g.
+`NOT_RECOGNIZED`, `PER_UNIT_THRESHOLD`) — these are raw values, not for the user; short all-caps
+labels such as an interest-type prefix (`PSU`) stay. Then ask in plain
 prose, phrased from the option's `label` and naming each `row_fields[].label` in the
 format hint: _"Which performance conditions should I recognize? Give the number, payout
 percentage, and recognition date for each (e.g. 1 at 50% on 2026-12-31)."_
