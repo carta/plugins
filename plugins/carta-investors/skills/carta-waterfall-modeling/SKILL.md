@@ -37,7 +37,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.85.4</carta-plugin>
+<carta-plugin>carta-investors:6.85.7</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -358,8 +358,8 @@ first `get_command` call in Step 6 is what waits on completion.
 **Error handling** (this step):
 
 - `400 invalid_target_id` → stop and surface the message.
-- `400 invalid_performance_conditions` / `400 invalid_adjustments` → surface `message` verbatim,
-  re-collect that input (Step 4), and re-confirm.
+- `400 invalid_performance_conditions` / `400 invalid_adjustments` / `400 invalid_participating_units` /
+  `400 invalid_cap_tables` → surface `message` verbatim, re-collect that input (Step 4), and re-confirm.
 - `502 waterfall_dispatch_failed` → "Couldn't kick off the waterfall — the request was rejected.
   Want me to try again?" Retry uses the same body.
 - Shared: `403`, `404 target_not_found`, `501 waterfall_route_not_supported`, `502 target_lookup_failed` — see §Error handling.
