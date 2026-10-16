@@ -19,7 +19,7 @@ model: inherit
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-crm:1.16.10</carta-plugin>
+<carta-plugin>carta-crm:1.16.11</carta-plugin>
 
 # Adviser Tracker
 
@@ -46,7 +46,8 @@ summed across currencies. A bank with no logo gets an empty bordered tile, never
 ## Step 0: Gate
 
 Read `${CLAUDE_PLUGIN_ROOT}/references/gate-has-artifact-tool.md` (the plugin's own
-`references/`, not this skill's). Do not search for it. Pass silently.
+`references/`, not this skill's). Do not search for it. When that path does not resolve, the
+gate is this one rule: `Artifact` is in this session. Pass silently.
 
 ## Step 1: Fetch the advisers
 
@@ -58,74 +59,72 @@ Read `${CLAUDE_PLUGIN_ROOT}/references/gate-has-artifact-tool.md` (the plugin's 
 
    When several fields match at the same level, take the one with the shortest label, then the
    first in field order. Never pick an introducer field.
-3. Plan the run with that field's id as `dealFieldId`. The answer holds `runId` and `shards`:
+3. Plan two runs in ONE message, as two parallel calls. The Mandate run takes that field's id as
+   `dealFieldId`. The people run takes `linkBy` `dealPeople` and no `dealFieldId`. Each answer
+   holds `runId` and `shards`:
 
 ```
 crm_call_tool({ "name": "crm:get_adviser_tracker_plan", "arguments": { "limit": 20, "dealFieldId": "<id of that field>" } })
+crm_call_tool({ "name": "crm:get_adviser_tracker_plan", "arguments": { "limit": 20, "linkBy": "dealPeople" } })
 ```
 
+   The people run counts a deal for a bank when an introducer or adviser on the deal works at
+   the bank today. It is a second view of the page.
+
 4. Fan out. In ONE turn, as parallel tool calls in one message, call
-   `crm:get_adviser_tracker_relationships` once for every number in `shards` and
-   `crm:get_adviser_tracker_details` once. In the same message, also make the people call below.
-   All of them go out together, never across turns.
-   Send the shard calls in any order. A plan has 10 to 20 shards, often more than banks. Never
-   assume one shard per bank. Calling a shard again redoes that shard.
+   `crm:get_adviser_tracker_relationships` once for every number in `shards` of each run and
+   `crm:get_adviser_tracker_details` once for each run. Each call takes the `runId` of the run
+   that listed the shard. All of them go out together, never across turns.
+   Send the shard calls in any order. A plan has at most 12 shards. A shard can hold several
+   banks, and a large bank can span several shards. Never assume one shard per bank. Calling a
+   shard again redoes that shard.
 
 ```
 crm_call_tool({ "name": "crm:get_adviser_tracker_relationships", "arguments": { "runId": "<runId>", "shard": <a number from shards> } })
 crm_call_tool({ "name": "crm:get_adviser_tracker_details", "arguments": { "runId": "<runId>" } })
 ```
 
-```
-crm_call_tool({ "name": "crm:get_adviser_tracker", "arguments": { "limit": 20, "linkBy": "dealPeople" } })
-```
-
-   The people call counts a deal for a bank when an introducer or adviser on the deal works at
-   the bank today. It takes no `dealFieldId`. Its answer has the same shape as the result and
-   echoes `linkBy`. It is a second view of the page. Save it to its own file, as for the result
-   below. When it errors, or the tool rejects `linkBy` (an older environment), publish the
-   Mandate view alone and add one plain line to the notice in Step 4 that the introducer and
-   adviser view is not shown. This never stops the run, is never retried, and no other tool
-   fills it in.
-
    An error from a `crm:get_adviser_tracker_relationships` call or a
    `crm:get_adviser_tracker_details` call, here or in the retry below, does not stop the run
-   unless its code is listed below. Go on to the result call below. It decides.
+   unless its text is listed below. Go on to the result call below. It decides.
 
-5. Collect the result. It has the shape the build script reads:
+5. Collect the results. In ONE message, call the result once for each run. Each answer has the
+   shape the build script reads:
 
 ```
 crm_call_tool({ "name": "crm:get_adviser_tracker_result", "arguments": { "runId": "<runId>" } })
 ```
 
-Each error carries a message prefix and a structured code. Handle these, from whichever call
-returns them:
+An error comes back as the plain text of the tool answer, not as JSON. Find it by the text it
+contains. Handle these, from whichever Mandate call returns them:
 
-These rules are for the Mandate calls only. The people call is sent once per skill run, never
-again on a new plan or the single-call fallback, and its errors are handled only as in item 4
-above.
-
-- **Incomplete.** Code `ADVISER_TRACKER_RUN_INCOMPLETE`, message prefix
-  `adviser-tracker-run-incomplete:`, details `{ missingShards: number[], missingDetails: boolean }`.
-  Call again only the parts the details name: the shard calls for `missingShards`, and the
-  details call when `missingDetails` is true. Send them in one turn, one time. Then call the
-  result again. When it is still incomplete, stop with the plain error below. Build nothing from
-  a partial result.
-- **Run not found.** Code `ADVISER_TRACKER_RUN_NOT_FOUND`. The run is unknown or expired. A run
-  part lives 15 minutes. Plan a new run with `crm:get_adviser_tracker_plan`, one time per skill
-  run. Then fan out and collect again. A second `ADVISER_TRACKER_RUN_NOT_FOUND` stops with the
-  plain error below.
-- **Unknown shard.** Code `ADVISER_TRACKER_UNKNOWN_SHARD`. Stop with the plain error below. Never
-  retry.
-- **Cache unavailable.** Code `ADVISER_TRACKER_CACHE_UNAVAILABLE`. The run store did not keep a
-  write. Make the single call below instead.
+- **Incomplete.** The text contains `adviser_tracker_run_incomplete:` and names the missing
+  parts, for example `adviser_tracker_run_incomplete: missingShards=[3,7] missingDetails=false`.
+  Call again only the parts the text names: the shard calls for the numbers in `missingShards`,
+  and the details call when it says `missingDetails=true`. Send them in one turn, one time. Then
+  call the result again. When it is still incomplete, stop with the plain error below. Build
+  nothing from a partial result.
+- **Run not found.** The text contains `adviser_tracker_run_not_found`. The run is unknown or
+  expired. A run part lives 15 minutes. Plan a new Mandate run with `crm:get_adviser_tracker_plan`,
+  one time per skill run. Then fan out and collect again. A second
+  `adviser_tracker_run_not_found` stops with the plain error below.
+- **Unknown shard.** The text contains `adviser_tracker_unknown_shard`. Stop with the plain error
+  below. Never retry.
+- **Cache unavailable.** The text contains `adviser_tracker_cache_unavailable`. The run store did
+  not keep a write. Make the single Mandate call below instead.
 
 The retry budgets are one incomplete retry and one new-plan retry per skill run. There are no
 other retries.
 
+These rules are for the Mandate run only. Any error in the people run drops the people view:
+an error from its plan or its result, a tool that rejects `linkBy` (an older environment), or an
+incomplete or expired run. Then publish the Mandate view alone and add one plain line to the
+notice in Step 4 that the introducer and adviser view is not shown. This never stops the run, is
+never retried, and no other tool fills it in. A new Mandate plan never plans the people run again.
+
 When `crm:get_adviser_tracker_plan` is an unknown tool, this environment has no split tools. Make
-one call instead, and use its answer as the result. Send the people call with it, in the same
-message:
+two single calls instead, in one message, and use their answers as the results. The people call
+follows the people rules above:
 
 ```
 crm_call_tool({ "name": "crm:get_adviser_tracker", "arguments": { "limit": 20, "dealFieldId": "<id of that field>" } })
@@ -136,14 +135,14 @@ Step 4 carries one plain line in its notice that names the field used. When no f
 qualifies, leave `dealFieldId` out and say so in that line: deals are counted from every
 company field.
 
-Save the result, and the people answer when it succeeded, each to its own file in the outputs
-directory with `Write`. When the host already returns a saved path, use that path.
+Save the Mandate result, and the people result when it succeeded, each to its own file in the
+outputs directory with `Write`. When the host already returns a saved path, use that path.
 
 - **Not configured.** An error whose text starts `adviser-tracker-not-configured:`, or an
   unknown-tool error on the single call. Build and publish nothing. Tell the user adviser
   tracking is not turned on for the organization, and stop.
-- **Any other error.** Except for a `crm:get_adviser_tracker_relationships` or
-  `crm:get_adviser_tracker_details` call, stop. Tell the user the adviser
+- **Any other error.** In the Mandate run, except for a `crm:get_adviser_tracker_relationships`
+  or `crm:get_adviser_tracker_details` call, stop. Tell the user the adviser
   tracker could not be loaded right now. Never fill a gap from `search_deals`,
   `search_companies` or any other tool.
 
@@ -169,9 +168,9 @@ created over the three years, Tier 2 is the rest. Do not choose, change or overr
 uv run "${CLAUDE_PLUGIN_ROOT}/skills/adviser-tracker/scripts/build_tracker.py" --result <file> --people-result <people file> --notice "<the Step 1 field line, plus the Step 2 disagreement line when there is one, joined into one line>" --out <outputs-directory>/adviser-tracker-<slug>.html
 ```
 
-Leave out `--people-result` when the people call failed. The page then has no view toggle. When
+Leave out `--people-result` when the people run failed. The page then has no view toggle. When
 the script drops a people file it cannot use, it adds its own line to the notice and builds the
-Mandate view. The notice also carries the plain line from Step 1 when the people call failed.
+Mandate view. The notice also carries the plain line from Step 1 when the people run failed.
 
 `<slug>` is the organization lowercased with non-alphanumerics collapsed to `-`.
 
