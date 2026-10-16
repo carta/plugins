@@ -125,5 +125,14 @@ percentage, and recognition date for each (e.g. 1 at 50% on 2026-12-31)."_
   number, label, range or "all"), say its reason and ask again.
 - "None" → omit the option.
 
+**A row with `choices`** carries its own set for one of its fields (each row's values
+differ, so a shared `row_fields[].choices` can't hold them). Add one more table column
+listing them as `a`, `b`, `c`… per row (`1a`, `1b`, …); show, default-mark and send them as
+for `ENUM` (§Formatting by `input_type`), with `defaults[<field>]` as the default. Ask for
+the letter per row the user wants different from default, phrased from the option's
+`label`: _"Which cap tables should I use? Give the letter for each entity you change (e.g.
+2b)."_ A row the user doesn't name keeps its default and is **not** sent — only rows
+changed from default go in the list.
+
 Build the `options` dict by taking each entry's `option` field as the key
 and the collected/mapped value as the value — then continue to `SKILL.md` §Step 5.

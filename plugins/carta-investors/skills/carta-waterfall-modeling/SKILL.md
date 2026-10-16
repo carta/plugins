@@ -37,7 +37,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.85.12</carta-plugin>
+<carta-plugin>carta-investors:6.85.13</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -290,8 +290,9 @@ and pass as the `name` field to `read_tool` (`call_tool` for `save_command`); ne
   - `row_fields` / `rows` — present only when `input_type == "NESTED_LIST"`.
     `row_fields` are the inputs set per row, shaped like the entries above. Each
     row has `id` (send), `label` and `facts` (show, filtered per `references/inputs.md`
-    §`NESTED_LIST`), `defaults` (pre-fill), and `locked_reason` (show) — present only on a
-    row the run won't accept.
+    §`NESTED_LIST`), `defaults` (pre-fill), `choices` (show `label`, send `value`; present only
+    when a field's values differ by row), and `locked_reason` (show; present only on a row the
+    run won't accept).
 - `is_multi_entity` — boolean. Rely on this to detect a multi-entity ownership
   structure; it's `true` whether the user picked the root or a non-root sub-entity.
 - `root` — `{issuer_id, issuer_kind, name}`. The resolved top-level entity the
@@ -334,7 +335,8 @@ value), then go to Step 5.
 and confirm via `AskUserQuestion` ("Run it" vs "Change a value"): the
 company name, `EQUITY_VALUE` as formatted currency, `WATERFALL_DATE` as
 ISO, any non-default optionals by their `choices[].label`, and each chosen
-`NESTED_LIST` row by its `label` with its values. If the user
+`NESTED_LIST` row by its `label` with its values (a value picked from the row's `choices` by
+that choice's `label`). If the user
 changes a value, re-collect just that input (Step 4) and re-confirm.
 
 On confirm, dispatch via the `run_command` from Step 3:
