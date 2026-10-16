@@ -37,7 +37,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.85.9</carta-plugin>
+<carta-plugin>carta-investors:6.85.10</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -288,7 +288,8 @@ and pass as the `name` field to `read_tool` (`call_tool` for `save_command`); ne
   - `row_fields` / `rows` — present only when `input_type == "NESTED_LIST"`.
     `row_fields` are the inputs set per row, shaped like the entries above. Each
     row has `id` (send), `label` and `facts` (show, filtered per `references/inputs.md`
-    §`NESTED_LIST`), and `defaults` (pre-fill).
+    §`NESTED_LIST`), `defaults` (pre-fill), and `locked_reason` (show) — present only on a
+    row the run won't accept.
 - `is_multi_entity` — boolean. Rely on this to detect a multi-entity ownership
   structure; it's `true` whether the user picked the root or a non-root sub-entity.
 - `root` — `{issuer_id, issuer_kind, name}`. The resolved top-level entity the

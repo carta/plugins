@@ -109,6 +109,9 @@ percentage, and recognition date for each (e.g. 1 at 50% on 2026-12-31)."_
 - A row field the user leaves out → the row's `defaults` value; otherwise
   `PAYOUT_PERCENTAGE` → the row's `max_payout_percentage`, `RECOGNITION_DATE` →
   `WATERFALL_DATE`, and any other non-required row field is left out.
+- A row with a `locked_reason` can't be picked: show the reason in a last **Locked** column
+  (blank on other rows), and never send its `id`. If the user's pick includes a locked row (by
+  number, label, range or "all"), say its reason and ask again.
 - "None" (or no rows) → omit the option.
 
 Build the `options` dict by taking each entry's `option` field as the key
