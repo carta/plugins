@@ -539,4 +539,8 @@ Tell the operator the `path`, the `as_of` date, and to upload the file in the ho
   hosted app has no owner for it to check and the recipient list has no business reaching
   Worker KV. If every budget on the dashboard is one shared with you, the export refuses
   with nothing safe to export.
+- Each of your own budgets also carries its share payload, when the last build produced
+  one — the same payload Carta sees when you share it locally. A budget whose payload
+  isn't ready or didn't pass the contract check exports without one; the operator sees
+  why on stderr, and the budget itself still uploads fine.
 
