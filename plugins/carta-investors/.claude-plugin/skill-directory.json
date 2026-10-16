@@ -178,5 +178,14 @@
       "Get me the LPA from {{FIRM}}'s Documents page",
       "Download our audit engagement letter from Carta"
     ]
+  },
+  "carta-entity-map": {
+    "category": "portfolio",
+    "name": "Redacted entity map",
+    "order": 80,
+    "prompts": [
+      "Show the entity map for the [deal group] deal group",
+      "Redact the [deal group] entity map before I share it: collapse the funds into one box"
+    ]
   }
 }
