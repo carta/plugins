@@ -8,8 +8,7 @@ answered mapping question reaches it on the next build.
 
 ## What a person can do in the app
 
-With sharing on (`MANCO_REPORT_SHARING=1`, below), all from the report controls beside
-**Export**, and none of it needs Claude in the loop:
+All from the report controls beside **Export**, and none of it needs Claude in the loop:
 
 | Action | What happens |
 |---|---|
@@ -42,13 +41,13 @@ is sent (`scripts/report_payload.py`) and again by Carta.
 - The connector is picked from the cache's Carta environment. A non-production cache never
   uses a production connector.
 - `--share-mcp-server <name>` (or `MANCO_SHARE_MCP_SERVER`) pins one connector, for example
-  a test connector. With sharing on, the startup banner prints which connectors sharing will use.
+  a test connector. The startup banner prints which connectors sharing will use.
 - `MANCO_CLAUDE_BIN` overrides the `claude` binary the bridge starts.
 - The session runs only the Carta command it was asked for: a hook (`scripts/relay_guard.py`)
   blocks any other, and the session is closed after reading reports other people shared, so
   their text never reaches a later call. It can't edit files or run commands.
-- Budget reports and sharing are on only when the server runs with `MANCO_REPORT_SHARING=1`.
-  Without it the server answers no `/api/reports*` route and the app shows no report controls.
+- `MANCO_REPORT_SHARING=0` turns budget reports and sharing off: the server answers no
+  `/api/reports*` route and the app shows no report controls.
 
 When Carta hasn't turned the budget-report commands on for someone, the app says sharing
 isn't available yet.
