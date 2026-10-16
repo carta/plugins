@@ -37,7 +37,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.85.11</carta-plugin>
+<carta-plugin>carta-investors:6.85.12</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -283,6 +283,8 @@ and pass as the `name` field to `read_tool` (`call_tool` for `save_command`); ne
     Drives how Step 4 collects and formats the value.
   - `required` — boolean. If `true`, you must collect a value.
   - `default` — present for non-required inputs; pre-fill.
+  - `unavailable` — `FORBIDDEN` or `ERROR` on a `NESTED_LIST` whose rows couldn't be read
+    (its `rows` is then empty); see `references/inputs.md`.
   - `choices` — present only when `input_type == "ENUM"`. Each entry has
     `label` (show) and `value` (send).
   - `row_fields` / `rows` — present only when `input_type == "NESTED_LIST"`.

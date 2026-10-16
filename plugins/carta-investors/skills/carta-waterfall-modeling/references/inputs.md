@@ -5,6 +5,12 @@ Step 4 detail: how to collect the run inputs from `available_inputs` (the catalo
 your plan; act based on each entry's `input_type` and `required` fields. Collect required
 inputs first, then optional.
 
+**Skip a `NESTED_LIST` option with no rows** — there is nothing to pick, so leave it out of
+every prompt and the "Use defaults" label, and don't count it as an optional. When it carries
+`unavailable`, first say so in one line, named by its `label`: `FORBIDDEN` → _"You don't have
+access to {label} for this company, so this run goes without it."_; `ERROR` → _"I couldn't load
+{label} right now, so this run goes without it."_
+
 **One input, one `AskUserQuestion` call.** Never batch several inputs into a single
 prose message, and never fold a later input into `EQUITY_VALUE`'s prose ask — a bare
 free-text value (a date, a number) is not a reason to skip the widget. `EQUITY_VALUE`
@@ -30,11 +36,11 @@ The widget accepts free-text input, so use it for every `input_type` —
 **Optional inputs** (`required == false`, has a `default`; a `NESTED_LIST`
 defaults to `None`): collect these after all required inputs.
 
-- **2 or fewer optionals, none a `NESTED_LIST`** → ask each directly, one at a time, the same
+- **2 or fewer optionals, none a `NESTED_LIST` with rows** → ask each directly, one at a time, the same
   way as required inputs. (The ENUM `(default)` marker on the matching
   choice already shows the default — don't add a separate "use defaults?"
   prompt.)
-- **3 or more optionals, or any `NESTED_LIST`** → open with one `AskUserQuestion` — "Use
+- **3 or more optionals, or any `NESTED_LIST` with rows** → open with one `AskUserQuestion` — "Use
   defaults" vs "Change one or more". On "Change", loop through them one at
   a time. **The resolved default value(s) must appear in the "Use
   defaults" label itself, never only in the description** (option-
@@ -117,7 +123,7 @@ percentage, and recognition date for each (e.g. 1 at 50% on 2026-12-31)."_
 - A row with a `locked_reason` can't be picked: show the reason in a last **Locked** column
   (blank on other rows), and never send its `id`. If the user's pick includes a locked row (by
   number, label, range or "all"), say its reason and ask again.
-- "None" (or no rows) → omit the option.
+- "None" → omit the option.
 
 Build the `options` dict by taking each entry's `option` field as the key
 and the collected/mapped value as the value — then continue to `SKILL.md` §Step 5.
