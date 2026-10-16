@@ -96,7 +96,10 @@ suggestions — period.
 
 Render `rows` as a numbered table — `#`, the row `label`, then one column per `facts` key
 (Title Case; `*_percentage` facts are fractions — show them ×100 as `X.XX%`, so `"1"` →
-`100.00%`). Never show row `id`s. Then ask in plain
+`100.00%`). Never show row `id`s, a fact whose key ends in `_id`, or a fact column where any row's
+value is an underscore-joined UPPER_SNAKE_CASE code (e.g. `NOT_RECOGNIZED`, `PER_UNIT_THRESHOLD`) —
+these are raw values, not for the user; short all-caps labels such as an interest-type prefix
+(`PSU`) stay. Then ask in plain
 prose, phrased from the option's `label` and naming each `row_fields[].label` in the
 format hint: _"Which performance conditions should I recognize? Give the number, payout
 percentage, and recognition date for each (e.g. 1 at 50% on 2026-12-31)."_
