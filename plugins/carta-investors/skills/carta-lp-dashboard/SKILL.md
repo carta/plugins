@@ -22,15 +22,13 @@ allowed-tools:
   # Cowork
   - Artifact
   # Local execution — the find locates the script on remote plugin mounts
-  - Bash(find /sessions "$HOME/mnt" -type f -path '*/carta-lp-dashboard/scripts/render_artifact.py' 2>/dev/null)
-  - Bash(uv run /sessions/*/carta-lp-dashboard/scripts/render_artifact.py *)
-  - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-lp-dashboard/scripts/render_artifact.py *)
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-lp-dashboard/scripts/render_artifact.py" *)
   # Interaction
   - AskUserQuestion
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.85.3</carta-plugin>
+<carta-plugin>carta-investors:6.85.4</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -129,18 +127,10 @@ A **401 or 403 is terminal**: stop at once and return `NEEDS_HUMAN: this Carta l
 
 **Never `Read` the template.** The render script fills it in and inlines Chart.js from the plugin's `vendor/chart.umd.min.js`, so neither the template nor the chart bundle enters context.
 
-**3a.** Locate the script:
+**3a.** Render. Run this on one line, with the script path exactly as written: `allowed-tools` pre-approves that exact command, so a shell variable or a `cd` in front of it makes the user approve it by hand.
 
 ```bash
-find /sessions "$HOME/mnt" -type f -path '*/carta-lp-dashboard/scripts/render_artifact.py' 2>/dev/null | head -1
-```
-
-If it prints nothing, use `${CLAUDE_PLUGIN_ROOT}/skills/carta-lp-dashboard/scripts/render_artifact.py`. Bash cannot reach the path `${CLAUDE_PLUGIN_ROOT}` expands to on remote plugin mounts, which is why the `find` comes first. Keep it scoped to those two roots.
-
-**3b.** Render, substituting the path from 3a **literally**. `allowed-tools` matches the command text, so a shell variable in place of the path fails the allowlist:
-
-```bash
-uv run <SCRIPT_PATH> --mcp-server "<CARTA_MCP_SERVER>" --portfolio-id "<portfolio_id>" --out lp-dashboard.html
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-lp-dashboard/scripts/render_artifact.py" --mcp-server "<CARTA_MCP_SERVER>" --portfolio-id "<portfolio_id>" --out lp-dashboard.html
 ```
 
 The script prints the absolute output path. It exits non-zero on an unusable connector name, a portfolio id that is not a UUID, an output path outside the working directory, or a missing Chart.js bundle. Surface the error and stop; do not edit the HTML by hand.

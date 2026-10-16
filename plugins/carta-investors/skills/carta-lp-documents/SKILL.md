@@ -23,14 +23,11 @@ allowed-tools:
   # Cowork
   - Artifact
   # Local execution — the find locates the render script on remote plugin mounts
-  - Bash(find /sessions *)
   - Bash(pwd)
-  - Bash(uv run /sessions/*)
-  - Bash(uv run ${CLAUDE_PLUGIN_ROOT}/skills/carta-lp-documents/scripts/render_artifact.py *)
+  - Bash(uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-lp-documents/scripts/render_artifact.py" *)
   - Read
   - Write
   # Zip download (desktop / CLI only)
-  - Bash(curl --proto '=https' --tlsv1.2 *)
   - Bash(unzip -l *)
   # Interaction
   - AskUserQuestion
@@ -44,7 +41,7 @@ trigger-phrases:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.85.3</carta-plugin>
+<carta-plugin>carta-investors:6.85.4</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -412,35 +409,27 @@ Then offer the zip (Step 5).
 
 **4b. Portfolios.** Call `mcp__<SERVER>__read_tool({"name": "lp__list__portfolios", "arguments": {}})` and `Write` its JSON payload to `<CWD>/lp-documents-portfolios.json` (`<CWD>` from `pwd`). The page title comes from it: one portfolio names the page after it, several give "N portfolios", none gives a plain "LP Documents". Never guess a person's name.
 
-**4c. Locate the render script:**
+**4c. Render.** Run this on one line, with the script path exactly as written: `allowed-tools` pre-approves that exact command, so a shell variable or a `cd` in front of it makes the user approve it by hand.
 
 ```bash
-find /sessions "$HOME/mnt" -type f -path '*/carta-lp-documents/scripts/render_artifact.py' 2>/dev/null | head -1
-```
-
-If it prints nothing, use `${CLAUDE_PLUGIN_ROOT}/skills/carta-lp-documents/scripts/render_artifact.py`. Bash cannot reach the path `${CLAUDE_PLUGIN_ROOT}` expands to on remote plugin mounts, which is why the `find` comes first. Keep it scoped to those two roots.
-
-**4d. Render**, substituting the path from 4c **literally** — `allowed-tools` matches the command text, so a shell variable in place of the path fails the allowlist:
-
-```bash
-uv run <SCRIPT_PATH> --mcp-server "<CARTA_MCP_SERVER>" --portfolios "<CWD>/lp-documents-portfolios.json" --out "<CWD>/lp-documents.html"
+uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-lp-documents/scripts/render_artifact.py" --mcp-server "<CARTA_MCP_SERVER>" --portfolios "<CWD>/lp-documents-portfolios.json" --out "<CWD>/lp-documents.html"
 ```
 
 It prints `{"out": "<path>", "title": "<title>"}`. It exits non-zero on an unusable connector name, an unreadable portfolios file or an output path outside the working directory — surface the error and stop; do not edit the HTML by hand.
 
-**4e. Fallback — one attempt, only when `uv` is missing or the script file does not exist** (never after a validation error):
+**4d. Fallback — one attempt, only when `uv` is missing or the script file does not exist** (never after a validation error):
 1. `Read` the template at `${CLAUDE_PLUGIN_ROOT}/skills/carta-lp-documents/references/lp-docs-artifact-template.html` — this skill's own `references/`. Read it by that exact path; don't search for it.
 2. Check `<CARTA_MCP_SERVER>` holds no quote, angle bracket, backslash or newline. If it does, stop.
 3. Replace `__LP_DOCS_CONFIG__` with `{"server": "<CARTA_MCP_SERVER>", "title": "LP Documents", "generated": "<today, YYYY-MM-DD>"}` and `__LP_DOCS_TITLE__` with `LP Documents`. Keep that fixed title — never type a portfolio name into the file by hand; the page shows the portfolio itself.
 4. `Write` the result to `<CWD>/lp-documents.html`, use the title `LP Documents`, and tell the user the fallback ran so the mount path gets fixed.
 
-**4f. Publish.** Look for an existing page with `Artifact({action: "list", scope: "mine"})`; if one with the same title is published, keep its `url`. Then — one call either way, `url` being the only difference:
+**4e. Publish.** Look for an existing page with `Artifact({action: "list", scope: "mine"})`; if one with the same title is published, keep its `url`. Then — one call either way, `url` being the only difference:
 
 ```
 Artifact({
-  file_path: "<out from 4d, or the fallback file>",
+  file_path: "<out from 4c, or the fallback file>",
   url: "<url from the list — omit entirely on a first publish>",
-  title: "<title from 4d, or LP Documents>",
+  title: "<title from 4c, or LP Documents>",
   description: "LP document browser — filters, sorts, and opens fund documents from Carta.",
   favicon: "📄",
   capabilities: {
@@ -528,7 +517,7 @@ Still pending after 18 polls: tell the LP it is still being prepared and give th
 
 ### 5.5 Save it
 
-The ready URL is a short-lived signed link. **Never show it as a clickable link or paste it for the LP to open** — download it for them:
+The ready URL is a short-lived signed link. **Never show it as a clickable link or paste it for the LP to open** — download it for them. Claude Code asks the LP to approve the download; that prompt is expected:
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSL "<signed_url>" -o ~/Downloads/"<FILENAME>.zip" -w "%{http_code}"
