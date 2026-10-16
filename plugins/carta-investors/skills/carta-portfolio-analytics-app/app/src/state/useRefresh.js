@@ -8,8 +8,9 @@ const REFRESH_POLL_MS = 5000;
  *  background fetch (all datasets when omitted) that writes only raw files, so the app stays
  *  usable throughout; loadNewData() rebuilds kpi.json then reloads. canRefresh reflects
  *  /api/capabilities (a claude binary + a firm-id'd cache). `target` is the dataset keys the
- *  running fetch covers (null = all). */
-export default function useRefresh() {
+ *  running fetch covers (null = all). `firm` is the route's slug; the hosted Worker needs it
+ *  to authorize the fetch (the local server ignores it). */
+export default function useRefresh(firm) {
   const [st, setSt] = useState({ status: "idle", warnings: [] });
   const [elapsed, setElapsed] = useState(0);
   const [canRefresh, setCanRefresh] = useState(false);
@@ -85,6 +86,7 @@ export default function useRefresh() {
     setSt({ status: "running", phase: "preflight", target: datasets ?? null, warnings: [] });
     try {
       const payload = {};
+      if (firm) payload.firm = firm;
       if (datasets) payload.datasets = datasets;
       if (opts.since) payload.since = opts.since;
       if (opts.companies) payload.companies = opts.companies;
@@ -98,7 +100,7 @@ export default function useRefresh() {
     } catch (e) {
       setSt({ status: "error", message: e.message || "Update failed.", warnings: [], retry: "fetch" });
     }
-  }, [running, startPolling]);
+  }, [firm, running, startPolling]);
 
   const loadNewData = useCallback(async () => {
     trackClick("PortfolioAnalytics.UpdateData.Load");

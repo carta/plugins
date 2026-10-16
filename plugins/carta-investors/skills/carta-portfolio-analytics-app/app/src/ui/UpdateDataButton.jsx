@@ -375,7 +375,7 @@ function WarningsPage({ st, companies, onBack }) {
 /** Topbar Update-data button: the popover is a form — check the datasets to refresh,
  *  optionally narrow the KPIs & Forecasts pull by company/date on the Narrow page,
  *  then one submit runs the whole selection. Lifecycle lives in useRefresh(). */
-export default function UpdateDataButton({ datasets = [], builtAt, variant, companies = [] }) {
+export default function UpdateDataButton({ firm, datasets = [], builtAt, variant, companies = [] }) {
   const [open, setOpen] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const [page, setPage] = useState("main");          // "main" | "narrow" (idle) — "warnall" (fetched)
@@ -386,7 +386,7 @@ export default function UpdateDataButton({ datasets = [], builtAt, variant, comp
   const ref = useRef(null);
   useDismissable(open, setOpen, ref);
   useNow();  // keep the per-dataset "Updated Xm ago" labels ticking while the popover is open
-  const st = useRefresh();
+  const st = useRefresh(firm);
   const { canRefresh, runRefresh, loadNewData } = st;
   const rows = useMemo(() => buildRows(datasets), [datasets]);
   const hasFilters = !!since || sel !== null;

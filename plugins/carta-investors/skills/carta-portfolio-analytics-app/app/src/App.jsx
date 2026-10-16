@@ -442,7 +442,7 @@ export default function App({ firm }) {
           <div style={{ ...sans, fontSize: FS.bodyLg, fontWeight: 600, color: "var(--ink-color-global-text-default)" }}>Portfolio Analytics</div>
           <DataStatusLine source={data.source} />
         </div>
-        <UpdateDataButton variant="sidebar" datasets={data.source?.datasets} builtAt={data.source?.builtAt} companies={refreshCompanies} />
+        <UpdateDataButton firm={firm} variant="sidebar" datasets={data.source?.datasets} builtAt={data.source?.builtAt} companies={refreshCompanies} />
         {currencyMenuSidebar}
         {themeToggleSidebar}
         {userName && (
@@ -460,7 +460,7 @@ export default function App({ firm }) {
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <Mark branding={data.branding} size={24} />
         <span style={{ ...serif, fontSize: FS.h3, fontWeight: 700, color: "var(--ink-color-global-text-default)" }}>{resolvedFirmName}</span>
-        <span style={{ flex: 1 }} />{currencyMenu}<UpdateDataButton datasets={data.source?.datasets} builtAt={data.source?.builtAt} companies={refreshCompanies} /><PublishEditsButton data={data} dashboard={dashboard} /><ConflictsButton data={data} dashboard={dashboard} />{themeToggle}
+        <span style={{ flex: 1 }} />{currencyMenu}<UpdateDataButton firm={firm} datasets={data.source?.datasets} builtAt={data.source?.builtAt} companies={refreshCompanies} /><PublishEditsButton data={data} dashboard={dashboard} /><ConflictsButton data={data} dashboard={dashboard} />{themeToggle}
       </div>
       <div style={{ display: "flex", gap: 4, overflowX: "auto", alignItems: "center" }}>
         {NAV_TABS.map((t) => {
