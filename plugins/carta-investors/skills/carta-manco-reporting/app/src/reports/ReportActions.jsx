@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { sans, INK, FAINT, RED, FS } from "../ui/theme.js";
 import { Btn, MenuItem, POPOVER_SHADOW } from "../ui/components.jsx";
 import { trackClick } from "../analytics.js";
-import { actSaved, duplicateReport } from "../state/useReports.js";
+import { actSaved, duplicateReport, REPORT_ACTIONS } from "../state/useReports.js";
 import Modal from "./Modal.jsx";
 import ShareDialog from "./ShareDialog.jsx";
 import HoverTip from "../ui/HoverTip.jsx";
@@ -59,7 +59,7 @@ export default function ReportActions({ report, reportsApi, firmName, entityName
   });
   const hide = act(async () => {
     trackClick("MancoReporting.ReportMenu.Hide");
-    const { notice } = await actSaved(reportsApi, report.id, "hide", { hidden: true });
+    const { notice } = await actSaved(reportsApi, report.id, REPORT_ACTIONS.HIDE, { hidden: true });
     if (notice) onShareDone?.(notice);
     onOpenReport(null);
   });
@@ -91,12 +91,12 @@ export default function ReportActions({ report, reportsApi, firmName, entityName
         </Btn>
         {menu && (
           <div role="menu" style={S.menu}>
-            {report.editable && (
+            {report.editable && reportsApi.can(REPORT_ACTIONS.RENAME) && (
               <MenuItem small onClick={() => { setMenu(false); setOpen("rename"); }}>Rename</MenuItem>
             )}
-            <MenuItem small onClick={duplicate}>Duplicate</MenuItem>
-            <MenuItem small onClick={hide}>Hide</MenuItem>
-            {canDelete && (
+            {reportsApi.can(REPORT_ACTIONS.DUPLICATE) && <MenuItem small onClick={duplicate}>Duplicate</MenuItem>}
+            {reportsApi.can(REPORT_ACTIONS.HIDE) && <MenuItem small onClick={hide}>Hide</MenuItem>}
+            {canDelete && reportsApi.can(REPORT_ACTIONS.REMOVE) && (
               <MenuItem small onClick={() => { setMenu(false); setOpen("confirm-delete"); }} style={{ color: RED }}>
                 {report.origin === "shared" ? "Remove from my reports" : "Delete this copy"}
               </MenuItem>
@@ -126,7 +126,7 @@ function RenameDialog({ report, reportsApi, onClose, onShareDone }) {
     setBusy(true);
     setError(null);
     try {
-      const { notice } = await actSaved(reportsApi, report.id, "rename", { name });
+      const { notice } = await actSaved(reportsApi, report.id, REPORT_ACTIONS.RENAME, { name });
       onClose();
       if (notice) onShareDone?.(notice);
     } catch (e) {
@@ -160,7 +160,7 @@ function DeleteDialog({ report, reportsApi, onClose, onDeleted }) {
     setBusy(true);
     setError(null);
     try {
-      const { notice } = await actSaved(reportsApi, report.id, "remove");
+      const { notice } = await actSaved(reportsApi, report.id, REPORT_ACTIONS.REMOVE);
       onDeleted(notice);
     } catch (e) {
       setError(e.message);

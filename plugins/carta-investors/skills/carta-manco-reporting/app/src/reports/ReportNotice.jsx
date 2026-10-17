@@ -5,7 +5,7 @@ import { trackClick } from "../analytics.js";
 import { AlertIcon, CloudUploadIcon, UsersIcon } from "./icons.jsx";
 import { UPDATED, shareOutcome } from "./shareOutcome.js";
 import { ownShare } from "./reportState.js";
-import { duplicateReport } from "../state/useReports.js";
+import { duplicateReport, REPORT_ACTIONS } from "../state/useReports.js";
 
 export function fmtDate(iso) {
   if (!iso) return null;
@@ -74,7 +74,7 @@ export default function ReportNotice({ report, asOf, firmName, reportsApi, onOpe
     setUpdating(true);
     setUpdateError(null);
     try {
-      const outcome = shareOutcome(await reportsApi.runShareOp("share", { report_id: report.id }));
+      const outcome = shareOutcome(await reportsApi.runShareOp(REPORT_ACTIONS.SHARE, { report_id: report.id }));
       if (outcome.kind === "decide") setUpdateError(`Couldn't share the update. ${NEEDS_DECISION[outcome.status]}`);
       else if (outcome.kind === "partial") setUpdateError(outcome.message);
       else onShareDone?.(UPDATED);
@@ -107,7 +107,7 @@ export default function ReportNotice({ report, asOf, firmName, reportsApi, onOpe
         </HoverTip>
         {when && <span>· {when}</span>}
         {own.dirty && <span style={S.pending}>· Changes not shared yet</span>}
-        {own.dirty && (
+        {own.dirty && reportsApi.can(REPORT_ACTIONS.SHARE) && (
           <HoverTip text={updating ? "Sharing…" : "Share update"} style={S.iconTip}>
             <button type="button" onClick={shareUpdate} disabled={updating} aria-label="Share update"
               style={{ ...S.iconButton, ...(updating ? S.iconButtonBusy : null) }}>
@@ -133,7 +133,9 @@ export default function ReportNotice({ report, asOf, firmName, reportsApi, onOpe
       <span key="ro" style={S.item}>
         <UsersIcon size={14} />
         <span>Shared by {who}{when ? ` · ${when}` : ""} · Read-only</span>
-        <button type="button" onClick={duplicate} disabled={busy} style={S.link}>Duplicate</button>
+        {reportsApi.can(REPORT_ACTIONS.DUPLICATE) && (
+          <button type="button" onClick={duplicate} disabled={busy} style={S.link}>Duplicate</button>
+        )}
       </span>
     );
     if (duplicateError) {

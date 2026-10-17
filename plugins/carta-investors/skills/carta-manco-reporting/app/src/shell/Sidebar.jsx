@@ -165,14 +165,16 @@ function SharedGroup({ items, parentSlug, busy, onPull, hiddenCount, unhiding, o
           </button>
         );
       })}
-      <button
-        type="button" onClick={onPull} disabled={busy} aria-label={loadLabel}
-        className="navitem" style={{ ...styles.navChild, ...styles.navChildRest, ...styles.actionRow }}
-      >
-        <DownloadIcon size={14} />
-        <span style={styles.actionText}>{loadLabel}</span>
-      </button>
-      {hiddenCount > 0 && (
+      {onPull && (
+        <button
+          type="button" onClick={onPull} disabled={busy} aria-label={loadLabel}
+          className="navitem" style={{ ...styles.navChild, ...styles.navChildRest, ...styles.actionRow }}
+        >
+          <DownloadIcon size={14} />
+          <span style={styles.actionText}>{loadLabel}</span>
+        </button>
+      )}
+      {onShowHidden && (
         <button
           type="button" onClick={onShowHidden} disabled={unhiding}
           className="navitem" style={{ ...styles.navChild, ...styles.navChildRest, ...styles.actionRow }}

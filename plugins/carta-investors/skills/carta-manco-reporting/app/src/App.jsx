@@ -8,7 +8,7 @@ import MonthlyActualsView from "./views/MonthlyActualsView.jsx";
 import BudgetImport from "./shell/BudgetImport.jsx";
 import DrilldownDrawer from "./views/DrilldownDrawer.jsx";
 import useDrilldown from "./state/useDrilldown.js";
-import useReports from "./state/useReports.js";
+import useReports, { REPORT_ACTIONS } from "./state/useReports.js";
 import { budgetNavChildren } from "./shell/reportNav.js";
 import { hasBudget, renderableBudgets } from "./shell/budgetPresence.js";
 import ShareStatus, { pulledMessage } from "./reports/ShareStatus.jsx";
@@ -113,12 +113,12 @@ export default function App() {
 
   const loadShared = async () => {
     trackClick("MancoReporting.Nav.LoadSharedReports");
-    setShareNotice({ status: "running", op: "pull" });
+    setShareNotice({ status: "running", op: REPORT_ACTIONS.PULL });
     try {
-      const result = await reportsApi.runShareOp("pull");
-      setShareNotice({ status: "done", op: "pull", message: pulledMessage(result) });
+      const result = await reportsApi.runShareOp(REPORT_ACTIONS.PULL);
+      setShareNotice({ status: "done", op: REPORT_ACTIONS.PULL, message: pulledMessage(result) });
     } catch (e) {
-      setShareNotice({ status: "error", op: "pull", message: e.message });
+      setShareNotice({ status: "error", op: REPORT_ACTIONS.PULL, message: e.message });
     }
   };
   const unhideAll = async () => {
@@ -126,10 +126,10 @@ export default function App() {
     setUnhiding(true);
     try {
       for (const r of hiddenReports) {
-        await reportsApi.act(r.id, "hide", { hidden: false });
+        await reportsApi.act(r.id, REPORT_ACTIONS.HIDE, { hidden: false });
       }
     } catch (e) {
-      setShareNotice({ status: "error", op: "hide", message: e.message });
+      setShareNotice({ status: "error", op: REPORT_ACTIONS.HIDE, message: e.message });
     } finally {
       setUnhiding(false);
     }
@@ -172,7 +172,9 @@ export default function App() {
             try {
               const msg = JSON.parse(line.slice(6));
               setLoadStatus(msg.step || "Loading…");
-              if (msg.done) { fetchData(); setLoadStatus(null); return; }
+              // /api/reports can depend on the firm just loaded, and the read on mount
+              // ran before it had. Reload it now that the firm is in.
+              if (msg.done) { fetchData(); reportsApi.reload(); setLoadStatus(null); return; }
               if (msg.error) { setError(msg.error); setLoadStatus(null); return; }
             } catch { /* skip */ }
           }
@@ -182,7 +184,7 @@ export default function App() {
       }
     })();
     return () => { cancelled = true; };
-  }, [error, fetchData]);
+  }, [error, fetchData, reportsApi.reload]);
 
   // Tab title names the firm, mirroring carta-fund-modeling. No iframe here,
   // so document.title is set directly instead of posted to an outer shell.
@@ -248,15 +250,24 @@ export default function App() {
     // Carta" was dropped from it and left it with nothing else to show.
     asOf: snapshot?.asOf,
     footerAction: snapshot && <BudgetImport budgetUpload={snapshot.budgetUpload} onChanged={fetchData} />,
-    shared: snapshot && reportsApi.available ? {
-      items: sharedChildren,
-      parentSlug: "budget-vs-actuals",
-      busy: shareNotice?.status === "running",
-      onPull: loadShared,
-      hiddenCount: hiddenReports.length,
-      unhiding,
-      onShowHidden: unhideAll,
-    } : null,
+    shared: (() => {
+      const onPull = reportsApi.can(REPORT_ACTIONS.PULL) ? loadShared : null;
+      const onShowHidden = hiddenReports.length > 0 && reportsApi.can(REPORT_ACTIONS.HIDE) ? unhideAll : null;
+      // The section renders exactly when at least one of its rows would: a shared child,
+      // the pull row, or the show-hidden row. Each row's own gate (onPull, onShowHidden,
+      // sharedChildren) is computed once, here, so this condition can't drift from what
+      // SharedGroup (Sidebar.jsx) actually renders.
+      if (!(snapshot && reportsApi.available && (sharedChildren.length || onPull || onShowHidden))) return null;
+      return {
+        items: sharedChildren,
+        parentSlug: "budget-vs-actuals",
+        busy: shareNotice?.status === "running",
+        onPull,
+        hiddenCount: hiddenReports.length,
+        unhiding,
+        onShowHidden,
+      };
+    })(),
   };
 
   return (
@@ -293,7 +304,7 @@ export default function App() {
             onToggleTheme={toggleTheme}
             reportsApi={reportsApi}
             onOpenReport={(id) => navigate(id ? `budget-vs-actuals/${id}` : "budget-vs-actuals")}
-            onShareDone={(message) => setShareNotice({ status: "done", op: "share", message })}
+            onShareDone={(message) => setShareNotice({ status: "done", op: REPORT_ACTIONS.SHARE, message })}
           />
         )}
         {snapshot && activeParent === "monthly-actuals" && (

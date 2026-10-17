@@ -2,12 +2,13 @@ import { useState } from "react";
 import { sans, INK, PAPER, LINE, FAINT, SHADE, FS } from "../ui/theme.js";
 import { trackClick } from "../analytics.js";
 import { Btn, POPOVER_SHADOW } from "../ui/components.jsx";
+import { REPORT_ACTIONS } from "../state/useReports.js";
 
 const RUNNING = {
-  pull: "Loading shared reports…",
-  share: "Sharing your report…",
-  "publish-as-new": "Sharing your report…",
-  delete: "Stopping sharing…",
+  [REPORT_ACTIONS.PULL]: "Loading shared reports…",
+  [REPORT_ACTIONS.SHARE]: "Sharing your report…",
+  [REPORT_ACTIONS.PUBLISH_AS_NEW]: "Sharing your report…",
+  [REPORT_ACTIONS.DELETE]: "Stopping sharing…",
 };
 
 // Floating status panel for sharing with Carta, the one carta-fund-modeling
@@ -28,7 +29,7 @@ export default function ShareStatus({ notice, progress, firmName, onDismiss }) {
     body = (
       <>
         <strong>{notice.status === "error" ? "Couldn't finish" : "Done"}</strong>
-        {notice.status === "error" && notice.op === "pull" ? (
+        {notice.status === "error" && notice.op === REPORT_ACTIONS.PULL ? (
           <>
             <div style={S.sub}>The app couldn’t load them from Carta. Try again, or ask Claude:</div>
             <ClaudePrompt text={pullPrompt(firmName)} />

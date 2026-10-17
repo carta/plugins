@@ -8,14 +8,14 @@ import { CodeIcon, DownloadIcon, LockIcon, ShareIcon, UserIcon, UsersIcon, XIcon
 import { fmtDate, sharerName } from "./ReportNotice.jsx";
 import { UPDATED, shareOutcome } from "./shareOutcome.js";
 import { ownShare } from "./reportState.js";
-import { actSaved } from "../state/useReports.js";
+import { actSaved, REPORT_ACTIONS } from "../state/useReports.js";
 
 // The report's Share | Export panel, anchored under the header button. Wording is agreed
 // with product; the Carta staff sentence holds because Carta staff keep access to the firm's entities.
 const DONE = {
-  share: "Report shared.",
-  "publish-as-new": "Report shared as a new report.",
-  delete: "Stopped sharing. The shared copy is gone for everyone; yours stays here.",
+  [REPORT_ACTIONS.SHARE]: "Report shared.",
+  [REPORT_ACTIONS.PUBLISH_AS_NEW]: "Report shared as a new report.",
+  [REPORT_ACTIONS.DELETE]: "Stopped sharing. The shared copy is gone for everyone; yours stays here.",
 };
 
 function initials(person) {
@@ -65,6 +65,10 @@ function sameSet(a, b) {
 
 export default function ShareDialog({ report, reportsApi, firmName, entityName, exportProps, anchorRef, onClose, onDone, onBusyChange }) {
   const link = ownShare(report);
+  // The picker shows who a share reaches: offered for a new share only when the server can
+  // create one, and always for an existing share so its audience stays visible. Stop
+  // sharing and Keep private live in the footers instead, each gated on its own action.
+  const canPick = reportsApi.can(REPORT_ACTIONS.SHARE) || !!link;
   // A new share starts limited to the people added; broadening it to the firm is a choice.
   const initialMode = link?.shared_with_everyone ? "everyone" : "people";
   const initialPicked = useMemo(() => new Set(link?.shared_with || []), [link]);
@@ -115,9 +119,16 @@ export default function ShareDialog({ report, reportsApi, firmName, entityName, 
   // seconds, and the server runs one sharing action at a time. Later panels reuse the answer.
   const [peopleAsOf, setPeopleAsOf] = useState(null);
   // A failed lookup says nothing about who can see the entity: the list it replaced stays.
-  const askPeople = (opts, kept = null) => reportsApi.loadPeople(opts)
-    .then(({ users: list, fetchedAt }) => { setUsers(list); setPeopleAsOf(fetchedAt); })
-    .catch(e => { setUsers(kept); setPeopleError(e.message); });
+  const askPeople = (opts, kept = null) => {
+    if (!reportsApi.can(REPORT_ACTIONS.USERS)) {
+      setUsers(kept);
+      setPeopleError("Carta's people list isn't available here.");
+      return Promise.resolve();
+    }
+    return reportsApi.loadPeople(opts)
+      .then(({ users: list, fetchedAt }) => { setUsers(list); setPeopleAsOf(fetchedAt); })
+      .catch(e => { setUsers(kept); setPeopleError(e.message); });
+  };
   const asked = useRef(false);
   useEffect(() => {
     if (!wantPeople || asked.current) return;
@@ -195,7 +206,7 @@ export default function ShareDialog({ report, reportsApi, firmName, entityName, 
         return;
       }
       onClose();
-      onDone?.(op === "share" && link ? UPDATED : DONE[op]);
+      onDone?.(op === REPORT_ACTIONS.SHARE && link ? UPDATED : DONE[op]);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -211,7 +222,7 @@ export default function ShareDialog({ report, reportsApi, firmName, entityName, 
     setBusy(true);
     setError(null);
     try {
-      const { notice } = await actSaved(reportsApi, report.id, "unlink");
+      const { notice } = await actSaved(reportsApi, report.id, REPORT_ACTIONS.UNLINK);
       onClose();
       if (notice) onDone?.(notice);
     } catch (e) {
@@ -223,7 +234,7 @@ export default function ShareDialog({ report, reportsApi, firmName, entityName, 
 
   const onShare = (force = false) => {
     trackClick(force ? "MancoReporting.ShareDialog.Overwrite" : "MancoReporting.ShareDialog.Share");
-    run("share", { shared_with: recipients, people: people(), force });
+    run(REPORT_ACTIONS.SHARE, { shared_with: recipients, people: people(), force });
   };
 
   const progress = busy ? reportsApi.shareJob?.progress : null;
@@ -242,19 +253,23 @@ export default function ShareDialog({ report, reportsApi, firmName, entityName, 
     <>
       <span style={S.status}>Overwrite the shared copy with your version?</span>
       <Btn onClick={onClose} disabled={busy}>Cancel</Btn>
-      <Btn kind="primary" onClick={() => onShare(true)} disabled={busy}>Overwrite with my version</Btn>
+      {reportsApi.can(REPORT_ACTIONS.SHARE) && (
+        <Btn kind="primary" onClick={() => onShare(true)} disabled={busy}>Overwrite with my version</Btn>
+      )}
     </>
   ) : outcome === "deleted" ? (
     <>
       <span style={S.status}>Share it as new, or keep it private?</span>
-      <Btn onClick={keepPrivate} disabled={busy}>Keep private</Btn>
-      <Btn kind="primary" onClick={() => { trackClick("MancoReporting.ShareDialog.ShareAsNew"); run("publish-as-new", { shared_with: recipients, people: people() }); }} disabled={busy}>Share as new</Btn>
+      {reportsApi.can(REPORT_ACTIONS.UNLINK) && <Btn onClick={keepPrivate} disabled={busy}>Keep private</Btn>}
+      {reportsApi.can(REPORT_ACTIONS.PUBLISH_AS_NEW) && (
+        <Btn kind="primary" onClick={() => { trackClick("MancoReporting.ShareDialog.ShareAsNew"); run(REPORT_ACTIONS.PUBLISH_AS_NEW, { shared_with: recipients, people: people() }); }} disabled={busy}>Share as new</Btn>
+      )}
     </>
   ) : confirmStop ? (
     <>
       <span style={S.status}>The shared copy goes away for everyone. Yours stays here.</span>
       <Btn onClick={() => setConfirmStop(false)} disabled={busy}>Cancel</Btn>
-      <Btn kind="danger" onClick={() => { trackClick("MancoReporting.ShareDialog.StopSharing"); run("delete"); }} disabled={busy}>
+      <Btn kind="danger" onClick={() => { trackClick("MancoReporting.ShareDialog.StopSharing"); run(REPORT_ACTIONS.DELETE); }} disabled={busy}>
         Stop sharing for everyone
       </Btn>
     </>
@@ -270,10 +285,12 @@ export default function ShareDialog({ report, reportsApi, firmName, entityName, 
           </>
         ) : "Only you can see this report")}
       </span>
-      {link && (
+      {link && reportsApi.can(REPORT_ACTIONS.DELETE) && (
         <Btn kind="ghost" onClick={() => setConfirmStop(true)} disabled={busy} style={S.stop}>Stop sharing</Btn>
       )}
-      <Btn kind="primary" onClick={() => onShare(false)} disabled={!canSubmit}>{primaryLabel}</Btn>
+      {reportsApi.can(REPORT_ACTIONS.SHARE) && (
+        <Btn kind="primary" onClick={() => onShare(false)} disabled={!canSubmit}>{primaryLabel}</Btn>
+      )}
     </>
   );
 
@@ -325,7 +342,13 @@ export default function ShareDialog({ report, reportsApi, firmName, entityName, 
             {outcome === "deleted" && (
               <p style={S.warn}>The shared copy of this report was deleted.</p>
             )}
-            {!outcome && (
+            {!outcome && !canPick && (
+              <>
+                <p style={S.readOnlyTitle}>Sharing isn’t available for this report</p>
+                <p style={S.readOnlyText}>This server doesn’t support sharing reports with Carta yet. Exporting is still available.</p>
+              </>
+            )}
+            {!outcome && canPick && (
               <>
                 {/* Focus moving within the search box and its list keeps the list open. */}
                 <div style={S.searchWrap} onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget)) setSearching(false); }}>

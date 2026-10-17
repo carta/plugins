@@ -32,6 +32,15 @@ export class ReportError extends Error {
 // A change that was saved, but the page couldn't be rebuilt to show it.
 export const REBUILD_FAILED = "rebuild";
 
+// The full action/op vocabulary a server's `actions` list draws from — the exact strings
+// `act()` sends as a per-report action and `runShareOp()` sends as `op`. A server names a
+// capability by one of these, never a string of its own, so `can(x)` and the call that
+// sends `x` always agree.
+export const REPORT_ACTIONS = Object.freeze({
+  RENAME: "rename", DUPLICATE: "duplicate", HIDE: "hide", REMOVE: "remove", UNLINK: "unlink",
+  SHARE: "share", PUBLISH_AS_NEW: "publish-as-new", DELETE: "delete", PULL: "pull", USERS: "users",
+});
+
 // Runs a report change. One that was saved but whose page didn't refresh counts as done:
 // it resolves with the refresh message as `notice` rather than throwing, so it isn't sent twice.
 export async function actSaved(reportsApi, ...args) {
@@ -47,7 +56,7 @@ export async function actSaved(reportsApi, ...args) {
 // isn't a failed duplicate, so that error keeps its own words.
 export async function duplicateReport(reportsApi, report, onOpenReport) {
   try {
-    const created = await reportsApi.act(report.id, "duplicate");
+    const created = await reportsApi.act(report.id, REPORT_ACTIONS.DUPLICATE);
     if (created?.id) onOpenReport(created.id);
   } catch (e) {
     throw e.code === REBUILD_FAILED ? e : new Error(`Couldn't duplicate it. ${e.message}`);
@@ -56,11 +65,14 @@ export async function duplicateReport(reportsApi, report, onOpenReport) {
 
 export default function useReports({ onChanged } = {}) {
   const [listing, setListing] = useState({ reports: [], share_target: null });
+  // A server may send `actions`, one of REPORT_ACTIONS' values each; when it does, only
+  // the actions it names are allowed. One with none at all (the key is simply absent)
+  // allows everything, so a server that doesn't send the field needs no other change here.
+  const can = useCallback((action) => !Array.isArray(listing.actions) || listing.actions.includes(action), [listing.actions]);
   const [shareJob, setShareJob] = useState(null);
-  // The hosted Worker has no /api/reports route — it falls through to the SPA's
-  // index.html, a 200 that isn't JSON. A serve.py without that route 404s.
-  // Either way this stays false, so the sidebar never offers an action the server
-  // can't perform.
+  // A GET here that doesn't come back as {reports: [...]} — no route at all, a 200 that
+  // answers with the SPA shell instead, a network error — leaves this false, so nothing
+  // renders a control for an action the server can't perform.
   const [available, setAvailable] = useState(false);
   const etagRef = useRef(null);
 
@@ -150,7 +162,7 @@ export default function useReports({ onChanged } = {}) {
         if (state.status === "error") {
           throw new ReportError(state.error?.message || "Couldn't finish — try again.", state.error?.code);
         }
-        if (op !== "users") {
+        if (op !== REPORT_ACTIONS.USERS) {
           await load();
           await onChanged?.();
         }
@@ -167,7 +179,7 @@ export default function useReports({ onChanged } = {}) {
   const peopleRef = useRef(null);
   const loadPeople = useCallback(async ({ refresh = false } = {}) => {
     if (!refresh && peopleRef.current) return peopleRef.current;
-    const result = await runShareOp("users", refresh ? { refresh: true } : {});
+    const result = await runShareOp(REPORT_ACTIONS.USERS, refresh ? { refresh: true } : {});
     peopleRef.current = { users: result?.users || [], fetchedAt: result?.fetched_at ?? null };
     return peopleRef.current;
   }, [runShareOp]);
@@ -179,10 +191,11 @@ export default function useReports({ onChanged } = {}) {
     reports: listing.reports,
     shareTarget: listing.share_target,
     shareJob,
+    can,
     byId,
     act,
     runShareOp,
     loadPeople,
     reload: load,
-  }), [available, listing, shareJob, byId, act, runShareOp, loadPeople, load]);
+  }), [available, listing, shareJob, can, byId, act, runShareOp, loadPeople, load]);
 }

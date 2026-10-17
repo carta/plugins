@@ -3,7 +3,10 @@ import { InkBarChart, escapeHtml } from "../ui/components.jsx";
 import { fmtVariance, varianceColor } from "../ui/variance.js";
 
 export default function BudgetVsActuals({ budget, ops, title, sub, compact }) {
-  if (!budget || !ops) return null;
+  // budget?.income, not just budget: a firm with only reports shared with it (no own or
+  // Carta-sourced budget of its own) can end up with a `budget` object that carries
+  // `budgets[]` entries but none of the scalar income/expenses/net totals this chart reads.
+  if (!budget?.income || !ops) return null;
   const { total_income, total_expenses } = ops;
   const net_actual = total_income - total_expenses;
 

@@ -30,6 +30,22 @@ not which dimension it's scoped by — the recipient's own chart-of-accounts map
 resolves that on their side, so a line can read differently for them than for the
 person who shared it.
 
+## The action vocabulary
+
+The app's frontend (`app/src/state/useReports.js`, `REPORT_ACTIONS`) names each report
+change and share operation with one of these strings, and shows the control for one only
+when the server says it's available:
+
+- Per-report actions, sent as `POST /api/reports/<id>/<action>`: `rename`, `duplicate`,
+  `hide`, `remove`, `unlink`.
+- Share operations, sent as `op` to `POST /api/reports/share-op`: `share`,
+  `publish-as-new`, `delete`, `pull`, `users`.
+
+`GET /api/reports` can answer with an `actions` array naming exactly which of these it
+supports; when the field is absent, every action is allowed (`serve.py` sends no `actions` field).
+A server implementing any of these must use these exact strings — the frontend gates each
+control on the matching name, not a synonym.
+
 ## How sharing reaches Carta
 
 `serve.py` never calls Carta over HTTP. A share runs a headless `claude -p` session

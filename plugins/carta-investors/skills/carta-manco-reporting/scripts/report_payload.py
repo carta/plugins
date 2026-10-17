@@ -5,6 +5,17 @@ step. The skill runs them before sharing, so the operator sees a
 plain message instead of a server error, and on pull, so a malformed report is
 refused rather than rendered with wrong numbers.
 
+The hosted Worker runs no Python, so server/reportPayload.js ports validate(),
+check_name(), check_snapshot_basis() and compact() for it. Both sides read every limit,
+enum member and key name from payload_contract.json, beside this file. The hosted Worker
+picks up an edit to it only when it is redeployed (DEPLOY.md); a behavioral edit (not
+just a shape one) still needs the matching code change on the other side.
+Most of validate()'s own accept/reject cases live once too, in server/__fixtures__/
+share-payload.json's "cases" array: tests/carta-investors/test_manco_report_store.py's
+test_shared_cases and reportPayload.test.js's matching test.each run each case against
+both implementations. Only what JSON can't hold (NaN, a too-large-for-float amount) or
+express as a plain field set (the duplicate-node-key append) stays written out per language.
+
 Python-stdlib only, 3.9-safe.
 """
 from __future__ import annotations
@@ -13,37 +24,42 @@ import datetime
 import json
 import math
 import re
+from pathlib import Path
 from typing import Any, Dict, List
 
 from shapes.canonical import SCHEMA_VERSION  # noqa: F401  (the model version these rules check; sent with each share)
 
-MAX_PAYLOAD_BYTES = 256 * 1024
-MAX_NODES = 5000
-MAX_FACTS_PER_NODE = 1000
-MAX_KEY_LENGTH = 128
-MAX_LABEL_LENGTH = 500
-MAX_COMMENT_LENGTH = 2000
-MAX_DEPTH = 20
-MAX_VALUE_ALIASES = 1000
-MAX_NAME_LENGTH = 255
-MAX_SOURCE_CLIENT_LENGTH = 64
-MAX_SOURCE_VERSION_LENGTH = 32
+_CONTRACT = json.loads((Path(__file__).parent / "payload_contract.json").read_text())
 
-NODE_KINDS = frozenset({"line", "section_header", "subsection_header", "subtotal", "summary", "total"})
-VIEW_KINDS = frozenset({"by-account", "by-line-item", "by-tag-crosstab"})
-GRANULARITIES = frozenset({"monthly", "quarterly"})
-PERIOD_KINDS = frozenset({"annual", "ytd_through_as_of"})
-DERIVED_RULES = frozenset({"net_income", "expression"})
+MAX_PAYLOAD_BYTES = _CONTRACT["limits"]["max_payload_bytes"]
+MAX_NODES = _CONTRACT["limits"]["max_nodes"]
+MAX_FACTS_PER_NODE = _CONTRACT["limits"]["max_facts_per_node"]
+MAX_KEY_LENGTH = _CONTRACT["limits"]["max_key_length"]
+MAX_LABEL_LENGTH = _CONTRACT["limits"]["max_label_length"]
+MAX_COMMENT_LENGTH = _CONTRACT["limits"]["max_comment_length"]
+MAX_DEPTH = _CONTRACT["limits"]["max_depth"]
+MAX_VALUE_ALIASES = _CONTRACT["limits"]["max_value_aliases"]
+MAX_NAME_LENGTH = _CONTRACT["limits"]["max_name_length"]
+MAX_SOURCE_CLIENT_LENGTH = _CONTRACT["limits"]["max_source_client_length"]
+MAX_SOURCE_VERSION_LENGTH = _CONTRACT["limits"]["max_source_version_length"]
 
-REQUIRED_PAYLOAD_KEYS = frozenset({"period_year", "period_granularity", "currency", "native_view_kind", "budget"})
-PAYLOAD_KEYS = REQUIRED_PAYLOAD_KEYS | {"period_kind", "value_aliases"}
-BUDGET_KEYS = frozenset({"dimensions", "nodes"})
-NODE_KEYS = frozenset({"key", "kind", "label", "depth", "order", "gl_codes", "facts",
-                       "section", "constituents", "comments", "derived"})
-REQUIRED_NODE_KEYS = frozenset({"key", "kind", "label", "depth", "order", "gl_codes", "facts"})
-FACT_KEYS = frozenset({"period", "scope", "amount"})
-SNAPSHOT_BASIS_KEYS = frozenset({"as_of", "fetched_at"})
-SOURCE_KEYS = frozenset({"client", "client_version"})
+NODE_KINDS = frozenset(_CONTRACT["node_kinds"])
+VIEW_KINDS = frozenset(_CONTRACT["view_kinds"])
+GRANULARITIES = frozenset(_CONTRACT["granularities"])
+PERIOD_KINDS = frozenset(_CONTRACT["period_kinds"])
+DERIVED_RULES = frozenset(_CONTRACT["derived_rules"])
+
+REQUIRED_PAYLOAD_KEYS = frozenset(_CONTRACT["payload_keys"]["required"])
+PAYLOAD_KEYS = REQUIRED_PAYLOAD_KEYS | frozenset(_CONTRACT["payload_keys"]["optional"])
+BUDGET_KEYS = frozenset(_CONTRACT["budget_keys"])
+REQUIRED_NODE_KEYS = frozenset(_CONTRACT["node_keys"]["required"])
+NODE_KEYS = REQUIRED_NODE_KEYS | frozenset(_CONTRACT["node_keys"]["optional"])
+FACT_KEYS = frozenset(_CONTRACT["fact_keys"])
+SCOPE_KEYS = frozenset(_CONTRACT["scope_keys"])
+REQUIRED_SNAPSHOT_BASIS_KEYS = frozenset(_CONTRACT["snapshot_basis_keys"]["required"])
+SNAPSHOT_BASIS_KEYS = REQUIRED_SNAPSHOT_BASIS_KEYS | frozenset(_CONTRACT["snapshot_basis_keys"]["optional"])
+REQUIRED_SOURCE_KEYS = frozenset(_CONTRACT["source_keys"]["required"])
+SOURCE_KEYS = REQUIRED_SOURCE_KEYS | frozenset(_CONTRACT["source_keys"]["optional"])
 
 _PERIOD = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
 _CURRENCY = re.compile(r"^[A-Z]{3}$")
@@ -176,7 +192,7 @@ def _check_node(node: Any, path: str, scoped: bool) -> None:
         if fact["scope"] is not None:
             if not scoped:
                 raise PayloadError("%s.scope needs payload.budget.dimensions to name an axis" % fpath)
-            scope = _keys(fact["scope"], fpath + ".scope", frozenset({"value"}), frozenset({"value"}))
+            scope = _keys(fact["scope"], fpath + ".scope", SCOPE_KEYS, SCOPE_KEYS)
             _text(scope["value"], fpath + ".scope.value", MAX_LABEL_LENGTH)
         amount = fact["amount"]
         if not _is_finite_number(amount):
@@ -229,7 +245,7 @@ def check_name(name: Any) -> None:
 def check_snapshot_basis(basis: Any) -> None:
     """``{as_of: YYYY-MM-DD, fetched_at?}`` — the drift banner's data date.
     ``as_of`` must be a real calendar date, not just the right shape."""
-    basis = _keys(basis, "snapshot_basis", SNAPSHOT_BASIS_KEYS, frozenset({"as_of"}))
+    basis = _keys(basis, "snapshot_basis", SNAPSHOT_BASIS_KEYS, REQUIRED_SNAPSHOT_BASIS_KEYS)
     as_of = basis["as_of"]
     if not isinstance(as_of, str) or not _DATE.fullmatch(as_of):
         raise PayloadError("snapshot_basis.as_of must be YYYY-MM-DD")
@@ -249,7 +265,7 @@ def check_source(source: Any) -> None:
     Carta keeps client to 64 characters and client_version to 32."""
     if source is None:
         return
-    source = _keys(source, "source", SOURCE_KEYS, frozenset({"client"}))
+    source = _keys(source, "source", SOURCE_KEYS, REQUIRED_SOURCE_KEYS)
     _text(source["client"], "source.client", MAX_SOURCE_CLIENT_LENGTH)
     if "client_version" in source:
         _text(source["client_version"], "source.client_version", MAX_SOURCE_VERSION_LENGTH)
