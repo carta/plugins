@@ -19,6 +19,7 @@ Prints the output file path on success.
 
 import argparse
 import json
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -26,6 +27,13 @@ from openpyxl import Workbook
 from openpyxl.drawing.image import Image as XLImage
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
+
+# The plugin's shared lib/ sits above the skill; walk up so this runs standalone under `uv run`.
+for _root in Path(__file__).resolve().parents:
+    if (_root / "lib" / "report_numbers.py").is_file():
+        sys.path.insert(0, str(_root / "lib"))
+        break
+from report_numbers import parse_number  # noqa: E402
 
 HEADER_BG  = "C6EBF4"
 HEADER_FG  = "2F3943"
@@ -235,25 +243,15 @@ def _write_sheet(ws, columns, rows, title, as_of_date, generated_by, summary_met
                 cell.fill = summary_fill
                 cell.font = summary_font
             else:
-                if col["type"] == "integer" and val is not None:
-                    try:
-                        val = int(val)
-                    except (ValueError, TypeError):
-                        pass
-                elif col["type"] == "money" and val is not None:
-                    try:
-                        val = float(val)
-                    except (ValueError, TypeError):
-                        pass
-                elif col["type"] in ("percentage", "decimal") and val is not None:
-                    try:
-                        # API may return percentages as "46.81%" strings or decimal strings
-                        if isinstance(val, str) and val.endswith('%'):
-                            val = float(val.rstrip('%')) / 100
+                if col["type"] in ("integer", "money", "percentage", "decimal") and val is not None:
+                    number = parse_number(val)
+                    if number is not None:
+                        if col["type"] == "integer":
+                            val = int(number) if number == int(number) else number
+                        elif isinstance(val, str) and "%" in val:
+                            val = number / 100  # "46.81%" -> 0.4681 under a 0.00% format
                         else:
-                            val = float(val)
-                    except (ValueError, TypeError):
-                        pass
+                            val = float(number)
                 elif col["type"] == "date" and isinstance(val, str) and val.strip():
                     # Coerce interchange date strings to real datetimes so FORMAT_MAP["date"]
                     # ("mmm d, yyyy") renders. Unparseable strings fall through unchanged.

@@ -51,6 +51,13 @@ import sys
 from html import escape
 from pathlib import Path
 
+# The plugin's shared lib/ sits above the skill; walk up so this runs standalone under `uv run`.
+for _root in Path(__file__).resolve().parents:
+    if (_root / "lib" / "script_json.py").is_file():
+        sys.path.insert(0, str(_root / "lib"))
+        break
+from script_json import script_json  # noqa: E402
+
 SKILL_DIR = Path(__file__).resolve().parent.parent
 RES = SKILL_DIR / "resources"
 VENDOR_DIR = SKILL_DIR.parent.parent / "vendor"  # plugin root / vendor/
@@ -172,9 +179,8 @@ def read_skill_directory():
 
 
 def directory_json(entries):
-    """JSON for inlining into the page's one <script>: `<` is escaped so no prompt can
-    close the script tag early."""
-    return json.dumps(entries, ensure_ascii=False).replace("<", "\\u003c")
+    """JSON for inlining into the page's one <script>; no prompt can close the tag early."""
+    return script_json(entries)
 
 
 def normalize_corporation_id(raw):

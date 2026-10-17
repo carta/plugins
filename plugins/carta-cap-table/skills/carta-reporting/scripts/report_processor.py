@@ -8,7 +8,8 @@ report_processor.py — download, filter, transform, and preview cap table repor
 Usage:
     uv run report_processor.py --config <config.json> [--out <result.json>]
 
-<config.json> holds the config below. The result goes to stdout, or to --out when given.
+<config.json> holds the config below. The result goes to stdout; with --out it goes to that
+file and stdout carries a short summary (shape: "Script Reference" in the carta-reporting SKILL.md).
 
 Config JSON fields:
   download_url    str              S3 presigned URL
@@ -80,6 +81,14 @@ import json
 import re
 import sys
 from datetime import datetime
+from pathlib import Path
+
+# The plugin's shared lib/ sits above the skill; walk up so this runs standalone under `uv run`.
+for _root in Path(__file__).resolve().parents:
+    if (_root / "lib" / "report_numbers.py").is_file():
+        sys.path.insert(0, str(_root / "lib"))
+        break
+from report_numbers import parse_number  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -87,12 +96,7 @@ from datetime import datetime
 # ---------------------------------------------------------------------------
 
 def _parse_numeric(val):
-    if val is None:
-        return None
-    try:
-        return float(str(val).replace(",", "").replace("$", "").replace("%", "").strip())
-    except (ValueError, TypeError):
-        return None
+    return parse_number(val)
 
 
 def _parse_date(val):
@@ -851,7 +855,12 @@ def main():
     if args.out:
         with open(args.out, "w") as f:
             json.dump({"data": result, "stats": stats, "warnings": warnings}, f, indent=2, default=str)
-        print(args.out)
+        # stats only: `data` can run to thousands of lines and stays in the file.
+        # `warnings` is added only when non-empty, so the caller still sees skipped sheets.
+        summary = {"out": args.out, "stats": stats}
+        if warnings:
+            summary["warnings"] = warnings
+        print(json.dumps(summary, default=str))
     else:
         json.dump({"data": result, "stats": stats, "warnings": warnings}, sys.stdout, indent=2, default=str)
 

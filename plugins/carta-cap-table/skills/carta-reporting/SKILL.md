@@ -34,11 +34,12 @@ allowed-tools:
   - Skill(carta-cap-table:carta-reporting-markdown)
   - Bash(date +%s)
   - Bash(UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_processor.py" *)
+  - Bash(UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/build_report_page.py" *)
   - Skill(carta-cap-table:carta-reporting-excel)
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.97.4</carta-plugin>
+<carta-plugin>carta-cap-table:6.97.5</carta-plugin>
 
 # Custom Reports
 
@@ -99,11 +100,11 @@ If the file exists, its instructions override the defaults in this skill for any
 
 **Connector prefix:** `_carta_prefix` is the `mcp__<segment>__` of the confirmed `__list_accounts` tool, never a literal. In Claude Desktop that is Gate 0b's PASS or PASS (unmapped connector) tool; in Claude Code it is the `__list_accounts` tool in `_tool_results`. Every Carta call this skill makes (`call_tool`, `read_tool`, `search_tools`, `list_accounts`), including those it hands to subagents, goes through `_carta_prefix`; the bare `read_tool(...)` / `call_tool(...)` calls below are shorthand for it. Pass `_carta_prefix` to every subagent that calls Carta, in its prompt. (The sub-skills `carta-reporting-markdown` and `carta-reporting-excel` make their own calls.)
 
-**Script and engine paths:** they are fixed — never search for them.
+**Script paths:** they are fixed — never search for them.
 - `report_processor.py`: `${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_processor.py`
-- Engine HTML: `${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/assets/artifact_engine.html`
+- `build_report_page.py`: `${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/build_report_page.py` (it reads the engine HTML itself; do not `Read` it)
 
-Run the script only in the one-line form shown below, as its own command: write its config with `Write` first, then pass `--config`. A heredoc, a pipe or a chained command needs approval every time.
+Run each script only in the one-line form shown below, as its own command: write its input files with `Write` first, then pass them by flag. A heredoc, a pipe or a chained command needs approval every time.
 
 > **Plugin root in reference files.** Reference files write the plugin root as a `CLAUDE_PLUGIN_ROOT` variable in braces. Bash does not set that variable, so never run it as written: replace it with the literal plugin root `${CLAUDE_PLUGIN_ROOT}`, keep every quote, and keep the command on one line.
 
@@ -294,12 +295,12 @@ Run the script only in the one-line form shown below, as its own command: write 
       If it exits non-zero, write {"error":"download failed"} to output_path and stop.
    ```
 
-   **4d. Main thread — wait for data, then build the artifact** — runs immediately after dispatching 4b and 4c. `Read` the engine HTML at `${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/assets/artifact_engine.html`.
+   **4d. Main thread — wait for data, then build the artifact** — runs immediately after dispatching 4b and 4c. The page is built by `build_report_page.py` below.
 
-   If that read fails, continue — do **not** fall back to the xlsx skill or generate Excel directly.
+   If the build or the publish fails, say so — do **not** fall back to the xlsx skill or generate Excel directly.
 
    Check for `/tmp/carta_preview_<pk_preview>.json` every 5 s (up to 12 attempts = 60 s):
-   - **Preview succeeded** (file present, no `"error"` key) → use the preview file as the data source. The preview holds partial data, so add `["Status", "Preview — full report loading"]` to the artifact's `metaRows` and do not present its row count as final.
+   - **Preview succeeded** (file present, no `"error"` key) → use the preview file as the data source. The preview holds partial data, so add `["Status", "Preview — full report loading"]` to the artifact's `metaRows` and do not present its row count as final. If `build_report_page.py` exits with "No rows matched" on a build that used any preview file, treat it as **Preview failed** and run the full-report wait: the partial data says nothing about the final result.
    - **Preview failed** (file contains `"error"`, or 12 attempts elapse without the file appearing) → switch to the full-report fallback: poll for `/tmp/carta_report_<pk>.json` every 5 s, up to 20 attempts (the **full-report wait**).
 
    **Mid-wait check-in (emit exactly once per report request):** If 30 seconds elapse during the preview poll (i.e., after 6 failed attempts) with no data yet available, output this message to the user before continuing to poll:
@@ -341,87 +342,50 @@ Run the script only in the one-line form shown below, as its own command: write 
    }
    ```
 
+   Then run this as its own command, on one line. `--out` keeps the full result in a file, so you never retype the rows:
+
+   ```bash
+   UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_processor.py" --config "carta-reporting/config.json" --out "carta-reporting/result.json"
+   ```
+
+   The command prints `{"out": <path>, "stats": {...}}`, plus `"warnings": {...}` when there are any (see the warnings table below). Check `stats` and any `warnings` in that output before proceeding; never `Read` `result.json` (the rows stay in the file):
+   - `missing_columns` non-empty → note the missing columns in the artifact's `metaRows` as "Columns unavailable: X, Y". Do not abort.
+   - `filtered_row_count` = 0 on any sheet, or `empty_rows_dropped` equal to `filtered_row_count` (only empty placeholder rows matched) → `build_report_page.py` leaves that sheet out and lists it in `omitted_sheets`; note the omission when you present the report. If every sheet is empty it builds nothing and exits with "No rows matched those filters". Relay that, and offer to loosen the filter, only when every input was a full report; a build that used a preview file falls back to the full report instead (see step 4d).
+
+   **CRITICAL:** the page is assembled by `build_report_page.py`, never by hand. It copies each non-empty sheet whole from `result.json` (`columns`, `rows`, `currency`, `row_currencies`, `summary_meta` — dropping `currency` or `row_currencies` makes every money cell show `$`), escapes text that could break the page, and puts the data before the engine, which the engine requires or the artifact renders blank.
+
+   `Write` `carta-reporting/params.json` with the artifact's `config` object:
+
+   ```json
+   {
+     "title":         "<Corporation> — <Report Type>",
+     "reportType":    "<Human-readable report type>",
+     "entityName":    "<Corporation legal name>",
+     "corporationId": "<numeric corporation_id>",
+     "generatedBy":   "<User full name>",
+     "asOfDate":      "<YYYY-MM-DD>",
+     "metaRows": [
+       ["Corporation", "<legal name>"],
+       ["As of Date",  "<YYYY-MM-DD>"]
+     ]
+   }
+   ```
+
+   `metaRows` always include `Corporation` and `As of Date`; add `["Stakeholder", "<name>"]` for stakeholder reports, `["Period", "<issued_from> – <issued_to>"]` for date-range reports, `["Equity Plan", "<plan name>"]` when a plan is a param.
+
    Then run this as its own command, on one line:
 
    ```bash
-   UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_processor.py" --config "carta-reporting/config.json"
+   UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/build_report_page.py" --result "carta-reporting/result.json" --params "carta-reporting/params.json" --output "{slug}.html"
    ```
 
-   Check `stats` before proceeding:
-   - `missing_columns` non-empty → note the missing columns in the artifact's `metaRows` as "Columns unavailable: X, Y". Do not abort.
-   - `filtered_row_count` = 0 on any sheet → omit that sheet from `_REPORT_PAYLOAD.data` and note the omission before creating the artifact.
+   It prints `{"output": <file>, "omitted_sheets": [...]}`.
 
-   **CRITICAL**: Use the entire sheet dict from `report_processor.py` output directly as each sheet's value in `data` — do NOT reconstruct or selectively pick fields. The output contains `columns`, `rows`, `currency`, `row_currencies`, and `summary_meta`; all must be present for correct currency rendering. Dropping `currency` or `row_currencies` causes every money cell to display `$` regardless of the actual currency.
-
-   **CRITICAL — assembly order:** The engine contains a boot IIFE that runs synchronously when its `<script>` block is parsed. `_REPORT_PAYLOAD` **must** be defined in an earlier `<script>` tag or `initReport` is never called and the artifact renders completely blank. Always assemble as:
-
-   ```
-   payload_script + params_script + engine_html   ← CORRECT
-   engine_html + payload_script + params_script   ← WRONG
-   ```
-
-   Full structure:
-   ```html
-   <script>const _REPORT_PAYLOAD = <report data>;</script>
-   <script>const _REPORT_PARAMS = { config: { … } };</script>
-   <engine HTML>
-   ```
-
-   `_REPORT_PARAMS`:
-   ```html
-   <script>
-   const _REPORT_PARAMS = {
-     config: {
-       title:         "<Corporation> — <Report Type>",
-       reportType:    "<Human-readable report type>",
-       entityName:    "<Corporation legal name>",
-       corporationId: "<numeric corporation_id>",
-       generatedBy:   "<User full name>",
-       asOfDate:      "<YYYY-MM-DD>",
-       metaRows:      [["Corporation", "<legal name>"], ["As of Date", "<YYYY-MM-DD>"]]
-     }
-   };
-   </script>
-   ```
-
-   `_REPORT_PAYLOAD` shape:
-   ```html
-   <script>
-   const _REPORT_PAYLOAD = {
-     config: {
-       title:         "{Corporation} — {Report Type}",
-       reportType:    "{Human-readable report type}",
-       entityName:    "{Stakeholder name, fund name, or company name}",
-       corporationId: "{numeric corporation_id}",
-       generatedBy:   "{User full name}",
-       asOfDate:      "{YYYY-MM-DD}",
-       metaRows: [
-         // ["Corporation", "{Corporation legal name}"]  — always include
-         // ["As of Date",  "{YYYY-MM-DD}"]              — always include
-         // ["Stakeholder", "{Stakeholder name}"]        — for stakeholder reports
-         // ["Period",      "{issued_from} – {issued_to}"] — for date-range reports
-         // ["Equity Plan", "{plan name}"]               — when plan is a param
-       ]
-     },
-     data: {
-       // Each sheet's value is the full sheet dict from report_processor.py — include ALL fields
-       "Sheet Name": {
-         columns: [{name: "Col A", type: "string"}, ...],
-         rows: [...],
-         currency: {"code": "USD", "symbol": "$"},
-         row_currencies: [null, ...]
-       }
-     }
-   };
-   </script>
-   ```
-
-   **Multi-corporation artifact:** The artifact engine has exactly one `id="sheetsNav"` and one `id="sheets"` element — **never** create separate containers per corporation, never namespace IDs, and never call `initReport` more than once. Build a single `_REPORT_PAYLOAD.data` dict where every sheet name is prefixed with the corporation name: `"Meetly — Securities Ledger"`, `"BiscuitByte — Securities Ledger"`, etc. Set `config.entityName` to comma-joined corporation names and `config.title` to `"Multi-Corporation — {Report Type}"`. Include one `["Corporation", "{name}"]` metaRow per corporation.
+   **Multi-corporation artifact:** The artifact engine has exactly one `id="sheetsNav"` and one `id="sheets"` element, so build one page: run `report_processor.py` once per corporation with its own `--out` (`carta-reporting/result-<corporation_id>.json`); each run prints its own `stats`, then pass every result to `build_report_page.py` with `--result "<file>" --label "<corporation name>"` repeated once per corporation. Sheets come out named `"Meetly — Securities Ledger"`, `"BiscuitByte — Securities Ledger"`. Set `entityName` in `params.json` to comma-joined corporation names, `title` to `"Multi-Corporation — {Report Type}"`, and include one `["Corporation", "{name}"]` metaRow per corporation.
 
    **Naming** — use a short slug: `{stakeholder-or-entity}-{report-type}`, e.g. `meetly-securities-ledger`.
 
-   One short sentence before publishing ("Building your report…"), then `Write` the full
-   combined HTML to `{slug}.html` and publish it:
+   One short sentence before publishing ("Building your report…"), then publish the file `build_report_page.py` wrote:
 
    ```
    Artifact({
@@ -499,7 +463,7 @@ Keep the contents in memory the first time you read it; do not read it again wit
 | `status: error` and `_scope_<corporation_id>` has `is_limited_admin: true` | The status carries no reason, but the most common cause for a scoped account is that no share class in its scope has data for this report. Retry once, then stop — a second failure will not clear. | "I couldn't generate the **{Report Type}** report. Your access covers {share class names}, and this report may have nothing there. Want me to try {alternative from `reports`} instead?" |
 | `status: not_found` | Report expired. Regenerate immediately with same params from this session — no user prompt needed. Poll until `complete`, fetch download URL, run `report_processor.py` automatically. | _(silent recovery — no message needed unless recovery also fails)_ |
 | `empty_rows_dropped` > 0 | Rows whose numeric columns are all zero or blank were dropped (placeholder security types Carta emits for types never issued). | "{K} rows with no values were left out." (K = sum of `empty_rows_dropped` across sheets) |
-| `filtered_row_count` = 0 | No rows matched the filters | "No rows matched those filters." Offer to loosen the filter or try a different date. |
+| `filtered_row_count` = 0 | No rows matched the filters | Full-report build: "No rows matched those filters." Offer to loosen the filter or try a different date. Preview build: do not relay; run the full-report wait first. |
 | `original_row_count` > ~1,000 rows | Large dataset | "This report has a lot of rows — want to narrow it down by date range, report type, or a specific person?" |
 | `401` / session expired | Auth expired | "It looks like your Carta session expired — reconnect and try again." |
 | `user_report_pk` missing from response | Transient API error | "Something went wrong generating this report — it may be a temporary issue. Try again in a moment, or contact your Carta team if it keeps happening." |
@@ -619,6 +583,8 @@ All fields except the file source are optional — omit or set to `null` to skip
                "merge_sources_missing": [{"target": ..., "source": ...}]}   // keys present only when raised
 }
 ```
+
+With `--out <file>`, this JSON is written to the file and stdout carries `{"out": <file>, "stats": {...}}`, plus `"warnings"` when non-empty.
 
 `kept_row_count` is the data rows in the result, before the preview cut: after grouping, without a summary totals row. `displayed_row_count` < `kept_row_count` exactly when a preview truncated it.
 
