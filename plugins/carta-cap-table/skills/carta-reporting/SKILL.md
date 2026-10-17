@@ -38,7 +38,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.97.3</carta-plugin>
+<carta-plugin>carta-cap-table:6.97.4</carta-plugin>
 
 # Custom Reports
 
@@ -95,7 +95,7 @@ Pull data directly from Carta and turn it into a customized report — filtered,
 **Staff overrides:** Before starting, silently `Read` `${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/staff/overrides.md`. If it doesn't exist, carry on without saying anything.
 If the file exists, its instructions override the defaults in this skill for any section it covers. If absent, proceed with the defaults below.
 
-**Tool discovery (ALL environments — run before any other step):** Call `ToolSearch` with query `"list_accounts"` and `max_results: 10`. Cache the full result set in memory as `_tool_results`. Do not call `ToolSearch` again anywhere in this workflow — all subsequent gates read from this cached result. The one exception: after the user reconnects Carta (the FAIL outcome in step 0b), run it once more and replace `_tool_results`.
+**Tool discovery (ALL environments — run before any other step):** Call `ToolSearch` with query `"list_accounts"` and `max_results: 10`. Cache the full result set in memory as `_tool_results`. Do not call `ToolSearch` again anywhere in this workflow — all subsequent gates read from this cached result. The only exceptions are the two reconnect retries, each after the user says "ready": the FAIL outcome in step 0b and a failed access check in step 0c. Each re-runs this discovery and replaces `_tool_results`.
 
 **Connector prefix:** `_carta_prefix` is the `mcp__<segment>__` of the confirmed `__list_accounts` tool, never a literal. In Claude Desktop that is Gate 0b's PASS or PASS (unmapped connector) tool; in Claude Code it is the `__list_accounts` tool in `_tool_results`. Every Carta call this skill makes (`call_tool`, `read_tool`, `search_tools`, `list_accounts`), including those it hands to subagents, goes through `_carta_prefix`; the bare `read_tool(...)` / `call_tool(...)` calls below are shorthand for it. Pass `_carta_prefix` to every subagent that calls Carta, in its prompt. (The sub-skills `carta-reporting-markdown` and `carta-reporting-excel` make their own calls.)
 
@@ -131,15 +131,19 @@ Run the script only in the one-line form shown below, as its own command: write 
 
    If multiple tools pass the gate, use the one whose environment appears earliest in the loaded map; its segment sets `_carta_prefix`. If the user's message includes an explicit environment qualifier (production, preprod, sandbox, test, demo), cross-check the confirmed UUID against that environment; if it doesn't match, treat as FAIL.
 
-   **Switching accounts mid-conversation** — if the company is already identified from earlier in this conversation and the user is asking to switch to a different Carta account, skip the "Find the company" step once reporting access is confirmed. Carry forward all previously resolved values and resume from "Find the right report type".
+   **Switching accounts mid-conversation** — if the company is already identified from earlier in this conversation and the user is asking to switch to a different Carta account, skip the "Find the company" step once reporting access is confirmed (0c). Carry forward all previously resolved values and resume from "Find the right report type".
 
-   **Confirm reporting access**
+0c. **Confirm reporting access — runs in ALL environments (Claude Desktop and Claude Code)**
 
    Reporting access is a property of the connected Carta account (identified by `_carta_prefix`), not of an individual company, and it does not change within a conversation — so confirm it **once per connected account**. If `_reporting_access_confirmed` is already set to `true` in this session for the current `_carta_prefix`, skip this check entirely and proceed to Step 1 — do not re-call `search_tools`. (If the user switches to a different Carta connector mid-conversation, treat that as a new account and re-confirm.)
 
-   Otherwise, call `search_tools({"query": "reporting"})` on `_carta_prefix` to query Carta's BM25 catalog (reporting tools are indexed, not pinned, so `ToolSearch` won't find them). If no `reporting__*` tools appear in the results, tell the user: "Looks like reporting isn't enabled for this account yet. You can try a different Carta account, or reach out to your Carta contact to get it set up." Then stop — do not proceed to Step 1. On success, set `_reporting_access_confirmed` to `true` in session memory so subsequent report requests on the same connected account skip this round-trip.
+   Otherwise, call `search_tools({"query": "reporting"})` on `_carta_prefix` to query Carta's BM25 catalog (reporting tools are indexed, not pinned, so `ToolSearch` won't find them). If the response contains no `reporting__*` tools, tell the user: "Looks like reporting isn't enabled for this account yet. You can try a different Carta account, or reach out to your Carta contact to get it set up." Then stop — do not proceed to Step 1.
 
-0c. **Set output mode — runs in ALL environments (Claude Desktop and Claude Code)**
+   If the `search_tools` call itself fails (tool not found, 401/403 or another auth error), say "I can't reach your Carta account. Make sure the Carta connector is set up and signed in, then say 'ready'.", stop, and when the user replies, re-run tool discovery (see its reconnect exception) to refresh `_tool_results`, then continue from step 0 (Claude Code, which skips step 0b, continues from 0c) — do not ask them to repeat the original request. Only a successful response with no `reporting__*` tools means reporting is off.
+
+   On success, set `_reporting_access_confirmed` to `true` in session memory so subsequent report requests on the same connected account skip this round-trip.
+
+0d. **Set output mode — runs in ALL environments (Claude Desktop and Claude Code)**
 
    Check whether the `Artifact` tool is available in this session.
 
