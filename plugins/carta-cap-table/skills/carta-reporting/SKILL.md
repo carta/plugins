@@ -38,7 +38,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.97.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.97.2</carta-plugin>
 
 # Custom Reports
 
@@ -432,7 +432,7 @@ Run the script only in the one-line form shown below, as its own command: write 
    **Present a customization checkpoint after the full report renders (or fails), and after every later rebuild — never for the preview artifact:**
 
    Compute `{elapsed}` as the output of `date +%s` (run on its own, one line, no shell arithmetic) minus `_report_start_time`, rounded to the nearest whole second.
-   Compute `{N}` as `filtered_row_count` (sum across all sheets) from `report_processor.py`'s `stats` output.
+   Compute `{N}` as `kept_row_count` (sum across all sheets) from `report_processor.py`'s `stats` output — the data rows in the report, before any preview cut. When any sheet has `empty_rows_dropped` > 0, also say so, using the `empty_rows_dropped` row of the Error Handling table.
 
    > Here's your **{Report Type}** for **{Company Name}** — {N} rows as of {date}, built in {elapsed}s.
    >
@@ -490,6 +490,7 @@ Keep the contents in memory the first time you read it; do not read it again wit
 | `status: error` | Report generation failed. If single report: regenerate once sequentially. If parallel reports: retry failed ones one at a time (sequential — parallel retries cause load failures). If still failing after retry: skip and continue. | "I wasn't able to generate the [Report Name] report — continuing with the rest." |
 | `status: error` and `_scope_<corporation_id>` has `is_limited_admin: true` | The status carries no reason, but the most common cause for a scoped account is that no share class in its scope has data for this report. Retry once, then stop — a second failure will not clear. | "I couldn't generate the **{Report Type}** report. Your access covers {share class names}, and this report may have nothing there. Want me to try {alternative from `reports`} instead?" |
 | `status: not_found` | Report expired. Regenerate immediately with same params from this session — no user prompt needed. Poll until `complete`, fetch download URL, run `report_processor.py` automatically. | _(silent recovery — no message needed unless recovery also fails)_ |
+| `empty_rows_dropped` > 0 | Rows whose numeric columns are all zero or blank were dropped (placeholder security types Carta emits for types never issued). | "{K} rows with no values were left out." (K = sum of `empty_rows_dropped` across sheets) |
 | `filtered_row_count` = 0 | No rows matched the filters | "No rows matched those filters." Offer to loosen the filter or try a different date. |
 | `original_row_count` > ~1,000 rows | Large dataset | "This report has a lot of rows — want to narrow it down by date range, report type, or a specific person?" |
 | `401` / session expired | Auth expired | "It looks like your Carta session expired — reconnect and try again." |
@@ -601,7 +602,8 @@ All fields except the file source are optional — omit or set to `null` to skip
 {
   "data":  {sheet_name: {"columns": [...], "rows": [...]}},
   "stats": {sheet_name: {"original_row_count": N, "filtered_row_count": N,
-                         "empty_rows_dropped": N, "displayed_row_count": N,
+                         "empty_rows_dropped": N, "kept_row_count": N,
+                         "displayed_row_count": N,
                          "missing_columns": [], "unknown_filter_columns": [],
                          "skipped_formulas": [],
                          "merged_from": [...], "schema_warnings": [...]}},   // last two: merged tabs only
@@ -609,6 +611,8 @@ All fields except the file source are optional — omit or set to `null` to skip
                "merge_sources_missing": [{"target": ..., "source": ...}]}   // keys present only when raised
 }
 ```
+
+`kept_row_count` is the data rows in the result, before the preview cut: after grouping, without a summary totals row. `displayed_row_count` < `kept_row_count` exactly when a preview truncated it.
 
 ---
 

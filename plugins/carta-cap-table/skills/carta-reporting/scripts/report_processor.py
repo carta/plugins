@@ -62,6 +62,10 @@ Aggregations:
 Output JSON: {"data", "stats", "warnings"} — the full shape is the Output block under
 "Script Reference" in the carta-reporting SKILL.md.
 
+  kept_row_count is the data rows in the result, before the preview cut: after grouping,
+  without a summary totals row. displayed_row_count < kept_row_count exactly when a preview
+  truncated it.
+
   Each column dict may carry "hidden": true — set automatically by
   detect_hidden_columns() for technical identifier columns (ID-suffixed names,
   UUID/hash-shaped or email-shaped values) that carry no end-user meaning.
@@ -212,6 +216,14 @@ def _make_filter_predicate(columns, filters):
         return (lambda row: True), []
     idx_map  = _col_map(columns)
     type_map = {col["name"]: col["type"] for col in columns}
+
+    for f in filters:
+        missing = [k for k in ("column", "op", "value") if not isinstance(f, dict) or k not in f]
+        if missing:
+            raise ValueError(
+                f"Filter {f!r} is missing {', '.join(missing)}. "
+                'Each filter is {"column": ..., "op": ..., "value": ...}.'
+            )
 
     bad_ops = sorted({f["op"] for f in filters if f["op"] not in VALID_FILTER_OPS})
     if bad_ops:
@@ -729,6 +741,8 @@ def main():
         new_to_old_col.extend([None] * (len(cols) - n_before_formulas))
 
         cols, rows, summary_meta = apply_aggregations(cols, rows, aggregations)
+        # Data rows in the full result: after grouping, without the totals row, before the preview cut.
+        kept_count = len(rows) - (summary_meta or {}).get("count", 0)
 
         # Naming a column — in `columns`, as the group_by key, or as an aggregated column — is a
         # request to see it, even a technical identifier.
@@ -776,6 +790,7 @@ def main():
             "original_row_count":    original_count,
             "filtered_row_count":    filtered_count,
             "empty_rows_dropped":    empty_rows_dropped,
+            "kept_row_count":        kept_count,
             "displayed_row_count":   len(displayed),
             "missing_columns":       missing_cols,
             "unknown_filter_columns": unknown_filter_cols,
@@ -792,13 +807,15 @@ def main():
         merged_currency: dict | None = None
         merged_summary = None
         schema_warnings: list = []
+        counts = {"original_row_count": 0, "filtered_row_count": 0,
+                  "empty_rows_dropped": 0, "kept_row_count": 0}
         for src in sources:
             if src not in result:
                 warnings.setdefault("merge_sources_missing", []).append(
                     {"target": target_name, "source": src})
                 continue
             s = result.pop(src)
-            stats.pop(src, None)
+            src_stats = stats.pop(src, None) or {}
             if merged_cols is None:
                 merged_cols    = s["columns"]
                 merged_currency = s.get("currency")
@@ -810,6 +827,8 @@ def main():
                         f"'{src}' schema mismatch: expected {ref_names}, got {src_names}"
                     )
                     continue  # skip rows — mismatched schema would corrupt column alignment
+            for key in counts:
+                counts[key] += src_stats.get(key, 0)
             merged_rows.extend(s["rows"])
             src_rcs = s.get("row_currencies") or [None] * len(s["rows"])
             merged_row_currencies.extend(src_rcs)
@@ -820,9 +839,9 @@ def main():
                                    "currency": merged_currency or {"code": "USD", "symbol": "$"},
                                    "row_currencies": merged_row_currencies,
                                    "summary_meta": merged_summary}
-            stats[target_name] = {"original_row_count": len(merged_rows),
-                                  "filtered_row_count": len(merged_rows),
-                                  "empty_rows_dropped": 0,
+            # Count stats are sums over the sources actually merged; only the displayed
+            # count is the merged tab's own length.
+            stats[target_name] = {**counts,
                                   "displayed_row_count": len(merged_rows),
                                   "missing_columns": [], "unknown_filter_columns": [],
                                   "skipped_formulas": [],

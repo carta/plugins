@@ -14,7 +14,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.97.1</carta-plugin>
+<carta-plugin>carta-cap-table:6.97.2</carta-plugin>
 
 # Transform Configuration
 
@@ -224,8 +224,9 @@ Always check `stats` after running:
 - `skipped_formulas` non-empty → tell the user which formulas couldn't run (usually the source column wasn't included in the selection)
 - `warnings.unknown_sheets` present → a requested sheet is not in this report; name it and list `available`
 - `warnings.merge_sources_missing` present, or `stats[<merged sheet>].schema_warnings` non-empty → say which sheet's rows are missing from the merged tab (wording in the `carta-reporting` Error Handling table)
+- `empty_rows_dropped` > 0 → say so, with the wording in the `empty_rows_dropped` row of the `carta-reporting` Error Handling table
 - `filtered_row_count` = 0 → no rows matched; offer to relax the filter or change `as_of_date`
-- `displayed_row_count` < `filtered_row_count` → preview is active; re-run without `preview` for full results
+- `displayed_row_count` < `kept_row_count` → preview is active; re-run without `preview` for full results
 
 ---
 
@@ -253,7 +254,7 @@ Then run this as its own command, on one line:
 UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_processor.py" --config "carta-reporting/config.json"
 ```
 
-Show first 5 rows of each processed sheet as a markdown table. Above each table write: `N of M rows matched · K columns`.
+Show first 5 rows of each processed sheet as a markdown table. Above each table write: `N of M rows · K columns`, where N is `kept_row_count` and M is `original_row_count`.
 
 Ask:
 
