@@ -38,7 +38,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.97.2</carta-plugin>
+<carta-plugin>carta-cap-table:6.97.3</carta-plugin>
 
 # Custom Reports
 
@@ -253,6 +253,7 @@ Run the script only in the one-line form shown below, as its own command: write 
    corporation_id: <corp_id>
    carta_prefix:   <_carta_prefix>
    output_path:    /tmp/carta_report_<pk>.json
+   Every write to output_path (error JSON or the download) goes to <output_path>.part first, then `mv <output_path>.part <output_path>` — the main thread treats the file's existence as "ready", so it must only ever appear complete.
 
    Steps:
    1. Poll `read_tool` on <carta_prefix> `({"name": "reporting__get__report_status", "arguments": { user_report_pk: <pk> }})` every 5 s, up to
@@ -262,7 +263,8 @@ Run the script only in the one-line form shown below, as its own command: write 
       - 20 attempts without complete → write {"error":"timeout"} to output_path and stop.
    2. Call `read_tool` on <carta_prefix> `({"name": "reporting__get__download_url", "arguments": { user_report_pk: <pk>, corporation_id: <corp_id> }})`
       → presigned URL.
-   3. Run: curl -fsSL "<presigned_url>" -o <output_path>
+   3. Run, as one command: curl -fsSL "<presigned_url>" -o <output_path>.part && mv <output_path>.part <output_path>
+      If it exits non-zero, write {"error":"download failed"} to output_path and stop.
    ```
 
    **4c. Background subagent — poll and download the preview report** — call the `Agent` tool with `run_in_background: true` in the **same message as 4b**. Use this prompt, substituting real values:
@@ -274,6 +276,7 @@ Run the script only in the one-line form shown below, as its own command: write 
    corporation_id:         <corp_id>
    carta_prefix:           <_carta_prefix>
    output_path:            /tmp/carta_preview_<pk_preview>.json
+   Every write to output_path (error JSON or the download) goes to <output_path>.part first, then `mv <output_path>.part <output_path>` — the main thread treats the file's existence as "ready", so it must only ever appear complete.
 
    Steps:
    1. Poll `read_tool` on <carta_prefix> `({"name": "reporting__get__report_status", "arguments": { user_report_pk: <pk_preview> }})` every 5 s,
@@ -283,7 +286,8 @@ Run the script only in the one-line form shown below, as its own command: write 
       - 10 attempts without complete → write {"error":"preview timeout"} to output_path and stop.
    2. Call `read_tool` on <carta_prefix> `({"name": "reporting__get__download_url", "arguments": { user_report_pk: <pk_preview>, corporation_id: <corp_id> }})`
       → presigned URL. If this call fails, write {"error":"download_url failed"} to output_path and stop.
-   3. Run: curl -fsSL "<presigned_url>" -o <output_path>
+   3. Run, as one command: curl -fsSL "<presigned_url>" -o <output_path>.part && mv <output_path>.part <output_path>
+      If it exits non-zero, write {"error":"download failed"} to output_path and stop.
    ```
 
    **4d. Main thread — wait for data, then build the artifact** — runs immediately after dispatching 4b and 4c. `Read` the engine HTML at `${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/assets/artifact_engine.html`.
