@@ -14,7 +14,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.97.0</carta-plugin>
+<carta-plugin>carta-cap-table:6.97.1</carta-plugin>
 
 # Transform Configuration
 
@@ -222,6 +222,8 @@ See **Script Reference** in `carta-reporting` for the full API (all fields, mult
 Always check `stats` after running:
 - `missing_columns` non-empty → list available column names from `data[sheet].columns` and ask the user which they meant, then re-run with the corrected name
 - `skipped_formulas` non-empty → tell the user which formulas couldn't run (usually the source column wasn't included in the selection)
+- `warnings.unknown_sheets` present → a requested sheet is not in this report; name it and list `available`
+- `warnings.merge_sources_missing` present, or `stats[<merged sheet>].schema_warnings` non-empty → say which sheet's rows are missing from the merged tab (wording in the `carta-reporting` Error Handling table)
 - `filtered_row_count` = 0 → no rows matched; offer to relax the filter or change `as_of_date`
 - `displayed_row_count` < `filtered_row_count` → preview is active; re-run without `preview` for full results
 

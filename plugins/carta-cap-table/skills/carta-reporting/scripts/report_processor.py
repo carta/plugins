@@ -59,19 +59,16 @@ Aggregations:
      "columns": {"Shares Issued": "sum", "Grant Count": "count"}}
   Supported ops: sum avg min max count
 
-Output JSON:
-  {
-    "data":  {sheet_name: {"columns": [{"name": ..., "type": ..., "hidden": bool, ...}], "rows": [...]}},
-    "stats": {sheet_name: {"original_row_count": N, "filtered_row_count": N,
-                           "displayed_row_count": N, "missing_columns": [...],
-                           "skipped_formulas": [...]}}
-  }
+Output JSON: {"data", "stats", "warnings"} — the full shape is the Output block under
+"Script Reference" in the carta-reporting SKILL.md.
 
   Each column dict may carry "hidden": true — set automatically by
   detect_hidden_columns() for technical identifier columns (ID-suffixed names,
   UUID/hash-shaped or email-shaped values) that carry no end-user meaning.
   Hidden columns are a display default only: they still appear in the output,
-  are re-showable in the artifact's Columns panel, and are never dropped.
+  are re-showable in the artifact's Columns panel, and are never dropped. A column the
+  config names (in `columns`, as the group_by key, or in the aggregation columns) is
+  un-hidden in the output.
 """
 
 import argparse
@@ -434,6 +431,15 @@ def _agg_values(vals, op):
     return None
 
 
+def _agg_inputs(rows, idx, op):
+    """Cell values to aggregate. `count` counts non-empty cells of any type;
+    every other op needs numbers."""
+    cells = [r[idx] for r in rows if idx < len(r)]
+    if op == "count":
+        return [c for c in cells if c not in (None, "")]
+    return [_parse_numeric(c) for c in cells]
+
+
 def apply_aggregations(columns, rows, agg_spec):
     """
     agg_spec types:
@@ -456,8 +462,7 @@ def apply_aggregations(columns, rows, agg_spec):
             if i == 0:
                 summary.append("Total")
             elif op:
-                vals = [_parse_numeric(r[i]) for r in rows if i < len(r)]
-                summary.append(_agg_values(vals, op))
+                summary.append(_agg_values(_agg_inputs(rows, i, op), op))
             else:
                 summary.append(None)
         return columns, rows + [summary], {"count": 1, "ops": agg_cols}
@@ -488,8 +493,7 @@ def apply_aggregations(columns, rows, agg_spec):
         for key, group_rows in groups.items():
             out_row = [key]
             for cidx, op in agg_specs:
-                vals = [_parse_numeric(r[cidx]) for r in group_rows if cidx < len(r)]
-                out_row.append(_agg_values(vals, op))
+                out_row.append(_agg_values(_agg_inputs(group_rows, cidx, op), op))
             out_rows.append(out_row)
 
         return out_cols, out_rows, None
@@ -647,6 +651,12 @@ def main():
 
     result: dict = {}
     stats:  dict = {}
+    warnings: dict = {}
+
+    requested = sorted(allowed) if allowed is not None else []
+    unknown_sheets = [n for n in requested if n not in data]
+    if unknown_sheets:
+        warnings["unknown_sheets"] = {"requested": unknown_sheets, "available": list(data)}
 
     for sheet_name, sheet in data.items():
         if allowed is not None and sheet_name not in allowed:
@@ -707,7 +717,6 @@ def main():
         empty_rows_dropped = filtered_count - len(rows)
 
         cols, rows, missing_cols = select_columns(cols, rows, columns)
-
         # Map: output column position j → original column index (None for unknown)
         new_to_old_col = [orig_col_name_to_idx.get(col["name"]) for col in cols]
 
@@ -720,6 +729,14 @@ def main():
         new_to_old_col.extend([None] * (len(cols) - n_before_formulas))
 
         cols, rows, summary_meta = apply_aggregations(cols, rows, aggregations)
+
+        # Naming a column — in `columns`, as the group_by key, or as an aggregated column — is a
+        # request to see it, even a technical identifier.
+        named = set(columns or []) | set((aggregations or {}).get("columns", {}))
+        if aggregations and aggregations.get("group_by"):
+            named.add(aggregations["group_by"])
+        cols = [{k: v for k, v in col.items() if k != "hidden"} if col["name"] in named else col
+                for col in cols]
 
         # After aggregations: summary appends one totals row (no original index);
         # group_by collapses all rows (all original indices lost).
@@ -777,6 +794,8 @@ def main():
         schema_warnings: list = []
         for src in sources:
             if src not in result:
+                warnings.setdefault("merge_sources_missing", []).append(
+                    {"target": target_name, "source": src})
                 continue
             s = result.pop(src)
             stats.pop(src, None)
@@ -812,10 +831,10 @@ def main():
 
     if args.out:
         with open(args.out, "w") as f:
-            json.dump({"data": result, "stats": stats}, f, indent=2, default=str)
+            json.dump({"data": result, "stats": stats, "warnings": warnings}, f, indent=2, default=str)
         print(args.out)
     else:
-        json.dump({"data": result, "stats": stats}, sys.stdout, indent=2, default=str)
+        json.dump({"data": result, "stats": stats, "warnings": warnings}, sys.stdout, indent=2, default=str)
 
 
 if __name__ == "__main__":

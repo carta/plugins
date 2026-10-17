@@ -18,7 +18,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.97.0</carta-plugin>
+<carta-plugin>carta-cap-table:6.97.1</carta-plugin>
 
 # Excel Export
 
@@ -97,7 +97,9 @@ Pass all sheets in one run using the `sheets` dict. Two commands, each run on it
 UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_processor.py" --config "carta-reporting/config.json" --out "carta-reporting/result.json"
 ```
 
-3. Export the workbook:
+3. Check `carta-reporting/result.json` before exporting: if its `warnings` is non-empty, or any sheet's `stats` has `schema_warnings`, tell the user which sheet was left out and why (wording: the `warnings.*` rows of the Error Handling table in `carta-reporting`), then export what is there. Never present a workbook with a missing sheet or merged rows as complete.
+
+4. Export the workbook:
 
 ```bash
 UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting-excel/scripts/excel_exporter.py" --input "carta-reporting/result.json" --title "Securities Ledger Report" --as-of-date "2024-01-15" --generated-by "Jane Doe" --output "./{report-slug}.xlsx"

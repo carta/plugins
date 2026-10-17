@@ -102,6 +102,35 @@ def _summary_formula(op, col_letter, start_row, end_row):
     return f"={fn}({col_letter}{start_row}:{col_letter}{end_row})"
 
 
+def _prepare_sheet(sheet):
+    """Normalize a processed sheet for writing.
+
+    A row's kind is decided here, once, from the row as it arrived: one-element string lists
+    become `{"_s": text}` section rows, so dropping columns can never turn a data row into one.
+    Columns report_processor.py tagged `hidden` (technical identifiers the artifact hides by
+    default) are dropped, except the first, which is the row label (summary "Total", group key).
+    Rows, totals and per-cell currencies stay aligned."""
+    columns = sheet["columns"]
+    keep = [i for i, col in enumerate(columns) if i == 0 or not col.get("hidden")]
+
+    def pick(cells):
+        return [cells[i] for i in keep if i < len(cells)]
+
+    rows = []
+    for row in sheet["rows"]:
+        if isinstance(row, dict):
+            row = {**row, "_t": pick(row["_t"])} if isinstance(row.get("_t"), list) else row
+        elif len(row) == 1 and isinstance(row[0], str):
+            row = {"_s": row[0]}
+        else:
+            row = pick(row)
+        rows.append(row)
+    row_currencies = [pick(rc) if isinstance(rc, list) else rc
+                      for rc in sheet.get("row_currencies") or []]
+    return {**sheet, "columns": [columns[i] for i in keep],
+            "rows": rows, "row_currencies": row_currencies}
+
+
 def _write_sheet(ws, columns, rows, title, as_of_date, generated_by, summary_meta=None,
                  currency=None, row_currencies=None):
     base_symbol    = (currency or {}).get("symbol", "$")
@@ -186,12 +215,6 @@ def _write_sheet(ws, columns, rows, title, as_of_date, generated_by, summary_met
                 row = row["_t"]
             else:
                 continue
-        elif isinstance(row, list) and len(row) == 1 and isinstance(row[0], str):
-            # Plain single-element string arrays are section headers from the API
-            cell = ws.cell(row=row_idx, column=1, value=row[0])
-            cell.font = section_font
-            cell.fill = section_fill
-            continue
 
         is_summary = summary_count > 0 and (row_idx - DATA_START) >= data_row_count
 
@@ -277,6 +300,7 @@ def main():
     wb.remove(wb.active)  # remove default empty sheet
 
     for sheet_name, sheet in data.items():
+        sheet = _prepare_sheet(sheet)
         ws = wb.create_sheet(title=_sanitize_sheet_name(sheet_name))
         _write_sheet(
             ws,

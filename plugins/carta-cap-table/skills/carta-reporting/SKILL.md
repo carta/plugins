@@ -32,12 +32,13 @@ allowed-tools:
   - AskUserQuestion
   - Read
   - Skill(carta-cap-table:carta-reporting-markdown)
+  - Bash(date +%s)
   - Bash(UV_PYTHON_DOWNLOADS=never uv run "${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_processor.py" *)
   - Skill(carta-cap-table:carta-reporting-excel)
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-cap-table:6.97.0</carta-plugin>
+<carta-plugin>carta-cap-table:6.97.1</carta-plugin>
 
 # Custom Reports
 
@@ -94,7 +95,9 @@ Pull data directly from Carta and turn it into a customized report — filtered,
 **Staff overrides:** Before starting, silently `Read` `${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/staff/overrides.md`. If it doesn't exist, carry on without saying anything.
 If the file exists, its instructions override the defaults in this skill for any section it covers. If absent, proceed with the defaults below.
 
-**Tool discovery (ALL environments — run before any other step):** Call `ToolSearch` with query `"list_accounts"` and `max_results: 10`. Cache the full result set in memory as `_tool_results`. Do not call `ToolSearch` again anywhere in this workflow — all subsequent gates read from this cached result.
+**Tool discovery (ALL environments — run before any other step):** Call `ToolSearch` with query `"list_accounts"` and `max_results: 10`. Cache the full result set in memory as `_tool_results`. Do not call `ToolSearch` again anywhere in this workflow — all subsequent gates read from this cached result. The one exception: after the user reconnects Carta (the FAIL outcome in step 0b), run it once more and replace `_tool_results`.
+
+**Connector prefix:** `_carta_prefix` is the `mcp__<segment>__` of the confirmed `__list_accounts` tool, never a literal. In Claude Desktop that is Gate 0b's PASS or PASS (unmapped connector) tool; in Claude Code it is the `__list_accounts` tool in `_tool_results`. Every Carta call this skill makes (`call_tool`, `read_tool`, `search_tools`, `list_accounts`), including those it hands to subagents, goes through `_carta_prefix`; the bare `read_tool(...)` / `call_tool(...)` calls below are shorthand for it. Pass `_carta_prefix` to every subagent that calls Carta, in its prompt. (The sub-skills `carta-reporting-markdown` and `carta-reporting-excel` make their own calls.)
 
 **Script and engine paths:** they are fixed — never search for them.
 - `report_processor.py`: `${CLAUDE_PLUGIN_ROOT}/skills/carta-reporting/scripts/report_processor.py`
@@ -122,19 +125,19 @@ Run the script only in the one-line form shown below, as its own command: write 
 
    **GATE — pick exactly one outcome and act on it before proceeding:**
 
-   - **PASS:** At least one extracted segment is an exact match for a UUID value in the loaded environment map → that tool is the confirmed Carta connector. Use `mcp__<segment>__` as the prefix for all subsequent MCP calls. Continue to the reporting access check below.
-   - **PASS (unmapped connector):** A `__list_accounts` tool was found, but none of the extracted segments match a UUID in the loaded environment map → before treating this as FAIL, make one live `list_accounts` call on that tool. A successful response means the connector works even though its environment UUID isn't in the map — treat as PASS and use it as the confirmed connector. Only a real 401/403 (or an explicit auth error) from this call falls through to FAIL.
-   - **FAIL:** No `__list_accounts` tool was found in `_tool_results` at all, OR the live `list_accounts` call above returned a 401/403/auth error → call `mcp_registry_suggest_connectors` with the Production UUID from the loaded map. **Stop immediately — do not proceed to Step 1.** Say to the user: "I need access to [Company Name]'s Carta account to pull this report. Connect Carta using the button above — once you're in, say 'ready' and I'll pick up from here." When the user replies, re-run the single ToolSearch from the tool discovery step and continue from this gate — do not ask them to repeat the original request.
+   - **PASS:** At least one extracted segment is an exact match for a UUID value in the loaded environment map → that tool is the confirmed Carta connector. Set `_carta_prefix` to `mcp__<segment>__`. Continue to the reporting access check below.
+   - **PASS (unmapped connector):** A `__list_accounts` tool was found, but none of the extracted segments match a UUID in the loaded environment map → before treating this as FAIL, make one live `list_accounts` call on that tool. A successful response means the connector works even though its environment UUID isn't in the map — treat as PASS and set `_carta_prefix` to that tool's `mcp__<segment>__`. Only a real 401/403 (or an explicit auth error) from this call falls through to FAIL.
+   - **FAIL:** No `__list_accounts` tool was found in `_tool_results` at all, OR the live `list_accounts` call above returned a 401/403/auth error → call `mcp_registry_suggest_connectors` with the Production UUID from the loaded map. **Stop immediately — do not proceed to Step 1.** Say to the user: "I need access to [Company Name]'s Carta account to pull this report. Connect Carta using the button above — once you're in, say 'ready' and I'll pick up from here." When the user replies, re-run tool discovery (see its reconnect exception) and continue from this gate — do not ask them to repeat the original request.
 
-   If multiple tools pass the gate, use the one whose environment appears earliest in the loaded map. If the user's message includes an explicit environment qualifier (production, preprod, sandbox, test, demo), cross-check the confirmed UUID against that environment; if it doesn't match, treat as FAIL.
+   If multiple tools pass the gate, use the one whose environment appears earliest in the loaded map; its segment sets `_carta_prefix`. If the user's message includes an explicit environment qualifier (production, preprod, sandbox, test, demo), cross-check the confirmed UUID against that environment; if it doesn't match, treat as FAIL.
 
    **Switching accounts mid-conversation** — if the company is already identified from earlier in this conversation and the user is asking to switch to a different Carta account, skip the "Find the company" step once reporting access is confirmed. Carry forward all previously resolved values and resume from "Find the right report type".
 
    **Confirm reporting access**
 
-   Reporting access is a property of the connected Carta account (the confirmed MCP connector prefix from Gate 0b), not of an individual company, and it does not change within a conversation — so confirm it **once per connected account**. If `_reporting_access_confirmed` is already set to `true` in this session for the current connector prefix, skip this check entirely and proceed to Step 1 — do not re-call `search_tools`. (If the user switches to a different Carta connector mid-conversation, treat that as a new account and re-confirm.)
+   Reporting access is a property of the connected Carta account (identified by `_carta_prefix`), not of an individual company, and it does not change within a conversation — so confirm it **once per connected account**. If `_reporting_access_confirmed` is already set to `true` in this session for the current `_carta_prefix`, skip this check entirely and proceed to Step 1 — do not re-call `search_tools`. (If the user switches to a different Carta connector mid-conversation, treat that as a new account and re-confirm.)
 
-   Otherwise, call `mcp__carta__search_tools({"query": "reporting"})` to query Carta's BM25 catalog (reporting tools are indexed, not pinned, so `ToolSearch` won't find them). If no `reporting__*` tools appear in the results, tell the user: "Looks like reporting isn't enabled for this account yet. You can try a different Carta account, or reach out to your Carta contact to get it set up." Then stop — do not proceed to Step 1. On success, set `_reporting_access_confirmed` to `true` in session memory so subsequent report requests on the same connected account skip this round-trip.
+   Otherwise, call `search_tools({"query": "reporting"})` on `_carta_prefix` to query Carta's BM25 catalog (reporting tools are indexed, not pinned, so `ToolSearch` won't find them). If no `reporting__*` tools appear in the results, tell the user: "Looks like reporting isn't enabled for this account yet. You can try a different Carta account, or reach out to your Carta contact to get it set up." Then stop — do not proceed to Step 1. On success, set `_reporting_access_confirmed` to `true` in session memory so subsequent report requests on the same connected account skip this round-trip.
 
 0c. **Set output mode — runs in ALL environments (Claude Desktop and Claude Code)**
 
@@ -147,7 +150,7 @@ Run the script only in the one-line form shown below, as its own command: write 
 
    Do not re-run this check later in the workflow. Do not rely on environment heuristics — a user may be on Claude Desktop without Cowork installed.
 
-1. **Find the company** — if the company name appears to be a nickname, abbreviation, or informal reference (e.g. "golden master", "the fund", "our main entity"), note this and use it as a fuzzy search term in `list_accounts` rather than a literal match. After `list_accounts` returns, do a case-insensitive substring match across all account names before assuming no match. Then extract the numeric ID from the `corporation_pk:<id>` field. Only `corporation_pk` accounts support reports. If the user names multiple companies, dispatch one subagent per company in parallel (send all `Agent` tool calls in a single message) to resolve each corporation_id simultaneously. If multiple accounts share the same name, **you MUST call the `AskUserQuestion` tool** — do not ask in plain text, the user cannot respond to plain text questions. List every match explicitly in the question, e.g. "I found 3 accounts named Meetly — which one did you mean? (Account 2451, Account 2452, or Account 7)" — the question must enumerate the options so the user can pick one. If a company cannot be found, say "I couldn't find [CompanyName] — it won't be included in the report" — never fabricate or estimate data for it.
+1. **Find the company** — if the company name appears to be a nickname, abbreviation, or informal reference (e.g. "golden master", "the fund", "our main entity"), note this and use it as a fuzzy search term in `list_accounts` rather than a literal match. After `list_accounts` returns, do a case-insensitive substring match across all account names before assuming no match. Then extract the numeric ID from the `corporation_pk:<id>` field. Only `corporation_pk` accounts support reports. If the user names multiple companies, dispatch one subagent per company in parallel (send all `Agent` tool calls in a single message) to resolve each corporation_id simultaneously, each calling `list_accounts` on `_carta_prefix` (put the prefix in its prompt). If multiple accounts share the same name, **you MUST call the `AskUserQuestion` tool** — do not ask in plain text, the user cannot respond to plain text questions. List every match explicitly in the question, e.g. "I found 3 accounts named Meetly — which one did you mean? (Account 2451, Account 2452, or Account 7)" — the question must enumerate the options so the user can pick one. If a company cannot be found, say "I couldn't find [CompanyName] — it won't be included in the report" — never fabricate or estimate data for it.
 
 1a. **Resolve phantom equity display label (silent)** — run this step on the **main thread** for each resolved `corporation_id`. Do NOT delegate to a subagent — the resolved label must be available in the parent context before report processing begins.
 
@@ -216,7 +219,7 @@ Run the script only in the one-line form shown below, as its own command: write 
 
    **Filters** — many report types accept filter params; the same reference file lists which filters each report type supports and the ID-lookup commands to resolve them. If the user mentions specific stakeholders, share classes, equity plans, securities, or a date range, resolve their IDs/values and pass the matching filter params as comma-separated strings — the report runs faster. `security_ids` takes comma-separated `TYPE:ID` strings (e.g. `"CERTIFICATE:42,OPTION:7"`); valid types: `CERTIFICATE`, `RSA`, `RSU`, `OPTION`, `SAR`, `CBU`, `PIU`, `WARRANT`, `CONVERTIBLE_NOTE`. Passing unsupported filters for a report type has no effect.
 
-4. **Emit a status message before dispatching subagents** — before triggering any report generation, output a plain-language message to the user. Record the current time as `_report_start_time` (epoch seconds) on the **main thread**, immediately before dispatching the background `Agent` calls in steps 4b and 4c — this is the start of the generation clock. Do not record this inside the subagents. Capture it with: `UV_PYTHON_DOWNLOADS=never uv run python -c "import time; print(int(time.time()))"` (this form is already covered by the skill's `allowed-tools`).
+4. **Emit a status message before dispatching subagents** — before triggering any report generation, output a plain-language message to the user. Record the current time as `_report_start_time` (epoch seconds) on the **main thread**, immediately before dispatching the background `Agent` calls in steps 4b and 4c — this is the start of the generation clock. Do not record this inside the subagents. Capture it with `date +%s`, run on its own, one line.
 
    **Infer company size from the stakeholder count.** After resolving `corporation_id` in Step 1, call:
    ```
@@ -248,15 +251,16 @@ Run the script only in the one-line form shown below, as its own command: write 
 
    user_report_pk: <pk>
    corporation_id: <corp_id>
+   carta_prefix:   <_carta_prefix>
    output_path:    /tmp/carta_report_<pk>.json
 
    Steps:
-   1. Poll `read_tool({"name": "reporting__get__report_status", "arguments": { user_report_pk: <pk> }})` every 5 s, up to
+   1. Poll `read_tool` on <carta_prefix> `({"name": "reporting__get__report_status", "arguments": { user_report_pk: <pk> }})` every 5 s, up to
       20 attempts.
       - Status "complete" → proceed to step 2.
       - Status "error" or "failed" → write {"error":"report failed"} to output_path and stop.
       - 20 attempts without complete → write {"error":"timeout"} to output_path and stop.
-   2. Call `read_tool({"name": "reporting__get__download_url", "arguments": { user_report_pk: <pk>, corporation_id: <corp_id> }})`
+   2. Call `read_tool` on <carta_prefix> `({"name": "reporting__get__download_url", "arguments": { user_report_pk: <pk>, corporation_id: <corp_id> }})`
       → presigned URL.
    3. Run: curl -fsSL "<presigned_url>" -o <output_path>
    ```
@@ -268,15 +272,16 @@ Run the script only in the one-line form shown below, as its own command: write 
 
    user_report_pk_preview: <pk_preview>
    corporation_id:         <corp_id>
+   carta_prefix:           <_carta_prefix>
    output_path:            /tmp/carta_preview_<pk_preview>.json
 
    Steps:
-   1. Poll `read_tool({"name": "reporting__get__report_status", "arguments": { user_report_pk: <pk_preview> }})` every 5 s,
+   1. Poll `read_tool` on <carta_prefix> `({"name": "reporting__get__report_status", "arguments": { user_report_pk: <pk_preview> }})` every 5 s,
       up to 10 attempts.
       - Status "complete" → proceed to step 2.
       - Status "error" or "failed" → write {"error":"preview failed"} to output_path and stop.
       - 10 attempts without complete → write {"error":"preview timeout"} to output_path and stop.
-   2. Call `read_tool({"name": "reporting__get__download_url", "arguments": { user_report_pk: <pk_preview>, corporation_id: <corp_id> }})`
+   2. Call `read_tool` on <carta_prefix> `({"name": "reporting__get__download_url", "arguments": { user_report_pk: <pk_preview>, corporation_id: <corp_id> }})`
       → presigned URL. If this call fails, write {"error":"download_url failed"} to output_path and stop.
    3. Run: curl -fsSL "<presigned_url>" -o <output_path>
    ```
@@ -286,8 +291,8 @@ Run the script only in the one-line form shown below, as its own command: write 
    If that read fails, continue — do **not** fall back to the xlsx skill or generate Excel directly.
 
    Check for `/tmp/carta_preview_<pk_preview>.json` every 5 s (up to 12 attempts = 60 s):
-   - **Preview succeeded** (file present, no `"error"` key) → use the preview file as the data source.
-   - **Preview failed** (file contains `"error"`, or 12 attempts elapse without the file appearing) → switch to the full-report fallback: poll for `/tmp/carta_report_<pk>.json` (poll every 5 s up to 20 attempts).
+   - **Preview succeeded** (file present, no `"error"` key) → use the preview file as the data source. The preview holds partial data, so add `["Status", "Preview — full report loading"]` to the artifact's `metaRows` and do not present its row count as final.
+   - **Preview failed** (file contains `"error"`, or 12 attempts elapse without the file appearing) → switch to the full-report fallback: poll for `/tmp/carta_report_<pk>.json` every 5 s, up to 20 attempts (the **full-report wait**).
 
    **Mid-wait check-in (emit exactly once per report request):** If 30 seconds elapse during the preview poll (i.e., after 6 failed attempts) with no data yet available, output this message to the user before continuing to poll:
 
@@ -299,13 +304,18 @@ Run the script only in the one-line form shown below, as its own command: write 
    - **MARKDOWN mode (Claude Code):** invoke `Skill(carta-cap-table:carta-reporting-markdown)`. The following context is available in this session: data file path, `corporation_id`, `user_report_pk`.
    - **ARTIFACT mode (Cowork):** build the artifact inline (no subskill invocation — see below).
 
+   **Swap in the full report (when any data source was a preview).** After publishing the preview artifact, run the full-report wait in this same turn: for each corporation whose data came from its preview, wait for its `/tmp/carta_report_<pk>.json`. The wait is bounded, because the 4b agent writes data or an error within its own limit. Then:
+   - **Every full report landed without an `"error"` key** → run `report_processor.py` on the full files with the same config (including `label_overrides`) as the preview build, rebuild the artifact without the `Status` row(s) and with the normal description, and republish in place by passing the existing artifact `url`. Every sheet in it must come from a full report.
+   - **Any failed or timed out** → keep that corporation's preview sheets, set `["Status", "Preview only — {Corp Name}'s full report didn't finish"]` for each such corporation (a single corporation: `["Status", "Preview only — full report didn't finish"]`), rebuild with the full sheets for the rest, republish in place with a preview description, then say plainly: "The full report didn't finish for {Corp Name}, so that part shows only a preview of the data — tell me to retry."
+   Then show the customization checkpoint below. Never present a preview as the final report.
+
    **Do not dispatch Excel generation here or in parallel with the artifact.** The Excel path opens only after the user responds to the customization checkpoint. Triggering Excel before that checkpoint bypasses the user's chance to adjust columns, filters, and transforms.
 
    **Multi-corporation (when step 1 resolved more than one corporation_id):**
 
    Steps 4a–4c run independently per corporation — trigger N×2 report pairs in parallel. Each corporation produces its own data file at `/tmp/carta_preview_<pk>.json` (or `/tmp/carta_report_<pk>.json` on fallback).
 
-   Once all data files are ready, collect them as a list: `[(corp_legal_name, data_file_path), ...]`.
+   Once all data files are ready, collect them as a list: `[(corp_legal_name, data_file_path), ...]`. In ARTIFACT mode, any file that is a preview is covered by the swap step above, per corporation.
    - **MARKDOWN mode:** invoke `Skill(carta-cap-table:carta-reporting-markdown)` with each corporation's data file in turn, presenting one markdown table block per corporation.
    - **ARTIFACT mode:** proceed with artifact build below, merging all corporations' sheets using `{Corp Name} — {Sheet Name}` prefixing (see multi-corporation guidance below).
 
@@ -414,15 +424,19 @@ Run the script only in the one-line form shown below, as its own command: write 
    })
    ```
 
+   For an artifact built from a preview, use the description `"{Report Type} for {Company Name} — preview, {N} rows so far, as of {date}."`; the swap step republishes with the description above.
+
    The payload is baked into the page, so it needs no `capabilities`. To refresh a report
    already published this session, pass that artifact's `url` so it redeploys in place.
 
-   **Always present a customization checkpoint after the artifact renders — every artifact, without exception:**
+   **Present a customization checkpoint after the full report renders (or fails), and after every later rebuild — never for the preview artifact:**
 
-   Compute `{elapsed}` as `(current epoch seconds) − _report_start_time`, rounded to the nearest whole second.
+   Compute `{elapsed}` as the output of `date +%s` (run on its own, one line, no shell arithmetic) minus `_report_start_time`, rounded to the nearest whole second.
    Compute `{N}` as `filtered_row_count` (sum across all sheets) from `report_processor.py`'s `stats` output.
 
    > Here's your **{Report Type}** for **{Company Name}** — {N} rows as of {date}, built in {elapsed}s.
+   >
+   > _(When the full report failed, use instead: "Here's a preview of your **{Report Type}** for **{Company Name}** — {N} rows so far (the full report didn't finish), as of {date}." The Status row and the chat message above are the preview caveat.)_
    >
    > _(If the original prompt specified transforms, summarize them here.)_
    >
@@ -434,7 +448,7 @@ Run the script only in the one-line form shown below, as its own command: write 
    >
    > Say **Export to Excel** when ready, or describe your changes.
 
-   If the dataset is large (> 300 rows), append: "This report has {N} rows — you may want to filter before exporting."
+   If the dataset is large (> 300 rows), append: "This report has {N} rows — you may want to filter before exporting." (For a preview: "The preview already has {N} rows.")
 
    **Percentage columns under a share-class scope.** `pct_of_total` divides by the sum of the rows
    in the report. When `_scope_<corporation_id>` reports `is_limited_admin: true` that denominator
@@ -482,6 +496,8 @@ Keep the contents in memory the first time you read it; do not read it again wit
 | `user_report_pk` missing from response | Transient API error | "Something went wrong generating this report — it may be a temporary issue. Try again in a moment, or contact your Carta team if it keeps happening." |
 | `missing_columns` or `skipped_formulas` non-empty | Column name mismatch or formula source column not included | "Heads up — '[Column]' wasn't available in this report type and was left out." |
 | `unknown_filter_columns` non-empty | A filter named a column this sheet does not have, so **that filter did not run** and the rows shown are broader than asked for. Never present the result as filtered. | "I couldn't filter on '[Column]' — it isn't in this report, so these rows are unfiltered. Here are the columns I can filter on: […]" Offer to re-run against a real column. |
+| `warnings.unknown_sheets` present | A name in `warnings.unknown_sheets.requested` is not in this report, so it was left out. | "This report has no sheet called '[Name]'. Its sheets are: […]" (list `warnings.unknown_sheets.available`) Offer to re-run with a real sheet. |
+| `warnings.merge_sources_missing` present, or `stats[<merged sheet>].schema_warnings` non-empty | A sheet to merge was missing (`warnings.merge_sources_missing[].source`), or its columns differ (`schema_warnings`), so its rows are not in the merged tab. | Name the sheet that was left out and why; never present the merged tab as complete. |
 | `filtered_row_count` == `original_row_count` with filters set | The filters matched every row. Legitimate, but confirm it is not a mis-typed filter before presenting. | State plainly that the filter matched all N rows. |
 
 ---
@@ -587,7 +603,10 @@ All fields except the file source are optional — omit or set to `null` to skip
   "stats": {sheet_name: {"original_row_count": N, "filtered_row_count": N,
                          "empty_rows_dropped": N, "displayed_row_count": N,
                          "missing_columns": [], "unknown_filter_columns": [],
-                         "skipped_formulas": []}}
+                         "skipped_formulas": [],
+                         "merged_from": [...], "schema_warnings": [...]}},   // last two: merged tabs only
+  "warnings": {"unknown_sheets": {"requested": [...], "available": [...]},
+               "merge_sources_missing": [{"target": ..., "source": ...}]}   // keys present only when raised
 }
 ```
 
