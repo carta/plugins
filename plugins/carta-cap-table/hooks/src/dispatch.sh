@@ -14,16 +14,6 @@
 #      staff exercising hooks without a publish, where bin/ is checked in
 #      alongside this script
 #
-# A third layout carries no bin/ sibling: a clone-based install copies the
-# plugin dir verbatim, with no publish step. The second lookup below walks up
-# to a sibling "marketplaces/" clone and tries its tools/hooks/bin/ instead.
-#
-# A fourth layout is a plain monorepo checkout (or a git worktree of one), where
-# this script runs from plugins/<name>/hooks/ and the binary is committed at
-# <repo>/tools/hooks/bin/. The third lookup walks up looking for that path, so
-# --plugin-dir users and clone installs resolve a binary instead of silently
-# failing open with every hook disabled.
-#
 # Fail-open is PER SUBCOMMAND: an event with
 # no allow/deny concept (SessionStart, UserPromptSubmit) must not emit a
 # PreToolUse-shaped payload, and vice versa. The shapes below match the Go
@@ -57,49 +47,6 @@ if [ -n "$os" ]; then
     fi
 fi
 
-# Case 3: walk up looking for a "marketplaces" dir next to an ancestor (a
-# sibling of the cache dir a plugin install copies from). Bounded to 8 levels.
-if [ -z "$bin" ] && [ -n "$os" ]; then
-    walk="$here"
-    depth=0
-    while [ "$depth" -lt 8 ] && [ "$walk" != "/" ]; do
-        parent=$(dirname -- "$walk")
-        sibling="$parent/marketplaces"
-        if [ -d "$sibling" ]; then
-            for mkt in "$sibling"/*/tools/hooks/bin; do
-                [ -d "$mkt" ] || continue
-                candidate="$mkt/hooks-${os}-${arch}"
-                [ "$os" = windows ] && candidate="${candidate}.exe"
-                if [ -x "$candidate" ]; then
-                    bin="$candidate"
-                    break
-                fi
-            done
-            break
-        fi
-        walk="$parent"
-        depth=$((depth + 1))
-    done
-fi
-
-# Case 4: a monorepo checkout or a git worktree of one — this script sits at
-# plugins/<name>/hooks/ and the binary is committed at <repo>/tools/hooks/bin/.
-# Same 8-level bound as case 3; checks "$here" itself first so tools/hooks/
-# also resolves when run straight from the source dir.
-if [ -z "$bin" ] && [ -n "$os" ]; then
-    walk="$here"
-    depth=0
-    while [ "$depth" -lt 8 ] && [ "$walk" != "/" ]; do
-        candidate="$walk/tools/hooks/bin/hooks-${os}-${arch}"
-        [ "$os" = windows ] && candidate="${candidate}.exe"
-        if [ -x "$candidate" ]; then
-            bin="$candidate"
-            break
-        fi
-        walk=$(dirname -- "$walk")
-        depth=$((depth + 1))
-    done
-fi
 
 if [ -n "$bin" ]; then
     exec "$bin" "$@"
