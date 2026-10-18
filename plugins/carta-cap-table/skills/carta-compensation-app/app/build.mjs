@@ -53,6 +53,9 @@ const REACT_REQUIRED_EXPORTS = [
   "createPortal", "createRoot", "hydrateRoot", "jsx", "jsxs",
 ];
 
+// Every file this script writes into webapp/vendor/; the clean step removes exactly these.
+const OUT = { react: "react.esm.js", sucrase: "sucrase.esm.js" };
+
 const COMMON = {
   bundle: true,
   format: "esm",
@@ -72,7 +75,7 @@ async function buildVendors() {
     await esbuild({
       ...COMMON,
       entryPoints: [reactEntryPath],
-      outfile: resolve(VENDOR_OUT, "react.esm.js"),
+      outfile: resolve(VENDOR_OUT, OUT.react),
     });
   } finally {
     await rm(reactEntryPath, { force: true }); // always clean up, even on build throw
@@ -84,20 +87,20 @@ async function buildVendors() {
   await esbuild({
     ...COMMON,
     entryPoints: [resolve(APP, "node_modules/sucrase/dist/esm/index.js")],
-    outfile: resolve(VENDOR_OUT, "sucrase.esm.js"),
+    outfile: resolve(VENDOR_OUT, OUT.sucrase),
   });
 }
 
 async function verifyReactBundle() {
-  const ns = await import(pathToFileURL(resolve(VENDOR_OUT, "react.esm.js")).href);
+  const ns = await import(pathToFileURL(resolve(VENDOR_OUT, OUT.react)).href);
   const missing = REACT_REQUIRED_EXPORTS.filter((k) => ns[k] === undefined);
   if (missing.length) {
-    throw new Error(`react.esm.js missing exports: ${missing.join(", ")}`);
+    throw new Error(`${OUT.react} missing exports: ${missing.join(", ")}`);
   }
   if (typeof ns.createRoot !== "function" || typeof ns.useState !== "function") {
-    throw new Error("react.esm.js: createRoot/useState not callable");
+    throw new Error(`${OUT.react}: createRoot/useState not callable`);
   }
-  console.log(`  verified react.esm.js (${REACT_REQUIRED_EXPORTS.length} exports) ✓`);
+  console.log(`  verified ${OUT.react} (${REACT_REQUIRED_EXPORTS.length} exports) ✓`);
 }
 
 async function buildFonts() {
@@ -111,8 +114,10 @@ async function buildFonts() {
 }
 
 (async () => {
-  console.log("build: cleaning webapp/vendor/ + webapp/fonts/…");
-  await rm(VENDOR_OUT, { recursive: true, force: true });
+  // Remove only the files this script writes: webapp/vendor/ also holds a hand-maintained
+  // README.md that a whole-folder clean would delete.
+  console.log("build: cleaning generated webapp/vendor/ files + webapp/fonts/…");
+  for (const f of Object.values(OUT)) await rm(resolve(VENDOR_OUT, f), { force: true });
   await rm(FONTS_OUT, { recursive: true, force: true });
 
   console.log("build: bundling vendor ESM…");
