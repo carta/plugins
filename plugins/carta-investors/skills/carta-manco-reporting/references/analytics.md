@@ -245,8 +245,8 @@ unknown path with the SPA fallback, so the request returns `200 OK` with `text/h
 the bytes of `index.html`. The network tab looks healthy; the browser throws
 `Unexpected token '<'` and leaves `window.mcpUiTracker` undefined.
 
-`app/build.mjs` rebuilds `webapp/vendor/` and preserves the tracker across that rebuild.
-It is hand-vendored, not generated, so nothing else would put it back.
+`app/build.mjs` removes and rewrites only the bundles it generates, so the tracker, which is
+hand-vendored rather than generated, stays in place across a rebuild. It warns if the file is missing.
 
 ## Firm, user and environment
 

@@ -9,14 +9,21 @@
 
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { resolve, relative } from "node:path";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { build as esbuild } from "esbuild";
 
 const APP = fileURLToPath(new URL(".", import.meta.url)); // this file lives at app/build.mjs
 const WEBAPP = resolve(APP, "../webapp");
 const VENDOR_OUT = resolve(WEBAPP, "vendor");
-const TRACKER = "mcp-ui-tracker.global.js";
+const TRACKER = "mcp-ui-tracker.global.js"; // hand-vendored, never generated here
+// Every file this script writes into webapp/vendor/; the clean step removes exactly these.
+const OUT = {
+  react: "react.esm.js",
+  sucrase: "sucrase.esm.js",
+  lucide: "lucide-react.esm.js",
+  pkg: "package.json",
+};
 
 // React is CJS-only. `export * from 'react'` drops every name — esbuild can't
 // enumerate a CJS module's exports for a star re-export. So import the default
@@ -64,7 +71,7 @@ async function buildVendors() {
   // one above webapp/. Without this marker, verifyReactBundle()'s `import()` of a
   // .js file is parsed as CommonJS and dies on "Unexpected token 'export'".
   await writeFile(
-    resolve(VENDOR_OUT, "package.json"),
+    resolve(VENDOR_OUT, OUT.pkg),
     JSON.stringify({ type: "module" }, null, 2) + "\n",
   );
 
@@ -75,7 +82,7 @@ async function buildVendors() {
     await esbuild({
       ...COMMON,
       entryPoints: [reactEntryPath],
-      outfile: resolve(VENDOR_OUT, "react.esm.js"),
+      outfile: resolve(VENDOR_OUT, OUT.react),
     });
   } finally {
     await rm(reactEntryPath, { force: true }); // always clean up, even on build throw
@@ -87,7 +94,7 @@ async function buildVendors() {
   await esbuild({
     ...COMMON,
     entryPoints: [resolve(APP, "node_modules/sucrase/dist/esm/index.js")],
-    outfile: resolve(VENDOR_OUT, "sucrase.esm.js"),
+    outfile: resolve(VENDOR_OUT, OUT.sucrase),
   });
 
   // `external: react` keeps this on the app's one React instance via the importmap.
@@ -100,7 +107,7 @@ async function buildVendors() {
       ...COMMON,
       external: ["react", "react/jsx-runtime"],
       entryPoints: [iconsEntryPath],
-      outfile: resolve(VENDOR_OUT, "lucide-react.esm.js"),
+      outfile: resolve(VENDOR_OUT, OUT.lucide),
     });
   } finally {
     await rm(iconsEntryPath, { force: true });
@@ -108,33 +115,27 @@ async function buildVendors() {
 }
 
 async function verifyReactBundle() {
-  const ns = await import(pathToFileURL(resolve(VENDOR_OUT, "react.esm.js")).href);
+  const ns = await import(pathToFileURL(resolve(VENDOR_OUT, OUT.react)).href);
   const missing = REACT_REQUIRED_EXPORTS.filter((k) => ns[k] === undefined);
   if (missing.length) {
-    throw new Error(`react.esm.js missing exports: ${missing.join(", ")}`);
+    throw new Error(`${OUT.react} missing exports: ${missing.join(", ")}`);
   }
   if (typeof ns.createRoot !== "function" || typeof ns.useState !== "function") {
-    throw new Error("react.esm.js: createRoot/useState not callable");
+    throw new Error(`${OUT.react}: createRoot/useState not callable`);
   }
-  console.log(`  verified react.esm.js (${REACT_REQUIRED_EXPORTS.length} exports) ✓`);
+  console.log(`  verified ${OUT.react} (${REACT_REQUIRED_EXPORTS.length} exports) ✓`);
 }
 
 (async () => {
-  // The Snowplow tracker is hand-vendored into this directory, not generated here, so
-  // the clean below would drop it and silence every UI event.
-  const tracker = resolve(VENDOR_OUT, TRACKER);
-  const kept = existsSync(tracker) ? await readFile(tracker) : null;
-
-  console.log("build: cleaning webapp/vendor/…");
-  await rm(VENDOR_OUT, { recursive: true, force: true });
+  // Remove only the files this script writes: webapp/vendor/ also holds hand-maintained
+  // files (the Snowplow tracker bundle, README.md) that a whole-folder clean would delete.
+  console.log("build: cleaning generated webapp/vendor/ files…");
+  for (const f of Object.values(OUT)) await rm(resolve(VENDOR_OUT, f), { force: true });
 
   console.log("build: bundling vendor ESM…");
   await buildVendors();
 
-  if (kept) {
-    await writeFile(tracker, kept);
-    console.log(`  preserved ${TRACKER} ✓`);
-  } else {
+  if (!existsSync(resolve(VENDOR_OUT, TRACKER))) {
     console.warn(`  WARNING: ${TRACKER} is missing — the dashboard will emit no telemetry.`);
     console.warn("  Copy it from ../../carta-fund-modeling/webapp/vendor/ and commit it.");
   }

@@ -1853,11 +1853,8 @@ def pass2(args) -> None:
         print(f"  ⚠ {len(remaining)} tokens still unfilled: {remaining[:10]}")
     else:
         print("  All tokens filled.")
-    import subprocess
-    count = subprocess.run(
-        ["grep", "-c", "data-screen-label", str(output_path)],
-        capture_output=True, text=True
-    ).stdout.strip()
+    # Counts lines carrying the marker, not markers: two slides on one line count once.
+    count = sum(1 for line in html.split("\n") if "data-screen-label" in line)
     print(f"  Slide count: {count}")
 
 
