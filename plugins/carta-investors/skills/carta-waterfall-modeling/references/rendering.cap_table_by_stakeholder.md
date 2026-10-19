@@ -61,7 +61,8 @@ stakeholders[]: { stakeholder_group_name, outstanding_shares, outstanding_owners
                   phantom_summary: { issued, issued_not_canceled, outstanding },
                   individuals: [ { stakeholder_id, stakeholder_name,
                       securities: [ { id, security_type, certificate_subtype,
-                                      share_class_id, label, share_class_name, quantity } ],
+                                      share_class_id, label, share_class_name, quantity,
+                                      custom_fields: [ { name, value } ] } ],
                       phantom_summary: { issued, issued_not_canceled, outstanding },
                       phantom_securities: [ same shape as securities[] ] } ] }
 ```
@@ -118,6 +119,7 @@ response (no re-fetch):
 | a security's certificate subtype | `individuals[].securities[].certificate_subtype` |
 | total capital contributed across holders | sum of `stakeholders[].cash_raised` across all holders |
 | a holder's phantom units issued / issued (not canceled) | `stakeholders[].phantom_summary.issued`, `.issued_not_canceled` |
+| a custom field, asked by its name (e.g. "MOIC Hurdle") | `individuals[].securities[].custom_fields[]` — match the ask to `name`, answer its `value` |
 
 The total row needs every holder from a fetch without `search` (§Rows); if the response in hand is
 `search`-scoped, re-fetch without it first.
