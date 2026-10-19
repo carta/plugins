@@ -1145,13 +1145,37 @@ function generateQuarterOptions(currentQuarter, count){
   return out;
 }
 
+// The page shows data only up to the GP's last sharing date, so the newest quarter worth
+// offering is that date's quarter, never later than the last completed one. Null when the
+// summary has no sharing date; the server's default quarter then applies.
+function latestDataQuarter(){
+  const shared = quarterFromISO(currentData.summary && currentData.summary.as_of_date);
+  if (!shared) return null;
+  const lastCompleted = previousQuarter(quarterFromISO(new Date().toISOString().slice(0, 10)));
+  return shared.startISO <= lastCompleted.startISO ? shared : lastCompleted;
+}
+
+// The oldest quarter with history, from the timeseries' first month.
+function earliestDataQuarter(){
+  const points = (currentData.timeseries && currentData.timeseries.points) || [];
+  return points.length ? quarterFromISO(points[0].month_end_date) : null;
+}
+
+const MAX_QUARTER_OPTIONS = 40;
+
+function quarterOptionCount(newest, oldest){
+  if (!newest || !oldest || oldest.startISO > newest.startISO) return 8;
+  const span = (newest.year - oldest.year) * 4 + (newest.q - oldest.q) + 1;
+  return Math.min(span, MAX_QUARTER_OPTIONS);
+}
+
 let _quarterPickerInited = false;
 
 function initQuarterPicker(currentQuarterLabel){
   const select = document.getElementById('quarter-picker');
   if (!select) return;
   const initial = quarterFromLabel(currentQuarterLabel) || quarterFromISO(new Date().toISOString().slice(0, 10));
-  const opts = generateQuarterOptions(initial, 8);
+  const opts = generateQuarterOptions(initial, quarterOptionCount(initial, earliestDataQuarter()));
   select.innerHTML = '';
   opts.forEach(o => {
     const opt = document.createElement('option');
@@ -1471,10 +1495,12 @@ async function loadCurrencyData(){
     }
 
     try {
-      const q = await fetchCmd(QUARTERLY_CMD, { portfolio_id: PORTFOLIO_ID, ...currencyParam() });
+      const latest = latestDataQuarter();
+      const latestParam = latest ? { quarter_start: latest.startISO } : {};
+      const q = await fetchCmd(QUARTERLY_CMD, { portfolio_id: PORTFOLIO_ID, ...latestParam, ...currencyParam() });
       currentData.quarterly = q;
       noteTruncation(q, 'funds');
-      try { initQuarterPicker(q && q.current_quarter && q.current_quarter.label); } catch(e) { debugLog('initQuarterPicker threw', e); }
+      try { initQuarterPicker((q && q.current_quarter && q.current_quarter.label) || (latest && latest.label)); } catch(e) { debugLog('initQuarterPicker threw', e); }
       try { renderFundMovers(q); } catch(e) { debugLog('renderFundMovers threw', e); }
     } catch (err) {
       debugLog('quarterly fetch failed', err);
