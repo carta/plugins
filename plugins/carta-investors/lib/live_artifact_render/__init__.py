@@ -47,3 +47,19 @@ def check_path_under_cwd(p: Path, label: str):
         print(f"error: {label} must be under the current working directory: {resolved}", file=sys.stderr)
         return None
     return resolved
+
+
+TRACKER_MARKER = "/* __MCP_UI_TRACKER_JS__ */"
+TRACKER_BUNDLE = Path(__file__).with_name("mcp-ui-tracker.js")
+TRACKER_HELPERS = Path(__file__).with_name("ui-tracking.js")
+SKILL_PLACEHOLDER = "__MCP_UI_SKILL__"
+
+
+def inline_tracker(content: str, skill: str) -> str:
+    """Put the tracker bundle, stamped with `carta-investors:<skill>`, and the page helpers at the marker.
+
+    A missing bundle inlines only the helpers, which then no-op, so the page still renders.
+    """
+    bundle = TRACKER_BUNDLE.read_text(encoding="utf-8") if TRACKER_BUNDLE.is_file() else ""
+    js = bundle.replace(SKILL_PLACEHOLDER, "carta-investors:" + skill) + TRACKER_HELPERS.read_text(encoding="utf-8")
+    return content.replace(TRACKER_MARKER, js, 1)

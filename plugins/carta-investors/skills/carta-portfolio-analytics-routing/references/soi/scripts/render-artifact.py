@@ -70,6 +70,7 @@ from live_artifact_render import (  # noqa: E402
     MCP_SERVER_RE,
     UUID_RE,
     check_path_under_cwd,
+    inline_tracker,
     js_safe_json,
 )
 from live_artifact_render.customizations import stamp_baseline  # noqa: E402
@@ -277,7 +278,7 @@ def main() -> int:
         )
         return 1
 
-    content = src.read_text(encoding="utf-8")
+    content = inline_tracker(src.read_text(encoding="utf-8"), "carta-soi")
     missing = [p for p in PLACEHOLDERS if p not in content]
     if missing:
         print(

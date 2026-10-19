@@ -31,7 +31,7 @@ allowed-tools:
 ---
 
 <!-- carta:plugin-version -->
-<carta-plugin>carta-investors:6.91.4</carta-plugin>
+<carta-plugin>carta-investors:6.91.5</carta-plugin>
 
 > **If this plugin's files can't be found:** a path that still shows an unreplaced `${…}` variable, or a "not found" when you read or run one of this skill's files, means the skill loaded before this session's computer link was ready. Invoke this skill once more with the Skill tool and use the paths that copy gives. If they're still unreplaced, tell the user Carta's plugin files aren't available in this session yet (link your computer, then ask again) and stop. Don't search the disk for them.
 
@@ -73,7 +73,7 @@ publish the template itself: its Home link is a placeholder.
 ## Step 2 — Publish the artifact
 
 Publish the rendered file with the Artifact tool. The artifact calls `fetch` (`dwh:execute:query`),
-`list_contexts` and `set_context`, so grant exactly those. Set `server` to the viewer's
+`list_contexts` and `set_context`, so grant exactly those, plus `track_ui_event` for the page's usage analytics. Set `server` to the viewer's
 Carta connector display name from `${CLAUDE_PLUGIN_ROOT}/references/gate-carta-connector-name.md`
 (the plugin's `references/`, not this skill's); the page looks that name up at runtime.
 
@@ -83,7 +83,7 @@ Artifact(
     favicon="📈",
     title="Fund Performance",
     description="Live fund performance dashboard — IRR, TVPI, DPI and MOIC against peer benchmarks.",
-    capabilities={"mcp": {"servers": [{"server": "<carta_connector_name>", "tools": ["fetch", "list_contexts", "set_context"]}]}},
+    capabilities={"mcp": {"servers": [{"server": "<carta_connector_name>", "tools": ["fetch", "list_contexts", "set_context", "track_ui_event"]}]}},
 )
 ```
 

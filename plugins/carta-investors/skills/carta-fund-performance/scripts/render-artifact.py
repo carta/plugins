@@ -10,7 +10,7 @@ from pathlib import Path
 _LIB = next(p for p in Path(__file__).resolve().parents if (p / "lib" / "live_artifact_render").is_dir()) / "lib"
 sys.path.insert(0, str(_LIB))
 
-from live_artifact_render import CLAUDE_ARTIFACT_URL_RE, check_path_under_cwd  # noqa: E402
+from live_artifact_render import CLAUDE_ARTIFACT_URL_RE, check_path_under_cwd, inline_tracker  # noqa: E402
 from live_artifact_render.customizations import stamp_baseline  # noqa: E402
 
 TEMPLATE = Path(__file__).resolve().parent.parent / "references" / "artifact.html"
@@ -34,7 +34,7 @@ def main() -> int:
     if out_path is None:
         return 1
 
-    content = TEMPLATE.read_text(encoding="utf-8")
+    content = inline_tracker(TEMPLATE.read_text(encoding="utf-8"), "carta-fund-performance")
     if PLACEHOLDER not in content:
         print(f"error: template missing {PLACEHOLDER}", file=sys.stderr)
         return 1

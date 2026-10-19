@@ -1361,6 +1361,7 @@
         </div>
     </div>
 
+    <script>/* __MCP_UI_TRACKER_JS__ */</script>
     <script>
         // === Skill-injected constants (string-replaced at artifact-create time) ===
         // STATE: parsed once from the embedded <script id="soi-funds-state"> block
@@ -2447,6 +2448,7 @@
         }
 
         function setSort(key) {
+            trackUi('click', 'SOI.Sort.' + key);
             if (sortCol === key) {
                 sortDir = sortDir === 'asc' ? 'desc' : 'asc';
             } else {
@@ -3100,6 +3102,7 @@
         // term left over from before the fund switch; the global search box itself
         // (and its panel) are left alone so the user can keep browsing other matches.
         async function jumpToMatch(fundUuid, parentIssuerName, underlyingIssuerName) {
+            trackUi('click', 'SOI.Search.JumpToMatch');
             if (fundUuid && fundUuid !== currentFundUuid) {
                 await loadFund(fundUuid);
                 // loadFund rebuilds the DOM (ensureContentSkeleton), which wipes the
@@ -3174,6 +3177,7 @@
 
         function setActiveTab(tab) {
             if (tab === activeTab) return;
+            trackUi('click', 'SOI.Tab.' + (tab === CASH_FLOWS_TAB ? 'CashFlows' : 'Holdings'));
             activeTab = tab;
             syncViewTabs();
             // The cross-fund look-through search belongs to Holdings.
@@ -3594,6 +3598,7 @@
 
         function setShowExited(on) {
             if (on === showExited) return;
+            trackUi('click', 'SOI.ShowExited.' + (on ? 'On' : 'Off'));
             showExited = on;
             showCompaniesInView();
         }
@@ -4512,6 +4517,7 @@
 
         function switchFund(fundUuid) {
             if (fundUuid === currentFundUuid) return;
+            trackUi('change', 'SOI.FundSelect');
             // Reset transient view state when changing data sources; filter/sort/expand
             // are properties of "this view of this fund", not global preferences.
             filterText = '';
@@ -4719,6 +4725,13 @@
         }
 
         setTimeout(soiCheckForUpdate, 0);
+
+        // The tracker relays through window.claude, which may not be ready at script start.
+        mcpNamespace().then(mcp => {
+            if (!mcp) return;
+            initUiTracker('carta-soi', CARTA_MCP_SERVER);
+            trackUi('render', 'SOI.View');
+        });
 
         // ── Back to Home: links to the Carta Home page that built this one, stamped in at render.
         (function () {
