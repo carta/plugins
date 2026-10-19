@@ -93,6 +93,15 @@
     ]
   },
   "carta-fund-performance": null,
+  "carta-gp-cash-reconciliation": {
+    "category": "fund-admin",
+    "name": "Answer cash reconciliation questions",
+    "order": 15,
+    "prompts": [
+      "What transactions does Carta need me to explain?",
+      "Draft answers for my uncategorized cash transactions"
+    ]
+  },
   "carta-home-build": null,
   "carta-loan-dashboard": null,
   "carta-lp-dashboard": null,
